@@ -40,3 +40,9 @@ path = "crates/workspace-fs/src/resolver/prepare.rs"
 function = "prepare_operation"
 ceiling = 272
 reason = "Over the limit when the limit was introduced; not yet reviewed for shortening."
+
+[[exceptions]]
+path = "crates/tui/src/bottom_pane/textarea/keys.rs"
+function = "TextArea::input"
+ceiling = 215
+reason = "The text area's key dispatch, ported from Codex: one exhaustive match over the editing chords and their C0-character fallbacks, each arm a single call."

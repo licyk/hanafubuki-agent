@@ -2,6 +2,9 @@
 
 mod agent_bridge;
 mod app_event;
+// Wired by the chat widget.
+#[allow(dead_code)]
+mod bottom_pane;
 mod custom_terminal;
 mod diff_render;
 mod history_cell;

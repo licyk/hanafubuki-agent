@@ -1,0 +1,14 @@
+---
+source: crates/tui/src/bottom_pane/chat_composer/tests.rs
+expression: terminal.backend()
+---
+"                                                                                                    "
+"› Ask Codex to do anything                                                                          "
+"                                                                                                    "
+"                                                                                                    "
+"                                                                                                    "
+"                                                                                                    "
+"                                                                                                    "
+"                                                                                                    "
+"  shift + enter for newline        esc to interrupt                                                 "
+"  ↑ for previous message           ctrl + c to exit                                                 "

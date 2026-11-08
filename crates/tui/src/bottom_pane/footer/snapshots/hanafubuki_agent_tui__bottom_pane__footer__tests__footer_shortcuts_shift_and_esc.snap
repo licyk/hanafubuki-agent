@@ -1,0 +1,6 @@
+---
+source: crates/tui/src/bottom_pane/footer/tests.rs
+expression: terminal.backend()
+---
+"  shift + enter for newline        esc to interrupt                             "
+"  ↑ for previous message           ctrl + c to exit                             "

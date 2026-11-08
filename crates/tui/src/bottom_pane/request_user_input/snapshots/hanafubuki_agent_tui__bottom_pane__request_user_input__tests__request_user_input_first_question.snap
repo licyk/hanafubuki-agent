@@ -1,0 +1,13 @@
+---
+source: crates/tui/src/bottom_pane/request_user_input/tests.rs
+expression: "render(&view, 60)"
+---
+
+  Question 1/2
+  Scope
+  Which crates should the change touch?
+
+  › 1. The TUI only         Leave the CLI alone
+    2. The TUI and the CLI
+
+  enter to answer | ←/→ questions | esc to interrupt

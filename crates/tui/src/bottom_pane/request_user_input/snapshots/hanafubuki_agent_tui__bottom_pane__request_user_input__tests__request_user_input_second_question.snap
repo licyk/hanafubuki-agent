@@ -1,0 +1,13 @@
+---
+source: crates/tui/src/bottom_pane/request_user_input/tests.rs
+expression: "render(&view, 60)"
+---
+
+  Question 2/2
+  Tests
+  Add snapshot tests?
+
+  › 1. Yes  Regenerate them
+    2. No
+
+  enter to submit | ←/→ questions | esc to interrupt
