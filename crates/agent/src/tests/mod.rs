@@ -31,6 +31,7 @@ mod quarantine;
 mod restart;
 mod sessions;
 mod shutdown;
+mod standalone;
 mod startup;
 mod titles;
 mod tools;

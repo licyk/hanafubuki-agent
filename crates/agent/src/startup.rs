@@ -37,12 +37,14 @@ use hanafubuki_agent_history::{AgentHistoryRefusalSink, NoopAgentHistoryRefusalS
 use hanafubuki_agent_kernel::{AgentKernelFaultSink, NoopAgentKernelFaultSink};
 use hanafubuki_agent_process::executor::ExecutorManager;
 use hanafubuki_agent_process::process_groups::{ProcessGroupRecord, ProcessOwnerGroup};
+use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 
 use super::{
     AgentApplicationService, AgentDisabledReason, AgentHandle, AgentSlot, AgentStartOptions,
     AgentStartStage,
 };
+use crate::data_dir_lock::DataDirLock;
 use crate::skill_watcher::SkillCatalogWatcher;
 use hanafubuki_agent_runtime::{ContainedRuntime, RuntimeTaskFailure, AGENT_RUNTIME_THREAD_NAME};
 
@@ -187,7 +189,9 @@ fn counted_starts(document: &StartMarkerDocument, crash: Option<&CrashRecord>) -
     }
 }
 
-/// The crash-loop start-up marker under the Agent data directory.
+/// The crash-loop start-up marker under the Agent data directory, which
+/// also holds the data directory's lock: the directory the marker's file is
+/// in is the data directory (`AgentStoragePaths::start_marker_file`).
 #[derive(Clone)]
 pub struct AgentStartMarker {
     file: PathBuf,
@@ -195,6 +199,8 @@ pub struct AgentStartMarker {
     crash_record: Option<PathBuf>,
     /// Whether this run recorded an attempt that is not cleared yet.
     recorded: Arc<AtomicBool>,
+    /// Taken by the first start and held across restarts until shutdown.
+    lock: Arc<Mutex<Option<DataDirLock>>>,
 }
 
 impl AgentStartMarker {
@@ -203,6 +209,7 @@ impl AgentStartMarker {
             file,
             crash_record: None,
             recorded: Arc::new(AtomicBool::new(false)),
+            lock: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -254,6 +261,24 @@ impl AgentStartMarker {
             return Some(AgentDisabledReason::CrashLoop);
         }
         None
+    }
+
+    /// Takes the data directory's lock unless this run holds it already. A
+    /// start takes it before it touches the directory, since another
+    /// process using it would see its processes reaped and its history
+    /// written under it.
+    pub(crate) fn lock_data_dir(&self) -> Result<(), String> {
+        let mut lock = self.lock.lock();
+        if lock.is_none() {
+            let directory = self.file.parent().unwrap_or(&self.file);
+            *lock = Some(DataDirLock::acquire(directory)?);
+        }
+        Ok(())
+    }
+
+    /// Releases the data directory's lock, once the Agent has stopped.
+    pub(crate) fn release_data_dir(&self) {
+        self.lock.lock().take();
     }
 
     /// Records a start attempt before the Agent is constructed.
@@ -422,6 +447,16 @@ async fn start_sequence(
     launcher: Arc<AgentLauncher>,
     claim: Claim,
 ) -> Option<AgentHandle> {
+    let locking = launcher.clone();
+    if let Err(reason) = flatten(
+        runtime
+            .run_blocking(move || locking.marker.lock_data_dir())
+            .await,
+    ) {
+        log::error!("the Agent did not start: {reason}");
+        slot.fail(AgentStartStage::Construct, reason);
+        return None;
+    }
     let attempt = launcher.clone();
     let recorded = runtime
         .run_blocking(move || {

@@ -24,6 +24,8 @@ pub struct AgentStoragePaths {
     /// The process groups of the Agent's own processes
     /// (`hanafubuki_agent_process::process_groups::ProcessGroupRecord`).
     pub process_groups_file: PathBuf,
+    /// The standalone Agent's log files (`logging`); a host logs to its own.
+    pub logs_dir: PathBuf,
 }
 
 impl AgentStoragePaths {
@@ -36,6 +38,7 @@ impl AgentStoragePaths {
             start_marker_file: root.join("start-marker.json"),
             crash_record_file: root.join("crash-record.json"),
             process_groups_file: root.join("process-groups.json"),
+            logs_dir: root.join("logs"),
             root,
         }
     }

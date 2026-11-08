@@ -219,6 +219,27 @@ impl AgentSlot {
         }
     }
 
+    /// The options of the first start; later ones bring their own.
+    pub(crate) fn starting_with(self, options: AgentStartOptions) -> Self {
+        self.inner.state.lock().options = options;
+        self
+    }
+
+    /// The running Agent once its start has settled, or why there is none:
+    /// waits while it is starting, until `deadline`.
+    pub fn wait_until_started(&self, deadline: Instant) -> Result<AgentHandle, AgentUnavailable> {
+        let mut state = self.inner.state.lock();
+        while matches!(state.state, AgentState::Starting)
+            && !self
+                .inner
+                .changed
+                .wait_until(&mut state, deadline)
+                .timed_out()
+        {}
+        drop(state);
+        self.agent()
+    }
+
     /// The running Agent, or why there is none.
     pub fn agent(&self) -> Result<AgentHandle, AgentUnavailable> {
         let state = self.inner.state.lock();

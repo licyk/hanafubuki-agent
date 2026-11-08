@@ -13,4 +13,5 @@ fn derives_every_durable_agent_store_from_one_root() {
     assert_eq!(paths.start_marker_file, root.join("start-marker.json"));
     assert_eq!(paths.crash_record_file, root.join("crash-record.json"));
     assert_eq!(paths.process_groups_file, root.join("process-groups.json"));
+    assert_eq!(paths.logs_dir, root.join("logs"));
 }

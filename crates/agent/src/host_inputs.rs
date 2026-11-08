@@ -32,3 +32,12 @@ pub trait HostContextPort: Send + Sync {
     /// carry none. Runs on the Agent's blocking pool and may block.
     fn steering_context(&self, host: &TurnExtensions) -> Option<AgentHostContext>;
 }
+
+/// A host that adds no context to steering, as the standalone Agent.
+pub struct NoHostContext;
+
+impl HostContextPort for NoHostContext {
+    fn steering_context(&self, _host: &TurnExtensions) -> Option<AgentHostContext> {
+        None
+    }
+}

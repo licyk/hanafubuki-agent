@@ -12,7 +12,8 @@
 //! what the instance's own owners did not stop). Last, the instance's
 //! runtime is stopped: the hard stop that drops whatever that instance still
 //! runs, including a call still in flight on it. A stage that does not end
-//! by its deadline is reported and the next one runs.
+//! by its deadline is reported and the next one runs. The data directory's
+//! lock is released last.
 use std::time::{Duration, Instant};
 
 use hanafubuki_agent_foundation::background_worker::WorkerShutdownDiagnostic;
@@ -83,6 +84,7 @@ pub(crate) fn shutdown_agent(
     let remaining = total.saturating_duration_since(Instant::now());
     diagnostics.extend(stop_instance(slot, running.as_ref(), remaining));
     marker.finish();
+    marker.release_data_dir();
     diagnostics
 }
 

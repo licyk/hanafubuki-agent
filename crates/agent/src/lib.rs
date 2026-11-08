@@ -8,18 +8,27 @@
 
 mod attachments;
 mod contracts;
+mod data_dir_lock;
 mod desktop;
 mod file_search;
 mod host;
 mod host_inputs;
 mod kernel_tasks;
+pub mod logging;
 mod memory;
 mod network;
 /// The Agent's half of the host's panic hook: its threads and guards are
 /// marked in its own foundation, which the host's hook cannot see, so the
 /// host's hook treats a panic as contained when this says so too.
+///
+/// The standalone binary installs the Agent foundation's hook itself:
+/// `configure_crash_record(AgentStoragePaths::crash_record_file)`, then
+/// `install_panic_hook(logging::logging_blocked)`.
 pub mod panic {
-    pub use hanafubuki_agent_foundation::panic::is_panic_contained;
+    pub use hanafubuki_agent_foundation::panic::{
+        configure_crash_record, install_panic_hook, is_panic_contained, recorded_panics,
+        PanicFaultSummary,
+    };
 }
 mod plugins;
 mod service;
@@ -27,6 +36,7 @@ mod shutdown;
 mod skill_watcher;
 mod skills;
 mod slot;
+mod standalone;
 mod startup;
 mod storage_paths;
 mod supervisor_runtime;
@@ -43,6 +53,7 @@ pub use attachments::{
 };
 use contracts::{agent_base_instructions, model_api_protocol, model_compaction_capability};
 pub use contracts::{AgentHostInstructions, AgentModelInfo};
+pub use data_dir_lock::{DataDirLock, DATA_DIR_LOCK_FILE};
 pub use desktop::DesktopAgent;
 pub use file_search::{AgentFileCandidate, AgentFileSearch, AgentFileSearchResult};
 /// The secure store a host hands the Agent (`AgentHostPorts::secrets`), and
@@ -56,7 +67,7 @@ pub use host::{
     AgentPluginGroup, AgentPluginLock, AgentPluginRow, AgentPluginState, AgentPluginStatus,
     AgentPlugins, NoopAgentPluginEventSink,
 };
-pub use host_inputs::{AgentSteeringRequest, AgentTurnRequest, HostContextPort};
+pub use host_inputs::{AgentSteeringRequest, AgentTurnRequest, HostContextPort, NoHostContext};
 pub use memory::AgentMemoryApplication;
 pub use network::{AgentProxy, NetworkSettingsPort};
 pub use service::{
@@ -86,6 +97,7 @@ pub use slot::{
     AgentSlot, AgentStartOptions, AgentStartStage, AgentStatus, AgentStatusEventSink,
     AgentUnavailable, NoopAgentStatusEventSink, AUTOMATIC_RESTART_DELAYS, AUTOMATIC_RESTART_WINDOW,
 };
+pub use standalone::{AgentRuntime, AgentRuntimeHost, AgentRuntimeOptions, KEYRING_SERVICE};
 #[cfg(test)]
 pub(crate) use startup::start_agent;
 pub(crate) use startup::{spawn_agent_start, AgentLauncher};
@@ -105,9 +117,11 @@ pub use hanafubuki_agent_workspace_fs::{
 use hanafubuki_agent_runtime::AGENT_RUNTIME_THREAD_NAME;
 use std::path::Path;
 
-/// The Agent's configuration, which the host opens in the directory it names.
+/// The Agent's configuration, which the host opens in the directory it names
+/// and the standalone Agent layers.
 pub use hanafubuki_agent_config::{
-    AgentConfig, AgentModelProtocol, AgentSettings, AgentSettingsPatch, AGENT_CREDENTIAL_FILES,
+    AgentConfig, AgentDirs, AgentLogLevel, AgentModelProtocol, AgentSettings, AgentSettingsPatch,
+    AgentStandaloneSettings, ConfigLayers, ConfigOverrides, AGENT_CREDENTIAL_FILES, AGENT_HOME_ENV,
 };
 pub use hanafubuki_agent_execution::{
     AgentBackgroundTerminalSnapshot, AgentBackgroundTerminalStopFailure,
@@ -132,6 +146,8 @@ pub use hanafubuki_agent_kernel::{
 };
 pub use hanafubuki_agent_kernel::{AgentQuarantinedSession, AgentRecoveryReport};
 use hanafubuki_agent_kernel::{AgentService, ModelCompactionCapability};
+/// What the Agent tells a host about its MCP servers.
+pub use hanafubuki_agent_mcp::{McpEventSink, NoopMcpEventSink};
 use hanafubuki_agent_workspace_fs::WorkspaceFsService;
 use serde::{Deserialize, Serialize};
 

@@ -13,13 +13,14 @@ use hanafubuki_agent_foundation::blocking::{
 };
 use hanafubuki_agent_foundation::paths::ResolvedPath;
 use hanafubuki_agent_foundation::secrets::MemorySecretStore;
-use hanafubuki_agent_kernel::AgentHostContext;
 use hanafubuki_agent_process::executor::ExecutorManager;
 
+/// A host that adds no context to steering.
+pub use crate::NoHostContext;
 use crate::{
     agent_workspace_roots_from, AgentApplicationService, AgentConfig, AgentHostInstructions,
     AgentHostPorts, AgentMemoryApplication, AgentModelProtocol, AgentProxy, AgentStoragePaths,
-    AgentWorkspaceRoots, HostContextPort, NetworkSettingsPort, SkillRoots, WorkspaceRootsPort,
+    AgentWorkspaceRoots, NetworkSettingsPort, SkillRoots, WorkspaceRootsPort,
 };
 
 /// What a test gives the Agent's shutdown before it expects no diagnostics.
@@ -115,15 +116,6 @@ impl WorkspaceRootsPort for FixedWorkspaceRoots {
 
     fn search_roots(&self, _host: &TurnExtensions) -> Result<Vec<(String, PathBuf)>, String> {
         Ok(Vec::new())
-    }
-}
-
-/// A host that adds no context to steering.
-pub struct NoHostContext;
-
-impl HostContextPort for NoHostContext {
-    fn steering_context(&self, _host: &TurnExtensions) -> Option<AgentHostContext> {
-        None
     }
 }
 
