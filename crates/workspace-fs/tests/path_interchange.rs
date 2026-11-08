@@ -23,6 +23,7 @@ use hanafubuki_agent_approval::{
     PermissionActionDetails,
 };
 use hanafubuki_agent_foundation::cancellation::CancellationToken;
+use hanafubuki_agent_foundation::paths::ResolvedPath;
 use hanafubuki_agent_workspace_fs::*;
 use tempfile::TempDir;
 
@@ -130,9 +131,12 @@ fn no_result_variant_exposes_a_verbatim_path() {
         }),
     ];
 
-    // Serialized JSON escapes Windows separators (`\` becomes `\\`), so the
-    // root must be compared in its escaped spelling.
-    let root_in_json = serde_json::to_string(&root.path().to_string_lossy()).unwrap();
+    // Results name the resolved root, which is not the temporary directory's
+    // spelling on Windows (`RUNNER~1` is a short name) or macOS (`/var` is a
+    // symlink). Serialized JSON escapes Windows separators (`\` becomes
+    // `\\`), so the root must be compared in its escaped spelling.
+    let root = ResolvedPath::resolve(root.path()).unwrap();
+    let root_in_json = serde_json::to_string(root.native_text()).unwrap();
     let root_in_json = &root_in_json[1..root_in_json.len() - 1];
 
     for request in requests {
