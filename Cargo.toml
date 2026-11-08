@@ -30,6 +30,7 @@ hanafubuki-agent-plugin-workspace-fs = { path = "crates/plugin-workspace-fs", ve
 hanafubuki-agent-process = { path = "crates/process", version = "0.1.0" }
 hanafubuki-agent-runtime = { path = "crates/runtime", version = "0.1.0" }
 hanafubuki-agent-skills = { path = "crates/skills", version = "0.1.0" }
+hanafubuki-agent-tui = { path = "crates/tui", version = "0.1.0" }
 hanafubuki-agent-tool-contracts = { path = "crates/tool-contracts", version = "0.1.0" }
 hanafubuki-agent-web-search = { path = "crates/web-search", version = "0.1.0" }
 hanafubuki-agent-workspace-fs = { path = "crates/workspace-fs", version = "0.1.0" }

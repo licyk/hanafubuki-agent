@@ -151,12 +151,20 @@ pub use hanafubuki_agent_kernel::{
 };
 pub use hanafubuki_agent_kernel::{AgentQuarantinedSession, AgentRecoveryReport};
 use hanafubuki_agent_kernel::{AgentService, ModelCompactionCapability};
+/// What a turn's events carry, which a terminal interface renders: the task
+/// checklist, the questions the model asks, the approvals it needs and the
+/// output of a committed tool call.
+pub use hanafubuki_agent_kernel::{
+    AgentTaskPlanSnapshot, AgentTaskPlanStep, AgentTaskPlanStepStatus, AgentToolPresentation,
+    AgentUserInputOption, AgentUserInputQuestion, ApprovalAction, ApprovalActionKind,
+};
 /// What the Agent tells a host about its MCP servers, and the servers it is
 /// told to connect.
 pub use hanafubuki_agent_mcp::{
     McpConnectionPhase, McpEventSink, McpServerConfig, McpServerId, McpStdioConfig,
     McpStreamableHttpConfig, McpTransportConfig, NoopMcpEventSink,
 };
+pub use hanafubuki_agent_tool_contracts::{ToolOutput, ToolOutputContent};
 use hanafubuki_agent_workspace_fs::WorkspaceFsService;
 use serde::{Deserialize, Serialize};
 

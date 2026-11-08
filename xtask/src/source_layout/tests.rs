@@ -112,6 +112,11 @@ fn a_well_laid_out_workspace_passes() {
         "xtask/src/task/tests.rs",
         "use super::*;\n#[test]\nfn runs() { run() }\n",
     );
+    write(
+        &root,
+        "xtask/src/task/snapshots/xtask__task__tests__runs.snap",
+        "---\nsource: xtask/src/task/tests.rs\n---\nran\n",
+    );
     write(&root, "crates/core/Cargo.toml", "");
     write(
         &root,

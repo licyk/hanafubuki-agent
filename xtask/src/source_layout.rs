@@ -187,7 +187,8 @@ fn is_glob_reexport(line: &str) -> bool {
 
 /// A module with production children is `foo/mod.rs`; a module whose only
 /// children are tests is `foo.rs`; a multi-file test directory is rooted at
-/// `tests/mod.rs`.
+/// `tests/mod.rs`. A `snapshots` directory holds the snapshot files insta
+/// writes beside the tests that assert them; it is no module.
 fn check_directory(
     root: &Path,
     src: &Path,
@@ -197,6 +198,9 @@ fn check_directory(
     for entry in sorted_entries(directory) {
         if entry.is_dir() {
             let name = file_name(&entry);
+            if name == "snapshots" {
+                continue;
+            }
             if name == "tests" {
                 if directory.join("tests.rs").is_file() {
                     violations.push(format!(
@@ -208,7 +212,12 @@ fn check_directory(
             }
             let has_production_children = sorted_entries(&entry)
                 .iter()
-                .any(|child| !matches!(file_name(child), "mod.rs" | "tests.rs" | "tests"));
+                .any(|child| {
+                    !matches!(
+                        file_name(child),
+                        "mod.rs" | "tests.rs" | "tests" | "snapshots"
+                    )
+                });
             let sibling = directory.join(format!("{name}.rs"));
             if has_production_children && sibling.is_file() {
                 violations.push(format!(

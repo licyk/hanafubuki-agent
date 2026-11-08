@@ -175,6 +175,8 @@ mechanical rules below; keep the rest in review.
   children are tests is `foo.rs` with `foo/tests.rs` or `foo/tests/mod.rs`; a
   multi-file test directory is rooted at `tests/mod.rs`.
 - `src/` contains no `#[path]` attribute: the module tree is the directory tree.
+- Snapshot files (`insta`) live in the `snapshots/` directory beside the tests
+  that assert them; a `snapshots/` directory is not a module.
 - Re-exports name their items (`pub use module::{Item, Other};`); `src/` has no
   glob re-export (`pub use module::*;`) at any visibility.
 - Production files contain no inline tests or `#[test]`; declare only an external

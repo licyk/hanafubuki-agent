@@ -1,0 +1,25 @@
+[package]
+name = "hanafubuki-agent-tui"
+description = "The hanafubuki-agent terminal interface: the inline chat, its composer and its approval and question overlays"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+hanafubuki-agent.workspace = true
+pulldown-cmark = { version = "0.13", default-features = false }
+# Without the default features, which pull crossterm 0.28 in beside 0.29.
+ratatui = { version = "0.30", default-features = false, features = ["crossterm_0_29", "scrolling-regions", "unstable-rendered-line-info"] }
+serde_json.workspace = true
+textwrap = "0.16"
+unicode-segmentation = "1.12"
+unicode-width = "0.2"
+
+[dev-dependencies]
+hanafubuki-agent = { workspace = true, features = ["test-support"] }
+insta = "1.46"
+# The vt100 test terminal reads what the crossterm backend wrote.
+ratatui = { version = "0.30", default-features = false, features = ["unstable-backend-writer"] }
+vt100 = "0.16"

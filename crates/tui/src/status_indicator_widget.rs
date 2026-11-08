@@ -1,0 +1,240 @@
+// Modified from OpenAI Codex rust-v0.93.0 (Apache-2.0).
+
+//! A live status indicator that shows the *latest* log line emitted by the
+//! application while the agent is processing a long‑running task.
+
+use std::time::Duration;
+use std::time::Instant;
+
+use ratatui::buffer::Buffer;
+use ratatui::crossterm::event::KeyCode;
+use ratatui::layout::Rect;
+use ratatui::style::Stylize;
+use ratatui::text::Line;
+use ratatui::text::Span;
+use ratatui::text::Text;
+use ratatui::widgets::Paragraph;
+use ratatui::widgets::Widget;
+use unicode_width::UnicodeWidthStr;
+
+use crate::app_event::{AppEvent, AppEventSender, Op};
+use crate::key_hint;
+use crate::render::renderable::Renderable;
+use crate::shimmer::{shimmer_spans, spinner};
+use crate::text_formatting::capitalize_first;
+use crate::tui::FrameRequester;
+use crate::wrapping::word_wrap_lines;
+use crate::wrapping::RtOptions;
+
+const DETAILS_MAX_LINES: usize = 3;
+const DETAILS_PREFIX: &str = "  └ ";
+
+pub(crate) struct StatusIndicatorWidget {
+    /// Animated header text (defaults to "Working").
+    header: String,
+    details: Option<String>,
+    show_interrupt_hint: bool,
+
+    elapsed_running: Duration,
+    last_resume_at: Instant,
+    is_paused: bool,
+    app_event_tx: AppEventSender,
+    frame_requester: FrameRequester,
+    animations_enabled: bool,
+}
+
+// Format elapsed seconds into a compact human-friendly form used by the status line.
+// Examples: 0s, 59s, 1m 00s, 59m 59s, 1h 00m 00s, 2h 03m 09s
+pub(crate) fn fmt_elapsed_compact(elapsed_secs: u64) -> String {
+    if elapsed_secs < 60 {
+        return format!("{elapsed_secs}s");
+    }
+    if elapsed_secs < 3600 {
+        let minutes = elapsed_secs / 60;
+        let seconds = elapsed_secs % 60;
+        return format!("{minutes}m {seconds:02}s");
+    }
+    let hours = elapsed_secs / 3600;
+    let minutes = (elapsed_secs % 3600) / 60;
+    let seconds = elapsed_secs % 60;
+    format!("{hours}h {minutes:02}m {seconds:02}s")
+}
+
+impl StatusIndicatorWidget {
+    pub(crate) fn new(
+        app_event_tx: AppEventSender,
+        frame_requester: FrameRequester,
+        animations_enabled: bool,
+    ) -> Self {
+        Self {
+            header: String::from("Working"),
+            details: None,
+            show_interrupt_hint: true,
+            elapsed_running: Duration::ZERO,
+            last_resume_at: Instant::now(),
+            is_paused: false,
+
+            app_event_tx,
+            frame_requester,
+            animations_enabled,
+        }
+    }
+
+    pub(crate) fn interrupt(&self) {
+        self.app_event_tx.send(AppEvent::Op(Op::Interrupt));
+    }
+
+    /// Update the animated header label (left of the brackets).
+    pub(crate) fn update_header(&mut self, header: String) {
+        self.header = header;
+    }
+
+    /// Update the details text shown below the header.
+    pub(crate) fn update_details(&mut self, details: Option<String>) {
+        self.details = details
+            .filter(|details| !details.is_empty())
+            .map(|details| capitalize_first(details.trim_start()));
+    }
+
+    #[cfg(test)]
+    pub(crate) fn header(&self) -> &str {
+        &self.header
+    }
+
+    #[cfg(test)]
+    pub(crate) fn details(&self) -> Option<&str> {
+        self.details.as_deref()
+    }
+
+    pub(crate) fn set_interrupt_hint_visible(&mut self, visible: bool) {
+        self.show_interrupt_hint = visible;
+    }
+
+    #[cfg(test)]
+    pub(crate) fn interrupt_hint_visible(&self) -> bool {
+        self.show_interrupt_hint
+    }
+
+    pub(crate) fn pause_timer(&mut self) {
+        self.pause_timer_at(Instant::now());
+    }
+
+    pub(crate) fn resume_timer(&mut self) {
+        self.resume_timer_at(Instant::now());
+    }
+
+    pub(crate) fn pause_timer_at(&mut self, now: Instant) {
+        if self.is_paused {
+            return;
+        }
+        self.elapsed_running += now.saturating_duration_since(self.last_resume_at);
+        self.is_paused = true;
+    }
+
+    pub(crate) fn resume_timer_at(&mut self, now: Instant) {
+        if !self.is_paused {
+            return;
+        }
+        self.last_resume_at = now;
+        self.is_paused = false;
+        self.frame_requester.schedule_frame();
+    }
+
+    fn elapsed_duration_at(&self, now: Instant) -> Duration {
+        let mut elapsed = self.elapsed_running;
+        if !self.is_paused {
+            elapsed += now.saturating_duration_since(self.last_resume_at);
+        }
+        elapsed
+    }
+
+    fn elapsed_seconds_at(&self, now: Instant) -> u64 {
+        self.elapsed_duration_at(now).as_secs()
+    }
+
+    pub(crate) fn elapsed_seconds(&self) -> u64 {
+        self.elapsed_seconds_at(Instant::now())
+    }
+
+    /// Wrap the details text into a fixed width and return the lines, truncating if necessary.
+    fn wrapped_details_lines(&self, width: u16) -> Vec<Line<'static>> {
+        let Some(details) = self.details.as_deref() else {
+            return Vec::new();
+        };
+        if width == 0 {
+            return Vec::new();
+        }
+
+        let prefix_width = UnicodeWidthStr::width(DETAILS_PREFIX);
+        let opts = RtOptions::new(usize::from(width))
+            .initial_indent(Line::from(DETAILS_PREFIX.dim()))
+            .subsequent_indent(Line::from(Span::from(" ".repeat(prefix_width)).dim()))
+            .break_words(true);
+
+        let mut out = word_wrap_lines(details.lines().map(|line| vec![line.dim()]), opts);
+
+        if out.len() > DETAILS_MAX_LINES {
+            out.truncate(DETAILS_MAX_LINES);
+            let content_width = usize::from(width).saturating_sub(prefix_width).max(1);
+            let max_base_len = content_width.saturating_sub(1);
+            if let Some(span) = out.last_mut().and_then(|last| last.spans.last_mut()) {
+                let trimmed: String = span.content.as_ref().chars().take(max_base_len).collect();
+                *span = format!("{trimmed}…").dim();
+            }
+        }
+
+        out
+    }
+}
+
+impl Renderable for StatusIndicatorWidget {
+    fn desired_height(&self, width: u16) -> u16 {
+        1 + u16::try_from(self.wrapped_details_lines(width).len()).unwrap_or(0)
+    }
+
+    fn render(&self, area: Rect, buf: &mut Buffer) {
+        if area.is_empty() {
+            return;
+        }
+
+        // Schedule next animation frame.
+        self.frame_requester
+            .schedule_frame_in(Duration::from_millis(32));
+        let now = Instant::now();
+        let elapsed_duration = self.elapsed_duration_at(now);
+        let pretty_elapsed = fmt_elapsed_compact(elapsed_duration.as_secs());
+
+        let mut spans = Vec::with_capacity(5);
+        spans.push(spinner(Some(self.last_resume_at), self.animations_enabled));
+        spans.push(" ".into());
+        if self.animations_enabled {
+            spans.extend(shimmer_spans(&self.header));
+        } else if !self.header.is_empty() {
+            spans.push(self.header.clone().into());
+        }
+        spans.push(" ".into());
+        if self.show_interrupt_hint {
+            spans.extend(vec![
+                format!("({pretty_elapsed} • ").dim(),
+                key_hint::plain(KeyCode::Esc).into(),
+                " to interrupt)".dim(),
+            ]);
+        } else {
+            spans.push(format!("({pretty_elapsed})").dim());
+        }
+
+        let mut lines = Vec::new();
+        lines.push(Line::from(spans));
+        if area.height > 1 {
+            // If there is enough space, add the details lines below the header.
+            let details = self.wrapped_details_lines(area.width);
+            let max_details = usize::from(area.height.saturating_sub(1));
+            lines.extend(details.into_iter().take(max_details));
+        }
+
+        Paragraph::new(Text::from(lines)).render(area, buf);
+    }
+}
+
+#[cfg(test)]
+mod tests;
