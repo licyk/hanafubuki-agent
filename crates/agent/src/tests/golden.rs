@@ -1,0 +1,596 @@
+//! Golden baselines for the Agent over its own plugin set, with a host that
+//! adds no plugin rows, context or instructions (docs/rules/plugins.md,
+//! "Testing a plugin").
+//!
+//! They pin what the model receives (instructions, tool catalog, input items),
+//! the presentation event sequence of a tool round trip, and that history
+//! written by an earlier build still opens and continues. Rerun with
+//! `HANAFUBUKI_AGENT_UPDATE_GOLDEN=1` to rewrite the fixtures after an intentional change,
+//! then review the fixture diff. The history corpus is re-recorded only with
+//! `HANAFUBUKI_AGENT_UPDATE_GOLDEN_HISTORY=1`, after an intentional history format change:
+//! re-recording it would stop proving that older history still opens.
+//!
+//! The fixtures are Linux-only: the world state names the platform and the
+//! architecture, and temporary paths differ per platform.
+
+use std::path::{Path, PathBuf};
+
+use super::*;
+use crate::{
+    AgentHistorySortDirection, AgentSessionListRequest, AgentTranscriptPageRequest,
+    McpServerWriteRequest,
+};
+use serde_json::{Map, Value};
+
+const GOLDEN_DIR: &str = "src/tests/golden";
+
+#[tokio::test]
+async fn default_mode_request_matches_golden() {
+    let body = first_request_with(
+        "golden-default",
+        AgentSessionMode::Default,
+        |_, _| {},
+        |_, _| {},
+    )
+    .await;
+    assert_golden("default_mode_request", &body);
+}
+
+#[tokio::test]
+async fn plan_mode_request_matches_golden() {
+    let body =
+        first_request_with("golden-plan", AgentSessionMode::Plan, |_, _| {}, |_, _| {}).await;
+    assert_golden("plan_mode_request", &body);
+}
+
+#[tokio::test]
+async fn tool_round_trip_matches_golden() {
+    let (requests, kinds) = run_tool_round_trip("golden-round-trip", |_| {}).await;
+    assert_golden("tool_round_trip_request", &requests);
+    assert_golden("tool_round_trip_events", &kinds);
+}
+
+/// Runs one `skills_list` round trip and returns the normalized second request
+/// and the presentation event kinds. `after_shutdown` sees the paths once the
+/// history is flushed.
+async fn run_tool_round_trip(
+    name: &str,
+    after_shutdown: impl FnOnce(&TestPaths),
+) -> (Value, Value) {
+    let server = FakeServer::start(vec![
+        (tool_events("skills_list", "{}"), Duration::ZERO),
+        (assistant_events("No Skills are installed."), Duration::ZERO),
+    ])
+    .await;
+    let (service, paths) = configured_service(name, &server.base_url);
+    let session = service
+        .create_session(AgentSessionMode::Default)
+        .await
+        .unwrap();
+    let outcome = service
+        .start_turn(session.id, "List the Skills.".to_string().into())
+        .await
+        .unwrap();
+    assert_eq!(outcome.final_answer, "No Skills are installed.");
+
+    let requests = server.requests();
+    let second: Value = serde_json::from_slice(&requests[1].body).unwrap();
+    let second = normalize(&second, &paths.app_data_dir);
+
+    let kinds = service
+        .events_since(session.id, None)
+        .unwrap()
+        .events
+        .iter()
+        .map(|event| serde_json::to_value(&event.kind).unwrap()["type"].clone())
+        .collect::<Vec<_>>();
+
+    assert!(service
+        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
+        .is_empty());
+    after_shutdown(&paths);
+    let _ = std::fs::remove_dir_all(paths.app_data_dir);
+    (second, Value::Array(kinds))
+}
+
+/// History written by the build that recorded the fixture must open, keep its
+/// transcript, and accept a new turn.
+#[tokio::test]
+async fn recorded_history_reopens_and_continues() {
+    if updating_history() {
+        run_tool_round_trip("golden-history-corpus", record_history_fixture).await;
+    }
+    let server = FakeServer::start(vec![(assistant_events("Continued."), Duration::ZERO)]).await;
+    let (service, paths) = service_with("golden-history", |paths, config| {
+        copy_tree(&golden_path("history"), &agent_history_dir(paths));
+        configure_test_provider(config, &server.base_url, None);
+    });
+    let sessions = service
+        .list_sessions_page(AgentSessionListRequest::default())
+        .unwrap()
+        .sessions;
+    assert_eq!(sessions.len(), 1, "the corpus holds exactly one session");
+    let session_id = sessions[0].session_id;
+
+    let opened = service.open_session(session_id, 50).unwrap();
+    assert_golden(
+        "recorded_history_transcript",
+        &transcript_digest(&serde_json::to_value(&opened.transcript).unwrap()),
+    );
+
+    let outcome = service
+        .start_turn(session_id, "Continue.".to_string().into())
+        .await
+        .unwrap();
+    assert_eq!(outcome.final_answer, "Continued.");
+    let page = service
+        .read_transcript_page(AgentTranscriptPageRequest {
+            session_id,
+            page_size: 50,
+            cursor: None,
+            direction: AgentHistorySortDirection::Ascending,
+            through_revision: None,
+        })
+        .unwrap();
+    let rendered = serde_json::to_string(&page).unwrap();
+    assert!(rendered.contains("List the tasks."));
+    assert!(rendered.contains("Continued."));
+
+    assert!(service
+        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
+        .is_empty());
+    let _ = std::fs::remove_dir_all(paths.app_data_dir);
+}
+
+#[tokio::test]
+async fn skill_catalog_request_matches_golden() {
+    let body = first_request_with(
+        "golden-skills",
+        AgentSessionMode::Default,
+        |_, _| {},
+        enable_two_skills,
+    )
+    .await;
+    assert_golden("skill_catalog_request", &body);
+}
+
+#[tokio::test]
+async fn workspace_instructions_request_matches_golden() {
+    let body = first_request_with(
+        "golden-workspace-instructions",
+        AgentSessionMode::Default,
+        |_, _| {},
+        |_, paths| {
+            std::fs::write(
+                paths.managed_instances_dir.join("AGENTS.md"),
+                "# Workspace rules\n\nRun the narrow checks first.\n",
+            )
+            .unwrap();
+        },
+    )
+    .await;
+    assert_golden("workspace_instructions_request", &body);
+}
+
+#[tokio::test]
+async fn memory_summary_request_matches_golden() {
+    let body = first_request_with(
+        "golden-memory",
+        AgentSessionMode::Default,
+        |_, config| enable_memory(config, false),
+        |service, _| {
+            let memory = service.test_memory();
+            let artifacts = &memory.repository().paths().artifacts;
+            std::fs::write(
+                artifacts.join("memory_summary.md"),
+                "v1\n\n- Validation preferences: MEMORY.md\n",
+            )
+            .unwrap();
+        },
+    )
+    .await;
+    assert_golden("memory_summary_request", &body);
+}
+
+/// A manual compaction after one turn: the summary request it sends, and the
+/// next turn's request, which starts from the installed checkpoint. The
+/// session carries a Skill catalog and workspace instructions, so what the
+/// compaction keeps of the initial context is visible.
+#[tokio::test]
+async fn compacted_request_matches_golden() {
+    let server = FakeServer::start(vec![
+        (assistant_events("Done."), Duration::ZERO),
+        (
+            assistant_events("The user said hello; nothing else happened."),
+            Duration::ZERO,
+        ),
+        (assistant_events("Still here."), Duration::ZERO),
+    ])
+    .await;
+    let (service, paths) = configured_service("golden-compacted", &server.base_url);
+    enable_two_skills(&service, &paths);
+    std::fs::write(
+        paths.managed_instances_dir.join("AGENTS.md"),
+        "# Workspace rules\n\nRun the narrow checks first.\n",
+    )
+    .unwrap();
+    let session = service
+        .create_session(AgentSessionMode::Default)
+        .await
+        .unwrap();
+    service
+        .start_turn(session.id, "Hello.".to_string().into())
+        .await
+        .unwrap();
+    let before = service.snapshot(session.id).unwrap();
+    service
+        .compact_session(session.id, before.generation, before.revision)
+        .await
+        .unwrap();
+    service
+        .start_turn(session.id, "Are you there?".to_string().into())
+        .await
+        .unwrap();
+
+    let requests = server.requests();
+    assert_eq!(requests.len(), 3);
+    let body = |index: usize| -> Value { serde_json::from_slice(&requests[index].body).unwrap() };
+    let pinned = serde_json::json!({
+        "compaction_request": body(1),
+        "next_request": body(2),
+    });
+    assert!(service
+        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
+        .is_empty());
+    let normalized = normalize(&pinned, &paths.app_data_dir);
+    let _ = std::fs::remove_dir_all(paths.app_data_dir);
+    assert_golden("compacted_request", &normalized);
+}
+
+/// A window compacted mid-turn (the model asked for a new context) renders
+/// every section again from the registry: the step after the compaction
+/// carries the Skill catalog, as the first step did, beside the compacted
+/// window's own initial context.
+#[tokio::test]
+async fn a_window_compacted_mid_turn_keeps_the_skill_catalog() {
+    let server = FakeServer::start(vec![
+        (tool_events("new_context", "{}"), Duration::ZERO),
+        (
+            assistant_events("The user asked for a fresh context."),
+            Duration::ZERO,
+        ),
+        (assistant_events("Done."), Duration::ZERO),
+    ])
+    .await;
+    let (service, paths) = configured_service("compacted-mid-turn", &server.base_url);
+    enable_two_skills(&service, &paths);
+    let session = service
+        .create_session(AgentSessionMode::Default)
+        .await
+        .unwrap();
+    service
+        .start_turn(session.id, "Start over.".to_string().into())
+        .await
+        .unwrap();
+
+    let requests = server.requests();
+    assert_eq!(requests.len(), 3);
+    let input = |index: usize| -> Vec<Value> {
+        let body: Value = serde_json::from_slice(&requests[index].body).unwrap();
+        body["input"].as_array().unwrap().clone()
+    };
+    let has_text =
+        |items: &[Value], needle: &str| items.iter().any(|item| item.to_string().contains(needle));
+    assert!(has_text(&input(0), "<skills_instructions>"));
+    assert!(!has_text(&input(1), "<skills_instructions>"));
+    let after = input(2);
+    assert!(has_text(&after, "<skills_instructions>"));
+    assert!(has_text(&after, "Mode: default"));
+    assert!(has_text(&after, "The user asked for a fresh context."));
+    assert!(service
+        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
+        .is_empty());
+    let _ = std::fs::remove_dir_all(paths.app_data_dir);
+}
+
+/// MCP tools as the model receives them, from three scripted servers:
+/// `fixture` (Direct) with a plain name, a 64-byte name, a name the wire
+/// table fits to the 128-byte Responses limit, a name with an illegal
+/// character and `b__c`; `fixture__b` (Direct) whose `c` flattens to the
+/// same `mcp__fixture__b__c`, so it is renamed and the rename reported; and
+/// `deferred` (Deferred), reached only through `tool_search`.
+#[tokio::test]
+async fn mcp_tools_request_matches_golden() {
+    let mcp = scripted_mcp_servers().await;
+    let server = FakeServer::start(vec![(assistant_events("Done."), Duration::ZERO)]).await;
+    let (service, paths) = configured_service("golden-mcp", &server.base_url);
+    connect_scripted_mcp_servers(&service, &mcp).await;
+    let session = service
+        .create_session(AgentSessionMode::Default)
+        .await
+        .unwrap();
+    service
+        .start_turn(session.id, "Hello.".to_string().into())
+        .await
+        .unwrap();
+    let body: Value = serde_json::from_slice(&server.requests()[0].body).unwrap();
+    assert!(service
+        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
+        .is_empty());
+    let normalized = normalize(&body, &paths.app_data_dir);
+    let _ = std::fs::remove_dir_all(paths.app_data_dir);
+    assert_golden("mcp_tools_request", &normalized);
+}
+
+/// A `tool_search` that finds the deferred MCP tool, then a call of it: the
+/// request after the search and the request after the call.
+#[tokio::test]
+async fn tool_search_round_trip_matches_golden() {
+    let mcp = scripted_mcp_servers().await;
+    let server = FakeServer::start(vec![
+        (tool_search_events("look up a record"), Duration::ZERO),
+        (
+            namespace_tool_events("mcp__deferred", "lookup", "{\"value\":\"42\"}"),
+            Duration::ZERO,
+        ),
+        (assistant_events("Found it."), Duration::ZERO),
+    ])
+    .await;
+    let (service, paths) = configured_service("golden-tool-search", &server.base_url);
+    connect_scripted_mcp_servers(&service, &mcp).await;
+    let session = service
+        .create_session(AgentSessionMode::Default)
+        .await
+        .unwrap();
+    let outcome = service
+        .start_turn(session.id, "Look up record 42.".to_string().into())
+        .await
+        .unwrap();
+    assert_eq!(outcome.final_answer, "Found it.");
+    let requests = server.requests();
+    assert_eq!(requests.len(), 3);
+    let body = |index: usize| -> Value { serde_json::from_slice(&requests[index].body).unwrap() };
+    let pinned = serde_json::json!({
+        "after_search": body(1),
+        "after_call": body(2),
+    });
+    assert!(service
+        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
+        .is_empty());
+    let normalized = normalize(&pinned, &paths.app_data_dir);
+    let _ = std::fs::remove_dir_all(paths.app_data_dir);
+    assert_golden("tool_search_round_trip", &normalized);
+}
+
+async fn scripted_mcp_servers() -> ScriptedMcpServers {
+    ScriptedMcpServers::start(std::collections::BTreeMap::from([
+        (
+            "fixture",
+            vec![
+                scripted_tool("echo", "Echo the value."),
+                scripted_tool(&format!("long_{}", "x".repeat(59)), "A 64-byte name."),
+                scripted_tool(&"y".repeat(120), "A name over the flattened limit."),
+                scripted_tool("my.tool", "A name with a dot."),
+                scripted_tool("b__c", "Flattens like fixture__b's c."),
+            ],
+        ),
+        (
+            "fixture__b",
+            vec![scripted_tool("c", "Flattens like fixture's b__c.")],
+        ),
+        (
+            "deferred",
+            vec![scripted_tool("lookup", "Look up a record.")],
+        ),
+    ]))
+    .await
+}
+
+async fn connect_scripted_mcp_servers(service: &AgentApplicationService, mcp: &ScriptedMcpServers) {
+    use McpExposurePolicy::{Deferred, Direct};
+    let mut revision = service.mcp_snapshot().await.unwrap().settings.revision;
+    for (id, exposure) in [
+        ("fixture", Direct),
+        ("fixture__b", Direct),
+        ("deferred", Deferred),
+    ] {
+        let snapshot = service
+            .mcp_write_server(McpServerWriteRequest {
+                expected_revision: revision,
+                server: mcp.config(id, exposure),
+            })
+            .await
+            .unwrap();
+        revision = snapshot.settings.revision;
+    }
+}
+
+/// The first request of a "Hello." turn in `mode`, after `configure` sets
+/// the settings and `prepare` the fixture files of a configured service.
+async fn first_request_with(
+    name: &str,
+    mode: AgentSessionMode,
+    configure: impl FnOnce(&TestPaths, &AgentConfig),
+    prepare: impl FnOnce(&AgentApplicationService, &TestPaths),
+) -> Value {
+    let server = FakeServer::start(vec![(assistant_events("Done."), Duration::ZERO)]).await;
+    let (service, paths) = service_with(name, |paths, config| {
+        configure_test_provider(config, &server.base_url, None);
+        configure(paths, config);
+    });
+    prepare(&service, &paths);
+    let session = service.create_session(mode).await.unwrap();
+    service
+        .start_turn(session.id, "Hello.".to_string().into())
+        .await
+        .unwrap();
+    let requests = server.requests();
+    assert_eq!(requests.len(), 1);
+    let body: Value = serde_json::from_slice(&requests[0].body).unwrap();
+    assert!(service
+        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
+        .is_empty());
+    let normalized = normalize(&body, &paths.app_data_dir);
+    let _ = std::fs::remove_dir_all(paths.app_data_dir);
+    normalized
+}
+
+/// Keeps the item kinds and the visible text of a transcript page; ids,
+/// revisions and timestamps belong to the recording run.
+fn transcript_digest(page: &Value) -> Value {
+    fn texts(value: &Value, out: &mut Vec<Value>) {
+        match value {
+            Value::Object(object) => {
+                for (key, value) in object {
+                    match (key.as_str(), value) {
+                        ("type" | "kind" | "text" | "role" | "name", Value::String(_)) => {
+                            out.push(Value::String(format!("{key}={}", value.as_str().unwrap())));
+                        }
+                        _ => texts(value, out),
+                    }
+                }
+            }
+            Value::Array(items) => items.iter().for_each(|item| texts(item, out)),
+            _ => {}
+        }
+    }
+    let mut out = Vec::new();
+    texts(&sorted(page), &mut out);
+    Value::Array(out)
+}
+
+fn normalize(value: &Value, app_data_dir: &Path) -> Value {
+    let app_data_dir = app_data_dir.to_string_lossy().into_owned();
+    let replace = |text: &str| {
+        let text = text.replace(&app_data_dir, "<APP_DATA>").replace(
+            &format!("\"architecture\":\"{}\"", std::env::consts::ARCH),
+            "\"architecture\":\"<ARCH>\"",
+        );
+        redact_digests(&text)
+    };
+    fn walk(value: &Value, replace: &dyn Fn(&str) -> String) -> Value {
+        match value {
+            Value::String(text) => Value::String(replace(text)),
+            Value::Array(items) => {
+                Value::Array(items.iter().map(|item| walk(item, replace)).collect())
+            }
+            Value::Object(object) => Value::Object(
+                object
+                    .iter()
+                    .map(|(key, value)| (key.clone(), walk(value, replace)))
+                    .collect(),
+            ),
+            other => other.clone(),
+        }
+    }
+    sorted(&walk(value, &replace))
+}
+
+/// World-state sections carry a content digest that covers temporary paths,
+/// and the tool catalog revision covers each MCP connection's generation.
+fn redact_digests(text: &str) -> String {
+    ["version=\"", "\"catalogRevision\":\""]
+        .into_iter()
+        .fold(text.to_string(), |text, marker| {
+            redact_digests_after(&text, marker)
+        })
+}
+
+fn redact_digests_after(text: &str, marker: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(position) = rest.find(marker) {
+        let start = position + marker.len();
+        out.push_str(&rest[..start]);
+        let candidate = &rest[start..];
+        let digest_length = candidate
+            .bytes()
+            .take_while(|byte| byte.is_ascii_hexdigit())
+            .count();
+        if digest_length == 64 {
+            out.push_str("<DIGEST>");
+            rest = &candidate[64..];
+        } else {
+            rest = candidate;
+        }
+    }
+    out.push_str(rest);
+    out
+}
+
+/// Object keys in a stable order whether or not `serde_json/preserve_order` is
+/// enabled somewhere in the dependency graph.
+fn sorted(value: &Value) -> Value {
+    match value {
+        Value::Array(items) => Value::Array(items.iter().map(sorted).collect()),
+        Value::Object(object) => {
+            let mut keys = object.keys().collect::<Vec<_>>();
+            keys.sort_unstable();
+            let mut out = Map::new();
+            for key in keys {
+                out.insert(key.clone(), sorted(&object[key]));
+            }
+            Value::Object(out)
+        }
+        other => other.clone(),
+    }
+}
+
+fn updating() -> bool {
+    std::env::var_os("HANAFUBUKI_AGENT_UPDATE_GOLDEN").is_some()
+}
+
+fn updating_history() -> bool {
+    std::env::var_os("HANAFUBUKI_AGENT_UPDATE_GOLDEN_HISTORY").is_some()
+}
+
+fn golden_path(name: &str) -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join(GOLDEN_DIR)
+        .join(name)
+}
+
+fn assert_golden(name: &str, actual: &Value) {
+    let path = golden_path(&format!("{name}.json"));
+    let rendered = format!("{}\n", serde_json::to_string_pretty(actual).unwrap());
+    if updating() {
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, rendered).unwrap();
+        return;
+    }
+    let expected = std::fs::read_to_string(&path)
+        .unwrap_or_else(|error| panic!("missing golden {}: {error}", path.display()));
+    assert!(
+        expected == rendered,
+        "golden {name} changed; rerun with HANAFUBUKI_AGENT_UPDATE_GOLDEN=1 and review the fixture diff"
+    );
+}
+
+fn agent_history_dir(paths: &TestPaths) -> PathBuf {
+    paths.data_dir.join("agent-test").join("history")
+}
+
+/// Stores the session JSONL written by this build. The SQLite index is a
+/// projection and is rebuilt on open, so the corpus leaves it out.
+fn record_history_fixture(paths: &TestPaths) {
+    let target = golden_path("history");
+    let _ = std::fs::remove_dir_all(&target);
+    copy_tree(&agent_history_dir(paths), &target);
+}
+
+fn copy_tree(source: &Path, target: &Path) {
+    std::fs::create_dir_all(target).unwrap();
+    for entry in std::fs::read_dir(source).unwrap() {
+        let entry = entry.unwrap();
+        let name = entry.file_name();
+        if name.to_string_lossy().starts_with("index.sqlite3") {
+            continue;
+        }
+        let destination = target.join(&name);
+        if entry.file_type().unwrap().is_dir() {
+            copy_tree(&entry.path(), &destination);
+        } else {
+            std::fs::copy(entry.path(), destination).unwrap();
+        }
+    }
+}

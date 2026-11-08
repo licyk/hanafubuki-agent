@@ -1,0 +1,21 @@
+[package]
+name = "hanafubuki-agent-plugin-workspace-fs"
+description = "The hanafubuki-agent plugin for workspace file tools"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+hanafubuki-agent-contracts.workspace = true
+hanafubuki-agent-approval.workspace = true
+hanafubuki-agent-tool-contracts.workspace = true
+hanafubuki-agent-workspace-fs.workspace = true
+kardia-core.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+hanafubuki-agent-foundation.workspace = true
+tempfile.workspace = true
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }

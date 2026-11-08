@@ -1,0 +1,36 @@
+# Path resolution boundary policy, checked by `cargo xtask
+# check-path-boundaries`.
+#
+# `hanafubuki-agent-foundation::paths` is the only authority that may call
+# `fs::canonicalize`. Every other crate resolves a location through
+# `ResolvedPath` and then picks a projection deliberately:
+#
+#   system()      -> operating system calls, and a child process working
+#                    directory. Keeps the Windows verbatim prefix, and with it
+#                    long-path capability.
+#   native()      -> anything a person or a model reads, anything written to a
+#                    durable record, and any argument handed to a child process.
+#   key()         -> every comparison, prefix test, hash, and approval digest.
+#
+# Entries below are the audited exceptions. Every entry states why the raw call
+# is correct where it is.
+
+[[allow]]
+path = "crates/foundation/src/paths/resolved.rs"
+reason = """
+The Agent's authority, the twin of `hanafubuki-foundation`'s: the one
+sanctioned `fs::canonicalize` call in the Agent's crates.
+"""
+
+[[allow]]
+path = "crates/foundation/src/paths/tests/resolved.rs"
+reason = """
+Tests of the Agent's authority, the twin of `hanafubuki-foundation`'s.
+"""
+
+[[allow]]
+path = "crates/mcp/src/program/tests.rs"
+reason = """
+Test fixture. Resolves a temporary executable to assert program resolution
+returns the same location.
+"""

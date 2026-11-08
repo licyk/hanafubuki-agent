@@ -1,0 +1,7 @@
+interface:
+  display_name: Skill Creator
+  short_description: Write and revise reusable Agent Skills
+  brand_color: "#2563EB"
+  default_prompt: Create a focused Skill from a workflow the user repeats.
+policy:
+  allow_implicit_invocation: true

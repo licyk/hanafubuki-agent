@@ -1,0 +1,209 @@
+# Types that decode strictly, checked by `cargo xtask check-strict-decoding`.
+#
+# `deny_unknown_fields` follows the input source (AGENTS.md, "Decoding by
+# input source"): a request a host's frontend sends over IPC (`ipc-request`)
+# and a manifest we produce and check by digest (`integrity-manifest`) reject
+# what they do not know; our persisted data, external producers and model
+# output never do. `other` is security-relevant strictness that is neither,
+# and its reason says why. A type with the attribute that is not listed
+# fails, and so does an entry whose type no longer has it. `type` is the type
+# name, qualified by inline modules.
+version = 1
+
+[[types]]
+path = "crates/kernel/src/model/session.rs"
+type = "AgentSessionTitleRenameRequest"
+category = "ipc-request"
+reason = "The argument of `agent_rename_session`."
+
+[[types]]
+path = "crates/kernel/src/model/session.rs"
+type = "AgentPlanImplementationRequest"
+category = "ipc-request"
+reason = "The argument of `agent_implement_plan`."
+
+[[types]]
+path = "crates/kernel/src/model/session.rs"
+type = "AgentSessionForkRequest"
+category = "ipc-request"
+reason = "The argument of `agent_fork_session_before_turn`."
+
+[[types]]
+path = "crates/kernel/src/model/session.rs"
+type = "AgentSessionHeadForkRequest"
+category = "ipc-request"
+reason = "The argument of `agent_fork_session_at_head`."
+
+[[types]]
+path = "crates/kernel/src/model/session.rs"
+type = "AgentSkillRef"
+category = "ipc-request"
+reason = "A Skill the user picked, inside `DesktopAgentTurnInput` (`agent_start_turn`); never persisted."
+
+[[types]]
+path = "crates/kernel/src/conversation/mod.rs"
+type = "AgentSessionListRequest"
+category = "ipc-request"
+reason = "The argument of `agent_list_session_page`."
+
+[[types]]
+path = "crates/kernel/src/conversation/mod.rs"
+type = "AgentTranscriptPageRequest"
+category = "ipc-request"
+reason = "The argument of `agent_read_transcript_page`."
+
+[[types]]
+path = "crates/kernel/src/conversation/mod.rs"
+type = "AgentTurnPageRequest"
+category = "ipc-request"
+reason = "The argument of `agent_read_turn_page`."
+
+[[types]]
+path = "crates/history/src/store/query/cursor.rs"
+type = "SessionCursor"
+category = "ipc-request"
+reason = "The opaque page cursor the frontend hands back in a page request; one that does not decode is an invalid cursor."
+
+[[types]]
+path = "crates/history/src/store/query/cursor.rs"
+type = "TranscriptCursor"
+category = "ipc-request"
+reason = "The opaque page cursor the frontend hands back in a page request; one that does not decode is an invalid cursor."
+
+[[types]]
+path = "crates/config/src/settings/mod.rs"
+type = "AgentSettingsPatch"
+category = "ipc-request"
+reason = "The argument of `agent_settings_write`."
+
+[[types]]
+path = "crates/config/src/settings/mod.rs"
+type = "AgentMemorySettings"
+category = "ipc-request"
+reason = "The memory settings inside `AgentSettingsPatch` (`agent_settings_write`); persisted field by field, never through serde."
+
+[[types]]
+path = "crates/agent/src/attachments.rs"
+type = "DesktopAgentImageInput"
+category = "ipc-request"
+reason = "An image inside `DesktopAgentTurnInput` and `DesktopAgentSteeringInput`."
+
+[[types]]
+path = "crates/agent/src/service/skill_operations.rs"
+type = "LocalSkillInstallRequest"
+category = "ipc-request"
+reason = "The argument of `agent_install_skill`."
+
+[[types]]
+path = "crates/agent/src/service/mcp/contracts.rs"
+type = "McpCredentialsWriteRequest"
+category = "ipc-request"
+reason = "The argument of `agent_mcp_write_credentials`."
+
+[[types]]
+path = "crates/agent/src/service/mcp/contracts.rs"
+type = "McpServerWriteRequest"
+category = "ipc-request"
+reason = "The argument of `agent_mcp_write_server`."
+
+[[types]]
+path = "crates/agent/src/service/mcp/contracts.rs"
+type = "McpServerDeleteRequest"
+category = "ipc-request"
+reason = "The argument of `agent_mcp_delete_server`."
+
+[[types]]
+path = "crates/agent/src/service/mcp/contracts.rs"
+type = "McpOAuthLoginRequest"
+category = "ipc-request"
+reason = "The argument of `agent_mcp_oauth_start`."
+
+[[types]]
+path = "crates/agent/src/service/mcp/contracts.rs"
+type = "McpOAuthCallbackRequest"
+category = "ipc-request"
+reason = "The argument of `agent_mcp_oauth_complete`."
+
+[[types]]
+path = "crates/agent/src/service/mcp/contracts.rs"
+type = "McpOAuthCancelRequest"
+category = "ipc-request"
+reason = "The argument of `agent_mcp_oauth_cancel`."
+
+[[types]]
+path = "crates/agent/src/service/provider/contracts.rs"
+type = "AgentProviderModelCatalogRequest"
+category = "ipc-request"
+reason = "The argument of `agent_list_provider_models`."
+
+[[types]]
+path = "crates/agent/src/service/provider/contracts.rs"
+type = "AgentProviderWriteRequest"
+category = "ipc-request"
+reason = "The argument of `agent_provider_write`."
+
+[[types]]
+path = "crates/agent/src/service/provider/contracts.rs"
+type = "AgentModelPolicyWriteRequest"
+category = "ipc-request"
+reason = "The argument of `agent_model_policy_write`."
+
+[[types]]
+path = "crates/agent/src/service/provider/contracts.rs"
+type = "AgentProviderEnabledRequest"
+category = "ipc-request"
+reason = "The argument of `agent_provider_set_enabled`."
+
+[[types]]
+path = "crates/agent/src/service/provider/contracts.rs"
+type = "AgentProviderDeleteRequest"
+category = "ipc-request"
+reason = "The argument of `agent_provider_delete`."
+
+[[types]]
+path = "crates/agent/src/service/provider/contracts.rs"
+type = "AgentSessionModelSelectionRequest"
+category = "ipc-request"
+reason = "The argument of `agent_set_session_model`."
+
+[[types]]
+path = "crates/agent/src/service/provider/contracts.rs"
+type = "AgentSessionReasoningEffortRequest"
+category = "ipc-request"
+reason = "The argument of `agent_set_session_reasoning_effort`."
+
+[[types]]
+path = "crates/agent/src/service/provider/contracts.rs"
+type = "AgentProviderDraft"
+category = "ipc-request"
+reason = "The provider inside `AgentProviderWriteRequest` (`agent_provider_write`)."
+
+[[types]]
+path = "crates/memory/src/repository/artifacts/manifest.rs"
+type = "ArtifactManifest"
+category = "integrity-manifest"
+reason = "The manifest a memory consolidation is published under: the SHA-256 of every published artifact and its sources, checked against them before they are read; a mismatch is a corrupt publication."
+
+[[types]]
+path = "crates/memory/src/repository/artifacts/manifest.rs"
+type = "ManifestSource"
+category = "integrity-manifest"
+reason = "The manifest a memory consolidation is published under: the SHA-256 of every published artifact and its sources, checked against them before they are read; a mismatch is a corrupt publication."
+
+[[types]]
+path = "crates/memory/src/repository/artifacts/manifest.rs"
+type = "ManifestRollout"
+category = "integrity-manifest"
+reason = "The manifest a memory consolidation is published under: the SHA-256 of every published artifact and its sources, checked against them before they are read; a mismatch is a corrupt publication."
+
+[[types]]
+path = "crates/memory/src/repository/artifacts/manifest.rs"
+type = "ManifestNote"
+category = "integrity-manifest"
+reason = "The manifest a memory consolidation is published under: the SHA-256 of every published artifact and its sources, checked against them before they are read; a mismatch is a corrupt publication."
+
+[[types]]
+path = "crates/kernel/src/permission.rs"
+type = "WireAssessment"
+category = "other"
+reason = "The permission reviewer's verdict on a tool call. Approval fails closed: an assessment not shaped exactly as its schema (`additionalProperties: false`) asks may carry a qualification the outcome cannot express, so it is a failed review (a denial), not a guess."

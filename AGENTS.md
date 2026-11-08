@@ -7,9 +7,18 @@ modes: standalone, as the `hanafubuki-agent` command-line and terminal (TUI)
 application, and embedded, as a Rust library a host application builds on.
 Hanafubuki is such a host. Dependencies point one way: this repository depends
 on no Hanafubuki crate, from any source, and Hanafubuki depends on it
-(`cargo xtask check-dependencies` enforces this). The Agent-specific rule
-documents (plugins, lifecycle, architecture) arrive with the code under
-`docs/rules/`; until then this file holds every rule.
+(`cargo xtask check-dependencies` enforces this).
+
+This file holds the rules every change needs; the documents below hold the
+rest, each the only copy of its rules. Read the ones a change touches before
+changing behavior, and update them when the design changes.
+
+| Document | Read before changing |
+| --- | --- |
+| [docs/rules/plugins.md](docs/rules/plugins.md) | Any tool, context section, approval rule, continuation hook or observer; the plugin host, its manifest and the plugin configuration; the crate boundaries; the host interface a host embeds the Agent through; the goldens. |
+| [docs/architecture.md](docs/architecture.md) | The Agent as a whole: crates, plugin host and faults, tool planning and pipeline, context, Skills, MCP, memory, persistence, and why the less obvious choices were made. |
+| [docs/spec.md](docs/spec.md) | The Agent as built in detail: composition, storage, contracts, plugins and tools, sessions and turns, approval, execution, history, memory, MCP, models, Skills, presentation, shutdown. |
+| [docs/extraction-plan.md](docs/extraction-plan.md) | The plan this repository was extracted from Hanafubuki by, and its remaining phases (standalone mode, the TUI, the release). |
 
 ## Development Principles
 
@@ -46,6 +55,65 @@ documents (plugins, lifecycle, architecture) arrive with the code under
 - Prefer explicit Rust APIs and typed structs. Raw JSON is acceptable only at
   controlled patch/override boundaries, validated in Rust before use or persistence.
 
+## Rules every change needs
+
+- **Locks** a contained panic reaches do not poison. Every panic in the
+  Agent unwinds on a contained thread, so the production code of every crate
+  uses `parking_lot::{Mutex, RwLock, Condvar}`, never `std::sync::Mutex` or
+  `RwLock`: a std lock poisoned by one panic fails every later caller, and a
+  drop guard taking it while unwinding aborts the process (`cargo xtask
+  check-locks`, outside tests and test support). Every critical section
+  leaves its state consistent at any panic point: compute, then assign.
+- **Paths** go through `hanafubuki-agent-foundation::paths`
+  (`ResolvedPath`, `PathKey`), the only code that calls `fs::canonicalize`:
+  `system()` for operating system calls, `native()` for anything a person,
+  a model, a log line or a record reads, `key()` for every comparison. Never
+  render `system()`, compare resolved `PathBuf`s directly or strip `\\?\`
+  (`cargo xtask check-path-boundaries`, with its audited exceptions in
+  `architecture/path-policy.toml`).
+- **Processes** the Agent starts are the Agent's own: its `ExecutorManager`
+  (`hanafubuki-agent-process`) reserves an owner before a spawn, mutates a
+  process only with its exact receipt, and keeps owner, receipt and
+  metadata until termination is confirmed; nothing is terminated and
+  forgotten. Each Agent instance's processes belong to its owner group, a
+  stop sweeps that group, and the groups a run leaves are recorded in
+  `process-groups.json` and reaped at the next start. A host's processes are
+  the host's ([spec.md](docs/spec.md)).
+- **Decoding by input source**: how strictly a value is decoded is decided
+  by who produced it, not by its type. A request a host's frontend sends
+  over IPC rejects unknown fields (`deny_unknown_fields`), and so does an
+  integrity manifest we produce and check by digest; our persisted data
+  (settings, history, memory, state files) ignores unknown fields, falls
+  back per field and quarantines what it cannot use; external producers
+  (model providers, MCP servers, the web) are read tolerantly, one bad item
+  never failing the rest; model tool arguments are normalized against their
+  schema ([plugins.md](docs/rules/plugins.md#model-tool-arguments)).
+  `deny_unknown_fields` appears in production code only on a type listed in
+  `architecture/strict-decoding-policy.toml` with its category and reason
+  (`cargo xtask check-strict-decoding`). Approval, path containment and
+  identities stay strict whatever the source.
+- **Plugins** are kardia plugins that the kernel reaches only through the
+  `hanafubuki-agent-contracts` registries; a registration is an effect of
+  the calling plugin, removed when it stops; plugins return errors and never
+  panic (`cargo xtask check-plugin-panics`); and the goldens pin what the
+  model sees, so a model-visible change regenerates them on purpose
+  ([plugins.md](docs/rules/plugins.md)).
+
+## Agent Content Logging
+
+Diagnostic logs, including raw wire bodies (`hanafubuki-agent-model-api`
+`trace_wire_body`), may include wire/model content, reasoning, tool
+arguments, and committed tool results only at `trace`, truncated to
+`MAX_TRACE_CONTENT_BYTES` on a UTF-8 boundary by
+`hanafubuki_agent_model_api::bounded_trace_content`, when the user explicitly
+selects `trace` through the log level. Never log headers, credentials,
+signing tokens, or approval-sensitive fields, or emit content at `debug` or
+below. Do not insert diagnostic/raw wire records into conversation history.
+Canonical conversation items, including tool calls and committed results,
+are persisted through the typed Agent history contract independently of
+diagnostic log level; this does not authorize persisting credentials or
+approval-sensitive fields.
+
 ## Workspace
 
 - Crates live in `crates/<name>/` and are named `hanafubuki-agent-<name>`,
@@ -56,6 +124,8 @@ documents (plugins, lifecycle, architecture) arrive with the code under
   the root `[workspace.dependencies]` with both `path` and `version`, and
   members use them with `.workspace = true`.
 - The edition stays 2021 and rustfmt keeps its defaults.
+- Every crate but `xtask` is published: it has a `description` and no
+  `publish = false`.
 
 ## Validation
 
@@ -63,7 +133,9 @@ Run from the repository root, selecting scope by the change's impact:
 
 - `cargo fmt --all --check`
 - `RUSTFLAGS="-D warnings" cargo check --workspace --all-targets --all-features`
-- `cargo xtask check` (every repository check)
+- `cargo xtask check` (every repository check: dependencies and layers,
+  source layout, module size, strict decoding, model-api context sections,
+  path boundaries, locks, plugin panics)
 - `cargo test --workspace --all-features`
 
 These are the steps `.github/workflows/ci.yml` runs on Linux, Windows and
@@ -123,9 +195,11 @@ mechanical rules below; keep the rest in review.
 
 ### Module size
 
-Module size is reviewed now and will be checked by `cargo xtask
-check-module-size` against a policy file once it arrives with the code. Counts
-are code lines, so comments never count.
+Module size is checked by `cargo xtask check-module-size` against
+`architecture/module-size-policy.toml`. Counts are code lines, so comments
+never count; `cargo xtask module-size-report` lists the largest files and
+functions.
+
 
 - Limits: 600 code lines for a production file, 900 for a test file, and 200
   for a production function. Test functions are not limited.

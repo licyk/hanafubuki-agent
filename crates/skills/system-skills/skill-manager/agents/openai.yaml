@@ -1,0 +1,7 @@
+interface:
+  display_name: Skill Manager
+  short_description: Install, enable, and inspect Agent Skills
+  brand_color: "#7C3AED"
+  default_prompt: Inspect the Skill catalog and propose only the action the user asked for.
+policy:
+  allow_implicit_invocation: true

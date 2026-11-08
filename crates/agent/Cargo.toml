@@ -1,0 +1,60 @@
+[package]
+name = "hanafubuki-agent"
+description = "An AI coding and operations agent to embed: the composition, its plugins, the slot and the host interface"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[features]
+# Fixtures for a host's integration tests (`test_support`).
+test-support = ["dep:axum", "dep:rmcp", "hanafubuki-agent-mcp/test-support", "tokio/io-util"]
+
+[dependencies]
+hanafubuki-agent-kernel.workspace = true
+hanafubuki-agent-contracts.workspace = true
+hanafubuki-agent-host.workspace = true
+hanafubuki-agent-plugin-execution.workspace = true
+hanafubuki-agent-plugin-mcp.workspace = true
+hanafubuki-agent-plugin-web.workspace = true
+hanafubuki-agent-plugin-workspace-fs.workspace = true
+hanafubuki-agent-history.workspace = true
+hanafubuki-agent-memory.workspace = true
+hanafubuki-agent-execution.workspace = true
+hanafubuki-agent-config.workspace = true
+hanafubuki-agent-runtime.workspace = true
+hanafubuki-agent-approval.workspace = true
+hanafubuki-agent-mcp.workspace = true
+hanafubuki-agent-process.workspace = true
+hanafubuki-agent-skills.workspace = true
+hanafubuki-agent-workspace-fs.workspace = true
+hanafubuki-agent-tool-contracts.workspace = true
+hanafubuki-agent-foundation.workspace = true
+axum = { workspace = true, optional = true }
+base64.workspace = true
+hex.workspace = true
+log.workspace = true
+# The Skill catalog watcher (skill_watcher).
+notify = "8"
+image = { workspace = true, features = ["gif", "jpeg", "png", "webp"] }
+ignore.workspace = true
+parking_lot.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+sha2.workspace = true
+kardia-core.workspace = true
+rmcp = { workspace = true, features = ["server", "transport-streamable-http-server"], optional = true }
+tokio = { workspace = true, features = ["net", "rt", "rt-multi-thread", "sync", "time"] }
+url.workspace = true
+
+[dev-dependencies]
+axum.workspace = true
+hanafubuki-agent-execution = { workspace = true, features = ["test-support"] }
+hanafubuki-agent-approval = { workspace = true, features = ["test-support"] }
+hanafubuki-agent-mcp = { workspace = true, features = ["test-support"] }
+hanafubuki-agent-process = { workspace = true, features = ["test-support"] }
+rmcp = { workspace = true, features = ["server", "transport-streamable-http-server"] }
+rusqlite = { workspace = true, features = ["bundled"] }
+tempfile.workspace = true
+tokio = { workspace = true, features = ["io-util", "macros", "net", "rt-multi-thread", "sync", "test-util", "time"] }

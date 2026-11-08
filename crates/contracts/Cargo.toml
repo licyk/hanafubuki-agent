@@ -1,0 +1,27 @@
+[package]
+name = "hanafubuki-agent-contracts"
+description = "The hanafubuki-agent plugin API: the registries and the tool, context and approval contracts plugins use"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[features]
+test-support = ["hanafubuki-agent-host/test-support"]
+
+[dependencies]
+hanafubuki-agent-approval.workspace = true
+hanafubuki-agent-foundation.workspace = true
+hanafubuki-agent-host.workspace = true
+hanafubuki-agent-tool-contracts.workspace = true
+kardia-core.workspace = true
+kardia-macros.workspace = true
+log.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+serde_path_to_error = "0.1"
+uuid = { workspace = true, features = ["serde", "v7"] }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync", "test-util", "time"] }

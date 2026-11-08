@@ -1,0 +1,25 @@
+[package]
+name = "hanafubuki-agent-plugin-mcp"
+description = "The hanafubuki-agent plugin exposing MCP server tools"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+hanafubuki-agent-contracts.workspace = true
+hanafubuki-agent-approval.workspace = true
+hanafubuki-agent-foundation.workspace = true
+hanafubuki-agent-mcp.workspace = true
+hanafubuki-agent-tool-contracts.workspace = true
+futures-util.workspace = true
+kardia-core.workspace = true
+log.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+
+[dev-dependencies]
+hanafubuki-agent-process.workspace = true
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }

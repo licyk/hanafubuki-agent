@@ -1,0 +1,42 @@
+# Size limits for Rust modules, checked by `cargo xtask check-module-size`.
+#
+# Counts are code lines: blank lines and comments are not counted. A limit
+# asks for a review, not a split to fit the number. A module over its limit
+# that is cohesive keeps an exception with the reason and the size it was
+# reviewed at (`ceiling`); growing past the ceiling fails, and an exception
+# that no longer applies must be removed.
+version = 1
+
+[limits]
+production-file = 600
+test-file = 900
+production-function = 200
+
+[[exceptions]]
+path = "crates/kernel/src/activity.rs"
+ceiling = 639
+reason = "The activity tracker and the output preview it maintains; observe is an exhaustive event dispatch with no catch-all arm."
+
+[[exceptions]]
+path = "crates/agent/src/memory/supervisor.rs"
+function = "run_memory_pass"
+ceiling = 257
+reason = "Over the limit when the limit was introduced; not yet reviewed for shortening."
+
+[[exceptions]]
+path = "crates/model-api/src/anthropic_messages/encode.rs"
+function = "encode_anthropic_request"
+ceiling = 216
+reason = "Over the limit when the limit was introduced; not yet reviewed for shortening."
+
+[[exceptions]]
+path = "crates/model-api/src/chat_completions/encode.rs"
+function = "encode_chat_request"
+ceiling = 227
+reason = "Over the limit when the limit was introduced; not yet reviewed for shortening."
+
+[[exceptions]]
+path = "crates/workspace-fs/src/resolver/prepare.rs"
+function = "prepare_operation"
+ceiling = 272
+reason = "Over the limit when the limit was introduced; not yet reviewed for shortening."

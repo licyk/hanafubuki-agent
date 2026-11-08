@@ -1,0 +1,20 @@
+[
+  "turn_started",
+  "history_committed",
+  "sampling_started",
+  "reasoning_updated",
+  "response_started",
+  "history_committed",
+  "tool_started",
+  "tool_execution_finished",
+  "history_committed",
+  "tool_completed",
+  "sampling_started",
+  "reasoning_updated",
+  "response_started",
+  "assistant_message_started",
+  "assistant_text_delta",
+  "history_committed",
+  "assistant_message_completed",
+  "turn_completed"
+]

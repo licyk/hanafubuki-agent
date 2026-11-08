@@ -8,3 +8,52 @@ edition = "2021"
 license = "GPL-3.0-only"
 repository = "https://github.com/licyk/hanafubuki-agent"
 rust-version = "1.99"
+
+[workspace.dependencies]
+# The workspace's own crates.
+hanafubuki-agent = { path = "crates/agent", version = "0.1.0" }
+hanafubuki-agent-approval = { path = "crates/approval", version = "0.1.0" }
+hanafubuki-agent-config = { path = "crates/config", version = "0.1.0" }
+hanafubuki-agent-contracts = { path = "crates/contracts", version = "0.1.0" }
+hanafubuki-agent-execution = { path = "crates/execution", version = "0.1.0" }
+hanafubuki-agent-foundation = { path = "crates/foundation", version = "0.1.0" }
+hanafubuki-agent-history = { path = "crates/history", version = "0.1.0" }
+hanafubuki-agent-host = { path = "crates/host", version = "0.1.0" }
+hanafubuki-agent-kernel = { path = "crates/kernel", version = "0.1.0" }
+hanafubuki-agent-mcp = { path = "crates/mcp", version = "0.1.0" }
+hanafubuki-agent-memory = { path = "crates/memory", version = "0.1.0" }
+hanafubuki-agent-model-api = { path = "crates/model-api", version = "0.1.0" }
+hanafubuki-agent-plugin-execution = { path = "crates/plugin-execution", version = "0.1.0" }
+hanafubuki-agent-plugin-mcp = { path = "crates/plugin-mcp", version = "0.1.0" }
+hanafubuki-agent-plugin-web = { path = "crates/plugin-web", version = "0.1.0" }
+hanafubuki-agent-plugin-workspace-fs = { path = "crates/plugin-workspace-fs", version = "0.1.0" }
+hanafubuki-agent-process = { path = "crates/process", version = "0.1.0" }
+hanafubuki-agent-runtime = { path = "crates/runtime", version = "0.1.0" }
+hanafubuki-agent-skills = { path = "crates/skills", version = "0.1.0" }
+hanafubuki-agent-tool-contracts = { path = "crates/tool-contracts", version = "0.1.0" }
+hanafubuki-agent-web-search = { path = "crates/web-search", version = "0.1.0" }
+hanafubuki-agent-workspace-fs = { path = "crates/workspace-fs", version = "0.1.0" }
+
+# Third-party crates more than one member uses; members add features.
+axum = "0.8"
+base64 = "0.23"
+futures-util = "0.3"
+hex = "0.4"
+http = "1"
+ignore = "0.4"
+image = { version = "0.25", default-features = false }
+kardia-core = "0.2.0"
+kardia-macros = "0.2.0"
+log = "0.4"
+parking_lot = "0.12"
+reqwest = { version = "0.13", default-features = false }
+rmcp = { version = "3.5.0", default-features = false }
+rusqlite = "0.41"
+serde = "1"
+serde_json = "1"
+sha2 = "0.11"
+tempfile = "3"
+tokio = "1"
+url = "2"
+uuid = "1"
+windows-sys = "0.61"

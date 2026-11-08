@@ -1,0 +1,25 @@
+[package]
+name = "hanafubuki-agent-approval"
+description = "Approval rules and decisions for hanafubuki-agent tool calls"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[features]
+test-support = []
+
+[dependencies]
+hanafubuki-agent-foundation.workspace = true
+log.workspace = true
+parking_lot.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+sha2.workspace = true
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+
+[[test]]
+name = "contracts"
+required-features = ["test-support"]

@@ -1,0 +1,13 @@
+[package]
+name = "hanafubuki-agent-runtime"
+description = "The contained Tokio runtime hanafubuki-agent runs on"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+hanafubuki-agent-foundation.workspace = true
+parking_lot.workspace = true
+tokio = { workspace = true, features = ["rt", "rt-multi-thread", "sync", "time"] }

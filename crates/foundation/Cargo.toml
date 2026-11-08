@@ -1,0 +1,20 @@
+[package]
+name = "hanafubuki-agent-foundation"
+description = "Neutral mechanisms for hanafubuki-agent: paths, cancellation, panics, persistence and blocking work"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+# The header rule the Agent config and the model transport share; see agent_settings.
+http.workspace = true
+log.workspace = true
+parking_lot.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+url.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

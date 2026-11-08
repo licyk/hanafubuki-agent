@@ -1,0 +1,51 @@
+[package]
+name = "hanafubuki-agent-process"
+description = "Process ownership for hanafubuki-agent: the executor, ownership receipts, process groups and PTYs"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[features]
+default = []
+test-support = []
+
+[dependencies]
+hanafubuki-agent-foundation.workspace = true
+log.workspace = true
+parking_lot.workspace = true
+portable-pty = "0.9"
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { workspace = true, features = [
+  "Win32_Foundation",
+  "Win32_Globalization",
+  "Win32_Security",
+  "Win32_System_Diagnostics_ToolHelp",
+  "Win32_System_JobObjects",
+  "Win32_System_Threading",
+  "Win32_UI_WindowsAndMessaging"
+] }
+anyhow = "1"
+filedescriptor = "0.8.3"
+lazy_static = "1"
+shared_library = "0.1.9"
+winapi = { version = "0.3.9", features = [
+  "handleapi",
+  "minwinbase",
+  "minwindef",
+  "ntdef",
+  "ntstatus",
+  "processthreadsapi",
+  "synchapi",
+  "winbase",
+  "wincon",
+  "winerror",
+  "winnt",
+] }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"

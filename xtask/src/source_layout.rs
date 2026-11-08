@@ -131,7 +131,7 @@ fn path_name(path: &syn::Path) -> String {
 
 /// `xtask` and every package under `crates/`. A missing or empty `crates/`
 /// is a workspace with no crates yet.
-fn package_roots(root: &Path) -> Vec<PathBuf> {
+pub(crate) fn package_roots(root: &Path) -> Vec<PathBuf> {
     let mut crates: Vec<PathBuf> = sorted_entries(&root.join("crates"))
         .into_iter()
         .filter(|path| path.join("Cargo.toml").is_file())
@@ -140,7 +140,7 @@ fn package_roots(root: &Path) -> Vec<PathBuf> {
     crates
 }
 
-fn relative(root: &Path, file: &Path) -> String {
+pub(crate) fn relative(root: &Path, file: &Path) -> String {
     file.strip_prefix(root)
         .unwrap_or(file)
         .to_string_lossy()

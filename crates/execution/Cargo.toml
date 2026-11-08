@@ -1,0 +1,28 @@
+[package]
+name = "hanafubuki-agent-execution"
+description = "Command execution for hanafubuki-agent: commands, their approvals and background terminals"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[features]
+test-support = ["hanafubuki-agent-approval/test-support", "hanafubuki-agent-process/test-support"]
+
+[dependencies]
+hanafubuki-agent-approval.workspace = true
+hanafubuki-agent-foundation.workspace = true
+hanafubuki-agent-process.workspace = true
+hex.workspace = true
+log.workspace = true
+parking_lot.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+sha2.workspace = true
+
+[dev-dependencies]
+
+[[test]]
+name = "contracts"
+required-features = ["test-support"]

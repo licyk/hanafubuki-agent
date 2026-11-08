@@ -84,3 +84,108 @@ fn a_layer_table_must_name_every_member_and_only_members() {
         ]
     );
 }
+
+/// The facade, the plugin API and two plugins, each with `extra` added to
+/// its own dependencies.
+fn plugin_workspace(extra: &[(&str, &str)]) -> Metadata {
+    let mut packages: Vec<(&str, Vec<&str>)> = vec![
+        (
+            FACADE,
+            vec![
+                KERNEL,
+                CONFIG,
+                "hanafubuki-agent-plugin-a",
+                "hanafubuki-agent-plugin-b",
+            ],
+        ),
+        (KERNEL, vec![CONTRACTS, "kardia-core"]),
+        (CONTRACTS, vec![HOST, "kardia-core"]),
+        (HOST, vec![FOUNDATION, "kardia-core"]),
+        (FOUNDATION, vec![]),
+        (CONFIG, vec![FOUNDATION]),
+        (MODEL_API, vec![FOUNDATION]),
+        ("hanafubuki-agent-plugin-a", vec![CONTRACTS, "kardia-core"]),
+        ("hanafubuki-agent-plugin-b", vec![CONTRACTS]),
+    ];
+    for (name, dependency) in extra {
+        packages
+            .iter_mut()
+            .find(|(package, _)| package == name)
+            .unwrap()
+            .1
+            .push(dependency);
+    }
+    let packages: Vec<(&str, &[&str])> = packages
+        .iter()
+        .map(|(name, dependencies)| (*name, dependencies.as_slice()))
+        .collect();
+    metadata(&packages)
+}
+
+#[test]
+fn the_plugin_architecture_holds() {
+    assert_eq!(
+        rule_violations(&plugin_workspace(&[])),
+        Vec::<String>::new()
+    );
+}
+
+#[test]
+fn a_plugin_reaches_the_agent_only_through_the_plugin_api() {
+    let violations = rule_violations(&plugin_workspace(&[
+        ("hanafubuki-agent-plugin-a", "hanafubuki-agent-plugin-b"),
+        ("hanafubuki-agent-plugin-a", KERNEL),
+        ("hanafubuki-agent-plugin-b", FACADE),
+        (KERNEL, "hanafubuki-agent-plugin-b"),
+    ]));
+    assert_eq!(
+        violations,
+        [
+            "hanafubuki-agent-kernel depends on the plugin hanafubuki-agent-plugin-b; plugins register through hanafubuki-agent-contracts",
+            "hanafubuki-agent-plugin-a depends on hanafubuki-agent-kernel; a plugin reaches the Agent through hanafubuki-agent-contracts",
+            "hanafubuki-agent-plugin-a depends on the plugin hanafubuki-agent-plugin-b; plugins share services through hanafubuki-agent-contracts",
+            "hanafubuki-agent-plugin-b depends on hanafubuki-agent; a plugin reaches the Agent through hanafubuki-agent-contracts",
+        ]
+    );
+}
+
+#[test]
+fn the_facade_alone_reads_the_configuration_and_mounts_every_plugin() {
+    let metadata = metadata(&[
+        (FACADE, &["hanafubuki-agent-plugin-a"]),
+        (KERNEL, &[CONFIG]),
+        (CONFIG, &[]),
+        ("hanafubuki-agent-plugin-a", &[CONTRACTS]),
+        ("hanafubuki-agent-plugin-b", &[CONTRACTS]),
+        (CONTRACTS, &[]),
+    ]);
+    assert_eq!(
+        rule_violations(&metadata),
+        [
+            "hanafubuki-agent does not depend on the plugin hanafubuki-agent-plugin-b; a plugin crate is mounted from the facade's manifest",
+            "hanafubuki-agent-kernel depends on hanafubuki-agent-config; only the facade reads the configuration",
+        ]
+    );
+}
+
+#[test]
+fn the_host_model_api_and_kardia_stay_in_their_place() {
+    let violations = rule_violations(&plugin_workspace(&[
+        (HOST, CONFIG),
+        (MODEL_API, CONTRACTS),
+        (MODEL_API, "kardia-macros"),
+        (CONFIG, "kardia"),
+    ]));
+    assert_eq!(
+        violations,
+        [
+            "hanafubuki-agent-host depends on hanafubuki-agent-config; only the facade reads the configuration",
+            "hanafubuki-agent-host depends on hanafubuki-agent-config; the plugin host depends only on kardia and hanafubuki-agent-foundation",
+            "hanafubuki-agent-config depends on the kardia facade; depend on kardia-core and kardia-macros",
+            "hanafubuki-agent-config depends on kardia; only the plugin host, the plugin API, the kernel, the plugins and the facade may",
+
+            "hanafubuki-agent-model-api depends on hanafubuki-agent-contracts; context sections and their renderers are the plugins' (check-model-api-context)",
+            "hanafubuki-agent-model-api depends on kardia-macros; only the plugin host, the plugin API, the kernel, the plugins and the facade may",
+        ]
+    );
+}

@@ -1,0 +1,47 @@
+[package]
+name = "hanafubuki-agent-kernel"
+description = "The hanafubuki-agent kernel: sessions, the turn loop, tool planning and context assembly"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[features]
+test-support = []
+
+[dependencies]
+hanafubuki-agent-contracts.workspace = true
+hanafubuki-agent-approval.workspace = true
+hanafubuki-agent-foundation.workspace = true
+hanafubuki-agent-model-api.workspace = true
+hanafubuki-agent-skills.workspace = true
+hanafubuki-agent-tool-contracts.workspace = true
+base64.workspace = true
+kardia-core.workspace = true
+log.workspace = true
+parking_lot.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+sha2.workspace = true
+tokio = { workspace = true, features = ["macros", "rt", "sync", "time"] }
+url.workspace = true
+uuid = { workspace = true, features = ["serde", "v7"] }
+
+[dev-dependencies]
+hanafubuki-agent-contracts = { workspace = true, features = ["test-support"] }
+hanafubuki-agent-approval = { workspace = true, features = ["test-support"] }
+hanafubuki-agent-model-api = { workspace = true, features = ["test-support"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
+
+[[test]]
+name = "loop_contract"
+required-features = ["test-support"]
+
+[[test]]
+name = "compaction_contract"
+required-features = ["test-support"]
+
+[[test]]
+name = "persistence_contract"
+required-features = ["test-support"]

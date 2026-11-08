@@ -1,0 +1,24 @@
+[package]
+name = "hanafubuki-agent-host"
+description = "The kardia plugin host of hanafubuki-agent: plugin rows, bounds, faults, restarts and status"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[features]
+test-support = []
+
+[dependencies]
+hanafubuki-agent-foundation.workspace = true
+kardia-core.workspace = true
+kardia-macros.workspace = true
+log.workspace = true
+parking_lot.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+tokio = { workspace = true, features = ["rt", "sync", "time"] }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync", "test-util", "time"] }

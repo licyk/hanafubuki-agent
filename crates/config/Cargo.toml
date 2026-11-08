@@ -1,0 +1,21 @@
+[package]
+name = "hanafubuki-agent-config"
+description = "The hanafubuki-agent configuration: settings, the provider registry and MCP servers in TOML"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+hanafubuki-agent-foundation.workspace = true
+hanafubuki-agent-mcp.workspace = true
+log.workspace = true
+parking_lot.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+toml = "1.1"
+toml_edit = "0.25"
+
+[dev-dependencies]
+tempfile.workspace = true

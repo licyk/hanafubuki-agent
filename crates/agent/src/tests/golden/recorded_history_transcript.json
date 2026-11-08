@@ -1,0 +1,15 @@
+[
+  "text=No tasks are running.",
+  "type=assistant_message",
+  "type=structured",
+  "type=tool_output",
+  "name=list_tasks",
+  "type=tool_call",
+  "text=List the tasks.",
+  "type=user_message",
+  "type=world_state_update",
+  "kind=workspace_roots",
+  "kind=permission_mode",
+  "kind=environment",
+  "type=turn_start"
+]

@@ -1,0 +1,229 @@
+//! The Agent's settings: how it may act, what it remembers, which of its
+//! plugins run and how its web tools reach the network.
+
+use std::collections::BTreeSet;
+
+pub use hanafubuki_agent_foundation::agent_settings::AgentPermissionMode;
+use hanafubuki_agent_foundation::url_policy::{UrlPolicy, MAX_URL_BYTES};
+use serde::{Deserialize, Deserializer, Serialize};
+
+mod decode;
+mod schema;
+
+pub(crate) use decode::decode_settings;
+pub use schema::agent_settings_fields;
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentSettings {
+    pub permission_mode: AgentPermissionMode,
+    pub memory: AgentMemorySettings,
+    /// Names of the Agent plugins the user turned off. The plugin host leaves
+    /// them unmounted and disposes one that is running when it is added; a
+    /// name no plugin carries is kept but means nothing, and the core plugins
+    /// ignore it. Changed through the plugin enablement call, never patched.
+    pub disabled_plugins: BTreeSet<String>,
+    pub web_search_provider: AgentWebSearchProvider,
+    pub searxng_base_url: Option<String>,
+    pub web_fetch_use_jina_reader: bool,
+}
+
+impl Default for AgentSettings {
+    fn default() -> Self {
+        Self {
+            // The most restrictive mode, so an unreadable mode never grants
+            // more than the user chose.
+            permission_mode: AgentPermissionMode::Manual,
+            memory: AgentMemorySettings::default(),
+            disabled_plugins: BTreeSet::new(),
+            web_search_provider: AgentWebSearchProvider::Auto,
+            searxng_base_url: None,
+            web_fetch_use_jina_reader: false,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentWebSearchProvider {
+    Auto,
+    Duckduckgo,
+    Searxng,
+}
+
+impl AgentWebSearchProvider {
+    pub const ALL: &'static [Self] = &[Self::Auto, Self::Duckduckgo, Self::Searxng];
+
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Auto => "auto",
+            Self::Duckduckgo => "duckduckgo",
+            Self::Searxng => "searxng",
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AgentMemorySettings {
+    pub enabled: bool,
+    pub use_memories: bool,
+    pub generate_memories: bool,
+    pub exclude_external_context: bool,
+    pub extraction_model: Option<String>,
+    pub consolidation_model: Option<String>,
+    pub max_source_age_days: u32,
+    pub minimum_idle_hours: u32,
+    pub max_sessions_per_pass: usize,
+    pub max_stage1_outputs: usize,
+    pub max_unused_days: u32,
+}
+
+impl Default for AgentMemorySettings {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            use_memories: true,
+            generate_memories: true,
+            exclude_external_context: false,
+            extraction_model: None,
+            consolidation_model: None,
+            max_source_age_days: 10,
+            minimum_idle_hours: 6,
+            max_sessions_per_pass: 2,
+            max_stage1_outputs: 256,
+            max_unused_days: 30,
+        }
+    }
+}
+
+/// At most this many names in `disabledPlugins`.
+pub const MAX_AGENT_DISABLED_PLUGINS: usize = 64;
+/// The longest Agent plugin name `disabledPlugins` holds.
+pub const MAX_AGENT_PLUGIN_NAME_BYTES: usize = 128;
+
+/// A change to the settings from the settings page: each field present is
+/// replaced, and the result is validated as a whole before it is written.
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AgentSettingsPatch {
+    pub permission_mode: Option<AgentPermissionMode>,
+    pub memory: Option<AgentMemorySettings>,
+    pub web_search_provider: Option<AgentWebSearchProvider>,
+    /// `null` clears the endpoint; a missing key leaves it.
+    #[serde(default, deserialize_with = "present")]
+    pub searxng_base_url: Option<Option<String>>,
+    pub web_fetch_use_jina_reader: Option<bool>,
+}
+
+fn present<'de, D: Deserializer<'de>, T: Deserialize<'de>>(
+    deserializer: D,
+) -> Result<Option<T>, D::Error> {
+    T::deserialize(deserializer).map(Some)
+}
+
+impl AgentSettingsPatch {
+    pub(crate) fn apply(self, settings: &mut AgentSettings) -> Result<(), String> {
+        if let Some(mode) = self.permission_mode {
+            settings.permission_mode = mode;
+        }
+        if let Some(memory) = self.memory {
+            validate_memory(&memory)?;
+            settings.memory = memory;
+        }
+        if let Some(provider) = self.web_search_provider {
+            settings.web_search_provider = provider;
+        }
+        if let Some(url) = self.searxng_base_url {
+            settings.searxng_base_url = url
+                .map(|url| {
+                    if url.trim().is_empty() {
+                        return Err("searxngBaseUrl cannot be empty or whitespace-only; use null to clear it".to_string());
+                    }
+                    normalize_search_endpoint(&url).map_err(|error| format!("searxngBaseUrl {error}"))
+                })
+                .transpose()?;
+        }
+        if let Some(enabled) = self.web_fetch_use_jina_reader {
+            settings.web_fetch_use_jina_reader = enabled;
+        }
+        validate_search_pair(settings)
+    }
+}
+
+pub(crate) fn validate_memory(settings: &AgentMemorySettings) -> Result<(), String> {
+    if !(1..=3650).contains(&settings.max_source_age_days)
+        || settings.minimum_idle_hours > 8760
+        || !(1..=64).contains(&settings.max_sessions_per_pass)
+        || !(1..=4096).contains(&settings.max_stage1_outputs)
+        || !(1..=3650).contains(&settings.max_unused_days)
+    {
+        return Err("memory numeric settings are outside their supported bounds".into());
+    }
+    for (field, value) in [
+        ("extractionModel", settings.extraction_model.as_deref()),
+        (
+            "consolidationModel",
+            settings.consolidation_model.as_deref(),
+        ),
+    ] {
+        if value.is_some_and(|value| value.trim().is_empty() || value.len() > 256) {
+            return Err(format!(
+                "memory.{field} must contain 1 to 256 bytes or be null"
+            ));
+        }
+    }
+    Ok(())
+}
+
+pub(crate) fn validate_search_pair(settings: &AgentSettings) -> Result<(), String> {
+    if settings.web_search_provider == AgentWebSearchProvider::Searxng
+        && settings.searxng_base_url.is_none()
+    {
+        return Err("searxngBaseUrl is required when webSearchProvider is searxng".to_string());
+    }
+    Ok(())
+}
+
+/// A plugin name `disabledPlugins` can hold: 1 to
+/// [`MAX_AGENT_PLUGIN_NAME_BYTES`] bytes without surrounding whitespace or
+/// control characters. The plugin host decides what a name means.
+pub(crate) fn is_plugin_name(name: &str) -> bool {
+    !name.is_empty()
+        && name.len() <= MAX_AGENT_PLUGIN_NAME_BYTES
+        && name.trim() == name
+        && !name.chars().any(char::is_control)
+}
+
+pub(crate) fn validate_disabled_plugins(names: &BTreeSet<String>) -> Result<(), String> {
+    if names.len() > MAX_AGENT_DISABLED_PLUGINS {
+        return Err(format!(
+            "disabledPlugins holds at most {MAX_AGENT_DISABLED_PLUGINS} plugin names"
+        ));
+    }
+    if !names.iter().all(|name| is_plugin_name(name)) {
+        return Err(format!(
+            "disabledPlugins names must contain 1 to {MAX_AGENT_PLUGIN_NAME_BYTES} bytes without surrounding whitespace or control characters"
+        ));
+    }
+    Ok(())
+}
+
+/// The SearXNG endpoint: an endpoint URL (no credentials, query or fragment)
+/// within the URL bound, without a trailing `/`. This is the address's one
+/// check: web search takes it as valid. The error completes a sentence that
+/// starts with the field's name.
+pub(crate) fn normalize_search_endpoint(raw: &str) -> Result<String, String> {
+    let raw = raw.trim();
+    if raw.is_empty() {
+        return Err("cannot be empty".to_string());
+    }
+    UrlPolicy::ENDPOINT
+        .within(MAX_URL_BYTES)
+        .parse(raw)
+        .map_err(|rejection| rejection.to_string())?;
+    Ok(raw.trim_end_matches('/').to_string())
+}
+
+#[cfg(test)]
+mod tests;
