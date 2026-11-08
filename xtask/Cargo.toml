@@ -1,0 +1,14 @@
+[package]
+name = "xtask"
+description = "Repository tasks for hanafubuki-agent: architecture checks, version bumps and release tags"
+version = "0.0.0"
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+proc-macro2 = { version = "1", features = ["span-locations"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+syn = { version = "3", features = ["full"] }
+toml_edit = "0.25"

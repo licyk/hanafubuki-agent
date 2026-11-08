@@ -1,0 +1,20 @@
+hanafubuki-agent
+Copyright (C) 2026 licyk
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU General Public License as published by the Free Software
+Foundation, version 3 only (GPL-3.0-only). It is distributed WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+A PARTICULAR PURPOSE. See the LICENSE file for the full license text.
+
+hanafubuki-agent was extracted from Hanafubuki
+(https://github.com/licyk/Hanafubuki), by the same author.
+
+Third-party notices
+===================
+
+TODO(Phase 5): when code derived from these projects is ported, add their
+notices here, with the full license text each requires:
+
+- OpenAI Codex (https://github.com/openai/codex), Apache License 2.0
+- Ratatui (https://github.com/ratatui/ratatui), MIT License
