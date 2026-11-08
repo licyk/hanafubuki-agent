@@ -1,7 +1,8 @@
 # Configuration
 
-How to configure the standalone Agent (the `hanafubuki-agent` binary):
-where its files are, how their layers combine, and the keys they hold. An
+How to configure the standalone Agent (the `hanafubuki-agent` binary,
+[cli.md](cli.md)): where its files are, how their layers combine, and the
+keys they hold. An
 application that embeds the Agent (Hanafubuki) names its own configuration
 directory and reads the user's files alone, without the layers below; its
 own settings page writes them.
@@ -68,16 +69,40 @@ Agent cannot use, keeps the value of the layer below.
    `[projects.'C:\Users\me\src\my-project']`. A project's file is
    never repaired or rewritten by the Agent; a value in it that cannot be
    used is logged and skipped.
-5. **`-c key=value` overrides**, in the order given. The key is a dotted path
-   of the keys below (`memory.enabled`, `network.proxy`); the value is TOML
-   (`true`, `7`, `"full_access"`, `["a", "b"]`), and a value that is not
-   valid TOML is taken as a string, so `-c logLevel=debug` needs no quotes.
+5. **`-c key=value` overrides**, in the order given, then the flags that
+   name a key (`--permission-mode`, `--log-level`), so a flag wins. The key
+   is a dotted path of the keys below (`memory.enabled`, `network.proxy`);
+   the value is TOML (`true`, `7`, `"full_access"`, `["a", "b"]`), and a
+   value that is not valid TOML is taken as a string, so `-c logLevel=debug`
+   needs no quotes.
 
-The Agent writes only the user's `config.toml`, and only the keys its
-settings change (the permission mode, memory, plugins, web tools); a write
-never copies a profile's, a project's or an override's value into it, and
-keeps comments and keys it does not know. `providers.toml` and `mcp.toml`
-have no layers.
+The Agent writes only the user's `config.toml`: the keys its settings
+change (the permission mode, memory, plugins, web tools), and the one key
+`hanafubuki-agent config set` names. A write never copies a profile's, a
+project's or an override's value into it, and keeps comments and keys it
+does not know. `providers.toml` and `mcp.toml` have no layers.
+
+## Reading and writing keys
+
+`hanafubuki-agent config get [KEY]` prints a key's value with every layer
+applied (all of them, as TOML, without a key), and `config set KEY VALUE`
+writes one key into the user's `config.toml` ([cli.md](cli.md#config)).
+The key is a dotted TOML key; a part with characters a bare key cannot
+have is quoted:
+
+```sh
+hanafubuki-agent config set logLevel debug
+hanafubuki-agent config set network.proxy http://127.0.0.1:7890
+hanafubuki-agent config set profiles.review.permissionMode auto_review
+hanafubuki-agent config set "projects.'$PWD'.trustLevel" trusted
+```
+
+`set` takes the keys of the table below, a profile's
+(`profiles.<name>.<key>`) and a project's `trustLevel` (`trusted`, or
+`untrusted` to take the trust back), and refuses a key that is none of
+these or a value the Agent could not use, so nothing it writes is
+replaced by a default on the next read. The value is TOML; one that is
+not, like `debug` above, is taken as a string, as for `-c`.
 
 ## Keys of `config.toml`
 
@@ -97,9 +122,13 @@ Keys are camelCase, in the file and in `-c` paths.
 | `network.proxy` | `"system"`, `"disabled"`, or a proxy URL (`http`, `https`, `socks4`, `socks4a`, `socks5`, `socks5h`, credentials allowed) | `"system"` |
 | `logLevel` | `"off"`, `"error"`, `"warn"`, `"info"`, `"debug"`, `"trace"` | `"info"` |
 | `profiles.<name>` | a table of any keys above | |
-| `projects."<path>".trustLevel` | `"trusted"` | |
+| `projects."<path>".trustLevel` | `"trusted"` (any other value, such as `"untrusted"`, does not trust it) | |
 
-`network.proxy` is the proxy of the web tools, MCP servers and OAuth.
+`network.proxy` is the proxy of the web tools, MCP servers and OAuth, and
+of the processes the Agent starts: an explicit proxy is their `HTTP_PROXY`
+and `HTTPS_PROXY`, `"disabled"` removes those two from their environment,
+and both set `NO_PROXY` to `localhost,127.0.0.1,::1`; `"system"` leaves
+their environment as this process's.
 `logLevel` sets the log file's level; only `trace` records model and tool
 content, bounded, and no level records credentials. Records of other
 libraries are kept at `info` and above whatever the level. Both keys are

@@ -51,6 +51,7 @@ member's allowed dependencies).
 
 | Crate | Role |
 | --- | --- |
+| `hanafubuki-agent-cli` | The `hanafubuki-agent` binary (§3.6, [cli.md](cli.md)): `exec` and the management commands over the facade's standalone runtime; depends on the facade alone. |
 | `hanafubuki-agent` | The facade a host embeds, and the composition: `DesktopAgent`, the `AgentSlot` supervisor, the Agent's own Executor and Skill watcher (§3.4), the plugin host (`AgentHost`) and its manifest, the Agent's own plugins (`src/plugins/`), the IPC facade `AgentApplicationService` (the settings API among it), the host interface (`AgentHostPorts`, §3.5), the standalone runtime with a default for every port (`AgentRuntime`, §3.6), the data directory's lock and the standalone log file (§10), the memory supervisor, and `panic` for the host's hook and the binary's (§3.3). |
 | `hanafubuki-agent-config` | The Agent's own configuration (`AgentConfig`, §10): the settings, the Provider registry and the MCP servers in the directory the host names, or, standalone, in the OS directory (`AgentDirs`) with the settings layered (`ConfigLayers`). |
 | `hanafubuki-agent-runtime` | The Agent's copy of the contained runtime (`ContainedRuntime`, threads `agent-rt`); the application keeps its own for the feature runtime. |
@@ -222,9 +223,11 @@ by `hanafubuki-agent-integration`'s `agent_host_ports`):
   directories file search walks;
 - **`HostContextPort`**: the `AgentHostContext` (kind and content) steering
   carries, written to the world state like any section of its kind;
-- **`AgentHostInstructions`**: the application's section after the tool
-  guidance and its ownership paragraph in "Approval and ownership", joined
-  into the base instructions byte for byte as one file had them;
+- **`AgentHostInstructions`**: who the Agent is (the opening sentence of
+  the base instructions, the application the environment section names),
+  the application's section after the tool guidance and its ownership
+  paragraph in "Approval and ownership", joined into the base instructions
+  byte for byte as one file had them;
 - **`NetworkSettingsPort`**: the proxy (`AgentProxy`) the web tools, MCP and
   OAuth use, read at start and on `apply_saved_settings`;
 - **`SecretStore`**: where MCP OAuth tokens live (the OS keyring in
@@ -263,12 +266,12 @@ for every port:
 | Configuration | `AgentConfig::layered` on the configuration directory: profile, trusted project and `-c` over the user's `config.toml` (§10, [config.md](config.md)); read once when the runtime is made, so a bad profile fails it, and again by every instance |
 | Data | `AgentStoragePaths::under` the data directory |
 | `WorkspaceRootsPort` | the working directory first (the base of relative requests), then its Git root, then the added directories; no extra read roots, no selection; search walks each root once (the working directory as part of its Git root) |
-| Plugin rows, `HostContextPort`, `AgentHostInstructions` | none (`NoHostContext`, the default instructions): the model sees what the goldens pin |
+| Plugin rows, `HostContextPort`, `AgentHostInstructions` | none (`NoHostContext`, the default instructions: "a coding and operations agent", the application `hanafubuki-agent`): the model sees what the goldens pin |
 | `NetworkSettingsPort` | the configuration's `[network] proxy` |
 | `SecretStore` | the OS keyring (`keyring` 4, service `org.licyk.hanafubuki-agent.secrets`, on the instance runtime's blocking pool), unless `AgentRuntimeHost::secrets` names a store |
 | `BlockingOperationPort` | the instance runtime's blocking pool, as embedded |
 | Status, plugin and MCP sinks | no-op until the consumer's; turn and session events go to the sink each call is given |
-| Child processes | this process's environment (no overlay) |
+| Child processes | this process's environment, with the configured proxy over it as a host's overlay puts its own: an explicit proxy sets `HTTP_PROXY` and `HTTPS_PROXY`, `disabled` removes them, both set `NO_PROXY` to the loopback names; `system` leaves the environment as it is |
 | System Skills | the embedded ones published into `<data>/skills/system`, or the given directory as it is |
 
 The first start always runs: a command line that starts the Agent asks for
@@ -277,6 +280,21 @@ marker still counts them). `start` returns at once and
 `wait_until_started` returns the running handle or why there is none;
 `shutdown` is the embedded sequence (§3.4). The logger is not part of the
 runtime: the binary installs it (§10).
+
+The binary is `hanafubuki-agent-cli` ([cli.md](cli.md)), above the facade
+and depending on nothing else of the workspace. Every command composes the
+runtime from its global flags (`--permission-mode` and `--log-level` become
+the last `-c` overrides, `--data-dir` replaces `AgentDirs::data_dir`), then
+installs the panic hook and the log file; the commands that read or write
+the configuration (`config`, `providers list`, `mcp list`, `doctor`
+offline) never start it, so they work beside a running Agent, and the
+others start it, which takes the data directory's lock. `exec` brings its
+own sinks: the turn's `AgentEventSink` and the slot's status sink feed one
+channel the command's thread reads, so the events it prints are the
+facade's own (`--json` serializes `AgentEvent` as it is), and it answers
+approvals and questions with `resolve_approval` and `resolve_user_input`
+from there. A change of the Agent's status during the turn (a kernel
+fault) ends the command, since the restarted Agent has a new generation.
 
 ## 4. Tools
 
@@ -678,9 +696,21 @@ quarantine what they cannot use
   applies the layers again, so no layer's value is ever baked into the
   user's file. A project's file that cannot be read is logged and skipped.
   `[network] proxy` and `logLevel` (`AgentStandaloneSettings`) are read the
-  same way and never written; an embedded configuration has no layers and
+  same way; the settings API never writes them, `config set` does
+  (`AgentConfig::set_user_value`, below). An embedded configuration has no layers and
   ignores both (their keys are reported unknown), since its host supplies
   the proxy and the logger.
+- **Writes by key** (`AgentConfig::value`, `set_user_value`, the CLI's
+  `config get|set`): a key is a dotted TOML key (`toml_edit::Key::parse`,
+  so a project's path is a quoted segment). A setting's value is read with
+  every layer applied; `profiles.<name>.<key>` and
+  `projects."<path>".trustLevel` from the user's file. A write changes the
+  user's file only, and only that key (the document written is the key's
+  path alone, which the `toml_edit` merge applies), after checking that the
+  key is a setting (present in the defaults' document), a profile's setting
+  or a project's `trustLevel` (`trusted` or `untrusted`), and that its value
+  decodes without a repair the file did not already need, so a value the
+  Agent would replace by its default is refused instead of written.
 - **Data directory lock**: `<data_dir>/.lock`, an advisory lock (std's
   `File::try_lock`: `flock` on Unix, `LockFileEx` on Windows; no `fs4`
   needed) that the OS drops with the process. The history's SQLite index and

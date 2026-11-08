@@ -12,34 +12,42 @@ done: the workspace, the decoupling inside Hanafubuki's tree, and the move.
       data-dir lock (both modes), the standalone log file, the keyring
       store, the cwd workspace and `AgentRuntime::standalone`
       ([docs/config.md](docs/config.md), architecture.md §3.6, §10).
-- [ ] Phase 4b: the CLI (`hanafubuki-agent-cli`, `clap`), `exec` (human +
-      JSONL), `config`/`providers`/`mcp`/`sessions` subcommands, `doctor`.
-      What it builds on and still needs:
-  - parse `-c` with `ConfigOverrides::parse`, `-p`, `--cd`, `--add-dir`,
-    `--data-dir` (overrides `AgentDirs::data_dir`), `--log-level` (a
-    `logLevel` override) into `AgentRuntimeOptions`;
-  - at start: `panic::configure_crash_record` +
-    `panic::install_panic_hook(logging::logging_blocked)`, then
-    `logging::install_file_logger(storage_paths().logs_dir, level)` with
-    `config().standalone_settings()?.log_level`, then `start()` and
-    `wait_until_started`;
-  - `exec` passes its own `AgentEventSink` to `submit_turn_with_sink` and
-    replaces the status/plugin/MCP sinks in `AgentRuntimeHost`; approvals
-    and user-input questions need a policy (`--approve`);
-  - `config set` writes keys the settings API does not patch (`network`,
-    `logLevel`, profiles, `projects` trust) by editing `config.toml` with
-    `toml_edit` itself, or the configuration gains a generic path write;
-  - `doctor`: `DataDirLock::acquire` (and drop) for the lock, the keyring
-    under `KEYRING_SERVICE`;
-  - `[network] proxy` reaches the HTTP clients but not the child processes'
-    environment (they inherit this process's, where a user's proxy
-    variables already are); add an overlay if that is wanted;
+- [x] Phase 4b: the CLI (`hanafubuki-agent-cli`, binary `hanafubuki-agent`,
+      `clap`): the global flags, `exec` (text and JSON lines, `--approve`,
+      questions on a terminal, exit codes, `-o`), `config path|get|set|edit`
+      (`AgentConfig::value`, `set_user_value`, `layer_sources`), `providers`,
+      `mcp`, `sessions`, `skills`, `memory`, `doctor`; the proxy in the
+      Agent's processes' environment; the host-supplied identity
+      (`AgentHostInstructions::identity`, `application`)
+      ([docs/cli.md](docs/cli.md), architecture.md §3.6). Phase 4 is done:
+      an `exec` turn against the scripted model runs end to end in CI
+      (`crates/cli/tests/exec.rs`).
+  - Deferred: `mcp add` sets no credentials (`credentialEnvironment`,
+    `credentialHeaders`, OAuth login are edited in `mcp.toml`); `providers
+    add` takes no request headers; `exec` resumes no session and attaches
+    no images; `doctor` cannot say which process holds the data directory
+    (the lock file names none); a management command that starts the Agent
+    also starts its MCP servers in the background, as every start does.
   - AGENTS.md discovery reads the working directory's and the Git root's
     own `AGENTS.md` (each a root), not the directories between them, since
     the runtime selects no target; Codex reads every level.
 - [ ] Hanafubuki, when it moves its pin past Phase 4a: nothing to change for
       the lock (it is taken by the start marker); `AgentProxy` is now
       `hanafubuki_agent_config::AgentProxy`, re-exported where it was.
+- [ ] Hanafubuki, when it moves its pin past Phase 4b:
+  - `AgentHostInstructions` has two new fields (its struct literal in
+    `hanafubuki-agent-integration/src/host.rs`, `application_instructions`,
+    stops compiling): pass `identity: "You are the desktop application's
+    coding and operations agent.".to_string()` and `application:
+    "Hanafubuki".to_string()`, the strings the Agent used to have, and the
+    integration goldens stay byte-identical (checked here by building the
+    facade's goldens with those values); the history corpus is unchanged.
+  - `docs/agent-integration.md`: the host instructions now carry the
+    identity and the application name.
+  - Nothing else: the facade's other changes are additions (re-exports of
+    MCP, approval and user-input types, `probe_keyring`, the
+    configuration's key API), and the CLI is a crate Hanafubuki does not
+    depend on.
 - [ ] Phase 5: the TUI from Codex `rust-v0.93.0`, with `check-notices`.
 - [ ] Phase 6: `release.yml` with binaries, clippy `-D warnings`, `v0.1.0`
       on crates.io.

@@ -399,10 +399,15 @@ configuration directory; Hanafubuki's is `<app_data>/config/agent/`) and
   inherited overlay (`ChildProcessEnvironment::inherited_snapshot`), and the
   proxy overlay, which the root's proxy target replaces in both
   environments at once (`runtime::proxy`).
-- **`AgentHostInstructions`** (`instructions`): what the host adds to the
-  base instructions, at two places: `sections` after the tool guidance and
-  `ownership` closing "Approval and ownership", each joined one blank line
-  from its neighbours. In Hanafubuki: the application context section and the
+- **`AgentHostInstructions`** (`instructions`): who the Agent is and what
+  the host adds to the base instructions. `identity` is the sentence that
+  opens them (`{identity}` in `prompts/base.md`) and `application` the name
+  the environment section gives (`"application"`); `sections` go after the
+  tool guidance and `ownership` closes "Approval and ownership", each joined
+  one blank line from its neighbours. The default is the standalone Agent's:
+  "You are a coding and operations agent.", `hanafubuki-agent`, no
+  additions. In Hanafubuki: "You are the desktop application's coding and
+  operations agent.", `Hanafubuki`, the application context section and the
   ownership paragraph (`src/prompts/` of the integration).
 - **Host input**: `AgentTurnRequest`, `AgentSteeringRequest` and
   `AgentFileSearch` carry what the host submitted beside a message or a

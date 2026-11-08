@@ -18,6 +18,7 @@ changing behavior, and update them when the design changes.
 | [docs/rules/plugins.md](docs/rules/plugins.md) | Any tool, context section, approval rule, continuation hook or observer; the plugin host, its manifest and the plugin configuration; the crate boundaries; the host interface a host embeds the Agent through; the goldens. |
 | [docs/architecture.md](docs/architecture.md) | The Agent as a whole: crates, plugin host and faults, tool planning and pipeline, context, Skills, MCP, memory, persistence, and why the less obvious choices were made. |
 | [docs/spec.md](docs/spec.md) | The Agent as built in detail: composition, storage, contracts, plugins and tools, sessions and turns, approval, execution, history, memory, MCP, models, Skills, presentation, shutdown. |
+| [docs/cli.md](docs/cli.md), [docs/config.md](docs/config.md) | The `hanafubuki-agent` command line (its commands, `exec`'s output formats, approvals and exit codes); the standalone configuration (locations, layers, keys). |
 | [docs/extraction-plan.md](docs/extraction-plan.md) | The plan this repository was extracted from Hanafubuki by, and its remaining phases (standalone mode, the TUI, the release). |
 
 ## Development Principles
