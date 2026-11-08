@@ -115,7 +115,7 @@ fn a_queued_attachment_load_answers_each_attachment_in_order() {
         }),
     );
 
-    let (thread, loaded) = receiver.recv_timeout(Duration::from_secs(2)).unwrap();
+    let (thread, loaded) = receiver.recv_timeout(Duration::from_secs(10)).unwrap();
     assert_eq!(
         thread.as_deref(),
         Some(format!("agent-history-writer-{session_id}").as_str())

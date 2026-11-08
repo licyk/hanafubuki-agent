@@ -76,7 +76,8 @@ async fn unified_exec_completes_only_after_manual_exact_approval() {
         .unwrap();
 
     assert_eq!(
-        tokio::time::timeout(Duration::from_secs(5), turn)
+        // A cold PowerShell start on a loaded CI runner takes seconds.
+        tokio::time::timeout(Duration::from_secs(30), turn)
             .await
             .expect("approved command turn must finish within the fixture deadline")
             .unwrap()

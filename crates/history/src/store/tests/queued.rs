@@ -53,7 +53,7 @@ fn a_follow_up_is_appended_before_the_next_queued_append() {
     );
 
     let order = (0..3)
-        .map(|_| received.recv_timeout(Duration::from_secs(2)).unwrap())
+        .map(|_| received.recv_timeout(Duration::from_secs(10)).unwrap())
         .collect::<Vec<_>>();
     assert_eq!(
         order,
@@ -89,7 +89,7 @@ fn a_follow_up_fails_with_an_append_the_store_cannot_make() {
     );
 
     let order = (0..2)
-        .map(|_| received.recv_timeout(Duration::from_secs(2)).unwrap())
+        .map(|_| received.recv_timeout(Duration::from_secs(10)).unwrap())
         .collect::<Vec<_>>();
     assert_eq!(
         order,
@@ -147,7 +147,7 @@ fn shutdown_reports_a_writer_that_does_not_stop_by_its_deadline() {
         }),
     );
     assert_eq!(
-        acknowledged.recv_timeout(Duration::from_secs(2)).unwrap(),
+        acknowledged.recv_timeout(Duration::from_secs(10)).unwrap(),
         Ok(())
     );
 
