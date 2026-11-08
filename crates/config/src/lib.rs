@@ -15,6 +15,7 @@
 mod dirs;
 mod fields;
 mod file;
+mod keys;
 mod layers;
 mod mcp;
 mod network;
@@ -26,7 +27,7 @@ mod store;
 
 pub use dirs::{AgentDirs, AGENT_HOME_ENV};
 pub use file::{write_atomic, FileAccess};
-pub use layers::{ConfigLayers, PROJECT_CONFIG_DIR};
+pub use layers::{ConfigLayerSource, ConfigLayers, PROJECT_CONFIG_DIR};
 pub use mcp::McpSettingsStore;
 pub use network::AgentProxy;
 pub use overrides::ConfigOverrides;

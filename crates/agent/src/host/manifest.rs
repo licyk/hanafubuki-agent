@@ -31,6 +31,8 @@ use crate::{AgentMemoryApplication, AgentProxy, WorkspaceRootsPort};
 pub(crate) struct AgentPluginInputs {
     /// Where the user's own `AGENTS.md` is read from.
     pub(crate) user_instructions_dir: PathBuf,
+    /// The application the environment section names.
+    pub(crate) application: String,
     pub(crate) workspace: Arc<dyn WorkspaceRootsPort>,
     pub(crate) files: WorkspaceFsService,
     pub(crate) executions: AgentExecutionService,
@@ -75,7 +77,11 @@ pub(crate) fn agent_plugin_manifest(
     rows.extend([
         AgentPluginRow::unconfigured(
             Context,
-            workspace_context_plugin(inputs.user_instructions_dir, inputs.workspace),
+            workspace_context_plugin(
+                inputs.user_instructions_dir,
+                inputs.application,
+                inputs.workspace,
+            ),
         ),
         AgentPluginRow::unconfigured(Context, permission_mode_plugin()),
     ]);

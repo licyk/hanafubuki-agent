@@ -53,6 +53,11 @@ impl DesktopAgent {
             .map_err(|error| format!("invalid Agent child process environment: {error}"))
     }
 
+    #[cfg(test)]
+    pub(crate) fn child_environment_for_test(&self) -> HashMap<String, Option<String>> {
+        self.child_environment.snapshot()
+    }
+
     /// The slot itself, for a holder that resolves the Agent per call.
     pub fn slot(&self) -> &AgentSlot {
         &self.slot

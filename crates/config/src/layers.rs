@@ -15,17 +15,16 @@ use serde_json::{Map, Value};
 
 use crate::fields::unknown_keys;
 use crate::file::{ConfigFile, FileAccess, FileRead};
+use crate::keys::{PROFILES, PROJECTS, TRUST_LEVEL};
 use crate::settings::decode_settings;
 use crate::standalone::decode_standalone;
 use crate::store::object;
 use crate::{AgentSettings, AgentStandaloneSettings, ConfigOverrides, AGENT_SETTINGS_FILE};
 
-/// The directory of a project's configuration, in the project's root.
+/// The directory of a project's configuration, in the project's root. The
+/// user's file names trusted projects in its `projects` table, keyed by
+/// path: `[projects."/path/to/project"] trustLevel = "trusted"`.
 pub const PROJECT_CONFIG_DIR: &str = ".hanafubuki-agent";
-/// The user's file names trusted projects in this table, keyed by path:
-/// `[projects."/path/to/project"] trustLevel = "trusted"`.
-const PROJECTS: &str = "projects";
-const PROFILES: &str = "profiles";
 
 /// What the standalone Agent layers over the user's `config.toml`.
 #[derive(Clone, Debug, Default)]
@@ -37,6 +36,19 @@ pub struct ConfigLayers {
     /// when the user's file trusts it.
     pub project: Option<PathBuf>,
     pub overrides: ConfigOverrides,
+}
+
+/// One layer of a configuration, as it was found.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ConfigLayerSource {
+    /// The user's `config.toml`; `present` is false when there is none.
+    User { path: PathBuf, present: bool },
+    /// The profile `-p` selects.
+    Profile { name: String },
+    /// The project's file, which is read only when the project is trusted.
+    Project { path: PathBuf, trusted: bool },
+    /// The `-c` overrides.
+    Overrides,
 }
 
 /// The settings with every layer applied.
@@ -95,6 +107,26 @@ impl ConfigLayers {
         Ok(resolved)
     }
 
+    /// The layers above the user's file that exist (a project file that is
+    /// there, overrides that were given), lowest first.
+    pub(crate) fn sources(&self, user: &Map<String, Value>) -> Vec<ConfigLayerSource> {
+        let mut sources = Vec::new();
+        if let Some(name) = &self.profile {
+            sources.push(ConfigLayerSource::Profile { name: name.clone() });
+        }
+        if let Some(project) = self.project.as_deref() {
+            let path = Self::project_file(project);
+            if path.is_file() {
+                let trusted = is_trusted(user, project);
+                sources.push(ConfigLayerSource::Project { path, trusted });
+            }
+        }
+        if !self.overrides.is_empty() {
+            sources.push(ConfigLayerSource::Overrides);
+        }
+        sources
+    }
+
     /// The project's configuration file and what it holds, when the project
     /// is trusted and has one the Agent can read. A project's file is never
     /// repaired or quarantined: it is the project's, not the user's.
@@ -142,7 +174,7 @@ fn is_trusted(user: &Map<String, Value>, project: &Path) -> bool {
         return false;
     };
     projects.iter().any(|(path, entry)| {
-        entry.get("trustLevel").and_then(Value::as_str) == Some("trusted")
+        entry.get(TRUST_LEVEL).and_then(Value::as_str) == Some("trusted")
             && ResolvedPath::resolve(path).is_ok_and(|path| path.key() == project.key())
     })
 }

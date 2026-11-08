@@ -82,7 +82,7 @@ pub struct AgentHostPorts {
     pub workspace: Arc<dyn WorkspaceRootsPort>,
     /// The context steering carries.
     pub steering_context: Arc<dyn HostContextPort>,
-    /// What the host adds to the base instructions.
+    /// Who the Agent is, and what the host adds to the base instructions.
     pub instructions: AgentHostInstructions,
     /// The proxy the Agent's HTTP clients use.
     pub network: Arc<dyn NetworkSettingsPort>,
@@ -342,6 +342,7 @@ impl AgentApplicationService {
             agent_plugin_manifest(
                 AgentPluginInputs {
                     user_instructions_dir: storage_paths.root.clone(),
+                    application: host.instructions.application.clone(),
                     workspace: workspace.clone(),
                     files: files.clone(),
                     executions: executions.clone(),

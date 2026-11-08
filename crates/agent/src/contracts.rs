@@ -6,23 +6,41 @@ const BASE_INSTRUCTIONS_OPENING: &str = include_str!("prompts/base.md");
 const BASE_INSTRUCTIONS_APPROVAL: &str = include_str!("prompts/approval.md");
 const BASE_INSTRUCTIONS_CLOSING: &str = include_str!("prompts/closing.md");
 
-/// What a host adds to the Agent's base instructions. Each part is a run of
-/// Markdown blocks; an empty part adds nothing.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+/// Who the Agent is and what a host adds to its base instructions. The
+/// default is the standalone Agent's: its own identity and name, no
+/// additions.
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AgentHostInstructions {
-    /// Sections after the tool guidance, before "Approval and ownership": how
-    /// the host's tools and context are used.
+    /// The sentence that opens the base instructions (`You are …`).
+    pub identity: String,
+    /// The application the environment section names.
+    pub application: String,
+    /// Markdown sections after the tool guidance, before "Approval and
+    /// ownership": how the host's tools and context are used. Empty adds
+    /// nothing, as for `ownership`.
     pub sections: String,
     /// The paragraph that closes "Approval and ownership": what the host
     /// owns.
     pub ownership: String,
 }
 
+impl Default for AgentHostInstructions {
+    fn default() -> Self {
+        Self {
+            identity: "You are a coding and operations agent.".to_string(),
+            application: "hanafubuki-agent".to_string(),
+            sections: String::new(),
+            ownership: String::new(),
+        }
+    }
+}
+
 /// The base instructions with `host`'s additions, blocks separated by one
 /// blank line.
 pub(crate) fn agent_base_instructions(host: &AgentHostInstructions) -> String {
+    let opening = BASE_INSTRUCTIONS_OPENING.replacen("{identity}", &host.identity, 1);
     let blocks = [
-        BASE_INSTRUCTIONS_OPENING,
+        &opening,
         &host.sections,
         BASE_INSTRUCTIONS_APPROVAL,
         &host.ownership,

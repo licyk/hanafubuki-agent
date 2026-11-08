@@ -191,3 +191,37 @@ fn a_profile_the_configuration_does_not_have_fails_the_runtime() {
     .unwrap();
     assert!(error.contains("no profile `missing`"), "{error}");
 }
+
+#[test]
+fn the_configured_proxy_reaches_the_agents_processes() {
+    let fixture = standalone("http://127.0.0.1:9/v1");
+    let runtime = |proxy: &str| {
+        AgentRuntime::standalone(
+            AgentRuntimeOptions {
+                dirs: AgentDirs::resolve(Some(fixture.home.clone())).unwrap(),
+                bundled_skills: None,
+                cwd: fixture.cwd.clone(),
+                add_dirs: Vec::new(),
+                profile: None,
+                overrides: ConfigOverrides::parse(&[format!("network.proxy={proxy}")]).unwrap(),
+                start: AgentStartOptions::default(),
+            },
+            AgentRuntimeHost::default(),
+        )
+        .unwrap()
+        .child_environment_for_test()
+    };
+    let explicit = runtime("\"http://127.0.0.1:7890\"");
+    let proxy = Some("http://127.0.0.1:7890".to_string());
+    assert_eq!(explicit.get("HTTP_PROXY"), Some(&proxy));
+    assert_eq!(explicit.get("HTTPS_PROXY"), Some(&proxy));
+    assert!(explicit.contains_key("NO_PROXY"));
+    // Disabled removes what this process's environment would pass on.
+    let disabled = runtime("disabled");
+    assert_eq!(disabled.get("HTTP_PROXY"), Some(&None));
+    assert_eq!(disabled.get("HTTPS_PROXY"), Some(&None));
+    // The system's proxy is this process's environment, left as it is.
+    let system = runtime("system");
+    assert!(!system.contains_key("HTTP_PROXY"));
+    assert!(!system.contains_key("NO_PROXY"));
+}

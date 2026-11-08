@@ -3,8 +3,9 @@
 // Copyright 2025 OpenAI. Licensed under the Apache License, Version 2.0
 // (http://www.apache.org/licenses/LICENSE-2.0).
 // Modified for hanafubuki-agent: no `clap` type (the CLI collects the raw
-// strings), the overrides are parsed once into one TOML table, and the
-// parsing errors are the caller's to report.
+// strings), the overrides are parsed once into one TOML table, the parsing
+// errors are the caller's to report, and the value parsing is shared with
+// `config set`.
 
 //! `-c key=value` overrides: the last layer of the standalone configuration.
 //!
@@ -63,17 +64,21 @@ fn parse_override(raw: &str) -> Result<(String, Value), String> {
     if key.is_empty() {
         return Err(format!("Empty key in override: {raw}"));
     }
+    Ok((key.to_string(), parse_value(value)))
+}
+
+/// `raw` as a TOML value, or as a string when it is not one.
+pub(crate) fn parse_value(raw: &str) -> Value {
     // Attempt to parse as TOML. If that fails, treat it as a raw string. This
     // allows convenient usage such as `-c logLevel=debug` without the quotes.
-    let value = match parse_toml_value(value) {
+    match parse_toml_value(raw) {
         Ok(value) => value,
         Err(_) => {
             // Strip leading/trailing quotes if present
-            let trimmed = value.trim().trim_matches(|c| c == '"' || c == '\'');
+            let trimmed = raw.trim().trim_matches(|c| c == '"' || c == '\'');
             Value::String(trimmed.to_string())
         }
-    };
-    Ok((key.to_string(), value))
+    }
 }
 
 /// Apply a single override onto `root`, creating intermediate tables as

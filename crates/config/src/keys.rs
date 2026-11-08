@@ -1,0 +1,130 @@
+//! Keys of `config.toml` by path, as `config get` and `config set` name
+//! them: a dotted TOML key (`memory.enabled`, `profiles.ci.permissionMode`,
+//! `projects."/home/me/project".trustLevel`).
+
+use serde_json::{Map, Value};
+
+use crate::settings::decode_settings;
+use crate::standalone::decode_standalone;
+use crate::store::object;
+use crate::{AgentSettings, AgentStandaloneSettings};
+
+pub(crate) const PROFILES: &str = "profiles";
+pub(crate) const PROJECTS: &str = "projects";
+pub(crate) const TRUST_LEVEL: &str = "trustLevel";
+/// The values of a project's `trustLevel`; only the first trusts it.
+const TRUST_LEVELS: [&str; 2] = ["trusted", "untrusted"];
+
+/// What a key names.
+pub(crate) enum KeyTarget<'a> {
+    /// A setting, which the layers resolve.
+    Setting(&'a [String]),
+    /// A setting of the profile `name`.
+    Profile { name: &'a str, key: &'a [String] },
+    /// A project's trust.
+    ProjectTrust,
+}
+
+pub(crate) fn parse_key(key: &str) -> Result<Vec<String>, String> {
+    let keys = toml_edit::Key::parse(key)
+        .map_err(|_| format!("`{key}` is not a key (write a dotted TOML key)"))?;
+    Ok(keys.iter().map(|key| key.get().to_string()).collect())
+}
+
+pub(crate) fn target<'a>(key: &str, path: &'a [String]) -> Result<KeyTarget<'a>, String> {
+    match path {
+        [first, name, rest @ ..] if first == PROFILES && !rest.is_empty() => {
+            Ok(KeyTarget::Profile { name, key: rest })
+        }
+        [first, _, level] if first == PROJECTS && level == TRUST_LEVEL => {
+            Ok(KeyTarget::ProjectTrust)
+        }
+        [first, ..] if first == PROFILES || first == PROJECTS => Err(format!(
+            "`{key}` names no setting: write profiles.<name>.<key> or \
+             projects.\"<path>\".{TRUST_LEVEL}"
+        )),
+        _ => Ok(KeyTarget::Setting(path)),
+    }
+}
+
+/// Checks `value` for `key` in `document`, a table of settings decoded over
+/// `below`: the key must be a setting's, and the value one the Agent can
+/// use (a value the document already could not use is not this write's).
+pub(crate) fn check_setting(
+    key: &str,
+    path: &[String],
+    document: &Map<String, Value>,
+    value: &Value,
+    below: &AgentSettings,
+) -> Result<(), String> {
+    if lookup(&known_settings()?, path).is_none() {
+        return Err(format!("`{key}` is not a setting of config.toml"));
+    }
+    let before = repairs(document, below);
+    let mut changed = document.clone();
+    insert(&mut changed, path, value.clone());
+    match repairs(&changed, below)
+        .into_iter()
+        .find(|repair| !before.contains(repair))
+    {
+        Some(repair) => Err(format!("`{key}` cannot take this value: {repair}")),
+        None => Ok(()),
+    }
+}
+
+pub(crate) fn check_trust(key: &str, value: &Value) -> Result<(), String> {
+    match value.as_str() {
+        Some(level) if TRUST_LEVELS.contains(&level) => Ok(()),
+        _ => Err(format!(
+            "`{key}` is \"{}\" or \"{}\"",
+            TRUST_LEVELS[0], TRUST_LEVELS[1]
+        )),
+    }
+}
+
+/// Every setting, with its default, as one document.
+pub(crate) fn known_settings() -> Result<Map<String, Value>, String> {
+    let mut known = object(&AgentSettings::default())?;
+    known.extend(object(&AgentStandaloneSettings::default())?);
+    Ok(known)
+}
+
+pub(crate) fn lookup<'a>(document: &'a Map<String, Value>, path: &[String]) -> Option<&'a Value> {
+    let (last, parents) = path.split_last()?;
+    let mut table = document;
+    for key in parents {
+        table = table.get(key)?.as_object()?;
+    }
+    table.get(last)
+}
+
+/// Sets `path` in `document` to `value`, making the tables on the way.
+pub(crate) fn insert(document: &mut Map<String, Value>, path: &[String], value: Value) {
+    let Some((last, parents)) = path.split_last() else {
+        return;
+    };
+    let mut table = document;
+    for key in parents {
+        let entry = table
+            .entry(key.clone())
+            .or_insert_with(|| Value::Object(Map::new()));
+        if !entry.is_object() {
+            *entry = Value::Object(Map::new());
+        }
+        let Value::Object(next) = entry else {
+            return;
+        };
+        table = next;
+    }
+    table.insert(last.clone(), value);
+}
+
+fn repairs(document: &Map<String, Value>, below: &AgentSettings) -> Vec<String> {
+    let mut repairs = Vec::new();
+    decode_settings(document, below, &mut repairs);
+    decode_standalone(document, &AgentStandaloneSettings::default(), &mut repairs);
+    repairs
+}
+
+#[cfg(test)]
+mod tests;

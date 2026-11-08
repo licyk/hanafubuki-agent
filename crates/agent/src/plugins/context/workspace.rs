@@ -18,14 +18,16 @@ use crate::WorkspaceRootsPort;
 /// Registers the workspace contributor: the workspace roots, the instructions
 /// found in `user_instructions_dir` and in them, and the environment, which
 /// carries the warnings of that discovery (so the three come from one
-/// discovery).
+/// discovery) and names `application`.
 pub(crate) fn workspace_context_plugin(
     user_instructions_dir: PathBuf,
+    application: String,
     roots: Arc<dyn WorkspaceRootsPort>,
 ) -> PluginDef {
     PluginDef::new(move |ctx: Context, _| {
         let workspace = Workspace {
             user_instructions_dir: user_instructions_dir.clone(),
+            application: application.clone(),
             roots: roots.clone(),
         };
         async move {
@@ -62,6 +64,7 @@ const INSTRUCTIONS_RENDERER: ContextRenderer = ContextRenderer {
 
 struct Workspace {
     user_instructions_dir: PathBuf,
+    application: String,
     roots: Arc<dyn WorkspaceRootsPort>,
 }
 
@@ -130,7 +133,7 @@ impl Workspace {
         sections.push(ContextSection::from_json(
             ContextSectionKind::ENVIRONMENT,
             &serde_json::json!({
-                "application": "Hanafubuki",
+                "application": self.application,
                 "platform": std::env::consts::OS,
                 "architecture": std::env::consts::ARCH,
                 "workspaceInstructionWarnings": discovered.warnings,

@@ -10,12 +10,14 @@ use serde_json::{Map, Value};
 
 use crate::fields::unknown_keys;
 use crate::file::{ConfigFile, FileAccess, FileRead};
+use crate::keys::{self, KeyTarget};
 use crate::layers::Resolved;
+use crate::overrides::parse_value;
 use crate::providers::{decode_registry, validate_agent_provider_registry};
 use crate::settings::{decode_settings, validate_disabled_plugins};
 use crate::{
     AgentProviderRegistrySettings, AgentSettings, AgentSettingsPatch, AgentStandaloneSettings,
-    ConfigLayers, McpSettingsStore,
+    ConfigLayerSource, ConfigLayers, McpSettingsStore,
 };
 
 /// The settings, without credentials.
@@ -138,6 +140,81 @@ impl AgentConfig {
             }
             validate_disabled_plugins(&settings.disabled_plugins)
         })
+    }
+
+    /// The settings with every layer applied, as one document (`config
+    /// get`).
+    pub fn resolved_document(&self) -> Result<Map<String, Value>, String> {
+        let resolved = self.resolved()?;
+        let mut document = object(&resolved.settings)?;
+        document.extend(object(&resolved.standalone)?);
+        Ok(document)
+    }
+
+    /// The value of `key`, a dotted TOML key: a setting as the layers
+    /// resolve it, a profile's or a project's entry as the user's file holds
+    /// it; `None` when it is not set.
+    pub fn value(&self, key: &str) -> Result<Option<Value>, String> {
+        let path = keys::parse_key(key)?;
+        let value = match keys::target(key, &path)? {
+            KeyTarget::Setting(setting) => keys::lookup(&self.resolved_document()?, setting)
+                .cloned()
+                .ok_or_else(|| format!("`{key}` is not a setting of config.toml"))?,
+            KeyTarget::Profile { .. } | KeyTarget::ProjectTrust => {
+                let document = self.load_user_settings()?.document;
+                keys::lookup(&document, &path).cloned().unwrap_or(Value::Null)
+            }
+        };
+        Ok(Some(value).filter(|value| !value.is_null()))
+    }
+
+    /// Sets `key` (a dotted TOML key, as [`Self::value`] reads) in the
+    /// user's `config.toml` to `raw`, TOML or, when it is not, a string as
+    /// for `-c`. The key must be a setting, a profile's setting or a
+    /// project's `trustLevel`, and the value one the Agent can use; the rest
+    /// of the file stays as written.
+    pub fn set_user_value(&self, key: &str, raw: &str) -> Result<(), String> {
+        let path = keys::parse_key(key)?;
+        let value = serde_json::to_value(parse_value(raw))
+            .map_err(|error| format!("`{key}` cannot take this value: {error}"))?;
+        let mut cached = self.inner.settings.lock();
+        let user = self.load_user_settings()?;
+        match keys::target(key, &path)? {
+            KeyTarget::Setting(setting) => keys::check_setting(
+                key,
+                setting,
+                &user.document,
+                &value,
+                &AgentSettings::default(),
+            )?,
+            KeyTarget::Profile { name, key: setting } => {
+                let profile = keys::lookup(&user.document, &path[..2])
+                    .and_then(Value::as_object)
+                    .cloned()
+                    .unwrap_or_default();
+                keys::check_setting(key, setting, &profile, &value, &user.value)
+                    .map_err(|error| format!("{error} (profile `{name}`)"))?
+            }
+            KeyTarget::ProjectTrust => keys::check_trust(key, &value)?,
+        }
+        // Only the key is written: the write keeps every other key as the
+        // file has it.
+        let mut change = Map::new();
+        keys::insert(&mut change, &path, value);
+        self.inner.settings_file.write(&change)?;
+        *cached = None;
+        Ok(())
+    }
+
+    /// The layers the settings are read from, lowest first (`doctor`).
+    pub fn layer_sources(&self) -> Result<Vec<ConfigLayerSource>, String> {
+        let path = self.inner.settings_file.path().to_path_buf();
+        let present = path.is_file();
+        let mut sources = vec![ConfigLayerSource::User { path, present }];
+        if let Some(layers) = &self.inner.layers {
+            sources.extend(layers.sources(&self.load_user_settings()?.document));
+        }
+        Ok(sources)
     }
 
     pub fn providers(&self) -> Result<AgentProviderRegistrySettings, String> {

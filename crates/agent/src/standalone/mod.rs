@@ -7,7 +7,8 @@
 //! `[network]` proxy, the operating system's keyring for secrets, and sinks
 //! that drop what they are told until a consumer (the TUI, `exec`) brings
 //! its own. The configuration is layered ([`ConfigLayers`]); the data
-//! directory's lock is taken by the first start, as for a host.
+//! directory's lock is taken by the first start, as for a host. The
+//! configured proxy reaches the Agent's processes too.
 
 mod keyring;
 mod workspace;
@@ -118,6 +119,9 @@ impl AgentRuntime {
         // run's unfinished starts never keep it off.
         let slot = AgentSlot::new(None, host.status).starting_with(options.start);
         let agent = DesktopAgent::new(slot, marker, HashMap::new())?;
+        agent.replace_child_environment(proxy_environment(
+            &config.standalone_settings()?.network.proxy,
+        ))?;
         let storage_paths = storage.clone();
         let (secrets, plugin_events, mcp_events) =
             (host.secrets, host.plugin_events, host.mcp_events);
@@ -182,6 +186,11 @@ impl AgentRuntime {
         &self.config
     }
 
+    #[cfg(test)]
+    pub(crate) fn child_environment_for_test(&self) -> HashMap<String, Option<String>> {
+        self.agent.child_environment_for_test()
+    }
+
     pub fn storage_paths(&self) -> &AgentStoragePaths {
         &self.storage
     }
@@ -192,6 +201,25 @@ impl AgentRuntime {
     pub fn shutdown(&self, budget: Duration) -> Vec<WorkerShutdownDiagnostic> {
         self.agent.shutdown(budget)
     }
+}
+
+/// The configured proxy in the environment of the Agent's processes, as a
+/// host's overlay puts its own there; the system's proxy is what this
+/// process's environment already holds.
+fn proxy_environment(proxy: &AgentProxy) -> HashMap<String, Option<String>> {
+    let address = match proxy {
+        AgentProxy::System => return HashMap::new(),
+        AgentProxy::Disabled => None,
+        AgentProxy::Explicit(url) => Some(url.clone()),
+    };
+    HashMap::from([
+        ("HTTP_PROXY".to_string(), address.clone()),
+        ("HTTPS_PROXY".to_string(), address),
+        (
+            "NO_PROXY".to_string(),
+            Some("localhost,127.0.0.1,::1".to_string()),
+        ),
+    ])
 }
 
 /// The proxy of the configuration's `[network]` section.

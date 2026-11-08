@@ -5,6 +5,8 @@ use super::*;
 #[test]
 fn the_base_instructions_name_only_the_agents_own_tools() {
     let instructions = agent_base_instructions(&AgentHostInstructions::default());
+    assert!(instructions.starts_with("You are a coding and operations agent. Be precise,"));
+    assert!(!instructions.contains("{identity}"));
     assert!(instructions.contains("Before making tool calls"));
     assert!(instructions.contains("After a meaningful batch"));
     assert!(instructions.contains("Do not emit a final answer"));
@@ -27,9 +29,12 @@ fn the_base_instructions_name_only_the_agents_own_tools() {
 #[test]
 fn a_hosts_additions_join_the_base_instructions_at_their_places() {
     let instructions = agent_base_instructions(&AgentHostInstructions {
+        identity: "You are the host's agent.".to_string(),
         sections: "# Host\n\nHost guidance.\n".to_string(),
         ownership: "The host owns its state.".to_string(),
+        ..AgentHostInstructions::default()
     });
+    assert!(instructions.starts_with("You are the host's agent. Be precise,\nsafe"));
     assert!(instructions.contains(
         "needs nothing extra either.\n\n# Host\n\nHost guidance.\n\n# Approval and ownership\n"
     ));
