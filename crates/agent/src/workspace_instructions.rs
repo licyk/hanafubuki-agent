@@ -296,7 +296,7 @@ fn truncate_head_tail(value: &str, maximum: usize) -> String {
         return value.to_string();
     }
     if maximum <= MARKER.len() {
-        return value.chars().take(maximum).collect();
+        return value[..value.floor_char_boundary(maximum)].to_string();
     }
     let available = maximum - MARKER.len();
     let mut head = available / 2;

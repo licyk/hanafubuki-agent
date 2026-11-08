@@ -63,6 +63,11 @@ fn multiple_roots_receive_a_fair_share_and_utf8_head_tail_truncation() {
 }
 
 #[test]
+fn a_budget_too_small_for_the_marker_keeps_a_utf8_head_within_it() {
+    assert_eq!(truncate_head_tail(&"界".repeat(64), 8), "界界");
+}
+
+#[test]
 fn an_unavailable_root_warns_without_blocking_another_root() {
     let available = tempfile::tempdir().unwrap();
     fs::write(available.path().join("AGENTS.md"), "available rule").unwrap();
