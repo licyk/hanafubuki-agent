@@ -1,0 +1,12 @@
+---
+source: crates/tui/src/diff_render/tests.rs
+expression: "render(&preview, 60)"
+---
+  └ Edited 2 files (+2 -1)
+    new.txt (+1 -0)
+    +hello
+
+    old.txt → renamed.txt (+1 -1)
+    -a
+    +b
+    … +3 lines

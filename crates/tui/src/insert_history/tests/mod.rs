@@ -1,5 +1,7 @@
 // Modified from OpenAI Codex rust-v0.93.0 (Apache-2.0).
 
+mod vt100_history;
+
 use super::*;
 use crate::markdown_render::render_markdown_text;
 use crate::test_support::VT100Backend;

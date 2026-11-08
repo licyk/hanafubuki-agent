@@ -3,8 +3,8 @@
 `hanafubuki-agent` is the standalone Agent's binary (the crate
 `hanafubuki-agent-cli`). It runs one turn headless (`exec`) and manages the
 configuration, the model Providers, the MCP servers, the sessions, the
-Skills and the memory; the terminal interface (TUI) comes in a later
-release. Its configuration is described in [config.md](config.md), its
+Skills and the memory; with no command it runs the terminal interface
+(TUI). Its configuration is described in [config.md](config.md), its
 design in [architecture.md §3.6](architecture.md#36-standalone).
 
 ```sh
@@ -44,7 +44,8 @@ need the data directory to themselves.
 
 | Command | Does |
 | --- | --- |
-| `hanafubuki-agent [PROMPT]`, `resume [--last\|ID]` | The terminal interface, not available yet: prints how to use `exec` and exits with 2. |
+| `hanafubuki-agent [PROMPT]` | The terminal interface (below), in a new session; `PROMPT` is its first message. Without a terminal on standard input and output it prints how to use `exec` and exits with 2. |
+| `resume [--last\|ID]` | Reopening a session in the terminal interface, not available yet: prints how to use `exec` and exits with 2. |
 | `exec [PROMPT\|-]` | One turn (below). |
 | `config path` | Prints where `config.toml`, `providers.toml`, `mcp.toml`, the data and the log are. |
 | `config get [KEY]` | A key's value with every layer applied (a string as it is, anything else as TOML); without a key, every setting as a TOML document. The credentials of a proxy URL print as `***`. |
@@ -64,6 +65,27 @@ need the data directory to themselves.
 | `skills list`, `skills install DIR [--overwrite]`, `skills remove ID` | The Skill catalog; installs the Skill in `DIR`; removes an installed Skill. |
 | `memory status`, `memory reset` | The memory's state; forgets everything it holds. |
 | `doctor [--online]` | Checks whether the Agent can run (below). |
+
+## The terminal interface
+
+`hanafubuki-agent [PROMPT]` opens the interface at the bottom of the
+terminal, and the conversation goes into the terminal's scrollback above
+it. `-m`, `-C`, `--add-dir` and the other global flags apply as for `exec`;
+the permission mode decides which tool calls ask, and each one that asks
+opens an approval: `y` once, `a` for the rest of the session (when the
+call offers it), `n` or Esc to deny. The model's questions open one at a
+time, an option to pick for each.
+
+| Key | Does |
+| --- | --- |
+| Enter | Sends the message: a new turn, or, while one runs, a message that steers it |
+| Shift+Enter, Ctrl+J | A new line |
+| Up, Down | The session's earlier messages |
+| Esc, Ctrl-C | Interrupts the running turn (Ctrl-C also clears the composer) |
+| Ctrl-C twice, Ctrl-D twice on an empty composer, `/quit` | Quits |
+
+Quitting restores the terminal and shuts the Agent down; the exit code is
+0, or 1 when the Agent could not start or the terminal could not be used.
 
 ## `exec`
 

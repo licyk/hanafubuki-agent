@@ -1,0 +1,10 @@
+---
+source: crates/tui/src/history_cell/tests.rs
+expression: "lines.join(\"\\n\")"
+---
+╭──────────────────────────────────╮
+│ >_ hanafubuki-agent (v0.1.0)     │
+│                                  │
+│ model:     fixture-model         │
+│ directory: /home/someone/project │
+╰──────────────────────────────────╯

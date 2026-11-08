@@ -8,9 +8,7 @@ use ratatui::text::Line;
 use unicode_width::UnicodeWidthStr;
 
 use super::HistoryCell;
-use crate::markdown::append_markdown;
 use crate::render::line_utils::prefix_lines;
-use crate::style::proposed_plan_style;
 
 /// The task checklist the model keeps with `update_plan`, as it stood at
 /// one update.
@@ -19,10 +17,6 @@ pub(crate) fn new_plan_update(snapshot: &AgentTaskPlanSnapshot) -> PlanUpdateCel
         explanation: snapshot.explanation.clone(),
         plan: snapshot.plan.clone(),
     }
-}
-
-pub(crate) fn new_proposed_plan(plan_markdown: String) -> ProposedPlanCell {
-    ProposedPlanCell { plan_markdown }
 }
 
 pub(crate) fn new_proposed_plan_stream(
@@ -36,36 +30,9 @@ pub(crate) fn new_proposed_plan_stream(
 }
 
 #[derive(Debug)]
-pub(crate) struct ProposedPlanCell {
-    plan_markdown: String,
-}
-
-#[derive(Debug)]
 pub(crate) struct ProposedPlanStreamCell {
     lines: Vec<Line<'static>>,
     is_stream_continuation: bool,
-}
-
-impl HistoryCell for ProposedPlanCell {
-    fn display_lines(&self, width: u16) -> Vec<Line<'static>> {
-        let mut lines: Vec<Line<'static>> = Vec::new();
-        lines.push(vec!["• ".dim(), "Proposed Plan".bold()].into());
-        lines.push(Line::from(" "));
-
-        let mut plan_lines: Vec<Line<'static>> = vec![Line::from(" ")];
-        let plan_style = proposed_plan_style();
-        let wrap_width = width.saturating_sub(4).max(1) as usize;
-        let mut body: Vec<Line<'static>> = Vec::new();
-        append_markdown(&self.plan_markdown, Some(wrap_width), &mut body);
-        if body.is_empty() {
-            body.push(Line::from("(empty)".dim().italic()));
-        }
-        plan_lines.extend(prefix_lines(body, "  ".into(), "  ".into()));
-        plan_lines.push(Line::from(" "));
-
-        lines.extend(plan_lines.into_iter().map(|line| line.style(plan_style)));
-        lines
-    }
 }
 
 impl HistoryCell for ProposedPlanStreamCell {

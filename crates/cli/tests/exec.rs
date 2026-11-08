@@ -167,7 +167,7 @@ fn an_allowed_tool_runs() {
 #[test]
 fn the_exit_code_says_how_the_command_ended() {
     let home = Home::new();
-    // The terminal interface and `resume` are not there yet.
+    // The terminal interface needs a terminal; `resume` is not there yet.
     let run = home.run(&[]).expect(2);
     assert!(run.stderr().contains("hanafubuki-agent exec PROMPT"));
     home.run(&["resume", "--last"]).expect(2);

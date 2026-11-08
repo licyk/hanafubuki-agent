@@ -11,7 +11,7 @@
 
 mod input;
 
-use std::io::{stdout, Result, Stdout};
+use std::io::{self, stdout, Result, Stdout, Write};
 use std::panic;
 use std::time::{Duration, Instant};
 
@@ -23,7 +23,8 @@ use ratatui::crossterm::event::{
 use ratatui::crossterm::terminal::{
     disable_raw_mode, enable_raw_mode, supports_keyboard_enhancement,
 };
-use ratatui::crossterm::{execute, SynchronizedUpdate};
+use ratatui::crossterm::terminal::{BeginSynchronizedUpdate, EndSynchronizedUpdate};
+use ratatui::crossterm::{execute, queue};
 use ratatui::layout::{Offset, Rect};
 use ratatui::text::Line;
 
@@ -86,28 +87,25 @@ fn set_panic_hook() {
     }));
 }
 
-/// The terminal with its inline viewport and the transcript lines waiting
-/// to be written above it.
-pub(crate) struct Tui {
-    pub(crate) terminal: Terminal,
-    pending_history_lines: Vec<Line<'static>>,
-    enhanced_keys_supported: bool,
+/// Whether the terminal reports modified keys apart. Ask it before the
+/// input thread starts, so its reply is not read as input.
+pub(crate) fn enhanced_keys_supported() -> bool {
+    supports_keyboard_enhancement().unwrap_or(false)
 }
 
-impl Tui {
-    pub(crate) fn new(terminal: Terminal) -> Self {
-        // Asked before the input thread starts, so its reply is not read
-        // as input.
-        let enhanced_keys_supported = supports_keyboard_enhancement().unwrap_or(false);
+/// The terminal with its inline viewport and the transcript lines waiting
+/// to be written above it. Tests draw it on a vt100 screen.
+pub(crate) struct Tui<B: Backend<Error = io::Error> + Write = CrosstermBackend<Stdout>> {
+    pub(crate) terminal: CustomTerminal<B>,
+    pending_history_lines: Vec<Line<'static>>,
+}
+
+impl<B: Backend<Error = io::Error> + Write> Tui<B> {
+    pub(crate) fn new(terminal: CustomTerminal<B>) -> Self {
         Self {
             terminal,
             pending_history_lines: Vec::new(),
-            enhanced_keys_supported,
         }
-    }
-
-    pub(crate) fn enhanced_keys_supported(&self) -> bool {
-        self.enhanced_keys_supported
     }
 
     pub(crate) fn insert_history_lines(&mut self, lines: Vec<Line<'static>>) {
@@ -125,7 +123,8 @@ impl Tui {
         // update, so the viewport's move after a resize is found first.
         let mut pending_viewport_area = self.pending_viewport_area()?;
 
-        stdout().sync_update(|_| {
+        queue!(self.terminal.backend_mut(), BeginSynchronizedUpdate)?;
+        let drawn = (|| {
             let terminal = &mut self.terminal;
             if let Some(new_area) = pending_viewport_area.take() {
                 terminal.set_viewport_area(new_area);
@@ -159,7 +158,9 @@ impl Tui {
             terminal.draw(|frame| {
                 draw_fn(frame);
             })
-        })?
+        })();
+        execute!(self.terminal.backend_mut(), EndSynchronizedUpdate)?;
+        drawn
     }
 
     /// After a resize that moved the cursor, the viewport moves with it,
@@ -219,3 +220,6 @@ impl FrameRequester {
         Self::new(AppEventSender::new(tx))
     }
 }
+
+#[cfg(test)]
+mod tests;

@@ -51,7 +51,8 @@ member's allowed dependencies).
 
 | Crate | Role |
 | --- | --- |
-| `hanafubuki-agent-cli` | The `hanafubuki-agent` binary (§3.6, [cli.md](cli.md)): `exec` and the management commands over the facade's standalone runtime; depends on the facade alone. |
+| `hanafubuki-agent-cli` | The `hanafubuki-agent` binary (§3.6, [cli.md](cli.md)): the terminal interface with no command, `exec` and the management commands over the facade's standalone runtime; depends on the facade and the TUI. |
+| `hanafubuki-agent-tui` | The terminal interface (§3.7), ported from the Codex TUI (`rust-v0.93.0`) onto upstream ratatui 0.30 and crossterm 0.29; a library over the facade alone, run by the binary on the started Agent. |
 | `hanafubuki-agent` | The facade a host embeds, and the composition: `DesktopAgent`, the `AgentSlot` supervisor, the Agent's own Executor and Skill watcher (§3.4), the plugin host (`AgentHost`) and its manifest, the Agent's own plugins (`src/plugins/`), the IPC facade `AgentApplicationService` (the settings API among it), the host interface (`AgentHostPorts`, §3.5), the standalone runtime with a default for every port (`AgentRuntime`, §3.6), the data directory's lock and the standalone log file (§10), the memory supervisor, and `panic` for the host's hook and the binary's (§3.3). |
 | `hanafubuki-agent-config` | The Agent's own configuration (`AgentConfig`, §10): the settings, the Provider registry and the MCP servers in the directory the host names, or, standalone, in the OS directory (`AgentDirs`) with the settings layered (`ConfigLayers`). |
 | `hanafubuki-agent-runtime` | The Agent's copy of the contained runtime (`ContainedRuntime`, threads `agent-rt`); the application keeps its own for the feature runtime. |
@@ -295,6 +296,55 @@ facade's own (`--json` serializes `AgentEvent` as it is), and it answers
 approvals and questions with `resolve_approval` and `resolve_user_input`
 from there. A change of the Agent's status during the turn (a kernel
 fault) ends the command, since the restarted Agent has a new generation.
+
+### 3.7 The terminal interface
+
+`hanafubuki-agent` with no command runs the terminal interface
+(`hanafubuki-agent-tui`) when standard input and output are a terminal; the
+binary composes and starts the Agent as for `exec` (the runtime, the crash
+record, the panic hook, the log file, the start), with the interface's
+status sink (`TuiEvents::status_sink`), then hands it the running handle
+(`hanafubuki_agent_tui::run`) and shuts the Agent down with
+`AGENT_SHUTDOWN_BUDGET` once the interface has restored the terminal.
+
+It is Codex's TUI at `rust-v0.93.0`, ported over the facade: an inline
+viewport at the bottom of the terminal (the running tool calls, the status
+line, the composer and the approval and question overlays), with the
+transcript written into the terminal's own scrollback above it
+(`custom_terminal`, `insert_history`). Codex patches ratatui and crossterm
+with git forks, which crates.io cannot take; the port uses upstream ratatui
+0.30 (its `scrolling-regions` feature grows the viewport) with crossterm
+0.29 through ratatui's re-export, and drops the terminal palette query for
+the fixed theme Codex falls back to without it.
+
+- **One adapter.** `agent_bridge.rs` stands where Codex has its
+  `ConversationManager` and `CodexConversation`: it maps the turn's
+  `AgentEvent`s onto what the chat widget shows (`TurnUpdate`), and the
+  interface's requests (`Op`: a message, an interrupt, an approval, an
+  answer) onto the facade. A message while a turn runs steers it
+  (`steer_turn_with_sink`). Tool events carry neither arguments nor output,
+  so a finished call's output, and for `apply_patch` the patch read by the
+  Agent's own parser (`preview_patch`), come from the turn's committed
+  history (`read_turn_page`); the diff has no line numbers, since that
+  reading has none.
+- **One loop, one channel.** A thread reads the terminal (`tui/input.rs`)
+  into the channel the Agent's sinks also send to (an `emit` only sends);
+  the app loop on the calling thread handles each event and draws when a
+  frame is due. A facade call that waits runs as a task of the Agent's
+  runtime and reports back on the channel, so the loop never blocks on the
+  Agent; the approval and answer calls, which do not wait, run on the loop.
+- **The terminal is restored** on every return (a drop guard), and on a
+  panic that ends the process: the interface's hook restores the terminal,
+  then runs the Agent's, which aborts. A contained panic (an Agent thread
+  the Agent recovers from) leaves the interface running.
+- **Keys.** Enter submits, Shift+Enter (with the keyboard enhancement
+  flags) or Ctrl+J inserts a newline, Up and Down walk the session's
+  messages; Esc or Ctrl-C interrupts a running turn; Ctrl-C twice, Ctrl-D
+  twice on an empty composer, or `/quit` quits.
+
+Not ported yet (Phase 5b, [todo.md](../todo.md)): the transcript pager,
+the slash commands, the resume picker, `/model`, `@` file mentions and the
+notices check.
 
 ## 4. Tools
 

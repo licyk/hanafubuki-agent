@@ -12,11 +12,10 @@ use std::sync::Arc;
 
 use hanafubuki_agent::{
     AgentAvailability, AgentEvent, AgentEventKind, AgentEventSink, AgentHandle,
-    AgentHistorySortDirection, AgentMessageId, AgentMessagePhase, AgentSessionId, AgentSlot,
-    AgentStatusEventSink, AgentSteeringRequest, AgentTaskPlanSnapshot, AgentTurnAccepted,
-    AgentTurnPageRequest, AgentTurnRequest, AgentTurnTerminalReason, AgentUserInputRequest,
-    AgentUserInputRequestId, ApprovalRequest, ApprovalRequestId, ConversationItem,
-    ToolOutputContent,
+    AgentHistorySortDirection, AgentSessionId, AgentSlot, AgentStatusEventSink,
+    AgentSteeringRequest, AgentTaskPlanSnapshot, AgentTurnAccepted, AgentTurnPageRequest,
+    AgentTurnRequest, AgentTurnTerminalReason, AgentUserInputRequest, AgentUserInputRequestId,
+    ApprovalRequest, ApprovalRequestId, ConversationItem, ToolOutputContent,
 };
 
 use crate::app_event::{AppEvent, AppEventSender, Op};
@@ -33,14 +32,8 @@ pub(crate) enum TurnUpdate {
     Started,
     /// What the turn is doing now, for the status line.
     Status(String),
-    MessageDelta {
-        id: AgentMessageId,
-        delta: String,
-    },
-    MessageCompleted {
-        id: AgentMessageId,
-        final_answer: bool,
-    },
+    MessageDelta(String),
+    MessageCompleted,
     PlanDelta(String),
     PlanCompleted,
     ToolStarted {
@@ -194,19 +187,19 @@ impl AgentBridge {
         if event.session_id != self.session_id {
             return None;
         }
+        // The turn's events can arrive before the reply that accepted it.
+        if let (None, Some(turn_id), true) = (self.turn, event.turn_id, self.turn_running) {
+            self.turn = Some(AgentTurnAccepted {
+                session_id: event.session_id,
+                turn_id,
+                generation: event.generation,
+            });
+        }
         let update = match event.kind {
             AgentEventKind::TurnStarted => TurnUpdate::Started,
             AgentEventKind::ReasoningHeadlineUpdated { headline } => TurnUpdate::Status(headline),
-            AgentEventKind::AssistantTextDelta { message_id, delta } => TurnUpdate::MessageDelta {
-                id: message_id,
-                delta,
-            },
-            AgentEventKind::AssistantMessageCompleted { message_id, phase } => {
-                TurnUpdate::MessageCompleted {
-                    id: message_id,
-                    final_answer: phase != Some(AgentMessagePhase::Commentary),
-                }
-            }
+            AgentEventKind::AssistantTextDelta { delta, .. } => TurnUpdate::MessageDelta(delta),
+            AgentEventKind::AssistantMessageCompleted { .. } => TurnUpdate::MessageCompleted,
             AgentEventKind::ProposedPlanDelta { delta, .. } => TurnUpdate::PlanDelta(delta),
             AgentEventKind::ProposedPlanCompleted { .. } => TurnUpdate::PlanCompleted,
             AgentEventKind::ToolStarted {

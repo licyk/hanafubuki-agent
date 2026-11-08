@@ -38,20 +38,12 @@ pub(crate) const fn plain(key: KeyCode) -> KeyBinding {
     KeyBinding::new(key, KeyModifiers::NONE)
 }
 
-pub(crate) const fn alt(key: KeyCode) -> KeyBinding {
-    KeyBinding::new(key, KeyModifiers::ALT)
-}
-
 pub(crate) const fn shift(key: KeyCode) -> KeyBinding {
     KeyBinding::new(key, KeyModifiers::SHIFT)
 }
 
 pub(crate) const fn ctrl(key: KeyCode) -> KeyBinding {
     KeyBinding::new(key, KeyModifiers::CONTROL)
-}
-
-pub(crate) const fn ctrl_alt(key: KeyCode) -> KeyBinding {
-    KeyBinding::new(key, KeyModifiers::CONTROL.union(KeyModifiers::ALT))
 }
 
 fn modifiers_to_string(modifiers: KeyModifiers) -> String {

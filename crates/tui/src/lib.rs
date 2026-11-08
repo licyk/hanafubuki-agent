@@ -1,14 +1,20 @@
-//! The terminal interface.
+//! The terminal interface of the standalone Agent (`hanafubuki-agent`
+//! with no command), ported from the Codex TUI at `rust-v0.93.0`: an inline
+//! viewport at the bottom of the terminal with the composer, the status
+//! line and the approval and question overlays, and the transcript written
+//! into the terminal's own scrollback above it. It drives the Agent through
+//! the facade alone (`agent_bridge`).
 
 mod agent_bridge;
+mod app;
 mod app_event;
-// Wired by the chat widget.
-#[allow(dead_code)]
 mod bottom_pane;
+mod chatwidget;
 mod custom_terminal;
 mod diff_render;
 mod history_cell;
 mod insert_history;
+mod interface;
 mod key_hint;
 mod markdown;
 mod markdown_render;
@@ -24,3 +30,5 @@ mod text_formatting;
 mod tui;
 mod ui_consts;
 mod wrapping;
+
+pub use interface::{run, TuiEvents, TuiOptions};

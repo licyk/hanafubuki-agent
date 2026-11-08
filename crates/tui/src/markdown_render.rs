@@ -71,6 +71,7 @@ impl IndentContext {
     }
 }
 
+#[cfg(test)]
 pub fn render_markdown_text(input: &str) -> Text<'static> {
     render_markdown_text_with_width(input, None)
 }

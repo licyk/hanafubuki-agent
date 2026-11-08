@@ -20,6 +20,8 @@ unicode-width = "0.2"
 [dev-dependencies]
 hanafubuki-agent = { workspace = true, features = ["test-support"] }
 insta = "1.46"
+tempfile.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread"] }
 # The vt100 test terminal reads what the crossterm backend wrote.
 ratatui = { version = "0.30", default-features = false, features = ["unstable-backend-writer"] }
 vt100 = "0.16"

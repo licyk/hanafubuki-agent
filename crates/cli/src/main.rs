@@ -6,6 +6,7 @@ mod config;
 mod doctor;
 mod exec;
 mod exit;
+mod interactive;
 mod mcp;
 mod memory;
 mod providers;
@@ -23,8 +24,9 @@ fn main() -> ExitCode {
     let cli = Cli::parse();
     let global = &cli.global;
     let result = match cli.command {
-        None | Some(Command::Resume { .. }) => Err(Failure::usage(
-            "the terminal interface is not available yet; run one turn with \
+        None => interactive::run(global, cli.prompt),
+        Some(Command::Resume { .. }) => Err(Failure::usage(
+            "resuming a session is not available yet; run one turn with \
              `hanafubuki-agent exec PROMPT`",
         )),
         Some(Command::Exec(args)) => exec::run(global, args),

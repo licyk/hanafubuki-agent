@@ -96,23 +96,8 @@ impl StatusIndicatorWidget {
             .map(|details| capitalize_first(details.trim_start()));
     }
 
-    #[cfg(test)]
-    pub(crate) fn header(&self) -> &str {
-        &self.header
-    }
-
-    #[cfg(test)]
-    pub(crate) fn details(&self) -> Option<&str> {
-        self.details.as_deref()
-    }
-
     pub(crate) fn set_interrupt_hint_visible(&mut self, visible: bool) {
         self.show_interrupt_hint = visible;
-    }
-
-    #[cfg(test)]
-    pub(crate) fn interrupt_hint_visible(&self) -> bool {
-        self.show_interrupt_hint
     }
 
     pub(crate) fn pause_timer(&mut self) {

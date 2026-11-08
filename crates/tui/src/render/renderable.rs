@@ -199,10 +199,6 @@ impl<'a> ColumnRenderable<'a> {
         }
     }
 
-    pub fn push(&mut self, child: impl Into<Box<dyn Renderable + 'a>>) {
-        self.children.push(RenderableItem::Owned(child.into()));
-    }
-
     #[allow(dead_code)]
     pub fn push_ref<R>(&mut self, child: &'a R)
     where
@@ -317,76 +313,6 @@ impl<'a> Renderable for FlexRenderable<'a> {
     }
 }
 
-pub struct RowRenderable<'a> {
-    children: Vec<(u16, RenderableItem<'a>)>,
-}
-
-impl Renderable for RowRenderable<'_> {
-    fn render(&self, area: Rect, buf: &mut Buffer) {
-        let mut x = area.x;
-        for (width, child) in &self.children {
-            let available_width = area.width.saturating_sub(x - area.x);
-            let child_area = Rect::new(x, area.y, (*width).min(available_width), area.height);
-            if child_area.is_empty() {
-                break;
-            }
-            child.render(child_area, buf);
-            x = x.saturating_add(*width);
-        }
-    }
-    fn desired_height(&self, width: u16) -> u16 {
-        let mut max_height = 0;
-        let mut width_remaining = width;
-        for (child_width, child) in &self.children {
-            let w = (*child_width).min(width_remaining);
-            if w == 0 {
-                break;
-            }
-            let height = child.desired_height(w);
-            if height > max_height {
-                max_height = height;
-            }
-            width_remaining = width_remaining.saturating_sub(w);
-        }
-        max_height
-    }
-
-    fn cursor_pos(&self, area: Rect) -> Option<(u16, u16)> {
-        let mut x = area.x;
-        for (width, child) in &self.children {
-            let available_width = area.width.saturating_sub(x - area.x);
-            let child_area = Rect::new(x, area.y, (*width).min(available_width), area.height);
-            if !child_area.is_empty() {
-                if let Some(pos) = child.cursor_pos(child_area) {
-                    return Some(pos);
-                }
-            }
-            x = x.saturating_add(*width);
-        }
-        None
-    }
-}
-
-impl<'a> RowRenderable<'a> {
-    pub fn new() -> Self {
-        Self { children: vec![] }
-    }
-
-    pub fn push(&mut self, width: u16, child: impl Into<Box<dyn Renderable>>) {
-        self.children
-            .push((width, RenderableItem::Owned(child.into())));
-    }
-
-    #[allow(dead_code)]
-    pub fn push_ref<R>(&mut self, width: u16, child: &'a R)
-    where
-        R: Renderable + 'a,
-    {
-        self.children
-            .push((width, RenderableItem::Borrowed(child as &'a dyn Renderable)));
-    }
-}
-
 pub struct InsetRenderable<'a> {
     child: RenderableItem<'a>,
     insets: Insets,
@@ -404,15 +330,6 @@ impl<'a> Renderable for InsetRenderable<'a> {
     }
     fn cursor_pos(&self, area: Rect) -> Option<(u16, u16)> {
         self.child.cursor_pos(area.inset(self.insets))
-    }
-}
-
-impl<'a> InsetRenderable<'a> {
-    pub fn new(child: impl Into<RenderableItem<'a>>, insets: Insets) -> Self {
-        Self {
-            child: child.into(),
-            insets,
-        }
     }
 }
 

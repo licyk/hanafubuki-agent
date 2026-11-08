@@ -195,6 +195,7 @@ impl BottomPane {
         }
     }
 
+    #[cfg(test)]
     pub(crate) fn set_composer_text(&mut self, text: String) {
         self.composer.set_text_content(text);
         self.request_redraw();
@@ -375,6 +376,11 @@ impl BottomPane {
 
     pub(crate) fn is_in_paste_burst(&self) -> bool {
         self.composer.is_in_paste_burst()
+    }
+
+    /// When to look again at a paste burst being captured.
+    pub(crate) fn paste_burst_flush_delay() -> Duration {
+        PasteBurst::recommended_flush_delay()
     }
 
     fn as_renderable(&'_ self) -> RenderableItem<'_> {

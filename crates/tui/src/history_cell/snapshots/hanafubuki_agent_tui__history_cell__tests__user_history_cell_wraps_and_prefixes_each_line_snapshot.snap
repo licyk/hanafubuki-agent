@@ -1,0 +1,9 @@
+---
+source: crates/tui/src/history_cell/tests.rs
+expression: "render_lines(&lines).join(\"\\n\")"
+---
+
+› one two
+  three
+  four five
+  six seven

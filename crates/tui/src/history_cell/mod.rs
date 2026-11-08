@@ -7,8 +7,6 @@
 mod plan;
 mod tool;
 
-use std::any::Any;
-
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::Stylize;
@@ -16,19 +14,17 @@ use ratatui::text::{Line, Span, Text};
 use ratatui::widgets::{Paragraph, Widget, Wrap};
 use unicode_width::UnicodeWidthStr;
 
-use crate::render::line_utils::{prefix_lines, push_owned_lines};
+use crate::render::line_utils::prefix_lines;
 use crate::render::renderable::Renderable;
 use crate::style::user_message_style;
 use crate::ui_consts::LIVE_PREFIX_COLS;
 use crate::wrapping::{word_wrap_lines, RtOptions};
 
-pub(crate) use plan::{
-    new_plan_update, new_proposed_plan, new_proposed_plan_stream, PlanUpdateCell,
-};
+pub(crate) use plan::{new_plan_update, new_proposed_plan_stream};
 pub(crate) use tool::{new_tool_call, ToolCallCell, ToolResultView};
 
 /// An entry of the conversation, rendered at a width.
-pub(crate) trait HistoryCell: std::fmt::Debug + Send + Sync + Any {
+pub(crate) trait HistoryCell: std::fmt::Debug + Send + Sync {
     fn display_lines(&self, width: u16) -> Vec<Line<'static>>;
 
     fn desired_height(&self, width: u16) -> u16 {
@@ -62,12 +58,6 @@ impl Renderable for Box<dyn HistoryCell> {
 
     fn desired_height(&self, width: u16) -> u16 {
         HistoryCell::desired_height(self.as_ref(), width)
-    }
-}
-
-impl dyn HistoryCell {
-    pub(crate) fn as_any_mut(&mut self) -> &mut dyn Any {
-        self
     }
 }
 
@@ -152,46 +142,6 @@ impl HistoryCell for PlainHistoryCell {
     }
 }
 
-#[derive(Debug)]
-pub(crate) struct PrefixedWrappedHistoryCell {
-    text: Text<'static>,
-    initial_prefix: Line<'static>,
-    subsequent_prefix: Line<'static>,
-}
-
-impl PrefixedWrappedHistoryCell {
-    pub(crate) fn new(
-        text: impl Into<Text<'static>>,
-        initial_prefix: impl Into<Line<'static>>,
-        subsequent_prefix: impl Into<Line<'static>>,
-    ) -> Self {
-        Self {
-            text: text.into(),
-            initial_prefix: initial_prefix.into(),
-            subsequent_prefix: subsequent_prefix.into(),
-        }
-    }
-}
-
-impl HistoryCell for PrefixedWrappedHistoryCell {
-    fn display_lines(&self, width: u16) -> Vec<Line<'static>> {
-        if width == 0 {
-            return Vec::new();
-        }
-        let opts = RtOptions::new(width.max(1) as usize)
-            .initial_indent(self.initial_prefix.clone())
-            .subsequent_indent(self.subsequent_prefix.clone());
-        let wrapped = word_wrap_lines(&self.text, opts);
-        let mut out = Vec::new();
-        push_owned_lines(&wrapped, &mut out);
-        out
-    }
-
-    fn desired_height(&self, width: u16) -> u16 {
-        self.display_lines(width).len() as u16
-    }
-}
-
 /// The session's header card: the application, the model and the working
 /// directory.
 #[derive(Debug)]
@@ -266,19 +216,6 @@ fn with_border(lines: Vec<Line<'static>>) -> Vec<Line<'static>> {
     }
     out.push(vec![format!("╰{}╯", "─".repeat(border_inner_width)).dim()].into());
     out
-}
-
-pub(crate) fn new_info_event(message: String, hint: Option<String>) -> PlainHistoryCell {
-    let mut line = vec!["• ".dim(), message.into()];
-    if let Some(hint) = hint {
-        line.push(" ".into());
-        line.push(hint.dark_gray());
-    }
-    PlainHistoryCell::new(vec![line.into()])
-}
-
-pub(crate) fn new_warning_event(message: String) -> PrefixedWrappedHistoryCell {
-    PrefixedWrappedHistoryCell::new(message.yellow(), "⚠ ".yellow(), "  ")
 }
 
 pub(crate) fn new_error_event(message: String) -> PlainHistoryCell {

@@ -67,10 +67,6 @@ impl ToolCallCell {
         self.outcome = Some(Outcome { is_error, result });
     }
 
-    pub(crate) fn is_running(&self) -> bool {
-        self.outcome.is_none()
-    }
-
     fn header(&self) -> Line<'static> {
         let (bullet, verb) = match &self.outcome {
             None => (spinner(Some(self.start_time), true), "Running".bold()),

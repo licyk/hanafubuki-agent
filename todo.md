@@ -50,7 +50,30 @@ done: the workspace, the decoupling inside Hanafubuki's tree, and the move.
     MCP, approval and user-input types, `probe_keyring`, the
     configuration's key API), and the CLI is a crate Hanafubuki does not
     depend on.
-- [ ] Phase 5: the TUI from Codex `rust-v0.93.0`, with `check-notices`.
+- [x] Phase 5a: the terminal interface's core (`hanafubuki-agent-tui`,
+      architecture.md §3.7, [docs/cli.md](docs/cli.md)): upstream ratatui
+      0.30 and crossterm 0.29 (Codex's git forks dropped, the palette
+      query too), the inline viewport and scrollback, the app loop, the
+      chat widget and its history cells, markdown and streaming, the diff
+      of a `PatchPreview`, the composer, the status line and key hints, the
+      approval and question overlays, `agent_bridge.rs`; bare
+      `hanafubuki-agent [PROMPT]` runs it on a terminal. NOTICE carries
+      Codex's NOTICE and license and Ratatui's.
+- [ ] Phase 5b: the transcript pager overlay (alternate screen); the slash
+      commands (new, resume, compact, diff, model, mode, mcp, skills,
+      status, mention, quit beyond 5a's `/quit`) with the composer's
+      popup; the resume picker from the history store and `resume
+      [--last|ID]`; `/model` from the provider registry and
+      `ModelCatalog`; `@` file mentions (Codex `file-search`); `cargo xtask
+      check-notices`; the `.tmTheme` licence check if highlighting ships.
+  - Deferred from 5a: images in the composer (paste, attach); a session's
+    earlier messages in the composer's history (only this run's); desktop
+    notifications; Ctrl-Z suspend; the external editor; syntax
+    highlighting of code and commands; the reasoning summary cells (the
+    Agent's events carry no reasoning text); the time-worked separator
+    counts from the status line's timer; a contained Agent panic writes
+    its report to standard error, over the interface, as the Agent's hook
+    does everywhere.
 - [ ] Phase 6: `release.yml` with binaries, clippy `-D warnings`, `v0.1.0`
       on crates.io.
 

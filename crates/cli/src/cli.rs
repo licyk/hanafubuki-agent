@@ -19,8 +19,8 @@ pub(crate) struct Cli {
     pub(crate) global: GlobalArgs,
     #[command(subcommand)]
     pub(crate) command: Option<Command>,
-    /// The first message of an interactive session (the terminal
-    /// interface, not available yet).
+    /// The first message of an interactive session in the terminal
+    /// interface.
     pub(crate) prompt: Option<String>,
 }
 
