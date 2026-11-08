@@ -136,7 +136,11 @@ impl McpManager {
                     registry.statuses.insert(config.id, status.clone());
                     completion
                 };
-                self.watch_connection(status.server_id.clone(), &connection);
+                // Hands over this connect's own hold: from here only the
+                // registry holds the connection, so a shutdown that overtakes
+                // the rest of the connect (its cleanup of the connection it
+                // replaced) can dispose it.
+                self.watch_connection(status.server_id.clone(), connection);
                 self.emit(status.server_id.clone(), McpEventKind::ServerStatus);
                 self.emit(status.server_id.clone(), McpEventKind::ToolCatalog);
                 let cleanup = self.cleanup_retired().await;

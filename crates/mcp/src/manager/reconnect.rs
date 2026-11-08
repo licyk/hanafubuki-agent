@@ -21,13 +21,13 @@ impl McpManager {
     pub(super) fn watch_connection(
         &self,
         server_id: McpServerId,
-        connection: &Arc<McpLiveConnection>,
+        connection: Arc<McpLiveConnection>,
     ) {
         let manager = self.clone();
         let closed = connection.closed();
         // Weak: the cleanup disposes a connection only once nothing else
         // holds it.
-        let watched = Arc::downgrade(connection);
+        let watched = Arc::downgrade(&connection);
         tokio::spawn(async move {
             crate::liveness::transport_closed(closed).await;
             if let Some((config, secrets)) =
