@@ -70,7 +70,11 @@ pub(crate) fn init() -> Result<Terminal> {
     set_modes()?;
     set_panic_hook();
     let backend = CrosstermBackend::new(stdout());
-    CustomTerminal::with_options(backend)
+    // The viewport opens at the cursor, which a terminal that does not
+    // answer the position query never gives; the modes go with the error.
+    CustomTerminal::with_options(backend).inspect_err(|_| {
+        let _ = restore();
+    })
 }
 
 /// Restores the terminal on a panic that ends the process, before the

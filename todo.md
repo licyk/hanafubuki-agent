@@ -74,6 +74,12 @@ done: the workspace, the decoupling inside Hanafubuki's tree, and the move.
     counts from the status line's timer; a contained Agent panic writes
     its report to standard error, over the interface, as the Agent's hook
     does everywhere.
+- [ ] Hanafubuki, when it moves its pin past Phase 5a: nothing to change.
+      The facade gained re-exports only (`AgentTaskPlanSnapshot`,
+      `AgentTaskPlanStep`, `AgentTaskPlanStepStatus`, `AgentToolPresentation`,
+      `AgentUserInputOption`, `AgentUserInputQuestion`, `ApprovalAction`,
+      `ApprovalActionKind`, `ToolOutput`, `ToolOutputContent`), and the TUI is
+      a crate Hanafubuki does not depend on.
 - [ ] Phase 6: `release.yml` with binaries, clippy `-D warnings`, `v0.1.0`
       on crates.io.
 

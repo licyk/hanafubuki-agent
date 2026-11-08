@@ -588,8 +588,8 @@ Codex's `exec` human and JSONL event processors are the model to follow.
     JSON-RPC app-server protocol of about 230 methods.
   - `rust-v0.48.0` is smaller but lacks rendering work done since.
 - **Forked dependencies:** at `rust-v0.93.0`, Codex patches `crossterm` with a
-  git fork (`nornagon/color-query`); at `rust-v0.48.0`, `ratatui` with
-  `nornagon-v0.29.0-patch`. crates.io refuses git dependencies, so the port
+  git fork (`nornagon/color-query`) and `ratatui` with
+  `nornagon-v0.29.0-patch` (as it already did at `rust-v0.48.0`). crates.io refuses git dependencies, so the port
   targets upstream `ratatui` 0.30 and `crossterm` 0.29.
   - ratatui 0.30 has the scrolling-regions feature upstream.
   - The color query (the terminal palette) is dropped, or replaced by a
