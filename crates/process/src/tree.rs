@@ -78,12 +78,15 @@ fn signal_process_group(group: libc::pid_t, signal: libc::c_int) -> Result<(), S
         return Ok(());
     }
     let error = std::io::Error::last_os_error();
-    if error.raw_os_error() == Some(libc::ESRCH) {
-        Ok(())
-    } else {
-        Err(format!(
+    match error.raw_os_error() {
+        Some(libc::ESRCH) => Ok(()),
+        // XNU's killpg skips zombies and reports EPERM when nothing else is
+        // left, as when a group leader has exited but is not yet reaped.
+        #[cfg(target_os = "macos")]
+        Some(libc::EPERM) => Ok(()),
+        _ => Err(format!(
             "send signal {signal} to process group {group}: {error}"
-        ))
+        )),
     }
 }
 

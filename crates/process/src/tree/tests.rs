@@ -12,7 +12,8 @@ fn pid_is_alive(pid: i32) -> bool {
 
 /// A PTY shell (session/group leader, via portable-pty's setsid) backgrounds a
 /// descendant `sleep`; terminating the group must kill that descendant, not
-/// just the shell.
+/// just the shell. The shell is reaped only afterwards, so the final `SIGKILL`
+/// meets a group whose leader is a zombie.
 #[test]
 fn terminate_group_kills_descendant_process_tree() {
     use portable_pty::{native_pty_system, CommandBuilder, PtySize};
