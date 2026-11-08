@@ -210,14 +210,12 @@ fn check_directory(
                 }
                 continue;
             }
-            let has_production_children = sorted_entries(&entry)
-                .iter()
-                .any(|child| {
-                    !matches!(
-                        file_name(child),
-                        "mod.rs" | "tests.rs" | "tests" | "snapshots"
-                    )
-                });
+            let has_production_children = sorted_entries(&entry).iter().any(|child| {
+                !matches!(
+                    file_name(child),
+                    "mod.rs" | "tests.rs" | "tests" | "snapshots"
+                )
+            });
             let sibling = directory.join(format!("{name}.rs"));
             if has_production_children && sibling.is_file() {
                 violations.push(format!(
