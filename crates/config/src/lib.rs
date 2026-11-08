@@ -7,16 +7,29 @@
 //! be used takes its default, unknown keys are kept, and a file that needed
 //! repair is copied into `.recovery/` first. Writes edit the document in
 //! place, so comments and unknown keys survive, and publish it atomically.
+//!
+//! The standalone Agent finds the directory itself ([`AgentDirs`]) and
+//! layers a profile, a trusted project's file and `-c` overrides over the
+//! user's `config.toml` ([`ConfigLayers`], docs/config.md).
 
+mod dirs;
 mod fields;
 mod file;
+mod layers;
 mod mcp;
+mod network;
+mod overrides;
 mod providers;
 mod settings;
+mod standalone;
 mod store;
 
+pub use dirs::{AgentDirs, AGENT_HOME_ENV};
 pub use file::{write_atomic, FileAccess};
+pub use layers::{ConfigLayers, PROJECT_CONFIG_DIR};
 pub use mcp::McpSettingsStore;
+pub use network::AgentProxy;
+pub use overrides::ConfigOverrides;
 pub use providers::{
     validate_agent_model_policy, validate_agent_provider, validate_agent_provider_base_url,
     validate_agent_provider_credential, validate_agent_provider_registry, AgentImageInputPolicy,
@@ -34,6 +47,7 @@ pub use settings::{
     AgentSettingsPatch, AgentWebSearchProvider, MAX_AGENT_DISABLED_PLUGINS,
     MAX_AGENT_PLUGIN_NAME_BYTES,
 };
+pub use standalone::{AgentLogLevel, AgentNetworkSettings, AgentStandaloneSettings};
 pub use store::{
     read_mcp_document, read_providers_document, read_settings_document, AgentConfig,
     AGENT_CREDENTIAL_FILES, AGENT_MCP_FILE, AGENT_PROVIDERS_FILE, AGENT_SETTINGS_FILE,

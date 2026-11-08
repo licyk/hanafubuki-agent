@@ -82,12 +82,17 @@ impl McpSettingsStore {
 
     fn load_locked(&self) -> Result<McpSettings, McpError> {
         let mut repairs = Vec::new();
-        let loaded = load(&self.file, McpSettings::default, |document| {
-            let (settings, found) = repair_settings(Value::Object(document.clone()));
-            let messages = found.iter().map(describe).collect();
-            repairs = found;
-            (settings, messages)
-        })
+        let loaded = load(
+            &self.file,
+            McpSettings::default,
+            |document| {
+                let (settings, found) = repair_settings(Value::Object(document.clone()));
+                let messages = found.iter().map(describe).collect();
+                repairs = found;
+                (settings, messages)
+            },
+            true,
+        )
         .map_err(McpError::Unavailable)?;
         if let Some(reason) = loaded.unusable {
             repairs.push(McpSettingsRepair::reset(&reason));

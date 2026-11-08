@@ -1,16 +1,8 @@
 //! The network settings the host owns and the Agent's HTTP clients follow.
 
 /// The proxy the Agent's web tools, MCP servers and OAuth reach the network
-/// through.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum AgentProxy {
-    /// The operating system's proxy settings.
-    System,
-    /// No proxy.
-    Disabled,
-    /// This proxy URL.
-    Explicit(String),
-}
+/// through; the standalone Agent's `[network]` section holds it.
+pub use hanafubuki_agent_config::AgentProxy;
 
 /// Where the host's network settings come from. Read when the Agent starts
 /// and again whenever the host says its settings changed

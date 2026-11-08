@@ -13,8 +13,12 @@ hanafubuki-agent was extracted from Hanafubuki
 Third-party notices
 ===================
 
-TODO(Phase 5): when code derived from these projects is ported, add their
-notices here, with the full license text each requires:
+- OpenAI Codex (https://github.com/openai/codex), Apache License 2.0,
+  Copyright 2025 OpenAI: `crates/config/src/overrides.rs` and its tests are
+  derived from Codex's `codex-rs/common/src/config_override.rs`
+  (`rust-v0.93.0`), modified as their headers say.
 
-- OpenAI Codex (https://github.com/openai/codex), Apache License 2.0
+TODO(Phase 5): add the full license text each requires, and these notices
+when code derived from them is ported:
+
 - Ratatui (https://github.com/ratatui/ratatui), MIT License

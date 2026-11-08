@@ -8,21 +8,28 @@ use super::{
 };
 use crate::fields::{read_member, read_object, FieldRead, Fields};
 
+/// The settings `object` holds; a missing or invalid field takes its value
+/// in `defaults` (the defaults, or the layer below in a layered
+/// configuration).
 pub(crate) fn decode_settings(
     object: &Map<String, Value>,
+    defaults: &AgentSettings,
     repairs: &mut Vec<String>,
 ) -> AgentSettings {
-    let defaults = AgentSettings::default();
     let mut fields = Fields::new(object, repairs);
     let permission_mode = fields.read("permissionMode", defaults.permission_mode);
     let memory = read_object(&mut fields, "memory", &defaults.memory, decode_memory);
-    let disabled_plugins = decode_disabled_plugins(&mut fields);
+    let disabled_plugins = decode_disabled_plugins(&mut fields, &defaults.disabled_plugins);
     let searxng_base_url = fields.read_checked(
         "searxngBaseUrl",
         defaults.searxng_base_url.clone(),
         |value: Option<String>| value.as_deref().map(normalize_search_endpoint).transpose(),
     );
-    let web_search_provider = decode_search_provider(&mut fields, searxng_base_url.is_some());
+    let web_search_provider = decode_search_provider(
+        &mut fields,
+        defaults.web_search_provider,
+        searxng_base_url.is_some(),
+    );
     let web_fetch_use_jina_reader =
         fields.read("webFetchUseJinaReader", defaults.web_fetch_use_jina_reader);
     AgentSettings {
@@ -114,9 +121,12 @@ fn decode_memory(fields: &mut Fields<'_>, memory: &mut AgentMemorySettings) {
 
 /// A name that cannot be one is dropped alone: losing the whole set would
 /// enable what the user turned off.
-fn decode_disabled_plugins(fields: &mut Fields<'_>) -> BTreeSet<String> {
+fn decode_disabled_plugins(
+    fields: &mut Fields<'_>,
+    default: &BTreeSet<String>,
+) -> BTreeSet<String> {
     let Some(raw) = fields.raw("disabledPlugins") else {
-        return BTreeSet::new();
+        return default.clone();
     };
     let Some(items) = raw.as_array() else {
         fields.invalid(
@@ -146,16 +156,20 @@ fn decode_disabled_plugins(fields: &mut Fields<'_>) -> BTreeSet<String> {
 }
 
 /// A search endpoint is never accepted with credentials, a query, or a
-/// fragment. Without a usable endpoint the provider cannot stay SearXNG.
-fn decode_search_provider(fields: &mut Fields<'_>, has_endpoint: bool) -> AgentWebSearchProvider {
-    let default = AgentWebSearchProvider::Auto;
+/// fragment. Without a usable endpoint the provider cannot stay SearXNG,
+/// and falls back to the automatic one.
+fn decode_search_provider(
+    fields: &mut Fields<'_>,
+    default: AgentWebSearchProvider,
+    has_endpoint: bool,
+) -> AgentWebSearchProvider {
     match fields.read_quiet::<AgentWebSearchProvider>("webSearchProvider", Ok) {
         FieldRead::Valid(AgentWebSearchProvider::Searxng) if !has_endpoint => {
             fields.invalid(
                 "webSearchProvider",
                 Some("SearXNG has no usable endpoint; Agent web search uses the automatic provider until an endpoint is configured again"),
             );
-            default
+            AgentWebSearchProvider::Auto
         }
         FieldRead::Valid(provider) => provider,
         FieldRead::Missing => default,

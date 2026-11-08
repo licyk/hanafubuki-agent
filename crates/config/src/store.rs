@@ -10,9 +10,13 @@ use serde_json::{Map, Value};
 
 use crate::fields::unknown_keys;
 use crate::file::{ConfigFile, FileAccess, FileRead};
+use crate::layers::Resolved;
 use crate::providers::{decode_registry, validate_agent_provider_registry};
 use crate::settings::{decode_settings, validate_disabled_plugins};
-use crate::{AgentProviderRegistrySettings, AgentSettings, AgentSettingsPatch, McpSettingsStore};
+use crate::{
+    AgentProviderRegistrySettings, AgentSettings, AgentSettingsPatch, AgentStandaloneSettings,
+    ConfigLayers, McpSettingsStore,
+};
 
 /// The settings, without credentials.
 pub const AGENT_SETTINGS_FILE: &str = "config.toml";
@@ -28,6 +32,13 @@ pub const AGENT_CREDENTIAL_FILES: [&str; 2] = [AGENT_PROVIDERS_FILE, AGENT_MCP_F
 /// Provider edit and a permission-mode edit never wait on or conflict with
 /// each other. Each file is read once, on first use; a write reads it again
 /// first, so an edit made by hand meanwhile is kept.
+///
+/// A host's configuration is the user's files alone ([`Self::new`]). The
+/// standalone Agent's settings are layered ([`Self::layered`]): what
+/// [`Self::settings`] returns has the profile, the project's file and the
+/// `-c` overrides applied, while a write still changes only the user's
+/// `config.toml`. The Provider registry and the MCP servers are never
+/// layered.
 #[derive(Clone)]
 pub struct AgentConfig {
     inner: Arc<AgentConfigInner>,
@@ -36,7 +47,9 @@ pub struct AgentConfig {
 struct AgentConfigInner {
     settings_file: ConfigFile,
     providers_file: ConfigFile,
-    settings: Mutex<Option<AgentSettings>>,
+    /// `None` for a host's configuration.
+    layers: Option<ConfigLayers>,
+    settings: Mutex<Option<Resolved>>,
     providers: Mutex<Option<AgentProviderRegistrySettings>>,
     mcp: McpSettingsStore,
 }
@@ -44,6 +57,16 @@ struct AgentConfigInner {
 impl AgentConfig {
     /// The configuration in `config_dir`; nothing is read until it is used.
     pub fn new(config_dir: &Path) -> Self {
+        Self::open(config_dir, None)
+    }
+
+    /// The standalone configuration in `config_dir`, with `layers` over the
+    /// user's settings.
+    pub fn layered(config_dir: &Path, layers: ConfigLayers) -> Self {
+        Self::open(config_dir, Some(layers))
+    }
+
+    fn open(config_dir: &Path, layers: Option<ConfigLayers>) -> Self {
         Self {
             inner: Arc::new(AgentConfigInner {
                 settings_file: ConfigFile::new(
@@ -54,6 +77,7 @@ impl AgentConfig {
                     config_dir.join(AGENT_PROVIDERS_FILE),
                     FileAccess::Private,
                 ),
+                layers,
                 settings: Mutex::new(None),
                 providers: Mutex::new(None),
                 mcp: McpSettingsStore::new(config_dir.join(AGENT_MCP_FILE)),
@@ -69,19 +93,34 @@ impl AgentConfig {
     }
 
     pub fn settings(&self) -> Result<AgentSettings, String> {
-        let mut cached = self.inner.settings.lock();
-        if let Some(settings) = cached.as_ref() {
-            return Ok(settings.clone());
-        }
-        let settings = self.load_settings()?;
-        *cached = Some(settings.clone());
-        Ok(settings)
+        self.resolved().map(|resolved| resolved.settings)
+    }
+
+    /// The settings only the standalone Agent reads (`[network]`,
+    /// `logLevel`); a host's configuration has the defaults, since the host
+    /// supplies its own.
+    pub fn standalone_settings(&self) -> Result<AgentStandaloneSettings, String> {
+        self.resolved().map(|resolved| resolved.standalone)
     }
 
     /// The settings read so far, without reading the file: `None` before
     /// the first [`Self::settings`].
     pub fn settings_snapshot(&self) -> Option<AgentSettings> {
-        self.inner.settings.lock().clone()
+        self.inner
+            .settings
+            .lock()
+            .as_ref()
+            .map(|resolved| resolved.settings.clone())
+    }
+
+    fn resolved(&self) -> Result<Resolved, String> {
+        let mut cached = self.inner.settings.lock();
+        if let Some(resolved) = cached.as_ref() {
+            return Ok(resolved.clone());
+        }
+        let resolved = self.load_resolved()?;
+        *cached = Some(resolved.clone());
+        Ok(resolved)
     }
 
     /// Applies `patch` to the settings on disk, as a whole or not at all.
@@ -156,33 +195,63 @@ impl AgentConfig {
             .write(mcp)
             .map_err(|error| error.to_string())?;
         self.inner.settings_file.write(&object(settings)?)?;
-        *self.inner.settings.lock() = Some(settings.clone());
+        *self.inner.settings.lock() = self.inner.layers.is_none().then(|| Resolved {
+            settings: settings.clone(),
+            standalone: AgentStandaloneSettings::default(),
+        });
         *self.inner.providers.lock() = Some(providers.clone());
         Ok(())
     }
 
+    /// Changes the user's settings: the layers above them are applied
+    /// again afterwards, never written.
     fn update_settings(
         &self,
         update: impl FnOnce(&mut AgentSettings) -> Result<(), String>,
     ) -> Result<AgentSettings, String> {
         let mut cached = self.inner.settings.lock();
-        let mut settings = self.load_settings()?;
+        let mut settings = self.load_user_settings()?.value;
         update(&mut settings)?;
         self.inner.settings_file.write(&object(&settings)?)?;
-        *cached = Some(settings.clone());
-        Ok(settings)
+        let resolved = match &self.inner.layers {
+            None => Resolved {
+                settings,
+                standalone: AgentStandaloneSettings::default(),
+            },
+            Some(_) => self.load_resolved()?,
+        };
+        *cached = Some(resolved.clone());
+        Ok(resolved.settings)
     }
 
-    fn load_settings(&self) -> Result<AgentSettings, String> {
+    /// The user's settings file. A layered configuration reports its unknown
+    /// keys once the layers are known, since the layers read some of them.
+    fn load_user_settings(&self) -> Result<Loaded<AgentSettings>, String> {
         load(
             &self.inner.settings_file,
             AgentSettings::default,
             |document| {
                 let mut repairs = Vec::new();
-                (decode_settings(document, &mut repairs), repairs)
+                (
+                    decode_settings(document, &AgentSettings::default(), &mut repairs),
+                    repairs,
+                )
             },
+            self.inner.layers.is_none(),
         )
-        .map(|loaded| loaded.value)
+    }
+
+    fn load_resolved(&self) -> Result<Resolved, String> {
+        let user = self.load_user_settings()?;
+        match &self.inner.layers {
+            None => Ok(Resolved {
+                settings: user.value,
+                standalone: AgentStandaloneSettings::default(),
+            }),
+            Some(layers) => {
+                layers.resolve(self.inner.settings_file.path(), user.value, &user.document)
+            }
+        }
     }
 
     fn load_providers(&self) -> Result<AgentProviderRegistrySettings, String> {
@@ -193,6 +262,7 @@ impl AgentConfig {
                 let mut repairs = Vec::new();
                 (decode_registry(document, &mut repairs), repairs)
             },
+            true,
         )
         .map(|loaded| loaded.value)
     }
@@ -203,7 +273,10 @@ impl AgentConfig {
 /// of its own settings files reads them with this).
 pub fn read_settings_document(document: &Map<String, Value>) -> (AgentSettings, Vec<String>) {
     let mut repairs = Vec::new();
-    (decode_settings(document, &mut repairs), repairs)
+    (
+        decode_settings(document, &AgentSettings::default(), &mut repairs),
+        repairs,
+    )
 }
 
 /// The Provider registry a document holds, as [`read_settings_document`].
@@ -226,22 +299,26 @@ pub(crate) struct Loaded<T> {
     pub(crate) value: T,
     /// Why the file could not be used at all, when it could not.
     pub(crate) unusable: Option<String>,
+    /// What the file held as it was read; empty when it held nothing usable.
+    pub(crate) document: Map<String, Value>,
 }
 
 /// Reads `file` with `decode`. A file that cannot be read as a document, or
 /// whose values needed repair, is kept in `.recovery/` and rewritten: with
 /// the defaults, or with the repaired values over the user's own document.
-/// Unknown keys are logged and stay in the file.
+/// Unknown keys stay in the file, and are logged when `report_unknown`.
 pub(crate) fn load<T: Serialize>(
     file: &ConfigFile,
     defaults: impl FnOnce() -> T,
     decode: impl FnOnce(&Map<String, Value>) -> (T, Vec<String>),
+    report_unknown: bool,
 ) -> Result<Loaded<T>, String> {
     let path = file.path().display();
     match file.read()? {
         FileRead::Missing => Ok(Loaded {
             value: defaults(),
             unusable: None,
+            document: Map::new(),
         }),
         FileRead::Unusable(reason) => {
             log::warn!("Agent configuration {path} is unusable ({reason}); a copy is kept in .recovery and the defaults are used");
@@ -251,15 +328,18 @@ pub(crate) fn load<T: Serialize>(
             Ok(Loaded {
                 value,
                 unusable: Some(reason),
+                document: Map::new(),
             })
         }
         FileRead::Document(document) => {
             let (value, repairs) = decode(&document);
             let canonical = object(&value)?;
-            for key in unknown_keys(&document, &canonical) {
-                log::warn!(
-                    "Agent configuration {path} has the unknown key {key}; it is kept and ignored"
-                );
+            if report_unknown {
+                for key in unknown_keys(&document, &canonical) {
+                    log::warn!(
+                        "Agent configuration {path} has the unknown key {key}; it is kept and ignored"
+                    );
+                }
             }
             if !repairs.is_empty() {
                 for repair in &repairs {
@@ -271,6 +351,7 @@ pub(crate) fn load<T: Serialize>(
             Ok(Loaded {
                 value,
                 unusable: None,
+                document,
             })
         }
     }
