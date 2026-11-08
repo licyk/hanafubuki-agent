@@ -62,7 +62,8 @@ fn a_busy_executable_fails_with_its_error_once_the_schedule_is_spent() {
     assert_eq!(attempts, NO_WAIT.len() + 1);
 }
 
-#[cfg(unix)]
+/// macOS runs a file open for writing, so the race exists only on Linux.
+#[cfg(target_os = "linux")]
 mod forked_sibling {
     use std::fs;
     use std::io::{Read, Write};

@@ -6,6 +6,7 @@ use hanafubuki_agent_mcp::{
     MemoryMcpSecretStore, NoopMcpEventSink,
 };
 use hanafubuki_agent_process::executor::ExecutorManager;
+#[cfg(unix)]
 use serde_json::Value;
 use std::collections::BTreeSet;
 

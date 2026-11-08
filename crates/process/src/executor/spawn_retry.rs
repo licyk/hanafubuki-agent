@@ -1,7 +1,7 @@
 //! Retrying a spawn whose executable was busy for a moment.
 //!
-//! On Unix, `exec` fails with `ETXTBSY` ("Text file busy") while any process
-//! holds the file open for writing. The application writes executables it
+//! On Linux, `exec` fails with `ETXTBSY` ("Text file busy") while any process
+//! holds the file open for writing (macOS runs such a file). The application writes executables it
 //! then runs (the Micromamba binary it publishes, an extracted Python runtime,
 //! a launcher update) and closes them before spawning, but a sibling thread
 //! that forks while one is open copies the writable descriptor into its child,

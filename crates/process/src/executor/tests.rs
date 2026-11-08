@@ -517,7 +517,9 @@ fn pty_answers_a_device_attributes_query() {
     let out = wait_terminal(&manager, &info.executor_id);
     assert_eq!(out.status, ExecutorStatus::Exited);
     let text = merged_text(&out, OutputStream::Merged);
-    assert!(text.contains("1b 5b 3f 31 3b 32 63"), "{text:?}");
+    // GNU and BSD `od` space their columns differently.
+    let bytes = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    assert!(bytes.contains("1b 5b 3f 31 3b 32 63"), "{text:?}");
     assert!(!text.contains("\u{1b}[c"), "{text:?}");
 }
 
@@ -531,7 +533,7 @@ fn pipe_output_reads_in_slices_without_splitting_characters() {
         req(&[
             "sh",
             "-c",
-            "i=0; s=''; while [ $i -lt 3000 ]; do s=\"$s中\"; i=$((i+1)); done; printf '%s' \"$s\"",
+            "i=0; s=''; while [ $i -lt 3000 ]; do s=\"${s}中\"; i=$((i+1)); done; printf '%s' \"$s\"",
         ]),
     )
     .unwrap();

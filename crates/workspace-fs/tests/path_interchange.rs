@@ -404,10 +404,11 @@ fn one_patch_cannot_reach_a_new_file_under_two_case_spellings() {
     );
 }
 
-/// POSIX filesystems are case sensitive, so `target.txt` and `TARGET.txt` are
-/// two real files and one patch may legitimately touch both. The Windows folding
-/// must not leak onto a case-sensitive filesystem.
-#[cfg(not(windows))]
+/// On a case-sensitive filesystem `target.txt` and `TARGET.txt` are two real
+/// files and one patch may legitimately touch both. The Windows folding must not
+/// leak onto it. Linux's filesystems are; macOS's default APFS is not, and there
+/// both names resolve to one file, which the patch is rightly refused for.
+#[cfg(not(any(windows, target_os = "macos")))]
 #[test]
 fn one_patch_may_touch_case_distinct_files_on_posix() {
     let root = TempDir::new().unwrap();

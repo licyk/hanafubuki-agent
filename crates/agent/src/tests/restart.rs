@@ -196,7 +196,17 @@ fn a_kernel_fault_stops_the_agent_and_restarts_it_after_a_backoff() {
 #[test]
 fn three_automatic_restarts_use_up_the_window_until_the_user_restarts() {
     let paths = test_paths("restart-window");
-    let (slot, marker, mut agent) = plain_agent(&paths, policy(Duration::from_millis(20)));
+    // The first delay is also the one the fault after the user's restart
+    // waits, which the test must see as faulted before it restarts again.
+    let policy = AgentRestartPolicy {
+        delays: vec![
+            Duration::from_millis(500),
+            Duration::from_millis(20),
+            Duration::from_millis(20),
+        ],
+        window: Duration::from_secs(600),
+    };
+    let (slot, marker, mut agent) = plain_agent(&paths, policy);
     for restarted in 0..3 {
         agent.test_panic_in_agent_worker();
         agent = running(&slot, 2 + restarted);
