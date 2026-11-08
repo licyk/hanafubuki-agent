@@ -25,7 +25,7 @@ use hanafubuki_agent_mcp::{McpEventSink, NoopMcpEventSink};
 use parking_lot::Mutex;
 
 use self::keyring::KeyringSecretStore;
-pub use self::keyring::KEYRING_SERVICE;
+pub use self::keyring::{probe_keyring, KEYRING_SERVICE};
 use self::workspace::StandaloneWorkspace;
 use crate::{
     AgentApplicationService, AgentConfig, AgentConstructor, AgentHandle, AgentHostInstructions,

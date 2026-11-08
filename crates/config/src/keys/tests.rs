@@ -108,7 +108,10 @@ fn set_writes_one_key_of_the_users_file_and_keeps_the_rest() {
     assert!(file.starts_with("# The user's own comment.\npermissionMode = \"auto_review\"\n"));
     assert!(file.contains("logLevel = \"warn\""), "{file}");
     assert!(file.contains("maxUnusedDays = 12"), "{file}");
-    assert!(file.contains("enabled = true"), "the override is not written: {file}");
+    assert!(
+        file.contains("enabled = true"),
+        "the override is not written: {file}"
+    );
 
     // The layers apply over the written file, read again.
     let standalone = config.standalone_settings().unwrap();
@@ -137,7 +140,11 @@ fn set_refuses_unknown_keys_and_unusable_values() {
         ("profiles.ci.logLevel", "loud", "profile `ci`"),
         ("profiles.ci", "1", "names no setting"),
         ("projects.'/a'.trust", "trusted", "names no setting"),
-        ("projects.'/a'.trustLevel", "maybe", "\"trusted\" or \"untrusted\""),
+        (
+            "projects.'/a'.trustLevel",
+            "maybe",
+            "\"trusted\" or \"untrusted\"",
+        ),
         ("memory..enabled", "true", "not a key"),
     ] {
         let error = config.set_user_value(key, value).unwrap_err();

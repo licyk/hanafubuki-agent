@@ -131,6 +131,8 @@ const LAYERS: &[(&str, &[&str])] = &[
             "hanafubuki-agent-workspace-fs",
         ],
     ),
+    // The command line over the facade.
+    ("hanafubuki-agent-cli", &[FACADE]),
     ("xtask", &[]),
 ];
 

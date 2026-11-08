@@ -97,7 +97,9 @@ pub use slot::{
     AgentSlot, AgentStartOptions, AgentStartStage, AgentStatus, AgentStatusEventSink,
     AgentUnavailable, NoopAgentStatusEventSink, AUTOMATIC_RESTART_DELAYS, AUTOMATIC_RESTART_WINDOW,
 };
-pub use standalone::{AgentRuntime, AgentRuntimeHost, AgentRuntimeOptions, KEYRING_SERVICE};
+pub use standalone::{
+    probe_keyring, AgentRuntime, AgentRuntimeHost, AgentRuntimeOptions, KEYRING_SERVICE,
+};
 #[cfg(test)]
 pub(crate) use startup::start_agent;
 pub(crate) use startup::{spawn_agent_start, AgentLauncher};
@@ -121,7 +123,9 @@ use std::path::Path;
 /// and the standalone Agent layers.
 pub use hanafubuki_agent_config::{
     AgentConfig, AgentDirs, AgentLogLevel, AgentModelProtocol, AgentSettings, AgentSettingsPatch,
-    AgentStandaloneSettings, ConfigLayers, ConfigOverrides, AGENT_CREDENTIAL_FILES, AGENT_HOME_ENV,
+    AgentStandaloneSettings, ConfigLayerSource, ConfigLayers, ConfigOverrides,
+    AGENT_CREDENTIAL_FILES, AGENT_HOME_ENV, AGENT_MCP_FILE, AGENT_PROVIDERS_FILE,
+    AGENT_SETTINGS_FILE,
 };
 pub use hanafubuki_agent_execution::{
     AgentBackgroundTerminalSnapshot, AgentBackgroundTerminalStopFailure,
@@ -141,13 +145,18 @@ pub use hanafubuki_agent_kernel::{
     AgentSteeringAccepted, AgentTranscriptPage, AgentTranscriptPageRequest, AgentTurnAccepted,
     AgentTurnCancellationOutcome, AgentTurnId, AgentTurnInput, AgentTurnOutcome,
     AgentTurnPageRequest, AgentTurnPhase, AgentTurnTerminalReason, AgentUserInputAccepted,
-    AgentUserInputAnswer, AgentUserInputRequestId, ApprovalRequestId, ApprovalUserDecision,
-    ConfirmedAgentSessionDeletion, ConversationItem, ModelCatalogEntry, MAXIMUM_HOST_CONTEXT_BYTES,
+    AgentUserInputAnswer, AgentUserInputRequest, AgentUserInputRequestId, ApprovalRequest,
+    ApprovalRequestId, ApprovalUserDecision, ConfirmedAgentSessionDeletion, ConversationItem,
+    ModelCatalogEntry, MAXIMUM_HOST_CONTEXT_BYTES,
 };
 pub use hanafubuki_agent_kernel::{AgentQuarantinedSession, AgentRecoveryReport};
 use hanafubuki_agent_kernel::{AgentService, ModelCompactionCapability};
-/// What the Agent tells a host about its MCP servers.
-pub use hanafubuki_agent_mcp::{McpEventSink, NoopMcpEventSink};
+/// What the Agent tells a host about its MCP servers, and the servers it is
+/// told to connect.
+pub use hanafubuki_agent_mcp::{
+    McpConnectionPhase, McpEventSink, McpServerConfig, McpServerId, McpStdioConfig,
+    McpStreamableHttpConfig, McpTransportConfig, NoopMcpEventSink,
+};
 use hanafubuki_agent_workspace_fs::WorkspaceFsService;
 use serde::{Deserialize, Serialize};
 

@@ -1,0 +1,191 @@
+//! `exec` end to end: the built binary runs one turn against the scripted
+//! model server, in a temporary home and working directory.
+
+mod support;
+
+use std::io::Write;
+use std::process::Stdio;
+use std::time::Duration;
+
+use hanafubuki_agent::test_support::{assistant_events, tool_events, FakeServer};
+use serde_json::Value;
+use support::Home;
+
+/// The scripted model, answering each request with the next response.
+struct Model {
+    runtime: tokio::runtime::Runtime,
+    server: FakeServer,
+}
+
+impl Model {
+    fn start(responses: Vec<Vec<u8>>) -> Self {
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let server = runtime.block_on(FakeServer::start(
+            responses
+                .into_iter()
+                .map(|body| (body, Duration::ZERO))
+                .collect(),
+        ));
+        Self { runtime, server }
+    }
+
+    fn request_count(&self) -> usize {
+        let _guard = self.runtime.enter();
+        self.server.requests().len()
+    }
+}
+
+fn command_call(command: &str) -> Vec<u8> {
+    let arguments = serde_json::json!({
+        "cmd": command,
+        "shell": null,
+        "login": null,
+        "tty": null,
+        "yield_time_ms": 5_000,
+        "max_output_bytes": 32_768,
+        "workdir": null
+    });
+    tool_events("exec_command", &arguments.to_string())
+}
+
+#[test]
+fn a_turn_prints_its_answer_and_writes_the_last_message() {
+    let model = Model::start(vec![assistant_events("The answer is 42.")]);
+    let home = Home::new().with_provider(&model.server.base_url);
+    let last = home.home.join("last.txt");
+    let run = home
+        .run(&["exec", "What is the answer?", "-o", last.to_str().unwrap()])
+        .expect(0);
+    assert!(
+        run.stdout().contains("The answer is 42."),
+        "{}",
+        run.stdout()
+    );
+    assert!(run.stderr().contains("session "), "{}", run.stderr());
+    assert_eq!(std::fs::read_to_string(last).unwrap(), "The answer is 42.");
+    assert_eq!(model.request_count(), 1);
+}
+
+#[test]
+fn json_prints_one_event_per_line_ending_with_the_completion() {
+    let model = Model::start(vec![assistant_events("Lines.")]);
+    let home = Home::new().with_provider(&model.server.base_url);
+    let mut child = home
+        .command()
+        .args(["exec", "--json", "-"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(b"From standard input")
+        .unwrap();
+    let run = support::Run(child.wait_with_output().unwrap()).expect(0);
+    let events = run
+        .stdout()
+        .lines()
+        .map(|line| serde_json::from_str::<Value>(line).unwrap())
+        .collect::<Vec<_>>();
+    let kinds = events
+        .iter()
+        .map(|event| event["kind"]["type"].as_str().unwrap().to_string())
+        .collect::<Vec<_>>();
+    assert_eq!(kinds.first().map(String::as_str), Some("turn_started"));
+    assert_eq!(kinds.last().map(String::as_str), Some("turn_completed"));
+    assert!(kinds.iter().any(|kind| kind == "assistant_text_delta"));
+    for event in &events {
+        assert!(event["sessionId"].is_u64(), "{event}");
+        assert!(event["sequence"].is_u64(), "{event}");
+    }
+    let request = String::from_utf8_lossy(&model.server.requests()[0].body).into_owned();
+    assert!(request.contains("From standard input"));
+}
+
+#[test]
+fn an_approval_is_denied_under_approve_deny_and_the_turn_goes_on() {
+    let model = Model::start(vec![
+        command_call("echo should-not-run"),
+        assistant_events("It was denied."),
+    ]);
+    let home = Home::new().with_provider(&model.server.base_url);
+    let run = home
+        .run(&["exec", "--approve", "deny", "Run the command."])
+        .expect(0);
+    let stdout = run.stdout();
+    assert!(stdout.contains("→ exec_command"), "{stdout}");
+    assert!(
+        stdout.contains("approval denied: exec_command: "),
+        "{stdout}"
+    );
+    assert!(stdout.contains("It was denied."), "{stdout}");
+    assert_eq!(model.request_count(), 2);
+
+    // In JSON, the kernel's resolution carries the denial.
+    let model = Model::start(vec![
+        command_call("echo should-not-run"),
+        assistant_events("Denied again."),
+    ]);
+    let home = Home::new().with_provider(&model.server.base_url);
+    let run = home.run(&["exec", "--json", "Run the command."]).expect(0);
+    let resolution = run
+        .stdout()
+        .lines()
+        .map(|line| serde_json::from_str::<Value>(line).unwrap())
+        .find(|event| event["kind"]["type"] == "approval_resolved")
+        .expect("an approval_resolved event");
+    assert_eq!(resolution["kind"]["resolution"]["decision"], "deny");
+    assert!(run.stderr().contains("approval denied: exec_command"));
+}
+
+#[test]
+fn an_allowed_tool_runs() {
+    #[cfg(not(windows))]
+    let command = "printf allowed-command";
+    #[cfg(windows)]
+    let command = "Write-Output allowed-command";
+    let model = Model::start(vec![command_call(command), assistant_events("It ran.")]);
+    let home = Home::new().with_provider(&model.server.base_url);
+    let run = home
+        .run(&["exec", "--approve", "allow:exec_command", "Run it."])
+        .expect(0);
+    let stdout = run.stdout();
+    assert!(
+        stdout.contains("approval allowed: exec_command"),
+        "{stdout}"
+    );
+    assert!(stdout.contains("exec_command done"), "{stdout}");
+    let output = String::from_utf8_lossy(&model.server.requests()[1].body).into_owned();
+    assert!(output.contains("allowed-command"), "{output}");
+}
+
+#[test]
+fn the_exit_code_says_how_the_command_ended() {
+    let home = Home::new();
+    // The terminal interface and `resume` are not there yet.
+    let run = home.run(&[]).expect(2);
+    assert!(run.stderr().contains("hanafubuki-agent exec PROMPT"));
+    home.run(&["resume", "--last"]).expect(2);
+    // An empty prompt, an unknown policy.
+    home.run(&["exec", "-"]).expect(2);
+    home.run(&["exec", "--approve", "sometimes", "hi"])
+        .expect(2);
+    // No Provider: the session cannot be made.
+    let run = home.run(&["exec", "hi"]).expect(1);
+    assert!(
+        run.stderr()
+            .contains("No default Agent Provider is configured"),
+        "{}",
+        run.stderr()
+    );
+    // A model that fails the turn.
+    let model = Model::start(vec![
+        b"data: {\"type\":\"response.failed\",\"response\":{\"id\":\"failed\",\"error\":{\"code\":\"invalid_request\",\"message\":\"no\"}}}\n\n".to_vec(),
+    ]);
+    let home = Home::new().with_provider(&model.server.base_url);
+    let run = home.run(&["exec", "hi"]).expect(1);
+    assert!(run.stderr().contains("the turn failed"), "{}", run.stderr());
+}

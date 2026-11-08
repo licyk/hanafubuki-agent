@@ -162,7 +162,9 @@ impl AgentConfig {
                 .ok_or_else(|| format!("`{key}` is not a setting of config.toml"))?,
             KeyTarget::Profile { .. } | KeyTarget::ProjectTrust => {
                 let document = self.load_user_settings()?.document;
-                keys::lookup(&document, &path).cloned().unwrap_or(Value::Null)
+                keys::lookup(&document, &path)
+                    .cloned()
+                    .unwrap_or(Value::Null)
             }
         };
         Ok(Some(value).filter(|value| !value.is_null()))

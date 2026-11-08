@@ -14,6 +14,16 @@ use hanafubuki_agent_foundation::secrets::{
 /// share an entry.
 pub const KEYRING_SERVICE: &str = "org.licyk.hanafubuki-agent.secrets";
 
+/// Whether the keyring answers, by reading an entry nothing writes; blocks
+/// the caller.
+pub fn probe_keyring() -> Result<(), String> {
+    match keyring::Entry::new(KEYRING_SERVICE, "doctor-probe").and_then(|entry| entry.get_secret())
+    {
+        Ok(_) | Err(keyring::Error::NoEntry) => Ok(()),
+        Err(error) => Err(error.to_string()),
+    }
+}
+
 /// Each call runs on the Agent runtime's blocking pool: the platform stores
 /// block, and a panic there stays contained.
 pub(crate) struct KeyringSecretStore {
