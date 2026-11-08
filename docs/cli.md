@@ -81,7 +81,7 @@ time, an option to pick for each.
 | Enter | Sends the message: a new turn, or, while one runs, a message that steers it |
 | Shift+Enter, Ctrl+J | A new line |
 | Up, Down | The session's earlier messages |
-| Esc, Ctrl-C | Interrupts the running turn (Ctrl-C also clears the composer) |
+| Esc, Ctrl-C | Interrupts the running turn; Ctrl-C first clears a composer that has text, and in an approval denies it and those waiting |
 | Ctrl-C twice, Ctrl-D twice on an empty composer, `/quit` | Quits |
 
 Quitting restores the terminal and shuts the Agent down; the exit code is
