@@ -35,7 +35,7 @@ fn multiple_roots_receive_a_fair_share_and_utf8_head_tail_truncation() {
     let second = tempfile::tempdir().unwrap();
     fs::write(
         first.path().join("AGENTS.md"),
-        format!("HEAD{}TAIL", "界".repeat(128)),
+        format!("HEAD{}TAIL", "界".repeat(512)),
     )
     .unwrap();
     fs::write(second.path().join("AGENTS.md"), "SECOND").unwrap();
@@ -45,15 +45,18 @@ fn multiple_roots_receive_a_fair_share_and_utf8_head_tail_truncation() {
     ])
     .unwrap();
 
+    // Each header names its root twice, so the budget leaves room for a long
+    // temporary path (macOS's is over 60 bytes) and still truncates.
     let discovered = discover_workspace_instructions_with_budget(
         no_user_instructions().path(),
         &roots,
         None,
-        512,
-        512,
+        1024,
+        1024,
     );
     let content = discovered.content.unwrap();
     assert!(content.contains("HEAD"));
+    assert!(content.contains("workspace instructions omitted"));
     assert!(content.contains("TAIL"));
     assert!(content.contains("SECOND"));
     assert!(content.is_char_boundary(content.len()));
@@ -84,9 +87,9 @@ fn user_instructions_come_before_the_project_within_the_same_budget() {
     let roots = super::super::agent_workspace_roots_from([root.path().to_path_buf()]).unwrap();
 
     let discovered =
-        discover_workspace_instructions_with_budget(user.path(), &roots, None, 512, 512);
+        discover_workspace_instructions_with_budget(user.path(), &roots, None, 1024, 1024);
     let content = discovered.content.unwrap();
-    assert!(content.len() <= 512);
+    assert!(content.len() <= 1024);
     assert!(content.find("USER").unwrap() < content.find("PROJECT").unwrap());
     assert!(content.contains("workspace instructions omitted"));
 

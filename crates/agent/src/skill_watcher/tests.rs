@@ -72,8 +72,16 @@ fn reading_a_skill_is_not_a_change() {
     let temporary = tempfile::tempdir().unwrap();
     let root = temporary.path().join("user");
     std::fs::create_dir_all(root.join("demo")).unwrap();
-    std::fs::write(root.join("demo/SKILL.md"), "instructions").unwrap();
     let (watcher, catalog) = armed_watch(std::slice::from_ref(&root));
+    // Written under the watch and waited out: FSEvents may still deliver
+    // changes made just before a watch started, and they arrive before this
+    // write's own, so after it every change has been counted.
+    std::fs::write(root.join("demo/SKILL.md"), "instructions").unwrap();
+    assert!(wait_until(
+        || catalog.invalidations.load(Ordering::SeqCst) > 0
+    ));
+    std::thread::sleep(DEBOUNCE * 2);
+    let changes = catalog.invalidations.load(Ordering::SeqCst);
 
     assert_eq!(
         std::fs::read_to_string(root.join("demo/SKILL.md")).unwrap(),
@@ -83,7 +91,7 @@ fn reading_a_skill_is_not_a_change() {
     // invalidated by now. Waiting cannot make this fail spuriously.
     std::thread::sleep(DEBOUNCE * 6);
 
-    assert_eq!(catalog.invalidations.load(Ordering::SeqCst), 0);
+    assert_eq!(catalog.invalidations.load(Ordering::SeqCst), changes);
     assert!(watcher
         .shutdown(Instant::now() + Duration::from_secs(5))
         .is_empty());

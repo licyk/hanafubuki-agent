@@ -23,6 +23,7 @@ impl AgentApplicationService {
         self.mcp_application.proxy.lock().clone()
     }
 
+    #[cfg(unix)]
     pub(crate) fn test_mcp_status(
         &self,
         server_id: &hanafubuki_agent_mcp::McpServerId,

@@ -45,4 +45,4 @@ jobs:
         env:
           RUSTFLAGS: -D warnings
       - run: cargo xtask check
-      - run: cargo test --workspace --all-features
+      - run: cargo test --workspace --all-features --no-fail-fast

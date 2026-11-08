@@ -1,13 +1,17 @@
-use hanafubuki_agent_execution::StartCommandRequest;
-
 use super::*;
+#[cfg(unix)]
 use hanafubuki_agent_approval::ApprovalOrigin;
 use hanafubuki_agent_config::McpSettingsStore;
-use hanafubuki_agent_execution::{AgentExecutionScope, AgentExecutionService};
+#[cfg(unix)]
+use hanafubuki_agent_execution::{AgentExecutionScope, AgentExecutionService, StartCommandRequest};
+#[cfg(unix)]
 use hanafubuki_agent_foundation::background_worker::BackgroundWorkerGroup;
 use hanafubuki_agent_mcp::{McpOAuthManager, MemoryMcpSecretStore};
+#[cfg(unix)]
 use hanafubuki_agent_process::executor::ExecutorManager;
+#[cfg(unix)]
 use serde_json::Value;
+#[cfg(unix)]
 use std::collections::BTreeSet;
 
 #[test]
@@ -100,7 +104,10 @@ fn generic_executor_install_then_mcp_path_connect_is_deterministic_and_cleanup_c
     assert_eq!(waited.snapshot.exit_code, Some(0));
     executions.dispose(&scope, started.execution_id).unwrap();
     let install_log = std::fs::read_to_string(&log).unwrap();
-    assert!(install_log.contains(&format!("cwd={}\n", root.display())));
+    // `$PWD` is the physical directory: on macOS the temp dir is reached
+    // through the `/var` symlink, so only its resolved form matches.
+    let cwd = hanafubuki_agent_foundation::paths::ResolvedPath::resolve(&root).unwrap();
+    assert!(install_log.contains(&format!("cwd={}\n", cwd.native_text())));
     assert!(install_log.contains(&format!(
         "install\n{}\n{}\n",
         installed.read_link().unwrap().display(),

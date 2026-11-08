@@ -669,6 +669,7 @@ async fn reading_a_mentioned_skill_does_not_deliver_its_instructions_twice() {
 }
 
 /// How many request input items carry `marker`.
+#[cfg(unix)]
 fn body_deliveries(input: &[Value], marker: &str) -> usize {
     input
         .iter()
@@ -716,8 +717,12 @@ async fn skill_catalog_and_selected_skill_fragments_are_pinned() {
 
     let request: Value = serde_json::from_slice(&server.requests()[0].body).unwrap();
     let input = request["input"].as_array().unwrap();
-    // The catalog and the context name the temporary Skill directories.
-    let app_data = paths.app_data_dir.to_string_lossy().into_owned();
+    // The catalog and the context name the temporary Skill directories, in
+    // their resolved form (on macOS the temp dir is behind the `/var` symlink).
+    let app_data = hanafubuki_agent_foundation::paths::ResolvedPath::resolve(&paths.app_data_dir)
+        .unwrap()
+        .native_text()
+        .to_string();
     let digest = |value: &Value| {
         hex::encode(Sha256::digest(
             value

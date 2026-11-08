@@ -11,7 +11,6 @@ use super::*;
 /// Install every package under the smoke root, then admit a turn that names
 /// one. A package that Codex accepts must survive install, discovery, read,
 /// selection, and turn admission here too.
-#[cfg(unix)]
 #[tokio::test]
 async fn codex_cache_packages_install_and_admit_a_turn() {
     let Ok(cache) = std::env::var("HANAFUBUKI_SKILL_SMOKE_ROOT") else {

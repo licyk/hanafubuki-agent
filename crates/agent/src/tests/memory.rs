@@ -271,6 +271,7 @@ async fn the_memory_context_item_is_pinned_right_after_the_skill_catalog() {
 }
 
 /// Publishes generation 1 of memory with one source, session `source`.
+#[cfg(unix)]
 fn publish_memory_from(repository: &hanafubuki_agent_memory::AgentMemoryRepository, source: &str) {
     repository
         .sync_source_state(
@@ -319,6 +320,7 @@ fn publish_memory_from(repository: &hanafubuki_agent_memory::AgentMemoryReposito
 }
 
 /// How often the memory of source session `source` was cited.
+#[cfg(unix)]
 fn citation_usage(
     repository: &hanafubuki_agent_memory::AgentMemoryRepository,
     source: &str,
