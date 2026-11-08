@@ -27,7 +27,9 @@ done: the workspace, the decoupling inside Hanafubuki's tree, and the move.
     add` takes no request headers; `exec` resumes no session and attaches
     no images; `doctor` cannot say which process holds the data directory
     (the lock file names none); a management command that starts the Agent
-    also starts its MCP servers in the background, as every start does.
+    also starts its MCP servers in the background, as every start does;
+    Ctrl-C during a command other than `exec` ends it without a shutdown
+    (the lock goes with the process, the next start reaps its processes).
   - AGENTS.md discovery reads the working directory's and the Git root's
     own `AGENTS.md` (each a root), not the directories between them, since
     the runtime selects no target; Codex reads every level.

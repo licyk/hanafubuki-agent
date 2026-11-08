@@ -32,8 +32,9 @@ They go before or after the command.
 `HANAFUBUKI_AGENT_HOME` names one directory for both the configuration and
 the data ([config.md](config.md#locations)).
 
-Every command installs the Agent's panic hook and its log file
-(`<data>/logs/hanafubuki-agent.log`) before it does anything else. The
+Every command reads the configuration, then installs the Agent's panic hook
+and its log file (`<data>/logs/hanafubuki-agent.log`) before it starts the
+Agent or changes anything. The
 commands that only read or write the configuration (`config`,
 `providers list`, `mcp list`, `doctor` without `--online`) do not start the
 Agent and work while another Agent process runs; the others start it and
@@ -46,7 +47,7 @@ need the data directory to themselves.
 | `hanafubuki-agent [PROMPT]`, `resume [--last\|ID]` | The terminal interface, not available yet: prints how to use `exec` and exits with 2. |
 | `exec [PROMPT\|-]` | One turn (below). |
 | `config path` | Prints where `config.toml`, `providers.toml`, `mcp.toml`, the data and the log are. |
-| `config get [KEY]` | A key's value with every layer applied (a string as it is, anything else as TOML); without a key, every setting as a TOML document. |
+| `config get [KEY]` | A key's value with every layer applied (a string as it is, anything else as TOML); without a key, every setting as a TOML document. The credentials of a proxy URL print as `***`. |
 | `config set KEY VALUE` | Writes one key into the user's `config.toml` ([config.md](config.md#reading-and-writing-keys)): any setting, `profiles.NAME.KEY`, `projects."PATH".trustLevel`. |
 | `config edit` | Opens the user's `config.toml` in `$VISUAL` or `$EDITOR`. |
 | `providers list` | The model policy's model and each Provider: id, name, default, protocol, endpoint, and whether a token and which headers are set; never a token's or a header's value. |
@@ -159,8 +160,10 @@ model asks (`request_user_input`) is put to the person at the terminal,
 who picks an option by number; without a terminal, or without an answer,
 `exec` cancels the turn and exits with 3.
 
-Ctrl-C cancels the turn and `exec` exits once it ended; a second Ctrl-C
-exits at once.
+Ctrl-C cancels the turn and `exec` exits once it ended, after the Agent
+shut down; a second Ctrl-C exits at once. Ctrl-C during another command
+ends it at once: the operating system releases the data directory's lock,
+and the next start reaps the processes the Agent had started.
 
 ### Exit codes
 
