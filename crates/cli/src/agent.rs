@@ -83,12 +83,10 @@ impl Standalone {
 /// command's result.
 pub(crate) fn with_agent<T>(
     global: &GlobalArgs,
-    command: impl FnOnce(&Standalone, &AgentHandle) -> Result<T, Failure>,
+    command: impl FnOnce(&AgentHandle) -> Result<T, Failure>,
 ) -> Result<T, Failure> {
     let standalone = Standalone::open(global, AgentRuntimeHost::default())?;
-    let result = standalone
-        .start()
-        .and_then(|agent| command(&standalone, &agent));
+    let result = standalone.start().and_then(|agent| command(&agent));
     standalone.shutdown();
     result
 }

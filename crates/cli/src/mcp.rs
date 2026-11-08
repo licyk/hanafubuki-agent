@@ -38,7 +38,7 @@ pub(crate) fn run(global: &GlobalArgs, command: McpCommand) -> Result<(), Failur
         } => {
             let id = server_id(&id)?;
             let transport = transport(url, environment, command)?;
-            with_agent(global, |_, agent| {
+            with_agent(global, |agent| {
                 let snapshot = block_on(agent, move |agent| async move {
                     let current = agent.mcp_snapshot().await?;
                     let defaults = current.server_defaults;
@@ -75,7 +75,7 @@ pub(crate) fn run(global: &GlobalArgs, command: McpCommand) -> Result<(), Failur
         }
         McpCommand::Remove { id } => {
             let server_id = server_id(&id)?;
-            with_agent(global, |_, agent| {
+            with_agent(global, |agent| {
                 block_on(agent, move |agent| async move {
                     let current = agent.mcp_snapshot().await?;
                     agent
@@ -90,7 +90,7 @@ pub(crate) fn run(global: &GlobalArgs, command: McpCommand) -> Result<(), Failur
         }
         McpCommand::Connect { id } => {
             let server_id = server_id(&id)?;
-            with_agent(global, |_, agent| {
+            with_agent(global, |agent| {
                 let connecting = server_id.clone();
                 let snapshot = block_on(agent, move |agent| async move {
                     agent.mcp_connect(connecting).await

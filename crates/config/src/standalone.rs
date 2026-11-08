@@ -1,6 +1,7 @@
 //! The settings only the standalone Agent reads from `config.toml`: what a
 //! host supplies itself when it embeds the Agent (its proxy, its logger).
-//! The Agent never writes them; a person edits them by hand.
+//! The settings API never writes them; `config set`
+//! ([`crate::AgentConfig::set_user_value`]) or a person does.
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};

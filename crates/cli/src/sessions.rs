@@ -14,7 +14,7 @@ const SHOWN_ITEMS: usize = 200;
 
 pub(crate) fn run(global: &GlobalArgs, command: SessionsCommand) -> Result<(), Failure> {
     match command {
-        SessionsCommand::List { archived, json } => with_agent(global, |_, agent| {
+        SessionsCommand::List { archived, json } => with_agent(global, |agent| {
             let lifecycle = if archived {
                 AgentSessionLifecycle::Archived
             } else {
@@ -41,7 +41,7 @@ pub(crate) fn run(global: &GlobalArgs, command: SessionsCommand) -> Result<(), F
         }),
         SessionsCommand::Show { id, json } => {
             let id = session_id(&id)?;
-            with_agent(global, |_, agent| {
+            with_agent(global, |agent| {
                 let opened = agent.open_session(id, SHOWN_ITEMS).map_err(failure)?;
                 if json {
                     println!("{}", to_json(&opened.transcript)?);
@@ -68,7 +68,7 @@ pub(crate) fn run(global: &GlobalArgs, command: SessionsCommand) -> Result<(), F
         }
         SessionsCommand::Archive { id } => {
             let id = session_id(&id)?;
-            with_agent(global, |_, agent| {
+            with_agent(global, |agent| {
                 let session = agent.open_session(id, 1).map_err(failure)?.runtime;
                 agent
                     .archive_session(id, session.generation, session.revision)
@@ -78,7 +78,7 @@ pub(crate) fn run(global: &GlobalArgs, command: SessionsCommand) -> Result<(), F
         }
         SessionsCommand::Delete { id } => {
             let id = session_id(&id)?;
-            with_agent(global, |_, agent| {
+            with_agent(global, |agent| {
                 let session = agent.open_session(id, 1).map_err(failure)?.runtime;
                 agent
                     .delete_session_confirmed(id, session.generation, session.revision)

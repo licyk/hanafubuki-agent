@@ -5,7 +5,7 @@ use crate::cli::{GlobalArgs, MemoryCommand};
 use crate::exit::Failure;
 
 pub(crate) fn run(global: &GlobalArgs, command: MemoryCommand) -> Result<(), Failure> {
-    with_agent(global, |_, agent| {
+    with_agent(global, |agent| {
         let status = agent.memory_status().map_err(Failure::new)?;
         match command {
             MemoryCommand::Status => {

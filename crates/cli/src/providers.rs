@@ -45,7 +45,7 @@ pub(crate) fn run(global: &GlobalArgs, command: ProvidersCommand) -> Result<(), 
                 api_token,
                 request_headers: Vec::new(),
             };
-            with_agent(global, |_, agent| {
+            with_agent(global, |agent| {
                 block_on(agent, |agent| async move {
                     let before = agent.provider_registry_snapshot().await?;
                     let after = agent
@@ -66,7 +66,7 @@ pub(crate) fn run(global: &GlobalArgs, command: ProvidersCommand) -> Result<(), 
                 })
             })
         }
-        ProvidersCommand::Remove { id } => with_agent(global, |_, agent| {
+        ProvidersCommand::Remove { id } => with_agent(global, |agent| {
             block_on(agent, |agent| async move {
                 let registry = agent.provider_registry_snapshot().await?;
                 agent
@@ -78,7 +78,7 @@ pub(crate) fn run(global: &GlobalArgs, command: ProvidersCommand) -> Result<(), 
                     .map(|_| ())
             })
         }),
-        ProvidersCommand::Default { id, model } => with_agent(global, |_, agent| {
+        ProvidersCommand::Default { id, model } => with_agent(global, |agent| {
             block_on(agent, |agent| async move {
                 let registry = agent.provider_registry_snapshot().await?;
                 let mut policy = registry.model_policy;

@@ -7,7 +7,7 @@ use crate::cli::{GlobalArgs, SkillsCommand};
 use crate::exit::Failure;
 
 pub(crate) fn run(global: &GlobalArgs, command: SkillsCommand) -> Result<(), Failure> {
-    with_agent(global, |_, agent| match command {
+    with_agent(global, |agent| match command {
         SkillsCommand::List => {
             let catalog = agent.list_skills().map_err(Failure::new)?;
             for entry in &catalog.entries {
