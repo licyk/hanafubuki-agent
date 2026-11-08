@@ -62,7 +62,21 @@ fn config_get_reads_every_layer_and_set_writes_the_users_file() {
         get(&["config", "get", "network.proxy"]),
         "http://127.0.0.1:7890"
     );
+    // A proxy's credentials are written, never printed.
+    home.run(&[
+        "config",
+        "set",
+        "network.proxy",
+        "http://me:hunter2@127.0.0.1:7890",
+    ])
+    .expect(0);
+    assert_eq!(
+        get(&["config", "get", "network.proxy"]),
+        "http://***@127.0.0.1:7890"
+    );
+    assert!(!get(&["config", "get"]).contains("hunter2"));
     let file = home.file("config.toml");
+    assert!(file.contains("hunter2"), "{file}");
     assert!(file.starts_with("# kept\n"), "{file}");
     assert!(file.contains("[profiles.ci]"), "{file}");
 

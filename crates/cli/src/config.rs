@@ -58,9 +58,35 @@ fn get(config: &AgentConfig, key: Option<&str>) -> Result<(), Failure> {
         )),
     };
     if let Some(value) = value {
-        println!("{}", render(value)?);
+        println!("{}", render(without_credentials(value))?);
     }
     Ok(())
+}
+
+/// The value with the credentials of a URL in it (a proxy's
+/// `user:password@`) replaced by `***`.
+fn without_credentials(value: Value) -> Value {
+    match value {
+        Value::String(text) => Value::String(redact_userinfo(&text)),
+        Value::Object(table) => Value::Object(
+            table
+                .into_iter()
+                .map(|(key, value)| (key, without_credentials(value)))
+                .collect(),
+        ),
+        value => value,
+    }
+}
+
+fn redact_userinfo(text: &str) -> String {
+    let Some((scheme, rest)) = text.split_once("://") else {
+        return text.to_string();
+    };
+    let authority = rest.split(['/', '?', '#']).next().unwrap_or_default();
+    match authority.rsplit_once('@') {
+        Some((_, host)) => format!("{scheme}://***@{host}{}", &rest[authority.len()..]),
+        None => text.to_string(),
+    }
 }
 
 /// A string as it is, a table as a TOML document, anything else as a TOML

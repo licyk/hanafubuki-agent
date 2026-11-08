@@ -13,7 +13,7 @@ use support::Home;
 
 /// The scripted model, answering each request with the next response.
 struct Model {
-    runtime: tokio::runtime::Runtime,
+    _runtime: tokio::runtime::Runtime,
     server: FakeServer,
 }
 
@@ -26,11 +26,13 @@ impl Model {
                 .map(|body| (body, Duration::ZERO))
                 .collect(),
         ));
-        Self { runtime, server }
+        Self {
+            _runtime: runtime,
+            server,
+        }
     }
 
     fn request_count(&self) -> usize {
-        let _guard = self.runtime.enter();
         self.server.requests().len()
     }
 }
@@ -188,4 +190,44 @@ fn the_exit_code_says_how_the_command_ended() {
     let home = Home::new().with_provider(&model.server.base_url);
     let run = home.run(&["exec", "hi"]).expect(1);
     assert!(run.stderr().contains("the turn failed"), "{}", run.stderr());
+}
+
+/// Ctrl-C cancels the turn under way, and `exec` ends once it did.
+#[cfg(unix)]
+#[test]
+fn an_interrupt_cancels_the_turn_and_exits_with_130() {
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    let server = runtime.block_on(FakeServer::start(vec![(
+        assistant_events("Too late."),
+        Duration::from_secs(60),
+    )]));
+    let home = Home::new().with_provider(&server.base_url);
+    let child = home
+        .command()
+        .args(["exec", "Take your time."])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let deadline = std::time::Instant::now() + Duration::from_secs(30);
+    while server.requests().is_empty() {
+        assert!(std::time::Instant::now() < deadline, "no model request");
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    // The handler is installed once the turn was accepted, before its
+    // request; give it a moment to be in place.
+    std::thread::sleep(Duration::from_millis(500));
+    let interrupted = std::process::Command::new("kill")
+        .args(["-INT", &child.id().to_string()])
+        .status()
+        .unwrap();
+    assert!(interrupted.success());
+    let run = support::Run(child.wait_with_output().unwrap()).expect(130);
+    assert!(
+        run.stderr()
+            .contains("the turn was cancelled (user_interrupted)"),
+        "{}",
+        run.stderr()
+    );
+    assert!(run.stdout().contains("interrupted; cancelling the turn"));
 }
