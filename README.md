@@ -8,8 +8,9 @@ terminal (TUI) application of its own.
 
 The Agent's crates live here, moved from
 [Hanafubuki](https://github.com/licyk/Hanafubuki), which embeds the Agent
-through the `hanafubuki-agent` facade. The standalone command-line and TUI
-front ends are not built yet ([extraction plan](docs/extraction-plan.md)).
+through the `hanafubuki-agent` facade. The facade can run without a host
+(`AgentRuntime::standalone`); the command-line and TUI front ends on it are
+not built yet ([extraction plan](docs/extraction-plan.md)).
 
 ## Embedding
 
@@ -25,6 +26,8 @@ against), and supplies its plugins and ports through the host interface
 - [docs/rules/plugins.md](docs/rules/plugins.md): the plugin rules and the
   host interface.
 - [docs/spec.md](docs/spec.md): the Agent as built, in detail.
+- [docs/config.md](docs/config.md): the standalone Agent's configuration:
+  locations, layers, keys.
 - [AGENTS.md](AGENTS.md): the workspace rules and validation.
 
 ## License

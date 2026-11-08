@@ -119,7 +119,9 @@ a host embedding the Agent supplies the same through the host interface
   turned on), and returns at
   once: the slot's start (`startup`) claims the next generation,
   builds the instance's runtime and process owner group
-  (`ProcessOwnerGroup::recorded_in`) and runs there as a task. It records a
+  (`ProcessOwnerGroup::recorded_in`) and runs there as a task. It takes
+  the data directory's lock (once per run; a held lock fails the start at
+  construction, naming the directory), records a
   crash-loop attempt, reaps the process groups an earlier run left
   (`ProcessGroupRecord::reap_leftovers`, `data/agent/process-groups.json`;
   lifecycle.md), builds the
@@ -299,6 +301,11 @@ Under `data/agent/`:
   settings read), so an instance registered later brings its Skills to the
   next turn.
 - `start-marker.json`: the crash-loop start-up marker (§1).
+- `.lock`: the data directory's advisory lock, held by the start marker
+  from the first start until shutdown, so one process uses the directory
+  ([architecture.md §10](architecture.md#10-persistence-and-compatibility)).
+- `logs/hanafubuki-agent.log` and its rotated `.1`–`.3`: the standalone
+  Agent's log file, when the binary installs it; a host logs to its own.
 - `mcp-settings.json`, from before the Agent had its own configuration: read
   once by the settings import (§8), never written.
 

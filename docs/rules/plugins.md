@@ -19,7 +19,7 @@ one) embeds the facade and adds its own plugins through
 | `hanafubuki-agent-kernel` | Kernel: sessions, turns, the tool pipeline and core tools, model request assembly, world state, Skill selection, history commits, compaction, approval flows; creates the registries it reads (`hanafubuki-agent-skills` only for `SkillId`, the identity persisted in Skill references and Skill context) | contracts, `kardia-core`, `hanafubuki-agent-model-api`, `hanafubuki-agent-skills`, `hanafubuki-agent-approval`, `hanafubuki-agent-tool-contracts`, `hanafubuki-agent-foundation` | any plugin, `tauri`, `hanafubuki-agent`, `hanafubuki-agent-process`, `hanafubuki-agent-web-search`, every Hanafubuki crate outside the Agent |
 | `hanafubuki-agent-plugin-<name>` | One capability: binds one domain crate to extension points | contracts, `kardia-core`/`kardia-macros`, `hanafubuki-agent-approval`, `hanafubuki-agent-tool-contracts`, `hanafubuki-agent-foundation`, its own domain crate(s) | `hanafubuki-agent-kernel`, `hanafubuki-agent`, `hanafubuki-application`, `tauri`, other plugins |
 | `hanafubuki-agent` | The Agent's composition: the plugin host and manifest, the Agent's own plugins, the slot, its Executor and Skill watcher, the IPC facade, and the host interface ([The host interface](#the-host-interface)) | kernel, contracts, plugin crates, `hanafubuki-agent-config`, `hanafubuki-agent-runtime`, the Agent's foundation, process and host copies | `hanafubuki-agent-model-api`, `hanafubuki-agent-web-search`, every Hanafubuki crate outside the Agent |
-| `hanafubuki-agent-config` | The Agent's own configuration (`AgentConfig`): its settings, the Provider registry and the MCP servers, as TOML files in the directory the host names ([architecture.md](../architecture.md#10-persistence-and-compatibility)) | `hanafubuki-agent-mcp` (the MCP settings and their repair), `hanafubuki-agent-foundation`, `toml`, `toml_edit` | the kernel, contracts, plugins, `hanafubuki-agent`, `hanafubuki-config`, `hanafubuki-application`, `tauri` |
+| `hanafubuki-agent-config` | The Agent's own configuration (`AgentConfig`): its settings, the Provider registry and the MCP servers, as TOML files in the directory the host names, or standalone in the OS directory with the settings layered ([architecture.md](../architecture.md#10-persistence-and-compatibility), [config.md](../config.md)) | `hanafubuki-agent-mcp` (the MCP settings and their repair), `hanafubuki-agent-foundation`, `toml`, `toml_edit`, `dirs` | the kernel, contracts, plugins, `hanafubuki-agent`, `hanafubuki-config`, `hanafubuki-application`, `tauri` |
 | `hanafubuki-agent-runtime` | The Agent's copy of the contained runtime (`ContainedRuntime`, `AGENT_RUNTIME_THREAD_NAME`) | `hanafubuki-agent-foundation` | every other project crate, `tauri` |
 | A host's integration (Hanafubuki: `hanafubuki-agent-integration`) | Outside this repository: the host's plugin rows, written against the contracts, and its ports | the facade, contracts, `hanafubuki-agent-approval`, `hanafubuki-agent-tool-contracts`, `hanafubuki-agent-config` (a host's settings import) | the kernel, `hanafubuki-agent-model-api` and every other crate here |
 
@@ -411,10 +411,21 @@ configuration directory; Hanafubuki's is `<app_data>/config/agent/`) and
   and to `WorkspaceRootsPort`. The IPC inputs that carry the UI context are
   the host's (Hanafubuki's `DesktopAgentTurnInput`, `DesktopAgentSteeringInput`,
   `AgentFileSearchRequest`), converted with `From` in the thin command.
+- **The data directory's lock** (`<data_dir>/.lock`): held from the
+  Agent's first start until its shutdown, in both modes. A host does
+  nothing for it; its Agent fails to start (and the host keeps running)
+  while another process holds the directory.
 - **The Agent's runs** for a host's activity view: `AgentSlot::list_run_projections`
   and `get_run_projection` (`AgentRunProjection`: activity id, turn number,
   `AgentTurnPhase`, times, error), guarded. The host maps them to its own
   view (Hanafubuki's `AgentTaskActivities`, Task Activity's `AgentActivitySource`).
+
+Without a host, `AgentRuntime::standalone` supplies every port itself
+([architecture.md §3.6](../architecture.md#36-standalone)): the working
+directory and its Git root as the workspace, no plugin rows, context or
+instructions, the configuration's `[network]` proxy, the OS keyring. A
+host's composition keeps `DesktopAgent`, `AgentLaunch` and
+`AgentHostPorts`, which the standalone runtime composes too.
 
 ## Extension points
 

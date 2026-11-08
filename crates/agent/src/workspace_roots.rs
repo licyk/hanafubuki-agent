@@ -41,7 +41,9 @@ pub trait WorkspaceRootsPort: Send + Sync {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AgentWorkspaceRoots {
     /// Every root, the host's primary root first. Never empty, deduplicated
-    /// on path identity, and free of roots nested inside another root.
+    /// on path identity, and free of roots nested inside an earlier root;
+    /// an earlier root may lie inside a later one (the standalone working
+    /// directory inside its Git root).
     ///
     /// The first entry is the base for relative requests.
     roots: Vec<PathBuf>,
