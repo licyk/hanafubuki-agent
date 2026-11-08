@@ -131,15 +131,20 @@ fn the_standalone_runtime_runs_a_turn_in_its_working_directory() {
 
     // The model saw the working directory as the workspace, and the
     // embedded System Skills were published into the data directory.
+    // The roots are a JSON section sent as text inside the request's JSON,
+    // so the working directory, the first root, is escaped twice there.
     let cwd = ResolvedPath::resolve(&fixture.cwd).unwrap();
-    let cwd_text = serde_json::to_string(cwd.native_text()).unwrap();
+    let section =
+        serde_json::to_string(&serde_json::json!({ "roots": [cwd.native_text()] })).unwrap();
+    let first_root = serde_json::to_string(&section).unwrap();
+    // Without the closing `]}"`: the Git root follows.
+    let first_root = &first_root[1..first_root.len() - 3];
     let requests = server.requests();
     assert!(
         requests
             .iter()
-            .any(|request| String::from_utf8_lossy(&request.body)
-                .contains(cwd_text.trim_matches('"'))),
-        "no request names {}",
+            .any(|request| String::from_utf8_lossy(&request.body).contains(first_root)),
+        "no request names {} first: {first_root}",
         cwd.native_text()
     );
     assert!(fixture
