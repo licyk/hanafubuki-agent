@@ -692,7 +692,11 @@ quarantine what they cannot use
   touches the marker or the ledger, restarts keep it, and shutdown releases
   it last. That is the same in both modes; a start that finds the lock held
   fails at construction with an error naming the directory, so a host's
-  application keeps running without its Agent.
+  application keeps running without its Agent. Turning a host's Agent off
+  (`AgentSlot::turn_off`) keeps the lock until the application quits, so a
+  standalone Agent on that data directory is refused meanwhile. A start
+  refused the lock writes nothing there: its owner group records processes
+  only when they spawn, and it records no start attempt.
 - **Logs**: the standalone binary installs `logging::install_file_logger`
   on `AgentStoragePaths::logs_dir`: `hanafubuki-agent.log`, rotated past
   8 MiB into `.1`…`.3` (the oldest dropped), at the configured level

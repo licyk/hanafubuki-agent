@@ -63,7 +63,9 @@ Agent cannot use, keeps the value of the layer below.
    ```
 
    The path is compared as a location, not as text (a symbolic link or a
-   different spelling of the same directory matches). A project's file is
+   different spelling of the same directory matches). On Windows, write it
+   as a literal string, whose backslashes need no escaping:
+   `[projects.'C:\Users\me\src\my-project']`. A project's file is
    never repaired or rewritten by the Agent; a value in it that cannot be
    used is logged and skipped.
 5. **`-c key=value` overrides**, in the order given. The key is a dotted path
