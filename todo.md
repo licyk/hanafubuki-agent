@@ -76,6 +76,25 @@ moves its pin.
 - [ ] P6: per-session permission mode (`set_session_permission_mode`,
       `turns.rs` no longer overrides it), `/permissions`, `/approve`
       (`approve_denied_action`, a model-visible note: goldens).
+  - [x] The facade's half: `set_session_permission_mode` and
+        `session_permission_mode` (runtime state beside the allowances; not
+        persisted, forks and recoveries start with none; a running turn
+        keeps the mode it started with); `approve_denied_action(session,
+        review_id)` for one of the session's 10 latest denied reviews,
+        between turns only: a `ContinuationContext` item (provider `kernel`,
+        hook `approved-denied-action`) with Codex's approved-action wording,
+        which the model and the next auto-review see (`user approval`
+        evidence). No golden or corpus change; the note's text is pinned in
+        `kernel/tests/loop_contract/approved_action.rs`. Permissions,
+        "Session mode" and "Approving a denied action".
+  - [ ] The interface's half: `/permissions`, `/approve` (the review ids of
+        `PermissionReviewCompleted { Denied }`); `/status` shows the mode in
+        effect (the session's, else `settings_view().settings.permission_mode`).
+  - Hanafubuki, at its next pin: new calls `set_session_permission_mode`,
+    `session_permission_mode`, `approve_denied_action`; kernel variant
+    `PermissionReviewEvidenceRole::UserApproval`; the review prompt gained
+    one sentence (no golden covers review requests). Differences from
+    Codex: refused during a turn; a compaction drops older denials.
 - [ ] P7: a mutable standalone workspace, `WorkspaceFsPolicy` rebuilt,
       `exec_command`'s default workdir (the `-C` bug), `/cd`;
       `hanafubuki-agent-worktree` and `plugin-worktree`, `/worktree`, the
