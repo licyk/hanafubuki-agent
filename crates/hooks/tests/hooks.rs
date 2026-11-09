@@ -5,10 +5,12 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
+#[cfg(unix)]
 use hanafubuki_agent_foundation::cancellation::CancellationToken;
+#[cfg(unix)]
+use hanafubuki_agent_hooks::{HookEvent, HookScope};
 use hanafubuki_agent_hooks::{
-    HookEvent, HookEventName, HookHandler, HookScope, HookSource, HookSources, HookTrust,
-    HooksEngine,
+    HookEventName, HookHandler, HookSource, HookSources, HookTrust, HooksEngine,
 };
 use hanafubuki_agent_process::executor::ExecutorManager;
 use serde_json::json;
