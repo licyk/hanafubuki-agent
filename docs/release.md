@@ -38,7 +38,7 @@ binary for four targets and creates the GitHub release with the archives.
 
    | Job | What it does |
    | --- | --- |
-   | `plan` | Reads the workspace version; fails unless the run is on the tag that names it. |
+   | `plan` | Reads the workspace version; on a tag, fails unless the tag names it. |
    | `ci-result` | Finds CI's run of the commit and waits for it; a failed run stops the release. |
    | `checks` | Runs `ci.yml` when `ci-result` found no usable run. |
    | `publish` | `cargo publish --workspace`, in dependency order, skipping versions already on crates.io and waiting out crates.io's rate limit. |
@@ -71,7 +71,18 @@ gh workflow run release.yml -R licyk/hanafubuki-agent --ref v0.1.0
 Every job is safe to repeat: `publish` skips each crate version already on
 crates.io, the binaries are built again, and `github-release` uploads the
 archives over an existing release's (`--clobber`) instead of creating it
-again. A manual run on a branch stops at `plan` and publishes nothing.
+again.
+
+## Rehearsing
+
+A manual run on a branch builds and packages the binaries (and the
+third-party licenses) and publishes nothing: `publish` and `github-release`
+run only on a tag. Rehearse before a release that changes the workflow or
+the build, and look at the archives the run uploads as artifacts:
+
+```sh
+gh workflow run release.yml -R licyk/hanafubuki-agent --ref main
+```
 
 If a fix is needed in the code, a published version cannot be replaced:
 fix it on `main`, bump the version, and release the new one.

@@ -2,7 +2,8 @@
 # creates the GitHub release with the archives. A v<version> tag (cargo xtask tag --push) releases the workspace version
 # it names. A manual run on the tag (gh workflow run release.yml --ref v<version>) resumes a release that stopped
 # part-way: a crate version already on crates.io is skipped, and the release's archives are replaced when it exists.
-# A run on anything but a tag stops at the plan, so a branch is never published.
+# A manual run on a branch is a rehearsal: it builds and packages the binaries and publishes nothing (publish and the
+# GitHub release run only on a tag).
 #
 # The released commit is tested once: CI's run of it (from the push to main) is reused, waiting for it if it is still
 # running, and this workflow calls ci.yml as its checks only when no usable run exists (a commit CI never ran on, or a
@@ -27,21 +28,24 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.plan.outputs.version }}
+      release: ${{ steps.plan.outputs.release }}
     steps:
       - uses: actions/checkout@v7.0.1
       - id: plan
         run: |
           version=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "hanafubuki-agent") | .version')
           echo "Workspace version: $version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
           if [ "$GITHUB_REF_TYPE" != tag ]; then
-            echo "::error::A release runs on a v<version> tag, not on $GITHUB_REF_TYPE $GITHUB_REF_NAME"
-            exit 1
+            echo "::notice::A rehearsal on $GITHUB_REF_TYPE $GITHUB_REF_NAME: the binaries are built, nothing is published"
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
           if [ "$GITHUB_REF_NAME" != "v$version" ]; then
             echo "::error::Tag $GITHUB_REF_NAME does not name the workspace version $version"
             exit 1
           fi
-          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "release=true" >> "$GITHUB_OUTPUT"
 
   ci-result:
     name: CI of this commit
@@ -89,7 +93,8 @@ jobs:
     needs: [plan, ci-result, checks]
     # the commit passed CI, either in CI's own run or in this workflow's checks
     if: >-
-      !cancelled() && needs.ci-result.result == 'success'
+      !cancelled() && needs.plan.outputs.release == 'true' && startsWith(github.ref, 'refs/tags/v')
+      && needs.ci-result.result == 'success'
       && (needs.ci-result.outputs.tested == 'true' || needs.checks.result == 'success')
     runs-on: ubuntu-latest
     # a first release waits out crates.io's new-crate limit for each crate past the first few (docs/release.md)
@@ -235,7 +240,9 @@ jobs:
     name: GitHub release
     needs: [plan, publish, binaries]
     # without a status function, the skipped `checks` job upstream skips this one too
-    if: ${{ !cancelled() && needs.publish.result == 'success' && needs.binaries.result == 'success' }}
+    if: >-
+      ${{ !cancelled() && needs.plan.outputs.release == 'true' && startsWith(github.ref, 'refs/tags/v')
+      && needs.publish.result == 'success' && needs.binaries.result == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
