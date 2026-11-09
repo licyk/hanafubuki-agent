@@ -723,12 +723,14 @@ links to it.
     the workspace version, and CI's run of the commit is reused;
   - `publish` runs `cargo publish --workspace`, in dependency order, skipping
     versions already on crates.io and waiting out crates.io's new-crate rate
-    limit. About 25 crates are published on the first release, which takes
-    about an hour under that limit.
+    limit. The first release creates 24 crates, which takes about three and
+    a half hours under that limit (one new crate per ten minutes past the
+    first few; [release.md](release.md)).
   - **New:** `binaries`, a matrix over x86_64 Linux (gnu), x86_64 and
     aarch64 macOS, and x86_64 Windows (msvc). It builds `hanafubuki-agent`
-    with `--release`, packages `tar.gz` or `zip` archives with LICENSE and
-    NOTICE, and writes SHA-256 sums.
+    with `--release`, packages `tar.gz` or `zip` archives with LICENSE,
+    NOTICE and the third-party licenses (`cargo-about`, a `licenses` job),
+    and writes SHA-256 sums.
   - `github-release` creates the release with generated notes from the
     previous tag, and uploads the archives and sums.
 - **Secrets:** `CARGO_REGISTRY_TOKEN` (the crates.io token you configured in

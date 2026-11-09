@@ -19,6 +19,7 @@ changing behavior, and update them when the design changes.
 | [docs/architecture.md](docs/architecture.md) | The Agent as a whole: crates, plugin host and faults, tool planning and pipeline, context, Skills, MCP, memory, persistence, and why the less obvious choices were made. |
 | [docs/spec.md](docs/spec.md) | The Agent as built in detail: composition, storage, contracts, plugins and tools, sessions and turns, approval, execution, history, memory, MCP, models, Skills, presentation, shutdown. |
 | [docs/cli.md](docs/cli.md), [docs/config.md](docs/config.md) | The `hanafubuki-agent` command line (its commands, `exec`'s output formats, approvals and exit codes); the standalone configuration (locations, layers, keys). |
+| [docs/release.md](docs/release.md) | The release workflow (`release.yml`), the crates' packaging, the binary archives and their third-party license file (`about.toml`, `about.hbs`). |
 | [docs/extraction-plan.md](docs/extraction-plan.md) | The plan this repository was extracted from Hanafubuki by, and its remaining phases (standalone mode, the TUI, the release). |
 
 ## Development Principles
@@ -126,7 +127,8 @@ approval-sensitive fields.
   members use them with `.workspace = true`.
 - The edition stays 2021 and rustfmt keeps its defaults.
 - Every crate but `xtask` is published: it has a `description` and no
-  `publish = false`.
+  `publish = false`. The facade and the CLI take the repository's
+  `README.md` as their `readme`.
 
 ## Validation
 
@@ -134,6 +136,8 @@ Run from the repository root, selecting scope by the change's impact:
 
 - `cargo fmt --all --check`
 - `RUSTFLAGS="-D warnings" cargo check --workspace --all-targets --all-features`
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings` (an
+  `#[allow]` names its `reason`)
 - `cargo xtask check` (every repository check: dependencies and layers,
   source layout, module size, strict decoding, model-api context sections,
   path boundaries, locks, plugin panics, the third-party notices)
@@ -160,7 +164,12 @@ macOS.
 requirement (and dependency snippets in `README.md` and `docs/*.md` when the
 requirement users write changes), then refreshes `Cargo.lock`. Commit the
 result; `cargo xtask tag [--push] [--dry-run]` then makes the annotated
-`v<version>` tag on a clean `HEAD`.
+`v<version>` tag on a clean `HEAD`. The tag starts `release.yml`
+(crates.io, the binaries, the GitHub release); the checklist, the first
+release's crates.io rate limit and how to resume a stopped release are in
+[docs/release.md](docs/release.md). `about.toml` lists the licenses the
+binary's dependencies may have; a dependency under another one fails the
+release's `licenses` job until it is accepted there.
 
 ### Rust source and test layout
 

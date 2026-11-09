@@ -109,8 +109,26 @@ done: the workspace, the decoupling inside Hanafubuki's tree, and the move.
       `AgentCompactionStatus`; the TUI and the
       CLI are crates Hanafubuki does not depend on, and nothing the model
       sees changed (the goldens and the history corpus are untouched).
-- [ ] Phase 6: `release.yml` with binaries, clippy `-D warnings`, `v0.1.0`
-      on crates.io.
+- [x] Phase 6, the repository's part: clippy with `-D warnings` in CI
+      (an `#[allow]` names its reason); `release.yml` (`plan`,
+      `ci-result`, `checks`, `publish`, `licenses`, `binaries` for four
+      targets, `github-release`), resumable by a manual run on the tag;
+      the archives carry LICENSE, NOTICE and `THIRD-PARTY-LICENSES.txt`
+      from `cargo-about` 0.9.2 (`about.toml`, `about.hbs`), which covers
+      `nucleo`'s and the other MPL-2.0 crates; every crate but `xtask`
+      packages and verifies (`cargo publish --workspace --dry-run`); the
+      checklist is [docs/release.md](docs/release.md).
+- [ ] Phase 6, the user's step: `cargo xtask tag --push` on `main` for
+      `v0.1.0` and watching the release run (about three and a half hours
+      under crates.io's new-crate limit; resume with `gh workflow run
+      release.yml --ref v0.1.0`). Done when the crates are on crates.io
+      and the archives on the GitHub release.
+- [ ] Hanafubuki, when it moves its pin past Phase 6: nothing to change.
+      The clippy fixes boxed variants of internal enums only (the public
+      `AgentModelContextBoundary` keeps its shape under an allow), and
+      removed `ProcessOwnershipRegistry::len` and `ReservationSet::len`
+      from `hanafubuki-agent-process`'s test support, which nothing
+      called (its twin, `hanafubuki-process`, may keep them).
 
 ## Shared with the other repository
 

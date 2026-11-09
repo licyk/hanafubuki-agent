@@ -12,13 +12,14 @@ through the `hanafubuki-agent` facade. The facade also runs without a host
 (`AgentRuntime::standalone`), and the `hanafubuki-agent` binary runs the
 terminal interface, ported from Codex's (with its slash commands, transcript
 pager, `@` file mentions and session picker), or one headless turn (`exec`),
-and manages its configuration on it; the release comes next
-([extraction plan](docs/extraction-plan.md)).
+and manages its configuration on it. Each release publishes the crates on
+crates.io and binaries for Linux (x86_64), macOS (x86_64, Apple silicon)
+and Windows (x86_64) on GitHub ([releasing](docs/release.md)).
 
 ## Usage
 
 ```sh
-cargo install --path crates/cli
+cargo install hanafubuki-agent-cli    # or --path crates/cli in a checkout, or a release's binary
 hanafubuki-agent providers add OpenAI --base-url https://api.openai.com/v1 --api-key-env OPENAI_API_KEY
 hanafubuki-agent providers default provider-1 --model gpt-5.1
 hanafubuki-agent                      # the terminal interface
@@ -53,6 +54,7 @@ against), and supplies its plugins and ports through the host interface
 - [docs/cli.md](docs/cli.md): the `hanafubuki-agent` command line.
 - [docs/config.md](docs/config.md): the standalone Agent's configuration:
   locations, layers, keys.
+- [docs/release.md](docs/release.md): how a release is made and resumed.
 - [AGENTS.md](AGENTS.md): the workspace rules and validation.
 
 ## License
