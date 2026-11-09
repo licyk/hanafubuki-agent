@@ -5,6 +5,7 @@ mod configuration;
 mod create;
 mod events;
 mod fork;
+mod goal;
 mod memory;
 mod query;
 mod title;

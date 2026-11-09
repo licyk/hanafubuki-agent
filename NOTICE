@@ -53,6 +53,13 @@ Third-party notices
     `src/schema.rs` and `src/events`), `codex-rs/protocol/src/hooks.rs`,
     `codex-rs/config/src/hook_config.rs`, `codex-rs/config/src/fingerprint.rs`
     and `codex-rs/core/src/tools/hook_names.rs` (commit `57a808a392`); each
+    says so in its first lines;
+  - the `goal` plugin's model-visible parts (`crates/agent/src/plugins/goal`:
+    `templates.rs`, `tools.rs` and `context.rs`) are derived from Codex's
+    `codex-rs/ext/goal` (`templates/goals/continuation.md`,
+    `budget_limit.md`, `objective_updated.md`, `src/steering.rs`,
+    `src/spec.rs` and `src/tool.rs`) and
+    `codex-rs/core/src/context/user_goal.rs` (commit `57a808a392`); each
     says so in its first lines.
   Codex's NOTICE and its license follow.
 - Ratatui (https://github.com/ratatui/ratatui), MIT License: Codex's

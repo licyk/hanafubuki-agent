@@ -15,6 +15,7 @@ icon: Wrench
 | `mcp`          | MCP 服务器的工具，以及 `list_mcp_resources`、`list_mcp_resource_templates`、`read_mcp_resource`               |
 | `skills`       | `skills_list`、`skills_read`、`enable_skill`、`disable_skill`                                                 |
 | `memory`       | `list_agent_memories`、`search_agent_memories`、`read_agent_memory`、`append_agent_memory_note`（启用记忆时） |
+| `goal`         | `get_goal`、`create_goal`、`update_goal`                                                                      |
 
 另外有几个总是存在的工具：`update_plan`（更新任务计划）、`request_user_input`（向你提问）、`new_context`（开始新的上下文窗口），以及在有延迟提供的工具时出现的 `tool_search`。
 
@@ -74,6 +75,16 @@ hanafubuki-agent config set webSearchProvider searxng
 - 抓取拒绝私有地址、本机地址和带凭据的 URL。
 - `webFetchUseJinaReader = true` 时，直接抓取失败（被拒绝、超时、内容为空、类型不支持等）后改用 `https://r.jina.ai/` 读取。这会把 URL 发送给 Jina。
 - 网页工具使用 `network.proxy`，见[网络与日志](/docs/network-logging#proxy-scope)。
+
+## 目标 [#goals]
+
+`goal` 插件的工具操作会话的[目标](/docs/sessions#goals)：
+
+- `get_goal` 读取目标：目标内容、状态、预算、已用的 token 和时间，以及预算中剩余的 token。
+- `create_goal`（`objective`，可选的 `token_budget`）创建一个活动的目标。模型被告知只在你或指令要求时才创建目标；会话有未完成的目标时它会失败。
+- `update_goal`（`status`：`complete`、`blocked` 或 `paused`）在目标达成并经过验证后把它标为完成，在同一个阻碍在三个目标回合中反复出现后标为阻塞，或按你的要求暂停。它不能恢复目标，也不能解除预算限制。
+
+它们都不需要审批。计划模式中只提供 `get_goal`；在临时会话（旁路对话）中它们会失败。
 
 ## 工作区目录 [#workspace]
 

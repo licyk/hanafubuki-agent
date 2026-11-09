@@ -49,6 +49,10 @@ pub enum AgentEventKind {
     SessionTitleUpdated {
         title: AgentSessionTitle,
     },
+    /// The session's goal changed; `None` when it was cleared.
+    SessionGoalUpdated {
+        goal: Option<super::AgentGoal>,
+    },
     TurnStarted,
     SamplingStarted {
         step: u32,

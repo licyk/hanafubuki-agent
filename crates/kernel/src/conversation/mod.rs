@@ -156,6 +156,14 @@ pub struct PersistedAgentRuntimeState {
     pub branch: Option<String>,
     #[serde(default)]
     pub title: Option<AgentSessionTitle>,
+    /// The session's goal; absent from a record written before goals
+    /// existed, left out when none, and read as none when unreadable.
+    #[serde(
+        default,
+        deserialize_with = "crate::model::tolerant_goal",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub goal: Option<crate::AgentGoal>,
     pub generation: AgentGeneration,
     pub revision: AgentRevision,
     pub config: AgentSessionConfig,

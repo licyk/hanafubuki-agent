@@ -14,7 +14,7 @@ production-function = 200
 
 [[exceptions]]
 path = "crates/kernel/src/activity.rs"
-ceiling = 643
+ceiling = 644
 reason = "The activity tracker and the output preview it maintains; observe is an exhaustive event dispatch with no catch-all arm."
 
 [[exceptions]]

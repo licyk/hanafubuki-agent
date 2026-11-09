@@ -108,6 +108,7 @@ impl AgentService {
             settings: SessionSettings {
                 model,
                 title: None,
+                goal: None,
                 config,
                 memory_contribution: AgentMemoryContributionState::default(),
                 effective_input_capabilities,

@@ -352,6 +352,7 @@ pub(super) fn conversation_commit(
             cwd: record.lineage.workspace.cwd.clone(),
             branch: record.lineage.workspace.branch.clone(),
             title: record.settings.title.clone(),
+            goal: record.settings.goal.clone(),
             generation: record.status.generation,
             revision: AgentRevision::new(record.status.revision),
             config: record.settings.config.clone(),

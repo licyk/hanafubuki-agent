@@ -35,6 +35,7 @@ pub(in crate::service) struct SessionLineage {
 pub(in crate::service) struct SessionSettings {
     pub(in crate::service) model: Arc<dyn ModelPort>,
     pub(in crate::service) title: Option<AgentSessionTitle>,
+    pub(in crate::service) goal: Option<crate::AgentGoal>,
     pub(in crate::service) config: AgentSessionConfig,
     pub(in crate::service) memory_contribution: AgentMemoryContributionState,
     pub(in crate::service) effective_input_capabilities: ModelInputCapabilities,

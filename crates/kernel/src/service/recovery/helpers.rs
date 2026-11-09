@@ -106,6 +106,7 @@ impl AgentService {
                     .effective(observed_image_input),
                 model,
                 title: runtime.title,
+                goal: runtime.goal,
                 config: runtime.config,
                 memory_contribution: runtime.memory_contribution,
                 budget_policy: runtime.turn_budget_policy,

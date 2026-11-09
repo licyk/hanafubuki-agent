@@ -272,6 +272,7 @@ fn idle_session(
         cwd: None,
         branch: None,
         title: None,
+        goal: None,
         generation: hanafubuki_agent_kernel::AgentGeneration::new(0),
         revision: hanafubuki_agent_kernel::AgentRevision::new(revision),
         config: hanafubuki_agent_kernel::AgentSessionConfig {

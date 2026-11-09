@@ -191,6 +191,7 @@ impl AgentActivityTracker {
             }
             AgentEventKind::TurnStarted
             | AgentEventKind::SessionTitleUpdated { .. }
+            | AgentEventKind::SessionGoalUpdated { .. }
             | AgentEventKind::ReasoningUpdated { .. }
             | AgentEventKind::ReasoningStarted { .. }
             | AgentEventKind::ReasoningDelta { .. }

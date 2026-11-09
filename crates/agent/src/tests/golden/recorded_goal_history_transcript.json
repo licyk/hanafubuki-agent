@@ -1,0 +1,22 @@
+[
+  "text=Changelog written.",
+  "type=assistant_message",
+  "type=structured",
+  "type=tool_output",
+  "name=update_goal",
+  "type=tool_call",
+  "type=continuation_context",
+  "text=Goal set.",
+  "type=assistant_message",
+  "type=structured",
+  "type=tool_output",
+  "name=create_goal",
+  "type=tool_call",
+  "text=Make writing the changelog a goal.",
+  "type=user_message",
+  "type=world_state_update",
+  "kind=environment",
+  "kind=permission_mode",
+  "kind=workspace_roots",
+  "type=turn_start"
+]

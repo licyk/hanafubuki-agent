@@ -2,6 +2,7 @@ mod activity;
 mod conversation_item;
 mod error;
 mod event;
+mod goal;
 mod lineage;
 mod reasoning;
 mod session;
@@ -21,6 +22,8 @@ pub use event::{
     AgentContinuationHookOutcome, AgentEvent, AgentEventBatch, AgentEventKind, AgentEventSink,
     AgentHookEvent, AgentHookOutcome,
 };
+pub(crate) use goal::tolerant_goal;
+pub use goal::{AgentGoal, AgentGoalChange, AgentGoalOrigin, AgentGoalStatus};
 pub use hanafubuki_agent_contracts::{
     AgentActivityAction, AgentActivityId, AgentActivityPresentation, AgentCompactionGeneration,
     AgentCompactionId, AgentContextWindowId, AgentContinuationHookGeneration,

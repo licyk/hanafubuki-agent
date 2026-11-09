@@ -22,7 +22,8 @@ use crate::{
     AgentSessionParentFilter, AgentTranscriptPageRequest, McpServerWriteRequest,
 };
 use hanafubuki_agent_kernel::{
-    AgentChildSessionBase, AgentChildSessionRequest, AgentSessionPersistence,
+    AgentChildSessionBase, AgentChildSessionRequest, AgentGoalOrigin, AgentGoalStatus,
+    AgentSessionPersistence,
 };
 use serde_json::{Map, Value};
 
@@ -307,6 +308,93 @@ async fn record_lineage_history() {
         .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
         .is_empty());
     record_history_fixture(&paths, "history-lineage");
+    let _ = std::fs::remove_dir_all(paths.app_data_dir);
+}
+
+/// A session goal written by the build that recorded the fixture reads back
+/// with its status and usage, and the session accepts a new turn, which a
+/// complete goal does not continue (`golden/history-goal/`: the model
+/// created a goal, was kept going once, and completed it).
+#[tokio::test]
+async fn recorded_goal_history_reopens_and_continues() {
+    if updating_history() {
+        record_goal_history().await;
+    }
+    let server = FakeServer::start(vec![(assistant_events("Continued."), Duration::ZERO)]).await;
+    let (service, paths) = service_with("golden-history-goal", |paths, config| {
+        copy_tree(&golden_path("history-goal"), &agent_history_dir(paths));
+        configure_test_provider(config, &server.base_url, None);
+    });
+    let sessions = service
+        .list_sessions_page(AgentSessionListRequest::default())
+        .unwrap()
+        .sessions;
+    assert_eq!(sessions.len(), 1, "the corpus holds exactly one session");
+    let session_id = sessions[0].session_id;
+
+    let goal = service.goal(session_id).await.unwrap().unwrap();
+    assert_eq!(goal.objective, "Write the changelog");
+    assert_eq!(goal.status, AgentGoalStatus::Complete);
+    assert_eq!(goal.origin, AgentGoalOrigin::Model);
+    assert_eq!(goal.token_budget, Some(100_000));
+    assert!(goal.tokens_used > 0 && goal.created_at > 0);
+    let opened = service.open_session(session_id, 50).unwrap();
+    assert_golden(
+        "recorded_goal_history_transcript",
+        &transcript_digest(&serde_json::to_value(&opened.transcript).unwrap()),
+    );
+    let outcome = service
+        .start_turn(session_id, "Continue.".to_string().into())
+        .await
+        .unwrap();
+    assert_eq!(outcome.final_answer, "Continued.");
+    assert_eq!(server.requests().len(), 1);
+    let request = String::from_utf8(server.requests()[0].body.clone()).unwrap();
+    assert!(request.contains("Continue working toward the active session goal."));
+    assert!(request.contains(r#"Goal status: complete."#));
+    assert!(request.contains(r#"set the goal: \"Write the changelog\""#));
+
+    assert!(service
+        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
+        .is_empty());
+    let _ = std::fs::remove_dir_all(paths.app_data_dir);
+}
+
+/// Records `golden/history-goal/`.
+async fn record_goal_history() {
+    let server = FakeServer::start(vec![
+        (
+            tool_events(
+                "create_goal",
+                r#"{"objective":"Write the changelog","token_budget":100000}"#,
+            ),
+            Duration::ZERO,
+        ),
+        (assistant_events("Goal set."), Duration::ZERO),
+        (
+            tool_events("update_goal", r#"{"status":"complete"}"#),
+            Duration::ZERO,
+        ),
+        (assistant_events("Changelog written."), Duration::ZERO),
+    ])
+    .await;
+    let (service, paths) = configured_service("golden-goal-corpus", &server.base_url);
+    let session = service
+        .create_session(AgentSessionMode::Default)
+        .await
+        .unwrap();
+    service
+        .start_turn(
+            session.id,
+            "Make writing the changelog a goal.".to_string().into(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(server.requests().len(), 4);
+    assert!(service
+        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
+        .is_empty());
+    record_history_fixture(&paths, "history-goal");
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }
 

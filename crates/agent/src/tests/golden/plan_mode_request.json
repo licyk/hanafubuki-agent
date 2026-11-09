@@ -91,6 +91,17 @@
       "type": "function"
     },
     {
+      "description": "Get the current goal for this session, including status, budgets, token and elapsed-time usage, and remaining token budget.",
+      "name": "get_goal",
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "strict": false,
+      "type": "function"
+    },
+    {
       "description": "List a bounded directory tree after exact approval of its resolved root.",
       "name": "list_directory",
       "parameters": {

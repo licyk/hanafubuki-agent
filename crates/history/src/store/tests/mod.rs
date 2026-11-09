@@ -33,6 +33,7 @@ fn runtime(
         cwd: None,
         branch: None,
         title: None,
+        goal: None,
         generation: AgentGeneration::new(0),
         revision: AgentRevision::new(revision),
         config: AgentSessionConfig {

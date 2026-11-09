@@ -12,6 +12,7 @@ mod conversation_reader;
 mod data_dir_lock;
 mod desktop;
 mod file_search;
+mod goals;
 mod host;
 mod host_inputs;
 mod kernel_tasks;
@@ -77,7 +78,7 @@ pub use host::{
 pub use host_inputs::{AgentSteeringRequest, AgentTurnRequest, HostContextPort, NoHostContext};
 pub use memory::AgentMemoryApplication;
 pub use network::{AgentProxy, NetworkSettingsPort};
-pub use plugins::AgentRecap;
+pub use plugins::{AgentGoalBudgets, AgentRecap, MAXIMUM_GOAL_OBJECTIVE_CHARS};
 pub use service::{
     AgentApplicationService, AgentHook, AgentHookHandler, AgentHooks, AgentHostPorts,
     AgentModelPolicyWriteRequest, AgentProviderDeleteRequest, AgentProviderDraft,
@@ -146,13 +147,14 @@ pub use hanafubuki_agent_kernel::AgentError;
 pub use hanafubuki_agent_kernel::{
     AgentActivitySnapshot, AgentCompactionGeneration, AgentCompactionId, AgentCompactionOutcome,
     AgentCompactionStatus, AgentEvent, AgentEventBatch, AgentEventKind, AgentEventSequence,
-    AgentEventSink, AgentGeneration, AgentHistorySortDirection, AgentHostContext,
-    AgentImageAttachmentRef, AgentMessageId, AgentMessagePhase, AgentPermissionMode,
-    AgentPlanImplementationRequest, AgentReasoningId, AgentReasoningPhase, AgentReasoningSnapshot,
-    AgentRevision, AgentSessionForkOutcome, AgentSessionForkRequest, AgentSessionHeadForkOutcome,
-    AgentSessionHeadForkRequest, AgentSessionId, AgentSessionLifecycle, AgentSessionListRequest,
-    AgentSessionMode, AgentSessionOpenResult, AgentSessionOrigin, AgentSessionPage,
-    AgentSessionParentFilter, AgentSessionRuntimeSnapshot, AgentSessionSummary, AgentSessionTitle,
+    AgentEventSink, AgentGeneration, AgentGoal, AgentGoalOrigin, AgentGoalStatus,
+    AgentHistorySortDirection, AgentHostContext, AgentImageAttachmentRef, AgentMessageId,
+    AgentMessagePhase, AgentPermissionMode, AgentPlanImplementationRequest, AgentReasoningId,
+    AgentReasoningPhase, AgentReasoningSnapshot, AgentRevision, AgentSessionForkOutcome,
+    AgentSessionForkRequest, AgentSessionHeadForkOutcome, AgentSessionHeadForkRequest,
+    AgentSessionId, AgentSessionLifecycle, AgentSessionListRequest, AgentSessionMode,
+    AgentSessionOpenResult, AgentSessionOrigin, AgentSessionPage, AgentSessionParentFilter,
+    AgentSessionRuntimeSnapshot, AgentSessionSummary, AgentSessionTitle,
     AgentSessionTitleRenameRequest, AgentSessionTitleSource, AgentSkillRef, AgentSteeringAccepted,
     AgentTranscriptPage, AgentTranscriptPageRequest, AgentTurnAccepted,
     AgentTurnCancellationOutcome, AgentTurnId, AgentTurnInput, AgentTurnOutcome,

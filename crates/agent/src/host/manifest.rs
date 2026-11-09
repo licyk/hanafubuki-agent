@@ -22,8 +22,9 @@ use std::sync::Arc;
 
 use super::{AgentPluginGroup, AgentPluginRow, AgentPluginSettings};
 use crate::conversation_reader::AgentConversationReader;
+use crate::goals::AgentGoalApplication;
 use crate::plugins::{
-    memory_plugin, permission_mode_plugin, recap_plugin, skills_plugin, titles_plugin,
+    goal_plugin, memory_plugin, permission_mode_plugin, recap_plugin, skills_plugin, titles_plugin,
     view_image_plugin, workspace_context_plugin,
 };
 use crate::service::AgentMcpApplication;
@@ -49,6 +50,8 @@ pub(crate) struct AgentPluginInputs {
     pub(crate) titles: AgentTitleApplication,
     /// What a recap reads of a session.
     pub(crate) conversations: AgentConversationReader,
+    /// The sessions' goals.
+    pub(crate) goals: AgentGoalApplication,
     /// The worktrees, under the data directory, over the instance's
     /// executor.
     pub(crate) worktrees: WorktreeManager,
@@ -88,6 +91,7 @@ pub(crate) fn agent_plugin_manifest(
         ),
         AgentPluginRow::unconfigured(Capability, titles_plugin(inputs.titles)),
         AgentPluginRow::unconfigured(Capability, recap_plugin(inputs.conversations)),
+        AgentPluginRow::unconfigured(Capability, goal_plugin(inputs.goals)),
         AgentPluginRow::unconfigured(Capability, worktree_plugin(inputs.worktrees)),
         AgentPluginRow::unconfigured(
             Capability,

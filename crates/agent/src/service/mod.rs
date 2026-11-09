@@ -27,6 +27,7 @@ use std::sync::Arc;
 mod background_terminals;
 mod children;
 mod features;
+mod goal;
 mod history;
 mod mcp;
 pub(crate) use mcp::AgentMcpApplication;
@@ -377,6 +378,7 @@ impl AgentApplicationService {
                         core.clone(),
                         config.clone(),
                     ),
+                    goals: crate::goals::AgentGoalApplication::new(core.clone()),
                     worktrees: hanafubuki_agent_worktree::WorktreeManager::new(
                         storage_paths.worktrees_root.clone(),
                         executor.clone(),

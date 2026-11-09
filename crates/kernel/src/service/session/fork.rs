@@ -51,6 +51,7 @@ impl AgentService {
             settings: SessionSettings {
                 model: source.settings.model.clone(),
                 title: source.settings.title.clone(),
+                goal: source.settings.goal.clone(),
                 config: source.settings.config.clone(),
                 memory_contribution: AgentMemoryContributionState::default(),
                 effective_input_capabilities: source.settings.effective_input_capabilities,
@@ -121,6 +122,7 @@ impl AgentService {
             settings: SessionSettings {
                 model: source.settings.model.clone(),
                 title: source.settings.title.clone(),
+                goal: source.settings.goal.clone(),
                 config: source.settings.config.clone(),
                 memory_contribution: AgentMemoryContributionState::default(),
                 effective_input_capabilities: source.settings.effective_input_capabilities,

@@ -15,6 +15,7 @@ The model does its work through tools. Each tool comes from a plugin, which `dis
 | `mcp`          | The MCP servers' tools, and `list_mcp_resources`, `list_mcp_resource_templates`, `read_mcp_resource`             |
 | `skills`       | `skills_list`, `skills_read`, `enable_skill`, `disable_skill`                                                    |
 | `memory`       | `list_agent_memories`, `search_agent_memories`, `read_agent_memory`, `append_agent_memory_note` (with memory on) |
+| `goal`         | `get_goal`, `create_goal`, `update_goal`                                                                         |
 
 A few tools are always there: `update_plan` (the task plan), `request_user_input` (asking you), `new_context` (a fresh context window), and `tool_search` when some tools are offered on demand.
 
@@ -74,6 +75,16 @@ hanafubuki-agent config set webSearchProvider searxng
 - A fetch refuses private and loopback addresses and URLs with credentials.
 - With `webFetchUseJinaReader = true`, a direct fetch that fails (refused, timed out, empty, an unsupported type) is retried through `https://r.jina.ai/`, which sends the URL to Jina.
 - The web tools use `network.proxy`; see [Network and logging](/docs/network-logging#proxy-scope).
+
+## Goals [#goals]
+
+The `goal` plugin's tools work on the session's [goal](/docs/sessions#goals):
+
+- `get_goal` reads it: the objective, status, budgets, the tokens and time used, and the tokens left of its budget.
+- `create_goal` (`objective`, an optional `token_budget`) creates an active goal. The model is told to create one only when you, or instructions, ask for one; it fails while the session has an unfinished goal.
+- `update_goal` (`status`: `complete`, `blocked` or `paused`) marks the goal complete once its objective is achieved and verified, blocked after the same blocker recurred for three goal turns, or paused at your request. It cannot resume a goal or lift a budget limit.
+
+None needs an approval. In Plan mode only `get_goal` is offered; in a temporary session (a side conversation) they fail.
 
 ## Workspace roots [#workspace]
 

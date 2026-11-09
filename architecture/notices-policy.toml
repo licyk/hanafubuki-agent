@@ -45,6 +45,21 @@ markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
 notice = "crates/agent/src/side_conversation.rs"
 
 [[derived]]
+path = "crates/agent/src/plugins/goal/templates.rs"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
+notice = "crates/agent/src/plugins/goal"
+
+[[derived]]
+path = "crates/agent/src/plugins/goal/tools.rs"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
+notice = "crates/agent/src/plugins/goal"
+
+[[derived]]
+path = "crates/agent/src/plugins/goal/context.rs"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
+notice = "crates/agent/src/plugins/goal"
+
+[[derived]]
 path = "crates/agent/src/service/mcp/oauth_login.rs"
 markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
 notice = "crates/agent/src/service/mcp/oauth_login.rs"

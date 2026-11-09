@@ -230,6 +230,8 @@ fn child_record(
         settings: SessionSettings {
             model: parent.settings.model.clone(),
             title: from_parent.then(|| parent.settings.title.clone()).flatten(),
+            // A child works for its parent: it never pursues the parent's goal.
+            goal: None,
             config: parent.settings.config.clone(),
             memory_contribution: AgentMemoryContributionState::default(),
             effective_input_capabilities: parent.settings.effective_input_capabilities,
