@@ -273,6 +273,34 @@ moves its pin.
     `subagents` row; every request golden changes again.
 - [ ] P11: the `review` plugin (rubric, read-only child session, JSON
       findings), `/review`.
+  - [x] The facade's half: the `review` row (after `subagents`); a review
+        is a durable child of origin `Review` (empty, Default mode) whose
+        first message is Codex's request for the target (uncommitted
+        changes, base branch with its merge base, commit, custom); the
+        rubric is a prompt fragment for review sessions only; the
+        `review.read-only` approval rule denies every action that needs
+        approval in a review session except `git --no-pager
+        status|diff|show|log|blame|rev-parse|merge-base|ls-files` with
+        plain arguments (contracts: `ApprovalRule::evaluate` takes the
+        session's origin; `AgentSessionOrigin` moved to contracts); the
+        review's turn runs in FullAccess; the answer is read tolerantly;
+        the parent gets Codex's exit message as context. Facade
+        `start_review`, `cancel_review`, `review_targets` (git queries in
+        `crates/worktree/src/queries.rs`); `AgentReviewTarget` is a strict
+        IPC request. New golden `review_request.json`; no other changed.
+  - [ ] The interface's half: `/review [instructions]` (targets picker:
+        uncommitted, base branch, commit, custom), the review cell; a
+        parent with no turn yet is refused (say so, or ask for a message
+        first).
+  - Open: read-only tools, allowed MCP tools and the Agent's own tools
+    still run in a review; `request_user_input` could stall one; no
+    `review_model`; a failed review is reported as interrupted; with the
+    plugin off, an earlier review session is no longer kept read-only.
+  - Hanafubuki, at its next pin: every `ApprovalRule` implementor takes
+    `origin`, and so does `ApprovalRuleSnapshot::verdict`; new calls
+    `start_review`, `cancel_review`, `review_targets` and their types; a
+    `review` row; kernel `add_continuation_context`; copy
+    `review_request.json` byte for byte.
 - [ ] P12: the `goal` plugin (tools, context, the first continuation hook,
       goal templates), `/goal` and its status-line item.
   - [x] The facade's half: `AgentGoal` (objective ≤ 4,000 characters,
