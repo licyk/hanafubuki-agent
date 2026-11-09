@@ -283,8 +283,8 @@ fn member_names(root: &Path, manifest: &str) -> Result<BTreeSet<String>, String>
     Ok(names)
 }
 
-/// Files that show users a dependency on a member: the README and the
-/// Markdown pages under docs/.
+/// Files that show users a dependency on a member: the README, the
+/// Markdown pages under docs/ and the site's MDX pages.
 fn snippet_files(root: &Path) -> Vec<PathBuf> {
     let mut files = vec![root.join("README.md")];
     if let Ok(entries) = std::fs::read_dir(root.join("docs")) {
@@ -296,8 +296,24 @@ fn snippet_files(root: &Path) -> Vec<PathBuf> {
         pages.sort();
         files.extend(pages);
     }
+    site_pages(&root.join("site/content/docs"), &mut files);
     files.retain(|path| path.is_file());
     files
+}
+
+fn site_pages(directory: &Path, files: &mut Vec<PathBuf>) {
+    let Ok(entries) = std::fs::read_dir(directory) else {
+        return;
+    };
+    let mut entries: Vec<PathBuf> = entries.flatten().map(|entry| entry.path()).collect();
+    entries.sort();
+    for path in entries {
+        if path.is_dir() {
+            site_pages(&path, files);
+        } else if path.extension().is_some_and(|ext| ext == "mdx") {
+            files.push(path);
+        }
+    }
 }
 
 fn update_lockfile(root: &Path) -> Result<(), String> {
