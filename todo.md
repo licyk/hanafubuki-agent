@@ -65,9 +65,20 @@ and pushed, and notes what Hanafubuki must change at its next pin.
       `wait_for_pending`, the rebase install, cancellation, shutdown,
       usage, `AgentCompactionPhase::Background`).
 - [ ] P4: background compaction in the interface and docs.
-- [ ] P5: `crates/compression` core (model, refs, boundaries, parse,
+- [x] P5: `crates/compression` core (model, refs, boundaries, parse,
       project, protect, apply, prune, render) with the ported tests;
-      notices and attribution.
+      notices and attribution. Pure (serde and serde_json only); 361
+      ported tests; texts verbatim; tags never on tool-call arguments
+      (`TextOnly`, `TextAndToolResults`, `None`); host predicates became
+      data (`Message.protected`); `NOTICE`, the notices policy and the
+      contributing page credit billion-context and acp-kernel.
+  - Open (P5): recommend, nudge, the status line and `processTurn` are
+    P6; `rebuild` P8; decompress primitives and MEDIA REFS P9; absorb,
+    rules, timestamps P10. The kernel's dependency row allows the crate
+    in P7. No ledger `seq`, `base#part` ids or SKILL.md paths (the
+    Agent has one item per message part).
+  - Hanafubuki, at its next pin: a new published crate,
+    `hanafubuki-agent-compression`; `NOTICE` gains billion-context.
 - [ ] P6: recommend, nudge, truncation, latches, the per-request
       pipeline, prompts (byte-exact golden), reports.
 - [ ] P7: `hierarchical` in the kernel (projection, the five core tools,
