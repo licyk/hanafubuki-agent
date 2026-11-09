@@ -46,6 +46,9 @@ against), and supplies its plugins and ports through the host interface
 
 ## Documentation
 
+The documentation site's source is in [site/](site) (`bun run site:dev`;
+see [AGENTS.md](AGENTS.md#site)); the pages below move there.
+
 - [docs/architecture.md](docs/architecture.md): how the Agent is put
   together, and why.
 - [docs/rules/plugins.md](docs/rules/plugins.md): the plugin rules and the

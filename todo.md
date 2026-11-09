@@ -83,10 +83,33 @@ The next release with it is 0.2.0 (the headline event is removed).
     opens with both reasoning items' text and the next request carries
     none of it. The recorded prompt is "List the Skills." and its tool
     `skills_list`.
-- [ ] D1: the `site/` framework, tooling, Giscus, Umami, `site.yml`.
+- [x] D1: the `site/` framework, tooling, Giscus, Umami, `site.yml`.
+      Hanafubuki's site at its versions, without its home and download
+      pages; a small home page; Giscus starts from the given attributes
+      and follows the site's theme and language once its frame has loaded
+      (its first message); `cargo xtask version` also scans
+      `site/content/docs/**/*.mdx`. Under the Pages base, TanStack Start's
+      static server functions fetched from the origin root, which broke
+      client-side navigation: `patches/` prefixes Vite's base
+      (AGENTS.md, "Site").
 - [ ] D2: the content rewrite, bilingual; `docs/` removed; links re-pointed.
+  - `index`, `installation` and `quick-start` (both languages) are drafts
+    to replace; the sidebar's sections go in `meta.json` and
+    `meta.en.json`, in the same order.
+  - Once `docs/` is gone, `snippet_files` in `xtask/src/version.rs` drops
+    its `docs/*.md` scan, with its test; the README's documentation list
+    and AGENTS.md's document table point at the site.
 - [ ] D2b (Hanafubuki): its links into this repository's docs re-pointed.
 - [ ] D3: GitHub Pages.
+  - Enable Pages (source: GitHub Actions) in the repository settings, and
+    add a deploy job to `site.yml` on push to main that publishes the
+    built `site/.output/public` (the `site` artifact today; `404.html` is
+    the SPA shell, `.nojekyll` is in it).
+  - Giscus maps `pathname`: a page reached by URL is
+    `/hanafubuki-agent/docs/x/` (Pages adds the slash) and by in-site
+    navigation `/hanafubuki-agent/docs/x`. Check whether giscus keeps the
+    slash in the term (two discussions per page); if it does, map
+    `specific` with a normalized term, as Hanafubuki does.
 
 ## Extraction from Hanafubuki
 

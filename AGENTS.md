@@ -130,6 +130,29 @@ approval-sensitive fields.
   `publish = false`. The facade and the CLI take the repository's
   `README.md` as their `readme`.
 
+## Site
+
+The documentation site is `site/`, the one member of a Bun workspace at the
+root (`package.json`, whose `packageManager` pins Bun, and `bun.lock`):
+Fumadocs on TanStack Start, prerendered to static files and built for
+GitHub Pages under `/hanafubuki-agent/` (`VITE_BASE_PATH`). It is zh-CN by
+default with English: every page under `site/content/docs` is `x.mdx` plus
+`x.en.mdx`, and `meta.json` and `meta.en.json` list the same slugs in the
+same order (`i18n-content.test.ts`). The Markdown under `docs/` moves there
+in phase D2 of [docs/plan-thinking-and-site.md](docs/plan-thinking-and-site.md).
+
+- `bun run site:dev|check|test|build|preview` run the site's scripts;
+  `bun run format:site` formats `site/` and the root `package.json` and
+  `.prettierrc.json` with prettier. Markdown is not formatted
+  (`.prettierignore`).
+- `patches/` holds a Bun patch of `@tanstack/start-static-server-functions`,
+  which fetches its prerendered results from the origin root; the patch
+  prefixes Vite's base. Bumping that package means regenerating the patch
+  (`bun patch`): without it, first loads under the base still work but
+  client-side navigation fails.
+- `.github/workflows/site.yml` checks and builds the site; `ci.yml` ignores
+  the site's paths.
+
 ## Validation
 
 Run from the repository root, selecting scope by the change's impact:
@@ -146,6 +169,11 @@ Run from the repository root, selecting scope by the change's impact:
 These are the steps `.github/workflows/ci.yml` runs on Linux, Windows and
 macOS.
 
+- For site changes: `bun install --frozen-lockfile`, `bun run
+  format:check:site`, `bun run site:check`, `bun run site:test` and
+  `VITE_BASE_PATH=/hanafubuki-agent/ bun run site:build` (the steps
+  `site.yml` runs), then check that every page was prerendered.
+
 - For documentation-only changes, check the diff and referenced paths;
   builds and tests are unnecessary.
 - Add meaningful tests for changed behavior/contracts, not tests mirroring
@@ -161,8 +189,8 @@ macOS.
 
 `cargo xtask version <patch|minor|major> [--dry-run]` raises
 `[workspace.package].version` and every internal `[workspace.dependencies]`
-requirement (and dependency snippets in `README.md` and `docs/*.md` when the
-requirement users write changes), then refreshes `Cargo.lock`. Commit the
+requirement (and dependency snippets in `README.md`, `docs/*.md` and the
+site's `.mdx` pages when the requirement users write changes), then refreshes `Cargo.lock`. Commit the
 result; `cargo xtask tag [--push] [--dry-run]` then makes the annotated
 `v<version>` tag on a clean `HEAD`. The tag starts `release.yml`
 (crates.io, the binaries, the GitHub release); the checklist, the first
