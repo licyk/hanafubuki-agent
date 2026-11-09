@@ -126,10 +126,6 @@ impl ChatWidget {
                     return;
                 }
                 KeyCode::Char(c) if c.eq_ignore_ascii_case(&'d') && self.on_ctrl_d() => return,
-                KeyCode::Char(c) if c.eq_ignore_ascii_case(&'o') => {
-                    self.toggle_thinking();
-                    return;
-                }
                 _ => {}
             }
         }
@@ -137,6 +133,12 @@ impl ChatWidget {
             self.bottom_pane.clear_quit_shortcut_hint();
             self.quit_shortcut_expires_at = None;
             self.quit_shortcut_key = None;
+            if key_event.modifiers.contains(KeyModifiers::CONTROL)
+                && matches!(key_event.code, KeyCode::Char(c) if c.eq_ignore_ascii_case(&'o'))
+            {
+                self.toggle_thinking();
+                return;
+            }
         }
         match self.bottom_pane.handle_key_event(key_event) {
             InputResult::Submitted(text) => self.submit_user_message(text),

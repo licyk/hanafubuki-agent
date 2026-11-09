@@ -411,3 +411,18 @@ fn a_replayed_reasoning_item_is_a_completed_cell() {
     assert_eq!(cells[2], "• Thought for 12s", "{cells:?}");
     assert_eq!(cells[3], "• Here is why.", "{cells:?}");
 }
+
+#[test]
+fn ctrl_o_between_two_ctrl_c_does_not_quit() {
+    let (mut chat, events) = chat();
+    chat.handle_turn_update(TurnUpdate::Started);
+    drain(&events);
+    let ctrl = |c| KeyEvent::new(KeyCode::Char(c), KeyModifiers::CONTROL);
+    chat.handle_key_event(ctrl('c'));
+    chat.handle_key_event(ctrl('o'));
+    chat.handle_key_event(ctrl('c'));
+    let exited =
+        std::iter::from_fn(|| events.try_recv().ok()).any(|event| matches!(event, AppEvent::Exit));
+    assert!(!exited);
+    assert!(chat.thinking_expanded);
+}
