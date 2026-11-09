@@ -50,7 +50,9 @@ fn child_scenario() {
             group
                 .spawn("plain-worker", |_| panic!("a default worker panic"))
                 .unwrap();
-            let _ = group.shutdown(Instant::now() + Duration::from_secs(5));
+            // The hook aborts while this waits; a loaded runner can take
+            // seconds to write its report.
+            let _ = group.shutdown(Instant::now() + Duration::from_secs(60));
             println!("the process outlived a default worker's panic");
         }
         "contained" => {
