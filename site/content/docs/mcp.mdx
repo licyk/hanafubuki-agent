@@ -1,0 +1,163 @@
+---
+title: MCP
+description: 添加 stdio 和 HTTP 的 MCP 服务器，设置凭据、审批策略和暴露策略，连接并检查服务器。
+icon: Plug
+---
+
+MCP（Model Context Protocol）服务器可以把本地程序或远程服务的工具提供给模型。服务器可能访问文件、网络、数据库和第三方账号，因此请只添加你信任的服务器，并为它的工具设置合适的审批策略。
+
+服务器保存在配置目录的 `mcp.toml` 中，完整的字段见[配置参考](/docs/config-reference#mcp-toml)。
+
+## 添加服务器 [#add]
+
+<Tabs items={["stdio", "Streamable HTTP"]}>
+  <Tab value="stdio">
+    由 Agent 启动的本地程序。程序和参数写在 `--` 之后，`--env` 设置环境变量（可重复）：
+
+    ```sh
+    hanafubuki-agent mcp add files -- npx -y @modelcontextprotocol/server-filesystem /home/me/notes
+    hanafubuki-agent mcp add search --env SEARCH_REGION=cn -- /usr/local/bin/search-mcp --stdio
+    ```
+
+    程序可以是绝对路径，也可以是在 `PATH` 中查找的程序名。stdio 服务器继承 Agent 进程的完整环境。
+
+  </Tab>
+  <Tab value="Streamable HTTP">
+    已经在运行的本地或远程 HTTP 服务：
+
+    ```sh
+    hanafubuki-agent mcp add docs --url https://mcp.example.com/mcp
+    ```
+
+  </Tab>
+</Tabs>
+
+- 服务器 ID 只能包含字母、数字、`-`、`_` 和 `.`。
+- 新服务器使用默认设置：审批策略 `ask`、暴露策略 `deferred`、调用超时 120 秒等。
+- 启用的服务器添加后立即连接，命令打印连接结果，例如 `files: ready`。`--disabled` 添加一个禁用的服务器。
+
+## 凭据 [#credentials]
+
+`mcp add` 不设置凭据。需要令牌的服务器，请编辑 `mcp.toml`：把环境变量或请求头指向 `[credentials]` 中的一个键，凭据的值只保存在那里（文件只有自己可读）。
+
+<Tabs items={["stdio：环境变量", "HTTP：请求头"]}>
+  <Tab value="stdio：环境变量">
+    ```toml
+    [[servers]]
+    id = "github"
+    # ……
+
+    [servers.transport]
+    type = "stdio"
+    program = "github-mcp-server"
+    argv = ["stdio"]
+
+    [servers.transport.credentialEnvironment]
+    GITHUB_PERSONAL_ACCESS_TOKEN = "github-token"
+
+    [credentials.github-token]
+    value = "ghp_..."
+    generation = 1
+    ```
+
+  </Tab>
+  <Tab value="HTTP：请求头">
+    ```toml
+    [[servers]]
+    id = "docs"
+    # ……
+
+    [servers.transport]
+    type = "streamable_http"
+    url = "https://mcp.example.com/mcp"
+    oauth = "disabled"
+
+    [servers.transport.credentialHeaders]
+    Authorization = "docs-token"
+
+    [credentials.docs-token]
+    value = "Bearer abc123"
+    generation = 1
+    ```
+
+  </Tab>
+</Tabs>
+
+- 不是秘密的变量和请求头写在 `publicEnvironment` 和 `publicHeaders` 中。
+- 修改凭据的值时，同时把 `generation` 加一。
+- 引用了不存在的凭据键的服务器无法连接。
+- 编辑前请先退出正在运行的 Agent；修改在下次启动时生效。
+
+`mcp list` 只打印环境变量和请求头的名字，以及哪些凭据已经设置，从不打印它们的值。
+
+<Callout title="OAuth">
+  `mcp.toml` 中有 `oauth` 设置，但独立运行的命令行目前没有 OAuth 登录流程，`mcp add`
+  添加的服务器总是 `oauth = "disabled"`。需要 OAuth
+  登录的服务器暂时无法在命令行中使用；如果服务器支持，请改用令牌请求头。
+</Callout>
+
+## 审批和暴露策略 [#policies]
+
+每个服务器有默认的策略，也可以为单个工具设置：
+
+```toml
+[[servers]]
+id = "github"
+approvalPolicy = "ask"
+exposurePolicy = "deferred"
+disabledTools = ["delete_repository"]
+
+[servers.toolApprovalPolicies]
+get_issue = "allow"
+list_issues = "allow"
+
+[servers.toolExposurePolicies]
+search_code = "direct"
+```
+
+**审批策略**（`approvalPolicy`、`toolApprovalPolicies`）：
+
+| 值              | 行为                                                                                                     |
+| --------------- | -------------------------------------------------------------------------------------------------------- |
+| `"allow"`       | 工具声明自己没有破坏性（`destructiveHint: false`）时不需要审批；没有声明的工具视为有破坏性，仍然需要审批 |
+| `"ask"`（默认） | 按[权限模式](/docs/permissions)处理：手动模式下询问你                                                    |
+| `"deny"`        | 拒绝调用，任何权限模式下都不执行                                                                         |
+
+**暴露策略**（`exposurePolicy`、`toolExposurePolicies`）决定模型如何看到工具：
+
+| 值                    | 行为                                                            |
+| --------------------- | --------------------------------------------------------------- |
+| `"direct"`            | 每次请求都把工具交给模型                                        |
+| `"deferred"`（默认）  | 不直接交给模型，模型需要时通过 `tool_search` 找到它，节省上下文 |
+| `"hidden"`            | 不提供给模型                                                    |
+| `"direct_model_only"` | 与 `direct` 相同，用于只给模型、不给应用界面的工具              |
+
+`enabledTools` 非空时只开放列出的工具；`disabledTools` 中的工具不开放。
+
+模型看到的工具名形如 `mcp__服务器__工具`，名字中 `[A-Za-z0-9_-]` 以外的字符会被替换为 `_`。
+
+## 连接 [#connecting]
+
+- Agent 启动时在后台连接所有启用的服务器，每次最多 4 个。
+- 连接断开的服务器会在 2 秒、10 秒和 30 秒后重新连接，10 分钟内最多 3 次。
+- `required = true` 的服务器是必需的：启动时连接失败会记录错误，它的工具无法使用时，回合的这一步失败。
+- 会启动 Agent 的管理命令（例如 `sessions list`）也会在后台连接服务器。
+
+```sh
+hanafubuki-agent mcp connect files    # 连接并打印状态和工具数，例如 files: ready (11 tools)
+hanafubuki-agent mcp list
+hanafubuki-agent mcp remove files
+hanafubuki-agent doctor --online      # 连接每个启用的服务器并报告结果
+```
+
+`mcp connect` 在服务器没有达到 `ready` 时以退出码 1 失败，并打印错误。
+
+在终端界面中输入 `/mcp`，可以查看每个服务器是否启用、连接状态、错误、命令或 URL，以及它的工具。
+
+## 资源 [#resources]
+
+服务器提供的资源通过 `list_mcp_resources`、`list_mcp_resource_templates` 和 `read_mcp_resource` 读取，不需要审批。
+
+## MCP 与记忆 [#memory]
+
+开启 `memory.excludeExternalContext` 后，会话一旦使用了网页或 MCP 工具的结果，就不再用于提取记忆，避免未经核实的外部内容进入记忆。见[记忆](/docs/memory)。

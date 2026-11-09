@@ -1,0 +1,132 @@
+---
+title: Providers and models
+description: Protocols and endpoints, tokens, the model policy, reasoning effort and thinking, the context window and compaction.
+icon: Cpu
+---
+
+A **Provider** is a model service: an endpoint, a protocol, and an optional API token. You can configure several; one is the **default Provider**, which new sessions run on. The **model policy** sets the model new sessions run, their reasoning effort and how their context is compacted, for every Provider.
+
+The Providers and the model policy are kept in `providers.toml` in the configuration directory; see the [Configuration reference](/docs/config-reference#providers-toml).
+
+## Protocols [#protocols]
+
+| Protocol           | `--protocol`          | Path (appended to the endpoint) | Authentication                                         | Typical services                                          |
+| ------------------ | --------------------- | ------------------------------- | ------------------------------------------------------ | --------------------------------------------------------- |
+| OpenAI Responses   | `responses` (default) | `responses`                     | `Authorization: Bearer TOKEN`                          | OpenAI, vLLM and other compatible servers                 |
+| Chat Completions   | `chat-completions`    | `chat/completions`              | `Authorization: Bearer TOKEN`                          | DeepSeek, OpenRouter, Ollama and most compatible services |
+| Anthropic Messages | `anthropic-messages`  | `messages`                      | `x-api-key: TOKEN` and `anthropic-version: 2023-06-01` | Anthropic                                                 |
+
+A trailing `/` on the endpoint makes no difference: the protocol's path is appended to it, so `https://api.openai.com/v1` with `responses` is `https://api.openai.com/v1/responses`. A query string in the endpoint is kept. The model catalog is read from `models` on the same endpoint.
+
+## Adding a Provider [#add]
+
+<Tabs items={["OpenAI", "Anthropic", "Chat Completions", "A local server"]}>
+  <Tab value="OpenAI">
+    ```sh
+    hanafubuki-agent providers add OpenAI --base-url https://api.openai.com/v1 --api-key-env OPENAI_API_KEY
+    ```
+  </Tab>
+  <Tab value="Anthropic">
+    ```sh
+    hanafubuki-agent providers add Anthropic --protocol anthropic-messages \
+      --base-url https://api.anthropic.com/v1 --api-key-env ANTHROPIC_API_KEY
+    ```
+  </Tab>
+  <Tab value="Chat Completions">
+    ```sh
+    hanafubuki-agent providers add DeepSeek --protocol chat-completions \
+      --base-url https://api.deepseek.com/v1 --api-key-env DEEPSEEK_API_KEY
+    ```
+
+    The endpoint is everything before `chat/completions`.
+
+  </Tab>
+  <Tab value="A local server">
+    ```sh
+    hanafubuki-agent providers add Ollama --protocol chat-completions --base-url http://127.0.0.1:11434/v1
+    ```
+
+    Leave out `--api-key-env` for a server that needs no token.
+
+  </Tab>
+</Tabs>
+
+- `--api-key-env VAR` reads the token from the environment variable when the Provider is added, and keeps it as it is in `providers.toml` (readable only by you). A token cannot be written on the command line, so it does not end up in your shell's history. When the variable is not set, the command exits with code 2.
+- `--disabled` adds the Provider turned off.
+- The command prints the new Provider's id, such as `added provider-2`: the lowest free `provider-N`.
+
+## Managing Providers [#manage]
+
+```sh
+hanafubuki-agent providers list
+hanafubuki-agent providers default provider-2 --model deepseek-chat
+hanafubuki-agent providers remove provider-1
+```
+
+```text
+model: gpt-5.1
+provider-1 OpenAI (default)  Responses  https://api.openai.com/v1  token: set
+provider-2 DeepSeek  ChatCompletions  https://api.deepseek.com/v1  token: set
+```
+
+- The first Provider you add becomes the default. When the default is removed or disabled, the first enabled Provider in the list becomes the default.
+- `providers list` never prints a token's or a header's value.
+- To change a token, enable a Provider, or add request headers (`requestHeaders`), edit `providers.toml`, or remove the Provider and add it again. Quit any running Agent before you edit it.
+
+## The model [#model]
+
+| How                                | For                                                                    |
+| ---------------------------------- | ---------------------------------------------------------------------- |
+| `providers default ID --model`     | The model policy's model: what every new session runs from then on     |
+| `-m MODEL`                         | This run's new (or resumed) sessions, on the default Provider          |
+| `/model` in the terminal interface | The current session, picked from the enabled Providers' model catalogs |
+
+`/model` lists each enabled Provider's model catalog (read from `models`); a Provider whose catalog cannot be read says why. `doctor --online` checks that the default Provider lists its models.
+
+## Reasoning effort and thinking [#reasoning]
+
+The reasoning effort is set in `[modelPolicy]` of `providers.toml`; no command-line flag sets it:
+
+```toml
+[modelPolicy]
+model = "gpt-5.1"
+reasoningEffort = "medium"   # minimal, low, medium, high, xhigh
+```
+
+The reasoning effort applies to the Responses protocol only; a session on another protocol leaves it out. `/status` shows the session's effort.
+
+The model's thinking is shown: as a `Thinking` line you can expand in the terminal interface (see [Terminal interface](/docs/terminal-interface#thinking)), and as the `reasoning_*` events of `exec --json` (see [exec --json events](/docs/json-events#reasoning)). What there is to see depends on the Provider:
+
+| Protocol           | The thinking                                                                                                                                                 |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Responses          | With a reasoning effort set, the Agent asks for a summary of the thinking; a compatible server (gpt-oss on vLLM, say) may send the raw thinking text instead |
+| Chat Completions   | What the service sends in `reasoning_content` or `reasoning` (DeepSeek, Qwen, OpenRouter and others)                                                         |
+| Anthropic Messages | Thinking is not requested yet, so there is none                                                                                                              |
+
+The thinking is kept in the session's history, each stretch up to 256 KiB (the rest is cut). It is there to be read: it is never sent to the model again.
+
+## The context window and compaction [#compaction]
+
+The model's context window is, in order: `contextWindowTokens` in `[modelPolicy]`, the value the Provider's model catalog reports, or a built-in table of common models (the GPT-5 family, Claude, Gemini 2.5 and others). With none, nothing is compacted automatically.
+
+Once the context uses `autoCompactThresholdPercent` of the window (80% by default), the Agent compacts it before a turn or during one: the earlier conversation becomes a summary, and the recent messages stay. When the Provider reports that the context exceeds its window, the Agent compacts once and retries; if it exceeds it again, the turn fails (`context_window_exceeded`).
+
+| Setting                       | Default      | Does                                                                                              |
+| ----------------------------- | ------------ | ------------------------------------------------------------------------------------------------- |
+| `autoCompactionEnabled`       | `true`       | Whether the context is compacted automatically                                                    |
+| `autoCompactThresholdPercent` | `80`         | The share of the window that triggers it                                                          |
+| `remoteCompaction`            | `"disabled"` | `"responses_compact"` or `"responses_compact_v2"`: the server compacts, on the Responses protocol |
+| `contextWindowTokens`         | unset        | Sets the context window                                                                           |
+
+`/compact` in the terminal interface compacts now. `/status` shows the token use and how much context is left.
+
+## Images [#images]
+
+With `imageInput` of `[modelPolicy.inputCapabilities]` set to `"auto"` (the default), the Agent sends images (those `view_image` looks at, say) to a model that takes them. When the model refuses an image, the Agent retries once without it. `"disabled"` never sends images.
+
+## Retries and limits [#limits]
+
+- A failed model request (it cannot connect, say) is tried up to three times; then the turn fails with `model_request_retries_exhausted`.
+- A response stream that breaks off is retried; the terminal interface's status line says `Reconnecting`.
+- A turn asks the model at most 32 times, and runs for at most 30 minutes. The other limits are in [`turnBudget`](/docs/config-reference#model-policy).
+- Requests to a Provider use the Agent process's proxy variables, not `network.proxy`; see [Network and logging](/docs/network-logging#provider-proxy).

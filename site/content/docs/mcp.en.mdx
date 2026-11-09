@@ -1,0 +1,163 @@
+---
+title: MCP
+description: Adding stdio and HTTP MCP servers, their credentials, approval and exposure policies, and connecting and checking them.
+icon: Plug
+---
+
+An MCP (Model Context Protocol) server gives the model the tools of a local program or a remote service. A server may reach files, the network, databases and third-party accounts: add only servers you trust, and give their tools fitting approval policies.
+
+The servers are kept in `mcp.toml` in the configuration directory; every field is in the [Configuration reference](/docs/config-reference#mcp-toml).
+
+## Adding a server [#add]
+
+<Tabs items={["stdio", "Streamable HTTP"]}>
+  <Tab value="stdio">
+    A local program the Agent starts. The program and its arguments follow `--`; `--env` sets an environment variable (repeatable):
+
+    ```sh
+    hanafubuki-agent mcp add files -- npx -y @modelcontextprotocol/server-filesystem /home/me/notes
+    hanafubuki-agent mcp add search --env SEARCH_REGION=eu -- /usr/local/bin/search-mcp --stdio
+    ```
+
+    The program is an absolute path, or a name looked up on `PATH`. A stdio server inherits the Agent process's whole environment.
+
+  </Tab>
+  <Tab value="Streamable HTTP">
+    A local or remote HTTP service that is already running:
+
+    ```sh
+    hanafubuki-agent mcp add docs --url https://mcp.example.com/mcp
+    ```
+
+  </Tab>
+</Tabs>
+
+- A server id has letters, digits, `-`, `_` and `.` only.
+- A new server has the defaults: the approval policy `ask`, the exposure policy `deferred`, a 120-second call timeout, and so on.
+- An enabled server is connected as soon as it is added, and the command prints how that went, such as `files: ready`. `--disabled` adds it turned off.
+
+## Credentials [#credentials]
+
+`mcp add` sets no credentials. For a server that needs a token, edit `mcp.toml`: point an environment variable or a header at a key of `[credentials]`, the only place the value is kept (the file is readable only by you).
+
+<Tabs items={["stdio: an environment variable", "HTTP: a header"]}>
+  <Tab value="stdio: an environment variable">
+    ```toml
+    [[servers]]
+    id = "github"
+    # …
+
+    [servers.transport]
+    type = "stdio"
+    program = "github-mcp-server"
+    argv = ["stdio"]
+
+    [servers.transport.credentialEnvironment]
+    GITHUB_PERSONAL_ACCESS_TOKEN = "github-token"
+
+    [credentials.github-token]
+    value = "ghp_..."
+    generation = 1
+    ```
+
+  </Tab>
+  <Tab value="HTTP: a header">
+    ```toml
+    [[servers]]
+    id = "docs"
+    # …
+
+    [servers.transport]
+    type = "streamable_http"
+    url = "https://mcp.example.com/mcp"
+    oauth = "disabled"
+
+    [servers.transport.credentialHeaders]
+    Authorization = "docs-token"
+
+    [credentials.docs-token]
+    value = "Bearer abc123"
+    generation = 1
+    ```
+
+  </Tab>
+</Tabs>
+
+- Variables and headers that are not secret go in `publicEnvironment` and `publicHeaders`.
+- When you change a credential's value, raise its `generation` by one.
+- A server that refers to a credential key that does not exist cannot connect.
+- Quit any running Agent before you edit the file; the change applies at the next start.
+
+`mcp list` prints only the names of the environment variables and headers, and which credentials are set, never their values.
+
+<Callout title="OAuth">
+  `mcp.toml` has an `oauth` setting, but the standalone command line has no OAuth login yet, and
+  `mcp add` always writes `oauth = "disabled"`. A server that needs an OAuth login cannot be used
+  from the command line for now; if the server allows it, use a token header instead.
+</Callout>
+
+## Approval and exposure policies [#policies]
+
+A server has default policies, and a tool can have its own:
+
+```toml
+[[servers]]
+id = "github"
+approvalPolicy = "ask"
+exposurePolicy = "deferred"
+disabledTools = ["delete_repository"]
+
+[servers.toolApprovalPolicies]
+get_issue = "allow"
+list_issues = "allow"
+
+[servers.toolExposurePolicies]
+search_code = "direct"
+```
+
+**The approval policy** (`approvalPolicy`, `toolApprovalPolicies`):
+
+| Value             | Does                                                                                                                                            |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `"allow"`         | No approval when the tool says it is not destructive (`destructiveHint: false`); a tool that says nothing counts as destructive, and still asks |
+| `"ask"` (default) | The [permission mode](/docs/permissions) decides: manual mode asks you                                                                          |
+| `"deny"`          | The call is refused, in every permission mode                                                                                                   |
+
+**The exposure policy** (`exposurePolicy`, `toolExposurePolicies`) decides how the model sees a tool:
+
+| Value                  | Does                                                                                            |
+| ---------------------- | ----------------------------------------------------------------------------------------------- |
+| `"direct"`             | The tool is given to the model with every request                                               |
+| `"deferred"` (default) | Not given directly: the model finds it with `tool_search` when it needs it, which saves context |
+| `"hidden"`             | Never offered to the model                                                                      |
+| `"direct_model_only"`  | As `direct`, for a tool meant for the model and not an application's interface                  |
+
+A non-empty `enabledTools` opens only the tools it lists; the tools in `disabledTools` are not opened.
+
+The model sees a tool as `mcp__SERVER__TOOL`, with any character outside `[A-Za-z0-9_-]` replaced by `_`.
+
+## Connecting [#connecting]
+
+- When the Agent starts, it connects every enabled server in the background, four at a time.
+- A server whose connection drops is reconnected after 2, 10 and 30 seconds, at most three times in ten minutes.
+- A server with `required = true` is required: a failed connection at the start is logged as an error, and a step of a turn fails when its tools cannot be used.
+- A management command that starts the Agent (`sessions list`, say) connects the servers in the background too.
+
+```sh
+hanafubuki-agent mcp connect files    # connects and prints its state and tools: files: ready (11 tools)
+hanafubuki-agent mcp list
+hanafubuki-agent mcp remove files
+hanafubuki-agent doctor --online      # connects each enabled server and reports how it went
+```
+
+`mcp connect` fails with exit code 1, printing the error, when the server does not reach `ready`.
+
+`/mcp` in the terminal interface shows each server: whether it is enabled, its connection state, errors, its command or URL, and its tools.
+
+## Resources [#resources]
+
+A server's resources are read with `list_mcp_resources`, `list_mcp_resource_templates` and `read_mcp_resource`, which need no approval.
+
+## MCP and memory [#memory]
+
+With `memory.excludeExternalContext` on, a session that has used a web or MCP tool's output no longer contributes to the memory, so unchecked outside content stays out of it. See [Memory](/docs/memory).

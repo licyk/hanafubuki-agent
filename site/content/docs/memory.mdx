@@ -1,0 +1,80 @@
+---
+title: 记忆
+description: 记忆如何从过去的会话中提炼经验，如何启用、调整和重置，以及模型如何使用它。
+icon: Brain
+---
+
+记忆让 Agent 记住过去会话中学到的东西：项目的约定、你的偏好、踩过的坑。它在后台用模型读取已经结束的会话，提取值得记住的内容，再整合成一份摘要；之后的会话中，模型会看到这份摘要，并在需要时查阅细节。
+
+记忆默认关闭。
+
+## 启用 [#enable]
+
+```sh
+hanafubuki-agent config set memory.enabled true
+hanafubuki-agent memory status
+```
+
+```text
+enabled: true
+sessions read: 12
+extracted memories: 9
+running jobs: 0
+```
+
+<Callout>
+  一个会话是否参与记忆，在它**创建时**就决定了：只有在 `memory.enabled` 和 `memory.generateMemories`
+  都为 `true` 时创建的会话才会被提取。启用记忆之前的会话不会被读取。
+</Callout>
+
+记忆需要一个启用的默认 Provider。提取和整合默认使用模型策略中的模型，可以分别用 `memory.extractionModel` 和 `memory.consolidationModel` 指定其他模型（例如更便宜的模型）。
+
+## 它如何工作 [#how]
+
+1. **提取**：会话空闲超过 `memory.minimumIdleHours`（默认 6 小时）后，Agent 用模型读取它，提取值得记住的内容。每一轮最多处理 `memory.maxSessionsPerPass` 个会话（默认 2 个），只考虑最近 `memory.maxSourceAgeDays` 天内的会话（默认 10 天）。
+2. **整合**：把提取的结果（最多 `memory.maxStage1Outputs` 条）整合成一份记忆文件和一份摘要。
+3. **过期**：`memory.maxUnusedDays` 天（默认 30 天）没有被使用过的提取结果会过期。
+
+这些工作在回合结束后、Agent 启动时和设置改变时运行，需要额外的模型请求。失败的任务会退避重试，间隔从 30 秒逐渐增加到一天；最近的错误显示在 `memory status` 中。
+
+## 模型如何使用记忆 [#use]
+
+- 每次请求模型时，记忆的摘要都会作为背景信息提供给模型。它只是参考，不是指令。
+- 模型可以用 `list_agent_memories`、`search_agent_memories` 和 `read_agent_memory` 查阅更多细节，并说明它用了哪些记忆。
+- 模型也可以用 `append_agent_memory_note` 记下一条笔记。
+
+记忆不授予任何权限：它只是上下文，命令和文件修改仍然按[权限模式](/docs/permissions)审批。
+
+## 设置 [#settings]
+
+| 键                              | 默认值  | 作用                                                |
+| ------------------------------- | ------- | --------------------------------------------------- |
+| `memory.enabled`                | `false` | 启用记忆                                            |
+| `memory.useMemories`            | `true`  | 模型可以使用已有的记忆                              |
+| `memory.generateMemories`       | `true`  | 从会话中提取新的记忆                                |
+| `memory.excludeExternalContext` | `false` | 会话使用过网页或 MCP 工具的结果后，不再从中提取记忆 |
+| `memory.extractionModel`        | 未设置  | 提取使用的模型                                      |
+| `memory.consolidationModel`     | 未设置  | 整合使用的模型                                      |
+| `memory.maxSourceAgeDays`       | `10`    | 只读取最近这么多天内的会话                          |
+| `memory.minimumIdleHours`       | `6`     | 会话空闲这么久才提取                                |
+| `memory.maxSessionsPerPass`     | `2`     | 每一轮最多提取的会话数                              |
+| `memory.maxStage1Outputs`       | `256`   | 整合时最多使用的提取结果数                          |
+| `memory.maxUnusedDays`          | `30`    | 提取结果多久没被使用就过期                          |
+
+取值范围见[配置参考](/docs/config-reference#memory)。只想使用已有的记忆、不再提取新的，把 `memory.generateMemories` 设为 `false`；想暂时不让模型看到记忆，把 `memory.useMemories` 设为 `false`。
+
+## 外部内容 [#external-content]
+
+网页和 MCP 工具返回的内容未经核实，可能包含错误或刻意构造的指令。开启 `memory.excludeExternalContext` 后，会话一旦使用了这类结果，就永久不再参与记忆。
+
+## 查看和重置 [#status-reset]
+
+```sh
+hanafubuki-agent memory status
+hanafubuki-agent memory reset
+```
+
+- `memory status`：是否启用、读过的会话数、提取的记忆数、运行中的任务数和最近的错误。
+- `memory reset`：删除提取的结果和整合后的记忆，把所有会话标记为未提取。之后符合条件的会话会被重新提取；如果不想这样，先关闭记忆再重置。
+
+记忆保存在数据目录的 `memory/` 中。关闭 `memory` 插件（`disabledPlugins`）后，模型看不到记忆，也没有记忆工具。

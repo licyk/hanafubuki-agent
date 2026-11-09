@@ -1,0 +1,81 @@
+---
+title: Memory
+description: How the memory distils earlier sessions, how to turn it on, tune and reset it, and how the model uses it.
+icon: Brain
+---
+
+The memory lets the Agent keep what earlier sessions learned: a project's conventions, your preferences, the pitfalls already met. In the background it has a model read sessions that have ended, extract what is worth keeping, and consolidate that into a summary; later sessions show the model the summary, and the model looks up the details when it needs them.
+
+The memory is off by default.
+
+## Turning it on [#enable]
+
+```sh
+hanafubuki-agent config set memory.enabled true
+hanafubuki-agent memory status
+```
+
+```text
+enabled: true
+sessions read: 12
+extracted memories: 9
+running jobs: 0
+```
+
+<Callout>
+  Whether a session contributes is decided **when it is created**: only a session created while
+  `memory.enabled` and `memory.generateMemories` are both `true` is read. Sessions from before you
+  turned the memory on are not.
+</Callout>
+
+The memory needs an enabled default Provider. Extraction and consolidation run the model policy's model by default; `memory.extractionModel` and `memory.consolidationModel` name others (a cheaper model, say).
+
+## How it works [#how]
+
+1. **Extraction**: once a session has been idle for `memory.minimumIdleHours` (6 by default), the Agent has a model read it and extract what is worth keeping. Each pass takes at most `memory.maxSessionsPerPass` sessions (2 by default), from the last `memory.maxSourceAgeDays` days (10 by default).
+2. **Consolidation**: the extractions (at most `memory.maxStage1Outputs` of them) are consolidated into a memory file and a summary.
+3. **Expiry**: an extraction no one has used for `memory.maxUnusedDays` days (30 by default) expires.
+
+This work runs after a turn ends, when the Agent starts and when the settings change, and costs extra model requests. A job that fails is retried later, waiting from 30 seconds up to a day; the latest error is in `memory status`.
+
+## How the model uses it [#use]
+
+- With every request, the model gets the memory's summary as background. It is reference, never an instruction.
+- The model looks up more with `list_agent_memories`, `search_agent_memories` and `read_agent_memory`, and says which memories it used.
+- The model can also leave a note with `append_agent_memory_note`.
+
+The memory grants no permission: it is context, and commands and file changes are still approved by the [permission mode](/docs/permissions).
+
+## Settings [#settings]
+
+| Key                             | Default | Does                                                                     |
+| ------------------------------- | ------- | ------------------------------------------------------------------------ |
+| `memory.enabled`                | `false` | Turns the memory on                                                      |
+| `memory.useMemories`            | `true`  | The model may use the memories                                           |
+| `memory.generateMemories`       | `true`  | New memories are extracted from sessions                                 |
+| `memory.excludeExternalContext` | `false` | A session stops contributing once it has used a web or MCP tool's output |
+| `memory.extractionModel`        | unset   | The model that extracts                                                  |
+| `memory.consolidationModel`     | unset   | The model that consolidates                                              |
+| `memory.maxSourceAgeDays`       | `10`    | Only sessions of the last that many days are read                        |
+| `memory.minimumIdleHours`       | `6`     | How long a session is idle before it is read                             |
+| `memory.maxSessionsPerPass`     | `2`     | Sessions read per pass                                                   |
+| `memory.maxStage1Outputs`       | `256`   | Extractions consolidated at most                                         |
+| `memory.maxUnusedDays`          | `30`    | How long an unused extraction lasts                                      |
+
+The ranges are in the [Configuration reference](/docs/config-reference#memory). To keep using the memories without extracting new ones, set `memory.generateMemories` to `false`; to keep them from the model for a while, set `memory.useMemories` to `false`.
+
+## Outside content [#external-content]
+
+What web and MCP tools return is unchecked, and may be wrong or carry instructions planted on purpose. With `memory.excludeExternalContext` on, a session that has used such output never contributes to the memory again.
+
+## Status and reset [#status-reset]
+
+```sh
+hanafubuki-agent memory status
+hanafubuki-agent memory reset
+```
+
+- `memory status`: whether it is on, the sessions read, the memories extracted, the jobs running and the latest error.
+- `memory reset`: deletes the extractions and the consolidated memory, and marks every session as not yet read. The sessions that qualify are then read again; to avoid that, turn the memory off before you reset it.
+
+The memory is kept in `memory/` in the data directory. With the `memory` plugin turned off (`disabledPlugins`), the model sees no memories and has no memory tools.

@@ -1,0 +1,162 @@
+---
+title: Troubleshooting
+description: Check your setup with doctor, fix the common problems, read the logs and crash records, and report a bug.
+icon: Stethoscope
+---
+
+## Run doctor first [#doctor]
+
+```sh
+hanafubuki-agent doctor
+hanafubuki-agent doctor --online
+```
+
+```text
+ok    config    /home/me/.config/hanafubuki-agent/config.toml
+ok    providers 1 configured; the default provider-1 (https://api.openai.com/v1) runs gpt-5.1
+ok    mcp       2 configured, 2 enabled
+FAIL  keyring   No default store has been set, so cannot search or create entries
+ok    data      /home/me/.local/share/hanafubuki-agent (not in use)
+skip  online    the Provider and the MCP servers are reached with --online
+```
+
+Each check prints one line, `ok`, `FAIL` or `skip`, and any `FAIL` exits with code 1.
+
+| Check       | What it checks                                                                                                                                                                                                                                                                          |
+| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `config`    | The layers read: the user's `config.toml` (or none, the defaults), the profile, the project's file (and whether the project is trusted), the `-c` overrides. A profile that does not exist fails. Then each file this run repaired; see [Configuration recovery](/docs/recovery#doctor) |
+| `providers` | How many Providers, and the default's endpoint and model. No default, or no model, fails                                                                                                                                                                                                |
+| `mcp`       | How many MCP servers, and how many are enabled                                                                                                                                                                                                                                          |
+| `keyring`   | Whether the operating system's keyring answers a read                                                                                                                                                                                                                                   |
+| `data`      | Whether the data directory is free; held by another Agent process fails                                                                                                                                                                                                                 |
+| `online`    | With `--online`, when the data directory is free: starts the Agent, lists the default Provider's models (the `provider` line), and connects each enabled MCP server (the `mcp` lines)                                                                                                   |
+
+Without `--online`, `doctor` does not start the Agent, and works while another Agent process runs.
+
+## Common problems [#common]
+
+### No default Provider [#no-provider]
+
+```text
+error: No default Agent Provider is configured
+FAIL  providers 0 configured, none the default (hanafubuki-agent providers default ID)
+FAIL  providers no model is set (hanafubuki-agent providers default ID --model MODEL)
+```
+
+Add a Provider and set the model:
+
+```sh
+hanafubuki-agent providers add OpenAI --base-url https://api.openai.com/v1 --api-key-env OPENAI_API_KEY
+hanafubuki-agent providers default provider-1 --model gpt-5.1
+```
+
+When `providers add` says `the environment variable X is not set`, `export` the variable first. See [Quick start](/docs/quick-start).
+
+### The Provider's requests fail [#provider-errors]
+
+```text
+error: the turn failed (model_request_retries_exhausted): agent model request retries exhausted after 3 attempt(s): connection failed
+```
+
+| Cause                                       | What to check                                                                                                                                                  |
+| ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A wrong endpoint or protocol                | `providers list` shows them; the endpoint is the part before the protocol's path, such as `https://api.openai.com/v1`                                          |
+| An invalid or expired token (`model_error`) | Edit `apiToken` in `providers.toml`, or remove the Provider and add it again                                                                                   |
+| A wrong model name                          | `/model` in the terminal interface lists the models the Provider has                                                                                           |
+| A proxy is needed                           | Provider requests read `HTTPS_PROXY` and the other environment variables, not `network.proxy`; see [Network and logging](/docs/network-logging#provider-proxy) |
+| No network                                  | `doctor --online` checks that the default Provider lists its models                                                                                            |
+
+The other ways a turn fails (the `reason` of `turn_failed`) are in [exec --json events](/docs/json-events#turn).
+
+### The data directory is in use [#data-directory-in-use]
+
+```text
+error: the Agent is unavailable: its construction failed: the Agent data directory /home/me/.local/share/hanafubuki-agent is in use by another process (it holds /home/me/.local/share/hanafubuki-agent/.lock); only one Agent may use a data directory at a time
+```
+
+Only one Agent process uses a data directory at a time: the interface in another terminal, an `exec` still running, or an application that embeds the Agent.
+
+- End the other process, or wait for it. `doctor` cannot say which process it is: look for `hanafubuki-agent` with `ps`, the Task Manager and the like.
+- The operating system holds the lock and releases it when the process ends, a crash included: do **not** delete `.lock` by hand.
+- To run several Agents at once, give each its own data directory with `--data-dir`; see [Data directory](/docs/data-directory#lock).
+
+`config`, `providers list`, `mcp list` and `doctor` without `--online` need no data directory, and work as usual.
+
+### The keyring is not available [#keyring]
+
+```text
+FAIL  keyring   No default store has been set, so cannot search or create entries
+```
+
+The operating system's keyring (the Secret Service on Linux, the Keychain on macOS, the Credential Manager on Windows) does not answer. This is common on Linux servers and in containers without a desktop. It holds only MCP servers' OAuth tokens; Provider tokens and MCP credentials are kept in the configuration files, so the line can usually be ignored. When you need it, install and start a Secret Service such as GNOME Keyring or KWallet.
+
+### An MCP server does not connect [#mcp]
+
+```sh
+hanafubuki-agent mcp connect SERVER_ID
+```
+
+`mcp connect` prints the connection's state and its error; `/mcp` in the terminal interface shows each server's error too.
+
+| Symptom                                         | What to check                                                                                                                                              |
+| ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A stdio program does not start                  | Whether the program is on `PATH` (or an absolute path), its arguments, `cwd`, the runtime it needs (Node.js, Python, …)                                    |
+| HTTP does not connect                           | The URL, `network.proxy`, certificates, whether the service runs                                                                                           |
+| Authentication fails                            | Whether `credentialEnvironment` or `credentialHeaders` in `mcp.toml` point at a credential key that exists; whether `generation` was raised after a change |
+| It needs OAuth                                  | The standalone command line has no OAuth login yet; see [MCP](/docs/mcp#credentials)                                                                       |
+| Connected, but the model does not use its tools | The exposure policy is `deferred` by default, so the model searches for them when it needs them; `enabledTools`, `disabledTools` and `hidden`              |
+| Timeouts                                        | `connectTimeoutSeconds`, `initializeTimeoutSeconds`, `callTimeoutSeconds`                                                                                  |
+
+### A configuration file is read-only [#read-only-config]
+
+```text
+FAIL  config    /home/me/.config/hanafubuki-agent/config.toml: repaired ...; read-only until the Agent restarts: ...
+```
+
+The Agent had to repair the file but could not keep its original in `.recovery/`, or could not write the file back: it runs on the repaired values in memory and refuses to change the file. Check the configuration directory's permissions and free space, and whether a plain file sits at `.recovery`, then run again. See [Configuration recovery](/docs/recovery#read-only).
+
+### A setting does not take effect [#config-not-applied]
+
+- `hanafubuki-agent config get KEY` shows the value in effect, and the `config` lines of `doctor` the layers that were read.
+- A project's file is read only when the project is trusted; see [Configuration layers](/docs/config-layers#projects).
+- `--permission-mode` and `--log-level` win over `-c`.
+- A value that cannot be used is replaced with its default, and the original file is in `.recovery/`.
+
+### The terminal interface [#interface]
+
+| Symptom                                   | Cause, and what to do                                                                           |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `the terminal interface needs a terminal` | Standard input or output is not a terminal. Use `exec` in scripts                               |
+| Esc does not interrupt the turn           | Once the answer streams, the status line is hidden and Esc no longer interrupts; use Ctrl-C     |
+| Shift+Enter sends the message             | The terminal lacks the enhanced keyboard protocol; use Ctrl+J for a new line                    |
+| `the terminal: …` at the start            | The terminal did not answer the cursor-position query; try another terminal emulator, or `exec` |
+
+## Logs [#logs]
+
+The log file is `logs/hanafubuki-agent.log` in the data directory; `hanafubuki-agent config path` prints where. To track a problem down, raise the level and reproduce it:
+
+```sh
+hanafubuki-agent --log-level debug exec "…"
+```
+
+At `trace` the log records the model's and the tools' content too, which may be sensitive. See [Network and logging](/docs/network-logging#logging).
+
+## Crash records [#crashes]
+
+When the Agent hits an internal error (a panic), it writes a report to standard error and leaves `crash-record.json` in the data directory. `start-marker.json` counts the starts that did not end normally, to notice a crash loop. After a crash, the next start cleans up the processes left behind.
+
+When the Agent stops during an `exec`, it says `the Agent stopped after an internal error, and the turn with it: …` and exits with code 1.
+
+## Reporting a bug [#reporting]
+
+Report it in [GitHub Issues](https://github.com/licyk/hanafubuki-agent/issues), with:
+
+1. the output of `hanafubuki-agent --version`, and your operating system;
+2. the output of `hanafubuki-agent doctor`;
+3. how to reproduce it, and what you expected and got;
+4. the relevant part of the log (at `debug`), and `crash-record.json` if there is one.
+
+<Callout type="warn">
+  Before you send it, check the logs and the configuration for API tokens, credentials, private code
+  and anything else sensitive. Do not attach `providers.toml` or `mcp.toml`.
+</Callout>

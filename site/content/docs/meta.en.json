@@ -9,6 +9,13 @@
     "terminal-interface",
     "exec",
     "sessions",
+    "providers-models",
+    "permissions",
+    "tools",
+    "mcp",
+    "skills",
+    "memory",
+    "plan-mode",
     "---Configuration---",
     "configuration",
     "config-layers",
@@ -29,6 +36,8 @@
     "plugin-rules",
     "building-testing",
     "contributing",
-    "releasing"
+    "releasing",
+    "---Troubleshooting---",
+    "troubleshooting"
   ]
 }

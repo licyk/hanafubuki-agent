@@ -1,0 +1,84 @@
+---
+title: Skill
+description: Skill 是什么、放在哪里、如何安装和使用，以及如何启用和停用。
+icon: Sparkles
+---
+
+Skill 是一个包含 `SKILL.md` 的目录：一份说明某类任务怎么做的指南，可以附带参考资料和脚本。模型看到 Skill 的目录（名字和说明），在任务需要时读取对应的 Skill，按其中的步骤工作。
+
+## SKILL.md [#skill-md]
+
+`SKILL.md` 以 YAML 头开始：
+
+```markdown
+---
+name: release-notes
+description: 根据 git 历史为这个仓库撰写发布说明，按功能、修复和破坏性变更分组。
+---
+
+# 撰写发布说明
+
+1. 用 `git log` 找出上一个标签以来的提交……
+```
+
+| 字段                                             | 是否必需 | 说明                                                       |
+| ------------------------------------------------ | -------- | ---------------------------------------------------------- |
+| `description`                                    | 必需     | 何时使用这个 Skill，最多 4096 字节。模型根据它决定是否读取 |
+| `name`                                           | 可选     | 名字，最多 96 个字符；默认为目录名                         |
+| `license`                                        | 可选     | 许可证                                                     |
+| `metadata.version`、`metadata.short-description` | 可选     | 版本和简短说明                                             |
+
+不认识的字段会被忽略。Skill 目录中还可以有一个 `agents/openai.yaml`，提供显示名称、图标，以及它依赖的 MCP 服务器；依赖的服务器没有就绪时，这个 Skill 显示为不可用。
+
+## Skill 从哪里来 [#sources]
+
+| 来源 | 位置                                                                      | ID 示例                |
+| ---- | ------------------------------------------------------------------------- | ---------------------- |
+| 内置 | 数据目录的 `skills/system/`，每次启动时更新                               | `system:skill-creator` |
+| 安装 | 数据目录的 `skills/packages/`，由 `skills install` 放入                   | `user:release-notes`   |
+| 仓库 | 每个工作区目录及其上级目录（直到 Git 根目录）中的 `.agents/skills/`，只读 | `repo:web/lint`        |
+
+内置的两个 Skill：
+
+- `system:skill-creator`：帮你编写或修改 Skill。
+- `system:skill-manager`：查看 Skill、启用或停用某个 Skill、从目录或 Git 仓库安装 Skill，并解释某个 Skill 为什么在或不在本次回合中使用。
+
+把团队共用的 Skill 放进仓库的 `.agents/skills/` 中，所有在这个仓库中工作的人都能使用。
+
+## 查看和安装 [#manage]
+
+```sh
+hanafubuki-agent skills list
+hanafubuki-agent skills install ./release-notes
+hanafubuki-agent skills install ./release-notes --overwrite
+hanafubuki-agent skills remove user:release-notes
+```
+
+- `skills list` 打印每个 Skill 的 ID、是否停用和说明；目录中有问题的 Skill 打印到标准错误。
+- `skills install 目录`：目录本身包含 `SKILL.md`，或者只有一个子目录包含它。Skill 必须能被正确解析。安装后的目录名取自源目录名。已经有同名的 Skill 时会失败，加上 `--overwrite` 替换它。
+- `skills remove ID` 删除一个安装的 Skill。仓库中的 Skill 随仓库一起管理。
+
+终端界面中输入 `/skills` 查看同样的列表。
+
+## 在对话中使用 [#use]
+
+- **让模型自己选**：模型在每次请求中都能看到 Skill 目录，任务符合某个 Skill 的说明时会用 `skills_read` 读取它。
+- **点名使用**：在消息中写 `$名字`，例如 `用 $release-notes 写 0.2.0 的发布说明`。点名的 Skill 会在这个回合中提供给模型。
+
+`$PATH`、`$HOME` 这类环境变量名，以及工具名和 MCP 服务器名，不会被当作 Skill。
+
+## 启用和停用 [#enable]
+
+所有发现的 Skill 默认启用。停用的 Skill 不会出现在模型看到的目录中。
+
+- 让模型帮你做：例如“停用 release-notes 这个 Skill”。模型会调用 `disable_skill`（或 `enable_skill`），这类操作**总是询问你**，在任何权限模式下都需要你确认，计划模式下不可用。
+- 或者编辑数据目录的 `skills/state.json`，在其中的 `disabled` 列表中加入或去掉 Skill 的 ID。
+
+命令行和终端界面中没有直接启用或停用 Skill 的命令。
+
+要关闭整个 Skill 功能，把 `skills` 加入 `disabledPlugins`。
+
+<Callout type="warn">
+  Skill 中的脚本由模型通过命令运行，同样需要审批。安装来源不明的 Skill 前，请先阅读它的 `SKILL.md`
+  和脚本。
+</Callout>

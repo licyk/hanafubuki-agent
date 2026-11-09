@@ -1,0 +1,162 @@
+---
+title: 故障排查
+description: 用 doctor 检查环境，解决常见问题，查看日志和崩溃记录，以及报告问题。
+icon: Stethoscope
+---
+
+## 先运行 doctor [#doctor]
+
+```sh
+hanafubuki-agent doctor
+hanafubuki-agent doctor --online
+```
+
+```text
+ok    config    /home/me/.config/hanafubuki-agent/config.toml
+ok    providers 1 configured; the default provider-1 (https://api.openai.com/v1) runs gpt-5.1
+ok    mcp       2 configured, 2 enabled
+FAIL  keyring   No default store has been set, so cannot search or create entries
+ok    data      /home/me/.local/share/hanafubuki-agent (not in use)
+skip  online    the Provider and the MCP servers are reached with --online
+```
+
+每项检查打印一行 `ok`、`FAIL` 或 `skip`，有任何 `FAIL` 时以退出码 1 退出。
+
+| 检查        | 内容                                                                                                                                                                                                        |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `config`    | 读取了哪些层：用户的 `config.toml`（或者没有，使用默认值）、配置档、项目配置（以及项目是否受信任）、`-c` 覆盖。不存在的配置档为 `FAIL`。还会列出本次运行中修复过的文件，见[配置恢复](/docs/recovery#doctor) |
+| `providers` | Provider 的数量，以及默认 Provider 的地址和模型。没有默认 Provider 或没有设置模型为 `FAIL`                                                                                                                  |
+| `mcp`       | MCP 服务器的数量和启用的数量                                                                                                                                                                                |
+| `keyring`   | 系统密钥环能否读取                                                                                                                                                                                          |
+| `data`      | 数据目录是否空闲；被另一个 Agent 进程占用为 `FAIL`                                                                                                                                                          |
+| `online`    | 只在 `--online` 且数据目录空闲时运行：启动 Agent，列出默认 Provider 的模型（`provider` 行），连接每个启用的 MCP 服务器（`mcp` 行）                                                                          |
+
+不带 `--online` 时，`doctor` 不启动 Agent，可以在另一个 Agent 进程运行时使用。
+
+## 常见问题 [#common]
+
+### 没有默认 Provider [#no-provider]
+
+```text
+error: No default Agent Provider is configured
+FAIL  providers 0 configured, none the default (hanafubuki-agent providers default ID)
+FAIL  providers no model is set (hanafubuki-agent providers default ID --model MODEL)
+```
+
+添加一个 Provider，并设置模型：
+
+```sh
+hanafubuki-agent providers add OpenAI --base-url https://api.openai.com/v1 --api-key-env OPENAI_API_KEY
+hanafubuki-agent providers default provider-1 --model gpt-5.1
+```
+
+`providers add` 报告 `the environment variable X is not set` 时，先 `export` 这个变量。见[快速开始](/docs/quick-start)。
+
+### Provider 请求失败 [#provider-errors]
+
+```text
+error: the turn failed (model_request_retries_exhausted): agent model request retries exhausted after 3 attempt(s): connection failed
+```
+
+| 原因                            | 怎么查                                                                                                                   |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| 地址或协议错误                  | `providers list` 检查地址和协议；地址应当是协议路径之前的部分，例如 `https://api.openai.com/v1`                          |
+| 令牌无效或过期（`model_error`） | 编辑 `providers.toml` 中的 `apiToken`，或删除后重新添加 Provider                                                         |
+| 模型名称错误                    | 终端界面的 `/model` 列出 Provider 实际提供的模型                                                                         |
+| 需要代理                        | Provider 请求读取 `HTTPS_PROXY` 等环境变量，而不是 `network.proxy`，见[网络与日志](/docs/network-logging#provider-proxy) |
+| 网络不通                        | `doctor --online` 检查默认 Provider 是否能列出模型                                                                       |
+
+回合失败的其他原因（`turn_failed` 的 `reason`）见 [exec --json 事件](/docs/json-events#turn)。
+
+### 数据目录被占用 [#data-directory-in-use]
+
+```text
+error: the Agent is unavailable: its construction failed: the Agent data directory /home/me/.local/share/hanafubuki-agent is in use by another process (it holds /home/me/.local/share/hanafubuki-agent/.lock); only one Agent may use a data directory at a time
+```
+
+一个数据目录同一时间只能被一个 Agent 进程使用：另一个终端中的界面、正在运行的 `exec`，或者嵌入了 Agent 的应用。
+
+- 结束另一个进程，或者等它完成。`doctor` 无法告诉你是哪个进程，可以用 `ps`、任务管理器等查找 `hanafubuki-agent`。
+- 锁由操作系统持有，进程结束（包括崩溃）后自动释放，**不要**手动删除 `.lock`。
+- 需要同时运行多个 Agent 时，用 `--data-dir` 为每个指定不同的数据目录，见[数据目录](/docs/data-directory#lock)。
+
+`config`、`providers list`、`mcp list` 和不带 `--online` 的 `doctor` 不需要数据目录，可以照常使用。
+
+### 密钥环不可用 [#keyring]
+
+```text
+FAIL  keyring   No default store has been set, so cannot search or create entries
+```
+
+系统密钥环（Linux 上的 Secret Service、macOS 的钥匙串、Windows 的凭据管理器）不可用。没有桌面环境的 Linux 服务器和容器上很常见。它只用于 MCP 服务器的 OAuth 令牌，Provider 令牌和 MCP 凭据都保存在配置文件中，所以通常可以忽略这一行。需要时，安装并启动 GNOME Keyring 或 KWallet 等 Secret Service 实现。
+
+### MCP 服务器无法连接 [#mcp]
+
+```sh
+hanafubuki-agent mcp connect 服务器ID
+```
+
+`mcp connect` 打印连接状态和错误。终端界面中的 `/mcp` 也会显示每个服务器的错误。
+
+| 症状                 | 检查                                                                                                              |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| stdio 程序无法启动   | 程序是否在 `PATH` 中（或使用绝对路径）、参数、`cwd`、需要的运行时（Node.js、Python 等）                           |
+| HTTP 无法连接        | URL、`network.proxy`、证书、服务是否在运行                                                                        |
+| 认证失败             | `mcp.toml` 中的 `credentialEnvironment` 或 `credentialHeaders` 是否指向存在的凭据键；改值后 `generation` 是否加一 |
+| 需要 OAuth           | 独立运行的命令行目前没有 OAuth 登录，见 [MCP](/docs/mcp#credentials)                                              |
+| 已连接但模型没用工具 | 暴露策略默认是 `deferred`，模型需要时才会搜索；`enabledTools`、`disabledTools` 和 `hidden`                        |
+| 超时                 | `connectTimeoutSeconds`、`initializeTimeoutSeconds`、`callTimeoutSeconds`                                         |
+
+### 配置文件只读 [#read-only-config]
+
+```text
+FAIL  config    /home/me/.config/hanafubuki-agent/config.toml: repaired ...; read-only until the Agent restarts: ...
+```
+
+Agent 需要修复这个文件，但无法在 `.recovery/` 中保存原文件或无法写回文件，所以在内存中使用修复后的值，并拒绝修改这个文件。检查配置目录的权限和磁盘空间，以及 `.recovery` 是否被一个普通文件占用，然后重新运行。见[配置恢复](/docs/recovery#read-only)。
+
+### 配置没有生效 [#config-not-applied]
+
+- 用 `hanafubuki-agent config get 键` 查看最终生效的值，`doctor` 的 `config` 行查看读取了哪些层。
+- 项目配置只有在项目受信任时才会读取，见[配置分层](/docs/config-layers#projects)。
+- `--permission-mode` 和 `--log-level` 优先于 `-c`。
+- 无效的值会被替换为默认值，原文件在 `.recovery/` 中。
+
+### 终端界面的问题 [#interface]
+
+| 症状                                      | 原因和处理                                                |
+| ----------------------------------------- | --------------------------------------------------------- |
+| `the terminal interface needs a terminal` | 标准输入或输出不是终端。在脚本中使用 `exec`               |
+| Esc 不能中断回合                          | 模型开始输出回答后状态行隐藏，Esc 不再中断；用 Ctrl-C     |
+| Shift+Enter 发送了消息                    | 终端不支持增强键盘协议，用 Ctrl+J 换行                    |
+| 启动时报 `the terminal: ...`              | 终端没有响应光标位置查询；换一个终端模拟器，或使用 `exec` |
+
+## 日志 [#logs]
+
+日志文件是数据目录中的 `logs/hanafubuki-agent.log`，`hanafubuki-agent config path` 打印它的位置。排查问题时，先提高日志级别再重现：
+
+```sh
+hanafubuki-agent --log-level debug exec "..."
+```
+
+`trace` 级别还会记录模型和工具的内容，可能包含敏感信息。见[网络与日志](/docs/network-logging#logging)。
+
+## 崩溃记录 [#crashes]
+
+Agent 内部发生错误（panic）时，会把报告写到标准错误，并在数据目录中留下 `crash-record.json`。`start-marker.json` 记录没有正常结束的启动，用于发现反复崩溃。崩溃后，下一次启动会清理上次遗留的进程。
+
+`exec` 运行中 Agent 停止时，会报告 `the Agent stopped after an internal error, and the turn with it: ...` 并以退出码 1 退出。
+
+## 报告问题 [#reporting]
+
+在 [GitHub Issues](https://github.com/licyk/hanafubuki-agent/issues) 中报告问题，并附上：
+
+1. `hanafubuki-agent --version` 的输出和操作系统；
+2. `hanafubuki-agent doctor` 的输出；
+3. 重现的步骤，以及期望和实际的结果；
+4. 相关的日志片段（`debug` 级别），以及 `crash-record.json`（如果有）。
+
+<Callout type="warn">
+  提交前检查日志和配置中是否有 API 令牌、凭据、私有代码或其他敏感内容。不要附上 `providers.toml` 和
+  `mcp.toml`。
+</Callout>

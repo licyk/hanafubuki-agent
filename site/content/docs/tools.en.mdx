@@ -1,0 +1,101 @@
+---
+title: Tools
+description: "The tools the model uses: commands and terminals, file reads, edits and patches, web search and fetch, and the workspace roots and AGENTS.md."
+icon: Wrench
+---
+
+The model does its work through tools. Each tool comes from a plugin, which `disabledPlugins` can turn off as a whole (see the [Configuration reference](/docs/config-reference#general)). Which tools need an approval is in [Permissions and approvals](/docs/permissions#what-asks).
+
+| Plugin         | Tools                                                                                                            |
+| -------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `execution`    | `exec_command`, `write_stdin`, `resize_execution`                                                                |
+| `workspace-fs` | `read_file`, `list_directory`, `search_text`, `apply_patch`, `move_path`, `delete_path`                          |
+| `web`          | `web_search`, `fetch_web_page`                                                                                   |
+| `view-image`   | `view_image` (only when the model takes images)                                                                  |
+| `mcp`          | The MCP servers' tools, and `list_mcp_resources`, `list_mcp_resource_templates`, `read_mcp_resource`             |
+| `skills`       | `skills_list`, `skills_read`, `enable_skill`, `disable_skill`                                                    |
+| `memory`       | `list_agent_memories`, `search_agent_memories`, `read_agent_memory`, `append_agent_memory_note` (with memory on) |
+
+A few tools are always there: `update_plan` (the task plan), `request_user_input` (asking you), `new_context` (a fresh context window), and `tool_search` when some tools are offered on demand.
+
+## Commands and terminals [#commands]
+
+`exec_command` runs a command in a shell:
+
+| System       | Shell                                                                        |
+| ------------ | ---------------------------------------------------------------------------- |
+| Linux, macOS | `/bin/bash` (or `/bin/sh` without it), as a login shell (`-lc`) by default   |
+| Windows      | `pwsh` (or `powershell` without it), with UTF-8 output; `cmd.exe` on request |
+
+- **Long-running commands**: a command is waited for up to 10 seconds by default (the model may ask for up to 30). One still running then goes on in the background, and the model reads its later output, or writes to it, with `write_stdin`.
+- **Interactive terminals**: the model can ask for a pseudo-terminal (PTY), which takes any input and can be resized with `resize_execution`; otherwise only Ctrl-C can be sent.
+- **Output**: each call returns at most 256 KiB of output, and a process's whole output is capped at 256 KiB by default.
+- **Time limits**: every process is stopped after 10 minutes. A tool that makes no progress for 10 minutes is stopped too.
+- **Environment**: commands get a clean environment, without your shell's variables; see [Environment](/docs/environment#commands).
+- **Working directory**: a command runs in the directory the model names; when it names none, in the directory you started `hanafubuki-agent` in.
+- **Clean-up**: the Agent records the process groups it starts and ends them when it shuts down; after a crash, the next start cleans up what was left.
+
+The terminal interface shows a running command as `• Running …`; `exec --json` has its `execution_progress` events.
+
+## Files [#files]
+
+| Tool             | Does                                                                                       |
+| ---------------- | ------------------------------------------------------------------------------------------ |
+| `read_file`      | Reads a file, page by page, up to 256 KiB a page                                           |
+| `list_directory` | Lists a directory                                                                          |
+| `search_text`    | Searches text with a regular expression, honouring `.gitignore` and the other ignore files |
+| `apply_patch`    | Creates, changes and deletes files as a patch                                              |
+| `move_path`      | Moves or renames                                                                           |
+| `delete_path`    | Deletes a file or a directory                                                              |
+
+- A relative path is taken from the first workspace root.
+- Reading is not limited to the workspace roots. A write, move or delete anywhere needs an approval; one that touches a path outside the workspace roots is critical, and its summary names those paths.
+- In the terminal interface, `apply_patch`'s approval and result show the diff it makes.
+
+## The web [#web]
+
+`web_search` searches the web, and `fetch_web_page` reads a page's text. Neither needs an approval.
+
+`webSearchProvider` picks the search service:
+
+| Value              | Does                                                                                                                  |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------- |
+| `"auto"` (default) | SearXNG first when `searxngBaseUrl` is set, then DuckDuckGo when SearXNG finds nothing or fails; otherwise DuckDuckGo |
+| `"duckduckgo"`     | Always DuckDuckGo                                                                                                     |
+| `"searxng"`        | Always SearXNG; needs `searxngBaseUrl`                                                                                |
+
+```sh
+hanafubuki-agent config set searxngBaseUrl https://searx.example.com
+hanafubuki-agent config set webSearchProvider searxng
+```
+
+- A search returns at most 10 results, kept for 5 minutes.
+- A fetch returns up to 50,000 bytes of text by default, and can continue page by page. It follows at most 5 redirects, 20 seconds each fetch.
+- A fetch refuses private and loopback addresses and URLs with credentials.
+- With `webFetchUseJinaReader = true`, a direct fetch that fails (refused, timed out, empty, an unsupported type) is retried through `https://r.jina.ai/`, which sends the URL to Jina.
+- The web tools use `network.proxy`; see [Network and logging](/docs/network-logging#proxy-scope).
+
+## Workspace roots [#workspace]
+
+The workspace roots tell the model which directories it works in, in this order:
+
+1. the working directory: `-C DIR`, or the current directory;
+2. the working directory's Git root;
+3. each `--add-dir DIR`.
+
+A directory inside an earlier one is dropped. The first root is what relative paths are taken from, and what `@` mentions and `/diff` use.
+
+```sh
+hanafubuki-agent -C ~/src/app --add-dir ~/src/shared-lib
+```
+
+## AGENTS.md [#agents-md]
+
+At the start of each turn, the Agent reads these instruction files and gives them to the model:
+
+1. your own: `AGENTS.override.md` in the data directory, or `AGENTS.md` without it (`~/.local/share/hanafubuki-agent/AGENTS.md` on Linux);
+2. each workspace root's `AGENTS.override.md`, or its `AGENTS.md`.
+
+Only the files in the roots themselves are read, not those in the directories between the Git root and the working directory. All the instructions together are capped at 32 KiB, 16 KiB a group.
+
+With the `workspace-context` plugin turned off, the model sees neither these instructions nor the workspace roots and the environment.

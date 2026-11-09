@@ -1,0 +1,101 @@
+---
+title: 工具
+description: 模型可以使用的工具：命令和终端、文件读写和补丁、网页搜索和抓取，以及工作区目录和 AGENTS.md。
+icon: Wrench
+---
+
+模型通过工具完成工作。每个工具来自一个插件，可以用 `disabledPlugins` 整个关闭（见[配置参考](/docs/config-reference#general)）。哪些工具需要审批见[权限与审批](/docs/permissions#what-asks)。
+
+| 插件           | 工具                                                                                                          |
+| -------------- | ------------------------------------------------------------------------------------------------------------- |
+| `execution`    | `exec_command`、`write_stdin`、`resize_execution`                                                             |
+| `workspace-fs` | `read_file`、`list_directory`、`search_text`、`apply_patch`、`move_path`、`delete_path`                       |
+| `web`          | `web_search`、`fetch_web_page`                                                                                |
+| `view-image`   | `view_image`（只在模型接受图片时提供）                                                                        |
+| `mcp`          | MCP 服务器的工具，以及 `list_mcp_resources`、`list_mcp_resource_templates`、`read_mcp_resource`               |
+| `skills`       | `skills_list`、`skills_read`、`enable_skill`、`disable_skill`                                                 |
+| `memory`       | `list_agent_memories`、`search_agent_memories`、`read_agent_memory`、`append_agent_memory_note`（启用记忆时） |
+
+另外有几个总是存在的工具：`update_plan`（更新任务计划）、`request_user_input`（向你提问）、`new_context`（开始新的上下文窗口），以及在有延迟提供的工具时出现的 `tool_search`。
+
+## 命令和终端 [#commands]
+
+`exec_command` 在 Shell 中运行一条命令：
+
+| 系统         | Shell                                                               |
+| ------------ | ------------------------------------------------------------------- |
+| Linux、macOS | `/bin/bash`（没有时用 `/bin/sh`），默认以登录 Shell 运行（`-lc`）   |
+| Windows      | `pwsh`（没有时用 `powershell`），输出为 UTF-8；也可以选择 `cmd.exe` |
+
+- **长时间运行的命令**：命令默认最多等待 10 秒（模型可以要求最多 30 秒）。到时还没结束的命令继续在后台运行，模型用 `write_stdin` 读取后续输出或向它输入。
+- **交互式终端**：模型可以要求在伪终端（PTY）中运行，此时可以输入任意内容，并用 `resize_execution` 调整大小；普通模式下只能发送 Ctrl-C。
+- **输出**：每次调用最多返回 256 KiB 输出，一个进程的总输出默认最多 256 KiB。
+- **时限**：每个进程最多运行 10 分钟。工具 10 分钟没有进展也会被停止。
+- **环境**：命令得到一个干净的环境，不继承你 Shell 中的变量，见[环境变量](/docs/environment#commands)。
+- **工作目录**：命令在模型指定的目录中运行；模型没有指定时，在你启动 `hanafubuki-agent` 时所在的目录运行。
+- **清理**：Agent 记录它启动的进程组，关闭时结束它们；崩溃后，下次启动时会清理遗留的进程。
+
+终端界面中，运行中的命令显示为 `• Running ...`；`exec --json` 中是 `execution_progress` 事件。
+
+## 文件 [#files]
+
+| 工具             | 作用                                               |
+| ---------------- | -------------------------------------------------- |
+| `read_file`      | 读取文件，按页读取，每页最多 256 KiB               |
+| `list_directory` | 列出目录                                           |
+| `search_text`    | 用正则表达式搜索文本，遵循 `.gitignore` 等忽略规则 |
+| `apply_patch`    | 以补丁的形式创建、修改和删除文件                   |
+| `move_path`      | 移动或重命名                                       |
+| `delete_path`    | 删除文件或目录                                     |
+
+- 相对路径相对于第一个工作区目录。
+- 读取不受工作区目录限制；写入、移动和删除在任何位置都需要审批，涉及工作区目录以外的路径时风险等级为严重，并在摘要中列出这些路径。
+- 终端界面中，`apply_patch` 的审批和结果会显示修改的差异。
+
+## 网页 [#web]
+
+`web_search` 搜索网页，`fetch_web_page` 读取一个网页的正文。两者都不需要审批。
+
+`webSearchProvider` 决定使用哪个搜索服务：
+
+| 值               | 行为                                                                                       |
+| ---------------- | ------------------------------------------------------------------------------------------ |
+| `"auto"`（默认） | 设置了 `searxngBaseUrl` 时先用 SearXNG，没有结果或失败时改用 DuckDuckGo；否则用 DuckDuckGo |
+| `"duckduckgo"`   | 总是用 DuckDuckGo                                                                          |
+| `"searxng"`      | 总是用 SearXNG，需要设置 `searxngBaseUrl`                                                  |
+
+```sh
+hanafubuki-agent config set searxngBaseUrl https://searx.example.com
+hanafubuki-agent config set webSearchProvider searxng
+```
+
+- 每次搜索最多 10 条结果，结果缓存 5 分钟。
+- 抓取默认返回最多 50,000 字节的正文，可以分页继续读取。最多跟随 5 次重定向，单次 20 秒。
+- 抓取拒绝私有地址、本机地址和带凭据的 URL。
+- `webFetchUseJinaReader = true` 时，直接抓取失败（被拒绝、超时、内容为空、类型不支持等）后改用 `https://r.jina.ai/` 读取。这会把 URL 发送给 Jina。
+- 网页工具使用 `network.proxy`，见[网络与日志](/docs/network-logging#proxy-scope)。
+
+## 工作区目录 [#workspace]
+
+工作区目录告诉模型它在哪些目录中工作，依次是：
+
+1. 工作目录：`-C 目录`，默认为当前目录；
+2. 工作目录所在的 Git 仓库根目录；
+3. 每个 `--add-dir 目录`。
+
+位于前面某个目录之内的目录会被去掉。第一个目录是相对路径的基准，`@` 文件提及和 `/diff` 也使用它。
+
+```sh
+hanafubuki-agent -C ~/src/app --add-dir ~/src/shared-lib
+```
+
+## AGENTS.md [#agents-md]
+
+每个回合开始时，Agent 读取这些说明文件并交给模型：
+
+1. 你自己的说明：数据目录中的 `AGENTS.override.md`，没有时读 `AGENTS.md`（Linux 上是 `~/.local/share/hanafubuki-agent/AGENTS.md`）；
+2. 每个工作区目录中的 `AGENTS.override.md`，没有时读 `AGENTS.md`。
+
+只读取工作区目录本身中的文件，不读取 Git 根目录和工作目录之间各级目录中的文件。所有说明合计最多 32 KiB，每组最多 16 KiB。
+
+关闭 `workspace-context` 插件后，模型不再看到这些说明、工作区目录和环境信息。

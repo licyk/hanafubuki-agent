@@ -1,0 +1,84 @@
+---
+title: Skills
+description: What a Skill is, where Skills come from, how to install and use one, and how to turn one on or off.
+icon: Sparkles
+---
+
+A Skill is a directory with a `SKILL.md`: a guide to doing one kind of task, with reference material and scripts if it needs them. The model sees the Skill catalog (the names and descriptions), reads a Skill when a task calls for it, and follows its steps.
+
+## SKILL.md [#skill-md]
+
+`SKILL.md` starts with a YAML header:
+
+```markdown
+---
+name: release-notes
+description: Write release notes for this repository from its git history, grouped into features, fixes and breaking changes.
+---
+
+# Writing release notes
+
+1. Find the commits since the last tag with `git log` …
+```
+
+| Field                                            | Required | Means                                                                                      |
+| ------------------------------------------------ | -------- | ------------------------------------------------------------------------------------------ |
+| `description`                                    | Yes      | When to use the Skill, up to 4096 bytes; the model decides by it whether to read the Skill |
+| `name`                                           | No       | Its name, up to 96 characters; the directory's name by default                             |
+| `license`                                        | No       | Its license                                                                                |
+| `metadata.version`, `metadata.short-description` | No       | A version and a short description                                                          |
+
+Fields it does not know are ignored. A Skill directory may also have an `agents/openai.yaml`, with a display name, icons, and the MCP servers it depends on; while such a server is not ready, the Skill is listed as unavailable.
+
+## Where Skills come from [#sources]
+
+| Source     | Where                                                                                                 | Id, for example        |
+| ---------- | ----------------------------------------------------------------------------------------------------- | ---------------------- |
+| Built in   | `skills/system/` in the data directory, refreshed at every start                                      | `system:skill-creator` |
+| Installed  | `skills/packages/` in the data directory, where `skills install` puts them                            | `user:release-notes`   |
+| Repository | `.agents/skills/` in each workspace root and the directories above it (up to its Git root), read-only | `repo:web/lint`        |
+
+The two built-in Skills:
+
+- `system:skill-creator`: writes or revises a Skill with you.
+- `system:skill-manager`: inspects the Skills, turns one on or off, installs one from a folder or a Git repository, and explains why a Skill is or is not in play for this turn.
+
+Put the Skills a team shares in the repository's `.agents/skills/`, and everyone working in it can use them.
+
+## Listing and installing [#manage]
+
+```sh
+hanafubuki-agent skills list
+hanafubuki-agent skills install ./release-notes
+hanafubuki-agent skills install ./release-notes --overwrite
+hanafubuki-agent skills remove user:release-notes
+```
+
+- `skills list` prints each Skill's id, whether it is turned off, and its description; the Skills with problems go to standard error.
+- `skills install DIR`: `DIR` holds a `SKILL.md`, or exactly one subdirectory holds one. The Skill must parse. The installed directory is named after the source directory. An installed Skill of the same name makes it fail; `--overwrite` replaces it.
+- `skills remove ID` removes an installed Skill. A repository's Skills come and go with the repository.
+
+`/skills` in the terminal interface shows the same list.
+
+## Using one in a conversation [#use]
+
+- **Let the model choose**: the model sees the catalog with every request, and reads a Skill with `skills_read` when the task fits its description.
+- **Name it**: write `$NAME` in a message, such as `Use $release-notes to write the notes for 0.2.0`. A Skill you name is given to the model for that turn.
+
+Environment variable names such as `$PATH` or `$HOME`, and the names of tools and MCP servers, are never taken for a Skill.
+
+## Turning one on or off [#enable]
+
+Every Skill found is on by default. A Skill that is turned off is left out of the catalog the model sees.
+
+- Ask the model: "turn off the release-notes Skill", say. It calls `disable_skill` (or `enable_skill`), which **always asks you**, whatever the permission mode, and is not available in plan mode.
+- Or edit `skills/state.json` in the data directory, adding the Skill's id to its `disabled` list or removing it.
+
+Neither the command line nor the terminal interface has a command that turns a Skill on or off.
+
+To turn Skills off altogether, add `skills` to `disabledPlugins`.
+
+<Callout type="warn">
+  A Skill's scripts are run by the model as commands, which need approval like any other. Before you
+  install a Skill from a source you do not know, read its `SKILL.md` and its scripts.
+</Callout>

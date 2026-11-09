@@ -1,0 +1,95 @@
+---
+title: Permissions and approvals
+description: The three permission modes, what needs an approval, how to answer one, and the protection the Agent does not give.
+icon: ShieldCheck
+---
+
+When the model wants to do something with side effects (run a command, change a file, call an MCP tool), the Agent first lets the **permission mode** decide whether it needs your approval.
+
+## Permission modes [#modes]
+
+| Mode             | `--permission-mode` | In `config.toml` | Does                                                                                  |
+| ---------------- | ------------------- | ---------------- | ------------------------------------------------------------------------------------- |
+| Manual (default) | `manual`            | `"manual"`       | Every operation that needs an approval waits for your answer                          |
+| Automatic review | `auto-review`       | `"auto_review"`  | A model reviews each operation that needs an approval and decides, without asking you |
+| Full access      | `full-access`       | `"full_access"`  | Every operation that needs an approval is allowed                                     |
+
+To set it:
+
+```sh
+hanafubuki-agent config set permissionMode auto_review    # from now on
+hanafubuki-agent --permission-mode full-access exec "…"   # for this run only
+```
+
+A profile can hold it too, such as `[profiles.review] permissionMode = "auto_review"`, selected with `-p review`. The mode is fixed when a turn starts, and the terminal interface has no command to change it; `/status` shows it.
+
+<Callout type="warn" title="There is no operating-system sandbox">
+  The Agent does not run commands in a sandbox. An allowed command runs with your user's rights: it
+  can read and write any file you can, and reach the network. In full-access mode, every command the
+  model proposes runs at once. Use it only where you can live with the consequences.
+</Callout>
+
+## What needs an approval [#what-asks]
+
+| Operation                                                                   | Approval                                                       | Risk                                                |
+| --------------------------------------------------------------------------- | -------------------------------------------------------------- | --------------------------------------------------- |
+| Running a command (`exec_command`)                                          | Every time                                                     | Critical                                            |
+| Writing to a running command, resizing its terminal                         | No                                                             |                                                     |
+| Changing files (`apply_patch`)                                              | Yes                                                            | High; critical outside the workspace roots          |
+| Moving or deleting files (`move_path`, `delete_path`)                       | Yes                                                            | High; critical for a recursive delete               |
+| Reading files, listing directories, searching text                          | No                                                             |                                                     |
+| Web search and fetch                                                        | No                                                             |                                                     |
+| MCP tools                                                                   | By the server's approval policy; see [MCP](/docs/mcp#policies) | High; critical when the tool says it is destructive |
+| MCP resources, the memory tools, listing and reading Skills, viewing images | No                                                             |                                                     |
+| Turning a Skill on or off                                                   | Always asks you                                                | Critical                                            |
+| `git clone`                                                                 | Always asks you                                                | Critical                                            |
+
+- There is no list of safe commands: even `ls` or `git status` asks.
+- Reading is not limited to the workspace roots: the model can read any file your user can.
+- The operations that **always ask you** (turning a Skill on or off, `git clone`) ask in automatic review and full access too, and can only be allowed once.
+
+## Answering an approval [#answering]
+
+<Tabs items={["Terminal interface", "exec"]}>
+  <Tab value="Terminal interface">
+    The approval shows the kind of operation, its summary and its risk. `y` allows it once, `a`
+    allows it for the session (when offered), and `n` or Esc denies it. Ctrl-C denies it and every
+    request waiting behind it. See [Terminal interface](/docs/terminal-interface#approvals).
+  </Tab>
+  <Tab value="exec">
+    `--approve` decides: `deny` (the default, every approval denied), `ask` (you are asked at the
+    terminal) or `allow:TOOL[,TOOL…]` (those tools allowed, the others denied). See
+    [exec](/docs/exec#approvals).
+  </Tab>
+</Tabs>
+
+- **Allow once** allows this one operation.
+- **Allow for the session** (`a`) stops the same tool from asking for the rest of the session, whatever the command or path. It is kept in memory only: after a restart, or once the tool changes (an MCP server reconnecting, say), it asks again. The operations that always ask you do not offer it.
+- After a **denial** the model is told it was denied; usually it tries another way, or explains why it needs the operation.
+- An approval waits at most 15 minutes; then it counts as denied.
+
+## Automatic review [#auto-review]
+
+In automatic review mode, an operation that needs an approval is reviewed by **the session's own model on its Provider**. The review request has no tools, only the operation and an excerpt of the conversation, and the model answers with a risk level, whether you asked for the operation, allow or deny, and why.
+
+- Allowed, the operation runs; denied, the model is told why.
+- Three denials in a row stop the turn, so the model does not keep trying.
+- A review that times out (after 90 seconds) or fails denies the operation.
+- The review is kept in the session's history; `exec --json` has it as the `permission_review_*` events.
+
+Automatic review costs extra model requests and relies on the model's judgement. It suits everyday work you can undo.
+
+## Full access [#full-access]
+
+In full-access mode, every operation that needs an approval is allowed without asking. What still applies:
+
+- The operations that always ask you (turning a Skill on or off, `git clone`).
+- The calls refused outright: an MCP tool its server's policy denies, a command or path that cannot be resolved.
+- [Plan mode](/docs/plan-mode) still offers read-only tools only.
+
+## Other controls [#other-controls]
+
+- [Plan mode](/docs/plan-mode) gives the model read-only tools only, whatever the permission mode.
+- MCP servers have their own approval policies (`allow`, `ask`, `deny`); see [MCP](/docs/mcp#policies).
+- `disabledPlugins` removes a whole kind of tool: `["execution"]` leaves the model no way to run commands; see the [Configuration reference](/docs/config-reference#general).
+- The model is told the permission mode, so it can plan with it.

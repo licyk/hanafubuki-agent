@@ -1,0 +1,36 @@
+---
+title: Plan mode
+description: Explore the code read-only in plan mode and get a plan; and the task plan of the default mode.
+icon: ClipboardList
+---
+
+A session has two modes: in the **default mode** the Agent does the task; in **plan mode** it explores the code read-only, asks you questions if it needs to, and ends with a plan, changing nothing. Use plan mode when you want to see how the Agent means to go about something before it starts.
+
+## Switching [#switch]
+
+In the terminal interface, type `/mode` and pick `plan` or `default` from the list; the interface says `• Mode set to plan`. You cannot switch while a turn runs. `/status` shows the mode.
+
+A session `/new` starts is always in the default mode, and so is `exec`'s.
+
+## What plan mode has [#tools]
+
+- Read-only tools only: reading files, listing directories, searching text, web search and fetch, read-only MCP tools, listing and reading Skills, and the like.
+- Questions for you (`request_user_input`), to choose between approaches, say.
+- No tool that runs commands, changes files or turns Skills on or off, whatever the [permission mode](/docs/permissions).
+
+Once it has explored, the model gives a **proposed plan**, shown in the conversation as `• Proposed Plan` and its text.
+
+## Carrying the plan out [#implement]
+
+The terminal interface has no "implement this plan" action. To carry it out:
+
+1. type `/mode` and switch back to `default`;
+2. send a message such as "Implement the plan above".
+
+The model is in the same session, and sees the plan.
+
+## The task plan [#task-plan]
+
+In the default mode, the model can keep a checklist with `update_plan`: up to 20 steps, each pending, in progress or completed. The terminal interface shows it as `• Updated Plan` with checkboxes; `exec --json` has it as `task_plan_updated` events.
+
+The task plan is the model's progress, for itself and for you; it changes nothing about what the model can do.
