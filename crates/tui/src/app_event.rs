@@ -13,6 +13,7 @@ use hanafubuki_agent::{
 use ratatui::crossterm::event::{KeyEvent, MouseEvent};
 
 use crate::agent_bridge::{AgentReply, McpCall, ProviderCall, SessionCall};
+use crate::appearance::AppearanceEvent;
 use crate::file_search::FileMatch;
 use crate::history_cell::HistoryCell;
 
@@ -53,6 +54,8 @@ pub(crate) enum AppEvent {
     SetFullscreenTranscript(bool),
     /// What a slash command asks of the app itself.
     Command(AppCommand),
+    /// `/theme`, `/statusline`, `/title`: a change, for this run or saved.
+    Appearance(AppearanceEvent),
     StartCommitAnimation,
     StopCommitAnimation,
     CommitTick,

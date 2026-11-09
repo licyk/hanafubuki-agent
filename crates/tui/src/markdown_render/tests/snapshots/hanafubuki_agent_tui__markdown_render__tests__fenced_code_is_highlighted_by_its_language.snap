@@ -1,0 +1,11 @@
+---
+source: crates/tui/src/markdown_render/tests/mod.rs
+expression: styled_lines(&text)
+---
+[Before]
+
+[fn]{#B48EAD}[ ]{#C0C5CE}[main]{#8FA1B3}[(]{#C0C5CE}[)]{#C0C5CE}[ ]{#C0C5CE}[{]{#C0C5CE}
+[    ]{#C0C5CE}[let]{#B48EAD}[ answer ]{#C0C5CE}[=]{#C0C5CE}[ ]{#C0C5CE}[42]{#D08770}[;]{#C0C5CE}[ ]{#C0C5CE}[//]{#65737E}[ the answer]{#65737E}
+[}]{#C0C5CE}
+
+[After]

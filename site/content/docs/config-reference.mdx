@@ -72,13 +72,17 @@ icon: ListTree
 
 ### 终端界面 [#tui]
 
-| 键                         | 类型和取值                      | 默认值   | 含义                                                                                                                                                          |
-| -------------------------- | ------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `tui.fullscreenTranscript` | 布尔值                          | `true`   | [终端界面](/docs/terminal-interface#modes)在备用屏幕上自己绘制对话（Fullscreen）；`false` 时对话写入终端的滚动历史（Scrollback）。启动时读取，`/tui` 会设置它 |
-| `tui.alternateScreen`      | `"auto"`、`"always"`、`"never"` | `"auto"` | 界面是否可以使用备用屏幕；`"auto"` 在 SSH 会话中不使用。不能使用备用屏幕时，界面以 Scrollback 方式运行                                                        |
-| `tui.rawOutput`            | 布尔值                          | `false`  | 以对话内容的原始纯文本显示，便于用终端自己的选择复制；`/raw` 会设置它                                                                                         |
+| 键                         | 类型和取值                      | 默认值                                                     | 含义                                                                                                                                                          |
+| -------------------------- | ------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tui.fullscreenTranscript` | 布尔值                          | `true`                                                     | [终端界面](/docs/terminal-interface#modes)在备用屏幕上自己绘制对话（Fullscreen）；`false` 时对话写入终端的滚动历史（Scrollback）。启动时读取，`/tui` 会设置它 |
+| `tui.alternateScreen`      | `"auto"`、`"always"`、`"never"` | `"auto"`                                                   | 界面是否可以使用备用屏幕；`"auto"` 在 SSH 会话中不使用。不能使用备用屏幕时，界面以 Scrollback 方式运行                                                        |
+| `tui.rawOutput`            | 布尔值                          | `false`                                                    | 以对话内容的原始纯文本显示，便于用终端自己的选择复制；`/raw` 会设置它                                                                                         |
+| `tui.theme`                | 字符串                          | 未设置                                                     | [语法高亮](/docs/terminal-interface#highlighting)主题：内置主题的名字，或数据目录 `themes/` 下自定义的 `名字.tmTheme`；未设置时是 `ansi`。`/theme` 会设置它   |
+| `tui.statusLine`           | 项目 ID 数组                    | `["model-with-reasoning", "current-dir", "session-title"]` | [状态栏](/docs/terminal-interface#status-line)的项目及顺序；`[]` 表示不显示（底栏显示 `? for shortcuts`）。`/statusline` 会设置它                             |
+| `tui.statusLineColors`     | 布尔值                          | `true`                                                     | 状态栏的项目是否使用主题的颜色                                                                                                                                |
+| `tui.terminalTitle`        | 项目 ID 数组                    | `["activity", "session-title", "project-name"]`            | [终端标题](/docs/terminal-interface#status-line)的项目及顺序；`[]` 表示不修改终端标题。`/title` 会设置它                                                      |
 
-`[tui]` 下的其他键保留在文件中，但会被忽略。
+`[tui]` 下的其他键保留在文件中，但会被忽略；`statusLine` 和 `terminalTitle` 中界面不认识的项目也会被忽略（启动时给出警告）。
 
 `logLevel`、`network.proxy` 和 `[tui]` 只对独立运行的 Agent 有效；嵌入 Agent 的应用提供自己的日志、代理和界面。
 

@@ -49,6 +49,9 @@ fn the_table_keeps_the_presentation_order() {
             "pwd",
             "mcp",
             "raw",
+            "theme",
+            "statusline",
+            "title",
             "tui",
             "ps",
             "stop",
@@ -68,8 +71,21 @@ fn availability_follows_the_spec() {
     assert_eq!(
         during_task,
         [
-            "skills", "copy", "diff", "mention", "status", "pwd", "mcp", "raw", "tui", "ps",
-            "stop", "exit"
+            "skills",
+            "copy",
+            "diff",
+            "mention",
+            "status",
+            "pwd",
+            "mcp",
+            "raw",
+            "theme",
+            "statusline",
+            "title",
+            "tui",
+            "ps",
+            "stop",
+            "exit"
         ]
     );
     let needs_session: Vec<&str> = COMMANDS
@@ -88,7 +104,17 @@ fn availability_follows_the_spec() {
         .collect();
     assert_eq!(
         inline_args,
-        ["rename", "resume", "fork", "export", "mcp", "raw", "clear"]
+        [
+            "rename",
+            "resume",
+            "fork",
+            "export",
+            "mcp",
+            "raw",
+            "statusline",
+            "title",
+            "clear"
+        ]
     );
 }
 

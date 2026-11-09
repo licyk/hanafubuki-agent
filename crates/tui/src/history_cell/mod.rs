@@ -27,7 +27,7 @@ use crate::wrapping::{word_wrap_lines, RtOptions};
 
 pub(crate) use plan::{new_plan_update, new_proposed_plan_stream};
 pub(crate) use reports::{new_mcp_output, new_skills_output};
-pub(crate) use status::new_status_output;
+pub(crate) use status::{format_tokens_compact, new_status_output, permission_mode_name};
 pub(crate) use thinking::ThinkingCell;
 pub(crate) use tool::{new_tool_call, ToolCallCell, ToolResultView};
 

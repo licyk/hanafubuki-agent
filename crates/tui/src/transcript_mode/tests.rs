@@ -9,6 +9,7 @@ fn preferences(fullscreen: bool, alternate_screen: AgentAlternateScreen) -> Agen
         fullscreen_transcript: fullscreen,
         alternate_screen,
         raw_output: false,
+        ..AgentTuiPreferences::default()
     }
 }
 

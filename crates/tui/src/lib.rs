@@ -11,6 +11,7 @@
 mod agent_bridge;
 mod app;
 mod app_event;
+mod appearance;
 mod bottom_pane;
 mod chatwidget;
 mod clipboard;

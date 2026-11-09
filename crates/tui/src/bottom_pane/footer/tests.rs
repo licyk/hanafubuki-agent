@@ -1,11 +1,12 @@
 // Modified from OpenAI Codex rust-v0.93.0 (Apache-2.0).
+// Modified from OpenAI Codex 57a808a392 (Apache-2.0).
 
 use super::*;
 use insta::assert_snapshot;
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
 
-fn snapshot_footer(name: &str, props: FooterProps) {
+fn snapshot_footer(name: &str, props: FooterProps<'_>) {
     let height = footer_height(props).max(1);
     let mut terminal = Terminal::new(TestBackend::new(80, height)).unwrap();
     terminal
@@ -17,12 +18,13 @@ fn snapshot_footer(name: &str, props: FooterProps) {
     assert_snapshot!(name, terminal.backend());
 }
 
-fn props(mode: FooterMode) -> FooterProps {
+fn props(mode: FooterMode) -> FooterProps<'static> {
     FooterProps {
         mode,
         use_shift_enter_hint: false,
         quit_shortcut_key: key_hint::ctrl(KeyCode::Char('c')),
         thinking_toggle: None,
+        status_line: None,
     }
 }
 

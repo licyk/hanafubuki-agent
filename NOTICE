@@ -91,6 +91,13 @@ Third-party notices
   `custom_terminal.rs`, ported as `crates/tui/src/custom_terminal.rs`, is
   derived from `ratatui::Terminal` and keeps its MIT header; the license
   follows.
+- The syntax definitions and themes the terminal interface highlights with
+  are the ones two-face (https://github.com/CosmicHorrorDev/two-face, MIT
+  or Apache License 2.0) bundles into the binary, curated from bat
+  (https://github.com/sharkdp/bat); each has its own license (MIT, BSD,
+  Apache 2.0, the Sublime Text license, the Unlicense or WTFPL), listed
+  with its text in `crates/tui/syntax-licenses.txt`, which the release
+  appends to the binary archives' `THIRD-PARTY-LICENSES.txt`.
 
 The NOTICE of OpenAI Codex
 --------------------------

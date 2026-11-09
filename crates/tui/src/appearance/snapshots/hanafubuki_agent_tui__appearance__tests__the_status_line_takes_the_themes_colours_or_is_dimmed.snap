@@ -1,0 +1,5 @@
+---
+source: crates/tui/src/appearance/tests.rs
+expression: styled(&appearance.status_line().unwrap())
+---
+[gpt-5 high]{#BF616A}[ · ]~[main]{#8FA1B3}[ · ]~[Context 25% used]{#D08770}

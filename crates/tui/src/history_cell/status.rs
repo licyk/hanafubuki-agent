@@ -135,11 +135,7 @@ impl HistoryCell for StatusHistoryCell {
         for root in roots {
             lines.push(formatter.continuation(vec![Span::from(root)]));
         }
-        let permissions = match self.permission_mode {
-            AgentPermissionMode::Manual => "manual",
-            AgentPermissionMode::AutoReview => "auto-review",
-            AgentPermissionMode::FullAccess => "full-access",
-        };
+        let permissions = permission_mode_name(self.permission_mode);
         lines.push(formatter.line("Permissions", vec![Span::from(permissions)]));
         let mode = match self.mode {
             AgentSessionMode::Default => "default",
@@ -284,7 +280,16 @@ fn truncate_line_to_width(line: Line<'static>, max_width: usize) -> Line<'static
     Line::from(spans_out)
 }
 
-fn format_tokens_compact(value: u64) -> String {
+/// The permission mode as the configuration names it.
+pub(crate) fn permission_mode_name(mode: AgentPermissionMode) -> &'static str {
+    match mode {
+        AgentPermissionMode::Manual => "manual",
+        AgentPermissionMode::AutoReview => "auto-review",
+        AgentPermissionMode::FullAccess => "full-access",
+    }
+}
+
+pub(crate) fn format_tokens_compact(value: u64) -> String {
     if value < 1_000 {
         return value.to_string();
     }

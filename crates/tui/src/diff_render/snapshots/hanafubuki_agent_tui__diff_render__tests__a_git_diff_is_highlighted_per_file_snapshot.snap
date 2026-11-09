@@ -1,0 +1,19 @@
+---
+source: crates/tui/src/diff_render/tests.rs
+expression: styled(&git_diff_lines(&diff))
+---
+[diff --git a/src/main.py b/src/main.py]
+[index 1111111..2222222 100644]
+[--- a/src/main.py]
+[+++ b/src/main.py]
+[@@ -1,2 +1,2 @@]{Cyan}
+[ ][def]{#B48EAD}[ ]{#C0C5CE}[main]{#8FA1B3}[(]{#C0C5CE}[)]{#C0C5CE}[:]{#C0C5CE}
+[-]{Red}[    ]{#C0C5CE~}[return]{#B48EAD~}[ ]{#C0C5CE~}[1]{#D08770~}
+[+]{Green}[    ]{#C0C5CE}[return]{#B48EAD}[ ]{#C0C5CE}[2]{#D08770}
+[diff --git a/notes.txt b/notes.txt]
+[--- a/notes.txt]
+[+++ b/notes.txt]
+[@@ -1 +1 @@]{Cyan}
+[-]{Red}[old words]{#C0C5CE~}
+[+]{Green}[new words]{#C0C5CE}
+[\ No newline at end of file]~

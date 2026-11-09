@@ -8,6 +8,7 @@
 //! types goes to the bottom pane, and what it submits leaves as an
 //! [`Op`] for the Agent, or runs as a slash command (`commands`).
 
+mod appearance;
 mod commands;
 mod live_tail;
 mod replay;
@@ -26,6 +27,7 @@ use ratatui::layout::Rect;
 
 use crate::agent_bridge::TurnUpdate;
 use crate::app_event::{AppEvent, AppEventSender, Op};
+use crate::appearance::Appearance;
 use crate::bottom_pane::{
     BottomPane, BottomPaneParams, CancellationEvent, InputResult, ThinkingToggle,
 };
@@ -59,6 +61,8 @@ pub(crate) struct ChatWidgetInit {
     /// The sessions the interface creates get a model of their own (`-m`),
     /// so the model policy may leave it empty.
     pub(crate) model_override: bool,
+    /// The theme, the status line and the title as `[tui]` has them.
+    pub(crate) appearance: Appearance,
 }
 
 pub(crate) struct ChatWidget {
@@ -95,6 +99,7 @@ pub(crate) struct ChatWidget {
     /// command turned off after it panicked.
     #[allow(dead_code, reason = "`/warnings` will read them")]
     warnings: Vec<String>,
+    appearance: Appearance,
     /// Advanced by every change to the live cells, so a cached layout of
     /// the live tail is refreshed.
     live_revision: u64,
@@ -118,6 +123,7 @@ impl ChatWidget {
             owned_transcript,
             fullscreen_preference,
             model_override,
+            appearance,
         } = init;
         let bottom_pane = BottomPane::new(BottomPaneParams {
             app_event_tx: app_event_tx.clone(),
@@ -145,6 +151,7 @@ impl ChatWidget {
             directory,
             mode: AgentSessionMode::Default,
             warnings: Vec::new(),
+            appearance,
             live_revision: 0,
             owned_transcript,
             fullscreen_preference,

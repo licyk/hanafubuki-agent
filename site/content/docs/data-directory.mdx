@@ -36,6 +36,7 @@ Linux 上的位置遵循 `$XDG_CONFIG_HOME` 和 `$XDG_DATA_HOME`。
 | `memory/`                   | [记忆](/docs/memory)：`memory.sqlite3` 及其工作目录                                                                                                                                |
 | `skills/`                   | [Skill](/docs/skills)：`system/` 中的内置 Skill，`packages/` 中安装的 Skill，`state.json` 记录启用状态                                                                             |
 | `logs/hanafubuki-agent.log` | 日志文件，超过 8 MiB 时轮换，保留 `.log.1` 到 `.log.3` 三个旧文件                                                                                                                  |
+| `themes/`                   | 自定义的[语法高亮主题](/docs/terminal-interface#highlighting)，`名字.tmTheme`，由你添加；Agent 不会创建这个目录                                                                    |
 | `start-marker.json`         | 记录未正常结束的启动次数，用于发现反复崩溃                                                                                                                                         |
 | `crash-record.json`         | 最近一次崩溃的记录                                                                                                                                                                 |
 | `process-groups.json`       | Agent 启动的进程组。下次启动时会清理上次遗留的进程                                                                                                                                 |

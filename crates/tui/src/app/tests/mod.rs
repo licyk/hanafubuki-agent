@@ -2,6 +2,8 @@
 //! its events through the bridge into the chat widget, and the chat drawn
 //! on a vt100 screen.
 
+use crate::appearance::Appearance;
+use hanafubuki_agent::AgentTuiPreferences;
 use std::sync::mpsc::{channel, Receiver};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -118,6 +120,7 @@ impl Harness {
             owned_transcript: mode.is_owned(),
             fullscreen_preference: true,
             model_override: false,
+            appearance: Appearance::new(&AgentTuiPreferences::default(), "/project".to_string()).0,
         });
         let mut app = App::new(chat_widget, bridge, sender, mode, HistoryRenderMode::Rich);
         let mut terminal = Terminal::with_options(VT100Backend::new(WIDTH, HEIGHT)).unwrap();
@@ -634,6 +637,7 @@ fn a_resumed_session_loads_its_earlier_pages_into_the_owned_transcript() {
     }
 }
 
+mod appearance;
 mod backtrack;
 mod session_commands;
 mod settings;

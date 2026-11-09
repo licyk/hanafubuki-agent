@@ -39,7 +39,7 @@ At the start (and after `/new` or a resume) a box shows the version, the model a
 1. **The running tool calls**: `• Running TOOL: SUBJECT`. In Fullscreen they are the end of the conversation instead.
 2. **The status line**: during a turn, `• Working (12s • esc to interrupt)` with the elapsed time. While a model request is retried it reads `Reconnecting 1/3: reason`. The timer pauses while an approval or a question waits for you. Once the model's answer starts streaming, the status line is hidden.
 3. **The composer**, starting with `›`.
-4. **The footer**: `? for shortcuts` while the composer is empty.
+4. **The footer**: the [status line](#status-line), by default the model and its reasoning effort, the working directory and the session's title, while the composer is empty or holds a draft with no turn running; `? for shortcuts` when it shows no item.
 
 An approval, a question, the `/model` and `/mode` lists and the screens of `/providers` and `/mcp` take the place of the status line and the composer while they are open. A screen stays open when a turn ends.
 
@@ -102,6 +102,9 @@ A message that starts with `/` is a command. Typing `/` opens a popup of them, n
 | `/pwd`, `/cwd`        | Shows the working directory (the first workspace root) and the other roots                                                                                              | Yes           |
 | `/mcp`                | Opens the [MCP](/docs/mcp) manager ([below](#mcp)). `/mcp verbose` lists the servers: connection state, errors, command or URL, tools. `/mcp login ID` logs in to one   | Yes           |
 | `/raw [on\|off]`      | Shows the conversation as the plain text it was made from, without styles, for copying with the terminal's selection; without an argument, switches it (below)          | Yes           |
+| `/theme`              | Picks the [syntax highlighting](#highlighting) theme, previewing each                                                                                                   | Yes           |
+| `/statusline`         | Sets the [status line](#status-line)'s items and colors; `/statusline ITEMS [--colors\|--no-colors]` for this run only                                                  | Yes           |
+| `/title`              | Sets the [terminal title](#status-line)'s items; `/title ITEMS` or `/title --clear` for this run only                                                                   | Yes           |
 | `/tui`                | Picks Scrollback or Fullscreen for the next launch (below)                                                                                                              | Yes           |
 | `/ps`                 | Lists the session's background terminals: command, state, directory, latest output                                                                                      | Yes           |
 | `/stop`, `/clean`     | After a confirmation, stops all of the session's background terminals                                                                                                   | Yes           |
@@ -110,7 +113,7 @@ A message that starts with `/` is a command. Typing `/` opens a popup of them, n
 
 - A command that is not available during a turn says `'/x' is disabled while a task is in progress.`
 - A `/name` that is no command is not sent; you get `Unrecognized command` instead. A path with a slash in it (`/usr/bin/env`), or text that starts with a space, is sent as a message.
-- Commands take no arguments, but `/rename`, `/resume`, `/fork`, `/export`, `/clear`, `/raw` and `/mcp`. A message such as `/model gpt-5.1`, with text after the name, goes to the model as an ordinary message. `/mcp` with anything but `verbose` or `login ID` says `Usage: /mcp [verbose | login ID]`.
+- Commands take no arguments, but `/rename`, `/resume`, `/fork`, `/export`, `/clear`, `/raw`, `/mcp`, `/statusline` and `/title`. A message such as `/model gpt-5.1`, with text after the name, goes to the model as an ordinary message. `/mcp` with anything but `verbose` or `login ID` says `Usage: /mcp [verbose | login ID]`.
 - `/raw` applies at once and is saved (`tui.rawOutput`), so the next launch starts with it. In Fullscreen the whole conversation is shown again in its raw form; in Scrollback what is already in the scrollback stays as it is, and only what follows is raw. `/raw` with anything but `on` or `off` says `Usage: /raw [on|off]`.
 - `/tui` saves `tui.fullscreenTranscript` and applies from the next launch: the running interface keeps its mode. `--no-alt-screen` and `tui.alternateScreen` still apply then.
 - The permission mode is the configuration's (`permissionMode` or `--permission-mode`). `/status` shows it; no command in the interface changes it.
@@ -287,6 +290,57 @@ With no session to resume, `resume --last` starts with no session, as `hanafubuk
 Type `/quit` or `/exit`, or press Ctrl-C twice within one second (or Ctrl-D twice on an empty composer). Quitting restores the terminal (in Fullscreen, leaving the alternate screen, and the conversation with it) and shuts the Agent down, and prints nothing more.
 
 The exit code is 0; 1 when the Agent could not start, the session to resume could not be opened or given the `-m` model, or the terminal could not be used; 2 without a terminal.
+
+## Syntax highlighting [#highlighting]
+
+Fenced code in an answer (` ```rust `) is highlighted by its language: a name, an alias or a file extension. A block with no language, or in one the interface does not know, keeps its plain text. A diff (a patch's, `/diff`'s) is highlighted by each file's extension; the `+` and `-` keep their colors and a removed line is dimmed. Code over 512 KiB or 10,000 lines, or with a line over 4 KiB, is not highlighted.
+
+The grammars and the 32 themes are the ones [two-face](https://github.com/CosmicHorrorDev/two-face) bundles, curated from bat. `/theme` lists them with the custom themes:
+
+- Moving through the list makes the highlighted theme the one in use, shown on a sample diff: beside the list in a wide terminal, under it otherwise. Typing filters the list.
+- Enter keeps the theme and saves it as `tui.theme`. Esc and Ctrl-C put back the theme in use when the list opened.
+- A custom theme is a `.tmTheme` file in the `themes/` directory of the [data directory](/docs/data-directory#contents), named by its file name without `.tmTheme`. A file that cannot be read as a theme is not listed; a custom theme with a bundled theme's name is the bundled one.
+- Without `tui.theme` the theme is `ansi`, which colors with the terminal's own palette and so reads on a light background as on a dark one. A `tui.theme` that names no theme, or a custom theme that cannot be read, is reported in the conversation at launch, and the default is used.
+- What the conversation already shows keeps the colors it was drawn with.
+
+## Status line and terminal title [#status-line]
+
+The footer under the composer shows the status line: items about the session, separated by `·`. An item with no value yet is left out: no branch outside a Git repository, no title before the session has one. With `tui.statusLineColors` each item takes a color from the theme; without, the line is dimmed.
+
+| Item                                        | Shows                                                                                               |
+| ------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `model`                                     | The model                                                                                           |
+| `model-with-reasoning`                      | The model and its reasoning effort (shown by default)                                               |
+| `reasoning`                                 | The reasoning effort                                                                                |
+| `current-dir`                               | The working directory, with `~` for the home directory (shown by default)                           |
+| `git-branch`                                | The branch the first workspace root has checked out, a short commit when detached, read from `.git` |
+| `context-remaining`, `context-used`         | `Context 75% left`, `Context 25% used`, once the model's context window is known                    |
+| `used-tokens`                               | The session's input and output tokens together, once there are any                                  |
+| `total-input-tokens`, `total-output-tokens` | `12K in`, `3.4K out`                                                                                |
+| `session-id`                                | The session's id                                                                                    |
+| `session-title`                             | The session's title (shown by default)                                                              |
+| `task-progress`                             | `Tasks 2/5`: the latest task plan's completed steps and all its steps                               |
+| `permission-mode`                           | The session's permission mode, else the configured `permissionMode`                                 |
+| `goal`                                      | `Goal: OBJECTIVE (STATUS)`, while the session has a goal                                            |
+
+The terminal's title (OSC 0) shows items of its own, joined with `|`; by default the spinner, the session's title and the project's name.
+
+| Item            | Shows                        |
+| --------------- | ---------------------------- |
+| `app-name`      | `hanafubuki-agent`           |
+| `project-name`  | The working directory's name |
+| `current-dir`   | The working directory        |
+| `activity`      | A spinner while a turn runs  |
+| `run-state`     | `Ready` or `Working`         |
+| `session-title` | The session's title          |
+| `model`         | The model                    |
+| `task-progress` | `Tasks 2/5`                  |
+
+- `/statusline` or `/title` alone opens a setup: Up and Down move, Space turns the highlighted item on or off, Left and Right move it in the order, Enter saves (`tui.statusLine` and `tui.statusLineColors`, or `tui.terminalTitle`), Esc cancels. The status line's setup previews the line, with sample values for what the session does not have yet. The title's sets the terminal's title while it is open; Esc puts it back.
+- With arguments they apply to this run only, and nothing is saved. `/statusline git-branch context-remaining` shows those items in that order; `--colors` and `--no-colors` turn the colors on and off. `/title app-name model` sets the title's items; `/title --clear` gives the terminal its own title back. An unknown item is refused with the list of the items.
+- Items that `[tui]` names and the interface does not know are left out, with a warning at launch.
+- The title is sanitized before it is written: control characters and invisible or bidirectional formatting characters are dropped, whitespace runs become one space, and it is cut at 240 characters. Under GNU Screen (`STY` is set) it is ASCII.
+- Before its first title the interface pushes the terminal's title on the terminal's title stack (XTWINOPS), and pops it back when it stops setting one and at exit. A terminal without the stack is left with an empty title.
 
 ## Terminal requirements [#terminal]
 

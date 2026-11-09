@@ -125,6 +125,7 @@ impl ChatWidget {
             | TurnUpdate::Mcp(_)
             | TurnUpdate::Skills(_)
             | TurnUpdate::Session(_) => {}
+            TurnUpdate::SessionStatus(_) => {}
         }
     }
 

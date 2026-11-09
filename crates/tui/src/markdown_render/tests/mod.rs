@@ -1,10 +1,12 @@
 // Modified from OpenAI Codex rust-v0.93.0 (Apache-2.0).
+// Modified from OpenAI Codex 57a808a392 (Apache-2.0).
 
 use ratatui::style::Stylize;
 use ratatui::text::Line;
 use ratatui::text::Text;
 
 use crate::markdown_render::render_markdown_text;
+use crate::render::highlight::{resolve_theme_by_name, set_syntax_theme};
 use insta::assert_snapshot;
 
 use crate::markdown_render::render_markdown_text_with_width;
@@ -115,10 +117,46 @@ fn link() {
 }
 
 #[test]
-fn code_block_unhighlighted() {
-    let text = render_markdown_text("```rust\nfn main() {}\n```\n");
+fn code_block_without_a_language_is_unhighlighted() {
+    let text = render_markdown_text("```\nfn main() {}\n```\n");
     let expected = Text::from_iter([Line::from_iter(["", "fn main() {}"])]);
     assert_eq!(text, expected);
+}
+
+#[test]
+fn fenced_code_is_highlighted_by_its_language() {
+    set_syntax_theme(resolve_theme_by_name("base16-ocean-dark", None).unwrap());
+    let md = "Before\n\n```rust,no_run\nfn main() {\n    let answer = 42; // the answer\n}\n```\n\nAfter\n";
+    let text = render_markdown_text(md);
+    assert_snapshot!(styled_lines(&text));
+}
+
+#[test]
+fn fenced_code_in_an_unknown_language_keeps_its_text() {
+    let text = render_markdown_text("```nosuchlang\nfirst\nsecond\n```\n");
+    let expected = Text::from_iter([
+        Line::from_iter(["", "first"]),
+        Line::from_iter(["", "second"]),
+    ]);
+    assert_eq!(text, expected);
+}
+
+/// Each span as `text` with its foreground, one line per line.
+fn styled_lines(text: &Text<'_>) -> String {
+    text.lines
+        .iter()
+        .map(|line| {
+            line.spans
+                .iter()
+                .filter(|span| !span.content.is_empty())
+                .map(|span| match span.style.fg {
+                    Some(color) => format!("[{}]{{{color}}}", span.content),
+                    None => format!("[{}]", span.content),
+                })
+                .collect::<String>()
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 #[test]

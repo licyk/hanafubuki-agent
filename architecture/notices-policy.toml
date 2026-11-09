@@ -180,6 +180,14 @@ path = "crates/tui/src/agent_bridge/replay.rs"
 reason = "A session's committed history read into what the chat replays."
 
 [[original]]
+path = "crates/tui/src/agent_bridge/status.rs"
+reason = "The session's status for the status line and the title, read through the facade, and the Git branch read from HEAD."
+
+[[original]]
+path = "crates/tui/src/agent_bridge/status/tests.rs"
+reason = "The Git branch read from HEAD, in a repository and a worktree."
+
+[[original]]
 path = "crates/tui/src/tui/input.rs"
 reason = "The thread that reads the terminal, written in place of Codex's event-stream broker."
 
@@ -190,6 +198,10 @@ reason = "The bridge end to end over the standalone Agent and its scripted model
 [[original]]
 path = "crates/tui/src/app/tests/settings.rs"
 reason = "The first-run setup, /providers and the MCP manager end to end over the standalone Agent."
+
+[[original]]
+path = "crates/tui/src/app/tests/appearance.rs"
+reason = "/theme, /statusline and /title end to end over the standalone Agent: run-only arguments, saved setups and the title written."
 
 [[original]]
 path = "crates/tui/src/app/tests/backtrack.rs"

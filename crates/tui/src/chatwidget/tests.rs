@@ -1,3 +1,5 @@
+use crate::appearance::Appearance;
+use hanafubuki_agent::AgentTuiPreferences;
 use std::sync::mpsc::{channel, Receiver};
 
 use super::*;
@@ -22,6 +24,7 @@ fn chat() -> (ChatWidget, Receiver<AppEvent>) {
         owned_transcript: false,
         fullscreen_preference: true,
         model_override: false,
+        appearance: Appearance::new(&AgentTuiPreferences::default(), "/project".to_string()).0,
     });
     (chat, events)
 }

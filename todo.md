@@ -144,6 +144,18 @@ moves its pin.
 - [ ] P5: `/theme` (syntect and two-face, also syntax highlighting),
       `/keymap`, `/title`, `/statusline`, `/presets`, `/config`,
       `/warnings`, `/memories`.
+  - [x] P5a: highlighting of fenced code and diffs (syntect 5.3, two-face
+        0.5 with Oniguruma; the grammars' and themes' licences in
+        `crates/tui/syntax-licenses.txt`, appended to the release's
+        `THIRD-PARTY-LICENSES.txt`); `/theme` (bundled and
+        `<data>/themes/*.tmTheme`, live preview; default `ansi`);
+        `/statusline` (model, reasoning, directory, branch, context,
+        tokens, session id and title, task progress, permission mode,
+        goal) and `/title` (OSC 0, sanitized, the title stack pushed and
+        popped); `tui.theme`, `tui.statusLine`, `tui.statusLineColors`,
+        `tui.terminalTitle`. Not ported: Codex's model-named themes, a
+        background query for the default theme, a streaming highlighter.
+  - [ ] P5b: `/keymap`, `/presets`, `/config`, `/warnings`, `/memories`.
 - [ ] P6: per-session permission mode (`set_session_permission_mode`,
       `turns.rs` no longer overrides it), `/permissions`, `/approve`
       (`approve_denied_action`, a model-visible note: goldens).

@@ -27,6 +27,7 @@ mod footer;
 mod form;
 mod list_selection_view;
 mod module_view;
+mod multi_select_picker;
 mod paste_burst;
 mod popup_consts;
 mod request_user_input;
@@ -43,6 +44,7 @@ use ratatui::buffer::Buffer;
 use ratatui::crossterm::event::KeyCode;
 use ratatui::crossterm::event::KeyEvent;
 use ratatui::layout::Rect;
+use ratatui::text::Line;
 
 use crate::app_event::AppEventSender;
 use crate::commands::{CommandReply, CommandSpec};
@@ -62,6 +64,7 @@ pub(crate) use form::{FieldId, FormEvent, FormItem, FormView, RowValue, TextFiel
 pub(crate) use list_selection_view::{ListSelectionView, SelectionItem, SelectionViewParams};
 pub(crate) use module_view::ViewFailure;
 use module_view::{ModuleView, ViewFailures};
+pub(crate) use multi_select_picker::{MultiSelectItem, MultiSelectPicker};
 use paste_burst::PasteBurst;
 use request_user_input::RequestUserInputOverlay;
 pub(crate) use textarea::{TextArea, TextAreaState};
@@ -359,6 +362,12 @@ impl BottomPane {
 
     pub(crate) fn set_thinking_toggle(&mut self, toggle: Option<ThinkingToggle>) {
         self.composer.set_thinking_toggle(toggle);
+        self.request_redraw();
+    }
+
+    /// The status line under the composer; `None` for the shortcuts hint.
+    pub(crate) fn set_status_line(&mut self, line: Option<Line<'static>>) {
+        self.composer.set_status_line(line);
         self.request_redraw();
     }
 

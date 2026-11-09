@@ -1,5 +1,10 @@
 // Modified from OpenAI Codex rust-v0.93.0 (Apache-2.0).
+// Modified from OpenAI Codex 57a808a392 (Apache-2.0).
 
+//! Markdown as the transcript shows it; a fenced code block that names its
+//! language is highlighted with the active syntax theme.
+
+use crate::render::highlight::highlight_code_to_lines;
 use crate::render::line_utils::line_to_static;
 use crate::wrapping::word_wrap_line;
 use crate::wrapping::RtOptions;
@@ -100,6 +105,10 @@ where
     pending_marker_line: bool,
     in_paragraph: bool,
     in_code_block: bool,
+    /// The language of the fenced block being read; its text is collected
+    /// in `code_block_buffer` and highlighted at its end.
+    code_block_lang: Option<String>,
+    code_block_buffer: String,
     wrap_width: Option<usize>,
     current_line_content: Option<Line<'static>>,
     current_initial_indent: Vec<Span<'static>>,
@@ -125,6 +134,8 @@ where
             pending_marker_line: false,
             in_paragraph: false,
             in_code_block: false,
+            code_block_lang: None,
+            code_block_buffer: String::new(),
             wrap_width,
             current_line_content: None,
             current_initial_indent: Vec::new(),
@@ -291,6 +302,10 @@ where
             self.push_line(Line::default());
         }
         self.pending_marker_line = false;
+        if self.in_code_block && self.code_block_lang.is_some() {
+            self.code_block_buffer.push_str(&text);
+            return;
+        }
         if self.in_code_block && !self.needs_newline {
             let has_content = self
                 .current_line_content
@@ -407,12 +422,20 @@ where
         self.needs_newline = false;
     }
 
-    fn start_codeblock(&mut self, _lang: Option<String>, indent: Option<Span<'static>>) {
+    fn start_codeblock(&mut self, lang: Option<String>, indent: Option<Span<'static>>) {
         self.flush_current_line();
         if !self.text.lines.is_empty() {
             self.push_blank_line();
         }
         self.in_code_block = true;
+        // The info string's first word: `rust,no_run` and `rust title=x`
+        // are Rust.
+        self.code_block_lang = lang
+            .as_deref()
+            .and_then(|info| info.split([',', ' ', '\t']).next())
+            .filter(|lang| !lang.is_empty())
+            .map(str::to_string);
+        self.code_block_buffer.clear();
         self.indent_stack.push(IndentContext::new(
             vec![indent.unwrap_or_default()],
             None,
@@ -422,6 +445,17 @@ where
     }
 
     fn end_codeblock(&mut self) {
+        if let Some(lang) = self.code_block_lang.take() {
+            let code = std::mem::take(&mut self.code_block_buffer);
+            if !code.is_empty() {
+                for line in highlight_code_to_lines(&code, &lang) {
+                    self.push_line(Line::default());
+                    for span in line.spans {
+                        self.push_span(span);
+                    }
+                }
+            }
+        }
         self.needs_newline = true;
         self.in_code_block = false;
         self.indent_stack.pop();

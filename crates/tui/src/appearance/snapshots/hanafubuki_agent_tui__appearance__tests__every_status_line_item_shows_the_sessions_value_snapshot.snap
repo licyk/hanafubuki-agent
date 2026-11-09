@@ -1,0 +1,19 @@
+---
+source: crates/tui/src/appearance/tests.rs
+expression: "plain(&line).replace(\" · \", \"\\n\")"
+---
+gpt-5
+gpt-5 high
+high
+/work/project
+main
+Context 75% left
+Context 25% used
+15.4K used
+12K in
+3.4K out
+7
+Fix the build
+Tasks 2/5
+auto-review
+Goal: Ship the release with every check passin… (active)

@@ -18,8 +18,12 @@ pulldown-cmark = { version = "0.13", default-features = false }
 # Without the default features, which pull crossterm 0.28 in beside 0.29.
 ratatui = { version = "0.30", default-features = false, features = ["crossterm_0_29", "scrolling-regions", "unstable-rendered-line-info"] }
 serde_json.workspace = true
+# Codex's feature set: the grammars and themes two-face bundles, read with
+# Oniguruma, which some of its grammars need.
+syntect = { version = "5", default-features = false, features = ["parsing", "plist-load", "regex-onig"] }
 tokio = { workspace = true, features = ["sync"] }
 textwrap = "0.16"
+two-face = { version = "0.5", default-features = false, features = ["syntect-onig"] }
 unicode-segmentation = "1.12"
 unicode-width = "0.2"
 

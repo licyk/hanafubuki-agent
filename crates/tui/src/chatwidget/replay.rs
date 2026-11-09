@@ -27,6 +27,10 @@ impl ChatWidget {
         self.mode = opened.mode;
         self.session_open = opened.session_id.is_some();
         self.setup_needed = opened.setup_needed;
+        let values = self.appearance.values_mut();
+        values.model = opened.model.clone();
+        values.status = None;
+        self.sync_status_line();
         self.add_to_history(history_cell::SessionHeaderHistoryCell::new(
             opened.model,
             self.directory.clone(),

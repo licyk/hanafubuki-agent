@@ -121,4 +121,4 @@ hanafubuki-agent 的许可证是 **GPL-3.0-only**（[LICENSE](https://github.com
 
 在 `crates/tui` 下添加新文件时，要么它派生自 Codex 并带上其来源版本的标记，要么在 `[[original]]` 中列出并说明原因。快照文件由测试生成，不检查。
 
-发布的二进制归档附带由 `cargo-about` 生成的 `THIRD-PARTY-LICENSES.txt`（`about.toml`、`about.hbs`）。`about.toml` 列出二进制的依赖允许使用的许可证；使用其他许可证的新依赖会让发布的 `licenses` 任务失败，直到在那里接受它。
+发布的二进制归档附带由 `cargo-about` 生成的 `THIRD-PARTY-LICENSES.txt`（`about.toml`、`about.hbs`），其后接上 `crates/tui/syntax-licenses.txt`：two-face 打包进二进制的语法定义和主题的许可证，它们不是 crate。界面的一个测试会将这个文件与 two-face 自己的清单比对；升级 two-face 后，用 `UPDATE_SYNTAX_LICENSES=1` 运行它重新生成。`about.toml` 列出二进制的依赖允许使用的许可证；使用其他许可证的新依赖会让发布的 `licenses` 任务失败，直到在那里接受它。

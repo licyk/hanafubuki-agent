@@ -30,15 +30,16 @@ use std::io::{self, Write};
 
 use ratatui::backend::Backend;
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
-use ratatui::style::Stylize;
 use ratatui::text::Line;
 
 use ratatui::crossterm::event::MouseEvent;
 
 use crate::agent_bridge::{AgentBridge, OlderTranscript, TurnUpdate};
 use crate::app_event::{AgentCommand, AppEvent, AppEventSender, Op};
+use crate::appearance::terminal_title::{TerminalTitle, TitleEncoding};
 use crate::chatwidget::ChatWidget;
 use crate::clipboard::Clipboard;
+use crate::diff_render::git_diff_lines;
 use crate::file_search::FileSearchManager;
 use crate::get_git_diff::get_git_diff;
 use crate::history_cell::{HistoryCell, HistoryRenderMode};
@@ -92,6 +93,7 @@ pub(crate) struct App {
     next_frame: Option<Instant>,
     last_frame: Option<Instant>,
     backtrack: backtrack::Backtrack,
+    terminal_title: TerminalTitle,
 }
 
 impl App {
@@ -125,6 +127,7 @@ impl App {
             next_frame: Some(Instant::now()),
             last_frame: None,
             backtrack: backtrack::Backtrack::default(),
+            terminal_title: TerminalTitle::new(TitleEncoding::detect()),
         }
     }
 
@@ -197,7 +200,7 @@ impl App {
             AppEvent::DiffResult(text) => {
                 self.open_overlay(
                     tui,
-                    Overlay::new_static_with_lines(diff_lines(&text), "D I F F".to_string()),
+                    Overlay::new_static_with_lines(git_diff_lines(&text), "D I F F".to_string()),
                 );
             }
             AppEvent::OpenResumePicker => self.open_resume_picker(tui, false),
@@ -209,6 +212,7 @@ impl App {
             AppEvent::SetRawOutput(raw) => self.set_raw_output(raw),
             AppEvent::SetFullscreenTranscript(enabled) => self.save_fullscreen_transcript(enabled),
             AppEvent::Command(command) => self.run_app_command(tui, command),
+            AppEvent::Appearance(event) => self.apply_appearance(event),
             AppEvent::Exit => return false,
         }
         true
@@ -534,6 +538,7 @@ impl App {
         if self.chat_widget.handle_paste_burst_tick() {
             return Ok(());
         }
+        self.sync_terminal_title(tui);
         self.last_frame = Some(Instant::now());
         if let Some(picker) = self.resume_picker.as_mut() {
             tui.draw(u16::MAX, |frame| {
@@ -622,31 +627,5 @@ fn new_view(render_mode: HistoryRenderMode, history: TranscriptHistoryState) -> 
 
 /// The diff's lines as the pager shows them: added lines green, removed
 /// ones red, hunk headers cyan and file headers bold.
-fn diff_lines(text: &str) -> Vec<Line<'static>> {
-    if text.trim().is_empty() {
-        return vec!["No changes detected.".italic().into()];
-    }
-    text.lines()
-        .map(|line| {
-            let line = line.to_string();
-            if line.starts_with("diff ")
-                || line.starts_with("index ")
-                || line.starts_with("+++")
-                || line.starts_with("---")
-            {
-                line.bold().into()
-            } else if line.starts_with('+') {
-                line.green().into()
-            } else if line.starts_with('-') {
-                line.red().into()
-            } else if line.starts_with("@@") {
-                line.cyan().into()
-            } else {
-                line.into()
-            }
-        })
-        .collect()
-}
-
 #[cfg(test)]
 mod tests;

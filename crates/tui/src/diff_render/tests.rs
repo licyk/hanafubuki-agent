@@ -1,6 +1,10 @@
+// Modified from OpenAI Codex 57a808a392 (Apache-2.0).
+
 use hanafubuki_agent::PatchPreview;
+use ratatui::text::Line;
 
 use super::*;
+use crate::render::highlight::{resolve_theme_by_name, set_syntax_theme};
 
 fn render(preview: &PatchPreview, width: usize) -> String {
     create_diff_summary(preview, width)
@@ -40,5 +44,106 @@ fn an_unreadable_patch_says_why() {
     assert_eq!(
         render(&preview, 60),
         "  └ the patch could not be read: \n    missing *** Begin Patch"
+    );
+}
+
+/// Each span as `text` with its foreground and its dimming.
+fn styled(lines: &[Line<'static>]) -> String {
+    lines
+        .iter()
+        .map(|line| {
+            line.spans
+                .iter()
+                .filter(|span| !span.content.is_empty())
+                .map(|span| {
+                    let dim = if span.style.add_modifier.contains(Modifier::DIM) {
+                        "~"
+                    } else {
+                        ""
+                    };
+                    match span.style.fg {
+                        Some(color) => format!("[{}]{{{color}{dim}}}", span.content),
+                        None => format!("[{}]{dim}", span.content),
+                    }
+                })
+                .collect::<String>()
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+#[test]
+fn a_patch_is_highlighted_by_its_files_language_snapshot() {
+    set_syntax_theme(resolve_theme_by_name("base16-ocean-dark", None).unwrap());
+    let preview: PatchPreview = serde_json::from_value(serde_json::json!({
+        "files": [
+            {"operation": "update", "path": "src/lib.rs", "movedTo": null,
+             "lines": [
+                {"kind": "hunk", "text": "@@"},
+                {"kind": "context", "text": "fn answer() -> u32 {"},
+                {"kind": "removed", "text": "    41"},
+                {"kind": "added", "text": "    42 // the answer"},
+                {"kind": "context", "text": "}"}
+             ],
+             "added": 1, "removed": 1, "omittedLines": 0}
+        ],
+        "error": null
+    }))
+    .unwrap();
+    insta::assert_snapshot!(styled(&create_diff_summary(&preview, 80)));
+}
+
+#[test]
+fn a_highlighted_row_wraps_with_the_sign_column_kept() {
+    set_syntax_theme(resolve_theme_by_name("base16-ocean-dark", None).unwrap());
+    let texts = vec!["let value = 1234567890;".to_string()];
+    let highlighted = highlight_lines("a.rs", &texts).unwrap();
+    let rows = push_wrapped_diff_line(
+        DiffLineKind::Added,
+        &texts[0],
+        highlighted.into_iter().next(),
+        12,
+    );
+    let text: Vec<String> = rows
+        .iter()
+        .map(|row| row.spans.iter().map(|span| span.content.as_ref()).collect())
+        .collect();
+    assert_eq!(text, ["+let value =", "  1234567890", " ;"]);
+}
+
+#[test]
+fn a_file_of_no_known_language_keeps_the_diff_colours() {
+    let texts = vec!["plain words".to_string()];
+    assert!(highlight_lines("notes.unknown-extension", &texts).is_none());
+    let rows = push_wrapped_diff_line(DiffLineKind::Removed, &texts[0], None, 80);
+    assert_eq!(rows.len(), 1);
+    assert!(rows[0].spans.iter().all(|span| span.style == style_del()));
+}
+
+#[test]
+fn a_git_diff_is_highlighted_per_file_snapshot() {
+    set_syntax_theme(resolve_theme_by_name("base16-ocean-dark", None).unwrap());
+    let diff = [
+        "diff --git a/src/main.py b/src/main.py",
+        "index 1111111..2222222 100644",
+        "--- a/src/main.py",
+        "+++ b/src/main.py",
+        "@@ -1,2 +1,2 @@",
+        " def main():",
+        "-    return 1",
+        "+    return 2",
+        "diff --git a/notes.txt b/notes.txt",
+        "--- a/notes.txt",
+        "+++ b/notes.txt",
+        "@@ -1 +1 @@",
+        "-old words",
+        "+new words",
+        "\\ No newline at end of file",
+    ]
+    .join("\n");
+    insta::assert_snapshot!(styled(&git_diff_lines(&diff)));
+    assert_eq!(
+        git_diff_lines("  \n"),
+        vec![Line::from("No changes detected.".italic())]
     );
 }

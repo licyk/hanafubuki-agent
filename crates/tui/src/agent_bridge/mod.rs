@@ -21,16 +21,17 @@ mod mcp;
 mod providers;
 mod replay;
 mod sessions;
+mod status;
 
 use std::sync::Arc;
 
 use hanafubuki_agent::{
     AgentAvailability, AgentCompactionOutcome, AgentEvent, AgentEventKind, AgentEventSink,
-    AgentHandle, AgentHistorySortDirection, AgentReasoningId, AgentSessionId, AgentSessionMode,
-    AgentSlot, AgentStatusEventSink, AgentSteeringRequest, AgentTaskPlanSnapshot,
-    AgentTurnAccepted, AgentTurnPageRequest, AgentTurnRequest, AgentTurnTerminalReason,
-    AgentUserInputRequest, AgentUserInputRequestId, ApprovalRequest, ApprovalRequestId,
-    SkillCatalogSnapshot,
+    AgentGoal, AgentHandle, AgentHistorySortDirection, AgentPermissionMode, AgentReasoningId,
+    AgentSessionId, AgentSessionMode, AgentSlot, AgentStatusEventSink, AgentSteeringRequest,
+    AgentTaskPlanSnapshot, AgentTurnAccepted, AgentTurnPageRequest, AgentTurnRequest,
+    AgentTurnTerminalReason, AgentUserInputRequest, AgentUserInputRequestId, ApprovalRequest,
+    ApprovalRequestId, SkillCatalogSnapshot,
 };
 use tokio::sync::oneshot;
 
@@ -41,6 +42,7 @@ pub(crate) use mcp::{McpCall, McpReply};
 pub(crate) use providers::{ProviderCall, ProviderReply};
 pub(crate) use replay::{OlderTranscript, OpenedSession, ReplayedItem};
 pub(crate) use sessions::{ExportDestination, SessionCall, SessionReply};
+pub(crate) use status::{SessionStatus, UsageSummary};
 
 /// How many of the turn's latest items are read for a finished call.
 const TOOL_ITEMS_PAGE: usize = 64;
@@ -95,6 +97,8 @@ pub(crate) enum TurnUpdate {
     Mcp(McpReply),
     Skills(SkillCatalogSnapshot),
     Session(SessionReply),
+    /// What the status line and the terminal title show of the session.
+    SessionStatus(Box<SessionStatus>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -116,6 +120,12 @@ pub(crate) enum AgentReply {
     SessionNotCreated(String),
     /// What a command found, for the chat to show as it is.
     Update(Box<TurnUpdate>),
+    /// What the session's status reads once, at open.
+    StatusLoaded {
+        session_id: AgentSessionId,
+        permission_mode: Option<AgentPermissionMode>,
+        goal: Option<AgentGoal>,
+    },
 }
 
 pub(crate) struct AgentBridge {
@@ -144,6 +154,7 @@ pub(crate) struct AgentBridge {
     page_size: usize,
     /// Dropped to cancel the MCP login waiting for the browser.
     mcp_login: Option<oneshot::Sender<()>>,
+    status: status::StatusCache,
 }
 
 impl AgentBridge {
@@ -166,6 +177,7 @@ impl AgentBridge {
             pending_steering: Vec::new(),
             page_size: commands::REPLAYED_ITEMS,
             mcp_login: None,
+            status: status::StatusCache::default(),
         }
     }
 
@@ -267,6 +279,7 @@ impl AgentBridge {
             AgentReply::Failed(message) => Some(TurnUpdate::Error(message)),
             AgentReply::SessionCreated(session_id) => {
                 self.session_id = Some(session_id);
+                self.load_session_status();
                 for op in self.creating.take().unwrap_or_default() {
                     if let Some(update) = self.submit(op) {
                         self.app_event_tx
@@ -284,9 +297,25 @@ impl AgentBridge {
                 self.turn = None;
                 self.turn_running = false;
                 self.pending_steering.clear();
+                self.load_session_status();
                 Some(TurnUpdate::SessionOpened(opened))
             }
-            AgentReply::Update(update) => Some(*update),
+            AgentReply::Update(update) => match *update {
+                // The interface has moved to another session since.
+                TurnUpdate::SessionStatus(status) if Some(status.session_id) != self.session_id => {
+                    None
+                }
+                TurnUpdate::ModelChanged(model) => {
+                    self.send_session_status();
+                    Some(TurnUpdate::ModelChanged(model))
+                }
+                update => Some(update),
+            },
+            AgentReply::StatusLoaded {
+                session_id,
+                permission_mode,
+                goal,
+            } => self.status_loaded(session_id, permission_mode, goal),
         }
     }
 
@@ -356,7 +385,14 @@ impl AgentBridge {
             AgentEventKind::UserInputResolved { resolution } => {
                 TurnUpdate::UserInputResolved(resolution.request_id)
             }
-            AgentEventKind::TaskPlanUpdated { plan } => TurnUpdate::TaskPlan(plan),
+            AgentEventKind::TaskPlanUpdated { plan } => {
+                self.send_session_status();
+                TurnUpdate::TaskPlan(plan)
+            }
+            AgentEventKind::HistoryCommitted { .. }
+            | AgentEventKind::SessionTitleUpdated { .. }
+            | AgentEventKind::CompactionUpdated { .. } => return self.session_status(),
+            AgentEventKind::SessionGoalUpdated { goal } => return self.goal_updated(goal),
             AgentEventKind::ModelRetryScheduled {
                 current_retry,
                 maximum_retries,
@@ -400,6 +436,7 @@ impl AgentBridge {
         self.turn = None;
         self.turn_running = false;
         self.pending_steering.clear();
+        self.send_session_status();
         TurnUpdate::Ended(end)
     }
 

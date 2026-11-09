@@ -7,8 +7,11 @@ use std::sync::mpsc::{channel, Receiver};
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use super::*;
+use hanafubuki_agent::AgentTuiPreferences;
+
 use crate::agent_bridge::{ExportDestination, TurnUpdate};
 use crate::app_event::AppCommand;
+use crate::appearance::Appearance;
 use crate::chatwidget::{ChatWidget, ChatWidgetInit};
 use crate::render::renderable::Renderable;
 use crate::tui::FrameRequester;
@@ -24,6 +27,7 @@ fn chat(owned_transcript: bool) -> (ChatWidget, Receiver<AppEvent>) {
         owned_transcript,
         fullscreen_preference: true,
         model_override: false,
+        appearance: Appearance::new(&AgentTuiPreferences::default(), "/project".to_string()).0,
     });
     (chat, events)
 }

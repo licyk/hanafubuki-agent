@@ -1,4 +1,5 @@
 // Modified from OpenAI Codex rust-v0.93.0 (Apache-2.0).
+// Modified from OpenAI Codex 57a808a392 (Apache-2.0).
 
 //! The bottom-pane footer renders transient hints under the composer.
 //!
@@ -11,7 +12,9 @@
 //! schedule a redraw so it can expire even if the UI is otherwise idle.
 //!
 //! After a first Esc on an empty composer, the footer says a second one edits a previous message
-//! (`FooterMode::EscHint`). Codex's footer also shows the context window left, the collaboration
+//! (`FooterMode::EscHint`). The status line (`/statusline`) takes the row of
+//! the shortcuts hint while the composer is empty, and while a draft is
+//! written with no turn running. Codex's footer also shows the context window left, the collaboration
 //! mode and its width-based collapse rules, and shortcuts for shell commands, images, the external
 //! editor and backtracking; none of those are ported.
 use crate::key_hint;
@@ -29,7 +32,7 @@ use ratatui::widgets::Widget;
 
 /// The rendering inputs for the footer area under the composer.
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct FooterProps {
+pub(crate) struct FooterProps<'a> {
     pub(crate) mode: FooterMode,
     pub(crate) use_shift_enter_hint: bool,
     /// Which key the user must press again to quit.
@@ -38,6 +41,8 @@ pub(crate) struct FooterProps {
     pub(crate) quit_shortcut_key: KeyBinding,
     /// What Ctrl-O does, while the model's thinking is live.
     pub(crate) thinking_toggle: Option<ThinkingToggle>,
+    /// The status line, when this mode shows it.
+    pub(crate) status_line: Option<&'a Line<'static>>,
 }
 
 /// What the thinking toggle (Ctrl-O) does to the live thinking cells.
@@ -110,12 +115,12 @@ pub(crate) fn reset_mode_after_activity(current: FooterMode) -> FooterMode {
     }
 }
 
-pub(crate) fn footer_height(props: FooterProps) -> u16 {
+pub(crate) fn footer_height(props: FooterProps<'_>) -> u16 {
     footer_lines(props).len() as u16
 }
 
 /// Render footer content from `FooterProps`, indented like the composer.
-pub(crate) fn render_footer(area: Rect, buf: &mut Buffer, props: FooterProps) {
+pub(crate) fn render_footer(area: Rect, buf: &mut Buffer, props: FooterProps<'_>) {
     Paragraph::new(prefix_lines(
         footer_lines(props),
         " ".repeat(FOOTER_INDENT_COLS).into(),
@@ -125,16 +130,18 @@ pub(crate) fn render_footer(area: Rect, buf: &mut Buffer, props: FooterProps) {
 }
 
 /// The canonical FooterMode-to-text mapping.
-fn footer_lines(props: FooterProps) -> Vec<Line<'static>> {
+fn footer_lines(props: FooterProps<'_>) -> Vec<Line<'static>> {
     match props.mode {
         FooterMode::QuitShortcutReminder => {
             vec![quit_shortcut_reminder_line(props.quit_shortcut_key)]
         }
         FooterMode::ComposerEmpty => {
-            let mut line = Line::from(vec![
-                key_hint::plain(KeyCode::Char('?')).into(),
-                " for shortcuts".dim(),
-            ]);
+            let mut line = props.status_line.cloned().unwrap_or_else(|| {
+                Line::from(vec![
+                    key_hint::plain(KeyCode::Char('?')).into(),
+                    " for shortcuts".dim(),
+                ])
+            });
             if let Some(toggle) = props.thinking_toggle {
                 line.push_span("   ".dim());
                 line.extend(toggle.hint().dim().spans);
@@ -142,7 +149,7 @@ fn footer_lines(props: FooterProps) -> Vec<Line<'static>> {
             vec![line]
         }
         FooterMode::ShortcutOverlay => shortcut_overlay_lines(props),
-        FooterMode::ComposerHasDraft => vec![Line::from("")],
+        FooterMode::ComposerHasDraft => vec![props.status_line.cloned().unwrap_or_default()],
         FooterMode::EscHint => vec![Line::from(vec![
             key_hint::plain(KeyCode::Esc).into(),
             " again to edit a previous message".into(),
@@ -155,7 +162,7 @@ fn quit_shortcut_reminder_line(key: KeyBinding) -> Line<'static> {
     Line::from(vec![key.into(), " again to quit".into()]).dim()
 }
 
-fn shortcut_overlay_lines(props: FooterProps) -> Vec<Line<'static>> {
+fn shortcut_overlay_lines(props: FooterProps<'_>) -> Vec<Line<'static>> {
     let newline = if props.use_shift_enter_hint {
         key_hint::shift(KeyCode::Enter)
     } else {

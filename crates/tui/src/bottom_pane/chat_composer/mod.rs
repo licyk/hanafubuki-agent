@@ -100,6 +100,8 @@ pub(crate) struct ChatComposer {
     placeholder_text: String,
     is_task_running: bool,
     thinking_toggle: Option<ThinkingToggle>,
+    /// The status line the footer shows (`/statusline`).
+    status_line: Option<Line<'static>>,
     /// Non-bracketed paste burst tracker (see `bottom_pane/paste_burst.rs`).
     paste_burst: PasteBurst,
     footer_mode: FooterMode,
@@ -140,6 +142,7 @@ impl ChatComposer {
             placeholder_text,
             is_task_running: false,
             thinking_toggle: None,
+            status_line: None,
             paste_burst: PasteBurst::default(),
             footer_mode: FooterMode::ComposerEmpty,
             current_file_query: None,
@@ -680,12 +683,17 @@ impl ChatComposer {
         changed
     }
 
-    fn footer_props(&self) -> FooterProps {
+    fn footer_props(&self) -> FooterProps<'_> {
+        let mode = self.footer_mode();
+        // A draft written during a turn keeps the row clear.
+        let shows_status_line = mode == FooterMode::ComposerEmpty
+            || (mode == FooterMode::ComposerHasDraft && !self.is_task_running);
         FooterProps {
-            mode: self.footer_mode(),
+            mode,
             use_shift_enter_hint: self.use_shift_enter_hint,
             quit_shortcut_key: self.quit_shortcut_key,
             thinking_toggle: self.thinking_toggle,
+            status_line: self.status_line.as_ref().filter(|_| shows_status_line),
         }
     }
 
@@ -719,6 +727,10 @@ impl ChatComposer {
 
     pub(crate) fn set_thinking_toggle(&mut self, toggle: Option<ThinkingToggle>) {
         self.thinking_toggle = toggle;
+    }
+
+    pub(crate) fn set_status_line(&mut self, line: Option<Line<'static>>) {
+        self.status_line = line;
     }
 }
 

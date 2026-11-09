@@ -15,8 +15,10 @@ use hanafubuki_agent::{
 use crate::agent_bridge::{with_model, AgentBridge, AgentReply, StatusSink};
 use crate::app::App;
 use crate::app_event::{AppEvent, AppEventSender};
+use crate::appearance::Appearance;
 use crate::chatwidget::{ChatWidget, ChatWidgetInit};
 use crate::history_cell::HistoryRenderMode;
+use crate::render::highlight::configure_theme;
 use crate::transcript_mode::{is_ssh_session, TranscriptMode};
 use crate::tui::{self, FrameRequester, InputReader, Tui};
 
@@ -93,6 +95,12 @@ pub fn run(
         None => bridge.no_session()?,
     };
     let preferences = bridge.tui_preferences();
+    let theme_warning = configure_theme(
+        preferences.theme.as_deref(),
+        Some(runtime.storage_paths().root.join("themes")),
+    );
+    let (appearance, mut warnings) = Appearance::new(&preferences, options.directory.clone());
+    warnings.extend(theme_warning);
     let mode = TranscriptMode::resolve(&preferences, options.no_alt_screen, is_ssh_session());
     let render_mode = if preferences.raw_output {
         HistoryRenderMode::Raw
@@ -113,6 +121,7 @@ pub fn run(
         owned_transcript: mode.is_owned(),
         fullscreen_preference: preferences.fullscreen_transcript,
         model_override,
+        appearance,
     });
     let mut app = App::new(
         chat_widget,
@@ -128,6 +137,9 @@ pub fn run(
     if let Some(update) = app.bridge.reply(AgentReply::SessionOpened(opened)) {
         app.show_update(update);
     }
+    for warning in warnings {
+        app.chat_widget.add_warning(warning);
+    }
     if let Some(prompt) = options.prompt {
         app.chat_widget.submit_user_message(prompt);
     }
@@ -135,6 +147,7 @@ pub fn run(
         app.open_resume_picker(&mut tui, true);
     }
     let result = app.run(&mut tui, &events.receiver);
+    app.restore_terminal_title(&mut tui);
     drop(input);
     if mode.is_owned() {
         let _ = tui.leave_alt_screen();

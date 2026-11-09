@@ -160,6 +160,9 @@ jobs:
       # about.toml lists the accepted licenses and the four release targets
       - run: cargo fetch --locked
       - run: cargo about generate --locked --fail -m crates/cli/Cargo.toml -o THIRD-PARTY-LICENSES.txt about.hbs
+      # The grammars and themes two-face bundles into the binary are not
+      # crates; their licences are kept beside the interface's code.
+      - run: printf '\n' >> THIRD-PARTY-LICENSES.txt && cat crates/tui/syntax-licenses.txt >> THIRD-PARTY-LICENSES.txt
       - uses: actions/upload-artifact@v7.0.2
         with:
           name: third-party-licenses

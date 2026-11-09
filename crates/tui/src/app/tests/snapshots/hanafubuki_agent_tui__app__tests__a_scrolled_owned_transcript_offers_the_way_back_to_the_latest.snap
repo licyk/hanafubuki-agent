@@ -1,5 +1,5 @@
 ---
-source: crates/tui/src/app/tests.rs
+source: crates/tui/src/app/tests/mod.rs
 expression: harness.bottom_rows(6)
 ---
 • note 42
@@ -7,4 +7,4 @@ expression: harness.bottom_rows(6)
 
 › Ask the Agent to do anything
 
-  ? for shortcuts
+  fixture-model · /project

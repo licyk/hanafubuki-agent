@@ -28,7 +28,10 @@ mod rename;
 mod reports;
 mod resume;
 mod session;
+mod statusline;
 mod terminals;
+mod theme;
+mod title;
 mod tui;
 mod workspace;
 
@@ -38,6 +41,7 @@ use hanafubuki_agent::AgentSessionMode;
 
 use crate::agent_bridge::{McpReply, ProviderReply, SessionCall, SessionReply};
 use crate::app_event::{AgentCommand, AppEvent, AppEventSender, Op};
+use crate::appearance::Appearance;
 use crate::bottom_pane::{BottomPane, BottomPaneView, SelectionViewParams};
 use crate::history_cell::{self, HistoryCell};
 pub(crate) use mcp::MCP;
@@ -46,7 +50,7 @@ pub(crate) use model::{show_model_choices, MODEL};
 pub(crate) use providers::PROVIDERS;
 
 /// Every command, in presentation order: the most used first.
-pub(crate) static COMMANDS: [&CommandSpec; 26] = [
+pub(crate) static COMMANDS: [&CommandSpec; 29] = [
     &model::MODEL,
     &providers::PROVIDERS,
     &mode::MODE,
@@ -68,6 +72,9 @@ pub(crate) static COMMANDS: [&CommandSpec; 26] = [
     &pwd::PWD,
     &mcp::MCP,
     &raw::RAW,
+    &theme::THEME,
+    &statusline::STATUSLINE,
+    &title::TITLE,
     &tui::TUI,
     &terminals::PS,
     &terminals::STOP,
@@ -200,6 +207,7 @@ pub(crate) struct CommandContext<'a> {
     mode: AgentSessionMode,
     fullscreen_preference: bool,
     owned_transcript: bool,
+    appearance: &'a Appearance,
 }
 
 impl<'a> CommandContext<'a> {
@@ -210,6 +218,7 @@ impl<'a> CommandContext<'a> {
         mode: AgentSessionMode,
         fullscreen_preference: bool,
         owned_transcript: bool,
+        appearance: &'a Appearance,
     ) -> Self {
         Self {
             command,
@@ -218,7 +227,13 @@ impl<'a> CommandContext<'a> {
             mode,
             fullscreen_preference,
             owned_transcript,
+            appearance,
         }
+    }
+
+    /// The theme, the status line and the title as this run has them.
+    pub(crate) fn appearance(&self) -> &Appearance {
+        self.appearance
     }
 
     pub(crate) fn send(&self, event: AppEvent) {

@@ -1,0 +1,14 @@
+---
+source: crates/tui/src/bottom_pane/multi_select_picker/tests.rs
+expression: "render(&picker, 60)"
+---
+
+  Configure
+  Pick items.
+
+  [x] a  the a
+› [x] b  the b
+  [ ] c  the c
+
+  a | b
+  space toggle · ←/→ move · enter confirm · esc cancel

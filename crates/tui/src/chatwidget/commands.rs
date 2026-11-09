@@ -48,6 +48,7 @@ impl ChatWidget {
             self.mode,
             self.fullscreen_preference,
             self.owned_transcript,
+            &self.appearance,
         );
         if let Err(message) = catch_panic(|| call(&mut context)) {
             self.command_failed(command.name, &message);
@@ -90,10 +91,15 @@ impl ChatWidget {
             TurnUpdate::ModelChoices(choices) => self.run_command(&commands::MODEL, |context| {
                 commands::show_model_choices(context, choices)
             }),
-            TurnUpdate::ModelChanged(model) => self.add_to_history(history_cell::new_info_event(
-                format!("Model changed to {model}"),
-                None,
-            )),
+            TurnUpdate::ModelChanged(model) => {
+                self.appearance.values_mut().model = model.clone();
+                self.sync_status_line();
+                self.add_to_history(history_cell::new_info_event(
+                    format!("Model changed to {model}"),
+                    None,
+                ))
+            }
+            TurnUpdate::SessionStatus(status) => self.set_session_status(*status),
             TurnUpdate::ModeChanged(mode) => {
                 self.mode = mode;
                 self.add_to_history(history_cell::new_info_event(

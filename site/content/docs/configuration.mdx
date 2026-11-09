@@ -60,7 +60,7 @@ hanafubuki-agent config set "projects.'$PWD'.trustLevel" trusted
 error: `nosuch` is not a setting of config.toml
 ```
 
-写入只修改这一个键，保留文件中的注释和其他内容。`config set` 不能删除一个键；要删除，请编辑文件。终端界面的 [`/tui` 和 `/raw`](/docs/terminal-interface#modes) 以同样的方式写入它们的 `[tui]` 键。
+写入只修改这一个键，保留文件中的注释和其他内容。`config set` 不能删除一个键；要删除，请编辑文件。终端界面的 [`/tui` 和 `/raw`](/docs/terminal-interface#modes)、[`/theme`](/docs/terminal-interface#highlighting)、[`/statusline` 和 `/title`](/docs/terminal-interface#status-line) 以同样的方式写入它们的 `[tui]` 键。自定义高亮主题不在配置目录中：它们是数据目录 `themes/` 下的 `.tmTheme` 文件。
 
 ## 编辑文件 [#edit]
 
@@ -143,6 +143,9 @@ proxy = "http://127.0.0.1:7890"
 [tui]
 fullscreenTranscript = true
 rawOutput = false
+theme = "catppuccin-mocha"
+statusLine = ["model-with-reasoning", "git-branch", "context-remaining"]
+terminalTitle = ["activity", "project-name"]
 
 # hanafubuki-agent -p review
 [profiles.review]

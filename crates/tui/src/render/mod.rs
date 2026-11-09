@@ -2,6 +2,7 @@
 
 use ratatui::layout::Rect;
 
+pub(crate) mod highlight;
 pub mod line_utils;
 pub mod renderable;
 
