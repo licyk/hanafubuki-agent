@@ -213,6 +213,34 @@ moves its pin.
       findings), `/review`.
 - [ ] P12: the `goal` plugin (tools, context, the first continuation hook,
       goal templates), `/goal` and its status-line item.
+  - [x] The facade's half: `AgentGoal` (objective ≤ 4,000 characters,
+        status active | paused | blocked | budget_limited | complete,
+        origin, token and time budgets, usage) as an optional field `goal`
+        of the persisted runtime state (a fork copies it; children and
+        ephemeral sessions never have one); kernel `session_goal`,
+        `update_session_goal` (compare-and-swap); the `goal` row: tools
+        `get_goal`, `create_goal`, `update_goal` (Plan mode: `get_goal`
+        only), a `goal` world-state section, and the continuation hook
+        `goal/continue` (Codex's continuation, budget-limit and
+        objective-updated templates, within the same turn); facade `goal`,
+        `set_goal`, `clear_goal`, `pause_goal`, `resume_goal`; event
+        `session_goal_updated`. Ten request goldens regenerated (the three
+        tools); new corpus `golden/history-goal/` with
+        `recorded_goal_history_transcript.json`. `activity.rs`'s ceiling
+        644. Plugin rules' tool counts corrected (they were already off:
+        Default 24, Plan 13).
+  - [ ] The interface's half: `/goal [objective|clear|pause|resume|edit]`
+        and its status-line item (read `goal()` at open, follow the event).
+  - Open: continuation is within the turn (Codex starts a new turn), so a
+    goal without a budget is bounded by a turn's limits; `resume_goal`
+    starts no turn; `/goal edit` (keeping usage) needs an edit path;
+    tokens count cached input.
+  - Hanafubuki, at its next pin: copy `history-goal/`,
+    `recorded_goal_history_transcript.json` and the ten regenerated
+    request goldens byte for byte, with the twin of
+    `recorded_goal_history_reopens_and_continues`; `PersistedAgentRuntime
+    State` struct literals need `goal`; exhaustive event matches need
+    `SessionGoalUpdated`; a `goal` row after `recap`.
 - [ ] P13: `hanafubuki-agent-hooks` and `plugin-hooks`, the
       `ToolLifecycleHookRegistry` extension point, hook events, `/hooks`.
   - [x] The facade's half: `crates/hooks` (Codex's `[hooks]` and
