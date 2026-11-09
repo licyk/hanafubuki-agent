@@ -426,6 +426,27 @@ the generic tool label, so a plugin tool needs no frontend change.
   ends the turn `Failed` with `InternalFailure` (`AgentError::Internal`), not
   as the cancellation its drop guard would commit; the session takes its next
   turn.
+- Thinking (`service/sampling/stream/reasoning.rs`): each reasoning item the
+  model streams gets a kernel id (`AgentReasoningId`, drawn from the message
+  counter; provider ids never leave the stream) and is published as
+  `ReasoningStarted { reasoning_id, sampling_step }`, `ReasoningDelta {
+  reasoning_id, delta }` (Markdown; a new summary part arrives with its blank
+  line) and `ReasoningCompleted { reasoning_id, duration_millis }`, the time
+  from the item's start to its completion. The kept text is the item's
+  summary when it has one, else its raw text, each from the completed item
+  when it carries any, else as streamed; text the completed item adds to
+  what was shown is shown before the completion. Thinking is not counted
+  toward `maximum_model_output_bytes`: each item is cut at
+  `maximum_reasoning_text_bytes` (256 KiB) on a character boundary, and the
+  rest is neither shown nor kept. The step commits each item as
+  `ConversationItem::Reasoning { text, duration_millis, sampling_step,
+  truncated }` with its other items, in the order the model produced them;
+  it is presentation only: `as_model_input` skips it, the token estimate
+  does not count it, compaction drops it and permission reviews and memory
+  never read it. A response that stops early completes its open items with
+  what streamed; a response of only reasoning still commits nothing. The
+  timing snapshot (`ReasoningUpdated`, `AgentReasoningSnapshot`) is kept
+  beside it for status and recovery.
 - Tool plan: per sampling step the kernel (`AgentToolPlanner`) plans the core
   tools, the registered tools (with each handler's `availability` for the
   step's `ToolPlanContext`) and the tool sources, and freezes the plan with
@@ -1011,7 +1032,18 @@ the same start permits and maintenance leases as the UI does.
   completed and the text streamed so far (an unfinished reasoning or other
   item is accepted), logs the reason at warn, and fails only when nothing
   was produced. An item completed without `output_item.added` is started
-  by the kernel then completed; a missing `summary_index` is 0. A 200 body
+  by the kernel then completed; a missing `summary_index` is 0. Thinking
+  is `ModelEvent::ReasoningDelta { item_id, kind, index, delta }` (`kind`
+  `Summary` or `Raw`) between a reasoning item's `OutputItemAdded` and
+  `OutputItemCompleted` (which carries its `summary` and `content` parts):
+  Responses `reasoning_summary_text.delta` and `reasoning_text.delta`, its
+  request sending `reasoning: {effort, summary: "auto"}` whenever an effort
+  is set (OpenAI sends no summary otherwise); Chat `delta.reasoning_content`
+  or `delta.reasoning` (the first that has text), one reasoning item per
+  stretch of thinking, ended by the answer, a tool call or the response's
+  end; Anthropic `thinking` blocks and their `thinking_delta`
+  (`signature_delta` is dropped, and thinking is not requested, since with
+  tools its signed blocks would have to be sent back). A 200 body
   under another content type is read as SSE unless it starts with `{`, `[`
   or `<`. Empty responses, auth and HTTP errors stay errors. The kernel builds model
   ports from the protocol. Wire bodies are traced only as described in

@@ -189,7 +189,8 @@ The kinds, with their fields:
 | `turn_started` | |
 | `sampling_started` | `step` |
 | `response_started` | `responseId` |
-| `reasoning_updated`, `reasoning_headline_updated` | `reasoning`; `headline` |
+| `reasoning_updated` | `reasoning` (the turn's thinking time: `phase`, `activeSince`, …) |
+| `reasoning_started`, `reasoning_delta`, `reasoning_completed` | `reasoningId`, and `samplingStep`, `delta` (Markdown) or `durationMillis` |
 | `assistant_message_started` | `messageId`, `phase` (`commentary`, `final_answer` or `null`), `samplingStep` |
 | `assistant_text_delta` | `messageId`, `delta` |
 | `assistant_message_completed` | `messageId`, `phase` |

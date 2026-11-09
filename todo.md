@@ -9,14 +9,69 @@ Hanafubuki's separate thinking timer; a bilingual site, zh-CN by default;
 fixture recorded deliberately; Giscus follows the site's theme and locale).
 The next release with it is 0.2.0 (the headline event is removed).
 
-- [ ] T1: thinking in the model API (three protocols, `reasoning.summary`)
+- [x] T1: thinking in the model API (three protocols, `reasoning.summary`)
       and the kernel (three events, `ConversationItem::Reasoning`, its own
-      budget), the headline removed.
+      budget), the headline removed (spec.md §5 "Thinking" and §8
+      model-api, [docs/cli.md](docs/cli.md) event table). Each item is cut
+      at `AgentHardLimits::maximum_reasoning_text_bytes` (256 KiB) and no
+      longer spends `maximum_model_output_bytes`; a response that stops
+      early completes its open items. No request golden sets an effort, so
+      none changed; the new corpus is `golden/history-reasoning/` with
+      `recorded_reasoning_history_transcript.json`, and `golden/history/` is
+      unchanged.
+  - What T2 and T3 build on (serialized as the facade serializes them):
+    - `AgentEventKind::ReasoningStarted { reasoning_id, sampling_step }` →
+      `{"type":"reasoning_started","reasoningId":3,"samplingStep":1}`;
+      `ReasoningDelta { reasoning_id, delta }` →
+      `{"type":"reasoning_delta","reasoningId":3,"delta":"…"}` (Markdown,
+      concatenated as is: a new summary part's delta starts with its blank
+      line); `ReasoningCompleted { reasoning_id, duration_millis }` →
+      `{"type":"reasoning_completed","reasoningId":3,"durationMillis":1200}`.
+      Started → deltas → completed, all before the step's
+      `history_committed`; an item may have no delta (a provider that sent
+      no text). `AgentReasoningId` (a `u64`, unique in the session, drawn
+      from the message counter) is re-exported by the facade. A turn that
+      fails mid-stream sends no completion: end live blocks at the turn's
+      terminal event.
+    - `ConversationItem::Reasoning { text, duration_millis, sampling_step,
+      truncated }` →
+      `{"type":"reasoning","text":"…","durationMillis":1200,"samplingStep":1,"truncated":false}`,
+      committed with the step's other items in the model's order (normally
+      ahead of the step's tool calls and answer). It carries no reasoning id: a live
+      block is replaced by the items of the `history_committed` that follows
+      its completion. Exhaustive matches on `ConversationItem` need an arm.
+    - Removed: `AgentEventKind::ReasoningHeadlineUpdated`
+      (`reasoning_headline_updated`) and `AgentTurnSnapshot::reasoning_headline`
+      (`reasoningHeadline`). `ReasoningUpdated` and `AgentReasoningSnapshot`
+      (the turn's thinking time) are unchanged.
+    - Model API: `ModelEvent::ReasoningSummaryDelta` is now
+      `ReasoningDelta { item_id, kind: ModelReasoningTextKind, index, delta }`
+      and `ModelOutputItem::Reasoning` has `content: Vec<String>` beside
+      `summary`; a Responses request with an effort sends
+      `"reasoning":{"effort":…,"summary":"auto"}`, which changes a host's
+      request goldens only where they set an effort.
+    - Test support: `reasoning_tool_events` and `reasoning_answer_events`
+      (Responses streams whose reasoning summary streams).
 - [ ] T2: the TUI thinking cell, the toggle key, Working without the
       headline; `exec` output and `docs/cli.md`.
+  - T1 left the TUI compiling only: the bridge ignores the three events
+    (`agent_bridge/mod.rs` `event`, the `_ => return None` arm), `TurnUpdate::Status`
+    is gone with the headline, and the resume replay
+    (`agent_bridge/replay.rs`) and `sessions show` (`cli/src/sessions.rs`)
+    skip `ConversationItem::Reasoning` through their catch-all arms;
+    `exec`'s human output prints nothing for them and `--json` already
+    carries them.
 - [ ] T3 (Hanafubuki): the thinking block, Working without the headline or
       the thinking timer, the Task Center showing the configuration's
       recoveries.
+  - Copy `crates/agent/src/tests/golden/history-reasoning/` (one session,
+    `active/2026/11/09/session-2026-11-09T04-11-30-1.jsonl`) and
+    `recorded_reasoning_history_transcript.json` byte for byte into the
+    integration's `src/tests/golden/`, with the twin of
+    `recorded_reasoning_history_reopens_and_continues` (`golden.rs`): it
+    opens with both reasoning items' text and the next request carries
+    none of it. The recorded prompt is "List the Skills." and its tool
+    `skills_list`.
 - [ ] D1: the `site/` framework, tooling, Giscus, Umami, `site.yml`.
 - [ ] D2: the content rewrite, bilingual; `docs/` removed; links re-pointed.
 - [ ] D2b (Hanafubuki): its links into this repository's docs re-pointed.

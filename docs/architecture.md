@@ -743,7 +743,7 @@ quarantine what they cannot use
 
 - **History** (`AGENT_HISTORY_FORMAT_VERSION`, 5): JSONL rollouts are
   canonical and the SQLite index a projection. New items are additive
-  (`ToolSelection`, the optional namespace on `ToolCall`); a removed field is
+  (`ToolSelection`, `Reasoning`, the optional namespace on `ToolCall`); a removed field is
   an unknown key, ignored. `ContextSectionKind` stays a bare name rather than
   an `{ owner, id }` pair because every recorded `WorldStateUpdate` names
   kinds that way; the owner is the plugin that registers the kind's
@@ -859,7 +859,10 @@ quarantine what they cannot use
   ([Testing a plugin](rules/plugins.md#testing-a-plugin)).
 - **The history corpus** (`crates/agent/src/tests/golden/history/`) is
   history an earlier build recorded (a copy of Hanafubuki's, byte for byte);
-  it must keep opening and continuing. It is re-recorded only with
+  it must keep opening and continuing. `golden/history-reasoning/` is a
+  second corpus, a round trip whose steps think, recorded when reasoning
+  items were added: it must open with their text and keep it out of the
+  next request. Both are re-recorded only with
   `HANAFUBUKI_AGENT_UPDATE_GOLDEN_HISTORY=1` after an intended format
   change.
 - **Pipeline tests** (`crates/agent/src/tests/pipeline.rs`)

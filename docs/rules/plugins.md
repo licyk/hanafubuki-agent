@@ -1196,9 +1196,10 @@ documentation in step 7. No kernel or contracts file changed.
   corpus still opens. A change the model sees changes the request goldens on
   purpose. Regenerate them with
   `HANAFUBUKI_AGENT_UPDATE_GOLDEN=1 cargo test -p hanafubuki-agent --lib tests::golden`
-  and review the fixture diff. The `golden/history/` corpus is re-recorded
-  only with `HANAFUBUKI_AGENT_UPDATE_GOLDEN_HISTORY=1`, after an intended
-  history-format change; otherwise it keeps proving that older history
+  and review the fixture diff. The `golden/history/` and
+  `golden/history-reasoning/` corpora are re-recorded only with
+  `HANAFUBUKI_AGENT_UPDATE_GOLDEN_HISTORY=1`, after an intended
+  history-format change; otherwise they keep proving that older history
   opens. A host keeps goldens of its own over its rows (Hanafubuki's are in
   `hanafubuki-agent-integration`), which a model-visible change here
   changes as well. The fixtures are Linux-only.
