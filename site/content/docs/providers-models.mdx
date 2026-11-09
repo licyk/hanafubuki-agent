@@ -95,6 +95,8 @@ reasoningEffort = "medium"   # minimal、low、medium、high、xhigh
 
 推理强度只对 Responses 协议有效；其他协议的会话会忽略它。`/status` 会显示当前会话的推理强度。
 
+{/* T2: verify */}
+
 模型的思考过程会显示出来，在终端界面中是一行可展开的 `Thinking`（见[终端界面](/docs/terminal-interface#thinking)），在 `exec --json` 中是 `reasoning_*` 事件（见 [exec --json 事件](/docs/json-events#reasoning)）。能看到什么取决于 Provider：
 
 | 协议               | 思考内容                                                                                         |
