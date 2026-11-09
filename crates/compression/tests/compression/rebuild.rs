@@ -140,3 +140,19 @@ fn a_later_call_over_an_earlier_block_rebuilds_the_tier() {
     assert_eq!(distilled.direct_block_ids, ["b1"]);
     assert!(!result.state.block("b1").unwrap().active);
 }
+
+#[test]
+fn a_call_its_receipt_says_applied_nothing_is_not_replayed() {
+    let arguments =
+        json!({"content": [{"startId": "m00001", "endId": "m00002", "summary": "refused"}]});
+    let mut messages = history(&arguments.to_string());
+    messages.push(crate::fixtures::result(
+        "raw4",
+        "call1",
+        "compress",
+        "[Compression refused: the range is too small]",
+    ));
+    let result = rebuild(&messages);
+    assert_eq!(result.blocks_rebuilt, 0);
+    assert!(result.state.blocks.is_empty());
+}

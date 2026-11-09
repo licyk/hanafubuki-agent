@@ -75,8 +75,9 @@ fn to_usize(value: u64) -> usize {
     usize::try_from(value).unwrap_or(usize::MAX)
 }
 
-/// The persisted state, or none when it cannot be read: the session goes on
-/// without its blocks rather than failing to open.
+/// The persisted state, or none when it cannot be read: the session opens
+/// rather than failing, and recovery rebuilds the blocks from the history's
+/// `compress` calls.
 pub(crate) fn tolerant_compression_state<'de, D>(
     deserializer: D,
 ) -> Result<Option<AgentCompressionState>, D::Error>

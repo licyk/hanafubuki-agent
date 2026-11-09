@@ -37,6 +37,12 @@ impl AgentService {
         let history_bytes = history_contents.iter().fold(0usize, |total, item| {
             total.saturating_add(item.retained_bytes())
         });
+        let history: Arc<Vec<_>> = Arc::new(fork.history.into_iter().map(Arc::new).collect());
+        let compression = super::super::compression::inherited_state(
+            &source,
+            source.runtime.compression.as_deref(),
+            &history,
+        );
         let record = SessionRecord {
             session_id,
             forked_from_session_id: Some(request.source_session_id),
@@ -59,7 +65,7 @@ impl AgentService {
             },
             status: SessionStatus::created(now),
             conversation: SessionConversation {
-                history: Arc::new(fork.history.into_iter().map(Arc::new).collect()),
+                history,
                 history_version: 0,
                 pending_history_mutations: Vec::new(),
                 next_history_item_id: source.conversation.next_history_item_id,
@@ -69,7 +75,10 @@ impl AgentService {
                 next_message_id: source.conversation.next_message_id,
             },
             journal: SessionJournal::empty(),
-            runtime: SessionRuntime::idle(),
+            runtime: SessionRuntime {
+                compression,
+                ..SessionRuntime::idle()
+            },
         };
         let cell = self.inner.sessions.insert(record, &self.inner.accepting)?;
         if let Err(error) =

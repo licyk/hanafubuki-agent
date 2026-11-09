@@ -21,6 +21,7 @@ use tools::{configured_service, service_with, service_with_config};
 mod base_instructions;
 #[cfg(target_os = "linux")]
 mod compaction_golden;
+mod compression;
 #[cfg(target_os = "linux")]
 mod compression_golden;
 mod executions;

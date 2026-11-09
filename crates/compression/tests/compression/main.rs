@@ -10,6 +10,7 @@ mod apply;
 mod cache_report;
 mod decompress;
 mod fixtures;
+mod fork;
 mod hide;
 mod integrity;
 mod latch;

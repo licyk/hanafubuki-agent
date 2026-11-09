@@ -6,6 +6,11 @@ pub use fake_tools::{
     fake_mutation_action, standard_fake_tool_specs, FakeRegisteredExchange, FakeTools,
 };
 
+/// The view-latch digest that makes a session's compression state panic in
+/// every projection and compression tool call, to test that the panic is
+/// contained. The algorithm never writes it.
+pub const COMPRESSION_PANIC_MARKER: &str = "test-support: panic";
+
 /// A kernel over `model` whose caught kernel panics reach `kernel_faults`.
 pub fn service_reporting_kernel_faults(
     model: std::sync::Arc<dyn hanafubuki_agent_model_api::ModelPort>,

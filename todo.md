@@ -243,15 +243,12 @@ and pushed, and notes what Hanafubuki must change at its next pin.
     none. Budget pressure still compacts under `hierarchical`. A
     `[Compression FAILED`/refused receipt is an error output (`is_error`).
   - Open: the projection runs twice per step under `hierarchical` (the
-    estimate and the request); measure with P8's state size. The state is
-    persisted with every checkpoint (P8 decides on writing it only when it
-    changed). Forks before a turn, `edit_from_turn` and children start
-    without a state (P8, with `rebuild_state`); an unreadable state is
-    dropped, not rebuilt yet. The emergency voice nudges from
+    estimate and the request), and the state is persisted with every
+    checkpoint: both measured in P8, see its deviations. Forks, children
+    and an unreadable state: done in P8. The emergency voice nudges from
     `maxContextLimitPercent`; post-install `ContextBudgetExceeded` still
-    applies to a terminal-escape compaction. The panic-containment test
-    triggers its panics through `u32` overflows in the crate, so it relies
-    on debug overflow checks (a test hook would be the durable fix). The
+    applies to a terminal-escape compaction. The panic-containment test's
+    debug-only overflows: replaced in P8 by a test-support marker. The
     architecture page's "Not built: a third compaction path" is P4's.
   - Hanafubuki, at its next pin: `PersistedAgentRuntimeState.compression`
     (its own constructions add `compression: None`); new kernel types
@@ -264,7 +261,100 @@ and pushed, and notes what Hanafubuki must change at its next pin.
     `search_context`, `acp_status`, `acp_cache`). Golden to copy:
     `hierarchical_requests.json`. `NOTICE` names
     `crates/kernel/src/service/compression`.
-- [ ] P8: forks, resume, children, `rebuild`; state size; switching away.
+- [x] P8: forks, resume, children, `rebuild`; state size; switching away.
+      Done: kernel `service/compression/inherit.rs` (`inherited_state`). A
+      fork before a turn (so `edit_from_turn`) and a child forked before
+      its parent's running turn adopt the source's state through the
+      crate's new `adopt_fork_state` (billion-context's
+      `src/fork-adoption.ts`, `seedAllRefs` always on): a block whose
+      covered messages are all present is kept active, with the blocks a
+      tier block consumed as inactive records; expanded, consumed and
+      straddling blocks are dropped; every present message keeps its ref
+      and token snapshot; the parent's highest ref is reserved
+      (`REF_FLOOR_ID`, a `by_raw` entry naming no message); the orphan,
+      truncation, deferral and view latches carry over; the nudge, stats,
+      terminal streak, absorbed records and rules start fresh. A child at
+      its parent's head copies the state (as a fork at head does, so a
+      `/side` runs `Carry`); an empty child has none. With no source
+      state, and when a session is loaded without one (none written, or
+      undecodable and dropped by `tolerant_compression_state`), the state
+      is rebuilt from the window's `compress` calls (`rebuild_state`) with
+      the source's last turn's tuning (the defaults at load) and the
+      compress limits and recent zone relaxed; the crate's `rebuild_state`
+      now skips a call whose receipt is `[Compression FAILED`/`refused`/
+      `no-op` (a change to the ported function). A window holding a
+      `CompactionSummary` or `ProviderCompaction` is never rebuilt; a
+      window without `compress` calls gets no state (a `standard` fork
+      stays `None`). The panic-containment test now panics through
+      `test_support::COMPRESSION_PANIC_MARKER`: a view-latch digest the
+      algorithm never writes, checked first inside the projection's and
+      the tools' `catch_panic` closures under `cfg(any(test, feature =
+      "test-support"))` (per session, no record field or global, nothing
+      in production builds); the crate has no panic a malformed state
+      reaches in release (its `u32` counters only wrap there). It passes
+      in release. Tests: crate `fork` (7, ported from
+      `fork-adoption-plan.test.ts`) and a `rebuild` case; kernel
+      `compaction_contract::hierarchical::forks` (a fork before the second
+      turn keeps `b1` and drops `b2`, keeps `m00001`/`m00002`, reserves the
+      parent's highest ref and tags its own message above it, and shows
+      the summary without its carrier; a fork before the fold turn keeps
+      both; a lost parent state is rebuilt with the same blocks and refs,
+      and a fork before the folds gets none; children at head and empty;
+      a lost state rebuilt at restart, an undecodable one read as none);
+      facade `tests::compression` (switching to `standard` end to end: the
+      `compress` call stays as a carrier with tags and the summary, no
+      prompt, tools or nudge, then a standard compaction ends the blocks;
+      `edit_from_turn` after a fold keeps it). The kernel's hierarchical
+      tests pass in release too. `standard` and `hierarchical`
+      goldens unchanged (the golden's helpers moved to
+      `tests/compression.rs`).
+  - Measurements (release, a scratch harness in `crates/compression/tests`
+    run with `cargo test --release -- --ignored --nocapture` and then
+    removed: rounds of a short user message, three `read` calls with
+    ~1.5 KB results and a ~1.6 KB answer, each round folded by a
+    `compress` in the next): the state is about 89 B per message (the ref
+    map both ways) plus about 560 B per block (ids and a 120-character
+    summary): 42 KB at 500 messages and 49 blocks, 85 KB at 1 000/99,
+    174 KB at 2 000/199, 353 KB at 4 000/399, 709 KB at 8 000/799.
+    Counted in the kernel (a temporary trace in `conversation_commit`): a
+    sampling step writes one to three full runtime checkpoints carrying
+    the same state, and the state changes at every step (the request mints
+    the new messages' refs); at a few blocks it is under a third of a record, at
+    1 000 messages over 90 %. The rollout JSONL is append-only, so the
+    state's share of a session's disk growth is O(steps × state).
+    `process_turn` per call: folded 3.8 ms at 1 000 messages, 7.8 ms at
+    2 000, 16 ms at 4 000, 40 ms at 8 000; unfolded 16 ms at 1 000,
+    38 ms at 2 000, 175 ms at 5 000, 677 ms at 10 000, with or without
+    the nudge's screening; cloning the state 0.2–2 ms. A step projects
+    twice (its estimate and its request).
+  - Deviations: the state is still written with every checkpoint. The
+    measurement says it matters for long sessions, but writing it only in
+    checkpoints after a change removes only the one-to-three duplicates
+    per step (it changes every step) and leaves the O(steps × state)
+    growth, while needing a tri-state field (absent = unchanged, none,
+    a state), a rollback-safe marker in the kernel and the history store
+    carrying the last state forward in `runtime_json`, materialization
+    and lag catch-up: a persisted-format change across two crates, left
+    for a decision. The double projection is not fixed: at most ~80 ms a
+    step at 8 000 folded messages, against the model's latency.
+  - Open: bound the state's disk growth: an incremental record (a
+    mutation carrying only the refs and blocks a step added) or the state
+    out of the rollout record with carry-forward in the store; either is
+    a format change Hanafubuki follows. The crate's per-call cost is
+    superlinear in the window (677 ms at 10 000 unfolded messages, without
+    the nudge too): profile `process_turn`. A child forked before its
+    parent's running turn has no test of its own (it shares
+    `inherited_state` with the fork before a turn). The rebuild at load
+    uses the default tuning, so a session with `protectedTools` may number
+    a replay differently; an approximation, as the crate's doc says.
+  - Hanafubuki, at its next pin: nothing to change; persisted format and
+    public kernel API unchanged. New public items: the compression
+    crate's `adopt_fork_state` and `REF_FLOOR_ID`, and the kernel's
+    `test_support::COMPRESSION_PANIC_MARKER`. Behavior: forks before a
+    turn, `edit_from_turn` and children now carry the hierarchical state
+    (a child at head, `/side` included, projects the parent's blocks), and
+    a session whose state is missing or unreadable gets it back from its
+    `compress` calls at load.
 - [ ] P9: decompress, search, media refs.
   - Crate half done (decompress, search, media, rebuild); the kernel half
     lands with P7. `decompress` (`collect_block_content` one tier up or

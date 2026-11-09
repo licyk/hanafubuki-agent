@@ -1,3 +1,5 @@
+use hanafubuki_agent_kernel::test_support::COMPRESSION_PANIC_MARKER;
+
 use super::*;
 
 fn context_error() -> ScriptedResponse {
@@ -146,9 +148,8 @@ async fn a_panic_in_the_algorithm_is_contained() {
         .await
         .unwrap();
 
-    // Aging a block past `u32::MAX` requests overflows in the algorithm.
     let mut corrupt = state(&service, session.id);
-    corrupt.blocks[0].survived_count = u32::MAX;
+    corrupt.view_latch_config_digest = Some(COMPRESSION_PANIC_MARKER.to_string());
     service
         .test_set_compression_state(session.id, Some(corrupt.clone()))
         .unwrap();
@@ -162,9 +163,8 @@ async fn a_panic_in_the_algorithm_is_contained() {
     assert!(!request.instructions.contains("ACP TAGS"));
     assert_eq!(state(&service, session.id), corrupt);
 
-    // Allocating a block id past `u32::MAX` overflows too.
     let corrupt = AgentCompressionState {
-        next_block_id: u32::MAX,
+        view_latch_config_digest: Some(COMPRESSION_PANIC_MARKER.to_string()),
         ..AgentCompressionState::default()
     };
     service

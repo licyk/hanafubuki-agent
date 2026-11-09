@@ -8,6 +8,7 @@
 //! as `standard`) or the tool call, never the session.
 
 mod adapter;
+mod inherit;
 mod receipts;
 mod tools;
 
@@ -22,6 +23,7 @@ use hanafubuki_agent_foundation::panic::catch_panic;
 use super::*;
 use crate::{AgentCompressionState, AgentHierarchicalCompression};
 use adapter::MessageLog;
+pub(super) use inherit::inherited_state;
 pub(super) use tools::compression_tool_output;
 
 /// What a request does with the session's compression.
@@ -98,6 +100,7 @@ pub(super) fn project_request(
         .unwrap_or_default();
     let (token_count, token_count_source) = token_count(record, items);
     let output = catch_panic(|| {
+        panic_if_asked(&state);
         process_turn(TurnInput {
             messages: &log.messages,
             state,
@@ -180,6 +183,23 @@ pub(super) fn after_standard_compaction(record: &mut SessionRecord) {
         None
     };
 }
+
+/// A panic in the algorithm for the tests of its containment: under test
+/// support, a state whose view-latch digest is
+/// [`COMPRESSION_PANIC_MARKER`](crate::test_support::COMPRESSION_PANIC_MARKER)
+/// panics in the calls that project and run the tools. The algorithm never
+/// writes that digest.
+#[cfg(any(test, feature = "test-support"))]
+fn panic_if_asked(state: &AgentCompressionState) {
+    if state.view_latch_config_digest.as_deref()
+        == Some(crate::test_support::COMPRESSION_PANIC_MARKER)
+    {
+        panic!("a test asked the compression algorithm to panic");
+    }
+}
+
+#[cfg(not(any(test, feature = "test-support")))]
+fn panic_if_asked(_: &AgentCompressionState) {}
 
 /// The algorithm's configuration: `[compaction.hierarchical]` from the
 /// turn's extensions (the defaults without), over the session's context

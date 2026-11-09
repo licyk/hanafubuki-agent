@@ -1,11 +1,13 @@
 //! Golden baselines of the `hierarchical` strategy: a session the model
 //! folds by itself, from the nudge to a tier-2 block, and the request once
-//! the session switched back to `standard` (`golden.rs` holds the helpers).
+//! the session switched back to `standard` (`golden.rs` and `compression.rs`
+//! hold the helpers).
 //! Linux-only, as the fixtures are.
 
+use super::compression::{call_events, configure, tuned, with_usage};
 use super::golden::{assert_golden, normalize};
 use super::*;
-use crate::{AgentCompactionSettings, AgentCompactionStrategy, AgentConfig};
+use crate::{AgentCompactionSettings, AgentCompactionStrategy};
 use serde_json::Value;
 
 const SUMMARY: &str = "The user asked and the assistant answered at length; nothing in it is still open, and no file was changed.";
@@ -135,57 +137,4 @@ async fn hierarchical_requests_match_golden() {
         "hierarchical_requests",
         &serde_json::from_str(&shortened).unwrap(),
     );
-}
-
-/// The `[compaction]` table the session runs with: `hierarchical`, only the
-/// newest message kept out of a fold.
-fn tuned() -> AgentCompactionSettings {
-    let mut settings = AgentCompactionSettings {
-        strategy: AgentCompactionStrategy::Hierarchical,
-        ..AgentCompactionSettings::default()
-    };
-    settings.hierarchical.preserve_recent_messages = 1;
-    settings.hierarchical.preserve_recent_tokens = 0;
-    settings.hierarchical.min_compress_range_chars = 1_000;
-    settings
-}
-
-fn configure(config: &AgentConfig, base_url: &str) {
-    configure_test_provider(config, base_url, None);
-    config
-        .mutate_providers(1, |registry| {
-            registry.model_policy.context_window_tokens = Some(100_000);
-            Ok(())
-        })
-        .unwrap();
-    config
-        .write_settings(AgentSettingsPatch {
-            compaction: Some(tuned()),
-            ..AgentSettingsPatch::default()
-        })
-        .unwrap();
-}
-
-/// A call of `name` with `arguments`, as `call_id`.
-fn call_events(call_id: &str, name: &str, arguments: &Value) -> Vec<u8> {
-    String::from_utf8(tool_events(name, &arguments.to_string()))
-        .unwrap()
-        .replace("call-tool", call_id)
-        .into_bytes()
-}
-
-/// `events` with the provider's count of the request's input tokens.
-fn with_usage(events: Vec<u8>, input_tokens: u64) -> Vec<u8> {
-    let usage = format!("\"usage\":{{\"input_tokens\":{input_tokens},\"output_tokens\":1}}");
-    String::from_utf8(events)
-        .unwrap()
-        .replace(
-            "\"end_turn\":true}",
-            &format!("\"end_turn\":true,{usage}}}"),
-        )
-        .replace(
-            "\"end_turn\":false}",
-            &format!("\"end_turn\":false,{usage}}}"),
-        )
-        .into_bytes()
 }

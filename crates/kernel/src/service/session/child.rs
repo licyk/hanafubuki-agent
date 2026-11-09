@@ -16,6 +16,8 @@ struct ChildHistory {
     context_window: AgentContextWindowSnapshot,
     /// The parent's running turn the history stops before, if one ran.
     before_turn_id: Option<AgentTurnId>,
+    /// The hierarchical compression state the history comes with.
+    compression: Option<Arc<crate::AgentCompressionState>>,
 }
 
 impl AgentService {
@@ -173,6 +175,7 @@ impl AgentService {
                 next_message_id: 1,
                 context_window: AgentContextWindowSnapshot::initial(),
                 before_turn_id: None,
+                compression: None,
             });
         }
         let running_turn = parent
@@ -191,17 +194,26 @@ impl AgentService {
                 next_message_id: parent.conversation.next_message_id,
                 context_window: parent.runtime.context_window,
                 before_turn_id: None,
+                // At the head the child has the parent's window, so the
+                // same blocks project it.
+                compression: parent.runtime.compression.clone(),
             });
         };
         let fork = self.load_fork_material(parent, turn_id)?;
         let contents = history_contents(&fork.history);
         validate_persisted_history(&contents, &parent.settings.config, self.inner.limits)?;
         validate_complete_tool_pairs(&contents)?;
+        let history: Arc<Vec<_>> = Arc::new(fork.history.into_iter().map(Arc::new).collect());
         Ok(ChildHistory {
             history_bytes: contents.iter().fold(0usize, |total, item| {
                 total.saturating_add(item.retained_bytes())
             }),
-            history: Arc::new(fork.history.into_iter().map(Arc::new).collect()),
+            compression: super::super::compression::inherited_state(
+                parent,
+                parent.runtime.compression.as_deref(),
+                &history,
+            ),
+            history,
             model_context_boundary: AgentModelContextBoundary::Full,
             next_history_item_id: parent.conversation.next_history_item_id,
             next_message_id: parent.conversation.next_message_id,
@@ -262,6 +274,7 @@ fn child_record(
         journal: SessionJournal::empty(),
         runtime: SessionRuntime {
             context_window: base.context_window,
+            compression: base.compression,
             ..SessionRuntime::idle()
         },
     }

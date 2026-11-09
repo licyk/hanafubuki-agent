@@ -87,7 +87,7 @@ impl AgentService {
             extensions: hanafubuki_agent_contracts::TurnExtensions::default(),
             compression_fallback: false,
         });
-        SessionRecord {
+        let mut record = SessionRecord {
             session_id: runtime.id,
             forked_from_session_id: runtime.forked_from_session_id,
             lineage: SessionLineage {
@@ -149,6 +149,16 @@ impl AgentService {
                 background_compaction: Default::default(),
                 compression: runtime.compression.map(Arc::new),
             },
+        };
+        // A state that was lost (it could not be read) is rebuilt from the
+        // `compress` calls the window still holds.
+        if record.runtime.compression.is_none() {
+            record.runtime.compression = super::super::compression::inherited_state(
+                &record,
+                None,
+                &record.conversation.history,
+            );
         }
+        record
     }
 }

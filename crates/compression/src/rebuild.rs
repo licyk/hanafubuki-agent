@@ -4,14 +4,16 @@
 // term (NOTICE).
 // Modified for hanafubuki-agent: refs are minted with the view's protection,
 // so a protected message takes no number here either and the refs the
-// historical calls cite land where they did; the caller passes the time.
+// historical calls cite land where they did; the caller passes the time; a
+// call whose receipt says it applied nothing is not replayed, so a host may
+// replay with looser limits than the calls were made under.
 
 use serde_json::Value;
 
 use crate::apply::{apply_compression, ApplyInput};
 use crate::model::{Config, Kind, Message, State};
 use crate::parse::parse_compress_args;
-use crate::protect::COMPRESS_TOOL_NAME;
+use crate::protect::{collect_failed_compress_call_ids, COMPRESS_TOOL_NAME};
 use crate::refs::assign_message_refs;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -25,7 +27,9 @@ pub struct RebuildResult {
 /// minted in history order, so a ref an old call cites names the same
 /// message as when it was made. The result approximates the original: the
 /// recent zone is the one at the end of `messages`, and the arguments are
-/// parsed leniently, so a truncated or stringified call still counts.
+/// parsed leniently, so a truncated or stringified call still counts. A
+/// call whose result says it failed, was refused or applied nothing is
+/// skipped.
 pub fn rebuild_state(
     state: State,
     messages: &[Message],
@@ -34,9 +38,15 @@ pub fn rebuild_state(
 ) -> RebuildResult {
     let mut working = state;
     assign_message_refs(&mut working, messages, config);
+    let failed = collect_failed_compress_call_ids(messages);
     let mut blocks_rebuilt = 0;
     for call in messages.iter().filter(|message| {
-        message.kind == Kind::ToolCall && message.tool_name_is(COMPRESS_TOOL_NAME)
+        message.kind == Kind::ToolCall
+            && message.tool_name_is(COMPRESS_TOOL_NAME)
+            && !message
+                .tool_call_id
+                .as_ref()
+                .is_some_and(|call_id| failed.contains(call_id))
     }) {
         let parsed = parse_compress_args(
             &Value::String(call.text.clone()),

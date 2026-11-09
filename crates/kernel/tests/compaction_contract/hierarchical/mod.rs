@@ -12,6 +12,7 @@ use hanafubuki_agent_kernel::{
 use super::*;
 
 mod fallbacks;
+mod forks;
 mod projection;
 mod switching;
 

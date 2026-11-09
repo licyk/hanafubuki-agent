@@ -47,15 +47,22 @@ pub(in crate::service) fn compression_tool_output(
         .as_deref()
         .cloned()
         .unwrap_or_default();
-    let run = catch_panic(|| match tool {
-        crate::AgentCoreTool::Compress => {
-            compress(&log, &config, &state, call_id, arguments, now_ms)
+    let run = catch_panic(|| {
+        panic_if_asked(&state);
+        match tool {
+            crate::AgentCoreTool::Compress => {
+                compress(&log, &config, &state, call_id, arguments, now_ms)
+            }
+            crate::AgentCoreTool::Decompress => decompress(&log, &state, arguments),
+            crate::AgentCoreTool::SearchContext => read_only(search_context(&state, arguments)),
+            crate::AgentCoreTool::AcpStatus => {
+                read_only(acp_status(&log, &config, &state, arguments))
+            }
+            crate::AgentCoreTool::AcpCache => {
+                read_only(acp_cache(record, &state, arguments, now_ms))
+            }
+            _ => unreachable!("only the compression tools reach here"),
         }
-        crate::AgentCoreTool::Decompress => decompress(&log, &state, arguments),
-        crate::AgentCoreTool::SearchContext => read_only(search_context(&state, arguments)),
-        crate::AgentCoreTool::AcpStatus => read_only(acp_status(&log, &config, &state, arguments)),
-        crate::AgentCoreTool::AcpCache => read_only(acp_cache(record, &state, arguments, now_ms)),
-        _ => unreachable!("only the compression tools reach here"),
     });
     run.unwrap_or_else(|message| CompressionToolRun {
         output: text_output(

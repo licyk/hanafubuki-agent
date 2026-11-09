@@ -21,6 +21,7 @@ mod boundaries;
 mod crush;
 mod decompress;
 mod filter;
+mod fork;
 mod ids;
 mod json;
 mod latch;
@@ -73,6 +74,7 @@ pub use decompress::{
 pub use filter::{
     apply_message_filters, FilterAction, FilterResult, MessageFilter, MessageFilterContext,
 };
+pub use fork::{adopt_fork_state, REF_FLOOR_ID};
 pub use latch::{apply_view_latch, view_latch_config_digest};
 pub use media::{
     append_media_refs_section, collect_fold_media_refs, extract_media_refs,

@@ -213,7 +213,9 @@ Provider 的流是外部输入（[模型 API](/docs/architecture#the-model-api)�
 
 `hierarchical` 策略（[压缩](/docs/architecture#compaction)）是内核的 `service/compression/`（`mod.rs` 中的投影、`adapter.rs`、`tools.rs`、`receipts.rs`），建立在纯 crate `hanafubuki-agent-compression` 之上。
 
-**状态。** `PersistedAgentRuntimeState.compression` 保存该 crate 的 `State`，以 `AgentCompressionState` 重新导出：在窗口上生成的引用、块（只失效，从不删除）、token 快照和提醒的基线。它随每个运行时检查点写入。在它出现之前写入的记录没有它；无法解码的状态带一条警告被丢弃（`tolerant_compression_state`），会话在没有这些块的情况下继续。从历史中的 `compress` 调用重建状态还没有实现。历史格式及其版本没有变化。切换到 `hierarchical` 时，如果还没有状态，就装入一个空状态；在头部创建的分叉沿用源会话的状态，其他分叉从没有状态开始。
+**状态。** `PersistedAgentRuntimeState.compression` 保存该 crate 的 `State`，以 `AgentCompressionState` 重新导出：在窗口上生成的引用、块（只失效，从不删除）、token 快照和提醒的基线。它随每个运行时检查点写入。在它出现之前写入的记录没有它；无法解码的状态带一条警告被丢弃（`tolerant_compression_state`），并在会话加载时重建（见下文）。历史格式及其版本没有变化。切换到 `hierarchical` 时，如果还没有状态，就装入一个空状态。
+
+**分叉、子会话和加载。** 条目 ID 在分叉中保留，所以状态映射的消息 ID 也保留。在头部创建的分叉，以及在父会话头部创建的子会话（包括 `/side`），原样沿用源会话的状态。在某个轮次之前创建的分叉（因此也包括 `edit_from_turn`），以及在父会话运行中的轮次之前创建的子会话，从源会话的状态中采纳（`inherited_state`，基于该 crate 的 `adopt_fork_state`，仿照 billion-context 的分叉采纳）：覆盖的消息全部在分叉中的块被保留，并且是活动的，层级块消耗过的块作为原来那样的非活动记录随之保留；已展开或已被消耗的块，或覆盖了分叉中没有的消息的块，被丢弃。分叉持有的每条消息保留它的引用和冻结的 token 计数，源会话的最高引用被保留下来（引用映射中的 `REF_FLOOR_ID`），所以分叉自己的消息从它之上编号。孤立调用、截断、渲染延迟和视图的锁存随之保留；提醒的基线、统计和终止计数重新开始。空的子会话没有状态。源会话没有状态，或者会话加载时没有状态（没有写入，或者无法读取）时，通过重放窗口中的 `compress` 调用重建状态（`rebuild_state`），使用源会话最近一次的调优（加载时用默认值），并放宽压缩限制和最近区，因为这些调用已经通过过它们一次；回执表明失败、被拒绝或无操作的调用不重放。含有压缩（`CompactionSummary`、`ProviderCompaction`）的窗口不重建：压缩之后，引用从窗口里已经看不到的编号继续，重放可能折叠错误的消息。没有 `compress` 调用的窗口不得到状态，所以 `standard` 的分叉仍然没有状态。
 
 **哪些请求。** `CompressionMode::of` 按请求决定：策略为 `hierarchical` 时是 `Hierarchical`；已切换走的会话仍有有效的块时是 `Carry`，保留投影，但没有提示、提醒和工具；其余情况，以及轮次已回退时（`compression_fallback`），是 `Off`。
 
