@@ -32,6 +32,7 @@ const LAYERS: &[(&str, &[&str])] = &[
     (HOST, &[FOUNDATION]),
     // Domains.
     ("hanafubuki-agent-approval", &[FOUNDATION]),
+    ("hanafubuki-agent-compression", &[]),
     ("hanafubuki-agent-skills", &[FOUNDATION]),
     ("hanafubuki-agent-web-search", &[FOUNDATION]),
     (MODEL_API, &[FOUNDATION, TOOL_CONTRACTS]),

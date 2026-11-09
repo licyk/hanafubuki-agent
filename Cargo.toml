@@ -13,6 +13,7 @@ rust-version = "1.99"
 # The workspace's own crates.
 hanafubuki-agent = { path = "crates/agent", version = "0.2.0" }
 hanafubuki-agent-approval = { path = "crates/approval", version = "0.2.0" }
+hanafubuki-agent-compression = { path = "crates/compression", version = "0.2.0" }
 hanafubuki-agent-config = { path = "crates/config", version = "0.2.0" }
 hanafubuki-agent-contracts = { path = "crates/contracts", version = "0.2.0" }
 hanafubuki-agent-execution = { path = "crates/execution", version = "0.2.0" }

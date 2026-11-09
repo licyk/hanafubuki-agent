@@ -1,0 +1,12 @@
+[package]
+name = "hanafubuki-agent-compression"
+description = "Model-driven hierarchical context compression for hanafubuki-agent, ported from billion-context's acp-kernel"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true

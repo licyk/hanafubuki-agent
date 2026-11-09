@@ -231,6 +231,13 @@ path = "crates/sandbox/src/macos/mod.rs"
 markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
 notice = "crates/sandbox"
 
+# billion-context's acp-kernel (MIT with an attribution term): the
+# algorithm, its texts and its tests.
+[[derived]]
+path = "crates/compression"
+markers = ["Derived from billion-context (https://github.com/ranxianglei/billion-context),"]
+notice = "crates/compression"
+
 [[mit]]
 path = "crates/tui/src/custom_terminal.rs"
 holder = "Copyright (c) 2016-2022 Florian Dehau"
@@ -450,3 +457,11 @@ reason = "/subagents and a subagent's approval end to end over the standalone Ag
 [[original]]
 path = "crates/tui/src/app/tests/agents.rs"
 reason = "/agents end to end over the standalone Agent."
+
+[[original]]
+path = "crates/compression/src/ids.rs"
+reason = "An insertion-ordered id set, standing in for the JavaScript Set the kernel relies on for its order."
+
+[[original]]
+path = "crates/compression/src/prune/json.rs"
+reason = "Order-preserving JSON, standing in for the key order JavaScript's JSON.parse and JSON.stringify keep."
