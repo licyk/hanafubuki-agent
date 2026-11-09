@@ -1,13 +1,95 @@
 ---
 title: 快速开始
-description: 添加 Provider，运行第一次 exec，打开终端界面。
+description: 添加一个 Provider，选择模型，运行第一个任务，再打开终端界面。
 icon: Rocket
 ---
 
-<Callout type="warn">草稿：本页将在 D2 阶段完整撰写。</Callout>
+下面的步骤以 OpenAI 为例。其他服务和本地推理服务的设置方法相同，只是地址和协议不同，详见 [Provider 与模型](/docs/providers-models)。
 
-```sh
-hanafubuki-agent providers add OpenAI --base-url https://api.openai.com/v1 --api-key-env OPENAI_API_KEY
-hanafubuki-agent exec "Explain this repository"
-hanafubuki-agent
-```
+<Steps>
+  <Step>
+    ### 准备 API 令牌
+
+    把令牌放进一个环境变量。`providers add` 只从环境变量读取令牌，不接受在命令行上直接写出，以免令牌留在 Shell 历史中。
+
+    ```sh
+    export OPENAI_API_KEY=sk-...
+    ```
+
+  </Step>
+  <Step>
+    ### 添加 Provider
+
+    ```sh
+    hanafubuki-agent providers add OpenAI --base-url https://api.openai.com/v1 --api-key-env OPENAI_API_KEY
+    ```
+
+    命令会打印新 Provider 的 ID，例如 `added provider-1`。第一个添加的 Provider 自动成为默认 Provider。
+
+    令牌在添加时从环境变量读出，保存到配置目录的 `providers.toml` 中（在 Unix 上只有你自己可以读取），之后不再需要这个环境变量。
+
+  </Step>
+  <Step>
+    ### 选择模型
+
+    ```sh
+    hanafubuki-agent providers default provider-1 --model gpt-5.1
+    hanafubuki-agent providers list
+    ```
+
+    `--model` 设置新会话默认使用的模型。`providers list` 显示当前模型和每个 Provider，令牌只显示“已设置”，不会显示内容。
+
+  </Step>
+  <Step>
+    ### 检查环境
+
+    ```sh
+    hanafubuki-agent doctor
+    ```
+
+    每项检查打印一行 `ok`、`FAIL` 或 `skip`。加上 `--online` 还会实际连接默认 Provider，列出它的模型。各项的含义见[故障排查](/docs/troubleshooting)。
+
+  </Step>
+  <Step>
+    ### 运行第一个任务
+
+    进入一个项目目录，用 `exec` 运行一轮对话：
+
+    ```sh
+    cd ~/src/my-project
+    hanafubuki-agent exec "解释这个仓库是做什么的"
+    ```
+
+    `exec` 把过程打印到终端，回合结束后退出。默认情况下，所有需要审批的操作都会被拒绝，模型会得知这一点并继续，所以这一步不会修改任何东西。更多用法见 [exec](/docs/exec)。
+
+  </Step>
+  <Step>
+    ### 打开终端界面
+
+    ```sh
+    hanafubuki-agent
+    ```
+
+    在底部的输入框中输入消息，按 Enter 发送。需要审批的操作会弹出确认：按 `y` 允许一次，按 `n` 或 Esc 拒绝。输入 `/` 查看所有命令，按两次 Ctrl-C 或输入 `/quit` 退出。
+
+    下次想继续这次对话时，运行 `hanafubuki-agent resume --last`。
+
+  </Step>
+</Steps>
+
+## 接下来
+
+<Cards>
+  <Card
+    title="终端界面"
+    href="/docs/terminal-interface"
+    description="按键、斜杠命令、@ 文件提及和对话记录。"
+  />
+  <Card
+    title="权限与审批"
+    href="/docs/permissions"
+    description="选择 manual、auto-review 或 full-access。"
+  />
+  <Card title="配置" href="/docs/configuration" description="配置文件、分层和常用设置。" />
+  <Card title="工具" href="/docs/tools" description="模型可以使用哪些工具，以及它们的边界。" />
+</Cards>

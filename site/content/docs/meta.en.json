@@ -1,4 +1,18 @@
 {
   "title": "hanafubuki-agent documentation",
-  "pages": ["---Getting started---", "index", "installation", "quick-start"]
+  "pages": [
+    "---Getting started---",
+    "index",
+    "installation",
+    "quick-start",
+    "---Embedding---",
+    "embedding",
+    "host-plugins",
+    "---Development---",
+    "architecture",
+    "plugin-rules",
+    "building-testing",
+    "contributing",
+    "releasing"
+  ]
 }

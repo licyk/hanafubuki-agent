@@ -1,13 +1,103 @@
 ---
 title: Quick start
-description: Add a Provider, run a first exec, open the terminal interface.
+description: Add a Provider, pick a model, run a first task, then open the terminal interface.
 icon: Rocket
 ---
 
-<Callout type="warn">Draft: this page is written in full in phase D2.</Callout>
+These steps use OpenAI as the example. Other services and local inference servers are set up the same way, with their own address and protocol; see [Providers and models](/docs/providers-models).
 
-```sh
-hanafubuki-agent providers add OpenAI --base-url https://api.openai.com/v1 --api-key-env OPENAI_API_KEY
-hanafubuki-agent exec "Explain this repository"
-hanafubuki-agent
-```
+<Steps>
+  <Step>
+    ### Have your API token ready
+
+    Put the token in an environment variable. `providers add` reads a token only from an environment variable, never from the command line, so it does not end up in your shell's history.
+
+    ```sh
+    export OPENAI_API_KEY=sk-...
+    ```
+
+  </Step>
+  <Step>
+    ### Add a Provider
+
+    ```sh
+    hanafubuki-agent providers add OpenAI --base-url https://api.openai.com/v1 --api-key-env OPENAI_API_KEY
+    ```
+
+    The command prints the new Provider's id, such as `added provider-1`. The first Provider you add becomes the default.
+
+    The token is read from the variable when you add the Provider and saved in `providers.toml` in the configuration directory (readable only by you on Unix); the variable is not needed after that.
+
+  </Step>
+  <Step>
+    ### Pick a model
+
+    ```sh
+    hanafubuki-agent providers default provider-1 --model gpt-5.1
+    hanafubuki-agent providers list
+    ```
+
+    `--model` sets the model new sessions run. `providers list` shows that model and each Provider; a token is only said to be set, never printed.
+
+  </Step>
+  <Step>
+    ### Check your setup
+
+    ```sh
+    hanafubuki-agent doctor
+    ```
+
+    Each check prints one line, `ok`, `FAIL` or `skip`. With `--online` it also reaches the default Provider and lists its models. [Troubleshooting](/docs/troubleshooting) explains each line.
+
+  </Step>
+  <Step>
+    ### Run a first task
+
+    In a project's directory, run one turn with `exec`:
+
+    ```sh
+    cd ~/src/my-project
+    hanafubuki-agent exec "Explain what this repository does"
+    ```
+
+    `exec` prints the turn as it runs and exits when it ends. By default every operation that needs an approval is denied (the model is told and carries on), so this step changes nothing. [exec](/docs/exec) has more.
+
+  </Step>
+  <Step>
+    ### Open the terminal interface
+
+    ```sh
+    hanafubuki-agent
+    ```
+
+    Type a message in the composer at the bottom and press Enter. An operation that needs your approval asks first: `y` allows it once, `n` or Esc denies it. Type `/` to see the commands; press Ctrl-C twice or type `/quit` to leave.
+
+    To pick the conversation up again later, run `hanafubuki-agent resume --last`.
+
+  </Step>
+</Steps>
+
+## Next
+
+<Cards>
+  <Card
+    title="Terminal interface"
+    href="/docs/terminal-interface"
+    description="Keys, slash commands, @ file mentions and the transcript."
+  />
+  <Card
+    title="Permissions"
+    href="/docs/permissions"
+    description="Choose manual, auto-review or full-access."
+  />
+  <Card
+    title="Configuration"
+    href="/docs/configuration"
+    description="The files, their layers and the common settings."
+  />
+  <Card
+    title="Tools"
+    href="/docs/tools"
+    description="Which tools the model can use, and their limits."
+  />
+</Cards>

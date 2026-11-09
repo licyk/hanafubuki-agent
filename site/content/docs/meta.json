@@ -1,4 +1,18 @@
 {
   "title": "hanafubuki-agent 文档",
-  "pages": ["---开始---", "index", "installation", "quick-start"]
+  "pages": [
+    "---开始---",
+    "index",
+    "installation",
+    "quick-start",
+    "---嵌入---",
+    "embedding",
+    "host-plugins",
+    "---开发---",
+    "architecture",
+    "plugin-rules",
+    "building-testing",
+    "contributing",
+    "releasing"
+  ]
 }

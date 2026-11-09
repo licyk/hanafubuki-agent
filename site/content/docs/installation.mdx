@@ -1,11 +1,153 @@
 ---
 title: 安装
-description: 安装 hanafubuki-agent 命令行。
+description: 用 cargo 安装，下载发布的二进制文件，或从源码构建；以及升级和卸载。
 icon: Download
 ---
 
-<Callout type="warn">草稿：本页将在 D2 阶段完整撰写。</Callout>
+`hanafubuki-agent` 是一个独立的可执行文件，没有额外的运行时依赖。可以用以下三种方式之一安装：
+
+| 方式            | 适合                           | 需要                 |
+| --------------- | ------------------------------ | -------------------- |
+| `cargo install` | 已经安装了 Rust 工具链         | Rust 1.99 或更新版本 |
+| 发布的二进制    | 不想安装 Rust，直接下载使用    | 支持的平台（见下表） |
+| 从源码构建      | 想使用 `main` 分支上的最新代码 | Git 和 rustup        |
+
+## 用 cargo 安装
 
 ```sh
 cargo install hanafubuki-agent-cli
 ```
+
+这个 crate 提供的命令叫 `hanafubuki-agent`，安装在 `~/.cargo/bin`（Windows 上是 `%USERPROFILE%\.cargo\bin`）。确认它在 `PATH` 中：
+
+```sh
+hanafubuki-agent --version
+```
+
+构建需要 Rust 1.99 或更新版本。版本太旧时，先运行 `rustup update stable`。
+
+## 下载发布的二进制
+
+每个版本的 [GitHub Releases](https://github.com/licyk/hanafubuki-agent/releases) 页面都提供四个平台的压缩包，以及对应的 `.sha256` 校验文件：
+
+| 平台             | 目标                       | 文件                                                      |
+| ---------------- | -------------------------- | --------------------------------------------------------- |
+| Linux x86_64     | `x86_64-unknown-linux-gnu` | `hanafubuki-agent-<版本>-x86_64-unknown-linux-gnu.tar.gz` |
+| macOS Intel      | `x86_64-apple-darwin`      | `hanafubuki-agent-<版本>-x86_64-apple-darwin.tar.gz`      |
+| macOS Apple 芯片 | `aarch64-apple-darwin`     | `hanafubuki-agent-<版本>-aarch64-apple-darwin.tar.gz`     |
+| Windows x86_64   | `x86_64-pc-windows-msvc`   | `hanafubuki-agent-<版本>-x86_64-pc-windows-msvc.zip`      |
+
+压缩包里是一个同名目录，包含可执行文件、`LICENSE`、`NOTICE` 和 `THIRD-PARTY-LICENSES.txt`。Linux 版本需要 glibc 2.35 或更新版本（Ubuntu 22.04、Debian 12 及更新的发行版）。
+
+<Steps>
+  <Step>
+    ### 下载并校验
+
+    把压缩包和它的 `.sha256` 文件下载到同一个目录，然后校验：
+
+    <Tabs items={["Linux", "macOS", "Windows"]}>
+      <Tab value="Linux">
+        ```sh
+        sha256sum -c hanafubuki-agent-<版本>-x86_64-unknown-linux-gnu.tar.gz.sha256
+        ```
+      </Tab>
+      <Tab value="macOS">
+        ```sh
+        shasum -a 256 -c hanafubuki-agent-<版本>-aarch64-apple-darwin.tar.gz.sha256
+        ```
+      </Tab>
+      <Tab value="Windows">
+        ```powershell
+        Get-FileHash hanafubuki-agent-<版本>-x86_64-pc-windows-msvc.zip -Algorithm SHA256
+        Get-Content hanafubuki-agent-<版本>-x86_64-pc-windows-msvc.zip.sha256
+        ```
+
+        比较两者输出的哈希值，大小写不同不影响结果。
+      </Tab>
+    </Tabs>
+
+    校验通过时，`sha256sum` 和 `shasum` 会输出 `OK`。
+
+  </Step>
+  <Step>
+    ### 解压并放入 PATH
+
+    <Tabs items={["Linux 和 macOS", "Windows"]}>
+      <Tab value="Linux 和 macOS">
+        ```sh
+        tar xzf hanafubuki-agent-<版本>-<目标>.tar.gz
+        install -m 755 hanafubuki-agent-<版本>-<目标>/hanafubuki-agent ~/.local/bin/
+        ```
+
+        `~/.local/bin` 只是一个例子，任何在 `PATH` 中的目录都可以。
+      </Tab>
+      <Tab value="Windows">
+        解压 `.zip`，把 `hanafubuki-agent.exe` 放到一个固定目录，再把这个目录加入用户的 `Path` 环境变量。
+      </Tab>
+    </Tabs>
+
+  </Step>
+  <Step>
+    ### 确认可以运行
+
+    ```sh
+    hanafubuki-agent --version
+    ```
+
+  </Step>
+</Steps>
+
+## 从源码构建
+
+```sh
+git clone https://github.com/licyk/hanafubuki-agent.git
+cd hanafubuki-agent
+cargo install --path crates/cli
+```
+
+仓库中的 `rust-toolchain.toml` 固定了工具链版本（1.99.0），rustup 会在第一次构建时自动安装它。只想构建而不安装时，使用 `cargo build --release -p hanafubuki-agent-cli`，可执行文件在 `target/release/hanafubuki-agent`。
+
+## 平台说明
+
+<Tabs items={["Linux", "macOS", "Windows"]}>
+  <Tab value="Linux">
+    MCP 服务器的 OAuth 令牌保存在系统密钥环中，Linux 上通过 Secret Service 访问（GNOME Keyring、KWallet 等都提供它）。没有桌面环境的服务器或容器通常没有 Secret Service：Agent 仍然可以运行，只是需要 OAuth 登录的 MCP 服务器无法保存令牌，`hanafubuki-agent doctor` 的 `keyring` 一项会显示 `FAIL`。
+
+    配置和数据目录遵循 `$XDG_CONFIG_HOME` 和 `$XDG_DATA_HOME`。
+
+  </Tab>
+  <Tab value="macOS">
+    发布的二进制没有经过签名和公证。用浏览器下载的文件会带上隔离属性，第一次运行时 Gatekeeper 会阻止它。确认文件来源并校验通过后，移除隔离属性：
+
+    ```sh
+    xattr -d com.apple.quarantine ~/.local/bin/hanafubuki-agent
+    ```
+
+    用 `curl` 下载或通过 `cargo install` 安装的文件没有这个属性。OAuth 令牌保存在钥匙串中。
+
+  </Tab>
+  <Tab value="Windows">
+    发布的可执行文件没有签名，从浏览器下载后，SmartScreen 可能在第一次运行时给出警告。确认文件来源并校验通过后再选择继续运行。
+
+    命令在 PowerShell、Windows Terminal 和 `cmd.exe` 中都可以使用。OAuth 令牌保存在凭据管理器中。
+
+  </Tab>
+</Tabs>
+
+## 升级
+
+- **cargo**：再次运行 `cargo install hanafubuki-agent-cli`，有新版本时会替换旧版本。
+- **发布的二进制**：下载新版本，覆盖原来的可执行文件。
+
+升级前请先退出正在运行的 Agent。配置文件和历史记录会被新版本直接读取：新版本能容忍它不认识的字段，也不会删除它无法使用的数据。
+
+## 卸载
+
+1. 删除可执行文件：`cargo uninstall hanafubuki-agent-cli`，或者直接删除下载的二进制。
+2. 如果不再需要配置和历史，删除配置目录和数据目录。`hanafubuki-agent config path` 会打印它们的位置，默认位置见[数据目录](/docs/data-directory)。
+3. 如果用过需要 OAuth 的 MCP 服务器，可以在系统密钥环中删除服务名为 `org.licyk.hanafubuki-agent.secrets` 的条目。
+
+<Callout type="warn">
+  数据目录包含所有会话历史、记忆和安装的 Skill，删除后无法恢复。配置目录中的 `providers.toml` 和
+  `mcp.toml` 保存着 API 令牌等凭据。
+</Callout>

@@ -1,9 +1,68 @@
 ---
 title: 概览
-description: hanafubuki-agent 是什么，以及它的两种运行方式。
+description: hanafubuki-agent 是什么、能做什么，以及独立运行和嵌入运行的区别。
 icon: BookOpen
 ---
 
-<Callout type="warn">草稿：本页将在 D2 阶段完整撰写。</Callout>
+hanafubuki-agent 是一个在终端里工作的编程与运维 Agent。你用自然语言描述任务，它会阅读代码、运行命令、修改文件、搜索网页，并在需要时先征求你的同意。
 
-hanafubuki-agent 是终端里的编程与运维 Agent：既可以作为 `hanafubuki-agent` 命令行与终端界面独立运行，也可以作为 Rust 库嵌入到应用中。
+它有两种运行方式：作为 `hanafubuki-agent` 命令独立运行，提供终端界面和无界面的 `exec`；或者作为 Rust 库嵌入到其他应用中，例如桌面应用 [Hanafubuki](https://github.com/licyk/Hanafubuki)。
+
+## 它能做什么
+
+- **运行命令和终端**：在工作区里执行 Shell 命令，与长时间运行的进程交互，并读取输出。
+- **读写文件**：读取文件，以补丁的形式修改代码，修改前可以预览差异。
+- **搜索和抓取网页**：通过 DuckDuckGo 或自建的 SearXNG 搜索，并抓取网页正文。
+- **连接 MCP 服务器**：把本地程序或远程服务提供的工具交给模型使用。
+- **使用 Skill**：按需加载可复用的工作流程和参考资料。
+- **记忆**：可选地从过去的会话中提炼经验，在以后的会话里使用。
+- **计划模式**：只读地探索代码，最后给出一份可执行的计划。
+- **会话**：每次对话都保存在本地历史中，可以随时列出、查看和恢复。
+
+模型来自你配置的 Provider，支持 OpenAI Responses、Chat Completions 和 Anthropic Messages 三种协议，因此既可以连接云服务，也可以连接本地推理服务。
+
+## 两种运行方式
+
+|          | 独立运行                                             | 嵌入运行                                     |
+| -------- | ---------------------------------------------------- | -------------------------------------------- |
+| 入口     | `hanafubuki-agent` 命令：终端界面、`exec` 和管理命令 | 宿主应用通过 `hanafubuki-agent` 库启动 Agent |
+| 配置     | 自己的配置目录，支持分层、配置档和 `-c` 覆盖         | 由宿主指定配置目录，并通常提供自己的设置页面 |
+| 界面     | 终端界面，或以文本、JSON 输出的单次运行              | 宿主自己的界面                               |
+| 额外能力 | 内置的工具、MCP、Skill 和记忆                        | 宿主还可以通过插件提供自己的工具和上下文     |
+
+本文档的大部分内容面向独立运行的命令行。要把 Agent 嵌入自己的应用，请阅读[嵌入](/docs/embedding)。
+
+## 从这里开始
+
+<Cards>
+  <Card
+    title="安装"
+    href="/docs/installation"
+    description="用 cargo 安装，或下载发布的二进制文件。"
+  />
+  <Card
+    title="快速开始"
+    href="/docs/quick-start"
+    description="添加 Provider，运行第一个任务，打开终端界面。"
+  />
+  <Card
+    title="终端界面"
+    href="/docs/terminal-interface"
+    description="按键、斜杠命令、文件提及和审批。"
+  />
+  <Card
+    title="权限与审批"
+    href="/docs/permissions"
+    description="选择权限模式，决定哪些操作需要你同意。"
+  />
+  <Card
+    title="配置"
+    href="/docs/configuration"
+    description="配置文件在哪里，以及如何查看和修改。"
+  />
+  <Card
+    title="故障排查"
+    href="/docs/troubleshooting"
+    description="用 doctor 检查环境，定位常见问题。"
+  />
+</Cards>

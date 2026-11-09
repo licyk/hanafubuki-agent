@@ -1,9 +1,68 @@
 ---
 title: Overview
-description: What hanafubuki-agent is, and the two ways it runs.
+description: What hanafubuki-agent is, what it can do, and how standalone and embedded use differ.
 icon: BookOpen
 ---
 
-<Callout type="warn">Draft: this page is written in full in phase D2.</Callout>
+hanafubuki-agent is a coding and operations agent that works in your terminal. You describe a task in plain language, and it reads code, runs commands, edits files and searches the web, asking for your approval first where it needs to.
 
-hanafubuki-agent is a coding and operations agent for the terminal: it runs standalone as the `hanafubuki-agent` command line and terminal interface, and embedded as a Rust library in an application.
+It runs in two ways: standalone, as the `hanafubuki-agent` command with its terminal interface and the headless `exec`; or embedded as a Rust library in another application, such as the desktop application [Hanafubuki](https://github.com/licyk/Hanafubuki).
+
+## What it can do
+
+- **Commands and terminals**: runs shell commands in your workspace, talks to long-running processes and reads their output.
+- **Files**: reads files and changes code as patches, with a diff you can review.
+- **The web**: searches through DuckDuckGo or your own SearXNG instance, and fetches a page's text.
+- **MCP servers**: gives the model the tools of local programs and remote services.
+- **Skills**: loads reusable workflows and reference material when a task needs them.
+- **Memory**: optionally distils what earlier sessions learned, for later sessions to use.
+- **Plan mode**: explores the code read-only and ends with a plan you can act on.
+- **Sessions**: every conversation is kept in a local history, to list, read and resume at any time.
+
+The model comes from the Providers you configure. Three protocols are supported, OpenAI Responses, Chat Completions and Anthropic Messages, so it can talk to cloud services and to local inference servers alike.
+
+## Two ways to run it
+
+|                 | Standalone                                                        | Embedded                                                            |
+| --------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------- |
+| Entry point     | The `hanafubuki-agent` command: the interface, `exec`, management | The host application starts it through the `hanafubuki-agent` crate |
+| Configuration   | Its own directory, with layers, profiles and `-c` overrides       | A directory the host names, usually edited in the host's settings   |
+| Interface       | The terminal interface, or one run printed as text or JSON        | The host's own                                                      |
+| What it can use | The built-in tools, MCP, Skills and memory                        | Also the tools and context the host adds as plugins                 |
+
+Most of this documentation is about the standalone command line. To embed the Agent in your own application, read [Embedding](/docs/embedding).
+
+## Where to go next
+
+<Cards>
+  <Card
+    title="Installation"
+    href="/docs/installation"
+    description="Install with cargo, or download a released binary."
+  />
+  <Card
+    title="Quick start"
+    href="/docs/quick-start"
+    description="Add a Provider, run a first task, open the terminal interface."
+  />
+  <Card
+    title="Terminal interface"
+    href="/docs/terminal-interface"
+    description="Keys, slash commands, file mentions and approvals."
+  />
+  <Card
+    title="Permissions"
+    href="/docs/permissions"
+    description="Pick a permission mode: what needs your approval."
+  />
+  <Card
+    title="Configuration"
+    href="/docs/configuration"
+    description="Where the files are, and how to read and change them."
+  />
+  <Card
+    title="Troubleshooting"
+    href="/docs/troubleshooting"
+    description="Check your setup with doctor, and fix common problems."
+  />
+</Cards>

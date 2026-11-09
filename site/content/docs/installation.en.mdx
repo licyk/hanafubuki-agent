@@ -1,11 +1,154 @@
 ---
 title: Installation
-description: Install the hanafubuki-agent command line.
+description: Install with cargo, download a released binary, or build from source; upgrading and uninstalling.
 icon: Download
 ---
 
-<Callout type="warn">Draft: this page is written in full in phase D2.</Callout>
+`hanafubuki-agent` is a single executable with no runtime to install alongside it. Install it in one of three ways:
+
+| Way                  | For                                  | Needs                        |
+| -------------------- | ------------------------------------ | ---------------------------- |
+| `cargo install`      | You already have a Rust toolchain    | Rust 1.99 or newer           |
+| A released binary    | Using it without installing Rust     | A supported platform (below) |
+| Building from source | The latest code on the `main` branch | Git and rustup               |
+
+## With cargo
 
 ```sh
 cargo install hanafubuki-agent-cli
 ```
+
+The crate's command is `hanafubuki-agent`, installed in `~/.cargo/bin` (`%USERPROFILE%\.cargo\bin` on Windows). Check that it is on your `PATH`:
+
+```sh
+hanafubuki-agent --version
+```
+
+Building it needs Rust 1.99 or newer. If yours is older, run `rustup update stable` first.
+
+## A released binary
+
+Each version's page on [GitHub Releases](https://github.com/licyk/hanafubuki-agent/releases) has an archive for four platforms, each with a `.sha256` file:
+
+| Platform            | Target                     | File                                                         |
+| ------------------- | -------------------------- | ------------------------------------------------------------ |
+| Linux x86_64        | `x86_64-unknown-linux-gnu` | `hanafubuki-agent-<version>-x86_64-unknown-linux-gnu.tar.gz` |
+| macOS Intel         | `x86_64-apple-darwin`      | `hanafubuki-agent-<version>-x86_64-apple-darwin.tar.gz`      |
+| macOS Apple silicon | `aarch64-apple-darwin`     | `hanafubuki-agent-<version>-aarch64-apple-darwin.tar.gz`     |
+| Windows x86_64      | `x86_64-pc-windows-msvc`   | `hanafubuki-agent-<version>-x86_64-pc-windows-msvc.zip`      |
+
+An archive holds one directory of the same name, with the executable, `LICENSE`, `NOTICE` and `THIRD-PARTY-LICENSES.txt`. The Linux build needs glibc 2.35 or newer (Ubuntu 22.04, Debian 12 and later distributions).
+
+<Steps>
+  <Step>
+    ### Download and verify
+
+    Download the archive and its `.sha256` file into one directory, then verify it:
+
+    <Tabs items={["Linux", "macOS", "Windows"]}>
+      <Tab value="Linux">
+        ```sh
+        sha256sum -c hanafubuki-agent-<version>-x86_64-unknown-linux-gnu.tar.gz.sha256
+        ```
+      </Tab>
+      <Tab value="macOS">
+        ```sh
+        shasum -a 256 -c hanafubuki-agent-<version>-aarch64-apple-darwin.tar.gz.sha256
+        ```
+      </Tab>
+      <Tab value="Windows">
+        ```powershell
+        Get-FileHash hanafubuki-agent-<version>-x86_64-pc-windows-msvc.zip -Algorithm SHA256
+        Get-Content hanafubuki-agent-<version>-x86_64-pc-windows-msvc.zip.sha256
+        ```
+
+        Compare the two hashes; their letter case does not matter.
+      </Tab>
+    </Tabs>
+
+    `sha256sum` and `shasum` print `OK` when the archive matches.
+
+  </Step>
+  <Step>
+    ### Extract it onto your PATH
+
+    <Tabs items={["Linux and macOS", "Windows"]}>
+      <Tab value="Linux and macOS">
+        ```sh
+        tar xzf hanafubuki-agent-<version>-<target>.tar.gz
+        install -m 755 hanafubuki-agent-<version>-<target>/hanafubuki-agent ~/.local/bin/
+        ```
+
+        `~/.local/bin` is only an example: any directory on your `PATH` will do.
+      </Tab>
+      <Tab value="Windows">
+        Extract the `.zip`, put `hanafubuki-agent.exe` in a directory of its own, and add that directory to your user `Path` environment variable.
+      </Tab>
+    </Tabs>
+
+  </Step>
+  <Step>
+    ### Check that it runs
+
+    ```sh
+    hanafubuki-agent --version
+    ```
+
+  </Step>
+</Steps>
+
+## Building from source
+
+```sh
+git clone https://github.com/licyk/hanafubuki-agent.git
+cd hanafubuki-agent
+cargo install --path crates/cli
+```
+
+The repository's `rust-toolchain.toml` pins the toolchain (1.99.0), and rustup installs it on the first build. To build without installing, run `cargo build --release -p hanafubuki-agent-cli`; the executable is `target/release/hanafubuki-agent`.
+
+## Platform notes
+
+<Tabs items={["Linux", "macOS", "Windows"]}>
+  <Tab value="Linux">
+    MCP servers' OAuth tokens are kept in the operating system's keyring, which on Linux is reached through the Secret Service (GNOME Keyring, KWallet and others provide it). A server or container without a desktop usually has none: the Agent still runs, but an MCP server that needs an OAuth login cannot keep its token, and the `keyring` line of `hanafubuki-agent doctor` says `FAIL`.
+
+    The configuration and data directories follow `$XDG_CONFIG_HOME` and `$XDG_DATA_HOME`.
+
+  </Tab>
+  <Tab value="macOS">
+    The released binaries are not signed or notarized. A file downloaded with a browser carries the quarantine attribute, and Gatekeeper blocks it on its first run. Once you trust its source and its checksum matches, remove the attribute:
+
+    ```sh
+    xattr -d com.apple.quarantine ~/.local/bin/hanafubuki-agent
+    ```
+
+    A file downloaded with `curl`, or installed with `cargo install`, does not have it. OAuth tokens are kept in the Keychain.
+
+  </Tab>
+  <Tab value="Windows">
+    The released executable is not signed, so SmartScreen may warn on its first run after a browser download. Run it anyway only once you trust its source and its checksum matches.
+
+    The command works in PowerShell, Windows Terminal and `cmd.exe`. OAuth tokens are kept in the Credential Manager.
+
+  </Tab>
+</Tabs>
+
+## Upgrading
+
+- **cargo**: run `cargo install hanafubuki-agent-cli` again; it replaces an older version.
+- **A released binary**: download the new version and replace the executable.
+
+Quit any running Agent first. The new version reads your configuration and history as they are: it tolerates fields it does not know, and never deletes data it cannot use.
+
+## Uninstalling
+
+1. Remove the executable: `cargo uninstall hanafubuki-agent-cli`, or delete the binary you downloaded.
+2. If you no longer want your configuration and history, delete the configuration and data directories. `hanafubuki-agent config path` prints where they are; the defaults are in [Data directory](/docs/data-directory).
+3. If you used an MCP server with OAuth, you can delete the operating system keyring's entries under the service `org.licyk.hanafubuki-agent.secrets`.
+
+<Callout type="warn">
+  The data directory holds every session's history, the memory and the Skills you installed;
+  deleting it cannot be undone. `providers.toml` and `mcp.toml`, in the configuration directory,
+  hold credentials such as API tokens.
+</Callout>
