@@ -25,6 +25,8 @@ fn repository(paths: &TestPaths) {
     let workspace = &paths.managed_instances_dir;
     std::fs::write(workspace.join("file.txt"), "committed\n").unwrap();
     setup_git(workspace, &["init", "-q"]);
+    // Windows' Git converts line endings at checkout by default.
+    setup_git(workspace, &["config", "core.autocrlf", "false"]);
     setup_git(workspace, &["add", "."]);
     setup_git(
         workspace,

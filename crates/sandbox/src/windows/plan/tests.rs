@@ -44,7 +44,13 @@ fn a_command_line_cannot_carry_is_refused() {
 #[test]
 fn a_capability_sid_is_derived_from_the_path_key_alone() {
     let work = capability_sid(&PathKey::of(Path::new("/work")));
-    assert_eq!(work, "S-1-5-21-3402435716-1864852127-429106255-4212131304");
+    // A key's bytes are the platform's: Windows' are UTF-16 and fold case.
+    let pinned = if cfg!(windows) {
+        "S-1-5-21-2467111697-386323676-738845183-2872869646"
+    } else {
+        "S-1-5-21-3402435716-1864852127-429106255-4212131304"
+    };
+    assert_eq!(work, pinned);
     assert_eq!(work, capability_sid(&PathKey::of(Path::new("/work"))));
     assert_ne!(work, capability_sid(&PathKey::of(Path::new("/work/sub"))));
     if cfg!(windows) {

@@ -166,8 +166,10 @@ mod windows {
         assert!(!written.status.success(), "{written:?}");
         assert!(!escaped.exists());
 
-        let temporary = tempfile::NamedTempFile::new().unwrap();
-        let in_temp = write(sandbox, &policy, temporary.path());
+        // Closed first: `cmd`'s redirection is refused a file another
+        // process holds open (a sharing violation).
+        let temporary = tempfile::NamedTempFile::new().unwrap().into_temp_path();
+        let in_temp = write(sandbox, &policy, &temporary);
         assert!(in_temp.status.success(), "{in_temp:?}");
     }
 

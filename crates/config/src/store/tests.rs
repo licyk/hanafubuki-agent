@@ -460,9 +460,15 @@ fn the_sandbox_settings_read_tolerantly_and_an_unset_mode_is_never_written() {
         .unwrap();
     assert!(!fs::read_to_string(&path).unwrap().contains("sandboxMode"));
 
+    // Absolute on every platform: `/data` is not on Windows. A TOML literal
+    // string, so a Windows path's backslashes are not escapes.
+    let root = directory.path().join("data");
+    let root_text = root.to_str().unwrap();
     fs::write(
         &path,
-        "sandboxMode = \"workspace-write\"\n[sandboxWorkspaceWrite]\nwritableRoots = [\"/data\"]\nnetworkAccess = true\n",
+        format!(
+            "sandboxMode = \"workspace-write\"\n[sandboxWorkspaceWrite]\nwritableRoots = ['{root_text}']\nnetworkAccess = true\n"
+        ),
     )
     .unwrap();
     let settings = AgentConfig::new(directory.path()).settings().unwrap();
@@ -473,7 +479,7 @@ fn the_sandbox_settings_read_tolerantly_and_an_unset_mode_is_never_written() {
     assert_eq!(
         settings.sandbox_workspace_write,
         AgentSandboxWorkspaceWrite {
-            writable_roots: vec!["/data".into()],
+            writable_roots: vec![root.clone()],
             network_access: true,
         }
     );
@@ -482,7 +488,9 @@ fn the_sandbox_settings_read_tolerantly_and_an_unset_mode_is_never_written() {
     // list, not the network switch beside it.
     fs::write(
         &path,
-        "sandboxMode = \"sandboxed\"\n[sandboxWorkspaceWrite]\nwritableRoots = [\"/data\", \"relative\"]\nnetworkAccess = true\n",
+        format!(
+            "sandboxMode = \"sandboxed\"\n[sandboxWorkspaceWrite]\nwritableRoots = ['{root_text}', \"relative\"]\nnetworkAccess = true\n"
+        ),
     )
     .unwrap();
     let config = AgentConfig::new(directory.path());

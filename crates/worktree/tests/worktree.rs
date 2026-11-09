@@ -27,6 +27,8 @@ fn fixture() -> Fixture {
     fs::write(repository.join("file.txt"), "committed\n").unwrap();
     fs::write(repository.join("src/lib.rs"), "").unwrap();
     setup_git(&repository, &["init", "-q", "-b", "main"]);
+    // Windows' Git converts line endings at checkout by default.
+    setup_git(&repository, &["config", "core.autocrlf", "false"]);
     setup_git(&repository, &["add", "."]);
     setup_git(
         &repository,

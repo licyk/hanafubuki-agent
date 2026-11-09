@@ -1,14 +1,22 @@
 // Modified from OpenAI Codex 57a808a392 (Apache-2.0).
 
 //! What entering, configuring and leaving the alternate screen write.
+//!
+//! On Windows crossterm sets the pointer capture through the console API
+//! instead of writing it, and has no keyboard enhancement flags to push or
+//! pop, so the tests of what those write run elsewhere only.
 
 use super::AlternateScreen;
 
 const POINTER_CAPTURE: &str = "\x1b[?1000h\x1b[?1002h\x1b[?1003h\x1b[?1006h";
 const ALTERNATE_SCROLL_ON: &str = "\x1b[?1007h";
+#[cfg(not(windows))]
 const ALTERNATE_SCROLL_OFF: &str = "\x1b[?1007l";
+#[cfg(not(windows))]
 const ENTER: &str = "\x1b[?1049h";
+#[cfg(not(windows))]
 const LEAVE: &str = "\x1b[?1049l";
+#[cfg(not(windows))]
 const MOUSE_OFF: &str = "\x1b[?1006l";
 
 fn written(write: impl FnOnce(&mut Vec<u8>)) -> String {
@@ -18,6 +26,7 @@ fn written(write: impl FnOnce(&mut Vec<u8>)) -> String {
 }
 
 #[test]
+#[cfg(not(windows))]
 fn entering_with_the_pointer_captures_it_instead_of_the_wheel() {
     let screen = AlternateScreen::new();
     let out = written(|w| screen.enter(w, true).unwrap());
@@ -37,6 +46,7 @@ fn entering_without_the_pointer_leaves_the_wheel_to_the_terminal() {
 }
 
 #[test]
+#[cfg(not(windows))]
 fn leaving_stops_the_pointer_and_pops_the_keyboard_flags_before_the_screen() {
     let screen = AlternateScreen::new();
     written(|w| screen.enter(w, true).unwrap());
@@ -50,6 +60,7 @@ fn leaving_stops_the_pointer_and_pops_the_keyboard_flags_before_the_screen() {
 }
 
 #[test]
+#[cfg(not(windows))]
 fn turning_the_capture_off_restores_alternate_scroll() {
     let screen = AlternateScreen::new();
     written(|w| screen.enter(w, true).unwrap());
@@ -59,6 +70,7 @@ fn turning_the_capture_off_restores_alternate_scroll() {
 }
 
 #[test]
+#[cfg(not(windows))]
 fn a_restore_off_the_alternate_screen_only_stops_the_pointer() {
     let screen = AlternateScreen::new();
     assert_eq!(written(|w| screen.restore(w).unwrap()), "");

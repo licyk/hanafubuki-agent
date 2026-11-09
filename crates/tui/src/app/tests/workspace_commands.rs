@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Duration;
 
+use hanafubuki_agent::sandbox::SandboxStatus;
 use hanafubuki_agent::test_support::assistant_events;
 use hanafubuki_agent::{AgentPermissionMode, AgentSessionListRequest, AgentWorktree};
 use ratatui::crossterm::event::KeyCode;
@@ -39,6 +40,8 @@ impl Harness {
         std::fs::remove_dir_all(project.join(".git")).unwrap();
         std::fs::write(project.join("file.txt"), "committed\n").unwrap();
         git(&project, &["init", "-q"]);
+        // Windows' Git converts line endings at checkout by default.
+        git(&project, &["config", "core.autocrlf", "false"]);
         git(&project, &["add", "."]);
         git(
             &project,
@@ -107,15 +110,18 @@ fn a_denied_action_is_approved_between_turns_and_refused_during_one() {
         agent.session_permission_mode(session),
         Ok(Some(AgentPermissionMode::AutoReview))
     );
-    // The list is read through the bridge: this test binary has no sandbox
-    // (and its configuration none), so no preset is the one in effect and
-    // those that need one cannot be chosen.
+    // The list is read through the bridge. The configuration's sandbox is
+    // full access, so no preset is the one in effect; the presets that need
+    // a sandbox cannot be chosen where there is none: a test binary is no
+    // sandbox helper, but macOS's Seatbelt is the system's.
+    let sandbox = agent.sandbox_status().unwrap();
     harness.type_and_submit("/permissions");
     let list = harness.pump_until_screen_shows("Select Permissions");
     assert!(!list.contains("(current)"), "{list}");
-    assert!(
+    assert_eq!(
         list.contains("The sandbox is unavailable on this machine"),
-        "{list}"
+        !matches!(sandbox, SandboxStatus::Available { .. }),
+        "{sandbox:?}: {list}"
     );
     harness.key(KeyCode::Esc);
     harness.type_and_submit("/status");
@@ -126,7 +132,7 @@ fn a_denied_action_is_approved_between_turns_and_refused_during_one() {
     harness.type_and_submit("/approve");
     // The latest first.
     let picker = harness.pump_until_screen_shows("Auto-review Denials");
-    // The long summary wraps the rationale beside it.
+    // A long summary wraps its rationale beside it, or has it underneath.
     let unwrapped: String = picker.split_whitespace().collect();
     for text in [
         "echo second-denied",
@@ -138,7 +144,8 @@ fn a_denied_action_is_approved_between_turns_and_refused_during_one() {
     for character in "first".chars() {
         harness.key(KeyCode::Char(character));
     }
-    harness.pump_until_screen_shows("echo first-denied");
+    // The summaries name the directory, so where they wrap varies.
+    harness.pump_until_screen_shows("first-denied");
     let requests = harness.server.requests().len();
     harness.key(KeyCode::Enter);
     harness.pump_until_screen_shows("Approved one retry of:");
@@ -163,7 +170,7 @@ fn a_denied_action_is_approved_between_turns_and_refused_during_one() {
     for _ in 0.."first".len() {
         harness.key(KeyCode::Backspace);
     }
-    harness.pump_until_screen_shows("echo second-denied");
+    harness.pump_until_screen_shows("second-denied");
     harness.key(KeyCode::Enter);
     harness.pump_until_screen_shows("/approve: the action was not approved");
     harness.pump_until_screen_shows("Going on.");
@@ -316,5 +323,8 @@ fn worktree_outside_a_git_repository_says_why_there_is_none() {
         return;
     }
     harness.type_and_submit("/worktree");
-    harness.pump_until_screen_shows("is not in a Git repository");
+    // The message names the directory, so where the screen wraps it varies.
+    harness.pump_until("the reason there is no worktree", |harness| {
+        harness.transcript().contains("is not in a Git repository")
+    });
 }
