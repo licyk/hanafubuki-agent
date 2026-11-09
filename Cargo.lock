@@ -2034,7 +2034,9 @@ dependencies = [
  "landlock",
  "libc",
  "seccompiler",
+ "sha2 0.11.1",
  "tempfile",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

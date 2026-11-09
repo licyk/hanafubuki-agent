@@ -178,6 +178,7 @@ impl AgentExecutionService {
         };
         self.inner
             .sandbox
+            .with_windows_sandbox(request.sandbox.windows_sandbox)
             .wrap(&policy, command)
             .map_err(AgentExecutionError::Sandbox)
     }

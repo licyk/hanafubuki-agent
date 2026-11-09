@@ -3,8 +3,8 @@
 //! Seatbelt needs no helper (the test configuration is full access,
 //! `configure_test_provider`): a command that asks for one fails closed
 //! here, which is what the second test checks (the sandboxes themselves
-//! are `hanafubuki-agent-sandbox`'s `tests/linux.rs` and `tests/macos.rs`,
-//! and the command line's `tests/exec.rs`).
+//! are `hanafubuki-agent-sandbox`'s `tests/linux.rs`, `tests/macos.rs` and
+//! `tests/windows.rs`, and the command line's `tests/exec.rs`).
 
 use super::*;
 use hanafubuki_agent_sandbox::{platform_default_mode, SandboxSettings};
@@ -20,6 +20,9 @@ async fn a_turn_takes_the_session_sandbox_over_the_configured_one() {
                 sandbox_workspace_write: Some(AgentSandboxWorkspaceWrite {
                     writable_roots: vec![std::env::temp_dir().join("sandbox-data")],
                     network_access: true,
+                }),
+                windows: Some(crate::AgentWindowsSettings {
+                    sandbox: Some(crate::AgentWindowsSandbox::Unelevated),
                 }),
                 ..AgentSettingsPatch::default()
             })
@@ -37,6 +40,7 @@ async fn a_turn_takes_the_session_sandbox_over_the_configured_one() {
         mode: platform_default_mode(),
         writable_roots: vec![std::env::temp_dir().join("sandbox-data")],
         network_access: true,
+        windows_sandbox: Some(crate::AgentWindowsSandbox::Unelevated),
     };
     let driver = service.test_session_driver();
     assert_eq!(driver.turn_sandbox(chosen.id).await.unwrap(), configured);

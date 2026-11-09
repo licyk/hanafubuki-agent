@@ -8,16 +8,11 @@
 // Modified for hanafubuki-agent: only the two policies a command can have
 // here, reading everything and writing nothing or under writable roots, so
 // no restricted reads, unreadable globs, platform defaults, network proxy,
-// Unix-socket allowlist or app-server socket protection; writable roots
-// are resolved in full (a symlinked root grants its target, as Landlock
-// does) and one that does not resolve is left out; the read-only names are
-// `.git`, `.agents` and the project's `.hanafubuki-agent`, and only when
-// they exist; `/dev/tty` is writable, as on Linux.
+// Unix-socket allowlist or app-server socket protection; the writable roots
+// and what stays read-only under them are `crate::roots`'; `/dev/tty` is
+// writable, as on Linux.
 
-use std::ffi::OsStr;
-use std::path::{Path, PathBuf};
-
-use hanafubuki_agent_foundation::paths::ResolvedPath;
+use std::path::PathBuf;
 
 /// Only this `sandbox-exec`, never one found on the PATH, which a command
 /// could have changed; replacing this one already takes root.
@@ -31,11 +26,6 @@ const TLS_TRUST_POLICY: &str =
     "(allow mach-lookup (global-name \"com.apple.TrustEvaluationAgent\"))\n";
 const TTY_POLICY: &str = "; the command's own terminal, which prompts and pagers open\n\
      (allow file-read* file-write* file-ioctl (literal \"/dev/tty\"))";
-
-/// Kept read-only under a writable root, when they exist there: the
-/// repository (its hooks run outside the sandbox), the repository's Skills,
-/// and the project's configuration, which could choose a weaker sandbox.
-const READ_ONLY_NAMES: [&str; 3] = [".git", ".agents", ".hanafubuki-agent"];
 
 /// A writable root as the policy names it: resolved, with the paths under
 /// it that stay read-only.
@@ -121,61 +111,20 @@ pub(crate) fn policy(
     (sections.join("\n"), params)
 }
 
-/// `roots` resolved (`/tmp` is `/private/tmp` to Seatbelt, which matches
-/// the paths a command reaches), each once, with what stays read-only under
-/// it. A root that does not resolve, one that does not exist, is left out
-/// and so stays unwritable.
+/// `roots` resolved, each once, with what stays read-only under it
+/// ([`crate::roots::resolve_roots`]), as the policy names them.
 pub(crate) fn resolve_roots(roots: &[PathBuf]) -> Vec<WritableRoot> {
-    let mut resolved: Vec<ResolvedPath> = Vec::new();
-    for root in roots {
-        let Ok(root) = ResolvedPath::resolve(root) else {
-            continue;
-        };
-        if !resolved.iter().any(|seen| seen.key() == root.key()) {
-            resolved.push(root);
-        }
-    }
-    resolved
-        .iter()
+    crate::roots::resolve_roots(roots)
+        .into_iter()
         .map(|root| WritableRoot {
-            root: root.native_text().to_string(),
-            read_only: read_only_under(root),
+            root: root.root.native_text().to_string(),
+            read_only: root
+                .read_only
+                .iter()
+                .map(|path| path.native_text().to_string())
+                .collect(),
         })
         .collect()
-}
-
-/// The [`READ_ONLY_NAMES`] that exist directly under `root`; for a `.git`
-/// file (a linked worktree's or a submodule's), the repository directory it
-/// points to as well.
-fn read_only_under(root: &ResolvedPath) -> Vec<String> {
-    let mut paths = Vec::new();
-    for name in READ_ONLY_NAMES {
-        let Ok(path) = ResolvedPath::resolve_child(root, OsStr::new(name)) else {
-            continue;
-        };
-        let Ok(metadata) = std::fs::symlink_metadata(path.system()) else {
-            continue;
-        };
-        if name == ".git" && metadata.is_file() {
-            paths.extend(git_directory(root, &path));
-        }
-        paths.push(path.native_text().to_string());
-    }
-    paths
-}
-
-/// The directory a `.git` file's `gitdir: <path>` names, relative to the
-/// root it is in.
-fn git_directory(root: &ResolvedPath, dot_git: &ResolvedPath) -> Option<String> {
-    let contents = std::fs::read_to_string(dot_git.system()).ok()?;
-    let (prefix, target) = contents.trim().split_once(':')?;
-    let target = target.trim();
-    if prefix.trim() != "gitdir" || target.is_empty() {
-        return None;
-    }
-    let requested = root.join_request(Path::new(target)).ok()?;
-    let directory = ResolvedPath::resolve(requested).ok()?;
-    Some(directory.native_text().to_string())
 }
 
 #[cfg(test)]

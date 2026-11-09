@@ -9,6 +9,7 @@ fn settings(mode: AgentSandboxMode) -> SandboxSettings {
         mode,
         writable_roots: vec![PathBuf::from("/data"), PathBuf::from("/work")],
         network_access: true,
+        windows_sandbox: None,
     }
 }
 
@@ -27,10 +28,8 @@ fn workspace_write_writes_the_workspace_the_configured_roots_and_the_temporary_d
         writable_roots[..2],
         [PathBuf::from("/work"), PathBuf::from("/data")]
     );
-    if cfg!(unix) {
-        assert!(writable_roots.contains(&PathBuf::from("/tmp")));
-        assert!(writable_roots.contains(&std::env::temp_dir()));
-    }
+    assert!(writable_roots.contains(&std::env::temp_dir()));
+    assert_eq!(writable_roots.contains(&PathBuf::from("/tmp")), cfg!(unix));
     let unique: std::collections::BTreeSet<_> = writable_roots.iter().collect();
     assert_eq!(unique.len(), writable_roots.len());
 }

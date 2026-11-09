@@ -92,6 +92,7 @@ mod linux {
             mode: AgentSandboxMode::WorkspaceWrite,
             writable_roots: Vec::new(),
             network_access,
+            windows_sandbox: None,
         }
         .policy(&[root.to_path_buf()])
     }

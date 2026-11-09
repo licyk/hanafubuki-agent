@@ -151,8 +151,9 @@ pub use hanafubuki_agent_config::{
     AgentLogLevel, AgentMemorySettings, AgentModelProtocol, AgentProviderHeaderSettings,
     AgentProviderSettings, AgentSandboxMode, AgentSandboxWorkspaceWrite, AgentSettings,
     AgentSettingsPatch, AgentStandaloneSettings, AgentTuiPreferences, AgentTuiPreferencesPatch,
-    AgentTuiPreset, ConfigLayerSource, ConfigLayers, ConfigOverrides, AGENT_CREDENTIAL_FILES,
-    AGENT_HOME_ENV, AGENT_MCP_FILE, AGENT_PROVIDERS_FILE, AGENT_SETTINGS_FILE,
+    AgentTuiPreset, AgentWindowsSandbox, AgentWindowsSettings, ConfigLayerSource, ConfigLayers,
+    ConfigOverrides, AGENT_CREDENTIAL_FILES, AGENT_HOME_ENV, AGENT_MCP_FILE, AGENT_PROVIDERS_FILE,
+    AGENT_SETTINGS_FILE,
 };
 pub use hanafubuki_agent_execution::{
     AgentBackgroundTerminalSnapshot, AgentBackgroundTerminalStopFailure,

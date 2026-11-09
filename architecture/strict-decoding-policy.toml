@@ -89,6 +89,12 @@ category = "ipc-request"
 reason = "The workspace-write sandbox settings inside `AgentSettingsPatch` (`agent_settings_write`); persisted field by field, never through serde."
 
 [[types]]
+path = "crates/config/src/settings/mod.rs"
+type = "AgentWindowsSettings"
+category = "ipc-request"
+reason = "The Windows sandbox settings inside `AgentSettingsPatch` (`agent_settings_write`); persisted field by field, never through serde."
+
+[[types]]
 path = "crates/agent/src/attachments.rs"
 type = "DesktopAgentImageInput"
 category = "ipc-request"

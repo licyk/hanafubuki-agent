@@ -340,7 +340,7 @@ impl SecretStore for MemorySecrets {
 
 ## The sandbox helper [#sandbox-helper]
 
-On Linux a sandboxed command ([The sandbox](/docs/permissions#sandbox)) runs as the program that embeds the Agent, started again with `--hanafubuki-agent-sandbox` as its first argument: that run confines itself and then becomes the command. So the program's `main` calls `hanafubuki_agent::sandbox::helper_dispatch()` first, before it starts any thread:
+On Linux and Windows a sandboxed command ([The sandbox](/docs/permissions#sandbox)) runs as the program that embeds the Agent, started again with `--hanafubuki-agent-sandbox` as its first argument: on Linux that run confines itself and then becomes the command; on Windows it starts the command with a restricted token, in a job that ends with it, and exits with the command's status. So the program's `main` calls `hanafubuki_agent::sandbox::helper_dispatch()` first, before it starts any thread:
 
 ```rust
 fn main() {
@@ -353,6 +353,7 @@ fn main() {
 - Without the call the Agent has no sandbox: `AgentApplicationService::sandbox_status()` (and `sandbox::Sandbox::detect().status()`) is `Unavailable`, and every command whose sandbox mode is not full access fails, unrun. On Linux the default `sandboxMode` is workspace-write, so a host that does not call it must configure `sandboxMode = "full-access"` to run commands.
 - The `ExecutorManager` spawns the helper like any command; the host's process code is not involved.
 - On macOS no helper is needed: a sandboxed command runs under `/usr/bin/sandbox-exec`, so the call only returns there.
+- On Windows the sandbox is off until `windows.sandbox` (`AgentSettings::windows`) is `"unelevated"`; a turn takes it with its sandbox mode (`SandboxSettings::windows_sandbox`), and `Sandbox::with_windows_sandbox` applies it.
 
 ## The panic-hook bridge [#the-panic-hook-bridge]
 

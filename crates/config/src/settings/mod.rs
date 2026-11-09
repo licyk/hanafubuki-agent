@@ -4,7 +4,9 @@
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 
-pub use hanafubuki_agent_foundation::agent_settings::{AgentPermissionMode, AgentSandboxMode};
+pub use hanafubuki_agent_foundation::agent_settings::{
+    AgentPermissionMode, AgentSandboxMode, AgentWindowsSandbox,
+};
 use hanafubuki_agent_foundation::url_policy::{UrlPolicy, MAX_URL_BYTES};
 use serde::{Deserialize, Deserializer, Serialize};
 
@@ -24,6 +26,7 @@ pub struct AgentSettings {
     /// gain a sandbox.
     pub sandbox_mode: Option<AgentSandboxMode>,
     pub sandbox_workspace_write: AgentSandboxWorkspaceWrite,
+    pub windows: AgentWindowsSettings,
     pub memory: AgentMemorySettings,
     /// Names of the Agent plugins the user turned off. The plugin host leaves
     /// them unmounted and disposes one that is running when it is added; a
@@ -43,6 +46,7 @@ impl Default for AgentSettings {
             permission_mode: AgentPermissionMode::Manual,
             sandbox_mode: None,
             sandbox_workspace_write: AgentSandboxWorkspaceWrite::default(),
+            windows: AgentWindowsSettings::default(),
             memory: AgentMemorySettings::default(),
             disabled_plugins: BTreeSet::new(),
             web_search_provider: AgentWebSearchProvider::Auto,
@@ -81,6 +85,14 @@ pub struct AgentSandboxWorkspaceWrite {
     pub writable_roots: Vec<PathBuf>,
     /// Whether commands may use the network.
     pub network_access: bool,
+}
+
+/// Codex's `[windows]`: the Windows sandbox `sandboxMode` runs in. Unset,
+/// a mode other than full access cannot be given on Windows.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AgentWindowsSettings {
+    pub sandbox: Option<AgentWindowsSandbox>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -132,6 +144,7 @@ pub struct AgentSettingsPatch {
     #[serde(default, deserialize_with = "present")]
     pub sandbox_mode: Option<Option<AgentSandboxMode>>,
     pub sandbox_workspace_write: Option<AgentSandboxWorkspaceWrite>,
+    pub windows: Option<AgentWindowsSettings>,
     pub memory: Option<AgentMemorySettings>,
     pub web_search_provider: Option<AgentWebSearchProvider>,
     /// `null` clears the endpoint; a missing key leaves it.
@@ -157,6 +170,9 @@ impl AgentSettingsPatch {
         if let Some(workspace_write) = self.sandbox_workspace_write {
             validate_sandbox_workspace_write(&workspace_write)?;
             settings.sandbox_workspace_write = workspace_write;
+        }
+        if let Some(windows) = self.windows {
+            settings.windows = windows;
         }
         if let Some(memory) = self.memory {
             validate_memory(&memory)?;

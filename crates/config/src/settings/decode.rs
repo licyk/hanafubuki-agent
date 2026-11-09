@@ -5,7 +5,7 @@ use serde_json::{Map, Value};
 use super::{
     is_plugin_name, normalize_search_endpoint, validate_memory, validate_sandbox_workspace_write,
     AgentMemorySettings, AgentSandboxMode, AgentSandboxWorkspaceWrite, AgentSettings,
-    AgentWebSearchProvider, MAX_AGENT_DISABLED_PLUGINS,
+    AgentWebSearchProvider, AgentWindowsSettings, MAX_AGENT_DISABLED_PLUGINS,
 };
 use crate::fields::{read_member, read_object, FieldRead, Fields};
 
@@ -26,6 +26,7 @@ pub(crate) fn decode_settings(
         &defaults.sandbox_workspace_write,
         decode_sandbox_workspace_write,
     );
+    let windows = read_object(&mut fields, "windows", &defaults.windows, decode_windows);
     let memory = read_object(&mut fields, "memory", &defaults.memory, decode_memory);
     let disabled_plugins = decode_disabled_plugins(&mut fields, &defaults.disabled_plugins);
     let searxng_base_url = fields.read_checked(
@@ -44,6 +45,7 @@ pub(crate) fn decode_settings(
         permission_mode,
         sandbox_mode,
         sandbox_workspace_write,
+        windows,
         memory,
         disabled_plugins,
         web_search_provider,
@@ -92,6 +94,12 @@ fn decode_sandbox_workspace_write(
         |s| &mut s.network_access,
         validate,
     );
+}
+
+/// An unreadable sandbox falls back to the layer below, else to none, which
+/// gives no Windows sandbox, so never a weaker one.
+fn decode_windows(fields: &mut Fields<'_>, settings: &mut AgentWindowsSettings) {
+    read_member(fields, settings, "sandbox", |s| &mut s.sandbox, |_| Ok(()));
 }
 
 /// Each memory setting falls back on its own; its bounds are the ones the

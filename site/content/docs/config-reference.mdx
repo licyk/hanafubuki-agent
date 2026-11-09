@@ -44,13 +44,14 @@ icon: ListTree
 
 模型运行的命令能触及什么，见[沙箱](/docs/permissions#sandbox)。
 
-| 键                                    | 类型和取值                                          | 默认值                                                                      | 含义                                                             |
-| ------------------------------------- | --------------------------------------------------- | --------------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| `sandboxMode`                         | `"read-only"`、`"workspace-write"`、`"full-access"` | 未设置：Linux 和 macOS 上为 `"workspace-write"`，其他平台为 `"full-access"` | 沙箱模式。未设置的模式不会被写入文件，所以会随平台获得沙箱而改变 |
-| `sandboxWorkspaceWrite.writableRoots` | 绝对路径的数组                                      | `[]`                                                                        | workspace-write 模式下命令还可以写入的目录                       |
-| `sandboxWorkspaceWrite.networkAccess` | `true`、`false`                                     | `false`                                                                     | workspace-write 模式下命令能否使用网络                           |
+| 键                                    | 类型和取值                                          | 默认值                                                                      | 含义                                                                                                                                                                                                                               |
+| ------------------------------------- | --------------------------------------------------- | --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `sandboxMode`                         | `"read-only"`、`"workspace-write"`、`"full-access"` | 未设置：Linux 和 macOS 上为 `"workspace-write"`，其他平台为 `"full-access"` | 沙箱模式。未设置的模式不会被写入文件，所以会随平台获得沙箱而改变                                                                                                                                                                   |
+| `sandboxWorkspaceWrite.writableRoots` | 绝对路径的数组                                      | `[]`                                                                        | workspace-write 模式下命令还可以写入的目录                                                                                                                                                                                         |
+| `sandboxWorkspaceWrite.networkAccess` | `true`、`false`                                     | `false`                                                                     | workspace-write 模式下命令能否使用网络                                                                                                                                                                                             |
+| `windows.sandbox`                     | `"unelevated"`、`"elevated"`                        | 未设置                                                                      | Windows 的沙箱（[平台](/docs/permissions#sandbox-platforms)）：`"unelevated"` 是受限令牌，限制写入但不限制网络；`"elevated"` 暂不可用。未设置或为 `"elevated"` 时，在 Windows 上完全访问以外的模式会让每个命令失败；其他平台忽略它 |
 
-无法读取的 `sandboxMode` 会被修复为最严格的 `"read-only"`，而不是默认值；含有相对路径的 `writableRoots` 会被整个丢弃。
+无法读取的 `sandboxMode` 会被修复为最严格的 `"read-only"`，而不是默认值；含有相对路径的 `writableRoots` 会被整个丢弃；无法读取的 `windows.sandbox` 会被丢弃，这会关闭 Windows 沙箱，于是沙箱中的命令会失败，而不是以更少的限制运行。
 
 ### 记忆 [#memory]
 

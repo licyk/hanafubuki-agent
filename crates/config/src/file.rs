@@ -163,7 +163,7 @@ impl ConfigFile {
             }
             // The JSON map the merge works on sorts its keys.
             None => match toml::to_string(value) {
-                Ok(text) => text,
+                Ok(text) => without_empty_tables(text),
                 Err(_) => {
                     let mut document = DocumentMut::new();
                     merge_table(document.as_table_mut(), None, &object(value)?);
@@ -238,11 +238,32 @@ fn parent(path: &Path) -> Result<&Path, String> {
         .ok_or_else(|| format!("{} has no parent directory", path.display()))
 }
 
+/// `text` without the tables that hold nothing, a table of unset values
+/// (`[windows]` without a sandbox), as an unset value is not written.
+fn without_empty_tables(text: String) -> String {
+    let Ok(mut document) = text.parse::<DocumentMut>() else {
+        return text;
+    };
+    document
+        .as_table_mut()
+        .retain(|_, item| !item.as_table().is_some_and(Table::is_empty));
+    document.to_string()
+}
+
 fn merge_table(table: &mut Table, before: Option<&Map<String, Value>>, after: &Map<String, Value>) {
     for (key, value) in after {
         let previous = before.and_then(|before| before.get(key));
         if value.is_null() {
             table.remove(key);
+            continue;
+        }
+        // A table of unset values (`[windows]` without a sandbox) is not
+        // written, as an unset value is not.
+        if !table.contains_key(key)
+            && value
+                .as_object()
+                .is_some_and(|object| object.values().all(Value::is_null))
+        {
             continue;
         }
         if previous == Some(value) && table.contains_key(key) {

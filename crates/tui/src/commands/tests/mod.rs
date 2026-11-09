@@ -34,6 +34,7 @@ fn the_table_keeps_the_presentation_order() {
             "mode",
             "permissions",
             "approve",
+            "setup-default-sandbox",
             "skills",
             "rename",
             "new",
@@ -89,6 +90,7 @@ fn availability_follows_the_spec() {
         [
             "permissions",
             "approve",
+            "setup-default-sandbox",
             "skills",
             "review",
             "side",
@@ -170,6 +172,7 @@ fn a_prefix_is_a_case_insensitive_subsequence_of_an_enabled_command() {
     assert!(!has_prefix("zz", &[]));
     assert!(!has_prefix("rsm", &["resume", "rename"]));
     assert!(!has_prefix("qu", &["exit"]));
+    assert_eq!(has_prefix("setup-default", &[]), cfg!(windows));
 }
 
 /// The chat and what it sent, for the commands' own tests too.

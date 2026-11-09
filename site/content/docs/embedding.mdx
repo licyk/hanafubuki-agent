@@ -340,7 +340,7 @@ impl SecretStore for MemorySecrets {
 
 ## 沙箱辅助进程 [#sandbox-helper]
 
-在 Linux 上，沙箱中的命令（[沙箱](/docs/permissions#sandbox)）以嵌入 Agent 的那个程序运行：程序被再次启动，第一个参数是 `--hanafubuki-agent-sandbox`，这次运行先限制自身，再变成那个命令。所以程序的 `main` 要最先、在启动任何线程之前调用 `hanafubuki_agent::sandbox::helper_dispatch()`：
+在 Linux 和 Windows 上，沙箱中的命令（[沙箱](/docs/permissions#sandbox)）以嵌入 Agent 的那个程序运行：程序被再次启动，第一个参数是 `--hanafubuki-agent-sandbox`。在 Linux 上，这次运行先限制自身，再变成那个命令；在 Windows 上，它用受限令牌在一个随它结束的作业中启动命令，并以命令的退出状态退出。所以程序的 `main` 要最先、在启动任何线程之前调用 `hanafubuki_agent::sandbox::helper_dispatch()`：
 
 ```rust
 fn main() {
@@ -353,6 +353,7 @@ fn main() {
 - 不调用它，Agent 就没有沙箱：`AgentApplicationService::sandbox_status()`（以及 `sandbox::Sandbox::detect().status()`）为 `Unavailable`，沙箱模式不是完全访问的每个命令都会失败，不会运行。Linux 上 `sandboxMode` 的默认值是 workspace-write，所以不调用它的宿主必须配置 `sandboxMode = "full-access"` 才能运行命令。
 - `ExecutorManager` 像启动其他命令一样启动辅助进程；不涉及宿主自己的进程代码。
 - 在 macOS 上不需要辅助进程：沙箱中的命令在 `/usr/bin/sandbox-exec` 下运行，所以这个调用在那里只是返回。
+- 在 Windows 上，沙箱在 `windows.sandbox`（`AgentSettings::windows`）设为 `"unelevated"` 之前是关闭的；回合连同沙箱模式一起取得它（`SandboxSettings::windows_sandbox`），由 `Sandbox::with_windows_sandbox` 应用。
 
 ## panic hook 桥 [#the-panic-hook-bridge]
 

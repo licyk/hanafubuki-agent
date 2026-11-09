@@ -4,14 +4,16 @@
 // Copyright 2025 OpenAI. Licensed under the Apache License, Version 2.0
 // (http://www.apache.org/licenses/LICENSE-2.0).
 // Modified for hanafubuki-agent: Landlock rather than bubblewrap on Linux,
-// probed once; Seatbelt on macOS when `/usr/bin/sandbox-exec` exists; a
-// policy no backend can enforce is an error, never a command run
-// unconfined; no network proxy or Windows backend yet.
+// probed once; Seatbelt on macOS when `/usr/bin/sandbox-exec` exists; on
+// Windows only the unelevated (restricted token) sandbox, through the
+// helper, and only when `[windows] sandbox` chooses it; a policy no backend
+// can enforce is an error, never a command run unconfined; no network
+// proxy.
 
 use std::fmt;
 use std::path::{Path, PathBuf};
 
-use hanafubuki_agent_foundation::agent_settings::AgentSandboxMode;
+use hanafubuki_agent_foundation::agent_settings::{AgentSandboxMode, AgentWindowsSandbox};
 
 use crate::helper::HelperRequest;
 use crate::SandboxPolicy;
@@ -26,10 +28,11 @@ pub struct Sandbox {
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum Backend {
     /// This program as the helper, which confines itself with `confinement`
-    /// (Linux: Landlock and seccomp) before it runs the command.
+    /// (Linux: Landlock and seccomp) before it runs the command, or (Windows)
+    /// runs it with a restricted token.
     #[cfg_attr(
-        not(target_os = "linux"),
-        allow(dead_code, reason = "only Linux has a helper backend yet")
+        not(any(target_os = "linux", windows)),
+        allow(dead_code, reason = "only Linux and Windows have a helper backend")
     )]
     Helper {
         helper: PathBuf,
@@ -86,7 +89,9 @@ impl Sandbox {
     /// later, enabled) and seccomp on x86_64 or aarch64, run by this
     /// program as the helper once it called
     /// [`helper_dispatch`](crate::helper_dispatch). On macOS: Seatbelt,
-    /// through `/usr/bin/sandbox-exec`.
+    /// through `/usr/bin/sandbox-exec`. On Windows: a restricted token, run
+    /// by the helper likewise, which [`Self::with_windows_sandbox`] then
+    /// turns on.
     pub fn detect() -> Self {
         Self {
             backend: detect_backend(),
@@ -99,6 +104,26 @@ impl Sandbox {
             backend: Backend::Unavailable {
                 reason: reason.into(),
             },
+        }
+    }
+
+    /// This sandbox as `[windows] sandbox` (`setting`) has it on Windows:
+    /// unset, none (the sandbox is opt-in there, as in Codex); `elevated`,
+    /// none yet; `unelevated`, the restricted token. Elsewhere it changes
+    /// nothing.
+    pub fn with_windows_sandbox(&self, setting: Option<AgentWindowsSandbox>) -> Self {
+        if !cfg!(windows) || matches!(self.backend, Backend::Unavailable { .. }) {
+            return self.clone();
+        }
+        match setting {
+            Some(AgentWindowsSandbox::Unelevated) => self.clone(),
+            Some(AgentWindowsSandbox::Elevated) => Self::unavailable(
+                "the elevated Windows sandbox is not available yet; \
+                 set windows.sandbox to \"unelevated\" for the restricted-token sandbox",
+            ),
+            None => Self::unavailable(
+                "the Windows sandbox is off; set windows.sandbox to \"unelevated\" to turn it on",
+            ),
         }
     }
 
@@ -185,7 +210,22 @@ fn detect_backend() -> Backend {
     }
 }
 
-#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+#[cfg(windows)]
+fn detect_backend() -> Backend {
+    match crate::helper::registered_helper() {
+        Some(helper) => Backend::Helper {
+            helper: helper.clone(),
+            confinement: "a restricted token (unelevated: writes are confined, \
+                          the network is not blocked)"
+                .to_string(),
+        },
+        None => Backend::Unavailable {
+            reason: "this program does not run the sandbox helper".to_string(),
+        },
+    }
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "macos", windows)))]
 fn detect_backend() -> Backend {
     Backend::Unavailable {
         reason: "the sandbox is not available on this platform yet".to_string(),

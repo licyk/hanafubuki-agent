@@ -414,3 +414,40 @@ fn an_escalated_command_reaches_the_network_the_sandbox_refused() {
         "{first}"
     );
 }
+
+/// On Windows the sandbox is opt-in: with `[windows] sandbox =
+/// "unelevated"` a workspace-write command, run by PowerShell through the
+/// binary as its helper, writes in the workspace, nowhere else.
+#[cfg(windows)]
+#[test]
+fn a_command_runs_in_the_unelevated_windows_sandbox_once_chosen() {
+    let outside = tempfile::tempdir_in(env!("CARGO_TARGET_TMPDIR")).unwrap();
+    let escaped = outside.path().join("escaped.txt");
+    let command = format!(
+        "Set-Content -Path inside.txt -Value in; \
+         try {{ Set-Content -Path '{}' -Value out -ErrorAction Stop }} catch {{ 'refused-outside' }}",
+        escaped.display()
+    );
+    let model = Model::start(vec![command_call(&command), assistant_events("It ran.")]);
+    let home = Home::new().with_provider(&model.server.base_url);
+    let config = home.file("config.toml").replace(
+        "sandboxMode = \"full-access\"\n",
+        "sandboxMode = \"workspace-write\"\n",
+    ) + "\n[windows]\nsandbox = \"unelevated\"\n";
+    std::fs::write(home.home.join("config.toml"), config).unwrap();
+    assert!(home
+        .run(&["doctor"])
+        .stdout()
+        .contains("ok    sandbox   workspace-write: a restricted token"));
+    home.run(&["exec", "--approve", "allow:exec_command", "Run it."])
+        .expect(0);
+    assert_eq!(
+        std::fs::read_to_string(home.cwd.join("inside.txt"))
+            .unwrap()
+            .trim(),
+        "in"
+    );
+    assert!(!escaped.exists());
+    let output = String::from_utf8_lossy(&model.server.requests()[1].body).into_owned();
+    assert!(output.contains("refused-outside"), "{output}");
+}

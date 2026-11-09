@@ -81,6 +81,33 @@ fn seatbelt_runs_a_sandboxed_command_under_sandbox_exec() {
     );
 }
 
+#[test]
+fn the_windows_sandbox_setting_chooses_a_backend_only_on_windows() {
+    let available = Sandbox {
+        backend: super::Backend::Helper {
+            helper: "/agent".into(),
+            confinement: "a restricted token".to_string(),
+        },
+    };
+    for setting in [None, Some(crate::AgentWindowsSandbox::Elevated)] {
+        let chosen = available.with_windows_sandbox(setting);
+        assert_eq!(
+            matches!(chosen.status(), SandboxStatus::Unavailable { .. }),
+            cfg!(windows),
+            "{setting:?}"
+        );
+    }
+    assert_eq!(
+        available.with_windows_sandbox(Some(crate::AgentWindowsSandbox::Unelevated)),
+        available
+    );
+    let unavailable = Sandbox::unavailable("none here");
+    assert_eq!(
+        unavailable.with_windows_sandbox(Some(crate::AgentWindowsSandbox::Unelevated)),
+        unavailable
+    );
+}
+
 #[cfg(target_os = "linux")]
 #[test]
 fn a_kernel_without_landlock_has_no_sandbox() {

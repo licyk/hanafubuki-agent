@@ -175,6 +175,41 @@ markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
 notice = "crates/sandbox"
 
 [[derived]]
+path = "crates/sandbox/src/roots.rs"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
+notice = "crates/sandbox"
+
+[[derived]]
+path = "crates/sandbox/src/windows/mod.rs"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
+notice = "crates/sandbox"
+
+[[derived]]
+path = "crates/sandbox/src/windows/plan.rs"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
+notice = "crates/sandbox"
+
+[[derived]]
+path = "crates/sandbox/src/windows/token.rs"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
+notice = "crates/sandbox"
+
+[[derived]]
+path = "crates/sandbox/src/windows/acl.rs"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
+notice = "crates/sandbox"
+
+[[derived]]
+path = "crates/sandbox/src/windows/desktop.rs"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
+notice = "crates/sandbox"
+
+[[derived]]
+path = "crates/sandbox/src/windows/process.rs"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
+notice = "crates/sandbox"
+
+[[derived]]
 path = "crates/sandbox/src/linux/mod.rs"
 markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
 notice = "crates/sandbox"

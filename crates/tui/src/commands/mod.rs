@@ -40,6 +40,7 @@ mod reports;
 mod resume;
 pub(crate) mod review;
 mod session;
+mod setup_sandbox;
 mod side;
 mod statusline;
 pub(crate) mod subagents;
@@ -77,12 +78,13 @@ pub(crate) use subagents::SUBAGENTS;
 pub(crate) use warnings::{show_warnings, WARNINGS};
 
 /// Every command, in presentation order: the most used first.
-pub(crate) static COMMANDS: [&CommandSpec; 44] = [
+pub(crate) static COMMANDS: [&CommandSpec; 45] = [
     &model::MODEL,
     &providers::PROVIDERS,
     &mode::MODE,
     &permissions::PERMISSIONS,
     &permissions::APPROVE,
+    &setup_sandbox::SETUP_DEFAULT_SANDBOX,
     &reports::SKILLS,
     &rename::RENAME,
     &session::NEW,
@@ -160,6 +162,14 @@ impl fmt::Debug for CommandSpec {
     }
 }
 
+/// The commands this platform leaves out of the popup: the Windows
+/// sandbox's setup elsewhere. Typed, they still run and say so.
+pub(crate) const HIDDEN_HERE: &[&str] = if cfg!(windows) {
+    &[]
+} else {
+    &["setup-default-sandbox"]
+};
+
 /// The command named or aliased exactly `name`.
 pub(crate) fn find(name: &str) -> Option<&'static CommandSpec> {
     COMMANDS
@@ -174,7 +184,7 @@ pub(crate) fn has_prefix(name: &str, disabled: &[&str]) -> bool {
     let name = name.to_lowercase();
     COMMANDS
         .into_iter()
-        .filter(|command| !disabled.contains(&command.name))
+        .filter(|command| !disabled.contains(&command.name) && !HIDDEN_HERE.contains(&command.name))
         .flat_map(CommandSpec::names)
         .any(|known| {
             let mut characters = known.chars();

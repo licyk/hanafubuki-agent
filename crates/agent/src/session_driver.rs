@@ -450,7 +450,8 @@ impl AgentSessionDriver {
 
     /// The sandbox of the session's next turn's commands: the session's
     /// mode, else the configured `sandboxMode`, else the platform's
-    /// default, with the configured `[sandboxWorkspaceWrite]`.
+    /// default, with the configured `[sandboxWorkspaceWrite]` and
+    /// `[windows] sandbox`.
     pub(crate) async fn turn_sandbox(
         &self,
         session_id: AgentSessionId,
@@ -471,6 +472,7 @@ impl AgentSessionDriver {
                 .unwrap_or_else(platform_default_mode),
             writable_roots: settings.sandbox_workspace_write.writable_roots,
             network_access: settings.sandbox_workspace_write.network_access,
+            windows_sandbox: settings.windows.sandbox,
         })
     }
 

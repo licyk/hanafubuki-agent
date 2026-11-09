@@ -9,11 +9,12 @@
 // rather than the working directory; read-only has no network switch; no
 // external-sandbox policy, no `exclude_tmpdir_env_var` or
 // `exclude_slash_tmp`; the read-only carve-outs under a writable root
-// (`.git`) are the macOS backend's, since Landlock cannot make them.
+// (`.git`) are the macOS and Windows backends', since Landlock cannot make
+// them; Windows's sandbox is chosen by `[windows] sandbox`, as in Codex.
 
 use std::path::{Path, PathBuf};
 
-use hanafubuki_agent_foundation::agent_settings::AgentSandboxMode;
+use hanafubuki_agent_foundation::agent_settings::{AgentSandboxMode, AgentWindowsSandbox};
 
 /// What one command may do.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -51,6 +52,9 @@ pub struct SandboxSettings {
     pub writable_roots: Vec<PathBuf>,
     /// Whether a workspace-write command may use the network.
     pub network_access: bool,
+    /// The configured `[windows] sandbox`, which only Windows reads: none
+    /// gives no sandbox there ([`crate::Sandbox::with_windows_sandbox`]).
+    pub windows_sandbox: Option<AgentWindowsSandbox>,
 }
 
 impl SandboxSettings {
@@ -60,23 +64,27 @@ impl SandboxSettings {
             mode: AgentSandboxMode::FullAccess,
             writable_roots: Vec::new(),
             network_access: false,
+            windows_sandbox: None,
         }
     }
 
     /// The policy of a command run in `workspace_roots`. In workspace-write
-    /// mode they are writable, with the configured roots, `/tmp` and the
-    /// Agent's temporary directory (`TMPDIR`), as in Codex.
+    /// mode they are writable, with the configured roots, the Agent's
+    /// temporary directory (`TMPDIR`, on Windows `TEMP`) and on Unix `/tmp`,
+    /// as in Codex.
     pub fn policy(&self, workspace_roots: &[PathBuf]) -> SandboxPolicy {
         match self.mode {
             AgentSandboxMode::ReadOnly => SandboxPolicy::ReadOnly,
             AgentSandboxMode::FullAccess => SandboxPolicy::FullAccess,
             AgentSandboxMode::WorkspaceWrite => {
                 let mut writable_roots = Vec::new();
-                let temporary = [Path::new("/tmp").to_path_buf(), std::env::temp_dir()];
+                let slash_tmp = cfg!(unix).then(|| Path::new("/tmp").to_path_buf());
+                let temporary = std::env::temp_dir();
                 for root in workspace_roots
                     .iter()
                     .chain(&self.writable_roots)
-                    .chain(temporary.iter().filter(|_| cfg!(unix)))
+                    .chain(&slash_tmp)
+                    .chain(std::iter::once(&temporary))
                 {
                     if !writable_roots.contains(root) {
                         writable_roots.push(root.clone());
@@ -92,9 +100,11 @@ impl SandboxSettings {
 }
 
 /// The mode an unset `sandboxMode` means: Codex's default preset,
-/// workspace-write, where the platform has a sandbox (Linux, macOS);
-/// elsewhere none, since a mode no backend can enforce would fail every
-/// command. Windows has no backend yet.
+/// workspace-write, where the platform's sandbox needs no setup (Linux,
+/// macOS); elsewhere none, since a mode no backend can enforce would fail
+/// every command. On Windows the sandbox is opt-in (`[windows] sandbox`),
+/// as in Codex, and the restricted token it has does not block the
+/// network.
 pub fn platform_default_mode() -> AgentSandboxMode {
     if cfg!(any(target_os = "linux", target_os = "macos")) {
         AgentSandboxMode::WorkspaceWrite

@@ -87,10 +87,14 @@ Third-party notices
     `codex-rs/core/src/session/review.rs` (commit `57a808a392`); each says
     so in its first lines;
   - the sandbox of the commands the model runs, `crates/sandbox`
-    (`src/policy.rs`, `src/backend.rs`, `src/helper.rs`, `src/linux/` and
-    `src/macos/`), is derived from Codex's `codex-rs/sandboxing`
-    (`src/manager.rs`, `src/landlock.rs`, `src/seatbelt.rs`),
-    `codex-rs/linux-sandbox` (`src/linux_run_main.rs`, `src/seccomp.rs`),
+    (`src/policy.rs`, `src/backend.rs`, `src/helper.rs`, `src/roots.rs`,
+    `src/linux/`, `src/macos/` and `src/windows/`), is derived from Codex's
+    `codex-rs/sandboxing` (`src/manager.rs`, `src/landlock.rs`,
+    `src/seatbelt.rs`), `codex-rs/linux-sandbox` (`src/linux_run_main.rs`,
+    `src/seccomp.rs`), `codex-rs/windows-sandbox-rs` (`src/lib.rs`,
+    `src/spawn_prep.rs`, `src/token.rs`, `src/acl.rs`, `src/cap.rs`,
+    `src/env.rs`, `src/desktop.rs`, `src/process.rs`,
+    `src/proc_thread_attr.rs`, `src/winutil.rs`),
     `codex-rs/arg0/src/lib.rs`, `codex-rs/protocol/src/protocol.rs`
     (`SandboxPolicy`), `codex-rs/protocol/src/permissions.rs` and
     `codex-rs/config/src/config_toml.rs` (commit `57a808a392`); the

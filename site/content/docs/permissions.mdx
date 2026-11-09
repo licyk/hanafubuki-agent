@@ -35,11 +35,11 @@ hanafubuki-agent --permission-mode full-access exec "..." # 只对这次运行
 
 权限模式决定由谁批准一个命令；**沙箱**决定获得批准的命令能触及什么。两者互相独立：完全访问模式下不经询问就运行的命令，仍在沙箱中运行。
 
-| `sandboxMode`                                    | 模型运行的命令可以                                                                                                                                                                                               |
-| ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `"read-only"`                                    | 读取你的用户能读的所有文件；除 `/dev/null` 和 `/dev/tty` 外不能写入；不能使用网络                                                                                                                                |
-| `"workspace-write"`（Linux 和 macOS 上的默认值） | 读取所有文件；只能写入[工作区根目录](/docs/tools#workspace)、`/tmp`、Agent 的临时目录（`TMPDIR`）和 `sandboxWorkspaceWrite.writableRoots` 之下；只有 `sandboxWorkspaceWrite.networkAccess = true` 时才能使用网络 |
-| `"full-access"`（Windows 上的默认值）            | 你的用户能做的一切：没有沙箱                                                                                                                                                                                     |
+| `sandboxMode`                                    | 模型运行的命令可以                                                                                                                                                                                                                    |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `"read-only"`                                    | 读取你的用户能读的所有文件；除 `/dev/null` 和 `/dev/tty` 外不能写入；不能使用网络                                                                                                                                                     |
+| `"workspace-write"`（Linux 和 macOS 上的默认值） | 读取所有文件；只能写入[工作区根目录](/docs/tools#workspace)、`/tmp`、Agent 的临时目录（`TMPDIR`，Windows 上为 `TEMP`）和 `sandboxWorkspaceWrite.writableRoots` 之下；只有 `sandboxWorkspaceWrite.networkAccess = true` 时才能使用网络 |
+| `"full-access"`（Windows 上的默认值）            | 你的用户能做的一切：没有沙箱                                                                                                                                                                                                          |
 
 ```sh
 hanafubuki-agent config set sandboxMode read-only
@@ -52,7 +52,7 @@ hanafubuki-agent config set sandboxWorkspaceWrite.networkAccess true
 
 - **Linux**：Landlock 限制文件系统（Linux 5.13 或更新，且启用了 Landlock），seccomp 限制网络（x86_64 和 aarch64）。沙箱中的命令会再次启动 `hanafubuki-agent` 程序作为辅助进程，它先限制自身，再变成那个命令，所以命令仍是 Agent 所拥有的那个进程。这是 Codex 的 Landlock 流程；Codex 自己现在优先使用 bubblewrap，它需要许多系统都会限制的用户命名空间，以及一个随附的 `bwrap`。
 - **macOS**：Seatbelt。沙箱中的命令在 `/usr/bin/sandbox-exec` 下运行（只用这个路径，绝不用在 `PATH` 中找到的）：它施加一个拒绝该模式所不允许的一切的策略，然后变成那个命令。这个策略是 Codex 的。可写根目录会先被解析，所以 `/tmp` 即 `/private/tmp`，符号链接形式的根目录授予的是它的目标；不存在的根目录保持不可写。在可写根目录之下，已存在的 `.git`（如果 `.git` 是文件，还有它指向的仓库）、`.agents` 和 `.hanafubuki-agent` 保持只读，就像 Codex 保护 `.git`、`.agents` 和 `.codex` 那样：否则命令可以添加 Git 钩子，或修改项目的 `sandboxMode`。
-- **Windows**：暂时没有沙箱（计划使用受限令牌）。在 Windows 上，未设置的 `sandboxMode` 即 full-access；设为其他模式会让每个命令都失败，见下文。
+- **Windows**：和 Codex 一样，沙箱需要主动开启：`[windows] sandbox = "unelevated"` 开启 Codex 的非提升沙箱，它不需要管理员权限。沙箱中的命令会再次启动 `hanafubuki-agent` 程序作为辅助进程，由它用受限令牌启动命令并等待其结束：命令的写入还必须被允许给某个可写根目录的能力 SID、登录会话或 Everyone，而每个可写根目录只授予自己的 SID，第一次时会在其目录上添加一条 ACE（这些 ACE 会保留，添加时会遍历整棵目录树一次）。在可写根目录下，已存在的 `.git`（若 `.git` 是文件，还包括它指向的仓库）、`.agents` 和 `.hanafubuki-agent` 对这些 SID 拒绝写入，与 macOS 相同。命令运行在自己的桌面上，它的窗口和按键到不了你的桌面；它还运行在一个作业中，辅助进程结束时，它和它启动的一切都随之结束。**网络不会被阻断**：没有网络访问时，命令只会得到 Codex 的离线环境变量（指向无效地址的 `HTTP_PROXY` 等、`CARGO_NET_OFFLINE`、`NPM_CONFIG_OFFLINE`、总是失败的 `GIT_SSH_COMMAND`），程序可以无视它们。Codex 的提升沙箱（由管理员创建沙箱用户，并用防火墙规则阻断网络）暂不可用（`windows.sandbox = "elevated"` 会拒绝每个沙箱命令，[`/setup-default-sandbox`](/docs/terminal-interface#commands) 会说明这一点）。在 Windows 上，未设置的 `sandboxMode` 仍是 full-access；`[windows] sandbox` 未设置时，设为其他模式会让每个命令都失败，见下文。
 
 `hanafubuki-agent doctor` 会报告当前生效的沙箱模式，以及这台机器能否提供它。
 
@@ -64,7 +64,7 @@ hanafubuki-agent config set sandboxWorkspaceWrite.networkAccess true
 the command was not run: it needs the workspace-write sandbox, which is unavailable (this kernel has no Landlock (Linux 5.13 or later, with Landlock enabled)); set sandboxMode to "full-access" to run commands without a sandbox
 ```
 
-在这样的机器上，设置 `sandboxMode = "full-access"` 即可重新运行命令，不受限制。在 Linux 上，嵌入 Agent 的程序必须让自己的程序文件充当辅助进程，否则每个沙箱中的命令都会这样失败（[嵌入 Agent](/docs/embedding#sandbox-helper)）。在 macOS 上，只有缺少 `/usr/bin/sandbox-exec` 时沙箱才不可用；但本身运行在 Seatbelt 沙箱中的 Agent 无法再启动一个沙箱，所以它的沙箱命令会在启动时失败。模型请求[在沙箱之外](#escalation)运行的命令不需要沙箱，所以不会因此被拒绝。
+在这样的机器上，设置 `sandboxMode = "full-access"` 即可重新运行命令，不受限制（在 Windows 上，也可以用 `[windows] sandbox = "unelevated"` 开启沙箱）。在 Linux 和 Windows 上，嵌入 Agent 的程序必须让自己的程序文件充当辅助进程，否则每个沙箱中的命令都会这样失败（[嵌入 Agent](/docs/embedding#sandbox-helper)）。在 macOS 上，只有缺少 `/usr/bin/sandbox-exec` 时沙箱才不可用；但本身运行在 Seatbelt 沙箱中的 Agent 无法再启动一个沙箱，所以它的沙箱命令会在启动时失败。
 
 ### 在沙箱之外运行一条命令 [#escalation]
 
@@ -106,6 +106,7 @@ Run Posix command outside the sandbox in /home/me/project: npm install (reason: 
 - 在 Linux 上，可写根目录之下没有任何内容保持只读，包括 `.git`：Landlock 只能授予权限，所以 Codex 把工作区中的 `.git` 设为只读的做法在那里没有移植。在 macOS 上移植了，所以在 workspace-write 下，`git commit` 以及其他写入 `.git` 的操作都会失败：请在 full-access 下运行。
 - 在 macOS 上，命令启动时尚不存在的 `.git`、`.agents` 或 `.hanafubuki-agent` 不受保护：命令可以创建它。
 - 没有网络访问时，在 Linux 上除 Unix 套接字外的所有套接字都会被拒绝，连接任何套接字也会被拒绝，包括 Unix 套接字（SSH agent、Docker 的套接字）；有网络访问时，只有虚拟机套接字仍被拒绝；两种情况下，可以绕过过滤器打开套接字的 `io_uring` 都会被拒绝。在 macOS 上，没有网络访问时任何套接字都无法连接，包括 Unix 套接字；有网络访问时都可以。
+- 在 Windows 上，受限令牌只限制写入：登录会话或 Everyone 可写的位置仍然可写，网络仍可访问（见[平台](#sandbox-platforms)），命令留在后台的进程会随它一起结束。
 - 在 Linux 的终端（PTY）命令中，`/dev/stdout` 和 `/dev/stderr` 指向终端的 `/dev/pts` 设备，它不可写：请直接写到输出，或写到可写的 `/dev/tty`（命令自己的终端）。
 - 在早于 6.2 的 Linux 内核上，截断可写根目录之外的文件不受限制（Landlock 第 3 版之前的 ABI 做不到）。
 

@@ -1,6 +1,6 @@
 [package]
 name = "hanafubuki-agent-sandbox"
-description = "The sandbox of hanafubuki-agent's commands: read-only, workspace-write or full access, enforced by Landlock and seccomp on Linux and by Seatbelt on macOS"
+description = "The sandbox of hanafubuki-agent's commands: read-only, workspace-write or full access, enforced by Landlock and seccomp on Linux, by Seatbelt on macOS and by a restricted token on Windows"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -15,11 +15,30 @@ landlock = "0.4.7"
 libc = "0.2"
 seccompiler = "0.5.0"
 
+[target.'cfg(windows)'.dependencies]
+sha2.workspace = true
+windows-sys = { workspace = true, features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_Security",
+    "Win32_Security_Authorization",
+    "Win32_Storage_FileSystem",
+    "Win32_System_Console",
+    "Win32_System_JobObjects",
+    "Win32_System_StationsAndDesktops",
+    "Win32_System_Threading",
+] }
+
 [dev-dependencies]
+sha2.workspace = true
 tempfile.workspace = true
 
 # Its own `main` answers the helper's command line first, as the Agent's
 # binary does, so the sandboxed commands it starts re-execute it.
 [[test]]
 name = "linux"
+harness = false
+
+[[test]]
+name = "windows"
 harness = false

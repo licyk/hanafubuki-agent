@@ -5,8 +5,9 @@
 // Copyright 2025 OpenAI. Licensed under the Apache License, Version 2.0
 // (http://www.apache.org/licenses/LICENSE-2.0).
 // Modified for hanafubuki-agent: the helper is selected by its first
-// argument, as Codex selects its other helpers, rather than by argv[0], so
-// the Agent's `ExecutorManager` spawns it like any command; it takes its
+// argument, as Codex selects its other helpers (and its Windows sandbox
+// wrapper, `--run-as-windows-sandbox`), rather than by argv[0], so the
+// Agent's `ExecutorManager` spawns it like any command; it takes its
 // writable roots and network switch as flags instead of a JSON policy; no
 // PATH aliases, `.env` loading or other helpers.
 
@@ -40,7 +41,7 @@ pub fn helper_dispatch() {
     }
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", windows))]
 pub(crate) fn registered_helper() -> Option<&'static PathBuf> {
     HELPER.get()
 }
@@ -118,9 +119,20 @@ fn confine_and_exec(request: HelperRequest) -> String {
     crate::linux::confine_and_exec(request)
 }
 
-#[cfg(not(target_os = "linux"))]
+/// Windows cannot replace a process: the helper runs the command and exits
+/// with its status.
+#[cfg(windows)]
+fn confine_and_exec(request: HelperRequest) -> String {
+    match crate::windows::run(request) {
+        // An exit status is a `u32` on Windows; `exit` passes the bits on.
+        Ok(status) => std::process::exit(status as i32),
+        Err(error) => error,
+    }
+}
+
+#[cfg(not(any(target_os = "linux", windows)))]
 fn confine_and_exec(_request: HelperRequest) -> String {
-    "the sandbox helper runs only on Linux".to_string()
+    "the sandbox helper runs only on Linux and Windows".to_string()
 }
 
 #[cfg(test)]

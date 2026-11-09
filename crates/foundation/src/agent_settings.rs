@@ -45,6 +45,25 @@ impl AgentSandboxMode {
     }
 }
 
+/// Which Windows sandbox confines the commands, Codex's `[windows]
+/// sandbox`: the restricted token any user can have (`unelevated`), or the
+/// sandbox users an administrator sets up (`elevated`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum AgentWindowsSandbox {
+    Unelevated,
+    Elevated,
+}
+
+impl AgentWindowsSandbox {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Unelevated => "unelevated",
+            Self::Elevated => "elevated",
+        }
+    }
+}
+
 /// Whether a session's history may feed memory generation. The kernel
 /// persists it with the session and the memory store per source, both in
 /// this snake_case form.

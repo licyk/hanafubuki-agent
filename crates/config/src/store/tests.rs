@@ -506,3 +506,34 @@ fn the_sandbox_settings_read_tolerantly_and_an_unset_mode_is_never_written() {
     let reset: AgentSettingsPatch = serde_json::from_value(json!({"sandboxMode": null})).unwrap();
     assert_eq!(config.write_settings(reset).unwrap().sandbox_mode, None);
 }
+
+#[test]
+fn an_unreadable_windows_sandbox_is_dropped_which_turns_it_off() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join(AGENT_SETTINGS_FILE);
+    fs::write(&path, "[windows]\nsandbox = \"unelevated\"\n").unwrap();
+    let config = AgentConfig::new(directory.path());
+    assert_eq!(
+        config.settings().unwrap().windows.sandbox,
+        Some(crate::AgentWindowsSandbox::Unelevated)
+    );
+
+    fs::write(&path, "[windows]\nsandbox = \"admin\"\n").unwrap();
+    let config = AgentConfig::new(directory.path());
+    assert_eq!(config.settings().unwrap().windows.sandbox, None);
+    assert!(matches!(
+        &config.recoveries()[0].problem,
+        AgentConfigProblem::Repaired { repairs } if repairs.len() == 1
+    ));
+
+    fs::remove_file(&path).unwrap();
+    let config = AgentConfig::new(directory.path());
+    config
+        .write_settings(AgentSettingsPatch {
+            permission_mode: Some(AgentPermissionMode::AutoReview),
+            ..AgentSettingsPatch::default()
+        })
+        .unwrap();
+    let written = fs::read_to_string(&path).unwrap();
+    assert!(!written.contains("windows"), "{written}");
+}

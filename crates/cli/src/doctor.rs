@@ -66,7 +66,8 @@ fn sandbox(report: &mut Report, config: &AgentConfig) {
         .sandbox_mode
         .unwrap_or_else(sandbox::platform_default_mode);
     let mode_name = mode.as_str();
-    match (mode, sandbox::Sandbox::detect().status()) {
+    let sandbox = sandbox::Sandbox::detect().with_windows_sandbox(settings.windows.sandbox);
+    match (mode, sandbox.status()) {
         (AgentSandboxMode::FullAccess, _) => {
             report.ok("sandbox", "full-access: commands run without a sandbox")
         }

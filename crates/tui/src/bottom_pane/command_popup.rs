@@ -12,7 +12,7 @@ use super::popup_consts::MAX_POPUP_ROWS;
 use super::scroll_state::ScrollState;
 use super::selection_popup_common::render_rows;
 use super::selection_popup_common::GenericDisplayRow;
-use crate::commands::{CommandSpec, COMMANDS};
+use crate::commands::{CommandSpec, COMMANDS, HIDDEN_HERE};
 use crate::render::Insets;
 use crate::render::RectExt;
 
@@ -80,9 +80,9 @@ impl CommandPopup {
     /// Compute exact/prefix matches over the commands' names, paired with
     /// optional highlight indices. Preserves the presentation order.
     fn filtered(&self) -> Vec<(CommandMatch, Option<Vec<usize>>)> {
-        let enabled = COMMANDS
-            .into_iter()
-            .filter(|command| !self.disabled.contains(&command.name));
+        let enabled = COMMANDS.into_iter().filter(|command| {
+            !self.disabled.contains(&command.name) && !HIDDEN_HERE.contains(&command.name)
+        });
         let filter = self.command_filter.trim();
         if filter.is_empty() {
             return enabled

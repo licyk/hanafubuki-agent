@@ -51,6 +51,7 @@ fn workspace_write(root: &Path, network_access: bool) -> SandboxPolicy {
         mode: AgentSandboxMode::WorkspaceWrite,
         writable_roots: Vec::new(),
         network_access,
+        windows_sandbox: None,
     }
     .policy(&[root.to_path_buf()])
 }
