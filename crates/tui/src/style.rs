@@ -5,7 +5,7 @@
 //! queried here, so they take the terminal's own colours, as Codex's do when
 //! its query gets no answer.
 
-use ratatui::style::Style;
+use ratatui::style::{Color, Modifier, Style};
 
 pub fn user_message_style() -> Style {
     Style::default()
@@ -13,4 +13,15 @@ pub fn user_message_style() -> Style {
 
 pub fn proposed_plan_style() -> Style {
     Style::default()
+}
+
+/// Selected transcript text. Codex derives it from the queried background;
+/// without the query it reverses the cell.
+pub(crate) fn selection_style() -> Style {
+    Style::default().add_modifier(Modifier::REVERSED)
+}
+
+/// Emphasis for the transcript's controls.
+pub(crate) fn accent_color() -> Color {
+    Color::Cyan
 }

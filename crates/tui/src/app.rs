@@ -125,6 +125,8 @@ impl App {
                 self.chat_widget
                     .handle_paste(text.replace("\r\n", "\n").replace('\r', "\n"))
             }
+            // Nothing captures the pointer yet.
+            AppEvent::Mouse(_) => {}
             AppEvent::Redraw => self.schedule_frame(Instant::now()),
             AppEvent::ScheduleFrame(at) => self.schedule_frame(at),
             AppEvent::Agent(event) => {
@@ -239,7 +241,7 @@ impl App {
         overlay: Overlay,
     ) {
         if !self.alt_screen_open() {
-            let _ = tui.enter_alt_screen();
+            let _ = tui.enter_alt_screen(false);
         }
         self.overlay = Some(overlay);
         self.schedule_frame(Instant::now());
@@ -253,7 +255,7 @@ impl App {
         at_startup: bool,
     ) {
         if !self.alt_screen_open() {
-            let _ = tui.enter_alt_screen();
+            let _ = tui.enter_alt_screen(false);
         }
         self.resume_picker = Some(ResumePicker::new(at_startup));
         self.load_picker_pages();

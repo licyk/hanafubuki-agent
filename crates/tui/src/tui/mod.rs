@@ -9,81 +9,34 @@
 //! broker it can pause; here one thread reads it (`input`) and the app loop
 //! is a plain receive loop, since nothing pauses the input.
 
+mod alternate_screen;
 mod input;
 
-use std::fmt;
 use std::io::{self, stdout, Result, Stdout, Write};
 use std::panic;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use ratatui::backend::{Backend, CrosstermBackend};
 use ratatui::crossterm::event::{
-    DisableBracketedPaste, EnableBracketedPaste, KeyboardEnhancementFlags,
-    PopKeyboardEnhancementFlags, PushKeyboardEnhancementFlags,
+    DisableBracketedPaste, EnableBracketedPaste, PopKeyboardEnhancementFlags,
+    PushKeyboardEnhancementFlags,
 };
 use ratatui::crossterm::terminal::{
     disable_raw_mode, enable_raw_mode, supports_keyboard_enhancement,
 };
 use ratatui::crossterm::terminal::{BeginSynchronizedUpdate, EndSynchronizedUpdate};
-use ratatui::crossterm::terminal::{EnterAlternateScreen, LeaveAlternateScreen};
-use ratatui::crossterm::{execute, queue, Command};
+use ratatui::crossterm::{execute, queue};
 use ratatui::layout::{Offset, Rect};
 use ratatui::text::Line;
 
 use crate::app_event::{AppEvent, AppEventSender};
 use crate::custom_terminal;
 use crate::custom_terminal::Terminal as CustomTerminal;
+use alternate_screen::ALTERNATE_SCREEN;
 pub(crate) use input::InputReader;
 
 /// The terminal type the application draws on.
 pub(crate) type Terminal = CustomTerminal<CrosstermBackend<Stdout>>;
-
-/// Whether an overlay holds the alternate screen, so a restore leaves it:
-/// leaving it when it was not entered would move the cursor.
-static ALT_SCREEN_ACTIVE: AtomicBool = AtomicBool::new(false);
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct EnableAlternateScroll;
-
-impl Command for EnableAlternateScroll {
-    fn write_ansi(&self, f: &mut impl fmt::Write) -> fmt::Result {
-        write!(f, "\x1b[?1007h")
-    }
-
-    #[cfg(windows)]
-    fn execute_winapi(&self) -> Result<()> {
-        Err(std::io::Error::other(
-            "tried to execute EnableAlternateScroll using WinAPI; use ANSI instead",
-        ))
-    }
-
-    #[cfg(windows)]
-    fn is_ansi_code_supported(&self) -> bool {
-        true
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct DisableAlternateScroll;
-
-impl Command for DisableAlternateScroll {
-    fn write_ansi(&self, f: &mut impl fmt::Write) -> fmt::Result {
-        write!(f, "\x1b[?1007l")
-    }
-
-    #[cfg(windows)]
-    fn execute_winapi(&self) -> Result<()> {
-        Err(std::io::Error::other(
-            "tried to execute DisableAlternateScroll using WinAPI; use ANSI instead",
-        ))
-    }
-
-    #[cfg(windows)]
-    fn is_ansi_code_supported(&self) -> bool {
-        true
-    }
-}
 
 fn set_modes() -> Result<()> {
     execute!(stdout(), EnableBracketedPaste)?;
@@ -93,20 +46,14 @@ fn set_modes() -> Result<()> {
     // Windows consoles) still work, without the distinction.
     let _ = execute!(
         stdout(),
-        PushKeyboardEnhancementFlags(
-            KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
-                | KeyboardEnhancementFlags::REPORT_EVENT_TYPES
-                | KeyboardEnhancementFlags::REPORT_ALTERNATE_KEYS
-        )
+        PushKeyboardEnhancementFlags(alternate_screen::enhancement_flags())
     );
     Ok(())
 }
 
 /// Restores the terminal's modes; the inverse of [`set_modes`].
 pub(crate) fn restore() -> Result<()> {
-    if ALT_SCREEN_ACTIVE.swap(false, Ordering::Relaxed) {
-        let _ = execute!(stdout(), DisableAlternateScroll, LeaveAlternateScreen);
-    }
+    let _ = ALTERNATE_SCREEN.restore(&mut stdout());
     // Pop may fail on platforms that didn't support the push; ignore errors.
     let _ = execute!(stdout(), PopKeyboardEnhancementFlags);
     execute!(stdout(), DisableBracketedPaste)?;
@@ -167,32 +114,38 @@ impl<B: Backend<Error = io::Error> + Write> Tui<B> {
         }
     }
 
-    /// Enter alternate screen and expand the viewport to full terminal size, saving the current
-    /// inline viewport for restoration when leaving.
-    pub(crate) fn enter_alt_screen(&mut self) -> Result<()> {
-        let _ = execute!(self.terminal.backend_mut(), EnterAlternateScreen);
-        // Enable "alternate scroll" so terminals may translate wheel to arrows
-        let _ = execute!(self.terminal.backend_mut(), EnableAlternateScroll);
-        ALT_SCREEN_ACTIVE.store(true, Ordering::Relaxed);
+    /// Enters the alternate screen and expands the viewport to all of it,
+    /// keeping the inline viewport for the return. With `capture_mouse`
+    /// the pointer is reported to the app (a transcript view); without it
+    /// the terminal turns the wheel into arrow keys.
+    pub(crate) fn enter_alt_screen(&mut self, capture_mouse: bool) -> Result<()> {
+        let entered = ALTERNATE_SCREEN.enter(self.terminal.backend_mut(), capture_mouse);
         if let Ok(size) = self.terminal.size() {
             self.alt_saved_viewport = Some(self.terminal.viewport_area);
             self.terminal
                 .set_viewport_area(Rect::new(0, 0, size.width, size.height));
             let _ = self.terminal.clear();
         }
-        Ok(())
+        entered
     }
 
-    /// Leave alternate screen and restore the previously saved inline viewport, if any.
+    /// Leaves the alternate screen and restores the inline viewport.
     pub(crate) fn leave_alt_screen(&mut self) -> Result<()> {
-        // Disable alternate scroll when leaving alt-screen
-        let _ = execute!(self.terminal.backend_mut(), DisableAlternateScroll);
-        let _ = execute!(self.terminal.backend_mut(), LeaveAlternateScreen);
-        ALT_SCREEN_ACTIVE.store(false, Ordering::Relaxed);
+        let left = ALTERNATE_SCREEN.leave(self.terminal.backend_mut());
         if let Some(saved) = self.alt_saved_viewport.take() {
             self.terminal.set_viewport_area(saved);
         }
-        Ok(())
+        left
+    }
+
+    /// Turns the pointer reporting of the entered alternate screen on or
+    /// off.
+    #[allow(dead_code, reason = "P2.2's owned transcript turns it on and off")]
+    pub(crate) fn set_mouse_capture(&mut self, capture: bool) -> Result<()> {
+        if !ALTERNATE_SCREEN.is_active() || ALTERNATE_SCREEN.is_capturing_mouse() == capture {
+            return Ok(());
+        }
+        ALTERNATE_SCREEN.configure_input(self.terminal.backend_mut(), capture)
     }
 
     pub(crate) fn insert_history_lines(&mut self, lines: Vec<Line<'static>>) {

@@ -89,3 +89,35 @@ fn a_patch_shows_its_diff_snapshot() {
     );
     insta::assert_snapshot!(render(&cell, 40));
 }
+
+#[test]
+fn only_an_outputs_left_out_lines_are_details_to_disclose() {
+    let long_output = || ToolResultView {
+        text: Some((1..=30).map(|line| format!("line {line}\n")).collect()),
+        exit_code: Some(0),
+        patch: None,
+    };
+    let mut call = new_tool_call("call-1".to_string(), "shell".to_string(), None);
+    assert_eq!(call.activity_disclosure(80), None);
+    call.complete(false, long_output());
+    assert_eq!(
+        call.activity_disclosure(80),
+        Some(ActivityDisclosure::OutputLines(20))
+    );
+    assert_eq!(call.activity_ids(), vec!["tool:call-1".to_string()]);
+    let compact = call.display_lines(80).len();
+    assert!(call.transcript_lines(80).len() > compact);
+    // A patch's diff is already whole, whatever output came with it.
+    let mut patched = new_tool_call("call-2".to_string(), "apply_patch".to_string(), None);
+    patched.complete(
+        false,
+        ToolResultView {
+            patch: Some(PatchPreview {
+                files: Vec::new(),
+                error: None,
+            }),
+            ..long_output()
+        },
+    );
+    assert_eq!(patched.activity_disclosure(80), None);
+}

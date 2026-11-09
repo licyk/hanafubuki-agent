@@ -9,7 +9,7 @@ use std::time::Instant;
 use ratatui::style::{Style, Stylize};
 use ratatui::text::{Line, Span};
 
-use super::HistoryCell;
+use super::{plain_lines, raw_lines_from_source, HistoryCell};
 use crate::render::line_utils::prefix_lines;
 use crate::shimmer::shimmer_spans;
 use crate::status_indicator_widget::fmt_elapsed_compact;
@@ -140,6 +140,26 @@ impl HistoryCell for ThinkingCell {
         let mut lines = vec![self.header()];
         lines.extend(self.body(width));
         lines
+    }
+
+    fn raw_lines(&self) -> Vec<Line<'static>> {
+        let mut lines = plain_lines([self.header()]);
+        lines.extend(raw_lines_from_source(self.text.trim_end()));
+        lines
+    }
+
+    fn copy_source(&self) -> Option<&str> {
+        Some(self.text.as_str()).filter(|text| !text.trim().is_empty())
+    }
+
+    /// The shimmer moves every frame while the cell is live.
+    fn transcript_animation_tick(&self) -> Option<u64> {
+        match self.state {
+            ThinkingState::Live { started } => {
+                Some(u64::try_from(started.elapsed().as_millis() / 32).unwrap_or(u64::MAX))
+            }
+            ThinkingState::Completed { .. } => None,
+        }
     }
 }
 

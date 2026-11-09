@@ -10,7 +10,7 @@ use hanafubuki_agent::PatchPreview;
 use ratatui::style::{Modifier, Stylize};
 use ratatui::text::{Line, Span};
 
-use super::HistoryCell;
+use super::{plain_lines, raw_lines_from_source, ActivityDisclosure, HistoryCell};
 use crate::diff_render::create_diff_summary;
 use crate::shimmer::spinner;
 use crate::text_formatting::strip_terminal_controls;
@@ -90,6 +90,71 @@ impl ToolCallCell {
 
 impl HistoryCell for ToolCallCell {
     fn display_lines(&self, width: u16) -> Vec<Line<'static>> {
+        self.lines(width, OutputExtent::Excerpt)
+    }
+
+    fn transcript_lines(&self, width: u16) -> Vec<Line<'static>> {
+        self.lines(width, OutputExtent::Full)
+    }
+
+    fn raw_lines(&self) -> Vec<Line<'static>> {
+        let mut lines = plain_lines([self.header()]);
+        let Some(Outcome { result, .. }) = &self.outcome else {
+            return lines;
+        };
+        if let Some(patch) = &result.patch {
+            lines.extend(plain_lines(create_diff_summary(
+                patch,
+                usize::from(u16::MAX),
+            )));
+            return lines;
+        }
+        if let Some(text) = &result.text {
+            lines.extend(raw_lines_from_source(
+                strip_terminal_controls(text).trim_end(),
+            ));
+        }
+        if let Some(code) = result.exit_code.filter(|code| *code != 0) {
+            lines.push(Line::from(format!("exit code {code}")));
+        }
+        lines
+    }
+
+    fn activity_ids(&self) -> Vec<String> {
+        vec![format!("tool:{}", self.call_id)]
+    }
+
+    /// A patch's diff is shown whole; an output's middle lines are left
+    /// out.
+    fn activity_disclosure(&self, _width: u16) -> Option<ActivityDisclosure> {
+        let result = &self.outcome.as_ref()?.result;
+        if result.patch.is_some() {
+            return None;
+        }
+        let text = result.text.as_deref()?;
+        let lines = strip_terminal_controls(text).trim_end().lines().count();
+        (lines > 2 * TOOL_CALL_MAX_LINES)
+            .then(|| ActivityDisclosure::OutputLines(lines - 2 * TOOL_CALL_MAX_LINES))
+    }
+
+    /// The spinner blinks while the call runs.
+    fn transcript_animation_tick(&self) -> Option<u64> {
+        self.outcome
+            .is_none()
+            .then(|| u64::try_from(self.start_time.elapsed().as_millis() / 600).unwrap_or(u64::MAX))
+    }
+}
+
+/// How much of a call's output its lines show.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum OutputExtent {
+    /// The first and last lines, as the scrollback shows them.
+    Excerpt,
+    Full,
+}
+
+impl ToolCallCell {
+    fn lines(&self, width: u16, extent: OutputExtent) -> Vec<Line<'static>> {
         let header = self.header();
         let mut lines: Vec<Line<'static>> = word_wrap_line(
             &header,
@@ -105,7 +170,11 @@ impl HistoryCell for ToolCallCell {
             lines.extend(create_diff_summary(patch, width.saturating_sub(4) as usize));
             return lines;
         }
-        let mut body = result.text.as_deref().map(output_lines).unwrap_or_default();
+        let mut body = result
+            .text
+            .as_deref()
+            .map(|text| output_lines(text, extent))
+            .unwrap_or_default();
         if let Some(code) = result.exit_code.filter(|code| *code != 0) {
             body.push(Line::from(format!("exit code {code}")).red());
         }
@@ -119,13 +188,13 @@ impl HistoryCell for ToolCallCell {
     }
 }
 
-/// The first and last lines of `text`, dimmed, with how many lines between
-/// them are left out.
-fn output_lines(text: &str) -> Vec<Line<'static>> {
+/// The lines of `text`, dimmed; as an excerpt, the first and last ones with
+/// how many lines between them are left out.
+fn output_lines(text: &str, extent: OutputExtent) -> Vec<Line<'static>> {
     let text = strip_terminal_controls(text);
     let raw: Vec<&str> = text.trim_end().lines().collect();
     let dim = |line: &str| Line::from(line.to_string()).add_modifier(Modifier::DIM);
-    if raw.len() <= 2 * TOOL_CALL_MAX_LINES {
+    if extent == OutputExtent::Full || raw.len() <= 2 * TOOL_CALL_MAX_LINES {
         return raw.into_iter().map(dim).collect();
     }
     let omitted = raw.len() - 2 * TOOL_CALL_MAX_LINES;

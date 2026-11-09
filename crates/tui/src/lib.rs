@@ -32,6 +32,10 @@ mod style;
 #[cfg(test)]
 mod test_support;
 mod text_formatting;
+#[allow(dead_code, reason = "P2.2 wires the transcript view into the app")]
+mod text_selection;
+#[allow(dead_code, reason = "P2.2 wires the transcript view into the app")]
+mod transcript_view;
 mod tui;
 mod ui_consts;
 mod wrapping;

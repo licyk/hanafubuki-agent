@@ -58,6 +58,7 @@ fn read_input(app_event_tx: &AppEventSender, stop: &AtomicBool) {
                 app_event_tx.send(AppEvent::Key(key))
             }
             Event::Paste(text) => app_event_tx.send(AppEvent::Paste(text)),
+            Event::Mouse(mouse) => app_event_tx.send(AppEvent::Mouse(mouse)),
             Event::Resize(_, _) | Event::FocusGained => app_event_tx.send(AppEvent::Redraw),
             _ => {}
         }

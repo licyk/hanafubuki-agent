@@ -10,7 +10,7 @@ use hanafubuki_agent::{
     AgentEvent, AgentSessionId, AgentSessionMode, AgentUserInputAnswer, AgentUserInputRequestId,
     ApprovalRequestId, ApprovalUserDecision,
 };
-use ratatui::crossterm::event::KeyEvent;
+use ratatui::crossterm::event::{KeyEvent, MouseEvent};
 
 use crate::agent_bridge::AgentReply;
 use crate::file_search::FileMatch;
@@ -19,6 +19,9 @@ use crate::history_cell::HistoryCell;
 pub(crate) enum AppEvent {
     Key(KeyEvent),
     Paste(String),
+    /// The pointer, reported while a transcript view captures it.
+    #[allow(dead_code, reason = "P2.2's transcript view reads it")]
+    Mouse(MouseEvent),
     /// The terminal changed size, or must be drawn again.
     Redraw,
     /// Draw no later than this.

@@ -63,6 +63,7 @@ pub(crate) use module_view::ViewFailure;
 use module_view::{ModuleView, ViewFailures};
 use paste_burst::PasteBurst;
 use request_user_input::RequestUserInputOverlay;
+pub(crate) use textarea::{TextArea, TextAreaState};
 
 /// How long the "press again to quit" hint stays visible.
 ///

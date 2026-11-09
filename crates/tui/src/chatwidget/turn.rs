@@ -15,6 +15,7 @@ const WORKING: &str = "Working";
 
 impl ChatWidget {
     pub(crate) fn handle_turn_update(&mut self, update: TurnUpdate) {
+        self.live_revision += 1;
         let Some(update) = self.handle_command_update(update) else {
             self.request_redraw();
             return;

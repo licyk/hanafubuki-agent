@@ -65,6 +65,22 @@ moves its pin.
       terminal extensions, the `HistoryCell` extension, `TranscriptView`,
       the owned shell, the clipboard, keymap core; owned mode by default;
       Ctrl+T in both modes (live tail); `/tui`; `/raw`.
+  - [x] P2.1, layers A–C: `tui/alternate_screen.rs` (enter and leave with
+        the keyboard flags, optional mouse capture), mouse events as
+        `AppEvent::Mouse`; `HistoryCell` gains `raw_lines` (every cell),
+        presentations (compact, expanded, Rich/Raw), activity ids and
+        disclosure, `copy_source`, animation ticks; `ChatWidget`'s live
+        tail; `transcript_view/` (anchored positions, layout cache, live
+        tail, follow-latest, scrolling, mouse and keyboard selection, F3
+        search, F4 disclosure, footer). The Ctrl+T pager already shows a
+        tool call's whole output. Not ported: hyperlinks and wrap
+        provenance, copy mode (needs layer E), bookmarks, images.
+  - [ ] P2.2: the owned shell (entries by `Arc`; per frame: live cells,
+        render, follow control, footer; suppress `ChatWidget`'s own live
+        cells), owned mode by default, Ctrl+T in both modes, `/tui`,
+        `/raw`, the clipboard (`Copy` actions, `/copy` later), the first
+        `[tui]` keys; remove P2.1's temporary `allow(dead_code)`s; the
+        crate doc names both Codex revisions.
 - [ ] P3: Esc to edit an earlier message (`app_backtrack`) over
       `fork_session_before_turn`; facade `edit_from_turn`.
 - [ ] P4: `/rename /archive /delete /resume [id|title] /fork /clear /export

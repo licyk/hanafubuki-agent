@@ -7,7 +7,7 @@ use ratatui::style::{Style, Styled, Stylize};
 use ratatui::text::Line;
 use unicode_width::UnicodeWidthStr;
 
-use super::HistoryCell;
+use super::{plain_lines, raw_lines_from_source, HistoryCell};
 use crate::render::line_utils::prefix_lines;
 
 /// The task checklist the model keeps with `update_plan`, as it stood at
@@ -38,6 +38,10 @@ pub(crate) struct ProposedPlanStreamCell {
 impl HistoryCell for ProposedPlanStreamCell {
     fn display_lines(&self, _width: u16) -> Vec<Line<'static>> {
         self.lines.clone()
+    }
+
+    fn raw_lines(&self) -> Vec<Line<'static>> {
+        plain_lines(self.lines.clone())
     }
 
     fn is_stream_continuation(&self) -> bool {
@@ -101,6 +105,30 @@ impl HistoryCell for PlanUpdateCell {
         }
         lines.extend(prefix_lines(indented_lines, "  └ ".dim(), "    ".into()));
 
+        lines
+    }
+
+    fn raw_lines(&self) -> Vec<Line<'static>> {
+        let mut lines = vec![Line::from("Updated Plan")];
+        if let Some(explanation) = self
+            .explanation
+            .as_deref()
+            .map(str::trim)
+            .filter(|text| !text.is_empty())
+        {
+            lines.extend(raw_lines_from_source(explanation));
+        }
+        if self.plan.is_empty() {
+            lines.push(Line::from("(no steps provided)"));
+        }
+        for AgentTaskPlanStep { step, status } in &self.plan {
+            let marker = match status {
+                AgentTaskPlanStepStatus::Completed => "[x]",
+                AgentTaskPlanStepStatus::InProgress => "[~]",
+                AgentTaskPlanStepStatus::Pending => "[ ]",
+            };
+            lines.push(Line::from(format!("{marker} {step}")));
+        }
         lines
     }
 }

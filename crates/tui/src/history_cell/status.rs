@@ -12,7 +12,7 @@ use ratatui::style::Stylize;
 use ratatui::text::{Line, Span};
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
-use super::{with_border, HistoryCell};
+use super::{plain_lines, with_border, HistoryCell};
 use crate::agent_bridge::StatusReport;
 use crate::text_formatting::center_truncate_path;
 
@@ -162,6 +162,10 @@ impl HistoryCell for StatusHistoryCell {
         let mut out: Vec<Line<'static>> = vec!["/status".magenta().into(), Line::default()];
         out.extend(with_border(lines));
         out
+    }
+
+    fn raw_lines(&self) -> Vec<Line<'static>> {
+        plain_lines(self.display_lines(u16::MAX))
     }
 }
 

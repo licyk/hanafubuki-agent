@@ -31,9 +31,63 @@ pub(crate) use status::new_status_output;
 pub(crate) use thinking::ThinkingCell;
 pub(crate) use tool::{new_tool_call, ToolCallCell, ToolResultView};
 
+/// How the transcript view shows the cells: styled, or as the plain text
+/// the cells were made from, for copying.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum HistoryRenderMode {
+    Rich,
+    #[allow(dead_code, reason = "P2.2's `/raw` turns it on")]
+    Raw,
+}
+
+/// What an activity's details add to its compact presentation.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum ActivityDisclosure {
+    Generic,
+    /// The output lines the compact presentation leaves out.
+    OutputLines(usize),
+}
+
+/// The lines' text without its styles.
+pub(crate) fn plain_lines(lines: impl IntoIterator<Item = Line<'static>>) -> Vec<Line<'static>> {
+    lines
+        .into_iter()
+        .map(|line| {
+            Line::from(
+                line.spans
+                    .into_iter()
+                    .map(|span| span.content.into_owned())
+                    .collect::<String>(),
+            )
+        })
+        .collect()
+}
+
+/// One line per line of `source`, without a trailing empty one.
+pub(crate) fn raw_lines_from_source(source: &str) -> Vec<Line<'static>> {
+    let source = source.strip_suffix('\n').unwrap_or(source);
+    if source.is_empty() {
+        return Vec::new();
+    }
+    source
+        .split('\n')
+        .map(|line| Line::from(line.to_string()))
+        .collect()
+}
+
 /// An entry of the conversation, rendered at a width.
 pub(crate) trait HistoryCell: std::fmt::Debug + Send + Sync + Any {
     fn display_lines(&self, width: u16) -> Vec<Line<'static>>;
+
+    /// The cell's text as plain, unwrapped lines, for the raw presentation.
+    fn raw_lines(&self) -> Vec<Line<'static>>;
+
+    fn display_lines_for_mode(&self, width: u16, mode: HistoryRenderMode) -> Vec<Line<'static>> {
+        match mode {
+            HistoryRenderMode::Rich => self.display_lines(width),
+            HistoryRenderMode::Raw => self.raw_lines(),
+        }
+    }
 
     fn desired_height(&self, width: u16) -> u16 {
         Paragraph::new(Text::from(self.display_lines(width)))
@@ -57,10 +111,69 @@ pub(crate) trait HistoryCell: std::fmt::Debug + Send + Sync + Any {
             .unwrap_or(0)
     }
 
+    /// The compact presentation of the transcript view, which can reveal an
+    /// activity's details in place.
+    fn compact_lines(&self, width: u16) -> Vec<Line<'static>> {
+        self.display_lines(width)
+    }
+
+    /// An activity's details, revealed in the compact presentation.
+    fn expanded_lines(&self, width: u16) -> Vec<Line<'static>> {
+        self.transcript_lines(width)
+    }
+
+    /// Stable identities of the activities the cell shows, which keep a
+    /// disclosure across the cell's move from the live tail into history.
+    /// Empty for a cell with no details to disclose.
+    fn activity_ids(&self) -> Vec<String> {
+        Vec::new()
+    }
+
+    /// What the details add, or `None` when the compact presentation
+    /// already shows everything.
+    fn activity_disclosure(&self, _width: u16) -> Option<ActivityDisclosure> {
+        Some(ActivityDisclosure::Generic)
+    }
+
+    /// The source text the cell was rendered from, for copying it whole.
+    #[allow(dead_code, reason = "P2.2's copy targets copy a cell's source")]
+    fn copy_source(&self) -> Option<&str> {
+        None
+    }
+
+    /// Whether a layout of the cell stays valid across frames; a cell
+    /// backed by changing state is laid out again each frame.
+    fn has_stable_transcript_height(&self) -> bool {
+        true
+    }
+
+    /// A tick that changes while the cell's lines change with time (a
+    /// spinner, a timer), so a cached layout of it is refreshed.
+    fn transcript_animation_tick(&self) -> Option<u64> {
+        None
+    }
+
     /// Whether the cell continues the streamed message before it, so no
     /// blank line separates them in the scrollback.
     fn is_stream_continuation(&self) -> bool {
         false
+    }
+}
+
+/// The lines of an entry of the transcript view: the full transcript when
+/// `detailed`, otherwise the compact or the raw presentation.
+pub(crate) fn transcript_entry_lines(
+    cell: &dyn HistoryCell,
+    width: u16,
+    detailed: bool,
+    mode: HistoryRenderMode,
+) -> Vec<Line<'static>> {
+    if detailed {
+        cell.transcript_lines(width)
+    } else if mode == HistoryRenderMode::Rich {
+        cell.compact_lines(width)
+    } else {
+        cell.display_lines_for_mode(width, mode)
     }
 }
 
@@ -113,6 +226,14 @@ impl HistoryCell for UserHistoryCell {
         lines.push(Line::from("").style(style));
         lines
     }
+
+    fn raw_lines(&self) -> Vec<Line<'static>> {
+        raw_lines_from_source(&self.message)
+    }
+
+    fn copy_source(&self) -> Option<&str> {
+        Some(&self.message)
+    }
 }
 
 pub(crate) fn new_user_prompt(message: String) -> UserHistoryCell {
@@ -148,6 +269,10 @@ impl HistoryCell for AgentMessageCell {
         )
     }
 
+    fn raw_lines(&self) -> Vec<Line<'static>> {
+        plain_lines(self.lines.clone())
+    }
+
     fn is_stream_continuation(&self) -> bool {
         !self.is_first_line
     }
@@ -167,6 +292,10 @@ impl PlainHistoryCell {
 impl HistoryCell for PlainHistoryCell {
     fn display_lines(&self, _width: u16) -> Vec<Line<'static>> {
         self.lines.clone()
+    }
+
+    fn raw_lines(&self) -> Vec<Line<'static>> {
+        plain_lines(self.lines.clone())
     }
 }
 
@@ -222,6 +351,14 @@ impl HistoryCell for SessionHeaderHistoryCell {
             Line::from(model),
             Line::from(vec![Span::from(dir_prefix).dim(), Span::from(directory)]),
         ])
+    }
+
+    fn raw_lines(&self) -> Vec<Line<'static>> {
+        vec![
+            Line::from(format!("hanafubuki-agent (v{})", self.version)),
+            Line::from(format!("model: {}", self.model)),
+            Line::from(format!("directory: {}", self.directory)),
+        ]
     }
 }
 
@@ -285,6 +422,15 @@ impl HistoryCell for FinalMessageSeparator {
             }
             None => vec![Line::from_iter(["─".repeat(width as usize).dim()])],
         }
+    }
+
+    fn raw_lines(&self) -> Vec<Line<'static>> {
+        self.elapsed_seconds
+            .map(|seconds| {
+                let elapsed = crate::status_indicator_widget::fmt_elapsed_compact(seconds);
+                vec![Line::from(format!("Worked for {elapsed}"))]
+            })
+            .unwrap_or_default()
     }
 }
 

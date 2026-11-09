@@ -103,3 +103,39 @@ pub(crate) fn is_altgr(mods: KeyModifiers) -> bool {
 pub(crate) fn is_altgr(_mods: KeyModifiers) -> bool {
     false
 }
+
+/// A key in one canonical form: an uppercase letter as Shift and the lower
+/// case one, a C0 control character as Ctrl and its letter, Shift+Tab as
+/// BackTab. Terminals differ in which of these forms they report.
+pub(crate) fn normalize_key_parts(
+    key: KeyCode,
+    mut modifiers: KeyModifiers,
+) -> (KeyCode, KeyModifiers) {
+    if key == KeyCode::BackTab || (key == KeyCode::Tab && modifiers.contains(KeyModifiers::SHIFT)) {
+        modifiers.remove(KeyModifiers::SHIFT);
+        return (KeyCode::BackTab, modifiers);
+    }
+    let KeyCode::Char(ch) = key else {
+        return (key, modifiers);
+    };
+    if modifiers.is_empty() {
+        if let Some(ctrl_char) = c0_control_char_to_ctrl_char(ch) {
+            return normalize_key_parts(KeyCode::Char(ctrl_char), KeyModifiers::CONTROL);
+        }
+    }
+    if ch.is_ascii_uppercase() {
+        modifiers.insert(KeyModifiers::SHIFT);
+        return (KeyCode::Char(ch.to_ascii_lowercase()), modifiers);
+    }
+    (key, modifiers)
+}
+
+fn c0_control_char_to_ctrl_char(ch: char) -> Option<char> {
+    let code = u32::from(ch);
+    match code {
+        0x00 => Some(' '),
+        0x01..=0x1a => char::from_u32(code - 0x01 + u32::from('a')),
+        0x1c..=0x1f => char::from_u32(code - 0x1c + u32::from('4')),
+        _ => None,
+    }
+}

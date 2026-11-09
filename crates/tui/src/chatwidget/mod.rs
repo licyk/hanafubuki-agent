@@ -9,7 +9,10 @@
 //! [`Op`] for the Agent, or runs as a slash command (`commands`).
 
 mod commands;
+mod live_tail;
 mod turn;
+
+pub(crate) use live_tail::ActiveCellTranscriptKey;
 
 use std::cell::Cell;
 use std::collections::VecDeque;
@@ -82,6 +85,9 @@ pub(crate) struct ChatWidget {
     /// command turned off after it panicked.
     #[allow(dead_code, reason = "`/warnings` will read them")]
     warnings: Vec<String>,
+    /// Advanced by every change to the live cells, so a cached layout of
+    /// the live tail is refreshed.
+    live_revision: u64,
 }
 
 impl ChatWidget {
@@ -118,6 +124,7 @@ impl ChatWidget {
             directory,
             mode: AgentSessionMode::Default,
             warnings: Vec::new(),
+            live_revision: 0,
         }
     }
 
@@ -231,6 +238,7 @@ impl ChatWidget {
     }
 
     fn toggle_thinking(&mut self) {
+        self.live_revision += 1;
         self.thinking_expanded = !self.thinking_expanded;
         for (_, cell) in &mut self.live_thinking {
             cell.set_expanded(self.thinking_expanded);
