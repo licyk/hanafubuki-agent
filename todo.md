@@ -305,8 +305,9 @@ moves its pin.
         and answered on the child; `/agents` (sessions with their children
         nested, filters, open, new, fork, archive or restore, delete,
         interrupt).
-  - Open: an interrupt that lands while the tool catalog is built ends
-    the child's turn Failed, not Cancelled; `wait_agent` pollutes memory
+  - Fixed after P14: an interrupt that lands while the tool catalog is
+    built ends the child's turn Cancelled (it was Failed).
+  - Open: `wait_agent` pollutes memory
     contribution, so a coordinating session never contributes; archiving
     a parent while a child runs is untested.
   - Hanafubuki, at its next pin: re-exports `AgentSubagentStatus`,
@@ -484,6 +485,19 @@ moves its pin.
     has `sandbox_mode` and `sandbox_workspace_write`;
     `ExecCommandRequest.sandbox`; `set_working_directory` is now
     `set_workspace_roots`; a new crate.
+- [x] CI on macOS and Windows (red since P2.1, fixed after P14): platform
+      assumptions in tests (line endings, absolute paths, the alternate
+      screen, the Windows SID, PowerShell's wording); a narrow description
+      column stacks; a stop that overtakes a background terminal's wait
+      finds it gone; a confirmed cancellation whose commit outlasts the
+      grace is no longer aborted (its sink heard nothing); a subagent
+      shown after it asked for an approval shows it. Tests wait on
+      outcomes (`TEST_WAIT`, 60 s) and give shutdowns that are not their
+      subject `TEST_SHUTDOWN_DEADLINE` (10 s); tests whose time limit is
+      the point measure it relative to a far larger one. Reproduced and
+      cleared under CPU and disk load on Linux.
+  - Open: `workspace_commands::a_denied_action_is_approved_between_turns_
+    and_refused_during_one` still uses a 10 s model delay as its window.
 
 ## Plan: visible thinking and the documentation site (2026-11-09)
 
