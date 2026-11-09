@@ -6,7 +6,7 @@ mod support;
 
 use std::time::Duration;
 
-use hanafubuki_agent::test_support::{assistant_events, FakeServer};
+use hanafubuki_agent::test_support::{reasoning_answer_events, FakeServer};
 use serde_json::Value;
 use support::Home;
 
@@ -204,7 +204,7 @@ fn mcp_servers_are_added_listed_without_secrets_and_removed() {
 fn sessions_are_listed_shown_archived_and_deleted() {
     let runtime = tokio::runtime::Runtime::new().unwrap();
     let server = runtime.block_on(FakeServer::start(vec![(
-        assistant_events("Recorded answer."),
+        reasoning_answer_events("Recalling it.", "Recorded answer."),
         Duration::ZERO,
     )]));
     let home = Home::new().with_provider(&server.base_url);
@@ -221,6 +221,20 @@ fn sessions_are_listed_shown_archived_and_deleted() {
     let show = home.run(&["sessions", "show", &id]).expect(0).stdout();
     assert!(show.contains("user: Remember this question"), "{show}");
     assert!(show.contains("assistant: Recorded answer."), "{show}");
+    assert!(show.lines().any(|line| line == "thought for 0s"), "{show}");
+    assert!(!show.contains("Recalling it."), "{show}");
+    let shown = home
+        .run(&["sessions", "show", &id, "--json"])
+        .expect(0)
+        .stdout();
+    let page: Value = serde_json::from_str(&shown).unwrap();
+    let reasoning = page["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|item| item["content"]["type"] == "reasoning")
+        .expect(&shown);
+    assert_eq!(reasoning["content"]["text"], "Recalling it.");
 
     home.run(&["sessions", "archive", &id]).expect(0);
     assert!(home

@@ -7,7 +7,9 @@ use std::io::Write;
 use std::process::Stdio;
 use std::time::Duration;
 
-use hanafubuki_agent::test_support::{assistant_events, tool_events, FakeServer};
+use hanafubuki_agent::test_support::{
+    assistant_events, reasoning_answer_events, tool_events, FakeServer,
+};
 use serde_json::Value;
 use support::Home;
 
@@ -66,6 +68,52 @@ fn a_turn_prints_its_answer_and_writes_the_last_message() {
     assert!(run.stderr().contains("session "), "{}", run.stderr());
     assert_eq!(std::fs::read_to_string(last).unwrap(), "The answer is 42.");
     assert_eq!(model.request_count(), 1);
+}
+
+#[test]
+fn the_thinking_time_goes_to_stderr_without_its_text() {
+    let model = Model::start(vec![reasoning_answer_events(
+        "Weighing it.",
+        "The answer is 42.",
+    )]);
+    let home = Home::new().with_provider(&model.server.base_url);
+    let run = home.run(&["exec", "What is the answer?"]).expect(0);
+    assert!(
+        run.stderr().contains("· thought for 0s"),
+        "{}",
+        run.stderr()
+    );
+    assert!(!run.stderr().contains("Weighing it."), "{}", run.stderr());
+    assert!(!run.stdout().contains("Weighing it."), "{}", run.stdout());
+    assert!(
+        run.stdout().contains("The answer is 42."),
+        "{}",
+        run.stdout()
+    );
+
+    let model = Model::start(vec![reasoning_answer_events(
+        "Weighing it.",
+        "The answer is 42.",
+    )]);
+    let home = Home::new().with_provider(&model.server.base_url);
+    let run = home
+        .run(&["exec", "--json", "What is the answer?"])
+        .expect(0);
+    let kinds = run
+        .stdout()
+        .lines()
+        .map(|line| serde_json::from_str::<Value>(line).unwrap())
+        .map(|event| event["kind"].clone())
+        .collect::<Vec<_>>();
+    let position = |kind: &str| {
+        kinds
+            .iter()
+            .position(|event| event["type"] == kind)
+            .unwrap_or_else(|| panic!("no {kind}: {kinds:?}"))
+    };
+    assert!(position("reasoning_started") < position("reasoning_delta"));
+    assert!(position("reasoning_delta") < position("reasoning_completed"));
+    assert_eq!(kinds[position("reasoning_delta")]["delta"], "Weighing it.");
 }
 
 #[test]

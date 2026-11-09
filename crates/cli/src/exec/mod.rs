@@ -17,6 +17,7 @@ use hanafubuki_agent::{
 };
 
 use self::answers::{Answers, ApprovePolicy};
+pub(crate) use self::output::thought_for;
 use self::output::{Human, JsonLines, Output};
 use crate::agent::{block_on, Standalone};
 use crate::cli::{ExecArgs, GlobalArgs};

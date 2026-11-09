@@ -120,6 +120,9 @@ fn transcript_line(item: &ConversationItem) -> Option<String> {
     match item {
         ConversationItem::UserMessage { text, .. } => Some(format!("user: {text}")),
         ConversationItem::SteeringMessage { text, .. } => Some(format!("user (steering): {text}")),
+        ConversationItem::Reasoning {
+            duration_millis, ..
+        } => Some(crate::exec::thought_for(*duration_millis)),
         ConversationItem::AssistantMessage { text, .. } => Some(format!("assistant: {text}")),
         ConversationItem::ToolCall { name, .. } => Some(format!("→ {name}")),
         ConversationItem::ToolOutput { output, .. } => Some(

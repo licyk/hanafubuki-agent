@@ -42,7 +42,7 @@ impl Messages {
 }
 
 /// The turn for a person: messages and tool calls on standard output,
-/// errors and the session on standard error.
+/// errors, the session and how long the model thought on standard error.
 #[derive(Default)]
 pub(super) struct Human {
     messages: Messages,
@@ -57,6 +57,9 @@ impl Output for Human {
     fn event(&mut self, event: &AgentEvent) {
         self.messages.record(&event.kind);
         match &event.kind {
+            AgentEventKind::ReasoningCompleted {
+                duration_millis, ..
+            } => eprintln!("· {}", thought_for(*duration_millis)),
             AgentEventKind::AssistantMessageCompleted { message_id, phase } => {
                 let text = self.messages.text.get(message_id).map(String::as_str);
                 let text = text.unwrap_or_default().trim_end();
@@ -142,6 +145,11 @@ impl Output for JsonLines {
     fn final_message(&self) -> Option<String> {
         self.messages.final_message.clone()
     }
+}
+
+/// How long a reasoning item took, as `exec` and `sessions show` print it.
+pub(crate) fn thought_for(duration_millis: u64) -> String {
+    format!("thought for {}s", duration_millis / 1000)
 }
 
 /// A terminal reason as it is serialized (`model_error`).
