@@ -29,6 +29,16 @@ path = "crates/config/src/overrides/tests.rs"
 markers = ["Derived from OpenAI Codex (https://github.com/openai/codex), the tests"]
 notice = "crates/config/src/overrides.rs"
 
+[[derived]]
+path = "crates/agent/src/plugins/recap/prompt.rs"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
+notice = "crates/agent/src/plugins/recap"
+
+[[derived]]
+path = "crates/agent/src/plugins/recap/history.rs"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
+notice = "crates/agent/src/plugins/recap"
+
 [[mit]]
 path = "crates/tui/src/custom_terminal.rs"
 holder = "Copyright (c) 2016-2022 Florian Dehau"

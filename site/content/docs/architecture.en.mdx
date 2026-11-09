@@ -45,7 +45,8 @@ the host (Hanafubuki's module host, for one)
     └── AgentHost = ModuleHost<AgentPlugins>
         ├── Core:       agent-host-services (BlockingService)
         │               agent-kernel (publishes AgentKernelRegistries)
-        ├── Capability: web, workspace-fs, view-image, execution, mcp, memory, skills, titles
+        ├── Capability: web, workspace-fs, view-image, execution, mcp, memory, skills, titles,
+        │               recap
         ├── host rows:  Hanafubuki's tasks, instances (Capability), ui-context (Context)
         └── Context:    workspace-context, permission-mode
 ```
@@ -62,8 +63,11 @@ Three owners, three outcomes:
 | Fault                                | Caught by                                                                                                                               | Outcome                                                                                                                                                                                            |
 | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | a panic in plugin code               | the guard on every kernel call into a plugin (`RegistryEntry::guard`, `PluginFaults::guard`); kardia for `apply`, effects and disposers | that call's own error path; a `PluginFault` of the owner; the host stops the plugin and mounts it again under `RestartPolicy` (2 s, 10 s, 30 s, three in ten minutes, then `failed` until a retry) |
+| a panic in a feature call            | `PluginFaults::guard_async` in the facade's feature helper (`AgentApplicationService::feature`)                                         | the call is `FeatureUnavailable`; a `PluginFault` of the row that provides the feature, which the host stops and mounts again as above; every other feature and the Agent run on                   |
 | a panic in an MCP server's tool call | `catch_panic_async` in `McpTool::invoke`                                                                                                | the call's "internal error"; that server `Failed` and reconnected; the `mcp` plugin and the other servers run on                                                                                   |
 | a panic in kernel code               | a turn's task, a command guard, the Agent's worker groups, the host's tasks (`spawn_kernel_task`)                                       | reported to the instance's `AgentKernelFaultSink`; the slot marks the Agent `Faulted`, stops it and starts a new instance after 2 s, 10 s, 30 s, rebuilding the sessions from disk                 |
+
+**A feature plugin's failure costs only its feature.** A feature the facade offers as a call (a recap, a title suggestion) is served by the service its plugin row provides, resolved per call; while the row is off, starting, failed or restarting, the call is `FeatureUnavailable` with why, and nothing else changes ([Host, configuration and status](/docs/plugin-rules#host-configuration-and-status)).
 
 **Why a kernel fault rebuilds the whole Agent:** the locks do not poison (they are all `parking_lot`), so nothing rolls back after a panic and in-memory session state may be half-changed; the history on disk is the consistent copy.
 

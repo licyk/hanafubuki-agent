@@ -45,7 +45,8 @@ Agent 是一个**内核**（`hanafubuki-agent-kernel`），拥有会话、轮次
     └── AgentHost = ModuleHost<AgentPlugins>
         ├── Core:       agent-host-services（BlockingService）
         │               agent-kernel（发布 AgentKernelRegistries）
-        ├── Capability: web、workspace-fs、view-image、execution、mcp、memory、skills、titles
+        ├── Capability: web、workspace-fs、view-image、execution、mcp、memory、skills、titles、
+        │               recap
         ├── 宿主行:     Hanafubuki 的 tasks、instances（Capability）、ui-context（Context）
         └── Context:    workspace-context、permission-mode
 ```
@@ -62,8 +63,11 @@ Agent 是一个**内核**（`hanafubuki-agent-kernel`），拥有会话、轮次
 | 故障                       | 由谁捕获                                                                                                       | 结果                                                                                                                                                 |
 | -------------------------- | -------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 插件代码 panic             | 内核调用插件时的守卫（`RegistryEntry::guard`、`PluginFaults::guard`）；kardia 守卫 `apply`、effect 与 disposer | 那次调用自己的错误路径；插件的 `PluginFault`；宿主停止插件，按 `RestartPolicy` 重新挂载（2 秒、10 秒、30 秒，10 分钟内三次，之后 `failed` 直到重试） |
+| 功能调用 panic             | 门面功能辅助函数（`AgentApplicationService::feature`）中的 `PluginFaults::guard_async`                         | 该调用返回 `FeatureUnavailable`；提供该功能的行的 `PluginFault`，宿主像上面一样停止并重新挂载它；其他功能和 Agent 继续运行                           |
 | MCP 服务器的工具调用 panic | `McpTool::invoke` 中的 `catch_panic_async`                                                                     | 那次调用的“internal error”；那台服务器 `Failed` 并重连；`mcp` 插件和其他服务器继续运行                                                               |
 | 内核代码 panic             | 轮次任务、命令守卫、Agent 的工作线程组、宿主任务（`spawn_kernel_task`）                                        | 报告给实例的 `AgentKernelFaultSink`；槽位把 Agent 标为 `Faulted`，停止它，2 秒、10 秒、30 秒后启动新实例，从磁盘重建会话                             |
+
+**功能插件失败只损失它的功能。** 门面作为调用提供的功能（概要、标题建议）由它的插件行提供的服务承担，每次调用时解析；该行关闭、启动中、失败或重启时，调用返回带原因的 `FeatureUnavailable`，其他一切不变（[宿主、配置与状态](/docs/plugin-rules#host-configuration-and-status)）。
 
 **为什么内核故障要重建整个 Agent：** 锁不会中毒（全部使用 `parking_lot`），所以 panic 后什么都不会回滚，内存中的会话状态可能只改了一半；磁盘上的历史才是一致的副本。
 

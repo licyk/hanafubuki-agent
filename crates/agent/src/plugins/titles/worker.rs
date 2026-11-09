@@ -4,8 +4,9 @@ use hanafubuki_agent_contracts::BlockingService;
 use hanafubuki_agent_foundation::cancellation::CancellationToken;
 use tokio::sync::mpsc;
 
-use super::generation::{generate_title, wait_for_cancellation};
+use super::generation::{generate_title, TITLE_INSTRUCTIONS};
 use super::TitleWork;
+use crate::plugins::structured_request::wait_for_cancellation;
 use crate::titles::AgentTitleApplication;
 
 /// Generates the queued titles one after another until the plugin stops.
@@ -65,7 +66,7 @@ async fn title_turn(
             return;
         }
     };
-    let model_session = match request.model_session() {
+    let model_session = match request.model.model_session() {
         Ok(model_session) => model_session,
         Err(error) => {
             log::debug!(
@@ -76,7 +77,8 @@ async fn title_turn(
     };
     let title = match generate_title(
         model_session,
-        request.model,
+        request.model.model,
+        TITLE_INSTRUCTIONS,
         request.prompt,
         cancellation.clone(),
     )

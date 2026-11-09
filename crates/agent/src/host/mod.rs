@@ -26,7 +26,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use hanafubuki_agent_config::{AgentConfig, AgentSettings};
-use hanafubuki_agent_contracts::BlockingService;
+use hanafubuki_agent_contracts::{BlockingService, PluginFaults};
 use hanafubuki_agent_foundation::background_worker::WorkerShutdownDiagnostic;
 use hanafubuki_agent_foundation::blocking::BlockingOperationPort;
 use hanafubuki_agent_host::{HostProfile, ModuleHost, ModuleHostOptions, ModuleRow, RestartPolicy};
@@ -191,6 +191,22 @@ impl AgentHost {
                 AgentPluginStatus::of(status, contributions)
             })
             .collect()
+    }
+
+    /// The service of type `T` the active row `name` provides under its
+    /// name, resolved now; why it is unavailable otherwise. A retried row
+    /// provides a new instance, so a caller never keeps one.
+    pub(crate) fn service<T: std::any::Any + Send + Sync>(
+        &self,
+        name: &str,
+    ) -> Result<Arc<T>, String> {
+        self.host.service::<T>(name)
+    }
+
+    /// Where a panic in a plugin's code is reported; the host stops and
+    /// restarts the plugin it names.
+    pub(crate) fn faults(&self) -> &PluginFaults {
+        &self.registries.faults
     }
 
     /// Checks that `name` is a plugin whose enablement may become `enabled`.

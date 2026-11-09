@@ -17,9 +17,10 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use super::{AgentPluginGroup, AgentPluginRow, AgentPluginSettings};
+use crate::conversation_reader::AgentConversationReader;
 use crate::plugins::{
-    memory_plugin, permission_mode_plugin, skills_plugin, titles_plugin, view_image_plugin,
-    workspace_context_plugin,
+    memory_plugin, permission_mode_plugin, recap_plugin, skills_plugin, titles_plugin,
+    view_image_plugin, workspace_context_plugin,
 };
 use crate::service::AgentMcpApplication;
 use crate::skills::AgentSkillApplication;
@@ -42,6 +43,8 @@ pub(crate) struct AgentPluginInputs {
     /// Narrows the turn's Skill catalog to reachable MCP dependencies.
     pub(crate) mcp_application: AgentMcpApplication,
     pub(crate) titles: AgentTitleApplication,
+    /// What a recap reads of a session.
+    pub(crate) conversations: AgentConversationReader,
 }
 
 /// The manifest rows in mount order. Each declares its group, which the
@@ -72,6 +75,7 @@ pub(crate) fn agent_plugin_manifest(
             skills_plugin(inputs.skills, inputs.mcp_application),
         ),
         AgentPluginRow::unconfigured(Capability, titles_plugin(inputs.titles)),
+        AgentPluginRow::unconfigured(Capability, recap_plugin(inputs.conversations)),
     ];
     rows.extend(host);
     rows.extend([

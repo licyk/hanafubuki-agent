@@ -3,15 +3,10 @@
 //! the narrow port through which the `titles` plugin reads what it needs to
 //! generate a better one and commits it.
 
-use std::sync::Arc;
-
 use hanafubuki_agent_config::AgentConfig;
-use hanafubuki_agent_kernel::{
-    AgentService, AgentSessionId, AgentTurnId, ModelApiProtocol, ModelSession,
-};
+use hanafubuki_agent_kernel::{AgentService, AgentSessionId, AgentTurnId};
 
-use crate::service::resolve_settings_provider;
-use crate::{model_api_protocol, ResolvedAgentProvider};
+use crate::conversation_reader::{AgentConversationReader, AgentSessionModel};
 
 /// The longest automatic title, provisional or generated, in characters.
 pub(super) const AUTOMATIC_AGENT_TITLE_MAX_CHARS: usize = 36;
@@ -32,8 +27,9 @@ pub(super) fn provisional_agent_title(prompt: &str) -> Option<String> {
 }
 
 /// What the `titles` plugin reads and writes: a turn's prompt and the
-/// session's Provider, and the compare-and-swap that commits a generated
-/// title. Every method blocks; the plugin calls them on the `BlockingService`.
+/// session's Provider, the conversation a suggestion reads, and the
+/// compare-and-swap that commits a generated title. Every method blocks;
+/// the plugin calls them on the `BlockingService`.
 #[derive(Clone)]
 pub(crate) struct AgentTitleApplication {
     core: AgentService,
@@ -43,24 +39,7 @@ pub(crate) struct AgentTitleApplication {
 /// Everything one title generation needs.
 pub(crate) struct AgentTitleRequest {
     pub(crate) prompt: String,
-    pub(crate) model: String,
-    protocol: ModelApiProtocol,
-    provider: ResolvedAgentProvider,
-}
-
-impl AgentTitleRequest {
-    /// A private model session on the session's Provider, outside the
-    /// session's own conversation.
-    pub(crate) fn model_session(&self) -> Result<Arc<dyn ModelSession>, String> {
-        AgentService::create_private_model_session(
-            self.protocol,
-            &self.provider.definition.base_url,
-            self.provider.credential.clone(),
-            self.provider.headers.clone(),
-            hanafubuki_agent_kernel::ModelRetryPolicy::default(),
-        )
-        .map_err(|error| error.to_string())
-    }
+    pub(crate) model: AgentSessionModel,
 }
 
 impl AgentTitleApplication {
@@ -87,20 +66,15 @@ impl AgentTitleApplication {
             .core
             .snapshot(session_id)
             .map_err(|error| error.to_string())?;
-        let registry = self.config.providers()?;
-        let provider = resolve_settings_provider(&registry, &session.provider_id)?;
-        if model_api_protocol(provider.definition.protocol) != session.provider_protocol {
-            return Err(format!(
-                "Agent Provider {} protocol changed",
-                provider.definition.display_name
-            ));
-        }
         Ok(Some(AgentTitleRequest {
             prompt,
-            model: session.model,
-            protocol: session.provider_protocol,
-            provider,
+            model: AgentSessionModel::resolve(&self.config, &session)?,
         }))
+    }
+
+    /// What a title suggestion reads of a session.
+    pub(crate) fn conversations(&self) -> AgentConversationReader {
+        AgentConversationReader::new(self.core.clone(), self.config.clone())
     }
 
     /// Replaces the session's automatic title `expected` with `title`.

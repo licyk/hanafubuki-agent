@@ -27,7 +27,13 @@ Third-party notices
     port describes (site/content/docs/architecture.en.mdx, "What the port
     of the terminal interface changed");
     architecture/notices-policy.toml lists the files of it that are not
-    derived.
+    derived;
+  - the `recap` plugin's prompt and conversation selection
+    (`crates/agent/src/plugins/recap`: `prompt.rs` and `history.rs`) are
+    derived from Codex's `codex-rs/context-fragments/src/recap_prompt.rs`,
+    `codex-rs/tui/src/app/recap.rs` and
+    `codex-rs/tui/src/app/recap_history.rs` (commit `57a808a392`); each
+    says so in its first lines.
   Codex's NOTICE and its license follow.
 - Ratatui (https://github.com/ratatui/ratatui), MIT License: Codex's
   `custom_terminal.rs`, ported as `crates/tui/src/custom_terminal.rs`, is

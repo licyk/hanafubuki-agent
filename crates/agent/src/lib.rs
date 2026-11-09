@@ -8,6 +8,7 @@
 
 mod attachments;
 mod contracts;
+mod conversation_reader;
 mod data_dir_lock;
 mod desktop;
 mod file_search;
@@ -70,6 +71,7 @@ pub use host::{
 pub use host_inputs::{AgentSteeringRequest, AgentTurnRequest, HostContextPort, NoHostContext};
 pub use memory::AgentMemoryApplication;
 pub use network::{AgentProxy, NetworkSettingsPort};
+pub use plugins::AgentRecap;
 pub use service::{
     AgentApplicationService, AgentHostPorts, AgentModelPolicyWriteRequest,
     AgentProviderDeleteRequest, AgentProviderDraft, AgentProviderEnabledRequest,
@@ -132,6 +134,7 @@ pub use hanafubuki_agent_execution::{
     AgentBackgroundTerminalStopOutcome,
 };
 use hanafubuki_agent_foundation::cancellation::CancellationToken;
+pub use hanafubuki_agent_kernel::AgentError;
 pub use hanafubuki_agent_kernel::{
     AgentActivitySnapshot, AgentCompactionGeneration, AgentCompactionId, AgentCompactionOutcome,
     AgentCompactionStatus, AgentEvent, AgentEventBatch, AgentEventKind, AgentEventSequence,

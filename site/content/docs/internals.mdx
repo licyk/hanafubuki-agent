@@ -260,6 +260,9 @@ Provider 的流是外部输入（[模型 API](/docs/architecture#the-model-api)�
 
 - 门面的提交把轮次标为 `User`，对没有标题的会话，把提交的文本折成一行、截到 36 个字符，作为 `AgentTurnInput::provisional_title` 传入。如果会话仍然没有标题，准入就把它随轮次一起提交（`session_title_updated` 在 `turn_started` 和 `history_committed` 之后）。来源和临时标题都不随轮次持久化。
 - `titles` 插件的观察者把每个提交了临时标题的 `User` 轮次的 `TurnAdmitted` 排入有界队列（`try_send`）。它的工作线程（`spawn_scoped_worker`，一次处理一个标题，随插件停止）通过 `BlockingService` 上的 `AgentTitleApplication` 读取轮次的用户消息（`AgentService::turn_user_message`）和当前设置中该会话的 Provider，让一个私有的模型会话生成标题（提示截到 960 字节，30 秒），并用 `replace_automatic_session_title_if_expected` 提交，这是对临时标题的比较并交换，所以期间的重命名优先。插件关闭时临时标题保留。
+- 这个请求是共用的结构化请求（`plugins/structured_request.rs`）：提供者支持时用 JSON schema 输出（`ModelStructuredOutputCapability::NativeJsonSchema`），否则强制调用一个以该对象为参数的工具；有时间上限，随插件停止而取消。概要和标题建议也使用它。
+- 标题建议（`suggest_session_title`）通过 `AgentConversationReader` 读取会话最近 8 条用户和助手消息（从记录中由新到旧），每条截到 960 字节的平均份额，不提交任何东西。
+- 概要（`recap_session`，`recap` 插件）以同样的方式读取最近 8 次有回答的往来（引导并入它的请求，保留一个更新的未回答请求，不含工具输出和推理），提示在估算 8192 个 token 以内（先省略最旧的往来，再把每段文本摘录为保留首尾），返回 `AgentRecap { summary, next_action }`（60 秒）。回答被宽容地读取：忽略未知字段，缺少 `next_action` 即为空，超过 700 个字符的摘要或超过 200 个字符的下一步会被截断。
 
 ### 存储布局 [#storage-layout]
 

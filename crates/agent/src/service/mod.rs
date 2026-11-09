@@ -24,6 +24,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
 mod background_terminals;
+mod features;
 mod history;
 mod mcp;
 pub(crate) use mcp::AgentMcpApplication;
@@ -351,6 +352,10 @@ impl AgentApplicationService {
                     skills: skills.clone(),
                     mcp_application: mcp_application.clone(),
                     titles: AgentTitleApplication::new(core.clone(), config.clone()),
+                    conversations: crate::conversation_reader::AgentConversationReader::new(
+                        core.clone(),
+                        config.clone(),
+                    ),
                 },
                 host.plugins,
             ),

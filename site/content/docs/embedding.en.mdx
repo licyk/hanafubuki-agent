@@ -443,6 +443,17 @@ impl AgentEventSink for PrintEvents {
 - **History**: `list_sessions_page` (paged, searchable), `open_session` (a session with its latest transcript), `read_transcript_page` and `read_turn_page` read the committed `ConversationItem`s. Thinking is `ConversationItem::Reasoning { text, duration_millis, sampling_step, truncated }`, for presentation only and never replayed as model input.
 - **Run projections**: `AgentSlot::list_run_projections` and `get_run_projection` (activity id, turn number, phase, times, error); Hanafubuki maps them to its Task Center.
 
+## Feature calls [#feature-calls]
+
+Some features are served by a plugin row, and the service API reaches them per call:
+
+| Call                                | Returns                                                                                           | Its row  |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------- | -------- |
+| `recap_session(session_id)`         | `AgentRecap { summary, next_action }`: a catch-up on the session from its latest exchanges        | `recap`  |
+| `suggest_session_title(session_id)` | a title for the conversation as it stands, for the user to accept or edit before `rename_session` | `titles` |
+
+Both ask the session's model, outside the session's conversation, and commit nothing. While the row is off (`disabledPlugins`), starting, failed or restarting, the call returns `AgentError::FeatureUnavailable { feature, reason }`, whose `reason` says why; a panic in the row's code during the call stops and restarts that row alone, and the call returns the same error. A session without a request to read is `InvalidInput`, and a request the model fails is `Model`.
+
 ## Logging [#logging]
 
 The facade installs no logger: the host keeps its own `log` implementation, and the Agent's records go there. The standalone binary uses `logging::install_file_logger` (`hanafubuki-agent.log`, rotated past 8 MiB into `.1`…`.3`). The Agent's own records follow its content-logging rule: model content, reasoning, tool arguments and tool results appear only at `trace`, truncated to a bound, and headers and credentials never. So the host's log level is how a user selects `trace` (Hanafubuki's `log_level` setting).

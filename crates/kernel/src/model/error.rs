@@ -83,6 +83,13 @@ pub enum AgentError {
     CancellationNotConfirmed,
     SessionMutationNotConfirmed,
     ShuttingDown,
+    /// The plugin row a facade feature call needs (`feature`, its name) is
+    /// not running, or its service panicked during the call; `reason` is
+    /// the whole message for the user.
+    FeatureUnavailable {
+        feature: String,
+        reason: String,
+    },
 }
 
 impl fmt::Display for AgentError {
@@ -198,6 +205,7 @@ impl fmt::Display for AgentError {
                 formatter.write_str("agent session has a non-terminal turn")
             }
             Self::ShuttingDown => formatter.write_str("agent service is shutting down"),
+            Self::FeatureUnavailable { reason, .. } => formatter.write_str(reason),
         }
     }
 }
