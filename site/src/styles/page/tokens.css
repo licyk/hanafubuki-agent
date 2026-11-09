@@ -1,0 +1,73 @@
+/*
+ * Page design tokens.
+ *
+ * `--page-nav` lives on `:root` because `html:has(.paged)` needs it for
+ * `scroll-padding-top`, and custom properties on `.paged` are not visible
+ * to the `html` element.
+ */
+
+:root {
+  /* fumadocs HomeLayout header is `sticky h-14 top-0` */
+  --page-nav: 3.5rem;
+
+  /*
+   * Motion timing lives on :root because shared controls (the theme toggle)
+   * render outside `.paged` and must resolve the same tokens.
+   *
+   * The leave duration is deliberately longer than the enter duration so a
+   * pointer leaving an element reads as a settle rather than a cut.
+   */
+  --page-in: 200ms;
+  --page-out: 340ms;
+  --page-ease-in: cubic-bezier(0.32, 0.72, 0, 1);
+  --page-ease-out: cubic-bezier(0.33, 0, 0.2, 1);
+  --page-enter: 620ms;
+  --page-ease-enter: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.paged {
+  /* palette */
+  --page-accent: #4f5fe8;
+  --page-accent-strong: #3442c4;
+  --page-on-accent: #ffffff;
+  --page-accent-soft: color-mix(in srgb, var(--page-accent) 12%, transparent);
+  --page-surface: color-mix(in srgb, var(--color-fd-card) 88%, transparent);
+  --page-surface-strong: color-mix(in srgb, var(--color-fd-card) 96%, transparent);
+  --page-ink: #181a2b;
+
+  /* layout */
+  --page-section-min: calc(100svh - var(--page-nav));
+  --page-gutter: clamp(1.25rem, 4vw, 3rem);
+  --page-shell-width: 1200px;
+
+  /*
+   * Dual-axis fluid unit. It contracts when EITHER axis is tight, so a short
+   * wide window (1920x720) scales type down instead of clipping content.
+   */
+  --page-fluid: min(1vw, 1.7vh);
+  --page-display: clamp(2.25rem, calc(1.6rem + 3.4 * var(--page-fluid)), 4.25rem);
+  --page-lead: clamp(0.9rem, calc(0.86rem + 0.3 * var(--page-fluid)), 1.12rem);
+
+  color: var(--color-fd-foreground);
+}
+
+/* The dark accent is light, so text on it turns dark. */
+.dark .paged {
+  --page-accent: #9ba6ff;
+  --page-accent-strong: #c2c9ff;
+  --page-on-accent: #12152e;
+  --page-accent-soft: color-mix(in srgb, var(--page-accent) 14%, transparent);
+  --page-surface: color-mix(in srgb, #171a26 88%, transparent);
+  --page-surface-strong: #161924;
+  --page-ink: #f5f6ff;
+}
+
+/*
+ * Below a real height floor, filling the viewport produces a stretched, mostly
+ * empty page. Fall back to content-driven height there.
+ */
+@media (max-height: 600px) {
+  .paged {
+    --page-section-min: auto;
+  }
+}

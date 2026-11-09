@@ -1,1 +1,6 @@
 target/
+node_modules/
+site/.output/
+.nitro/
+.tanstack/
+.source/

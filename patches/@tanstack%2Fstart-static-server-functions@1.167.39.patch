@@ -1,0 +1,14 @@
+diff --git a/dist/esm/staticFunctionMiddleware.js b/dist/esm/staticFunctionMiddleware.js
+index 3f9b7db31b55634034ac348ef8812b62aa0ff922..ddee89114e65a8c655081d8b473f05a91b71a362 100644
+--- a/dist/esm/staticFunctionMiddleware.js
++++ b/dist/esm/staticFunctionMiddleware.js
+@@ -53,7 +53,8 @@ var fetchItem = async ({ data, functionId }) => {
+ 		functionId,
+ 		hash: jsonToFilenameSafeString(data)
+ 	});
+-	return fetch(url, { method: "GET" }).then((r) => r.json()).then((d) => fromJSON(d, { plugins: getSerovalPlugins(defaultSerovalDeserializerPlugins) }));
++	// Served under the deployment base (Vite `base`), not the origin root.
++	return fetch(`${import.meta.env.BASE_URL.replace(/\/$/, "")}${url}`, { method: "GET" }).then((r) => r.json()).then((d) => fromJSON(d, { plugins: getSerovalPlugins(defaultSerovalDeserializerPlugins) }));
+ };
+ var staticFunctionMiddleware = createMiddleware({ type: "function" }).client(async (ctx) => {
+ 	if (process.env.NODE_ENV === "production" && typeof document !== "undefined") {

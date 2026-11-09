@@ -1,0 +1,88 @@
+/*
+ * Interaction motion.
+ *
+ * INVARIANT: hover and focus transitions carry no delay. Entrance motion uses
+ * keyframe animations on elements that never hover, so its `animation-delay`
+ * cannot leak into interaction timing (a stagger `transition-delay` on a
+ * hovering element made hover lag on entry and cut on exit).
+ *
+ * `page-motion.test.ts` enforces the invariant against these stylesheets.
+ */
+
+/* ------------------------------------------------------------------ */
+/* Interaction channel                                                 */
+/* ------------------------------------------------------------------ */
+
+/*
+ * The base rule is the leave state, so it owns the longer leave timing.
+ * `:hover`/`:focus-visible` only override duration and easing — appearance
+ * stays with each component.
+ */
+.page-interactive {
+  transition:
+    transform var(--page-out) var(--page-ease-out),
+    border-color var(--page-out) var(--page-ease-out),
+    background-color var(--page-out) var(--page-ease-out),
+    box-shadow var(--page-out) var(--page-ease-out),
+    color var(--page-out) var(--page-ease-out),
+    opacity var(--page-out) var(--page-ease-out);
+}
+
+/*
+ * Descendants that react to their ancestor's hover.
+ *
+ * Property list kept identical to `.page-interactive` above — omitting one
+ * (`box-shadow` used to be missing here) makes that property snap while its
+ * neighbours ease, which reads as the whole effect appearing abruptly.
+ */
+.page-interactive-part {
+  transition:
+    transform var(--page-out) var(--page-ease-out),
+    border-color var(--page-out) var(--page-ease-out),
+    background-color var(--page-out) var(--page-ease-out),
+    box-shadow var(--page-out) var(--page-ease-out),
+    color var(--page-out) var(--page-ease-out),
+    opacity var(--page-out) var(--page-ease-out);
+}
+
+/*
+ * `any-hover`, not `hover`: a Windows touch laptop with a mouse attached
+ * reports `hover: none` for its primary pointer, which would drop every hover
+ * state for a user who does in fact have a pointer. `any-hover` keeps hover on
+ * hybrid machines while still excluding pure-touch devices.
+ */
+@media (any-hover: hover) {
+  .page-interactive:hover,
+  .page-interactive:hover .page-interactive-part {
+    transition-duration: var(--page-in);
+    transition-timing-function: var(--page-ease-in);
+  }
+}
+
+.page-interactive:focus-visible,
+.page-interactive:focus-visible .page-interactive-part,
+.page-interactive:focus-within .page-interactive-part {
+  transition-duration: var(--page-in);
+  transition-timing-function: var(--page-ease-in);
+}
+
+/* ------------------------------------------------------------------ */
+/* Reduced motion                                                      */
+/* ------------------------------------------------------------------ */
+
+/*
+ * Durations collapse to 1ms rather than `none` so `transitionend` and
+ * `animationend` still fire for anything listening.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .paged,
+  .paged::before,
+  .paged::after,
+  .paged *,
+  .paged *::before,
+  .paged *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+  }
+}

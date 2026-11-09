@@ -1,0 +1,57 @@
+/*
+ * Section primitive and page shell.
+ *
+ * Sections use `min-block-size`, never `block-size`: content taller than the
+ * viewport grows the section instead of being clipped. `svh` rather than `dvh`
+ * because `dvh` changes as a mobile URL bar collapses.
+ */
+
+.paged {
+  position: relative;
+  isolation: isolate;
+
+  /* `overflow-x: clip` contains decorative bleed without creating a scroll
+   * container, so the sticky header keeps working. */
+  overflow-x: clip;
+  overflow-y: visible;
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--page-accent) 4%, transparent),
+      transparent 28rem
+    ),
+    var(--color-fd-background);
+}
+
+.dark .paged {
+  background: linear-gradient(180deg, rgb(40 46 96 / 26%), transparent 32rem), #0d0f17;
+}
+
+.page-section {
+  position: relative;
+  display: grid;
+  align-content: stretch;
+  min-block-size: var(--page-section-min);
+  padding-block: clamp(2rem, 5vh, 4rem) 0;
+  container: page-section / inline-size;
+}
+
+/*
+ * The shell fills the section and pins the footer to its bottom, so the page
+ * reads as one view rather than a card floating above an off-screen footer.
+ */
+.page-shell {
+  display: grid;
+  width: min(var(--page-shell-width), calc(100% - var(--page-gutter) * 2));
+  margin-inline: auto;
+  grid-template-rows: 1fr auto;
+  align-items: center;
+}
+
+.page-section-backdrop {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}

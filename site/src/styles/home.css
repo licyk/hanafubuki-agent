@@ -1,0 +1,228 @@
+/*
+ * Home page: the hero and the footer, built on the primitives in `./page`.
+ */
+
+.home-hero-backdrop::before {
+  position: absolute;
+  top: -18rem;
+  right: -14rem;
+  width: min(66rem, 90vw);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--page-accent) 17%, transparent),
+    transparent 66%
+  );
+  content: "";
+  filter: blur(10px);
+  animation: home-glow-breathe 14s ease-in-out infinite alternate;
+}
+
+.home-hero-backdrop::after {
+  position: absolute;
+  inset: 0;
+  opacity: 0.28;
+  background-image:
+    linear-gradient(
+      color-mix(in srgb, var(--color-fd-border) 45%, transparent) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--color-fd-border) 45%, transparent) 1px,
+      transparent 1px
+    );
+  background-position: center top;
+  background-size: 56px 56px;
+  mask-image: linear-gradient(to bottom, black, transparent 76%);
+  content: "";
+}
+
+@keyframes home-glow-breathe {
+  from {
+    opacity: 0.72;
+    transform: translate3d(-2%, -1%, 0) scale(0.96);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate3d(2%, 1%, 0) scale(1.04);
+  }
+}
+
+.home-hero {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+  padding-block: clamp(2rem, 8vh, 6rem);
+}
+
+/*
+ * The entrance is a keyframe animation on wrappers that never hover, so its
+ * delay cannot reach the links' hover timing.
+ */
+.home-hero h1,
+.home-hero > p,
+.home-install,
+.home-actions {
+  animation: home-hero-enter var(--page-enter) var(--page-ease-enter) both;
+}
+
+.home-hero > p {
+  animation-delay: 90ms;
+}
+
+.home-install {
+  animation-delay: 180ms;
+}
+
+.home-actions {
+  animation-delay: 270ms;
+}
+
+@keyframes home-hero-enter {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.home-hero h1 {
+  color: var(--page-ink);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: var(--page-display);
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: -0.04em;
+  overflow-wrap: anywhere;
+}
+
+.home-hero > p {
+  max-width: 40rem;
+  margin-top: clamp(0.9rem, 2vh, 1.55rem);
+  color: var(--color-fd-muted-foreground);
+  font-size: var(--page-lead);
+  line-height: 1.8;
+  text-wrap: pretty;
+}
+
+.home-install {
+  display: flex;
+  width: fit-content;
+  max-width: 100%;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: clamp(1.1rem, 2.5vh, 2rem);
+  padding: 0.8rem 1.1rem;
+  border: 1px solid var(--color-fd-border);
+  border-radius: 0.78rem;
+  background: var(--page-surface-strong);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.9rem;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.home-install span {
+  color: var(--page-accent-strong);
+  user-select: none;
+}
+
+.home-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: clamp(1.1rem, 2.5vh, 2rem);
+}
+
+.home-primary-link,
+.home-secondary-link {
+  display: inline-flex;
+  min-height: 3rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  padding: 0.72rem 1rem;
+  border-radius: 0.78rem;
+  font-size: 0.9rem;
+  font-weight: 650;
+}
+
+.home-primary-link:focus-visible,
+.home-secondary-link:focus-visible {
+  outline: 2px solid var(--page-accent-strong);
+  outline-offset: 3px;
+}
+
+.home-primary-link {
+  background: var(--page-accent);
+  box-shadow: 0 14px 36px color-mix(in srgb, var(--page-accent) 22%, transparent);
+  color: var(--page-on-accent);
+}
+
+.home-secondary-link {
+  border: 1px solid var(--color-fd-border);
+  background: var(--page-surface);
+  color: var(--color-fd-foreground);
+}
+
+.home-primary-link svg,
+.home-secondary-link svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+@media (any-hover: hover) {
+  .home-primary-link:hover,
+  .home-secondary-link:hover {
+    transform: translateY(-2px);
+  }
+
+  .home-primary-link:hover {
+    background: var(--page-accent-strong);
+    box-shadow: 0 18px 44px color-mix(in srgb, var(--page-accent) 30%, transparent);
+  }
+
+  .home-secondary-link:hover {
+    border-color: color-mix(in srgb, var(--page-accent) 35%, var(--color-fd-border));
+    background: var(--page-surface-strong);
+  }
+
+  .home-primary-link:hover .page-interactive-part {
+    transform: translateX(3px);
+  }
+}
+
+.home-primary-link:active,
+.home-secondary-link:active {
+  transform: translateY(0) scale(0.98);
+}
+
+.home-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem 2rem;
+  flex-wrap: wrap;
+  padding: 2rem 0 2.5rem;
+  border-top: 1px solid var(--color-fd-border);
+  color: var(--color-fd-muted-foreground);
+  font-size: 0.75rem;
+}
+
+.home-footer nav {
+  display: flex;
+  gap: 1.2rem;
+}
+
+@media (any-hover: hover) {
+  .home-footer-link:hover {
+    color: var(--color-fd-foreground);
+  }
+}

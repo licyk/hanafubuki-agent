@@ -1,0 +1,24 @@
+{
+  "name": "hanafubuki-agent",
+  "private": true,
+  "packageManager": "bun@1.4.2",
+  "type": "module",
+  "workspaces": [
+    "site"
+  ],
+  "scripts": {
+    "site:dev": "bun run --cwd site dev",
+    "site:build": "bun run --cwd site build",
+    "site:check": "bun run --cwd site check",
+    "site:test": "bun run --cwd site test",
+    "site:preview": "bun run --cwd site preview",
+    "format:site": "prettier --write site package.json .prettierrc.json",
+    "format:check:site": "prettier --check site package.json .prettierrc.json"
+  },
+  "devDependencies": {
+    "prettier": "^3.9.10"
+  },
+  "patchedDependencies": {
+    "@tanstack/start-static-server-functions@1.167.39": "patches/@tanstack%2Fstart-static-server-functions@1.167.39.patch"
+  }
+}
