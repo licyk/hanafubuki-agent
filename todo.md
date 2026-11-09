@@ -63,6 +63,21 @@ moves its pin.
       worktree choice in `/fork`.
 - [ ] P8: the shared structured request (from the titles plugin), the
       `recap` plugin, `/recap`, `suggest_session_title` in `/rename`.
+  - [x] The facade's half: `plugins/structured_request.rs` (the titles
+        plugin uses it, unchanged); the feature-call helper
+        (`service/features.rs`: resolve the row's service per call, run it
+        under `PluginFaults::guard_async`, `AgentError::FeatureUnavailable`
+        when the row is down or the call panicked); the `recap` row
+        (`RecapService`, the last 8 exchanges within 8192 estimated tokens,
+        Codex's prompt) and the `titles` row's `TitleService`; the narrow
+        port `AgentConversationReader`. Embedding, "Feature calls".
+  - [ ] The interface's half: `/recap`, the suggestion in `/rename`.
+  - Hanafubuki, at its next pin: `AgentError` is now exported and has
+    `FeatureUnavailable { feature, reason }` (an exhaustive match needs an
+    arm); new calls `recap_session`, `suggest_session_title`, type
+    `AgentRecap`; a new plugin row `recap` (Capability, after `titles`;
+    host rows now mount after it). Goldens and the history corpus are
+    unchanged.
 - [ ] P9: child and ephemeral sessions (`parent`, `origin`,
       `AgentSessionDriver`, archive and delete cascade; a new history
       fixture in both repositories), `/side` and `/btw`, the workspace
