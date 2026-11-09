@@ -143,9 +143,11 @@ The next release with it is 0.2.0 (the headline event is removed).
       the live site a page reached by URL and by in-site navigation gives
       the same Giscus term (`hanafubuki-agent/docs/<slug>/`, one thread),
       and every page carries the Umami script with its website id.
-- [ ] Yours: the next release (0.2.0, since the headline event is gone),
-      and the visual checks of the thinking display in Hanafubuki and in
-      the terminal interface on macOS and Windows terminals.
+- [x] 0.2.0 released (tag `v0.2.0` at `feba8a1`, release run
+      42576971888): all 24 crates on crates.io, the four archives and their
+      sums on the GitHub release.
+- [ ] Yours: the visual checks of the thinking display in Hanafubuki and
+      in the terminal interface on macOS and Windows terminals.
 
 ## Extraction from Hanafubuki
 
