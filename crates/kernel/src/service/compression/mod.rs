@@ -19,7 +19,7 @@ use std::sync::OnceLock;
 
 use hanafubuki_agent_compression::{
     build_absorb_system_prompt, format_rules_for_prompt, hide_consumed_compress_calls,
-    process_turn_with, prune, render_nudge_text, DocCache, Prompts, RenderStrategy,
+    process_turn_with, prune, render_nudge_text, DocCache, LocalTime, Prompts, RenderStrategy,
     TokenCountSource, TurnExtras, TurnInput, RULES_USAGE_PROMPT,
 };
 use hanafubuki_agent_foundation::panic::catch_panic;
@@ -128,7 +128,9 @@ pub(super) fn project_request(
     mode: CompressionMode,
 ) -> Result<RequestProjection, String> {
     let log = MessageLog::new(items);
-    let mut config = hierarchical_config(record);
+    let settings = hierarchical_settings(record);
+    let mut config = settings.config(window(record));
+    let clock = message_clock(record, &settings);
     if mode != CompressionMode::Hierarchical {
         // Carried blocks keep projecting, but no feature acts without its
         // tool: absorbed pairs stay hidden, stored originals show again.
@@ -169,6 +171,7 @@ pub(super) fn project_request(
                 token_count,
                 token_count_source: Some(token_count_source),
                 render: RenderStrategy::TextAndToolResults,
+                clock,
             },
             TurnExtras {
                 content_store,
@@ -186,7 +189,10 @@ pub(super) fn project_request(
             } else {
                 output.status_line.clone()
             };
-            (trailing, Some(instructions(&config, &output.state)))
+            (
+                trailing,
+                Some(instructions(&config, &output.state, clock.is_some())),
+            )
         })?
     } else {
         (None, None)
@@ -253,17 +259,23 @@ pub(super) fn project_compaction_source(
 }
 
 /// What a `hierarchical` request appends to the instructions: the static
-/// prompt, then the absorb section while `absorb` is on, then the rules'
-/// usage and the rules recorded while `rules` is on. The same bytes for
-/// every request until a rule is recorded or removed.
+/// prompt (its tag section showing the time attribute with
+/// `message_timestamps`), then the absorb section while `absorb` is on,
+/// then the rules' usage and the rules recorded while `rules` is on. The
+/// same bytes for every request until a rule is recorded or removed or the
+/// setting changes.
 fn instructions(
     config: &hanafubuki_agent_compression::Config,
     state: &AgentCompressionState,
+    message_timestamps: bool,
 ) -> String {
-    static PROMPT: OnceLock<String> = OnceLock::new();
-    let mut text = PROMPT
+    static PROMPTS: [OnceLock<String>; 2] = [OnceLock::new(), OnceLock::new()];
+    let mut text = PROMPTS[usize::from(message_timestamps)]
         .get_or_init(|| {
-            hanafubuki_agent_compression::build_compress_system_prompt(&Prompts::default())
+            hanafubuki_agent_compression::build_compress_system_prompt(
+                &Prompts::default(),
+                message_timestamps,
+            )
         })
         .clone();
     if config.absorb.enabled {
@@ -326,20 +338,57 @@ fn panic_if_asked(state: &AgentCompressionState) {
 #[cfg(not(any(test, feature = "test-support")))]
 fn panic_if_asked(_: &AgentCompressionState) {}
 
-/// The algorithm's configuration: `[compaction.hierarchical]` from the
-/// turn's extensions (the defaults without), over the session's context
-/// window. With no known window nothing presses: no nudge, no truncation.
+/// The algorithm's configuration: [`hierarchical_settings`] over the
+/// session's context window. With no known window nothing presses: no
+/// nudge, no truncation.
 fn hierarchical_config(record: &SessionRecord) -> hanafubuki_agent_compression::Config {
-    let window = record.settings.config.context_window_tokens.unwrap_or(0);
-    match record
+    hierarchical_settings(record).config(window(record))
+}
+
+/// `[compaction.hierarchical]` from the turn's extensions, the defaults
+/// without.
+fn hierarchical_settings(record: &SessionRecord) -> AgentHierarchicalCompression {
+    record
         .runtime
         .turn
         .as_ref()
         .and_then(|turn| turn.extensions.get::<AgentHierarchicalCompression>())
-    {
-        Some(settings) => settings.config(window),
-        None => AgentHierarchicalCompression::default().config(window),
+        .cloned()
+        .unwrap_or_default()
+}
+
+fn window(record: &SessionRecord) -> u64 {
+    record.settings.config.context_window_tokens.unwrap_or(0)
+}
+
+/// The clock a projection stamps first-seen messages with while
+/// `messageTimestamps` is on: now, in the offset the turn was admitted in.
+/// A stamp is made once and keeps that offset, so a tag already sent never
+/// changes.
+fn message_clock(
+    record: &SessionRecord,
+    settings: &AgentHierarchicalCompression,
+) -> Option<LocalTime> {
+    if !settings.message_timestamps {
+        return None;
     }
+    Some(fixed_clock(record).unwrap_or_else(|| LocalTime {
+        at: now_millis_u64(),
+        utc_offset_seconds: settings.utc_offset_seconds,
+    }))
+}
+
+/// The clock a test fixed for the session
+/// ([`AgentService::test_fix_message_clock`]), so the times it pins are
+/// the same on every run.
+#[cfg(any(test, feature = "test-support"))]
+fn fixed_clock(record: &SessionRecord) -> Option<LocalTime> {
+    record.runtime.compression_runtime.fixed_clock
+}
+
+#[cfg(not(any(test, feature = "test-support")))]
+fn fixed_clock(_: &SessionRecord) -> Option<LocalTime> {
+    None
 }
 
 /// The context's size: the provider's count of the last request when it

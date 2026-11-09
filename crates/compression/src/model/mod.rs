@@ -4,11 +4,14 @@
 // term (NOTICE).
 // Modified for hanafubuki-agent: a message carries the host's own fields
 // (image handles, a host protection flag) instead of wire sidecars, and no
-// ledger sequence or timestamp.
+// ledger sequence or timestamp: a message's time is the state's first-sight
+// stamp, a [`LocalTime`] with the offset it was read in.
 
 mod config;
 mod opt_in;
 mod state;
+
+use serde::{Deserialize, Serialize};
 
 pub use config::{
     CompressLimits, Config, NudgeConfig, TierConfig, TierGrowthTokens, TruncateConfig,
@@ -20,6 +23,17 @@ pub use opt_in::{
 pub use state::{
     Block, Generation, NudgeState, RefMap, State, Stats, TruncateLatchEntry, ViewLatch,
 };
+
+/// A reading of the host's clock: milliseconds since the Unix epoch and the
+/// local time's offset from UTC when it was read. A message's stamp keeps
+/// the offset it was made in, so its rendered time never changes when the
+/// host's offset does.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct LocalTime {
+    pub at: u64,
+    pub utc_offset_seconds: i32,
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Role {

@@ -169,6 +169,7 @@ fn turn_text_only(
         token_count: 148_265,
         token_count_source: None,
         render: RenderStrategy::TextOnly,
+        clock: None,
     })
 }
 

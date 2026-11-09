@@ -15,8 +15,10 @@ const SUMMARY: &str = "The user asked and the assistant answered at length; noth
 /// A model-scripted session over the HTTP fake: two long answers, the
 /// nudge over the pressure band, two folds, their tier-2 distillation, a
 /// `decompress`, then the switch to `standard`, which keeps the blocks
-/// projecting without the prompt, the tools or the nudge. The `standard`
-/// goldens stay as they are: nothing here touches a `standard` session.
+/// projecting without the prompt, the tools or the nudge. Each turn reads a
+/// fixed clock, a minute after the last, so the tags' times and the
+/// receipts' spans are the same on every run. The `standard` goldens stay
+/// as they are: nothing here touches a `standard` session.
 #[tokio::test]
 async fn hierarchical_requests_match_golden() {
     let first = "The first answer is long. ".repeat(1_000);
@@ -68,7 +70,24 @@ async fn hierarchical_requests_match_golden() {
         .create_session(AgentSessionMode::Default)
         .await
         .unwrap();
-    for prompt in ["Hello.", "Go on.", "Fold what is done."] {
+    let clock = |minute: u64| {
+        service
+            .core
+            .test_fix_message_clock(
+                session.id,
+                Some(hanafubuki_agent_kernel::AgentLocalTime {
+                    // 2026-11-09 09:00:00 at +08:00, then a minute a turn.
+                    at: 1_794_186_000_000 + minute * 60_000,
+                    utc_offset_seconds: 8 * 3600,
+                }),
+            )
+            .unwrap()
+    };
+    for (minute, prompt) in ["Hello.", "Go on.", "Fold what is done."]
+        .into_iter()
+        .enumerate()
+    {
+        clock(minute as u64);
         service
             .start_turn(session.id, prompt.to_string().into())
             .await
@@ -84,6 +103,7 @@ async fn hierarchical_requests_match_golden() {
         })
         .await
         .unwrap();
+    clock(3);
     service
         .start_turn(session.id, "Are you there?".to_string().into())
         .await

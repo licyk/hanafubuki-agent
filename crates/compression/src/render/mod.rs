@@ -4,14 +4,14 @@
 // term (NOTICE).
 // Modified for hanafubuki-agent: a strategy that tags tool results but never
 // tool-call arguments (whose text is JSON) replaces tagging everything, the
-// token count is always frozen at first render, and there is no time
-// attribute.
+// token count is always frozen at first render, and the time attribute is
+// read from the state's stamps and shown in the offset each was made in.
 
 mod tokenize;
 
 pub use tokenize::{count_message_tokens, default_count_tokens};
 
-use crate::model::{Kind, Message, State};
+use crate::model::{Kind, LocalTime, Message, State};
 use crate::refs::BLOCKED_REF;
 
 /// Which messages get an `<acp>` ref tag prepended to their text. Refs are
@@ -31,20 +31,29 @@ const TAG_CLOSE: &str = "</acp>";
 
 /// Prepends `<acp tokens="…" type="…">mNNNNN</acp>` and a newline to each
 /// message the strategy tags. The token count is the one the ref showed
-/// first, recorded in `state.token_snapshot`, so a tag never changes. A
-/// message whose ref left `BLOCKED` stays untagged until the next fold.
+/// first, recorded in `state.token_snapshot`, so a tag never changes. With
+/// `timestamps`, a message stamped in `state.ts_stamps` shows its time too
+/// (`time="yyyy-mm-dd hh:mm:ss"`, after `type`); the clock is never read
+/// here. A message whose ref left `BLOCKED` stays untagged until the next
+/// fold.
 pub fn render_refs(
     messages: &[Message],
     state: &mut State,
     strategy: RenderStrategy,
+    timestamps: bool,
 ) -> Vec<Message> {
     messages
         .iter()
-        .map(|message| render_message(message, state, strategy))
+        .map(|message| render_message(message, state, strategy, timestamps))
         .collect()
 }
 
-fn render_message(message: &Message, state: &mut State, strategy: RenderStrategy) -> Message {
+fn render_message(
+    message: &Message,
+    state: &mut State,
+    strategy: RenderStrategy,
+    timestamps: bool,
+) -> Message {
     let Some(r#ref) = state.message_refs.by_raw.get(&message.id).cloned() else {
         return message.clone();
     };
@@ -64,8 +73,15 @@ fn render_message(message: &Message, state: &mut State, strategy: RenderStrategy
         .token_snapshot
         .entry(r#ref.clone())
         .or_insert_with(|| default_count_tokens(clean));
+    let time = state
+        .ts_stamps
+        .get(&message.id)
+        .filter(|_| timestamps)
+        .map_or_else(String::new, |stamp| {
+            format!(" time=\"{}\"", format_tag_time(*stamp))
+        });
     let tag = format!(
-        "{TAG_OPEN}tokens=\"{}\" type=\"{}\">{}{TAG_CLOSE}\n",
+        "{TAG_OPEN}tokens=\"{}\" type=\"{}\"{time}>{}{TAG_CLOSE}\n",
         format_tokens(tokens),
         type_of(message),
         r#ref,
@@ -104,6 +120,41 @@ fn type_of(message: &Message) -> &str {
         Kind::Text => "text",
         Kind::Reasoning => "reasoning",
     }
+}
+
+/// `time` as the local wall clock read it: `yyyy-mm-dd hh:mm:ss`, in the
+/// offset it was read in, so the same stamp formats to the same bytes
+/// wherever and whenever it is formatted.
+pub fn format_tag_time(time: LocalTime) -> String {
+    let seconds = (time.at / 1000) as i64 + i64::from(time.utc_offset_seconds);
+    let (year, month, day) = civil_from_days(seconds.div_euclid(86_400));
+    let of_day = seconds.rem_euclid(86_400);
+    format!(
+        "{year:04}-{month:02}-{day:02} {:02}:{:02}:{:02}",
+        of_day / 3600,
+        of_day % 3600 / 60,
+        of_day % 60
+    )
+}
+
+/// The proleptic Gregorian date `days` after 1970-01-01 (Howard Hinnant's
+/// `civil_from_days`).
+fn civil_from_days(days: i64) -> (i64, i64, i64) {
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let day_of_era = z.rem_euclid(146_097);
+    let year_of_era =
+        (day_of_era - day_of_era / 1460 + day_of_era / 36_524 - day_of_era / 146_096) / 365;
+    let day_of_year = day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
+    let shifted_month = (5 * day_of_year + 2) / 153;
+    let day = day_of_year - (153 * shifted_month + 2) / 5 + 1;
+    let month = if shifted_month < 10 {
+        shifted_month + 3
+    } else {
+        shifted_month - 9
+    };
+    let year = year_of_era + era * 400 + i64::from(month <= 2);
+    (year, month, day)
 }
 
 /// Below 1000 as is, below 10,000 as `X.YK`, else as `XK`, rounded as

@@ -80,6 +80,7 @@ pub struct AgentHierarchicalCompactionSettings {
     pub tiers: bool,
     /// Tools whose calls are never folded.
     pub protected_tools: Vec<String>,
+    /// Each message's ref tag shows when it was first seen.
     pub message_timestamps: bool,
     pub absorb: bool,
     pub content_store: bool,

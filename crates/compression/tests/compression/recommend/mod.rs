@@ -108,6 +108,7 @@ pub(crate) fn turn(messages: &[Message], state: State, config: &Config, tokens: 
         token_count: tokens,
         token_count_source: None,
         render: RenderStrategy::TextAndToolResults,
+        clock: None,
     })
 }
 

@@ -82,7 +82,7 @@ pub use media::{
 };
 pub use model::{
     AbsorbConfig, AbsorbRecord, Block, CompressLimits, Config, ContentStoreConfig, CrushConfig,
-    CrushStrategyOverride, Generation, Kind, Message, MessageFiltersConfig, NudgeConfig,
+    CrushStrategyOverride, Generation, Kind, LocalTime, Message, MessageFiltersConfig, NudgeConfig,
     NudgeState, RefMap, Role, RuleRecord, RulesConfig, State, Stats, TierConfig, TierGrowthTokens,
     TruncateConfig, TruncateLatchEntry, ViewLatch,
 };
@@ -131,7 +131,9 @@ pub use refs::{
     assign_message_refs, assign_refs, highest_used_index, index_to_ref, ordered_ref_pair,
     ref_to_index, AssignedRefs, BLOCKED_REF,
 };
-pub use render::{count_message_tokens, default_count_tokens, render_refs, RenderStrategy};
+pub use render::{
+    count_message_tokens, default_count_tokens, format_tag_time, render_refs, RenderStrategy,
+};
 pub use report::{
     build_cache_report, build_recap, build_status_panel, build_status_report, cache_hit_stats,
     compute_fold_economics, decompose_sample, format_cache_report, format_compact_tokens,

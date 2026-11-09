@@ -9,6 +9,10 @@ pub use chain::{AgentCompressionChain, AgentCompressionDelta, AgentCompressionUp
 /// window, the blocks the model folded and the nudge's baselines.
 pub use hanafubuki_agent_compression::State as AgentCompressionState;
 
+/// A reading of the host's clock with the local offset it was read in: a
+/// message's first-sight stamp (`AgentCompressionState::ts_stamps`).
+pub use hanafubuki_agent_compression::LocalTime as AgentLocalTime;
+
 /// The originals a `hierarchical` session's content store replaced, by ref.
 /// A host's history store keeps it in a file of its own, apart from the
 /// rollout's records.
@@ -46,6 +50,13 @@ pub struct AgentHierarchicalCompression {
     /// The model records persistent reminders with `acp_rule`, shown in the
     /// instructions.
     pub rules: bool,
+    /// Each message's tag shows when it was first seen
+    /// (`time="yyyy-mm-dd hh:mm:ss"`), and a fold's receipt the span it
+    /// covered.
+    pub message_timestamps: bool,
+    /// The local time's offset from UTC when the turn was admitted: the
+    /// offset the turn's new stamps keep, and the cache report's times.
+    pub utc_offset_seconds: i32,
 }
 
 impl Default for AgentHierarchicalCompression {
@@ -65,6 +76,8 @@ impl Default for AgentHierarchicalCompression {
             content_store: false,
             crush: false,
             rules: false,
+            message_timestamps: true,
+            utc_offset_seconds: 0,
         }
     }
 }

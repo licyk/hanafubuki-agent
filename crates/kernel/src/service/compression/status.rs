@@ -48,6 +48,7 @@ struct StatusRead {
     content_store: Option<AgentContentStore>,
     token_count: (u64, TokenCountSource),
     usage: Option<AgentModelUsage>,
+    utc_offset_seconds: i32,
 }
 
 impl StatusRead {
@@ -67,6 +68,7 @@ impl StatusRead {
             config: settings.config(window),
             content_store: record.runtime.compression_runtime.content_store().cloned(),
             usage: record.runtime.usage,
+            utc_offset_seconds: settings.utc_offset_seconds,
         })
     }
 
@@ -82,6 +84,7 @@ impl StatusRead {
                 token_count,
                 token_count_source: Some(source),
                 render: RenderStrategy::None,
+                clock: None,
             },
             TurnExtras {
                 content_store: self.content_store.unwrap_or_default(),
@@ -100,7 +103,13 @@ impl StatusRead {
         });
         AgentCompressionStatus {
             panel,
-            cache_report: cache_report(self.usage, &self.state, CacheDetail::Full, now_ms),
+            cache_report: cache_report(
+                self.usage,
+                &self.state,
+                CacheDetail::Full,
+                now_ms,
+                self.utc_offset_seconds,
+            ),
             stats: self.state.stats.clone(),
             content_store,
         }

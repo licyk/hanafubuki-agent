@@ -24,7 +24,7 @@ fn tokens_of(text: &str) -> Option<&str> {
 fn a_tag_carries_the_ref_its_frozen_tokens_and_the_message_type() {
     let messages = vec![user("a", "hello world")];
     let mut state = state_for(&messages);
-    let rendered = render_refs(&messages, &mut state, RenderStrategy::TextOnly);
+    let rendered = render_refs(&messages, &mut state, RenderStrategy::TextOnly, false);
     let tokens = default_count_tokens("hello world");
     assert_eq!(
         rendered[0].text,
@@ -45,8 +45,8 @@ fn the_snapshot_keeps_tags_stable_whatever_the_count_would_be_now() {
     let mut state = state_for(&messages);
     state.token_snapshot = BTreeMap::from([("m00001".to_owned(), 99), ("m00002".to_owned(), 7)]);
     let snapshot = state.token_snapshot.clone();
-    let first = render_refs(&messages, &mut state, RenderStrategy::TextOnly);
-    let second = render_refs(&messages, &mut state, RenderStrategy::TextOnly);
+    let first = render_refs(&messages, &mut state, RenderStrategy::TextOnly, false);
+    let second = render_refs(&messages, &mut state, RenderStrategy::TextOnly, false);
     let tags: Vec<Option<&str>> = first.iter().map(|m| tokens_of(&m.text)).collect();
     assert_eq!(tags, [Some("99"), Some("7")]);
     assert_eq!(first, second);
@@ -60,8 +60,8 @@ fn rendering_a_rendered_message_again_strips_its_own_tag_only() {
         "<acp tokens=\"3\" type=\"text\">m00042</acp>\nquoted foreign tag",
     )];
     let mut state = state_for(&messages);
-    let once = render_refs(&messages, &mut state, RenderStrategy::TextOnly);
-    let twice = render_refs(&once, &mut state, RenderStrategy::TextOnly);
+    let once = render_refs(&messages, &mut state, RenderStrategy::TextOnly, false);
+    let twice = render_refs(&once, &mut state, RenderStrategy::TextOnly, false);
     assert_eq!(once, twice);
     assert!(twice[0].text.starts_with("<acp tokens="));
     assert!(twice[0]
@@ -79,7 +79,7 @@ fn a_state_without_a_snapshot_decodes_and_renders() {
         .remove("token_snapshot");
     legacy = serde_json::from_value(json).expect("decodes without the field");
     assert!(legacy.token_snapshot.is_empty());
-    let rendered = render_refs(&messages, &mut legacy, RenderStrategy::TextOnly);
+    let rendered = render_refs(&messages, &mut legacy, RenderStrategy::TextOnly, false);
     assert_eq!(legacy.token_snapshot.len(), 1);
     assert!(rendered[0].text.contains("tokens=\""));
 }
@@ -91,7 +91,7 @@ fn a_fold_carries_the_snapshot_through() {
         user("b", "second message content"),
     ];
     let mut state = state_for(&messages);
-    render_refs(&messages, &mut state, RenderStrategy::TextOnly);
+    render_refs(&messages, &mut state, RenderStrategy::TextOnly, false);
     let snapshot = state.token_snapshot.clone();
     let outcome = apply(
         &[range("m00002", "m00002", "compressed")],
@@ -113,7 +113,7 @@ fn token_counts_format_as_javascript_rounds_them() {
             .token_snapshot
             .insert(format!("m{:05}", index + 1), *count);
     }
-    let rendered = render_refs(&messages, &mut state, RenderStrategy::TextOnly);
+    let rendered = render_refs(&messages, &mut state, RenderStrategy::TextOnly, false);
     let tags: Vec<&str> = rendered.iter().filter_map(|m| tokens_of(&m.text)).collect();
     assert_eq!(tags, ["999", "1.3K", "1.1K", "1.8K", "10.0K", "10K", "13K"]);
 }
@@ -133,13 +133,18 @@ fn the_strategies_tag_text_results_or_nothing_but_never_call_arguments() {
             .collect()
     };
 
-    let text_only = render_refs(&messages, &mut state, RenderStrategy::TextOnly);
+    let text_only = render_refs(&messages, &mut state, RenderStrategy::TextOnly, false);
     assert_eq!(tagged(&text_only), [true, false, false]);
-    let with_results = render_refs(&messages, &mut state, RenderStrategy::TextAndToolResults);
+    let with_results = render_refs(
+        &messages,
+        &mut state,
+        RenderStrategy::TextAndToolResults,
+        false,
+    );
     assert_eq!(tagged(&with_results), [true, false, true]);
     assert!(with_results[2].text.contains("type=\"read\""));
     assert_eq!(with_results[1].text, "{\"path\":\"a\"}");
-    let none = render_refs(&messages, &mut state, RenderStrategy::None);
+    let none = render_refs(&messages, &mut state, RenderStrategy::None, false);
     assert_eq!(none, messages);
 }
 
@@ -168,7 +173,7 @@ fn an_unprotected_sibling_never_steals_a_blocked_binding() {
         message_refs: assigned.map,
         ..State::default()
     };
-    let rendered = render_refs(&messages, &mut state, RenderStrategy::TextOnly);
+    let rendered = render_refs(&messages, &mut state, RenderStrategy::TextOnly, false);
     assert_eq!(rendered[0].text, SHARED_PROTECTED);
     assert_eq!(rendered[2].text, SHARED_UNPROTECTED);
 }
@@ -183,10 +188,11 @@ fn bytes_stay_stable_round_over_round_under_the_collision() {
         let assigned = assign_refs(&messages, &state.message_refs, next, protected_first);
         state.message_refs = assigned.map;
         next = assigned.next_index;
-        let texts: Vec<String> = render_refs(&messages, &mut state, RenderStrategy::TextOnly)
-            .into_iter()
-            .map(|m| m.text)
-            .collect();
+        let texts: Vec<String> =
+            render_refs(&messages, &mut state, RenderStrategy::TextOnly, false)
+                .into_iter()
+                .map(|m| m.text)
+                .collect();
         if let Some(previous) = &previous {
             assert_eq!(&texts, previous);
         }
@@ -258,7 +264,7 @@ fn view(messages: &[Message], state: &mut State, config: &Config) -> Vec<Message
     assign_message_refs(state, messages, config);
     sync_blocks(messages, state);
     let pruned = prune(messages, state);
-    render_refs(&pruned, state, RenderStrategy::TextOnly)
+    render_refs(&pruned, state, RenderStrategy::TextOnly, false)
 }
 
 fn has_tag(messages: &[Message], id: &str) -> Option<bool> {

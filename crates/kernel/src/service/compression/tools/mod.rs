@@ -64,7 +64,8 @@ pub(in crate::service) fn compression_tool_output(
     now_ms: u64,
 ) -> CompressionToolRun {
     let log = MessageLog::new(&record.conversation.history);
-    let config = hierarchical_config(record);
+    let settings = hierarchical_settings(record);
+    let config = settings.config(window(record));
     let state = record
         .runtime
         .compression
@@ -85,6 +86,7 @@ pub(in crate::service) fn compression_tool_output(
                     arguments,
                     now_ms,
                 },
+                settings.message_timestamps,
             ),
             crate::AgentCoreTool::Decompress => {
                 decompress::decompress(&log, &state, arguments, images_supported)
@@ -98,9 +100,13 @@ pub(in crate::service) fn compression_tool_output(
             crate::AgentCoreTool::AcpStatus => {
                 read_only(acp_status(&log, &config, &state, arguments))
             }
-            crate::AgentCoreTool::AcpCache => {
-                read_only(acp_cache(record, &state, arguments, now_ms))
-            }
+            crate::AgentCoreTool::AcpCache => read_only(acp_cache(
+                record,
+                &state,
+                arguments,
+                now_ms,
+                settings.utc_offset_seconds,
+            )),
             crate::AgentCoreTool::Absorb => {
                 opt_in::absorb(&log, &config, &state, call_id, arguments, now_ms)
             }
@@ -138,6 +144,7 @@ fn compress(
     state: &AgentCompressionState,
     content_store: Option<&AgentContentStore>,
     call: Call<'_>,
+    message_timestamps: bool,
 ) -> CompressionToolRun {
     let parsed = parse_compress_args(call.arguments, Some(call.call_id));
     if parsed.ranges.is_empty() {
@@ -162,7 +169,13 @@ fn compress(
                 .is_none_or(|before| before.summary != block.summary)
         })
         .collect::<Vec<_>>();
-    let receipt = receipts::applied(&parsed.ranges, &parsed.diagnostics, result, &changed);
+    let receipt = receipts::applied(
+        &parsed.ranges,
+        &parsed.diagnostics,
+        result,
+        &changed,
+        message_timestamps.then_some(&outcome.state),
+    );
     let folded = result.blocks_created > 0;
     let content_store = (folded && config.content_store.enabled)
         .then(|| {
@@ -241,22 +254,31 @@ fn acp_cache(
     state: &AgentCompressionState,
     arguments: &Value,
     now_ms: u64,
+    utc_offset_seconds: i32,
 ) -> String {
     let detail = match arguments.get("detail").and_then(Value::as_str) {
         Some("full") => CacheDetail::Full,
         _ => CacheDetail::Summary,
     };
-    cache_report(record.runtime.usage, state, detail, now_ms)
+    cache_report(
+        record.runtime.usage,
+        state,
+        detail,
+        now_ms,
+        utc_offset_seconds,
+    )
 }
 
 /// The cache report from what the Agent records: the last response's input
 /// and output (the model API reports no cached tokens, so none count as
-/// cached) and the folds of the session's blocks.
+/// cached) and the folds of the session's blocks, its times of day in the
+/// local offset.
 pub(super) fn cache_report(
     usage: Option<AgentModelUsage>,
     state: &AgentCompressionState,
     detail: CacheDetail,
     now_ms: u64,
+    utc_offset_seconds: i32,
 ) -> String {
     let samples = usage
         .filter(|usage| usage.source == AgentUsageSource::ProviderReported)
@@ -283,7 +305,7 @@ pub(super) fn cache_report(
         None,
         &FormatCacheReportOptions {
             detail,
-            utc_offset_seconds: 0,
+            utc_offset_seconds: i64::from(utc_offset_seconds),
         },
     )
 }

@@ -34,6 +34,7 @@ fn turn(messages: &[Message], state: State, config: &Config, token_count: u64) -
         token_count,
         token_count_source: None,
         render: RenderStrategy::None,
+        clock: None,
     })
 }
 

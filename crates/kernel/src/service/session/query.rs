@@ -70,6 +70,21 @@ impl AgentService {
         Ok(record.runtime.compression_runtime.content_store().cloned())
     }
 
+    /// Fixes the clock the session's message timestamps read, until it is
+    /// fixed again or the session is loaded again; `None` reads the real
+    /// one.
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn test_fix_message_clock(
+        &self,
+        session_id: AgentSessionId,
+        clock: Option<crate::AgentLocalTime>,
+    ) -> Result<(), AgentError> {
+        let cell = self.session(session_id)?;
+        let mut record = cell.lock_after_persistence_blocking()?;
+        record.runtime.compression_runtime.fixed_clock = clock;
+        Ok(())
+    }
+
     /// Replaces the session's hierarchical compression state in memory, as
     /// a corrupt one would be read.
     #[cfg(any(test, feature = "test-support"))]

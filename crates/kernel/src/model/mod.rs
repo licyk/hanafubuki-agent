@@ -18,7 +18,7 @@ pub use compression::{
     compress_call_ranges, AgentCompressRange, AgentCompressionChain, AgentCompressionDelta,
     AgentCompressionState, AgentCompressionStats, AgentCompressionStatus, AgentCompressionSummary,
     AgentCompressionUpdate, AgentContentStore, AgentContentStoreStats,
-    AgentHierarchicalCompression,
+    AgentHierarchicalCompression, AgentLocalTime,
 };
 pub(crate) use compression::{
     next_link, tolerant_compression_state, tolerant_compression_update, CompressionChainHead,

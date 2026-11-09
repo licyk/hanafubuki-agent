@@ -1,12 +1,12 @@
 use std::sync::Arc;
 
-use hanafubuki_agent_compression::{Block, BLOCKED_REF, REF_FLOOR_ID};
+use hanafubuki_agent_compression::{Block, LocalTime, BLOCKED_REF, REF_FLOOR_ID};
 
 use super::*;
 
 /// `state` one request later: `count` messages minted (every third one
-/// protected), one block folded over the first two of them, every active
-/// block a request older, the nudge moved on.
+/// protected) and stamped, one block folded over the first two of them,
+/// every active block a request older, the nudge moved on.
 fn grown(state: &AgentCompressionState, count: usize) -> AgentCompressionState {
     let mut next = state.clone();
     let start = next.message_refs.by_raw.len();
@@ -22,6 +22,13 @@ fn grown(state: &AgentCompressionState, count: usize) -> AgentCompressionState {
             r#ref
         };
         next.message_refs.by_raw.insert(id.clone(), r#ref);
+        next.ts_stamps.insert(
+            id.clone(),
+            LocalTime {
+                at: 1_000 * index as u64,
+                utc_offset_seconds: 3_600,
+            },
+        );
         ids.push(id);
     }
     next.advance_survival(4);
@@ -101,6 +108,7 @@ fn a_delta_carries_only_what_changed() {
     assert_eq!(delta.blocks.len(), 1, "the new block");
     assert_eq!(delta.survived.len(), 1, "the old block only aged");
     assert_eq!(delta.token_snapshot.len(), 7);
+    assert_eq!(delta.ts_stamps.len(), 10, "the new messages' stamps");
     assert!(delta.rest.is_some(), "the nudge moved");
 }
 
@@ -114,13 +122,19 @@ fn an_unchanged_state_writes_nothing() {
 }
 
 #[test]
-fn a_removed_binding_or_block_is_written_as_a_snapshot() {
+fn a_removed_binding_block_or_stamp_is_written_as_a_snapshot() {
     let before = grown(&AgentCompressionState::default(), 6);
     let mut fewer_refs = grown(&before, 3);
     fewer_refs.message_refs.by_raw.remove("1:0");
     let mut fewer_blocks = grown(&before, 3);
     fewer_blocks.blocks.remove(0);
-    for after in [fewer_refs, fewer_blocks] {
+    let mut fewer_stamps = grown(&before, 3);
+    fewer_stamps.ts_stamps.remove("1:0");
+    let mut moved_stamp = grown(&before, 3);
+    moved_stamp
+        .ts_stamps
+        .insert("1:1".to_owned(), LocalTime::default());
+    for after in [fewer_refs, fewer_blocks, fewer_stamps, moved_stamp] {
         let links = written(&[before.clone(), after.clone()]);
         assert!(matches!(links[1], AgentCompressionUpdate::Snapshot(_)));
         let mut expected = after;

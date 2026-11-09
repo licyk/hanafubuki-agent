@@ -3,8 +3,9 @@
 // commit `4be21b08e`. Copyright (c) 2026 ranxianglei. MIT License with an
 // additional attribution term (NOTICE).
 // Modified for hanafubuki-agent: every field decodes with a default (the
-// kernel's `mergeCompressionState` dropped the fields it did not list), and
-// the ledger, timestamp and instance-id fields are not kept; the host books
+// kernel's `mergeCompressionState` dropped the fields it did not list), the
+// ledger and instance-id fields are not kept, and a first-sight stamp keeps
+// the UTC offset it was made in; the host books
 // an aborted turn's growth through `NudgeState` (from billion-context's
 // `absorbAbortedTurnGrowth` in `src/session.ts`, without its age limit).
 
@@ -13,6 +14,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 use super::opt_in::{AbsorbRecord, RuleRecord};
+use super::LocalTime;
 
 /// A session's whole compression state: plain data, persisted by the host
 /// and passed into and out of every call. Refs, block ids and run ids are
@@ -26,6 +28,11 @@ pub struct State {
     /// The token count each ref showed the first time it was rendered, kept
     /// so the rendered tags never change between requests.
     pub token_snapshot: BTreeMap<String, u64>,
+    /// When each message id was first seen, while message timestamps were
+    /// on. Recorded once and never changed or pruned (ids are never
+    /// reissued), so a tag renders the same time on every request; a
+    /// message seen before timestamps were on has none and shows none.
+    pub ts_stamps: BTreeMap<String, LocalTime>,
     pub nudge: NudgeState,
     pub stats: Stats,
     /// Consecutive requests over the truncation threshold with nothing left
@@ -65,6 +72,7 @@ impl Default for State {
             blocks: Vec::new(),
             message_refs: RefMap::default(),
             token_snapshot: BTreeMap::new(),
+            ts_stamps: BTreeMap::new(),
             nudge: NudgeState::default(),
             stats: Stats::default(),
             terminal_streak: 0,

@@ -38,6 +38,7 @@ fn turn_rendered(
         token_count,
         token_count_source: None,
         render,
+        clock: None,
     })
 }
 

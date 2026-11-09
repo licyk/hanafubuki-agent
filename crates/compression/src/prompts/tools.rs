@@ -171,6 +171,11 @@ pub(super) const ACP_TAGS_SECTION: &str = r##"ACP TAGS
 
 Addressable messages in the conversation are annotated with a <acp tokens="2.1K" type="tool:bash">m00175</acp> tag showing its reference ID, approximate token size, and content type. These tags are system metadata injected by the proxy. NEVER echo, repeat, or reference these XML tags in your responses — the tags must not appear in your output. Use only the ref ID (e.g. m00005) inside compress calls, never the XML wrapper. The token size is approximate — treat it as a relative guide, not an exact count."##;
 
+/// [`ACP_TAGS_SECTION`] for tags that show their message's time.
+pub(super) const ACP_TAGS_SECTION_TIMESTAMPED: &str = r##"ACP TAGS
+
+Addressable messages in the conversation are annotated with a <acp tokens="2.1K" type="tool:bash" time="2026-10-30 09:02:11">m00175</acp> tag showing its reference ID, approximate token size, content type, and local time of occurrence (yyyy-mm-dd hh:mm:ss). Ordering: smaller ref number = earlier message; smaller time = earlier message. These tags are system metadata injected by the proxy. NEVER echo, repeat, or reference these XML tags in your responses — the tags must not appear in your output. Use only the ref ID (e.g. m00005) inside compress calls, never the XML wrapper. The token size is approximate — treat it as a relative guide, not an exact count."##;
+
 pub(super) const TOOLS_SECTION: &str = r##"TOOLS
 
 You have four context-management tools:

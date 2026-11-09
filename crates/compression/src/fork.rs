@@ -5,8 +5,9 @@
 // term (NOTICE).
 // Modified for hanafubuki-agent: one call plans and seeds a fresh state;
 // every ref of a present message is kept (the kernel's `seedAllRefs`) and
-// blocks are always adopted; no content store, block contents or lineage
-// metadata ride along.
+// blocks are always adopted; a present message's first-sight stamp rides
+// along (billion-context's fork clones its store rows, which carry the time);
+// no content store, block contents or lineage metadata do.
 
 use std::collections::{BTreeSet, HashMap, HashSet};
 
@@ -22,8 +23,8 @@ pub const REF_FLOOR_ID: &str = "fork:ref-floor";
 /// its history holds. A block is adopted, active, when every message it
 /// covers is present, unless it was expanded or another block consumed it;
 /// a tier block brings the blocks it consumed as the inactive records they
-/// are. Every present message keeps its ref and its frozen token count, and
-/// fresh refs number above the parent's. The orphan-hiding, truncation,
+/// are. Every present message keeps its ref, its frozen token count and its
+/// first-sight stamp, and fresh refs number above the parent's. The orphan-hiding, truncation,
 /// render-deferral and view latches carry over, so the shared history is
 /// sent as before; the nudge, the stats, the streak, absorbed records and
 /// rules start fresh. The parent is not changed.
@@ -81,6 +82,12 @@ pub fn adopt_fork_state(parent: &State, present: &HashSet<&str>) -> State {
         view_latch_config_digest: parent.view_latch_config_digest.clone(),
         ..State::default()
     };
+    state.ts_stamps = parent
+        .ts_stamps
+        .iter()
+        .filter(|(id, _)| present.contains(id.as_str()))
+        .map(|(id, stamp)| (id.clone(), *stamp))
+        .collect();
     for (id, r#ref) in &parent.message_refs.by_raw {
         if !present.contains(id.as_str()) {
             continue;

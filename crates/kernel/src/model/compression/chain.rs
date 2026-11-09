@@ -9,7 +9,7 @@
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
-use hanafubuki_agent_compression::{Block, RefMap, State, BLOCKED_REF, REF_FLOOR_ID};
+use hanafubuki_agent_compression::{Block, LocalTime, RefMap, State, BLOCKED_REF, REF_FLOOR_ID};
 use serde::{Deserialize, Serialize};
 
 use super::AgentCompressionState;
@@ -48,8 +48,10 @@ pub struct AgentCompressionDelta {
     pub token_snapshot: BTreeMap<String, u64>,
     /// The refs whose token count is no longer kept.
     pub token_snapshot_removed: Vec<String>,
+    /// The messages first stamped (stamps are never changed or removed).
+    pub ts_stamps: BTreeMap<String, LocalTime>,
     /// Every other field of the state, when one of them changed; its
-    /// blocks, refs and token counts are empty.
+    /// blocks, refs, token counts and stamps are empty.
     pub rest: Option<Box<AgentCompressionState>>,
 }
 
@@ -170,8 +172,9 @@ pub(crate) fn next_link(
     )
 }
 
-/// What changed from `base` to `current`, or none when a binding or a block
-/// went away or the blocks were reordered: only a snapshot carries that.
+/// What changed from `base` to `current`, or none when a binding, a block or
+/// a stamp went away or changed, or the blocks were reordered: only a
+/// snapshot carries that.
 fn diff(
     base: &AgentCompressionState,
     current: &AgentCompressionState,
@@ -220,6 +223,19 @@ fn diff(
         .filter(|r#ref| !current.token_snapshot.contains_key(*r#ref))
         .cloned()
         .collect();
+    let mut stamps_kept = 0;
+    for (id, stamp) in &current.ts_stamps {
+        match base.ts_stamps.get(id) {
+            Some(before) if before == stamp => stamps_kept += 1,
+            Some(_) => return None,
+            None => {
+                delta.ts_stamps.insert(id.clone(), *stamp);
+            }
+        }
+    }
+    if stamps_kept != base.ts_stamps.len() {
+        return None;
+    }
     let rest = rest_of(current);
     if rest != rest_of(base) {
         delta.rest = Some(Box::new(rest));
@@ -271,17 +287,20 @@ fn apply(
             .remove(&r#ref)
             .ok_or("it removes a token count the state does not have")?;
     }
+    state.ts_stamps.extend(delta.ts_stamps);
     if let Some(rest) = delta.rest {
         let State {
             blocks,
             message_refs,
             token_snapshot,
+            ts_stamps,
             ..
         } = std::mem::take(state);
         *state = State {
             blocks,
             message_refs,
             token_snapshot,
+            ts_stamps,
             ..*rest
         };
     }
@@ -305,13 +324,14 @@ fn empty_delta(seq: u64) -> AgentCompressionDelta {
     }
 }
 
-/// Every field of `state` but the three that grow with the window.
+/// Every field of `state` but the four that grow with the window.
 fn rest_of(state: &AgentCompressionState) -> AgentCompressionState {
     // Listed in full, so a new field of the state is placed on purpose.
     let State {
         blocks: _,
         message_refs: _,
         token_snapshot: _,
+        ts_stamps: _,
         nudge,
         stats,
         terminal_streak,
@@ -333,6 +353,7 @@ fn rest_of(state: &AgentCompressionState) -> AgentCompressionState {
         blocks: Vec::new(),
         message_refs: RefMap::default(),
         token_snapshot: BTreeMap::new(),
+        ts_stamps: BTreeMap::new(),
         nudge: nudge.clone(),
         stats: stats.clone(),
         terminal_streak: *terminal_streak,

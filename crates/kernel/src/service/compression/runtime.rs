@@ -29,6 +29,9 @@ pub(in crate::service) struct CompressionRuntime {
     /// once the count moves past it
     /// (`NudgeState::absorb_aborted_turn_growth`). Never persisted.
     pub(super) abort_anchor: Option<u64>,
+    /// The clock a test fixed for the session's message timestamps.
+    #[cfg(any(test, feature = "test-support"))]
+    pub(in crate::service) fixed_clock: Option<hanafubuki_agent_compression::LocalTime>,
 }
 
 impl CompressionRuntime {

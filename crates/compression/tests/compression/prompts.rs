@@ -20,7 +20,7 @@ const PROMPT_FUNCTION_DEFAULT: &str = include_str!("golden/prompt-function-defau
 #[test]
 fn the_default_system_prompt_is_byte_identical_to_the_kernel_fixture() {
     assert_eq!(
-        build_compress_system_prompt(&Prompts::default()),
+        build_compress_system_prompt(&Prompts::default(), false),
         PROMPT_FUNCTION_DEFAULT
     );
 }
@@ -191,7 +191,7 @@ fn compress_takes_one_string_with_no_alternatives() {
 
 #[test]
 fn the_system_prompt_mentions_the_compress_tool() {
-    let prompt = build_compress_system_prompt(&Prompts::default());
+    let prompt = build_compress_system_prompt(&Prompts::default(), false);
     assert!(prompt.contains("compress"));
     assert!(prompt.len() > 1000);
 }

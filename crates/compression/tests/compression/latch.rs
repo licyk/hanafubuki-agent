@@ -212,6 +212,7 @@ fn turn(messages: &[Message], state: State, config: &Config) -> TurnOutput {
         token_count: 1000,
         token_count_source: None,
         render: RenderStrategy::None,
+        clock: None,
     })
 }
 

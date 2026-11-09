@@ -36,6 +36,7 @@ pub fn turn_with(
             token_count,
             token_count_source: None,
             render: RenderStrategy::None,
+            clock: None,
         },
         TurnExtras {
             content_store,

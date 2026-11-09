@@ -32,5 +32,6 @@ mod refs;
 mod render;
 mod report;
 mod search;
+mod timestamps;
 mod truncate;
 mod turn;

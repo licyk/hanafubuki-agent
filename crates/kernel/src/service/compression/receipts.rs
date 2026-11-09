@@ -1,8 +1,9 @@
 // Derived from billion-context (https://github.com/ranxianglei/billion-context),
 // the `compress` receipts of `src/stream.ts` (`summaryFingerprintLine`,
-// `droppedEntriesNote`, `applyErrorNote` and the success, no-op and failure
-// receipts) at commit `4be21b08e`. Copyright (c) 2026 ranxianglei. MIT
-// License with an additional attribution term (NOTICE).
+// `blockCoverageTimes`, `droppedEntriesNote`, `applyErrorNote` and the
+// success, no-op and failure receipts) at commit `4be21b08e`. Copyright (c)
+// 2026 ranxianglei. MIT License with an additional attribution term
+// (NOTICE).
 // Modified for hanafubuki-agent: the proxy's loop guards, circuit breaker,
 // recovery hints and degenerate-fold notes are not ported; the texts the
 // model reads are kept verbatim.
@@ -12,7 +13,8 @@
 //! receipts of a call that folded nothing.
 
 use hanafubuki_agent_compression::{
-    ApplyResult, Block, ParseDiagnostics, ParseKind, ParsedCompressArgs, RangeSpec,
+    format_tag_time, ApplyResult, Block, LocalTime, ParseDiagnostics, ParseKind,
+    ParsedCompressArgs, RangeSpec, State,
 };
 
 const RETURN_TO_TASK_SUFFIX: &str = " This failure only concerns the compress call. Return to the original task now and continue it (visible output or a tool call).";
@@ -42,11 +44,14 @@ pub(super) fn unparsed(parsed: &ParsedCompressArgs) -> String {
 }
 
 /// The receipt of an applied call: what it folded, or why nothing was.
+/// With `stamped` (the state after the fold, while message timestamps are
+/// on), each block's line shows the time span it covers.
 pub(super) fn applied(
     ranges: &[RangeSpec],
     diagnostics: &ParseDiagnostics,
     result: &ApplyResult,
     changed: &[&Block],
+    stamped: Option<&State>,
 ) -> String {
     let detail = ranges
         .iter()
@@ -91,7 +96,8 @@ pub(super) fn applied(
     }
     for block in changed {
         receipt.push('\n');
-        receipt.push_str(&fingerprint_line(&block.block_id, &block.summary));
+        let span = stamped.and_then(|state| coverage(block, state));
+        receipt.push_str(&fingerprint_line(&block.block_id, &block.summary, span));
     }
     if !changed.is_empty() {
         receipt.push('\n');
@@ -105,19 +111,46 @@ pub(super) fn failed(message: &str) -> String {
     format!("[Compression FAILED: {message}]")
 }
 
-/// A block's integrity line: the summary's length and its two ends, so the
-/// model can check it was stored whole without decompressing.
-fn fingerprint_line(block_id: &str, summary: &str) -> String {
+/// A block's integrity line: the summary's length, the time span it
+/// covers when known, and its two ends, so the model can check it was
+/// stored whole without decompressing.
+fn fingerprint_line(block_id: &str, summary: &str, span: Option<(LocalTime, LocalTime)>) -> String {
     let head: String = summary.chars().take(30).collect::<String>();
     let tail_start = summary.chars().count().saturating_sub(100);
     let tail: String = summary.chars().skip(tail_start).collect();
     let flatten = |text: &str| text.replace("\r\n", " ").replace('\n', " ");
+    let span = span.map_or_else(String::new, |(start, end)| {
+        format!(" [{} – {}]", format_tag_time(start), format_tag_time(end))
+    });
     format!(
-        " · {block_id} full summary {}ch · head \"{}\" … tail \"{}\"",
+        " · {block_id} full summary {}ch{span} · head \"{}\" … tail \"{}\"",
         summary.encode_utf16().count(),
         flatten(&head),
         flatten(&tail)
     )
+}
+
+/// The earliest and latest first-sight stamps of what `block` covers: its
+/// messages and the messages its range's ends name (a block ref names
+/// none). None when one of them has no stamp: a span is never invented or
+/// narrowed.
+fn coverage(block: &Block, state: &State) -> Option<(LocalTime, LocalTime)> {
+    let ends = [&block.start_ref, &block.end_ref]
+        .into_iter()
+        .flatten()
+        .filter_map(|r#ref| state.message_refs.by_ref.get(r#ref));
+    let mut span: Option<(LocalTime, LocalTime)> = None;
+    for id in block.effective_message_ids.iter().chain(ends) {
+        let stamp = *state.ts_stamps.get(id)?;
+        span = Some(match span {
+            Some((start, end)) => (
+                if stamp.at < start.at { stamp } else { start },
+                if stamp.at > end.at { stamp } else { end },
+            ),
+            None => (stamp, stamp),
+        });
+    }
+    span
 }
 
 fn dropped_entries_note(diagnostics: &ParseDiagnostics) -> String {

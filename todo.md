@@ -3,7 +3,8 @@
 ## Plan: background compaction, hierarchical compression, a choice between them (2026-11-09)
 
 The plan is [docs/plan-context-compaction.md](docs/plan-context-compaction.md).
-All phases (P1–P11, with P8b) are done; the open items below stay.
+All phases (P1–P11, with P8b) are done, and P12 after the plan; the
+open items below stay.
 
 Every §8 decision was accepted as recommended, except decision 12: the
 previous plan stays and AGENTS.md allows one plan per piece of work. The
@@ -166,7 +167,7 @@ and pushed, and notes what Hanafubuki must change at its next pin.
   - Open (P5): recommend, nudge, the status line and `processTurn` are
     P6; `rebuild`, the decompress primitives and MEDIA REFS came with
     P9's crate half; absorb and rules with P10's crate half; timestamps
-    are still open. The kernel's dependency row allows the crate
+    with P12. The kernel's dependency row allows the crate
     in P7. No ledger `seq`, `base#part` ids or SKILL.md paths (the
     Agent has one item per message part).
   - Hanafubuki, at its next pin: a new published crate,
@@ -181,9 +182,9 @@ and pushed, and notes what Hanafubuki must change at its next pin.
       `acp_cache` report and fold economics), `Config::validate`. 700 tests
       (315 new) with the kernel's `prompt-function-default.txt` byte-exact
       and eight more texts byte-exact against the kernel's own output.
-  - Open (P6): timestamps are not in `process_turn` (relocation is not
-    ported, plan §9). The content store, absorb, crush and filters came
-    with P10's crate half, and the view latch's digest holds the settings
+  - Open (P6): relocation is not in `process_turn` (not ported, plan
+    §9); timestamps came with P12. The content store, absorb, crush and
+    filters came with P10's crate half, and the view latch's digest holds the settings
     of those that are on. Ported with P9's crate half: `open-objectives`' decompress
     assertion, the decompress primitives of `decompress-report`, the
     search and preview cases of `truncate-surrogates`. Not ported: host-set `dangerous`
@@ -740,11 +741,10 @@ and pushed, and notes what Hanafubuki must change at its next pin.
     `/compression cache`; `/config` → Compaction to `standard` (saved); a
     turn whose request had no compression tools, prompt or nudge but kept
     the summary; `/exit`, status 0.
-  - Open: `messageTimestamps` is a setting with no effect (billion-context's
-    timestamps are not ported); remove it from `[compaction.hierarchical]`
-    (a settings change for Hanafubuki) or port the timestamps. `absorb`
-    sends no `context_compressed` (it folds no block). The status panel
-    has no system-prompt row (the Agent does not measure the instructions
+  - Decided: `messageTimestamps` stays and acts, the timestamps ported
+    (P12).
+  - Open: `absorb` sends no `context_compressed` (it folds no block). The
+    status panel has no system-prompt row (the Agent does not measure the instructions
     and tools apart) and no cache line (no cached tokens reported). The
     panel's nudge is decided with the settings as they are now, which a
     running turn may not have yet.
@@ -760,6 +760,69 @@ and pushed, and notes what Hanafubuki must change at its next pin.
     `AgentContentStoreStats`, `AgentCompressionSummary`,
     `AgentCompressRange`; kernel `AgentService::compression_status`.
     Goldens and the persisted format unchanged.
+- [x] P12 (after the plan): message timestamps, so
+      `[compaction.hierarchical] messageTimestamps` (default true) acts.
+      Done: billion-context's #4313 (`createStampTimestampsNode`,
+      `tsStamps`, `render-refs.ts`'s `time` attribute, `FUNCTION_ACP_TAGS_
+      TIMESTAMPED`, the host's `blockCoverageTimes` span on the fingerprint
+      line). Crate: `LocalTime { at, utc_offset_seconds }`, `State.
+      ts_stamps` (message id to stamp, never changed or pruned),
+      `TurnInput.clock` (`Some` turns the timestamps on: before the refs are
+      minted, every id the ref map does not know is stamped with it; an id
+      it knows without a stamp is never backfilled), `render_refs(…,
+      timestamps)` (` time="yyyy-mm-dd hh:mm:ss"` after `type`, read from
+      the stamps only), `format_tag_time` (civil-from-days, no clock),
+      `build_compress_system_prompt(prompts, message_timestamps)` (the
+      time-aware ACP TAGS section verbatim), `adopt_fork_state` keeps the
+      present messages' stamps. Kernel: `AgentHierarchicalCompression.
+      message_timestamps` and `utc_offset_seconds` (the facade reads the
+      local offset with `chrono::Local` at turn admission); the projection
+      passes `now` in that offset (`message_clock`); two cached prompts; a
+      fold's receipt shows `[start – end]` per block from the post-fold
+      state (none when a covered message or a range end has no stamp);
+      `acp_cache` and `/compression`'s cache report use the offset instead
+      of 0; the chain's delta carries new stamps in `ts_stamps` (a changed
+      or removed stamp takes a snapshot; `rest` never holds them). Tests:
+      crate `timestamps` (12, ported from `issue4313-message-timestamps.
+      test.ts`: the format at +08:00, first sight once and stable, a later
+      arrival later, the offset kept, no backfill, the render reads only
+      the stamps and no clock, a fold keeps them, off stamps and shows
+      nothing then stamps only new ids, stored stamps hidden while off,
+      the prompt variants, a fork's stamps); kernel `compaction_contract::
+      hierarchical::timestamps` (the same tag bytes on every request and
+      after a restart through the chain; a fixed clock per turn: an
+      answer takes the next turn's time and the receipt's span; off: no
+      stamp, no attribute, the plain prompt, no span; a fold over a message
+      shown before timestamps were on has no span) and the chain tests
+      (stamps in deltas, a changed or removed stamp a snapshot). Golden
+      `hierarchical_requests` regenerated on purpose with a fixed clock
+      (`AgentService::test_fix_message_clock`, test support, per session in
+      `CompressionRuntime`): the time attributes, the ACP TAGS section, the
+      receipts' spans and the nudge's breakdown counting the longer
+      receipt; `standard` goldens unchanged.
+  - Decisions: the time is a first-sight stamp (history items record no
+    time; billion-context's memory-only lanes do the same), made when a
+    request first shows the message, so a turn's final answer takes the
+    next turn's time, and messages shown before the setting was on, or
+    numbered by a `rebuild_state` repair, show none. The offset is kept
+    per stamp, read once per turn: a tag already sent never changes when
+    the offset does (daylight saving, travel), and new ones show the new
+    local time.
+  - Deviations: no message carries a time of its own (the kernel's
+    `CoreMessage.ts`), so its case is not ported; the lean pack's TIMELINE
+    ("Occurred:") rule is not ported (the Agent sends the default pack,
+    which has none). A stamp costs ~70 B per message in a snapshot.
+  - Hanafubuki, at its next pin: `AgentHierarchicalCompression` has two
+    more fields, `message_timestamps` (from `[compaction.hierarchical]
+    messageTimestamps`) and `utc_offset_seconds` (the local offset when
+    the turn is admitted); a struct literal adds them. New kernel
+    re-export `AgentLocalTime`; `AgentService::test_fix_message_clock`
+    (test support). The compression crate: `TurnInput.clock`,
+    `render_refs`' and `build_compress_system_prompt`'s new flag,
+    `State.ts_stamps`, `LocalTime`, `format_tag_time`. Persisted:
+    `AgentCompressionDelta.ts_stamps` and the state's `ts_stamps` (both
+    `#[serde(default)]`; older records read as no stamps). Golden to copy:
+    `hierarchical_requests.json`.
 
 ## Plan: Codex's new terminal interface, its commands, configuration in the interface (2026-11-09)
 

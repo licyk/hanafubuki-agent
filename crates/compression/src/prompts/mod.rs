@@ -5,7 +5,9 @@
 // additional attribution term (NOTICE).
 // Modified for hanafubuki-agent: the rule texts cannot be overridden and the
 // prompt has no section packs; only the language-preservation rule is
-// optional.
+// optional, and the time-aware `<acp>` tag section is chosen by a flag (the
+// kernel's `FUNCTION_ACP_TAGS_TIMESTAMPED`, which billion-context's host
+// swaps in when `compress.messageTimestamps` is on).
 
 mod opt_in;
 mod rules;
@@ -62,13 +64,19 @@ impl Prompts {
 }
 
 /// The static system prompt for the function tools: the philosophy, how to
-/// compress, the `<acp>` tags, the tools and how to read past summaries.
-/// It never changes within a session, so it stays in the cached prefix.
-pub fn build_compress_system_prompt(prompts: &Prompts) -> String {
+/// compress, the `<acp>` tags (with their `time` attribute when
+/// `message_timestamps`), the tools and how to read past summaries. It
+/// never changes within a session, so it stays in the cached prefix.
+pub fn build_compress_system_prompt(prompts: &Prompts, message_timestamps: bool) -> String {
+    let tags = if message_timestamps {
+        tools::ACP_TAGS_SECTION_TIMESTAMPED
+    } else {
+        tools::ACP_TAGS_SECTION
+    };
     [
         prompts.compress_philosophy.as_str(),
         prompts.how_to_compress_rules.as_str(),
-        tools::ACP_TAGS_SECTION,
+        tags,
         tools::TOOLS_SECTION,
         tools::SUMMARIES_IN_CONTEXT_SECTION,
     ]

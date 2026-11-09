@@ -5,9 +5,11 @@
 // term (NOTICE).
 // Modified for hanafubuki-agent: the steps run as one function in the
 // kernel's order. Ids are the host's stable ones, so there is no live-id
-// reconciliation; timestamps and carrier relocation are not ported; there
-// is no separate apply view, since the host passes the full history; the
-// content store and the filters come with the call.
+// reconciliation; carrier relocation is not ported; the host's clock comes
+// with the call, and its presence turns the timestamps on (no message
+// carries a time of its own); there is no separate apply view, since the
+// host passes the full history; the content store and the filters come
+// with the call.
 
 use std::collections::HashSet;
 
@@ -15,7 +17,7 @@ use crate::absorb::{append_absorb_prompts, hide_absorbed_messages};
 use crate::crush::apply_crush_to_messages;
 use crate::filter::{apply_message_filters, MessageFilter};
 use crate::latch::{apply_view_latch, view_latch_config_digest};
-use crate::model::{Config, Message, State};
+use crate::model::{Config, LocalTime, Message, State};
 use crate::nudge::{decide_nudge, stamp_nudge, NudgeDecision, NudgeInput, TokenCountSource};
 use crate::number::format_k;
 use crate::prune::{hide_consumed_compress_calls, prune, sync_blocks};
@@ -36,6 +38,11 @@ pub struct TurnInput<'a> {
     pub token_count: u64,
     pub token_count_source: Option<TokenCountSource>,
     pub render: RenderStrategy,
+    /// The host's clock now, while message timestamps are on: a message
+    /// first seen in this call is stamped with it, and the tags show the
+    /// stamps. None: nothing is stamped or shown, and the view is
+    /// byte-identical to one without timestamps.
+    pub clock: Option<LocalTime>,
 }
 
 /// The view to send and what goes with it.
@@ -99,8 +106,12 @@ pub fn process_turn_with(
         token_count,
         token_count_source,
         render,
+        clock,
     } = input;
 
+    if let Some(now) = clock {
+        stamp_first_sight(&mut state, original, now);
+    }
     assign_message_refs(&mut state, original, config);
     sync_blocks(original, &mut state);
     state.advance_survival(config.promotion_threshold);
@@ -135,7 +146,7 @@ pub fn process_turn_with(
     });
     stamp_nudge(&mut state.nudge, &nudge, token_count);
     let emergency = emergency_truncate(view, &mut state, config, token_count, &nudge);
-    let messages = render_refs(&emergency.messages, &mut state, render);
+    let messages = render_refs(&emergency.messages, &mut state, render, clock.is_some());
 
     lift_dead_refs(&mut state, original);
     let status_line = status_line(&state, &nudge);
@@ -172,6 +183,22 @@ fn transform(
         view = apply_message_filters(view, &config.message_filters, filters).messages;
     }
     view
+}
+
+/// Stamps each message arriving now with `now`, once. It runs before the
+/// refs are minted, so an id the ref map does not know yet is new; an id it
+/// knows without a stamp was seen before timestamps were on and is never
+/// given a time it did not have.
+fn stamp_first_sight(state: &mut State, messages: &[Message], now: LocalTime) {
+    for message in messages {
+        if message.id.is_empty()
+            || state.ts_stamps.contains_key(&message.id)
+            || state.message_refs.by_raw.contains_key(&message.id)
+        {
+            continue;
+        }
+        state.ts_stamps.insert(message.id.clone(), now);
+    }
 }
 
 /// A dead ref whose message came back into the history is alive again.

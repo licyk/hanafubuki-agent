@@ -542,6 +542,8 @@ impl AgentSessionDriver {
     }
 }
 
+/// `[compaction.hierarchical]` for a turn admitted now, with the local
+/// time's offset from UTC now (what the turn's new message stamps keep).
 pub(crate) fn hierarchical_compression(
     settings: &hanafubuki_agent_config::AgentHierarchicalCompactionSettings,
 ) -> hanafubuki_agent_kernel::AgentHierarchicalCompression {
@@ -560,6 +562,8 @@ pub(crate) fn hierarchical_compression(
         content_store: settings.content_store,
         crush: settings.crush,
         rules: settings.rules,
+        message_timestamps: settings.message_timestamps,
+        utc_offset_seconds: chrono::Local::now().offset().local_minus_utc(),
     }
 }
 

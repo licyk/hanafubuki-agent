@@ -89,6 +89,7 @@ pub(crate) fn turn_with(
         token_count: tokens,
         token_count_source: source,
         render: RenderStrategy::None,
+        clock: None,
     })
 }
 
