@@ -1,16 +1,7 @@
 use super::*;
 
-/// The part of the history a compaction replaces, and the windows it moves
-/// between.
-struct CompactionSource {
-    items: Vec<ConversationItem>,
-    item_ids: Vec<AgentHistoryItemId>,
-    current_turn_suffix: Vec<AgentHistoryItem>,
-    revision: AgentRevision,
-    window: AgentContextWindowSnapshot,
-    target_window: AgentContextWindowSnapshot,
-    target_window_chain: Vec<AgentContextWindowSnapshot>,
-}
+use super::source::compaction_source;
+use super::status::reserve_compaction;
 
 impl AgentService {
     #[allow(
@@ -29,16 +20,7 @@ impl AgentService {
     ) -> Result<CompactionPlan, AgentError> {
         // Read with no lock held; the request below is assembled from them.
         let images = self.load_history_images(session_id).await?;
-        let (
-            staged,
-            identity,
-            request,
-            cancellation,
-            source,
-            canonical_initial_context,
-            local_trim_prefix_ends,
-            sampling_retry_policy,
-        ) = {
+        let (staged, identity, cancellation, source) = {
             let cell = self.session(session_id)?;
             let mut guard = cell.lock_after_persistence().await?;
             let compaction_id = self.allocate_compaction_id();
@@ -46,8 +28,7 @@ impl AgentService {
             ensure_no_staged_commit(record)?;
             let previous = record.rollback_state();
             validate_compaction_start(record, trigger, phase, expected_session, turn_identity)?;
-            let source = compaction_source(record, phase, turn_identity)?;
-            let canonical_initial_context = canonical_initial_context(record);
+            let source = compaction_source(record, phase, turn_identity, &images, &transport)?;
             let generation = AgentCompactionGeneration::new(
                 record
                     .runtime
@@ -58,19 +39,11 @@ impl AgentService {
                     .expect("agent compaction generation exhausted"),
             );
             let cancellation = CancellationToken::default();
-            let sampling_retry_policy = record.settings.config.sampling_retry_policy;
             let identity = CompactionIdentity {
                 session_id,
                 id: compaction_id,
                 generation,
             };
-            let (request, implementation, local_trim_prefix_ends) = compaction_request(
-                record,
-                &source.items,
-                &images,
-                transport.model.as_ref(),
-                &transport.tool_plan,
-            )?;
             let compaction_now = now_millis_u64();
             let reserved = AgentCompactionSnapshot {
                 id: compaction_id,
@@ -78,7 +51,7 @@ impl AgentService {
                 trigger,
                 phase,
                 reason,
-                implementation,
+                implementation: source.implementation,
                 status: AgentCompactionStatus::Reserved,
                 source_revision: source.revision,
                 source_window_id: source.window.window_id,
@@ -94,36 +67,14 @@ impl AgentService {
             (
                 StagedPersistence::commit(&cell, record, previous),
                 identity,
-                request,
                 cancellation,
                 source,
-                canonical_initial_context,
-                local_trim_prefix_ends,
-                sampling_retry_policy,
             )
         };
         self.persist_staged(staged).await?;
         self.set_compaction_status(identity, AgentCompactionStatus::Running, None, None)
             .await?;
-        Ok(CompactionPlan {
-            identity,
-            request,
-            next_tool_plan: transport.tool_plan,
-            next_prompt: transport.prompt,
-            model: transport.model,
-            cancellation,
-            source_items: source.items,
-            source_item_ids: source.item_ids,
-            current_turn_suffix: source.current_turn_suffix,
-            source_revision: source.revision,
-            source_window: source.window,
-            target_window: source.target_window,
-            target_window_chain: source.target_window_chain,
-            canonical_initial_context,
-            local_trim_prefix_ends,
-            sampling_retry_policy,
-            images,
-        })
+        Ok(source.into_plan(identity, phase, cancellation, transport, images))
     }
 
     /// The transport of a standalone compaction: the session's model, and
@@ -169,74 +120,6 @@ impl AgentService {
             tool_plan,
             prompt,
         })
-    }
-
-    pub(super) async fn execute_compaction(
-        &self,
-        plan: CompactionPlan,
-        event_sink: &dyn AgentEventSink,
-    ) -> Result<AgentCompactionOutcome, AgentError> {
-        let identity = plan.identity;
-        let mut guard = CompactionExecutionGuard {
-            service: self.clone(),
-            identity,
-            armed: true,
-        };
-        let result = self.execute_compaction_inner(&plan).await;
-        let result = match result {
-            Ok(sample) => {
-                self.set_compaction_status(
-                    identity,
-                    AgentCompactionStatus::ReadyToInstall,
-                    sample.summary.clone(),
-                    Some(compaction_usage(&sample)),
-                )
-                .await?;
-                match self.commit_compaction(plan, sample).await {
-                    Ok((outcome, event)) => {
-                        event_sink.emit(event);
-                        Ok(outcome)
-                    }
-                    Err(error) => {
-                        let event = self
-                            .finish_compaction_terminal(
-                                identity,
-                                AgentCompactionStatus::Failed,
-                                Some(error.to_string()),
-                            )
-                            .await?;
-                        if let Some(event) = event {
-                            event_sink.emit(event);
-                        }
-                        Err(error)
-                    }
-                }
-            }
-            Err(AgentError::Cancelled) => {
-                let event = self
-                    .finish_compaction_terminal(identity, AgentCompactionStatus::Cancelled, None)
-                    .await?;
-                if let Some(event) = event {
-                    event_sink.emit(event);
-                }
-                Err(AgentError::Cancelled)
-            }
-            Err(error) => {
-                let event = self
-                    .finish_compaction_terminal(
-                        identity,
-                        AgentCompactionStatus::Failed,
-                        Some(error.to_string()),
-                    )
-                    .await?;
-                if let Some(event) = event {
-                    event_sink.emit(event);
-                }
-                Err(error)
-            }
-        };
-        guard.armed = false;
-        result
     }
 }
 
@@ -291,117 +174,4 @@ fn validate_compaction_start(
         return Err(AgentError::CompactionUnavailable);
     }
     Ok(())
-}
-
-/// The history before the compaction boundary (a pre-turn compaction keeps
-/// the starting turn out of it) and the next context window.
-fn compaction_source(
-    record: &SessionRecord,
-    phase: AgentCompactionPhase,
-    turn_identity: Option<TurnIdentity>,
-) -> Result<CompactionSource, AgentError> {
-    let compaction_boundary = if phase == AgentCompactionPhase::PreTurn {
-        let identity = turn_identity.ok_or_else(|| {
-            AgentError::Protocol("pre-turn compaction is missing its turn identity".to_string())
-        })?;
-        record
-            .conversation.history
-            .iter()
-            .position(|item| {
-                matches!(&item.content, ConversationItem::TurnStart { turn_id } if *turn_id == identity.turn_id)
-            })
-            .ok_or(AgentError::TurnNotRunning)?
-    } else {
-        record.conversation.history.len()
-    };
-    let items = history_contents(&record.conversation.history[..compaction_boundary]);
-    if items.is_empty() {
-        return Err(AgentError::CompactionUnavailable);
-    }
-    let window = record.runtime.context_window;
-    let target_window = window.next()?;
-    let mut target_window_chain = match &record.conversation.model_context_boundary {
-        AgentModelContextBoundary::Full => vec![window],
-        AgentModelContextBoundary::Compacted { checkpoint } => checkpoint.window_chain.clone(),
-    };
-    target_window_chain.push(target_window);
-    Ok(CompactionSource {
-        items,
-        item_ids: record
-            .conversation
-            .history
-            .iter()
-            .map(|item| item.item_id)
-            .collect(),
-        current_turn_suffix: record.conversation.history[compaction_boundary..]
-            .iter()
-            .map(|item| item.as_ref().clone())
-            .collect(),
-        revision: AgentRevision::new(record.status.revision),
-        window,
-        target_window,
-        target_window_chain,
-    })
-}
-
-/// The model request that compacts `source` with the session's compaction
-/// implementation, and the local-trim prefix ends of its input.
-fn compaction_request(
-    record: &SessionRecord,
-    source: &[ConversationItem],
-    images: &LoadedImages,
-    model: &dyn ModelSession,
-    tool_plan: &AgentToolPlan,
-) -> Result<(ModelRequest, AgentCompactionImplementation, Vec<usize>), AgentError> {
-    let (mut input, local_trim_prefix_ends) = build_compaction_input(source, images)?;
-    let implementation =
-        AgentCompactionImplementation::from(record.settings.config.compaction_capability);
-    if model.compaction_capability() != record.settings.config.compaction_capability {
-        return Err(AgentError::Protocol(
-            "compaction transport capability changed after session creation".to_string(),
-        ));
-    }
-    let local_summary = implementation == AgentCompactionImplementation::LocalSummary;
-    if local_summary {
-        if let Some(task_plan) = record.runtime.task_plan.as_ref() {
-            input.push(task_plan_model_input(task_plan));
-        }
-        input.push(ModelInputItem::user_text(SUMMARIZATION_PROMPT));
-    } else if implementation == AgentCompactionImplementation::ResponsesCompactV2 {
-        input.push(ModelInputItem::CompactionTrigger);
-    }
-    let request = ModelRequest {
-        model: record.settings.config.model.clone(),
-        instructions: record.settings.config.instructions.clone(),
-        input,
-        tools: if local_summary {
-            Vec::new()
-        } else {
-            tool_plan.model_specs()
-        },
-        tool_choice: hanafubuki_agent_model_api::ModelToolChoice::None,
-        parallel_tool_calls: !local_summary && tool_plan.parallel_tool_calls(),
-        reasoning: record.settings.config.effective_reasoning(),
-        output_format: None,
-    };
-    Ok((request, implementation, local_trim_prefix_ends))
-}
-
-/// Records `reserved` as the session's compaction and its event.
-fn reserve_compaction(
-    record: &mut SessionRecord,
-    reserved: AgentCompactionSnapshot,
-    cancellation: CancellationToken,
-    limits: AgentHardLimits,
-) {
-    record.status.updated_at = now_millis();
-    record.runtime.compaction = Some(CompactionRecord {
-        snapshot: reserved.clone(),
-        cancellation,
-        operation_revision: record.status.revision,
-    });
-    record_compaction_event(record, reserved, limits);
-    if let Some(compaction) = record.runtime.compaction.as_mut() {
-        compaction.operation_revision = record.status.revision;
-    }
 }

@@ -9,9 +9,12 @@ sources are Codex `57a808a392` and billion-context `4be21b08e` (acp-kernel
 0.0.189). Each phase is validated, documented in both languages, committed
 and pushed, and notes what Hanafubuki must change at its next pin.
 
-- [ ] P1: split `service/compaction/` along responsibilities (source and
+- [x] P1: split `service/compaction/` along responsibilities (source and
       plan, a pure replacement build, install, status machine); no
-      behavior change, goldens unchanged.
+      behavior change, goldens unchanged. Done: `source`, `replacement`,
+      `status` beside `admission`, `prepare`, `execute`, `commit`;
+      `commit_compaction` 75 lines. Nothing for Hanafubuki: kernel-internal,
+      public API unchanged.
 - [ ] P2: the `[compaction]` setting (`strategy`, `background`,
       `hierarchical`), `AgentSessionConfig.compaction_strategy`, applied
       at turn admission, every transition; the `remoteCompaction` bug
