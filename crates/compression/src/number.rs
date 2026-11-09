@@ -62,3 +62,39 @@ pub(crate) fn format_number(value: f64) -> String {
         format!("{value}")
     }
 }
+
+/// `String(n)` for any finite number: the shortest digits that read back as
+/// `value`, in exponent form below `1e-6` and from `1e21`.
+pub(crate) fn js_number_to_string(value: f64) -> String {
+    if value == 0.0 || !value.is_finite() {
+        return "0".to_owned();
+    }
+    let scientific = format!("{:e}", value.abs());
+    let (mantissa, exponent) = scientific.split_once('e').unwrap_or((&scientific, "0"));
+    let digits: String = mantissa.chars().filter(char::is_ascii_digit).collect();
+    let exponent: i32 = exponent.parse().unwrap_or(0);
+    let count = digits.len() as i32;
+    let point = exponent + 1;
+    let body = if count <= point && point <= 21 {
+        format!("{digits}{}", "0".repeat((point - count) as usize))
+    } else if 0 < point && point <= 21 {
+        let (whole, fraction) = digits.split_at(point as usize);
+        format!("{whole}.{fraction}")
+    } else if -6 < point && point <= 0 {
+        format!("0.{}{digits}", "0".repeat((-point) as usize))
+    } else {
+        let (first, rest) = digits.split_at(1);
+        let rest = if rest.is_empty() {
+            String::new()
+        } else {
+            format!(".{rest}")
+        };
+        let sign = if point > 0 { "+" } else { "-" };
+        format!("{first}{rest}e{sign}{}", (point - 1).abs())
+    };
+    if value < 0.0 {
+        format!("-{body}")
+    } else {
+        body
+    }
+}

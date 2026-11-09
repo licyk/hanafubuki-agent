@@ -4,7 +4,7 @@
 // additional attribution term (NOTICE).
 // Modified for hanafubuki-agent: only the function protocol (no text or
 // hybrid protocol), one wire-neutral schema per tool instead of one per
-// provider shape, and no opt-in tools yet.
+// provider shape; the opt-in tools are in `opt_in.rs`.
 
 use serde_json::{json, Value};
 

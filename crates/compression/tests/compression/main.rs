@@ -17,6 +17,7 @@ mod media;
 mod merge;
 mod nudge;
 mod nudge_text;
+mod opt_in;
 mod pairs;
 mod parse;
 mod parse_line_form;

@@ -7,9 +7,14 @@
 // prompt has no section packs; only the language-preservation rule is
 // optional.
 
+mod opt_in;
 mod rules;
 mod tools;
 
+pub use opt_in::{
+    absorb_tool, retrieve_tool, rule_tool, ABSORB_TOOL_DESCRIPTION, ABSORB_TOOL_NAME,
+    RETRIEVE_TOOL_DESCRIPTION, RETRIEVE_TOOL_NAME, RULE_TOOL_DESCRIPTION, RULE_TOOL_NAME,
+};
 pub use rules::{
     COMPRESS_PHILOSOPHY, HOW_TO_COMPRESS_RULES, LANGUAGE_PRESERVATION_RULE, TIER2_DISTILL_RULES,
     TIER3_CONDENSE_RULES,

@@ -1,7 +1,8 @@
 //! JSON that keeps its object keys in their order, as JavaScript's
 //! `JSON.parse` and `JSON.stringify` do: a `compress` call's arguments are
 //! rewritten in the cached history, so an unchanged entry must serialize to
-//! the same bytes it came in as.
+//! the same bytes it came in as, and a crushed tool result is written the
+//! way the kernel writes it.
 
 use std::fmt;
 
@@ -9,8 +10,10 @@ use serde::de::{Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
 use serde::ser::{Serialize, SerializeMap, SerializeSeq, Serializer};
 use serde_json::Number;
 
+use crate::number::js_number_to_string;
+
 #[derive(Clone, Debug, PartialEq)]
-pub(super) enum Json {
+pub(crate) enum Json {
     Null,
     Bool(bool),
     Number(Number),
@@ -20,11 +23,11 @@ pub(super) enum Json {
 }
 
 impl Json {
-    pub(super) fn parse(text: &str) -> Option<Self> {
+    pub(crate) fn parse(text: &str) -> Option<Self> {
         serde_json::from_str(text).ok()
     }
 
-    pub(super) fn get(&self, key: &str) -> Option<&Json> {
+    pub(crate) fn get(&self, key: &str) -> Option<&Json> {
         match self {
             Self::Object(entries) => entries
                 .iter()
@@ -34,7 +37,7 @@ impl Json {
         }
     }
 
-    pub(super) fn as_str(&self) -> Option<&str> {
+    pub(crate) fn as_str(&self) -> Option<&str> {
         match self {
             Self::String(text) => Some(text),
             _ => None,
@@ -42,7 +45,7 @@ impl Json {
     }
 
     /// Replaces `key`'s value where it stands, or appends it.
-    pub(super) fn set(&mut self, key: &str, value: Json) {
+    pub(crate) fn set(&mut self, key: &str, value: Json) {
         let Self::Object(entries) = self else {
             return;
         };
@@ -52,9 +55,55 @@ impl Json {
         }
     }
 
-    pub(super) fn to_text(&self) -> String {
+    pub(crate) fn to_text(&self) -> String {
         serde_json::to_string(self).unwrap_or_default()
     }
+
+    /// `JSON.stringify`: as [`Json::to_text`], with numbers as JavaScript
+    /// writes them (`1.0` is `1`, `1e21` is `1e+21`).
+    pub(crate) fn to_js_text(&self) -> String {
+        let mut out = String::new();
+        self.write_js(&mut out);
+        out
+    }
+
+    fn write_js(&self, out: &mut String) {
+        match self {
+            Self::Null => out.push_str("null"),
+            Self::Bool(value) => out.push_str(if *value { "true" } else { "false" }),
+            Self::Number(value) => {
+                out.push_str(&js_number_to_string(value.as_f64().unwrap_or(0.0)));
+            }
+            Self::String(value) => out.push_str(&quote(value)),
+            Self::Array(items) => {
+                out.push('[');
+                for (index, item) in items.iter().enumerate() {
+                    if index > 0 {
+                        out.push(',');
+                    }
+                    item.write_js(out);
+                }
+                out.push(']');
+            }
+            Self::Object(entries) => {
+                out.push('{');
+                for (index, (key, value)) in entries.iter().enumerate() {
+                    if index > 0 {
+                        out.push(',');
+                    }
+                    out.push_str(&quote(key));
+                    out.push(':');
+                    value.write_js(out);
+                }
+                out.push('}');
+            }
+        }
+    }
+}
+
+/// A string as `JSON.stringify` quotes it; serde_json escapes the same set.
+pub(crate) fn quote(text: &str) -> String {
+    serde_json::to_string(text).unwrap_or_default()
 }
 
 impl<'de> Deserialize<'de> for Json {

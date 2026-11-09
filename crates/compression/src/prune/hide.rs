@@ -9,7 +9,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use super::json::Json;
+use crate::json::Json;
 
 use crate::model::{Kind, Message, State};
 use crate::protect::COMPRESS_TOOL_NAME;

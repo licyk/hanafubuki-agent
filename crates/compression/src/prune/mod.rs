@@ -7,7 +7,6 @@
 // is one message, and there is no head placement for handoff views.
 
 mod hide;
-mod json;
 mod sync;
 
 use std::collections::{HashMap, HashSet};

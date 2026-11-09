@@ -8,6 +8,10 @@
 // validation keeps only the rules the unsigned and optional types do not
 // already enforce.
 
+use super::opt_in::{
+    AbsorbConfig, ContentStoreConfig, CrushConfig, MessageFiltersConfig, RulesConfig,
+};
+
 /// The compression settings, with the kernel's defaults from
 /// [`Config::new`]. Tool patterns are a name or a `prefix*` glob, matched
 /// without regard to case.
@@ -34,6 +38,12 @@ pub struct Config {
     pub preserve_recent_messages: usize,
     /// The newest tokens that stay visible.
     pub preserve_recent_tokens: u64,
+    /// The opt-in features, all off by default.
+    pub absorb: AbsorbConfig,
+    pub crush: CrushConfig,
+    pub content_store: ContentStoreConfig,
+    pub rules: RulesConfig,
+    pub message_filters: MessageFiltersConfig,
 }
 
 impl Config {
@@ -76,6 +86,11 @@ impl Config {
             preserve_recent_tools: Vec::new(),
             preserve_recent_messages: 3,
             preserve_recent_tokens: 5000,
+            absorb: AbsorbConfig::default(),
+            crush: CrushConfig::default(),
+            content_store: ContentStoreConfig::default(),
+            rules: RulesConfig::default(),
+            message_filters: MessageFiltersConfig::default(),
         }
     }
 
@@ -115,6 +130,19 @@ impl Config {
         check(
             self.tiers.tier3_trigger > self.tiers.tier2_trigger,
             "tiers.tier3Trigger must be greater than tiers.tier2Trigger",
+        );
+        check(
+            (0.0..=1.0).contains(&self.absorb.context_threshold_pct),
+            "absorb.contextThresholdPct must be in [0, 1]",
+        );
+        check(self.rules.max_rules >= 1, "rules.maxRules must be >= 1");
+        check(
+            self.rules.max_rule_chars >= 1,
+            "rules.maxRuleChars must be >= 1",
+        );
+        check(
+            self.crush.min_reduction > 0.0 && self.crush.min_reduction <= 1.0,
+            "crush.minReduction must be in (0, 1]",
         );
         let growth = &nudge.tier_growth_tokens;
         for (tier, value) in [("t1", growth.t1), ("t2", growth.t2), ("t3", growth.t3)] {

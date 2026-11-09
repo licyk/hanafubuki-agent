@@ -1,0 +1,713 @@
+[
+  {
+    "messages": [
+      {
+        "id": "u1",
+        "kind": "Text",
+        "role": "User",
+        "text": "<acp tokens=\"9\" type=\"text\">m00001</acp>\nrun the build and read the config",
+        "tool_call_id": null,
+        "tool_name": null
+      },
+      {
+        "id": "c1",
+        "kind": "ToolCall",
+        "role": "Assistant",
+        "text": "{\"command\":\"npm run build\"}",
+        "tool_call_id": "call1",
+        "tool_name": "bash"
+      },
+      {
+        "id": "r1",
+        "kind": "ToolResult",
+        "role": "Tool",
+        "text": "16844 bytes, sha256 ea8b4c32fc291c248f876456c1bfbea45d95656de89f55d2055ab11a2b78c111",
+        "tool_call_id": "call1",
+        "tool_name": "bash"
+      },
+      {
+        "id": "c2",
+        "kind": "ToolCall",
+        "role": "Assistant",
+        "text": "{\"path\":\"rows.json\"}",
+        "tool_call_id": "call2",
+        "tool_name": "read"
+      },
+      {
+        "id": "r2",
+        "kind": "ToolResult",
+        "role": "Tool",
+        "text": "18835 bytes, sha256 ed6c0295b7ba30cfbad9d4b6137448a4b0e8157cbed77f57bf0931cde92e2261",
+        "tool_call_id": "call2",
+        "tool_name": "read"
+      },
+      {
+        "id": "a1",
+        "kind": "Text",
+        "role": "Assistant",
+        "text": "4244 bytes, sha256 68f5ba2fd8c2e38cd0b50bb8b85901ffcd57574c6668243ff9cb51360ef177be",
+        "tool_call_id": null,
+        "tool_name": null
+      },
+      {
+        "id": "c0",
+        "kind": "ToolCall",
+        "role": "Assistant",
+        "text": "{\"content\":\"m00090–m00099 nothing\"}",
+        "tool_call_id": "call0",
+        "tool_name": "compress"
+      },
+      {
+        "id": "r0",
+        "kind": "ToolResult",
+        "role": "Tool",
+        "text": "<acp tokens=\"9\" type=\"compress\">m00008</acp>\n[Compression FAILED: no such range]",
+        "tool_call_id": "call0",
+        "tool_name": "compress"
+      },
+      {
+        "id": "u2",
+        "kind": "Text",
+        "role": "User",
+        "text": "<acp tokens=\"4\" type=\"text\">m00009</acp>\nnow fold that",
+        "tool_call_id": null,
+        "tool_name": null
+      }
+    ],
+    "nudge": "NudgeDecision { should_inject: false, reason: \"max compressible 9969 < threshold 50000; growth 0 < floor 22500\", compressible_ranges: [CompressibleRange { start_ref: \"m00001\", end_ref: \"m00006\", count: 6, tokens: 9969, chars: Some(39871), tool_pct: 67, text_pct: 33, user_msgs: 1, start_index: Some(0), end_index: Some(5), no_merge_before: false }], protected_ranges: [], active_block_spans: [], tier_target_blocks: [], context_usage: 0.6, tier: None, breakdown: NudgeBreakdown { usage: 0.6, growth: 0, growth_reference: 60000, effective_threshold: 50000, nudge_growth_tokens: 50000, growth_floor: 22500.0, has_pending_nudge: false, over_limit: false, emergency_override: false, pressure_deferred_no_sample: false, estimate_hold_streak: 0, min_pressure_benefit: 5000, pending_t1: 9969, pending_t2: 0, pending_t3: 0, max_pending: 9969 }, context_breakdown: Some(ContextBreakdown { system: 0, tool: 8928, summaries: 0, code: 0, text: 1063, total: 60000, growth: 0 }) }",
+    "state": {
+      "blocks": [],
+      "dead_refs": [],
+      "emergency_truncate_latch": [],
+      "hidden_orphan_refs": [],
+      "message_refs": {
+        "by_raw": {
+          "a1": "m00006",
+          "c0": "m00007",
+          "c1": "m00002",
+          "c2": "m00004",
+          "r0": "m00008",
+          "r1": "m00003",
+          "r2": "m00005",
+          "u1": "m00001",
+          "u2": "m00009"
+        },
+        "by_ref": {
+          "m00001": "u1",
+          "m00002": "c1",
+          "m00003": "r1",
+          "m00004": "c2",
+          "m00005": "r2",
+          "m00006": "a1",
+          "m00007": "c0",
+          "m00008": "r0",
+          "m00009": "u2"
+        }
+      },
+      "next_block_id": 1,
+      "next_run_id": 1,
+      "nudge": {
+        "absorb_count": 0,
+        "absorbed_debt": 0,
+        "estimate_hold_streak": 0,
+        "last_nudge_shown_tokens": 0,
+        "last_per_message_nudge_tokens": 60000,
+        "last_shown_by_tier": {},
+        "last_t1_fire_pending": null,
+        "t1_harvest_stall": false
+      },
+      "pending_orphan_sweep_min_ref": null,
+      "render_deferred_refs": [],
+      "stats": {
+        "compression_count": 0,
+        "tokens_compressed": 0
+      },
+      "swept_orphan_call_ids": [],
+      "terminal_streak": 0,
+      "token_snapshot": {
+        "m00001": 9,
+        "m00003": 4200,
+        "m00005": 4698,
+        "m00006": 1050,
+        "m00008": 9,
+        "m00009": 4
+      },
+      "view_latch_config_digest": null,
+      "view_latches": {}
+    },
+    "status_line": null,
+    "terminal_escape": "None",
+    "truncation_skipped": null
+  },
+  {
+    "messages": [
+      {
+        "id": "u1",
+        "kind": "Text",
+        "role": "User",
+        "text": "<acp tokens=\"9\" type=\"text\">m00001</acp>\nrun the build and read the config",
+        "tool_call_id": null,
+        "tool_name": null
+      },
+      {
+        "id": "u2",
+        "kind": "Text",
+        "role": "User",
+        "text": "<acp tokens=\"4\" type=\"text\">m00009</acp>\nnow fold that",
+        "tool_call_id": null,
+        "tool_name": null
+      },
+      {
+        "id": "c3",
+        "kind": "ToolCall",
+        "role": "Assistant",
+        "text": "{\"content\":\"m00001–m00006 build\\nThe build passed; rows.json holds 300 uniform INFO rows.\"}",
+        "tool_call_id": "call3",
+        "tool_name": "compress"
+      },
+      {
+        "id": "r3",
+        "kind": "ToolResult",
+        "role": "Tool",
+        "text": "Compressed 1 range.",
+        "tool_call_id": "call3",
+        "tool_name": "compress"
+      },
+      {
+        "id": "c4",
+        "kind": "ToolCall",
+        "role": "Assistant",
+        "text": "{\"command\":\"cargo test\"}",
+        "tool_call_id": "call4",
+        "tool_name": "bash"
+      },
+      {
+        "id": "r4",
+        "kind": "ToolResult",
+        "role": "Tool",
+        "text": "24044 bytes, sha256 3598692dc451d1fb9f9fe41bf8c59d2340b426cd3df71f56624b00fddf689317",
+        "tool_call_id": "call4",
+        "tool_name": "bash"
+      },
+      {
+        "id": "a2",
+        "kind": "Text",
+        "role": "Assistant",
+        "text": "<acp tokens=\"4\" type=\"text\">m00012</acp>\nthe tests pass",
+        "tool_call_id": null,
+        "tool_name": null
+      },
+      {
+        "id": "u3",
+        "kind": "Text",
+        "role": "User",
+        "text": "<acp tokens=\"3\" type=\"text\">m00013</acp>\nand again",
+        "tool_call_id": null,
+        "tool_name": null
+      }
+    ],
+    "nudge": "NudgeDecision { should_inject: true, reason: \"OVER-LIMIT T1: max effective pending 6010, usage 80%\", compressible_ranges: [CompressibleRange { start_ref: \"m00009\", end_ref: \"m00011\", count: 3, tokens: 6010, chars: Some(24037), tool_pct: 67, text_pct: 33, user_msgs: 1, start_index: Some(1), end_index: Some(5), no_merge_before: false }], protected_ranges: [], active_block_spans: [BlockSpan { block_id: \"b1\", tier: 1, start_ref: \"m00001\", end_ref: \"m00006\" }], tier_target_blocks: [], context_usage: 0.8, tier: Some(1), breakdown: NudgeBreakdown { usage: 0.8, growth: 0, growth_reference: 80000, effective_threshold: 50000, nudge_growth_tokens: 50000, growth_floor: 22500.0, has_pending_nudge: false, over_limit: true, emergency_override: false, pressure_deferred_no_sample: false, estimate_hold_streak: 0, min_pressure_benefit: 5000, pending_t1: 6010, pending_t2: 14, pending_t3: 0, max_pending: 6010 }, context_breakdown: Some(ContextBreakdown { system: 0, tool: 6034, summaries: 0, code: 0, text: 20, total: 80000, growth: 0 }) }",
+    "state": {
+      "blocks": [
+        {
+          "active": true,
+          "block_id": "b1",
+          "compress_call_id": "call3",
+          "compressed_tokens": 9969,
+          "created_at": 0,
+          "direct_block_ids": [],
+          "direct_message_ids": [
+            "u1",
+            "c1",
+            "r1",
+            "c2",
+            "r2",
+            "a1"
+          ],
+          "effective_message_ids": [
+            "u1",
+            "c1",
+            "r1",
+            "c2",
+            "r2",
+            "a1"
+          ],
+          "end_ref": "m00006",
+          "expanded": false,
+          "generation": "young",
+          "restored_inline": false,
+          "run_id": "r1",
+          "start_ref": "m00001",
+          "summary": "The build passed; rows.json holds 300 uniform INFO rows.",
+          "survived_count": 1,
+          "tier": 1,
+          "topic": null
+        }
+      ],
+      "dead_refs": [],
+      "emergency_truncate_latch": [],
+      "hidden_orphan_refs": [
+        "m00007",
+        "m00008"
+      ],
+      "message_refs": {
+        "by_raw": {
+          "a1": "m00006",
+          "a2": "m00012",
+          "c0": "m00007",
+          "c1": "m00002",
+          "c2": "m00004",
+          "c3": "BLOCKED",
+          "c4": "m00010",
+          "r0": "m00008",
+          "r1": "m00003",
+          "r2": "m00005",
+          "r3": "BLOCKED",
+          "r4": "m00011",
+          "u1": "m00001",
+          "u2": "m00009",
+          "u3": "m00013"
+        },
+        "by_ref": {
+          "m00001": "u1",
+          "m00002": "c1",
+          "m00003": "r1",
+          "m00004": "c2",
+          "m00005": "r2",
+          "m00006": "a1",
+          "m00007": "c0",
+          "m00008": "r0",
+          "m00009": "u2",
+          "m00010": "c4",
+          "m00011": "r4",
+          "m00012": "a2",
+          "m00013": "u3"
+        }
+      },
+      "next_block_id": 2,
+      "next_run_id": 2,
+      "nudge": {
+        "absorb_count": 0,
+        "absorbed_debt": 0,
+        "estimate_hold_streak": 0,
+        "last_nudge_shown_tokens": 80000,
+        "last_per_message_nudge_tokens": 80000,
+        "last_shown_by_tier": {
+          "1": 80000
+        },
+        "last_t1_fire_pending": 6010,
+        "t1_harvest_stall": false
+      },
+      "pending_orphan_sweep_min_ref": null,
+      "render_deferred_refs": [],
+      "stats": {
+        "compression_count": 1,
+        "tokens_compressed": 9969
+      },
+      "swept_orphan_call_ids": [
+        "call0"
+      ],
+      "terminal_streak": 0,
+      "token_snapshot": {
+        "m00001": 9,
+        "m00003": 4200,
+        "m00005": 4698,
+        "m00006": 1050,
+        "m00008": 9,
+        "m00009": 4,
+        "m00011": 6000,
+        "m00012": 4,
+        "m00013": 3
+      },
+      "view_latch_config_digest": null,
+      "view_latches": {}
+    },
+    "status_line": null,
+    "terminal_escape": "None",
+    "truncation_skipped": null
+  },
+  {
+    "messages": [
+      {
+        "id": "u1",
+        "kind": "Text",
+        "role": "User",
+        "text": "<acp tokens=\"9\" type=\"text\">m00001</acp>\nrun the build and read the config",
+        "tool_call_id": null,
+        "tool_name": null
+      },
+      {
+        "id": "u2",
+        "kind": "Text",
+        "role": "User",
+        "text": "<acp tokens=\"4\" type=\"text\">m00009</acp>\nnow fold that",
+        "tool_call_id": null,
+        "tool_name": null
+      },
+      {
+        "id": "c3",
+        "kind": "ToolCall",
+        "role": "Assistant",
+        "text": "{\"content\":\"m00001–m00006 build\\nThe build passed; rows.json holds 300 uniform INFO rows.\"}",
+        "tool_call_id": "call3",
+        "tool_name": "compress"
+      },
+      {
+        "id": "r3",
+        "kind": "ToolResult",
+        "role": "Tool",
+        "text": "Compressed 1 range.",
+        "tool_call_id": "call3",
+        "tool_name": "compress"
+      },
+      {
+        "id": "c4",
+        "kind": "ToolCall",
+        "role": "Assistant",
+        "text": "{\"command\":\"cargo test\"}",
+        "tool_call_id": "call4",
+        "tool_name": "bash"
+      },
+      {
+        "id": "r4",
+        "kind": "ToolResult",
+        "role": "Tool",
+        "text": "4110 bytes, sha256 a1b2314b3bdae9f20cb1087d0874ff7e1623b168e44e0a57511cb37678ab82e4",
+        "tool_call_id": "call4",
+        "tool_name": "bash"
+      },
+      {
+        "id": "a2",
+        "kind": "Text",
+        "role": "Assistant",
+        "text": "<acp tokens=\"4\" type=\"text\">m00012</acp>\nthe tests pass",
+        "tool_call_id": null,
+        "tool_name": null
+      },
+      {
+        "id": "u3",
+        "kind": "Text",
+        "role": "User",
+        "text": "<acp tokens=\"3\" type=\"text\">m00013</acp>\nand again",
+        "tool_call_id": null,
+        "tool_name": null
+      }
+    ],
+    "nudge": "NudgeDecision { should_inject: true, reason: \"EMERGENCY T1: max effective pending 6010, usage 97%\", compressible_ranges: [CompressibleRange { start_ref: \"m00009\", end_ref: \"m00011\", count: 3, tokens: 6010, chars: Some(24037), tool_pct: 67, text_pct: 33, user_msgs: 1, start_index: Some(1), end_index: Some(5), no_merge_before: false }], protected_ranges: [], active_block_spans: [BlockSpan { block_id: \"b1\", tier: 1, start_ref: \"m00001\", end_ref: \"m00006\" }], tier_target_blocks: [], context_usage: 0.97, tier: Some(1), breakdown: NudgeBreakdown { usage: 0.97, growth: 17000, growth_reference: 80000, effective_threshold: 25000, nudge_growth_tokens: 50000, growth_floor: 22500.0, has_pending_nudge: true, over_limit: true, emergency_override: true, pressure_deferred_no_sample: false, estimate_hold_streak: 0, min_pressure_benefit: 5000, pending_t1: 6010, pending_t2: 14, pending_t3: 0, max_pending: 6010 }, context_breakdown: Some(ContextBreakdown { system: 0, tool: 6034, summaries: 0, code: 0, text: 20, total: 97000, growth: 17000 }) }",
+    "state": {
+      "blocks": [
+        {
+          "active": true,
+          "block_id": "b1",
+          "compress_call_id": "call3",
+          "compressed_tokens": 9969,
+          "created_at": 0,
+          "direct_block_ids": [],
+          "direct_message_ids": [
+            "u1",
+            "c1",
+            "r1",
+            "c2",
+            "r2",
+            "a1"
+          ],
+          "effective_message_ids": [
+            "u1",
+            "c1",
+            "r1",
+            "c2",
+            "r2",
+            "a1"
+          ],
+          "end_ref": "m00006",
+          "expanded": false,
+          "generation": "young",
+          "restored_inline": false,
+          "run_id": "r1",
+          "start_ref": "m00001",
+          "summary": "The build passed; rows.json holds 300 uniform INFO rows.",
+          "survived_count": 2,
+          "tier": 1,
+          "topic": null
+        }
+      ],
+      "dead_refs": [],
+      "emergency_truncate_latch": [
+        {
+          "ref": "m00011",
+          "text": "test result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\n\n\n...[truncated for context space] — original ~6000 tokens]...\n\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\n"
+        }
+      ],
+      "hidden_orphan_refs": [
+        "m00007",
+        "m00008"
+      ],
+      "message_refs": {
+        "by_raw": {
+          "a1": "m00006",
+          "a2": "m00012",
+          "c0": "m00007",
+          "c1": "m00002",
+          "c2": "m00004",
+          "c3": "BLOCKED",
+          "c4": "m00010",
+          "r0": "m00008",
+          "r1": "m00003",
+          "r2": "m00005",
+          "r3": "BLOCKED",
+          "r4": "m00011",
+          "u1": "m00001",
+          "u2": "m00009",
+          "u3": "m00013"
+        },
+        "by_ref": {
+          "m00001": "u1",
+          "m00002": "c1",
+          "m00003": "r1",
+          "m00004": "c2",
+          "m00005": "r2",
+          "m00006": "a1",
+          "m00007": "c0",
+          "m00008": "r0",
+          "m00009": "u2",
+          "m00010": "c4",
+          "m00011": "r4",
+          "m00012": "a2",
+          "m00013": "u3"
+        }
+      },
+      "next_block_id": 2,
+      "next_run_id": 2,
+      "nudge": {
+        "absorb_count": 0,
+        "absorbed_debt": 0,
+        "estimate_hold_streak": 0,
+        "last_nudge_shown_tokens": 97000,
+        "last_per_message_nudge_tokens": 80000,
+        "last_shown_by_tier": {
+          "1": 97000
+        },
+        "last_t1_fire_pending": 6010,
+        "t1_harvest_stall": false
+      },
+      "pending_orphan_sweep_min_ref": null,
+      "render_deferred_refs": [],
+      "stats": {
+        "compression_count": 1,
+        "tokens_compressed": 9969
+      },
+      "swept_orphan_call_ids": [
+        "call0"
+      ],
+      "terminal_streak": 0,
+      "token_snapshot": {
+        "m00001": 9,
+        "m00003": 4200,
+        "m00005": 4698,
+        "m00006": 1050,
+        "m00008": 9,
+        "m00009": 4,
+        "m00011": 6000,
+        "m00012": 4,
+        "m00013": 3
+      },
+      "view_latch_config_digest": null,
+      "view_latches": {}
+    },
+    "status_line": null,
+    "terminal_escape": "None",
+    "truncation_skipped": null
+  },
+  {
+    "messages": [
+      {
+        "id": "u1",
+        "kind": "Text",
+        "role": "User",
+        "text": "<acp tokens=\"9\" type=\"text\">m00001</acp>\nrun the build and read the config",
+        "tool_call_id": null,
+        "tool_name": null
+      },
+      {
+        "id": "u2",
+        "kind": "Text",
+        "role": "User",
+        "text": "<acp tokens=\"4\" type=\"text\">m00009</acp>\nnow fold that",
+        "tool_call_id": null,
+        "tool_name": null
+      },
+      {
+        "id": "c3",
+        "kind": "ToolCall",
+        "role": "Assistant",
+        "text": "{\"content\":\"m00001–m00006 build\\nThe build passed; rows.json holds 300 uniform INFO rows.\"}",
+        "tool_call_id": "call3",
+        "tool_name": "compress"
+      },
+      {
+        "id": "r3",
+        "kind": "ToolResult",
+        "role": "Tool",
+        "text": "Compressed 1 range.",
+        "tool_call_id": "call3",
+        "tool_name": "compress"
+      },
+      {
+        "id": "c4",
+        "kind": "ToolCall",
+        "role": "Assistant",
+        "text": "{\"command\":\"cargo test\"}",
+        "tool_call_id": "call4",
+        "tool_name": "bash"
+      },
+      {
+        "id": "r4",
+        "kind": "ToolResult",
+        "role": "Tool",
+        "text": "4110 bytes, sha256 a1b2314b3bdae9f20cb1087d0874ff7e1623b168e44e0a57511cb37678ab82e4",
+        "tool_call_id": "call4",
+        "tool_name": "bash"
+      },
+      {
+        "id": "a2",
+        "kind": "Text",
+        "role": "Assistant",
+        "text": "<acp tokens=\"4\" type=\"text\">m00012</acp>\nthe tests pass",
+        "tool_call_id": null,
+        "tool_name": null
+      },
+      {
+        "id": "u3",
+        "kind": "Text",
+        "role": "User",
+        "text": "<acp tokens=\"3\" type=\"text\">m00013</acp>\nand again",
+        "tool_call_id": null,
+        "tool_name": null
+      }
+    ],
+    "nudge": "NudgeDecision { should_inject: true, reason: \"EMERGENCY T1: max effective pending 6010, usage 98%\", compressible_ranges: [CompressibleRange { start_ref: \"m00009\", end_ref: \"m00011\", count: 3, tokens: 6010, chars: Some(24037), tool_pct: 67, text_pct: 33, user_msgs: 1, start_index: Some(1), end_index: Some(5), no_merge_before: false }], protected_ranges: [], active_block_spans: [BlockSpan { block_id: \"b1\", tier: 1, start_ref: \"m00001\", end_ref: \"m00006\" }], tier_target_blocks: [], context_usage: 0.975, tier: Some(1), breakdown: NudgeBreakdown { usage: 0.975, growth: 500, growth_reference: 97000, effective_threshold: 25000, nudge_growth_tokens: 50000, growth_floor: 22500.0, has_pending_nudge: true, over_limit: true, emergency_override: true, pressure_deferred_no_sample: false, estimate_hold_streak: 0, min_pressure_benefit: 5000, pending_t1: 6010, pending_t2: 14, pending_t3: 0, max_pending: 6010 }, context_breakdown: Some(ContextBreakdown { system: 0, tool: 6034, summaries: 0, code: 0, text: 20, total: 97500, growth: 500 }) }",
+    "state": {
+      "blocks": [
+        {
+          "active": true,
+          "block_id": "b1",
+          "compress_call_id": "call3",
+          "compressed_tokens": 9969,
+          "created_at": 0,
+          "direct_block_ids": [],
+          "direct_message_ids": [
+            "u1",
+            "c1",
+            "r1",
+            "c2",
+            "r2",
+            "a1"
+          ],
+          "effective_message_ids": [
+            "u1",
+            "c1",
+            "r1",
+            "c2",
+            "r2",
+            "a1"
+          ],
+          "end_ref": "m00006",
+          "expanded": false,
+          "generation": "young",
+          "restored_inline": false,
+          "run_id": "r1",
+          "start_ref": "m00001",
+          "summary": "The build passed; rows.json holds 300 uniform INFO rows.",
+          "survived_count": 3,
+          "tier": 1,
+          "topic": null
+        }
+      ],
+      "dead_refs": [],
+      "emergency_truncate_latch": [
+        {
+          "ref": "m00011",
+          "text": "test result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\n\n\n...[truncated for context space] — original ~6000 tokens]...\n\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\ntest result: ok\n"
+        }
+      ],
+      "hidden_orphan_refs": [
+        "m00007",
+        "m00008"
+      ],
+      "message_refs": {
+        "by_raw": {
+          "a1": "m00006",
+          "a2": "m00012",
+          "c0": "m00007",
+          "c1": "m00002",
+          "c2": "m00004",
+          "c3": "BLOCKED",
+          "c4": "m00010",
+          "r0": "m00008",
+          "r1": "m00003",
+          "r2": "m00005",
+          "r3": "BLOCKED",
+          "r4": "m00011",
+          "u1": "m00001",
+          "u2": "m00009",
+          "u3": "m00013"
+        },
+        "by_ref": {
+          "m00001": "u1",
+          "m00002": "c1",
+          "m00003": "r1",
+          "m00004": "c2",
+          "m00005": "r2",
+          "m00006": "a1",
+          "m00007": "c0",
+          "m00008": "r0",
+          "m00009": "u2",
+          "m00010": "c4",
+          "m00011": "r4",
+          "m00012": "a2",
+          "m00013": "u3"
+        }
+      },
+      "next_block_id": 2,
+      "next_run_id": 2,
+      "nudge": {
+        "absorb_count": 0,
+        "absorbed_debt": 0,
+        "estimate_hold_streak": 0,
+        "last_nudge_shown_tokens": 97500,
+        "last_per_message_nudge_tokens": 80000,
+        "last_shown_by_tier": {
+          "1": 97500
+        },
+        "last_t1_fire_pending": 6010,
+        "t1_harvest_stall": false
+      },
+      "pending_orphan_sweep_min_ref": null,
+      "render_deferred_refs": [],
+      "stats": {
+        "compression_count": 1,
+        "tokens_compressed": 9969
+      },
+      "swept_orphan_call_ids": [
+        "call0"
+      ],
+      "terminal_streak": 0,
+      "token_snapshot": {
+        "m00001": 9,
+        "m00003": 4200,
+        "m00005": 4698,
+        "m00006": 1050,
+        "m00008": 9,
+        "m00009": 4,
+        "m00011": 6000,
+        "m00012": 4,
+        "m00013": 3
+      },
+      "view_latch_config_digest": null,
+      "view_latches": {}
+    },
+    "status_line": null,
+    "terminal_escape": "None",
+    "truncation_skipped": "emergency-truncate ran at 98% usage but found no truncatable content (no oversized tool-result or text message outside the last 2 messages)"
+  }
+]

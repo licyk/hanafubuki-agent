@@ -7,10 +7,15 @@
 // ledger sequence or timestamp.
 
 mod config;
+mod opt_in;
 mod state;
 
 pub use config::{
     CompressLimits, Config, NudgeConfig, TierConfig, TierGrowthTokens, TruncateConfig,
+};
+pub use opt_in::{
+    AbsorbConfig, AbsorbRecord, ContentStoreConfig, CrushConfig, CrushStrategyOverride,
+    MessageFiltersConfig, RuleRecord, RulesConfig,
 };
 pub use state::{
     Block, Generation, NudgeState, RefMap, State, Stats, TruncateLatchEntry, ViewLatch,

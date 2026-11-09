@@ -330,7 +330,7 @@ fn process_turn_clips_oversized_assistant_text_over_the_threshold() {
     assert_eq!(out.state.terminal_streak, 0);
 }
 
-// truncate-keep-filter.test.ts (the message-filter cases are P10)
+// truncate-keep-filter.test.ts (its message-filter cases are in `opt_in/filter.rs`)
 
 #[test]
 fn truncation_is_a_no_op_below_the_threshold() {

@@ -2,10 +2,9 @@
 // tests of `kernel/tests` of acp-kernel 0.0.189 at commit `4be21b08e`.
 // Copyright (c) 2026 ranxianglei. MIT License with an additional attribution
 // term (NOTICE).
-// Pins the contract of `issue3939-view-latch.test.ts` on the latch itself:
-// the kernel's cases drive it through the opt-in transforms (filters,
-// absorb, crush, the content store), which are not ported yet, so here the
-// transforms' output is built by hand.
+// Pins the contract of `issue3939-view-latch.test.ts` on the latch itself,
+// with the transforms' output built by hand; the kernel's cases, through
+// the transforms themselves, are in `opt_in/latch.rs`.
 
 use serde_json::json;
 

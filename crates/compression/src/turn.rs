@@ -5,12 +5,15 @@
 // term (NOTICE).
 // Modified for hanafubuki-agent: the steps run as one function in the
 // kernel's order. Ids are the host's stable ones, so there is no live-id
-// reconciliation; the opt-in steps (timestamps, the content store, absorb,
-// crush, filters, carrier relocation) are not ported yet; there is no
-// separate apply view, since the host passes the full history.
+// reconciliation; timestamps and carrier relocation are not ported; there
+// is no separate apply view, since the host passes the full history; the
+// content store and the filters come with the call.
 
 use std::collections::HashSet;
 
+use crate::absorb::{append_absorb_prompts, hide_absorbed_messages};
+use crate::crush::apply_crush_to_messages;
+use crate::filter::{apply_message_filters, MessageFilter};
 use crate::latch::{apply_view_latch, view_latch_config_digest};
 use crate::model::{Config, Message, State};
 use crate::nudge::{decide_nudge, stamp_nudge, NudgeDecision, NudgeInput, TokenCountSource};
@@ -19,6 +22,7 @@ use crate::prune::{hide_consumed_compress_calls, prune, sync_blocks};
 use crate::recommend::recommend;
 use crate::refs::{assign_message_refs, highest_used_index, index_to_ref};
 use crate::render::{render_refs, RenderStrategy};
+use crate::store::{store_large_results, ContentStore};
 use crate::truncate::{emergency_truncate, TerminalEscape};
 
 /// One request's input.
@@ -56,12 +60,38 @@ pub struct TurnOutput {
     pub truncation_skipped: Option<String>,
 }
 
-/// Projects the full history into the view for one request: mints refs,
-/// syncs and prunes the blocks, hides consumed `compress` calls, replays
-/// the view latch, recommends ranges, decides the nudge, truncates as a
-/// last resort and renders the ref tags. Bytes already sent change only at
-/// a fold.
+/// What the opt-in transforms need beyond a [`TurnInput`].
+#[derive(Default)]
+pub struct TurnExtras<'a> {
+    /// The session's content store, as the previous turn returned it.
+    pub content_store: ContentStore,
+    /// The host's message filters, run while `config.message_filters` is
+    /// on.
+    pub filters: &'a [&'a dyn MessageFilter],
+}
+
+/// [`process_turn_with`] with an empty content store and no filters: for a
+/// host whose content store is off.
 pub fn process_turn(input: TurnInput<'_>) -> TurnOutput {
+    process_turn_with(input, TurnExtras::default()).0
+}
+
+/// Projects the full history into the view for one request: mints refs,
+/// syncs and prunes the blocks, runs the opt-in transforms that are on
+/// (the content store, absorbed-pair hiding, crush, the absorb demand, the
+/// filters), hides consumed `compress` calls, replays the view latch,
+/// recommends ranges, decides the nudge, truncates as a last resort and
+/// renders the ref tags. Bytes already sent change only at a fold, an
+/// absorption or a change of the transforms' settings. Returns the content
+/// store to persist with the state.
+pub fn process_turn_with(
+    input: TurnInput<'_>,
+    extras: TurnExtras<'_>,
+) -> (TurnOutput, ContentStore) {
+    let TurnExtras {
+        mut content_store,
+        filters,
+    } = extras;
     let TurnInput {
         messages: original,
         mut state,
@@ -76,9 +106,15 @@ pub fn process_turn(input: TurnInput<'_>) -> TurnOutput {
     state.advance_survival(config.promotion_threshold);
     let view = prune(original, &state);
 
-    // The opt-in transforms (P10: the content store, absorb-hide, crush,
-    // absorb-prompt, filters) run between this snapshot and the latch.
     let pre_transform = view.clone();
+    let view = transform(
+        view,
+        &mut state,
+        config,
+        token_count,
+        &mut content_store,
+        filters,
+    );
     let hidden = hide_consumed_compress_calls(&state, &view);
     hidden.commit(&mut state);
     let view = apply_view_latch(
@@ -103,14 +139,39 @@ pub fn process_turn(input: TurnInput<'_>) -> TurnOutput {
 
     lift_dead_refs(&mut state, original);
     let status_line = status_line(&state, &nudge);
-    TurnOutput {
+    let output = TurnOutput {
         messages,
         state,
         nudge,
         status_line,
         terminal_escape: emergency.terminal_escape,
         truncation_skipped: emergency.truncation_skipped,
+    };
+    (output, content_store)
+}
+
+/// The opt-in transforms, in the kernel's order: the content store first
+/// (a placeholder is never absorbed), crush before the absorb demand (which
+/// decides on the crushed size).
+fn transform(
+    view: Vec<Message>,
+    state: &mut State,
+    config: &Config,
+    token_count: u64,
+    content_store: &mut ContentStore,
+    filters: &[&dyn MessageFilter],
+) -> Vec<Message> {
+    let stored = store_large_results(view, state, content_store, config);
+    state.stats.stored_count += stored.stored_count as u64;
+    let mut view = hide_absorbed_messages(stored.messages, state);
+    if config.crush.enabled && config.absorb.enabled {
+        view = apply_crush_to_messages(view, config, token_count).messages;
     }
+    view = append_absorb_prompts(view, state, config, token_count).messages;
+    if config.message_filters.enabled && !filters.is_empty() {
+        view = apply_message_filters(view, &config.message_filters, filters).messages;
+    }
+    view
 }
 
 /// A dead ref whose message came back into the history is alive again.

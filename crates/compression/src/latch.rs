@@ -2,20 +2,53 @@
 // `kernel/src/view-latch.ts` of acp-kernel 0.0.189 at commit `4be21b08e`.
 // Copyright (c) 2026 ranxianglei. MIT License with an additional attribution
 // term (NOTICE).
-// Modified for hanafubuki-agent: no transform has a configuration yet, so
-// the configuration digest is constant until the opt-in transforms add
-// theirs.
+// Modified for hanafubuki-agent: the configuration digest holds only the
+// transforms that are on, so a session with all of them off keeps the `{}`
+// it had before they existed.
 
 use std::collections::{BTreeMap, HashMap};
+
+use serde_json::{Map, Value};
 
 use crate::model::{Config, Message, State, ViewLatch};
 use crate::refs::BLOCKED_REF;
 
 /// What the latch is released by when it changes: the configuration of the
-/// transforms between the pre-transform snapshot and the latch. The token
-/// count is deliberately not in it; pressure is what the latch gates.
-pub fn view_latch_config_digest(_config: &Config) -> String {
-    "{}".to_owned()
+/// transforms between the pre-transform snapshot and the latch, so turning
+/// one on or off applies at once (a content store turned off must not
+/// leave placeholders whose retrieval is gone). A transform that is off
+/// changes nothing whatever its other settings, so only the ones on are in
+/// it. The token count is deliberately not in it; pressure is what the
+/// latch gates.
+pub fn view_latch_config_digest(config: &Config) -> String {
+    let sections = [
+        (
+            "absorb",
+            config.absorb.enabled,
+            serde_json::to_value(&config.absorb),
+        ),
+        (
+            "crush",
+            config.crush.enabled && config.absorb.enabled,
+            serde_json::to_value(&config.crush),
+        ),
+        (
+            "contentStore",
+            config.content_store.enabled,
+            serde_json::to_value(&config.content_store),
+        ),
+        (
+            "filters",
+            config.message_filters.enabled,
+            serde_json::to_value(&config.message_filters),
+        ),
+    ];
+    let digest: Map<String, Value> = sections
+        .into_iter()
+        .filter(|(_, on, _)| *on)
+        .map(|(name, _, settings)| (name.to_owned(), settings.unwrap_or(Value::Null)))
+        .collect();
+    Value::Object(digest).to_string()
 }
 
 /// The fold-gated view latch. Whatever the transforms made of a message

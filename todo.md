@@ -163,7 +163,8 @@ and pushed, and notes what Hanafubuki must change at its next pin.
       contributing page credit billion-context and acp-kernel.
   - Open (P5): recommend, nudge, the status line and `processTurn` are
     P6; `rebuild`, the decompress primitives and MEDIA REFS came with
-    P9's crate half; absorb, rules, timestamps P10. The kernel's dependency row allows the crate
+    P9's crate half; absorb and rules with P10's crate half; timestamps
+    are still open. The kernel's dependency row allows the crate
     in P7. No ledger `seq`, `base#part` ids or SKILL.md paths (the
     Agent has one item per message part).
   - Hanafubuki, at its next pin: a new published crate,
@@ -178,10 +179,10 @@ and pushed, and notes what Hanafubuki must change at its next pin.
       `acp_cache` report and fold economics), `Config::validate`. 700 tests
       (315 new) with the kernel's `prompt-function-default.txt` byte-exact
       and eight more texts byte-exact against the kernel's own output.
-  - Open (P6): the opt-in steps (content store, absorb, crush, filters,
-    relocation, timestamps) have their place in `process_turn` and come in
-    P10; the view latch's configuration digest is constant until they add
-    theirs. Ported with P9's crate half: `open-objectives`' decompress
+  - Open (P6): timestamps are not in `process_turn` (relocation is not
+    ported, plan §9). The content store, absorb, crush and filters came
+    with P10's crate half, and the view latch's digest holds the settings
+    of those that are on. Ported with P9's crate half: `open-objectives`' decompress
     assertion, the decompress primitives of `decompress-report`, the
     search and preview cases of `truncate-surrogates`. Not ported: host-set `dangerous`
     ranges, checkpoint carriers and media gaps, packs and section
@@ -229,6 +230,53 @@ and pushed, and notes what Hanafubuki must change at its next pin.
     gains public items only.
 - [ ] P10: the opt-in features (absorb, content store, crush, rules,
       filter), off by default.
+  - Crate half done; the kernel half (tools, the content store's files,
+    settings) lands after P7. `absorb` (the `[ACP absorb]` demand, the
+    candidate rules, `apply_absorb`, `parse_absorb_input`, hiding the
+    pair, the system-prompt section), `store` (`ContentStore`: plain data,
+    SHA-256-keyed texts and per-ref entries, persisted by the host apart
+    from the state; arrival-time placeholders, re-projected byte for byte
+    when raw bytes come back; `store_covered_originals` for folds;
+    `apply_retrieve` answers inline or `Export { file_name, .. }`, after
+    which the host writes the file and builds the pointer with the path
+    it chose), `crush` (json-fold, code-trim, log-select; the two-tier gate
+    `evaluate_tool_result`), `rules` (`acp_rule` records with
+    `execute_rule`, the host's one-call API, and the prompt section),
+    `filter` (a `MessageFilter` trait the host passes per call; no
+    built-ins), the three tool schemas verbatim (`acp_rule`'s is
+    billion-context's host's). `process_turn_with(input, TurnExtras {
+    content_store, filters })` returns `(TurnOutput, ContentStore)`;
+    `process_turn` is unchanged. `NudgeState::absorb_aborted_turn_growth`
+    books an interrupted turn (#5415's host side). `Config` gains
+    `absorb`, `crush`, `content_store`, `rules`, `message_filters`;
+    `State` gains `absorbed`, `rules`, `next_rule_id`; `Stats` gains
+    `absorbed_tokens`, `stored_count`, `retrieval_count`. New
+    dependencies `regex` and `sha2`, and serde_json's `float_roundtrip`
+    (unified across the workspace): crush writes numbers as JavaScript
+    does, which needs them parsed exactly. 130 new tests, one a golden
+    recorded before the port that pins that defaults change no turn; crush was
+    checked byte for byte against the kernel's own code over a generated
+    corpus (783 inputs).
+  - Unfaithful: tool names are fixed (`absorb`, `acp_retrieve`), not
+    settings; a target an active block covers is refused as not visible
+    (the host passes the full history); tokens are the crate's estimate
+    throughout; crush keeps an object's keys in document order where
+    JavaScript moves integer-like keys first. Kept from the kernel: its
+    code scanners never leave a string once a quote opens one, and its
+    log selection keeps lines in the order they were chosen. Not ported:
+    the crush and filter registries (and their plugin-contract tests),
+    `restampContentStore` and `ccr-restamp` (no ledger restamp), the
+    legacy `acp_retrieved_` injections, the status report's store counters,
+    absorb's stale-flag age (the host's).
+  - For the kernel half: offer `absorb_tool`/`retrieve_tool`/`rule_tool`
+    only while each feature is on, with `build_absorb_system_prompt`,
+    `RULES_USAGE_PROMPT` and `format_rules_for_prompt` in the
+    instructions; persist `ContentStore` beside the state; call
+    `store_covered_originals` after a fold and `note_retrieval` after a
+    hit.
+  - Hanafubuki, at its next pin: nothing to change; the compression crate
+    gains public items and fields (`Config`, `State` and `Stats` are built
+    with `Config::new` and `Default`).
 - [ ] P11: `/compression`, status line, `context_compressed`, docs,
       attribution; pty smoke.
 

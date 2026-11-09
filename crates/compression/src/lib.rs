@@ -15,10 +15,14 @@
 //! (`m00001`, ...) in history order and names blocks `b1`, `b2`, ...; refs
 //! and block ids are never reused.
 
+mod absorb;
 mod apply;
 mod boundaries;
+mod crush;
 mod decompress;
+mod filter;
 mod ids;
+mod json;
 mod latch;
 mod media;
 mod model;
@@ -34,11 +38,18 @@ mod recommend;
 mod refs;
 mod render;
 mod report;
+mod rules;
 mod search;
+mod store;
 mod text;
 mod truncate;
 mod turn;
 
+pub use absorb::{
+    append_absorb_prompts, apply_absorb, build_absorb_prompt, build_absorb_system_prompt,
+    hide_absorbed_messages, is_absorb_candidate, parse_absorb_input, AbsorbInput, AbsorbOutcome,
+    AbsorbPrompts, ParsedAbsorb, ABSORB_PROMPT_MARKER,
+};
 pub use apply::{
     apply_compression, evaluate_refold, ApplyInput, ApplyOutcome, ApplyResult, RangeSpec,
     RefoldDecision,
@@ -48,11 +59,19 @@ pub use boundaries::{
     resolve_boundaries, BlockSpan, Boundary, BoundaryError, BoundaryErrorKind, BoundaryKind,
     Endpoint, ResolvedRange,
 };
+pub use crush::{
+    apply_crush_to_messages, classify_crush_text, crush_code, crush_json, crush_log, crush_text,
+    evaluate_tool_result, CrushDecision, CrushEvaluation, CrushKind, CrushOutput, CrushResult,
+    CrushStrategy, CRUSH_STRATEGIES,
+};
 pub use decompress::{
     active_ancestor_ids, build_restored_content_preview, collect_block_content, deactivate_blocks,
     expand_block, find_active_ancestor, find_blocks_overlapping_messages,
     mark_block_restored_inline, parse_block_id_arg, CollectedContent, InlineRestore,
     RestoredPreview,
+};
+pub use filter::{
+    apply_message_filters, FilterAction, FilterResult, MessageFilter, MessageFilterContext,
 };
 pub use latch::{apply_view_latch, view_latch_config_digest};
 pub use media::{
@@ -60,9 +79,10 @@ pub use media::{
     looks_ephemeral_signed_url, parse_media_refs_section, MEDIA_REFS_MARKER,
 };
 pub use model::{
-    Block, CompressLimits, Config, Generation, Kind, Message, NudgeConfig, NudgeState, RefMap,
-    Role, State, Stats, TierConfig, TierGrowthTokens, TruncateConfig, TruncateLatchEntry,
-    ViewLatch,
+    AbsorbConfig, AbsorbRecord, Block, CompressLimits, Config, ContentStoreConfig, CrushConfig,
+    CrushStrategyOverride, Generation, Kind, Message, MessageFiltersConfig, NudgeConfig,
+    NudgeState, RefMap, Role, RuleRecord, RulesConfig, State, Stats, TierConfig, TierGrowthTokens,
+    TruncateConfig, TruncateLatchEntry, ViewLatch,
 };
 pub use nudge::{
     decide_nudge, format_ranges, render_nudge_text, ContextBreakdown, NudgeBreakdown,
@@ -76,6 +96,10 @@ pub use project::{
     compute_integrity_withdrawals, compute_turn_groups, project_unit, segment_groups,
     viable_ranges, Fatal, FatalKind, IntegrityWithdrawals, ProjectionContext, SegmentItem,
     UnitProjection, UnitRequest, VIABLE_RANGE_MIN_TOKENS,
+};
+pub use prompts::{
+    absorb_tool, retrieve_tool, rule_tool, ABSORB_TOOL_DESCRIPTION, ABSORB_TOOL_NAME,
+    RETRIEVE_TOOL_DESCRIPTION, RETRIEVE_TOOL_NAME, RULE_TOOL_DESCRIPTION, RULE_TOOL_NAME,
 };
 pub use prompts::{
     acp_tools, build_compress_system_prompt, compress_parameters, Prompts, ToolSchema,
@@ -115,10 +139,22 @@ pub use report::{
     PriceProfile, SampleDecomposition, StatusPanelInput, StatusReportOptions, StatusScope,
     StatusSort, StatusView, FOLD_CLAIM_COLD_ROUNDS, FOLD_CLAIM_WARM_HIT_PCT,
 };
+pub use rules::{
+    add_rule, allocate_rule_id, clear_rules, execute_rule, format_rules_for_prompt,
+    format_rules_list, remove_rule, RuleToolResult, RULES_USAGE_PROMPT,
+};
 pub use search::{
     block_docs, char_bigrams, folded_message_inputs, message_docs, search_blocks, stem_word,
     term_frequencies, tokenize, Algorithm, DocCache, DocCacheInfo, DocFeatures, MessageInput,
     RoleWeights, SearchDoc, SearchDocKind, SearchOptions, SearchResult, DEFAULT_DOC_CACHE_CAP,
 };
+pub use store::{
+    apply_retrieve, build_retrieval_pointer, build_stored_placeholder, classify_kind,
+    extract_command, frame_retrieved_original, hash_content, is_stored_placeholder_text,
+    normalize_head, note_retrieval, parse_stored_placeholder, restore_stored_placeholder_text,
+    store_covered_originals, store_large_results, strip_leading_tag, ContentStore,
+    ContentStoreStats, ParsedStoredPlaceholder, Retrieval, StoreLargeResults, StoreSpec,
+    StoredEntry, StoredPlaceholder, STORED_PLACEHOLDER_MARKER,
+};
 pub use truncate::{truncate_large_tool_outputs, TerminalEscape, TruncateOptions, TruncateResult};
-pub use turn::{process_turn, TurnInput, TurnOutput};
+pub use turn::{process_turn, process_turn_with, TurnExtras, TurnInput, TurnOutput};

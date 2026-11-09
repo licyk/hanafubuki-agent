@@ -4,11 +4,15 @@
 // additional attribution term (NOTICE).
 // Modified for hanafubuki-agent: every field decodes with a default (the
 // kernel's `mergeCompressionState` dropped the fields it did not list), and
-// the ledger, timestamp, absorb, rule and instance-id fields are not kept.
+// the ledger, timestamp and instance-id fields are not kept; the host books
+// an aborted turn's growth through `NudgeState` (from billion-context's
+// `absorbAbortedTurnGrowth` in `src/session.ts`, without its age limit).
 
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
+
+use super::opt_in::{AbsorbRecord, RuleRecord};
 
 /// A session's whole compression state: plain data, persisted by the host
 /// and passed into and out of every call. Refs, block ids and run ids are
@@ -47,6 +51,12 @@ pub struct State {
     pub dead_refs: Vec<String>,
     pub next_block_id: u32,
     pub next_run_id: u32,
+    /// The absorbed tool results, hidden from every later view.
+    pub absorbed: Vec<AbsorbRecord>,
+    pub rules: Vec<RuleRecord>,
+    /// The next rule number; never lowered, so a removed rule's id stays
+    /// retired.
+    pub next_rule_id: u32,
 }
 
 impl Default for State {
@@ -68,6 +78,9 @@ impl Default for State {
             dead_refs: Vec::new(),
             next_block_id: 1,
             next_run_id: 1,
+            absorbed: Vec::new(),
+            rules: Vec::new(),
+            next_rule_id: 1,
         }
     }
 }
@@ -221,11 +234,38 @@ pub struct NudgeState {
     pub estimate_hold_streak: u32,
 }
 
+impl NudgeState {
+    /// Books a turn the user interrupted, once the token count has moved
+    /// past `pre_abort_anchor` (the count the aborted turn was sent with):
+    /// the growth reference moves to `token_count`, the growth it skips is
+    /// banked in `absorbed_debt` (paid from the second abort on), and the
+    /// pending nudge died with its turn. False, and nothing changed, while
+    /// the count has not moved past the anchor; the host keeps waiting.
+    pub fn absorb_aborted_turn_growth(&mut self, pre_abort_anchor: u64, token_count: u64) -> bool {
+        if token_count <= pre_abort_anchor {
+            return false;
+        }
+        let reference = self.last_per_message_nudge_tokens;
+        self.absorb_count += 1;
+        self.absorbed_debt += pre_abort_anchor.saturating_sub(reference);
+        self.last_per_message_nudge_tokens = reference.max(token_count);
+        self.last_nudge_shown_tokens = 0;
+        self.last_shown_by_tier.clear();
+        true
+    }
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Stats {
     pub tokens_compressed: u64,
     pub compression_count: u64,
+    /// Tokens hidden by absorption.
+    pub absorbed_tokens: u64,
+    /// Tool results put in the content store.
+    pub stored_count: u64,
+    /// Successful `acp_retrieve` calls.
+    pub retrieval_count: u64,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
