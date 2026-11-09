@@ -33,34 +33,12 @@ pub(super) fn decode_sse_event(
         // endpoints also emit output_text.done; accepting both would duplicate
         // the assistant item.
         "response.output_text.done" => Ok(None),
-        "response.reasoning_text.delta" => {
-            let item_id = value
-                .pointer("/item_id")
-                .and_then(Value::as_str)
-                .unwrap_or_default();
-            let delta = value
-                .pointer("/delta")
-                .and_then(Value::as_str)
-                .unwrap_or_default();
-            crate::streaming::trace_reasoning(PROTOCOL, "delta", item_id, delta);
-            Ok(None)
-        }
         "response.reasoning_summary_text.delta" => {
-            let item_id = required_string(&value, &["item_id"], "reasoning item id")?;
-            let delta = required_string(&value, &["delta"], "reasoning summary delta")?;
-            // A summary delta without its part index belongs to the first
-            // part; a server that never splits the summary omits it.
-            let summary_index = value
-                .get("summary_index")
-                .and_then(Value::as_u64)
-                .and_then(|index| u32::try_from(index).ok())
-                .unwrap_or(0);
-            crate::streaming::trace_reasoning(PROTOCOL, "summary_delta", &item_id, &delta);
-            Ok(Some(ModelEvent::ReasoningSummaryDelta {
-                item_id,
-                summary_index,
-                delta,
-            }))
+            decode_reasoning_delta(&value, ModelReasoningTextKind::Summary, "summary_index")
+                .map(Some)
+        }
+        "response.reasoning_text.delta" => {
+            decode_reasoning_delta(&value, ModelReasoningTextKind::Raw, "content_index").map(Some)
         }
         "response.output_item.done" => decode_output_item_done(&value).map(Some),
         "response.completed" => Ok(Some(ModelEvent::ResponseCompleted {
@@ -115,17 +93,7 @@ fn decode_output_item_added(value: &Value) -> ModelResult<ModelEvent> {
                 argument_error: None,
             },
         },
-        Some("reasoning") => {
-            let item_id = required_string(value, &["item", "id"], "reasoning item id")?;
-            let summary = reasoning_summary(value);
-            crate::streaming::trace_reasoning(
-                PROTOCOL,
-                "item_started",
-                &item_id,
-                &summary.join("\n"),
-            );
-            ModelOutputItem::Reasoning { item_id, summary }
-        }
+        Some("reasoning") => reasoning_item(value, "item_started")?,
         Some("compaction") => ModelOutputItem::Other {
             item_id: Some(required_string(
                 value,
@@ -199,10 +167,7 @@ fn decode_output_item_done(value: &Value) -> ModelResult<ModelEvent> {
                 },
             }
         }
-        Some("reasoning") => ModelOutputItem::Reasoning {
-            item_id: required_string(value, &["item", "id"], "reasoning item id")?,
-            summary: reasoning_summary(value),
-        },
+        Some("reasoning") => reasoning_item(value, "item_done")?,
         Some("compaction") => {
             let payload = required_string(
                 value,
@@ -358,12 +323,56 @@ pub(super) fn decode_message_phase(phase: Option<&str>) -> Option<ModelMessagePh
     }
 }
 
-fn reasoning_summary(value: &Value) -> Vec<String> {
+/// A reasoning delta. One without its part index belongs to the first
+/// part; a server that never splits the text omits it.
+fn decode_reasoning_delta(
+    value: &Value,
+    kind: ModelReasoningTextKind,
+    index_field: &str,
+) -> ModelResult<ModelEvent> {
+    let item_id = required_string(value, &["item_id"], "reasoning item id")?;
+    let delta = required_string(value, &["delta"], "reasoning delta")?;
+    let index = value
+        .get(index_field)
+        .and_then(Value::as_u64)
+        .and_then(|index| u32::try_from(index).ok())
+        .unwrap_or(0);
+    crate::streaming::trace_reasoning(PROTOCOL, "delta", &item_id, &delta);
+    Ok(ModelEvent::ReasoningDelta {
+        item_id,
+        kind,
+        index,
+        delta,
+    })
+}
+
+/// A reasoning item with its summary parts (`summary[].text`) and its raw
+/// reasoning parts (`content[]` of type `reasoning_text`).
+fn reasoning_item(value: &Value, stage: &'static str) -> ModelResult<ModelOutputItem> {
+    let item_id = required_string(value, &["item", "id"], "reasoning item id")?;
+    let summary = reasoning_parts(value, "/item/summary", None);
+    let content = reasoning_parts(value, "/item/content", Some("reasoning_text"));
+    if !summary.is_empty() || !content.is_empty() {
+        let text = summary.iter().chain(&content).cloned().collect::<Vec<_>>();
+        crate::streaming::trace_reasoning(PROTOCOL, stage, &item_id, &text.join("\n"));
+    }
+    Ok(ModelOutputItem::Reasoning {
+        item_id,
+        summary,
+        content,
+    })
+}
+
+fn reasoning_parts(value: &Value, pointer: &str, part_type: Option<&str>) -> Vec<String> {
     value
-        .pointer("/item/summary")
+        .pointer(pointer)
         .and_then(Value::as_array)
         .into_iter()
         .flatten()
+        .filter(|part| {
+            part_type
+                .is_none_or(|expected| part.get("type").and_then(Value::as_str) == Some(expected))
+        })
         .filter_map(|part| part.get("text").and_then(Value::as_str))
         .map(str::to_owned)
         .collect()

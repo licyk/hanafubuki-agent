@@ -33,10 +33,24 @@ pub enum AgentEventKind {
     ReasoningUpdated {
         reasoning: AgentReasoningSnapshot,
     },
-    /// The model's latest summary of what it is doing, bounded and stripped
-    /// of Markdown markers. Retained for the rest of the turn until replaced.
-    ReasoningHeadlineUpdated {
-        headline: String,
+    /// The model started thinking: a reasoning item of `sampling_step`
+    /// began. Its text follows as `ReasoningDelta`s.
+    ReasoningStarted {
+        reasoning_id: AgentReasoningId,
+        sampling_step: u32,
+    },
+    /// More of the reasoning item's text, as Markdown: the provider's summary
+    /// of its reasoning, or its raw reasoning text. A new summary part
+    /// arrives with the blank line that separates it.
+    ReasoningDelta {
+        reasoning_id: AgentReasoningId,
+        delta: String,
+    },
+    /// The reasoning item ended after `duration_millis`. The step's commit
+    /// then carries it as `ConversationItem::Reasoning`.
+    ReasoningCompleted {
+        reasoning_id: AgentReasoningId,
+        duration_millis: u64,
     },
     ResponseStarted {
         response_id: String,

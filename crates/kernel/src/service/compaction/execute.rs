@@ -174,7 +174,7 @@ impl AgentService {
                         require_response_started(&started_response_id)?;
                         saw_output = true;
                     }
-                    Ok(ModelEvent::ReasoningSummaryDelta { .. }) => {
+                    Ok(ModelEvent::ReasoningDelta { .. }) => {
                         require_response_started(&started_response_id)?;
                     }
                     Ok(ModelEvent::OutputItemCompleted { item }) => {

@@ -274,8 +274,14 @@ async fn existing_sessions_keep_frozen_reasoning_when_global_settings_change() {
     assert_eq!(requests.len(), 2);
     let first_body: Value = serde_json::from_slice(&requests[0].body).unwrap();
     let second_body: Value = serde_json::from_slice(&requests[1].body).unwrap();
-    assert_eq!(first_body["reasoning"], json!({"effort": "high"}));
-    assert_eq!(second_body["reasoning"], json!({"effort": "low"}));
+    assert_eq!(
+        first_body["reasoning"],
+        json!({"effort": "high", "summary": "auto"})
+    );
+    assert_eq!(
+        second_body["reasoning"],
+        json!({"effort": "low", "summary": "auto"})
+    );
     assert!(service
         .shutdown(Instant::now() + Duration::from_secs(1))
         .is_empty());

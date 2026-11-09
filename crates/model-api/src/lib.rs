@@ -35,10 +35,11 @@ pub use model::{
     ModelImageDetail, ModelImageInputCapability, ModelImageInputPolicy, ModelInputCapabilities,
     ModelInputCapabilityPolicy, ModelInputItem, ModelJsonSchemaOutput, ModelMessagePhase,
     ModelOpaqueCompactionPayload, ModelOutputFormat, ModelOutputItem, ModelReasoningConfig,
-    ModelReasoningEffort, ModelRequest, ModelResponseMetadata, ModelStructuredOutputCapability,
-    ModelToolArgumentError, ModelToolCall, ModelToolCallOrigin, ModelToolChoice, ModelToolSpec,
-    ModelUsage, ModelUserContent, RateLimitMetadata, FALLBACK_TOOL_SEARCH_NAME,
-    MAX_MODEL_REASONING_EFFORT_BYTES, MAX_TOOL_ARGUMENT_PREVIEW_BYTES, NATIVE_TOOL_SEARCH_NAME,
+    ModelReasoningEffort, ModelReasoningTextKind, ModelRequest, ModelResponseMetadata,
+    ModelStructuredOutputCapability, ModelToolArgumentError, ModelToolCall, ModelToolCallOrigin,
+    ModelToolChoice, ModelToolSpec, ModelUsage, ModelUserContent, RateLimitMetadata,
+    FALLBACK_TOOL_SEARCH_NAME, MAX_MODEL_REASONING_EFFORT_BYTES, MAX_TOOL_ARGUMENT_PREVIEW_BYTES,
+    NATIVE_TOOL_SEARCH_NAME,
 };
 pub use model_catalog::{ModelCatalogClient, ModelCatalogEntry};
 pub use port::{

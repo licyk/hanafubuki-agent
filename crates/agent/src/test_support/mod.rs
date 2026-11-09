@@ -11,8 +11,8 @@ mod service;
 #[cfg(unix)]
 pub use mcp_server::{annotated_tool, scripted_tool, McpCallHold, ScriptedMcpServers};
 pub use model_server::{
-    assistant_events, namespace_tool_events, tool_events, tool_search_events, CapturedRequest,
-    FakeServer,
+    assistant_events, namespace_tool_events, reasoning_answer_events, reasoning_tool_events,
+    tool_events, tool_search_events, CapturedRequest, FakeServer,
 };
 pub use plugins::{mount, mount_tool_plugin, test_tool_context, MountedPlugin, MountedToolPlugin};
 pub use service::{

@@ -45,11 +45,6 @@ impl ChatWidget {
     fn handle_now(&mut self, update: TurnUpdate) {
         match update {
             TurnUpdate::Started => self.on_task_started(),
-            TurnUpdate::Status(headline) => {
-                if self.retry_status_header.is_none() {
-                    self.bottom_pane.update_status(headline, None);
-                }
-            }
             TurnUpdate::MessageDelta(delta) => self.on_message_delta(delta),
             TurnUpdate::MessageCompleted => self.on_message_completed(),
             TurnUpdate::PlanDelta(delta) => self.on_plan_delta(delta),

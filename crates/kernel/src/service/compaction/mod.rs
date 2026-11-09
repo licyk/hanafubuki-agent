@@ -172,7 +172,7 @@ async fn collect_v2_compaction(
                     ));
                 }
             }
-            ModelEvent::OutputItemAdded { .. } | ModelEvent::ReasoningSummaryDelta { .. } => {
+            ModelEvent::OutputItemAdded { .. } | ModelEvent::ReasoningDelta { .. } => {
                 require_response_started(&response_id)?;
             }
             ModelEvent::AssistantTextDelta { .. } => {

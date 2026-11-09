@@ -105,11 +105,15 @@ fn add_estimated_image_tokens(
     Ok(())
 }
 
-/// The tokens `items` are estimated at, by their retained bytes.
+/// The tokens `items` are estimated at, by their retained bytes. Reasoning
+/// is never model input, so it is no context.
 pub(in crate::service) fn estimate_conversation_items_tokens(
     items: &[ConversationItem],
 ) -> Result<u64, AgentError> {
-    let bytes = items.iter().try_fold(0usize, |total, item| {
+    let mut context = items
+        .iter()
+        .filter(|item| !matches!(item, ConversationItem::Reasoning { .. }));
+    let bytes = context.try_fold(0usize, |total, item| {
         total
             .checked_add(item.retained_bytes())
             .ok_or(AgentError::UsageOverflow {

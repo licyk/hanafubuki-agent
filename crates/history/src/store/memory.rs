@@ -297,6 +297,7 @@ fn memory_evidence_text(item: &ConversationItem) -> Option<EvidenceText> {
             )
         }),
         ConversationItem::CanonicalInitialContext { .. }
+        | ConversationItem::Reasoning { .. }
         | ConversationItem::TurnStart { .. }
         | ConversationItem::WorldStateUpdate { .. }
         | ConversationItem::SkillContext { .. }

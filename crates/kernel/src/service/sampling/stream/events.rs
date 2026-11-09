@@ -72,32 +72,38 @@ impl AgentService {
                 self.output_item_added(identity, response, item, event_sink)
                     .await?;
             }
-            ModelEvent::ReasoningSummaryDelta {
+            ModelEvent::ReasoningDelta {
                 item_id,
-                summary_index,
+                kind,
+                index,
                 delta,
             } => {
                 require_response_started(&response.started_response_id)?;
-                response.streamed_output_bytes =
-                    response.streamed_output_bytes.saturating_add(delta.len());
-                enforce_size(
-                    "model output bytes",
-                    response.streamed_output_bytes,
-                    self.inner.limits.maximum_model_output_bytes,
-                )?;
-                let Some(PendingModelItem::Reasoning {
-                    completed: false,
-                    headline,
-                }) = response.pending_items.get_mut(&item_id)
-                else {
-                    return Err(AgentError::Protocol(
-                        "model streamed a reasoning summary for an unknown or completed reasoning item"
-                            .to_string(),
-                    ));
+                // Thinking is not output for the model output bound; the
+                // reasoning text bound caps each item instead.
+                let limit = self.inner.limits.maximum_reasoning_text_bytes;
+                let reasoning = match response.pending_items.get_mut(&item_id) {
+                    Some(PendingModelItem::Reasoning(reasoning)) if !reasoning.is_completed() => {
+                        reasoning
+                    }
+                    _ => {
+                        return Err(AgentError::Protocol(
+                            "model streamed reasoning text for an unknown or completed reasoning item"
+                                .to_string(),
+                        ));
+                    }
                 };
-                if let Some(headline) = headline.push(summary_index, &delta) {
-                    self.publish_reasoning_headline(identity, headline, event_sink)
-                        .await?;
+                if let Some(delta) = reasoning.push(kind, index, &delta, limit) {
+                    let reasoning_id = reasoning.reasoning_id;
+                    self.emit(
+                        identity,
+                        AgentEventKind::ReasoningDelta {
+                            reasoning_id,
+                            delta,
+                        },
+                        event_sink,
+                    )
+                    .await?;
                 }
             }
             ModelEvent::AssistantTextDelta { item_id, delta } => {
@@ -137,6 +143,8 @@ impl AgentService {
                     bounded_diagnostic(reason.clone())
                 );
                 response.incomplete = Some(reason);
+                self.complete_unfinished_reasoning(identity, response, event_sink)
+                    .await?;
                 return Ok(Some((None, usage)));
             }
         }
@@ -182,16 +190,13 @@ impl AgentService {
             // Tool previews carry no presentation or durable state.
             // The completed item is the only execution authority.
             ModelOutputItem::ToolCall { .. } => return Ok(()),
-            ModelOutputItem::Reasoning {
-                item_id,
-                summary: _,
-            } => (
-                item_id,
-                PendingModelItem::Reasoning {
-                    completed: false,
-                    headline: reasoning_headline::ReasoningHeadlineProjection::default(),
-                },
-            ),
+            ModelOutputItem::Reasoning { item_id, .. } => {
+                let reasoning_id = self.reserve_reasoning_id(identity).await?;
+                (
+                    item_id,
+                    PendingModelItem::Reasoning(PendingReasoning::new(reasoning_id)),
+                )
+            }
             ModelOutputItem::Compaction { .. } => {
                 return Err(AgentError::Protocol(
                     "ordinary sampling returned a compaction output item".to_string(),
@@ -214,10 +219,22 @@ impl AgentService {
             ));
         }
         response.item_order.push(item_id.clone());
-        let is_reasoning = matches!(pending, PendingModelItem::Reasoning { .. });
+        let reasoning_id = match &pending {
+            PendingModelItem::Reasoning(reasoning) => Some(reasoning.reasoning_id),
+            _ => None,
+        };
         response.pending_items.insert(item_id, pending);
-        if is_reasoning {
+        if let Some(reasoning_id) = reasoning_id {
             self.reasoning_item_started(identity, event_sink).await?;
+            self.emit(
+                identity,
+                AgentEventKind::ReasoningStarted {
+                    reasoning_id,
+                    sampling_step,
+                },
+                event_sink,
+            )
+            .await?;
         }
         Ok(())
     }
@@ -389,14 +406,21 @@ impl AgentService {
                     }
                 }
             }
-            ModelOutputItem::Reasoning { item_id, .. } => {
-                match response.pending_items.get_mut(&item_id) {
-                    Some(PendingModelItem::Reasoning {
-                        completed: false, ..
-                    }) => {}
-                    Some(PendingModelItem::Reasoning {
-                        completed: true, ..
-                    }) => {
+            ModelOutputItem::Reasoning {
+                item_id,
+                summary,
+                content,
+            } => {
+                let limit = self.inner.limits.maximum_reasoning_text_bytes;
+                let (reasoning_id, tail, duration_millis) = match response
+                    .pending_items
+                    .get_mut(&item_id)
+                {
+                    Some(PendingModelItem::Reasoning(reasoning)) if !reasoning.is_completed() => {
+                        let (tail, duration_millis) = reasoning.complete(summary, content, limit);
+                        (reasoning.reasoning_id, tail, duration_millis)
+                    }
+                    Some(PendingModelItem::Reasoning(_)) => {
                         return Err(AgentError::Protocol(
                             "model completed a reasoning item more than once".to_string(),
                         ));
@@ -406,16 +430,9 @@ impl AgentService {
                             "model completed an unknown reasoning item".to_string(),
                         ));
                     }
-                }
-                self.reasoning_item_completed(identity, event_sink).await?;
-                // `response` is borrowed exclusively here, so the item matched
-                // above is still there after the await.
-                let Some(PendingModelItem::Reasoning { completed, .. }) =
-                    response.pending_items.get_mut(&item_id)
-                else {
-                    unreachable!("reasoning item was validated before completion")
                 };
-                *completed = true;
+                self.reasoning_completed(identity, reasoning_id, tail, duration_millis, event_sink)
+                    .await?;
             }
             ModelOutputItem::Compaction { .. } => {
                 return Err(AgentError::Protocol(
@@ -490,6 +507,7 @@ fn unannounced_item_start(
             (!response.pending_items.contains_key(item_id)).then(|| ModelOutputItem::Reasoning {
                 item_id: item_id.clone(),
                 summary: Vec::new(),
+                content: Vec::new(),
             })
         }
         ModelOutputItem::Other {

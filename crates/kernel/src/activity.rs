@@ -190,7 +190,9 @@ impl AgentActivityTracker {
             AgentEventKind::TurnStarted
             | AgentEventKind::SessionTitleUpdated { .. }
             | AgentEventKind::ReasoningUpdated { .. }
-            | AgentEventKind::ReasoningHeadlineUpdated { .. }
+            | AgentEventKind::ReasoningStarted { .. }
+            | AgentEventKind::ReasoningDelta { .. }
+            | AgentEventKind::ReasoningCompleted { .. }
             | AgentEventKind::ProposedPlanStarted { .. }
             | AgentEventKind::ProposedPlanDelta { .. }
             | AgentEventKind::ProposedPlanCompleted { .. }

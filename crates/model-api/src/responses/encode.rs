@@ -42,7 +42,7 @@ pub(super) fn encode_responses_request(request: &ModelRequest) -> ModelResult<Ve
         "store": false
     });
     if let Some(reasoning) = &request.reasoning {
-        body["reasoning"] = json!({"effort": reasoning.effort.as_str()});
+        body["reasoning"] = encode_reasoning(reasoning);
     }
     if let Some(output_format) = &request.output_format {
         body["text"] = json!({"format": encode_responses_output_format(output_format)?});
@@ -79,10 +79,16 @@ pub(super) fn encode_responses_compact_request(request: &ModelRequest) -> ModelR
         "parallel_tool_calls": request.parallel_tool_calls,
     });
     if let Some(reasoning) = &request.reasoning {
-        body["reasoning"] = json!({"effort": reasoning.effort.as_str()});
+        body["reasoning"] = encode_reasoning(reasoning);
     }
     serde_json::to_vec(&body)
         .map_err(|_| ModelError::InvalidRequest("compact request could not be encoded".into()))
+}
+
+/// `summary: "auto"` asks for the model's summary of its reasoning, which
+/// OpenAI otherwise does not send.
+fn encode_reasoning(reasoning: &crate::ModelReasoningConfig) -> Value {
+    json!({"effort": reasoning.effort.as_str(), "summary": "auto"})
 }
 
 fn encode_responses_output_format(output_format: &crate::ModelOutputFormat) -> ModelResult<Value> {

@@ -12,9 +12,9 @@ use serde_json::{json, Value};
 
 use crate::model::{
     ModelCompactionCapability, ModelCompactionResult, ModelContextRole, ModelEvent, ModelInputItem,
-    ModelMessagePhase, ModelOpaqueCompactionPayload, ModelOutputItem, ModelRequest,
-    ModelResponseMetadata, ModelToolCall, ModelToolChoice, ModelUsage, ModelUserContent,
-    RateLimitMetadata,
+    ModelMessagePhase, ModelOpaqueCompactionPayload, ModelOutputItem, ModelReasoningTextKind,
+    ModelRequest, ModelResponseMetadata, ModelToolCall, ModelToolChoice, ModelUsage,
+    ModelUserContent, RateLimitMetadata,
 };
 use crate::port::{ModelError, ModelEventStream, ModelFuture, ModelPort, ModelResult, ModelStream};
 use crate::provider::ModelProvider;

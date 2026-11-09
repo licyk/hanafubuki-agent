@@ -25,7 +25,7 @@ pub use hanafubuki_agent_contracts::{
     AgentContinuationHookId, AgentContinuationHookProviderId, AgentEventSequence,
     AgentExecutionProgressStatus, AgentGeneration, AgentImageDetail, AgentMemoryCitationSnapshot,
     AgentMemoryContributionMode, AgentMemoryContributionState, AgentMessageId,
-    AgentModelSessionGeneration, AgentRevision, AgentSessionId, AgentSessionMode,
+    AgentModelSessionGeneration, AgentReasoningId, AgentRevision, AgentSessionId, AgentSessionMode,
     AgentSteeringSequence, AgentToolPresentation, AgentToolProgressUpdate, AgentTurnId,
     AgentTurnOrigin, AgentUserInputRequestId, ContextSectionKind, PreparedAgentImage,
 };

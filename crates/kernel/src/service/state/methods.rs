@@ -39,35 +39,6 @@ impl AgentService {
         Ok(())
     }
 
-    /// Publishes the turn's reasoning headline when it differs from the one
-    /// already shown. Like text deltas, the headline is runtime-only state
-    /// and never persisted.
-    pub(in crate::service) async fn publish_reasoning_headline(
-        &self,
-        identity: TurnIdentity,
-        headline: String,
-        event_sink: &dyn AgentEventSink,
-    ) -> Result<(), AgentError> {
-        let cell = self.session(identity.session_id)?;
-        let event = {
-            let mut guard = cell.lock_after_persistence().await?;
-            let record = &mut *guard;
-            let turn = exact_turn_mut(record, identity)?;
-            if turn.reasoning_headline.as_deref() == Some(headline.as_str()) {
-                return Ok(());
-            }
-            turn.reasoning_headline = Some(headline.clone());
-            record_event(
-                record,
-                identity,
-                AgentEventKind::ReasoningHeadlineUpdated { headline },
-                self.inner.limits,
-            )
-        };
-        event_sink.emit(event);
-        Ok(())
-    }
-
     pub(in crate::service) async fn reasoning_item_started(
         &self,
         identity: TurnIdentity,
@@ -154,6 +125,16 @@ impl AgentService {
             .checked_add(1)
             .expect("agent message id exhausted");
         Ok(message_id)
+    }
+
+    /// Reasoning ids are drawn from the message counter: one sequence for
+    /// every item of the conversation that streams.
+    pub(in crate::service) async fn reserve_reasoning_id(
+        &self,
+        identity: TurnIdentity,
+    ) -> Result<AgentReasoningId, AgentError> {
+        let message_id = self.reserve_message_id(identity).await?;
+        Ok(AgentReasoningId::new(message_id.value()))
     }
 
     pub(in crate::service) fn current_sampling_step(

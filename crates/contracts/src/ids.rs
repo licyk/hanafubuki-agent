@@ -38,6 +38,7 @@ typed_counter!(AgentCompactionGeneration);
 typed_counter!(AgentActivityId);
 typed_counter!(AgentUserInputRequestId);
 typed_counter!(AgentMessageId);
+typed_counter!(AgentReasoningId);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(transparent)]

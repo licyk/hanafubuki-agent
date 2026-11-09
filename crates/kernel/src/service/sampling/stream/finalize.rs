@@ -154,13 +154,16 @@ impl AgentService {
                     tool_calls.push(call.clone());
                     items.push(AgentSamplingItem::ToolCall(call));
                 }
-                PendingModelItem::Reasoning { completed, .. } => {
-                    if !completed && response.incomplete.is_none() {
-                        return Err(AgentError::Protocol(
+                PendingModelItem::Reasoning(reasoning) => {
+                    // A response that stopped early completed its open
+                    // reasoning items when it stopped.
+                    let item = reasoning.into_item(sampling_step).ok_or_else(|| {
+                        AgentError::Protocol(
                             "model response completed with an unfinished reasoning item"
                                 .to_string(),
-                        ));
-                    }
+                        )
+                    })?;
+                    draft.push(item);
                 }
                 PendingModelItem::Ignored {
                     item_type,
@@ -174,7 +177,10 @@ impl AgentService {
                 }
             }
         }
-        if draft.is_empty() {
+        if draft
+            .iter()
+            .all(|item| matches!(item, ConversationItem::Reasoning { .. }))
+        {
             return Err(AgentError::Protocol(
                 "model response committed no conversation item".to_string(),
             ));

@@ -335,9 +335,6 @@ pub struct AgentTurnSnapshot {
     pub phase: AgentTurnPhase,
     pub sampling_step: u32,
     pub reasoning: AgentReasoningSnapshot,
-    /// Latest reasoning summary line of the turn, or `None` before the model
-    /// has narrated anything. Only a live turn has a meaningful value.
-    pub reasoning_headline: Option<String>,
     pub final_answer_message_id: Option<AgentMessageId>,
     pub last_error: Option<String>,
     pub terminal_reason: Option<AgentTurnTerminalReason>,

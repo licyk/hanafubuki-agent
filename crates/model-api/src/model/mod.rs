@@ -16,8 +16,8 @@ pub use input::{
     FALLBACK_TOOL_SEARCH_NAME, NATIVE_TOOL_SEARCH_NAME,
 };
 pub use output::{
-    ModelMessagePhase, ModelOutputItem, ModelToolArgumentError, ModelToolCall, ModelToolCallOrigin,
-    ModelUsage, MAX_TOOL_ARGUMENT_PREVIEW_BYTES,
+    ModelMessagePhase, ModelOutputItem, ModelReasoningTextKind, ModelToolArgumentError,
+    ModelToolCall, ModelToolCallOrigin, ModelUsage, MAX_TOOL_ARGUMENT_PREVIEW_BYTES,
 };
 pub use reasoning::{
     ModelCompactionCapability, ModelOpaqueCompactionPayload, ModelReasoningConfig,

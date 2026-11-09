@@ -56,7 +56,7 @@ async fn responses_compact_uses_exact_endpoint_body_headers_and_typed_replacemen
                 "strict":true
             }],
             "parallel_tool_calls": true,
-            "reasoning": {"effort": "low"}
+            "reasoning": {"effort": "low", "summary": "auto"}
         })
     );
 }

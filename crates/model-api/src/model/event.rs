@@ -1,4 +1,4 @@
-use super::{ModelOutputItem, ModelResponseMetadata, ModelUsage};
+use super::{ModelOutputItem, ModelReasoningTextKind, ModelResponseMetadata, ModelUsage};
 use serde::{Deserialize, Serialize};
 
 /// Incremental events emitted by a model transport.
@@ -16,12 +16,15 @@ pub enum ModelEvent {
         item_id: String,
         delta: String,
     },
-    /// A fragment of the model's own summary of an in-progress reasoning
-    /// item. `summary_index` identifies the summary part; a new part starts
-    /// a new paragraph, so consumers must not join fragments across parts.
-    ReasoningSummaryDelta {
+    /// A fragment of an in-progress reasoning item's text: the model's
+    /// summary of its reasoning or the raw reasoning text, as `kind` says.
+    /// `index` is the part it belongs to (a Responses summary or content
+    /// part, 0 where the protocol has none); a new part starts a new
+    /// paragraph, so consumers must not join fragments across parts.
+    ReasoningDelta {
         item_id: String,
-        summary_index: u32,
+        kind: ModelReasoningTextKind,
+        index: u32,
         delta: String,
     },
     OutputItemCompleted {

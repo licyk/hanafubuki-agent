@@ -85,6 +85,18 @@ pub enum ModelMessagePhase {
     FinalAnswer,
 }
 
+/// Which text of a reasoning item a [`super::ModelEvent::ReasoningDelta`]
+/// carries.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ModelReasoningTextKind {
+    /// The model's own summary of its reasoning.
+    Summary,
+    /// The reasoning text itself, as open-weight models and their servers
+    /// stream it.
+    Raw,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ModelOutputItem {
@@ -96,9 +108,12 @@ pub enum ModelOutputItem {
     ToolCall {
         call: ModelToolCall,
     },
+    /// A reasoning item with its summary parts and its raw reasoning text
+    /// parts (`content`), either of which a provider may leave empty.
     Reasoning {
         item_id: String,
         summary: Vec<String>,
+        content: Vec<String>,
     },
     Compaction {
         item_id: String,

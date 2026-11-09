@@ -1,5 +1,8 @@
 use super::*;
 
+use hanafubuki_agent_kernel::AgentReasoningId;
+use hanafubuki_agent_model_api::ModelReasoningTextKind;
+
 #[tokio::test]
 async fn reasoning_effort_is_shared_across_default_and_plan_modes() {
     let model = RecordingAssistantModel::default();
@@ -81,24 +84,28 @@ async fn reasoning_and_unknown_items_preserve_order_without_becoming_messages_or
             item: ModelOutputItem::Reasoning {
                 item_id: "reason-1".to_string(),
                 summary: Vec::new(),
+                content: Vec::new(),
             },
         }),
         Ok(ModelEvent::OutputItemAdded {
             item: ModelOutputItem::Reasoning {
                 item_id: "reason-2".to_string(),
                 summary: Vec::new(),
+                content: Vec::new(),
             },
         }),
         Ok(ModelEvent::OutputItemCompleted {
             item: ModelOutputItem::Reasoning {
                 item_id: "reason-1".to_string(),
-                summary: vec!["not presented".to_string()],
+                summary: vec!["first summary".to_string()],
+                content: Vec::new(),
             },
         }),
         Ok(ModelEvent::OutputItemCompleted {
             item: ModelOutputItem::Reasoning {
                 item_id: "reason-2".to_string(),
-                summary: vec!["also private".to_string()],
+                summary: vec!["second summary".to_string()],
+                content: Vec::new(),
             },
         }),
         Ok(ModelEvent::OutputItemAdded {
@@ -209,9 +216,14 @@ async fn reasoning_and_unknown_items_preserve_order_without_becoming_messages_or
         "step reset, first item start, and last item completion are the only public updates",
     );
 
-    let presentation_json = serde_json::to_string(&(turn, events)).unwrap();
-    assert!(!presentation_json.contains("not presented"));
-    assert!(!presentation_json.contains("also private"));
+    assert_eq!(
+        reasoning_items(&view.model_context)
+            .into_iter()
+            .map(|item| item.0)
+            .collect::<Vec<_>>(),
+        ["first summary", "second summary"],
+        "overlapping reasoning items each keep their own text, in start order",
+    );
 }
 
 #[tokio::test]
@@ -226,6 +238,7 @@ async fn stream_failure_closes_active_reasoning_before_the_terminal_event() {
             item: ModelOutputItem::Reasoning {
                 item_id: "reason-active".to_string(),
                 summary: vec!["private reasoning".to_string()],
+                content: Vec::new(),
             },
         }),
         Err(ModelError::StreamInterrupted(
@@ -269,11 +282,11 @@ async fn stream_failure_closes_active_reasoning_before_the_terminal_event() {
         .contains("private reasoning"));
 }
 
-/// Prepends a reasoning item, with its streamed summary fragments and final
-/// summary, to a deterministic fixture response.
-fn with_reasoning_summary(
+/// Prepends a reasoning item, with its streamed fragments and the summary of
+/// its completed item, to a deterministic fixture response.
+fn with_reasoning(
     item_id: &str,
-    fragments: &[(u32, &str)],
+    fragments: &[(ModelReasoningTextKind, u32, &str)],
     summary: &[&str],
     mut events: Vec<ModelResult<ModelEvent>>,
 ) -> Vec<ModelResult<ModelEvent>> {
@@ -281,12 +294,14 @@ fn with_reasoning_summary(
         item: ModelOutputItem::Reasoning {
             item_id: item_id.to_string(),
             summary: Vec::new(),
+            content: Vec::new(),
         },
     })];
-    for (summary_index, delta) in fragments {
-        reasoning.push(Ok(ModelEvent::ReasoningSummaryDelta {
+    for (kind, index, delta) in fragments {
+        reasoning.push(Ok(ModelEvent::ReasoningDelta {
             item_id: item_id.to_string(),
-            summary_index: *summary_index,
+            kind: *kind,
+            index: *index,
             delta: (*delta).to_string(),
         }));
     }
@@ -294,6 +309,7 @@ fn with_reasoning_summary(
         item: ModelOutputItem::Reasoning {
             item_id: item_id.to_string(),
             summary: summary.iter().map(|part| (*part).to_string()).collect(),
+            content: Vec::new(),
         },
     }));
     assert!(matches!(events[0], Ok(ModelEvent::ResponseStarted { .. })));
@@ -301,38 +317,70 @@ fn with_reasoning_summary(
     events
 }
 
-fn headlines(events: &[AgentEvent]) -> Vec<&str> {
-    events
+/// The reasoning events of a session, as `(id, started step, text, duration)`
+/// per reasoning item in the order they started.
+fn reasoning_blocks(events: &[AgentEvent]) -> Vec<(AgentReasoningId, u32, String, Option<u64>)> {
+    let mut blocks = Vec::<(AgentReasoningId, u32, String, Option<u64>)>::new();
+    for event in events {
+        match &event.kind {
+            AgentEventKind::ReasoningStarted {
+                reasoning_id,
+                sampling_step,
+            } => blocks.push((*reasoning_id, *sampling_step, String::new(), None)),
+            AgentEventKind::ReasoningDelta {
+                reasoning_id,
+                delta,
+            } => {
+                let block = blocks.iter_mut().find(|block| block.0 == *reasoning_id);
+                let block = block.expect("a delta follows its start");
+                assert!(block.3.is_none(), "no delta after completion");
+                block.2.push_str(delta);
+            }
+            AgentEventKind::ReasoningCompleted {
+                reasoning_id,
+                duration_millis,
+            } => {
+                let block = blocks.iter_mut().find(|block| block.0 == *reasoning_id);
+                block.expect("a completion follows its start").3 = Some(*duration_millis);
+            }
+            _ => {}
+        }
+    }
+    blocks
+}
+
+fn reasoning_items(items: &[ConversationItem]) -> Vec<(String, u64, u32, bool)> {
+    items
         .iter()
-        .filter_map(|event| match &event.kind {
-            AgentEventKind::ReasoningHeadlineUpdated { headline } => Some(headline.as_str()),
+        .filter_map(|item| match item {
+            ConversationItem::Reasoning {
+                text,
+                duration_millis,
+                sampling_step,
+                truncated,
+            } => Some((text.clone(), *duration_millis, *sampling_step, *truncated)),
             _ => None,
         })
         .collect()
 }
 
 #[tokio::test]
-async fn streamed_reasoning_summaries_publish_a_bounded_headline_that_outlives_tool_steps() {
+async fn streamed_reasoning_reaches_events_and_history_but_never_model_input() {
     let tool_output =
         hanafubuki_agent_tool_contracts::ToolOutput::structured(json!({ "instances": [] }), false);
     let model = ScriptedEventModel::new([
-        with_reasoning_summary(
+        with_reasoning(
             "reason-1",
             &[
-                (0, "**Mapping"),
-                (0, " the app**\n\nLooking at routes."),
-                (1, "<!-- private note -->"),
-                (1, "\n## Checking"),
-                (1, " tests"),
+                (ModelReasoningTextKind::Summary, 0, "**Mapping"),
+                (ModelReasoningTextKind::Summary, 0, " the app**"),
+                (ModelReasoningTextKind::Summary, 1, "Checking"),
+                (ModelReasoningTextKind::Summary, 1, " tests"),
             ],
-            &[
-                "**Mapping the app**\n\nLooking at routes.",
-                "<!-- private note -->\n## Checking tests",
-            ],
+            &["**Mapping the app**", "Checking tests"],
             deterministic_tool_call_events(),
         ),
-        with_reasoning_summary("reason-2", &[], &[], deterministic_assistant_events("done")),
-        deterministic_assistant_events("second turn"),
+        with_reasoning("reason-2", &[], &[], deterministic_assistant_events("done")),
     ]);
     let tools = FakeTools::new([FakeRegisteredExchange::success(
         "list_instances",
@@ -340,57 +388,266 @@ async fn streamed_reasoning_summaries_publish_a_bounded_headline_that_outlives_t
         tool_output,
     )])
     .await;
-    let service = AgentService::new(Arc::new(model), tools.registries());
+    let service = AgentService::new(Arc::new(model.clone()), tools.registries());
     let session = service.create_session(config()).unwrap();
 
     let outcome = service.start_turn(session.id, "finish").await.unwrap();
     assert_eq!(outcome.final_answer, "done");
 
     let events = service.events_since(session.id, None).unwrap().events;
+    let blocks = reasoning_blocks(&events);
+    assert_eq!(blocks.len(), 2);
+    assert_ne!(blocks[0].0, blocks[1].0);
     assert_eq!(
-        headlines(&events),
-        ["Looking at routes.", "Checking", "Checking tests"],
-        "each published headline is the latest presentable summary line, streaming as it grows",
+        (blocks[0].1, blocks[0].2.as_str()),
+        (1, "**Mapping the app**\n\nChecking tests"),
+        "summary parts are joined by a blank line",
     );
-    let turn = service.snapshot(session.id).unwrap().turn.unwrap();
-    assert_eq!(turn.sampling_step, 2);
-    assert_eq!(turn.reasoning_headline.as_deref(), Some("Checking tests"));
-    let last_headline = events
+    assert_eq!((blocks[1].1, blocks[1].2.as_str()), (2, ""));
+    let first_completed = events
         .iter()
-        .rposition(|event| matches!(event.kind, AgentEventKind::ReasoningHeadlineUpdated { .. }))
+        .position(|event| matches!(event.kind, AgentEventKind::ReasoningCompleted { .. }))
         .unwrap();
-    let second_step = events
+    let first_commit = events
         .iter()
-        .position(|event| matches!(event.kind, AgentEventKind::SamplingStarted { step: 2 }))
+        .enumerate()
+        .skip(first_completed)
+        .find(|(_, event)| matches!(event.kind, AgentEventKind::HistoryCommitted { .. }))
+        .map(|(index, _)| index)
         .unwrap();
-    assert!(
-        last_headline < second_step,
-        "the second step's empty reasoning item publishes nothing and keeps the headline",
-    );
-    let presentation_json = serde_json::to_string(&(&turn, &events)).unwrap();
-    assert!(!presentation_json.contains("private note"));
-    assert!(!presentation_json.contains("**Mapping"));
+    let tool_started = events
+        .iter()
+        .position(|event| matches!(event.kind, AgentEventKind::ToolStarted { .. }))
+        .unwrap();
+    assert!(first_completed < first_commit && first_commit < tool_started);
 
-    service.start_turn(session.id, "again").await.unwrap();
-    let turn = service.snapshot(session.id).unwrap().turn.unwrap();
-    assert_eq!(turn.reasoning_headline, None);
+    let history = test_session_view(&service, session.id)
+        .unwrap()
+        .model_context;
     assert_eq!(
-        headlines(&service.events_since(session.id, None).unwrap().events).len(),
-        3,
-        "a turn without reasoning summaries publishes no headline",
+        reasoning_items(&history),
+        vec![
+            (
+                "**Mapping the app**\n\nChecking tests".to_string(),
+                blocks[0].3.unwrap(),
+                1,
+                false
+            ),
+            (String::new(), blocks[1].3.unwrap(), 2, false),
+        ],
+        "each item keeps the shown text and the duration its completion carried",
+    );
+    let reasoning = history
+        .iter()
+        .position(|item| matches!(item, ConversationItem::Reasoning { .. }))
+        .unwrap();
+    assert!(matches!(
+        history[reasoning + 1],
+        ConversationItem::ToolCall { .. }
+    ));
+    let answer = history
+        .iter()
+        .position(|item| matches!(item, ConversationItem::AssistantMessage { .. }))
+        .unwrap();
+    assert!(matches!(
+        history[answer - 1],
+        ConversationItem::Reasoning {
+            sampling_step: 2,
+            ..
+        }
+    ));
+
+    let requests = model.requests();
+    assert_eq!(requests.len(), 2);
+    let second_input = serde_json::to_string(&requests[1].input).unwrap();
+    assert!(second_input.contains(FIXTURE_CALL_ID));
+    assert!(
+        !second_input.contains("Mapping the app"),
+        "thinking is never sent back to the model"
     );
 }
 
 #[tokio::test]
-async fn a_summary_delta_for_an_unknown_reasoning_item_is_a_protocol_error() {
+async fn a_summary_that_arrives_whole_is_shown_at_completion_and_the_summary_outranks_raw_text() {
+    let model = ScriptedEventModel::new([with_reasoning(
+        "reason-1",
+        &[(ModelReasoningTextKind::Raw, 0, "raw thinking")],
+        &["The summary."],
+        with_reasoning("reason-0", &[], &["Whole summary."], {
+            deterministic_assistant_events("done")
+        }),
+    )]);
+    let service = AgentService::new(Arc::new(model), FakeTools::new([]).await.registries());
+    let session = service.create_session(config()).unwrap();
+
+    service.start_turn(session.id, "finish").await.unwrap();
+
+    let events = service.events_since(session.id, None).unwrap().events;
+    let shown = reasoning_blocks(&events)
+        .into_iter()
+        .map(|block| block.2)
+        .collect::<Vec<_>>();
+    assert_eq!(shown, ["raw thinking", "Whole summary."]);
+    let history = test_session_view(&service, session.id)
+        .unwrap()
+        .model_context;
+    let kept = reasoning_items(&history)
+        .into_iter()
+        .map(|item| item.0)
+        .collect::<Vec<_>>();
+    assert_eq!(
+        kept,
+        ["The summary.", "Whole summary."],
+        "an item that has a summary keeps it, even after streaming raw text",
+    );
+}
+
+#[tokio::test]
+async fn long_thinking_is_cut_at_the_reasoning_bound_and_spends_no_output_budget() {
+    let limits = AgentHardLimits {
+        maximum_model_output_bytes: 64,
+        maximum_reasoning_text_bytes: 10,
+        ..FIRST_BATCH_HARD_LIMITS
+    };
+    let fragments = (0..40)
+        .map(|_| (ModelReasoningTextKind::Raw, 0, "思考"))
+        .collect::<Vec<_>>();
+    let model = ScriptedEventModel::new([with_reasoning(
+        "reason-1",
+        &fragments,
+        &[],
+        with_reasoning(
+            "reason-2",
+            &[],
+            &["a summary that arrives whole"],
+            deterministic_assistant_events("done"),
+        ),
+    )]);
+    let service = AgentService::with_limits(
+        Arc::new(model),
+        FakeTools::new([]).await.registries(),
+        limits,
+    );
+    let session = service.create_session(config()).unwrap();
+
+    let outcome = service.start_turn(session.id, "finish").await.unwrap();
+
+    assert_eq!(
+        outcome.final_answer, "done",
+        "240 bytes of thinking do not fail a turn whose output bound is 64"
+    );
+    let events = service.events_since(session.id, None).unwrap().events;
+    let blocks = reasoning_blocks(&events);
+    assert_eq!(blocks[0].2, "思考思", "cut on a character boundary");
+    assert!(blocks[0].3.is_some());
+    assert_eq!(blocks[1].2, "a summary ");
+    let history = test_session_view(&service, session.id)
+        .unwrap()
+        .model_context;
+    assert_eq!(
+        reasoning_items(&history)
+            .into_iter()
+            .map(|item| (item.0, item.3))
+            .collect::<Vec<_>>(),
+        [
+            ("思考思".to_string(), true),
+            ("a summary ".to_string(), true)
+        ]
+    );
+}
+
+#[tokio::test]
+async fn an_incomplete_response_completes_its_open_reasoning_and_keeps_what_streamed() {
+    let model = ScriptedEventModel::new([vec![
+        Ok(ModelEvent::ResponseStarted {
+            response_id: "partial".to_string(),
+            metadata: ModelResponseMetadata::default(),
+        }),
+        Ok(ModelEvent::OutputItemAdded {
+            item: ModelOutputItem::Reasoning {
+                item_id: "thinking".to_string(),
+                summary: Vec::new(),
+                content: Vec::new(),
+            },
+        }),
+        Ok(ModelEvent::ReasoningDelta {
+            item_id: "thinking".to_string(),
+            kind: ModelReasoningTextKind::Raw,
+            index: 0,
+            delta: "Half a thought".to_string(),
+        }),
+        Ok(ModelEvent::OutputItemAdded {
+            item: ModelOutputItem::AssistantMessage {
+                item_id: "answer".to_string(),
+                phase: None,
+                text: String::new(),
+            },
+        }),
+        Ok(ModelEvent::AssistantTextDelta {
+            item_id: "answer".to_string(),
+            delta: "The partial ans".to_string(),
+        }),
+        Ok(ModelEvent::ResponseIncomplete {
+            response_id: "partial".to_string(),
+            usage: None,
+            reason: "max_output_tokens".to_string(),
+        }),
+    ]]);
+    let service = AgentService::new(Arc::new(model), FakeTools::new([]).await.registries());
+    let session = service.create_session(config()).unwrap();
+
+    let outcome = service.start_turn(session.id, "Explain").await.unwrap();
+
+    assert_eq!(outcome.final_answer, "The partial ans");
+    let events = service.events_since(session.id, None).unwrap().events;
+    let blocks = reasoning_blocks(&events);
+    assert_eq!(blocks[0].2, "Half a thought");
+    assert!(blocks[0].3.is_some(), "the open item is completed");
+    let history = test_session_view(&service, session.id)
+        .unwrap()
+        .model_context;
+    assert_eq!(reasoning_items(&history)[0].0, "Half a thought");
+}
+
+#[tokio::test]
+async fn a_response_of_only_reasoning_still_commits_nothing() {
+    let mut events = with_reasoning(
+        "reason-1",
+        &[(ModelReasoningTextKind::Raw, 0, "thinking")],
+        &[],
+        vec![Ok(ModelEvent::ResponseStarted {
+            response_id: "thinking-only".to_string(),
+            metadata: ModelResponseMetadata::default(),
+        })],
+    );
+    events.push(Ok(ModelEvent::ResponseCompleted {
+        response_id: "thinking-only".to_string(),
+        usage: None,
+        end_turn: Some(true),
+    }));
+    let model = ScriptedEventModel::new([events]);
+    let service = AgentService::new(Arc::new(model), FakeTools::new([]).await.registries());
+    let session = service.create_session(config()).unwrap();
+
+    let result = service.start_turn(session.id, "finish").await;
+
+    assert!(
+        matches!(&result, Err(AgentError::Protocol(message)) if message.contains("no conversation item")),
+        "{result:?}"
+    );
+}
+
+#[tokio::test]
+async fn a_reasoning_delta_for_an_unknown_reasoning_item_is_a_protocol_error() {
     let model = ScriptedEventModel::new([vec![
         Ok(ModelEvent::ResponseStarted {
             response_id: "response-orphan".to_string(),
             metadata: ModelResponseMetadata::default(),
         }),
-        Ok(ModelEvent::ReasoningSummaryDelta {
+        Ok(ModelEvent::ReasoningDelta {
             item_id: "reason-missing".to_string(),
-            summary_index: 0,
+            kind: ModelReasoningTextKind::Summary,
+            index: 0,
             delta: "orphan".to_string(),
         }),
     ]]);
@@ -405,5 +662,5 @@ async fn a_summary_delta_for_an_unknown_reasoning_item_is_a_protocol_error() {
             if message.contains("unknown or completed reasoning item")
     ));
     let events = service.events_since(session.id, None).unwrap().events;
-    assert!(headlines(&events).is_empty());
+    assert!(reasoning_blocks(&events).is_empty());
 }

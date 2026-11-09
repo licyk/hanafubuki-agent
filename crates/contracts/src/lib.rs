@@ -57,7 +57,8 @@ pub use host::BlockingService;
 pub use ids::{
     AgentActivityId, AgentCompactionGeneration, AgentCompactionId, AgentContextWindowId,
     AgentEventSequence, AgentGeneration, AgentMessageId, AgentModelSessionGeneration,
-    AgentRevision, AgentSessionId, AgentSteeringSequence, AgentTurnId, AgentUserInputRequestId,
+    AgentReasoningId, AgentRevision, AgentSessionId, AgentSteeringSequence, AgentTurnId,
+    AgentUserInputRequestId,
 };
 pub use image::{AgentImageDetail, PreparedAgentImage};
 pub use memory::{

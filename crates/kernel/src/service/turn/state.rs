@@ -213,7 +213,6 @@ impl AgentService {
             phase: AgentTurnPhase::Sampling,
             sampling_step: 0,
             reasoning: AgentReasoningCheckpoint::default(),
-            reasoning_headline: None,
             final_answer_message_id: None,
             last_error: None,
             terminal_reason: None,

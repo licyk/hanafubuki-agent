@@ -157,6 +157,7 @@ pub fn build_permission_review_evidence(
                 render_tool_output_evidence(output),
             ),
             ConversationItem::CanonicalInitialContext { .. }
+            | ConversationItem::Reasoning { .. }
             | ConversationItem::TurnStart { .. }
             | ConversationItem::WorldStateUpdate { .. }
             | ConversationItem::SkillContext { .. }

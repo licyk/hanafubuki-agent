@@ -41,7 +41,7 @@ impl AgentService {
     ///
     /// Nothing is running yet: cancellation tokens and the turn's model
     /// session are new, the event journal is empty, and runtime-only turn
-    /// state (reasoning headline, review denials, Skill catalog) starts over.
+    /// state (review denials, Skill catalog) starts over.
     pub(super) fn persisted_record(
         &self,
         runtime: PersistedAgentRuntimeState,
@@ -67,7 +67,6 @@ impl AgentService {
             phase: turn.phase,
             sampling_step: turn.sampling_step,
             reasoning: turn.reasoning,
-            reasoning_headline: None,
             final_answer_message_id: turn.final_answer_message_id,
             last_error: turn.last_error,
             terminal_reason: turn.terminal_reason,

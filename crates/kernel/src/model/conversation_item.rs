@@ -138,6 +138,17 @@ pub enum ConversationItem {
         #[serde(default)]
         memory_citations: Vec<crate::AgentMemoryCitationSnapshot>,
     },
+    /// The text one reasoning item of the model showed while it thought, at
+    /// most the reasoning text bound (`truncated` when it was cut). It is
+    /// presentation only: never model input, never context.
+    Reasoning {
+        text: String,
+        #[serde(default)]
+        duration_millis: u64,
+        sampling_step: u32,
+        #[serde(default)]
+        truncated: bool,
+    },
     SteeringMessage {
         sequence: AgentSteeringSequence,
         text: String,
@@ -214,6 +225,7 @@ impl ConversationItem {
             Self::AssistantMessage {
                 text, model_text, ..
             } => model_text.as_ref().unwrap_or(text).len(),
+            Self::Reasoning { text, .. } => text.len(),
             Self::UserMessage { text, images } | Self::SteeringMessage { text, images, .. } => {
                 text.len().saturating_add(
                     serde_json::to_vec(images).map_or(usize::MAX, |encoded| encoded.len()),
@@ -367,7 +379,9 @@ impl ConversationItem {
                     }
                 }
             },
-            Self::ToolSelection { .. } | Self::PermissionReview { .. } => return None,
+            Self::Reasoning { .. } | Self::ToolSelection { .. } | Self::PermissionReview { .. } => {
+                return None
+            }
             Self::ContinuationContext {
                 provider_id,
                 hook_id,

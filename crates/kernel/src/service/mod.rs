@@ -41,20 +41,21 @@ use crate::model::{
     AgentContextWindowSnapshot, AgentError, AgentEvent, AgentEventKind, AgentEventSequence,
     AgentEventSink, AgentGeneration, AgentMemoryContributionState, AgentMessageId,
     AgentMessagePhase, AgentModelRetryStage, AgentModelSessionGeneration, AgentModelUsage,
-    AgentPlanBlock, AgentReasoningCheckpoint, AgentReasoningTransitionError, AgentRevision,
-    AgentSamplingRetryPolicy, AgentSessionConfig, AgentSessionForkOutcome, AgentSessionForkRequest,
-    AgentSessionHeadForkOutcome, AgentSessionHeadForkRequest, AgentSessionId,
-    AgentSessionLifecycle, AgentSessionModelConfigurationUpdate, AgentSessionRuntimeSnapshot,
-    AgentSessionSummary, AgentSessionTitle, AgentSessionTitleRenameRequest,
-    AgentSessionTitleSource, AgentShutdownDiagnostic, AgentSteeringAccepted, AgentSteeringInput,
-    AgentSteeringSequence, AgentTaskPlanSnapshot, AgentTurnAccepted, AgentTurnCancellationOutcome,
-    AgentTurnId, AgentTurnOutcome, AgentTurnPhase, AgentTurnTerminalReason, AgentUsageSource,
-    AgentUserInputAccepted, AgentUserInputAnswer, AgentUserInputRequest, AgentUserInputRequestId,
-    AgentUserInputResolution, AgentWorldStateSection, AgentWorldStateSnapshot,
-    AgentWorldStateUpdate, ConfirmedAgentSessionDeletion, ContextSectionKind, ConversationItem,
-    PermissionAssessment, PermissionAssessmentOutcome, PermissionReviewStatus,
-    PreparedAgentSessionDeletion, MAXIMUM_AGENT_WORLD_STATE_SECTIONS,
-    MAXIMUM_AGENT_WORLD_STATE_SECTION_BYTES, MAXIMUM_AGENT_WORLD_STATE_TOTAL_BYTES,
+    AgentPlanBlock, AgentReasoningCheckpoint, AgentReasoningId, AgentReasoningTransitionError,
+    AgentRevision, AgentSamplingRetryPolicy, AgentSessionConfig, AgentSessionForkOutcome,
+    AgentSessionForkRequest, AgentSessionHeadForkOutcome, AgentSessionHeadForkRequest,
+    AgentSessionId, AgentSessionLifecycle, AgentSessionModelConfigurationUpdate,
+    AgentSessionRuntimeSnapshot, AgentSessionSummary, AgentSessionTitle,
+    AgentSessionTitleRenameRequest, AgentSessionTitleSource, AgentShutdownDiagnostic,
+    AgentSteeringAccepted, AgentSteeringInput, AgentSteeringSequence, AgentTaskPlanSnapshot,
+    AgentTurnAccepted, AgentTurnCancellationOutcome, AgentTurnId, AgentTurnOutcome, AgentTurnPhase,
+    AgentTurnTerminalReason, AgentUsageSource, AgentUserInputAccepted, AgentUserInputAnswer,
+    AgentUserInputRequest, AgentUserInputRequestId, AgentUserInputResolution,
+    AgentWorldStateSection, AgentWorldStateSnapshot, AgentWorldStateUpdate,
+    ConfirmedAgentSessionDeletion, ContextSectionKind, ConversationItem, PermissionAssessment,
+    PermissionAssessmentOutcome, PermissionReviewStatus, PreparedAgentSessionDeletion,
+    MAXIMUM_AGENT_WORLD_STATE_SECTIONS, MAXIMUM_AGENT_WORLD_STATE_SECTION_BYTES,
+    MAXIMUM_AGENT_WORLD_STATE_TOTAL_BYTES,
 };
 use crate::permission::{review_permission, PermissionReviewError};
 use crate::tool_catalog::{AgentToolCatalogContext, AgentToolPlan, AgentToolSearchIndexCache};
@@ -146,9 +147,6 @@ struct TurnRecord {
     phase: AgentTurnPhase,
     sampling_step: u32,
     reasoning: AgentReasoningCheckpoint,
-    /// Latest presentable reasoning summary line of this turn. Runtime-only:
-    /// it is never persisted and a restored turn starts without one.
-    reasoning_headline: Option<String>,
     final_answer_message_id: Option<crate::AgentMessageId>,
     last_error: Option<String>,
     terminal_reason: Option<AgentTurnTerminalReason>,
@@ -298,10 +296,7 @@ enum PendingModelItem {
         )>,
     },
     ToolCall(ModelToolCall),
-    Reasoning {
-        completed: bool,
-        headline: reasoning_headline::ReasoningHeadlineProjection,
-    },
+    Reasoning(sampling::PendingReasoning),
     Ignored {
         item_type: String,
         completed: bool,
@@ -342,7 +337,6 @@ mod lifecycle;
 mod persistence;
 mod plan_output;
 mod progress;
-mod reasoning_headline;
 mod recovery;
 mod retry_wait;
 mod sampling;

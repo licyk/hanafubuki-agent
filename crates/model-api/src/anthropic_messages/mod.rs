@@ -8,7 +8,8 @@ use hanafubuki_agent_foundation::cancellation::CancellationToken;
 use serde_json::Value;
 
 use crate::model::{
-    ModelEvent, ModelOutputItem, ModelRequest, ModelToolArgumentError, ModelToolCall, ModelUsage,
+    ModelEvent, ModelOutputItem, ModelReasoningTextKind, ModelRequest, ModelToolArgumentError,
+    ModelToolCall, ModelUsage,
 };
 use crate::port::{ModelError, ModelEventStream, ModelFuture, ModelPort, ModelResult, ModelStream};
 use crate::provider::ModelProvider;
@@ -89,6 +90,10 @@ enum ContentBlock {
         name: String,
         initial_input: Option<Value>,
         partial_json: String,
+    },
+    Thinking {
+        item_id: String,
+        text: String,
     },
     Ignored,
 }
@@ -253,16 +258,26 @@ impl AnthropicDecoder {
                 )
             }
             "thinking" => {
-                crate::streaming::trace_reasoning(
-                    PROTOCOL,
-                    "block_started",
-                    "",
-                    block
-                        .get("thinking")
-                        .and_then(Value::as_str)
-                        .unwrap_or_default(),
-                );
-                (ContentBlock::Ignored, None)
+                let item_id = format!("{}:thinking:{index}", self.response_id()?);
+                let text = block
+                    .get("thinking")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default()
+                    .to_owned();
+                crate::streaming::trace_reasoning(PROTOCOL, "block_started", &item_id, &text);
+                (
+                    ContentBlock::Thinking {
+                        item_id: item_id.clone(),
+                        text,
+                    },
+                    Some(ModelEvent::OutputItemAdded {
+                        item: ModelOutputItem::Reasoning {
+                            item_id,
+                            summary: Vec::new(),
+                            content: Vec::new(),
+                        },
+                    }),
+                )
             }
             _ => (ContentBlock::Ignored, None),
         };
@@ -300,17 +315,23 @@ impl AnthropicDecoder {
                 );
                 Ok(Vec::new())
             }
-            (_, "thinking_delta") => {
-                crate::streaming::trace_reasoning(
-                    PROTOCOL,
-                    "delta",
-                    "",
-                    delta
-                        .get("thinking")
-                        .and_then(Value::as_str)
-                        .unwrap_or_default(),
-                );
-                Ok(Vec::new())
+            (ContentBlock::Thinking { item_id, text }, "thinking_delta") => {
+                let value = delta
+                    .get("thinking")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default()
+                    .to_owned();
+                crate::streaming::trace_reasoning(PROTOCOL, "delta", item_id, &value);
+                if value.is_empty() {
+                    return Ok(Vec::new());
+                }
+                text.push_str(&value);
+                Ok(vec![ModelEvent::ReasoningDelta {
+                    item_id: item_id.clone(),
+                    kind: ModelReasoningTextKind::Raw,
+                    index: 0,
+                    delta: value,
+                }])
             }
             _ => Ok(Vec::new()),
         }
@@ -350,6 +371,13 @@ impl AnthropicDecoder {
                     },
                 }])
             }
+            ContentBlock::Thinking { item_id, text } => Ok(vec![ModelEvent::OutputItemCompleted {
+                item: ModelOutputItem::Reasoning {
+                    item_id,
+                    summary: Vec::new(),
+                    content: vec![text],
+                },
+            }]),
             ContentBlock::Ignored => Ok(Vec::new()),
         }
     }

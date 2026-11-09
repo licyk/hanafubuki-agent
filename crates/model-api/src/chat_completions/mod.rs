@@ -7,7 +7,9 @@ use std::sync::Arc;
 use hanafubuki_agent_foundation::cancellation::CancellationToken;
 use serde_json::Value;
 
-use crate::model::{ModelEvent, ModelOutputItem, ModelRequest, ModelToolCall, ModelUsage};
+use crate::model::{
+    ModelEvent, ModelOutputItem, ModelReasoningTextKind, ModelRequest, ModelToolCall, ModelUsage,
+};
 use crate::port::{ModelError, ModelEventStream, ModelFuture, ModelPort, ModelResult, ModelStream};
 use crate::provider::ModelProvider;
 use crate::streaming::{build_client, Authentication, RawSseStream, StreamingRequestSpec};
@@ -82,8 +84,18 @@ struct PartialToolCall {
     arguments: String,
 }
 
+/// The stretch of reasoning text streaming now. Chat has no reasoning item:
+/// a stretch starts with its first delta and ends when the answer or a tool
+/// call starts, or the response ends.
+struct OpenReasoning {
+    item_id: String,
+    text: String,
+}
+
 struct ChatDecoder {
     response_id: Option<String>,
+    reasoning: Option<OpenReasoning>,
+    reasoning_items: u32,
     text: String,
     text_started: bool,
     tools: BTreeMap<u64, PartialToolCall>,
@@ -96,6 +108,8 @@ impl ChatDecoder {
     fn new() -> Self {
         Self {
             response_id: None,
+            reasoning: None,
+            reasoning_items: 0,
             text: String::new(),
             text_started: false,
             tools: BTreeMap::new(),
@@ -168,23 +182,66 @@ impl ChatDecoder {
             let Some(delta) = choice.get("delta").and_then(Value::as_object) else {
                 continue;
             };
-            if let Some(reasoning) = delta.get("reasoning_content").and_then(Value::as_str) {
-                if !reasoning.is_empty() {
-                    crate::streaming::trace_reasoning("chat_completions", "delta", "", reasoning);
-                }
+            if let Some(reasoning) = reasoning_delta(delta) {
+                self.push_reasoning(reasoning, &mut events)?;
             }
             if let Some(content) = delta.get("content").and_then(Value::as_str) {
                 if !content.is_empty() {
+                    self.close_reasoning(&mut events);
                     self.push_text(content, &mut events)?;
                 }
             }
             if let Some(tool_calls) = delta.get("tool_calls").and_then(Value::as_array) {
                 for tool in tool_calls {
+                    self.close_reasoning(&mut events);
                     self.push_tool_delta(tool, &mut events)?;
                 }
             }
         }
         Ok(events)
+    }
+
+    fn push_reasoning(&mut self, delta: &str, events: &mut Vec<ModelEvent>) -> ModelResult<()> {
+        if self.reasoning.is_none() {
+            let response_id = self.response_id.as_deref().ok_or_else(|| {
+                ModelError::Protocol("Chat Completions reasoning arrived before response id".into())
+            })?;
+            let item_id = format!("{response_id}:reasoning:{}", self.reasoning_items);
+            self.reasoning_items += 1;
+            events.push(ModelEvent::OutputItemAdded {
+                item: ModelOutputItem::Reasoning {
+                    item_id: item_id.clone(),
+                    summary: Vec::new(),
+                    content: Vec::new(),
+                },
+            });
+            self.reasoning = Some(OpenReasoning {
+                item_id,
+                text: String::new(),
+            });
+        }
+        let reasoning = self.reasoning.as_mut().expect("reasoning opened above");
+        crate::streaming::trace_reasoning("chat_completions", "delta", &reasoning.item_id, delta);
+        reasoning.text.push_str(delta);
+        events.push(ModelEvent::ReasoningDelta {
+            item_id: reasoning.item_id.clone(),
+            kind: ModelReasoningTextKind::Raw,
+            index: 0,
+            delta: delta.to_owned(),
+        });
+        Ok(())
+    }
+
+    fn close_reasoning(&mut self, events: &mut Vec<ModelEvent>) {
+        if let Some(reasoning) = self.reasoning.take() {
+            events.push(ModelEvent::OutputItemCompleted {
+                item: ModelOutputItem::Reasoning {
+                    item_id: reasoning.item_id,
+                    summary: Vec::new(),
+                    content: vec![reasoning.text],
+                },
+            });
+        }
     }
 
     fn push_text(&mut self, content: &str, events: &mut Vec<ModelEvent>) -> ModelResult<()> {
@@ -309,6 +366,7 @@ impl ChatDecoder {
             ModelError::Protocol("Chat Completions stream ended without response id".into())
         })?;
         let mut events = Vec::new();
+        self.close_reasoning(&mut events);
         if !self.text.is_empty() {
             events.push(ModelEvent::OutputItemCompleted {
                 item: ModelOutputItem::AssistantMessage {
@@ -355,6 +413,16 @@ impl ChatDecoder {
         });
         Ok(events)
     }
+}
+
+/// A delta's reasoning text: `reasoning_content` (DeepSeek, Qwen, vLLM) or
+/// `reasoning` (OpenRouter, newer vLLM). A server that sends both, during
+/// that rename, sends the same text in each, so only the first is read.
+fn reasoning_delta(delta: &serde_json::Map<String, Value>) -> Option<&str> {
+    ["reasoning_content", "reasoning"]
+        .into_iter()
+        .filter_map(|field| delta.get(field).and_then(Value::as_str))
+        .find(|text| !text.is_empty())
 }
 
 struct ChatEventStream {

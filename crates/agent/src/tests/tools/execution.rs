@@ -1,11 +1,17 @@
 use super::*;
 
 #[tokio::test]
-async fn responses_reasoning_lifecycle_reaches_typed_agent_state_without_content() {
-    let server = FakeServer::start(vec![(
-        reasoning_assistant_events("Reasoning lifecycle observed."),
-        Duration::ZERO,
-    )])
+async fn responses_reasoning_reaches_typed_events_and_history_but_not_the_next_request() {
+    let server = FakeServer::start(vec![
+        (
+            reasoning_tool_events("Thinking about the Skills.", "skills_list", "{}"),
+            Duration::ZERO,
+        ),
+        (
+            reasoning_assistant_events("Reasoning lifecycle observed."),
+            Duration::ZERO,
+        ),
+    ])
     .await;
     let (service, paths) = configured_service("reasoning-lifecycle", &server.base_url);
     let session = service
@@ -24,38 +30,72 @@ async fn responses_reasoning_lifecycle_reaches_typed_agent_state_without_content
         reasoning.phase,
         hanafubuki_agent_kernel::AgentReasoningPhase::Completed
     );
-    assert_eq!(reasoning.sampling_step, 1);
+    assert_eq!(reasoning.sampling_step, 2);
     assert!(reasoning.active_since.is_none());
     let events = service.events_since(session.id, None).unwrap().events;
-    let thinking = events
+    let started = events
         .iter()
-        .position(|event| {
-            matches!(
-                event.kind,
-                AgentEventKind::ReasoningUpdated { reasoning }
-                    if reasoning.phase == hanafubuki_agent_kernel::AgentReasoningPhase::Thinking
-            )
-        })
+        .position(|event| matches!(event.kind, AgentEventKind::ReasoningStarted { .. }))
         .unwrap();
+    let shown = events
+        .iter()
+        .filter_map(|event| match &event.kind {
+            AgentEventKind::ReasoningDelta { delta, .. } => Some(delta.as_str()),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        shown,
+        [
+            "Thinking about the Skills.",
+            "A summary that arrives whole."
+        ]
+    );
     let completed = events
         .iter()
-        .position(|event| {
-            matches!(
-                event.kind,
-                AgentEventKind::ReasoningUpdated { reasoning }
-                    if reasoning.phase == hanafubuki_agent_kernel::AgentReasoningPhase::Completed
-            )
+        .position(|event| matches!(event.kind, AgentEventKind::ReasoningCompleted { .. }))
+        .unwrap();
+    let tool = events
+        .iter()
+        .position(|event| matches!(event.kind, AgentEventKind::ToolStarted { .. }))
+        .unwrap();
+    assert!(started < completed && completed < tool);
+
+    let page = service
+        .read_transcript_page(crate::AgentTranscriptPageRequest {
+            session_id: session.id,
+            page_size: 50,
+            cursor: None,
+            direction: crate::AgentHistorySortDirection::Ascending,
+            through_revision: None,
         })
         .unwrap();
-    let assistant = events
+    let kept = page
+        .items
         .iter()
-        .position(|event| matches!(event.kind, AgentEventKind::AssistantMessageStarted { .. }))
-        .unwrap();
-    assert!(thinking < completed && completed < assistant);
-    let public_json = serde_json::to_string(&(snapshot, events)).unwrap();
-    assert!(public_json.contains("reasoning_updated"));
-    assert!(public_json.contains("activeSince"));
-    assert!(!public_json.contains("private fixture reasoning"));
+        .filter_map(|item| match &item.content {
+            ConversationItem::Reasoning {
+                text,
+                sampling_step,
+                ..
+            } => Some((text.as_str(), *sampling_step)),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        kept,
+        [
+            ("Thinking about the Skills.", 1),
+            ("A summary that arrives whole.", 2)
+        ],
+        "the history store keeps each reasoning item"
+    );
+    let second_request = String::from_utf8(server.requests()[1].body.clone()).unwrap();
+    assert!(second_request.contains("call-tool"));
+    assert!(
+        !second_request.contains("Thinking about the Skills."),
+        "thinking is never model input"
+    );
 
     assert!(service
         .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)

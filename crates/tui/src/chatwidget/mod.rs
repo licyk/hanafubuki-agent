@@ -60,8 +60,8 @@ pub(crate) struct ChatWidget {
     /// gets a separator, with the time worked when there was work.
     needs_final_message_separator: bool,
     had_work_activity: bool,
-    /// The status line while a model request is retried, kept over the
-    /// reasoning headlines until the retry gets an answer.
+    /// The status line while a model request is retried, kept until the
+    /// retry gets an answer.
     retry_status_header: Option<String>,
     quit_shortcut_expires_at: Option<Instant>,
     quit_shortcut_key: Option<KeyBinding>,

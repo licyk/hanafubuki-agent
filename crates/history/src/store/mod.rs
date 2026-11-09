@@ -538,6 +538,7 @@ fn conversation_item_type(item: &ConversationItem) -> &'static str {
         ConversationItem::SkillContext { .. } => "skill_context",
         ConversationItem::UserMessage { .. } => "user_message",
         ConversationItem::AssistantMessage { .. } => "assistant_message",
+        ConversationItem::Reasoning { .. } => "reasoning",
         ConversationItem::SteeringMessage { .. } => "steering_message",
         ConversationItem::ToolCall { .. } => "tool_call",
         ConversationItem::ToolOutput { .. } => "tool_output",

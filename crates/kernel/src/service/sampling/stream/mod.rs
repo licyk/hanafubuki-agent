@@ -2,8 +2,10 @@ use super::*;
 
 mod events;
 mod finalize;
+mod reasoning;
 
 use events::stream_event;
+pub(in crate::service) use reasoning::PendingReasoning;
 
 /// What the model stream has produced so far, keyed by item in arrival order.
 struct StreamedResponse {

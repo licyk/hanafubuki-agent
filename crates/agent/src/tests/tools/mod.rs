@@ -7,7 +7,7 @@ fn reasoning_assistant_events(text: &str) -> Vec<u8> {
         concat!(
             "data: {{\"type\":\"response.created\",\"response\":{{\"id\":\"resp-reasoning\"}}}}\n\n",
             "data: {{\"type\":\"response.output_item.added\",\"item\":{{\"type\":\"reasoning\",\"id\":\"reason-1\",\"summary\":[]}}}}\n\n",
-            "data: {{\"type\":\"response.output_item.done\",\"item\":{{\"type\":\"reasoning\",\"id\":\"reason-1\",\"summary\":[{{\"type\":\"summary_text\",\"text\":\"private fixture reasoning\"}}]}}}}\n\n",
+            "data: {{\"type\":\"response.output_item.done\",\"item\":{{\"type\":\"reasoning\",\"id\":\"reason-1\",\"summary\":[{{\"type\":\"summary_text\",\"text\":\"A summary that arrives whole.\"}}]}}}}\n\n",
             "data: {{\"type\":\"response.output_item.added\",\"item\":{{\"type\":\"message\",\"id\":\"message\",\"phase\":\"final_answer\"}}}}\n\n",
             "data: {{\"type\":\"response.output_text.delta\",\"item_id\":\"message\",\"delta\":{text:?}}}\n\n",
             "data: {{\"type\":\"response.output_item.done\",\"item\":{{\"type\":\"message\",\"id\":\"message\",\"phase\":\"final_answer\",\"content\":[{{\"type\":\"output_text\",\"text\":{text:?}}}]}}}}\n\n",

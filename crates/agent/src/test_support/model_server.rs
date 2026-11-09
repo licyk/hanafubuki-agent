@@ -141,6 +141,44 @@ pub fn tool_search_events(query: &str) -> Vec<u8> {
     .into_bytes()
 }
 
+/// A reasoning item whose summary streams, then a tool call.
+pub fn reasoning_tool_events(summary: &str, name: &str, arguments: &str) -> Vec<u8> {
+    format!(
+        concat!(
+            "data: {{\"type\":\"response.created\",\"response\":{{\"id\":\"resp-reasoning-tool\"}}}}\n\n",
+            "data: {{\"type\":\"response.output_item.added\",\"item\":{{\"type\":\"reasoning\",\"id\":\"reason-tool\",\"summary\":[]}}}}\n\n",
+            "data: {{\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"reason-tool\",\"summary_index\":0,\"delta\":{summary:?}}}\n\n",
+            "data: {{\"type\":\"response.output_item.done\",\"item\":{{\"type\":\"reasoning\",\"id\":\"reason-tool\",\"summary\":[{{\"type\":\"summary_text\",\"text\":{summary:?}}}]}}}}\n\n",
+            "data: {{\"type\":\"response.output_item.added\",\"item\":{{\"type\":\"function_call\",\"id\":\"tool-item\"}}}}\n\n",
+            "data: {{\"type\":\"response.output_item.done\",\"item\":{{\"type\":\"function_call\",\"id\":\"tool-item\",\"call_id\":\"call-tool\",\"name\":\"{name}\",\"arguments\":{arguments:?}}}}}\n\n",
+            "data: {{\"type\":\"response.completed\",\"response\":{{\"id\":\"resp-reasoning-tool\",\"end_turn\":false}}}}\n\n"
+        ),
+        summary = summary,
+        name = name,
+        arguments = arguments,
+    )
+    .into_bytes()
+}
+
+/// A reasoning item whose summary streams, then the final answer.
+pub fn reasoning_answer_events(summary: &str, text: &str) -> Vec<u8> {
+    format!(
+        concat!(
+            "data: {{\"type\":\"response.created\",\"response\":{{\"id\":\"resp-reasoning-final\"}}}}\n\n",
+            "data: {{\"type\":\"response.output_item.added\",\"item\":{{\"type\":\"reasoning\",\"id\":\"reason-final\",\"summary\":[]}}}}\n\n",
+            "data: {{\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"reason-final\",\"summary_index\":0,\"delta\":{summary:?}}}\n\n",
+            "data: {{\"type\":\"response.output_item.done\",\"item\":{{\"type\":\"reasoning\",\"id\":\"reason-final\",\"summary\":[{{\"type\":\"summary_text\",\"text\":{summary:?}}}]}}}}\n\n",
+            "data: {{\"type\":\"response.output_item.added\",\"item\":{{\"type\":\"message\",\"id\":\"message\",\"phase\":\"final_answer\"}}}}\n\n",
+            "data: {{\"type\":\"response.output_text.delta\",\"item_id\":\"message\",\"delta\":{text:?}}}\n\n",
+            "data: {{\"type\":\"response.output_item.done\",\"item\":{{\"type\":\"message\",\"id\":\"message\",\"phase\":\"final_answer\",\"content\":[{{\"type\":\"output_text\",\"text\":{text:?}}}]}}}}\n\n",
+            "data: {{\"type\":\"response.completed\",\"response\":{{\"id\":\"resp-reasoning-final\",\"end_turn\":true}}}}\n\n"
+        ),
+        summary = summary,
+        text = text,
+    )
+    .into_bytes()
+}
+
 pub fn assistant_events(text: &str) -> Vec<u8> {
     format!(
         concat!(

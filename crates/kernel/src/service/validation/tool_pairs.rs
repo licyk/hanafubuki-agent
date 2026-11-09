@@ -135,6 +135,7 @@ pub(in crate::service) fn interrupted_tool_outputs(
             | ConversationItem::SkillContext { .. }
             | ConversationItem::UserMessage { .. }
             | ConversationItem::AssistantMessage { .. }
+            | ConversationItem::Reasoning { .. }
             | ConversationItem::SteeringMessage { .. }
             | ConversationItem::ToolSelection { .. }
             | ConversationItem::PermissionReview { .. }

@@ -12,6 +12,10 @@ pub struct AgentHardLimits {
     pub maximum_tool_argument_bytes: usize,
     pub maximum_tool_output_bytes: usize,
     pub maximum_model_output_bytes: usize,
+    /// The most text one reasoning item shows and keeps. Thinking is not
+    /// model output for `maximum_model_output_bytes`: past this the rest of
+    /// the item is dropped and the kept text is marked truncated.
+    pub maximum_reasoning_text_bytes: usize,
     pub maximum_compaction_summary_bytes: usize,
     pub maximum_compaction_summary_tokens: u64,
     pub maximum_history_items: usize,
@@ -28,6 +32,7 @@ pub const FIRST_BATCH_HARD_LIMITS: AgentHardLimits = AgentHardLimits {
     maximum_tool_argument_bytes: 64 * 1024,
     maximum_tool_output_bytes: 256 * 1024,
     maximum_model_output_bytes: 1024 * 1024,
+    maximum_reasoning_text_bytes: 256 * 1024,
     maximum_compaction_summary_bytes: 256 * 1024,
     maximum_compaction_summary_tokens: 64 * 1024,
     maximum_history_items: 1_024,

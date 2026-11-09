@@ -54,9 +54,9 @@ pub(crate) fn trace_wire_body(
     );
 }
 
-/// Record model reasoning/thinking content at `trace` level only. Reasoning is
-/// deliberately content-free in typed events and persisted state; this is the
-/// troubleshooting window into that text, bounded to `MAX_TRACE_CONTENT_BYTES`.
+/// Record model reasoning/thinking content at `trace` level only, bounded to
+/// `MAX_TRACE_CONTENT_BYTES`. The text also reaches the typed reasoning
+/// events; no log below `trace` carries it.
 pub(crate) fn trace_reasoning(
     protocol: &'static str,
     stage: &'static str,

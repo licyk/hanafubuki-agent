@@ -51,7 +51,10 @@ async fn responses_encodes_explicit_reasoning_and_omits_provider_default() {
 
     let explicit_body: Value = serde_json::from_slice(&explicit.requests()[0].body).unwrap();
     let omitted_body: Value = serde_json::from_slice(&omitted.requests()[0].body).unwrap();
-    assert_eq!(explicit_body["reasoning"], json!({"effort": "high"}));
+    assert_eq!(
+        explicit_body["reasoning"],
+        json!({"effort": "high", "summary": "auto"})
+    );
     assert!(omitted_body.get("reasoning").is_none());
 }
 
@@ -283,5 +286,8 @@ async fn unsupported_reasoning_effort_is_not_downgraded_or_retried() {
     let requests = server.requests();
     assert_eq!(requests.len(), 1);
     let body: Value = serde_json::from_slice(&requests[0].body).unwrap();
-    assert_eq!(body["reasoning"], json!({"effort": "xhigh"}));
+    assert_eq!(
+        body["reasoning"],
+        json!({"effort": "xhigh", "summary": "auto"})
+    );
 }

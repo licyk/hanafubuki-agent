@@ -123,6 +123,7 @@ pub(in crate::service) fn validate_persisted_history(
             | ConversationItem::WorldStateUpdate { .. }
             | ConversationItem::SkillContext { .. }
             | ConversationItem::UserMessage { .. }
+            | ConversationItem::Reasoning { .. }
             | ConversationItem::SteeringMessage { .. }
             | ConversationItem::ToolSelection { .. }
             | ConversationItem::ContinuationContext { .. }

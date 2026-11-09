@@ -37,8 +37,6 @@ const TOOL_ITEMS_PAGE: usize = 64;
 #[derive(Debug)]
 pub(crate) enum TurnUpdate {
     Started,
-    /// What the turn is doing now, for the status line.
-    Status(String),
     MessageDelta(String),
     MessageCompleted,
     PlanDelta(String),
@@ -232,7 +230,6 @@ impl AgentBridge {
         }
         let update = match event.kind {
             AgentEventKind::TurnStarted => TurnUpdate::Started,
-            AgentEventKind::ReasoningHeadlineUpdated { headline } => TurnUpdate::Status(headline),
             AgentEventKind::AssistantTextDelta { delta, .. } => TurnUpdate::MessageDelta(delta),
             AgentEventKind::AssistantMessageCompleted { .. } => TurnUpdate::MessageCompleted,
             AgentEventKind::ProposedPlanDelta { delta, .. } => TurnUpdate::PlanDelta(delta),

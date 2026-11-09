@@ -117,5 +117,6 @@ async fn collect_request(transport: &dyn ModelPort, request: ModelRequest) -> Ve
 mod anthropic;
 mod chat;
 mod cross_protocol;
+mod reasoning;
 mod responses;
 mod tolerance;

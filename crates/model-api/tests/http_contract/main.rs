@@ -8,8 +8,8 @@ use hanafubuki_agent_model_api::{
     ModelCompactionCapability, ModelContextRole, ModelCredential, ModelEndpoint, ModelError,
     ModelEvent, ModelHeader, ModelInputItem, ModelMessagePhase, ModelOpaqueCompactionPayload,
     ModelOutputItem, ModelPort, ModelProvider, ModelReasoningConfig, ModelReasoningEffort,
-    ModelRequest, ModelResponseMetadata, ModelRetryPolicy, ModelTimeouts, ModelToolSpec,
-    ModelUsage, RateLimitMetadata, ResponsesModelTransport,
+    ModelReasoningTextKind, ModelRequest, ModelResponseMetadata, ModelRetryPolicy, ModelTimeouts,
+    ModelToolSpec, ModelUsage, RateLimitMetadata, ResponsesModelTransport,
 };
 use serde_json::{json, Value};
 use support::{FakeHttpServer, PlannedResponse, ResponseFragment};

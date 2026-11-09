@@ -17,6 +17,7 @@ fn first_batch_hard_limits_are_an_explicit_contract() {
             maximum_tool_argument_bytes: 64 * 1024,
             maximum_tool_output_bytes: 256 * 1024,
             maximum_model_output_bytes: 1024 * 1024,
+            maximum_reasoning_text_bytes: 256 * 1024,
             maximum_compaction_summary_bytes: 256 * 1024,
             maximum_compaction_summary_tokens: 64 * 1024,
             maximum_history_items: 1024,

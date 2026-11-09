@@ -146,7 +146,7 @@ async fn responses_preserves_multiple_assistant_items_and_explicit_or_missing_ph
 }
 
 #[tokio::test]
-async fn responses_streams_reasoning_summary_deltas_with_their_part_index() {
+async fn responses_streams_summary_and_raw_reasoning_deltas_with_their_part_index() {
     let payload = concat!(
         "data: {\"type\":\"response.created\",\"response\":{\"id\":\"resp-summary\"}}\n\n",
         "data: {\"type\":\"response.output_item.added\",\"item\":{\"type\":\"reasoning\",\"id\":\"reason-1\",\"summary\":[]}}\n\n",
@@ -157,8 +157,8 @@ async fn responses_streams_reasoning_summary_deltas_with_their_part_index() {
         "data: {\"type\":\"response.reasoning_summary_part.done\",\"item_id\":\"reason-1\",\"output_index\":0,\"summary_index\":0,\"part\":{\"type\":\"summary_text\",\"text\":\"**Mapping the app**\"}}\n\n",
         "data: {\"type\":\"response.reasoning_summary_part.added\",\"item_id\":\"reason-1\",\"output_index\":0,\"summary_index\":1,\"part\":{\"type\":\"summary_text\",\"text\":\"\"}}\n\n",
         "data: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"reason-1\",\"output_index\":0,\"summary_index\":1,\"delta\":\"Checking routes\"}\n\n",
-        "data: {\"type\":\"response.reasoning_text.delta\",\"item_id\":\"reason-1\",\"output_index\":0,\"content_index\":0,\"delta\":\"raw reasoning stays private\"}\n\n",
-        "data: {\"type\":\"response.output_item.done\",\"item\":{\"type\":\"reasoning\",\"id\":\"reason-1\",\"summary\":[{\"type\":\"summary_text\",\"text\":\"**Mapping the app**\"},{\"type\":\"summary_text\",\"text\":\"Checking routes\"}]}}\n\n",
+        "data: {\"type\":\"response.reasoning_text.delta\",\"item_id\":\"reason-1\",\"output_index\":0,\"content_index\":0,\"delta\":\"raw reasoning\"}\n\n",
+        "data: {\"type\":\"response.output_item.done\",\"item\":{\"type\":\"reasoning\",\"id\":\"reason-1\",\"summary\":[{\"type\":\"summary_text\",\"text\":\"**Mapping the app**\"},{\"type\":\"summary_text\",\"text\":\"Checking routes\"}],\"content\":[{\"type\":\"reasoning_text\",\"text\":\"raw reasoning\"}]}}\n\n",
         "data: {\"type\":\"response.output_item.added\",\"item\":{\"type\":\"message\",\"id\":\"answer\"}}\n\n",
         "data: {\"type\":\"response.output_text.delta\",\"item_id\":\"answer\",\"delta\":\"Done\"}\n\n",
         "data: {\"type\":\"response.output_item.done\",\"item\":{\"type\":\"message\",\"id\":\"answer\",\"content\":[{\"type\":\"output_text\",\"text\":\"Done\"}]}}\n\n",
@@ -171,23 +171,30 @@ async fn responses_streams_reasoning_summary_deltas_with_their_part_index() {
     let transport = ResponsesModelTransport::new(provider(&server)).unwrap();
     let events = collect(&transport).await.unwrap();
 
-    let summary_deltas = events
+    let deltas = events
         .iter()
         .filter_map(|event| match event {
-            ModelEvent::ReasoningSummaryDelta {
+            ModelEvent::ReasoningDelta {
                 item_id,
-                summary_index,
+                kind,
+                index,
                 delta,
-            } => Some((item_id.as_str(), *summary_index, delta.as_str())),
+            } => Some((item_id.as_str(), *kind, *index, delta.as_str())),
             _ => None,
         })
         .collect::<Vec<_>>();
     assert_eq!(
-        summary_deltas,
+        deltas,
         vec![
-            ("reason-1", 0, "**Mapping"),
-            ("reason-1", 0, " the app**"),
-            ("reason-1", 1, "Checking routes"),
+            ("reason-1", ModelReasoningTextKind::Summary, 0, "**Mapping"),
+            ("reason-1", ModelReasoningTextKind::Summary, 0, " the app**"),
+            (
+                "reason-1",
+                ModelReasoningTextKind::Summary,
+                1,
+                "Checking routes"
+            ),
+            ("reason-1", ModelReasoningTextKind::Raw, 0, "raw reasoning"),
         ]
     );
     assert!(matches!(
@@ -196,18 +203,16 @@ async fn responses_streams_reasoning_summary_deltas_with_their_part_index() {
             item: ModelOutputItem::Reasoning { item_id, .. },
         } if item_id == "reason-1"
     ));
-    assert!(matches!(
-        &events[2],
-        ModelEvent::ReasoningSummaryDelta { .. }
-    ));
-    assert!(matches!(
-        &events[5],
+    assert_eq!(
+        events[6],
         ModelEvent::OutputItemCompleted {
-            item: ModelOutputItem::Reasoning { summary, .. },
-        } if summary == &["**Mapping the app**", "Checking routes"]
-    ));
-    let serialized = serde_json::to_string(&events).unwrap();
-    assert!(!serialized.contains("raw reasoning stays private"));
+            item: ModelOutputItem::Reasoning {
+                item_id: "reason-1".into(),
+                summary: vec!["**Mapping the app**".into(), "Checking routes".into()],
+                content: vec!["raw reasoning".into()],
+            },
+        }
+    );
 }
 
 #[tokio::test]
@@ -228,9 +233,10 @@ async fn responses_reads_a_reasoning_summary_delta_without_a_part_index_as_the_f
 
     assert_eq!(
         events[2],
-        ModelEvent::ReasoningSummaryDelta {
+        ModelEvent::ReasoningDelta {
             item_id: "reason-1".into(),
-            summary_index: 0,
+            kind: ModelReasoningTextKind::Summary,
+            index: 0,
             delta: "Mapping".into(),
         }
     );
