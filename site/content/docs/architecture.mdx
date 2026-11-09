@@ -205,6 +205,16 @@ schema 遵循同样的按协议规则：支持 `strict_json_schema` 的协议（
 - **`hanafubuki-agent-cli`** 是 `hanafubuki-agent` 二进制，位于门面之上，不依赖工作区的其他东西。每个命令从全局标志组合运行时，安装 panic hook 和日志文件；读写配置的命令（`config`、`providers list`、`mcp list`、离线的 `doctor`）从不启动 Agent，所以它们可以在 Agent 运行时使用。`exec` 自带 sink：轮次的 `AgentEventSink` 和槽位的状态 sink 送入命令线程读取的同一个通道，所以它打印的事件就是门面自己的（`--json` 原样序列化 `AgentEvent`）。见[命令行参考](/docs/cli-reference)。
 - **`hanafubuki-agent-tui`** 是移植到门面之上的 Codex 终端界面（`rust-v0.93.0`），使用上游的 ratatui 0.30 与 crossterm 0.29（Codex 用 git 分支给它们打补丁，crates.io 不接受）。终端底部是内联视口，转录写入终端自己的回滚区。一个适配器（`agent_bridge`）把轮次的 `AgentEvent` 映射为聊天组件显示的内容，把界面的请求映射到门面；一个循环、一个通道：读终端的线程和 Agent 的 sink 都送到同一个通道，会等待的门面调用作为 Agent 运行时的任务运行并在通道上回报，所以循环从不阻塞在 Agent 上。见[终端界面](/docs/terminal-interface)。
 
+### 终端界面的移植改动
+
+`crates/tui` 中派生自 Codex 的文件都带有说明这一点的标记行（[许可证](/docs/contributing#许可证)）。移植对 Codex 的终端界面做了这些改动：
+
+- **上游的 ratatui 与 crossterm。** Codex 用 git 分支给 ratatui 和 crossterm 打补丁，crates.io 不接受；移植使用上游的 ratatui 0.30（它的 `scrolling-regions` 特性让视口增长），通过 ratatui 的重新导出使用 crossterm 0.29，并去掉了终端调色板查询，改用 Codex 在没有它时回退到的固定主题。
+- **在门面之上。** `agent_bridge` 代替 Codex 的 `ConversationManager` 与 `CodexConversation`。工具事件既不带参数也不带输出，所以已完成调用的输出（`apply_patch` 的补丁由 Agent 自己的解析器 `preview_patch` 读取）来自轮次已提交的历史（`read_turn_page`）；diff 没有行号，因为那种读取没有行号。斜杠命令映射到门面的调用；`/diff` 在第一个工作区根目录运行 `git diff`，这是界面自己的短生命进程，不是 Agent 的工具调用，所以不在 Agent 的进程所有权之内。
+- **`@` 文件提及**来自 Codex 的 `file-search` crate，作为界面的 `file_search` 模块而不是单独的 crate 移植，因为只有界面使用它。crates.io 上的 `nucleo` 0.5 没有 Codex 固定的 git 版本读取的匹配分数访问器，所以匹配不带分数（没有地方显示它们）；匹配器在带期限的 std 通道上等待，而 Codex 在 `crossbeam` 通道上 select；锁是 `parking_lot` 的。
+- **终端的恢复。** 每次返回（一个 drop guard）和结束进程的 panic 都会恢复终端：界面的 hook 先恢复终端，再运行 Agent 的 hook。被隔离的 panic 让界面继续运行。
+- **没有移植的：** 转录分页器中的实时尾部与回溯、自定义提示、编辑框中的 Skill 与应用提及和图片附件、状态卡中的账号与速率限制，以及语法高亮（没有附带 Codex 的 `.tmTheme` 资源）。
+
 ## 设计选择
 
 以下是读者可能想撤销、但有理由的选择：
