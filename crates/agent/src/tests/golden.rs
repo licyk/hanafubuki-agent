@@ -301,7 +301,7 @@ async fn record_lineage_history() {
         })
         .unwrap();
     driver
-        .run_turn(child.id, "Child question.".into())
+        .run_turn(child.id, "Child question.".into(), None)
         .await
         .unwrap();
     assert!(service
@@ -423,6 +423,39 @@ async fn side_conversation_request_matches_golden() {
         "side_conversation_request",
         &normalize(&body, &paths.app_data_dir),
     );
+    assert!(service
+        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
+        .is_empty());
+    let _ = std::fs::remove_dir_all(paths.app_data_dir);
+}
+
+/// A review session's first request: the rubric among the capabilities and
+/// the review's request as its only message, nothing of its parent's.
+#[tokio::test]
+async fn review_request_matches_golden() {
+    let server =
+        FakeServer::start(vec![(assistant_events("No findings."), Duration::ZERO); 2]).await;
+    let (service, paths) = configured_service("golden-review", &server.base_url);
+    let parent = service
+        .create_session(AgentSessionMode::Default)
+        .await
+        .unwrap();
+    service
+        .start_turn(parent.id, "Hello.".to_string().into())
+        .await
+        .unwrap();
+    service
+        .start_review(
+            parent.id,
+            crate::AgentReviewTarget::Custom {
+                instructions: "Review the error handling in src/lib.rs.".to_string(),
+            },
+        )
+        .await
+        .unwrap();
+
+    let body: Value = serde_json::from_slice(&server.requests()[1].body).unwrap();
+    assert_golden("review_request", &normalize(&body, &paths.app_data_dir));
     assert!(service
         .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
         .is_empty());

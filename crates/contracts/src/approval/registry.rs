@@ -4,7 +4,10 @@ use hanafubuki_agent_approval::ApprovalAction;
 use kardia_macros::Service;
 
 use super::{ApprovalRule, ApprovalRuleVerdict};
-use crate::{ExtensionPoint, RegistrationError, Registry, RegistryService, RegistrySnapshot};
+use crate::{
+    AgentSessionOrigin, ExtensionPoint, RegistrationError, Registry, RegistryService,
+    RegistrySnapshot,
+};
 
 /// The approval rules, one entry per rule id. The kernel asks one snapshot
 /// of it for every action that needs approval.
@@ -37,18 +40,25 @@ impl ApprovalRuleRegistry {
 pub struct ApprovalRuleSnapshot(RegistrySnapshot<Arc<dyn ApprovalRule>>);
 
 impl ApprovalRuleSnapshot {
-    /// The combined verdict of the registered rules for `action`.
+    /// The combined verdict of the registered rules for `action`, which a
+    /// session of `origin` asks to run.
     ///
     /// A denial beats `RequireUser`, which beats no opinion. Several denials
     /// give their distinct reasons sorted and joined, so the verdict is the
     /// same whatever order the rules were registered in. A rule that panics
     /// fails closed: it denies the action (and is reported as a fault of its
     /// plugin), never "no opinion".
-    pub fn verdict(&self, action: &ApprovalAction) -> Option<ApprovalRuleVerdict> {
+    pub fn verdict(
+        &self,
+        origin: Option<AgentSessionOrigin>,
+        action: &ApprovalAction,
+    ) -> Option<ApprovalRuleVerdict> {
         let mut require_user = false;
         let mut denials = Vec::new();
         for entry in self.0.entries() {
-            match entry.guard(ExtensionPoint::ApprovalRule, |rule| rule.evaluate(action)) {
+            match entry.guard(ExtensionPoint::ApprovalRule, |rule| {
+                rule.evaluate(origin, action)
+            }) {
                 Ok(None) => {}
                 Ok(Some(ApprovalRuleVerdict::RequireUser)) => require_user = true,
                 Ok(Some(ApprovalRuleVerdict::Deny { reason })) => denials.push(reason),

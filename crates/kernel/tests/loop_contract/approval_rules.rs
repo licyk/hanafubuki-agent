@@ -19,7 +19,11 @@ impl ApprovalRule for FixedRule {
         self.id
     }
 
-    fn evaluate(&self, action: &ApprovalAction) -> Option<ApprovalRuleVerdict> {
+    fn evaluate(
+        &self,
+        _origin: Option<hanafubuki_agent_contracts::AgentSessionOrigin>,
+        action: &ApprovalAction,
+    ) -> Option<ApprovalRuleVerdict> {
         (action.kind == hanafubuki_agent_kernel::ApprovalActionKind::DomainMutation
             && action.summary.contains(self.matching))
         .then(|| self.verdict.clone())

@@ -21,7 +21,11 @@ impl ApprovalRule for Fixed {
         self.0
     }
 
-    fn evaluate(&self, _action: &ApprovalAction) -> Option<ApprovalRuleVerdict> {
+    fn evaluate(
+        &self,
+        _origin: Option<hanafubuki_agent_contracts::AgentSessionOrigin>,
+        _action: &ApprovalAction,
+    ) -> Option<ApprovalRuleVerdict> {
         self.1.clone()
     }
 }
@@ -85,7 +89,7 @@ async fn verdict(
     rules: &[(&'static str, Option<ApprovalRuleVerdict>)],
 ) -> Option<ApprovalRuleVerdict> {
     let (root, registry) = registered(rules).await;
-    let verdict = registry.snapshot().verdict(&action());
+    let verdict = registry.snapshot().verdict(None, &action());
     root.fiber().dispose().await.unwrap();
     verdict
 }
@@ -136,12 +140,12 @@ async fn the_combined_verdict_does_not_depend_on_registration_order() {
 async fn a_rule_leaves_with_its_plugin() {
     let (root, registry) = registered(&[("person", Some(ApprovalRuleVerdict::RequireUser))]).await;
     assert_eq!(
-        registry.snapshot().verdict(&action()),
+        registry.snapshot().verdict(None, &action()),
         Some(ApprovalRuleVerdict::RequireUser)
     );
     root.fiber().dispose().await.unwrap();
     assert!(registry.registry().snapshot().is_empty());
-    assert_eq!(registry.snapshot().verdict(&action()), None);
+    assert_eq!(registry.snapshot().verdict(None, &action()), None);
 }
 
 #[test]

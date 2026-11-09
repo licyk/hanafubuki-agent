@@ -40,7 +40,9 @@ Third-party notices
   - the Git worktrees, `crates/worktree` (`src/git.rs`, `src/manager.rs`
     and `src/owner.rs`), are derived from Codex's `codex-rs/worktree`
     (`src/git.rs`, `src/lib.rs`, `src/paths.rs` and `src/metadata.rs`,
-    commit `57a808a392`); each says so in its first lines.
+    commit `57a808a392`), and its review queries (`src/queries.rs`) from
+    Codex's `codex-rs/git-utils` (`src/info.rs` and `src/branch.rs`,
+    commit `57a808a392`); each says so in its first lines;
   - the Markdown export of a conversation
     (`crates/agent/src/service/export.rs`) follows the layout of Codex's
     `codex-rs/tui/src/app/transcript_export.rs` (commit `57a808a392`), as
@@ -72,7 +74,18 @@ Third-party notices
     `codex-rs/core/src/tools/handlers/multi_agents_v2/`,
     `codex-rs/core/src/agent/status.rs`, `codex-rs/core/src/config/mod.rs`
     and `codex-rs/core/templates/agents/orchestrator.md` (commit
-    `57a808a392`); each says so in its first lines.
+    `57a808a392`); each says so in its first lines;
+  - the `review` plugin's rubric, requests, reading of the reviewer's
+    answer, exit messages and the review itself
+    (`crates/agent/src/plugins/review`: `rubric.rs`, `request.rs`,
+    `output.rs` and `service.rs`) are derived from Codex's
+    `codex-rs/prompts/templates/review/` (`rubric.md`, `exit_success.xml`
+    and `exit_interrupted.xml`), `codex-rs/prompts/src/review_request.rs`,
+    `codex-rs/prompts/src/review_exit.rs`,
+    `codex-rs/protocol/src/review_format.rs`,
+    `codex-rs/core/src/tasks/review.rs` and
+    `codex-rs/core/src/session/review.rs` (commit `57a808a392`); each says
+    so in its first lines.
   Codex's NOTICE and its license follow.
 - Ratatui (https://github.com/ratatui/ratatui), MIT License: Codex's
   `custom_terminal.rs`, ported as `crates/tui/src/custom_terminal.rs`, is

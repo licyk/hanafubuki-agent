@@ -211,7 +211,7 @@ async fn skill_management_always_requires_a_person_while_the_plugin_runs() {
         let call = parse_call(name, json!({ "skill": "user:pdf-tools" })).unwrap();
         let action = skill_approval_action(&context, &call).unwrap().unwrap();
         assert_eq!(
-            mounted.rules.snapshot().verdict(&action),
+            mounted.rules.snapshot().verdict(None, &action),
             Some(ApprovalRuleVerdict::RequireUser),
             "{name}"
         );
@@ -224,7 +224,7 @@ async fn skill_management_always_requires_a_person_while_the_plugin_runs() {
         b"instance",
     )
     .unwrap();
-    assert_eq!(mounted.rules.snapshot().verdict(&other), None);
+    assert_eq!(mounted.rules.snapshot().verdict(None, &other), None);
 
     mounted.fiber.dispose().await.unwrap();
     assert!(mounted.rules.registry().snapshot().is_empty());

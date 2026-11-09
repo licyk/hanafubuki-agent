@@ -79,8 +79,9 @@ pub use host_inputs::{AgentSteeringRequest, AgentTurnRequest, HostContextPort, N
 pub use memory::AgentMemoryApplication;
 pub use network::{AgentProxy, NetworkSettingsPort};
 pub use plugins::{
-    AgentGoalBudgets, AgentRecap, AgentSubagentState, AgentSubagentStatus,
-    MAXIMUM_GOAL_OBJECTIVE_CHARS,
+    AgentGoalBudgets, AgentRecap, AgentReviewCodeLocation, AgentReviewCommit, AgentReviewFinding,
+    AgentReviewLineRange, AgentReviewOutput, AgentReviewTarget, AgentReviewTargets,
+    AgentSubagentState, AgentSubagentStatus, MAXIMUM_GOAL_OBJECTIVE_CHARS,
 };
 pub use service::{
     AgentApplicationService, AgentEditFromTurn, AgentHook, AgentHookHandler, AgentHooks,

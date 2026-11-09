@@ -1,8 +1,10 @@
-//! The narrow port through which the application and the `subagents`
-//! plugin drive child sessions: create one under a parent, name it, list a
-//! parent's children, give a child its parent's permission mode, run a turn
-//! on it and wait for its outcome, steer or interrupt that turn, read its
-//! last answer, and close it. It also prepares every turn the facade admits
+//! The narrow port through which the application and the `subagents` and
+//! `review` plugins drive child sessions: create one under a parent, name
+//! it, set its mode, list a parent's children, give a child its parent's
+//! permission mode, run a turn on it (in a permission mode of its own if
+//! need be) and wait for its outcome, steer or interrupt that turn, read
+//! its last answer, add context between its turns, and close it. It also
+//! prepares every turn the facade admits
 //! (the session's Provider, its permission mode, the world state and the
 //! turn's extensions), so a turn a plugin runs is prepared like a user's.
 
@@ -19,7 +21,7 @@ use hanafubuki_agent_kernel::{
     AgentSessionListRequest, AgentSessionMode, AgentSessionOrigin, AgentSessionParentFilter,
     AgentSessionPersistence, AgentSessionRuntimeSnapshot, AgentSessionSummary,
     AgentSessionTitleRenameRequest, AgentTurnInput, AgentTurnOrigin, AgentTurnOutcome,
-    AgentWorldStateSnapshot, AGENT_SESSION_PAGE_SIZE_MAX,
+    AgentWorldStateSnapshot, ConversationItem, AGENT_SESSION_PAGE_SIZE_MAX,
 };
 
 use crate::conversation_reader::{AgentConversationReader, ConversationMessage};
@@ -73,20 +75,25 @@ impl AgentSessionDriver {
         self.core.snapshot(child.id)
     }
 
-    /// Runs a turn of `text` on `session_id` and waits for its outcome.
+    /// Runs a turn of `text` on `session_id` and waits for its outcome. The
+    /// turn runs in `permission_mode`, else in the session's.
     pub(crate) async fn run_turn(
         &self,
         session_id: AgentSessionId,
         text: String,
+        permission_mode: Option<AgentPermissionMode>,
     ) -> Result<AgentTurnOutcome, AgentError> {
         let session = self
             .activate_provider_session(session_id)
             .await
             .map_err(AgentError::InvalidInput)?;
-        let permission_mode = self
-            .turn_permission_mode(session_id)
-            .await
-            .map_err(AgentError::InvalidInput)?;
+        let permission_mode = match permission_mode {
+            Some(mode) => mode,
+            None => self
+                .turn_permission_mode(session_id)
+                .await
+                .map_err(AgentError::InvalidInput)?,
+        };
         let world_state = self
             .collect_world_state(
                 session_id,
@@ -191,6 +198,42 @@ impl AgentSessionDriver {
                 &Discard,
             )
             .map(|_| ())
+    }
+
+    /// Puts `session_id` in `mode`, unless it is in it. Blocks.
+    pub(crate) fn set_mode(
+        &self,
+        session_id: AgentSessionId,
+        mode: AgentSessionMode,
+    ) -> Result<(), AgentError> {
+        let current = self.core.snapshot(session_id)?;
+        if current.mode == mode {
+            return Ok(());
+        }
+        self.core
+            .set_session_mode(session_id, current.generation, current.revision, mode)
+            .map(|_| ())
+    }
+
+    /// Whether `session_id` has had a turn, so context can follow its
+    /// history. Blocks.
+    pub(crate) fn has_history(&self, session_id: AgentSessionId) -> Result<bool, AgentError> {
+        Ok(!self
+            .core
+            .open_session(session_id, 1)?
+            .transcript
+            .items
+            .is_empty())
+    }
+
+    /// Commits `items`, continuation context only, to `session_id` between
+    /// turns. Blocks.
+    pub(crate) fn add_context(
+        &self,
+        session_id: AgentSessionId,
+        items: Vec<ConversationItem>,
+    ) -> Result<(), AgentError> {
+        self.core.add_continuation_context(session_id, items)
     }
 
     /// Gives `child` the permission mode `parent`'s next turn would run

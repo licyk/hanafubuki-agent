@@ -179,6 +179,32 @@ pub fn reasoning_answer_events(summary: &str, text: &str) -> Vec<u8> {
     .into_bytes()
 }
 
+/// One response calling each `(call id, tool, arguments)` in order.
+pub fn tool_calls_events(calls: &[(&str, &str, &str)]) -> Vec<u8> {
+    let mut events = String::new();
+    let mut event = |value: serde_json::Value| events.push_str(&format!("data: {value}\n\n"));
+    event(serde_json::json!({ "type": "response.created", "response": { "id": "resp-calls" } }));
+    for (index, (call_id, name, arguments)) in calls.iter().enumerate() {
+        let id = format!("call-item-{index}");
+        event(serde_json::json!({
+            "type": "response.output_item.added",
+            "item": { "type": "function_call", "id": id }
+        }));
+        event(serde_json::json!({
+            "type": "response.output_item.done",
+            "item": {
+                "type": "function_call", "id": id, "call_id": call_id,
+                "name": name, "arguments": arguments
+            }
+        }));
+    }
+    event(serde_json::json!({
+        "type": "response.completed",
+        "response": { "id": "resp-calls", "end_turn": false }
+    }));
+    events.into_bytes()
+}
+
 pub fn assistant_events(text: &str) -> Vec<u8> {
     format!(
         concat!(

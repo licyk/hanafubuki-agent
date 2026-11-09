@@ -266,7 +266,11 @@ impl ApprovalRule for Faulty {
         "faulty-rule"
     }
 
-    fn evaluate(&self, _action: &ApprovalAction) -> Option<ApprovalRuleVerdict> {
+    fn evaluate(
+        &self,
+        _origin: Option<hanafubuki_agent_contracts::AgentSessionOrigin>,
+        _action: &ApprovalAction,
+    ) -> Option<ApprovalRuleVerdict> {
         self.0.trip(Point::Approval);
         None
     }

@@ -4,7 +4,7 @@
 //! under `AutoReview` or `FullAccess`.
 
 use hanafubuki_agent_approval::{ApprovalAction, PermissionActionDetails};
-use hanafubuki_agent_contracts::{ApprovalRule, ApprovalRuleVerdict};
+use hanafubuki_agent_contracts::{AgentSessionOrigin, ApprovalRule, ApprovalRuleVerdict};
 
 pub(crate) struct GitCloneRequiresUser;
 
@@ -13,7 +13,11 @@ impl ApprovalRule for GitCloneRequiresUser {
         "execution.git-clone"
     }
 
-    fn evaluate(&self, action: &ApprovalAction) -> Option<ApprovalRuleVerdict> {
+    fn evaluate(
+        &self,
+        _origin: Option<AgentSessionOrigin>,
+        action: &ApprovalAction,
+    ) -> Option<ApprovalRuleVerdict> {
         let clones = matches!(
             action.details(),
             Some(PermissionActionDetails::Command { program, argv, .. })

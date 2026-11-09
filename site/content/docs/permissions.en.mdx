@@ -116,6 +116,16 @@ In full-access mode, every operation that needs an approval is allowed without a
 - The calls refused outright: an MCP tool its server's policy denies, a command or path that cannot be resolved.
 - [Plan mode](/docs/plan-mode) still offers read-only tools only.
 
+## In a review [#review]
+
+A [review](/docs/sessions#reviews) session is read-only, in place of the read-only sandbox Codex reviews in:
+
+- Tools that only read (files, directories, text search, the web, images, MCP resources) run as anywhere else.
+- A command runs only when it is `git --no-pager` with one of `status`, `diff`, `show`, `log`, `blame`, `rev-parse`, `merge-base` and `ls-files`, and plain arguments: no quotes, variables, redirections, pipes or second command, and no `--output` or `--ext-diff`. It runs through a POSIX shell or PowerShell, never `cmd.exe` (which would run a `git.cmd` from the working directory first). `--no-pager` is required so that no pager waits on a terminal for input.
+- Everything else that needs an approval (other commands, file changes, MCP tools that ask, Skills) is **denied without asking**, with the reason as the tool's error. What needs none runs as anywhere else: an MCP tool its server's policy allows without asking (`allow`, not destructive), and the Agent's own tools such as the plan and goal tools.
+- The review's turn runs in full access, so what is allowed runs without asking (Codex's "never ask"). A turn you start on the review session later runs in your mode, and stays read-only.
+- The rule is the `review` plugin's: with the plugin off, no review starts, and a review session from before is not kept read-only.
+
 ## Other controls [#other-controls]
 
 - [Plan mode](/docs/plan-mode) gives the model read-only tools only, whatever the permission mode.

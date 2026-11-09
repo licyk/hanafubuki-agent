@@ -95,6 +95,12 @@ category = "ipc-request"
 reason = "The argument of `agent_install_skill`."
 
 [[types]]
+path = "crates/agent/src/plugins/review/mod.rs"
+type = "AgentReviewTarget"
+category = "ipc-request"
+reason = "The target of `agent_start_review`."
+
+[[types]]
 path = "crates/agent/src/service/mcp/contracts.rs"
 type = "McpCredentialsWriteRequest"
 category = "ipc-request"

@@ -96,7 +96,7 @@ Editing one of your earlier messages (Esc twice in the [terminal interface](/doc
 
 ## Child sessions [#children]
 
-A session can be the child of another, made for it rather than started by you: a [side conversation](#side), a [sub-agent](#subagents), and reviews later. A child records its parent (`parentSessionId` in its summary) and why it was made (`origin`: `side`, `subagent` or `review`), and works in its parent's directory, with its parent's model and settings.
+A session can be the child of another, made for it rather than started by you: a [side conversation](#side), a [sub-agent](#subagents) or a [review](#reviews). A child records its parent (`parentSessionId` in its summary) and why it was made (`origin`: `side`, `subagent` or `review`), and works in its parent's directory, with its parent's model and settings.
 
 Every session records, when it is created, the workspace's primary directory (`cwd`) and the Git branch checked out there (`branch`, read from the repository's `HEAD`; none for a detached `HEAD` or outside a repository). A child, or a fork, takes its source's. A session from before these fields existed has none.
 
@@ -117,6 +117,17 @@ A sub-agent is a child the session's model spawns with `spawn_agent` to work on 
 - It starts empty, or with its parent's conversation before the turn that spawned it, and runs with its parent's model and the permission mode its parent's next turn would have; its turns come from its parent's model, not from you.
 - Archiving or deleting the parent archives or deletes its sub-agents with it.
 - Only a session without a parent spawns sub-agents, at most 3 running at once.
+
+## Reviews [#reviews]
+
+A review is a child that reviews the work in the session's repository and reports its findings back to the session: the facade's `start_review` ([Embedding the Agent](/docs/embedding#feature-calls)), Codex's `/review`.
+
+- **What it reviews**: the uncommitted changes (staged, unstaged and untracked), the changes against a base branch (from the merge base of `HEAD` with that branch, which the review is given), one commit, or your own instructions. `review_targets` lists the working directory's branches, current branch and latest 100 commits to choose from.
+- It is **durable**, with `origin` `review` and `Review: <target>` as its title, and starts empty: nothing of the session's conversation, only the request for its target as its first message. Its model is the session's, in Default mode whatever the session's mode, and it is told Codex's review guidelines, which ask for the findings as JSON (title, body, confidence, priority, file and lines, and an overall verdict).
+- It is **read-only** ([Permissions](/docs/permissions#review)): it reads files and runs plain `git --no-pager` reads; anything else that needs an approval is denied without asking.
+- It runs one turn, whose final answer is read as the findings: an answer that is not that JSON is kept whole as the explanation, and a finding that does not read is left out. Then the session is told, as context its model reads at its next turn, what the review found, or that it was interrupted (`cancel_review`) or failed. If the session runs a turn then, the note waits for it to end.
+- The session must have had a turn: its history starts with one, so a session with none cannot be told. A review of it is refused.
+- Archiving or deleting the session archives or deletes its reviews with it.
 
 ## Goals [#goals]
 

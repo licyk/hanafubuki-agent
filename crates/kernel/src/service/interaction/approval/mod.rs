@@ -111,13 +111,14 @@ impl AgentService {
             tool_id: tool_context.tool_id.clone(),
             generation: tool_context.tool_generation,
         };
-        let (turn_mode, allowed_for_session) = {
+        let (turn_mode, allowed_for_session, origin) = {
             let cell = self.session(identity.session_id)?;
             let guard = cell.lock()?;
             let record = &*guard;
             (
                 exact_turn(record, identity.turn_id, identity.generation)?.permission_mode,
                 record.runtime.allowed_tools.contains(&tool),
+                record.lineage.origin,
             )
         };
         // The rules of the plugins that own the action can only tighten the
@@ -127,7 +128,7 @@ impl AgentService {
         let verdict = tool_context
             .approval_rules
             .as_ref()
-            .and_then(|rules| rules.verdict(&action));
+            .and_then(|rules| rules.verdict(origin, &action));
         let mut pending = PendingApproval {
             identity,
             call_id: tool_context.call_id.clone(),

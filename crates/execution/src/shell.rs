@@ -18,7 +18,7 @@ use sha2::{Digest, Sha256};
 const MAX_SHELL_SCRIPT_BYTES: usize = 48 * 1024;
 /// Prefixed to every PowerShell script so its console output is UTF-8 rather
 /// than the system code page (Codex parity).
-const POWERSHELL_UTF8_OUTPUT_PREFIX: &str =
+pub const POWERSHELL_UTF8_OUTPUT_PREFIX: &str =
     "try { [Console]::OutputEncoding=[System.Text.Encoding]::UTF8 } catch {}\n";
 
 pub(crate) struct PreparedExecCommand {

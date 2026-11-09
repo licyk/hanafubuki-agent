@@ -144,7 +144,11 @@ impl ApprovalRule for Rule {
         self.id
     }
 
-    fn evaluate(&self, _action: &ApprovalAction) -> Option<ApprovalRuleVerdict> {
+    fn evaluate(
+        &self,
+        _origin: Option<hanafubuki_agent_contracts::AgentSessionOrigin>,
+        _action: &ApprovalAction,
+    ) -> Option<ApprovalRuleVerdict> {
         if self.panics {
             panic!("rule {} broke", self.id);
         }
@@ -189,7 +193,7 @@ async fn a_panicking_approval_rule_denies_the_action() {
     .await;
 
     assert_eq!(
-        registry.snapshot().verdict(&action()),
+        registry.snapshot().verdict(None, &action()),
         Some(ApprovalRuleVerdict::Deny {
             reason: "an approval rule of the broken plugin failed with an internal error"
                 .to_string(),

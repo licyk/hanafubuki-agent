@@ -5,6 +5,7 @@ mod context;
 mod goal;
 mod memory;
 mod recap;
+mod review;
 mod skills;
 mod structured_request;
 mod subagents;
@@ -22,6 +23,11 @@ pub(crate) use memory::memory_plugin;
 pub(crate) use memory::memory_tools;
 pub use recap::AgentRecap;
 pub(crate) use recap::{recap_plugin, RecapService, RECAP_PLUGIN};
+pub(crate) use review::{review_plugin, ReviewService, REVIEW_PLUGIN};
+pub use review::{
+    AgentReviewCodeLocation, AgentReviewCommit, AgentReviewFinding, AgentReviewLineRange,
+    AgentReviewOutput, AgentReviewTarget, AgentReviewTargets,
+};
 pub(crate) use skills::skills_plugin;
 pub(crate) use subagents::{subagents_plugin, SubagentService, SUBAGENTS_PLUGIN};
 pub use subagents::{AgentSubagentState, AgentSubagentStatus};

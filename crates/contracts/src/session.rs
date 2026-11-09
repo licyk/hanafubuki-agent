@@ -9,6 +9,18 @@ pub enum AgentSessionMode {
     Plan,
 }
 
+/// Why a session was made as another session's child.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentSessionOrigin {
+    /// A side conversation: a question asked beside the parent's work.
+    Side,
+    /// A subagent the parent's model started.
+    Subagent,
+    /// A review of the parent's work.
+    Review,
+}
+
 /// Who asked for a turn. The kernel only carries it to the observers
 /// (`AgentNotification::TurnAdmitted`); it changes nothing in the turn.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

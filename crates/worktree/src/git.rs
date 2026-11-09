@@ -62,6 +62,28 @@ pub(crate) fn git(
     cwd: &Path,
     args: &[&str],
 ) -> Result<Vec<u8>, WorktreeError> {
+    git_unless_one(executor, cwd, args)?
+        .ok_or_else(|| WorktreeError::Git(format!("git {} exited with Some(1)", args.join(" "))))
+}
+
+/// [`git`]'s stdout as one line of text, or `None` when git exits with 1:
+/// how `rev-parse --verify --quiet` says a revision does not exist and
+/// `merge-base` that there is no common ancestor.
+pub(crate) fn git_text_unless_one(
+    executor: &ExecutorManager,
+    cwd: &Path,
+    args: &[&str],
+) -> Result<Option<String>, WorktreeError> {
+    git_unless_one(executor, cwd, args)?
+        .map(|stdout| text(stdout, args))
+        .transpose()
+}
+
+fn git_unless_one(
+    executor: &ExecutorManager,
+    cwd: &Path,
+    args: &[&str],
+) -> Result<Option<Vec<u8>>, WorktreeError> {
     let executor_id = format!("worktree-git-{}", NEXT_GIT.fetch_add(1, Ordering::Relaxed));
     let reservation = reserve_executor_id(executor, &executor_id, &ProcessOwnerId::generate())
         .map_err(WorktreeError::Git)?;
@@ -97,16 +119,19 @@ pub(crate) fn git(
     let disposed = dispose_reserved_executor(executor, &receipt);
     let (exit_code, stdout, stderr) = finished?;
     disposed.map_err(WorktreeError::Git)?;
-    if exit_code != Some(0) {
-        let stderr = String::from_utf8_lossy(&stderr);
-        let stderr = stderr.trim();
-        return Err(WorktreeError::Git(if stderr.is_empty() {
-            format!("git {} exited with {exit_code:?}", args.join(" "))
-        } else {
-            stderr.to_string()
-        }));
+    match exit_code {
+        Some(0) => Ok(Some(stdout)),
+        Some(1) if stderr.iter().all(u8::is_ascii_whitespace) => Ok(None),
+        _ => {
+            let stderr = String::from_utf8_lossy(&stderr);
+            let stderr = stderr.trim();
+            Err(WorktreeError::Git(if stderr.is_empty() {
+                format!("git {} exited with {exit_code:?}", args.join(" "))
+            } else {
+                stderr.to_string()
+            }))
+        }
     }
-    Ok(stdout)
 }
 
 /// `git`'s stdout as one line of text.
@@ -115,7 +140,10 @@ pub(crate) fn git_text(
     cwd: &Path,
     args: &[&str],
 ) -> Result<String, WorktreeError> {
-    let stdout = git(executor, cwd, args)?;
+    text(git(executor, cwd, args)?, args)
+}
+
+fn text(stdout: Vec<u8>, args: &[&str]) -> Result<String, WorktreeError> {
     String::from_utf8(stdout)
         .map(|text| text.trim_end_matches(['\r', '\n']).to_string())
         .map_err(|_| WorktreeError::Git(format!("git {} printed no UTF-8", args.join(" "))))

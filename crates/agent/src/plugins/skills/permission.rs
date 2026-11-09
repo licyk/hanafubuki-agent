@@ -6,7 +6,9 @@
 use hanafubuki_agent_approval::{
     ApprovalAction, ApprovalActionKind, ApprovalOrigin, ApprovalRiskClass, PermissionActionDetails,
 };
-use hanafubuki_agent_contracts::{ApprovalRule, ApprovalRuleVerdict, ToolCallContext};
+use hanafubuki_agent_contracts::{
+    AgentSessionOrigin, ApprovalRule, ApprovalRuleVerdict, ToolCallContext,
+};
 use hanafubuki_agent_skills::SkillId;
 use serde::Serialize;
 
@@ -71,7 +73,11 @@ impl ApprovalRule for SkillManagementRequiresUser {
         "skills.management"
     }
 
-    fn evaluate(&self, action: &ApprovalAction) -> Option<ApprovalRuleVerdict> {
+    fn evaluate(
+        &self,
+        _origin: Option<AgentSessionOrigin>,
+        action: &ApprovalAction,
+    ) -> Option<ApprovalRuleVerdict> {
         (action.kind == ApprovalActionKind::SkillManagement)
             .then_some(ApprovalRuleVerdict::RequireUser)
     }

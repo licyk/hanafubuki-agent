@@ -75,7 +75,7 @@ pub use prompt::{
     PromptContributor, PromptContributorRegistry, PromptContributorSnapshot, PromptFragment,
     PromptPrepareFuture, PromptRequest, PromptStep,
 };
-pub use session::{AgentSessionMode, AgentTurnOrigin};
+pub use session::{AgentSessionMode, AgentSessionOrigin, AgentTurnOrigin};
 pub use skills::{SelectableSkill, SelectableSkills};
 pub use tokens::{estimate_tokens, token_budget_bytes};
 pub use tool_lifecycle::{

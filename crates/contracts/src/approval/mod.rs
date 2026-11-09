@@ -8,6 +8,8 @@ mod registry;
 
 use hanafubuki_agent_approval::ApprovalAction;
 
+use crate::AgentSessionOrigin;
+
 pub use registry::{ApprovalRuleRegistry, ApprovalRuleSnapshot};
 
 /// What a rule requires for one action, beyond the turn's permission mode.
@@ -29,6 +31,11 @@ pub trait ApprovalRule: Send + Sync + 'static {
     /// Unique within the registry.
     fn id(&self) -> &str;
 
-    /// `None` when the rule has no opinion on `action`.
-    fn evaluate(&self, action: &ApprovalAction) -> Option<ApprovalRuleVerdict>;
+    /// `None` when the rule has no opinion on `action`, which a session of
+    /// `origin` (`None` for a session without a parent) asks to run.
+    fn evaluate(
+        &self,
+        origin: Option<AgentSessionOrigin>,
+        action: &ApprovalAction,
+    ) -> Option<ApprovalRuleVerdict>;
 }

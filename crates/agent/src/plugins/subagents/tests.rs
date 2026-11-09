@@ -21,7 +21,7 @@ use super::tools::{SubagentTool, SubagentToolKind};
 use super::{AgentSubagentState, AgentSubagentStatus, SubagentService, SUBAGENTS_PLUGIN};
 use crate::test_support::{
     assistant_events, configure_test_provider, service_with_host, test_host, test_tool_context,
-    FakeServer, TestPaths, TEST_SHUTDOWN_DEADLINE,
+    tool_calls_events, FakeServer, TestPaths, TEST_SHUTDOWN_DEADLINE,
 };
 use crate::{AgentApplicationService, AgentPluginState};
 
@@ -79,32 +79,6 @@ fn spawn(task_name: &str, message: &str) -> SpawnRequest {
 }
 
 const NO_WAIT: Duration = Duration::from_secs(20);
-
-/// One response calling each `(call id, tool, arguments)` in order.
-fn tool_calls_events(calls: &[(&str, &str, &str)]) -> Vec<u8> {
-    let mut events = String::new();
-    let mut event = |value: Value| events.push_str(&format!("data: {value}\n\n"));
-    event(json!({ "type": "response.created", "response": { "id": "resp-calls" } }));
-    for (index, (call_id, name, arguments)) in calls.iter().enumerate() {
-        let id = format!("call-item-{index}");
-        event(json!({
-            "type": "response.output_item.added",
-            "item": { "type": "function_call", "id": id }
-        }));
-        event(json!({
-            "type": "response.output_item.done",
-            "item": {
-                "type": "function_call", "id": id, "call_id": call_id,
-                "name": name, "arguments": arguments
-            }
-        }));
-    }
-    event(json!({
-        "type": "response.completed",
-        "response": { "id": "resp-calls", "end_turn": false }
-    }));
-    events.into_bytes()
-}
 
 /// Runs `kind` for `session` as the kernel does once its permission is
 /// settled.

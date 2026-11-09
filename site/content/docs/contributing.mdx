@@ -105,12 +105,12 @@ hanafubuki-agent 的许可证是 **GPL-3.0-only**（[LICENSE](https://github.com
   - `crates/config/src/overrides.rs` 及其测试，来自 `codex-rs/common/src/config_override.rs`；
   - `recap` 插件的提示词和对话选取（`crates/agent/src/plugins/recap/prompt.rs`、`history.rs`），来自 `codex-rs/context-fragments/src/recap_prompt.rs`、`codex-rs/tui/src/app/recap.rs` 和 `recap_history.rs`（`57a808a392`）；
   - MCP OAuth 的本机回调（`crates/agent/src/service/mcp/oauth_login.rs`），来自 `codex-rs/rmcp-client/src/perform_oauth_login.rs`（`57a808a392`）；
-  - Git 工作树（`crates/worktree/src`：`git.rs`、`manager.rs`、`owner.rs`），来自 `codex-rs/worktree`（`57a808a392`）;
   - 旁支对话的策略和分界（`crates/agent/src/side_conversation.rs`），来自 `codex-rs/context-fragments/src/side_conversation.rs`（`57a808a392`）；
   - `goal` 插件的工具、继续推进的模板和上下文（`crates/agent/src/plugins/goal`：`tools.rs`、`templates.rs`、`context.rs`），来自 `codex-rs/ext/goal` 和 `codex-rs/core/src/context/user_goal.rs`（`57a808a392`）；
-  - Git 工作树（`crates/worktree/src`：`git.rs`、`manager.rs`、`owner.rs`），来自 `codex-rs/worktree`（`57a808a392`）；
+  - Git 工作树（`crates/worktree/src`：`git.rs`、`manager.rs`、`owner.rs`），来自 `codex-rs/worktree`，以及评审用的查询（`crates/worktree/src/queries.rs`），来自 `codex-rs/git-utils/src/info.rs` 和 `branch.rs`（`57a808a392`）；
   - 钩子（`crates/hooks/src`：`event.rs`、`matcher.rs`、`config.rs`、`discovery.rs`、`command.rs`、`output.rs`、`engine.rs`），来自 `codex-rs/hooks`，以及 `codex-rs/protocol` 与 `codex-rs/config` 中的钩子配置和 `codex-rs/core/src/tools/hook_names.rs` 中的工具名（`57a808a392`）；
-  - `subagents` 插件的工具、它们的行为和编排指引（`crates/agent/src/plugins/subagents`：`tools.rs`、`service.rs`、`prompt.rs`），来自 `codex-rs/core/src/tools/handlers/multi_agents_spec.rs`、`multi_agents_v2/`、`codex-rs/core/src/agent/status.rs`、`codex-rs/core/src/config/mod.rs` 和 `codex-rs/core/templates/agents/orchestrator.md`（`57a808a392`）。
+  - `subagents` 插件的工具、它们的行为和编排指引（`crates/agent/src/plugins/subagents`：`tools.rs`、`service.rs`、`prompt.rs`），来自 `codex-rs/core/src/tools/handlers/multi_agents_spec.rs`、`multi_agents_v2/`、`codex-rs/core/src/agent/status.rs`、`codex-rs/core/src/config/mod.rs` 和 `codex-rs/core/templates/agents/orchestrator.md`（`57a808a392`）；
+  - `review` 插件的评审准则、各目标的请求、对评审回答的读取、结束消息和评审本身（`crates/agent/src/plugins/review`：`rubric.rs`、`request.rs`、`output.rs`、`service.rs`），来自 `codex-rs/prompts/templates/review/`（`rubric.md`、`exit_success.xml`、`exit_interrupted.xml`）、`codex-rs/prompts/src/review_request.rs` 和 `review_exit.rs`、`codex-rs/protocol/src/review_format.rs`、`codex-rs/core/src/tasks/review.rs` 和 `codex-rs/core/src/session/review.rs`（`57a808a392`）。
 - **Ratatui**（MIT）：`crates/tui/src/custom_terminal.rs` 派生自 `ratatui::Terminal`，保留它的 MIT 头。
 
 `cargo xtask check-notices` 对照 `architecture/notices-policy.toml` 检查这些署名：

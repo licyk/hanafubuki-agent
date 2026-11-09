@@ -41,6 +41,7 @@ pub use mcp::{
 mod plugins;
 pub use plugins::AgentSettingsView;
 mod projections;
+mod review;
 pub use projections::AgentRunProjection;
 mod provider;
 pub(crate) use provider::{
@@ -386,6 +387,7 @@ impl AgentApplicationService {
                         storage_paths.worktrees_root.clone(),
                         executor.clone(),
                     ),
+                    git: hanafubuki_agent_worktree::GitQueries::new(executor.clone()),
                     hooks: Arc::new(hanafubuki_agent_hooks::HooksEngine::new(
                         hooks::hook_sources(&config)?,
                         storage_paths.hooks_state_file.clone(),

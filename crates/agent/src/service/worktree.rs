@@ -112,7 +112,7 @@ impl AgentApplicationService {
 
     /// The first workspace root, read on the blocking pool as the port
     /// requires.
-    async fn working_directory(&self) -> Result<PathBuf, AgentError> {
+    pub(super) async fn working_directory(&self) -> Result<PathBuf, AgentError> {
         let workspace = self.workspace.clone();
         hanafubuki_agent_foundation::blocking::run_blocking_operation(
             self.blocking.as_ref(),

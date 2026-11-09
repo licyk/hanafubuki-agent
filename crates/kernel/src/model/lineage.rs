@@ -1,21 +1,9 @@
 //! Where a session came from: the session that made it and why, the
 //! workspace it was created in, and whether it is kept at all.
 
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Deserializer};
 
-use super::{AgentSessionId, ConversationItem};
-
-/// Why a session was made as another session's child.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum AgentSessionOrigin {
-    /// A side conversation: a question asked beside the parent's work.
-    Side,
-    /// A subagent the parent's model started.
-    Subagent,
-    /// A review of the parent's work.
-    Review,
-}
+use super::{AgentSessionId, AgentSessionOrigin, ConversationItem};
 
 /// Whether a session is written to the history store.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

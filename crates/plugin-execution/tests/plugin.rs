@@ -114,7 +114,7 @@ async fn a_git_clone_always_requires_a_person() {
         ] {
             let action = command_action(kind, program, &[program, "clone", "https://example"]);
             assert_eq!(
-                mounted.rules.snapshot().verdict(&action),
+                mounted.rules.snapshot().verdict(None, &action),
                 Some(ApprovalRuleVerdict::RequireUser),
                 "{program}"
             );
@@ -130,7 +130,11 @@ async fn a_git_clone_always_requires_a_person() {
         ),
     ] {
         let action = command_action(ApprovalActionKind::CommandExecution, program, argv);
-        assert_eq!(mounted.rules.snapshot().verdict(&action), None, "{argv:?}");
+        assert_eq!(
+            mounted.rules.snapshot().verdict(None, &action),
+            None,
+            "{argv:?}"
+        );
     }
     let unrelated = ApprovalAction::from_canonical_bytes(
         ApprovalActionKind::FileWrite,
@@ -140,6 +144,6 @@ async fn a_git_clone_always_requires_a_person() {
         b"file",
     )
     .unwrap();
-    assert_eq!(mounted.rules.snapshot().verdict(&unrelated), None);
+    assert_eq!(mounted.rules.snapshot().verdict(None, &unrelated), None);
     mounted.root.fiber().dispose().await.unwrap();
 }

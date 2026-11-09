@@ -100,6 +100,31 @@ markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
 notice = "crates/worktree"
 
 [[derived]]
+path = "crates/worktree/src/queries.rs"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
+notice = "crates/worktree"
+
+[[derived]]
+path = "crates/agent/src/plugins/review/rubric.rs"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
+notice = "crates/agent/src/plugins/review"
+
+[[derived]]
+path = "crates/agent/src/plugins/review/request.rs"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
+notice = "crates/agent/src/plugins/review"
+
+[[derived]]
+path = "crates/agent/src/plugins/review/output.rs"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
+notice = "crates/agent/src/plugins/review"
+
+[[derived]]
+path = "crates/agent/src/plugins/review/service.rs"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
+notice = "crates/agent/src/plugins/review"
+
+[[derived]]
 path = "crates/hooks/src/event.rs"
 markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
 notice = "crates/hooks"

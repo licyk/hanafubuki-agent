@@ -27,3 +27,4 @@ pub use model::{
     InteractiveResizeAccepted, PlatformShell, UnifiedExecResult, WriteStdinRequest,
 };
 pub use service::{AgentExecutionProcessPort, AgentExecutionService, ExecutorAgentExecutionPort};
+pub use shell::POWERSHELL_UTF8_OUTPUT_PREFIX;
