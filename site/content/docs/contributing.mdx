@@ -1,9 +1,114 @@
 ---
-title: 参与贡献
-description: 仓库规则和提交方式。
+title: 参与开发
+description: 仓库规则概要（以 AGENTS.md 为准）、内容日志、布局与模块大小、提交风格、与 Hanafubuki 共享的双生副本，以及许可证与第三方署名。
 icon: GitPullRequest
 ---
 
-{/* placeholder: replaced by the development writer */}
+仓库的 [AGENTS.md](https://github.com/licyk/hanafubuki-agent/blob/main/AGENTS.md) 是每个变更都要遵守的规则的**权威**来源；本页概括其中最关键的部分，有出入时以 AGENTS.md 为准。改变某个领域的行为之前，先读对应的规则页：插件、工具、上下文、审批、crate 边界、宿主接口和 golden 见[插件规则](/docs/plugin-rules)；整体结构见[架构](/docs/architecture)；命令见[构建与测试](/docs/building-testing)。
 
-<Callout type="warn">本页正在撰写中。</Callout>
+## 开发原则
+
+- **内部 API 与持久化格式是不稳定的。** 能改进设计时优先选择干净的破坏性变更；除非要求兼容，删除过时的结构并更新当前的调用者、测试和文档，而不是保留别名、迁移或弃用的路径。格式可以变，但读取方从不删除用户数据：它容错解码，隔离不能使用的东西。
+- **实现满足需求和这些约定的最小一致设计。** 不加推测性的灵活性、冗余的阶段或状态、假想的工作流、扩展点或更严格的流程。
+- **避免过度检查和过严的字段校验。** 只校验正确运行必需的东西，容忍配置文件和上游数据中的未知字段。
+- **不为推测性的、极不可能的竞争条件或安全边界情况增加复杂度。** 如果认为确实需要，先说明会出什么问题、可能性多大、要多少额外代码，经同意后再做。不悄悄扩大变更范围。
+- **外部数据只在入口边界校验一次**，内部传递已知类型的值，不重复防御性检查。
+- **主函数专注于正常流程**，校验和实现细节放在它下面的小辅助函数中。
+- **注释只写不明显的约束和反直觉的行为**，不注释一目了然的代码。
+- **不手工编辑生成的文件**：修改源头并重新生成。
+- **测试真实的实现**，不在测试中复制业务逻辑，尽量少用 mock。
+- **不过早提取只用一次的函数**：只在会被复用、封装了确实复杂的逻辑或代表一个能清楚命名的概念时提取。
+- **优先使用明确的 Rust API 和类型化的结构体。** 原始 JSON 只在受控的补丁或覆盖边界上可以接受，并在使用或持久化之前在 Rust 中校验。
+
+## 每个变更都要遵守的规则
+
+- **锁**：被隔离的 panic 能到达的锁不能中毒。Agent 的每个 panic 都在被隔离的线程上展开，所以每个 crate 的生产代码都用 `parking_lot::{Mutex, RwLock, Condvar}`，从不用 `std::sync::Mutex` 或 `RwLock`（`cargo xtask check-locks`）。每个临界区在任何 panic 点都让状态保持一致：先计算，再赋值。
+- **路径**通过 `hanafubuki-agent-foundation::paths`（`ResolvedPath`、`PathKey`），它是唯一调用 `fs::canonicalize` 的代码：`system()` 用于操作系统调用，`native()` 用于人、模型、日志或记录读到的任何东西，`key()` 用于每次比较。从不渲染 `system()`、直接比较解析后的 `PathBuf` 或去掉 `\\?\`（`cargo xtask check-path-boundaries`，审计过的例外在 `architecture/path-policy.toml`）。
+- **进程**：Agent 启动的进程归 Agent 所有。它的 `ExecutorManager`（`hanafubuki-agent-process`）在 spawn 前预留所有者，只凭确切的回执修改进程，并保留所有者、回执和元数据直到确认终止；从不终止后就遗忘。每个 Agent 实例的进程属于它的所有者组，停止时清理该组，运行留下的组记录在 `process-groups.json` 中，下次启动时回收。宿主的进程是宿主的。
+- **解码严格度由输入来源决定**，而不是由类型决定。宿主前端通过 IPC 发来的请求拒绝未知字段（`deny_unknown_fields`），我们生成并按摘要检查的完整性清单也一样；我们持久化的数据（设置、历史、记忆、状态文件）忽略未知字段、按字段回退、隔离不能使用的东西；外部产出（模型 Provider、MCP 服务器、Web）容错读取，一个坏条目从不让其余的失败；模型的工具参数按它的 schema 规范化。生产代码中的 `deny_unknown_fields` 只出现在 `architecture/strict-decoding-policy.toml` 列出的类型上（`cargo xtask check-strict-decoding`）。审批、路径包含和身份无论来源都保持严格。
+- **插件**是 kardia 插件，内核只通过 `hanafubuki-agent-contracts` 的注册表接触它们；注册是调用插件的副作用，随它停止而移除；插件返回错误，从不 panic（`cargo xtask check-plugin-panics`）；golden 固定模型看到的内容，所以模型可见的变化要有意地重新生成它们（[插件规则](/docs/plugin-rules)）。
+
+## 内容日志
+
+诊断日志（包括原始线路正文，`hanafubuki-agent-model-api` 的 `trace_wire_body`）只在用户通过日志级别明确选择 `trace` 时，才可以包含线路或模型内容、推理、工具参数和已提交的工具结果，并由 `hanafubuki_agent_model_api::bounded_trace_content` 在 UTF-8 边界上截断到 `MAX_TRACE_CONTENT_BYTES`。从不记录请求头、凭据、签名令牌或审批敏感的字段，也从不在 `debug` 或更低级别输出内容。不把诊断或原始线路记录插入对话历史。规范的对话条目（包括工具调用和已提交的结果）通过类型化的历史契约持久化，与诊断日志级别无关；这不允许持久化凭据或审批敏感的字段。
+
+## 工作区约定
+
+- crate 放在 `crates/<name>/`，名为 `hanafubuki-agent-<name>`，门面 `hanafubuki-agent` 除外。仓库工具是 `xtask` crate。
+- `version`、`edition`、`license`、`repository` 和 `rust-version` 在根目录的 `[workspace.package]` 中设置一次。内部依赖在根目录的 `[workspace.dependencies]` 中声明一次，同时带 `path` 和 `version`，成员用 `.workspace = true` 使用它们。
+- edition 保持 2021，rustfmt 保持默认配置。
+- 除 `xtask` 外每个 crate 都会发布：它有 `description`，没有 `publish = false`。门面和命令行用仓库的 `README.md` 作为 `readme`。
+
+## 布局与模块大小
+
+`cargo xtask check-source-layout` 执行下面的机械规则，其余靠评审：
+
+- `lib.rs` 只有文档、属性、模块声明和重新导出（内联模块可以作为重新导出的命名空间；过程宏入口留在 `lib.rs`）；类型、函数、impl、常量和宏放在命名的模块中。`mod.rs` 可以放它自己模块的代码。
+- 有生产子模块的模块是 `foo/mod.rs`。只有测试子模块的模块是 `foo.rs` 加 `foo/tests.rs` 或 `foo/tests/mod.rs`。
+- `src/` 中没有 `#[path]` 属性：模块树就是目录树。
+- 快照文件（`insta`）放在断言它们的测试旁边的 `snapshots/` 目录中；`snapshots/` 不是模块。
+- 重新导出列出名字（`pub use module::{Item, Other};`）；`src/` 中没有任何可见性的 glob 重新导出。
+- 生产文件中没有内联测试或 `#[test]`，只声明外部的 `#[cfg(test)] mod tests;`。私有的白盒测试放在相邻的 `src/<module>/tests.rs` 或 `src/<module>/tests/*.rs` 中；不要只为了移动测试而扩大生产代码的可见性。
+- 公开 API、跨 crate 和架构/依赖契约放在所属 crate 的 `tests/` 中。单文件套件是 `tests/<suite>.rs`；多文件套件是 `tests/<suite>/main.rs` 加普通的 `mod` 子模块，多个套件共享的辅助放在 `tests/support/mod.rs`。
+- 测试辅助：私有 fixture 是 `tests` 模块里的 `fixtures` 模块；其他 crate 的测试使用的辅助是由 `#[cfg(any(test, feature = "test-support"))]` 控制的公开 `test_support` 模块，只从 `[dev-dependencies]` 启用。
+
+`cargo xtask check-module-size` 对照 `architecture/module-size-policy.toml` 检查模块大小（只数代码行，注释不计）：
+
+- 上限：生产文件 600 行代码，测试文件 900 行，生产函数 200 行；测试函数不限。
+- 上限要求的是评审，而不是目标。按职责拆分，从不机械拆分（`part1`/`part2`），也不只为了低于这个数字而拆分。
+- 超过上限但内聚的模块（穷举的分派、数据表、一组契约类型）保留一个例外，写明原因，`ceiling` 是评审时的大小。超过上限就失败，不再适用的例外必须删除。
+- 添加例外或提高上限要在交接时说明，从不为了让无关的变更通过而悄悄这样做。
+
+## 验证与交接
+
+- 按变更的影响选择验证范围（[构建与测试](/docs/building-testing)）。只改文档时检查 diff 和引用的路径，不需要构建和测试。
+- 为改变了的行为或契约添加有意义的测试，而不是镜像可逆的、低影响编辑的测试。
+- 如实报告运行了哪些验证命令、跳过或受阻的有哪些。不要在没有复现当前工作流时声称与 CI 等价，也不要从 Linux 的结果声称覆盖了 Windows 或 macOS。
+
+## 提交风格
+
+提交信息使用带类型的约定式前缀，主题行用小写开头的完整短句描述变更后的状态，正文说明原因：
+
+```text
+feat(tui): the slash commands, the pager, @ file mentions and the resume picker
+fix(config): a repair that cannot keep its original leaves the file read-only
+docs: the release checklist; Phase 6's repository part is done
+```
+
+常用的类型有 `feat`、`fix`、`docs`、`test`、`ci`、`build`、`style` 和 `chore(release)`，范围是 crate 或领域（`tui`、`cli`、`config`、`xtask`、`site`）。每个提交是一个连贯的步骤，并单独通过它所需的检查。
+
+## 与 Hanafubuki 共享的双生副本
+
+Agent 是从 [Hanafubuki](https://github.com/licyk/Hanafubuki) 中提取出来的，带着它几个基础 crate 的**副本**，裁剪到 Agent 用到的部分。两边各自保留自己的一份，所以一边的修复要**手工移植**到另一边。Hanafubuki 的 `todo.md` 保留同一份清单。
+
+| Agent                                                        | Hanafubuki                                                                   | 双生的模块                                                                                                                                                                          | 只在一边                                                                                                               |
+| ------------------------------------------------------------ | ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `hanafubuki-agent-foundation`                                | `hanafubuki-foundation`                                                      | `background_worker`、`blocking`、`cancellation`、`environment`、`json_normalization`、`module_faults`、`panic`、`paths`、`persistence`、`terminal_text`、`url_policy`、`user_agent` | 只在 Agent：`agent_settings`、`secrets`；只在 Hanafubuki：`bounded_work_queue`、`concurrency`、`readiness`、`resolved` |
+| `hanafubuki-agent-process`                                   | `hanafubuki-process`                                                         | `da_filter`、`executor`、`ownership`、`process_groups`、`terminal_size`、`test_support`、`tree`                                                                                     | 只在 Hanafubuki：`environment`                                                                                         |
+| `hanafubuki-agent-host`                                      | `hanafubuki-module-contracts`                                                | `error`、`fault`、`host`（没有 `RootServices::serve_bridge`）、`logging`、`registry`、`restart`、`status`、`test_support`、`worker`                                                 | 只在 Hanafubuki：`bridge`                                                                                              |
+| 门面的 golden 与历史语料（`crates/agent/src/tests/golden/`） | 集成的 golden 与历史语料（`hanafubuki-agent-integration/src/tests/golden/`） | 历史语料在两边是相同的字节；历史格式变化要在两边都重新录制                                                                                                                          |                                                                                                                        |
+
+`panic` 模块有一处不同：宿主的 hook 接受第二个隔离检查（[panic hook 桥](/docs/embedding#panic-hook-桥)），Agent 的不接受；崩溃记录的 JSON 跨越这座桥共享：Hanafubuki 的 hook 写 `data/agent/crash-record.json`，Agent 的启动标记读它。
+
+之所以是副本而不是让 Hanafubuki 使用 Agent 发布的 crate：那样 Hanafubuki 的 foundation、process 或模块宿主的每次修改都要等 Agent 发布，而这些是 Hanafubuki 每个领域赖以构建的 crate。代价是两个进程所有权域（Agent 拥有自己的 `ExecutorManager`）、类型不跨越边界（宿主接口只接受普通值），以及副本会分叉。
+
+Hanafubuki 依赖 Agent 的方式（在它的 `src-tauri/Cargo.toml` 中声明一次，首次发布前是固定的 git revision）和它那一侧的规则在 Hanafubuki 的 `docs/agent-integration.md` 中。
+
+## 许可证
+
+hanafubuki-agent 的许可证是 **GPL-3.0-only**（[LICENSE](https://github.com/licyk/hanafubuki-agent/blob/main/LICENSE)、[NOTICE](https://github.com/licyk/hanafubuki-agent/blob/main/NOTICE)），在 `[workspace.package]` 中设置一次。
+
+部分代码派生自其他项目，按它们的许可证保留署名：
+
+- **OpenAI Codex**（Apache License 2.0）：终端界面 `crates/tui` 移植自 Codex 的 `codex-rs/tui`（`rust-v0.93.0`），它的文件搜索（`crates/tui/src/file_search`）来自 `codex-rs/file-search`；`crates/config/src/overrides.rs` 及其测试派生自 `codex-rs/common/src/config_override.rs`。每个派生的文件在第一行说明这一点（“Modified from OpenAI Codex rust-v0.93.0 (Apache-2.0).”）。NOTICE 带有 Codex 的 NOTICE 和许可证。
+- **Ratatui**（MIT）：`crates/tui/src/custom_terminal.rs` 派生自 `ratatui::Terminal`，保留它的 MIT 头。
+
+`cargo xtask check-notices` 对照 `architecture/notices-policy.toml` 检查这些署名：
+
+- `[[derived]]`：派生的代码，`path` 是一个 Rust 文件或目录（其下递归的每个 `.rs` 文件），每个文件的开头注释块中带有 `marker`，NOTICE 中出现 `notice`（在反引号中）。
+- `[[mit]]`：还保留了来源项目 MIT 头的文件（`holder` 是它的版权行之一），NOTICE 列出它的路径。
+- `[[original]]`：派生目录下**不是**派生的文件，写明原因；它不带标记。
+
+在 `crates/tui` 下添加新文件时，要么它派生自 Codex 并带上标记，要么在 `[[original]]` 中列出并说明原因。快照文件由测试生成，不检查。
+
+发布的二进制归档附带由 `cargo-about` 生成的 `THIRD-PARTY-LICENSES.txt`（`about.toml`、`about.hbs`）。`about.toml` 列出二进制的依赖允许使用的许可证；使用其他许可证的新依赖会让发布的 `licenses` 任务失败，直到在那里接受它。

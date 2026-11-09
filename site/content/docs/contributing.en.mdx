@@ -1,9 +1,114 @@
 ---
 title: Contributing
-description: The repository rules and how to contribute.
+description: The repository rules in brief (AGENTS.md is the authority), content logging, layout and module size, commit style, the twins shared with Hanafubuki, and the licence and third-party attribution.
 icon: GitPullRequest
 ---
 
-{/* placeholder: replaced by the development writer */}
+The repository's [AGENTS.md](https://github.com/licyk/hanafubuki-agent/blob/main/AGENTS.md) is the **authority** for the rules every change follows; this page summarizes the key ones, and where the two differ AGENTS.md wins. Before changing an area's behaviour, read its rules: plugins, tools, context, approval, crate boundaries, the host interface and the goldens are [Plugin rules](/docs/plugin-rules); the overall structure is [Architecture](/docs/architecture); the commands are [Building and testing](/docs/building-testing).
 
-<Callout type="warn">This page is being written.</Callout>
+## Development principles
+
+- **Internal APIs and persisted formats are unstable.** Prefer clean breaking changes when they improve the design; unless compatibility is requested, remove obsolete structures and update current callers, tests and documents rather than keep aliases, migrations or deprecated paths. A format may change, but its reader never deletes user data: it decodes tolerantly and quarantines what it cannot use.
+- **Implement the smallest coherent design** that satisfies the requirement and these contracts. No speculative flexibility, redundant phases or state, hypothetical workflows, extension points or stricter process.
+- **Avoid excessive checks and overly strict field validation.** Validate only what correct operation needs, and tolerate unknown fields in configuration files and upstream data.
+- **Do not add complexity for speculative, extremely unlikely races or security edge cases.** If you believe it is needed, first explain what could go wrong, how likely it is and how much code it takes, and proceed only once that is approved. Do not silently widen a change.
+- **Validate external data once, at the entry boundary**, and pass values of known types inward without repeating defensive checks.
+- **Keep the main function on the normal flow**, with validation and details in small helpers below it.
+- **Comment only non-obvious constraints and counterintuitive behaviour**, never self-explanatory code.
+- **Do not hand-edit generated files**: change the source and regenerate.
+- **Test the real implementation**, without duplicating business logic in tests and with as few mocks as possible.
+- **Do not extract a function used once** unless it will be reused, encapsulates truly complex logic, or names a clear concept.
+- **Prefer explicit Rust APIs and typed structs.** Raw JSON is acceptable only at controlled patch or override boundaries, validated in Rust before use or persistence.
+
+## Rules every change needs
+
+- **Locks** a contained panic reaches do not poison. Every Agent panic unwinds on a contained thread, so every crate's production code uses `parking_lot::{Mutex, RwLock, Condvar}`, never `std::sync::Mutex` or `RwLock` (`cargo xtask check-locks`). Every critical section leaves its state consistent at any panic point: compute, then assign.
+- **Paths** go through `hanafubuki-agent-foundation::paths` (`ResolvedPath`, `PathKey`), the only code that calls `fs::canonicalize`: `system()` for operating-system calls, `native()` for anything a person, a model, a log line or a record reads, `key()` for every comparison. Never render `system()`, compare resolved `PathBuf`s directly or strip `\\?\` (`cargo xtask check-path-boundaries`, with its audited exceptions in `architecture/path-policy.toml`).
+- **Processes** the Agent starts are the Agent's own: its `ExecutorManager` (`hanafubuki-agent-process`) reserves an owner before a spawn, mutates a process only with its exact receipt, and keeps owner, receipt and metadata until termination is confirmed; nothing is terminated and forgotten. Each Agent instance's processes belong to its owner group, a stop sweeps that group, and the groups a run leaves are recorded in `process-groups.json` and reaped at the next start. A host's processes are the host's.
+- **Decoding strictness follows the input source**, not the type. A request a host's frontend sends over IPC rejects unknown fields (`deny_unknown_fields`), and so does an integrity manifest we produce and check by digest; our persisted data (settings, history, memory, state files) ignores unknown fields, falls back per field and quarantines what it cannot use; external producers (model providers, MCP servers, the web) are read tolerantly, one bad item never failing the rest; model tool arguments are normalized against their schema. `deny_unknown_fields` appears in production code only on a type listed in `architecture/strict-decoding-policy.toml` (`cargo xtask check-strict-decoding`). Approval, path containment and identities stay strict whatever the source.
+- **Plugins** are kardia plugins that the kernel reaches only through the `hanafubuki-agent-contracts` registries; a registration is an effect of the calling plugin, removed when it stops; plugins return errors and never panic (`cargo xtask check-plugin-panics`); and the goldens pin what the model sees, so a model-visible change regenerates them on purpose ([Plugin rules](/docs/plugin-rules)).
+
+## Content logging
+
+Diagnostic logs, raw wire bodies included (`hanafubuki-agent-model-api`'s `trace_wire_body`), may include wire or model content, reasoning, tool arguments and committed tool results only at `trace`, when the user explicitly selects `trace` through the log level, truncated to `MAX_TRACE_CONTENT_BYTES` on a UTF-8 boundary by `hanafubuki_agent_model_api::bounded_trace_content`. Never log headers, credentials, signing tokens or approval-sensitive fields, or emit content at `debug` or below. Do not insert diagnostic or raw wire records into conversation history. Canonical conversation items, tool calls and committed results included, are persisted through the typed history contract independently of the log level; that does not authorize persisting credentials or approval-sensitive fields.
+
+## Workspace conventions
+
+- Crates live in `crates/<name>/` and are named `hanafubuki-agent-<name>`, except the facade, `hanafubuki-agent`. Repository tooling is the `xtask` crate.
+- `version`, `edition`, `license`, `repository` and `rust-version` are set once in the root `[workspace.package]`. Internal dependencies are declared once in the root `[workspace.dependencies]` with both `path` and `version`, and members use them with `.workspace = true`.
+- The edition stays 2021 and rustfmt keeps its defaults.
+- Every crate but `xtask` is published: it has a `description` and no `publish = false`. The facade and the command line take the repository's `README.md` as their `readme`.
+
+## Layout and module size
+
+`cargo xtask check-source-layout` enforces the mechanical rules below; the rest is review:
+
+- `lib.rs` holds docs, attributes, module declarations and re-exports only (an inline module may serve as a re-export namespace; proc-macro entry points stay in `lib.rs`); types, functions, impls, constants and macros live in named modules. A `mod.rs` may hold its own module's code.
+- A module with production child modules is `foo/mod.rs`. A module whose only children are tests is `foo.rs` with `foo/tests.rs` or `foo/tests/mod.rs`.
+- `src/` contains no `#[path]` attribute: the module tree is the directory tree.
+- Snapshot files (`insta`) live in the `snapshots/` directory beside the tests that assert them; `snapshots/` is not a module.
+- Re-exports name their items (`pub use module::{Item, Other};`); `src/` has no glob re-export at any visibility.
+- Production files contain no inline tests or `#[test]` and declare only an external `#[cfg(test)] mod tests;`. Private white-box tests belong in an adjacent `src/<module>/tests.rs` or `src/<module>/tests/*.rs`; do not widen production visibility just to move tests.
+- Public API, cross-crate and architecture or dependency contracts belong in the owning crate's `tests/`. A single-file suite is `tests/<suite>.rs`; a multi-file suite is `tests/<suite>/main.rs` with plain `mod` children, and helpers several suites share live in `tests/support/mod.rs`.
+- Test helpers: private fixtures are a `fixtures` module inside a `tests` module; helpers other crates' tests use are a public `test_support` module gated by `#[cfg(any(test, feature = "test-support"))]`, enabled only from `[dev-dependencies]`.
+
+`cargo xtask check-module-size` checks module sizes against `architecture/module-size-policy.toml` (code lines only; comments never count):
+
+- Limits: 600 code lines for a production file, 900 for a test file, and 200 for a production function. Test functions are not limited.
+- A limit asks for a review, not a target. Split along responsibilities, never mechanically (`part1`/`part2`) or only to get under the number.
+- A cohesive module over a limit (an exhaustive dispatch, a data table, a set of contract types) keeps an exception whose reason says why and whose `ceiling` is the size it was reviewed at. Growth past the ceiling fails, and an exception that no longer applies must be removed.
+- Adding an exception or raising a ceiling is reported in the handoff, never done silently to get an unrelated change through.
+
+## Validation and handoff
+
+- Select validation by the change's impact ([Building and testing](/docs/building-testing)). For a documentation-only change, check the diff and the referenced paths; builds and tests are unnecessary.
+- Add meaningful tests for changed behaviour or contracts, not tests mirroring reversible, low-impact edits.
+- Report exactly which validation commands ran and which were skipped or blocked. Do not claim CI equivalence without reproducing the current workflow, or Windows or macOS coverage from Linux results.
+
+## Commit style
+
+Commit messages take a conventional typed prefix, a subject that says, in lower case and as a full phrase, what the change makes true, and a body that says why:
+
+```text
+feat(tui): the slash commands, the pager, @ file mentions and the resume picker
+fix(config): a repair that cannot keep its original leaves the file read-only
+docs: the release checklist; Phase 6's repository part is done
+```
+
+The usual types are `feat`, `fix`, `docs`, `test`, `ci`, `build`, `style` and `chore(release)`, scoped by crate or area (`tui`, `cli`, `config`, `xtask`, `site`). Each commit is one coherent step that passes the checks it needs on its own.
+
+## Twins shared with Hanafubuki
+
+The Agent was extracted from [Hanafubuki](https://github.com/licyk/Hanafubuki) and carries **copies** of some of its foundation crates, trimmed to what the Agent uses. Each repository keeps its own, so a fix to one is **ported to the other by hand**. Hanafubuki's `todo.md` keeps the same list.
+
+| The Agent                                                                  | Hanafubuki                                                           | Twin modules                                                                                                                                                                        | One side only                                                                                                          |
+| -------------------------------------------------------------------------- | -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `hanafubuki-agent-foundation`                                              | `hanafubuki-foundation`                                              | `background_worker`, `blocking`, `cancellation`, `environment`, `json_normalization`, `module_faults`, `panic`, `paths`, `persistence`, `terminal_text`, `url_policy`, `user_agent` | Agent only: `agent_settings`, `secrets`; Hanafubuki only: `bounded_work_queue`, `concurrency`, `readiness`, `resolved` |
+| `hanafubuki-agent-process`                                                 | `hanafubuki-process`                                                 | `da_filter`, `executor`, `ownership`, `process_groups`, `terminal_size`, `test_support`, `tree`                                                                                     | Hanafubuki only: `environment`                                                                                         |
+| `hanafubuki-agent-host`                                                    | `hanafubuki-module-contracts`                                        | `error`, `fault`, `host` (without `RootServices::serve_bridge`), `logging`, `registry`, `restart`, `status`, `test_support`, `worker`                                               | Hanafubuki only: `bridge`                                                                                              |
+| the facade's goldens and history corpus (`crates/agent/src/tests/golden/`) | the integration's (`hanafubuki-agent-integration/src/tests/golden/`) | the history corpus is the same bytes in both; a history-format change re-records both                                                                                               |                                                                                                                        |
+
+The `panic` modules differ in one place: a host's hook takes a second containment check ([the panic-hook bridge](/docs/embedding#the-panic-hook-bridge)) and the Agent's does not; the crash record's JSON is shared across the bridge: Hanafubuki's hook writes `data/agent/crash-record.json`, and the Agent's start marker reads it.
+
+Why copies rather than Hanafubuki using the Agent's published crates: every change to Hanafubuki's foundation, process or module host would then wait for an Agent release, and these are the crates every Hanafubuki domain is built on. The cost is two process-ownership domains (the Agent owns its own `ExecutorManager`), types that do not cross the boundary (the host interface takes plain values), and copies that drift.
+
+How Hanafubuki depends on the Agent (declared once in its `src-tauri/Cargo.toml`, a pinned git revision until the first release) and the rules of its side are in Hanafubuki's `docs/agent-integration.md`.
+
+## Licence
+
+hanafubuki-agent is licensed **GPL-3.0-only** ([LICENSE](https://github.com/licyk/hanafubuki-agent/blob/main/LICENSE), [NOTICE](https://github.com/licyk/hanafubuki-agent/blob/main/NOTICE)), set once in `[workspace.package]`.
+
+Some code is derived from other projects and keeps their attribution as their licences ask:
+
+- **OpenAI Codex** (Apache License 2.0): the terminal interface, `crates/tui`, is ported from Codex's `codex-rs/tui` (`rust-v0.93.0`), and its file search (`crates/tui/src/file_search`) from `codex-rs/file-search`; `crates/config/src/overrides.rs` and its tests are derived from `codex-rs/common/src/config_override.rs`. Every derived file says so in its first line ("Modified from OpenAI Codex rust-v0.93.0 (Apache-2.0)."). NOTICE carries Codex's NOTICE and licence.
+- **Ratatui** (MIT): `crates/tui/src/custom_terminal.rs` is derived from `ratatui::Terminal` and keeps its MIT header.
+
+`cargo xtask check-notices` checks that attribution against `architecture/notices-policy.toml`:
+
+- `[[derived]]`: derived code; `path` is a Rust file or a directory (every `.rs` file under it, recursively), each file carries `marker` in its leading comment block, and NOTICE names `notice` (in backquotes).
+- `[[mit]]`: a file that also keeps the MIT header of the project it derives from (`holder` is one of its copyright lines); NOTICE names its path.
+- `[[original]]`: a file under a derived directory that is **not** derived, with why; it carries no marker.
+
+A new file under `crates/tui` either derives from Codex and carries the marker, or is listed under `[[original]]` with its reason. Snapshot files are generated by the tests and not checked.
+
+The binary archives a release publishes carry a `THIRD-PARTY-LICENSES.txt` generated by `cargo-about` (`about.toml`, `about.hbs`). `about.toml` lists the licences the binary's dependencies may have; a new dependency under another one fails the release's `licenses` job until it is accepted there.
