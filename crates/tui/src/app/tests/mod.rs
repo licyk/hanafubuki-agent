@@ -40,7 +40,7 @@ struct Harness {
     home: tempfile::TempDir,
     _model_runtime: tokio::runtime::Runtime,
     server: FakeServer,
-    runtime: AgentRuntime,
+    runtime: Arc<AgentRuntime>,
     app: App,
     tui: Tui<VT100Backend>,
     events: Receiver<AppEvent>,
@@ -108,10 +108,11 @@ impl Harness {
             },
         )
         .unwrap();
+        let runtime = Arc::new(runtime);
         runtime.start();
         let agent = runtime.wait_until_started(DEADLINE).unwrap();
 
-        let bridge = AgentBridge::new(agent, runtime.slot().clone(), None, sender.clone());
+        let bridge = AgentBridge::new(runtime.clone(), agent, None, sender.clone());
         let chat_widget = ChatWidget::new(ChatWidgetInit {
             app_event_tx: sender.clone(),
             frame_requester: FrameRequester::new(sender.clone()),
@@ -642,3 +643,4 @@ mod backtrack;
 mod features;
 mod session_commands;
 mod settings;
+mod workspace_commands;

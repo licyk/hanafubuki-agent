@@ -21,11 +21,11 @@ hanafubuki-agent config set permissionMode auto_review   # 以后都使用
 hanafubuki-agent --permission-mode full-access exec "..." # 只对这次运行
 ```
 
-也可以写在配置档中，例如 `[profiles.review] permissionMode = "auto_review"`，再用 `-p review` 选择。权限模式在每个回合开始时确定，终端界面中没有修改它的命令；`/status` 会显示当前的模式。
+也可以写在配置档中，例如 `[profiles.review] permissionMode = "auto_review"`，再用 `-p review` 选择。权限模式在每个回合开始时确定。在终端界面中，`/permissions` 可以为本会话修改它（见下文），`/status` 会显示生效的模式。
 
 ### 单个会话的模式 [#session-mode]
 
-一个会话可以使用与配置不同的模式，直到会话结束，不改变 `permissionMode`。嵌入的宿主用 `set_session_permission_mode` 设置它（[嵌入 Agent](/docs/embedding#permissions)）。
+一个会话可以使用与配置不同的模式，直到会话结束，不改变 `permissionMode`。在终端界面中用 `/permissions` 设置：从三种模式的列表中选择（Full access 需要确认），或用 `/permissions 模式` 直接设置（[终端界面](/docs/terminal-interface#permissions)）。嵌入的宿主用 `set_session_permission_mode` 设置它（[嵌入 Agent](/docs/embedding#permissions)）。
 
 - 随时可以修改。正在运行的回合保持开始时的模式，会话的下一个回合使用新模式。
 - 只属于这个会话：其他会话，以及从它分叉出的会话，仍使用配置的模式。
@@ -88,7 +88,7 @@ hanafubuki-agent --permission-mode full-access exec "..." # 只对这次运行
 
 ### 批准被拒绝的操作 [#approve-denied]
 
-审查拒绝了一个你确实需要的操作时，可以批准它（嵌入的宿主调用 `approve_denied_action`，见[嵌入 Agent](/docs/embedding#permissions)）。只能批准会话最近十次拒绝中的一次，回合或压缩运行期间不能批准。
+审查拒绝了一个你确实需要的操作时，可以批准它：在终端界面中，`/approve` 列出本会话的拒绝供你选择（[终端界面](/docs/terminal-interface#permissions)）；嵌入的宿主调用 `approve_denied_action`（[嵌入 Agent](/docs/embedding#permissions)）。只能批准会话最近十次拒绝中的一次，回合或压缩运行期间不能批准。
 
 批准不会执行这个操作，也不会开始回合。它在会话历史中加入一条说明，模型从下一次请求起读到它：
 

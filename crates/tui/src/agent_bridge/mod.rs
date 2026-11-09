@@ -2,10 +2,10 @@
 //! Codex's TUI has its `ConversationManager` and `CodexConversation`): it
 //! maps the Agent's turn events onto what the chat widget shows
 //! ([`TurnUpdate`]), and the interface's [`Op`]s onto calls of the facade:
-//! the turn's (here), the slash commands' (`commands`; `/review`, `/goal`
-//! and `/hooks` in modules of their own), the reading of a session's
-//! transcript into what the chat replays (`replay`), and the editing of an
-//! earlier message (`edit`).
+//! the turn's (here), the slash commands' (`commands`, `sessions`,
+//! `permissions`, `workspace`; `/review`, `/goal` and `/hooks` in modules
+//! of their own), the reading of a session's transcript into what the chat
+//! replays (`replay`), and the editing of an earlier message (`edit`).
 //!
 //! The interface starts with no session: the first message creates it, or
 //! a command that needs one (`Op::EnsureSession`), and `/new` drops back to
@@ -21,21 +21,24 @@ mod edit;
 mod goal;
 mod hooks;
 mod mcp;
+mod permissions;
 mod providers;
 mod replay;
 mod review;
 mod sessions;
 mod status;
+mod workspace;
 
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use hanafubuki_agent::{
     AgentAvailability, AgentCompactionOutcome, AgentEvent, AgentEventKind, AgentEventSink,
     AgentGoal, AgentHandle, AgentHistorySortDirection, AgentPermissionMode, AgentReasoningId,
-    AgentSessionId, AgentSessionMode, AgentSlot, AgentStatusEventSink, AgentSteeringRequest,
-    AgentTaskPlanSnapshot, AgentTurnAccepted, AgentTurnPageRequest, AgentTurnRequest,
-    AgentTurnTerminalReason, AgentUserInputRequest, AgentUserInputRequestId, ApprovalRequest,
-    ApprovalRequestId, SkillCatalogSnapshot,
+    AgentRuntime, AgentSessionId, AgentSessionMode, AgentSlot, AgentStatusEventSink,
+    AgentSteeringRequest, AgentTaskPlanSnapshot, AgentTurnAccepted, AgentTurnPageRequest,
+    AgentTurnRequest, AgentTurnTerminalReason, AgentUserInputRequest, AgentUserInputRequestId,
+    ApprovalRequest, ApprovalRequestId, SkillCatalogSnapshot,
 };
 use tokio::sync::oneshot;
 
@@ -45,6 +48,7 @@ pub(crate) use commands::{setup_needed, with_model, ModelChoices, StatusReport};
 pub(crate) use goal::{GoalCall, GoalReply};
 pub(crate) use hooks::{needing_review, HooksCall, HooksReply};
 pub(crate) use mcp::{McpCall, McpReply};
+pub(crate) use permissions::DeniedAction;
 pub(crate) use providers::{ProviderCall, ProviderReply};
 pub(crate) use replay::{OlderTranscript, OpenedSession, ReplayedItem};
 pub(crate) use review::{ReviewCall, ReviewEnd, ReviewReply};
@@ -138,9 +142,13 @@ pub(crate) enum AgentReply {
     },
     /// The review that ran ended.
     ReviewEnded(ReviewEnd),
+    /// The working directory moved into a new worktree (`/worktree`).
+    EnteredWorktree(workspace::EnteredWorktree),
 }
 
 pub(crate) struct AgentBridge {
+    /// The standalone runtime, which moves the working directory (`/cd`).
+    runtime: Arc<AgentRuntime>,
     agent: AgentHandle,
     slot: AgentSlot,
     /// The session the interface drives, once there is one.
@@ -169,18 +177,24 @@ pub(crate) struct AgentBridge {
     status: status::StatusCache,
     /// The review that runs, if one does.
     review: Option<review::RunningReview>,
+    /// The latest denials of automatic review, for `/approve`.
+    denials: permissions::RecentDenials,
+    /// The worktree the next session the interface creates is bound to
+    /// (`/worktree`'s new conversation).
+    pending_worktree: Option<PathBuf>,
 }
 
 impl AgentBridge {
     pub(crate) fn new(
+        runtime: Arc<AgentRuntime>,
         agent: AgentHandle,
-        slot: AgentSlot,
         model: Option<String>,
         app_event_tx: AppEventSender,
     ) -> Self {
         Self {
+            slot: runtime.slot().clone(),
+            runtime,
             agent,
-            slot,
             session_id: None,
             model,
             pending_title: None,
@@ -193,6 +207,8 @@ impl AgentBridge {
             mcp_login: None,
             status: status::StatusCache::default(),
             review: None,
+            denials: permissions::RecentDenials::default(),
+            pending_worktree: None,
         }
     }
 
@@ -311,6 +327,9 @@ impl AgentBridge {
                 Some(TurnUpdate::Error(message))
             }
             AgentReply::SessionOpened(opened) => {
+                if opened.session_id.is_some() {
+                    self.pending_worktree = None;
+                }
                 self.session_id = opened.session_id;
                 self.turn = None;
                 self.turn_running = false;
@@ -328,6 +347,11 @@ impl AgentBridge {
                     Some(TurnUpdate::ModelChanged(model))
                 }
                 TurnUpdate::Goal(reply) => self.goal_reply(reply),
+                // `/cd` moved: the status line's branch is the new root's.
+                TurnUpdate::Session(reply) if reply.working_directory().is_some() => {
+                    self.send_session_status();
+                    Some(TurnUpdate::Session(reply))
+                }
                 update => Some(update),
             },
             AgentReply::StatusLoaded {
@@ -336,6 +360,7 @@ impl AgentBridge {
                 goal,
             } => self.status_loaded(session_id, permission_mode, goal),
             AgentReply::ReviewEnded(end) => self.review_ended(end),
+            AgentReply::EnteredWorktree(entered) => self.entered_worktree(entered),
         }
     }
 
@@ -344,6 +369,7 @@ impl AgentBridge {
         if Some(event.session_id) != self.session_id {
             return None;
         }
+        self.denials.observe(event.session_id, &event.kind);
         // The turn's events can arrive before the reply that accepted it.
         if let (None, Some(turn_id), true) = (self.turn, event.turn_id, self.turn_running) {
             self.turn = Some(AgentTurnAccepted {

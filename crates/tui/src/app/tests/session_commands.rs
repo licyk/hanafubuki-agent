@@ -12,7 +12,7 @@ const RECAP: &str =
 
 impl Harness {
     /// Sends `text` and waits for the answer `answer` and the turn's end.
-    fn exchange(&mut self, text: &str, answer: &str) -> AgentSessionId {
+    pub(super) fn exchange(&mut self, text: &str, answer: &str) -> AgentSessionId {
         self.type_and_submit(text);
         self.pump_until_screen_shows(answer);
         self.pump_until_turn_ends();
@@ -31,7 +31,7 @@ impl Harness {
     }
 
     /// Picks "yes" in a confirmation, "no" being first.
-    fn confirm(&mut self, question: &str) {
+    pub(super) fn confirm(&mut self, question: &str) {
         self.pump_until_screen_shows(question);
         self.key(KeyCode::Down);
         self.key(KeyCode::Enter);
@@ -156,6 +156,9 @@ fn fork_shows_a_named_copy_and_the_original_stays() {
     let mut harness = Harness::start(vec![assistant_events("Shared answer.")]);
     let original = harness.exchange("Shared question", "Shared answer.");
     harness.type_and_submit("/fork Experiment");
+    // The project is a Git repository: the fork may run in a new worktree.
+    harness.pump_until_screen_shows("Where should the fork run?");
+    harness.key(KeyCode::Enter);
     harness.pump_until_screen_shows("Forked into a new session, \"Experiment\"");
     let fork = harness.app.bridge.session_id().unwrap();
     assert_ne!(fork, original);

@@ -213,6 +213,7 @@ impl App {
             AppEvent::SetFullscreenTranscript(enabled) => self.save_fullscreen_transcript(enabled),
             AppEvent::Command(command) => self.run_app_command(tui, command),
             AppEvent::Appearance(event) => self.apply_appearance(event),
+            AppEvent::CommandStep(step) => self.chat_widget.run_command_step(step),
             AppEvent::Exit => return false,
         }
         true

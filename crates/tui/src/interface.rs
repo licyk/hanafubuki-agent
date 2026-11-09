@@ -79,13 +79,13 @@ pub enum TuiResume {
 /// The terminal is restored on return.
 pub fn run(
     events: TuiEvents,
-    runtime: &AgentRuntime,
+    runtime: &Arc<AgentRuntime>,
     agent: &AgentHandle,
     options: TuiOptions,
 ) -> Result<(), String> {
     let bridge = AgentBridge::new(
+        runtime.clone(),
         agent.clone(),
-        runtime.slot().clone(),
         options.model.clone(),
         events.sender.clone(),
     );

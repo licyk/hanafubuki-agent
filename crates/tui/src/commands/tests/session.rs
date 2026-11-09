@@ -44,25 +44,29 @@ pub(crate) enum Sent {
 
 pub(crate) fn sent(events: &Receiver<AppEvent>) -> Vec<Sent> {
     std::iter::from_fn(|| events.try_recv().ok())
-        .filter_map(|event| match event {
-            AppEvent::Op(op) => Some(Sent::Op(op)),
-            AppEvent::Command(command) => Some(Sent::App(command)),
-            AppEvent::OpenResumePicker => Some(Sent::ResumePicker),
-            AppEvent::InsertHistoryCell(cell) => Some(Sent::Cell(
-                cell.display_lines(80)
-                    .iter()
-                    .map(|line| {
-                        line.spans
-                            .iter()
-                            .map(|span| span.content.as_ref())
-                            .collect::<String>()
-                    })
-                    .collect::<Vec<_>>()
-                    .join("\n"),
-            )),
-            _ => None,
-        })
+        .filter_map(to_sent)
         .collect()
+}
+
+pub(crate) fn to_sent(event: AppEvent) -> Option<Sent> {
+    match event {
+        AppEvent::Op(op) => Some(Sent::Op(op)),
+        AppEvent::Command(command) => Some(Sent::App(command)),
+        AppEvent::OpenResumePicker => Some(Sent::ResumePicker),
+        AppEvent::InsertHistoryCell(cell) => Some(Sent::Cell(
+            cell.display_lines(80)
+                .iter()
+                .map(|line| {
+                    line.spans
+                        .iter()
+                        .map(|span| span.content.as_ref())
+                        .collect::<String>()
+                })
+                .collect::<Vec<_>>()
+                .join("\n"),
+        )),
+        _ => None,
+    }
 }
 
 pub(crate) fn call(call: SessionCall) -> Sent {

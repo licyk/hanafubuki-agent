@@ -3,6 +3,7 @@
 //! commands that need it, the running Agent.
 
 use std::future::Future;
+use std::sync::Arc;
 use std::time::Duration;
 
 use hanafubuki_agent::logging;
@@ -19,7 +20,9 @@ use crate::exit::Failure;
 const START_TIMEOUT: Duration = Duration::from_secs(120);
 
 pub(crate) struct Standalone {
-    pub(crate) runtime: AgentRuntime,
+    /// Shared with the terminal interface, which moves its working
+    /// directory (`/cd`).
+    pub(crate) runtime: Arc<AgentRuntime>,
     pub(crate) dirs: AgentDirs,
 }
 
@@ -58,7 +61,10 @@ impl Standalone {
         {
             eprintln!("warning: the log file is not written: {error}");
         }
-        Ok(Self { runtime, dirs })
+        Ok(Self {
+            runtime: Arc::new(runtime),
+            dirs,
+        })
     }
 
     /// Starts the Agent and waits until it runs.

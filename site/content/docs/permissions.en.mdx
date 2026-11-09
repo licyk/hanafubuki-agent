@@ -21,11 +21,11 @@ hanafubuki-agent config set permissionMode auto_review    # from now on
 hanafubuki-agent --permission-mode full-access exec "…"   # for this run only
 ```
 
-A profile can hold it too, such as `[profiles.review] permissionMode = "auto_review"`, selected with `-p review`. The mode is fixed when a turn starts, and the terminal interface has no command to change it; `/status` shows it.
+A profile can hold it too, such as `[profiles.review] permissionMode = "auto_review"`, selected with `-p review`. The mode is fixed when a turn starts. In the terminal interface, `/permissions` changes it for the session (below), and `/status` shows the mode in effect.
 
 ### One session's mode [#session-mode]
 
-A session can run in another mode than the configured one, until it ends, without changing `permissionMode`. An embedding host sets it with `set_session_permission_mode` ([Embedding the Agent](/docs/embedding#permissions)).
+A session can run in another mode than the configured one, until it ends, without changing `permissionMode`. In the terminal interface `/permissions` sets it: a list of the three modes, Full access after a confirmation, or `/permissions MODE` at once ([Terminal interface](/docs/terminal-interface#permissions)). An embedding host sets it with `set_session_permission_mode` ([Embedding the Agent](/docs/embedding#permissions)).
 
 - It can be changed at any time. A running turn keeps the mode it started with; the session's next turn takes the new one.
 - It belongs to that session only: other sessions, and a fork of it, keep the configured mode.
@@ -90,7 +90,7 @@ Automatic review costs extra model requests and relies on the model's judgement.
 
 ### Approving a denied operation [#approve-denied]
 
-When a review denies an operation you did want, you can approve it (an embedding host calls `approve_denied_action`; see [Embedding the Agent](/docs/embedding#permissions)). Only one of the session's ten latest denials can be approved, and not while a turn or a compaction runs.
+When a review denies an operation you did want, you can approve it: `/approve` in the terminal interface lists the session's denials to choose from ([Terminal interface](/docs/terminal-interface#permissions)), and an embedding host calls `approve_denied_action` ([Embedding the Agent](/docs/embedding#permissions)). Only one of the session's ten latest denials can be approved, and not while a turn or a compaction runs.
 
 The approval does not run the operation and starts no turn. It adds a note to the session's history, which the model reads from its next request:
 

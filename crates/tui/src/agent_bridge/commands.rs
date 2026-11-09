@@ -137,7 +137,14 @@ impl AgentBridge {
             AgentCommand::Status => {
                 let session = self.current()?;
                 self.spawn(move |agent| async move {
-                    let settings = agent.settings_view().await?;
+                    // The session's own mode, else the configured one.
+                    let permission_mode = match agent
+                        .session_permission_mode(session.id)
+                        .map_err(|error| error.to_string())?
+                    {
+                        Some(mode) => mode,
+                        None => agent.settings_view().await?.settings.permission_mode,
+                    };
                     let registry = agent.provider_registry_snapshot().await?;
                     let roots = agent.workspace_roots()?.into_vec();
                     let provider = registry
@@ -152,7 +159,7 @@ impl AgentBridge {
                         TurnUpdate::StatusReport(Box::new(StatusReport {
                             session,
                             provider,
-                            permission_mode: settings.settings.permission_mode,
+                            permission_mode,
                             roots,
                         })),
                     ))))
@@ -229,13 +236,15 @@ impl AgentBridge {
             .map_err(|failure| failure.to_string())
     }
 
-    /// Creates the session the interface drives; `waiting` and what is
-    /// asked until it exists are carried out then.
+    /// Creates the session the interface drives, bound to the worktree
+    /// `/worktree` moved into for it; `waiting` and what is asked until it
+    /// exists are carried out then.
     pub(super) fn create_session(&mut self, waiting: Vec<Op>) {
         self.creating = Some(waiting);
         let agent = self.agent.clone();
         let model = self.model.clone();
         let title = self.pending_title.take();
+        let worktree = self.pending_worktree.take();
         let sink = self.sink();
         let app_event_tx = self.app_event_tx.clone();
         self.agent.runtime().handle().spawn(async move {
@@ -250,6 +259,15 @@ impl AgentBridge {
                         };
                         if let Err(error) = agent.rename_session(request, &*sink) {
                             let failed = format!("the session was not named: {error}");
+                            app_event_tx.send(AppEvent::AgentReply(AgentReply::Failed(failed)));
+                        }
+                    }
+                    if let Some(path) = worktree {
+                        if let Err(error) = agent.worktree_bind(path.clone(), session.id).await {
+                            let failed = format!(
+                                "the session was not bound to the worktree {}: {error}",
+                                path.display()
+                            );
                             app_event_tx.send(AppEvent::AgentReply(AgentReply::Failed(failed)));
                         }
                     }

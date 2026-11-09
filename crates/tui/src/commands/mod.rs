@@ -5,9 +5,11 @@
 //! `/name args` and the chat's dispatch all come from the table.
 //!
 //! A command runs inside `catch_panic`, and so do the views it pushes
-//! (`bottom_pane::module_view`): a command that panics is turned off for
-//! the rest of the run, and the chat goes on.
+//! (`bottom_pane::module_view`) and its later steps ([`CommandStep`]): a
+//! command that panics is turned off for the rest of the run, and the chat
+//! goes on.
 
+mod cd;
 mod clear;
 mod confirm;
 mod copy;
@@ -21,6 +23,7 @@ mod leave;
 pub(crate) mod mcp;
 mod mode;
 mod model;
+mod permissions;
 mod prompt;
 pub(crate) mod providers;
 mod pwd;
@@ -37,6 +40,7 @@ mod theme;
 mod title;
 mod tui;
 mod workspace;
+mod worktree;
 
 use std::fmt;
 
@@ -56,10 +60,12 @@ pub(crate) use providers::PROVIDERS;
 pub(crate) use review::REVIEW;
 
 /// Every command, in presentation order: the most used first.
-pub(crate) static COMMANDS: [&CommandSpec; 32] = [
+pub(crate) static COMMANDS: [&CommandSpec; 36] = [
     &model::MODEL,
     &providers::PROVIDERS,
     &mode::MODE,
+    &permissions::PERMISSIONS,
+    &permissions::APPROVE,
     &reports::SKILLS,
     &rename::RENAME,
     &session::NEW,
@@ -67,6 +73,7 @@ pub(crate) static COMMANDS: [&CommandSpec; 32] = [
     &leave::DELETE,
     &resume::RESUME,
     &fork::FORK,
+    &worktree::WORKTREE,
     &init::INIT,
     &session::COMPACT,
     &recap::RECAP,
@@ -78,6 +85,7 @@ pub(crate) static COMMANDS: [&CommandSpec; 32] = [
     &workspace::MENTION,
     &reports::STATUS,
     &pwd::PWD,
+    &cd::CD,
     &mcp::MCP,
     &hooks::HOOKS,
     &raw::RAW,
@@ -154,6 +162,26 @@ pub(crate) fn send_session_call(app_event_tx: &AppEventSender, call: SessionCall
     app_event_tx.send(AppEvent::Op(Op::Command(AgentCommand::Session(call))));
 }
 
+/// What a command does next, asked by one of its views' actions, which
+/// have only the app's channel: another view in place of the one closed
+/// (a confirmation, a listed entry's actions).
+pub(crate) struct CommandStep {
+    pub(crate) command: &'static CommandSpec,
+    pub(crate) run: Box<dyn FnOnce(&mut CommandContext<'_>) + Send>,
+}
+
+/// Has `run` run as `command`'s next step.
+pub(crate) fn send_step(
+    app_event_tx: &AppEventSender,
+    command: &'static CommandSpec,
+    run: impl FnOnce(&mut CommandContext<'_>) + Send + 'static,
+) {
+    app_event_tx.send(AppEvent::CommandStep(CommandStep {
+        command,
+        run: Box::new(run),
+    }));
+}
+
 /// What the Agent answered a command's call, for the command's view.
 #[derive(Debug)]
 pub(crate) enum CommandReply {
@@ -171,7 +199,7 @@ pub(crate) fn session_reply_command(reply: &SessionReply) -> Option<&'static Com
         }
         SessionReply::Archived => &leave::ARCHIVE,
         SessionReply::Deleted => &leave::DELETE,
-        SessionReply::Forked(_) => &fork::FORK,
+        SessionReply::Forked(_) | SessionReply::ForkChoice(_) => &fork::FORK,
         SessionReply::ExportPath(_)
         | SessionReply::ExportedText(_)
         | SessionReply::ExportedFile(_) => &export::EXPORT,
@@ -180,6 +208,15 @@ pub(crate) fn session_reply_command(reply: &SessionReply) -> Option<&'static Com
         SessionReply::Terminals(_) => &terminals::PS,
         SessionReply::TerminalsStopped { .. } => &terminals::STOP,
         SessionReply::Roots(_) => &pwd::PWD,
+        SessionReply::PermissionModes { .. } | SessionReply::PermissionModeSet(_) => {
+            &permissions::PERMISSIONS
+        }
+        SessionReply::Denials(_) | SessionReply::Approved(_) => &permissions::APPROVE,
+        SessionReply::DirectoryChanged(_) => &cd::CD,
+        SessionReply::WorktreeMenu { .. }
+        | SessionReply::WorktreeEntered { .. }
+        | SessionReply::Worktrees(_)
+        | SessionReply::WorktreeRemoved(_) => &worktree::WORKTREE,
         SessionReply::Failed { command, .. } => return find(command),
     })
 }
@@ -195,7 +232,7 @@ pub(crate) fn on_session_reply(context: &mut CommandContext<'_>, reply: SessionR
             rename::on_reply(context, reply)
         }
         SessionReply::Archived | SessionReply::Deleted => leave::on_reply(context, reply),
-        SessionReply::Forked(name) => fork::on_reply(context, name),
+        SessionReply::Forked(_) | SessionReply::ForkChoice(_) => fork::on_reply(context, reply),
         SessionReply::ExportPath(_)
         | SessionReply::ExportedText(_)
         | SessionReply::ExportedFile(_) => export::on_reply(context, reply),
@@ -205,6 +242,15 @@ pub(crate) fn on_session_reply(context: &mut CommandContext<'_>, reply: SessionR
             terminals::on_reply(context, reply)
         }
         SessionReply::Roots(roots) => pwd::on_reply(context, roots),
+        SessionReply::PermissionModes { .. }
+        | SessionReply::PermissionModeSet(_)
+        | SessionReply::Denials(_)
+        | SessionReply::Approved(_) => permissions::on_reply(context, reply),
+        SessionReply::DirectoryChanged(roots) => cd::on_reply(context, roots),
+        SessionReply::WorktreeMenu { .. }
+        | SessionReply::WorktreeEntered { .. }
+        | SessionReply::Worktrees(_)
+        | SessionReply::WorktreeRemoved(_) => worktree::on_reply(context, reply),
     }
 }
 

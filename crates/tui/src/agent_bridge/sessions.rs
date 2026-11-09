@@ -1,20 +1,24 @@
 //! The session commands onto the facade's calls: renaming (and the
 //! suggested title), archiving, deleting, forking, clearing, exporting,
-//! the last answer `/copy` offers, the recap, the background terminals and
-//! the workspace roots. What a call found comes back as a [`SessionReply`]
-//! for the command that asked; a failure names that command.
+//! the last answer `/copy` offers, the recap, the background terminals,
+//! the workspace roots, and the permission mode and the working directory
+//! (`permissions`, `workspace`). What a call found comes back as a
+//! [`SessionReply`] for the command that asked; a failure names that
+//! command.
 
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use hanafubuki_agent::{
-    AgentBackgroundTerminalSnapshot, AgentError, AgentHandle, AgentHistorySortDirection,
-    AgentRecap, AgentSessionHeadForkRequest, AgentSessionId, AgentSessionTitleRenameRequest,
-    AgentTranscriptPageRequest, ConversationItem,
+    AgentBackgroundTerminalSnapshot, AgentError, AgentEventSink, AgentHandle,
+    AgentHistorySortDirection, AgentPermissionMode, AgentRecap, AgentSessionHeadForkRequest,
+    AgentSessionId, AgentSessionRuntimeSnapshot, AgentSessionTitleRenameRequest,
+    AgentTranscriptPageRequest, AgentWorktree, ConversationItem,
 };
 
 use super::commands::no_session;
+use super::permissions::DeniedAction;
 use super::{AgentBridge, AgentReply, TurnUpdate};
 use crate::app_event::AppEvent;
 use crate::resume_picker::ArchiveRequest;
@@ -32,8 +36,11 @@ pub(crate) enum SessionCall {
     Archive,
     Delete,
     /// A fork of the session at its head, shown from then on; named when a
-    /// name is given.
+    /// name is given. Where a worktree can be made, the choice of where it
+    /// runs comes first.
     Fork(Option<String>),
+    /// A fork in the working directory, without the choice.
+    ForkHere(Option<String>),
     /// No session, as `/new`; the session the next message creates gets
     /// the name.
     Clear(Option<String>),
@@ -46,6 +53,26 @@ pub(crate) enum SessionCall {
     Terminals,
     StopTerminals,
     Roots,
+    /// `/permissions`: the session's own mode and the configured one.
+    PermissionModes,
+    SetPermissionMode(AgentPermissionMode),
+    /// The denials `/approve` offers.
+    Denials,
+    /// Approves the denial with this review id.
+    ApproveDenial(String),
+    /// `/cd`: the path as typed, a relative one read against the working
+    /// directory.
+    ChangeDirectory(PathBuf),
+    /// `/worktree`'s menu, where a worktree can be made.
+    WorktreeMenu,
+    /// A new worktree to move into: with `continued`, a fork of the session
+    /// (named `name`) goes on there; else the next session starts there.
+    EnterWorktree {
+        continued: bool,
+        name: Option<String>,
+    },
+    ListWorktrees,
+    RemoveWorktree(PathBuf),
 }
 
 /// Where `/export` puts the conversation.
@@ -82,6 +109,31 @@ pub(crate) enum SessionReply {
         failed: Vec<String>,
     },
     Roots(Vec<PathBuf>),
+    /// A worktree can be made: `/fork` asks where the fork runs.
+    ForkChoice(Option<String>),
+    PermissionModes {
+        session: Option<AgentPermissionMode>,
+        configured: AgentPermissionMode,
+    },
+    PermissionModeSet(AgentPermissionMode),
+    /// The session's latest denials, newest first.
+    Denials(Vec<DeniedAction>),
+    /// The summary of the action approved.
+    Approved(String),
+    /// The workspace roots after `/cd`.
+    DirectoryChanged(Vec<PathBuf>),
+    WorktreeMenu {
+        /// There is a session to continue.
+        conversation: bool,
+    },
+    /// The working directory moved into the new worktree at `path`.
+    WorktreeEntered {
+        path: PathBuf,
+        roots: Vec<PathBuf>,
+        continued: bool,
+    },
+    Worktrees(Vec<AgentWorktree>),
+    WorktreeRemoved(PathBuf),
     /// `command`'s call failed.
     Failed {
         command: &'static str,
@@ -96,7 +148,7 @@ impl SessionCall {
             Self::RenamePrompt | Self::Rename(_) => "rename",
             Self::Archive => "archive",
             Self::Delete => "delete",
-            Self::Fork(_) => "fork",
+            Self::Fork(_) | Self::ForkHere(_) => "fork",
             Self::Clear(_) => "clear",
             Self::ExportPath | Self::Export(_) => "export",
             Self::LastAnswer => "copy",
@@ -104,6 +156,25 @@ impl SessionCall {
             Self::Terminals => "ps",
             Self::StopTerminals => "stop",
             Self::Roots => "pwd",
+            Self::PermissionModes | Self::SetPermissionMode(_) => "permissions",
+            Self::Denials | Self::ApproveDenial(_) => "approve",
+            Self::ChangeDirectory(_) => "cd",
+            Self::WorktreeMenu
+            | Self::EnterWorktree { .. }
+            | Self::ListWorktrees
+            | Self::RemoveWorktree(_) => "worktree",
+        }
+    }
+}
+
+impl SessionReply {
+    /// The working directory this reply moved to, if it moved it.
+    pub(crate) fn working_directory(&self) -> Option<&Path> {
+        match self {
+            Self::DirectoryChanged(roots) | Self::WorktreeEntered { roots, .. } => {
+                roots.first().map(PathBuf::as_path)
+            }
+            _ => None,
         }
     }
 }
@@ -152,7 +223,12 @@ impl AgentBridge {
                 self.leave_session(call == SessionCall::Archive)?;
                 return Ok(None);
             }
-            SessionCall::Fork(name) => return self.fork(name),
+            SessionCall::Fork(name)
+                if self.session_id.is_some() && self.worktrees_unavailable().is_none() =>
+            {
+                reply(SessionReply::ForkChoice(name))
+            }
+            SessionCall::Fork(name) | SessionCall::ForkHere(name) => return self.fork(name),
             SessionCall::Clear(name) => {
                 self.pending_title = name;
                 let model = self.model.clone();
@@ -244,6 +320,30 @@ impl AgentBridge {
                 return Ok(None);
             }
             SessionCall::Roots => reply(SessionReply::Roots(self.workspace_roots())),
+            SessionCall::PermissionModes => {
+                self.permission_modes()?;
+                return Ok(None);
+            }
+            SessionCall::SetPermissionMode(mode) => self.set_permission_mode(mode)?,
+            SessionCall::Denials => self.denials(),
+            SessionCall::ApproveDenial(review_id) => self.approve_denial(review_id)?,
+            SessionCall::ChangeDirectory(path) => {
+                self.change_directory(path);
+                return Ok(None);
+            }
+            SessionCall::WorktreeMenu => self.worktree_menu()?,
+            SessionCall::EnterWorktree { continued, name } => {
+                self.enter_new_worktree(continued, name)?;
+                return Ok(None);
+            }
+            SessionCall::ListWorktrees => {
+                self.list_worktrees();
+                return Ok(None);
+            }
+            SessionCall::RemoveWorktree(path) => {
+                self.remove_worktree(path);
+                return Ok(None);
+            }
         };
         Ok(Some(update))
     }
@@ -300,34 +400,10 @@ impl AgentBridge {
     /// one is given; the command says so once it is shown.
     fn fork(&mut self, name: Option<String>) -> Result<Option<TurnUpdate>, String> {
         let session = self.current()?;
-        let outcome = self
-            .agent
-            .fork_session_at_head(AgentSessionHeadForkRequest {
-                source_session_id: session.id,
-                source_generation: session.generation,
-                source_revision: session.revision,
-            })
-            .map_err(|error| format!("the session was not forked: {error}"))?;
-        let fork = outcome.session;
-        let mut named = None;
-        if let Some(title) = name {
-            let sink = self.sink();
-            let renamed = self
-                .agent
-                .rename_session(
-                    AgentSessionTitleRenameRequest {
-                        session_id: fork.id,
-                        generation: fork.generation,
-                        revision: fork.revision,
-                        title,
-                    },
-                    &*sink,
-                )
-                .map_err(|error| format!("the fork was made but not named: {error}"))?;
-            named = renamed.title.map(|title| title.value);
-        }
+        let sink = self.sink();
+        let (fork, named) = fork_at_head(&self.agent, &*sink, &session, name)?;
         self.pending_title = None;
-        let opened = self.open(fork.id)?;
+        let opened = self.open(fork)?;
         let forked = reply(SessionReply::Forked(named));
         self.app_event_tx
             .send(AppEvent::AgentReply(AgentReply::Update(Box::new(forked))));
@@ -351,7 +427,7 @@ impl AgentBridge {
         done.map(drop).map_err(|error| error.to_string())
     }
 
-    fn current_id(&self) -> Result<AgentSessionId, String> {
+    pub(super) fn current_id(&self) -> Result<AgentSessionId, String> {
         self.session_id
             .ok_or_else(|| "there is no session yet".to_string())
     }
@@ -359,7 +435,7 @@ impl AgentBridge {
     /// Runs `call`, which blocks (it reads or writes the history, or waits
     /// for processes), on a thread of its own, off the Agent's runtime;
     /// what it found, or its failure, comes back as `command`'s reply.
-    fn blocking_session_call(
+    pub(super) fn blocking_session_call(
         &self,
         command: &'static str,
         call: impl FnOnce(AgentHandle) -> Result<SessionReply, String> + Send + 'static,
@@ -376,8 +452,11 @@ impl AgentBridge {
 
     /// Runs `call` on the Agent's runtime; what it found, or its failure,
     /// comes back as `command`'s reply.
-    fn spawn_session_call<F>(&self, command: &'static str, call: impl FnOnce(AgentHandle) -> F)
-    where
+    pub(super) fn spawn_session_call<F>(
+        &self,
+        command: &'static str,
+        call: impl FnOnce(AgentHandle) -> F,
+    ) where
         F: std::future::Future<Output = Result<SessionReply, String>> + Send + 'static,
     {
         let call = call(self.agent.clone());
@@ -392,6 +471,39 @@ impl AgentBridge {
 
 fn reply(reply: SessionReply) -> TurnUpdate {
     TurnUpdate::Session(reply)
+}
+
+/// A fork of `session` at its head, named `name` when one is given: its
+/// id and its title.
+pub(super) fn fork_at_head(
+    agent: &AgentHandle,
+    sink: &dyn AgentEventSink,
+    session: &AgentSessionRuntimeSnapshot,
+    name: Option<String>,
+) -> Result<(AgentSessionId, Option<String>), String> {
+    let fork = agent
+        .fork_session_at_head(AgentSessionHeadForkRequest {
+            source_session_id: session.id,
+            source_generation: session.generation,
+            source_revision: session.revision,
+        })
+        .map_err(|error| format!("the session was not forked: {error}"))?
+        .session;
+    let Some(title) = name else {
+        return Ok((fork.id, None));
+    };
+    let renamed = agent
+        .rename_session(
+            AgentSessionTitleRenameRequest {
+                session_id: fork.id,
+                generation: fork.generation,
+                revision: fork.revision,
+                title,
+            },
+            sink,
+        )
+        .map_err(|error| format!("the fork was made but not named: {error}"))?;
+    Ok((fork.id, renamed.title.map(|title| title.value)))
 }
 
 /// The text of the session's latest assistant message, if any.

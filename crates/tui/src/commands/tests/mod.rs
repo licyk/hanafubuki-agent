@@ -10,6 +10,7 @@ fn every_command_is_found_by_its_name_and_its_aliases() {
     assert_eq!(find("quit"), Some(&exit::EXIT));
     assert_eq!(find("clean"), Some(&terminals::STOP));
     assert_eq!(find("cwd"), Some(&pwd::PWD));
+    assert_eq!(find("cd"), Some(&cd::CD));
     assert_eq!(find("mod"), None);
 }
 
@@ -31,6 +32,8 @@ fn the_table_keeps_the_presentation_order() {
             "model",
             "providers",
             "mode",
+            "permissions",
+            "approve",
             "skills",
             "rename",
             "new",
@@ -38,6 +41,7 @@ fn the_table_keeps_the_presentation_order() {
             "delete",
             "resume",
             "fork",
+            "worktree",
             "init",
             "compact",
             "recap",
@@ -49,6 +53,7 @@ fn the_table_keeps_the_presentation_order() {
             "mention",
             "status",
             "pwd",
+            "cd",
             "mcp",
             "hooks",
             "raw",
@@ -74,6 +79,8 @@ fn availability_follows_the_spec() {
     assert_eq!(
         during_task,
         [
+            "permissions",
+            "approve",
             "skills",
             "review",
             "goal",
@@ -101,7 +108,15 @@ fn availability_follows_the_spec() {
         .collect();
     assert_eq!(
         needs_session,
-        ["model", "mode", "rename", "compact", "goal", "status"]
+        [
+            "model",
+            "mode",
+            "permissions",
+            "rename",
+            "compact",
+            "goal",
+            "status"
+        ]
     );
     let inline_args: Vec<&str> = COMMANDS
         .into_iter()
@@ -111,12 +126,14 @@ fn availability_follows_the_spec() {
     assert_eq!(
         inline_args,
         [
+            "permissions",
             "rename",
             "resume",
             "fork",
             "review",
             "goal",
             "export",
+            "cd",
             "mcp",
             "raw",
             "statusline",
@@ -139,3 +156,4 @@ fn a_prefix_is_a_case_insensitive_subsequence_of_an_enabled_command() {
 
 /// The chat and what it sent, for the commands' own tests too.
 pub(super) mod session;
+mod workspace;

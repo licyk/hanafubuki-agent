@@ -16,6 +16,7 @@ use crate::agent_bridge::{
     AgentReply, GoalCall, HooksCall, McpCall, ProviderCall, ReviewCall, SessionCall,
 };
 use crate::appearance::AppearanceEvent;
+use crate::commands::CommandStep;
 use crate::file_search::FileMatch;
 use crate::history_cell::HistoryCell;
 
@@ -58,6 +59,8 @@ pub(crate) enum AppEvent {
     Command(AppCommand),
     /// `/theme`, `/statusline`, `/title`: a change, for this run or saved.
     Appearance(AppearanceEvent),
+    /// A slash command's next view, asked by one of its views.
+    CommandStep(CommandStep),
     StartCommitAnimation,
     StopCommitAnimation,
     CommitTick,

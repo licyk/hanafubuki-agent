@@ -11,7 +11,7 @@ use hanafubuki_agent::AgentCompactionStatus;
 use super::ChatWidget;
 use crate::agent_bridge::{setup_needed, TurnUpdate};
 use crate::app_event::{AppEvent, Op};
-use crate::commands::{self, CommandContext, CommandSpec};
+use crate::commands::{self, CommandContext, CommandSpec, CommandStep};
 use crate::history_cell;
 
 impl ChatWidget {
@@ -54,6 +54,11 @@ impl ChatWidget {
             self.command_failed(command.name, &message);
         }
         self.request_redraw();
+    }
+
+    /// A command's next view, which one of its views asked for.
+    pub(crate) fn run_command_step(&mut self, step: CommandStep) {
+        self.run_command(step.command, step.run);
     }
 
     /// Opens the Provider setup, unless it is open (or `/providers` is off).
@@ -139,6 +144,11 @@ impl ChatWidget {
                 self.add_to_history(history_cell::new_skills_output(&catalog))
             }
             TurnUpdate::Session(reply) => {
+                // `/cd` and `/worktree` moved: the next session's header
+                // names the new directory.
+                if let Some(directory) = reply.working_directory() {
+                    self.directory = directory.display().to_string();
+                }
                 if let Some(command) = commands::session_reply_command(&reply) {
                     self.run_command(command, |context| {
                         commands::on_session_reply(context, reply)

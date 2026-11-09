@@ -94,6 +94,16 @@ Editing one of your earlier messages (Esc twice in the [terminal interface](/doc
 - Files the Agent changed are not restored.
 - It is refused while a turn runs in the session, and in a child session: a [side conversation](#side) is temporary.
 
+## Worktrees [#worktrees]
+
+A worktree is a separate checkout of the repository the working directory is in, which the Agent makes under the data directory's `worktrees/` (named `<repository>-<8 hex digits>`), detached at the repository's `HEAD`. It can belong to one session, recorded in the worktree's Git metadata.
+
+- In the terminal interface, `/worktree` continues the conversation in a new worktree (a fork of the session goes on there and owns it) or starts a new conversation there (the session your next message creates owns it); in a Git repository `/fork` offers the first too. Either moves the working directory into the worktree. See [Terminal interface](/docs/terminal-interface#worktrees).
+- `/worktree`'s Browse worktrees lists the repository's worktrees, with their commit, branch and session: it resumes a worktree's session, copies its path, or removes it.
+- Removing a worktree deletes its checkout with its local changes and prunes the repository's record of it; its session stays. The worktree the working directory is in is not removed.
+- A session records the directory it was created in (`cwd`): one created in a worktree records the worktree, a fork records its source's.
+- With the `worktree` plugin off (`disabledPlugins`), worktrees are unavailable, and the interface says so.
+
 ## Child sessions [#children]
 
 A session can be the child of another, made for it rather than started by you: a [side conversation](#side), a [sub-agent](#subagents) or a [review](#reviews). A child records its parent (`parentSessionId` in its summary) and why it was made (`origin`: `side`, `subagent` or `review`), and works in its parent's directory, with its parent's model and settings.

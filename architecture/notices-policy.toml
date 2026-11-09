@@ -296,6 +296,18 @@ path = "crates/tui/src/app/tests/session_commands.rs"
 reason = "The session commands end to end over the standalone Agent."
 
 [[original]]
+path = "crates/tui/src/agent_bridge/workspace.rs"
+reason = "/cd and the worktree commands onto the standalone runtime's set_working_directory and the facade's worktree calls."
+
+[[original]]
+path = "crates/tui/src/commands/tests/workspace.rs"
+reason = "The permission, working directory and worktree commands' dispatch and their views' replies, written for the port."
+
+[[original]]
+path = "crates/tui/src/app/tests/workspace_commands.rs"
+reason = "/permissions, /approve, /cd and /worktree end to end over the standalone Agent and a temporary Git repository."
+
+[[original]]
 path = "crates/tui/src/bottom_pane/module_view.rs"
 reason = "The isolation of a command's views over catch_panic, written for the Agent."
 
