@@ -1,9 +1,69 @@
 # Follow-ups
 
+## Plan: Codex's new terminal interface, its commands, configuration in the interface (2026-11-09)
+
+The plan is [docs/plan-codex-tui-port.md](docs/plan-codex-tui-port.md).
+Every §7 decision was accepted as recommended. The source is Codex `57a808a392` (no stable tag has the new
+interface). Every phase is validated, documented in both languages,
+committed and pushed. Each phase notes what Hanafubuki must change when it
+moves its pin.
+
+- [ ] P0a (TUI): the Codex revision marker and NOTICE; the command
+      registry (`commands/`, `SlashCommandModule`), replacing the flat
+      matches, with the existing 12 commands moved into it unchanged;
+      per-module isolation of dispatch, view input and render over the
+      re-exported `catch_panic`; a bridge without a session, and the
+      session created with the first message.
+- [ ] P0b (facade): the feature-call helper (`ModuleHost::service`,
+      `PluginFaults::guard_async`, `AgentError::FeatureUnavailable`);
+      `check-plugin-panics` over `crates/agent/src/plugins/`; the `[tui]`
+      section and `tui_preferences` / `write_tui_preferences`;
+      `hanafubuki_agent::panic::catch_panic` re-exported.
+- [ ] P1: the provider screen (`/providers`, first-run setup when there is
+      no default provider or the model is empty, `test_provider_draft`,
+      request headers) and the MCP manager and form (`/mcp`, `/mcp verbose`,
+      `/mcp login`, secret rows as credentials, OAuth loopback
+      `mcp_oauth_login`, CLI `mcp login`, MCP ids validated on read).
+- [ ] P2: the new interface (Codex's owned transcript, layers A–G):
+      terminal extensions, the `HistoryCell` extension, `TranscriptView`,
+      the owned shell, the clipboard, keymap core; owned mode by default;
+      Ctrl+T in both modes (live tail); `/tui`; `/raw`.
+- [ ] P3: Esc to edit an earlier message (`app_backtrack`) over
+      `fork_session_before_turn`; facade `edit_from_turn`.
+- [ ] P4: `/rename /archive /delete /resume [id|title] /fork /clear /export
+      /copy /ps /stop /pwd /init`; `export_session_markdown`; `cwd` and
+      `branch` in session summaries.
+- [ ] P5: `/theme` (syntect and two-face, also syntax highlighting),
+      `/keymap`, `/title`, `/statusline`, `/presets`, `/config`,
+      `/warnings`, `/memories`.
+- [ ] P6: per-session permission mode (`set_session_permission_mode`,
+      `turns.rs` no longer overrides it), `/permissions`, `/approve`
+      (`approve_denied_action`, a model-visible note: goldens).
+- [ ] P7: a mutable standalone workspace, `WorkspaceFsPolicy` rebuilt,
+      `exec_command`'s default workdir (the `-C` bug), `/cd`;
+      `hanafubuki-agent-worktree` and `plugin-worktree`, `/worktree`, the
+      worktree choice in `/fork`.
+- [ ] P8: the shared structured request (from the titles plugin), the
+      `recap` plugin, `/recap`, `suggest_session_title` in `/rename`.
+- [ ] P9: child and ephemeral sessions (`parent`, `origin`,
+      `AgentSessionDriver`, archive and delete cascade; a new history
+      fixture in both repositories), `/side` and `/btw`, the workspace
+      panes.
+- [ ] P10: the `subagents` plugin (Codex's v2 tools, orchestrator prompt:
+      goldens), `/subagents`, `/agents`.
+- [ ] P11: the `review` plugin (rubric, read-only child session, JSON
+      findings), `/review`.
+- [ ] P12: the `goal` plugin (tools, context, the first continuation hook,
+      goal templates), `/goal` and its status-line item.
+- [ ] P13: `hanafubuki-agent-hooks` and `plugin-hooks`, the
+      `ToolLifecycleHookRegistry` extension point, hook events, `/hooks`.
+- [ ] P14 (decision 4): `hanafubuki-agent-sandbox`, sandbox presets in
+      `/permissions`, `/setup-default-sandbox` on Windows.
+
 ## Plan: visible thinking and the documentation site (2026-11-09)
 
-The plan is [docs/plan-thinking-and-site.md](docs/plan-thinking-and-site.md);
-every recommendation in its §5 was accepted (store thinking in history; drop
+The plan was `docs/plan-thinking-and-site.md` (removed once its
+repository work was done; git keeps it); every recommendation in its §5 was accepted (store thinking in history; drop
 Hanafubuki's separate thinking timer; a bilingual site, zh-CN by default;
 `extraction-plan.md` not carried over; GitHub Pages; one new history-corpus
 fixture recorded deliberately; Giscus follows the site's theme and locale).
