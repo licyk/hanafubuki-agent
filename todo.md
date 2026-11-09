@@ -8,12 +8,25 @@ interface). Every phase is validated, documented in both languages,
 committed and pushed. Each phase notes what Hanafubuki must change when it
 moves its pin.
 
-- [ ] P0a (TUI): the Codex revision marker and NOTICE; the command
-      registry (`commands/`, `SlashCommandModule`), replacing the flat
-      matches, with the existing 12 commands moved into it unchanged;
-      per-module isolation of dispatch, view input and render over the
-      re-exported `catch_panic`; a bridge without a session, and the
-      session created with the first message.
+- [x] P0a (TUI): `[[derived]]` in the notices policy takes `markers`,
+      and `crates/tui/src` accepts "Modified from OpenAI Codex 57a808a392
+      (Apache-2.0)." beside rust-v0.93.0's; NOTICE names both. The commands
+      are one static table (`commands::COMMANDS`, `CommandSpec`: name,
+      aliases, description, `inline_args`, `during_task`, `needs_session`,
+      `dispatch`); `/quit` is an alias of `/exit`; `/name rest` is split
+      and the rest goes to a command that takes it (none yet). A command's
+      dispatch and its views (`bottom_pane::module_view`) run under
+      `catch_panic`: one that panics is closed, reported, turned off for
+      the run and recorded in `ChatWidget.warnings` (for `/warnings`). The
+      bridge starts without a session; the first message (or a
+      `needs_session` command, through `Op::EnsureSession`) creates it,
+      and a failure (no Provider) is an error cell, the interface goes on;
+      `/new` returns to no session; `-m` applies to every session the
+      interface creates. The terminal interface page, "Slash commands".
+  - Limits: the approval and question overlays are chat core, not
+    wrapped; a contained panic's report still goes to standard error over
+    the interface (as before, todo 5a); a session whose `-m` failed is
+    left with no turn.
 - [x] P0b (facade): `check-plugin-panics` also covers
       `crates/agent/src/plugins/` (no violation there);
       `hanafubuki_agent::panic::{catch_panic, catch_panic_async}`
@@ -300,11 +313,8 @@ done: the workspace, the decoupling inside Hanafubuki's tree, and the move.
     toggle or insert a Skill; the sessions in the resume picker show no
     working directory or branch (the summaries have none); `exec`
     resumes no session; syntax highlighting (no `.tmTheme` is shipped).
-  - Every start of the interface (and `resume` on the picker) creates a
-    session that stays in the history, a turn run in it or not: the
-    picker hides the sessions no turn ran in, `sessions list` does not.
-    Create the session with the first message, or delete an unused one
-    on quit.
+  - Every start of the interface created a session (fixed in P0a: the
+    first message creates it).
   - Still deferred from 5a: images in the composer (paste, attach); a
     session's earlier messages in the composer's history (only this
     run's); desktop notifications; Ctrl-Z suspend; the external editor;

@@ -48,4 +48,9 @@ pub(crate) trait BottomPaneView: Renderable {
 
     /// Drop a pending question that was answered or withdrawn elsewhere.
     fn dismiss_user_input(&mut self, _request_id: AgentUserInputRequestId) {}
+
+    /// The slash command whose view this is; `None` for the chat's own.
+    fn command(&self) -> Option<&'static str> {
+        None
+    }
 }

@@ -37,7 +37,8 @@ pub(crate) struct NoticesPolicy {
 struct Derived {
     /// A repository-relative file or directory, with `/` separators.
     path: String,
-    marker: String,
+    /// Each file carries one of them: one per upstream revision ported.
+    markers: Vec<String>,
     /// What NOTICE names for it.
     notice: String,
 }
@@ -108,10 +109,10 @@ pub(crate) fn check(root: &Path, policy: &NoticesPolicy, notice: &str) -> Vec<St
                 continue;
             }
             match fs::read_to_string(&file) {
-                Ok(source) if header(&source).contains(&derived.marker) => {}
+                Ok(source) if has_marker(&header(&source), &derived.markers) => {}
                 Ok(_) => violations.push(format!(
                     "{path}: its leading comments do not say \"{}\"",
-                    derived.marker
+                    derived.markers.join("\" or \"")
                 )),
                 Err(error) => violations.push(format!("{path}: {error}")),
             }
@@ -158,6 +159,12 @@ fn original_paths(
         paths.insert(original.path.clone());
     }
     paths
+}
+
+fn has_marker(header: &str, markers: &[String]) -> bool {
+    markers
+        .iter()
+        .any(|marker| header.contains(marker.as_str()))
 }
 
 /// The comment lines a file starts with, blank lines among them included.

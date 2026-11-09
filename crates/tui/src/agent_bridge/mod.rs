@@ -5,6 +5,10 @@
 //! the turn's (here), the slash commands' (`commands`), and the reading of
 //! a session's transcript into what the chat replays (`replay`).
 //!
+//! The interface starts with no session: the first message creates it, or
+//! a command that needs one (`Op::EnsureSession`), and `/new` drops back to
+//! none. What is asked while it is being created waits for it.
+//!
 //! It runs on the app loop's thread. The Agent's sink only forwards events
 //! into the loop's channel (`emit` must not block); a call that waits runs
 //! as a task of the Agent's runtime and reports back with an
@@ -26,7 +30,7 @@ use hanafubuki_agent::{
 
 use crate::app_event::{AppEvent, AppEventSender, Op};
 use crate::history_cell::ToolResultView;
-pub(crate) use commands::{ModelChoices, StatusReport};
+pub(crate) use commands::{with_model, ModelChoices, StatusReport};
 pub(crate) use replay::{OpenedSession, ReplayedItem};
 
 /// How many of the turn's latest items are read for a finished call.
@@ -94,8 +98,11 @@ pub(crate) enum AgentReply {
     TurnAccepted(AgentTurnAccepted),
     TurnRejected(String),
     Failed(String),
-    /// The session the interface now drives.
+    /// The session the interface now shows: one reopened, or none yet.
     SessionOpened(OpenedSession),
+    /// The session the first message (or a command) asked for exists.
+    SessionCreated(AgentSessionId),
+    SessionNotCreated(String),
     /// What a command found, for the chat to show as it is.
     Update(Box<TurnUpdate>),
 }
@@ -103,7 +110,14 @@ pub(crate) enum AgentReply {
 pub(crate) struct AgentBridge {
     agent: AgentHandle,
     slot: AgentSlot,
-    session_id: AgentSessionId,
+    /// The session the interface drives, once there is one.
+    session_id: Option<AgentSessionId>,
+    /// The model of the sessions the interface creates, in place of the
+    /// model policy's (`-m`).
+    model: Option<String>,
+    /// While a session is being created: what was asked meanwhile, in
+    /// order, carried out once it exists.
+    creating: Option<Vec<Op>>,
     app_event_tx: AppEventSender,
     turn: Option<AgentTurnAccepted>,
     /// A turn was submitted and has not ended; `turn` is unknown until the
@@ -118,13 +132,15 @@ impl AgentBridge {
     pub(crate) fn new(
         agent: AgentHandle,
         slot: AgentSlot,
-        session_id: AgentSessionId,
+        model: Option<String>,
         app_event_tx: AppEventSender,
     ) -> Self {
         Self {
             agent,
             slot,
-            session_id,
+            session_id: None,
+            model,
+            creating: None,
             app_event_tx,
             turn: None,
             turn_running: false,
@@ -133,19 +149,30 @@ impl AgentBridge {
     }
 
     #[cfg(test)]
-    pub(crate) fn session_id(&self) -> AgentSessionId {
+    pub(crate) fn session_id(&self) -> Option<AgentSessionId> {
         self.session_id
     }
 
     /// Carries out what the interface asked; what it leads to arrives as
     /// events and replies.
     pub(crate) fn submit(&mut self, op: Op) -> Option<TurnUpdate> {
+        if let Some(waiting) = self.creating.as_mut() {
+            waiting.push(op);
+            return None;
+        }
         match op {
             Op::UserInput(text) => {
-                match (self.turn_running, self.turn) {
-                    (false, _) => self.start_turn(text),
-                    (true, Some(turn)) => self.steer(turn, text),
-                    (true, None) => self.pending_steering.push(text),
+                match (self.session_id, self.turn_running, self.turn) {
+                    (None, ..) => self.create_session(vec![Op::UserInput(text)]),
+                    (Some(session_id), false, _) => self.start_turn(session_id, text),
+                    (Some(_), true, Some(turn)) => self.steer(turn, text),
+                    (Some(_), true, None) => self.pending_steering.push(text),
+                }
+                None
+            }
+            Op::EnsureSession => {
+                if self.session_id.is_none() {
+                    self.create_session(Vec::new());
                 }
                 None
             }
@@ -213,6 +240,20 @@ impl AgentBridge {
                 Some(TurnUpdate::Ended(TurnEnd::Failed(message)))
             }
             AgentReply::Failed(message) => Some(TurnUpdate::Error(message)),
+            AgentReply::SessionCreated(session_id) => {
+                self.session_id = Some(session_id);
+                for op in self.creating.take().unwrap_or_default() {
+                    if let Some(update) = self.submit(op) {
+                        self.app_event_tx
+                            .send(AppEvent::AgentReply(AgentReply::Update(Box::new(update))));
+                    }
+                }
+                None
+            }
+            AgentReply::SessionNotCreated(message) => {
+                self.creating = None;
+                Some(TurnUpdate::Error(message))
+            }
             AgentReply::SessionOpened(opened) => {
                 self.session_id = opened.session_id;
                 self.turn = None;
@@ -226,7 +267,7 @@ impl AgentBridge {
 
     /// What the chat widget makes of one of the Agent's events, if anything.
     pub(crate) fn event(&mut self, event: AgentEvent) -> Option<TurnUpdate> {
-        if event.session_id != self.session_id {
+        if Some(event.session_id) != self.session_id {
             return None;
         }
         // The turn's events can arrive before the reply that accepted it.
@@ -272,7 +313,7 @@ impl AgentBridge {
             AgentEventKind::ToolCompleted { call_id, is_error } => {
                 let result = event
                     .turn_id
-                    .map(|turn_id| self.tool_result(turn_id, &call_id))
+                    .map(|turn_id| self.tool_result(event.session_id, turn_id, &call_id))
                     .unwrap_or_default();
                 TurnUpdate::ToolCompleted {
                     call_id,
@@ -337,9 +378,8 @@ impl AgentBridge {
         TurnUpdate::Ended(end)
     }
 
-    fn start_turn(&mut self, text: String) {
+    fn start_turn(&mut self, session_id: AgentSessionId, text: String) {
         self.turn_running = true;
-        let session_id = self.session_id;
         let sink = self.sink();
         let app_event_tx = self.app_event_tx.clone();
         self.agent.runtime().handle().spawn({
@@ -407,9 +447,14 @@ impl AgentBridge {
 
     /// What a finished call left in the turn's history: its output, and for
     /// a patch the patch read as a diff. Tool events carry neither.
-    fn tool_result(&self, turn_id: hanafubuki_agent::AgentTurnId, call_id: &str) -> ToolResultView {
+    fn tool_result(
+        &self,
+        session_id: AgentSessionId,
+        turn_id: hanafubuki_agent::AgentTurnId,
+        call_id: &str,
+    ) -> ToolResultView {
         let page = self.agent.read_turn_page(AgentTurnPageRequest {
-            session_id: self.session_id,
+            session_id,
             turn_id,
             page_size: TOOL_ITEMS_PAGE,
             cursor: None,

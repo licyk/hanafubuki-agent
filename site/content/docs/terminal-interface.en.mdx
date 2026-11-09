@@ -4,12 +4,14 @@ description: The layout, keys, composer, slash commands, @ file mentions, the tr
 icon: SquareTerminal
 ---
 
-`hanafubuki-agent` with no command opens the terminal interface in a new session. Text after it is sent as the first message:
+`hanafubuki-agent` with no command opens the terminal interface. Text after it is sent as the first message:
 
 ```sh
 hanafubuki-agent
 hanafubuki-agent "Find the modules in this project that no test covers"
 ```
+
+The interface starts with no session: your first message creates it, as does a command that needs one (`/model`, `/mode`, `/compact`, `/status`). Starting and quitting leaves no empty session behind. When the session cannot be created (no default Provider is configured, say), the conversation says why in red and the interface stays open; the next message tries again.
 
 The interface needs a terminal on both standard input and standard output; in a pipe or a redirection it points you to [exec](/docs/exec) and exits with code 2. `-m`, `-C`, `--add-dir`, `--permission-mode` and the other [global flags](/docs/cli-reference#global-flags) apply as usual.
 
@@ -17,7 +19,7 @@ The interface needs a terminal on both standard input and standard output; in a 
 
 The interface takes a few lines at the bottom of the terminal, and the conversation is written into the terminal's own scrollback above it, so you scroll back through it like any other output, and it stays in the terminal after you quit.
 
-At the start (and after `/new` or a resume) a box shows the version, the model and the working directory. The bottom area holds, from the top:
+At the start (and after `/new` or a resume) a box shows the version, the model and the working directory. Before a session exists, the model is the one it will get: `-m`'s, else the configured one. The bottom area holds, from the top:
 
 1. **The running tool calls**: `• Running TOOL: SUBJECT`.
 2. **The status line**: during a turn, `• Working (12s • esc to interrupt)` with the elapsed time. While a model request is retried it reads `Reconnecting 1/3: reason`. The timer pauses while an approval or a question waits for you. Once the model's answer starts streaming, the status line is hidden.
@@ -65,7 +67,7 @@ A message that starts with `/` is a command. Typing `/` opens a popup of them, n
 | `/model`         | Picks the session's model from the enabled Providers' model catalogs; a Provider whose catalog cannot be read says why                                                  | No            |
 | `/mode`          | Picks the default mode or [plan mode](/docs/plan-mode)                                                                                                                  | No            |
 | `/skills`        | Lists the [Skills](/docs/skills), whether each is enabled, and the catalog's issues                                                                                     | Yes           |
-| `/new`           | Starts a new session (in the default mode); the previous one stays in the history                                                                                       | No            |
+| `/new`           | Leaves the session: the next message starts a new one (in the default mode); the previous one stays in the history                                                      | No            |
 | `/resume`        | Opens the resume picker (below)                                                                                                                                         | No            |
 | `/compact`       | Compacts the session's context now, as automatic compaction does                                                                                                        | No            |
 | `/diff`          | Shows `git diff` of the first workspace root, untracked files included, in a pager                                                                                      | Yes           |
@@ -78,6 +80,7 @@ A message that starts with `/` is a command. Typing `/` opens a popup of them, n
 - A `/name` that is no command is not sent; you get `Unrecognized command` instead. A path with a slash in it (`/usr/bin/env`), or text that starts with a space, is sent as a message.
 - Commands take no arguments. A message such as `/model gpt-5.1`, with text after the name, goes to the model as an ordinary message.
 - The permission mode is the configuration's (`permissionMode` or `--permission-mode`). `/status` shows it; no command in the interface changes it.
+- A command, or a list it opened, that fails with an internal error (a panic) is turned off for the rest of the run: the conversation says `'/x' failed and is turned off for the rest of this run`, the popup leaves it out, and typing it says it is off. The session, the composer and the other commands go on. An internal error in the chat itself (the composer, the conversation, a streaming answer) still ends the interface, after the terminal is restored.
 
 ## @ file mentions [#mentions]
 
@@ -139,17 +142,17 @@ hanafubuki-agent resume --last             # the latest session a turn ran in
 hanafubuki-agent resume 12 "Carry on"      # resume, then send a message
 ```
 
-The resume picker lists the sessions a turn ran in, the latest first, by title (the first message until the session is named) and when each was last updated. Type to search the titles; Up/Down and Page Up/Page Down move, Enter resumes, Esc goes back (at `resume`'s start, to a new session), and Ctrl-C quits. `/resume` opens it from the interface.
+The resume picker lists the sessions a turn ran in, the latest first, by title (the first message until the session is named) and when each was last updated. Type to search the titles; Up/Down and Page Up/Page Down move, Enter resumes, Esc goes back (at `resume`'s start, to the interface with no session), and Ctrl-C quits. `/resume` opens it from the interface.
 
 A resumed session shows its box and its latest 200 items: messages, the plans the model proposed, tool calls with their output, and context compactions. Older items are left out, with `Earlier messages are not shown.` Your next message continues the session.
 
-`resume --last` starts a new session when there is none. `hanafubuki-agent sessions list` shows the session ids; see [Sessions](/docs/sessions).
+With no session to resume, `resume --last` starts with no session, as `hanafubuki-agent` does. `hanafubuki-agent sessions list` shows the session ids; see [Sessions](/docs/sessions).
 
 ## Quitting [#quit]
 
 Type `/quit` or `/exit`, or press Ctrl-C twice within one second (or Ctrl-D twice on an empty composer). Quitting restores the terminal and shuts the Agent down, and prints nothing more.
 
-The exit code is 0; 1 when the Agent could not start, the session could not be opened or created, the `-m` model could not be set, or the terminal could not be used; 2 without a terminal.
+The exit code is 0; 1 when the Agent could not start, the session to resume could not be opened or given the `-m` model, or the terminal could not be used; 2 without a terminal.
 
 ## Terminal requirements [#terminal]
 

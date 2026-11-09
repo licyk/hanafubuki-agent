@@ -20,7 +20,7 @@ use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::style::Stylize;
 use ratatui::text::Line;
 
-use crate::agent_bridge::{AgentBridge, AgentReply, TurnUpdate};
+use crate::agent_bridge::{AgentBridge, TurnUpdate};
 use crate::app_event::{AgentCommand, AppEvent, AppEventSender, Op};
 use crate::chatwidget::ChatWidget;
 use crate::file_search::FileSearchManager;
@@ -138,20 +138,13 @@ impl App {
                 }
             }
             AppEvent::AgentReply(reply) => {
-                // The new session's transcript starts with its header.
-                if matches!(reply, AgentReply::SessionOpened(_)) {
-                    self.transcript_cells.clear();
-                }
                 if let Some(update) = self.bridge.reply(reply) {
-                    self.chat_widget.handle_turn_update(update);
+                    self.show_update(update);
                 }
             }
             AppEvent::Op(op) => {
                 if let Some(update) = self.bridge.submit(op) {
-                    if matches!(update, TurnUpdate::SessionOpened(_)) {
-                        self.transcript_cells.clear();
-                    }
-                    self.chat_widget.handle_turn_update(update);
+                    self.show_update(update);
                 }
             }
             AppEvent::InsertHistoryCell(cell) => self.insert_history_cell(tui, cell.into()),
@@ -175,6 +168,15 @@ impl App {
             AppEvent::Exit => return false,
         }
         true
+    }
+
+    /// What a reply or a request led to, for the chat; a session opened
+    /// replaces the transcript, which starts with its header.
+    fn show_update(&mut self, update: TurnUpdate) {
+        if matches!(update, TurnUpdate::SessionOpened(_)) {
+            self.transcript_cells.clear();
+        }
+        self.chat_widget.handle_turn_update(update);
     }
 
     /// `false` when the app should exit.
@@ -386,7 +388,11 @@ impl App {
             if let Some((x, y)) = chat_widget.cursor_pos(area) {
                 frame.set_cursor_position((x, y));
             }
-        })
+        })?;
+        // A command's view that panicked while drawn is gone from the next
+        // frame, which its error cell schedules.
+        self.chat_widget.reap_failed_views();
+        Ok(())
     }
 }
 

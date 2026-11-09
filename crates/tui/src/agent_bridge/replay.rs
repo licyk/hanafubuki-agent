@@ -11,10 +11,12 @@ use crate::history_cell::ToolResultView;
 /// The tool whose arguments are a patch the transcript shows as a diff.
 const APPLY_PATCH: &str = "apply_patch";
 
-/// The session the interface switched to.
+/// What the interface shows from now on: a reopened session, or no
+/// session yet (at the start, after `/new`), which the next message creates.
 #[derive(Debug)]
 pub(crate) struct OpenedSession {
-    pub(crate) session_id: AgentSessionId,
+    pub(crate) session_id: Option<AgentSessionId>,
+    /// The session's model; with none yet, the one it will get.
     pub(crate) model: String,
     pub(crate) mode: AgentSessionMode,
     /// Its latest transcript items, oldest first; empty for a new session.

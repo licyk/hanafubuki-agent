@@ -7,7 +7,7 @@ version = 1
 
 [[derived]]
 path = "crates/port/src"
-marker = "Modified from Upstream v1 (Apache-2.0)."
+markers = ["Modified from Upstream v1 (Apache-2.0).", "Modified from Upstream v2 (Apache-2.0)."]
 notice = "crates/port"
 
 [[mit]]
@@ -72,6 +72,22 @@ fn a_complete_port_passes() {
             ),
             ("crates/port/src/terminal.rs", &terminal()),
             ("crates/port/src/widget/snapshots/a.snap", "---\n"),
+        ],
+    );
+    assert_eq!(fixture.check(NOTICE), Vec::<String>::new());
+}
+
+#[test]
+fn a_file_may_carry_the_marker_of_either_revision() {
+    let fixture = Fixture::new(
+        "revisions",
+        &[
+            ("crates/port/src/lib.rs", "//! Docs.\n"),
+            (
+                "crates/port/src/newer.rs",
+                "// Modified from Upstream v2 (Apache-2.0).\n\nfn f() {}\n",
+            ),
+            ("crates/port/src/terminal.rs", &terminal()),
         ],
     );
     assert_eq!(fixture.check(NOTICE), Vec::<String>::new());

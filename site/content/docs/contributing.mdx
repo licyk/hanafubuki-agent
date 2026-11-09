@@ -100,15 +100,15 @@ hanafubuki-agent 的许可证是 **GPL-3.0-only**（[LICENSE](https://github.com
 
 部分代码派生自其他项目，按它们的许可证保留署名：
 
-- **OpenAI Codex**（Apache License 2.0）：终端界面 `crates/tui` 移植自 Codex 的 `codex-rs/tui`（`rust-v0.93.0`），它的文件搜索（`crates/tui/src/file_search`）来自 `codex-rs/file-search`；`crates/config/src/overrides.rs` 及其测试派生自 `codex-rs/common/src/config_override.rs`。每个派生的文件在第一行说明这一点（“Modified from OpenAI Codex rust-v0.93.0 (Apache-2.0).”）。NOTICE 带有 Codex 的 NOTICE 和许可证。
+- **OpenAI Codex**（Apache License 2.0）：终端界面 `crates/tui` 移植自 Codex 的 `codex-rs/tui`（`rust-v0.93.0`，之后的工作来自 `57a808a392`），它的文件搜索（`crates/tui/src/file_search`）来自 `codex-rs/file-search`；`crates/config/src/overrides.rs` 及其测试派生自 `codex-rs/common/src/config_override.rs`。每个派生的文件在第一行说明这一点及其来源版本（“Modified from OpenAI Codex rust-v0.93.0 (Apache-2.0).” 或 “Modified from OpenAI Codex 57a808a392 (Apache-2.0).”）。NOTICE 带有 Codex 的 NOTICE 和许可证。
 - **Ratatui**（MIT）：`crates/tui/src/custom_terminal.rs` 派生自 `ratatui::Terminal`，保留它的 MIT 头。
 
 `cargo xtask check-notices` 对照 `architecture/notices-policy.toml` 检查这些署名：
 
-- `[[derived]]`：派生的代码，`path` 是一个 Rust 文件或目录（其下递归的每个 `.rs` 文件），每个文件的开头注释块中带有 `marker`，NOTICE 中出现 `notice`（在反引号中）。
+- `[[derived]]`：派生的代码，`path` 是一个 Rust 文件或目录（其下递归的每个 `.rs` 文件），每个文件的开头注释块中带有 `markers` 中的一个（每个移植的上游版本一个），NOTICE 中出现 `notice`（在反引号中）。
 - `[[mit]]`：还保留了来源项目 MIT 头的文件（`holder` 是它的版权行之一），NOTICE 列出它的路径。
 - `[[original]]`：派生目录下**不是**派生的文件，写明原因；它不带标记。
 
-在 `crates/tui` 下添加新文件时，要么它派生自 Codex 并带上标记，要么在 `[[original]]` 中列出并说明原因。快照文件由测试生成，不检查。
+在 `crates/tui` 下添加新文件时，要么它派生自 Codex 并带上其来源版本的标记，要么在 `[[original]]` 中列出并说明原因。快照文件由测试生成，不检查。
 
 发布的二进制归档附带由 `cargo-about` 生成的 `THIRD-PARTY-LICENSES.txt`（`about.toml`、`about.hbs`）。`about.toml` 列出二进制的依赖允许使用的许可证；使用其他许可证的新依赖会让发布的 `licenses` 任务失败，直到在那里接受它。

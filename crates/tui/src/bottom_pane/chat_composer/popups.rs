@@ -17,14 +17,25 @@ use super::InputResult;
 use crate::app_event::AppEvent;
 use crate::bottom_pane::footer::reset_mode_after_activity;
 use crate::bottom_pane::textarea::TextArea;
+use crate::commands;
 use crate::file_search::FileMatch;
 use crate::history_cell;
-use crate::slash_command::SlashCommand;
 
 impl ChatComposer {
     /// Return true if either the slash-command popup or the file-search popup is active.
     pub(crate) fn popup_active(&self) -> bool {
         !matches!(self.active_popup, ActivePopup::None)
+    }
+
+    /// Turns `/name` off: the popup leaves it out, and typing it says so.
+    pub(crate) fn disable_command(&mut self, name: &'static str) {
+        if !self.disabled_commands.contains(&name) {
+            self.disabled_commands.push(name);
+        }
+    }
+
+    pub(crate) fn command_disabled(&self, name: &str) -> bool {
+        self.disabled_commands.contains(&name)
     }
 
     pub(crate) fn insert_str(&mut self, text: &str) {
@@ -94,13 +105,13 @@ impl ChatComposer {
                 // before applying completion.
                 let first_line = self.textarea.text().lines().next().unwrap_or("");
                 popup.on_composer_text_change(first_line.to_string());
-                if let Some(cmd) = popup.selected_item() {
+                if let Some(selected) = popup.selected_item() {
                     let starts_with_cmd = first_line
                         .trim_start()
-                        .starts_with(&format!("/{}", cmd.command()));
+                        .starts_with(&format!("/{}", selected.name));
                     if !starts_with_cmd {
                         self.textarea
-                            .set_text_clearing_elements(&format!("/{} ", cmd.command()));
+                            .set_text_clearing_elements(&format!("/{} ", selected.name));
                     }
                     if !self.textarea.text().is_empty() {
                         self.textarea.set_cursor(self.textarea.text().len());
@@ -113,9 +124,9 @@ impl ChatComposer {
                 modifiers: KeyModifiers::NONE,
                 ..
             } => {
-                if let Some(cmd) = popup.selected_item() {
+                if let Some(selected) = popup.selected_item() {
                     self.textarea.set_text_clearing_elements("");
-                    return (InputResult::Command(cmd), true);
+                    return (InputResult::Command(selected.command, String::new()), true);
                 }
                 // Fallback to default newline handling if no command selected.
                 self.handle_key_event_without_popup(key_event)
@@ -187,17 +198,31 @@ impl ChatComposer {
         }
     }
 
-    /// Check if the first line is a bare slash command (no args) and dispatch it.
-    /// Returns Some(InputResult) if a command was dispatched, None otherwise.
-    pub(super) fn try_dispatch_bare_slash_command(&mut self) -> Option<InputResult> {
-        let first_line = self.textarea.text().lines().next().unwrap_or("");
-        let (name, rest) = parse_slash_name(first_line)?;
-        if !rest.is_empty() {
-            return None;
-        }
-        let cmd = SlashCommand::find(name)?;
+    /// The command the message names, with the text after its name when
+    /// it takes any (Codex's split of `/name args`); `None` when the
+    /// message is no command, or text follows a command that takes none.
+    /// A command turned off is not run: the transcript says so.
+    pub(super) fn try_dispatch_slash_command(&mut self) -> Option<InputResult> {
+        let text = self.textarea.text();
+        let (name, rest) = parse_slash_name(text.lines().next().unwrap_or(""))?;
+        let command = commands::find(name)?;
+        let args = match (command.inline_args, rest.is_empty()) {
+            (true, _) => parse_slash_name(text)?.1.trim_end().to_string(),
+            (false, true) => String::new(),
+            (false, false) => return None,
+        };
         self.textarea.set_text_clearing_elements("");
-        Some(InputResult::Command(cmd))
+        if self.command_disabled(command.name) {
+            let message = format!(
+                "'/{name}' is turned off: it failed earlier in this run.",
+                name = command.name
+            );
+            self.app_event_tx.send(AppEvent::InsertHistoryCell(Box::new(
+                history_cell::new_error_event(message),
+            )));
+            return Some(InputResult::None);
+        }
+        Some(InputResult::Command(command, args))
     }
 
     /// A message that starts with `/name` naming no command is not sent: the
@@ -208,7 +233,7 @@ impl ChatComposer {
         let Some((name, _rest)) = parse_slash_name(&text) else {
             return false;
         };
-        if name.contains('/') || SlashCommand::find(name).is_some() {
+        if name.contains('/') || commands::find(name).is_some() {
             return false;
         }
         let message = format!(
@@ -292,11 +317,11 @@ impl ChatComposer {
     /// Heuristic for whether the typed slash command looks like a valid
     /// prefix for any known command.
     /// Empty names only count when there is no extra content after the '/'.
-    fn looks_like_slash_prefix(name: &str, rest_after_name: &str) -> bool {
+    fn looks_like_slash_prefix(&self, name: &str, rest_after_name: &str) -> bool {
         if name.is_empty() {
             return rest_after_name.is_empty();
         }
-        SlashCommand::has_prefix(name)
+        commands::has_prefix(name, &self.disabled_commands)
     }
 
     /// Synchronize `self.command_popup` with the current text in the
@@ -318,7 +343,7 @@ impl ChatComposer {
 
         let is_editing_slash_command_name = caret_on_first_line
             && Self::slash_command_under_cursor(first_line, cursor)
-                .is_some_and(|(name, rest)| Self::looks_like_slash_prefix(name, rest));
+                .is_some_and(|(name, rest)| self.looks_like_slash_prefix(name, rest));
 
         match &mut self.active_popup {
             ActivePopup::Command(popup) => {
@@ -330,7 +355,7 @@ impl ChatComposer {
             }
             _ => {
                 if is_editing_slash_command_name {
-                    let mut command_popup = CommandPopup::new();
+                    let mut command_popup = CommandPopup::new(self.disabled_commands.clone());
                     command_popup.on_composer_text_change(first_line.to_string());
                     self.active_popup = ActivePopup::Command(command_popup);
                 }

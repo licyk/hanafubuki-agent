@@ -25,6 +25,7 @@ mod command_popup;
 mod file_search_popup;
 mod footer;
 mod list_selection_view;
+mod module_view;
 mod paste_burst;
 mod popup_consts;
 mod request_user_input;
@@ -43,13 +44,13 @@ use ratatui::crossterm::event::KeyEvent;
 use ratatui::layout::Rect;
 
 use crate::app_event::AppEventSender;
+use crate::commands::CommandSpec;
 use crate::file_search::FileMatch;
 use crate::key_hint;
 use crate::key_hint::KeyBinding;
 use crate::render::renderable::FlexRenderable;
 use crate::render::renderable::Renderable;
 use crate::render::renderable::RenderableItem;
-use crate::slash_command::SlashCommand;
 use crate::status_indicator_widget::StatusIndicatorWidget;
 use crate::tui::FrameRequester;
 use approval_overlay::ApprovalOverlay;
@@ -58,6 +59,8 @@ use chat_composer::ChatComposer;
 pub(crate) use footer::ThinkingToggle;
 use list_selection_view::ListSelectionView;
 pub(crate) use list_selection_view::{SelectionItem, SelectionViewParams};
+pub(crate) use module_view::ViewFailure;
+use module_view::{ModuleView, ViewFailures};
 use paste_burst::PasteBurst;
 use request_user_input::RequestUserInputOverlay;
 
@@ -75,7 +78,8 @@ pub(crate) const QUIT_SHORTCUT_TIMEOUT: Duration = Duration::from_secs(1);
 pub(crate) enum InputResult {
     /// The message the person sent, trimmed, with large pastes put back.
     Submitted(String),
-    Command(SlashCommand),
+    /// A command, with the text after its name when it takes any.
+    Command(&'static CommandSpec, String),
     None,
 }
 
@@ -102,6 +106,9 @@ pub(crate) struct BottomPane {
     is_task_running: bool,
 
     status: Option<StatusIndicatorWidget>,
+
+    /// What the commands' views reported when they panicked.
+    view_failures: ViewFailures,
 }
 
 pub(crate) struct BottomPaneParams {
@@ -134,6 +141,7 @@ impl BottomPane {
             has_input_focus,
             is_task_running: false,
             status: None,
+            view_failures: ViewFailures::default(),
         }
     }
 
@@ -221,10 +229,44 @@ impl BottomPane {
         self.request_redraw();
     }
 
-    /// Shows a list to pick from, over the composer.
-    pub(crate) fn show_selection_view(&mut self, params: SelectionViewParams) {
+    /// Shows a list to pick from over the composer, as `command`'s view.
+    pub(crate) fn show_command_selection_view(
+        &mut self,
+        command: &'static str,
+        params: SelectionViewParams,
+    ) {
         let view = ListSelectionView::new(params, self.app_event_tx.clone());
-        self.push_view(Box::new(view));
+        self.push_view(Box::new(ModuleView::new(
+            command,
+            Box::new(view),
+            self.view_failures.clone(),
+        )));
+    }
+
+    /// The commands whose views panicked since the last call; their views
+    /// are dropped.
+    pub(crate) fn take_view_failures(&mut self) -> Vec<ViewFailure> {
+        let failures = std::mem::take(&mut *self.view_failures.borrow_mut());
+        if !failures.is_empty() {
+            self.remove_completed_views();
+        }
+        failures
+    }
+
+    /// Turns `/name` off for the rest of the run: its views close, the
+    /// popup leaves it out, and typing it says it is off.
+    pub(crate) fn disable_command(&mut self, name: &'static str) {
+        self.composer.disable_command(name);
+        let before = self.view_stack.len();
+        self.view_stack.retain(|view| view.command() != Some(name));
+        if self.view_stack.len() != before && self.view_stack.is_empty() {
+            self.on_active_view_complete();
+        }
+        self.request_redraw();
+    }
+
+    pub(crate) fn command_disabled(&self, name: &str) -> bool {
+        self.composer.command_disabled(name)
     }
 
     #[cfg(test)]

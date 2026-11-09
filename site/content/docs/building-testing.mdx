@@ -47,7 +47,7 @@ cargo test --workspace --all-features
 | `check-model-api-context` | `hanafubuki-agent-model-api` 的生产源码不出现任何上下文段类型                                                                                                                                                                                             |
 | `check-path-boundaries`   | 路径只通过 `hanafubuki-agent-foundation::paths` 解析：不直接 `fs::canonicalize`，不渲染 `system()`，不直接比较解析后的 `PathBuf`；例外在 `architecture/path-policy.toml` 中审计                                                                           |
 | `check-locks`             | 生产代码不使用 `std::sync::Mutex` 或 `RwLock`（任何导入形式）；测试与测试支持可以                                                                                                                                                                         |
-| `check-plugin-panics`     | 插件 crate（`crates/plugin-*`）和门面自己的插件（`crates/agent/src/plugins`）的生产源码中没有 `.unwrap()` 和 `.expect(`                                                                                                                                                                                 |
+| `check-plugin-panics`     | 插件 crate（`crates/plugin-*`）和门面自己的插件（`crates/agent/src/plugins`）的生产源码中没有 `.unwrap()` 和 `.expect(`                                                                                                                                   |
 | `check-notices`           | 派生自第三方代码的文件带有它们的署名标记，NOTICE 列出它们（`architecture/notices-policy.toml`），见[许可证](/docs/contributing#licence)                                                                                                                   |
 
 另外还有：

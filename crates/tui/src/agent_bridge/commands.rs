@@ -1,19 +1,20 @@
 //! The slash commands that ask something of the Agent, each onto the
-//! facade's calls: a new or a reopened session, compaction, the model and
-//! the mode of the session, and what `/status`, `/mcp` and `/skills` report.
+//! facade's calls: no session (`/new`) or a reopened one, compaction, the
+//! model and the mode of the session, and what `/status`, `/mcp` and
+//! `/skills` report; and the creation of the session the interface drives.
 //! A call that waits runs on the Agent's runtime; one that does not runs
 //! here.
 
 use std::path::PathBuf;
 
 use hanafubuki_agent::{
-    AgentPermissionMode, AgentProviderModelCatalogRequest, AgentProviderModelCatalogResult,
-    AgentSessionId, AgentSessionListRequest, AgentSessionMode, AgentSessionModelSelectionRequest,
-    AgentSessionPage, AgentSessionRuntimeSnapshot,
+    AgentHandle, AgentPermissionMode, AgentProviderModelCatalogRequest,
+    AgentProviderModelCatalogResult, AgentSessionId, AgentSessionListRequest, AgentSessionMode,
+    AgentSessionModelSelectionRequest, AgentSessionPage, AgentSessionRuntimeSnapshot,
 };
 
 use super::{replay, AgentBridge, AgentReply, OpenedSession, TurnUpdate};
-use crate::app_event::AgentCommand;
+use crate::app_event::{AgentCommand, AppEvent, Op};
 
 /// How many of a reopened session's latest transcript items are replayed.
 const REPLAYED_ITEMS: usize = 200;
@@ -46,19 +47,14 @@ impl AgentBridge {
     /// comes back as a reply.
     fn run_command(&mut self, command: AgentCommand) -> Result<Option<TurnUpdate>, String> {
         match command {
-            AgentCommand::NewSession => self.spawn(|agent| async move {
-                let session = agent
-                    .create_session(AgentSessionMode::Default)
-                    .await
-                    .map_err(|error| format!("the session was not created: {error}"))?;
-                Ok(Some(AgentReply::SessionOpened(OpenedSession {
-                    session_id: session.id,
-                    model: session.model,
-                    mode: session.mode,
-                    transcript: Vec::new(),
-                    earlier_items: false,
-                })))
-            }),
+            AgentCommand::NewSession => {
+                let model = self.model.clone();
+                self.spawn(|agent| async move {
+                    Ok(Some(AgentReply::SessionOpened(
+                        no_session(&agent, model).await,
+                    )))
+                })
+            }
             AgentCommand::Resume(session_id) => {
                 let opened = self.open(session_id)?;
                 return Ok(self.reply(AgentReply::SessionOpened(opened)));
@@ -183,6 +179,32 @@ impl AgentBridge {
             .unwrap_or_default()
     }
 
+    /// What the interface shows before its first message creates a session.
+    pub(crate) fn no_session(&self) -> Result<OpenedSession, String> {
+        let agent = self.agent.clone();
+        let model = self.model.clone();
+        self.agent
+            .runtime()
+            .block_on(async move { no_session(&agent, model).await })
+            .map_err(|failure| failure.to_string())
+    }
+
+    /// Creates the session the interface drives; `waiting` and what is
+    /// asked until it exists are carried out then.
+    pub(super) fn create_session(&mut self, waiting: Vec<Op>) {
+        self.creating = Some(waiting);
+        let agent = self.agent.clone();
+        let model = self.model.clone();
+        let app_event_tx = self.app_event_tx.clone();
+        self.agent.runtime().handle().spawn(async move {
+            let reply = match new_session(&agent, model).await {
+                Ok(session) => AgentReply::SessionCreated(session.id),
+                Err(message) => AgentReply::SessionNotCreated(message),
+            };
+            app_event_tx.send(AppEvent::AgentReply(reply));
+        });
+    }
+
     /// `session_id` with its latest transcript, for the chat to replay.
     pub(crate) fn open(&self, session_id: AgentSessionId) -> Result<OpenedSession, String> {
         let opened = self
@@ -196,7 +218,7 @@ impl AgentBridge {
             .map(|item| item.content)
             .collect();
         Ok(OpenedSession {
-            session_id,
+            session_id: Some(session_id),
             model: opened.runtime.model,
             mode: opened.runtime.mode,
             transcript: replay::transcript(&self.agent, items),
@@ -207,8 +229,64 @@ impl AgentBridge {
     /// The session as it is now, for a call that names its generation and
     /// revision.
     fn current(&self) -> Result<AgentSessionRuntimeSnapshot, String> {
+        let session_id = self
+            .session_id
+            .ok_or_else(|| "there is no session yet".to_string())?;
         self.agent
-            .snapshot(self.session_id)
+            .snapshot(session_id)
             .map_err(|error| error.to_string())
     }
+}
+
+/// No session: its header names the model a new session gets, `-m`'s or
+/// the model policy's (empty when the configuration cannot be read).
+async fn no_session(agent: &AgentHandle, model: Option<String>) -> OpenedSession {
+    let model = match model {
+        Some(model) => model,
+        None => agent
+            .provider_registry_snapshot()
+            .await
+            .map(|registry| registry.model_policy.model)
+            .unwrap_or_default(),
+    };
+    OpenedSession {
+        session_id: None,
+        model,
+        mode: AgentSessionMode::Default,
+        transcript: Vec::new(),
+        earlier_items: false,
+    }
+}
+
+/// A new session in the default mode, with `model` when one is given.
+async fn new_session(
+    agent: &AgentHandle,
+    model: Option<String>,
+) -> Result<AgentSessionRuntimeSnapshot, String> {
+    let session = agent
+        .create_session(AgentSessionMode::Default)
+        .await
+        .map_err(|error| format!("the session was not created: {error}"))?;
+    match model {
+        Some(model) => with_model(agent, session, model).await,
+        None => Ok(session),
+    }
+}
+
+/// `session` switched to `model`, on its Provider.
+pub(crate) async fn with_model(
+    agent: &AgentHandle,
+    session: AgentSessionRuntimeSnapshot,
+    model: String,
+) -> Result<AgentSessionRuntimeSnapshot, String> {
+    agent
+        .set_session_model(AgentSessionModelSelectionRequest {
+            session_id: session.id,
+            generation: session.generation,
+            revision: session.revision,
+            provider_id: session.provider_id,
+            model,
+        })
+        .await
+        .map_err(|error| format!("the model was not set: {error}"))
 }

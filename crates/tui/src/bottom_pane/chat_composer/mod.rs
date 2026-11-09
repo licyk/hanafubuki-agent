@@ -107,6 +107,8 @@ pub(crate) struct ChatComposer {
     current_file_query: Option<String>,
     /// The `@` token whose popup Esc closed; it stays closed until the token changes.
     dismissed_file_popup_token: Option<String>,
+    /// The commands turned off after they panicked.
+    disabled_commands: Vec<&'static str>,
 }
 
 /// Popup state – at most one can be visible at any time.
@@ -142,6 +144,7 @@ impl ChatComposer {
             footer_mode: FooterMode::ComposerEmpty,
             current_file_query: None,
             dismissed_file_popup_token: None,
+            disabled_commands: Vec::new(),
         }
     }
 
@@ -450,9 +453,9 @@ impl ChatComposer {
     }
 
     fn handle_submission(&mut self, now: Instant) -> (InputResult, bool) {
-        // A bare command is run even once the caret left the '/name' token
-        // and the popup with it.
-        if let Some(result) = self.try_dispatch_bare_slash_command() {
+        // A command is run even once the caret left the '/name' token and
+        // the popup with it.
+        if let Some(result) = self.try_dispatch_slash_command() {
             return (result, true);
         }
 

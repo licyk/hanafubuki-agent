@@ -3,8 +3,10 @@ use std::sync::mpsc::{channel, Receiver};
 use super::*;
 use crate::agent_bridge::{ModelChoices, OpenedSession, ReplayedItem, TurnEnd};
 use crate::app_event::AgentCommand;
+use crate::bottom_pane::{SelectionItem, SelectionViewParams};
+use crate::commands::{self, CommandSpec};
 use crate::history_cell::ToolResultView;
-use crate::slash_command::SlashCommand;
+use hanafubuki_agent::panic::is_panic_contained;
 
 fn chat() -> (ChatWidget, Receiver<AppEvent>) {
     let (sender, events) = channel();
@@ -57,6 +59,10 @@ fn screen(chat: &ChatWidget, width: u16) -> String {
         })
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+fn command(name: &str) -> &'static CommandSpec {
+    commands::find(name).unwrap()
 }
 
 fn reasoning_id(id: u64) -> hanafubuki_agent::AgentReasoningId {
@@ -162,7 +168,7 @@ fn a_submitted_message_is_written_and_sent_and_quit_exits() {
     let (cells, ops) = drain(&events);
     assert!(cells[0].contains("› Do it"), "{cells:?}");
     assert_eq!(ops, vec![Op::UserInput("Do it".to_string())]);
-    chat.dispatch_command(SlashCommand::Quit);
+    chat.dispatch_command(command("quit"), String::new());
     assert!(matches!(events.try_recv(), Ok(AppEvent::Exit)));
 }
 
@@ -185,7 +191,7 @@ fn a_command_the_running_turn_forbids_says_so() {
     let (mut chat, events) = chat();
     chat.handle_turn_update(TurnUpdate::Started);
     drain(&events);
-    chat.dispatch_command(SlashCommand::Model);
+    chat.dispatch_command(command("model"), String::new());
     let (cells, ops) = drain(&events);
     assert_eq!(
         cells,
@@ -199,7 +205,7 @@ fn an_opened_session_replays_its_transcript_after_its_header() {
     let (mut chat, events) = chat();
     drain(&events);
     chat.handle_turn_update(TurnUpdate::SessionOpened(OpenedSession {
-        session_id: hanafubuki_agent::AgentSessionId::new(7),
+        session_id: Some(hanafubuki_agent::AgentSessionId::new(7)),
         model: "fixture-model".to_string(),
         mode: hanafubuki_agent::AgentSessionMode::Plan,
         transcript: vec![
@@ -393,7 +399,7 @@ fn a_replayed_reasoning_item_is_a_completed_cell() {
     let (mut chat, events) = chat();
     drain(&events);
     chat.handle_turn_update(TurnUpdate::SessionOpened(OpenedSession {
-        session_id: hanafubuki_agent::AgentSessionId::new(7),
+        session_id: Some(hanafubuki_agent::AgentSessionId::new(7)),
         model: "fixture-model".to_string(),
         mode: hanafubuki_agent::AgentSessionMode::Default,
         transcript: vec![
@@ -425,4 +431,154 @@ fn ctrl_o_between_two_ctrl_c_does_not_quit() {
         std::iter::from_fn(|| events.try_recv().ok()).any(|event| matches!(event, AppEvent::Exit));
     assert!(!exited);
     assert!(chat.thinking_expanded);
+}
+
+// Each panic says whether it was raised in a contained region, where the
+// process's panic hook lets it unwind instead of aborting.
+static PANICS: CommandSpec = CommandSpec {
+    name: "panics",
+    aliases: &[],
+    description: "panics when run",
+    inline_args: false,
+    during_task: true,
+    needs_session: false,
+    dispatch: |_, _| panic!("the command broke (contained: {})", is_panic_contained()),
+};
+
+/// Its list panics when drawn.
+static DRAWS_BADLY: CommandSpec = CommandSpec {
+    name: "draws-badly",
+    aliases: &[],
+    description: "shows a list that panics when drawn",
+    inline_args: false,
+    during_task: true,
+    needs_session: false,
+    dispatch: |context, _| {
+        context.show_selection_view(SelectionViewParams {
+            header: Box::new(PanicsWhenDrawn),
+            items: vec![SelectionItem {
+                name: "item".to_string(),
+                ..Default::default()
+            }],
+            ..Default::default()
+        })
+    },
+};
+
+/// Its list's item panics when picked.
+static PICKS_BADLY: CommandSpec = CommandSpec {
+    name: "picks-badly",
+    aliases: &[],
+    description: "shows a list whose item panics when picked",
+    inline_args: false,
+    during_task: true,
+    needs_session: false,
+    dispatch: |context, _| {
+        context.show_selection_view(SelectionViewParams {
+            items: vec![SelectionItem {
+                name: "item".to_string(),
+                actions: vec![Box::new(|_| {
+                    panic!("the pick broke (contained: {})", is_panic_contained())
+                })],
+                dismiss_on_select: true,
+                ..Default::default()
+            }],
+            ..Default::default()
+        })
+    },
+};
+
+struct PanicsWhenDrawn;
+
+impl Renderable for PanicsWhenDrawn {
+    fn render(&self, _area: ratatui::layout::Rect, _buf: &mut ratatui::buffer::Buffer) {
+        panic!("the view broke (contained: {})", is_panic_contained());
+    }
+
+    fn desired_height(&self, _width: u16) -> u16 {
+        1
+    }
+}
+
+/// `/name` failed with `message`, said so once, and is off; the composer
+/// is back.
+fn assert_turned_off(chat: &ChatWidget, cells: &[String], name: &'static str, message: &str) {
+    assert_eq!(cells.len(), 1, "{cells:?}");
+    let said = cells[0].replace('\n', " ");
+    assert!(
+        said.contains(&format!("'/{name}' failed and is turned off")) && said.contains(message),
+        "{said}"
+    );
+    assert!(chat.bottom_pane.command_disabled(name));
+    assert_eq!(chat.warnings.len(), 1, "{:?}", chat.warnings);
+    assert!(chat.bottom_pane.no_modal_or_popup_active());
+    assert!(screen(chat, 60).contains("Ask the Agent to do anything"));
+}
+
+#[test]
+fn a_command_that_panics_is_turned_off_and_the_others_still_run() {
+    let (mut chat, events) = chat();
+    drain(&events);
+    chat.dispatch_command(&PANICS, String::new());
+    assert_turned_off(
+        &chat,
+        &drain(&events).0,
+        "panics",
+        "the command broke (contained: true)",
+    );
+
+    chat.dispatch_command(&PANICS, String::new());
+    assert_eq!(drain(&events), (Vec::new(), Vec::new()));
+    chat.dispatch_command(command("skills"), String::new());
+    assert_eq!(drain(&events).1, vec![Op::Command(AgentCommand::Skills)]);
+    chat.submit_user_message("Still here".to_string());
+    assert_eq!(
+        drain(&events).1,
+        vec![Op::UserInput("Still here".to_string())]
+    );
+}
+
+#[test]
+fn a_command_whose_view_panics_when_drawn_is_turned_off() {
+    let (mut chat, events) = chat();
+    drain(&events);
+    chat.dispatch_command(&DRAWS_BADLY, String::new());
+    screen(&chat, 60);
+    chat.reap_failed_views();
+    assert_turned_off(
+        &chat,
+        &drain(&events).0,
+        "draws-badly",
+        "the view broke (contained: true)",
+    );
+}
+
+#[test]
+fn a_command_whose_view_panics_on_a_key_is_turned_off() {
+    let (mut chat, events) = chat();
+    drain(&events);
+    chat.dispatch_command(&PICKS_BADLY, String::new());
+    assert!(screen(&chat, 60).contains("item"));
+    chat.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    assert_turned_off(
+        &chat,
+        &drain(&events).0,
+        "picks-badly",
+        "the pick broke (contained: true)",
+    );
+    chat.dispatch_command(command("mode"), String::new());
+    assert!(screen(&chat, 60).contains("Select Mode"));
+}
+
+#[test]
+fn a_command_that_needs_a_session_asks_for_one_first() {
+    let (mut chat, events) = chat();
+    drain(&events);
+    chat.dispatch_command(command("status"), String::new());
+    assert_eq!(
+        drain(&events).1,
+        vec![Op::EnsureSession, Op::Command(AgentCommand::Status)]
+    );
+    chat.dispatch_command(command("mcp"), String::new());
+    assert_eq!(drain(&events).1, vec![Op::Command(AgentCommand::Mcp)]);
 }

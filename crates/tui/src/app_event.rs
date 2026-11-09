@@ -66,6 +66,9 @@ pub(crate) enum Op {
         answers: Vec<AgentUserInputAnswer>,
     },
     Command(AgentCommand),
+    /// A command that needs a session runs next: one is created first when
+    /// there is none.
+    EnsureSession,
 }
 
 /// What the slash commands ask of the Agent.

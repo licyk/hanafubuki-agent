@@ -1,17 +1,17 @@
 // Modified from OpenAI Codex rust-v0.93.0 (Apache-2.0).
 
-//! The interface's entry: a session on the started Agent (a new one, or
-//! one reopened), the terminal set up and restored around the app loop.
+//! The interface's entry: the session it opens on the started Agent (one
+//! reopened, or none until the first message creates it), the terminal set
+//! up and restored around the app loop.
 
 use std::sync::mpsc::{channel, Receiver};
 use std::sync::Arc;
 
 use hanafubuki_agent::{
-    AgentHandle, AgentRuntime, AgentSessionId, AgentSessionListRequest, AgentSessionMode,
-    AgentSessionModelSelectionRequest, AgentStatusEventSink,
+    AgentHandle, AgentRuntime, AgentSessionId, AgentSessionListRequest, AgentStatusEventSink,
 };
 
-use crate::agent_bridge::{AgentBridge, StatusSink, TurnUpdate};
+use crate::agent_bridge::{with_model, AgentBridge, AgentReply, StatusSink};
 use crate::app::App;
 use crate::app_event::{AppEvent, AppEventSender};
 use crate::chatwidget::{ChatWidget, ChatWidgetInit};
@@ -46,7 +46,8 @@ impl TuiEvents {
 pub struct TuiOptions {
     /// Submitted as the first message.
     pub prompt: Option<String>,
-    /// The session's model, in place of the model policy's (`-m`).
+    /// The model of the sessions the interface creates, and of the one it
+    /// resumes at the start, in place of the model policy's (`-m`).
     pub model: Option<String>,
     /// The working directory, as the header shows it.
     pub directory: String,
@@ -57,9 +58,9 @@ pub struct TuiOptions {
 /// Which session `hanafubuki-agent resume` reopens.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TuiResume {
-    /// The one picked from the sessions (a new session until one is).
+    /// The one picked from the sessions (none until one is).
     Picker,
-    /// The latest session a turn ran in; a new session when there is none.
+    /// The latest session a turn ran in; none when there is none.
     Last,
     Session(AgentSessionId),
 }
@@ -74,14 +75,16 @@ pub fn run(
     agent: &AgentHandle,
     options: TuiOptions,
 ) -> Result<(), String> {
-    let session_id = open_session(agent, options.resume, options.model)?;
-    let bridge = AgentBridge::new(
+    let mut bridge = AgentBridge::new(
         agent.clone(),
         runtime.slot().clone(),
-        session_id,
+        options.model.clone(),
         events.sender.clone(),
     );
-    let opened = bridge.open(session_id)?;
+    let opened = match resumed_session(agent, options.resume, options.model)? {
+        Some(session_id) => bridge.open(session_id)?,
+        None => bridge.no_session()?,
+    };
     let terminal = tui::init().map_err(|error| format!("the terminal: {error}"))?;
     let restore = RestoreOnDrop;
     let enhanced_keys_supported = tui::enhanced_keys_supported();
@@ -94,7 +97,9 @@ pub fn run(
         enhanced_keys_supported,
         directory: options.directory,
     });
-    chat_widget.handle_turn_update(TurnUpdate::SessionOpened(opened));
+    if let Some(update) = bridge.reply(AgentReply::SessionOpened(opened)) {
+        chat_widget.handle_turn_update(update);
+    }
     if let Some(prompt) = options.prompt {
         chat_widget.submit_user_message(prompt);
     }
@@ -111,47 +116,33 @@ pub fn run(
         .map_err(|error| format!("the terminal: {error}"))
 }
 
-/// The session the interface starts on, with the model asked for: the one
-/// to resume, or a new one.
-fn open_session(
+/// The session to resume at the start, switched to the model asked for;
+/// `None` for none.
+fn resumed_session(
     agent: &AgentHandle,
     resume: Option<TuiResume>,
     model: Option<String>,
-) -> Result<AgentSessionId, String> {
-    let resumed = match resume {
-        Some(TuiResume::Session(session_id)) => Some(session_id),
-        Some(TuiResume::Last) => latest_session(agent)?,
-        Some(TuiResume::Picker) | None => None,
+) -> Result<Option<AgentSessionId>, String> {
+    let session_id = match resume {
+        Some(TuiResume::Session(session_id)) => session_id,
+        Some(TuiResume::Last) => match latest_session(agent)? {
+            Some(session_id) => session_id,
+            None => return Ok(None),
+        },
+        Some(TuiResume::Picker) | None => return Ok(None),
     };
-    let opened = agent.runtime().block_on({
-        let agent = agent.clone();
-        async move {
-            let session = match resumed {
-                Some(session_id) => agent
-                    .open_session(session_id, 1)
-                    .map(|opened| opened.runtime)
-                    .map_err(|error| format!("the session was not opened: {error}"))?,
-                None => agent
-                    .create_session(AgentSessionMode::Default)
-                    .await
-                    .map_err(|error| format!("the session was not created: {error}"))?,
-            };
-            match model {
-                Some(model) => agent
-                    .set_session_model(AgentSessionModelSelectionRequest {
-                        session_id: session.id,
-                        generation: session.generation,
-                        revision: session.revision,
-                        provider_id: session.provider_id.clone(),
-                        model,
-                    })
-                    .await
-                    .map_err(|error| format!("the model was not set: {error}")),
-                None => Ok(session),
-            }
-        }
-    });
-    Ok(opened.map_err(|failure| failure.to_string())??.id)
+    let session = agent
+        .open_session(session_id, 1)
+        .map_err(|error| format!("the session was not opened: {error}"))?
+        .runtime;
+    if let Some(model) = model {
+        let call = agent.clone();
+        agent
+            .runtime()
+            .block_on(async move { with_model(&call, session, model).await })
+            .map_err(|failure| failure.to_string())??;
+    }
+    Ok(Some(session_id))
 }
 
 /// The latest session a turn ran in.

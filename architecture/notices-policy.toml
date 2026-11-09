@@ -3,8 +3,8 @@
 #
 # `[[derived]]`: code derived from another project. `path` is a Rust file or
 # a directory (every `.rs` file under it, recursively); each file carries
-# `marker` in its leading comment block, and NOTICE names `notice` (in
-# backquotes). `[[mit]]`: a file that also keeps the MIT header of the
+# one of `markers` (one per upstream revision ported) in its leading comment
+# block, and NOTICE names `notice` (in backquotes). `[[mit]]`: a file that also keeps the MIT header of the
 # project it derives from (`holder` is one of its copyright lines); NOTICE
 # names its path. `[[original]]`: a file under a derived directory that is
 # not derived, with why; it carries no marker. Snapshot files are generated
@@ -13,17 +13,20 @@ version = 1
 
 [[derived]]
 path = "crates/tui/src"
-marker = "Modified from OpenAI Codex rust-v0.93.0 (Apache-2.0)."
+markers = [
+    "Modified from OpenAI Codex rust-v0.93.0 (Apache-2.0).",
+    "Modified from OpenAI Codex 57a808a392 (Apache-2.0).",
+]
 notice = "crates/tui"
 
 [[derived]]
 path = "crates/config/src/overrides.rs"
-marker = "Derived from OpenAI Codex (https://github.com/openai/codex),"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
 notice = "crates/config/src/overrides.rs"
 
 [[derived]]
 path = "crates/config/src/overrides/tests.rs"
-marker = "Derived from OpenAI Codex (https://github.com/openai/codex), the tests"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex), the tests"]
 notice = "crates/config/src/overrides.rs"
 
 [[mit]]
@@ -83,8 +86,12 @@ path = "crates/tui/src/history_cell/thinking/tests.rs"
 reason = "The thinking cell's states, written with it."
 
 [[original]]
-path = "crates/tui/src/slash_command/tests.rs"
-reason = "The command table's lookups, written for the port."
+path = "crates/tui/src/commands/tests.rs"
+reason = "The command registry's lookups and flags, written for the port."
+
+[[original]]
+path = "crates/tui/src/bottom_pane/module_view.rs"
+reason = "The isolation of a command's views over catch_panic, written for the Agent."
 
 [[original]]
 path = "crates/tui/src/get_git_diff/tests.rs"

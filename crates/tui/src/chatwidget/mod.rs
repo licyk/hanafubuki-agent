@@ -78,6 +78,10 @@ pub(crate) struct ChatWidget {
     directory: String,
     /// The session's mode, which `/mode` offers to change.
     mode: AgentSessionMode,
+    /// What went wrong in the interface itself in this run, such as a
+    /// command turned off after it panicked.
+    #[allow(dead_code, reason = "`/warnings` will read them")]
+    warnings: Vec<String>,
 }
 
 impl ChatWidget {
@@ -113,6 +117,7 @@ impl ChatWidget {
             quit_shortcut_key: None,
             directory,
             mode: AgentSessionMode::Default,
+            warnings: Vec::new(),
         }
     }
 
@@ -123,6 +128,7 @@ impl ChatWidget {
             match key_event.code {
                 KeyCode::Char(c) if c.eq_ignore_ascii_case(&'c') => {
                     self.on_ctrl_c();
+                    self.reap_failed_views();
                     return;
                 }
                 KeyCode::Char(c) if c.eq_ignore_ascii_case(&'d') && self.on_ctrl_d() => return,
@@ -142,9 +148,10 @@ impl ChatWidget {
         }
         match self.bottom_pane.handle_key_event(key_event) {
             InputResult::Submitted(text) => self.submit_user_message(text),
-            InputResult::Command(cmd) => self.dispatch_command(cmd),
+            InputResult::Command(command, args) => self.dispatch_command(command, args),
             InputResult::None => {}
         }
+        self.reap_failed_views();
         self.request_redraw();
     }
 

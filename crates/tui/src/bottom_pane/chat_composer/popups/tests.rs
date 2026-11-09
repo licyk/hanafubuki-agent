@@ -32,6 +32,10 @@ fn type_chars_humanlike(composer: &mut ChatComposer, chars: &[char]) {
     }
 }
 
+fn command(name: &str) -> &'static crate::commands::CommandSpec {
+    commands::find(name).unwrap()
+}
+
 fn enter(composer: &mut ChatComposer) -> InputResult {
     composer
         .handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
@@ -213,7 +217,10 @@ fn slash_popup_model_first_for_mo_logic() {
 
     match &composer.active_popup {
         ActivePopup::Command(popup) => {
-            assert_eq!(popup.selected_item(), Some(SlashCommand::Model))
+            assert_eq!(
+                popup.selected_item().map(|matched| matched.name),
+                Some("model")
+            )
         }
         _ => panic!("slash popup not active after typing '/mo'"),
     }
@@ -242,7 +249,10 @@ fn slash_popup_resume_for_res_logic() {
 
     match &composer.active_popup {
         ActivePopup::Command(popup) => {
-            assert_eq!(popup.selected_item(), Some(SlashCommand::Resume))
+            assert_eq!(
+                popup.selected_item().map(|matched| matched.name),
+                Some("resume")
+            )
         }
         _ => panic!("slash popup not active after typing '/res'"),
     }
@@ -259,7 +269,7 @@ fn slash_compact_dispatches_command_and_does_not_submit_literal_text() {
     // Command result (not submit literal text) and clear its textarea.
     assert_eq!(
         enter(&mut composer),
-        InputResult::Command(SlashCommand::Compact)
+        InputResult::Command(command("compact"), String::new())
     );
     assert!(composer.textarea.is_empty(), "composer should be cleared");
 }
@@ -291,7 +301,7 @@ fn slash_tab_then_enter_dispatches_builtin_command() {
     // Press Enter: should dispatch the command, not submit literal text.
     assert_eq!(
         enter(&mut composer),
-        InputResult::Command(SlashCommand::Diff)
+        InputResult::Command(command("diff"), String::new())
     );
     assert!(composer.textarea.is_empty());
 }
@@ -304,7 +314,7 @@ fn slash_mention_dispatches_command_and_inserts_at() {
 
     assert_eq!(
         enter(&mut composer),
-        InputResult::Command(SlashCommand::Mention)
+        InputResult::Command(command("mention"), String::new())
     );
     assert!(composer.textarea.is_empty(), "composer should be cleared");
     composer.insert_str("@");
@@ -494,4 +504,33 @@ fn esc_hides_the_file_popup_until_the_token_changes() {
 
     type_chars_humanlike(&mut composer, &['i']);
     assert!(matches!(composer.active_popup, ActivePopup::File(_)));
+}
+
+#[test]
+fn text_after_a_command_that_takes_none_is_sent_as_a_message() {
+    let (mut composer, _rx) = composer();
+    type_chars_humanlike(&mut composer, &['/', 'm', 'c', 'p', ' ', 'x']);
+    assert_eq!(
+        enter(&mut composer),
+        InputResult::Submitted("/mcp x".to_string())
+    );
+}
+
+#[test]
+fn a_command_turned_off_is_not_offered_and_says_so_when_typed() {
+    let (mut composer, rx) = composer();
+    composer.disable_command("diff");
+    type_chars_humanlike(&mut composer, &['/', 'd', 'i']);
+    assert!(
+        !matches!(composer.active_popup, ActivePopup::Command(_)),
+        "no command left to offer for /di"
+    );
+    type_chars_humanlike(&mut composer, &['f', 'f']);
+    assert_eq!(enter(&mut composer), InputResult::None);
+    assert!(composer.textarea.is_empty());
+    let said = std::iter::from_fn(|| rx.try_recv().ok()).any(|event| {
+        matches!(event, AppEvent::InsertHistoryCell(cell)
+            if cell.display_lines(80).iter().any(|line| line.to_string().contains("'/diff' is turned off")))
+    });
+    assert!(said);
 }
