@@ -626,6 +626,7 @@ fn finished_execution_is_disposed_only_after_its_observer_releases_it() {
     let observer = service.clone();
     let observer_scope = scope.clone();
     let release_after = Duration::from_millis(200);
+    let waited = std::time::Instant::now();
     let releaser = std::thread::spawn(move || {
         std::thread::sleep(release_after);
         // Still readable: disposal has not happened yet.
@@ -634,7 +635,6 @@ fn finished_execution_is_disposed_only_after_its_observer_releases_it() {
             .is_ok());
         observer.release_observer(&observer_scope, started.execution_id, started.generation);
     });
-    let waited = std::time::Instant::now();
     let result = service
         .wait_unified_execution(
             &scope,
