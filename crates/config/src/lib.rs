@@ -21,6 +21,7 @@ mod mcp;
 mod network;
 mod overrides;
 mod providers;
+mod recovery;
 mod settings;
 mod standalone;
 mod store;
@@ -43,6 +44,7 @@ pub use providers::{
     MAX_AGENT_PENDING_INPUT_ITEMS, MAX_AGENT_PROVIDERS, MAX_AGENT_PROVIDER_CREDENTIAL_BYTES,
     MAX_AGENT_PROVIDER_HEADERS, MAX_AGENT_TOOL_INVOCATIONS, MAX_AGENT_TOOL_OUTPUT_BYTES,
 };
+pub use recovery::{AgentConfigProblem, AgentConfigRecovery};
 pub use settings::{
     agent_settings_fields, AgentMemorySettings, AgentPermissionMode, AgentSettings,
     AgentSettingsPatch, AgentWebSearchProvider, MAX_AGENT_DISABLED_PLUGINS,

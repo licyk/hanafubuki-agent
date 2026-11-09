@@ -2,8 +2,8 @@
 //! one line (`ok`, `FAIL`, or `skip`); any failure fails the command.
 
 use hanafubuki_agent::{
-    probe_keyring, AgentConfig, AgentProviderModelCatalogRequest, AgentRuntimeHost,
-    ConfigLayerSource, DataDirLock, McpConnectionPhase,
+    probe_keyring, AgentConfig, AgentConfigProblem, AgentProviderModelCatalogRequest,
+    AgentRuntimeHost, ConfigLayerSource, DataDirLock, McpConnectionPhase,
 };
 
 use crate::agent::{block_on, Standalone};
@@ -24,6 +24,7 @@ pub(crate) fn run(global: &GlobalArgs, online: bool) -> Result<u8, Failure> {
     configuration(&mut report, config);
     let default_provider = providers(&mut report, config);
     mcp(&mut report, config);
+    recoveries(&mut report, config);
     match probe_keyring() {
         Ok(()) => report.ok("keyring", hanafubuki_agent::KEYRING_SERVICE),
         Err(error) => report.fail("keyring", &error),
@@ -150,6 +151,28 @@ fn mcp(report: &mut Report, config: &AgentConfig) {
             );
         }
         Err(error) => report.fail("mcp", &error.to_string()),
+    }
+}
+
+/// What the reads above had to fix: a file left read-only fails, since the
+/// Agent cannot save a change to it.
+fn recoveries(report: &mut Report, config: &AgentConfig) {
+    for recovery in config.recoveries() {
+        let problem = match &recovery.problem {
+            AgentConfigProblem::Unusable { reason } => format!("unusable ({reason})"),
+            AgentConfigProblem::Repaired { repairs } => format!("repaired {}", repairs.join("; ")),
+        };
+        let file = recovery.file.display();
+        match &recovery.read_only {
+            None => report.ok(
+                "config",
+                &format!("{file}: {problem}; the original is in .recovery"),
+            ),
+            Some(error) => report.fail(
+                "config",
+                &format!("{file}: {problem}; read-only until the Agent restarts: {error}"),
+            ),
+        }
     }
 }
 

@@ -14,6 +14,7 @@ use crate::keys::{self, KeyTarget};
 use crate::layers::Resolved;
 use crate::overrides::parse_value;
 use crate::providers::{decode_registry, validate_agent_provider_registry};
+use crate::recovery::{AgentConfigProblem, AgentConfigRecovery};
 use crate::settings::{decode_settings, validate_disabled_plugins};
 use crate::{
     AgentProviderRegistrySettings, AgentSettings, AgentSettingsPatch, AgentStandaloneSettings,
@@ -251,13 +252,23 @@ impl AgentConfig {
             .checked_add(1)
             .ok_or_else(|| "Agent Provider registry revision exhausted".to_string())?;
         validate_agent_provider_registry(&registry)?;
-        self.inner.providers_file.write(&object(&registry)?)?;
+        self.inner.providers_file.write(&registry)?;
         *cached = Some(registry.clone());
         Ok(registry)
     }
 
     pub fn mcp(&self) -> &McpSettingsStore {
         &self.inner.mcp
+    }
+
+    /// What the reads of the settings, the Provider registry and the MCP
+    /// servers had to fix since this configuration was opened, oldest first.
+    pub fn recoveries(&self) -> Vec<AgentConfigRecovery> {
+        let mut recoveries = self.inner.settings_file.recoveries();
+        recoveries.extend(self.inner.providers_file.recoveries());
+        recoveries.extend(self.inner.mcp.file().recoveries());
+        recoveries.sort_by_key(|recovery| recovery.recorded_at_unix_ms);
+        recoveries
     }
 
     /// Writes a whole configuration into a directory that has none, the
@@ -268,12 +279,12 @@ impl AgentConfig {
         providers: &AgentProviderRegistrySettings,
         mcp: &McpSettings,
     ) -> Result<(), String> {
-        self.inner.providers_file.write(&object(providers)?)?;
+        self.inner.providers_file.write(providers)?;
         self.inner
             .mcp
             .write(mcp)
             .map_err(|error| error.to_string())?;
-        self.inner.settings_file.write(&object(settings)?)?;
+        self.inner.settings_file.write(settings)?;
         *self.inner.settings.lock() = self.inner.layers.is_none().then(|| Resolved {
             settings: settings.clone(),
             standalone: AgentStandaloneSettings::default(),
@@ -291,7 +302,7 @@ impl AgentConfig {
         let mut cached = self.inner.settings.lock();
         let mut settings = self.load_user_settings()?.value;
         update(&mut settings)?;
-        self.inner.settings_file.write(&object(&settings)?)?;
+        self.inner.settings_file.write(&settings)?;
         let resolved = match &self.inner.layers {
             None => Resolved {
                 settings,
@@ -380,11 +391,16 @@ pub(crate) struct Loaded<T> {
     pub(crate) unusable: Option<String>,
     /// What the file held as it was read; empty when it held nothing usable.
     pub(crate) document: Map<String, Value>,
+    /// Whether this read recorded a recovery: a file left read-only finds
+    /// the same problem at every read and records it once.
+    pub(crate) recorded: bool,
 }
 
 /// Reads `file` with `decode`. A file that cannot be read as a document, or
 /// whose values needed repair, is kept in `.recovery/` and rewritten: with
 /// the defaults, or with the repaired values over the user's own document.
+/// When that fails, the fixed values are used from memory and the file
+/// refuses writes: one would replace the user's original with no copy kept.
 /// Unknown keys stay in the file, and are logged when `report_unknown`.
 pub(crate) fn load<T: Serialize>(
     file: &ConfigFile,
@@ -393,21 +409,28 @@ pub(crate) fn load<T: Serialize>(
     report_unknown: bool,
 ) -> Result<Loaded<T>, String> {
     let path = file.path().display();
+    let fresh = !file.is_read_only();
     match file.read()? {
         FileRead::Missing => Ok(Loaded {
             value: defaults(),
             unusable: None,
             document: Map::new(),
+            recorded: false,
         }),
         FileRead::Unusable(reason) => {
-            log::warn!("Agent configuration {path} is unusable ({reason}); a copy is kept in .recovery and the defaults are used");
-            file.preserve()?;
             let value = defaults();
-            file.write(&object(&value)?)?;
+            if fresh {
+                log::warn!("Agent configuration {path} is unusable ({reason}); a copy is kept in .recovery and the defaults are used");
+                let problem = AgentConfigProblem::Unusable {
+                    reason: reason.clone(),
+                };
+                replace(file, problem, &value);
+            }
             Ok(Loaded {
                 value,
                 unusable: Some(reason),
                 document: Map::new(),
+                recorded: fresh,
             })
         }
         FileRead::Document(document) => {
@@ -420,20 +443,39 @@ pub(crate) fn load<T: Serialize>(
                     );
                 }
             }
-            if !repairs.is_empty() {
+            let recorded = fresh && !repairs.is_empty();
+            if recorded {
                 for repair in &repairs {
                     log::warn!("Agent configuration {path} repaired {repair}");
                 }
-                file.preserve()?;
-                file.write(&canonical)?;
+                replace(file, AgentConfigProblem::Repaired { repairs }, &canonical);
             }
             Ok(Loaded {
                 value,
                 unusable: None,
                 document,
+                recorded,
             })
         }
     }
+}
+
+/// Keeps `file` in `.recovery/` and writes `value` over it, or leaves the
+/// file read-only when either fails; records the recovery either way.
+fn replace<T: Serialize>(file: &ConfigFile, problem: AgentConfigProblem, value: &T) {
+    let read_only = file.preserve().and_then(|()| file.write(value)).err();
+    if let Some(error) = &read_only {
+        log::warn!(
+            "Agent configuration {} is used from memory and is read-only until the Agent restarts: {error}",
+            file.path().display()
+        );
+        file.set_read_only(error.clone());
+    }
+    file.record(AgentConfigRecovery::new(
+        file.path().to_path_buf(),
+        problem,
+        read_only,
+    ));
 }
 
 pub(crate) fn object<T: Serialize>(value: &T) -> Result<Map<String, Value>, String> {

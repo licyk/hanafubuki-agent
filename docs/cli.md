@@ -256,7 +256,10 @@ with 1:
 
 - **config**: each layer read: the user's `config.toml` (or that there is
   none), the profile, the project's file (and whether it is trusted, hence
-  read), the `-c` overrides. A profile that does not exist fails.
+  read), the `-c` overrides. A profile that does not exist fails. Then
+  each file a read had to repair, with what it repaired; one whose
+  original could not be kept fails, since it refuses changes until the
+  Agent restarts.
 - **providers**: how many, and the default with its endpoint and model;
   no default or no model fails.
 - **mcp**: how many servers, how many enabled.

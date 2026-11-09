@@ -34,7 +34,11 @@ The configuration directory holds three files:
 
 The last two hold credentials and are owner-only (`0600` on Unix). A file the
 Agent had to repair, or could not read at all, is copied into `.recovery/`
-first; nothing is ever deleted.
+first; nothing is ever deleted. When the copy cannot be made (or the repaired
+file written), the Agent runs on the repaired values in memory and that file
+refuses every change until the Agent restarts, so the original is never
+replaced without a copy; `doctor` names it. A new file lists its keys in the
+order the Agent declares them.
 
 The data directory holds the history (`history/`), memory (`memory/`), the
 Skills (`skills/`), the logs (`logs/hanafubuki-agent.log`), the crash-loop

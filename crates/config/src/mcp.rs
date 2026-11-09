@@ -8,7 +8,7 @@ use parking_lot::Mutex;
 use serde_json::Value;
 
 use crate::file::{ConfigFile, FileAccess};
-use crate::store::{load, object};
+use crate::store::load;
 
 /// The repairs one store keeps for its settings surface.
 const MAX_RETAINED_REPAIRS: usize = 256;
@@ -75,9 +75,11 @@ impl McpSettingsStore {
     }
 
     fn write_locked(&self, settings: &McpSettings) -> Result<(), McpError> {
-        object(settings)
-            .and_then(|document| self.file.write(&document))
-            .map_err(McpError::Unavailable)
+        self.file.write(settings).map_err(McpError::Unavailable)
+    }
+
+    pub(crate) fn file(&self) -> &ConfigFile {
+        &self.file
     }
 
     fn load_locked(&self) -> Result<McpSettings, McpError> {
@@ -94,6 +96,9 @@ impl McpSettingsStore {
             true,
         )
         .map_err(McpError::Unavailable)?;
+        if !loaded.recorded {
+            return Ok(loaded.value);
+        }
         if let Some(reason) = loaded.unusable {
             repairs.push(McpSettingsRepair::reset(&reason));
         }

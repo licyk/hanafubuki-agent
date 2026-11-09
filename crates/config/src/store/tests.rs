@@ -4,7 +4,9 @@ use hanafubuki_agent_mcp::{McpError, McpServerConfig, McpSettingsRepairKind};
 use serde_json::json;
 
 use super::*;
-use crate::{AgentPermissionMode, AgentProviderSettings, AgentWebSearchProvider};
+use crate::{
+    AgentConfigProblem, AgentPermissionMode, AgentProviderSettings, AgentWebSearchProvider,
+};
 
 fn recovered(directory: &Path) -> Vec<String> {
     let Ok(entries) = fs::read_dir(directory.join(".recovery")) else {
@@ -124,10 +126,19 @@ fn an_invalid_value_takes_its_default_and_the_original_is_kept() {
     let original = "permissionMode = \"everything\"\nwebFetchUseJinaReader = true\nwebSearchProvider = \"searxng\"\ndisabledPlugins = [\"titles\", \" padded \"]\n";
     fs::write(&path, original).unwrap();
 
-    let settings = AgentConfig::new(directory.path()).settings().unwrap();
+    let config = AgentConfig::new(directory.path());
+    let settings = config.settings().unwrap();
 
     assert_eq!(settings.permission_mode, AgentPermissionMode::Manual);
     assert!(settings.web_fetch_use_jina_reader);
+    let recoveries = config.recoveries();
+    assert_eq!(recoveries.len(), 1);
+    assert_eq!(recoveries[0].file, path);
+    assert_eq!(recoveries[0].read_only, None);
+    assert!(matches!(
+        &recoveries[0].problem,
+        AgentConfigProblem::Repaired { repairs } if repairs.len() == 3
+    ));
     assert_eq!(settings.web_search_provider, AgentWebSearchProvider::Auto);
     assert_eq!(
         settings.disabled_plugins.into_iter().collect::<Vec<_>>(),
@@ -301,4 +312,95 @@ fn mcp_repairs_keep_the_original_and_the_next_read_is_clean() {
     assert_eq!(recovered(directory.path()), [original]);
     assert_eq!(McpSettingsStore::new(path).load().unwrap(), settings);
     assert_eq!(recovered(directory.path()).len(), 1);
+}
+
+/// A regular file where `.recovery/` belongs, so keeping an original fails
+/// on every system and for every user.
+fn block_recovery(directory: &Path) {
+    fs::write(directory.join(".recovery"), "not a directory").unwrap();
+}
+
+#[test]
+fn a_repair_that_cannot_keep_the_original_leaves_the_file_read_only() {
+    let directory = tempfile::tempdir().unwrap();
+    block_recovery(directory.path());
+    let path = directory.path().join(AGENT_SETTINGS_FILE);
+    let original = "permissionMode = \"everything\"\nwebFetchUseJinaReader = true\n";
+    fs::write(&path, original).unwrap();
+    let config = AgentConfig::new(directory.path());
+
+    let settings = config.settings().unwrap();
+
+    assert_eq!(settings.permission_mode, AgentPermissionMode::Manual);
+    assert!(settings.web_fetch_use_jina_reader);
+    assert_eq!(fs::read_to_string(&path).unwrap(), original);
+    let error = config
+        .write_settings(AgentSettingsPatch {
+            web_fetch_use_jina_reader: Some(false),
+            ..AgentSettingsPatch::default()
+        })
+        .unwrap_err();
+    assert!(
+        error.contains("read-only until the Agent restarts"),
+        "{error}"
+    );
+    assert_eq!(fs::read_to_string(&path).unwrap(), original);
+    let recoveries = config.recoveries();
+    assert_eq!(recoveries.len(), 1, "a read-only file is recorded once");
+    assert!(recoveries[0].read_only.is_some());
+    // The other files are not affected.
+    config
+        .mutate_providers(0, |registry| {
+            registry.providers.push(provider("example"));
+            Ok(())
+        })
+        .unwrap();
+}
+
+#[test]
+fn unusable_mcp_settings_that_cannot_be_kept_stay_on_disk_and_refuse_writes() {
+    let directory = tempfile::tempdir().unwrap();
+    block_recovery(directory.path());
+    let path = directory.path().join(AGENT_MCP_FILE);
+    fs::write(&path, "servers = [").unwrap();
+    let store = McpSettingsStore::new(path.clone());
+
+    assert_eq!(store.load().unwrap(), McpSettings::default());
+    assert_eq!(store.load().unwrap(), McpSettings::default());
+
+    assert_eq!(store.repairs().len(), 1);
+    assert!(matches!(
+        store.update(1, |_| Ok(())),
+        Err(McpError::Unavailable(error)) if error.contains("read-only")
+    ));
+    assert_eq!(fs::read_to_string(&path).unwrap(), "servers = [");
+}
+
+#[test]
+fn a_new_file_lists_the_keys_in_their_declared_order() {
+    let directory = tempfile::tempdir().unwrap();
+    let config = AgentConfig::new(directory.path());
+
+    config
+        .write_settings(AgentSettingsPatch::default())
+        .unwrap();
+
+    let text = fs::read_to_string(directory.path().join(AGENT_SETTINGS_FILE)).unwrap();
+    let position = |key: &str| {
+        text.find(key)
+            .unwrap_or_else(|| panic!("{key} in:\n{text}"))
+    };
+    // Sorted, disabledPlugins would come first.
+    assert!(
+        position("permissionMode") < position("disabledPlugins"),
+        "{text}"
+    );
+    assert!(
+        position("disabledPlugins") < position("webSearchProvider"),
+        "{text}"
+    );
+    assert_eq!(
+        AgentConfig::new(directory.path()).settings().unwrap(),
+        AgentSettings::default()
+    );
 }

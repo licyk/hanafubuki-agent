@@ -765,7 +765,11 @@ quarantine what they cannot use
   invalid value takes its default (one bad Provider or MCP server is dropped
   alone), unknown keys are logged and stay in the file, and a file that
   needed repair or cannot be read is copied into `.recovery/` before the
-  repaired values are written. A write edits the document on disk with
+  repaired values are written. When the copy or the write fails, the
+  repaired values are used from memory and the file refuses writes until
+  restart (`ConfigFile::set_read_only`). Each repair is kept as an
+  `AgentConfigRecovery` (`AgentConfig::recoveries`, the last 20 a file),
+  which `doctor` prints and a host can show. A write edits the document on disk with
   `toml_edit` (comments, layout and unknown keys survive; a changed value
   keeps its key's comment) and publishes it by an atomic rename. Each file is
   read once per Agent instance and again before every write, so a hand edit

@@ -5,13 +5,19 @@
 //! Agent does not know stays where the user put it. The new document is
 //! published by an atomic rename.
 
+use std::collections::VecDeque;
 use std::fs::{self, File, OpenOptions};
 use std::io::{ErrorKind, Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
+use parking_lot::Mutex;
+use serde::Serialize;
 use serde_json::{Map, Value};
 use toml_edit::{Array, ArrayOfTables, DocumentMut, InlineTable, Item, Table};
+
+use crate::recovery::AgentConfigRecovery;
+use crate::store::object;
 
 const MAX_CONFIG_FILE_BYTES: u64 = 8 * 1024 * 1024;
 
@@ -28,7 +34,13 @@ pub enum FileAccess {
 pub(crate) struct ConfigFile {
     path: PathBuf,
     access: FileAccess,
+    /// Why the file refuses writes: a repair could not keep its original.
+    read_only: Mutex<Option<String>>,
+    recoveries: Mutex<VecDeque<AgentConfigRecovery>>,
 }
+
+/// The recoveries one file keeps, oldest dropped first.
+const MAX_RECOVERIES: usize = 20;
 
 /// What a read found.
 pub(crate) enum FileRead {
@@ -41,7 +53,33 @@ pub(crate) enum FileRead {
 
 impl ConfigFile {
     pub(crate) fn new(path: PathBuf, access: FileAccess) -> Self {
-        Self { path, access }
+        Self {
+            path,
+            access,
+            read_only: Mutex::new(None),
+            recoveries: Mutex::new(VecDeque::new()),
+        }
+    }
+
+    pub(crate) fn is_read_only(&self) -> bool {
+        self.read_only.lock().is_some()
+    }
+
+    /// Refuses every later write, until the Agent restarts, with `reason`.
+    pub(crate) fn set_read_only(&self, reason: String) {
+        *self.read_only.lock() = Some(reason);
+    }
+
+    pub(crate) fn record(&self, recovery: AgentConfigRecovery) {
+        let mut recoveries = self.recoveries.lock();
+        recoveries.push_back(recovery);
+        while recoveries.len() > MAX_RECOVERIES {
+            recoveries.pop_front();
+        }
+    }
+
+    pub(crate) fn recoveries(&self) -> Vec<AgentConfigRecovery> {
+        self.recoveries.lock().iter().cloned().collect()
     }
 
     pub(crate) fn path(&self) -> &Path {
@@ -93,27 +131,47 @@ impl ConfigFile {
             .map_err(|error| format!("preserve {}: {error}", self.path.display()))
     }
 
-    /// Writes `value`, a JSON object, over the document on disk: changed
-    /// values are replaced, removed ones (`null`) deleted, everything else
-    /// kept as written.
-    pub(crate) fn write(&self, value: &Map<String, Value>) -> Result<(), String> {
+    /// Writes `value`, an object, over the document on disk: changed values
+    /// are replaced, removed ones (`null`) deleted, everything else kept as
+    /// written. A file with no document yet lists the keys in the order
+    /// `value` declares them.
+    pub(crate) fn write<T: Serialize>(&self, value: &T) -> Result<(), String> {
+        if let Some(reason) = self.read_only.lock().as_ref() {
+            return Err(format!(
+                "{} is read-only until the Agent restarts: {reason}",
+                self.path.display()
+            ));
+        }
         let existing = match self.read_text()? {
             Text::Bytes(bytes) => String::from_utf8(bytes).ok(),
             Text::Missing | Text::TooLarge => None,
         };
-        let mut document = existing
+        let document = existing
             .as_deref()
-            .and_then(|text| text.parse::<DocumentMut>().ok())
-            .unwrap_or_default();
-        let before = existing
-            .as_deref()
-            .and_then(|text| toml::from_str::<Value>(text).ok());
-        merge_table(
-            document.as_table_mut(),
-            before.as_ref().and_then(Value::as_object),
-            value,
-        );
-        write_atomic(&self.path, document.to_string().as_bytes(), self.access)
+            .and_then(|text| text.parse::<DocumentMut>().ok());
+        let text = match document {
+            Some(mut document) => {
+                let before = existing
+                    .as_deref()
+                    .and_then(|text| toml::from_str::<Value>(text).ok());
+                merge_table(
+                    document.as_table_mut(),
+                    before.as_ref().and_then(Value::as_object),
+                    &object(value)?,
+                );
+                document.to_string()
+            }
+            // The JSON map the merge works on sorts its keys.
+            None => match toml::to_string(value) {
+                Ok(text) => text,
+                Err(_) => {
+                    let mut document = DocumentMut::new();
+                    merge_table(document.as_table_mut(), None, &object(value)?);
+                    document.to_string()
+                }
+            },
+        };
+        write_atomic(&self.path, text.as_bytes(), self.access)
     }
 
     fn read_text(&self) -> Result<Text, String> {

@@ -129,6 +129,18 @@ done: the workspace, the decoupling inside Hanafubuki's tree, and the move.
       removed `ProcessOwnershipRegistry::len` and `ReservationSet::len`
       from `hanafubuki-agent-process`'s test support, which nothing
       called (its twin, `hanafubuki-process`, may keep them).
+- [x] The configuration's recovery (Hanafubuki's open item from 2b): a
+      repair whose original cannot be kept in `.recovery/` (or whose
+      repaired file cannot be written) leaves the values in memory and the
+      file read-only until restart, instead of failing the read; each
+      repair is an `AgentConfigRecovery` (`AgentConfig::recoveries`), which
+      `doctor` prints; a new file lists its keys in declared order. A hand
+      edit is read at the next write or restart, by design (as Hanafubuki's
+      Config and Codex).
+- [ ] Hanafubuki, at its first pin past this (0.1.1): the recoveries in
+      the Task Center's configuration recovery notice (the integration maps
+      `AgentConfigRecovery` onto a `ConfigRecoveryReport` for the Agent's
+      files); nothing else changes.
 
 ## Shared with the other repository
 
