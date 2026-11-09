@@ -35,19 +35,16 @@ hanafubuki-agent sessions show 2
 
 ```text
 session 2  gpt-5.1  解释这个仓库是做什么的
-user: 解释这个仓库是做什么的
-→ exec_command
-  done
 assistant: 这是一个……
+  done
+→ exec_command
+thought for 3s
+user: 解释这个仓库是做什么的
 ```
 
-`show` 打印会话最近的 200 项记录：你的消息（`user:`，回合进行中补充的消息是 `user (steering):`）、模型的回答（`assistant:`）、工具调用（`→ 工具名`）及其结果（`done` 或 `failed`）。更早的记录不会显示，此时会先打印 `(older items are not shown)`。只给模型看的上下文不会显示。
+`show` 打印会话最近的 200 项记录，最新的在前：你的消息（`user:`，回合进行中补充的消息是 `user (steering):`）、模型思考了多久（`thought for 3s`，整秒，向下取整；不含思考内容）、模型的回答（`assistant:`）、工具调用（`→ 工具名`）及其结果（`done` 或 `failed`）。更早的记录不会显示，此时会先打印 `(older items are not shown)`。只给模型看的上下文不会显示。
 
-{/* T2: verify */}
-
-模型的思考记录也保存在会话中，在终端界面恢复会话时可以看到；`sessions show` 的文本输出不包含它们。
-
-`--json` 输出这一页记录的完整 JSON，包括每一项的全部字段。
+`--json` 输出这一页记录的完整 JSON，包括每一项的全部字段，思考内容也在其中。在终端界面恢复会话时也能看到思考过程。
 
 ## 归档与删除 [#archive-delete]
 

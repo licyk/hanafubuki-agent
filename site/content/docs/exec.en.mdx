@@ -54,9 +54,7 @@ The final answer.
 
 Each message is printed once it is complete. Standard error has the session's id (`session 3`), the model request's retries, and how a turn that did not complete ended (`error: the turn failed (...)`, `the turn was cancelled (...)`).
 
-{/* T2: verify */}
-
-While the model thinks, standard error gets one line such as `· thought for 12s`: the time only, not the thinking itself. The thinking's text is in the `--json` events.
+Each time the model finishes thinking, standard error gets a line such as `· thought for 12s` (whole seconds, rounded down): the time only, not the thinking itself. A thinking cut short by the turn's end prints no line. The thinking's text is in the `--json` events ([Thinking](/docs/json-events#reasoning)).
 
 ## JSON output [#json]
 

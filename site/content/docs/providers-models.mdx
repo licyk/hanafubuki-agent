@@ -95,15 +95,13 @@ reasoningEffort = "medium"   # minimal、low、medium、high、xhigh
 
 推理强度只对 Responses 协议有效；其他协议的会话会忽略它。`/status` 会显示当前会话的推理强度。
 
-{/* T2: verify */}
-
-模型的思考过程会显示出来，在终端界面中是一行可展开的 `Thinking`（见[终端界面](/docs/terminal-interface#thinking)），在 `exec --json` 中是 `reasoning_*` 事件（见 [exec --json 事件](/docs/json-events#reasoning)）。能看到什么取决于 Provider：
+模型的思考过程会显示出来，在终端界面中是一行可以用 Ctrl-O 展开的 `Thinking`（见[终端界面](/docs/terminal-interface#thinking)），在 `exec --json` 中是 `reasoning_*` 事件（见 [exec --json 事件](/docs/json-events#reasoning)）；`exec` 的普通输出和 `sessions show` 只显示思考了多久（`thought for 12s`）。能看到什么取决于 Provider：
 
 | 协议               | 思考内容                                                                                         |
 | ------------------ | ------------------------------------------------------------------------------------------------ |
 | Responses          | 设置了推理强度时，Agent 会请求思考摘要；兼容服务（例如 vLLM 上的 gpt-oss）也可能发送原始思考文本 |
 | Chat Completions   | 服务在 `reasoning_content` 或 `reasoning` 中发送的内容（DeepSeek、Qwen、OpenRouter 等）          |
-| Anthropic Messages | 目前不会请求思考，因此没有内容                                                                   |
+| Anthropic Messages | 目前不会请求思考，因此没有内容；服务仍然发送的 `thinking` 块会显示出来                           |
 
 思考内容保存在会话历史中，每一段最多 256 KiB，超出的部分被截断。它只用于显示，不会再发送给模型。
 

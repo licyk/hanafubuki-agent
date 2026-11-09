@@ -40,6 +40,7 @@ In the conversation your messages start with `›`; a tool call is `• Called T
 | Ctrl-C                    | In turn: denies an approval; clears a composer with text; interrupts a running turn; a second press within one second quits |
 | Ctrl-D                    | On an empty composer, two presses within one second quit; with text, deletes the next character                             |
 | Ctrl-T                    | Opens the transcript (below)                                                                                                |
+| Ctrl-O                    | Shows or hides the model's thinking (below)                                                                                 |
 | `?` on an empty composer  | Shows the shortcuts                                                                                                         |
 
 The composer has the usual Emacs-style editing keys: Ctrl-A/E for the start and end of the line, Ctrl-W to delete the previous word, Ctrl-U/K to delete to the start or end of the line, Alt-B/F to move by word, and so on.
@@ -100,11 +101,9 @@ The turn goes on while a pager is open, and what it writes meanwhile appears in 
 
 ## Thinking [#thinking]
 
-{/* T2: verify */}
+While the model thinks, the conversation shows a `• Thinking 5s` line that counts up, collapsed by default; the status line stays `Working`. Ctrl-O expands it to the thinking as the model streams it (dim Markdown) and collapses it again. The choice applies to the thinking shown now and to every later one until you press Ctrl-O again, for as long as the interface runs. While thinking is live, the footer says `ctrl + o to show thinking` (or `to hide thinking`).
 
-While the model thinks, the interface shows a `• Thinking 5s` line that counts up, collapsed by default. Ctrl-O expands it to show the thinking as the model streams it (dim Markdown), and collapses it again.
-
-When the thinking ends, the line is written into the scrollback as it is shown: `• Thought for 12s` when collapsed, or the header and the text when expanded. Scrollback cannot be changed afterwards, but the full thinking is always in the transcript (Ctrl-T). A resumed session replays earlier thinking collapsed.
+When the thinking ends, it is written into the scrollback as it is shown at that moment: `• Thought for 12s` (whole seconds, rounded down) when collapsed, or that line and the text when expanded. A Provider that sends no text leaves only the line. If the turn ends before the thinking does (an error, an interrupt), the line is completed with the time so far. Scrollback cannot be changed afterwards, but the transcript (Ctrl-T) always shows every thinking's text. A resumed session replays its thinking the same way, collapsed unless Ctrl-O expanded thinking; a thinking whose text was cut at the Agent's bound says `• Thought for 12s (truncated)`.
 
 What you see depends on what the Provider sends: some send a summary of the thinking, some the raw thinking text, some nothing. See [Providers and models](/docs/providers-models#reasoning).
 

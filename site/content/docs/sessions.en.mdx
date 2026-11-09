@@ -35,19 +35,16 @@ hanafubuki-agent sessions show 2
 
 ```text
 session 2  gpt-5.1  Explain what this repository does
-user: Explain what this repository does
-→ exec_command
-  done
 assistant: This is …
+  done
+→ exec_command
+thought for 3s
+user: Explain what this repository does
 ```
 
-`show` prints the session's latest 200 items: your messages (`user:`, or `user (steering):` for one sent while a turn ran), the model's answers (`assistant:`), its tool calls (`→ TOOL`) and their results (`done` or `failed`). Older items are left out, and `(older items are not shown)` says so first. Context only the model reads is not shown.
+`show` prints the session's latest 200 items, the latest first: your messages (`user:`, or `user (steering):` for one sent while a turn ran), how long the model thought (`thought for 3s`, in whole seconds, rounded down; not its text), the model's answers (`assistant:`), its tool calls (`→ TOOL`) and their results (`done` or `failed`). Older items are left out, and `(older items are not shown)` says so first. Context only the model reads is not shown.
 
-{/* T2: verify */}
-
-The model's thinking is kept in the session too, and the terminal interface shows it when you resume the session; `sessions show`'s text leaves it out.
-
-`--json` prints that page of the transcript as JSON, with every field of each item.
+`--json` prints that page of the transcript as JSON, with every field of each item, the thinking's text included. The terminal interface shows the thinking too when you resume the session.
 
 ## Archiving and deleting [#archive-delete]
 

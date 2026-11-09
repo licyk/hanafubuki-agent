@@ -54,9 +54,7 @@ hanafubuki-agent exec - < task.md
 
 每条消息在完整收到后才打印。标准错误中是会话 ID（`session 3`）、模型请求的重试，以及没有正常完成的回合是如何结束的（`error: the turn failed (...)`、`the turn was cancelled (...)`）。
 
-{/* T2: verify */}
-
-模型思考时，标准错误会打印一行 `· thought for 12s`，只有时长，没有思考内容。思考内容可以在 `--json` 的事件中读取。
+模型每完成一段思考，标准错误就打印一行，如 `· thought for 12s`（整秒，向下取整），只有时长，没有思考内容。被回合结束打断的思考不打印这一行。思考内容可以在 `--json` 的事件中读取（[思考](/docs/json-events#reasoning)）。
 
 ## JSON 输出 [#json]
 

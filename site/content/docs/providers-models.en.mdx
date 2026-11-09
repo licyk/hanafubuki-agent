@@ -95,15 +95,13 @@ reasoningEffort = "medium"   # minimal, low, medium, high, xhigh
 
 The reasoning effort applies to the Responses protocol only; a session on another protocol leaves it out. `/status` shows the session's effort.
 
-{/* T2: verify */}
-
-The model's thinking is shown: as a `Thinking` line you can expand in the terminal interface (see [Terminal interface](/docs/terminal-interface#thinking)), and as the `reasoning_*` events of `exec --json` (see [exec --json events](/docs/json-events#reasoning)). What there is to see depends on the Provider:
+The model's thinking is shown: as a `Thinking` line you can expand with Ctrl-O in the terminal interface (see [Terminal interface](/docs/terminal-interface#thinking)), and as the `reasoning_*` events of `exec --json` (see [exec --json events](/docs/json-events#reasoning)); `exec`'s human output and `sessions show` say only how long it took (`thought for 12s`). What there is to see depends on the Provider:
 
 | Protocol           | The thinking                                                                                                                                                 |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Responses          | With a reasoning effort set, the Agent asks for a summary of the thinking; a compatible server (gpt-oss on vLLM, say) may send the raw thinking text instead |
 | Chat Completions   | What the service sends in `reasoning_content` or `reasoning` (DeepSeek, Qwen, OpenRouter and others)                                                         |
-| Anthropic Messages | Thinking is not requested yet, so there is none                                                                                                              |
+| Anthropic Messages | Thinking is not requested yet, so there is none; a `thinking` block the service sends anyway is shown                                                        |
 
 The thinking is kept in the session's history, each stretch up to 256 KiB (the rest is cut). It is there to be read: it is never sent to the model again.
 
