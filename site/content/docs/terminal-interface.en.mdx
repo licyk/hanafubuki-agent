@@ -254,7 +254,7 @@ In Fullscreen, while the leader waits for its second key with a second conversat
 
 ## Subagents [#subagents]
 
-`/subagents` writes the session's [subagents](/docs/sessions#subagents) into the conversation, each with its status (`running`, `idle` or `failed`) and the start of its latest answer, then opens a list of them; while one runs, the list follows their statuses. Enter shows the one selected in place of the session, under `Subagent NAME · from PARENT · Esc or ctrl-x left returns`: its transcript as `/resume` shows it and, while it runs, its turn as it goes on (its answer streams, its tool calls show, and Esc interrupts it). A message you send there goes to the subagent.
+`/subagents` writes the session's [subagents](/docs/sessions#subagents) into the conversation, each with its status (`running`, `idle` or `failed`) and the start of its latest answer, then opens a list of them; while one runs, the list follows their statuses. Enter shows the one selected in place of the session, under `Subagent NAME · from PARENT · Esc or ctrl-x left returns`: its transcript as `/resume` shows it and, while it runs, its turn as it goes on (its answer streams, its tool calls show, an approval it waits on is asked there, including one it asked for before it was shown, and Esc interrupts it). A message you send there goes to the subagent.
 
 - Esc on an empty composer with nothing running, `leader left` or `leader x` returns to the session, whose own turn went on meanwhile.
 - In Fullscreen the subagent fills the screen; in Scrollback the interface switches to it, as to a [side conversation](#side). Its commands are a side conversation's. While a side conversation is open, a subagent is not shown: close it first.

@@ -5,7 +5,8 @@
 //! apart.
 
 use hanafubuki_agent::{
-    AgentError, AgentEventSequence, AgentSessionId, AgentSessionOrigin, AgentTurnAccepted,
+    AgentError, AgentEventKind, AgentEventSequence, AgentSessionId, AgentSessionOrigin,
+    AgentTurnAccepted, ApprovalRequest,
 };
 
 use super::{AgentBridge, OpenedSession, TurnUpdate};
@@ -29,14 +30,16 @@ pub(crate) struct OpenedSide {
     pub(crate) session: OpenedSession,
 }
 
-/// A subagent opened to be shown: its transcript, its parent's title, and
-/// where its journal is followed from.
+/// A subagent opened to be shown: its transcript, its parent's title,
+/// where its journal is followed from, and the approvals its turn already
+/// waits on there.
 pub(crate) struct OpenedChild {
     pub(crate) session: OpenedSession,
     pub(crate) title: String,
     pub(crate) parent_title: String,
     after: Option<AgentEventSequence>,
     running: Option<AgentTurnAccepted>,
+    waiting: Vec<ApprovalRequest>,
 }
 
 impl AgentBridge {
@@ -130,6 +133,10 @@ impl AgentBridge {
             .checked_sub(1)
             .filter(|sequence| *sequence > 0)
             .map(AgentEventSequence::new);
+        let waiting = match (running, after) {
+            (Some(turn), Some(after)) => self.waiting_approvals(turn, after),
+            _ => Vec::new(),
+        };
         Ok(OpenedChild {
             session,
             title: snapshot
@@ -138,7 +145,35 @@ impl AgentBridge {
             parent_title,
             after,
             running,
+            waiting,
         })
+    }
+
+    /// The approvals `turn` asked for through `after` and that are not yet
+    /// answered: the journal is followed after them, so they are shown from
+    /// here.
+    fn waiting_approvals(
+        &self,
+        turn: AgentTurnAccepted,
+        after: AgentEventSequence,
+    ) -> Vec<ApprovalRequest> {
+        let Ok(batch) = self.agent.events_since(turn.session_id, None) else {
+            return Vec::new();
+        };
+        let mut waiting: Vec<ApprovalRequest> = Vec::new();
+        for event in batch.events {
+            if event.sequence > after || event.turn_id != Some(turn.turn_id) {
+                continue;
+            }
+            match event.kind {
+                AgentEventKind::ApprovalRequested { request } => waiting.push(request),
+                AgentEventKind::ApprovalResolved { request_id, .. } => {
+                    waiting.retain(|request| request.request_id != request_id);
+                }
+                _ => {}
+            }
+        }
+        waiting
     }
 
     /// Shows `child` in this (second) bridge and follows its journal.
@@ -150,6 +185,7 @@ impl AgentBridge {
         }
         if let Some(session_id) = session_id {
             updates.extend(self.follow(session_id, child.after, child.running));
+            updates.extend(child.waiting.into_iter().map(TurnUpdate::ApprovalRequested));
         }
         updates
     }

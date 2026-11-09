@@ -7,10 +7,12 @@
 use std::time::Duration;
 
 use hanafubuki_agent::test_support::{assistant_events, tool_calls_events};
-use hanafubuki_agent::{AgentSessionId, AgentSessionOrigin};
+use hanafubuki_agent::{AgentEventKind, AgentSessionId, AgentSessionOrigin};
 use ratatui::crossterm::event::KeyCode;
 
 use super::{command_arguments, Harness};
+use crate::app::WorkspaceEvent;
+use crate::app_event::AppEvent;
 use crate::transcript_mode::TranscriptMode;
 
 /// The parent's step that spawns `counter` with `task` and waits for it.
@@ -151,4 +153,55 @@ fn a_running_subagent_shown_follows_its_turn_and_takes_its_approval() {
     harness.pump_until_turn_ends();
     harness.key(KeyCode::Esc);
     harness.pump_until_screen_shows("The subagent ran it.");
+}
+
+/// A subagent shown once its call already waits on the user (the parent's
+/// list was slower than the subagent) shows that approval too.
+#[test]
+fn a_subagent_shown_after_it_asked_shows_the_approval_it_waits_on() {
+    let mut harness = Harness::start(vec![
+        spawn_and_wait("Run the command."),
+        tool_calls_events(&[(
+            "call-child",
+            "exec_command",
+            &command_arguments("echo child-output"),
+        )]),
+        assistant_events("The command printed child-output."),
+        assistant_events("The subagent ran it."),
+    ]);
+    harness.type_and_submit("Delegate the command.");
+    harness.pump_until("the subagent to ask", |harness| {
+        harness.asking_subagent().is_some()
+    });
+    let child = harness.asking_subagent().unwrap();
+
+    let event = AppEvent::Workspace(WorkspaceEvent::OpenChild(child));
+    assert!(harness.app.handle_event(&mut harness.tui, event));
+    harness.pump_until("the subagent's approval", |harness| {
+        let screen = harness.screen();
+        screen.contains("Subagent counter ·")
+            && screen.contains("Yes, proceed")
+            && !screen.contains("Subagent counter: Run")
+    });
+    harness.key(KeyCode::Char('y'));
+    harness.pump_until_screen_shows("The command printed child-output.");
+    harness.pump_until_turn_ends();
+    harness.key(KeyCode::Esc);
+    harness.pump_until_screen_shows("The subagent ran it.");
+}
+
+impl Harness {
+    /// The session's subagent whose turn has asked for an approval.
+    fn asking_subagent(&self) -> Option<AgentSessionId> {
+        let parent = self.app.bridge.session_id()?;
+        let agent = self.runtime.slot().agent().unwrap();
+        self.subagents_of(parent).into_iter().find(|child| {
+            agent
+                .events_since(*child, None)
+                .unwrap()
+                .events
+                .iter()
+                .any(|event| matches!(event.kind, AgentEventKind::ApprovalRequested { .. }))
+        })
+    }
 }
