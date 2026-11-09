@@ -1,0 +1,442 @@
+---
+title: 嵌入 Agent
+description: 把 hanafubuki-agent 作为 Rust 库嵌入宿主应用：依赖、组合、宿主端口、panic hook 桥、启动与关闭。
+icon: Package
+---
+
+hanafubuki-agent 有两种运行方式，背后是同一套组合：
+
+- **独立运行**：`hanafubuki-agent` 命令行与终端界面。门面 crate 的 `AgentRuntime::standalone` 为每个宿主端口提供默认实现（工作目录作为工作区、操作系统钥匙串、配置文件里的代理）。
+- **嵌入运行**：宿主应用（例如 [Hanafubuki](https://github.com/licyk/Hanafubuki)）自己组合 Agent，通过**宿主接口**提供插件、工作区、上下文、指令、网络设置和密钥存储。Agent 不知道宿主的任何领域，也不依赖宿主的任何 crate；依赖方向只有一个：宿主依赖 Agent。
+
+本页说明嵌入方式。编写宿主插件见[宿主插件](/docs/host-plugins)，各部分如何协作见[架构](/docs/architecture)。
+
+## 添加依赖
+
+```toml
+[dependencies]
+hanafubuki-agent = "0.1"
+hanafubuki-agent-contracts = "0.1"
+hanafubuki-agent-runtime = "0.1"
+# 宿主插件的工具还需要：
+hanafubuki-agent-approval = "0.1"
+hanafubuki-agent-tool-contracts = "0.1"
+kardia-core = "0.2.0"
+```
+
+| crate                             | 用途                                                                                          |
+| --------------------------------- | --------------------------------------------------------------------------------------------- |
+| `hanafubuki-agent`                | 门面：组合、槽位（slot）、服务 API、宿主接口、配置（`AgentConfig` 由它重新导出）              |
+| `hanafubuki-agent-contracts`      | 插件 API：注册表、工具与上下文契约、`TurnExtensions`（实现 `WorkspaceRootsPort` 需要它）      |
+| `hanafubuki-agent-runtime`        | `ContainedRuntime`：每个 Agent 实例的运行时，出现在 `AgentConstructor` 的签名里               |
+| `hanafubuki-agent-approval`       | 宿主插件的工具需要的审批类型（`ApprovalAction`、`PermissionRequirement`、`AuthorizedAction`） |
+| `hanafubuki-agent-tool-contracts` | 工具名与工具规格类型（`ToolName`、`ToolExposure`、`ToolExecutionClass`）                      |
+
+插件用 kardia 的 `PluginDef` 定义，所以需要 `kardia-core`。宿主不应依赖内核（`hanafubuki-agent-kernel`）、模型 API 或其他内部 crate；门面重新导出了宿主需要的类型。
+
+<Callout title="版本">
+  1.0 之前，次版本号的升级可以包含破坏性变更（Cargo 对 `0.x` 的规则），所以依赖写 `"0.1"`
+  这样的次版本要求，随每个次版本手动升级。首个版本发布到 crates.io 之前，宿主用 git 依赖固定一个
+  revision（Hanafubuki 目前就是这样）。
+</Callout>
+
+## 组合
+
+嵌入时宿主自己组装独立模式也在用的几个部件：
+
+| 部件                      | 作用                                                                                                       |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `AgentSlot`               | Agent 的状态机与监督者：启动、内核故障后的自动重启、崩溃循环停止、开关、状态                               |
+| `AgentStartMarker`        | 崩溃循环标记（`start-marker.json`），并持有数据目录锁                                                      |
+| `DesktopAgent`            | 槽位、标记和 Agent 子进程的环境；`start` 与 `shutdown`                                                     |
+| `AgentLaunch`             | 构造每个 Agent 实例的闭包（`AgentConstructor`）和进程组台账的路径                                          |
+| `AgentServiceInputs`      | 构造闭包交给 `AgentApplicationService::open` 的输入：配置、存储、Skill 根目录、阻塞池、事件 sink、宿主端口 |
+| `AgentApplicationService` | 运行中的 Agent 的服务 API：会话、轮次、设置、Provider、MCP、Skill、记忆、插件状态                          |
+
+构造闭包在每次启动时都会运行：首次启动、用户重启、内核故障后的自动重启、模块重新开启。所以宿主端口要在闭包里**为每个实例重新构建**：每个实例只挂载一次它拿到的插件行。
+
+一个完整的最小例子：
+
+```rust
+use std::collections::{BTreeMap, HashMap};
+use std::path::PathBuf;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
+
+use hanafubuki_agent::{
+    agent_workspace_roots_from, AgentApplicationService, AgentConfig, AgentConstructor, AgentEvent,
+    AgentEventKind, AgentEventSink, AgentHostInstructions, AgentHostPorts, AgentInstanceInputs,
+    AgentLaunch, AgentPluginGroup, AgentPluginRow, AgentProxy, AgentServiceInputs,
+    AgentSessionMode, AgentSlot, AgentStartMarker, AgentStatusEventSink, AgentStoragePaths,
+    AgentTurnRequest, AgentWorkspaceRoots, DesktopAgent, NetworkSettingsPort, NoHostContext,
+    NoopAgentPluginEventSink, NoopMcpEventSink, SecretFuture, SecretKey, SecretStore, SkillRoots,
+    WorkspaceRootsPort, AGENT_SHUTDOWN_BUDGET,
+};
+use hanafubuki_agent_contracts::TurnExtensions;
+use hanafubuki_agent_runtime::ContainedRuntime;
+use parking_lot::Mutex;
+
+fn main() -> Result<(), String> {
+    let config_dir = PathBuf::from("/var/lib/my-app/config/agent");
+    let storage = AgentStoragePaths::under(PathBuf::from("/var/lib/my-app/data/agent"));
+    let project = PathBuf::from("/srv/project");
+
+    // 1. 槽位与崩溃循环标记，然后是宿主旁边的 Agent。
+    let marker = AgentStartMarker::new(storage.start_marker_file.clone())
+        .with_crash_record(storage.crash_record_file.clone());
+    let slot = AgentSlot::new(marker.disabled_reason(true), Arc::new(LogStatus));
+    let agent = DesktopAgent::new(slot, marker, HashMap::new())?;
+
+    // 2. 构造每个 Agent 实例：首次启动和每次重启。
+    let process_groups_file = storage.process_groups_file.clone();
+    let construct: AgentConstructor = Arc::new(
+        move |runtime: &ContainedRuntime, instance: AgentInstanceInputs| {
+            let blocking = runtime.blocking_port();
+            AgentApplicationService::open(AgentServiceInputs {
+                config: AgentConfig::new(&config_dir),
+                storage_paths: storage.clone(),
+                skill_roots: SkillRoots {
+                    system: storage.skills_root.join("system"),
+                    user: storage.skills_root.join("packages"),
+                    install_bundled_system_skills: true,
+                    state_file: storage.skill_state_file.clone(),
+                },
+                blocking,
+                mcp_event_sink: Arc::new(NoopMcpEventSink),
+                plugin_event_sink: Arc::new(NoopAgentPluginEventSink),
+                host: AgentHostPorts {
+                    plugins: vec![AgentPluginRow::unconfigured(
+                        AgentPluginGroup::Capability,
+                        app_info_plugin(),
+                    )],
+                    workspace: Arc::new(ProjectRoots(project.clone())),
+                    steering_context: Arc::new(NoHostContext),
+                    instructions: AgentHostInstructions {
+                        identity: "You are My App's coding agent.".to_string(),
+                        application: "My App".to_string(),
+                        ..AgentHostInstructions::default()
+                    },
+                    network: Arc::new(SystemProxy),
+                    secrets: Arc::new(MemorySecrets::default()),
+                },
+                instance,
+            })
+        },
+    );
+
+    // 3. 启动，等待 Agent 运行。
+    agent.start(AgentLaunch {
+        construct,
+        process_groups_file,
+    });
+    let handle = agent
+        .slot()
+        .wait_until_started(Instant::now() + Duration::from_secs(120))
+        .map_err(|unavailable| unavailable.to_string())?;
+
+    // 4. 对 Agent 的每次调用都在它自己的运行时上执行。
+    let turn = handle
+        .runtime()
+        .block_on({
+            let handle = handle.clone();
+            async move {
+                let session = handle.create_session(AgentSessionMode::Default).await?;
+                let request = AgentTurnRequest {
+                    text: "Summarize the README.".to_string(),
+                    images: Vec::new(),
+                    skills: Vec::new(),
+                    host: TurnExtensions::default(),
+                };
+                handle
+                    .submit_turn_with_sink(session.id, request, Arc::new(PrintEvents))
+                    .await
+            }
+        })
+        .map_err(|failure| failure.to_string())??;
+    println!("turn {:?} accepted", turn.turn_id);
+
+    // 5. 在预算内关闭，调用方不在任何异步上下文中。
+    for diagnostic in agent.shutdown(AGENT_SHUTDOWN_BUDGET) {
+        eprintln!("{} did not stop: {}", diagnostic.worker, diagnostic.message);
+    }
+    Ok(())
+}
+```
+
+例子里的 `ProjectRoots`、`SystemProxy`、`MemorySecrets`（见[宿主接口](#宿主接口)）与 `LogStatus`、`PrintEvents`（见[事件与历史](#事件与历史)）是宿主自己的小类型，和上面的代码在同一个文件里，用的是上面的 `use`；`app_info_plugin` 是[宿主插件](/docs/host-plugins)一页的示例插件。
+
+要点：
+
+- `AgentSlot::new` 的第一个参数是 `Option<AgentDisabledReason>`：`None` 表示 Agent 会启动。`AgentStartMarker::disabled_reason(module_enabled)` 在宿主关闭了 Agent，或者前几次启动都没有完成（崩溃循环，`CRASH_LOOP_STARTS` 为 3）时给出停用原因。
+- `DesktopAgent::new` 的第三个参数是 Agent 子进程继承的环境（代替本进程的环境，`HashMap<String, Option<String>>`，`None` 表示移除）。宿主的代理改变时用 `DesktopAgent::replace_child_environment` 替换最后应用的覆盖层。
+- `start` 立即返回：启动在 Agent 实例自己的运行时上进行（构造与恢复在它的阻塞池上，插件作为它的任务，MCP 服务器在后台连接）。失败时槽位变为 `Failed`，不会影响宿主。
+- `wait_until_started` 返回运行中的 `AgentHandle`，或者 Agent 为什么没有运行（`AgentUnavailable`，它的 `Display` 就是“the Agent is unavailable: …”）。
+- `AgentHandle` 解引用为 `AgentApplicationService`。异步方法必须在 `handle.runtime()` 上运行（`ContainedRuntime::block_on`，或者在它的 handle 上 `spawn`）：kardia 与 Agent 的任务只能在那里运行，panic 也只在那里被隔离。
+
+### 独立模式的同一组合
+
+没有宿主时，`AgentRuntime::standalone` 组合同样的槽位、标记、`DesktopAgent` 和 `AgentLaunch`，并为每个端口提供默认值。命令行就是这样用的：
+
+```rust
+use std::time::Duration;
+
+use hanafubuki_agent::{
+    logging, panic, AgentDirs, AgentRuntime, AgentRuntimeHost, AgentRuntimeOptions,
+    AgentStartOptions, ConfigOverrides, AGENT_SHUTDOWN_BUDGET,
+};
+
+fn main() -> Result<(), String> {
+    let runtime = AgentRuntime::standalone(
+        AgentRuntimeOptions {
+            dirs: AgentDirs::standalone()?,
+            bundled_skills: None,
+            cwd: std::env::current_dir().map_err(|error| error.to_string())?,
+            add_dirs: Vec::new(),
+            profile: None,
+            overrides: ConfigOverrides::default(),
+            start: AgentStartOptions::default(),
+        },
+        AgentRuntimeHost::default(),
+    )?;
+    panic::configure_crash_record(runtime.storage_paths().crash_record_file.clone());
+    panic::install_panic_hook(logging::logging_blocked);
+
+    runtime.start();
+    let agent = runtime
+        .wait_until_started(Duration::from_secs(120))
+        .map_err(|unavailable| unavailable.to_string())?;
+    // … 像嵌入时一样在 agent.runtime() 上调用 agent 的方法 …
+    drop(agent);
+    runtime.shutdown(AGENT_SHUTDOWN_BUDGET);
+    Ok(())
+}
+```
+
+`AgentRuntimeOptions` 是目录（`AgentDirs`，遵循 `HANAFUBUKI_AGENT_HOME`）、可选的 System Skills 目录、工作目录和 `--add-dir`、配置 profile、`-c` 覆盖和首次启动的选项。`AgentRuntime::standalone` 会立即读取一次分层配置，所以错误的 profile 在这里就失败。独立模式的首次启动总会运行：命令行启动 Agent 就是在请求它，之前未完成的启动不会让它保持关闭（崩溃标记仍然计数）。
+
+`AgentRuntimeHost` 是独立模式的使用者可以替换的部分：
+
+| 字段            | 默认值                                | 说明                                              |
+| --------------- | ------------------------------------- | ------------------------------------------------- |
+| `secrets`       | `None`：操作系统钥匙串（`keyring` 4） | 服务名 `org.licyk.hanafubuki-agent.secrets`       |
+| `status`        | `NoopAgentStatusEventSink`            | 槽位状态改变时调用 `status_changed()`，不携带负载 |
+| `plugin_events` | `NoopAgentPluginEventSink`            | 插件状态的提示                                    |
+| `mcp_events`    | `NoopMcpEventSink`                    | MCP 状态与工具目录变化                            |
+
+轮次与会话事件不经过这里，而是发给每次调用传入的 `AgentEventSink`（见[事件与历史](#事件与历史)）。
+
+## 宿主接口
+
+宿主只能通过 `AgentHostPorts` 向 Agent 添加东西。接口只接受普通值（`PathBuf`、字符串、映射）或 Agent 自己的类型：Agent 带有自己的 foundation、process 和模块宿主的副本，与宿主的同名类型是不同的类型，宿主在边界处做转换。
+
+| 字段               | 类型                           | 作用                                                           | 独立模式默认                           |
+| ------------------ | ------------------------------ | -------------------------------------------------------------- | -------------------------------------- |
+| `plugins`          | `Vec<AgentPluginRow>`          | 宿主插件行                                                     | 无                                     |
+| `workspace`        | `Arc<dyn WorkspaceRootsPort>`  | 工作区根目录、额外可读目录、指令查找的选中目录、文件搜索根目录 | 工作目录、它的 Git 根目录、`--add-dir` |
+| `steering_context` | `Arc<dyn HostContextPort>`     | steering 消息携带的宿主上下文                                  | `NoHostContext`                        |
+| `instructions`     | `AgentHostInstructions`        | 身份、应用名，以及宿主加入基础指令的段落                       | `AgentHostInstructions::default()`     |
+| `network`          | `Arc<dyn NetworkSettingsPort>` | Web 工具、MCP 与 OAuth 使用的代理                              | 配置文件的 `[network] proxy`           |
+| `secrets`          | `Arc<dyn SecretStore>`         | MCP OAuth 令牌的存放处                                         | 操作系统钥匙串                         |
+
+### 插件行
+
+`AgentPluginRow::unconfigured(group, plugin)`，`group` 为 `AgentPluginGroup::Capability`（工具、工具源及其规则）或 `AgentPluginGroup::Context`（世界状态段）。宿主行挂载在 Agent 自己的能力插件之后、上下文插件之前，所以宿主的世界状态段排在工作区根目录、环境和权限模式之前。宿主插件与 Agent 自己的插件遵守同一套规则：`disabledPlugins` 可以关闭它们，安全模式不挂载它们。写法见[宿主插件](/docs/host-plugins)。
+
+### `WorkspaceRootsPort`
+
+```rust
+/// 一个项目目录就是整个工作区。
+struct ProjectRoots(PathBuf);
+
+impl WorkspaceRootsPort for ProjectRoots {
+    fn roots(&self) -> Result<AgentWorkspaceRoots, String> {
+        agent_workspace_roots_from([self.0.clone()]).ok_or_else(|| "no workspace".to_string())
+    }
+
+    fn extra_read_roots(&self) -> Vec<PathBuf> {
+        Vec::new()
+    }
+
+    fn selected(&self, _host: &TurnExtensions) -> Option<PathBuf> {
+        None
+    }
+
+    fn search_roots(&self, _host: &TurnExtensions) -> Result<Vec<(String, PathBuf)>, String> {
+        Ok(vec![("project".to_string(), self.0.clone())])
+    }
+}
+```
+
+- `roots()` 在每个轮次和每次 Skill 目录读取时重新读取；第一个根目录是相对路径请求的基准。`agent_workspace_roots_from` 去重（按路径身份），并去掉嵌套在前面某个根目录里的根目录。
+- `extra_read_roots()`：文件工具无需审批也可以读取的工作区外目录（Hanafubuki：应用的数据与日志目录）。
+- `selected(host)`：轮次的宿主输入所选中的目录，`AGENTS.md` 从根目录一直查找到这里（Hanafubuki：用户正在看的实例）。
+- `search_roots(host)`：`@` 文件搜索要遍历的目录及其标签。
+- 每个方法都可能阻塞，Agent 在自己的阻塞池上调用它们。
+
+### `HostContextPort`
+
+steering 消息（追加到正在运行的轮次的消息）携带的宿主上下文：`steering_context(host)` 返回 `Option<AgentHostContext>`（一个 `ContextSectionKind` 和内容，最多 `MAXIMUM_HOST_CONTEXT_BYTES`，4 KiB）。内核在它变化时把它作为该类型的段写入世界状态；这个类型的渲染器由宿主的插件注册。不需要时用 `NoHostContext`。
+
+### `AgentHostInstructions`
+
+| 字段          | 作用                                                       | 默认（独立模式）                         |
+| ------------- | ---------------------------------------------------------- | ---------------------------------------- |
+| `identity`    | 基础指令开头的句子（`prompts/base.md` 中的 `{identity}`）  | `You are a coding and operations agent.` |
+| `application` | 环境段报告的应用名                                         | `hanafubuki-agent`                       |
+| `sections`    | 放在工具说明之后的 Markdown 段落：宿主的工具与上下文怎么用 | 空                                       |
+| `ownership`   | “Approval and ownership”一节结尾的段落：宿主拥有什么       | 空                                       |
+
+各块之间用一个空行连接。这些文本是模型可见的，宿主应当用自己的 golden 测试固定它们（Hanafubuki 的在 `hanafubuki-agent-integration`）。
+
+### `NetworkSettingsPort` 与 `SecretStore`
+
+```rust
+struct SystemProxy;
+
+impl NetworkSettingsPort for SystemProxy {
+    fn proxy(&self) -> Result<AgentProxy, String> {
+        Ok(AgentProxy::System)
+    }
+}
+
+/// 把 MCP OAuth 令牌放在内存里；真实的宿主使用平台的安全存储。
+#[derive(Default)]
+struct MemorySecrets(Mutex<BTreeMap<SecretKey, Vec<u8>>>);
+
+impl SecretStore for MemorySecrets {
+    fn get<'a>(&'a self, key: &'a SecretKey) -> SecretFuture<'a, Option<Vec<u8>>> {
+        Box::pin(async move { Ok(self.0.lock().get(key).cloned()) })
+    }
+
+    fn set<'a>(&'a self, key: &'a SecretKey, value: Vec<u8>) -> SecretFuture<'a, ()> {
+        Box::pin(async move {
+            self.0.lock().insert(key.clone(), value);
+            Ok(())
+        })
+    }
+
+    fn delete<'a>(&'a self, key: &'a SecretKey) -> SecretFuture<'a, ()> {
+        Box::pin(async move {
+            self.0.lock().remove(key);
+            Ok(())
+        })
+    }
+}
+```
+
+- `NetworkSettingsPort::proxy()` 在 Agent 启动时读取，宿主调用 `AgentSlot::apply_saved_settings` 时再次读取；它必须从内存回答，不能阻塞。`AgentProxy` 是 `System`、`Disabled` 或 `Explicit(url)`。
+- `SecretStore` 的调用可能阻塞（钥匙串），宿主应把它们放到 Agent 的阻塞池上（`ContainedRuntime::blocking_port`，配合 `run_blocking_operation`），Hanafubuki 的 `KeyringSecretStore` 就是这样做的。
+- 锁使用 `parking_lot`：Agent 的 panic 会在被隔离的线程上展开，std 的锁会因此中毒。
+
+### 宿主输入
+
+`AgentTurnRequest`、`AgentSteeringRequest` 和 `AgentFileSearch` 都有一个 `host: TurnExtensions` 字段：宿主随消息或搜索提交的数据，按类型存放。Agent 原样传递、从不读取：它交给上下文贡献者（`ContextRequest::turn`）、`HostContextPort` 和 `WorkspaceRootsPort`。宿主的插件和端口读取它们自己放入的类型。
+
+## panic hook 桥
+
+Agent 的故障隔离依赖展开（unwinding）：插件或内核代码里的 panic 在被标记为“已隔离”的线程上展开到它的捕获点，变成一次工具错误、一个插件故障或一次内核重启。所以：
+
+- 宿主**不能**用 `panic = "abort"` 构建。
+- 宿主如果安装了自己的 panic hook，并且 hook 对它认为没有被隔离的 panic 中止进程，就必须同时询问 Agent：Agent 在**它自己的** foundation 里标记线程与守卫，宿主的 hook 看不到。
+
+```rust
+// 宿主 hook 判断 panic 是否被隔离时：
+let contained = host_says_contained() || hanafubuki_agent::panic::is_panic_contained();
+```
+
+没有这个桥，每个 Agent panic 都会中止宿主应用。Hanafubuki 在 `platform::panic_hook` 里安装了带第二个检查的 hook，并在子进程里测试两种结果（有桥时展开，没有时中止）；这个测试是宿主的责任。
+
+宿主的 hook 在致命 panic 中止进程前应写下崩溃记录，路径为 `AgentStoragePaths::crash_record_file`（`<data>/crash-record.json`）：Agent 的崩溃循环标记会读它，判断上一次未完成的启动是不是因为宿主自己的致命 panic。没有自己 hook 的宿主可以直接安装 Agent foundation 的 hook，就像独立的二进制那样：`panic::configure_crash_record(...)`，然后 `panic::install_panic_hook(logging::logging_blocked)`。
+
+## 数据目录锁
+
+`<data_dir>/.lock` 是一个建议锁（Unix 上是 `flock`，Windows 上是 `LockFileEx`），从 Agent 的首次启动一直持有到关闭，嵌入与独立模式相同。历史的 SQLite 索引、记忆存储和进程组台账都假定只有一个写进程，两个进程使用同一个数据目录会损坏历史，并互相杀掉对方的进程。
+
+- 宿主不需要为锁做任何事：启动标记持有它。
+- 另一个进程持有锁时，启动在构造阶段失败，错误里写明目录；宿主应用继续运行，只是没有 Agent。
+- 关闭宿主的 Agent（`AgentSlot::turn_off`）会保留锁直到应用退出，所以这期间同一数据目录上的独立 Agent 会被拒绝。
+
+## 启动、开关与关闭
+
+槽位的状态（`AgentStatus::availability`）是 `Disabled`（`setting` 或 `crashLoop`）、`Starting`、`Running`、`Faulted`、`Stopping`、`Failed { stage, reason }`（`construct`、`recover`、`start`）或 `Stopped`。`AgentStatusEventSink::status_changed()` 不携带负载：收到后重新读取 `AgentSlot::status()`。状态还包含 `generation`（本次运行的第几个实例）、`safe_mode`、`degraded`（有插件失败、拆除卡住或带有警告）和被隔离的会话。
+
+| 调用                                      | 作用                                                                                                     |
+| ----------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `DesktopAgent::start(launch)`             | 交出启动组合并启动第一个实例；立即返回                                                                   |
+| `AgentSlot::wait_until_started(deadline)` | 等待启动结束，返回 `AgentHandle` 或原因                                                                  |
+| `AgentSlot::agent()`                      | 运行中的 Agent 或原因；持有者应在**每次调用时**重新解析，而不是缓存 handle                               |
+| `AgentSlot::restart(options)`             | 用户的重启，可选安全模式（`AgentStartOptions { safe_mode, rebuild_history_index }`），并清空崩溃循环标记 |
+| `AgentSlot::enable()` / `disable()`       | 打开 / 关闭 Agent；`turn_off(deadline)` 关闭并等待到期限                                                 |
+| `AgentSlot::apply_saved_settings()`       | 宿主的设置（例如代理）保存后调用：在 Agent 的运行时上重新配置插件，立即返回                              |
+| `AgentSlot::list_run_projections()`       | Agent 的运行（`AgentRunProjection`），供宿主的活动视图使用                                               |
+| `DesktopAgent::shutdown(budget)`          | 在预算内关闭；阻塞调用方，调用方不能在异步上下文中                                                       |
+
+内核代码的 panic（轮次任务、Agent 的工作线程组、宿主任务）会让槽位把 Agent 标为 `Faulted`、停止它，并在 2 秒、10 秒、30 秒后启动新实例（10 分钟窗口内最多三次，`AgentRestartPolicy`），从磁盘重建会话。重启后旧实例上进行中的调用会失败；正在运行的 `AgentHandle` 的 `generation()` 与 `status().generation` 不同就说明 Agent 已经换了实例。
+
+`AGENT_SHUTDOWN_BUDGET` 为 20 秒，关闭按固定阶段进行，每个阶段有自己的期限：
+
+<Steps>
+  <Step>停止 Skill 监视器（2 秒）；关闭槽位，取消进行中的启动并最多等待 8 秒。</Step>
+  <Step>停止接受新轮次并取消轮次与压缩（5 秒）。</Step>
+  <Step>MCP：取消后台连接，关闭每个连接并确认其进程已退出（4 秒）。</Step>
+  <Step>停止插件：一次性释放 kardia 根（5 秒）。</Step>
+  <Step>停止记忆工作线程，关闭历史，停止服务工作线程与执行（3 秒）。</Step>
+  <Step>清理实例的进程所有者组：终止 Agent 自己启动、仍在运行的进程（1 秒）。</Step>
+  <Step>停止实例的运行时，阻塞池有 2 秒上限。</Step>
+</Steps>
+
+Agent 启动的进程归 Agent 所有：它有自己的 `ExecutorManager`，与宿主的进程分属两个所有权域。宿主不需要（也不能）替 Agent 终止它们。
+
+## 宿主中的配置
+
+宿主为 Agent 指定一个配置目录，用 `AgentConfig::new(dir)` 打开（Hanafubuki 用 `<app_data>/config/agent/`）。目录里有三个 TOML 文件，各自是一个修订域、各有一把锁：
+
+| 文件             | 内容                                                    |
+| ---------------- | ------------------------------------------------------- |
+| `config.toml`    | 权限模式、记忆、`disabledPlugins`、Web 搜索与抓取       |
+| `providers.toml` | Provider 注册表及其修订号，令牌原样保存（仅所有者可读） |
+| `mcp.toml`       | MCP 服务器与凭据值及其修订号（仅所有者可读）            |
+
+与独立模式不同，嵌入的配置**没有分层**（没有 profile、项目文件和 `-c`），并忽略 `[network]` 与 `logLevel`（报告为未知键）：代理和日志由宿主提供。宿主通过服务 API 读写设置（`settings_view`、`write_settings`、Provider 与 MCP 的方法），写入后服务会把设置应用到插件。
+
+读取是容错的：无效值取默认值，未知键记录日志并保留在文件里，需要修复的文件先复制到 `.recovery/` 再写入修复后的值；无法保留原件时，修复后的值只用在内存里，文件在重启前拒绝写入。每次修复都是一条 `AgentConfigRecovery`（文件、问题、是否只读、时间），`AgentConfig::recoveries()` 返回本次打开以来的修复（每个文件最近 20 条），宿主应当把它们展示给用户。键名、默认值和修复规则见[配置](/docs/configuration)与[配置参考](/docs/config-reference)。
+
+从旧格式迁移设置是宿主自己的事：Hanafubuki 在 `config.toml` 不存在时（`AgentConfig::exists`），由它的构造闭包运行 `import_legacy_agent_settings`，用 `AgentConfig::create` 一次写入整份配置（`config.toml` 最后写，所以中途停止的导入会重来），旧文件保持不变。
+
+## 事件与历史
+
+```rust
+struct LogStatus;
+
+impl AgentStatusEventSink for LogStatus {
+    fn status_changed(&self) {
+        eprintln!("the Agent's status changed");
+    }
+}
+
+struct PrintEvents;
+
+impl AgentEventSink for PrintEvents {
+    fn emit(&self, event: AgentEvent) {
+        if let AgentEventKind::TurnCompleted { .. } = event.kind {
+            println!("turn completed");
+        }
+    }
+}
+```
+
+- **轮次事件**发给每次调用传入的 `AgentEventSink`：`submit_turn_with_sink`、`steer_turn_with_sink`、`submit_plan_implementation_with_sink`、`compact_session_with_sink`。`emit` 在 Agent 的线程上调用，只能做有界的工作（例如送进通道），不能阻塞。事件类型（`AgentEventKind`）与 `exec --json` 输出的相同，见[JSON 事件](/docs/json-events)。
+- **审批与提问**：`ApprovalRequested` 用 `resolve_approval` 回答，`UserInputRequested` 用 `resolve_user_input` 回答，取消轮次用 `cancel_turn`。
+- **事件日志**：每个会话保留一份有界的事件日志，`events_since(session, after)` 返回某个序号之后的 `AgentEventBatch`，适合断开后补读；`snapshot(session)` 返回会话当前的运行状态。
+- **历史**：`list_sessions_page`（分页、可搜索）、`open_session`（会话及其最近的转录）、`read_transcript_page` 和 `read_turn_page` 读取已提交的 `ConversationItem`。思考内容是 `ConversationItem::Reasoning { text, duration_millis, sampling_step, truncated }`，只用于展示，从不作为模型输入回放。
+- **运行投影**：`AgentSlot::list_run_projections` 与 `get_run_projection`（活动 ID、轮次号、阶段、时间、错误），Hanafubuki 把它们映射到任务中心。
+
+## 日志
+
+门面默认不安装日志器：宿主保留自己的 `log` 实现，Agent 的记录进入其中。独立二进制使用 `logging::install_file_logger`（`hanafubuki-agent.log`，超过 8 MiB 轮转到 `.1`…`.3`）。Agent 自己的记录遵守内容日志规则：模型内容、推理、工具参数和工具结果只在 `trace` 级别出现，并截断到上限，从不记录请求头和凭据。所以宿主的日志级别就是用户选择 `trace` 的方式（Hanafubuki 的 `log_level` 设置）。
+
+## 测试
+
+- 在 `[dev-dependencies]` 中为 `hanafubuki-agent` 打开 `test-support` feature，得到 `hanafubuki_agent::test_support`：`mount`（在一个提供注册表与 `PluginFaults` 的上下文中挂载插件）、`test_host`、脚本化的模型服务器与 MCP 服务器。
+- 宿主应保留自己的 golden 测试，固定加上宿主插件与指令后模型收到的内容；Agent 一侧模型可见的变化也会改变它们，需要有意地重新生成。
+- panic hook 桥由宿主在子进程中测试。
