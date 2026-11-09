@@ -1,0 +1,263 @@
+---
+title: 插件规则
+description: Agent 插件组合的约束规则：crate 边界、组合规则、扩展点、工具与参数、上下文、审批、外部产出、宿主接口、编写与测试插件。
+icon: Scale
+---
+
+Agent 由 [kardia](https://github.com/licyk/kardia)（Cordis 的 Rust 实现）上的插件组合而成。本页是这套组合的**规则**：修改任何工具、上下文段、审批规则、继续钩子或观察者，修改插件宿主、它的清单和插件配置，修改 crate 边界或宿主接口，或修改 golden 测试之前，先读相关的小节；设计改变时更新本页。仓库级规则（锁、路径、解码严格度、内容日志、布局）见[参与开发](/docs/contributing)和 [AGENTS.md](https://github.com/licyk/hanafubuki-agent/blob/main/AGENTS.md)；这些部分如何协作以及原因见[架构](/docs/architecture)。
+
+## crate 与依赖
+
+| crate                                                    | 作用                                                                                                                                                                     | 可以依赖                                                                                      | 不能依赖                                 |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| `hanafubuki-agent-foundation`、`-process`、`-host`       | Hanafubuki 的 `hanafubuki-foundation`、`hanafubuki-process`、`hanafubuki-module-contracts` 的 Agent 副本，裁剪到 Agent 用到的部分；类型与宿主的不同                      | process 与 host 依赖 foundation；host 依赖 `kardia-core`、`kardia-macros`                     | 其他所有项目 crate                       |
+| `hanafubuki-agent-contracts`                             | 扩展点契约：注册表服务、扩展点（`ExtensionPoint`）、各类契约、`SelectableSkills`、宿主服务；重新导出 host 的注册、故障与工作线程机制和 `CancellationToken`，插件只依赖它 | `kardia-core`、`kardia-macros`、host、foundation、approval、tool-contracts                    | 内核、门面、任何领域服务 crate、任何插件 |
+| `hanafubuki-agent-kernel`                                | 内核：会话、轮次、工具流水线与核心工具、请求组装、世界状态、Skill 选择、历史提交、压缩、审批流程；创建它读取的注册表（依赖 skills 只为 `SkillId`）                       | 契约、`kardia-core`、model-api、skills、approval、tool-contracts、foundation                  | 任何插件、门面、process、web-search      |
+| `hanafubuki-agent-plugin-<name>`                         | 一项能力：把一个领域 crate 绑定到扩展点                                                                                                                                  | 契约、`kardia-core`/`kardia-macros`、approval、tool-contracts、foundation、它自己的领域 crate | 内核、门面、其他插件                     |
+| `hanafubuki-agent`                                       | 组合：插件宿主与清单、Agent 自己的插件、槽位、Executor 与 Skill 监视器、服务 API、宿主接口                                                                               | 内核、契约、插件 crate、config、runtime、foundation/process/host 副本                         | model-api、web-search                    |
+| `hanafubuki-agent-config`                                | Agent 自己的配置（`AgentConfig`）                                                                                                                                        | mcp（MCP 设置及其修复）、foundation、`toml`、`toml_edit`、`dirs`                              | 内核、契约、插件、门面                   |
+| `hanafubuki-agent-runtime`                               | 被隔离的运行时（`ContainedRuntime`）                                                                                                                                     | foundation                                                                                    | 其他所有项目 crate                       |
+| `hanafubuki-agent-tui`、`hanafubuki-agent-cli`           | 终端界面；`hanafubuki-agent` 二进制                                                                                                                                      | tui：门面；cli：门面与 tui                                                                    | 其他所有项目 crate                       |
+| 宿主的集成（Hanafubuki：`hanafubuki-agent-integration`） | 在本仓库之外：宿主的插件行和端口                                                                                                                                         | 门面、契约、approval、tool-contracts、config（宿主的设置导入）                                | 内核、model-api 和这里的其他所有 crate   |
+
+`cargo xtask check-dependencies` 检查这张表的 Cargo 部分：不依赖任何 Hanafubuki crate（任何来源）；每个成员的内部依赖都在层表（`LAYERS`）它那一行之内；kardia 只出现在 host、契约、内核、插件 crate（名为 `hanafubuki-agent-plugin-*` 的成员）和门面中，且从不使用 `kardia` 门面 crate；host 只依赖 foundation；只有门面依赖 config；每个插件依赖契约，不依赖内核、门面或其他插件；每个插件 crate 都是门面的依赖。`check-plugin-panics` 在插件 crate 中执行下面的 panic 规则（宿主检查它自己的插件）。model-api 不能依赖契约，`check-model-api-context` 检查它的生产源码不出现任何上下文段类型。其余靠评审。
+
+## 组合规则
+
+1. **内核不依赖任何插件可以替换的东西。** 被注入的服务被替换时 kardia 会重启插件，而内核重启会丢失所有活动会话。内核插件不注入任何东西；它发布在运行时启动前创建的注册表，内核按轮次或采样步骤读取它们的快照。
+2. **注册是调用者的副作用。** 通过注入的注册表服务上的 `hanafubuki_agent_contracts::Register` 贡献条目。条目属于调用的插件（`Svc::caller`），在它停止时移除；插件从不保留撤销注册的句柄。被拒绝的注册（`RegistrationError`，例如重复的 ID）让插件失败。
+3. **运行中的调用让条目的插件存活，但有界限。** 调用从快照条目取得 `EntryLease` 并观察它的取消。工具源规划的工具租用工具源的条目，工具源贡献时也一样。停止中的插件先把条目从新快照中隐藏，等待 `DRAIN_GRACE` 让租用的调用结束，取消它们，等待 `RETIRE_CANCEL_BOUND`，然后继续拆除。
+4. **内核只通过契约注册表接触插件。** 改变结果的钩子是内核拥有的注册表，带有文档化的排序与组合方式（只拒绝、只收紧、首个匹配、按优先级和 ID 排序），从不是 kardia 事件：内核不持有 kardia 上下文。结果从不依赖注册顺序，因为插件并发启动。新的扩展点随它的第一个真实使用者一起添加。
+5. **effect 体里没有长时间的异步工作。** kardia 从不取消 `apply` 或异步 effect，那里的循环会阻止插件和它的每个祖先停止；宿主只能限制损害（行在 `PLUGIN_START_TIMEOUT` 后失败，fiber 一直卡住直到它的 Agent 实例的运行时停止）。`apply` 校验配置、注册、生成任务；长期工作通过 `spawn_scoped_worker`（插件注入内核插件提供的 `PluginFaults::NAME`），或放在插件从 `ctx.defer` 释放器中停止的工作线程组里（`execution` 插件的活动监视器）。
+6. **不受检查的根访问留在宿主里。** 只有拥有 kardia 根的模块宿主（`hanafubuki-agent-host`，由门面的 `AgentHost` 配置）和门面从根读取插件状态。插件声明它们用到的东西（`PluginDef::inject`）；领域从不看到 kardia 上下文。
+7. **插件返回错误，从不 panic。** 插件的生产源码不含 `.unwrap()` 和 `.expect(`；失败的 `apply` 让插件进入 `Failed`，由宿主报告，配置更新或 `retry_plugin` 重启它。panic 是 bug，但它留在插件里（宿主在退避后重启插件）：kardia 在 `apply`、effect 体、释放器和事件监听器中捕获它，内核守卫它对插件代码的每次调用。发布构建也是如此：它们展开，panic hook 让 Agent 线程上的 panic 展开到它的捕获点。锁用 `parking_lot`，从不用 std 的。
+8. **每次 kardia 修改都在 Agent 运行时上运行。** kardia 在环境运行时上 spawn，没有运行时就 panic；挂载或更新插件的宿主方法是异步的，调用方把它们发到 Agent 运行时。
+
+## Agent 代码在哪里运行
+
+Agent 运行的所有东西都在 panic 被隔离的线程上：panic hook 让它在那里展开到捕获点，在其他任何地方中止进程。
+
+- **Agent 运行时**（`hanafubuki-agent-runtime` 的 `ContainedRuntime`，线程名 `agent-rt`），每个 Agent 实例一个：槽位的启动构建它，槽位一直保留它，直到实例停止（关闭、重启、关闭 Agent）时最后停止它。它运行宿主对 Agent 的每次调用、整个启动（构造与恢复在它的阻塞池上，插件的启动，MCP 的后台启动）、异步的关闭阶段，以及这些生成的东西：轮次与压缩、kardia 的 effect 与释放、作用域工作线程、宿主的故障/退役/重新挂载/重新配置任务、MCP 与模型客户端。它的阻塞池运行 `BlockingService` 和 Agent 的每次 `BlockingOperationPort` 调用。
+- **由 Agent 自己的 foundation 隔离。** 这些标记和守卫是 `hanafubuki-agent-foundation` 的线程局部变量，宿主的 foundation 看不到。所以宿主的 panic hook 必须把 `hanafubuki_agent::panic::is_panic_contained` 作为第二个隔离检查：任一 foundation 说被隔离，panic 就被隔离。
+- **Agent 的工作线程**全部在 `BackgroundWorkerGroup::contained` 组中：历史写入线程、MCP stdio 读取线程、记忆监督者（它自己的当前线程运行时也标记它的阻塞池）、`execution` 插件的活动监视器和 Skill 目录监视器；以及槽位的监督线程（`agent-supervisor`）。
+
+不是 Agent 线程的地方，panic 仍会中止进程：宿主的线程，以及 Agent 调用的服务的线程（执行器的读取与等待线程）。Agent 代码里新的 spawn 必须落在环境运行时或被隔离的组中，从不落在普通线程上。
+
+## 扩展点
+
+| 注册表                      | 插件注册                            | 唯一性                                                    | 内核何时读取                                 | 组合方式                                                                      |
+| --------------------------- | ----------------------------------- | --------------------------------------------------------- | -------------------------------------------- | ----------------------------------------------------------------------------- |
+| `ToolRegistry`              | `AgentToolHandler`                  | 扁平工具名，保留名除外（[工具名](#工具名)）               | 每个采样步骤，随工具计划                     | 内核的流水线                                                                  |
+| `ToolSourceRegistry`        | `AgentToolSource`                   | 工具源 ID                                                 | 每个采样步骤                                 | 在核心与注册的工具之后规划；失败的工具源按它的信任级别处理                    |
+| `ContextRegistry`           | `ContextContributor`                | 贡献者 ID，且每种类型一个贡献者                           | 轮次准入时                                   | 按类型名收集；按渲染器槽位展示                                                |
+| `ContextRendererRegistry`   | `ContextRenderer`（数据）           | 段类型                                                    | 每个模型请求一次快照                         | 槽位，然后注册顺序                                                            |
+| `TurnAdmissionRegistry`     | `TurnAdmissionContributor`          | 贡献者 ID                                                 | 轮次准入时                                   | 按 rank 与 ID 合并进轮次的 `TurnExtensions`；失败或返回已有类型的贡献者被略过 |
+| `PromptContributorRegistry` | `PromptContributor`                 | 贡献者 ID                                                 | 每个采样步骤一次快照，准备一次，每个请求询问 | 准备的值按 rank 与 ID 合并（重复的类型被略过）；片段按槽位加入对话开头的段    |
+| `ApprovalRuleRegistry`      | `ApprovalRule`                      | 规则 ID                                                   | 随每个步骤的工具计划冻结                     | 拒绝 > 需要用户 > 会话许可 > 模式                                             |
+| `ContinuationHookRegistry`  | `AgentContinuationHookRegistration` | （提供者 ID、钩子 ID）；最多 `MAXIMUM_CONTINUATION_HOOKS` | 每个采样步骤                                 | 按优先级、提供者 ID、钩子 ID                                                  |
+| `ObserverRegistry`          | `AgentObserver`                     | 观察者 ID                                                 | 每次持久提交之后                             | 全部，按提交顺序                                                              |
+
+### 插件代码中的 panic
+
+内核只在守卫下调用插件代码：`RegistryEntry::guard` 或 `guard_async`（条目知道它的所有者），或在手头没有条目时用 `PluginFaults::guard` 与 `guard_async`。那里的 panic 以 error 级别记录，作为条目所有者的 `PluginFault`（插件、`ExtensionPoint`、有界的 panic 消息）报告给 `PluginFaults`，并变成 `PluginPanicked`，由调用方转为那次调用自己的错误路径：
+
+| 调用                              | panic 意味着                                                           |
+| --------------------------------- | ---------------------------------------------------------------------- |
+| 工具 `availability`（注册或来源） | 该工具在这一步被略去（`Omitted`）                                      |
+| 工具 `permission`、`invoke`       | 工具错误“the tool failed with an internal error”，与任何失败的工具相同 |
+| 工具源 `contribute`               | 工具源失败：由它的信任级别决定（`Optional` 的被略去）                  |
+| 上下文与轮次准入 `contribute`     | 该贡献者在这次准入中被略过                                             |
+| 提示 `prepare`                    | 该贡献者的值被略过，附警告                                             |
+| 提示 `contribute`                 | 该贡献者不渲染片段                                                     |
+| 审批规则 `evaluate`               | 一个指名插件的拒绝：规则失败时关闭，从不是“没有意见”                   |
+| 继续钩子                          | 钩子失败：由它的失败策略决定                                           |
+| 观察者 `observe`                  | 跳过该观察者；其他观察者照常通知，提交的线程从不展开                   |
+| `spawn_scoped_worker` 的主体      | 工作线程结束，带标签记录                                               |
+
+panic 消息进入日志和插件状态，从不进入模型。`mcp` 插件自己隔离一种 panic：`McpTool::invoke` 在 `catch_panic_async` 下运行服务器调用，所以那里的 panic 是那次调用的错误和**那台服务器**的故障，从不是插件的。内核从不跨守卫调用持有锁，所以守卫不改变加锁顺序。身份访问器（`id`、`descriptor`、`kinds`、`rank`、`trust`）是数据，不被守卫。
+
+故障之后：插件被停止并报告 `failed`（`panicked in <extension point>: <message>`），宿主在重启策略的下一个延迟后自动再次挂载它（2 秒、10 秒、30 秒，10 分钟内三次）；超过之后直到 `retry_plugin`、新配置或重新开关它（在拆除结束之后）。启动失败（而不是 panic）的插件不会自动重启。
+
+## 工具
+
+- 工具的 `ToolDescriptor` 在注册期间（工具源的工具：在这个步骤中）固定模型可见的规格、暴露方式、执行类别、效果（注册或来源的 `ReadOnly` 工具是计划模式中仅有的工具）、活动动作、记忆效果和超时。`availability` 可以把它作为自由格式工具提供，或在某一步略去它（`ToolPlanContext`）。
+- 内核拥有流水线，插件不能改变它的顺序：模式策略、`permission`、需要时审批（审批规则，然后会话的许可，然后权限模式的流程），然后带一次性审批的 `invoke`。`invoke` 重新检查审批与它要运行的调用一致。
+- 流水线在步骤的门下运行：一个在途许可，然后 `ConcurrentRead` 工具取得读访问，否则独占访问，先到先得，所以 `permission` 能看到同一步骤之前的调用做了什么。等待的审批（用户或审查模型）释放门，批准后再取回；同一步骤的其他调用同时运行，用户在每个步骤中一次只被问一个提示。等待期间其他调用运行后，批准的动作可能已经过期；`invoke` 中的重新检查（`verify_tool_approval`，领域自己的检查）把它变成调用的错误，从不运行未经批准的东西。轮次被取消之后才被接受的调用不会开始。
+- `invoke` 在 `ToolDescriptor::timeout` 内运行，为 `None` 时在轮次的 `tool_idle_timeout`（10 分钟）内；`permission` 和审批等待都不计时。超时的调用被取消、future 被丢弃，模型读到“the tool did not finish within N s and was stopped”；轮次继续。调用留在 `BlockingService` 上的工作观察取消并自行结束。自身上限在等待用户时暂停的工具把超时设在那个上限之上：MCP 工具的超时是服务器的调用超时加一次 elicitation 等待（`MAXIMUM_MCP_ELICITATION_WAIT`）。
+- 输出按调用顺序提交，每个都在之前每个调用的输出提交后尽早提交。以错误结束的调用（包括轮次的取消）不提交；同一步骤的其他调用照常运行到结束并提交，因为它们的效果已经发生，然后步骤返回第一个错误。取消时只有未完成的调用得到合成的中断输出，模型在它的调用之后立即读到。
+- 一个轮次最多采样 `AgentHardLimits::maximum_sampling_steps`（32）次，下一步以 `LimitExceeded { "sampling steps" }`（`budget_exceeded`）失败，之前的输出都已提交。到 `turn_deadline`（30 分钟）时内核像用户取消一样取消轮次（挂起的审批与提问被中止，完成的调用被提交），以 `TurnDeadlineExceeded`（`deadline_exceeded`）结束。两种限制都不让模型看到。
+- 阻塞工作在注入的 `BlockingService` 上运行；调用观察 `ToolInvocation::cancellation`。`ToolInvocation::progress` 只排队（`report` 从不等待），可以来自调用或比它存活更久的监视线程；内核按顺序提交会话的进度。
+- 只在 Agent 外部某物提供时存在的工具（MCP 服务器的目录、记忆设置）来自 `AgentToolSource`。内核每个采样步骤用 `ToolSourceStep` 询问每个工具源一次，它返回 `SourcedTool`：为这一步构建的 `AgentToolHandler`，加上计划记录的身份（提供者 ID、工具 ID、代次、命名空间说明、活动主题）和它的 `ToolSourceTrust`。工具不变时保持身份稳定，工具变了就改变身份：延迟工具的选择（`ToolSelection` 历史条目）按身份命名，内核按身份只校验一次工具的 schema 和规格（`AgentToolSpecCache`）。
+- 工具源的工具与注册的工具一样规划和运行，有两点不同：内核在 `permission` 之前按它的 schema 检查参数；它的信任是外部的：无法规划的 `Optional` 工具被略去（在 `tool_catalog_omissions` 中报告），`Required` 的让计划失败。名字冲突两者都不是（见[工具名](#工具名)）。被询问时插件正在停止的工具源被略去，无论信任级别，所以关闭插件从不让步骤失败。直接目录超出预算时只延迟工具源的工具。
+- 工具源可以随贡献返回 `ToolPlanLease`；计划保留每个租约，每个调用以 `ToolInvocation::plan_leases` 收到它们。用 `ToolInvocation::plan_lease::<T>()` 找自己的，从不向下转换 `Arc`。
+- 轮次数据以 `ToolInvocation::turn`（按类型存放的 `TurnExtensions`）到达调用：轮次准入贡献者为轮次冻结的内容。用 `turn.get::<T>()` 读取，缺失的值视为工具错误。契约只命名内核自己读取的值（`SelectableSkills`）。
+- 工具通过随 `ToolResult` 返回 `ToolContextFragment` 向对话加入指令。内核在输出之后立即把它作为 `source` 指名的 Skill 的上下文提交，每个轮次每个 Skill 一次，不是 Skill ID 的 `source` 变成工具错误。
+- 内核自己的工具（`AgentCoreTool`：`new_context`、`update_plan`、`request_user_input`）作用于轮次，不是插件；`tool_search`（计划对延迟工具的搜索）也不是。它们的名字是 `RESERVED_TOOL_NAMES`。
+- 活动动作是开放的标识符（`AgentActivityAction`）；界面为认识的名字加标签，否则显示通用的工具标签，所以新工具不需要前端改动。
+
+### 工具名
+
+- 工具的名字是它的 `ToolName`（命名空间段与本地名）。注册表与规划器按扁平形式（`namespace__name`）索引它，这个字符串从不被反向解析。
+- `ToolRegistry::admit` 拒绝扁平名是保留名、已经注册或长于工具 ID（128 字节）的注册。`RegistrationError` 让注册的插件在启动时失败，什么都不注册；其他插件和轮次不受影响。
+- 线路名按请求决定：`assign_provider_names` 在为步骤的协议构建计划时把它写进每个计划工具的提供者规格。协议接受命名空间时（Responses），带命名空间的函数保留命名空间与本地名；其他情况，以及命名空间已被另一个提供者使用时，名字被扁平化。每个名字适配到 `ToolProviderCapabilities::maximum_tool_name_bytes`（Responses 128，按 `namespace__name` 计；Anthropic Messages 128；Chat Completions 64，OpenAI 的函数名上限）。
+- 名字按扁平形式唯一，`tool_search` 为计划的搜索保留。按规划顺序（信任，然后名字、提供者 ID、工具 ID）第一个工具保留名字；之后冲突或过长的被截断，并以 `_` 加它 `(provider id, tool id)` 哈希的 12 位十六进制结尾，每一步都相同。冲突（只有工具源的工具会冲突，因为注册拒绝其他的）在 `tool_catalog_omissions` 中以“renamed to `<name>`”报告，工具仍被规划。名字从不让步骤失败。
+- 返回的调用按它的 `(namespace, name)` 在计划中查找解析（`AgentToolPlan::resolve_call`）；请求中没有的名字是未知工具。解码器把提供者的命名空间与名字分开返回，历史记录两者，所以 Responses 以命名空间回放调用，没有命名空间的协议以 `namespace__name` 回放。
+- schema 按同样的按协议规则降级：设置了 `strict_json_schema` 能力的协议（Responses）收到完整 schema；没有的收到可移植的关键字（`portable_model_schema`）。工具从不发送 `strict`。内核无论如何按完整 schema 校验参数。
+
+### 模型的工具参数
+
+模型的参数被容错读取；错误是模型作为工具结果读回的、指明字段的错误，从不是失败的轮次。
+
+- 没有参数类型使用 `deny_unknown_fields`，没有辅助函数拒绝它不认识的键：未知键被忽略。忽略它从不扩大运行的范围，因为能力（审批、回执、已解析的路径、执行器 ID）从来不是参数，调用仍然经过 `permission` 和审批。唯一的例外是属于同一工具另一个动作的值：Hanafubuki 的 `provision_instance` 拒绝所选动作不接受的非空属性，因为它的动作会创建和删除实例。
+- 缺失或为 `null` 的可选字段视为未提供。语义上必需的字段（`cmd`、`path`、`delete_path` 的 `recursive`）保持必需。
+- 超出范围的上限被夹紧到边界内并附说明（`clamped_u64`/`clamped_usize`、`ArgumentNotes`，由 `ToolResult::with_argument_notes` 附在结果后）；保护安全的上限（字节或深度上限）夹紧到上限，从不超过；省略的取默认值。包含关系不是上限：路径按原样传入，由领域解析和包含。
+- `decode_arguments` 指明错误所在的字段（`invalid tool argument plan[1].status: ...`）。
+- 工具源工具的参数按它的 schema 检查（`validate_dynamic_tool_arguments`）；检查不认识的 `type` 不约束任何东西，整数形式的数字是 `integer`。
+- 步骤无法运行的调用会被回答，从不是协议失败，它的输出对每种协议都保持调用/输出配对有效：步骤没有提供的名字（未知、`Hidden`、模式隐藏、与提供者不兼容）得到同一个错误“no tool named `<name>` is available in this step”，所以隐藏的工具与不存在的无法区分；尚未接受的延迟工具得到带 `tool_search` 恢复方法的发现错误；无法解析或超过 `maximum_tool_argument_bytes` 的参数得到带 512 字节预览的错误；格式错误的 `tool_search` 得到指明字段的错误。
+
+## 上下文
+
+- `ContextContributor` 声明它产生的类型（`ContextSectionKind`），每个声明的类型最多返回一个 `ContextSection`。两个贡献者声明同一类型，或贡献者声明 `tool_catalog_omissions`（内核每个采样步骤自己写），都让注册的插件失败。
+- 轮次准入时从一个注册表快照收集段（`collect_world_state`；贡献者在条目租约下依次运行）。失败的贡献者（错误、panic、插件正在停止）在那个轮次被略过；未声明的类型、已经产生的类型，或超过 `MAXIMUM_AGENT_PLUGIN_WORLD_STATE_SECTIONS`（7，宿主的类型在内；Agent 自己的五种已知类型有自己的位置）的插件类型的段也被略过。每种情况都记为插件的问题（`PluginFaults::set_issue`），插件状态以 `warning` 显示（Agent 显示为降级），直到那个贡献者再次成功或插件被重新挂载；轮次从不因此被拒绝。没有贡献者返回的类型在那个轮次从世界状态中移除，所以启动失败的贡献者插件让它的段缺席，而不是让每个轮次失败。
+- 宿主上下文从不拒绝它随附的消息或 steering：这个版本无法使用的被带警告地丢弃，超过 `MAXIMUM_HOST_CONTEXT_BYTES`（4 KiB）的在 UTF-8 边界上截断。
+- 结果按类型名排序收集，所以历史每次都以同样的方式记录；模型按渲染器的顺序看到它们。
+- `ContextRequest` 携带会话 ID、会话模式、轮次的权限模式和宿主输入的 `TurnExtensions`，Agent 原样传递、从不读取。缺失的值视为“这个轮次没有提供”。长时间的工作在 `BlockingService` 上运行。
+- 由 JSON 渲染的文本经过 `ContextSection::from_json`，它对对象键排序，使版本摘要稳定。
+- 每段最多 32 KiB，合计 64 KiB。
+
+### 上下文渲染器
+
+- 模型可见、既不是历史也不是工具的所有内容都是某个 `ContextSectionKind` 的上下文段：世界状态段（持久化，来自 `ContextContributor`）或提示片段（每个请求，来自 `PromptContributor`）。段通过它类型的 `ContextRenderer` 展示给模型，渲染器由拥有该类型的插件注册在 `ContextRendererRegistry` 中（每种类型一个；无效或重复的类型让注册的插件失败）。
+- 渲染器是数据：`ContextSlot`、`ContextRole`、`preamble`（这段是什么、它**没有**什么权威）、`epilogue` 和 `versioned`（把内容放进 `<agent_world_state kind=".." version="..">` 元素）。类型的包装文字在拥有它的插件里，从不在 `hanafubuki-agent-model-api` 里，后者原样发送片段的角色和渲染后的文本，不匹配任何段类型。没有自己框架的段使用 `WORLD_STATE_PREAMBLE`。
+- 内核在构建注册表时注册它自己写的类型（`tool_catalog_omissions`）的渲染器；`workspace-context`、`permission-mode`、`skills`、`memory` 插件和宿主的插件随它们的贡献者注册各自的渲染器。内核不知道任何宿主类型。
+- 内核为每个模型请求取一次渲染器快照。类型没有渲染器的段（插件已停止）不出现在那个请求中；世界状态段留在历史里，下一次准入在没有贡献者产生它时移除它。
+- 顺序：请求中每一串相邻的段按槽位（`Instructions`、`WorldState`、`Capabilities`、`Memory`），再按渲染器注册顺序（内核的，然后清单的挂载顺序，宿主的行在 Agent 的能力插件之后、上下文插件之前；重新挂载的插件的渲染器移到它的槽位末尾）；其他条目保持位置。提示片段加入对话开头的那一串。之后变化的世界状态段显示在它变化的位置。只显示每种类型的最新版本，所以不存在“替换先前提供的内容”的通知，也没有段变化事件：持久化的 `WorldStateUpdate` 就是变化记录。
+
+### 轮次准入
+
+- `TurnAdmissionContributor` 在轮次被接受时产生一次按类型存放的 `TurnExtensions`。内核把它们冻结在轮次上，交给轮次的每个工具调用和提示贡献者；重启后恢复的轮次没有。
+- 贡献者在内核接受轮次之前按 `(rank, id)` 顺序在条目租约下依次运行（`collect_turn_extensions`）。错误、panic、插件正在停止，或返回另一个贡献者已经返回的类型，都让那个贡献者在这个轮次被略过，像上下文贡献者一样记为问题；结果从不依赖注册顺序。仍会失败的唯一准入是用户明确引用了一个 Skill，而轮次无法解析它：没有 `skills` 插件的值时，它被拒绝（“the Skill catalog is unavailable”），而不是在没有它的情况下运行。
+- 内核自己只读一个值：`SelectableSkills`，即显式引用或 `$mention` 可以选择的 Skill，以及 `mention_exclusions`（普通 `$mention` 指向的不是 Skill 的名字）。
+
+### 提示片段
+
+- `PromptContributor` 从轮次的 `TurnExtensions`、贡献者为这个请求的采样步骤准备的值和会话的上下文窗口（`PromptRequest`）渲染模型可见的片段。`PromptFragment` 有一个类型（同一插件注册了其渲染器的 `ContextSectionKind`）、可选的版本（只有带版本的渲染器显示）和内容。
+- `prepare` 是唯一异步、允许 I/O 的调用：每个采样步骤开始时一次，内核按 `(rank, id)` 顺序依次询问步骤快照中的每个贡献者，带 `PromptStep`，在条目租约下，以轮次取消的子令牌。它返回类型化的值，合并进步骤准备的值。插件正在停止的贡献者什么都不准备；错误，或之前的贡献者已准备的类型，让那个贡献者的值带警告地被略过。只有轮次的取消让步骤失败。
+- `contribute` 是纯函数且有界（没有 I/O、不阻塞、没有每次调用的状态，从不调用内核），所以内核不带租约调用它。缺少它要渲染的东西时什么都不返回。需要的外部值在 `prepare` 中加载，从不在 `contribute` 中。
+- 内核从不在会话锁下运行贡献者：在锁下读取轮次的扩展与上下文窗口，释放锁，准备步骤并渲染片段，再在锁下构建请求。它在准备采样步骤时这样做一次，那一步计数的每个请求都使用这一次渲染。
+- 插件以 token 衡量的预算使用 `hanafubuki_agent_contracts::{estimate_tokens, token_budget_bytes}`，即内核接受请求所用的估算。
+- 内核自己读取一个准备的值：`AgentMemoryStep`，步骤的记忆策略。没有它的步骤（`memory` 插件关闭）原样显示回答，不提交引用，也不标记污染。
+- 指令不是提示片段：会话的指令和内核的计划模式提示是会话配置。
+
+## 审批规则
+
+- 拥有某个动作的插件用 `ApprovalRule` 收紧它的审批，与产生该动作的工具一起注册。没有单个插件拥有的规则留在内核里。
+- `evaluate` 只检查 `ApprovalAction`。它是纯函数且有界，所以内核不带租约调用它。一个步骤的每个调用都由步骤冻结的 `ApprovalRuleSnapshot` 判断，所以规则不会在仍在排空的调用之下消失。
+- 规则返回 `None`（没有意见）、`RequireUser` 或 `Deny { reason }`。组合是单调的：任何拒绝都以它的原因作为模型可见的错误拒绝调用（多个拒绝的不同原因排序后合并）；否则任何 `RequireUser` 让动作成为 `Manual`，即使在 `AutoReview` 或 `FullAccess` 下；否则由轮次的权限模式决定。
+- 规则从不放宽审批。工具声明为 `NotRequired` 或 `Forbidden` 的动作从不到达规则；硬拒绝属于工具的 `permission`。
+- 用户可以对 `Manual` 模式的提示回答 `AllowForSession`：会话中同一工具（`(provider id, tool id, generation)`）之后的动作无需询问即被授权，无论轮次的模式如何，但只在规则没有意见时。规则的 `Deny` 仍然拒绝，它的 `RequireUser` 仍然询问，而那样的提示不提供 `AllowForSession`。许可只保存在会话的运行时状态中。
+
+## 继续钩子
+
+- 钩子请求在候选的最终回答之后让轮次继续。内核在开始采样步骤时为注册表取快照；如果步骤以最终回答结束，就按顺序询问钩子。每次调用持有条目租约，观察轮次取消的子令牌，受轮次的工具空闲超时限制。插件正在停止的钩子被跳过。
+- `Pass` 询问下一个钩子，`Stop` 结束轮次而不询问其余钩子，`Continue` 返回 1 到 `MAXIMUM_CONTINUATION_FRAGMENTS_PER_HOOK` 个非空片段（每个最多 `MAXIMUM_CONTINUATION_FRAGMENT_BYTES`），内核把它们作为 `ContinuationContext` 提交后再次采样。失败或超时在 `FailTurn` 下让轮次失败，在 `Ignore` 下被跳过。目前没有注册任何钩子。
+
+## 观察者
+
+- `AgentObserver` 通过 `AgentNotification` 得知内核提交了什么：`TurnAdmitted`（带轮次的 `AgentTurnOrigin` 和准入提交的临时标题）、`SamplingCommitted`（带回答的记忆引用）、`TurnFinished`、`MemoryContributionChanged`（带原因）、`SessionArchived`/`SessionRestored`。通知随它的第一个使用者添加。
+- 内核在提交持久化且其事件发出之后通知，从不在会话锁下，按提交顺序。失败的提交不通知任何东西。
+- `observe` 是同步的，在提交线程上运行：它通知一个工作线程或做一个小的有界本地更新，从不等待内核。它不返回任何东西，所以不能改变结果；必须持久化或到达模型的东西不是观察。
+- 调用不持有租约：插件正在停止的观察者从它开始退役起就被跳过。
+- 观察者启动的后台工作在插件拥有的工作线程中运行，从 `apply` 用 `spawn_scoped_worker` 生成，通过观察者只 `try_send` 的有界通道喂给它；插件停止时工作线程被取消并等待。它通过应用构造的窄端口（`titles` 插件的 `AgentTitleApplication`）到达内核，从不通过门面；它做的内核修改是比较并交换，所以用户在此期间做的事优先。
+
+## 外部产出：MCP 服务器、Skill、Web、记忆
+
+MCP 服务器、Skill 作者或提取模型产生的东西被容错读取；一个坏条目只损失它自己，严格的规则（MCP 配置、凭据与 OAuth、路径包含、URL 校验、持久化格式）不变。
+
+- **MCP 目录**逐个工具构建。每个名字段按字符清理为 `[A-Za-z0-9_-]`，仍超过 128 字节的被截断并加哈希后缀。schema 无效或过大、名字无法编码或之后重复的工具被跳过；超过 16 KiB 的说明在字符边界截断，无效的输出 schema 被丢弃。每种情况都是服务器的 Warning 诊断；服务器保持连接，即使没有可用的工具。
+- **MCP 注解是用户配置的服务器给的提示，从不是授权。** `readOnlyHint` 为真且 `destructiveHint` 不为真的工具是 `ConcurrentRead`、`ReadOnly`；其余都是 `Exclusive`、`Mutating`。每个 MCP 工具的记忆效果都是 `PollutesContribution`。审批不读只读提示：服务器（或工具）的审批策略决定，`Allow` 只对 `destructiveHint` 为假的工具跳过审查，缺失的提示算作破坏性的。
+- **MCP 存活**：连接的传输知道 rmcp 的循环何时结束；服务器一侧结束时，服务器以原因 `Failed`，条目退役，管理器按模块宿主的 `RestartPolicy` 用关闭的连接打开时的配置和密钥重连它。来自外部的连接（用户的连接或刷新、设置、凭据或代理的变化）清空窗口，关闭取消已安排的重连。步骤保留它规划时的连接；租约的连接已关闭的调用返回 `McpError::CatalogChanged`，不请求审批。
+- **MCP 输出**：无法解码的内容块变成文本 `[unsupported MCP content: <type>]`；超过 64 项的保留 63 项加一条说明；带参数的 MIME 类型取基础类型，接受无填充的 base64。
+- **Skill**：`SKILL.md` 的 frontmatter 与 `openai.yaml` 逐字段读取：可选键类型错误时丢弃该键并记录问题，超过 96 字符的名字或超过 4096 字节的说明被截断，根目录下无法读取的目录被跳过。`name` 与 `description` 的类型保持严格。`allowed-tools` 是未知键：Skill 从不增加或限制工具。声明的 MCP 服务器未就绪的 Skill 在轮次中不可用，列为不可用并附原因。
+- **Web**：服务无法使用的搜索端点配置让 `web` 行继续运行，只是每一步都略去 `web_search`；`fetch_web_page` 继续可用。
+- **记忆**：无法读取的笔记行被跳过（按行号记录，从不记录内容）。阶段一的提取输出忽略 schema 未命名的字段，保留命名字段仍能给出的内容；只有完全不是提取对象的输出才让任务失败。整合 Agent 只能写发布会接受的内容，超出上限的写入是指明它的工具错误，让模型缩短后重试。
+
+## 宿主、配置与状态
+
+- Agent 对宿主是可选的。它在宿主的界面打开后、在它的启动所构建的运行时上，由捕获的启动组合（`AgentLaunch`）构建；槽位保留启动组合，所以之后的每个实例（重启、自动重启、重新开启）都以同样的方式启动，代次递增。构造、恢复或启动失败让槽位进入 `Failed`。
+- 故障要么属于插件，要么属于内核（[故障](/docs/architecture#故障)）。插件宿主自己任务（故障跟随者、重新挂载）中的 panic 作为 `plugin host` 处的内核故障报告给内核故障 sink，会重建 Agent。
+- 无法启动的能力让它的插件失败，而不是 Agent：没有打开的 Skill 目录让 `skills` 插件失败，没有连接上的必需 MCP 服务器是它的 MCP 状态，无法派生的 `web` 配置是那一行的错误。恢复拒绝的会话被隔离。
+- `AgentHost` 是通用模块宿主的 Agent 配置（`AgentPlugins`，它的 `HostProfile`）：挂载顺序、上限、启用、重新配置、重试、安全模式、故障处理、状态和关闭都属于宿主。属于 Agent 的是：它的行、从它自己的设置和宿主代理派生的配置（`AgentPluginSettings`）、来自 `disabledPlugins` 的启用、它的分组、状态中的贡献、它的 `AgentPluginEventSink`。选项：`module_faults` 关闭（它的行是插件，不是应用模块，故障只通过 `PluginFaults` 到达），`automatic_restarts` 为默认的重启策略。
+- 行是 `AgentPluginRow::unconfigured` 或 `AgentPluginRow::from_settings`，声明它的 `AgentPluginGroup`：`Capability`（工具、工具源及其规则）或 `Context`（世界状态段）。不从设置派生的配置不存在；插件适配的服务在它的 `PluginDef` 构造函数中捕获（通过 `AgentPluginInputs`），不作为配置传递。
+- 从设置派生的插件跟随设置。设置写入后 `apply_settings_to_plugins` 被安排在运行中的 Agent 的运行时上；宿主从最新发布的设置重新配置它的行。`disabledPlugins` 是启用状态：重新启用的行只在它之前的 fiber 停止后才挂载，所以它的注册不会与旧的冲突。`set_plugin_enabled` 是唯一的写入者，拒绝未知名字和关闭核心行。关闭插件不是拒绝工具的方式：审批仍由规则和权限模式决定。
+- 无需重启就能吸收变化的插件注册 kardia 的更新钩子（`Context::on_update`）；否则插件重启，这会排空它运行中的调用。
+- `plugin_status` 返回每个插件的 `AgentPluginStatus`：名字、分组、状态（`pending`/`active`/`failed`/`disabled`/`disposed`）、错误文本、活动插件的 `warning`、是否启用、锁（核心行为 `core`）、`restart` 和它当前的贡献。
+- **上限**：宿主限制它对 kardia 的每次等待：启动在 `PLUGIN_START_TIMEOUT`（20 秒）内，释放在 `PLUGIN_STOP_BOUND`（10 秒）内，重新挂载在释放的上限内。永久卡住的 fiber 随它的 Agent 实例的运行时一起丢弃。
+- 关闭一次性释放 kardia 根，受调用方的期限限制；那时仍在停止的插件作为 `agent-plugins` 关闭诊断报告。MCP 连接、记忆工作线程、历史和执行由应用拥有，在它自己的关闭步骤中停止，从不在插件的拆除中。
+
+## 宿主接口
+
+嵌入的应用（宿主）只通过 `AgentHostPorts`（`AgentServiceInputs` 的一个字段，每个 Agent 实例构建一次）向 Agent 添加东西。各端口的用法与默认值见[嵌入 Agent](/docs/embedding#宿主接口)；规则是：
+
+- 接口只接受普通值（`PathBuf`、字符串、映射）或 Agent 自己的类型，从不接受宿主的 foundation、process 或模块宿主类型：它们在两侧是不同的类型，宿主在边界处转换（例如 Agent 的关闭诊断在调用处映射为宿主的）。
+- 宿主插件行与其他插件一样：针对契约编写，本页的每条规则都适用，`disabledPlugins` 关闭它们，安全模式不挂载它们。它们挂载在 Agent 的能力插件之后、上下文插件之前。
+- 宿主输入（`AgentTurnRequest`、`AgentSteeringRequest`、`AgentFileSearch` 的 `host`）作为 `TurnExtensions` 原样传给上下文贡献者、`HostContextPort` 和 `WorkspaceRootsPort`。携带它的 IPC 输入是宿主的，在宿主一侧转换。
+- 数据目录锁从首次启动持有到关闭，两种模式相同；宿主不为它做任何事。
+- 宿主通过 `AgentSlot::list_run_projections` 与 `get_run_projection` 读取 Agent 的运行，映射到它自己的视图。
+
+## 日志
+
+kardia 的日志通过宿主安装在根上的 `LogExporter` 到达 `log` facade。kardia 没有 `trace` 级别，所以内容日志规则限制在 `trace` 的内容从不通过 kardia 的日志器记录。
+
+## 当前的插件
+
+| 插件                  | 位置                                   | 贡献                                                                                                                                                                                                              |
+| --------------------- | -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `agent-host-services` | 门面（`host`）                         | `BlockingService`                                                                                                                                                                                                 |
+| `agent-kernel`        | 内核                                   | 九个注册表；`tool_catalog_omissions` 的渲染器                                                                                                                                                                     |
+| `web`                 | `hanafubuki-agent-plugin-web`          | `web_search`、`fetch_web_page`；配置从 Web 搜索与代理设置派生                                                                                                                                                     |
+| `workspace-fs`        | `hanafubuki-agent-plugin-workspace-fs` | `list_directory`、`search_text`、`read_file`、`apply_patch`（提供者支持时为自由格式）、`move_path`、`delete_path`                                                                                                 |
+| `view-image`          | 门面                                   | `view_image`（模型不接受图片输入和多模态工具输出时略去）                                                                                                                                                          |
+| `execution`           | `hanafubuki-agent-plugin-execution`    | `exec_command`、`write_stdin`、`resize_execution`；活动监视器；`git clone` 的审批规则                                                                                                                             |
+| `mcp`                 | `hanafubuki-agent-plugin-mcp`          | MCP 工具源（每步一个 `McpStepBinding` 作为计划租约）；`list_mcp_resources`、`list_mcp_resource_templates`、`read_mcp_resource`                                                                                    |
+| `memory`              | 门面                                   | 记忆摘要的提示片段（`agent_memory`，槽位 `Memory`）及其渲染器、步骤的记忆策略、记忆工具源、记忆观察者                                                                                                             |
+| `skills`              | 门面                                   | 轮次准入：轮次的 Skill 目录与 `SelectableSkills`；目录片段（`skill_catalog`，槽位 `Capabilities`）及其渲染器；`skills_list`、`skills_read`、`enable_skill`、`disable_skill`（延迟）；`SkillManagement` 的审批规则 |
+| `titles`              | 门面                                   | 标题观察者与 `agent-titles` 工作线程：为得到临时标题的用户轮次生成标题                                                                                                                                            |
+| `workspace-context`   | 门面                                   | 上下文与渲染器：`workspace_instructions`、`workspace_roots`、`environment`                                                                                                                                        |
+| `permission-mode`     | 门面                                   | 上下文与渲染器：`permission_mode`                                                                                                                                                                                 |
+
+这也是挂载顺序，宿主的行在 `titles` 之后、`workspace-context` 之前。门面自己的插件在 `crates/agent/src/plugins/` 中，因为它们使用 Agent 的服务。工具：3 个内核工具和 30 个注册的工具（3 个延迟）；`tool_search` 是计划自己的绑定。每一步，工具源加上已连接 MCP 服务器的工具和最多 4 个记忆工具。golden 的默认模式请求（没有 MCP 服务器、记忆关闭、图片输入开启）带 31 个工具：27 个直接注册的工具、3 个内核工具和 `tool_search`；计划模式的带 15 个只读注册工具和 `request_user_input`。
+
+## 编写插件
+
+先选择它放在哪里：
+
+- **插件 crate** `crates/plugin-<name>`（`hanafubuki-agent-plugin-<name>`）：绑定一个领域 crate，只需要契约类型（`web`、`workspace-fs`、`execution`、`mcp`；工具源也一样）。
+- **门面里的插件**，放在 `crates/agent/src/plugins/` 下：需要 Agent 自己的服务时（图片规范化、`AgentSkillApplication`、`AgentMemoryApplication`、`AgentTitleApplication`）。从 `plugins/mod.rs` 导出，不改 Cargo。
+- **宿主插件**，放在宿主自己的 crate 里：需要宿主的领域时。只针对契约和门面的公开 API 编写，作为宿主在 `AgentHostPorts::plugins` 中的一行；本页的规则同样适用。见[宿主插件](/docs/host-plugins)。
+
+检查清单：
+
+<Steps>
+  <Step>crate：`Cargo.toml` 依赖 `hanafubuki-agent-contracts`、`kardia-core`，以及工具用到的 `hanafubuki-agent-approval`、`hanafubuki-agent-tool-contracts` 和领域 crate；`src/lib.rs` 只有模块声明和 `pub use plugin::<name>_plugin;`。</Step>
+  <Step>`<name>_plugin() -> PluginDef`：`PluginDef::new`（从设置派生配置时用 `PluginDef::typed`）、`.name("<name>")`、`.inject(..)` 带上它用到的每个注册表或宿主服务的 `NAME`（用 `spawn_scoped_worker` 时加 `PluginFaults::NAME`）。`apply` 用 `ctx.get::<T>()?` 取得每个服务，用 `register(Arc::new(..))?` 注册，用 `spawn_scoped_worker` 生成长期工作，然后返回。</Step>
+  <Step>每个工具：带 `ToolName::parse` 名字、`additionalProperties: false` 的 JSON schema、暴露方式、执行类别、效果、活动动作和记忆效果的 `ToolDescriptor`；`permission` 对读取返回 `NotRequired`，对修改返回它的 `ApprovalAction`；`invoke` 校验参数、观察取消、重新检查修改的审批（`verify_tool_approval`），在 `BlockingService` 上运行阻塞工作。</Step>
+  <Step>生产源码中没有 `.unwrap()`/`.expect(`；错误映射为 `kardia_core::Error`。</Step>
+  <Step>接入：在根 `Cargo.toml` 的 `[workspace.dependencies]` 中加一项（同时带 `path` 和 `version`），在 `crates/agent/Cargo.toml` 中加依赖，在层表（`xtask/src/dependencies.rs`）中加一行，在 `crates/agent/src/host/manifest.rs` 中加一行（它适配的服务通过 `AgentPluginInputs` 的字段传入）。`Cargo.lock` 随之更新。</Step>
+  <Step>按[测试插件](#测试插件)测试它；模型能看到这个变化时重新生成 golden。</Step>
+  <Step>写文档：[架构](/docs/architecture#crate-与分层)中的 crate 行和本页[当前的插件](#当前的插件)表与工具数量。</Step>
+  <Step>在仓库根目录用 `cargo xtask check`、`cargo fmt --all --check`、`cargo test -p hanafubuki-agent-plugin-<name>` 和 `cargo test -p hanafubuki-agent --lib` 验证。</Step>
+</Steps>
+
+新插件不需要改内核或契约的任何文件。
+
+## 测试插件
+
+- 在一个新的 `kardia_core::Context` 上，把它挂载在一个提供它注入的注册表（以及用 `spawn_scoped_worker` 时的 `PluginFaults`）的插件之下（门面或宿主插件用 `hanafubuki_agent::test_support::mount`，它两者都提供），等待 `settled()`，断言 `state()`：插件因缺少服务仍是 `Pending` 时 `settled()` 也会返回。
+- 断言它的注册，更新它的配置，释放它，断言每个注册都已移除。插件拒绝的配置让它保持 `Failed`，什么都不注册。
+- 不需要 kardia 的地方直接测试处理函数和领域逻辑。
+- **请求 golden**（`crates/agent/src/tests/golden.rs`，在 Agent 自己的插件上，宿主不添加任何行、上下文或指令）固定模型收到的内容：默认与计划模式下、带 Skill 目录、工作区指令、记忆摘要、压缩之后、带来自脚本化进程内服务器的 MCP 工具、围绕一次工具调用和一次 `tool_search` 的指令、工具目录和输入条目，以及一次工具往返的展示事件。模型能看到的变化**有意地**改变请求 golden：用 `HANAFUBUKI_AGENT_UPDATE_GOLDEN=1 cargo test -p hanafubuki-agent --lib tests::golden` 重新生成并审查 fixture 的 diff。
+- **历史语料**（`golden/history/` 与 `golden/history-reasoning/`）只在有意的历史格式变化之后用 `HANAFUBUKI_AGENT_UPDATE_GOLDEN_HISTORY=1` 重新录制；否则它们持续证明旧的历史仍能打开。
+- 宿主保留它自己的、覆盖它的行的 golden（Hanafubuki 的在 `hanafubuki-agent-integration`），这里模型可见的变化也会改变它们。fixture 只在 Linux 上有效。
+
+命令与更新规则见[构建与测试](/docs/building-testing)。

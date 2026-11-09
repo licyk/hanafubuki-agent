@@ -1,0 +1,244 @@
+---
+title: 架构
+description: hanafubuki-agent 是怎样组成的：crate 与分层、内核与轮次、插件宿主、上下文与压缩、存储、模型 API、思考、终端界面，以及不明显的设计选择背后的原因。
+icon: Layers
+---
+
+本页面向第一次读这份代码的人，说明各部分如何协作，以及那些从代码里看不出来的选择为什么这样做。必须遵守的规则在[插件规则](/docs/plugin-rules)和仓库的 [AGENTS.md](https://github.com/licyk/hanafubuki-agent/blob/main/AGENTS.md)；嵌入方式在[嵌入 Agent](/docs/embedding)。
+
+## 目标
+
+Agent 是一个**内核**（`hanafubuki-agent-kernel`），拥有会话、轮次、历史和每个步骤的快照；能力由 [kardia](https://github.com/licyk/kardia) 上的**插件**提供。内核只通过 `hanafubuki-agent-contracts` 中的注册表接触插件。设计服务于三个目标：
+
+- **故障隔离。** 故障限制在它的所有者之内：工具调用失败是模型可见的错误；插件故障停止并重启那个插件；MCP 服务器故障让那台服务器进入 `Failed` 再重新连接。只有内核故障才会重建整个 Agent，而 Agent 失败从不让宿主应用停止。
+- **可扩展。** 新能力是一个插件加一行清单；内核、契约和前端都不用改。
+- **固定模型看到的内容。** golden 测试记录每个模型可见的面；模型能看到的变化要有意地重新生成它们。
+
+## crate 与分层
+
+依赖只向下指。`cargo xtask check-dependencies` 按层表（`xtask/src/dependencies.rs` 的 `LAYERS`）检查每个成员只依赖它那一行允许的成员。
+
+| 层         | crate                                                                                         | 作用                                                                                                                            |
+| ---------- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| 中性机制   | `foundation`、`tool-contracts`、`process`、`runtime`、`host`                                  | 路径、取消、阻塞边界、panic 隔离；工具规格类型；进程所有权；被隔离的 Tokio 运行时；通用模块宿主（注册表、租约、故障、重启策略） |
+| 领域       | `approval`、`skills`、`web-search`、`model-api`、`workspace-fs`、`execution`、`mcp`、`memory` | 各自独立、可单独测试的能力                                                                                                      |
+| 插件 API   | `contracts`                                                                                   | 注册表与扩展点契约；重新导出 `host` 的注册与故障机制，插件只依赖它                                                              |
+| 内核与历史 | `kernel`、`history`                                                                           | 会话、轮次循环、工具规划与流水线、请求组装、世界状态、压缩、审批流程、恢复；JSONL 历史与 SQLite 索引                            |
+| 插件       | `plugin-web`、`plugin-workspace-fs`、`plugin-execution`、`plugin-mcp`                         | 每个把一个领域 crate 绑定到扩展点                                                                                               |
+| 配置       | `config`                                                                                      | Agent 自己的配置（`AgentConfig`）：三个 TOML 文件，独立模式下分层                                                               |
+| 门面       | `hanafubuki-agent`（`crates/agent`）                                                          | 组合：插件宿主与清单、Agent 自己的插件、槽位、服务 API、宿主接口、独立运行时、数据目录锁、日志                                  |
+| 界面       | `tui`、`cli`                                                                                  | 终端界面（只依赖门面）和 `hanafubuki-agent` 二进制（依赖门面与终端界面）                                                        |
+
+（表中省略了 `hanafubuki-agent-` 前缀。）除了层表，检查还执行与表无关的规则：不依赖任何 Hanafubuki crate（任何来源）；内核不依赖任何插件；插件依赖插件 API，不依赖内核、门面或其他插件；每个插件 crate 都是门面的依赖（门面挂载它）；只有门面依赖配置 crate；`host` 只依赖 `foundation`；kardia 只出现在 `host`、插件 API、内核、插件和门面中，而且从不使用 `kardia` 门面 crate（它带有 WASM/dylib 热重载）。
+
+三条边界承载了大部分设计：
+
+- **内核和插件只在契约中相遇。** 内核不依赖插件，插件不依赖内核、组合或其他插件。内核不注入任何插件可以替换的东西，所以替换插件从不重启内核，也不丢失会话。
+- **模型 API 只是线路。** 它把 `ModelInputItem::ContextFragment { role, kind, content }` 原样发送，`kind` 只是标签。段的包装文字属于拥有它的插件；`check-model-api-context` 检查模型 API 的源码不出现任何上下文段类型。
+- **Agent 不知道宿主的领域。** 宿主的东西（在 Hanafubuki 里是实例、任务中心、界面上下文、它那部分指令）通过宿主接口到达 Agent。
+
+## 插件宿主
+
+```text
+宿主（例如 Hanafubuki 的模块宿主）
+└── AgentSlot                 每次启动的运行时、内核故障重启、崩溃循环停止
+    └── AgentHost = ModuleHost<AgentPlugins>
+        ├── Core:       agent-host-services（BlockingService）
+        │               agent-kernel（发布 AgentKernelRegistries）
+        ├── Capability: web、workspace-fs、view-image、execution、mcp、memory、skills、titles
+        ├── 宿主行:     Hanafubuki 的 tasks、instances（Capability）、ui-context（Context）
+        └── Context:    workspace-context、permission-mode
+```
+
+- **`AgentSlot`** 保存 Agent 的状态（`Disabled`、`Starting`、`Running`、`Faulted`、`Stopping`、`Failed`、`Stopped`）并监督它：每次启动构建自己的被隔离运行时，构造并恢复服务，启动插件，然后在后台连接 MCP 服务器。持有者每次调用时重新解析槽位，所以没有旧的 Agent 能被继续访问。
+- **`AgentHost`** 是通用 `ModuleHost` 的 Agent 配置：两个核心行，然后是清单（`host/manifest.rs`）中每个启用的行，宿主的行在其中；每行在前一行就绪或超时（`PLUGIN_START_TIMEOUT`，20 秒）后挂载。配置从 Agent 的设置和宿主的代理派生，启用状态来自 `disabledPlugins`。
+- **注册表在运行时启动前由内核创建**，`agent-kernel` 插件发布它们；插件注入并注册条目。共九个：工具、工具源、上下文贡献者、上下文渲染器、轮次准入、提示贡献者、审批规则、继续钩子、观察者。内核在固定的时刻读取每个注册表的快照（每个采样步骤、每个请求、轮次准入、提交之后）。
+- **注册是调用者的副作用。** 条目属于注册它的插件并随它离开：停止中的插件先把条目从新快照中隐藏，等待租用中的调用（`DRAIN_GRACE`），再取消它们。无法接受的注册（重复的 ID、保留或冲突的工具名、同一类型的第二个贡献者或渲染器）让注册的插件启动失败，不影响任何轮次。
+
+### 故障
+
+三类所有者，三种结果：
+
+| 故障                       | 由谁捕获                                                                                                       | 结果                                                                                                                                                 |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 插件代码 panic             | 内核调用插件时的守卫（`RegistryEntry::guard`、`PluginFaults::guard`）；kardia 守卫 `apply`、effect 与 disposer | 那次调用自己的错误路径；插件的 `PluginFault`；宿主停止插件，按 `RestartPolicy` 重新挂载（2 秒、10 秒、30 秒，10 分钟内三次，之后 `failed` 直到重试） |
+| MCP 服务器的工具调用 panic | `McpTool::invoke` 中的 `catch_panic_async`                                                                     | 那次调用的“internal error”；那台服务器 `Failed` 并重连；`mcp` 插件和其他服务器继续运行                                                               |
+| 内核代码 panic             | 轮次任务、命令守卫、Agent 的工作线程组、宿主任务（`spawn_kernel_task`）                                        | 报告给实例的 `AgentKernelFaultSink`；槽位把 Agent 标为 `Faulted`，停止它，2 秒、10 秒、30 秒后启动新实例，从磁盘重建会话                             |
+
+**为什么内核故障要重建整个 Agent：** 锁不会中毒（全部使用 `parking_lot`），所以 panic 后什么都不会回滚，内存中的会话状态可能只改了一半；磁盘上的历史才是一致的副本。
+
+这一切依赖展开。进程的 panic hook 只允许已知会被捕获的 panic 展开：Agent 的线程运行在被隔离的运行时（`ContainedRuntime`，线程名 `agent-rt`）和被隔离的工作线程组上，守卫也做标记。这些标记在 Agent 自己的 foundation 里，所以宿主的 hook 必须询问 `hanafubuki_agent::panic::is_panic_contained`（[panic hook 桥](/docs/embedding#panic-hook-桥)）。
+
+### 启动与关闭
+
+启动领取一个代次，构建运行时和进程所有者组，回收上一次运行留下的进程组（`process-groups.json`），在运行时的阻塞池上构造服务并运行恢复，启动插件，安排 MCP 连接（同时最多四个，各有自己的超时），然后把服务装为 `Running`。崩溃循环标记（`start-marker.json`）在三次未完成的启动后停止自动启动。关闭在 20 秒预算内按固定阶段进行：关闭槽位、停止轮次、MCP、插件（一次性释放 kardia 根）、记忆、历史与执行、进程组、运行时。插件不拥有 MCP、记忆、历史或执行的生命周期，所以它们拆除的顺序无关紧要。
+
+## 会话与轮次
+
+- **会话**有配置（Provider、协议、模型、指令、模式、推理强度、上下文窗口、压缩设置）、模式（`Default` 或 `Plan`）、生命周期（`Available`、`Archived`）、标题和记忆贡献模式。会话可以在某个轮次之前或在头部分叉。配置在一个地方规范化（`normalize_session_config`）：创建、每次更新和恢复时。
+- **轮次**作为托管的 Tokio 任务运行，经过 `Sampling`、`RunningTools`、`WaitingForUserInput`，以 `Completed`、`Cancelled`、`Failed` 或 `Interrupted` 结束。循环的每次迭代可能自动压缩，用冻结的工具计划对模型采样，运行工具，消费 steering 输入，并询问继续钩子。轮次自身工作中的 panic 让轮次以 `Failed`（`InternalFailure`）结束，会话接受下一个轮次。
+- **持久化先于可见。** 每次修改先持久提交到历史，才对外可见；提交失败恢复内存状态。提交在会话单元（cell）的锁下暂存，当追加被确认时结算：发布持久化的修订号或回滚，然后才发出事件。结算在历史写入线程上的确认中运行，而不是在等待的 future 里，所以 future 被丢弃时它照样发生。
+- **会话之间从不互相等待。** `SessionTable` 只在查找、插入或删除时持有它的锁；每个单元有自己的锁，只在内存中工作时持有，从不跨越 await、历史追加或其他 I/O，也从不同时持有另一个单元的锁。
+- **取消**先协作，再中止任务，并在 5 秒内确认。被重启打断的轮次在恢复时变为 `Interrupted`。恢复拒绝的会话被**隔离**而不是致命：不改写也不删除它的任何文件，其他会话照常打开。
+- **限制**（`AgentHardLimits`）：一个轮次最多采样 32 次，超过则以 `budget_exceeded` 失败（之前的输出都已提交）；30 分钟的期限像用户取消一样取消轮次，以 `deadline_exceeded` 失败。两者都不让模型看到。
+
+## 工具
+
+### 每个步骤的计划
+
+每个采样步骤构建一个不可变的 `AgentToolPlan`：内核的核心工具（`new_context`、`update_plan`、`request_user_input`），注册的工具（每个处理器对这一步的 `availability`），每个工具源为这一步提供的工具，以及有工具被延迟时的 `tool_search`。计划同时冻结该步骤的审批规则快照和工具源的计划租约；调用针对宣告它的那个计划运行，租约让工具规划时依赖的东西（例如一个 MCP 连接）存活到步骤结束。计划模式只保留 `ReadOnly` 工具和 `request_user_input`。
+
+### 线路上的名字
+
+工具在 Agent 内部的身份是 `ToolName`（命名空间段和本地名），注册表按扁平形式 `namespace__name` 索引它，这个字符串从不被反向解析。线路名按请求选择（`ProviderToolTable`）：Responses 接受命名空间，带命名空间的函数保留命名空间和本地名；其他协议使用扁平名。每个名字被适配到协议的上限（Responses 与 Anthropic Messages 为 128 字节，Chat Completions 为 64 字节）；后来者发生冲突或过长时被截断，并加上 `_` 和它 `(provider id, tool id)` 哈希的 12 位十六进制，每一步都相同。返回的调用按 `(namespace, name)` 查找解析，历史记录两者。
+
+schema 遵循同样的按协议规则：支持 `strict_json_schema` 的协议（Responses）收到完整 schema，其他协议收到所有 OpenAI 兼容端点都接受的关键字（`portable_model_schema`）。从不发送 `strict`，内核无论如何都按完整 schema 校验参数。
+
+**注册拒绝，规划改名。** 注册时就能拒绝的都拒绝（保留名、已注册的扁平名、过长的名字），所以只有来自外部目录的工具源工具会在规划时冲突，它们被确定性地改名，而不是让步骤失败：拒绝一个冲突的注册只让一个插件失败一次，而让步骤失败会让每个轮次都失败，直到插件被关闭。
+
+### 暴露与延迟工具
+
+`ToolExposure` 是 `Direct`、`Deferred`、`DirectModelOnly` 或 `Hidden`。直接目录超出预算时，只有工具源的直接工具会被延迟，并在各提供者之间公平分配。延迟的工具通过 `tool_search`（对名称、说明和 schema 的 BM25 索引）找到；搜索提交它的输出，然后提交一个 `ConversationItem::ToolSelection`。规划器接受上次压缩以来模型上下文中的选择，所以选择跨轮次有效，直到下次压缩。
+
+### 调用流水线
+
+内核拥有流水线，插件不能改变它的顺序：
+
+<Steps>
+  <Step>**流式接收并提交。** 响应流到结束，每个工具调用在运行之前提交到历史。</Step>
+  <Step>
+    **处置。**
+    未知、隐藏或未被接受的名字，或无法解析、过大的参数，变成模型可见的错误输出，轮次继续。
+  </Step>
+  <Step>
+    **参数**按工具的输入 schema 规范化（整数形式的浮点数和数字字符串变为数字，去掉不可为空的可选
+    `null`，在 `additionalProperties: false` 下去掉未声明的键），再由处理器容错解码。
+  </Step>
+  <Step>
+    **门。** 调用取得步骤的门：一个在途许可，然后对 `ConcurrentRead`
+    工具取得读访问，否则取得独占访问，先到先得。在门下运行模式策略、工具源工具的 schema
+    检查和处理器的 `permission`，所以分类能看到同一步骤之前的调用做了什么。
+  </Step>
+  <Step>
+    **审批路由。** 任何规则 `Deny` 就拒绝；否则任何 `RequireUser`
+    就询问用户；否则会话对该工具的许可授权；否则由轮次的权限模式决定（`Manual` 询问，`AutoReview`
+    询问审查模型，`FullAccess`
+    允许）。等待中的决定释放门，批准后再取回，所以同一步骤的其他调用可以继续。
+  </Step>
+  <Step>
+    **调用**在条目租约和子取消令牌下进行，受 `ToolDescriptor::timeout` 或轮次的工具空闲超时（10
+    分钟）限制。`invoke` 重新检查审批与它要运行的调用一致。
+  </Step>
+  <Step>
+    **按调用顺序提交，每个尽早提交。**
+    一个输出在之前每个调用的输出都提交后提交。以错误结束的调用（包括取消）不提交；其他调用照常完成并提交，因为它们的效果已经发生。取消时只有未完成的调用得到合成的“已中断”输出。
+  </Step>
+</Steps>
+
+**没有流式分派。** 调用在响应流完、其条目提交之后才开始。像 Codex 那样每个条目完成就开始调用能缩短某些步骤；提交与取消的规则写成了以后可以加上它而不必改变，但目前没有需要。
+
+### 审批
+
+`AgentPermissionMode` 是 `Manual`（默认）、`AutoReview` 或 `FullAccess`，每个轮次从设置中冻结。每个工具调用由处理器的 `permission` 分类为一个 `ApprovalAction`（类型、风险等级、规范化摘要）。规则只能收紧。用户可以对 `Manual` 模式的提示回答 `AllowForSession`：之后同一工具（按 `(provider id, tool id, generation)`）在会话剩余时间内不再询问，只保存在运行时状态中，所以重启、分叉和改变了的工具（MCP 的重连也算）都会重新询问。审批产生一次性的 `AuthorizedAction`；修改型工具在 `invoke` 中重新计算动作并要求它们完全一致。没有操作系统沙箱：审批就是那道门。
+
+## 上下文
+
+### 段、槽位与渲染器
+
+模型可见、既不是历史也不是工具的所有内容都是某个 `ContextSectionKind`（一个开放的标识符，按蛇形命名持久化）的**上下文段**：
+
+- **世界状态段**在轮次准入时由 `ContextContributor` 产生，按类型与内容的 SHA-256 定版本，只把变化作为 `WorldStateUpdate` 提交。内核每个步骤自己写 `tool_catalog_omissions`，steering 在轮次中替换它携带的宿主上下文。
+- **提示片段**每个请求由 `PromptContributor` 产生：先 `prepare`（异步，每步一次，可以 I/O），再 `contribute`（纯函数）。`skills` 插件渲染 Skill 目录（`skill_catalog`），`memory` 插件渲染记忆摘要（`agent_memory`）。
+
+段通过它类型的 `ContextRenderer` 展示给模型：一个槽位、一个角色、前言、后记和是否带版本。**渲染器是数据**，渲染不运行插件代码，所以它不需要守卫、租约或超时，请求也不会因它失败。每一串相邻的段按槽位（`Instructions`、`WorldState`、`Capabilities`、`Memory`）排序，再按渲染器注册顺序；稳定的槽位在前，每步都可能变化的记忆摘要在最后，以保持缓存的前缀尽量长。
+
+**变化检测：** 每种类型只显示最新版本，放在它最后变化的位置；更早的版本不再出现在请求中。所以没有“替换先前提供的内容”的通知，也没有段变化事件：持久化的 `WorldStateUpdate` 就是变化记录。
+
+### AGENTS.md
+
+`workspace-context` 插件的 `workspace_instructions` 段在每次轮次准入时读取：先读用户自己的文件（数据目录下的 `AGENTS.override.md`，否则 `AGENTS.md`），再读每个工作区根目录从根一直到宿主选中的目录中的文件，所有文件共用 32 KiB 预算，每组公平分配（每组最多 16 KiB）。因为每个轮次都重新读取并按摘要比较，会话中途的编辑会到达下一个轮次。
+
+### 上下文窗口与 token 估算
+
+会话的 `context_window_tokens` 在创建会话或选择模型时解析：配置的窗口，否则本次运行中 Provider 的模型列表报告的窗口，否则一张已知模型系列的小表；都没有就不做自动压缩。整个 Agent 只有一种 token 估算（`hanafubuki_agent_contracts::tokens`，字节数 / 4）。计数之所以一致，是因为它们数的是同一个请求：准入检查、步骤的请求和自动压缩对下一个请求的检查都用 `step_model_request` 构建请求，用 `estimate_model_request_tokens` 计数，工具和记忆都包括在内。
+
+### 压缩
+
+压缩用本地摘要或 Responses 的压缩替换历史，由会话的压缩能力选择。它在会话记录的克隆上暂存，并作为 `Compacted { checkpoint }` 边界安装，所以失败只丢弃克隆，历史不变。它保留用户消息（最新的优先，在预算内）和摘要，从不摘要上下文段：下一个请求从注册表重新渲染每个段，所以轮次中途被压缩的窗口仍带有 Skill 目录和记忆。触发条件：轮次前和轮次中达到阈值（默认窗口的 80%）、手动、Provider 报告上下文窗口错误之后。最后一种有上限：每步一次压缩加重试，成功响应之前第二次出错则轮次失败（`context_window_exceeded`）。
+
+## 思考
+
+模型流式输出的思考作为类型化事件传给使用者，并作为对话条目保存，但**从不**作为模型输入回放。
+
+- **模型 API。** 思考是 `ModelEvent::ReasoningDelta { item_id, kind, index, delta }`（`kind` 为 `Summary` 或 `Raw`），位于推理条目的开始与完成之间。Responses：`reasoning_summary_text.delta` 与 `reasoning_text.delta`，请求在设置了推理强度时发送 `reasoning: {effort, summary: "auto"}`（否则 OpenAI 不发送摘要）。Chat Completions：`delta.reasoning_content` 或 `delta.reasoning`，每段连续的思考一个条目。Anthropic Messages：`thinking` 块与 `thinking_delta`；不主动请求思考，因为带工具时签名的思考块必须回传，而那就是回放。
+- **内核。** 每个推理条目得到内核自己的 ID（`AgentReasoningId`，提供者的 ID 从不离开流），依次发布 `ReasoningStarted { reasoning_id, sampling_step }`、`ReasoningDelta { reasoning_id, delta }`（Markdown）和 `ReasoningCompleted { reasoning_id, duration_millis }`。保留的文本是条目的摘要（有的话），否则是原始文本。
+- **单独的上限。** 思考不计入 `maximum_model_output_bytes`：每个条目在 `maximum_reasoning_text_bytes`（256 KiB）处按字符边界截断，其余的既不显示也不保存。否则一个有 30 KB 思考的轮次会开始失败。
+- **历史。** 步骤把每个条目作为 `ConversationItem::Reasoning { text, duration_millis, sampling_step, truncated }` 与其他条目一起按模型产生的顺序提交。它只用于展示：`as_model_input` 跳过它，token 估算不计它，压缩丢弃它，权限审查和记忆从不读取它。提前停止的响应用已经流出的内容完成打开的条目。
+
+## 存储
+
+数据目录（嵌入时由宿主指定，Hanafubuki 是 `<app_data>/data/agent`）的内容见[数据目录](/docs/data-directory)。
+
+- **历史**（`hanafubuki-agent-history`，格式版本 5）：每个会话一份 JSONL rollout，它是权威的；SQLite 索引是投影，需要时重建。新条目都是增量添加的（`ToolSelection`、`Reasoning`、`ToolCall` 上可选的命名空间），移除的字段是被忽略的未知键。打开时无法接受的东西只损失它自己的会话：另一种格式的 rollout 移入 `.recovery`，无法投影的留在原处并在每次启动时重试修复，会话被隔离；其他会话和 Agent 照常打开。写入经过每个会话一个的写入线程，追加和它的投影写好后才确认。
+- **记忆**（`hanafubuki-agent-memory`，移植自 Codex）分两阶段从会话历史中派生：阶段一用一个小模型提取每个空闲会话，阶段二由整合子 Agent 处理提取结果，发布 `MEMORY.md` 和 `memory_summary.md`。先判断资格再应用上限，两个阶段都有退避（30 秒翻倍到一天），发布先提交数据库再重命名文件。
+- **Skill**（`hanafubuki-agent-skills`）：仓库 Skill 来自每个工作区根目录及其祖先直到 Git 根目录中的 `.agents/skills`，每次读取目录时重新计算；然后是用户根目录和内置的 System Skills。Skill 的正文作为 `ConversationItem::SkillContext` 每个轮次每个 Skill 只交付一次。Skill 从不注册或限制工具。
+- **配置**（`hanafubuki-agent-config`）：三个 TOML 文件，各自一个修订域和一把锁（`config.toml`、`providers.toml`、`mcp.toml`，后两者只有所有者可读）。读取逐字段解码，无效值取默认值，未知键保留，需要修复的文件先复制到 `.recovery/`；写入用 `toml_edit` 编辑磁盘上的文档（注释、布局和未知键得以保留），再原子重命名。独立模式下设置是分层的（profile、受信任的项目文件、`-c`），但只有用户的文件会被修复或写入。详见[配置](/docs/configuration)。
+- **数据目录锁**：`<data_dir>/.lock`，因为历史索引、记忆存储和进程组台账都假定只有一个写进程。
+- **持久化格式是不稳定的。** 规则是读取方容错解码，隔离它不能使用的东西，从不删除用户数据。
+
+## MCP
+
+`McpManager`（`hanafubuki-agent-mcp`）拥有连接（stdio 与 Streamable HTTP 传输、OAuth、工具目录、存活检测、重连、租约）；`mcp` 插件只是它之上的工具源加三个资源工具。每个步骤，工具源绑定已连接服务器的目录（作为计划租约），为每个目录条目提供一个工具。
+
+- **目录逐个工具构建**，一个坏工具只损失它自己；名字按字符清理为 `[A-Za-z0-9_-]`。
+- **注解是提示，不是授权。** `readOnlyHint` 且不带 `destructiveHint: true` 的工具是 `ConcurrentRead`、`ReadOnly`（计划模式可用）；其余都是 `Exclusive`、`Mutating`。审批只读服务器或工具的策略和破坏性提示，缺失的提示视为破坏性的。
+- **存活与重连。** 服务器一侧结束连接时，服务器变为 `Failed` 并附原因，它的条目退役（工具离开下一个计划），管理器按重启策略用打开时的配置和密钥重新连接它。
+- **连接就是目录修订。** 步骤保留它规划时的连接；过期的调用只能是因为连接已关闭，这时返回 `McpError::CatalogChanged`，不请求审批，模型重新搜索或重试。用计数器会让被用户刷新退役、但仍在运行的连接上的调用失败，破坏“步骤保留它的连接”的保证。
+- **每台服务器一个故障所有者，而不是每台服务器一个子 fiber。** 命名的子 fiber 会以宿主故障处理器不认识的名字出故障，只被记录而不被停止，于是每次调用都再 panic 一次；未命名的子 fiber 以 `mcp` 的名义出故障，停止整个插件。在调用处捕获就能隔离到服务器，而所有服务器本来就共享一个进程。
+
+## 模型 API
+
+`hanafubuki-agent-model-api` 实现三种协议：Responses、Chat Completions 和 Anthropic Messages，包括编码、流式解码、工具降级和模型列表。它不知道任何插件和任何上下文段类型，也不依赖插件 API。Provider 的流是外部输入，容错解码：空的工具参数是 `{}`；无法解析的是 `{}` 加 `argument_error`；缺失的用量计数是 0；没有结束原因的流以未知的 `end_turn` 结束；Responses 的 `response.incomplete` 保留已完成的条目和已流出的文本，只有什么都没产生时才失败。线路正文只按[内容日志规则](/docs/contributing#内容日志)在 `trace` 级别、截断后记录。
+
+## 终端界面与命令行
+
+- **`hanafubuki-agent-cli`** 是 `hanafubuki-agent` 二进制，位于门面之上，不依赖工作区的其他东西。每个命令从全局标志组合运行时，安装 panic hook 和日志文件；读写配置的命令（`config`、`providers list`、`mcp list`、离线的 `doctor`）从不启动 Agent，所以它们可以在 Agent 运行时使用。`exec` 自带 sink：轮次的 `AgentEventSink` 和槽位的状态 sink 送入命令线程读取的同一个通道，所以它打印的事件就是门面自己的（`--json` 原样序列化 `AgentEvent`）。见[命令行参考](/docs/cli-reference)。
+- **`hanafubuki-agent-tui`** 是移植到门面之上的 Codex 终端界面（`rust-v0.93.0`），使用上游的 ratatui 0.30 与 crossterm 0.29（Codex 用 git 分支给它们打补丁，crates.io 不接受）。终端底部是内联视口，转录写入终端自己的回滚区。一个适配器（`agent_bridge`）把轮次的 `AgentEvent` 映射为聊天组件显示的内容，把界面的请求映射到门面；一个循环、一个通道：读终端的线程和 Agent 的 sink 都送到同一个通道，会等待的门面调用作为 Agent 运行时的任务运行并在通道上回报，所以循环从不阻塞在 Agent 上。见[终端界面](/docs/terminal-interface)。
+
+## 设计选择
+
+以下是读者可能想撤销、但有理由的选择：
+
+- **没有流式分派**（见上文）。
+- **每台 MCP 服务器一个故障所有者**，**连接就是目录修订**（见 [MCP](#mcp)）。
+- **Skill 正文作为 `SkillContext`，而不是工具输出。** 压缩两者都不保留，所以不由它决定；`$mention` 路径没有工具输出，而 `SkillContext` 是每轮一次检查读取的类型化记录，所以无论 Skill 怎样被选中，正文只有一种形式。
+- **MCP 工具总是 `PollutesContribution`**，只读的也是：只读工具的输出仍是外部内容，与网页抓取一样。
+- **插件宿主关闭 `module_faults`、开启自动重启。** 那个标志是关于应用的模块故障 sink 的，插件故障从不使用它，而是通过 `PluginFaults` 到达 Agent 的宿主。
+- **渲染器是数据**，**注册拒绝、规划改名**（见上文）。
+- **轮次限制对模型不可见。** 历史中没有失败轮次原因的条目；用户读轮次的错误消息，没有什么需要模型看到它。
+- **没有做的：** 代码模式（用 JS 调用所有工具）、第三种压缩路径、后台压缩、跨会话的 MCP 连接池、无论目录大小都延迟所有 MCP 工具、MCP 的 prompts/subscriptions/sampling/roots、Skill 注册的工具或 `allowed-tools` 的执行、从 Agent 写设置的 Skill 安装流程，以及进程外的 Agent。
+
+与 Codex（`codex-rs`）相比，Agent 的机制都对照过它：
+
+| 方面      | Codex                           | hanafubuki-agent                                     |
+| --------- | ------------------------------- | ---------------------------------------------------- |
+| 工具快照  | 每步一个工具路由器              | 每步一个工具计划，带计划租约                         |
+| 名字      | `{namespace, name}`，只做查找   | 相同；每个请求一张线路名表，按协议适配               |
+| 延迟工具  | `tool_search`；选择保存在历史中 | 相同，通过 `ToolSelection` 条目直到压缩              |
+| Schema    | 精简的关键字集合，从不 strict   | 协议接受时发送完整 schema，否则可移植的，从不 strict |
+| 审批      | 执行之前                        | 决定等待时在门外；`AllowForSession`                  |
+| 工具超时  | 注册表层面没有                  | 按描述符，否则轮次的空闲超时                         |
+| MCP 存活  | 只对一个内置服务器重连          | 每台服务器：`Failed`，然后有界重连                   |
+| AGENTS.md | 每步读取；错过项目内的就地编辑  | 每个轮次读取并按摘要比较；用户与项目文件             |
+| 上下文段  | 类型化的世界状态                | 类型化的段，渲染器与槽位属于插件                     |
+| 压缩      | 多条路径；重新渲染初始上下文    | 本地与 Responses；重新渲染每个段；有上限的重试       |
+| 记忆      | 两个阶段、租约、引用            | 相同的设计，加上先判断资格再限量和两阶段退避         |
+
+## 已知的限制
+
+- 文件工具的策略根目录在构建 Agent 时固定；只有 Skill 根目录和上下文段按每次读取跟随工作区。
+- 在模型窗口已知之前创建的会话没有窗口，直到再次选择它的模型；恢复不会解析它。
+- MCP 重连复用打开连接时的密钥，所以过期的 OAuth 令牌会让重连失败，直到用户手动连接。
+- Skill 监视器只监视启动时存在的根目录；之后出现的根目录依靠读取时的标记。
+- 内置的上下文窗口只覆盖公开了上限的模型系列（GPT、o 系列、Claude、Gemini 2.5）；其他模型需要 Provider 的列表或设置才能自动压缩。
+- 在 Linux 之外未验证：`notify` 监视器的 macOS 与 Windows 后端、Skill 目录中显示的 Windows 路径、Windows 上 MCP stdio 的退出原因和已退出子进程的释放，以及 Windows 上记忆制品的安装重命名。
