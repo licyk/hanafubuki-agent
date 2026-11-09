@@ -245,7 +245,7 @@ fn tool_call_events_with_usage(usage: ModelUsage) -> Vec<ModelResult<ModelEvent>
 }
 
 fn request(input: Vec<ModelInputItem>) -> ModelRequest {
-    let mut tools = hanafubuki_agent_kernel::AgentCoreTool::ALL
+    let mut tools = hanafubuki_agent_kernel::AgentCoreTool::STANDARD
         .into_iter()
         .filter(|tool| tool.allowed_in_mode(hanafubuki_agent_kernel::AgentSessionMode::Default))
         .map(hanafubuki_agent_kernel::AgentCoreTool::model_spec)

@@ -429,6 +429,7 @@ fn config() -> AgentSessionConfig {
 
 mod automatic;
 mod background;
+mod hierarchical;
 mod local;
 mod recovery_fork;
 mod remote_v1;

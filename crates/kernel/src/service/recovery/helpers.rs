@@ -85,6 +85,7 @@ impl AgentService {
             consecutive_auto_review_denials: 0,
             sampling_retry_policy: AgentSamplingRetryPolicy::default(),
             extensions: hanafubuki_agent_contracts::TurnExtensions::default(),
+            compression_fallback: false,
         });
         SessionRecord {
             session_id: runtime.id,
@@ -146,6 +147,7 @@ impl AgentService {
                 permission_mode: None,
                 sandbox_mode: None,
                 background_compaction: Default::default(),
+                compression: runtime.compression.map(Arc::new),
             },
         }
     }

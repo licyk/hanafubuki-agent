@@ -103,7 +103,7 @@ icon: ListTree
 
 - **`"standard"`** 同步压缩：上下文用到窗口的 `autoCompactThresholdPercent` 时在轮次前或轮次中压缩，模型请求新上下文时、Provider 报告上下文窗口错误之后、`/compact` 时也压缩。
 - **`"background"`** 还会在上下文用到窗口的 `compaction.background.thresholdPercent`（低于 `autoCompactThresholdPercent`）时于后台开始压缩：会话继续工作的同时，它压缩到当时为止已完成的轮次，结果在下一个请求之前安装，排在之后所做的工作之前。它运行期间，如果因为阈值、上下文窗口错误或 `/compact` 需要压缩，会等待它而不发送自己的请求；结果失败、已不适用或安装后上下文仍超过阈值时，按 `"standard"` 的方式同步压缩。不低于 `autoCompactThresholdPercent` 的值永远不会开始，日志会给出警告。`autoCompactionEnabled = false` 也会关闭它。它的用量计入会话，从不计入轮次的预算。
-- **`"hierarchical"`** 正在加入；在此之前，设为它的会话按 `"standard"` 压缩，它的表只保存设置。它将让模型把历史折叠成它自己写的摘要（源自 [billion-context](https://github.com/ranxianglei/billion-context)）。
+- **`"hierarchical"`** 让模型把自己的历史折叠成它写的摘要（源自 [billion-context](https://github.com/ranxianglei/billion-context)）。保存的历史从不改变：每个请求把折叠的片段显示为它们的摘要。模型得到一段常驻提示、五个工具（`compress`、`decompress`、`search_context`、`acp_status`、`acp_cache`），以及上下文变满时折叠的提醒（见 `maxContextLimitPercent`、`emergencyThresholdPercent` 和 `nudgeGrowthTokens` 三行）；超过 `emergencyThresholdPercent` 时还会截短过大的工具输出。没有阈值压缩，也不使用 `autoCompactThresholdPercent`。标准压缩在上下文窗口错误之后、`/compact` 和请求新上下文时运行，以及上下文连续三个请求超过 `emergencyThresholdPercent` 且已没有可折叠或可截短的内容时运行；`autoCompactionEnabled = false` 关闭其中两种自动的：错误之后的（与其他策略相同）和超过 `emergencyThresholdPercent` 的。上下文窗口未知时，既不提醒也不截短。它的表中除 `messageTimestamps` 和可选功能（`absorb`、`contentStore`、`crush`、`rules`）外，每个键都生效；这几项暂时没有作用。从它切换走的会话继续把已折叠的内容显示为摘要，直到下一次标准压缩。
 
 每种策略都以标准压缩为底线：`/compact`、模型请求新上下文、上下文窗口错误之后的重试总是运行它。策略按会话生效：新会话采用它，已有会话在下一轮次或 `/compact` 时采用，子会话（子代理的、评审的）同样采用，但 `"background"` 且 `childSessions = false` 时子会话用 `"standard"`；旁支对话（`/side`）总是用 `"standard"`。终端界面的 `/config` 可以选择它。无法使用的值取默认值；`minSummaryLength` 大于 `maxSummaryLength` 时两者都回到默认值。
 

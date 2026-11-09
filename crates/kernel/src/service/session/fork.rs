@@ -152,6 +152,9 @@ impl AgentService {
                 permission_mode: None,
                 sandbox_mode: None,
                 background_compaction: Default::default(),
+                // At the head the fork has the same window, so the same
+                // blocks project it.
+                compression: source.runtime.compression.clone(),
             },
         };
         let cell = self.inner.sessions.insert(record, &self.inner.accepting)?;

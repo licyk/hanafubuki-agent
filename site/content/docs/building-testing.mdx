@@ -81,7 +81,7 @@ cargo test --workspace --all-features
 - 模型能看到的变化会改变请求 golden。**只在有意的变化之后**重新生成，并审查 fixture 的 diff：
 
   ```sh
-  HANAFUBUKI_AGENT_UPDATE_GOLDEN=1 cargo test -p hanafubuki-agent --lib tests::golden
+  HANAFUBUKI_AGENT_UPDATE_GOLDEN=1 cargo test -p hanafubuki-agent --lib golden
   ```
 
 - 历史语料**只在有意的历史格式变化之后**重新录制；否则它们的意义就是证明旧的历史仍能打开：

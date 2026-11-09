@@ -1,6 +1,6 @@
 ---
 title: 内部细节
-description: 架构页没有展开的实现细节：持久提交与 drop guard、执行进度、请求中的图片、会话上的等待、历史存储的拒绝规则、MCP 设置的修复与诊断、Skill 文件的问题、Provider 流的容错解码、崩溃循环标记，以及 Agent 其余的内部机制。
+description: 架构页没有展开的实现细节：持久提交与 drop guard、执行进度、请求中的图片、会话上的等待、历史存储的拒绝规则、MCP 设置的修复与诊断、Skill 文件的问题、Provider 流的容错解码、崩溃循环标记、分层压缩，以及 Agent 其余的内部机制。
 icon: Microscope
 ---
 
@@ -208,6 +208,50 @@ Provider 的流是外部输入（[模型 API](/docs/architecture#the-model-api)�
 ```
 
 - 计入的启动达到 `CRASH_LOOP_STARTS`（3）次时，`AgentStartMarker::disabled_reason` 让槽位进入带 `crashLoop` 的 `Disabled`，并记录一条提示。用户的重启，或者把 Agent 关闭再打开，会重置标记；单纯的挂载不改变崩溃循环导致的停止。无法读取的标记不计任何启动：它从不让 Agent 保持关闭。独立模式的第一次启动无论计数是多少都会运行（[独立模式的同一组合](/docs/embedding#the-same-composition-standalone)）。
+
+## 分层压缩 [#hierarchical-compression]
+
+`hierarchical` 策略（[压缩](/docs/architecture#compaction)）是内核的 `service/compression/`（`mod.rs` 中的投影、`adapter.rs`、`tools.rs`、`receipts.rs`），建立在纯 crate `hanafubuki-agent-compression` 之上。
+
+**状态。** `PersistedAgentRuntimeState.compression` 保存该 crate 的 `State`，以 `AgentCompressionState` 重新导出：在窗口上生成的引用、块（只失效，从不删除）、token 快照和提醒的基线。它随每个运行时检查点写入。在它出现之前写入的记录没有它；无法解码的状态带一条警告被丢弃（`tolerant_compression_state`），会话在没有这些块的情况下继续。从历史中的 `compress` 调用重建状态还没有实现。历史格式及其版本没有变化。切换到 `hierarchical` 时，如果还没有状态，就装入一个空状态；在头部创建的分叉沿用源会话的状态，其他分叉从没有状态开始。
+
+**哪些请求。** `CompressionMode::of` 按请求决定：策略为 `hierarchical` 时是 `Hierarchical`；已切换走的会话仍有有效的块时是 `Carry`，保留投影，但没有提示、提醒和工具；其余情况，以及轮次已回退时（`compression_fallback`），是 `Off`。
+
+**适配器。** `MessageLog` 把窗口的历史条目映射为该 crate 的消息：
+
+| 历史条目                                                                                                                                            | 消息                                                            |
+| --------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| `UserMessage`、`SteeringMessage`                                                                                                                    | 用户文本，图片作为附件句柄                                      |
+| `AssistantMessage`                                                                                                                                  | 助手文本（有 `model_text` 时用它）                              |
+| `ToolCall`                                                                                                                                          | 工具调用：调用 ID、名字、作为 JSON 文本的参数                   |
+| `ToolOutput`                                                                                                                                        | 以其调用的名字表示的工具结果：它的文本部分，结构化部分作为 JSON |
+| `CompactionSummary`、`ProviderCompaction`                                                                                                           | 受保护的用户文本                                                |
+| `TurnStart`、`WorldStateUpdate`、`SkillContext`、`ContinuationContext`、`PermissionReview`、`ToolSelection`、`CanonicalInitialContext`、`Reasoning` | 无：条目在请求中保持它在投影条目之间的位置                      |
+
+窗口第一个 `TurnStart` 之前的每条消息（压缩过的前缀）也受保护：它从不折叠。消息的 ID 是 `<来源会话 ID>:<条目 ID>`，在会话的谱系内唯一。模型读到的引用（`m00001`……）不是这些 ID，因为压缩之后条目 ID 不再按历史顺序排列：该 crate 按历史顺序生成引用，从不重用。
+
+**投影。** `regular_model_request` 从 `projected_history` 构建输入，后者对消息日志、状态、配置和上下文大小（上一个响应中 Provider 报告的 `context_consumed_tokens`，否则是窗口历史的估算）运行该 crate 的 `process_turn`。`apply_view` 把该 crate 的视图变回条目：
+
+- 被覆盖的条目被省略；
+- 视图改变了文本的消息得到新文本：用户、助手或工具输出文本前面的 `<acp tokens="…" type="…">mNNNNN</acp>` 标签（助手消息写入它的 `model_text`；工具输出的文本部分合成一段文本，图片和资源保留），或者仍然有效的 `compress` 调用的参数被压缩到仍然有效的范围。工具调用的参数从不带标签；
+- 视图渲染的每个摘要（`[Compressed conversation section] — topic`，对应没有可见载体的块）作为 `CompactionSummary` 条目插入到它的锚点处，模型 API 把它包装为用户文本。
+
+保存的条目从不改变。随后 `project_model_tool_outputs` 像对任何请求一样限制历史工具输出的大小。在 `Hierarchical` 下，请求还在指令之后（计划模式的后缀之后）追加 `build_compress_system_prompt` 的文本（只构建一次，每个请求的字节都相同），并把提醒（在 Anthropic Messages 上用它的 Anthropic 措辞）或者状态行作为最后一条输入：一段用户文本，从不持久化。
+
+**哪个请求保留状态。** 构建请求会在内存中推进状态：为新消息生成的引用、token 快照、提醒的基线。只有步骤自己的请求（在 `begin_sampling` 中构建）保留它：状态存到记录上，由步骤的提交持久化。自动压缩的估算和安装之后的检查构建同样的请求（`step_model_request_projected`），但丢弃状态，所以计算一个请求的大小从不改变状态。
+
+**工具。** `compress`、`decompress`、`search_context`、`acp_status` 和 `acp_cache` 是 `AgentCoreTool`，在模式为 `Hierarchical` 时被规划（目录上下文中的 `compression_tools`），计划模式下也是；它们的名字在 `RESERVED_TOOL_NAMES` 中。每个工具都在会话记录的锁下对记录运行（`execute_compression_tool`），让它的钩子得到一个结果。随后，`compress` 和 `decompress` 在写入其输出的那次提交的锁下（`commit_history_with`），针对那一刻的状态再应用一次：提交的输出就是提交的状态所对应的输出，同一步骤中的两次调用按调用顺序应用。被拒绝的调用让状态保持原样。
+
+- **`compress`** 用 billion-context 的回执回答：带摘要指纹的 `[Compressed …]`、`[Compression FAILED`、`[Compression no-op`。
+- **`decompress`** 把块的内容作为输出原地返回，并把块标记为已原地恢复（只有第一次恢复改变状态）；之后对它的范围调用 `compress` 会以同一个 ID 原地重新折叠它。恢复到文件（`toFile`）、恢复一个范围或图片还没有实现。
+- **`search_context`** 和 billion-context 的宿主一样，按查询词的字面出现搜索块摘要，包括有效的和已被折叠掉的；还不搜索被折叠的原文。
+- **`acp_status`** 是该 crate 的状态报告。**`acp_cache`** 根据 Agent 记录的内容报告：上一个响应的用量（模型 API 不报告缓存的 token，所以没有 token 算作缓存）和各次折叠。
+
+**此策略下的压缩。** 在 `Hierarchical` 下，自动检查（`maybe_auto_compact`）不看阈值：它像以前一样在轮次有预算压力时压缩，或者在投影报告最终出口时压缩（该 crate 统计的、超过紧急阈值且已没有可折叠或可截短内容的请求数达到三），并且只在 `autoCompactionEnabled` 开启时。标准压缩的来源是对有效块的投影（`project_compaction_source`：去掉被覆盖的条目，摘要作为文本，没有标签）。安装时，`after_standard_compaction` 在 `hierarchical` 下重新开始最终出口的计数，块所覆盖的条目已离开窗口，这些块在下一次投影时失效；已切换走的会话丢弃它的状态。
+
+**Panic。** 对该 crate 的每次调用都在 `catch_panic` 下运行。请求投影中的 panic 让这个请求带完整历史发送，并设置轮次的 `compression_fallback`：轮次之后的步骤按 `standard` 运行（没有提示、工具和提醒，阈值恢复），记录一条警告，下一轮次再尝试。投影压缩来源时的 panic 让压缩读取完整历史。工具中的 panic 是这次调用的错误 `[Compression FAILED: … (internal error)]`，状态保持原样。
+
+**设置。** facade 每个轮次读取 `[compaction.hierarchical]`，作为 `AgentHierarchicalCompression` 放进轮次扩展；内核把它映射到该 crate 的 `Config` 上，以会话的上下文窗口作为模型的上限：`maxContextLimitPercent` 设定压力区间，`emergencyThresholdPercent` 设定紧急提醒和截短阈值（从不低于压力区间），`nudgeGrowthTokens` 设定增长步长，其余按名字映射。没有它的轮次取默认值；上下文窗口未知时什么都不施加压力。`messageTimestamps` 和可选功能还没有映射。
 
 ## 其他细节 [#other-details]
 

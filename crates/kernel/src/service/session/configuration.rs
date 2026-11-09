@@ -116,6 +116,13 @@ impl AgentService {
         // A result made for the strategy it leaves is discarded.
         record.runtime.background_compaction.cancel();
         record.settings.config.compaction_strategy = strategy;
+        // Refs are minted over the window as it is; a session coming back
+        // keeps the blocks it left, which kept projecting.
+        if strategy == crate::AgentCompactionStrategy::Hierarchical
+            && record.runtime.compression.is_none()
+        {
+            record.runtime.compression = Some(Arc::new(crate::AgentCompressionState::default()));
+        }
         let staged = StagedPersistence::commit(&cell, record, previous);
         drop(guard);
         self.persist_staged_blocking(staged)?;

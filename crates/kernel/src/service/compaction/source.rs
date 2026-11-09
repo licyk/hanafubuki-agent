@@ -82,7 +82,7 @@ pub(super) fn compaction_source(
     } else {
         record.conversation.history.len()
     };
-    let items = history_contents(&record.conversation.history[..compaction_boundary]);
+    let items = source_items(record, compaction_boundary);
     if items.is_empty() {
         return Err(AgentError::CompactionUnavailable);
     }
@@ -125,6 +125,23 @@ pub(super) fn compaction_source(
         local_trim_prefix_ends,
         sampling_retry_policy: record.settings.config.sampling_retry_policy,
     })
+}
+
+/// The history before `boundary` as a compaction reads it: projected over
+/// the active compression blocks, whose summaries replace what they cover.
+fn source_items(record: &SessionRecord, boundary: usize) -> Vec<ConversationItem> {
+    let items = &record.conversation.history[..boundary];
+    match super::super::compression::project_compaction_source(record, items) {
+        Ok(Some(projected)) => projected,
+        Ok(None) => history_contents(items),
+        Err(message) => {
+            log::warn!(
+                "Agent context compression failed; the compaction reads the full history: {}",
+                bounded_diagnostic(message)
+            );
+            history_contents(items)
+        }
+    }
 }
 
 /// The model request that compacts `source` with the session's compaction

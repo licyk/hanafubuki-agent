@@ -516,8 +516,9 @@ impl AgentSessionDriver {
 
     /// The turn's extensions: what the turn admission contributors plugins
     /// registered return (the `skills` plugin freezes the turn's Skill
-    /// catalog), the sandbox its commands run in, and the threshold of
-    /// `[compaction.background]`.
+    /// catalog), the sandbox its commands run in, the threshold of
+    /// `[compaction.background]` and the tuning of
+    /// `[compaction.hierarchical]`.
     pub(crate) async fn collect_turn_extensions(
         &self,
         session_id: AgentSessionId,
@@ -527,6 +528,7 @@ impl AgentSessionDriver {
         let background = AgentBackgroundCompactionThreshold {
             percent: settings.compaction.background.threshold_percent,
         };
+        let hierarchical = hierarchical_compression(&settings.compaction.hierarchical);
         let sandbox = self.sandbox_settings(session_id, settings)?;
         let mut turn = hanafubuki_agent_kernel::collect_turn_extensions(
             &self.registries.turn_admission,
@@ -535,7 +537,25 @@ impl AgentSessionDriver {
         .await?;
         turn.insert(Arc::new(sandbox));
         turn.insert(Arc::new(background));
+        turn.insert(Arc::new(hierarchical));
         Ok(turn)
+    }
+}
+
+fn hierarchical_compression(
+    settings: &hanafubuki_agent_config::AgentHierarchicalCompactionSettings,
+) -> hanafubuki_agent_kernel::AgentHierarchicalCompression {
+    hanafubuki_agent_kernel::AgentHierarchicalCompression {
+        max_context_limit_percent: settings.max_context_limit_percent,
+        emergency_threshold_percent: settings.emergency_threshold_percent,
+        nudge_growth_tokens: settings.nudge_growth_tokens,
+        preserve_recent_messages: settings.preserve_recent_messages,
+        preserve_recent_tokens: settings.preserve_recent_tokens,
+        min_compress_range_chars: settings.min_compress_range_chars,
+        min_summary_length: settings.min_summary_length,
+        max_summary_length: settings.max_summary_length,
+        tiers: settings.tiers,
+        protected_tools: settings.protected_tools.clone(),
     }
 }
 

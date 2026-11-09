@@ -1834,6 +1834,7 @@ version = "0.2.0"
 dependencies = [
  "base64 0.23.1",
  "hanafubuki-agent-approval",
+ "hanafubuki-agent-compression",
  "hanafubuki-agent-contracts",
  "hanafubuki-agent-foundation",
  "hanafubuki-agent-model-api",

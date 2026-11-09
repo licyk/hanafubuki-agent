@@ -18,7 +18,7 @@ use super::opt_in::{AbsorbRecord, RuleRecord};
 /// and passed into and out of every call. Refs, block ids and run ids are
 /// never reissued, `message_refs` only grows, and blocks are deactivated,
 /// never deleted.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct State {
     pub blocks: Vec<Block>,
@@ -140,7 +140,7 @@ impl State {
 
 /// A folded range: a tier-1 block summarises messages, a tier-2 block
 /// distils tier-1 blocks, a tier-3 block condenses tier-2 blocks.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Block {
     pub block_id: String,
@@ -209,14 +209,14 @@ pub enum Generation {
 
 /// Message id to ref and back. A protected message maps to
 /// [`BLOCKED_REF`](crate::BLOCKED_REF) in `by_raw` and has no `by_ref` entry.
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct RefMap {
     pub by_raw: BTreeMap<String, String>,
     pub by_ref: BTreeMap<String, String>,
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct NudgeState {
     pub last_per_message_nudge_tokens: u64,
@@ -255,7 +255,7 @@ impl NudgeState {
     }
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Stats {
     pub tokens_compressed: u64,
@@ -268,7 +268,7 @@ pub struct Stats {
     pub retrieval_count: u64,
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct TruncateLatchEntry {
     pub r#ref: String,
@@ -276,7 +276,7 @@ pub struct TruncateLatchEntry {
 }
 
 /// A latched view text: `None` keeps the source text.
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ViewLatch {
     pub text: Option<String>,

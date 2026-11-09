@@ -59,6 +59,7 @@ const LAYERS: &[(&str, &[&str])] = &[
         KERNEL,
         &[
             APPROVAL,
+            "hanafubuki-agent-compression",
             CONTRACTS,
             FOUNDATION,
             MODEL_API,

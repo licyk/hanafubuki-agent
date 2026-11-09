@@ -1,4 +1,5 @@
 mod activity;
+mod compression;
 mod conversation_item;
 mod error;
 mod event;
@@ -13,6 +14,8 @@ pub use activity::{
     AgentActivityKind, AgentActivityOutputPreview, AgentActivityPhase, AgentActivitySnapshot,
     AgentExecutionActivityRef,
 };
+pub(crate) use compression::tolerant_compression_state;
+pub use compression::{AgentCompressionState, AgentHierarchicalCompression};
 pub use conversation_item::{
     AgentAttachmentId, AgentImageAttachmentRef, AgentMessagePhase, AgentPlanBlock,
     AgentToolOutputTruncation, ConversationItem,

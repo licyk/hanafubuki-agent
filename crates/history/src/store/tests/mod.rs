@@ -57,6 +57,7 @@ fn runtime(
         usage: None,
         context_window: AgentContextWindowSnapshot::initial(),
         compaction: None,
+        compression: None,
         turn: None,
         activities: Vec::new(),
         task_plan: None,

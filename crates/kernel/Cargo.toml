@@ -13,6 +13,7 @@ test-support = []
 [dependencies]
 hanafubuki-agent-contracts.workspace = true
 hanafubuki-agent-approval.workspace = true
+hanafubuki-agent-compression.workspace = true
 hanafubuki-agent-foundation.workspace = true
 hanafubuki-agent-model-api.workspace = true
 hanafubuki-agent-skills.workspace = true

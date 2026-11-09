@@ -11,6 +11,8 @@ struct CompletedCall {
     /// What the call's post-tool-use hooks added, committed after the
     /// step's outputs.
     hook_context: Vec<ConversationItem>,
+    /// A compression tool that changes the state, applied at the commit.
+    compression: Option<crate::AgentCoreTool>,
 }
 
 impl AgentService {
@@ -113,6 +115,7 @@ impl AgentService {
         let started = Instant::now();
         let plan = runtime.catalog();
         let mut hook_context = Vec::new();
+        let mut compression = None;
         let (output, rejected) = match disposition {
             CallDisposition::Run(ref registration) => {
                 let normalized = normalized_call(&call, registration);
@@ -143,6 +146,14 @@ impl AgentService {
                                 event_sink,
                             )
                             .await?;
+                        compression = match registration.binding {
+                            crate::AgentPlannedToolBinding::Core(tool)
+                                if tool.changes_compression_state() =>
+                            {
+                                Some(tool)
+                            }
+                            _ => None,
+                        };
                         hook_context = self
                             .run_post_tool_use_hooks(
                                 identity,
@@ -196,6 +207,7 @@ impl AgentService {
             output,
             memory_context_effect,
             hook_context,
+            compression,
         })
     }
 
@@ -212,8 +224,9 @@ impl AgentService {
             output,
             memory_context_effect,
             hook_context: _,
+            compression,
         } = completed;
-        self.finish_tool_call(identity, &call, output, event_sink)
+        self.finish_tool_call(identity, &call, output, compression, event_sink)
             .await?;
         if memory_context_effect == crate::AgentMemoryContextEffect::PollutesContribution {
             let pollution = match memory.excludes_external_context() {

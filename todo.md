@@ -195,8 +195,75 @@ and pushed, and notes what Hanafubuki must change at its next pin.
     sorts lowercase names instead of the locale's collation.
   - Hanafubuki, at its next pin: nothing to change; the compression crate
     gains public items only.
-- [ ] P7: `hierarchical` in the kernel (projection, the five core tools,
-      the nudge, fallbacks, terminal escape, state), its goldens.
+- [x] P7: `hierarchical` in the kernel (projection, the five core tools,
+      the nudge, fallbacks, terminal escape, state), its goldens. Done:
+      kernel `service/compression/` (`adapter`: history items to the
+      crate's messages, ids `<source session>:<item>`, `CompactionSummary`,
+      `ProviderCompaction` and a compacted prefix protected, the view back
+      to items with tags, compacted carriers, clips and anchors as summary
+      items; `tools`; `receipts`, ported from billion-context's host with
+      the marker). `regular_model_request` projects while the strategy is
+      `hierarchical` or the session has active blocks (`CompressionMode::
+      {Off, Carry, Hierarchical}`); the static prompt after the Plan suffix,
+      the nudge or status line as the last input and the five core tools
+      only under `hierarchical`. Only `begin_sampling` keeps the state the
+      projection returns (in memory, persisted by the next commit); the
+      estimate and the post-install check build the same request and drop
+      it. `PersistedAgentRuntimeState.compression` (`#[serde(default)]`,
+      skipped when none, an unreadable one dropped with a warning); the
+      runtime keeps it behind an `Arc`; fork at head copies it. Settings:
+      the facade puts `AgentHierarchicalCompression` in each turn's
+      extensions (P3's route); a turn without it, and `/compact`, use the
+      defaults; no known window, no pressure. `compress`/`decompress` run on
+      the record for their result and are applied again under the commit's
+      lock (`commit_history_with`), so the state and its receipt are one
+      commit and two calls of a step apply in order. Thresholds off under
+      `hierarchical`; the context-error retry, `/compact`, `new_context` and
+      the terminal escape (from the estimate's projection) run a standard
+      compaction of the projected view; after it the blocks deactivate,
+      and a session that switched away drops its state. A projection panic
+      sends the full history and sets the turn's `compression_fallback`
+      (standard for the rest of the turn); a tool panic is its error. The
+      crate's state types derive `Eq` (the one change in
+      `crates/compression`). Tests: `compaction_contract::hierarchical`
+      (projection, tier 2, the read-only tools, refusals, the nudge, the
+      threshold off, the context error, the terminal escape, panics,
+      switching both ways, a restart), and the facade golden
+      `hierarchical_requests` (nudge with prompt, tools and tags; after a
+      fold; after a tier-2 distillation and a `decompress`; after the switch
+      to `standard`). `standard` goldens unchanged; corpora decode.
+  - Deviations: no warning event for a projection panic, only the log
+    line (the event kinds come with P11). The receipts keep billion-context's
+    texts but not its proxy's loop guards, breaker, recovery hints or
+    degenerate-fold notes. `decompress` restores inline only (no `toFile`,
+    range or image restore); `search_context` searches the block summaries
+    (substring, as billion-context's host) without plan steering or the
+    folded originals, with a fresh `DocCache` per call; `acp_cache` has one
+    sample (the last response) and no cached tokens: the model API reports
+    none. Budget pressure still compacts under `hierarchical`. A
+    `[Compression FAILED`/refused receipt is an error output (`is_error`).
+  - Open: the projection runs twice per step under `hierarchical` (the
+    estimate and the request); measure with P8's state size. The state is
+    persisted with every checkpoint (P8 decides on writing it only when it
+    changed). Forks before a turn, `edit_from_turn` and children start
+    without a state (P8, with `rebuild_state`); an unreadable state is
+    dropped, not rebuilt yet. The emergency voice nudges from
+    `maxContextLimitPercent`; post-install `ContextBudgetExceeded` still
+    applies to a terminal-escape compaction. The panic-containment test
+    triggers its panics through `u32` overflows in the crate, so it relies
+    on debug overflow checks (a test hook would be the durable fix). The
+    architecture page's "Not built: a third compaction path" is P4's.
+  - Hanafubuki, at its next pin: `PersistedAgentRuntimeState.compression`
+    (its own constructions add `compression: None`); new kernel types
+    `AgentCompressionState` (the crate's `State`) and
+    `AgentHierarchicalCompression` (a turn admitted through the kernel itself
+    adds it to the extensions for `[compaction.hierarchical]`);
+    `AgentCoreTool` has five more variants, `ALL` is 8, `STANDARD` and
+    `COMPRESSION` split it; `AgentToolCatalogContext.compression_tools`;
+    `RESERVED_TOOL_NAMES` has 9 names (`compress`, `decompress`,
+    `search_context`, `acp_status`, `acp_cache`). Golden to copy:
+    `hierarchical_requests.json`. `NOTICE` names
+    `crates/kernel/src/service/compression`.
 - [ ] P8: forks, resume, children, `rebuild`; state size; switching away.
 - [ ] P9: decompress, search, media refs.
   - Crate half done (decompress, search, media, rebuild); the kernel half

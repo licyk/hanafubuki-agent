@@ -238,6 +238,18 @@ path = "crates/compression"
 markers = ["Derived from billion-context (https://github.com/ranxianglei/billion-context),"]
 notice = "crates/compression"
 
+# billion-context's host side of its core tools: the `compress` receipts and
+# the `decompress` and `search_context` results.
+[[derived]]
+path = "crates/kernel/src/service/compression/receipts.rs"
+markers = ["Derived from billion-context (https://github.com/ranxianglei/billion-context),"]
+notice = "crates/kernel/src/service/compression"
+
+[[derived]]
+path = "crates/kernel/src/service/compression/tools.rs"
+markers = ["Derived from billion-context (https://github.com/ranxianglei/billion-context),"]
+notice = "crates/kernel/src/service/compression"
+
 [[mit]]
 path = "crates/tui/src/custom_terminal.rs"
 holder = "Copyright (c) 2016-2022 Florian Dehau"

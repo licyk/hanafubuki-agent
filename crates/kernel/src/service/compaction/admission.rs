@@ -285,7 +285,7 @@ impl AgentService {
             record.settings.budget_policy,
             record.settings.config.auto_compact_threshold_percent,
         );
-        let request = step_model_request(
+        let (request, compression) = step_model_request_projected(
             record,
             &images,
             &step.tool_plan,
@@ -304,7 +304,19 @@ impl AgentService {
             record.settings.config.auto_compaction_enabled,
             record.settings.config.auto_compact_threshold_percent,
         );
-        Ok(if budget_pressure || status.token_limit_reached {
+        // `hierarchical` owns the window: the model folds it, and a standard
+        // compaction runs only once nothing can be folded or clipped any more
+        // (its terminal escape). A turn whose projection failed is
+        // `standard`'s.
+        let limit_reached = if super::super::compression::CompressionMode::of(record)
+            == super::super::compression::CompressionMode::Hierarchical
+            && !compression.failed
+        {
+            compression.terminal_escape
+        } else {
+            status.token_limit_reached
+        };
+        Ok(if budget_pressure || limit_reached {
             CompactionNeed::Required(AgentCompactionReason::ContextLimit)
         } else {
             CompactionNeed::None {

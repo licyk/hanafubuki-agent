@@ -67,6 +67,8 @@ impl AgentService {
                     provider_capabilities: model.tool_capabilities(),
                     selected_deferred_tools: selected_deferred_tools(&record.conversation.history),
                     memory_contribution_enabled,
+                    compression_tools: super::super::compression::CompressionMode::of(record)
+                        == super::super::compression::CompressionMode::Hierarchical,
                 },
                 turn.cancellation.clone(),
                 model,
@@ -178,13 +180,19 @@ impl AgentService {
                 AgentEventKind::ReasoningUpdated { reasoning },
                 self.inner.limits,
             );
-            let request = step_model_request(
+            let (request, compression) = step_model_request_projected(
                 record,
                 &images,
                 tool_plan,
                 prompt,
                 self.inner.limits.maximum_tool_output_bytes,
             )?;
+            if let Some(state) = compression.state {
+                record.runtime.compression = Some(Arc::new(state));
+            }
+            if compression.failed {
+                exact_turn_mut(record, identity)?.compression_fallback = true;
+            }
             (
                 StagedPersistence::delta(&cell, record, previous),
                 history_event,

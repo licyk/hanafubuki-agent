@@ -172,6 +172,10 @@ struct TurnRecord {
     /// The turn's extensions, frozen at admission. They are never included
     /// in a runtime snapshot or canonical history.
     extensions: hanafubuki_agent_contracts::TurnExtensions,
+    /// The hierarchical compression failed this turn (a panic in the
+    /// algorithm): the turn's requests carry the full history, as under
+    /// `standard`, and the next turn tries again.
+    compression_fallback: bool,
 }
 
 #[derive(Clone)]
@@ -281,6 +285,7 @@ enum TurnAdmission {
 }
 
 mod compaction;
+mod compression;
 mod diagnostics;
 mod durable;
 mod factory;

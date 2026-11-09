@@ -48,6 +48,31 @@ impl AgentService {
         Ok(history_contents(&record.conversation.history))
     }
 
+    /// The session's hierarchical compression state.
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn test_compression_state(
+        &self,
+        session_id: AgentSessionId,
+    ) -> Result<Option<crate::AgentCompressionState>, AgentError> {
+        let cell = self.session(session_id)?;
+        let record = cell.lock_after_persistence_blocking()?;
+        Ok(record.runtime.compression.as_deref().cloned())
+    }
+
+    /// Replaces the session's hierarchical compression state in memory, as
+    /// a corrupt one would be read.
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn test_set_compression_state(
+        &self,
+        session_id: AgentSessionId,
+        state: Option<crate::AgentCompressionState>,
+    ) -> Result<(), AgentError> {
+        let cell = self.session(session_id)?;
+        let mut record = cell.lock_after_persistence_blocking()?;
+        record.runtime.compression = state.map(Arc::new);
+        Ok(())
+    }
+
     #[cfg(any(test, feature = "test-support"))]
     pub fn test_history_backing(
         &self,

@@ -103,10 +103,34 @@ impl AgentService {
         items: &[ConversationItem],
         event_sink: &dyn AgentEventSink,
     ) -> Result<(), AgentError> {
+        self.commit_history_with(
+            identity,
+            |_| (std::borrow::Cow::Borrowed(items), None),
+            event_sink,
+        )
+        .await
+    }
+
+    /// Commits the items `prepare` builds from the record under the commit's
+    /// lock, with the compression state it returns, if any, in the same
+    /// commit.
+    pub(super) async fn commit_history_with<'a>(
+        &self,
+        identity: TurnIdentity,
+        prepare: impl FnOnce(
+            &SessionRecord,
+        ) -> (
+            std::borrow::Cow<'a, [ConversationItem]>,
+            Option<crate::AgentCompressionState>,
+        ),
+        event_sink: &dyn AgentEventSink,
+    ) -> Result<(), AgentError> {
         let cell = self.session(identity.session_id)?;
         let (staged, event) = {
             let mut guard = cell.lock_after_persistence().await?;
             let record = &mut *guard;
+            let (items, compression) = prepare(record);
+            let items = &*items;
             let previous = record.rollback_state();
             let (tool_output_bytes, hook_fragment_bytes, hook_fragment_items) = items
                 .iter()
@@ -157,6 +181,9 @@ impl AgentService {
             exact_turn_mut(record, identity)?.budget_ledger = next_ledger;
             let start_index = record.conversation.history.len();
             append_history(record, items);
+            if let Some(compression) = compression {
+                record.runtime.compression = Some(Arc::new(compression));
+            }
             let event = record_event(
                 record,
                 identity,
@@ -366,6 +393,7 @@ pub(super) fn conversation_commit(
                 .compaction
                 .as_ref()
                 .map(|compaction| compaction.snapshot.clone()),
+            compression: record.runtime.compression.as_deref().cloned(),
             turn: record.runtime.turn.as_ref().map(|turn| PersistedAgentTurn {
                 id: turn.id,
                 generation: turn.generation,

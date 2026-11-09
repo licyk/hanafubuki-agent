@@ -17,12 +17,12 @@ fn every_core_tool_uses_codex_style_non_strict_schema() {
 }
 
 #[test]
-fn plan_mode_keeps_only_the_question_to_the_user() {
+fn plan_mode_keeps_only_the_question_to_the_user_and_the_context_tools() {
     for tool in AgentCoreTool::ALL {
         assert!(tool.allowed_in_mode(AgentSessionMode::Default));
         assert_eq!(
             tool.allowed_in_mode(AgentSessionMode::Plan),
-            tool == AgentCoreTool::RequestUserInput,
+            tool == AgentCoreTool::RequestUserInput || tool.is_compression(),
             "{}",
             tool.name()
         );

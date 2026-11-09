@@ -25,8 +25,8 @@ pub struct AgentSessionConfig {
 }
 
 /// What starts a reduction of a session's context. Every strategy keeps the
-/// standard compaction as its floor; until `hierarchical` is built, a
-/// session set to it compacts as `standard` does.
+/// standard compaction as its floor (`/compact`, `new_context`, the retry
+/// after a provider's context error).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AgentCompactionStrategy {

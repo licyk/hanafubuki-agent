@@ -104,7 +104,31 @@ pub(super) fn step_model_request(
     prompt: &RequestContext,
     maximum_tool_output_bytes: usize,
 ) -> Result<ModelRequest, AgentError> {
-    let request = regular_model_request(
+    step_model_request_projected(record, images, tool_plan, prompt, maximum_tool_output_bytes)
+        .map(|(request, _)| request)
+}
+
+/// What building a request did with the session's compression.
+#[derive(Default)]
+pub(super) struct RequestCompression {
+    /// The state after the projection, which only the step's own request
+    /// persists.
+    pub(super) state: Option<crate::AgentCompressionState>,
+    /// A standard compaction is due (`hierarchical`'s terminal escape).
+    pub(super) terminal_escape: bool,
+    /// The algorithm panicked: the request carries the full history.
+    pub(super) failed: bool,
+}
+
+/// [`step_model_request`], with what its projection left.
+pub(super) fn step_model_request_projected(
+    record: &SessionRecord,
+    images: &LoadedImages,
+    tool_plan: &AgentToolPlan,
+    prompt: &RequestContext,
+    maximum_tool_output_bytes: usize,
+) -> Result<(ModelRequest, RequestCompression), AgentError> {
+    let (request, compression) = regular_model_request(
         record,
         images,
         tool_plan.model_specs(),
@@ -112,13 +136,12 @@ pub(super) fn step_model_request(
         prompt,
         maximum_tool_output_bytes,
     )?;
-    Ok(
-        if record.settings.effective_input_capabilities.image_input {
-            request
-        } else {
-            hanafubuki_agent_model_api::sanitize_images_for_unsupported_input(&request).0
-        },
-    )
+    let request = if record.settings.effective_input_capabilities.image_input {
+        request
+    } else {
+        hanafubuki_agent_model_api::sanitize_images_for_unsupported_input(&request).0
+    };
+    Ok((request, compression))
 }
 
 /// The request for `record`'s next sampling step, its images from `images`
@@ -130,7 +153,7 @@ fn regular_model_request(
     parallel_tool_calls: bool,
     context: &RequestContext,
     maximum_tool_output_bytes: usize,
-) -> Result<ModelRequest, AgentError> {
+) -> Result<(ModelRequest, RequestCompression), AgentError> {
     let latest_inline_context = record.conversation.history.iter().rposition(|item| {
         matches!(
             &item.content,
@@ -147,7 +170,7 @@ fn regular_model_request(
     // A compacted context window carries its own initial context (the mode
     // and the task checklist) until the next turn starts.
     let mut placed = context.fragments();
-    let visible_history = record
+    let visible_items = record
         .conversation
         .history
         .iter()
@@ -158,8 +181,10 @@ fn regular_model_request(
                     ConversationItem::CanonicalInitialContext { .. }
                 )
         })
-        .map(|item| item.content.clone())
+        .cloned()
         .collect::<Vec<_>>();
+    let (visible_history, trailing, compression, hierarchical) =
+        projected_history(record, &visible_items);
     let normalized_history = normalized_tool_pairs_for_model(&visible_history)?;
     let latest_world_state_updates = normalized_history
         .iter()
@@ -210,24 +235,78 @@ fn regular_model_request(
         record.settings.config.context_window_tokens,
         maximum_tool_output_bytes,
     )?;
-    Ok(ModelRequest {
+    input.extend(trailing.map(ModelInputItem::user_text));
+    let mut instructions = match record.settings.config.mode {
+        crate::AgentSessionMode::Default => record.settings.config.instructions.clone(),
+        crate::AgentSessionMode::Plan => {
+            format!(
+                "{}\n\n{}",
+                record.settings.config.instructions, PLAN_MODE_INSTRUCTIONS
+            )
+        }
+    };
+    if hierarchical {
+        instructions.push_str("\n\n");
+        instructions.push_str(super::compression::compression_instructions());
+    }
+    let request = ModelRequest {
         model: record.settings.config.model.clone(),
-        instructions: match record.settings.config.mode {
-            crate::AgentSessionMode::Default => record.settings.config.instructions.clone(),
-            crate::AgentSessionMode::Plan => {
-                format!(
-                    "{}\n\n{}",
-                    record.settings.config.instructions, PLAN_MODE_INSTRUCTIONS
-                )
-            }
-        },
+        instructions,
         input,
         tools,
         tool_choice: hanafubuki_agent_model_api::ModelToolChoice::Auto,
         parallel_tool_calls,
         reasoning: record.settings.config.effective_reasoning(),
         output_format: None,
-    })
+    };
+    Ok((request, compression))
+}
+
+/// The history the request shows (projected while blocks or the strategy
+/// call for it), its trailing nudge or status line, what the projection
+/// left, and whether the request is `hierarchical`'s (its prompt).
+fn projected_history(
+    record: &SessionRecord,
+    items: &[Arc<AgentHistoryItem>],
+) -> (
+    Vec<ConversationItem>,
+    Option<String>,
+    RequestCompression,
+    bool,
+) {
+    use super::compression::{project_request, CompressionMode};
+    let mode = CompressionMode::of(record);
+    let full = || items.iter().map(|item| item.content.clone()).collect();
+    if mode == CompressionMode::Off {
+        return (full(), None, RequestCompression::default(), false);
+    }
+    match project_request(record, items, mode) {
+        Ok(projection) => (
+            projection.history,
+            projection.trailing,
+            RequestCompression {
+                state: Some(projection.state),
+                terminal_escape: projection.terminal_escape,
+                failed: false,
+            },
+            mode == CompressionMode::Hierarchical,
+        ),
+        Err(message) => {
+            log::warn!(
+                "Agent context compression failed; this turn sends the full history: {}",
+                bounded_diagnostic(message)
+            );
+            (
+                full(),
+                None,
+                RequestCompression {
+                    failed: true,
+                    ..RequestCompression::default()
+                },
+                false,
+            )
+        }
+    }
 }
 
 fn hex_digest(digest: &[u8; 32]) -> String {

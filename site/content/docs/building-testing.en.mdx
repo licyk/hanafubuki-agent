@@ -81,7 +81,7 @@ The update rules:
 - A change the model sees changes the request goldens. Regenerate them **only after an intended change**, and review the fixture diff:
 
   ```sh
-  HANAFUBUKI_AGENT_UPDATE_GOLDEN=1 cargo test -p hanafubuki-agent --lib tests::golden
+  HANAFUBUKI_AGENT_UPDATE_GOLDEN=1 cargo test -p hanafubuki-agent --lib golden
   ```
 
 - The history corpora are re-recorded **only after an intended history-format change**; otherwise their point is to prove that older history still opens:

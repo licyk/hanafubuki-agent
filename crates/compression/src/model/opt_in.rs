@@ -134,7 +134,7 @@ pub struct MessageFiltersConfig {
 
 /// One absorbed tool result: its call and result are hidden, and the
 /// model's `absorb` call is the record.
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct AbsorbRecord {
     pub tool_call_id: String,

@@ -28,6 +28,9 @@ pub(crate) enum CoreToolCall {
     NewContext,
     UpdatePlan(UpdateTaskPlanTool),
     RequestUserInput(RequestUserInputTool),
+    /// A compression tool: its arguments are the algorithm's to read, as
+    /// leniently as billion-context reads them.
+    Compression(AgentCoreTool),
 }
 
 impl CoreToolCall {
@@ -35,6 +38,9 @@ impl CoreToolCall {
         tool: AgentCoreTool,
         arguments: &Value,
     ) -> Result<Self, ToolCallValidationError> {
+        if tool.is_compression() {
+            return Ok(Self::Compression(tool));
+        }
         let arguments = object_arguments(arguments)?;
         parse(tool, arguments)
     }
@@ -56,6 +62,11 @@ fn parse(
             validate_user_input_request(&call)?;
             Ok(CoreToolCall::RequestUserInput(call))
         }
+        AgentCoreTool::Compress
+        | AgentCoreTool::Decompress
+        | AgentCoreTool::SearchContext
+        | AgentCoreTool::AcpStatus
+        | AgentCoreTool::AcpCache => Ok(CoreToolCall::Compression(tool)),
     }
 }
 

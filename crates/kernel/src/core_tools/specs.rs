@@ -82,5 +82,24 @@ pub(super) fn model_spec(tool: AgentCoreTool) -> ModelToolSpec {
                     "additionalProperties": false
                 }),
             },
+            AgentCoreTool::Compress
+            | AgentCoreTool::Decompress
+            | AgentCoreTool::SearchContext
+            | AgentCoreTool::AcpStatus
+            | AgentCoreTool::AcpCache => compression_spec(tool),
+    }
+}
+
+/// billion-context's schema for one of its core tools, verbatim.
+fn compression_spec(tool: AgentCoreTool) -> ModelToolSpec {
+    let schema = hanafubuki_agent_compression::acp_tools()
+        .into_iter()
+        .find(|schema| schema.name == tool.name())
+        .expect("every compression core tool has a schema");
+    ModelToolSpec {
+        strict: false,
+        name: schema.name.to_owned(),
+        description: schema.description.to_owned(),
+        input_schema: schema.parameters,
     }
 }

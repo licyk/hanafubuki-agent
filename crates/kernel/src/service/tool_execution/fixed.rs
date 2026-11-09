@@ -87,6 +87,9 @@ impl AgentService {
             CoreToolCall::UpdatePlan(plan) => {
                 self.update_task_plan(identity, plan, event_sink).await
             }
+            CoreToolCall::Compression(tool) => {
+                self.execute_compression_tool(identity, call, tool).await
+            }
             CoreToolCall::RequestUserInput(request) => {
                 self.request_user_input(
                     identity,
@@ -98,5 +101,29 @@ impl AgentService {
                 .await
             }
         }
+    }
+
+    /// Runs a compression tool on the session as it stands. A tool that
+    /// changes the state only reports here: it is applied when its output is
+    /// committed ([`Self::finish_tool_call`]), against the state of that
+    /// moment, so the state and its receipt land in one commit and two calls
+    /// of one step apply in order.
+    async fn execute_compression_tool(
+        &self,
+        identity: TurnIdentity,
+        call: &ModelToolCall,
+        tool: crate::AgentCoreTool,
+    ) -> Result<AgentToolOutput, AgentError> {
+        let cell = self.session(identity.session_id)?;
+        let guard = cell.lock_after_persistence().await?;
+        exact_turn_identity(&guard, identity)?;
+        let run = super::super::compression::compression_tool_output(
+            &guard,
+            tool,
+            &call.call_id,
+            &call.arguments,
+            now_millis_u64(),
+        );
+        Ok(AgentToolOutput::typed(run.output))
     }
 }

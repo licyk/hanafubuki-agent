@@ -101,6 +101,9 @@ pub(in crate::service) struct SessionRuntime {
     /// go on while it runs.
     pub(in crate::service) background_compaction:
         crate::service::compaction::BackgroundCompactionSlot,
+    /// The hierarchical compression state, persisted with every runtime
+    /// checkpoint. Shared by `Arc`, so a rollback state never copies it.
+    pub(in crate::service) compression: Option<Arc<crate::AgentCompressionState>>,
 }
 
 /// Bounded rollback state for one staged durable mutation: every group but
@@ -173,6 +176,7 @@ impl SessionRuntime {
             permission_mode: None,
             sandbox_mode: None,
             background_compaction: Default::default(),
+            compression: None,
         }
     }
 }

@@ -6,6 +6,7 @@ impl AgentService {
         identity: TurnIdentity,
         call: &ModelToolCall,
         output: AgentToolOutput,
+        compression: Option<crate::AgentCoreTool>,
         event_sink: &dyn AgentEventSink,
     ) -> Result<(), AgentError> {
         let (output, truncation) = crate::tool_output::canonicalize_agent_tool_output(
@@ -48,8 +49,37 @@ impl AgentService {
                 });
             }
         }
-        self.commit_history(identity, &committed_items, event_sink)
-            .await?;
+        match compression {
+            None => {
+                self.commit_history(identity, &committed_items, event_sink)
+                    .await?
+            }
+            // Applied again under the commit's lock: the output committed is
+            // the one of the state it commits.
+            Some(tool) => {
+                let now = now_millis_u64();
+                self.commit_history_with(
+                    identity,
+                    |record| {
+                        let run = super::super::compression::compression_tool_output(
+                            record,
+                            tool,
+                            &call.call_id,
+                            &call.arguments,
+                            now,
+                        );
+                        let mut items = committed_items;
+                        if let Some(ConversationItem::ToolOutput { output, .. }) = items.first_mut()
+                        {
+                            *output = run.output;
+                        }
+                        (std::borrow::Cow::Owned(items), run.state)
+                    },
+                    event_sink,
+                )
+                .await?
+            }
+        }
         self.emit(
             identity,
             AgentEventKind::ToolCompleted {

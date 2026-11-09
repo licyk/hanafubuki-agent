@@ -289,6 +289,7 @@ fn stage_compacted_history(
     staged.runtime.context_window = plan.target_window;
     staged.runtime.context_window.prefill_input_tokens = Some(installed_tokens);
     staged.runtime.context_window.new_context_requested = false;
+    super::super::compression::after_standard_compaction(staged);
     let mut window_chain = plan.target_window_chain.clone();
     if let Some(last) = window_chain.last_mut() {
         last.prefill_input_tokens = Some(installed_tokens);

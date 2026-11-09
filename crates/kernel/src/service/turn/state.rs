@@ -231,6 +231,7 @@ impl AgentService {
             consecutive_auto_review_denials: 0,
             sampling_retry_policy: record.settings.config.sampling_retry_policy,
             extensions,
+            compression_fallback: false,
         });
         let history_start = record.conversation.history.len();
         append_history(record, &turn_items);

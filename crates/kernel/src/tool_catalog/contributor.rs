@@ -12,6 +12,9 @@ pub struct AgentToolCatalogContext {
     pub provider_capabilities: hanafubuki_agent_tool_contracts::ToolProviderCapabilities,
     pub selected_deferred_tools: BTreeSet<AgentToolSelection>,
     pub memory_contribution_enabled: bool,
+    /// The session's strategy is `hierarchical`: the step plans its
+    /// compression tools.
+    pub compression_tools: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]

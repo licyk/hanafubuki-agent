@@ -23,7 +23,7 @@ Agent 是一个**内核**（`hanafubuki-agent-kernel`），拥有会话、轮次
 | 中性机制   | `foundation`、`tool-contracts`、`process`、`runtime`、`host`                                                                                 | 路径、取消、阻塞边界、panic 隔离；工具规格类型；进程所有权；被隔离的 Tokio 运行时；通用模块宿主（注册表、租约、故障、重启策略） |
 | 领域       | `approval`、`skills`、`web-search`、`model-api`、`workspace-fs`、`execution`、`mcp`、`memory`、`worktree`、`hooks`、`sandbox`、`compression` | 各自独立、可单独测试的能力                                                                                                      |
 | 插件 API   | `contracts`                                                                                                                                  | 注册表与扩展点契约；重新导出 `host` 的注册与故障机制，插件只依赖它                                                              |
-| 内核与历史 | `kernel`、`history`                                                                                                                          | 会话、轮次循环、工具规划与流水线、请求组装、世界状态、压缩、审批流程、恢复；JSONL 历史与 SQLite 索引                            |
+| 内核与历史 | `kernel`、`history`                                                                                                                          | 会话、轮次循环、工具规划与流水线、请求组装、世界状态、压缩与分层压缩、审批流程、恢复；JSONL 历史与 SQLite 索引                  |
 | 插件       | `plugin-web`、`plugin-workspace-fs`、`plugin-execution`、`plugin-mcp`、`plugin-worktree`、`plugin-hooks`                                     | 每个把一个领域 crate 绑定到扩展点，或作为服务提供给门面的调用                                                                   |
 | 配置       | `config`                                                                                                                                     | Agent 自己的配置（`AgentConfig`）：三个 TOML 文件，独立模式下分层                                                               |
 | 门面       | `hanafubuki-agent`（`crates/agent`）                                                                                                         | 组合：插件宿主与清单、Agent 自己的插件、槽位、服务 API、宿主接口、独立运行时、数据目录锁、日志                                  |
@@ -95,7 +95,7 @@ Agent 是一个**内核**（`hanafubuki-agent-kernel`），拥有会话、轮次
 
 ### 每个步骤的计划 [#a-plan-per-step]
 
-每个采样步骤构建一个不可变的 `AgentToolPlan`：内核的核心工具（`new_context`、`update_plan`、`request_user_input`），注册的工具（每个处理器对这一步的 `availability`），每个工具源为这一步提供的工具，以及有工具被延迟时的 `tool_search`。计划同时冻结该步骤的审批规则快照和工具源的计划租约；调用针对宣告它的那个计划运行，租约让工具规划时依赖的东西（例如一个 MCP 连接）存活到步骤结束。计划模式只保留 `ReadOnly` 工具和 `request_user_input`。
+每个采样步骤构建一个不可变的 `AgentToolPlan`：内核的核心工具（`new_context`、`update_plan`、`request_user_input`，会话的压缩策略为 `hierarchical` 时还有五个压缩工具），注册的工具（每个处理器对这一步的 `availability`），每个工具源为这一步提供的工具，以及有工具被延迟时的 `tool_search`。计划同时冻结该步骤的审批规则快照和工具源的计划租约；调用针对宣告它的那个计划运行，租约让工具规划时依赖的东西（例如一个 MCP 连接）存活到步骤结束。计划模式只保留 `ReadOnly` 工具、`request_user_input` 和压缩工具。
 
 ### 线路上的名字 [#names-on-the-wire]
 
@@ -175,11 +175,15 @@ schema 遵循同样的按协议规则：支持 `strict_json_schema` 的协议（
 
 压缩用本地摘要或 Responses 的压缩替换历史，由会话的压缩能力选择。它在会话记录的克隆上暂存，并作为 `Compacted { checkpoint }` 边界安装，所以失败只丢弃克隆，历史不变。它保留用户消息（最新的优先，在预算内）和摘要，从不摘要上下文段：下一个请求从注册表重新渲染每个段，所以轮次中途被压缩的窗口仍带有 Skill 目录和记忆。触发条件：轮次前和轮次中达到阈值（默认窗口的 80%）、手动、Provider 报告上下文窗口错误之后。最后一种有上限：每步一次压缩加重试，成功响应之前第二次出错则轮次失败（`context_window_exceeded`）。
 
-会话还有压缩策略（`AgentSessionConfig.compaction_strategy`）：`standard` 即上面的压缩；`background` 在会话工作时对快照运行它，稍后安装结果；`hierarchical` 将让模型把历史折叠成摘要，在请求时投影。`hierarchical` 正在构建，在此之前设为它的会话按 `standard` 压缩。每种策略都以这种压缩为底线（手动、模型的 `new_context`、上下文错误后的重试）。facade 在每次模型操作前从 `[compaction]` 读取策略，并在会话空闲时应用（`set_session_compaction_strategy`）；临时会话（`/side`）总是 `standard`；`background.childSessions` 关闭时，子会话（子代理的、评审的）以 `standard` 代替 `background`。同一次激活还把修改后的 `remoteCompaction` 写入会话的压缩能力，压缩会用它核对传输。
+会话还有压缩策略（`AgentSessionConfig.compaction_strategy`）：`standard` 即上面的压缩；`background` 在会话工作时对快照运行它，稍后安装结果；`hierarchical` 由模型自己把历史折叠成摘要，在请求时投影（源自 [billion-context](https://github.com/ranxianglei/billion-context)）。每种策略都以这种压缩为底线（手动、模型的 `new_context`、上下文错误后的重试）。facade 在每次模型操作前从 `[compaction]` 读取策略，并在会话空闲时应用（`set_session_compaction_strategy`）；临时会话（`/side`）总是 `standard`；`background.childSessions` 关闭时，子会话（子代理的、评审的）以 `standard` 代替 `background`。同一次激活还把修改后的 `remoteCompaction` 写入会话的压缩能力，压缩会用它核对传输。
 
 **后台压缩**（`background`，来自 Codex 的 `async_compaction`）运行会话自己的实现，三种中的任一种，适用任何 Provider。轮次在第一个请求之前和每个请求之后启动它，条件是：上下文达到或超过窗口的 `[compaction.background] thresholdPercent`（facade 把它放进轮次扩展）且低于前台阈值，之前已有完成的轮次，轮次没有被取消、没有预算压力，并且自动压缩开着。它只压缩已完成的轮次，即当前轮次 `TurnStart` 之前的历史，所以它之后的部分总是从一个轮次开始，安装后的历史保持完整的轮次结构。它运行在会话拥有的任务上，而不是作为会话的操作：轮次、steering、`/model` 和其他所有更改照常进行，中断轮次只停止这个轮次的启动。它的槽位不持久化，所以重启丢弃它，不留下恢复义务。
 
 结果在下一个检查点安装：步骤的自动压缩检查之前，或 `/compact` 之前。需要压缩时（阈值、Provider 的上下文错误、`/compact`），如果有一个仍在运行，就等待它而不发送自己的请求，直到轮次被中断；结果失败、不适用或过期时在线压缩，安装后的结果仍让下一个请求超过阈值时再在线压缩一次。模型请求的新上下文总是在线压缩。安装是变基（`InstallMode::Rebase`）：窗口必须仍是它压缩的那个，历史必须仍以它读取的历史开头，之后添加的历史保留在替换之后。它的用量属于会话，在它结束时记录，无论是否安装，任何轮次的预算都不计入它。关闭、归档和删除会取消它并等待它的任务；策略或压缩能力的更改会取消它。
+
+**分层压缩**（`hierarchical`）是 billion-context 的算法，移植为纯 crate `compression`，由内核驱动（`service/compression/`）。它从不改写历史：每个请求都从窗口历史的投影构建，投影中模型折叠的块代替它们覆盖的消息。用户、助手和工具输出的文本带有引用标签（`<acp tokens="…" type="…">m00001</acp>`），模型用它们指明要折叠的范围；工具调用的参数从不带标签。仍然有效的 `compress` 调用留在请求中，作为它的摘要的载体；载体已不在的块，在它的位置显示为 `[Compressed conversation section]` 摘要。压缩过的前缀和压缩摘要从不折叠。策略为 `hierarchical` 时，请求还带有：指令之后的算法静态提示，作为最后一条用户输入的提醒或状态行（从不持久化），以及五个内核核心工具：改变状态的 `compress` 和 `decompress`，只读取状态的 `search_context`、`acp_status` 和 `acp_cache`。状态（引用、块、提醒的基线）随每个运行时检查点持久化（`PersistedAgentRuntimeState.compression`）；`compress` 或 `decompress` 在写入其输出的那次提交的锁下再应用一次，所以折叠和它的回执落在同一次提交中。
+
+窗口由模型负责，所以阈值压缩（轮次前和轮次中）关闭。标准压缩仍是底线：Provider 的上下文窗口错误、`/compact`、`new_context`，以及最终出口（上下文连续三个请求超过紧急阈值，且已没有可折叠或可截短的内容）各运行一次。它压缩的是投影后的视图，摘要作为文本；安装后，被覆盖的条目已离开窗口，块随之失效。切换到 `hierarchical` 时从空状态开始，在当前窗口上生成引用。切换离开时，有效的块继续投影，标签和载体都保留，所以请求只在指令和工具上变化；不再有提示、提醒或工具产生新块，下一次标准压缩结束它们。对该 crate 的每次调用都在 `catch_panic` 下运行：投影中的 panic 让这个请求带完整历史发送，轮次剩下的部分按 `standard` 运行（下一轮次再尝试）；`compress` 或 `decompress` 中的 panic 是这次调用的错误。
 
 ## 思考 [#thinking]
 
@@ -245,6 +249,7 @@ schema 遵循同样的按协议规则：支持 `strict_json_schema` 的协议（
 - **渲染器是数据**，**注册拒绝、规划改名**（见上文）。
 - **轮次限制对模型不可见。** 历史中没有失败轮次原因的条目；用户读轮次的错误消息，没有什么需要模型看到它。
 - **沙箱改写 argv；进程 crate 不知道它。** `sandbox` 把一个命令变成辅助进程的命令行：辅助进程就是 Agent 自己的程序文件，由第一个参数选中（`--hanafubuki-agent-sandbox`，和 Codex 选择它的其他辅助进程一样），它先限制自身，再原地执行那个命令。`ExecutorManager` 像对待其他进程一样启动、拥有和回收这个进程，管道和 PTY 模式都一样，所以 `process`（Hanafubuki 那份的孪生）没有改动；Codex 按 argv[0] 选择的方式需要它能设置 `arg0`。它所在的位置：回合冻结会话的沙箱设置（`SandboxSettings`，门面准备回合时加入的扩展），`plugin-execution` 把它和命令一起交给 `execution`，`execution` 在自己的工作区根目录上解析它，并在启动前包装已获批准的命令。在 Linux 上，辅助进程使用 Codex 的 Landlock 流程，而不是它默认的 bubblewrap：不需要许多发行版都会限制的用户命名空间，不需要从 C 构建的随附 `bwrap`，而 Codex 放弃 Landlock 的理由（它的 app-server 的 Unix 套接字、拒绝访问的例外路径）在这里都不适用。在 macOS 上没有辅助进程：命令行是 `/usr/bin/sandbox-exec` 加上 Codex 的 Seatbelt 策略，可写根目录和只读的例外路径（`.git`，Landlock 做不到）作为参数（`-D`）传入，而不是拼进策略的文本。机器无法执行的模式会让命令失败，绝不会不受限地运行它（[权限](/docs/permissions#sandbox-unavailable)）。
+- **`hierarchical` 是内置策略，不是插件。** 做成插件需要一个内核每次请求都调用的新注册表，于是每个请求都依赖插件可以替换的代码（[组合规则 1](/docs/plugin-rules#composition-rules)），而且契约无法引用模型 API 的类型。所以算法是一个纯 crate（没有 I/O、没有异步，生产代码不 panic，与插件一样受检查），内核在 `catch_panic` 下调用它：那里的失败只损失一个请求的投影或一次工具调用，不会损失会话，这正是插件的隔离本来能给的。
 - **没有做的：** 代码模式（用 JS 调用所有工具）、跨会话的 MCP 连接池、无论目录大小都延迟所有 MCP 工具、MCP 的 prompts/subscriptions/sampling/roots、Skill 注册的工具或 `allowed-tools` 的执行、从 Agent 写设置的 Skill 安装流程，以及进程外的 Agent。
 
 与 Codex（`codex-rs`）相比，Agent 的机制都对照过它：

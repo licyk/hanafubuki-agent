@@ -1,6 +1,6 @@
 ---
 title: Internals
-description: The as-built details the architecture page leaves out — durable commits and drop guards, execution progress, request images, session waits, the history store's refusals, MCP settings repairs and diagnostics, Skill file issues, tolerant provider decoding, the crash-loop marker, and the rest of the Agent's internal mechanics.
+description: The as-built details the architecture page leaves out — durable commits and drop guards, execution progress, request images, session waits, the history store's refusals, MCP settings repairs and diagnostics, Skill file issues, tolerant provider decoding, the crash-loop marker, hierarchical compression, and the rest of the Agent's internal mechanics.
 icon: Microscope
 ---
 
@@ -216,6 +216,50 @@ Empty responses, authentication and HTTP errors stay errors. The model listing i
 ```
 
 - At `CRASH_LOOP_STARTS` (3) counted starts, `AgentStartMarker::disabled_reason` leaves the slot `Disabled` with `crashLoop` and logs a notice. The user's restart, or turning the Agent off and on, resets the marker; a mount alone leaves a crash-loop stop as it is. A marker that cannot be read counts no starts: it never keeps the Agent off. A standalone first start runs whatever the count ([The same composition, standalone](/docs/embedding#the-same-composition-standalone)).
+
+## Hierarchical compression [#hierarchical-compression]
+
+The `hierarchical` strategy ([Compaction](/docs/architecture#compaction)) is the kernel's `service/compression/` (the projection in `mod.rs`, `adapter.rs`, `tools.rs`, `receipts.rs`) over the pure `hanafubuki-agent-compression` crate.
+
+**The state.** `PersistedAgentRuntimeState.compression` holds the crate's `State`, re-exported as `AgentCompressionState`: the refs minted over the window, the blocks (deactivated, never deleted), the token snapshots and the nudge's baselines. It is written with every runtime checkpoint. A record written before it existed has none; one that cannot be decoded is dropped with a warning (`tolerant_compression_state`), and the session goes on without its blocks. Rebuilding it from the `compress` calls in history is not built yet. The history format and its version are unchanged. Switching to `hierarchical` installs an empty state when there is none; a fork at the head takes its source's state, any other fork starts without one.
+
+**Which requests.** `CompressionMode::of` decides per request: `Hierarchical` while the strategy is `hierarchical`; `Carry` when a session that switched away still has active blocks, which keeps the projection without the prompt, the nudge or the tools; `Off` otherwise, and whenever the turn has fallen back (`compression_fallback`).
+
+**The adapter.** `MessageLog` maps the window's history items to the crate's messages:
+
+| History item                                                                                                                                        | Message                                                                      |
+| --------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `UserMessage`, `SteeringMessage`                                                                                                                    | a user text, its images as attachment handles                                |
+| `AssistantMessage`                                                                                                                                  | an assistant text (its `model_text` when it has one)                         |
+| `ToolCall`                                                                                                                                          | a tool call: the call id, the name, the arguments as JSON text               |
+| `ToolOutput`                                                                                                                                        | a tool result under its call's name: its text parts, structured ones as JSON |
+| `CompactionSummary`, `ProviderCompaction`                                                                                                           | a protected user text                                                        |
+| `TurnStart`, `WorldStateUpdate`, `SkillContext`, `ContinuationContext`, `PermissionReview`, `ToolSelection`, `CanonicalInitialContext`, `Reasoning` | none: the item keeps its place in the request around the projected ones      |
+
+Every message before the window's first `TurnStart`, a compacted prefix, is protected too: it never folds. A message's id is `<source session id>:<item id>`, unique within the session's lineage. The refs the model reads (`m00001`, …) are not those ids, since item ids are not in history order after a compaction: the crate mints them in history order and never reuses one.
+
+**The projection.** `regular_model_request` builds its input from `projected_history`, which runs the crate's `process_turn` over the log, the state, the configuration and the context's size (the provider-reported `context_consumed_tokens` of the last response, else an estimate of the window's history). `apply_view` turns the crate's view back into items:
+
+- a covered item is left out;
+- a message whose text the view changed gets the new text: the `<acp tokens="…" type="…">mNNNNN</acp>` tag before a user, assistant or tool-output text (an assistant message's `model_text`; a tool output's text parts become one text, its images and resources kept), or a live `compress` call's arguments compacted to the ranges still live. Tool-call arguments are never tagged;
+- each summary the view rendered (`[Compressed conversation section] — topic`, for a block with no visible carrier) is inserted at its anchor as a `CompactionSummary` item, which the model API frames as user text.
+
+The stored items never change. `project_model_tool_outputs` then caps the historical tool outputs, as for any request. Under `Hierarchical` the request also gets `build_compress_system_prompt`'s text appended to the instructions, after Plan mode's suffix (built once, the same bytes for every request), and the nudge (its Anthropic wording on Anthropic Messages), or else the status line, as its last input: a user text, never persisted.
+
+**Which request keeps the state.** Building a request advances the state in memory: refs minted for new messages, token snapshots, the nudge's baselines. Only the step's own request, built in `begin_sampling`, keeps it: it is stored on the record and the step's commit persists it. The automatic compaction's estimate and the check after an install build the same request (`step_model_request_projected`) and discard the state, so counting a request never changes it.
+
+**The tools.** `compress`, `decompress`, `search_context`, `acp_status` and `acp_cache` are `AgentCoreTool`s, planned while the mode is `Hierarchical` (`compression_tools` in the catalog context), in Plan mode too; their names are in `RESERVED_TOOL_NAMES`. Each runs on the session's record under its lock (`execute_compression_tool`), so its hooks get a result. `compress` and `decompress` are then applied again under the lock of the commit that writes their output (`commit_history_with`), against the state of that moment: the output committed is the one of the state committed, and two calls in one step apply in call order. A refused call leaves the state as it was.
+
+- **`compress`** answers with billion-context's receipts: `[Compressed …]` with the summaries' fingerprints, `[Compression FAILED`, `[Compression no-op`.
+- **`decompress`** returns a block's content inline as its output and marks the block restored inline (only the first restore changes the state); a later `compress` over its span refolds it in place under the same id. Restoring to a file (`toFile`), a range or images is not built.
+- **`search_context`** searches the block summaries, active and folded away, by literal occurrences of the query's terms, as billion-context's host does; the folded originals are not searched yet.
+- **`acp_status`** is the crate's status report. **`acp_cache`** reports from what the Agent records: the last response's usage (the model API reports no cached tokens, so none count as cached) and the folds.
+
+**Compaction under it.** Under `Hierarchical` the automatic check (`maybe_auto_compact`) ignores the threshold: it compacts on the turn's budget pressure, as before, or when the projection reports the terminal escape (the crate's count of requests over the emergency threshold with nothing left to fold or clip reaching three), and only with `autoCompactionEnabled`. A standard compaction's source is the projection over the active blocks (`project_compaction_source`: covered items out, summaries as text, no tags). When it installs, `after_standard_compaction` restarts the terminal count under `hierarchical`, and the blocks, whose items have left the window, deactivate at the next projection; a session that switched away drops its state.
+
+**Panics.** Every call into the crate runs under `catch_panic`. A panic in a request's projection sends that request with the full history and sets the turn's `compression_fallback`: the turn's later steps run as `standard` (no prompt, tools or nudge, the threshold back), a warning is logged, and the next turn tries again. A panic while projecting a compaction's source makes the compaction read the full history. A panic in a tool is that call's error, `[Compression FAILED: … (internal error)]`, and leaves the state as it was.
+
+**Settings.** The facade reads `[compaction.hierarchical]` per turn into the turn's extensions as `AgentHierarchicalCompression`, and the kernel maps it onto the crate's `Config` with the session's context window as the model's limit: `maxContextLimitPercent` sets the pressure band, `emergencyThresholdPercent` the emergency nudge and the truncation threshold (never below the band), `nudgeGrowthTokens` the growth step, and the others map by name. A turn without it takes the defaults; with no known context window nothing presses. `messageTimestamps` and the optional features are not mapped yet.
 
 ## Other details [#other-details]
 

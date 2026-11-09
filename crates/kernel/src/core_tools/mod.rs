@@ -1,6 +1,7 @@
 //! The kernel's own tools. They act on the turn itself (its context window,
-//! its task checklist, a question to the user), so they are a fixed set the
-//! kernel runs directly rather than registered handlers.
+//! its task checklist, a question to the user) or on the session's
+//! hierarchical compression, so they are a fixed set the kernel runs directly
+//! rather than registered handlers.
 
 mod arguments;
 mod specs;
@@ -21,17 +22,70 @@ pub enum AgentCoreTool {
     NewContext,
     UpdatePlan,
     RequestUserInput,
+    /// billion-context's core tools, planned while the session's strategy is
+    /// `hierarchical`.
+    Compress,
+    Decompress,
+    SearchContext,
+    AcpStatus,
+    AcpCache,
 }
 
 impl AgentCoreTool {
-    pub const ALL: [Self; 3] = [Self::NewContext, Self::UpdatePlan, Self::RequestUserInput];
+    pub const ALL: [Self; 8] = [
+        Self::NewContext,
+        Self::UpdatePlan,
+        Self::RequestUserInput,
+        Self::Compress,
+        Self::Decompress,
+        Self::SearchContext,
+        Self::AcpStatus,
+        Self::AcpCache,
+    ];
+
+    /// The tools every session plans.
+    pub const STANDARD: [Self; 3] = [Self::NewContext, Self::UpdatePlan, Self::RequestUserInput];
+
+    /// The tools a session with the `hierarchical` strategy plans too, in
+    /// billion-context's order.
+    pub const COMPRESSION: [Self; 5] = [
+        Self::Compress,
+        Self::Decompress,
+        Self::SearchContext,
+        Self::AcpStatus,
+        Self::AcpCache,
+    ];
 
     pub const fn name(self) -> &'static str {
         match self {
             Self::NewContext => "new_context",
             Self::UpdatePlan => "update_plan",
             Self::RequestUserInput => "request_user_input",
+            Self::Compress => hanafubuki_agent_compression::COMPRESS_TOOL_NAME,
+            Self::Decompress => hanafubuki_agent_compression::DECOMPRESS_TOOL_NAME,
+            Self::SearchContext => hanafubuki_agent_compression::SEARCH_CONTEXT_TOOL_NAME,
+            Self::AcpStatus => hanafubuki_agent_compression::ACP_STATUS_TOOL_NAME,
+            Self::AcpCache => hanafubuki_agent_compression::ACP_CACHE_TOOL_NAME,
         }
+    }
+
+    /// One of the hierarchical compression's tools.
+    pub const fn is_compression(self) -> bool {
+        matches!(
+            self,
+            Self::Compress
+                | Self::Decompress
+                | Self::SearchContext
+                | Self::AcpStatus
+                | Self::AcpCache
+        )
+    }
+
+    /// A compression tool that changes the session's compression state: it
+    /// is applied again when its output is committed, so the state and the
+    /// output it explains land in one commit.
+    pub const fn changes_compression_state(self) -> bool {
+        matches!(self, Self::Compress | Self::Decompress)
     }
 
     pub fn model_spec(self) -> ModelToolSpec {
@@ -44,17 +98,25 @@ impl AgentCoreTool {
     }
 
     /// Plan mode keeps the question to the user: a plan is not a task
-    /// checklist, and a fresh context would drop the plan being written.
+    /// checklist, and a fresh context would drop the plan being written. The
+    /// compression tools manage the context in either mode.
     pub const fn allowed_in_mode(self, mode: AgentSessionMode) -> bool {
         match mode {
             AgentSessionMode::Default => true,
-            AgentSessionMode::Plan => matches!(self, Self::RequestUserInput),
+            AgentSessionMode::Plan => {
+                matches!(self, Self::RequestUserInput) || self.is_compression()
+            }
         }
     }
 
     pub(crate) const fn activity_action(self) -> AgentActivityAction {
         match self {
-            Self::NewContext => AgentActivityAction::USE_TOOL,
+            Self::NewContext
+            | Self::Compress
+            | Self::Decompress
+            | Self::SearchContext
+            | Self::AcpStatus
+            | Self::AcpCache => AgentActivityAction::USE_TOOL,
             Self::UpdatePlan => AgentActivityAction::UPDATE_PLAN,
             Self::RequestUserInput => AgentActivityAction::REQUEST_USER_INPUT,
         }
