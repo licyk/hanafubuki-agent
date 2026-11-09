@@ -57,3 +57,16 @@ fn a_second_process_is_refused_a_held_data_directory_until_it_is_released() {
     assert!(taken.contains("CHILD-LOCKED"), "{taken}");
     DataDirLock::acquire(&data_dir).unwrap();
 }
+
+#[test]
+fn a_dropped_lock_is_released_while_a_copy_of_its_file_is_still_open() {
+    let directory = tempfile::tempdir().unwrap();
+    let lock = DataDirLock::acquire(directory.path()).unwrap();
+    // The copy a process forked to spawn a child holds until it execs: a
+    // duplicate of the same open file.
+    let inherited = lock.file.try_clone().unwrap();
+
+    drop(lock);
+    DataDirLock::acquire(directory.path()).unwrap();
+    drop(inherited);
+}

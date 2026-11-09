@@ -7,6 +7,11 @@
 //! processes. The lock is advisory (`flock` on Unix, `LockFileEx` on
 //! Windows) and the operating system drops it when the process ends, so a
 //! crash leaves nothing to clean up.
+//!
+//! Dropping the lock unlocks the file before closing it: closing alone does
+//! not release the lock while another descriptor of the same open file is
+//! alive, and a process forked to spawn a child (by the Agent, its host or a
+//! test beside it) holds a copy of every descriptor until it execs.
 
 use std::fs::{self, File, OpenOptions, TryLockError};
 use std::path::{Path, PathBuf};
@@ -17,7 +22,7 @@ pub const DATA_DIR_LOCK_FILE: &str = ".lock";
 /// The data directory's lock, held until it is dropped.
 #[derive(Debug)]
 pub struct DataDirLock {
-    _file: File,
+    file: File,
     directory: PathBuf,
 }
 
@@ -37,7 +42,7 @@ impl DataDirLock {
             .map_err(|error| format!("open {}: {error}", path.display()))?;
         match file.try_lock() {
             Ok(()) => Ok(Self {
-                _file: file,
+                file,
                 directory: directory.to_path_buf(),
             }),
             Err(TryLockError::WouldBlock) => Err(format!(
@@ -52,6 +57,17 @@ impl DataDirLock {
 
     pub fn directory(&self) -> &Path {
         &self.directory
+    }
+}
+
+impl Drop for DataDirLock {
+    fn drop(&mut self) {
+        if let Err(error) = self.file.unlock() {
+            log::warn!(
+                "the Agent data directory {} was not unlocked: {error}",
+                self.directory.display()
+            );
+        }
     }
 }
 
