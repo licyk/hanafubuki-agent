@@ -22,6 +22,7 @@ async fn request_retry_exhaustion_reason_survives_durable_runtime_reload() {
             auto_compact_threshold_percent: 80,
             compaction_capability: ModelCompactionCapability::LocalSummary,
             sampling_retry_policy: hanafubuki_agent_kernel::AgentSamplingRetryPolicy::default(),
+            compaction_strategy: Default::default(),
         })
         .unwrap();
 

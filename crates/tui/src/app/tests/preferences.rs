@@ -216,7 +216,7 @@ fn a_message_preset_is_sent_and_one_starts_from_the_current_settings() {
 }
 
 #[test]
-fn config_toggles_write_the_preferences_and_its_entries_open_the_editors() {
+fn config_toggles_and_choices_write_the_settings_and_its_entries_open_the_editors() {
     let mut harness = Harness::start(Vec::new());
     harness.open("/config", "Settings");
     // Raw output, at once and saved.
@@ -239,8 +239,17 @@ fn config_toggles_write_the_preferences_and_its_entries_open_the_editors() {
     assert!(harness
         .config_file()
         .contains("fullscreenTranscript = false"));
+    // The compaction strategy, a choice saved into the Agent's settings.
+    for _ in 0..2 {
+        harness.key(KeyCode::Down);
+    }
+    harness.key(KeyCode::Right);
+    harness.pump_until_screen_shows("Saved the compaction strategy: background");
+    assert!(harness.config_file().contains("strategy = \"background\""));
+    harness.key(KeyCode::Left);
+    harness.pump_until_screen_shows("Saved the compaction strategy: standard");
     // Theme ›, the fourth entry.
-    for _ in 0..5 {
+    for _ in 0..4 {
         harness.key(KeyCode::Down);
     }
     harness.key(KeyCode::Enter);

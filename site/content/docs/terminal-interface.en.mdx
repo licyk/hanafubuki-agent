@@ -121,7 +121,7 @@ A message that starts with `/` is a command. Typing `/` opens a popup of them, n
 | `/statusline`             | Sets the [status line](#status-line)'s items and colors; `/statusline ITEMS [--colors\|--no-colors]` for this run only                                                                                                     | Yes           |
 | `/title`                  | Sets the [terminal title](#status-line)'s items; `/title ITEMS` or `/title --clear` for this run only                                                                                                                      | Yes           |
 | `/tui`                    | Picks Scrollback or Fullscreen for the next launch (below)                                                                                                                                                                 | Yes           |
-| `/config`                 | The interface's settings in one panel, and the other editors ([below](#config))                                                                                                                                            | Yes           |
+| `/config`                 | The interface's settings and the compaction strategy in one panel, and the other editors ([below](#config))                                                                                                                | Yes           |
 | `/keymap [debug]`         | Changes the keys of an action; `/keymap debug` lists every action's keys ([below](#keymap))                                                                                                                                | Yes           |
 | `/presets`                | Runs, writes, edits and deletes the inputs kept in slots 0 to 9 ([below](#presets))                                                                                                                                        | Yes           |
 | `/memories`               | Uses, generates or resets the [memories](/docs/memory#status-reset), and whether this session contributes                                                                                                                  | Yes           |
@@ -558,14 +558,15 @@ A preset is an input kept in a slot from 0 to 9 (`tui.presets."N"`), with an opt
 
 ## Settings [#config]
 
-`/config` gathers the `[tui]` settings: Space or Enter turns one on or off (Left and Right for a choice), and each change is applied and saved at once.
+`/config` gathers the `[tui]` settings and the compaction strategy: Space or Enter turns one on or off (Left and Right for a choice), and each change is applied and saved at once.
 
-| Row                | Key                        | Applies            |
-| ------------------ | -------------------------- | ------------------ |
-| Raw output         | `tui.rawOutput`            | At once, as `/raw` |
-| Status line colors | `tui.statusLineColors`     | At once            |
-| Fullscreen         | `tui.fullscreenTranscript` | At the next launch |
-| Alternate screen   | `tui.alternateScreen`      | At the next launch |
+| Row                | Key                        | Applies                                                                          |
+| ------------------ | -------------------------- | -------------------------------------------------------------------------------- |
+| Raw output         | `tui.rawOutput`            | At once, as `/raw`                                                               |
+| Status line colors | `tui.statusLineColors`     | At once                                                                          |
+| Fullscreen         | `tui.fullscreenTranscript` | At the next launch                                                               |
+| Alternate screen   | `tui.alternateScreen`      | At the next launch                                                               |
+| Compaction         | `compaction.strategy`      | At each session's next turn; see [Compaction](/docs/config-reference#compaction) |
 
 Its other rows open the editors: Providers (`/providers`), MCP servers (`/mcp`), Memories (`/memories`), Theme (`/theme`), Status line (`/statusline`), Terminal title (`/title`), Keyboard (`/keymap`), Presets (`/presets`) and Interface mode (`/tui`).
 

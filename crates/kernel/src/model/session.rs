@@ -18,6 +18,32 @@ pub struct AgentSessionConfig {
     pub auto_compact_threshold_percent: u8,
     pub compaction_capability: hanafubuki_agent_model_api::ModelCompactionCapability,
     pub sampling_retry_policy: AgentSamplingRetryPolicy,
+    /// A session written before the strategy existed, or with one this
+    /// build does not know, compacts with `standard`.
+    #[serde(default, deserialize_with = "tolerant_compaction_strategy")]
+    pub compaction_strategy: AgentCompactionStrategy,
+}
+
+/// What starts a reduction of a session's context. Every strategy keeps the
+/// standard compaction as its floor; until `background` and `hierarchical`
+/// are built, a session set to either compacts as `standard` does.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentCompactionStrategy {
+    #[default]
+    Standard,
+    Background,
+    Hierarchical,
+}
+
+fn tolerant_compaction_strategy<'de, D>(
+    deserializer: D,
+) -> Result<AgentCompactionStrategy, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = serde_json::Value::deserialize(deserializer)?;
+    Ok(serde_json::from_value(value).unwrap_or_default())
 }
 
 impl AgentSessionConfig {

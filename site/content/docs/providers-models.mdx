@@ -130,6 +130,8 @@ reasoningEffort = "medium"   # minimal、low、medium、high、xhigh
 | `remoteCompaction`            | `"disabled"` | 设为 `"responses_compact"` 或 `"responses_compact_v2"` 时，在 Responses 协议上由服务端压缩 |
 | `contextWindowTokens`         | 未设置       | 指定上下文窗口                                                                             |
 
+已有会话在下一轮次或 `/compact` 时采用修改后的 `remoteCompaction`；其他键在会话重新选择模型（`/model`）时才采用，新会话则全部采用。除这种压缩外如何缩减上下文，由 `config.toml` 中的[压缩策略](/docs/config-reference#compaction)决定。
+
 在终端界面中输入 `/compact` 可以立即压缩。`/status` 显示 token 用量和上下文剩余比例。
 
 ## 图片 [#images]

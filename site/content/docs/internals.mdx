@@ -235,7 +235,7 @@ Provider 的流是外部输入（[模型 API](/docs/architecture#the-model-api)�
 
 ### 会话与轮次 [#turn-details]
 
-- **配置。** `normalize_session_config` 在创建、每次更新和恢复时运行：协议不是 Responses（`ModelApiProtocol::supports_reasoning_effort`、`supports_remote_compaction`），或会话尚未配置时，推理强度和远程压缩被去掉并给出警告；为零的上下文窗口变为未知；自动压缩阈值和流重试策略被限制在范围内。恢复会重新规范化较旧的会话，而不是隔离它；身份（Provider ID、模型）和完整性检查保持严格。
+- **配置。** `normalize_session_config` 在创建、每次更新和恢复时运行：协议不是 Responses（`ModelApiProtocol::supports_reasoning_effort`、`supports_remote_compaction`），或会话尚未配置时，推理强度和远程压缩被去掉并给出警告；为零的上下文窗口变为未知；自动压缩阈值和流重试策略被限制在范围内。恢复会重新规范化较旧的会话，而不是隔离它；身份（Provider ID、模型）和完整性检查保持严格。会话的压缩策略，以及它的传输携带的压缩能力，在每次激活时于会话空闲时与设置对齐，提交时不产生新的修订号：快照不显示它们，所以调用方在操作前读到的修订号仍然有效。在压缩策略出现之前写入的配置，或带有本版本不认识的策略的配置，读作 `standard`。
 - **恢复**（`service/recovery/`：校验、持久化的记录、`repair.rs` 中的重启修复）。校验拒绝持久化了某个内核之后会递增、且大于 `u64::MAX / 2` 的计数器的会话（修订号、代次、消息、历史条目、轮次、压缩和活动的 ID，steering 序号，模型会话代次，记忆贡献和历史条目的修订号；`validation/counters.rs`），所以内核的 `checked_add(1)` 预期是不变量。`load_recovery_candidates` 分别加载每个候选，并把历史存储打开时拒绝的会话作为失败返回，无论它们的恢复状态如何；`recover_sessions` 把每个跳过的会话以 error 级别记入日志后，返回一个 `AgentRecoveryReport`（恢复的数量，以及带原因的 `AgentQuarantinedSession`）。打开已隔离的会话会以它未解决的恢复义务或存储给出的原因失败，直到之后的某次启动恢复了它。记忆来源投影略去运行时无法解码的会话。只有读取历史索引失败才会让恢复失败。
 - **ID。** 轮次和压缩的 ID 来自原子计数器。
 - **步骤无法运行的调用**（`service/tool_execution/rejection.rs`、`CallDisposition`）：调用了步骤没有提供的名字时，历史把这个调用记在 `unavailable` 提供者和工具 ID 下。超过 `maximum_tool_argument_bytes`（64 KiB）的参数以 `{}` 代替模型发送的内容保存（[模型工具参数](/docs/plugin-rules#model-tool-arguments)）。

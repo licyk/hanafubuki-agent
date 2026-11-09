@@ -15,10 +15,52 @@ and pushed, and notes what Hanafubuki must change at its next pin.
       `status` beside `admission`, `prepare`, `execute`, `commit`;
       `commit_compaction` 75 lines. Nothing for Hanafubuki: kernel-internal,
       public API unchanged.
-- [ ] P2: the `[compaction]` setting (`strategy`, `background`,
+- [x] P2: the `[compaction]` setting (`strategy`, `background`,
       `hierarchical`), `AgentSessionConfig.compaction_strategy`, applied
       at turn admission, every transition; the `remoteCompaction` bug
-      fixed; the Anthropic empty-`tools` case checked.
+      fixed; the Anthropic empty-`tools` case checked. Done: config
+      `settings/compaction.rs` (per-field decoding, the summary-length
+      pair checked once both are read), `/config` row, docs. The facade's
+      `activate_provider_session` (every turn, `/compact`, plan
+      implementation) applies the strategy (`set_session_compaction_strategy`)
+      and `activate_model_session` takes a changed `remoteCompaction` into
+      the session's `compaction_capability`; both only while idle, both
+      persisted without a revision bump (no snapshot shows them, so a
+      caller's revision read before the call stays current). Children copy
+      the parent's, ephemeral ones run `standard`, `childSessions = false`
+      gives a durable child `standard` (applied by the driver at creation
+      and at each activation). Tests: the corpora decode as `standard`
+      (`persistence_contract::session_config`), the bug's facade regression
+      (`sessions::compaction`), the switch between turns. Goldens unchanged.
+  - Open: the sub-tables reach no kernel code yet; P3/P7 carry what they
+    need as a kernel type in `TurnExtensions` from `collect_turn_extensions`
+    (as the sandbox reaches a turn). The `background.thresholdPercent`
+    warning is a log line at creation and when the strategy changes.
+    `agent_settings_fields()` is the web tools' form (rendered in
+    Hanafubuki's Tools panel, flat patch keys), so `compaction` has no
+    entry there: it is a nested table patched whole, like `memory`.
+  - Open: Anthropic Messages with `LocalSummary` sends history `tool_use`
+    / `tool_result` blocks with no `tools` key (`compaction_request` sets
+    `tools: []`; `anthropic_messages/encode.rs` writes `tools` only when
+    non-empty). The live API rejects such requests ("Requests which
+    include `tool_use` or `tool_result` blocks must define tools"), from
+    memory, not checked against the live API; the fake does not enforce
+    it. Likely fix: send the tool specs with `tool_choice: none` on the
+    local summary request (model-visible, regenerates the goldens), or
+    have the Anthropic encoder declare the tools the history calls.
+  - Hanafubuki, at its next pin: `AgentSettings.compaction`
+    (`AgentCompactionSettings`: `strategy`, `background`, `hierarchical`)
+    and `AgentSettingsPatch.compaction` (the table whole, strict); new
+    re-exports `AgentCompactionSettings`, `AgentCompactionStrategy`,
+    `AgentBackgroundCompactionSettings`,
+    `AgentHierarchicalCompactionSettings`; a strategy select belongs with
+    memory in the behavior panel, with `settings.fields.compaction*` keys
+    of its own. `AgentSessionConfig.compaction_strategy`
+    (`#[serde(default)]`, the corpus unchanged); kernel calls
+    `set_session_compaction_strategy` and `session_compaction_strategy`.
+    `activate_model_session` may now commit (persisting a changed remote
+    compaction). Its own constructions of `AgentSessionConfig` add the
+    field.
 - [ ] P3: background compaction in the kernel (slot, launch, adoption,
       `wait_for_pending`, the rebase install, cancellation, shutdown,
       usage, `AgentCompactionPhase::Background`).

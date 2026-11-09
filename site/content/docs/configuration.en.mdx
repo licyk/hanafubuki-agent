@@ -14,11 +14,11 @@ The standalone Agent keeps its configuration in the configuration directory: by 
 
 ## The three files [#files]
 
-| File             | Holds                                                                                                                                                | Layers | Permissions         |
-| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ------------------- |
-| `config.toml`    | The settings (permission mode, sandbox, memory, plugins, web tools, proxy, log level, the terminal interface), the profiles and the trusted projects | Yes    | Ordinary            |
-| `providers.toml` | The model Providers, their tokens, and the model policy (model, reasoning effort, compaction)                                                        | No     | Owner only (`0600`) |
-| `mcp.toml`       | The MCP servers and their credentials                                                                                                                | No     | Owner only (`0600`) |
+| File             | Holds                                                                                                                                                                     | Layers | Permissions         |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ------------------- |
+| `config.toml`    | The settings (permission mode, sandbox, memory, plugins, web tools, compaction strategy, proxy, log level, the terminal interface), the profiles and the trusted projects | Yes    | Ordinary            |
+| `providers.toml` | The model Providers, their tokens, and the model policy (model, reasoning effort, compaction)                                                                             | No     | Owner only (`0600`) |
+| `mcp.toml`       | The MCP servers and their credentials                                                                                                                                     | No     | Owner only (`0600`) |
 
 Each file is created when it is first needed: `config.toml` by the first `config set`, `providers.toml` by the first `providers add`, and so on. Without a file the defaults apply. Every key is camelCase. Each key's type and default are in the [Configuration reference](/docs/config-reference).
 

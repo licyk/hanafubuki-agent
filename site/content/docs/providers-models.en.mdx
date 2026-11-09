@@ -130,6 +130,8 @@ Once the context uses `autoCompactThresholdPercent` of the window (80% by defaul
 | `remoteCompaction`            | `"disabled"` | `"responses_compact"` or `"responses_compact_v2"`: the server compacts, on the Responses protocol |
 | `contextWindowTokens`         | unset        | Sets the context window                                                                           |
 
+An existing session takes a changed `remoteCompaction` at its next turn or `/compact`; it takes the other keys when its model is selected again (`/model`), and a new session takes them all. What reduces the context besides this compaction is the [compaction strategy](/docs/config-reference#compaction) in `config.toml`.
+
 `/compact` in the terminal interface compacts now. `/status` shows the token use and how much context is left.
 
 ## Images [#images]

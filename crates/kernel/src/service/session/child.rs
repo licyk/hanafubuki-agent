@@ -232,7 +232,16 @@ fn child_record(
             title: from_parent.then(|| parent.settings.title.clone()).flatten(),
             // A child works for its parent: it never pursues the parent's goal.
             goal: None,
-            config: parent.settings.config.clone(),
+            config: AgentSessionConfig {
+                // An ephemeral session (`/side`) is too short-lived to reduce
+                // its context in any other way.
+                compaction_strategy: if request.persistence == AgentSessionPersistence::Ephemeral {
+                    crate::AgentCompactionStrategy::Standard
+                } else {
+                    parent.settings.config.compaction_strategy
+                },
+                ..parent.settings.config.clone()
+            },
             memory_contribution: AgentMemoryContributionState::default(),
             effective_input_capabilities: parent.settings.effective_input_capabilities,
             budget_policy: parent.settings.budget_policy,

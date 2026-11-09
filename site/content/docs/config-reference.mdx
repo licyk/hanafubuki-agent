@@ -77,6 +77,35 @@ icon: ListTree
 | `searxngBaseUrl`        | `http` 或 `https` URL，不含凭据、查询和片段，最多 2048 字节 | 未设置   | SearXNG 实例的地址；`"searxng"` 需要它             |
 | `webFetchUseJinaReader` | 布尔值                                                      | `false`  | 直接抓取网页失败时，改用 `https://r.jina.ai/` 读取 |
 
+### 压缩 [#compaction]
+
+会话上下文增长时如何缩减；何时运行标准压缩、运行哪种压缩由模型策略决定（[上下文窗口与压缩](/docs/providers-models#compaction)）。
+
+| 键                                                                 | 类型和取值                                     | 默认值       | 含义                                                                      |
+| ------------------------------------------------------------------ | ---------------------------------------------- | ------------ | ------------------------------------------------------------------------- |
+| `compaction.strategy`                                              | `"standard"`、`"background"`、`"hierarchical"` | `"standard"` | 压缩策略（见下）                                                          |
+| `compaction.background.thresholdPercent`                           | 整数，1–100                                    | `65`         | 在后台开始压缩的窗口比例；应低于 `autoCompactThresholdPercent`            |
+| `compaction.background.childSessions`                              | 布尔值                                         | `true`       | 子会话（子代理的、评审的）是否也在后台压缩；`false` 时它们用 `"standard"` |
+| `compaction.hierarchical.maxContextLimitPercent`                   | 整数，1–100                                    | `75`         | 超过窗口的这一比例时，立即请模型折叠历史                                  |
+| `compaction.hierarchical.emergencyThresholdPercent`                | 整数，1–100                                    | `95`         | 超过窗口的这一比例时，截短过大的工具输出                                  |
+| `compaction.hierarchical.nudgeGrowthTokens`                        | 整数                                           | `50000`      | 可折叠片段增长到这么多 token 后才请模型折叠                               |
+| `compaction.hierarchical.preserveRecentMessages`                   | 整数                                           | `3`          | 不参与折叠的最近消息数                                                    |
+| `compaction.hierarchical.preserveRecentTokens`                     | 整数                                           | `5000`       | 不参与折叠的最近 token 数                                                 |
+| `compaction.hierarchical.minCompressRangeChars`                    | 整数                                           | `5000`       | 值得折叠的最短历史片段，按字符计                                          |
+| `compaction.hierarchical.minSummaryLength`                         | 整数，不超过 `maxSummaryLength`                | `50`         | 模型所写摘要的最短长度，按字符计；更短的会被拒绝                          |
+| `compaction.hierarchical.maxSummaryLength`                         | 整数                                           | `20000`      | 摘要的最长长度；更长的会被拒绝                                            |
+| `compaction.hierarchical.tiers`                                    | 布尔值                                         | `true`       | 是否把较早的摘要分层再次提炼                                              |
+| `compaction.hierarchical.protectedTools`                           | 工具名数组                                     | `[]`         | 结果从不被折叠的工具                                                      |
+| `compaction.hierarchical.messageTimestamps`                        | 布尔值                                         | `true`       | 被折叠的消息是否带有发送时间                                              |
+| `compaction.hierarchical.absorb`、`contentStore`、`crush`、`rules` | 布尔值                                         | `false`      | 分层策略的可选功能                                                        |
+
+各策略：
+
+- **`"standard"`** 同步压缩：上下文用到窗口的 `autoCompactThresholdPercent` 时在轮次前或轮次中压缩，模型请求新上下文时、Provider 报告上下文窗口错误之后、`/compact` 时也压缩。
+- **`"background"`** 和 **`"hierarchical"`** 正在加入；在此之前，设为其中之一的会话按 `"standard"` 压缩，它们的表只保存设置。`"background"` 将在 `compaction.background.thresholdPercent` 时于后台开始压缩；不低于 `autoCompactThresholdPercent` 的值永远不会开始，日志会给出警告。`"hierarchical"` 将让模型把历史折叠成它自己写的摘要（源自 [billion-context](https://github.com/ranxianglei/billion-context)）。
+
+每种策略都以标准压缩为底线：`/compact`、模型请求新上下文、上下文窗口错误之后的重试总是运行它。策略按会话生效：新会话采用它，已有会话在下一轮次或 `/compact` 时采用，子会话（子代理的、评审的）同样采用，但 `"background"` 且 `childSessions = false` 时子会话用 `"standard"`；旁支对话（`/side`）总是用 `"standard"`。终端界面的 `/config` 可以选择它。无法使用的值取默认值；`minSummaryLength` 大于 `maxSummaryLength` 时两者都回到默认值。
+
 ### 网络 [#network]
 
 | 键              | 类型和取值                                                                                                    | 默认值     | 含义                                                                               |

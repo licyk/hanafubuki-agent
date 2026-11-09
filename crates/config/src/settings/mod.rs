@@ -1,5 +1,6 @@
 //! The Agent's settings: how it may act, what it remembers, which of its
-//! plugins run and how its web tools reach the network.
+//! plugins run, how its web tools reach the network and how it reduces a
+//! session's context.
 
 use std::collections::BTreeSet;
 use std::path::PathBuf;
@@ -10,9 +11,14 @@ pub use hanafubuki_agent_foundation::agent_settings::{
 use hanafubuki_agent_foundation::url_policy::{UrlPolicy, MAX_URL_BYTES};
 use serde::{Deserialize, Deserializer, Serialize};
 
+mod compaction;
 mod decode;
 mod schema;
 
+pub use compaction::{
+    AgentBackgroundCompactionSettings, AgentCompactionSettings, AgentCompactionStrategy,
+    AgentHierarchicalCompactionSettings,
+};
 pub(crate) use decode::decode_settings;
 pub use schema::agent_settings_fields;
 
@@ -36,6 +42,7 @@ pub struct AgentSettings {
     pub web_search_provider: AgentWebSearchProvider,
     pub searxng_base_url: Option<String>,
     pub web_fetch_use_jina_reader: bool,
+    pub compaction: AgentCompactionSettings,
 }
 
 impl Default for AgentSettings {
@@ -52,6 +59,7 @@ impl Default for AgentSettings {
             web_search_provider: AgentWebSearchProvider::Auto,
             searxng_base_url: None,
             web_fetch_use_jina_reader: false,
+            compaction: AgentCompactionSettings::default(),
         }
     }
 }
@@ -151,6 +159,7 @@ pub struct AgentSettingsPatch {
     #[serde(default, deserialize_with = "present")]
     pub searxng_base_url: Option<Option<String>>,
     pub web_fetch_use_jina_reader: Option<bool>,
+    pub compaction: Option<AgentCompactionSettings>,
 }
 
 fn present<'de, D: Deserializer<'de>, T: Deserialize<'de>>(
@@ -193,6 +202,10 @@ impl AgentSettingsPatch {
         }
         if let Some(enabled) = self.web_fetch_use_jina_reader {
             settings.web_fetch_use_jina_reader = enabled;
+        }
+        if let Some(compaction) = self.compaction {
+            compaction::validate_compaction(&compaction)?;
+            settings.compaction = compaction;
         }
         validate_search_pair(settings)
     }

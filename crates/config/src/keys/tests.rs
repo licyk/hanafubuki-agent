@@ -103,6 +103,12 @@ fn set_writes_one_key_of_the_users_file_and_keeps_the_rest() {
     config
         .set_user_value("disabledPlugins", r#"["titles"]"#)
         .unwrap();
+    config
+        .set_user_value("compaction.strategy", "background")
+        .unwrap();
+    config
+        .set_user_value("compaction.hierarchical.protectedTools", r#"["shell"]"#)
+        .unwrap();
 
     let file = fixture.user_file();
     assert!(file.starts_with("# The user's own comment.\npermissionMode = \"auto_review\"\n"));
@@ -124,6 +130,11 @@ fn set_writes_one_key_of_the_users_file_and_keeps_the_rest() {
     assert_eq!(settings.memory.max_unused_days, 12);
     assert!(!settings.memory.enabled, "-c still applies");
     assert!(settings.disabled_plugins.contains("titles"));
+    assert_eq!(
+        settings.compaction.strategy,
+        crate::AgentCompactionStrategy::Background
+    );
+    assert_eq!(settings.compaction.hierarchical.protected_tools, ["shell"]);
 }
 
 #[test]
@@ -134,6 +145,17 @@ fn set_refuses_unknown_keys_and_unusable_values() {
     for (key, value, expected) in [
         ("logLevle", "debug", "not a setting"),
         ("memory.maxUnusedDays", "0", "cannot take this value"),
+        (
+            "compaction.strategy",
+            "eventually",
+            "cannot take this value",
+        ),
+        (
+            "compaction.background.thresholdPercent",
+            "0",
+            "cannot take this value",
+        ),
+        ("compaction.foreground", "true", "not a setting"),
         ("permissionMode", "everything", "cannot take this value"),
         ("network.proxy", "ftp://proxy", "cannot take this value"),
         ("webSearchProvider", "searxng", "cannot take this value"),

@@ -288,6 +288,7 @@ fn idle_session(
             auto_compact_threshold_percent: 80,
             compaction_capability: hanafubuki_agent_kernel::ModelCompactionCapability::LocalSummary,
             sampling_retry_policy: hanafubuki_agent_kernel::AgentSamplingRetryPolicy::default(),
+            compaction_strategy: Default::default(),
         },
         memory_contribution: Default::default(),
         turn_budget_policy: hanafubuki_agent_kernel::AgentTurnBudgetPolicy::default(),

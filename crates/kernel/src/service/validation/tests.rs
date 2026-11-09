@@ -185,6 +185,7 @@ fn skills_read_output_and_context_round_trip_as_a_valid_persisted_group() {
         auto_compact_threshold_percent: 80,
         compaction_capability: hanafubuki_agent_model_api::ModelCompactionCapability::LocalSummary,
         sampling_retry_policy: AgentSamplingRetryPolicy::default(),
+        compaction_strategy: Default::default(),
     };
 
     validate_persisted_history(&reconstructed, &config, crate::FIRST_BATCH_HARD_LIMITS).unwrap();
@@ -329,6 +330,7 @@ fn responses_only_config(
         compaction_capability:
             hanafubuki_agent_model_api::ModelCompactionCapability::ResponsesCompact,
         sampling_retry_policy: AgentSamplingRetryPolicy::default(),
+        compaction_strategy: Default::default(),
     }
 }
 

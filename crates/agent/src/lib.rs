@@ -66,7 +66,10 @@ pub use attachments::{
     AgentImagePreview, DesktopAgentImageInput, MAXIMUM_IMAGE_DIMENSION, MAXIMUM_IMAGE_PIXELS,
     MAXIMUM_NORMALIZED_IMAGE_BYTES, MAXIMUM_SOURCE_IMAGES_BYTES, MAXIMUM_SOURCE_IMAGE_BYTES,
 };
-use contracts::{agent_base_instructions, model_api_protocol, model_compaction_capability};
+use contracts::{
+    agent_base_instructions, model_api_protocol, model_compaction_capability,
+    session_compaction_strategy, warn_unreachable_background_threshold,
+};
 pub use contracts::{AgentHostInstructions, AgentModelInfo};
 pub use data_dir_lock::{DataDirLock, DATA_DIR_LOCK_FILE};
 pub use desktop::DesktopAgent;
@@ -147,13 +150,14 @@ use std::path::Path;
 /// The Agent's configuration, which the host opens in the directory it names
 /// and the standalone Agent layers.
 pub use hanafubuki_agent_config::{
-    AgentAlternateScreen, AgentConfig, AgentConfigProblem, AgentConfigRecovery, AgentDirs,
-    AgentLogLevel, AgentMemorySettings, AgentModelProtocol, AgentProviderHeaderSettings,
-    AgentProviderSettings, AgentSandboxMode, AgentSandboxWorkspaceWrite, AgentSettings,
-    AgentSettingsPatch, AgentStandaloneSettings, AgentTuiPreferences, AgentTuiPreferencesPatch,
-    AgentTuiPreset, AgentWindowsSandbox, AgentWindowsSettings, ConfigLayerSource, ConfigLayers,
-    ConfigOverrides, AGENT_CREDENTIAL_FILES, AGENT_HOME_ENV, AGENT_MCP_FILE, AGENT_PROVIDERS_FILE,
-    AGENT_SETTINGS_FILE,
+    AgentAlternateScreen, AgentBackgroundCompactionSettings, AgentCompactionSettings,
+    AgentCompactionStrategy, AgentConfig, AgentConfigProblem, AgentConfigRecovery, AgentDirs,
+    AgentHierarchicalCompactionSettings, AgentLogLevel, AgentMemorySettings, AgentModelProtocol,
+    AgentProviderHeaderSettings, AgentProviderSettings, AgentSandboxMode,
+    AgentSandboxWorkspaceWrite, AgentSettings, AgentSettingsPatch, AgentStandaloneSettings,
+    AgentTuiPreferences, AgentTuiPreferencesPatch, AgentTuiPreset, AgentWindowsSandbox,
+    AgentWindowsSettings, ConfigLayerSource, ConfigLayers, ConfigOverrides, AGENT_CREDENTIAL_FILES,
+    AGENT_HOME_ENV, AGENT_MCP_FILE, AGENT_PROVIDERS_FILE, AGENT_SETTINGS_FILE,
 };
 pub use hanafubuki_agent_execution::{
     AgentBackgroundTerminalSnapshot, AgentBackgroundTerminalStopFailure,

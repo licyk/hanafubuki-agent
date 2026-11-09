@@ -137,8 +137,21 @@ impl AgentService {
         {
             return Err(AgentError::TurnAlreadyRunning);
         }
+        let Some(config) = reconciled_compaction_config(record, model.compaction_capability())
+        else {
+            record.settings.model = model;
+            return Ok(());
+        };
+        // The configured remote compaction changed since the session last
+        // took it: compaction checks the transport against the session.
+        let previous = record.rollback_state();
+        record.settings.config = config;
         record.settings.model = model;
-        Ok(())
+        // Not a revision: no snapshot shows the capability, and a caller that
+        // read the revision before this activation must not find it stale.
+        let staged = StagedPersistence::commit(&cell, record, previous);
+        drop(guard);
+        self.persist_staged_blocking(staged)
     }
 
     pub(super) fn open_loaded_session(
@@ -185,4 +198,23 @@ impl AgentService {
             next_event_sequence,
         })
     }
+}
+
+/// The session's config with the transport's compaction `capability`, when
+/// it differs and the session is idle; a capability the session's protocol
+/// cannot use is left to fail at compaction, as it would after `/model`.
+fn reconciled_compaction_config(
+    record: &SessionRecord,
+    capability: hanafubuki_agent_model_api::ModelCompactionCapability,
+) -> Option<AgentSessionConfig> {
+    if record.settings.config.compaction_capability == capability
+        || has_active_operation(record)
+        || ensure_no_staged_commit(record).is_err()
+    {
+        return None;
+    }
+    let mut config = record.settings.config.clone();
+    config.compaction_capability = capability;
+    normalize_session_config(&mut config);
+    (config.compaction_capability == capability).then_some(config)
 }

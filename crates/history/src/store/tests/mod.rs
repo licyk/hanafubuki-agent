@@ -49,6 +49,7 @@ fn runtime(
             auto_compact_threshold_percent: 80,
             compaction_capability: hanafubuki_agent_kernel::ModelCompactionCapability::LocalSummary,
             sampling_retry_policy: hanafubuki_agent_kernel::AgentSamplingRetryPolicy::default(),
+            compaction_strategy: Default::default(),
         },
         memory_contribution: hanafubuki_agent_kernel::AgentMemoryContributionState::default(),
         turn_budget_policy: AgentTurnBudgetPolicy::default(),

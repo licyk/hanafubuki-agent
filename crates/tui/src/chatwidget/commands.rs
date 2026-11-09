@@ -145,9 +145,18 @@ impl ChatWidget {
                 self.add_to_history(history_cell::new_skills_output(&catalog))
             }
             TurnUpdate::Settings(SettingsReply::Warnings(warnings)) => self.show_warnings(warnings),
-            TurnUpdate::Settings(reply) => self.run_command(&commands::MEMORIES, |context| {
-                commands::on_settings_reply(context, reply)
-            }),
+            TurnUpdate::Settings(reply) => {
+                let command = match &reply {
+                    SettingsReply::Config { .. }
+                    | SettingsReply::Failed {
+                        command: "config", ..
+                    } => &commands::CONFIG,
+                    _ => &commands::MEMORIES,
+                };
+                self.run_command(command, |context| {
+                    commands::on_settings_reply(context, reply)
+                })
+            }
             TurnUpdate::Session(reply) => {
                 // `/cd` and `/worktree` moved: the next session's header
                 // names the new directory.

@@ -26,8 +26,10 @@ use hanafubuki_agent_kernel::{
 use hanafubuki_agent_sandbox::{platform_default_mode, SandboxSettings};
 
 use crate::conversation_reader::{AgentConversationReader, ConversationMessage};
-use crate::model_api_protocol;
 use crate::service::resolve_settings_provider;
+use crate::{
+    model_api_protocol, session_compaction_strategy, warn_unreachable_background_threshold,
+};
 
 #[derive(Clone)]
 pub(crate) struct AgentSessionDriver {
@@ -57,7 +59,8 @@ impl AgentSessionDriver {
 
     /// Creates the child `request` describes under its loaded parent. A
     /// durable child contributes to memory as the settings say, like a
-    /// fork; an ephemeral one never does. Blocks.
+    /// fork, and takes the configured compaction strategy; an ephemeral one
+    /// never contributes and always compacts with `standard`. Blocks.
     pub(crate) fn create_child(
         &self,
         request: AgentChildSessionRequest,
@@ -68,6 +71,10 @@ impl AgentSessionDriver {
             return Ok(child);
         }
         let settings = self.config.settings().map_err(AgentError::Persistence)?;
+        self.core.set_session_compaction_strategy(
+            child.id,
+            session_compaction_strategy(&settings.compaction, false, true),
+        )?;
         self.core.initialize_session_memory_contribution(
             child.id,
             child.memory_contribution.revision,
@@ -335,10 +342,10 @@ impl AgentSessionDriver {
         Ok(())
     }
 
-    /// Loads `session_id` and binds it to its Provider as the settings now
-    /// describe it, for a model operation. The kernel calls load history and
-    /// wait for the session's staged commit, so they run on the blocking
-    /// boundary.
+    /// Loads `session_id` and binds it to its Provider and its compaction
+    /// strategy as the settings now describe them, for a model operation.
+    /// The kernel calls load history and wait for the session's staged
+    /// commit, so they run on the blocking boundary.
     pub(crate) async fn activate_provider_session(
         &self,
         session_id: AgentSessionId,
@@ -361,13 +368,19 @@ impl AgentSessionDriver {
             );
         }
         let config = self.config.clone();
-        let registry = run_blocking_operation(
+        let (registry, settings) = run_blocking_operation(
             self.blocking.as_ref(),
             "agent provider settings read worker",
-            move || config.providers(),
+            move || Ok::<_, String>((config.providers()?, config.settings()?)),
         )
         .await??;
         let resolved = resolve_settings_provider(&registry, &snapshot.provider_id)?;
+        let strategy = session_compaction_strategy(
+            &settings.compaction,
+            snapshot.ephemeral,
+            snapshot.parent_session_id.is_some(),
+        );
+        let auto_compact_threshold_percent = resolved.policy.auto_compact_threshold_percent;
         let protocol = model_api_protocol(resolved.definition.protocol);
         if protocol != snapshot.provider_protocol {
             return Err(format!(
@@ -376,7 +389,7 @@ impl AgentSessionDriver {
             ));
         }
         let core = self.core.clone();
-        run_blocking_operation(
+        let activated = run_blocking_operation(
             self.blocking.as_ref(),
             "agent session activation worker",
             move || {
@@ -389,11 +402,21 @@ impl AgentSessionDriver {
                     resolved.policy.compaction_capability,
                     session_id,
                 )?;
-                core.snapshot(session_id)
+                let changed = core.set_session_compaction_strategy(session_id, strategy)?;
+                Ok::<_, AgentError>((changed, core.snapshot(session_id)?))
             },
         )
         .await?
-        .map_err(|error| error.to_string())
+        .map_err(|error| error.to_string())?;
+        let (changed, snapshot) = activated;
+        if changed {
+            warn_unreachable_background_threshold(
+                strategy,
+                &settings.compaction,
+                auto_compact_threshold_percent,
+            );
+        }
+        Ok(snapshot)
     }
 
     /// The permission mode of the session's next turn: the session's choice,

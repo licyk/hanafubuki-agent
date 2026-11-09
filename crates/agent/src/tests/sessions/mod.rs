@@ -117,6 +117,7 @@ pub(super) fn approved_command() -> String {
 
 mod background_execution;
 mod children;
+mod compaction;
 mod edit;
 mod escalation;
 mod export;

@@ -555,14 +555,15 @@ yank = []
 
 ## 设置 [#config]
 
-`/config` 汇集了 `[tui]` 的设置：Space 或 Enter 打开或关闭一项（选项用 Left 和 Right），每次修改立即应用并保存。
+`/config` 汇集了 `[tui]` 的设置和压缩策略：Space 或 Enter 打开或关闭一项（选项用 Left 和 Right），每次修改立即应用并保存。
 
-| 行                 | 键                         | 何时生效        |
-| ------------------ | -------------------------- | --------------- |
-| Raw output         | `tui.rawOutput`            | 立即，同 `/raw` |
-| Status line colors | `tui.statusLineColors`     | 立即            |
-| Fullscreen         | `tui.fullscreenTranscript` | 下次启动        |
-| Alternate screen   | `tui.alternateScreen`      | 下次启动        |
+| 行                 | 键                         | 何时生效                                                        |
+| ------------------ | -------------------------- | --------------------------------------------------------------- |
+| Raw output         | `tui.rawOutput`            | 立即，同 `/raw`                                                 |
+| Status line colors | `tui.statusLineColors`     | 立即                                                            |
+| Fullscreen         | `tui.fullscreenTranscript` | 下次启动                                                        |
+| Alternate screen   | `tui.alternateScreen`      | 下次启动                                                        |
+| Compaction         | `compaction.strategy`      | 每个会话的下一轮次；见[压缩](/docs/config-reference#compaction) |
 
 其他行打开各个编辑界面：Providers（`/providers`）、MCP servers（`/mcp`）、Memories（`/memories`）、Theme（`/theme`）、Status line（`/statusline`）、Terminal title（`/title`）、Keyboard（`/keymap`）、Presets（`/presets`）和 Interface mode（`/tui`）。
 

@@ -66,6 +66,60 @@ impl AgentService {
         Ok(())
     }
 
+    /// The strategy that starts reductions of the session's context.
+    pub fn session_compaction_strategy(
+        &self,
+        session_id: AgentSessionId,
+    ) -> Result<crate::AgentCompactionStrategy, AgentError> {
+        let cell = self.session(session_id)?;
+        let record = cell.lock()?;
+        Ok(record.settings.config.compaction_strategy)
+    }
+
+    /// Sets the strategy that starts reductions of the session's context,
+    /// which the facade takes from `[compaction]` before each of the
+    /// session's model operations, and returns whether it changed. An
+    /// ephemeral session always compacts with `standard`. Only between
+    /// operations. It is persisted with the session's configuration but is
+    /// not a revision: no snapshot shows it, and a caller that read the
+    /// revision before the operation's activation must not find it stale.
+    /// Off the async runtime only.
+    pub fn set_session_compaction_strategy(
+        &self,
+        session_id: AgentSessionId,
+        strategy: crate::AgentCompactionStrategy,
+    ) -> Result<bool, AgentError> {
+        let cell = self.session(session_id)?;
+        let mut guard = cell.lock_after_persistence_blocking()?;
+        let record = &mut *guard;
+        if record.settings.config.compaction_strategy == strategy {
+            return Ok(false);
+        }
+        if record.lineage.ephemeral {
+            return Err(AgentError::InvalidInput(
+                "an ephemeral session compacts with the standard strategy".to_string(),
+            ));
+        }
+        ensure_no_staged_commit(record)?;
+        if record
+            .runtime
+            .turn
+            .as_ref()
+            .is_some_and(|turn| !turn.phase.is_terminal())
+        {
+            return Err(AgentError::TurnAlreadyRunning);
+        }
+        if has_active_operation(record) {
+            return Err(AgentError::CompactionAlreadyRunning);
+        }
+        let previous = record.rollback_state();
+        record.settings.config.compaction_strategy = strategy;
+        let staged = StagedPersistence::commit(&cell, record, previous);
+        drop(guard);
+        self.persist_staged_blocking(staged)?;
+        Ok(true)
+    }
+
     pub fn set_session_turn_budget_policy(
         &self,
         session_id: AgentSessionId,

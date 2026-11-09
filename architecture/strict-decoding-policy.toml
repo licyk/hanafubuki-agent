@@ -95,6 +95,24 @@ category = "ipc-request"
 reason = "The Windows sandbox settings inside `AgentSettingsPatch` (`agent_settings_write`); persisted field by field, never through serde."
 
 [[types]]
+path = "crates/config/src/settings/compaction.rs"
+type = "AgentCompactionSettings"
+category = "ipc-request"
+reason = "The compaction settings inside `AgentSettingsPatch` (`agent_settings_write`); persisted field by field, never through serde."
+
+[[types]]
+path = "crates/config/src/settings/compaction.rs"
+type = "AgentBackgroundCompactionSettings"
+category = "ipc-request"
+reason = "The background compaction settings inside `AgentSettingsPatch` (`agent_settings_write`); persisted field by field, never through serde."
+
+[[types]]
+path = "crates/config/src/settings/compaction.rs"
+type = "AgentHierarchicalCompactionSettings"
+category = "ipc-request"
+reason = "The hierarchical compaction settings inside `AgentSettingsPatch` (`agent_settings_write`); persisted field by field, never through serde."
+
+[[types]]
 path = "crates/agent/src/attachments.rs"
 type = "DesktopAgentImageInput"
 category = "ipc-request"

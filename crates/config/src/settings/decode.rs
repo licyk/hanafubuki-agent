@@ -2,6 +2,7 @@ use std::collections::BTreeSet;
 
 use serde_json::{Map, Value};
 
+use super::compaction::decode_compaction;
 use super::{
     is_plugin_name, normalize_search_endpoint, validate_memory, validate_sandbox_workspace_write,
     AgentMemorySettings, AgentSandboxMode, AgentSandboxWorkspaceWrite, AgentSettings,
@@ -41,6 +42,12 @@ pub(crate) fn decode_settings(
     );
     let web_fetch_use_jina_reader =
         fields.read("webFetchUseJinaReader", defaults.web_fetch_use_jina_reader);
+    let compaction = read_object(
+        &mut fields,
+        "compaction",
+        &defaults.compaction,
+        decode_compaction,
+    );
     AgentSettings {
         permission_mode,
         sandbox_mode,
@@ -51,6 +58,7 @@ pub(crate) fn decode_settings(
         web_search_provider,
         searxng_base_url,
         web_fetch_use_jina_reader,
+        compaction,
     }
 }
 

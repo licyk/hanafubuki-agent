@@ -63,6 +63,7 @@ use crate::app_event::{AgentCommand, AppEvent, AppEventSender, Op};
 use crate::appearance::Appearance;
 use crate::bottom_pane::{BottomPane, BottomPaneView, SelectionViewParams};
 use crate::history_cell::{self, HistoryCell};
+pub(crate) use config::CONFIG;
 pub(crate) use goal::GOAL;
 pub(crate) use hooks::HOOKS;
 pub(crate) use mcp::MCP;
@@ -229,8 +230,8 @@ pub(crate) enum CommandReply {
     Subagents(Vec<AgentSubagentStatus>),
 }
 
-/// What `/memories` asked; `/warnings`' answer goes through the chat,
-/// which adds its own warnings.
+/// What `/memories` or `/config` asked; `/warnings`' answer goes through
+/// the chat, which adds its own warnings.
 pub(crate) fn on_settings_reply(context: &mut CommandContext<'_>, reply: SettingsReply) {
     match reply {
         // An open panel says it under its rows.
@@ -244,6 +245,10 @@ pub(crate) fn on_settings_reply(context: &mut CommandContext<'_>, reply: Setting
             }
         }
         SettingsReply::Memories(state) => memories::on_reply(context, *state),
+        SettingsReply::Config {
+            compaction_strategy,
+            saved,
+        } => config::on_reply(context, compaction_strategy, saved),
         SettingsReply::Warnings(_) => {}
     }
 }

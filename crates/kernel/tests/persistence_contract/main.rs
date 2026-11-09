@@ -216,6 +216,7 @@ fn text_session_config() -> AgentSessionConfig {
         auto_compact_threshold_percent: 80,
         compaction_capability: ModelCompactionCapability::LocalSummary,
         sampling_retry_policy: hanafubuki_agent_kernel::AgentSamplingRetryPolicy::default(),
+        compaction_strategy: Default::default(),
     }
 }
 
@@ -572,3 +573,4 @@ mod paging;
 mod progress;
 mod recovery;
 mod request_images;
+mod session_config;

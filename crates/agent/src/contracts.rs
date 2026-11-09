@@ -117,3 +117,39 @@ pub(crate) fn model_compaction_capability(
         }
     }
 }
+
+/// The strategy `[compaction]` gives a session: always `standard` for an
+/// ephemeral one, and for a child when background compaction leaves
+/// children out (`compaction.background.childSessions`).
+pub(crate) fn session_compaction_strategy(
+    settings: &hanafubuki_agent_config::AgentCompactionSettings,
+    ephemeral: bool,
+    child: bool,
+) -> hanafubuki_agent_kernel::AgentCompactionStrategy {
+    use hanafubuki_agent_config::AgentCompactionStrategy as Configured;
+    use hanafubuki_agent_kernel::AgentCompactionStrategy as Session;
+    match settings.strategy {
+        _ if ephemeral => Session::Standard,
+        Configured::Background if child && !settings.background.child_sessions => Session::Standard,
+        Configured::Standard => Session::Standard,
+        Configured::Background => Session::Background,
+        Configured::Hierarchical => Session::Hierarchical,
+    }
+}
+
+/// Warns when background compaction is configured to start where the
+/// session's own compaction already does, so it never would.
+pub(crate) fn warn_unreachable_background_threshold(
+    strategy: hanafubuki_agent_kernel::AgentCompactionStrategy,
+    settings: &hanafubuki_agent_config::AgentCompactionSettings,
+    auto_compact_threshold_percent: u8,
+) {
+    let background = settings.background.threshold_percent;
+    if strategy == hanafubuki_agent_kernel::AgentCompactionStrategy::Background
+        && background >= auto_compact_threshold_percent
+    {
+        log::warn!(
+            "compaction.background.thresholdPercent ({background}) is at or above the model policy's autoCompactThresholdPercent ({auto_compact_threshold_percent}): background compaction never starts"
+        );
+    }
+}

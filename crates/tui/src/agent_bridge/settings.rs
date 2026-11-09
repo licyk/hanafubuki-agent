@@ -1,17 +1,19 @@
 // Modified from OpenAI Codex 57a808a392 (Apache-2.0).
 
-//! `/warnings` and `/memories` onto the facade's calls: the warnings the
-//! Agent keeps (the configuration's recoveries and layers, the plugins,
-//! MCP, the hooks, the panics), and memory's settings, status, the
-//! session's contribution and the reset. What a call found comes back as a
-//! [`SettingsReply`]; a failure names the command.
+//! `/warnings`, `/memories` and `/config` onto the facade's calls: the
+//! warnings the Agent keeps (the configuration's recoveries and layers, the
+//! plugins, MCP, the hooks, the panics), memory's settings, status, the
+//! session's contribution and the reset, and the compaction strategy. What a
+//! call found comes back as a [`SettingsReply`]; a failure names the
+//! command.
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use hanafubuki_agent::panic::recorded_panics;
 use hanafubuki_agent::{
-    AgentConfigProblem, AgentConfigRecovery, AgentHandle, AgentMemoryContributionMode,
-    AgentMemorySettings, AgentMemoryStatus, AgentPluginState, AgentSessionId, AgentSettingsPatch,
+    AgentCompactionStrategy, AgentConfigProblem, AgentConfigRecovery, AgentHandle,
+    AgentMemoryContributionMode, AgentMemorySettings, AgentMemoryStatus, AgentPluginState,
+    AgentSessionId, AgentSettingsPatch,
 };
 
 use super::{AgentBridge, AgentReply, TurnUpdate};
@@ -76,11 +78,15 @@ pub(crate) struct MemoriesState {
     pub(crate) note: Option<String>,
 }
 
-/// What `/warnings` and `/memories` ask of the Agent.
+/// What `/warnings`, `/memories` and `/config` ask of the Agent.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum SettingsCall {
     Warnings,
     Memories,
+    /// The settings `/config` shows beside the interface's own.
+    Config,
+    /// Saves `compaction.strategy`.
+    SetCompactionStrategy(AgentCompactionStrategy),
     /// Saves memory's settings (`memory.*`).
     SetMemory(AgentMemorySettings),
     /// Turns the session's contribution on or off, at the revision read.
@@ -98,6 +104,7 @@ impl SettingsCall {
     fn command(&self) -> &'static str {
         match self {
             Self::Warnings => "warnings",
+            Self::Config | Self::SetCompactionStrategy(_) => "config",
             _ => "memories",
         }
     }
@@ -108,6 +115,11 @@ pub(crate) enum SettingsReply {
     /// The Agent's warnings, for the interface to add its own to.
     Warnings(Vec<Warning>),
     Memories(Box<MemoriesState>),
+    /// The compaction strategy as saved; `saved` when this call saved it.
+    Config {
+        compaction_strategy: AgentCompactionStrategy,
+        saved: bool,
+    },
     Failed {
         command: &'static str,
         error: String,
@@ -142,6 +154,26 @@ async fn run(
 ) -> Result<SettingsReply, String> {
     let note = match call {
         SettingsCall::Warnings => return Ok(SettingsReply::Warnings(agent_warnings(agent).await)),
+        SettingsCall::Config => {
+            return Ok(SettingsReply::Config {
+                compaction_strategy: agent.settings_view().await?.settings.compaction.strategy,
+                saved: false,
+            })
+        }
+        SettingsCall::SetCompactionStrategy(strategy) => {
+            let mut compaction = agent.settings_view().await?.settings.compaction;
+            compaction.strategy = strategy;
+            let saved = agent
+                .write_settings(AgentSettingsPatch {
+                    compaction: Some(compaction),
+                    ..AgentSettingsPatch::default()
+                })
+                .await?;
+            return Ok(SettingsReply::Config {
+                compaction_strategy: saved.settings.compaction.strategy,
+                saved: true,
+            });
+        }
         SettingsCall::Memories => None,
         SettingsCall::SetMemory(memory) => {
             agent

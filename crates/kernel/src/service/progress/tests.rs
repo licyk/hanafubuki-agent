@@ -193,6 +193,7 @@ fn a_report_on_a_runtime_that_has_shut_down_frees_the_consumer_slot() {
                 compaction_capability:
                     hanafubuki_agent_model_api::ModelCompactionCapability::LocalSummary,
                 sampling_retry_policy: crate::AgentSamplingRetryPolicy::default(),
+                compaction_strategy: Default::default(),
             },
             hanafubuki_agent_model_api::ModelApiProtocol::Responses,
             "http://127.0.0.1:1/v1",

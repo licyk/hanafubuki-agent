@@ -1,20 +1,22 @@
 // Modified from OpenAI Codex 57a808a392 (Apache-2.0).
 
 //! `/config` (Codex's `config_panel/` and `app/config_panel.rs`): the
-//! `[tui]` preferences in one panel, toggles and a choice applied and saved
-//! at once, and entries that open the other editors (`/providers`, `/mcp`,
-//! `/memories`, `/theme`, `/statusline`, `/title`, `/keymap`, `/presets`,
-//! `/tui`).
+//! `[tui]` preferences and the compaction strategy in one panel, toggles
+//! and choices applied and saved at once, and entries that open the other
+//! editors (`/providers`, `/mcp`, `/memories`, `/theme`, `/statusline`,
+//! `/title`, `/keymap`, `/presets`, `/tui`).
 
-use hanafubuki_agent::{AgentAlternateScreen, AgentTuiPreferencesPatch};
+use hanafubuki_agent::{AgentAlternateScreen, AgentCompactionStrategy, AgentTuiPreferencesPatch};
 use ratatui::crossterm::event::{KeyCode, KeyEvent};
 
-use super::{CommandContext, CommandSpec};
-use crate::app_event::{AppCommand, AppEvent, AppEventSender};
+use super::{CommandContext, CommandReply, CommandSpec};
+use crate::agent_bridge::{SettingsCall, SettingsReply};
+use crate::app_event::{AgentCommand, AppCommand, AppEvent, AppEventSender, Op};
 use crate::appearance::AppearanceEvent;
 use crate::bottom_pane::{GenericDisplayRow, MenuKey, MenuModel, MenuView};
+use crate::history_cell;
 
-pub(super) static CONFIG: CommandSpec = CommandSpec {
+pub(crate) static CONFIG: CommandSpec = CommandSpec {
     name: "config",
     aliases: &[],
     description: "change the interface's settings",
@@ -56,12 +58,39 @@ const SCREENS: [AgentAlternateScreen; 3] = [
 ];
 
 fn dispatch(context: &mut CommandContext<'_>, _args: &str) {
+    context.agent_command(AgentCommand::Settings(SettingsCall::Config));
+}
+
+/// The compaction strategy read or saved: into the open panel, or a new
+/// one. A save is said in the transcript.
+pub(super) fn on_reply(
+    context: &mut CommandContext<'_>,
+    compaction_strategy: AgentCompactionStrategy,
+    saved: bool,
+) {
+    if saved {
+        context.add_to_history(history_cell::new_info_event(
+            format!(
+                "Saved the compaction strategy: {}. Each session takes it at its next turn.",
+                compaction_strategy.as_str()
+            ),
+            None,
+        ));
+    }
+    let reply = CommandReply::Settings(SettingsReply::Config {
+        compaction_strategy,
+        saved,
+    });
+    if context.offer_reply(reply).is_none() || saved {
+        return;
+    }
     let preferences = context.preferences();
     let panel = ConfigPanel {
         raw_output: preferences.raw_output,
         status_line_colors: preferences.status_line_colors,
         fullscreen: preferences.fullscreen_transcript,
         alternate_screen: preferences.alternate_screen,
+        compaction_strategy,
     };
     let view = MenuView::new(panel, context.app_event_tx());
     context.show_view(Box::new(view));
@@ -73,10 +102,15 @@ pub(super) struct ConfigPanel {
     status_line_colors: bool,
     fullscreen: bool,
     alternate_screen: AgentAlternateScreen,
+    compaction_strategy: AgentCompactionStrategy,
 }
 
+/// The rows that choose one of several values with ←/→.
+const ALTERNATE_SCREEN: usize = 3;
+const COMPACTION_STRATEGY: usize = 4;
+
 /// The rows before the entries.
-const TOGGLES: usize = 4;
+const TOGGLES: usize = 5;
 
 impl ConfigPanel {
     fn change(&mut self, row: usize, forward: bool, tx: &AppEventSender) -> MenuKey {
@@ -97,7 +131,7 @@ impl ConfigPanel {
                 self.fullscreen = !self.fullscreen;
                 tx.send(AppEvent::SetFullscreenTranscript(self.fullscreen));
             }
-            3 => {
+            ALTERNATE_SCREEN => {
                 let index = SCREENS
                     .iter()
                     .position(|screen| *screen == self.alternate_screen)
@@ -115,6 +149,18 @@ impl ConfigPanel {
                 tx.send(AppEvent::Command(AppCommand::SavePreferences(
                     patch, message,
                 )));
+            }
+            COMPACTION_STRATEGY => {
+                let strategies = AgentCompactionStrategy::ALL;
+                let index = strategies
+                    .iter()
+                    .position(|strategy| *strategy == self.compaction_strategy)
+                    .unwrap_or_default();
+                let step = if forward { 1 } else { strategies.len() - 1 };
+                self.compaction_strategy = strategies[(index + step) % strategies.len()];
+                tx.send(AppEvent::Op(Op::Command(AgentCommand::Settings(
+                    SettingsCall::SetCompactionStrategy(self.compaction_strategy),
+                ))));
             }
             entry => {
                 let Some((_, command, _)) = ENTRIES.get(entry - TOGGLES) else {
@@ -160,6 +206,14 @@ impl MenuModel for ConfigPanel {
                 description: Some("auto is off over SSH (next launch)".to_string()),
                 ..Default::default()
             },
+            GenericDisplayRow {
+                name: format!("Compaction: {}", self.compaction_strategy.as_str()),
+                description: Some(
+                    "what reduces the context; background and hierarchical compact as standard until they are built"
+                        .to_string(),
+                ),
+                ..Default::default()
+            },
         ];
         rows.extend(
             ENTRIES
@@ -177,14 +231,31 @@ impl MenuModel for ConfigPanel {
         "space or enter change or open · ←/→ choose · esc close".to_string()
     }
 
+    fn on_reply(&mut self, reply: CommandReply) -> Option<CommandReply> {
+        match reply {
+            CommandReply::Settings(SettingsReply::Config {
+                compaction_strategy,
+                ..
+            }) => {
+                self.compaction_strategy = compaction_strategy;
+                None
+            }
+            reply => Some(reply),
+        }
+    }
+
     fn on_key(&mut self, key: KeyEvent, selected: Option<usize>, tx: &AppEventSender) -> MenuKey {
         let Some(row) = selected else {
             return MenuKey::Ignored;
         };
         match key.code {
             KeyCode::Enter | KeyCode::Char(' ') => self.change(row, true, tx),
-            KeyCode::Right if row == TOGGLES - 1 => self.change(row, true, tx),
-            KeyCode::Left if row == TOGGLES - 1 => self.change(row, false, tx),
+            KeyCode::Right if matches!(row, ALTERNATE_SCREEN | COMPACTION_STRATEGY) => {
+                self.change(row, true, tx)
+            }
+            KeyCode::Left if matches!(row, ALTERNATE_SCREEN | COMPACTION_STRATEGY) => {
+                self.change(row, false, tx)
+            }
             _ => MenuKey::Ignored,
         }
     }

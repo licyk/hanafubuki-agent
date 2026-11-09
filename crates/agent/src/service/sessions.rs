@@ -1,6 +1,9 @@
 use super::AgentApplicationService;
 use crate::session_workspace::session_workspace;
-use crate::{model_api_protocol, AgentModelInfo, ResolvedAgentProvider};
+use crate::{
+    model_api_protocol, session_compaction_strategy, warn_unreachable_background_threshold,
+    AgentModelInfo, ResolvedAgentProvider,
+};
 use hanafubuki_agent_kernel::AgentImageAttachmentRef;
 use hanafubuki_agent_kernel::{
     AgentError, AgentEventSink, AgentGeneration, AgentRevision, AgentSessionConfig,
@@ -107,7 +110,13 @@ impl AgentApplicationService {
                 hanafubuki_agent_kernel::ModelCompactionCapability::LocalSummary
             },
             sampling_retry_policy: hanafubuki_agent_kernel::AgentSamplingRetryPolicy::default(),
+            compaction_strategy: session_compaction_strategy(&settings.compaction, false, false),
         };
+        warn_unreachable_background_threshold(
+            config.compaction_strategy,
+            &settings.compaction,
+            config.auto_compact_threshold_percent,
+        );
         let workspace = self
             .workspace
             .roots()
