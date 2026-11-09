@@ -7,13 +7,16 @@
 //! helper ([`helper_dispatch`]), which confines itself with Landlock
 //! (filesystem) and seccomp (network) and then executes the command in
 //! place, so the process the `ExecutorManager` owns is the command itself.
-//! Other platforms have no backend yet: a policy other than full access
-//! fails there rather than run unconfined.
+//! On macOS it is `/usr/bin/sandbox-exec` with a Seatbelt policy, which
+//! likewise executes the command in place. Other platforms have no backend
+//! yet: a policy other than full access fails there rather than run
+//! unconfined.
 
 mod backend;
 mod helper;
 #[cfg(target_os = "linux")]
 mod linux;
+mod macos;
 mod policy;
 
 pub use backend::{Sandbox, SandboxError, SandboxStatus};

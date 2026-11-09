@@ -87,13 +87,17 @@ Third-party notices
     `codex-rs/core/src/session/review.rs` (commit `57a808a392`); each says
     so in its first lines;
   - the sandbox of the commands the model runs, `crates/sandbox`
-    (`src/policy.rs`, `src/backend.rs`, `src/helper.rs` and `src/linux/`),
-    is derived from Codex's `codex-rs/sandboxing` (`src/manager.rs`,
-    `src/landlock.rs`), `codex-rs/linux-sandbox` (`src/linux_run_main.rs`,
-    `src/seccomp.rs`), `codex-rs/arg0/src/lib.rs`,
-    `codex-rs/protocol/src/protocol.rs` (`SandboxPolicy`) and
-    `codex-rs/config/src/config_toml.rs` (commit `57a808a392`); each says
-    so in its first lines.
+    (`src/policy.rs`, `src/backend.rs`, `src/helper.rs`, `src/linux/` and
+    `src/macos/`), is derived from Codex's `codex-rs/sandboxing`
+    (`src/manager.rs`, `src/landlock.rs`, `src/seatbelt.rs`),
+    `codex-rs/linux-sandbox` (`src/linux_run_main.rs`, `src/seccomp.rs`),
+    `codex-rs/arg0/src/lib.rs`, `codex-rs/protocol/src/protocol.rs`
+    (`SandboxPolicy`), `codex-rs/protocol/src/permissions.rs` and
+    `codex-rs/config/src/config_toml.rs` (commit `57a808a392`); the
+    Seatbelt policies in `src/macos/` (`seatbelt_base_policy.sbpl`,
+    `seatbelt_network_policy.sbpl`, `seatbelt_preferences_policy.sbpl`)
+    are Codex's `codex-rs/sandboxing/src/seatbelt_*_policy.sbpl`
+    unchanged. Each says so in its first lines.
   Codex's NOTICE and its license follow.
 - Ratatui (https://github.com/ratatui/ratatui), MIT License: Codex's
   `custom_terminal.rs`, ported as `crates/tui/src/custom_terminal.rs`, is

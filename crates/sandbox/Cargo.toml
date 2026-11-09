@@ -1,6 +1,6 @@
 [package]
 name = "hanafubuki-agent-sandbox"
-description = "The sandbox of hanafubuki-agent's commands: read-only, workspace-write or full access, enforced by Landlock and seccomp on Linux"
+description = "The sandbox of hanafubuki-agent's commands: read-only, workspace-write or full access, enforced by Landlock and seccomp on Linux and by Seatbelt on macOS"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

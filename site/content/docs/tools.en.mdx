@@ -33,7 +33,7 @@ A few tools are always there: `update_plan` (the task plan), `request_user_input
 - **Interactive terminals**: the model can ask for a pseudo-terminal (PTY), which takes any input and can be resized with `resize_execution`; otherwise only Ctrl-C can be sent.
 - **Output**: each call returns at most 256 KiB of output, and a process's whole output is capped at 256 KiB by default.
 - **Time limits**: every process is stopped after 10 minutes. A tool that makes no progress for 10 minutes is stopped too.
-- **Sandbox**: a command runs in the session's [sandbox](/docs/permissions#sandbox): by default on Linux it writes only in the workspace roots and the temporary directories, without the network; one whose sandbox this machine cannot give is not run.
+- **Sandbox**: a command runs in the session's [sandbox](/docs/permissions#sandbox): by default on Linux and macOS it writes only in the workspace roots and the temporary directories, without the network; one whose sandbox this machine cannot give is not run.
 - **Environment**: commands get a clean environment, without your shell's variables; see [Environment](/docs/environment#commands).
 - **Working directory**: a command runs in the directory the model names, a relative one taken from the first workspace root; when it names none, in the first workspace root: the working directory (`-C`), or the one it was changed to while the Agent runs.
 - **Clean-up**: the Agent records the process groups it starts and ends them when it shuts down; after a crash, the next start cleans up what was left.

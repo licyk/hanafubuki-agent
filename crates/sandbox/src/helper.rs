@@ -120,7 +120,7 @@ fn confine_and_exec(request: HelperRequest) -> String {
 
 #[cfg(not(target_os = "linux"))]
 fn confine_and_exec(_request: HelperRequest) -> String {
-    "the sandbox is not available on this platform yet".to_string()
+    "the sandbox helper runs only on Linux".to_string()
 }
 
 #[cfg(test)]

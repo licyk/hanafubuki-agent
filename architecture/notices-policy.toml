@@ -189,6 +189,13 @@ path = "crates/sandbox/src/linux/network.rs"
 markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
 notice = "crates/sandbox"
 
+# Its Seatbelt policies (`seatbelt_*_policy.sbpl` beside it) are Codex's,
+# with the same marker in a `;` header; this check reads only Rust files.
+[[derived]]
+path = "crates/sandbox/src/macos/mod.rs"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
+notice = "crates/sandbox"
+
 [[mit]]
 path = "crates/tui/src/custom_terminal.rs"
 holder = "Copyright (c) 2016-2022 Florian Dehau"

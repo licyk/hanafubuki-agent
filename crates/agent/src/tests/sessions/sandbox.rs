@@ -1,12 +1,12 @@
 //! The sandbox a session's commands run in. This test binary never calls
-//! `sandbox::helper_dispatch`, so it has no sandbox on any platform (the
-//! test configuration is full access, `configure_test_provider`): a
-//! command that asks for one fails closed here, which is what the second
-//! test checks (the Linux sandbox itself is `hanafubuki-agent-sandbox`'s
-//! `tests/linux.rs`, and the command line's `tests/exec.rs`).
+//! `sandbox::helper_dispatch`, so it has no sandbox but on macOS, whose
+//! Seatbelt needs no helper (the test configuration is full access,
+//! `configure_test_provider`): a command that asks for one fails closed
+//! here, which is what the second test checks (the sandboxes themselves
+//! are `hanafubuki-agent-sandbox`'s `tests/linux.rs` and `tests/macos.rs`,
+//! and the command line's `tests/exec.rs`).
 
 use super::*;
-use hanafubuki_agent_approval::AgentPermissionMode;
 use hanafubuki_agent_sandbox::{platform_default_mode, SandboxSettings};
 
 #[tokio::test]
@@ -69,6 +69,7 @@ async fn a_turn_takes_the_session_sandbox_over_the_configured_one() {
 
 /// Even a full-access permission mode, which asks no one, runs nothing
 /// when the sandbox the command needs is unavailable: the model reads why.
+#[cfg(not(target_os = "macos"))]
 #[tokio::test]
 async fn a_command_whose_sandbox_is_unavailable_is_refused_before_it_runs() {
     let arguments = serde_json::to_string(&json!({
@@ -93,7 +94,10 @@ async fn a_command_whose_sandbox_is_unavailable_is_refused_before_it_runs() {
         .await
         .unwrap();
     service
-        .set_session_permission_mode(session.id, AgentPermissionMode::FullAccess)
+        .set_session_permission_mode(
+            session.id,
+            hanafubuki_agent_approval::AgentPermissionMode::FullAccess,
+        )
         .unwrap();
     service
         .set_session_sandbox_mode(session.id, AgentSandboxMode::WorkspaceWrite)

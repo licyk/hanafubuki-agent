@@ -7,8 +7,9 @@
 // (http://www.apache.org/licenses/LICENSE-2.0).
 // Modified for hanafubuki-agent: the workspace is every workspace root
 // rather than the working directory; read-only has no network switch; no
-// external-sandbox policy, no read-only carve-outs under a writable root
-// (`.git`), no `exclude_tmpdir_env_var` or `exclude_slash_tmp`.
+// external-sandbox policy, no `exclude_tmpdir_env_var` or
+// `exclude_slash_tmp`; the read-only carve-outs under a writable root
+// (`.git`) are the macOS backend's, since Landlock cannot make them.
 
 use std::path::{Path, PathBuf};
 
@@ -91,11 +92,11 @@ impl SandboxSettings {
 }
 
 /// The mode an unset `sandboxMode` means: Codex's default preset,
-/// workspace-write, where the platform has a sandbox; elsewhere none, since
-/// a mode no backend can enforce would fail every command. macOS and
-/// Windows have no backend yet.
+/// workspace-write, where the platform has a sandbox (Linux, macOS);
+/// elsewhere none, since a mode no backend can enforce would fail every
+/// command. Windows has no backend yet.
 pub fn platform_default_mode() -> AgentSandboxMode {
-    if cfg!(target_os = "linux") {
+    if cfg!(any(target_os = "linux", target_os = "macos")) {
         AgentSandboxMode::WorkspaceWrite
     } else {
         AgentSandboxMode::FullAccess

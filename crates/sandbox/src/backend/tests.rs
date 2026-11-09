@@ -43,12 +43,42 @@ fn a_policy_no_backend_enforces_fails_closed_and_says_why() {
     }
 }
 
+// macOS's Seatbelt needs no helper.
+#[cfg(not(target_os = "macos"))]
 #[test]
 fn a_test_binary_that_never_dispatched_has_no_helper() {
     assert!(matches!(
         Sandbox::detect().status(),
         SandboxStatus::Unavailable { .. }
     ));
+}
+
+#[test]
+fn seatbelt_runs_a_sandboxed_command_under_sandbox_exec() {
+    let sandbox = Sandbox {
+        backend: super::Backend::Seatbelt,
+    };
+    assert_eq!(
+        sandbox.status(),
+        SandboxStatus::Available {
+            backend: "Seatbelt (/usr/bin/sandbox-exec)".to_string()
+        }
+    );
+    for policy in [
+        SandboxPolicy::ReadOnly,
+        SandboxPolicy::WorkspaceWrite {
+            writable_roots: Vec::new(),
+            network_access: false,
+        },
+    ] {
+        let wrapped = sandbox.wrap(&policy, command()).unwrap();
+        assert_eq!(wrapped[..2], ["/usr/bin/sandbox-exec", "-p"]);
+        assert_eq!(wrapped[3..], ["--", "/bin/sh", "-c", "true"]);
+    }
+    assert_eq!(
+        sandbox.wrap(&SandboxPolicy::FullAccess, command()),
+        Ok(command())
+    );
 }
 
 #[cfg(target_os = "linux")]
