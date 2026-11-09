@@ -3,7 +3,7 @@ resolver = "2"
 members = ["crates/*", "xtask"]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 license = "GPL-3.0-only"
 repository = "https://github.com/licyk/hanafubuki-agent"
@@ -11,29 +11,29 @@ rust-version = "1.99"
 
 [workspace.dependencies]
 # The workspace's own crates.
-hanafubuki-agent = { path = "crates/agent", version = "0.1.0" }
-hanafubuki-agent-approval = { path = "crates/approval", version = "0.1.0" }
-hanafubuki-agent-config = { path = "crates/config", version = "0.1.0" }
-hanafubuki-agent-contracts = { path = "crates/contracts", version = "0.1.0" }
-hanafubuki-agent-execution = { path = "crates/execution", version = "0.1.0" }
-hanafubuki-agent-foundation = { path = "crates/foundation", version = "0.1.0" }
-hanafubuki-agent-history = { path = "crates/history", version = "0.1.0" }
-hanafubuki-agent-host = { path = "crates/host", version = "0.1.0" }
-hanafubuki-agent-kernel = { path = "crates/kernel", version = "0.1.0" }
-hanafubuki-agent-mcp = { path = "crates/mcp", version = "0.1.0" }
-hanafubuki-agent-memory = { path = "crates/memory", version = "0.1.0" }
-hanafubuki-agent-model-api = { path = "crates/model-api", version = "0.1.0" }
-hanafubuki-agent-plugin-execution = { path = "crates/plugin-execution", version = "0.1.0" }
-hanafubuki-agent-plugin-mcp = { path = "crates/plugin-mcp", version = "0.1.0" }
-hanafubuki-agent-plugin-web = { path = "crates/plugin-web", version = "0.1.0" }
-hanafubuki-agent-plugin-workspace-fs = { path = "crates/plugin-workspace-fs", version = "0.1.0" }
-hanafubuki-agent-process = { path = "crates/process", version = "0.1.0" }
-hanafubuki-agent-runtime = { path = "crates/runtime", version = "0.1.0" }
-hanafubuki-agent-skills = { path = "crates/skills", version = "0.1.0" }
-hanafubuki-agent-tui = { path = "crates/tui", version = "0.1.0" }
-hanafubuki-agent-tool-contracts = { path = "crates/tool-contracts", version = "0.1.0" }
-hanafubuki-agent-web-search = { path = "crates/web-search", version = "0.1.0" }
-hanafubuki-agent-workspace-fs = { path = "crates/workspace-fs", version = "0.1.0" }
+hanafubuki-agent = { path = "crates/agent", version = "0.2.0" }
+hanafubuki-agent-approval = { path = "crates/approval", version = "0.2.0" }
+hanafubuki-agent-config = { path = "crates/config", version = "0.2.0" }
+hanafubuki-agent-contracts = { path = "crates/contracts", version = "0.2.0" }
+hanafubuki-agent-execution = { path = "crates/execution", version = "0.2.0" }
+hanafubuki-agent-foundation = { path = "crates/foundation", version = "0.2.0" }
+hanafubuki-agent-history = { path = "crates/history", version = "0.2.0" }
+hanafubuki-agent-host = { path = "crates/host", version = "0.2.0" }
+hanafubuki-agent-kernel = { path = "crates/kernel", version = "0.2.0" }
+hanafubuki-agent-mcp = { path = "crates/mcp", version = "0.2.0" }
+hanafubuki-agent-memory = { path = "crates/memory", version = "0.2.0" }
+hanafubuki-agent-model-api = { path = "crates/model-api", version = "0.2.0" }
+hanafubuki-agent-plugin-execution = { path = "crates/plugin-execution", version = "0.2.0" }
+hanafubuki-agent-plugin-mcp = { path = "crates/plugin-mcp", version = "0.2.0" }
+hanafubuki-agent-plugin-web = { path = "crates/plugin-web", version = "0.2.0" }
+hanafubuki-agent-plugin-workspace-fs = { path = "crates/plugin-workspace-fs", version = "0.2.0" }
+hanafubuki-agent-process = { path = "crates/process", version = "0.2.0" }
+hanafubuki-agent-runtime = { path = "crates/runtime", version = "0.2.0" }
+hanafubuki-agent-skills = { path = "crates/skills", version = "0.2.0" }
+hanafubuki-agent-tui = { path = "crates/tui", version = "0.2.0" }
+hanafubuki-agent-tool-contracts = { path = "crates/tool-contracts", version = "0.2.0" }
+hanafubuki-agent-web-search = { path = "crates/web-search", version = "0.2.0" }
+hanafubuki-agent-workspace-fs = { path = "crates/workspace-fs", version = "0.2.0" }
 
 # Third-party crates more than one member uses; members add features.
 axum = "0.8"

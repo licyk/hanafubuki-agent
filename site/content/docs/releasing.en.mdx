@@ -18,7 +18,7 @@ A release is a `v<version>` tag on `main`. The tag starts `.github/workflows/rel
     git push
     ```
 
-    `version` raises `[workspace.package].version` and every internal requirement in `[workspace.dependencies]`, then refreshes `Cargo.lock`. When the requirement users write (`hanafubuki-agent = "0.1"`, for one) changes with it, it also updates the dependency snippets in `README.md` and the site's MDX pages. Before 1.0 a minor release may break, so a release that removes or changes public API (the `exec --json` events included) bumps the minor version.
+    `version` raises `[workspace.package].version` and every internal requirement in `[workspace.dependencies]`, then refreshes `Cargo.lock`. When the requirement users write (`hanafubuki-agent = "0.2"`, for one) changes with it, it also updates the dependency snippets in `README.md` and the site's MDX pages. Before 1.0 a minor release may break, so a release that removes or changes public API (the `exec --json` events included) bumps the minor version.
 
   </Step>
   <Step>

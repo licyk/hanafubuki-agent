@@ -18,7 +18,7 @@ icon: Rocket
     git push
     ```
 
-    `version` 提升 `[workspace.package].version` 和 `[workspace.dependencies]` 中的每个内部要求，然后刷新 `Cargo.lock`。当用户写的依赖要求（例如 `hanafubuki-agent = "0.1"`）随之变化时，它还会更新 `README.md` 和站点 MDX 页面中的依赖片段。1.0 之前次版本号可以包含破坏性变更，所以移除或改变公开 API（包括 `exec --json` 的事件）的版本要升级次版本号。
+    `version` 提升 `[workspace.package].version` 和 `[workspace.dependencies]` 中的每个内部要求，然后刷新 `Cargo.lock`。当用户写的依赖要求（例如 `hanafubuki-agent = "0.2"`）随之变化时，它还会更新 `README.md` 和站点 MDX 页面中的依赖片段。1.0 之前次版本号可以包含破坏性变更，所以移除或改变公开 API（包括 `exec --json` 的事件）的版本要升级次版本号。
 
   </Step>
   <Step>
