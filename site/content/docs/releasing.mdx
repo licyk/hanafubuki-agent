@@ -6,7 +6,7 @@ icon: Rocket
 
 一个版本就是 `main` 上的一个 `v<version>` 标签。标签启动 `.github/workflows/release.yml`：把除 `xtask` 外的每个 crate 发布到 crates.io，为四个目标构建 `hanafubuki-agent` 二进制，并创建带归档的 GitHub release。
 
-## 检查清单
+## 检查清单 [#checklist]
 
 <Steps>
   <Step>
@@ -43,7 +43,7 @@ icon: Rocket
   </Step>
 </Steps>
 
-## 发布工作流的任务
+## 发布工作流的任务 [#the-release-workflows-jobs]
 
 | 任务             | 做什么                                                                                                                                                                                                                                                                                       |
 | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -57,11 +57,11 @@ icon: Rocket
 
 `publish` 和 `github-release` 只在标签上运行。
 
-## 首次发布与 crates.io 的速率限制
+## 首次发布与 crates.io 的速率限制 [#the-first-release-and-cratesios-rate-limit]
 
 crates.io 允许一个账号一次创建几个新 crate，之后每十分钟一个。首次发布会创建全部 24 个 crate，所以 `publish` 先发布前几个，之后大约每十分钟一个 crate：总共约三个半小时。这个任务最多重试 30 次，允许运行 330 分钟；`github-release` 等待它。之后的发布只是给已有的 crate 添加版本，crates.io 对此限制宽松得多，几分钟就能完成。
 
-## 恢复中断的发布
+## 恢复中断的发布 [#resuming-a-release-that-stopped]
 
 中途停止的运行（发布超时或失败、某个二进制没有构建成功、runner 消失）通过**在标签上**手动运行来恢复：
 
@@ -71,7 +71,7 @@ gh workflow run release.yml -R licyk/hanafubuki-agent --ref v0.1.0
 
 每个任务都可以安全地重复：`publish` 跳过 crates.io 上已有的每个 crate 版本，二进制重新构建，`github-release` 把归档上传覆盖到已有的 release（`--clobber`），而不是再创建一次。
 
-## 在分支上演练
+## 在分支上演练 [#rehearsing]
 
 在分支上手动运行会构建并打包二进制（以及第三方许可证），但什么都不发布：`publish` 和 `github-release` 只在标签上运行。改变了工作流或构建的发布之前先演练，并查看运行作为制品上传的归档：
 
@@ -81,7 +81,7 @@ gh workflow run release.yml -R licyk/hanafubuki-agent --ref main
 
 如果需要修复代码：已发布的版本不能替换。在 `main` 上修复，升级版本号，发布新版本。
 
-## 密钥
+## 密钥 [#secrets]
 
 - `CARGO_REGISTRY_TOKEN`：带 `publish-new` 和 `publish-update` 权限的 crates.io 令牌，设置为仓库密钥。只有 `publish` 能看到它。
 - `GITHUB_TOKEN`：工作流自己的令牌，只在 `github-release` 上有 `contents: write`。

@@ -6,7 +6,7 @@ icon: Plug
 
 Host plugins let the Agent use the host's own domains: Hanafubuki uses them for its instance-management tools, its Task Center tools and the UI context ("where the user is looking"). A host plugin is an ordinary [kardia](https://github.com/licyk/kardia) plugin that depends only on the plugin API (`hanafubuki-agent-contracts`) and the facade's public API, and it follows the same [plugin rules](/docs/plugin-rules) as the Agent's own plugins. The kernel never sees a plugin; it reads only the entries plugins register in its registries.
 
-## Where it lives
+## Where it lives [#where-it-lives]
 
 A host plugin lives in the host's own crate (Hanafubuki: `hanafubuki-agent-integration/src/plugins/`) and is mounted through the host interface:
 
@@ -16,7 +16,7 @@ AgentPluginRow::unconfigured(AgentPluginGroup::Capability, app_info_plugin())
 
 The `Capability` group holds tools, tool sources and their approval rules; the `Context` group holds world-state sections. A host's rows mount after the Agent's capability plugins and before its context plugins, one after another, each once the previous one settled or timed out (20 s). The dependencies are in [Embedding the Agent](/docs/embedding#adding-the-crates).
 
-## The shape of a plugin
+## The shape of a plugin [#the-shape-of-a-plugin]
 
 ```text
 PluginDef::new(apply)      apply: get the injected services, register entries, spawn workers, return
@@ -46,7 +46,7 @@ The extension points a plugin registers in:
 
 Uniqueness, combination and the rules of each are in [Plugin rules](/docs/plugin-rules#extension-points). Host plugins mostly contribute tools and context sections; an example of each follows.
 
-## Tools
+## Tools [#tools]
 
 ```rust
 use std::sync::Arc;
@@ -166,7 +166,7 @@ The kernel owns the call pipeline and a plugin cannot reorder it: argument norma
 - **Blocking work** runs on the injected `BlockingService`, and a call observes `invocation.cancellation`.
 - **Errors**: `AgentToolError::Failed(message)` is a tool error the model reads, and the turn goes on; `AgentToolError::Cancelled` is for cancellation. To show the model an error without the call failing, return `ToolResult::model_visible_error`.
 
-## Context sections and renderers
+## Context sections and renderers [#context-sections-and-renderers]
 
 Everything model-visible that is neither history nor a tool is a **context section** of a `ContextSectionKind`. A contributor produces sections at turn admission; a renderer is **data** (it runs no plugin code) and decides the slot, the role and the text around the section. A kind's wrapper text belongs to the plugin that owns the kind; the model API knows no section kind.
 
@@ -267,7 +267,7 @@ The rules:
 - A contributor that fails (an error, a panic, its plugin stopping, an undeclared or repeated kind) is left out of that turn and recorded as an issue of its plugin (the plugin's status shows a `warning`, the Agent `degraded`) until it succeeds again; the turn is never refused over it.
 - A host context can also come with a steering message: the host's `HostContextPort` returns an `AgentHostContext` of the same kind, which the kernel writes to the world state and the same renderer shows.
 
-## The other extension points
+## The other extension points [#the-other-extension-points]
 
 - **Tool sources** (`AgentToolSource`): tools that exist only while something outside offers them (an MCP server's catalog). Asked once per sampling step, a source returns `SourcedTool`s, optionally with a `ToolPlanLease` so the step's calls run against what they were planned from. Their identity (provider id, tool id, generation) stays stable while the tool does not change.
 - **Turn admission contributors** produce typed `TurnExtensions` once at admission, frozen on the turn and handed to every tool call (`ToolInvocation::turn`) and prompt contributor.
@@ -277,7 +277,7 @@ The rules:
 
 The full rules of each are in [Plugin rules](/docs/plugin-rules).
 
-## Panics in plugin code
+## Panics in plugin code [#panics-in-plugin-code]
 
 A plugin panic is a bug, but it stays in its plugin: the kernel calls plugin code only under a guard, and a panic becomes that call's own error path and a fault of the plugin.
 
@@ -291,7 +291,7 @@ A plugin panic is a bug, but it stays in its plugin: the kernel calls plugin cod
 
 The host then stops the plugin and mounts it again under the restart policy (2 s, 10 s, 30 s, three in ten minutes); after that it stays `failed` until `retry_plugin`, a new configuration or turning it off and on. The panic message reaches the log and the plugin's status, never the model. All of it needs the panic to unwind: [The panic-hook bridge](/docs/embedding#the-panic-hook-bridge).
 
-## Testing
+## Testing [#testing]
 
 Turn on the `test-support` feature of `hanafubuki-agent` in `[dev-dependencies]`. `test_support::mount` mounts a plugin on a fresh kardia root that provides every registry, the `BlockingService` and `PluginFaults`, and asserts it becomes `Active`:
 
@@ -324,7 +324,7 @@ async fn registers_app_info_until_stopped() {
 - The host's goldens pin what the model receives with its plugins.
 - The Agent repository's `cargo xtask check-plugin-panics` checks the Agent's own plugin crates only; a host checks its plugins itself (Hanafubuki: `bun run xtask check-agent-dependencies`).
 
-## Example: Hanafubuki's plugins
+## Example: Hanafubuki's plugins [#example-hanafubukis-plugins]
 
 | Plugin       | Group      | What it does                                                                                                                                                                                                                                                                              |
 | ------------ | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

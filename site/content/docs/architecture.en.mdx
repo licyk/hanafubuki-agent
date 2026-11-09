@@ -6,7 +6,7 @@ icon: Layers
 
 This page is for someone reading the code for the first time: how the parts work together, and why the choices the code does not explain were made. The rules to follow are in [Plugin rules](/docs/plugin-rules) and the repository's [AGENTS.md](https://github.com/licyk/hanafubuki-agent/blob/main/AGENTS.md); embedding is [Embedding the Agent](/docs/embedding).
 
-## Goals
+## Goals [#goals]
 
 The Agent is a **kernel** (`hanafubuki-agent-kernel`) that owns sessions, turns, history and the per-step snapshots, with its capabilities supplied by **plugins** on [kardia](https://github.com/licyk/kardia). The kernel reaches plugins only through the registries in `hanafubuki-agent-contracts`. The design serves three goals:
 
@@ -14,7 +14,7 @@ The Agent is a **kernel** (`hanafubuki-agent-kernel`) that owns sessions, turns,
 - **Extensibility.** A new capability is a plugin and a manifest row; the kernel, the contracts and the frontend do not change.
 - **What the model sees is pinned.** The goldens record every model-visible surface; a change the model sees regenerates them on purpose.
 
-## Crates and layers
+## Crates and layers [#crates-and-layers]
 
 Dependencies point down. `cargo xtask check-dependencies` checks against the layer table (`LAYERS` in `xtask/src/dependencies.rs`) that each member depends only on the members its row allows.
 
@@ -37,7 +37,7 @@ Three boundaries carry most of the design:
 - **The model API is the wire and nothing more.** It sends a `ModelInputItem::ContextFragment { role, kind, content }` as given and treats `kind` as a label. A section's wrapper text belongs to the plugin that owns the section; `check-model-api-context` keeps every context section kind out of the model API's sources.
 - **The Agent knows no host domain.** What is the host's (in Hanafubuki: instances, the Task Center, the UI context, its part of the instructions) reaches the Agent through the host interface.
 
-## The plugin host
+## The plugin host [#the-plugin-host]
 
 ```text
 the host (Hanafubuki's module host, for one)
@@ -55,7 +55,7 @@ the host (Hanafubuki's module host, for one)
 - **The kernel creates the registries before the runtime starts**, and the `agent-kernel` plugin publishes them; plugins inject them and register entries. There are nine: tools, tool sources, context contributors, context renderers, turn admission, prompt contributors, approval rules, continuation hooks and observers. The kernel reads each as a snapshot at a fixed point (per sampling step, per request, at turn admission, after a commit).
 - **A registration is an effect of its caller.** An entry belongs to the plugin that registered it and leaves with it: a stopping plugin first hides its entries from new snapshots, waits for leased calls (`DRAIN_GRACE`), then cancels them. A registration that cannot be admitted (a duplicate id, a reserved or colliding tool name, a second contributor or renderer for a kind) fails the registering plugin at its start and affects no turn.
 
-### Faults
+### Faults [#faults]
 
 Three owners, three outcomes:
 
@@ -69,11 +69,11 @@ Three owners, three outcomes:
 
 All of it rests on unwinding. The process's panic hook lets a panic unwind only when it is known to be caught: the Agent's threads run on a contained runtime (`ContainedRuntime`, threads `agent-rt`) and in contained worker groups, and its guards mark themselves too. Those marks live in the Agent's own foundation, so a host's hook must ask `hanafubuki_agent::panic::is_panic_contained` ([the panic-hook bridge](/docs/embedding#the-panic-hook-bridge)).
 
-### Start and shutdown
+### Start and shutdown [#start-and-shutdown]
 
 A start claims a generation, builds the runtime and the process owner group, reaps the process groups an earlier run left (`process-groups.json`), constructs the service and runs recovery on the runtime's blocking pool, starts the plugins, schedules the MCP connects (four at a time, each with its own timeouts) and installs the service as `Running`. The crash-loop marker (`start-marker.json`) stops automatic starts after three unfinished ones. Shutdown runs in fixed stages within a 20 s budget: close the slot, stop turns, MCP, plugins (one disposal of the kardia root), memory, history and executions, the process group, the runtime. Plugins own no MCP, memory, history or execution lifecycle, so the order of their teardowns does not matter.
 
-## Sessions and turns
+## Sessions and turns [#sessions-and-turns]
 
 - **A session** has a configuration (Provider, protocol, model, instructions, mode, reasoning effort, context window, compaction settings), a mode (`Default` or `Plan`), a lifecycle (`Available`, `Archived`), a title and a memory contribution mode. A session can be forked before a turn or at its head. The configuration is normalized in one place (`normalize_session_config`), at creation, every update and recovery.
 - **A turn** runs as a managed Tokio task through `Sampling`, `RunningTools` and `WaitingForUserInput`, ending `Completed`, `Cancelled`, `Failed` or `Interrupted`. Each loop iteration may auto-compact, samples the model with a frozen tool plan, runs tools, consumes steering input and asks the continuation hooks. A panic in the turn's own work ends the turn `Failed` (`InternalFailure`), and the session takes its next turn.
@@ -82,13 +82,13 @@ A start claims a generation, builds the runtime and the process owner group, rea
 - **Cancellation** is cooperative first, then aborts the task, confirmed within 5 s. Turns interrupted by a restart are recovered as `Interrupted`. A session recovery rejects is **quarantined**, not fatal: none of its files is rewritten or deleted, and the other sessions open.
 - **Limits** (`AgentHardLimits`): a turn samples at most 32 times, then fails `budget_exceeded` with every earlier output committed; its 30-minute deadline cancels it as a user's cancel would and fails it `deadline_exceeded`. Neither is shown to the model.
 
-## Tools
+## Tools [#tools]
 
-### A plan per step
+### A plan per step [#a-plan-per-step]
 
 Every sampling step builds one immutable `AgentToolPlan`: the kernel's core tools (`new_context`, `update_plan`, `request_user_input`), the registered tools (each handler's `availability` for the step), the tools each tool source contributes for the step, and `tool_search` when anything is deferred. The plan freezes the step's approval-rule snapshot and the sources' plan leases with it; a call runs against the plan that advertised it, and the leases keep what a tool was planned from (an MCP connection) alive until the step ends. Plan mode keeps only `ReadOnly` tools and `request_user_input`.
 
-### Names on the wire
+### Names on the wire [#names-on-the-wire]
 
 A tool's identity inside the Agent is its `ToolName` (namespace segments and a local name), keyed by the flattened `namespace__name`, which is never parsed back. The wire name is chosen per request (`ProviderToolTable`): Responses takes namespaces, so a namespaced function keeps its namespace and local name; the other protocols get the flattened name. Every name is fitted to the protocol's limit (128 bytes for Responses and Anthropic Messages, 64 for Chat Completions); a later one that collides or is too long is cut and suffixed with `_` and 12 hex digits of a hash of its `(provider id, tool id)`, the same on every step. A returned call is resolved by lookup of its `(namespace, name)`, and history records both.
 
@@ -96,11 +96,11 @@ Schemas follow the same per-protocol rule: a protocol with `strict_json_schema` 
 
 **Registration refuses, planning renames.** What registration can refuse it refuses (reserved names, a flattened name already registered, an over-long name), so only sourced tools, whose catalogs come from outside, can collide at planning time, and those are renamed deterministically instead of failing the step: refusing a colliding registration fails one plugin once, while failing the step would fail every turn until the plugin was turned off.
 
-### Exposure and deferred tools
+### Exposure and deferred tools [#exposure-and-deferred-tools]
 
 `ToolExposure` is `Direct`, `Deferred`, `DirectModelOnly` or `Hidden`. When the direct catalog is over budget, only sourced direct tools are deferred, fairly across providers. A deferred tool is found through `tool_search` (a BM25 index over name, description and schema); the search commits its output, then a `ConversationItem::ToolSelection`. The planner admits the selections in the model context since the last compaction, so a selection lasts across turns until the next compaction.
 
-### The call pipeline
+### The call pipeline [#the-call-pipeline]
 
 The kernel owns the pipeline, and plugins cannot reorder it:
 
@@ -145,13 +145,13 @@ The kernel owns the pipeline, and plugins cannot reorder it:
 
 **No streaming dispatch.** Calls start once the response has streamed and its items are committed. Starting each call as its item completes, as Codex does, would shorten some steps; the commit and cancel rules are written so it could be added without changing them, and nothing needs it yet.
 
-### Approval
+### Approval [#approval]
 
 `AgentPermissionMode` is `Manual` (the default), `AutoReview` or `FullAccess`, frozen per turn from the setting. Each tool call is classified by its handler's `permission` into an `ApprovalAction` (kind, risk class, canonical digest). Rules can only tighten. The user may answer a `Manual`-mode prompt with `AllowForSession`: later calls of the same tool (by `(provider id, tool id, generation)`) are not asked again for the rest of the session, which is kept in runtime state only, so a restart, a fork and a changed tool (an MCP reconnect included) ask again. Approval yields a one-shot `AuthorizedAction`; mutating tools recompute their action in `invoke` and require an exact match. There is no OS sandbox: approval is the gate.
 
-## Context
+## Context [#context]
 
-### Sections, slots and renderers
+### Sections, slots and renderers [#sections-slots-and-renderers]
 
 Everything model-visible that is neither history nor a tool is a **context section** of a `ContextSectionKind`, an open identifier persisted by its snake_case name:
 
@@ -162,19 +162,19 @@ A section is shown to the model by its kind's `ContextRenderer`: a slot, a role,
 
 **Change detection:** only the latest version of each kind is shown, where it last changed; earlier versions are no longer in the request. So there is no "replaces previously provided" notice and no section-changed event: the persisted `WorldStateUpdate` is the change record.
 
-### AGENTS.md
+### AGENTS.md [#agentsmd]
 
 The `workspace-context` plugin's `workspace_instructions` section is read at every turn admission: first the user's own file (`AGENTS.override.md` in the data directory, else `AGENTS.md`), then each workspace root's from the root down to the directory the host selects, under one 32 KiB budget with a fair share per group (at most 16 KiB). Because it is read every turn and diffed by digest, an edit mid-session reaches the next turn.
 
-### The context window and the token estimate
+### The context window and the token estimate [#the-context-window-and-the-token-estimate]
 
 A session's `context_window_tokens` is resolved when it is created or its model selected: the configured window, else the one the Provider's model listing reported in this run, else a small table of known model families; without one there is no automatic compaction. The Agent has one token estimate (`hanafubuki_agent_contracts::tokens`, bytes / 4). The counts agree because they count the same request: the admission check, the step's request and an automatic compaction's check of the next request all build it with `step_model_request` and count it with `estimate_model_request_tokens`, tools and memory included.
 
-### Compaction
+### Compaction [#compaction]
 
 Compaction replaces history with a local summary or a Responses compaction, chosen by the session's compaction capability. It is staged on a clone of the session record and installed as a `Compacted { checkpoint }` boundary, so a failure discards the clone and leaves history unchanged. It keeps user messages (newest first, within a budget) and the summary, and never summarizes sections: the next request re-renders every section from the registries, so a window compacted mid-turn still carries the Skill catalog and memory. Triggers: before a turn and mid-turn at the threshold (80% of the window by default), manual, and after a Provider's context-window error. The last is capped: one compaction and retry per step, and a second error before a response succeeds fails the turn (`context_window_exceeded`).
 
-## Thinking
+## Thinking [#thinking]
 
 The thinking a model streams reaches consumers as typed events and is kept as a conversation item, but is **never** replayed as model input.
 
@@ -183,7 +183,7 @@ The thinking a model streams reaches consumers as typed events and is kept as a 
 - **A bound of its own.** Thinking does not count toward `maximum_model_output_bytes`: each item is cut at `maximum_reasoning_text_bytes` (256 KiB) on a character boundary, and the rest is neither shown nor kept. Otherwise a turn with 30 KB of thinking would start failing.
 - **History.** The step commits each item as `ConversationItem::Reasoning { text, duration_millis, sampling_step, truncated }` with its other items, in the order the model produced them. It is presentation only: `as_model_input` skips it, the token estimate does not count it, compaction drops it, and permission reviews and memory never read it. A response that stops early completes its open items with what streamed.
 
-## Storage
+## Storage [#storage]
 
 The data directory (named by the host when embedded; Hanafubuki's is `<app_data>/data/agent`) is described in [Data directory](/docs/data-directory).
 
@@ -194,7 +194,7 @@ The data directory (named by the host when embedded; Hanafubuki's is `<app_data>
 - **The data directory's lock**: `<data_dir>/.lock`, because the history index, the memory store and the process-group ledger assume one writer process.
 - **Persisted formats are unstable.** The rule is that readers decode tolerantly, quarantine what they cannot use, and never delete user data.
 
-## MCP
+## MCP [#mcp]
 
 `McpManager` (`hanafubuki-agent-mcp`) owns the connections (stdio and Streamable HTTP transports, OAuth, catalogs, liveness, reconnect, leases); the `mcp` plugin is only a tool source over it, plus three resource tools. Each step, the source binds the connected servers' catalogs (as its plan lease) and contributes one tool per catalog entry.
 
@@ -204,16 +204,16 @@ The data directory (named by the host when embedded; Hanafubuki's is `<app_data>
 - **The connection is the catalog revision.** A step keeps the connection it was planned with, so a call can be stale only when its connection closed; it then returns `McpError::CatalogChanged` without asking for approval, and the model searches or retries. A counter would fail calls on a connection a user's refresh retired but that still runs, breaking the guarantee that a step keeps its connection.
 - **One fault owner per server, not a child fiber per server.** A named child fiber would fault under a name the host's fault handler does not know, so it would only be logged and would panic again on every call; an unnamed one faults as `mcp` and stops the whole plugin. Catching at the call isolates the server, and all servers share one process anyway.
 
-## The model API
+## The model API [#the-model-api]
 
 `hanafubuki-agent-model-api` implements three protocols, Responses, Chat Completions and Anthropic Messages: encoding, streaming decode, tool lowering and the model listing. It knows no plugin and no context section kind, and does not depend on the plugin API. A Provider's stream is external input, decoded tolerantly: empty tool arguments are `{}`; unparseable ones `{}` plus an `argument_error`; a missing usage count is 0; a stream without a finish reason ends with `end_turn` unknown; Responses `response.incomplete` keeps the completed items and the text streamed so far, and fails only when nothing was produced. Wire bodies are logged only as the [content-logging rule](/docs/contributing#content-logging) allows: at `trace`, truncated.
 
-## The terminal interface and the command line
+## The terminal interface and the command line [#the-terminal-interface-and-the-command-line]
 
 - **`hanafubuki-agent-cli`** is the `hanafubuki-agent` binary, above the facade and depending on nothing else of the workspace. Every command composes the runtime from its global flags and installs the panic hook and the log file; the commands that read or write the configuration (`config`, `providers list`, `mcp list`, `doctor` offline) never start the Agent, so they work beside a running one. `exec` brings its own sinks: the turn's `AgentEventSink` and the slot's status sink feed one channel the command's thread reads, so the events it prints are the facade's own (`--json` serializes `AgentEvent` as it is). See [CLI reference](/docs/cli-reference).
 - **`hanafubuki-agent-tui`** is Codex's terminal interface (`rust-v0.93.0`) ported over the facade, on upstream ratatui 0.30 and crossterm 0.29 (Codex patches them with git forks, which crates.io cannot take). An inline viewport sits at the bottom of the terminal, and the transcript goes into the terminal's own scrollback. One adapter (`agent_bridge`) maps the turn's `AgentEvent`s onto what the chat widget shows and the interface's requests onto the facade; one loop, one channel: the terminal reader and the Agent's sinks send to the same channel, and a facade call that waits runs as a task of the Agent's runtime and reports back on it, so the loop never blocks on the Agent. See [Terminal interface](/docs/terminal-interface).
 
-### What the port of the terminal interface changed
+### What the port of the terminal interface changed [#what-the-port-of-the-terminal-interface-changed]
 
 Every file in `crates/tui` derived from Codex carries a marker line saying so ([Licence](/docs/contributing#licence)). The port changed Codex's terminal interface as follows:
 
@@ -223,7 +223,7 @@ Every file in `crates/tui` derived from Codex carries a marker line saying so ([
 - **Restoring the terminal.** The terminal is restored on every return (a drop guard) and on a panic that ends the process: the interface's hook restores the terminal, then runs the Agent's. A contained panic leaves the interface running.
 - **Not ported:** the transcript pager's live tail and backtracking, custom prompts, Skill and app mentions and image attachments in the composer, the status card's account and rate limits, and syntax highlighting (Codex's `.tmTheme` assets are not shipped).
 
-## Design choices
+## Design choices [#design-choices]
 
 Choices a reader might otherwise undo, and why they stand:
 
@@ -252,7 +252,7 @@ Compared with Codex (`codex-rs`), which the Agent's mechanisms were checked agai
 | Compaction       | several paths; initial context re-rendered | local and Responses; every section re-rendered; a capped retry                |
 | Memory           | two phases, leases, citations              | the same design, with eligibility before the limit and backoff in both phases |
 
-## Known limits
+## Known limits [#known-limits]
 
 - The file tools' policy roots are fixed when the Agent is built; only the Skill roots and the context sections follow the workspace per read.
 - A session created before its model's window was known keeps none until its model is selected again; recovery does not resolve it.

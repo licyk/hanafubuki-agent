@@ -6,7 +6,7 @@ icon: Plug
 
 宿主插件让 Agent 使用宿主自己的领域：Hanafubuki 用它们提供实例管理工具、任务中心工具和“用户正在看哪里”的界面上下文。宿主插件是普通的 [kardia](https://github.com/licyk/kardia) 插件，只依赖插件 API（`hanafubuki-agent-contracts`）和门面的公开 API，遵守与 Agent 自己的插件相同的[插件规则](/docs/plugin-rules)。内核看不到插件，只读取插件注册到注册表里的条目。
 
-## 放在哪里
+## 放在哪里 [#where-it-lives]
 
 插件放在宿主自己的 crate 里（Hanafubuki：`hanafubuki-agent-integration/src/plugins/`），通过宿主接口挂载：
 
@@ -14,9 +14,9 @@ icon: Plug
 AgentPluginRow::unconfigured(AgentPluginGroup::Capability, app_info_plugin())
 ```
 
-`Capability` 组放工具、工具源和它们的审批规则，`Context` 组放世界状态段。宿主行挂载在 Agent 的能力插件之后、上下文插件之前，各行依次挂载，前一行就绪或超时（20 秒）后才挂载下一行。依赖见[嵌入 Agent](/docs/embedding#添加依赖)。
+`Capability` 组放工具、工具源和它们的审批规则，`Context` 组放世界状态段。宿主行挂载在 Agent 的能力插件之后、上下文插件之前，各行依次挂载，前一行就绪或超时（20 秒）后才挂载下一行。依赖见[嵌入 Agent](/docs/embedding#adding-the-crates)。
 
-## 插件的形状
+## 插件的形状 [#the-shape-of-a-plugin]
 
 ```text
 PluginDef::new(apply)      apply：取得注入的服务，注册条目，生成工作线程，然后返回
@@ -44,9 +44,9 @@ PluginDef::new(apply)      apply：取得注入的服务，注册条目，生成
 | `ContinuationHookRegistry`  | 继续钩子                            | 每个采样步骤             |
 | `ObserverRegistry`          | `AgentObserver`（已提交内容的通知） | 每次持久提交之后         |
 
-各扩展点的唯一性、组合方式和规则见[插件规则](/docs/plugin-rules#扩展点)。宿主插件最常用的是工具和上下文段，下面分别举例。
+各扩展点的唯一性、组合方式和规则见[插件规则](/docs/plugin-rules#extension-points)。宿主插件最常用的是工具和上下文段，下面分别举例。
 
-## 工具
+## 工具 [#tools]
 
 ```rust
 use std::sync::Arc;
@@ -166,7 +166,7 @@ impl AgentToolHandler for AppInfoTool {
 - **阻塞工作**放到注入的 `BlockingService` 上，调用要观察 `invocation.cancellation`。
 - **错误**：`AgentToolError::Failed(message)` 是模型读到的工具错误，轮次继续；`AgentToolError::Cancelled` 用于取消。要让模型看到错误但调用不算失败，用 `ToolResult::model_visible_error`。
 
-## 上下文段与渲染器
+## 上下文段与渲染器 [#context-sections-and-renderers]
 
 模型可见、但既不是历史也不是工具的东西都是**上下文段**，属于某个 `ContextSectionKind`。贡献者在轮次准入时产生段；渲染器是**数据**（不运行插件代码），决定段放在哪个槽位、以什么角色出现、前后加什么文字。这个类型的包装文字属于拥有它的插件，模型 API 不认识任何段类型。
 
@@ -267,7 +267,7 @@ pub fn turn_request(text: String, title: String) -> AgentTurnRequest {
 - 失败的贡献者（错误、panic、插件正在停止、未声明的或重复的类型）在那个轮次被略过，并记为插件的问题（插件状态显示 `warning`，Agent 显示 `degraded`），直到它再次成功；轮次从不因此被拒绝。
 - 宿主上下文也可以随 steering 消息到来：宿主的 `HostContextPort` 返回同一类型的 `AgentHostContext`，内核把它写入世界状态，由同一个渲染器显示。
 
-## 其他扩展点
+## 其他扩展点 [#the-other-extension-points]
 
 - **工具源**（`AgentToolSource`）：工具只在外部某物提供时存在（例如 MCP 服务器的目录）。每个采样步骤询问一次，返回 `SourcedTool`，可以附带 `ToolPlanLease`，让该步骤的调用在规划时的状态上运行。身份（提供者 ID、工具 ID、代次）在工具不变时保持稳定。
 - **轮次准入贡献者**：在轮次准入时产生一次按类型存放的 `TurnExtensions`，冻结在轮次上，交给每个工具调用（`ToolInvocation::turn`）和提示贡献者。
@@ -277,7 +277,7 @@ pub fn turn_request(text: String, title: String) -> AgentTurnRequest {
 
 各自的完整规则见[插件规则](/docs/plugin-rules)。
 
-## 插件代码中的 panic
+## 插件代码中的 panic [#panics-in-plugin-code]
 
 插件 panic 是 bug，但它留在插件里：内核对插件代码的每次调用都在守卫下进行，panic 变成那次调用自己的错误路径，并记为插件的故障。
 
@@ -289,9 +289,9 @@ pub fn turn_request(text: String, title: String) -> AgentTurnRequest {
 | 审批规则 `evaluate`         | 拒绝（规则失败时关闭，而不是“没有意见”）         |
 | 观察者 `observe`            | 跳过这个观察者，其他观察者照常通知               |
 
-宿主随后停止该插件，按重启策略（2 秒、10 秒、30 秒，10 分钟内最多三次）重新挂载它；超过之后保持 `failed`，直到 `retry_plugin`、新的配置或重新开关它。panic 消息进入日志和插件状态，从不进入模型。这一切要求 panic 能展开，见[panic hook 桥](/docs/embedding#panic-hook-桥)。
+宿主随后停止该插件，按重启策略（2 秒、10 秒、30 秒，10 分钟内最多三次）重新挂载它；超过之后保持 `failed`，直到 `retry_plugin`、新的配置或重新开关它。panic 消息进入日志和插件状态，从不进入模型。这一切要求 panic 能展开，见[panic hook 桥](/docs/embedding#the-panic-hook-bridge)。
 
-## 测试
+## 测试 [#testing]
 
 在 `[dev-dependencies]` 中为 `hanafubuki-agent` 打开 `test-support` feature。`test_support::mount` 在一个新的 kardia 根上挂载插件，根提供所有注册表、`BlockingService` 和 `PluginFaults`，并断言插件变为 `Active`：
 
@@ -324,7 +324,7 @@ async fn registers_app_info_until_stopped() {
 - 宿主的 golden 测试固定加上宿主插件后模型收到的内容。
 - Agent 仓库的 `cargo xtask check-plugin-panics` 只检查 Agent 自己的插件 crate，宿主要自己检查它的插件（Hanafubuki：`bun run xtask check-agent-dependencies`）。
 
-## 例子：Hanafubuki 的插件
+## 例子：Hanafubuki 的插件 [#example-hanafubukis-plugins]
 
 | 插件         | 组         | 做什么                                                                                                                                                                                        |
 | ------------ | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

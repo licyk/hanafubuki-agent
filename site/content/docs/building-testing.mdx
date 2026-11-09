@@ -4,7 +4,7 @@ description: 工具链、验证命令、cargo xtask 的各项检查、golden 测
 icon: FlaskConical
 ---
 
-## 工具链
+## 工具链 [#toolchain]
 
 - **Rust**：`rust-toolchain.toml` 固定 1.99.0（带 `rustfmt` 和 `clippy`），工作区的 `rust-version` 也是 1.99。edition 保持 2021，rustfmt 使用默认配置。
 - **Bun**：根目录的 `package.json` 用 `packageManager` 固定 Bun 1.4.2，只用于文档站点（`site/`，根目录 Bun 工作区的唯一成员）。
@@ -17,7 +17,7 @@ cargo build                      # 整个工作区
 cargo run -p hanafubuki-agent-cli -- --help
 ```
 
-## 验证命令
+## 验证命令 [#the-validation-commands]
 
 在仓库根目录运行，按变更的影响选择范围。下面五步就是 `.github/workflows/ci.yml` 在 Linux、Windows 和 macOS 上运行的步骤：
 
@@ -34,28 +34,28 @@ cargo test --workspace --all-features
 - 只改文档时检查 diff 和引用的路径即可，不需要构建和测试。
 - 在 Linux 上通过不代表 Windows 或 macOS 也通过；交接时如实说明运行了哪些命令、跳过了哪些。
 
-## `cargo xtask` 的检查
+## `cargo xtask` 的检查 [#the-checks-of-cargo-xtask]
 
 `cargo xtask check` 依次运行下面每一项，每一项也可以单独运行：
 
-| 命令                      | 检查什么                                                                                                                                                                                                                                       |
-| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `check-dependencies`      | 依赖方向与分层：不依赖任何 Hanafubuki crate；每个成员只依赖层表（`xtask/src/dependencies.rs` 的 `LAYERS`）允许的成员；插件规则（内核不依赖插件、插件不依赖内核/门面/其他插件、kardia 的位置等），见[插件规则](/docs/plugin-rules#crate-与依赖) |
-| `check-source-layout`     | Rust 模块与测试的布局：`lib.rs` 只有声明与重新导出、`mod.rs` 与 `foo.rs` 的用法、没有 `#[path]`、没有 glob 重新导出、生产文件中没有内联测试、快照放在 `snapshots/` 中                                                                          |
-| `check-module-size`       | 文件与函数大小，对照 `architecture/module-size-policy.toml`：生产文件 600 行代码、测试文件 900 行、生产函数 200 行（注释不计）                                                                                                                 |
-| `check-strict-decoding`   | `deny_unknown_fields` 只出现在 `architecture/strict-decoding-policy.toml` 列出的类型上（带类别与原因）                                                                                                                                         |
-| `check-model-api-context` | `hanafubuki-agent-model-api` 的生产源码不出现任何上下文段类型                                                                                                                                                                                  |
-| `check-path-boundaries`   | 路径只通过 `hanafubuki-agent-foundation::paths` 解析：不直接 `fs::canonicalize`，不渲染 `system()`，不直接比较解析后的 `PathBuf`；例外在 `architecture/path-policy.toml` 中审计                                                                |
-| `check-locks`             | 生产代码不使用 `std::sync::Mutex` 或 `RwLock`（任何导入形式）；测试与测试支持可以                                                                                                                                                              |
-| `check-plugin-panics`     | 插件 crate（`crates/plugin-*`）的生产源码中没有 `.unwrap()` 和 `.expect(`                                                                                                                                                                      |
-| `check-notices`           | 派生自第三方代码的文件带有它们的署名标记，NOTICE 列出它们（`architecture/notices-policy.toml`），见[许可证](/docs/contributing#许可证)                                                                                                         |
+| 命令                      | 检查什么                                                                                                                                                                                                                                                  |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `check-dependencies`      | 依赖方向与分层：不依赖任何 Hanafubuki crate；每个成员只依赖层表（`xtask/src/dependencies.rs` 的 `LAYERS`）允许的成员；插件规则（内核不依赖插件、插件不依赖内核/门面/其他插件、kardia 的位置等），见[插件规则](/docs/plugin-rules#crates-and-dependencies) |
+| `check-source-layout`     | Rust 模块与测试的布局：`lib.rs` 只有声明与重新导出、`mod.rs` 与 `foo.rs` 的用法、没有 `#[path]`、没有 glob 重新导出、生产文件中没有内联测试、快照放在 `snapshots/` 中                                                                                     |
+| `check-module-size`       | 文件与函数大小，对照 `architecture/module-size-policy.toml`：生产文件 600 行代码、测试文件 900 行、生产函数 200 行（注释不计）                                                                                                                            |
+| `check-strict-decoding`   | `deny_unknown_fields` 只出现在 `architecture/strict-decoding-policy.toml` 列出的类型上（带类别与原因）                                                                                                                                                    |
+| `check-model-api-context` | `hanafubuki-agent-model-api` 的生产源码不出现任何上下文段类型                                                                                                                                                                                             |
+| `check-path-boundaries`   | 路径只通过 `hanafubuki-agent-foundation::paths` 解析：不直接 `fs::canonicalize`，不渲染 `system()`，不直接比较解析后的 `PathBuf`；例外在 `architecture/path-policy.toml` 中审计                                                                           |
+| `check-locks`             | 生产代码不使用 `std::sync::Mutex` 或 `RwLock`（任何导入形式）；测试与测试支持可以                                                                                                                                                                         |
+| `check-plugin-panics`     | 插件 crate（`crates/plugin-*`）的生产源码中没有 `.unwrap()` 和 `.expect(`                                                                                                                                                                                 |
+| `check-notices`           | 派生自第三方代码的文件带有它们的署名标记，NOTICE 列出它们（`architecture/notices-policy.toml`），见[许可证](/docs/contributing#licence)                                                                                                                   |
 
 另外还有：
 
 - `cargo xtask module-size-report [--top N]`：列出最大的文件和函数。
 - `cargo xtask version` 与 `cargo xtask tag`：发布用，见[发布](/docs/releasing)。
 
-## 测试
+## 测试 [#tests]
 
 `cargo test --workspace --all-features` 运行全部测试。值得知道的几组：
 
@@ -68,9 +68,9 @@ cargo test --workspace --all-features
 | 命令行（`crates/cli/tests/`）                                                 | `exec` 针对脚本化模型端到端运行一个轮次；管理命令                                                              |
 | 终端界面（`crates/tui`）                                                      | `insta` 快照测试                                                                                               |
 
-测试针对真实实现，尽量少用 mock，不在测试里复制业务逻辑。测试的位置规则（白盒测试在 `src/<module>/tests.rs`，公开 API 与跨 crate 契约在 crate 的 `tests/`，测试辅助的写法）见[参与开发](/docs/contributing#布局与模块大小)。
+测试针对真实实现，尽量少用 mock，不在测试里复制业务逻辑。测试的位置规则（白盒测试在 `src/<module>/tests.rs`，公开 API 与跨 crate 契约在 crate 的 `tests/`，测试辅助的写法）见[参与开发](/docs/contributing#layout-and-module-size)。
 
-### golden 测试与历史语料
+### golden 测试与历史语料 [#the-goldens-and-the-history-corpus]
 
 **请求 golden**（fixture 在 `crates/agent/src/tests/golden/`）在 Agent 自己的插件上、用一个什么都不添加的宿主，固定模型收到的内容：默认与计划模式、一次工具往返及其展示事件、Skill 目录、工作区指令、记忆摘要、压缩后的请求、来自脚本化进程内服务器的 MCP 工具（直接与延迟、过长与冲突的名字）和一次 `tool_search` 往返。
 
@@ -92,13 +92,13 @@ cargo test --workspace --all-features
 
 - 两个变量只看是否**设置**，不看值：设置成 `0` 也会重写 fixture。
 - fixture 只在 Linux 上有效。
-- Hanafubuki 在 `hanafubuki-agent-integration` 中保留了自己的 golden 和同一份历史语料（[双生副本](/docs/contributing#与-hanafubuki-共享的双生副本)）：这里模型可见的变化也会改变它们，历史格式变化要在两边都重新录制。
+- Hanafubuki 在 `hanafubuki-agent-integration` 中保留了自己的 golden 和同一份历史语料（[双生副本](/docs/contributing#twins-shared-with-hanafubuki)）：这里模型可见的变化也会改变它们，历史格式变化要在两边都重新录制。
 
-### 终端界面的快照
+### 终端界面的快照 [#the-terminal-interfaces-snapshots]
 
 终端界面的渲染用 [insta](https://insta.rs) 做快照测试，快照文件放在断言它们的测试旁边的 `snapshots/` 目录里（这个目录不是模块）。快照不匹配时测试失败，并在旁边写出 `.snap.new`；用 `cargo insta review`（需要 `cargo install cargo-insta`）逐个审查接受，或用 `INSTA_UPDATE=always cargo test -p hanafubuki-agent-tui` 全部接受后审查 diff。和 golden 一样，只接受有意的变化。
 
-## 文档站点
+## 文档站点 [#the-documentation-site]
 
 站点在 `site/`：TanStack Start 上的 Fumadocs，预渲染为静态文件，为 GitHub Pages 构建在 `/hanafubuki-agent/` 下。
 
@@ -119,7 +119,7 @@ bun run format:check:site
 - `patches/` 中有 `@tanstack/start-static-server-functions` 的一个 Bun 补丁：它从源站根目录取预渲染的结果，补丁加上 Vite 的 base。升级这个包时要重新生成补丁（`bun patch`），否则在 base 下的首次加载仍然正常，但站内导航会失败。
 - 页面中的依赖片段写成 `hanafubuki-agent = "0.1"` 这样的形式，`cargo xtask version` 会在用户写的要求变化时更新它们。
 
-## CI
+## CI [#ci]
 
 | 工作流        | 何时运行                                                                                 | 做什么                                                                                                              |
 | ------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |

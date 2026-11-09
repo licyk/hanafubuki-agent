@@ -6,7 +6,7 @@ icon: Rocket
 
 A release is a `v<version>` tag on `main`. The tag starts `.github/workflows/release.yml`, which publishes every crate but `xtask` to crates.io, builds the `hanafubuki-agent` binary for four targets and creates the GitHub release with the archives.
 
-## Checklist
+## Checklist [#checklist]
 
 <Steps>
   <Step>
@@ -43,7 +43,7 @@ A release is a `v<version>` tag on `main`. The tag starts `.github/workflows/rel
   </Step>
 </Steps>
 
-## The release workflow's jobs
+## The release workflow's jobs [#the-release-workflows-jobs]
 
 | Job              | What it does                                                                                                                                                                                                                                                                                                                   |
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -57,11 +57,11 @@ A release is a `v<version>` tag on `main`. The tag starts `.github/workflows/rel
 
 `publish` and `github-release` run only on a tag.
 
-## The first release and crates.io's rate limit
+## The first release and crates.io's rate limit [#the-first-release-and-cratesios-rate-limit]
 
 crates.io lets an account create a few new crates at once and then one every ten minutes. The first release creates all 24 crates, so `publish` publishes the first few, then one crate every ten minutes or so: about three and a half hours in all. The job retries up to 30 times and is allowed 330 minutes; `github-release` waits for it. Later releases only add versions of existing crates, which crates.io limits far less, and take minutes.
 
-## Resuming a release that stopped
+## Resuming a release that stopped [#resuming-a-release-that-stopped]
 
 A run that stopped part-way (the publish timed out or failed, a binary did not build, the runner went away) is resumed with a manual run **on the tag**:
 
@@ -71,7 +71,7 @@ gh workflow run release.yml -R licyk/hanafubuki-agent --ref v0.1.0
 
 Every job is safe to repeat: `publish` skips each crate version already on crates.io, the binaries are built again, and `github-release` uploads the archives over an existing release's (`--clobber`) instead of creating it again.
 
-## Rehearsing
+## Rehearsing [#rehearsing]
 
 A manual run on a branch builds and packages the binaries (and the third-party licences) and publishes nothing: `publish` and `github-release` run only on a tag. Rehearse before a release that changes the workflow or the build, and look at the archives the run uploads as artifacts:
 
@@ -81,7 +81,7 @@ gh workflow run release.yml -R licyk/hanafubuki-agent --ref main
 
 If a fix is needed in the code, a published version cannot be replaced: fix it on `main`, bump the version, and release the new one.
 
-## Secrets
+## Secrets [#secrets]
 
 - `CARGO_REGISTRY_TOKEN`: a crates.io token with the `publish-new` and `publish-update` scopes, set as a repository secret. Only `publish` sees it.
 - `GITHUB_TOKEN`: the workflow's own token, with `contents: write` only on `github-release`.

@@ -11,7 +11,7 @@ hanafubuki-agent runs in two ways, and both are the same composition:
 
 This page covers embedding. Writing a host plugin is [Host plugins](/docs/host-plugins); how the parts work together is [Architecture](/docs/architecture).
 
-## Adding the crates
+## Adding the crates [#adding-the-crates]
 
 ```toml
 [dependencies]
@@ -40,7 +40,7 @@ Plugins are kardia `PluginDef`s, hence `kardia-core`. A host should not depend o
   a host pins a git revision instead (as Hanafubuki does today).
 </Callout>
 
-## Composition
+## Composition [#composition]
 
 Embedded, the host assembles the parts the standalone mode uses too:
 
@@ -173,7 +173,7 @@ Points to note:
 - `wait_until_started` returns the running `AgentHandle`, or why the Agent does not run (`AgentUnavailable`, whose `Display` is "the Agent is unavailable: …").
 - `AgentHandle` dereferences to `AgentApplicationService`. Its async methods run on `handle.runtime()` (`ContainedRuntime::block_on`, or `spawn` on its handle): kardia and the Agent's tasks run only there, and only there is a panic contained.
 
-### The same composition, standalone
+### The same composition, standalone [#the-same-composition-standalone]
 
 Without a host, `AgentRuntime::standalone` composes the same slot, marker, `DesktopAgent` and `AgentLaunch`, with a default for every port. The command line uses it like this:
 
@@ -225,7 +225,7 @@ fn main() -> Result<(), String> {
 
 Turn and session events do not go through it: they go to the `AgentEventSink` each call is given (see [Events and history](#events-and-history)).
 
-## The host interface
+## The host interface [#the-host-interface]
 
 A host adds to the Agent only through `AgentHostPorts`. The interface takes plain values (`PathBuf`, strings, maps) or the Agent's own types: the Agent carries its own copies of the foundation, process and module-host crates, whose types are distinct from a host's of the same name, so the host adapts at the edge.
 
@@ -238,11 +238,11 @@ A host adds to the Agent only through `AgentHostPorts`. The interface takes plai
 | `network`          | `Arc<dyn NetworkSettingsPort>` | the proxy the web tools, MCP and OAuth use                                                            | the configuration's `[network] proxy`                 |
 | `secrets`          | `Arc<dyn SecretStore>`         | where MCP OAuth tokens are kept                                                                       | the OS keyring                                        |
 
-### Plugin rows
+### Plugin rows [#plugin-rows]
 
 `AgentPluginRow::unconfigured(group, plugin)`, with `group` either `AgentPluginGroup::Capability` (tools, tool sources and their rules) or `AgentPluginGroup::Context` (world-state sections). A host's rows mount after the Agent's own capability plugins and before its context plugins, so the host's world-state sections come before the workspace roots, environment and permission mode. Host plugins follow the same rules as the Agent's own: `disabledPlugins` turns them off and safe mode leaves them unmounted. How to write one is [Host plugins](/docs/host-plugins).
 
-### `WorkspaceRootsPort`
+### `WorkspaceRootsPort` [#workspacerootsport]
 
 ```rust
 /// One project directory as the whole workspace.
@@ -273,11 +273,11 @@ impl WorkspaceRootsPort for ProjectRoots {
 - `search_roots(host)`: the directories `@` file search walks, each with its label.
 - Every method may block; the Agent calls them on its blocking pool.
 
-### `HostContextPort`
+### `HostContextPort` [#hostcontextport]
 
 The host context a steering message (a message added to a running turn) carries: `steering_context(host)` returns an `Option<AgentHostContext>` (a `ContextSectionKind` and its content, at most `MAXIMUM_HOST_CONTEXT_BYTES`, 4 KiB). The kernel writes it to the world state as a section of that kind when it changed; the host's plugin registers the kind's renderer. Use `NoHostContext` when there is none.
 
-### `AgentHostInstructions`
+### `AgentHostInstructions` [#agenthostinstructions]
 
 | Field         | What it is                                                                        | Default (standalone)                     |
 | ------------- | --------------------------------------------------------------------------------- | ---------------------------------------- |
@@ -288,7 +288,7 @@ The host context a steering message (a message added to a running turn) carries:
 
 The blocks are joined one blank line apart. The text is model-visible, so a host pins it with goldens of its own (Hanafubuki's are in `hanafubuki-agent-integration`).
 
-### `NetworkSettingsPort` and `SecretStore`
+### `NetworkSettingsPort` and `SecretStore` [#networksettingsport-and-secretstore]
 
 ```rust
 struct SystemProxy;
@@ -328,11 +328,11 @@ impl SecretStore for MemorySecrets {
 - `SecretStore` calls may block (a keyring), so a host runs them on the Agent's blocking pool (`ContainedRuntime::blocking_port` with `run_blocking_operation`), as Hanafubuki's `KeyringSecretStore` does.
 - Locks are `parking_lot`'s: an Agent panic unwinds on a contained thread, which would poison a std lock.
 
-### Host input
+### Host input [#host-input]
 
 `AgentTurnRequest`, `AgentSteeringRequest` and `AgentFileSearch` each have a `host: TurnExtensions` field: what the host submits beside a message or a search, keyed by type. The Agent passes it on unread, to the context contributors (`ContextRequest::turn`), to `HostContextPort` and to `WorkspaceRootsPort`. The host's plugins and ports read the types they put in.
 
-## The panic-hook bridge
+## The panic-hook bridge [#the-panic-hook-bridge]
 
 The Agent's fault isolation rests on unwinding: a panic in plugin or kernel code unwinds, on a thread marked contained, to its catch, and becomes a tool error, a plugin fault or a kernel restart. So:
 
@@ -348,7 +348,7 @@ Without the bridge every Agent panic aborts the host application. Hanafubuki's `
 
 Before a fatal panic aborts the process, the host's hook should write the crash record at `AgentStoragePaths::crash_record_file` (`<data>/crash-record.json`): the Agent's crash-loop marker reads it to tell that an unfinished start ended in the host's own fatal panic. A host with no hook of its own can install the Agent foundation's, as the standalone binary does: `panic::configure_crash_record(...)`, then `panic::install_panic_hook(logging::logging_blocked)`.
 
-## The data directory's lock
+## The data directory's lock [#the-data-directorys-lock]
 
 `<data_dir>/.lock` is an advisory lock (`flock` on Unix, `LockFileEx` on Windows) held from the Agent's first start until its shutdown, embedded and standalone alike. The history's SQLite index, the memory store and the process-group ledger assume one writer process; two processes on one data directory would corrupt the history and kill each other's processes.
 
@@ -356,7 +356,7 @@ Before a fatal panic aborts the process, the host's hook should write the crash 
 - While another process holds it, the start fails at construction with an error naming the directory; the host application runs on without its Agent.
 - Turning a host's Agent off (`AgentSlot::turn_off`) keeps the lock until the application quits, so a standalone Agent on that data directory is refused meanwhile.
 
-## Start, on and off, shutdown
+## Start, on and off, shutdown [#start-on-and-off-shutdown]
 
 The slot's state (`AgentStatus::availability`) is `Disabled` (`setting` or `crashLoop`), `Starting`, `Running`, `Faulted`, `Stopping`, `Failed { stage, reason }` (`construct`, `recover`, `start`) or `Stopped`. `AgentStatusEventSink::status_changed()` carries no payload: read `AgentSlot::status()` again. The status also has the `generation` (which instance of this run), `safe_mode`, `degraded` (a plugin failed, its teardown is stuck, or it runs with a warning) and the quarantined sessions.
 
@@ -397,7 +397,7 @@ A panic in kernel code (a turn's task, the Agent's worker groups, the host's tas
 
 The processes the Agent starts are the Agent's: it has its own `ExecutorManager`, a process-ownership domain apart from the host's. The host neither needs to nor can terminate them for it.
 
-## Configuration in a host
+## Configuration in a host [#configuration-in-a-host]
 
 The host names a configuration directory for the Agent and opens it with `AgentConfig::new(dir)` (Hanafubuki's is `<app_data>/config/agent/`). It holds three TOML files, each its own revision domain with its own lock:
 
@@ -413,7 +413,7 @@ Reads are tolerant: an invalid value takes its default, unknown keys are logged 
 
 Moving settings from an older format is the host's business: while `config.toml` does not exist (`AgentConfig::exists`), Hanafubuki's construct closure runs `import_legacy_agent_settings`, which writes the whole configuration once with `AgentConfig::create` (`config.toml` last, so an import that stopped part-way runs again) and leaves the old files untouched.
 
-## Events and history
+## Events and history [#events-and-history]
 
 ```rust
 struct LogStatus;
@@ -441,11 +441,11 @@ impl AgentEventSink for PrintEvents {
 - **History**: `list_sessions_page` (paged, searchable), `open_session` (a session with its latest transcript), `read_transcript_page` and `read_turn_page` read the committed `ConversationItem`s. Thinking is `ConversationItem::Reasoning { text, duration_millis, sampling_step, truncated }`, for presentation only and never replayed as model input.
 - **Run projections**: `AgentSlot::list_run_projections` and `get_run_projection` (activity id, turn number, phase, times, error); Hanafubuki maps them to its Task Center.
 
-## Logging
+## Logging [#logging]
 
 The facade installs no logger: the host keeps its own `log` implementation, and the Agent's records go there. The standalone binary uses `logging::install_file_logger` (`hanafubuki-agent.log`, rotated past 8 MiB into `.1`…`.3`). The Agent's own records follow its content-logging rule: model content, reasoning, tool arguments and tool results appear only at `trace`, truncated to a bound, and headers and credentials never. So the host's log level is how a user selects `trace` (Hanafubuki's `log_level` setting).
 
-## Testing
+## Testing [#testing]
 
 - Turn on the `test-support` feature of `hanafubuki-agent` in `[dev-dependencies]` for `hanafubuki_agent::test_support`: `mount` (mounts a plugin in a context that provides the registries and `PluginFaults`), `test_host`, the scripted model and MCP servers.
 - A host keeps goldens of its own that pin what the model receives with its plugins and instructions; a model-visible change on the Agent's side changes them too, and they are regenerated on purpose.

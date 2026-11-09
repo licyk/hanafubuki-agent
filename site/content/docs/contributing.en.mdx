@@ -6,7 +6,7 @@ icon: GitPullRequest
 
 The repository's [AGENTS.md](https://github.com/licyk/hanafubuki-agent/blob/main/AGENTS.md) is the **authority** for the rules every change follows; this page summarizes the key ones, and where the two differ AGENTS.md wins. Before changing an area's behaviour, read its rules: plugins, tools, context, approval, crate boundaries, the host interface and the goldens are [Plugin rules](/docs/plugin-rules); the overall structure is [Architecture](/docs/architecture); the commands are [Building and testing](/docs/building-testing).
 
-## Development principles
+## Development principles [#development-principles]
 
 - **Internal APIs and persisted formats are unstable.** Prefer clean breaking changes when they improve the design; unless compatibility is requested, remove obsolete structures and update current callers, tests and documents rather than keep aliases, migrations or deprecated paths. A format may change, but its reader never deletes user data: it decodes tolerantly and quarantines what it cannot use.
 - **Implement the smallest coherent design** that satisfies the requirement and these contracts. No speculative flexibility, redundant phases or state, hypothetical workflows, extension points or stricter process.
@@ -20,7 +20,7 @@ The repository's [AGENTS.md](https://github.com/licyk/hanafubuki-agent/blob/main
 - **Do not extract a function used once** unless it will be reused, encapsulates truly complex logic, or names a clear concept.
 - **Prefer explicit Rust APIs and typed structs.** Raw JSON is acceptable only at controlled patch or override boundaries, validated in Rust before use or persistence.
 
-## Rules every change needs
+## Rules every change needs [#rules-every-change-needs]
 
 - **Locks** a contained panic reaches do not poison. Every Agent panic unwinds on a contained thread, so every crate's production code uses `parking_lot::{Mutex, RwLock, Condvar}`, never `std::sync::Mutex` or `RwLock` (`cargo xtask check-locks`). Every critical section leaves its state consistent at any panic point: compute, then assign.
 - **Paths** go through `hanafubuki-agent-foundation::paths` (`ResolvedPath`, `PathKey`), the only code that calls `fs::canonicalize`: `system()` for operating-system calls, `native()` for anything a person, a model, a log line or a record reads, `key()` for every comparison. Never render `system()`, compare resolved `PathBuf`s directly or strip `\\?\` (`cargo xtask check-path-boundaries`, with its audited exceptions in `architecture/path-policy.toml`).
@@ -28,18 +28,18 @@ The repository's [AGENTS.md](https://github.com/licyk/hanafubuki-agent/blob/main
 - **Decoding strictness follows the input source**, not the type. A request a host's frontend sends over IPC rejects unknown fields (`deny_unknown_fields`), and so does an integrity manifest we produce and check by digest; our persisted data (settings, history, memory, state files) ignores unknown fields, falls back per field and quarantines what it cannot use; external producers (model providers, MCP servers, the web) are read tolerantly, one bad item never failing the rest; model tool arguments are normalized against their schema. `deny_unknown_fields` appears in production code only on a type listed in `architecture/strict-decoding-policy.toml` (`cargo xtask check-strict-decoding`). Approval, path containment and identities stay strict whatever the source.
 - **Plugins** are kardia plugins that the kernel reaches only through the `hanafubuki-agent-contracts` registries; a registration is an effect of the calling plugin, removed when it stops; plugins return errors and never panic (`cargo xtask check-plugin-panics`); and the goldens pin what the model sees, so a model-visible change regenerates them on purpose ([Plugin rules](/docs/plugin-rules)).
 
-## Content logging
+## Content logging [#content-logging]
 
 Diagnostic logs, raw wire bodies included (`hanafubuki-agent-model-api`'s `trace_wire_body`), may include wire or model content, reasoning, tool arguments and committed tool results only at `trace`, when the user explicitly selects `trace` through the log level, truncated to `MAX_TRACE_CONTENT_BYTES` on a UTF-8 boundary by `hanafubuki_agent_model_api::bounded_trace_content`. Never log headers, credentials, signing tokens or approval-sensitive fields, or emit content at `debug` or below. Do not insert diagnostic or raw wire records into conversation history. Canonical conversation items, tool calls and committed results included, are persisted through the typed history contract independently of the log level; that does not authorize persisting credentials or approval-sensitive fields.
 
-## Workspace conventions
+## Workspace conventions [#workspace-conventions]
 
 - Crates live in `crates/<name>/` and are named `hanafubuki-agent-<name>`, except the facade, `hanafubuki-agent`. Repository tooling is the `xtask` crate.
 - `version`, `edition`, `license`, `repository` and `rust-version` are set once in the root `[workspace.package]`. Internal dependencies are declared once in the root `[workspace.dependencies]` with both `path` and `version`, and members use them with `.workspace = true`.
 - The edition stays 2021 and rustfmt keeps its defaults.
 - Every crate but `xtask` is published: it has a `description` and no `publish = false`. The facade and the command line take the repository's `README.md` as their `readme`.
 
-## Layout and module size
+## Layout and module size [#layout-and-module-size]
 
 `cargo xtask check-source-layout` enforces the mechanical rules below; the rest is review:
 
@@ -59,13 +59,13 @@ Diagnostic logs, raw wire bodies included (`hanafubuki-agent-model-api`'s `trace
 - A cohesive module over a limit (an exhaustive dispatch, a data table, a set of contract types) keeps an exception whose reason says why and whose `ceiling` is the size it was reviewed at. Growth past the ceiling fails, and an exception that no longer applies must be removed.
 - Adding an exception or raising a ceiling is reported in the handoff, never done silently to get an unrelated change through.
 
-## Validation and handoff
+## Validation and handoff [#validation-and-handoff]
 
 - Select validation by the change's impact ([Building and testing](/docs/building-testing)). For a documentation-only change, check the diff and the referenced paths; builds and tests are unnecessary.
 - Add meaningful tests for changed behaviour or contracts, not tests mirroring reversible, low-impact edits.
 - Report exactly which validation commands ran and which were skipped or blocked. Do not claim CI equivalence without reproducing the current workflow, or Windows or macOS coverage from Linux results.
 
-## Commit style
+## Commit style [#commit-style]
 
 Commit messages take a conventional typed prefix, a subject that says, in lower case and as a full phrase, what the change makes true, and a body that says why:
 
@@ -77,7 +77,7 @@ docs: the release checklist; Phase 6's repository part is done
 
 The usual types are `feat`, `fix`, `docs`, `test`, `ci`, `build`, `style` and `chore(release)`, scoped by crate or area (`tui`, `cli`, `config`, `xtask`, `site`). Each commit is one coherent step that passes the checks it needs on its own.
 
-## Twins shared with Hanafubuki
+## Twins shared with Hanafubuki [#twins-shared-with-hanafubuki]
 
 The Agent was extracted from [Hanafubuki](https://github.com/licyk/Hanafubuki) and carries **copies** of some of its foundation crates, trimmed to what the Agent uses. Each repository keeps its own, so a fix to one is **ported to the other by hand**. Hanafubuki's `todo.md` keeps the same list.
 
@@ -94,7 +94,7 @@ Why copies rather than Hanafubuki using the Agent's published crates: every chan
 
 How Hanafubuki depends on the Agent (declared once in its `src-tauri/Cargo.toml`, a pinned git revision until the first release) and the rules of its side are in Hanafubuki's `docs/agent-integration.md`.
 
-## Licence
+## Licence [#licence]
 
 hanafubuki-agent is licensed **GPL-3.0-only** ([LICENSE](https://github.com/licyk/hanafubuki-agent/blob/main/LICENSE), [NOTICE](https://github.com/licyk/hanafubuki-agent/blob/main/NOTICE)), set once in `[workspace.package]`.
 
