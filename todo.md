@@ -663,6 +663,11 @@ and pushed, and notes what Hanafubuki must change at its next pin.
     support). Goldens unchanged. `NOTICE` already names
     `crates/kernel/src/service/compression` (two new derived files in
     `tools/`).
+- Open (CI, seen once at P8b): on a loaded Windows runner
+  `plugins::subagents::tests::the_depth_and_running_limits_refuse_a_spawn_with_a_tool_error`
+  failed "agent turn cancellation was not confirmed": interrupting a
+  running child missed the kernel's 5 s confirmation deadline (the test
+  binary took 173 s). The re-run passed.
 - [ ] P11: `/compression`, status line, `context_compressed`, docs,
       attribution; pty smoke.
 
