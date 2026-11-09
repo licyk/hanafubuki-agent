@@ -85,10 +85,14 @@ pub(crate) enum LogLevel {
 pub(crate) enum Command {
     /// Runs one turn without the terminal interface.
     Exec(ExecArgs),
-    /// Reopens a session in the terminal interface (not available yet).
+    /// Reopens a session in the terminal interface: the one named, the
+    /// latest with --last, or the one picked from the sessions.
     Resume {
-        /// The session to reopen.
+        /// The session to reopen (with --last: the first message).
         session: Option<String>,
+        /// Submitted as the first message.
+        prompt: Option<String>,
+        /// Reopens the latest session a turn ran in.
         #[arg(long)]
         last: bool,
     },

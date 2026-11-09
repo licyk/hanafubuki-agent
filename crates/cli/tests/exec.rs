@@ -167,10 +167,23 @@ fn an_allowed_tool_runs() {
 #[test]
 fn the_exit_code_says_how_the_command_ended() {
     let home = Home::new();
-    // The terminal interface needs a terminal; `resume` is not there yet.
+    // The terminal interface needs a terminal, and so does `resume`; a
+    // session id that is not one, or one beside --last, is a usage error.
     let run = home.run(&[]).expect(2);
     assert!(run.stderr().contains("hanafubuki-agent exec PROMPT"));
     home.run(&["resume", "--last"]).expect(2);
+    let run = home.run(&["resume", "not-an-id"]).expect(2);
+    assert!(
+        run.stderr().contains("is not a session id"),
+        "{}",
+        run.stderr()
+    );
+    let run = home.run(&["resume", "--last", "7", "hi"]).expect(2);
+    assert!(
+        run.stderr().contains("takes no session id"),
+        "{}",
+        run.stderr()
+    );
     // An empty prompt, an unknown policy.
     home.run(&["exec", "-"]).expect(2);
     home.run(&["exec", "--approve", "sometimes", "hi"])

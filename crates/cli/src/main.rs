@@ -18,17 +18,18 @@ use std::process::ExitCode;
 use clap::Parser;
 
 use crate::cli::{Cli, Command};
-use crate::exit::{Failure, SUCCESS};
+use crate::exit::SUCCESS;
 
 fn main() -> ExitCode {
     let cli = Cli::parse();
     let global = &cli.global;
     let result = match cli.command {
-        None => interactive::run(global, cli.prompt),
-        Some(Command::Resume { .. }) => Err(Failure::usage(
-            "resuming a session is not available yet; run one turn with \
-             `hanafubuki-agent exec PROMPT`",
-        )),
+        None => interactive::run(global, cli.prompt, None),
+        Some(Command::Resume {
+            session,
+            prompt,
+            last,
+        }) => interactive::resume(global, session, prompt, last),
         Some(Command::Exec(args)) => exec::run(global, args),
         Some(Command::Config(command)) => config::run(global, command).map(|()| SUCCESS),
         Some(Command::Providers(command)) => providers::run(global, command).map(|()| SUCCESS),
