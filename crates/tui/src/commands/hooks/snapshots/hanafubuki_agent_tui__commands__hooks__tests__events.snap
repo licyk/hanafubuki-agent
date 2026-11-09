@@ -1,0 +1,19 @@
+---
+source: crates/tui/src/commands/hooks/tests.rs
+expression: "screen(&chat, 80)"
+---
+                                                                                
+                                                                                
+  Hooks                                                                         
+  A hook runs only once it is trusted, while it is on.                          
+  2 hooks need review before they can run.                                      
+  Skipped:                                                                      
+    · hooks.json: PreCompact hooks are not supported                            
+                                                                                
+› 1. PreToolUse        2 installed · 0 active · 1 need review                   
+  2. PostToolUse       0 installed · 0 active                                   
+  3. SessionStart      0 installed · 0 active                                   
+  4. UserPromptSubmit  0 installed · 0 active                                   
+  5. Stop              1 installed · 0 active · 1 need review                   
+                                                                                
+  enter open · t trust all · esc close

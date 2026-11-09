@@ -1,0 +1,18 @@
+---
+source: crates/tui/src/commands/hooks/tests.rs
+expression: "screen(&chat, 80)"
+---
+                                                                                
+                                                                                
+  PreToolUse hooks                                                              
+  Before a tool call's approval; a hook can deny the call.                      
+  1 hook needs review before it can run.                                        
+                                                                                
+› 1. [Bash|exec_command] ~/bin/check.sh  new, review required · on · user /     
+                                         home/me/.config/hanafubuki-agent/      
+                                         hooks.json · 30s                       
+  2. ~/bin/audit.sh                      trusted · off · user /home/            
+                                         me/.config/hanafubuki-agent/           
+                                         hooks.json · 30s                       
+                                                                                
+  space/enter on or off · t trust · esc back

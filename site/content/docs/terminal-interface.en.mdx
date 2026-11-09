@@ -79,41 +79,44 @@ The composer has the usual Emacs-style editing keys: Ctrl-A/E for the start and 
 
 A message that starts with `/` is a command. Typing `/` opens a popup of them, narrowed as you type the name.
 
-| Command               | Does                                                                                                                                                                    | During a turn |
-| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
-| `/model`              | Picks the session's model from the enabled Providers' model catalogs; a Provider whose catalog cannot be read says why                                                  | No            |
-| `/providers`          | Adds, edits, tests, enables and deletes the model Providers, and chooses the default Provider and the model new sessions run ([below](#providers))                      | No            |
-| `/mode`               | Picks the default mode or [plan mode](/docs/plan-mode)                                                                                                                  | No            |
-| `/skills`             | Lists the [Skills](/docs/skills), whether each is enabled, and the catalog's issues                                                                                     | Yes           |
-| `/rename [name]`      | Renames the session: a prompt with its title, and the model's suggested title when it arrives; with a name, renames at once ([below](#session-commands))                | No            |
-| `/new`                | Leaves the session: the next message starts a new one (in the default mode); the previous one stays in the history                                                      | No            |
-| `/archive`            | After a confirmation, archives the session and leaves it, as `/new` does                                                                                                | No            |
-| `/delete`             | After a confirmation, deletes the session for good, with its child sessions, and leaves it                                                                              | No            |
-| `/resume [id\|title]` | Opens the resume picker ([below](#resume)); with a session's id or title, resumes that session                                                                          | No            |
-| `/fork [name]`        | Copies the session as it stands into a new session, named when a name is given, and continues in the copy                                                               | No            |
-| `/init`               | Asks the Agent to write an `AGENTS.md` contributor guide for the repository; an existing one is left alone                                                              | No            |
-| `/compact`            | Compacts the session's context now, as automatic compaction does                                                                                                        | No            |
-| `/recap`              | A short catch-up on the conversation by the session's model, with the next step when there is one                                                                       | No            |
-| `/copy`               | Copies the last answer, or one of its code blocks or quotes; in Fullscreen, also selecting any part of the conversation                                                 | Yes           |
-| `/export [path]`      | Copies the conversation as Markdown, or saves it into a file ([below](#session-commands))                                                                               | No            |
-| `/diff`               | Shows `git diff` of the first workspace root, untracked files included, in a pager                                                                                      | Yes           |
-| `/mention`            | Inserts `@`, which opens the file popup                                                                                                                                 | Yes           |
-| `/status`             | Shows the model and its reasoning effort, the Provider, the workspace roots, the permission mode, the session's mode and id, its token use and how much context is left | Yes           |
-| `/pwd`, `/cwd`        | Shows the working directory (the first workspace root) and the other roots                                                                                              | Yes           |
-| `/mcp`                | Opens the [MCP](/docs/mcp) manager ([below](#mcp)). `/mcp verbose` lists the servers: connection state, errors, command or URL, tools. `/mcp login ID` logs in to one   | Yes           |
-| `/raw [on\|off]`      | Shows the conversation as the plain text it was made from, without styles, for copying with the terminal's selection; without an argument, switches it (below)          | Yes           |
-| `/theme`              | Picks the [syntax highlighting](#highlighting) theme, previewing each                                                                                                   | Yes           |
-| `/statusline`         | Sets the [status line](#status-line)'s items and colors; `/statusline ITEMS [--colors\|--no-colors]` for this run only                                                  | Yes           |
-| `/title`              | Sets the [terminal title](#status-line)'s items; `/title ITEMS` or `/title --clear` for this run only                                                                   | Yes           |
-| `/tui`                | Picks Scrollback or Fullscreen for the next launch (below)                                                                                                              | Yes           |
-| `/ps`                 | Lists the session's background terminals: command, state, directory, latest output                                                                                      | Yes           |
-| `/stop`, `/clean`     | After a confirmation, stops all of the session's background terminals                                                                                                   | Yes           |
-| `/clear [name]`       | Clears the terminal's scrollback and screen (in Fullscreen, the conversation) and leaves the session; the next session gets the name                                    | No            |
-| `/quit`, `/exit`      | Quits                                                                                                                                                                   | Yes           |
+| Command                  | Does                                                                                                                                                                       | During a turn |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| `/model`                 | Picks the session's model from the enabled Providers' model catalogs; a Provider whose catalog cannot be read says why                                                     | No            |
+| `/providers`             | Adds, edits, tests, enables and deletes the model Providers, and chooses the default Provider and the model new sessions run ([below](#providers))                         | No            |
+| `/mode`                  | Picks the default mode or [plan mode](/docs/plan-mode)                                                                                                                     | No            |
+| `/skills`                | Lists the [Skills](/docs/skills), whether each is enabled, and the catalog's issues                                                                                        | Yes           |
+| `/rename [name]`         | Renames the session: a prompt with its title, and the model's suggested title when it arrives; with a name, renames at once ([below](#session-commands))                   | No            |
+| `/new`                   | Leaves the session: the next message starts a new one (in the default mode); the previous one stays in the history                                                         | No            |
+| `/archive`               | After a confirmation, archives the session and leaves it, as `/new` does                                                                                                   | No            |
+| `/delete`                | After a confirmation, deletes the session for good, with its child sessions, and leaves it                                                                                 | No            |
+| `/resume [id\|title]`    | Opens the resume picker ([below](#resume)); with a session's id or title, resumes that session                                                                             | No            |
+| `/fork [name]`           | Copies the session as it stands into a new session, named when a name is given, and continues in the copy                                                                  | No            |
+| `/init`                  | Asks the Agent to write an `AGENTS.md` contributor guide for the repository; an existing one is left alone                                                                 | No            |
+| `/compact`               | Compacts the session's context now, as automatic compaction does                                                                                                           | No            |
+| `/recap`                 | A short catch-up on the conversation by the session's model, with the next step when there is one                                                                          | No            |
+| `/review [instructions]` | Reviews the repository's changes in a read-only child session and reports the findings into the conversation: a picker of targets, or your instructions ([below](#review)) | No            |
+| `/goal [objective]`      | Shows the session's goal and what can be done with it, or sets one; `clear`, `pause`, `resume`, `edit` ([below](#goal))                                                    | Yes           |
+| `/copy`                  | Copies the last answer, or one of its code blocks or quotes; in Fullscreen, also selecting any part of the conversation                                                    | Yes           |
+| `/export [path]`         | Copies the conversation as Markdown, or saves it into a file ([below](#session-commands))                                                                                  | No            |
+| `/diff`                  | Shows `git diff` of the first workspace root, untracked files included, in a pager                                                                                         | Yes           |
+| `/mention`               | Inserts `@`, which opens the file popup                                                                                                                                    | Yes           |
+| `/status`                | Shows the model and its reasoning effort, the Provider, the workspace roots, the permission mode, the session's mode and id, its token use and how much context is left    | Yes           |
+| `/pwd`, `/cwd`           | Shows the working directory (the first workspace root) and the other roots                                                                                                 | Yes           |
+| `/mcp`                   | Opens the [MCP](/docs/mcp) manager ([below](#mcp)). `/mcp verbose` lists the servers: connection state, errors, command or URL, tools. `/mcp login ID` logs in to one      | Yes           |
+| `/hooks`                 | Opens the hooks browser: each event's hooks with their trust and state; trusts them and turns them on or off ([below](#hooks))                                             | Yes           |
+| `/raw [on\|off]`         | Shows the conversation as the plain text it was made from, without styles, for copying with the terminal's selection; without an argument, switches it (below)             | Yes           |
+| `/theme`                 | Picks the [syntax highlighting](#highlighting) theme, previewing each                                                                                                      | Yes           |
+| `/statusline`            | Sets the [status line](#status-line)'s items and colors; `/statusline ITEMS [--colors\|--no-colors]` for this run only                                                     | Yes           |
+| `/title`                 | Sets the [terminal title](#status-line)'s items; `/title ITEMS` or `/title --clear` for this run only                                                                      | Yes           |
+| `/tui`                   | Picks Scrollback or Fullscreen for the next launch (below)                                                                                                                 | Yes           |
+| `/ps`                    | Lists the session's background terminals: command, state, directory, latest output                                                                                         | Yes           |
+| `/stop`, `/clean`        | After a confirmation, stops all of the session's background terminals                                                                                                      | Yes           |
+| `/clear [name]`          | Clears the terminal's scrollback and screen (in Fullscreen, the conversation) and leaves the session; the next session gets the name                                       | No            |
+| `/quit`, `/exit`         | Quits                                                                                                                                                                      | Yes           |
 
 - A command that is not available during a turn says `'/x' is disabled while a task is in progress.`
 - A `/name` that is no command is not sent; you get `Unrecognized command` instead. A path with a slash in it (`/usr/bin/env`), or text that starts with a space, is sent as a message.
-- Commands take no arguments, but `/rename`, `/resume`, `/fork`, `/export`, `/clear`, `/raw`, `/mcp`, `/statusline` and `/title`. A message such as `/model gpt-5.1`, with text after the name, goes to the model as an ordinary message. `/mcp` with anything but `verbose` or `login ID` says `Usage: /mcp [verbose | login ID]`.
+- Commands take no arguments, but `/rename`, `/resume`, `/fork`, `/review`, `/goal`, `/export`, `/clear`, `/raw`, `/mcp`, `/statusline` and `/title`. A message such as `/model gpt-5.1`, with text after the name, goes to the model as an ordinary message. `/mcp` with anything but `verbose` or `login ID` says `Usage: /mcp [verbose | login ID]`.
 - `/raw` applies at once and is saved (`tui.rawOutput`), so the next launch starts with it. In Fullscreen the whole conversation is shown again in its raw form; in Scrollback what is already in the scrollback stays as it is, and only what follows is raw. `/raw` with anything but `on` or `off` says `Usage: /raw [on|off]`.
 - `/tui` saves `tui.fullscreenTranscript` and applies from the next launch: the running interface keeps its mode. `--no-alt-screen` and `tui.alternateScreen` still apply then.
 - The permission mode is the configuration's (`permissionMode` or `--permission-mode`). `/status` shows it; no command in the interface changes it.
@@ -166,6 +169,30 @@ The screens of `/providers` and `/mcp` edit in a form:
 ## MCP servers [#mcp]
 
 `/mcp` lists the MCP servers, each with its transport, connection phase, number of tools and last error. Enter edits the highlighted one, `a` adds one, `d` deletes it after asking, `e` enables or disables it, `c` connects it (a connected one reconnects), `l` starts its OAuth login, `o` logs it out, Esc closes the list. The form and its secrets are in [MCP](/docs/mcp#interface).
+
+## Reviews [#review]
+
+`/review` opens a picker of what to review: **Review uncommitted changes** (staged, unstaged and untracked), **Review against a base branch** (the repository's local branches, the current one marked `(current)`, searchable), **Review a commit** (the latest 100 commits, searchable by subject or hash) and **Custom review instructions** (a one-line prompt). Esc on a list goes back to the presets. Outside a Git repository the branch and the commit are unavailable and say why. `/review INSTRUCTIONS` reviews with your instructions at once. How a review runs is in [Sessions](/docs/sessions#reviews).
+
+- A review reports back into the conversation, so the session must have had a turn: before your first message `/review` says `Send a message first; a review reports back into a conversation.` It does not start during a turn, nor while another review runs.
+- While it runs, the conversation shows `>> Code review started: … <<` and the status line `Reviewing …`. Esc, or `/review cancel`, cancels it (`<< Code review cancelled >>`). A message you send meanwhile waits and is sent when the review ends, so the turn it starts reads what the review found.
+- When it ends, `<< Code review finished >>` is followed by the verdict and its confidence, the explanation, and each finding: its priority and title, its file and lines, and its body.
+- With the `review` plugin off, `/review` says reviews are unavailable and why.
+
+## Goals [#goal]
+
+`/goal OBJECTIVE` gives the session a goal ([Sessions](/docs/sessions#goals)); `/goal --tokens N OBJECTIVE` gives it a token budget too (`200000`, `200k`, `2m`). When the session's goal is not complete, a question asks first, **Replace goal?**, with keeping the current goal selected. The Agent pursues the goal from your next message; one set during a turn is taken up at that turn's next answer.
+
+- `/goal` alone shows the goal: its objective, status, tokens used (of the budget) and time used, with what can be done: **Pause goal** (an active goal) or **Resume goal** (a paused or blocked one), **Edit objective**, **Set token budget** and **Clear goal**. Without a goal it says so, with the usage.
+- `/goal pause`, `/goal resume` and `/goal clear` act at once; `/goal edit` opens a prompt filled with the objective. Editing the objective, or setting the budget, sets the goal again: its usage starts from zero.
+- Without a session, `/goal` creates one first. With the `goal` plugin off, it says goals are unavailable and why.
+- The [status line](#status-line)'s `goal` item shows the goal: read when a session opens, then updated by every `/goal` and, during a turn, by the session's events.
+
+## Hooks [#hooks]
+
+`/hooks` lists the [hook](/docs/configuration#hooks) events, each with how many hooks it has, how many run (trusted and on) and how many need review, above what in the configuration was skipped and why. Enter opens an event: each hook with its matcher and command, its trust (`trusted`, `new, review required` or `modified since trusted, review required`), whether it is on, the file it is configured in and its timeout. Space or Enter turns the highlighted hook on or off, `t` trusts it, Esc goes back. On the events, `t` trusts every hook that needs review, after a question. Each change is saved at once, and the hooks are read again.
+
+When the interface starts with hooks that need review (new, or modified since they were trusted), the conversation says `N hooks need review: /hooks`, and the warning is kept; nothing waits for you.
 
 ## @ file mentions [#mentions]
 

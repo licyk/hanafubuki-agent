@@ -12,7 +12,9 @@ use hanafubuki_agent::{
 };
 use ratatui::crossterm::event::{KeyEvent, MouseEvent};
 
-use crate::agent_bridge::{AgentReply, McpCall, ProviderCall, SessionCall};
+use crate::agent_bridge::{
+    AgentReply, GoalCall, HooksCall, McpCall, ProviderCall, ReviewCall, SessionCall,
+};
 use crate::appearance::AppearanceEvent;
 use crate::file_search::FileMatch;
 use crate::history_cell::HistoryCell;
@@ -118,6 +120,9 @@ pub(crate) enum AgentCommand {
     Mcp(McpCall),
     Skills,
     Session(SessionCall),
+    Review(ReviewCall),
+    Goal(GoalCall),
+    Hooks(HooksCall),
 }
 
 /// The app loop's channel, as the widgets and the Agent's sinks hold it.

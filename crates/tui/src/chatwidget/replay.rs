@@ -5,7 +5,8 @@
 //! which the owned transcript loads as the reader nears its start.
 
 use super::ChatWidget;
-use crate::agent_bridge::{OpenedSession, ReplayedItem};
+use crate::agent_bridge::{HooksCall, OpenedSession, ReplayedItem};
+use crate::app_event::{AgentCommand, AppEvent, Op};
 use crate::history_cell::{self, HistoryCell};
 use crate::streaming::controller::{PlanStreamController, StreamController};
 
@@ -49,6 +50,13 @@ impl ChatWidget {
         self.needs_final_message_separator = false;
         if self.setup_needed {
             self.open_setup();
+        }
+        if !self.hooks_checked {
+            self.hooks_checked = true;
+            self.app_event_tx
+                .send(AppEvent::Op(Op::Command(AgentCommand::Hooks(
+                    HooksCall::Check,
+                ))));
         }
     }
 

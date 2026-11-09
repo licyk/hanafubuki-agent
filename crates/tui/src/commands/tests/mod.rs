@@ -41,6 +41,8 @@ fn the_table_keeps_the_presentation_order() {
             "init",
             "compact",
             "recap",
+            "review",
+            "goal",
             "copy",
             "export",
             "diff",
@@ -48,6 +50,7 @@ fn the_table_keeps_the_presentation_order() {
             "status",
             "pwd",
             "mcp",
+            "hooks",
             "raw",
             "theme",
             "statusline",
@@ -72,12 +75,15 @@ fn availability_follows_the_spec() {
         during_task,
         [
             "skills",
+            "review",
+            "goal",
             "copy",
             "diff",
             "mention",
             "status",
             "pwd",
             "mcp",
+            "hooks",
             "raw",
             "theme",
             "statusline",
@@ -95,7 +101,7 @@ fn availability_follows_the_spec() {
         .collect();
     assert_eq!(
         needs_session,
-        ["model", "mode", "rename", "compact", "status"]
+        ["model", "mode", "rename", "compact", "goal", "status"]
     );
     let inline_args: Vec<&str> = COMMANDS
         .into_iter()
@@ -108,6 +114,8 @@ fn availability_follows_the_spec() {
             "rename",
             "resume",
             "fork",
+            "review",
+            "goal",
             "export",
             "mcp",
             "raw",
@@ -129,4 +137,5 @@ fn a_prefix_is_a_case_insensitive_subsequence_of_an_enabled_command() {
     assert!(!has_prefix("qu", &["exit"]));
 }
 
-mod session;
+/// The chat and what it sent, for the commands' own tests too.
+pub(super) mod session;

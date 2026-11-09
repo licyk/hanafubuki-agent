@@ -283,11 +283,14 @@ impl BottomPane {
         command: &'static str,
         reply: CommandReply,
     ) -> Option<CommandReply> {
-        let view = self
+        let Some(view) = self
             .view_stack
             .iter_mut()
             .rev()
-            .find(|view| view.command() == Some(command))?;
+            .find(|view| view.command() == Some(command))
+        else {
+            return Some(reply);
+        };
         let left = view.take_command_reply(reply);
         self.remove_completed_views();
         self.request_redraw();

@@ -161,6 +161,9 @@ impl AgentBridge {
             AgentCommand::Providers(call) => self.provider_call(call),
             AgentCommand::Mcp(call) => self.mcp_call(call),
             AgentCommand::Session(call) => return Ok(self.session_call(call)),
+            AgentCommand::Review(call) => return Ok(self.review_call(call)),
+            AgentCommand::Goal(call) => return Ok(self.goal_call(call)),
+            AgentCommand::Hooks(call) => return Ok(self.hooks_call(call)),
             AgentCommand::Skills => {
                 let catalog = self
                     .agent

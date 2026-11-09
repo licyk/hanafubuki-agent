@@ -76,41 +76,44 @@ Fullscreen 下还有阅读对话的按键：Page Up/Page Down、F3、F4、Ctrl-S
 
 以 `/` 开头的消息是命令。输入 `/` 会弹出命令列表，并随输入的名字缩小范围。
 
-| 命令                  | 作用                                                                                                                                        | 回合中 |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
-| `/model`              | 从已启用 Provider 的模型目录中选择本会话的模型；无法读取目录的 Provider 会显示原因                                                          | 不可用 |
-| `/providers`          | 添加、编辑、测试、启用和删除模型 Provider，并选择默认 Provider 和新会话使用的模型（[见下文](#providers)）                                   | 不可用 |
-| `/mode`               | 在默认模式和[计划模式](/docs/plan-mode)之间选择                                                                                             | 不可用 |
-| `/skills`             | 列出 [Skill](/docs/skills)、它们是否启用，以及目录中的问题                                                                                  | 可用   |
-| `/rename [name]`      | 重命名会话：打开填有当前标题的输入框，模型给出的建议标题到达后显示出来；带名字时直接重命名（[见下文](#session-commands)）                   | 不可用 |
-| `/new`                | 离开当前会话，下一条消息开始一个新会话（默认模式），之前的会话保留在历史中                                                                  | 不可用 |
-| `/archive`            | 确认后归档会话并离开它，与 `/new` 一样                                                                                                      | 不可用 |
-| `/delete`             | 确认后永久删除会话及其子会话，并离开它                                                                                                      | 不可用 |
-| `/resume [id\|title]` | 打开恢复选择器（[见下文](#resume)）；带会话 ID 或标题时直接恢复该会话                                                                       | 不可用 |
-| `/fork [name]`        | 把会话当前的状态复制成一个新会话，给了名字时用它命名，之后在副本中继续                                                                      | 不可用 |
-| `/init`               | 让 Agent 为仓库写一份 `AGENTS.md` 贡献指南；已有的 `AGENTS.md` 不会改动                                                                     | 不可用 |
-| `/compact`            | 立即压缩会话的上下文，与自动压缩相同                                                                                                        | 不可用 |
-| `/recap`              | 由会话的模型简要回顾对话，有下一步时一并给出                                                                                                | 不可用 |
-| `/copy`               | 复制最后一个回答，或其中的某个代码块或引用；Fullscreen 下还可以在对话中选择任意部分                                                         | 可用   |
-| `/export [path]`      | 把对话以 Markdown 复制到剪贴板，或保存到文件（[见下文](#session-commands)）                                                                 | 不可用 |
-| `/diff`               | 在分页器中显示第一个工作区目录的 `git diff`，包括未跟踪的文件                                                                               | 可用   |
-| `/mention`            | 插入 `@`，打开文件列表                                                                                                                      | 可用   |
-| `/status`             | 显示模型和推理强度、Provider、工作区目录、权限模式、会话模式和 ID、token 用量和上下文剩余比例                                               | 可用   |
-| `/pwd`、`/cwd`        | 显示工作目录（第一个工作区目录）和其他工作区目录                                                                                            | 可用   |
-| `/mcp`                | 打开 [MCP](/docs/mcp) 管理界面（[见下文](#mcp)）。`/mcp verbose` 列出服务器：连接状态、错误、命令或 URL、工具。`/mcp login ID` 登录其中一个 | 可用   |
-| `/raw [on\|off]`      | 以生成对话的原始纯文本显示对话，不带样式，便于用终端自己的选择复制；不带参数时切换（见下文）                                                | 可用   |
-| `/theme`              | 选择[语法高亮](#highlighting)主题，移动时实时预览                                                                                           | 可用   |
-| `/statusline`         | 设置[状态栏](#status-line)的项目和颜色；`/statusline 项目 [--colors\|--no-colors]` 只对本次运行有效                                         | 可用   |
-| `/title`              | 设置[终端标题](#status-line)的项目；`/title 项目` 或 `/title --clear` 只对本次运行有效                                                      | 可用   |
-| `/tui`                | 为下次启动选择 Scrollback 或 Fullscreen（见下文）                                                                                           | 可用   |
-| `/ps`                 | 列出会话的后台终端：命令、状态、目录、最近的输出                                                                                            | 可用   |
-| `/stop`、`/clean`     | 确认后停止会话的所有后台终端                                                                                                                | 可用   |
-| `/clear [name]`       | 清空终端的滚动历史和屏幕（Fullscreen 下清空对话）并离开会话；下一个会话使用这个名字                                                         | 不可用 |
-| `/quit`、`/exit`      | 退出                                                                                                                                        | 可用   |
+| 命令                     | 作用                                                                                                                                        | 回合中 |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| `/model`                 | 从已启用 Provider 的模型目录中选择本会话的模型；无法读取目录的 Provider 会显示原因                                                          | 不可用 |
+| `/providers`             | 添加、编辑、测试、启用和删除模型 Provider，并选择默认 Provider 和新会话使用的模型（[见下文](#providers)）                                   | 不可用 |
+| `/mode`                  | 在默认模式和[计划模式](/docs/plan-mode)之间选择                                                                                             | 不可用 |
+| `/skills`                | 列出 [Skill](/docs/skills)、它们是否启用，以及目录中的问题                                                                                  | 可用   |
+| `/rename [name]`         | 重命名会话：打开填有当前标题的输入框，模型给出的建议标题到达后显示出来；带名字时直接重命名（[见下文](#session-commands)）                   | 不可用 |
+| `/new`                   | 离开当前会话，下一条消息开始一个新会话（默认模式），之前的会话保留在历史中                                                                  | 不可用 |
+| `/archive`               | 确认后归档会话并离开它，与 `/new` 一样                                                                                                      | 不可用 |
+| `/delete`                | 确认后永久删除会话及其子会话，并离开它                                                                                                      | 不可用 |
+| `/resume [id\|title]`    | 打开恢复选择器（[见下文](#resume)）；带会话 ID 或标题时直接恢复该会话                                                                       | 不可用 |
+| `/fork [name]`           | 把会话当前的状态复制成一个新会话，给了名字时用它命名，之后在副本中继续                                                                      | 不可用 |
+| `/init`                  | 让 Agent 为仓库写一份 `AGENTS.md` 贡献指南；已有的 `AGENTS.md` 不会改动                                                                     | 不可用 |
+| `/compact`               | 立即压缩会话的上下文，与自动压缩相同                                                                                                        | 不可用 |
+| `/recap`                 | 由会话的模型简要回顾对话，有下一步时一并给出                                                                                                | 不可用 |
+| `/review [instructions]` | 在只读的子会话中评审仓库的改动，并把发现报告到对话中：打开目标选择器，或按你的要求评审（[见下文](#review)）                                 | 不可用 |
+| `/goal [objective]`      | 显示会话的目标及可做的操作，或设置目标；`clear`、`pause`、`resume`、`edit`（[见下文](#goal)）                                               | 可用   |
+| `/copy`                  | 复制最后一个回答，或其中的某个代码块或引用；Fullscreen 下还可以在对话中选择任意部分                                                         | 可用   |
+| `/export [path]`         | 把对话以 Markdown 复制到剪贴板，或保存到文件（[见下文](#session-commands)）                                                                 | 不可用 |
+| `/diff`                  | 在分页器中显示第一个工作区目录的 `git diff`，包括未跟踪的文件                                                                               | 可用   |
+| `/mention`               | 插入 `@`，打开文件列表                                                                                                                      | 可用   |
+| `/status`                | 显示模型和推理强度、Provider、工作区目录、权限模式、会话模式和 ID、token 用量和上下文剩余比例                                               | 可用   |
+| `/pwd`、`/cwd`           | 显示工作目录（第一个工作区目录）和其他工作区目录                                                                                            | 可用   |
+| `/mcp`                   | 打开 [MCP](/docs/mcp) 管理界面（[见下文](#mcp)）。`/mcp verbose` 列出服务器：连接状态、错误、命令或 URL、工具。`/mcp login ID` 登录其中一个 | 可用   |
+| `/hooks`                 | 打开钩子浏览器：各事件的钩子及其信任状态和开关；信任钩子、开启或关闭钩子（[见下文](#hooks)）                                                | 可用   |
+| `/raw [on\|off]`         | 以生成对话的原始纯文本显示对话，不带样式，便于用终端自己的选择复制；不带参数时切换（见下文）                                                | 可用   |
+| `/theme`                 | 选择[语法高亮](#highlighting)主题，移动时实时预览                                                                                           | 可用   |
+| `/statusline`            | 设置[状态栏](#status-line)的项目和颜色；`/statusline 项目 [--colors\|--no-colors]` 只对本次运行有效                                         | 可用   |
+| `/title`                 | 设置[终端标题](#status-line)的项目；`/title 项目` 或 `/title --clear` 只对本次运行有效                                                      | 可用   |
+| `/tui`                   | 为下次启动选择 Scrollback 或 Fullscreen（见下文）                                                                                           | 可用   |
+| `/ps`                    | 列出会话的后台终端：命令、状态、目录、最近的输出                                                                                            | 可用   |
+| `/stop`、`/clean`        | 确认后停止会话的所有后台终端                                                                                                                | 可用   |
+| `/clear [name]`          | 清空终端的滚动历史和屏幕（Fullscreen 下清空对话）并离开会话；下一个会话使用这个名字                                                         | 不可用 |
+| `/quit`、`/exit`         | 退出                                                                                                                                        | 可用   |
 
 - 回合进行中输入不可用的命令，会显示 `'/x' is disabled while a task is in progress.`。
 - 不认识的 `/名字` 不会发送，而是提示 `Unrecognized command`。包含斜杠的路径（如 `/usr/bin/env`）或以空格开头的文本会作为普通消息发送。
-- 除 `/rename`、`/resume`、`/fork`、`/export`、`/clear`、`/raw`、`/mcp`、`/statusline` 和 `/title` 外，命令不带参数。`/model gpt-5.1` 这样在名字后面写了内容的消息会作为普通消息发给模型。`/mcp` 后面跟 `verbose` 或 `login ID` 以外的内容时，会提示 `Usage: /mcp [verbose | login ID]`。
+- 除 `/rename`、`/resume`、`/fork`、`/review`、`/goal`、`/export`、`/clear`、`/raw`、`/mcp`、`/statusline` 和 `/title` 外，命令不带参数。`/model gpt-5.1` 这样在名字后面写了内容的消息会作为普通消息发给模型。`/mcp` 后面跟 `verbose` 或 `login ID` 以外的内容时，会提示 `Usage: /mcp [verbose | login ID]`。
 - `/raw` 立即生效并保存（`tui.rawOutput`），下次启动时沿用。Fullscreen 下整个对话以原始形式重新显示；Scrollback 下已经写入滚动历史的内容保持不变，只有之后的内容是原始形式。`/raw` 后面跟 `on`、`off` 以外的内容时，会提示 `Usage: /raw [on|off]`。
 - `/tui` 保存 `tui.fullscreenTranscript`，从下次启动起生效：正在运行的界面保持当前方式。届时 `--no-alt-screen` 和 `tui.alternateScreen` 仍然适用。
 - 权限模式来自配置（`permissionMode` 或 `--permission-mode`），`/status` 会显示它，但界面中没有命令可以修改它。
@@ -163,6 +166,30 @@ Fullscreen 下还有阅读对话的按键：Page Up/Page Down、F3、F4、Ctrl-S
 ## MCP 服务器 [#mcp]
 
 `/mcp` 列出 MCP 服务器，每一项显示传输方式、连接阶段、工具数量和最近的错误。Enter 编辑选中的一项，`a` 添加，`d` 确认后删除，`e` 启用或停用，`c` 连接（已连接的会重新连接），`l` 开始 OAuth 登录，`o` 登出，Esc 关闭列表。表单和其中的机密见 [MCP](/docs/mcp#interface)。
+
+## 评审 [#review]
+
+`/review` 打开评审目标的选择器：**Review uncommitted changes**（未提交的改动：已暂存、未暂存和未跟踪的文件）、**Review against a base branch**（相对基础分支：仓库的本地分支，当前分支标为 `(current)`，可搜索）、**Review a commit**（一个提交：最近 100 个提交，可按标题或哈希搜索）和 **Custom review instructions**（自定义要求：一行输入框）。在列表中按 Esc 回到预设。不在 Git 仓库中时，基础分支和提交两项不可用，并显示原因。`/review 要求` 直接按你的要求评审。评审如何运行见[会话](/docs/sessions#reviews)。
+
+- 评审会把结果报告回对话，所以会话必须已经有过一个回合：发送第一条消息之前，`/review` 会提示 `Send a message first; a review reports back into a conversation.`。回合进行中或另一个评审运行时，不会开始评审。
+- 评审运行时，对话中显示 `>> Code review started: … <<`，状态行显示 `Reviewing …`。按 Esc 或输入 `/review cancel` 取消它（`<< Code review cancelled >>`）。这期间你发送的消息会等待，评审结束后再发送，这样它开始的回合能读到评审的发现。
+- 评审结束后，`<< Code review finished >>` 之后依次是结论及其置信度、说明，以及每条发现：优先级和标题、文件和行，以及正文。
+- `review` 插件关闭时，`/review` 会说明评审不可用及原因。
+
+## 目标 [#goal]
+
+`/goal 目标内容` 为会话设置目标（[会话](/docs/sessions#goals)）；`/goal --tokens N 目标内容` 同时设置 token 预算（`200000`、`200k`、`2m`）。会话的目标尚未完成时，会先询问 **Replace goal?**（替换目标？），默认选中保留当前目标。Agent 从你的下一条消息起推进目标；在回合进行中设置的目标，会在该回合的下一个回答时被接手。
+
+- 只输入 `/goal` 时显示目标：目标内容、状态、已用 token（及预算）和已用时间，以及可做的操作：**Pause goal**（暂停，活动的目标）或 **Resume goal**（恢复，暂停或阻塞的目标）、**Edit objective**（编辑目标内容）、**Set token budget**（设置 token 预算）和 **Clear goal**（清除目标）。没有目标时会说明，并给出用法。
+- `/goal pause`、`/goal resume` 和 `/goal clear` 直接执行；`/goal edit` 打开填有目标内容的输入框。编辑目标内容或设置预算都会重新设置目标：用量从零开始。
+- 没有会话时，`/goal` 会先创建一个。`goal` 插件关闭时，会说明目标不可用及原因。
+- [状态行](#status-line)的 `goal` 项显示目标：打开会话时读取，之后随每次 `/goal` 以及回合中会话的事件更新。
+
+## 钩子 [#hooks]
+
+`/hooks` 列出[钩子](/docs/configuration#hooks)事件，每个事件显示它有几个钩子、几个在运行（已信任且开启）、几个需要审查，下方列出配置中被跳过的内容及原因。Enter 打开一个事件：每个钩子显示它的 matcher 和命令、信任状态（`trusted`、`new, review required` 或 `modified since trusted, review required`）、是否开启、配置它的文件和超时。空格或 Enter 开启或关闭选中的钩子，`t` 信任它，Esc 返回。在事件列表中，`t` 经确认后信任所有需要审查的钩子。每个改动立即保存，之后重新读取钩子。
+
+界面启动时如果有需要审查的钩子（新的，或信任之后被修改的），对话中会显示 `N hooks need review: /hooks`，并记下这条警告；不会有任何东西等你处理。
 
 ## @ 文件提及 [#mentions]
 

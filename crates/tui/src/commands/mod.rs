@@ -14,6 +14,8 @@ mod copy;
 mod exit;
 mod export;
 mod fork;
+pub(crate) mod goal;
+pub(crate) mod hooks;
 mod init;
 mod leave;
 pub(crate) mod mcp;
@@ -27,6 +29,7 @@ mod recap;
 mod rename;
 mod reports;
 mod resume;
+pub(crate) mod review;
 mod session;
 mod statusline;
 mod terminals;
@@ -39,18 +42,21 @@ use std::fmt;
 
 use hanafubuki_agent::AgentSessionMode;
 
-use crate::agent_bridge::{McpReply, ProviderReply, SessionCall, SessionReply};
+use crate::agent_bridge::{HooksReply, McpReply, ProviderReply, SessionCall, SessionReply};
 use crate::app_event::{AgentCommand, AppEvent, AppEventSender, Op};
 use crate::appearance::Appearance;
 use crate::bottom_pane::{BottomPane, BottomPaneView, SelectionViewParams};
 use crate::history_cell::{self, HistoryCell};
+pub(crate) use goal::GOAL;
+pub(crate) use hooks::HOOKS;
 pub(crate) use mcp::MCP;
 pub(crate) use mode::mode_name;
 pub(crate) use model::{show_model_choices, MODEL};
 pub(crate) use providers::PROVIDERS;
+pub(crate) use review::REVIEW;
 
 /// Every command, in presentation order: the most used first.
-pub(crate) static COMMANDS: [&CommandSpec; 29] = [
+pub(crate) static COMMANDS: [&CommandSpec; 32] = [
     &model::MODEL,
     &providers::PROVIDERS,
     &mode::MODE,
@@ -64,6 +70,8 @@ pub(crate) static COMMANDS: [&CommandSpec; 29] = [
     &init::INIT,
     &session::COMPACT,
     &recap::RECAP,
+    &review::REVIEW,
+    &goal::GOAL,
     &copy::COPY,
     &export::EXPORT,
     &workspace::DIFF,
@@ -71,6 +79,7 @@ pub(crate) static COMMANDS: [&CommandSpec; 29] = [
     &reports::STATUS,
     &pwd::PWD,
     &mcp::MCP,
+    &hooks::HOOKS,
     &raw::RAW,
     &theme::THEME,
     &statusline::STATUSLINE,
@@ -151,6 +160,7 @@ pub(crate) enum CommandReply {
     Providers(ProviderReply),
     Mcp(McpReply),
     Session(SessionReply),
+    Hooks(HooksReply),
 }
 
 /// The command a session call's reply belongs to.
@@ -261,6 +271,23 @@ impl<'a> CommandContext<'a> {
     /// The saved `tui.fullscreenTranscript`.
     pub(crate) fn fullscreen_preference(&self) -> bool {
         self.fullscreen_preference
+    }
+
+    /// A turn, or the work of a command that shows as one, runs.
+    pub(crate) fn task_running(&self) -> bool {
+        self.bottom_pane.is_task_running()
+    }
+
+    /// Shows this command's work as the running task, `header` in the
+    /// status line (Esc interrupts it), or (`None`) ends it.
+    pub(crate) fn set_task_status(&mut self, header: Option<String>) {
+        match header {
+            Some(header) => {
+                self.bottom_pane.set_task_running(true);
+                self.bottom_pane.update_status(header, None);
+            }
+            None => self.bottom_pane.set_task_running(false),
+        }
     }
 
     /// Shows a list to pick from over the composer, as this command's view.

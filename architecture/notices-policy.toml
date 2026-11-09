@@ -302,3 +302,31 @@ reason = "The isolation of a command's views over catch_panic, written for the A
 [[original]]
 path = "crates/tui/src/get_git_diff/tests.rs"
 reason = "The diff over temporary Git repositories, written for the port."
+
+[[original]]
+path = "crates/tui/src/agent_bridge/review.rs"
+reason = "/review's calls onto the facade's review calls, and the review the bridge holds while it runs."
+
+[[original]]
+path = "crates/tui/src/agent_bridge/goal.rs"
+reason = "/goal's calls onto the facade's goal calls."
+
+[[original]]
+path = "crates/tui/src/agent_bridge/hooks.rs"
+reason = "/hooks' calls onto the facade's hook calls, the list read again after each change."
+
+[[original]]
+path = "crates/tui/src/commands/review/tests.rs"
+reason = "/review's dispatch, picker and review cell over hand-built replies."
+
+[[original]]
+path = "crates/tui/src/commands/goal/tests.rs"
+reason = "/goal's dispatch, menu and prompts over hand-built replies."
+
+[[original]]
+path = "crates/tui/src/commands/hooks/tests.rs"
+reason = "The hooks browser over a hand-built list of hooks."
+
+[[original]]
+path = "crates/tui/src/app/tests/features.rs"
+reason = "/review, /goal and /hooks end to end over the standalone Agent."

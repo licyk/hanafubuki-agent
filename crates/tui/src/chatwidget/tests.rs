@@ -4,7 +4,8 @@ use std::sync::mpsc::{channel, Receiver};
 
 use super::*;
 use crate::agent_bridge::{
-    McpCall, ModelChoices, OlderTranscript, OpenedSession, ReplayedItem, TurnEnd,
+    HooksCall, HooksReply, McpCall, ModelChoices, OlderTranscript, OpenedSession, ReplayedItem,
+    TurnEnd,
 };
 use crate::app_event::AgentCommand;
 use crate::bottom_pane::{SelectionItem, SelectionViewParams};
@@ -648,4 +649,31 @@ fn tui_offers_the_two_modes_with_the_saved_one_marked() {
         "{}",
         sent.len()
     );
+}
+
+#[test]
+fn the_hooks_are_checked_once_a_run_and_waiting_ones_are_a_warning() {
+    let (mut chat, events) = chat();
+    drain(&events);
+    let opened = |session_id| OpenedSession {
+        session_id,
+        model: "fixture-model".to_string(),
+        mode: hanafubuki_agent::AgentSessionMode::Default,
+        transcript: Vec::new(),
+        older: None,
+        setup_needed: false,
+    };
+    chat.handle_turn_update(TurnUpdate::SessionOpened(opened(None)));
+    assert_eq!(
+        drain(&events).1,
+        [Op::Command(AgentCommand::Hooks(HooksCall::Check))]
+    );
+    chat.handle_turn_update(TurnUpdate::SessionOpened(opened(Some(
+        AgentSessionId::new(3),
+    ))));
+    assert!(drain(&events).1.is_empty());
+
+    chat.handle_turn_update(TurnUpdate::Hooks(HooksReply::NeedReview(1)));
+    assert_eq!(drain(&events).0, ["• 1 hook needs review: /hooks"]);
+    assert_eq!(chat.warnings, ["1 hook needs review: /hooks"]);
 }

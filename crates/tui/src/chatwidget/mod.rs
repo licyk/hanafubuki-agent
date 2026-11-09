@@ -111,6 +111,8 @@ pub(crate) struct ChatWidget {
     /// opens the setup instead of failing.
     setup_needed: bool,
     model_override: bool,
+    /// The hooks waiting to be trusted were looked for, once per run.
+    hooks_checked: bool,
 }
 
 impl ChatWidget {
@@ -158,6 +160,7 @@ impl ChatWidget {
             session_open: false,
             setup_needed: false,
             model_override,
+            hooks_checked: false,
         }
     }
 

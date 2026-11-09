@@ -2,9 +2,10 @@
 //! Codex's TUI has its `ConversationManager` and `CodexConversation`): it
 //! maps the Agent's turn events onto what the chat widget shows
 //! ([`TurnUpdate`]), and the interface's [`Op`]s onto calls of the facade:
-//! the turn's (here), the slash commands' (`commands`), the reading of a
-//! session's transcript into what the chat replays (`replay`), and the
-//! editing of an earlier message (`edit`).
+//! the turn's (here), the slash commands' (`commands`; `/review`, `/goal`
+//! and `/hooks` in modules of their own), the reading of a session's
+//! transcript into what the chat replays (`replay`), and the editing of an
+//! earlier message (`edit`).
 //!
 //! The interface starts with no session: the first message creates it, or
 //! a command that needs one (`Op::EnsureSession`), and `/new` drops back to
@@ -17,9 +18,12 @@
 
 mod commands;
 mod edit;
+mod goal;
+mod hooks;
 mod mcp;
 mod providers;
 mod replay;
+mod review;
 mod sessions;
 mod status;
 
@@ -38,9 +42,12 @@ use tokio::sync::oneshot;
 use crate::app_event::{AppEvent, AppEventSender, Op};
 use crate::history_cell::ToolResultView;
 pub(crate) use commands::{setup_needed, with_model, ModelChoices, StatusReport};
+pub(crate) use goal::{GoalCall, GoalReply};
+pub(crate) use hooks::{needing_review, HooksCall, HooksReply};
 pub(crate) use mcp::{McpCall, McpReply};
 pub(crate) use providers::{ProviderCall, ProviderReply};
 pub(crate) use replay::{OlderTranscript, OpenedSession, ReplayedItem};
+pub(crate) use review::{ReviewCall, ReviewEnd, ReviewReply};
 pub(crate) use sessions::{ExportDestination, SessionCall, SessionReply};
 pub(crate) use status::{SessionStatus, UsageSummary};
 
@@ -99,6 +106,9 @@ pub(crate) enum TurnUpdate {
     Session(SessionReply),
     /// What the status line and the terminal title show of the session.
     SessionStatus(Box<SessionStatus>),
+    Review(ReviewReply),
+    Goal(GoalReply),
+    Hooks(HooksReply),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -126,6 +136,8 @@ pub(crate) enum AgentReply {
         permission_mode: Option<AgentPermissionMode>,
         goal: Option<AgentGoal>,
     },
+    /// The review that ran ended.
+    ReviewEnded(ReviewEnd),
 }
 
 pub(crate) struct AgentBridge {
@@ -155,6 +167,8 @@ pub(crate) struct AgentBridge {
     /// Dropped to cancel the MCP login waiting for the browser.
     mcp_login: Option<oneshot::Sender<()>>,
     status: status::StatusCache,
+    /// The review that runs, if one does.
+    review: Option<review::RunningReview>,
 }
 
 impl AgentBridge {
@@ -178,6 +192,7 @@ impl AgentBridge {
             page_size: commands::REPLAYED_ITEMS,
             mcp_login: None,
             status: status::StatusCache::default(),
+            review: None,
         }
     }
 
@@ -198,6 +213,7 @@ impl AgentBridge {
             return None;
         }
         match op {
+            Op::UserInput(text) if self.review_running() => self.hold_for_review(text),
             Op::UserInput(text) => {
                 match (self.session_id, self.turn_running, self.turn) {
                     (None, ..) => self.create_session(vec![Op::UserInput(text)]),
@@ -213,6 +229,8 @@ impl AgentBridge {
                 }
                 None
             }
+            // No turn runs while a review does.
+            Op::Interrupt if self.review_running() => self.review_call(ReviewCall::Cancel),
             Op::Interrupt => {
                 let turn = self.turn?;
                 self.spawn(move |agent| async move {
@@ -309,6 +327,7 @@ impl AgentBridge {
                     self.send_session_status();
                     Some(TurnUpdate::ModelChanged(model))
                 }
+                TurnUpdate::Goal(reply) => self.goal_reply(reply),
                 update => Some(update),
             },
             AgentReply::StatusLoaded {
@@ -316,6 +335,7 @@ impl AgentBridge {
                 permission_mode,
                 goal,
             } => self.status_loaded(session_id, permission_mode, goal),
+            AgentReply::ReviewEnded(end) => self.review_ended(end),
         }
     }
 
@@ -414,13 +434,14 @@ impl AgentBridge {
         Some(update)
     }
 
-    /// When the Agent stopped (a kernel fault) during a turn, the turn's
-    /// events stop with it: the turn is told it failed.
+    /// When the Agent stopped (a kernel fault) during a turn or a review,
+    /// their events and replies stop with it: they are told they failed
+    /// (a review's held messages are then sent, and refused).
     pub(crate) fn status_changed(&mut self) -> Option<TurnUpdate> {
         let status = self.slot.status();
         let running = matches!(status.availability, AgentAvailability::Running)
             && status.generation == self.agent.generation();
-        if running || !self.turn_running {
+        if running || !(self.turn_running || self.review_running()) {
             return None;
         }
         let message = match status.availability {
@@ -429,6 +450,9 @@ impl AgentBridge {
             }
             _ => "the Agent stopped".to_string(),
         };
+        if self.review_running() {
+            return self.review_ended(ReviewEnd::Failed(message));
+        }
         Some(self.ended(TurnEnd::Failed(message)))
     }
 

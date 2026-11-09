@@ -128,18 +128,20 @@ A review is a child that reviews the work in the session's repository and report
 - It runs one turn, whose final answer is read as the findings: an answer that is not that JSON is kept whole as the explanation, and a finding that does not read is left out. Then the session is told, as context its model reads at its next turn, what the review found, or that it was interrupted (`cancel_review`) or failed. If the session runs a turn then, the note waits for it to end.
 - The session must have had a turn: its history starts with one, so a session with none cannot be told. A review of it is refused.
 - Archiving or deleting the session archives or deletes its reviews with it.
+- **From the terminal interface**: `/review` picks the target, shows the review running (Esc cancels it), then its verdict and findings ([Terminal interface](/docs/terminal-interface#review)).
 
 ## Goals [#goals]
 
 A session can have a goal: an objective it keeps working toward beyond one answer, until the objective is done or a budget is spent.
 
-- **Setting one.** You set a goal through the facade (`set_goal`), or ask the model to and it calls `create_goal` ([Tools](/docs/tools#goals)). A goal you set replaces the session's, and its usage starts again; the model may only create one when the session has none or its goal is complete. The objective is at most 4,000 characters (a longer one is refused: put the instructions in a file and name it), and a goal may have a token budget and a time budget.
+- **Setting one.** You set a goal through the facade (`set_goal`) or `/goal` in the terminal interface, or ask the model to and it calls `create_goal` ([Tools](/docs/tools#goals)). A goal you set replaces the session's, and its usage starts again; the model may only create one when the session has none or its goal is complete. The objective is at most 4,000 characters (a longer one is refused: put the instructions in a file and name it), and a goal may have a token budget and a time budget.
 - **What keeps it going.** While the goal is `active`, a turn that ends with a final answer goes on: the model is told to continue toward the objective, once per final answer, until it marks the goal `complete` or `blocked`, you pause it, or a budget is spent. No turn starts by itself: resuming a goal, or setting one while the session is idle, takes effect at the session's next turn. A Plan-mode turn is not continued.
 - **Budgets and usage.** While the goal is active it counts the model tokens the session spends (input and output, as the provider reports them or as estimated; cached input is not subtracted) and the time spent in turns. Once a budget is spent the goal becomes `budget_limited`, and the turn gets one more answer, in which the model is told to wrap up. A goal without a budget still runs within each turn's own limits (tool calls, tokens and continuation context per turn): a turn that reaches one fails, and the goal stays active for the next turn.
 - **Statuses**: `active`, `paused`, `blocked` (the model is at an impasse it cannot pass without you), `budget_limited` and `complete`. A spent budget outranks paused and blocked, and resuming a budget-limited goal leaves it budget-limited.
 - **What the model sees.** Each turn starts with the goal in its context: the objective as quoted data (left out when its quoted form is over 700 bytes), who set it, its status and budgets. A goal you set or replace while a turn runs is announced at that turn's next final answer.
 - **Where it is kept.** The goal is stored with the session's state in the history, so it survives a restart, a fork keeps it (status and usage too), and archiving and deleting the session carry it. A child session (a side conversation, a subagent) does not inherit its parent's goal, and a temporary session cannot have one.
 - With the `goal` plugin off (`disabledPlugins`), the goal tools are gone, nothing is continued and the goal calls are unavailable; a goal already set stays stored.
+- **From the terminal interface**: `/goal` shows the goal with its status, budgets and usage, and sets, replaces, edits, pauses, resumes and clears it ([Terminal interface](/docs/terminal-interface#goal)).
 
 ## Resuming a session [#resume]
 

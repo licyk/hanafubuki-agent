@@ -16,7 +16,7 @@ use crate::chatwidget::{ChatWidget, ChatWidgetInit};
 use crate::render::renderable::Renderable;
 use crate::tui::FrameRequester;
 
-fn chat(owned_transcript: bool) -> (ChatWidget, Receiver<AppEvent>) {
+pub(crate) fn chat(owned_transcript: bool) -> (ChatWidget, Receiver<AppEvent>) {
     let (sender, events) = channel();
     let sender = AppEventSender::new(sender);
     let chat = ChatWidget::new(ChatWidgetInit {
@@ -35,14 +35,14 @@ fn chat(owned_transcript: bool) -> (ChatWidget, Receiver<AppEvent>) {
 /// What the chat sent, but frames: the ops, the app commands and the
 /// cells' text.
 #[derive(Debug, PartialEq)]
-enum Sent {
+pub(crate) enum Sent {
     Op(Op),
     App(AppCommand),
     Cell(String),
     ResumePicker,
 }
 
-fn sent(events: &Receiver<AppEvent>) -> Vec<Sent> {
+pub(crate) fn sent(events: &Receiver<AppEvent>) -> Vec<Sent> {
     std::iter::from_fn(|| events.try_recv().ok())
         .filter_map(|event| match event {
             AppEvent::Op(op) => Some(Sent::Op(op)),
@@ -65,22 +65,22 @@ fn sent(events: &Receiver<AppEvent>) -> Vec<Sent> {
         .collect()
 }
 
-fn call(call: SessionCall) -> Sent {
+pub(crate) fn call(call: SessionCall) -> Sent {
     Sent::Op(Op::Command(AgentCommand::Session(call)))
 }
 
-fn run(chat: &mut ChatWidget, events: &Receiver<AppEvent>, line: &str) -> Vec<Sent> {
+pub(crate) fn run(chat: &mut ChatWidget, events: &Receiver<AppEvent>, line: &str) -> Vec<Sent> {
     sent(events);
     let (name, args) = line.split_once(' ').unwrap_or((line, ""));
     chat.dispatch_command(find(name).unwrap(), args.to_string());
     sent(events)
 }
 
-fn key(chat: &mut ChatWidget, code: KeyCode) {
+pub(crate) fn key(chat: &mut ChatWidget, code: KeyCode) {
     chat.handle_key_event(KeyEvent::new(code, KeyModifiers::NONE));
 }
 
-fn screen(chat: &ChatWidget, width: u16) -> String {
+pub(crate) fn screen(chat: &ChatWidget, width: u16) -> String {
     let area = ratatui::layout::Rect::new(0, 0, width, chat.desired_height(width));
     let mut buf = ratatui::buffer::Buffer::empty(area);
     chat.render(area, &mut buf);

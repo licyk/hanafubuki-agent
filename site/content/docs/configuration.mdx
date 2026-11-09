@@ -125,7 +125,7 @@ timeout = 30
 
 ### 信任 [#hooks-trust]
 
-钩子只有在你信任之后、并且处于启用状态时才会运行。每个钩子有一个键 `<文件>:<事件>:<组>:<钩子>`（`/home/me/.config/hanafubuki-agent/hooks.json:pre_tool_use:0:0`），信任它会记录它定义的哈希（事件、matcher、命令、超时和状态消息）。定义改变了的钩子是 `modified`，在你再次信任之前不会运行。基于 Agent 的应用通过门面的钩子调用列出钩子及其信任状态、信任它们并开关它们（[功能调用](/docs/embedding#feature-calls)）。信任与启用状态保存在数据目录的 `hooks-state.json` 中，而不是 `config.toml`；Codex 的 `[hooks.state]` 被忽略。
+钩子只有在你信任之后、并且处于启用状态时才会运行。每个钩子有一个键 `<文件>:<事件>:<组>:<钩子>`（`/home/me/.config/hanafubuki-agent/hooks.json:pre_tool_use:0:0`），信任它会记录它定义的哈希（事件、matcher、命令、超时和状态消息）。定义改变了的钩子是 `modified`，在你再次信任之前不会运行。基于 Agent 的应用通过门面的钩子调用列出钩子及其信任状态、信任它们并开关它们（[功能调用](/docs/embedding#feature-calls)）；在终端界面中由 `/hooks` 完成（[终端界面](/docs/terminal-interface#hooks)），界面启动时还会说明有几个钩子需要审查。信任与启用状态保存在数据目录的 `hooks-state.json` 中，而不是 `config.toml`；Codex 的 `[hooks.state]` 被忽略。
 
 ## 示例 [#example]
 

@@ -1,0 +1,17 @@
+---
+source: crates/tui/src/commands/goal/tests.rs
+expression: "screen(&chat, 72)"
+---
+                                                                        
+                                                                        
+  Goal                                                                  
+  Objective: Ship the release                                           
+  Status: active                                                        
+  Tokens: 12.4K / 200K                                                  
+  Time: 1h 30m                                                          
+                                                                        
+› 1. Pause goal        stop continuing it; /goal resume picks it up     
+  2. Edit objective    replace the goal; its usage starts again         
+  3. Set token budget  set the goal again with a budget; its usage      
+                       starts again                                     
+  4. Clear goal        remove the goal

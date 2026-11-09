@@ -145,6 +145,20 @@ impl ChatWidget {
                     })
                 }
             }
+            TurnUpdate::Review(reply) => self.run_command(&commands::REVIEW, |context| {
+                commands::review::on_reply(context, reply)
+            }),
+            TurnUpdate::Goal(reply) => self.run_command(&commands::GOAL, |context| {
+                commands::goal::on_reply(context, reply)
+            }),
+            TurnUpdate::Hooks(reply) => {
+                if let Some(warning) = commands::hooks::startup_warning(&reply) {
+                    self.warnings.push(warning);
+                }
+                self.run_command(&commands::HOOKS, |context| {
+                    commands::hooks::on_reply(context, reply)
+                })
+            }
             update => return Some(update),
         }
         None
