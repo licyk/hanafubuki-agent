@@ -1,15 +1,19 @@
 //! The terminal interface of the standalone Agent (`hanafubuki-agent`
-//! with no command), ported from the Codex TUI at `rust-v0.93.0`: an inline
-//! viewport at the bottom of the terminal with the composer, the status
-//! line and the approval and question overlays, and the transcript written
-//! into the terminal's own scrollback above it. It drives the Agent through
-//! the facade alone (`agent_bridge`).
+//! with no command), ported from the Codex TUI: the inline chat, its
+//! composer, the status line and the approval and question overlays at
+//! `rust-v0.93.0`, and the owned transcript at `57a808a392`, which draws
+//! the conversation on the alternate screen in a transcript view with
+//! scrolling, selection, search and copying. The transcript's mode is
+//! chosen at launch: owned (Fullscreen) by default, or written into the
+//! terminal's own scrollback (Scrollback). It drives the Agent through the
+//! facade alone (`agent_bridge`).
 
 mod agent_bridge;
 mod app;
 mod app_event;
 mod bottom_pane;
 mod chatwidget;
+mod clipboard;
 mod commands;
 mod custom_terminal;
 mod diff_render;
@@ -32,9 +36,8 @@ mod style;
 #[cfg(test)]
 mod test_support;
 mod text_formatting;
-#[allow(dead_code, reason = "P2.2 wires the transcript view into the app")]
 mod text_selection;
-#[allow(dead_code, reason = "P2.2 wires the transcript view into the app")]
+mod transcript_mode;
 mod transcript_view;
 mod tui;
 mod ui_consts;

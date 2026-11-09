@@ -1,6 +1,6 @@
 ---
 title: Terminal interface
-description: The layout, keys, composer, slash commands, @ file mentions, the transcript, approvals and questions, and resuming a session.
+description: Fullscreen and Scrollback, the layout, keys, composer, slash commands, @ file mentions, reading, selecting and copying the conversation, the transcript, approvals and questions, and resuming a session.
 icon: SquareTerminal
 ---
 
@@ -15,13 +15,28 @@ The interface starts with no session: your first message creates it, as does a c
 
 The interface needs a terminal on both standard input and standard output; in a pipe or a redirection it points you to [exec](/docs/exec) and exits with code 2. `-m`, `-C`, `--add-dir`, `--permission-mode` and the other [global flags](/docs/cli-reference#global-flags) apply as usual.
 
+## Fullscreen and Scrollback [#modes]
+
+The interface shows the conversation one of two ways, chosen when it starts and kept until it quits:
+
+- **Fullscreen** (the default): the interface takes the terminal's alternate screen and draws the conversation itself, above the bottom area. You scroll, select, search and copy inside it (see [Reading the conversation](#reading)), and it does not stay in the terminal after you quit.
+- **Scrollback**: the interface takes a few lines at the bottom of the terminal, and the conversation is written into the terminal's own scrollback above it, so you scroll back through it, select and copy like any other output, and it stays in the terminal after you quit.
+
+It starts in Fullscreen unless one of these says otherwise, the first that applies winning:
+
+1. `--no-alt-screen` on the command line: Scrollback for this run.
+2. `tui.alternateScreen = "never"`: Scrollback. `"auto"` (the default) is Scrollback in an SSH session (`SSH_TTY` or `SSH_CONNECTION` set), `"always"` never.
+3. `tui.fullscreenTranscript = false`: Scrollback. `/tui` sets it.
+
+The keys are in the [Configuration reference](/docs/config-reference#tui).
+
 ## Layout [#layout]
 
-The interface takes a few lines at the bottom of the terminal, and the conversation is written into the terminal's own scrollback above it, so you scroll back through it like any other output, and it stays in the terminal after you quit.
+In Fullscreen the conversation fills the screen above the bottom area. In Scrollback the bottom area is all the interface draws, and the conversation goes into the scrollback above it.
 
 At the start (and after `/new` or a resume) a box shows the version, the model and the working directory. Before a session exists, the model is the one it will get: `-m`'s, else the configured one. The bottom area holds, from the top:
 
-1. **The running tool calls**: `• Running TOOL: SUBJECT`.
+1. **The running tool calls**: `• Running TOOL: SUBJECT`. In Fullscreen they are the end of the conversation instead.
 2. **The status line**: during a turn, `• Working (12s • esc to interrupt)` with the elapsed time. While a model request is retried it reads `Reconnecting 1/3: reason`. The timer pauses while an approval or a question waits for you. Once the model's answer starts streaming, the status line is hidden.
 3. **The composer**, starting with `›`.
 4. **The footer**: `? for shortcuts` while the composer is empty.
@@ -41,9 +56,11 @@ In the conversation your messages start with `›`; a tool call is `• Called T
 | Esc                       | Closes a popup; otherwise interrupts the turn while the status line is shown                                                |
 | Ctrl-C                    | In turn: denies an approval; clears a composer with text; interrupts a running turn; a second press within one second quits |
 | Ctrl-D                    | On an empty composer, two presses within one second quit; with text, deletes the next character                             |
-| Ctrl-T                    | Opens the transcript (below)                                                                                                |
+| Ctrl-T                    | Fullscreen: shows the conversation in detail, in place; Scrollback: opens the transcript (below)                            |
 | Ctrl-O                    | Shows or hides the model's thinking (below)                                                                                 |
 | `?` on an empty composer  | Shows the shortcuts                                                                                                         |
+
+Fullscreen has the conversation's keys too: Page Up/Page Down, F3, F4, Ctrl-Space and the others in [Reading the conversation](#reading).
 
 The composer has the usual Emacs-style editing keys: Ctrl-A/E for the start and end of the line, Ctrl-W to delete the previous word, Ctrl-U/K to delete to the start or end of the line, Alt-B/F to move by word, and so on.
 
@@ -74,11 +91,15 @@ A message that starts with `/` is a command. Typing `/` opens a popup of them, n
 | `/mention`       | Inserts `@`, which opens the file popup                                                                                                                                 | Yes           |
 | `/status`        | Shows the model and its reasoning effort, the Provider, the workspace roots, the permission mode, the session's mode and id, its token use and how much context is left | Yes           |
 | `/mcp`           | Lists the [MCP servers](/docs/mcp): connection state, errors, command or URL, tools                                                                                     | Yes           |
+| `/raw [on\|off]` | Shows the conversation as the plain text it was made from, without styles, for copying with the terminal's selection; without an argument, switches it (below)          | Yes           |
+| `/tui`           | Picks Scrollback or Fullscreen for the next launch (below)                                                                                                              | Yes           |
 | `/quit`, `/exit` | Quits                                                                                                                                                                   | Yes           |
 
 - A command that is not available during a turn says `'/x' is disabled while a task is in progress.`
 - A `/name` that is no command is not sent; you get `Unrecognized command` instead. A path with a slash in it (`/usr/bin/env`), or text that starts with a space, is sent as a message.
-- Commands take no arguments. A message such as `/model gpt-5.1`, with text after the name, goes to the model as an ordinary message.
+- Commands take no arguments, but `/raw`. A message such as `/model gpt-5.1`, with text after the name, goes to the model as an ordinary message.
+- `/raw` applies at once and is saved (`tui.rawOutput`), so the next launch starts with it. In Fullscreen the whole conversation is shown again in its raw form; in Scrollback what is already in the scrollback stays as it is, and only what follows is raw. `/raw` with anything but `on` or `off` says `Usage: /raw [on|off]`.
+- `/tui` saves `tui.fullscreenTranscript` and applies from the next launch: the running interface keeps its mode. `--no-alt-screen` and `tui.alternateScreen` still apply then.
 - The permission mode is the configuration's (`permissionMode` or `--permission-mode`). `/status` shows it; no command in the interface changes it.
 - A command, or a list it opened, that fails with an internal error (a panic) is turned off for the rest of the run: the conversation says `'/x' failed and is turned off for the rest of this run`, the popup leaves it out, and typing it says it is off. The session, the composer and the other commands go on. An internal error in the chat itself (the composer, the conversation, a streaming answer) still ends the interface, after the terminal is restored.
 
@@ -88,9 +109,36 @@ A message that starts with `/` is a command. Typing `/` opens a popup of them, n
 
 Only the path is sent; the model reads the file with its tools.
 
+## Reading the conversation [#reading]
+
+In Fullscreen the conversation follows the latest output until you scroll. Scrolled up, it stays where you are while the turn goes on, and a `↓ Back to bottom · esc` control above the composer (`New activity · …` when something was added below) brings you back.
+
+| Key or gesture                         | Does                                                                                                                                                     |
+| -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Mouse wheel                            | Scrolls three lines                                                                                                                                      |
+| Page Up/Page Down                      | Scrolls one page                                                                                                                                         |
+| Ctrl-Home, Ctrl-End (Alt-`<`, Alt-`>`) | To the start of the session (loading its earlier messages) or to the latest output                                                                       |
+| Esc, a click on the control            | Back to the latest output                                                                                                                                |
+| Enter on an empty composer             | Back to the latest output                                                                                                                                |
+| Drag                                   | Selects; a double click selects a word, a triple click a line, Shift-click extends the selection                                                         |
+| Ctrl-Space                             | Starts a selection with the keyboard; arrows and Shift-arrows move it                                                                                    |
+| Ctrl-C, Ctrl-Shift-C, Ctrl-Insert      | With a selection: copies it                                                                                                                              |
+| Enter                                  | With a selection: copies it and goes back to the latest output                                                                                           |
+| Right click                            | Copies the selection                                                                                                                                     |
+| Esc                                    | With a selection: clears it                                                                                                                              |
+| F3                                     | Finds text: type the query, Enter accepts the match, Ctrl-P/Ctrl-N go to the older or newer one, Esc cancels                                             |
+| F4                                     | Focuses the latest activity (a tool call, a thinking): Up/Down move between them, Enter or a click on its control shows or hides its details, Esc leaves |
+| Ctrl-T                                 | Shows the whole conversation in detail (every thinking's text, a tool call's whole output), in place; Ctrl-T or Esc goes back                            |
+
+The footer under the conversation shows the keys of a selection, a search or a focused activity while it lasts. A copy goes to the system clipboard; where there is none (over SSH, say) it is sent to the terminal (OSC 52), which most terminals put on their clipboard, and the interface says it is unconfirmed. A copy's result shows above the composer for a few seconds.
+
+While an approval, a question or a list is open, the keys are its own; the mouse still scrolls and selects, and Ctrl-C copies a selection.
+
+Fullscreen captures the mouse, so the terminal's own selection usually needs Shift held while you drag. To copy with the terminal's selection, `/raw` shows the conversation without its styles.
+
 ## The transcript [#transcript]
 
-Ctrl-T opens the whole session's transcript (`T R A N S C R I P T`) on the terminal's alternate screen; `/diff` shows its diff the same way.
+In Scrollback, Ctrl-T opens the whole session's transcript (`T R A N S C R I P T`) on the terminal's alternate screen; `/diff` shows its diff the same way. In Fullscreen, Ctrl-T shows the conversation in detail in place instead (above), and `/diff` covers the screen until you close it.
 
 | Key                                              | Does                    |
 | ------------------------------------------------ | ----------------------- |
@@ -100,13 +148,15 @@ Ctrl-T opens the whole session's transcript (`T R A N S C R I P T`) on the termi
 | Home/End                                         | To the start or the end |
 | `q`, Ctrl-C; for the transcript also Esc, Ctrl-T | Closes it               |
 
-The turn goes on while a pager is open, and what it writes meanwhile appears in the scrollback once you close it. The transcript holds what has completed, not the tool calls still running; a tool call there shows its whole output, where the scrollback shows its first and last lines.
+The transcript shows every thinking's text and a tool call's whole output, where the scrollback shows its first and last lines, and the tool calls still running after what has completed. Its selection, copying and search are the ones of [Reading the conversation](#reading) (drag, Ctrl-Space, F3).
+
+The turn goes on while a pager is open, and what it writes meanwhile appears in the transcript at once and in the scrollback once you close it.
 
 ## Thinking [#thinking]
 
 While the model thinks, the conversation shows a `• Thinking 5s` line that counts up, collapsed by default; the status line stays `Working`. Ctrl-O expands it to the thinking as the model streams it (dim Markdown) and collapses it again. The choice applies to the thinking shown now and to every later one until you press Ctrl-O again, for as long as the interface runs. While thinking is live, the footer says `ctrl + o to show thinking` (or `to hide thinking`).
 
-When the thinking ends, it is written into the scrollback as it is shown at that moment: `• Thought for 12s` (whole seconds, rounded down) when collapsed, or that line and the text when expanded. A Provider that sends no text leaves only the line. Thinking that ends while an answer streams is written after that answer, so the scrollback keeps the model's order. If the turn ends before the thinking does (an error, an interrupt), the line is completed with the time so far. Scrollback cannot be changed afterwards, but the transcript (Ctrl-T) always shows every thinking's text. A resumed session replays its thinking the same way, collapsed unless Ctrl-O expanded thinking; a thinking whose text was cut at the Agent's bound says `• Thought for 12s (truncated)`.
+When the thinking ends, it is written into the scrollback as it is shown at that moment: `• Thought for 12s` (whole seconds, rounded down) when collapsed, or that line and the text when expanded. A Provider that sends no text leaves only the line. Thinking that ends while an answer streams is written after that answer, so the scrollback keeps the model's order. If the turn ends before the thinking does (an error, an interrupt), the line is completed with the time so far. Scrollback cannot be changed afterwards, but the transcript (Ctrl-T, in Fullscreen the detailed conversation) always shows every thinking's text. A resumed session replays its thinking the same way, collapsed unless Ctrl-O expanded thinking; a thinking whose text was cut at the Agent's bound says `• Thought for 12s (truncated)`.
 
 What you see depends on what the Provider sends: some send a summary of the thinking, some the raw thinking text, some nothing. See [Providers and models](/docs/providers-models#reasoning).
 
@@ -144,13 +194,13 @@ hanafubuki-agent resume 12 "Carry on"      # resume, then send a message
 
 The resume picker lists the sessions a turn ran in, the latest first, by title (the first message until the session is named) and when each was last updated. Type to search the titles; Up/Down and Page Up/Page Down move, Enter resumes, Esc goes back (at `resume`'s start, to the interface with no session), and Ctrl-C quits. `/resume` opens it from the interface.
 
-A resumed session shows its box and its latest 200 items: messages, the plans the model proposed, tool calls with their output, and context compactions. Older items are left out, with `Earlier messages are not shown.` Your next message continues the session.
+A resumed session shows its box and its latest 200 items: messages, the plans the model proposed, tool calls with their output, and context compactions. In Fullscreen the earlier items are read 200 at a time as you scroll up to them (`↑ Loading earlier messages…`); a tool call whose output was read before its call shows without its output. In Scrollback they are left out, with `Earlier messages are not shown.` Your next message continues the session.
 
 With no session to resume, `resume --last` starts with no session, as `hanafubuki-agent` does. `hanafubuki-agent sessions list` shows the session ids; see [Sessions](/docs/sessions).
 
 ## Quitting [#quit]
 
-Type `/quit` or `/exit`, or press Ctrl-C twice within one second (or Ctrl-D twice on an empty composer). Quitting restores the terminal and shuts the Agent down, and prints nothing more.
+Type `/quit` or `/exit`, or press Ctrl-C twice within one second (or Ctrl-D twice on an empty composer). Quitting restores the terminal (in Fullscreen, leaving the alternate screen, and the conversation with it) and shuts the Agent down, and prints nothing more.
 
 The exit code is 0; 1 when the Agent could not start, the session to resume could not be opened or given the `-m` model, or the terminal could not be used; 2 without a terminal.
 
@@ -158,4 +208,5 @@ The exit code is 0; 1 when the Agent could not start, the session to resume coul
 
 - The terminal must answer the cursor-position query, or the interface cannot start.
 - Only the basic ANSI colours, bold, dim and italic are used.
-- The pagers and the resume picker use the alternate screen, where the mouse wheel acts as the arrow keys.
+- Fullscreen uses the alternate screen and the mouse (SGR reporting).
+- In Scrollback, the pagers and the resume picker use the alternate screen, where the mouse wheel acts as the arrow keys; the transcript captures the mouse for its selection.

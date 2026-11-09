@@ -1,12 +1,13 @@
 use std::sync::mpsc::{channel, Receiver};
 
 use super::*;
-use crate::agent_bridge::{ModelChoices, OpenedSession, ReplayedItem, TurnEnd};
+use crate::agent_bridge::{ModelChoices, OlderTranscript, OpenedSession, ReplayedItem, TurnEnd};
 use crate::app_event::AgentCommand;
 use crate::bottom_pane::{SelectionItem, SelectionViewParams};
 use crate::commands::{self, CommandSpec};
 use crate::history_cell::ToolResultView;
 use hanafubuki_agent::panic::is_panic_contained;
+use hanafubuki_agent::{AgentRevision, AgentSessionId};
 
 fn chat() -> (ChatWidget, Receiver<AppEvent>) {
     let (sender, events) = channel();
@@ -16,6 +17,8 @@ fn chat() -> (ChatWidget, Receiver<AppEvent>) {
         frame_requester: FrameRequester::new(sender),
         enhanced_keys_supported: false,
         directory: "/project".to_string(),
+        owned_transcript: false,
+        fullscreen_preference: true,
     });
     (chat, events)
 }
@@ -221,7 +224,11 @@ fn an_opened_session_replays_its_transcript_after_its_header() {
             },
             ReplayedItem::Assistant("Two files **changed**.".to_string()),
         ],
-        earlier_items: true,
+        older: Some(OlderTranscript {
+            session_id: AgentSessionId::new(7),
+            cursor: "older".to_string(),
+            through_revision: AgentRevision::new(1),
+        }),
     }));
     let (cells, _) = drain(&events);
     assert_eq!(cells.len(), 5, "{cells:?}");
@@ -411,7 +418,7 @@ fn a_replayed_reasoning_item_is_a_completed_cell() {
             },
             ReplayedItem::Assistant("Here is why.".to_string()),
         ],
-        earlier_items: false,
+        older: None,
     }));
     let (cells, _) = drain(&events);
     assert_eq!(cells[2], "• Thought for 12s", "{cells:?}");
@@ -581,4 +588,53 @@ fn a_command_that_needs_a_session_asks_for_one_first() {
     );
     chat.dispatch_command(command("mcp"), String::new());
     assert_eq!(drain(&events).1, vec![Op::Command(AgentCommand::Mcp)]);
+}
+
+/// The events the chat sent but its transcript cells and ops.
+fn other_events(events: &Receiver<AppEvent>) -> Vec<AppEvent> {
+    std::iter::from_fn(|| events.try_recv().ok())
+        .filter(|event| {
+            !matches!(
+                event,
+                AppEvent::InsertHistoryCell(_) | AppEvent::Op(_) | AppEvent::ScheduleFrame(_)
+            )
+        })
+        .collect()
+}
+
+#[test]
+fn raw_takes_on_off_or_nothing_and_says_how_it_is_used() {
+    let (mut chat, events) = chat();
+    drain(&events);
+    for (args, expected) in [("", None), ("on", Some(true)), (" OFF ", Some(false))] {
+        chat.dispatch_command(command("raw"), args.to_string());
+        let sent = other_events(&events);
+        assert!(
+            matches!(sent.as_slice(), [AppEvent::SetRawOutput(raw)] if *raw == expected),
+            "{args:?}"
+        );
+    }
+    chat.dispatch_command(command("raw"), "sideways".to_string());
+    assert_eq!(drain(&events).0, vec!["■ Usage: /raw [on|off]"]);
+}
+
+#[test]
+fn tui_offers_the_two_modes_with_the_saved_one_marked() {
+    let (mut chat, events) = chat();
+    drain(&events);
+    chat.dispatch_command(command("tui"), String::new());
+    let shown = screen(&chat, 80);
+    assert!(
+        shown.contains("Interface mode for the next launch"),
+        "{shown}"
+    );
+    assert!(shown.contains("Scrollback"), "{shown}");
+    assert!(shown.contains("Fullscreen (current)"), "{shown}");
+    chat.handle_key_event(KeyEvent::new(KeyCode::Char('1'), KeyModifiers::NONE));
+    let sent = other_events(&events);
+    assert!(
+        matches!(sent.as_slice(), [AppEvent::SetFullscreenTranscript(false)]),
+        "{}",
+        sent.len()
+    );
 }

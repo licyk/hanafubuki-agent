@@ -140,7 +140,6 @@ impl<B: Backend<Error = io::Error> + Write> Tui<B> {
 
     /// Turns the pointer reporting of the entered alternate screen on or
     /// off.
-    #[allow(dead_code, reason = "P2.2's owned transcript turns it on and off")]
     pub(crate) fn set_mouse_capture(&mut self, capture: bool) -> Result<()> {
         if !ALTERNATE_SCREEN.is_active() || ALTERNATE_SCREEN.is_capturing_mouse() == capture {
             return Ok(());
@@ -160,8 +159,13 @@ impl<B: Backend<Error = io::Error> + Write> Tui<B> {
         draw_fn: impl FnOnce(&mut custom_terminal::Frame),
     ) -> Result<()> {
         // A cursor-position query cannot run inside the synchronized
-        // update, so the viewport's move after a resize is found first.
-        let mut pending_viewport_area = self.pending_viewport_area()?;
+        // update, so the viewport's move after a resize is found first. The
+        // alternate screen's viewport is the whole screen at any size.
+        let mut pending_viewport_area = if self.alt_saved_viewport.is_some() {
+            None
+        } else {
+            self.pending_viewport_area()?
+        };
 
         queue!(self.terminal.backend_mut(), BeginSynchronizedUpdate)?;
         let drawn = (|| {

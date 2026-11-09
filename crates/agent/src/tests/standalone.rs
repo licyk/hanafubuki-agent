@@ -307,3 +307,32 @@ fn the_configured_proxy_reaches_the_agents_processes() {
     assert!(!system.contains_key("HTTP_PROXY"));
     assert!(!system.contains_key("NO_PROXY"));
 }
+
+#[test]
+fn the_interface_preferences_are_read_and_written_through_the_running_agent() {
+    let fixture = standalone("http://127.0.0.1:9");
+    let runtime = fixture.runtime().unwrap();
+    runtime.start();
+    let agent = runtime.wait_until_started(START_TIMEOUT).unwrap();
+    let call = agent.clone();
+    let (before, written) = agent
+        .runtime()
+        .block_on(async move {
+            let before = call.tui_preferences().await.unwrap();
+            let written = call
+                .write_tui_preferences(AgentTuiPreferencesPatch {
+                    raw_output: Some(true),
+                    ..AgentTuiPreferencesPatch::default()
+                })
+                .await
+                .unwrap();
+            (before, written)
+        })
+        .unwrap();
+    assert_eq!(before, AgentTuiPreferences::default());
+    assert!(written.raw_output && written.fullscreen_transcript);
+    let file = std::fs::read_to_string(fixture.home.join("config.toml")).unwrap();
+    assert!(file.contains("[tui]\nrawOutput = true"), "{file}");
+    assert!(file.contains("[profiles.ci]"), "{file}");
+    runtime.shutdown(AGENT_SHUTDOWN_BUDGET);
+}

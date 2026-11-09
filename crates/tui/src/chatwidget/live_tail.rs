@@ -5,8 +5,6 @@
 //! whenever their lines can change, so the view lays them out again only
 //! then. Codex has one active cell; here every live cell is part of it.
 
-use ratatui::text::Line;
-
 use super::ChatWidget;
 use crate::history_cell::HistoryCell;
 
@@ -24,7 +22,6 @@ pub(crate) struct ActiveCellTranscriptKey {
     pub(crate) animation_tick: Option<u64>,
 }
 
-#[allow(dead_code, reason = "P2.2 draws the live tail in the transcript view")]
 impl ChatWidget {
     pub(crate) fn active_cell_transcript_key(&self) -> Option<ActiveCellTranscriptKey> {
         let cells = self.active_cells();
@@ -40,20 +37,6 @@ impl ChatWidget {
                 .filter_map(|cell| cell.transcript_animation_tick())
                 .max(),
         })
-    }
-
-    /// The live cells' transcript, a blank line between two cells; `None`
-    /// when nothing is live.
-    pub(crate) fn active_cell_transcript_lines(&self, width: u16) -> Option<Vec<Line<'static>>> {
-        let mut lines = Vec::new();
-        for cell in self.active_cells() {
-            let cell_lines = cell.transcript_lines(width);
-            if !lines.is_empty() && !cell_lines.is_empty() {
-                lines.push(Line::default());
-            }
-            lines.extend(cell_lines);
-        }
-        (!lines.is_empty()).then_some(lines)
     }
 
     /// The live cells in the order the viewport draws them, for a

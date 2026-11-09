@@ -27,7 +27,7 @@ fn the_table_keeps_the_presentation_order() {
         names,
         [
             "model", "mode", "skills", "new", "resume", "compact", "diff", "mention", "status",
-            "mcp", "exit"
+            "mcp", "raw", "tui", "exit"
         ]
     );
 }
@@ -41,7 +41,7 @@ fn availability_follows_the_spec() {
         .collect();
     assert_eq!(
         during_task,
-        ["skills", "diff", "mention", "status", "mcp", "exit"]
+        ["skills", "diff", "mention", "status", "mcp", "raw", "tui", "exit"]
     );
     let needs_session: Vec<&str> = COMMANDS
         .into_iter()
@@ -49,7 +49,12 @@ fn availability_follows_the_spec() {
         .map(|command| command.name)
         .collect();
     assert_eq!(needs_session, ["model", "mode", "compact", "status"]);
-    assert!(COMMANDS.into_iter().all(|command| !command.inline_args));
+    let inline_args: Vec<&str> = COMMANDS
+        .into_iter()
+        .filter(|command| command.inline_args)
+        .map(|command| command.name)
+        .collect();
+    assert_eq!(inline_args, ["raw"]);
 }
 
 #[test]

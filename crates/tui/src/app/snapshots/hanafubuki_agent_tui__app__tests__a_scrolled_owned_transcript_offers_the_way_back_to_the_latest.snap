@@ -1,0 +1,10 @@
+---
+source: crates/tui/src/app/tests.rs
+expression: harness.bottom_rows(6)
+---
+• note 42
+                                       ↓ Back to bottom · esc
+
+› Ask the Agent to do anything
+
+  ? for shortcuts

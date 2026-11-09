@@ -31,7 +31,7 @@ use hanafubuki_agent::{
 use crate::app_event::{AppEvent, AppEventSender, Op};
 use crate::history_cell::ToolResultView;
 pub(crate) use commands::{with_model, ModelChoices, StatusReport};
-pub(crate) use replay::{OpenedSession, ReplayedItem};
+pub(crate) use replay::{OlderTranscript, OpenedSession, ReplayedItem};
 
 /// How many of the turn's latest items are read for a finished call.
 const TOOL_ITEMS_PAGE: usize = 64;
@@ -126,6 +126,9 @@ pub(crate) struct AgentBridge {
     /// What the person sent while the submission was being accepted, to
     /// steer the turn with once it is.
     pending_steering: Vec<String>,
+    /// The transcript items a reopened session replays, and each earlier
+    /// page holds.
+    page_size: usize,
 }
 
 impl AgentBridge {
@@ -145,12 +148,18 @@ impl AgentBridge {
             turn: None,
             turn_running: false,
             pending_steering: Vec::new(),
+            page_size: commands::REPLAYED_ITEMS,
         }
     }
 
     #[cfg(test)]
     pub(crate) fn session_id(&self) -> Option<AgentSessionId> {
         self.session_id
+    }
+
+    #[cfg(test)]
+    pub(crate) fn set_page_size(&mut self, page_size: usize) {
+        self.page_size = page_size;
     }
 
     /// Carries out what the interface asked; what it leads to arrives as

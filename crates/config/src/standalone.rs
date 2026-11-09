@@ -1,13 +1,15 @@
 //! The settings only the standalone Agent reads from `config.toml`: what a
-//! host supplies itself when it embeds the Agent (its proxy, its logger).
-//! The settings API never writes them; `config set`
-//! ([`crate::AgentConfig::set_user_value`]) or a person does.
+//! host supplies itself when it embeds the Agent (its proxy, its logger,
+//! its interface). The settings API never writes them; `config set`
+//! ([`crate::AgentConfig::set_user_value`]), the terminal interface
+//! ([`crate::AgentConfig::write_tui_preferences`]) or a person does.
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
 use crate::fields::{read_object, Fields};
-use crate::AgentProxy;
+use crate::tui::read_tui;
+use crate::{AgentProxy, AgentTuiPreferences};
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -16,6 +18,8 @@ pub struct AgentStandaloneSettings {
     pub network: AgentNetworkSettings,
     /// The level of the standalone log file (`logLevel`).
     pub log_level: AgentLogLevel,
+    /// `[tui]`.
+    pub tui: AgentTuiPreferences,
 }
 
 impl Default for AgentStandaloneSettings {
@@ -25,6 +29,7 @@ impl Default for AgentStandaloneSettings {
                 proxy: AgentProxy::System,
             },
             log_level: AgentLogLevel::Info,
+            tui: AgentTuiPreferences::default(),
         }
     }
 }
@@ -77,5 +82,10 @@ pub(crate) fn decode_standalone(
         },
     );
     let log_level = fields.read("logLevel", defaults.log_level);
-    AgentStandaloneSettings { network, log_level }
+    let tui = read_tui(&mut fields, &defaults.tui);
+    AgentStandaloneSettings {
+        network,
+        log_level,
+        tui,
+    }
 }

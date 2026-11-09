@@ -1,11 +1,21 @@
 // Modified from OpenAI Codex rust-v0.93.0 (Apache-2.0).
+// Modified from OpenAI Codex 57a808a392 (Apache-2.0).
 
 //! The app loop: it receives the terminal's input, the Agent's events and
-//! the widgets' requests on one channel, hands each where it goes, writes
-//! the finished cells into the scrollback and draws the viewport when a
-//! frame is due. While an overlay (the transcript, `/diff`, the resume
-//! picker) holds the alternate screen, it takes the keys and the scrollback
-//! waits.
+//! the widgets' requests on one channel, hands each where it goes, keeps
+//! the finished cells and draws when a frame is due.
+//!
+//! The transcript's mode is fixed at launch ([`TranscriptMode`]). In
+//! terminal mode the finished cells are written into the scrollback above
+//! an inline viewport; while an overlay (the transcript, `/diff`, the
+//! resume picker) holds the alternate screen, it takes the keys and the
+//! scrollback waits. In owned mode the app holds the alternate screen for
+//! the whole run and draws the cells itself (`owned`), the overlays over
+//! it.
+
+mod history_pages;
+mod owned;
+mod preferences;
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -20,15 +30,20 @@ use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::style::Stylize;
 use ratatui::text::Line;
 
-use crate::agent_bridge::{AgentBridge, TurnUpdate};
+use ratatui::crossterm::event::MouseEvent;
+
+use crate::agent_bridge::{AgentBridge, OlderTranscript, TurnUpdate};
 use crate::app_event::{AgentCommand, AppEvent, AppEventSender, Op};
 use crate::chatwidget::ChatWidget;
+use crate::clipboard::Clipboard;
 use crate::file_search::FileSearchManager;
 use crate::get_git_diff::get_git_diff;
-use crate::history_cell::HistoryCell;
-use crate::pager_overlay::Overlay;
+use crate::history_cell::{HistoryCell, HistoryRenderMode};
+use crate::pager_overlay::{Overlay, TranscriptOverlay};
 use crate::render::renderable::Renderable;
 use crate::resume_picker::{ResumePicker, SessionSelection};
+use crate::transcript_mode::TranscriptMode;
+use crate::transcript_view::{TranscriptHistoryState, TranscriptView, ViewAction};
 use crate::tui::Tui;
 
 /// The commit animation's step: one streamed line per tick.
@@ -37,6 +52,12 @@ const COMMIT_TICK: Duration = Duration::from_millis(50);
 const IDLE_WAIT: Duration = Duration::from_secs(3600);
 /// At most one frame per this, however often frames are asked for.
 const MIN_FRAME_INTERVAL: Duration = Duration::from_millis(8);
+/// How often a transcript view is drawn while it scans a search or
+/// scrolls a drag past its edge.
+const VIEW_TICK: Duration = Duration::from_millis(16);
+/// How often a transcript view's live tail is drawn while it changes with
+/// time (a timer, a spinner).
+const LIVE_TICK: Duration = Duration::from_millis(50);
 
 pub(crate) struct App {
     pub(crate) chat_widget: ChatWidget,
@@ -45,8 +66,19 @@ pub(crate) struct App {
     file_search: FileSearchManager,
     /// The workspace's first root, where `/diff` runs `git`.
     diff_directory: Option<PathBuf>,
-    /// The session's cells as committed, for the transcript overlay.
+    /// The session's cells as committed: the owned transcript's entries,
+    /// or what the terminal-mode transcript overlay opens on.
     transcript_cells: Vec<Arc<dyn HistoryCell>>,
+    mode: TranscriptMode,
+    /// The owned transcript's viewport; unused in terminal mode.
+    transcript_view: TranscriptView,
+    render_mode: HistoryRenderMode,
+    /// Where the session's unread earlier transcript begins, which the
+    /// owned transcript loads as the reader nears its start.
+    older_transcript: Option<OlderTranscript>,
+    clipboard: Clipboard,
+    /// What the last copy said, shown in the owned transcript until then.
+    copy_notice: Option<(String, Instant)>,
     overlay: Option<Overlay>,
     resume_picker: Option<ResumePicker>,
     /// What was committed while an overlay was open, written into the
@@ -59,10 +91,13 @@ pub(crate) struct App {
 }
 
 impl App {
+    /// The app over `chat_widget`, which must have been made for `mode`.
     pub(crate) fn new(
         chat_widget: ChatWidget,
         bridge: AgentBridge,
         app_event_tx: AppEventSender,
+        mode: TranscriptMode,
+        render_mode: HistoryRenderMode,
     ) -> Self {
         let roots = bridge.workspace_roots();
         Self {
@@ -72,6 +107,12 @@ impl App {
             diff_directory: roots.into_iter().next(),
             app_event_tx,
             transcript_cells: Vec::new(),
+            mode,
+            transcript_view: new_view(render_mode, TranscriptHistoryState::Complete),
+            render_mode,
+            older_transcript: None,
+            clipboard: Clipboard::default(),
+            copy_notice: None,
             overlay: None,
             resume_picker: None,
             deferred_history_lines: Vec::new(),
@@ -118,15 +159,8 @@ impl App {
     ) -> bool {
         match event {
             AppEvent::Key(key) => return self.handle_key_event(tui, key),
-            // The overlays take no text.
-            AppEvent::Paste(_) if self.alt_screen_open() => {}
-            AppEvent::Paste(text) => {
-                // Pasted text arrives with `\r` line endings in many terminals.
-                self.chat_widget
-                    .handle_paste(text.replace("\r\n", "\n").replace('\r', "\n"))
-            }
-            // Nothing captures the pointer yet.
-            AppEvent::Mouse(_) => {}
+            AppEvent::Paste(text) => self.handle_paste(text),
+            AppEvent::Mouse(mouse) => self.handle_mouse(mouse),
             AppEvent::Redraw => self.schedule_frame(Instant::now()),
             AppEvent::ScheduleFrame(at) => self.schedule_frame(at),
             AppEvent::Agent(event) => {
@@ -167,6 +201,8 @@ impl App {
                 self.commit_anim_running.store(false, Ordering::Release)
             }
             AppEvent::CommitTick => self.chat_widget.on_commit_tick(),
+            AppEvent::SetRawOutput(raw) => self.set_raw_output(raw),
+            AppEvent::SetFullscreenTranscript(enabled) => self.save_fullscreen_transcript(enabled),
             AppEvent::Exit => return false,
         }
         true
@@ -174,11 +210,88 @@ impl App {
 
     /// What a reply or a request led to, for the chat; a session opened
     /// replaces the transcript, which starts with its header.
-    fn show_update(&mut self, update: TurnUpdate) {
-        if matches!(update, TurnUpdate::SessionOpened(_)) {
+    pub(crate) fn show_update(&mut self, update: TurnUpdate) {
+        if let TurnUpdate::SessionOpened(opened) = &update {
             self.transcript_cells.clear();
+            self.older_transcript = opened.older.clone().filter(|_| self.mode.is_owned());
+            let history = if self.older_transcript.is_some() {
+                TranscriptHistoryState::Partial
+            } else {
+                TranscriptHistoryState::Complete
+            };
+            self.transcript_view = new_view(self.render_mode, history);
         }
         self.chat_widget.handle_turn_update(update);
+    }
+
+    /// Pasted text goes to the composer, or to a transcript search being
+    /// edited; the other overlays take none.
+    fn handle_paste(&mut self, text: String) {
+        // Pasted text arrives with `\r` line endings in many terminals.
+        let text = text.replace("\r\n", "\n").replace('\r', "\n");
+        let to_search = match self.overlay.as_mut() {
+            Some(Overlay::Transcript(transcript)) => transcript.handle_paste(&text),
+            Some(Overlay::Static(_)) => false,
+            None if self.resume_picker.is_some() => false,
+            None if self.mode.is_owned() && self.transcript_view.is_search_editing() => {
+                self.transcript_view.paste_search(&text)
+            }
+            None => {
+                self.transcript_view.clear_activity_focus();
+                self.chat_widget.handle_paste(text);
+                return;
+            }
+        };
+        if to_search {
+            self.schedule_frame(Instant::now());
+        }
+    }
+
+    fn handle_mouse(&mut self, mouse: MouseEvent) {
+        let action = match self.overlay.as_mut() {
+            Some(Overlay::Transcript(transcript)) => transcript.handle_mouse(mouse),
+            Some(Overlay::Static(_)) => None,
+            None if self.resume_picker.is_none() && self.mode.is_owned() => self
+                .transcript_view
+                .handle_mouse(mouse, &self.transcript_cells),
+            None => None,
+        };
+        if let Some(action) = action {
+            self.apply_view_action(action);
+        }
+    }
+
+    /// What a transcript view asked for after it took an event.
+    fn apply_view_action(&mut self, action: ViewAction) {
+        let (text, follow) = match action {
+            ViewAction::Changed | ViewAction::ExitSelectMode => (None, false),
+            ViewAction::Copy(text) => (Some(text), false),
+            ViewAction::CopyAndFollow(text) => (Some(text), true),
+        };
+        if let Some(text) = text {
+            let copied = self.clipboard.copy(&text);
+            let notice = match &copied {
+                Ok(status) => status.message(text.chars().count()),
+                Err(error) => format!("Copy failed: {error}"),
+            };
+            let follow = follow && copied.is_ok();
+            match self.overlay.as_mut() {
+                Some(Overlay::Transcript(transcript)) => {
+                    transcript.set_notice(notice);
+                    if follow {
+                        transcript.follow_latest();
+                    }
+                }
+                _ => {
+                    self.copy_notice = Some((notice, Instant::now() + owned::COPY_NOTICE));
+                    if follow {
+                        self.transcript_view.jump_to_latest();
+                    }
+                }
+            }
+        }
+        self.load_older_pages();
+        self.schedule_frame(Instant::now());
     }
 
     /// `false` when the app should exit.
@@ -211,20 +324,30 @@ impl App {
             return true;
         }
         if let Some(overlay) = self.overlay.as_mut() {
-            overlay.handle_key_event(key, tui.terminal.viewport_area);
+            let action = match overlay {
+                Overlay::Transcript(transcript) => transcript.handle_key(key),
+                Overlay::Static(pager) => {
+                    pager.handle_key_event(key, tui.terminal.viewport_area);
+                    None
+                }
+            };
             if overlay.is_done() {
                 self.overlay = None;
                 self.leave_alt_screen(tui);
+            } else if let Some(action) = action {
+                self.apply_view_action(action);
             }
             self.schedule_frame(Instant::now());
             return true;
         }
-        if key.kind == KeyEventKind::Press
-            && key.modifiers == KeyModifiers::CONTROL
-            && matches!(key.code, KeyCode::Char('t'))
-        {
-            let cells = self.transcript_cells.clone();
-            self.open_overlay(tui, Overlay::new_transcript(cells));
+        if self.mode.is_owned() {
+            if self.handle_owned_key(key) {
+                self.schedule_frame(Instant::now());
+                return true;
+            }
+        } else if is_transcript_key(key) {
+            let overlay = TranscriptOverlay::new(self.transcript_cells.clone(), self.render_mode);
+            self.open_overlay(tui, Overlay::Transcript(overlay));
             return true;
         }
         self.chat_widget.handle_key_event(key);
@@ -240,11 +363,29 @@ impl App {
         tui: &mut Tui<B>,
         overlay: Overlay,
     ) {
-        if !self.alt_screen_open() {
-            let _ = tui.enter_alt_screen(false);
-        }
+        // The transcript view reads the pointer; the pager leaves the
+        // wheel to the terminal, which turns it into arrow keys.
+        let capture_mouse = matches!(overlay, Overlay::Transcript(_));
+        self.enter_alt_screen(tui, capture_mouse);
         self.overlay = Some(overlay);
         self.schedule_frame(Instant::now());
+    }
+
+    /// The alternate screen for an overlay: entered in terminal mode,
+    /// already held in owned mode, where only the pointer changes hands.
+    fn enter_alt_screen<B: Backend<Error = io::Error> + Write>(
+        &mut self,
+        tui: &mut Tui<B>,
+        capture_mouse: bool,
+    ) {
+        if self.alt_screen_open() {
+            return;
+        }
+        if self.mode.is_owned() {
+            let _ = tui.set_mouse_capture(capture_mouse);
+        } else {
+            let _ = tui.enter_alt_screen(capture_mouse);
+        }
     }
 
     /// Opens the resume picker; `at_startup` when the interface was asked
@@ -254,9 +395,7 @@ impl App {
         tui: &mut Tui<B>,
         at_startup: bool,
     ) {
-        if !self.alt_screen_open() {
-            let _ = tui.enter_alt_screen(false);
-        }
+        self.enter_alt_screen(tui, false);
         self.resume_picker = Some(ResumePicker::new(at_startup));
         self.load_picker_pages();
         self.schedule_frame(Instant::now());
@@ -272,11 +411,17 @@ impl App {
         }
     }
 
-    /// The last overlay closed: the terminal's own screen again, with what
-    /// was committed meanwhile written into its scrollback.
+    /// The last overlay closed: in terminal mode, the terminal's own screen
+    /// again, with what was committed meanwhile written into its
+    /// scrollback; in owned mode, the transcript view takes the pointer
+    /// back.
     fn leave_alt_screen<B: Backend<Error = io::Error> + Write>(&mut self, tui: &mut Tui<B>) {
-        let _ = tui.leave_alt_screen();
-        tui.insert_history_lines(std::mem::take(&mut self.deferred_history_lines));
+        if self.mode.is_owned() {
+            let _ = tui.set_mouse_capture(true);
+        } else {
+            let _ = tui.leave_alt_screen();
+            tui.insert_history_lines(std::mem::take(&mut self.deferred_history_lines));
+        }
         self.schedule_frame(Instant::now());
     }
 
@@ -305,8 +450,12 @@ impl App {
             transcript.insert_cell(cell.clone());
         }
         self.transcript_cells.push(cell.clone());
+        if self.mode.is_owned() {
+            self.schedule_frame(Instant::now());
+            return;
+        }
         let width = tui.terminal.last_known_screen_size.width;
-        let mut display = cell.display_lines(width);
+        let mut display = cell.display_lines_for_mode(width, self.render_mode);
         if display.is_empty() {
             return;
         }
@@ -375,11 +524,11 @@ impl App {
             }
             return Ok(());
         }
-        if let Some(overlay) = self.overlay.as_mut() {
-            return tui.draw(u16::MAX, |frame| {
-                let area = frame.area();
-                overlay.render(area, frame.buffer_mut());
-            });
+        if self.overlay.is_some() {
+            return self.draw_overlay(tui);
+        }
+        if self.mode.is_owned() {
+            return self.draw_owned(tui);
         }
         let width = tui.terminal.size()?.width;
         let height = self.chat_widget.desired_height(width);
@@ -396,6 +545,52 @@ impl App {
         self.chat_widget.reap_failed_views();
         Ok(())
     }
+
+    /// Draws the open overlay; the transcript first takes the live tail.
+    fn draw_overlay<B: Backend<Error = io::Error> + Write>(
+        &mut self,
+        tui: &mut Tui<B>,
+    ) -> io::Result<()> {
+        let Some(overlay) = self.overlay.as_mut() else {
+            return Ok(());
+        };
+        let mut ticking = false;
+        if let Overlay::Transcript(transcript) = overlay {
+            let width = tui.terminal.size()?.width;
+            let key = self.chat_widget.active_cell_transcript_key();
+            transcript.sync_live_tail(width, key, &self.chat_widget.active_cells());
+            ticking = transcript.tick(width);
+            if key.is_some_and(|key| key.animation_tick.is_some()) {
+                self.next_frame = Some(Instant::now() + LIVE_TICK);
+            }
+        }
+        tui.draw(u16::MAX, |frame| {
+            let area = frame.area();
+            if let Some(position) = overlay.render(area, frame.buffer_mut()) {
+                frame.set_cursor_position(position);
+            }
+        })?;
+        if ticking {
+            self.schedule_frame(Instant::now() + VIEW_TICK);
+        }
+        Ok(())
+    }
+}
+
+/// The transcript overlay's key in terminal mode, the detailed
+/// presentation's in owned mode.
+fn is_transcript_key(key: KeyEvent) -> bool {
+    key.kind == KeyEventKind::Press
+        && key.modifiers == KeyModifiers::CONTROL
+        && matches!(key.code, KeyCode::Char('t'))
+}
+
+/// A transcript view in `render_mode`'s compact presentation.
+fn new_view(render_mode: HistoryRenderMode, history: TranscriptHistoryState) -> TranscriptView {
+    let mut view = TranscriptView::default();
+    view.set_presentation(false, render_mode);
+    view.history = history;
+    view
 }
 
 /// The diff's lines as the pager shows them: added lines green, removed

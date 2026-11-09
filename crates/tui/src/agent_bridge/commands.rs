@@ -8,16 +8,20 @@
 use std::path::PathBuf;
 
 use hanafubuki_agent::{
-    AgentHandle, AgentPermissionMode, AgentProviderModelCatalogRequest,
+    AgentHandle, AgentHistorySortDirection, AgentPermissionMode, AgentProviderModelCatalogRequest,
     AgentProviderModelCatalogResult, AgentSessionId, AgentSessionListRequest, AgentSessionMode,
     AgentSessionModelSelectionRequest, AgentSessionPage, AgentSessionRuntimeSnapshot,
+    AgentTranscriptPageRequest, AgentTuiPreferences, AgentTuiPreferencesPatch,
 };
 
-use super::{replay, AgentBridge, AgentReply, OpenedSession, TurnUpdate};
+use super::{
+    replay, AgentBridge, AgentReply, OlderTranscript, OpenedSession, ReplayedItem, TurnUpdate,
+};
 use crate::app_event::{AgentCommand, AppEvent, Op};
 
-/// How many of a reopened session's latest transcript items are replayed.
-const REPLAYED_ITEMS: usize = 200;
+/// How many of a reopened session's latest transcript items are replayed,
+/// and how many more each earlier page holds.
+pub(super) const REPLAYED_ITEMS: usize = 200;
 
 /// What `/model` offers: each Provider's models, and the session's own.
 #[derive(Debug)]
@@ -170,6 +174,31 @@ impl AgentBridge {
             .map_err(|error| format!("the sessions were not listed: {error}"))
     }
 
+    /// The interface's preferences (`[tui]`); the defaults when the
+    /// configuration cannot be read.
+    pub(crate) fn tui_preferences(&self) -> AgentTuiPreferences {
+        let agent = self.agent.clone();
+        self.agent
+            .runtime()
+            .block_on(async move { agent.tui_preferences().await })
+            .ok()
+            .and_then(Result::ok)
+            .unwrap_or_default()
+    }
+
+    /// Saves `patch` into the interface's preferences.
+    pub(crate) fn write_tui_preferences(
+        &self,
+        patch: AgentTuiPreferencesPatch,
+    ) -> Result<(), String> {
+        let agent = self.agent.clone();
+        self.agent
+            .runtime()
+            .block_on(async move { agent.write_tui_preferences(patch).await })
+            .map_err(|failure| failure.to_string())?
+            .map(drop)
+    }
+
     /// The workspace roots, the first the one relative paths are read
     /// against.
     pub(crate) fn workspace_roots(&self) -> Vec<PathBuf> {
@@ -209,7 +238,7 @@ impl AgentBridge {
     pub(crate) fn open(&self, session_id: AgentSessionId) -> Result<OpenedSession, String> {
         let opened = self
             .agent
-            .open_session(session_id, REPLAYED_ITEMS)
+            .open_session(session_id, self.page_size)
             .map_err(|error| format!("the session was not opened: {error}"))?;
         let items = opened
             .transcript
@@ -222,8 +251,39 @@ impl AgentBridge {
             model: opened.runtime.model,
             mode: opened.runtime.mode,
             transcript: replay::transcript(&self.agent, items),
-            earlier_items: opened.transcript.older_cursor.is_some(),
+            older: opened
+                .transcript
+                .older_cursor
+                .map(|cursor| OlderTranscript {
+                    session_id,
+                    cursor,
+                    through_revision: opened.through_revision,
+                }),
         })
+    }
+
+    /// The page of the transcript before `older`, oldest first, and where
+    /// the page before it begins (`None` at the session's start).
+    pub(crate) fn read_older_page(
+        &self,
+        older: &OlderTranscript,
+    ) -> Result<(Vec<ReplayedItem>, Option<OlderTranscript>), String> {
+        let page = self
+            .agent
+            .read_transcript_page(AgentTranscriptPageRequest {
+                session_id: older.session_id,
+                page_size: self.page_size,
+                cursor: Some(older.cursor.clone()),
+                direction: AgentHistorySortDirection::Descending,
+                through_revision: Some(older.through_revision),
+            })
+            .map_err(|error| format!("earlier messages were not read: {error}"))?;
+        let items = page.items.into_iter().map(|item| item.content).collect();
+        let next = page.older_cursor.map(|cursor| OlderTranscript {
+            cursor,
+            ..older.clone()
+        });
+        Ok((replay::transcript(&self.agent, items), next))
     }
 
     /// The session as it is now, for a call that names its generation and
@@ -254,7 +314,7 @@ async fn no_session(agent: &AgentHandle, model: Option<String>) -> OpenedSession
         model,
         mode: AgentSessionMode::Default,
         transcript: Vec::new(),
-        earlier_items: false,
+        older: None,
     }
 }
 

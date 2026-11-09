@@ -25,6 +25,7 @@ hanafubuki-agent [选项] <命令> [参数]
 | `--permission-mode manual\|auto-review\|full-access` | 本次运行的[权限模式](/docs/permissions)，相当于 `-c permissionMode=...`，优先于 `-c`                |
 | `--log-level off\|error\|warn\|info\|debug\|trace`   | 本次运行的日志级别，相当于 `-c logLevel=...`，优先于 `-c`                                           |
 | `--data-dir 目录`                                    | 数据目录（历史、记忆、Skill、日志），代替平台默认位置或 `HANAFUBUKI_AGENT_HOME` 指定的位置          |
+| `--no-alt-screen`                                    | [终端界面](#interface)把对话写入终端的滚动历史；其他命令忽略它                                      |
 
 <Callout>
   选项中的值使用连字符（`auto-review`、`full-access`），而配置文件和 `-c`
@@ -41,7 +42,9 @@ hanafubuki-agent [选项] <命令> [参数]
 | `resume [ID] [提示词]`      | 在终端界面中恢复会话 `ID`；不给 ID 时打开恢复选择器                             |
 | `resume --last [提示词]`    | 恢复最近一个运行过回合的会话；没有时开始新会话。`--last` 不能和会话 ID 一起使用 |
 
-没有终端时，两者都以退出码 2 退出。见[终端界面](/docs/terminal-interface)。
+`--no-alt-screen` 让本次运行的界面不使用终端的备用屏幕：对话写入终端的滚动历史（Scrollback），不管 `tui.fullscreenTranscript` 和 `tui.alternateScreen` 如何设置。其他命令忽略它。
+
+没有终端时，两者都以退出码 2 退出。见[终端界面](/docs/terminal-interface#modes)。
 
 ## exec [#exec]
 

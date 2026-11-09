@@ -21,7 +21,10 @@ use crate::agent_bridge::{AgentBridge, AgentReply, StatusSink};
 use crate::app_event::{AppEvent, AppEventSender};
 use crate::chatwidget::{ChatWidget, ChatWidgetInit};
 use crate::custom_terminal::Terminal;
+use crate::history_cell::HistoryRenderMode;
 use crate::test_support::VT100Backend;
+use crate::transcript_mode::TranscriptMode;
+use crate::transcript_view::TranscriptHistoryState;
 use crate::tui::{FrameRequester, Tui};
 
 const WIDTH: u16 = 100;
@@ -32,7 +35,7 @@ const DEADLINE: Duration = Duration::from_secs(60);
 /// its one Provider, and the interface on a vt100 screen, started as
 /// `hanafubuki-agent` starts it: with no session.
 struct Harness {
-    _home: tempfile::TempDir,
+    home: tempfile::TempDir,
     _model_runtime: tokio::runtime::Runtime,
     server: FakeServer,
     runtime: AgentRuntime,
@@ -43,11 +46,17 @@ struct Harness {
 
 impl Harness {
     fn start(responses: Vec<Vec<u8>>) -> Self {
-        Self::start_with(responses, true)
+        Self::start_with(responses, true, TranscriptMode::Terminal)
+    }
+
+    /// The interface as it starts by default: owning the transcript on the
+    /// alternate screen.
+    fn owned(responses: Vec<Vec<u8>>) -> Self {
+        Self::start_with(responses, true, TranscriptMode::Owned)
     }
 
     /// `with_provider: false` leaves the configuration with no Provider.
-    fn start_with(responses: Vec<Vec<u8>>, with_provider: bool) -> Self {
+    fn start_with(responses: Vec<Vec<u8>>, with_provider: bool, mode: TranscriptMode) -> Self {
         let model_runtime = tokio::runtime::Runtime::new().unwrap();
         let server = model_runtime.block_on(FakeServer::start(
             responses
@@ -92,26 +101,33 @@ impl Harness {
         runtime.start();
         let agent = runtime.wait_until_started(DEADLINE).unwrap();
 
-        let mut bridge = AgentBridge::new(agent, runtime.slot().clone(), None, sender.clone());
-        let mut chat_widget = ChatWidget::new(ChatWidgetInit {
+        let bridge = AgentBridge::new(agent, runtime.slot().clone(), None, sender.clone());
+        let chat_widget = ChatWidget::new(ChatWidgetInit {
             app_event_tx: sender.clone(),
             frame_requester: FrameRequester::new(sender.clone()),
             enhanced_keys_supported: false,
             directory: "/project".to_string(),
+            owned_transcript: mode.is_owned(),
+            fullscreen_preference: true,
         });
-        let opened = bridge.no_session().unwrap();
-        if let Some(update) = bridge.reply(AgentReply::SessionOpened(opened)) {
-            chat_widget.handle_turn_update(update);
-        }
+        let mut app = App::new(chat_widget, bridge, sender, mode, HistoryRenderMode::Rich);
         let mut terminal = Terminal::with_options(VT100Backend::new(WIDTH, HEIGHT)).unwrap();
         terminal.set_viewport_area(ratatui::layout::Rect::new(0, HEIGHT - 1, WIDTH, 1));
+        let mut tui = Tui::new(terminal);
+        if mode.is_owned() {
+            app.enter_owned_screen(&mut tui).unwrap();
+        }
+        let opened = app.bridge.no_session().unwrap();
+        if let Some(update) = app.bridge.reply(AgentReply::SessionOpened(opened)) {
+            app.show_update(update);
+        }
         Self {
-            _home: home,
+            home,
             _model_runtime: model_runtime,
             server,
             runtime,
-            app: App::new(chat_widget, bridge, sender),
-            tui: Tui::new(terminal),
+            app,
+            tui,
             events,
         }
     }
@@ -235,7 +251,7 @@ fn the_interface_starts_without_a_session_and_the_first_message_creates_it() {
 
 #[test]
 fn without_a_provider_the_first_message_says_why_and_the_interface_goes_on() {
-    let mut harness = Harness::start_with(Vec::new(), false);
+    let mut harness = Harness::start_with(Vec::new(), false, TranscriptMode::Terminal);
     harness.type_and_submit("What is the answer?");
     let screen = harness.pump_until_screen_shows("No default Agent Provider is configured");
     assert!(screen.contains("the session was not created"), "{screen}");
@@ -433,6 +449,196 @@ fn each_step_writes_its_thought_before_its_call_or_answer() {
     ];
     let mut from = 0;
     for text in order {
+        let at = transcript[from..]
+            .find(text)
+            .unwrap_or_else(|| panic!("{text:?} not in order:\n{transcript}"));
+        from += at + text.len();
+    }
+}
+
+impl Harness {
+    /// The last `rows` rows of the screen.
+    fn bottom_rows(&self, rows: usize) -> String {
+        let screen = self.screen();
+        let lines: Vec<&str> = screen.lines().collect();
+        lines[lines.len().saturating_sub(rows)..].join("\n")
+    }
+
+    fn config_file(&self) -> String {
+        std::fs::read_to_string(self.home.path().join("config.toml")).unwrap()
+    }
+}
+
+#[test]
+fn owned_mode_draws_the_conversation_on_the_alternate_screen() {
+    let mut harness = Harness::owned(vec![assistant_events("The answer is 42.")]);
+    harness.pump_until_screen_shows("fixture-model");
+    assert!(harness
+        .tui
+        .terminal
+        .backend()
+        .vt100()
+        .screen()
+        .alternate_screen());
+    harness.type_and_submit("What is the answer?");
+    let screen = harness.pump_until_screen_shows("The answer is 42.");
+    assert!(screen.contains("› What is the answer?"), "{screen}");
+    // The composer stays at the bottom, below the conversation.
+    let composer = screen.find("Ask the Agent to do anything").expect(&screen);
+    assert!(
+        composer > screen.find("The answer is 42.").unwrap(),
+        "{screen}"
+    );
+}
+
+#[test]
+fn a_scrolled_owned_transcript_offers_the_way_back_to_the_latest() {
+    let mut harness = Harness::owned(Vec::new());
+    harness.pump_until_screen_shows("fixture-model");
+    for note in 0..60 {
+        harness
+            .app
+            .chat_widget
+            .add_info_message(format!("note {note:02}"));
+    }
+    harness.pump_until_screen_shows("note 59");
+    harness.key(KeyCode::PageUp);
+    harness.app.draw(&mut harness.tui).unwrap();
+    let scrolled = harness.screen();
+    assert!(!scrolled.contains("note 59"), "{scrolled}");
+    insta::assert_snapshot!(harness.bottom_rows(6));
+
+    // Esc returns to the latest output, and so does Enter on an empty
+    // composer.
+    harness.key(KeyCode::Esc);
+    let latest = harness.pump_until_screen_shows("note 59");
+    assert!(!latest.contains("Back to bottom"), "{latest}");
+    harness.key(KeyCode::PageUp);
+    harness.app.draw(&mut harness.tui).unwrap();
+    assert!(harness.screen().contains("Back to bottom"));
+    harness.key(KeyCode::Enter);
+    harness.pump_until_screen_shows("note 59");
+    assert_eq!(harness.app.bridge.session_id(), None);
+}
+
+#[test]
+fn ctrl_t_shows_the_owned_transcript_in_detail_in_place() {
+    let mut harness = Harness::owned(vec![reasoning_answer_events(
+        "Weighing the **question**.",
+        "The answer is 42.",
+    )]);
+    harness.type_and_submit("What is the answer?");
+    let compact = harness.pump_until_screen_shows("The answer is 42.");
+    harness.pump_until_turn_ends();
+    assert!(compact.contains("• Thought for"), "{compact}");
+    assert!(!compact.contains("Weighing the question."), "{compact}");
+
+    harness.key_with(KeyCode::Char('t'), KeyModifiers::CONTROL);
+    let detailed = harness.pump_until_screen_shows("Weighing the question.");
+    assert!(harness.app.transcript_view.is_detailed());
+    // Still the conversation's screen, with the composer below.
+    assert!(
+        detailed.contains("Ask the Agent to do anything"),
+        "{detailed}"
+    );
+
+    harness.key(KeyCode::Esc);
+    harness.app.draw(&mut harness.tui).unwrap();
+    assert!(!harness.app.transcript_view.is_detailed());
+    assert!(!harness.screen().contains("Weighing the question."));
+    harness.key_with(KeyCode::Char('t'), KeyModifiers::CONTROL);
+    harness.key_with(KeyCode::Char('t'), KeyModifiers::CONTROL);
+    assert!(!harness.app.transcript_view.is_detailed());
+}
+
+#[test]
+fn the_terminal_transcript_overlay_holds_the_scrollback_until_it_closes() {
+    let mut harness = Harness::start(Vec::new());
+    harness.pump_until_screen_shows("fixture-model");
+    harness.key_with(KeyCode::Char('t'), KeyModifiers::CONTROL);
+    harness.pump_until_screen_shows("T R A N S C R I P T");
+    harness
+        .app
+        .chat_widget
+        .add_info_message("written while open".to_string());
+    harness.pump_until_screen_shows("written while open");
+    assert!(!harness.app.deferred_history_lines.is_empty());
+
+    harness.key(KeyCode::Char('q'));
+    harness.app.draw(&mut harness.tui).unwrap();
+    assert!(harness.app.deferred_history_lines.is_empty());
+    let screen = harness.screen();
+    assert!(!screen.contains("T R A N S C R I P T"), "{screen}");
+    assert!(screen.contains("written while open"), "{screen}");
+}
+
+#[test]
+fn raw_and_tui_save_the_interface_preferences() {
+    let mut harness = Harness::owned(Vec::new());
+    harness.pump_until_screen_shows("fixture-model");
+    harness.type_and_submit("/raw on");
+    harness.pump_until_screen_shows("Raw output on.");
+    assert_eq!(harness.app.render_mode, HistoryRenderMode::Raw);
+    assert!(harness.config_file().contains("rawOutput = true"));
+    harness.type_and_submit("/raw");
+    harness.pump_until_screen_shows("Raw output off.");
+    assert_eq!(harness.app.render_mode, HistoryRenderMode::Rich);
+
+    harness.type_and_submit("/tui");
+    harness.pump_until_screen_shows("Interface mode for the next launch");
+    harness.key(KeyCode::Char('1'));
+    harness.pump_until_screen_shows("Saved the interface mode: Scrollback");
+    let config = harness.config_file();
+    assert!(config.contains("fullscreenTranscript = false"), "{config}");
+    assert!(config.contains("rawOutput = false"), "{config}");
+}
+
+#[test]
+fn a_resumed_session_loads_its_earlier_pages_into_the_owned_transcript() {
+    let mut harness = Harness::owned(vec![
+        assistant_events("First answer."),
+        assistant_events("Second answer."),
+        assistant_events("Third answer."),
+    ]);
+    for (question, answer) in [
+        ("First?", "First answer."),
+        ("Second?", "Second answer."),
+        ("Third?", "Third answer."),
+    ] {
+        harness.type_and_submit(question);
+        harness.pump_until_screen_shows(answer);
+        harness.pump_until_turn_ends();
+    }
+    let finished = harness.app.bridge.session_id();
+    harness.type_and_submit("/new");
+    harness.pump_until("no session", |harness| {
+        harness.app.bridge.session_id().is_none()
+    });
+
+    // Each page holds two items: the latest exchange, then the earlier
+    // ones as the view, which has room for them, asks for them.
+    harness.app.bridge.set_page_size(2);
+    harness.type_and_submit("/resume");
+    harness.pump_until_screen_shows("Resume a previous session");
+    harness.key(KeyCode::Enter);
+    harness.pump_until("every page", |harness| {
+        let transcript = harness.transcript();
+        harness.app.transcript_view.history == TranscriptHistoryState::Complete
+            && transcript.contains("First answer.")
+            && transcript.contains("Third answer.")
+    });
+    assert_eq!(harness.app.bridge.session_id(), finished);
+    let transcript = harness.transcript();
+    assert!(!transcript.contains("Earlier messages"), "{transcript}");
+    let mut from = transcript.find("model:").expect(&transcript);
+    for text in [
+        "First?",
+        "First answer.",
+        "Second?",
+        "Second answer.",
+        "Third?",
+        "Third answer.",
+    ] {
         let at = transcript[from..]
             .find(text)
             .unwrap_or_else(|| panic!("{text:?} not in order:\n{transcript}"));

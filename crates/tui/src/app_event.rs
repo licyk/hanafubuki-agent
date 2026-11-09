@@ -20,7 +20,6 @@ pub(crate) enum AppEvent {
     Key(KeyEvent),
     Paste(String),
     /// The pointer, reported while a transcript view captures it.
-    #[allow(dead_code, reason = "P2.2's transcript view reads it")]
     Mouse(MouseEvent),
     /// The terminal changed size, or must be drawn again.
     Redraw,
@@ -48,6 +47,10 @@ pub(crate) enum AppEvent {
     DiffResult(String),
     /// `/resume`: the sessions to pick from.
     OpenResumePicker,
+    /// `/raw`: on, off, or (`None`) toggled.
+    SetRawOutput(Option<bool>),
+    /// `/tui`: the transcript's mode at the next launch.
+    SetFullscreenTranscript(bool),
     StartCommitAnimation,
     StopCommitAnimation,
     CommitTick,

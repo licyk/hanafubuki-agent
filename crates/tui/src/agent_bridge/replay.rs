@@ -3,7 +3,8 @@
 //! finished (tool events carry neither its output nor its arguments).
 
 use hanafubuki_agent::{
-    AgentHandle, AgentSessionId, AgentSessionMode, ConversationItem, ToolOutputContent,
+    AgentHandle, AgentRevision, AgentSessionId, AgentSessionMode, ConversationItem,
+    ToolOutputContent,
 };
 
 use crate::history_cell::ToolResultView;
@@ -21,8 +22,18 @@ pub(crate) struct OpenedSession {
     pub(crate) mode: AgentSessionMode,
     /// Its latest transcript items, oldest first; empty for a new session.
     pub(crate) transcript: Vec<ReplayedItem>,
-    /// Whether older items were left out.
-    pub(crate) earlier_items: bool,
+    /// Where the items left out begin, when older items were left out.
+    pub(crate) older: Option<OlderTranscript>,
+}
+
+/// The page of a session's transcript before the ones read so far.
+#[derive(Clone, Debug)]
+pub(crate) struct OlderTranscript {
+    pub(crate) session_id: AgentSessionId,
+    pub(crate) cursor: String,
+    /// The revision the first page was read at, so later pages read the
+    /// same history.
+    pub(crate) through_revision: AgentRevision,
 }
 
 /// One entry of a reopened session's transcript.

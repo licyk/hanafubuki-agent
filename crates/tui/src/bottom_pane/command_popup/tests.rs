@@ -68,7 +68,7 @@ fn the_unfiltered_list_is_the_registry_in_order() {
         filtered("/"),
         vec![
             "model", "mode", "skills", "new", "resume", "compact", "diff", "mention", "status",
-            "mcp", "exit"
+            "mcp", "raw", "tui", "exit"
         ]
     );
 }

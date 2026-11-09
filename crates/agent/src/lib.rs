@@ -128,11 +128,11 @@ use std::path::Path;
 /// The Agent's configuration, which the host opens in the directory it names
 /// and the standalone Agent layers.
 pub use hanafubuki_agent_config::{
-    AgentConfig, AgentConfigProblem, AgentConfigRecovery, AgentDirs, AgentLogLevel,
-    AgentModelProtocol, AgentProviderHeaderSettings, AgentSettings, AgentSettingsPatch,
-    AgentStandaloneSettings, ConfigLayerSource, ConfigLayers, ConfigOverrides,
-    AGENT_CREDENTIAL_FILES, AGENT_HOME_ENV, AGENT_MCP_FILE, AGENT_PROVIDERS_FILE,
-    AGENT_SETTINGS_FILE,
+    AgentAlternateScreen, AgentConfig, AgentConfigProblem, AgentConfigRecovery, AgentDirs,
+    AgentLogLevel, AgentModelProtocol, AgentProviderHeaderSettings, AgentSettings,
+    AgentSettingsPatch, AgentStandaloneSettings, AgentTuiPreferences, AgentTuiPreferencesPatch,
+    ConfigLayerSource, ConfigLayers, ConfigOverrides, AGENT_CREDENTIAL_FILES, AGENT_HOME_ENV,
+    AGENT_MCP_FILE, AGENT_PROVIDERS_FILE, AGENT_SETTINGS_FILE,
 };
 pub use hanafubuki_agent_execution::{
     AgentBackgroundTerminalSnapshot, AgentBackgroundTerminalStopFailure,

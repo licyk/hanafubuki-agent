@@ -64,6 +64,7 @@ pub(crate) fn run(
             model: global.model.clone(),
             directory,
             resume,
+            no_alt_screen: global.no_alt_screen,
         };
         hanafubuki_agent_tui::run(events, &standalone.runtime, &agent, options)
             .map_err(Failure::new)

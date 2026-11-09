@@ -26,6 +26,7 @@ mod recovery;
 mod settings;
 mod standalone;
 mod store;
+mod tui;
 
 pub use dirs::{AgentDirs, AGENT_HOME_ENV};
 pub use file::{write_atomic, FileAccess};
@@ -56,3 +57,4 @@ pub use store::{
     read_mcp_document, read_providers_document, read_settings_document, AgentConfig,
     AGENT_CREDENTIAL_FILES, AGENT_MCP_FILE, AGENT_PROVIDERS_FILE, AGENT_SETTINGS_FILE,
 };
+pub use tui::{AgentAlternateScreen, AgentTuiPreferences, AgentTuiPreferencesPatch};

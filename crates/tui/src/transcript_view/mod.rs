@@ -47,8 +47,6 @@ use selection::Selection;
 use snapshot::ViewSnapshot;
 use text::TextLayout;
 
-#[allow(unused_imports, reason = "P2.2 draws the footer")]
-pub(crate) use footer::TranscriptFooter;
 pub(crate) use history::TranscriptHistoryState;
 pub(crate) use input::ViewAction;
 
@@ -119,19 +117,6 @@ impl Default for TranscriptView {
 }
 
 impl TranscriptView {
-    /// The rows the last render left below the transcript, where a caller
-    /// can paint without changing the view's state.
-    pub(crate) fn remaining_area(&self) -> Rect {
-        let used = u16::try_from(self.visible.len())
-            .unwrap_or(u16::MAX)
-            .min(self.area.height);
-        Rect {
-            y: self.area.y + used,
-            height: self.area.height - used,
-            ..self.area
-        }
-    }
-
     pub(crate) fn render(&mut self, area: Rect, buf: &mut Buffer, cells: &[Arc<dyn HistoryCell>]) {
         self.cache.begin_frame();
         self.sync_history_tail(cells);

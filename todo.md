@@ -61,7 +61,7 @@ moves its pin.
     `AgentProviderHeaderSettings`; `mcp_write_server` now refuses an
     invalid id; `mcp_write_credentials` really removes a dropped key. The
     goldens and the corpus are unchanged.
-- [ ] P2: the new interface (Codex's owned transcript, layers A–G):
+- [x] P2: the new interface (Codex's owned transcript, layers A–G):
       terminal extensions, the `HistoryCell` extension, `TranscriptView`,
       the owned shell, the clipboard, keymap core; owned mode by default;
       Ctrl+T in both modes (live tail); `/tui`; `/raw`.
@@ -75,12 +75,26 @@ moves its pin.
         search, F4 disclosure, footer). The Ctrl+T pager already shows a
         tool call's whole output. Not ported: hyperlinks and wrap
         provenance, copy mode (needs layer E), bookmarks, images.
-  - [ ] P2.2: the owned shell (entries by `Arc`; per frame: live cells,
-        render, follow control, footer; suppress `ChatWidget`'s own live
-        cells), owned mode by default, Ctrl+T in both modes, `/tui`,
-        `/raw`, the clipboard (`Copy` actions, `/copy` later), the first
-        `[tui]` keys; remove P2.1's temporary `allow(dead_code)`s; the
-        crate doc names both Codex revisions.
+  - [x] P2.2: fullscreen (owned) when `tui.fullscreenTranscript` and the
+        alternate screen is allowed (`--no-alt-screen`,
+        `tui.alternateScreen` auto|always|never, auto off in any SSH
+        session: stricter than Codex); cells kept as `Arc`s and drawn by
+        the view, `ChatWidget` stops drawing its live cells; older pages
+        read on demand (`read_transcript_page`, spliced after the header);
+        Ctrl+T toggles detail in place, or in scrollback mode opens
+        `pager_overlay::TranscriptOverlay` (live tail, scrollback held
+        until close); `/tui`; `/raw [on|off]`; `clipboard.rs` (arboard,
+        OSC 52 fallback; `BSL-1.0` accepted in `about.toml` for arboard's
+        Windows dependencies); `[tui]` typed (`AgentTuiPreferences`,
+        facade `tui_preferences` / `write_tui_preferences`, no revision,
+        like `write_settings`).
+  - Open from P2: a tool call whose output was on the newer page shows
+    without its output (5b); select mode has no default key (`/keymap`,
+    P5); `app/mod.rs` is near the file limit.
+  - Hanafubuki, at its next pin: `AgentStandaloneSettings` has a new
+    public field `tui` (a struct literal needs it); re-exports
+    `AgentTuiPreferences`, `AgentTuiPreferencesPatch`,
+    `AgentAlternateScreen`.
 - [ ] P3: Esc to edit an earlier message (`app_backtrack`) over
       `fork_session_before_turn`; facade `edit_from_turn`.
 - [ ] P4: `/rename /archive /delete /resume [id|title] /fork /clear /export

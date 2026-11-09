@@ -10,6 +10,7 @@
 
 mod commands;
 mod live_tail;
+mod replay;
 mod turn;
 
 pub(crate) use live_tail::ActiveCellTranscriptKey;
@@ -49,6 +50,11 @@ pub(crate) struct ChatWidgetInit {
     pub(crate) enhanced_keys_supported: bool,
     /// The working directory, as the session header shows it.
     pub(crate) directory: String,
+    /// The app draws the live cells in its transcript view (owned mode),
+    /// so the chat does not.
+    pub(crate) owned_transcript: bool,
+    /// The saved `tui.fullscreenTranscript`, which `/tui` marks.
+    pub(crate) fullscreen_preference: bool,
 }
 
 pub(crate) struct ChatWidget {
@@ -88,6 +94,8 @@ pub(crate) struct ChatWidget {
     /// Advanced by every change to the live cells, so a cached layout of
     /// the live tail is refreshed.
     live_revision: u64,
+    owned_transcript: bool,
+    fullscreen_preference: bool,
 }
 
 impl ChatWidget {
@@ -97,6 +105,8 @@ impl ChatWidget {
             frame_requester,
             enhanced_keys_supported,
             directory,
+            owned_transcript,
+            fullscreen_preference,
         } = init;
         let bottom_pane = BottomPane::new(BottomPaneParams {
             app_event_tx: app_event_tx.clone(),
@@ -125,6 +135,8 @@ impl ChatWidget {
             mode: AgentSessionMode::Default,
             warnings: Vec::new(),
             live_revision: 0,
+            owned_transcript,
+            fullscreen_preference,
         }
     }
 
@@ -180,6 +192,31 @@ impl ChatWidget {
         } else {
             false
         }
+    }
+
+    pub(crate) fn composer_is_empty(&self) -> bool {
+        self.bottom_pane.composer_is_empty()
+    }
+
+    /// Whether the composer has the keys: no popup, approval, question or
+    /// command view is open.
+    pub(crate) fn no_modal_or_popup_active(&self) -> bool {
+        self.bottom_pane.no_modal_or_popup_active()
+    }
+
+    pub(crate) fn set_fullscreen_preference(&mut self, enabled: bool) {
+        self.fullscreen_preference = enabled;
+    }
+
+    /// Adds a dim note to the transcript.
+    pub(crate) fn add_info_message(&mut self, message: String) {
+        self.add_to_history(history_cell::new_info_event(message, None));
+        self.request_redraw();
+    }
+
+    pub(crate) fn add_error_message(&mut self, message: String) {
+        self.add_to_history(history_cell::new_error_event(message));
+        self.request_redraw();
     }
 
     #[cfg(test)]
@@ -323,7 +360,9 @@ impl ChatWidget {
             tools.push_ref(cell);
         }
         let mut flex = FlexRenderable::new();
-        if !self.running_tools.is_empty() || !self.live_thinking.is_empty() {
+        if !self.owned_transcript
+            && (!self.running_tools.is_empty() || !self.live_thinking.is_empty())
+        {
             flex.push(
                 1,
                 RenderableItem::Owned(Box::new(tools)).inset(Insets::tlbr(1, 0, 0, 0)),

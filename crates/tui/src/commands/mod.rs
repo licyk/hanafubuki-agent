@@ -11,8 +11,10 @@
 mod exit;
 mod mode;
 mod model;
+mod raw;
 mod reports;
 mod session;
+mod tui;
 mod workspace;
 
 use std::fmt;
@@ -25,7 +27,7 @@ pub(crate) use mode::mode_name;
 pub(crate) use model::{show_model_choices, MODEL};
 
 /// Every command, in presentation order: the most used first.
-pub(crate) static COMMANDS: [&CommandSpec; 11] = [
+pub(crate) static COMMANDS: [&CommandSpec; 13] = [
     &model::MODEL,
     &mode::MODE,
     &reports::SKILLS,
@@ -36,6 +38,8 @@ pub(crate) static COMMANDS: [&CommandSpec; 11] = [
     &workspace::MENTION,
     &reports::STATUS,
     &reports::MCP,
+    &raw::RAW,
+    &tui::TUI,
     &exit::EXIT,
 ];
 
@@ -104,6 +108,7 @@ pub(crate) struct CommandContext<'a> {
     app_event_tx: &'a AppEventSender,
     bottom_pane: &'a mut BottomPane,
     mode: AgentSessionMode,
+    fullscreen_preference: bool,
 }
 
 impl<'a> CommandContext<'a> {
@@ -112,12 +117,14 @@ impl<'a> CommandContext<'a> {
         app_event_tx: &'a AppEventSender,
         bottom_pane: &'a mut BottomPane,
         mode: AgentSessionMode,
+        fullscreen_preference: bool,
     ) -> Self {
         Self {
             command,
             app_event_tx,
             bottom_pane,
             mode,
+            fullscreen_preference,
         }
     }
 
@@ -132,6 +139,11 @@ impl<'a> CommandContext<'a> {
     /// The session's mode.
     pub(crate) fn mode(&self) -> AgentSessionMode {
         self.mode
+    }
+
+    /// The saved `tui.fullscreenTranscript`.
+    pub(crate) fn fullscreen_preference(&self) -> bool {
+        self.fullscreen_preference
     }
 
     /// Shows a list to pick from over the composer, as this command's view.

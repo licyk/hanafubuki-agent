@@ -25,6 +25,7 @@ They go before or after the command, and apply to every command.
 | `--permission-mode manual\|auto-review\|full-access` | This run's [permission mode](/docs/permissions), as `-c permissionMode=…`, winning over `-c`                                        |
 | `--log-level off\|error\|warn\|info\|debug\|trace`   | This run's log level, as `-c logLevel=…`, winning over `-c`                                                                         |
 | `--data-dir DIR`                                     | The data directory (history, memory, Skills, logs), in place of the platform's or the one `HANAFUBUKI_AGENT_HOME` names             |
+| `--no-alt-screen`                                    | The [terminal interface](#interface) writes the conversation into the terminal's scrollback; other commands ignore it               |
 
 <Callout>
   The flag's values have hyphens (`auto-review`, `full-access`); the configuration file and `-c` use
@@ -41,7 +42,9 @@ The layers and their precedence are in [Configuration layers](/docs/config-layer
 | `resume [ID] [PROMPT]`      | Resumes session `ID` in the terminal interface; without an id, opens the resume picker                         |
 | `resume --last [PROMPT]`    | Resumes the latest session a turn ran in, or starts a new one when there is none. `--last` takes no session id |
 
-Without a terminal, both exit with code 2. See [Terminal interface](/docs/terminal-interface).
+`--no-alt-screen` keeps the interface off the terminal's alternate screen for this run: the conversation goes into the terminal's scrollback (Scrollback), whatever `tui.fullscreenTranscript` and `tui.alternateScreen` say. The other commands ignore it.
+
+Without a terminal, both exit with code 2. See [Terminal interface](/docs/terminal-interface#modes).
 
 ## exec [#exec]
 

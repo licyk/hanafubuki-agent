@@ -9,11 +9,10 @@ use hanafubuki_agent::panic::catch_panic;
 use hanafubuki_agent::AgentCompactionStatus;
 
 use super::ChatWidget;
-use crate::agent_bridge::{OpenedSession, ReplayedItem, TurnUpdate};
+use crate::agent_bridge::TurnUpdate;
 use crate::app_event::{AppEvent, Op};
 use crate::commands::{self, CommandContext, CommandSpec};
 use crate::history_cell;
-use crate::streaming::controller::{PlanStreamController, StreamController};
 
 impl ChatWidget {
     pub(crate) fn dispatch_command(&mut self, command: &'static CommandSpec, args: String) {
@@ -47,6 +46,7 @@ impl ChatWidget {
             &self.app_event_tx,
             &mut self.bottom_pane,
             self.mode,
+            self.fullscreen_preference,
         );
         if let Err(message) = catch_panic(|| call(&mut context)) {
             self.command_failed(command.name, &message);
@@ -117,80 +117,5 @@ impl ChatWidget {
             update => return Some(update),
         }
         None
-    }
-
-    /// Shows the session from its start: the header, then what it said so
-    /// far. What the previous session left running is gone with it.
-    fn on_session_opened(&mut self, opened: OpenedSession) {
-        self.running_tools.clear();
-        self.live_thinking.clear();
-        self.sync_thinking_toggle();
-        self.stream_controller = None;
-        self.plan_stream_controller = None;
-        self.deferred.clear();
-        self.bottom_pane.dismiss_all_requests();
-        self.bottom_pane.set_task_running(false);
-        self.retry_status_header = None;
-        self.had_work_activity = false;
-        self.mode = opened.mode;
-        self.add_to_history(history_cell::SessionHeaderHistoryCell::new(
-            opened.model,
-            self.directory.clone(),
-            env!("CARGO_PKG_VERSION"),
-        ));
-        if opened.earlier_items {
-            self.add_to_history(history_cell::new_info_event(
-                "Earlier messages are not shown.".to_string(),
-                None,
-            ));
-        }
-        let width = self.last_rendered_width.get();
-        for item in opened.transcript {
-            match item {
-                ReplayedItem::User(text) => {
-                    self.add_to_history(history_cell::new_user_prompt(text))
-                }
-                ReplayedItem::Reasoning {
-                    text,
-                    duration_millis,
-                    truncated,
-                } => self.add_to_history(history_cell::ThinkingCell::completed(
-                    text,
-                    duration_millis,
-                    truncated,
-                    self.thinking_expanded,
-                )),
-                ReplayedItem::Assistant(text) => {
-                    let mut controller = StreamController::new(width.map(|w| w.saturating_sub(2)));
-                    controller.push(&text);
-                    if let Some(cell) = controller.finalize() {
-                        self.add_boxed_history(cell);
-                    }
-                }
-                ReplayedItem::Plan(text) => {
-                    let mut controller =
-                        PlanStreamController::new(width.map(|w| w.saturating_sub(4)));
-                    controller.push(&text);
-                    if let Some(cell) = controller.finalize() {
-                        self.add_boxed_history(cell);
-                    }
-                }
-                ReplayedItem::Tool {
-                    call_id,
-                    name,
-                    is_error,
-                    result,
-                } => {
-                    let mut cell = history_cell::new_tool_call(call_id, name, None);
-                    cell.complete(is_error, result);
-                    self.add_to_history(cell);
-                }
-                ReplayedItem::Compacted => self.add_to_history(history_cell::new_info_event(
-                    "Context compacted".to_string(),
-                    None,
-                )),
-            }
-        }
-        self.needs_final_message_separator = false;
     }
 }

@@ -51,6 +51,10 @@ pub(crate) struct GlobalArgs {
     /// Keeps the history, memory, Skills and logs in DIR.
     #[arg(long, value_name = "DIR", global = true)]
     pub(crate) data_dir: Option<PathBuf>,
+    /// Keeps the terminal interface's conversation in the terminal's
+    /// scrollback, off the alternate screen.
+    #[arg(long, global = true)]
+    pub(crate) no_alt_screen: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]

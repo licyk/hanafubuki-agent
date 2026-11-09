@@ -2,24 +2,18 @@
 
 //! Overlay UIs rendered in an alternate screen.
 //!
-//! This module implements the pager-style overlays: the transcript overlay
-//! (`Ctrl+T`), a full history view separate from the main viewport, and the
-//! static overlay `/diff` shows its output in.
-//!
-//! Codex's transcript overlay also renders a live tail of the in-flight
-//! active cell and highlights a message for backtracking (Esc); neither is
-//! ported: here the overlay shows the committed cells as their transcript
-//! lines (a collapsed thinking cell with its text), a cell committed while
-//! it is open is appended, and Esc closes it.
+//! The terminal-mode transcript (`Ctrl+T`, [`transcript`]): Codex's
+//! `TranscriptOverlay`, a transcript view over the committed cells with
+//! the live tail after them. And the static overlay `/diff` shows its
+//! output in, a pager over fixed lines.
 
-use std::sync::Arc;
+mod transcript;
 
 use ratatui::buffer::Buffer;
 use ratatui::buffer::Cell;
 use ratatui::crossterm::event::KeyCode;
 use ratatui::crossterm::event::KeyEvent;
 use ratatui::layout::Rect;
-use ratatui::style::Style;
 use ratatui::style::Stylize;
 use ratatui::text::Line;
 use ratatui::text::Span;
@@ -29,14 +23,10 @@ use ratatui::widgets::Paragraph;
 use ratatui::widgets::Widget;
 use ratatui::widgets::Wrap;
 
-use crate::history_cell::HistoryCell;
-use crate::history_cell::UserHistoryCell;
 use crate::key_hint;
 use crate::key_hint::KeyBinding;
-use crate::render::renderable::InsetRenderable;
 use crate::render::renderable::Renderable;
-use crate::render::Insets;
-use crate::style::user_message_style;
+pub(crate) use transcript::TranscriptOverlay;
 
 pub(crate) enum Overlay {
     Transcript(TranscriptOverlay),
@@ -44,26 +34,18 @@ pub(crate) enum Overlay {
 }
 
 impl Overlay {
-    pub(crate) fn new_transcript(cells: Vec<Arc<dyn HistoryCell>>) -> Self {
-        Self::Transcript(TranscriptOverlay::new(cells))
-    }
-
     pub(crate) fn new_static_with_lines(lines: Vec<Line<'static>>, title: String) -> Self {
         Self::Static(StaticOverlay::with_title(lines, title))
     }
 
-    /// Handles a key; `viewport` is the screen the overlay is drawn on.
-    pub(crate) fn handle_key_event(&mut self, key_event: KeyEvent, viewport: Rect) {
-        match self {
-            Overlay::Transcript(o) => o.handle_key_event(key_event, viewport),
-            Overlay::Static(o) => o.handle_key_event(key_event, viewport),
-        }
-    }
-
-    pub(crate) fn render(&mut self, area: Rect, buf: &mut Buffer) {
+    /// Draws the overlay; where the cursor goes, when it shows one.
+    pub(crate) fn render(&mut self, area: Rect, buf: &mut Buffer) -> Option<(u16, u16)> {
         match self {
             Overlay::Transcript(o) => o.render(area, buf),
-            Overlay::Static(o) => o.render(area, buf),
+            Overlay::Static(o) => {
+                o.render(area, buf);
+                None
+            }
         }
     }
 
@@ -300,26 +282,6 @@ impl PagerView {
         area.height = area.height.saturating_sub(2);
         area
     }
-
-    fn is_scrolled_to_bottom(&self) -> bool {
-        if self.scroll_offset == usize::MAX {
-            return true;
-        }
-        let Some(height) = self.last_content_height else {
-            return false;
-        };
-        if self.renderables.is_empty() {
-            return true;
-        }
-        let Some(total_height) = self.last_rendered_height else {
-            return false;
-        };
-        if total_height <= height {
-            return true;
-        }
-        let max_scroll = total_height.saturating_sub(height);
-        self.scroll_offset >= max_scroll
-    }
 }
 
 /// A renderable that caches its desired height.
@@ -353,115 +315,6 @@ impl Renderable for CachedRenderable {
     }
 }
 
-struct CellRenderable {
-    cell: Arc<dyn HistoryCell>,
-    style: Style,
-}
-
-impl Renderable for CellRenderable {
-    fn render(&self, area: Rect, buf: &mut Buffer) {
-        let p =
-            Paragraph::new(Text::from(self.cell.transcript_lines(area.width))).style(self.style);
-        p.render(area, buf);
-    }
-
-    fn desired_height(&self, width: u16) -> u16 {
-        self.cell.desired_transcript_height(width)
-    }
-}
-
-pub(crate) struct TranscriptOverlay {
-    /// Pager UI state and the renderables currently displayed, one per cell.
-    view: PagerView,
-    cells: Vec<Arc<dyn HistoryCell>>,
-    is_done: bool,
-}
-
-impl TranscriptOverlay {
-    /// Creates a transcript overlay for a fixed set of committed cells.
-    pub(crate) fn new(transcript_cells: Vec<Arc<dyn HistoryCell>>) -> Self {
-        Self {
-            view: PagerView::new(
-                Self::render_cells(&transcript_cells),
-                "T R A N S C R I P T".to_string(),
-                usize::MAX,
-            ),
-            cells: transcript_cells,
-            is_done: false,
-        }
-    }
-
-    fn render_cells(cells: &[Arc<dyn HistoryCell>]) -> Vec<Box<dyn Renderable>> {
-        cells
-            .iter()
-            .enumerate()
-            .map(|(i, c)| {
-                let style = if c.as_any().is::<UserHistoryCell>() {
-                    user_message_style()
-                } else {
-                    Style::default()
-                };
-                let mut cell_renderable: Box<dyn Renderable> =
-                    Box::new(CachedRenderable::new(CellRenderable {
-                        cell: c.clone(),
-                        style,
-                    }));
-                if !c.is_stream_continuation() && i > 0 {
-                    cell_renderable = Box::new(InsetRenderable::new(
-                        cell_renderable,
-                        Insets::tlbr(1, 0, 0, 0),
-                    ));
-                }
-                cell_renderable
-            })
-            .collect()
-    }
-
-    /// Insert a committed history cell. If the overlay was scrolled to
-    /// bottom before insertion, it remains pinned to bottom after the
-    /// insertion to preserve the "follow along" behavior.
-    pub(crate) fn insert_cell(&mut self, cell: Arc<dyn HistoryCell>) {
-        let follow_bottom = self.view.is_scrolled_to_bottom();
-        self.cells.push(cell);
-        self.view.renderables = Self::render_cells(&self.cells);
-        if follow_bottom {
-            self.view.scroll_offset = usize::MAX;
-        }
-    }
-
-    fn render_hints(&self, area: Rect, buf: &mut Buffer) {
-        let line1 = Rect::new(area.x, area.y, area.width, 1);
-        let line2 = Rect::new(area.x, area.y.saturating_add(1), area.width, 1);
-        render_key_hints(line1, buf, PAGER_KEY_HINTS);
-        render_key_hints(line2, buf, &[(&[KEY_Q, KEY_ESC], "to quit")]);
-    }
-
-    pub(crate) fn render(&mut self, area: Rect, buf: &mut Buffer) {
-        let top_h = area.height.saturating_sub(3);
-        let top = Rect::new(area.x, area.y, area.width, top_h);
-        let bottom = Rect::new(area.x, area.y + top_h, area.width, 3);
-        self.view.render(top, buf);
-        self.render_hints(bottom, buf);
-    }
-
-    fn handle_key_event(&mut self, key_event: KeyEvent, viewport: Rect) {
-        match key_event {
-            e if KEY_Q.is_press(e)
-                || KEY_ESC.is_press(e)
-                || KEY_CTRL_C.is_press(e)
-                || KEY_CTRL_T.is_press(e) =>
-            {
-                self.is_done = true;
-            }
-            other => self.view.handle_key_event(other, viewport),
-        }
-    }
-
-    pub(crate) fn is_done(&self) -> bool {
-        self.is_done
-    }
-}
-
 pub(crate) struct StaticOverlay {
     view: PagerView,
     is_done: bool,
@@ -492,7 +345,8 @@ impl StaticOverlay {
         self.render_hints(bottom, buf);
     }
 
-    fn handle_key_event(&mut self, key_event: KeyEvent, viewport: Rect) {
+    /// Handles a key; `viewport` is the screen the overlay is drawn on.
+    pub(crate) fn handle_key_event(&mut self, key_event: KeyEvent, viewport: Rect) {
         match key_event {
             e if KEY_Q.is_press(e) || KEY_CTRL_C.is_press(e) => {
                 self.is_done = true;

@@ -36,7 +36,6 @@ pub(crate) use tool::{new_tool_call, ToolCallCell, ToolResultView};
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum HistoryRenderMode {
     Rich,
-    #[allow(dead_code, reason = "P2.2's `/raw` turns it on")]
     Raw,
 }
 
@@ -103,14 +102,6 @@ pub(crate) trait HistoryCell: std::fmt::Debug + Send + Sync + Any {
         self.display_lines(width)
     }
 
-    fn desired_transcript_height(&self, width: u16) -> u16 {
-        Paragraph::new(Text::from(self.transcript_lines(width)))
-            .wrap(Wrap { trim: false })
-            .line_count(width)
-            .try_into()
-            .unwrap_or(0)
-    }
-
     /// The compact presentation of the transcript view, which can reveal an
     /// activity's details in place.
     fn compact_lines(&self, width: u16) -> Vec<Line<'static>> {
@@ -136,7 +127,7 @@ pub(crate) trait HistoryCell: std::fmt::Debug + Send + Sync + Any {
     }
 
     /// The source text the cell was rendered from, for copying it whole.
-    #[allow(dead_code, reason = "P2.2's copy targets copy a cell's source")]
+    #[allow(dead_code, reason = "`/copy` (P4) copies a cell's source")]
     fn copy_source(&self) -> Option<&str> {
         None
     }

@@ -67,7 +67,17 @@ Other names are accepted and do nothing.
 | --------------- | ------------------------------------------------------------------------------------------------------------------------- | ---------- | -------------------------------------------------------------------------------------------------------------------- |
 | `network.proxy` | `"system"`, `"disabled"`, or a proxy URL (`http`, `https`, `socks4`, `socks4a`, `socks5`, `socks5h`, credentials allowed) | `"system"` | The proxy of the web tools, MCP and the processes the Agent starts; see [Network and logging](/docs/network-logging) |
 
-`logLevel` and `network.proxy` are the standalone Agent's: an application that embeds the Agent supplies its own logger and proxy.
+### Terminal interface [#tui]
+
+| Key                        | Type and values                 | Default  | Means                                                                                                                                                                                                                      |
+| -------------------------- | ------------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tui.fullscreenTranscript` | boolean                         | `true`   | The [terminal interface](/docs/terminal-interface#modes) draws the conversation itself on the alternate screen (Fullscreen); `false` writes it into the terminal's scrollback (Scrollback). Read at launch; `/tui` sets it |
+| `tui.alternateScreen`      | `"auto"`, `"always"`, `"never"` | `"auto"` | Whether the interface may use the alternate screen; `"auto"` does except over SSH. Without it, the interface runs in Scrollback                                                                                            |
+| `tui.rawOutput`            | boolean                         | `false`  | The conversation shown as the plain text it was made from, for copying with the terminal's selection; `/raw` sets it                                                                                                       |
+
+Other keys under `[tui]` are kept in the file and ignored.
+
+`logLevel`, `network.proxy` and `[tui]` are the standalone Agent's: an application that embeds the Agent supplies its own logger, proxy and interface.
 
 ### Profiles and projects [#profiles-projects]
 

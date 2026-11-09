@@ -318,15 +318,6 @@ pub struct InsetRenderable<'a> {
     insets: Insets,
 }
 
-impl<'a> InsetRenderable<'a> {
-    pub fn new(child: impl Into<RenderableItem<'a>>, insets: Insets) -> Self {
-        Self {
-            child: child.into(),
-            insets,
-        }
-    }
-}
-
 impl<'a> Renderable for InsetRenderable<'a> {
     fn render(&self, area: Rect, buf: &mut Buffer) {
         self.child.render(area.inset(self.insets), buf);

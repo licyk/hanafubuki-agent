@@ -1,8 +1,9 @@
 // Modified from OpenAI Codex rust-v0.93.0 (Apache-2.0).
 
 //! The interface's entry: the session it opens on the started Agent (one
-//! reopened, or none until the first message creates it), the terminal set
-//! up and restored around the app loop.
+//! reopened, or none until the first message creates it), the transcript's
+//! mode for the run ([`TranscriptMode`]), and the terminal set up and
+//! restored around the app loop.
 
 use std::sync::mpsc::{channel, Receiver};
 use std::sync::Arc;
@@ -15,6 +16,8 @@ use crate::agent_bridge::{with_model, AgentBridge, AgentReply, StatusSink};
 use crate::app::App;
 use crate::app_event::{AppEvent, AppEventSender};
 use crate::chatwidget::{ChatWidget, ChatWidgetInit};
+use crate::history_cell::HistoryRenderMode;
+use crate::transcript_mode::{is_ssh_session, TranscriptMode};
 use crate::tui::{self, FrameRequester, InputReader, Tui};
 
 /// The channel the interface is told on, made before the Agent is: the
@@ -53,6 +56,9 @@ pub struct TuiOptions {
     pub directory: String,
     /// A session to reopen in place of a new one.
     pub resume: Option<TuiResume>,
+    /// Keeps the transcript in the terminal's scrollback, whatever
+    /// `[tui]` prefers (`--no-alt-screen`).
+    pub no_alt_screen: bool,
 }
 
 /// Which session `hanafubuki-agent resume` reopens.
@@ -75,7 +81,7 @@ pub fn run(
     agent: &AgentHandle,
     options: TuiOptions,
 ) -> Result<(), String> {
-    let mut bridge = AgentBridge::new(
+    let bridge = AgentBridge::new(
         agent.clone(),
         runtime.slot().clone(),
         options.model.clone(),
@@ -85,30 +91,52 @@ pub fn run(
         Some(session_id) => bridge.open(session_id)?,
         None => bridge.no_session()?,
     };
+    let preferences = bridge.tui_preferences();
+    let mode = TranscriptMode::resolve(&preferences, options.no_alt_screen, is_ssh_session());
+    let render_mode = if preferences.raw_output {
+        HistoryRenderMode::Raw
+    } else {
+        HistoryRenderMode::Rich
+    };
     let terminal = tui::init().map_err(|error| format!("the terminal: {error}"))?;
     let restore = RestoreOnDrop;
     let enhanced_keys_supported = tui::enhanced_keys_supported();
     let mut tui = Tui::new(terminal);
     let input = InputReader::start(events.sender.clone())
         .map_err(|error| format!("the terminal's input: {error}"))?;
-    let mut chat_widget = ChatWidget::new(ChatWidgetInit {
+    let chat_widget = ChatWidget::new(ChatWidgetInit {
         app_event_tx: events.sender.clone(),
         frame_requester: FrameRequester::new(events.sender.clone()),
         enhanced_keys_supported,
         directory: options.directory,
+        owned_transcript: mode.is_owned(),
+        fullscreen_preference: preferences.fullscreen_transcript,
     });
-    if let Some(update) = bridge.reply(AgentReply::SessionOpened(opened)) {
-        chat_widget.handle_turn_update(update);
+    let mut app = App::new(
+        chat_widget,
+        bridge,
+        events.sender.clone(),
+        mode,
+        render_mode,
+    );
+    if mode.is_owned() {
+        app.enter_owned_screen(&mut tui)
+            .map_err(|error| format!("the terminal's alternate screen: {error}"))?;
+    }
+    if let Some(update) = app.bridge.reply(AgentReply::SessionOpened(opened)) {
+        app.show_update(update);
     }
     if let Some(prompt) = options.prompt {
-        chat_widget.submit_user_message(prompt);
+        app.chat_widget.submit_user_message(prompt);
     }
-    let mut app = App::new(chat_widget, bridge, events.sender.clone());
     if options.resume == Some(TuiResume::Picker) {
         app.open_resume_picker(&mut tui, true);
     }
     let result = app.run(&mut tui, &events.receiver);
     drop(input);
+    if mode.is_owned() {
+        let _ = tui.leave_alt_screen();
+    }
     let left = tui.leave();
     drop(restore);
     result

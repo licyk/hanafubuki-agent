@@ -18,7 +18,8 @@ use crate::recovery::{AgentConfigProblem, AgentConfigRecovery};
 use crate::settings::{decode_settings, validate_disabled_plugins};
 use crate::{
     AgentProviderRegistrySettings, AgentSettings, AgentSettingsPatch, AgentStandaloneSettings,
-    ConfigLayerSource, ConfigLayers, McpSettingsStore,
+    AgentTuiPreferences, AgentTuiPreferencesPatch, ConfigLayerSource, ConfigLayers,
+    McpSettingsStore,
 };
 
 /// The settings, without credentials.
@@ -104,6 +105,30 @@ impl AgentConfig {
     /// supplies its own.
     pub fn standalone_settings(&self) -> Result<AgentStandaloneSettings, String> {
         self.resolved().map(|resolved| resolved.standalone)
+    }
+
+    /// The terminal interface's preferences (`[tui]`), with the layers
+    /// applied; a host's configuration has the defaults.
+    pub fn tui_preferences(&self) -> Result<AgentTuiPreferences, String> {
+        self.standalone_settings().map(|standalone| standalone.tui)
+    }
+
+    /// Writes the keys `patch` names into the `[tui]` table of the user's
+    /// `config.toml`, keeping the rest of the file as written, and returns
+    /// the preferences as the layers now resolve them.
+    pub fn write_tui_preferences(
+        &self,
+        patch: AgentTuiPreferencesPatch,
+    ) -> Result<AgentTuiPreferences, String> {
+        {
+            let mut cached = self.inner.settings.lock();
+            // A file that needs repair is kept in `.recovery/` before the
+            // write changes it.
+            self.load_user_settings()?;
+            self.inner.settings_file.write(&patch.document())?;
+            *cached = None;
+        }
+        self.tui_preferences()
     }
 
     /// The settings read so far, without reading the file: `None` before

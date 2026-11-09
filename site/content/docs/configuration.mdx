@@ -14,11 +14,11 @@ icon: Settings
 
 ## 三个文件 [#files]
 
-| 文件             | 内容                                                                       | 分层 | 权限                 |
-| ---------------- | -------------------------------------------------------------------------- | ---- | -------------------- |
-| `config.toml`    | 设置：权限模式、记忆、插件、网页工具、代理、日志级别；配置档；受信任的项目 | 有   | 普通                 |
-| `providers.toml` | 模型 Provider、它们的令牌，以及模型策略（模型、推理强度、压缩）            | 无   | 仅自己可读（`0600`） |
-| `mcp.toml`       | MCP 服务器及其凭据                                                         | 无   | 仅自己可读（`0600`） |
+| 文件             | 内容                                                                                 | 分层 | 权限                 |
+| ---------------- | ------------------------------------------------------------------------------------ | ---- | -------------------- |
+| `config.toml`    | 设置：权限模式、记忆、插件、网页工具、代理、日志级别、终端界面；配置档；受信任的项目 | 有   | 普通                 |
+| `providers.toml` | 模型 Provider、它们的令牌，以及模型策略（模型、推理强度、压缩）                      | 无   | 仅自己可读（`0600`） |
+| `mcp.toml`       | MCP 服务器及其凭据                                                                   | 无   | 仅自己可读（`0600`） |
 
 文件在需要时才创建：第一次 `config set` 时创建 `config.toml`，第一次 `providers add` 时创建 `providers.toml`，依此类推。没有文件时使用默认值。所有键使用 camelCase。每个键的类型和默认值见[配置参考](/docs/config-reference)。
 
@@ -41,6 +41,7 @@ hanafubuki-agent config get memory      # 一个表
 hanafubuki-agent config set logLevel debug
 hanafubuki-agent config set memory.enabled true
 hanafubuki-agent config set network.proxy http://127.0.0.1:7890
+hanafubuki-agent config set tui.alternateScreen never
 hanafubuki-agent config set profiles.review.permissionMode auto_review
 hanafubuki-agent config set "projects.'$PWD'.trustLevel" trusted
 ```
@@ -59,7 +60,7 @@ hanafubuki-agent config set "projects.'$PWD'.trustLevel" trusted
 error: `nosuch` is not a setting of config.toml
 ```
 
-写入只修改这一个键，保留文件中的注释和其他内容。`config set` 不能删除一个键；要删除，请编辑文件。
+写入只修改这一个键，保留文件中的注释和其他内容。`config set` 不能删除一个键；要删除，请编辑文件。终端界面的 [`/tui` 和 `/raw`](/docs/terminal-interface#modes) 以同样的方式写入它们的 `[tui]` 键。
 
 ## 编辑文件 [#edit]
 
@@ -83,6 +84,10 @@ enabled = true
 
 [network]
 proxy = "http://127.0.0.1:7890"
+
+[tui]
+fullscreenTranscript = true
+rawOutput = false
 
 # hanafubuki-agent -p review
 [profiles.review]
