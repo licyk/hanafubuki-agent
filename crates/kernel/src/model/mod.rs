@@ -19,6 +19,7 @@ pub use conversation_item::{
 pub use error::{AgentError, AgentShutdownDiagnostic};
 pub use event::{
     AgentContinuationHookOutcome, AgentEvent, AgentEventBatch, AgentEventKind, AgentEventSink,
+    AgentHookEvent, AgentHookOutcome,
 };
 pub use hanafubuki_agent_contracts::{
     AgentActivityAction, AgentActivityId, AgentActivityPresentation, AgentCompactionGeneration,

@@ -27,6 +27,9 @@ impl AgentService {
         .with_spec_cache(self.inner.tool_spec_cache.clone())
         .build(context, cancellation)
         .await
-        .map(|plan| plan.with_approval_rules(registries.approval_rules.snapshot()))
+        .map(|plan| {
+            plan.with_approval_rules(registries.approval_rules.snapshot())
+                .with_tool_lifecycle_hooks(registries.tool_lifecycle_hooks.ordered())
+        })
     }
 }

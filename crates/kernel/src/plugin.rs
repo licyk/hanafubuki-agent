@@ -2,8 +2,8 @@ use std::sync::Arc;
 
 use hanafubuki_agent_contracts::{
     ApprovalRuleRegistry, ContextRegistry, ContextRendererRegistry, ContinuationHookRegistry,
-    ObserverRegistry, PluginFaults, PromptContributorRegistry, RegistryService, ToolRegistry,
-    ToolSourceRegistry, TurnAdmissionRegistry,
+    ObserverRegistry, PluginFaults, PromptContributorRegistry, RegistryService,
+    ToolLifecycleHookRegistry, ToolRegistry, ToolSourceRegistry, TurnAdmissionRegistry,
 };
 use kardia_core::{Context, PluginDef, Service};
 
@@ -31,6 +31,9 @@ pub struct AgentKernelRegistries {
     /// The hooks asked before a final answer ends a turn, snapshotted per
     /// sampling step.
     pub continuation_hooks: Arc<ContinuationHookRegistry>,
+    /// The hooks asked around each tool call, frozen with each sampling
+    /// step's tool plan.
+    pub tool_lifecycle_hooks: Arc<ToolLifecycleHookRegistry>,
     /// Told what the kernel committed, after the commit is durable.
     pub observers: Arc<ObserverRegistry>,
     /// Where every registry's entries, and plugins' scoped workers, report a
@@ -59,6 +62,7 @@ impl Default for AgentKernelRegistries {
             prompt: Arc::new(PromptContributorRegistry::with_faults(faults.clone())),
             approval_rules: Arc::new(ApprovalRuleRegistry::with_faults(faults.clone())),
             continuation_hooks: Arc::new(ContinuationHookRegistry::with_faults(faults.clone())),
+            tool_lifecycle_hooks: Arc::new(ToolLifecycleHookRegistry::with_faults(faults.clone())),
             observers: Arc::new(ObserverRegistry::with_faults(faults.clone())),
             faults,
         }
@@ -79,6 +83,7 @@ pub fn kernel_plugin(registries: AgentKernelRegistries) -> PluginDef {
             ctx.provide_arc(registries.prompt)?;
             ctx.provide_arc(registries.approval_rules)?;
             ctx.provide_arc(registries.continuation_hooks)?;
+            ctx.provide_arc(registries.tool_lifecycle_hooks)?;
             ctx.provide_arc(registries.observers)?;
             ctx.provide_arc(registries.faults)?;
             Ok(())
@@ -94,6 +99,7 @@ pub fn kernel_plugin(registries: AgentKernelRegistries) -> PluginDef {
         PromptContributorRegistry::NAME,
         ApprovalRuleRegistry::NAME,
         ContinuationHookRegistry::NAME,
+        ToolLifecycleHookRegistry::NAME,
         ObserverRegistry::NAME,
         PluginFaults::NAME,
     ])

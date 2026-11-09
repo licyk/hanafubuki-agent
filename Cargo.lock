@@ -1633,11 +1633,13 @@ dependencies = [
  "hanafubuki-agent-execution",
  "hanafubuki-agent-foundation",
  "hanafubuki-agent-history",
+ "hanafubuki-agent-hooks",
  "hanafubuki-agent-host",
  "hanafubuki-agent-kernel",
  "hanafubuki-agent-mcp",
  "hanafubuki-agent-memory",
  "hanafubuki-agent-plugin-execution",
+ "hanafubuki-agent-plugin-hooks",
  "hanafubuki-agent-plugin-mcp",
  "hanafubuki-agent-plugin-web",
  "hanafubuki-agent-plugin-workspace-fs",
@@ -1776,6 +1778,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "hanafubuki-agent-hooks"
+version = "0.2.0"
+dependencies = [
+ "hanafubuki-agent-foundation",
+ "hanafubuki-agent-process",
+ "log",
+ "parking_lot",
+ "regex",
+ "serde",
+ "serde_json",
+ "sha2 0.11.1",
+ "tempfile",
+ "toml",
+]
+
+[[package]]
 name = "hanafubuki-agent-host"
 version = "0.2.0"
 dependencies = [
@@ -1883,6 +1901,24 @@ dependencies = [
  "kardia-core",
  "log",
  "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "hanafubuki-agent-plugin-hooks"
+version = "0.2.0"
+dependencies = [
+ "hanafubuki-agent-contracts",
+ "hanafubuki-agent-foundation",
+ "hanafubuki-agent-hooks",
+ "hanafubuki-agent-process",
+ "hanafubuki-agent-tool-contracts",
+ "kardia-core",
+ "log",
+ "parking_lot",
+ "serde_json",
+ "sha2 0.11.1",
+ "tempfile",
  "tokio",
 ]
 

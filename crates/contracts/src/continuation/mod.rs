@@ -97,6 +97,13 @@ pub type AgentContinuationHookFuture<'a> = Pin<
 /// and the registry cancels when the hook's plugin stops. The kernel bounds
 /// each call by the turn's tool idle timeout.
 pub trait AgentContinuationHook: Send + Sync {
+    /// Whether the hook has anything to decide for `context`: a pure,
+    /// bounded inspection. The kernel neither calls nor reports a hook that
+    /// does not apply.
+    fn applies(&self, _context: &AgentContinuationContext) -> bool {
+        true
+    }
+
     fn evaluate<'a>(
         &'a self,
         context: AgentContinuationContext,

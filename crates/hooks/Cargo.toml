@@ -1,0 +1,22 @@
+[package]
+name = "hanafubuki-agent-hooks"
+description = "Hooks for hanafubuki-agent: the user's and the project's commands run around tool calls, prompts and final answers, each trusted by the hash of its definition"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+hanafubuki-agent-foundation.workspace = true
+hanafubuki-agent-process.workspace = true
+log.workspace = true
+parking_lot.workspace = true
+regex.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+sha2.workspace = true
+toml = "1.1"
+
+[dev-dependencies]
+tempfile.workspace = true

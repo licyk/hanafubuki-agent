@@ -51,6 +51,7 @@ pub use contributor::{AgentToolCatalogContext, AgentToolSelection};
 pub(crate) use contributor::{AgentToolContribution, AgentToolContributor, AgentToolPlanner};
 pub use error::{validate_dynamic_tool_arguments, AgentToolCatalogError};
 pub(crate) use kernel_tools::CoreAgentToolContributor;
+pub(crate) use plan::ToolLifecycleHookEntry;
 pub use plan::{AgentToolPlan, AgentToolSearchMatch};
 pub(crate) use registered::RegisteredAgentToolContributor;
 pub use registration::{

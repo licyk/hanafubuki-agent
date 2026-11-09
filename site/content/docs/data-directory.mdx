@@ -40,6 +40,7 @@ Linux 上的位置遵循 `$XDG_CONFIG_HOME` 和 `$XDG_DATA_HOME`。
 | `crash-record.json`         | 最近一次崩溃的记录                                                                                                                                                                 |
 | `process-groups.json`       | Agent 启动的进程组。下次启动时会清理上次遗留的进程                                                                                                                                 |
 | `worktrees/`                | Agent 创建的 Git 工作树，每个是 `<仓库>-<id>`，一个分离的检出；它所属的会话记录在它的 Git 元数据中（仓库里该工作树自己的 `HEAD` 旁的 `hanafubuki-agent-owner.json`），随它一起删除 |
+| `hooks-state.json`          | 你信任了哪些[钩子](/docs/configuration#hooks-trust)（每个钩子定义的哈希），关闭了哪些；无法读取的文件会被移到一旁，所有钩子重新变为不信任                                          |
 | `.lock`                     | 数据目录锁                                                                                                                                                                         |
 
 所有文件都是在需要时才创建的。

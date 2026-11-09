@@ -24,6 +24,7 @@ pub mod prompt;
 pub mod session;
 pub mod skills;
 pub mod tokens;
+pub mod tool_lifecycle;
 pub mod tools;
 
 pub use activity::{AgentActivityAction, AgentActivityPresentation, AgentToolPresentation};
@@ -77,6 +78,11 @@ pub use prompt::{
 pub use session::{AgentSessionMode, AgentTurnOrigin};
 pub use skills::{SelectableSkill, SelectableSkills};
 pub use tokens::{estimate_tokens, token_budget_bytes};
+pub use tool_lifecycle::{
+    PostToolUseDecision, PostToolUseFuture, PreToolUseDecision, PreToolUseFuture,
+    ToolLifecycleCall, ToolLifecycleHook, ToolLifecycleHookError, ToolLifecycleHookRegistration,
+    ToolLifecycleHookRegistry, ToolLifecyclePhase, MAXIMUM_TOOL_LIFECYCLE_HOOKS,
+};
 pub use tools::{
     decode_arguments, object_arguments, verify_tool_approval, AgentMemoryContextEffect,
     AgentToolError, AgentToolHandler, AgentToolOmission, AgentToolSource, SourcedTool,

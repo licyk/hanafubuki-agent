@@ -50,6 +50,7 @@ fn request() -> ContextRequest {
         session_id: crate::AgentSessionId::new(1),
         mode: crate::AgentSessionMode::Default,
         permission_mode: crate::AgentPermissionMode::Manual,
+        user_message: None,
         turn: TurnExtensions::default(),
     }
 }

@@ -1,3 +1,5 @@
+use hanafubuki_agent_contracts::ToolLifecycleCall;
+
 use super::*;
 
 /// A call that ran to an output, waiting for its commit.
@@ -6,6 +8,9 @@ struct CompletedCall {
     started: Instant,
     output: AgentToolOutput,
     memory_context_effect: crate::AgentMemoryContextEffect,
+    /// What the call's post-tool-use hooks added, committed after the
+    /// step's outputs.
+    hook_context: Vec<ConversationItem>,
 }
 
 impl AgentService {
@@ -67,12 +72,14 @@ impl AgentService {
             .collect::<Vec<Option<Result<CompletedCall, AgentError>>>>();
         let mut next_commit = 0;
         let mut first_error = None;
+        let mut hook_context = Vec::new();
         while let Some((index, result)) = calls.next().await {
             results[index] = Some(result);
             while let Some(result) = results.get_mut(next_commit).and_then(Option::take) {
                 next_commit += 1;
                 match result {
-                    Ok(completed) => {
+                    Ok(mut completed) => {
+                        hook_context.append(&mut completed.hook_context);
                         self.commit_completed_call(identity, completed, memory, event_sink)
                             .await?
                     }
@@ -82,10 +89,15 @@ impl AgentService {
                 }
             }
         }
-        match first_error {
-            Some(error) => Err(error),
-            None => self.check_cancelled(identity),
+        if let Some(error) = first_error {
+            return Err(error);
         }
+        self.check_cancelled(identity)?;
+        if !hook_context.is_empty() {
+            self.commit_history(identity, &hook_context, event_sink)
+                .await?;
+        }
+        Ok(())
     }
 
     /// One call, from its disposition to its output.
@@ -100,19 +112,52 @@ impl AgentService {
     ) -> Result<CompletedCall, AgentError> {
         let started = Instant::now();
         let plan = runtime.catalog();
+        let mut hook_context = Vec::new();
         let (output, rejected) = match disposition {
-            CallDisposition::Run(ref registration) => (
-                self.execute_tool_call(
-                    identity,
-                    &normalized_call(&call, registration),
-                    registration,
-                    runtime,
-                    cancellation,
-                    event_sink,
-                )
-                .await?,
-                false,
-            ),
+            CallDisposition::Run(ref registration) => {
+                let normalized = normalized_call(&call, registration);
+                let hooks = plan.tool_lifecycle_hooks();
+                let lifecycle = ToolLifecycleCall {
+                    session_id: identity.session_id,
+                    turn_id: identity.turn_id,
+                    generation: identity.generation,
+                    call_id: call.call_id.clone(),
+                    tool_name: registration.model_spec.name.clone(),
+                    arguments: normalized.arguments.clone(),
+                };
+                let denial = self
+                    .run_pre_tool_use_hooks(identity, &lifecycle, hooks, &cancellation, event_sink)
+                    .await?;
+                let output = match denial {
+                    Some(reason) => {
+                        AgentToolOutput::model_visible_error(json!({ "error": reason }))
+                    }
+                    None => {
+                        let output = self
+                            .execute_tool_call(
+                                identity,
+                                &normalized,
+                                registration,
+                                runtime,
+                                cancellation.clone(),
+                                event_sink,
+                            )
+                            .await?;
+                        hook_context = self
+                            .run_post_tool_use_hooks(
+                                identity,
+                                &lifecycle,
+                                &output.output,
+                                hooks,
+                                &cancellation,
+                                event_sink,
+                            )
+                            .await?;
+                        output
+                    }
+                };
+                (output, false)
+            }
             CallDisposition::Reject { ref output, .. } => {
                 log::debug!(
                     "agent_diag stage=tool.reject session_id={} turn_id={} generation={} outcome=recoverable",
@@ -150,6 +195,7 @@ impl AgentService {
             started,
             output,
             memory_context_effect,
+            hook_context,
         })
     }
 
@@ -165,6 +211,7 @@ impl AgentService {
             started,
             output,
             memory_context_effect,
+            hook_context: _,
         } = completed;
         self.finish_tool_call(identity, &call, output, event_sink)
             .await?;

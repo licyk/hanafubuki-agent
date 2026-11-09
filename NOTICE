@@ -44,7 +44,16 @@ Third-party notices
   - the side conversation's policy and boundary
     (`crates/agent/src/side_conversation.rs`) are derived from Codex's
     `codex-rs/context-fragments/src/side_conversation.rs` (commit
-    `57a808a392`), as its first lines say.
+    `57a808a392`), as its first lines say;
+  - the hooks, `crates/hooks` (`src/event.rs`, `src/matcher.rs`,
+    `src/config.rs`, `src/discovery.rs`, `src/command.rs`, `src/output.rs`
+    and `src/engine.rs`), are derived from Codex's `codex-rs/hooks`
+    (`src/lib.rs`, `src/engine/matcher.rs`, `src/engine/discovery.rs`,
+    `src/engine/command_runner.rs`, `src/engine/output_parser.rs`,
+    `src/schema.rs` and `src/events`), `codex-rs/protocol/src/hooks.rs`,
+    `codex-rs/config/src/hook_config.rs`, `codex-rs/config/src/fingerprint.rs`
+    and `codex-rs/core/src/tools/hook_names.rs` (commit `57a808a392`); each
+    says so in its first lines.
   Codex's NOTICE and its license follow.
 - Ratatui (https://github.com/ratatui/ratatui), MIT License: Codex's
   `custom_terminal.rs`, ported as `crates/tui/src/custom_terminal.rs`, is

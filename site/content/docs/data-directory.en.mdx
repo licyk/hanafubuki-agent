@@ -40,6 +40,7 @@ A relative path in either is taken from the current directory.
 | `crash-record.json`         | The record of the latest crash                                                                                                                                                                                                                   |
 | `process-groups.json`       | The process groups the Agent started; the next start cleans up any left behind                                                                                                                                                                   |
 | `worktrees/`                | The Git worktrees the Agent made, each `<repository>-<id>`, a detached checkout; the session one belongs to is recorded in its Git metadata (`hanafubuki-agent-owner.json` beside the worktree's own `HEAD` in the repository), and goes with it |
+| `hooks-state.json`          | Which [hooks](/docs/configuration#hooks-trust) you trusted (the hash of each one's definition) and which you turned off; a file that cannot be read is moved aside and every hook is untrusted again                                             |
 | `.lock`                     | The data directory's lock                                                                                                                                                                                                                        |
 
 Each file is created when it is first needed.

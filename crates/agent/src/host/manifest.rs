@@ -5,8 +5,10 @@
 
 use hanafubuki_agent_config::AgentWebSearchProvider;
 use hanafubuki_agent_execution::AgentExecutionService;
+use hanafubuki_agent_hooks::HooksEngine;
 use hanafubuki_agent_mcp::McpManager;
 use hanafubuki_agent_plugin_execution::execution_plugin;
+use hanafubuki_agent_plugin_hooks::{hooks_plugin, WorkingDirectory};
 use hanafubuki_agent_plugin_mcp::mcp_plugin;
 use hanafubuki_agent_plugin_web::{
     web_plugin, WebPluginConfig, WebProviderSetting, WebProxySetting,
@@ -50,6 +52,11 @@ pub(crate) struct AgentPluginInputs {
     /// The worktrees, under the data directory, over the instance's
     /// executor.
     pub(crate) worktrees: WorktreeManager,
+    /// The user's and a trusted project's hooks, over the instance's
+    /// executor.
+    pub(crate) hooks: Arc<HooksEngine>,
+    /// Where a hook's command runs: the first workspace root.
+    pub(crate) working_directory: WorkingDirectory,
 }
 
 /// The manifest rows in mount order. Each declares its group, which the
@@ -82,6 +89,10 @@ pub(crate) fn agent_plugin_manifest(
         AgentPluginRow::unconfigured(Capability, titles_plugin(inputs.titles)),
         AgentPluginRow::unconfigured(Capability, recap_plugin(inputs.conversations)),
         AgentPluginRow::unconfigured(Capability, worktree_plugin(inputs.worktrees)),
+        AgentPluginRow::unconfigured(
+            Capability,
+            hooks_plugin(inputs.hooks, inputs.working_directory),
+        ),
     ];
     rows.extend(host);
     rows.extend([

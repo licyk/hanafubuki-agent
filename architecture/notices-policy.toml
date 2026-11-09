@@ -64,6 +64,41 @@ path = "crates/worktree/src/owner.rs"
 markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
 notice = "crates/worktree"
 
+[[derived]]
+path = "crates/hooks/src/event.rs"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
+notice = "crates/hooks"
+
+[[derived]]
+path = "crates/hooks/src/matcher.rs"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
+notice = "crates/hooks"
+
+[[derived]]
+path = "crates/hooks/src/config.rs"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
+notice = "crates/hooks"
+
+[[derived]]
+path = "crates/hooks/src/discovery.rs"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
+notice = "crates/hooks"
+
+[[derived]]
+path = "crates/hooks/src/command.rs"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
+notice = "crates/hooks"
+
+[[derived]]
+path = "crates/hooks/src/output.rs"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
+notice = "crates/hooks"
+
+[[derived]]
+path = "crates/hooks/src/engine.rs"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
+notice = "crates/hooks"
+
 [[mit]]
 path = "crates/tui/src/custom_terminal.rs"
 holder = "Copyright (c) 2016-2022 Florian Dehau"

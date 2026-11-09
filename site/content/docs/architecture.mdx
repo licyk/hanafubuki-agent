@@ -18,16 +18,16 @@ Agent 是一个**内核**（`hanafubuki-agent-kernel`），拥有会话、轮次
 
 依赖只向下指。`cargo xtask check-dependencies` 按层表（`xtask/src/dependencies.rs` 的 `LAYERS`）检查每个成员只依赖它那一行允许的成员。
 
-| 层         | crate                                                                                                     | 作用                                                                                                                            |
-| ---------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| 中性机制   | `foundation`、`tool-contracts`、`process`、`runtime`、`host`                                              | 路径、取消、阻塞边界、panic 隔离；工具规格类型；进程所有权；被隔离的 Tokio 运行时；通用模块宿主（注册表、租约、故障、重启策略） |
-| 领域       | `approval`、`skills`、`web-search`、`model-api`、`workspace-fs`、`execution`、`mcp`、`memory`、`worktree` | 各自独立、可单独测试的能力                                                                                                      |
-| 插件 API   | `contracts`                                                                                               | 注册表与扩展点契约；重新导出 `host` 的注册与故障机制，插件只依赖它                                                              |
-| 内核与历史 | `kernel`、`history`                                                                                       | 会话、轮次循环、工具规划与流水线、请求组装、世界状态、压缩、审批流程、恢复；JSONL 历史与 SQLite 索引                            |
-| 插件       | `plugin-web`、`plugin-workspace-fs`、`plugin-execution`、`plugin-mcp`、`plugin-worktree`                  | 每个把一个领域 crate 绑定到扩展点，或作为服务提供给门面的调用                                                                   |
-| 配置       | `config`                                                                                                  | Agent 自己的配置（`AgentConfig`）：三个 TOML 文件，独立模式下分层                                                               |
-| 门面       | `hanafubuki-agent`（`crates/agent`）                                                                      | 组合：插件宿主与清单、Agent 自己的插件、槽位、服务 API、宿主接口、独立运行时、数据目录锁、日志                                  |
-| 界面       | `tui`、`cli`                                                                                              | 终端界面（只依赖门面）和 `hanafubuki-agent` 二进制（依赖门面与终端界面）                                                        |
+| 层         | crate                                                                                                              | 作用                                                                                                                            |
+| ---------- | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| 中性机制   | `foundation`、`tool-contracts`、`process`、`runtime`、`host`                                                       | 路径、取消、阻塞边界、panic 隔离；工具规格类型；进程所有权；被隔离的 Tokio 运行时；通用模块宿主（注册表、租约、故障、重启策略） |
+| 领域       | `approval`、`skills`、`web-search`、`model-api`、`workspace-fs`、`execution`、`mcp`、`memory`、`worktree`、`hooks` | 各自独立、可单独测试的能力                                                                                                      |
+| 插件 API   | `contracts`                                                                                                        | 注册表与扩展点契约；重新导出 `host` 的注册与故障机制，插件只依赖它                                                              |
+| 内核与历史 | `kernel`、`history`                                                                                                | 会话、轮次循环、工具规划与流水线、请求组装、世界状态、压缩、审批流程、恢复；JSONL 历史与 SQLite 索引                            |
+| 插件       | `plugin-web`、`plugin-workspace-fs`、`plugin-execution`、`plugin-mcp`、`plugin-worktree`、`plugin-hooks`           | 每个把一个领域 crate 绑定到扩展点，或作为服务提供给门面的调用                                                                   |
+| 配置       | `config`                                                                                                           | Agent 自己的配置（`AgentConfig`）：三个 TOML 文件，独立模式下分层                                                               |
+| 门面       | `hanafubuki-agent`（`crates/agent`）                                                                               | 组合：插件宿主与清单、Agent 自己的插件、槽位、服务 API、宿主接口、独立运行时、数据目录锁、日志                                  |
+| 界面       | `tui`、`cli`                                                                                                       | 终端界面（只依赖门面）和 `hanafubuki-agent` 二进制（依赖门面与终端界面）                                                        |
 
 （表中省略了 `hanafubuki-agent-` 前缀。）除了层表，检查还执行与表无关的规则：不依赖任何 Hanafubuki crate（任何来源）；内核不依赖任何插件；插件依赖插件 API，不依赖内核、门面或其他插件；每个插件 crate 都是门面的依赖（门面挂载它）；只有门面依赖配置 crate；`host` 只依赖 `foundation`；kardia 只出现在 `host`、插件 API、内核、插件和门面中，而且从不使用 `kardia` 门面 crate（它带有 WASM/dylib 热重载）。
 
@@ -46,14 +46,14 @@ Agent 是一个**内核**（`hanafubuki-agent-kernel`），拥有会话、轮次
         ├── Core:       agent-host-services（BlockingService）
         │               agent-kernel（发布 AgentKernelRegistries）
         ├── Capability: web、workspace-fs、view-image、execution、mcp、memory、skills、titles、
-        │               recap、worktree
+        │               recap、worktree、hooks
         ├── 宿主行:     Hanafubuki 的 tasks、instances（Capability）、ui-context（Context）
         └── Context:    workspace-context、permission-mode
 ```
 
 - **`AgentSlot`** 保存 Agent 的状态（`Disabled`、`Starting`、`Running`、`Faulted`、`Stopping`、`Failed`、`Stopped`）并监督它：每次启动构建自己的被隔离运行时，构造并恢复服务，启动插件，然后在后台连接 MCP 服务器。持有者每次调用时重新解析槽位，所以没有旧的 Agent 能被继续访问。
 - **`AgentHost`** 是通用 `ModuleHost` 的 Agent 配置：两个核心行，然后是清单（`host/manifest.rs`）中每个启用的行，宿主的行在其中；每行在前一行就绪或超时（`PLUGIN_START_TIMEOUT`，20 秒）后挂载。配置从 Agent 的设置和宿主的代理派生，启用状态来自 `disabledPlugins`。
-- **注册表在运行时启动前由内核创建**，`agent-kernel` 插件发布它们；插件注入并注册条目。共九个：工具、工具源、上下文贡献者、上下文渲染器、轮次准入、提示贡献者、审批规则、继续钩子、观察者。内核在固定的时刻读取每个注册表的快照（每个采样步骤、每个请求、轮次准入、提交之后）。
+- **注册表在运行时启动前由内核创建**，`agent-kernel` 插件发布它们；插件注入并注册条目。共十个：工具、工具源、上下文贡献者、上下文渲染器、轮次准入、提示贡献者、审批规则、继续钩子、工具生命周期钩子、观察者。内核在固定的时刻读取每个注册表的快照（每个采样步骤、每个请求、轮次准入、提交之后）。
 - **注册是调用者的副作用。** 条目属于注册它的插件并随它离开：停止中的插件先把条目从新快照中隐藏，等待租用中的调用（`DRAIN_GRACE`），再取消它们。无法接受的注册（重复的 ID、保留或冲突的工具名、同一类型的第二个贡献者或渲染器）让注册的插件启动失败，不影响任何轮次。
 
 ### 故障 [#faults]
@@ -67,7 +67,7 @@ Agent 是一个**内核**（`hanafubuki-agent-kernel`），拥有会话、轮次
 | MCP 服务器的工具调用 panic | `McpTool::invoke` 中的 `catch_panic_async`                                                                     | 那次调用的“internal error”；那台服务器 `Failed` 并重连；`mcp` 插件和其他服务器继续运行                                                               |
 | 内核代码 panic             | 轮次任务、命令守卫、Agent 的工作线程组、宿主任务（`spawn_kernel_task`）                                        | 报告给实例的 `AgentKernelFaultSink`；槽位把 Agent 标为 `Faulted`，停止它，2 秒、10 秒、30 秒后启动新实例，从磁盘重建会话                             |
 
-**功能插件失败只损失它的功能。** 门面作为调用提供的功能（概要、标题建议、工作树）由它的插件行提供的服务承担，每次调用时解析；该行关闭、启动中、失败或重启时，调用返回带原因的 `FeatureUnavailable`，其他一切不变（[宿主、配置与状态](/docs/plugin-rules#host-configuration-and-status)）。
+**功能插件失败只损失它的功能。** 门面作为调用提供的功能（概要、标题建议、工作树、钩子的列表与信任）由它的插件行提供的服务承担，每次调用时解析；该行关闭、启动中、失败或重启时，调用返回带原因的 `FeatureUnavailable`，其他一切不变（[宿主、配置与状态](/docs/plugin-rules#host-configuration-and-status)）。
 
 **为什么内核故障要重建整个 Agent：** 锁不会中毒（全部使用 `parking_lot`），所以 panic 后什么都不会回滚，内存中的会话状态可能只改了一半；磁盘上的历史才是一致的副本。
 
@@ -83,7 +83,7 @@ Agent 是一个**内核**（`hanafubuki-agent-kernel`），拥有会话、轮次
 - **谱系。** 会话在创建时记录它所在的工作区（主根目录及其 Git 分支）；如果它是子会话，还记录它的父会话和来源（`Side`、`Subagent`、`Review`）。分叉和子会话沿用来源的工作区。`create_child_session` 用父会话的模型和配置创建子会话，可以是空的，也可以从父会话最近的回合边界开始（它的头部，或正在运行的轮次之前的状态），并在创建时一并提交给它的上下文条目（继续上下文）。
 - **临时会话**和其他会话在同一个会话表里，运行轮次的方式也完全一样，区别只在历史存储。内核的存储是 `SessionStores`：它按会话 ID 把每个会话的提交和读取分到持久存储，或分到内存中的 `EphemeralAgentHistoryStore`。所有 ID 都由持久存储分配，两者从不共用；会话列表和恢复只读持久存储，所以临时会话从不被列出或恢复，`close_ephemeral_session`（或进程结束）会丢弃它。它的记录只包含它自己提交的内容，而它的模型历史从继承来的内容开始；继承来的图片通过它们所属的持久会话读取。在每条提交路径上加标志会改动每一条路径；改为路由存储则一条也不用改。
 - **会话驱动器。** `AgentSessionDriver` 是应用驱动子会话的窄端口：创建子会话、运行一个轮次并等待结果、中断、读取最后的回答、关闭（停止它的后台终端，临时会话则丢弃）。外观层接受的每个轮次也由它准备（会话的 Provider、权限模式、世界状态和轮次扩展），所以它运行的轮次和用户的轮次准备得一样。旁路对话是它的第一个调用方；子代理和评审插件以后也会通过它使用会话。
-- **轮次**作为托管的 Tokio 任务运行，经过 `Sampling`、`RunningTools`、`WaitingForUserInput`，以 `Completed`、`Cancelled`、`Failed` 或 `Interrupted` 结束。循环的每次迭代可能自动压缩，用冻结的工具计划对模型采样，运行工具，消费 steering 输入，并询问继续钩子。轮次自身工作中的 panic 让轮次以 `Failed`（`InternalFailure`）结束，会话接受下一个轮次。
+- **轮次**作为托管的 Tokio 任务运行，经过 `Sampling`、`RunningTools`、`WaitingForUserInput`，以 `Completed`、`Cancelled`、`Failed` 或 `Interrupted` 结束。循环的每次迭代可能自动压缩，用冻结的工具计划对模型采样，运行工具（每个都在适用于它的工具生命周期钩子之间），消费 steering 输入，并询问继续钩子。轮次自身工作中的 panic 让轮次以 `Failed`（`InternalFailure`）结束，会话接受下一个轮次。
 - **持久化先于可见。** 每次修改先持久提交到历史，才对外可见；提交失败恢复内存状态。提交在会话单元（cell）的锁下暂存，当追加被确认时结算：发布持久化的修订号或回滚，然后才发出事件。结算在历史写入线程上的确认中运行，而不是在等待的 future 里，所以 future 被丢弃时它照样发生。
 - **会话之间从不互相等待。** `SessionTable` 只在查找、插入或删除时持有它的锁；每个单元有自己的锁，只在内存中工作时持有，从不跨越 await、历史追加或其他 I/O，也从不同时持有另一个单元的锁。
 - **取消**先协作，再中止任务，并在 5 秒内确认。被重启打断的轮次在恢复时变为 `Interrupted`。恢复拒绝的会话被**隔离**而不是致命：不改写也不删除它的任何文件，其他会话照常打开。

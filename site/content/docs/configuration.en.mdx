@@ -72,6 +72,61 @@ Opens the user's `config.toml` in `$VISUAL` or `$EDITOR` (creating the directory
 
 What you edit by hand is read the next time the Agent starts. A value in it the Agent cannot use is repaired, after the original file is copied into `.recovery/`; see [Configuration recovery](/docs/recovery).
 
+## Hooks [#hooks]
+
+Hooks are commands you configure to run when the Agent raises an event: before or after a tool call, when a session starts, when you submit a message, before a turn ends. The format is Codex's, so its `hooks.json` files and `[hooks]` tables work as they are. A hook runs only once you trusted it.
+
+They are read from two places, each as `hooks.json` and as the `[hooks]` table of `config.toml` (prefer one of the two):
+
+- the configuration directory, the user's own hooks;
+- a project's `.hanafubuki-agent/`, when the project's configuration is read: the user's `config.toml` trusts the project ([Configuration layers](/docs/config-layers#projects)) and the project has a `.hanafubuki-agent/config.toml`.
+
+They are read again when each turn starts, so an edit takes effect from the next turn, without a restart.
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|exec_command",
+        "hooks": [{ "type": "command", "command": "~/bin/check-command.sh", "timeout": 30 }]
+      }
+    ],
+    "Stop": [{ "hooks": [{ "type": "command", "command": "~/bin/tests-pass.sh" }] }]
+  }
+}
+```
+
+The same in `config.toml`:
+
+```toml
+[[hooks.PreToolUse]]
+matcher = "Bash|exec_command"
+
+[[hooks.PreToolUse.hooks]]
+type = "command"
+command = "~/bin/check-command.sh"
+timeout = 30
+```
+
+| Event              | When                                                              | `matcher` matches                                                                      | The hook can                                                                                                                                                                                                                                   |
+| ------------------ | ----------------------------------------------------------------- | -------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PreToolUse`       | before a tool call's approval                                     | the tool's name (`exec_command` also as `Bash`, `apply_patch` also as `Write`, `Edit`) | deny the call: exit code 2 with the reason on stderr, or `{"hookSpecificOutput": {"permissionDecision": "deny", "permissionDecisionReason": "…"}}` (or `{"decision": "block", "reason": "…"}`); the model reads the reason as the call's error |
+| `PostToolUse`      | after a call ran                                                  | the tool's name, as above                                                              | add context for the model: `{"hookSpecificOutput": {"additionalContext": "…"}}`, or exit code 2 with it on stderr                                                                                                                              |
+| `SessionStart`     | at a session's first turn (once per session while the Agent runs) | `startup`                                                                              | add context for the session: plain text on stdout, or `additionalContext`                                                                                                                                                                      |
+| `UserPromptSubmit` | when you submit a message                                         | (not used)                                                                             | add context for the turn: plain text on stdout, or `additionalContext`; it cannot block the message                                                                                                                                            |
+| `Stop`             | when the model gives its final answer                             | (not used)                                                                             | keep the turn going: `{"decision": "block", "reason": "…"}` or exit code 2, the reason being the model's next instruction; `{"continue": false}` ends the turn                                                                                 |
+
+- A **matcher** that is empty or `*` matches everything; names joined by `|` match one of them exactly; anything else is a regular expression.
+- A **command** runs through your shell (`$SHELL -lc`, `%COMSPEC% /C` on Windows) in the working directory, with the event as JSON on its stdin: `session_id`, `turn_id`, `cwd`, `hook_event_name` and the event's own fields (`tool_name`, `tool_input`, `tool_use_id` and `tool_response`; `prompt`; `source`; `stop_hook_active` and `last_assistant_message`). `commandWindows` replaces it on Windows. `timeout` is in seconds (600 by default); `statusMessage` is shown while it runs.
+- Exit code 0 with nothing on stdout does nothing. Another exit code, a timeout, or JSON that cannot be read is the hook's failure: it is logged and has no effect, so a broken hook never stops a call or a turn. A hook's output is read leniently: a field the Agent does not use is ignored.
+- Hooks of one event run one after another, in the order they are configured (the user's first); the first denial ends a `PreToolUse`.
+- Codex's other events (`PermissionRequest`, `PreCompact`, `PostCompact`, `SessionEnd`, `SubagentStart`, `SubagentStop`, `PreModelRequest`, `PostModelRequest`, `Interrupt`) and its `mcp_tool`, `prompt` and `agent` hooks, and `async` commands, are not supported: they are reported and never run. Whatever in the files cannot be used is skipped, one entry at a time; the rest still loads.
+
+### Trust [#hooks-trust]
+
+A hook runs only once you trusted it, and while it is enabled. Each hook has a key, `<file>:<event>:<group>:<hook>` (`/home/me/.config/hanafubuki-agent/hooks.json:pre_tool_use:0:0`), and trusting it records the hash of its definition (its event, matcher, command, timeout and status message). A hook whose definition changed is `modified` and does not run until you trust it again. An application over the Agent lists the hooks with their trust, trusts them and turns them on and off through the facade's hook calls ([Feature calls](/docs/embedding#feature-calls)). The trust and enablement are kept in the data directory's `hooks-state.json`, not in `config.toml`; Codex's `[hooks.state]` is ignored.
+
 ## Example [#example]
 
 ```toml

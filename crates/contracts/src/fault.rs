@@ -26,6 +26,7 @@ pub enum ExtensionPoint {
     PromptContribute,
     ApprovalRule,
     ContinuationHook,
+    ToolLifecycleHook,
     Observer,
 }
 
@@ -42,6 +43,7 @@ impl From<ExtensionPoint> for FaultPoint {
             ExtensionPoint::PromptContribute => "prompt contribute",
             ExtensionPoint::ApprovalRule => "approval rule",
             ExtensionPoint::ContinuationHook => "continuation hook",
+            ExtensionPoint::ToolLifecycleHook => "tool lifecycle hook",
             ExtensionPoint::Observer => "observer",
         })
     }

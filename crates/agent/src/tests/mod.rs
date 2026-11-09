@@ -23,6 +23,8 @@ mod executions;
 mod features;
 #[cfg(target_os = "linux")]
 mod golden;
+#[cfg(unix)]
+mod hooks;
 mod memory;
 #[cfg(unix)]
 mod pipeline;

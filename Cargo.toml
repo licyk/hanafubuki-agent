@@ -18,12 +18,14 @@ hanafubuki-agent-contracts = { path = "crates/contracts", version = "0.2.0" }
 hanafubuki-agent-execution = { path = "crates/execution", version = "0.2.0" }
 hanafubuki-agent-foundation = { path = "crates/foundation", version = "0.2.0" }
 hanafubuki-agent-history = { path = "crates/history", version = "0.2.0" }
+hanafubuki-agent-hooks = { path = "crates/hooks", version = "0.2.0" }
 hanafubuki-agent-host = { path = "crates/host", version = "0.2.0" }
 hanafubuki-agent-kernel = { path = "crates/kernel", version = "0.2.0" }
 hanafubuki-agent-mcp = { path = "crates/mcp", version = "0.2.0" }
 hanafubuki-agent-memory = { path = "crates/memory", version = "0.2.0" }
 hanafubuki-agent-model-api = { path = "crates/model-api", version = "0.2.0" }
 hanafubuki-agent-plugin-execution = { path = "crates/plugin-execution", version = "0.2.0" }
+hanafubuki-agent-plugin-hooks = { path = "crates/plugin-hooks", version = "0.2.0" }
 hanafubuki-agent-plugin-mcp = { path = "crates/plugin-mcp", version = "0.2.0" }
 hanafubuki-agent-plugin-web = { path = "crates/plugin-web", version = "0.2.0" }
 hanafubuki-agent-plugin-workspace-fs = { path = "crates/plugin-workspace-fs", version = "0.2.0" }
@@ -49,6 +51,7 @@ kardia-core = "0.2.0"
 kardia-macros = "0.2.0"
 log = "0.4"
 parking_lot = "0.12"
+regex = "1"
 reqwest = { version = "0.13", default-features = false }
 rmcp = { version = "3.5.0", default-features = false }
 rusqlite = "0.41"

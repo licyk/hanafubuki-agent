@@ -15,6 +15,7 @@ fn request(turn: TurnExtensions) -> ContextRequest {
         session_id: hanafubuki_agent_kernel::AgentSessionId::new(1),
         mode: hanafubuki_agent_kernel::AgentSessionMode::Default,
         permission_mode: hanafubuki_agent_kernel::AgentPermissionMode::FullAccess,
+        user_message: None,
         turn,
     }
 }

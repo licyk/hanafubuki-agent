@@ -53,6 +53,9 @@ pub struct ContextRequest {
     pub session_id: AgentSessionId,
     pub mode: AgentSessionMode,
     pub permission_mode: AgentPermissionMode,
+    /// The text of the user's message the turn was submitted with; `None`
+    /// for a turn that has none (implementing a plan, say).
+    pub user_message: Option<String>,
     /// Host inputs keyed by type (for example the UI context the user
     /// submitted with the turn). A contributor reads the type it knows and
     /// treats a missing value as "not supplied for this turn".

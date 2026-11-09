@@ -1,5 +1,11 @@
 use super::*;
 
+pub(crate) type ToolLifecycleHookEntry = Arc<
+    hanafubuki_agent_contracts::RegistryEntry<
+        hanafubuki_agent_contracts::ToolLifecycleHookRegistration,
+    >,
+>;
+
 #[derive(Clone)]
 pub struct AgentToolPlan {
     pub revision: AgentToolCatalogRevision,
@@ -9,6 +15,7 @@ pub struct AgentToolPlan {
     native_tool_search: bool,
     leases: Vec<Arc<dyn ToolPlanLease>>,
     approval_rules: Option<hanafubuki_agent_contracts::ApprovalRuleSnapshot>,
+    tool_lifecycle_hooks: Vec<ToolLifecycleHookEntry>,
     omissions: Vec<AgentToolOmission>,
     search_index: Arc<AgentToolSearchIndex>,
     admitted_deferred_tools: BTreeSet<AgentToolSelection>,
@@ -141,6 +148,7 @@ impl AgentToolPlan {
             native_tool_search,
             leases: Vec::new(),
             approval_rules: None,
+            tool_lifecycle_hooks: Vec::new(),
             omissions: {
                 omissions.truncate(MAX_AGENT_TOOL_OMISSIONS);
                 omissions
@@ -163,6 +171,18 @@ impl AgentToolPlan {
     ) -> Self {
         self.approval_rules = Some(rules);
         self
+    }
+
+    /// Freezes the tool lifecycle hooks this step's calls are run with, in
+    /// the order they are asked.
+    pub(crate) fn with_tool_lifecycle_hooks(mut self, hooks: Vec<ToolLifecycleHookEntry>) -> Self {
+        self.tool_lifecycle_hooks = hooks;
+        self
+    }
+
+    /// The tool lifecycle hooks frozen with the plan, in order.
+    pub(crate) fn tool_lifecycle_hooks(&self) -> &[ToolLifecycleHookEntry] {
+        &self.tool_lifecycle_hooks
     }
 
     /// The approval rules frozen with the plan; `None` only for plans built

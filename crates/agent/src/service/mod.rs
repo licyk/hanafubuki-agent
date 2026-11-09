@@ -61,6 +61,8 @@ mod turns;
 mod workspace;
 mod worktree;
 pub use worktree::AgentWorktree;
+mod hooks;
+pub use hooks::{AgentHook, AgentHookHandler, AgentHooks};
 
 /// What the application hands the Agent when it builds it.
 pub struct AgentServiceInputs {
@@ -379,6 +381,12 @@ impl AgentApplicationService {
                         storage_paths.worktrees_root.clone(),
                         executor.clone(),
                     ),
+                    hooks: Arc::new(hanafubuki_agent_hooks::HooksEngine::new(
+                        hooks::hook_sources(&config)?,
+                        storage_paths.hooks_state_file.clone(),
+                        executor.clone(),
+                    )),
+                    working_directory: hooks::working_directory(workspace.clone()),
                 },
                 host.plugins,
             ),

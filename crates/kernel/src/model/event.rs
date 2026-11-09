@@ -16,6 +16,29 @@ pub enum AgentContinuationHookOutcome {
     Failed,
 }
 
+/// When a tool lifecycle hook ran.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentHookEvent {
+    PreToolUse,
+    PostToolUse,
+}
+
+/// How the kernel ended one tool lifecycle hook call.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentHookOutcome {
+    Passed,
+    /// The call was denied and did not run.
+    Denied,
+    /// Context was added after the step's tool outputs.
+    AddedContext,
+    /// The hook failed and had no say.
+    Failed,
+    /// The hook ran past the turn's tool idle timeout and had no say.
+    TimedOut,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(
     tag = "type",
@@ -139,6 +162,20 @@ pub enum AgentEventKind {
         provider_id: String,
         hook_id: String,
         outcome: AgentContinuationHookOutcome,
+    },
+    /// A tool lifecycle hook started for the call `call_id`.
+    HookStarted {
+        provider_id: String,
+        hook_id: String,
+        call_id: String,
+        event: AgentHookEvent,
+    },
+    HookCompleted {
+        provider_id: String,
+        hook_id: String,
+        call_id: String,
+        event: AgentHookEvent,
+        outcome: AgentHookOutcome,
     },
     SteeringAccepted {
         sequence: AgentSteeringSequence,

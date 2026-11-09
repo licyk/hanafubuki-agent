@@ -11,6 +11,8 @@ use crate::{AgentSettings, AgentStandaloneSettings};
 
 pub(crate) const PROFILES: &str = "profiles";
 pub(crate) const PROJECTS: &str = "projects";
+/// Read by the hooks plugin from each layer's file, not by the settings.
+pub(crate) const HOOKS: &str = "hooks";
 pub(crate) const TRUST_LEVEL: &str = "trustLevel";
 /// The values of a project's `trustLevel`; only the first trusts it.
 const TRUST_LEVELS: [&str; 2] = ["trusted", "untrusted"];

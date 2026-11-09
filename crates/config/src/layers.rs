@@ -15,7 +15,7 @@ use serde_json::{Map, Value};
 
 use crate::fields::unknown_keys;
 use crate::file::{ConfigFile, FileAccess, FileRead};
-use crate::keys::{PROFILES, PROJECTS, TRUST_LEVEL};
+use crate::keys::{HOOKS, PROFILES, PROJECTS, TRUST_LEVEL};
 use crate::settings::decode_settings;
 use crate::standalone::decode_standalone;
 use crate::store::object;
@@ -85,7 +85,7 @@ impl ConfigLayers {
             &user_source,
             document,
             &resolved,
-            &[PROFILES, PROJECTS],
+            &[PROFILES, PROJECTS, HOOKS],
             repairs,
         )?;
         if let Some(name) = &self.profile {
@@ -188,7 +188,7 @@ fn apply(source: &str, layer: &Map<String, Value>, resolved: &mut Resolved) -> R
         settings,
         standalone,
     };
-    report(source, layer, resolved, &[], repairs)
+    report(source, layer, resolved, &[HOOKS], repairs)
 }
 
 /// Logs the keys of `layer` the settings do not have (but those in

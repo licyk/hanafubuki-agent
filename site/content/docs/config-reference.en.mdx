@@ -88,6 +88,16 @@ Other keys under `[tui]` are kept in the file and ignored.
 
 Both go only in the user's `config.toml`.
 
+### Hooks [#hooks]
+
+| Key                   | Type and values                                                                                                   | Means                                                                                           |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `hooks.EVENT`         | An array of matcher groups, `[[hooks.PreToolUse]]`                                                                | The hooks of `EVENT`: `PreToolUse`, `PostToolUse`, `SessionStart`, `UserPromptSubmit` or `Stop` |
+| `hooks.EVENT.matcher` | A string; empty or `*` by default                                                                                 | The tool names (or the session start's source) the group's hooks run for                        |
+| `hooks.EVENT.hooks`   | An array of hooks: `type = "command"`, `command`, and `commandWindows`, `timeout` (seconds, 600), `statusMessage` | The commands to run                                                                             |
+
+The user's file and a read project's file may both have them, as may a `hooks.json` beside each. They are not settings: `config get` and `config set` do not reach them, and a hook's trust and enablement are not keys of `config.toml` (see [Hooks](/docs/configuration#hooks)).
+
 ## providers.toml [#providers-toml]
 
 `providers.toml` has no layers and is readable by its owner only. The `providers` commands usually change it; settings such as the reasoning effort are edited by hand. Quit any running Agent before you edit it.

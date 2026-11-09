@@ -159,7 +159,9 @@ impl AgentActivityTracker {
                 now,
             ),
             AgentEventKind::PermissionReviewStarted { .. }
-            | AgentEventKind::PermissionReviewCompleted { .. } => None,
+            | AgentEventKind::PermissionReviewCompleted { .. }
+            | AgentEventKind::HookStarted { .. }
+            | AgentEventKind::HookCompleted { .. } => None,
             AgentEventKind::ContinuationHookStarted {
                 provider_id,
                 hook_id,

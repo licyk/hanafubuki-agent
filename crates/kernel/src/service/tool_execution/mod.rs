@@ -4,6 +4,7 @@ mod completion;
 mod context;
 mod fixed;
 mod handler;
+mod hooks;
 mod plan;
 mod rejection;
 mod scheduler;

@@ -43,6 +43,7 @@ impl AgentApplicationService {
                 session_id,
                 session.mode,
                 input.permission_mode,
+                Some(input.text.clone()),
                 TurnExtensions::default(),
             )
             .await?;
@@ -74,7 +75,13 @@ impl AgentApplicationService {
         let permission_mode = self.driver.turn_permission_mode(session_id).await?;
         let world_state = self
             .driver
-            .collect_world_state(session_id, session.mode, permission_mode, input.host)
+            .collect_world_state(
+                session_id,
+                session.mode,
+                permission_mode,
+                Some(input.text.clone()),
+                input.host,
+            )
             .await
             .map_err(|error| error.to_string())?;
         let turn = self
@@ -147,6 +154,7 @@ impl AgentApplicationService {
                 request.session_id,
                 AgentSessionMode::Default,
                 permission_mode,
+                None,
                 TurnExtensions::default(),
             )
             .await

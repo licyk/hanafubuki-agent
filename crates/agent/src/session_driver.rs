@@ -92,6 +92,7 @@ impl AgentSessionDriver {
                 session_id,
                 session.mode,
                 permission_mode,
+                Some(text.clone()),
                 TurnExtensions::default(),
             )
             .await?;
@@ -276,18 +277,21 @@ impl AgentSessionDriver {
     }
 
     /// The turn's world state, from the context contributors plugins
-    /// registered. `host` is what the host submitted with the turn.
+    /// registered. `user_message` is the text the turn was submitted with,
+    /// `host` what the host submitted with it.
     pub(crate) async fn collect_world_state(
         &self,
         session_id: AgentSessionId,
         mode: AgentSessionMode,
         permission_mode: AgentPermissionMode,
+        user_message: Option<String>,
         host: TurnExtensions,
     ) -> Result<AgentWorldStateSnapshot, AgentError> {
         let request = ContextRequest {
             session_id,
             mode,
             permission_mode,
+            user_message,
             turn: host,
         };
         hanafubuki_agent_kernel::collect_world_state(&self.registries.context, &request).await

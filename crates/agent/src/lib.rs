@@ -66,6 +66,9 @@ pub use hanafubuki_agent_foundation::blocking::{run_blocking_operation, Blocking
 pub use hanafubuki_agent_foundation::secrets::{
     SecretFuture, SecretKey, SecretStore, SecretStoreError,
 };
+/// What a hook in [`AgentHook`] is for, where it comes from and whether it
+/// is trusted.
+pub use hanafubuki_agent_hooks::{HookEventName, HookSource, HookTrust};
 pub use host::{
     AgentPluginContextContribution, AgentPluginContributions, AgentPluginEventSink,
     AgentPluginGroup, AgentPluginLock, AgentPluginRow, AgentPluginState, AgentPluginStatus,
@@ -76,9 +79,9 @@ pub use memory::AgentMemoryApplication;
 pub use network::{AgentProxy, NetworkSettingsPort};
 pub use plugins::AgentRecap;
 pub use service::{
-    AgentApplicationService, AgentHostPorts, AgentModelPolicyWriteRequest,
-    AgentProviderDeleteRequest, AgentProviderDraft, AgentProviderEnabledRequest,
-    AgentProviderModelCatalogRequest, AgentProviderModelCatalogResult,
+    AgentApplicationService, AgentHook, AgentHookHandler, AgentHooks, AgentHostPorts,
+    AgentModelPolicyWriteRequest, AgentProviderDeleteRequest, AgentProviderDraft,
+    AgentProviderEnabledRequest, AgentProviderModelCatalogRequest, AgentProviderModelCatalogResult,
     AgentProviderRegistrySnapshot, AgentProviderWriteRequest, AgentRunProjection,
     AgentServiceInputs, AgentSessionModelSelectionRequest, AgentSessionReasoningEffortRequest,
     AgentSettingsView, AgentSkillSessionState, AgentWorktree, LocalSkillInstallRequest,

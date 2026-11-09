@@ -1,0 +1,25 @@
+[package]
+name = "hanafubuki-agent-plugin-hooks"
+description = "The hanafubuki-agent plugin that runs the user's hooks around tool calls, at a session's start, on a prompt and before a turn ends"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+hanafubuki-agent-contracts.workspace = true
+hanafubuki-agent-foundation.workspace = true
+hanafubuki-agent-hooks.workspace = true
+hanafubuki-agent-tool-contracts.workspace = true
+kardia-core.workspace = true
+log.workspace = true
+parking_lot.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+
+[dev-dependencies]
+hanafubuki-agent-contracts = { workspace = true, features = ["test-support"] }
+hanafubuki-agent-process.workspace = true
+tempfile.workspace = true
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }

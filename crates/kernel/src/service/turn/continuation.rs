@@ -32,6 +32,18 @@ impl AgentService {
         let mut items = Vec::new();
         for entry in hooks {
             self.check_cancelled(identity)?;
+            // A hook with nothing to decide is neither called nor reported;
+            // one whose `applies` panics does not apply (and faults its
+            // plugin).
+            if !entry
+                .guard(
+                    hanafubuki_agent_contracts::ExtensionPoint::ContinuationHook,
+                    |registration| registration.hook.applies(&context),
+                )
+                .unwrap_or(false)
+            {
+                continue;
+            }
             // A hook whose plugin is stopping is no longer registered; one
             // that stops while it runs is cancelled through this token.
             let hook_cancellation = cancellation.child();

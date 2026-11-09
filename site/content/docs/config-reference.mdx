@@ -88,6 +88,16 @@ icon: ListTree
 
 这两个只能写在用户的 `config.toml` 中。
 
+### 钩子 [#hooks]
+
+| 键                   | 类型和取值                                                                                            | 含义                                                                                     |
+| -------------------- | ----------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `hooks.事件`         | matcher 组的数组，`[[hooks.PreToolUse]]`                                                              | `事件` 的钩子：`PreToolUse`、`PostToolUse`、`SessionStart`、`UserPromptSubmit` 或 `Stop` |
+| `hooks.事件.matcher` | 字符串；默认为空或 `*`                                                                                | 组内钩子针对的工具名（或会话开始的来源）                                                 |
+| `hooks.事件.hooks`   | 钩子数组：`type = "command"`、`command`，以及 `commandWindows`、`timeout`（秒，600）、`statusMessage` | 要运行的命令                                                                             |
+
+用户的文件和被读取的项目文件都可以有它们，各自旁边的 `hooks.json` 也可以。它们不是设置：`config get` 和 `config set` 不处理它们，钩子的信任与启用状态也不是 `config.toml` 的键（见[钩子](/docs/configuration#hooks)）。
+
 ## providers.toml [#providers-toml]
 
 `providers.toml` 没有分层，只有自己可读。通常用 `providers` 命令修改；推理强度等设置需要直接编辑。修改时请先退出正在运行的 Agent。
