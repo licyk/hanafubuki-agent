@@ -742,3 +742,69 @@ fn a_command_whose_sandbox_is_unavailable_fails_closed() {
     let command = &process.starts()[0].command;
     assert_eq!(command[1..], ["-lc", "printf unified"]);
 }
+
+/// A command the model asked to run outside its sandbox has an approval of
+/// its own: the sandboxed command's does not start it, nor its the
+/// sandboxed one. Approved, it runs as it is, even where the sandbox it
+/// leaves is unavailable.
+#[test]
+#[cfg(unix)]
+fn an_escalated_command_has_its_own_approval_and_runs_unconfined() {
+    let process = FakeAgentExecutionProcessPort::shared();
+    process.finish_on_start("", 0);
+    let service = AgentExecutionService::with_sandbox(
+        process.clone(),
+        hanafubuki_agent_sandbox::Sandbox::unavailable("simulated"),
+    );
+    let mut sandboxed = exec_request(false);
+    sandboxed.sandbox.mode = hanafubuki_agent_sandbox::AgentSandboxMode::FullAccess;
+    let mut escalated = exec_request(false);
+    escalated.sandbox.mode = hanafubuki_agent_sandbox::AgentSandboxMode::WorkspaceWrite;
+    escalated.sandbox_escalation = Some(hanafubuki_agent_approval::SandboxEscalation {
+        justification: Some("Run it outside?".to_string()),
+    });
+    let sandboxed_action = service.prepare_exec_command_action(&sandboxed).unwrap();
+    let escalated_action = service.prepare_exec_command_action(&escalated).unwrap();
+    assert_ne!(sandboxed_action.digest, escalated_action.digest);
+    assert_eq!(sandboxed_action.details, escalated_action.details);
+    assert_eq!(
+        escalated_action.summary,
+        format!(
+            "Run Posix command outside the sandbox in {}: printf unified (reason: Run it outside?)",
+            std::env::current_dir().unwrap().display()
+        )
+    );
+
+    let scope = AgentExecutionScope::for_agent_session(42).unwrap();
+    let mismatched = service.start_exec_command(
+        scope.clone(),
+        escalated.clone(),
+        Some(&approve_action(&sandboxed_action)),
+        &CancellationToken::default(),
+    );
+    assert!(matches!(
+        mismatched,
+        Err(AgentExecutionError::ApprovalMismatch)
+    ));
+    let mismatched = service.start_exec_command(
+        scope.clone(),
+        sandboxed,
+        Some(&approve_action(&escalated_action)),
+        &CancellationToken::default(),
+    );
+    assert!(matches!(
+        mismatched,
+        Err(AgentExecutionError::ApprovalMismatch)
+    ));
+    assert!(process.starts().is_empty());
+
+    service
+        .start_exec_command(
+            scope,
+            escalated,
+            Some(&approve_action(&escalated_action)),
+            &CancellationToken::default(),
+        )
+        .unwrap();
+    assert_eq!(process.starts()[0].command[1..], ["-lc", "printf unified"]);
+}

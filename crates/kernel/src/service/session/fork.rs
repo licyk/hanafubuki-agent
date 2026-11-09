@@ -148,7 +148,7 @@ impl AgentService {
                 activities: AgentActivityTracker::default(),
                 task_plan: None,
                 pending_user_input: None,
-                allowed_tools: BTreeSet::new(),
+                allowances: BTreeSet::new(),
                 permission_mode: None,
                 sandbox_mode: None,
             },

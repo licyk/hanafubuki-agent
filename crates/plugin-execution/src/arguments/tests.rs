@@ -160,3 +160,61 @@ fn out_of_range_waits_and_caps_are_clamped_with_a_note() {
         Err(ToolCallValidationError::MissingArgument("cols"))
     ));
 }
+
+/// Codex's `sandbox_permissions` and `justification`: `require_escalated`
+/// asks to leave the sandbox, with the justification if there is one; a
+/// justification without an explicit choice is an error the model reads.
+#[test]
+fn sandbox_permissions_asks_to_leave_the_sandbox_with_a_justification() {
+    let escalation = |permissions: Value, justification: Value| {
+        let arguments = json!({
+            "cmd": "program",
+            "shell": null,
+            "login": null,
+            "tty": null,
+            "yield_time_ms": null,
+            "max_output_bytes": null,
+            "workdir": null,
+            "sandbox_permissions": permissions,
+            "justification": justification
+        });
+        parse(ExecToolKind::ExecCommand, &arguments).map(|(call, _)| match call {
+            ExecCall::ExecCommand(request) => request.sandbox_escalation,
+            _ => panic!("exec_command parses to a command"),
+        })
+    };
+    assert_eq!(escalation(Value::Null, Value::Null).unwrap(), None);
+    assert_eq!(
+        escalation(json!("use_default"), json!("ignored")).unwrap(),
+        None
+    );
+    assert_eq!(
+        escalation(
+            json!("require_escalated"),
+            json!("Download the dependencies?")
+        )
+        .unwrap(),
+        Some(hanafubuki_agent_approval::SandboxEscalation {
+            justification: Some("Download the dependencies?".to_string())
+        })
+    );
+    assert_eq!(
+        escalation(json!("require_escalated"), json!(" ")).unwrap(),
+        Some(hanafubuki_agent_approval::SandboxEscalation {
+            justification: None
+        })
+    );
+    let error = escalation(Value::Null, json!("Download the dependencies?")).unwrap_err();
+    assert!(
+        error.to_string().starts_with(
+            "invalid tool argument justification: it requires an explicit sandbox_permissions"
+        ),
+        "{error}"
+    );
+    assert!(matches!(
+        escalation(json!("with_additional_permissions"), Value::Null),
+        Err(ToolCallValidationError::InvalidArgument(
+            "sandbox_permissions"
+        ))
+    ));
+}

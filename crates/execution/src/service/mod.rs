@@ -19,7 +19,7 @@ use hanafubuki_agent_process::executor::{
 use hanafubuki_agent_process::ownership::{
     OwnedReleaseStatus, ProcessOwnerId, ProcessReceipt, ProcessReservation,
 };
-use hanafubuki_agent_sandbox::{Sandbox, SandboxSettings};
+use hanafubuki_agent_sandbox::{Sandbox, SandboxPolicy};
 use parking_lot::{Condvar, Mutex, RwLock};
 
 use crate::model::{
@@ -144,7 +144,7 @@ impl AgentExecutionService {
         let prepared = prepare_exec_command(request, self.working_directory().as_deref())?;
         // A command its sandbox cannot run is refused before anyone is
         // asked to approve it.
-        self.sandboxed(prepared.plan.command.clone(), &request.sandbox)?;
+        self.sandboxed(prepared.plan.command.clone(), request)?;
         Ok(prepared.action().clone())
     }
 
@@ -164,13 +164,18 @@ impl AgentExecutionService {
         self.inner.workspace_roots.read().first().cloned()
     }
 
-    /// `command` as `settings` confine it over the workspace roots.
+    /// `command` as `request`'s sandbox confines it over the workspace
+    /// roots; unconfined when the request asked to leave the sandbox (its
+    /// approval said so).
     fn sandboxed(
         &self,
         command: Vec<String>,
-        settings: &SandboxSettings,
+        request: &ExecCommandRequest,
     ) -> Result<Vec<String>, AgentExecutionError> {
-        let policy = settings.policy(&self.workspace_roots());
+        let policy = match request.sandbox_escalation {
+            Some(_) => SandboxPolicy::FullAccess,
+            None => request.sandbox.policy(&self.workspace_roots()),
+        };
         self.inner
             .sandbox
             .wrap(&policy, command)

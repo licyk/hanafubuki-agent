@@ -5,7 +5,7 @@
 use std::path::PathBuf;
 use std::sync::mpsc::Receiver;
 
-use hanafubuki_agent::{AgentPermissionMode, AgentSessionId, AgentWorktree};
+use hanafubuki_agent::{AgentPermissionMode, AgentSandboxMode, AgentSessionId, AgentWorktree};
 use ratatui::crossterm::event::KeyCode;
 
 use super::session::{call, chat, key, run, screen, sent, to_sent, Sent};
@@ -41,7 +41,7 @@ fn cells(sent: Vec<Sent>) -> String {
 }
 
 #[test]
-fn permissions_with_a_mode_sets_it_and_without_one_lists_them() {
+fn permissions_with_a_mode_sets_it_and_without_one_lists_the_presets() {
     let (mut chat, events) = chat(false);
     for (line, mode) in [
         ("permissions manual", AgentPermissionMode::Manual),
@@ -58,9 +58,33 @@ fn permissions_with_a_mode_sets_it_and_without_one_lists_them() {
             "/{line}"
         );
     }
+    // The presets whose names are not a permission mode's set both modes.
+    for (line, mode, sandbox) in [
+        (
+            "permissions read-only",
+            AgentPermissionMode::Manual,
+            AgentSandboxMode::ReadOnly,
+        ),
+        (
+            "permissions Default",
+            AgentPermissionMode::Manual,
+            AgentSandboxMode::WorkspaceWrite,
+        ),
+    ] {
+        assert_eq!(
+            run(&mut chat, &events, line),
+            [
+                Sent::Op(Op::EnsureSession),
+                call(SessionCall::SetPreset(mode, sandbox))
+            ],
+            "/{line}"
+        );
+    }
     let unknown = run(&mut chat, &events, "permissions sometimes");
     assert_eq!(unknown[0], Sent::Op(Op::EnsureSession));
-    assert!(cells(unknown).contains("no mode `sometimes`; use manual, auto-review or full-access"));
+    assert!(cells(unknown).contains(
+        "no preset or mode `sometimes`; use read-only, default, manual, auto-review or full-access"
+    ));
 
     assert_eq!(
         run(&mut chat, &events, "permissions"),
@@ -74,31 +98,66 @@ fn permissions_with_a_mode_sets_it_and_without_one_lists_them() {
         SessionReply::PermissionModes {
             session: None,
             configured: AgentPermissionMode::AutoReview,
+            sandbox: AgentSandboxMode::WorkspaceWrite,
+            sandbox_available: true,
         },
     );
     let shown = screen(&chat, 100);
-    for mode in [
-        "Manual",
+    for preset in [
+        "Read only",
+        "Default",
         "Auto-review",
         "Full access",
         "For this session only",
     ] {
-        assert!(shown.contains(mode), "{mode}: {shown}");
+        assert!(shown.contains(preset), "{preset}: {shown}");
     }
-    // The configured mode is the one in effect: it is selected.
+    // The configured mode and the sandbox in effect make the preset that is
+    // selected.
     key(&mut chat, KeyCode::Enter);
     assert_eq!(
         sent_after_steps(&mut chat, &events),
-        [call(SessionCall::SetPermissionMode(
-            AgentPermissionMode::AutoReview
+        [call(SessionCall::SetPreset(
+            AgentPermissionMode::AutoReview,
+            AgentSandboxMode::WorkspaceWrite
         ))]
     );
 
     reply(
         &mut chat,
-        SessionReply::PermissionModeSet(AgentPermissionMode::AutoReview),
+        SessionReply::PresetSet(
+            AgentPermissionMode::AutoReview,
+            AgentSandboxMode::WorkspaceWrite,
+        ),
     );
-    assert!(cells(sent(&events)).contains("Permissions set to Auto-review for this session"));
+    let shown = cells(sent(&events));
+    assert!(shown.contains("Permissions set to Auto-review for this session"));
+    assert!(shown.contains("sandbox workspace-write"), "{shown}");
+    reply(
+        &mut chat,
+        SessionReply::PermissionModeSet(AgentPermissionMode::Manual),
+    );
+    assert!(cells(sent(&events)).contains("Permissions set to Manual for this session"));
+}
+
+/// Where this machine has no sandbox, the presets that need one cannot be
+/// chosen: their commands would all be refused.
+#[test]
+fn the_sandboxed_presets_are_disabled_without_a_sandbox() {
+    let (mut chat, events) = chat(false);
+    run(&mut chat, &events, "permissions");
+    reply(
+        &mut chat,
+        SessionReply::PermissionModes {
+            session: None,
+            configured: AgentPermissionMode::Manual,
+            sandbox: AgentSandboxMode::FullAccess,
+            sandbox_available: false,
+        },
+    );
+    assert!(screen(&chat, 100).contains("The sandbox is unavailable on this machine"));
+    key(&mut chat, KeyCode::Enter);
+    assert_eq!(sent_after_steps(&mut chat, &events), []);
 }
 
 #[test]
@@ -111,10 +170,12 @@ fn full_access_from_the_list_asks_first_and_cancel_is_selected() {
             SessionReply::PermissionModes {
                 session: Some(AgentPermissionMode::Manual),
                 configured: AgentPermissionMode::AutoReview,
+                sandbox: AgentSandboxMode::WorkspaceWrite,
+                sandbox_available: true,
             },
         );
-        // The session's own mode is in effect: Manual, then Auto-review,
-        // then Full access.
+        // The session's own mode and the sandbox make Default the preset in
+        // effect: Auto-review, then Full access, come after it.
         key(&mut chat, KeyCode::Down);
         key(&mut chat, KeyCode::Down);
         key(&mut chat, KeyCode::Enter);
@@ -125,8 +186,9 @@ fn full_access_from_the_list_asks_first_and_cancel_is_selected() {
         }
         key(&mut chat, KeyCode::Enter);
         let expected = if confirmed {
-            vec![call(SessionCall::SetPermissionMode(
+            vec![call(SessionCall::SetPreset(
                 AgentPermissionMode::FullAccess,
+                AgentSandboxMode::FullAccess,
             ))]
         } else {
             Vec::new()

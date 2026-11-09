@@ -94,7 +94,8 @@ hanafubuki-agent exec --json "列出最大的五个文件"
 
 <Callout type="warn" title="谨慎放行">
   `allow:` 放行的是整个工具，而不是某一条具体命令。`allow:exec_command`
-  意味着模型提出的任何命令都会执行。在 CI 中使用时，确保运行环境是可以丢弃的。
+  意味着模型提出的任何命令都会执行，包括它请求[在沙箱之外](/docs/permissions#escalation)运行的命令。在
+  CI 中使用时，确保运行环境是可以丢弃的。
 </Callout>
 
 ## 保存最终回答 [#output-last-message]

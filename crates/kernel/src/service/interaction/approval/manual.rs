@@ -104,14 +104,14 @@ impl AgentService {
 
     /// Records the user's `AllowForSession`. The allowance lives in the
     /// session's runtime state only, so it ends with the Agent instance.
-    async fn allow_tool_for_session(
+    async fn allow_for_session(
         &self,
         session_id: AgentSessionId,
-        tool: crate::AgentToolSelection,
+        allowance: SessionAllowance,
     ) -> Result<(), AgentError> {
         let cell = self.session(session_id)?;
         let mut record = cell.lock_after_persistence().await?;
-        record.runtime.allowed_tools.insert(tool);
+        record.runtime.allowances.insert(allowance);
         Ok(())
     }
 
@@ -140,7 +140,7 @@ impl AgentService {
                     .consume(grant, &pending.action, &pending.context)
                     .map_err(map_approval_error)?;
                 if resolution.decision == ApprovalDecision::AllowForSession {
-                    self.allow_tool_for_session(identity.session_id, pending.tool.clone())
+                    self.allow_for_session(identity.session_id, pending.allowance.clone())
                         .await?;
                 }
                 (

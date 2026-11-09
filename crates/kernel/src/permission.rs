@@ -33,6 +33,8 @@ const REVIEW_INSTRUCTIONS: &str = concat!(
     "tools. Determine whether the user's messages authorize the exact action and whether its ",
     "risk is acceptable. A user approval entry is the user's explicit authorization of the exact ",
     "action it names, which an earlier review denied; it authorizes nothing else. ",
+    "An action with a sandboxEscalation runs outside the sandbox, with the user's full rights; ",
+    "its justification is the agent's own claim, not the user's authorization. ",
     "Deny when authorization is absent or conflicting, when the action ",
     "materially exceeds the request, or when evidence is insufficient. Return exactly one JSON ",
     "object matching the requested permission assessment schema and no other text."

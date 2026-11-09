@@ -14,9 +14,9 @@ use super::ConversationItem;
 /// (`ContextSectionKind::KNOWN`), a host's context among them. The built-in
 /// kinds have their own slots, so they never use up what plugins may add.
 pub const MAXIMUM_AGENT_PLUGIN_WORLD_STATE_SECTIONS: usize = 7;
-/// Every section a world state may hold: one per known kind (5) and the
+/// Every section a world state may hold: one per known kind (6) and the
 /// plugin kinds. The byte bounds below bound its size.
-pub const MAXIMUM_AGENT_WORLD_STATE_SECTIONS: usize = 5 + MAXIMUM_AGENT_PLUGIN_WORLD_STATE_SECTIONS;
+pub const MAXIMUM_AGENT_WORLD_STATE_SECTIONS: usize = 6 + MAXIMUM_AGENT_PLUGIN_WORLD_STATE_SECTIONS;
 pub const MAXIMUM_AGENT_WORLD_STATE_SECTION_BYTES: usize = 32 * 1024;
 pub const MAXIMUM_AGENT_WORLD_STATE_TOTAL_BYTES: usize = 64 * 1024;
 

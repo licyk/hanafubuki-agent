@@ -1,16 +1,17 @@
 // Modified from OpenAI Codex 57a808a392 (Apache-2.0).
 
-//! `/permissions [manual|auto-review|full-access]`: the session's
-//! permission mode, from a list of the three (the one in effect marked:
-//! the session's, else the configured `permissionMode`), Full access after
-//! a confirmation; or the mode named, at once. It lasts for the session
-//! only (Codex's permissions popup).
+//! `/permissions [preset|mode]`: the session's permissions, from Codex's
+//! presets, each a permission mode with a sandbox mode (the one in effect
+//! marked), Full access after a confirmation; or, at once, the preset
+//! `read-only` or `default`, or the permission mode `manual`, `auto-review`
+//! or `full-access` alone, which keeps the sandbox. It lasts for the
+//! session only (Codex's permissions popup).
 //!
 //! `/approve`: the session's latest actions automatic review denied (the
 //! bridge keeps ten), searchable; the one chosen is approved for one retry,
 //! which is still reviewed (Codex's auto-review denials popup).
 
-use hanafubuki_agent::AgentPermissionMode;
+use hanafubuki_agent::{AgentPermissionMode, AgentSandboxMode};
 
 use super::confirm::{confirm, Confirmation};
 use super::{send_session_call, send_step, CommandContext, CommandSpec};
@@ -21,7 +22,7 @@ use crate::history_cell;
 pub(super) static PERMISSIONS: CommandSpec = CommandSpec {
     name: "permissions",
     aliases: &[],
-    description: "choose what the Agent may do without asking, for this session",
+    description: "choose what the Agent may do without asking, and its sandbox, for this session",
     inline_args: true,
     during_task: true,
     needs_session: true,
@@ -38,10 +39,49 @@ pub(super) static APPROVE: CommandSpec = CommandSpec {
     dispatch: |context, _args| context.session_call(SessionCall::Denials),
 };
 
-const MODES: [AgentPermissionMode; 3] = [
-    AgentPermissionMode::Manual,
-    AgentPermissionMode::AutoReview,
-    AgentPermissionMode::FullAccess,
+/// A permission mode with a sandbox mode (Codex's approval presets, with
+/// its Auto-review).
+struct Preset {
+    /// The argument that applies it; `None` where the name is the
+    /// permission mode's, which applies the mode alone.
+    argument: Option<&'static str>,
+    label: &'static str,
+    description: &'static str,
+    mode: AgentPermissionMode,
+    sandbox: AgentSandboxMode,
+}
+
+const PRESETS: [Preset; 4] = [
+    Preset {
+        argument: Some("read-only"),
+        label: "Read only",
+        description: "Commands can read files but not write them or use the network; you \
+                      approve every operation",
+        mode: AgentPermissionMode::Manual,
+        sandbox: AgentSandboxMode::ReadOnly,
+    },
+    Preset {
+        argument: Some("default"),
+        label: "Default",
+        description: "Commands can read files and edit the workspace, without the network; you \
+                      approve every operation",
+        mode: AgentPermissionMode::Manual,
+        sandbox: AgentSandboxMode::WorkspaceWrite,
+    },
+    Preset {
+        argument: None,
+        label: "Auto-review",
+        description: "As Default, but the session's model reviews each operation and decides",
+        mode: AgentPermissionMode::AutoReview,
+        sandbox: AgentSandboxMode::WorkspaceWrite,
+    },
+    Preset {
+        argument: None,
+        label: "Full access",
+        description: "No sandbox, and every operation runs without asking",
+        mode: AgentPermissionMode::FullAccess,
+        sandbox: AgentSandboxMode::FullAccess,
+    },
 ];
 
 fn dispatch(context: &mut CommandContext<'_>, args: &str) {
@@ -49,17 +89,26 @@ fn dispatch(context: &mut CommandContext<'_>, args: &str) {
     if args.is_empty() {
         return context.session_call(SessionCall::PermissionModes);
     }
-    match parse_mode(args) {
+    let name = args.to_lowercase().replace('_', "-");
+    if let Some(preset) = PRESETS
+        .iter()
+        .find(|preset| preset.argument == Some(name.as_str()))
+    {
+        return context.session_call(SessionCall::SetPreset(preset.mode, preset.sandbox));
+    }
+    match parse_mode(&name) {
         Some(mode) => context.session_call(SessionCall::SetPermissionMode(mode)),
         None => context.add_to_history(history_cell::new_error_event(format!(
-            "/permissions: no mode `{args}`; use manual, auto-review or full-access"
+            "/permissions: no preset or mode `{args}`; use read-only, default, manual, \
+             auto-review or full-access"
         ))),
     }
 }
 
-/// A mode as `--permission-mode` or `config.toml` spells it.
+/// A mode as `--permission-mode` or `config.toml` spells it (lower case,
+/// `-` for `_`).
 fn parse_mode(text: &str) -> Option<AgentPermissionMode> {
-    match text.to_lowercase().replace('_', "-").as_str() {
+    match text {
         "manual" => Some(AgentPermissionMode::Manual),
         "auto-review" => Some(AgentPermissionMode::AutoReview),
         "full-access" => Some(AgentPermissionMode::FullAccess),
@@ -72,7 +121,14 @@ pub(super) fn on_reply(context: &mut CommandContext<'_>, reply: SessionReply) {
         SessionReply::PermissionModes {
             session,
             configured,
-        } => show_modes(context, session.unwrap_or(configured)),
+            sandbox,
+            sandbox_available,
+        } => show_presets(
+            context,
+            session.unwrap_or(configured),
+            sandbox,
+            sandbox_available,
+        ),
         SessionReply::PermissionModeSet(mode) => {
             context.add_to_history(history_cell::new_info_event(
                 format!("Permissions set to {} for this session", label(mode)),
@@ -80,6 +136,21 @@ pub(super) fn on_reply(context: &mut CommandContext<'_>, reply: SessionReply) {
                     "The configured permissionMode stays as it is; a running turn keeps its mode."
                         .to_string(),
                 ),
+            ))
+        }
+        SessionReply::PresetSet(mode, sandbox) => {
+            let preset = PRESETS
+                .iter()
+                .find(|preset| (preset.mode, preset.sandbox) == (mode, sandbox))
+                .map_or("the chosen preset", |preset| preset.label);
+            context.add_to_history(history_cell::new_info_event(
+                format!("Permissions set to {preset} for this session"),
+                Some(format!(
+                    "Permission mode {}, sandbox {}; the configuration stays as it is, and a \
+                     running turn keeps its own.",
+                    label(mode),
+                    sandbox.as_str()
+                )),
             ))
         }
         SessionReply::Denials(denials) => show_denials(context, denials),
@@ -94,25 +165,42 @@ pub(super) fn on_reply(context: &mut CommandContext<'_>, reply: SessionReply) {
     }
 }
 
-fn show_modes(context: &mut CommandContext<'_>, current: AgentPermissionMode) {
-    let items = MODES
-        .into_iter()
-        .map(|mode| SelectionItem {
-            name: label(mode).to_string(),
-            description: Some(description(mode).to_string()),
-            is_current: mode == current,
-            actions: vec![Box::new(move |tx| match mode {
-                AgentPermissionMode::FullAccess => send_step(tx, &PERMISSIONS, confirm_full_access),
-                mode => send_session_call(tx, SessionCall::SetPermissionMode(mode)),
-            })],
-            dismiss_on_select: true,
-            ..Default::default()
+fn show_presets(
+    context: &mut CommandContext<'_>,
+    mode: AgentPermissionMode,
+    sandbox: AgentSandboxMode,
+    sandbox_available: bool,
+) {
+    let items = PRESETS
+        .iter()
+        .map(|preset| {
+            let (preset_mode, preset_sandbox) = (preset.mode, preset.sandbox);
+            // A sandbox this machine cannot give would refuse every command.
+            let unavailable = !sandbox_available && preset_sandbox != AgentSandboxMode::FullAccess;
+            SelectionItem {
+                name: preset.label.to_string(),
+                description: Some(preset.description.to_string()),
+                is_current: (preset_mode, preset_sandbox) == (mode, sandbox),
+                is_disabled: unavailable,
+                disabled_reason: unavailable
+                    .then(|| "The sandbox is unavailable on this machine".to_string()),
+                actions: vec![Box::new(move |tx| match preset_mode {
+                    AgentPermissionMode::FullAccess => {
+                        send_step(tx, &PERMISSIONS, confirm_full_access)
+                    }
+                    mode => send_session_call(tx, SessionCall::SetPreset(mode, preset_sandbox)),
+                })],
+                dismiss_on_select: true,
+                ..Default::default()
+            }
         })
         .collect();
     context.show_selection_view(SelectionViewParams {
         title: Some("Select Permissions".to_string()),
         subtitle: Some(
-            "For this session only; the configured permissionMode stays as it is.".to_string(),
+            "For this session only; the configured permissionMode and sandboxMode stay as they \
+             are."
+                .to_string(),
         ),
         items,
         ..Default::default()
@@ -129,7 +217,10 @@ fn confirm_full_access(context: &mut CommandContext<'_>) {
             no: "Cancel",
             yes: "Yes, continue anyway",
             yes_description: "Apply full access for this session",
-            call: SessionCall::SetPermissionMode(AgentPermissionMode::FullAccess),
+            call: SessionCall::SetPreset(
+                AgentPermissionMode::FullAccess,
+                AgentSandboxMode::FullAccess,
+            ),
         },
     )
 }
@@ -181,15 +272,5 @@ fn label(mode: AgentPermissionMode) -> &'static str {
         AgentPermissionMode::Manual => "Manual",
         AgentPermissionMode::AutoReview => "Auto-review",
         AgentPermissionMode::FullAccess => "Full access",
-    }
-}
-
-fn description(mode: AgentPermissionMode) -> &'static str {
-    match mode {
-        AgentPermissionMode::Manual => "Every operation that needs an approval asks you",
-        AgentPermissionMode::AutoReview => {
-            "The session's model reviews each such operation and decides"
-        }
-        AgentPermissionMode::FullAccess => "Every such operation runs without asking",
     }
 }

@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::path::PathBuf;
 
-use hanafubuki_agent_approval::ApprovalOrigin;
+use hanafubuki_agent_approval::{ApprovalOrigin, SandboxEscalation};
 use hanafubuki_agent_process::executor::{ExecutorIoMode, ExecutorStatus, OutputStream};
 use hanafubuki_agent_sandbox::{SandboxError, SandboxSettings};
 use serde::{Deserialize, Serialize};
@@ -119,6 +119,9 @@ pub struct ExecCommandRequest {
     pub origin: ApprovalOrigin,
     /// The sandbox the command runs in, over the service's workspace roots.
     pub sandbox: SandboxSettings,
+    /// Set when the model asked to run the command outside `sandbox`: its
+    /// approval says so, and once approved it runs unconfined.
+    pub sandbox_escalation: Option<SandboxEscalation>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

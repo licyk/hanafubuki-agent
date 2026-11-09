@@ -84,7 +84,7 @@ Fullscreen 下还有阅读对话的按键：Page Up/Page Down、F3、F4、Ctrl-S
 | `/model`                 | 从已启用 Provider 的模型目录中选择本会话的模型；无法读取目录的 Provider 会显示原因                                                          | 不可用 |
 | `/providers`             | 添加、编辑、测试、启用和删除模型 Provider，并选择默认 Provider 和新会话使用的模型（[见下文](#providers)）                                   | 不可用 |
 | `/mode`                  | 在默认模式和[计划模式](/docs/plan-mode)之间选择                                                                                             | 不可用 |
-| `/permissions [mode]`    | 选择本会话的权限模式，只对本会话有效：Manual、Auto-review，或确认后的 Full access；带模式时直接设置（[见下文](#permissions)）               | 可用   |
+| `/permissions [mode]`    | 选择本会话的权限预设（Read only、Default、Auto-review，或确认后的 Full access）；带预设或模式时直接设置（[见下文](#permissions)）           | 可用   |
 | `/approve`               | 列出本会话中被自动审查拒绝的操作（最近十个）；选中的一个获准重试一次（[见下文](#permissions)）                                              | 可用   |
 | `/skills`                | 列出 [Skill](/docs/skills)、它们是否启用，以及目录中的问题                                                                                  | 可用   |
 | `/rename [name]`         | 重命名会话：打开填有当前标题的输入框，模型给出的建议标题到达后显示出来；带名字时直接重命名（[见下文](#session-commands)）                   | 不可用 |
@@ -146,8 +146,9 @@ Fullscreen 下还有阅读对话的按键：Page Up/Page Down、F3、F4、Ctrl-S
 
 权限模式一开始是配置中的模式（`permissionMode` 或 `--permission-mode`）；见[权限](/docs/permissions#modes)。
 
-- **`/permissions`** 列出 Manual、Auto-review 和 Full access，并选中生效的模式：会话自己的模式，否则是配置的模式。选择 Full access 时会先确认（默认选中 Cancel）。`/permissions manual`、`/permissions auto-review` 或 `/permissions full-access`（也可以写 `auto_review` 和 `full_access`）直接设置模式，不再确认。没有会话时，`/permissions` 会先创建一个。
-- 这个模式只属于本会话，直到界面退出：`permissionMode` 保持不变，其他会话和分叉出的会话仍使用配置的模式，已经在运行的回合保持它开始时的模式。见[单个会话的模式](/docs/permissions#session-mode)。
+- **`/permissions`** 列出 Codex 的[预设](/docs/permissions#presets)，每个都是一个权限模式加一个沙箱模式：Read only（手动，`read-only`）、Default（手动，`workspace-write`）、Auto-review（自动审查，`workspace-write`）和 Full access（完全访问，没有沙箱）。生效的预设被选中：会话自己的模式，否则是配置的模式；两者组成不了预设时，不选中任何一个。选择 Full access 时会先确认（默认选中 Cancel）。这台机器没有沙箱时，需要沙箱的预设不能选择。选中一个预设会为本会话同时设置两种模式。没有会话时，`/permissions` 会先创建一个。
+- **`/permissions read-only`** 或 **`/permissions default`** 直接设置这个预设。**`/permissions manual`**、**`/permissions auto-review`** 或 **`/permissions full-access`**（也可以写 `auto_review` 和 `full_access`）只直接设置权限模式，不再确认，沙箱保持不变：模式的名字不会被当作预设。
+- 这些模式只属于本会话，直到界面退出：`permissionMode` 和 `sandboxMode` 保持不变，其他会话和分叉出的会话仍使用配置的模式，已经在运行的回合保持它开始时的模式。见[单个会话的模式](/docs/permissions#session-mode)和[单个会话的沙箱](/docs/permissions#session-sandbox)。
 - **`/approve`** 列出本会话中被自动审查拒绝的操作，最新的在前：每个都有摘要和审查给出的理由，可以搜索。界面为每个会话保留从打开它起最近的十个，所以恢复的会话不会列出之前的拒绝。选中的操作会获得批准：模型从下一次请求起看到这次批准，重试仍要经过审查（[批准被拒绝的操作](/docs/permissions#approve-denied)）。没有被拒绝的操作时，会显示 `No denied actions to approve.`。回合进行中 Agent 会拒绝批准，对话中会说明原因。
 
 ## 工作目录和工作树 [#worktrees]
@@ -307,6 +308,8 @@ Enter 在会话的副本中编辑：会话在这条消息所在回合之前分�
 | `Yes, proceed`：允许这一次                                                          | `y` 或 `1` |
 | `Yes, and don't ask again this session`：本会话内同类操作不再询问（仅在可用时提供） | `a` 或 `2` |
 | `No`：拒绝                                                                          | `n` 或 Esc |
+
+模型请求[在沙箱之外](/docs/permissions#escalation)运行的命令，会在摘要中说明这一点，并附上模型的问题（`… outside the sandbox in 目录: 命令 (reason: 问题)`）；对它选择本会话内允许，只允许这条命令以后在沙箱外运行。
 
 也可以用 Up/Down 选择后按 Enter。Ctrl-C 拒绝当前请求以及排在后面的所有请求。其他请求会排队，依次弹出。对话记录中会留下 `✔ You approved ...` 或 `✗ You did not approve ...`。
 

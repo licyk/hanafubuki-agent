@@ -12,9 +12,9 @@ use std::path::{Path, PathBuf};
 
 use hanafubuki_agent::{
     AgentBackgroundTerminalSnapshot, AgentError, AgentEventSink, AgentHandle,
-    AgentHistorySortDirection, AgentPermissionMode, AgentRecap, AgentSessionHeadForkRequest,
-    AgentSessionId, AgentSessionRuntimeSnapshot, AgentSessionTitleRenameRequest,
-    AgentTranscriptPageRequest, AgentWorktree, ConversationItem,
+    AgentHistorySortDirection, AgentPermissionMode, AgentRecap, AgentSandboxMode,
+    AgentSessionHeadForkRequest, AgentSessionId, AgentSessionRuntimeSnapshot,
+    AgentSessionTitleRenameRequest, AgentTranscriptPageRequest, AgentWorktree, ConversationItem,
 };
 
 use super::commands::no_session;
@@ -53,9 +53,12 @@ pub(crate) enum SessionCall {
     Terminals,
     StopTerminals,
     Roots,
-    /// `/permissions`: the session's own mode and the configured one.
+    /// `/permissions`: the session's own mode and the configured one, and
+    /// the sandbox in effect.
     PermissionModes,
     SetPermissionMode(AgentPermissionMode),
+    /// A preset: the session's permission mode and sandbox mode.
+    SetPreset(AgentPermissionMode, AgentSandboxMode),
     /// The denials `/approve` offers.
     Denials,
     /// Approves the denial with this review id.
@@ -114,8 +117,14 @@ pub(crate) enum SessionReply {
     PermissionModes {
         session: Option<AgentPermissionMode>,
         configured: AgentPermissionMode,
+        /// The session's sandbox mode, else the configured one, else the
+        /// platform's default.
+        sandbox: AgentSandboxMode,
+        /// Whether this machine can give a sandbox.
+        sandbox_available: bool,
     },
     PermissionModeSet(AgentPermissionMode),
+    PresetSet(AgentPermissionMode, AgentSandboxMode),
     /// The session's latest denials, newest first.
     Denials(Vec<DeniedAction>),
     /// The summary of the action approved.
@@ -156,7 +165,9 @@ impl SessionCall {
             Self::Terminals => "ps",
             Self::StopTerminals => "stop",
             Self::Roots => "pwd",
-            Self::PermissionModes | Self::SetPermissionMode(_) => "permissions",
+            Self::PermissionModes | Self::SetPermissionMode(_) | Self::SetPreset(..) => {
+                "permissions"
+            }
             Self::Denials | Self::ApproveDenial(_) => "approve",
             Self::ChangeDirectory(_) => "cd",
             Self::WorktreeMenu
@@ -325,6 +336,7 @@ impl AgentBridge {
                 return Ok(None);
             }
             SessionCall::SetPermissionMode(mode) => self.set_permission_mode(mode)?,
+            SessionCall::SetPreset(mode, sandbox) => self.set_preset(mode, sandbox)?,
             SessionCall::Denials => self.denials(),
             SessionCall::ApproveDenial(review_id) => self.approve_denial(review_id)?,
             SessionCall::ChangeDirectory(path) => {

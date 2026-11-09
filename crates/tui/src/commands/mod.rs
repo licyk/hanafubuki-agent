@@ -245,9 +245,9 @@ pub(crate) fn session_reply_command(reply: &SessionReply) -> Option<&'static Com
         SessionReply::Terminals(_) => &terminals::PS,
         SessionReply::TerminalsStopped { .. } => &terminals::STOP,
         SessionReply::Roots(_) => &pwd::PWD,
-        SessionReply::PermissionModes { .. } | SessionReply::PermissionModeSet(_) => {
-            &permissions::PERMISSIONS
-        }
+        SessionReply::PermissionModes { .. }
+        | SessionReply::PermissionModeSet(_)
+        | SessionReply::PresetSet(..) => &permissions::PERMISSIONS,
         SessionReply::Denials(_) | SessionReply::Approved(_) => &permissions::APPROVE,
         SessionReply::DirectoryChanged(_) => &cd::CD,
         SessionReply::WorktreeMenu { .. }
@@ -281,6 +281,7 @@ pub(crate) fn on_session_reply(context: &mut CommandContext<'_>, reply: SessionR
         SessionReply::Roots(roots) => pwd::on_reply(context, roots),
         SessionReply::PermissionModes { .. }
         | SessionReply::PermissionModeSet(_)
+        | SessionReply::PresetSet(..)
         | SessionReply::Denials(_)
         | SessionReply::Approved(_) => permissions::on_reply(context, reply),
         SessionReply::DirectoryChanged(roots) => cd::on_reply(context, roots),

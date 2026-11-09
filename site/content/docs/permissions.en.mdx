@@ -25,7 +25,7 @@ A profile can hold it too, such as `[profiles.review] permissionMode = "auto_rev
 
 ### One session's mode [#session-mode]
 
-A session can run in another mode than the configured one, until it ends, without changing `permissionMode`. In the terminal interface `/permissions` sets it: a list of the three modes, Full access after a confirmation, or `/permissions MODE` at once ([Terminal interface](/docs/terminal-interface#permissions)). An embedding host sets it with `set_session_permission_mode` ([Embedding the Agent](/docs/embedding#permissions)).
+A session can run in another mode than the configured one, until it ends, without changing `permissionMode`. In the terminal interface `/permissions` sets it, with the session's sandbox as a [preset](#presets) or alone with `/permissions MODE` ([Terminal interface](/docs/terminal-interface#permissions)). An embedding host sets it with `set_session_permission_mode` ([Embedding the Agent](/docs/embedding#permissions)).
 
 - It can be changed at any time. A running turn keeps the mode it started with; the session's next turn takes the new one.
 - It belongs to that session only: other sessions, and a fork of it, keep the configured mode.
@@ -64,7 +64,40 @@ A command that asks for a sandbox this machine cannot give is **not run**: the A
 the command was not run: it needs the workspace-write sandbox, which is unavailable (this kernel has no Landlock (Linux 5.13 or later, with Landlock enabled)); set sandboxMode to "full-access" to run commands without a sandbox
 ```
 
-On such a machine, set `sandboxMode = "full-access"` to run commands again, unconfined. On Linux, a program that embeds the Agent must let its binary serve as the helper, or every sandboxed command fails the same way ([Embedding the Agent](/docs/embedding#sandbox-helper)). On macOS the sandbox is unavailable only without `/usr/bin/sandbox-exec`; but an Agent that itself runs inside a Seatbelt sandbox cannot start another, so its sandboxed commands fail as they start.
+On such a machine, set `sandboxMode = "full-access"` to run commands again, unconfined. On Linux, a program that embeds the Agent must let its binary serve as the helper, or every sandboxed command fails the same way ([Embedding the Agent](/docs/embedding#sandbox-helper)). On macOS the sandbox is unavailable only without `/usr/bin/sandbox-exec`; but an Agent that itself runs inside a Seatbelt sandbox cannot start another, so its sandboxed commands fail as they start. A command the model asks to run [outside the sandbox](#escalation) needs none, so it is not refused for this.
+
+### Running one command outside the sandbox [#escalation]
+
+As in Codex, the model can ask to run one command outside the sandbox: `exec_command` with `sandbox_permissions` set to `"require_escalated"` and a `justification`, a short question for you ([Tools](/docs/tools#commands)). It does so when a command needs more than the sandbox allows (writing outside the writable roots, the network when it is off), or failed because of the sandbox. Such a command needs an approval of its own, which says that it runs outside the sandbox and gives the justification:
+
+```text
+Run Posix command outside the sandbox in /home/me/project: npm install (reason: Do you want to download the project's dependencies?)
+```
+
+| Permission mode  | A command outside the sandbox                                                                       |
+| ---------------- | --------------------------------------------------------------------------------------------------- |
+| Manual           | waits for your answer                                                                               |
+| Automatic review | is reviewed; the reviewer sees that it leaves the sandbox and the justification                     |
+| Full access      | is refused, and the model reads why: a mode that asks no one cannot let a command leave the sandbox |
+
+These follow Codex's approval policies: `on-request` asks you, an `auto_review` reviewer reviews the escalation, and `never` rejects it. Once approved, the command runs without the sandbox, with your user's rights; an approval of the same command inside the sandbox does not run it outside, nor the other way round. **Allow for the session** of a command outside the sandbox allows that same command (its text and directory) outside the sandbox again, and nothing else; the tool's own allowance does not cover commands outside the sandbox. When the session's sandbox is `full-access` the request changes nothing but the approval, since the command runs unconfined anyway.
+
+A command the sandbox refuses fails as the operating system reports it (`Permission denied`, `Operation not permitted`, a failed DNS lookup); its output carries no hint, as in Codex: the model learns when to ask from the tool's description and the context below.
+
+### What the model is told [#sandbox-context]
+
+Each turn's world state has a `sandbox` section beside the permission mode, with the sandbox mode, whether the network is allowed, the writable roots (in workspace-write) and how a command may leave the sandbox in the turn's permission mode, as Codex's permissions instructions tell its model:
+
+```json
+{
+  "escalation": "A command that needs more than the sandbox allows runs outside it with sandbox_permissions \"require_escalated\" and a justification question; the user approves or denies it.",
+  "mode": "workspace-write",
+  "networkAccess": false,
+  "writableRoots": ["/home/me/project", "/tmp"]
+}
+```
+
+In automatic review the escalation text says the reviewer decides, and asks the model to proceed only with a materially safer alternative after a denial; in full access it says not to ask; with no sandbox it says there is none. The section changes, and is sent again, only when one of these does: the sandbox mode, the permission mode, the workspace roots or the configured roots.
 
 ### What it does not cover [#sandbox-limits]
 
@@ -75,12 +108,23 @@ On such a machine, set `sandboxMode = "full-access"` to run commands again, unco
 - Without network access, on Linux every socket but a Unix one is refused, and so is connecting any socket, Unix ones included (an SSH agent, Docker's socket); with it, only VM sockets stay refused; either way `io_uring`, which could open a socket past the filter, is refused. On macOS, without network access no socket connects, Unix ones included; with it, every one does.
 - In a terminal (PTY) command on Linux, `/dev/stdout` and `/dev/stderr` name the terminal's `/dev/pts` device, which is not writable: write to the output itself, or to `/dev/tty`, which is (the command's own terminal).
 - On a Linux kernel older than 6.2, truncating a file outside the writable roots is not restricted (Landlock's ABI before version 3 cannot).
-- There is no escalation: unlike Codex, the model cannot ask to run one command outside the sandbox. Change the mode instead.
-- The model is not told the sandbox mode; a write or connection the sandbox refuses fails as the operating system reports it (`Permission denied`, `Operation not permitted`).
 
 ### One session's sandbox [#session-sandbox]
 
 Like its permission mode, a session can have its own sandbox mode until it ends, without changing `sandboxMode` (`set_session_sandbox_mode`, see [Embedding the Agent](/docs/embedding#permissions)). The session's next turn takes it; it is kept in memory only; a fork starts without one, and a sub-agent takes its parent's. `sandboxWorkspaceWrite` still comes from the configuration.
+
+### Presets [#presets]
+
+The terminal interface's `/permissions` offers Codex's presets, each a permission mode with a sandbox mode, set for the session together ([Terminal interface](/docs/terminal-interface#permissions)):
+
+| Preset      | Permission mode  | Sandbox mode      |
+| ----------- | ---------------- | ----------------- |
+| Read only   | Manual           | `read-only`       |
+| Default     | Manual           | `workspace-write` |
+| Auto-review | Automatic review | `workspace-write` |
+| Full access | Full access      | `full-access`     |
+
+Where this machine has no sandbox, the presets that need one cannot be chosen.
 
 ## What needs an approval [#what-asks]
 
@@ -117,7 +161,7 @@ Like its permission mode, a session can have its own sandbox mode until it ends,
 </Tabs>
 
 - **Allow once** allows this one operation.
-- **Allow for the session** (`a`) stops the same tool from asking for the rest of the session, whatever the command or path. It is kept in memory only: after a restart, or once the tool changes (an MCP server whose settings or credentials changed, say), it asks again; an MCP server that only reconnects keeps it. The operations that always ask you do not offer it.
+- **Allow for the session** (`a`) stops the same tool from asking for the rest of the session, whatever the command or path; for a command [outside the sandbox](#escalation), only that same command outside the sandbox. It is kept in memory only: after a restart, or once the tool changes (an MCP server whose settings or credentials changed, say), it asks again; an MCP server that only reconnects keeps it. The operations that always ask you do not offer it.
 - After a **denial** the model is told it was denied; usually it tries another way, or explains why it needs the operation.
 - An approval waits at most 15 minutes; then it counts as denied.
 
@@ -157,7 +201,7 @@ Approved action:
 
 In full-access mode, every operation that needs an approval is allowed without asking. What still applies:
 
-- The [sandbox](#sandbox): a command runs as confined as `sandboxMode` says.
+- The [sandbox](#sandbox): a command runs as confined as `sandboxMode` says, and a request to run one [outside it](#escalation) is refused.
 - The operations that always ask you (turning a Skill on or off, `git clone`).
 - The calls refused outright: an MCP tool its server's policy denies, a command or path that cannot be resolved.
 - [Plan mode](/docs/plan-mode) still offers read-only tools only.
@@ -178,4 +222,4 @@ A [review](/docs/sessions#reviews) session is read-only, in place of the read-on
 - [Plan mode](/docs/plan-mode) gives the model read-only tools only, whatever the permission mode.
 - MCP servers have their own approval policies (`allow`, `ask`, `deny`); see [MCP](/docs/mcp#policies).
 - `disabledPlugins` removes a whole kind of tool: `["execution"]` leaves the model no way to run commands; see the [Configuration reference](/docs/config-reference#general).
-- The model is told the permission mode, so it can plan with it.
+- The model is told the permission mode and the [sandbox](#sandbox-context), so it can plan with them.

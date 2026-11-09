@@ -18,6 +18,7 @@ pub use model::{
     ApprovalContextDigest, ApprovalContextScope, ApprovalDecision, ApprovalDecisionSource,
     ApprovalError, ApprovalGrantId, ApprovalOrigin, ApprovalRequest, ApprovalRequestId,
     ApprovalResolution, ApprovalRiskClass, ApprovalUserDecision, PermissionActionDetails,
+    SandboxEscalation,
 };
 pub use requirement::PermissionRequirement;
 pub use service::{

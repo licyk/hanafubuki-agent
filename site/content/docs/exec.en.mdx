@@ -94,7 +94,8 @@ The model may also ask you a question (to choose between approaches, say). `exec
 
 <Callout type="warn" title="Allow with care">
   `allow:` allows a whole tool, not one command. `allow:exec_command` means every command the model
-  proposes runs. In CI, make sure the machine is one you can throw away.
+  proposes runs, those it asks to run [outside the sandbox](/docs/permissions#escalation) included.
+  In CI, make sure the machine is one you can throw away.
 </Callout>
 
 ## Saving the final answer [#output-last-message]

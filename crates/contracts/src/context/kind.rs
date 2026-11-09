@@ -19,6 +19,8 @@ impl ContextSectionKind {
     pub const WORKSPACE_INSTRUCTIONS: Self = Self::fixed("workspace_instructions");
     pub const WORKSPACE_ROOTS: Self = Self::fixed("workspace_roots");
     pub const PERMISSION_MODE: Self = Self::fixed("permission_mode");
+    /// The sandbox of the turn's commands, and how one may leave it.
+    pub const SANDBOX: Self = Self::fixed("sandbox");
     /// Written by the kernel for each sampling step; no contributor produces it.
     pub const TOOL_CATALOG_OMISSIONS: Self = Self::fixed("tool_catalog_omissions");
     pub const ENVIRONMENT: Self = Self::fixed("environment");
@@ -26,10 +28,11 @@ impl ContextSectionKind {
     /// The kinds of the Agent's own world state, which have their own places
     /// in a world state's bound and never use up what plugins (a host's
     /// among them) may add.
-    pub const KNOWN: [Self; 5] = [
+    pub const KNOWN: [Self; 6] = [
         Self::WORKSPACE_INSTRUCTIONS,
         Self::WORKSPACE_ROOTS,
         Self::PERMISSION_MODE,
+        Self::SANDBOX,
         Self::TOOL_CATALOG_OMISSIONS,
         Self::ENVIRONMENT,
     ];

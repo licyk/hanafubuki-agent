@@ -1,5 +1,5 @@
-//! Model-visible descriptions and schemas, unchanged from the fixed tools
-//! they replace (the Agent's model-request goldens pin them).
+//! Model-visible descriptions and schemas (the Agent's model-request
+//! goldens pin them).
 
 use serde_json::{json, Value};
 
@@ -8,7 +8,7 @@ use crate::tool::ExecToolKind;
 pub(crate) fn spec(kind: ExecToolKind) -> (&'static str, Value) {
     match kind {
         ExecToolKind::ExecCommand => (
-            "Run a shell command after approval. If it completes before yield-time, return output and exit code; otherwise return a live session ID for write_stdin. tty=false uses non-interactive pipes; tty=true allocates a writable, resizable PTY.",
+            "Run a shell command after approval. If it completes before yield-time, return output and exit code; otherwise return a live session ID for write_stdin. tty=false uses non-interactive pipes; tty=true allocates a writable, resizable PTY. The command runs in the sandbox the `sandbox` world state describes. When a command important to the task needs to run outside it (to write outside the writable roots, or use the network when it is off), or failed because of it (a permission error, or a DNS, connection or download failure), run it again with sandbox_permissions \"require_escalated\" and a short justification question; it then needs its own approval, which the full-access permission mode never gives.",
             json!({
                 "type": "object",
                 "properties": {
@@ -18,9 +18,19 @@ pub(crate) fn spec(kind: ExecToolKind) -> (&'static str, Value) {
                     "tty": { "type": ["boolean", "null"] },
                     "yield_time_ms": { "type": ["integer", "null"], "minimum": 1, "maximum": 30000 },
                     "max_output_bytes": { "type": ["integer", "null"], "minimum": 1, "maximum": 262144 },
-                    "workdir": { "type": ["string", "null"], "maxLength": 4096 }
+                    "workdir": { "type": ["string", "null"], "maxLength": 4096 },
+                    "sandbox_permissions": {
+                        "type": ["string", "null"],
+                        "enum": ["use_default", "require_escalated", null],
+                        "description": "Per-command sandbox override. Defaults to `use_default`; use `require_escalated` for unsandboxed execution."
+                    },
+                    "justification": {
+                        "type": ["string", "null"],
+                        "maxLength": 1024,
+                        "description": "User-facing approval question for `require_escalated`, for example \"Do you want to download the project's dependencies?\"; null otherwise."
+                    }
                 },
-                "required": ["cmd", "shell", "login", "tty", "yield_time_ms", "max_output_bytes", "workdir"],
+                "required": ["cmd", "shell", "login", "tty", "yield_time_ms", "max_output_bytes", "workdir", "sandbox_permissions", "justification"],
                 "additionalProperties": false
             }),
         ),

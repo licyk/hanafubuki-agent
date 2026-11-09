@@ -76,6 +76,7 @@ fn exec_request(tty: bool) -> ExecCommandRequest {
         environment: BTreeMap::new(),
         origin: ApprovalOrigin::Model,
         sandbox: SandboxSettings::full_access(),
+        sandbox_escalation: None,
     }
 }
 

@@ -1,6 +1,13 @@
 //! Approval of one action a tool call needs: the plugins' approval rules
 //! first, then the flow of the effective permission mode (`FullAccess`
 //! authorizes, `AutoReview` asks the reviewer model, `Manual` asks a person).
+//!
+//! An action that asks to run outside the sandbox (Codex's
+//! `require_escalated`) follows the same flow, except that `FullAccess`
+//! refuses it, as Codex's `never` approval policy does: a mode that asks no
+//! one cannot let a command leave the sandbox. The user's "allow for this
+//! session" of one is kept apart from the tool's (Codex keys its session
+//! approvals of escalated commands by the command).
 
 use super::*;
 
@@ -10,17 +17,42 @@ use hanafubuki_agent_contracts::ApprovalRuleVerdict;
 mod auto_review;
 mod manual;
 
+/// Codex's answer to `require_escalated` under its `never` approval policy.
+const UNSANDBOXED_IN_FULL_ACCESS: &str = "the permission mode is full access, which asks no one, so the action cannot run outside the sandbox; run it without asking to leave the sandbox, or ask the user to change the permissions";
+
 /// One action on its way to a decision, in the turn that asked for it.
 pub(in crate::service) struct PendingApproval {
     identity: TurnIdentity,
     call_id: String,
-    /// The tool an `AllowForSession` answer allows.
-    tool: crate::AgentToolSelection,
+    /// What an `AllowForSession` answer allows.
+    allowance: SessionAllowance,
     action: ApprovalAction,
     context: ApprovalContext,
     timeout: Duration,
     started: Instant,
     flow: WaitingFlow,
+}
+
+/// What one `AllowForSession` answer allows for the rest of the session:
+/// every later action of the tool that only the permission mode would ask
+/// about, or, for an action that runs outside the sandbox, that same action
+/// again (its details: the command, its arguments and directory).
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub(in crate::service) enum SessionAllowance {
+    Tool(crate::AgentToolSelection),
+    Unsandboxed(
+        crate::AgentToolSelection,
+        Option<hanafubuki_agent_approval::PermissionActionDetails>,
+    ),
+}
+
+impl SessionAllowance {
+    fn of(tool: crate::AgentToolSelection, action: &ApprovalAction) -> Self {
+        match action.sandbox_escalation {
+            Some(_) => Self::Unsandboxed(tool, action.details.clone()),
+            None => Self::Tool(tool),
+        }
+    }
 }
 
 /// Who decides a pending approval.
@@ -106,21 +138,29 @@ impl AgentService {
             return Err(AgentError::Cancelled);
         }
         let context = approval_context(tool_context)?;
-        let tool = crate::AgentToolSelection {
-            provider_id: tool_context.provider_id.clone(),
-            tool_id: tool_context.tool_id.clone(),
-            generation: tool_context.tool_generation,
-        };
+        let allowance = SessionAllowance::of(
+            crate::AgentToolSelection {
+                provider_id: tool_context.provider_id.clone(),
+                tool_id: tool_context.tool_id.clone(),
+                generation: tool_context.tool_generation,
+            },
+            &action,
+        );
         let (turn_mode, allowed_for_session, origin) = {
             let cell = self.session(identity.session_id)?;
             let guard = cell.lock()?;
             let record = &*guard;
             (
                 exact_turn(record, identity.turn_id, identity.generation)?.permission_mode,
-                record.runtime.allowed_tools.contains(&tool),
+                record.runtime.allowances.contains(&allowance),
                 record.lineage.origin,
             )
         };
+        if action.sandbox_escalation.is_some() && turn_mode == AgentPermissionMode::FullAccess {
+            return Ok(ApprovalRoute::Decided(ToolApprovalDisposition::Rejected(
+                UNSANDBOXED_IN_FULL_ACCESS.to_string(),
+            )));
+        }
         // The rules of the plugins that own the action can only tighten the
         // turn's mode: a denial ends here, and a required human decision is
         // asked every time, so neither FullAccess, the automatic reviewer
@@ -132,7 +172,7 @@ impl AgentService {
         let mut pending = PendingApproval {
             identity,
             call_id: tool_context.call_id.clone(),
-            tool,
+            allowance,
             action,
             context,
             timeout,

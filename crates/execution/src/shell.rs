@@ -47,6 +47,11 @@ struct CanonicalShellAction<'a> {
     io_mode: ExecutorIoMode,
     cols: Option<u16>,
     rows: Option<u16>,
+    /// Outside the sandbox: an approval of the sandboxed command must not
+    /// authorize it. The justification is the model's wording, not part of
+    /// what runs.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    unsandboxed: bool,
 }
 
 /// Prepares `request` to run in its `workdir`, which resolves against
@@ -97,18 +102,36 @@ pub(crate) fn prepare_exec_command(
         rows,
         interactive: request.tty,
     };
-    let action = shell_action(
-        shell,
-        &plan,
-        &request.cmd,
-        format!(
+    let summary = match &request.sandbox_escalation {
+        None => format!(
             "Run {:?} command in {}: {}",
             shell,
             plan.cwd.display(),
             bounded_summary(&request.cmd)
         ),
+        Some(escalation) => format!(
+            "Run {:?} command outside the sandbox in {}: {}{}",
+            shell,
+            plan.cwd.display(),
+            bounded_summary(&request.cmd),
+            escalation
+                .justification
+                .as_deref()
+                .map(|justification| format!(" (reason: {})", bounded_summary(justification)))
+                .unwrap_or_default()
+        ),
+    };
+    let mut action = shell_action(
+        shell,
+        &plan,
+        &request.cmd,
+        summary,
         &request.origin,
+        request.sandbox_escalation.is_some(),
     )?;
+    if let Some(escalation) = &request.sandbox_escalation {
+        action = action.with_sandbox_escalation(escalation.clone());
+    }
     Ok(PreparedExecCommand { plan, action })
 }
 
@@ -223,6 +246,7 @@ fn shell_action(
     script: &str,
     summary: String,
     origin: &ApprovalOrigin,
+    unsandboxed: bool,
 ) -> Result<ApprovalAction, AgentExecutionError> {
     let canonical = serde_json::to_vec(&CanonicalShellAction {
         version: "agent-shell-v4",
@@ -237,6 +261,7 @@ fn shell_action(
         io_mode: plan.io_mode,
         cols: plan.cols,
         rows: plan.rows,
+        unsandboxed,
     })
     .map_err(|error| AgentExecutionError::Resolution(error.to_string()))?;
     ApprovalAction::from_canonical_bytes(

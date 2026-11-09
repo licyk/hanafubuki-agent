@@ -57,8 +57,9 @@ pub struct ContextRequest {
     /// for a turn that has none (implementing a plan, say).
     pub user_message: Option<String>,
     /// Host inputs keyed by type (for example the UI context the user
-    /// submitted with the turn). A contributor reads the type it knows and
-    /// treats a missing value as "not supplied for this turn".
+    /// submitted with the turn), and the turn's sandbox policy, which the
+    /// facade adds. A contributor reads the type it knows and treats a
+    /// missing value as "not supplied for this turn".
     pub turn: TurnExtensions,
 }
 

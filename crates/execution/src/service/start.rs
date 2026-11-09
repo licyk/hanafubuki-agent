@@ -46,7 +46,7 @@ impl AgentExecutionService {
         exact_approval(prepared.action(), approval)?;
         // The approval is of the command; the sandbox confines it after.
         let mut plan = prepared.plan;
-        plan.command = self.sandboxed(plan.command, &request.sandbox)?;
+        plan.command = self.sandboxed(plan.command, &request)?;
         self.start_plan(
             scope,
             plan,

@@ -2,7 +2,7 @@
 
 use std::path::PathBuf;
 
-use hanafubuki_agent_approval::ApprovalOrigin;
+use hanafubuki_agent_approval::{ApprovalOrigin, SandboxEscalation};
 use hanafubuki_agent_contracts::tools::arguments::{
     clamped_u64, nullable_bool, nullable_bool_or_default, nullable_bounded_string,
     nullable_text_or_default, optional_clamped_usize, required_bounded_string, required_u64,
@@ -37,6 +37,7 @@ pub(crate) enum ExecCall {
 const MAX_YIELD_TIME_MS: u64 = 30_000;
 const MAX_OUTPUT_BYTES: usize = 256 * 1024;
 const MAX_TERMINAL_CELLS: u64 = 500;
+const MAX_JUSTIFICATION_BYTES: usize = 1024;
 
 /// Parses a call and the notes on how its limits were adjusted. An omitted
 /// nullable field is absent, like `null`; an unknown key is ignored, since
@@ -83,6 +84,7 @@ pub(crate) fn parse(
                 origin: ApprovalOrigin::Model,
                 // The turn's, which the tool sets (`tool::parse_call`).
                 sandbox: SandboxSettings::full_access(),
+                sandbox_escalation: sandbox_escalation(arguments)?,
             })
         }
         ExecToolKind::WriteStdin => {
@@ -115,6 +117,36 @@ pub(crate) fn parse(
         },
     };
     Ok((call, notes))
+}
+
+/// Codex's `sandbox_permissions` and `justification`: `require_escalated`
+/// asks to run the command outside the sandbox, `use_default` (or none)
+/// keeps it in. A justification without an explicit choice is an error, as
+/// in Codex, so a model that meant to escalate learns it did not.
+fn sandbox_escalation(
+    arguments: &serde_json::Map<String, Value>,
+) -> Result<Option<SandboxEscalation>, ToolCallValidationError> {
+    let permissions = nullable_bounded_string(arguments, "sandbox_permissions", 32)?;
+    let justification = Some(nullable_text_or_default(
+        arguments,
+        "justification",
+        MAX_JUSTIFICATION_BYTES,
+    )?)
+    .filter(|justification| !justification.trim().is_empty());
+    match permissions.as_deref() {
+        None if justification.is_some() => Err(ToolCallValidationError::InvalidArgumentAt {
+            path: "justification".to_string(),
+            reason: "it requires an explicit sandbox_permissions; use sandbox_permissions \
+                     \"require_escalated\" to run the command outside the sandbox, or omit \
+                     justification"
+                .to_string(),
+        }),
+        None | Some("use_default") => Ok(None),
+        Some("require_escalated") => Ok(Some(SandboxEscalation { justification })),
+        Some(_) => Err(ToolCallValidationError::InvalidArgument(
+            "sandbox_permissions",
+        )),
+    }
 }
 
 /// A terminal dimension: required, clamped into `1..=500`.

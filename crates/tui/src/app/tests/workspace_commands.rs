@@ -107,10 +107,16 @@ fn a_denied_action_is_approved_between_turns_and_refused_during_one() {
         agent.session_permission_mode(session),
         Ok(Some(AgentPermissionMode::AutoReview))
     );
-    // The list marks the session's mode, read through the bridge.
+    // The list is read through the bridge: this test binary has no sandbox
+    // (and its configuration none), so no preset is the one in effect and
+    // those that need one cannot be chosen.
     harness.type_and_submit("/permissions");
     let list = harness.pump_until_screen_shows("Select Permissions");
-    assert!(list.contains("Auto-review (current)"), "{list}");
+    assert!(!list.contains("(current)"), "{list}");
+    assert!(
+        list.contains("The sandbox is unavailable on this machine"),
+        "{list}"
+    );
     harness.key(KeyCode::Esc);
     harness.type_and_submit("/status");
     harness.pump_until_screen_shows("Permissions:");
@@ -178,6 +184,23 @@ fn the_status_line_shows_the_mode_permissions_set() {
     harness.pump_until_screen_shows("Permissions set to Full access for this session");
     harness.pump_until("the status line to show the session's mode", |harness| {
         harness.bottom_rows(1).trim() == "full-access"
+    });
+
+    // A preset sets the session's sandbox mode with its permission mode.
+    harness.type_and_submit("/permissions read-only");
+    harness.pump_until_screen_shows("Permissions set to Read only for this session");
+    let session = harness.app.bridge.session_id().unwrap();
+    let agent = harness.runtime.slot().agent().unwrap();
+    assert_eq!(
+        agent.session_permission_mode(session),
+        Ok(Some(AgentPermissionMode::Manual))
+    );
+    assert_eq!(
+        agent.session_sandbox_mode(session),
+        Ok(Some(hanafubuki_agent::AgentSandboxMode::ReadOnly))
+    );
+    harness.pump_until("the status line to show the preset's mode", |harness| {
+        harness.bottom_rows(1).trim() == "manual"
     });
 }
 

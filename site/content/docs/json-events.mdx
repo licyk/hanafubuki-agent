@@ -133,7 +133,7 @@ icon: Braces
 | `requestedAtMs`、`expiresAtMs` | 请求时间和过期时间           |
 | `offersAllowForSession`        | 是否可以回答“本会话内都允许” |
 
-`action` 的字段：`kind`（操作类型）、`risk`（`low`、`medium`、`high`、`critical`）、`origin`（`{"type":"user"}`、`{"type":"model"}` 或来自 Skill 的 `{"type":"skill",...}`）、`summary`（摘要）、`digest`（操作的哈希）和 `details`（`null` 或带 `type` 的详细信息，例如命令的 `program`、`argv`、`cwd`）。`kind` 的取值：
+`action` 的字段：`kind`（操作类型）、`risk`（`low`、`medium`、`high`、`critical`）、`origin`（`{"type":"user"}`、`{"type":"model"}` 或来自 Skill 的 `{"type":"skill",...}`）、`summary`（摘要）、`digest`（操作的哈希）和 `details`（`null` 或带 `type` 的详细信息，例如命令的 `program`、`argv`、`cwd`）；模型请求[在沙箱之外](/docs/permissions#escalation)运行的命令还有 `sandboxEscalation`，即 `{"justification":"…"}`（模型没有给出理由时 `justification` 为 `null`），其他情况下没有这个字段。`kind` 的取值：
 
 `command_execution`、`shell_execution`、`code_execution`、`interactive_execution`、`file_read`、`file_write`、`file_patch`、`file_move`、`file_delete`、`mcp_tool_call`、`skill_management`、`domain_mutation`。
 

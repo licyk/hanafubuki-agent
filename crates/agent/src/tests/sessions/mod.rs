@@ -65,6 +65,7 @@ pub(super) fn install_fake_background_execution(
         environment: BTreeMap::new(),
         origin: ApprovalOrigin::Model,
         sandbox: hanafubuki_agent_sandbox::SandboxSettings::full_access(),
+        sandbox_escalation: None,
     };
     let action = service
         .test_executions()
@@ -117,6 +118,7 @@ pub(super) fn approved_command() -> String {
 mod background_execution;
 mod children;
 mod edit;
+mod escalation;
 mod export;
 mod lifecycle;
 mod permissions;

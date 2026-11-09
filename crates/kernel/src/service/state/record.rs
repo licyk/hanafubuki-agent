@@ -84,12 +84,12 @@ pub(in crate::service) struct SessionRuntime {
     pub(in crate::service) activities: AgentActivityTracker,
     pub(in crate::service) task_plan: Option<AgentTaskPlanSnapshot>,
     pub(in crate::service) pending_user_input: Option<AgentUserInputRequest>,
-    /// The tools the user allowed for the rest of the session
+    /// What the user allowed for the rest of the session
     /// (`ApprovalUserDecision::AllowForSession`). Never persisted: a session
     /// recovered by a new Agent instance starts without any.
-    pub(in crate::service) allowed_tools: BTreeSet<crate::AgentToolSelection>,
+    pub(in crate::service) allowances: BTreeSet<crate::service::interaction::SessionAllowance>,
     /// The permission mode the user chose for the session's next turns, in
-    /// place of the configured one. Never persisted, like `allowed_tools`.
+    /// place of the configured one. Never persisted, like `allowances`.
     pub(in crate::service) permission_mode: Option<hanafubuki_agent_approval::AgentPermissionMode>,
     /// The sandbox mode the user chose for the session's commands, in
     /// place of the configured one. Never persisted, like the permission
@@ -164,7 +164,7 @@ impl SessionRuntime {
             activities: AgentActivityTracker::default(),
             task_plan: None,
             pending_user_input: None,
-            allowed_tools: BTreeSet::new(),
+            allowances: BTreeSet::new(),
             permission_mode: None,
             sandbox_mode: None,
         }

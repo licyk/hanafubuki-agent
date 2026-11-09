@@ -131,9 +131,23 @@ pub struct ApprovalAction {
     pub summary: String,
     pub digest: ApprovalActionDigest,
     pub details: Option<PermissionActionDetails>,
+    /// Set when the action asks to run outside the sandbox (Codex's
+    /// `sandbox_permissions: "require_escalated"`): it is never approved by
+    /// the full-access mode alone, nor by an allowance of the tool's
+    /// sandboxed actions.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sandbox_escalation: Option<SandboxEscalation>,
 }
 
+/// What the model said when it asked to run an action outside the sandbox.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SandboxEscalation {
+    /// The question the model asks the user, if it gave one.
+    pub justification: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(
     tag = "type",
     rename_all = "snake_case",
@@ -187,6 +201,7 @@ impl ApprovalAction {
             summary,
             digest: ApprovalActionDigest::from_canonical_bytes(canonical),
             details: None,
+            sandbox_escalation: None,
         })
     }
 
@@ -194,6 +209,14 @@ impl ApprovalAction {
         target.validate()?;
         self.details = Some(target);
         Ok(self)
+    }
+
+    /// Marks the action as one that runs outside the sandbox. Its
+    /// canonical bytes must already say so, so that an approval of the
+    /// sandboxed action never authorizes this one.
+    pub fn with_sandbox_escalation(mut self, escalation: SandboxEscalation) -> Self {
+        self.sandbox_escalation = Some(escalation);
+        self
     }
 
     pub fn details(&self) -> Option<&PermissionActionDetails> {

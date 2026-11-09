@@ -332,3 +332,85 @@ fn a_command_runs_in_the_workspace_write_sandbox_by_default() {
     let output = String::from_utf8_lossy(&model.server.requests()[1].body).into_owned();
     assert!(output.contains("refused-outside"), "{output}");
 }
+
+/// The sandbox keeps a command off the network by default; the model asks
+/// to run it outside the sandbox (`require_escalated`), and once approved
+/// it connects. The connection is to a listener of this test's, never the
+/// scripted model.
+#[cfg(target_os = "linux")]
+#[test]
+fn an_escalated_command_reaches_the_network_the_sandbox_refused() {
+    let home = Home::new();
+    if !home
+        .run(&["doctor"])
+        .stdout()
+        .contains("ok    sandbox   workspace-write")
+    {
+        eprintln!("skipped: the Linux sandbox is unavailable here");
+        return;
+    }
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let command = format!(
+        "bash -c 'exec 3<>/dev/tcp/127.0.0.1/{}' 2>/dev/null && echo connected || echo refused-network",
+        listener.local_addr().unwrap().port()
+    );
+    let call = |escalated: bool, call_id: &str| {
+        let mut arguments = serde_json::json!({
+            "cmd": command,
+            "shell": null,
+            "login": null,
+            "tty": null,
+            "yield_time_ms": 5_000,
+            "max_output_bytes": 32_768,
+            "workdir": null,
+            "sandbox_permissions": null,
+            "justification": null
+        });
+        if escalated {
+            arguments["sandbox_permissions"] = "require_escalated".into();
+            arguments["justification"] = "Do you want to let the command use the network?".into();
+        }
+        String::from_utf8(tool_events("exec_command", &arguments.to_string()))
+            .unwrap()
+            .replace("call-tool", call_id)
+            .into_bytes()
+    };
+    let model = Model::start(vec![
+        call(false, "call-sandboxed"),
+        call(true, "call-escalated"),
+        assistant_events("It connected."),
+    ]);
+    let home = home.with_provider(&model.server.base_url);
+    let config = home
+        .file("config.toml")
+        .replace("sandboxMode = \"full-access\"\n", "");
+    std::fs::write(home.home.join("config.toml"), config).unwrap();
+    let run = home
+        .run(&["exec", "--approve", "allow:exec_command", "Connect."])
+        .expect(0);
+    assert!(
+        run.stdout().contains("command outside the sandbox in "),
+        "{}",
+        run.stdout()
+    );
+    let output = |request: usize| {
+        let body: Value = serde_json::from_slice(&model.server.requests()[request].body).unwrap();
+        body["input"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .rev()
+            .find(|item| item["type"] == "function_call_output")
+            .unwrap()["output"]
+            .to_string()
+    };
+    assert!(output(1).contains("refused-network"), "{}", output(1));
+    assert!(output(2).contains("connected"), "{}", output(2));
+    assert!(!output(2).contains("refused-network"), "{}", output(2));
+    // The model was told the sandbox keeps the network off.
+    let first = String::from_utf8_lossy(&model.server.requests()[0].body).into_owned();
+    assert!(
+        first.contains(r#"kind=\"sandbox\""#) && first.contains(r#"\"networkAccess\":false"#),
+        "{first}"
+    );
+}

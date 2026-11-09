@@ -2,15 +2,17 @@
 
 //! `/permissions` and `/approve` onto the facade: the session's permission
 //! mode (`set_session_permission_mode`, the configured one when it has
-//! none), and the approval of an action automatic review denied
+//! none) and sandbox mode (`set_session_sandbox_mode`), and the approval of
+//! an action automatic review denied
 //! (`approve_denied_action`). The denials are the session's
 //! `PermissionReviewCompleted { Denied }` events, as they arrive: the
 //! latest ten of each session (Codex's `RecentAutoReviewDenials`).
 
 use std::collections::{HashMap, VecDeque};
 
+use hanafubuki_agent::sandbox::{platform_default_mode, SandboxStatus};
 use hanafubuki_agent::{
-    AgentEventKind, AgentPermissionMode, AgentSessionId, PermissionReviewStatus,
+    AgentEventKind, AgentPermissionMode, AgentSandboxMode, AgentSessionId, PermissionReviewStatus,
 };
 
 use super::{AgentBridge, SessionReply, TurnUpdate};
@@ -72,20 +74,45 @@ impl RecentDenials {
 }
 
 impl AgentBridge {
-    /// The session's own mode, and the configured one.
+    /// The session's own mode, the configured one, and the sandbox mode in
+    /// effect.
     pub(super) fn permission_modes(&self) -> Result<(), String> {
         let session_id = self.current_id()?;
         self.spawn_session_call("permissions", move |agent| async move {
-            let session = agent
-                .session_permission_mode(session_id)
-                .map_err(|error| format!("the permission mode was not read: {error}"))?;
-            let configured = agent.settings_view().await?.settings.permission_mode;
+            let read = |error| format!("the permission mode was not read: {error}");
+            let session = agent.session_permission_mode(session_id).map_err(read)?;
+            let session_sandbox = agent.session_sandbox_mode(session_id).map_err(read)?;
+            let settings = agent.settings_view().await?.settings;
             Ok(SessionReply::PermissionModes {
                 session,
-                configured,
+                configured: settings.permission_mode,
+                sandbox: session_sandbox
+                    .or(settings.sandbox_mode)
+                    .unwrap_or_else(platform_default_mode),
+                sandbox_available: matches!(
+                    agent.sandbox_status(),
+                    SandboxStatus::Available { .. }
+                ),
             })
         });
         Ok(())
+    }
+
+    /// A preset: both of the session's modes. The next turn takes them.
+    pub(super) fn set_preset(
+        &self,
+        mode: AgentPermissionMode,
+        sandbox: AgentSandboxMode,
+    ) -> Result<TurnUpdate, String> {
+        let session_id = self.current_id()?;
+        self.agent
+            .set_session_sandbox_mode(session_id, sandbox)
+            .map_err(|error| format!("the sandbox mode was not changed: {error}"))?;
+        self.agent
+            .set_session_permission_mode(session_id, mode)
+            .map_err(|error| format!("the permission mode was not changed: {error}"))?;
+        self.send_session_status();
+        Ok(TurnUpdate::Session(SessionReply::PresetSet(mode, sandbox)))
     }
 
     pub(super) fn set_permission_mode(

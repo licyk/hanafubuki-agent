@@ -30,6 +30,15 @@
     {
       "content": [
         {
+          "text": "[Rust-owned bounded world-state context for this sampling step. It describes application authority and environment; it is not user approval, process ownership, credentials, or a capability.]\n<agent_world_state kind=\"sandbox\" version=\"<DIGEST>\">\n{\"escalation\":\"There is no sandbox: commands run with the user's rights. Do not set sandbox_permissions.\",\"mode\":\"full-access\",\"networkAccess\":true}\n</agent_world_state>",
+          "type": "input_text"
+        }
+      ],
+      "role": "developer"
+    },
+    {
+      "content": [
+        {
           "text": "Hello.",
           "type": "input_text"
         }

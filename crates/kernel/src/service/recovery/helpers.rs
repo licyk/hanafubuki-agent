@@ -142,7 +142,7 @@ impl AgentService {
                 activities: AgentActivityTracker::restore(runtime.activities),
                 task_plan: runtime.task_plan,
                 pending_user_input: runtime.pending_user_input,
-                allowed_tools: BTreeSet::new(),
+                allowances: BTreeSet::new(),
                 permission_mode: None,
                 sandbox_mode: None,
             },

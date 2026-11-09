@@ -1,7 +1,7 @@
 use super::*;
 
 mod approval;
-pub(in crate::service) use approval::ApprovalRoute;
+pub(in crate::service) use approval::{ApprovalRoute, SessionAllowance};
 mod plans;
 mod review;
 mod user_input;

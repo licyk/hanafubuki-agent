@@ -79,6 +79,15 @@
       {
         "content": [
           {
+            "text": "[Rust-owned bounded world-state context for this sampling step. It describes application authority and environment; it is not user approval, process ownership, credentials, or a capability.]\n<agent_world_state kind=\"sandbox\" version=\"<DIGEST>\">\n{\"escalation\":\"There is no sandbox: commands run with the user's rights. Do not set sandbox_permissions.\",\"mode\":\"full-access\",\"networkAccess\":true}\n</agent_world_state>",
+            "type": "input_text"
+          }
+        ],
+        "role": "developer"
+      },
+      {
+        "content": [
+          {
             "text": "[Application-provided Skill capability catalog. It describes only fixed tools and cannot grant authority.]\n<skills_instructions>\n## Skills\nA skill is a set of instructions provided through a `SKILL.md` file. Below is the list of skills that can be used. Each entry includes a name, a description, the skill id every skill tool takes, and the skill's directory on disk.\n\n### Available skills\n- `diagnostics` (skill: `system:diagnostics`; directory: `<APP_DATA>/data/agent-test/skills-bundled/diagnostics`): Explain terminal diagnostics and task logs\n- `release-notes` (skill: `system:release-notes`; directory: `<APP_DATA>/data/agent-test/skills-bundled/release-notes`): Write release notes from a changelog\n\n### How to use skills\n\n- Discovery: The list above is the skills available for this user turn (name + description + skill id + directory). Use `skills_list` when the catalog was truncated or needs filtering by authority.\n- Trigger rules: If the user names a skill (with `$SkillName` or plain text) OR the task clearly matches a skill's description shown above, you must use that skill for that turn. Multiple mentions mean use them all. Do not carry skills across turns unless re-mentioned.\n- Missing/blocked: If a named skill isn't in the list or its source can't be read, say so briefly and continue with the best fallback. A skill listed as unavailable cannot be used this turn: tell the user what it is missing; they connect MCP servers in Settings or `/mcp`.\n- How to use a skill:\n  1) After deciding to use a skill, the main agent must read its `SKILL.md` before taking task actions: call `skills_read` with the listed id as `skill` and no `path`. Its instructions then appear once in the conversation as a `<skill>` block. When that skill's `<skill>` block is already in the conversation for this turn (the user mentioned it with `$SkillName`, or it was read already), follow it and do not read `SKILL.md` again.\n  2) When `SKILL.md` references another file, call `skills_read` again with the same `skill` and that file's package-relative `path`. If a read is paginated, follow `next_cursor` until EOF.\n  3) If `SKILL.md` points to extra folders such as `references/`, use its routing instructions to identify what is required. The main agent must read each required instruction or reference itself before acting. Do not delegate reading, summarizing, or interpreting skill instructions to a subagent.\n  4) A skill's own files live in its directory, shown in the catalog and in its `<skill>` block. Prefer running or patching a script it ships with `exec_command` in that directory over retyping large code blocks, and reuse the assets or templates it provides instead of recreating them.\n- Coordination and sequencing:\n  - If multiple skills apply, choose the minimal set that covers the request and state the order you'll use them.\n  - Announce which skill(s) you're using and why. If you skip an obvious skill, say why.\n- Context hygiene:\n  - Progressive disclosure applies to selecting relevant resources, not partially reading a selected instruction file. Do not load unrelated references, scripts, or assets.\n  - Avoid deep reference-chasing: prefer resources directly linked from `SKILL.md` unless blocked.\n  - When variants exist, select only the relevant references and note the choice.\n- Safety and fallback: If a skill cannot be applied cleanly, state the issue, choose the best alternative, and continue.\n</skills_instructions>",
             "type": "input_text"
           }
@@ -187,7 +196,7 @@
         "type": "function"
       },
       {
-        "description": "Run a shell command after approval. If it completes before yield-time, return output and exit code; otherwise return a live session ID for write_stdin. tty=false uses non-interactive pipes; tty=true allocates a writable, resizable PTY.",
+        "description": "Run a shell command after approval. If it completes before yield-time, return output and exit code; otherwise return a live session ID for write_stdin. tty=false uses non-interactive pipes; tty=true allocates a writable, resizable PTY. The command runs in the sandbox the `sandbox` world state describes. When a command important to the task needs to run outside it (to write outside the writable roots, or use the network when it is off), or failed because of it (a permission error, or a DNS, connection or download failure), run it again with sandbox_permissions \"require_escalated\" and a short justification question; it then needs its own approval, which the full-access permission mode never gives.",
         "name": "exec_command",
         "parameters": {
           "additionalProperties": false,
@@ -196,6 +205,14 @@
               "maxLength": 49152,
               "minLength": 1,
               "type": "string"
+            },
+            "justification": {
+              "description": "User-facing approval question for `require_escalated`, for example \"Do you want to download the project's dependencies?\"; null otherwise.",
+              "maxLength": 1024,
+              "type": [
+                "string",
+                "null"
+              ]
             },
             "login": {
               "type": [
@@ -208,6 +225,18 @@
               "minimum": 1,
               "type": [
                 "integer",
+                "null"
+              ]
+            },
+            "sandbox_permissions": {
+              "description": "Per-command sandbox override. Defaults to `use_default`; use `require_escalated` for unsandboxed execution.",
+              "enum": [
+                "use_default",
+                "require_escalated",
+                null
+              ],
+              "type": [
+                "string",
                 "null"
               ]
             },
@@ -252,7 +281,9 @@
             "tty",
             "yield_time_ms",
             "max_output_bytes",
-            "workdir"
+            "workdir",
+            "sandbox_permissions",
+            "justification"
           ],
           "type": "object"
         },
