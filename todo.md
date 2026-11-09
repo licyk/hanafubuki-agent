@@ -99,6 +99,29 @@ moves its pin.
       `exec_command`'s default workdir (the `-C` bug), `/cd`;
       `hanafubuki-agent-worktree` and `plugin-worktree`, `/worktree`, the
       worktree choice in `/fork`.
+  - [x] The facade's half: `AgentRuntime::set_working_directory` (standalone
+        only; refused while a turn, a compaction or a background terminal
+        runs; the filesystem policy is replaced in place and the commands'
+        directory moves; live sessions stay); `exec_command` without
+        `workdir` runs in the first workspace root, a relative `workdir`
+        against it (the `-C` bug); no context note is needed (the
+        `workspace_roots` section is rebuilt every turn).
+        `hanafubuki-agent-worktree` (`<data>/worktrees/<repo>-<8 hex>`,
+        git through the instance's `ExecutorManager`, the owner in the
+        worktree's git metadata) and the `worktree` row; facade calls
+        `worktree_create`, `worktree_list`, `worktree_bind`,
+        `worktree_remove` (feature calls).
+  - [ ] The interface's half: `/cd`, `/worktree`, the worktree choice in
+        `/fork`.
+  - Open: the project configuration layer (trust level, the project's
+    `config.toml`) does not follow `/cd`; it stays the project read at
+    start (switching it needs a new instance). The worktree service type
+    lives in the plugin crate, not in contracts (plugin-rules says so).
+  - Hanafubuki, at its next pin: `exec_command` without `workdir` now runs
+    in the first workspace root as read at the instance's start (it ran in
+    the process's directory); new crates and a `worktree` row (Capability);
+    `AgentStoragePaths::worktrees_root`; `AgentExecutionService::
+    set_working_directory`; `WorkspaceFsService::replace_policy`.
 - [ ] P8: the shared structured request (from the titles plugin), the
       `recap` plugin, `/recap`, `suggest_session_title` in `/rename`.
   - [x] The facade's half: `plugins/structured_request.rs` (the titles
