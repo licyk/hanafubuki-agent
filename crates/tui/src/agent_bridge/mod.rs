@@ -15,6 +15,8 @@
 //! [`AgentReply`].
 
 mod commands;
+mod mcp;
+mod providers;
 mod replay;
 
 use std::sync::Arc;
@@ -25,12 +27,15 @@ use hanafubuki_agent::{
     AgentSlot, AgentStatusEventSink, AgentSteeringRequest, AgentTaskPlanSnapshot,
     AgentTurnAccepted, AgentTurnPageRequest, AgentTurnRequest, AgentTurnTerminalReason,
     AgentUserInputRequest, AgentUserInputRequestId, ApprovalRequest, ApprovalRequestId,
-    McpApplicationSnapshot, SkillCatalogSnapshot,
+    SkillCatalogSnapshot,
 };
+use tokio::sync::oneshot;
 
 use crate::app_event::{AppEvent, AppEventSender, Op};
 use crate::history_cell::ToolResultView;
-pub(crate) use commands::{with_model, ModelChoices, StatusReport};
+pub(crate) use commands::{setup_needed, with_model, ModelChoices, StatusReport};
+pub(crate) use mcp::{McpCall, McpReply};
+pub(crate) use providers::{ProviderCall, ProviderReply};
 pub(crate) use replay::{OlderTranscript, OpenedSession, ReplayedItem};
 
 /// How many of the turn's latest items are read for a finished call.
@@ -82,7 +87,8 @@ pub(crate) enum TurnUpdate {
     ModeChanged(AgentSessionMode),
     Compacted(AgentCompactionOutcome),
     StatusReport(Box<StatusReport>),
-    Mcp(McpApplicationSnapshot),
+    Providers(ProviderReply),
+    Mcp(McpReply),
     Skills(SkillCatalogSnapshot),
 }
 
@@ -129,6 +135,8 @@ pub(crate) struct AgentBridge {
     /// The transcript items a reopened session replays, and each earlier
     /// page holds.
     page_size: usize,
+    /// Dropped to cancel the MCP login waiting for the browser.
+    mcp_login: Option<oneshot::Sender<()>>,
 }
 
 impl AgentBridge {
@@ -149,6 +157,7 @@ impl AgentBridge {
             turn_running: false,
             pending_steering: Vec::new(),
             page_size: commands::REPLAYED_ITEMS,
+            mcp_login: None,
         }
     }
 

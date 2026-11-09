@@ -1,6 +1,6 @@
 ---
 title: Terminal interface
-description: Fullscreen and Scrollback, the layout, keys, composer, slash commands, @ file mentions, reading, selecting and copying the conversation, the transcript, approvals and questions, and resuming a session.
+description: Fullscreen and Scrollback, the layout, keys, composer, slash commands, the first-run setup, the Provider and MCP screens and their forms, @ file mentions, reading, selecting and copying the conversation, the transcript, approvals and questions, and resuming a session.
 icon: SquareTerminal
 ---
 
@@ -11,7 +11,7 @@ hanafubuki-agent
 hanafubuki-agent "Find the modules in this project that no test covers"
 ```
 
-The interface starts with no session: your first message creates it, as does a command that needs one (`/model`, `/mode`, `/compact`, `/status`). Starting and quitting leaves no empty session behind. When the session cannot be created (no default Provider is configured, say), the conversation says why in red and the interface stays open; the next message tries again.
+The interface starts with no session: your first message creates it, as does a command that needs one (`/model`, `/mode`, `/compact`, `/status`). Starting and quitting leaves no empty session behind. With no default Provider or no model chosen, the interface opens the [setup](#setup) instead of letting the first message fail. When the session cannot be created for another reason, the conversation says why in red and the interface stays open; the next message tries again.
 
 The interface needs a terminal on both standard input and standard output; in a pipe or a redirection it points you to [exec](/docs/exec) and exits with code 2. `-m`, `-C`, `--add-dir`, `--permission-mode` and the other [global flags](/docs/cli-reference#global-flags) apply as usual.
 
@@ -41,7 +41,7 @@ At the start (and after `/new` or a resume) a box shows the version, the model a
 3. **The composer**, starting with `›`.
 4. **The footer**: `? for shortcuts` while the composer is empty.
 
-An approval, a question, and the `/model` and `/mode` lists take the place of the status line and the composer while they are open.
+An approval, a question, the `/model` and `/mode` lists and the screens of `/providers` and `/mcp` take the place of the status line and the composer while they are open. A screen stays open when a turn ends.
 
 In the conversation your messages start with `›`; a tool call is `• Called TOOL` or `• Failed TOOL`, with the first and last lines of its output; `apply_patch` shows the diff it made; the task plan is `• Updated Plan`; errors start with a red `■`. After a stretch of tool calls, a `─ Worked for 1m 05s ─` rule comes before the answer.
 
@@ -82,6 +82,7 @@ A message that starts with `/` is a command. Typing `/` opens a popup of them, n
 | Command          | Does                                                                                                                                                                    | During a turn |
 | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
 | `/model`         | Picks the session's model from the enabled Providers' model catalogs; a Provider whose catalog cannot be read says why                                                  | No            |
+| `/providers`     | Adds, edits, tests, enables and deletes the model Providers, and chooses the default Provider and the model new sessions run ([below](#providers))                      | No            |
 | `/mode`          | Picks the default mode or [plan mode](/docs/plan-mode)                                                                                                                  | No            |
 | `/skills`        | Lists the [Skills](/docs/skills), whether each is enabled, and the catalog's issues                                                                                     | Yes           |
 | `/new`           | Leaves the session: the next message starts a new one (in the default mode); the previous one stays in the history                                                      | No            |
@@ -90,18 +91,54 @@ A message that starts with `/` is a command. Typing `/` opens a popup of them, n
 | `/diff`          | Shows `git diff` of the first workspace root, untracked files included, in a pager                                                                                      | Yes           |
 | `/mention`       | Inserts `@`, which opens the file popup                                                                                                                                 | Yes           |
 | `/status`        | Shows the model and its reasoning effort, the Provider, the workspace roots, the permission mode, the session's mode and id, its token use and how much context is left | Yes           |
-| `/mcp`           | Lists the [MCP servers](/docs/mcp): connection state, errors, command or URL, tools                                                                                     | Yes           |
+| `/mcp`           | Opens the [MCP](/docs/mcp) manager ([below](#mcp)). `/mcp verbose` lists the servers: connection state, errors, command or URL, tools. `/mcp login ID` logs in to one   | Yes           |
 | `/raw [on\|off]` | Shows the conversation as the plain text it was made from, without styles, for copying with the terminal's selection; without an argument, switches it (below)          | Yes           |
 | `/tui`           | Picks Scrollback or Fullscreen for the next launch (below)                                                                                                              | Yes           |
 | `/quit`, `/exit` | Quits                                                                                                                                                                   | Yes           |
 
 - A command that is not available during a turn says `'/x' is disabled while a task is in progress.`
 - A `/name` that is no command is not sent; you get `Unrecognized command` instead. A path with a slash in it (`/usr/bin/env`), or text that starts with a space, is sent as a message.
-- Commands take no arguments, but `/raw`. A message such as `/model gpt-5.1`, with text after the name, goes to the model as an ordinary message.
+- Commands take no arguments, but `/raw` and `/mcp`. A message such as `/model gpt-5.1`, with text after the name, goes to the model as an ordinary message. `/mcp` with anything but `verbose` or `login ID` says `Usage: /mcp [verbose | login ID]`.
 - `/raw` applies at once and is saved (`tui.rawOutput`), so the next launch starts with it. In Fullscreen the whole conversation is shown again in its raw form; in Scrollback what is already in the scrollback stays as it is, and only what follows is raw. `/raw` with anything but `on` or `off` says `Usage: /raw [on|off]`.
 - `/tui` saves `tui.fullscreenTranscript` and applies from the next launch: the running interface keeps its mode. `--no-alt-screen` and `tui.alternateScreen` still apply then.
 - The permission mode is the configuration's (`permissionMode` or `--permission-mode`). `/status` shows it; no command in the interface changes it.
 - A command, or a list it opened, that fails with an internal error (a panic) is turned off for the rest of the run: the conversation says `'/x' failed and is turned off for the rest of this run`, the popup leaves it out, and typing it says it is off. The session, the composer and the other commands go on. An internal error in the chat itself (the composer, the conversation, a streaming answer) still ends the interface, after the terminal is restored.
+
+## First-run setup [#setup]
+
+When the interface starts with no default Provider (none is configured, or none is enabled), or with no model chosen for new sessions and none given with `-m`, it opens the Provider setup over the composer instead of letting the first message fail:
+
+- With no Provider: the form to add one. Fill in its name, protocol, base URL and token, choose **Test** to list its models, then **Save**. The model picker follows; the model you pick, on that Provider, is the one new sessions run.
+- With Providers but none enabled: the Provider list, where `e` enables one and `a` adds one.
+- With a default Provider but no model: the model picker straight away.
+
+Esc goes back and then closes the setup; the composer is yours again. A message sent before the setup is done stays in the composer, a line says why, and the setup opens again. Once a model is chosen, the next message creates the session. `/new` checks again, as a start does.
+
+## Forms [#forms]
+
+The screens of `/providers` and `/mcp` edit in a form:
+
+| Key                | Does                                                                                                   |
+| ------------------ | ------------------------------------------------------------------------------------------------------ |
+| Tab, Down          | The next field; from the last, the first                                                               |
+| Shift+Tab, Up      | The previous field; from the first, the last                                                           |
+| Enter              | The next field; on an action (**Test**, **Save**), runs it; on **+ Add …**, adds a row; opens Advanced |
+| Space, Left, Right | Switches a choice or a toggle (`[x]`), and a row between `[public]` and `[secret]`                     |
+| Esc                | Back: from the form to the list, from the list closed                                                  |
+| Ctrl-C             | Closes the screen                                                                                      |
+
+- Text fields have the composer's editing keys. Each field keeps its own kill buffer (Ctrl-K, Ctrl-U, Ctrl-W, then Ctrl-Y), so text deleted from a secret cannot be yanked into another field.
+- A token or a secret value is drawn as dots, its last character shown only while you type it. A paste goes into the field that has the focus, without its line breaks.
+- In a list of rows (request headers, environment variables, HTTP headers), **+ Add …** adds a row; a row whose name is empty is dropped when the form is saved.
+- What is wrong with a field is said in red under it, and the focus goes there. What the Agent refuses on saving (an invalid header, say) is said under the form, whose entries are kept.
+
+## Providers [#providers]
+
+`/providers` lists the Providers: ★ marks the default, and each shows its protocol, base URL, whether a token is set (never the token) and whether it is disabled. Enter edits the highlighted one, `a` adds one, `d` deletes it after asking, `e` enables or disables it, `*` makes it the default, Esc closes the list. The form, **Test**, saving and the model picker are in [Providers and models](/docs/providers-models#interface).
+
+## MCP servers [#mcp]
+
+`/mcp` lists the MCP servers, each with its transport, connection phase, number of tools and last error. Enter edits the highlighted one, `a` adds one, `d` deletes it after asking, `e` enables or disables it, `c` connects it (a connected one reconnects), `l` starts its OAuth login, `o` logs it out, Esc closes the list. The form and its secrets are in [MCP](/docs/mcp#interface).
 
 ## @ file mentions [#mentions]
 

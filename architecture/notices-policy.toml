@@ -139,8 +139,44 @@ path = "crates/tui/src/tui/input.rs"
 reason = "The thread that reads the terminal, written in place of Codex's event-stream broker."
 
 [[original]]
-path = "crates/tui/src/app/tests.rs"
+path = "crates/tui/src/app/tests/mod.rs"
 reason = "The bridge end to end over the standalone Agent and its scripted model."
+
+[[original]]
+path = "crates/tui/src/app/tests/settings.rs"
+reason = "The first-run setup, /providers and the MCP manager end to end over the standalone Agent."
+
+[[original]]
+path = "crates/tui/src/agent_bridge/providers.rs"
+reason = "The Provider screen's calls onto the facade's Provider API."
+
+[[original]]
+path = "crates/tui/src/agent_bridge/mcp.rs"
+reason = "The MCP manager's calls onto the facade's MCP API, the OAuth login on the Agent's runtime."
+
+[[original]]
+path = "crates/tui/src/commands/mcp/mod.rs"
+reason = "The /mcp command and its arguments; Codex has no MCP manager."
+
+[[original]]
+path = "crates/tui/src/commands/mcp/screen.rs"
+reason = "The MCP manager's steps over the Agent's MCP settings; Codex has no MCP manager."
+
+[[original]]
+path = "crates/tui/src/commands/mcp/form.rs"
+reason = "The MCP server form and the server configuration it writes, over the Agent's MCP types."
+
+[[original]]
+path = "crates/tui/src/commands/mcp/tests.rs"
+reason = "The MCP form's argument line."
+
+[[original]]
+path = "crates/tui/src/commands/providers/tests.rs"
+reason = "The Provider form's draft and the first-run rule."
+
+[[original]]
+path = "crates/tui/src/bottom_pane/form/tests.rs"
+reason = "The form widget: masking, the fields' own kill buffers, the stops, errors and rows."
 
 [[original]]
 path = "crates/tui/src/tui/tests.rs"

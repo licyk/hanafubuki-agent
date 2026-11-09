@@ -1,7 +1,9 @@
 use std::sync::mpsc::{channel, Receiver};
 
 use super::*;
-use crate::agent_bridge::{ModelChoices, OlderTranscript, OpenedSession, ReplayedItem, TurnEnd};
+use crate::agent_bridge::{
+    McpCall, ModelChoices, OlderTranscript, OpenedSession, ReplayedItem, TurnEnd,
+};
 use crate::app_event::AgentCommand;
 use crate::bottom_pane::{SelectionItem, SelectionViewParams};
 use crate::commands::{self, CommandSpec};
@@ -19,6 +21,7 @@ fn chat() -> (ChatWidget, Receiver<AppEvent>) {
         directory: "/project".to_string(),
         owned_transcript: false,
         fullscreen_preference: true,
+        model_override: false,
     });
     (chat, events)
 }
@@ -229,6 +232,7 @@ fn an_opened_session_replays_its_transcript_after_its_header() {
             cursor: "older".to_string(),
             through_revision: AgentRevision::new(1),
         }),
+        setup_needed: false,
     }));
     let (cells, _) = drain(&events);
     assert_eq!(cells.len(), 5, "{cells:?}");
@@ -419,6 +423,7 @@ fn a_replayed_reasoning_item_is_a_completed_cell() {
             ReplayedItem::Assistant("Here is why.".to_string()),
         ],
         older: None,
+        setup_needed: false,
     }));
     let (cells, _) = drain(&events);
     assert_eq!(cells[2], "• Thought for 12s", "{cells:?}");
@@ -586,8 +591,11 @@ fn a_command_that_needs_a_session_asks_for_one_first() {
         drain(&events).1,
         vec![Op::EnsureSession, Op::Command(AgentCommand::Status)]
     );
-    chat.dispatch_command(command("mcp"), String::new());
-    assert_eq!(drain(&events).1, vec![Op::Command(AgentCommand::Mcp)]);
+    chat.dispatch_command(command("mcp"), "verbose".to_string());
+    assert_eq!(
+        drain(&events).1,
+        vec![Op::Command(AgentCommand::Mcp(McpCall::Report))]
+    );
 }
 
 /// The events the chat sent but its transcript cells and ops.

@@ -12,7 +12,7 @@ use hanafubuki_agent::{
 };
 use ratatui::crossterm::event::{KeyEvent, MouseEvent};
 
-use crate::agent_bridge::AgentReply;
+use crate::agent_bridge::{AgentReply, McpCall, ProviderCall};
 use crate::file_search::FileMatch;
 use crate::history_cell::HistoryCell;
 
@@ -91,7 +91,8 @@ pub(crate) enum AgentCommand {
     },
     SetMode(AgentSessionMode),
     Status,
-    Mcp,
+    Providers(ProviderCall),
+    Mcp(McpCall),
     Skills,
 }
 

@@ -26,8 +26,20 @@ fn the_table_keeps_the_presentation_order() {
     assert_eq!(
         names,
         [
-            "model", "mode", "skills", "new", "resume", "compact", "diff", "mention", "status",
-            "mcp", "raw", "tui", "exit"
+            "model",
+            "providers",
+            "mode",
+            "skills",
+            "new",
+            "resume",
+            "compact",
+            "diff",
+            "mention",
+            "status",
+            "mcp",
+            "raw",
+            "tui",
+            "exit"
         ]
     );
 }
@@ -54,7 +66,7 @@ fn availability_follows_the_spec() {
         .filter(|command| command.inline_args)
         .map(|command| command.name)
         .collect();
-    assert_eq!(inline_args, ["raw"]);
+    assert_eq!(inline_args, ["mcp", "raw"]);
 }
 
 #[test]

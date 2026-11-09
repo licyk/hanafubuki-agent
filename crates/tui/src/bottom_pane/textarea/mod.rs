@@ -5,6 +5,7 @@
 
 mod keys;
 mod layout;
+mod single_line;
 
 use std::cell::RefCell;
 use std::ops::Range;
@@ -28,6 +29,8 @@ pub(crate) struct TextArea {
     preferred_col: Option<usize>,
     elements: Vec<TextElement>,
     kill_buffer: String,
+    /// Line breaks typed or pasted are dropped (a form's field).
+    single_line: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -51,6 +54,7 @@ impl TextArea {
             preferred_col: None,
             elements: Vec::new(),
             kill_buffer: String::new(),
+            single_line: false,
         }
     }
 
@@ -73,6 +77,7 @@ impl TextArea {
     }
 
     pub fn insert_str_at(&mut self, pos: usize, text: &str) {
+        let text = &*self.filter_line_breaks(text);
         let pos = self.clamp_pos_for_insertion(pos);
         self.text.insert_str(pos, text);
         self.wrap_cache.replace(None);

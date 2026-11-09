@@ -24,6 +24,7 @@ mod chat_composer_history;
 mod command_popup;
 mod file_search_popup;
 mod footer;
+mod form;
 mod list_selection_view;
 mod module_view;
 mod paste_burst;
@@ -44,7 +45,7 @@ use ratatui::crossterm::event::KeyEvent;
 use ratatui::layout::Rect;
 
 use crate::app_event::AppEventSender;
-use crate::commands::CommandSpec;
+use crate::commands::{CommandReply, CommandSpec};
 use crate::file_search::FileMatch;
 use crate::key_hint;
 use crate::key_hint::KeyBinding;
@@ -54,11 +55,11 @@ use crate::render::renderable::RenderableItem;
 use crate::status_indicator_widget::StatusIndicatorWidget;
 use crate::tui::FrameRequester;
 use approval_overlay::ApprovalOverlay;
-use bottom_pane_view::BottomPaneView;
+pub(crate) use bottom_pane_view::BottomPaneView;
 use chat_composer::ChatComposer;
 pub(crate) use footer::ThinkingToggle;
-use list_selection_view::ListSelectionView;
-pub(crate) use list_selection_view::{SelectionItem, SelectionViewParams};
+pub(crate) use form::{FieldId, FormEvent, FormItem, FormView, RowValue};
+pub(crate) use list_selection_view::{ListSelectionView, SelectionItem, SelectionViewParams};
 pub(crate) use module_view::ViewFailure;
 use module_view::{ModuleView, ViewFailures};
 use paste_burst::PasteBurst;
@@ -212,9 +213,14 @@ impl BottomPane {
         }
     }
 
+    /// Pasted text goes to the open view (a command's form takes it, the
+    /// modals take none), or to the composer.
     pub(crate) fn handle_paste(&mut self, pasted: String) {
-        // The modals take no text.
-        if self.view_stack.is_empty() && self.composer.handle_paste(pasted) {
+        let taken = match self.view_stack.last_mut() {
+            Some(view) => view.handle_paste(pasted),
+            None => self.composer.handle_paste(pasted),
+        };
+        if taken {
             self.request_redraw();
         }
     }
@@ -244,6 +250,47 @@ impl BottomPane {
         )));
     }
 
+    /// Shows `view` over the composer, as `command`'s, in place of the
+    /// command's view already open.
+    pub(crate) fn show_command_view(
+        &mut self,
+        command: &'static str,
+        view: Box<dyn BottomPaneView>,
+    ) {
+        self.view_stack
+            .retain(|open| open.command() != Some(command));
+        self.push_view(Box::new(ModuleView::new(
+            command,
+            view,
+            self.view_failures.clone(),
+        )));
+    }
+
+    /// Whether a view of `command` is open.
+    pub(crate) fn has_command_view(&self, command: &str) -> bool {
+        self.view_stack
+            .iter()
+            .any(|view| view.command() == Some(command))
+    }
+
+    /// Hands `reply` to `command`'s latest view; it comes back when no
+    /// view of the command takes it.
+    pub(crate) fn offer_command_reply(
+        &mut self,
+        command: &'static str,
+        reply: CommandReply,
+    ) -> Option<CommandReply> {
+        let view = self
+            .view_stack
+            .iter_mut()
+            .rev()
+            .find(|view| view.command() == Some(command))?;
+        let left = view.take_command_reply(reply);
+        self.remove_completed_views();
+        self.request_redraw();
+        left
+    }
+
     /// The commands whose views panicked since the last call; their views
     /// are dropped.
     pub(crate) fn take_view_failures(&mut self) -> Vec<ViewFailure> {
@@ -270,7 +317,6 @@ impl BottomPane {
         self.composer.command_disabled(name)
     }
 
-    #[cfg(test)]
     pub(crate) fn set_composer_text(&mut self, text: String) {
         self.composer.set_text_content(text);
         self.request_redraw();
@@ -410,11 +456,15 @@ impl BottomPane {
         self.remove_completed_views();
     }
 
-    /// The turn ended: whatever it was waiting for is no longer asked.
+    /// The turn ended: whatever it was waiting for is no longer asked. The
+    /// commands' views stay.
     pub(crate) fn dismiss_all_requests(&mut self) {
-        if !self.view_stack.is_empty() {
-            self.view_stack.clear();
-            self.on_active_view_complete();
+        let before = self.view_stack.len();
+        self.view_stack.retain(|view| view.command().is_some());
+        if self.view_stack.len() != before {
+            if self.view_stack.is_empty() {
+                self.on_active_view_complete();
+            }
             self.request_redraw();
         }
     }

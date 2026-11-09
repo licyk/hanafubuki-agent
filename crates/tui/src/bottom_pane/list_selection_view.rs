@@ -276,6 +276,13 @@ impl ListSelectionView {
         }
     }
 
+    /// The highlighted item, by its index in the items given.
+    pub(crate) fn selected_index(&self) -> Option<usize> {
+        self.state
+            .selected_idx
+            .and_then(|idx| self.filtered_indices.get(idx).copied())
+    }
+
     pub(crate) fn take_last_selected_index(&mut self) -> Option<usize> {
         self.last_selected_actual_idx.take()
     }

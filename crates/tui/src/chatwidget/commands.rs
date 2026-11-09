@@ -9,7 +9,7 @@ use hanafubuki_agent::panic::catch_panic;
 use hanafubuki_agent::AgentCompactionStatus;
 
 use super::ChatWidget;
-use crate::agent_bridge::TurnUpdate;
+use crate::agent_bridge::{setup_needed, TurnUpdate};
 use crate::app_event::{AppEvent, Op};
 use crate::commands::{self, CommandContext, CommandSpec};
 use crate::history_cell;
@@ -52,6 +52,15 @@ impl ChatWidget {
             self.command_failed(command.name, &message);
         }
         self.request_redraw();
+    }
+
+    /// Opens the Provider setup, unless it is open (or `/providers` is off).
+    pub(super) fn open_setup(&mut self) {
+        if !self.bottom_pane.has_command_view(commands::PROVIDERS.name) {
+            self.run_command(&commands::PROVIDERS, |context| {
+                commands::providers::open(context, true)
+            });
+        }
     }
 
     /// The views of commands that panicked since the last look (drawing
@@ -108,9 +117,17 @@ impl ChatWidget {
             TurnUpdate::StatusReport(report) => {
                 self.add_to_history(history_cell::new_status_output(&report))
             }
-            TurnUpdate::Mcp(snapshot) => {
-                self.add_to_history(history_cell::new_mcp_output(&snapshot))
+            TurnUpdate::Providers(reply) => {
+                if let Some(registry) = reply.registry().filter(|_| !self.session_open) {
+                    self.setup_needed = setup_needed(registry, self.model_override);
+                }
+                self.run_command(&commands::PROVIDERS, |context| {
+                    commands::providers::on_reply(context, reply)
+                })
             }
+            TurnUpdate::Mcp(reply) => self.run_command(&commands::MCP, |context| {
+                commands::mcp::on_reply(context, reply)
+            }),
             TurnUpdate::Skills(catalog) => {
                 self.add_to_history(history_cell::new_skills_output(&catalog))
             }

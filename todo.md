@@ -37,7 +37,7 @@ moves its pin.
     (P7's worktree or P8's recap, whichever lands first); the `[tui]`
     section comes with its first keys in P2, and grows with each command.
   - Hanafubuki, at its next pin: nothing to change (two re-exports).
-- [ ] P1: the provider screen (`/providers`, first-run setup when there is
+- [x] P1: the provider screen (`/providers`, first-run setup when there is
       no default provider or the model is empty, `test_provider_draft`,
       request headers) and the MCP manager and form (`/mcp`, `/mcp verbose`,
       `/mcp login`, secret rows as credentials, OAuth loopback
@@ -54,7 +54,19 @@ moves its pin.
         a removed credential stayed in `mcp.toml` (the writer merges; removed
         keys are now written as null). Still: a credential entry the
         read-time repair drops stays in the file.
-  - [ ] The interface's half: the screens and first-run setup.
+  - [x] The interface's half: `/providers` (list with add, edit, delete,
+        enable, default; a form with masked token and header rows; Test on
+        the draft; after a save, the model picker writing the model policy)
+        and first-run setup (no default Provider, or no model and no `-m`:
+        the setup opens and a message waits for it); `/mcp` (manager: add,
+        edit, delete, enable, connect, refresh, OAuth login and logout;
+        stdio or Streamable HTTP; public or secret rows, a secret stored
+        as a credential; Advanced fields), `/mcp verbose`, `/mcp login ID`.
+        The form view (`bottom_pane/form/`, `textarea/single_line.rs`).
+        Not ported: `SelectionSecondaryAction` (the screens handle their
+        keys); no browser is opened for OAuth (the URL is shown).
+  - Hanafubuki, at its next pin: re-exports `McpApprovalPolicy`,
+    `McpExposurePolicy`, `AgentProviderSettings`.
   - Hanafubuki, at its next pin: new calls `test_provider_draft`,
     `mcp_set_credential`, `mcp_remove_credential`, `mcp_oauth_login`;
     re-exports `McpCredentialKey`, `McpOAuthPhase`, `McpOAuthPolicy`,

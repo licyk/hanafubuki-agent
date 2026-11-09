@@ -109,6 +109,7 @@ impl Harness {
             directory: "/project".to_string(),
             owned_transcript: mode.is_owned(),
             fullscreen_preference: true,
+            model_override: false,
         });
         let mut app = App::new(chat_widget, bridge, sender, mode, HistoryRenderMode::Rich);
         let mut terminal = Terminal::with_options(VT100Backend::new(WIDTH, HEIGHT)).unwrap();
@@ -247,27 +248,6 @@ fn the_interface_starts_without_a_session_and_the_first_message_creates_it() {
     let session_id = harness.app.bridge.session_id().unwrap();
     let agent = harness.runtime.slot().agent().unwrap();
     assert_eq!(agent.snapshot(session_id).unwrap().model, "fixture-model");
-}
-
-#[test]
-fn without_a_provider_the_first_message_says_why_and_the_interface_goes_on() {
-    let mut harness = Harness::start_with(Vec::new(), false, TranscriptMode::Terminal);
-    harness.type_and_submit("What is the answer?");
-    let screen = harness.pump_until_screen_shows("No default Agent Provider is configured");
-    assert!(screen.contains("the session was not created"), "{screen}");
-    assert_eq!(harness.app.bridge.session_id(), None);
-    // The composer still takes messages and commands.
-    harness.type_and_submit("/mcp");
-    harness.pump_until_screen_shows("MCP Servers");
-    harness.type_and_submit("Again?");
-    harness.pump_until("the second refusal", |harness| {
-        harness
-            .transcript()
-            .matches("No default Agent Provider is configured")
-            .count()
-            == 2
-    });
-    assert_eq!(harness.app.bridge.session_id(), None);
 }
 
 #[test]
@@ -645,3 +625,5 @@ fn a_resumed_session_loads_its_earlier_pages_into_the_owned_transcript() {
         from += at + text.len();
     }
 }
+
+mod settings;

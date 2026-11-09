@@ -6,6 +6,7 @@ use hanafubuki_agent::{
 use ratatui::crossterm::event::KeyEvent;
 
 use super::CancellationEvent;
+use crate::commands::CommandReply;
 use crate::render::renderable::Renderable;
 
 /// Trait implemented by every view that can be shown in the bottom pane.
@@ -17,6 +18,17 @@ pub(crate) trait BottomPaneView: Renderable {
     /// Return `true` if the view has finished and should be removed.
     fn is_complete(&self) -> bool {
         false
+    }
+
+    /// Pasted text, while this view is active; `false` when it takes none.
+    fn handle_paste(&mut self, _pasted: String) -> bool {
+        false
+    }
+
+    /// What the Agent answered a command's call: the command's view takes
+    /// it, or hands it back.
+    fn take_command_reply(&mut self, reply: CommandReply) -> Option<CommandReply> {
+        Some(reply)
     }
 
     /// Handle Ctrl-C while this view is active.

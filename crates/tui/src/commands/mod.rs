@@ -9,8 +9,10 @@
 //! the rest of the run, and the chat goes on.
 
 mod exit;
+pub(crate) mod mcp;
 mod mode;
 mod model;
+pub(crate) mod providers;
 mod raw;
 mod reports;
 mod session;
@@ -21,14 +23,19 @@ use std::fmt;
 
 use hanafubuki_agent::AgentSessionMode;
 
+use crate::agent_bridge::{McpReply, ProviderReply};
 use crate::app_event::{AgentCommand, AppEvent, AppEventSender, Op};
-use crate::bottom_pane::{BottomPane, SelectionViewParams};
+use crate::bottom_pane::{BottomPane, BottomPaneView, SelectionViewParams};
+use crate::history_cell::HistoryCell;
+pub(crate) use mcp::MCP;
 pub(crate) use mode::mode_name;
 pub(crate) use model::{show_model_choices, MODEL};
+pub(crate) use providers::PROVIDERS;
 
 /// Every command, in presentation order: the most used first.
-pub(crate) static COMMANDS: [&CommandSpec; 13] = [
+pub(crate) static COMMANDS: [&CommandSpec; 14] = [
     &model::MODEL,
+    &providers::PROVIDERS,
     &mode::MODE,
     &reports::SKILLS,
     &session::NEW,
@@ -37,7 +44,7 @@ pub(crate) static COMMANDS: [&CommandSpec; 13] = [
     &workspace::DIFF,
     &workspace::MENTION,
     &reports::STATUS,
-    &reports::MCP,
+    &mcp::MCP,
     &raw::RAW,
     &tui::TUI,
     &exit::EXIT,
@@ -101,6 +108,13 @@ pub(crate) fn has_prefix(name: &str, disabled: &[&str]) -> bool {
         })
 }
 
+/// What the Agent answered a command's call, for the command's view.
+#[derive(Debug)]
+pub(crate) enum CommandReply {
+    Providers(ProviderReply),
+    Mcp(McpReply),
+}
+
 /// What a command may touch: the app's channel and the bottom pane, whose
 /// views it pushes as its own.
 pub(crate) struct CommandContext<'a> {
@@ -150,6 +164,28 @@ impl<'a> CommandContext<'a> {
     pub(crate) fn show_selection_view(&mut self, params: SelectionViewParams) {
         self.bottom_pane
             .show_command_selection_view(self.command.name, params);
+    }
+
+    /// A sender for the views this command shows.
+    pub(crate) fn app_event_tx(&self) -> AppEventSender {
+        self.app_event_tx.clone()
+    }
+
+    /// Shows `view` over the composer as this command's, in place of the
+    /// one it has open.
+    pub(crate) fn show_view(&mut self, view: Box<dyn BottomPaneView>) {
+        self.bottom_pane.show_command_view(self.command.name, view);
+    }
+
+    /// Hands `reply` to this command's open view; it comes back when none
+    /// takes it.
+    pub(crate) fn offer_reply(&mut self, reply: CommandReply) -> Option<CommandReply> {
+        self.bottom_pane
+            .offer_command_reply(self.command.name, reply)
+    }
+
+    pub(crate) fn add_to_history(&self, cell: impl HistoryCell + 'static) {
+        self.send(AppEvent::InsertHistoryCell(Box::new(cell)));
     }
 
     /// Inserts `text` at the composer's cursor.

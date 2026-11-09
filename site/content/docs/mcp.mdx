@@ -38,9 +38,19 @@ MCP（Model Context Protocol）服务器可以把本地程序或远程服务的�
 - 新服务器使用默认设置：审批策略 `ask`、暴露策略 `deferred`、调用超时 120 秒等。
 - 启用的服务器添加后立即连接，命令打印连接结果，例如 `files: ready`。`--disabled` 添加一个禁用的服务器。
 
+## 在终端界面中 [#interface]
+
+[终端界面](/docs/terminal-interface#mcp)中的 `/mcp` 打开管理界面，在表单中添加和编辑服务器，修改立即生效：
+
+- **列表**：每个服务器显示传输方式（`stdio` 或 `http`）、连接阶段（`starting`、`ready`、`failed` 等）、工具数量、`disabled` 以及最近的错误。Enter 编辑，`a` 添加，`d` 确认后删除，`e` 启用或停用，`c` 连接（已连接的服务器会重新连接），`l` 开始 [OAuth 登录](#oauth)，`o` 登出，Esc 关闭。
+- **表单**：添加时先填 ID，然后是传输方式。stdio：程序、写在一行中的参数（含空格的参数用引号括起来）、工作目录和环境变量。Streamable HTTP：URL、OAuth（`disabled`、`optional` 或 `required`）和请求头。之后是是否启用、是否必需，**Advanced** 下是审批策略和暴露策略、启用和禁用的工具（用逗号分隔），以及各项超时和并发调用数。新服务器从默认设置开始。按键见[表单](/docs/terminal-interface#forms)。
+- **机密**：每一行环境变量或请求头都标记为 `[public]` 或 `[secret]`。机密的值保存为服务器通过 `credentialEnvironment` 或 `credentialHeaders` 引用的[凭据](#credentials)；新凭据以服务器和变量命名（`github-GITHUB_TOKEN`），表单中显示为圆点。服务器不再使用的凭据会被删除，除非另一个服务器还在使用；删除服务器时也按同样的规则删除它的凭据。
+- **保存**时先写入服务器，启用的服务器随即连接，再写入它的机密；列表会显示连接结果。与 `/providers` 一样，如果设置在此期间被修改，保存会被拒绝，表单保留填写的内容。
+- `/mcp verbose` 把服务器和它们的工具写入对话，`/mcp login ID` 打开管理界面并开始该服务器的登录。
+
 ## 凭据 [#credentials]
 
-`mcp add` 不设置凭据。需要令牌的服务器，请编辑 `mcp.toml`：把环境变量或请求头指向 `[credentials]` 中的一个键，凭据的值只保存在那里（文件只有自己可读）。
+`mcp add` 不设置凭据。需要令牌的服务器，可以在 `/mcp` 中把对应的行标记为机密（[见上文](#interface)），或者编辑 `mcp.toml`：把环境变量或请求头指向 `[credentials]` 中的一个键，凭据的值只保存在那里（文件只有自己可读）。
 
 <Tabs items={["stdio：环境变量", "HTTP：请求头"]}>
   <Tab value="stdio：环境变量">
@@ -107,6 +117,7 @@ hanafubuki-agent mcp login docs
 - 命令最多等待 5 分钟，之后打印 `docs: logged in` 和服务器的状态。Ctrl-C 可以结束它。
 - 令牌保存在平台的安全存储（钥匙串）中，不在 `mcp.toml` 里；钥匙串不可用时（`doctor` 会检查），登录无法保存令牌。
 - `oauth` 为 `"disabled"`（默认）的服务器拒绝登录：`OAuth is disabled for this MCP server`。
+- 在终端界面中，`/mcp login docs`（或在 `/mcp` 中选中服务器后按 `l`）以同样的方式登录：要打开的地址写入对话，管理界面等待浏览器，按 Esc 取消登录。
 
 ## 审批和暴露策略 [#policies]
 

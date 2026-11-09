@@ -67,8 +67,20 @@ fn the_unfiltered_list_is_the_registry_in_order() {
     assert_eq!(
         filtered("/"),
         vec![
-            "model", "mode", "skills", "new", "resume", "compact", "diff", "mention", "status",
-            "mcp", "raw", "tui", "exit"
+            "model",
+            "providers",
+            "mode",
+            "skills",
+            "new",
+            "resume",
+            "compact",
+            "diff",
+            "mention",
+            "status",
+            "mcp",
+            "raw",
+            "tui",
+            "exit"
         ]
     );
 }

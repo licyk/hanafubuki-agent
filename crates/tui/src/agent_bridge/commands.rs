@@ -9,9 +9,10 @@ use std::path::PathBuf;
 
 use hanafubuki_agent::{
     AgentHandle, AgentHistorySortDirection, AgentPermissionMode, AgentProviderModelCatalogRequest,
-    AgentProviderModelCatalogResult, AgentSessionId, AgentSessionListRequest, AgentSessionMode,
-    AgentSessionModelSelectionRequest, AgentSessionPage, AgentSessionRuntimeSnapshot,
-    AgentTranscriptPageRequest, AgentTuiPreferences, AgentTuiPreferencesPatch,
+    AgentProviderModelCatalogResult, AgentProviderRegistrySnapshot, AgentSessionId,
+    AgentSessionListRequest, AgentSessionMode, AgentSessionModelSelectionRequest, AgentSessionPage,
+    AgentSessionRuntimeSnapshot, AgentTranscriptPageRequest, AgentTuiPreferences,
+    AgentTuiPreferencesPatch,
 };
 
 use super::{
@@ -22,6 +23,14 @@ use crate::app_event::{AgentCommand, AppEvent, Op};
 /// How many of a reopened session's latest transcript items are replayed,
 /// and how many more each earlier page holds.
 pub(super) const REPLAYED_ITEMS: usize = 200;
+
+/// Whether the interface must set up a Provider before a session can
+/// run a turn: no Provider is the default, or no model is chosen (and none
+/// given with `-m`).
+pub(crate) fn setup_needed(registry: &AgentProviderRegistrySnapshot, model_override: bool) -> bool {
+    registry.default_provider_id.is_none()
+        || (!model_override && registry.model_policy.model.trim().is_empty())
+}
 
 /// What `/model` offers: each Provider's models, and the session's own.
 #[derive(Debug)]
@@ -147,12 +156,8 @@ impl AgentBridge {
                     ))))
                 })
             }
-            AgentCommand::Mcp => self.spawn(|agent| async move {
-                let snapshot = agent.mcp_snapshot().await?;
-                Ok(Some(AgentReply::Update(Box::new(TurnUpdate::Mcp(
-                    snapshot,
-                )))))
-            }),
+            AgentCommand::Providers(call) => self.provider_call(call),
+            AgentCommand::Mcp(call) => self.mcp_call(call),
             AgentCommand::Skills => {
                 let catalog = self
                     .agent
@@ -251,6 +256,7 @@ impl AgentBridge {
             model: opened.runtime.model,
             mode: opened.runtime.mode,
             transcript: replay::transcript(&self.agent, items),
+            setup_needed: false,
             older: opened
                 .transcript
                 .older_cursor
@@ -301,11 +307,13 @@ impl AgentBridge {
 /// No session: its header names the model a new session gets, `-m`'s or
 /// the model policy's (empty when the configuration cannot be read).
 async fn no_session(agent: &AgentHandle, model: Option<String>) -> OpenedSession {
+    let registry = agent.provider_registry_snapshot().await.ok();
+    let setup_needed = registry
+        .as_ref()
+        .is_some_and(|registry| setup_needed(registry, model.is_some()));
     let model = match model {
         Some(model) => model,
-        None => agent
-            .provider_registry_snapshot()
-            .await
+        None => registry
             .map(|registry| registry.model_policy.model)
             .unwrap_or_default(),
     };
@@ -315,6 +323,7 @@ async fn no_session(agent: &AgentHandle, model: Option<String>) -> OpenedSession
         mode: AgentSessionMode::Default,
         transcript: Vec::new(),
         older: None,
+        setup_needed,
     }
 }
 

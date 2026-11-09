@@ -24,6 +24,9 @@ pub(crate) struct OpenedSession {
     pub(crate) transcript: Vec<ReplayedItem>,
     /// Where the items left out begin, when older items were left out.
     pub(crate) older: Option<OlderTranscript>,
+    /// With no session: a Provider and a model must be set up before the
+    /// first message can run (`setup_needed`).
+    pub(crate) setup_needed: bool,
 }
 
 /// The page of a session's transcript before the ones read so far.

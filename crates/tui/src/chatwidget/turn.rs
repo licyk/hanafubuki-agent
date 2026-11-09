@@ -121,6 +121,7 @@ impl ChatWidget {
             | TurnUpdate::ModeChanged(_)
             | TurnUpdate::Compacted(_)
             | TurnUpdate::StatusReport(_)
+            | TurnUpdate::Providers(_)
             | TurnUpdate::Mcp(_)
             | TurnUpdate::Skills(_) => {}
         }

@@ -13,6 +13,7 @@ use ratatui::layout::Rect;
 
 use super::bottom_pane_view::BottomPaneView;
 use super::CancellationEvent;
+use crate::commands::CommandReply;
 use crate::render::renderable::Renderable;
 
 /// A command whose view panicked, and the panic's message.
@@ -54,6 +55,15 @@ impl BottomPaneView for ModuleView {
 
     fn is_complete(&self) -> bool {
         self.guard.failed.get() || self.guard.run(true, || self.view.is_complete())
+    }
+
+    fn handle_paste(&mut self, pasted: String) -> bool {
+        self.guard.run(true, || self.view.handle_paste(pasted))
+    }
+
+    /// A view that panics on a reply took it: it is dropped.
+    fn take_command_reply(&mut self, reply: CommandReply) -> Option<CommandReply> {
+        self.guard.run(None, || self.view.take_command_reply(reply))
     }
 
     /// A view that panics on Ctrl-C took the key: it is dropped.

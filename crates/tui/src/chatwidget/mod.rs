@@ -29,6 +29,7 @@ use crate::app_event::{AppEvent, AppEventSender, Op};
 use crate::bottom_pane::{
     BottomPane, BottomPaneParams, CancellationEvent, InputResult, ThinkingToggle,
 };
+use crate::commands::PROVIDERS;
 use crate::file_search::FileMatch;
 use crate::history_cell::{self, HistoryCell, ThinkingCell, ToolCallCell};
 use crate::key_hint::{self, KeyBinding};
@@ -55,6 +56,9 @@ pub(crate) struct ChatWidgetInit {
     pub(crate) owned_transcript: bool,
     /// The saved `tui.fullscreenTranscript`, which `/tui` marks.
     pub(crate) fullscreen_preference: bool,
+    /// The sessions the interface creates get a model of their own (`-m`),
+    /// so the model policy may leave it empty.
+    pub(crate) model_override: bool,
 }
 
 pub(crate) struct ChatWidget {
@@ -96,6 +100,12 @@ pub(crate) struct ChatWidget {
     live_revision: u64,
     owned_transcript: bool,
     fullscreen_preference: bool,
+    /// The interface shows a session, or the first message is creating one.
+    session_open: bool,
+    /// With no session: no Provider or no model is set up, so a message
+    /// opens the setup instead of failing.
+    setup_needed: bool,
+    model_override: bool,
 }
 
 impl ChatWidget {
@@ -107,6 +117,7 @@ impl ChatWidget {
             directory,
             owned_transcript,
             fullscreen_preference,
+            model_override,
         } = init;
         let bottom_pane = BottomPane::new(BottomPaneParams {
             app_event_tx: app_event_tx.clone(),
@@ -137,6 +148,9 @@ impl ChatWidget {
             live_revision: 0,
             owned_transcript,
             fullscreen_preference,
+            session_open: false,
+            setup_needed: false,
+            model_override,
         }
     }
 
@@ -229,10 +243,26 @@ impl ChatWidget {
         self.bottom_pane.on_file_search_result(query, matches);
     }
 
+    /// Sends `text` to the session, created by it when there is none; with
+    /// no Provider or model set up yet, the text goes back to the composer
+    /// and the setup opens.
     pub(crate) fn submit_user_message(&mut self, text: String) {
         if text.trim().is_empty() {
             return;
         }
+        if self.setup_needed
+            && !self.session_open
+            && !self.bottom_pane.command_disabled(PROVIDERS.name)
+        {
+            self.bottom_pane.set_composer_text(text);
+            self.add_info_message(
+                "Set up a model Provider and choose a model first; your message is kept."
+                    .to_string(),
+            );
+            self.open_setup();
+            return;
+        }
+        self.session_open = true;
         self.add_to_history(history_cell::new_user_prompt(text.clone()));
         self.app_event_tx.send(AppEvent::Op(Op::UserInput(text)));
     }

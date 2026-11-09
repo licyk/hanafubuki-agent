@@ -87,6 +87,7 @@ pub fn run(
         options.model.clone(),
         events.sender.clone(),
     );
+    let model_override = options.model.is_some();
     let opened = match resumed_session(agent, options.resume, options.model)? {
         Some(session_id) => bridge.open(session_id)?,
         None => bridge.no_session()?,
@@ -111,6 +112,7 @@ pub fn run(
         directory: options.directory,
         owned_transcript: mode.is_owned(),
         fullscreen_preference: preferences.fullscreen_transcript,
+        model_override,
     });
     let mut app = App::new(
         chat_widget,

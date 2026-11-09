@@ -509,10 +509,10 @@ fn esc_hides_the_file_popup_until_the_token_changes() {
 #[test]
 fn text_after_a_command_that_takes_none_is_sent_as_a_message() {
     let (mut composer, _rx) = composer();
-    type_chars_humanlike(&mut composer, &['/', 'm', 'c', 'p', ' ', 'x']);
+    type_chars_humanlike(&mut composer, &['/', 'n', 'e', 'w', ' ', 'x']);
     assert_eq!(
         enter(&mut composer),
-        InputResult::Submitted("/mcp x".to_string())
+        InputResult::Submitted("/new x".to_string())
     );
 }
 

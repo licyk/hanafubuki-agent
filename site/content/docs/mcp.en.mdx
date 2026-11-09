@@ -38,9 +38,19 @@ The servers are kept in `mcp.toml` in the configuration directory; every field i
 - A new server has the defaults: the approval policy `ask`, the exposure policy `deferred`, a 120-second call timeout, and so on.
 - An enabled server is connected as soon as it is added, and the command prints how that went, such as `files: ready`. `--disabled` adds it turned off.
 
+## In the terminal interface [#interface]
+
+`/mcp` in the [terminal interface](/docs/terminal-interface#mcp) opens the manager, where a server is added and edited in a form and the changes apply at once:
+
+- **The list**: each server with its transport (`stdio` or `http`), its connection phase (`starting`, `ready`, `failed`, …), its number of tools, `disabled`, and its last error. Enter edits, `a` adds, `d` deletes after asking, `e` enables or disables, `c` connects (a connected server reconnects), `l` starts the [OAuth login](#oauth), `o` logs out, Esc closes.
+- **The form**: the id (when adding), then the transport. For stdio: the program, the arguments on one line (quote an argument that has a space), the working directory and the environment. For Streamable HTTP: the URL, OAuth (`disabled`, `optional` or `required`) and the headers. Then enabled and required, and under **Advanced** the approval and exposure policies, the enabled and disabled tools (separated by commas) and the timeouts and concurrent calls. A new server starts from the defaults. The keys are in [Forms](/docs/terminal-interface#forms).
+- **Secrets**: each environment variable or header row is `[public]` or `[secret]`. A secret's value is kept as a [credential](#credentials) the server refers to from `credentialEnvironment` or `credentialHeaders`; a new one is named after the server and the variable (`github-GITHUB_TOKEN`), and the form shows the value as dots. A credential the server no longer uses is removed, unless another server uses it; deleting a server removes its credentials the same way.
+- **Saving** writes the server, connects it when it is enabled, then writes its secrets; the list shows how the connection went. Like `/providers`, a save over settings that changed meanwhile is refused, and the form keeps its entries.
+- `/mcp verbose` writes the servers and their tools into the conversation, and `/mcp login ID` opens the manager on that server's login.
+
 ## Credentials [#credentials]
 
-`mcp add` sets no credentials. For a server that needs a token, edit `mcp.toml`: point an environment variable or a header at a key of `[credentials]`, the only place the value is kept (the file is readable only by you).
+`mcp add` sets no credentials. For a server that needs a token, mark its row secret in `/mcp` ([above](#interface)), or edit `mcp.toml`: point an environment variable or a header at a key of `[credentials]`, the only place the value is kept (the file is readable only by you).
 
 <Tabs items={["stdio: an environment variable", "HTTP: a header"]}>
   <Tab value="stdio: an environment variable">
@@ -107,6 +117,7 @@ hanafubuki-agent mcp login docs
 - The command waits up to 5 minutes; then it prints `docs: logged in` and the servers' states. Ctrl-C ends it.
 - The tokens are kept in the platform's secure store (the keyring), not in `mcp.toml`; without a reachable keyring (`doctor` checks it) the login cannot keep them.
 - A server whose `oauth` is `"disabled"` (the default) refuses the login: `OAuth is disabled for this MCP server`.
+- In the terminal interface, `/mcp login docs` (or `l` on the server in `/mcp`) logs in the same way: the address is written into the conversation to open, the manager waits for the browser, and Esc cancels the login.
 
 ## Approval and exposure policies [#policies]
 

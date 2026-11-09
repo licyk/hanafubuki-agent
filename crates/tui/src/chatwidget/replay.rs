@@ -25,6 +25,8 @@ impl ChatWidget {
         self.retry_status_header = None;
         self.had_work_activity = false;
         self.mode = opened.mode;
+        self.session_open = opened.session_id.is_some();
+        self.setup_needed = opened.setup_needed;
         self.add_to_history(history_cell::SessionHeaderHistoryCell::new(
             opened.model,
             self.directory.clone(),
@@ -41,6 +43,9 @@ impl ChatWidget {
             self.add_boxed_history(cell);
         }
         self.needs_final_message_separator = false;
+        if self.setup_needed {
+            self.open_setup();
+        }
     }
 
     /// The cells of replayed transcript items, oldest first.
