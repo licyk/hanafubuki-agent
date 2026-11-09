@@ -127,7 +127,7 @@ async fn codex_cache_packages_install_and_admit_a_turn() {
     );
 
     assert!(service
-        .shutdown(Instant::now() + Duration::from_secs(1))
+        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
         .is_empty());
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }

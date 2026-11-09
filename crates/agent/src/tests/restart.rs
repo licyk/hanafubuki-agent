@@ -12,8 +12,6 @@ use super::startup::{launcher, marker, start_with, storage_of, unrecovered_with,
 use super::*;
 use crate::test_support::test_paths;
 
-const WAIT: Duration = Duration::from_secs(20);
-
 fn policy(delay: Duration) -> AgentRestartPolicy {
     AgentRestartPolicy {
         delays: vec![delay; 3],
@@ -48,7 +46,7 @@ fn plain_agent(
 
 /// Waits until Agent `generation` runs, and returns it.
 fn running(slot: &AgentSlot, generation: u64) -> AgentHandle {
-    wait_until(&format!("Agent {generation} running"), WAIT, || {
+    wait_until(&format!("Agent {generation} running"), || {
         slot.agent()
             .is_ok_and(|agent| agent.generation() == generation)
     });
@@ -56,7 +54,7 @@ fn running(slot: &AgentSlot, generation: u64) -> AgentHandle {
 }
 
 fn faulted(slot: &AgentSlot) -> AgentAvailability {
-    wait_until("the Agent faulting", WAIT, || {
+    wait_until("the Agent faulting", || {
         matches!(
             slot.status().availability,
             AgentAvailability::Faulted { .. }
@@ -324,7 +322,7 @@ fn rebuilding_the_history_index_repairs_what_recovery_quarantined() {
     let [broken, intact] = [0, 1].map(|_| create_session(&agent));
     drop(agent);
     slot.disable().unwrap();
-    wait_until("the Agent turning off", WAIT, || {
+    wait_until("the Agent turning off", || {
         slot.status().availability
             == AgentAvailability::Disabled {
                 reason: AgentDisabledReason::Setting,
@@ -386,7 +384,7 @@ fn turning_the_agent_off_stops_it_in_order_and_turning_it_on_starts_it() {
         Err("the Agent is being turned off".to_string())
     );
 
-    wait_until("the Agent turning off", WAIT, || {
+    wait_until("the Agent turning off", || {
         slot.status().availability
             == AgentAvailability::Disabled {
                 reason: AgentDisabledReason::Setting,
@@ -417,7 +415,7 @@ fn the_modules_stop_turns_the_agent_off_and_waits_until_it_is_off() {
     let (slot, marker, agent) = plain_agent(&paths, AgentRestartPolicy::default());
     drop(agent);
 
-    slot.turn_off(Instant::now() + WAIT).unwrap();
+    slot.turn_off(Instant::now() + TEST_WAIT).unwrap();
     // Off when the stop returns, its runtime stopped.
     assert_eq!(
         slot.status().availability,
@@ -436,7 +434,7 @@ fn the_modules_stop_turns_the_agent_off_and_waits_until_it_is_off() {
     // Shutdown stopped the Agent first: the module's later stop finds the
     // slot closed and returns at once.
     let started = Instant::now();
-    slot.turn_off(Instant::now() + WAIT).unwrap();
+    slot.turn_off(Instant::now() + TEST_WAIT).unwrap();
     assert!(started.elapsed() < Duration::from_secs(1));
     assert_eq!(slot.status().availability, AgentAvailability::Stopped);
 }
@@ -481,7 +479,7 @@ fn an_agent_stopped_by_a_crash_loop_starts_when_its_module_is_turned_off_and_on(
         }
     );
     // Turned off and on, it starts.
-    slot.turn_off(Instant::now() + WAIT).unwrap();
+    slot.turn_off(Instant::now() + TEST_WAIT).unwrap();
     slot.enable().unwrap();
 
     let _ = running(&slot, 1);
@@ -547,7 +545,7 @@ fn a_stopping_agent_sweeps_the_processes_it_left_running() {
         "a process of the old Agent outlived it"
     );
     #[cfg(target_os = "linux")]
-    wait_until("the ledger forgetting the ended process", WAIT, || {
+    wait_until("the ledger forgetting the ended process", || {
         !storage_of(&paths).process_groups_file.exists()
     });
     shut_down(&slot, &marker, &paths);

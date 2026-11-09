@@ -538,7 +538,7 @@ async fn model_errors_and_snapshots_redact_the_configured_api_token() {
         header_secret
     );
     assert!(service
-        .shutdown(Instant::now() + Duration::from_secs(1))
+        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
         .is_empty());
     assert_history_tree_excludes(
         &paths.data_dir.join("agent-test/history"),

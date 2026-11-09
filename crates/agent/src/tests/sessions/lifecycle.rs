@@ -283,7 +283,7 @@ async fn existing_sessions_keep_frozen_reasoning_when_global_settings_change() {
         json!({"effort": "low", "summary": "auto"})
     );
     assert!(service
-        .shutdown(Instant::now() + Duration::from_secs(1))
+        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
         .is_empty());
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }

@@ -93,7 +93,7 @@ async fn run_turn_answering(
             .await
     });
     let mut answered = Vec::new();
-    let deadline = Instant::now() + Duration::from_secs(60);
+    let deadline = Instant::now() + TEST_WAIT;
     while answered.len() < answers.len() {
         assert!(Instant::now() < deadline, "the approvals were not asked");
         let pending = service
@@ -122,7 +122,7 @@ async fn run_turn_answering(
             .unwrap();
         answered.push(request);
     }
-    let outcome = tokio::time::timeout(Duration::from_secs(60), turn)
+    let outcome = tokio::time::timeout(TEST_WAIT, turn)
         .await
         .expect("the turn ends")
         .unwrap()

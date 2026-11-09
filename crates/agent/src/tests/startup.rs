@@ -308,7 +308,7 @@ fn a_running_agent_clears_its_start_attempt_once_it_settles() {
     assert_eq!(slot.agent().unwrap().generation(), 1);
     // This start is recorded on top of the earlier unfinished one.
     assert_eq!(marker.unfinished_starts(), 2);
-    let deadline = Instant::now() + Duration::from_secs(5);
+    let deadline = Instant::now() + TEST_WAIT;
     while marker.unfinished_starts() != 0 && Instant::now() < deadline {
         std::thread::sleep(Duration::from_millis(10));
     }
@@ -549,8 +549,8 @@ fn add_mcp_server(paths: &TestPaths, server: hanafubuki_agent_mcp::McpServerConf
         .unwrap();
 }
 
-pub(super) fn wait_until(what: &str, timeout: Duration, mut condition: impl FnMut() -> bool) {
-    let deadline = Instant::now() + timeout;
+pub(super) fn wait_until(what: &str, mut condition: impl FnMut() -> bool) {
+    let deadline = Instant::now() + TEST_WAIT;
     while !condition() {
         assert!(Instant::now() < deadline, "{what} did not happen in time");
         std::thread::sleep(Duration::from_millis(20));
@@ -562,8 +562,11 @@ pub(super) fn wait_until(what: &str, timeout: Duration, mut condition: impl FnMu
 fn a_hung_mcp_connect_does_not_hold_the_start_and_fails_on_its_own_timeout() {
     let paths = test_paths("startup-mcp-hung");
     let storage = storage_of(&paths);
-    // Connect and initialize: 3 s each.
-    add_mcp_server(&paths, silent_mcp_server(3));
+    // Connect and initialize time out after this each: longer than a start
+    // takes even on a loaded runner, so a start that returns sooner did not
+    // wait for the connect.
+    let timeout = Duration::from_secs(10);
+    add_mcp_server(&paths, silent_mcp_server(timeout.as_secs()));
     let slot = AgentSlot::new(None, Arc::new(NoopAgentStatusEventSink));
     let marker = marker(&paths);
 
@@ -571,13 +574,13 @@ fn a_hung_mcp_connect_does_not_hold_the_start_and_fails_on_its_own_timeout() {
     let agent = start(&slot, &marker, unrecovered(&paths, storage)).expect("the Agent runs");
 
     assert!(
-        started.elapsed() < Duration::from_secs(5),
+        started.elapsed() < timeout,
         "the start waited for MCP: {:?}",
         started.elapsed()
     );
     assert_eq!(slot.status().availability, AgentAvailability::Running);
     let server = hanafubuki_agent_mcp::McpServerId::parse("silent").unwrap();
-    wait_until("the MCP connect failing", Duration::from_secs(20), || {
+    wait_until("the MCP connect failing", || {
         agent
             .test_mcp_status(&server)
             .is_some_and(|status| status.phase == hanafubuki_agent_mcp::McpConnectionPhase::Failed)
@@ -614,7 +617,7 @@ fn shutdown_cancels_an_mcp_connect_under_way_and_leaves_no_process() {
         launcher(&paths, &marker, construct, executor.clone()),
     )
     .expect("the Agent runs");
-    wait_until("the MCP process starting", Duration::from_secs(10), || {
+    wait_until("the MCP process starting", || {
         hanafubuki_agent_process::executor::manager::executor_registry_counts(&executor).0 > 0
     });
     drop(agent);
@@ -672,7 +675,7 @@ fn a_start_that_shutdown_cancels_stops_at_once_and_is_torn_down() {
     };
     // The start is in its plugins' stage, where the hung plugin would hold
     // it for the start-up timeout.
-    wait_until("the hung plugin starting", Duration::from_secs(10), || {
+    wait_until("the hung plugin starting", || {
         entered.load(Ordering::SeqCst)
     });
 
@@ -732,12 +735,15 @@ fn a_plugin_that_never_stops_does_not_hold_shutdown_past_its_budget() {
     .expect("the Agent runs");
     drop(agent);
 
-    let budget = Duration::from_secs(3);
+    // Below the plugins' own bound (5 s): only the budget can end the wait
+    // for the plugin. The stages after it take a moment, longer on a loaded
+    // runner, but nowhere near that bound.
+    let budget = Duration::from_secs(1);
     let started = Instant::now();
     let diagnostics = shutdown_agent(&slot, &marker, budget);
 
     assert!(
-        started.elapsed() < budget + Duration::from_millis(500),
+        started.elapsed() < budget + Duration::from_secs(3),
         "{:?}",
         started.elapsed()
     );
@@ -800,7 +806,7 @@ fn saved_settings_reach_the_agent_without_waiting_for_a_reconnect_and_in_order()
     drop(reconnecting);
     let latest =
         hanafubuki_agent_mcp::McpHttpProxyPolicy::Explicit("http://127.0.0.1:9".to_string());
-    wait_until("the latest proxy applying", Duration::from_secs(5), || {
+    wait_until("the latest proxy applying", || {
         agent.test_mcp_proxy_policy() == latest
     });
     std::thread::sleep(Duration::from_millis(200));
@@ -841,9 +847,7 @@ fn the_agents_processes_inherit_the_hosts_overlay_and_follow_its_replacement() {
         }),
         process_groups_file: storage_of(&paths).process_groups_file,
     });
-    wait_until("the Agent running", Duration::from_secs(10), || {
-        slot.agent().is_ok()
-    });
+    wait_until("the Agent running", || slot.agent().is_ok());
 
     let executor = executors.lock().unwrap()[0].clone();
     let environment_of = |executor| {

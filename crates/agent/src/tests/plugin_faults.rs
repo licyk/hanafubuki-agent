@@ -456,7 +456,7 @@ impl Fixture {
     /// Waits until the host stopped `faulty` for its panic in `point`, checks
     /// that every other plugin kept running, then retries it.
     async fn assert_failed_then_retry(self, point: Point, described: &str) {
-        let deadline = Instant::now() + Duration::from_secs(5);
+        let deadline = Instant::now() + TEST_WAIT;
         while self.status("faulty").state != AgentPluginState::Failed {
             assert!(Instant::now() < deadline, "faulty never failed: {point:?}");
             tokio::time::sleep(Duration::from_millis(10)).await;
@@ -623,7 +623,7 @@ async fn a_panicking_turn_admission_contributor_is_left_out_of_that_admission() 
     assert_eq!(fixture.turn("go").await.unwrap().final_answer, "admitted");
     // Once the host stopped the plugin, its contributor is gone and the
     // next turn is admitted.
-    let deadline = Instant::now() + Duration::from_secs(5);
+    let deadline = Instant::now() + TEST_WAIT;
     while fixture.status("faulty").state != AgentPluginState::Failed {
         assert!(Instant::now() < deadline, "faulty never failed");
         tokio::time::sleep(Duration::from_millis(10)).await;
@@ -676,7 +676,7 @@ async fn a_panicking_context_contributor_is_left_out_of_that_admission() {
     // The turn is admitted without the contributor's sections; the panic
     // still fails its plugin.
     assert_eq!(fixture.turn("go").await.unwrap().final_answer, "admitted");
-    let deadline = Instant::now() + Duration::from_secs(5);
+    let deadline = Instant::now() + TEST_WAIT;
     while fixture.status("faulty").state != AgentPluginState::Failed {
         assert!(Instant::now() < deadline, "faulty never failed");
         tokio::time::sleep(Duration::from_millis(10)).await;
@@ -758,7 +758,7 @@ async fn turning_a_faulted_plugin_off_and_on_starts_it_again() {
     let server = FakeServer::start(Vec::new()).await;
     let fixture = Fixture::new("fault-disable", &server).await;
     fixture.plan.arm(Point::Worker);
-    let deadline = Instant::now() + Duration::from_secs(5);
+    let deadline = Instant::now() + TEST_WAIT;
     while fixture.status("faulty").state != AgentPluginState::Failed {
         assert!(Instant::now() < deadline, "faulty never failed");
         tokio::time::sleep(Duration::from_millis(10)).await;

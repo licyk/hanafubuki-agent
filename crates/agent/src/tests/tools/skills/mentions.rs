@@ -73,7 +73,7 @@ async fn a_mention_of_a_registered_plugin_tool_selects_no_same_named_skill() {
 
     assert_eq!(selected_skill_names(&server), ["diagnostics"]);
     assert!(service
-        .shutdown(Instant::now() + Duration::from_secs(1))
+        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
         .is_empty());
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }

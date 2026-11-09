@@ -12,7 +12,7 @@ const RECAP: &str =
     r#"{"summary":"Fixed the login timeout; not deployed yet.","next_action":"Deploy the fix?"}"#;
 
 async fn wait_until(what: &str, mut done: impl FnMut() -> bool) {
-    let deadline = Instant::now() + Duration::from_secs(10);
+    let deadline = Instant::now() + TEST_WAIT;
     while !done() {
         assert!(Instant::now() < deadline, "timed out waiting until {what}");
         tokio::time::sleep(Duration::from_millis(10)).await;

@@ -76,7 +76,7 @@ fn request_text(server: &FakeServer, index: usize) -> String {
 }
 
 async fn wait_for_goal_row(service: &AgentApplicationService, state: AgentPluginState) {
-    let deadline = Instant::now() + Duration::from_secs(10);
+    let deadline = Instant::now() + TEST_WAIT;
     while service
         .plugin_status()
         .into_iter()
@@ -239,10 +239,8 @@ async fn an_objective_replaced_mid_turn_is_announced() {
     let (service, paths, server, session_id) = goal_service(
         "goal-replaced",
         vec![
-            (
-                assistant_events("Working on A."),
-                Duration::from_millis(800),
-            ),
+            // The objective is replaced while this answer is on its way.
+            (assistant_events("Working on A."), Duration::from_secs(5)),
             (
                 tool_events("update_goal", r#"{"status":"complete"}"#),
                 Duration::ZERO,
@@ -263,7 +261,9 @@ async fn an_objective_replaced_mid_turn_is_announced() {
     let (outcome, replaced) = tokio::join!(
         service.start_turn(session_id, "Go.".to_string().into()),
         async {
-            tokio::time::sleep(Duration::from_millis(300)).await;
+            while server.requests().is_empty() {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
             service
                 .set_goal(
                     session_id,

@@ -37,7 +37,7 @@ async fn unified_exec_completes_only_after_manual_exact_approval() {
     });
 
     // The first turn's sampling and planning, on a loaded CI runner.
-    let (turn_identity, request) = tokio::time::timeout(Duration::from_secs(30), async {
+    let (turn_identity, request) = tokio::time::timeout(TEST_WAIT, async {
         loop {
             let snapshot = service.snapshot(session_id).unwrap();
             if let Some(turn_identity) = snapshot.turn {
@@ -93,7 +93,7 @@ async fn unified_exec_completes_only_after_manual_exact_approval() {
 
     assert_eq!(
         // A cold PowerShell start on a loaded CI runner takes seconds.
-        tokio::time::timeout(Duration::from_secs(60), turn)
+        tokio::time::timeout(TEST_WAIT, turn)
             .await
             .expect("approved command turn must finish within the fixture deadline")
             .unwrap()

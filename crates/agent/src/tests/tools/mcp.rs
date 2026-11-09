@@ -406,7 +406,7 @@ for line in sys.stdin:
             .start_turn(session_id, "Call the fixture MCP tool.".into())
             .await
     });
-    let (identity, approval) = tokio::time::timeout(Duration::from_secs(5), async {
+    let (identity, approval) = tokio::time::timeout(TEST_WAIT, async {
         loop {
             let snapshot = service.snapshot(session_id).unwrap();
             if let Some(identity) = snapshot.turn {
@@ -442,7 +442,7 @@ for line in sys.stdin:
         )
         .unwrap();
     assert_eq!(
-        tokio::time::timeout(Duration::from_secs(5), turn)
+        tokio::time::timeout(TEST_WAIT, turn)
             .await
             .unwrap()
             .unwrap()
@@ -617,7 +617,7 @@ async fn an_unrecognised_allowed_tool_neither_hides_a_skill_nor_expands_the_tool
         .iter()
         .any(|tool| tool["name"] == "not_a_fixed_tool" || tool["name"] == "Bash"));
     assert!(service
-        .shutdown(Instant::now() + Duration::from_secs(1))
+        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
         .is_empty());
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }

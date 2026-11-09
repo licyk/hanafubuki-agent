@@ -193,7 +193,7 @@ async fn a_call_waiting_for_approval_lets_the_step_proceed_and_allow_for_session
         .unwrap();
     let turn = spawn_turn(&service, session.id);
     wait_for_event(&service, session.id, "finished call-2").await;
-    let requests = tokio::time::timeout(Duration::from_secs(10), async {
+    let requests = tokio::time::timeout(TEST_WAIT, async {
         loop {
             let requests = approval_requests(&service, session.id);
             if !requests.is_empty() {
@@ -364,7 +364,7 @@ async fn a_panicking_mcp_call_fails_its_call_and_its_server_only() {
         .unwrap();
     assert_eq!(mcp_plugin.state, super::host::AgentPluginState::Active);
     // The policy's first reconnect comes after 2 s.
-    tokio::time::timeout(Duration::from_secs(30), async {
+    tokio::time::timeout(TEST_WAIT, async {
         while mcp_status(&service, "panicky").await.phase
             != hanafubuki_agent_mcp::McpConnectionPhase::Ready
         {
@@ -647,7 +647,7 @@ async fn wait_for_event(
     session_id: hanafubuki_agent_kernel::AgentSessionId,
     event: &str,
 ) {
-    tokio::time::timeout(Duration::from_secs(10), async {
+    tokio::time::timeout(TEST_WAIT, async {
         while !tool_events_of(service, session_id)
             .iter()
             .any(|seen| seen == event)

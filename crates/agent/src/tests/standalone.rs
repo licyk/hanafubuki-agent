@@ -9,8 +9,6 @@ use hanafubuki_agent_foundation::paths::ResolvedPath;
 
 use super::*;
 
-const START_TIMEOUT: Duration = Duration::from_secs(30);
-
 struct Standalone {
     _root: tempfile::TempDir,
     home: PathBuf,
@@ -88,7 +86,7 @@ fn the_standalone_runtime_runs_a_turn_in_its_working_directory() {
     );
 
     runtime.start();
-    let agent = runtime.wait_until_started(START_TIMEOUT).unwrap();
+    let agent = runtime.wait_until_started(TEST_WAIT).unwrap();
     let sink = Arc::new(RecordingSink::default());
     let session = agent
         .runtime()
@@ -117,7 +115,7 @@ fn the_standalone_runtime_runs_a_turn_in_its_working_directory() {
             }
         })
         .unwrap();
-    let deadline = Instant::now() + START_TIMEOUT;
+    let deadline = Instant::now() + TEST_WAIT;
     let turn = loop {
         let turn = agent.snapshot(session.id).unwrap().turn;
         if let Some(turn) = turn.filter(|turn| turn.phase.is_terminal()) {
@@ -155,7 +153,7 @@ fn the_standalone_runtime_runs_a_turn_in_its_working_directory() {
     // A second runtime on the same data directory does not start.
     let second = fixture.runtime().unwrap();
     second.start();
-    let refused = second.wait_until_started(START_TIMEOUT).err().unwrap();
+    let refused = second.wait_until_started(TEST_WAIT).err().unwrap();
     assert!(
         refused.to_string().contains(&format!(
             "the Agent data directory {} is in use by another process",
@@ -196,7 +194,7 @@ fn the_working_directory_changes_while_the_agent_runs() {
     std::fs::create_dir_all(&app).unwrap();
     let runtime = fixture.runtime().unwrap();
     runtime.start();
-    let agent = runtime.wait_until_started(START_TIMEOUT).unwrap();
+    let agent = runtime.wait_until_started(TEST_WAIT).unwrap();
     let session = agent
         .runtime()
         .block_on({
@@ -313,7 +311,7 @@ fn the_interface_preferences_are_read_and_written_through_the_running_agent() {
     let fixture = standalone("http://127.0.0.1:9");
     let runtime = fixture.runtime().unwrap();
     runtime.start();
-    let agent = runtime.wait_until_started(START_TIMEOUT).unwrap();
+    let agent = runtime.wait_until_started(TEST_WAIT).unwrap();
     let call = agent.clone();
     let (before, written) = agent
         .runtime()

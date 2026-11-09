@@ -136,7 +136,7 @@ async fn the_memory_note_tool_is_bound_to_the_turn_that_planned_it() {
     assert!(handler.invoke(invocation(turn_id), None).await.is_err());
 
     assert!(service
-        .shutdown(Instant::now() + Duration::from_secs(1))
+        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
         .is_empty());
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }
@@ -365,7 +365,7 @@ async fn a_cited_memory_answer_is_stripped_and_its_usage_recorded() {
     assert_eq!(outcome.final_answer, "Run the narrow suite.");
     let body = String::from_utf8(server.requests()[0].body.clone()).unwrap();
     assert!(body.contains("MEMORY_SUMMARY BEGINS"));
-    let deadline = Instant::now() + Duration::from_secs(5);
+    let deadline = Instant::now() + TEST_WAIT;
     while citation_usage(&repository, "9") == 0 {
         assert!(
             Instant::now() < deadline,
@@ -440,7 +440,7 @@ async fn turning_the_memory_plugin_off_removes_memory_from_the_next_request() {
         .set_plugin_enabled("memory".into(), false)
         .await
         .unwrap();
-    let deadline = Instant::now() + Duration::from_secs(5);
+    let deadline = Instant::now() + TEST_WAIT;
     while memory_prompts() != 0 {
         assert!(Instant::now() < deadline, "the memory plugin never stopped");
         tokio::time::sleep(Duration::from_millis(10)).await;
@@ -582,7 +582,7 @@ async fn the_memory_plugin_registers_its_prompt_tool_source_and_observer_until_i
     assert!(mounted.observers.registry().snapshot().is_empty());
     mounted.root.fiber().dispose().await.unwrap();
     assert!(service
-        .shutdown(Instant::now() + Duration::from_secs(1))
+        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
         .is_empty());
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }
@@ -641,7 +641,7 @@ async fn scans_signalled_by_session_actions(name: &str, memory_plugin: bool) -> 
             .await
             .unwrap();
         let observers = service.test_plugin_registries().observers;
-        let deadline = Instant::now() + Duration::from_secs(5);
+        let deadline = Instant::now() + TEST_WAIT;
         while observers
             .registry()
             .snapshot()

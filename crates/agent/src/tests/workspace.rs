@@ -123,7 +123,7 @@ async fn the_workspace_does_not_move_while_a_turn_runs() {
             .start_turn(session.id, "Take your time".to_string().into())
             .await
     });
-    let deadline = Instant::now() + Duration::from_secs(10);
+    let deadline = Instant::now() + TEST_WAIT;
     while service
         .snapshot(session.id)
         .unwrap()

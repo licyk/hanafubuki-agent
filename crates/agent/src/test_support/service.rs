@@ -28,6 +28,11 @@ use crate::{
 /// can take longer than the stop itself takes in practice.
 pub const TEST_SHUTDOWN_DEADLINE: Duration = Duration::from_secs(10);
 
+/// How long a test waits for something it expects to happen. Only the
+/// outcome matters, so the wait is generous: a loaded CI runner gets there
+/// seconds late.
+pub const TEST_WAIT: Duration = Duration::from_secs(60);
+
 static NEXT_TEST_ID: AtomicU64 = AtomicU64::new(1);
 
 /// A temporary directory laid out as an application's data directory.

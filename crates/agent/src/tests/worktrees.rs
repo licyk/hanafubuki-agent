@@ -98,7 +98,7 @@ async fn worktrees_are_made_listed_bound_and_removed_through_their_plugin() {
         .set_plugin_enabled("worktree".into(), false)
         .await
         .unwrap();
-    let deadline = Instant::now() + Duration::from_secs(10);
+    let deadline = Instant::now() + TEST_WAIT;
     while service
         .plugin_status()
         .into_iter()

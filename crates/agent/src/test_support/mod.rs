@@ -18,7 +18,7 @@ pub use plugins::{mount, mount_tool_plugin, test_tool_context, MountedPlugin, Mo
 pub use service::{
     configure_test_provider, enable_memory, enable_two_skills, service_with_host, test_host,
     test_paths, FixedProxy, FixedWorkspaceRoots, NoHostContext, TestBlockingOperationPort,
-    TestPaths, TEST_SHUTDOWN_DEADLINE,
+    TestPaths, TEST_SHUTDOWN_DEADLINE, TEST_WAIT,
 };
 
 /// A secure store in memory.

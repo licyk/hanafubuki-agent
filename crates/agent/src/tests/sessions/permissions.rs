@@ -169,7 +169,7 @@ async fn wait_for_turn_end(
     service: &AgentApplicationService,
     session_id: AgentSessionId,
 ) -> hanafubuki_agent_kernel::AgentTurnSnapshot {
-    let deadline = Instant::now() + Duration::from_secs(30);
+    let deadline = Instant::now() + TEST_WAIT;
     loop {
         if let Some(turn) = service
             .snapshot(session_id)

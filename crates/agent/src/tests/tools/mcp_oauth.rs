@@ -79,13 +79,17 @@ async fn a_refused_or_cancelled_oauth_login_cancels_its_flow() {
         phase(&application.mcp_snapshot().await.unwrap(), &server),
         McpOAuthPhase::LoggedOut
     );
-    let address = url::Url::parse(&redirect).unwrap();
-    assert!(
-        tokio::net::TcpStream::connect(("127.0.0.1", address.port().unwrap()))
-            .await
-            .is_err(),
-        "the loopback is closed"
-    );
+    // A process another test spawns at that moment can hold a copy of the
+    // listener until it execs: the port refuses connections soon after.
+    let port = url::Url::parse(&redirect).unwrap().port().unwrap();
+    let deadline = Instant::now() + TEST_WAIT;
+    while tokio::net::TcpStream::connect(("127.0.0.1", port))
+        .await
+        .is_ok()
+    {
+        assert!(Instant::now() < deadline, "the loopback is not closed");
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
     fixture.abort();
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }

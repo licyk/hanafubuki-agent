@@ -172,7 +172,7 @@ fn observers_owned_by(host: &AgentHost, owner: &str) -> usize {
 
 /// Waits for a teardown that runs in the background.
 async fn eventually(mut condition: impl FnMut() -> bool) {
-    let deadline = Instant::now() + Duration::from_secs(5);
+    let deadline = Instant::now() + TEST_WAIT;
     while !condition() {
         assert!(Instant::now() < deadline, "the condition never held");
         tokio::time::sleep(Duration::from_millis(10)).await;

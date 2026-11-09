@@ -227,11 +227,17 @@ async fn a_stop_hook_keeps_the_turn_going_once() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn a_hook_past_its_timeout_has_no_say() {
+    // Far past its 1 s timeout: a turn that ends before it did not wait for
+    // the hook, however slow the machine.
+    const HOOK_RUNS_FOR: Duration = Duration::from_secs(60);
     let (service, paths, _server) = hooked_service(
         "hooks-timeout",
         json!({ "PreToolUse": [{ "hooks": [{
             "type": "command",
-            "command": "sleep 5; echo 'too late' >&2; exit 2",
+            "command": format!(
+                "sleep {}; echo 'too late' >&2; exit 2",
+                HOOK_RUNS_FOR.as_secs()
+            ),
             "timeout": 1,
         }]}]}),
         vec![
@@ -252,7 +258,11 @@ async fn a_hook_past_its_timeout_has_no_say() {
         .await
         .unwrap();
 
-    assert!(started.elapsed() < Duration::from_secs(5));
+    assert!(
+        started.elapsed() < HOOK_RUNS_FOR,
+        "the turn waited for the hook: {:?}",
+        started.elapsed()
+    );
     assert_eq!(
         hook_outcomes(&service, session.id),
         [(AgentHookEvent::PreToolUse, AgentHookOutcome::Failed)],
@@ -346,7 +356,7 @@ async fn with_the_plugin_off_no_hook_runs_and_the_calls_are_unavailable() {
         .set_plugin_enabled("hooks".into(), false)
         .await
         .unwrap();
-    let deadline = Instant::now() + Duration::from_secs(10);
+    let deadline = Instant::now() + TEST_WAIT;
     while service
         .plugin_status()
         .into_iter()
