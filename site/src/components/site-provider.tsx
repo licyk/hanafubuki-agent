@@ -3,6 +3,7 @@ import { RootProvider } from "fumadocs-ui/provider/tanstack";
 import { useEffect, useState, type ReactNode } from "react";
 
 import SearchDialog from "@/components/search";
+import { SiteLink } from "@/components/site-link";
 import {
   DEFAULT_LOCALE,
   isLocale,
@@ -33,6 +34,7 @@ export function SiteProvider({ children }: { children: ReactNode }) {
 
   return (
     <RootProvider
+      components={{ Link: SiteLink }}
       i18n={{ ...provider, locale, onLocaleChange: changeLocale }}
       search={{ SearchDialog }}
     >
