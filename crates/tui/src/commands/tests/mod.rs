@@ -8,6 +8,8 @@ fn every_command_is_found_by_its_name_and_its_aliases() {
         }
     }
     assert_eq!(find("quit"), Some(&exit::EXIT));
+    assert_eq!(find("clean"), Some(&terminals::STOP));
+    assert_eq!(find("cwd"), Some(&pwd::PWD));
     assert_eq!(find("mod"), None);
 }
 
@@ -30,15 +32,27 @@ fn the_table_keeps_the_presentation_order() {
             "providers",
             "mode",
             "skills",
+            "rename",
             "new",
+            "archive",
+            "delete",
             "resume",
+            "fork",
+            "init",
             "compact",
+            "recap",
+            "copy",
+            "export",
             "diff",
             "mention",
             "status",
+            "pwd",
             "mcp",
             "raw",
             "tui",
+            "ps",
+            "stop",
+            "clear",
             "exit"
         ]
     );
@@ -53,20 +67,29 @@ fn availability_follows_the_spec() {
         .collect();
     assert_eq!(
         during_task,
-        ["skills", "diff", "mention", "status", "mcp", "raw", "tui", "exit"]
+        [
+            "skills", "copy", "diff", "mention", "status", "pwd", "mcp", "raw", "tui", "ps",
+            "stop", "exit"
+        ]
     );
     let needs_session: Vec<&str> = COMMANDS
         .into_iter()
         .filter(|command| command.needs_session)
         .map(|command| command.name)
         .collect();
-    assert_eq!(needs_session, ["model", "mode", "compact", "status"]);
+    assert_eq!(
+        needs_session,
+        ["model", "mode", "rename", "compact", "status"]
+    );
     let inline_args: Vec<&str> = COMMANDS
         .into_iter()
         .filter(|command| command.inline_args)
         .map(|command| command.name)
         .collect();
-    assert_eq!(inline_args, ["mcp", "raw"]);
+    assert_eq!(
+        inline_args,
+        ["rename", "resume", "fork", "export", "mcp", "raw", "clear"]
+    );
 }
 
 #[test]
@@ -76,6 +99,8 @@ fn a_prefix_is_a_case_insensitive_subsequence_of_an_enabled_command() {
     assert!(has_prefix("rsm", &[]));
     assert!(has_prefix("qu", &[]));
     assert!(!has_prefix("zz", &[]));
-    assert!(!has_prefix("rsm", &["resume"]));
+    assert!(!has_prefix("rsm", &["resume", "rename"]));
     assert!(!has_prefix("qu", &["exit"]));
 }
+
+mod session;

@@ -635,4 +635,5 @@ fn a_resumed_session_loads_its_earlier_pages_into_the_owned_transcript() {
 }
 
 mod backtrack;
+mod session_commands;
 mod settings;

@@ -8,14 +8,27 @@
 //! (`bottom_pane::module_view`): a command that panics is turned off for
 //! the rest of the run, and the chat goes on.
 
+mod clear;
+mod confirm;
+mod copy;
 mod exit;
+mod export;
+mod fork;
+mod init;
+mod leave;
 pub(crate) mod mcp;
 mod mode;
 mod model;
+mod prompt;
 pub(crate) mod providers;
+mod pwd;
 mod raw;
+mod recap;
+mod rename;
 mod reports;
+mod resume;
 mod session;
+mod terminals;
 mod tui;
 mod workspace;
 
@@ -23,30 +36,42 @@ use std::fmt;
 
 use hanafubuki_agent::AgentSessionMode;
 
-use crate::agent_bridge::{McpReply, ProviderReply};
+use crate::agent_bridge::{McpReply, ProviderReply, SessionCall, SessionReply};
 use crate::app_event::{AgentCommand, AppEvent, AppEventSender, Op};
 use crate::bottom_pane::{BottomPane, BottomPaneView, SelectionViewParams};
-use crate::history_cell::HistoryCell;
+use crate::history_cell::{self, HistoryCell};
 pub(crate) use mcp::MCP;
 pub(crate) use mode::mode_name;
 pub(crate) use model::{show_model_choices, MODEL};
 pub(crate) use providers::PROVIDERS;
 
 /// Every command, in presentation order: the most used first.
-pub(crate) static COMMANDS: [&CommandSpec; 14] = [
+pub(crate) static COMMANDS: [&CommandSpec; 26] = [
     &model::MODEL,
     &providers::PROVIDERS,
     &mode::MODE,
     &reports::SKILLS,
+    &rename::RENAME,
     &session::NEW,
-    &session::RESUME,
+    &leave::ARCHIVE,
+    &leave::DELETE,
+    &resume::RESUME,
+    &fork::FORK,
+    &init::INIT,
     &session::COMPACT,
+    &recap::RECAP,
+    &copy::COPY,
+    &export::EXPORT,
     &workspace::DIFF,
     &workspace::MENTION,
     &reports::STATUS,
+    &pwd::PWD,
     &mcp::MCP,
     &raw::RAW,
     &tui::TUI,
+    &terminals::PS,
+    &terminals::STOP,
+    &clear::CLEAR,
     &exit::EXIT,
 ];
 
@@ -108,11 +133,62 @@ pub(crate) fn has_prefix(name: &str, disabled: &[&str]) -> bool {
         })
 }
 
+/// Sends `call` to the Agent, from a view's action.
+pub(crate) fn send_session_call(app_event_tx: &AppEventSender, call: SessionCall) {
+    app_event_tx.send(AppEvent::Op(Op::Command(AgentCommand::Session(call))));
+}
+
 /// What the Agent answered a command's call, for the command's view.
 #[derive(Debug)]
 pub(crate) enum CommandReply {
     Providers(ProviderReply),
     Mcp(McpReply),
+    Session(SessionReply),
+}
+
+/// The command a session call's reply belongs to.
+pub(crate) fn session_reply_command(reply: &SessionReply) -> Option<&'static CommandSpec> {
+    Some(match reply {
+        SessionReply::Title(_) | SessionReply::TitleSuggestion(_) | SessionReply::Renamed(_) => {
+            &rename::RENAME
+        }
+        SessionReply::Archived => &leave::ARCHIVE,
+        SessionReply::Deleted => &leave::DELETE,
+        SessionReply::Forked(_) => &fork::FORK,
+        SessionReply::ExportPath(_)
+        | SessionReply::ExportedText(_)
+        | SessionReply::ExportedFile(_) => &export::EXPORT,
+        SessionReply::LastAnswer(_) => &copy::COPY,
+        SessionReply::Recap(_) => &recap::RECAP,
+        SessionReply::Terminals(_) => &terminals::PS,
+        SessionReply::TerminalsStopped { .. } => &terminals::STOP,
+        SessionReply::Roots(_) => &pwd::PWD,
+        SessionReply::Failed { command, .. } => return find(command),
+    })
+}
+
+/// What a session call found, handed to the command that asked; a failure
+/// goes into the transcript.
+pub(crate) fn on_session_reply(context: &mut CommandContext<'_>, reply: SessionReply) {
+    match reply {
+        SessionReply::Failed { command, error } => context.add_to_history(
+            history_cell::new_error_event(format!("/{command}: {error}")),
+        ),
+        SessionReply::Title(_) | SessionReply::TitleSuggestion(_) | SessionReply::Renamed(_) => {
+            rename::on_reply(context, reply)
+        }
+        SessionReply::Archived | SessionReply::Deleted => leave::on_reply(context, reply),
+        SessionReply::Forked(name) => fork::on_reply(context, name),
+        SessionReply::ExportPath(_)
+        | SessionReply::ExportedText(_)
+        | SessionReply::ExportedFile(_) => export::on_reply(context, reply),
+        SessionReply::LastAnswer(answer) => copy::on_reply(context, answer),
+        SessionReply::Recap(recap) => recap::on_reply(context, recap),
+        SessionReply::Terminals(_) | SessionReply::TerminalsStopped { .. } => {
+            terminals::on_reply(context, reply)
+        }
+        SessionReply::Roots(roots) => pwd::on_reply(context, roots),
+    }
 }
 
 /// What a command may touch: the app's channel and the bottom pane, whose
@@ -123,6 +199,7 @@ pub(crate) struct CommandContext<'a> {
     bottom_pane: &'a mut BottomPane,
     mode: AgentSessionMode,
     fullscreen_preference: bool,
+    owned_transcript: bool,
 }
 
 impl<'a> CommandContext<'a> {
@@ -132,6 +209,7 @@ impl<'a> CommandContext<'a> {
         bottom_pane: &'a mut BottomPane,
         mode: AgentSessionMode,
         fullscreen_preference: bool,
+        owned_transcript: bool,
     ) -> Self {
         Self {
             command,
@@ -139,6 +217,7 @@ impl<'a> CommandContext<'a> {
             bottom_pane,
             mode,
             fullscreen_preference,
+            owned_transcript,
         }
     }
 
@@ -148,6 +227,15 @@ impl<'a> CommandContext<'a> {
 
     pub(crate) fn agent_command(&self, command: AgentCommand) {
         self.send(AppEvent::Op(Op::Command(command)));
+    }
+
+    pub(crate) fn session_call(&self, call: SessionCall) {
+        self.agent_command(AgentCommand::Session(call));
+    }
+
+    /// The app owns the transcript (fullscreen), so it can select in it.
+    pub(crate) fn owned_transcript(&self) -> bool {
+        self.owned_transcript
     }
 
     /// The session's mode.

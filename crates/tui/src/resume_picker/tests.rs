@@ -15,12 +15,14 @@ fn rows(count: usize) -> Vec<Row> {
             session_id: AgentSessionId::new(idx as u64 + 1),
             preview: format!("item-{idx}"),
             updated_at: Some(now - Duration::days(idx as i64)),
+            cwd: None,
+            branch: None,
         })
         .collect()
 }
 
 fn picker_with(rows: Vec<Row>, view_rows: usize) -> ResumePicker {
-    let mut picker = ResumePicker::new(true);
+    let mut picker = ResumePicker::new(true, None);
     picker.loaded = true;
     picker.rows = rows;
     picker.update_view_rows(view_rows);
@@ -39,16 +41,22 @@ fn resume_table_snapshot() {
             session_id: AgentSessionId::new(1),
             preview: String::from("Fix resume picker timestamps"),
             updated_at: Some(now - Duration::seconds(42)),
+            cwd: Some(String::from("/home/user/projects/hanafubuki-agent")),
+            branch: Some(String::from("main")),
         },
         Row {
             session_id: AgentSessionId::new(2),
             preview: String::from("Investigate lazy pagination cap"),
             updated_at: Some(now - Duration::minutes(35)),
+            cwd: Some(String::from("/srv/app")),
+            branch: Some(String::from("fix/pagination-cap-for-long-lists")),
         },
         Row {
             session_id: AgentSessionId::new(3),
             preview: String::from("Explain the codebase"),
             updated_at: Some(now - Duration::hours(2)),
+            cwd: None,
+            branch: None,
         },
     ];
     let mut picker = picker_with(rows, 3);
@@ -57,7 +65,7 @@ fn resume_table_snapshot() {
 
     let metrics = calculate_column_metrics(&picker.rows);
 
-    let width: u16 = 80;
+    let width: u16 = 110;
     let height: u16 = 6;
     let backend = VT100Backend::new(width, height);
     let mut terminal = Terminal::with_options(backend).expect("terminal");
@@ -78,7 +86,7 @@ fn resume_table_snapshot() {
 
 #[test]
 fn resume_picker_screen_snapshot() {
-    let mut picker = ResumePicker::new(true);
+    let mut picker = ResumePicker::new(true, None);
     picker.loaded = true;
 
     let width: u16 = 80;
@@ -164,4 +172,85 @@ fn more_is_asked_for_near_the_end_and_a_query_starts_over() {
     assert_eq!(request.cursor, None);
     assert_eq!(request.search.as_deref(), Some("fx"));
     assert!(picker.rows.is_empty());
+}
+
+#[test]
+fn tab_lists_the_archived_sessions_and_ctrl_a_archives_or_restores() {
+    let mut picker = picker_with(rows(3), 5);
+    let ctrl_a = KeyEvent::new(KeyCode::Char('a'), KeyModifiers::CONTROL);
+    let request = picker.page_request().map(|request| request.lifecycle);
+    assert_eq!(request, None);
+
+    picker.handle_key(key(KeyCode::Down));
+    assert_eq!(picker.handle_key(ctrl_a), None);
+    let archived = AgentSessionId::new(2);
+    assert_eq!(
+        picker.take_archive_request(),
+        Some(ArchiveRequest {
+            session_id: archived,
+            archive: true
+        })
+    );
+    assert_eq!(picker.take_archive_request(), None);
+    picker.archive_done(archived, Ok(()));
+    let left: Vec<u64> = picker
+        .rows
+        .iter()
+        .map(|row| row.session_id.value())
+        .collect();
+    assert_eq!(left, [1, 3]);
+    assert_eq!(picker.notice.as_deref(), Some("Session archived"));
+
+    picker.handle_key(key(KeyCode::Tab));
+    assert!(picker.rows.is_empty());
+    let request = picker
+        .page_request()
+        .expect("the archived sessions' first page");
+    assert_eq!(request.lifecycle, AgentSessionLifecycle::Archived);
+    picker.rows = rows(1);
+    picker.loaded = true;
+    // Enter on an archived session restores it.
+    assert_eq!(picker.handle_key(key(KeyCode::Enter)), None);
+    assert_eq!(
+        picker.take_archive_request(),
+        Some(ArchiveRequest {
+            session_id: AgentSessionId::new(1),
+            archive: false
+        })
+    );
+    picker.archive_done(AgentSessionId::new(1), Err("stale".to_string()));
+    assert_eq!(
+        picker.notice.as_deref(),
+        Some("The session was not restored: stale")
+    );
+}
+
+#[test]
+fn the_shown_session_is_not_archived_from_the_picker() {
+    let mut picker = ResumePicker::new(false, Some(AgentSessionId::new(1)));
+    picker.loaded = true;
+    picker.rows = rows(2);
+    picker.handle_key(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::CONTROL));
+    assert_eq!(picker.take_archive_request(), None);
+    assert_eq!(
+        picker.notice.as_deref(),
+        Some("Use /archive to archive the current session")
+    );
+}
+
+#[test]
+fn a_query_given_at_opening_is_searched_from_the_start() {
+    let picker = ResumePicker::new(false, None).with_query("login fix".to_string());
+    let request = picker.page_request().expect("the query's first page");
+    assert_eq!(request.search.as_deref(), Some("login fix"));
+    assert_eq!(request.lifecycle, AgentSessionLifecycle::Available);
+}
+
+#[test]
+fn a_long_directory_keeps_its_end() {
+    let shortened = shorten_directory("/home/someone/projects/a-rather-long-repository-name");
+    assert_eq!(UnicodeWidthStr::width(shortened.as_str()), DIRECTORY_WIDTH);
+    assert!(shortened.starts_with('…'), "{shortened}");
+    assert!(shortened.ends_with("long-repository-name"), "{shortened}");
+    assert_eq!(shorten_directory("/srv/app"), "/srv/app");
 }

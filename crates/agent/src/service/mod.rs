@@ -26,6 +26,7 @@ use std::sync::Arc;
 
 mod background_terminals;
 mod children;
+mod export;
 mod features;
 mod goal;
 mod history;

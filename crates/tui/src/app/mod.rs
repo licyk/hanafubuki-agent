@@ -18,6 +18,7 @@ mod backtrack;
 mod history_pages;
 mod owned;
 mod preferences;
+mod requests;
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -207,6 +208,7 @@ impl App {
             AppEvent::CommitTick => self.chat_widget.on_commit_tick(),
             AppEvent::SetRawOutput(raw) => self.set_raw_output(raw),
             AppEvent::SetFullscreenTranscript(enabled) => self.save_fullscreen_transcript(enabled),
+            AppEvent::Command(command) => self.run_app_command(tui, command),
             AppEvent::Exit => return false,
         }
         true
@@ -404,17 +406,30 @@ impl App {
         tui: &mut Tui<B>,
         at_startup: bool,
     ) {
+        let picker = ResumePicker::new(at_startup, self.bridge.session_id());
+        self.show_resume_picker(tui, picker);
+    }
+
+    fn show_resume_picker<B: Backend<Error = io::Error> + Write>(
+        &mut self,
+        tui: &mut Tui<B>,
+        picker: ResumePicker,
+    ) {
         self.enter_alt_screen(tui, false);
-        self.resume_picker = Some(ResumePicker::new(at_startup));
+        self.resume_picker = Some(picker);
         self.load_picker_pages();
         self.schedule_frame(Instant::now());
     }
 
-    /// Reads the pages the picker asks for.
+    /// Carries out the archiving the picker asks for, and reads the pages
+    /// it asks for.
     fn load_picker_pages(&mut self) {
         let Some(picker) = self.resume_picker.as_mut() else {
             return;
         };
+        if let Some(request) = picker.take_archive_request() {
+            picker.archive_done(request.session_id, self.bridge.set_archived(request));
+        }
         while let Some(request) = picker.page_request() {
             picker.ingest_page(self.bridge.list_sessions(request));
         }

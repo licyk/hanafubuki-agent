@@ -41,6 +41,10 @@ Third-party notices
     and `src/owner.rs`), are derived from Codex's `codex-rs/worktree`
     (`src/git.rs`, `src/lib.rs`, `src/paths.rs` and `src/metadata.rs`,
     commit `57a808a392`); each says so in its first lines.
+  - the Markdown export of a conversation
+    (`crates/agent/src/service/export.rs`) follows the layout of Codex's
+    `codex-rs/tui/src/app/transcript_export.rs` (commit `57a808a392`), as
+    its first lines say;
   - the side conversation's policy and boundary
     (`crates/agent/src/side_conversation.rs`) are derived from Codex's
     `codex-rs/context-fragments/src/side_conversation.rs` (commit

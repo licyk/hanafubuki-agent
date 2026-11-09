@@ -123,7 +123,8 @@ impl ChatWidget {
             | TurnUpdate::StatusReport(_)
             | TurnUpdate::Providers(_)
             | TurnUpdate::Mcp(_)
-            | TurnUpdate::Skills(_) => {}
+            | TurnUpdate::Skills(_)
+            | TurnUpdate::Session(_) => {}
         }
     }
 

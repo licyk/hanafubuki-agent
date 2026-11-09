@@ -1,9 +1,9 @@
 // Modified from OpenAI Codex rust-v0.93.0 (Apache-2.0).
 
-//! The commands over the session itself: `/new`, `/resume` and `/compact`.
+//! The commands over the session itself: `/new` and `/compact`.
 
 use super::CommandSpec;
-use crate::app_event::{AgentCommand, AppEvent};
+use crate::app_event::AgentCommand;
 
 pub(super) static NEW: CommandSpec = CommandSpec {
     name: "new",
@@ -13,16 +13,6 @@ pub(super) static NEW: CommandSpec = CommandSpec {
     during_task: false,
     needs_session: false,
     dispatch: |context, _args| context.agent_command(AgentCommand::NewSession),
-};
-
-pub(super) static RESUME: CommandSpec = CommandSpec {
-    name: "resume",
-    aliases: &[],
-    description: "resume a saved chat",
-    inline_args: false,
-    during_task: false,
-    needs_session: false,
-    dispatch: |context, _args| context.send(AppEvent::OpenResumePicker),
 };
 
 pub(super) static COMPACT: CommandSpec = CommandSpec {

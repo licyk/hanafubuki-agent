@@ -14,7 +14,7 @@ use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::text::Line;
 
 use crate::key_hint;
-use text_field::TextField;
+pub(crate) use text_field::TextField;
 
 /// A field's name in its form.
 pub(crate) type FieldId = &'static str;

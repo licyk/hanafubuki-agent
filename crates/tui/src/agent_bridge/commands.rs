@@ -11,8 +11,8 @@ use hanafubuki_agent::{
     AgentHandle, AgentHistorySortDirection, AgentPermissionMode, AgentProviderModelCatalogRequest,
     AgentProviderModelCatalogResult, AgentProviderRegistrySnapshot, AgentSessionId,
     AgentSessionListRequest, AgentSessionMode, AgentSessionModelSelectionRequest, AgentSessionPage,
-    AgentSessionRuntimeSnapshot, AgentTranscriptPageRequest, AgentTuiPreferences,
-    AgentTuiPreferencesPatch,
+    AgentSessionRuntimeSnapshot, AgentSessionTitleRenameRequest, AgentTranscriptPageRequest,
+    AgentTuiPreferences, AgentTuiPreferencesPatch,
 };
 
 use super::{
@@ -61,6 +61,7 @@ impl AgentBridge {
     fn run_command(&mut self, command: AgentCommand) -> Result<Option<TurnUpdate>, String> {
         match command {
             AgentCommand::NewSession => {
+                self.pending_title = None;
                 let model = self.model.clone();
                 self.spawn(|agent| async move {
                     Ok(Some(AgentReply::SessionOpened(
@@ -69,6 +70,7 @@ impl AgentBridge {
                 })
             }
             AgentCommand::Resume(session_id) => {
+                self.pending_title = None;
                 let opened = self.open(session_id)?;
                 return Ok(self.reply(AgentReply::SessionOpened(opened)));
             }
@@ -158,6 +160,7 @@ impl AgentBridge {
             }
             AgentCommand::Providers(call) => self.provider_call(call),
             AgentCommand::Mcp(call) => self.mcp_call(call),
+            AgentCommand::Session(call) => return Ok(self.session_call(call)),
             AgentCommand::Skills => {
                 let catalog = self
                     .agent
@@ -229,10 +232,26 @@ impl AgentBridge {
         self.creating = Some(waiting);
         let agent = self.agent.clone();
         let model = self.model.clone();
+        let title = self.pending_title.take();
+        let sink = self.sink();
         let app_event_tx = self.app_event_tx.clone();
         self.agent.runtime().handle().spawn(async move {
             let reply = match new_session(&agent, model).await {
-                Ok(session) => AgentReply::SessionCreated(session.id),
+                Ok(session) => {
+                    if let Some(title) = title {
+                        let request = AgentSessionTitleRenameRequest {
+                            session_id: session.id,
+                            generation: session.generation,
+                            revision: session.revision,
+                            title,
+                        };
+                        if let Err(error) = agent.rename_session(request, &*sink) {
+                            let failed = format!("the session was not named: {error}");
+                            app_event_tx.send(AppEvent::AgentReply(AgentReply::Failed(failed)));
+                        }
+                    }
+                    AgentReply::SessionCreated(session.id)
+                }
                 Err(message) => AgentReply::SessionNotCreated(message),
             };
             app_event_tx.send(AppEvent::AgentReply(reply));
@@ -294,7 +313,7 @@ impl AgentBridge {
 
     /// The session as it is now, for a call that names its generation and
     /// revision.
-    fn current(&self) -> Result<AgentSessionRuntimeSnapshot, String> {
+    pub(super) fn current(&self) -> Result<AgentSessionRuntimeSnapshot, String> {
         let session_id = self
             .session_id
             .ok_or_else(|| "there is no session yet".to_string())?;
@@ -306,7 +325,7 @@ impl AgentBridge {
 
 /// No session: its header names the model a new session gets, `-m`'s or
 /// the model policy's (empty when the configuration cannot be read).
-async fn no_session(agent: &AgentHandle, model: Option<String>) -> OpenedSession {
+pub(super) async fn no_session(agent: &AgentHandle, model: Option<String>) -> OpenedSession {
     let registry = agent.provider_registry_snapshot().await.ok();
     let setup_needed = registry
         .as_ref()

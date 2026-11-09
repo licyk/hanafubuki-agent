@@ -12,7 +12,7 @@ use hanafubuki_agent::{
 };
 use ratatui::crossterm::event::{KeyEvent, MouseEvent};
 
-use crate::agent_bridge::{AgentReply, McpCall, ProviderCall};
+use crate::agent_bridge::{AgentReply, McpCall, ProviderCall, SessionCall};
 use crate::file_search::FileMatch;
 use crate::history_cell::HistoryCell;
 
@@ -51,10 +51,30 @@ pub(crate) enum AppEvent {
     SetRawOutput(Option<bool>),
     /// `/tui`: the transcript's mode at the next launch.
     SetFullscreenTranscript(bool),
+    /// What a slash command asks of the app itself.
+    Command(AppCommand),
     StartCommitAnimation,
     StopCommitAnimation,
     CommitTick,
     Exit,
+}
+
+/// What a slash command asks of the app: the clipboard, the transcript,
+/// the screen, the composer's submission, the resume picker.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum AppCommand {
+    /// Copies the text to the clipboard and says so.
+    Copy(String),
+    /// Owned mode: select mode in the transcript, to copy with the keys.
+    SelectTranscript,
+    /// `/clear`: the terminal's scrollback and screen (terminal mode) or
+    /// the transcript (owned mode) are cleared.
+    ClearScreen,
+    /// Submits the text as the person's message.
+    Submit(String),
+    /// `/resume TEXT`: the session with this id, else the one session with
+    /// this title, else the picker searching for it.
+    ResumeNamed(String),
 }
 
 /// The widgets' requests of the Agent, which the bridge turns into calls.
@@ -94,6 +114,7 @@ pub(crate) enum AgentCommand {
     Providers(ProviderCall),
     Mcp(McpCall),
     Skills,
+    Session(SessionCall),
 }
 
 /// The app loop's channel, as the widgets and the Agent's sinks hold it.

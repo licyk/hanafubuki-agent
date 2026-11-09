@@ -1,4 +1,5 @@
 // Modified from OpenAI Codex rust-v0.93.0 (Apache-2.0).
+// Modified from OpenAI Codex 57a808a392 (Apache-2.0).
 
 //! The resume picker: the history store's sessions, the latest first, to
 //! reopen one. It is an overlay on the alternate screen, opened by `/resume`
@@ -10,11 +11,19 @@
 //! itself: the app loads a page whenever the picker asks for one
 //! ([`ResumePicker::page_request`]), synchronously. A session's title is
 //! its first message until the Agent names it, so the conversation column
-//! shows the title. Sessions no turn ran in are left out. The summaries
-//! carry no working directory or Git branch, so those columns are gone.
+//! shows the title. Sessions no turn ran in are left out, and so are child
+//! sessions (the list is the top level's). Tab switches to the archived
+//! sessions; Ctrl+A archives the selected session, or restores it there
+//! (Codex's `resume_picker/archive.rs`), which the app carries out
+//! ([`ResumePicker::take_archive_request`]). Enter on an archived session
+//! restores it too, where Codex also resumes it.
+
+mod lookup;
 
 use chrono::{DateTime, Utc};
-use hanafubuki_agent::{AgentSessionId, AgentSessionListRequest, AgentSessionPage};
+use hanafubuki_agent::{
+    AgentSessionId, AgentSessionLifecycle, AgentSessionListRequest, AgentSessionPage,
+};
 use ratatui::buffer::Buffer;
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::layout::{Constraint, Layout, Rect};
@@ -25,9 +34,13 @@ use unicode_width::UnicodeWidthStr;
 
 use crate::key_hint;
 use crate::text_formatting::truncate_text;
+pub(crate) use lookup::find_session;
 
 const PAGE_SIZE: usize = 25;
 const LOAD_NEAR_THRESHOLD: usize = 5;
+/// The widest the branch and directory columns grow.
+const BRANCH_WIDTH: usize = 20;
+const DIRECTORY_WIDTH: usize = 28;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum SessionSelection {
@@ -37,11 +50,21 @@ pub(crate) enum SessionSelection {
     Exit,
 }
 
+/// A session to archive (or, `archive: false`, to restore).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct ArchiveRequest {
+    pub(crate) session_id: AgentSessionId,
+    pub(crate) archive: bool,
+}
+
 #[derive(Clone, Debug)]
 struct Row {
     session_id: AgentSessionId,
     preview: String,
     updated_at: Option<DateTime<Utc>>,
+    /// Where the session was created, and the branch checked out there.
+    cwd: Option<String>,
+    branch: Option<String>,
 }
 
 pub(crate) struct ResumePicker {
@@ -57,10 +80,17 @@ pub(crate) struct ResumePicker {
     view_rows: Option<usize>,
     /// Opened by `hanafubuki-agent resume`, before any session was shown.
     at_startup: bool,
+    /// The archived sessions are listed instead of the others.
+    archived: bool,
+    /// The session the interface shows, which `/archive` archives instead.
+    current: Option<AgentSessionId>,
+    archive_request: Option<ArchiveRequest>,
+    /// What the last archiving said, until the next key.
+    notice: Option<String>,
 }
 
 impl ResumePicker {
-    pub(crate) fn new(at_startup: bool) -> Self {
+    pub(crate) fn new(at_startup: bool, current: Option<AgentSessionId>) -> Self {
         Self {
             rows: Vec::new(),
             loaded: false,
@@ -71,18 +101,37 @@ impl ResumePicker {
             query: String::new(),
             view_rows: None,
             at_startup,
+            archived: false,
+            current,
+            archive_request: None,
+            notice: None,
         }
+    }
+
+    /// The picker searching for `query` from the start.
+    pub(crate) fn with_query(mut self, query: String) -> Self {
+        self.set_query(query);
+        self
     }
 
     pub(crate) fn handle_key(&mut self, key: KeyEvent) -> Option<SessionSelection> {
         if key.kind == KeyEventKind::Release {
             return None;
         }
+        self.notice = None;
         match key.code {
             KeyCode::Esc => return Some(SessionSelection::StartFresh),
             KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 return Some(SessionSelection::Exit);
             }
+            KeyCode::Char('a') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.request_archive();
+            }
+            KeyCode::Tab => {
+                self.archived = !self.archived;
+                self.start_over();
+            }
+            KeyCode::Enter if self.archived => self.request_archive(),
             KeyCode::Enter => {
                 if let Some(row) = self.rows.get(self.selected) {
                     return Some(SessionSelection::Resume(row.session_id));
@@ -152,9 +201,15 @@ impl ResumePicker {
         } else {
             None
         };
+        let lifecycle = if self.archived {
+            AgentSessionLifecycle::Archived
+        } else {
+            AgentSessionLifecycle::Available
+        };
         Some(AgentSessionListRequest {
             page_size: PAGE_SIZE,
             cursor,
+            lifecycle,
             search: (!self.query.is_empty()).then(|| self.query.clone()),
             ..AgentSessionListRequest::default()
         })
@@ -183,9 +238,49 @@ impl ResumePicker {
                     updated_at: i64::try_from(session.updated_at)
                         .ok()
                         .and_then(DateTime::from_timestamp_millis),
+                    cwd: session.cwd,
+                    branch: session.branch,
                 }),
         );
         self.ensure_selected_visible();
+    }
+
+    /// The archiving the person asked for, once: the app carries it out
+    /// and hands back how it went ([`Self::archive_done`]).
+    pub(crate) fn take_archive_request(&mut self) -> Option<ArchiveRequest> {
+        self.archive_request.take()
+    }
+
+    /// `session_id` was archived (or restored): it leaves the list.
+    pub(crate) fn archive_done(&mut self, session_id: AgentSessionId, result: Result<(), String>) {
+        let verb = if self.archived {
+            "restored"
+        } else {
+            "archived"
+        };
+        match result {
+            Ok(()) => {
+                self.rows.retain(|row| row.session_id != session_id);
+                self.selected = self.selected.min(self.rows.len().saturating_sub(1));
+                self.ensure_selected_visible();
+                self.notice = Some(format!("Session {verb}"));
+            }
+            Err(error) => self.notice = Some(format!("The session was not {verb}: {error}")),
+        }
+    }
+
+    fn request_archive(&mut self) {
+        let Some(row) = self.rows.get(self.selected) else {
+            return;
+        };
+        if !self.archived && Some(row.session_id) == self.current {
+            self.notice = Some("Use /archive to archive the current session".to_string());
+            return;
+        }
+        self.archive_request = Some(ArchiveRequest {
+            session_id: row.session_id,
+            archive: !self.archived,
+        });
     }
 
     fn set_query(&mut self, new_query: String) {
@@ -193,6 +288,11 @@ impl ResumePicker {
             return;
         }
         self.query = new_query;
+        self.start_over();
+    }
+
+    /// The list read again from its first page.
+    fn start_over(&mut self) {
         self.rows.clear();
         self.loaded = false;
         self.next_cursor = None;
@@ -241,15 +341,20 @@ impl ResumePicker {
         self.update_view_rows(list.height as usize);
 
         // Header
-        Line::from(vec!["Resume a previous session".bold().cyan()]).render(header, buf);
-
-        // Search line
-        let q = if self.query.is_empty() {
-            "Type to search".dim().to_string()
+        let title = if self.archived {
+            "Archived sessions"
         } else {
-            format!("Search: {}", self.query)
+            "Resume a previous session"
         };
-        Line::from(q).render(search, buf);
+        Line::from(vec![title.bold().cyan()]).render(header, buf);
+
+        // Search line, or what the last archiving said
+        let line = match &self.notice {
+            Some(notice) => Line::from(notice.clone().magenta()),
+            None if self.query.is_empty() => Line::from("Type to search".dim()),
+            None => Line::from(format!("Search: {}", self.query)),
+        };
+        line.render(search, buf);
 
         let metrics = calculate_column_metrics(&self.rows);
 
@@ -259,24 +364,30 @@ impl ResumePicker {
 
         // Hint line
         let esc_label = if self.at_startup {
-            " to start new "
+            " start new"
         } else {
-            " to go back "
+            " back"
+        };
+        let (enter_label, tab_label, archive_label) = if self.archived {
+            (" restore", " others", " restore")
+        } else {
+            (" resume", " archived", " archive")
         };
         let hint_line: Line = vec![
             key_hint::plain(KeyCode::Enter).into(),
-            " to resume ".dim(),
-            "    ".dim(),
+            enter_label.dim(),
+            "  ".dim(),
             key_hint::plain(KeyCode::Esc).into(),
             esc_label.dim(),
-            "    ".dim(),
+            "  ".dim(),
+            key_hint::plain(KeyCode::Tab).into(),
+            tab_label.dim(),
+            "  ".dim(),
+            key_hint::ctrl(KeyCode::Char('a')).into(),
+            archive_label.dim(),
+            "  ".dim(),
             key_hint::ctrl(KeyCode::Char('c')).into(),
-            " to quit ".dim(),
-            "    ".dim(),
-            key_hint::plain(KeyCode::Up).into(),
-            "/".dim(),
-            key_hint::plain(KeyCode::Down).into(),
-            " to browse".dim(),
+            " quit".dim(),
         ]
         .into();
         hint_line.render(hint, buf);
@@ -308,12 +419,23 @@ impl ResumePicker {
             let marker = if is_sel { "> ".bold() } else { "  ".into() };
             let marker_width = 2usize;
             let updated_span = Span::from(format!("{updated_label:<max_updated_width$}")).dim();
-
-            let preview_width = (area.width as usize)
-                .saturating_sub(marker_width)
-                .saturating_sub(max_updated_width + 2);
-            let preview = truncate_text(&row.preview, preview_width);
-            let line: Line = vec![marker, updated_span, "  ".into(), preview.into()].into();
+            let mut spans = vec![marker, updated_span, "  ".into()];
+            let mut used = marker_width + max_updated_width + 2;
+            if metrics.branch_width > 0 {
+                let branch = truncate_text(row.branch.as_deref().unwrap_or("-"), BRANCH_WIDTH);
+                spans.push(Span::from(pad(&branch, metrics.branch_width)).cyan());
+                spans.push("  ".into());
+                used += metrics.branch_width + 2;
+            }
+            if metrics.directory_width > 0 {
+                let directory = shorten_directory(row.cwd.as_deref().unwrap_or("-"));
+                spans.push(Span::from(pad(&directory, metrics.directory_width)).dim());
+                spans.push("  ".into());
+                used += metrics.directory_width + 2;
+            }
+            let preview_width = (area.width as usize).saturating_sub(used);
+            spans.push(truncate_text(&row.preview, preview_width).into());
+            let line: Line = spans.into();
             line.render(Rect::new(area.x, y, area.width, 1), buf);
             y = y.saturating_add(1);
         }
@@ -325,6 +447,9 @@ impl ResumePicker {
         }
         if !self.query.is_empty() {
             return vec!["No results for your search".italic().dim()].into();
+        }
+        if self.archived {
+            return vec!["No archived sessions".italic().dim()].into();
         }
         vec!["No sessions yet".italic().dim()].into()
     }
@@ -381,18 +506,26 @@ fn render_column_headers(buf: &mut Buffer, area: Rect, metrics: &ColumnMetrics) 
         text = "Updated",
         width = metrics.max_updated_width
     );
-    let spans: Vec<Span> = vec![
-        "  ".into(),
-        Span::from(label).bold(),
-        "  ".into(),
-        "Conversation".bold(),
-    ];
+    let mut spans: Vec<Span> = vec!["  ".into(), Span::from(label).bold(), "  ".into()];
+    if metrics.branch_width > 0 {
+        spans.push(Span::from(pad("Branch", metrics.branch_width)).bold());
+        spans.push("  ".into());
+    }
+    if metrics.directory_width > 0 {
+        spans.push(Span::from(pad("Directory", metrics.directory_width)).bold());
+        spans.push("  ".into());
+    }
+    spans.push("Conversation".bold());
     Line::from(spans).render(area, buf);
 }
 
 struct ColumnMetrics {
     max_updated_width: usize,
     labels: Vec<String>,
+    /// Zero when no row has a branch (or a directory): the column is left
+    /// out.
+    branch_width: usize,
+    directory_width: usize,
 }
 
 fn calculate_column_metrics(rows: &[Row]) -> ColumnMetrics {
@@ -401,10 +534,50 @@ fn calculate_column_metrics(rows: &[Row]) -> ColumnMetrics {
         .iter()
         .map(|label| UnicodeWidthStr::width(label.as_str()))
         .fold(UnicodeWidthStr::width("Updated"), usize::max);
+    let branch_width = rows
+        .iter()
+        .filter_map(|row| row.branch.as_deref())
+        .map(|branch| UnicodeWidthStr::width(truncate_text(branch, BRANCH_WIDTH).as_str()))
+        .max()
+        .map_or(0, |width| width.max(UnicodeWidthStr::width("Branch")));
+    let directory_width = rows
+        .iter()
+        .filter_map(|row| row.cwd.as_deref())
+        .map(|cwd| UnicodeWidthStr::width(shorten_directory(cwd).as_str()))
+        .max()
+        .map_or(0, |width| width.max(UnicodeWidthStr::width("Directory")));
     ColumnMetrics {
         max_updated_width,
         labels,
+        branch_width,
+        directory_width,
     }
+}
+
+/// `text` padded with spaces to `width` columns.
+fn pad(text: &str, width: usize) -> String {
+    let fill = width.saturating_sub(UnicodeWidthStr::width(text));
+    format!("{text}{}", " ".repeat(fill))
+}
+
+/// The directory's end, which tells sessions apart, within
+/// [`DIRECTORY_WIDTH`] columns.
+fn shorten_directory(directory: &str) -> String {
+    if UnicodeWidthStr::width(directory) <= DIRECTORY_WIDTH {
+        return directory.to_string();
+    }
+    let mut tail = Vec::new();
+    let mut width = 1;
+    for character in directory.chars().rev() {
+        let character_width = unicode_width::UnicodeWidthChar::width(character).unwrap_or(0);
+        if width + character_width > DIRECTORY_WIDTH {
+            break;
+        }
+        width += character_width;
+        tail.push(character);
+    }
+    let tail: String = tail.into_iter().rev().collect();
+    format!("…{tail}")
 }
 
 #[cfg(test)]

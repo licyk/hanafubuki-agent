@@ -40,6 +40,11 @@ markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
 notice = "crates/agent/src/plugins/recap"
 
 [[derived]]
+path = "crates/agent/src/service/export.rs"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
+notice = "crates/agent/src/service/export.rs"
+
+[[derived]]
 path = "crates/agent/src/side_conversation.rs"
 markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
 notice = "crates/agent/src/side_conversation.rs"
@@ -234,8 +239,24 @@ path = "crates/tui/src/history_cell/thinking/tests.rs"
 reason = "The thinking cell's states, written with it."
 
 [[original]]
-path = "crates/tui/src/commands/tests.rs"
+path = "crates/tui/src/commands/tests/mod.rs"
 reason = "The command registry's lookups and flags, written for the port."
+
+[[original]]
+path = "crates/tui/src/commands/tests/session.rs"
+reason = "The session commands' dispatch and their views' replies, written for the port."
+
+[[original]]
+path = "crates/tui/src/commands/recap/tests.rs"
+reason = "The recap cell's layout, written for the port."
+
+[[original]]
+path = "crates/tui/src/agent_bridge/sessions.rs"
+reason = "The session commands' calls onto the facade's session, export, recap and background terminal API."
+
+[[original]]
+path = "crates/tui/src/app/tests/session_commands.rs"
+reason = "The session commands end to end over the standalone Agent."
 
 [[original]]
 path = "crates/tui/src/bottom_pane/module_view.rs"

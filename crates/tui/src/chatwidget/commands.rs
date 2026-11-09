@@ -47,6 +47,7 @@ impl ChatWidget {
             &mut self.bottom_pane,
             self.mode,
             self.fullscreen_preference,
+            self.owned_transcript,
         );
         if let Err(message) = catch_panic(|| call(&mut context)) {
             self.command_failed(command.name, &message);
@@ -130,6 +131,13 @@ impl ChatWidget {
             }),
             TurnUpdate::Skills(catalog) => {
                 self.add_to_history(history_cell::new_skills_output(&catalog))
+            }
+            TurnUpdate::Session(reply) => {
+                if let Some(command) = commands::session_reply_command(&reply) {
+                    self.run_command(command, |context| {
+                        commands::on_session_reply(context, reply)
+                    })
+                }
             }
             update => return Some(update),
         }

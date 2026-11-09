@@ -20,6 +20,7 @@ mod edit;
 mod mcp;
 mod providers;
 mod replay;
+mod sessions;
 
 use std::sync::Arc;
 
@@ -39,6 +40,7 @@ pub(crate) use commands::{setup_needed, with_model, ModelChoices, StatusReport};
 pub(crate) use mcp::{McpCall, McpReply};
 pub(crate) use providers::{ProviderCall, ProviderReply};
 pub(crate) use replay::{OlderTranscript, OpenedSession, ReplayedItem};
+pub(crate) use sessions::{ExportDestination, SessionCall, SessionReply};
 
 /// How many of the turn's latest items are read for a finished call.
 const TOOL_ITEMS_PAGE: usize = 64;
@@ -92,6 +94,7 @@ pub(crate) enum TurnUpdate {
     Providers(ProviderReply),
     Mcp(McpReply),
     Skills(SkillCatalogSnapshot),
+    Session(SessionReply),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -123,6 +126,8 @@ pub(crate) struct AgentBridge {
     /// The model of the sessions the interface creates, in place of the
     /// model policy's (`-m`).
     model: Option<String>,
+    /// The name `/clear NAME` gives the session the next message creates.
+    pending_title: Option<String>,
     /// While a session is being created: what was asked meanwhile, in
     /// order, carried out once it exists.
     creating: Option<Vec<Op>>,
@@ -153,6 +158,7 @@ impl AgentBridge {
             slot,
             session_id: None,
             model,
+            pending_title: None,
             creating: None,
             app_event_tx,
             turn: None,
@@ -163,7 +169,6 @@ impl AgentBridge {
         }
     }
 
-    #[cfg(test)]
     pub(crate) fn session_id(&self) -> Option<AgentSessionId> {
         self.session_id
     }

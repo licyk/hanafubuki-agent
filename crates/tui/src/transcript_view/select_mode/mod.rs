@@ -65,10 +65,6 @@ impl TranscriptView {
     /// Enters select mode at search's accepted match, else at the lowest
     /// visible selectable position; `false` when there is nothing to
     /// select.
-    #[allow(
-        dead_code,
-        reason = "`/keymap` (P5) binds it; Codex has no default key for select mode"
-    )]
     pub(crate) fn begin_select_mode(&mut self, cells: &[Arc<dyn HistoryCell>]) -> bool {
         if self.select_mode.is_some() {
             return true;

@@ -2,7 +2,7 @@
 source: crates/tui/src/resume_picker/tests.rs
 expression: snapshot
 ---
-  Updated         Conversation
-  42 seconds ago  Fix resume picker timestamps
-> 35 minutes ago  Investigate lazy pagination cap
-  2 hours ago     Explain the codebase
+  Updated         Branch                Directory                     Conversation
+  42 seconds ago  main                  …r/projects/hanafubuki-agent  Fix resume picker timestamps
+> 35 minutes ago  fix/pagination-ca...  /srv/app                      Investigate lazy pagination cap
+  2 hours ago     -                     -                             Explain the codebase

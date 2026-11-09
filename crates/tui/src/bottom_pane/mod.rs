@@ -58,7 +58,7 @@ use approval_overlay::ApprovalOverlay;
 pub(crate) use bottom_pane_view::BottomPaneView;
 use chat_composer::ChatComposer;
 pub(crate) use footer::ThinkingToggle;
-pub(crate) use form::{FieldId, FormEvent, FormItem, FormView, RowValue};
+pub(crate) use form::{FieldId, FormEvent, FormItem, FormView, RowValue, TextField};
 pub(crate) use list_selection_view::{ListSelectionView, SelectionItem, SelectionViewParams};
 pub(crate) use module_view::ViewFailure;
 use module_view::{ModuleView, ViewFailures};

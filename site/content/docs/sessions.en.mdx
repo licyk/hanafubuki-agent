@@ -47,6 +47,32 @@ user: Explain what this repository does
 
 `--json` prints that page of the transcript as JSON, with every field of each item, the thinking's text included. The terminal interface shows the thinking too when you resume the session.
 
+## Exporting [#export]
+
+`/export` in the terminal interface copies a session's whole conversation as Markdown, or saves it into a file ([Terminal interface](/docs/terminal-interface#session-commands)); a host calls `export_session_markdown`. The export is read from the history, every page of it, oldest first:
+
+```markdown
+# Hanafubuki Agent conversation
+
+## User
+
+Explain what this repository does
+
+## Activity
+
+    exec_command({"cmd":"ls"})
+    Cargo.toml
+    crates
+
+## Assistant
+
+This is …
+```
+
+- Each message is a `## User` or `## Assistant` section, as written; a message sent during a turn is a `## User` too, and its images are named (`[Image #1]`). A plan the model proposed is a `## Plan`.
+- Each tool call is a `## Activity` section, indented as a code block: the tool's name with its arguments on one line (cut after 200 characters), `· failed` when it failed, then the first 10 lines of its output and how many more there were. A context compaction is `Context compacted`.
+- The model's thinking and the context only the model reads are left out. A session with nothing to show is not exported.
+
 ## Archiving and deleting [#archive-delete]
 
 ```sh
@@ -57,6 +83,7 @@ hanafubuki-agent sessions delete 2
 - **Archive**: the session leaves `sessions list` and the resume picker but is kept; `sessions list --archived` finds it. Its child sessions are archived with it.
 - **Delete**: removes the session and its history for good, with its child sessions, archived or not. It is refused, with the reason as the error, while a fork or a quarantined session file still needs the session or one of its children; a child that cannot be deleted refuses the whole deletion.
 - Either closes the session's [side conversation](#side). Restoring a session does not restore its children.
+- In the terminal interface, `/archive` and `/delete` do the same for the session shown, after a confirmation, and then show no session. The resume picker lists the archived sessions under Tab, where Ctrl+A or Enter restores one, and Ctrl+A archives another session ([Terminal interface](/docs/terminal-interface#resume)).
 
 ## Editing an earlier message [#edit]
 

@@ -230,6 +230,21 @@ impl<B: Backend<Error = io::Error> + Write> Tui<B> {
         Ok(Some(terminal.viewport_area.offset(offset)))
     }
 
+    /// Clears the terminal's scrollback and screen (`/clear`), with the
+    /// lines not written yet; the inline viewport starts again at the top.
+    /// One sequence: some terminals (Terminal.app, Warp) keep the
+    /// scrollback when the purge and the clear come separately.
+    pub(crate) fn clear_scrollback(&mut self) -> Result<()> {
+        self.pending_history_lines.clear();
+        let backend = self.terminal.backend_mut();
+        backend.write_all(b"\x1b[r\x1b[0m\x1b[H\x1b[2J\x1b[3J\x1b[H")?;
+        Write::flush(backend)?;
+        let mut area = self.terminal.viewport_area;
+        area.y = 0;
+        self.terminal.set_viewport_area(area);
+        self.terminal.clear()
+    }
+
     /// Clears the viewport, so what the shell prints next follows the
     /// transcript.
     pub(crate) fn leave(&mut self) -> Result<()> {
