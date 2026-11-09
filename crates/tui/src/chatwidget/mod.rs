@@ -233,9 +233,22 @@ impl ChatWidget {
         self.request_redraw();
     }
 
-    #[cfg(test)]
     pub(crate) fn is_task_running(&self) -> bool {
         self.bottom_pane.is_task_running()
+    }
+
+    /// The footer says a second Esc browses the prompts to edit one.
+    pub(crate) fn show_esc_backtrack_hint(&mut self) {
+        self.bottom_pane.show_esc_backtrack_hint();
+    }
+
+    pub(crate) fn clear_esc_backtrack_hint(&mut self) {
+        self.bottom_pane.clear_esc_backtrack_hint();
+    }
+
+    /// Puts `text` in the composer, for the person to edit and send.
+    pub(crate) fn set_composer_text(&mut self, text: String) {
+        self.bottom_pane.set_composer_text(text);
     }
 
     /// Matches for the `@` token being typed, from the file search.

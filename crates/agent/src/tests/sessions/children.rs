@@ -15,7 +15,7 @@ impl AgentEventSink for Discard {
     fn emit(&self, _event: AgentEvent) {}
 }
 
-async fn wait_until(what: &str, mut done: impl FnMut() -> bool) {
+pub(super) async fn wait_until(what: &str, mut done: impl FnMut() -> bool) {
     let deadline = Instant::now() + Duration::from_secs(10);
     while !done() {
         assert!(Instant::now() < deadline, "timed out waiting until {what}");
@@ -23,7 +23,7 @@ async fn wait_until(what: &str, mut done: impl FnMut() -> bool) {
     }
 }
 
-fn turn_running(service: &AgentApplicationService, session_id: AgentSessionId) -> bool {
+pub(super) fn turn_running(service: &AgentApplicationService, session_id: AgentSessionId) -> bool {
     service
         .snapshot(session_id)
         .unwrap()
@@ -63,7 +63,7 @@ fn child_of(
     }
 }
 
-fn finish(service: AgentApplicationService, paths: TestPaths) {
+pub(super) fn finish(service: AgentApplicationService, paths: TestPaths) {
     let diagnostics = service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE);
     assert!(diagnostics.is_empty(), "{diagnostics:?}");
     let _ = std::fs::remove_dir_all(paths.app_data_dir);

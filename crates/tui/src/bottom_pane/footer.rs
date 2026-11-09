@@ -10,9 +10,10 @@
 //! The "press again to quit" hint is time-based rather than event-based; the owning widgets
 //! schedule a redraw so it can expire even if the UI is otherwise idle.
 //!
-//! Codex's footer also shows the context window left, the collaboration mode and its
-//! width-based collapse rules, and shortcuts for shell commands, images, the external editor and
-//! backtracking; none of those are ported.
+//! After a first Esc on an empty composer, the footer says a second one edits a previous message
+//! (`FooterMode::EscHint`). Codex's footer also shows the context window left, the collaboration
+//! mode and its width-based collapse rules, and shortcuts for shell commands, images, the external
+//! editor and backtracking; none of those are ported.
 use crate::key_hint;
 use crate::key_hint::KeyBinding;
 use crate::render::line_utils::prefix_lines;
@@ -73,6 +74,9 @@ pub(crate) enum FooterMode {
     ComposerEmpty,
     /// Base single-line footer when the composer contains a draft.
     ComposerHasDraft,
+    /// After a first Esc on an empty composer: a second one browses the
+    /// prompts to edit an earlier message.
+    EscHint,
 }
 
 pub(crate) fn toggle_shortcut_mode(
@@ -100,7 +104,8 @@ pub(crate) fn reset_mode_after_activity(current: FooterMode) -> FooterMode {
     match current {
         FooterMode::ShortcutOverlay
         | FooterMode::QuitShortcutReminder
-        | FooterMode::ComposerHasDraft => FooterMode::ComposerEmpty,
+        | FooterMode::ComposerHasDraft
+        | FooterMode::EscHint => FooterMode::ComposerEmpty,
         other => other,
     }
 }
@@ -138,6 +143,11 @@ fn footer_lines(props: FooterProps) -> Vec<Line<'static>> {
         }
         FooterMode::ShortcutOverlay => shortcut_overlay_lines(props),
         FooterMode::ComposerHasDraft => vec![Line::from("")],
+        FooterMode::EscHint => vec![Line::from(vec![
+            key_hint::plain(KeyCode::Esc).into(),
+            " again to edit a previous message".into(),
+        ])
+        .dim()],
     }
 }
 

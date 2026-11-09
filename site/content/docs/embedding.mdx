@@ -466,6 +466,15 @@ impl AgentEventSink for PrintEvents {
 
 旁路对话上的轮次和其他会话一样，通过 `submit_turn_with_sink` 运行，使用各自的 `AgentEventSink`。临时会话从不被列出、归档（`InvalidInput`）或恢复；关闭它、归档或删除它的父会话、或 Agent 停止时，它就消失了。`open_side_conversation` 会阻塞，和 `rename_session` 一样，要在异步运行时之外调用。
 
+## 编辑之前的消息 [#edit-from-turn]
+
+`edit_from_turn(session_id, turn_id)` 像终端界面的 Esc 那样编辑开始 `turn_id` 这个轮次的消息（见[会话](/docs/sessions#edit)）。它在该轮次之前分叉会话（与 `fork_session_before_turn` 相同，使用会话当前的 generation 和 revision），归档原会话（与 `archive_session` 相同，因此连同它的持久化后代），并返回 `AgentEditFromTurn { session, restored_prompt, restored_images }`：分叉出的会话的运行时快照，以及这条消息的文本和图片附件，用于放回输入框。
+
+- `turn_id` 是 `ConversationItem::TurnStart` 的 `turn_id`，用 `read_transcript_page` 读取；它之后的 `UserMessage` 就是被恢复的消息。没有这样一条消息的轮次（不是由消息开始的）会被拒绝。
+- 对已归档的会话、会话中有轮次运行时、对子会话或临时会话、以及对会话中不存在的轮次，它返回 `Err` 并说明原因。
+- 如果分叉已经完成但原会话无法归档（例如某个后台终端停不下来），错误会说明这一点并给出分叉出的会话；两个会话都会保留。
+- 文件不会恢复。它会阻塞，和 `rename_session` 一样，要在异步运行时之外调用。
+
 ## 功能调用 [#feature-calls]
 
 有些功能由插件行承担，服务 API 每次调用时找到它们：

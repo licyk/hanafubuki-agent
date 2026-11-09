@@ -107,8 +107,21 @@ moves its pin.
     public field `tui` (a struct literal needs it); re-exports
     `AgentTuiPreferences`, `AgentTuiPreferencesPatch`,
     `AgentAlternateScreen`.
-- [ ] P3: Esc to edit an earlier message (`app_backtrack`) over
+- [x] P3: Esc to edit an earlier message (`app_backtrack`) over
       `fork_session_before_turn`; facade `edit_from_turn`.
+  - Done: `edit_from_turn(session, turn)` forks before the turn and
+    archives the original (refused while a turn runs, for an archived,
+    child or ephemeral session); `app/backtrack.rs` (prime, browse, edit,
+    in place in fullscreen and in the transcript overlay in scrollback);
+    `agent_bridge/edit.rs` maps a prompt, counted from the latest, to its
+    turn by matching the saved messages (a steering message is refused).
+    Terminal interface, "Edit"; sessions, "Edit"; embedding,
+    "edit_from_turn".
+  - Open: browsing does not start from an open Ctrl+T view; with no
+    prompt loaded in fullscreen, the second Esc does not load older
+    pages; images are not restored to the composer (it has none).
+  - Hanafubuki, at its next pin: the call `edit_from_turn`, the re-export
+    `AgentEditFromTurn`.
 - [ ] P4: `/rename /archive /delete /resume [id|title] /fork /clear /export
       /copy /ps /stop /pwd /init`; `export_session_markdown`; `cwd` and
       `branch` in session summaries.

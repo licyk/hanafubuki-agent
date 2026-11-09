@@ -264,6 +264,17 @@ impl ChatComposer {
         self.has_focus = has_focus;
     }
 
+    /// Shows that a second Esc browses the prompts to edit one.
+    pub(crate) fn show_esc_backtrack_hint(&mut self) {
+        self.footer_mode = FooterMode::EscHint;
+    }
+
+    pub(crate) fn clear_esc_backtrack_hint(&mut self) {
+        if self.footer_mode == FooterMode::EscHint {
+            self.footer_mode = FooterMode::ComposerEmpty;
+        }
+    }
+
     /// Whether the quit shortcut hint should currently be shown.
     ///
     /// This is time-based rather than event-based: it may become false without
@@ -694,9 +705,11 @@ impl ChatComposer {
         match self.footer_mode {
             FooterMode::ShortcutOverlay => FooterMode::ShortcutOverlay,
             _ if self.quit_shortcut_hint_visible() => FooterMode::QuitShortcutReminder,
+            FooterMode::EscHint if self.is_empty() => FooterMode::EscHint,
             FooterMode::QuitShortcutReminder
             | FooterMode::ComposerEmpty
-            | FooterMode::ComposerHasDraft => base_mode,
+            | FooterMode::ComposerHasDraft
+            | FooterMode::EscHint => base_mode,
         }
     }
 

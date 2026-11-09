@@ -115,6 +115,7 @@ pub(super) fn approved_command() -> String {
 
 mod background_execution;
 mod children;
+mod edit;
 mod lifecycle;
 mod permissions;
 mod provider;

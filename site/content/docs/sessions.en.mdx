@@ -58,6 +58,15 @@ hanafubuki-agent sessions delete 2
 - **Delete**: removes the session and its history for good, with its child sessions, archived or not. It is refused, with the reason as the error, while a fork or a quarantined session file still needs the session or one of its children; a child that cannot be deleted refuses the whole deletion.
 - Either closes the session's [side conversation](#side). Restoring a session does not restore its children.
 
+## Editing an earlier message [#edit]
+
+Editing one of your earlier messages (Esc twice in the [terminal interface](/docs/terminal-interface#edit); `edit_from_turn` for a [host](/docs/embedding#edit-from-turn)) does not rewrite the session's history:
+
+- The session is forked before the turn the message started. The fork has everything before that message, records the session as its source (`forkedFromSessionId`), and gets the message back, its text and images, to edit and send.
+- The original is archived, whole, children and all: `sessions list --archived` finds it and `sessions show` reads it. The fork is listed in its place.
+- Files the Agent changed are not restored.
+- It is refused while a turn runs in the session, and in a child session: a [side conversation](#side) is temporary.
+
 ## Child sessions [#children]
 
 A session can be the child of another, made for it rather than started by you: a [side conversation](#side), a [sub-agent](#subagents), and reviews later. A child records its parent (`parentSessionId` in its summary) and why it was made (`origin`: `side`, `subagent` or `review`), and works in its parent's directory, with its parent's model and settings.

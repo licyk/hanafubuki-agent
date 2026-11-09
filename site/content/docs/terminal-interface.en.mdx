@@ -1,6 +1,6 @@
 ---
 title: Terminal interface
-description: Fullscreen and Scrollback, the layout, keys, composer, slash commands, the first-run setup, the Provider and MCP screens and their forms, @ file mentions, reading, selecting and copying the conversation, the transcript, approvals and questions, and resuming a session.
+description: Fullscreen and Scrollback, the layout, keys, composer, slash commands, the first-run setup, the Provider and MCP screens and their forms, @ file mentions, reading, selecting and copying the conversation, the transcript, editing an earlier message, approvals and questions, and resuming a session.
 icon: SquareTerminal
 ---
 
@@ -47,18 +47,18 @@ In the conversation your messages start with `›`; a tool call is `• Called T
 
 ## Keys [#keys]
 
-| Key                       | Does                                                                                                                        |
-| ------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| Enter                     | Sends the message: a new turn, or, while one runs, a message that steers it (below). In a popup, picks its entry            |
-| Shift+Enter, Ctrl+J       | A new line. Shift+Enter needs a terminal with the enhanced keyboard protocol; otherwise use Ctrl+J                          |
-| Up, Down (Ctrl-P, Ctrl-N) | On an empty composer, the messages sent in this run; in a popup, its entries                                                |
-| Tab                       | In the command popup, completes the command; in the file popup, inserts the path                                            |
-| Esc                       | Closes a popup; otherwise interrupts the turn while the status line is shown                                                |
-| Ctrl-C                    | In turn: denies an approval; clears a composer with text; interrupts a running turn; a second press within one second quits |
-| Ctrl-D                    | On an empty composer, two presses within one second quit; with text, deletes the next character                             |
-| Ctrl-T                    | Fullscreen: shows the conversation in detail, in place; Scrollback: opens the transcript (below)                            |
-| Ctrl-O                    | Shows or hides the model's thinking (below)                                                                                 |
-| `?` on an empty composer  | Shows the shortcuts                                                                                                         |
+| Key                       | Does                                                                                                                                                             |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Enter                     | Sends the message: a new turn, or, while one runs, a message that steers it (below). In a popup, picks its entry                                                 |
+| Shift+Enter, Ctrl+J       | A new line. Shift+Enter needs a terminal with the enhanced keyboard protocol; otherwise use Ctrl+J                                                               |
+| Up, Down (Ctrl-P, Ctrl-N) | On an empty composer, the messages sent in this run; in a popup, its entries                                                                                     |
+| Tab                       | In the command popup, completes the command; in the file popup, inserts the path                                                                                 |
+| Esc                       | Closes a popup; otherwise interrupts the turn while the status line is shown. With no turn running, twice on an empty composer: edits an earlier message (below) |
+| Ctrl-C                    | In turn: denies an approval; clears a composer with text; interrupts a running turn; a second press within one second quits                                      |
+| Ctrl-D                    | On an empty composer, two presses within one second quit; with text, deletes the next character                                                                  |
+| Ctrl-T                    | Fullscreen: shows the conversation in detail, in place; Scrollback: opens the transcript (below)                                                                 |
+| Ctrl-O                    | Shows or hides the model's thinking (below)                                                                                                                      |
+| `?` on an empty composer  | Shows the shortcuts                                                                                                                                              |
 
 Fullscreen has the conversation's keys too: Page Up/Page Down, F3, F4, Ctrl-Space and the others in [Reading the conversation](#reading).
 
@@ -188,6 +188,26 @@ In Scrollback, Ctrl-T opens the whole session's transcript (`T R A N S C R I P T
 The transcript shows every thinking's text and a tool call's whole output, where the scrollback shows its first and last lines, and the tool calls still running after what has completed. Its selection, copying and search are the ones of [Reading the conversation](#reading) (drag, Ctrl-Space, F3).
 
 The turn goes on while a pager is open, and what it writes meanwhile appears in the transcript at once and in the scrollback once you close it.
+
+## Editing an earlier message [#edit]
+
+On an empty composer, with no turn running and nothing open, Esc shows `esc again to edit a previous message`; any other key cancels it. A second Esc browses your messages with the latest highlighted: in place in Fullscreen, in the transcript in Scrollback, in the compact presentation either way. The footer reads `Browsing · ←/→ prompt · ↑/↓ scroll · ctrl+t details · ↵ edit · esc back`.
+
+| Key           | Does                                           |
+| ------------- | ---------------------------------------------- |
+| ←/→ (`h`/`l`) | The earlier or the later message               |
+| ↑/↓ (`k`/`j`) | Scrolls one line                               |
+| Ctrl-T        | Shows or hides the details                     |
+| Enter         | Edits the highlighted message                  |
+| Esc           | Back to where browsing started, nothing edited |
+
+In Fullscreen the conversation's other keys (Page Up/Page Down, Home/End, F3) still work, and any other key ends browsing; in Scrollback the transcript's keys work, and `q` closes it.
+
+Enter edits in a copy of the session: it is forked before the message's turn and the interface switches to the fork, whose conversation ends before the message, with the message back in the composer to change and send. The original session is archived, whole: `hanafubuki-agent sessions list --archived` finds it ([Sessions](/docs/sessions#edit)). Files the Agent changed are not restored, which the first edit of a run says. Images the message had are not put back, since the composer cannot attach them; a line says how many.
+
+- A message sent while a turn ran (steering) did not start a turn of its own and cannot be edited by itself: edit the message that started the turn.
+- While a turn runs, Esc interrupts it, as before; the edit is refused until no turn runs.
+- With no message yet, the second Esc says `No previous message to edit.` In Fullscreen, browsing reaches the messages loaded so far; scrolling up loads earlier ones. In Scrollback, those of a resumed session's latest 200 items.
 
 ## Thinking [#thinking]
 

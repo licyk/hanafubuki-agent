@@ -10,9 +10,13 @@
 //! anchors inside entries ([`position`]), so prepending history never moves
 //! the reading position and rewrapping keeps the same text in view.
 //!
-//! Codex's transcript images, sticky prompt header, turn tips, bookmarks
-//! and clipboard writes are not here: a copy is handed to the caller as a
-//! [`ViewAction`] with the selected text.
+//! The app may highlight one entry (the prompt chosen while browsing to
+//! edit an earlier message) and keep a reading position to return to
+//! ([`TranscriptBookmark`]).
+//!
+//! Codex's transcript images, sticky prompt header, turn tips, named
+//! bookmarks and clipboard writes are not here: a copy is handed to the
+//! caller as a [`ViewAction`] with the selected text.
 
 mod disclosure;
 mod follow_control;
@@ -59,6 +63,10 @@ struct VisibleRow {
     activity_ids: Arc<[String]>,
 }
 
+/// A reading position the view can return to.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct TranscriptBookmark(Position);
+
 /// The scrolling and interaction state shared by the compact and the
 /// detailed presentation.
 pub(crate) struct TranscriptView {
@@ -85,6 +93,8 @@ pub(crate) struct TranscriptView {
     last_tail: Option<EntryKey>,
     last_click: Option<(Instant, u16, u16, u8)>,
     disclosure: disclosure::Disclosure,
+    /// The entry drawn reversed, unless a selection or a search shows.
+    highlight: Option<usize>,
 }
 
 impl Default for TranscriptView {
@@ -112,6 +122,7 @@ impl Default for TranscriptView {
             last_tail: None,
             last_click: None,
             disclosure: disclosure::Disclosure::default(),
+            highlight: None,
         }
     }
 }
@@ -161,6 +172,10 @@ impl TranscriptView {
             let row_area = Rect::new(area.x, y, area.width, 1);
             layout.render(row_area, buf, row);
             self.render_disclosure(&activity_ids, &layout, row, row_area, buf);
+            if self.highlight == Some(index) && self.selection.is_none() && !self.search.is_active()
+            {
+                layout.highlight(0..layout.text().len(), row_area, buf, row);
+            }
             self.visible.push(VisibleRow {
                 index,
                 row,
@@ -414,6 +429,41 @@ impl TranscriptView {
             offset: 0,
             row_bias: 0,
         });
+    }
+
+    /// Shows the entry at `index` if none of its non-blank rows is in view,
+    /// from its top.
+    pub(crate) fn ensure_entry_visible(&mut self, cells: &[Arc<dyn HistoryCell>], index: usize) {
+        let width = self.area.width;
+        let shown = self.visible.iter().any(|row| {
+            let start = row.layout.position_at(row.row, 0);
+            let end = row.layout.position_at(row.row, width);
+            row.index == index && !row.layout.text()[start..end].trim().is_empty()
+        });
+        if !shown {
+            // A jump to the beginning under way goes on.
+            let history = self.history;
+            self.jump_to_entry(cells, index);
+            self.history = history;
+        }
+    }
+
+    pub(crate) fn set_highlight(&mut self, index: Option<usize>) {
+        self.highlight = index;
+    }
+
+    pub(crate) fn bookmark(&self) -> TranscriptBookmark {
+        TranscriptBookmark(self.position)
+    }
+
+    pub(crate) fn restore_bookmark(&mut self, bookmark: TranscriptBookmark) {
+        match bookmark.0 {
+            Position::Latest => self.jump_to_latest(),
+            position => {
+                self.release_live_reading();
+                self.position = position;
+            }
+        }
     }
 
     /// Whether the view wants an older page: search ran out of loaded

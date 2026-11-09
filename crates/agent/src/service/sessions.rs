@@ -1,14 +1,25 @@
 use super::AgentApplicationService;
 use crate::session_workspace::session_workspace;
 use crate::{model_api_protocol, AgentModelInfo, ResolvedAgentProvider};
+use hanafubuki_agent_kernel::AgentImageAttachmentRef;
 use hanafubuki_agent_kernel::{
     AgentError, AgentEventSink, AgentGeneration, AgentRevision, AgentSessionConfig,
     AgentSessionForkOutcome, AgentSessionForkRequest, AgentSessionHeadForkOutcome,
     AgentSessionHeadForkRequest, AgentSessionId, AgentSessionLifecycle, AgentSessionMode,
-    AgentSessionRuntimeSnapshot, AgentSessionSummary, AgentSessionTitleRenameRequest,
+    AgentSessionRuntimeSnapshot, AgentSessionSummary, AgentSessionTitleRenameRequest, AgentTurnId,
     ConfirmedAgentSessionDeletion,
 };
 use std::sync::atomic::Ordering;
+
+/// What [`AgentApplicationService::edit_from_turn`] made: the fork that
+/// continues the conversation, and the message it was cut before, to edit
+/// and send again.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AgentEditFromTurn {
+    pub session: AgentSessionRuntimeSnapshot,
+    pub restored_prompt: String,
+    pub restored_images: Vec<AgentImageAttachmentRef>,
+}
 
 impl AgentApplicationService {
     pub fn rename_session(
@@ -155,6 +166,67 @@ impl AgentApplicationService {
             .snapshot(outcome.session.id)
             .map_err(|error| error.to_string())?;
         Ok(outcome)
+    }
+
+    /// Edits the message that started `turn_id`: forks the session before
+    /// that turn, archives the original (which can be restored) and returns
+    /// the fork with the message. Refused for an archived session, while a
+    /// turn runs in the session, and in a child session (a side
+    /// conversation is ephemeral). Files are
+    /// not restored. When the fork was made but the original could not be
+    /// archived, the error says so and both remain.
+    pub fn edit_from_turn(
+        &self,
+        session_id: AgentSessionId,
+        turn_id: AgentTurnId,
+    ) -> Result<AgentEditFromTurn, String> {
+        self.activate_session(session_id)
+            .map_err(|error| error.to_string())?;
+        let source = self
+            .core
+            .snapshot(session_id)
+            .map_err(|error| error.to_string())?;
+        if source.lifecycle != AgentSessionLifecycle::Available {
+            return Err(AgentError::SessionArchived.to_string());
+        }
+        if source.parent_session_id.is_some() || source.ephemeral {
+            return Err(
+                "an earlier message cannot be edited in a side conversation or another child session"
+                    .to_string(),
+            );
+        }
+        if source
+            .turn
+            .as_ref()
+            .is_some_and(|turn| !turn.phase.is_terminal())
+        {
+            return Err(
+                "a turn is running in this session: wait for it to end, or interrupt it, first"
+                    .to_string(),
+            );
+        }
+        let fork = self.fork_session_before_turn(AgentSessionForkRequest {
+            source_session_id: session_id,
+            source_generation: source.generation,
+            source_revision: source.revision,
+            before_turn_id: turn_id,
+        })?;
+        let source = self
+            .core
+            .snapshot(session_id)
+            .map_err(|error| error.to_string())?;
+        self.archive_session(session_id, source.generation, source.revision)
+            .map_err(|error| {
+                format!(
+                    "the conversation was forked as {} but the original was not archived: {error}",
+                    fork.session.id
+                )
+            })?;
+        Ok(AgentEditFromTurn {
+            session: fork.session,
+            restored_prompt: fork.restored_prompt,
+            restored_images: fork.restored_images,
+        })
     }
 
     pub fn fork_session_at_head(

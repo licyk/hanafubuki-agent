@@ -15,7 +15,9 @@
 //! the detailed presentation (Esc leaves it); plain Enter on an empty
 //! composer returns a scrolled view to the latest output; the view's own
 //! keys (paging, the jumps, F3, F4, Ctrl+Space, Esc while scrolled) go to
-//! it, and the rest to the composer. Codex's composer selection, turn tips,
+//! it, and the rest to the composer. Before all of these, Esc on an empty
+//! composer primes editing an earlier message, which takes the keys while
+//! it browses (`backtrack`). Codex's composer selection, turn tips,
 //! sidebar, side pane, link hover and keymap are not ported.
 
 use std::io::{self, Write};
@@ -86,6 +88,7 @@ impl App {
         tui: &mut Tui<B>,
     ) -> io::Result<()> {
         self.load_older_pages();
+        self.sync_browsing_highlight();
         let width = tui.terminal.size()?.width;
         if self
             .copy_notice
@@ -103,7 +106,14 @@ impl App {
         let scanning = view.advance_search(cells);
         let live_key = chat_widget.active_cell_transcript_key();
         view.sync_live_cells(cells, width, live_key, &chat_widget.active_cells());
-        let measured_footer = view.footer(width).map_or(0, |footer| footer.lines.len());
+        // Browsing's hints take the view's footer row when it has none.
+        let browsing = self
+            .backtrack
+            .is_browsing()
+            .then(|| super::backtrack::browsing_footer(width));
+        let measured_footer = view
+            .footer(width)
+            .map_or(usize::from(browsing.is_some()), |footer| footer.lines.len());
         let chat_height = chat_widget.desired_height(width);
         let mut footer_rows = 0;
         tui.draw(u16::MAX, |frame| {
@@ -129,7 +139,9 @@ impl App {
                 Line::from(notice).dim().render(gap, frame.buffer_mut());
             }
             let footer = view.footer(width);
-            footer_rows = footer.as_ref().map_or(0, |footer| footer.lines.len());
+            footer_rows = footer
+                .as_ref()
+                .map_or(usize::from(browsing.is_some()), |footer| footer.lines.len());
             let footer_area = Rect::new(area.x, transcript.bottom(), area.width, footer_height);
             let mut cursor = chat_widget.cursor_pos(chat_area);
             if let Some(footer) = footer {
@@ -137,6 +149,8 @@ impl App {
                     cursor = Some((footer_area.x + column, footer_area.y));
                 }
                 Paragraph::new(footer.lines).render(footer_area, frame.buffer_mut());
+            } else if let Some(browsing) = browsing {
+                browsing.render(footer_area, frame.buffer_mut());
             }
             if let Some((x, y)) = cursor {
                 frame.set_cursor_position((x, y));

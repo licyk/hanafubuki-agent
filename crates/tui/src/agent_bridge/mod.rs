@@ -2,8 +2,9 @@
 //! Codex's TUI has its `ConversationManager` and `CodexConversation`): it
 //! maps the Agent's turn events onto what the chat widget shows
 //! ([`TurnUpdate`]), and the interface's [`Op`]s onto calls of the facade:
-//! the turn's (here), the slash commands' (`commands`), and the reading of
-//! a session's transcript into what the chat replays (`replay`).
+//! the turn's (here), the slash commands' (`commands`), the reading of a
+//! session's transcript into what the chat replays (`replay`), and the
+//! editing of an earlier message (`edit`).
 //!
 //! The interface starts with no session: the first message creates it, or
 //! a command that needs one (`Op::EnsureSession`), and `/new` drops back to
@@ -15,6 +16,7 @@
 //! [`AgentReply`].
 
 mod commands;
+mod edit;
 mod mcp;
 mod providers;
 mod replay;

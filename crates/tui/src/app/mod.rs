@@ -11,8 +11,10 @@
 //! resume picker) holds the alternate screen, it takes the keys and the
 //! scrollback waits. In owned mode the app holds the alternate screen for
 //! the whole run and draws the cells itself (`owned`), the overlays over
-//! it.
+//! it. Esc twice on an empty composer browses the prompts to edit an
+//! earlier one (`backtrack`).
 
+mod backtrack;
 mod history_pages;
 mod owned;
 mod preferences;
@@ -88,6 +90,7 @@ pub(crate) struct App {
     has_emitted_history_lines: bool,
     next_frame: Option<Instant>,
     last_frame: Option<Instant>,
+    backtrack: backtrack::Backtrack,
 }
 
 impl App {
@@ -120,6 +123,7 @@ impl App {
             has_emitted_history_lines: false,
             next_frame: Some(Instant::now()),
             last_frame: None,
+            backtrack: backtrack::Backtrack::default(),
         }
     }
 
@@ -227,6 +231,7 @@ impl App {
     /// Pasted text goes to the composer, or to a transcript search being
     /// edited; the other overlays take none.
     fn handle_paste(&mut self, text: String) {
+        self.cancel_primed_backtrack();
         // Pasted text arrives with `\r` line endings in many terminals.
         let text = text.replace("\r\n", "\n").replace('\r', "\n");
         let to_search = match self.overlay.as_mut() {
@@ -323,6 +328,9 @@ impl App {
             }
             return true;
         }
+        if self.handle_backtrack_key(tui, key) {
+            return true;
+        }
         if let Some(overlay) = self.overlay.as_mut() {
             let action = match overlay {
                 Overlay::Transcript(transcript) => transcript.handle_key(key),
@@ -333,6 +341,7 @@ impl App {
             };
             if overlay.is_done() {
                 self.overlay = None;
+                self.reset_backtrack();
                 self.leave_alt_screen(tui);
             } else if let Some(action) = action {
                 self.apply_view_action(action);
@@ -559,6 +568,9 @@ impl App {
             let width = tui.terminal.size()?.width;
             let key = self.chat_widget.active_cell_transcript_key();
             transcript.sync_live_tail(width, key, &self.chat_widget.active_cells());
+            if self.backtrack.is_browsing() {
+                transcript.set_browsing_footer(backtrack::browsing_footer(width));
+            }
             ticking = transcript.tick(width);
             if key.is_some_and(|key| key.animation_tick.is_some()) {
                 self.next_frame = Some(Instant::now() + LIVE_TICK);

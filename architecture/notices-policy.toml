@@ -162,12 +162,24 @@ path = "crates/tui/src/app/tests/settings.rs"
 reason = "The first-run setup, /providers and the MCP manager end to end over the standalone Agent."
 
 [[original]]
+path = "crates/tui/src/app/tests/backtrack.rs"
+reason = "Editing an earlier message end to end over the standalone Agent: browsing, the fork and the archived original."
+
+[[original]]
 path = "crates/tui/src/agent_bridge/providers.rs"
 reason = "The Provider screen's calls onto the facade's Provider API."
 
 [[original]]
 path = "crates/tui/src/agent_bridge/mcp.rs"
 reason = "The MCP manager's calls onto the facade's MCP API, the OAuth login on the Agent's runtime."
+
+[[original]]
+path = "crates/tui/src/agent_bridge/edit.rs"
+reason = "A transcript prompt mapped onto the session's saved turns, and the facade's edit_from_turn; Codex reverts the thread in place instead."
+
+[[original]]
+path = "crates/tui/src/agent_bridge/edit/tests.rs"
+reason = "The prompt-to-turn mapping over hand-built history items."
 
 [[original]]
 path = "crates/tui/src/commands/mcp/mod.rs"

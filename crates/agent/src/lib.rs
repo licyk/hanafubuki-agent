@@ -83,8 +83,8 @@ pub use plugins::{
     MAXIMUM_GOAL_OBJECTIVE_CHARS,
 };
 pub use service::{
-    AgentApplicationService, AgentHook, AgentHookHandler, AgentHooks, AgentHostPorts,
-    AgentModelPolicyWriteRequest, AgentProviderDeleteRequest, AgentProviderDraft,
+    AgentApplicationService, AgentEditFromTurn, AgentHook, AgentHookHandler, AgentHooks,
+    AgentHostPorts, AgentModelPolicyWriteRequest, AgentProviderDeleteRequest, AgentProviderDraft,
     AgentProviderEnabledRequest, AgentProviderModelCatalogRequest, AgentProviderModelCatalogResult,
     AgentProviderRegistrySnapshot, AgentProviderWriteRequest, AgentRunProjection,
     AgentServiceInputs, AgentSessionModelSelectionRequest, AgentSessionReasoningEffortRequest,

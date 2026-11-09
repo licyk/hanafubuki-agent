@@ -476,6 +476,15 @@ A child session records its parent and why it was made; what children are, and w
 
 Turns run on a side conversation through `submit_turn_with_sink`, with their own `AgentEventSink`, as on any session. An ephemeral session is never listed, archived (`InvalidInput`) or recovered; it is gone when closed, when its parent is archived or deleted, or when the Agent stops. `open_side_conversation` blocks, like `rename_session`: call it off the async runtime.
 
+## Editing an earlier message [#edit-from-turn]
+
+`edit_from_turn(session_id, turn_id)` edits the message that started `turn_id` the way the terminal interface's Esc does ([Sessions](/docs/sessions#edit)). It forks the session before the turn (as `fork_session_before_turn`, at the session's current generation and revision), archives the original (as `archive_session`, so with its persisted descendants), and returns `AgentEditFromTurn { session, restored_prompt, restored_images }`: the fork's runtime snapshot and the message's text and image attachments, for the composer.
+
+- `turn_id` is the `turn_id` of a `ConversationItem::TurnStart`, read with `read_transcript_page`; the `UserMessage` after it is the message restored. A turn without one (none started by a message) is refused.
+- It returns `Err` with the reason for an archived session, while a turn runs in the session, for a child or ephemeral session, and for a turn the session does not hold.
+- When the fork was made but the original could not be archived (a background terminal that would not stop, say), the error says so and names the fork; both sessions remain.
+- Files are not restored. It blocks, like `rename_session`: call it off the async runtime.
+
 ## Feature calls [#feature-calls]
 
 Some features are served by a plugin row, and the service API reaches them per call:

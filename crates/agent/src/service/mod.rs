@@ -53,6 +53,7 @@ pub use provider::{
     AgentSessionReasoningEffortRequest,
 };
 mod sessions;
+pub use sessions::AgentEditFromTurn;
 mod skill_operations;
 pub use skill_operations::{AgentSkillSessionState, LocalSkillInstallRequest};
 #[cfg(test)]

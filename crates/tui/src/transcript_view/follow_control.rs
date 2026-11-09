@@ -50,6 +50,7 @@ impl TranscriptView {
             || self.tail_visible
             || self.selection.is_some()
             || self.is_search_editing()
+            || self.highlight.is_some()
         {
             return None;
         }

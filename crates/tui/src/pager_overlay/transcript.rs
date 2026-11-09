@@ -7,8 +7,10 @@
 //! The app syncs the live tail each frame and holds back the scrollback
 //! until the overlay closes.
 //!
-//! Codex's prompt highlighting and browsing for backtracking (Esc), its
-//! bookmarks and select-mode entry key are not here: Esc closes.
+//! While the app browses the prompts to edit an earlier message
+//! (`app::backtrack`), it takes the overlay's browsing keys, highlights the
+//! chosen prompt and puts its own hints in place of the overlay's. Codex's
+//! named bookmarks and select-mode entry key are not here.
 
 use std::sync::Arc;
 
@@ -30,6 +32,8 @@ pub(crate) struct TranscriptOverlay {
     content_area: Rect,
     /// What the last copy said, until the next action.
     notice: Option<String>,
+    /// The browsing hints, in place of the overlay's.
+    browsing_footer: Option<Line<'static>>,
     is_done: bool,
 }
 
@@ -42,6 +46,7 @@ impl TranscriptOverlay {
             cells,
             content_area: Rect::default(),
             notice: None,
+            browsing_footer: None,
             is_done: false,
         }
     }
@@ -52,6 +57,37 @@ impl TranscriptOverlay {
 
     pub(crate) fn set_render_mode(&mut self, mode: HistoryRenderMode) {
         self.view.set_presentation(true, mode);
+    }
+
+    pub(crate) fn set_presentation(&mut self, detailed: bool, mode: HistoryRenderMode) {
+        self.view.set_presentation(detailed, mode);
+    }
+
+    pub(crate) fn is_detailed(&self) -> bool {
+        self.view.is_detailed()
+    }
+
+    /// Highlights the entry at `index` and brings it into view; `jump`
+    /// shows it from its top even when some of it is in view.
+    pub(crate) fn highlight(&mut self, index: usize, jump: bool) {
+        self.view.set_highlight(Some(index));
+        if jump {
+            self.view.jump_to_entry(&self.cells, index);
+        } else {
+            self.view.ensure_entry_visible(&self.cells, index);
+        }
+    }
+
+    pub(crate) fn scroll(&mut self, rows: isize) {
+        self.view.scroll(&self.cells, rows);
+    }
+
+    pub(crate) fn has_active_interaction(&self) -> bool {
+        self.view.has_active_interaction()
+    }
+
+    pub(crate) fn set_browsing_footer(&mut self, footer: Line<'static>) {
+        self.browsing_footer = Some(footer);
     }
 
     /// Lays out the live cells after the committed ones at `width`; `true`
@@ -115,6 +151,10 @@ impl TranscriptOverlay {
             return footer
                 .cursor_column
                 .map(|column| (bottom.x + column, bottom.y));
+        }
+        if let Some(footer) = &self.browsing_footer {
+            footer.clone().render(status, buf);
+            return None;
         }
         let status_line = self
             .notice

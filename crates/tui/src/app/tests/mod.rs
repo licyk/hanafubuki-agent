@@ -57,13 +57,21 @@ impl Harness {
 
     /// `with_provider: false` leaves the configuration with no Provider.
     fn start_with(responses: Vec<Vec<u8>>, with_provider: bool, mode: TranscriptMode) -> Self {
+        let responses = responses
+            .into_iter()
+            .map(|body| (body, Duration::ZERO))
+            .collect();
+        Self::start_timed(responses, with_provider, mode)
+    }
+
+    /// Each response is sent after its delay.
+    fn start_timed(
+        responses: Vec<(Vec<u8>, Duration)>,
+        with_provider: bool,
+        mode: TranscriptMode,
+    ) -> Self {
         let model_runtime = tokio::runtime::Runtime::new().unwrap();
-        let server = model_runtime.block_on(FakeServer::start(
-            responses
-                .into_iter()
-                .map(|body| (body, Duration::ZERO))
-                .collect(),
-        ));
+        let server = model_runtime.block_on(FakeServer::start(responses));
         let home = tempfile::tempdir().unwrap();
         let cwd = home.path().join("project");
         std::fs::create_dir_all(cwd.join(".git")).unwrap();
@@ -626,4 +634,5 @@ fn a_resumed_session_loads_its_earlier_pages_into_the_owned_transcript() {
     }
 }
 
+mod backtrack;
 mod settings;

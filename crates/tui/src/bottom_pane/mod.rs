@@ -342,6 +342,16 @@ impl BottomPane {
         self.request_redraw();
     }
 
+    pub(crate) fn show_esc_backtrack_hint(&mut self) {
+        self.composer.show_esc_backtrack_hint();
+        self.request_redraw();
+    }
+
+    pub(crate) fn clear_esc_backtrack_hint(&mut self) {
+        self.composer.clear_esc_backtrack_hint();
+        self.request_redraw();
+    }
+
     pub(crate) fn clear_quit_shortcut_hint(&mut self) {
         self.composer.clear_quit_shortcut_hint(self.has_input_focus);
         self.request_redraw();
