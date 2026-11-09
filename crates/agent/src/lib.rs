@@ -187,7 +187,7 @@ use hanafubuki_agent_kernel::{AgentService, ModelCompactionCapability};
 pub use hanafubuki_agent_kernel::{
     AgentTaskPlanSnapshot, AgentTaskPlanStep, AgentTaskPlanStepStatus, AgentToolPresentation,
     AgentUserInputOption, AgentUserInputQuestion, ApprovalAction, ApprovalActionKind,
-    PermissionReviewStatus,
+    PermissionReviewStatus, SandboxEscalation,
 };
 /// What the Agent tells a host about its MCP servers, and the servers it is
 /// told to connect.

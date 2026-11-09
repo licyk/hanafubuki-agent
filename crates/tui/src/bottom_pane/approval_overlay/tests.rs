@@ -85,6 +85,25 @@ fn session_option_only_when_offered() {
 }
 
 #[test]
+fn an_escalated_command_is_allowed_for_the_session_as_that_command_only() {
+    let mut request = approval_request(1, "echo hi", true);
+    request.action.sandbox_escalation = Some(hanafubuki_agent::SandboxEscalation {
+        justification: Some("Needs the network".to_string()),
+    });
+    let (view, _rx) = overlay(request);
+    assert_eq!(
+        view.options[1].label,
+        "Yes, and don't ask again for this command this session"
+    );
+
+    let (view, _rx) = overlay(approval_request(1, "echo hi", true));
+    assert_eq!(
+        view.options[1].label,
+        "Yes, and don't ask again this session"
+    );
+}
+
+#[test]
 fn header_includes_the_summary_without_terminal_controls() {
     let (view, _rx) = overlay(approval_request(
         1,

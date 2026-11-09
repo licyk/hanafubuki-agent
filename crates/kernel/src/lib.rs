@@ -56,7 +56,7 @@ pub use hanafubuki_agent_approval::{
     AgentPermissionMode, ApprovalAction, ApprovalActionDigest, ApprovalActionKind,
     ApprovalDecision, ApprovalDecisionSource, ApprovalOrigin, ApprovalRequest, ApprovalRequestId,
     ApprovalResolution, ApprovalRiskClass, ApprovalUserDecision, AuthorizedAction,
-    PermissionRequirement,
+    PermissionRequirement, SandboxEscalation,
 };
 pub use hanafubuki_agent_model_api::{
     flattened_tool_call_name, ModelApiProtocol, ModelCatalogEntry, ModelCompactionCapability,

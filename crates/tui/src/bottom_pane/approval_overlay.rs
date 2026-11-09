@@ -70,7 +70,10 @@ impl ApprovalOverlay {
     }
 
     fn build_options(request: &ApprovalRequest) -> (Vec<ApprovalOption>, SelectionViewParams) {
-        let options = approval_options(request.offers_allow_for_session);
+        let options = approval_options(
+            request.offers_allow_for_session,
+            request.action.sandbox_escalation.is_some(),
+        );
         let risk = format!("{:?}", request.action.risk).to_lowercase();
         let header = Box::new(ColumnRenderable::with([
             Line::from(question(request.action.kind).bold()).into(),
@@ -267,7 +270,9 @@ impl ApprovalOption {
     }
 }
 
-fn approval_options(offers_allow_for_session: bool) -> Vec<ApprovalOption> {
+/// An escalated command's session allowance covers that command only
+/// (outside the sandbox), not the tool.
+fn approval_options(offers_allow_for_session: bool, escalated: bool) -> Vec<ApprovalOption> {
     let mut options = vec![ApprovalOption {
         label: "Yes, proceed",
         decision: ApprovalUserDecision::AllowOnce,
@@ -276,7 +281,11 @@ fn approval_options(offers_allow_for_session: bool) -> Vec<ApprovalOption> {
     }];
     if offers_allow_for_session {
         options.push(ApprovalOption {
-            label: "Yes, and don't ask again this session",
+            label: if escalated {
+                "Yes, and don't ask again for this command this session"
+            } else {
+                "Yes, and don't ask again this session"
+            },
             decision: ApprovalUserDecision::AllowForSession,
             display_shortcut: None,
             additional_shortcuts: vec![key_hint::plain(KeyCode::Char('a'))],
