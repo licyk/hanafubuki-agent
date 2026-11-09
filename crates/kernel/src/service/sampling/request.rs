@@ -77,7 +77,10 @@ impl AgentService {
         let tool_plan = self
             .build_tool_plan(catalog_context, cancellation.clone())
             .await
-            .map_err(|error| AgentError::Protocol(error.to_string()))?;
+            .map_err(|error| match error {
+                crate::AgentToolCatalogError::Cancelled => AgentError::Cancelled,
+                error => AgentError::Protocol(error.to_string()),
+            })?;
         let hook_catalog = self.inner.registries.continuation_hooks.ordered();
         // The request's sections are shown by the renderers in force now.
         let contributors = self.inner.registries.prompt.snapshot();

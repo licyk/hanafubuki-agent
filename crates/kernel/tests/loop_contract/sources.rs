@@ -140,6 +140,17 @@ async fn fixture() -> Fixture {
         permissions: permissions.clone(),
         started: started.clone(),
     });
+    let plugin = register_source(&root, source).await;
+    Fixture {
+        root,
+        plugin,
+        registries,
+        permissions,
+        started,
+    }
+}
+
+async fn register_source(root: &Context, source: Arc<dyn AgentToolSource>) -> Fiber {
     let plugin = PluginDef::new(move |ctx: Context, _| {
         let source = source.clone();
         async move {
@@ -151,12 +162,31 @@ async fn fixture() -> Fixture {
     .inject(Inject::new().with(ToolSourceRegistry::NAME));
     let plugin = root.plugin_def(&plugin, Value::Null).unwrap();
     plugin.settled().await.unwrap();
-    Fixture {
-        root,
-        plugin,
-        registries,
-        permissions,
-        started,
+    plugin
+}
+
+/// A source still planning its tools when the turn is cancelled: it answers
+/// the step's cancellation.
+struct PlanningSource {
+    planning: Arc<AtomicBool>,
+}
+
+impl AgentToolSource for PlanningSource {
+    fn id(&self) -> &str {
+        "planning-source"
+    }
+
+    fn contribute<'a>(
+        &'a self,
+        step: &'a ToolSourceStep,
+    ) -> ToolFuture<'a, Result<ToolSourceContribution, AgentToolError>> {
+        Box::pin(async move {
+            self.planning.store(true, Ordering::Release);
+            while !step.cancellation.is_cancelled() {
+                tokio::time::sleep(Duration::from_millis(5)).await;
+            }
+            Err(AgentToolError::Cancelled)
+        })
     }
 }
 
@@ -275,4 +305,43 @@ async fn a_sourced_call_outliving_its_stopping_source_is_cancelled_and_reported(
         "{second}"
     );
     fixture.root.fiber().dispose().await.unwrap();
+}
+
+#[tokio::test]
+async fn a_turn_cancelled_while_its_tools_are_planned_is_cancelled_not_failed() {
+    let registries = AgentKernelRegistries::default();
+    let root = Context::new();
+    root.plugin_def(&kernel_plugin(registries.clone()), Value::Null)
+        .unwrap()
+        .settled()
+        .await
+        .unwrap();
+    let planning = Arc::new(AtomicBool::new(false));
+    register_source(
+        &root,
+        Arc::new(PlanningSource {
+            planning: planning.clone(),
+        }),
+    )
+    .await;
+    let service = AgentService::new(Arc::new(CancellationOnlyModel), registries);
+    let session = service.create_session(config()).unwrap();
+    let executing = service.clone();
+    let session_id = session.id;
+    let turn =
+        tokio::spawn(async move { executing.start_turn(session_id, "plan".to_string()).await });
+    while !planning.load(Ordering::Acquire) {
+        tokio::time::sleep(Duration::from_millis(2)).await;
+    }
+    let running = service.snapshot(session.id).unwrap().turn.unwrap();
+
+    let outcome = service
+        .cancel_turn_confirmed(session.id, running.id, running.generation)
+        .await
+        .unwrap();
+
+    assert_eq!(outcome.phase, AgentTurnPhase::Cancelled);
+    assert_eq!(outcome.reason, AgentTurnTerminalReason::UserInterrupted);
+    assert_eq!(turn.await.unwrap(), Err(AgentError::Cancelled));
+    root.fiber().dispose().await.unwrap();
 }
