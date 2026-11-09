@@ -2,7 +2,8 @@
 //!
 //! The Agent's own copy of the mechanism the application's feature runtime
 //! uses (`hanafubuki_application::contained_runtime`), kept separate so the
-//! Agent depends on no application crate (docs/extraction-plan.md, §4).
+//! Agent depends on no application crate
+//! (site/content/docs/plugin-rules.en.mdx, "Crates and dependencies").
 
 mod runtime;
 

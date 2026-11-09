@@ -1,5 +1,5 @@
 //! Keeps the attribution of third-party code where its licence asks for it
-//! (NOTICE; docs/extraction-plan.md §9, "Licence checklist").
+//! (NOTICE; site/content/docs/contributing.en.mdx, "Licence").
 //!
 //! Apache-2.0 asks every modified file to say that it was changed and the
 //! NOTICE to carry the original's notices; MIT asks for its header to stay

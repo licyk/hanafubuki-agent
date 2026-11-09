@@ -1,4 +1,4 @@
-//! The Agent's own configuration (docs/extraction-plan.md, §6).
+//! The Agent's own configuration (site/content/docs/configuration.en.mdx).
 //!
 //! One directory the host names holds three TOML files: `config.toml` (the
 //! settings), `providers.toml` (the model Provider registry, tokens
@@ -10,7 +10,8 @@
 //!
 //! The standalone Agent finds the directory itself ([`AgentDirs`]) and
 //! layers a profile, a trusted project's file and `-c` overrides over the
-//! user's `config.toml` ([`ConfigLayers`], docs/config.md).
+//! user's `config.toml` ([`ConfigLayers`],
+//! site/content/docs/config-layers.en.mdx).
 
 mod dirs;
 mod fields;

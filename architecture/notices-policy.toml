@@ -1,5 +1,5 @@
 # The third-party code in the sources, checked by `cargo xtask
-# check-notices` (NOTICE, docs/extraction-plan.md §9, "Licence checklist").
+# check-notices` (NOTICE; site/content/docs/contributing.en.mdx, "Licence").
 #
 # `[[derived]]`: code derived from another project. `path` is a Rust file or
 # a directory (every `.rs` file under it, recursively); each file carries

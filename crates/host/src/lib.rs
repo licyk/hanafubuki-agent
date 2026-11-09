@@ -9,7 +9,8 @@
 //! their code to [`PluginFaults`], and run long-lived work as scoped workers
 //! ([`spawn_scoped_worker`]). The Agent's plugin host is one host; its
 //! extension points are `hanafubuki-agent-contracts`. Nothing here depends
-//! on the Agent's kernel or plugins. See `docs/rules/plugins.md`.
+//! on the Agent's kernel or plugins. See
+//! `site/content/docs/plugin-rules.en.mdx`.
 
 mod error;
 mod fault;

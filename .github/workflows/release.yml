@@ -97,7 +97,7 @@ jobs:
       && needs.ci-result.result == 'success'
       && (needs.ci-result.outputs.tested == 'true' || needs.checks.result == 'success')
     runs-on: ubuntu-latest
-    # a first release waits out crates.io's new-crate limit for each crate past the first few (docs/release.md)
+    # a first release waits out crates.io's new-crate limit for each crate past the first few (site/content/docs/releasing.en.mdx)
     timeout-minutes: 330
     steps:
       - uses: actions/checkout@v7.0.1

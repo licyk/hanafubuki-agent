@@ -1,4 +1,5 @@
-//! A kardia host for one manifest of rows (`docs/rules/plugins.md`).
+//! A kardia host for one manifest of rows
+//! (`site/content/docs/plugin-rules.en.mdx`).
 //!
 //! The host owns a kardia root and mounts every row of its manifest on it,
 //! in order, keeping one fiber per row. kardia needs the ambient Tokio

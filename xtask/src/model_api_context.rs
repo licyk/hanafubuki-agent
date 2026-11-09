@@ -1,5 +1,5 @@
 //! Keeps context section wrappers out of `hanafubuki-agent-model-api`
-//! (docs/rules/plugins.md, Context renderers).
+//! (site/content/docs/plugin-rules.en.mdx, "Context renderers").
 //!
 //! A context section's framing belongs to the plugin that registers its
 //! kind's `ContextRenderer`; model-api sends a `ContextFragment`'s role and
@@ -66,7 +66,7 @@ pub fn run(root: &Path) -> Result<(), String> {
         "hanafubuki-agent-model-api names context section kinds:\n\n{}\n\n\
          A section's wrapper text belongs to the plugin that registers its\n\
          ContextRenderer; model-api sends role and content as given\n\
-         (docs/rules/plugins.md, Context renderers).\n",
+         (site/content/docs/plugin-rules.en.mdx, \"Context renderers\").\n",
         reports.join("\n")
     ))
 }

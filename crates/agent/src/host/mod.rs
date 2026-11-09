@@ -15,7 +15,7 @@
 //! status lists, the plugin event sink, and the kernel fault sink a panic in
 //! the host's own tasks reaches. The mechanics (mount order, bounds, retire
 //! and remount, reconfigure, retry, safe mode, faults, shutdown) are the
-//! generic host's (`docs/rules/plugins.md`).
+//! generic host's (`site/content/docs/plugin-rules.en.mdx`).
 
 mod contributions;
 mod events;

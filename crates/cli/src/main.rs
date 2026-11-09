@@ -1,4 +1,5 @@
-//! `hanafubuki-agent`: the standalone Agent's command line (docs/cli.md).
+//! `hanafubuki-agent`: the standalone Agent's command line
+//! (site/content/docs/cli-reference.en.mdx).
 
 mod agent;
 mod cli;

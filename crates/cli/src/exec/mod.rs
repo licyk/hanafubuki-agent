@@ -1,7 +1,7 @@
 //! `exec`: one turn without the terminal interface. The turn's events go to
 //! standard output as text or as JSON lines; approvals and questions are
 //! answered by the `--approve` policy and, on a terminal, by the person at
-//! it; the exit code says how the turn ended (docs/cli.md).
+//! it; the exit code says how the turn ended (site/content/docs/exec.en.mdx, "Exit codes").
 
 mod answers;
 mod output;

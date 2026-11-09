@@ -1,5 +1,6 @@
 //! What `exec` prints: the turn as text for a person, or each event as one
-//! JSON object per line for a program (docs/cli.md has the schema).
+//! JSON object per line for a program (site/content/docs/json-events.en.mdx
+//! has the schema).
 
 use std::collections::HashMap;
 use std::io::Write;

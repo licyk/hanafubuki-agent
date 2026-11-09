@@ -117,7 +117,8 @@ impl AgentApplicationService {
     }
 
     /// Stops the Agent's plugins after turns are stopped and MCP is shut
-    /// down; see `docs/spec.md` §10.
+    /// down; see `site/content/docs/architecture.en.mdx`, "Start and
+    /// shutdown".
     pub async fn shutdown_plugins(
         &self,
         deadline: std::time::Instant,

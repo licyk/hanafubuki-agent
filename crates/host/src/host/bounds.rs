@@ -23,7 +23,8 @@ use crate::PluginError;
 
 /// How long a row's start may take to settle before the row is failed.
 /// Every plugin's `apply` only validates, registers and spawns
-/// (`docs/rules/plugins.md`), so none needs a bound of its own.
+/// (`site/content/docs/plugin-rules.en.mdx`), so none needs a bound of its
+/// own.
 pub const PLUGIN_START_TIMEOUT: Duration = Duration::from_secs(20);
 /// How long a disposal may run before its row is reported stuck: more than
 /// a plugin's own teardown takes (`DRAIN_GRACE`, `RETIRE_CANCEL_BOUND`,

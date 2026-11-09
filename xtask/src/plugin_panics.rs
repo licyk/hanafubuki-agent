@@ -1,5 +1,6 @@
 //! `cargo xtask check-plugin-panics`: a plugin's production code does not
-//! panic on failure (docs/rules/plugins.md).
+//! panic on failure (site/content/docs/plugin-rules.en.mdx, "Panics in plugin
+//! code").
 
 use std::fs;
 use std::path::Path;

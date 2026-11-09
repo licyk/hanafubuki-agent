@@ -20,7 +20,8 @@ use std::process::Command;
 use serde::Deserialize;
 
 /// Each member and the members it may depend on (normal, dev or build), by
-/// layer from the bottom (docs/architecture.md, "Crates"). The table is
+/// layer from the bottom (site/content/docs/architecture.en.mdx, "Crates and
+/// layers"). The table is
 /// enforced once it has rows: every member then needs one.
 const LAYERS: &[(&str, &[&str])] = &[
     // Neutral mechanisms.

@@ -1,5 +1,6 @@
 //! Golden baselines for the Agent over its own plugin set, with a host that
-//! adds no plugin rows, context or instructions (docs/rules/plugins.md,
+//! adds no plugin rows, context or instructions
+//! (site/content/docs/plugin-rules.en.mdx,
 //! "Testing a plugin").
 //!
 //! They pin what the model receives (instructions, tool catalog, input items),

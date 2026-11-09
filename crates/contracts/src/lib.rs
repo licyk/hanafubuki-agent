@@ -6,7 +6,7 @@
 //! stops. The registry, fault and worker mechanisms are the module host's
 //! (`hanafubuki-agent-host`), re-exported here so plugins depend on
 //! this crate alone. Domain crates never depend on this crate or on kardia.
-//! See `docs/rules/plugins.md`.
+//! See `site/content/docs/plugin-rules.en.mdx`.
 
 pub mod activity;
 pub mod admission;
