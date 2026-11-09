@@ -15,7 +15,7 @@ pager, `@` file mentions and session picker, and the model's thinking shown
 as it streams), or one headless turn (`exec`),
 and manages its configuration on it. Each release publishes the crates on
 crates.io and binaries for Linux (x86_64), macOS (x86_64, Apple silicon)
-and Windows (x86_64) on GitHub ([releasing](docs/release.md)).
+and Windows (x86_64) on GitHub ([releasing](https://licyk.github.io/hanafubuki-agent/docs/releasing/)).
 
 ## Usage
 
@@ -35,30 +35,39 @@ With no command it opens the terminal interface (`/` lists its commands;
 `/quit`, or Ctrl-C twice, to leave), and `resume` reopens a session in it. `exec` prints the turn as text, or with `--json` one event per line, and
 exits with a code that says how the turn ended; approvals follow
 `--approve` (`deny` by default). The commands, flags, output formats and
-exit codes are in [docs/cli.md](docs/cli.md), the configuration in
-[docs/config.md](docs/config.md).
+exit codes are in the [command-line reference](https://licyk.github.io/hanafubuki-agent/docs/cli-reference/), the
+configuration in [Configuration](https://licyk.github.io/hanafubuki-agent/docs/configuration/).
 
 ## Embedding
 
 A host depends on `hanafubuki-agent` (the facade) and
 `hanafubuki-agent-contracts` (the plugin API its own plugins are written
 against), and supplies its plugins and ports through the host interface
-([docs/rules/plugins.md](docs/rules/plugins.md#the-host-interface)).
+([Embedding the Agent](https://licyk.github.io/hanafubuki-agent/docs/embedding/), [Host plugins](https://licyk.github.io/hanafubuki-agent/docs/host-plugins/)).
 
 ## Documentation
 
-The documentation site's source is in [site/](site) (`bun run site:dev`;
-see [AGENTS.md](AGENTS.md#site)); the pages below move there.
+The documentation is at <https://licyk.github.io/hanafubuki-agent/docs/>, in Chinese and English. Its source is
+[site/content/docs](site/content/docs) (`<slug>.mdx` in Chinese,
+`<slug>.en.mdx` in English; `bun run site:dev`, see
+[AGENTS.md](AGENTS.md#site)).
 
-- [docs/architecture.md](docs/architecture.md): how the Agent is put
-  together, and why.
-- [docs/rules/plugins.md](docs/rules/plugins.md): the plugin rules and the
-  host interface.
-- [docs/spec.md](docs/spec.md): the Agent as built, in detail.
-- [docs/cli.md](docs/cli.md): the `hanafubuki-agent` command line.
-- [docs/config.md](docs/config.md): the standalone Agent's configuration:
-  locations, layers, keys.
-- [docs/release.md](docs/release.md): how a release is made and resumed.
+- Using the Agent: [Installation](https://licyk.github.io/hanafubuki-agent/docs/installation/),
+  [Quick start](https://licyk.github.io/hanafubuki-agent/docs/quick-start/),
+  [Terminal interface](https://licyk.github.io/hanafubuki-agent/docs/terminal-interface/), [exec](https://licyk.github.io/hanafubuki-agent/docs/exec/),
+  [Providers and models](https://licyk.github.io/hanafubuki-agent/docs/providers-models/),
+  [Permissions and approvals](https://licyk.github.io/hanafubuki-agent/docs/permissions/), [MCP](https://licyk.github.io/hanafubuki-agent/docs/mcp/),
+  [Skills](https://licyk.github.io/hanafubuki-agent/docs/skills/), [Troubleshooting](https://licyk.github.io/hanafubuki-agent/docs/troubleshooting/).
+- Configuration: [Configuration](https://licyk.github.io/hanafubuki-agent/docs/configuration/),
+  [Configuration reference](https://licyk.github.io/hanafubuki-agent/docs/config-reference/).
+- Reference: [Command-line reference](https://licyk.github.io/hanafubuki-agent/docs/cli-reference/),
+  [exec --json events](https://licyk.github.io/hanafubuki-agent/docs/json-events/), [Exit codes](https://licyk.github.io/hanafubuki-agent/docs/exit-codes/).
+- Embedding: [Embedding the Agent](https://licyk.github.io/hanafubuki-agent/docs/embedding/),
+  [Host plugins](https://licyk.github.io/hanafubuki-agent/docs/host-plugins/).
+- Development: [Architecture](https://licyk.github.io/hanafubuki-agent/docs/architecture/),
+  [Internals](https://licyk.github.io/hanafubuki-agent/docs/internals/), [Plugin rules](https://licyk.github.io/hanafubuki-agent/docs/plugin-rules/),
+  [Building and testing](https://licyk.github.io/hanafubuki-agent/docs/building-testing/),
+  [Contributing](https://licyk.github.io/hanafubuki-agent/docs/contributing/), [Releasing](https://licyk.github.io/hanafubuki-agent/docs/releasing/).
 - [AGENTS.md](AGENTS.md): the workspace rules and validation.
 
 ## License

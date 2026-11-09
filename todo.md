@@ -11,8 +11,8 @@ The next release with it is 0.2.0 (the headline event is removed).
 
 - [x] T1: thinking in the model API (three protocols, `reasoning.summary`)
       and the kernel (three events, `ConversationItem::Reasoning`, its own
-      budget), the headline removed (spec.md §5 "Thinking" and §8
-      model-api, [docs/cli.md](docs/cli.md) event table). Each item is cut
+      budget), the headline removed (the site's architecture page,
+      "Thinking", and its exec --json events page, "Thinking"). Each item is cut
       at `AgentHardLimits::maximum_reasoning_text_bytes` (256 KiB) and no
       longer spends `maximum_model_output_bytes`; a response that stops
       early completes its open items. No request golden sets an effort, so
@@ -66,7 +66,8 @@ The next release with it is 0.2.0 (the headline event is removed).
 - [x] T2: the TUI thinking cell (`history_cell/thinking.rs`), Ctrl-O,
       Working without the headline; `exec`'s `· thought for 12s` on
       standard error and `sessions show`'s `thought for 12s` line
-      ([docs/cli.md](docs/cli.md) "Thinking", architecture.md §3.7).
+      (the site's terminal interface page, "Thinking", and architecture
+      page, "The terminal interface and the command line").
   - What T3 mirrors: collapsed by default; live `Thinking 5s` counting up
     from the cell's own start, completed `Thought for 12s` from the
     kernel's `durationMillis` (seconds, rounded down; `(truncated)` when
@@ -102,13 +103,43 @@ The next release with it is 0.2.0 (the headline event is removed).
       (AGENTS.md, "Site"). The router links with a trailing slash, so
       giscus's `pathname` term is the same for a page reached by URL or by
       in-site navigation.
-- [ ] D2: the content rewrite, bilingual; `docs/` removed; links re-pointed.
-  - `index`, `installation` and `quick-start` (both languages) are drafts
-    to replace; the sidebar's sections go in `meta.json` and
-    `meta.en.json`, in the same order.
-  - Once `docs/` is gone, `snippet_files` in `xtask/src/version.rs` drops
-    its `docs/*.md` scan, with its test; the README's documentation list
-    and AGENTS.md's document table point at the site.
+- [x] D2: the content rewrite, bilingual; `docs/` removed; links re-pointed.
+      Thirty-two pages in zh-CN and English, every heading with an
+      explicit id shared by both languages; the Development section's
+      `internals` page keeps the as-built detail of the old spec. AGENTS.md
+      cites the pages' English sources, the README the live site, code
+      comments and NOTICE `site/content/docs/<slug>.en.mdx`; `cargo xtask
+      version` scans the README and the site only. A link to a heading on
+      another page passes its fragment to the router apart, so the
+      trailing slash goes before the `#`. Only the active plan is left in
+      `docs/`.
+  - Found while writing the docs (documented as current behaviour, likely
+    bugs):
+    - `-C` does not change the process's working directory, so
+      `exec_command` without `workdir` runs where the binary started
+      (`crates/execution/src/shell.rs:68`, `Path::new(".")`).
+    - `mcp.toml` server ids are not validated on read.
+    - `.git/` may show in `@` mention results.
+    - Configuration warnings from the first read are lost for commands
+      that do not start the Agent.
+    - Every start of the terminal interface creates a session that
+      `sessions list` shows (see Phase 5b below).
+    - `skills/src/service/mutations.rs`: `source_folder_name`'s comment
+      prefers the frontmatter name, the code the source folder's name.
+    - Provider requests ignore `[network] proxy`: they read the process's
+      proxy variables.
+    - An unusable `config.toml` rewritten with defaults drops profiles,
+      projects, `logLevel` and `[network]` from the live file (they are
+      kept only in `.recovery/`).
+    - The golden update variables trigger on any value
+      (`var_os(..).is_some()`), `0` and the empty string included.
+    - `check-plugin-panics` covers only `crates/plugin-*`.
+    - `sessions show` lists its items latest first (see T2 above).
+    - `WorkspaceRootsPort::extra_read_roots` is documented as directories
+      the file tools may read without approval, but the facade passes them
+      to `WorkspaceFsPolicy` as protected roots, so every request under
+      them fails with `ProtectedPath` (`crates/agent/src/service/mod.rs`);
+      the name and docs or the code are wrong.
 - [ ] D2b (Hanafubuki): its links into this repository's docs re-pointed.
 - [ ] D3: GitHub Pages.
   - Enable Pages (source: GitHub Actions) in the repository settings, and
@@ -123,8 +154,8 @@ The next release with it is 0.2.0 (the headline event is removed).
 
 ## Extraction from Hanafubuki
 
-The phases are in [docs/extraction-plan.md](docs/extraction-plan.md) §14;
-Hanafubuki's `todo.md` tracks them with their done notes. Phases 1–3 are
+The phases were in the extraction plan (§14), finished and removed in D2
+(git keeps it); Hanafubuki's `todo.md` tracks them with their done notes. Phases 1–3 are
 done: the workspace, the decoupling inside Hanafubuki's tree, and the move.
 
 - [x] Phase 4a: what the facade needs to run without a host: config
@@ -132,7 +163,8 @@ done: the workspace, the decoupling inside Hanafubuki's tree, and the move.
       `[network]`, `logLevel`, `AgentDirs`/`HANAFUBUKI_AGENT_HOME`), the
       data-dir lock (both modes), the standalone log file, the keyring
       store, the cwd workspace and `AgentRuntime::standalone`
-      ([docs/config.md](docs/config.md), architecture.md §3.6, §10).
+      (the site's Configuration pages; architecture page, "The terminal
+      interface and the command line").
 - [x] Phase 4b: the CLI (`hanafubuki-agent-cli`, binary `hanafubuki-agent`,
       `clap`): the global flags, `exec` (text and JSON lines, `--approve`,
       questions on a terminal, exit codes, `-o`), `config path|get|set|edit`
@@ -140,7 +172,7 @@ done: the workspace, the decoupling inside Hanafubuki's tree, and the move.
       `mcp`, `sessions`, `skills`, `memory`, `doctor`; the proxy in the
       Agent's processes' environment; the host-supplied identity
       (`AgentHostInstructions::identity`, `application`)
-      ([docs/cli.md](docs/cli.md), architecture.md §3.6). Phase 4 is done:
+      (the site's command line reference page). Phase 4 is done:
       an `exec` turn against the scripted model runs end to end in CI
       (`crates/cli/tests/exec.rs`).
   - Deferred: `mcp add` sets no credentials (`credentialEnvironment`,
@@ -165,14 +197,14 @@ done: the workspace, the decoupling inside Hanafubuki's tree, and the move.
     "Hanafubuki".to_string()`, the strings the Agent used to have, and the
     integration goldens stay byte-identical (checked here by building the
     facade's goldens with those values); the history corpus is unchanged.
-  - `docs/agent-integration.md`: the host instructions now carry the
-    identity and the application name.
+  - Hanafubuki's `docs/agent-integration.md`: the host instructions now
+    carry the identity and the application name.
   - Nothing else: the facade's other changes are additions (re-exports of
     MCP, approval and user-input types, `probe_keyring`, the
     configuration's key API), and the CLI is a crate Hanafubuki does not
     depend on.
-- [x] Phase 5a: the terminal interface's core (`hanafubuki-agent-tui`,
-      architecture.md §3.7, [docs/cli.md](docs/cli.md)): upstream ratatui
+- [x] Phase 5a: the terminal interface's core (`hanafubuki-agent-tui`;
+      the site's terminal interface and architecture pages): upstream ratatui
       0.30 and crossterm 0.29 (Codex's git forks dropped, the palette
       query too), the inline viewport and scrollback, the app loop, the
       chat widget and its history cells, markdown and streaming, the diff
@@ -180,8 +212,8 @@ done: the workspace, the decoupling inside Hanafubuki's tree, and the move.
       approval and question overlays, `agent_bridge.rs`; bare
       `hanafubuki-agent [PROMPT]` runs it on a terminal. NOTICE carries
       Codex's NOTICE and license and Ratatui's.
-- [x] Phase 5b: the rest of the terminal interface (architecture.md
-      §3.7, [docs/cli.md](docs/cli.md#commands)): the slash commands with
+- [x] Phase 5b: the rest of the terminal interface (the site's terminal
+      interface page, "Slash commands"): the slash commands with
       the composer's popup (`/model` from the Providers' model catalogs
       and `set_session_model`, `/mode`, `/skills`, `/new`, `/resume`,
       `/compact`, `/diff`, `/mention`, `/status`, `/mcp`, `/quit`,
@@ -214,8 +246,7 @@ done: the workspace, the decoupling inside Hanafubuki's tree, and the move.
   - Still deferred from 5a: images in the composer (paste, attach); a
     session's earlier messages in the composer's history (only this
     run's); desktop notifications; Ctrl-Z suspend; the external editor;
-    the reasoning summary cells (the Agent's events carry no reasoning
-    text); the time-worked separator counts from the status line's
+    the time-worked separator counts from the status line's
     timer; a contained Agent panic writes its report to standard error,
     over the interface, as the Agent's hook does everywhere.
 - [ ] Hanafubuki, when it moves its pin past Phase 5a: nothing to change.
@@ -238,7 +269,7 @@ done: the workspace, the decoupling inside Hanafubuki's tree, and the move.
       from `cargo-about` 0.9.2 (`about.toml`, `about.hbs`), which covers
       `nucleo`'s and the other MPL-2.0 crates; every crate but `xtask`
       packages and verifies (`cargo publish --workspace --dry-run`); the
-      checklist is [docs/release.md](docs/release.md).
+      checklist is the site's releasing page.
 - [ ] Phase 6, the user's step: `cargo xtask tag --push` on `main` for
       `v0.1.0` and watching the release run (about three and a half hours
       under crates.io's new-crate limit; resume with `gh workflow run

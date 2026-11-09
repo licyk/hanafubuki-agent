@@ -9,18 +9,23 @@ Hanafubuki is such a host. Dependencies point one way: this repository depends
 on no Hanafubuki crate, from any source, and Hanafubuki depends on it
 (`cargo xtask check-dependencies` enforces this).
 
-This file holds the rules every change needs; the documents below hold the
-rest, each the only copy of its rules. Read the ones a change touches before
-changing behavior, and update them when the design changes.
+This file holds the rules every change needs; the documentation site's
+Development and Embedding pages hold the rest, each the only copy of its
+rules. Read the ones a change touches before changing behavior, and update
+them (both languages) when the design changes. They are published at
+`https://licyk.github.io/hanafubuki-agent/docs/<slug>/`; the English source
+of each is `site/content/docs/<slug>.en.mdx`, its Chinese twin `<slug>.mdx`.
 
-| Document | Read before changing |
+| Page (English source) | Read before changing |
 | --- | --- |
-| [docs/rules/plugins.md](docs/rules/plugins.md) | Any tool, context section, approval rule, continuation hook or observer; the plugin host, its manifest and the plugin configuration; the crate boundaries; the host interface a host embeds the Agent through; the goldens. |
-| [docs/architecture.md](docs/architecture.md) | The Agent as a whole: crates, plugin host and faults, tool planning and pipeline, context, Skills, MCP, memory, persistence, and why the less obvious choices were made. |
-| [docs/spec.md](docs/spec.md) | The Agent as built in detail: composition, storage, contracts, plugins and tools, sessions and turns, approval, execution, history, memory, MCP, models, Skills, presentation, shutdown. |
-| [docs/cli.md](docs/cli.md), [docs/config.md](docs/config.md) | The `hanafubuki-agent` command line (its commands, `exec`'s output formats, approvals and exit codes); the standalone configuration (locations, layers, keys). |
-| [docs/release.md](docs/release.md) | The release workflow (`release.yml`), the crates' packaging, the binary archives and their third-party license file (`about.toml`, `about.hbs`). |
-| [docs/extraction-plan.md](docs/extraction-plan.md) | The plan this repository was extracted from Hanafubuki by, and its remaining phases (standalone mode, the TUI, the release). |
+| [Plugin rules](site/content/docs/plugin-rules.en.mdx) | Any tool, context section, approval rule, continuation hook or observer; the plugin host, its manifest and the plugin configuration; the crate boundaries ("Crates and dependencies"); the host interface a host embeds the Agent through; testing a plugin and the goldens. |
+| [Architecture](site/content/docs/architecture.en.mdx) | The Agent as a whole: crates, plugin host and faults, tool planning and pipeline, context, thinking, storage, MCP, the model API, the terminal interface and the port's changes, and why the less obvious choices were made. |
+| [Internals](site/content/docs/internals.en.mdx) | The Agent as built in detail: staged commits, the execution-progress queue, request images, session wait signals, the history store's refusals and quarantine, MCP repairs and diagnostics, Skill issues, model-api's tolerant decoding, the crash-loop marker. |
+| [Embedding the Agent](site/content/docs/embedding.en.mdx), [Host plugins](site/content/docs/host-plugins.en.mdx) | The facade a host embeds (`AgentRuntime`, `AgentHostPorts`), the panic-hook bridge, the data directory's lock, start and shutdown; plugins a host writes. |
+| [Command-line reference](site/content/docs/cli-reference.en.mdx), [exec](site/content/docs/exec.en.mdx), [exec --json events](site/content/docs/json-events.en.mdx), [Exit codes](site/content/docs/exit-codes.en.mdx), [Terminal interface](site/content/docs/terminal-interface.en.mdx) | The `hanafubuki-agent` command line: its commands and flags, `exec`'s output formats, approvals and exit codes, the event stream's stability rule, the terminal interface's keys and commands. |
+| [Configuration](site/content/docs/configuration.en.mdx), [Configuration layers](site/content/docs/config-layers.en.mdx), [Configuration reference](site/content/docs/config-reference.en.mdx), [Configuration recovery](site/content/docs/recovery.en.mdx) | The standalone configuration: locations, layers, keys, repairs. |
+| [Building and testing](site/content/docs/building-testing.en.mdx), [Contributing](site/content/docs/contributing.en.mdx) | The `cargo xtask` checks, the goldens and history corpora, CI; commit style, the twins shared with Hanafubuki, the licence. |
+| [Releasing](site/content/docs/releasing.en.mdx) | The release workflow (`release.yml`), the crates' packaging, the binary archives and their third-party license file (`about.toml`, `about.hbs`). |
 
 ## Development Principles
 
@@ -80,7 +85,8 @@ changing behavior, and update them when the design changes.
   forgotten. Each Agent instance's processes belong to its owner group, a
   stop sweeps that group, and the groups a run leaves are recorded in
   `process-groups.json` and reaped at the next start. A host's processes are
-  the host's ([spec.md](docs/spec.md)).
+  the host's ([Embedding the Agent](site/content/docs/embedding.en.mdx),
+  "Start, on and off, shutdown").
 - **Decoding by input source**: how strictly a value is decoded is decided
   by who produced it, not by its type. A request a host's frontend sends
   over IPC rejects unknown fields (`deny_unknown_fields`), and so does an
@@ -89,7 +95,8 @@ changing behavior, and update them when the design changes.
   back per field and quarantines what it cannot use; external producers
   (model providers, MCP servers, the web) are read tolerantly, one bad item
   never failing the rest; model tool arguments are normalized against their
-  schema ([plugins.md](docs/rules/plugins.md#model-tool-arguments)).
+  schema ([Plugin rules](site/content/docs/plugin-rules.en.mdx), "Model tool
+  arguments").
   `deny_unknown_fields` appears in production code only on a type listed in
   `architecture/strict-decoding-policy.toml` with its category and reason
   (`cargo xtask check-strict-decoding`). Approval, path containment and
@@ -99,7 +106,7 @@ changing behavior, and update them when the design changes.
   the calling plugin, removed when it stops; plugins return errors and never
   panic (`cargo xtask check-plugin-panics`); and the goldens pin what the
   model sees, so a model-visible change regenerates them on purpose
-  ([plugins.md](docs/rules/plugins.md)).
+  ([Plugin rules](site/content/docs/plugin-rules.en.mdx)).
 
 ## Agent Content Logging
 
@@ -138,8 +145,11 @@ Fumadocs on TanStack Start, prerendered to static files and built for
 GitHub Pages under `/hanafubuki-agent/` (`VITE_BASE_PATH`). It is zh-CN by
 default with English: every page under `site/content/docs` is `x.mdx` plus
 `x.en.mdx`, and `meta.json` and `meta.en.json` list the same slugs in the
-same order (`i18n-content.test.ts`). The Markdown under `docs/` moves there
-in phase D2 of [docs/plan-thinking-and-site.md](docs/plan-thinking-and-site.md).
+same order (`i18n-content.test.ts`). Every heading carries an explicit
+`[#id]`, the same in both languages, and links to another page's heading
+use it (`/docs/<slug>#<id>`). The Agent's documentation is the site; the
+repository keeps no other Markdown documents but this file, the README and
+`todo.md` (and an active plan under `docs/`).
 
 - `bun run site:dev|check|test|build|preview` run the site's scripts;
   `bun run format:site` formats `site/` and the root `package.json` and
@@ -189,13 +199,13 @@ macOS.
 
 `cargo xtask version <patch|minor|major> [--dry-run]` raises
 `[workspace.package].version` and every internal `[workspace.dependencies]`
-requirement (and dependency snippets in `README.md`, `docs/*.md` and the
-site's `.mdx` pages when the requirement users write changes), then refreshes `Cargo.lock`. Commit the
+requirement (and dependency snippets in `README.md` and the site's
+`.mdx` pages when the requirement users write changes), then refreshes `Cargo.lock`. Commit the
 result; `cargo xtask tag [--push] [--dry-run]` then makes the annotated
 `v<version>` tag on a clean `HEAD`. The tag starts `release.yml`
 (crates.io, the binaries, the GitHub release); the checklist, the first
 release's crates.io rate limit and how to resume a stopped release are in
-[docs/release.md](docs/release.md). `about.toml` lists the licenses the
+[Releasing](site/content/docs/releasing.en.mdx). `about.toml` lists the licenses the
 binary's dependencies may have; a dependency under another one fails the
 release's `licenses` job until it is accepted there.
 
