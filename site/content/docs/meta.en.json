@@ -33,6 +33,7 @@
     "host-plugins",
     "---Development---",
     "architecture",
+    "internals",
     "plugin-rules",
     "building-testing",
     "contributing",

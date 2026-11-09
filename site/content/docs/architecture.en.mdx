@@ -4,7 +4,7 @@ description: How hanafubuki-agent is put together — crates and layers, the ker
 icon: Layers
 ---
 
-This page is for someone reading the code for the first time: how the parts work together, and why the choices the code does not explain were made. The rules to follow are in [Plugin rules](/docs/plugin-rules) and the repository's [AGENTS.md](https://github.com/licyk/hanafubuki-agent/blob/main/AGENTS.md); embedding is [Embedding the Agent](/docs/embedding).
+This page is for someone reading the code for the first time: how the parts work together, and why the choices the code does not explain were made. The rules to follow are in [Plugin rules](/docs/plugin-rules) and the repository's [AGENTS.md](https://github.com/licyk/hanafubuki-agent/blob/main/AGENTS.md); embedding is [Embedding the Agent](/docs/embedding); the exact bounds, failure rules and file formats behind this page are in [Internals](/docs/internals).
 
 ## Goals [#goals]
 
@@ -147,7 +147,7 @@ The kernel owns the pipeline, and plugins cannot reorder it:
 
 ### Approval [#approval]
 
-`AgentPermissionMode` is `Manual` (the default), `AutoReview` or `FullAccess`, frozen per turn from the setting. Each tool call is classified by its handler's `permission` into an `ApprovalAction` (kind, risk class, canonical digest). Rules can only tighten. The user may answer a `Manual`-mode prompt with `AllowForSession`: later calls of the same tool (by `(provider id, tool id, generation)`) are not asked again for the rest of the session, which is kept in runtime state only, so a restart, a fork and a changed tool (an MCP reconnect included) ask again. Approval yields a one-shot `AuthorizedAction`; mutating tools recompute their action in `invoke` and require an exact match. There is no OS sandbox: approval is the gate.
+`AgentPermissionMode` is `Manual` (the default), `AutoReview` or `FullAccess`, frozen per turn from the setting. Each tool call is classified by its handler's `permission` into an `ApprovalAction` (kind, risk class, canonical digest). Rules can only tighten. The user may answer a `Manual`-mode prompt with `AllowForSession`: later calls of the same tool (by `(provider id, tool id, generation)`) are not asked again for the rest of the session, which is kept in runtime state only, so a restart, a fork and a changed tool ask again (for an MCP tool: a change to its server's configuration, credentials or catalog entry; a reconnect of an unchanged server keeps the allowance). Approval yields a one-shot `AuthorizedAction`; mutating tools recompute their action in `invoke` and require an exact match. There is no OS sandbox: approval is the gate.
 
 ## Context [#context]
 

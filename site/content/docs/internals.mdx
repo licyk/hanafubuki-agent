@@ -1,0 +1,330 @@
+---
+title: 内部细节
+description: 架构页没有展开的实现细节：持久提交与 drop guard、执行进度、请求中的图片、会话上的等待、历史存储的拒绝规则、MCP 设置的修复与诊断、Skill 文件的问题、Provider 流的容错解码、崩溃循环标记，以及 Agent 其余的内部机制。
+icon: Microscope
+---
+
+[架构](/docs/architecture)说明各部分如何协作、为什么这样设计；本页记录设计没有规定细节的地方实际是怎么做的：确切的上限、每种失败的处理规则、Agent 保存的文件格式。内容都对照过 `crates/` 中的代码；两者不一致时，以代码为准，本页需要修正。必须遵守的规则在[插件规则](/docs/plugin-rules)。
+
+## 暂存提交与 drop guard [#staged-commits]
+
+会话的每次修改都先持久化才对外可见（[会话与轮次](/docs/architecture#sessions-and-turns)）。具体做法如下（内核的 `service/durable.rs`、`service/state/cell.rs`）：
+
+- 会话记录把身份与五组状态分开保存：设置、状态、对话、事件日志和运行时（`service/state/record.rs`）。回滚时整组恢复。
+- **暂存。** 修改在会话单元的锁下改动记录，并暂存为一个 `StagedPersistence`：要追加的检查点（`AgentConversationCommit`）或增量（`AgentConversationDelta`），以及回滚用的状态。有提交暂存时，记录的 `persisting_revision` 挡住其他所有写入者：它们只在没有暂存的提交时才锁定记录（`lock_after_persistence`）。
+- **结算。** 追加的确认（`AgentHistoryAppendAck`）结算这次提交：成功则发布持久化的修订号（清除 `persisting_revision`）；失败则回滚记录，前提是记录的修订号仍是暂存的那一个。此后调用方才能发出这次提交的事件。存储未作回应就丢弃的确认会回滚记录，并以 `ShuttingDown` 失败。
+- **异步调用方**（轮次循环、它在内核 `start_turn` 中的准入、压缩、执行进度）把追加排入队列（`AgentHistoryStore::enqueue_commit` 或 `enqueue_delta`），再等待结算的答复。结算在确认中运行，也就是在完成追加的那个历史写入线程上，而不是在等待的 future 里：即使 future 在此期间被丢弃，结算照样发生；等待这个会话的任何东西都不依赖轮次的运行时能否推进。
+- **同步调用方**在调用线程上追加（`append_commit` 或 `append_delta`）并就地结算：宿主在异步运行时之外调用的服务会话修改，以及门面在其阻塞边界上运行的轮次提交（`submit_turn_with_sink`），这样轮次的准入和其托管任务的创建从不分开。
+
+**drop guard。** 在结束之前被丢弃的轮次或压缩（任务被中止，或者 `start_turn` 在追加准入时被丢弃）通过它的 guard（`TurnExecutionGuard`、`CompactionExecutionGuard`）结束，guard 既不能 await 也不能阻塞。轮次的 guard 先中止该轮次待处理的审批。随后 guard 暂存取消，并把它交给存储，不由任何人等待（`StagedPersistence::into_follow_up`）；确认在写入线程上发布它，然后自己让它可见：唤醒等待终态的调用方、发出事件、通知观察者（`TurnFinished`）。
+
+如果 guard 被丢弃时已有提交暂存，guard 无法等它，就把自己的提交推迟到单元上（`SessionCell::stage_or_defer`）。无论什么结算了那次暂存的提交（发布或回滚），都会在同一把锁下暂存第一个仍然适用的推迟提交，确认再把它作为 `AgentHistoryFollowUp` 交回存储。写入线程在接下一条命令之前先追加这个后续提交，并依次确认，所以一串后续提交按顺序追加。停止追加的存储会让后续提交随它所跟随的提交一起失败。
+
+## 执行进度 [#execution-progress]
+
+工具通过 `AgentToolProgressSink::report` 报告进度（进程的启动、输出、状态、释放），这个调用保持同步：它从轮次异步工作线程上的工具调用中被调用，也可能来自比调用活得更久的监视线程。因此 `report` 只把更新排入会话单元的队列（`service/progress.rs`）：
+
+- **每个会话一个消费者。** 报告时如果没有消费者在运行，就在创建这个 sink 的轮次的运行时上启动一个；它按顺序应用并提交排队的更新，逐个等待追加，队列空了就结束。队列未空就停止的消费者（被中止，或它的运行时已关闭）让它已取出的那条更新自行结算；下一次报告，或在自身运行时上的一次刷新，会启动新的消费者。
+- **上限。** 队列容纳 64 条更新（`EXECUTION_PROGRESS_QUEUE_CAPACITY`）。超过之后，如果同一执行在队列中没有排在后面的更新，新的输出更新就合并进该执行已排队的输出：文本追加上去，只保留最新的 16 KiB（`MAXIMUM_COALESCED_OUTPUT_BYTES`）。其他更新（执行的启动、状态、释放、清理失败）即使这时也照常排队，所以队列最多是容量加上这些更新，再加每条之后的一条输出。
+- **与轮次的顺序。** 轮次在终态提交之前等待之前排入的所有更新（`flush_execution_progress`），所以它的调用报告的内容先提交。被丢弃的轮次无法等待，这时仍在排队的更新在它的取消之后提交，顺序不变。
+- **应用自己的报告**（后台终端的停止、启动时的恢复）经过 `report_session_execution_progress`，它最多等待 5 秒，让排在它之前的更新先完成，然后在调用线程上提交。
+- **关闭。** 会话被移除和 `shutdown_history` 会关闭它的队列并中止消费者；此后 `report` 返回 `false`。`stop_operations` 先在关闭期限内刷新此前排入的内容。
+
+## 请求中的图片 [#request-images]
+
+模型请求中的图片附件在不持有会话锁的情况下读取（`service/sampling/images.rs`）。采样步骤、自动压缩的估算和压缩都这样做：
+
+<Steps>
+  <Step>在会话锁下收集历史引用的附件（每个一次，保持顺序）；</Step>
+  <Step>
+    释放锁，由历史存储加载它们（`AgentHistoryStore::enqueue_image_attachment_load`）：文件存储在该会话的写入线程上读取附件，连同摘要与图片检查，并按顺序确认它们的字节，所以内核自己从不读取附件文件；对放在内存中的存储，trait
+    的默认实现直接内联加载；
+  </Step>
+  <Step>再次加锁，检查要构建的内容没有变化，然后用加载到的字节组装请求。</Step>
+</Steps>
+
+历史引用了但没有加载到的附件，说明历史在此期间变了，请求以 `StaleRevision` 失败。附件按内容寻址，所以这个请求与在锁下读取所构建的请求逐字节相同。加载失败的附件只有在请求用到它时才让请求失败。压缩会保留它加载的图片，供远程替换（Responses 压缩）和对下一个请求的估算使用。
+
+## 会话上的等待 [#session-waits]
+
+会话单元有两个信号：`persisted` 在暂存的提交结算时推进，`terminal` 在轮次或压缩到达终态时推进。会话被移除时两者都推进，被移除的单元对仍持有它的调用方回答 `SessionNotFound`。每个信号都有异步的一侧（一个 `watch` 纪元）和阻塞的一侧（单元锁上的 `Condvar`）；`wait_until` 在有提交暂存时等待 `persisted`，否则等待 `terminal`。
+
+- **异步等待：** 轮次循环、它的准入和压缩（`lock_after_persistence`），以及取消的确认（Tokio 超时下的 `wait_until`）。
+- **阻塞等待**只给异步运行时之外的调用方：宿主在阻塞工作线程上运行的同步服务方法，以及门面的阻塞边界（它也负责模型操作前的会话激活和轮次提交）；`list_snapshots`；`flush_for_diagnostics`；还有关闭线程上的 `stop_operations` 和 `shutdown`，在那里每个会话的等待、它的进度刷新，以及之后对托管轮次任务（它们自己的 `Condvar`）的等待共用一个期限。
+- **从不阻塞：** drop guard、执行进度和内核的异步 `start_turn` 不在任何阻塞的一侧上等待。
+
+`cancel_turn_confirmed` 请求取消后，先等待 500 毫秒让轮次协作地结束（`COOPERATIVE_GRACE`），然后中止它的托管任务，并在 5 秒期限（`CONFIRMATION_DEADLINE`）的剩余时间里等待取消持久化；超过则返回 `CancellationNotConfirmed`。两次等待都是异步的，所以取消不占用阻塞工作线程。
+
+## 历史存储的拒绝规则 [#history-refusals]
+
+`FileAgentHistoryStore`（`hanafubuki-agent-history`）：每个会话一份 JSONL rollout，它是权威的；SQLite 索引（`index.sqlite3`）是 rollout 的投影（[存储](/docs/architecture#storage)）。存储无法使用的东西只损失它自己的会话，从不损失整个存储，也从不损失文件。只有索引或布局（其 schema、SQL、目录 I/O）的问题会让存储打开失败，并因此让 Agent 的构造失败。
+
+### 打开时无法接受的内容 [#history-open]
+
+| 打开时发现                                                                                   | 处理方式                                                                                                                                                                       |
+| -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 无法使用的索引                                                                               | 丢弃并从 rollout 重建，所有会话重新判断；`open_rebuilding_index`（带 `rebuild_history_index` 的重启）按请求丢弃它                                                              |
+| 另一种格式的 rollout（`IncompatibleFormat`）                                                 | 连同会话的附件目录一起移入旁边的 `.recovery` 目录（`quarantine_file`：`<name>.<pid>.<n>.invalid`，任何扫描都不读它）；新路径记入日志，也写进会话的原因；移动失败则文件留在原处 |
+| 无法投影的 rollout（无法解码，或没有通过会话、序号和检查点身份的记录检查，这些检查保持严格） | 留在原处，并记下一项待修复（`agent_projection_repairs` 表），以后每次启动都重试                                                                                                |
+| 文件缺失、同一会话在活动树和归档树中各有一份、路径在存储之外                                 | 保持原样；如果只是 rollout 的生命周期与所在的树不一致（归档中途停止），则把它移到正确的树中                                                                                    |
+| 已提交的条目或它引用的图片附件无法读取                                                       | 保持原样                                                                                                                                                                       |
+
+每个这样的会话都保留它的 ID（`next_session_id` 被抬到它之后，所以新会话从不与它共用 ID、rollout 名或附件），转录和运行时读取都会拒绝它（带原因的 `ProjectionUnavailable`），并作为失败交给恢复，由恢复隔离它；其他会话照常打开，Agent 也照常打开。它的任何内容都不改写、不删除。
+
+### 被拒绝的会话 [#history-refused]
+
+会话的投影不可用有两种原因（`ProjectionLag`），各由不同的事情清除：
+
+- **追加的滞后。** 记录已持久但投影失败的追加，只在它的写入线程再次投影 rollout 之前拒绝该会话的读取：在之后的某次追加时，或写入线程停止时。
+- **拒绝。** 索引无法接受的会话（打开时，或之后被会话列表拒绝）一直被拒绝，直到修复（`repair_session_projection`）或下一次启动重新判断它。拒绝从不由写入线程清除。
+
+会话列表略去摘要无法解码的行，并以同样方式拒绝那个会话。它只记录一次日志，并告知存储的 `AgentHistoryRefusalSink`（`open_reporting_refusals`），槽位通过它把该会话连同原因加入 Agent 状态中的已隔离会话；这一行在分页中保留位置，所以游标照样越过它，列表的其余部分照常返回。重建的索引会重新投影这个摘要。
+
+### 附件清理 [#attachment-sweep]
+
+清理未被引用的附件 blob（打开时，以及轮次准入失败的会话）只做垃圾回收：只有当磁盘上仍在的会话文件都不引用某个 blob 时才删除它。
+
+- blob 存放在暂存它的会话下，但任何会话都可能引用它（分叉出的子会话保留恢复的提示中图片的来源会话）。所以清理保留任何已投影条目引用的 blob，以及移入 `.recovery` 的 rollout 中出现的每一串 64 位十六进制数字，不管 blob 属于哪个会话。这些文件每次打开时读取一次，按字节读，从不解码；有一个无法读取就保留所有 blob。这样保留的 blob 在那个文件被恢复或删除后释放。
+- 只要有会话的投影不可用（那个会话的引用未知），清理就什么都不删；也不删索引中没有的会话的任何东西；无法清理的会话跳过并记录警告。会话 blob 中意外出现的文件保留。
+
+### 删除会话 [#history-deletion]
+
+删除（`delete_sessions_confirmed`）在删除范围之外仍有会话需要其中某个会话时被拒绝：
+
+- `ReferencedByFork`：谱系表（`agent_session_lineage`）中不随之一起删除的分叉；
+- `ReferencedByQuarantinedSession`：索引中没有的会话文件（移入 `.recovery` 的 rollout，或打开时被拒绝、带待修复项留在原处的 rollout），它从这个会话分叉（`forkedFromSessionId` 或 `historyBase` 的 `sessionId`），或提到了这个会话某个 blob 的摘要。错误中列出每个这样的文件及其会话。这些文件按字节读取、不解码（`store/kept_files.rs`），无法读取的文件会拒绝删除，因为它需要什么是未知的。
+
+两边会话的任何内容都不改动。这样的分叉被恢复并打开后重新进入谱系表；被删除后则不再保留任何东西。内核的 `prepare_session_deletion` 先询问存储（`check_sessions_deletable`），所以被拒绝的删除在应用撤销会话的记忆或停止它的终端之前就停下，拒绝的原因就是删除命令的错误。
+
+获准的删除先写一份删除记录（`trash/delete-<millis>-<n>/obligation.json`），把 rollout 和每个会话的整个附件目录移入该目录，在一个事务中删除会话的索引行，删除移入的文件，最后删除这份记录。中途停止的删除留下的记录在下次打开时完成；无法解码的记录被隔离。
+
+### 写入线程 [#history-writers]
+
+写入经过每个会话一个的写入线程（`agent-history-writer-<id>`，队列容纳 64 条命令），它在追加和它的投影都写好之后确认这次追加。
+
+- `append_commit` 和 `append_delta` 等待确认。`enqueue_commit` 和 `enqueue_delta` 只找到或启动写入线程（没有运行时从索引读取会话的文件）并排队，持有会话闸门的时间不超过这些；写入线程的队列满了时，调用方要等到有空位。
+- 线程已结束的写入线程（panic，由它的 `BackgroundWorkerGroup` 记录并作为内核故障报告）被撤下，由下一条持有会话闸门的命令换一个新的，所以一次写入失败不会让会话的历史停下。
+- `shutdown(deadline)` 把每个写入线程的停止排在它已有的命令之后，等到期限为止；届时仍在忙的写入线程被报告（`WriterDidNotStop`）并放任其分离。持久的内容不会丢失：提交只在写入磁盘后才被确认，所以只有写入线程尚未确认的追加（对任何轮次都从未持久；恢复会还原最后确认的修订）没有写入。
+
+## MCP 设置的修复与诊断 [#mcp-settings-diagnostics]
+
+### 修复 [#mcp-settings-repairs]
+
+`mcp.toml`（[它的键](/docs/config-reference#mcp-toml)）是 Agent 自己的数据，所以 `McpSettingsStore`（`hanafubuki-agent-config`）通过 `hanafubuki_agent_mcp::repair_settings` 逐个条目地容错读取：
+
+| 发现                                                                                                                                                                                                                | 修复（`McpSettingsRepairKind`）                           |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| 文件不是 TOML、不是 UTF-8 或超过 8 MiB                                                                                                                                                                              | 用默认值替换（`reset`）                                   |
+| 五个超时之一不在 1–86400 内，`maximumConcurrentCalls` 或 `toolMaximumConcurrentCalls` 中的值不在 1–64 内，凭据的 `generation` 小于 1 或不是整数                                                                     | 移到最近的边界；范围内的小数截断为整数（`value_clamped`） |
+| 第 64 个之后的服务器，无法解码的服务器，没有通过 `McpServerConfig::validate` 的服务器（带凭据或片段的 URL、公开与凭据的请求头或变量重叠、stdio 程序、参数与环境变量规则、过滤器与策略上限），同一 ID 的第二个服务器 | 只去掉那台服务器（`server_dropped`）                      |
+| 键无效、无法解码或值不可用的凭据                                                                                                                                                                                    | 只去掉那条凭据（`credential_dropped`）                    |
+
+该是数字的地方不是数字时，留给解码器处理，解码器会去掉整个条目。未知的键记入日志并保留在文件中。写入修复后的值之前，原文件先保存在 `.recovery/` 中（[配置恢复](/docs/recovery#backup)）。写入保持严格：用户添加或编辑的服务器要通过校验，从不被调整。
+
+每项修复是一个 `McpSettingsRepair`：类型、对象（条目带有有效 ID 时为服务器 ID 或凭据键）、调整改动的字段，以及原因，从不包含文件中的值。下一次读取看到的已是干净的文件，所以存储在打开它的 Agent 运行期间保留这些修复（最多 256 项，`MAX_RETAINED_REPAIRS`）。它们以 `McpApplicationSnapshot.settingsRepairs` 交给宿主（Hanafubuki 的 MCP 设置面板显示它们，直到用户关闭），独立二进制的 `doctor` 把它们列在配置的恢复记录中。快照中的 `serverDefaults`（`McpServerDefaults::default()`：启用、非必需、旧版协议、超时 15/30/30/120/10 秒、4 个并发调用、`ask`、`deferred`、OAuth `disabled`）是宿主新建服务器表单的初始值，所以默认值不属于任何前端。
+
+### 诊断 [#mcp-diagnostics]
+
+`McpDiagnosticStore` 为每台服务器保留最近 128 条诊断的环形缓冲（`MCP_DIAGNOSTIC_CAPACITY`）：每条有阶段（`spawn`、`initialize`、`discover_tools`、`tool_call`、`connection_lost` 等）、结果（`success`、`warning`、`error`、`cancelled`、`outcome_unknown`）、代码、消息、传输、配置与连接的代次、工具、能否重试和下一步。消息截断到 2 KiB 并做清洗：`Bearer` 之后的词、以 `token=`、`password:` 或类似键（`access_token`、`refresh_token`、`secret`、`authorization`、`code`、`verifier`）开头的词，以及 URL 的查询部分，都替换为 `[redacted]`。stdio 服务器的标准错误保留最后 128 行、最多 16 KiB 的尾部，以同样方式清洗。
+
+服务器的状态行是它的 `McpDiagnosticSummary`：它当前的诊断，即最近一次连接尝试开始（`begin_attempt`；第一次之前则是全部）以来记录的诊断，分别计为错误（`error`、`outcome_unknown`）和警告，并以其中最严重、同等严重中最近的一条作为标题。它带有当前的每一条，所以宿主可以把这一行展开为全部条目；整个环形缓冲保留在服务器的诊断快照中。它通过 `McpApplicationSnapshot.diagnostics` 交给宿主，每台已配置的服务器一项，按设置中的顺序。终端界面的 `/mcp` 显示每台服务器的阶段和最近的错误，不显示这个摘要。
+
+## Skill 文件的问题 [#skill-file-issues]
+
+`SKILL.md` 的 frontmatter 和 `agents/openai.yaml` 由人和其他工具编写，所以 `hanafubuki-agent-skills` 一次读取一个已知的键（`yaml_fields.rs`）：类型不对的值只损失那个键，`null` 视为没有。用户写什么、有哪些[字段](/docs/skills#skill-md)见 Skill 页面；按字段的规则如下：
+
+| 位置                                                                    | 发现                                                                                                          | 结果                                                                                                                                                      |
+| ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SKILL.md`                                                              | 不是 UTF-8，没有 `---` frontmatter，frontmatter 不是映射                                                      | Skill 加载失败                                                                                                                                            |
+| `SKILL.md`                                                              | frontmatter 不是合法的 YAML                                                                                   | 把看起来是文字、却被解析成 YAML 结构的标量加上引号后再读（值中带有 `: `，或以 `[`、`{`、`@`、`*`、`&` 或反引号开头且无法解析）；仍然无效则 Skill 加载失败 |
+| `name`、`description`                                                   | 不是字符串；没有 description                                                                                  | Skill 加载失败：这两个字段决定它能否被选中                                                                                                                |
+| `name`                                                                  | 超过 96 个字符                                                                                                | 截断，并记一个问题                                                                                                                                        |
+| `description`                                                           | 超过 4096 字节                                                                                                | 按字符边界截断，并记一个问题                                                                                                                              |
+| `license`、`metadata`、`metadata.version`、`metadata.short-description` | 类型不对                                                                                                      | 忽略那个键，并记一个问题（`ignored metadata.version: expected a string, found a number`）                                                                 |
+| `license`、`metadata.version`                                           | 超过 256 或 128 字节                                                                                          | 去掉，不记问题                                                                                                                                            |
+| `openai.yaml`                                                           | 不是 UTF-8、不是 YAML、不是映射                                                                               | 忽略整个文件，记一个问题；Skill 照常从 `SKILL.md` 加载                                                                                                    |
+| `openai.yaml`                                                           | 超过 64 KiB、无法读取                                                                                         | 忽略，不记问题                                                                                                                                            |
+| `openai.yaml`                                                           | `interface.*`、`policy.allow_implicit_invocation`、`dependencies.tools` 或其中某一项的类型不对                | 忽略那个字段，并记一个问题                                                                                                                                |
+| `openai.yaml`                                                           | 超过 256 字节的显示名、超过 4096 字节的其他文字、绝对路径或越出 Skill 目录的图标路径、不是 `#rrggbb` 的品牌色 | 去掉，不记问题                                                                                                                                            |
+| `openai.yaml`                                                           | 类型不是 `mcp` 或服务器 ID 无效的依赖，第 32 个之后的依赖；依赖中不是 `http(s)` 的 URL、未知的传输            | 去掉该依赖或该字段，不记问题                                                                                                                              |
+| Skill 根目录                                                            | 其下无法读取的目录                                                                                            | 跳过，并记一个问题；无法读取的根目录让那个根目录失败                                                                                                      |
+
+问题是 `SkillCatalogSnapshot::issues` 中的 `SkillLoadIssue`，带有文件或目录的路径和 `severity`：`warning` 表示照样加载了（某个字段被忽略或截断、Skill 被更近的同 ID Skill 遮蔽、监视器的诊断），`error` 表示有目录没有加载（加载失败的 Skill、无法读取的目录或根目录）。因此根目录下无法读取的目录是 `error` 问题，尽管它只损失自己。扫描最多深入 8 层目录，读取的 `SKILL.md` 最大 1 MiB。不解析 `allowed-tools`。
+
+## Provider 流的容错解码 [#provider-decoding]
+
+Provider 的流是外部输入（[模型 API](/docs/architecture#the-model-api)）：Agent 无法使用的值，只要响应的其余部分可用，就不让整个响应失败（`hanafubuki-agent-model-api` 的 `tolerant_decode.rs` 和各协议的解码器）。身份（响应、条目和调用的 ID）保持严格。
+
+| 位置               | 发现                                                                                     | 读作                                                                                                                                                                                                   |
+| ------------------ | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 所有协议           | 空的或只有空白的工具参数                                                                 | `{}`，即没有参数的调用                                                                                                                                                                                 |
+| 所有协议           | 不是 JSON 的工具参数（Responses 上还包括：不是字符串）                                   | `{}` 加上带解析器消息和预览的 `argument_error`；调用仍与一个告诉模型出了什么问题的输出配对                                                                                                             |
+| 所有协议           | 用量缺少某个计数或为 `null`                                                              | 该计数为 0，另一个保留                                                                                                                                                                                 |
+| 所有协议           | 用量不是对象、计数不是整数、两个计数都没有                                               | 没有用量                                                                                                                                                                                               |
+| Chat Completions   | 没有 `choices` 的块（`stream_options.include_usage`）                                    | 记录其用量；只读取 choice 0                                                                                                                                                                            |
+| Chat Completions   | 没有 `index` 的工具增量                                                                  | 接续最近的调用，除非它带有与那个调用不同的调用 ID，这时开始下一个调用；分片到达的 ID 拼接起来，重复发送的完整 ID 只保留一次                                                                            |
+| Chat Completions   | 正常结束但没有 `[DONE]` 的正文                                                           | 收到过文本或工具调用则视为完成；没有内容则仍是 `StreamInterrupted`；在事件中间截断的正文仍是协议错误                                                                                                   |
+| Chat、Anthropic    | 没有结束或停止原因                                                                       | `end_turn` 未知；内核于是只根据工具调用决定是否继续                                                                                                                                                    |
+| Anthropic Messages | `message_start` 和 `message_delta` 中的用量                                              | 后来的计数替换先前的，缺失的保留先前的                                                                                                                                                                 |
+| Anthropic Messages | 工具的输入                                                                               | 流式的 `input_json_delta`，否则 `content_block_start` 的 `input`，否则 `{}`；不是 JSON 对象的输入是 `{}` 加 `argument_error`                                                                           |
+| Anthropic Messages | 未知的块类型或事件                                                                       | 忽略；以仍未关闭的块结束的流是协议错误                                                                                                                                                                 |
+| Responses          | `response.output_text.done`、未知的事件类型                                              | 忽略：由 `response.output_item.done` 完成条目                                                                                                                                                          |
+| Responses          | `response.incomplete`                                                                    | 终态的 `ModelEvent::ResponseIncomplete { reason }`：内核保留已完成的条目和已流出的文本（未完成的推理条目用已流出的内容完成，其他未完成的条目照样接受），以 warn 级别记录原因，只有什么都没产生时才失败 |
+| Responses          | 没有 `response.output_item.added` 就完成的条目                                           | 由内核先开始再完成                                                                                                                                                                                     |
+| Responses          | 没有 `summary_index` 或 `content_index` 的推理增量                                       | 第 0 部分                                                                                                                                                                                              |
+| 所有协议           | 内容类型不是 `text/event-stream` 的 200 响应                                             | 当作 SSE 读取，除非第一个非空白字节是 `{`、`[` 或 `<`                                                                                                                                                  |
+| 模型列表           | `max_input_tokens`、`context_length`、`max_model_len` 或 `context_window` 中的上下文窗口 | 第一个正整数，否则没有                                                                                                                                                                                 |
+
+空响应、认证错误和 HTTP 错误仍是错误。模型列表对条目仍是严格的：没有可用 `id` 的条目、超过条目上限、无法解析的默认推理强度都会让列表失败。各协议的思考事件见[思考](/docs/architecture#thinking)。
+
+## 崩溃循环标记 [#crash-loop-marker]
+
+`AgentStartMarker`（数据目录中的 `start-marker.json`，用 `write_atomic` 写入，带缩进格式）记录从未完成的启动次数：
+
+```json
+{
+  "unfinishedStarts": 2,
+  "lastAttempt": {
+    "pid": 41237,
+    "atUnixMillis": 1793260800000
+  }
+}
+```
+
+- 启动在构造任何东西之前读取计数，加一，连同本进程的 `pid` 和时间一起写入。没有拿到数据目录锁的启动不记录尝试。
+- 在 Agent 已 `Running` 满 `AGENT_START_SETTLE`（60 秒）后、启动有序失败时、实例有序停止时（重启、故障后的停止、关闭模块）以及有序关闭时，写入 `{"unfinishedStarts": 0}`（没有 `lastAttempt`）来清除这次尝试。没有记录过尝试的运行（Agent 处于关闭状态）不清除它，所以崩溃循环导致的停止在有序退出后依然有效。
+- 如果崩溃记录属于同一进程且不早于最后一次尝试，就不计入最后一次尝试：致命的 panic 从不发生在 Agent 的线程上（Agent 的线程都被隔离），所以那次运行不是死于 Agent。崩溃记录（`crash-record.json`）在 `configure_crash_record` 指定它之后，由 panic hook 在致命 panic 中止进程之前写入：
+
+```json
+{
+  "pid": 41237,
+  "atUnixMillis": 1793260803512,
+  "thread": "main",
+  "location": "src/main.rs:42:9",
+  "message": "…"
+}
+```
+
+- 计入的启动达到 `CRASH_LOOP_STARTS`（3）次时，`AgentStartMarker::disabled_reason` 让槽位进入带 `crashLoop` 的 `Disabled`，并记录一条提示。用户的重启，或者把 Agent 关闭再打开，会重置标记；单纯的挂载不改变崩溃循环导致的停止。无法读取的标记不计任何启动：它从不让 Agent 保持关闭。独立模式的第一次启动无论计数是多少都会运行（[独立模式的同一组合](/docs/embedding#the-same-composition-standalone)）。
+
+## 其他细节 [#other-details]
+
+### 实例、槽位与启动 [#instance-and-start]
+
+- **运行时。** 每个 Agent 实例的 `ContainedRuntime` 有 2 到 4 个工作线程（机器的并行度，限制在这个范围内）和最多 128 个阻塞线程，都命名为 `agent-rt`（`AGENT_RUNTIME_THREAD_NAME`）并标记为被隔离。槽位保存它（`AgentSlot::take_runtime` 把它交给停止流程），实例停止时最后用 `ContainedRuntime::shutdown` 结束它，这是硬停止，丢弃实例仍在运行的一切（从未返回的插件 `apply`、等待它的释放），不触及宿主。Agent 的 `BlockingOperationPort` 是 `ContainedRuntime::blocking_port`。
+- **每个实例的 sink。** 每个实例通过绑定其代次的 sink 向槽位报告：内核故障经 `AgentSlot::fault_sink(generation)`，历史拒绝经 `AgentSlot::refusal_sink`（`AgentInstanceInputs::history_refusals`）。过时实例的报告被忽略，启动期间的故障让那次启动失败。已隔离的会话（启动时恢复跳过的，或之后被拒绝的）只加入状态一次并通知。状态中的 `generation` 计算本次运行中已领取的启动次数；`degraded` 由插件状态推导。
+- **内核故障**来自轮次的任务（`execute_admitted_turn` 在循环外围捕获 panic，托管轮次任务的 `JoinError` 也会检查；sink 通过 `AgentService::without_default_model_reporting_faults` 注入内核）、宿主的命令守卫、Agent 工作线程组的成员（`BackgroundWorkerGroup::contained_with_panic_handler`：历史写入线程、记忆监督线程、MCP stdio 读取线程；以 `worker <name>` 报告），以及宿主和服务自己的任务（`spawn_kernel_task`：插件故障跟随任务、重新挂载、设置的后续处理、MCP 启动）。槽位把 Agent 标为 `Faulted`，在它的监督线程（`agent-supervisor`）上停止它，并对 10 分钟内的前三次故障分别在 2 秒、10 秒、30 秒后启动下一个实例（`AUTOMATIC_RESTART_DELAYS`、`AUTOMATIC_RESTART_WINDOW`）；此后它保持 `Faulted`，没有 `nextRestartAt`，直到用户重启，重启会清空这个窗口。
+- **状态转换。** `AgentSlot::restart(AgentStartOptions { safe_mode, rebuild_history_index })` 在 Agent 启动中、宿主关闭中和宿主关闭了 Agent 时（带 `setting` 的 `Disabled`）被拒绝，但会启动因崩溃循环而停止的 Agent；`enable` 和 `turn_off`（先 `disable`，再有界等待）是宿主的打开与关闭。每个转换都交给监督线程安排。重启用关闭的步骤和预算停止实例（`stop_instance`），清扫它的进程所有者组，停止它的运行时，重置崩溃循环标记（用户的重启时），然后重新启动。安全模式让该实例中核心以外的行都不挂载（`AgentHostOptions::safe_mode`；`disabledPlugins` 不变）。`disable` 取消正在进行的启动，留下带 `setting` 的 `Disabled`。Skill 监视器在每个新实例的根目录上重新开始。
+- **失去 Agent 的调用。** `AgentSlot::interrupted(generation, command)` 为 Agent 已不再运行的调用给出错误："the Agent was turned off; `<command>` did not finish"、"the Agent stopped after an internal error; `<command>` did not finish"（故障且没有安排重启），否则 "the Agent restarted; `<command>` did not finish"。
+- **启动。** `DesktopAgent::start` 加上 Agent 自己的 `ExecutorManager`（基于构建 `DesktopAgent` 时给的子进程环境）和 Skill 监视器，把它们交给槽位供以后每个实例使用，并启动第一个实例。启动（`startup`）领取一个代次，构建运行时和进程所有者组（`ProcessOwnerGroup::recorded_in`），每次运行取一次数据目录锁，记录一次崩溃循环尝试，回收上一次运行留下的进程组（`ProcessGroupRecord::reap_leftovers`），在阻塞池上构造服务（`AgentConstructor` 得到运行时和实例的 `AgentInstanceInputs`，其中的 Executor 已限定在所有者组内），在那里运行 `recover`（它也结算上一个进程留下的仍在运行的执行活动），启动插件，安排 MCP 连接，并把服务装为 `Running`；随后 Skill 监视器在实例的根目录上启动。任一阶段失败都以 error 级别记录，让槽位进入 `Failed` 并清除这次尝试。
+- **会让构造失败的：** 设置（I/O 错误）、工作区根目录端口和工作区策略、网络端口的代理、MCP 设置文件（只有 I/O 错误；它会自我修复）和无效的 MCP 代理策略、历史存储的布局或索引，以及记忆存储。构造中途失败时会停止它已经启动的工作线程组。不会让构造失败的：无法打开的 Skill 目录（每个 Skill 命令返回原因，`skills` 插件以此失败）、没有连上的必需 MCP 服务器（体现在它的 MCP 状态 `Failed`，以 error 级别记录；启动在报告前会尝试每一台服务器）、配置无法推导的 `web` 行（那一行的错误）。
+- **取消启动。** `AgentSlot::close`（关闭时）和 `disable` 取消启动的令牌。构造和恢复是阻塞的，无法取消，所以启动在阶段之间检查令牌；插件的启动在原处被取消。已构建却不会运行的 Agent（恢复或启动失败，或在此期间启动被取消、槽位被关闭）先被退役：轮次、MCP（取消后台连接，释放它们的进程）、插件和工作线程按关闭顺序在 `RETIRE_BOUND`（5 秒）内停止，这比关闭等待启动的时间（`START_WAIT`，8 秒）短，所以它的运行时只在拆除完成之后才停止。这时仍阻塞在构造或恢复中的启动还没有启动任何插件、连接或进程，所以运行时的硬停止只留下它分离的阻塞线程。
+
+### 插件宿主 [#plugin-host-details]
+
+- **挂载。** `AgentHost` 自己不创建注册表：组合创建 `AgentKernelRegistries`，用它们构造内核（这样 `titles` 插件的 `AgentTitleApplication` 才能持有内核），再交给宿主。在 `PLUGIN_START_TIMEOUT` 内没有就绪的行以 "did not start within 20 s" 失败，它的 fiber 在后台释放，下一行接着挂载。每个模型操作（轮次、计划实施、压缩）在宿主尚未启动时启动它；内核从注册表快照做计划，从不等待宿主。宿主任务（故障跟随任务、重新挂载）中的 panic 是 `plugin host` 处的内核故障。
+- **每个注册表都用内核唯一的 `PluginFaults` 构建**（`AgentKernelRegistries::faults`，也由内核插件发布），每个条目都持有它。自己组合条目的注册表对每个条目分别加守卫：`ObserverRegistry::notify`、`ApprovalRuleSnapshot::verdict`、`PromptContributorSnapshot::fragments`。`ExtensionPoint` 转换为故障的 `FaultPoint`。最多可以注册 64 个继续钩子（`MAXIMUM_CONTINUATION_HOOKS`）。
+- **应用设置。** 宿主保存设置后，`AgentSlot::apply_saved_settings` 在运行中的 Agent 的运行时上安排 `apply_settings_to_plugins`；Agent 自己的设置写入（`write_settings`、`set_plugin_enabled`）在写完后调用它。两者都不等待。宿主在它的插件锁下读取最新的设置，所以两次快速保存中后一次生效；释放 `disabledPlugins` 新列入的行；在先前的 fiber 停止后，用当前配置挂载不再列入的行；只在由设置派生的行的配置变化时调用 `Fiber::update`。它不等待这些转换完成，每个结果都记入日志。尚未挂载的行在挂载时采用新的配置和启用状态。
+- **设置 API。** `settings_view` 返回一个 `AgentSettingsView`：设置、它们的默认值和 Web 工具的表单字段。`write_settings` 接受一个 `AgentSettingsPatch`（权限模式、记忆、Web 搜索服务、`searxngBaseUrl`（`null` 清除它，缺少这个键则保持不变）和 `webFetchUseJinaReader`），这是拒绝未知字段的 IPC 请求，其中没有 `disabledPlugins`，那只由 `set_plugin_enabled` 写入。它要么整体应用补丁，要么完全不应用，然后让插件跟上新设置，并发出记忆扫描信号。Provider 注册表只能通过 `AgentConfig::mutate_providers` 并带上调用方预期的修订号来修改。
+- **MCP 代理的后续处理**作为单独的任务运行：它在 MCP 配置闸门下读取最新的设置，代理策略变化时并发地重连已启用的 Streamable HTTP 服务器，所以挂起的重连既不占住命令，也不挡住之后的变化，后者在它之后应用。
+- **上限。** 重新启用的行只等待先前的 fiber `PLUGIN_STOP_BOUND`（10 秒），之后以 "its previous instance has not stopped yet" 失败，直到拆除结束后的一次重试。
+- **启用与状态。** 核心行忽略 `disabledPlugins`；没有任何行使用的名字保留并忽略。`set_plugin_enabled` 拒绝未知名字和核心名字，在阻塞边界上通过 `AgentConfig::set_plugin_disabled` 写入，由文件锁串行化。启动完成后，宿主把每个已启用但不是 `Active` 的插件记入日志。状态中的 `contributions` 从每个内核注册表的一份快照中按条目所有者读取：工具名、工具源 ID、上下文贡献者及其类型、轮次准入与提示贡献者 ID、审批规则 ID 和观察者 ID。`restart` 是待进行的自动重启，或窗口已计入的次数。
+- **插件事件 sink。** 宿主在以下时刻通知它的 `AgentPluginEventSink`：启动完成时，某行被启用、禁用、重试或重新配置时，这样的转换完成时，被禁用的行拆除完毕时（这时它的注册才真正移除），以及插件的问题出现、变化或消失时（`PluginFaults::set_issues_listener`，所以每个轮次都以同样方式失败的贡献者不会再重复通知）。
+
+### 会话与轮次 [#turn-details]
+
+- **配置。** `normalize_session_config` 在创建、每次更新和恢复时运行：协议不是 Responses（`ModelApiProtocol::supports_reasoning_effort`、`supports_remote_compaction`），或会话尚未配置时，推理强度和远程压缩被去掉并给出警告；为零的上下文窗口变为未知；自动压缩阈值和流重试策略被限制在范围内。恢复会重新规范化较旧的会话，而不是隔离它；身份（Provider ID、模型）和完整性检查保持严格。
+- **恢复**（`service/recovery/`：校验、持久化的记录、`repair.rs` 中的重启修复）。校验拒绝持久化了某个内核之后会递增、且大于 `u64::MAX / 2` 的计数器的会话（修订号、代次、消息、历史条目、轮次、压缩和活动的 ID，steering 序号，模型会话代次，记忆贡献和历史条目的修订号；`validation/counters.rs`），所以内核的 `checked_add(1)` 预期是不变量。`load_recovery_candidates` 分别加载每个候选，并把历史存储打开时拒绝的会话作为失败返回，无论它们的恢复状态如何；`recover_sessions` 把每个跳过的会话以 error 级别记入日志后，返回一个 `AgentRecoveryReport`（恢复的数量，以及带原因的 `AgentQuarantinedSession`）。打开已隔离的会话会以它未解决的恢复义务或存储给出的原因失败，直到之后的某次启动恢复了它。记忆来源投影略去运行时无法解码的会话。只有读取历史索引失败才会让恢复失败。
+- **ID。** 轮次和压缩的 ID 来自原子计数器。
+- **步骤无法运行的调用**（`service/tool_execution/rejection.rs`、`CallDisposition`）：调用了步骤没有提供的名字时，历史把这个调用记在 `unavailable` 提供者和工具 ID 下。超过 `maximum_tool_argument_bytes`（64 KiB）的参数以 `{}` 代替模型发送的内容保存（[模型工具参数](/docs/plugin-rules#model-tool-arguments)）。
+- **`tool_search` 的选择。** `ConversationItem::ToolSelection`（`call_id`、选中的 `AgentToolSelection`）不是模型输入：在不支持原生搜索的提供者上，选中的工具在计划中变为 `Direct`；在支持的提供者上，回放的搜索输出会显示它们。工具已不存在或代次已变化的选择不匹配任何东西；这种条目出现之前的历史里自然没有它。
+- **轮次限制**给用户看的文字是："agent turn stopped at its time limit of 30 minutes; send a message to continue"（`TurnDeadlineExceeded`），以及 "the conversation is still too long for the model's context window after it was compacted; start a new conversation or attach less context"（`ContextWindowExceededAfterCompaction`）。
+- **世界状态。** 世界状态最多有 12 个段（`MAXIMUM_AGENT_WORLD_STATE_SECTIONS`：每种已知类型一个，共 5 个，加上 7 个插件类型）；一次持久化的更新最多可以提到它的两倍，即每种类型一次替换和一次删除。指令不是世界状态：会话配置的指令（默认是基础指令加上宿主的 `AgentHostInstructions`），计划模式下再加上内核的 `plan.md`。
+- **内核负责包装的上下文条目。** 内核包装那些属于历史而不是段的上下文条目：压缩后窗口的初始上下文、任务清单和选中 Skill 的指令（`SkillContext`）。模型 API 只包装它自己的条目：继续上下文、压缩摘要和远程压缩条目。
+- **宿主上下文。** 恢复时，持久化的 steering 被限制在 `MAXIMUM_HOST_CONTEXT_BYTES`（4 KiB）之内。在宿主上下文还没有类型时记录的 steering（作为 `applicationContext`）读回时不带上下文。
+- **压缩。** 独立的压缩在任何采样步骤之外，构建下一个请求本应有的工具计划和提示，但不做任何准备，所以它的请求没有记忆上下文（`PromptRequest::prepared` 为 `None`）。
+- **上下文窗口。** 再次选择模型会重新解析它的窗口，并把已记录的用量移到新窗口上。
+- **继续钩子。** 因插件停止而被取消的钩子以 `IgnoredFailure` 完成。
+- **观察者。** `TurnAdmitted` 带有轮次的来源（`User` 或 `Programmatic`）和准入时提交的临时标题；`MemoryContributionChanged` 带有原因（`Initial`、`User` 或 `Polluted`）。`start_turn` 和计划实施是 `Programmatic` 的。
+
+### 思考 [#thinking-details]
+
+[思考](/docs/architecture#thinking)之外的细节：
+
+- 内核的 `AgentReasoningId` 取自会话的消息计数器（`service/sampling/stream/reasoning.rs`）。
+- 新的摘要部分随分隔它的空行一起到达。保留的文本是已完成条目的摘要（有的话），否则是原始文本，两者都优先取已完成条目中携带的内容，没有则取流出的内容；已完成条目比已显示内容多出的文本，在完成之前显示出来。
+- 只有推理的响应仍然不提交任何东西。
+- 计时快照（`ReasoningUpdated`、`AgentReasoningSnapshot`）保存在条目旁边，供状态显示和恢复使用。
+
+### 标题 [#titles]
+
+- 门面的提交把轮次标为 `User`，对没有标题的会话，把提交的文本折成一行、截到 36 个字符，作为 `AgentTurnInput::provisional_title` 传入。如果会话仍然没有标题，准入就把它随轮次一起提交（`session_title_updated` 在 `turn_started` 和 `history_committed` 之后）。来源和临时标题都不随轮次持久化。
+- `titles` 插件的观察者把每个提交了临时标题的 `User` 轮次的 `TurnAdmitted` 排入有界队列（`try_send`）。它的工作线程（`spawn_scoped_worker`，一次处理一个标题，随插件停止）通过 `BlockingService` 上的 `AgentTitleApplication` 读取轮次的用户消息（`AgentService::turn_user_message`）和当前设置中该会话的 Provider，让一个私有的模型会话生成标题（提示截到 960 字节，30 秒），并用 `replace_automatic_session_title_if_expected` 提交，这是对临时标题的比较并交换，所以期间的重命名优先。插件关闭时临时标题保留。
+
+### 存储布局 [#storage-layout]
+
+[数据目录](/docs/data-directory#contents)之外的细节：
+
+- `history/active/YYYY/MM/DD/session-<YYYY-MM-DD>T<HH-MM-SS>-<id>.jsonl`（创建时的本地时间）、`history/archived/`、`history/attachments/<id>/blobs/<sha256>.blob`、`history/trash/` 和 `history/index.sqlite3`。分叉通过谱系表共享父会话的前缀。
+- `memory/memory.sqlite3`、`memory/ad-hoc-notes.jsonl`（模型留下的笔记）、`memory/artifacts/`（发布的制品，包括 `MEMORY.md` 和 `memory_summary.md`）、`memory/staging/` 和 `memory/reset-trash/`。
+
+### 记忆存储 [#memory-store]
+
+[记忆](/docs/memory#how)之外的细节：
+
+- **一轮处理**按从新到旧分页浏览空闲的历史会话（`AgentMemoryHistoryQuery::older_than`，每页 100 个，每轮最多 1000 个），最多领取 `maxSessionsPerPass` 个。会话能否被提取（参与贡献、有尚未提取的修订、没有退避、没有租约）由记忆存储决定，所以已经提取过的较新会话从不让较旧的会话一直等待。
+- **阶段一的证据预算**是提取模型的上下文窗口（按会话会得到的方式解析：`AgentService::model_context_window`，即配置的值，否则 Provider 的列表，否则内置表，否则 160K）的 70%，最多 120K token。
+- **退避**从 30 秒翻倍到一天：阶段一按来源（`memory_sources.retry_count`、`next_retry_at`），阶段二全局（`memory_meta.global_retry_count`、`global_next_retry_at`）；成功或重置会清除它。引用用量的变化如果移动了正在进行的整合的排名截止点，会让那次发布因过时而失败，由退避重试。
+- **发布**先暂存并校验制品（`MEMORY.md` 最多 128 KiB，`memory_summary.md` 最多 16 KiB 且以 `v1` 行开头），提交数据库（新代次这时就是已发布的代次），然后才换入制品。提交之后的崩溃或重命名失败会把它们留在 `staging/generation-<n>` 中，下次打开或下次整合领取时，在任何东西把制品读作基线之前安装它们。
+- **打开时**就地迁移版本 4 的数据库（它缺少阶段二的退避；丢弃路径还会删除已发布的制品）。只有当数据库不是数据库、已损坏（`SQLITE_CORRUPT`、`SQLITE_NOTADB`）或是其他 schema 时，才连同派生的制品一起丢弃它；繁忙、被锁或 I/O 失败会让打开失败，于是 Agent 的构造带着原因失败，由重启再试。每个连接最多等待 5 秒获得锁（`busy_timeout`），与历史索引的连接相同。schema 版本是 5。`memory reset` 是用户触发的唯一丢弃。
+- **容错。** 笔记日志跳过无法读取的行（按行号记录，从不记录内容）；超过 64 MiB 的日志仍是 `Corrupt`。阶段一的输出忽略 schema 没有列出的字段：`hasMemory: false` 是表示什么都不做的开关，优先于多余的字段；否则缺失的文本为空，过长的文本按字符边界截断，NUL 被去掉，不合格的 `rolloutSlug` 被改写为小写 kebab-case（什么都不剩时为 `memory`）；只有根本不是提取对象的输出才让任务失败。存储不认识的贡献模式读作 `disabled`。
+- **贡献模式**只有一个类型 `hanafubuki_agent_foundation::agent_settings::AgentMemoryContributionMode`（默认 `Disabled`），内核随会话持久化它，存储按来源保存它，契约和记忆 crate 重新导出它。
+- **信号。** `memory` 插件的观察者在轮次结束时发出扫描信号（所以一轮处理从不与正在进行的轮次争用模型），在回答提交后把引用用量排入队列，记录已提交的贡献变化（用户切换时以及会话停止贡献时发出扫描信号；开始贡献的新会话或分叉会话由之后的扫描处理），并在会话归档或恢复时发出扫描信号。记忆自己的操作（启动、笔记、重置、撤销会话）和设置变化直接发出扫描信号。
+
+### MCP 连接、目录与输出 [#mcp-details]
+
+[MCP](/docs/architecture#mcp) 和[外部生产者](/docs/plugin-rules#external-producers-mcp-servers-skills-web-memory)之外的细节：
+
+- **启动。** Agent 的启动在后台连接已启用的服务器（`service/mcp/startup.rs`），同时最多 4 个（`MCP_CONNECT_CONCURRENCY`），每个受它自己的连接和初始化超时限制，所以 Agent 在它们连上之前就已 `Running`；挂起的服务器最终以 "MCP operation timed out" 进入 `failed`。每次连接都观察 MCP 的生命周期令牌，关闭时最先取消它，被取消的连接会释放它创建的进程。
+- **关闭连接。** `McpManager::shutdown(deadline)` 关闭每个连接，每个在它的 `shutdown_timeout` 之内，全部在期限之前；没有确认关闭的连接保持退役，带着它的清理义务（状态中的 `cleanup_pending`）。服务器一侧已结束的连接被退役，在没有步骤持有它之后，凭回执释放它的进程。
+- **重连。** 每台服务器一个重启窗口（`McpManager::with_reconnect_policy`）；状态带有 `reconnect`（下一次尝试，用完后为空）。如果外部的连接、刷新或断开先到一步，重连就不再开始；关闭开始之后才完成的重连会释放它的进程，而不是装上它。stdio 服务器的原因会说明它是怎么结束的（`the MCP server process exited with code 3`）。
+- **panic。** 工具调用的客户端路径中的 panic 让这次调用得到 "the tool failed with an internal error"，`McpManager::fail_after_panic` 退役该连接并像上面一样重连服务器（以 "the MCP client panicked during a tool call: `<message>`" 进入 `failed`，诊断代码 `tool_call_panicked`）。
+- **身份。** 工具的代次是服务器配置、其凭据代次以及工具自己的目录条目和策略的摘要。未改变的服务器重连后它不变，所以会话对该工具的 `AllowForSession` 在重连后依然有效；改变服务器的设置、凭据的 `generation` 或工具本身，才会重新询问。
+- **目录。** 从分页的 `tools/list` 结果逐个工具构建。被跳过的工具（无效或过大的 schema、无法编码的名字、清理后重复的名字，例如 `my.tool` 变成 `my_tool`）是一个 `McpCatalogIssue`，作为警告记录，带工具名（每次列表最多 16 个），并附一条 `tool_discovery_partial` 摘要。每台服务器 2048 个工具的上限保持严格，计入无法解码的条目，只检查一次；`nextCursor: ""` 结束分页；超过 4 MiB 的页或过大的游标是错误。调用按原始的远程名字发出。
+- **列表与读取。** `tools/list`、两种资源列表和 `resources/read` 都通过 `Peer::send_request` 请求（`listing.rs`、`request::read_resource`），所以 rmcp 的类型化结构拒绝的结果以 `ServerResult::CustomResult` 到达，并逐个条目解码：无法解码的工具是 `tool_skipped_undecodable` 目录问题；无法解码的资源或模板被略去，并记一条 `resource_skipped_undecodable` 或 `resource_template_skipped_undecodable` 警告（每次列表最多 16 条），计入 `resource_discovery_partial`；无法解码的读取条目是文本 `[unsupported MCP content: resource]`。这些请求绕过 rmcp 的响应缓存。
+- **输出。** 带参数的 MIME 类型存为它的基本类型，接受没有填充的 base64，两者都以规范形式保存（`canonical_media_type`、`canonical_base64`）。
+
+### 执行与文件 [#execution-files]
+
+- `exec_command` 通过预留的 Executor 进程运行；`execution` 插件的活动监视器作为执行的观察者挂上，释放已结束的执行时会有界地等待，直到监视器报告了最终的输出和状态。活动预览只提交以换行结尾的行，未完成的行临时显示。结果是纯文本（`render_plain_text`）。通用的 argv `start` 只在 `test-support` 下存在。
+- `WorkspaceFsService` 把每个请求解析为策略根目录内不可变的计划，在 I/O 之前重新校验，并原子地写入；`preview_patch` 是纯函数。`WorkspaceRootsPort::extra_read_roots` 指定的目录是策略的受保护根目录：每个文件工具，包括读取，都拒绝其下的路径（"direct filesystem tools cannot access application-owned path …"，`ProtectedPath`）。
+
+### 关闭 [#shutdown-details]
+
+[关闭的各阶段](/docs/embedding#start-on-and-off-shutdown)之外的细节：
+
+- 每个阶段在它自己的期限或预算结束时（以先到者为准）结束，错过期限的阶段会被报告，同时下一个阶段开始。只有 `Running` 的 Agent 才经历关闭槽位之后的各阶段。
+- 最坏情况也在 20 秒之内：正在进行的启动最多 8 秒，加上运行时的 2 秒；运行中的 Agent 最多 5 + 4 + 5 + 3 + 1 + 2 = 20 秒。Skill 监视器的线程通常立即结束；卡在目录失效处理中的线程从剩余时间中最多占用它的 2 秒。
+- MCP 和插件阶段在 Agent 的运行时上运行，用 `ContainedRuntime::block_on_until` 等待，这种等待不依赖运行时能否推进，所以工作线程全部阻塞的运行时也挡不住退出。
+- 之后是宿主自己的拆除（Hanafubuki 随后停止它的展示分发器，有自己 2 秒的期限）。
+
+### 终端界面 [#tui-details]
+
+[终端界面的移植改动](/docs/architecture#what-the-port-of-the-terminal-interface-changed)之外的细节：
+
+- **思考。** 桥把 `ReasoningStarted`、`ReasoningDelta` 和 `ReasoningCompleted` 映射到一个思考单元格（`history_cell/thinking.rs`），它和运行中的工具调用一起位于视口中。收到 `ReasoningCompleted` 时，单元格按当前显示的样子带着内核的 `durationMillis` 写入回滚区；轮次结束时，仍在进行的单元格以到那时为止的时间完成，因为在流中途失败的轮次不发送完成事件。消息正在流式输出时，推理更新像工具更新一样排在它后面，所以回滚区保持模型产生的顺序。Ctrl-O 切换聊天组件的一个标志，作用于正在进行的单元格和之后的每一个。转录分页器绘制每个单元格的 `transcript_lines`，对思考单元格来说其中总是包含文本；恢复时的回放把 `ConversationItem::Reasoning` 映射为已完成的单元格。实时显示的是流出的文本：在少见的同时流出摘要和原始文本的条目中，提交的条目保留摘要，恢复的会话显示的是摘要。
+- **会话。** 界面通过桥打开每个会话（`AgentBridge::open`，基于 `open_session`）：新会话、`resume` 指定的会话、最近的会话，或在恢复选择器中选中的会话。最新的转录条目在头部之后读回，作为聊天回放的内容（`agent_bridge/replay.rs`：消息、思考、计划、工具调用及其输出，以及从已提交条目读出的 `apply_patch` diff）。`/new` 和 `/resume` 切换桥的会话，离开的会话的事件被忽略。
+- **命令**在 `agent_bridge/commands.rs` 中映射到门面：`/new` 对应 `create_session`；`/resume` 对应 `list_sessions_page`（按标题搜索、按游标分页，选择器滚动时在循环上读取）；`/compact` 对应 `compact_session_with_sink`；`/model` 对应 `list_provider_models` 和 `set_session_model`；`/mode` 对应 `set_session_mode`；`/status` 对应 `settings_view`、`provider_registry_snapshot` 和 `workspace_roots`；`/mcp` 对应 `mcp_snapshot`；`/skills` 对应 `list_skills`。审批和回答的调用不会等待，在循环上运行。
+- **覆盖层。** 转录分页器、`/diff` 分页器和恢复选择器占用备用屏幕；期间提交的单元格先等待，覆盖层关闭时再写入回滚区；有覆盖层打开时，终端的恢复会离开备用屏幕（致命 panic 时的恢复也是如此）。
+- **文件搜索**用 `ignore` 遍历工作区根目录（嵌套在另一个根目录中的根目录作为它自己只遍历一次），送入在自己线程上运行的 `nucleo` 匹配器，随 `@token` 变化重新排序。
+- **二进制**像 `exec` 一样组合并启动 Agent，使用界面的状态 sink（`TuiEvents::status_sink`），把运行中的句柄交给界面（`hanafubuki_agent_tui::run`），在界面恢复终端后用 `AGENT_SHUTDOWN_BUDGET` 关闭 Agent。轮次进行中 Agent 的状态变化（内核故障）会让 `exec` 结束，因为重启后的 Agent 有新的代次。
+- **panic hook。** 二进制传给 `install_panic_hook` 的 `logging::logging_blocked` 说明线程是否在文件日志器内部；这时 hook 只写标准错误。
+
+### 已知的限制 [#internal-limits]
+
+- 在步骤开始时第一次追加的 `tool_catalog_omissions` 更新不在该步骤的准入估算之内。
+- rmcp 的无标签 `ServerResult` 会把带有 `_meta` 和无法解码条目的结果解码为 `CallToolResult`，其中的条目已经丢失，所以这样的列表页仍会整页失败。
+
+### 宿主的一侧 [#host-side]
+
+宿主围绕 Agent 构建的东西由宿主自己记录；Hanafubuki 的部分（`src/agent/commands/guard.rs` 中的命令守卫、它的事件 sink 和窗口事件、来自 `AgentSlot::list_run_projections` 的任务中心行、诊断包中来自 `flush_for_diagnostics` 和 `plugin_status_for_diagnostics` 的 `app/agent-status.json` 与 `app/agent-plugins.json`、它的 `agent` 模块行和退出顺序、旧设置文件的一次性导入）见它的 [agent-integration.md](https://github.com/licyk/Hanafubuki/blob/main/docs/agent-integration.md)。每个宿主的命令层都以同样的方式工作：每次调用时解析槽位，在 Agent 的运行时上运行调用，把其中的 panic 变成这次调用的错误和一次内核故障，并用 `AgentSlot::interrupted` 回答 Agent 在调用期间停止的调用。

@@ -4,7 +4,7 @@ description: hanafubuki-agent 是怎样组成的：crate 与分层、内核与�
 icon: Layers
 ---
 
-本页面向第一次读这份代码的人，说明各部分如何协作，以及那些从代码里看不出来的选择为什么这样做。必须遵守的规则在[插件规则](/docs/plugin-rules)和仓库的 [AGENTS.md](https://github.com/licyk/hanafubuki-agent/blob/main/AGENTS.md)；嵌入方式在[嵌入 Agent](/docs/embedding)。
+本页面向第一次读这份代码的人，说明各部分如何协作，以及那些从代码里看不出来的选择为什么这样做。必须遵守的规则在[插件规则](/docs/plugin-rules)和仓库的 [AGENTS.md](https://github.com/licyk/hanafubuki-agent/blob/main/AGENTS.md)；嵌入方式在[嵌入 Agent](/docs/embedding)；本页背后的确切上限、失败规则和文件格式见[内部细节](/docs/internals)。
 
 ## 目标 [#goals]
 
@@ -139,7 +139,7 @@ schema 遵循同样的按协议规则：支持 `strict_json_schema` 的协议（
 
 ### 审批 [#approval]
 
-`AgentPermissionMode` 是 `Manual`（默认）、`AutoReview` 或 `FullAccess`，每个轮次从设置中冻结。每个工具调用由处理器的 `permission` 分类为一个 `ApprovalAction`（类型、风险等级、规范化摘要）。规则只能收紧。用户可以对 `Manual` 模式的提示回答 `AllowForSession`：之后同一工具（按 `(provider id, tool id, generation)`）在会话剩余时间内不再询问，只保存在运行时状态中，所以重启、分叉和改变了的工具（MCP 的重连也算）都会重新询问。审批产生一次性的 `AuthorizedAction`；修改型工具在 `invoke` 中重新计算动作并要求它们完全一致。没有操作系统沙箱：审批就是那道门。
+`AgentPermissionMode` 是 `Manual`（默认）、`AutoReview` 或 `FullAccess`，每个轮次从设置中冻结。每个工具调用由处理器的 `permission` 分类为一个 `ApprovalAction`（类型、风险等级、规范化摘要）。规则只能收紧。用户可以对 `Manual` 模式的提示回答 `AllowForSession`：之后同一工具（按 `(provider id, tool id, generation)`）在会话剩余时间内不再询问，只保存在运行时状态中，所以重启、分叉和改变了的工具都会重新询问（对 MCP 工具来说是服务器的配置、凭据或目录条目改变了；未改变的服务器重新连接后，许可仍然有效）。审批产生一次性的 `AuthorizedAction`；修改型工具在 `invoke` 中重新计算动作并要求它们完全一致。没有操作系统沙箱：审批就是那道门。
 
 ## 上下文 [#context]
 
