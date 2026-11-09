@@ -175,8 +175,8 @@ impl FileAgentHistoryStore {
             AgentHistorySortDirection::Ascending => "ASC",
             AgentHistorySortDirection::Descending => "DESC",
         };
-        let mut sql = format!(
-            "SELECT updated_at, session_id, summary_json FROM agent_sessions WHERE lifecycle = ?"
+        let mut sql = String::from(
+            "SELECT updated_at, session_id, summary_json FROM agent_sessions WHERE lifecycle = ?",
         );
         if search.is_some() {
             sql.push_str(" AND title LIKE ?");

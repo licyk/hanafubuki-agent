@@ -75,7 +75,9 @@ impl AgentBridge {
                             sink,
                         )
                         .await
-                        .map(|outcome| Some(AgentReply::Update(TurnUpdate::Compacted(outcome))))
+                        .map(|outcome| {
+                            Some(AgentReply::Update(Box::new(TurnUpdate::Compacted(outcome))))
+                        })
                         .map_err(|error| format!("the conversation was not compacted: {error}"))
                 })
             }
@@ -86,12 +88,12 @@ impl AgentBridge {
                         .list_provider_models(AgentProviderModelCatalogRequest::default())
                         .await
                         .map_err(|error| format!("the models were not listed: {error}"))?;
-                    Ok(Some(AgentReply::Update(TurnUpdate::ModelChoices(
-                        ModelChoices {
+                    Ok(Some(AgentReply::Update(Box::new(
+                        TurnUpdate::ModelChoices(ModelChoices {
                             provider_id: session.provider_id,
                             model: session.model,
                             catalogs,
-                        },
+                        }),
                     ))))
                 })
             }
@@ -108,8 +110,8 @@ impl AgentBridge {
                         })
                         .await
                         .map_err(|error| format!("the model was not changed: {error}"))?;
-                    Ok(Some(AgentReply::Update(TurnUpdate::ModelChanged(
-                        session.model,
+                    Ok(Some(AgentReply::Update(Box::new(
+                        TurnUpdate::ModelChanged(session.model),
                     ))))
                 })
             }
@@ -135,19 +137,21 @@ impl AgentBridge {
                             || session.provider_id.clone(),
                             |provider| provider.display_name.clone(),
                         );
-                    Ok(Some(AgentReply::Update(TurnUpdate::StatusReport(
-                        StatusReport {
+                    Ok(Some(AgentReply::Update(Box::new(
+                        TurnUpdate::StatusReport(Box::new(StatusReport {
                             session,
                             provider,
                             permission_mode: settings.settings.permission_mode,
                             roots,
-                        },
+                        })),
                     ))))
                 })
             }
             AgentCommand::Mcp => self.spawn(|agent| async move {
                 let snapshot = agent.mcp_snapshot().await?;
-                Ok(Some(AgentReply::Update(TurnUpdate::Mcp(snapshot))))
+                Ok(Some(AgentReply::Update(Box::new(TurnUpdate::Mcp(
+                    snapshot,
+                )))))
             }),
             AgentCommand::Skills => {
                 let catalog = self

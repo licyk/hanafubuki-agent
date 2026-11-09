@@ -33,6 +33,10 @@ impl AtomicPublishHook for NoopAtomicPublishHook {
     }
 }
 
+#[allow(
+    clippy::too_many_arguments,
+    reason = "independent inputs that a parameter struct would only regroup"
+)]
 pub(crate) fn atomic_write(
     destination: &Path,
     bytes: &[u8],

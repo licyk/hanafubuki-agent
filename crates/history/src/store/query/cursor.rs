@@ -46,7 +46,7 @@ pub(in crate::store) fn encode_cursor<T: Serialize>(
 pub(in crate::store) fn decode_cursor<T: for<'de> Deserialize<'de>>(
     value: &str,
 ) -> Result<T, AgentHistoryStoreError> {
-    if value.len() % 2 != 0 {
+    if !value.len().is_multiple_of(2) {
         return Err(AgentHistoryStoreError::InvalidCursor(
             "cursor hex length is invalid".to_string(),
         ));

@@ -24,8 +24,7 @@ impl ApprovalClock for TestClock {
 }
 
 fn policy(root: &Path) -> WorkspaceFsPolicy {
-    WorkspaceFsPolicy::rooted_at(root.to_path_buf(), std::iter::empty::<std::path::PathBuf>())
-        .unwrap()
+    WorkspaceFsPolicy::rooted_at(root, std::iter::empty::<std::path::PathBuf>()).unwrap()
 }
 
 fn approved(service: &WorkspaceFsService, request: &WorkspaceFsRequest) -> AuthorizedAction {
@@ -551,7 +550,7 @@ fn protected_application_paths_are_rejected_before_approval() {
     let protected = temp.path().join("app-data");
     fs::create_dir(&protected).unwrap();
     fs::write(protected.join("credentials.json"), "secret").unwrap();
-    let policy = WorkspaceFsPolicy::rooted_at(temp.path().to_path_buf(), [protected]).unwrap();
+    let policy = WorkspaceFsPolicy::rooted_at(temp.path(), [protected]).unwrap();
     let service = WorkspaceFsService::new(policy);
     let request = WorkspaceFsRequest::ReadFile(ReadFileRequest {
         path: "app-data/credentials.json".to_string(),

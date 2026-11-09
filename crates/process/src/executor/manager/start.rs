@@ -174,9 +174,8 @@ fn start_executor_impl(
                     let _ = session.terminate();
                     return Err(format!("executor already exists: {executor_id}"));
                 }
-                let receipt = registry.ownership.commit(reservation).map_err(|error| {
+                let receipt = registry.ownership.commit(reservation).inspect_err(|_| {
                     let _ = session.terminate();
-                    error
                 })?;
                 registry
                     .sessions

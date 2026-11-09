@@ -100,7 +100,7 @@ fn the_repository_roots_follow_the_workspace_without_a_force_reload() {
         .unwrap();
     assert_eq!(
         entry.directory,
-        hanafubuki_agent_foundation::paths::ResolvedPath::resolve(&fixture.root.join("other/lint"))
+        hanafubuki_agent_foundation::paths::ResolvedPath::resolve(fixture.root.join("other/lint"))
             .unwrap()
             .native_text()
     );

@@ -79,7 +79,7 @@ fn prompt(argument: Option<&str>) -> Result<String, Failure> {
 }
 
 enum Message {
-    Event(AgentEvent),
+    Event(Box<AgentEvent>),
     StatusChanged,
     Interrupted,
 }
@@ -89,7 +89,7 @@ struct Channel(Sender<Message>);
 
 impl AgentEventSink for Channel {
     fn emit(&self, event: AgentEvent) {
-        let _ = self.0.send(Message::Event(event));
+        let _ = self.0.send(Message::Event(Box::new(event)));
     }
 }
 
@@ -121,7 +121,7 @@ impl Turn<'_> {
         let mut unanswered = false;
         loop {
             let event = match self.receiver.recv() {
-                Ok(Message::Event(event)) => event,
+                Ok(Message::Event(event)) => *event,
                 Ok(Message::StatusChanged) => {
                     self.check_running()?;
                     continue;

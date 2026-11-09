@@ -129,7 +129,7 @@ pub(crate) fn dependency_availability(statuses: &[SkillMcpDependencyStatus]) -> 
             reason: None,
         },
         |status| SkillAvailability {
-            state: status.state.clone(),
+            state: status.state,
             reason: status.reason.clone(),
         },
     )

@@ -35,6 +35,10 @@ struct FinalizedResponse {
 }
 
 impl AgentService {
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "independent inputs that a parameter struct would only regroup"
+    )]
     pub(super) async fn run_sampling_request_once(
         &self,
         identity: TurnIdentity,

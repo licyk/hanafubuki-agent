@@ -108,7 +108,8 @@ pub(super) fn dependents_of<K: HostProfile>(rows: &[HostedRow<K>]) -> Vec<Vec<St
             }
             rows.iter()
                 .zip(reached)
-                .filter_map(|(row, reached)| reached.then(|| row.name.clone()))
+                .filter(|(_, reached)| *reached)
+                .map(|(row, _)| row.name.clone())
                 .collect()
         })
         .collect()

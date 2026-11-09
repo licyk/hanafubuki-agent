@@ -1,5 +1,8 @@
 use super::*;
 
+#[cfg(any(test, feature = "test-support"))]
+type HistoryBacking = Arc<Vec<Arc<AgentHistoryItem>>>;
+
 impl AgentService {
     pub fn snapshot(
         &self,
@@ -49,7 +52,7 @@ impl AgentService {
     pub fn test_history_backing(
         &self,
         session_id: AgentSessionId,
-    ) -> Result<(Arc<Vec<Arc<AgentHistoryItem>>>, u64), AgentError> {
+    ) -> Result<(HistoryBacking, u64), AgentError> {
         let cell = self.session(session_id)?;
         let record = cell.lock_after_persistence_blocking()?;
         Ok((
@@ -100,6 +103,10 @@ impl AgentService {
         self.ensure_session_loaded(session_id, Arc::new(UnavailableRecoveredModel))
     }
 
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "independent inputs that a parameter struct would only regroup"
+    )]
     pub fn activate_model_session(
         &self,
         protocol: ModelApiProtocol,

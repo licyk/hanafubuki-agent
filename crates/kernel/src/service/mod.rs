@@ -312,7 +312,7 @@ enum PendingModelItem {
 type ContinuationHooks = Vec<Arc<RegistryEntry<AgentContinuationHookRegistration>>>;
 
 enum ToolApprovalDisposition {
-    Approved(AuthorizedAction),
+    Approved(Box<AuthorizedAction>),
     Rejected(String),
 }
 

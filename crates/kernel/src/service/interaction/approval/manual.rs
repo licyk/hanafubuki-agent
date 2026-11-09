@@ -146,7 +146,7 @@ impl AgentService {
                 (
                     resolution,
                     "approved",
-                    Ok(ToolApprovalDisposition::Approved(approved)),
+                    Ok(ToolApprovalDisposition::Approved(Box::new(approved))),
                 )
             }
             ApprovalOutcome::Denied(resolution) => (

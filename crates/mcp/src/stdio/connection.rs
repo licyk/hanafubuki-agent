@@ -67,9 +67,7 @@ impl McpStdioConnection {
             Ok(Err(error)) => {
                 let diagnostic = process.diagnostic();
                 let cleanup = process.dispose_confirmed().await;
-                if let Err(cleanup) = cleanup {
-                    return Err(cleanup);
-                }
+                cleanup?;
                 let diagnostic = crate::sanitize_mcp_diagnostic(&diagnostic, MCP_DIAGNOSTIC_BYTES);
                 return Err(McpError::Protocol(bounded_error(format!(
                     "{error}; sanitized stderr tail={diagnostic}"

@@ -55,9 +55,6 @@ impl WorkspaceFsService {
         prepare_operation(&self.policy, request)
     }
 
-    /// Read one file explicitly selected by the user without creating a
-    /// reusable filesystem capability.
-
     pub fn execute(
         &self,
         request: &WorkspaceFsRequest,

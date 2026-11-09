@@ -110,6 +110,10 @@ pub enum AgentHistoryMutation {
     rename_all = "snake_case",
     rename_all_fields = "camelCase"
 )]
+#[allow(
+    clippy::large_enum_variant,
+    reason = "public persisted state, one per session; a box would change the type its users build"
+)]
 pub enum AgentModelContextBoundary {
     #[default]
     Full,

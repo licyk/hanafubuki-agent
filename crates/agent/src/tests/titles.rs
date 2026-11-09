@@ -4,7 +4,6 @@
 
 use super::*;
 use hanafubuki_agent_contracts::RegistryService as _;
-use TestPaths;
 
 /// What the model answers both the turn and the title request with: the
 /// turn and the title worker race for the fake server's responses, and this

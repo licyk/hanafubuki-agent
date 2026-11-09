@@ -400,10 +400,8 @@ fn store_with_corrupted_session(
 #[test]
 fn recovery_rejects_a_session_whose_persisted_counter_passes_the_ceiling() {
     let ceiling = u64::MAX / 2;
-    let corruptions: [(
-        &str,
-        fn(&mut hanafubuki_agent_kernel::PersistedAgentRuntimeState, u64),
-    ); 3] = [
+    type Corrupt = fn(&mut hanafubuki_agent_kernel::PersistedAgentRuntimeState, u64);
+    let corruptions: [(&str, Corrupt); 3] = [
         ("revision", |runtime, value| {
             runtime.revision = hanafubuki_agent_kernel::AgentRevision::new(value)
         }),

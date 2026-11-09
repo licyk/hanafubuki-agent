@@ -79,9 +79,9 @@ impl ToolOutput {
         }
         for item in &self.content {
             match item {
-                ToolOutputContent::Image {
-                    mime_type, data: _, ..
-                } if !mime_type.starts_with("image/") || !valid_mime(mime_type) => {
+                ToolOutputContent::Image { mime_type, .. }
+                    if !mime_type.starts_with("image/") || !valid_mime(mime_type) =>
+                {
                     return Err(ToolContractError::InvalidMimeType)
                 }
                 ToolOutputContent::Audio { mime_type, data: _ }

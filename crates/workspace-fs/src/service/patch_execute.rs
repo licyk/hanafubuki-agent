@@ -40,7 +40,7 @@ impl WorkspaceFsService {
                         .unwrap_or_else(|| source.identity.path.clone());
                     if let Some(destination) = destination {
                         self.write_file(
-                            destination,
+                            *destination,
                             content,
                             content_sha256,
                             true,

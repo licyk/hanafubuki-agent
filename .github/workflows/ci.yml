@@ -44,5 +44,6 @@ jobs:
       - run: cargo check --workspace --all-targets --all-features
         env:
           RUSTFLAGS: -D warnings
+      - run: cargo clippy --workspace --all-targets --all-features -- -D warnings
       - run: cargo xtask check
       - run: cargo test --workspace --all-features --no-fail-fast

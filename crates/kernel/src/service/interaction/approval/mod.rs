@@ -36,7 +36,7 @@ pub(in crate::service) enum ApprovalRoute {
     Decided(ToolApprovalDisposition),
     /// The reviewer model or the user decides. The caller waits for it with
     /// [`AgentService::await_approval`], holding none of the step's gate.
-    Waiting(PendingApproval),
+    Waiting(Box<PendingApproval>),
 }
 
 impl AgentService {
@@ -148,17 +148,19 @@ impl AgentService {
                 pending.flow = WaitingFlow::User {
                     offers_allow_for_session: false,
                 };
-                return Ok(ApprovalRoute::Waiting(pending));
+                return Ok(ApprovalRoute::Waiting(Box::new(pending)));
             }
             None if allowed_for_session => ApprovalDecisionSource::SessionAllowance,
             None => match turn_mode {
                 AgentPermissionMode::FullAccess => ApprovalDecisionSource::FullAccess,
-                AgentPermissionMode::AutoReview => return Ok(ApprovalRoute::Waiting(pending)),
+                AgentPermissionMode::AutoReview => {
+                    return Ok(ApprovalRoute::Waiting(Box::new(pending)))
+                }
                 AgentPermissionMode::Manual => {
                     pending.flow = WaitingFlow::User {
                         offers_allow_for_session: true,
                     };
-                    return Ok(ApprovalRoute::Waiting(pending));
+                    return Ok(ApprovalRoute::Waiting(Box::new(pending)));
                 }
             },
         };
@@ -200,6 +202,6 @@ impl AgentService {
             .approvals
             .authorize(pending.action, &pending.context, pending.timeout, source)
             .map_err(map_approval_error)?;
-        Ok(ToolApprovalDisposition::Approved(authorized))
+        Ok(ToolApprovalDisposition::Approved(Box::new(authorized)))
     }
 }

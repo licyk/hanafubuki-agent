@@ -1,6 +1,8 @@
 use super::*;
 
 impl WorkspaceFsService {
+    /// Read one file explicitly selected by the user without creating a
+    /// reusable filesystem capability.
     pub fn read_selected_binary(
         &self,
         path: &str,

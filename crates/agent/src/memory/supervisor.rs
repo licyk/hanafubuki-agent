@@ -168,7 +168,7 @@ fn release_consolidation_after_operation(
     failure: &LeaseBoundFailure,
     exact_secrets: &[String],
 ) -> Result<(), String> {
-    let release = if failure.kind == LeaseBoundFailureKind::LeaseLost {
+    if failure.kind == LeaseBoundFailureKind::LeaseLost {
         Ok(())
     } else {
         let error = hanafubuki_agent_memory::redact_memory_text(&failure.message, exact_secrets);
@@ -176,8 +176,7 @@ fn release_consolidation_after_operation(
             Ok(()) | Err(AgentMemoryError::LeaseLost) => Ok(()),
             Err(error) => Err(error.to_string()),
         }
-    };
-    release
+    }
 }
 
 /// The idle history sessions a pass can extract, claimed one at a time.

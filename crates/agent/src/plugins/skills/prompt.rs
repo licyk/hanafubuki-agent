@@ -162,11 +162,7 @@ pub(super) fn render_skill_catalog(
             .saturating_add(minimum_bytes)
             .saturating_add(warning.as_ref().map_or(0, String::len)),
     );
-    let per_entry = if included == 0 {
-        0
-    } else {
-        description_budget / included
-    };
+    let per_entry = description_budget.checked_div(included).unwrap_or(0);
 
     let mut content = String::with_capacity(byte_budget);
     content.push_str(CATALOG_PREFIX);

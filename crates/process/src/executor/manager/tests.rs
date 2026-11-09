@@ -450,6 +450,10 @@ fn process_tree_helper() {
     }
     if mode == "parent" {
         let executable = std::env::current_exe().unwrap();
+        #[allow(
+            clippy::zombie_processes,
+            reason = "the helper runs until the test terminates its whole tree"
+        )]
         let child = Command::new(executable)
             .args(["--exact", PROCESS_TREE_HELPER_TEST, "--nocapture"])
             .env("HANAFUBUKI_CONFIRMED_DISPOSAL_HELPER", "child")

@@ -47,7 +47,7 @@ pub(in crate::service) fn snapshot(
             terminal_reason: turn.terminal_reason,
             created_at: turn.created_at,
             updated_at: turn.updated_at,
-            recovery: turn.recovery.clone(),
+            recovery: turn.recovery,
             pending_steering_count: turn.pending_steering.len(),
             last_consumed_steering_sequence: turn.last_consumed_steering_sequence,
             model_session_generation: turn.model_session_generation,
@@ -148,10 +148,6 @@ pub(in crate::service) fn session_summary(
         latest_turn_phase: record.runtime.turn.as_ref().map(|turn| turn.phase),
         created_at: record.created_at,
         updated_at: record.status.updated_at,
-        recovery_marker: record
-            .runtime
-            .turn
-            .as_ref()
-            .and_then(|turn| turn.recovery.clone()),
+        recovery_marker: record.runtime.turn.as_ref().and_then(|turn| turn.recovery),
     }
 }

@@ -66,7 +66,7 @@ pub(crate) fn spinner(start_time: Option<Instant>, animations_enabled: bool) -> 
         return "•".dim();
     }
     let elapsed = start_time.map(|st| st.elapsed()).unwrap_or_default();
-    if (elapsed.as_millis() / 600) % 2 == 0 {
+    if (elapsed.as_millis() / 600).is_multiple_of(2) {
         "•".into()
     } else {
         "◦".dim()

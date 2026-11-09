@@ -77,7 +77,6 @@ pub struct McpElicitationRequestId(pub u64);
     rename_all = "snake_case",
     rename_all_fields = "camelCase"
 )]
-
 pub enum McpElicitationKind {
     Form {
         schema: Value,
@@ -109,7 +108,6 @@ pub struct McpElicitationRequest {
     rename_all = "snake_case",
     rename_all_fields = "camelCase"
 )]
-
 pub enum McpElicitationDecision {
     Accept { content: Value },
     Decline,
@@ -156,11 +154,13 @@ impl McpActiveCallGuard {
     }
 }
 
+type ActiveCalls = HashMap<(McpServerId, McpConnectionGeneration), Vec<ActiveCall>>;
+
 #[derive(Clone)]
 pub struct McpInteractionHub {
     next_id: Arc<AtomicU64>,
     pending: Arc<Mutex<HashMap<McpElicitationRequestId, PendingElicitation>>>,
-    active_calls: Arc<Mutex<HashMap<(McpServerId, McpConnectionGeneration), Vec<ActiveCall>>>>,
+    active_calls: Arc<Mutex<ActiveCalls>>,
     events: Arc<dyn McpEventSink>,
 }
 

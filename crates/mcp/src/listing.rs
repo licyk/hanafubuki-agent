@@ -86,6 +86,10 @@ pub(crate) trait McpListMethod {
 
     fn request(params: Option<PaginatedRequestParams>) -> ClientRequest;
     /// The page, when rmcp decoded the whole result as this method's page.
+    #[allow(
+        clippy::result_large_err,
+        reason = "the error hands the caller back the result it did not consume"
+    )]
     fn typed(result: ServerResult) -> Result<Self::Page, ServerResult>;
     fn into_parts(page: Self::Page) -> (Vec<Self::Item>, Option<String>);
 }

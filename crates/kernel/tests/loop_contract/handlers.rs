@@ -31,7 +31,7 @@ struct FakeTool {
 }
 
 impl FakeTool {
-    fn new(name: &str, effect: ToolEffect, behaviour: Behaviour) -> Arc<dyn AgentToolHandler> {
+    fn handler(name: &str, effect: ToolEffect, behaviour: Behaviour) -> Arc<dyn AgentToolHandler> {
         Arc::new(Self {
             descriptor: ToolDescriptor {
                 name: ToolName::parse(name).unwrap(),
@@ -129,28 +129,28 @@ async fn fixture() -> Fixture {
         let hanging = hanging.clone();
         async move {
             let tools = ctx.get::<ToolRegistry>()?;
-            tools.register(FakeTool::new(
+            tools.register(FakeTool::handler(
                 "fake_read",
                 ToolEffect::ReadOnly,
                 Behaviour::Echo,
             ))?;
-            tools.register(FakeTool::new(
+            tools.register(FakeTool::handler(
                 "fake_write",
                 ToolEffect::Mutating,
                 Behaviour::Echo,
             ))?;
-            tools.register(FakeTool::new(
+            tools.register(FakeTool::handler(
                 "fake_skill",
                 ToolEffect::ReadOnly,
                 Behaviour::Context,
             ))?;
-            tools.register(FakeTool::new(
+            tools.register(FakeTool::handler(
                 "fake_wait",
                 ToolEffect::ReadOnly,
                 Behaviour::WaitForCancellation(started),
             ))?;
             let mut hang = FakeTool {
-                descriptor: FakeTool::new("fake_hang", ToolEffect::ReadOnly, Behaviour::Echo)
+                descriptor: FakeTool::handler("fake_hang", ToolEffect::ReadOnly, Behaviour::Echo)
                     .descriptor()
                     .clone(),
                 behaviour: Behaviour::Hang(hanging),

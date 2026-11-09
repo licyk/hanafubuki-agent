@@ -377,7 +377,7 @@ fn session_summary(
         latest_turn_phase: runtime.turn.as_ref().map(|turn| turn.phase),
         created_at: runtime.created_at,
         updated_at: runtime.updated_at,
-        recovery_marker: runtime.turn.as_ref().and_then(|turn| turn.recovery.clone()),
+        recovery_marker: runtime.turn.as_ref().and_then(|turn| turn.recovery),
     }
 }
 

@@ -937,11 +937,7 @@ async fn wait_for_active_turn(
     session_id: hanafubuki_agent_kernel::AgentSessionId,
 ) -> hanafubuki_agent_kernel::AgentTurnSnapshot {
     for _ in 0..100 {
-        if let Some(turn) = test_session_view(&service, session_id)
-            .unwrap()
-            .runtime
-            .turn
-        {
+        if let Some(turn) = test_session_view(service, session_id).unwrap().runtime.turn {
             if turn.sampling_step > 0 {
                 return turn;
             }

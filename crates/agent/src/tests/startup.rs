@@ -711,7 +711,7 @@ fn a_plugin_that_never_stops_does_not_hold_shutdown_past_its_budget() {
         kardia_core::PluginDef::new(|ctx: kardia_core::Context, _| async move {
             ctx.defer(
                 "never-stops",
-                kardia_core::Disposer::future(|| std::future::pending::<()>()),
+                kardia_core::Disposer::future(std::future::pending::<()>),
             )?;
             Ok(())
         })

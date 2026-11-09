@@ -632,10 +632,10 @@ fn append_output(
     }
     let complete = complete_prefix_len(&line.raw);
     if line.raw.len() > MAX_PENDING_LINE_BYTES {
-        let collapsed = render_plain_text(line.raw[..complete].as_bytes());
+        let collapsed = render_plain_text(&line.raw.as_bytes()[..complete]);
         line.raw.replace_range(..complete, &collapsed);
     }
-    let shown = render_plain_text(line.raw[..complete_prefix_len(&line.raw)].as_bytes());
+    let shown = render_plain_text(&line.raw.as_bytes()[..complete_prefix_len(&line.raw)]);
     if !shown.is_empty() {
         line.evicted = commit_output_line(output, &shown);
         line.shown = true;

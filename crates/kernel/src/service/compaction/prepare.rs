@@ -13,6 +13,10 @@ struct CompactionSource {
 }
 
 impl AgentService {
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "independent inputs that a parameter struct would only regroup"
+    )]
     pub(super) async fn begin_compaction(
         &self,
         session_id: AgentSessionId,

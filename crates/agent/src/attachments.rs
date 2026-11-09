@@ -130,7 +130,7 @@ pub(crate) fn prepare_and_stage_images(
             return Err("image display name must contain 1 to 256 bytes without NUL".to_string());
         }
         if let (None, Some(attachment)) = (&input.path, &input.attachment) {
-            core.read_image_attachment(session_id, &attachment)
+            core.read_image_attachment(session_id, attachment)
                 .map_err(|error| error.to_string())?;
             staged.push(attachment.clone());
             continue;

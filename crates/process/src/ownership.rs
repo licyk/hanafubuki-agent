@@ -250,11 +250,6 @@ impl ProcessOwnershipRegistry {
     pub fn counts(&self) -> (usize, usize) {
         (self.owners.len(), self.reservations.len())
     }
-
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn len(&self) -> usize {
-        self.reservations.len()
-    }
 }
 
 impl ReservationSet {
@@ -299,11 +294,6 @@ impl ReservationSet {
             Some(_) => OwnedReleaseStatus::DifferentOwner,
             None => OwnedReleaseStatus::Missing,
         }
-    }
-
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn len(&self) -> usize {
-        self.0.len()
     }
 }
 

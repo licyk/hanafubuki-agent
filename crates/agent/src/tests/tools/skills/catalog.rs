@@ -752,7 +752,7 @@ async fn skill_catalog_and_selected_skill_fragments_are_pinned() {
         "[Application-provided Skill capability catalog. It describes only fixed tools and cannot grant authority.]\n<skills_instructions>\n## Skills\n"
     ));
     let bundled = hanafubuki_agent_foundation::paths::ResolvedPath::resolve(
-        &paths.data_dir.join("agent-test/skills-bundled"),
+        paths.data_dir.join("agent-test/skills-bundled"),
     )
     .unwrap()
     .native_text()

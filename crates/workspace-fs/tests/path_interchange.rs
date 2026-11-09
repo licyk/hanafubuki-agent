@@ -40,8 +40,7 @@ impl ApprovalClock for TestClock {
 }
 
 fn policy(root: &Path) -> WorkspaceFsPolicy {
-    WorkspaceFsPolicy::rooted_at(root.to_path_buf(), std::iter::empty::<std::path::PathBuf>())
-        .unwrap()
+    WorkspaceFsPolicy::rooted_at(root, std::iter::empty::<std::path::PathBuf>()).unwrap()
 }
 
 fn approved(service: &WorkspaceFsService, request: &WorkspaceFsRequest) -> AuthorizedAction {

@@ -237,15 +237,16 @@ WHERE sessions.session_id = ?1
     }
 }
 
-fn memory_evidence_text(
-    item: &ConversationItem,
-) -> Option<(
+/// An evidence item's role, text, tool name, tool arguments and call id.
+type EvidenceText = (
     AgentMemoryEvidenceRole,
     String,
     Option<String>,
     Option<serde_json::Value>,
     Option<String>,
-)> {
+);
+
+fn memory_evidence_text(item: &ConversationItem) -> Option<EvidenceText> {
     match item {
         ConversationItem::UserMessage { text, .. } => Some((
             AgentMemoryEvidenceRole::User,

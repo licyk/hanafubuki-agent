@@ -25,7 +25,7 @@ pub(super) struct WriterHandle {
 pub(in crate::store) enum WriterCommand {
     /// Acknowledged on the writer once the append is durable or failed.
     Append {
-        commit: PendingHistoryCommit,
+        commit: Box<PendingHistoryCommit>,
         ack: AgentHistoryAppendAck,
     },
     /// Reads attachments for a model request of the session, so the
@@ -155,7 +155,10 @@ impl FileAgentHistoryStore {
         if let Err((error, command)) = self.send_to_writer(
             session_id,
             requested_path,
-            WriterCommand::Append { commit, ack },
+            WriterCommand::Append {
+                commit: Box::new(commit),
+                ack,
+            },
         ) {
             fail_command(command, error);
         }
@@ -177,9 +180,14 @@ impl FileAgentHistoryStore {
     ) {
         let gate = self.session_gate(session_id);
         let _guard = gate.lock();
-        if let Err((error, command)) =
-            self.send_to_writer(session_id, None, WriterCommand::Append { commit, ack })
-        {
+        if let Err((error, command)) = self.send_to_writer(
+            session_id,
+            None,
+            WriterCommand::Append {
+                commit: Box::new(commit),
+                ack,
+            },
+        ) {
             fail_command(command, error);
         }
     }
@@ -440,7 +448,7 @@ fn run_writer(
                 {
                     panic!("injected Agent history writer panic");
                 }
-                let appended = writer.append(commit);
+                let appended = writer.append(*commit);
                 // A follow-up the acknowledgement hands back is appended
                 // here, before the next queued command.
                 ack.acknowledge(appended, |commit| {

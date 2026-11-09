@@ -199,6 +199,10 @@ impl AgentService {
         Ok(request)
     }
 
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "independent inputs that a parameter struct would only regroup"
+    )]
     pub(in crate::service) async fn run_sampling_request(
         &self,
         identity: TurnIdentity,

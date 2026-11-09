@@ -108,7 +108,7 @@ pub(crate) enum PatchFilePlan {
     Update {
         source: ExistingPathPlan,
         source_sha256: String,
-        destination: Option<TargetPlan>,
+        destination: Option<Box<TargetPlan>>,
         content: Vec<u8>,
         content_sha256: String,
     },

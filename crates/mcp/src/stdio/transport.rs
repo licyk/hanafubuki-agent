@@ -17,7 +17,7 @@ pub enum McpExecutorTransportError {
 
 pub(super) enum WorkerCommand {
     Send {
-        message: ClientJsonRpcMessage,
+        message: Box<ClientJsonRpcMessage>,
         completion: oneshot::Sender<Result<(), McpExecutorTransportError>>,
     },
     Close {
@@ -43,7 +43,7 @@ impl Transport<RoleClient> for McpExecutorTransport {
             let (completion, result) = oneshot::channel();
             commands
                 .try_send(WorkerCommand::Send {
-                    message: item,
+                    message: Box::new(item),
                     completion,
                 })
                 .map_err(|error| match error {

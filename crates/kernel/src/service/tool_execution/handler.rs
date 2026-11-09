@@ -106,7 +106,7 @@ impl AgentService {
                         drop(admission);
                         let disposition = self
                             .await_approval(
-                                pending,
+                                *pending,
                                 runtime.approval_prompts(),
                                 cancellation.clone(),
                                 event_sink,
@@ -117,7 +117,7 @@ impl AgentService {
                     }
                 };
                 match disposition {
-                    ToolApprovalDisposition::Approved(approval) => Some(approval),
+                    ToolApprovalDisposition::Approved(approval) => Some(*approval),
                     ToolApprovalDisposition::Rejected(message) => {
                         return Ok(AgentToolOutput::model_visible_error(json!({
                             "error": message

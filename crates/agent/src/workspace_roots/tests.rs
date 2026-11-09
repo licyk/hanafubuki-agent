@@ -18,7 +18,7 @@ fn a_single_root_is_its_own_primary() {
     let root = temp_root("single");
     let roots = agent_workspace_roots_from([root.clone()]).unwrap();
     assert_eq!(roots.primary(), &root);
-    assert_eq!(roots.roots(), [root.clone()]);
+    assert_eq!(roots.roots(), std::slice::from_ref(&root));
     std::fs::remove_dir_all(&root).unwrap();
 }
 
@@ -37,7 +37,7 @@ fn a_root_nested_in_an_earlier_root_is_dropped() {
 
     let roots = agent_workspace_roots_from([managed.clone(), child]).unwrap();
 
-    assert_eq!(roots.roots(), [managed.clone()]);
+    assert_eq!(roots.roots(), std::slice::from_ref(&managed));
     std::fs::remove_dir_all(&managed).unwrap();
 }
 

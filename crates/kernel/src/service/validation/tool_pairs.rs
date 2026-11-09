@@ -51,20 +51,18 @@ pub(super) fn validate_skill_context_groups(
                 skill,
                 name,
                 content,
-            } => {
-                if selected.len() >= MAXIMUM_SELECTED_SKILLS_PER_TURN
-                    || !selected.insert(skill)
-                    || name.is_empty()
-                    || name.len() > 256
-                    || content.is_empty()
-                    || content.len() > 32 * 1024
-                    || !content.starts_with("<skill>\n")
-                    || !content.ends_with("\n</skill>")
-                {
-                    return Err(AgentError::Persistence(
-                        "Agent history contains an invalid Skill context group".to_string(),
-                    ));
-                }
+            } if selected.len() >= MAXIMUM_SELECTED_SKILLS_PER_TURN
+                || !selected.insert(skill)
+                || name.is_empty()
+                || name.len() > 256
+                || content.is_empty()
+                || content.len() > 32 * 1024
+                || !content.starts_with("<skill>\n")
+                || !content.ends_with("\n</skill>") =>
+            {
+                return Err(AgentError::Persistence(
+                    "Agent history contains an invalid Skill context group".to_string(),
+                ));
             }
             _ => {}
         }

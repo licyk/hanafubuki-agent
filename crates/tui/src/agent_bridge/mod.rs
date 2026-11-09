@@ -70,7 +70,7 @@ pub(crate) enum TurnUpdate {
     ModelChanged(String),
     ModeChanged(AgentSessionMode),
     Compacted(AgentCompactionOutcome),
-    StatusReport(StatusReport),
+    StatusReport(Box<StatusReport>),
     Mcp(McpApplicationSnapshot),
     Skills(SkillCatalogSnapshot),
 }
@@ -90,7 +90,7 @@ pub(crate) enum AgentReply {
     /// The session the interface now drives.
     SessionOpened(OpenedSession),
     /// What a command found, for the chat to show as it is.
-    Update(TurnUpdate),
+    Update(Box<TurnUpdate>),
 }
 
 pub(crate) struct AgentBridge {
@@ -213,7 +213,7 @@ impl AgentBridge {
                 self.pending_steering.clear();
                 Some(TurnUpdate::SessionOpened(opened))
             }
-            AgentReply::Update(update) => Some(update),
+            AgentReply::Update(update) => Some(*update),
         }
     }
 

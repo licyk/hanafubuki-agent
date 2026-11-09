@@ -134,7 +134,7 @@ impl AgentService {
                 turn: None,
                 compaction: None,
                 usage: None,
-                context_window: source.runtime.context_window.clone(),
+                context_window: source.runtime.context_window,
                 activities: AgentActivityTracker::default(),
                 task_plan: None,
                 pending_user_input: None,

@@ -120,7 +120,7 @@ impl AgentService {
                     identity.turn_id,
                     identity.generation
                 );
-                (output.clone(), true)
+                (AgentToolOutput::clone(output), true)
             }
         };
         let memory_context_effect = match &disposition {

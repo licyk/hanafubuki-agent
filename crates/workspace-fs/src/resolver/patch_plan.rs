@@ -73,7 +73,7 @@ pub(super) fn prepare_patch_changes(
                             target_resolved(&target),
                             &mut external_paths,
                         );
-                        Ok(target)
+                        Ok(Box::new(target))
                     })
                     .transpose()?;
                 let content = updated.into_bytes();

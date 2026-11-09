@@ -24,7 +24,7 @@ pub(in crate::service) enum CallDisposition {
     ///   error, so a hidden tool stays indistinguishable from an absent one.
     Reject {
         registration: Option<AgentPlannedTool>,
-        output: AgentToolOutput,
+        output: Box<AgentToolOutput>,
     },
 }
 
@@ -36,11 +36,11 @@ impl CallDisposition {
                 return match plan.unselected_deferred_call(call) {
                     Some(registration) => Self::Reject {
                         registration: Some(registration.clone()),
-                        output: undiscovered_tool_output(&call.name),
+                        output: Box::new(undiscovered_tool_output(&call.name)),
                     },
                     None => Self::Reject {
                         registration: None,
-                        output: unavailable_tool_output(&call.name),
+                        output: Box::new(unavailable_tool_output(&call.name)),
                     },
                 };
             }
@@ -48,7 +48,7 @@ impl CallDisposition {
         match &call.argument_error {
             Some(error) => Self::Reject {
                 registration: Some(registration),
-                output: invalid_arguments_output(&call.name, error),
+                output: Box::new(invalid_arguments_output(&call.name, error)),
             },
             None => Self::Run(registration),
         }

@@ -876,10 +876,7 @@ async fn a_teardown_that_never_ends_holds_neither_a_remount_nor_shutdown() {
             life.starts.fetch_add(1, Ordering::SeqCst);
             ctx.get::<ObserverRegistry>()?
                 .register(Arc::new(ProbeObserver))?;
-            ctx.defer(
-                "never-stops",
-                Disposer::future(|| std::future::pending::<()>()),
-            )?;
+            ctx.defer("never-stops", Disposer::future(std::future::pending::<()>))?;
             Ok(())
         }
     })

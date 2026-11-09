@@ -372,7 +372,7 @@ pub(super) fn conversation_commit(
                 terminal_reason: turn.terminal_reason,
                 created_at: turn.created_at,
                 updated_at: turn.updated_at,
-                recovery: turn.recovery.clone(),
+                recovery: turn.recovery,
                 budget_ledger: turn.budget_ledger,
                 no_progress: turn.no_progress,
                 pending_steering: turn.pending_steering.iter().cloned().collect(),

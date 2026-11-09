@@ -56,16 +56,16 @@ impl AgentApplicationService {
         let policy = resolved.policy;
         let provider = resolved.definition;
         let model_configured = !policy.model.is_empty();
-        let instructions = model_configured
-            .then(|| {
-                AgentModelInfo::from_provider(
-                    policy.model.clone(),
-                    provider.protocol,
-                    &self.base_instructions,
-                )
-                .resolve_instructions(None)
-            })
-            .unwrap_or_default();
+        let instructions = if model_configured {
+            AgentModelInfo::from_provider(
+                policy.model.clone(),
+                provider.protocol,
+                &self.base_instructions,
+            )
+            .resolve_instructions(None)
+        } else {
+            Default::default()
+        };
         let protocol = model_api_protocol(provider.protocol);
         let compaction_capability = policy.compaction_capability;
         let turn_budget = policy.turn_budget;

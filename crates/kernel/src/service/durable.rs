@@ -35,7 +35,7 @@ pub(super) struct StagedPersistence {
 }
 
 enum StagedAppend {
-    Commit(AgentConversationCommit),
+    Commit(Box<AgentConversationCommit>),
     Delta(AgentConversationDelta),
 }
 
@@ -61,7 +61,7 @@ impl StagedPersistence {
             cell: cell.clone(),
             committed_revision: record.status.revision,
             previous,
-            append: StagedAppend::Commit(conversation_commit(cell.session_id(), record)),
+            append: StagedAppend::Commit(Box::new(conversation_commit(cell.session_id(), record))),
         }
     }
 
@@ -102,7 +102,7 @@ impl StagedPersistence {
             outcome: Some(SettlementOutcome::Visible(Box::new(visible))),
         };
         AgentHistoryFollowUp {
-            commit,
+            commit: *commit,
             ack: AgentHistoryAppendAck::new(move |appended| settlement.settle(appended)),
         }
     }
@@ -196,7 +196,7 @@ impl AgentService {
         };
         let ack = AgentHistoryAppendAck::new(move |appended| settlement.settle(appended));
         match append {
-            StagedAppend::Commit(commit) => self.inner.history_store.enqueue_commit(commit, ack),
+            StagedAppend::Commit(commit) => self.inner.history_store.enqueue_commit(*commit, ack),
             StagedAppend::Delta(delta) => self.inner.history_store.enqueue_delta(delta, ack),
         }
         receiver
@@ -212,7 +212,7 @@ impl AgentService {
     ) -> Result<(), AgentError> {
         let trace = staged.append.trace();
         let appended = match staged.append {
-            StagedAppend::Commit(commit) => self.inner.history_store.append_commit(commit),
+            StagedAppend::Commit(commit) => self.inner.history_store.append_commit(*commit),
             StagedAppend::Delta(delta) => self.inner.history_store.append_delta(delta),
         };
         trace.end(appended.is_ok());

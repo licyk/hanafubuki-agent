@@ -15,6 +15,10 @@ impl AgentService {
 
     /// Creates a session over a configured provider; the session's context
     /// window is the configured one or the [`crate::model_catalog`]'s.
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "independent inputs that a parameter struct would only regroup"
+    )]
     pub fn create_model_session(
         &self,
         mut config: AgentSessionConfig,

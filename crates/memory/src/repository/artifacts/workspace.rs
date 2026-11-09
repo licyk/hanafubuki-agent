@@ -162,6 +162,10 @@ impl AgentMemoryRepository {
         }
     }
 
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "independent inputs that a parameter struct would only regroup"
+    )]
     fn render_semantic_diff(
         &self,
         target_generation: u64,

@@ -358,7 +358,6 @@ impl AgentApplicationService {
                 safe_mode: instance.options.safe_mode,
                 kernel_faults: kernel_faults.clone(),
                 restart_policy: plugin_restarts,
-                ..AgentHostOptions::default()
             },
         )?);
         unbuilt.built();

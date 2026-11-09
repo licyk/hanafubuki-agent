@@ -120,15 +120,14 @@ impl ResumePicker {
                 new_query.pop();
                 self.set_query(new_query);
             }
-            KeyCode::Char(c) => {
-                // basic text input for search
+            // basic text input for search
+            KeyCode::Char(c)
                 if !key.modifiers.contains(KeyModifiers::CONTROL)
-                    && !key.modifiers.contains(KeyModifiers::ALT)
-                {
-                    let mut new_query = self.query.clone();
-                    new_query.push(c);
-                    self.set_query(new_query);
-                }
+                    && !key.modifiers.contains(KeyModifiers::ALT) =>
+            {
+                let mut new_query = self.query.clone();
+                new_query.push(c);
+                self.set_query(new_query);
             }
             _ => {}
         }
