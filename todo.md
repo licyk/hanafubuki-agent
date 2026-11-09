@@ -141,16 +141,16 @@ The next release with it is 0.2.0 (the headline event is removed).
       them fails with `ProtectedPath` (`crates/agent/src/service/mod.rs`);
       the name and docs or the code are wrong.
 - [ ] D2b (Hanafubuki): its links into this repository's docs re-pointed.
-- [ ] D3: GitHub Pages.
-  - Enable Pages (source: GitHub Actions) in the repository settings, and
-    add a deploy job to `site.yml` on push to main that publishes the
-    built `site/.output/public` (the `site` artifact today; `404.html` is
-    the SPA shell, `.nojekyll` is in it).
-  - Giscus maps `pathname`, which keeps a trailing slash: Pages serves a
-    page at `/hanafubuki-agent/docs/x/`, so the router links with the
-    slash too (`trailingSlash: "always"`, checked locally against a
-    server that redirects as Pages does). Confirm on the live site that
-    a page reached by URL and by in-site navigation opens one thread.
+- [x] D3: GitHub Pages. Pages is enabled (source: GitHub Actions) and
+      `site.yml`'s `deploy` job publishes every push to main
+      (`actions/upload-pages-artifact` 5.0.0, `actions/deploy-pages`
+      5.0.1); the site is https://licyk.github.io/hanafubuki-agent/. On
+      the live site a page reached by URL and by in-site navigation gives
+      the same Giscus term (`hanafubuki-agent/docs/<slug>/`, one thread),
+      and every page carries the Umami script with its website id.
+- [ ] Yours: the next release (0.2.0, since the headline event is gone),
+      and the visual checks of the thinking display in Hanafubuki and in
+      the terminal interface on macOS and Windows terminals.
 
 ## Extraction from Hanafubuki
 
