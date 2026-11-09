@@ -1,5 +1,5 @@
 # The documentation site's checks and build (`site/`, the Bun workspace at the root). It builds for GitHub Pages,
-# under the repository's path; the build is kept as an artifact.
+# under the repository's path; a push to main (or a manual run on it) then deploys the build to Pages.
 name: Site
 
 on:
@@ -27,9 +27,10 @@ on:
 permissions:
   contents: read
 
+# A newer push cancels an older pull-request run; a deploy from main is never cut off half-way.
 concurrency:
   group: site-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   site:
@@ -53,3 +54,22 @@ jobs:
           name: site
           path: site/.output/public
           include-hidden-files: true
+      - if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v5.0.0
+        with:
+          path: site/.output/public
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: site
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5.0.1
