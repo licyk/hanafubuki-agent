@@ -197,13 +197,13 @@ fn prepared_deletion_can_be_cancelled_or_completed_with_the_exact_capability() {
     );
     let created = service.create_session(text_session_config()).unwrap();
     let prepared = service
-        .prepare_session_deletion(created.id, created.generation, created.revision)
+        .prepare_session_deletion(created.id, created.generation, created.revision, &[])
         .unwrap();
     service.cancel_prepared_session_deletion(prepared);
     assert!(service.snapshot(created.id).is_ok());
 
     let prepared = service
-        .prepare_session_deletion(created.id, created.generation, created.revision)
+        .prepare_session_deletion(created.id, created.generation, created.revision, &[])
         .unwrap();
     let confirmed = service
         .complete_session_deletion_confirmed(prepared)
@@ -244,6 +244,7 @@ fn session_creation_uses_a_small_runtime_checkpoint_without_history_snapshot() {
             Vec::new(),
             hanafubuki_agent_kernel::ModelRetryPolicy::default(),
             ModelCompactionCapability::LocalSummary,
+            hanafubuki_agent_kernel::AgentSessionWorkspace::default(),
         )
         .unwrap();
 
@@ -267,7 +268,12 @@ async fn unconfigured_session_is_durable_but_rejects_turn_admission() {
     config.reasoning_effort = None;
     config.context_window_tokens = None;
     config.compaction_capability = ModelCompactionCapability::LocalSummary;
-    let created = service.create_unconfigured_session(config).unwrap();
+    let created = service
+        .create_unconfigured_session(
+            config,
+            hanafubuki_agent_kernel::AgentSessionWorkspace::default(),
+        )
+        .unwrap();
 
     assert!(created.model.is_empty());
     let error = service

@@ -118,7 +118,7 @@ impl AgentService {
                 registries,
                 tool_search_cache: AgentToolSearchIndexCache::default(),
                 tool_spec_cache: Default::default(),
-                history_store,
+                history_store: SessionStores::new(history_store),
                 limits,
                 sessions: SessionTable::default(),
                 next_turn_id: AtomicU64::new(1),

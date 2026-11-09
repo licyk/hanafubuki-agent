@@ -18,8 +18,11 @@ use std::path::{Path, PathBuf};
 
 use super::*;
 use crate::{
-    AgentHistorySortDirection, AgentSessionListRequest, AgentTranscriptPageRequest,
-    McpServerWriteRequest,
+    AgentHistorySortDirection, AgentSessionListRequest, AgentSessionOrigin,
+    AgentSessionParentFilter, AgentTranscriptPageRequest, McpServerWriteRequest,
+};
+use hanafubuki_agent_kernel::{
+    AgentChildSessionBase, AgentChildSessionRequest, AgentSessionPersistence,
 };
 use serde_json::{Map, Value};
 
@@ -203,6 +206,139 @@ async fn reopen_and_continue(corpus: &str, transcript: &str, recorded_prompt: &s
         .is_empty());
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
     request
+}
+
+/// A child session written by the build that recorded the fixture opens
+/// under its parent, keeps its lineage and the workspace it was created in,
+/// and accepts a new turn (`golden/history-lineage/`: a parent and a
+/// subagent child forked from its head, each with one turn).
+#[tokio::test]
+async fn recorded_lineage_history_reopens_and_continues() {
+    if updating_history() {
+        record_lineage_history().await;
+    }
+    let server = FakeServer::start(vec![(assistant_events("Continued."), Duration::ZERO)]).await;
+    let (service, paths) = service_with("golden-history-lineage", |paths, config| {
+        copy_tree(&golden_path("history-lineage"), &agent_history_dir(paths));
+        configure_test_provider(config, &server.base_url, None);
+    });
+    let listed = |parent| {
+        service
+            .list_sessions_page(AgentSessionListRequest {
+                parent,
+                ..AgentSessionListRequest::default()
+            })
+            .unwrap()
+            .sessions
+    };
+    let parents = listed(AgentSessionParentFilter::TopLevel);
+    assert_eq!(
+        parents.len(),
+        1,
+        "the child is not listed beside its parent"
+    );
+    let parent = &parents[0];
+    assert_eq!((parent.parent_session_id, parent.origin), (None, None));
+    assert_eq!(parent.branch.as_deref(), Some("main"));
+    assert!(parent.cwd.is_some());
+    let children = listed(AgentSessionParentFilter::ChildrenOf(parent.session_id));
+    assert_eq!(children.len(), 1);
+    let child = &children[0];
+    assert_eq!(child.parent_session_id, Some(parent.session_id));
+    assert_eq!(child.origin, Some(AgentSessionOrigin::Subagent));
+    assert_eq!(child.forked_from_session_id, Some(parent.session_id));
+    assert_eq!((&child.cwd, &child.branch), (&parent.cwd, &parent.branch));
+
+    let opened = service.open_session(child.session_id, 50).unwrap();
+    assert_golden(
+        "recorded_lineage_history_transcript",
+        &transcript_digest(&serde_json::to_value(&opened.transcript).unwrap()),
+    );
+    let outcome = service
+        .start_turn(child.session_id, "Continue.".to_string().into())
+        .await
+        .unwrap();
+    assert_eq!(outcome.final_answer, "Continued.");
+    let request = String::from_utf8(server.requests()[0].body.clone()).unwrap();
+    assert!(request.contains("Parent question.") && request.contains("Child question."));
+
+    assert!(service
+        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
+        .is_empty());
+    let _ = std::fs::remove_dir_all(paths.app_data_dir);
+}
+
+/// Records `golden/history-lineage/`, its workspace on the branch `main`.
+async fn record_lineage_history() {
+    let server = FakeServer::start(vec![
+        (assistant_events("Parent answer."), Duration::ZERO),
+        (assistant_events("Child answer."), Duration::ZERO),
+    ])
+    .await;
+    let (service, paths) = service_with("golden-lineage-corpus", |paths, config| {
+        configure_test_provider(config, &server.base_url, None);
+        let head = paths.managed_instances_dir.join(".git").join("HEAD");
+        std::fs::create_dir_all(head.parent().unwrap()).unwrap();
+        std::fs::write(head, "ref: refs/heads/main\n").unwrap();
+    });
+    let parent = service
+        .create_session(AgentSessionMode::Default)
+        .await
+        .unwrap();
+    service
+        .start_turn(parent.id, "Parent question.".to_string().into())
+        .await
+        .unwrap();
+    let driver = service.test_session_driver().clone();
+    let child = driver
+        .create_child(AgentChildSessionRequest {
+            parent_session_id: parent.id,
+            origin: AgentSessionOrigin::Subagent,
+            persistence: AgentSessionPersistence::Durable,
+            base: AgentChildSessionBase::ParentHead,
+            context: Vec::new(),
+        })
+        .unwrap();
+    driver
+        .run_turn(child.id, "Child question.".into())
+        .await
+        .unwrap();
+    assert!(service
+        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
+        .is_empty());
+    record_history_fixture(&paths, "history-lineage");
+    let _ = std::fs::remove_dir_all(paths.app_data_dir);
+}
+
+/// The side policy and the boundary follow the history a side conversation
+/// inherits, before its first message.
+#[tokio::test]
+async fn side_conversation_request_matches_golden() {
+    let server = FakeServer::start(vec![(assistant_events("Done."), Duration::ZERO); 2]).await;
+    let (service, paths) = configured_service("golden-side", &server.base_url);
+    let parent = service
+        .create_session(AgentSessionMode::Default)
+        .await
+        .unwrap();
+    service
+        .start_turn(parent.id, "Hello.".to_string().into())
+        .await
+        .unwrap();
+    let side = service.open_side_conversation(parent.id).unwrap();
+    service
+        .start_turn(side.id, "What did you just say?".to_string().into())
+        .await
+        .unwrap();
+
+    let body: Value = serde_json::from_slice(&server.requests()[1].body).unwrap();
+    assert_golden(
+        "side_conversation_request",
+        &normalize(&body, &paths.app_data_dir),
+    );
+    assert!(service
+        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
+        .is_empty());
+    let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }
 
 #[tokio::test]

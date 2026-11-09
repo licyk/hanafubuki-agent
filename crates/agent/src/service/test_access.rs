@@ -1,6 +1,10 @@
 use super::*;
 
 impl AgentApplicationService {
+    pub(crate) fn test_session_driver(&self) -> &AgentSessionDriver {
+        &self.driver
+    }
+
     pub(crate) fn test_executions(&self) -> &AgentExecutionService {
         &self.executions
     }

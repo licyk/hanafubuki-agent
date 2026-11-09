@@ -41,6 +41,10 @@ Third-party notices
     and `src/owner.rs`), are derived from Codex's `codex-rs/worktree`
     (`src/git.rs`, `src/lib.rs`, `src/paths.rs` and `src/metadata.rs`,
     commit `57a808a392`); each says so in its first lines.
+  - the side conversation's policy and boundary
+    (`crates/agent/src/side_conversation.rs`) are derived from Codex's
+    `codex-rs/context-fragments/src/side_conversation.rs` (commit
+    `57a808a392`), as its first lines say.
   Codex's NOTICE and its license follow.
 - Ratatui (https://github.com/ratatui/ratatui), MIT License: Codex's
   `custom_terminal.rs`, ported as `crates/tui/src/custom_terminal.rs`, is

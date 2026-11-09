@@ -40,6 +40,10 @@ impl AgentService {
         let record = SessionRecord {
             session_id,
             forked_from_session_id: Some(request.source_session_id),
+            lineage: SessionLineage {
+                workspace: source.lineage.workspace.clone(),
+                ..SessionLineage::default()
+            },
             // A fork inherits history but not the source's execution clock: the
             // turns it kept were executed by a different session, and the ones
             // it dropped must not be counted at all.
@@ -109,6 +113,10 @@ impl AgentService {
         let record = SessionRecord {
             session_id,
             forked_from_session_id: Some(request.source_session_id),
+            lineage: SessionLineage {
+                workspace: source.lineage.workspace.clone(),
+                ..SessionLineage::default()
+            },
             created_at: now,
             settings: SessionSettings {
                 model: source.settings.model.clone(),

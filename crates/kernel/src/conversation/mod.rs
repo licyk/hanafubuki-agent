@@ -139,6 +139,21 @@ pub struct AgentCompactionCheckpoint {
 pub struct PersistedAgentRuntimeState {
     pub id: AgentSessionId,
     pub forked_from_session_id: Option<AgentSessionId>,
+    /// The session this one is a child of. Like `origin`, `cwd` and
+    /// `branch`, absent from a record written before it existed, and left
+    /// out when none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parent_session_id: Option<AgentSessionId>,
+    #[serde(
+        default,
+        deserialize_with = "crate::model::tolerant_origin",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub origin: Option<crate::AgentSessionOrigin>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cwd: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub branch: Option<String>,
     #[serde(default)]
     pub title: Option<AgentSessionTitle>,
     pub generation: AgentGeneration,
@@ -223,6 +238,19 @@ pub struct AgentSessionListRequest {
     pub lifecycle: AgentSessionLifecycle,
     pub direction: AgentHistorySortDirection,
     pub search: Option<String>,
+    #[serde(default)]
+    pub parent: AgentSessionParentFilter,
+}
+
+/// Which sessions a list holds by their parent.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum AgentSessionParentFilter {
+    /// The sessions without a parent: the list a person picks from.
+    #[default]
+    TopLevel,
+    /// The children of one session.
+    ChildrenOf(AgentSessionId),
 }
 
 impl Default for AgentSessionListRequest {
@@ -233,6 +261,7 @@ impl Default for AgentSessionListRequest {
             lifecycle: AgentSessionLifecycle::Available,
             direction: AgentHistorySortDirection::Descending,
             search: None,
+            parent: AgentSessionParentFilter::TopLevel,
         }
     }
 }

@@ -438,7 +438,7 @@ impl AgentEventSink for PrintEvents {
 - **轮次事件**发给每次调用传入的 `AgentEventSink`：`submit_turn_with_sink`、`steer_turn_with_sink`、`submit_plan_implementation_with_sink`、`compact_session_with_sink`。`emit` 在 Agent 的线程上调用，只能做有界的工作（例如送进通道），不能阻塞。事件类型（`AgentEventKind`）与 `exec --json` 输出的相同，见[JSON 事件](/docs/json-events)。
 - **审批与提问**：`ApprovalRequested` 用 `resolve_approval` 回答，`UserInputRequested` 用 `resolve_user_input` 回答，取消轮次用 `cancel_turn`。
 - **事件日志**：每个会话保留一份有界的事件日志，`events_since(session, after)` 返回某个序号之后的 `AgentEventBatch`，适合断开后补读；`snapshot(session)` 返回会话当前的运行状态。
-- **历史**：`list_sessions_page`（分页、可搜索）、`open_session`（会话及其最近的转录）、`read_transcript_page` 和 `read_turn_page` 读取已提交的 `ConversationItem`。思考内容是 `ConversationItem::Reasoning { text, duration_millis, sampling_step, truncated }`，只用于展示，从不作为模型输入回放。
+- **历史**：`list_sessions_page`（分页、可搜索）、`open_session`（会话及其最近的转录）、`read_transcript_page` 和 `read_turn_page` 读取已提交的 `ConversationItem`。列表只包含没有父会话的会话，除非请求的 `parent` 是 `AgentSessionParentFilter::ChildrenOf(session)`；不带这个字段的请求列出前者。`AgentSessionSummary` 带有会话的 `parent_session_id` 和 `origin`（`AgentSessionOrigin`：`Side`、`Subagent`、`Review`），以及创建时的 `cwd` 和 `branch`，未知或在这些字段出现之前创建的会话为 `None`；运行时快照带有 `parent_session_id`、`origin` 和 `ephemeral`。思考内容是 `ConversationItem::Reasoning { text, duration_millis, sampling_step, truncated }`，只用于展示，从不作为模型输入回放。
 - **运行投影**：`AgentSlot::list_run_projections` 与 `get_run_projection`（活动 ID、轮次号、阶段、时间、错误），Hanafubuki 把它们映射到任务中心。
 
 ## 权限 [#permissions]
@@ -452,6 +452,19 @@ impl AgentEventSink for PrintEvents {
 | `approve_denied_action(session_id, review_id)`  | 用户批准自动审查 `review_id`（来自 `PermissionReviewCompleted { status: Denied }`）拒绝的操作，必须是会话最近十次拒绝之一：提交一条模型和下一次审查都会读到的上下文说明，并把不带轮次 ID 的 `HistoryCommitted` 发给会话最近一个轮次的 sink。它不开始轮次，也不执行任何操作；重试仍会再次审查 |
 
 审查不是这些拒绝之一时，`approve_denied_action` 返回 `ApprovalNotFound`；轮次或压缩运行期间返回 `TurnAlreadyRunning` 或 `CompactionAlreadyRunning`。这三个调用可能加载会话的历史或等待它正在暂存的提交，所以要像 `rename_session` 和 `set_session_mode` 一样在异步运行时之外调用。
+
+## 子会话 [#child-sessions]
+
+子会话记录它的父会话和创建它的原因；子会话和旁路对话是什么，见[会话](/docs/sessions#children)。
+
+| 调用                                    | 作用                                                                                                                                                                             |
+| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `open_side_conversation(parent)`        | 父会话的旁路对话，以 `AgentSessionRuntimeSnapshot` 返回：从父会话最近的回合边界临时分叉出来，模型先读到旁路策略。再次打开返回已打开的那个。父会话还没有轮次时返回 `InvalidInput` |
+| `close_side_conversation(side)`（异步） | 中断旁路对话正在运行的轮次，停止它的后台终端并丢弃它；对不是旁路对话的会话返回 `InvalidInput`                                                                                    |
+| `archive_session`                       | 同时归档会话尚未归档的持久化后代（子会话在先），并关闭它存活的临时子会话                                                                                                         |
+| `delete_session_confirmed`              | 在同一次删除中一并删除会话的持久化后代（不论是否已归档），并关闭它存活的临时子会话；任何一个不能释放，整个删除都会被拒绝                                                         |
+
+旁路对话上的轮次和其他会话一样，通过 `submit_turn_with_sink` 运行，使用各自的 `AgentEventSink`。临时会话从不被列出、归档（`InvalidInput`）或恢复；关闭它、归档或删除它的父会话、或 Agent 停止时，它就消失了。`open_side_conversation` 会阻塞，和 `rename_session` 一样，要在异步运行时之外调用。
 
 ## 功能调用 [#feature-calls]
 

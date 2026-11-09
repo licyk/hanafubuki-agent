@@ -29,6 +29,7 @@ fn opening_a_completed_session_reads_only_runtime_and_the_requested_transcript_p
             Vec::new(),
             hanafubuki_agent_kernel::ModelRetryPolicy::default(),
             ModelCompactionCapability::LocalSummary,
+            hanafubuki_agent_kernel::AgentSessionWorkspace::default(),
         )
         .unwrap();
     drop(creating_service);

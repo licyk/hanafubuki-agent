@@ -166,6 +166,7 @@ impl AgentHost {
     }
 
     /// The registries the kernel plans from; they outlive every plugin.
+    #[cfg(test)]
     pub(crate) fn registries(&self) -> &AgentKernelRegistries {
         &self.registries
     }

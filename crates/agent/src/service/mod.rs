@@ -2,6 +2,7 @@ use super::host::AgentHostOptions;
 use super::host::{
     agent_plugin_manifest, AgentHost, AgentPluginEventSink, AgentPluginInputs, AgentPluginRow,
 };
+use super::session_driver::AgentSessionDriver;
 use super::skills::AgentSkillApplication;
 use super::titles::AgentTitleApplication;
 use super::{
@@ -24,6 +25,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
 mod background_terminals;
+mod children;
 mod features;
 mod history;
 mod mcp;
@@ -98,6 +100,11 @@ pub struct AgentHostPorts {
 pub struct AgentApplicationService {
     config: AgentConfig,
     pub(crate) core: AgentService,
+    /// Drives child sessions, and prepares every turn the facade admits.
+    driver: AgentSessionDriver,
+    /// Held while a side conversation is found or opened, so a parent never
+    /// gets two.
+    side_conversations: Arc<parking_lot::Mutex<()>>,
     executions: AgentExecutionService,
     skills: AgentSkillApplication,
     memory: AgentMemoryApplication,
@@ -338,6 +345,13 @@ impl AgentApplicationService {
             history_store,
             memory_workers.clone(),
         )?;
+        let driver = AgentSessionDriver::new(
+            core.clone(),
+            config.clone(),
+            registries.clone(),
+            executions.clone(),
+            blocking.clone(),
+        );
         let plugin_host = Arc::new(AgentHost::new(
             registries,
             blocking.clone(),
@@ -377,6 +391,8 @@ impl AgentApplicationService {
         Ok(Self {
             config,
             core,
+            driver,
+            side_conversations: Arc::new(parking_lot::Mutex::new(())),
             executions,
             skills,
             memory,

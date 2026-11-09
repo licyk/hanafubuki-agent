@@ -268,6 +268,13 @@ impl From<&str> for AgentTurnInput {
 pub struct AgentSessionRuntimeSnapshot {
     pub id: AgentSessionId,
     pub forked_from_session_id: Option<AgentSessionId>,
+    #[serde(default)]
+    pub parent_session_id: Option<AgentSessionId>,
+    #[serde(default, deserialize_with = "super::tolerant_origin")]
+    pub origin: Option<super::AgentSessionOrigin>,
+    /// Kept in memory only, never in the history store.
+    #[serde(default)]
+    pub ephemeral: bool,
     pub title: Option<AgentSessionTitle>,
     pub generation: AgentGeneration,
     pub revision: AgentRevision,
@@ -295,6 +302,18 @@ pub struct AgentSessionRuntimeSnapshot {
 pub struct AgentSessionSummary {
     pub session_id: AgentSessionId,
     pub forked_from_session_id: Option<AgentSessionId>,
+    /// The session this one is a child of, and why it was made. A summary
+    /// the index kept from before these fields existed reads them as none.
+    #[serde(default)]
+    pub parent_session_id: Option<AgentSessionId>,
+    #[serde(default, deserialize_with = "super::tolerant_origin")]
+    pub origin: Option<super::AgentSessionOrigin>,
+    /// The workspace's primary root, and the Git branch checked out there,
+    /// when the session was created.
+    #[serde(default)]
+    pub cwd: Option<String>,
+    #[serde(default)]
+    pub branch: Option<String>,
     pub generation: AgentGeneration,
     pub revision: AgentRevision,
     pub provider_id: String,
@@ -355,9 +374,10 @@ pub struct ConfirmedAgentSessionDeletion {
     pub revision: AgentRevision,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// A deletion prepared for a session and the descendants deleted with it,
+/// each held at the generation and revision it had when prepared. The
+/// session itself is first.
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PreparedAgentSessionDeletion {
-    pub(crate) session_id: AgentSessionId,
-    pub(crate) generation: AgentGeneration,
-    pub(crate) revision: AgentRevision,
+    pub(crate) sessions: Vec<ConfirmedAgentSessionDeletion>,
 }

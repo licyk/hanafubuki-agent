@@ -80,7 +80,8 @@ struct AgentServiceInner {
     registries: AgentKernelRegistries,
     tool_search_cache: AgentToolSearchIndexCache,
     tool_spec_cache: crate::tool_catalog::AgentToolSpecCache,
-    history_store: Arc<dyn AgentHistoryStore>,
+    /// The durable store, and the memory one of the ephemeral sessions.
+    history_store: SessionStores,
     limits: AgentHardLimits,
     /// The live sessions, one cell each (see `state::cell`).
     sessions: SessionTable,
@@ -342,6 +343,7 @@ mod retry_wait;
 mod sampling;
 mod session;
 mod state;
+mod stores;
 mod tool_execution;
 mod turn;
 mod validation;
@@ -353,4 +355,5 @@ use image_capability::ModelImageCapabilityCache;
 use persistence::*;
 use sampling::*;
 use state::*;
+use stores::SessionStores;
 use validation::*;

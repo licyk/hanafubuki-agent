@@ -1,5 +1,6 @@
 use super::persistence::history_store_error;
 use super::AgentService;
+use crate::conversation::AgentHistoryStore;
 use crate::model::{AgentError, AgentSessionId};
 
 impl AgentService {

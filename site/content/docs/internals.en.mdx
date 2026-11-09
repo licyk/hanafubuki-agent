@@ -104,6 +104,8 @@ A deletion (`delete_sessions_confirmed`) is refused while a session outside it s
 
 Nothing of either session is touched. Restored and opened, such a fork is in the lineage table again; removed, it keeps nothing. The kernel's `prepare_session_deletion` asks the store first (`check_sessions_deletable`), so a refused deletion stops before the application revokes the session's memory or stops its terminals, and its reason is the delete command's error.
 
+A session's persisted descendants are deleted with it, in the same `delete_sessions_confirmed`: the facade lists them through the index's `parent_session_id` (both lifecycles, recursively), loads each, and passes them to `prepare_session_deletion` as the session's `descendants`, which checks the whole set and marks each disposing. A child forked from its parent therefore never refuses the parent's deletion, while a fork outside the set still does. The facade then stops each member's terminals and revokes its memory, and any failure cancels the whole deletion. `complete_session_deletion_confirmed` checks that every member still stands as prepared, with no turn running, before it deletes anything; one that does not cancels the deletion with nothing deleted. Archiving is a cascade of ordinary archives instead, children before their parent, skipping those already archived. Both first close the live ephemeral children of every member.
+
 A deletion that goes ahead first writes an obligation (`trash/delete-<millis>-<n>/obligation.json`), moves the rollouts and each session's whole attachment directory into that directory, removes the sessions' index rows in one transaction, deletes the moved files, and removes the obligation last. An obligation left by a deletion that stopped part-way is completed at the next open; one that does not decode is quarantined.
 
 ### Writers [#history-writers]
@@ -254,6 +256,9 @@ Empty responses, authentication and HTTP errors stay errors. The model listing i
 - **The context window.** Selecting a model again resolves its window again and moves the recorded usage to the new window.
 - **Continuation hooks.** A hook cancelled because its plugin stopped completes as `IgnoredFailure`.
 - **Observers.** `TurnAdmitted` carries the turn's origin (`User` or `Programmatic`) and the provisional title its admission committed; `MemoryContributionChanged` its cause (`Initial`, `User` or `Polluted`). `start_turn` and plan implementations are `Programmatic`.
+- **Child sessions** (`service/session/child.rs`). A child takes its parent's model, configuration, budget policy and workspace; one from the parent's head also takes its title, so the `titles` plugin does not title it, and its memory contribution starts at the default. A durable child is persisted as a fork at the head (`create_fork_at_head`) or before the running turn (`create_fork`), an empty one as a new session. History starts with a turn, so context can only follow inherited history: a child that would start empty with context is refused (`InvalidInput`), as is context that is not continuation context. An ephemeral child of an ephemeral session reads its images from the nearest durable ancestor. A durable child initializes its memory contribution as a fork does; an ephemeral one never does.
+- **Ephemeral sessions.** `close_ephemeral_session` cancels the session's turn or compaction, aborts its pending approvals, waits up to 5 s for it to settle, then removes the cell, its event sink and its in-memory history; a turn that has not settled by then fails on the missing session. Archiving or restoring an ephemeral session is refused (`InvalidInput`). The in-memory store pages a transcript as the durable one does (newest first when descending, index cursors) and filters a turn's page by its turn id, but keeps no revisions: a page is always the session's latest.
+- **The side conversation's items** are two `ContinuationContext` items under the provider `agent`, the hooks `side-conversation` (the policy, in `<side_conversation>` markers) and `side-conversation-boundary` (the boundary), generation 1 (`crates/agent/src/side_conversation.rs`, ported from Codex's `context-fragments/src/side_conversation.rs`). The facade finds a parent's side conversation among the kernel's live ephemeral children (`ephemeral_children`) under a gate, so opening it twice at once still yields one.
 
 ### Thinking [#thinking-details]
 
@@ -276,7 +281,7 @@ Beside [Thinking](/docs/architecture#thinking):
 
 Beside [Data directory](/docs/data-directory#contents):
 
-- `history/active/YYYY/MM/DD/session-<YYYY-MM-DD>T<HH-MM-SS>-<id>.jsonl` (local time of its creation), `history/archived/`, `history/attachments/<id>/blobs/<sha256>.blob`, `history/trash/` and `history/index.sqlite3`. Forks share the parent's prefix through the lineage table.
+- `history/active/YYYY/MM/DD/session-<YYYY-MM-DD>T<HH-MM-SS>-<id>.jsonl` (local time of its creation), `history/archived/`, `history/attachments/<id>/blobs/<sha256>.blob`, `history/trash/` and `history/index.sqlite3`. Forks share the parent's prefix through the lineage table. The index is schema 5, which added `agent_sessions.parent_session_id` (indexed) for the parent filter of the session list; an index of another version, an older one included, is discarded at open and rebuilt from the rollouts, once.
 - `memory/memory.sqlite3`, `memory/ad-hoc-notes.jsonl` (the model's notes), `memory/artifacts/` (the published artifacts, `MEMORY.md` and `memory_summary.md` among them), `memory/staging/` and `memory/reset-trash/`.
 
 ### The memory store [#memory-store]

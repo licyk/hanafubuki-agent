@@ -10,11 +10,12 @@ impl AgentService {
             .default_model
             .clone()
             .ok_or_else(|| AgentError::InvalidInput("no default model provider".to_string()))?;
-        self.create_session_with_model(config, model)
+        self.create_session_with_model(config, model, crate::AgentSessionWorkspace::default())
     }
 
-    /// Creates a session over a configured provider; the session's context
-    /// window is the configured one or the [`crate::model_catalog`]'s.
+    /// Creates a session over a configured provider in `workspace`; the
+    /// session's context window is the configured one or the
+    /// [`crate::model_catalog`]'s.
     #[allow(
         clippy::too_many_arguments,
         reason = "independent inputs that a parameter struct would only regroup"
@@ -28,6 +29,7 @@ impl AgentService {
         headers: Vec<hanafubuki_agent_model_api::ModelHeader>,
         request_retry_policy: ModelRetryPolicy,
         compaction_capability: hanafubuki_agent_model_api::ModelCompactionCapability,
+        workspace: crate::AgentSessionWorkspace,
     ) -> Result<AgentSessionRuntimeSnapshot, AgentError> {
         config.context_window_tokens = self.inner.model_catalog.context_window(
             config.context_window_tokens,
@@ -44,19 +46,21 @@ impl AgentService {
                 request_retry_policy,
                 compaction_capability,
             )?,
+            workspace,
         )
     }
 
     pub fn create_unconfigured_session(
         &self,
         config: AgentSessionConfig,
+        workspace: crate::AgentSessionWorkspace,
     ) -> Result<AgentSessionRuntimeSnapshot, AgentError> {
         if !config.model.is_empty() {
             return Err(AgentError::InvalidInput(
                 "an unconfigured Agent session cannot contain a model".to_string(),
             ));
         }
-        self.create_session_with_model(config, Arc::new(UnavailableRecoveredModel))
+        self.create_session_with_model(config, Arc::new(UnavailableRecoveredModel), workspace)
     }
 
     /// Restores durable sessions without replaying any interrupted operation.
@@ -69,6 +73,7 @@ impl AgentService {
         &self,
         mut config: AgentSessionConfig,
         model: Arc<dyn ModelPort>,
+        workspace: crate::AgentSessionWorkspace,
     ) -> Result<AgentSessionRuntimeSnapshot, AgentError> {
         if !self.inner.accepting.load(Ordering::Acquire) {
             return Err(AgentError::ShuttingDown);
@@ -95,6 +100,10 @@ impl AgentService {
         let record = SessionRecord {
             session_id,
             forked_from_session_id: None,
+            lineage: SessionLineage {
+                workspace,
+                ..SessionLineage::default()
+            },
             created_at: now,
             settings: SessionSettings {
                 model,

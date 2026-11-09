@@ -80,6 +80,9 @@ Agent 是一个**内核**（`hanafubuki-agent-kernel`），拥有会话、轮次
 ## 会话与轮次 [#sessions-and-turns]
 
 - **会话**有配置（Provider、协议、模型、指令、模式、推理强度、上下文窗口、压缩设置）、模式（`Default` 或 `Plan`）、生命周期（`Available`、`Archived`）、标题和记忆贡献模式。会话可以在某个轮次之前或在头部分叉。配置在一个地方规范化（`normalize_session_config`）：创建、每次更新和恢复时。
+- **谱系。** 会话在创建时记录它所在的工作区（主根目录及其 Git 分支）；如果它是子会话，还记录它的父会话和来源（`Side`、`Subagent`、`Review`）。分叉和子会话沿用来源的工作区。`create_child_session` 用父会话的模型和配置创建子会话，可以是空的，也可以从父会话最近的回合边界开始（它的头部，或正在运行的轮次之前的状态），并在创建时一并提交给它的上下文条目（继续上下文）。
+- **临时会话**和其他会话在同一个会话表里，运行轮次的方式也完全一样，区别只在历史存储。内核的存储是 `SessionStores`：它按会话 ID 把每个会话的提交和读取分到持久存储，或分到内存中的 `EphemeralAgentHistoryStore`。所有 ID 都由持久存储分配，两者从不共用；会话列表和恢复只读持久存储，所以临时会话从不被列出或恢复，`close_ephemeral_session`（或进程结束）会丢弃它。它的记录只包含它自己提交的内容，而它的模型历史从继承来的内容开始；继承来的图片通过它们所属的持久会话读取。在每条提交路径上加标志会改动每一条路径；改为路由存储则一条也不用改。
+- **会话驱动器。** `AgentSessionDriver` 是应用驱动子会话的窄端口：创建子会话、运行一个轮次并等待结果、中断、读取最后的回答、关闭（停止它的后台终端，临时会话则丢弃）。外观层接受的每个轮次也由它准备（会话的 Provider、权限模式、世界状态和轮次扩展），所以它运行的轮次和用户的轮次准备得一样。旁路对话是它的第一个调用方；子代理和评审插件以后也会通过它使用会话。
 - **轮次**作为托管的 Tokio 任务运行，经过 `Sampling`、`RunningTools`、`WaitingForUserInput`，以 `Completed`、`Cancelled`、`Failed` 或 `Interrupted` 结束。循环的每次迭代可能自动压缩，用冻结的工具计划对模型采样，运行工具，消费 steering 输入，并询问继续钩子。轮次自身工作中的 panic 让轮次以 `Failed`（`InternalFailure`）结束，会话接受下一个轮次。
 - **持久化先于可见。** 每次修改先持久提交到历史，才对外可见；提交失败恢复内存状态。提交在会话单元（cell）的锁下暂存，当追加被确认时结算：发布持久化的修订号或回滚，然后才发出事件。结算在历史写入线程上的确认中运行，而不是在等待的 future 里，所以 future 被丢弃时它照样发生。
 - **会话之间从不互相等待。** `SessionTable` 只在查找、插入或删除时持有它的锁；每个单元有自己的锁，只在内存中工作时持有，从不跨越 await、历史追加或其他 I/O，也从不同时持有另一个单元的锁。
@@ -184,7 +187,7 @@ schema 遵循同样的按协议规则：支持 `strict_json_schema` 的协议（
 
 数据目录（嵌入时由宿主指定，Hanafubuki 是 `<app_data>/data/agent`）的内容见[数据目录](/docs/data-directory)。
 
-- **历史**（`hanafubuki-agent-history`，格式版本 5）：每个会话一份 JSONL rollout，它是权威的；SQLite 索引是投影，需要时重建。新条目都是增量添加的（`ToolSelection`、`Reasoning`、`ToolCall` 上可选的命名空间），移除的字段是被忽略的未知键。打开时无法接受的东西只损失它自己的会话：另一种格式的 rollout 移入 `.recovery`，无法投影的留在原处并在每次启动时重试修复，会话被隔离；其他会话和 Agent 照常打开。写入经过每个会话一个的写入线程，追加和它的投影写好后才确认。
+- **历史**（`hanafubuki-agent-history`，格式版本 5）：每个会话一份 JSONL rollout，它是权威的；SQLite 索引是投影，需要时重建。新条目和字段都是增量添加的（`ToolSelection`、`Reasoning`、`ToolCall` 上可选的命名空间；运行时状态的 `parentSessionId`、`origin`、`cwd` 和 `branch`，旧记录中没有，读作空），移除的字段是被忽略的未知键。打开时无法接受的东西只损失它自己的会话：另一种格式的 rollout 移入 `.recovery`，无法投影的留在原处并在每次启动时重试修复，会话被隔离；其他会话和 Agent 照常打开。写入经过每个会话一个的写入线程，追加和它的投影写好后才确认。
 - **记忆**（`hanafubuki-agent-memory`，移植自 Codex）分两阶段从会话历史中派生：阶段一用一个小模型提取每个空闲会话，阶段二由整合子 Agent 处理提取结果，发布 `MEMORY.md` 和 `memory_summary.md`。先判断资格再应用上限，两个阶段都有退避（30 秒翻倍到一天），发布先提交数据库再重命名文件。
 - **Skill**（`hanafubuki-agent-skills`）：仓库 Skill 来自每个工作区根目录及其祖先直到 Git 根目录中的 `.agents/skills`，每次读取目录时重新计算；然后是用户根目录和内置的 System Skills。Skill 的正文作为 `ConversationItem::SkillContext` 每个轮次每个 Skill 只交付一次。Skill 从不注册或限制工具。
 - **配置**（`hanafubuki-agent-config`）：三个 TOML 文件，各自一个修订域和一把锁（`config.toml`、`providers.toml`、`mcp.toml`，后两者只有所有者可读）。读取逐字段解码，无效值取默认值，未知键保留，需要修复的文件先复制到 `.recovery/`；写入用 `toml_edit` 编辑磁盘上的文档（注释、布局和未知键得以保留），再原子重命名。独立模式下设置是分层的（profile、受信任的项目文件、`-c`），但只有用户的文件会被修复或写入。详见[配置](/docs/configuration)。

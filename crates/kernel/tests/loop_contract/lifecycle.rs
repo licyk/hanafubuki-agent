@@ -51,6 +51,8 @@ async fn cancellation_commits_one_terminal_event_before_confirmed_deletion() {
         service.delete_session_confirmed(session.id, turn.generation, active_revision),
         Err(AgentError::SessionMutationNotConfirmed)
     );
+    // The refused deletion deleted nothing.
+    assert!(service.open_session(session.id, 10).is_ok());
     service
         .request_turn_cancellation(session.id, turn.id, turn.generation)
         .await
@@ -234,9 +236,9 @@ async fn each_terminal_turn_settles_its_own_duration_on_its_final_history_item()
         .unwrap()
         .transcript
         .items;
+    // A transcript page opened from the latest item is newest first.
     let first_final = first_items
         .iter()
-        .rev()
         .find(|item| item.turn_id == Some(first_turn.id))
         .unwrap();
     assert_eq!(first_final.turn_working_millis, Some(first_elapsed));
@@ -261,8 +263,8 @@ async fn each_terminal_turn_settles_its_own_duration_on_its_final_history_item()
     assert_eq!(
         settled,
         vec![
-            (Some(first_turn.id), first_elapsed),
             (Some(second_turn.id), second_elapsed),
+            (Some(first_turn.id), first_elapsed),
         ],
         "each loop must retain its own duration instead of a session total"
     );
@@ -308,7 +310,6 @@ async fn a_running_turn_has_no_settled_duration_until_terminalization() {
         .transcript
         .items
         .into_iter()
-        .rev()
         .find(|item| item.turn_id == Some(settled.id))
         .unwrap();
     assert_eq!(

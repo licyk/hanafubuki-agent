@@ -96,6 +96,8 @@ icon: Microscope
 
 两边会话的任何内容都不改动。这样的分叉被恢复并打开后重新进入谱系表；被删除后则不再保留任何东西。内核的 `prepare_session_deletion` 先询问存储（`check_sessions_deletable`），所以被拒绝的删除在应用撤销会话的记忆或停止它的终端之前就停下，拒绝的原因就是删除命令的错误。
 
+会话的持久化后代随它一起删除，在同一次 `delete_sessions_confirmed` 中：外观层通过索引的 `parent_session_id` 列出它们（两种生命周期，递归），逐个加载，并作为会话的 `descendants` 传给 `prepare_session_deletion`，它检查整个集合并把每个成员标记为正在释放。所以从父会话分叉出来的子会话从不阻止父会话的删除，而集合之外的分叉仍然会。外观层随后停止每个成员的终端、撤销它的记忆，任何一步失败都会取消整个删除。`complete_session_deletion_confirmed` 在删除任何东西之前，先确认每个成员仍处于准备好的状态、没有正在运行的轮次；有一个不满足就取消删除，什么都不删。归档则是逐个普通归档的级联，子会话先于父会话，已归档的跳过。两者都会先关闭每个成员仍然存活的临时子会话。
+
 获准的删除先写一份删除记录（`trash/delete-<millis>-<n>/obligation.json`），把 rollout 和每个会话的整个附件目录移入该目录，在一个事务中删除会话的索引行，删除移入的文件，最后删除这份记录。中途停止的删除留下的记录在下次打开时完成；无法解码的记录被隔离。
 
 ### 写入线程 [#history-writers]
@@ -246,6 +248,9 @@ Provider 的流是外部输入（[模型 API](/docs/architecture#the-model-api)�
 - **上下文窗口。** 再次选择模型会重新解析它的窗口，并把已记录的用量移到新窗口上。
 - **继续钩子。** 因插件停止而被取消的钩子以 `IgnoredFailure` 完成。
 - **观察者。** `TurnAdmitted` 带有轮次的来源（`User` 或 `Programmatic`）和准入时提交的临时标题；`MemoryContributionChanged` 带有原因（`Initial`、`User` 或 `Polluted`）。`start_turn` 和计划实施是 `Programmatic` 的。
+- **子会话**（`service/session/child.rs`）。子会话沿用父会话的模型、配置、预算策略和工作区；从父会话头部开始的子会话还沿用它的标题，所以 `titles` 插件不会给它起标题；它的记忆贡献从默认值开始。持久子会话作为头部分叉（`create_fork_at_head`）或运行中轮次之前的分叉（`create_fork`）持久化，空的子会话作为新会话持久化。历史以轮次开始，所以上下文只能跟在继承来的历史之后：会以空历史开始却带有上下文的子会话会被拒绝（`InvalidInput`），不是继续上下文的上下文也一样。临时会话的临时子会话从最近的持久祖先读取图片。持久子会话像分叉一样初始化记忆贡献，临时子会话从不初始化。
+- **临时会话。** `close_ephemeral_session` 取消会话的轮次或压缩，中止它待处理的审批，最多等待 5 秒让它结算，然后移除单元、它的事件接收器和内存中的历史；到时仍未结算的轮次会因会话不存在而失败。归档或恢复临时会话会被拒绝（`InvalidInput`）。内存存储像持久存储一样对记录分页（降序时最新的在前，游标是下标），并按轮次 ID 过滤轮次页，但不保留修订号：一页总是会话最新的状态。
+- **旁路对话的条目**是两个 `ContinuationContext` 条目，provider 为 `agent`，钩子分别是 `side-conversation`（策略，包在 `<side_conversation>` 标记中）和 `side-conversation-boundary`（边界），代次为 1（`crates/agent/src/side_conversation.rs`，移植自 Codex 的 `context-fragments/src/side_conversation.rs`）。外观层在一道闸门下从内核存活的临时子会话（`ephemeral_children`）中找父会话的旁路对话，所以同时打开两次也只会得到一个。
 
 ### 思考 [#thinking-details]
 
@@ -268,7 +273,7 @@ Provider 的流是外部输入（[模型 API](/docs/architecture#the-model-api)�
 
 [数据目录](/docs/data-directory#contents)之外的细节：
 
-- `history/active/YYYY/MM/DD/session-<YYYY-MM-DD>T<HH-MM-SS>-<id>.jsonl`（创建时的本地时间）、`history/archived/`、`history/attachments/<id>/blobs/<sha256>.blob`、`history/trash/` 和 `history/index.sqlite3`。分叉通过谱系表共享父会话的前缀。
+- `history/active/YYYY/MM/DD/session-<YYYY-MM-DD>T<HH-MM-SS>-<id>.jsonl`（创建时的本地时间）、`history/archived/`、`history/attachments/<id>/blobs/<sha256>.blob`、`history/trash/` 和 `history/index.sqlite3`。分叉通过谱系表共享父会话的前缀。索引的模式版本是 5，它为会话列表的父会话过滤增加了 `agent_sessions.parent_session_id`（带索引）；其他版本的索引（包括更旧的）在打开时被丢弃，并从 rollout 重建一次。
 - `memory/memory.sqlite3`、`memory/ad-hoc-notes.jsonl`（模型留下的笔记）、`memory/artifacts/`（发布的制品，包括 `MEMORY.md` 和 `memory_summary.md`）、`memory/staging/` 和 `memory/reset-trash/`。
 
 ### 记忆存储 [#memory-store]

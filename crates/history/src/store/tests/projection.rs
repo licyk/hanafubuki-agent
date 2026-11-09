@@ -236,6 +236,7 @@ fn deleting_sqlite_rebuilds_the_projection_from_jsonl() {
             lifecycle: AgentSessionLifecycle::Available,
             direction: AgentHistorySortDirection::Descending,
             search: None,
+            parent: Default::default(),
         })
         .unwrap();
     assert_eq!(sessions.sessions.len(), 1);
@@ -470,6 +471,56 @@ fn incompatible_sqlite_schema_is_discarded_and_rebuilt_from_jsonl() {
         vec![item(1, 0, "survives index reset")]
     );
     assert!(recovery.join("index.sqlite3.1.1.invalid").is_file());
+    assert!(rebuilt_workers
+        .shutdown(Instant::now() + Duration::from_secs(2))
+        .is_empty());
+}
+
+/// An index of schema 4, without the parent column, is rebuilt at open,
+/// and the session list's parent filter then works.
+#[test]
+fn a_schema_4_index_is_rebuilt_with_the_parent_column() {
+    let (_temporary, paths, workers, store) = open_store();
+    let session_id = store.allocate_session_id().unwrap();
+    store
+        .create_session(AgentConversationCommit {
+            runtime: runtime(session_id, 0, 2),
+            history_mutations: vec![AgentHistoryMutation::AppendItem {
+                item: item(1, 0, "kept"),
+            }],
+        })
+        .unwrap();
+    store.shutdown_session(session_id).unwrap();
+    assert!(workers
+        .shutdown(Instant::now() + Duration::from_secs(2))
+        .is_empty());
+    drop(store);
+    let connection = rusqlite::Connection::open(&paths.sqlite_database).unwrap();
+    connection
+        .execute_batch(
+            "DROP INDEX idx_agent_sessions_parent;
+             ALTER TABLE agent_sessions DROP COLUMN parent_session_id;
+             PRAGMA user_version = 4;",
+        )
+        .unwrap();
+    drop(connection);
+
+    let rebuilt_workers = BackgroundWorkerGroup::default();
+    let rebuilt = FileAgentHistoryStore::open(paths, rebuilt_workers.clone()).unwrap();
+    let listed = rebuilt
+        .list_sessions_page(AgentSessionListRequest::default())
+        .unwrap()
+        .sessions;
+    assert_eq!(listed.len(), 1);
+    assert_eq!(listed[0].session_id, session_id);
+    assert!(rebuilt
+        .list_sessions_page(AgentSessionListRequest {
+            parent: hanafubuki_agent_kernel::AgentSessionParentFilter::ChildrenOf(session_id),
+            ..AgentSessionListRequest::default()
+        })
+        .unwrap()
+        .sessions
+        .is_empty());
     assert!(rebuilt_workers
         .shutdown(Instant::now() + Duration::from_secs(2))
         .is_empty());

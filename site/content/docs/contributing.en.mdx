@@ -105,7 +105,8 @@ Some code is derived from other projects and keeps their attribution as their li
   - `crates/config/src/overrides.rs` and its tests, from `codex-rs/common/src/config_override.rs`;
   - the `recap` plugin's prompt and conversation selection (`crates/agent/src/plugins/recap/prompt.rs`, `history.rs`), from `codex-rs/context-fragments/src/recap_prompt.rs`, `codex-rs/tui/src/app/recap.rs` and `recap_history.rs` (`57a808a392`);
   - the MCP OAuth loopback (`crates/agent/src/service/mcp/oauth_login.rs`), from `codex-rs/rmcp-client/src/perform_oauth_login.rs` (`57a808a392`);
-  - the Git worktrees (`crates/worktree/src`: `git.rs`, `manager.rs`, `owner.rs`), from `codex-rs/worktree` (`57a808a392`).
+  - the Git worktrees (`crates/worktree/src`: `git.rs`, `manager.rs`, `owner.rs`), from `codex-rs/worktree` (`57a808a392`);
+  - the side conversation's policy and boundary (`crates/agent/src/side_conversation.rs`), from `codex-rs/context-fragments/src/side_conversation.rs` (`57a808a392`).
 - **Ratatui** (MIT): `crates/tui/src/custom_terminal.rs` is derived from `ratatui::Terminal` and keeps its MIT header.
 
 `cargo xtask check-notices` checks that attribution against `architecture/notices-policy.toml`:

@@ -15,6 +15,9 @@ pub(in crate::service) fn snapshot(
     AgentSessionRuntimeSnapshot {
         id: session_id,
         forked_from_session_id: record.forked_from_session_id,
+        parent_session_id: record.lineage.parent_session_id,
+        origin: record.lineage.origin,
+        ephemeral: record.lineage.ephemeral,
         title: record.settings.title.clone(),
         generation: record.status.generation,
         revision: AgentRevision::new(record.status.revision),
@@ -79,6 +82,9 @@ pub(in crate::service) fn persisted_runtime_snapshot(
     AgentSessionRuntimeSnapshot {
         id: runtime.id,
         forked_from_session_id: runtime.forked_from_session_id,
+        parent_session_id: runtime.parent_session_id,
+        origin: runtime.origin,
+        ephemeral: false,
         title: runtime.title,
         generation: runtime.generation,
         revision: runtime.revision,
@@ -128,6 +134,10 @@ pub(in crate::service) fn session_summary(
     AgentSessionSummary {
         session_id,
         forked_from_session_id: record.forked_from_session_id,
+        parent_session_id: record.lineage.parent_session_id,
+        origin: record.lineage.origin,
+        cwd: record.lineage.workspace.cwd.clone(),
+        branch: record.lineage.workspace.branch.clone(),
         generation: record.status.generation,
         revision: AgentRevision::new(record.status.revision),
         provider_id: record.settings.config.provider_id.clone(),

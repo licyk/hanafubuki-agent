@@ -1,5 +1,9 @@
 use super::cursor::{decode_cursor, encode_cursor, validate_page_size, SessionCursor};
 use crate::store::*;
+use hanafubuki_agent_kernel::AgentSessionParentFilter;
+
+/// Version 2 holds the parent filter.
+const SESSION_CURSOR_VERSION: u32 = 2;
 
 impl FileAgentHistoryStore {
     pub(in crate::store) fn lookup_rollout_path(
@@ -155,10 +159,11 @@ impl FileAgentHistoryStore {
             .map(decode_cursor::<SessionCursor>)
             .transpose()?;
         if let Some(cursor) = &cursor {
-            if cursor.version != 1
+            if cursor.version != SESSION_CURSOR_VERSION
                 || cursor.lifecycle != request.lifecycle
                 || cursor.direction != request.direction
                 || cursor.search != request.search
+                || cursor.parent != request.parent
             {
                 return Err(AgentHistoryStoreError::InvalidCursor(
                     "session cursor does not match the request".to_string(),
@@ -178,53 +183,44 @@ impl FileAgentHistoryStore {
         let mut sql = String::from(
             "SELECT updated_at, session_id, summary_json FROM agent_sessions WHERE lifecycle = ?",
         );
-        if search.is_some() {
-            sql.push_str(" AND title LIKE ?");
+        let mut values = vec![Value::Text(lifecycle.to_string())];
+        match request.parent {
+            AgentSessionParentFilter::TopLevel => sql.push_str(" AND parent_session_id IS NULL"),
+            AgentSessionParentFilter::ChildrenOf(parent) => {
+                sql.push_str(" AND parent_session_id = ?");
+                values.push(Value::Integer(to_i64(parent.value(), "session id")?));
+            }
         }
-        if cursor.is_some() {
+        if let Some(search) = search {
+            sql.push_str(" AND title LIKE ?");
+            values.push(Value::Text(search));
+        }
+        if let Some(cursor) = &cursor {
             sql.push_str(&format!(
                 " AND (updated_at {comparator} ? OR (updated_at = ? AND session_id {comparator} ?))"
             ));
+            values.push(Value::Text(cursor.updated_at.to_string()));
+            values.push(Value::Text(cursor.updated_at.to_string()));
+            values.push(Value::Integer(to_i64(
+                cursor.session_id.value(),
+                "session id",
+            )?));
         }
         sql.push_str(&format!(
             " ORDER BY updated_at {order}, session_id {order} LIMIT ?"
         ));
-        let _database = self.inner.database_gate.lock();
-        let connection = self.connection()?;
-        let mut statement = connection.prepare(&sql).map_err(database_error)?;
-        let limit = to_i64(
+        values.push(Value::Integer(to_i64(
             request.page_size.checked_add(1).ok_or_else(|| {
                 AgentHistoryStoreError::InvalidCursor("page size overflow".to_string())
             })? as u64,
             "page size",
-        )?;
-        let mut rows = match (&search, &cursor) {
-            (Some(search), Some(cursor)) => statement
-                .query(params![
-                    lifecycle,
-                    search,
-                    cursor.updated_at.to_string(),
-                    cursor.updated_at.to_string(),
-                    to_i64(cursor.session_id.value(), "session id")?,
-                    limit,
-                ])
-                .map_err(database_error)?,
-            (Some(search), None) => statement
-                .query(params![lifecycle, search, limit])
-                .map_err(database_error)?,
-            (None, Some(cursor)) => statement
-                .query(params![
-                    lifecycle,
-                    cursor.updated_at.to_string(),
-                    cursor.updated_at.to_string(),
-                    to_i64(cursor.session_id.value(), "session id")?,
-                    limit,
-                ])
-                .map_err(database_error)?,
-            (None, None) => statement
-                .query(params![lifecycle, limit])
-                .map_err(database_error)?,
-        };
+        )?));
+        let _database = self.inner.database_gate.lock();
+        let connection = self.connection()?;
+        let mut statement = connection.prepare(&sql).map_err(database_error)?;
+        let mut rows = statement
+            .query(params_from_iter(values.iter()))
+            .map_err(database_error)?;
         // A row whose summary does not decode keeps its place in the paging
         // (the cursor may stop on it) but is left out of the page.
         let mut entries = Vec::new();
@@ -258,12 +254,13 @@ impl FileAgentHistoryStore {
                 .last()
                 .map(|(updated_at, session_id, _)| {
                     encode_cursor(&SessionCursor {
-                        version: 1,
+                        version: SESSION_CURSOR_VERSION,
                         updated_at: *updated_at,
                         session_id: *session_id,
                         lifecycle: request.lifecycle,
                         direction: request.direction,
                         search: request.search.clone(),
+                        parent: request.parent,
                     })
                 })
                 .transpose()?

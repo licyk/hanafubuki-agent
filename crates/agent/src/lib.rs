@@ -33,7 +33,10 @@ pub mod panic {
 }
 mod plugins;
 mod service;
+mod session_driver;
+mod session_workspace;
 mod shutdown;
+mod side_conversation;
 mod skill_watcher;
 mod skills;
 mod slot;
@@ -145,14 +148,15 @@ pub use hanafubuki_agent_kernel::{
     AgentPlanImplementationRequest, AgentReasoningId, AgentReasoningPhase, AgentReasoningSnapshot,
     AgentRevision, AgentSessionForkOutcome, AgentSessionForkRequest, AgentSessionHeadForkOutcome,
     AgentSessionHeadForkRequest, AgentSessionId, AgentSessionLifecycle, AgentSessionListRequest,
-    AgentSessionMode, AgentSessionOpenResult, AgentSessionPage, AgentSessionRuntimeSnapshot,
-    AgentSessionSummary, AgentSessionTitle, AgentSessionTitleRenameRequest,
-    AgentSessionTitleSource, AgentSkillRef, AgentSteeringAccepted, AgentTranscriptPage,
-    AgentTranscriptPageRequest, AgentTurnAccepted, AgentTurnCancellationOutcome, AgentTurnId,
-    AgentTurnInput, AgentTurnOutcome, AgentTurnPageRequest, AgentTurnPhase,
-    AgentTurnTerminalReason, AgentUserInputAccepted, AgentUserInputAnswer, AgentUserInputRequest,
-    AgentUserInputRequestId, ApprovalRequest, ApprovalRequestId, ApprovalUserDecision,
-    ConfirmedAgentSessionDeletion, ConversationItem, ModelCatalogEntry, MAXIMUM_HOST_CONTEXT_BYTES,
+    AgentSessionMode, AgentSessionOpenResult, AgentSessionOrigin, AgentSessionPage,
+    AgentSessionParentFilter, AgentSessionRuntimeSnapshot, AgentSessionSummary, AgentSessionTitle,
+    AgentSessionTitleRenameRequest, AgentSessionTitleSource, AgentSkillRef, AgentSteeringAccepted,
+    AgentTranscriptPage, AgentTranscriptPageRequest, AgentTurnAccepted,
+    AgentTurnCancellationOutcome, AgentTurnId, AgentTurnInput, AgentTurnOutcome,
+    AgentTurnPageRequest, AgentTurnPhase, AgentTurnTerminalReason, AgentUserInputAccepted,
+    AgentUserInputAnswer, AgentUserInputRequest, AgentUserInputRequestId, ApprovalRequest,
+    ApprovalRequestId, ApprovalUserDecision, ConfirmedAgentSessionDeletion, ConversationItem,
+    ModelCatalogEntry, MAXIMUM_HOST_CONTEXT_BYTES,
 };
 pub use hanafubuki_agent_kernel::{AgentQuarantinedSession, AgentRecoveryReport};
 use hanafubuki_agent_kernel::{AgentService, ModelCompactionCapability};

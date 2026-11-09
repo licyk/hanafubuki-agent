@@ -1,5 +1,6 @@
 use super::*;
 
+mod child;
 mod configuration;
 mod create;
 mod events;

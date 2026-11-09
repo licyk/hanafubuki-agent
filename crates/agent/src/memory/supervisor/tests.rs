@@ -267,6 +267,10 @@ fn idle_session(
     let runtime = hanafubuki_agent_kernel::PersistedAgentRuntimeState {
         id: session_id,
         forked_from_session_id: None,
+        parent_session_id: None,
+        origin: None,
+        cwd: None,
+        branch: None,
         title: None,
         generation: hanafubuki_agent_kernel::AgentGeneration::new(0),
         revision: hanafubuki_agent_kernel::AgentRevision::new(revision),

@@ -54,6 +54,7 @@ fn activated_session_continues_activity_ids_after_the_event_journal_resets() {
             Vec::new(),
             hanafubuki_agent_kernel::ModelRetryPolicy::default(),
             ModelCompactionCapability::LocalSummary,
+            hanafubuki_agent_kernel::AgentSessionWorkspace::default(),
         )
         .unwrap();
     service
@@ -382,6 +383,7 @@ fn store_with_corrupted_session(
             Vec::new(),
             hanafubuki_agent_kernel::ModelRetryPolicy::default(),
             ModelCompactionCapability::LocalSummary,
+            hanafubuki_agent_kernel::AgentSessionWorkspace::default(),
         )
         .unwrap();
     drop(service);
@@ -458,6 +460,7 @@ fn a_quarantined_session_does_not_stop_the_others_and_keeps_its_stored_state() {
             Vec::new(),
             hanafubuki_agent_kernel::ModelRetryPolicy::default(),
             ModelCompactionCapability::LocalSummary,
+            hanafubuki_agent_kernel::AgentSessionWorkspace::default(),
         )
         .unwrap()
         .id;
@@ -554,6 +557,7 @@ async fn the_context_window_is_resolved_at_creation_and_model_selection_and_reco
                 Vec::new(),
                 hanafubuki_agent_kernel::ModelRetryPolicy::default(),
                 ModelCompactionCapability::LocalSummary,
+                hanafubuki_agent_kernel::AgentSessionWorkspace::default(),
             )
             .unwrap()
     };

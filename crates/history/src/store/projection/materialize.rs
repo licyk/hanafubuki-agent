@@ -112,8 +112,8 @@ fn project_record(
 INSERT INTO agent_sessions(
     session_id, rollout_path, created_at, updated_at, lifecycle, generation, revision, checkpoint_revision,
     model, mode, title, latest_turn_id, latest_turn_phase, recovery_needed,
-    runtime_json, summary_json, forked_from_session_id, archived_at
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    runtime_json, summary_json, forked_from_session_id, archived_at, parent_session_id
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(session_id) DO UPDATE SET
     rollout_path = excluded.rollout_path,
     updated_at = excluded.updated_at,
@@ -130,7 +130,8 @@ ON CONFLICT(session_id) DO UPDATE SET
     runtime_json = excluded.runtime_json,
     summary_json = excluded.summary_json,
     forked_from_session_id = excluded.forked_from_session_id,
-    archived_at = excluded.archived_at
+    archived_at = excluded.archived_at,
+    parent_session_id = excluded.parent_session_id
             "#,
                 params![
                     to_i64(runtime.id.value(), "session id")?,
@@ -162,6 +163,10 @@ ON CONFLICT(session_id) DO UPDATE SET
                         .transpose()?,
                     (runtime.lifecycle == AgentSessionLifecycle::Archived)
                         .then(|| runtime.updated_at.to_string()),
+                    runtime
+                        .parent_session_id
+                        .map(|id| to_i64(id.value(), "parent session id"))
+                        .transpose()?,
                 ],
             )
             .map_err(database_error)?;
@@ -363,6 +368,10 @@ fn session_summary(
     AgentSessionSummary {
         session_id: runtime.id,
         forked_from_session_id: runtime.forked_from_session_id,
+        parent_session_id: runtime.parent_session_id,
+        origin: runtime.origin,
+        cwd: runtime.cwd.clone(),
+        branch: runtime.branch.clone(),
         generation: runtime.generation,
         revision: runtime.revision,
         provider_id: runtime.config.provider_id.clone(),

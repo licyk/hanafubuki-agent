@@ -347,6 +347,10 @@ pub(super) fn conversation_commit(
         runtime: PersistedAgentRuntimeState {
             id: session_id,
             forked_from_session_id: record.forked_from_session_id,
+            parent_session_id: record.lineage.parent_session_id,
+            origin: record.lineage.origin,
+            cwd: record.lineage.workspace.cwd.clone(),
+            branch: record.lineage.workspace.branch.clone(),
             title: record.settings.title.clone(),
             generation: record.status.generation,
             revision: AgentRevision::new(record.status.revision),

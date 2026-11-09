@@ -135,6 +135,11 @@ impl AgentService {
         expected: AgentSessionLifecycle,
         next: AgentSessionLifecycle,
     ) -> Result<AgentSessionSummary, AgentError> {
+        if self.inner.history_store.is_ephemeral(session_id) {
+            return Err(AgentError::InvalidInput(format!(
+                "Agent session {session_id} is ephemeral: it is closed, never archived"
+            )));
+        }
         let cell = self.session(session_id)?;
         let mut guard = cell.lock_after_persistence_blocking()?;
         let record = &mut *guard;
@@ -194,91 +199,132 @@ impl AgentService {
         generation: AgentGeneration,
         revision: AgentRevision,
     ) -> Result<ConfirmedAgentSessionDeletion, AgentError> {
-        let prepared = self.prepare_session_deletion(session_id, generation, revision)?;
+        let prepared = self.prepare_session_deletion(session_id, generation, revision, &[])?;
         self.complete_session_deletion_confirmed(prepared)
     }
 
+    /// Prepares deleting `session_id` and, in the same deletion, the loaded
+    /// `descendants` at their current revisions.
     pub fn prepare_session_deletion(
         &self,
         session_id: AgentSessionId,
         generation: AgentGeneration,
         revision: AgentRevision,
+        descendants: &[AgentSessionId],
     ) -> Result<PreparedAgentSessionDeletion, AgentError> {
-        let cell = self.session(session_id)?;
+        let session_ids = std::iter::once(session_id)
+            .chain(descendants.iter().copied())
+            .collect::<Vec<_>>();
+        let cells = session_ids
+            .iter()
+            .map(|session_id| self.session(*session_id))
+            .collect::<Result<Vec<_>, _>>()?;
         // A fork, or a kept file the index does not hold, that still needs
-        // the session refuses the deletion here, before the caller lets go of
-        // anything else of it (its memory, its terminals).
+        // a session outside the deletion refuses it here, before the caller
+        // lets go of anything else of them (their memory, their terminals).
         self.inner
             .history_store
-            .check_sessions_deletable(&[session_id])
+            .check_sessions_deletable(&session_ids)
             .map_err(|error| AgentError::Persistence(error.to_string()))?;
-        let mut record = cell.lock_after_persistence_blocking()?;
-        validate_session_mutation(&record, generation, revision)?;
-        record.status.disposing = true;
-        Ok(PreparedAgentSessionDeletion {
-            session_id,
-            generation,
-            revision,
-        })
+        let mut prepared = PreparedAgentSessionDeletion {
+            sessions: Vec::with_capacity(cells.len()),
+        };
+        for cell in &cells {
+            let marked = cell
+                .lock_after_persistence_blocking()
+                .and_then(|mut record| {
+                    if cell.session_id() == session_id {
+                        validate_session_mutation(&record, generation, revision)?;
+                    }
+                    record.status.disposing = true;
+                    Ok(ConfirmedAgentSessionDeletion {
+                        session_id: cell.session_id(),
+                        generation: record.status.generation,
+                        revision: AgentRevision::new(record.status.revision),
+                    })
+                });
+            match marked {
+                Ok(member) => prepared.sessions.push(member),
+                Err(error) => {
+                    self.cancel_prepared_session_deletion(prepared);
+                    return Err(error);
+                }
+            }
+        }
+        Ok(prepared)
     }
 
     pub fn cancel_prepared_session_deletion(&self, prepared: PreparedAgentSessionDeletion) {
-        let Some(cell) = self.inner.sessions.find(prepared.session_id) else {
-            return;
-        };
-        let Ok(mut record) = cell.lock_after_persistence_blocking() else {
-            return;
-        };
-        if record.status.generation == prepared.generation
-            && record.status.revision == prepared.revision.value()
-            && record.status.disposing
-        {
-            record.status.disposing = false;
+        for member in prepared.sessions {
+            let Some(cell) = self.inner.sessions.find(member.session_id) else {
+                continue;
+            };
+            let Ok(mut record) = cell.lock_after_persistence_blocking() else {
+                continue;
+            };
+            if is_prepared(&record, &member) {
+                record.status.disposing = false;
+            }
         }
     }
 
+    /// Deletes every session of `prepared` from the history store together,
+    /// then lets go of each. Returns the first, the one the deletion was
+    /// prepared for. Every member is checked first, so nothing is deleted
+    /// unless all of them still stand as prepared (a disposing session
+    /// admits no turn, so none can start meanwhile).
     pub fn complete_session_deletion_confirmed(
         &self,
         prepared: PreparedAgentSessionDeletion,
     ) -> Result<ConfirmedAgentSessionDeletion, AgentError> {
-        let session_id = prepared.session_id;
-        let generation = prepared.generation;
-        let revision = prepared.revision;
+        let mut cells = Vec::with_capacity(prepared.sessions.len());
+        for member in prepared.sessions.clone() {
+            let cell = match self.session(member.session_id) {
+                Ok(cell) => cell,
+                Err(error) => {
+                    self.cancel_prepared_session_deletion(prepared);
+                    return Err(error);
+                }
+            };
+            let ready = cell.lock().is_ok_and(|record| {
+                is_prepared(&record, &member)
+                    && !record
+                        .runtime
+                        .turn
+                        .as_ref()
+                        .is_some_and(|turn| !turn.phase.is_terminal())
+            });
+            if !ready {
+                self.cancel_prepared_session_deletion(prepared);
+                return Err(AgentError::SessionMutationNotConfirmed);
+            }
+            cells.push(cell);
+        }
+        let session_ids = prepared
+            .sessions
+            .iter()
+            .map(|member| member.session_id)
+            .collect::<Vec<_>>();
         if let Err(error) = self
             .inner
             .history_store
-            .delete_sessions_confirmed(&[session_id])
+            .delete_sessions_confirmed(&session_ids)
         {
-            if let Some(cell) = self.inner.sessions.find(session_id) {
-                if let Ok(mut record) = cell.lock() {
-                    if record.status.generation == generation
-                        && record.status.revision == revision.value()
-                    {
-                        record.status.disposing = false;
-                    }
-                }
-            }
+            self.cancel_prepared_session_deletion(prepared);
             return Err(AgentError::Persistence(error.to_string()));
         }
-        let cell = self.session(session_id)?;
-        let record = cell.lock()?;
-        if record.status.generation != generation
-            || record.status.revision != revision.value()
-            || !record.status.disposing
-            || record
-                .runtime
-                .turn
-                .as_ref()
-                .is_some_and(|turn| !turn.phase.is_terminal())
-        {
-            return Err(AgentError::SessionMutationNotConfirmed);
+        for cell in cells {
+            if let Ok(record) = cell.lock() {
+                self.inner.sessions.remove(record);
+            }
+            self.inner.event_sinks.lock().remove(&cell.session_id());
         }
-        self.inner.sessions.remove(record);
-        self.inner.event_sinks.lock().remove(&session_id);
-        Ok(ConfirmedAgentSessionDeletion {
-            session_id,
-            generation,
-            revision,
-        })
+        Ok(prepared.sessions[0])
     }
+}
+
+fn is_prepared(record: &SessionRecord, member: &ConfirmedAgentSessionDeletion) -> bool {
+    record.status.generation == member.generation
+        && record.status.revision == member.revision.value()
+        && record.status.disposing
 }

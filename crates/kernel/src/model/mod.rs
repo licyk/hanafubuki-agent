@@ -2,6 +2,7 @@ mod activity;
 mod conversation_item;
 mod error;
 mod event;
+mod lineage;
 mod reasoning;
 mod session;
 mod turn;
@@ -28,6 +29,11 @@ pub use hanafubuki_agent_contracts::{
     AgentModelSessionGeneration, AgentReasoningId, AgentRevision, AgentSessionId, AgentSessionMode,
     AgentSteeringSequence, AgentToolPresentation, AgentToolProgressUpdate, AgentTurnId,
     AgentTurnOrigin, AgentUserInputRequestId, ContextSectionKind, PreparedAgentImage,
+};
+pub(crate) use lineage::tolerant_origin;
+pub use lineage::{
+    AgentChildSessionBase, AgentChildSessionRequest, AgentSessionOrigin, AgentSessionPersistence,
+    AgentSessionWorkspace,
 };
 pub(crate) use reasoning::AgentReasoningTransitionError;
 pub use reasoning::{AgentReasoningCheckpoint, AgentReasoningPhase, AgentReasoningSnapshot};

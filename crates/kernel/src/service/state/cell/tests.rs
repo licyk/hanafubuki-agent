@@ -27,6 +27,7 @@ mod fixtures {
                         Vec::new(),
                         hanafubuki_agent_model_api::ModelRetryPolicy::default(),
                         hanafubuki_agent_model_api::ModelCompactionCapability::LocalSummary,
+                        crate::AgentSessionWorkspace::default(),
                     )
                     .unwrap()
                     .id

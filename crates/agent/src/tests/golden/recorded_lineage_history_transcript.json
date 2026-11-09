@@ -1,0 +1,16 @@
+[
+  "text=Child answer.",
+  "type=assistant_message",
+  "text=Child question.",
+  "type=user_message",
+  "type=turn_start",
+  "text=Parent answer.",
+  "type=assistant_message",
+  "text=Parent question.",
+  "type=user_message",
+  "type=world_state_update",
+  "kind=environment",
+  "kind=permission_mode",
+  "kind=workspace_roots",
+  "type=turn_start"
+]

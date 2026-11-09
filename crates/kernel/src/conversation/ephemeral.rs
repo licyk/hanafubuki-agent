@@ -277,24 +277,39 @@ impl AgentHistoryStore for EphemeralAgentHistoryStore {
                 .ok_or(AgentHistoryStoreError::NotFound {
                     session_id: request.session_id,
                 })?;
-        Ok(AgentTranscriptPage {
-            items: session.model_context.clone(),
-            older_cursor: None,
-            newer_cursor: None,
-            through_revision: session.runtime.revision,
-        })
+        memory_page(
+            &session.model_context,
+            session.runtime.revision,
+            request.page_size,
+            request.cursor.as_deref(),
+            request.direction,
+        )
     }
 
     fn list_turn_items_page(
         &self,
-        _request: AgentTurnPageRequest,
+        request: AgentTurnPageRequest,
     ) -> Result<AgentTranscriptPage, AgentHistoryStoreError> {
-        Ok(AgentTranscriptPage {
-            items: Vec::new(),
-            older_cursor: None,
-            newer_cursor: None,
-            through_revision: AgentRevision::new(0),
-        })
+        let sessions = self.sessions.lock();
+        let session =
+            sessions
+                .get(&request.session_id)
+                .ok_or(AgentHistoryStoreError::NotFound {
+                    session_id: request.session_id,
+                })?;
+        let items = session
+            .model_context
+            .iter()
+            .filter(|item| item.turn_id == Some(request.turn_id))
+            .cloned()
+            .collect::<Vec<_>>();
+        memory_page(
+            &items,
+            session.runtime.revision,
+            request.page_size,
+            request.cursor.as_deref(),
+            request.direction,
+        )
     }
 
     fn archive_session(
@@ -344,6 +359,47 @@ impl AgentHistoryStore for EphemeralAgentHistoryStore {
     fn shutdown(&self, _deadline: std::time::Instant) -> Vec<AgentHistoryStoreError> {
         Vec::new()
     }
+}
+
+/// One page of `items`, which are oldest first: newest first when
+/// descending. A cursor is the index the next page stops before (descending)
+/// or starts at (ascending).
+fn memory_page(
+    items: &[AgentHistoryItem],
+    revision: AgentRevision,
+    page_size: usize,
+    cursor: Option<&str>,
+    direction: AgentHistorySortDirection,
+) -> Result<AgentTranscriptPage, AgentHistoryStoreError> {
+    let cursor = cursor
+        .map(|cursor| {
+            cursor
+                .parse::<usize>()
+                .ok()
+                .filter(|index| *index <= items.len())
+                .ok_or_else(|| AgentHistoryStoreError::InvalidCursor(cursor.to_string()))
+        })
+        .transpose()?;
+    let (items, older_cursor, newer_cursor) = match direction {
+        AgentHistorySortDirection::Descending => {
+            let end = cursor.unwrap_or(items.len());
+            let start = end.saturating_sub(page_size);
+            let page = items[start..end].iter().rev().cloned().collect();
+            (page, (start > 0).then(|| start.to_string()), None)
+        }
+        AgentHistorySortDirection::Ascending => {
+            let start = cursor.unwrap_or(0);
+            let end = start.saturating_add(page_size).min(items.len());
+            let page = items[start..end].to_vec();
+            (page, None, (end < items.len()).then(|| end.to_string()))
+        }
+    };
+    Ok(AgentTranscriptPage {
+        items,
+        older_cursor,
+        newer_cursor,
+        through_revision: revision,
+    })
 }
 
 fn appended_items(mutations: Vec<AgentHistoryMutation>) -> Vec<AgentHistoryItem> {

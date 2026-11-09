@@ -9,6 +9,7 @@ pub(in crate::store) struct SessionCursor {
     pub(in crate::store) lifecycle: AgentSessionLifecycle,
     pub(in crate::store) direction: AgentHistorySortDirection,
     pub(in crate::store) search: Option<String>,
+    pub(in crate::store) parent: hanafubuki_agent_kernel::AgentSessionParentFilter,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

@@ -89,6 +89,15 @@ impl AgentService {
         SessionRecord {
             session_id: runtime.id,
             forked_from_session_id: runtime.forked_from_session_id,
+            lineage: SessionLineage {
+                parent_session_id: runtime.parent_session_id,
+                origin: runtime.origin,
+                workspace: crate::AgentSessionWorkspace {
+                    cwd: runtime.cwd,
+                    branch: runtime.branch,
+                },
+                ephemeral: false,
+            },
             created_at: runtime.created_at,
             settings: SessionSettings {
                 effective_input_capabilities: runtime

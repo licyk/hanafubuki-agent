@@ -25,6 +25,7 @@ pub(crate) fn service_over(store: Arc<RecordingHistoryStore>) -> (AgentService, 
             Vec::new(),
             hanafubuki_agent_kernel::ModelRetryPolicy::default(),
             ModelCompactionCapability::LocalSummary,
+            hanafubuki_agent_kernel::AgentSessionWorkspace::default(),
         )
         .unwrap();
     (service, session.id)

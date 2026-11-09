@@ -1,5 +1,9 @@
 use crate::store::*;
 
+/// The index's `user_version`. An index of another version is discarded at
+/// open and rebuilt from the rollouts (5 added `parent_session_id`).
+const INDEX_SCHEMA_VERSION: i64 = 5;
+
 impl FileAgentHistoryStore {
     pub(in crate::store) fn initialize_database(&self) -> Result<(), AgentHistoryStoreError> {
         let _database = self.inner.database_gate.lock();
@@ -7,7 +11,7 @@ impl FileAgentHistoryStore {
         let schema_version: i64 = connection
             .query_row("PRAGMA user_version", [], |row| row.get(0))
             .map_err(database_error)?;
-        if schema_version != 0 && schema_version != 4 {
+        if schema_version != 0 && schema_version != INDEX_SCHEMA_VERSION {
             return Err(AgentHistoryStoreError::CorruptHistory(format!(
                 "unsupported Agent history index schema version {schema_version}"
             )));
@@ -18,7 +22,7 @@ impl FileAgentHistoryStore {
 PRAGMA journal_mode = WAL;
 PRAGMA foreign_keys = ON;
 PRAGMA synchronous = FULL;
-PRAGMA user_version = 4;
+PRAGMA user_version = 5;
 
 CREATE TABLE IF NOT EXISTS agent_store_state (
     key TEXT PRIMARY KEY,
@@ -44,7 +48,8 @@ CREATE TABLE IF NOT EXISTS agent_sessions (
     runtime_json TEXT NOT NULL,
     summary_json TEXT NOT NULL,
     forked_from_session_id INTEGER,
-    archived_at TEXT
+    archived_at TEXT,
+    parent_session_id INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_agent_sessions_updated
     ON agent_sessions(lifecycle, updated_at DESC, session_id DESC);
@@ -52,6 +57,8 @@ CREATE INDEX IF NOT EXISTS idx_agent_sessions_created
     ON agent_sessions(lifecycle, created_at DESC, session_id DESC);
 CREATE INDEX IF NOT EXISTS idx_agent_sessions_forked_from
     ON agent_sessions(forked_from_session_id);
+CREATE INDEX IF NOT EXISTS idx_agent_sessions_parent
+    ON agent_sessions(parent_session_id, lifecycle, updated_at DESC, session_id DESC);
 
 CREATE TABLE IF NOT EXISTS agent_turns (
     session_id INTEGER NOT NULL,

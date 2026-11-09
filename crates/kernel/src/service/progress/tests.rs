@@ -200,6 +200,7 @@ fn a_report_on_a_runtime_that_has_shut_down_frees_the_consumer_slot() {
             Vec::new(),
             hanafubuki_agent_model_api::ModelRetryPolicy::default(),
             hanafubuki_agent_model_api::ModelCompactionCapability::LocalSummary,
+            crate::AgentSessionWorkspace::default(),
         )
         .unwrap()
         .id;

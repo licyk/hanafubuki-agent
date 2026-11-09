@@ -101,6 +101,7 @@ fn failed_durable_commit_does_not_publish_the_staged_runtime_revision() {
             Vec::new(),
             hanafubuki_agent_kernel::ModelRetryPolicy::default(),
             ModelCompactionCapability::LocalSummary,
+            hanafubuki_agent_kernel::AgentSessionWorkspace::default(),
         )
         .unwrap();
     store.fail_next_append.store(true, Ordering::SeqCst);
@@ -164,6 +165,7 @@ fn model_and_effort_mutations_build_first_and_roll_back_failed_persistence() {
             Vec::new(),
             hanafubuki_agent_kernel::ModelRetryPolicy::default(),
             ModelCompactionCapability::LocalSummary,
+            hanafubuki_agent_kernel::AgentSessionWorkspace::default(),
         )
         .unwrap();
 
@@ -254,6 +256,7 @@ fn failed_session_execution_progress_rolls_back_activity_event_and_revision() {
             Vec::new(),
             hanafubuki_agent_kernel::ModelRetryPolicy::default(),
             ModelCompactionCapability::LocalSummary,
+            hanafubuki_agent_kernel::AgentSessionWorkspace::default(),
         )
         .unwrap();
     let update = AgentToolProgressUpdate::ExecutionStarted {
@@ -433,6 +436,7 @@ fn runtime_revision_is_not_observable_until_the_durable_commit_is_acknowledged()
             Vec::new(),
             hanafubuki_agent_kernel::ModelRetryPolicy::default(),
             ModelCompactionCapability::LocalSummary,
+            hanafubuki_agent_kernel::AgentSessionWorkspace::default(),
         )
         .unwrap();
     let gate = Arc::new(AppendGate::new());
@@ -490,6 +494,7 @@ fn session_mutation_waits_for_inflight_execution_progress_commit() {
             Vec::new(),
             hanafubuki_agent_kernel::ModelRetryPolicy::default(),
             ModelCompactionCapability::LocalSummary,
+            hanafubuki_agent_kernel::AgentSessionWorkspace::default(),
         )
         .unwrap();
     let session_id = created.id;

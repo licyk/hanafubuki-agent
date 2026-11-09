@@ -20,7 +20,8 @@ hanafubuki-agent sessions list
 Each line has the id, the last update (local time), the model and the title, the latest first. The title is made from the first message; a session without one shows `(untitled)`.
 
 - `--archived` lists the archived sessions instead.
-- `--json` prints one session summary per line as a JSON object (the id, model, Provider, mode, title, token use, creation and update times, and more), for scripts.
+- `--json` prints one session summary per line as a JSON object (the id, model, Provider, mode, title, token use, creation and update times, the directory and Git branch it was created in as `cwd` and `branch`, and more), for scripts.
+- Only sessions without a parent are listed: a [child session](#children) is found under its parent.
 
 <Callout>
   Every start of the terminal interface creates a session, even if you send no message. `sessions
@@ -53,8 +54,24 @@ hanafubuki-agent sessions archive 2
 hanafubuki-agent sessions delete 2
 ```
 
-- **Archive**: the session leaves `sessions list` and the resume picker but is kept; `sessions list --archived` finds it.
-- **Delete**: removes the session and its history for good. It is refused, with the reason as the error, while a fork or a quarantined session file still needs the session.
+- **Archive**: the session leaves `sessions list` and the resume picker but is kept; `sessions list --archived` finds it. Its child sessions are archived with it.
+- **Delete**: removes the session and its history for good, with its child sessions, archived or not. It is refused, with the reason as the error, while a fork or a quarantined session file still needs the session or one of its children; a child that cannot be deleted refuses the whole deletion.
+- Either closes the session's [side conversation](#side). Restoring a session does not restore its children.
+
+## Child sessions [#children]
+
+A session can be the child of another, made for it rather than started by you: a [side conversation](#side) now, and subagents and reviews later. A child records its parent (`parentSessionId` in its summary) and why it was made (`origin`: `side`, `subagent` or `review`), and works in its parent's directory, with its parent's model and settings.
+
+Every session records, when it is created, the workspace's primary directory (`cwd`) and the Git branch checked out there (`branch`, read from the repository's `HEAD`; none for a detached `HEAD` or outside a repository). A child, or a fork, takes its source's. A session from before these fields existed has none.
+
+## Side conversations [#side]
+
+A side conversation is a temporary conversation beside a session, for a question you want answered without disturbing the session's work.
+
+- It starts with everything the session had at its last turn boundary: the whole conversation when no turn runs, and the conversation before the running turn otherwise, so you can ask while the session works. The session's history must have at least one turn.
+- Its model is told it is in a side conversation: the inherited conversation is reference only, not instructions to carry on; it answers questions and explores without changing files, the workspace or settings unless you ask it to in the side conversation.
+- It is **ephemeral**: kept in memory only, never written to the history, never listed, and gone when it is closed, when its session is archived or deleted, or when the Agent stops. Its transcript starts at the side conversation, not with the inherited history.
+- A session has at most one; opening it again returns the open one. Closing it stops its running turn and its background terminals.
 
 ## Resuming a session [#resume]
 

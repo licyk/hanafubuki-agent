@@ -28,6 +28,10 @@ fn runtime(
     PersistedAgentRuntimeState {
         id: session_id,
         forked_from_session_id: None,
+        parent_session_id: None,
+        origin: None,
+        cwd: None,
+        branch: None,
         title: None,
         generation: AgentGeneration::new(0),
         revision: AgentRevision::new(revision),

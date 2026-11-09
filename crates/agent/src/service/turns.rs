@@ -1,14 +1,13 @@
 use super::AgentApplicationService;
 use crate::titles::provisional_agent_title;
 use crate::{prepare_and_stage_images, AgentSteeringRequest, AgentTurnRequest};
-use hanafubuki_agent_contracts::{ContextRequest, TurnAdmissionRequest, TurnExtensions};
+use hanafubuki_agent_contracts::TurnExtensions;
 use hanafubuki_agent_kernel::{
     AgentCompactionGeneration, AgentCompactionId, AgentCompactionOutcome, AgentError,
     AgentEventSink, AgentGeneration, AgentPermissionMode, AgentPlanImplementationRequest,
     AgentRevision, AgentSessionId, AgentSessionMode, AgentSteeringAccepted, AgentTurnAccepted,
     AgentTurnCancellationOutcome, AgentTurnId, AgentTurnOutcome, AgentUserInputAccepted,
-    AgentUserInputAnswer, AgentUserInputRequestId, AgentWorldStateSnapshot, ApprovalRequestId,
-    ApprovalUserDecision,
+    AgentUserInputAnswer, AgentUserInputRequestId, ApprovalRequestId, ApprovalUserDecision,
 };
 use std::sync::Arc;
 
@@ -39,6 +38,7 @@ impl AgentApplicationService {
             input.permission_mode = mode;
         }
         let world_state = self
+            .driver
             .collect_world_state(
                 session_id,
                 session.mode,
@@ -47,6 +47,7 @@ impl AgentApplicationService {
             )
             .await?;
         input.turn = self
+            .driver
             .collect_turn_extensions(session_id, session.mode)
             .await?;
         input.world_state = world_state;
@@ -70,12 +71,14 @@ impl AgentApplicationService {
             .flatten();
         let core = self.core.clone();
         let files = self.files.clone();
-        let permission_mode = self.turn_permission_mode(session_id).await?;
+        let permission_mode = self.driver.turn_permission_mode(session_id).await?;
         let world_state = self
+            .driver
             .collect_world_state(session_id, session.mode, permission_mode, input.host)
             .await
             .map_err(|error| error.to_string())?;
         let turn = self
+            .driver
             .collect_turn_extensions(session_id, session.mode)
             .await
             .map_err(|error| error.to_string())?;
@@ -136,9 +139,10 @@ impl AgentApplicationService {
     ) -> Result<AgentTurnAccepted, String> {
         self.activate_provider_session(request.session_id).await?;
         let core = self.core.clone();
-        let permission_mode = self.turn_permission_mode(request.session_id).await?;
+        let permission_mode = self.driver.turn_permission_mode(request.session_id).await?;
         // Implementing the plan returns the session to Default mode.
         let world_state = self
+            .driver
             .collect_world_state(
                 request.session_id,
                 AgentSessionMode::Default,
@@ -148,6 +152,7 @@ impl AgentApplicationService {
             .await
             .map_err(|error| error.to_string())?;
         let turn = self
+            .driver
             .collect_turn_extensions(request.session_id, AgentSessionMode::Default)
             .await
             .map_err(|error| error.to_string())?;
@@ -321,56 +326,5 @@ impl AgentApplicationService {
     ) -> Result<(), AgentError> {
         self.activate_session(session_id)?;
         self.core.approve_denied_action(session_id, review_id)
-    }
-}
-
-impl AgentApplicationService {
-    /// The permission mode of the session's next turn: the session's choice,
-    /// else the configured one.
-    async fn turn_permission_mode(
-        &self,
-        session_id: AgentSessionId,
-    ) -> Result<AgentPermissionMode, String> {
-        match self
-            .core
-            .session_permission_mode(session_id)
-            .map_err(|error| error.to_string())?
-        {
-            Some(mode) => Ok(mode),
-            None => Ok(self.load_agent_settings().await?.permission_mode),
-        }
-    }
-
-    /// The turn's world state, from the context contributors plugins
-    /// registered. `host` is what the host submitted with the turn.
-    async fn collect_world_state(
-        &self,
-        session_id: AgentSessionId,
-        mode: AgentSessionMode,
-        permission_mode: hanafubuki_agent_kernel::AgentPermissionMode,
-        host: TurnExtensions,
-    ) -> Result<AgentWorldStateSnapshot, AgentError> {
-        let request = ContextRequest {
-            session_id,
-            mode,
-            permission_mode,
-            turn: host,
-        };
-        hanafubuki_agent_kernel::collect_world_state(&self.host.registries().context, &request)
-            .await
-    }
-
-    /// The turn's extensions, from the turn admission contributors plugins
-    /// registered (the `skills` plugin freezes the turn's Skill catalog).
-    async fn collect_turn_extensions(
-        &self,
-        session_id: AgentSessionId,
-        mode: AgentSessionMode,
-    ) -> Result<TurnExtensions, AgentError> {
-        hanafubuki_agent_kernel::collect_turn_extensions(
-            &self.host.registries().turn_admission,
-            &TurnAdmissionRequest { session_id, mode },
-        )
-        .await
     }
 }

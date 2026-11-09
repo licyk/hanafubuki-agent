@@ -17,8 +17,8 @@ pub(in crate::service) use identity::{
     exact_compaction, exact_compaction_mut, exact_turn, exact_turn_identity, exact_turn_mut,
 };
 pub(in crate::service) use record::{
-    SessionConversation, SessionJournal, SessionRecord, SessionRollbackState, SessionRuntime,
-    SessionSettings, SessionStatus,
+    SessionConversation, SessionJournal, SessionLineage, SessionRecord, SessionRollbackState,
+    SessionRuntime, SessionSettings, SessionStatus,
 };
 pub(in crate::service) use snapshots::{persisted_runtime_snapshot, session_summary, snapshot};
 pub(in crate::service) use validation::{

@@ -1,10 +1,12 @@
 use super::AgentApplicationService;
+use crate::session_workspace::session_workspace;
 use crate::{model_api_protocol, AgentModelInfo, ResolvedAgentProvider};
 use hanafubuki_agent_kernel::{
     AgentError, AgentEventSink, AgentGeneration, AgentRevision, AgentSessionConfig,
     AgentSessionForkOutcome, AgentSessionForkRequest, AgentSessionHeadForkOutcome,
-    AgentSessionHeadForkRequest, AgentSessionId, AgentSessionMode, AgentSessionRuntimeSnapshot,
-    AgentSessionSummary, AgentSessionTitleRenameRequest, ConfirmedAgentSessionDeletion,
+    AgentSessionHeadForkRequest, AgentSessionId, AgentSessionLifecycle, AgentSessionMode,
+    AgentSessionRuntimeSnapshot, AgentSessionSummary, AgentSessionTitleRenameRequest,
+    ConfirmedAgentSessionDeletion,
 };
 use std::sync::atomic::Ordering;
 
@@ -95,6 +97,11 @@ impl AgentApplicationService {
             },
             sampling_retry_policy: hanafubuki_agent_kernel::AgentSamplingRetryPolicy::default(),
         };
+        let workspace = self
+            .workspace
+            .roots()
+            .map(|roots| session_workspace(roots.primary()))
+            .unwrap_or_default();
         let snapshot = if model_configured {
             self.core.create_model_session(
                 config,
@@ -104,9 +111,10 @@ impl AgentApplicationService {
                 resolved.headers,
                 hanafubuki_agent_kernel::ModelRetryPolicy::default(),
                 compaction_capability,
+                workspace,
             )
         } else {
-            self.core.create_unconfigured_session(config)
+            self.core.create_unconfigured_session(config, workspace)
         }
         .map_err(|error| error.to_string())?;
         self.core
@@ -188,6 +196,9 @@ impl AgentApplicationService {
             .map_err(|error| error.to_string())
     }
 
+    /// Archives the session, and first its persisted descendants that are
+    /// not archived yet, children before their parent; its live ephemeral
+    /// children and theirs are closed.
     pub fn archive_session(
         &self,
         session_id: AgentSessionId,
@@ -201,6 +212,14 @@ impl AgentApplicationService {
         }
         if before.revision != revision {
             return Err(AgentError::StaleRevision);
+        }
+        let descendants = self.persisted_descendants(session_id)?;
+        self.release_ephemeral_children(session_id)?;
+        for child in descendants.iter().rev() {
+            self.release_ephemeral_children(child.session_id)?;
+            if child.lifecycle == AgentSessionLifecycle::Available {
+                self.archive_one(child.session_id)?;
+            }
         }
         self.quiesce_background_terminals(session_id)?;
         let revision = self.core.snapshot(session_id)?.revision;
@@ -217,6 +236,10 @@ impl AgentApplicationService {
         self.core.restore_session(session_id, generation, revision)
     }
 
+    /// Deletes the session and, in the same deletion, its persisted
+    /// descendants, archived or not; its live ephemeral children and theirs
+    /// are closed. A descendant that cannot be let go refuses the whole
+    /// deletion.
     pub fn delete_session_confirmed(
         &self,
         session_id: AgentSessionId,
@@ -231,26 +254,40 @@ impl AgentApplicationService {
         if before.revision != revision {
             return Err(AgentError::StaleRevision);
         }
-        let prepared = self
-            .core
-            .prepare_session_deletion(session_id, generation, revision)?;
-        let projected = before.active_activities;
-        let outcome = match self.stop_background_terminal_authority(session_id) {
-            Ok(outcome) => outcome,
-            Err(error) => {
-                self.core.cancel_prepared_session_deletion(prepared);
-                return Err(error);
-            }
-        };
-        if !outcome.retained.is_empty() {
-            self.core.cancel_prepared_session_deletion(prepared);
-            self.publish_background_terminal_stop(session_id, &projected, &outcome)?;
-            return Err(AgentError::SessionMutationNotConfirmed);
+        let descendants = self
+            .persisted_descendants(session_id)?
+            .into_iter()
+            .map(|child| child.session_id)
+            .collect::<Vec<_>>();
+        let mut members = vec![(session_id, before.active_activities)];
+        for child in &descendants {
+            self.activate_session(*child)?;
+            members.push((*child, self.core.snapshot(*child)?.active_activities));
         }
-        if let Err(error) = self.memory.revoke_session(session_id) {
-            self.core.cancel_prepared_session_deletion(prepared);
-            self.publish_background_terminal_stop(session_id, &projected, &outcome)?;
-            return Err(AgentError::Persistence(error));
+        for (member, _) in &members {
+            self.release_ephemeral_children(*member)?;
+        }
+        let prepared =
+            self.core
+                .prepare_session_deletion(session_id, generation, revision, &descendants)?;
+        for (member, projected) in &members {
+            let outcome = match self.stop_background_terminal_authority(*member) {
+                Ok(outcome) => outcome,
+                Err(error) => {
+                    self.core.cancel_prepared_session_deletion(prepared);
+                    return Err(error);
+                }
+            };
+            if !outcome.retained.is_empty() {
+                self.core.cancel_prepared_session_deletion(prepared);
+                self.publish_background_terminal_stop(*member, projected, &outcome)?;
+                return Err(AgentError::SessionMutationNotConfirmed);
+            }
+            if let Err(error) = self.memory.revoke_session(*member) {
+                self.core.cancel_prepared_session_deletion(prepared);
+                self.publish_background_terminal_stop(*member, projected, &outcome)?;
+                return Err(AgentError::Persistence(error));
+            }
         }
         self.core.complete_session_deletion_confirmed(prepared)
     }

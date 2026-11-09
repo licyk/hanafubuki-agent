@@ -1,3 +1,4 @@
+use crate::conversation::AgentHistoryStore;
 use crate::model::{AgentError, AgentEventBatch, AgentEventSequence, AgentSessionId};
 use crate::service::persistence::history_store_error;
 use crate::service::AgentService;

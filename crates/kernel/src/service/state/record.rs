@@ -10,12 +10,24 @@ use super::*;
 pub(in crate::service) struct SessionRecord {
     pub(in crate::service) session_id: AgentSessionId,
     pub(in crate::service) forked_from_session_id: Option<AgentSessionId>,
+    pub(in crate::service) lineage: SessionLineage,
     pub(in crate::service) created_at: u128,
     pub(in crate::service) settings: SessionSettings,
     pub(in crate::service) status: SessionStatus,
     pub(in crate::service) conversation: SessionConversation,
     pub(in crate::service) journal: SessionJournal,
     pub(in crate::service) runtime: SessionRuntime,
+}
+
+/// Where the session came from and whether it is kept: its parent and why
+/// it was made, the workspace it was created in, and whether it lives in
+/// memory only.
+#[derive(Clone, Default)]
+pub(in crate::service) struct SessionLineage {
+    pub(in crate::service) parent_session_id: Option<AgentSessionId>,
+    pub(in crate::service) origin: Option<crate::AgentSessionOrigin>,
+    pub(in crate::service) workspace: crate::AgentSessionWorkspace,
+    pub(in crate::service) ephemeral: bool,
 }
 
 /// How the session samples: its model, configuration and policies.
