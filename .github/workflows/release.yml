@@ -217,7 +217,8 @@ jobs:
             sha256sum "$archive" > "$archive.sha256"
           else
             archive="$name.tar.gz"
-            tar czf "$archive" "$name"
+            # without it, macOS's tar adds AppleDouble (._*) entries for files with extended attributes
+            COPYFILE_DISABLE=1 tar czf "$archive" "$name"
             shasum -a 256 "$archive" > "$archive.sha256"
           fi
           cat "$archive.sha256"
