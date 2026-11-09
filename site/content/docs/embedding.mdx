@@ -473,10 +473,10 @@ impl AgentEventSink for PrintEvents {
 | `session_permission_mode(session_id)`           | 会话被设置的模式；仍使用 `permissionMode` 时为 `None`                                                                                                                                                                                                                                        |
 | `set_session_sandbox_mode(session_id, mode)`    | 会话的 `AgentSandboxMode`（`ReadOnly`、`WorkspaceWrite`、`FullAccess`），代替 `sandboxMode`，直到会话结束；只保存在内存中，不持久化，也不随分叉复制；子代理沿用父会话的。正在运行的回合保持它的沙箱，下一个回合使用新的。与权限模式无关                                                      |
 | `session_sandbox_mode(session_id)`              | 会话被设置的沙箱模式；仍使用 `sandboxMode`（或平台默认值）时为 `None`                                                                                                                                                                                                                        |
-| `sandbox_status()`                              | `SandboxStatus::Available { backend }`（Linux 上为 `"Landlock (ABI n) and seccomp"`，macOS 上为 `"Seatbelt (/usr/bin/sandbox-exec)"`）或 `Unavailable { reason }`：需要沙箱的命令能否运行（[沙箱辅助进程](#sandbox-helper)）                                                                 |
+| `sandbox_status()`                              | `SandboxStatus::Available { backend }`（Linux 上为 `"Landlock (ABI n) and seccomp"`，macOS 上为 `"Seatbelt (/usr/bin/sandbox-exec)"`）或 `Unavailable { reason }`，已应用配置的 `[windows] sandbox`：需要沙箱的命令能否运行（[沙箱辅助进程](#sandbox-helper)）                               |
 | `approve_denied_action(session_id, review_id)`  | 用户批准自动审查 `review_id`（来自 `PermissionReviewCompleted { status: Denied }`）拒绝的操作，必须是会话最近十次拒绝之一：提交一条模型和下一次审查都会读到的上下文说明，并把不带轮次 ID 的 `HistoryCommitted` 发给会话最近一个轮次的 sink。它不开始轮次，也不执行任何操作；重试仍会再次审查 |
 
-审查不是这些拒绝之一时，`approve_denied_action` 返回 `ApprovalNotFound`；轮次或压缩运行期间返回 `TurnAlreadyRunning` 或 `CompactionAlreadyRunning`。除 `sandbox_status` 外，这些调用可能加载会话的历史或等待它正在暂存的提交，所以要像 `rename_session` 和 `set_session_mode` 一样在异步运行时之外调用。
+审查不是这些拒绝之一时，`approve_denied_action` 返回 `ApprovalNotFound`；轮次或压缩运行期间返回 `TurnAlreadyRunning` 或 `CompactionAlreadyRunning`。除只读取设置的 `sandbox_status` 外，这些调用可能加载会话的历史或等待它正在暂存的提交，所以要像 `rename_session` 和 `set_session_mode` 一样在异步运行时之外调用。
 
 ## 子会话 [#child-sessions]
 

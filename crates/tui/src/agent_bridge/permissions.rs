@@ -83,16 +83,14 @@ impl AgentBridge {
             let session = agent.session_permission_mode(session_id).map_err(read)?;
             let session_sandbox = agent.session_sandbox_mode(session_id).map_err(read)?;
             let settings = agent.settings_view().await?.settings;
+            let sandbox_status = agent.sandbox_status().map_err(read)?;
             Ok(SessionReply::PermissionModes {
                 session,
                 configured: settings.permission_mode,
                 sandbox: session_sandbox
                     .or(settings.sandbox_mode)
                     .unwrap_or_else(platform_default_mode),
-                sandbox_available: matches!(
-                    agent.sandbox_status(),
-                    SandboxStatus::Available { .. }
-                ),
+                sandbox_available: matches!(sandbox_status, SandboxStatus::Available { .. }),
             })
         });
         Ok(())

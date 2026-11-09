@@ -25,7 +25,7 @@ mod roots;
 #[cfg(any(windows, test))]
 mod windows;
 
-pub use backend::{Sandbox, SandboxError, SandboxStatus};
+pub use backend::{Sandbox, SandboxEnforcement, SandboxError, SandboxStatus};
 pub use hanafubuki_agent_foundation::agent_settings::{AgentSandboxMode, AgentWindowsSandbox};
 pub use helper::{helper_dispatch, HELPER_ARG, HELPER_FAILURE_EXIT_CODE};
 pub use policy::{platform_default_mode, SandboxPolicy, SandboxSettings};

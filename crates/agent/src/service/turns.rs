@@ -348,10 +348,15 @@ impl AgentApplicationService {
         self.core.set_session_sandbox_mode(session_id, mode)
     }
 
-    /// The sandbox this machine gives the commands that ask for one, or
-    /// why it cannot.
-    pub fn sandbox_status(&self) -> hanafubuki_agent_sandbox::SandboxStatus {
-        self.executions.sandbox().status()
+    /// The sandbox this machine gives the commands that ask for one, as the
+    /// configured `[windows] sandbox` has it, or why it cannot.
+    pub fn sandbox_status(&self) -> Result<hanafubuki_agent_sandbox::SandboxStatus, AgentError> {
+        let settings = self.config.settings().map_err(AgentError::Persistence)?;
+        Ok(self
+            .executions
+            .sandbox()
+            .with_windows_sandbox(settings.windows.sandbox)
+            .status())
     }
 
     /// Records that the user approves the action automatic permission review

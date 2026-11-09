@@ -97,7 +97,7 @@ Run Posix command outside the sandbox in /home/me/project: npm install (reason: 
 }
 ```
 
-在自动审查模式下，提升说明会写明由审查者决定，并要求模型在被拒绝后只采用明显更安全的替代做法；在完全访问模式下，它说明不要请求；没有沙箱时，它说明没有沙箱。只有其中之一改变时，这一部分才会改变并重新发送：沙箱模式、权限模式、工作区根目录或配置的根目录。
+在自动审查模式下，提升说明会写明由审查者决定，并要求模型在被拒绝后只采用明显更安全的替代做法；在完全访问模式下，它说明不要请求；没有沙箱时，它说明没有沙箱。网络关闭、但生效的沙箱并不阻断网络时（Windows 的非提升沙箱，见[平台](#sandbox-platforms)），这一部分会加上 `"networkEnforced": false`，这样模型不会被告知网络不可达，而实际上它可达。只有其中之一改变时，这一部分才会改变并重新发送：沙箱模式、权限模式、工作区根目录或配置的根目录。
 
 ### 它不涵盖的内容 [#sandbox-limits]
 
@@ -106,7 +106,7 @@ Run Posix command outside the sandbox in /home/me/project: npm install (reason: 
 - 在 Linux 上，可写根目录之下没有任何内容保持只读，包括 `.git`：Landlock 只能授予权限，所以 Codex 把工作区中的 `.git` 设为只读的做法在那里没有移植。在 macOS 上移植了，所以在 workspace-write 下，`git commit` 以及其他写入 `.git` 的操作都会失败：请在 full-access 下运行。
 - 在 macOS 上，命令启动时尚不存在的 `.git`、`.agents` 或 `.hanafubuki-agent` 不受保护：命令可以创建它。
 - 没有网络访问时，在 Linux 上除 Unix 套接字外的所有套接字都会被拒绝，连接任何套接字也会被拒绝，包括 Unix 套接字（SSH agent、Docker 的套接字）；有网络访问时，只有虚拟机套接字仍被拒绝；两种情况下，可以绕过过滤器打开套接字的 `io_uring` 都会被拒绝。在 macOS 上，没有网络访问时任何套接字都无法连接，包括 Unix 套接字；有网络访问时都可以。
-- 在 Windows 上，受限令牌只限制写入：登录会话或 Everyone 可写的位置仍然可写，网络仍可访问（见[平台](#sandbox-platforms)），命令留在后台的进程会随它一起结束。
+- 在 Windows 上，受限令牌只限制写入：登录会话或 Everyone 可写的位置仍然可写，网络仍可访问（见[平台](#sandbox-platforms)；模型会被告知这一点，见[模型被告知的内容](#sandbox-context)），命令留在后台的进程会随它一起结束。
 - 在 Linux 的终端（PTY）命令中，`/dev/stdout` 和 `/dev/stderr` 指向终端的 `/dev/pts` 设备，它不可写：请直接写到输出，或写到可写的 `/dev/tty`（命令自己的终端）。
 - 在早于 6.2 的 Linux 内核上，截断可写根目录之外的文件不受限制（Landlock 第 3 版之前的 ABI 做不到）。
 

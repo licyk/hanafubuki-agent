@@ -788,6 +788,14 @@ The tier decides where a command's code goes (§2.1).
 
 ## 6. Phases
 
+As built (todo.md is the record): P0 was split into P0a (interface) and
+P0b (facade), and the feature-call helper and the `[tui]` section moved
+to their first users (P8, P2). Most phases landed as a facade half and an
+interface half. P5 landed as P5a and P5b, and P2 as P2.1 and P2.2. P14
+landed as P14a (Linux), P14b (macOS), P14c (Windows, unelevated) and
+P14d (escalation and the model-visible sandbox section). P14e, the
+elevated Windows sandbox, is open.
+
 Each phase:
 
 - is validated with the AGENTS.md "Validation" commands for its scope,

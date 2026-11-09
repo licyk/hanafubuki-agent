@@ -15,7 +15,7 @@ use hanafubuki_agent_contracts::{
     WORLD_STATE_PREAMBLE,
 };
 use hanafubuki_agent_foundation::cancellation::CancellationToken;
-use hanafubuki_agent_sandbox::SandboxPolicy;
+use hanafubuki_agent_sandbox::{SandboxEnforcement, SandboxPolicy};
 use kardia_core::{Context, Inject, PluginDef, Service};
 
 pub(crate) use workspace::workspace_context_plugin;
@@ -75,9 +75,18 @@ impl ContextContributor for PermissionModeContext {
                 ContextSectionKind::PERMISSION_MODE,
                 &serde_json::json!({ "mode": request.permission_mode }),
             )];
-            // The facade adds the turn's sandbox (`collect_world_state`).
+            // The facade adds the turn's sandbox (`collect_world_state`);
+            // without its enforcement, the policy is taken as enforced.
             if let Some(policy) = request.turn.get::<SandboxPolicy>() {
-                sections.push(sandbox::section(policy, request.permission_mode));
+                let blocks_network = request
+                    .turn
+                    .get::<SandboxEnforcement>()
+                    .is_none_or(|enforcement| enforcement.blocks_network);
+                sections.push(sandbox::section(
+                    policy,
+                    blocks_network,
+                    request.permission_mode,
+                ));
             }
             Ok(sections)
         })

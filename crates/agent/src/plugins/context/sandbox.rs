@@ -13,9 +13,12 @@ use hanafubuki_agent_kernel::AgentPermissionMode;
 use hanafubuki_agent_sandbox::SandboxPolicy;
 
 /// The `sandbox` section: what the turn's commands may reach, and how one
-/// may run outside the sandbox in `permission_mode`.
+/// may run outside the sandbox in `permission_mode`. A sandbox that does not
+/// block the network (`blocks_network`, Windows' unelevated one) adds
+/// `"networkEnforced": false` to a policy without network access.
 pub(super) fn section(
     policy: &SandboxPolicy,
+    blocks_network: bool,
     permission_mode: AgentPermissionMode,
 ) -> ContextSection {
     let mut content = serde_json::json!({
@@ -40,6 +43,9 @@ pub(super) fn section(
                 .collect();
         }
         SandboxPolicy::FullAccess => content["networkAccess"] = true.into(),
+    }
+    if content["networkAccess"] == false && !blocks_network {
+        content["networkEnforced"] = false.into();
     }
     ContextSection::from_json(ContextSectionKind::SANDBOX, &content)
 }

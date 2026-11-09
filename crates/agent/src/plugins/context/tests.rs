@@ -53,7 +53,7 @@ async fn permission_mode_renders_the_turns_mode_while_its_plugin_runs() {
 #[tokio::test]
 async fn the_sandbox_section_states_the_sandbox_and_how_to_leave_it() {
     use hanafubuki_agent_kernel::AgentPermissionMode;
-    use hanafubuki_agent_sandbox::SandboxPolicy;
+    use hanafubuki_agent_sandbox::{SandboxEnforcement, SandboxPolicy};
 
     let mounted = mount(permission_mode_plugin()).await;
     let root = std::env::temp_dir().join("sandbox-section-root");
@@ -61,26 +61,31 @@ async fn the_sandbox_section_states_the_sandbox_and_how_to_leave_it() {
         writable_roots: vec![root.clone()],
         network_access: false,
     };
-    let sandbox = |policy: &SandboxPolicy, mode: AgentPermissionMode| {
-        let mut turn = TurnExtensions::default();
-        turn.insert(std::sync::Arc::new(policy.clone()));
-        let request = ContextRequest {
-            permission_mode: mode,
-            ..request(turn)
+    let enforced =
+        |policy: &SandboxPolicy, mode: AgentPermissionMode, blocks_network: Option<bool>| {
+            let mut turn = TurnExtensions::default();
+            turn.insert(std::sync::Arc::new(policy.clone()));
+            if let Some(blocks_network) = blocks_network {
+                turn.insert(std::sync::Arc::new(SandboxEnforcement { blocks_network }));
+            }
+            let request = ContextRequest {
+                permission_mode: mode,
+                ..request(turn)
+            };
+            let context = mounted.context.clone();
+            async move {
+                let snapshot = hanafubuki_agent_kernel::collect_world_state(&context, &request)
+                    .await
+                    .unwrap();
+                let section = snapshot
+                    .sections
+                    .into_iter()
+                    .find(|section| section.kind == ContextSectionKind::SANDBOX)
+                    .expect("a sandbox section");
+                serde_json::from_str::<serde_json::Value>(&section.content).unwrap()
+            }
         };
-        let context = mounted.context.clone();
-        async move {
-            let snapshot = hanafubuki_agent_kernel::collect_world_state(&context, &request)
-                .await
-                .unwrap();
-            let section = snapshot
-                .sections
-                .into_iter()
-                .find(|section| section.kind == ContextSectionKind::SANDBOX)
-                .expect("a sandbox section");
-            serde_json::from_str::<serde_json::Value>(&section.content).unwrap()
-        }
-    };
+    let sandbox = |policy: &SandboxPolicy, mode: AgentPermissionMode| enforced(policy, mode, None);
 
     let manual = sandbox(&workspace_write, AgentPermissionMode::Manual).await;
     assert_eq!(manual["mode"], "workspace-write");
@@ -112,6 +117,26 @@ async fn the_sandbox_section_states_the_sandbox_and_how_to_leave_it() {
             "escalation": manual["escalation"],
         })
     );
+    let open_network = SandboxPolicy::WorkspaceWrite {
+        writable_roots: vec![root.clone()],
+        network_access: true,
+    };
+    for policy in [&workspace_write, &SandboxPolicy::ReadOnly, &open_network] {
+        let blocked = enforced(policy, AgentPermissionMode::Manual, Some(true)).await;
+        assert_eq!(blocked, sandbox(policy, AgentPermissionMode::Manual).await);
+        assert!(blocked.get("networkEnforced").is_none(), "{blocked}");
+    }
+    // Windows' unelevated sandbox: a policy without the network says it is
+    // not blocked; one with it, or no sandbox, has nothing to add.
+    for policy in [&workspace_write, &SandboxPolicy::ReadOnly] {
+        let advisory = enforced(policy, AgentPermissionMode::Manual, Some(false)).await;
+        assert_eq!(advisory["networkAccess"], false);
+        assert_eq!(advisory["networkEnforced"], false, "{advisory}");
+    }
+    for policy in [&open_network, &SandboxPolicy::FullAccess] {
+        let open = enforced(policy, AgentPermissionMode::Manual, Some(false)).await;
+        assert_eq!(open, sandbox(policy, AgentPermissionMode::Manual).await);
+    }
     let unsandboxed = sandbox(&SandboxPolicy::FullAccess, AgentPermissionMode::Manual).await;
     assert_eq!(
         unsandboxed,

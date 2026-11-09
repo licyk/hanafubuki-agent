@@ -37,6 +37,7 @@ enum Backend {
     Helper {
         helper: PathBuf,
         confinement: String,
+        blocks_network: bool,
     },
     /// `/usr/bin/sandbox-exec` with a Seatbelt policy (macOS).
     #[cfg_attr(
@@ -47,6 +48,15 @@ enum Backend {
     Unavailable {
         reason: String,
     },
+}
+
+/// What a [`Sandbox`] enforces of a policy, beside its writable roots.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SandboxEnforcement {
+    /// Whether a policy without network access blocks the network: false
+    /// for Windows' unelevated sandbox, which only gives the command an
+    /// offline environment.
+    pub blocks_network: bool,
 }
 
 /// What [`Sandbox::status`] reports.
@@ -112,7 +122,11 @@ impl Sandbox {
     /// none yet; `unelevated`, the restricted token. Elsewhere it changes
     /// nothing.
     pub fn with_windows_sandbox(&self, setting: Option<AgentWindowsSandbox>) -> Self {
-        if !cfg!(windows) || matches!(self.backend, Backend::Unavailable { .. }) {
+        self.with_windows_sandbox_on(cfg!(windows), setting)
+    }
+
+    fn with_windows_sandbox_on(&self, windows: bool, setting: Option<AgentWindowsSandbox>) -> Self {
+        if !windows || matches!(self.backend, Backend::Unavailable { .. }) {
             return self.clone();
         }
         match setting {
@@ -137,6 +151,17 @@ impl Sandbox {
             },
             Backend::Unavailable { reason } => SandboxStatus::Unavailable {
                 reason: reason.clone(),
+            },
+        }
+    }
+
+    /// What this sandbox enforces. An unavailable one runs no sandboxed
+    /// command, so nothing escapes it.
+    pub fn enforcement(&self) -> SandboxEnforcement {
+        SandboxEnforcement {
+            blocks_network: match &self.backend {
+                Backend::Helper { blocks_network, .. } => *blocks_network,
+                Backend::Seatbelt | Backend::Unavailable { .. } => true,
             },
         }
     }
@@ -213,15 +238,23 @@ fn detect_backend() -> Backend {
 #[cfg(windows)]
 fn detect_backend() -> Backend {
     match crate::helper::registered_helper() {
-        Some(helper) => Backend::Helper {
-            helper: helper.clone(),
-            confinement: "a restricted token (unelevated: writes are confined, \
-                          the network is not blocked)"
-                .to_string(),
-        },
+        Some(helper) => windows_backend(helper.clone()),
         None => Backend::Unavailable {
             reason: "this program does not run the sandbox helper".to_string(),
         },
+    }
+}
+
+/// The Windows backend: the unelevated sandbox, which does not block the
+/// network.
+#[cfg(any(windows, test))]
+fn windows_backend(helper: PathBuf) -> Backend {
+    Backend::Helper {
+        helper,
+        confinement: "a restricted token (unelevated: writes are confined, \
+                      the network is not blocked)"
+            .to_string(),
+        blocks_network: false,
     }
 }
 
@@ -253,6 +286,7 @@ fn linux_backend(helper: PathBuf, abi: i32) -> Backend {
     Backend::Helper {
         helper,
         confinement: format!("Landlock (ABI {abi}) and seccomp"),
+        blocks_network: true,
     }
 }
 

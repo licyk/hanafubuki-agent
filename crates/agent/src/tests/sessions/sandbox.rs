@@ -44,6 +44,12 @@ async fn a_turn_takes_the_session_sandbox_over_the_configured_one() {
     };
     let driver = service.test_session_driver();
     assert_eq!(driver.turn_sandbox(chosen.id).await.unwrap(), configured);
+    assert_eq!(
+        service.sandbox_status(),
+        Ok(hanafubuki_agent_sandbox::Sandbox::detect()
+            .with_windows_sandbox(Some(crate::AgentWindowsSandbox::Unelevated))
+            .status())
+    );
 
     service
         .set_session_sandbox_mode(chosen.id, AgentSandboxMode::ReadOnly)
@@ -108,7 +114,7 @@ async fn a_command_whose_sandbox_is_unavailable_is_refused_before_it_runs() {
         .unwrap();
     assert!(matches!(
         service.sandbox_status(),
-        hanafubuki_agent_sandbox::SandboxStatus::Unavailable { .. }
+        Ok(hanafubuki_agent_sandbox::SandboxStatus::Unavailable { .. })
     ));
 
     let outcome = service

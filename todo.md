@@ -444,9 +444,10 @@ moves its pin.
         `/setup-default-sandbox` writing `windows.sandbox = "elevated"`;
         then the Windows default.
   - Open (P14c): unelevated does not block the network (Codex's offline
-    environment variables only), yet the `sandbox` section says
-    `networkAccess: false`; a background process ends with its command;
-    `sandbox_status()` ignores `windows.sandbox` (doctor applies it).
+    environment variables only; the `sandbox` section then adds
+    `"networkEnforced": false`); a background process ends with its
+    command. `sandbox_status()` now applies `windows.sandbox` and returns
+    a `Result` (Hanafubuki: the signature changed).
   - Hanafubuki, at its next pin (P14c): `AgentSettings::windows`
     (`AgentWindowsSandbox`); a settings table whose values are all unset
     is no longer written.

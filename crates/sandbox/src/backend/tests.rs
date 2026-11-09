@@ -1,4 +1,4 @@
-use super::{Sandbox, SandboxError, SandboxStatus};
+use super::{Sandbox, SandboxEnforcement, SandboxError, SandboxStatus};
 use crate::SandboxPolicy;
 
 fn command() -> Vec<String> {
@@ -84,27 +84,64 @@ fn seatbelt_runs_a_sandboxed_command_under_sandbox_exec() {
 #[test]
 fn the_windows_sandbox_setting_chooses_a_backend_only_on_windows() {
     let available = Sandbox {
-        backend: super::Backend::Helper {
-            helper: "/agent".into(),
-            confinement: "a restricted token".to_string(),
-        },
+        backend: super::windows_backend("C:\\agent.exe".into()),
     };
-    for setting in [None, Some(crate::AgentWindowsSandbox::Elevated)] {
-        let chosen = available.with_windows_sandbox(setting);
+    for windows in [false, true] {
+        for setting in [None, Some(crate::AgentWindowsSandbox::Elevated)] {
+            let chosen = available.with_windows_sandbox_on(windows, setting);
+            assert_eq!(
+                matches!(chosen.status(), SandboxStatus::Unavailable { .. }),
+                windows,
+                "{setting:?}"
+            );
+        }
         assert_eq!(
-            matches!(chosen.status(), SandboxStatus::Unavailable { .. }),
-            cfg!(windows),
-            "{setting:?}"
+            available
+                .with_windows_sandbox_on(windows, Some(crate::AgentWindowsSandbox::Unelevated)),
+            available
+        );
+        let unavailable = Sandbox::unavailable("none here");
+        assert_eq!(
+            unavailable
+                .with_windows_sandbox_on(windows, Some(crate::AgentWindowsSandbox::Unelevated)),
+            unavailable
         );
     }
     assert_eq!(
-        available.with_windows_sandbox(Some(crate::AgentWindowsSandbox::Unelevated)),
-        available
+        available.with_windows_sandbox(None),
+        available.with_windows_sandbox_on(cfg!(windows), None)
     );
-    let unavailable = Sandbox::unavailable("none here");
+}
+
+/// Only Windows' unelevated sandbox leaves the network reachable; one
+/// that is unavailable runs nothing.
+#[test]
+fn the_sandbox_says_whether_it_blocks_the_network() {
+    let windows = Sandbox {
+        backend: super::windows_backend("C:\\agent.exe".into()),
+    };
     assert_eq!(
-        unavailable.with_windows_sandbox(Some(crate::AgentWindowsSandbox::Unelevated)),
-        unavailable
+        windows.enforcement(),
+        SandboxEnforcement {
+            blocks_network: false
+        }
+    );
+    let seatbelt = Sandbox {
+        backend: super::Backend::Seatbelt,
+    };
+    assert!(seatbelt.enforcement().blocks_network);
+    assert!(
+        Sandbox::unavailable("none here")
+            .enforcement()
+            .blocks_network
+    );
+    #[cfg(target_os = "linux")]
+    assert!(
+        Sandbox {
+            backend: super::linux_backend("/agent".into(), 1),
+        }
+        .enforcement()
+        .blocks_network
     );
 }
 

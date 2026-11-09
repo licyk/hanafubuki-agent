@@ -97,7 +97,7 @@ Each turn's world state has a `sandbox` section beside the permission mode, with
 }
 ```
 
-In automatic review the escalation text says the reviewer decides, and asks the model to proceed only with a materially safer alternative after a denial; in full access it says not to ask; with no sandbox it says there is none. The section changes, and is sent again, only when one of these does: the sandbox mode, the permission mode, the workspace roots or the configured roots.
+In automatic review the escalation text says the reviewer decides, and asks the model to proceed only with a materially safer alternative after a denial; in full access it says not to ask; with no sandbox it says there is none. When the network is off but the sandbox in effect does not block it (Windows' unelevated sandbox, see [Platforms](#sandbox-platforms)), the section adds `"networkEnforced": false`, so the model is not told that the network is unreachable when it is not. The section changes, and is sent again, only when one of these does: the sandbox mode, the permission mode, the workspace roots or the configured roots.
 
 ### What it does not cover [#sandbox-limits]
 
@@ -106,7 +106,7 @@ In automatic review the escalation text says the reviewer decides, and asks the 
 - On Linux nothing under a writable root stays read-only, `.git` included: Landlock only grants rights, so Codex's read-only `.git` inside the workspace is not ported there. On macOS it is, so in workspace-write `git commit`, and anything else that writes `.git`, fails: run it with full-access.
 - On macOS a `.git`, `.agents` or `.hanafubuki-agent` that does not exist when the command starts is not protected: the command can create one.
 - Without network access, on Linux every socket but a Unix one is refused, and so is connecting any socket, Unix ones included (an SSH agent, Docker's socket); with it, only VM sockets stay refused; either way `io_uring`, which could open a socket past the filter, is refused. On macOS, without network access no socket connects, Unix ones included; with it, every one does.
-- On Windows the restricted token confines writes only: what the logon session or Everyone may write stays writable, the network is reachable (see [Platforms](#sandbox-platforms)), and a background process a command leaves behind ends with it.
+- On Windows the restricted token confines writes only: what the logon session or Everyone may write stays writable, the network is reachable (see [Platforms](#sandbox-platforms); the model is told so, see [What the model is told](#sandbox-context)), and a background process a command leaves behind ends with it.
 - In a terminal (PTY) command on Linux, `/dev/stdout` and `/dev/stderr` name the terminal's `/dev/pts` device, which is not writable: write to the output itself, or to `/dev/tty`, which is (the command's own terminal).
 - On a Linux kernel older than 6.2, truncating a file outside the writable roots is not restricted (Landlock's ABI before version 3 cannot).
 

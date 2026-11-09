@@ -422,7 +422,7 @@ impl AgentSessionDriver {
     /// The turn's world state, from the context contributors plugins
     /// registered. `user_message` is the text the turn was submitted with,
     /// `host` what the host submitted with it, to which the turn's
-    /// `SandboxPolicy` is added.
+    /// `SandboxPolicy` and what its sandbox enforces of it are added.
     pub(crate) async fn collect_world_state(
         &self,
         session_id: AgentSessionId,
@@ -433,11 +433,14 @@ impl AgentSessionDriver {
     ) -> Result<AgentWorldStateSnapshot, AgentError> {
         // The `sandbox` section tells the model what the turn's commands
         // may reach.
-        let sandbox = self
-            .turn_sandbox(session_id)
-            .await?
-            .policy(&self.executions.workspace_roots());
-        host.insert(Arc::new(sandbox));
+        let sandbox = self.turn_sandbox(session_id).await?;
+        let enforcement = self
+            .executions
+            .sandbox()
+            .with_windows_sandbox(sandbox.windows_sandbox)
+            .enforcement();
+        host.insert(Arc::new(sandbox.policy(&self.executions.workspace_roots())));
+        host.insert(Arc::new(enforcement));
         let request = ContextRequest {
             session_id,
             mode,
