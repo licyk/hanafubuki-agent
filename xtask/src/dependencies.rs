@@ -36,6 +36,7 @@ const LAYERS: &[(&str, &[&str])] = &[
     ("hanafubuki-agent-web-search", &[FOUNDATION]),
     (MODEL_API, &[FOUNDATION, TOOL_CONTRACTS]),
     ("hanafubuki-agent-workspace-fs", &[APPROVAL, FOUNDATION]),
+    (WORKTREE, &[FOUNDATION, PROCESS]),
     (
         "hanafubuki-agent-execution",
         &[APPROVAL, FOUNDATION, PROCESS],
@@ -105,6 +106,10 @@ const LAYERS: &[(&str, &[&str])] = &[
             "hanafubuki-agent-workspace-fs",
         ],
     ),
+    (
+        "hanafubuki-agent-plugin-worktree",
+        &[CONTRACTS, FOUNDATION, PROCESS, WORKTREE],
+    ),
     // The configuration.
     (CONFIG, &[FOUNDATION, MCP]),
     // The facade: the composition over everything below.
@@ -125,11 +130,13 @@ const LAYERS: &[(&str, &[&str])] = &[
             "hanafubuki-agent-plugin-mcp",
             "hanafubuki-agent-plugin-web",
             "hanafubuki-agent-plugin-workspace-fs",
+            "hanafubuki-agent-plugin-worktree",
             PROCESS,
             "hanafubuki-agent-runtime",
             SKILLS,
             TOOL_CONTRACTS,
             "hanafubuki-agent-workspace-fs",
+            WORKTREE,
         ],
     ),
     // The terminal interface over the facade, and the command line over both.
@@ -150,6 +157,7 @@ const APPROVAL: &str = "hanafubuki-agent-approval";
 const PROCESS: &str = "hanafubuki-agent-process";
 const MCP: &str = "hanafubuki-agent-mcp";
 const SKILLS: &str = "hanafubuki-agent-skills";
+const WORKTREE: &str = "hanafubuki-agent-worktree";
 const PLUGIN_PREFIX: &str = "hanafubuki-agent-plugin-";
 const KARDIA: [&str; 4] = ["kardia", "kardia-bridge", "kardia-core", "kardia-macros"];
 

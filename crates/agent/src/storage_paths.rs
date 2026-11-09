@@ -26,6 +26,8 @@ pub struct AgentStoragePaths {
     pub process_groups_file: PathBuf,
     /// The standalone Agent's log files (`logging`); a host logs to its own.
     pub logs_dir: PathBuf,
+    /// The Git worktrees the Agent makes (`hanafubuki-agent-worktree`).
+    pub worktrees_root: PathBuf,
 }
 
 impl AgentStoragePaths {
@@ -39,6 +41,7 @@ impl AgentStoragePaths {
             crash_record_file: root.join("crash-record.json"),
             process_groups_file: root.join("process-groups.json"),
             logs_dir: root.join("logs"),
+            worktrees_root: root.join("worktrees"),
             root,
         }
     }

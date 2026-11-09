@@ -1576,11 +1576,13 @@ dependencies = [
  "hanafubuki-agent-plugin-mcp",
  "hanafubuki-agent-plugin-web",
  "hanafubuki-agent-plugin-workspace-fs",
+ "hanafubuki-agent-plugin-worktree",
  "hanafubuki-agent-process",
  "hanafubuki-agent-runtime",
  "hanafubuki-agent-skills",
  "hanafubuki-agent-tool-contracts",
  "hanafubuki-agent-workspace-fs",
+ "hanafubuki-agent-worktree",
  "hex",
  "ignore",
  "image",
@@ -1674,6 +1676,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.11.1",
+ "tempfile",
 ]
 
 [[package]]
@@ -1869,6 +1872,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "hanafubuki-agent-plugin-worktree"
+version = "0.2.0"
+dependencies = [
+ "hanafubuki-agent-contracts",
+ "hanafubuki-agent-foundation",
+ "hanafubuki-agent-process",
+ "hanafubuki-agent-worktree",
+ "kardia-core",
+ "serde_json",
+ "tempfile",
+ "tokio",
+]
+
+[[package]]
 name = "hanafubuki-agent-process"
 version = "0.2.0"
 dependencies = [
@@ -1974,12 +1991,26 @@ dependencies = [
  "hanafubuki-agent-foundation",
  "ignore",
  "log",
+ "parking_lot",
  "rustix",
  "serde",
  "serde_json",
  "sha2 0.11.1",
  "tempfile",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "hanafubuki-agent-worktree"
+version = "0.2.0"
+dependencies = [
+ "hanafubuki-agent-foundation",
+ "hanafubuki-agent-process",
+ "log",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "uuid",
 ]
 
 [[package]]

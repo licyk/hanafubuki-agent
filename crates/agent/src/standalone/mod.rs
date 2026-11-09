@@ -14,7 +14,7 @@ mod keyring;
 mod workspace;
 
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -31,8 +31,8 @@ use crate::{
     AgentApplicationService, AgentConfig, AgentConstructor, AgentHandle, AgentHostInstructions,
     AgentHostPorts, AgentLaunch, AgentPluginEventSink, AgentProxy, AgentServiceInputs, AgentSlot,
     AgentStartMarker, AgentStartOptions, AgentStatusEventSink, AgentStoragePaths, AgentUnavailable,
-    DesktopAgent, NetworkSettingsPort, NoHostContext, NoopAgentPluginEventSink,
-    NoopAgentStatusEventSink, SkillRoots, WorkspaceRootsPort,
+    AgentWorkspaceRoots, DesktopAgent, NetworkSettingsPort, NoHostContext,
+    NoopAgentPluginEventSink, NoopAgentStatusEventSink, SkillRoots, WorkspaceRootsPort,
 };
 
 /// Where and how the standalone Agent runs.
@@ -81,6 +81,7 @@ impl Default for AgentRuntimeHost {
 /// Agent's handle) and its configuration.
 pub struct AgentRuntime {
     agent: DesktopAgent,
+    workspace: Arc<StandaloneWorkspace>,
     config: AgentConfig,
     storage: AgentStoragePaths,
     launch: Mutex<Option<AgentLaunch>>,
@@ -93,10 +94,10 @@ impl AgentRuntime {
         options: AgentRuntimeOptions,
         host: AgentRuntimeHost,
     ) -> Result<Self, String> {
-        let workspace = StandaloneWorkspace::new(&options.cwd, &options.add_dirs)?;
+        let workspace = Arc::new(StandaloneWorkspace::new(&options.cwd, &options.add_dirs)?);
         let layers = ConfigLayers {
             profile: options.profile,
-            project: Some(workspace.project().to_path_buf()),
+            project: Some(workspace.project()),
             overrides: options.overrides,
         };
         let config_dir = options.dirs.config_dir;
@@ -112,7 +113,7 @@ impl AgentRuntime {
             install_bundled_system_skills: options.bundled_skills.is_none(),
             state_file: storage.skill_state_file.clone(),
         };
-        let workspace: Arc<dyn WorkspaceRootsPort> = Arc::new(workspace);
+        let roots: Arc<dyn WorkspaceRootsPort> = workspace.clone();
         let marker = AgentStartMarker::new(storage.start_marker_file.clone())
             .with_crash_record(storage.crash_record_file.clone());
         // A command line that starts the Agent asks for it, so an earlier
@@ -141,7 +142,7 @@ impl AgentRuntime {
                 plugin_event_sink: plugin_events.clone(),
                 host: AgentHostPorts {
                     plugins: Vec::new(),
-                    workspace: workspace.clone(),
+                    workspace: roots.clone(),
                     steering_context: Arc::new(NoHostContext),
                     instructions: AgentHostInstructions::default(),
                     network: Arc::new(ConfiguredNetwork(config)),
@@ -156,6 +157,7 @@ impl AgentRuntime {
         };
         Ok(Self {
             agent,
+            workspace,
             config,
             storage,
             launch: Mutex::new(Some(launch)),
@@ -189,6 +191,27 @@ impl AgentRuntime {
     #[cfg(test)]
     pub(crate) fn child_environment_for_test(&self) -> HashMap<String, Option<String>> {
         self.agent.child_environment_for_test()
+    }
+
+    /// Makes `path` (relative to the current working directory, or
+    /// absolute) the working directory: the first workspace root, with its
+    /// Git root and the added directories after it. The running Agent's
+    /// sessions stay live: the filesystem tools and commands work in the new
+    /// roots at once, and each session sees them in its next turn's
+    /// context. Refused, with nothing changed, while a turn, a compaction
+    /// or a background terminal runs. The configuration's project layer
+    /// stays the one read at start. Blocks the caller.
+    ///
+    /// Standalone only: an embedded host supplies the workspace through its
+    /// own `WorkspaceRootsPort`.
+    pub fn set_working_directory(&self, path: &Path) -> Result<AgentWorkspaceRoots, String> {
+        let moved = self.workspace.moved_to(path)?;
+        if let Ok(agent) = self.agent.slot().agent() {
+            agent.move_workspace(moved.roots())?;
+        }
+        let roots = moved.roots().clone();
+        self.workspace.apply(moved);
+        Ok(roots)
     }
 
     pub fn storage_paths(&self) -> &AgentStoragePaths {

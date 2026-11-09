@@ -5,6 +5,7 @@ use std::time::{Duration, Instant};
 
 use hanafubuki_agent_approval::{ApprovalActionKind, AuthorizedAction};
 use hanafubuki_agent_foundation::cancellation::CancellationToken;
+use parking_lot::RwLock;
 
 use crate::atomic_write::{
     atomic_write, AtomicPublishHook, AtomicPublishMode, NoopAtomicPublishHook,
@@ -25,16 +26,28 @@ const MAX_PREVIEW_BYTES: usize = 512;
 
 #[derive(Clone)]
 pub struct WorkspaceFsService {
-    policy: WorkspaceFsPolicy,
+    /// Shared by every clone, so a replaced policy applies to all of them.
+    policy: Arc<RwLock<Arc<WorkspaceFsPolicy>>>,
     publish_hook: Arc<dyn AtomicPublishHook>,
 }
 
 impl WorkspaceFsService {
     pub fn new(policy: WorkspaceFsPolicy) -> Self {
         Self {
-            policy,
+            policy: Arc::new(RwLock::new(Arc::new(policy))),
             publish_hook: Arc::new(NoopAtomicPublishHook),
         }
+    }
+
+    /// Replaces the policy of this service and every clone of it: when the
+    /// workspace roots change. An operation already prepared keeps the
+    /// policy it was prepared under.
+    pub fn replace_policy(&self, policy: WorkspaceFsPolicy) {
+        *self.policy.write() = Arc::new(policy);
+    }
+
+    fn policy(&self) -> Arc<WorkspaceFsPolicy> {
+        self.policy.read().clone()
     }
 
     #[cfg(any(test, feature = "test-support"))]
@@ -43,7 +56,7 @@ impl WorkspaceFsService {
         publish_hook: Arc<dyn AtomicPublishHook>,
     ) -> Self {
         Self {
-            policy,
+            policy: Arc::new(RwLock::new(Arc::new(policy))),
             publish_hook,
         }
     }
@@ -52,7 +65,7 @@ impl WorkspaceFsService {
         &self,
         request: &WorkspaceFsRequest,
     ) -> Result<PreparedWorkspaceOperation, WorkspaceFsError> {
-        prepare_operation(&self.policy, request)
+        prepare_operation(&self.policy(), request)
     }
 
     pub fn execute(

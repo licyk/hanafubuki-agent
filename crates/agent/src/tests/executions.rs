@@ -68,6 +68,19 @@ async fn unified_exec_completes_only_after_manual_exact_approval() {
         request.action.kind,
         hanafubuki_agent_approval::ApprovalActionKind::ShellExecution
     );
+    // Without a workdir the command runs in the first workspace root, not
+    // in this process's directory.
+    let root =
+        hanafubuki_agent_foundation::paths::ResolvedPath::resolve(&paths.managed_instances_dir)
+            .unwrap();
+    assert!(
+        request
+            .action
+            .summary
+            .contains(&format!(" command in {}: ", root.native_text())),
+        "{}",
+        request.action.summary
+    );
     service
         .resolve_approval(
             session_id,

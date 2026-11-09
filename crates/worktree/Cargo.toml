@@ -1,0 +1,20 @@
+[package]
+name = "hanafubuki-agent-worktree"
+description = "Git worktrees for hanafubuki-agent: detached checkouts under its data directory, each with the session it belongs to"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+hanafubuki-agent-foundation.workspace = true
+hanafubuki-agent-process.workspace = true
+log.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+uuid = { workspace = true, features = ["v4"] }
+
+[dev-dependencies]
+hanafubuki-agent-process = { workspace = true, features = ["test-support"] }
+tempfile.workspace = true

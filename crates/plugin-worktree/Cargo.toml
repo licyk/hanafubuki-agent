@@ -1,0 +1,20 @@
+[package]
+name = "hanafubuki-agent-plugin-worktree"
+description = "The hanafubuki-agent plugin that serves Git worktrees to the facade's worktree calls"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+hanafubuki-agent-contracts.workspace = true
+hanafubuki-agent-worktree.workspace = true
+kardia-core.workspace = true
+
+[dev-dependencies]
+hanafubuki-agent-foundation.workspace = true
+hanafubuki-agent-process.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }

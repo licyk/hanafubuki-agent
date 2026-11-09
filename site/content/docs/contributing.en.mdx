@@ -100,7 +100,12 @@ hanafubuki-agent is licensed **GPL-3.0-only** ([LICENSE](https://github.com/licy
 
 Some code is derived from other projects and keeps their attribution as their licences ask:
 
-- **OpenAI Codex** (Apache License 2.0): the terminal interface, `crates/tui`, is ported from Codex's `codex-rs/tui` (`rust-v0.93.0`, and later work from `57a808a392`), and its file search (`crates/tui/src/file_search`) from `codex-rs/file-search`; `crates/config/src/overrides.rs` and its tests are derived from `codex-rs/common/src/config_override.rs`; the `recap` plugin's prompt and conversation selection (`crates/agent/src/plugins/recap/prompt.rs`, `history.rs`) are derived from `codex-rs/context-fragments/src/recap_prompt.rs`, `codex-rs/tui/src/app/recap.rs` and `recap_history.rs`, and `crates/agent/src/service/mcp/oauth_login.rs` (the MCP OAuth loopback) from `codex-rs/rmcp-client/src/perform_oauth_login.rs` (commit `57a808a392`). Every derived file says so, and from which revision, in its first lines ("Modified from OpenAI Codex rust-v0.93.0 (Apache-2.0).", "Modified from OpenAI Codex 57a808a392 (Apache-2.0)." or a "Derived from OpenAI Codex" header naming its sources). NOTICE carries Codex's NOTICE and licence.
+- **OpenAI Codex** (Apache License 2.0). Every derived file says so, and from which revision, in its first lines ("Modified from OpenAI Codex rust-v0.93.0 (Apache-2.0).", "Modified from OpenAI Codex 57a808a392 (Apache-2.0)." or a "Derived from OpenAI Codex" header naming its sources); NOTICE carries Codex's NOTICE and licence. The derived code:
+  - the terminal interface, `crates/tui`, from `codex-rs/tui` (`rust-v0.93.0`, and later work from `57a808a392`), and its file search (`crates/tui/src/file_search`) from `codex-rs/file-search`;
+  - `crates/config/src/overrides.rs` and its tests, from `codex-rs/common/src/config_override.rs`;
+  - the `recap` plugin's prompt and conversation selection (`crates/agent/src/plugins/recap/prompt.rs`, `history.rs`), from `codex-rs/context-fragments/src/recap_prompt.rs`, `codex-rs/tui/src/app/recap.rs` and `recap_history.rs` (`57a808a392`);
+  - the MCP OAuth loopback (`crates/agent/src/service/mcp/oauth_login.rs`), from `codex-rs/rmcp-client/src/perform_oauth_login.rs` (`57a808a392`);
+  - the Git worktrees (`crates/worktree/src`: `git.rs`, `manager.rs`, `owner.rs`), from `codex-rs/worktree` (`57a808a392`).
 - **Ratatui** (MIT): `crates/tui/src/custom_terminal.rs` is derived from `ratatui::Terminal` and keeps its MIT header.
 
 `cargo xtask check-notices` checks that attribution against `architecture/notices-policy.toml`:

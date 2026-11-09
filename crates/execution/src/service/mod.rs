@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
@@ -18,7 +19,7 @@ use hanafubuki_agent_process::executor::{
 use hanafubuki_agent_process::ownership::{
     OwnedReleaseStatus, ProcessOwnerId, ProcessReceipt, ProcessReservation,
 };
-use parking_lot::{Condvar, Mutex};
+use parking_lot::{Condvar, Mutex, RwLock};
 
 use crate::model::{
     AgentBackgroundTerminalSnapshot, AgentBackgroundTerminalStopFailure,
@@ -69,6 +70,10 @@ struct AgentExecutionServiceInner {
     registry: Mutex<ExecutionRegistry>,
     /// Signalled with `registry` whenever an execution's observer is released.
     observer_released: Condvar,
+    /// Where a command without an absolute `workdir` runs: the primary
+    /// workspace root, which the application sets, and sets again when the
+    /// workspace changes.
+    working_directory: RwLock<Option<PathBuf>>,
 }
 
 impl AgentExecutionService {
@@ -104,6 +109,7 @@ impl AgentExecutionService {
                     records: HashMap::new(),
                 }),
                 observer_released: Condvar::new(),
+                working_directory: RwLock::new(None),
             }),
         }
     }
@@ -120,6 +126,20 @@ impl AgentExecutionService {
         &self,
         request: &ExecCommandRequest,
     ) -> Result<hanafubuki_agent_approval::ApprovalAction, AgentExecutionError> {
-        Ok(prepare_exec_command(request)?.action().clone())
+        Ok(
+            prepare_exec_command(request, self.working_directory().as_deref())?
+                .action()
+                .clone(),
+        )
+    }
+
+    /// Sets the directory a command without an absolute `workdir` runs in
+    /// (see [`ExecCommandRequest::workdir`]).
+    pub fn set_working_directory(&self, directory: PathBuf) {
+        *self.inner.working_directory.write() = Some(directory);
+    }
+
+    pub fn working_directory(&self) -> Option<PathBuf> {
+        self.inner.working_directory.read().clone()
     }
 }

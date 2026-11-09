@@ -214,6 +214,8 @@ fn main() -> Result<(), String> {
 
 `AgentRuntimeOptions` 是目录（`AgentDirs`，遵循 `HANAFUBUKI_AGENT_HOME`）、可选的 System Skills 目录、工作目录和 `--add-dir`、配置 profile、`-c` 覆盖和首次启动的选项。`AgentRuntime::standalone` 会立即读取一次分层配置，所以错误的 profile 在这里就失败。独立模式的首次启动总会运行：命令行启动 Agent 就是在请求它，之前未完成的启动不会让它保持关闭（崩溃标记仍然计数）。
 
+`AgentRuntime::set_working_directory(path)` 在 Agent 运行时把 `path`（相对于当前工作目录，或绝对路径）设为工作目录，并返回新的根目录：它、它的 Git 根目录，然后是 `--add-dir`。运行中的 Agent 的文件工具和命令立即移到这些根目录，会话保持活着，每个会话在下一个轮次的上下文中看到新的根目录。有轮次、压缩或后台终端在运行时它被拒绝，什么都不改变，错误说明是哪一个。配置的项目层仍是启动时读取的那一个。它只用于独立模式：嵌入的宿主通过自己的 `WorkspaceRootsPort` 提供工作区。
+
 `AgentRuntimeHost` 是独立模式的使用者可以替换的部分：
 
 | 字段            | 默认值                                | 说明                                              |
@@ -267,7 +269,7 @@ impl WorkspaceRootsPort for ProjectRoots {
 }
 ```
 
-- `roots()` 在每个轮次和每次 Skill 目录读取时重新读取；第一个根目录是相对路径请求的基准。`agent_workspace_roots_from` 去重（按路径身份），并去掉嵌套在前面某个根目录里的根目录。
+- `roots()` 在每个轮次和每次 Skill 目录读取时重新读取；第一个根目录是相对路径请求的基准。文件工具的策略和没有 `workdir` 的命令运行的目录在构建 Agent 实例时从它取得，所以新的根目录随下一个实例（重启）到达工具。`agent_workspace_roots_from` 去重（按路径身份），并去掉嵌套在前面某个根目录里的根目录。
 - `protected_roots()`：文件工具拒绝访问的目录，包括读取，即使它们位于工作区根目录之下；其下的请求在任何审批之前以 `ProtectedPath` 失败（Hanafubuki：应用的数据与日志目录，其凭据就在那里）。独立运行的 Agent 不指定任何目录。
 - `selected(host)`：轮次的宿主输入所选中的目录，`AGENTS.md` 从根目录一直查找到这里（Hanafubuki：用户正在看的实例）。
 - `search_roots(host)`：`@` 文件搜索要遍历的目录及其标签。
@@ -455,12 +457,16 @@ impl AgentEventSink for PrintEvents {
 
 有些功能由插件行承担，服务 API 每次调用时找到它们：
 
-| 调用                                | 返回                                                                | 所属的行 |
-| ----------------------------------- | ------------------------------------------------------------------- | -------- |
-| `recap_session(session_id)`         | `AgentRecap { summary, next_action }`：根据会话最近的往来生成的概要 | `recap`  |
-| `suggest_session_title(session_id)` | 对话当前的标题建议，用户在 `rename_session` 之前接受或编辑它        | `titles` |
+| 调用                                | 返回                                                                                                                                       | 所属的行   |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ---------- |
+| `recap_session(session_id)`         | `AgentRecap { summary, next_action }`：根据会话最近的往来生成的概要                                                                        | `recap`    |
+| `suggest_session_title(session_id)` | 对话当前的标题建议，用户在 `rename_session` 之前接受或编辑它                                                                               | `titles`   |
+| `worktree_create(owner)`            | `AgentWorktree { path, head, branch, owner }`：第一个工作区根目录所在仓库的新工作树，分离在它的 `HEAD`，给出 `owner`（一个会话）时绑定到它 | `worktree` |
+| `worktree_list()`                   | 该仓库在数据目录 `worktrees/` 下的工作树                                                                                                   | `worktree` |
+| `worktree_bind(path, session)`      | 把工作树绑定到会话；已属于另一个会话的被拒绝                                                                                               | `worktree` |
+| `worktree_remove(path)`             | 删除工作树，连同本地修改；第一个工作区根目录在其中时被拒绝                                                                                 | `worktree` |
 
-两者都在会话的对话之外询问会话的模型，不提交任何东西。该行关闭（`disabledPlugins`）、启动中、失败或重启时，调用返回 `AgentError::FeatureUnavailable { feature, reason }`，`reason` 说明原因；调用期间该行代码中的 panic 只停止并重启这一行，调用返回同样的错误。没有可读请求的会话返回 `InvalidInput`，模型请求失败返回 `Model`。
+前两个在会话的对话之外询问会话的模型，不提交任何东西。该行关闭（`disabledPlugins`）、启动中、失败或重启时，调用返回 `AgentError::FeatureUnavailable { feature, reason }`，`reason` 说明原因；调用期间该行代码中的 panic 只停止并重启这一行，调用返回同样的错误。没有可读请求的会话返回 `InvalidInput`，模型请求失败返回 `Model`。失败的工作树调用（不是 Git 仓库、不是 Agent 的工作树、属于另一个会话、`git` 失败）返回带原因的 `InvalidInput`。独立模式的使用者用 `AgentRuntime::set_working_directory` 移入工作树。
 
 ## 日志 [#logging]
 

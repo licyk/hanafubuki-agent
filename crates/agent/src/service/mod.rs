@@ -55,6 +55,9 @@ pub use skill_operations::{AgentSkillSessionState, LocalSkillInstallRequest};
 #[cfg(test)]
 mod test_access;
 mod turns;
+mod workspace;
+mod worktree;
+pub use worktree::AgentWorktree;
 
 /// What the application hands the Agent when it builds it.
 pub struct AgentServiceInputs {
@@ -267,6 +270,7 @@ impl AgentApplicationService {
             workspace_roots.roots().len(),
             workspace_roots.primary().display()
         );
+        executions.set_working_directory(workspace_roots.primary().clone());
         let files = WorkspaceFsService::new(
             WorkspaceFsPolicy::new(workspace_roots.into_vec(), workspace.protected_roots())
                 .map_err(|error| error.to_string())?,
@@ -355,6 +359,10 @@ impl AgentApplicationService {
                     conversations: crate::conversation_reader::AgentConversationReader::new(
                         core.clone(),
                         config.clone(),
+                    ),
+                    worktrees: hanafubuki_agent_worktree::WorktreeManager::new(
+                        storage_paths.worktrees_root.clone(),
+                        executor.clone(),
                     ),
                 },
                 host.plugins,

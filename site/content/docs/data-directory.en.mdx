@@ -30,16 +30,17 @@ A relative path in either is taken from the current directory.
 
 ## What the data directory holds [#contents]
 
-| Path                        | Holds                                                                                                                                                            |
-| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `history/`                  | The session history: the `index.sqlite3` index, the sessions in `active/` and `archived/`, attachments in `attachments/`, and `trash/` for deletions in progress |
-| `memory/`                   | The [memory](/docs/memory): `memory.sqlite3` and its working directories                                                                                         |
-| `skills/`                   | The [Skills](/docs/skills): the built-in ones in `system/`, the installed ones in `packages/`, and `state.json`, which ones are enabled                          |
-| `logs/hanafubuki-agent.log` | The log file; past 8 MiB it is rotated, keeping three old files, `.log.1` to `.log.3`                                                                            |
-| `start-marker.json`         | How many starts did not end normally, to notice a crash loop                                                                                                     |
-| `crash-record.json`         | The record of the latest crash                                                                                                                                   |
-| `process-groups.json`       | The process groups the Agent started; the next start cleans up any left behind                                                                                   |
-| `.lock`                     | The data directory's lock                                                                                                                                        |
+| Path                        | Holds                                                                                                                                                                                                                                            |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `history/`                  | The session history: the `index.sqlite3` index, the sessions in `active/` and `archived/`, attachments in `attachments/`, and `trash/` for deletions in progress                                                                                 |
+| `memory/`                   | The [memory](/docs/memory): `memory.sqlite3` and its working directories                                                                                                                                                                         |
+| `skills/`                   | The [Skills](/docs/skills): the built-in ones in `system/`, the installed ones in `packages/`, and `state.json`, which ones are enabled                                                                                                          |
+| `logs/hanafubuki-agent.log` | The log file; past 8 MiB it is rotated, keeping three old files, `.log.1` to `.log.3`                                                                                                                                                            |
+| `start-marker.json`         | How many starts did not end normally, to notice a crash loop                                                                                                                                                                                     |
+| `crash-record.json`         | The record of the latest crash                                                                                                                                                                                                                   |
+| `process-groups.json`       | The process groups the Agent started; the next start cleans up any left behind                                                                                                                                                                   |
+| `worktrees/`                | The Git worktrees the Agent made, each `<repository>-<id>`, a detached checkout; the session one belongs to is recorded in its Git metadata (`hanafubuki-agent-owner.json` beside the worktree's own `HEAD` in the repository), and goes with it |
+| `.lock`                     | The data directory's lock                                                                                                                                                                                                                        |
 
 Each file is created when it is first needed.
 

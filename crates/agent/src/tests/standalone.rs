@@ -3,7 +3,7 @@
 //! working directory, holds its data directory against a second runtime, and
 //! shuts down cleanly.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use hanafubuki_agent_foundation::paths::ResolvedPath;
 
@@ -170,6 +170,88 @@ fn the_standalone_runtime_runs_a_turn_in_its_working_directory() {
     assert!(diagnostics.is_empty(), "{diagnostics:?}");
     // Released with the shutdown.
     DataDirLock::acquire(&fixture.home).unwrap();
+}
+
+/// The working directory changes while the Agent runs: a path relative to
+/// the current one, whose Git root follows it as before; the commands run
+/// there and the session's next request names it. A directory that does
+/// not exist changes nothing.
+#[test]
+fn the_working_directory_changes_while_the_agent_runs() {
+    let model = tokio::runtime::Runtime::new().unwrap();
+    let server = model.block_on(FakeServer::start(vec![(
+        assistant_events("Moved"),
+        Duration::ZERO,
+    )]));
+    let fixture = standalone(&server.base_url);
+    let other = fixture
+        .cwd
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .join("other");
+    let app = other.join("app");
+    std::fs::create_dir_all(other.join(".git")).unwrap();
+    std::fs::create_dir_all(&app).unwrap();
+    let runtime = fixture.runtime().unwrap();
+    runtime.start();
+    let agent = runtime.wait_until_started(START_TIMEOUT).unwrap();
+    let session = agent
+        .runtime()
+        .block_on({
+            let agent = agent.clone();
+            async move {
+                agent
+                    .create_session(hanafubuki_agent_kernel::AgentSessionMode::Default)
+                    .await
+                    .unwrap()
+            }
+        })
+        .unwrap();
+
+    let roots = runtime
+        .set_working_directory(Path::new("../../other/app"))
+        .unwrap();
+
+    let app = ResolvedPath::resolve(&app).unwrap();
+    let other = ResolvedPath::resolve(&other).unwrap();
+    assert_eq!(
+        roots.roots(),
+        [app.native().to_path_buf(), other.native().to_path_buf()]
+    );
+    assert_eq!(agent.workspace_roots().unwrap(), roots);
+    assert_eq!(
+        agent.test_executions().working_directory().as_deref(),
+        Some(app.native())
+    );
+    assert!(runtime.set_working_directory(Path::new("missing")).is_err());
+    assert_eq!(agent.workspace_roots().unwrap(), roots);
+    agent
+        .runtime()
+        .block_on({
+            let agent = agent.clone();
+            async move {
+                agent
+                    .start_turn(session.id, "Where are you?".to_string().into())
+                    .await
+                    .unwrap()
+            }
+        })
+        .unwrap();
+    let section =
+        serde_json::to_string(&serde_json::json!({ "roots": [app.native_text()] })).unwrap();
+    let first_root = serde_json::to_string(&section).unwrap();
+    let first_root = &first_root[1..first_root.len() - 3];
+    assert!(
+        String::from_utf8_lossy(&server.requests()[0].body).contains(first_root),
+        "the request does not name {} first",
+        app.native_text()
+    );
+
+    drop(agent);
+    let diagnostics = runtime.shutdown(AGENT_SHUTDOWN_BUDGET);
+    assert!(diagnostics.is_empty(), "{diagnostics:?}");
 }
 
 #[test]

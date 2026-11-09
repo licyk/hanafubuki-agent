@@ -27,6 +27,7 @@ hanafubuki-agent-plugin-execution = { path = "crates/plugin-execution", version 
 hanafubuki-agent-plugin-mcp = { path = "crates/plugin-mcp", version = "0.2.0" }
 hanafubuki-agent-plugin-web = { path = "crates/plugin-web", version = "0.2.0" }
 hanafubuki-agent-plugin-workspace-fs = { path = "crates/plugin-workspace-fs", version = "0.2.0" }
+hanafubuki-agent-plugin-worktree = { path = "crates/plugin-worktree", version = "0.2.0" }
 hanafubuki-agent-process = { path = "crates/process", version = "0.2.0" }
 hanafubuki-agent-runtime = { path = "crates/runtime", version = "0.2.0" }
 hanafubuki-agent-skills = { path = "crates/skills", version = "0.2.0" }
@@ -34,6 +35,7 @@ hanafubuki-agent-tui = { path = "crates/tui", version = "0.2.0" }
 hanafubuki-agent-tool-contracts = { path = "crates/tool-contracts", version = "0.2.0" }
 hanafubuki-agent-web-search = { path = "crates/web-search", version = "0.2.0" }
 hanafubuki-agent-workspace-fs = { path = "crates/workspace-fs", version = "0.2.0" }
+hanafubuki-agent-worktree = { path = "crates/worktree", version = "0.2.0" }
 
 # Third-party crates more than one member uses; members add features.
 axum = "0.8"

@@ -214,6 +214,8 @@ fn main() -> Result<(), String> {
 
 `AgentRuntimeOptions` holds the directories (`AgentDirs`, which follows `HANAFUBUKI_AGENT_HOME`), an optional System Skills directory, the working directory and `--add-dir`s, the configuration profile, the `-c` overrides and the first start's options. `AgentRuntime::standalone` reads the layered configuration once right away, so a bad profile fails there. A standalone first start always runs: a command line that starts the Agent asks for it, so an earlier run's unfinished starts do not keep it off (the crash marker still counts them).
 
+`AgentRuntime::set_working_directory(path)` makes `path` (relative to the current working directory, or absolute) the working directory while the Agent runs, and returns the new roots: it, its Git root, then the `--add-dir`s. The running Agent's filesystem tools and commands move to them at once and its sessions stay live, each seeing the new roots in its next turn's context. It is refused, with nothing changed, while a turn, a compaction or a background terminal runs, and the error says which. The configuration's project layer stays the one read at start. It is standalone only: an embedded host supplies the workspace through its own `WorkspaceRootsPort`.
+
 `AgentRuntimeHost` is what a standalone consumer replaces:
 
 | Field           | Default                              | Notes                                                           |
@@ -267,7 +269,7 @@ impl WorkspaceRootsPort for ProjectRoots {
 }
 ```
 
-- `roots()` is read again for every turn and every Skill catalog read; the first root is the base of relative requests. `agent_workspace_roots_from` removes duplicates (by path identity) and roots nested in an earlier one.
+- `roots()` is read again for every turn and every Skill catalog read; the first root is the base of relative requests. The filesystem tools' policy and the directory a command without a `workdir` runs in are taken from it when an Agent instance is built, so new roots reach the tools with the next instance (a restart). `agent_workspace_roots_from` removes duplicates (by path identity) and roots nested in an earlier one.
 - `protected_roots()`: directories the filesystem tools refuse, reads included, even under a workspace root; a request there fails with `ProtectedPath` before any approval (Hanafubuki: the application's data and log directories, where its credentials are). The standalone Agent names none.
 - `selected(host)`: the directory the turn's host input selects; `AGENTS.md` files are read from each root down to it (Hanafubuki: the instance the user is looking at).
 - `search_roots(host)`: the directories `@` file search walks, each with its label.
@@ -465,12 +467,16 @@ A turn's permission mode is fixed when it starts. `submit_turn_with_sink` and `s
 
 Some features are served by a plugin row, and the service API reaches them per call:
 
-| Call                                | Returns                                                                                           | Its row  |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------- | -------- |
-| `recap_session(session_id)`         | `AgentRecap { summary, next_action }`: a catch-up on the session from its latest exchanges        | `recap`  |
-| `suggest_session_title(session_id)` | a title for the conversation as it stands, for the user to accept or edit before `rename_session` | `titles` |
+| Call                                | Returns                                                                                                                                                                         | Its row    |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| `recap_session(session_id)`         | `AgentRecap { summary, next_action }`: a catch-up on the session from its latest exchanges                                                                                      | `recap`    |
+| `suggest_session_title(session_id)` | a title for the conversation as it stands, for the user to accept or edit before `rename_session`                                                                               | `titles`   |
+| `worktree_create(owner)`            | `AgentWorktree { path, head, branch, owner }`: a new worktree of the repository the first workspace root is in, detached at its `HEAD`, bound to `owner` (a session) when given | `worktree` |
+| `worktree_list()`                   | the worktrees of that repository under the data directory's `worktrees/`                                                                                                        | `worktree` |
+| `worktree_bind(path, session)`      | binds a worktree to a session; one another session owns is refused                                                                                                              | `worktree` |
+| `worktree_remove(path)`             | removes a worktree, local changes and all; refused while the first workspace root is inside it                                                                                  | `worktree` |
 
-Both ask the session's model, outside the session's conversation, and commit nothing. While the row is off (`disabledPlugins`), starting, failed or restarting, the call returns `AgentError::FeatureUnavailable { feature, reason }`, whose `reason` says why; a panic in the row's code during the call stops and restarts that row alone, and the call returns the same error. A session without a request to read is `InvalidInput`, and a request the model fails is `Model`.
+The first two ask the session's model, outside the session's conversation, and commit nothing. While the row is off (`disabledPlugins`), starting, failed or restarting, the call returns `AgentError::FeatureUnavailable { feature, reason }`, whose `reason` says why; a panic in the row's code during the call stops and restarts that row alone, and the call returns the same error. A session without a request to read is `InvalidInput`, and a request the model fails is `Model`. A worktree call that fails (not a Git repository, not a worktree of the Agent's, owned by another session, `git` failing) is `InvalidInput` with why. A standalone consumer moves into a worktree with `AgentRuntime::set_working_directory`.
 
 ## Logging [#logging]
 

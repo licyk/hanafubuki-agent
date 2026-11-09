@@ -49,8 +49,12 @@ struct CanonicalShellAction<'a> {
     rows: Option<u16>,
 }
 
+/// Prepares `request` to run in its `workdir`, which resolves against
+/// `working_directory`, never the process's own: that is wherever the Agent
+/// was started from, and `-C` does not change it.
 pub(crate) fn prepare_exec_command(
     request: &ExecCommandRequest,
+    working_directory: Option<&Path>,
 ) -> Result<PreparedExecCommand, AgentExecutionError> {
     if request.cmd.is_empty()
         || request.cmd.len() > MAX_SHELL_SCRIPT_BYTES
@@ -65,7 +69,10 @@ pub(crate) fn prepare_exec_command(
     let shell = request.shell.unwrap_or_else(default_platform_shell);
     let source_digest = hex::encode(Sha256::digest(request.cmd.as_bytes()));
     validate_execution_origin(&request.origin, Some(&source_digest))?;
-    let cwd = canonical_directory(request.workdir.as_deref().unwrap_or_else(|| Path::new(".")))?;
+    let cwd = canonical_directory(&command_directory(
+        request.workdir.as_deref(),
+        working_directory,
+    )?)?;
     let environment = build_clean_command_environment(&request.environment)?;
     let program = resolve_shell(shell, &cwd, &environment)?;
     let (io_mode, cols, rows) = if request.tty {
@@ -103,6 +110,21 @@ pub(crate) fn prepare_exec_command(
         &request.origin,
     )?;
     Ok(PreparedExecCommand { plan, action })
+}
+
+fn command_directory(
+    workdir: Option<&Path>,
+    working_directory: Option<&Path>,
+) -> Result<PathBuf, AgentExecutionError> {
+    match (workdir, working_directory) {
+        (Some(workdir), _) if workdir.is_absolute() => Ok(workdir.to_path_buf()),
+        (Some(workdir), Some(base)) => Ok(base.join(workdir)),
+        (None, Some(base)) => Ok(base.to_path_buf()),
+        (_, None) => Err(AgentExecutionError::Resolution(
+            "the command has no absolute workdir and the Agent has no working directory"
+                .to_string(),
+        )),
+    }
 }
 
 const fn default_platform_shell() -> PlatformShell {

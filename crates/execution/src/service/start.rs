@@ -42,7 +42,7 @@ impl AgentExecutionService {
         approval: Option<&AuthorizedAction>,
         cancellation: &CancellationToken,
     ) -> Result<AgentExecutionSnapshot, AgentExecutionError> {
-        let prepared = prepare_exec_command(&request)?;
+        let prepared = prepare_exec_command(&request, self.working_directory().as_deref())?;
         exact_approval(prepared.action(), approval)?;
         self.start_plan(
             scope,

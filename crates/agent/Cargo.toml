@@ -20,6 +20,7 @@ hanafubuki-agent-plugin-execution.workspace = true
 hanafubuki-agent-plugin-mcp.workspace = true
 hanafubuki-agent-plugin-web.workspace = true
 hanafubuki-agent-plugin-workspace-fs.workspace = true
+hanafubuki-agent-plugin-worktree.workspace = true
 hanafubuki-agent-history.workspace = true
 hanafubuki-agent-memory.workspace = true
 hanafubuki-agent-execution.workspace = true
@@ -30,6 +31,7 @@ hanafubuki-agent-mcp.workspace = true
 hanafubuki-agent-process.workspace = true
 hanafubuki-agent-skills.workspace = true
 hanafubuki-agent-workspace-fs.workspace = true
+hanafubuki-agent-worktree.workspace = true
 hanafubuki-agent-tool-contracts.workspace = true
 hanafubuki-agent-foundation.workspace = true
 axum = { workspace = true, optional = true }

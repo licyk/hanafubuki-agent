@@ -55,7 +55,7 @@ impl WorkspaceFsService {
                     truncated = true;
                     continue;
                 };
-                self.policy.ensure_unprotected(&child)?;
+                self.policy().ensure_unprotected(&child)?;
                 let directory_identity = if kind == WorkspacePathKind::Directory {
                     Some(identity_from_metadata(&child, &metadata)?)
                 } else {

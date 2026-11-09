@@ -44,6 +44,21 @@ path = "crates/agent/src/service/mcp/oauth_login.rs"
 markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
 notice = "crates/agent/src/service/mcp/oauth_login.rs"
 
+[[derived]]
+path = "crates/worktree/src/git.rs"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
+notice = "crates/worktree"
+
+[[derived]]
+path = "crates/worktree/src/manager.rs"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
+notice = "crates/worktree"
+
+[[derived]]
+path = "crates/worktree/src/owner.rs"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
+notice = "crates/worktree"
+
 [[mit]]
 path = "crates/tui/src/custom_terminal.rs"
 holder = "Copyright (c) 2016-2022 Florian Dehau"

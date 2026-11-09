@@ -649,3 +649,47 @@ fn finished_execution_is_disposed_only_after_its_observer_releases_it() {
     assert_eq!(result.output, "done");
     assert_eq!(process.session_count(), 0);
 }
+
+/// A command without a `workdir` runs in the service's working directory,
+/// never in the process's own, which `-C` does not change; a relative
+/// `workdir` resolves against it. Without a working directory only an
+/// absolute `workdir` runs.
+#[test]
+#[cfg(unix)]
+fn a_command_runs_in_the_working_directory_not_the_processs() {
+    let process = FakeAgentExecutionProcessPort::shared();
+    process.finish_on_start("", 0);
+    let service = AgentExecutionService::with_process_port(process.clone());
+    let workspace = tempfile::tempdir().unwrap();
+    std::fs::create_dir(workspace.path().join("sub")).unwrap();
+    let root = hanafubuki_agent_foundation::paths::ResolvedPath::resolve(workspace.path())
+        .unwrap()
+        .native()
+        .to_path_buf();
+    assert_ne!(Some(&root), std::env::current_dir().ok().as_ref());
+    let mut request = exec_request(false);
+    request.workdir = None;
+    assert!(matches!(
+        service.prepare_exec_command_action(&request),
+        Err(AgentExecutionError::Resolution(_))
+    ));
+
+    service.set_working_directory(workspace.path().to_path_buf());
+    for (workdir, expected) in [
+        (None, root.clone()),
+        (Some("sub"), root.join("sub")),
+        (Some("sub/.."), root.clone()),
+    ] {
+        request.workdir = workdir.map(std::path::PathBuf::from);
+        let action = service.prepare_exec_command_action(&request).unwrap();
+        service
+            .start_exec_command(
+                AgentExecutionScope::for_agent_session(40).unwrap(),
+                request.clone(),
+                Some(&approve_action(&action)),
+                &CancellationToken::default(),
+            )
+            .unwrap();
+        assert_eq!(process.starts().last().unwrap().cwd, Some(expected));
+    }
+}

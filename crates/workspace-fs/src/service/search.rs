@@ -164,7 +164,7 @@ impl WorkspaceFsService {
             if !child.starts_with(&root.resolved) {
                 return Err(WorkspaceFsError::PathChanged);
             }
-            self.policy.ensure_unprotected(&child)?;
+            self.policy().ensure_unprotected(&child)?;
             let metadata = fs::symlink_metadata(child.system()).map_err(|error| {
                 WorkspaceFsError::Io(format!("inspect {}: {error}", child.native_text()))
             })?;

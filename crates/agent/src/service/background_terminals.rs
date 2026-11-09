@@ -158,7 +158,7 @@ impl AgentApplicationService {
     }
 }
 
-fn background_terminal_scope(
+pub(super) fn background_terminal_scope(
     session_id: AgentSessionId,
 ) -> Result<AgentExecutionScope, AgentError> {
     AgentExecutionScope::for_agent_session(session_id.value())

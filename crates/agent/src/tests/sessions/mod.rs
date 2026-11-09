@@ -46,7 +46,7 @@ async fn write_fixture_credentials(
         .unwrap()
 }
 
-fn install_fake_background_execution(
+pub(super) fn install_fake_background_execution(
     service: &AgentApplicationService,
     session_id: AgentSessionId,
     command: &str,

@@ -36,4 +36,6 @@ mod standalone;
 mod startup;
 mod titles;
 mod tools;
+mod workspace;
+mod worktrees;
 mod world_state;

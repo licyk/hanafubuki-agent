@@ -111,6 +111,8 @@ pub struct ExecCommandRequest {
     pub tty: bool,
     pub yield_time_ms: u64,
     pub max_output_bytes: Option<usize>,
+    /// Where the command runs: absolute, or relative to the service's
+    /// working directory; `None` is that directory.
     pub workdir: Option<PathBuf>,
     pub environment: BTreeMap<String, String>,
     pub origin: ApprovalOrigin,

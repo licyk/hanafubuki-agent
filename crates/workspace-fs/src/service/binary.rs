@@ -76,7 +76,7 @@ impl WorkspaceFsService {
             ));
         }
         let file =
-            crate::resolver::resolve_existing(&self.policy, path, Some(WorkspacePathKind::File))?;
+            crate::resolver::resolve_existing(&self.policy(), path, Some(WorkspacePathKind::File))?;
         revalidate_existing(&file)?;
         if file.identity.size > max_bytes as u64 {
             return Err(WorkspaceFsError::InvalidRequest(format!(

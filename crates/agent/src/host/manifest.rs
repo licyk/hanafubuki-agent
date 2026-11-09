@@ -12,7 +12,9 @@ use hanafubuki_agent_plugin_web::{
     web_plugin, WebPluginConfig, WebProviderSetting, WebProxySetting,
 };
 use hanafubuki_agent_plugin_workspace_fs::workspace_fs_plugin;
+use hanafubuki_agent_plugin_worktree::worktree_plugin;
 use hanafubuki_agent_workspace_fs::WorkspaceFsService;
+use hanafubuki_agent_worktree::WorktreeManager;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -45,6 +47,9 @@ pub(crate) struct AgentPluginInputs {
     pub(crate) titles: AgentTitleApplication,
     /// What a recap reads of a session.
     pub(crate) conversations: AgentConversationReader,
+    /// The worktrees, under the data directory, over the instance's
+    /// executor.
+    pub(crate) worktrees: WorktreeManager,
 }
 
 /// The manifest rows in mount order. Each declares its group, which the
@@ -76,6 +81,7 @@ pub(crate) fn agent_plugin_manifest(
         ),
         AgentPluginRow::unconfigured(Capability, titles_plugin(inputs.titles)),
         AgentPluginRow::unconfigured(Capability, recap_plugin(inputs.conversations)),
+        AgentPluginRow::unconfigured(Capability, worktree_plugin(inputs.worktrees)),
     ];
     rows.extend(host);
     rows.extend([

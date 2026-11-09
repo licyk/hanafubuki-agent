@@ -78,10 +78,11 @@ pub use service::{
     AgentProviderModelCatalogRequest, AgentProviderModelCatalogResult,
     AgentProviderRegistrySnapshot, AgentProviderWriteRequest, AgentRunProjection,
     AgentServiceInputs, AgentSessionModelSelectionRequest, AgentSessionReasoningEffortRequest,
-    AgentSettingsView, AgentSkillSessionState, LocalSkillInstallRequest, McpApplicationSnapshot,
-    McpCredentialPresence, McpCredentialsWriteRequest, McpLocalPolicySummary, McpLocalServerStatus,
-    McpLocalStatusSnapshot, McpOAuthCallbackRequest, McpOAuthCancelRequest, McpOAuthLoginRequest,
-    McpServerDeleteRequest, McpServerWriteRequest, McpToolSnapshot, SkillMcpDependencyStatus,
+    AgentSettingsView, AgentSkillSessionState, AgentWorktree, LocalSkillInstallRequest,
+    McpApplicationSnapshot, McpCredentialPresence, McpCredentialsWriteRequest,
+    McpLocalPolicySummary, McpLocalServerStatus, McpLocalStatusSnapshot, McpOAuthCallbackRequest,
+    McpOAuthCancelRequest, McpOAuthLoginRequest, McpServerDeleteRequest, McpServerWriteRequest,
+    McpToolSnapshot, SkillMcpDependencyStatus,
 };
 pub(crate) use service::{ResolvedAgentProvider, ResolvedModelPolicy};
 pub(crate) use shutdown::shutdown_agent;
