@@ -1,5 +1,39 @@
 # Follow-ups
 
+## Plan: background compaction, hierarchical compression, a choice between them (2026-11-09)
+
+The plan is [docs/plan-context-compaction.md](docs/plan-context-compaction.md).
+Every §8 decision was accepted as recommended, except decision 12: the
+previous plan stays and AGENTS.md allows one plan per piece of work. The
+sources are Codex `57a808a392` and billion-context `4be21b08e` (acp-kernel
+0.0.189). Each phase is validated, documented in both languages, committed
+and pushed, and notes what Hanafubuki must change at its next pin.
+
+- [ ] P1: split `service/compaction/` along responsibilities (source and
+      plan, a pure replacement build, install, status machine); no
+      behavior change, goldens unchanged.
+- [ ] P2: the `[compaction]` setting (`strategy`, `background`,
+      `hierarchical`), `AgentSessionConfig.compaction_strategy`, applied
+      at turn admission, every transition; the `remoteCompaction` bug
+      fixed; the Anthropic empty-`tools` case checked.
+- [ ] P3: background compaction in the kernel (slot, launch, adoption,
+      `wait_for_pending`, the rebase install, cancellation, shutdown,
+      usage, `AgentCompactionPhase::Background`).
+- [ ] P4: background compaction in the interface and docs.
+- [ ] P5: `crates/compression` core (model, refs, boundaries, parse,
+      project, protect, apply, prune, render) with the ported tests;
+      notices and attribution.
+- [ ] P6: recommend, nudge, truncation, latches, the per-request
+      pipeline, prompts (byte-exact golden), reports.
+- [ ] P7: `hierarchical` in the kernel (projection, the five core tools,
+      the nudge, fallbacks, terminal escape, state), its goldens.
+- [ ] P8: forks, resume, children, `rebuild`; state size; switching away.
+- [ ] P9: decompress, search, media refs.
+- [ ] P10: the opt-in features (absorb, content store, crush, rules,
+      filter), off by default.
+- [ ] P11: `/compression`, status line, `context_compressed`, docs,
+      attribution; pty smoke.
+
 ## Plan: Codex's new terminal interface, its commands, configuration in the interface (2026-11-09)
 
 The plan is [docs/plan-codex-tui-port.md](docs/plan-codex-tui-port.md).
