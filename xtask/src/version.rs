@@ -283,19 +283,10 @@ fn member_names(root: &Path, manifest: &str) -> Result<BTreeSet<String>, String>
     Ok(names)
 }
 
-/// Files that show users a dependency on a member: the README, the
-/// Markdown pages under docs/ and the site's MDX pages.
+/// Files that show users a dependency on a member: the README and the
+/// site's MDX pages.
 fn snippet_files(root: &Path) -> Vec<PathBuf> {
     let mut files = vec![root.join("README.md")];
-    if let Ok(entries) = std::fs::read_dir(root.join("docs")) {
-        let mut pages: Vec<PathBuf> = entries
-            .flatten()
-            .map(|entry| entry.path())
-            .filter(|path| path.extension().is_some_and(|ext| ext == "md"))
-            .collect();
-        pages.sort();
-        files.extend(pages);
-    }
     site_pages(&root.join("site/content/docs"), &mut files);
     files.retain(|path| path.is_file());
     files

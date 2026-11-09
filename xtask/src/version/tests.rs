@@ -101,8 +101,6 @@ fn plans_the_files_of_a_workspace() {
     );
     write(&root, "xtask/Cargo.toml", "[package]\nname = \"xtask\"\n");
     write(&root, "README.md", "hanafubuki-agent = \"0.1\"\n");
-    write(&root, "docs/a.md", "hanafubuki-agent-kernel = \"0.1\"\n");
-    write(&root, "docs/b.md", "no snippet\n");
     write(
         &root,
         "site/content/docs/installation.mdx",
@@ -137,7 +135,6 @@ fn plans_the_files_of_a_workspace() {
         [
             "Cargo.toml",
             "README.md",
-            "docs/a.md",
             "site/content/docs/embedding/host.en.mdx",
             "site/content/docs/installation.mdx",
         ]
