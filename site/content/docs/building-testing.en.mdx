@@ -1,0 +1,130 @@
+---
+title: Building and testing
+description: The toolchain, the validation commands, each check cargo xtask runs, the goldens and the history corpus and their update rules, snapshot tests, the documentation site's commands, and CI.
+icon: FlaskConical
+---
+
+## Toolchain
+
+- **Rust**: `rust-toolchain.toml` pins 1.99.0 (with `rustfmt` and `clippy`), and the workspace's `rust-version` is 1.99 too. The edition stays 2021 and rustfmt keeps its defaults.
+- **Bun**: the root `package.json` pins Bun 1.4.2 with `packageManager`, for the documentation site only (`site/`, the one member of the root Bun workspace).
+- Repository tooling is the `xtask` crate, run as `cargo xtask <command>`.
+
+```sh
+git clone https://github.com/licyk/hanafubuki-agent
+cd hanafubuki-agent
+cargo build                      # the whole workspace
+cargo run -p hanafubuki-agent-cli -- --help
+```
+
+## The validation commands
+
+Run from the repository root, selecting scope by the change's impact. These five steps are what `.github/workflows/ci.yml` runs on Linux, Windows and macOS:
+
+```sh
+cargo fmt --all --check
+RUSTFLAGS="-D warnings" cargo check --workspace --all-targets --all-features
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+cargo xtask check
+cargo test --workspace --all-features
+```
+
+- Warnings are errors. An `#[allow]` names its `reason`.
+- Formatting, static checks and tests are independent: a check never formats, and a test neither formats nor runs static checks.
+- A documentation-only change needs its diff and referenced paths checked, not builds and tests.
+- Passing on Linux says nothing about Windows or macOS; a handoff says exactly which commands ran and which were skipped.
+
+## The checks of `cargo xtask`
+
+`cargo xtask check` runs each of these in turn, and each also runs on its own:
+
+| Command                   | What it checks                                                                                                                                                                                                                                                                                                                                                    |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `check-dependencies`      | dependency direction and layers: no dependency on a Hanafubuki crate; each member only on the members its row of the layer table (`LAYERS` in `xtask/src/dependencies.rs`) allows; the plugin rules (the kernel on no plugin, a plugin on no kernel, facade or other plugin, where kardia may be), see [Plugin rules](/docs/plugin-rules#crates-and-dependencies) |
+| `check-source-layout`     | the Rust module and test layout: `lib.rs` only declares and re-exports, the uses of `mod.rs` and `foo.rs`, no `#[path]`, no glob re-exports, no inline tests in production files, snapshots in `snapshots/`                                                                                                                                                       |
+| `check-module-size`       | file and function sizes against `architecture/module-size-policy.toml`: 600 code lines for a production file, 900 for a test file, 200 for a production function (comments do not count)                                                                                                                                                                          |
+| `check-strict-decoding`   | `deny_unknown_fields` only on types listed in `architecture/strict-decoding-policy.toml`, each with its category and reason                                                                                                                                                                                                                                       |
+| `check-model-api-context` | `hanafubuki-agent-model-api`'s production sources name no context section kind                                                                                                                                                                                                                                                                                    |
+| `check-path-boundaries`   | paths resolve only through `hanafubuki-agent-foundation::paths`: no direct `fs::canonicalize`, no rendering of `system()`, no comparison of resolved `PathBuf`s; the exceptions are audited in `architecture/path-policy.toml`                                                                                                                                    |
+| `check-locks`             | production code uses no `std::sync::Mutex` or `RwLock`, in any import form; tests and test support may                                                                                                                                                                                                                                                            |
+| `check-plugin-panics`     | no `.unwrap()` or `.expect(` in the production sources of the plugin crates (`crates/plugin-*`)                                                                                                                                                                                                                                                                   |
+| `check-notices`           | files derived from third-party code carry their attribution marker and NOTICE names them (`architecture/notices-policy.toml`), see [Licence](/docs/contributing#licence)                                                                                                                                                                                          |
+
+Besides:
+
+- `cargo xtask module-size-report [--top N]` lists the largest files and functions.
+- `cargo xtask version` and `cargo xtask tag` are for releases: [Releasing](/docs/releasing).
+
+## Tests
+
+`cargo test --workspace --all-features` runs every test. Some groups worth knowing:
+
+| Tests                                                                                       | What they cover                                                                                                                                        |
+| ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| the request goldens (`crates/agent/src/tests/golden.rs`)                                    | what the model receives, below                                                                                                                         |
+| pipeline tests (`crates/agent/src/tests/pipeline.rs`)                                       | the real kernel and the Agent's own plugins through whole turns with a scripted model and MCP server: commit order, cancel, approval, timeouts, panics |
+| kernel contracts (`crates/kernel/tests/`)                                                   | `loop_contract`, `compaction_contract`, `persistence_contract`, `contracts`, `session_title_contract`                                                  |
+| faults (`plugin_faults.rs`, `restart.rs`, `plugin_host.rs` and more, in the facade's tests) | plugin faults and automatic restarts, kernel faults and Agent restarts, the plugin host                                                                |
+| the command line (`crates/cli/tests/`)                                                      | an `exec` turn end to end against a scripted model; the management commands                                                                            |
+| the terminal interface (`crates/tui`)                                                       | `insta` snapshot tests                                                                                                                                 |
+
+Tests exercise the real implementation, with as few mocks as possible and no business logic duplicated in them. Where tests live (white-box tests in `src/<module>/tests.rs`, public API and cross-crate contracts in the crate's `tests/`, how test helpers are written) is in [Contributing](/docs/contributing#layout-and-module-size).
+
+### The goldens and the history corpus
+
+**The request goldens** (fixtures in `crates/agent/src/tests/golden/`), over the Agent's own plugins with a host that adds nothing, pin what the model receives: Default and Plan mode, a tool round trip and its presentation events, a Skill catalog, workspace instructions, the memory summary, a compacted request, MCP tools from a scripted in-process server (direct and deferred, long and colliding names) and a `tool_search` round trip.
+
+**The history corpora** are history an earlier build recorded, which must keep opening and continuing: `golden/history/` is a byte-for-byte copy of Hanafubuki's corpus; `golden/history-reasoning/` is a second corpus recorded when reasoning items were added, which must open with its reasoning text and keep that text out of the next request.
+
+The update rules:
+
+- A change the model sees changes the request goldens. Regenerate them **only after an intended change**, and review the fixture diff:
+
+  ```sh
+  HANAFUBUKI_AGENT_UPDATE_GOLDEN=1 cargo test -p hanafubuki-agent --lib tests::golden
+  ```
+
+- The history corpora are re-recorded **only after an intended history-format change**; otherwise their point is to prove that older history still opens:
+
+  ```sh
+  HANAFUBUKI_AGENT_UPDATE_GOLDEN_HISTORY=1 cargo test -p hanafubuki-agent --lib tests::golden
+  ```
+
+- Both variables count as set whatever their value: setting one to `0` still rewrites the fixtures.
+- The fixtures are Linux-only.
+- Hanafubuki keeps goldens of its own and the same history corpus in `hanafubuki-agent-integration` ([the twins](/docs/contributing#twins-shared-with-hanafubuki)): a model-visible change here changes them too, and a history-format change re-records both.
+
+### The terminal interface's snapshots
+
+The terminal interface's rendering is snapshot-tested with [insta](https://insta.rs), the snapshot files living in a `snapshots/` directory beside the tests that assert them (that directory is not a module). A snapshot that does not match fails the test and leaves a `.snap.new` beside it; review and accept them one by one with `cargo insta review` (after `cargo install cargo-insta`), or accept all with `INSTA_UPDATE=always cargo test -p hanafubuki-agent-tui` and review the diff. As with the goldens, accept only intended changes.
+
+## The documentation site
+
+The site is `site/`: Fumadocs on TanStack Start, prerendered to static files and built for GitHub Pages under `/hanafubuki-agent/`.
+
+```sh
+bun install --frozen-lockfile
+bun run site:dev          # http://127.0.0.1:3000
+bun run site:check        # TypeScript check
+bun run site:test         # vitest
+VITE_BASE_PATH=/hanafubuki-agent/ bun run site:build
+bun run site:preview
+bun run format:site       # prettier over site/, package.json, .prettierrc.json
+bun run format:check:site
+```
+
+- Pages live in `site/content/docs/`: each page is `x.mdx` (Simplified Chinese, the default) plus `x.en.mdx` (English), with `title`, `description` and `icon` (a lucide icon name) in the frontmatter. `meta.json` and `meta.en.json` list the same pages in the same order, which `i18n-content.test.ts` checks.
+- prettier formats MDX (tables, wrapping) but not Markdown (`.prettierignore` leaves out `**/*.md`).
+- After a build, check that every page was prerendered.
+- `patches/` holds a Bun patch of `@tanstack/start-static-server-functions`, which fetches its prerendered results from the origin root; the patch prefixes Vite's base. Bumping that package means regenerating the patch (`bun patch`): without it, first loads under the base still work but client-side navigation fails.
+- Dependency snippets in the pages are written as `hanafubuki-agent = "0.1"`, which `cargo xtask version` keeps current when the requirement users write changes.
+
+## CI
+
+| Workflow      | When it runs                                                                                                                      | What it does                                                                                                                                  |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ci.yml`      | a push to `main`, a pull request, by hand, or called by the release; not for a change only to Markdown, licence files or the site | the five validation steps above on ubuntu, windows and macos (tests with `--no-fail-fast`); a newer push cancels an older run of the same ref |
+| `site.yml`    | a push to `main` or a pull request touching `site/`, `patches/`, the root Bun files or the workflow                               | `bun install --frozen-lockfile`, `format:check:site`, `site:check`, `site:test`, `site:build`, keeping the build as an artifact               |
+| `release.yml` | a `v*` tag, or by hand                                                                                                            | publishes the crates, builds the binaries and creates the GitHub release: [Releasing](/docs/releasing)                                        |
+
+CI covers only the platforms and commands it runs; do not claim CI equivalence locally without reproducing the current workflow.

@@ -1,0 +1,87 @@
+---
+title: 发布
+description: 如何发布一个版本：升级版本号、等待 CI、打标签、发布工作流的各个任务、首次发布与 crates.io 的速率限制、恢复中断的发布、在分支上演练，以及密钥。
+icon: Rocket
+---
+
+一个版本就是 `main` 上的一个 `v<version>` 标签。标签启动 `.github/workflows/release.yml`：把除 `xtask` 外的每个 crate 发布到 crates.io，为四个目标构建 `hanafubuki-agent` 二进制，并创建带归档的 GitHub release。
+
+## 检查清单
+
+<Steps>
+  <Step>
+    **升级版本号**（工作区已经是要发布的版本时跳过）：
+
+    ```sh
+    cargo xtask version patch        # 或 minor、major；--dry-run 只打印下一个版本
+    git commit -am "chore(release): hanafubuki-agent 0.1.1"
+    git push
+    ```
+
+    `version` 提升 `[workspace.package].version` 和 `[workspace.dependencies]` 中的每个内部要求，然后刷新 `Cargo.lock`。当用户写的依赖要求（例如 `hanafubuki-agent = "0.1"`）随之变化时，它还会更新 `README.md` 和站点 MDX 页面中的依赖片段。1.0 之前次版本号可以包含破坏性变更，所以移除或改变公开 API（包括 `exec --json` 的事件）的版本要升级次版本号。
+
+  </Step>
+  <Step>
+    **等待推送的提交在三个系统上都通过 CI。** 发布会复用那次运行而不是再测试一遍；提交没有可用的运行时（例如 CI 跳过的只改文档的提交），发布自己运行 `ci.yml`。
+  </Step>
+  <Step>
+    **打标签并推送：**
+
+    ```sh
+    cargo xtask tag --dry-run        # 打印将要创建的标签：v<version>
+    cargo xtask tag --push
+    ```
+
+    `tag` 在干净的 `HEAD` 上创建带注释的标签并推送它（也接受 `--version`、`--name`、`--message` 和 `--remote`）。
+
+  </Step>
+  <Step>
+    **观察发布：** `gh run watch -R licyk/hanafubuki-agent`（或在 Actions 页面）。各个任务见下文。
+  </Step>
+  <Step>
+    **检查结果：** crates.io 上的 crate（`cargo install hanafubuki-agent-cli` 能用），以及 release 的八个文件。
+  </Step>
+</Steps>
+
+## 发布工作流的任务
+
+| 任务             | 做什么                                                                                                                                                                                                                                                                                       |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `plan`           | 读取工作区版本；在标签上运行时，标签必须指明这个版本，否则失败                                                                                                                                                                                                                               |
+| `ci-result`      | 找到 CI 对这个提交的运行并等待它；失败的运行停止发布                                                                                                                                                                                                                                         |
+| `checks`         | `ci-result` 没有找到可用的运行时，运行 `ci.yml`                                                                                                                                                                                                                                              |
+| `publish`        | `cargo publish --workspace`，按依赖顺序，跳过 crates.io 上已有的版本，并等待 crates.io 的速率限制                                                                                                                                                                                            |
+| `licenses`       | 用 `cargo-about`（`about.toml`、`about.hbs`）生成 `THIRD-PARTY-LICENSES.txt`                                                                                                                                                                                                                 |
+| `binaries`       | 用 `--release --locked` 为 `x86_64-unknown-linux-gnu`、`x86_64-apple-darwin`、`aarch64-apple-darwin` 和 `x86_64-pc-windows-msvc` 构建 `hanafubuki-agent`，打包 `hanafubuki-agent-<version>-<target>.tar.gz`（Windows 上是 `.zip`，内含二进制、LICENSE、NOTICE 和第三方许可证）及其 `.sha256` |
+| `github-release` | 用从上一个 `v*` 标签生成的说明创建 release，上传归档和校验和                                                                                                                                                                                                                                 |
+
+`publish` 和 `github-release` 只在标签上运行。
+
+## 首次发布与 crates.io 的速率限制
+
+crates.io 允许一个账号一次创建几个新 crate，之后每十分钟一个。首次发布会创建全部 24 个 crate，所以 `publish` 先发布前几个，之后大约每十分钟一个 crate：总共约三个半小时。这个任务最多重试 30 次，允许运行 330 分钟；`github-release` 等待它。之后的发布只是给已有的 crate 添加版本，crates.io 对此限制宽松得多，几分钟就能完成。
+
+## 恢复中断的发布
+
+中途停止的运行（发布超时或失败、某个二进制没有构建成功、runner 消失）通过**在标签上**手动运行来恢复：
+
+```sh
+gh workflow run release.yml -R licyk/hanafubuki-agent --ref v0.1.0
+```
+
+每个任务都可以安全地重复：`publish` 跳过 crates.io 上已有的每个 crate 版本，二进制重新构建，`github-release` 把归档上传覆盖到已有的 release（`--clobber`），而不是再创建一次。
+
+## 在分支上演练
+
+在分支上手动运行会构建并打包二进制（以及第三方许可证），但什么都不发布：`publish` 和 `github-release` 只在标签上运行。改变了工作流或构建的发布之前先演练，并查看运行作为制品上传的归档：
+
+```sh
+gh workflow run release.yml -R licyk/hanafubuki-agent --ref main
+```
+
+如果需要修复代码：已发布的版本不能替换。在 `main` 上修复，升级版本号，发布新版本。
+
+## 密钥
+
+- `CARGO_REGISTRY_TOKEN`：带 `publish-new` 和 `publish-update` 权限的 crates.io 令牌，设置为仓库密钥。只有 `publish` 能看到它。
+- `GITHUB_TOKEN`：工作流自己的令牌，只在 `github-release` 上有 `contents: write`。

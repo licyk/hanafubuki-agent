@@ -1,0 +1,130 @@
+---
+title: 构建与测试
+description: 工具链、验证命令、cargo xtask 的各项检查、golden 测试与历史语料及其更新规则、快照测试、文档站点的命令和 CI。
+icon: FlaskConical
+---
+
+## 工具链
+
+- **Rust**：`rust-toolchain.toml` 固定 1.99.0（带 `rustfmt` 和 `clippy`），工作区的 `rust-version` 也是 1.99。edition 保持 2021，rustfmt 使用默认配置。
+- **Bun**：根目录的 `package.json` 用 `packageManager` 固定 Bun 1.4.2，只用于文档站点（`site/`，根目录 Bun 工作区的唯一成员）。
+- 仓库工具是 `xtask` crate，以 `cargo xtask <command>` 运行。
+
+```sh
+git clone https://github.com/licyk/hanafubuki-agent
+cd hanafubuki-agent
+cargo build                      # 整个工作区
+cargo run -p hanafubuki-agent-cli -- --help
+```
+
+## 验证命令
+
+在仓库根目录运行，按变更的影响选择范围。下面五步就是 `.github/workflows/ci.yml` 在 Linux、Windows 和 macOS 上运行的步骤：
+
+```sh
+cargo fmt --all --check
+RUSTFLAGS="-D warnings" cargo check --workspace --all-targets --all-features
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+cargo xtask check
+cargo test --workspace --all-features
+```
+
+- 警告是错误。`#[allow]` 必须写明它的 `reason`。
+- 格式化、静态检查和测试彼此独立：检查不会格式化，测试不会格式化也不会运行静态检查。
+- 只改文档时检查 diff 和引用的路径即可，不需要构建和测试。
+- 在 Linux 上通过不代表 Windows 或 macOS 也通过；交接时如实说明运行了哪些命令、跳过了哪些。
+
+## `cargo xtask` 的检查
+
+`cargo xtask check` 依次运行下面每一项，每一项也可以单独运行：
+
+| 命令                      | 检查什么                                                                                                                                                                                                                                       |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `check-dependencies`      | 依赖方向与分层：不依赖任何 Hanafubuki crate；每个成员只依赖层表（`xtask/src/dependencies.rs` 的 `LAYERS`）允许的成员；插件规则（内核不依赖插件、插件不依赖内核/门面/其他插件、kardia 的位置等），见[插件规则](/docs/plugin-rules#crate-与依赖) |
+| `check-source-layout`     | Rust 模块与测试的布局：`lib.rs` 只有声明与重新导出、`mod.rs` 与 `foo.rs` 的用法、没有 `#[path]`、没有 glob 重新导出、生产文件中没有内联测试、快照放在 `snapshots/` 中                                                                          |
+| `check-module-size`       | 文件与函数大小，对照 `architecture/module-size-policy.toml`：生产文件 600 行代码、测试文件 900 行、生产函数 200 行（注释不计）                                                                                                                 |
+| `check-strict-decoding`   | `deny_unknown_fields` 只出现在 `architecture/strict-decoding-policy.toml` 列出的类型上（带类别与原因）                                                                                                                                         |
+| `check-model-api-context` | `hanafubuki-agent-model-api` 的生产源码不出现任何上下文段类型                                                                                                                                                                                  |
+| `check-path-boundaries`   | 路径只通过 `hanafubuki-agent-foundation::paths` 解析：不直接 `fs::canonicalize`，不渲染 `system()`，不直接比较解析后的 `PathBuf`；例外在 `architecture/path-policy.toml` 中审计                                                                |
+| `check-locks`             | 生产代码不使用 `std::sync::Mutex` 或 `RwLock`（任何导入形式）；测试与测试支持可以                                                                                                                                                              |
+| `check-plugin-panics`     | 插件 crate（`crates/plugin-*`）的生产源码中没有 `.unwrap()` 和 `.expect(`                                                                                                                                                                      |
+| `check-notices`           | 派生自第三方代码的文件带有它们的署名标记，NOTICE 列出它们（`architecture/notices-policy.toml`），见[许可证](/docs/contributing#许可证)                                                                                                         |
+
+另外还有：
+
+- `cargo xtask module-size-report [--top N]`：列出最大的文件和函数。
+- `cargo xtask version` 与 `cargo xtask tag`：发布用，见[发布](/docs/releasing)。
+
+## 测试
+
+`cargo test --workspace --all-features` 运行全部测试。值得知道的几组：
+
+| 测试                                                                          | 内容                                                                                                           |
+| ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| 请求 golden（`crates/agent/src/tests/golden.rs`）                             | 固定模型收到的内容，见下文                                                                                     |
+| 流水线测试（`crates/agent/src/tests/pipeline.rs`）                            | 用脚本化的模型和 MCP 服务器驱动真实的内核和 Agent 自己的插件跑完整个轮次：提交顺序、取消、审批、超时、panic 等 |
+| 内核契约（`crates/kernel/tests/`）                                            | `loop_contract`、`compaction_contract`、`persistence_contract`、`contracts`、`session_title_contract`          |
+| 故障（`plugin_faults.rs`、`restart.rs`、`plugin_host.rs` 等，在门面的测试中） | 插件故障与自动重启、内核故障与 Agent 重启、插件宿主                                                            |
+| 命令行（`crates/cli/tests/`）                                                 | `exec` 针对脚本化模型端到端运行一个轮次；管理命令                                                              |
+| 终端界面（`crates/tui`）                                                      | `insta` 快照测试                                                                                               |
+
+测试针对真实实现，尽量少用 mock，不在测试里复制业务逻辑。测试的位置规则（白盒测试在 `src/<module>/tests.rs`，公开 API 与跨 crate 契约在 crate 的 `tests/`，测试辅助的写法）见[参与开发](/docs/contributing#布局与模块大小)。
+
+### golden 测试与历史语料
+
+**请求 golden**（fixture 在 `crates/agent/src/tests/golden/`）在 Agent 自己的插件上、用一个什么都不添加的宿主，固定模型收到的内容：默认与计划模式、一次工具往返及其展示事件、Skill 目录、工作区指令、记忆摘要、压缩后的请求、来自脚本化进程内服务器的 MCP 工具（直接与延迟、过长与冲突的名字）和一次 `tool_search` 往返。
+
+**历史语料**是更早的构建录制的历史，必须一直能打开并继续：`golden/history/` 是 Hanafubuki 的语料逐字节的副本；`golden/history-reasoning/` 是加入推理条目时录制的第二份语料，它必须带着推理文本打开，并且不让推理文本进入下一个请求。
+
+更新规则：
+
+- 模型能看到的变化会改变请求 golden。**只在有意的变化之后**重新生成，并审查 fixture 的 diff：
+
+  ```sh
+  HANAFUBUKI_AGENT_UPDATE_GOLDEN=1 cargo test -p hanafubuki-agent --lib tests::golden
+  ```
+
+- 历史语料**只在有意的历史格式变化之后**重新录制；否则它们的意义就是证明旧的历史仍能打开：
+
+  ```sh
+  HANAFUBUKI_AGENT_UPDATE_GOLDEN_HISTORY=1 cargo test -p hanafubuki-agent --lib tests::golden
+  ```
+
+- 两个变量只看是否**设置**，不看值：设置成 `0` 也会重写 fixture。
+- fixture 只在 Linux 上有效。
+- Hanafubuki 在 `hanafubuki-agent-integration` 中保留了自己的 golden 和同一份历史语料（[双生副本](/docs/contributing#与-hanafubuki-共享的双生副本)）：这里模型可见的变化也会改变它们，历史格式变化要在两边都重新录制。
+
+### 终端界面的快照
+
+终端界面的渲染用 [insta](https://insta.rs) 做快照测试，快照文件放在断言它们的测试旁边的 `snapshots/` 目录里（这个目录不是模块）。快照不匹配时测试失败，并在旁边写出 `.snap.new`；用 `cargo insta review`（需要 `cargo install cargo-insta`）逐个审查接受，或用 `INSTA_UPDATE=always cargo test -p hanafubuki-agent-tui` 全部接受后审查 diff。和 golden 一样，只接受有意的变化。
+
+## 文档站点
+
+站点在 `site/`：TanStack Start 上的 Fumadocs，预渲染为静态文件，为 GitHub Pages 构建在 `/hanafubuki-agent/` 下。
+
+```sh
+bun install --frozen-lockfile
+bun run site:dev          # http://127.0.0.1:3000
+bun run site:check        # TypeScript 检查
+bun run site:test         # vitest
+VITE_BASE_PATH=/hanafubuki-agent/ bun run site:build
+bun run site:preview
+bun run format:site       # prettier 格式化 site/、package.json、.prettierrc.json
+bun run format:check:site
+```
+
+- 页面在 `site/content/docs/`：每页是 `x.mdx`（简体中文，默认）加 `x.en.mdx`（英文），frontmatter 有 `title`、`description` 和 `icon`（一个 lucide 图标名）。`meta.json` 与 `meta.en.json` 按同样的顺序列出同样的页面，`i18n-content.test.ts` 检查这两点。
+- prettier 格式化 MDX（表格、换行），不格式化 Markdown（`.prettierignore` 排除了 `**/*.md`）。
+- 构建之后检查每个页面都被预渲染了。
+- `patches/` 中有 `@tanstack/start-static-server-functions` 的一个 Bun 补丁：它从源站根目录取预渲染的结果，补丁加上 Vite 的 base。升级这个包时要重新生成补丁（`bun patch`），否则在 base 下的首次加载仍然正常，但站内导航会失败。
+- 页面中的依赖片段写成 `hanafubuki-agent = "0.1"` 这样的形式，`cargo xtask version` 会在用户写的要求变化时更新它们。
+
+## CI
+
+| 工作流        | 何时运行                                                                                 | 做什么                                                                                                              |
+| ------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `ci.yml`      | 推送到 `main`、拉取请求、手动、被发布工作流调用；只改 Markdown、许可证文件或站点时不运行 | 在 ubuntu、windows、macos 上运行上面的五个验证步骤（测试带 `--no-fail-fast`）；新的推送取消同一 ref 上旧的运行      |
+| `site.yml`    | 推送到 `main` 或拉取请求，且改动了 `site/`、`patches/`、根目录的 Bun 文件或这个工作流    | `bun install --frozen-lockfile`、`format:check:site`、`site:check`、`site:test`、`site:build`，构建结果作为制品保留 |
+| `release.yml` | `v*` 标签，或手动运行                                                                    | 发布 crate、构建二进制、创建 GitHub release，见[发布](/docs/releasing)                                              |
+
+CI 的验证只覆盖它实际运行的平台和命令；本地不要声称与 CI 等价，除非按当前的工作流复现了它。
