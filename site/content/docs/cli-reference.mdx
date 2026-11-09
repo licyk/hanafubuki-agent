@@ -136,3 +136,5 @@ hanafubuki-agent exec [选项] [提示词|-]
 `config`、`providers list`、`mcp list` 和不带 `--online` 的 `doctor` 只读写配置，不启动 Agent，可以在另一个 Agent 进程运行时使用。其他命令会启动 Agent，需要独占数据目录。
 
 每个命令都会先读取配置，再安装崩溃处理和日志文件，然后才启动 Agent 或修改任何内容。会启动 Agent 的管理命令也会像每次启动一样在后台连接启用的 MCP 服务器。
+
+除 `exec` 和终端界面外，按 Ctrl-C 会立即结束命令：操作系统释放数据目录锁，下次启动时清理 Agent 启动过的进程。

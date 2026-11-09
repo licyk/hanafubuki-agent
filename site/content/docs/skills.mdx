@@ -64,6 +64,7 @@ hanafubuki-agent skills remove user:release-notes
 
 - **让模型自己选**：模型在每次请求中都能看到 Skill 目录，任务符合某个 Skill 的说明时会用 `skills_read` 读取它。
 - **点名使用**：在消息中写 `$名字`，例如 `用 $release-notes 写 0.2.0 的发布说明`。点名的 Skill 会在这个回合中提供给模型。
+- **用链接指定**：`[$release-notes](skill://user:release-notes)` 按 ID 指定 Skill，即使它的名字已经改了，或者与某个工具同名，也照样选中它。模型提到它读过的 Skill 时就写这种形式。
 
 `$PATH`、`$HOME` 这类环境变量名，以及工具名和 MCP 服务器名，不会被当作 Skill。
 

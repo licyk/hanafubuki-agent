@@ -268,7 +268,7 @@ impl WorkspaceRootsPort for ProjectRoots {
 ```
 
 - `roots()` 在每个轮次和每次 Skill 目录读取时重新读取；第一个根目录是相对路径请求的基准。`agent_workspace_roots_from` 去重（按路径身份），并去掉嵌套在前面某个根目录里的根目录。
-- `extra_read_roots()`：文件工具无需审批也可以读取的工作区外目录（Hanafubuki：应用的数据与日志目录）。
+- `extra_read_roots()`：文件工具视为受保护的工作区外目录（Hanafubuki：应用的数据与日志目录）。与名字和 trait 文档所说的不同，facade 把它们作为受保护的根传给 `WorkspaceFsPolicy`，所以其下的每个请求，包括读取，都在审批之前以 `ProtectedPath` 失败。
 - `selected(host)`：轮次的宿主输入所选中的目录，`AGENTS.md` 从根目录一直查找到这里（Hanafubuki：用户正在看的实例）。
 - `search_roots(host)`：`@` 文件搜索要遍历的目录及其标签。
 - 每个方法都可能阻塞，Agent 在自己的阻塞池上调用它们。

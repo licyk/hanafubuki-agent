@@ -50,6 +50,7 @@ hanafubuki-agent exec - < task.md
 | `→ 工具名: 对象`         | 一次工具调用开始；对象（命令、路径等）可能没有     |
 | `  工具名 done`/`failed` | 这次工具调用成功或失败                             |
 | `· 文本`                 | 模型的过程说明（commentary），或 `exec` 自己的提示 |
+| `plan:` 及其内容         | 模型提出的计划（见[计划模式](/docs/plan-mode)）    |
 | 没有前缀的文本           | 模型的最终回答                                     |
 
 每条消息在完整收到后才打印。标准错误中是会话 ID（`session 3`）、模型请求的重试，以及没有正常完成的回合是如何结束的（`error: the turn failed (...)`、`the turn was cancelled (...)`）。

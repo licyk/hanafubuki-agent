@@ -268,7 +268,7 @@ impl WorkspaceRootsPort for ProjectRoots {
 ```
 
 - `roots()` is read again for every turn and every Skill catalog read; the first root is the base of relative requests. `agent_workspace_roots_from` removes duplicates (by path identity) and roots nested in an earlier one.
-- `extra_read_roots()`: directories outside the workspace the file tools may read without approval (Hanafubuki: the application's data and log directories).
+- `extra_read_roots()`: directories outside the workspace that the filesystem tools treat as protected (Hanafubuki: the application's data and log directories). Despite the name and the trait's documentation, the facade passes them to `WorkspaceFsPolicy` as protected roots, so every request under them, reads included, fails with `ProtectedPath` before approval.
 - `selected(host)`: the directory the turn's host input selects; `AGENTS.md` files are read from each root down to it (Hanafubuki: the instance the user is looking at).
 - `search_roots(host)`: the directories `@` file search walks, each with its label.
 - Every method may block; the Agent calls them on its blocking pool.

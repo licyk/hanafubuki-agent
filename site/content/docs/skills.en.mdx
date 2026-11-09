@@ -64,6 +64,7 @@ hanafubuki-agent skills remove user:release-notes
 
 - **Let the model choose**: the model sees the catalog with every request, and reads a Skill with `skills_read` when the task fits its description.
 - **Name it**: write `$NAME` in a message, such as `Use $release-notes to write the notes for 0.2.0`. A Skill you name is given to the model for that turn.
+- **Link it**: `[$release-notes](skill://user:release-notes)` names a Skill by its id, so it selects that Skill even after its name changed, or when the name is also a tool's. The model writes this form when it names a Skill it has read.
 
 Environment variable names such as `$PATH` or `$HOME`, and the names of tools and MCP servers, are never taken for a Skill.
 

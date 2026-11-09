@@ -50,6 +50,7 @@ The final answer.
 | `→ TOOL: SUBJECT`        | A tool call started; the subject (a command, a path) is optional |
 | `  TOOL done` / `failed` | The tool call succeeded or failed                                |
 | `· text`                 | The model's commentary, or a note of `exec`'s own                |
+| `plan:` and its text     | A plan the model proposed (in [plan mode](/docs/plan-mode))      |
 | Text without a prefix    | The model's final answer                                         |
 
 Each message is printed once it is complete. Standard error has the session's id (`session 3`), the model request's retries, and how a turn that did not complete ended (`error: the turn failed (...)`, `the turn was cancelled (...)`).

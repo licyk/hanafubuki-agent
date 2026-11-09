@@ -64,7 +64,7 @@ A profile can hold it too, such as `[profiles.review] permissionMode = "auto_rev
 </Tabs>
 
 - **Allow once** allows this one operation.
-- **Allow for the session** (`a`) stops the same tool from asking for the rest of the session, whatever the command or path. It is kept in memory only: after a restart, or once the tool changes (an MCP server reconnecting, say), it asks again. The operations that always ask you do not offer it.
+- **Allow for the session** (`a`) stops the same tool from asking for the rest of the session, whatever the command or path. It is kept in memory only: after a restart, or once the tool changes (an MCP server whose settings or credentials changed, say), it asks again; an MCP server that only reconnects keeps it. The operations that always ask you do not offer it.
 - After a **denial** the model is told it was denied; usually it tries another way, or explains why it needs the operation.
 - An approval waits at most 15 minutes; then it counts as denied.
 

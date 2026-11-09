@@ -54,7 +54,7 @@ hanafubuki-agent sessions delete 2
 ```
 
 - **Archive**: the session leaves `sessions list` and the resume picker but is kept; `sessions list --archived` finds it.
-- **Delete**: removes the session and its history for good.
+- **Delete**: removes the session and its history for good. It is refused, with the reason as the error, while a fork or a quarantined session file still needs the session.
 
 ## Resuming a session [#resume]
 

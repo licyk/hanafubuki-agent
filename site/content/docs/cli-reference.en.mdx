@@ -136,3 +136,5 @@ See [Troubleshooting](/docs/troubleshooting#doctor).
 `config`, `providers list`, `mcp list` and `doctor` without `--online` only read and write the configuration: they do not start the Agent, and work while another Agent process runs. The other commands start it, and need the data directory to themselves.
 
 Every command reads the configuration first, then installs the crash handler and the log file, before it starts the Agent or changes anything. A management command that starts the Agent also connects the enabled MCP servers in the background, as every start does.
+
+Ctrl-C ends any command other than `exec` and the terminal interface at once: the operating system releases the data directory's lock, and the next start cleans up the processes the Agent had started.
