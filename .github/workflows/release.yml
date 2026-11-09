@@ -1,0 +1,265 @@
+# Releases the workspace: publishes its crates to crates.io, builds the hanafubuki-agent binary for four targets and
+# creates the GitHub release with the archives. A v<version> tag (cargo xtask tag --push) releases the workspace version
+# it names. A manual run on the tag (gh workflow run release.yml --ref v<version>) resumes a release that stopped
+# part-way: a crate version already on crates.io is skipped, and the release's archives are replaced when it exists.
+# A run on anything but a tag stops at the plan, so a branch is never published.
+#
+# The released commit is tested once: CI's run of it (from the push to main) is reused, waiting for it if it is still
+# running, and this workflow calls ci.yml as its checks only when no usable run exists (a commit CI never ran on, or a
+# run a newer push cancelled).
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    name: What to release
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.plan.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - id: plan
+        run: |
+          version=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "hanafubuki-agent") | .version')
+          echo "Workspace version: $version"
+          if [ "$GITHUB_REF_TYPE" != tag ]; then
+            echo "::error::A release runs on a v<version> tag, not on $GITHUB_REF_TYPE $GITHUB_REF_NAME"
+            exit 1
+          fi
+          if [ "$GITHUB_REF_NAME" != "v$version" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not name the workspace version $version"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  ci-result:
+    name: CI of this commit
+    needs: plan
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+    outputs:
+      tested: ${{ steps.find.outputs.tested }}
+    steps:
+      - id: find
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          run=$(gh run list -R "$GITHUB_REPOSITORY" --workflow ci.yml --commit "$GITHUB_SHA" --limit 20 \
+            --json databaseId,event,conclusion \
+            --jq '[.[] | select(.event == "push" or .event == "workflow_dispatch") | select(.conclusion != "cancelled")][0].databaseId // empty')
+          if [ -z "$run" ]; then
+            echo "No usable CI run of $GITHUB_SHA: this workflow runs the checks."
+            echo "tested=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "Reusing CI run $run of $GITHUB_SHA (waiting while it runs)"
+          if gh run watch "$run" -R "$GITHUB_REPOSITORY" --exit-status --interval 30 > /dev/null; then
+            echo "tested=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          conclusion=$(gh run view "$run" -R "$GITHUB_REPOSITORY" --json conclusion --jq .conclusion)
+          if [ "$conclusion" = cancelled ]; then
+            echo "CI run $run was cancelled: this workflow runs the checks."
+            echo "tested=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "::error::CI run $run of $GITHUB_SHA ended with $conclusion"
+          exit 1
+
+  checks:
+    name: Checks
+    needs: ci-result
+    if: needs.ci-result.outputs.tested == 'false'
+    uses: ./.github/workflows/ci.yml
+
+  publish:
+    name: Publish to crates.io
+    needs: [plan, ci-result, checks]
+    # the commit passed CI, either in CI's own run or in this workflow's checks
+    if: >-
+      !cancelled() && needs.ci-result.result == 'success'
+      && (needs.ci-result.outputs.tested == 'true' || needs.checks.result == 'success')
+    runs-on: ubuntu-latest
+    # a first release waits out crates.io's new-crate limit for each crate past the first few (docs/release.md)
+    timeout-minutes: 330
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: Swatinem/rust-cache@v2.9.3
+      - name: cargo publish --workspace
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          # Publishes every crate version that crates.io does not have yet, in dependency order (xtask, with
+          # publish = false, is not released). crates.io lets an account create a few new crates at once and then one
+          # every ten minutes, so a release with new crates waits out that limit, one crate per attempt. The first
+          # attempt verifies every package; a later one publishes the same packages without building them again.
+          set -o pipefail
+          verify=()
+          for attempt in $(seq 1 30); do
+            exclude=()
+            pending=0
+            packages=$(cargo metadata --no-deps --format-version 1 \
+              | jq -r '.packages[] | select(.publish == null or (.publish | length) > 0) | "\(.name)@\(.version)"')
+            for package in $packages; do
+              if curl -sf -A "hanafubuki-agent release workflow" "https://crates.io/api/v1/crates/${package%@*}/${package#*@}" > /dev/null; then
+                exclude+=(--exclude "${package%@*}")
+              else
+                pending=$((pending + 1))
+              fi
+            done
+            if [ "$pending" -eq 0 ]; then
+              echo "Every crate of this version is on crates.io."
+              exit 0
+            fi
+            echo "Attempt $attempt: $pending crate(s) to publish"
+            if cargo publish --workspace --locked "${verify[@]}" "${exclude[@]}" 2>&1 | tee publish.log; then
+              exit 0
+            fi
+            if grep -q "429 Too Many Requests" publish.log; then
+              verify=(--no-verify)
+              sleep 610
+            else
+              exit 1
+            fi
+          done
+          exit 1
+
+  licenses:
+    name: Third-party licenses
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - name: Install cargo-about
+        env:
+          VERSION: 0.9.2
+          SHA256: 9099a59e820c38a68b9d65f300662a567d56562f9a10f6aa4c7e86c17c2566af
+        run: |
+          archive="cargo-about-$VERSION-x86_64-unknown-linux-musl.tar.gz"
+          curl -sSfL -o "$RUNNER_TEMP/$archive" "https://github.com/EmbarkStudios/cargo-about/releases/download/$VERSION/$archive"
+          echo "$SHA256  $RUNNER_TEMP/$archive" | sha256sum -c
+          tar xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/${archive%.tar.gz}" >> "$GITHUB_PATH"
+      # about.toml lists the accepted licenses and the four release targets
+      - run: cargo fetch --locked
+      - run: cargo about generate --locked --fail -m crates/cli/Cargo.toml -o THIRD-PARTY-LICENSES.txt about.hbs
+      - uses: actions/upload-artifact@v7.0.2
+        with:
+          name: third-party-licenses
+          path: THIRD-PARTY-LICENSES.txt
+          if-no-files-found: error
+
+  binaries:
+    name: Binary (${{ matrix.target }})
+    needs: [plan, ci-result, checks, licenses]
+    if: >-
+      !cancelled() && needs.ci-result.result == 'success'
+      && (needs.ci-result.outputs.tested == 'true' || needs.checks.result == 'success')
+      && needs.licenses.result == 'success'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # the oldest supported runner, so the binary runs on glibc 2.35 and newer
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-22.04
+          # cross-compiled on an Apple silicon runner, so it is not run here
+          - target: x86_64-apple-darwin
+            os: macos-latest
+          - target: aarch64-apple-darwin
+            os: macos-latest
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: dtolnay/rust-toolchain@1.99.0
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2.9.3
+        with:
+          key: ${{ matrix.target }}
+      - run: cargo build --release --locked -p hanafubuki-agent-cli --target ${{ matrix.target }}
+      - if: matrix.target != 'x86_64-apple-darwin'
+        run: target/${{ matrix.target }}/release/hanafubuki-agent --version
+      - uses: actions/download-artifact@v8.0.2
+        with:
+          name: third-party-licenses
+      - name: Package
+        env:
+          TARGET: ${{ matrix.target }}
+          VERSION: ${{ needs.plan.outputs.version }}
+        run: |
+          name="hanafubuki-agent-$VERSION-$TARGET"
+          binary=hanafubuki-agent
+          if [ "$RUNNER_OS" = Windows ]; then binary=hanafubuki-agent.exe; fi
+          mkdir -p "dist/$name"
+          cp "target/$TARGET/release/$binary" LICENSE NOTICE THIRD-PARTY-LICENSES.txt "dist/$name/"
+          cd dist
+          if [ "$RUNNER_OS" = Windows ]; then
+            archive="$name.zip"
+            7z a -tzip "$archive" "$name" > /dev/null
+            sha256sum "$archive" > "$archive.sha256"
+          else
+            archive="$name.tar.gz"
+            tar czf "$archive" "$name"
+            shasum -a 256 "$archive" > "$archive.sha256"
+          fi
+          cat "$archive.sha256"
+      - uses: actions/upload-artifact@v7.0.2
+        with:
+          name: binary-${{ matrix.target }}
+          path: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/*.sha256
+          if-no-files-found: error
+
+  github-release:
+    name: GitHub release
+    needs: [plan, publish, binaries]
+    # without a status function, the skipped `checks` job upstream skips this one too
+    if: ${{ !cancelled() && needs.publish.result == 'success' && needs.binaries.result == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v8.0.2
+        with:
+          pattern: binary-*
+          path: dist
+          merge-multiple: true
+      - name: Create the release, or replace its archives
+        # notes start at the previous v* tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.plan.outputs.version }}
+        run: |
+          tag="$GITHUB_REF_NAME"
+          if gh release view "$tag" > /dev/null 2>&1; then
+            echo "Release $tag exists: replacing its archives."
+            gh release upload "$tag" dist/* --clobber
+            exit 0
+          fi
+          previous=$(git tag --list "v[0-9]*" --sort=-v:refname | awk -v t="$tag" 'found { print; exit } $0 == t { found = 1 }')
+          args=(--title "hanafubuki-agent $VERSION" --generate-notes --verify-tag)
+          if [ -n "$previous" ]; then args+=(--notes-start-tag "$previous"); fi
+          gh release create "$tag" "${args[@]}" dist/*

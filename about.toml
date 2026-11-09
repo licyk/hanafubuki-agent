@@ -1,0 +1,22 @@
+# cargo-about's configuration for THIRD-PARTY-LICENSES.txt, which the release workflow's `licenses` job generates for
+# the binary archives (`cargo about generate --locked --fail -m crates/cli/Cargo.toml -o THIRD-PARTY-LICENSES.txt
+# about.hbs`). Every license of the binary's dependency graph, on any of the four release targets, must be accepted
+# here, or the generation fails.
+accepted = [
+    "Apache-2.0",
+    "MIT",
+    "BSD-3-Clause",
+    "ISC",
+    "Unicode-3.0",
+    "Zlib",
+    "CC0-1.0",
+    "MPL-2.0",
+    "GPL-3.0-only",
+]
+targets = [
+    "x86_64-unknown-linux-gnu",
+    "x86_64-apple-darwin",
+    "aarch64-apple-darwin",
+    "x86_64-pc-windows-msvc",
+]
+ignore-dev-dependencies = true

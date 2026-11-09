@@ -1,4 +1,6 @@
-# The workspace's checks. A change only to files no check reads (Markdown, licence files) runs nothing here.
+# The workspace's checks. A change only to files no check reads (Markdown, licence files) runs nothing here. Tags never
+# start this workflow: a v* tag starts Release, which reuses this workflow's run of the tagged commit, or calls this file
+# as its checks when there is none.
 name: CI
 
 on:
