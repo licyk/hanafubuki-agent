@@ -4,7 +4,9 @@
 // additional attribution term (NOTICE).
 // Modified for hanafubuki-agent: the host predicates are data (a message's
 // own protection flag, the bare `compress` tool name), and the nudge keys no
-// code read (`frequency`, `iterationThreshold`, `force`) are gone.
+// code read (`frequency`, `iterationThreshold`, `force`) are gone; the
+// validation keeps only the rules the unsigned and optional types do not
+// already enforce.
 
 /// The compression settings, with the kernel's defaults from
 /// [`Config::new`]. Tool patterns are a name or a `prefix*` glob, matched
@@ -75,6 +77,54 @@ impl Config {
             preserve_recent_messages: 3,
             preserve_recent_tokens: 5000,
         }
+    }
+
+    /// The settings that would keep thresholds from firing as intended,
+    /// one message each; empty when the configuration is sound.
+    pub fn validate(&self) -> Vec<String> {
+        let mut errors = Vec::new();
+        let mut check = |ok: bool, message: &str| {
+            if !ok {
+                errors.push(message.to_owned());
+            }
+        };
+        let nudge = &self.nudge;
+        check(
+            self.model_context_limit > 0,
+            "modelContextLimit must be a positive number",
+        );
+        check(
+            nudge.min_context_limit_pct <= nudge.max_context_limit_pct,
+            "nudge.minContextLimitPct must not exceed nudge.maxContextLimitPct",
+        );
+        check(
+            nudge.max_context_limit_pct <= nudge.emergency_threshold_pct,
+            "nudge.maxContextLimitPct must not exceed nudge.emergencyThresholdPct",
+        );
+        check(
+            self.promotion_threshold >= 1,
+            "promotionThreshold must be >= 1",
+        );
+        check(
+            self.truncate.threshold > 0.0 && self.truncate.threshold <= 1.0,
+            "truncate.threshold must be in (0, 1]",
+        );
+        for trigger in [self.tiers.tier2_trigger, self.tiers.tier3_trigger] {
+            check(trigger >= 1, "tier triggers must be >= 1");
+        }
+        check(
+            self.tiers.tier3_trigger > self.tiers.tier2_trigger,
+            "tiers.tier3Trigger must be greater than tiers.tier2Trigger",
+        );
+        let growth = &nudge.tier_growth_tokens;
+        for (tier, value) in [("t1", growth.t1), ("t2", growth.t2), ("t3", growth.t3)] {
+            if value == Some(0) {
+                errors.push(format!(
+                    "nudge.tierGrowthTokens.{tier} must be a positive number"
+                ));
+            }
+        }
+        errors
     }
 }
 

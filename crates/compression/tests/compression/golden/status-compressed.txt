@@ -1,0 +1,7 @@
+COMPRESSED — 2 blocks | 29.0K original → 109 summary
+Tier usage: T1: 6 (1 blocks) | T2: 103 (1 blocks)
+
+  b1 (T1)  4.0K→6  1 msgs  age=2 young
+    "first"
+  b3 (T2)  25.0K→103  0 msgs  age=2 young nested=[b2]
+    "(no topic)"

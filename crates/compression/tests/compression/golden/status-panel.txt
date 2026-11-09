@@ -1,0 +1,31 @@
+╭─────────────────────────────────────────────╮
+│           ACP Context Analysis              │
+╰─────────────────────────────────────────────╯
+hanafubuki-agent test
+
+Context (session accounting, host footer scale): 43% (430k / 1.0M) — includes compressed originals; shrinks slower than the sent view
+Growth: +23k since last nudge
+
+Sent to LLM (after compression, est.): 56k (6% of limit)
+Session-only (compressed originals, est.): 34k — pruned from every request; the footer/nudge still count them
+
+Token Breakdown (sent view):
+  Tool       ████████████████░░░░  82%  46k
+  SysPrompt  ██░░░░░░░░░░░░░░░░░░   9%  5.0k
+  Text       ░░░░░░░░░░░░░░░░░░░░   2%  999
+  Summaries  █░░░░░░░░░░░░░░░░░░░   5%  3.0k
+
+Prompt cache (provider-reported): 90.0% last · 93.0% session avg — 279k of 300k billed prompt tokens served from cache (2 req)
+
+Nudge: idle — idle reason
+
+Compressible ranges (3, oldest first):
+  m00003–m00012  10 msgs  62.5K [tool 82% | text 18%] · 4 user msgs
+  m00014–m00015  2 msgs  800 [PROTECTED: skill, task — not compressible]
+  m00020–m00030  11 msgs  10.0K [tool 0% | text 100%]
+
+Blocks: 2 active / 2 total (29k tokens compressed, cumulative)
+  [b1] T1 4.0k→6: first
+  [b3] T2 25k→103: tier two zzzzzzzzzzzzzzzzzzzzz…
+
+Tag visibility: tags injected to LLM only (deep copy), not persisted in session, not shown in terminal.

@@ -463,5 +463,9 @@ path = "crates/compression/src/ids.rs"
 reason = "An insertion-ordered id set, standing in for the JavaScript Set the kernel relies on for its order."
 
 [[original]]
+path = "crates/compression/src/number.rs"
+reason = "JavaScript's rounding and number formatting, standing in for the Math.round and toFixed the kernel's texts are written with."
+
+[[original]]
 path = "crates/compression/src/prune/json.rs"
 reason = "Order-preserving JSON, standing in for the key order JavaScript's JSON.parse and JSON.stringify keep."

@@ -7,15 +7,24 @@
 //! (each module names the kernel test files it ports).
 
 mod apply;
+mod cache_report;
 mod fixtures;
 mod hide;
 mod integrity;
+mod latch;
 mod merge;
+mod nudge;
+mod nudge_text;
 mod pairs;
 mod parse;
 mod parse_line_form;
+mod prompts;
 mod protect;
 mod prune;
+mod recommend;
 mod refold;
 mod refs;
 mod render;
+mod report;
+mod truncate;
+mod turn;

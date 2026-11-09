@@ -79,8 +79,32 @@ and pushed, and notes what Hanafubuki must change at its next pin.
     Agent has one item per message part).
   - Hanafubuki, at its next pin: a new published crate,
     `hanafubuki-agent-compression`; `NOTICE` gains billion-context.
-- [ ] P6: recommend, nudge, truncation, latches, the per-request
-      pipeline, prompts (byte-exact golden), reports.
+- [x] P6: recommend, nudge, truncation, latches, the per-request
+      pipeline, prompts (byte-exact golden), reports. Done: `recommend`,
+      `nudge` (decision, low-water stamps, texts), `truncate` (latched
+      emergency clips, terminal escape), `latch` (view latch), `turn`
+      (`process_turn` in the kernel's step order), `prompts` (the five core
+      tool schemas, `build_compress_system_prompt`, the rule texts and the
+      opt-in language rule), `report` (`acp_status`, recap, status panel,
+      `acp_cache` report and fold economics), `Config::validate`. 700 tests
+      (315 new) with the kernel's `prompt-function-default.txt` byte-exact
+      and eight more texts byte-exact against the kernel's own output.
+  - Open (P6): the opt-in steps (content store, absorb, crush, filters,
+    relocation, timestamps) have their place in `process_turn` and come in
+    P10; the view latch's configuration digest is constant until they add
+    theirs. Deferred to P9: `open-objectives`' decompress assertion, the
+    decompress primitives of `decompress-report`, the search and preview
+    cases of `truncate-surrogates`. Not ported: host-set `dangerous`
+    ranges, checkpoint carriers and media gaps, packs and section
+    overrides, tokenizer injection, the text and hybrid protocols.
+    Screening costs units × messages (release: 0.33 s at 10k messages,
+    1.26 s at 20k, against the kernel's 0.57 s): measure with P8. Tool
+    parameters are `serde_json::Value`, so their keys are sorted. The
+    cache report shows times as UTC plus an offset the host passes; the
+    kernel's fold-attribution offset quirk is kept; the per-tool listing
+    sorts lowercase names instead of the locale's collation.
+  - Hanafubuki, at its next pin: nothing to change; the compression crate
+    gains public items only.
 - [ ] P7: `hierarchical` in the kernel (projection, the five core tools,
       the nudge, fallbacks, terminal escape, state), its goldens.
 - [ ] P8: forks, resume, children, `rebuild`; state size; switching away.

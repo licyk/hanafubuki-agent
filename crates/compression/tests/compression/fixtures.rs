@@ -4,8 +4,8 @@
 // additional attribution term (NOTICE).
 
 use hanafubuki_agent_compression::{
-    apply_compression, assign_refs, ApplyInput, ApplyOutcome, Config, Message, RangeSpec, Role,
-    State,
+    apply_compression, assign_refs, ApplyInput, ApplyOutcome, BlockSpan, CompressibleRange, Config,
+    ContextBreakdown, Message, NudgeDecision, ProtectedRange, RangeSpec, Role, State,
 };
 
 pub fn user(id: &str, text: &str) -> Message {
@@ -95,4 +95,60 @@ pub fn ids(messages: &[Message]) -> Vec<&str> {
 pub fn sorted(mut ids: Vec<String>) -> Vec<String> {
     ids.sort();
     ids
+}
+
+/// A nudge decision with ranges, protected ranges, a long block map and a
+/// breakdown, whose texts are checked byte for byte against the kernel.
+pub fn crossed() -> NudgeDecision {
+    let range = |start: usize, end: usize, tokens, chars, tool_pct, user_msgs| CompressibleRange {
+        start_ref: format!("m{start:05}"),
+        end_ref: format!("m{end:05}"),
+        count: end - start + 1,
+        tokens,
+        chars: Some(chars),
+        tool_pct,
+        text_pct: 100 - tool_pct,
+        user_msgs,
+        start_index: Some(start - 1),
+        end_index: Some(end - 1),
+        no_merge_before: false,
+    };
+    NudgeDecision {
+        should_inject: true,
+        reason: "r".to_owned(),
+        compressible_ranges: vec![
+            range(3, 10, 61_234, 240_000, 82, 3),
+            range(11, 12, 1250, 5000, 50, 1),
+            range(20, 30, 9999, 40_000, 0, 0),
+        ],
+        protected_ranges: vec![ProtectedRange {
+            start_ref: "m00014".to_owned(),
+            end_ref: "m00015".to_owned(),
+            count: 2,
+            tokens: 800,
+            tools: vec!["skill".to_owned(), "task".to_owned()],
+            start_index: Some(13),
+            end_index: Some(14),
+            no_merge_before: false,
+        }],
+        active_block_spans: (0..9)
+            .map(|index| BlockSpan {
+                block_id: format!("b{}", index + 1),
+                tier: if index == 8 { 2 } else { 1 },
+                start_ref: format!("m{:05}", 100 + index * 10),
+                end_ref: format!("m{:05}", 108 + index * 10),
+            })
+            .collect(),
+        context_usage: 0.5,
+        context_breakdown: Some(ContextBreakdown {
+            system: 1200,
+            tool: 45_678,
+            summaries: 3000,
+            code: 0,
+            text: 999,
+            total: 60_000,
+            growth: 22_500,
+        }),
+        ..NudgeDecision::default()
+    }
 }

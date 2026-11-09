@@ -43,3 +43,19 @@ pub(crate) fn collapse_whitespace(text: &str) -> String {
     }
     out
 }
+
+/// The last `max_units` UTF-16 code units of `text` at most, never
+/// splitting a character.
+pub(crate) fn clamp_suffix(text: &str, max_units: usize) -> &str {
+    let mut units = 0;
+    for (index, character) in text.char_indices().rev() {
+        units += character.len_utf16();
+        if units > max_units {
+            return &text[index + character.len_utf8()..];
+        }
+    }
+    text
+}
+
+#[cfg(test)]
+mod tests;

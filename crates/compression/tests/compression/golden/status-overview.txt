@@ -1,0 +1,11 @@
+CONTEXT BREAKDOWN
+  3.0K tool (77%) | 757 text (20%) | 109 summaries (3%)
+  Top tools: bash (59%), text (20%), read (18%)
+
+COMPRESSED BLOCKS — 2 active (109 summary, 29.0K original)
+  Tier usage: T1: 6 (1 blocks) | T2: 103 (1 blocks)
+
+  b3 (T2)  25.0K→103  0 msgs  "(no topic)"
+  b1 (T1)  4.0K→6  1 msgs  "first"
+
+Tip: call again with scope:"uncompressed", view:"messages", tool:"bash" for a per-message listing
