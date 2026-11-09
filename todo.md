@@ -498,7 +498,9 @@ moves its pin.
       the point measure it relative to a far larger one. Reproduced and
       cleared under CPU and disk load on Linux.
   - Open: `workspace_commands::a_denied_action_is_approved_between_turns_
-    and_refused_during_one` still uses a 10 s model delay as its window;
+    and_refused_during_one` uses a 10 s model delay as its window and is
+    `#[ignore]`d until it holds the turn open itself (a TODO at the test;
+    `cargo test -p hanafubuki-agent-tui -- --ignored` runs it);
     a turn thread blocked on the record's lock at the moment the abort is
     decided can still be aborted while staging its end (a narrow window,
     left as is); `mcp_oauth`'s refused-port wait rests on an unproven
