@@ -154,6 +154,37 @@ fn wraps_long_option_without_overflowing_columns() {
 }
 
 #[test]
+fn a_name_too_wide_for_a_description_column_has_its_description_under_it() {
+    let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+    let tx = AppEventSender::new(tx_raw);
+    let name =
+        "Run PowerShell command in C:\\Users\\someone\\AppData\\Local\\Temp\\project: echo denied";
+    let view = ListSelectionView::new(
+        SelectionViewParams {
+            title: Some("Denials".to_string()),
+            items: vec![SelectionItem {
+                name: name.to_string(),
+                description: Some("The user did not ask for this command.".to_string()),
+                dismiss_on_select: true,
+                ..Default::default()
+            }],
+            is_searchable: true,
+            ..Default::default()
+        },
+        tx,
+    );
+
+    let rendered = render_lines_with_width(&view, 60);
+    let unwrapped: String = rendered.split_whitespace().collect();
+    let whole_name: String = name.split_whitespace().collect();
+    assert!(unwrapped.contains(&whole_name), "{rendered}");
+    assert!(
+        rendered.contains("    The user did not ask for this command."),
+        "{rendered}"
+    );
+}
+
+#[test]
 fn width_changes_do_not_hide_rows() {
     let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
     let tx = AppEventSender::new(tx_raw);

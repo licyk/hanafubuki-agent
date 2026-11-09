@@ -73,15 +73,25 @@ pub(crate) fn wrap_styled_line<'a>(line: &'a Line<'a>, width: u16) -> Vec<Line<'
     word_wrap_line(line, opts)
 }
 
+/// The narrowest description column beside the names. Where the widest
+/// visible name leaves less, every description goes under its name: a
+/// column a character or two wide would stack its text one character a line.
+const MIN_DESCRIPTION_WIDTH: usize = 10;
+
+/// How far a description under its name, and the name's own wrapped lines,
+/// are indented.
+const STACKED_INDENT: usize = 4;
+
 /// Compute a shared description-column start based on the widest visible name
-/// plus two spaces of padding. Ensures at least one column is left for the
-/// description.
+/// plus two spaces of padding; `None` when that leaves the description fewer
+/// than [`MIN_DESCRIPTION_WIDTH`] columns, so each description goes under its
+/// name.
 fn compute_desc_col(
     rows_all: &[GenericDisplayRow],
     start_idx: usize,
     visible_items: usize,
     content_width: u16,
-) -> usize {
+) -> Option<usize> {
     let visible_range = start_idx..(start_idx + visible_items);
     let max_name_width = rows_all
         .iter()
@@ -96,19 +106,16 @@ fn compute_desc_col(
         })
         .max()
         .unwrap_or(0);
-    let mut desc_col = max_name_width.saturating_add(2);
-    if (desc_col as u16) >= content_width {
-        desc_col = content_width.saturating_sub(1) as usize;
-    }
-    desc_col
+    let desc_col = max_name_width.saturating_add(2);
+    (desc_col.saturating_add(MIN_DESCRIPTION_WIDTH) <= content_width as usize).then_some(desc_col)
 }
 
 /// Determine how many spaces to indent wrapped lines for a row.
-fn wrap_indent(row: &GenericDisplayRow, desc_col: usize, max_width: u16) -> usize {
+fn wrap_indent(row: &GenericDisplayRow, desc_col: Option<usize>, max_width: u16) -> usize {
     let max_indent = max_width.saturating_sub(1) as usize;
     let indent = row.wrap_indent.unwrap_or_else(|| {
         if row.description.is_some() || row.disabled_reason.is_some() {
-            desc_col
+            desc_col.unwrap_or(STACKED_INDENT)
         } else {
             0
         }
@@ -116,23 +123,58 @@ fn wrap_indent(row: &GenericDisplayRow, desc_col: usize, max_width: u16) -> usiz
     indent.min(max_indent)
 }
 
-/// Build the full display line for a row with the description padded to start
-/// at `desc_col`. Applies fuzzy-match bolding when indices are present and
-/// dims the description.
-fn build_full_line(row: &GenericDisplayRow, desc_col: usize) -> Line<'static> {
-    let combined_description = match (&row.description, &row.disabled_reason) {
+fn combined_description(row: &GenericDisplayRow) -> Option<String> {
+    match (&row.description, &row.disabled_reason) {
         (Some(desc), Some(reason)) => Some(format!("{desc} (disabled: {reason})")),
         (Some(desc), None) => Some(desc.clone()),
         (None, Some(reason)) => Some(format!("disabled: {reason}")),
         (None, None) => None,
-    };
+    }
+}
 
-    // Enforce single-line name: allow at most desc_col - 2 cells for name,
-    // reserving two spaces before the description column.
-    let name_limit = combined_description
-        .as_ref()
-        .map(|_| desc_col.saturating_sub(2))
-        .unwrap_or(usize::MAX);
+/// A row's lines at `width`, each styled by `style` before it is wrapped:
+/// the name with the description in the shared column, or, with no column
+/// (`desc_col` is `None`), the name and then the description under it.
+fn row_lines(
+    row: &GenericDisplayRow,
+    desc_col: Option<usize>,
+    width: u16,
+    style: impl Fn(&mut Line<'static>),
+) -> Vec<Line<'static>> {
+    use crate::wrapping::word_wrap_lines;
+    use crate::wrapping::RtOptions;
+
+    let indent = " ".repeat(wrap_indent(row, desc_col, width));
+    let mut name = build_full_line(row, desc_col);
+    style(&mut name);
+    let options = RtOptions::new(width as usize)
+        .initial_indent(Line::from(""))
+        .subsequent_indent(Line::from(indent.clone()));
+    let mut lines = word_wrap_lines([name], options);
+    if let (None, Some(description)) = (desc_col, combined_description(row)) {
+        let mut description = Line::from(description.dim());
+        style(&mut description);
+        let options = RtOptions::new(width as usize)
+            .initial_indent(Line::from(indent.clone()))
+            .subsequent_indent(Line::from(indent));
+        lines.extend(word_wrap_lines([description], options));
+    }
+    lines
+}
+
+/// Build the display line for a row: with a description column, the
+/// description padded to start at `desc_col`; without one, the name alone.
+/// Applies fuzzy-match bolding when indices are present and dims the
+/// description.
+fn build_full_line(row: &GenericDisplayRow, desc_col: Option<usize>) -> Line<'static> {
+    let combined_description = desc_col.and_then(|_| combined_description(row));
+
+    // Enforce single-line name beside a description: allow at most
+    // desc_col - 2 cells for name, reserving two spaces before the column.
+    let name_limit = match (desc_col, &combined_description) {
+        (Some(desc_col), Some(_)) => desc_col.saturating_sub(2),
+        _ => usize::MAX,
+    };
 
     let mut name_spans: Vec<Span> = Vec::with_capacity(row.name.len());
     let mut used_width = 0usize;
@@ -186,7 +228,7 @@ fn build_full_line(row: &GenericDisplayRow, desc_col: usize) -> Line<'static> {
         full_spans.push(display_shortcut.into());
         full_spans.push(")".into());
     }
-    if let Some(desc) = combined_description.as_ref() {
+    if let (Some(desc_col), Some(desc)) = (desc_col, combined_description.as_ref()) {
         let gap = desc_col.saturating_sub(this_name_width);
         if gap > 0 {
             full_spans.push(" ".repeat(gap).into());
@@ -246,28 +288,22 @@ pub(crate) fn render_rows(
             break;
         }
 
-        let mut full_line = build_full_line(row, desc_col);
-        if Some(i) == state.selected_idx && !row.is_disabled {
-            // Match previous behavior: cyan + bold for the selected row.
-            // Reset the style first to avoid inheriting dim from keyboard shortcuts.
-            full_line.spans.iter_mut().for_each(|span| {
-                span.style = Style::default().fg(Color::Cyan).bold();
-            });
-        }
-        if row.is_disabled {
-            full_line.spans.iter_mut().for_each(|span| {
-                span.style = span.style.dim();
-            });
-        }
-
-        // Wrap with subsequent indent aligned to the description column.
-        use crate::wrapping::word_wrap_line;
-        use crate::wrapping::RtOptions;
-        let continuation_indent = wrap_indent(row, desc_col, area.width);
-        let options = RtOptions::new(area.width as usize)
-            .initial_indent(Line::from(""))
-            .subsequent_indent(Line::from(" ".repeat(continuation_indent)));
-        let wrapped = word_wrap_line(&full_line, options);
+        let selected = Some(i) == state.selected_idx;
+        // Wrapped with subsequent indent aligned to the description column.
+        let wrapped = row_lines(row, desc_col, area.width, |line| {
+            if selected && !row.is_disabled {
+                // Match previous behavior: cyan + bold for the selected row.
+                // Reset the style first to avoid inheriting dim from keyboard shortcuts.
+                line.spans.iter_mut().for_each(|span| {
+                    span.style = Style::default().fg(Color::Cyan).bold();
+                });
+            }
+            if row.is_disabled {
+                line.spans.iter_mut().for_each(|span| {
+                    span.style = span.style.dim();
+                });
+            }
+        });
 
         // Render the wrapped lines.
         for line in wrapped {
@@ -319,8 +355,6 @@ pub(crate) fn measure_rows_height(
 
     let desc_col = compute_desc_col(rows_all, start_idx, visible_items, content_width);
 
-    use crate::wrapping::word_wrap_line;
-    use crate::wrapping::RtOptions;
     let mut total: u16 = 0;
     for row in rows_all
         .iter()
@@ -329,12 +363,7 @@ pub(crate) fn measure_rows_height(
         .take(visible_items)
         .map(|(_, r)| r)
     {
-        let full_line = build_full_line(row, desc_col);
-        let continuation_indent = wrap_indent(row, desc_col, content_width);
-        let opts = RtOptions::new(content_width as usize)
-            .initial_indent(Line::from(""))
-            .subsequent_indent(Line::from(" ".repeat(continuation_indent)));
-        let wrapped_lines = word_wrap_line(&full_line, opts).len();
+        let wrapped_lines = row_lines(row, desc_col, content_width, |_| {}).len();
         total = total.saturating_add(wrapped_lines as u16);
     }
     total.max(1)
