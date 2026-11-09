@@ -1,0 +1,55 @@
+# The documentation site's checks and build (`site/`, the Bun workspace at the root). It builds for GitHub Pages,
+# under the repository's path; the build is kept as an artifact.
+name: Site
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "site/**"
+      - "patches/**"
+      - "package.json"
+      - "bun.lock"
+      - ".prettierrc.json"
+      - ".prettierignore"
+      - ".github/workflows/site.yml"
+  pull_request:
+    paths:
+      - "site/**"
+      - "patches/**"
+      - "package.json"
+      - "bun.lock"
+      - ".prettierrc.json"
+      - ".prettierignore"
+      - ".github/workflows/site.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: site-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  site:
+    name: Site
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      # keep in step with packageManager in package.json
+      - uses: oven-sh/setup-bun@v2.2.0
+        with:
+          bun-version: 1.4.2
+      - run: bun install --frozen-lockfile
+      - run: bun run format:check:site
+      - run: bun run site:check
+      - run: bun run site:test
+      - run: bun run site:build
+        env:
+          VITE_BASE_PATH: /hanafubuki-agent/
+      - uses: actions/upload-artifact@v7.0.2
+        with:
+          name: site
+          path: site/.output/public
+          include-hidden-files: true

@@ -1,6 +1,6 @@
-# The workspace's checks. A change only to files no check reads (Markdown, licence files) runs nothing here. Tags never
-# start this workflow: a v* tag starts Release, which reuses this workflow's run of the tagged commit, or calls this file
-# as its checks when there is none.
+# The workspace's checks. A change only to files no check reads (Markdown, licence files, the documentation site that
+# site.yml checks) runs nothing here. Tags never start this workflow: a v* tag starts Release, which reuses this
+# workflow's run of the tagged commit, or calls this file as its checks when there is none.
 name: CI
 
 on:
@@ -10,11 +10,25 @@ on:
       - "**.md"
       - "LICENSE"
       - "NOTICE"
+      - "site/**"
+      - "patches/**"
+      - "package.json"
+      - "bun.lock"
+      - ".prettierrc.json"
+      - ".prettierignore"
+      - ".github/workflows/site.yml"
   pull_request:
     paths-ignore:
       - "**.md"
       - "LICENSE"
       - "NOTICE"
+      - "site/**"
+      - "patches/**"
+      - "package.json"
+      - "bun.lock"
+      - ".prettierrc.json"
+      - ".prettierignore"
+      - ".github/workflows/site.yml"
   workflow_dispatch:
   workflow_call:
 
