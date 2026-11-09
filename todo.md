@@ -245,7 +245,7 @@ moves its pin.
     `AgentRecap`; a new plugin row `recap` (Capability, after `titles`;
     host rows now mount after it). Goldens and the history corpus are
     unchanged.
-- [ ] P9: child and ephemeral sessions (`parent`, `origin`,
+- [x] P9: child and ephemeral sessions (`parent`, `origin`,
       `AgentSessionDriver`, archive and delete cascade; a new history
       fixture in both repositories), `/side` and `/btw`, the workspace
       panes.
@@ -267,8 +267,12 @@ moves its pin.
         corpus `golden/history-lineage/` with
         `recorded_lineage_history_transcript.json`, and the request golden
         `side_conversation_request.json`.
-  - [ ] The interface's half: `/side` and `/btw`, the workspace panes
-        (layer H), the resume picker's cwd and branch.
+  - [x] The interface's half: `/side [message|close]` and `/btw` (a
+        second conversation: docked on the right in fullscreen at 100
+        columns or more, with a divider, zoom and the leader's pane keys;
+        a switch with a banner in scrollback; Codex's command scope; Esc
+        returns); the resume picker's cwd and branch came in P4. No tab
+        strip (one side conversation per session).
   - Open: a compacting parent refuses `/side`; no `/side` before a first
     turn; restore does not cascade; a child does not inherit the
     session's permission mode (P10 passes it).
@@ -283,7 +287,7 @@ moves its pin.
     `PreparedAgentSessionDeletion` holds a list and is not `Copy`; new
     facade calls `open_side_conversation`, `close_side_conversation`;
     re-exports `AgentSessionOrigin`, `AgentSessionParentFilter`.
-- [ ] P10: the `subagents` plugin (Codex's v2 tools, orchestrator prompt:
+- [x] P10: the `subagents` plugin (Codex's v2 tools, orchestrator prompt:
       goldens), `/subagents`, `/agents`.
   - [x] The facade's half: the `subagents` row (after `goal`): tools
         `spawn_agent`, `send_message`, `followup_task`, `wait_agent`,
@@ -295,10 +299,12 @@ moves its pin.
         orchestrator.md) for top-level Default-mode sessions; facade
         `subagents(parent)`, `interrupt_subagent`. Ten request goldens
         regenerated (Default 30 tools, Plan 15); corpora unchanged.
-  - [ ] The interface's half: `/subagents` (status feed, switch to a
-        child), `/agents` (the command center), and a child's pending
-        approval surfaced in the interface (in Manual mode a child waits
-        on it).
+  - [x] The interface's half: `/subagents` (status cell, a live picker,
+        showing a child with its journal followed and its turn adopted);
+        a child's pending approval shown in the parent ("Subagent NAME:")
+        and answered on the child; `/agents` (sessions with their children
+        nested, filters, open, new, fork, archive or restore, delete,
+        interrupt).
   - Open: an interrupt that lands while the tool catalog is built ends
     the child's turn Failed, not Cancelled; `wait_agent` pollutes memory
     contribution, so a coordinating session never contributes; archiving
