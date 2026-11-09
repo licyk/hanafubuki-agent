@@ -1,0 +1,95 @@
+---
+title: Configuration
+description: The configuration directory, its three files, and reading and changing them with config path, get, set and edit.
+icon: Settings
+---
+
+The standalone Agent keeps its configuration in the configuration directory: by default `~/.config/hanafubuki-agent/` on Linux, `~/Library/Application Support/hanafubuki-agent/` on macOS and `%APPDATA%\hanafubuki-agent\` on Windows. With `HANAFUBUKI_AGENT_HOME` set, the configuration and the data share that one directory. [Data directory](/docs/data-directory) has the details.
+
+<Callout>
+  An application that embeds the Agent (Hanafubuki) names its own configuration directory and reads
+  the user's files alone, without profiles, project files or `-c` overrides; its own settings page
+  usually changes them.
+</Callout>
+
+## The three files [#files]
+
+| File             | Holds                                                                                                               | Layers | Permissions         |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------- | ------ | ------------------- |
+| `config.toml`    | The settings (permission mode, memory, plugins, web tools, proxy, log level), the profiles and the trusted projects | Yes    | Ordinary            |
+| `providers.toml` | The model Providers, their tokens, and the model policy (model, reasoning effort, compaction)                       | No     | Owner only (`0600`) |
+| `mcp.toml`       | The MCP servers and their credentials                                                                               | No     | Owner only (`0600`) |
+
+Each file is created when it is first needed: `config.toml` by the first `config set`, `providers.toml` by the first `providers add`, and so on. Without a file the defaults apply. Every key is camelCase. Each key's type and default are in the [Configuration reference](/docs/config-reference).
+
+`providers.toml` and `mcp.toml` are usually changed with the `providers` and `mcp` commands, but you can edit them too.
+
+## Reading the configuration [#read]
+
+```sh
+hanafubuki-agent config path            # where each file and directory is
+hanafubuki-agent config get             # every setting, with all layers applied
+hanafubuki-agent config get logLevel    # one key
+hanafubuki-agent config get memory      # one table
+```
+
+`config get` prints the values in effect: the defaults, the user's file, the profile, the project's file and `-c`, one over the other. A string prints as it is, anything else as TOML. A proxy URL's user name and password print as `***`. An optional key that is not set prints nothing.
+
+## Changing it [#write]
+
+```sh
+hanafubuki-agent config set logLevel debug
+hanafubuki-agent config set memory.enabled true
+hanafubuki-agent config set network.proxy http://127.0.0.1:7890
+hanafubuki-agent config set profiles.review.permissionMode auto_review
+hanafubuki-agent config set "projects.'$PWD'.trustLevel" trusted
+```
+
+`config set` writes one key into the user's `config.toml`. The key is a dotted TOML key, and a part with special characters is quoted (the project path above). The value is TOML, or a string when it is not valid TOML, so `debug` needs no quotes.
+
+`config set` takes:
+
+- any setting's key, listed in the [Configuration reference](/docs/config-reference#config-toml);
+- a profile's key: `profiles.NAME.KEY`;
+- a project's trust: `projects."PATH".trustLevel`, `trusted` or `untrusted`.
+
+It refuses a key it does not know and a value the Agent could not use:
+
+```text
+error: `nosuch` is not a setting of config.toml
+```
+
+A write changes that one key and keeps the file's comments and everything else. `config set` cannot remove a key; edit the file for that.
+
+## Editing the file [#edit]
+
+```sh
+hanafubuki-agent config edit
+```
+
+Opens the user's `config.toml` in `$VISUAL` or `$EDITOR` (creating the directory first if needed). The editor may take arguments, such as `EDITOR="code --wait"`.
+
+What you edit by hand is read the next time the Agent starts. A value in it the Agent cannot use is repaired, after the original file is copied into `.recovery/`; see [Configuration recovery](/docs/recovery).
+
+## Example [#example]
+
+```toml
+# ~/.config/hanafubuki-agent/config.toml
+permissionMode = "manual"
+logLevel = "info"
+
+[memory]
+enabled = true
+
+[network]
+proxy = "http://127.0.0.1:7890"
+
+# hanafubuki-agent -p review
+[profiles.review]
+permissionMode = "auto_review"
+
+[projects."/home/me/src/my-project"]
+trustLevel = "trusted"
+```
+
+How profiles, project files and `-c` combine is in [Configuration layers](/docs/config-layers).

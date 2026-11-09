@@ -1,0 +1,138 @@
+---
+title: Command-line reference
+description: Every command, argument and flag of hanafubuki-agent.
+icon: BookText
+---
+
+```text
+hanafubuki-agent [OPTIONS] [PROMPT]
+hanafubuki-agent [OPTIONS] <COMMAND> [ARGS]
+```
+
+With no command it opens the [terminal interface](/docs/terminal-interface), `PROMPT` being the first message. `hanafubuki-agent --help` and `hanafubuki-agent <COMMAND> --help` print the same information; `-V` (`--version`) prints the version.
+
+## Global flags [#global-flags]
+
+They go before or after the command, and apply to every command.
+
+| Flag                                                 | Does                                                                                                                                |
+| ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `-c`, `--config KEY=VALUE`                           | Overrides a key of `config.toml` for this run; repeatable, the later wins. The value is TOML, or a string when it is not valid TOML |
+| `-p`, `--profile NAME`                               | Reads the profile `[profiles.NAME]` over the user's settings; a profile the file does not have is an error                          |
+| `-m`, `--model MODEL`                                | The model a new (or resumed) session runs on the default Provider, in place of the model policy's                                   |
+| `-C`, `--cd DIR`                                     | The working directory: the first workspace root; its Git root decides which project configuration may be read                       |
+| `--add-dir DIR`                                      | Another workspace root; repeatable                                                                                                  |
+| `--permission-mode manual\|auto-review\|full-access` | This run's [permission mode](/docs/permissions), as `-c permissionMode=…`, winning over `-c`                                        |
+| `--log-level off\|error\|warn\|info\|debug\|trace`   | This run's log level, as `-c logLevel=…`, winning over `-c`                                                                         |
+| `--data-dir DIR`                                     | The data directory (history, memory, Skills, logs), in place of the platform's or the one `HANAFUBUKI_AGENT_HOME` names             |
+
+<Callout>
+  The flag's values have hyphens (`auto-review`, `full-access`); the configuration file and `-c` use
+  underscores (`auto_review`, `full_access`).
+</Callout>
+
+The layers and their precedence are in [Configuration layers](/docs/config-layers).
+
+## The terminal interface [#interface]
+
+| Command                     | Does                                                                                                           |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `hanafubuki-agent [PROMPT]` | Opens the terminal interface in a new session                                                                  |
+| `resume [ID] [PROMPT]`      | Resumes session `ID` in the terminal interface; without an id, opens the resume picker                         |
+| `resume --last [PROMPT]`    | Resumes the latest session a turn ran in, or starts a new one when there is none. `--last` takes no session id |
+
+Without a terminal, both exit with code 2. See [Terminal interface](/docs/terminal-interface).
+
+## exec [#exec]
+
+```text
+hanafubuki-agent exec [OPTIONS] [PROMPT|-]
+```
+
+| Flag                               | Does                                                                               |
+| ---------------------------------- | ---------------------------------------------------------------------------------- |
+| `PROMPT`                           | The message; `-`, or none with standard input not a terminal, reads standard input |
+| `--json`                           | Prints every event as one JSON line                                                |
+| `--approve POLICY`                 | How approvals are answered: `deny` (the default), `ask`, `allow:TOOL[,TOOL…]`      |
+| `-o`, `--output-last-message FILE` | Writes the turn's final answer to `FILE`                                           |
+
+See [exec](/docs/exec) and [exec --json events](/docs/json-events).
+
+## config [#config]
+
+| Command                | Does                                                                                                                                                             |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `config path`          | Prints where `config.toml`, `providers.toml`, `mcp.toml`, the data directory and the log file are                                                                |
+| `config get [KEY]`     | Prints a key's value with every layer applied (a string as it is, anything else as TOML); without a key, every setting. A proxy URL's credentials print as `***` |
+| `config set KEY VALUE` | Writes one key into the user's `config.toml`: any setting, `profiles.NAME.KEY`, `projects."PATH".trustLevel`. The value is TOML, or a string when it is not      |
+| `config edit`          | Opens the user's `config.toml` in `$VISUAL` or `$EDITOR`                                                                                                         |
+
+See [Configuration](/docs/configuration).
+
+## providers [#providers]
+
+| Command                                                                                                                           | Does                                                                                                                                                                    |
+| --------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `providers list`                                                                                                                  | Prints the model policy's model, and each Provider's id, name, whether it is the default or disabled, protocol, address, whether a token is set, and its headers' names |
+| `providers add NAME --base-url URL [--protocol responses\|chat-completions\|anthropic-messages] [--api-key-env VAR] [--disabled]` | Adds a Provider and prints its id. The protocol defaults to `responses`; the token is read from `VAR`. The first one becomes the default                                |
+| `providers remove ID`                                                                                                             | Removes a Provider; when it was the default, another becomes the default                                                                                                |
+| `providers default ID [--model MODEL]`                                                                                            | Makes a Provider the default, and optionally sets the model policy's model                                                                                              |
+
+See [Providers and models](/docs/providers-models).
+
+## mcp [#mcp]
+
+| Command                                                        | Does                                                                                                                                                                               |
+| -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `mcp list`                                                     | Prints each server's id, whether it is disabled, its transport and target, the names (never the values) of its environment variables or headers; then the credentials that are set |
+| `mcp add ID --url URL [--disabled]`                            | Adds a Streamable HTTP server                                                                                                                                                      |
+| `mcp add ID [--env KEY=VALUE]… [--disabled] -- PROGRAM [ARG]…` | Adds a stdio server: the program and its arguments follow `--`. An enabled server is connected at once, and how that went is printed                                               |
+| `mcp remove ID`                                                | Disconnects and removes a server                                                                                                                                                   |
+| `mcp connect ID`                                               | Connects a server and prints its state and tool count; fails when it does not reach `ready`                                                                                        |
+
+A server id has letters, digits, `-`, `_` and `.` only. Credentials are edited in `mcp.toml`; see [MCP](/docs/mcp).
+
+## sessions [#sessions]
+
+| Command                               | Does                                                                                                        |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `sessions list [--archived] [--json]` | Lists the sessions, the latest first; `--archived` the archived ones; `--json` one session summary per line |
+| `sessions show ID [--json]`           | Prints the session's latest 200 items; `--json` that page as JSON                                           |
+| `sessions archive ID`                 | Archives a session                                                                                          |
+| `sessions delete ID`                  | Deletes a session and its history                                                                           |
+
+See [Sessions](/docs/sessions).
+
+## skills [#skills]
+
+| Command                            | Does                                                                                                          |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `skills list`                      | Lists each Skill's id, whether it is disabled, and its description; the catalog's issues go to standard error |
+| `skills install DIR [--overwrite]` | Installs the Skill in `DIR`; `--overwrite` replaces an installed Skill of the same name                       |
+| `skills remove ID`                 | Removes an installed Skill                                                                                    |
+
+See [Skills](/docs/skills).
+
+## memory [#memory]
+
+| Command         | Does                                                                                                             |
+| --------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `memory status` | Prints whether memory is enabled, the sessions read, the memories extracted, the running jobs and the last error |
+| `memory reset`  | Forgets everything the memory holds                                                                              |
+
+See [Memory](/docs/memory).
+
+## doctor [#doctor]
+
+| Command           | Does                                                                                                                                 |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `doctor`          | Checks the configuration, the Providers, the MCP servers, the keyring and the data directory, one line each; any `FAIL` exits with 1 |
+| `doctor --online` | Also starts the Agent, lists the default Provider's models, and connects each enabled MCP server                                     |
+
+See [Troubleshooting](/docs/troubleshooting#doctor).
+
+## Which commands start the Agent [#agent-start]
+
+`config`, `providers list`, `mcp list` and `doctor` without `--online` only read and write the configuration: they do not start the Agent, and work while another Agent process runs. The other commands start it, and need the data directory to themselves.
+
+Every command reads the configuration first, then installs the crash handler and the log file, before it starts the Agent or changes anything. A management command that starts the Agent also connects the enabled MCP servers in the background, as every start does.

@@ -1,0 +1,138 @@
+---
+title: 命令行参考
+description: hanafubuki-agent 的所有命令、参数和选项。
+icon: BookText
+---
+
+```text
+hanafubuki-agent [选项] [提示词]
+hanafubuki-agent [选项] <命令> [参数]
+```
+
+不带命令时打开[终端界面](/docs/terminal-interface)，`提示词`作为第一条消息。`hanafubuki-agent --help` 和 `hanafubuki-agent <命令> --help` 打印同样的信息，`-V`（`--version`）打印版本。
+
+## 全局选项 [#global-flags]
+
+全局选项可以写在命令之前或之后，对所有命令有效。
+
+| 选项                                                 | 作用                                                                                                |
+| ---------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `-c`、`--config 键=值`                               | 本次运行覆盖 `config.toml` 的一个键，可重复，后面的优先。值按 TOML 解析，不是合法 TOML 时作为字符串 |
+| `-p`、`--profile 名字`                               | 在用户设置之上读取配置档 `[profiles.名字]`；配置文件中没有这个配置档时报错                          |
+| `-m`、`--model 模型`                                 | 新会话（以及恢复的会话）使用的模型，在默认 Provider 上运行，代替模型策略中的模型                    |
+| `-C`、`--cd 目录`                                    | 工作目录：第一个工作区目录；它所在的 Git 仓库根目录决定读取哪个项目配置                             |
+| `--add-dir 目录`                                     | 再添加一个工作区目录，可重复                                                                        |
+| `--permission-mode manual\|auto-review\|full-access` | 本次运行的[权限模式](/docs/permissions)，相当于 `-c permissionMode=...`，优先于 `-c`                |
+| `--log-level off\|error\|warn\|info\|debug\|trace`   | 本次运行的日志级别，相当于 `-c logLevel=...`，优先于 `-c`                                           |
+| `--data-dir 目录`                                    | 数据目录（历史、记忆、Skill、日志），代替平台默认位置或 `HANAFUBUKI_AGENT_HOME` 指定的位置          |
+
+<Callout>
+  选项中的值使用连字符（`auto-review`、`full-access`），而配置文件和 `-c`
+  中使用下划线（`auto_review`、`full_access`）。
+</Callout>
+
+配置的分层和优先级见[配置分层](/docs/config-layers)。
+
+## 终端界面 [#interface]
+
+| 命令                        | 作用                                                                            |
+| --------------------------- | ------------------------------------------------------------------------------- |
+| `hanafubuki-agent [提示词]` | 在新会话中打开终端界面                                                          |
+| `resume [ID] [提示词]`      | 在终端界面中恢复会话 `ID`；不给 ID 时打开恢复选择器                             |
+| `resume --last [提示词]`    | 恢复最近一个运行过回合的会话；没有时开始新会话。`--last` 不能和会话 ID 一起使用 |
+
+没有终端时，两者都以退出码 2 退出。见[终端界面](/docs/terminal-interface)。
+
+## exec [#exec]
+
+```text
+hanafubuki-agent exec [选项] [提示词|-]
+```
+
+| 选项                               | 作用                                                      |
+| ---------------------------------- | --------------------------------------------------------- |
+| `提示词`                           | 消息。`-`，或者不给且标准输入不是终端时，从标准输入读取   |
+| `--json`                           | 每个事件输出一行 JSON                                     |
+| `--approve 策略`                   | 如何回答审批：`deny`（默认）、`ask`、`allow:工具[,工具…]` |
+| `-o`、`--output-last-message 文件` | 把回合的最终回答写入文件                                  |
+
+见 [exec](/docs/exec) 和 [exec --json 事件](/docs/json-events)。
+
+## config [#config]
+
+| 命令               | 作用                                                                                                                         |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
+| `config path`      | 打印 `config.toml`、`providers.toml`、`mcp.toml`、数据目录和日志文件的位置                                                   |
+| `config get [键]`  | 打印应用所有分层后的值：字符串原样输出，其他值输出为 TOML；不给键时输出全部设置。代理 URL 中的凭据显示为 `***`               |
+| `config set 键 值` | 把一个键写入用户的 `config.toml`：任何设置、`profiles.名字.键`、`projects."路径".trustLevel`。值按 TOML 解析，否则作为字符串 |
+| `config edit`      | 用 `$VISUAL` 或 `$EDITOR` 打开用户的 `config.toml`                                                                           |
+
+见[配置](/docs/configuration)。
+
+## providers [#providers]
+
+| 命令                                                                                                                               | 作用                                                                                                              |
+| ---------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `providers list`                                                                                                                   | 打印模型策略中的模型，以及每个 Provider 的 ID、名称、是否默认、是否禁用、协议、地址、是否设置了令牌和请求头的名字 |
+| `providers add 名称 --base-url URL [--protocol responses\|chat-completions\|anthropic-messages] [--api-key-env 变量] [--disabled]` | 添加 Provider 并打印它的 ID。协议默认为 `responses`。令牌从环境变量读取。第一个添加的成为默认 Provider            |
+| `providers remove ID`                                                                                                              | 删除 Provider；删除的是默认 Provider 时，默认改为另一个                                                           |
+| `providers default ID [--model 模型]`                                                                                              | 设为默认 Provider，并可同时设置模型策略中的模型                                                                   |
+
+见 [Provider 与模型](/docs/providers-models)。
+
+## mcp [#mcp]
+
+| 命令                                                     | 作用                                                                                                  |
+| -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `mcp list`                                               | 打印每个服务器的 ID、是否禁用、传输方式和目标、环境变量或请求头的名字（不打印值），然后是已设置的凭据 |
+| `mcp add ID --url URL [--disabled]`                      | 添加一个 Streamable HTTP 服务器                                                                       |
+| `mcp add ID [--env 键=值]… [--disabled] -- 程序 [参数]…` | 添加一个 stdio 服务器，`--` 之后是程序和参数。启用的服务器添加后立即连接，并打印连接结果              |
+| `mcp remove ID`                                          | 断开并删除服务器                                                                                      |
+| `mcp connect ID`                                         | 连接服务器并打印它的状态和工具数量；没有达到 `ready` 时失败                                           |
+
+服务器 ID 只能包含字母、数字、`-`、`_` 和 `.`。凭据需要编辑 `mcp.toml`，见 [MCP](/docs/mcp)。
+
+## sessions [#sessions]
+
+| 命令                                  | 作用                                                                       |
+| ------------------------------------- | -------------------------------------------------------------------------- |
+| `sessions list [--archived] [--json]` | 列出会话，最新的在前；`--archived` 列出已归档的；`--json` 每行一个会话摘要 |
+| `sessions show ID [--json]`           | 打印会话最近的 200 项记录；`--json` 输出这一页的 JSON                      |
+| `sessions archive ID`                 | 归档会话                                                                   |
+| `sessions delete ID`                  | 删除会话及其历史                                                           |
+
+见[会话](/docs/sessions)。
+
+## skills [#skills]
+
+| 命令                                | 作用                                                         |
+| ----------------------------------- | ------------------------------------------------------------ |
+| `skills list`                       | 列出 Skill 的 ID、是否禁用和说明；目录中的问题打印到标准错误 |
+| `skills install 目录 [--overwrite]` | 安装目录中的 Skill；`--overwrite` 替换已安装的同名 Skill     |
+| `skills remove ID`                  | 删除一个安装的 Skill                                         |
+
+见 [Skill](/docs/skills)。
+
+## memory [#memory]
+
+| 命令            | 作用                                                                   |
+| --------------- | ---------------------------------------------------------------------- |
+| `memory status` | 打印记忆是否启用、读过的会话数、提取的记忆数、运行中的任务和最近的错误 |
+| `memory reset`  | 忘记记忆中的所有内容                                                   |
+
+见[记忆](/docs/memory)。
+
+## doctor [#doctor]
+
+| 命令              | 作用                                                                                    |
+| ----------------- | --------------------------------------------------------------------------------------- |
+| `doctor`          | 检查配置、Provider、MCP 服务器、密钥环和数据目录，每项一行；有 `FAIL` 时以退出码 1 退出 |
+| `doctor --online` | 还会启动 Agent，列出默认 Provider 的模型，并连接每个启用的 MCP 服务器                   |
+
+见[故障排查](/docs/troubleshooting#doctor)。
+
+## 哪些命令会启动 Agent [#agent-start]
+
+`config`、`providers list`、`mcp list` 和不带 `--online` 的 `doctor` 只读写配置，不启动 Agent，可以在另一个 Agent 进程运行时使用。其他命令会启动 Agent，需要独占数据目录。
+
+每个命令都会先读取配置，再安装崩溃处理和日志文件，然后才启动 Agent 或修改任何内容。会启动 Agent 的管理命令也会像每次启动一样在后台连接启用的 MCP 服务器。

@@ -1,0 +1,61 @@
+---
+title: 数据目录
+description: 配置目录和数据目录的位置，以及数据目录中保存了什么。
+icon: FolderTree
+---
+
+Agent 使用两个目录：**配置目录**保存三个配置文件，**数据目录**保存会话历史、记忆、Skill 和日志。`hanafubuki-agent config path` 打印当前使用的位置：
+
+```text
+config    /home/me/.config/hanafubuki-agent/config.toml
+providers /home/me/.config/hanafubuki-agent/providers.toml
+mcp       /home/me/.config/hanafubuki-agent/mcp.toml
+data      /home/me/.local/share/hanafubuki-agent
+log       /home/me/.local/share/hanafubuki-agent/logs/hanafubuki-agent.log
+```
+
+## 默认位置 [#locations]
+
+|          | Linux                              | macOS                                             | Windows                       |
+| -------- | ---------------------------------- | ------------------------------------------------- | ----------------------------- |
+| 配置目录 | `~/.config/hanafubuki-agent/`      | `~/Library/Application Support/hanafubuki-agent/` | `%APPDATA%\hanafubuki-agent\` |
+| 数据目录 | `~/.local/share/hanafubuki-agent/` | 与配置目录相同                                    | 与配置目录相同                |
+
+Linux 上的位置遵循 `$XDG_CONFIG_HOME` 和 `$XDG_DATA_HOME`。
+
+- `HANAFUBUKI_AGENT_HOME` 设置后，用这一个目录同时代替两者，配置文件和数据并排放在其中。
+- `--data-dir 目录` 只代替数据目录。
+
+两者的相对路径都相对于当前目录解析。
+
+## 数据目录里有什么 [#contents]
+
+| 路径                        | 内容                                                                                                                        |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `history/`                  | 会话历史：`index.sqlite3` 索引，`active/` 和 `archived/` 中的会话记录，`attachments/` 中的附件，`trash/` 是删除过程中的暂存 |
+| `memory/`                   | [记忆](/docs/memory)：`memory.sqlite3` 及其工作目录                                                                         |
+| `skills/`                   | [Skill](/docs/skills)：`system/` 中的内置 Skill，`packages/` 中安装的 Skill，`state.json` 记录启用状态                      |
+| `logs/hanafubuki-agent.log` | 日志文件，超过 8 MiB 时轮换，保留 `.log.1` 到 `.log.3` 三个旧文件                                                           |
+| `start-marker.json`         | 记录未正常结束的启动次数，用于发现反复崩溃                                                                                  |
+| `crash-record.json`         | 最近一次崩溃的记录                                                                                                          |
+| `process-groups.json`       | Agent 启动的进程组。下次启动时会清理上次遗留的进程                                                                          |
+| `.lock`                     | 数据目录锁                                                                                                                  |
+
+所有文件都是在需要时才创建的。
+
+## 同一时间只有一个 Agent [#lock]
+
+一个数据目录同一时间只能被一个 Agent 进程使用。第二个进程启动时会失败，并报告数据目录被占用。锁由操作系统持有，进程结束（包括崩溃）时自动释放，不需要手动删除 `.lock`。
+
+需要同时运行多个 Agent 时，为每个进程指定不同的数据目录：
+
+```sh
+hanafubuki-agent --data-dir ~/agent-data/review exec "审查这次改动"
+```
+
+## 备份与迁移 [#backup]
+
+退出所有 Agent 进程后，复制配置目录和数据目录即可备份或迁移到另一台机器。注意：
+
+- `providers.toml` 和 `mcp.toml` 包含 API 令牌等凭据。
+- MCP 服务器的 OAuth 令牌保存在系统密钥环中，不在这两个目录里。

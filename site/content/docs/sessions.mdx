@@ -1,0 +1,79 @@
+---
+title: 会话
+description: 列出、查看、归档、删除和恢复保存在本地历史中的会话。
+icon: History
+---
+
+每一次对话都是一个会话，保存在数据目录的 `history/` 中：终端界面里的对话、`resume` 继续的对话，以及每一次 `exec`。会话用一个数字 ID 标识，`sessions list` 会列出它们。
+
+## 列出会话 [#list]
+
+```sh
+hanafubuki-agent sessions list
+```
+
+```text
+2  2026-11-09 04:37  gpt-5.1  解释这个仓库是做什么的
+1  2026-11-08 21:12  gpt-5.1  修复 lint 报错
+```
+
+每行依次是 ID、最后更新时间（本地时间）、模型和标题，最新的在最前面。标题在第一条消息时自动生成；还没有标题的会话显示 `(untitled)`。
+
+- `--archived` 列出已归档的会话，而不是正常的会话。
+- `--json` 每行输出一个会话摘要的 JSON 对象，包含 ID、模型、Provider、模式、标题、token 用量、创建和更新时间等字段，适合脚本处理。
+
+<Callout>
+  每次打开终端界面都会创建一个会话，即使没有发送任何消息。`sessions list`
+  会列出这些空会话，而恢复选择器会隐藏它们。
+</Callout>
+
+## 查看会话 [#show]
+
+```sh
+hanafubuki-agent sessions show 2
+```
+
+```text
+session 2  gpt-5.1  解释这个仓库是做什么的
+user: 解释这个仓库是做什么的
+→ exec_command
+  done
+assistant: 这是一个……
+```
+
+`show` 打印会话最近的 200 项记录：你的消息（`user:`，回合进行中补充的消息是 `user (steering):`）、模型的回答（`assistant:`）、工具调用（`→ 工具名`）及其结果（`done` 或 `failed`）。更早的记录不会显示，此时会先打印 `(older items are not shown)`。只给模型看的上下文不会显示。
+
+{/* T2: verify */}
+
+模型的思考记录也保存在会话中，在终端界面恢复会话时可以看到；`sessions show` 的文本输出不包含它们。
+
+`--json` 输出这一页记录的完整 JSON，包括每一项的全部字段。
+
+## 归档与删除 [#archive-delete]
+
+```sh
+hanafubuki-agent sessions archive 2
+hanafubuki-agent sessions delete 2
+```
+
+- **归档**：会话从 `sessions list` 和恢复选择器中消失，但仍然保存，可以用 `sessions list --archived` 找到。
+- **删除**：永久删除会话及其历史，无法恢复。
+
+## 恢复会话 [#resume]
+
+在终端界面中继续一个会话：
+
+```sh
+hanafubuki-agent resume 2        # 指定 ID
+hanafubuki-agent resume --last   # 最近一个运行过回合的会话
+hanafubuki-agent resume          # 从列表中选择
+```
+
+恢复后，界面会重放会话最近的 200 项记录，下一条消息接着这个会话继续。也可以在终端界面中输入 `/resume` 打开同样的选择器。详见[终端界面](/docs/terminal-interface#resume)。
+
+`exec` 总是创建新会话，不能继续已有的会话；但 `exec` 创建的会话可以用 `resume ID` 在终端界面中继续。
+
+## 注意 [#notes]
+
+- 除了 `resume`，`sessions` 的各个子命令也需要启动 Agent，因此要独占数据目录：另一个 Agent 进程正在运行时，它们会报错退出，见[故障排查](/docs/troubleshooting#data-directory-in-use)。
+- 会话 ID 必须是数字，否则命令以退出码 2 退出。

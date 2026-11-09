@@ -111,7 +111,7 @@ The repository's `rust-toolchain.toml` pins the toolchain (1.99.0), and rustup i
 
 <Tabs items={["Linux", "macOS", "Windows"]}>
   <Tab value="Linux">
-    MCP servers' OAuth tokens are kept in the operating system's keyring, which on Linux is reached through the Secret Service (GNOME Keyring, KWallet and others provide it). A server or container without a desktop usually has none: the Agent still runs, but an MCP server that needs an OAuth login cannot keep its token, and the `keyring` line of `hanafubuki-agent doctor` says `FAIL`.
+    MCP servers' OAuth tokens are kept in the operating system's keyring, which on Linux is reached through the Secret Service (GNOME Keyring, KWallet and others provide it). A server or container without a desktop usually has none: the `keyring` line of `hanafubuki-agent doctor` then says `FAIL`, but nothing else is affected: Provider tokens and MCP credentials are kept in the configuration files, not in the keyring.
 
     The configuration and data directories follow `$XDG_CONFIG_HOME` and `$XDG_DATA_HOME`.
 
@@ -145,7 +145,7 @@ Quit any running Agent first. The new version reads your configuration and histo
 
 1. Remove the executable: `cargo uninstall hanafubuki-agent-cli`, or delete the binary you downloaded.
 2. If you no longer want your configuration and history, delete the configuration and data directories. `hanafubuki-agent config path` prints where they are; the defaults are in [Data directory](/docs/data-directory).
-3. If you used an MCP server with OAuth, you can delete the operating system keyring's entries under the service `org.licyk.hanafubuki-agent.secrets`.
+3. The Agent's service in the operating system's keyring is `org.licyk.hanafubuki-agent.secrets`; delete any entries under it too.
 
 <Callout type="warn">
   The data directory holds every session's history, the memory and the Skills you installed;

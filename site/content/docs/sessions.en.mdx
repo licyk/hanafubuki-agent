@@ -1,0 +1,79 @@
+---
+title: Sessions
+description: List, read, archive, delete and resume the sessions kept in the local history.
+icon: History
+---
+
+Every conversation is a session, kept in the data directory's `history/`: a conversation in the terminal interface, one continued with `resume`, and every `exec`. A session has a numeric id, which `sessions list` shows.
+
+## Listing sessions [#list]
+
+```sh
+hanafubuki-agent sessions list
+```
+
+```text
+2  2026-11-09 04:37  gpt-5.1  Explain what this repository does
+1  2026-11-08 21:12  gpt-5.1  Fix the lint errors
+```
+
+Each line has the id, the last update (local time), the model and the title, the latest first. The title is made from the first message; a session without one shows `(untitled)`.
+
+- `--archived` lists the archived sessions instead.
+- `--json` prints one session summary per line as a JSON object (the id, model, Provider, mode, title, token use, creation and update times, and more), for scripts.
+
+<Callout>
+  Every start of the terminal interface creates a session, even if you send no message. `sessions
+  list` shows these empty sessions; the resume picker hides them.
+</Callout>
+
+## Reading a session [#show]
+
+```sh
+hanafubuki-agent sessions show 2
+```
+
+```text
+session 2  gpt-5.1  Explain what this repository does
+user: Explain what this repository does
+→ exec_command
+  done
+assistant: This is …
+```
+
+`show` prints the session's latest 200 items: your messages (`user:`, or `user (steering):` for one sent while a turn ran), the model's answers (`assistant:`), its tool calls (`→ TOOL`) and their results (`done` or `failed`). Older items are left out, and `(older items are not shown)` says so first. Context only the model reads is not shown.
+
+{/* T2: verify */}
+
+The model's thinking is kept in the session too, and the terminal interface shows it when you resume the session; `sessions show`'s text leaves it out.
+
+`--json` prints that page of the transcript as JSON, with every field of each item.
+
+## Archiving and deleting [#archive-delete]
+
+```sh
+hanafubuki-agent sessions archive 2
+hanafubuki-agent sessions delete 2
+```
+
+- **Archive**: the session leaves `sessions list` and the resume picker but is kept; `sessions list --archived` finds it.
+- **Delete**: removes the session and its history for good.
+
+## Resuming a session [#resume]
+
+Continue a session in the terminal interface:
+
+```sh
+hanafubuki-agent resume 2        # by id
+hanafubuki-agent resume --last   # the latest session a turn ran in
+hanafubuki-agent resume          # pick one from a list
+```
+
+The interface replays the session's latest 200 items, and your next message continues it. `/resume` in the terminal interface opens the same picker. See [Terminal interface](/docs/terminal-interface#resume).
+
+`exec` always creates a new session and cannot continue one, but a session `exec` created can be continued with `resume ID`.
+
+## Notes [#notes]
+
+- Like `resume`, every `sessions` command starts the Agent, so it needs the data directory to itself: while another Agent process runs, it fails, as [Troubleshooting](/docs/troubleshooting#data-directory-in-use) explains.
+- A session id is a number; anything else exits with code 2.

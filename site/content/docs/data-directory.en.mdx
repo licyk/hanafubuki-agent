@@ -1,0 +1,61 @@
+---
+title: Data directory
+description: Where the configuration and data directories are, and what the data directory holds.
+icon: FolderTree
+---
+
+The Agent uses two directories: the **configuration directory** holds the three configuration files, and the **data directory** holds the session history, the memory, the Skills and the logs. `hanafubuki-agent config path` prints the ones in use:
+
+```text
+config    /home/me/.config/hanafubuki-agent/config.toml
+providers /home/me/.config/hanafubuki-agent/providers.toml
+mcp       /home/me/.config/hanafubuki-agent/mcp.toml
+data      /home/me/.local/share/hanafubuki-agent
+log       /home/me/.local/share/hanafubuki-agent/logs/hanafubuki-agent.log
+```
+
+## Default locations [#locations]
+
+|               | Linux                              | macOS                                             | Windows                       |
+| ------------- | ---------------------------------- | ------------------------------------------------- | ----------------------------- |
+| Configuration | `~/.config/hanafubuki-agent/`      | `~/Library/Application Support/hanafubuki-agent/` | `%APPDATA%\hanafubuki-agent\` |
+| Data          | `~/.local/share/hanafubuki-agent/` | The same directory                                | The same directory            |
+
+On Linux they follow `$XDG_CONFIG_HOME` and `$XDG_DATA_HOME`.
+
+- `HANAFUBUKI_AGENT_HOME`, when set, replaces both with one directory, the configuration files and the data side by side in it.
+- `--data-dir DIR` replaces the data directory only.
+
+A relative path in either is taken from the current directory.
+
+## What the data directory holds [#contents]
+
+| Path                        | Holds                                                                                                                                                            |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `history/`                  | The session history: the `index.sqlite3` index, the sessions in `active/` and `archived/`, attachments in `attachments/`, and `trash/` for deletions in progress |
+| `memory/`                   | The [memory](/docs/memory): `memory.sqlite3` and its working directories                                                                                         |
+| `skills/`                   | The [Skills](/docs/skills): the built-in ones in `system/`, the installed ones in `packages/`, and `state.json`, which ones are enabled                          |
+| `logs/hanafubuki-agent.log` | The log file; past 8 MiB it is rotated, keeping three old files, `.log.1` to `.log.3`                                                                            |
+| `start-marker.json`         | How many starts did not end normally, to notice a crash loop                                                                                                     |
+| `crash-record.json`         | The record of the latest crash                                                                                                                                   |
+| `process-groups.json`       | The process groups the Agent started; the next start cleans up any left behind                                                                                   |
+| `.lock`                     | The data directory's lock                                                                                                                                        |
+
+Each file is created when it is first needed.
+
+## One Agent at a time [#lock]
+
+Only one Agent process uses a data directory at a time. A second one fails to start, saying the data directory is in use. The operating system holds the lock and releases it when the process ends, a crash included: there is no need to delete `.lock` by hand.
+
+To run several Agents at once, give each its own data directory:
+
+```sh
+hanafubuki-agent --data-dir ~/agent-data/review exec "Review this change"
+```
+
+## Backing up and moving [#backup]
+
+With every Agent process stopped, copy the configuration and data directories to back them up or move them to another machine. Keep in mind:
+
+- `providers.toml` and `mcp.toml` hold credentials such as API tokens.
+- MCP servers' OAuth tokens are kept in the operating system's keyring, not in either directory.

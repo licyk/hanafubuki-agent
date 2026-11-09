@@ -1,0 +1,193 @@
+---
+title: exec --json 事件
+description: hanafubuki-agent exec --json 输出的事件流：外层字段、每种事件及其字段、顺序和兼容性规则。
+icon: Braces
+---
+
+`hanafubuki-agent exec --json` 在标准输出上每行写一个 JSON 对象，即回合中按顺序发生的每个事件。`exec` 自己的提示写到标准错误，所以标准输出可以直接交给 `jq` 或其他程序。
+
+## 外层字段 [#envelope]
+
+```json
+{
+  "sessionId": 2,
+  "turnId": 1,
+  "generation": 1,
+  "sequence": 4,
+  "activity": null,
+  "kind": { "type": "assistant_text_delta", "messageId": 2, "delta": "Hel" }
+}
+```
+
+| 字段         | 类型          | 含义                                                                                                              |
+| ------------ | ------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `sessionId`  | 数字          | 会话 ID                                                                                                           |
+| `turnId`     | 数字或 `null` | 回合 ID。属于会话而不属于回合的事件为 `null`：`session_title_updated`、`execution_progress`、`compaction_updated` |
+| `generation` | 数字          | 会话的代次                                                                                                        |
+| `sequence`   | 数字          | 事件在会话中的序号，从 1 开始递增                                                                                 |
+| `activity`   | 对象或 `null` | 这个事件改变的活动（回合正在做什么，用于状态行），见[活动](#activity)                                             |
+| `kind`       | 对象          | 发生了什么。`kind.type` 是事件种类，其余字段取决于种类                                                            |
+
+所有字段名都是 camelCase，种类名和枚举值是 snake_case。值为空的字段写作 `null`，不会省略。所有 ID 都是数字；时间是 Unix 毫秒数。
+
+## 事件种类 [#kinds]
+
+下面的示例只写出 `kind` 对象。
+
+### 回合 [#turn]
+
+| `kind.type`        | 字段                   | 说明                                                                   |
+| ------------------ | ---------------------- | ---------------------------------------------------------------------- |
+| `turn_started`     |                        | 回合开始                                                               |
+| `sampling_started` | `step`                 | 第 `step` 次请求模型（一个回合可能多次请求：每次工具调用后再请求一次） |
+| `response_started` | `responseId`           | Provider 开始返回响应，`responseId` 是 Provider 的响应 ID（字符串）    |
+| `turn_completed`   | `finalAnswerMessageId` | 回合完成；最终回答的消息 ID                                            |
+| `turn_cancelled`   | `reason`               | 回合被取消，`reason` 是 `user_interrupted`                             |
+| `turn_failed`      | `reason`、`message`    | 回合失败，`message` 是给人看的说明                                     |
+
+`turn_failed` 的 `reason` 取值：
+
+| `reason`                          | 含义                                 |
+| --------------------------------- | ------------------------------------ |
+| `model_request_retries_exhausted` | 模型请求重试次数用尽（例如无法连接） |
+| `model_stream_retries_exhausted`  | 模型响应流中断，重试次数用尽         |
+| `model_error`                     | Provider 返回了错误                  |
+| `model_protocol`                  | Provider 的响应不符合协议            |
+| `budget_exceeded`                 | 超出了 Agent 对回合的限制            |
+| `deadline_exceeded`               | 超出了回合的时限                     |
+| `context_window_exceeded`         | 压缩上下文后仍然超出模型的上下文窗口 |
+| `internal_failure`                | Agent 内部错误                       |
+
+### 思考 [#reasoning]
+
+```json
+{"type":"reasoning_started","reasoningId":3,"samplingStep":1}
+{"type":"reasoning_delta","reasoningId":3,"delta":"**Checking the tests**\n\n"}
+{"type":"reasoning_completed","reasoningId":3,"durationMillis":1200}
+```
+
+| `kind.type`           | 字段                            | 说明                                                                                                                                                               |
+| --------------------- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `reasoning_started`   | `reasoningId`、`samplingStep`   | 模型开始一段思考                                                                                                                                                   |
+| `reasoning_delta`     | `reasoningId`、`delta`          | 思考内容的下一段，Markdown 格式。按原样拼接即可：新的摘要段落以分隔的空行开头                                                                                      |
+| `reasoning_completed` | `reasoningId`、`durationMillis` | 这段思考结束，用时多少毫秒                                                                                                                                         |
+| `reasoning_updated`   | `reasoning`                     | 回合的思考计时：`samplingStep`、`phase`（`not_observed`、`thinking`、`completed`）、`activeSince`、`stepCompletedMillis`、`turnCompletedMillis`、`lastCompletedAt` |
+
+思考内容是 Provider 发送的摘要或原始思考文本；Provider 什么也不发送时，一段思考可能没有任何 `reasoning_delta`。`reasoningId` 在会话中唯一。
+
+### 消息 [#messages]
+
+| `kind.type`                                                               | 字段                                        | 说明                                                                                       |
+| ------------------------------------------------------------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `assistant_message_started`                                               | `messageId`、`phase`、`samplingStep`        | 模型开始一条消息。`phase` 是 `commentary`（过程说明）、`final_answer`（最终回答）或 `null` |
+| `assistant_text_delta`                                                    | `messageId`、`delta`                        | 消息的下一段文本                                                                           |
+| `assistant_message_completed`                                             | `messageId`、`phase`                        | 消息完成                                                                                   |
+| `proposed_plan_started`、`proposed_plan_delta`、`proposed_plan_completed` | `messageId`，以及 `samplingStep` 或 `delta` | 计划模式下模型提出的计划。`exec` 的会话总是默认模式，不会出现                              |
+
+### 工具 [#tools]
+
+```json
+{
+  "type": "tool_started",
+  "callId": "call_1",
+  "name": "exec_command",
+  "presentation": { "action": "exec_command", "subject": "cargo test" }
+}
+```
+
+| `kind.type`               | 字段                             | 说明                                                                                              |
+| ------------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `tool_started`            | `callId`、`name`、`presentation` | 一次工具调用开始。`presentation` 有 `action`（标识符）和 `subject`（命令、路径等，可能为 `null`） |
+| `tool_execution_finished` | `callId`、`isError`              | 工具执行结束                                                                                      |
+| `tool_completed`          | `callId`、`isError`              | 工具的结果已经记入历史                                                                            |
+| `execution_progress`      | `update`                         | 进程的实时进展，`turnId` 为 `null`                                                                |
+
+`execution_progress` 的 `update.type` 取值：
+
+| `update.type`              | 字段                                                                 |
+| -------------------------- | -------------------------------------------------------------------- |
+| `execution_started`        | `executionId`、`generation`、`action`、`status`                      |
+| `execution_output`         | `executionId`、`generation`、`text`、`nextOffset`、`truncated`       |
+| `execution_status`         | `executionId`、`generation`、`status`、`exitCode`、`cleanupRequired` |
+| `execution_disposed`       | `executionId`、`generation`                                          |
+| `execution_cleanup_failed` | `executionId`、`generation`                                          |
+
+`status` 是 `starting`、`running`、`exited`、`failed`、`cancelled` 或 `timed_out`；`exitCode` 是整数或 `null`。
+
+### 审批 [#approvals]
+
+| `kind.type`                   | 字段                                                                                      | 说明                             |
+| ----------------------------- | ----------------------------------------------------------------------------------------- | -------------------------------- |
+| `approval_requested`          | `request`                                                                                 | 一次工具调用需要审批             |
+| `approval_resolved`           | `requestId`、`resolution`                                                                 | 审批有了结果                     |
+| `permission_review_started`   | `reviewId`、`callId`、`action`、`startedAt`                                               | `auto-review` 模式下自动审查开始 |
+| `permission_review_completed` | `reviewId`、`callId`、`actionSummary`、`status`、`assessment`、`startedAt`、`completedAt` | 自动审查结束                     |
+
+`request` 的字段：
+
+| 字段                           | 含义                         |
+| ------------------------------ | ---------------------------- |
+| `requestId`                    | 审批 ID（数字）              |
+| `operationId`                  | 对应工具调用的 `callId`      |
+| `action`                       | 要审批的操作，见下表         |
+| `requestedAtMs`、`expiresAtMs` | 请求时间和过期时间           |
+| `offersAllowForSession`        | 是否可以回答“本会话内都允许” |
+
+`action` 的字段：`kind`（操作类型）、`risk`（`low`、`medium`、`high`、`critical`）、`origin`（`{"type":"user"}`、`{"type":"model"}` 或来自 Skill 的 `{"type":"skill",...}`）、`summary`（摘要）、`digest`（操作的哈希）和 `details`（`null` 或带 `type` 的详细信息，例如命令的 `program`、`argv`、`cwd`）。`kind` 的取值：
+
+`command_execution`、`shell_execution`、`code_execution`、`interactive_execution`、`file_read`、`file_write`、`file_patch`、`file_move`、`file_delete`、`mcp_tool_call`、`skill_management`、`domain_mutation`。
+
+`resolution` 的字段：`requestId`、`decision`、`source`、`resolvedAtMs`。`decision` 是 `allow_once`、`allow_for_session`、`deny`、`aborted` 或 `timed_out`；在这个事件中，`source` 是 `user`（由 `exec` 按 `--approve` 回答），或者在超时和中止时是 `system`。
+
+自动审查的 `status` 是 `reviewing`、`approved`、`denied`、`timed_out`、`failed` 或 `aborted`。`assessment` 只在 `approved` 和 `denied` 时有值，包含 `riskLevel`、`userAuthorization`（`explicit`、`implicit`、`absent`、`conflicting`）、`outcome`（`allow`、`deny`）和 `rationale`。
+
+### 提问与计划 [#questions-plans]
+
+| `kind.type`            | 字段         | 说明                                                                                                                              |
+| ---------------------- | ------------ | --------------------------------------------------------------------------------------------------------------------------------- |
+| `user_input_requested` | `request`    | 模型提问：`requestId`、`callId`、`questions`（每个有 `id`、`header`、`question`、`options`），选项有 `id`、`label`、`description` |
+| `user_input_resolved`  | `resolution` | 回答：`requestId`、`answers`（每个有 `questionId`、`optionId`）、`resolvedAt`                                                     |
+| `task_plan_updated`    | `plan`       | 模型更新了任务计划：`explanation` 和 `plan`（每步有 `step` 和 `status`：`pending`、`in_progress`、`completed`）                   |
+
+### 会话与上下文 [#session]
+
+| `kind.type`                                                | 字段                                                               | 说明                                                                                                                                                                                                                                                           |
+| ---------------------------------------------------------- | ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `session_title_updated`                                    | `title`                                                            | 会话标题：`value` 和 `source`（`automatic` 或 `user`）。`turnId` 为 `null`                                                                                                                                                                                     |
+| `history_committed`                                        | `startIndex`、`itemCount`、`usage`                                 | 一批记录写入了历史。`usage` 只在模型响应的提交上有值：`lastResponseInputTokens`、`lastResponseOutputTokens`、`cumulativeInputTokens`、`cumulativeOutputTokens`、`contextWindowTokens`、`contextConsumedTokens`、`source`（`provider_reported` 或 `estimated`） |
+| `compaction_updated`                                       | `compaction`                                                       | 上下文压缩的进展：`trigger`（`manual`、`automatic`）、`status`（`reserved`、`running`、`ready_to_install`、`completed`、`failed`、`cancelled`）、`summary`、`lastError` 等。`turnId` 为 `null`                                                                 |
+| `model_retry_scheduled`                                    | `stage`、`currentRetry`、`maximumRetries`、`delayMillis`、`reason` | 将要重试模型请求。`stage` 是 `response_stream` 或 `image_input_fallback`                                                                                                                                                                                       |
+| `steering_accepted`、`steering_consumed`                   | 补充消息的序号                                                     | 回合进行中补充的消息被接受、被模型读取。`exec` 不会补充消息，因此不会出现                                                                                                                                                                                      |
+| `continuation_hook_started`、`continuation_hook_completed` | `providerId`、`hookId`，以及 `outcome`                             | 插件的继续钩子。目前没有注册任何钩子                                                                                                                                                                                                                           |
+
+## 活动 [#activity]
+
+`activity` 在开始或改变一项活动的事件上有值：`sampling_started`、`response_started`、`model_retry_scheduled`、`history_committed`、工具事件、审批事件、`user_input_requested` 和 `execution_progress`。其他事件为 `null`。
+
+| 字段                                   | 含义                                                                                                                                    |
+| -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`、`revision`                       | 活动的 ID 和修订号                                                                                                                      |
+| `kind`                                 | `sampling`、`tool_invocation`、`approval`、`continuation_hook` 或 `execution`                                                           |
+| `phase`                                | `running`、`waiting_for_approval`、`waiting_for_cleanup`、`waiting_for_user_input`、`succeeded`、`failed`、`cancelled` 或 `interrupted` |
+| `presentation`                         | `action` 和 `subject`，与 `tool_started` 的相同                                                                                         |
+| `attempt`                              | 重试的次数，或 `null`                                                                                                                   |
+| `startedAt`、`updatedAt`、`finishedAt` | 时间；`finishedAt` 在活动结束前为 `null`                                                                                                |
+| `execution`、`output`                  | 进程活动的状态和输出摘要，或 `null`                                                                                                     |
+
+## 顺序 [#ordering]
+
+- 回合以 `turn_started` 开始，接着是记录你的消息的 `history_committed`，新会话随后是 `session_title_updated`。
+- 每次请求模型：`sampling_started`、`reasoning_updated`、`response_started`，然后是模型的输出。
+- 一段思考是 `reasoning_started`、零个或多个 `reasoning_delta`、`reasoning_completed`，都在这一步的 `history_committed` 之前。回合在响应流中途失败时，不会有 `reasoning_completed`。
+- 一条消息是 `assistant_message_started`、若干 `assistant_text_delta`，然后是这一步的 `history_committed`，最后是 `assistant_message_completed`。
+- 一步中的工具调用：先按调用顺序为每个调用发出 `tool_started`；每个调用执行中可能有审批、提问或计划事件，结束时有 `tool_execution_finished`（按完成顺序）；之后按调用顺序是 `history_committed` 和 `tool_completed`。
+- `execution_progress` 可能穿插在任何位置。需要严格顺序时，按 `sequence` 排序。
+
+**最后一行**总是 `turn_completed`、`turn_cancelled` 或 `turn_failed`：`exec` 在收到它后停止输出，之后会话中的事件（例如稍后生成的标题）不会出现。
+
+## 兼容性 [#stability]
+
+事件的格式就是 Agent 内部事件类型的序列化结果，会随 Agent 一起变化：
+
+- 任何版本都可能**增加**新的事件种类或字段。读取方应当跳过不认识的种类和字段。
+- 在 1.0 之前，**删除**一个字段或种类、改变其含义，只会在次版本号（如 0.1 到 0.2）变化时发生。

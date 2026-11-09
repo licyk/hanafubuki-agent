@@ -1,0 +1,126 @@
+---
+title: 配置分层
+description: 默认值、用户文件、配置档、受信任项目的配置和 -c 覆盖如何叠加，以及选项的优先级。
+icon: Layers
+---
+
+`config.toml` 中的设置分层读取，从低到高。每一层只设置它写出的键；没写的键保留下一层的值。只有 `config.toml` 分层，`providers.toml` 和 `mcp.toml` 没有分层。
+
+1. **默认值**
+2. **用户的 `config.toml`**
+3. **配置档**：`-p 名字` 选择的 `[profiles.名字]`
+4. **项目配置**：受信任项目中的 `.hanafubuki-agent/config.toml`
+5. **`-c 键=值` 覆盖**，按给出的顺序；然后是 `--permission-mode` 和 `--log-level`
+
+`hanafubuki-agent config get` 显示叠加后的结果，`hanafubuki-agent doctor` 的 `config` 行列出读取了哪些层。
+
+## 配置档 [#profiles]
+
+配置档是用户 `config.toml` 中的一个表，可以包含任何设置的键：
+
+```toml
+[profiles.review]
+permissionMode = "auto_review"
+logLevel = "debug"
+
+[profiles.offline]
+disabledPlugins = ["web"]
+```
+
+```sh
+hanafubuki-agent -p review
+hanafubuki-agent -p offline exec "整理这个目录下的笔记"
+```
+
+选择文件中不存在的配置档会报错。配置档中的列表（如 `disabledPlugins`）会**替换**下一层的列表，而不是合并。
+
+## 项目配置 [#projects]
+
+项目是工作目录（`-C`，默认为当前目录）所在的 Git 仓库根目录；不在仓库中时就是工作目录本身。项目可以有自己的配置文件 `<项目>/.hanafubuki-agent/config.toml`，内容与用户文件的设置相同。
+
+项目配置**只有在用户的 `config.toml` 信任这个项目时才会读取**，因为它来自仓库，可能是别人写的：
+
+```toml
+[projects."/home/me/src/my-project"]
+trustLevel = "trusted"
+```
+
+或者在项目目录中运行：
+
+```sh
+hanafubuki-agent config set "projects.'$PWD'.trustLevel" trusted
+```
+
+- 路径按实际位置比较，而不是按文本比较：符号链接或同一目录的不同写法都能匹配。
+- Windows 上用 TOML 的字面字符串书写路径，反斜杠不需要转义：`[projects.'C:\Users\me\src\my-project']`。
+- `trustLevel` 不是 `"trusted"` 的值（例如 `"untrusted"`）都表示不信任；`config set ... untrusted` 可以撤销信任。
+- Agent 从不修复或改写项目配置。其中无法使用的值会被记录到日志并跳过。
+- 项目配置中不能写 `profiles` 和 `projects`。
+
+## -c 覆盖 [#overrides]
+
+`-c 键=值` 只在本次运行中覆盖一个键，可以重复，后面的优先：
+
+```sh
+hanafubuki-agent -c memory.enabled=true -c 'disabledPlugins=["titles"]'
+hanafubuki-agent -c logLevel=debug exec "..."
+```
+
+- 键是点分路径，例如 `memory.enabled`、`network.proxy`。每一段按 `.` 拆分，不支持引号。
+- 值按 TOML 解析（`true`、`7`、`"full_access"`、`["a", "b"]`）。不是合法 TOML 时作为字符串，并去掉两端的引号，所以 `-c logLevel=debug` 不需要引号。
+- 缺少 `=` 或键为空时，命令以退出码 2 退出。
+- 不认识的键（包括 `profiles.*`、`projects.*` 以及 `providers.toml`、`mcp.toml` 的键）不会报错，只会记录到日志并忽略。
+
+## 选项的优先级 [#flags]
+
+`--permission-mode` 和 `--log-level` 相当于追加在所有 `-c` 之后的覆盖，所以总是最终生效：
+
+```sh
+hanafubuki-agent -c permissionMode=manual --permission-mode full-access config get permissionMode
+# full_access
+```
+
+`-m`、`-C`、`--add-dir` 和 `--data-dir` 不是 `config.toml` 的键，不参与分层。
+
+## 无法使用的值 [#invalid]
+
+一层中无法使用的值不会生效，通常保留下一层的值。有两个例外：
+
+- `disabledPlugins` 不是数组时，结果是空列表（所有插件都启用），而不是下一层的值。
+- `webSearchProvider = "searxng"` 但这一层及以下都没有可用的 `searxngBaseUrl` 时，使用 `"auto"`。
+
+用户文件中的问题会被修复，见[配置恢复](/docs/recovery)。
+
+## 示例 [#example]
+
+用户文件：
+
+```toml
+# ~/.config/hanafubuki-agent/config.toml
+logLevel = "info"
+
+[network]
+proxy = "http://127.0.0.1:7890"
+
+[profiles.review]
+permissionMode = "auto_review"
+
+[projects."/home/me/src/my-project"]
+trustLevel = "trusted"
+```
+
+项目配置：
+
+```toml
+# /home/me/src/my-project/.hanafubuki-agent/config.toml
+webSearchProvider = "duckduckgo"
+
+[memory]
+enabled = false
+```
+
+在 `/home/me/src/my-project/crates/core` 中运行 `hanafubuki-agent -p review -c logLevel=debug` 时：权限模式是 `auto_review`（配置档），记忆关闭（项目），网页搜索用 DuckDuckGo（项目），代理是 `http://127.0.0.1:7890`（用户文件），日志级别是 `debug`（`-c`）。
+
+## Agent 写入什么 [#writes]
+
+Agent 只写用户的 `config.toml`：`config set` 指定的键，以及嵌入应用的设置页面修改的设置。写入时不会把配置档、项目配置或 `-c` 的值复制到用户文件中，并保留注释和它不认识的键。

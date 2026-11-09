@@ -1,0 +1,126 @@
+---
+title: Configuration layers
+description: How the defaults, the user's file, profiles, trusted projects' files and -c overrides combine, and which flag wins.
+icon: Layers
+---
+
+The settings of `config.toml` are read in layers, lowest first. Each layer sets only the keys it names; a key it leaves out keeps the value of the layer below. Only `config.toml` has layers: `providers.toml` and `mcp.toml` have none.
+
+1. **The defaults**
+2. **The user's `config.toml`**
+3. **The profile**: `[profiles.NAME]`, selected with `-p NAME`
+4. **The project's file**: `.hanafubuki-agent/config.toml` in a trusted project
+5. **`-c KEY=VALUE` overrides**, in the order given; then `--permission-mode` and `--log-level`
+
+`hanafubuki-agent config get` shows the result, and the `config` lines of `hanafubuki-agent doctor` list the layers that were read.
+
+## Profiles [#profiles]
+
+A profile is a table of the user's `config.toml` holding any of the settings' keys:
+
+```toml
+[profiles.review]
+permissionMode = "auto_review"
+logLevel = "debug"
+
+[profiles.offline]
+disabledPlugins = ["web"]
+```
+
+```sh
+hanafubuki-agent -p review
+hanafubuki-agent -p offline exec "Tidy up the notes in this directory"
+```
+
+Selecting a profile the file does not have is an error. A list in a profile (such as `disabledPlugins`) **replaces** the list below it; the two are not merged.
+
+## The project's file [#projects]
+
+The project is the Git root of the working directory (`-C`, or the current directory), or the working directory itself outside a repository. A project may have its own file, `<project>/.hanafubuki-agent/config.toml`, with the same settings as the user's.
+
+A project's file is **read only when the user's `config.toml` trusts the project**, since it comes with the repository and someone else may have written it:
+
+```toml
+[projects."/home/me/src/my-project"]
+trustLevel = "trusted"
+```
+
+Or, in the project's directory:
+
+```sh
+hanafubuki-agent config set "projects.'$PWD'.trustLevel" trusted
+```
+
+- The path is compared as a location, not as text: a symbolic link or another spelling of the same directory matches.
+- On Windows, write the path as a TOML literal string, whose backslashes need no escaping: `[projects.'C:\Users\me\src\my-project']`.
+- A `trustLevel` other than `"trusted"` (such as `"untrusted"`) does not trust the project; `config set … untrusted` takes the trust back.
+- The Agent never repairs or rewrites a project's file. A value in it that cannot be used is logged and skipped.
+- A project's file cannot hold `profiles` or `projects`.
+
+## -c overrides [#overrides]
+
+`-c KEY=VALUE` overrides one key for this run; it can be repeated, and the later wins:
+
+```sh
+hanafubuki-agent -c memory.enabled=true -c 'disabledPlugins=["titles"]'
+hanafubuki-agent -c logLevel=debug exec "…"
+```
+
+- The key is a dotted path, such as `memory.enabled` or `network.proxy`, split at each `.`; quoting is not supported.
+- The value is TOML (`true`, `7`, `"full_access"`, `["a", "b"]`). One that is not valid TOML is taken as a string, its surrounding quotes removed, so `-c logLevel=debug` needs none.
+- A missing `=` or an empty key exits with code 2.
+- A key it does not know (`profiles.*`, `projects.*`, and the keys of `providers.toml` and `mcp.toml` among them) is not an error: it is logged and ignored.
+
+## Which flag wins [#flags]
+
+`--permission-mode` and `--log-level` are overrides added after every `-c`, so they always win:
+
+```sh
+hanafubuki-agent -c permissionMode=manual --permission-mode full-access config get permissionMode
+# full_access
+```
+
+`-m`, `-C`, `--add-dir` and `--data-dir` are not keys of `config.toml`, and have no layer.
+
+## Values that cannot be used [#invalid]
+
+A value in a layer that cannot be used does not take effect; usually the layer below's value stays. Two exceptions:
+
+- A `disabledPlugins` that is not an array gives an empty list (every plugin enabled), not the layer below's.
+- `webSearchProvider = "searxng"` without a usable `searxngBaseUrl` in this layer or below gives `"auto"`.
+
+Problems in the user's file are repaired; see [Configuration recovery](/docs/recovery).
+
+## Example [#example]
+
+The user's file:
+
+```toml
+# ~/.config/hanafubuki-agent/config.toml
+logLevel = "info"
+
+[network]
+proxy = "http://127.0.0.1:7890"
+
+[profiles.review]
+permissionMode = "auto_review"
+
+[projects."/home/me/src/my-project"]
+trustLevel = "trusted"
+```
+
+The project's file:
+
+```toml
+# /home/me/src/my-project/.hanafubuki-agent/config.toml
+webSearchProvider = "duckduckgo"
+
+[memory]
+enabled = false
+```
+
+Started in `/home/me/src/my-project/crates/core` as `hanafubuki-agent -p review -c logLevel=debug`, the Agent runs with the permission mode `auto_review` (the profile), memory off (the project), web search on DuckDuckGo (the project), the proxy `http://127.0.0.1:7890` (the user's file) and the log level `debug` (`-c`).
+
+## What the Agent writes [#writes]
+
+The Agent writes only the user's `config.toml`: the key `config set` names, and the settings an embedding application's settings page changes. A write never copies a profile's, a project's or an override's value into it, and keeps comments and keys it does not know.

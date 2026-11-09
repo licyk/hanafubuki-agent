@@ -1,0 +1,256 @@
+---
+title: Configuration reference
+description: Every key of config.toml, providers.toml and mcp.toml, with its type, default and meaning.
+icon: ListTree
+---
+
+Every key is camelCase. A key that is not written takes its default; TOML has no null, so to leave an optional key unset, leave it out.
+
+## config.toml [#config-toml]
+
+These keys go in the user's `config.toml`, in a profile `[profiles.NAME]` and in a trusted project's `.hanafubuki-agent/config.toml`, and can be set with `-c` and `config set`. See [Configuration layers](/docs/config-layers).
+
+### General [#general]
+
+| Key               | Type and values                                              | Default    | Means                                                                          |
+| ----------------- | ------------------------------------------------------------ | ---------- | ------------------------------------------------------------------------------ |
+| `permissionMode`  | `"manual"`, `"auto_review"`, `"full_access"`                 | `"manual"` | The [permission mode](/docs/permissions)                                       |
+| `disabledPlugins` | An array of plugin names, at most 64                         | `[]`       | The plugins turned off (below)                                                 |
+| `logLevel`        | `"off"`, `"error"`, `"warn"`, `"info"`, `"debug"`, `"trace"` | `"info"`   | The log file's level; see [Network and logging](/docs/network-logging#logging) |
+
+The plugin names that mean something in `disabledPlugins`:
+
+| Plugin              | Turned off                                                                                                        |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `execution`         | No commands (`exec_command`, `write_stdin`, `resize_execution`)                                                   |
+| `workspace-fs`      | No file reads or writes (`read_file`, `list_directory`, `search_text`, `apply_patch`, `move_path`, `delete_path`) |
+| `web`               | No web search or fetch (`web_search`, `fetch_web_page`)                                                           |
+| `view-image`        | No image viewing (`view_image`)                                                                                   |
+| `mcp`               | The model sees no MCP tools or resources; the servers still connect                                               |
+| `skills`            | No Skill catalog, Skill tools or `$name` mentions                                                                 |
+| `memory`            | The model sees no memories and has no memory tools                                                                |
+| `titles`            | No model-made session titles; the start of the first message stays the title                                      |
+| `workspace-context` | The model is not shown `AGENTS.md`, the workspace roots or the environment                                        |
+| `permission-mode`   | The model is not told the permission mode                                                                         |
+
+Other names are accepted and do nothing.
+
+### Memory [#memory]
+
+| Key                             | Type and values           | Default | Means                                                                    |
+| ------------------------------- | ------------------------- | ------- | ------------------------------------------------------------------------ |
+| `memory.enabled`                | boolean                   | `false` | Whether [memory](/docs/memory) is on                                     |
+| `memory.useMemories`            | boolean                   | `true`  | Whether the model may use the memories                                   |
+| `memory.generateMemories`       | boolean                   | `true`  | Whether new memories are extracted from sessions                         |
+| `memory.excludeExternalContext` | boolean                   | `false` | A session stops contributing once it has used a web or MCP tool's output |
+| `memory.extractionModel`        | a model name, 1–256 bytes | unset   | The model that extracts memories; unset, the model policy's              |
+| `memory.consolidationModel`     | a model name, 1–256 bytes | unset   | The model that consolidates them; unset, the model policy's              |
+| `memory.maxSourceAgeDays`       | integer, 1–3650           | `10`    | Only sessions of the last that many days are read                        |
+| `memory.minimumIdleHours`       | integer, 0–8760           | `6`     | A session is read once it has been idle that many hours                  |
+| `memory.maxSessionsPerPass`     | integer, 1–64             | `2`     | At most that many sessions are read per pass                             |
+| `memory.maxStage1Outputs`       | integer, 1–4096           | `256`   | At most that many extractions are consolidated                           |
+| `memory.maxUnusedDays`          | integer, 1–3650           | `30`    | An extraction unused for that many days expires                          |
+
+### Web tools [#web]
+
+| Key                     | Type and values                                                                     | Default  | Means                                                                 |
+| ----------------------- | ----------------------------------------------------------------------------------- | -------- | --------------------------------------------------------------------- |
+| `webSearchProvider`     | `"auto"`, `"duckduckgo"`, `"searxng"`                                               | `"auto"` | The web search service; see [Tools](/docs/tools#web)                  |
+| `searxngBaseUrl`        | An `http` or `https` URL without credentials, query or fragment, at most 2048 bytes | unset    | Your SearXNG instance; `"searxng"` needs it                           |
+| `webFetchUseJinaReader` | boolean                                                                             | `false`  | When a direct fetch fails, read the page through `https://r.jina.ai/` |
+
+### Network [#network]
+
+| Key             | Type and values                                                                                                           | Default    | Means                                                                                                                |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------- | ---------- | -------------------------------------------------------------------------------------------------------------------- |
+| `network.proxy` | `"system"`, `"disabled"`, or a proxy URL (`http`, `https`, `socks4`, `socks4a`, `socks5`, `socks5h`, credentials allowed) | `"system"` | The proxy of the web tools, MCP and the processes the Agent starts; see [Network and logging](/docs/network-logging) |
+
+`logLevel` and `network.proxy` are the standalone Agent's: an application that embeds the Agent supplies its own logger and proxy.
+
+### Profiles and projects [#profiles-projects]
+
+| Key                          | Type and values                                | Means                                                         |
+| ---------------------------- | ---------------------------------------------- | ------------------------------------------------------------- |
+| `profiles.NAME`              | A table of any keys above                      | The profile `-p NAME` selects                                 |
+| `projects."PATH".trustLevel` | `"trusted"`; any other value does not trust it | Whether the project's `.hanafubuki-agent/config.toml` is read |
+
+Both go only in the user's `config.toml`.
+
+## providers.toml [#providers-toml]
+
+`providers.toml` has no layers and is readable by its owner only. The `providers` commands usually change it; settings such as the reasoning effort are edited by hand. Quit any running Agent before you edit it.
+
+```toml
+revision = 2
+defaultProviderId = "provider-1"
+
+[modelPolicy]
+model = "gpt-5.1"
+reasoningEffort = "medium"
+autoCompactionEnabled = true
+autoCompactThresholdPercent = 80
+remoteCompaction = "disabled"
+
+[modelPolicy.inputCapabilities]
+imageInput = "auto"
+
+[[providers]]
+id = "provider-1"
+displayName = "OpenAI"
+enabled = true
+protocol = "responses"
+baseUrl = "https://api.openai.com/v1"
+apiToken = "sk-..."
+requestHeaders = []
+```
+
+### Top level [#providers-top]
+
+| Key                 | Type             | Means                                                     |
+| ------------------- | ---------------- | --------------------------------------------------------- |
+| `revision`          | integer          | Raised by one on each change; the Agent keeps it          |
+| `defaultProviderId` | string, optional | The default Provider's id; it must be an enabled Provider |
+
+### [modelPolicy] [#model-policy]
+
+One policy for every Provider.
+
+| Key                            | Type and values                                                                                 | Default      | Means                                                                                          |
+| ------------------------------ | ----------------------------------------------------------------------------------------------- | ------------ | ---------------------------------------------------------------------------------------------- |
+| `model`                        | string, at most 256 bytes                                                                       | `""`         | The model new sessions run                                                                     |
+| `reasoningEffort`              | `"minimal"`, `"low"`, `"medium"`, `"high"`, `"xhigh"`, or another identifier of 1–64 characters | unset        | The reasoning effort; the Responses protocol only                                              |
+| `inputCapabilities.imageInput` | `"auto"`, `"disabled"`                                                                          | `"auto"`     | Whether images are sent to the model                                                           |
+| `contextWindowTokens`          | a positive integer                                                                              | unset        | The model's context window; unset, taken from the Provider's model catalog or a built-in table |
+| `autoCompactionEnabled`        | boolean                                                                                         | `true`       | Whether the context is compacted automatically                                                 |
+| `autoCompactThresholdPercent`  | integer, 1–100                                                                                  | `80`         | Compacts once the context uses this share of the window                                        |
+| `remoteCompaction`             | `"disabled"`, `"responses_compact"`, `"responses_compact_v2"`                                   | `"disabled"` | Responses' remote compaction in place of a local summary                                       |
+| `turnBudget`                   | table                                                                                           | unset        | A turn's limits (below)                                                                        |
+
+`[modelPolicy.turnBudget]` is optional; when written it must have all eleven keys, each a positive integer:
+
+| Key                                  | Default | Ceiling   | Means                                     |
+| ------------------------------------ | ------- | --------- | ----------------------------------------- |
+| `maximumCumulativeModelInputTokens`  | 8000000 | 100000000 | A turn's input tokens in all              |
+| `maximumCumulativeModelOutputTokens` | 1000000 | 10000000  | A turn's output tokens in all             |
+| `maximumToolInvocations`             | 256     | 10000     | A turn's tool calls                       |
+| `maximumToolOutputBytes`             | 16 MiB  | 256 MiB   | A turn's tool output, in bytes            |
+| `maximumHookFragmentBytes`           | 1 MiB   | 16 MiB    | What plugin hooks add, in bytes           |
+| `maximumPendingInputItems`           | 64      | 1024      | Steering messages waiting                 |
+| `maximumInFlightTools`               | 8       | 64        | Tool calls running at once                |
+| `maximumConsecutiveStalledSteps`     | 4       | 32        | Steps in a row without progress           |
+| `modelStreamIdleTimeoutSeconds`      | 120     | 86400     | How long the model's stream may be silent |
+| `toolIdleTimeoutSeconds`             | 600     | 86400     | How long a tool may make no progress      |
+| `approvalTimeoutSeconds`             | 900     | 86400     | How long an approval may wait             |
+
+### [[providers]] [#providers]
+
+At most 32.
+
+| Key              | Type and values                                             | Means                                                                                                                                                |
+| ---------------- | ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`             | 1–64 letters, digits, `_` or `-`                            | The Provider's id; `providers add` gives the lowest free `provider-N`                                                                                |
+| `displayName`    | 1–128 bytes                                                 | Its name                                                                                                                                             |
+| `enabled`        | boolean                                                     | Whether it is enabled                                                                                                                                |
+| `protocol`       | `"responses"`, `"chat_completions"`, `"anthropic_messages"` | The protocol; see [Providers and models](/docs/providers-models#protocols)                                                                           |
+| `baseUrl`        | An `http` or `https` URL without credentials or fragment    | The endpoint; the protocol's path is appended to it                                                                                                  |
+| `apiToken`       | string, optional                                            | The API token, kept as it is                                                                                                                         |
+| `requestHeaders` | An array of `{ name, value }`, at most 32                   | Headers added to every request; not `Authorization`, `x-api-key`, `anthropic-version`, `Host`, `Content-Type` or the other headers the Agent manages |
+
+When the default Provider is removed or disabled, the first enabled Provider in the list becomes the default.
+
+## mcp.toml [#mcp-toml]
+
+`mcp.toml` has no layers and is readable by its owner only. `mcp add` writes a new server's defaults; credentials, headers and policies are edited by hand.
+
+```toml
+revision = 3
+
+[[servers]]
+id = "github"
+enabled = true
+required = false
+protocolMode = "legacy"
+connectTimeoutSeconds = 15
+initializeTimeoutSeconds = 30
+listTimeoutSeconds = 30
+callTimeoutSeconds = 120
+shutdownTimeoutSeconds = 10
+maximumConcurrentCalls = 4
+enabledTools = []
+disabledTools = []
+approvalPolicy = "ask"
+exposurePolicy = "deferred"
+
+[servers.transport]
+type = "stdio"
+program = "github-mcp-server"
+argv = ["stdio"]
+
+[servers.transport.publicEnvironment]
+GITHUB_TOOLSETS = "repos,issues"
+
+[servers.transport.credentialEnvironment]
+GITHUB_PERSONAL_ACCESS_TOKEN = "github-token"
+
+[servers.toolApprovalPolicies]
+get_issue = "allow"
+
+[credentials.github-token]
+value = "ghp_..."
+generation = 1
+```
+
+### [[servers]] [#servers]
+
+At most 64.
+
+| Key                          | Type and values                                             | Default      | Means                                                                |
+| ---------------------------- | ----------------------------------------------------------- | ------------ | -------------------------------------------------------------------- |
+| `id`                         | letters, digits, `-`, `_`, `.`                              |              | The server's id                                                      |
+| `enabled`                    | boolean                                                     | `true`       | Whether it is enabled; enabled servers connect when the Agent starts |
+| `required`                   | boolean                                                     | `false`      | A required server: a step fails when its tools cannot be used        |
+| `protocolMode`               | `"legacy"`, `"v20260728"`                                   | `"legacy"`   | The MCP protocol version                                             |
+| `transport`                  | table (below)                                               |              | The transport                                                        |
+| `connectTimeoutSeconds`      | 1–86400                                                     | `15`         | Connecting                                                           |
+| `initializeTimeoutSeconds`   | 1–86400                                                     | `30`         | Initializing                                                         |
+| `listTimeoutSeconds`         | 1–86400                                                     | `30`         | Listing the tools                                                    |
+| `callTimeoutSeconds`         | 1–86400                                                     | `120`        | A tool call                                                          |
+| `shutdownTimeoutSeconds`     | 1–86400                                                     | `10`         | Shutting down                                                        |
+| `maximumConcurrentCalls`     | 1–64                                                        | `4`          | Calls at once                                                        |
+| `toolMaximumConcurrentCalls` | A table of tool name to 1–64                                | `{}`         | One tool's calls at once                                             |
+| `enabledTools`               | An array of tool names                                      | `[]`         | Only these tools; empty means all                                    |
+| `disabledTools`              | An array of tool names                                      | `[]`         | Not these tools                                                      |
+| `approvalPolicy`             | `"allow"`, `"ask"`, `"deny"`                                | `"ask"`      | Whether a call needs an approval; see [MCP](/docs/mcp#policies)      |
+| `toolApprovalPolicies`       | A table of tool name to approval policy                     | `{}`         | One tool's approval policy                                           |
+| `exposurePolicy`             | `"direct"`, `"direct_model_only"`, `"deferred"`, `"hidden"` | `"deferred"` | How the tools are offered to the model                               |
+| `toolExposurePolicies`       | A table of tool name to exposure policy                     | `{}`         | One tool's exposure policy                                           |
+
+A number out of range is brought into it.
+
+`transport` with `type = "stdio"`:
+
+| Key                     | Means                                                                                   |
+| ----------------------- | --------------------------------------------------------------------------------------- |
+| `program`               | The program: an absolute path, or a name looked up on `PATH`                            |
+| `argv`                  | Its arguments                                                                           |
+| `cwd`                   | Its working directory, optional                                                         |
+| `publicEnvironment`     | A table of environment variable to value                                                |
+| `credentialEnvironment` | A table of environment variable to credential key; the value comes from `[credentials]` |
+
+`transport` with `type = "streamable_http"`:
+
+| Key                 | Means                                                                                  |
+| ------------------- | -------------------------------------------------------------------------------------- |
+| `url`               | An `http` or `https` URL                                                               |
+| `publicHeaders`     | A table of header to value                                                             |
+| `credentialHeaders` | A table of header to credential key; the value comes from `[credentials]`              |
+| `oauth`             | `"disabled"` (default), `"optional"`, `"required"`; not with an `Authorization` header |
+
+### [credentials] [#credentials]
+
+| Key                          | Means                                                                                |
+| ---------------------------- | ------------------------------------------------------------------------------------ |
+| `credentials.KEY.value`      | The credential's value, kept as it is                                                |
+| `credentials.KEY.generation` | A positive integer; raise it when you change the value, so the Agent sees it changed |
+
+A credential key has 1–128 letters, digits, `.`, `_` or `-`. A server that refers to a credential that does not exist cannot connect.

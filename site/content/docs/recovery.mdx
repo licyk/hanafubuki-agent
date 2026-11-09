@@ -1,0 +1,56 @@
+---
+title: 配置恢复
+description: 配置文件有问题时 Agent 怎么处理：修复、.recovery 中的备份、重启前只读的文件，以及 doctor 显示什么。
+icon: LifeBuoy
+---
+
+配置文件可能因为手动编辑、磁盘问题或旧版本写入而包含 Agent 无法使用的内容。Agent 不会因此拒绝启动，也不会丢弃你的数据：它先备份原文件，再修复，然后继续运行。
+
+## 两种问题 [#problems]
+
+| 问题         | 例子                                                | Agent 的处理                                       |
+| ------------ | --------------------------------------------------- | -------------------------------------------------- |
+| **可以修复** | 某个键的值无效，例如 `permissionMode = "sometimes"` | 只替换无效的值（通常换成默认值），其他内容保持不变 |
+| **无法使用** | 文件不是合法的 TOML、不是 UTF-8，或者超过 8 MiB     | 使用默认值，并用默认值重写文件                     |
+
+修复以字段为单位：`providers.toml` 中一个有问题的 Provider、`mcp.toml` 中一个有问题的服务器或凭据只会单独去掉，不影响其他条目。`mcp.toml` 中超出范围的数值会被调整到范围内。
+
+## .recovery 中的备份 [#backup]
+
+修复或重写之前，Agent 先把原文件复制到配置目录下的 `.recovery/` 中，文件名形如 `config.toml.2030438.0.invalid`。Agent 从不删除这些备份：需要找回原来的内容时，从这里复制回来，修正问题后再保存。
+
+<Callout type="warn">
+  `config.toml` 无法使用时，重写后的文件只包含设置的默认值，原来的配置档 `[profiles]`、受信任项目
+  `[projects]`、`logLevel` 和 `[network]` 都只保存在 `.recovery/` 的备份中。请从备份中找回它们。
+</Callout>
+
+## 不会修复的内容 [#not-repaired]
+
+- **项目配置**（`.hanafubuki-agent/config.toml`）从不修复或改写，其中无法使用的值只记录到日志并跳过。
+- 用户 `config.toml` 中无效的 `logLevel` 和 `network.proxy` 不会被改写，只记录到日志，并使用默认值。
+- 修复后，Agent 会把全部设置的键写入 `config.toml`，原有的注释和它不认识的键会保留。
+
+## 只读到重启 [#read-only]
+
+如果无法创建备份（例如 `.recovery` 无法写入），或者无法写回修复后的文件，Agent 不会冒险覆盖原文件。它在内存中使用修复后的值继续运行，而这个文件在 Agent 重启之前拒绝一切修改：`config set`、`providers add` 等写入这个文件的命令会失败。
+
+独立运行时每个命令都是一个新进程，所以“重启”就是下一个命令。解决导致无法写入的原因（权限、磁盘空间、`.recovery` 路径被占用等）后再运行即可。
+
+## doctor 显示什么 [#doctor]
+
+`hanafubuki-agent doctor` 列出本次运行中修复过的每个文件：
+
+```text
+ok    config    /home/me/.config/hanafubuki-agent/config.toml: repaired permissionMode: the value is invalid and was replaced with its default; the original is in .recovery
+ok    config    /home/me/.config/hanafubuki-agent/config.toml: unusable (the file is not valid TOML: ...); the original is in .recovery
+FAIL  config    /home/me/.config/hanafubuki-agent/config.toml: repaired ...; read-only until the Agent restarts: ...
+```
+
+- 修复成功、备份已保存：`ok`。
+- 文件只读到重启：`FAIL`，因为这个文件现在无法保存修改。
+
+修复在第一次读取时就写回了文件，所以下一次运行 `doctor` 时这一行就不再出现。如果你想知道发生过什么，查看 `.recovery/` 中的备份。
+
+## 嵌入运行 [#embedded]
+
+嵌入 Agent 的应用读取的是同样的文件，遵循同样的规则；应用可以把这些恢复记录显示在自己的界面中。

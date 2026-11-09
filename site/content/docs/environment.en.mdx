@@ -1,0 +1,42 @@
+---
+title: Environment
+description: The environment variables hanafubuki-agent reads, and the environment it gives the processes it starts.
+icon: Variable
+---
+
+## What the Agent reads [#read]
+
+| Variable                                             | Does                                                                                                                                                                    |
+| ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `HANAFUBUKI_AGENT_HOME`                              | One directory in place of both the configuration and the data directory. A relative path is taken from the current directory (not `-C`); an empty value counts as unset |
+| `XDG_CONFIG_HOME`, `XDG_DATA_HOME`                   | On Linux, where the configuration and data directories are based; `~/.config` and `~/.local/share` by default                                                           |
+| `VISUAL`, `EDITOR`                                   | The editor `config edit` opens, `VISUAL` first. It may have arguments, such as `code --wait`                                                                            |
+| The variable `--api-key-env` names                   | `providers add` reads the API token from it, once, when the Provider is added                                                                                           |
+| `PATH` (and `PATHEXT` on Windows)                    | Finding a stdio MCP server's program                                                                                                                                    |
+| `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, `NO_PROXY` | The proxy of the requests to model Providers; see [Network and logging](/docs/network-logging#provider-proxy)                                                           |
+
+The Agent itself reads neither `RUST_LOG` nor `NO_COLOR`: the log level is `logLevel` and `--log-level`; see [Network and logging](/docs/network-logging#logging).
+
+## The environment of commands and terminals [#commands]
+
+The commands the model runs through its tools do not inherit the Agent process's environment. They get a clean one:
+
+- Of the Agent's environment, only `PATH` and `TMPDIR` (on Windows `PATH`, `PATHEXT`, `SYSTEMROOT`, `WINDIR`, `COMSPEC`, `TEMP`, `TMP`).
+- So that a command neither waits on a pager nor fills its output with escape sequences: `NO_COLOR=1`, `TERM=dumb`, `LANG`, `LC_CTYPE` and `LC_ALL` set to `C.UTF-8`, `COLORTERM` empty, and `PAGER`, `GIT_PAGER` and `GH_PAGER` set to `cat`.
+- The proxy variables `network.proxy` decides.
+
+So a variable you set in your shell (an API token, a proxy) does not reach the commands the model runs.
+
+stdio MCP servers differ: they inherit the Agent process's whole environment, plus the variables `mcp.toml` gives them.
+
+## Proxy variables [#proxy]
+
+`network.proxy` decides the proxy variables of the processes the Agent starts:
+
+| `network.proxy`      | What commands and terminals get                                                       |
+| -------------------- | ------------------------------------------------------------------------------------- |
+| `"system"` (default) | No proxy variable                                                                     |
+| A proxy URL          | `HTTP_PROXY` and `HTTPS_PROXY` set to the URL, and `NO_PROXY=localhost,127.0.0.1,::1` |
+| `"disabled"`         | `HTTP_PROXY` and `HTTPS_PROXY` removed, and `NO_PROXY=localhost,127.0.0.1,::1`        |
+
+Only the upper-case names are set or removed. See [Network and logging](/docs/network-logging).

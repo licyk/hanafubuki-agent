@@ -1,0 +1,256 @@
+---
+title: 配置参考
+description: config.toml、providers.toml 和 mcp.toml 中每个键的类型、默认值和含义。
+icon: ListTree
+---
+
+所有键使用 camelCase。没有写出的键使用默认值；TOML 没有空值，要让可选键“未设置”，就不要写它。
+
+## config.toml [#config-toml]
+
+这些键可以写在用户的 `config.toml`、配置档 `[profiles.名字]` 和受信任项目的 `.hanafubuki-agent/config.toml` 中，也可以用 `-c` 和 `config set` 设置。见[配置分层](/docs/config-layers)。
+
+### 通用 [#general]
+
+| 键                | 类型和取值                                                   | 默认值     | 含义                                                          |
+| ----------------- | ------------------------------------------------------------ | ---------- | ------------------------------------------------------------- |
+| `permissionMode`  | `"manual"`、`"auto_review"`、`"full_access"`                 | `"manual"` | [权限模式](/docs/permissions)                                 |
+| `disabledPlugins` | 插件名的数组，最多 64 个                                     | `[]`       | 关闭的插件，见下表                                            |
+| `logLevel`        | `"off"`、`"error"`、`"warn"`、`"info"`、`"debug"`、`"trace"` | `"info"`   | 日志文件的级别，见[网络与日志](/docs/network-logging#logging) |
+
+`disabledPlugins` 中有意义的插件名：
+
+| 插件                | 关闭后                                                                                                  |
+| ------------------- | ------------------------------------------------------------------------------------------------------- |
+| `execution`         | 不能运行命令（`exec_command`、`write_stdin`、`resize_execution`）                                       |
+| `workspace-fs`      | 不能读写文件（`read_file`、`list_directory`、`search_text`、`apply_patch`、`move_path`、`delete_path`） |
+| `web`               | 不能搜索和抓取网页（`web_search`、`fetch_web_page`）                                                    |
+| `view-image`        | 不能查看图片（`view_image`）                                                                            |
+| `mcp`               | 模型看不到 MCP 工具和资源；服务器仍然会连接                                                             |
+| `skills`            | 没有 Skill 目录、Skill 工具和 `$名字` 提及                                                              |
+| `memory`            | 模型看不到记忆，也没有记忆工具                                                                          |
+| `titles`            | 不再用模型为会话生成标题，保留第一条消息开头作为标题                                                    |
+| `workspace-context` | 模型看不到 `AGENTS.md`、工作区目录和环境信息                                                            |
+| `permission-mode`   | 模型不再被告知当前的权限模式                                                                            |
+
+其他名字会被接受但没有效果。
+
+### 记忆 [#memory]
+
+| 键                              | 类型和取值         | 默认值  | 含义                                                |
+| ------------------------------- | ------------------ | ------- | --------------------------------------------------- |
+| `memory.enabled`                | 布尔值             | `false` | 是否启用[记忆](/docs/memory)                        |
+| `memory.useMemories`            | 布尔值             | `true`  | 模型是否可以使用已有的记忆                          |
+| `memory.generateMemories`       | 布尔值             | `true`  | 是否从会话中提取新的记忆                            |
+| `memory.excludeExternalContext` | 布尔值             | `false` | 会话使用过网页或 MCP 工具的结果后，不再从中提取记忆 |
+| `memory.extractionModel`        | 模型名，1–256 字节 | 未设置  | 提取记忆使用的模型；未设置时使用模型策略中的模型    |
+| `memory.consolidationModel`     | 模型名，1–256 字节 | 未设置  | 整合记忆使用的模型；未设置时使用模型策略中的模型    |
+| `memory.maxSourceAgeDays`       | 整数，1–3650       | `10`    | 只读取最近这么多天内的会话                          |
+| `memory.minimumIdleHours`       | 整数，0–8760       | `6`     | 会话空闲这么多小时后才提取                          |
+| `memory.maxSessionsPerPass`     | 整数，1–64         | `2`     | 每一轮最多提取的会话数                              |
+| `memory.maxStage1Outputs`       | 整数，1–4096       | `256`   | 整合时最多使用的提取结果数                          |
+| `memory.maxUnusedDays`          | 整数，1–3650       | `30`    | 这么多天没有被使用过的提取结果会过期                |
+
+### 网页工具 [#web]
+
+| 键                      | 类型和取值                                                  | 默认值   | 含义                                               |
+| ----------------------- | ----------------------------------------------------------- | -------- | -------------------------------------------------- |
+| `webSearchProvider`     | `"auto"`、`"duckduckgo"`、`"searxng"`                       | `"auto"` | 网页搜索使用的服务，见[工具](/docs/tools#web)      |
+| `searxngBaseUrl`        | `http` 或 `https` URL，不含凭据、查询和片段，最多 2048 字节 | 未设置   | SearXNG 实例的地址；`"searxng"` 需要它             |
+| `webFetchUseJinaReader` | 布尔值                                                      | `false`  | 直接抓取网页失败时，改用 `https://r.jina.ai/` 读取 |
+
+### 网络 [#network]
+
+| 键              | 类型和取值                                                                                                    | 默认值     | 含义                                                                               |
+| --------------- | ------------------------------------------------------------------------------------------------------------- | ---------- | ---------------------------------------------------------------------------------- |
+| `network.proxy` | `"system"`、`"disabled"`，或代理 URL（`http`、`https`、`socks4`、`socks4a`、`socks5`、`socks5h`，可以带凭据） | `"system"` | 网页工具、MCP 和 Agent 启动的进程使用的代理，见[网络与日志](/docs/network-logging) |
+
+`logLevel` 和 `network.proxy` 只对独立运行的 Agent 有效；嵌入 Agent 的应用提供自己的日志和代理。
+
+### 配置档和项目 [#profiles-projects]
+
+| 键                           | 类型和取值                      | 含义                                               |
+| ---------------------------- | ------------------------------- | -------------------------------------------------- |
+| `profiles.名字`              | 表，包含上面任何键              | `-p 名字` 选择的配置档                             |
+| `projects."路径".trustLevel` | `"trusted"`；其他值都表示不信任 | 是否读取这个项目的 `.hanafubuki-agent/config.toml` |
+
+这两个只能写在用户的 `config.toml` 中。
+
+## providers.toml [#providers-toml]
+
+`providers.toml` 没有分层，只有自己可读。通常用 `providers` 命令修改；推理强度等设置需要直接编辑。修改时请先退出正在运行的 Agent。
+
+```toml
+revision = 2
+defaultProviderId = "provider-1"
+
+[modelPolicy]
+model = "gpt-5.1"
+reasoningEffort = "medium"
+autoCompactionEnabled = true
+autoCompactThresholdPercent = 80
+remoteCompaction = "disabled"
+
+[modelPolicy.inputCapabilities]
+imageInput = "auto"
+
+[[providers]]
+id = "provider-1"
+displayName = "OpenAI"
+enabled = true
+protocol = "responses"
+baseUrl = "https://api.openai.com/v1"
+apiToken = "sk-..."
+requestHeaders = []
+```
+
+### 顶层 [#providers-top]
+
+| 键                  | 类型         | 含义                                           |
+| ------------------- | ------------ | ---------------------------------------------- |
+| `revision`          | 整数         | 每次修改加一，由 Agent 维护                    |
+| `defaultProviderId` | 字符串，可选 | 默认 Provider 的 ID，必须是一个启用的 Provider |
+
+### [modelPolicy] [#model-policy]
+
+模型策略对所有 Provider 生效。
+
+| 键                             | 类型和取值                                                                     | 默认值       | 含义                                                           |
+| ------------------------------ | ------------------------------------------------------------------------------ | ------------ | -------------------------------------------------------------- |
+| `model`                        | 字符串，最多 256 字节                                                          | `""`         | 新会话使用的模型                                               |
+| `reasoningEffort`              | `"minimal"`、`"low"`、`"medium"`、`"high"`、`"xhigh"` 或其他 1–64 个字符的标识 | 未设置       | 推理强度，只对 Responses 协议有效                              |
+| `inputCapabilities.imageInput` | `"auto"`、`"disabled"`                                                         | `"auto"`     | 是否向模型发送图片                                             |
+| `contextWindowTokens`          | 正整数                                                                         | 未设置       | 模型的上下文窗口；未设置时从 Provider 的模型目录或内置表中获取 |
+| `autoCompactionEnabled`        | 布尔值                                                                         | `true`       | 是否自动压缩上下文                                             |
+| `autoCompactThresholdPercent`  | 整数，1–100                                                                    | `80`         | 上下文用到窗口的这个百分比时自动压缩                           |
+| `remoteCompaction`             | `"disabled"`、`"responses_compact"`、`"responses_compact_v2"`                  | `"disabled"` | 用 Responses 的远程压缩代替本地摘要                            |
+| `turnBudget`                   | 表                                                                             | 未设置       | 回合的限制，见下文                                             |
+
+`[modelPolicy.turnBudget]` 是可选的；写出时必须包含全部 11 个键，每个都是正整数：
+
+| 键                                   | 默认值  | 上限      | 含义                         |
+| ------------------------------------ | ------- | --------- | ---------------------------- |
+| `maximumCumulativeModelInputTokens`  | 8000000 | 100000000 | 一个回合累计的输入 token     |
+| `maximumCumulativeModelOutputTokens` | 1000000 | 10000000  | 一个回合累计的输出 token     |
+| `maximumToolInvocations`             | 256     | 10000     | 一个回合的工具调用次数       |
+| `maximumToolOutputBytes`             | 16 MiB  | 256 MiB   | 一个回合的工具输出总字节数   |
+| `maximumHookFragmentBytes`           | 1 MiB   | 16 MiB    | 插件钩子注入的内容字节数     |
+| `maximumPendingInputItems`           | 64      | 1024      | 等待处理的补充消息数         |
+| `maximumInFlightTools`               | 8       | 64        | 同时运行的工具调用数         |
+| `maximumConsecutiveStalledSteps`     | 4       | 32        | 连续没有进展的步骤数         |
+| `modelStreamIdleTimeoutSeconds`      | 120     | 86400     | 模型响应流多久没有数据算超时 |
+| `toolIdleTimeoutSeconds`             | 600     | 86400     | 工具多久没有进展算超时       |
+| `approvalTimeoutSeconds`             | 900     | 86400     | 审批最长等待时间             |
+
+### [[providers]] [#providers]
+
+最多 32 个。
+
+| 键               | 类型和取值                                                  | 含义                                                                                                                               |
+| ---------------- | ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `id`             | 1–64 个字母、数字、`_` 或 `-`                               | Provider 的 ID；`providers add` 分配最小的空闲 `provider-N`                                                                        |
+| `displayName`    | 1–128 字节                                                  | 显示名称                                                                                                                           |
+| `enabled`        | 布尔值                                                      | 是否启用                                                                                                                           |
+| `protocol`       | `"responses"`、`"chat_completions"`、`"anthropic_messages"` | 协议，见 [Provider 与模型](/docs/providers-models#protocols)                                                                       |
+| `baseUrl`        | `http` 或 `https` URL，不含凭据和片段                       | 接口地址，协议的路径追加在它后面                                                                                                   |
+| `apiToken`       | 字符串，可选                                                | API 令牌，原样保存                                                                                                                 |
+| `requestHeaders` | `{ name, value }` 的数组，最多 32 个                        | 附加到每个请求的请求头；不能设置 `Authorization`、`x-api-key`、`anthropic-version`、`Host`、`Content-Type` 等由 Agent 管理的请求头 |
+
+默认 Provider 被删除或禁用时，默认改为列表中第一个启用的 Provider。
+
+## mcp.toml [#mcp-toml]
+
+`mcp.toml` 没有分层，只有自己可读。`mcp add` 写入新服务器的默认值；凭据、请求头和策略需要直接编辑。
+
+```toml
+revision = 3
+
+[[servers]]
+id = "github"
+enabled = true
+required = false
+protocolMode = "legacy"
+connectTimeoutSeconds = 15
+initializeTimeoutSeconds = 30
+listTimeoutSeconds = 30
+callTimeoutSeconds = 120
+shutdownTimeoutSeconds = 10
+maximumConcurrentCalls = 4
+enabledTools = []
+disabledTools = []
+approvalPolicy = "ask"
+exposurePolicy = "deferred"
+
+[servers.transport]
+type = "stdio"
+program = "github-mcp-server"
+argv = ["stdio"]
+
+[servers.transport.publicEnvironment]
+GITHUB_TOOLSETS = "repos,issues"
+
+[servers.transport.credentialEnvironment]
+GITHUB_PERSONAL_ACCESS_TOKEN = "github-token"
+
+[servers.toolApprovalPolicies]
+get_issue = "allow"
+
+[credentials.github-token]
+value = "ghp_..."
+generation = 1
+```
+
+### [[servers]] [#servers]
+
+最多 64 个。
+
+| 键                           | 类型和取值                                                  | 默认值       | 含义                                               |
+| ---------------------------- | ----------------------------------------------------------- | ------------ | -------------------------------------------------- |
+| `id`                         | 字母、数字、`-`、`_`、`.`                                   |              | 服务器 ID                                          |
+| `enabled`                    | 布尔值                                                      | `true`       | 是否启用；启用的服务器在 Agent 启动时连接          |
+| `required`                   | 布尔值                                                      | `false`      | 必需的服务器：它的工具无法使用时，这一步失败       |
+| `protocolMode`               | `"legacy"`、`"v20260728"`                                   | `"legacy"`   | MCP 协议版本                                       |
+| `transport`                  | 表，见下文                                                  |              | 传输方式                                           |
+| `connectTimeoutSeconds`      | 1–86400                                                     | `15`         | 连接超时                                           |
+| `initializeTimeoutSeconds`   | 1–86400                                                     | `30`         | 初始化超时                                         |
+| `listTimeoutSeconds`         | 1–86400                                                     | `30`         | 列出工具的超时                                     |
+| `callTimeoutSeconds`         | 1–86400                                                     | `120`        | 工具调用超时                                       |
+| `shutdownTimeoutSeconds`     | 1–86400                                                     | `10`         | 关闭超时                                           |
+| `maximumConcurrentCalls`     | 1–64                                                        | `4`          | 同时进行的调用数                                   |
+| `toolMaximumConcurrentCalls` | 工具名到 1–64 的表                                          | `{}`         | 单个工具的并发上限                                 |
+| `enabledTools`               | 工具名的数组                                                | `[]`         | 只开放这些工具；空数组表示全部                     |
+| `disabledTools`              | 工具名的数组                                                | `[]`         | 不开放这些工具                                     |
+| `approvalPolicy`             | `"allow"`、`"ask"`、`"deny"`                                | `"ask"`      | 工具调用是否需要审批，见 [MCP](/docs/mcp#policies) |
+| `toolApprovalPolicies`       | 工具名到审批策略的表                                        | `{}`         | 单个工具的审批策略                                 |
+| `exposurePolicy`             | `"direct"`、`"direct_model_only"`、`"deferred"`、`"hidden"` | `"deferred"` | 工具如何提供给模型                                 |
+| `toolExposurePolicies`       | 工具名到暴露策略的表                                        | `{}`         | 单个工具的暴露策略                                 |
+
+数值超出范围时会被调整到范围内。
+
+`transport` 的 `type = "stdio"`：
+
+| 键                      | 含义                                                |
+| ----------------------- | --------------------------------------------------- |
+| `program`               | 程序：绝对路径，或在 `PATH` 中查找的程序名          |
+| `argv`                  | 参数数组                                            |
+| `cwd`                   | 工作目录，可选                                      |
+| `publicEnvironment`     | 环境变量名到值的表                                  |
+| `credentialEnvironment` | 环境变量名到凭据键的表，值从 `[credentials]` 中读取 |
+
+`transport` 的 `type = "streamable_http"`：
+
+| 键                  | 含义                                                                                    |
+| ------------------- | --------------------------------------------------------------------------------------- |
+| `url`               | `http` 或 `https` URL                                                                   |
+| `publicHeaders`     | 请求头名到值的表                                                                        |
+| `credentialHeaders` | 请求头名到凭据键的表，值从 `[credentials]` 中读取                                       |
+| `oauth`             | `"disabled"`（默认）、`"optional"`、`"required"`；不能和 `Authorization` 请求头同时使用 |
+
+### [credentials] [#credentials]
+
+| 键                          | 含义                                        |
+| --------------------------- | ------------------------------------------- |
+| `credentials.键.value`      | 凭据的值，原样保存                          |
+| `credentials.键.generation` | 正整数，修改值时加一，让 Agent 知道凭据变了 |
+
+凭据键由 1–128 个字母、数字、`.`、`_`、`-` 组成。服务器引用了不存在的凭据时无法连接。

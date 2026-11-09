@@ -1,0 +1,57 @@
+---
+title: Configuration recovery
+description: "What the Agent does with a configuration file it cannot use: repairs, the copies in .recovery, files read-only until a restart, and what doctor shows."
+icon: LifeBuoy
+---
+
+A configuration file may hold something the Agent cannot use: a hand edit, a disk problem, an older version's write. The Agent does not refuse to start over it, and does not throw your data away: it copies the original first, repairs it, and goes on.
+
+## Two kinds of problem [#problems]
+
+| Problem        | For example                                                         | What the Agent does                                                          |
+| -------------- | ------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| **Repairable** | A key with an invalid value, such as `permissionMode = "sometimes"` | Replaces only that value (usually with its default); the rest stays as it is |
+| **Unusable**   | The file is not valid TOML, not UTF-8, or over 8 MiB                | Uses the defaults, and rewrites the file with them                           |
+
+Repairs go field by field: a broken Provider in `providers.toml`, or a broken server or credential in `mcp.toml`, is dropped on its own, and the other entries stay. A number out of range in `mcp.toml` is brought into range.
+
+## The copies in .recovery [#backup]
+
+Before it repairs or rewrites a file, the Agent copies the original into `.recovery/` in the configuration directory, under a name such as `config.toml.2030438.0.invalid`. It never deletes these copies: to get the original content back, copy it from there, fix the problem and save it.
+
+<Callout type="warn">
+  When `config.toml` is unusable, the rewritten file holds only the settings' defaults: its profiles
+  `[profiles]`, trusted projects `[projects]`, `logLevel` and `[network]` are left only in the copy
+  in `.recovery/`. Get them back from there.
+</Callout>
+
+## What is not repaired [#not-repaired]
+
+- **A project's file** (`.hanafubuki-agent/config.toml`) is never repaired or rewritten; a value in it that cannot be used is logged and skipped.
+- An invalid `logLevel` or `network.proxy` in the user's `config.toml` is not rewritten: it is logged, and the default is used.
+- After a repair, every settings key is written into `config.toml`; comments and keys the Agent does not know stay.
+
+## Read-only until a restart [#read-only]
+
+When the copy cannot be made (`.recovery` cannot be written, say), or the repaired file cannot be written back, the Agent does not risk overwriting the original. It runs on the repaired values in memory, and that file refuses every change until the Agent restarts: `config set`, `providers add` and the other commands that write it fail.
+
+Standalone, every command is a new process, so "a restart" is the next command. Fix what kept the file from being written (permissions, disk space, something else at the `.recovery` path) and run it again.
+
+## What doctor shows [#doctor]
+
+`hanafubuki-agent doctor` lists each file it had to repair in this run:
+
+```text
+ok    config    /home/me/.config/hanafubuki-agent/config.toml: repaired permissionMode: the value is invalid and was replaced with its default; the original is in .recovery
+ok    config    /home/me/.config/hanafubuki-agent/config.toml: unusable (the file is not valid TOML: ...); the original is in .recovery
+FAIL  config    /home/me/.config/hanafubuki-agent/config.toml: repaired ...; read-only until the Agent restarts: ...
+```
+
+- Repaired, with its copy kept: `ok`.
+- Read-only until a restart: `FAIL`, since that file cannot save a change now.
+
+The repair is written back on the first read, so the next `doctor` no longer shows the line. To see what happened, look at the copies in `.recovery/`.
+
+## Embedded [#embedded]
+
+An application that embeds the Agent reads the same files by the same rules, and may show these recoveries in its own interface.

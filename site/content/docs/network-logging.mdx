@@ -1,0 +1,83 @@
+---
+title: 网络与日志
+description: 用 network.proxy 设置代理，它对哪些请求和进程生效；以及日志级别和日志文件。
+icon: Network
+---
+
+## 代理 [#proxy]
+
+`network.proxy` 设置 Agent 的代理：
+
+```sh
+hanafubuki-agent config set network.proxy http://127.0.0.1:7890
+hanafubuki-agent config set network.proxy socks5h://user:pass@proxy.example.com:1080
+hanafubuki-agent config set network.proxy disabled
+hanafubuki-agent config set network.proxy system
+```
+
+| 值                 | 含义                                                                                             |
+| ------------------ | ------------------------------------------------------------------------------------------------ |
+| `"system"`（默认） | 不指定代理，使用 Agent 进程环境中的设置                                                          |
+| `"disabled"`       | 不使用代理                                                                                       |
+| 代理 URL           | 使用这个代理。支持 `http`、`https`、`socks4`、`socks4a`、`socks5`、`socks5h`，可以带用户名和密码 |
+
+`config get network.proxy` 会把 URL 中的用户名和密码显示为 `***`。
+
+### 代理对什么生效 [#proxy-scope]
+
+| 对象                                             | 使用的代理                                  |
+| ------------------------------------------------ | ------------------------------------------- |
+| 网页搜索和抓取（`web_search`、`fetch_web_page`） | `network.proxy`                             |
+| MCP 的 Streamable HTTP 服务器和 OAuth            | `network.proxy`；修改后会重新连接这些服务器 |
+| 模型运行的命令和终端                             | 由 `network.proxy` 决定的环境变量，见下文   |
+| 模型 Provider 的请求                             | **不使用** `network.proxy`，见下文          |
+
+### 命令的代理变量 [#child-processes]
+
+模型运行的命令得到的是一个干净的环境（见[环境变量](/docs/environment#commands)），其中的代理变量由 `network.proxy` 决定：
+
+- 代理 URL：`HTTP_PROXY` 和 `HTTPS_PROXY` 设为这个 URL；
+- `"disabled"`：去掉 `HTTP_PROXY` 和 `HTTPS_PROXY`；
+- 以上两种都会设置 `NO_PROXY=localhost,127.0.0.1,::1`；
+- `"system"`：不设置任何代理变量。由于命令的环境是干净的，你 Shell 中的代理变量也不会传给它们。需要让命令走代理时，请设置一个代理 URL。
+
+只处理大写的变量名，不处理 `http_proxy` 和 `ALL_PROXY`。
+
+### 模型 Provider 的代理 [#provider-proxy]
+
+访问模型 Provider 的请求不使用 `network.proxy`，而是读取 Agent 进程自己的环境变量 `HTTPS_PROXY`、`HTTP_PROXY`、`ALL_PROXY` 和 `NO_PROXY`（大小写均可）。需要通过代理访问 Provider 时，在启动 Agent 前设置它们：
+
+```sh
+HTTPS_PROXY=http://127.0.0.1:7890 hanafubuki-agent
+```
+
+## 日志 [#logging]
+
+独立运行的 Agent 把日志写到数据目录的 `logs/hanafubuki-agent.log`，`hanafubuki-agent config path` 会打印它的位置。日志文件超过 8 MiB 时轮换为 `hanafubuki-agent.log.1`，最多保留三个旧文件。
+
+日志级别由 `logLevel` 设置，`--log-level` 只对本次运行生效：
+
+```sh
+hanafubuki-agent config set logLevel debug
+hanafubuki-agent --log-level trace exec "..."
+```
+
+| 级别            | 记录什么                       |
+| --------------- | ------------------------------ |
+| `off`           | 不记录                         |
+| `error`、`warn` | 错误；以及警告                 |
+| `info`（默认）  | 启动、关闭、连接等主要事件     |
+| `debug`         | 更详细的过程信息，用于排查问题 |
+| `trace`         | 还记录模型和工具的内容         |
+
+- **只有 `trace` 记录内容**：发给模型和模型返回的内容、工具的输入和输出。每条内容最多 64 KiB。
+- **任何级别都不记录凭据**：API 令牌、请求头和 MCP 凭据不会写入日志。
+- 其他依赖库的日志最多记录到 `info` 级别，即使设置为 `debug` 或 `trace` 也是如此。
+
+<Callout type="warn">
+  `trace`
+  级别的日志包含对话和工具输出的内容，可能有代码、文件内容和其他敏感信息。分享日志前请检查，排查完毕后改回
+  `info`。
+</Callout>
+
+`logLevel` 和 `network.proxy` 只对独立运行的 Agent 有效；嵌入 Agent 的应用使用自己的日志和代理。

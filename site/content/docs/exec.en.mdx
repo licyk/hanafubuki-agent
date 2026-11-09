@@ -1,0 +1,150 @@
+---
+title: exec
+description: "Run one turn without the terminal interface: prompt sources, output, approvals, exit codes and scripting."
+icon: Play
+---
+
+`hanafubuki-agent exec` creates a session, runs one turn in it and exits when the turn ends. It is meant for scripts, CI and anywhere without an interactive terminal.
+
+```sh
+hanafubuki-agent exec "Summarize the open TODOs in this repository"
+```
+
+Every `exec` creates a new session, kept in the history like one from the terminal interface. Read it later with `hanafubuki-agent sessions show ID`, or continue it in the terminal interface with `hanafubuki-agent resume ID`. `exec` itself cannot continue an existing session.
+
+## Where the prompt comes from [#prompt]
+
+| Written as                            | The prompt                               |
+| ------------------------------------- | ---------------------------------------- |
+| `exec "text"`                         | The argument                             |
+| `exec -`                              | Standard input, read to its end          |
+| `exec`, standard input not a terminal | Standard input (a pipe or a redirection) |
+| `exec`, standard input a terminal     | An error, with exit code 2               |
+
+An empty prompt on standard input also exits with 2.
+
+```sh
+hanafubuki-agent exec - < task.md
+{ echo "Review this change and point out likely problems:"; git diff; } | hanafubuki-agent exec -
+```
+
+The [global flags](/docs/cli-reference#global-flags) apply to `exec` too: `-m` picks the session's model, `-C` the working directory, `--add-dir` adds a workspace root, `--permission-mode` picks the permission mode, and `-p` and `-c` adjust the configuration.
+
+## Output for a person [#human-output]
+
+Without `--json`, standard output is the turn written for a person to read:
+
+```text
+→ exec_command
+  exec_command done
+· There is a build directory in the workspace; I will remove it first.
+→ exec_command
+· approval denied: exec_command: Run Posix command in /home/me/project: rm -rf build
+  exec_command failed
+· I was not allowed to remove the build directory, so instead …
+The final answer.
+```
+
+| Line                     | Means                                                            |
+| ------------------------ | ---------------------------------------------------------------- |
+| `→ TOOL: SUBJECT`        | A tool call started; the subject (a command, a path) is optional |
+| `  TOOL done` / `failed` | The tool call succeeded or failed                                |
+| `· text`                 | The model's commentary, or a note of `exec`'s own                |
+| Text without a prefix    | The model's final answer                                         |
+
+Each message is printed once it is complete. Standard error has the session's id (`session 3`), the model request's retries, and how a turn that did not complete ended (`error: the turn failed (...)`, `the turn was cancelled (...)`).
+
+{/* T2: verify */}
+
+While the model thinks, standard error gets one line such as `· thought for 12s`: the time only, not the thinking itself. The thinking's text is in the `--json` events.
+
+## JSON output [#json]
+
+With `--json`, every line of standard output is one JSON object: each event of the turn, in order. `exec`'s own notes go to standard error instead.
+
+```sh
+hanafubuki-agent exec --json "List the five largest files"
+```
+
+```json
+{
+  "sessionId": 2,
+  "turnId": 1,
+  "generation": 1,
+  "sequence": 1,
+  "activity": null,
+  "kind": { "type": "turn_started" }
+}
+```
+
+The turn's last line is `turn_completed`, `turn_cancelled` or `turn_failed`. Every event's fields, their order and the compatibility rule are in [exec --json events](/docs/json-events).
+
+## Approvals and questions [#approvals]
+
+The [permission mode](/docs/permissions) decides which tool calls need an approval; `exec` answers them by `--approve`:
+
+| `--approve`          | Does                                                                                                              |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `deny` (the default) | Denies every approval; the model is told, and the turn goes on                                                    |
+| `ask`                | Asks the person at the terminal: `y` allows once, `s` allows for the session (when offered), anything else denies |
+| `allow:TOOL[,TOOL…]` | Allows the named tools once each time they ask and denies the others, such as `allow:exec_command,apply_patch`    |
+
+`ask` needs both standard input and standard error to be a terminal; otherwise it denies. Each answer is printed as a line such as `· approval denied: exec_command: Run ...`.
+
+The model may also ask you a question (to choose between approaches, say). `exec` prints the question and its options on standard error, and you answer with an option's number. Without a terminal, or without a valid answer, `exec` cancels the turn and exits with 3.
+
+<Callout type="warn" title="Allow with care">
+  `allow:` allows a whole tool, not one command. `allow:exec_command` means every command the model
+  proposes runs. In CI, make sure the machine is one you can throw away.
+</Callout>
+
+## Saving the final answer [#output-last-message]
+
+`-o FILE` (`--output-last-message FILE`) writes the model's final answer to `FILE` once the turn has ended. When the turn has no final answer (it failed, say), the file is empty.
+
+```sh
+hanafubuki-agent exec -o summary.md "Summarize the README in three paragraphs"
+```
+
+## Interrupting [#interrupt]
+
+Ctrl-C cancels the turn; `exec` exits with 130 once the Agent has shut down. A second Ctrl-C exits at once.
+
+## Exit codes [#exit-codes]
+
+| Code | Means                                                                                                                  |
+| ---- | ---------------------------------------------------------------------------------------------------------------------- |
+| 0    | The turn completed                                                                                                     |
+| 1    | The turn failed, the Agent stopped during it, or the command could not run (no Provider, the data directory in use, …) |
+| 2    | The command line is wrong: an unknown flag, no prompt, an `--approve` that is not a policy                             |
+| 3    | The model asked a question no one could answer, so the turn was cancelled                                              |
+| 130  | The turn was interrupted with Ctrl-C                                                                                   |
+
+The exit codes of every command are in [Exit codes](/docs/exit-codes).
+
+## Scripting examples [#scripting]
+
+Keep only the final answer:
+
+```sh
+hanafubuki-agent exec -o answer.txt "Which license does this project use?" > /dev/null
+cat answer.txt
+```
+
+List the tools a turn called, with `jq`:
+
+```sh
+hanafubuki-agent exec --json "Run the tests and fix the failing ones" \
+  | jq -r 'select(.kind.type == "tool_started") | .kind.name'
+```
+
+In CI, allow commands and patches, and act on the exit code:
+
+```sh
+hanafubuki-agent exec --approve allow:exec_command,apply_patch "Fix the lint errors"
+case $? in
+  0) echo "done" ;;
+  3) echo "the model needs a person to answer a question" ;;
+  *) echo "failed"; exit 1 ;;
+esac
+```

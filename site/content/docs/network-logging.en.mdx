@@ -1,0 +1,82 @@
+---
+title: Network and logging
+description: Setting a proxy with network.proxy, which requests and processes it applies to, and the log level and log file.
+icon: Network
+---
+
+## Proxy [#proxy]
+
+`network.proxy` sets the Agent's proxy:
+
+```sh
+hanafubuki-agent config set network.proxy http://127.0.0.1:7890
+hanafubuki-agent config set network.proxy socks5h://user:pass@proxy.example.com:1080
+hanafubuki-agent config set network.proxy disabled
+hanafubuki-agent config set network.proxy system
+```
+
+| Value                | Means                                                                                                            |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `"system"` (default) | No proxy of its own: what the Agent process's environment says                                                   |
+| `"disabled"`         | No proxy                                                                                                         |
+| A proxy URL          | That proxy: `http`, `https`, `socks4`, `socks4a`, `socks5` or `socks5h`, with a user name and password if needed |
+
+`config get network.proxy` prints a URL's user name and password as `***`.
+
+### What it applies to [#proxy-scope]
+
+| What                                                  | Uses                                                      |
+| ----------------------------------------------------- | --------------------------------------------------------- |
+| Web search and fetch (`web_search`, `fetch_web_page`) | `network.proxy`                                           |
+| MCP Streamable HTTP servers and OAuth                 | `network.proxy`; a change reconnects those servers        |
+| The commands and terminals the model runs             | The environment variables `network.proxy` decides (below) |
+| Requests to model Providers                           | **Not** `network.proxy` (below)                           |
+
+### The commands' proxy variables [#child-processes]
+
+The commands the model runs get a clean environment (see [Environment](/docs/environment#commands)), whose proxy variables `network.proxy` decides:
+
+- a proxy URL: `HTTP_PROXY` and `HTTPS_PROXY` set to it;
+- `"disabled"`: `HTTP_PROXY` and `HTTPS_PROXY` removed;
+- both of these also set `NO_PROXY=localhost,127.0.0.1,::1`;
+- `"system"`: no proxy variable at all. Since the commands' environment is clean, your shell's proxy variables do not reach them either: to have commands use a proxy, set a proxy URL.
+
+Only the upper-case names are handled, not `http_proxy` or `ALL_PROXY`.
+
+### The model Providers' proxy [#provider-proxy]
+
+Requests to model Providers do not use `network.proxy`: they read the Agent process's own `HTTPS_PROXY`, `HTTP_PROXY`, `ALL_PROXY` and `NO_PROXY` (in either case). To reach a Provider through a proxy, set them before you start the Agent:
+
+```sh
+HTTPS_PROXY=http://127.0.0.1:7890 hanafubuki-agent
+```
+
+## Logging [#logging]
+
+The standalone Agent logs to `logs/hanafubuki-agent.log` in the data directory; `hanafubuki-agent config path` prints where it is. Past 8 MiB the file is rotated to `hanafubuki-agent.log.1`, keeping at most three old files.
+
+`logLevel` sets the level, and `--log-level` sets it for one run:
+
+```sh
+hanafubuki-agent config set logLevel debug
+hanafubuki-agent --log-level trace exec "…"
+```
+
+| Level            | Records                                                  |
+| ---------------- | -------------------------------------------------------- |
+| `off`            | Nothing                                                  |
+| `error`, `warn`  | Errors; and warnings                                     |
+| `info` (default) | Starts, shutdowns, connections and the other main events |
+| `debug`          | More detail, to track a problem down                     |
+| `trace`          | The model's and the tools' content too                   |
+
+- **Only `trace` records content**: what is sent to the model and what it returns, the tools' input and output. Each piece is cut at 64 KiB.
+- **No level records credentials**: API tokens, request headers and MCP credentials never reach the log.
+- The records of other libraries go up to `info` only, even at `debug` or `trace`.
+
+<Callout type="warn">
+  A `trace` log holds the content of conversations and tool output: code, file contents and other
+  sensitive information. Read it before you share it, and go back to `info` once you are done.
+</Callout>
+
+`logLevel` and `network.proxy` are the standalone Agent's; an application that embeds the Agent uses its own logger and proxy.

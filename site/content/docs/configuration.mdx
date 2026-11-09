@@ -1,0 +1,95 @@
+---
+title: 配置
+description: 配置目录、三个配置文件，以及用 config path、get、set、edit 查看和修改配置。
+icon: Settings
+---
+
+独立运行的 Agent 把配置保存在配置目录中，默认是 Linux 的 `~/.config/hanafubuki-agent/`、macOS 的 `~/Library/Application Support/hanafubuki-agent/` 和 Windows 的 `%APPDATA%\hanafubuki-agent\`。设置 `HANAFUBUKI_AGENT_HOME` 后，配置和数据都放在这一个目录中。完整说明见[数据目录](/docs/data-directory)。
+
+<Callout>
+  嵌入 Agent 的应用（例如
+  Hanafubuki）使用自己指定的配置目录，并且只读取用户文件，不使用配置档、项目配置和 `-c`
+  覆盖，通常由应用自己的设置页面来修改。
+</Callout>
+
+## 三个文件 [#files]
+
+| 文件             | 内容                                                                       | 分层 | 权限                 |
+| ---------------- | -------------------------------------------------------------------------- | ---- | -------------------- |
+| `config.toml`    | 设置：权限模式、记忆、插件、网页工具、代理、日志级别；配置档；受信任的项目 | 有   | 普通                 |
+| `providers.toml` | 模型 Provider、它们的令牌，以及模型策略（模型、推理强度、压缩）            | 无   | 仅自己可读（`0600`） |
+| `mcp.toml`       | MCP 服务器及其凭据                                                         | 无   | 仅自己可读（`0600`） |
+
+文件在需要时才创建：第一次 `config set` 时创建 `config.toml`，第一次 `providers add` 时创建 `providers.toml`，依此类推。没有文件时使用默认值。所有键使用 camelCase。每个键的类型和默认值见[配置参考](/docs/config-reference)。
+
+`providers.toml` 和 `mcp.toml` 通常用 `providers` 和 `mcp` 命令修改，也可以直接编辑。
+
+## 查看配置 [#read]
+
+```sh
+hanafubuki-agent config path            # 各个文件和目录的位置
+hanafubuki-agent config get             # 应用所有分层后的全部设置
+hanafubuki-agent config get logLevel    # 一个键的值
+hanafubuki-agent config get memory      # 一个表
+```
+
+`config get` 输出的是最终生效的值，即默认值、用户文件、配置档、项目配置和 `-c` 叠加之后的结果。字符串原样输出，其他值输出为 TOML。代理 URL 中的用户名和密码显示为 `***`。没有设置的可选键不输出任何内容。
+
+## 修改配置 [#write]
+
+```sh
+hanafubuki-agent config set logLevel debug
+hanafubuki-agent config set memory.enabled true
+hanafubuki-agent config set network.proxy http://127.0.0.1:7890
+hanafubuki-agent config set profiles.review.permissionMode auto_review
+hanafubuki-agent config set "projects.'$PWD'.trustLevel" trusted
+```
+
+`config set` 把一个键写入用户的 `config.toml`。键是 TOML 的点分键，包含特殊字符的部分要加引号（如上面的项目路径）。值按 TOML 解析，不是合法 TOML 时作为字符串，所以 `debug` 不需要加引号。
+
+`config set` 接受：
+
+- 任何设置的键，见[配置参考](/docs/config-reference#config-toml)；
+- 配置档中的键：`profiles.名字.键`；
+- 项目的信任级别：`projects."路径".trustLevel`，值为 `trusted` 或 `untrusted`。
+
+它会拒绝不认识的键和 Agent 无法使用的值，例如：
+
+```text
+error: `nosuch` is not a setting of config.toml
+```
+
+写入只修改这一个键，保留文件中的注释和其他内容。`config set` 不能删除一个键；要删除，请编辑文件。
+
+## 编辑文件 [#edit]
+
+```sh
+hanafubuki-agent config edit
+```
+
+用 `$VISUAL` 或 `$EDITOR` 打开用户的 `config.toml`（目录不存在时先创建）。编辑器可以带参数，例如 `EDITOR="code --wait"`。
+
+手动编辑的内容在下一次启动 Agent 时读取。如果文件中有无法使用的值，Agent 会修复它，并先把原文件复制到 `.recovery/`，见[配置恢复](/docs/recovery)。
+
+## 示例 [#example]
+
+```toml
+# ~/.config/hanafubuki-agent/config.toml
+permissionMode = "manual"
+logLevel = "info"
+
+[memory]
+enabled = true
+
+[network]
+proxy = "http://127.0.0.1:7890"
+
+# hanafubuki-agent -p review
+[profiles.review]
+permissionMode = "auto_review"
+
+[projects."/home/me/src/my-project"]
+trustLevel = "trusted"
+```
+
+配置档、项目配置和 `-c` 如何叠加，见[配置分层](/docs/config-layers)。

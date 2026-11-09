@@ -1,0 +1,193 @@
+---
+title: exec --json events
+description: "The event stream of hanafubuki-agent exec --json: the envelope, every kind and its fields, their order, and the compatibility rule."
+icon: Braces
+---
+
+`hanafubuki-agent exec --json` writes one JSON object per line on standard output: each event of the turn, in order. `exec`'s own notes go to standard error, so standard output can go straight to `jq` or another program.
+
+## The envelope [#envelope]
+
+```json
+{
+  "sessionId": 2,
+  "turnId": 1,
+  "generation": 1,
+  "sequence": 4,
+  "activity": null,
+  "kind": { "type": "assistant_text_delta", "messageId": 2, "delta": "Hel" }
+}
+```
+
+| Field        | Type             | Means                                                                                                                                    |
+| ------------ | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `sessionId`  | number           | The session                                                                                                                              |
+| `turnId`     | number or `null` | The turn; `null` for the events of the session rather than the turn: `session_title_updated`, `execution_progress`, `compaction_updated` |
+| `generation` | number           | The session's generation                                                                                                                 |
+| `sequence`   | number           | The event's number in the session, from 1, increasing                                                                                    |
+| `activity`   | object or `null` | The activity the event changed (what the turn is doing, for a status line); see [Activity](#activity)                                    |
+| `kind`       | object           | What happened. `kind.type` names the kind; its other fields depend on it                                                                 |
+
+Field names are camelCase; kinds and enum values are snake_case. A field without a value is `null`, never left out. Every id is a number, and times are Unix milliseconds.
+
+## The kinds [#kinds]
+
+The examples below show the `kind` object only.
+
+### The turn [#turn]
+
+| `kind.type`        | Fields                 | Means                                                                               |
+| ------------------ | ---------------------- | ----------------------------------------------------------------------------------- |
+| `turn_started`     |                        | The turn started                                                                    |
+| `sampling_started` | `step`                 | The model is asked for the `step`th time (once more after each round of tool calls) |
+| `response_started` | `responseId`           | The Provider started its response; `responseId` is the Provider's (a string)        |
+| `turn_completed`   | `finalAnswerMessageId` | The turn completed; the final answer's message id                                   |
+| `turn_cancelled`   | `reason`               | The turn was cancelled; `reason` is `user_interrupted`                              |
+| `turn_failed`      | `reason`, `message`    | The turn failed; `message` explains it for a person                                 |
+
+The `reason` of `turn_failed`:
+
+| `reason`                          | Means                                                                             |
+| --------------------------------- | --------------------------------------------------------------------------------- |
+| `model_request_retries_exhausted` | The model request was retried until no retry was left (it could not connect, say) |
+| `model_stream_retries_exhausted`  | The model's response stream broke off, and no retry was left                      |
+| `model_error`                     | The Provider answered with an error                                               |
+| `model_protocol`                  | The Provider's response did not follow the protocol                               |
+| `budget_exceeded`                 | The turn went past a limit the Agent sets for it                                  |
+| `deadline_exceeded`               | The turn went past its time limit                                                 |
+| `context_window_exceeded`         | The context still exceeded the model's window after it was compacted              |
+| `internal_failure`                | An internal error of the Agent                                                    |
+
+### Thinking [#reasoning]
+
+```json
+{"type":"reasoning_started","reasoningId":3,"samplingStep":1}
+{"type":"reasoning_delta","reasoningId":3,"delta":"**Checking the tests**\n\n"}
+{"type":"reasoning_completed","reasoningId":3,"durationMillis":1200}
+```
+
+| `kind.type`           | Fields                          | Means                                                                                                                                                                       |
+| --------------------- | ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `reasoning_started`   | `reasoningId`, `samplingStep`   | The model started a stretch of thinking                                                                                                                                     |
+| `reasoning_delta`     | `reasoningId`, `delta`          | More of the thinking, as Markdown. Concatenate the deltas as they are: a new summary part starts with the blank line that separates it                                      |
+| `reasoning_completed` | `reasoningId`, `durationMillis` | The thinking ended, after that many milliseconds                                                                                                                            |
+| `reasoning_updated`   | `reasoning`                     | The turn's thinking time: `samplingStep`, `phase` (`not_observed`, `thinking`, `completed`), `activeSince`, `stepCompletedMillis`, `turnCompletedMillis`, `lastCompletedAt` |
+
+The thinking is the summary or the raw thinking text the Provider sends; when it sends nothing, a stretch of thinking may have no `reasoning_delta` at all. A `reasoningId` is unique in the session.
+
+### Messages [#messages]
+
+| `kind.type`                                                               | Fields                                     | Means                                                                                                        |
+| ------------------------------------------------------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
+| `assistant_message_started`                                               | `messageId`, `phase`, `samplingStep`       | The model started a message. `phase` is `commentary`, `final_answer` or `null`                               |
+| `assistant_text_delta`                                                    | `messageId`, `delta`                       | More of the message's text                                                                                   |
+| `assistant_message_completed`                                             | `messageId`, `phase`                       | The message is complete                                                                                      |
+| `proposed_plan_started`, `proposed_plan_delta`, `proposed_plan_completed` | `messageId`, and `samplingStep` or `delta` | A plan the model proposes in plan mode. `exec`'s session is always in the default mode, so they do not occur |
+
+### Tools [#tools]
+
+```json
+{
+  "type": "tool_started",
+  "callId": "call_1",
+  "name": "exec_command",
+  "presentation": { "action": "exec_command", "subject": "cargo test" }
+}
+```
+
+| `kind.type`               | Fields                           | Means                                                                                                         |
+| ------------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `tool_started`            | `callId`, `name`, `presentation` | A tool call started. `presentation` has `action` (an identifier) and `subject` (a command, a path, or `null`) |
+| `tool_execution_finished` | `callId`, `isError`              | The tool finished running                                                                                     |
+| `tool_completed`          | `callId`, `isError`              | The tool's result is in the history                                                                           |
+| `execution_progress`      | `update`                         | A process's live progress; `turnId` is `null`                                                                 |
+
+The `update.type` of `execution_progress`:
+
+| `update.type`              | Fields                                                               |
+| -------------------------- | -------------------------------------------------------------------- |
+| `execution_started`        | `executionId`, `generation`, `action`, `status`                      |
+| `execution_output`         | `executionId`, `generation`, `text`, `nextOffset`, `truncated`       |
+| `execution_status`         | `executionId`, `generation`, `status`, `exitCode`, `cleanupRequired` |
+| `execution_disposed`       | `executionId`, `generation`                                          |
+| `execution_cleanup_failed` | `executionId`, `generation`                                          |
+
+`status` is `starting`, `running`, `exited`, `failed`, `cancelled` or `timed_out`; `exitCode` is an integer or `null`.
+
+### Approvals [#approvals]
+
+| `kind.type`                   | Fields                                                                                    | Means                                              |
+| ----------------------------- | ----------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| `approval_requested`          | `request`                                                                                 | A tool call needs an approval                      |
+| `approval_resolved`           | `requestId`, `resolution`                                                                 | The approval was answered                          |
+| `permission_review_started`   | `reviewId`, `callId`, `action`, `startedAt`                                               | The automatic review of `auto-review` mode started |
+| `permission_review_completed` | `reviewId`, `callId`, `actionSummary`, `status`, `assessment`, `startedAt`, `completedAt` | The automatic review ended                         |
+
+The fields of `request`:
+
+| Field                          | Means                                        |
+| ------------------------------ | -------------------------------------------- |
+| `requestId`                    | The approval's id (a number)                 |
+| `operationId`                  | The tool call's `callId`                     |
+| `action`                       | The operation to approve (below)             |
+| `requestedAtMs`, `expiresAtMs` | When it was asked, and when it expires       |
+| `offersAllowForSession`        | Whether "allow for the session" is an answer |
+
+`action` has `kind` (what sort of operation), `risk` (`low`, `medium`, `high`, `critical`), `origin` (`{"type":"user"}`, `{"type":"model"}`, or `{"type":"skill",...}` for one a Skill supplied), `summary`, `digest` (a hash of the operation) and `details` (`null`, or an object with a `type`, such as a command's `program`, `argv` and `cwd`). The values of `kind`:
+
+`command_execution`, `shell_execution`, `code_execution`, `interactive_execution`, `file_read`, `file_write`, `file_patch`, `file_move`, `file_delete`, `mcp_tool_call`, `skill_management`, `domain_mutation`.
+
+`resolution` has `requestId`, `decision`, `source` and `resolvedAtMs`. `decision` is `allow_once`, `allow_for_session`, `deny`, `aborted` or `timed_out`; on this event `source` is `user` (`exec` answering by `--approve`), or `system` when the approval timed out or was aborted.
+
+An automatic review's `status` is `reviewing`, `approved`, `denied`, `timed_out`, `failed` or `aborted`. Its `assessment` is set only when it is `approved` or `denied`: `riskLevel`, `userAuthorization` (`explicit`, `implicit`, `absent`, `conflicting`), `outcome` (`allow`, `deny`) and `rationale`.
+
+### Questions and plans [#questions-plans]
+
+| `kind.type`            | Fields       | Means                                                                                                                                             |
+| ---------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `user_input_requested` | `request`    | The model asks: `requestId`, `callId`, `questions` (each with `id`, `header`, `question`, `options`), an option with `id`, `label`, `description` |
+| `user_input_resolved`  | `resolution` | The answers: `requestId`, `answers` (each with `questionId`, `optionId`), `resolvedAt`                                                            |
+| `task_plan_updated`    | `plan`       | The model updated its task plan: `explanation` and `plan` (steps with `step` and `status`: `pending`, `in_progress`, `completed`)                 |
+
+### The session and its context [#session]
+
+| `kind.type`                                                | Fields                                                             | Means                                                                                                                                                                                                                                                                                             |
+| ---------------------------------------------------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `session_title_updated`                                    | `title`                                                            | The session's title: `value` and `source` (`automatic` or `user`). `turnId` is `null`                                                                                                                                                                                                             |
+| `history_committed`                                        | `startIndex`, `itemCount`, `usage`                                 | Items were written to the history. `usage` is set only on the commit of a model response: `lastResponseInputTokens`, `lastResponseOutputTokens`, `cumulativeInputTokens`, `cumulativeOutputTokens`, `contextWindowTokens`, `contextConsumedTokens`, `source` (`provider_reported` or `estimated`) |
+| `compaction_updated`                                       | `compaction`                                                       | A context compaction's progress: `trigger` (`manual`, `automatic`), `status` (`reserved`, `running`, `ready_to_install`, `completed`, `failed`, `cancelled`), `summary`, `lastError` and more. `turnId` is `null`                                                                                 |
+| `model_retry_scheduled`                                    | `stage`, `currentRetry`, `maximumRetries`, `delayMillis`, `reason` | The model request will be retried. `stage` is `response_stream` or `image_input_fallback`                                                                                                                                                                                                         |
+| `steering_accepted`, `steering_consumed`                   | the steering messages' sequence numbers                            | A message sent during the turn was accepted, then read by the model. `exec` sends none, so they do not occur                                                                                                                                                                                      |
+| `continuation_hook_started`, `continuation_hook_completed` | `providerId`, `hookId`, and `outcome`                              | A plugin's continuation hook. None is registered today                                                                                                                                                                                                                                            |
+
+## Activity [#activity]
+
+`activity` is set on the events that start or change an activity: `sampling_started`, `response_started`, `model_retry_scheduled`, `history_committed`, the tool events, the approval events, `user_input_requested` and `execution_progress`. It is `null` on the others.
+
+| Field                                  | Means                                                                                                                                   |
+| -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`, `revision`                       | The activity's id and revision                                                                                                          |
+| `kind`                                 | `sampling`, `tool_invocation`, `approval`, `continuation_hook` or `execution`                                                           |
+| `phase`                                | `running`, `waiting_for_approval`, `waiting_for_cleanup`, `waiting_for_user_input`, `succeeded`, `failed`, `cancelled` or `interrupted` |
+| `presentation`                         | `action` and `subject`, as on `tool_started`                                                                                            |
+| `attempt`                              | The retry's number, or `null`                                                                                                           |
+| `startedAt`, `updatedAt`, `finishedAt` | Times; `finishedAt` is `null` until the activity ends                                                                                   |
+| `execution`, `output`                  | A process activity's state and an excerpt of its output, or `null`                                                                      |
+
+## Order [#ordering]
+
+- A turn starts with `turn_started`, then the `history_committed` of your message, and in a new session `session_title_updated`.
+- Each time the model is asked: `sampling_started`, `reasoning_updated`, `response_started`, then the model's output.
+- A stretch of thinking is `reasoning_started`, any number of `reasoning_delta`s and `reasoning_completed`, all before the step's `history_committed`. A turn that fails in the middle of a response sends no `reasoning_completed`.
+- A message is `assistant_message_started`, its `assistant_text_delta`s, then the step's `history_committed`, and last `assistant_message_completed`.
+- A step's tool calls: first a `tool_started` for every call, in call order; while each runs, its approval, question or plan events, and when it ends its `tool_execution_finished` (in the order they finish); then, in call order, `history_committed` and `tool_completed`.
+- `execution_progress` may come anywhere in between. When you need a strict order, sort by `sequence`.
+
+**The last line** is always `turn_completed`, `turn_cancelled` or `turn_failed`: `exec` stops writing once it has it, so later events of the session (a title generated afterwards, say) are not printed.
+
+## Compatibility [#stability]
+
+The format is the Agent's own event type, serialized, so it changes with the Agent:
+
+- A new kind or field may **appear** in any release. A reader should skip the kinds and fields it does not know.
+- Before 1.0, a field or a kind is **removed**, or changes its meaning, only with a new minor version (0.1 to 0.2, say).

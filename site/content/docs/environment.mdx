@@ -1,0 +1,42 @@
+---
+title: 环境变量
+description: hanafubuki-agent 读取的环境变量，以及它为启动的进程设置的环境。
+icon: Variable
+---
+
+## Agent 读取的变量 [#read]
+
+| 变量                                                 | 作用                                                                                                |
+| ---------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `HANAFUBUKI_AGENT_HOME`                              | 用一个目录同时代替配置目录和数据目录。相对路径相对于当前目录解析（不是 `-C`）；设为空值等于没有设置 |
+| `XDG_CONFIG_HOME`、`XDG_DATA_HOME`                   | Linux 上配置目录和数据目录的基准位置，默认分别是 `~/.config` 和 `~/.local/share`                    |
+| `VISUAL`、`EDITOR`                                   | `config edit` 使用的编辑器，先看 `VISUAL`。可以带参数，例如 `code --wait`                           |
+| `--api-key-env` 指定的变量                           | `providers add` 从中读取 API 令牌，只在添加时读取一次                                               |
+| `PATH`（Windows 上还有 `PATHEXT`）                   | 查找 stdio MCP 服务器的程序                                                                         |
+| `HTTP_PROXY`、`HTTPS_PROXY`、`ALL_PROXY`、`NO_PROXY` | 访问模型 Provider 时使用的代理，见[网络与日志](/docs/network-logging#provider-proxy)                |
+
+Agent 本身不读取 `RUST_LOG` 或 `NO_COLOR`：日志级别由 `logLevel` 和 `--log-level` 决定，见[网络与日志](/docs/network-logging#logging)。
+
+## 命令和终端的环境 [#commands]
+
+模型通过工具运行的命令不会继承 Agent 进程的全部环境。它们只得到一个干净的环境：
+
+- 从 Agent 的环境中只保留 `PATH` 和 `TMPDIR`（Windows 上是 `PATH`、`PATHEXT`、`SYSTEMROOT`、`WINDIR`、`COMSPEC`、`TEMP`、`TMP`）。
+- 为了不让命令等待分页器或输出控制字符，固定设置 `NO_COLOR=1`、`TERM=dumb`、`LANG`、`LC_CTYPE`、`LC_ALL` 为 `C.UTF-8`、`COLORTERM` 为空，以及 `PAGER`、`GIT_PAGER`、`GH_PAGER` 为 `cat`。
+- 再加上由 `network.proxy` 决定的代理变量。
+
+因此，你在 Shell 中设置的变量（例如 API 令牌或代理）不会自动传给模型运行的命令。
+
+stdio MCP 服务器不同：它们继承 Agent 进程的完整环境，再加上 `mcp.toml` 中为它们配置的变量。
+
+## 代理变量 [#proxy]
+
+`network.proxy` 决定 Agent 为它启动的进程设置哪些代理变量：
+
+| `network.proxy`    | 命令和终端得到的变量                                                         |
+| ------------------ | ---------------------------------------------------------------------------- |
+| `"system"`（默认） | 不设置代理变量                                                               |
+| 一个代理 URL       | `HTTP_PROXY` 和 `HTTPS_PROXY` 为这个 URL，`NO_PROXY=localhost,127.0.0.1,::1` |
+| `"disabled"`       | 去掉 `HTTP_PROXY` 和 `HTTPS_PROXY`，`NO_PROXY=localhost,127.0.0.1,::1`       |
+
+只处理大写的变量名。详见[网络与日志](/docs/network-logging)。

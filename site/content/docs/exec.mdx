@@ -1,0 +1,150 @@
+---
+title: exec
+description: 不打开终端界面，运行一轮对话：提示词来源、输出格式、审批、退出码和脚本示例。
+icon: Play
+---
+
+`hanafubuki-agent exec` 创建一个新会话，在其中运行一轮对话，回合结束后退出。它适合脚本、CI 和任何没有交互终端的场合。
+
+```sh
+hanafubuki-agent exec "总结这个仓库中未完成的 TODO"
+```
+
+每次 `exec` 都会创建一个新会话，并像终端界面中的会话一样保存在历史里。之后可以用 `hanafubuki-agent sessions show ID` 查看，或用 `hanafubuki-agent resume ID` 在终端界面中继续。`exec` 本身不能继续已有的会话。
+
+## 提示词从哪里来 [#prompt]
+
+| 写法                       | 提示词                         |
+| -------------------------- | ------------------------------ |
+| `exec "文本"`              | 参数本身                       |
+| `exec -`                   | 从标准输入读取，直到结束       |
+| `exec`，且标准输入不是终端 | 从标准输入读取（管道或重定向） |
+| `exec`，且标准输入是终端   | 报错并以退出码 2 退出          |
+
+从标准输入读到的内容为空时，同样以退出码 2 退出。
+
+```sh
+hanafubuki-agent exec - < task.md
+{ echo "审查下面的改动，指出可能的问题："; git diff; } | hanafubuki-agent exec -
+```
+
+[全局选项](/docs/cli-reference#global-flags)对 `exec` 同样有效：`-m` 选择这个会话的模型，`-C` 指定工作目录，`--add-dir` 添加工作区目录，`--permission-mode` 选择权限模式，`-p` 和 `-c` 调整配置。
+
+## 给人看的输出 [#human-output]
+
+不加 `--json` 时，标准输出是给人阅读的回合记录：
+
+```text
+→ exec_command
+  exec_command done
+· 工作区里有一个 build 目录，我先把它删掉。
+→ exec_command
+· approval denied: exec_command: Run Posix command in /home/me/project: rm -rf build
+  exec_command failed
+· 没有获准删除 build 目录，我改为……
+最终的回答。
+```
+
+| 行                       | 含义                                               |
+| ------------------------ | -------------------------------------------------- |
+| `→ 工具名: 对象`         | 一次工具调用开始；对象（命令、路径等）可能没有     |
+| `  工具名 done`/`failed` | 这次工具调用成功或失败                             |
+| `· 文本`                 | 模型的过程说明（commentary），或 `exec` 自己的提示 |
+| 没有前缀的文本           | 模型的最终回答                                     |
+
+每条消息在完整收到后才打印。标准错误中是会话 ID（`session 3`）、模型请求的重试，以及没有正常完成的回合是如何结束的（`error: the turn failed (...)`、`the turn was cancelled (...)`）。
+
+{/* T2: verify */}
+
+模型思考时，标准错误会打印一行 `· thought for 12s`，只有时长，没有思考内容。思考内容可以在 `--json` 的事件中读取。
+
+## JSON 输出 [#json]
+
+加上 `--json` 后，标准输出的每一行都是一个 JSON 对象，即回合中按顺序发生的每个事件；`exec` 自己的提示改到标准错误。
+
+```sh
+hanafubuki-agent exec --json "列出最大的五个文件"
+```
+
+```json
+{
+  "sessionId": 2,
+  "turnId": 1,
+  "generation": 1,
+  "sequence": 1,
+  "activity": null,
+  "kind": { "type": "turn_started" }
+}
+```
+
+回合的最后一行是 `turn_completed`、`turn_cancelled` 或 `turn_failed`。每种事件的字段、顺序和兼容性规则见 [exec --json 事件](/docs/json-events)。
+
+## 审批与提问 [#approvals]
+
+哪些工具调用需要审批由[权限模式](/docs/permissions)决定；`exec` 用 `--approve` 回答这些审批：
+
+| `--approve`          | 行为                                                                                    |
+| -------------------- | --------------------------------------------------------------------------------------- |
+| `deny`（默认）       | 拒绝所有审批。模型会得知被拒绝，回合继续                                                |
+| `ask`                | 询问终端前的人：`y` 允许一次，`s` 在本会话内都允许（仅在可用时提供），其他输入拒绝      |
+| `allow:工具[,工具…]` | 列出的工具每次请求时都允许一次，其他工具一律拒绝，例如 `allow:exec_command,apply_patch` |
+
+`ask` 需要标准输入和标准错误都是终端，否则一律拒绝。每个回答都会打印一行，例如 `· approval denied: exec_command: Run ...`。
+
+模型也可能向你提问（例如让你在几个方案中选择）。`exec` 会把问题和选项打印到标准错误，你输入选项编号回答。没有终端，或者没有给出有效回答时，`exec` 取消回合并以退出码 3 退出。
+
+<Callout type="warn" title="谨慎放行">
+  `allow:` 放行的是整个工具，而不是某一条具体命令。`allow:exec_command`
+  意味着模型提出的任何命令都会执行。在 CI 中使用时，确保运行环境是可以丢弃的。
+</Callout>
+
+## 保存最终回答 [#output-last-message]
+
+`-o FILE`（`--output-last-message FILE`）在回合结束后把模型的最终回答写入 `FILE`。回合没有最终回答时（例如失败了），写入一个空文件。
+
+```sh
+hanafubuki-agent exec -o summary.md "用三段话总结 README"
+```
+
+## 中断 [#interrupt]
+
+按 Ctrl-C 会取消回合，`exec` 等 Agent 关闭后以退出码 130 退出。再按一次 Ctrl-C 会立即退出。
+
+## 退出码 [#exit-codes]
+
+| 退出码 | 含义                                                                              |
+| ------ | --------------------------------------------------------------------------------- |
+| 0      | 回合完成                                                                          |
+| 1      | 回合失败、Agent 在回合中停止，或者命令无法运行（没有 Provider、数据目录被占用等） |
+| 2      | 命令行有误：未知选项、没有提示词、无效的 `--approve` 策略                         |
+| 3      | 模型提出的问题无人回答，回合被取消                                                |
+| 130    | 回合被 Ctrl-C 中断                                                                |
+
+所有命令的退出码见[退出码](/docs/exit-codes)。
+
+## 脚本示例 [#scripting]
+
+只取最终回答，丢掉过程：
+
+```sh
+hanafubuki-agent exec -o answer.txt "这个项目用的是什么许可证？" > /dev/null
+cat answer.txt
+```
+
+用 `jq` 列出回合中调用过的工具：
+
+```sh
+hanafubuki-agent exec --json "运行测试并修复失败的用例" \
+  | jq -r 'select(.kind.type == "tool_started") | .kind.name'
+```
+
+在 CI 中允许命令和补丁，并根据退出码处理结果：
+
+```sh
+hanafubuki-agent exec --approve allow:exec_command,apply_patch "修复 lint 报错"
+case $? in
+  0) echo "完成" ;;
+  3) echo "模型需要人来回答问题" ;;
+  *) echo "失败"; exit 1 ;;
+esac
+```

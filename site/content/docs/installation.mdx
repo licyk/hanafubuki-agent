@@ -111,7 +111,7 @@ cargo install --path crates/cli
 
 <Tabs items={["Linux", "macOS", "Windows"]}>
   <Tab value="Linux">
-    MCP 服务器的 OAuth 令牌保存在系统密钥环中，Linux 上通过 Secret Service 访问（GNOME Keyring、KWallet 等都提供它）。没有桌面环境的服务器或容器通常没有 Secret Service：Agent 仍然可以运行，只是需要 OAuth 登录的 MCP 服务器无法保存令牌，`hanafubuki-agent doctor` 的 `keyring` 一项会显示 `FAIL`。
+    MCP 服务器的 OAuth 令牌保存在系统密钥环中，Linux 上通过 Secret Service 访问（GNOME Keyring、KWallet 等都提供它）。没有桌面环境的服务器或容器通常没有 Secret Service：这时 `hanafubuki-agent doctor` 的 `keyring` 一项会显示 `FAIL`，但其他功能不受影响：Provider 令牌和 MCP 凭据都保存在配置文件中，不使用密钥环。
 
     配置和数据目录遵循 `$XDG_CONFIG_HOME` 和 `$XDG_DATA_HOME`。
 
@@ -145,7 +145,7 @@ cargo install --path crates/cli
 
 1. 删除可执行文件：`cargo uninstall hanafubuki-agent-cli`，或者直接删除下载的二进制。
 2. 如果不再需要配置和历史，删除配置目录和数据目录。`hanafubuki-agent config path` 会打印它们的位置，默认位置见[数据目录](/docs/data-directory)。
-3. 如果用过需要 OAuth 的 MCP 服务器，可以在系统密钥环中删除服务名为 `org.licyk.hanafubuki-agent.secrets` 的条目。
+3. Agent 在系统密钥环中使用的服务名是 `org.licyk.hanafubuki-agent.secrets`，如果其中有条目，可以一并删除。
 
 <Callout type="warn">
   数据目录包含所有会话历史、记忆和安装的 Skill，删除后无法恢复。配置目录中的 `providers.toml` 和
