@@ -70,7 +70,8 @@ done: the workspace, the decoupling inside Hanafubuki's tree, and the move.
       [ID|--last] [PROMPT]`, `@` file mentions from Codex's `file-search`
       (in the TUI crate, on `nucleo` 0.5), and `cargo xtask check-notices`
       (`architecture/notices-policy.toml`). The facade gained
-      `workspace_roots()`. Phase 5 is done: a pty run covers the popup,
+      `workspace_roots()` and re-exports `AgentCompactionStatus`. Phase 5
+      is done: a pty run covers the popup,
       `/status`, a mention, a turn, Ctrl-T, `/diff`, `/model`, `resume`
       and `resume --last` against a fake Responses server.
   - Deferred from 5b: the permission mode changed from the interface (it
@@ -84,6 +85,11 @@ done: the workspace, the decoupling inside Hanafubuki's tree, and the move.
     toggle or insert a Skill; the sessions in the resume picker show no
     working directory or branch (the summaries have none); `exec`
     resumes no session; syntax highlighting (no `.tmTheme` is shipped).
+  - Every start of the interface (and `resume` on the picker) creates a
+    session that stays in the history, a turn run in it or not: the
+    picker hides the sessions no turn ran in, `sessions list` does not.
+    Create the session with the first message, or delete an unused one
+    on quit.
   - Still deferred from 5a: images in the composer (paste, attach); a
     session's earlier messages in the composer's history (only this
     run's); desktop notifications; Ctrl-Z suspend; the external editor;
@@ -99,7 +105,8 @@ done: the workspace, the decoupling inside Hanafubuki's tree, and the move.
       a crate Hanafubuki does not depend on.
 - [ ] Hanafubuki, when it moves its pin past Phase 5b: nothing to change.
       The facade gained one call, `AgentApplicationService::workspace_roots`
-      (an addition over the host's `WorkspaceRootsPort`); the TUI and the
+      (an addition over the host's `WorkspaceRootsPort`), and re-exports
+      `AgentCompactionStatus`; the TUI and the
       CLI are crates Hanafubuki does not depend on, and nothing the model
       sees changed (the goldens and the history corpus are untouched).
 - [ ] Phase 6: `release.yml` with binaries, clippy `-D warnings`, `v0.1.0`

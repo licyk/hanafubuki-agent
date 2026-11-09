@@ -4,7 +4,7 @@
 //! with what they found: a session opened (and its transcript replayed),
 //! the model and mode pickers, compaction and the reports.
 
-use hanafubuki_agent::AgentSessionMode;
+use hanafubuki_agent::{AgentCompactionStatus, AgentSessionMode};
 
 use super::ChatWidget;
 use crate::agent_bridge::{ModelChoices, OpenedSession, ReplayedItem, TurnUpdate};
@@ -60,14 +60,19 @@ impl ChatWidget {
                     None,
                 ));
             }
-            TurnUpdate::Compacted(outcome) => match outcome.compaction.last_error {
-                Some(error) => self.add_to_history(history_cell::new_error_event(format!(
-                    "the conversation was not compacted: {error}"
-                ))),
-                None => self.add_to_history(history_cell::new_info_event(
-                    "Context compacted".to_string(),
-                    None,
-                )),
+            TurnUpdate::Compacted(outcome) => match outcome.compaction.status {
+                AgentCompactionStatus::Completed => self.add_to_history(
+                    history_cell::new_info_event("Context compacted".to_string(), None),
+                ),
+                status => {
+                    let reason = outcome
+                        .compaction
+                        .last_error
+                        .unwrap_or_else(|| format!("{status:?}").to_lowercase());
+                    self.add_to_history(history_cell::new_error_event(format!(
+                        "the conversation was not compacted: {reason}"
+                    )))
+                }
             },
             TurnUpdate::StatusReport(report) => {
                 self.add_to_history(history_cell::new_status_output(&report))

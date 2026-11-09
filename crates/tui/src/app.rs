@@ -191,6 +191,11 @@ impl App {
                 return true;
             };
             self.resume_picker = None;
+            // The session left is replaced, header and all: what it wrote
+            // while the picker was open is not shown.
+            if matches!(selection, SessionSelection::Resume(_)) {
+                self.deferred_history_lines.clear();
+            }
             self.leave_alt_screen(tui);
             match selection {
                 SessionSelection::StartFresh => {}

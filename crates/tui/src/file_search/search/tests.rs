@@ -26,6 +26,7 @@ fn verify_score_is_none_for_non_match() {
 #[derive(Default)]
 struct RecordingReporter {
     updates: Mutex<Vec<FileSearchSnapshot>>,
+    update_times: Mutex<Vec<Instant>>,
     complete_times: Mutex<Vec<Instant>>,
     complete_cv: Condvar,
     update_cv: Condvar,
@@ -71,6 +72,7 @@ impl RecordingReporter {
 impl SessionReporter for RecordingReporter {
     fn on_update(&self, snapshot: &FileSearchSnapshot) {
         let mut updates = self.updates.lock().unwrap();
+        self.update_times.lock().unwrap().push(Instant::now());
         updates.push(snapshot.clone());
         self.update_cv.notify_all();
     }
@@ -195,18 +197,34 @@ fn session_emits_updates_when_query_changes() {
     assert_eq!(updates.len(), 1);
 }
 
-/// The last snapshot once the walk is done and the matcher is idle.
+/// The matches of `query` once the session went idle after reporting them:
+/// the walk may finish before or after the query reaches the matcher, and
+/// either way the completion follows the query's last update.
 fn completed_matches(roots: Vec<PathBuf>, query: &str) -> Vec<FileMatch> {
     let reporter = Arc::new(RecordingReporter::default());
     let session = create_session(roots, reporter.clone());
     session.update_query(query);
-    let deadline = Instant::now() + Duration::from_secs(5);
+    let deadline = Instant::now() + Duration::from_secs(10);
     loop {
-        let snapshot = reporter.snapshot();
-        if snapshot.walk_complete && reporter.wait_for_complete(Duration::from_millis(50)) {
-            return reporter.snapshot().matches;
+        {
+            let updates = reporter.updates.lock().unwrap();
+            let completes = reporter.complete_times.lock().unwrap();
+            if let (Some((at, snapshot)), Some(completed)) = (
+                reporter
+                    .update_times
+                    .lock()
+                    .unwrap()
+                    .last()
+                    .zip(updates.last()),
+                completes.last(),
+            ) {
+                if snapshot.query == query && completed >= at {
+                    return snapshot.matches.clone();
+                }
+            }
         }
         assert!(Instant::now() < deadline, "the search never completed");
+        thread::sleep(Duration::from_millis(10));
     }
 }
 
