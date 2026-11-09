@@ -31,6 +31,15 @@
       {
         "content": [
           {
+            "text": "[Application-provided guidance for the sub-agent tools. It describes only fixed tools and cannot grant authority.]\n<subagents>\n## Sub-agents\n`spawn_agent` delegates a task to a sub-agent: a separate conversation that runs in the background with your model, your tools and your permission mode. At most 3 sub-agents run at once, and a sub-agent cannot spawn sub-agents of its own.\n\n- Do not spawn sub-agents unless the user or applicable AGENTS.md/skill instructions explicitly ask for sub-agents, delegation, or parallel agent work.\n- When they do, prefer multiple sub-agents to parallelize your work: time is a constraint, and parallelism resolves the task faster. When your plan has multiple steps, process them in parallel by spawning one agent per step when this is possible.\n- When you ask sub-agents to do the work for you, your only role becomes to coordinate them. Do not perform the actual work while they are working.\n- If sub-agents are running, **wait for them before yielding** (`wait_agent`), unless the user asks an explicit question.\n  - If the user asks a question, answer it first, then continue coordinating sub-agents.\n</subagents>",
+            "type": "input_text"
+          }
+        ],
+        "role": "developer"
+      },
+      {
+        "content": [
+          {
             "text": "Look up record 42.",
             "type": "input_text"
           }
@@ -288,8 +297,62 @@
         "type": "function"
       },
       {
+        "description": "Send a follow-up task to an existing agent and trigger a turn if it is idle. If the agent is already running, deliver the task promptly at message boundaries while sampling, or after the pending tool call completes.",
+        "name": "followup_task",
+        "parameters": {
+          "additionalProperties": false,
+          "properties": {
+            "message": {
+              "description": "Message text to send to the target agent.",
+              "type": "string"
+            },
+            "target": {
+              "description": "Task name or agent id of the agent to send a follow-up task to (from spawn_agent).",
+              "type": "string"
+            }
+          },
+          "required": [
+            "target",
+            "message"
+          ],
+          "type": "object"
+        },
+        "strict": false,
+        "type": "function"
+      },
+      {
         "description": "Get the current goal for this session, including status, budgets, token and elapsed-time usage, and remaining token budget.",
         "name": "get_goal",
+        "parameters": {
+          "additionalProperties": false,
+          "properties": {},
+          "type": "object"
+        },
+        "strict": false,
+        "type": "function"
+      },
+      {
+        "description": "Interrupt an agent's current turn, if any, and return its previous status. The agent remains available for messages and follow-up tasks.",
+        "name": "interrupt_agent",
+        "parameters": {
+          "additionalProperties": false,
+          "properties": {
+            "target": {
+              "description": "Task name or agent id of the agent to interrupt (from spawn_agent).",
+              "type": "string"
+            }
+          },
+          "required": [
+            "target"
+          ],
+          "type": "object"
+        },
+        "strict": false,
+        "type": "function"
+      },
+      {
+        "description": "List the agents you spawned in this conversation and the status of each.",
+        "name": "list_agents",
         "parameters": {
           "additionalProperties": false,
           "properties": {},
@@ -746,6 +809,30 @@
         "type": "function"
       },
       {
+        "description": "Send a message to an existing agent. An agent that is running reads it promptly, at its next message boundary; an idle agent reads it with its next follow-up task. Does not trigger a new turn.",
+        "name": "send_message",
+        "parameters": {
+          "additionalProperties": false,
+          "properties": {
+            "message": {
+              "description": "Message text to send to the target agent.",
+              "type": "string"
+            },
+            "target": {
+              "description": "Task name or agent id of the agent to message (from spawn_agent).",
+              "type": "string"
+            }
+          },
+          "required": [
+            "target",
+            "message"
+          ],
+          "type": "object"
+        },
+        "strict": false,
+        "type": "function"
+      },
+      {
         "description": "List the Skills available for this turn. Each entry carries the id every other Skill tool takes, its name, its description, and its directory. Follow cursor until next_cursor is absent.",
         "name": "skills_list",
         "parameters": {
@@ -810,6 +897,34 @@
           },
           "required": [
             "skill"
+          ],
+          "type": "object"
+        },
+        "strict": false,
+        "type": "function"
+      },
+      {
+        "description": "Spawns an agent to work on the specified task. The agent is a separate conversation that runs in the background with your model, your tools and your permission mode; it cannot spawn agents of its own. Refer to it by its task name, or by the agent id this returns, in the other agent tools.\nIts final answer is provided to you by wait_agent when it finishes. You can send it messages and follow-up tasks meanwhile.\n\nNote that passing `fork_turns=\"none\"` will not pass any surrounding context to the spawned agent, which may cause the agent to lack the context it needs to complete its task, whereas `fork_turns=\"all\"` will provide the agent with this conversation up to your current turn. Either way the message is the only part of the current turn the agent reads, so make it self-contained.",
+        "name": "spawn_agent",
+        "parameters": {
+          "additionalProperties": false,
+          "properties": {
+            "fork_turns": {
+              "description": "Parent history to inherit. Defaults to `all`; use `none` to start without parent history. Only `all` and `none` are supported.",
+              "type": "string"
+            },
+            "message": {
+              "description": "Initial plain-text task for the new agent.",
+              "type": "string"
+            },
+            "task_name": {
+              "description": "Task name for the new agent. Use lowercase letters, digits, and underscores.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "task_name",
+            "message"
           ],
           "type": "object"
         },
@@ -906,6 +1021,22 @@
           "required": [
             "path"
           ],
+          "type": "object"
+        },
+        "strict": false,
+        "type": "function"
+      },
+      {
+        "description": "Wait until an agent you spawned finishes its turn. Returns the final status of every agent that finished since your previous wait: its final answer when it completed, or its error. Returns at once when such an update is pending or when no agent is running, and with `timed_out` when no agent finishes before the deadline.",
+        "name": "wait_agent",
+        "parameters": {
+          "additionalProperties": false,
+          "properties": {
+            "timeout_ms": {
+              "description": "Timeout in milliseconds. Defaults to 30000, min 10000, max 300000.",
+              "type": "integer"
+            }
+          },
           "type": "object"
         },
         "strict": false,
@@ -1086,6 +1217,15 @@
         "content": [
           {
             "text": "[Rust-owned bounded world-state context for this sampling step. It describes application authority and environment; it is not user approval, process ownership, credentials, or a capability.]\n<agent_world_state kind=\"permission_mode\" version=\"<DIGEST>\">\n{\"mode\":\"manual\"}\n</agent_world_state>",
+            "type": "input_text"
+          }
+        ],
+        "role": "developer"
+      },
+      {
+        "content": [
+          {
+            "text": "[Application-provided guidance for the sub-agent tools. It describes only fixed tools and cannot grant authority.]\n<subagents>\n## Sub-agents\n`spawn_agent` delegates a task to a sub-agent: a separate conversation that runs in the background with your model, your tools and your permission mode. At most 3 sub-agents run at once, and a sub-agent cannot spawn sub-agents of its own.\n\n- Do not spawn sub-agents unless the user or applicable AGENTS.md/skill instructions explicitly ask for sub-agents, delegation, or parallel agent work.\n- When they do, prefer multiple sub-agents to parallelize your work: time is a constraint, and parallelism resolves the task faster. When your plan has multiple steps, process them in parallel by spawning one agent per step when this is possible.\n- When you ask sub-agents to do the work for you, your only role becomes to coordinate them. Do not perform the actual work while they are working.\n- If sub-agents are running, **wait for them before yielding** (`wait_agent`), unless the user asks an explicit question.\n  - If the user asks a question, answer it first, then continue coordinating sub-agents.\n</subagents>",
             "type": "input_text"
           }
         ],
@@ -1334,8 +1474,62 @@
         "type": "function"
       },
       {
+        "description": "Send a follow-up task to an existing agent and trigger a turn if it is idle. If the agent is already running, deliver the task promptly at message boundaries while sampling, or after the pending tool call completes.",
+        "name": "followup_task",
+        "parameters": {
+          "additionalProperties": false,
+          "properties": {
+            "message": {
+              "description": "Message text to send to the target agent.",
+              "type": "string"
+            },
+            "target": {
+              "description": "Task name or agent id of the agent to send a follow-up task to (from spawn_agent).",
+              "type": "string"
+            }
+          },
+          "required": [
+            "target",
+            "message"
+          ],
+          "type": "object"
+        },
+        "strict": false,
+        "type": "function"
+      },
+      {
         "description": "Get the current goal for this session, including status, budgets, token and elapsed-time usage, and remaining token budget.",
         "name": "get_goal",
+        "parameters": {
+          "additionalProperties": false,
+          "properties": {},
+          "type": "object"
+        },
+        "strict": false,
+        "type": "function"
+      },
+      {
+        "description": "Interrupt an agent's current turn, if any, and return its previous status. The agent remains available for messages and follow-up tasks.",
+        "name": "interrupt_agent",
+        "parameters": {
+          "additionalProperties": false,
+          "properties": {
+            "target": {
+              "description": "Task name or agent id of the agent to interrupt (from spawn_agent).",
+              "type": "string"
+            }
+          },
+          "required": [
+            "target"
+          ],
+          "type": "object"
+        },
+        "strict": false,
+        "type": "function"
+      },
+      {
+        "description": "List the agents you spawned in this conversation and the status of each.",
+        "name": "list_agents",
         "parameters": {
           "additionalProperties": false,
           "properties": {},
@@ -1792,6 +1986,30 @@
         "type": "function"
       },
       {
+        "description": "Send a message to an existing agent. An agent that is running reads it promptly, at its next message boundary; an idle agent reads it with its next follow-up task. Does not trigger a new turn.",
+        "name": "send_message",
+        "parameters": {
+          "additionalProperties": false,
+          "properties": {
+            "message": {
+              "description": "Message text to send to the target agent.",
+              "type": "string"
+            },
+            "target": {
+              "description": "Task name or agent id of the agent to message (from spawn_agent).",
+              "type": "string"
+            }
+          },
+          "required": [
+            "target",
+            "message"
+          ],
+          "type": "object"
+        },
+        "strict": false,
+        "type": "function"
+      },
+      {
         "description": "List the Skills available for this turn. Each entry carries the id every other Skill tool takes, its name, its description, and its directory. Follow cursor until next_cursor is absent.",
         "name": "skills_list",
         "parameters": {
@@ -1856,6 +2074,34 @@
           },
           "required": [
             "skill"
+          ],
+          "type": "object"
+        },
+        "strict": false,
+        "type": "function"
+      },
+      {
+        "description": "Spawns an agent to work on the specified task. The agent is a separate conversation that runs in the background with your model, your tools and your permission mode; it cannot spawn agents of its own. Refer to it by its task name, or by the agent id this returns, in the other agent tools.\nIts final answer is provided to you by wait_agent when it finishes. You can send it messages and follow-up tasks meanwhile.\n\nNote that passing `fork_turns=\"none\"` will not pass any surrounding context to the spawned agent, which may cause the agent to lack the context it needs to complete its task, whereas `fork_turns=\"all\"` will provide the agent with this conversation up to your current turn. Either way the message is the only part of the current turn the agent reads, so make it self-contained.",
+        "name": "spawn_agent",
+        "parameters": {
+          "additionalProperties": false,
+          "properties": {
+            "fork_turns": {
+              "description": "Parent history to inherit. Defaults to `all`; use `none` to start without parent history. Only `all` and `none` are supported.",
+              "type": "string"
+            },
+            "message": {
+              "description": "Initial plain-text task for the new agent.",
+              "type": "string"
+            },
+            "task_name": {
+              "description": "Task name for the new agent. Use lowercase letters, digits, and underscores.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "task_name",
+            "message"
           ],
           "type": "object"
         },
@@ -1952,6 +2198,22 @@
           "required": [
             "path"
           ],
+          "type": "object"
+        },
+        "strict": false,
+        "type": "function"
+      },
+      {
+        "description": "Wait until an agent you spawned finishes its turn. Returns the final status of every agent that finished since your previous wait: its final answer when it completed, or its error. Returns at once when such an update is pending or when no agent is running, and with `timed_out` when no agent finishes before the deadline.",
+        "name": "wait_agent",
+        "parameters": {
+          "additionalProperties": false,
+          "properties": {
+            "timeout_ms": {
+              "description": "Timeout in milliseconds. Defaults to 30000, min 10000, max 300000.",
+              "type": "integer"
+            }
+          },
           "type": "object"
         },
         "strict": false,

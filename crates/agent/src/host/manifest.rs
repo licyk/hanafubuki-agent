@@ -24,10 +24,11 @@ use super::{AgentPluginGroup, AgentPluginRow, AgentPluginSettings};
 use crate::conversation_reader::AgentConversationReader;
 use crate::goals::AgentGoalApplication;
 use crate::plugins::{
-    goal_plugin, memory_plugin, permission_mode_plugin, recap_plugin, skills_plugin, titles_plugin,
-    view_image_plugin, workspace_context_plugin,
+    goal_plugin, memory_plugin, permission_mode_plugin, recap_plugin, skills_plugin,
+    subagents_plugin, titles_plugin, view_image_plugin, workspace_context_plugin,
 };
 use crate::service::AgentMcpApplication;
+use crate::session_driver::AgentSessionDriver;
 use crate::skills::AgentSkillApplication;
 use crate::titles::AgentTitleApplication;
 use crate::{AgentMemoryApplication, AgentProxy, WorkspaceRootsPort};
@@ -52,6 +53,8 @@ pub(crate) struct AgentPluginInputs {
     pub(crate) conversations: AgentConversationReader,
     /// The sessions' goals.
     pub(crate) goals: AgentGoalApplication,
+    /// How the subagents are created and run.
+    pub(crate) driver: AgentSessionDriver,
     /// The worktrees, under the data directory, over the instance's
     /// executor.
     pub(crate) worktrees: WorktreeManager,
@@ -92,6 +95,7 @@ pub(crate) fn agent_plugin_manifest(
         AgentPluginRow::unconfigured(Capability, titles_plugin(inputs.titles)),
         AgentPluginRow::unconfigured(Capability, recap_plugin(inputs.conversations)),
         AgentPluginRow::unconfigured(Capability, goal_plugin(inputs.goals)),
+        AgentPluginRow::unconfigured(Capability, subagents_plugin(inputs.driver)),
         AgentPluginRow::unconfigured(Capability, worktree_plugin(inputs.worktrees)),
         AgentPluginRow::unconfigured(
             Capability,

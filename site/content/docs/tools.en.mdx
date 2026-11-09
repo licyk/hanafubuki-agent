@@ -1,6 +1,6 @@
 ---
 title: Tools
-description: "The tools the model uses: commands and terminals, file reads, edits and patches, web search and fetch, and the workspace roots and AGENTS.md."
+description: "The tools the model uses: commands and terminals, file reads, edits and patches, web search and fetch, sub-agents, and the workspace roots and AGENTS.md."
 icon: Wrench
 ---
 
@@ -16,6 +16,7 @@ The model does its work through tools. Each tool comes from a plugin, which `dis
 | `skills`       | `skills_list`, `skills_read`, `enable_skill`, `disable_skill`                                                    |
 | `memory`       | `list_agent_memories`, `search_agent_memories`, `read_agent_memory`, `append_agent_memory_note` (with memory on) |
 | `goal`         | `get_goal`, `create_goal`, `update_goal`                                                                         |
+| `subagents`    | `spawn_agent`, `send_message`, `followup_task`, `wait_agent`, `list_agents`, `interrupt_agent`                   |
 
 A few tools are always there: `update_plan` (the task plan), `request_user_input` (asking you), `new_context` (a fresh context window), and `tool_search` when some tools are offered on demand.
 
@@ -85,6 +86,26 @@ The `goal` plugin's tools work on the session's [goal](/docs/sessions#goals):
 - `update_goal` (`status`: `complete`, `blocked` or `paused`) marks the goal complete once its objective is achieved and verified, blocked after the same blocker recurred for three goal turns, or paused at your request. It cannot resume a goal or lift a budget limit.
 
 None needs an approval. In Plan mode only `get_goal` is offered; in a temporary session (a side conversation) they fail.
+
+## Sub-agents [#subagents]
+
+The model can hand a task to a sub-agent: a conversation of its own, a child of the session ([Sessions](/docs/sessions#children)), that runs in the background with the session's model, its tools and its permission mode. The tools are Codex's (its second multi-agent tool set):
+
+| Tool              | Arguments                                           | Does                                                                                                                                                                                                    |
+| ----------------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `spawn_agent`     | `task_name`, `message`, `fork_turns` (`all`/`none`) | Creates a sub-agent named `task_name` (lowercase letters, digits, underscores) and runs `message` as its first turn; `all` starts it from the conversation before the current turn, `none` from nothing |
+| `send_message`    | `target`, `message`                                 | A running sub-agent reads the message at its next step; an idle one with its next task. Starts no turn                                                                                                  |
+| `followup_task`   | `target`, `message`                                 | Gives a sub-agent another task: a new turn when it is idle, otherwise added to the turn it runs                                                                                                         |
+| `wait_agent`      | `timeout_ms` (10 s to 5 min, 30 s by default)       | Waits until a sub-agent finishes a turn, and returns the final answer (or the error) of each one that finished since the last wait                                                                      |
+| `list_agents`     |                                                     | The session's sub-agents and the status of each                                                                                                                                                         |
+| `interrupt_agent` | `target`                                            | Stops the sub-agent's turn; it keeps taking messages and tasks                                                                                                                                          |
+
+`target` is a sub-agent's task name or its session id.
+
+- **Limits**: only a session that is not itself a child spawns, so a sub-agent cannot spawn its own; at most 3 sub-agents of a session run at once; a task name is used once per session.
+- **Approvals**: the tools need none. A sub-agent's own tool calls are approved in its own conversation, under the permission mode it takes from the session at each task: one that needs your answer waits there until you open the sub-agent and answer it.
+- **Guidance**: in Default mode, the model of a session that may spawn also reads guidance on coordinating sub-agents (spawn only when asked to, run independent steps in parallel, wait for them before answering). In Plan mode only `wait_agent` and `list_agents` are offered.
+- A sub-agent is a session like any other: its turns and events are in its own history, and an interface lists a session's sub-agents through the `subagents` call ([Embedding the Agent](/docs/embedding#feature-calls)). `subagents` in `disabledPlugins` takes the tools and the guidance away.
 
 ## Workspace roots [#workspace]
 

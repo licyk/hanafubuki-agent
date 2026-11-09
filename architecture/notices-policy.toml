@@ -60,6 +60,21 @@ markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
 notice = "crates/agent/src/plugins/goal"
 
 [[derived]]
+path = "crates/agent/src/plugins/subagents/tools.rs"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
+notice = "crates/agent/src/plugins/subagents"
+
+[[derived]]
+path = "crates/agent/src/plugins/subagents/service.rs"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
+notice = "crates/agent/src/plugins/subagents"
+
+[[derived]]
+path = "crates/agent/src/plugins/subagents/prompt.rs"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
+notice = "crates/agent/src/plugins/subagents"
+
+[[derived]]
 path = "crates/agent/src/service/mcp/oauth_login.rs"
 markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
 notice = "crates/agent/src/service/mcp/oauth_login.rs"

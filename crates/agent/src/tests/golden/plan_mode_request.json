@@ -102,6 +102,17 @@
       "type": "function"
     },
     {
+      "description": "List the agents you spawned in this conversation and the status of each.",
+      "name": "list_agents",
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "strict": false,
+      "type": "function"
+    },
+    {
       "description": "List a bounded directory tree after exact approval of its resolved root.",
       "name": "list_directory",
       "parameters": {
@@ -456,6 +467,22 @@
         "required": [
           "path"
         ],
+        "type": "object"
+      },
+      "strict": false,
+      "type": "function"
+    },
+    {
+      "description": "Wait until an agent you spawned finishes its turn. Returns the final status of every agent that finished since your previous wait: its final answer when it completed, or its error. Returns at once when such an update is pending or when no agent is running, and with `timed_out` when no agent finishes before the deadline.",
+      "name": "wait_agent",
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "timeout_ms": {
+            "description": "Timeout in milliseconds. Defaults to 30000, min 10000, max 300000.",
+            "type": "integer"
+          }
+        },
         "type": "object"
       },
       "strict": false,

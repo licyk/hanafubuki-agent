@@ -379,6 +379,7 @@ impl AgentApplicationService {
                         config.clone(),
                     ),
                     goals: crate::goals::AgentGoalApplication::new(core.clone()),
+                    driver: driver.clone(),
                     worktrees: hanafubuki_agent_worktree::WorktreeManager::new(
                         storage_paths.worktrees_root.clone(),
                         executor.clone(),

@@ -109,7 +109,8 @@ hanafubuki-agent 的许可证是 **GPL-3.0-only**（[LICENSE](https://github.com
   - 旁支对话的策略和分界（`crates/agent/src/side_conversation.rs`），来自 `codex-rs/context-fragments/src/side_conversation.rs`（`57a808a392`）；
   - `goal` 插件的工具、继续推进的模板和上下文（`crates/agent/src/plugins/goal`：`tools.rs`、`templates.rs`、`context.rs`），来自 `codex-rs/ext/goal` 和 `codex-rs/core/src/context/user_goal.rs`（`57a808a392`）；
   - Git 工作树（`crates/worktree/src`：`git.rs`、`manager.rs`、`owner.rs`），来自 `codex-rs/worktree`（`57a808a392`）；
-  - 钩子（`crates/hooks/src`：`event.rs`、`matcher.rs`、`config.rs`、`discovery.rs`、`command.rs`、`output.rs`、`engine.rs`），来自 `codex-rs/hooks`，以及 `codex-rs/protocol` 与 `codex-rs/config` 中的钩子配置和 `codex-rs/core/src/tools/hook_names.rs` 中的工具名（`57a808a392`）。
+  - 钩子（`crates/hooks/src`：`event.rs`、`matcher.rs`、`config.rs`、`discovery.rs`、`command.rs`、`output.rs`、`engine.rs`），来自 `codex-rs/hooks`，以及 `codex-rs/protocol` 与 `codex-rs/config` 中的钩子配置和 `codex-rs/core/src/tools/hook_names.rs` 中的工具名（`57a808a392`）；
+  - `subagents` 插件的工具、它们的行为和编排指引（`crates/agent/src/plugins/subagents`：`tools.rs`、`service.rs`、`prompt.rs`），来自 `codex-rs/core/src/tools/handlers/multi_agents_spec.rs`、`multi_agents_v2/`、`codex-rs/core/src/agent/status.rs`、`codex-rs/core/src/config/mod.rs` 和 `codex-rs/core/templates/agents/orchestrator.md`（`57a808a392`）。
 - **Ratatui**（MIT）：`crates/tui/src/custom_terminal.rs` 派生自 `ratatui::Terminal`，保留它的 MIT 头。
 
 `cargo xtask check-notices` 对照 `architecture/notices-policy.toml` 检查这些署名：

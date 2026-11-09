@@ -1,9 +1,10 @@
-//! The narrow port through which the application, and later the plugins it
-//! hands it to, drive child sessions: create one under a parent, run a turn
-//! on it and wait for its outcome, interrupt it, read its last answer, and
-//! close it. It also prepares every turn the facade admits (the session's
-//! Provider, its permission mode, the world state and the turn's
-//! extensions), so a turn a plugin runs is prepared like a user's.
+//! The narrow port through which the application and the `subagents`
+//! plugin drive child sessions: create one under a parent, name it, list a
+//! parent's children, give a child its parent's permission mode, run a turn
+//! on it and wait for its outcome, steer or interrupt that turn, read its
+//! last answer, and close it. It also prepares every turn the facade admits
+//! (the session's Provider, its permission mode, the world state and the
+//! turn's extensions), so a turn a plugin runs is prepared like a user's.
 
 use std::ops::ControlFlow;
 use std::sync::Arc;
@@ -13,9 +14,12 @@ use hanafubuki_agent_contracts::{ContextRequest, TurnAdmissionRequest, TurnExten
 use hanafubuki_agent_execution::{AgentExecutionScope, AgentExecutionService};
 use hanafubuki_agent_foundation::blocking::{run_blocking_operation, BlockingOperationPort};
 use hanafubuki_agent_kernel::{
-    AgentChildSessionRequest, AgentError, AgentKernelRegistries, AgentPermissionMode, AgentService,
-    AgentSessionId, AgentSessionMode, AgentSessionPersistence, AgentSessionRuntimeSnapshot,
-    AgentTurnInput, AgentTurnOrigin, AgentTurnOutcome, AgentWorldStateSnapshot,
+    AgentChildSessionRequest, AgentError, AgentEvent, AgentEventSink, AgentKernelRegistries,
+    AgentPermissionMode, AgentService, AgentSessionId, AgentSessionLifecycle,
+    AgentSessionListRequest, AgentSessionMode, AgentSessionOrigin, AgentSessionParentFilter,
+    AgentSessionPersistence, AgentSessionRuntimeSnapshot, AgentSessionSummary,
+    AgentSessionTitleRenameRequest, AgentTurnInput, AgentTurnOrigin, AgentTurnOutcome,
+    AgentWorldStateSnapshot, AGENT_SESSION_PAGE_SIZE_MAX,
 };
 
 use crate::conversation_reader::{AgentConversationReader, ConversationMessage};
@@ -70,10 +74,6 @@ impl AgentSessionDriver {
     }
 
     /// Runs a turn of `text` on `session_id` and waits for its outcome.
-    #[allow(
-        dead_code,
-        reason = "the subagent and review plugins (P10, P11) run their children's turns; tests cover it until then"
-    )]
     pub(crate) async fn run_turn(
         &self,
         session_id: AgentSessionId,
@@ -132,10 +132,6 @@ impl AgentSessionDriver {
 
     /// The text of the latest answer of `session_id`'s model, if it has
     /// answered. Blocks.
-    #[allow(
-        dead_code,
-        reason = "the subagent and review plugins (P10, P11) read their children's answers; tests cover it until then"
-    )]
     pub(crate) fn last_answer(
         &self,
         session_id: AgentSessionId,
@@ -152,6 +148,101 @@ impl AgentSessionDriver {
             },
         )?;
         Ok(answer)
+    }
+
+    /// Adds `text` to the turn `session_id` runs, which its model reads at
+    /// the turn's next message boundary. Fails when no turn runs. Blocks.
+    pub(crate) fn steer(&self, session_id: AgentSessionId, text: String) -> Result<(), AgentError> {
+        let turn = self
+            .core
+            .snapshot(session_id)?
+            .turn
+            .filter(|turn| !turn.phase.is_terminal())
+            .ok_or(AgentError::TurnNotRunning)?;
+        self.core
+            .steer_turn_with_sink(session_id, turn.id, turn.generation, text, &Discard)
+            .map(|_| ())
+    }
+
+    /// The session's current state, loading it first. Blocks.
+    pub(crate) fn snapshot(
+        &self,
+        session_id: AgentSessionId,
+    ) -> Result<AgentSessionRuntimeSnapshot, AgentError> {
+        self.core.activate_session(session_id)?;
+        self.core.snapshot(session_id)
+    }
+
+    /// Names `session_id` `title`, as a user's rename would. Blocks.
+    pub(crate) fn rename(
+        &self,
+        session_id: AgentSessionId,
+        title: String,
+    ) -> Result<(), AgentError> {
+        let current = self.core.snapshot(session_id)?;
+        self.core
+            .rename_session(
+                AgentSessionTitleRenameRequest {
+                    session_id,
+                    generation: current.generation,
+                    revision: current.revision,
+                    title,
+                },
+                &Discard,
+            )
+            .map(|_| ())
+    }
+
+    /// Gives `child` the permission mode `parent`'s next turn would run
+    /// with, until the child ends or is given another.
+    pub(crate) async fn inherit_permission_mode(
+        &self,
+        parent: AgentSessionId,
+        child: AgentSessionId,
+    ) -> Result<(), AgentError> {
+        let mode = self
+            .turn_permission_mode(parent)
+            .await
+            .map_err(AgentError::InvalidInput)?;
+        let core = self.core.clone();
+        run_blocking_operation(
+            self.blocking.as_ref(),
+            "agent child permission mode worker",
+            move || core.set_session_permission_mode(child, mode),
+        )
+        .await
+        .map_err(AgentError::Persistence)?
+    }
+
+    /// The children `origin` made under `parent` that are not archived,
+    /// oldest first. Blocks.
+    pub(crate) fn children(
+        &self,
+        parent: AgentSessionId,
+        origin: AgentSessionOrigin,
+    ) -> Result<Vec<AgentSessionSummary>, AgentError> {
+        let mut children = Vec::new();
+        let mut cursor = None;
+        loop {
+            let page = self.core.list_sessions_page(AgentSessionListRequest {
+                page_size: AGENT_SESSION_PAGE_SIZE_MAX,
+                cursor,
+                lifecycle: AgentSessionLifecycle::Available,
+                parent: AgentSessionParentFilter::ChildrenOf(parent),
+                ..AgentSessionListRequest::default()
+            })?;
+            children.extend(
+                page.sessions
+                    .into_iter()
+                    .filter(|child| child.origin == Some(origin)),
+            );
+            let Some(next) = page.next_cursor else {
+                break;
+            };
+            cursor = Some(next);
+        }
+        children.sort_by_key(|child| (child.created_at, child.session_id));
+        Ok(children)
     }
 
     /// Interrupts `session_id`, then lets it go ([`Self::release`]).
@@ -310,4 +401,12 @@ impl AgentSessionDriver {
         )
         .await
     }
+}
+
+/// Where the events of what a plugin drives on a child go: the child's
+/// journal keeps them, which is where an interface reads them.
+struct Discard;
+
+impl AgentEventSink for Discard {
+    fn emit(&self, _event: AgentEvent) {}
 }

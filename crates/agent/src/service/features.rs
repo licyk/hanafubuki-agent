@@ -11,9 +11,40 @@ use hanafubuki_agent_host::FaultPoint;
 use hanafubuki_agent_kernel::{AgentError, AgentSessionId};
 
 use super::AgentApplicationService;
-use crate::plugins::{AgentRecap, RecapService, TitleService, RECAP_PLUGIN, TITLES_PLUGIN};
+use crate::plugins::{
+    AgentRecap, AgentSubagentStatus, RecapService, SubagentService, TitleService, RECAP_PLUGIN,
+    SUBAGENTS_PLUGIN, TITLES_PLUGIN,
+};
 
 impl AgentApplicationService {
+    /// The subagents `parent` spawned, oldest first, each with its status
+    /// and the start of its latest answer; `FeatureUnavailable` while the
+    /// `subagents` plugin is not running.
+    pub async fn subagents(
+        &self,
+        parent: AgentSessionId,
+    ) -> Result<Vec<AgentSubagentStatus>, AgentError> {
+        self.feature(
+            SUBAGENTS_PLUGIN,
+            |subagents: Arc<SubagentService>| async move { subagents.statuses(parent).await },
+        )
+        .await
+    }
+
+    /// Interrupts the turn the subagent `session_id` runs, if any, and
+    /// waits until the cancellation is confirmed; the subagent stays and
+    /// takes follow-up tasks. `FeatureUnavailable` while the `subagents`
+    /// plugin is not running.
+    pub async fn interrupt_subagent(&self, session_id: AgentSessionId) -> Result<(), AgentError> {
+        self.feature(
+            SUBAGENTS_PLUGIN,
+            |subagents: Arc<SubagentService>| async move {
+                subagents.interrupt_subagent(session_id).await
+            },
+        )
+        .await
+    }
+
     /// A brief catch-up on `session_id` from its latest exchanges, by the
     /// session's model; `FeatureUnavailable` while the `recap` plugin is not
     /// running. Nothing is committed.

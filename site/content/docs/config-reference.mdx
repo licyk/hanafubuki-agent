@@ -32,6 +32,7 @@ icon: ListTree
 | `titles`            | 不再用模型为会话生成标题，保留第一条消息开头作为标题；没有标题建议                                      |
 | `recap`             | 没有会话概要                                                                                            |
 | `goal`              | 没有会话目标：没有目标工具、上下文和继续推进，也没有目标调用；已经设置的目标仍然保存着                  |
+| `subagents`         | 没有子代理：模型没有子代理工具和指引；门面的 `subagents` 调用不可用                                     |
 | `worktree`          | 没有工作树（`/worktree`，门面的 `worktree_*` 调用）                                                     |
 | `workspace-context` | 模型看不到 `AGENTS.md`、工作区目录和环境信息                                                            |
 | `permission-mode`   | 模型不再被告知当前的权限模式                                                                            |

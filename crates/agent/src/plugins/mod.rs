@@ -7,6 +7,7 @@ mod memory;
 mod recap;
 mod skills;
 mod structured_request;
+mod subagents;
 mod titles;
 mod view_image;
 
@@ -22,5 +23,7 @@ pub(crate) use memory::memory_tools;
 pub use recap::AgentRecap;
 pub(crate) use recap::{recap_plugin, RecapService, RECAP_PLUGIN};
 pub(crate) use skills::skills_plugin;
+pub(crate) use subagents::{subagents_plugin, SubagentService, SUBAGENTS_PLUGIN};
+pub use subagents::{AgentSubagentState, AgentSubagentStatus};
 pub(crate) use titles::{titles_plugin, TitleService, TITLES_PLUGIN};
 pub(crate) use view_image::view_image_plugin;

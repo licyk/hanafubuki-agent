@@ -60,7 +60,7 @@ hanafubuki-agent sessions delete 2
 
 ## Child sessions [#children]
 
-A session can be the child of another, made for it rather than started by you: a [side conversation](#side) now, and subagents and reviews later. A child records its parent (`parentSessionId` in its summary) and why it was made (`origin`: `side`, `subagent` or `review`), and works in its parent's directory, with its parent's model and settings.
+A session can be the child of another, made for it rather than started by you: a [side conversation](#side), a [sub-agent](#subagents), and reviews later. A child records its parent (`parentSessionId` in its summary) and why it was made (`origin`: `side`, `subagent` or `review`), and works in its parent's directory, with its parent's model and settings.
 
 Every session records, when it is created, the workspace's primary directory (`cwd`) and the Git branch checked out there (`branch`, read from the repository's `HEAD`; none for a detached `HEAD` or outside a repository). A child, or a fork, takes its source's. A session from before these fields existed has none.
 
@@ -72,6 +72,15 @@ A side conversation is a temporary conversation beside a session, for a question
 - Its model is told it is in a side conversation: the inherited conversation is reference only, not instructions to carry on; it answers questions and explores without changing files, the workspace or settings unless you ask it to in the side conversation.
 - It is **ephemeral**: kept in memory only, never written to the history, never listed, and gone when it is closed, when its session is archived or deleted, or when the Agent stops. Its transcript starts at the side conversation, not with the inherited history.
 - A session has at most one; opening it again returns the open one. Closing it stops its running turn and its background terminals.
+
+## Sub-agents [#subagents]
+
+A sub-agent is a child the session's model spawns with `spawn_agent` to work on a task in the background ([Tools](/docs/tools#subagents)).
+
+- It is **durable**: written to the history like any session, with `origin` `subagent` and the task name as its title. Session lists leave it out like every child; it is listed with its parent's children.
+- It starts empty, or with its parent's conversation before the turn that spawned it, and runs with its parent's model and the permission mode its parent's next turn would have; its turns come from its parent's model, not from you.
+- Archiving or deleting the parent archives or deletes its sub-agents with it.
+- Only a session without a parent spawns sub-agents, at most 3 running at once.
 
 ## Goals [#goals]
 

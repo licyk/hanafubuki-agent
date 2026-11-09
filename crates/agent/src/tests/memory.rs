@@ -211,12 +211,13 @@ async fn published_memory_reaches_the_model_with_the_tools_that_read_it() {
 }
 
 /// Pins, byte for byte, the memory context the model receives: a developer
-/// item right after the Skill catalog, which follows the world state,
-/// carrying the memory instructions and the published summary. A change here
-/// is a change of the model's input.
+/// item right after the capability fragments (the Skill catalog, which
+/// follows the world state, then the sub-agent guidance), carrying the
+/// memory instructions and the published summary. A change here is a
+/// change of the model's input.
 #[cfg(unix)]
 #[tokio::test]
-async fn the_memory_context_item_is_pinned_right_after_the_skill_catalog() {
+async fn the_memory_context_item_is_pinned_right_after_the_capability_fragments() {
     use sha2::{Digest, Sha256};
 
     let server = FakeServer::start(vec![(assistant_events("done"), Duration::ZERO)]).await;
@@ -255,7 +256,9 @@ async fn the_memory_context_item_is_pinned_right_after_the_skill_catalog() {
     assert!(input[..catalog]
         .iter()
         .all(|item| text(item).contains("<agent_world_state kind=")));
-    let memory_item = &input[catalog + 1];
+    assert!(text(&input[catalog + 1])
+        .starts_with("[Application-provided guidance for the sub-agent tools."));
+    let memory_item = &input[catalog + 2];
     assert_eq!(memory_item["role"], "developer");
     assert!(text(memory_item).ends_with(
         "========= MEMORY_SUMMARY BEGINS =========\nv1\n\n- Validation preferences: MEMORY.md\n========= MEMORY_SUMMARY ENDS ========="
