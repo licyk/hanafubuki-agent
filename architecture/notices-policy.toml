@@ -35,8 +35,16 @@ path = "crates/tui/src/lib.rs"
 reason = "The crate's own entry: its docs and module declarations."
 
 [[original]]
-path = "crates/tui/src/agent_bridge.rs"
+path = "crates/tui/src/agent_bridge/mod.rs"
 reason = "The adapter between the facade and the interface, written for the Agent; it stands where Codex has its ConversationManager."
+
+[[original]]
+path = "crates/tui/src/agent_bridge/commands.rs"
+reason = "The bridge's slash commands, onto the facade's calls."
+
+[[original]]
+path = "crates/tui/src/agent_bridge/replay.rs"
+reason = "A session's committed history read into what the chat replays."
 
 [[original]]
 path = "crates/tui/src/tui/input.rs"
@@ -65,3 +73,11 @@ reason = "The diff of the Agent's PatchPreview."
 [[original]]
 path = "crates/tui/src/history_cell/tool/tests.rs"
 reason = "The tool call cell over the Agent's tool results."
+
+[[original]]
+path = "crates/tui/src/slash_command/tests.rs"
+reason = "The command table's lookups, written for the port."
+
+[[original]]
+path = "crates/tui/src/get_git_diff/tests.rs"
+reason = "The diff over temporary Git repositories, written for the port."

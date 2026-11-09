@@ -1,0 +1,9 @@
+---
+source: crates/tui/src/bottom_pane/chat_composer/popups/tests.rs
+expression: terminal.backend()
+---
+"                                                            "
+"› /mo                                                       "
+"                                                            "
+"  /model  choose what model to use                          "
+"  /mode   switch between default and plan mode              "

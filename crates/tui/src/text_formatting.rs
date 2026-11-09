@@ -1,5 +1,6 @@
 // Modified from OpenAI Codex rust-v0.93.0 (Apache-2.0).
 
+use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthChar;
 use unicode_width::UnicodeWidthStr;
 
@@ -266,6 +267,33 @@ pub(crate) fn strip_terminal_controls(text: &str) -> String {
         }
     }
     out
+}
+
+/// Truncate `text` to `max_graphemes` graphemes. Using graphemes to avoid accidentally truncating in the middle of a multi-codepoint character.
+pub(crate) fn truncate_text(text: &str, max_graphemes: usize) -> String {
+    let mut graphemes = text.grapheme_indices(true);
+
+    // Check if there's a grapheme at position max_graphemes (meaning there are more than max_graphemes total)
+    if let Some((byte_index, _)) = graphemes.nth(max_graphemes) {
+        // There are more than max_graphemes, so we need to truncate
+        if max_graphemes >= 3 {
+            // Truncate to max_graphemes - 3 and add "..." to stay within limit
+            let mut truncate_graphemes = text.grapheme_indices(true);
+            if let Some((truncate_byte_index, _)) = truncate_graphemes.nth(max_graphemes - 3) {
+                let truncated = &text[..truncate_byte_index];
+                format!("{truncated}...")
+            } else {
+                text.to_string()
+            }
+        } else {
+            // max_graphemes < 3, so just return first max_graphemes without "..."
+            let truncated = &text[..byte_index];
+            truncated.to_string()
+        }
+    } else {
+        // There are max_graphemes or fewer graphemes, return original text
+        text.to_string()
+    }
 }
 
 #[cfg(test)]

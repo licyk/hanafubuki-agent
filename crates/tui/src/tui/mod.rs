@@ -2,8 +2,8 @@
 
 //! The terminal: its modes, set on entry and restored on exit and on a
 //! fatal panic; the inline viewport at the bottom of the screen, with the
-//! transcript written into the scrollback above it; and the scheduling of
-//! frames.
+//! transcript written into the scrollback above it; the alternate screen
+//! the overlays take over; and the scheduling of frames.
 //!
 //! Codex reads the terminal with crossterm's async event stream behind a
 //! broker it can pause; here one thread reads it (`input`) and the app loop
@@ -11,8 +11,10 @@
 
 mod input;
 
+use std::fmt;
 use std::io::{self, stdout, Result, Stdout, Write};
 use std::panic;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use ratatui::backend::{Backend, CrosstermBackend};
@@ -24,7 +26,8 @@ use ratatui::crossterm::terminal::{
     disable_raw_mode, enable_raw_mode, supports_keyboard_enhancement,
 };
 use ratatui::crossterm::terminal::{BeginSynchronizedUpdate, EndSynchronizedUpdate};
-use ratatui::crossterm::{execute, queue};
+use ratatui::crossterm::terminal::{EnterAlternateScreen, LeaveAlternateScreen};
+use ratatui::crossterm::{execute, queue, Command};
 use ratatui::layout::{Offset, Rect};
 use ratatui::text::Line;
 
@@ -35,6 +38,52 @@ pub(crate) use input::InputReader;
 
 /// The terminal type the application draws on.
 pub(crate) type Terminal = CustomTerminal<CrosstermBackend<Stdout>>;
+
+/// Whether an overlay holds the alternate screen, so a restore leaves it:
+/// leaving it when it was not entered would move the cursor.
+static ALT_SCREEN_ACTIVE: AtomicBool = AtomicBool::new(false);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct EnableAlternateScroll;
+
+impl Command for EnableAlternateScroll {
+    fn write_ansi(&self, f: &mut impl fmt::Write) -> fmt::Result {
+        write!(f, "\x1b[?1007h")
+    }
+
+    #[cfg(windows)]
+    fn execute_winapi(&self) -> Result<()> {
+        Err(std::io::Error::other(
+            "tried to execute EnableAlternateScroll using WinAPI; use ANSI instead",
+        ))
+    }
+
+    #[cfg(windows)]
+    fn is_ansi_code_supported(&self) -> bool {
+        true
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct DisableAlternateScroll;
+
+impl Command for DisableAlternateScroll {
+    fn write_ansi(&self, f: &mut impl fmt::Write) -> fmt::Result {
+        write!(f, "\x1b[?1007l")
+    }
+
+    #[cfg(windows)]
+    fn execute_winapi(&self) -> Result<()> {
+        Err(std::io::Error::other(
+            "tried to execute DisableAlternateScroll using WinAPI; use ANSI instead",
+        ))
+    }
+
+    #[cfg(windows)]
+    fn is_ansi_code_supported(&self) -> bool {
+        true
+    }
+}
 
 fn set_modes() -> Result<()> {
     execute!(stdout(), EnableBracketedPaste)?;
@@ -55,6 +104,9 @@ fn set_modes() -> Result<()> {
 
 /// Restores the terminal's modes; the inverse of [`set_modes`].
 pub(crate) fn restore() -> Result<()> {
+    if ALT_SCREEN_ACTIVE.swap(false, Ordering::Relaxed) {
+        let _ = execute!(stdout(), DisableAlternateScroll, LeaveAlternateScreen);
+    }
     // Pop may fail on platforms that didn't support the push; ignore errors.
     let _ = execute!(stdout(), PopKeyboardEnhancementFlags);
     execute!(stdout(), DisableBracketedPaste)?;
@@ -102,6 +154,8 @@ pub(crate) fn enhanced_keys_supported() -> bool {
 pub(crate) struct Tui<B: Backend<Error = io::Error> + Write = CrosstermBackend<Stdout>> {
     pub(crate) terminal: CustomTerminal<B>,
     pending_history_lines: Vec<Line<'static>>,
+    /// The inline viewport, kept while an overlay holds the alternate screen.
+    alt_saved_viewport: Option<Rect>,
 }
 
 impl<B: Backend<Error = io::Error> + Write> Tui<B> {
@@ -109,7 +163,36 @@ impl<B: Backend<Error = io::Error> + Write> Tui<B> {
         Self {
             terminal,
             pending_history_lines: Vec::new(),
+            alt_saved_viewport: None,
         }
+    }
+
+    /// Enter alternate screen and expand the viewport to full terminal size, saving the current
+    /// inline viewport for restoration when leaving.
+    pub(crate) fn enter_alt_screen(&mut self) -> Result<()> {
+        let _ = execute!(self.terminal.backend_mut(), EnterAlternateScreen);
+        // Enable "alternate scroll" so terminals may translate wheel to arrows
+        let _ = execute!(self.terminal.backend_mut(), EnableAlternateScroll);
+        ALT_SCREEN_ACTIVE.store(true, Ordering::Relaxed);
+        if let Ok(size) = self.terminal.size() {
+            self.alt_saved_viewport = Some(self.terminal.viewport_area);
+            self.terminal
+                .set_viewport_area(Rect::new(0, 0, size.width, size.height));
+            let _ = self.terminal.clear();
+        }
+        Ok(())
+    }
+
+    /// Leave alternate screen and restore the previously saved inline viewport, if any.
+    pub(crate) fn leave_alt_screen(&mut self) -> Result<()> {
+        // Disable alternate scroll when leaving alt-screen
+        let _ = execute!(self.terminal.backend_mut(), DisableAlternateScroll);
+        let _ = execute!(self.terminal.backend_mut(), LeaveAlternateScreen);
+        ALT_SCREEN_ACTIVE.store(false, Ordering::Relaxed);
+        if let Some(saved) = self.alt_saved_viewport.take() {
+            self.terminal.set_viewport_area(saved);
+        }
+        Ok(())
     }
 
     pub(crate) fn insert_history_lines(&mut self, lines: Vec<Line<'static>>) {

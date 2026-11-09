@@ -11,8 +11,8 @@
 //! schedule a redraw so it can expire even if the UI is otherwise idle.
 //!
 //! Codex's footer also shows the context window left, the collaboration mode and its
-//! width-based collapse rules, and shortcuts for commands, file paths, images, the external
-//! editor, backtracking and the transcript; none of those exist here yet.
+//! width-based collapse rules, and shortcuts for shell commands, images, the external editor and
+//! backtracking; none of those are ported.
 use crate::key_hint;
 use crate::key_hint::KeyBinding;
 use crate::render::line_utils::prefix_lines;
@@ -124,10 +124,13 @@ fn shortcut_overlay_lines(props: FooterProps) -> Vec<Line<'static>> {
     };
     let entry = |key: KeyBinding, label: &'static str| Line::from(vec![key.into(), label.into()]);
     build_columns(vec![
+        entry(key_hint::plain(KeyCode::Char('/')), " for commands"),
         entry(newline, " for newline"),
+        entry(key_hint::plain(KeyCode::Char('@')), " for file paths"),
         entry(key_hint::plain(KeyCode::Esc), " to interrupt"),
         entry(key_hint::plain(KeyCode::Up), " for previous message"),
         entry(key_hint::ctrl(KeyCode::Char('c')), " to exit"),
+        entry(key_hint::ctrl(KeyCode::Char('t')), " to view transcript"),
     ])
 }
 

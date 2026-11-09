@@ -1,32 +1,39 @@
 //! The one adapter between the interface and the Agent (it stands where
 //! Codex's TUI has its `ConversationManager` and `CodexConversation`): it
 //! maps the Agent's turn events onto what the chat widget shows
-//! ([`TurnUpdate`]), and the interface's [`Op`]s onto calls of the facade.
+//! ([`TurnUpdate`]), and the interface's [`Op`]s onto calls of the facade:
+//! the turn's (here), the slash commands' (`commands`), and the reading of
+//! a session's transcript into what the chat replays (`replay`).
 //!
 //! It runs on the app loop's thread. The Agent's sink only forwards events
 //! into the loop's channel (`emit` must not block); a call that waits runs
 //! as a task of the Agent's runtime and reports back with an
 //! [`AgentReply`].
 
+mod commands;
+mod replay;
+
 use std::sync::Arc;
 
 use hanafubuki_agent::{
-    AgentAvailability, AgentEvent, AgentEventKind, AgentEventSink, AgentHandle,
-    AgentHistorySortDirection, AgentSessionId, AgentSlot, AgentStatusEventSink,
-    AgentSteeringRequest, AgentTaskPlanSnapshot, AgentTurnAccepted, AgentTurnPageRequest,
-    AgentTurnRequest, AgentTurnTerminalReason, AgentUserInputRequest, AgentUserInputRequestId,
-    ApprovalRequest, ApprovalRequestId, ConversationItem, ToolOutputContent,
+    AgentAvailability, AgentCompactionOutcome, AgentEvent, AgentEventKind, AgentEventSink,
+    AgentHandle, AgentHistorySortDirection, AgentSessionId, AgentSessionMode, AgentSlot,
+    AgentStatusEventSink, AgentSteeringRequest, AgentTaskPlanSnapshot, AgentTurnAccepted,
+    AgentTurnPageRequest, AgentTurnRequest, AgentTurnTerminalReason, AgentUserInputRequest,
+    AgentUserInputRequestId, ApprovalRequest, ApprovalRequestId, McpApplicationSnapshot,
+    SkillCatalogSnapshot,
 };
 
 use crate::app_event::{AppEvent, AppEventSender, Op};
 use crate::history_cell::ToolResultView;
+pub(crate) use commands::{ModelChoices, StatusReport};
+pub(crate) use replay::{OpenedSession, ReplayedItem};
 
-/// The tool whose arguments are a patch the transcript shows as a diff.
-const APPLY_PATCH: &str = "apply_patch";
 /// How many of the turn's latest items are read for a finished call.
 const TOOL_ITEMS_PAGE: usize = 64;
 
-/// What the chat widget is told of the turn.
+/// What the chat widget is told: the turn's progress, and what the
+/// commands it asked for found.
 #[derive(Debug)]
 pub(crate) enum TurnUpdate {
     Started,
@@ -56,6 +63,16 @@ pub(crate) enum TurnUpdate {
     Ended(TurnEnd),
     /// A call into the Agent failed.
     Error(String),
+    /// The interface now shows this session: a new one, or one reopened
+    /// with its transcript.
+    SessionOpened(OpenedSession),
+    ModelChoices(ModelChoices),
+    ModelChanged(String),
+    ModeChanged(AgentSessionMode),
+    Compacted(AgentCompactionOutcome),
+    StatusReport(StatusReport),
+    Mcp(McpApplicationSnapshot),
+    Skills(SkillCatalogSnapshot),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -70,6 +87,10 @@ pub(crate) enum AgentReply {
     TurnAccepted(AgentTurnAccepted),
     TurnRejected(String),
     Failed(String),
+    /// The session the interface now drives.
+    SessionOpened(OpenedSession),
+    /// What a command found, for the chat to show as it is.
+    Update(TurnUpdate),
 }
 
 pub(crate) struct AgentBridge {
@@ -102,6 +123,11 @@ impl AgentBridge {
             turn_running: false,
             pending_steering: Vec::new(),
         }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn session_id(&self) -> AgentSessionId {
+        self.session_id
     }
 
     /// Carries out what the interface asked; what it leads to arrives as
@@ -161,6 +187,7 @@ impl AgentBridge {
                     .err()
                     .map(|error| TurnUpdate::Error(format!("the answer was not taken: {error}")))
             }
+            Op::Command(command) => self.command(command),
         }
     }
 
@@ -179,6 +206,14 @@ impl AgentBridge {
                 Some(TurnUpdate::Ended(TurnEnd::Failed(message)))
             }
             AgentReply::Failed(message) => Some(TurnUpdate::Error(message)),
+            AgentReply::SessionOpened(opened) => {
+                self.session_id = opened.session_id;
+                self.turn = None;
+                self.turn_running = false;
+                self.pending_steering.clear();
+                Some(TurnUpdate::SessionOpened(opened))
+            }
+            AgentReply::Update(update) => Some(update),
         }
     }
 
@@ -358,46 +393,10 @@ impl AgentBridge {
             direction: AgentHistorySortDirection::Descending,
             through_revision: None,
         });
-        let Ok(page) = page else {
-            return ToolResultView::default();
-        };
         let mut view = ToolResultView::default();
-        for item in page.items {
-            match item.content {
-                ConversationItem::ToolCall {
-                    call_id: id,
-                    name,
-                    arguments,
-                    ..
-                } if id == call_id && name == APPLY_PATCH => {
-                    let patch = match &arguments {
-                        serde_json::Value::String(patch) => Some(patch.as_str()),
-                        value => value.get("patch").and_then(serde_json::Value::as_str),
-                    };
-                    view.patch = patch.map(|patch| self.agent.preview_patch(patch));
-                }
-                ConversationItem::ToolOutput {
-                    call_id: id,
-                    output,
-                    ..
-                } if id == call_id => {
-                    for content in output.content {
-                        match content {
-                            ToolOutputContent::Text { text } => view.text = Some(text),
-                            ToolOutputContent::Structured { value } => {
-                                if let Some(output) = value.get("output").and_then(|v| v.as_str()) {
-                                    view.text = Some(output.to_string());
-                                }
-                                view.exit_code = value
-                                    .get("exitCode")
-                                    .and_then(serde_json::Value::as_i64)
-                                    .and_then(|code| i32::try_from(code).ok());
-                            }
-                            _ => {}
-                        }
-                    }
-                }
-                _ => {}
+        for item in page.map(|page| page.items).unwrap_or_default() {
+            if replay::call_id(&item.content) == Some(call_id) {
+                replay::read_into(&self.agent, item.content, &mut view);
             }
         }
         view

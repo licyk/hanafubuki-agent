@@ -1,0 +1,10 @@
+---
+source: crates/tui/src/bottom_pane/chat_composer/popups/tests.rs
+expression: terminal.backend()
+---
+"                                                            "
+"› look at @ma                                               "
+"                                                            "
+"                                                            "
+"  src/main.rs                                               "
+"  lib/map.rs                                                "

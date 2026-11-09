@@ -3,9 +3,20 @@
 use super::*;
 use std::time::Duration;
 
+/// A sender nothing listens to: the composer's events are dropped.
+fn sender() -> AppEventSender {
+    let (tx, _rx) = std::sync::mpsc::channel();
+    AppEventSender::new(tx)
+}
+
 #[test]
 fn footer_hint_row_is_separated_from_composer() {
-    let composer = ChatComposer::new(true, false, "Ask Codex to do anything".to_string());
+    let composer = ChatComposer::new(
+        true,
+        sender(),
+        false,
+        "Ask Codex to do anything".to_string(),
+    );
 
     let area = Rect::new(0, 0, 40, 6);
     let mut buf = Buffer::empty(area);
@@ -62,6 +73,7 @@ fn snapshot_composer_state_with_width<F>(
 
     let mut composer = ChatComposer::new(
         true,
+        sender(),
         enhanced_keys_supported,
         "Ask Codex to do anything".to_string(),
     );
@@ -111,7 +123,12 @@ fn footer_mode_snapshots() {
 fn base_footer_mode_tracks_empty_state_after_quit_hint_expires() {
     use ratatui::crossterm::event::KeyCode;
 
-    let mut composer = ChatComposer::new(true, false, "Ask Codex to do anything".to_string());
+    let mut composer = ChatComposer::new(
+        true,
+        sender(),
+        false,
+        "Ask Codex to do anything".to_string(),
+    );
 
     type_chars_humanlike(&mut composer, &['d']);
     composer.show_quit_shortcut_hint(key_hint::ctrl(KeyCode::Char('c')), true);
@@ -125,7 +142,12 @@ fn base_footer_mode_tracks_empty_state_after_quit_hint_expires() {
 
 #[test]
 fn clear_for_ctrl_c_records_cleared_draft() {
-    let mut composer = ChatComposer::new(true, false, "Ask Codex to do anything".to_string());
+    let mut composer = ChatComposer::new(
+        true,
+        sender(),
+        false,
+        "Ask Codex to do anything".to_string(),
+    );
 
     composer.set_text_content("draft text".to_string());
     assert_eq!(composer.clear_for_ctrl_c(), Some("draft text".to_string()));
@@ -146,7 +168,12 @@ fn question_mark_only_toggles_on_first_char() {
     use ratatui::crossterm::event::KeyEvent;
     use ratatui::crossterm::event::KeyModifiers;
 
-    let mut composer = ChatComposer::new(true, false, "Ask Codex to do anything".to_string());
+    let mut composer = ChatComposer::new(
+        true,
+        sender(),
+        false,
+        "Ask Codex to do anything".to_string(),
+    );
 
     let (result, needs_redraw) =
         composer.handle_key_event(KeyEvent::new(KeyCode::Char('?'), KeyModifiers::NONE));
@@ -181,7 +208,12 @@ fn question_mark_does_not_toggle_during_paste_burst() {
     use ratatui::crossterm::event::KeyEvent;
     use ratatui::crossterm::event::KeyModifiers;
 
-    let mut composer = ChatComposer::new(true, false, "Ask Codex to do anything".to_string());
+    let mut composer = ChatComposer::new(
+        true,
+        sender(),
+        false,
+        "Ask Codex to do anything".to_string(),
+    );
 
     // Force an active paste burst so this test doesn't depend on tight timing.
     composer
@@ -206,7 +238,12 @@ fn shortcut_overlay_persists_while_task_running() {
     use ratatui::crossterm::event::KeyEvent;
     use ratatui::crossterm::event::KeyModifiers;
 
-    let mut composer = ChatComposer::new(true, false, "Ask Codex to do anything".to_string());
+    let mut composer = ChatComposer::new(
+        true,
+        sender(),
+        false,
+        "Ask Codex to do anything".to_string(),
+    );
 
     let _ = composer.handle_key_event(KeyEvent::new(KeyCode::Char('?'), KeyModifiers::NONE));
     assert_eq!(composer.footer_mode, FooterMode::ShortcutOverlay);
@@ -223,7 +260,12 @@ fn ascii_prefix_survives_non_ascii_followup() {
     use ratatui::crossterm::event::KeyEvent;
     use ratatui::crossterm::event::KeyModifiers;
 
-    let mut composer = ChatComposer::new(true, false, "Ask Codex to do anything".to_string());
+    let mut composer = ChatComposer::new(
+        true,
+        sender(),
+        false,
+        "Ask Codex to do anything".to_string(),
+    );
 
     let _ = composer.handle_key_event(KeyEvent::new(KeyCode::Char('1'), KeyModifiers::NONE));
     assert!(composer.is_in_paste_burst());
@@ -246,7 +288,12 @@ fn non_ascii_char_inserts_immediately_without_burst_state() {
     use ratatui::crossterm::event::KeyEvent;
     use ratatui::crossterm::event::KeyModifiers;
 
-    let mut composer = ChatComposer::new(true, false, "Ask Codex to do anything".to_string());
+    let mut composer = ChatComposer::new(
+        true,
+        sender(),
+        false,
+        "Ask Codex to do anything".to_string(),
+    );
 
     let _ = composer.handle_key_event(KeyEvent::new(KeyCode::Char('あ'), KeyModifiers::NONE));
 
@@ -263,7 +310,12 @@ fn non_ascii_burst_buffers_enter_and_flushes_multiline() {
     use ratatui::crossterm::event::KeyEvent;
     use ratatui::crossterm::event::KeyModifiers;
 
-    let mut composer = ChatComposer::new(true, false, "Ask Codex to do anything".to_string());
+    let mut composer = ChatComposer::new(
+        true,
+        sender(),
+        false,
+        "Ask Codex to do anything".to_string(),
+    );
 
     composer
         .paste_burst
@@ -289,7 +341,12 @@ fn non_ascii_burst_preserves_ideographic_space_and_ascii() {
     use ratatui::crossterm::event::KeyEvent;
     use ratatui::crossterm::event::KeyModifiers;
 
-    let mut composer = ChatComposer::new(true, false, "Ask Codex to do anything".to_string());
+    let mut composer = ChatComposer::new(
+        true,
+        sender(),
+        false,
+        "Ask Codex to do anything".to_string(),
+    );
 
     composer
         .paste_burst
@@ -330,7 +387,12 @@ fn non_ascii_burst_buffers_large_multiline_mixed_ascii_and_unicode() {
 白云千载 青山依旧\n\
 程序员 与 Unicode 同行";
 
-    let mut composer = ChatComposer::new(true, false, "Ask Codex to do anything".to_string());
+    let mut composer = ChatComposer::new(
+        true,
+        sender(),
+        false,
+        "Ask Codex to do anything".to_string(),
+    );
 
     // Force an active burst so the test doesn't depend on timing heuristics.
     composer
@@ -360,7 +422,12 @@ fn ascii_burst_treats_enter_as_newline() {
     use ratatui::crossterm::event::KeyEvent;
     use ratatui::crossterm::event::KeyModifiers;
 
-    let mut composer = ChatComposer::new(true, false, "Ask Codex to do anything".to_string());
+    let mut composer = ChatComposer::new(
+        true,
+        sender(),
+        false,
+        "Ask Codex to do anything".to_string(),
+    );
 
     let mut now = Instant::now();
     let step = Duration::from_millis(1);
@@ -402,7 +469,12 @@ fn non_char_key_flushes_active_burst_before_input() {
     use ratatui::crossterm::event::KeyEvent;
     use ratatui::crossterm::event::KeyModifiers;
 
-    let mut composer = ChatComposer::new(true, false, "Ask Codex to do anything".to_string());
+    let mut composer = ChatComposer::new(
+        true,
+        sender(),
+        false,
+        "Ask Codex to do anything".to_string(),
+    );
 
     // Force an active burst so we can deterministically buffer characters without relying on
     // timing.
@@ -430,7 +502,12 @@ fn handle_paste_small_inserts_text() {
     use ratatui::crossterm::event::KeyEvent;
     use ratatui::crossterm::event::KeyModifiers;
 
-    let mut composer = ChatComposer::new(true, false, "Ask Codex to do anything".to_string());
+    let mut composer = ChatComposer::new(
+        true,
+        sender(),
+        false,
+        "Ask Codex to do anything".to_string(),
+    );
 
     let needs_redraw = composer.handle_paste("hello".to_string());
     assert!(needs_redraw);
@@ -450,7 +527,12 @@ fn empty_enter_returns_none() {
     use ratatui::crossterm::event::KeyEvent;
     use ratatui::crossterm::event::KeyModifiers;
 
-    let mut composer = ChatComposer::new(true, false, "Ask Codex to do anything".to_string());
+    let mut composer = ChatComposer::new(
+        true,
+        sender(),
+        false,
+        "Ask Codex to do anything".to_string(),
+    );
 
     // Ensure composer is empty and press Enter.
     assert!(composer.textarea.text().is_empty());
@@ -472,7 +554,12 @@ fn handle_paste_large_uses_placeholder_and_replaces_on_submit() {
     use ratatui::crossterm::event::KeyEvent;
     use ratatui::crossterm::event::KeyModifiers;
 
-    let mut composer = ChatComposer::new(true, false, "Ask Codex to do anything".to_string());
+    let mut composer = ChatComposer::new(
+        true,
+        sender(),
+        false,
+        "Ask Codex to do anything".to_string(),
+    );
 
     let large = "x".repeat(LARGE_PASTE_CHAR_THRESHOLD + 10);
     let needs_redraw = composer.handle_paste(large.clone());
@@ -501,7 +588,12 @@ fn edit_clears_pending_paste() {
     use ratatui::crossterm::event::KeyModifiers;
 
     let large = "y".repeat(LARGE_PASTE_CHAR_THRESHOLD + 1);
-    let mut composer = ChatComposer::new(true, false, "Ask Codex to do anything".to_string());
+    let mut composer = ChatComposer::new(
+        true,
+        sender(),
+        false,
+        "Ask Codex to do anything".to_string(),
+    );
 
     composer.handle_paste(large);
     assert_eq!(composer.pending_pastes.len(), 1);
@@ -534,7 +626,12 @@ fn ui_snapshots() {
 
     for (name, input) in test_cases {
         // Create a fresh composer for each test case
-        let mut composer = ChatComposer::new(true, false, "Ask Codex to do anything".to_string());
+        let mut composer = ChatComposer::new(
+            true,
+            sender(),
+            false,
+            "Ask Codex to do anything".to_string(),
+        );
 
         if let Some(text) = input {
             composer.handle_paste(text);
@@ -587,7 +684,12 @@ fn test_multiple_pastes_submission() {
     use ratatui::crossterm::event::KeyEvent;
     use ratatui::crossterm::event::KeyModifiers;
 
-    let mut composer = ChatComposer::new(true, false, "Ask Codex to do anything".to_string());
+    let mut composer = ChatComposer::new(
+        true,
+        sender(),
+        false,
+        "Ask Codex to do anything".to_string(),
+    );
 
     // Define test cases: (paste content, is_large)
     let test_cases = [
@@ -657,7 +759,12 @@ fn test_placeholder_deletion() {
     use ratatui::crossterm::event::KeyEvent;
     use ratatui::crossterm::event::KeyModifiers;
 
-    let mut composer = ChatComposer::new(true, false, "Ask Codex to do anything".to_string());
+    let mut composer = ChatComposer::new(
+        true,
+        sender(),
+        false,
+        "Ask Codex to do anything".to_string(),
+    );
 
     // Define test cases: (content, is_large)
     let test_cases = [
@@ -724,7 +831,12 @@ fn deleting_duplicate_length_pastes_removes_only_target() {
     use ratatui::crossterm::event::KeyEvent;
     use ratatui::crossterm::event::KeyModifiers;
 
-    let mut composer = ChatComposer::new(true, false, "Ask Codex to do anything".to_string());
+    let mut composer = ChatComposer::new(
+        true,
+        sender(),
+        false,
+        "Ask Codex to do anything".to_string(),
+    );
 
     let paste = "x".repeat(LARGE_PASTE_CHAR_THRESHOLD + 4);
     let placeholder_base = format!("[Pasted Content {} chars]", paste.chars().count());
@@ -756,7 +868,12 @@ fn large_paste_numbering_does_not_reuse_after_deletion() {
     use ratatui::crossterm::event::KeyEvent;
     use ratatui::crossterm::event::KeyModifiers;
 
-    let mut composer = ChatComposer::new(true, false, "Ask Codex to do anything".to_string());
+    let mut composer = ChatComposer::new(
+        true,
+        sender(),
+        false,
+        "Ask Codex to do anything".to_string(),
+    );
 
     let paste = "x".repeat(LARGE_PASTE_CHAR_THRESHOLD + 4);
     let base = format!("[Pasted Content {} chars]", paste.chars().count());
@@ -788,7 +905,12 @@ fn test_partial_placeholder_deletion() {
     use ratatui::crossterm::event::KeyEvent;
     use ratatui::crossterm::event::KeyModifiers;
 
-    let mut composer = ChatComposer::new(true, false, "Ask Codex to do anything".to_string());
+    let mut composer = ChatComposer::new(
+        true,
+        sender(),
+        false,
+        "Ask Codex to do anything".to_string(),
+    );
 
     // Define test cases: (cursor_position_from_end, expected_pending_count)
     let test_cases = [
@@ -833,7 +955,12 @@ fn pending_first_ascii_char_flushes_as_typed() {
     use ratatui::crossterm::event::KeyEvent;
     use ratatui::crossterm::event::KeyModifiers;
 
-    let mut composer = ChatComposer::new(true, false, "Ask Codex to do anything".to_string());
+    let mut composer = ChatComposer::new(
+        true,
+        sender(),
+        false,
+        "Ask Codex to do anything".to_string(),
+    );
 
     let _ = composer.handle_key_event(KeyEvent::new(KeyCode::Char('h'), KeyModifiers::NONE));
     assert!(composer.is_in_paste_burst());
@@ -855,7 +982,12 @@ fn burst_paste_fast_small_buffers_and_flushes_on_stop() {
     use ratatui::crossterm::event::KeyEvent;
     use ratatui::crossterm::event::KeyModifiers;
 
-    let mut composer = ChatComposer::new(true, false, "Ask Codex to do anything".to_string());
+    let mut composer = ChatComposer::new(
+        true,
+        sender(),
+        false,
+        "Ask Codex to do anything".to_string(),
+    );
 
     let count = 32;
     let mut now = Instant::now();
@@ -895,7 +1027,12 @@ fn burst_paste_fast_small_buffers_and_flushes_on_stop() {
 
 #[test]
 fn burst_paste_fast_large_inserts_placeholder_on_flush() {
-    let mut composer = ChatComposer::new(true, false, "Ask Codex to do anything".to_string());
+    let mut composer = ChatComposer::new(
+        true,
+        sender(),
+        false,
+        "Ask Codex to do anything".to_string(),
+    );
 
     let count = LARGE_PASTE_CHAR_THRESHOLD + 1; // > threshold to trigger placeholder
     let mut now = Instant::now();
@@ -927,7 +1064,12 @@ fn burst_paste_fast_large_inserts_placeholder_on_flush() {
 
 #[test]
 fn humanlike_typing_1000_chars_appears_live_no_placeholder() {
-    let mut composer = ChatComposer::new(true, false, "Ask Codex to do anything".to_string());
+    let mut composer = ChatComposer::new(
+        true,
+        sender(),
+        false,
+        "Ask Codex to do anything".to_string(),
+    );
 
     let count = LARGE_PASTE_CHAR_THRESHOLD; // 1000 in current config
     let chars: Vec<char> = vec!['z'; count];
@@ -939,7 +1081,12 @@ fn humanlike_typing_1000_chars_appears_live_no_placeholder() {
 
 #[test]
 fn current_text_with_pending_expands_placeholders() {
-    let mut composer = ChatComposer::new(true, false, "Ask Codex to do anything".to_string());
+    let mut composer = ChatComposer::new(
+        true,
+        sender(),
+        false,
+        "Ask Codex to do anything".to_string(),
+    );
 
     let placeholder = "[Pasted Content 5 chars]".to_string();
     composer.textarea.insert_element(&placeholder);

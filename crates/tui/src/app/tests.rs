@@ -16,7 +16,7 @@ use hanafubuki_agent::{
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use super::App;
-use crate::agent_bridge::{AgentBridge, StatusSink};
+use crate::agent_bridge::{AgentBridge, StatusSink, TurnUpdate};
 use crate::app_event::{AppEvent, AppEventSender};
 use crate::chatwidget::{ChatWidget, ChatWidgetInit};
 use crate::custom_terminal::Terminal;
@@ -84,14 +84,14 @@ impl Harness {
         let agent = runtime.wait_until_started(DEADLINE).unwrap();
         let session = session(&agent);
 
-        let chat_widget = ChatWidget::new(ChatWidgetInit {
+        let bridge = AgentBridge::new(agent, runtime.slot().clone(), session, sender.clone());
+        let mut chat_widget = ChatWidget::new(ChatWidgetInit {
             app_event_tx: sender.clone(),
             frame_requester: FrameRequester::new(sender.clone()),
             enhanced_keys_supported: false,
-            model: session.1,
             directory: "/project".to_string(),
         });
-        let bridge = AgentBridge::new(agent, runtime.slot().clone(), session.0, sender.clone());
+        chat_widget.handle_turn_update(TurnUpdate::SessionOpened(bridge.open(session).unwrap()));
         let mut terminal = Terminal::with_options(VT100Backend::new(WIDTH, HEIGHT)).unwrap();
         terminal.set_viewport_area(ratatui::layout::Rect::new(0, HEIGHT - 1, WIDTH, 1));
         Self {
@@ -123,17 +123,26 @@ impl Harness {
 
     /// Runs the app loop's steps until the screen shows `text`.
     fn pump_until_screen_shows(&mut self, text: &str) -> String {
+        self.pump_until(&format!("the screen to show {text:?}"), |harness| {
+            harness.screen().contains(text)
+        });
+        self.screen()
+    }
+
+    /// Runs the app loop's steps until `done` holds.
+    fn pump_until(&mut self, what: &str, done: impl Fn(&Self) -> bool) {
         let deadline = Instant::now() + DEADLINE;
         loop {
             self.app.draw(&mut self.tui).unwrap();
-            let screen = self.screen();
-            if screen.contains(text) {
-                return screen;
+            if done(self) {
+                return;
             }
             let wait = deadline.saturating_duration_since(Instant::now());
             assert!(
                 !wait.is_zero(),
-                "the screen never showed {text:?}:\n{screen}"
+                "waited in vain for {what}:\n{}\n-- transcript --\n{}",
+                self.screen(),
+                self.transcript()
             );
             if let Ok(event) = self
                 .events
@@ -144,8 +153,32 @@ impl Harness {
         }
     }
 
+    /// Waits until the chat has seen the session's turn end, so the
+    /// commands a running turn forbids run.
+    fn pump_until_turn_ends(&mut self) {
+        self.pump_until("the turn to end", |harness| {
+            !harness.app.chat_widget.is_task_running()
+        });
+    }
+
     fn screen(&self) -> String {
         self.tui.terminal.backend().vt100().screen().contents()
+    }
+
+    /// The text of the cells the session's transcript holds.
+    fn transcript(&self) -> String {
+        self.app
+            .transcript_cells
+            .iter()
+            .flat_map(|cell| cell.display_lines(WIDTH))
+            .map(|line| {
+                line.spans
+                    .iter()
+                    .map(|span| span.content.as_ref())
+                    .collect::<String>()
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
     }
 }
 
@@ -155,14 +188,14 @@ impl Drop for Harness {
     }
 }
 
-fn session(agent: &AgentHandle) -> (hanafubuki_agent::AgentSessionId, String) {
+fn session(agent: &AgentHandle) -> hanafubuki_agent::AgentSessionId {
     let agent = agent.clone();
     let runtime = agent.runtime().clone();
-    let session = runtime
+    runtime
         .block_on(async move { agent.create_session(AgentSessionMode::Default).await })
         .unwrap()
-        .unwrap();
-    (session.id, session.model)
+        .unwrap()
+        .id
 }
 
 fn command_call(command: &str) -> Vec<u8> {
@@ -200,4 +233,85 @@ fn an_approved_command_runs_and_the_turn_completes() {
     let screen = harness.pump_until_screen_shows("The command ran.");
     assert!(screen.contains("approved-output"), "{screen}");
     assert!(screen.contains("exec_command"), "{screen}");
+}
+
+#[test]
+fn status_reports_the_session_through_the_facade() {
+    let mut harness = Harness::start(Vec::new());
+    harness.type_and_submit("/status");
+    let screen = harness.pump_until_screen_shows("Permissions:");
+    assert!(screen.contains("fixture-model"), "{screen}");
+    assert!(screen.contains("Fixture Provider"), "{screen}");
+    assert!(screen.contains("manual"), "{screen}");
+    assert!(screen.contains("project"), "{screen}");
+}
+
+#[test]
+fn mode_switches_the_session_to_plan_mode() {
+    let mut harness = Harness::start(Vec::new());
+    harness.type_and_submit("/mode");
+    harness.pump_until_screen_shows("Select Mode");
+    harness.key(KeyCode::Down);
+    harness.key(KeyCode::Enter);
+    harness.pump_until_screen_shows("Mode set to plan");
+    let agent = harness.runtime.slot().agent().unwrap();
+    let session = agent.snapshot(harness.app.bridge.session_id()).unwrap();
+    assert_eq!(session.mode, AgentSessionMode::Plan);
+}
+
+#[test]
+fn a_finished_session_is_resumed_from_the_picker_and_its_transcript_replayed() {
+    let mut harness = Harness::start(vec![assistant_events("The answer is 42.")]);
+    harness.type_and_submit("What is the answer?");
+    harness.pump_until_screen_shows("The answer is 42.");
+    harness.pump_until_turn_ends();
+    let finished = harness.app.bridge.session_id();
+
+    harness.type_and_submit("/new");
+    harness.pump_until("a new session", |harness| {
+        harness.app.bridge.session_id() != finished
+    });
+    assert!(!harness.transcript().contains("The answer is 42."));
+
+    harness.type_and_submit("/resume");
+    let picker = harness.pump_until_screen_shows("Resume a previous session");
+    // The new session ran no turn, so only the finished one is listed.
+    assert!(picker.contains("What is the answer?"), "{picker}");
+    harness.key(KeyCode::Enter);
+    harness.pump_until("the resumed transcript", |harness| {
+        harness.transcript().contains("The answer is 42.")
+    });
+    assert_eq!(harness.app.bridge.session_id(), finished);
+    let transcript = harness.transcript();
+    assert!(transcript.contains("› What is the answer?"), "{transcript}");
+    assert!(transcript.contains("model:"), "{transcript}");
+}
+
+#[test]
+fn a_resumed_session_replays_its_tool_calls_with_their_output() {
+    let mut harness = Harness::start(vec![
+        command_call("echo replayed-output"),
+        assistant_events("The command ran."),
+    ]);
+    harness.type_and_submit("Run the command.");
+    harness.pump_until_screen_shows("Yes, proceed");
+    harness.key(KeyCode::Char('y'));
+    harness.pump_until_screen_shows("The command ran.");
+    harness.pump_until_turn_ends();
+    let finished = harness.app.bridge.session_id();
+
+    harness.type_and_submit("/new");
+    harness.pump_until("a new session", |harness| {
+        harness.app.bridge.session_id() != finished
+    });
+    harness.type_and_submit("/resume");
+    let picker = harness.pump_until_screen_shows("Resume a previous session");
+    assert!(picker.contains("Run the command."), "{picker}");
+    harness.key(KeyCode::Enter);
+    harness.pump_until("the resumed transcript", |harness| {
+        harness.transcript().contains("The command ran.")
+    });
+    let transcript = harness.transcript();
+    assert!(transcript.contains("exec_command"), "{transcript}");
+    assert!(transcript.contains("replayed-output"), "{transcript}");
 }

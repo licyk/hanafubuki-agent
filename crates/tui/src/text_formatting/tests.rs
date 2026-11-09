@@ -56,3 +56,69 @@ fn strip_terminal_controls_drops_escapes_and_control_characters() {
         "text link"
     );
 }
+
+#[test]
+fn test_truncate_text() {
+    let text = "Hello, world!";
+    let truncated = truncate_text(text, 8);
+    assert_eq!(truncated, "Hello...");
+}
+
+#[test]
+fn test_truncate_empty_string() {
+    let text = "";
+    let truncated = truncate_text(text, 5);
+    assert_eq!(truncated, "");
+}
+
+#[test]
+fn test_truncate_max_graphemes_zero() {
+    let text = "Hello";
+    let truncated = truncate_text(text, 0);
+    assert_eq!(truncated, "");
+}
+
+#[test]
+fn test_truncate_max_graphemes_one() {
+    let text = "Hello";
+    let truncated = truncate_text(text, 1);
+    assert_eq!(truncated, "H");
+}
+
+#[test]
+fn test_truncate_max_graphemes_two() {
+    let text = "Hello";
+    let truncated = truncate_text(text, 2);
+    assert_eq!(truncated, "He");
+}
+
+#[test]
+fn test_truncate_max_graphemes_three_boundary() {
+    let text = "Hello";
+    let truncated = truncate_text(text, 3);
+    assert_eq!(truncated, "...");
+}
+
+#[test]
+fn test_truncate_text_shorter_than_limit() {
+    let text = "Hi";
+    let truncated = truncate_text(text, 10);
+    assert_eq!(truncated, "Hi");
+}
+
+#[test]
+fn test_truncate_text_exact_length() {
+    let text = "Hello";
+    let truncated = truncate_text(text, 5);
+    assert_eq!(truncated, "Hello");
+}
+
+#[test]
+fn test_truncate_emoji() {
+    let text = "👋🌍🚀✨💫";
+    let truncated = truncate_text(text, 3);
+    assert_eq!(truncated, "...");
+
+    let truncated_longer = truncate_text(text, 4);
+    assert_eq!(truncated_longer, "👋...");
+}

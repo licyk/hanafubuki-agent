@@ -5,7 +5,11 @@
 //! cell a running tool call keeps updating in place.
 
 mod plan;
+mod reports;
+mod status;
 mod tool;
+
+use std::any::Any;
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
@@ -21,10 +25,12 @@ use crate::ui_consts::LIVE_PREFIX_COLS;
 use crate::wrapping::{word_wrap_lines, RtOptions};
 
 pub(crate) use plan::{new_plan_update, new_proposed_plan_stream};
+pub(crate) use reports::{new_mcp_output, new_skills_output};
+pub(crate) use status::new_status_output;
 pub(crate) use tool::{new_tool_call, ToolCallCell, ToolResultView};
 
 /// An entry of the conversation, rendered at a width.
-pub(crate) trait HistoryCell: std::fmt::Debug + Send + Sync {
+pub(crate) trait HistoryCell: std::fmt::Debug + Send + Sync + Any {
     fn display_lines(&self, width: u16) -> Vec<Line<'static>>;
 
     fn desired_height(&self, width: u16) -> u16 {
@@ -39,6 +45,12 @@ pub(crate) trait HistoryCell: std::fmt::Debug + Send + Sync {
     /// blank line separates them in the scrollback.
     fn is_stream_continuation(&self) -> bool {
         false
+    }
+}
+
+impl dyn HistoryCell {
+    pub(crate) fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 
@@ -216,6 +228,15 @@ fn with_border(lines: Vec<Line<'static>>) -> Vec<Line<'static>> {
     }
     out.push(vec![format!("╰{}╯", "─".repeat(border_inner_width)).dim()].into());
     out
+}
+
+pub(crate) fn new_info_event(message: String, hint: Option<String>) -> PlainHistoryCell {
+    let mut line = vec!["• ".dim(), message.into()];
+    if let Some(hint) = hint {
+        line.push(" ".into());
+        line.push(hint.dark_gray());
+    }
+    PlainHistoryCell::new(vec![line.into()])
 }
 
 pub(crate) fn new_error_event(message: String) -> PlainHistoryCell {

@@ -1,17 +1,17 @@
 // Modified from OpenAI Codex rust-v0.93.0 (Apache-2.0).
 
-//! The interface's entry: a session on the started Agent, the terminal set
-//! up and restored around the app loop.
+//! The interface's entry: a session on the started Agent (a new one, or
+//! one reopened), the terminal set up and restored around the app loop.
 
 use std::sync::mpsc::{channel, Receiver};
 use std::sync::Arc;
 
 use hanafubuki_agent::{
-    AgentHandle, AgentRuntime, AgentSessionMode, AgentSessionModelSelectionRequest,
-    AgentSessionRuntimeSnapshot, AgentStatusEventSink,
+    AgentHandle, AgentRuntime, AgentSessionId, AgentSessionListRequest, AgentSessionMode,
+    AgentSessionModelSelectionRequest, AgentStatusEventSink,
 };
 
-use crate::agent_bridge::{AgentBridge, StatusSink};
+use crate::agent_bridge::{AgentBridge, StatusSink, TurnUpdate};
 use crate::app::App;
 use crate::app_event::{AppEvent, AppEventSender};
 use crate::chatwidget::{ChatWidget, ChatWidgetInit};
@@ -50,19 +50,38 @@ pub struct TuiOptions {
     pub model: Option<String>,
     /// The working directory, as the header shows it.
     pub directory: String,
+    /// A session to reopen in place of a new one.
+    pub resume: Option<TuiResume>,
 }
 
-/// Runs the interface on the started Agent until the person quits, in a
-/// new session. Standard input and output must be the terminal; the
-/// process's panic hook must be installed already (the interface's own
-/// restores the terminal before it). The terminal is restored on return.
+/// Which session `hanafubuki-agent resume` reopens.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TuiResume {
+    /// The one picked from the sessions (a new session until one is).
+    Picker,
+    /// The latest session a turn ran in; a new session when there is none.
+    Last,
+    Session(AgentSessionId),
+}
+
+/// Runs the interface on the started Agent until the person quits. Standard
+/// input and output must be the terminal; the process's panic hook must be
+/// installed already (the interface's own restores the terminal before it).
+/// The terminal is restored on return.
 pub fn run(
     events: TuiEvents,
     runtime: &AgentRuntime,
     agent: &AgentHandle,
     options: TuiOptions,
 ) -> Result<(), String> {
-    let session = create_session(agent, options.model)?;
+    let session_id = open_session(agent, options.resume, options.model)?;
+    let bridge = AgentBridge::new(
+        agent.clone(),
+        runtime.slot().clone(),
+        session_id,
+        events.sender.clone(),
+    );
+    let opened = bridge.open(session_id)?;
     let terminal = tui::init().map_err(|error| format!("the terminal: {error}"))?;
     let restore = RestoreOnDrop;
     let enhanced_keys_supported = tui::enhanced_keys_supported();
@@ -73,19 +92,16 @@ pub fn run(
         app_event_tx: events.sender.clone(),
         frame_requester: FrameRequester::new(events.sender.clone()),
         enhanced_keys_supported,
-        model: session.model.clone(),
         directory: options.directory,
     });
+    chat_widget.handle_turn_update(TurnUpdate::SessionOpened(opened));
     if let Some(prompt) = options.prompt {
         chat_widget.submit_user_message(prompt);
     }
-    let bridge = AgentBridge::new(
-        agent.clone(),
-        runtime.slot().clone(),
-        session.id,
-        events.sender.clone(),
-    );
     let mut app = App::new(chat_widget, bridge, events.sender.clone());
+    if options.resume == Some(TuiResume::Picker) {
+        app.open_resume_picker(&mut tui, true);
+    }
     let result = app.run(&mut tui, &events.receiver);
     drop(input);
     let left = tui.leave();
@@ -95,34 +111,68 @@ pub fn run(
         .map_err(|error| format!("the terminal: {error}"))
 }
 
-/// A new session, with the model asked for.
-fn create_session(
+/// The session the interface starts on, with the model asked for: the one
+/// to resume, or a new one.
+fn open_session(
     agent: &AgentHandle,
+    resume: Option<TuiResume>,
     model: Option<String>,
-) -> Result<AgentSessionRuntimeSnapshot, String> {
-    let created = agent.runtime().block_on({
+) -> Result<AgentSessionId, String> {
+    let resumed = match resume {
+        Some(TuiResume::Session(session_id)) => Some(session_id),
+        Some(TuiResume::Last) => latest_session(agent)?,
+        Some(TuiResume::Picker) | None => None,
+    };
+    let opened = agent.runtime().block_on({
         let agent = agent.clone();
         async move {
-            let session = agent.create_session(AgentSessionMode::Default).await?;
+            let session = match resumed {
+                Some(session_id) => agent
+                    .open_session(session_id, 1)
+                    .map(|opened| opened.runtime)
+                    .map_err(|error| format!("the session was not opened: {error}"))?,
+                None => agent
+                    .create_session(AgentSessionMode::Default)
+                    .await
+                    .map_err(|error| format!("the session was not created: {error}"))?,
+            };
             match model {
-                Some(model) => {
-                    agent
-                        .set_session_model(AgentSessionModelSelectionRequest {
-                            session_id: session.id,
-                            generation: session.generation,
-                            revision: session.revision,
-                            provider_id: session.provider_id.clone(),
-                            model,
-                        })
-                        .await
-                }
+                Some(model) => agent
+                    .set_session_model(AgentSessionModelSelectionRequest {
+                        session_id: session.id,
+                        generation: session.generation,
+                        revision: session.revision,
+                        provider_id: session.provider_id.clone(),
+                        model,
+                    })
+                    .await
+                    .map_err(|error| format!("the model was not set: {error}")),
                 None => Ok(session),
             }
         }
     });
-    created
-        .map_err(|failure| failure.to_string())?
-        .map_err(|error| format!("the session was not created: {error}"))
+    Ok(opened.map_err(|failure| failure.to_string())??.id)
+}
+
+/// The latest session a turn ran in.
+fn latest_session(agent: &AgentHandle) -> Result<Option<AgentSessionId>, String> {
+    let mut request = AgentSessionListRequest::default();
+    loop {
+        let page = agent
+            .list_sessions_page(request.clone())
+            .map_err(|error| format!("the sessions were not listed: {error}"))?;
+        if let Some(session) = page
+            .sessions
+            .iter()
+            .find(|session| session.latest_turn_phase.is_some())
+        {
+            return Ok(Some(session.session_id));
+        }
+        match page.next_cursor {
+            Some(cursor) => request.cursor = Some(cursor),
+            None => return Ok(None),
+        }
+    }
 }
 
 /// Restores the terminal however the interface returns.

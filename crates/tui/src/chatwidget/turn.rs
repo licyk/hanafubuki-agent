@@ -15,6 +15,10 @@ const WORKING: &str = "Working";
 
 impl ChatWidget {
     pub(crate) fn handle_turn_update(&mut self, update: TurnUpdate) {
+        let Some(update) = self.handle_command_update(update) else {
+            self.request_redraw();
+            return;
+        };
         if self.defers(&update) {
             self.deferred.push_back(update);
         } else {
@@ -92,6 +96,15 @@ impl ChatWidget {
             TurnUpdate::Error(message) => {
                 self.add_to_history(history_cell::new_error_event(message))
             }
+            // The commands' updates are handled before an update is deferred.
+            TurnUpdate::SessionOpened(_)
+            | TurnUpdate::ModelChoices(_)
+            | TurnUpdate::ModelChanged(_)
+            | TurnUpdate::ModeChanged(_)
+            | TurnUpdate::Compacted(_)
+            | TurnUpdate::StatusReport(_)
+            | TurnUpdate::Mcp(_)
+            | TurnUpdate::Skills(_) => {}
         }
     }
 

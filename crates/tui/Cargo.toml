@@ -8,7 +8,11 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+chrono = "0.4"
 hanafubuki-agent.workspace = true
+ignore.workspace = true
+nucleo = "0.5"
+parking_lot.workspace = true
 pulldown-cmark = { version = "0.13", default-features = false }
 # Without the default features, which pull crossterm 0.28 in beside 0.29.
 ratatui = { version = "0.30", default-features = false, features = ["crossterm_0_29", "scrolling-regions", "unstable-rendered-line-info"] }

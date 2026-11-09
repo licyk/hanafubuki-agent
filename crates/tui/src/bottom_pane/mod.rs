@@ -2,9 +2,10 @@
 
 //! The bottom pane is the interactive footer of the chat UI.
 //!
-//! The pane owns the [`ChatComposer`] (editable prompt input) and a stack of transient
-//! [`BottomPaneView`]s (the approval and question modals) that temporarily replace the composer
-//! for focused interactions.
+//! The pane owns the [`ChatComposer`] (editable prompt input, with its slash-command and file
+//! popups) and a stack of transient [`BottomPaneView`]s (the approval and question modals, the
+//! selection lists of `/model` and `/mode`) that temporarily replace the composer for focused
+//! interactions.
 //!
 //! Input routing is layered: `BottomPane` decides which local surface receives a key (view vs
 //! composer), while higher-level intent such as "interrupt" or "quit" is decided by the parent
@@ -20,6 +21,8 @@ mod approval_overlay;
 mod bottom_pane_view;
 mod chat_composer;
 mod chat_composer_history;
+mod command_popup;
+mod file_search_popup;
 mod footer;
 mod list_selection_view;
 mod paste_burst;
@@ -40,16 +43,20 @@ use ratatui::crossterm::event::KeyEvent;
 use ratatui::layout::Rect;
 
 use crate::app_event::AppEventSender;
+use crate::file_search::FileMatch;
 use crate::key_hint;
 use crate::key_hint::KeyBinding;
 use crate::render::renderable::FlexRenderable;
 use crate::render::renderable::Renderable;
 use crate::render::renderable::RenderableItem;
+use crate::slash_command::SlashCommand;
 use crate::status_indicator_widget::StatusIndicatorWidget;
 use crate::tui::FrameRequester;
 use approval_overlay::ApprovalOverlay;
 use bottom_pane_view::BottomPaneView;
 use chat_composer::ChatComposer;
+use list_selection_view::ListSelectionView;
+pub(crate) use list_selection_view::{SelectionItem, SelectionViewParams};
 use paste_burst::PasteBurst;
 use request_user_input::RequestUserInputOverlay;
 
@@ -67,6 +74,7 @@ pub(crate) const QUIT_SHORTCUT_TIMEOUT: Duration = Duration::from_secs(1);
 pub(crate) enum InputResult {
     /// The message the person sent, trimmed, with large pastes put back.
     Submitted(String),
+    Command(SlashCommand),
     None,
 }
 
@@ -113,7 +121,12 @@ impl BottomPane {
             placeholder_text,
         } = params;
         Self {
-            composer: ChatComposer::new(has_input_focus, enhanced_keys_supported, placeholder_text),
+            composer: ChatComposer::new(
+                has_input_focus,
+                app_event_tx.clone(),
+                enhanced_keys_supported,
+                placeholder_text,
+            ),
             view_stack: Vec::new(),
             app_event_tx,
             frame_requester,
@@ -148,8 +161,9 @@ impl BottomPane {
             return InputResult::None;
         }
         // If a task is running and a status line is visible, allow Esc to
-        // send an interrupt even while the composer has focus.
-        if key_event.code == KeyCode::Esc && self.is_task_running {
+        // send an interrupt even while the composer has focus; with a popup
+        // open, Esc closes the popup.
+        if key_event.code == KeyCode::Esc && self.is_task_running && !self.composer.popup_active() {
             if let Some(status) = &self.status {
                 status.interrupt();
                 self.request_redraw();
@@ -193,6 +207,23 @@ impl BottomPane {
         if self.view_stack.is_empty() && self.composer.handle_paste(pasted) {
             self.request_redraw();
         }
+    }
+
+    /// Inserts `text` at the composer's cursor (`/mention` inserts `@`).
+    pub(crate) fn insert_str(&mut self, text: &str) {
+        self.composer.insert_str(text);
+        self.request_redraw();
+    }
+
+    pub(crate) fn on_file_search_result(&mut self, query: String, matches: Vec<FileMatch>) {
+        self.composer.on_file_search_result(query, matches);
+        self.request_redraw();
+    }
+
+    /// Shows a list to pick from, over the composer.
+    pub(crate) fn show_selection_view(&mut self, params: SelectionViewParams) {
+        let view = ListSelectionView::new(params, self.app_event_tx.clone());
+        self.push_view(Box::new(view));
     }
 
     #[cfg(test)]
@@ -278,7 +309,7 @@ impl BottomPane {
     }
 
     pub(crate) fn no_modal_or_popup_active(&self) -> bool {
-        self.view_stack.is_empty()
+        self.view_stack.is_empty() && !self.composer.popup_active()
     }
 
     pub(crate) fn push_approval_request(&mut self, request: ApprovalRequest) {

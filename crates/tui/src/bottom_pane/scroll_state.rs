@@ -20,6 +20,12 @@ impl ScrollState {
         }
     }
 
+    /// Reset selection and scroll.
+    pub fn reset(&mut self) {
+        self.selected_idx = None;
+        self.scroll_top = 0;
+    }
+
     /// Clamp selection to be within the [0, len-1] range, or None when empty.
     pub fn clamp_selection(&mut self, len: usize) {
         self.selected_idx = match len {

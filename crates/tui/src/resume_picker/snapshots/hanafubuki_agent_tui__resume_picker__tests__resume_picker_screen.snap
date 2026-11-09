@@ -1,0 +1,13 @@
+---
+source: crates/tui/src/resume_picker/tests.rs
+expression: snapshot
+---
+Resume a previous session
+Type to search
+  Updated  Conversation
+No sessions yet
+
+
+
+
+enter to resume     esc to start new     ctrl + c to quit     ↑/↓ to browse

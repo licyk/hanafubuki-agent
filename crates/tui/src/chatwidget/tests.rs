@@ -1,8 +1,10 @@
 use std::sync::mpsc::{channel, Receiver};
 
 use super::*;
-use crate::agent_bridge::TurnEnd;
+use crate::agent_bridge::{ModelChoices, OpenedSession, ReplayedItem, TurnEnd};
+use crate::app_event::AgentCommand;
 use crate::history_cell::ToolResultView;
+use crate::slash_command::SlashCommand;
 
 fn chat() -> (ChatWidget, Receiver<AppEvent>) {
     let (sender, events) = channel();
@@ -11,7 +13,6 @@ fn chat() -> (ChatWidget, Receiver<AppEvent>) {
         app_event_tx: sender.clone(),
         frame_requester: FrameRequester::new(sender),
         enhanced_keys_supported: false,
-        model: "fixture-model".to_string(),
         directory: "/project".to_string(),
     });
     (chat, events)
@@ -129,7 +130,7 @@ fn a_submitted_message_is_written_and_sent_and_quit_exits() {
     let (cells, ops) = drain(&events);
     assert!(cells[0].contains("› Do it"), "{cells:?}");
     assert_eq!(ops, vec![Op::UserInput("Do it".to_string())]);
-    chat.submit_user_message("/quit".to_string());
+    chat.dispatch_command(SlashCommand::Quit);
     assert!(matches!(events.try_recv(), Ok(AppEvent::Exit)));
 }
 
@@ -145,4 +146,111 @@ fn ctrl_c_interrupts_a_running_turn_and_twice_quits() {
     let exited =
         std::iter::from_fn(|| events.try_recv().ok()).any(|event| matches!(event, AppEvent::Exit));
     assert!(exited);
+}
+
+#[test]
+fn a_command_the_running_turn_forbids_says_so() {
+    let (mut chat, events) = chat();
+    chat.handle_turn_update(TurnUpdate::Started);
+    drain(&events);
+    chat.dispatch_command(SlashCommand::Model);
+    let (cells, ops) = drain(&events);
+    assert_eq!(
+        cells,
+        vec!["■ '/model' is disabled while a task is in progress."]
+    );
+    assert!(ops.is_empty());
+}
+
+#[test]
+fn an_opened_session_replays_its_transcript_after_its_header() {
+    let (mut chat, events) = chat();
+    drain(&events);
+    chat.handle_turn_update(TurnUpdate::SessionOpened(OpenedSession {
+        session_id: hanafubuki_agent::AgentSessionId::new(7),
+        model: "fixture-model".to_string(),
+        mode: hanafubuki_agent::AgentSessionMode::Plan,
+        transcript: vec![
+            ReplayedItem::User("What changed?".to_string()),
+            ReplayedItem::Tool {
+                call_id: "call-1".to_string(),
+                name: "exec_command".to_string(),
+                is_error: false,
+                result: ToolResultView {
+                    text: Some("two files".to_string()),
+                    ..ToolResultView::default()
+                },
+            },
+            ReplayedItem::Assistant("Two files **changed**.".to_string()),
+        ],
+        earlier_items: true,
+    }));
+    let (cells, _) = drain(&events);
+    assert_eq!(cells.len(), 5, "{cells:?}");
+    assert!(cells[0].contains("model:     fixture-model"), "{cells:?}");
+    assert!(
+        cells[1].contains("Earlier messages are not shown."),
+        "{cells:?}"
+    );
+    assert!(cells[2].contains("› What changed?"), "{cells:?}");
+    assert!(cells[3].contains("exec_command") && cells[3].contains("two files"));
+    assert_eq!(cells[4], "• Two files changed.");
+    assert_eq!(chat.mode, hanafubuki_agent::AgentSessionMode::Plan);
+}
+
+#[test]
+fn a_model_picked_from_the_catalogs_is_set_on_the_session() {
+    let (mut chat, events) = chat();
+    drain(&events);
+    let entry = |id: &str| hanafubuki_agent::ModelCatalogEntry {
+        id: id.to_string(),
+        display_name: None,
+        default_reasoning_effort: None,
+        supported_reasoning_efforts: Vec::new(),
+        context_window: None,
+    };
+    chat.handle_turn_update(TurnUpdate::ModelChoices(ModelChoices {
+        provider_id: "provider-1".to_string(),
+        model: "model-a".to_string(),
+        catalogs: vec![
+            hanafubuki_agent::AgentProviderModelCatalogResult {
+                provider_id: "provider-1".to_string(),
+                display_name: "First".to_string(),
+                models: vec![entry("model-a"), entry("model-b")],
+                error: None,
+            },
+            hanafubuki_agent::AgentProviderModelCatalogResult {
+                provider_id: "provider-2".to_string(),
+                display_name: "Second".to_string(),
+                models: Vec::new(),
+                error: Some("unreachable".to_string()),
+            },
+        ],
+    }));
+    let area = ratatui::layout::Rect::new(0, 0, 60, chat.desired_height(60));
+    let mut buf = ratatui::buffer::Buffer::empty(area);
+    chat.render(area, &mut buf);
+    let screen = (0..area.height)
+        .map(|y| {
+            (0..area.width)
+                .map(|x| buf[(x, y)].symbol().to_string())
+                .collect::<String>()
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(screen.contains("Select Model"), "{screen}");
+    assert!(
+        screen.contains("models not listed: unreachable"),
+        "{screen}"
+    );
+
+    chat.handle_key_event(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    chat.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    assert_eq!(
+        drain(&events).1,
+        vec![Op::Command(AgentCommand::SetModel {
+            provider_id: "provider-1".to_string(),
+            model: "model-b".to_string(),
+        })]
+    );
 }

@@ -9,11 +9,12 @@
 //! - Handling submit vs newline on Enter.
 //! - Shell-style history navigation (↑/↓) over this session's messages
 //!   ([`ChatComposerHistory`]).
+//! - Routing keys to the active popup (`popups`): the slash commands and the `@` file search.
 //! - Turning raw key streams into explicit paste operations on platforms where terminals
 //!   don't provide reliable bracketed paste (notably Windows).
 //!
-//! Codex's composer also routes keys to its popups (slash commands, file search, Skill and app
-//! mentions), attaches images and expands custom prompts; none of those exist here yet.
+//! Codex's composer also offers Skill and app mentions, attaches images and expands custom
+//! prompts; none of those are ported.
 //!
 //! # Non-bracketed Paste Bursts
 //!
@@ -52,7 +53,11 @@ use ratatui::widgets::Block;
 use ratatui::widgets::StatefulWidget;
 use ratatui::widgets::Widget;
 
+mod popups;
+
 use super::chat_composer_history::ChatComposerHistory;
+use super::command_popup::CommandPopup;
+use super::file_search_popup::FileSearchPopup;
 use super::footer::footer_height;
 use super::footer::render_footer;
 use super::footer::reset_mode_after_activity;
@@ -65,6 +70,7 @@ use super::paste_burst::PasteBurst;
 use super::textarea::TextArea;
 use super::textarea::TextAreaState;
 use super::InputResult;
+use crate::app_event::AppEventSender;
 use crate::key_hint;
 use crate::key_hint::has_ctrl_or_alt;
 use crate::key_hint::KeyBinding;
@@ -81,6 +87,8 @@ const LARGE_PASTE_CHAR_THRESHOLD: usize = 1000;
 pub(crate) struct ChatComposer {
     textarea: TextArea,
     textarea_state: RefCell<TextAreaState>,
+    active_popup: ActivePopup,
+    app_event_tx: AppEventSender,
     history: ChatComposerHistory,
     quit_shortcut_expires_at: Option<Instant>,
     quit_shortcut_key: KeyBinding,
@@ -93,17 +101,31 @@ pub(crate) struct ChatComposer {
     /// Non-bracketed paste burst tracker (see `bottom_pane/paste_burst.rs`).
     paste_burst: PasteBurst,
     footer_mode: FooterMode,
+    /// The `@` query the file search was last asked for.
+    current_file_query: Option<String>,
+    /// The `@` token whose popup Esc closed; it stays closed until the token changes.
+    dismissed_file_popup_token: Option<String>,
+}
+
+/// Popup state – at most one can be visible at any time.
+enum ActivePopup {
+    None,
+    Command(CommandPopup),
+    File(FileSearchPopup),
 }
 
 impl ChatComposer {
     pub(crate) fn new(
         has_input_focus: bool,
+        app_event_tx: AppEventSender,
         enhanced_keys_supported: bool,
         placeholder_text: String,
     ) -> Self {
         Self {
             textarea: TextArea::new(),
             textarea_state: RefCell::new(TextAreaState::default()),
+            active_popup: ActivePopup::None,
+            app_event_tx,
             history: ChatComposerHistory::new(),
             quit_shortcut_expires_at: None,
             quit_shortcut_key: key_hint::ctrl(KeyCode::Char('c')),
@@ -115,16 +137,26 @@ impl ChatComposer {
             is_task_running: false,
             paste_burst: PasteBurst::default(),
             footer_mode: FooterMode::ComposerEmpty,
+            current_file_query: None,
+            dismissed_file_popup_token: None,
         }
     }
 
     fn layout_areas(&self, area: Rect) -> [Rect; 3] {
-        let footer_total_height = footer_height(self.footer_props());
-        let [composer_rect, footer_rect] =
-            Layout::vertical([Constraint::Min(3), Constraint::Max(footer_total_height)])
-                .areas(area);
+        let popup_constraint = Constraint::Max(self.popup_or_footer_height(area.width));
+        let [composer_rect, popup_rect] =
+            Layout::vertical([Constraint::Min(3), popup_constraint]).areas(area);
         let textarea_rect = composer_rect.inset(Insets::tlbr(1, LIVE_PREFIX_COLS, 1, 1));
-        [composer_rect, textarea_rect, footer_rect]
+        [composer_rect, textarea_rect, popup_rect]
+    }
+
+    /// The rows under the text: the active popup's, or the footer's.
+    fn popup_or_footer_height(&self, width: u16) -> u16 {
+        match &self.active_popup {
+            ActivePopup::None => footer_height(self.footer_props()),
+            ActivePopup::Command(popup) => popup.calculate_required_height(width),
+            ActivePopup::File(popup) => popup.calculate_required_height(),
+        }
     }
 
     /// Returns true if the composer currently contains no user input.
@@ -158,6 +190,7 @@ impl ChatComposer {
         }
         // Explicit paste events should not trigger Enter suppression.
         self.paste_burst.clear_after_explicit_paste();
+        self.sync_popups();
         true
     }
 
@@ -167,6 +200,7 @@ impl ChatComposer {
         self.textarea.set_text_clearing_elements(&text);
         self.pending_pastes.clear();
         self.textarea.set_cursor(self.textarea.text().len());
+        self.sync_popups();
     }
 
     pub(crate) fn clear_for_ctrl_c(&mut self) -> Option<String> {
@@ -247,6 +281,18 @@ impl ChatComposer {
 
     /// Handle a key event coming from the main UI.
     pub fn handle_key_event(&mut self, key_event: KeyEvent) -> (InputResult, bool) {
+        let result = match &self.active_popup {
+            ActivePopup::Command(_) => self.handle_key_event_with_slash_popup(key_event),
+            ActivePopup::File(_) => self.handle_key_event_with_file_popup(key_event),
+            ActivePopup::None => self.handle_key_event_without_popup(key_event),
+        };
+        // Update (or hide/show) popup after processing the key.
+        self.sync_popups();
+        result
+    }
+
+    /// Handle key event when no popup is visible.
+    fn handle_key_event_without_popup(&mut self, key_event: KeyEvent) -> (InputResult, bool) {
         if self.handle_shortcut_overlay_key(&key_event) {
             return (InputResult::None, true);
         }
@@ -388,10 +434,10 @@ impl ChatComposer {
     }
 
     /// The trimmed message with its pastes put back, recorded in the history;
-    /// `None` when it is empty.
+    /// `None` when it is empty, or names no command although it looks like one.
     fn prepare_submission_text(&mut self) -> Option<String> {
         let text = self.current_text_with_pending().trim().to_string();
-        if text.is_empty() {
+        if text.is_empty() || self.reject_unrecognized_command() {
             return None;
         }
         self.textarea.set_text_clearing_elements("");
@@ -401,16 +447,35 @@ impl ChatComposer {
     }
 
     fn handle_submission(&mut self, now: Instant) -> (InputResult, bool) {
+        // A bare command is run even once the caret left the '/name' token
+        // and the popup with it.
+        if let Some(result) = self.try_dispatch_bare_slash_command() {
+            return (result, true);
+        }
+
         // If we're in a paste-like burst capture, treat Enter as part of the burst
         // and accumulate it rather than submitting or inserting immediately.
-        if self.paste_burst.is_active() && self.paste_burst.append_newline_if_active(now) {
+        // Do not treat as paste inside a slash-command context.
+        let in_slash_context = matches!(self.active_popup, ActivePopup::Command(_))
+            || self
+                .textarea
+                .text()
+                .lines()
+                .next()
+                .unwrap_or("")
+                .starts_with('/');
+        if self.paste_burst.is_active()
+            && !in_slash_context
+            && self.paste_burst.append_newline_if_active(now)
+        {
             return (InputResult::None, true);
         }
 
         // During a paste-like burst, treat Enter as a newline instead of submit.
-        if self
-            .paste_burst
-            .newline_should_insert_instead_of_submit(now)
+        if !in_slash_context
+            && self
+                .paste_burst
+                .newline_should_insert_instead_of_submit(now)
         {
             self.textarea.insert_str("\n");
             self.paste_burst.extend_window(now);
@@ -438,7 +503,10 @@ impl ChatComposer {
                 true
             }
             FlushResult::Typed(ch) => {
+                // Mirror insert_str() behavior so popups stay in sync when a
+                // pending fast char flushes as normal typed input.
                 self.textarea.insert_str(ch.to_string().as_str());
+                self.sync_popups();
                 true
             }
             FlushResult::None => false,
@@ -645,18 +713,24 @@ impl Renderable for ChatComposer {
         self.textarea
             .desired_height(width.saturating_sub(COLS_WITH_MARGIN))
             + 2
-            + footer_height(self.footer_props())
+            + self.popup_or_footer_height(width)
     }
 
     fn render(&self, area: Rect, buf: &mut Buffer) {
-        let [composer_rect, textarea_rect, footer_rect] = self.layout_areas(area);
-        // The footer hides while a paste burst buffers, so a pasted `?` does
-        // not flash "? for shortcuts" away and back.
-        let mut props = self.footer_props();
-        if props.mode == FooterMode::ComposerEmpty && self.is_in_paste_burst() {
-            props.mode = FooterMode::ComposerHasDraft;
+        let [composer_rect, textarea_rect, popup_rect] = self.layout_areas(area);
+        match &self.active_popup {
+            ActivePopup::Command(popup) => popup.render(popup_rect, buf),
+            ActivePopup::File(popup) => popup.render(popup_rect, buf),
+            ActivePopup::None => {
+                // The footer hides while a paste burst buffers, so a pasted `?` does
+                // not flash "? for shortcuts" away and back.
+                let mut props = self.footer_props();
+                if props.mode == FooterMode::ComposerEmpty && self.is_in_paste_burst() {
+                    props.mode = FooterMode::ComposerHasDraft;
+                }
+                render_footer(popup_rect, buf, props);
+            }
         }
-        render_footer(footer_rect, buf, props);
         Block::default()
             .style(user_message_style())
             .render(composer_rect, buf);

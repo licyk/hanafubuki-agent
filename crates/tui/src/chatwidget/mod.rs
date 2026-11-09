@@ -6,14 +6,16 @@
 //!
 //! What the turn does arrives as [`TurnUpdate`]s (`turn`); what the person
 //! types goes to the bottom pane, and what it submits leaves as an
-//! [`Op`] for the Agent.
+//! [`Op`] for the Agent, or runs as a slash command (`commands`).
 
+mod commands;
 mod turn;
 
 use std::cell::Cell;
 use std::collections::VecDeque;
 use std::time::{Duration, Instant};
 
+use hanafubuki_agent::AgentSessionMode;
 use ratatui::buffer::Buffer;
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::layout::Rect;
@@ -21,6 +23,7 @@ use ratatui::layout::Rect;
 use crate::agent_bridge::TurnUpdate;
 use crate::app_event::{AppEvent, AppEventSender, Op};
 use crate::bottom_pane::{BottomPane, BottomPaneParams, CancellationEvent, InputResult};
+use crate::file_search::FileMatch;
 use crate::history_cell::{self, HistoryCell, ToolCallCell};
 use crate::key_hint::{self, KeyBinding};
 use crate::render::renderable::{
@@ -33,14 +36,11 @@ use crate::tui::FrameRequester;
 /// How long a first Ctrl-C (or Ctrl-D) waits for the second that quits.
 const QUIT_SHORTCUT_TIMEOUT: Duration = Duration::from_secs(1);
 
-/// What `/quit` and `/exit` are: the one command before the slash commands.
-const QUIT_COMMANDS: [&str; 2] = ["/quit", "/exit"];
-
 pub(crate) struct ChatWidgetInit {
     pub(crate) app_event_tx: AppEventSender,
     pub(crate) frame_requester: FrameRequester,
     pub(crate) enhanced_keys_supported: bool,
-    pub(crate) model: String,
+    /// The working directory, as the session header shows it.
     pub(crate) directory: String,
 }
 
@@ -65,6 +65,9 @@ pub(crate) struct ChatWidget {
     retry_status_header: Option<String>,
     quit_shortcut_expires_at: Option<Instant>,
     quit_shortcut_key: Option<KeyBinding>,
+    directory: String,
+    /// The session's mode, which `/mode` offers to change.
+    mode: AgentSessionMode,
 }
 
 impl ChatWidget {
@@ -73,7 +76,6 @@ impl ChatWidget {
             app_event_tx,
             frame_requester,
             enhanced_keys_supported,
-            model,
             directory,
         } = init;
         let bottom_pane = BottomPane::new(BottomPaneParams {
@@ -83,7 +85,7 @@ impl ChatWidget {
             enhanced_keys_supported,
             placeholder_text: "Ask the Agent to do anything".to_string(),
         });
-        let widget = Self {
+        Self {
             app_event_tx,
             frame_requester,
             bottom_pane,
@@ -97,17 +99,9 @@ impl ChatWidget {
             retry_status_header: None,
             quit_shortcut_expires_at: None,
             quit_shortcut_key: None,
-        };
-        widget
-            .app_event_tx
-            .send(AppEvent::InsertHistoryCell(Box::new(
-                history_cell::SessionHeaderHistoryCell::new(
-                    model,
-                    directory,
-                    env!("CARGO_PKG_VERSION"),
-                ),
-            )));
-        widget
+            directory,
+            mode: AgentSessionMode::Default,
+        }
     }
 
     pub(crate) fn handle_key_event(&mut self, key_event: KeyEvent) {
@@ -130,6 +124,7 @@ impl ChatWidget {
         }
         match self.bottom_pane.handle_key_event(key_event) {
             InputResult::Submitted(text) => self.submit_user_message(text),
+            InputResult::Command(cmd) => self.dispatch_command(cmd),
             InputResult::None => {}
         }
         self.request_redraw();
@@ -155,11 +150,17 @@ impl ChatWidget {
         }
     }
 
+    #[cfg(test)]
+    pub(crate) fn is_task_running(&self) -> bool {
+        self.bottom_pane.is_task_running()
+    }
+
+    /// Matches for the `@` token being typed, from the file search.
+    pub(crate) fn apply_file_search_result(&mut self, query: String, matches: Vec<FileMatch>) {
+        self.bottom_pane.on_file_search_result(query, matches);
+    }
+
     pub(crate) fn submit_user_message(&mut self, text: String) {
-        if QUIT_COMMANDS.contains(&text.trim()) {
-            self.app_event_tx.send(AppEvent::Exit);
-            return;
-        }
         if text.trim().is_empty() {
             return;
         }

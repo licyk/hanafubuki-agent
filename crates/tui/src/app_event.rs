@@ -7,12 +7,13 @@ use std::sync::mpsc::Sender;
 use std::time::Instant;
 
 use hanafubuki_agent::{
-    AgentEvent, AgentUserInputAnswer, AgentUserInputRequestId, ApprovalRequestId,
-    ApprovalUserDecision,
+    AgentEvent, AgentSessionId, AgentSessionMode, AgentUserInputAnswer, AgentUserInputRequestId,
+    ApprovalRequestId, ApprovalUserDecision,
 };
 use ratatui::crossterm::event::KeyEvent;
 
 use crate::agent_bridge::AgentReply;
+use crate::file_search::FileMatch;
 use crate::history_cell::HistoryCell;
 
 pub(crate) enum AppEvent {
@@ -31,6 +32,19 @@ pub(crate) enum AppEvent {
     /// Something for the Agent to do.
     Op(Op),
     InsertHistoryCell(Box<dyn HistoryCell>),
+    /// The `@` token being typed changed; an empty query ends the search.
+    StartFileSearch(String),
+    /// The best files for `query` so far.
+    FileSearchResult {
+        query: String,
+        matches: Vec<FileMatch>,
+    },
+    /// `/diff`: run `git diff` in the workspace.
+    Diff,
+    /// Its output, for the pager.
+    DiffResult(String),
+    /// `/resume`: the sessions to pick from.
+    OpenResumePicker,
     StartCommitAnimation,
     StopCommitAnimation,
     CommitTick,
@@ -51,6 +65,25 @@ pub(crate) enum Op {
         request_id: AgentUserInputRequestId,
         answers: Vec<AgentUserInputAnswer>,
     },
+    Command(AgentCommand),
+}
+
+/// What the slash commands ask of the Agent.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum AgentCommand {
+    NewSession,
+    Resume(AgentSessionId),
+    Compact,
+    /// The models `/model` offers.
+    ListModels,
+    SetModel {
+        provider_id: String,
+        model: String,
+    },
+    SetMode(AgentSessionMode),
+    Status,
+    Mcp,
+    Skills,
 }
 
 /// The app loop's channel, as the widgets and the Agent's sinks hold it.
