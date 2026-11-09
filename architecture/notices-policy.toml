@@ -1,0 +1,67 @@
+# The third-party code in the sources, checked by `cargo xtask
+# check-notices` (NOTICE, docs/extraction-plan.md §9, "Licence checklist").
+#
+# `[[derived]]`: code derived from another project. `path` is a Rust file or
+# a directory (every `.rs` file under it, recursively); each file carries
+# `marker` in its leading comment block, and NOTICE names `notice` (in
+# backquotes). `[[mit]]`: a file that also keeps the MIT header of the
+# project it derives from (`holder` is one of its copyright lines); NOTICE
+# names its path. `[[original]]`: a file under a derived directory that is
+# not derived, with why; it carries no marker. Snapshot files are generated
+# from the tests and not checked.
+version = 1
+
+[[derived]]
+path = "crates/tui/src"
+marker = "Modified from OpenAI Codex rust-v0.93.0 (Apache-2.0)."
+notice = "crates/tui"
+
+[[derived]]
+path = "crates/config/src/overrides.rs"
+marker = "Derived from OpenAI Codex (https://github.com/openai/codex),"
+notice = "crates/config/src/overrides.rs"
+
+[[derived]]
+path = "crates/config/src/overrides/tests.rs"
+marker = "Derived from OpenAI Codex (https://github.com/openai/codex), the tests"
+notice = "crates/config/src/overrides.rs"
+
+[[mit]]
+path = "crates/tui/src/custom_terminal.rs"
+holder = "Copyright (c) 2016-2022 Florian Dehau"
+
+[[original]]
+path = "crates/tui/src/lib.rs"
+reason = "The crate's own entry: its docs and module declarations."
+
+[[original]]
+path = "crates/tui/src/agent_bridge.rs"
+reason = "The adapter between the facade and the interface, written for the Agent; it stands where Codex has its ConversationManager."
+
+[[original]]
+path = "crates/tui/src/tui/input.rs"
+reason = "The thread that reads the terminal, written in place of Codex's event-stream broker."
+
+[[original]]
+path = "crates/tui/src/app/tests.rs"
+reason = "The bridge end to end over the standalone Agent and its scripted model."
+
+[[original]]
+path = "crates/tui/src/tui/tests.rs"
+reason = "The inline viewport on an emulated terminal, written for the port."
+
+[[original]]
+path = "crates/tui/src/chatwidget/tests.rs"
+reason = "The chat's handling of the bridge's turn updates."
+
+[[original]]
+path = "crates/tui/src/bottom_pane/request_user_input/tests.rs"
+reason = "The question overlay over the Agent's option-only answers."
+
+[[original]]
+path = "crates/tui/src/diff_render/tests.rs"
+reason = "The diff of the Agent's PatchPreview."
+
+[[original]]
+path = "crates/tui/src/history_cell/tool/tests.rs"
+reason = "The tool call cell over the Agent's tool results."
