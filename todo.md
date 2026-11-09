@@ -283,7 +283,7 @@ moves its pin.
   - Hanafubuki, at its next pin: re-exports `AgentSubagentStatus`,
     `AgentSubagentState`; calls `subagents`, `interrupt_subagent`; a
     `subagents` row; every request golden changes again.
-- [ ] P11: the `review` plugin (rubric, read-only child session, JSON
+- [x] P11: the `review` plugin (rubric, read-only child session, JSON
       findings), `/review`.
   - [x] The facade's half: the `review` row (after `subagents`); a review
         is a durable child of origin `Review` (empty, Default mode) whose
@@ -300,10 +300,10 @@ moves its pin.
         `start_review`, `cancel_review`, `review_targets` (git queries in
         `crates/worktree/src/queries.rs`); `AgentReviewTarget` is a strict
         IPC request. New golden `review_request.json`; no other changed.
-  - [ ] The interface's half: `/review [instructions]` (targets picker:
-        uncommitted, base branch, commit, custom), the review cell; a
-        parent with no turn yet is refused (say so, or ask for a message
-        first).
+  - [x] The interface's half: `/review [instructions|cancel]` (a picker
+        of targets; refused before a first message; a "Reviewing" status
+        and Esc to cancel; the review cell with the verdict and findings;
+        messages sent meanwhile wait for the findings).
   - Open: read-only tools, allowed MCP tools and the Agent's own tools
     still run in a review; `request_user_input` could stall one; no
     `review_model`; a failed review is reported as interrupted; with the
@@ -313,7 +313,7 @@ moves its pin.
     `start_review`, `cancel_review`, `review_targets` and their types; a
     `review` row; kernel `add_continuation_context`; copy
     `review_request.json` byte for byte.
-- [ ] P12: the `goal` plugin (tools, context, the first continuation hook,
+- [x] P12: the `goal` plugin (tools, context, the first continuation hook,
       goal templates), `/goal` and its status-line item.
   - [x] The facade's half: `AgentGoal` (objective ≤ 4,000 characters,
         status active | paused | blocked | budget_limited | complete,
@@ -331,8 +331,9 @@ moves its pin.
         `recorded_goal_history_transcript.json`. `activity.rs`'s ceiling
         644. Plugin rules' tool counts corrected (they were already off:
         Default 24, Plan 13).
-  - [ ] The interface's half: `/goal [objective|clear|pause|resume|edit]`
-        and its status-line item (read `goal()` at open, follow the event).
+  - [x] The interface's half: `/goal [objective [--tokens N]|clear|pause|
+        resume|edit]` (a menu with usage and budgets; "Replace goal?"),
+        the status line's goal item; setting or resuming starts no turn.
   - Open: continuation is within the turn (Codex starts a new turn), so a
     goal without a budget is bounded by a turn's limits; `resume_goal`
     starts no turn; `/goal edit` (keeping usage) needs an edit path;
@@ -343,7 +344,7 @@ moves its pin.
     `recorded_goal_history_reopens_and_continues`; `PersistedAgentRuntime
     State` struct literals need `goal`; exhaustive event matches need
     `SessionGoalUpdated`; a `goal` row after `recap`.
-- [ ] P13: `hanafubuki-agent-hooks` and `plugin-hooks`, the
+- [x] P13: `hanafubuki-agent-hooks` and `plugin-hooks`, the
       `ToolLifecycleHookRegistry` extension point, hook events, `/hooks`.
   - [x] The facade's half: `crates/hooks` (Codex's `[hooks]` and
         `hooks.json` from the home and a trusted project; tolerant;
@@ -358,7 +359,9 @@ moves its pin.
         is no longer reported as an unknown configuration key. No golden
         changed; `kernel/src/activity.rs`'s ceiling rose from 641 to 643
         (its exhaustive event match).
-  - [ ] The interface's half: `/hooks`.
+  - [x] The interface's half: `/hooks` (events, hooks with trust and
+        on/off, toggle, trust, trust all; the configuration's skipped
+        items); at start, "N hooks need review" and a warning.
   - Open: dropped events (model request, permission request, compaction,
     session end, subagent start/stop, interrupt) and handlers (`mcp_tool`,
     `prompt`, `agent`, async) are diagnostics; a project with only
