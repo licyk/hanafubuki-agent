@@ -159,6 +159,40 @@ moves its pin.
       `AgentSessionDriver`, archive and delete cascade; a new history
       fixture in both repositories), `/side` and `/btw`, the workspace
       panes.
+  - [x] The facade's half: lineage (`parent_session_id`, `origin` Side |
+        Subagent | Review, `cwd`, `branch` from `.git/HEAD`) in the
+        persisted runtime state (optional fields, format version unchanged)
+        and in `AgentSessionSummary`; `AgentSessionListRequest.parent`
+        (`TopLevel` by default, so every list now hides children, or
+        `ChildrenOf(id)`), cursor version 2, index schema 5 (an older
+        index is rebuilt from the rollouts once); ephemeral sessions in an
+        in-memory store behind `SessionStores` (never listed or
+        recovered); kernel `create_child_session`,
+        `close_ephemeral_session`, `ephemeral_children`;
+        `AgentSessionDriver` (`session_driver.rs`; `run_turn` and
+        `last_answer` wait for P10); `open_side_conversation` and
+        `close_side_conversation` (Codex's side policy and boundary as
+        `ContinuationContext` items); archive and delete cascade over
+        persisted descendants (a refused deletion deletes nothing). New
+        corpus `golden/history-lineage/` with
+        `recorded_lineage_history_transcript.json`, and the request golden
+        `side_conversation_request.json`.
+  - [ ] The interface's half: `/side` and `/btw`, the workspace panes
+        (layer H), the resume picker's cwd and branch.
+  - Open: a compacting parent refuses `/side`; no `/side` before a first
+    turn; restore does not cascade; a child does not inherit the
+    session's permission mode (P10 passes it).
+  - Hanafubuki, at its next pin: copy `history-lineage/`,
+    `recorded_lineage_history_transcript.json` and
+    `side_conversation_request.json` byte for byte, with the twin of
+    `recorded_lineage_history_reopens_and_continues`; every session list
+    without `parent` now hides children; the index reindexes once (schema
+    5); kernel signatures changed: `create_model_session` and
+    `create_unconfigured_session` take an `AgentSessionWorkspace`,
+    `prepare_session_deletion` takes `descendants`,
+    `PreparedAgentSessionDeletion` holds a list and is not `Copy`; new
+    facade calls `open_side_conversation`, `close_side_conversation`;
+    re-exports `AgentSessionOrigin`, `AgentSessionParentFilter`.
 - [ ] P10: the `subagents` plugin (Codex's v2 tools, orchestrator prompt:
       goldens), `/subagents`, `/agents`.
 - [ ] P11: the `review` plugin (rubric, read-only child session, JSON
