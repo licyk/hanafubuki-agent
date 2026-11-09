@@ -136,7 +136,7 @@ Run from the repository root, selecting scope by the change's impact:
 - `RUSTFLAGS="-D warnings" cargo check --workspace --all-targets --all-features`
 - `cargo xtask check` (every repository check: dependencies and layers,
   source layout, module size, strict decoding, model-api context sections,
-  path boundaries, locks, plugin panics)
+  path boundaries, locks, plugin panics, the third-party notices)
 - `cargo test --workspace --all-features`
 
 These are the steps `.github/workflows/ci.yml` runs on Linux, Windows and

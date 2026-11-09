@@ -59,27 +59,49 @@ done: the workspace, the decoupling inside Hanafubuki's tree, and the move.
       approval and question overlays, `agent_bridge.rs`; bare
       `hanafubuki-agent [PROMPT]` runs it on a terminal. NOTICE carries
       Codex's NOTICE and license and Ratatui's.
-- [ ] Phase 5b: the transcript pager overlay (alternate screen); the slash
-      commands (new, resume, compact, diff, model, mode, mcp, skills,
-      status, mention, quit beyond 5a's `/quit`) with the composer's
-      popup; the resume picker from the history store and `resume
-      [--last|ID]`; `/model` from the provider registry and
-      `ModelCatalog`; `@` file mentions (Codex `file-search`); `cargo xtask
-      check-notices`; the `.tmTheme` licence check if highlighting ships.
-  - Deferred from 5a: images in the composer (paste, attach); a session's
-    earlier messages in the composer's history (only this run's); desktop
-    notifications; Ctrl-Z suspend; the external editor; syntax
-    highlighting of code and commands; the reasoning summary cells (the
-    Agent's events carry no reasoning text); the time-worked separator
-    counts from the status line's timer; a contained Agent panic writes
-    its report to standard error, over the interface, as the Agent's hook
-    does everywhere.
+- [x] Phase 5b: the rest of the terminal interface (architecture.md
+      §3.7, [docs/cli.md](docs/cli.md#commands)): the slash commands with
+      the composer's popup (`/model` from the Providers' model catalogs
+      and `set_session_model`, `/mode`, `/skills`, `/new`, `/resume`,
+      `/compact`, `/diff`, `/mention`, `/status`, `/mcp`, `/quit`,
+      `/exit`), the transcript pager (Ctrl-T) and `/diff`'s on the
+      alternate screen, the resume picker over the history store's session
+      pages with the transcript replayed, `hanafubuki-agent resume
+      [ID|--last] [PROMPT]`, `@` file mentions from Codex's `file-search`
+      (in the TUI crate, on `nucleo` 0.5), and `cargo xtask check-notices`
+      (`architecture/notices-policy.toml`). The facade gained
+      `workspace_roots()`. Phase 5 is done: a pty run covers the popup,
+      `/status`, a mention, a turn, Ctrl-T, `/diff`, `/model`, `resume`
+      and `resume --last` against a fake Responses server.
+  - Deferred from 5b: the permission mode changed from the interface (it
+    is the configuration's; a per-session one is not in the facade);
+    plan mode's "implement this plan?" prompt (switch back with `/mode`
+    and ask); `/model`'s reasoning effort; the transcript pager's live
+    tail of the running call and Codex's backtracking (Esc to edit an
+    earlier message); a replayed tool call shows its name without the
+    subject the live event carried (the history keeps the arguments,
+    not the presentation); `/skills` lists the catalog, it does not
+    toggle or insert a Skill; the sessions in the resume picker show no
+    working directory or branch (the summaries have none); `exec`
+    resumes no session; syntax highlighting (no `.tmTheme` is shipped).
+  - Still deferred from 5a: images in the composer (paste, attach); a
+    session's earlier messages in the composer's history (only this
+    run's); desktop notifications; Ctrl-Z suspend; the external editor;
+    the reasoning summary cells (the Agent's events carry no reasoning
+    text); the time-worked separator counts from the status line's
+    timer; a contained Agent panic writes its report to standard error,
+    over the interface, as the Agent's hook does everywhere.
 - [ ] Hanafubuki, when it moves its pin past Phase 5a: nothing to change.
       The facade gained re-exports only (`AgentTaskPlanSnapshot`,
       `AgentTaskPlanStep`, `AgentTaskPlanStepStatus`, `AgentToolPresentation`,
       `AgentUserInputOption`, `AgentUserInputQuestion`, `ApprovalAction`,
       `ApprovalActionKind`, `ToolOutput`, `ToolOutputContent`), and the TUI is
       a crate Hanafubuki does not depend on.
+- [ ] Hanafubuki, when it moves its pin past Phase 5b: nothing to change.
+      The facade gained one call, `AgentApplicationService::workspace_roots`
+      (an addition over the host's `WorkspaceRootsPort`); the TUI and the
+      CLI are crates Hanafubuki does not depend on, and nothing the model
+      sees changed (the goldens and the history corpus are untouched).
 - [ ] Phase 6: `release.yml` with binaries, clippy `-D warnings`, `v0.1.0`
       on crates.io.
 

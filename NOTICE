@@ -18,10 +18,13 @@ Third-party notices
   - `crates/config/src/overrides.rs` and its tests are derived from Codex's
     `codex-rs/common/src/config_override.rs` (`rust-v0.93.0`);
   - the terminal interface, `crates/tui`, is ported from Codex's
-    `codex-rs/tui` (`rust-v0.93.0`): every file of it derived from Codex
-    says so in its first line ("Modified from OpenAI Codex rust-v0.93.0
-    (Apache-2.0)"), and was modified as the port describes
-    (docs/architecture.md, "The terminal interface").
+    `codex-rs/tui` (`rust-v0.93.0`), and its file search
+    (`crates/tui/src/file_search`) from Codex's `codex-rs/file-search`:
+    every file of it derived from Codex says so in its first line
+    ("Modified from OpenAI Codex rust-v0.93.0 (Apache-2.0)"), and was
+    modified as the port describes (docs/architecture.md, "The terminal
+    interface"); architecture/notices-policy.toml lists the files of it
+    that are not derived.
   Codex's NOTICE and its license follow.
 - Ratatui (https://github.com/ratatui/ratatui), MIT License: Codex's
   `custom_terminal.rs`, ported as `crates/tui/src/custom_terminal.rs`, is

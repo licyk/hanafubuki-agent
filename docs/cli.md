@@ -45,7 +45,7 @@ need the data directory to themselves.
 | Command | Does |
 | --- | --- |
 | `hanafubuki-agent [PROMPT]` | The terminal interface (below), in a new session; `PROMPT` is its first message. Without a terminal on standard input and output it prints how to use `exec` and exits with 2. |
-| `resume [--last\|ID]` | Reopening a session in the terminal interface, not available yet: prints how to use `exec` and exits with 2. |
+| `resume [ID] [PROMPT]`, `resume --last [PROMPT]` | The terminal interface on an earlier session, its transcript replayed: the session `ID` (from `sessions list`), the latest one a turn ran in (`--last`; a new session when there is none), or, with neither, the one picked from the resume picker (Esc there starts a new session). `PROMPT` is the first message. Without a terminal it exits with 2, as the interface does. |
 | `exec [PROMPT\|-]` | One turn (below). |
 | `config path` | Prints where `config.toml`, `providers.toml`, `mcp.toml`, the data and the log are. |
 | `config get [KEY]` | A key's value with every layer applied (a string as it is, anything else as TOML); without a key, every setting as a TOML document. The credentials of a proxy URL print as `***`. |
@@ -78,14 +78,66 @@ time, an option to pick for each.
 
 | Key | Does |
 | --- | --- |
-| Enter | Sends the message: a new turn, or, while one runs, a message that steers it |
+| Enter | Sends the message: a new turn, or, while one runs, a message that steers it; in a popup, picks its entry |
 | Shift+Enter, Ctrl+J | A new line |
-| Up, Down | The session's earlier messages |
-| Esc, Ctrl-C | Interrupts the running turn; Ctrl-C first clears a composer that has text, and in an approval denies it and those waiting |
+| Up, Down | The session's earlier messages; in a popup, its entries |
+| Tab | In the command popup, completes the command; in the file popup, inserts the file |
+| Esc, Ctrl-C | Interrupts the running turn; Esc first closes a popup; Ctrl-C first clears a composer that has text, and in an approval denies it and those waiting |
+| Ctrl-T | The transcript in a pager (below) |
+| `?` on an empty composer | The shortcuts |
 | Ctrl-C twice, Ctrl-D twice on an empty composer, `/quit` | Quits |
 
 Quitting restores the terminal and shuts the Agent down; the exit code is
 0, or 1 when the Agent could not start or the terminal could not be used.
+
+### Commands
+
+A message that starts with `/` names a command; typing `/` opens a popup
+of them, narrowed as the name is typed. A `/name` that is no command is
+not sent (a path such as `/usr/bin/env`, or a leading space, is). The
+commands marked *not during a turn* say so instead of running while a turn
+runs.
+
+| Command | Does |
+| --- | --- |
+| `/model` | A list of the models the enabled Providers report (their model catalog), the session's own marked; picking one sets it on the session. A Provider whose catalog cannot be read is listed with why. *Not during a turn.* |
+| `/mode` | Switches the session between `default` and `plan` mode (read-only exploration that ends with a proposed plan). *Not during a turn.* |
+| `/skills` | The Skill catalog: each Skill, whether it is enabled, and the catalog's issues. |
+| `/new` | A new session; the previous one stays in the history. *Not during a turn.* |
+| `/resume` | The resume picker (below). *Not during a turn.* |
+| `/compact` | Compacts the session's context now, as automatic compaction does. *Not during a turn.* |
+| `/diff` | `git diff` of the first workspace root, untracked files included, in a pager. |
+| `/mention` | Inserts `@`, which opens the file popup. |
+| `/status` | The session's model and Provider, the workspace roots, the permission mode, the session's mode and id, and its token use. |
+| `/mcp` | The MCP servers: enabled, connection state, command or URL, tools. |
+| `/quit`, `/exit` | Quits. |
+
+The permission mode is the configuration's (`permissionMode`,
+`--permission-mode`); `/status` shows it, no command changes it.
+
+### File mentions
+
+`@` followed by a few characters opens a popup of the workspace roots'
+files that match them fuzzily (`.gitignore` and the other ignore files are
+honoured); Enter or Tab replaces the `@token` with the file's path:
+relative to the first root, or whole for a file in another root, quoted
+when it has spaces. Only the path is sent; the model reads the file with
+its tools.
+
+### The pager and the resume picker
+
+Ctrl-T shows the session's transcript, and `/diff` its diff, on the
+terminal's alternate screen: Up, Down (`k`, `j`), Page Up, Page Down
+(Space), Home and End scroll; `q` (and for the transcript Esc or Ctrl-T)
+closes it. What the turn writes meanwhile appears in the scrollback when
+it closes.
+
+The resume picker lists the sessions a turn ran in, the latest first, by
+title (a session's first message until it is named) and when it was last
+updated; typing searches the titles. Enter reopens the session: the
+interface shows its header and its latest 200 transcript items (messages,
+plans, tool calls with their output), and the next message continues it.
+Esc goes back (at `resume`'s start, to a new session); Ctrl-C quits.
 
 ## `exec`
 
@@ -193,7 +245,7 @@ and the next start reaps the processes the Agent had started.
 | --- | --- |
 | 0 | The turn completed (or a management command did what it was asked). |
 | 1 | The turn failed (`turn_failed`, any reason), the Agent cancelled it (`turn_cancelled` for another reason than an interruption), the Agent stopped during it, or the command could not run (no Provider, the data directory in use, a key that cannot be set). |
-| 2 | The command line is not one the binary accepts: an unknown flag, no prompt, an `--approve` that is not a policy, the terminal interface or `resume`. |
+| 2 | The command line is not one the binary accepts: an unknown flag, no prompt, an `--approve` that is not a policy, a session id that is not one, the terminal interface or `resume` without a terminal. |
 | 3 | The model asked a question no one could answer, so the turn was cancelled. |
 | 130 | The turn was interrupted (Ctrl-C). |
 

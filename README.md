@@ -10,9 +10,10 @@ The Agent's crates live here, moved from
 [Hanafubuki](https://github.com/licyk/Hanafubuki), which embeds the Agent
 through the `hanafubuki-agent` facade. The facade also runs without a host
 (`AgentRuntime::standalone`), and the `hanafubuki-agent` binary runs the
-terminal interface, ported from Codex's, or one headless turn (`exec`), and
-manages its configuration on it; the interface's slash commands and session
-picker come next ([extraction plan](docs/extraction-plan.md)).
+terminal interface, ported from Codex's (with its slash commands, transcript
+pager, `@` file mentions and session picker), or one headless turn (`exec`),
+and manages its configuration on it; the release comes next
+([extraction plan](docs/extraction-plan.md)).
 
 ## Usage
 
@@ -22,13 +23,14 @@ hanafubuki-agent providers add OpenAI --base-url https://api.openai.com/v1 --api
 hanafubuki-agent providers default provider-1 --model gpt-5.1
 hanafubuki-agent                      # the terminal interface
 hanafubuki-agent "Explain this repository"
+hanafubuki-agent resume --last        # reopen the latest session
 hanafubuki-agent exec "Summarize the open TODOs in this repository"
 hanafubuki-agent exec --json --approve allow:exec_command - < task.md
 hanafubuki-agent doctor
 ```
 
-With no command it opens the terminal interface (`/quit`, or Ctrl-C twice,
-to leave). `exec` prints the turn as text, or with `--json` one event per line, and
+With no command it opens the terminal interface (`/` lists its commands;
+`/quit`, or Ctrl-C twice, to leave), and `resume` reopens a session in it. `exec` prints the turn as text, or with `--json` one event per line, and
 exits with a code that says how the turn ended; approvals follow
 `--approve` (`deny` by default). The commands, flags, output formats and
 exit codes are in [docs/cli.md](docs/cli.md), the configuration in

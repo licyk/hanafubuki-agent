@@ -52,7 +52,7 @@ member's allowed dependencies).
 | Crate | Role |
 | --- | --- |
 | `hanafubuki-agent-cli` | The `hanafubuki-agent` binary (§3.6, [cli.md](cli.md)): the terminal interface with no command, `exec` and the management commands over the facade's standalone runtime; depends on the facade and the TUI. |
-| `hanafubuki-agent-tui` | The terminal interface (§3.7), ported from the Codex TUI (`rust-v0.93.0`) onto upstream ratatui 0.30 and crossterm 0.29; a library over the facade alone, run by the binary on the started Agent. |
+| `hanafubuki-agent-tui` | The terminal interface (§3.7), ported from the Codex TUI (`rust-v0.93.0`) onto upstream ratatui 0.30 and crossterm 0.29, with Codex's `file-search` for `@` mentions; a library over the facade alone, run by the binary on the started Agent. |
 | `hanafubuki-agent` | The facade a host embeds, and the composition: `DesktopAgent`, the `AgentSlot` supervisor, the Agent's own Executor and Skill watcher (§3.4), the plugin host (`AgentHost`) and its manifest, the Agent's own plugins (`src/plugins/`), the IPC facade `AgentApplicationService` (the settings API among it), the host interface (`AgentHostPorts`, §3.5), the standalone runtime with a default for every port (`AgentRuntime`, §3.6), the data directory's lock and the standalone log file (§10), the memory supervisor, and `panic` for the host's hook and the binary's (§3.3). |
 | `hanafubuki-agent-config` | The Agent's own configuration (`AgentConfig`, §10): the settings, the Provider registry and the MCP servers in the directory the host names, or, standalone, in the OS directory (`AgentDirs`) with the settings layered (`ConfigLayers`). |
 | `hanafubuki-agent-runtime` | The Agent's copy of the contained runtime (`ContainedRuntime`, threads `agent-rt`); the application keeps its own for the feature runtime. |
@@ -341,10 +341,49 @@ the fixed theme Codex falls back to without it.
   flags) or Ctrl+J inserts a newline, Up and Down walk the session's
   messages; Esc or Ctrl-C interrupts a running turn; Ctrl-C twice, Ctrl-D
   twice on an empty composer, or `/quit` quits.
+- **Sessions through the bridge.** The interface opens every session
+  through the bridge (`AgentBridge::open`, over `open_session`): a new one,
+  one named by `resume`, the latest, or one picked from the resume picker.
+  The session's latest transcript items are read back into what the chat
+  replays (`agent_bridge/replay.rs`: messages, plans, tool calls with the
+  output and the `apply_patch` diff read from their committed items, the
+  way a finished call's are), after its header. `/new` and `/resume` switch
+  the bridge's session; the events of the one left are ignored.
+- **The slash commands** (`slash_command.rs`, the composer's popup) map
+  onto the facade in `agent_bridge/commands.rs`: `/new` `create_session`,
+  `/resume` the history store's session pages (`list_sessions_page`,
+  searched by title, cursor-paged, read on the loop as the picker scrolls),
+  `/compact` `compact_session_with_sink`, `/model` the Providers' model
+  catalogs (`list_provider_models`) and `set_session_model`, `/mode`
+  `set_session_mode` (the session modes; the permission mode is the
+  configuration's and `/status` only shows it), `/status`
+  `settings_view`, `provider_registry_snapshot` and `workspace_roots`,
+  `/mcp` `mcp_snapshot`, `/skills` `list_skills`. `/diff` runs `git diff`
+  in the first workspace root: the interface's own short-lived process on
+  a thread of its own, not a tool call of the Agent's, so the Agent's
+  process ownership does not cover it.
+- **Overlays on the alternate screen.** The transcript pager (Ctrl-T), the
+  `/diff` pager and the resume picker take over the alternate screen; the
+  cells committed meanwhile wait and are written into the scrollback when
+  the overlay closes, and the restore leaves the alternate screen when one
+  is open (a fatal panic's restore included). The app keeps the session's
+  committed cells for the transcript pager.
+- **`@` file mentions** come from Codex's `file-search` crate, ported as
+  the interface's `file_search` module rather than a crate of its own,
+  since only the interface uses it: the workspace roots walked with
+  `ignore` (a root nested in another walked once, as its own) into a
+  `nucleo` matcher on its threads, re-ranked as the `@token` changes.
+  crates.io's `nucleo` 0.5 has no accessor for the match scores Codex's
+  pinned git revision reads, so the matches carry none (nothing showed
+  them); the matcher waits on a std channel with a deadline where Codex
+  selects over `crossbeam` channels; the locks are `parking_lot`'s.
 
-Not ported yet (Phase 5b, [todo.md](../todo.md)): the transcript pager,
-the slash commands, the resume picker, `/model`, `@` file mentions and the
-notices check.
+Not ported: Codex's live tail and backtracking in the transcript pager,
+its custom prompts, Skill and app mentions and image attachments in the
+composer, its status card's account and rate limits, and syntax
+highlighting (Codex's `.tmTheme` assets are not shipped). The
+third-party attribution of the ported files is checked by `cargo xtask
+check-notices` against `architecture/notices-policy.toml`.
 
 ## 4. Tools
 
