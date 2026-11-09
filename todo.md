@@ -424,13 +424,29 @@ moves its pin.
   - [ ] P14c, Windows: the restricted-token backend through
         `helper_dispatch`, TEMP as a writable root, the elevated setup,
         `/setup-default-sandbox`, `windows.sandbox`; the Windows default.
-  - [ ] P14d: escalation (the model asks to run one command outside the
-        sandbox, approved like any action: Codex's
-        `sandbox_permissions`/`justification`; a model-visible schema
-        change, goldens) and telling the model the sandbox mode; the
-        `/permissions` presets combining a mode with a sandbox.
-  - Open: on Linux the network is now off by default for the model's
-    commands, and until P14d nothing lets one command out; test support's
+  - [x] P14d: `exec_command`'s `sandbox_permissions` (`use_default` |
+        `require_escalated`) and `justification`; an escalated command is
+        approved like any action (Manual asks, AutoReview's reviewer sees
+        `sandboxEscalation`, FullAccess refuses it, as Codex's `never`),
+        its digest differs from the sandboxed one, and an approved one
+        runs unwrapped; a session allowance for it covers that command
+        only (the overlay says so). A `sandbox` world-state section tells
+        the model the mode, writable roots, network and how to escalate.
+        `/permissions` presets: Read only, Default, Auto-review, Full
+        access (both modes for the session). Eleven request goldens
+        regenerated; corpora unchanged.
+  - Open (P14d): `/permissions manual|auto-review|full-access` set the
+    mode only (the preset names collide); the status line does not show
+    the sandbox; Codex's `prefix_rule` and `with_additional_permissions`
+    are not ported.
+  - Hanafubuki, at its next pin (P14d): `ExecCommandRequest.
+    sandbox_escalation`, `ApprovalAction.sandbox_escalation` and
+    `SandboxEscalation` (re-exported); `ContextSectionKind::SANDBOX` (six
+    known kinds), `MAXIMUM_AGENT_WORLD_STATE_SECTIONS` 12; approval
+    payloads may carry `sandboxEscalation` (show the justification); copy
+    the eleven request goldens.
+  - Open: on Linux the network is off by default for the model's
+    commands (P14d's escalation lets one command out, approved); test support's
     `configure_test_provider` also writes `sandboxMode = "full-access"`
     (test binaries cannot be the helper); `.git` under a writable root
     stays writable (Landlock cannot carve sub-paths); review sessions are
