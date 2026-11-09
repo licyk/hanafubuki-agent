@@ -221,6 +221,27 @@ moves its pin.
     re-exports `AgentSessionOrigin`, `AgentSessionParentFilter`.
 - [ ] P10: the `subagents` plugin (Codex's v2 tools, orchestrator prompt:
       goldens), `/subagents`, `/agents`.
+  - [x] The facade's half: the `subagents` row (after `goal`): tools
+        `spawn_agent`, `send_message`, `followup_task`, `wait_agent`,
+        `list_agents`, `interrupt_agent` over `AgentSessionDriver` (Plan
+        mode: `wait_agent`, `list_agents`); children are durable sessions
+        of origin `Subagent` with the parent's effective permission mode;
+        depth 1, at most 3 running per parent, waits up to 5 minutes; the
+        `subagent_guidance` prompt fragment (the tail of Codex's
+        orchestrator.md) for top-level Default-mode sessions; facade
+        `subagents(parent)`, `interrupt_subagent`. Ten request goldens
+        regenerated (Default 30 tools, Plan 15); corpora unchanged.
+  - [ ] The interface's half: `/subagents` (status feed, switch to a
+        child), `/agents` (the command center), and a child's pending
+        approval surfaced in the interface (in Manual mode a child waits
+        on it).
+  - Open: an interrupt that lands while the tool catalog is built ends
+    the child's turn Failed, not Cancelled; `wait_agent` pollutes memory
+    contribution, so a coordinating session never contributes; archiving
+    a parent while a child runs is untested.
+  - Hanafubuki, at its next pin: re-exports `AgentSubagentStatus`,
+    `AgentSubagentState`; calls `subagents`, `interrupt_subagent`; a
+    `subagents` row; every request golden changes again.
 - [ ] P11: the `review` plugin (rubric, read-only child session, JSON
       findings), `/review`.
 - [ ] P12: the `goal` plugin (tools, context, the first continuation hook,
