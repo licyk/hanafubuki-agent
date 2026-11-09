@@ -1512,7 +1512,7 @@
         "type": "function"
       },
       {
-        "description": "Restores previously compressed content. Use when you need exact details lost in compression. By default restores one tier up. Use full:true for all the way to original messages. Use toFile to write to file instead of inflating context.",
+        "description": "Restores previously compressed content. Use when you need exact details lost in compression. By default restores one tier up. Use full:true for all the way to original messages. Use toFile to write to file instead of inflating context. Pass imageRef (an mNNNNN ref) to restore a folded image's original pixels, attached to the result; imageRef:\"list\" shows what is restorable.",
         "name": "decompress",
         "parameters": {
           "properties": {
@@ -1520,9 +1520,21 @@
               "description": "Block ID to decompress (e.g. b5)",
               "type": "string"
             },
+            "endId": {
+              "description": "Optional mNNNNN message ref, inclusive upper bound. Used together with startId; omit both to restore the whole block.",
+              "type": "string"
+            },
             "full": {
               "description": "Restore all the way to original messages",
               "type": "boolean"
+            },
+            "imageRef": {
+              "description": "Optional mNNNNN message ref whose IMAGE payload you want restored (an image that was folded away), or a handle a summary's MEDIA REFS lists. Pass \"list\" to enumerate every image currently restorable. Restored images are attached to the result. Independent of blockId/range.",
+              "type": "string"
+            },
+            "startId": {
+              "description": "Optional mNNNNN message ref, inclusive lower bound of a sub-range of this block. With endId, restores only that span instead of the whole block. Omit both to restore the whole block; empty values count as omitted.",
+              "type": "string"
             },
             "toFile": {
               "description": "Optional: write content to file instead of context",

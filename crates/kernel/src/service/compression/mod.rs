@@ -15,8 +15,8 @@ mod tools;
 use std::sync::OnceLock;
 
 use hanafubuki_agent_compression::{
-    hide_consumed_compress_calls, process_turn, prune, render_nudge_text, Prompts, RenderStrategy,
-    TokenCountSource, TurnInput,
+    hide_consumed_compress_calls, process_turn, prune, render_nudge_text, DocCache, Prompts,
+    RenderStrategy, TokenCountSource, TurnInput,
 };
 use hanafubuki_agent_foundation::panic::catch_panic;
 
@@ -25,6 +25,18 @@ use crate::{AgentCompressionState, AgentHierarchicalCompression};
 use adapter::MessageLog;
 pub(super) use inherit::inherited_state;
 pub(super) use tools::compression_tool_output;
+
+/// `search_context`'s document features, kept per session while it is
+/// loaded and never persisted: the summaries and the folded originals
+/// change little between searches. Shared by the record's rollback copies.
+#[derive(Clone, Default)]
+pub(super) struct SearchCache(Arc<parking_lot::Mutex<DocCache>>);
+
+impl SearchCache {
+    pub(super) fn lock(&self) -> parking_lot::MutexGuard<'_, DocCache> {
+        self.0.lock()
+    }
+}
 
 /// What a request does with the session's compression.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

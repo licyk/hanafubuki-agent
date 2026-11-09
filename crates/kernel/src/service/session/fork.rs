@@ -165,6 +165,7 @@ impl AgentService {
                 // blocks project it.
                 compression: source.runtime.compression.clone(),
                 compression_head: None,
+                compression_search: Default::default(),
             },
         };
         let cell = self.inner.sessions.insert(record, &self.inner.accepting)?;

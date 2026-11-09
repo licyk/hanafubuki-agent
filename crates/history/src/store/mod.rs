@@ -32,6 +32,7 @@ use crate::{
 };
 
 mod attachments;
+mod exports;
 mod filesystem;
 mod jsonl;
 mod kept_files;
@@ -404,6 +405,15 @@ impl AgentHistoryStore for FileAgentHistoryStore {
         attachment: &hanafubuki_agent_kernel::AgentImageAttachmentRef,
     ) -> Result<Vec<u8>, AgentHistoryStoreError> {
         self.load_visible_image_attachment_inner(session_id, attachment)
+    }
+
+    fn write_session_export(
+        &self,
+        session_id: AgentSessionId,
+        file_name: &str,
+        contents: &str,
+    ) -> Result<String, AgentHistoryStoreError> {
+        self.write_session_export_inner(session_id, file_name, contents)
     }
 
     fn flush_session(&self, session_id: AgentSessionId) -> Result<(), AgentHistoryStoreError> {

@@ -51,6 +51,18 @@ impl<'a> MessageLog<'a> {
         }
     }
 
+    /// The images of each message that has any, by message id.
+    pub(super) fn images_by_message(&self) -> HashMap<&str, &[crate::AgentImageAttachmentRef]> {
+        self.items
+            .iter()
+            .zip(&self.ids)
+            .filter_map(|(item, id)| {
+                let images = item.content.image_attachments();
+                (!images.is_empty()).then_some((id.as_deref()?, images))
+            })
+            .collect()
+    }
+
     /// The items `view` keeps, in history order, with its texts (ref tags,
     /// compacted `compress` arguments, clipped outputs) written into them and
     /// each summary it rendered at its place, as a summary item.

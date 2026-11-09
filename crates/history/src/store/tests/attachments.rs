@@ -127,3 +127,42 @@ fn a_queued_attachment_load_answers_each_attachment_in_order() {
         .shutdown(Instant::now() + Duration::from_secs(2))
         .is_empty());
 }
+
+/// A session's export is written under its attachments, replaced by the
+/// next one of its name, refused for an unknown session or a name that is
+/// not a plain file name, and deleted with the session.
+#[test]
+fn an_export_is_replaced_by_name_and_deleted_with_its_session() {
+    let (_temporary, paths, _workers, store) = open_store();
+    let session_id = AgentSessionId::new(1);
+    store
+        .create_session(AgentConversationCommit {
+            runtime: runtime(session_id, 0, 1),
+            history_mutations: Vec::new(),
+        })
+        .unwrap();
+    let first = store
+        .write_session_export(session_id, "decompress-b1.txt", "first")
+        .unwrap();
+    let second = store
+        .write_session_export(session_id, "decompress-b1.txt", "second")
+        .unwrap();
+    assert_eq!(first, second);
+    let exports = paths
+        .attachments
+        .join(session_id.value().to_string())
+        .join("exports");
+    assert_eq!(
+        std::fs::read_to_string(exports.join("decompress-b1.txt")).unwrap(),
+        "second"
+    );
+    assert!(store
+        .write_session_export(AgentSessionId::new(999), "decompress-b1.txt", "lost")
+        .is_err());
+    assert!(store
+        .write_session_export(session_id, "../escape.txt", "lost")
+        .is_err());
+
+    store.delete_sessions_confirmed(&[session_id]).unwrap();
+    assert!(!exports.exists());
+}

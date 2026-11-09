@@ -568,6 +568,22 @@ pub trait AgentHistoryStore: Send + Sync {
     ) -> Result<(), AgentHistoryStoreError> {
         Ok(())
     }
+    /// Writes `contents` as the session's export `file_name` (a plain file
+    /// name), replacing an earlier one of that name, and returns its path as
+    /// a person or a model reads it. Exports live with the session's data
+    /// and are removed when it is deleted. This default, for stores that
+    /// keep no files, refuses.
+    fn write_session_export(
+        &self,
+        session_id: AgentSessionId,
+        file_name: &str,
+        contents: &str,
+    ) -> Result<String, AgentHistoryStoreError> {
+        let _ = (session_id, file_name, contents);
+        Err(AgentHistoryStoreError::Io(
+            "this session's history store keeps no files".to_string(),
+        ))
+    }
     fn load_visible_image_attachment(
         &self,
         session_id: AgentSessionId,

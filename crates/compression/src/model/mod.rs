@@ -31,7 +31,7 @@ pub enum Role {
 
 impl Role {
     /// The kernel's name for the role, as its texts print it.
-    pub(crate) fn name(self) -> &'static str {
+    pub fn name(self) -> &'static str {
         match self {
             Role::User => "user",
             Role::Assistant => "assistant",

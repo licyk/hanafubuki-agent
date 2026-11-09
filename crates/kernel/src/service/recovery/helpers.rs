@@ -149,6 +149,7 @@ impl AgentService {
                 background_compaction: Default::default(),
                 compression: runtime.compression.map(Arc::new),
                 compression_head: None,
+                compression_search: Default::default(),
             },
         };
         // A state that was lost (it could not be read) is rebuilt from the

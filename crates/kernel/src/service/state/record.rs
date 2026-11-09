@@ -109,6 +109,8 @@ pub(in crate::service) struct SessionRuntime {
     /// the rest of the runtime, so it is always the last durable link once
     /// the commit settles; none until this run writes one.
     pub(in crate::service) compression_head: Option<crate::model::CompressionChainHead>,
+    /// `search_context`'s cache of document features, never persisted.
+    pub(in crate::service) compression_search: crate::service::compression::SearchCache,
 }
 
 /// Bounded rollback state for one staged durable mutation: every group but
@@ -183,6 +185,7 @@ impl SessionRuntime {
             background_compaction: Default::default(),
             compression: None,
             compression_head: None,
+            compression_search: Default::default(),
         }
     }
 }

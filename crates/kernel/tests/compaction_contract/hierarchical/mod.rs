@@ -15,6 +15,7 @@ mod fallbacks;
 mod forks;
 mod projection;
 mod switching;
+mod tools;
 
 /// A first answer long enough to be worth folding.
 static FIRST_ANSWER: std::sync::LazyLock<String> =

@@ -246,9 +246,15 @@ markers = ["Derived from billion-context (https://github.com/ranxianglei/billion
 notice = "crates/kernel/src/service/compression"
 
 [[derived]]
-path = "crates/kernel/src/service/compression/tools.rs"
+path = "crates/kernel/src/service/compression/tools"
 markers = ["Derived from billion-context (https://github.com/ranxianglei/billion-context),"]
 notice = "crates/kernel/src/service/compression"
+
+# billion-context's host extension of the `decompress` schema.
+[[derived]]
+path = "crates/kernel/src/core_tools/compression_spec.rs"
+markers = ["Derived from billion-context (https://github.com/ranxianglei/billion-context),"]
+notice = "crates/kernel/src/core_tools/compression_spec.rs"
 
 [[mit]]
 path = "crates/tui/src/custom_terminal.rs"

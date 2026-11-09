@@ -107,7 +107,8 @@ impl AgentService {
     /// changes the state only reports here: it is applied when its output is
     /// committed ([`Self::finish_tool_call`]), against the state of that
     /// moment, so the state and its receipt land in one commit and two calls
-    /// of one step apply in order.
+    /// of one step apply in order. An export is written here, with the
+    /// record's lock released, and its output is the one committed.
     async fn execute_compression_tool(
         &self,
         identity: TurnIdentity,
@@ -124,6 +125,16 @@ impl AgentService {
             &call.arguments,
             now_millis_u64(),
         );
-        Ok(AgentToolOutput::typed(run.output))
+        drop(guard);
+        let output = match run.export {
+            Some(export) => export.output(
+                self.inner
+                    .history_store
+                    .write_session_export(identity.session_id, &export.file_name, export.body())
+                    .map_err(|error| error.to_string()),
+            ),
+            None => run.output,
+        };
+        Ok(AgentToolOutput::typed(output))
     }
 }

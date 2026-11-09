@@ -4,6 +4,7 @@
 //! rather than registered handlers.
 
 mod arguments;
+mod compression_spec;
 mod specs;
 
 #[cfg(test)]

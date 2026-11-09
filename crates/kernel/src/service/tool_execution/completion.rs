@@ -69,9 +69,15 @@ impl AgentService {
                             now,
                         );
                         let mut items = committed_items;
-                        if let Some(ConversationItem::ToolOutput { output, .. }) = items.first_mut()
+                        if let Some(ConversationItem::ToolOutput { output, images, .. }) =
+                            items.first_mut()
                         {
-                            *output = run.output;
+                            // An export's output names the file the call
+                            // wrote; this run writes none.
+                            if run.export.is_none() {
+                                *output = run.output;
+                            }
+                            images.extend(run.images);
                         }
                         (std::borrow::Cow::Owned(items), run.state)
                     },

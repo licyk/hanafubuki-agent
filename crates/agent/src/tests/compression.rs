@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 use super::*;
 use crate::test_support::test_host;
 use crate::{AgentCompactionSettings, AgentCompactionStrategy, AgentConfig};
+use hanafubuki_agent_foundation::paths::ResolvedPath;
 use hanafubuki_agent_kernel::AgentCompressionState;
 use hanafubuki_agent_process::executor::ExecutorManager;
 use serde_json::Value;
@@ -282,6 +283,93 @@ async fn the_state_is_written_as_a_chain_and_read_back_whole() {
     };
     assert_eq!(blocks(&state), blocks(&live));
     finish(rebuilt, paths);
+}
+
+/// `decompress` with `toFile` writes the block's content to the session's
+/// export file under the Agent's data directory and answers with its path;
+/// deleting the session removes the file.
+// The managed turns' tasks must finish while `shutdown` blocks this thread.
+#[tokio::test(flavor = "multi_thread")]
+async fn decompress_to_a_file_writes_under_the_session_and_goes_with_it() {
+    let first = "The first answer is long. ".repeat(1_000);
+    let server = FakeServer::start(
+        [
+            with_usage(assistant_events(&first), 1_000),
+            with_usage(
+                call_events(
+                    "fold-1",
+                    "compress",
+                    &json!({ "content": format!("m00002–m00002 First answer\n{SUMMARY}") }),
+                ),
+                1_000,
+            ),
+            with_usage(
+                call_events(
+                    "export",
+                    "decompress",
+                    &json!({ "blockId": "b1", "full": true, "toFile": "/somewhere/else.md" }),
+                ),
+                1_000,
+            ),
+            with_usage(assistant_events("Written."), 1_000),
+        ]
+        .into_iter()
+        .map(|response| (response, Duration::ZERO))
+        .collect(),
+    )
+    .await;
+    let (service, paths) = service_with("compression-to-file", |_, config| {
+        configure(config, &server.base_url)
+    });
+    let session = service
+        .create_session(AgentSessionMode::Default)
+        .await
+        .unwrap();
+    for prompt in ["Hello.", "Fold it, then export it."] {
+        service
+            .start_turn(session.id, prompt.to_string().into())
+            .await
+            .unwrap();
+    }
+
+    let requests = server.requests();
+    let last: Value = serde_json::from_slice(&requests.last().unwrap().body).unwrap();
+    let output = last["input"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|item| item["call_id"] == "export" && item["type"] == "function_call_output")
+        .map(|item| item["output"][0]["text"].as_str().unwrap().to_owned())
+        .unwrap();
+    assert!(
+        output.contains(
+            "</acp>\n[Block b1 content — 1 item(s), full]\nContent (26012 chars) written to: "
+        ),
+        "{output}"
+    );
+    let path = output
+        .split_once("written to: ")
+        .and_then(|(_, rest)| rest.split_once(" (this session's export file"))
+        .map(|(path, _)| PathBuf::from(path))
+        .unwrap();
+    let exports = hanafubuki_agent_history::AgentHistoryPaths::under(history_root(&paths))
+        .attachments
+        .join(session.id.value().to_string())
+        .join("exports");
+    let expected = ResolvedPath::resolve(exports.join("decompress-b1-full.txt")).unwrap();
+    assert_eq!(path, expected.native());
+    let written = std::fs::read_to_string(&path).unwrap();
+    assert_eq!(written, format!("[assistant]\n{first}"));
+    assert!(!last.to_string().contains(&first));
+    assert!(!Path::new("/somewhere/else.md").exists());
+
+    let before = service.snapshot(session.id).unwrap();
+    service
+        .delete_session_confirmed(session.id, before.generation, before.revision)
+        .unwrap();
+    assert!(!path.exists());
+    assert!(!exports.exists());
+    finish(service, paths);
 }
 
 /// A `standard` session writes no compression state at all.

@@ -144,6 +144,18 @@ impl AgentHistoryStore for SessionStores {
             .load_image_attachment(attachment)
     }
 
+    /// An ephemeral session keeps no files: nothing of it outlives the
+    /// process.
+    fn write_session_export(
+        &self,
+        session_id: AgentSessionId,
+        file_name: &str,
+        contents: &str,
+    ) -> Result<String, AgentHistoryStoreError> {
+        self.store(session_id)
+            .write_session_export(session_id, file_name, contents)
+    }
+
     /// An ephemeral session's own images are in memory and its inherited
     /// ones in the durable store: a load of inherited images only goes
     /// through the durable session they came from, and a mixed one is read

@@ -420,9 +420,83 @@ and pushed, and notes what Hanafubuki must change at its next pin.
     `AgentCompressionChain` (a host store folds its links with it). The
     history index is schema 6 (`agent_compression_links`); an older index
     is rebuilt from the rollouts at the first open.
-- [ ] P9: decompress, search, media refs.
-  - Crate half done (decompress, search, media, rebuild); the kernel half
-    lands with P7. `decompress` (`collect_block_content` one tier up or
+- [x] P9: decompress, search, media refs. Done (kernel half):
+      `decompress` (kernel `service/compression/tools/decompress.rs`) has
+      billion-context's host's four modes: the whole block inline (one tier
+      up or `full`; an active block flagged restored inline, the re-fold
+      hint), a range (`startId`/`endId`, the block's messages whose refs
+      fall in it, read from the history, no state change), `toFile` (the
+      text written to the session's export file, the output its path) and
+      `imageRef` (`list`, an `mNNNNN` ref or a MEDIA REFS handle: the
+      message's images attached to the output). `full` and range restores
+      attach their messages' images too. The schema gains the host's
+      `startId`/`endId`/`imageRef` and its image note
+      (`core_tools/compression_spec.rs`, a derived file). Exports go through
+      the new `AgentHistoryStore::write_session_export` (default: refused):
+      the file store writes `history/attachments/<session>/exports/
+      decompress-<block>[-full|-<start>-<end>].txt` (staged, published,
+      replaced by name; the path rendered `native()`), so session deletion
+      removes them with the attachments and the blob sweeps never see them;
+      `execute_compression_tool` writes with the record's lock released,
+      and the commit keeps that output (`CompressionToolRun.export`) while
+      re-running the call only for its images and state. Restored images
+      are the history's own `AgentImageAttachmentRef`s, written into the
+      committed `ToolOutput.images` (`CompressionToolRun.images`), so a
+      request loads them like any tool output's and a model without image
+      input gets them stripped (an image restore is refused then).
+      `search_context` (`tools/search.rs`) searches the summaries and then
+      the folded originals (`folded_message_inputs` and `message_docs`),
+      both `Substring` with minimum score 1e-9 as the host: one literal
+      occurrence is a hit, none is no match (the hybrid's fuzzy n-grams make
+      weak matches of garbage queries). Rendering is the host's: covered
+      ref spans, the 【】-marked evidence snippet around the rarest term,
+      the truncation note, the narrowing tip, the original-text section
+      (one line per block no summary line listed, with its best message's
+      ref). The `DocCache` is per session in `SessionRuntime.
+      compression_search` (shared `Arc<parking_lot::Mutex>`, never
+      persisted, 8 Mi units). MEDIA REFS: the adapter already passes a
+      message's attachment ids as its image handles, so a fold lists them;
+      a kernel test pins it and the re-access. `acp_cache` is unchanged: the
+      model API's `ModelUsage` has `input_tokens` and `output_tokens` only.
+      The crate's `Role::name` is public now. Tests: kernel
+      `compaction_contract::hierarchical::tools` (range and its refusals;
+      search over folded originals, summary hits first, no match; a folded
+      image in MEDIA REFS, listed, restored by ref, by handle and by `full`,
+      its pixels in the next request; `toFile` on an ephemeral store fails
+      with the content inline), history `an_export_is_replaced_by_name_and_
+      deleted_with_its_session`, facade `tests::compression::decompress_to_
+      a_file_writes_under_the_session_and_goes_with_it` (real store: the
+      path under the data directory in the output, the file's text, a
+      `toFile` path ignored, removed by `delete_session_confirmed`). The
+      kernel cannot see the data directory (the history crate depends on
+      it), so the toFile contract is tested in the store and the facade.
+      Golden `hierarchical_requests` regenerated on purpose: only
+      `decompress`'s schema and description in `nudged_request` changed (its
+      `b1` restore is unchanged); `standard` goldens unchanged.
+  - Deviations from the host: a range is returned as the call's output
+    (the host acks and injects the text into the next request) and needs no
+    content store (the history holds the originals); `toFile` is a switch,
+    not a path (writing where the model names would be an unapproved
+    write), and the output says so; no automatic spill past 10 000
+    characters (the request's tool-output cap bounds a large inline
+    restore); images come back attached, not as files to `read`; no
+    plan-aware steering (off by default in the host behind `search.
+    planAware`, and the Agent has no such setting), no derived or foreign
+    session search, no archived-block receipts.
+  - Open: an export path under the data directory is readable by the
+    `read` tool only where the data directory is not a protected root
+    (standalone: none are). Images attached by a restore count toward the
+    turn's tool-output byte budget; a `full` restore of a block with many
+    images can exhaust it. The commit re-runs every `decompress` (only
+    exports keep the first output), and a re-run's inline output bypasses
+    `canonicalize_agent_tool_output` as in P7 (the request cap still
+    applies).
+  - For P10: `apply_retrieve`'s `Export { file_name, .. }` can go through
+    `write_session_export` as `decompress`'s does (`ToolExport`); the
+    content store's originals need files of their own (§4.6), which
+    `attachments/<session>/` holds and deletion removes.
+  - Crate half (before the kernel half): decompress, search, media,
+    rebuild. `decompress` (`collect_block_content` one tier up or
     full, `mark_block_restored_inline`, `expand_block`, which also sets
     `expanded` since `sync_blocks` reactivates any other block, and the
     kernel's lineage helpers), `search` (`search_blocks` over `block_docs`
@@ -444,12 +518,16 @@ and pushed, and notes what Hanafubuki must change at its next pin.
     the algorithm registry, semantic and asynchronous search, the V8
     160K-document case, media pinning (no message is unrecoverable: the
     host keeps the full history).
-  - For P7: the tool texts (`[Block bN content — …]`, the re-fold hint,
-    the search listing) are the host's in billion-context
-    (`src/decompress-shared.ts`), so the kernel writes its own; `toFile`
-    writes `collect_block_content`'s text under the data directory.
-  - Hanafubuki, at its next pin: nothing to change; the compression crate
-    gains public items only.
+  - Hanafubuki, at its next pin: `AgentHistoryStore::write_session_export`
+    (a default that refuses; a host store that keeps files implements it
+    to make `toFile` work, and must remove the files with the session).
+    If Hanafubuki's `protected_roots()` covers its app data directory (the
+    Agent's test support models a host so), the model cannot `read` an
+    export there: check at the pin, and allow the session's `exports/` for
+    reads or expect `toFile` to be useless. The
+    `decompress` schema changed (model-visible): golden to copy,
+    `hierarchical_requests.json`. The compression crate's `Role::name` is
+    public. `NOTICE` names `crates/kernel/src/core_tools/compression_spec.rs`.
 - [ ] P10: the opt-in features (absorb, content store, crush, rules,
       filter), off by default.
   - Crate half done; the kernel half (tools, the content store's files,
