@@ -114,6 +114,9 @@ pub(crate) enum TurnUpdate {
     /// The session's context was compacted: by `/compact`, automatically
     /// or in the background.
     Compacted,
+    /// The hierarchical compression failed for a request: the turn goes on
+    /// with the full history.
+    CompressionFailed(String),
     StatusReport(Box<StatusReport>),
     Providers(ProviderReply),
     Mcp(McpReply),
@@ -489,6 +492,12 @@ impl AgentBridge {
                 self.send_session_status();
                 TurnUpdate::Compacted
             }
+            AgentEventKind::ContextCompressionFailed { message } => {
+                TurnUpdate::CompressionFailed(message)
+            }
+            // The `compress` call's cell shows the fold, and the commit's
+            // `HistoryCommitted` already refreshed the status line.
+            AgentEventKind::ContextCompressed { .. } => return None,
             AgentEventKind::HistoryCommitted { .. }
             | AgentEventKind::SessionTitleUpdated { .. }
             | AgentEventKind::CompactionUpdated { .. } => return self.session_status(),

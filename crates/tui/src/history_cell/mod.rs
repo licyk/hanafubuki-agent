@@ -387,6 +387,10 @@ pub(crate) fn new_error_event(message: String) -> PlainHistoryCell {
     PlainHistoryCell::new(vec![vec![format!("■ {message}").red()].into()])
 }
 
+pub(crate) fn new_warning_event(message: String) -> PlainHistoryCell {
+    PlainHistoryCell::new(vec![vec![format!("⚠ {message}").yellow()].into()])
+}
+
 /// A divider between the work of a turn and its final answer, with how
 /// long the turn worked.
 #[derive(Debug)]

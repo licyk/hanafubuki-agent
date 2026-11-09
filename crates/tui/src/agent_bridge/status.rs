@@ -6,7 +6,10 @@
 
 use std::path::{Path, PathBuf};
 
-use hanafubuki_agent::{AgentGoal, AgentPermissionMode, AgentSessionId, AgentTaskPlanStepStatus};
+use hanafubuki_agent::{
+    AgentCompressionSummary, AgentGoal, AgentPermissionMode, AgentSessionId,
+    AgentTaskPlanStepStatus,
+};
 
 use super::{AgentBridge, AgentReply, TurnUpdate};
 use crate::app_event::AppEvent;
@@ -25,6 +28,8 @@ pub(crate) struct SessionStatus {
     pub(crate) goal: Option<AgentGoal>,
     /// The branch the workspace's first root has checked out.
     pub(crate) git_branch: Option<String>,
+    /// What the hierarchical compression folded, when it ran.
+    pub(crate) compression: Option<AgentCompressionSummary>,
 }
 
 /// The session's tokens so far, and its context when the window is known.
@@ -85,6 +90,7 @@ impl AgentBridge {
             permission_mode,
             goal: cache.and_then(|cache| cache.goal.clone()),
             git_branch: root.as_deref().and_then(git_branch),
+            compression: snapshot.compression,
         })))
     }
 

@@ -131,7 +131,7 @@ impl AgentService {
         event_sink: &dyn AgentEventSink,
     ) -> Result<(), AgentError> {
         let cell = self.session(identity.session_id)?;
-        let (staged, event) = {
+        let (staged, events) = {
             let mut guard = cell.lock_after_persistence().await?;
             let record = &mut *guard;
             let (items, compression) = prepare(record);
@@ -192,7 +192,7 @@ impl AgentService {
             if let Some(store) = compression.content_store {
                 record.runtime.compression_runtime.keep_content_store(store);
             }
-            let event = record_event(
+            let mut events = vec![record_event(
                 record,
                 identity,
                 AgentEventKind::HistoryCommitted {
@@ -201,11 +201,26 @@ impl AgentService {
                     usage: None,
                 },
                 self.inner.limits,
-            );
-            (StagedPersistence::commit(&cell, record, previous), event)
+            )];
+            if let Some((call_id, fold)) = compression.fold {
+                events.push(record_event(
+                    record,
+                    identity,
+                    AgentEventKind::ContextCompressed {
+                        call_id,
+                        blocks_created: fold.blocks_created,
+                        tokens_compressed: fold.tokens_compressed,
+                        tier: fold.tier,
+                    },
+                    self.inner.limits,
+                ));
+            }
+            (StagedPersistence::commit(&cell, record, previous), events)
         };
         self.persist_staged(staged).await?;
-        event_sink.emit(event);
+        for event in events {
+            event_sink.emit(event);
+        }
         Ok(())
     }
 }

@@ -73,6 +73,25 @@ Opens the user's `config.toml` in `$VISUAL` or `$EDITOR` (creating the directory
 
 What you edit by hand is read the next time the Agent starts. A value in it the Agent cannot use is repaired, after the original file is copied into `.recovery/`; see [Configuration recovery](/docs/recovery).
 
+## Compaction [#compaction]
+
+A session's context grows with every turn; `compaction.strategy` decides how it is kept within the model's window. Each session takes the strategy at its next turn.
+
+| Strategy         | What reduces the context                                                                                                                                                                                                                                |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `"standard"`     | The default. Once the context uses `autoCompactThresholdPercent` of the window, the earlier conversation becomes a summary, before a turn or during one ([The context window and compaction](/docs/providers-models#compaction))                        |
+| `"background"`   | The same summary, started earlier (`compaction.background.thresholdPercent`, 65% by default) and written in the background while the session goes on; it is installed before the next request. The session waits only when the context has no room left |
+| `"hierarchical"` | The model folds stretches of its history into summaries it writes, and can open them again; the stored history is never changed. The standard compaction runs only once nothing is left to fold                                                         |
+
+```sh
+hanafubuki-agent config set compaction.strategy hierarchical
+hanafubuki-agent config set compaction.hierarchical.contentStore true
+```
+
+`/config` in the terminal interface switches the strategy, and under `hierarchical` [`/compression`](/docs/terminal-interface#compression) shows the blocks the model folded and what they saved. Every strategy keeps the standard compaction as its floor: `/compact` and the retry after a Provider's context-window error run it. Each key of `[compaction]` and the strategies in detail are in the [Configuration reference](/docs/config-reference#compaction).
+
+The `hierarchical` strategy is billion-context's algorithm: hanafubuki-agent uses [acp-kernel](https://github.com/ranxianglei/acp-kernel) and [billion-context](https://github.com/ranxianglei/billion-context), by ranxianglei, under the MIT License with an additional attribution term ([Licence](/docs/contributing#licence)).
+
 ## Hooks [#hooks]
 
 Hooks are commands you configure to run when the Agent raises an event: before or after a tool call, when a session starts, when you submit a message, before a turn ends. The format is Codex's, so its `hooks.json` files and `[hooks]` tables work as they are. A hook runs only once you trusted it.

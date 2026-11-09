@@ -98,6 +98,7 @@ Fullscreen 下还有阅读对话的按键：Page Up/Page Down、F3、F4、Ctrl-S
 | `/worktree`               | 在新的 Git 工作树中继续当前对话或开始新对话，或浏览工作树（[见下文](#worktrees)）                                                                                                                     | 不可用 |
 | `/init`                   | 让 Agent 为仓库写一份 `AGENTS.md` 贡献指南；已有的 `AGENTS.md` 不会改动                                                                                                                               | 不可用 |
 | `/compact`                | 立即压缩会话的上下文，与自动压缩相同；有压缩在后台运行时，等待并采用它                                                                                                                                | 不可用 |
+| `/compression [cache]`    | 会话的[分层压缩](#compression)：它的块、尚可折叠的范围和节省的 token；`cache` 显示它的缓存报告                                                                                                        |
 | `/recap`                  | 由会话的模型简要回顾对话，有下一步时一并给出                                                                                                                                                          | 不可用 |
 | `/review [instructions]`  | 在只读的子会话中评审仓库的改动，并把发现报告到对话中：打开目标选择器，或按你的要求评审（[见下文](#review)）                                                                                           | 不可用 |
 | `/side [message]`、`/btw` | 打开会话的旁路对话，或再次显示它，并把消息发到那里；`/side close` 关闭它（[见下文](#side)）                                                                                                           | 可用   |
@@ -311,6 +312,20 @@ Fullscreen 会捕获鼠标，所以使用终端自己的选择时通常需要按
 
 会话的上下文每压缩一次，对话就在发生的位置显示 `• Context compacted`：`/compact` 之后，回合压缩上下文时（达到阈值、模型请求新上下文、Provider 报告上下文窗口错误之后），以及回合安装一个[在后台](/docs/config-reference#compaction)运行的压缩时。恢复的会话以同样的方式显示之前的压缩。
 
+## 分层压缩 [#compression]
+
+在 `hierarchical` [压缩策略](/docs/configuration#compaction)下，模型用它的 `compress` 工具把对话中的片段折叠成它自己写的摘要。`compress` 调用以折叠的形式显示：标题行列出它折叠的范围及其主题（`• Called compress: m00002–m00005 Setup`），下面是它回执的第一行（`[Compressed m00002–m00005 → 1 block(s), ~8000 tokens saved.]`）。模型写的摘要和回执的其余部分是它的详情，在[对话记录](#transcript)、Fullscreen 下的 Ctrl-T 和 F4 中显示。恢复的会话以同样的方式显示它的 `compress` 调用。
+
+`/compression` 读取会话的压缩情况，既不改变会话，也不询问模型：
+
+- **面板**（来自 billion-context）：上下文相对窗口的占用、压缩之后发送的内容及其构成、折叠提醒及其给出的范围，以及每个活动块的层级、它替换的 token 数、摘要的大小和主题。下面是计数（已应用的 `compress` 调用、压缩和吸收的 token、存储和取回的工具结果），`contentStore` 开启时还有内容存储的大小。
+- **`/compression cache`** 显示缓存报告：最近一次请求的 token 和每次折叠，以及折叠节省的量。Provider 的响应流不向 Agent 报告缓存命中的 token，所以都不计为缓存。
+- 从未运行过该策略的会话会说明它没有使用分层压缩。
+
+[状态栏](#status-line)的 `compression` 项显示活动块数和折叠掉的 token 数。
+
+如果压缩在某次请求中失败（其算法发生 panic），对话会显示一条警告 `⚠ Context compression failed; this turn goes on with the full history: …`，回合余下部分按 `standard` 运行；[`/warnings`](#warnings) 会保留这条警告。
+
 ## 对话记录 [#transcript]
 
 Scrollback 下，Ctrl-T 在终端的备用屏幕上打开整个会话的对话记录（`T R A N S C R I P T`），`/diff` 以同样的方式显示差异。Fullscreen 下，Ctrl-T 改为就地显示对话的详细内容（见上文），`/diff` 覆盖屏幕直到你关闭它。
@@ -422,21 +437,22 @@ hanafubuki-agent resume 12 "继续" # 恢复后发送一条消息
 
 输入框下方的底栏显示状态栏：关于会话的若干项目，以 `·` 分隔。还没有值的项目不显示：不在 Git 仓库中时没有分支，会话有标题之前没有标题。`tui.statusLineColors` 为真时，每个项目取主题中的颜色；否则整行变暗。
 
-| 项目                                        | 显示                                                                 |
-| ------------------------------------------- | -------------------------------------------------------------------- |
-| `model`                                     | 模型                                                                 |
-| `model-with-reasoning`                      | 模型及其推理强度（默认显示）                                         |
-| `reasoning`                                 | 推理强度                                                             |
-| `current-dir`                               | 工作目录，主目录写作 `~`（默认显示）                                 |
-| `git-branch`                                | 第一个工作区目录检出的分支，分离状态时是短提交号，从 `.git` 读取     |
-| `context-remaining`、`context-used`         | `Context 75% left`、`Context 25% used`，知道模型的上下文窗口之后显示 |
-| `used-tokens`                               | 会话的输入和输出 token 总数，有用量之后显示                          |
-| `total-input-tokens`、`total-output-tokens` | `12K in`、`3.4K out`                                                 |
-| `session-id`                                | 会话 ID                                                              |
-| `session-title`                             | 会话标题（默认显示）                                                 |
-| `task-progress`                             | `Tasks 2/5`：最近的任务计划中已完成的步骤数和总步骤数                |
-| `permission-mode`                           | 会话的权限模式，没有时是配置的 `permissionMode`                      |
-| `goal`                                      | `Goal: 目标 (状态)`，会话设有目标时显示                              |
+| 项目                                        | 显示                                                                                                   |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `model`                                     | 模型                                                                                                   |
+| `model-with-reasoning`                      | 模型及其推理强度（默认显示）                                                                           |
+| `reasoning`                                 | 推理强度                                                                                               |
+| `current-dir`                               | 工作目录，主目录写作 `~`（默认显示）                                                                   |
+| `git-branch`                                | 第一个工作区目录检出的分支，分离状态时是短提交号，从 `.git` 读取                                       |
+| `context-remaining`、`context-used`         | `Context 75% left`、`Context 25% used`，知道模型的上下文窗口之后显示                                   |
+| `used-tokens`                               | 会话的输入和输出 token 总数，有用量之后显示                                                            |
+| `total-input-tokens`、`total-output-tokens` | `12K in`、`3.4K out`                                                                                   |
+| `session-id`                                | 会话 ID                                                                                                |
+| `session-title`                             | 会话标题（默认显示）                                                                                   |
+| `task-progress`                             | `Tasks 2/5`：最近的任务计划中已完成的步骤数和总步骤数                                                  |
+| `permission-mode`                           | 会话的权限模式，没有时是配置的 `permissionMode`                                                        |
+| `goal`                                      | `Goal: 目标 (状态)`，会话设有目标时显示                                                                |
+| `compression`                               | `3 blocks, 42K saved`：[分层压缩](#compression)的活动块数和折叠所替换的 token 数，会话运行过它之后显示 |
 
 终端标题（OSC 0）有自己的项目，以 `|` 连接；默认是旋转指示、会话标题和项目名称。
 

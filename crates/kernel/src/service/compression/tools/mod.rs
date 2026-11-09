@@ -41,6 +41,17 @@ pub(in crate::service) struct CompressionToolRun {
     pub(in crate::service) export: Option<ToolExport>,
     /// The content store with the originals a fold covered added.
     pub(in crate::service) content_store: Option<AgentContentStore>,
+    /// What a `compress` call folded.
+    pub(in crate::service) fold: Option<Fold>,
+}
+
+/// What a `compress` call folded: the blocks it made, the tokens they
+/// replaced and the highest tier among the blocks it made or refolded.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(in crate::service) struct Fold {
+    pub(in crate::service) blocks_created: usize,
+    pub(in crate::service) tokens_compressed: u64,
+    pub(in crate::service) tier: u8,
 }
 
 /// Runs the compression tool `tool` called as `call_id` with `arguments`
@@ -171,8 +182,14 @@ fn compress(
             (store.by_ref.len() > entries).then_some(store)
         })
         .flatten();
+    let fold = folded.then(|| Fold {
+        blocks_created: result.blocks_created,
+        tokens_compressed: result.tokens_compressed,
+        tier: changed.iter().map(|block| block.tier).max().unwrap_or(1),
+    });
     CompressionToolRun {
         content_store,
+        fold,
         ..output_run(
             text_output(receipt, !folded && !result.errors.is_empty()),
             folded.then_some(outcome.state),
@@ -217,18 +234,31 @@ fn acp_status(
     )
 }
 
-/// The cache report from what the Agent records: the last response's input
-/// and output (the model API reports no cached tokens, so none count as
-/// cached) and the folds of the session's blocks.
+/// `acp_cache`: the cache report, in summary or (`detail: "full"`) in
+/// full.
 fn acp_cache(
     record: &SessionRecord,
     state: &AgentCompressionState,
     arguments: &Value,
     now_ms: u64,
 ) -> String {
-    let samples = record
-        .runtime
-        .usage
+    let detail = match arguments.get("detail").and_then(Value::as_str) {
+        Some("full") => CacheDetail::Full,
+        _ => CacheDetail::Summary,
+    };
+    cache_report(record.runtime.usage, state, detail, now_ms)
+}
+
+/// The cache report from what the Agent records: the last response's input
+/// and output (the model API reports no cached tokens, so none count as
+/// cached) and the folds of the session's blocks.
+pub(super) fn cache_report(
+    usage: Option<AgentModelUsage>,
+    state: &AgentCompressionState,
+    detail: CacheDetail,
+    now_ms: u64,
+) -> String {
+    let samples = usage
         .filter(|usage| usage.source == AgentUsageSource::ProviderReported)
         .map(|usage| CacheSample {
             at: now_ms,
@@ -248,10 +278,6 @@ fn acp_cache(
         })
         .collect::<Vec<_>>();
     let report = build_cache_report(&samples, &folds, &CacheReportOptions::default(), now_ms);
-    let detail = match arguments.get("detail").and_then(Value::as_str) {
-        Some("full") => CacheDetail::Full,
-        _ => CacheDetail::Summary,
-    };
     format_cache_report(
         &report,
         None,
@@ -273,6 +299,7 @@ fn output_run(output: ToolOutput, state: Option<AgentCompressionState>) -> Compr
         images: Vec::new(),
         export: None,
         content_store: None,
+        fold: None,
     }
 }
 

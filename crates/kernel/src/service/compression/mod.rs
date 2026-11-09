@@ -12,6 +12,7 @@ mod adapter;
 mod inherit;
 mod receipts;
 mod runtime;
+mod status;
 mod tools;
 
 use std::sync::OnceLock;
@@ -28,7 +29,7 @@ use crate::{AgentCompressionState, AgentContentStore, AgentHierarchicalCompressi
 use adapter::MessageLog;
 pub(super) use inherit::inherited_state;
 pub(super) use runtime::CompressionRuntime;
-pub(super) use tools::compression_tool_output;
+pub(super) use tools::{compression_tool_output, Fold};
 
 /// `search_context`'s document features, kept per session while it is
 /// loaded and never persisted: the summaries and the folded originals
@@ -85,11 +86,13 @@ impl CompressionMode {
 }
 
 /// What a committed compression tool leaves: the state and the content
-/// store, each when it changed them.
+/// store, each when it changed them, and the fold of a `compress` call,
+/// recorded as `ContextCompressed` in the same commit.
 #[derive(Default)]
 pub(super) struct CompressionChange {
     pub(super) state: Option<AgentCompressionState>,
     pub(super) content_store: Option<AgentContentStore>,
+    pub(super) fold: Option<(String, Fold)>,
 }
 
 /// One request's view of the history.

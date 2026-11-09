@@ -310,7 +310,7 @@ impl AgentService {
         // `standard`'s.
         let limit_reached = if super::super::compression::CompressionMode::of(record)
             == super::super::compression::CompressionMode::Hierarchical
-            && !compression.failed
+            && compression.failed.is_none()
         {
             compression.terminal_escape
         } else {

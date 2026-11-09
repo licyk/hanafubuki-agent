@@ -209,7 +209,7 @@ impl MenuModel for ConfigPanel {
             GenericDisplayRow {
                 name: format!("Compaction: {}", self.compaction_strategy.as_str()),
                 description: Some(
-                    "what reduces the context; background and hierarchical compact as standard until they are built"
+                    "what reduces the context: standard, background or hierarchical (at each session's next turn)"
                         .to_string(),
                 ),
                 ..Default::default()

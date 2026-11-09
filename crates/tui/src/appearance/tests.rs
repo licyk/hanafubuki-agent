@@ -2,7 +2,7 @@
 
 use std::sync::mpsc::{channel, Receiver};
 
-use hanafubuki_agent::{AgentGoal, AgentSessionId};
+use hanafubuki_agent::{AgentCompressionSummary, AgentGoal, AgentSessionId};
 use insta::assert_snapshot;
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
@@ -45,6 +45,10 @@ fn status() -> SessionStatus {
             "Ship the release with every check passing on all platforms",
         )),
         git_branch: Some("main".to_string()),
+        compression: Some(AgentCompressionSummary {
+            active_blocks: 3,
+            tokens_compressed: 42_000,
+        }),
     }
 }
 
@@ -141,6 +145,7 @@ fn items_with_no_value_yet_are_left_out() {
             "git-branch",
             "current-dir",
             "goal",
+            "compression",
         ],
         &[],
     );

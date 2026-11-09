@@ -55,6 +55,7 @@ pub(crate) enum StatusLineItem {
     TaskProgress,
     PermissionMode,
     Goal,
+    Compression,
 }
 
 impl SurfaceItem for StatusLineItem {
@@ -74,6 +75,7 @@ impl SurfaceItem for StatusLineItem {
         Self::TaskProgress,
         Self::PermissionMode,
         Self::Goal,
+        Self::Compression,
     ];
 
     fn id(self) -> &'static str {
@@ -93,6 +95,7 @@ impl SurfaceItem for StatusLineItem {
             Self::TaskProgress => "task-progress",
             Self::PermissionMode => "permission-mode",
             Self::Goal => "goal",
+            Self::Compression => "compression",
         }
     }
 
@@ -113,6 +116,9 @@ impl SurfaceItem for StatusLineItem {
             Self::TaskProgress => "Latest task plan's progress (omitted until there is one)",
             Self::PermissionMode => "Permission mode of the session",
             Self::Goal => "Goal and its status (omitted when none is set)",
+            Self::Compression => {
+                "Hierarchical compression's active blocks and tokens saved (omitted without it)"
+            }
         }
     }
 }
@@ -133,7 +139,8 @@ impl StatusLineItem {
             | Self::ContextUsed
             | Self::UsedTokens
             | Self::TotalInputTokens
-            | Self::TotalOutputTokens => (&["constant.numeric", "constant"], Color::Green),
+            | Self::TotalOutputTokens
+            | Self::Compression => (&["constant.numeric", "constant"], Color::Green),
             Self::SessionId => (&["comment", "constant.other"], Color::Cyan),
             Self::SessionTitle | Self::Goal => {
                 (&["markup.heading", "entity.name.section"], Color::Magenta)

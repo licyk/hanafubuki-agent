@@ -101,6 +101,7 @@ A message that starts with `/` is a command. Typing `/` opens a popup of them, n
 | `/worktree`               | Continues the conversation, or starts a new one, in a new Git worktree, or browses the worktrees ([below](#worktrees))                                                                                                                                                                                                 | No            |
 | `/init`                   | Asks the Agent to write an `AGENTS.md` contributor guide for the repository; an existing one is left alone                                                                                                                                                                                                             | No            |
 | `/compact`                | Compacts the session's context now, as automatic compaction does; a compaction running in the background is waited for and taken instead                                                                                                                                                                               | No            |
+| `/compression [cache]`    | The session's [hierarchical compression](#compression): its blocks, the ranges left to fold and the savings; `cache`, its cache report                                                                                                                                                                                 |
 | `/recap`                  | A short catch-up on the conversation by the session's model, with the next step when there is one                                                                                                                                                                                                                      | No            |
 | `/review [instructions]`  | Reviews the repository's changes in a read-only child session and reports the findings into the conversation: a picker of targets, or your instructions ([below](#review))                                                                                                                                             | No            |
 | `/side [message]`, `/btw` | Opens the session's side conversation, or shows it again, and sends the message there; `/side close` closes it ([below](#side))                                                                                                                                                                                        | Yes           |
@@ -314,6 +315,20 @@ Fullscreen captures the mouse, so the terminal's own selection usually needs Shi
 
 Each time the session's context is compacted, the conversation shows `• Context compacted` where it happened: after `/compact`, when a turn compacts it (at the threshold, when the model asks for a new context, after the Provider's context-window error), and when a turn installs a compaction that ran [in the background](/docs/config-reference#compaction). A resumed session shows its earlier compactions the same way.
 
+## Hierarchical compression [#compression]
+
+Under the `hierarchical` [compaction strategy](/docs/configuration#compaction) the model folds stretches of the conversation into summaries it writes, with its `compress` tool. A `compress` call shows folded: its header names the ranges it folded and their topics (`• Called compress: m00002–m00005 Setup`), and below it is the first line of its receipt (`[Compressed m00002–m00005 → 1 block(s), ~8000 tokens saved.]`). The summaries the model wrote and the rest of the receipt are its details, which the [transcript](#transcript), Ctrl-T in Fullscreen and F4 show. A resumed session shows its `compress` calls the same way.
+
+`/compression` reads the session's compression without changing it or asking the model:
+
+- **The panel** (billion-context's): the context against the window, what is sent after compression and how it splits, the reminder to fold and the ranges it offers, and each active block with its tier, the tokens it replaced, its summary's size and its topic. Below it come the counters (the `compress` calls applied, the tokens compressed and absorbed, the tool results stored and retrieved) and, while `contentStore` is on, the content store's size.
+- **`/compression cache`** shows the cache report: the last request's tokens and each fold, with what the folds saved. The Providers' streams report no cached tokens to the Agent, so none count as cached.
+- A session that never ran the strategy says it is not using hierarchical compression.
+
+The [status line](#status-line)'s `compression` item shows the active blocks and the tokens folded away.
+
+If the compression fails for a request (its algorithm panicked), the conversation shows a warning, `⚠ Context compression failed; this turn goes on with the full history: …`, and the rest of the turn runs as `standard`; [`/warnings`](#warnings) keeps it.
+
 ## The transcript [#transcript]
 
 In Scrollback, Ctrl-T opens the whole session's transcript (`T R A N S C R I P T`) on the terminal's alternate screen; `/diff` shows its diff the same way. In Fullscreen, Ctrl-T shows the conversation in detail in place instead (above), and `/diff` covers the screen until you close it.
@@ -425,21 +440,22 @@ The grammars and the 32 themes are the ones [two-face](https://github.com/Cosmic
 
 The footer under the composer shows the status line: items about the session, separated by `·`. An item with no value yet is left out: no branch outside a Git repository, no title before the session has one. With `tui.statusLineColors` each item takes a color from the theme; without, the line is dimmed.
 
-| Item                                        | Shows                                                                                               |
-| ------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| `model`                                     | The model                                                                                           |
-| `model-with-reasoning`                      | The model and its reasoning effort (shown by default)                                               |
-| `reasoning`                                 | The reasoning effort                                                                                |
-| `current-dir`                               | The working directory, with `~` for the home directory (shown by default)                           |
-| `git-branch`                                | The branch the first workspace root has checked out, a short commit when detached, read from `.git` |
-| `context-remaining`, `context-used`         | `Context 75% left`, `Context 25% used`, once the model's context window is known                    |
-| `used-tokens`                               | The session's input and output tokens together, once there are any                                  |
-| `total-input-tokens`, `total-output-tokens` | `12K in`, `3.4K out`                                                                                |
-| `session-id`                                | The session's id                                                                                    |
-| `session-title`                             | The session's title (shown by default)                                                              |
-| `task-progress`                             | `Tasks 2/5`: the latest task plan's completed steps and all its steps                               |
-| `permission-mode`                           | The session's permission mode, else the configured `permissionMode`                                 |
-| `goal`                                      | `Goal: OBJECTIVE (STATUS)`, while the session has a goal                                            |
+| Item                                        | Shows                                                                                                                                              |
+| ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `model`                                     | The model                                                                                                                                          |
+| `model-with-reasoning`                      | The model and its reasoning effort (shown by default)                                                                                              |
+| `reasoning`                                 | The reasoning effort                                                                                                                               |
+| `current-dir`                               | The working directory, with `~` for the home directory (shown by default)                                                                          |
+| `git-branch`                                | The branch the first workspace root has checked out, a short commit when detached, read from `.git`                                                |
+| `context-remaining`, `context-used`         | `Context 75% left`, `Context 25% used`, once the model's context window is known                                                                   |
+| `used-tokens`                               | The session's input and output tokens together, once there are any                                                                                 |
+| `total-input-tokens`, `total-output-tokens` | `12K in`, `3.4K out`                                                                                                                               |
+| `session-id`                                | The session's id                                                                                                                                   |
+| `session-title`                             | The session's title (shown by default)                                                                                                             |
+| `task-progress`                             | `Tasks 2/5`: the latest task plan's completed steps and all its steps                                                                              |
+| `permission-mode`                           | The session's permission mode, else the configured `permissionMode`                                                                                |
+| `goal`                                      | `Goal: OBJECTIVE (STATUS)`, while the session has a goal                                                                                           |
+| `compression`                               | `3 blocks, 42K saved`: the [hierarchical compression](#compression)'s active blocks and the tokens its folds replaced, once the session has run it |
 
 The terminal's title (OSC 0) shows items of its own, joined with `|`; by default the spinner, the session's title and the project's name.
 

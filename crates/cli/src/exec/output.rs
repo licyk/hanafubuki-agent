@@ -89,6 +89,17 @@ impl Output for Human {
                 let result = if *is_error { "failed" } else { "done" };
                 println!("  {} {result}", name.unwrap_or("tool"));
             }
+            AgentEventKind::ContextCompressed {
+                blocks_created,
+                tokens_compressed,
+                tier,
+                ..
+            } => println!(
+                "  folded into {blocks_created} block(s), ~{tokens_compressed} tokens (tier {tier})"
+            ),
+            AgentEventKind::ContextCompressionFailed { message } => eprintln!(
+                "warning: context compression failed; the turn goes on with the full history: {message}"
+            ),
             AgentEventKind::ModelRetryScheduled {
                 current_retry,
                 maximum_retries,

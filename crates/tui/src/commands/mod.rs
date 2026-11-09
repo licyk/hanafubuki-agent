@@ -12,6 +12,7 @@
 mod agents;
 mod cd;
 mod clear;
+mod compression;
 mod config;
 mod confirm;
 mod copy;
@@ -79,7 +80,7 @@ pub(crate) use subagents::SUBAGENTS;
 pub(crate) use warnings::{show_warnings, WARNINGS};
 
 /// Every command, in presentation order: the most used first.
-pub(crate) static COMMANDS: [&CommandSpec; 45] = [
+pub(crate) static COMMANDS: [&CommandSpec; 46] = [
     &model::MODEL,
     &providers::PROVIDERS,
     &mode::MODE,
@@ -96,6 +97,7 @@ pub(crate) static COMMANDS: [&CommandSpec; 45] = [
     &worktree::WORKTREE,
     &init::INIT,
     &session::COMPACT,
+    &compression::COMPRESSION,
     &recap::RECAP,
     &review::REVIEW,
     &side::SIDE,
@@ -267,6 +269,7 @@ pub(crate) fn session_reply_command(reply: &SessionReply) -> Option<&'static Com
         | SessionReply::ExportedFile(_) => &export::EXPORT,
         SessionReply::LastAnswer(_) => &copy::COPY,
         SessionReply::Recap(_) => &recap::RECAP,
+        SessionReply::Compression { .. } => &compression::COMPRESSION,
         SessionReply::Terminals(_) => &terminals::PS,
         SessionReply::TerminalsStopped { .. } => &terminals::STOP,
         SessionReply::Roots(_) => &pwd::PWD,
@@ -300,6 +303,9 @@ pub(crate) fn on_session_reply(context: &mut CommandContext<'_>, reply: SessionR
         | SessionReply::ExportedFile(_) => export::on_reply(context, reply),
         SessionReply::LastAnswer(answer) => copy::on_reply(context, answer),
         SessionReply::Recap(recap) => recap::on_reply(context, recap),
+        SessionReply::Compression { status, cache } => {
+            compression::on_reply(context, status.map(|status| *status), cache)
+        }
         SessionReply::Terminals(_) | SessionReply::TerminalsStopped { .. } => {
             terminals::on_reply(context, reply)
         }

@@ -58,6 +58,7 @@ pub(crate) fn tool_call(call_id: &str, lines: usize) -> Arc<dyn HistoryCell> {
             ),
             exit_code: Some(0),
             patch: None,
+            compress: None,
         },
     );
     Arc::new(cell)

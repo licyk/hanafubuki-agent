@@ -122,8 +122,9 @@ pub(super) struct RequestCompression {
     pub(super) sent: Option<(u64, bool)>,
     /// A standard compaction is due (`hierarchical`'s terminal escape).
     pub(super) terminal_escape: bool,
-    /// The algorithm panicked: the request carries the full history.
-    pub(super) failed: bool,
+    /// The algorithm panicked, with this message (bounded): the request
+    /// carries the full history.
+    pub(super) failed: Option<String>,
 }
 
 /// [`step_model_request`], with what its projection left.
@@ -295,20 +296,20 @@ fn projected_history(
                 content_store: projection.content_store,
                 sent: Some((projection.token_count, projection.abort_booked)),
                 terminal_escape: projection.terminal_escape,
-                failed: false,
+                failed: None,
             },
             projection.instructions,
         ),
         Err(message) => {
+            let message = bounded_diagnostic(message);
             log::warn!(
-                "Agent context compression failed; this turn sends the full history: {}",
-                bounded_diagnostic(message)
+                "Agent context compression failed; this turn sends the full history: {message}"
             );
             (
                 full(),
                 None,
                 RequestCompression {
-                    failed: true,
+                    failed: Some(message),
                     ..RequestCompression::default()
                 },
                 None,

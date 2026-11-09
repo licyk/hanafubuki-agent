@@ -2,11 +2,14 @@
 
 //! A tool call: the active cell while it runs (with a spinner), then its
 //! outcome and an excerpt of its output, or the diff of the patch it
-//! applied. Codex's exec and MCP cells, for every tool the Agent has.
+//! applied. Codex's exec and MCP cells, for every tool the Agent has. A
+//! `compress` call is folded: its ranges and topics in the header, the
+//! first line of its receipt below; the detailed transcript adds the rest
+//! of the receipt and the summaries.
 
 use std::time::Instant;
 
-use hanafubuki_agent::PatchPreview;
+use hanafubuki_agent::{AgentCompressRange, PatchPreview};
 use ratatui::style::{Modifier, Stylize};
 use ratatui::text::{Line, Span};
 
@@ -27,6 +30,8 @@ pub(crate) struct ToolResultView {
     pub(crate) exit_code: Option<i32>,
     /// The patch an `apply_patch` call applied (or tried to).
     pub(crate) patch: Option<PatchPreview>,
+    /// The ranges a `compress` call asked to fold.
+    pub(crate) compress: Option<Vec<AgentCompressRange>>,
 }
 
 #[derive(Debug)]
@@ -80,12 +85,38 @@ impl ToolCallCell {
             " ".into(),
             self.name.clone().cyan(),
         ];
-        if let Some(subject) = &self.subject {
+        let ranges = self
+            .outcome
+            .as_ref()
+            .and_then(|outcome| outcome.result.compress.as_deref())
+            .filter(|ranges| !ranges.is_empty())
+            .map(compress_subject);
+        if let Some(subject) = ranges.as_ref().or(self.subject.as_ref()) {
             spans.push(": ".dim());
             spans.push(Span::from(strip_terminal_controls(subject)));
         }
         Line::from(spans)
     }
+
+    /// A `compress` call's output, folded: only its receipt's first line
+    /// shows in the scrollback.
+    fn folded(&self) -> Option<&str> {
+        let result = &self.outcome.as_ref()?.result;
+        result.compress.as_ref()?;
+        result.text.as_deref()
+    }
+}
+
+/// `m00002–m00005 Setup, m00009–m00012`: the ranges with their topics.
+fn compress_subject(ranges: &[AgentCompressRange]) -> String {
+    ranges
+        .iter()
+        .map(|range| match &range.topic {
+            Some(topic) => format!("{}–{} {topic}", range.start_ref, range.end_ref),
+            None => format!("{}–{}", range.start_ref, range.end_ref),
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 impl HistoryCell for ToolCallCell {
@@ -117,6 +148,7 @@ impl HistoryCell for ToolCallCell {
         if let Some(code) = result.exit_code.filter(|code| *code != 0) {
             lines.push(Line::from(format!("exit code {code}")));
         }
+        lines.extend(plain_lines(summary_lines(result)));
         lines
     }
 
@@ -131,6 +163,9 @@ impl HistoryCell for ToolCallCell {
         if result.patch.is_some() {
             return None;
         }
+        if self.folded().is_some() {
+            return Some(ActivityDisclosure::Generic);
+        }
         let text = result.text.as_deref()?;
         let lines = strip_terminal_controls(text).trim_end().lines().count();
         (lines > 2 * TOOL_CALL_MAX_LINES)
@@ -143,6 +178,22 @@ impl HistoryCell for ToolCallCell {
             .is_none()
             .then(|| u64::try_from(self.start_time.elapsed().as_millis() / 600).unwrap_or(u64::MAX))
     }
+}
+
+/// A `compress` call's summaries, each under its range, for the detailed
+/// transcript.
+fn summary_lines(result: &ToolResultView) -> Vec<Line<'static>> {
+    let mut lines = Vec::new();
+    for range in result.compress.iter().flatten() {
+        lines.push(Line::from(compress_subject(std::slice::from_ref(range))).bold());
+        lines.extend(
+            strip_terminal_controls(&range.summary)
+                .trim_end()
+                .lines()
+                .map(|line| Line::from(line.to_string()).add_modifier(Modifier::DIM)),
+        );
+    }
+    lines
 }
 
 /// How much of a call's output its lines show.
@@ -170,13 +221,21 @@ impl ToolCallCell {
             lines.extend(create_diff_summary(patch, width.saturating_sub(4) as usize));
             return lines;
         }
-        let mut body = result
-            .text
-            .as_deref()
-            .map(|text| output_lines(text, extent))
-            .unwrap_or_default();
+        let mut body = match (self.folded(), extent) {
+            (Some(receipt), OutputExtent::Excerpt) => {
+                output_lines(receipt, extent).into_iter().take(1).collect()
+            }
+            _ => result
+                .text
+                .as_deref()
+                .map(|text| output_lines(text, extent))
+                .unwrap_or_default(),
+        };
         if let Some(code) = result.exit_code.filter(|code| *code != 0) {
             body.push(Line::from(format!("exit code {code}")).red());
+        }
+        if extent == OutputExtent::Full {
+            body.extend(summary_lines(result));
         }
         for (index, line) in body.into_iter().enumerate() {
             let prefix = if index == 0 { "  └ " } else { "    " };

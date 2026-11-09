@@ -3,14 +3,16 @@
 //! finished (tool events carry neither its output nor its arguments).
 
 use hanafubuki_agent::{
-    AgentHandle, AgentRevision, AgentSessionId, AgentSessionMode, ConversationItem,
-    ToolOutputContent,
+    compress_call_ranges, AgentHandle, AgentRevision, AgentSessionId, AgentSessionMode,
+    ConversationItem, ToolOutputContent,
 };
 
 use crate::history_cell::ToolResultView;
 
 /// The tool whose arguments are a patch the transcript shows as a diff.
 const APPLY_PATCH: &str = "apply_patch";
+/// The tool whose ranges and summaries the transcript shows folded.
+const COMPRESS: &str = "compress";
 
 /// What the interface shows from now on: a reopened session, or no
 /// session yet (at the start, after `/new`), which the next message creates.
@@ -140,9 +142,13 @@ pub(super) fn call_id(item: &ConversationItem) -> Option<&str> {
 }
 
 /// What a call's item says of its result: an `apply_patch` call's patch,
-/// read as a diff, and an output's text and exit code.
+/// read as a diff, a `compress` call's ranges, and an output's text and
+/// exit code.
 pub(super) fn read_into(agent: &AgentHandle, item: ConversationItem, view: &mut ToolResultView) {
     match item {
+        ConversationItem::ToolCall {
+            name, arguments, ..
+        } if name == COMPRESS => view.compress = Some(compress_call_ranges(&arguments)),
         ConversationItem::ToolCall {
             name, arguments, ..
         } if name == APPLY_PATCH => {

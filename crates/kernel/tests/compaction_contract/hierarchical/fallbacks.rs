@@ -158,6 +158,18 @@ async fn a_panic_in_the_algorithm_is_contained() {
         .await
         .unwrap();
     assert_eq!(outcome.final_answer, "Full history.");
+    let failures = service
+        .events_since(session.id, None)
+        .unwrap()
+        .events
+        .into_iter()
+        .filter_map(|event| match event.kind {
+            AgentEventKind::ContextCompressionFailed { message } => Some(message),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(failures.len(), 1, "{failures:?}");
+    assert!(failures[0].contains("panic"), "{failures:?}");
     let request = &model.requests()[4];
     assert!(text(request).contains("a long first answer"));
     assert!(!request.instructions.contains("ACP TAGS"));

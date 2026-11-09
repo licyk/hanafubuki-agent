@@ -120,14 +120,16 @@ Third-party notices
   ranxianglei: the hierarchical context compression, `crates/compression`,
   is ported from billion-context's `kernel/src` (acp-kernel 0.0.189,
   commit `4be21b08e`), with its tests from `kernel/tests`; every file of
-  it says so in its first lines. The texts the `compress`, `decompress`
-  and `search_context` tools return, in
-  `crates/kernel/src/service/compression`, are ported from billion-context's
-  `src/stream.ts`, `src/decompress-shared.ts` and `src/image-restore.ts`,
-  and the `decompress` schema's extension, in
+  it says so in its first lines. The texts the `compress`, `decompress`,
+  `search_context`, `absorb`, `acp_retrieve` and `acp_rule` tools return,
+  in `crates/kernel/src/service/compression`, are ported from
+  billion-context's `src/stream.ts`, `src/decompress-shared.ts`,
+  `src/image-restore.ts` and the host side of its opt-in tools, and the
+  `decompress` schema's extension, in
   `crates/kernel/src/core_tools/compression_spec.rs`, from its
-  `src/compress-tool.ts`, at the same commit; those files say so too. hanafubuki-agent uses acp-kernel and
-  billion-context. Their license, with the additional term, follows.
+  `src/compress-tool.ts`, at the same commit; those files say so too.
+  hanafubuki-agent uses acp-kernel and billion-context. Their license,
+  with the additional term, follows.
 
 The NOTICE of OpenAI Codex
 --------------------------

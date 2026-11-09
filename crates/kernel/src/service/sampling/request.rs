@@ -126,7 +126,7 @@ impl AgentService {
         let step = *step;
         // The history's images, read with no lock held.
         let images = self.load_history_images(identity.session_id).await?;
-        let (staged, history_event, event, reasoning_event, request) = {
+        let (staged, history_event, event, reasoning_event, failed_event, request) = {
             let cell = self.session(identity.session_id)?;
             let mut guard = cell.lock_after_persistence().await?;
             let record = &mut *guard;
@@ -198,14 +198,24 @@ impl AgentService {
                     .compression_runtime
                     .sent(tokens, abort_booked);
             }
-            if compression.failed {
-                exact_turn_mut(record, identity)?.compression_fallback = true;
-            }
+            let failed_event = match compression.failed {
+                Some(message) => {
+                    exact_turn_mut(record, identity)?.compression_fallback = true;
+                    Some(record_event(
+                        record,
+                        identity,
+                        AgentEventKind::ContextCompressionFailed { message },
+                        self.inner.limits,
+                    ))
+                }
+                None => None,
+            };
             (
                 StagedPersistence::delta(&cell, record, previous),
                 history_event,
                 event,
                 reasoning_event,
+                failed_event,
                 request,
             )
         };
@@ -216,6 +226,9 @@ impl AgentService {
         }
         event_sink.emit(event);
         event_sink.emit(reasoning_event);
+        if let Some(failed_event) = failed_event {
+            event_sink.emit(failed_event);
+        }
         Ok(request)
     }
 

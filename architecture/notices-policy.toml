@@ -309,6 +309,18 @@ path = "crates/tui/src/app/tests/compaction.rs"
 reason = "The compaction cells and /status's background compaction end to end over the standalone Agent."
 
 [[original]]
+path = "crates/tui/src/app/tests/compression.rs"
+reason = "The hierarchical compression end to end over the standalone Agent: the folded compress cell, /compression and the status item."
+
+[[original]]
+path = "crates/tui/src/commands/compression.rs"
+reason = "/compression, the Agent's own command: the facade's compression status as a report cell."
+
+[[original]]
+path = "crates/tui/src/commands/compression/tests.rs"
+reason = "The /compression report cells."
+
+[[original]]
 path = "crates/tui/src/agent_bridge/providers.rs"
 reason = "The Provider screen's calls onto the facade's Provider API."
 

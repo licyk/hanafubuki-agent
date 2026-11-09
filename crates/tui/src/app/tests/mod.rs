@@ -654,6 +654,7 @@ mod agents;
 mod appearance;
 mod backtrack;
 mod compaction;
+mod compression;
 mod features;
 mod preferences;
 mod session_commands;

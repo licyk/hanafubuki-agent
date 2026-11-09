@@ -199,6 +199,22 @@ pub enum AgentEventKind {
     CompactionUpdated {
         compaction: AgentCompactionSnapshot,
     },
+    /// The `compress` call `call_id` folded part of the context
+    /// (`hierarchical`): recorded in the commit of its output, right after
+    /// that commit's `HistoryCommitted`. `tier` is the highest tier of the
+    /// blocks it made or refolded.
+    ContextCompressed {
+        call_id: String,
+        blocks_created: usize,
+        tokens_compressed: u64,
+        tier: u8,
+    },
+    /// The hierarchical compression failed for this step's request (the
+    /// algorithm panicked): the request carries the full history and the
+    /// rest of the turn runs as `standard`.
+    ContextCompressionFailed {
+        message: String,
+    },
     TurnCompleted {
         final_answer_message_id: AgentMessageId,
     },

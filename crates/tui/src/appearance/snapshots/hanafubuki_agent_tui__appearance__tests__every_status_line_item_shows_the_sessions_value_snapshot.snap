@@ -1,5 +1,6 @@
 ---
 source: crates/tui/src/appearance/tests.rs
+assertion_line: 119
 expression: "plain(&line).replace(\" · \", \"\\n\")"
 ---
 gpt-5
@@ -17,3 +18,4 @@ Fix the build
 Tasks 2/5
 auto-review
 Goal: Ship the release with every check passin… (active)
+3 blocks, 42K saved

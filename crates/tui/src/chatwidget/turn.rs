@@ -6,7 +6,7 @@
 use hanafubuki_agent::{AgentReasoningId, AgentTaskPlanSnapshot};
 
 use super::ChatWidget;
-use crate::agent_bridge::{TurnEnd, TurnUpdate};
+use crate::agent_bridge::{TurnEnd, TurnUpdate, Warning, WarningSource};
 use crate::app_event::AppEvent;
 use crate::history_cell::{self, ThinkingCell, ToolResultView};
 use crate::streaming::controller::{PlanStreamController, StreamController};
@@ -46,6 +46,7 @@ impl ChatWidget {
                     | TurnUpdate::ApprovalRequested(_)
                     | TurnUpdate::UserInputRequested(_)
                     | TurnUpdate::Compacted
+                    | TurnUpdate::CompressionFailed(_)
             )
     }
 
@@ -115,6 +116,14 @@ impl ChatWidget {
                 "Context compacted".to_string(),
                 None,
             )),
+            TurnUpdate::CompressionFailed(message) => {
+                let warning = format!(
+                    "Context compression failed; this turn goes on with the full history: {message}"
+                );
+                self.add_to_history(history_cell::new_warning_event(warning.clone()));
+                self.warnings
+                    .push(Warning::new(WarningSource::Panics, warning));
+            }
             TurnUpdate::Ended(end) => self.on_turn_ended(end),
             TurnUpdate::Error(message) => {
                 self.add_to_history(history_cell::new_error_event(message))

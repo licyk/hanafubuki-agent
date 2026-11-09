@@ -542,7 +542,7 @@ impl AgentSessionDriver {
     }
 }
 
-fn hierarchical_compression(
+pub(crate) fn hierarchical_compression(
     settings: &hanafubuki_agent_config::AgentHierarchicalCompactionSettings,
 ) -> hanafubuki_agent_kernel::AgentHierarchicalCompression {
     hanafubuki_agent_kernel::AgentHierarchicalCompression {

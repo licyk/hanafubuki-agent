@@ -216,6 +216,20 @@ impl SurfaceValues {
                 let state = format!("{:?}", goal.status).to_lowercase();
                 format!("Goal: {objective}{ellipsis} ({state})")
             }),
+            StatusLineItem::Compression => {
+                status
+                    .and_then(|status| status.compression)
+                    .map(|compression| {
+                        let blocks = match compression.active_blocks {
+                            1 => "1 block".to_string(),
+                            count => format!("{count} blocks"),
+                        };
+                        format!(
+                            "{blocks}, {} saved",
+                            format_tokens_compact(compression.tokens_compressed)
+                        )
+                    })
+            }
         }
     }
 

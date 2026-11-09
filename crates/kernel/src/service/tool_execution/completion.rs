@@ -84,6 +84,7 @@ impl AgentService {
                             super::super::compression::CompressionChange {
                                 state: run.state,
                                 content_store: run.content_store,
+                                fold: run.fold.map(|fold| (call.call_id.clone(), fold)),
                             },
                         )
                     },

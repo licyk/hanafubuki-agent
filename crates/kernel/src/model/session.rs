@@ -336,6 +336,10 @@ pub struct AgentSessionRuntimeSnapshot {
     /// Never persisted: a session read from the history store has none.
     #[serde(default)]
     pub background_compaction: Option<AgentBackgroundCompactionState>,
+    /// What the hierarchical compression folded; none for a session that
+    /// never ran it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub compression: Option<super::AgentCompressionSummary>,
     pub task_plan: Option<AgentTaskPlanSnapshot>,
     pub pending_user_input: Option<AgentUserInputRequest>,
     pub turn: Option<AgentTurnSnapshot>,

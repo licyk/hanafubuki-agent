@@ -45,15 +45,16 @@ Without `--json`, standard output is the turn written for a person to read:
 The final answer.
 ```
 
-| Line                     | Means                                                            |
-| ------------------------ | ---------------------------------------------------------------- |
-| `→ TOOL: SUBJECT`        | A tool call started; the subject (a command, a path) is optional |
-| `  TOOL done` / `failed` | The tool call succeeded or failed                                |
-| `· text`                 | The model's commentary, or a note of `exec`'s own                |
-| `plan:` and its text     | A plan the model proposed (in [plan mode](/docs/plan-mode))      |
-| Text without a prefix    | The model's final answer                                         |
+| Line                                           | Means                                                                                                          |
+| ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `→ TOOL: SUBJECT`                              | A tool call started; the subject (a command, a path) is optional                                               |
+| `  TOOL done` / `failed`                       | The tool call succeeded or failed                                                                              |
+| `  folded into N block(s), ~T tokens (tier K)` | A `compress` call of the [hierarchical compression](/docs/configuration#compaction) folded part of the context |
+| `· text`                                       | The model's commentary, or a note of `exec`'s own                                                              |
+| `plan:` and its text                           | A plan the model proposed (in [plan mode](/docs/plan-mode))                                                    |
+| Text without a prefix                          | The model's final answer                                                                                       |
 
-Each message is printed once it is complete. Standard error has the session's id (`session 3`), the model request's retries (`retrying the model request (1/3): reason`), and how a turn that did not complete ended (`error: the turn failed (...)`, `the turn was cancelled (...)`).
+Each message is printed once it is complete. Standard error has the session's id (`session 3`), the model request's retries (`retrying the model request (1/3): reason`), how a turn that did not complete ended (`error: the turn failed (...)`, `the turn was cancelled (...)`), and a failure of the hierarchical compression (`warning: context compression failed; the turn goes on with the full history: ...`).
 
 Each time the model finishes thinking, standard error gets a line such as `· thought for 12s` (whole seconds, rounded down): the time only, not the thinking itself. A thinking cut short by the turn's end prints no line. The thinking's text is in the `--json` events ([Thinking](/docs/json-events#reasoning)).
 

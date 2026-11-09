@@ -3,6 +3,8 @@
 ## Plan: background compaction, hierarchical compression, a choice between them (2026-11-09)
 
 The plan is [docs/plan-context-compaction.md](docs/plan-context-compaction.md).
+All phases (P1–P11, with P8b) are done; the open items below stay.
+
 Every §8 decision was accepted as recommended, except decision 12: the
 previous plan stays and AGENTS.md allows one plan per piece of work. The
 sources are Codex `57a808a392` and billion-context `4be21b08e` (acp-kernel
@@ -668,8 +670,96 @@ and pushed, and notes what Hanafubuki must change at its next pin.
   failed "agent turn cancellation was not confirmed": interrupting a
   running child missed the kernel's 5 s confirmation deadline (the test
   binary took 173 s). The re-run passed.
-- [ ] P11: `/compression`, status line, `context_compressed`, docs,
-      attribution; pty smoke.
+- [x] P11: `/compression`, status line, `context_compressed`, docs,
+      attribution; pty smoke. Done: `AgentEventKind::ContextCompressed
+      { call_id, blocks_created, tokens_compressed, tier }` (a `compress`
+      that folded: `CompressionToolRun.fold`, carried by `CompressionChange`
+      and recorded by `commit_history_with` right after the output's
+      `HistoryCommitted`, before `ToolCompleted`; a no-op or refused call
+      records none; `tier` is the highest of the blocks made or refolded)
+      and `ContextCompressionFailed { message }` (no warning kind existed:
+      the smallest one, recorded by `begin_sampling` when the projection
+      panicked, once a turn since the fallback then turns the mode off;
+      the message bounded at 4 KiB). `AgentSessionRuntimeSnapshot.
+      compression: Option<AgentCompressionSummary>` (`active_blocks`,
+      `tokens_compressed`; skipped when none, so `standard` snapshots are
+      unchanged). `AgentService::compression_status(session, settings)`
+      (kernel `service/compression/status.rs`): copies the window, state,
+      content store and usage under the lock, then with it released decides
+      the nudge again on a copy (`process_turn_with`, no tags, as
+      billion-context's `/acp`), `build_status_panel` (no system-prompt
+      count, no cache line) and the cache report in full (`acp_cache`'s
+      builder, now shared); commits nothing; a panic is
+      `AgentError::Internal` (no plugin row, so not a `feature()` call);
+      `None` when the session neither runs `hierarchical` nor has a state.
+      The facade's `compression_status(session_id)` reads
+      `[compaction.hierarchical]` as a turn would. `compress_call_ranges`
+      (the tool's lenient parser, panic-contained) for the interface. TUI:
+      `/compression [cache]` (`commands/compression.rs`, a `SessionCall`
+      run on a thread of its own; the panel then `Stats:` and the content
+      store's size; "not using hierarchical compression" without a state
+      or a session); the `compression` status item (`3 blocks, 42K saved`,
+      from the snapshot, refreshed by the fold's `HistoryCommitted`); the
+      `compress` cell folded (header `compress: m00002–m00005 topic`, the
+      receipt's first line; the rest of the receipt and the summaries in
+      the detailed transcript), live and replayed; no cell for
+      `context_compressed` (the tool cell shows the fold); a warning cell,
+      kept in `/warnings` (source `panics`), for `context_compression_
+      failed`. `exec`'s text output prints a fold and the warning. The
+      `/config` row's stale "until they are built" description replaced.
+      Docs (both languages): json-events (both kinds, the order, an
+      appear), terminal-interface (`/compression`, the status item, the
+      folded cell, the warning; new `#compression`), configuration (new
+      `#compaction`: the three strategies and the billion-context and
+      acp-kernel credit with links), config-reference (`messageTimestamps`
+      said to have no effect, no "yet"), architecture and internals (the
+      events, the snapshot field, the status; `tools/`), contributing and
+      NOTICE (the opt-in tools' texts, `/compression`). Tests: kernel
+      `compaction_contract::hierarchical::events` (one event after the
+      fold's commit and before `ToolCompleted`, none for a no-op, the
+      snapshot summary; the status panel and counters, state and revision
+      unchanged by the read, none for `standard`), the panic test asserts
+      one `context_compression_failed`; TUI `app::tests::compression` (the
+      folded cell live and resumed, `/compression`, `cache`, a bad
+      argument, `/statusline compression`, a `standard` session),
+      `commands::compression::tests`, the folded cell in
+      `history_cell::tool::tests`, the status item's snapshot. Goldens
+      unchanged. Module size: `kernel/src/activity.rs`'s ceiling 644 to
+      646 (the two new arms of its exhaustive dispatch).
+  - Smoke (pty, the real binary, `cargo build -p hanafubuki-agent-cli`):
+    a scripted Responses server (Python, in a scratch directory), a home
+    set up with `providers add`, `providers default --model`, `config set`
+    (`compaction.strategy hierarchical`, the recent zone and the range
+    minimum lowered, `titles` off, Scrollback) and `contextWindowTokens =
+    100000` added to `providers.toml` by hand (no command sets it). Driven
+    in a 160×50 pty: a long answer reported at 80 000 tokens, so the next
+    request carried the nudge; the model's `compress` folded `m00002`; the
+    folded cell (`Called compress: m00002–m00002 Greeting`, the receipt's
+    first line); `/statusline model compression` (`1 block, 9.75K saved`);
+    `/compression` (the panel, `Blocks: 1 active / 1 total`, `Stats:`);
+    `/compression cache`; `/config` → Compaction to `standard` (saved); a
+    turn whose request had no compression tools, prompt or nudge but kept
+    the summary; `/exit`, status 0.
+  - Open: `messageTimestamps` is a setting with no effect (billion-context's
+    timestamps are not ported); remove it from `[compaction.hierarchical]`
+    (a settings change for Hanafubuki) or port the timestamps. `absorb`
+    sends no `context_compressed` (it folds no block). The status panel
+    has no system-prompt row (the Agent does not measure the instructions
+    and tools apart) and no cache line (no cached tokens reported). The
+    panel's nudge is decided with the settings as they are now, which a
+    running turn may not have yet.
+  - Hanafubuki, at its next pin: `AgentEventKind` has two more variants,
+    `ContextCompressed` and `ContextCompressionFailed` (`context_compressed`,
+    `context_compression_failed`: appears; an exhaustive match adds them;
+    a host can show a fold's tier and savings, and the failure as a
+    warning). `AgentSessionRuntimeSnapshot.compression`
+    (`Option<AgentCompressionSummary>`, `#[serde(default)]`, skipped when
+    none; its constructions add `compression: None`). New facade call
+    `compression_status(session_id)` and function `compress_call_ranges`;
+    new re-exports `AgentCompressionStatus`, `AgentCompressionStats`,
+    `AgentContentStoreStats`, `AgentCompressionSummary`,
+    `AgentCompressRange`; kernel `AgentService::compression_status`.
+    Goldens and the persisted format unchanged.
 
 ## Plan: Codex's new terminal interface, its commands, configuration in the interface (2026-11-09)
 

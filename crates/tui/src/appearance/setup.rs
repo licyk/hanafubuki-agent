@@ -137,6 +137,7 @@ fn status_preview(values: &SurfaceValues, item: StatusLineItem) -> Option<String
                 StatusLineItem::TaskProgress => "Tasks 2/5",
                 StatusLineItem::PermissionMode => "manual",
                 StatusLineItem::Goal => "Goal: Ship the release (active)",
+                StatusLineItem::Compression => "3 blocks, 42K saved",
             }
             .to_string(),
         )

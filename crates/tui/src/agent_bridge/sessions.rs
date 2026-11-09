@@ -11,8 +11,8 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use hanafubuki_agent::{
-    AgentBackgroundTerminalSnapshot, AgentError, AgentEventSink, AgentHandle,
-    AgentHistorySortDirection, AgentPermissionMode, AgentRecap, AgentSandboxMode,
+    AgentBackgroundTerminalSnapshot, AgentCompressionStatus, AgentError, AgentEventSink,
+    AgentHandle, AgentHistorySortDirection, AgentPermissionMode, AgentRecap, AgentSandboxMode,
     AgentSessionHeadForkRequest, AgentSessionId, AgentSessionRuntimeSnapshot,
     AgentSessionTitleRenameRequest, AgentTranscriptPageRequest, AgentWorktree, ConversationItem,
 };
@@ -50,6 +50,10 @@ pub(crate) enum SessionCall {
     /// The session's last answer, for `/copy`.
     LastAnswer,
     Recap,
+    /// `/compression`: the panel, or with `cache` the cache report.
+    Compression {
+        cache: bool,
+    },
     Terminals,
     StopTerminals,
     Roots,
@@ -106,6 +110,11 @@ pub(crate) enum SessionReply {
     ExportedFile(PathBuf),
     LastAnswer(Option<String>),
     Recap(AgentRecap),
+    /// The session's hierarchical compression; `None` when it has none.
+    Compression {
+        status: Option<Box<AgentCompressionStatus>>,
+        cache: bool,
+    },
     Terminals(Vec<AgentBackgroundTerminalSnapshot>),
     TerminalsStopped {
         stopped: usize,
@@ -162,6 +171,7 @@ impl SessionCall {
             Self::ExportPath | Self::Export(_) => "export",
             Self::LastAnswer => "copy",
             Self::Recap => "recap",
+            Self::Compression { .. } => "compression",
             Self::Terminals => "ps",
             Self::StopTerminals => "stop",
             Self::Roots => "pwd",
@@ -295,6 +305,24 @@ impl AgentBridge {
                             }
                             error => format!("no recap: {error}"),
                         })
+                });
+                return Ok(None);
+            }
+            SessionCall::Compression { cache } => {
+                let Some(session_id) = self.session_id else {
+                    return Ok(Some(reply(SessionReply::Compression {
+                        status: None,
+                        cache,
+                    })));
+                };
+                self.blocking_session_call("compression", move |agent| {
+                    let status = agent
+                        .compression_status(session_id)
+                        .map_err(|error| format!("the compression was not read: {error}"))?;
+                    Ok(SessionReply::Compression {
+                        status: status.map(Box::new),
+                        cache,
+                    })
                 });
                 return Ok(None);
             }

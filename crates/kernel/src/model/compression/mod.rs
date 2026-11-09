@@ -1,6 +1,6 @@
 mod chain;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 pub(crate) use chain::{next_link, CompressionChainHead};
 pub use chain::{AgentCompressionChain, AgentCompressionDelta, AgentCompressionUpdate};
@@ -99,6 +99,75 @@ impl AgentHierarchicalCompression {
         config.rules.enabled = self.rules;
         config
     }
+}
+
+/// What a session's hierarchical compression has folded, as its snapshot
+/// shows it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct AgentCompressionSummary {
+    /// The blocks the requests show in place of what they cover.
+    pub active_blocks: usize,
+    /// The tokens every fold replaced, cumulative.
+    pub tokens_compressed: u64,
+}
+
+impl AgentCompressionSummary {
+    pub(crate) fn of(state: &AgentCompressionState) -> Self {
+        Self {
+            active_blocks: state.active_blocks().count(),
+            tokens_compressed: state.stats.tokens_compressed,
+        }
+    }
+}
+
+/// The counters of a session's hierarchical compression.
+pub use hanafubuki_agent_compression::Stats as AgentCompressionStats;
+
+/// The size of a session's content store.
+pub use hanafubuki_agent_compression::ContentStoreStats as AgentContentStoreStats;
+
+/// A session's hierarchical compression as a person reads it (the terminal
+/// interface's `/compression`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AgentCompressionStatus {
+    /// billion-context's status panel: the context, the nudge and the
+    /// compressible ranges, the active blocks by tier.
+    pub panel: String,
+    /// The cache report, in full (`acp_cache`'s).
+    pub cache_report: String,
+    pub stats: AgentCompressionStats,
+    /// The content store's size, when the session has one.
+    pub content_store: Option<AgentContentStoreStats>,
+}
+
+/// One range a `compress` call asks to fold, as an interface shows the
+/// call.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AgentCompressRange {
+    /// `mNNNNN` or `bN`.
+    pub start_ref: String,
+    pub end_ref: String,
+    pub topic: Option<String>,
+    pub summary: String,
+}
+
+/// The ranges of a `compress` call's `arguments`, read as the tool reads
+/// them (leniently); none when nothing in them parses.
+pub fn compress_call_ranges(arguments: &serde_json::Value) -> Vec<AgentCompressRange> {
+    hanafubuki_agent_foundation::panic::catch_panic(|| {
+        hanafubuki_agent_compression::parse_compress_args(arguments, None)
+            .ranges
+            .into_iter()
+            .map(|range| AgentCompressRange {
+                start_ref: range.start_ref,
+                end_ref: range.end_ref,
+                topic: range.topic.filter(|topic| !topic.trim().is_empty()),
+                summary: range.summary,
+            })
+            .collect()
+    })
+    .unwrap_or_default()
 }
 
 fn to_usize(value: u64) -> usize {

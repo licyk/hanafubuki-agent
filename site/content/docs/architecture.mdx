@@ -185,6 +185,8 @@ schema 遵循同样的按协议规则：支持 `strict_json_schema` 的协议（
 
 窗口由模型负责，所以阈值压缩（轮次前和轮次中）关闭。标准压缩仍是底线：Provider 的上下文窗口错误、`/compact`、`new_context`，以及最终出口（上下文连续三个请求超过紧急阈值，且已没有可折叠或可截短的内容）各运行一次。它压缩的是投影后的视图，摘要作为文本；安装后，被覆盖的条目已离开窗口，块随之失效。切换到 `hierarchical` 时从空状态开始，在当前窗口上生成引用。切换离开时，有效的块继续投影，标签和载体都保留，所以请求只在指令和工具上变化；不再有提示、提醒或工具产生新块，下一次标准压缩结束它们。对该 crate 的每次调用都在 `catch_panic` 下运行：投影中的 panic 让这个请求带完整历史发送，轮次剩下的部分按 `standard` 运行（下一轮次再尝试）；`compress` 或 `decompress` 中的 panic 是这次调用的错误。
 
+宿主在调用输出的那次提交中看到每次折叠的 `ContextCompressed` 事件（生成的块数、它们替换的 token 数、层级），投影的 panic 则是 `ContextCompressionFailed`。会话的快照带有活动块数和压缩的 token 数（`compression`），facade 的 `compression_status` 读取算法的状态面板和缓存报告，不改变会话。终端界面以折叠的形式显示 `compress` 调用（它的范围和回执的第一行），并提供 `/compression` 和状态栏的 `compression` 项。
+
 ## 思考 [#thinking]
 
 模型流式输出的思考作为类型化事件传给使用者，并作为对话条目保存，但**从不**作为模型输入回放。

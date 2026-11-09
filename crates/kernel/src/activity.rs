@@ -205,7 +205,9 @@ impl AgentActivityTracker {
             | AgentEventKind::AssistantMessageCompleted { .. }
             | AgentEventKind::SteeringAccepted { .. }
             | AgentEventKind::SteeringConsumed { .. }
-            | AgentEventKind::CompactionUpdated { .. } => None,
+            | AgentEventKind::CompactionUpdated { .. }
+            | AgentEventKind::ContextCompressed { .. }
+            | AgentEventKind::ContextCompressionFailed { .. } => None,
         }
     }
 

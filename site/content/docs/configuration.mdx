@@ -73,6 +73,25 @@ hanafubuki-agent config edit
 
 手动编辑的内容在下一次启动 Agent 时读取。如果文件中有无法使用的值，Agent 会修复它，并先把原文件复制到 `.recovery/`，见[配置恢复](/docs/recovery)。
 
+## 压缩 [#compaction]
+
+会话的上下文随每个回合增长；`compaction.strategy` 决定如何让它保持在模型的窗口之内。每个会话在下一个回合采用该策略。
+
+| 策略             | 如何缩减上下文                                                                                                                                                           |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `"standard"`     | 默认值。上下文用到窗口的 `autoCompactThresholdPercent` 时，在回合之前或回合之中把较早的对话写成摘要（[上下文窗口与压缩](/docs/providers-models#compaction)）             |
+| `"background"`   | 同样的摘要，但更早开始（`compaction.background.thresholdPercent`，默认 65%），并在会话继续进行时于后台写成；它在下一次请求之前安装。只有上下文已无空间时，会话才会等待它 |
+| `"hierarchical"` | 模型把自己历史中的片段折叠成它写的摘要，并可以再次展开；保存的历史从不改变。只有已没有可折叠的内容时才运行标准压缩                                                       |
+
+```sh
+hanafubuki-agent config set compaction.strategy hierarchical
+hanafubuki-agent config set compaction.hierarchical.contentStore true
+```
+
+终端界面中的 `/config` 可以切换策略；在 `hierarchical` 下，[`/compression`](/docs/terminal-interface#compression) 显示模型折叠出的块及其节省的量。每种策略都以标准压缩为底线：`/compact` 和 Provider 报告上下文窗口错误之后的重试都会运行它。`[compaction]` 的每个键以及各策略的细节见[配置参考](/docs/config-reference#compaction)。
+
+`hierarchical` 策略是 billion-context 的算法：hanafubuki-agent 使用了 ranxianglei 的 [acp-kernel](https://github.com/ranxianglei/acp-kernel) 和 [billion-context](https://github.com/ranxianglei/billion-context)，采用 MIT 许可证并附加一项署名条款（[许可证](/docs/contributing#licence)）。
+
 ## 钩子 [#hooks]
 
 钩子是你配置的命令，在 Agent 触发某个事件时运行：工具调用之前或之后、会话开始时、你提交消息时、轮次结束之前。格式与 Codex 相同，所以它的 `hooks.json` 文件和 `[hooks]` 表可以原样使用。钩子只有在你信任之后才会运行。
