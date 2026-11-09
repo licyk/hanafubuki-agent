@@ -20,6 +20,9 @@ mod keys;
 mod owned;
 mod preferences;
 mod requests;
+mod workspace;
+
+pub(crate) use workspace::WorkspaceEvent;
 
 use keys::is_transcript_key;
 
@@ -99,6 +102,8 @@ pub(crate) struct App {
     terminal_title: TerminalTitle,
     /// A chord's first key, while it waits for the second.
     chords: ChordState,
+    /// The second conversation, the panes and the command center.
+    workspace: workspace::Workspace,
 }
 
 impl App {
@@ -134,6 +139,7 @@ impl App {
             backtrack: backtrack::Backtrack::default(),
             terminal_title: TerminalTitle::new(TitleEncoding::detect()),
             chords: ChordState::default(),
+            workspace: workspace::Workspace::default(),
         }
     }
 
@@ -167,6 +173,25 @@ impl App {
 
     /// `false` when the app should exit.
     pub(crate) fn handle_event<B: Backend<Error = io::Error> + Write>(
+        &mut self,
+        tui: &mut Tui<B>,
+        event: AppEvent,
+    ) -> bool {
+        let keep_running = match self.route_event(event) {
+            workspace::Route::Here(event) => self.handle_here(tui, event),
+            workspace::Route::Parked(event) => self.handle_parked(tui, event),
+            workspace::Route::Workspace(event) => {
+                self.workspace_event(tui, event);
+                true
+            }
+            workspace::Route::Dropped => true,
+        };
+        self.sync_second(tui);
+        keep_running
+    }
+
+    /// Handles `event` with the conversation the app's fields hold.
+    fn handle_here<B: Backend<Error = io::Error> + Write>(
         &mut self,
         tui: &mut Tui<B>,
         event: AppEvent,
@@ -220,6 +245,7 @@ impl App {
             AppEvent::Command(command) => self.run_app_command(tui, command),
             AppEvent::Appearance(event) => self.apply_appearance(event),
             AppEvent::CommandStep(step) => self.chat_widget.run_command_step(step),
+            AppEvent::Second(..) | AppEvent::Workspace(_) => {}
             AppEvent::Exit => return false,
         }
         true
@@ -250,7 +276,7 @@ impl App {
         let to_search = match self.overlay.as_mut() {
             Some(Overlay::Transcript(transcript)) => transcript.handle_paste(&text),
             Some(Overlay::Static(_)) => false,
-            None if self.resume_picker.is_some() => false,
+            None if self.resume_picker.is_some() || self.workspace.agents_open() => false,
             None if self.mode.is_owned() && self.transcript_view.is_search_editing() => {
                 self.transcript_view.paste_search(&text)
             }
@@ -266,6 +292,9 @@ impl App {
     }
 
     fn handle_mouse(&mut self, mouse: MouseEvent) {
+        if self.overlay.is_none() && self.handle_workspace_mouse(mouse) {
+            return;
+        }
         let action = match self.overlay.as_mut() {
             Some(Overlay::Transcript(transcript)) => transcript.handle_mouse(mouse),
             Some(Overlay::Static(_)) => None,
@@ -313,7 +342,7 @@ impl App {
     }
 
     fn alt_screen_open(&self) -> bool {
-        self.overlay.is_some() || self.resume_picker.is_some()
+        self.overlay.is_some() || self.resume_picker.is_some() || self.workspace.agents_open()
     }
 
     fn open_overlay<B: Backend<Error = io::Error> + Write>(
@@ -398,7 +427,8 @@ impl App {
 
     /// Runs `git diff` off the loop; its output opens the diff overlay.
     fn start_diff(&self) {
-        let tx = self.app_event_tx.clone();
+        // The app's own, whichever conversation has the focus.
+        let tx = self.app_event_tx.untagged();
         let directory = self.diff_directory.clone();
         std::thread::spawn(move || {
             let text = match directory.as_deref().map(get_git_diff) {
@@ -417,7 +447,10 @@ impl App {
         tui: &mut Tui<B>,
         cell: Arc<dyn HistoryCell>,
     ) {
-        if let Some(Overlay::Transcript(transcript)) = &mut self.overlay {
+        // The transcript overlay shows the focused conversation.
+        if let (Some(Overlay::Transcript(transcript)), false) =
+            (&mut self.overlay, self.workspace.handling_parked())
+        {
             transcript.insert_cell(cell.clone());
         }
         self.transcript_cells.push(cell.clone());
@@ -439,7 +472,9 @@ impl App {
                 self.has_emitted_history_lines = true;
             }
         }
-        if self.alt_screen_open() {
+        if let Some(held) = self.workspace.held_lines() {
+            held.extend(display);
+        } else if self.alt_screen_open() {
             self.deferred_history_lines.extend(display);
         } else {
             tui.insert_history_lines(display);
@@ -455,7 +490,8 @@ impl App {
         {
             return;
         }
-        let tx = self.app_event_tx.clone();
+        // The app's own, whichever conversation has the focus.
+        let tx = self.app_event_tx.untagged();
         let running = self.commit_anim_running.clone();
         std::thread::spawn(move || {
             while running.load(Ordering::Relaxed) {
@@ -494,6 +530,9 @@ impl App {
                 self.load_picker_pages();
                 self.schedule_frame(Instant::now());
             }
+            return Ok(());
+        }
+        if self.draw_agents_center(tui)? {
             return Ok(());
         }
         if self.overlay.is_some() {

@@ -112,6 +112,9 @@ pub(crate) struct ChatComposer {
     dismissed_file_popup_token: Option<String>,
     /// The commands turned off after they panicked.
     disabled_commands: Vec<&'static str>,
+    /// In a second conversation (a side conversation, a subagent shown):
+    /// the only commands it runs.
+    command_scope: Option<&'static [&'static str]>,
 }
 
 /// Popup state – at most one can be visible at any time.
@@ -149,6 +152,7 @@ impl ChatComposer {
             current_file_query: None,
             dismissed_file_popup_token: None,
             disabled_commands: Vec::new(),
+            command_scope: None,
         }
     }
 
@@ -721,6 +725,11 @@ impl ChatComposer {
 
     pub(crate) fn set_status_line(&mut self, line: Option<Line<'static>>) {
         self.status_line = line;
+    }
+
+    /// Whether the terminal reports Shift+Enter apart from Enter.
+    pub(crate) fn enhanced_keys_supported(&self) -> bool {
+        self.use_shift_enter_hint
     }
 }
 

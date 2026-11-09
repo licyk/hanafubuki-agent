@@ -172,6 +172,7 @@ impl AgentBridge {
             AgentCommand::Goal(call) => return Ok(self.goal_call(call)),
             AgentCommand::Hooks(call) => return Ok(self.hooks_call(call)),
             AgentCommand::Settings(call) => self.settings_call(call),
+            AgentCommand::Subagents(call) => return Ok(self.subagents_call(call)),
             AgentCommand::Skills => {
                 let catalog = self
                     .agent
@@ -282,6 +283,16 @@ impl AgentBridge {
 
     /// `session_id` with its latest transcript, for the chat to replay.
     pub(crate) fn open(&self, session_id: AgentSessionId) -> Result<OpenedSession, String> {
+        self.open_with_snapshot(session_id)
+            .map(|(opened, _)| opened)
+    }
+
+    /// [`Self::open`], with the session's state as it was read with the
+    /// transcript.
+    pub(crate) fn open_with_snapshot(
+        &self,
+        session_id: AgentSessionId,
+    ) -> Result<(OpenedSession, AgentSessionRuntimeSnapshot), String> {
         let opened = self
             .agent
             .open_session(session_id, self.page_size)
@@ -292,9 +303,9 @@ impl AgentBridge {
             .into_iter()
             .map(|item| item.content)
             .collect();
-        Ok(OpenedSession {
+        let session = OpenedSession {
             session_id: Some(session_id),
-            model: opened.runtime.model,
+            model: opened.runtime.model.clone(),
             mode: opened.runtime.mode,
             transcript: replay::transcript(&self.agent, items),
             setup_needed: false,
@@ -306,7 +317,8 @@ impl AgentBridge {
                     cursor,
                     through_revision: opened.through_revision,
                 }),
-        })
+        };
+        Ok((session, opened.runtime))
     }
 
     /// The page of the transcript before `older`, oldest first, and where

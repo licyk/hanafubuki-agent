@@ -39,6 +39,27 @@ impl ChatComposer {
         self.disabled_commands.contains(&name)
     }
 
+    /// Limits the commands to `scope` (`None`: every command): the popup
+    /// lists only those, and typing another says it is unavailable here.
+    pub(crate) fn set_command_scope(&mut self, scope: Option<&'static [&'static str]>) {
+        self.command_scope = scope;
+    }
+
+    /// The commands the popup leaves out: those turned off, and those
+    /// outside the scope.
+    fn hidden_commands(&self) -> Vec<&'static str> {
+        let mut hidden = self.disabled_commands.clone();
+        if let Some(scope) = self.command_scope {
+            hidden.extend(
+                commands::COMMANDS
+                    .into_iter()
+                    .map(|command| command.name)
+                    .filter(|name| !scope.contains(name)),
+            );
+        }
+        hidden
+    }
+
     pub(crate) fn insert_str(&mut self, text: &str) {
         self.textarea.insert_str(text);
         self.sync_popups();
@@ -208,6 +229,19 @@ impl ChatComposer {
             return None;
         };
         self.textarea.set_text_clearing_elements("");
+        if self
+            .command_scope
+            .is_some_and(|scope| !scope.contains(&command.name))
+        {
+            let message = format!(
+                "'/{name}' is unavailable here; Esc returns to the main conversation.",
+                name = command.name
+            );
+            self.app_event_tx.send(AppEvent::InsertHistoryCell(Box::new(
+                history_cell::new_error_event(message),
+            )));
+            return Some(InputResult::None);
+        }
         if self.command_disabled(command.name) {
             let message = format!(
                 "'/{name}' is turned off: it failed earlier in this run.",
@@ -348,7 +382,7 @@ impl ChatComposer {
             }
             _ => {
                 if is_editing_slash_command_name {
-                    let mut command_popup = CommandPopup::new(self.disabled_commands.clone());
+                    let mut command_popup = CommandPopup::new(self.hidden_commands());
                     command_popup.on_composer_text_change(first_line.to_string());
                     self.active_popup = ActivePopup::Command(command_popup);
                 }

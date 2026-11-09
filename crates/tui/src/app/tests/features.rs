@@ -35,7 +35,7 @@ const FINDINGS: &str = r#"{
 
 impl Harness {
     /// Sends `text` and waits for the answer `answer` and the turn's end.
-    fn answered(&mut self, text: &str, answer: &str) -> AgentSessionId {
+    pub(super) fn answered(&mut self, text: &str, answer: &str) -> AgentSessionId {
         self.type_and_submit(text);
         self.pump_until_screen_shows(answer);
         self.pump_until_turn_ends();

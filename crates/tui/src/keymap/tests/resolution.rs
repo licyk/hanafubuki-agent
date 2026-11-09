@@ -155,6 +155,17 @@ fn the_default_leader_yields_to_a_key_bound_to_it() {
         .collect();
     assert_eq!(
         chords,
-        ["ctrl-g [ SelectTranscript", "ctrl-g p OpenPresets"]
+        [
+            "ctrl-g [ SelectTranscript",
+            "ctrl-g left FocusPaneLeft",
+            "ctrl-g right FocusPaneRight",
+            "ctrl-g tab ToggleSideConversation",
+            "ctrl-g < MoveDividerLeft",
+            "ctrl-g > MoveDividerRight",
+            "ctrl-g = EqualizePaneWidths",
+            "ctrl-g z TogglePaneZoom",
+            "ctrl-g x HidePane",
+            "ctrl-g p OpenPresets"
+        ]
     );
 }

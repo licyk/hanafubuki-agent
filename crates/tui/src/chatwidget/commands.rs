@@ -166,6 +166,9 @@ impl ChatWidget {
             TurnUpdate::Goal(reply) => self.run_command(&commands::GOAL, |context| {
                 commands::goal::on_reply(context, reply)
             }),
+            TurnUpdate::Subagents(reply) => self.run_command(&commands::SUBAGENTS, |context| {
+                commands::subagents::on_reply(context, reply)
+            }),
             TurnUpdate::Hooks(reply) => {
                 if let Some(warning) = commands::hooks::startup_warning(&reply) {
                     self.warnings

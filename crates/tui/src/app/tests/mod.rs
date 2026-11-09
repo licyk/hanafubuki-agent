@@ -638,10 +638,13 @@ fn a_resumed_session_loads_its_earlier_pages_into_the_owned_transcript() {
     }
 }
 
+mod agents;
 mod appearance;
 mod backtrack;
 mod features;
 mod preferences;
 mod session_commands;
 mod settings;
+mod side;
+mod subagents;
 mod workspace_commands;

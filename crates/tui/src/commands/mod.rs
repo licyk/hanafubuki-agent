@@ -9,6 +9,7 @@
 //! command that panics is turned off for the rest of the run, and the chat
 //! goes on.
 
+mod agents;
 mod cd;
 mod clear;
 mod config;
@@ -39,7 +40,9 @@ mod reports;
 mod resume;
 pub(crate) mod review;
 mod session;
+mod side;
 mod statusline;
+pub(crate) mod subagents;
 mod terminals;
 mod theme;
 mod title;
@@ -50,7 +53,7 @@ mod worktree;
 
 use std::fmt;
 
-use hanafubuki_agent::{AgentSessionMode, AgentTuiPreferences};
+use hanafubuki_agent::{AgentSessionMode, AgentSubagentStatus, AgentTuiPreferences};
 
 use crate::agent_bridge::{
     HooksReply, McpReply, ProviderReply, SessionCall, SessionReply, SettingsReply,
@@ -69,10 +72,12 @@ pub(crate) use parse::{parse_input, ParsedInput};
 pub(crate) use presets::PRESETS;
 pub(crate) use providers::PROVIDERS;
 pub(crate) use review::REVIEW;
+pub(crate) use side::SECOND_CONVERSATION_COMMANDS;
+pub(crate) use subagents::SUBAGENTS;
 pub(crate) use warnings::{show_warnings, WARNINGS};
 
 /// Every command, in presentation order: the most used first.
-pub(crate) static COMMANDS: [&CommandSpec; 41] = [
+pub(crate) static COMMANDS: [&CommandSpec; 44] = [
     &model::MODEL,
     &providers::PROVIDERS,
     &mode::MODE,
@@ -90,6 +95,9 @@ pub(crate) static COMMANDS: [&CommandSpec; 41] = [
     &session::COMPACT,
     &recap::RECAP,
     &review::REVIEW,
+    &side::SIDE,
+    &subagents::SUBAGENTS,
+    &agents::AGENTS,
     &goal::GOAL,
     &copy::COPY,
     &export::EXPORT,
@@ -207,6 +215,8 @@ pub(crate) enum CommandReply {
     Session(SessionReply),
     Hooks(HooksReply),
     Settings(SettingsReply),
+    /// The subagents' statuses, read again while they run.
+    Subagents(Vec<AgentSubagentStatus>),
 }
 
 /// What `/memories` asked; `/warnings`' answer goes through the chat,

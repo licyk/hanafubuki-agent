@@ -88,6 +88,11 @@ impl ChordState {
         ChordStep::Wait
     }
 
+    /// The leader was pressed and waits for its second key.
+    pub(crate) fn leader_pending(&self) -> bool {
+        self.pending.as_ref().is_some_and(|pending| pending.leader)
+    }
+
     #[cfg(test)]
     pub(crate) fn pending(&self) -> Option<KeyStroke> {
         self.pending.as_ref().map(|pending| pending.first)

@@ -3,8 +3,9 @@
 //! maps the Agent's turn events onto what the chat widget shows
 //! ([`TurnUpdate`]), and the interface's [`Op`]s onto calls of the facade:
 //! the turn's (here), the slash commands' (`commands`, `sessions`,
-//! `permissions`, `workspace`; `/review`, `/goal` and `/hooks` in modules
-//! of their own), the reading of a session's transcript into what the chat
+//! `permissions`, `workspace`; `/review`, `/goal`, `/hooks` and
+//! `/subagents` in modules of their own, the side conversation in `side`),
+//! the reading of a session's transcript into what the chat
 //! replays (`replay`), and the editing of an earlier message (`edit`).
 //!
 //! The interface starts with no session: the first message creates it, or
@@ -16,6 +17,7 @@
 //! as a task of the Agent's runtime and reports back with an
 //! [`AgentReply`].
 
+mod agents;
 mod commands;
 mod edit;
 mod goal;
@@ -27,9 +29,12 @@ mod replay;
 mod review;
 mod sessions;
 mod settings;
+mod side;
 mod status;
+mod subagents;
 mod workspace;
 
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -55,7 +60,9 @@ pub(crate) use replay::{OlderTranscript, OpenedSession, ReplayedItem};
 pub(crate) use review::{ReviewCall, ReviewEnd, ReviewReply};
 pub(crate) use sessions::{ExportDestination, SessionCall, SessionReply};
 pub(crate) use settings::{MemoriesState, SettingsCall, SettingsReply, Warning, WarningSource};
+pub(crate) use side::OpenedSide;
 pub(crate) use status::{SessionStatus, UsageSummary};
+pub(crate) use subagents::{ChildApproval, SubagentsCall, SubagentsReply};
 
 /// How many of the turn's latest items are read for a finished call.
 const TOOL_ITEMS_PAGE: usize = 64;
@@ -117,6 +124,7 @@ pub(crate) enum TurnUpdate {
     Review(ReviewReply),
     Goal(GoalReply),
     Hooks(HooksReply),
+    Subagents(SubagentsReply),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -148,6 +156,13 @@ pub(crate) enum AgentReply {
     ReviewEnded(ReviewEnd),
     /// The working directory moved into a new worktree (`/worktree`).
     EnteredWorktree(workspace::EnteredWorktree),
+    /// A subagent of `parent` waits on an approval.
+    ChildApproval(Box<ChildApproval>),
+    /// It was answered, or its turn ended.
+    ChildApprovalResolved {
+        parent: AgentSessionId,
+        request_id: ApprovalRequestId,
+    },
 }
 
 pub(crate) struct AgentBridge {
@@ -186,6 +201,12 @@ pub(crate) struct AgentBridge {
     /// The worktree the next session the interface creates is bound to
     /// (`/worktree`'s new conversation).
     pending_worktree: Option<PathBuf>,
+    /// The watch over the session's subagents while they run.
+    watch: Option<subagents::Watch>,
+    /// The subagents' approvals shown as the session's, by request.
+    child_approvals: HashMap<ApprovalRequestId, subagents::ChildTarget>,
+    /// The journal of the subagent this bridge shows, followed.
+    following: Option<subagents::Following>,
 }
 
 impl AgentBridge {
@@ -213,6 +234,9 @@ impl AgentBridge {
             review: None,
             denials: permissions::RecentDenials::default(),
             pending_worktree: None,
+            watch: None,
+            child_approvals: HashMap::new(),
+            following: None,
         }
     }
 
@@ -266,6 +290,9 @@ impl AgentBridge {
                 request_id,
                 decision,
             } => {
+                if let Some(answered) = self.resolve_child_approval(request_id, decision) {
+                    return answered;
+                }
                 let turn = self.turn?;
                 self.agent
                     .resolve_approval(
@@ -335,6 +362,8 @@ impl AgentBridge {
                     self.pending_worktree = None;
                 }
                 self.session_id = opened.session_id;
+                self.watch = None;
+                self.child_approvals.clear();
                 self.turn = None;
                 self.turn_running = false;
                 self.pending_steering.clear();
@@ -351,6 +380,10 @@ impl AgentBridge {
                     Some(TurnUpdate::ModelChanged(model))
                 }
                 TurnUpdate::Goal(reply) => self.goal_reply(reply),
+                TurnUpdate::Subagents(SubagentsReply::Listed(statuses)) => {
+                    self.subagents_listed(&statuses);
+                    Some(TurnUpdate::Subagents(SubagentsReply::Listed(statuses)))
+                }
                 // `/cd` moved: the status line's branch is the new root's.
                 TurnUpdate::Session(reply) if reply.working_directory().is_some() => {
                     self.send_session_status();
@@ -365,6 +398,10 @@ impl AgentBridge {
             } => self.status_loaded(session_id, permission_mode, goal),
             AgentReply::ReviewEnded(end) => self.review_ended(end),
             AgentReply::EnteredWorktree(entered) => self.entered_worktree(entered),
+            AgentReply::ChildApproval(approval) => self.child_approval(*approval),
+            AgentReply::ChildApprovalResolved { parent, request_id } => {
+                self.child_approval_resolved(parent, request_id)
+            }
         }
     }
 
@@ -374,6 +411,7 @@ impl AgentBridge {
             return None;
         }
         self.denials.observe(event.session_id, &event.kind);
+        self.adopt_followed_turn(&event.kind, event.turn_id);
         // The turn's events can arrive before the reply that accepted it.
         if let (None, Some(turn_id), true) = (self.turn, event.turn_id, self.turn_running) {
             self.turn = Some(AgentTurnAccepted {
@@ -409,11 +447,14 @@ impl AgentBridge {
                 call_id,
                 name,
                 presentation,
-            } => TurnUpdate::ToolStarted {
-                call_id,
-                name,
-                subject: presentation.subject,
-            },
+            } => {
+                self.observe_tool(&name);
+                TurnUpdate::ToolStarted {
+                    call_id,
+                    name,
+                    subject: presentation.subject,
+                }
+            }
             AgentEventKind::ToolCompleted { call_id, is_error } => {
                 let result = event
                     .turn_id
@@ -491,6 +532,7 @@ impl AgentBridge {
         self.turn_running = false;
         self.pending_steering.clear();
         self.send_session_status();
+        self.reshow_child_approvals();
         TurnUpdate::Ended(end)
     }
 

@@ -118,6 +118,7 @@ A side conversation is a temporary conversation beside a session, for a question
 - Its model is told it is in a side conversation: the inherited conversation is reference only, not instructions to carry on; it answers questions and explores without changing files, the workspace or settings unless you ask it to in the side conversation.
 - It is **ephemeral**: kept in memory only, never written to the history, never listed, and gone when it is closed, when its session is archived or deleted, or when the Agent stops. Its transcript starts at the side conversation, not with the inherited history.
 - A session has at most one; opening it again returns the open one. Closing it stops its running turn and its background terminals.
+- **In the terminal interface**, `/side` (or `/btw`) opens it: in Fullscreen a pane beside the conversation, in Scrollback a switch to it; Esc returns and `/side close` closes it ([Terminal interface](/docs/terminal-interface#side)).
 
 ## Sub-agents [#subagents]
 
@@ -127,6 +128,7 @@ A sub-agent is a child the session's model spawns with `spawn_agent` to work on 
 - It starts empty, or with its parent's conversation before the turn that spawned it, and runs with its parent's model and the permission mode its parent's next turn would have; its turns come from its parent's model, not from you.
 - Archiving or deleting the parent archives or deletes its sub-agents with it.
 - Only a session without a parent spawns sub-agents, at most 3 running at once.
+- **In the terminal interface**, `/subagents` lists them with their status and shows one in place of its parent, live while it runs; in Manual mode an approval a sub-agent waits on is shown in its parent, labelled with its title, and answered on it ([Terminal interface](/docs/terminal-interface#subagents)). `/agents` lists every session with its children, to open, fork, archive, delete or interrupt them ([Terminal interface](/docs/terminal-interface#agents)).
 
 ## Reviews [#reviews]
 

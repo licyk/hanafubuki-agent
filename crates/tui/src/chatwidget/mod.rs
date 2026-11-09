@@ -12,6 +12,7 @@ mod appearance;
 mod commands;
 mod live_tail;
 mod replay;
+mod second;
 mod turn;
 mod warnings;
 

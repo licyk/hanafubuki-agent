@@ -383,3 +383,35 @@ reason = "/review, /goal and /hooks end to end over the standalone Agent."
 [[original]]
 path = "crates/tui/src/app/tests/preferences.rs"
 reason = "/keymap, /presets, /config, /warnings and /memories end to end over the standalone Agent."
+
+[[original]]
+path = "crates/tui/src/agent_bridge/side.rs"
+reason = "The second conversation's bridge: the side conversation's open and close calls, and a subagent opened to be shown."
+
+[[original]]
+path = "crates/tui/src/agent_bridge/subagents.rs"
+reason = "The subagents' calls, the watch over their statuses and approvals, and the following of a subagent shown, over the facade's journal."
+
+[[original]]
+path = "crates/tui/src/agent_bridge/agents.rs"
+reason = "The command center's fork, delete and interrupt of a listed session over the facade's calls."
+
+[[original]]
+path = "crates/tui/src/chatwidget/second.rs"
+reason = "The second conversation's chat, made from the first's settings."
+
+[[original]]
+path = "crates/tui/src/commands/subagents/tests.rs"
+reason = "/subagents' cell and picker, /side's and /agents' dispatch, and a second conversation's commands over hand-built replies."
+
+[[original]]
+path = "crates/tui/src/app/tests/side.rs"
+reason = "/side end to end over the standalone Agent: refusals, the switch in scrollback mode, the panes in fullscreen."
+
+[[original]]
+path = "crates/tui/src/app/tests/subagents.rs"
+reason = "/subagents and a subagent's approval end to end over the standalone Agent."
+
+[[original]]
+path = "crates/tui/src/app/tests/agents.rs"
+reason = "/agents end to end over the standalone Agent."

@@ -9,6 +9,7 @@
 //! facade alone (`agent_bridge`).
 
 mod agent_bridge;
+mod agents_center;
 mod app;
 mod app_event;
 mod appearance;

@@ -61,6 +61,14 @@ pub(crate) enum Action {
     FindTranscript,
     FocusActivity,
     SelectTranscript,
+    FocusPaneLeft,
+    FocusPaneRight,
+    ToggleSideConversation,
+    MoveDividerLeft,
+    MoveDividerRight,
+    EqualizePaneWidths,
+    TogglePaneZoom,
+    HidePane,
     InterruptTurn,
     EditPrevious,
     ToggleThinking,
@@ -186,7 +194,7 @@ macro_rules! action {
 }
 
 /// Every action, in [`Action`]'s order.
-pub(crate) static ACTIONS: [ActionSpec; 43] = [
+pub(crate) static ACTIONS: [ActionSpec; 51] = [
     action!(
         Leader,
         Global,
@@ -221,6 +229,62 @@ pub(crate) static ACTIONS: [ActionSpec; 43] = [
         "select_transcript",
         "Select in the conversation with the keys (Fullscreen)",
         ["leader ["]
+    ),
+    action!(
+        FocusPaneLeft,
+        Global,
+        "focus_pane_left",
+        "Return to the main conversation from a side conversation or a subagent",
+        ["leader left"]
+    ),
+    action!(
+        FocusPaneRight,
+        Global,
+        "focus_pane_right",
+        "Focus the side conversation",
+        ["leader right"]
+    ),
+    action!(
+        ToggleSideConversation,
+        Global,
+        "toggle_side_conversation",
+        "Switch between the main and the side conversation",
+        ["leader tab"]
+    ),
+    action!(
+        MoveDividerLeft,
+        Global,
+        "move_divider_left",
+        "Move the panes' divider left: the side pane grows (Fullscreen)",
+        ["leader <"]
+    ),
+    action!(
+        MoveDividerRight,
+        Global,
+        "move_divider_right",
+        "Move the panes' divider right: the side pane shrinks (Fullscreen)",
+        ["leader >"]
+    ),
+    action!(
+        EqualizePaneWidths,
+        Global,
+        "equalize_pane_widths",
+        "Give the two panes equal widths (Fullscreen)",
+        ["leader ="]
+    ),
+    action!(
+        TogglePaneZoom,
+        Global,
+        "toggle_pane_zoom",
+        "The focused pane alone, or both again (Fullscreen)",
+        ["leader z"]
+    ),
+    action!(
+        HidePane,
+        Global,
+        "hide_pane",
+        "Close the side conversation, or leave the subagent shown",
+        ["leader x"]
     ),
     action!(
         InterruptTurn,

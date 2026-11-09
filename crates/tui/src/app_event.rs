@@ -16,7 +16,9 @@ use hanafubuki_agent::AgentTuiPreferencesPatch;
 
 use crate::agent_bridge::{
     AgentReply, GoalCall, HooksCall, McpCall, ProviderCall, ReviewCall, SessionCall, SettingsCall,
+    SubagentsCall,
 };
+use crate::app::WorkspaceEvent;
 use crate::appearance::AppearanceEvent;
 use crate::commands::CommandStep;
 use crate::file_search::FileMatch;
@@ -63,6 +65,13 @@ pub(crate) enum AppEvent {
     Appearance(AppearanceEvent),
     /// A slash command's next view, asked by one of its views.
     CommandStep(CommandStep),
+    /// What the second conversation's widgets and bridge sent (the side
+    /// conversation, a subagent shown): the number of the conversation,
+    /// so a closed one's late events are dropped.
+    Second(u64, Box<AppEvent>),
+    /// `/side`, `/subagents`, `/agents` and the panes: what the app does
+    /// with its conversations.
+    Workspace(WorkspaceEvent),
     StartCommitAnimation,
     StopCommitAnimation,
     CommitTick,
@@ -137,22 +146,49 @@ pub(crate) enum AgentCommand {
     Goal(GoalCall),
     Hooks(HooksCall),
     Settings(SettingsCall),
+    Subagents(SubagentsCall),
 }
 
 /// The app loop's channel, as the widgets and the Agent's sinks hold it.
 #[derive(Clone, Debug)]
 pub(crate) struct AppEventSender {
     app_event_tx: Sender<AppEvent>,
+    /// The second conversation's number: what it sends arrives wrapped in
+    /// [`AppEvent::Second`].
+    second: Option<u64>,
 }
 
 impl AppEventSender {
     pub(crate) fn new(app_event_tx: Sender<AppEvent>) -> Self {
-        Self { app_event_tx }
+        Self {
+            app_event_tx,
+            second: None,
+        }
+    }
+
+    /// The sender of the second conversation numbered `id`.
+    pub(crate) fn for_second(&self, id: u64) -> Self {
+        Self {
+            app_event_tx: self.app_event_tx.clone(),
+            second: Some(id),
+        }
+    }
+
+    /// The same channel, for the app's own events: they arrive unwrapped.
+    pub(crate) fn untagged(&self) -> Self {
+        Self {
+            app_event_tx: self.app_event_tx.clone(),
+            second: None,
+        }
     }
 
     /// Sends an event to the app loop; once the loop is gone, nothing
     /// listens and the event is dropped.
     pub(crate) fn send(&self, event: AppEvent) {
+        let event = match self.second {
+            Some(id) => AppEvent::Second(id, Box::new(event)),
+            None => event,
+        };
         let _ = self.app_event_tx.send(event);
     }
 }

@@ -54,6 +54,7 @@ pub(crate) enum AppearanceEvent {
 }
 
 /// The settings and what they show.
+#[derive(Clone)]
 pub(crate) struct Appearance {
     /// `tui.theme` as saved, which `/theme` marks.
     theme: Option<String>,

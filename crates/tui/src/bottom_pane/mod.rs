@@ -337,6 +337,15 @@ impl BottomPane {
         self.composer.command_disabled(name)
     }
 
+    /// Limits the commands the composer runs to `scope`.
+    pub(crate) fn set_command_scope(&mut self, scope: Option<&'static [&'static str]>) {
+        self.composer.set_command_scope(scope);
+    }
+
+    pub(crate) fn enhanced_keys_supported(&self) -> bool {
+        self.composer.enhanced_keys_supported()
+    }
+
     pub(crate) fn set_composer_text(&mut self, text: String) {
         self.composer.set_text_content(text);
         self.request_redraw();

@@ -1,10 +1,11 @@
 // Modified from OpenAI Codex rust-v0.93.0 (Apache-2.0).
 // Modified from OpenAI Codex 57a808a392 (Apache-2.0).
 
-//! Where a key goes: the resume picker takes them all while open; then a
-//! chord's first key waits for its second (`keymap::chords`), and a
-//! completed chord goes on as its action's token; then editing an earlier
-//! message, an overlay, the owned transcript's keys and the app's own
+//! Where a key goes: the resume picker and the command center take them
+//! all while open; then a chord's first key waits for its second
+//! (`keymap::chords`), and a completed chord goes on as its action's token;
+//! then the panes' keys (`workspace`), editing an earlier message, an
+//! overlay, the owned transcript's keys and the app's own
 //! actions (Ctrl+T, select mode), and the chat last. A view that captures
 //! keys (`/keymap`'s) gets every key as it is.
 
@@ -40,6 +41,9 @@ impl App {
     ) -> bool {
         if self.resume_picker.is_some() {
             return self.handle_picker_key(tui, key);
+        }
+        if self.handle_agents_key(tui, key) {
+            return true;
         }
         let contexts: &[Context] = if self.chat_widget.captures_keys() {
             &[]
@@ -102,7 +106,11 @@ impl App {
         tui: &mut Tui<B>,
         key: KeyEvent,
     ) -> bool {
-        if self.handle_backtrack_key(tui, key) {
+        if self.handle_workspace_key(tui, key) {
+            return true;
+        }
+        // An earlier message of a second conversation is not edited.
+        if !self.workspace.second_focused() && self.handle_backtrack_key(tui, key) {
             return true;
         }
         if let Some(overlay) = self.overlay.as_mut() {

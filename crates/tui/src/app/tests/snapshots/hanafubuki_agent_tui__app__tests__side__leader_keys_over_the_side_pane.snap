@@ -1,0 +1,44 @@
+---
+source: crates/tui/src/app/tests/side.rs
+expression: harness.redacted_screen()
+---
+ Main conversation                                             │ Side · Esc returns · /side close
+╭──────────────────────────────╮                               │┌ ctrl-x ──────────────────────────┐
+│ >_ hanafubuki-agent (vXXXXX) │                               ││ left   main conversation         │
+│                              │                               ││ right  side pane                 │
+│ model:     fixture-model     │                               ││ tab    other pane                │
+│ directory: /project          │                               ││ <      divider left              │
+╰──────────────────────────────╯                               ││ >      divider right             │
+                                                               ││ =      equal widths              │
+› Hello.                                                       ││ z      zoom pane                 │
+                                                               ││ x      close the side pane       │
+                                                               │└──────────────────────────────────┘
+• Hi.                                                          │• Four.
+                                                               │
+                                                               │
+                                                               │
+                                                               │
+                                                               │
+                                                               │
+                                                               │
+                                                               │
+                                                               │
+                                                               │
+                                                               │
+                                                               │
+                                                               │
+                                                               │
+                                                               │
+                                                               │
+                                                               │
+                                                               │
+                                                               │
+                                                               │
+                                                               │
+                                                               │
+                                                               │
+                                                               │
+                                                               │
+› Ask the Agent to do anything                                 │› Ask the Agent to do anything
+                                                               │
+  fixture-model · /project · Hello.                            │  fixture-model · /project · Hello.
