@@ -17,8 +17,10 @@
 
 mod apply;
 mod boundaries;
+mod decompress;
 mod ids;
 mod latch;
+mod media;
 mod model;
 mod nudge;
 mod number;
@@ -27,10 +29,12 @@ mod project;
 mod prompts;
 mod protect;
 mod prune;
+mod rebuild;
 mod recommend;
 mod refs;
 mod render;
 mod report;
+mod search;
 mod text;
 mod truncate;
 mod turn;
@@ -44,7 +48,17 @@ pub use boundaries::{
     resolve_boundaries, BlockSpan, Boundary, BoundaryError, BoundaryErrorKind, BoundaryKind,
     Endpoint, ResolvedRange,
 };
+pub use decompress::{
+    active_ancestor_ids, build_restored_content_preview, collect_block_content, deactivate_blocks,
+    expand_block, find_active_ancestor, find_blocks_overlapping_messages,
+    mark_block_restored_inline, parse_block_id_arg, CollectedContent, InlineRestore,
+    RestoredPreview,
+};
 pub use latch::{apply_view_latch, view_latch_config_digest};
+pub use media::{
+    append_media_refs_section, collect_fold_media_refs, extract_media_refs,
+    looks_ephemeral_signed_url, parse_media_refs_section, MEDIA_REFS_MARKER,
+};
 pub use model::{
     Block, CompressLimits, Config, Generation, Kind, Message, NudgeConfig, NudgeState, RefMap,
     Role, State, Stats, TierConfig, TierGrowthTokens, TruncateConfig, TruncateLatchEntry,
@@ -82,6 +96,7 @@ pub use prune::{
     hide_consumed_compress_calls, is_rendered_summary, prune, summary_message_id, sync_blocks,
     HiddenCompressCalls, SUMMARY_HEADER,
 };
+pub use rebuild::{rebuild_state, RebuildResult};
 pub use recommend::{
     build_compressible_ranges, merge_ranges_to_threshold, recommend, screen_recommended_units,
     CompressibleRange, ContextRanges, ProtectedRange, Recommendation,
@@ -99,6 +114,11 @@ pub use report::{
     EconomicsSummary, FoldEconomics, FoldEconomicsInput, FoldEvent, FormatCacheReportOptions,
     PriceProfile, SampleDecomposition, StatusPanelInput, StatusReportOptions, StatusScope,
     StatusSort, StatusView, FOLD_CLAIM_COLD_ROUNDS, FOLD_CLAIM_WARM_HIT_PCT,
+};
+pub use search::{
+    block_docs, char_bigrams, folded_message_inputs, message_docs, search_blocks, stem_word,
+    term_frequencies, tokenize, Algorithm, DocCache, DocCacheInfo, DocFeatures, MessageInput,
+    RoleWeights, SearchDoc, SearchDocKind, SearchOptions, SearchResult, DEFAULT_DOC_CACHE_CAP,
 };
 pub use truncate::{truncate_large_tool_outputs, TerminalEscape, TruncateOptions, TruncateResult};
 pub use turn::{process_turn, TurnInput, TurnOutput};

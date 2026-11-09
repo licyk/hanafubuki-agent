@@ -6,7 +6,7 @@
 // `truncate-surrogates.test.ts`: a cut through an astral character drops the
 // whole character, since a Rust string cannot hold half of one.
 
-use super::{clamp_prefix, clamp_suffix};
+use super::{clamp_prefix, clamp_suffix, clamp_window};
 
 const EMOJI: &str = "\u{1F980}";
 
@@ -31,4 +31,14 @@ fn a_suffix_cut_inside_a_pair_drops_the_character() {
     assert_eq!(clamp_suffix(&text, 4), format!("{EMOJI}cd"));
     assert_eq!(clamp_suffix(&text, 6), text);
     assert_eq!(clamp_suffix("abc", 0), "");
+}
+
+#[test]
+fn a_window_edge_inside_a_pair_drops_the_character() {
+    let text = format!("ab{EMOJI}cd");
+    assert_eq!(clamp_window(&text, 3, 6), "cd");
+    assert_eq!(clamp_window(&text, 2, 6), format!("{EMOJI}cd"));
+    assert_eq!(clamp_window(&text, 0, 3), "ab");
+    assert_eq!(clamp_window(&text, 0, 6), text);
+    assert_eq!(clamp_window("abc", 5, 3), "");
 }

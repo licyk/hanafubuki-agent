@@ -3,11 +3,11 @@
 // Copyright (c) 2026 ranxianglei. MIT License with an additional attribution
 // term (NOTICE).
 
-// Ports `refold.test.ts` (refold in place; the inline-decompress marker is
-// set on the block directly until the decompress module is ported).
+// Ports `refold.test.ts`: the inline-decompress marker and refold in place.
 
 use hanafubuki_agent_compression::{
-    evaluate_refold, index_to_ref, Block, Config, Message, RefoldDecision, Role, State,
+    active_ancestor_ids, collect_block_content, evaluate_refold, index_to_ref,
+    mark_block_restored_inline, Block, Config, Message, RefoldDecision, Role, State,
 };
 
 use crate::fixtures::{apply, config, range, with_topic};
@@ -88,17 +88,53 @@ fn make_state(messages: &[Message], blocks: Vec<Block>) -> State {
 
 /// What an inline decompress records on a block.
 fn restored(mut state: State, block_id: &str) -> State {
-    state
-        .blocks
-        .iter_mut()
-        .find(|block| block.block_id == block_id)
-        .unwrap()
-        .restored_inline = true;
+    mark_block_restored_inline(&mut state, block_id).unwrap();
     state
 }
 
 fn summary_anchor(block_id: &str) -> Message {
     Message::text(format!("acp_summary_{block_id}"), Role::System, OLD_SUMMARY)
+}
+
+#[test]
+fn marking_a_restored_block_flags_it_and_reports_its_span() {
+    let messages = short_messages(10);
+    let mut state = make_state(&messages, vec![make_block("b1", message_ids(&messages))]);
+    let result = mark_block_restored_inline(&mut state, "b1").unwrap();
+    assert_eq!(result.block_id, "b1");
+    assert_eq!(result.restored_start_ref.as_deref(), Some("m00001"));
+    assert_eq!(result.restored_end_ref.as_deref(), Some("m00010"));
+    assert!(state.blocks[0].restored_inline);
+    assert!(
+        state.blocks[0].active,
+        "an inline restore keeps the block active"
+    );
+}
+
+#[test]
+fn marking_omits_underivable_refs_and_ignores_an_unknown_block() {
+    let mut state = make_state(
+        &short_messages(3),
+        vec![make_block("b7", vec!["ghost-no-ref".to_owned()])],
+    );
+    let result = mark_block_restored_inline(&mut state, "b7").unwrap();
+    assert_eq!(result.restored_start_ref, None);
+    assert_eq!(result.restored_end_ref, None);
+    assert!(state.blocks[0].restored_inline);
+
+    let before = state.clone();
+    assert_eq!(mark_block_restored_inline(&mut state, "b99"), None);
+    assert_eq!(state, before, "an unknown block leaves the state untouched");
+}
+
+#[test]
+fn collecting_a_block_s_content_does_not_mark_it() {
+    let messages = short_messages(10);
+    let block = make_block("b1", message_ids(&messages));
+    let state = make_state(&messages, vec![block.clone()]);
+    let collected = collect_block_content(&state, &block, &messages, true);
+    assert_eq!(collected.count, 10);
+    assert!(!state.blocks[0].restored_inline);
 }
 
 #[test]
@@ -198,6 +234,7 @@ fn nested(messages: &[Message]) -> State {
 fn an_unrecovered_higher_tier_block_above_a_restored_block_blocks_the_refold() {
     let messages = short_messages(10);
     let marked = restored(nested(&messages), "b1");
+    assert_eq!(active_ancestor_ids(&marked, "b1"), ["b2"]);
     let outcome = apply(
         &[range("m00001", "m00010", NEW_SUMMARY)],
         &[],

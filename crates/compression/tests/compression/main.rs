@@ -8,10 +8,12 @@
 
 mod apply;
 mod cache_report;
+mod decompress;
 mod fixtures;
 mod hide;
 mod integrity;
 mod latch;
+mod media;
 mod merge;
 mod nudge;
 mod nudge_text;
@@ -21,10 +23,12 @@ mod parse_line_form;
 mod prompts;
 mod protect;
 mod prune;
+mod rebuild;
 mod recommend;
 mod refold;
 mod refs;
 mod render;
 mod report;
+mod search;
 mod truncate;
 mod turn;

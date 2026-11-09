@@ -3,11 +3,12 @@
 // Copyright (c) 2026 ranxianglei. MIT License with an additional attribution
 // term (NOTICE).
 // Ports `open-objectives.test.ts`: the guidance at every hop mandates the
-// `Open objectives:` carry-forward, and the block lineage keeps the request.
-// The full decompression of the distilled block is checked with the
-// decompress module.
+// `Open objectives:` carry-forward, and the block lineage keeps the request,
+// which a full decompression of the distilled block recovers.
 
-use hanafubuki_agent_compression::{render_nudge_text, Config, Message, Prompts, Role, State};
+use hanafubuki_agent_compression::{
+    collect_block_content, render_nudge_text, Config, Message, Prompts, Role, State,
+};
 
 use super::{nudge_config, turn, warmed};
 use crate::fixtures::{apply, range};
@@ -95,6 +96,13 @@ fn an_open_objective_survives_a_fold_and_a_distillation() {
     assert_eq!(b2.tier, 2);
     assert_eq!(b2.direct_block_ids, ["b1"]);
     assert!(b2.effective_message_ids.contains(&"m9".to_owned()));
+
+    let restored = collect_block_content(&state, b2, &messages, true);
+    assert!(restored.text.contains(OBJECTIVE));
+    assert!(
+        restored.count >= 100,
+        "every folded message stays recoverable"
+    );
 }
 
 #[test]

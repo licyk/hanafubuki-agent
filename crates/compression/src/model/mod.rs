@@ -24,6 +24,18 @@ pub enum Role {
     Tool,
 }
 
+impl Role {
+    /// The kernel's name for the role, as its texts print it.
+    pub(crate) fn name(self) -> &'static str {
+        match self {
+            Role::User => "user",
+            Role::Assistant => "assistant",
+            Role::System => "system",
+            Role::Tool => "tool",
+        }
+    }
+}
+
 /// What a message holds; one message per content part.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Kind {

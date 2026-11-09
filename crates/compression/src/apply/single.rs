@@ -3,13 +3,13 @@
 // `kernel/src/compress.ts` of acp-kernel 0.0.189 at commit `4be21b08e`.
 // Copyright (c) 2026 ranxianglei. MIT License with an additional attribution
 // term (NOTICE).
-// Modified for hanafubuki-agent: the creation time is the caller's, and a
-// summary carries no MEDIA REFS section yet.
+// Modified for hanafubuki-agent: the creation time is the caller's.
 
 use std::collections::HashSet;
 
 use super::refold::{evaluate_refold, RefoldDecision};
 use super::RangeSpec;
+use crate::media::{append_media_refs_section, collect_fold_media_refs, parse_media_refs_section};
 use crate::model::{Block, CompressLimits, Config, Generation, Message, State};
 use crate::project::{project_unit, FatalKind, ProjectionContext, UnitRequest};
 use crate::refs::{highest_used_index, index_to_ref};
@@ -114,17 +114,23 @@ pub(super) fn apply_single_range(
         return Ok(SingleOutcome::noop(warnings));
     }
 
-    let mut compressed_tokens: u64 = projection
+    let folded: Vec<&Message> = projection
         .filtered_ids
         .iter()
         .filter_map(|id| range.messages.iter().find(|message| &message.id == id))
-        .map(count_message_tokens)
-        .sum();
+        .collect();
+    let mut compressed_tokens: u64 = folded.iter().copied().map(count_message_tokens).sum();
     compressed_tokens += consumed
         .iter()
         .filter_map(|id| state.block(id))
         .map(|block| default_count_tokens(&block.summary))
         .sum::<u64>();
+    // The handles of folded images ride the stored summary, appended here
+    // rather than left to the model, and carried on from consumed blocks.
+    let media_refs = collect_fold_media_refs(
+        folded.iter().copied(),
+        consumed.iter().filter_map(|id| state.block(id)),
+    );
 
     let block_id = state.allocate_block_id();
     state.blocks.push(Block {
@@ -132,7 +138,7 @@ pub(super) fn apply_single_range(
         run_id: range.run_id,
         tier: projection.output_tier,
         topic: spec.topic.clone(),
-        summary: spec.summary.clone(),
+        summary: append_media_refs_section(&spec.summary, &media_refs),
         direct_message_ids: projection.filtered_ids,
         effective_message_ids: projection.effective_message_ids,
         direct_block_ids: consumed.clone(),
@@ -174,7 +180,8 @@ pub(super) fn apply_refolds(
         .iter_mut()
         .filter(|block| block_ids.contains(&block.block_id))
     {
-        block.summary = spec.summary.clone();
+        let carried = parse_media_refs_section(&block.summary);
+        block.summary = append_media_refs_section(&spec.summary, &carried);
         if spec.topic.is_some() {
             block.topic = spec.topic.clone();
         }

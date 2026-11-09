@@ -135,8 +135,8 @@ and pushed, and notes what Hanafubuki must change at its next pin.
       data (`Message.protected`); `NOTICE`, the notices policy and the
       contributing page credit billion-context and acp-kernel.
   - Open (P5): recommend, nudge, the status line and `processTurn` are
-    P6; `rebuild` P8; decompress primitives and MEDIA REFS P9; absorb,
-    rules, timestamps P10. The kernel's dependency row allows the crate
+    P6; `rebuild`, the decompress primitives and MEDIA REFS came with
+    P9's crate half; absorb, rules, timestamps P10. The kernel's dependency row allows the crate
     in P7. No ledger `seq`, `base#part` ids or SKILL.md paths (the
     Agent has one item per message part).
   - Hanafubuki, at its next pin: a new published crate,
@@ -154,9 +154,9 @@ and pushed, and notes what Hanafubuki must change at its next pin.
   - Open (P6): the opt-in steps (content store, absorb, crush, filters,
     relocation, timestamps) have their place in `process_turn` and come in
     P10; the view latch's configuration digest is constant until they add
-    theirs. Deferred to P9: `open-objectives`' decompress assertion, the
-    decompress primitives of `decompress-report`, the search and preview
-    cases of `truncate-surrogates`. Not ported: host-set `dangerous`
+    theirs. Ported with P9's crate half: `open-objectives`' decompress
+    assertion, the decompress primitives of `decompress-report`, the
+    search and preview cases of `truncate-surrogates`. Not ported: host-set `dangerous`
     ranges, checkpoint carriers and media gaps, packs and section
     overrides, tokenizer injection, the text and hybrid protocols.
     Screening costs units × messages (release: 0.33 s at 10k messages,
@@ -171,6 +171,35 @@ and pushed, and notes what Hanafubuki must change at its next pin.
       the nudge, fallbacks, terminal escape, state), its goldens.
 - [ ] P8: forks, resume, children, `rebuild`; state size; switching away.
 - [ ] P9: decompress, search, media refs.
+  - Crate half done (decompress, search, media, rebuild); the kernel half
+    lands with P7. `decompress` (`collect_block_content` one tier up or
+    full, `mark_block_restored_inline`, `expand_block`, which also sets
+    `expanded` since `sync_blocks` reactivates any other block, and the
+    kernel's lineage helpers), `search` (`search_blocks` over `block_docs`
+    and `message_docs`; hybrid, BM25, fuzzy, substring; a `DocCache` the
+    caller keeps per session instead of process-wide state;
+    `folded_message_inputs` gives the folded originals), `media` (MEDIA
+    REFS appended to a block's summary at a fold and carried through
+    merges and refolds; a message's handles are its `images`, inline
+    `data:` and signed or expiring URLs excluded), `rebuild_state`
+    (replays the `compress` calls; refs are minted with the view's
+    protection, unlike the kernel, so a protected `compress` call takes no
+    number and later refs stay where the model saw them). 88 new tests.
+  - Unfaithful: no dictionary segmenter, so a CJK run of two or more
+    characters is its bigrams and a one-character run itself (the
+    kernel's ICU words and its all-OOV singles are not reproduced; the
+    tests pinning ICU's words, `试验证明` against `验证`, and the `缓存`
+    rescue's fuzzy-only cap are not ported); bigrams are of characters,
+    not UTF-16 units; a system message weighs as a tool's. Not ported:
+    the algorithm registry, semantic and asynchronous search, the V8
+    160K-document case, media pinning (no message is unrecoverable: the
+    host keeps the full history).
+  - For P7: the tool texts (`[Block bN content — …]`, the re-fold hint,
+    the search listing) are the host's in billion-context
+    (`src/decompress-shared.ts`), so the kernel writes its own; `toFile`
+    writes `collect_block_content`'s text under the data directory.
+  - Hanafubuki, at its next pin: nothing to change; the compression crate
+    gains public items only.
 - [ ] P10: the opt-in features (absorb, content store, crush, rules,
       filter), off by default.
 - [ ] P11: `/compression`, status line, `context_compressed`, docs,

@@ -25,6 +25,28 @@ pub(crate) fn clamp_prefix(text: &str, max_units: usize) -> &str {
     text
 }
 
+/// The `[start_units, end_units)` window of `text` in UTF-16 code units,
+/// without the characters either edge cuts through.
+pub(crate) fn clamp_window(text: &str, start_units: usize, end_units: usize) -> &str {
+    let mut units = 0;
+    let mut from = text.len();
+    let mut to = text.len();
+    for (index, character) in text.char_indices() {
+        if units >= start_units && from == text.len() {
+            from = index;
+        }
+        units += character.len_utf16();
+        if units > end_units {
+            to = index;
+            break;
+        }
+    }
+    if from > to {
+        return "";
+    }
+    &text[from..to]
+}
+
 /// Collapses every whitespace run to one space (JavaScript's
 /// `replace(/\s+/g, " ")`).
 pub(crate) fn collapse_whitespace(text: &str) -> String {
