@@ -53,7 +53,7 @@ hanafubuki-agent exec - < task.md
 | `plan:` 及其内容         | 模型提出的计划（见[计划模式](/docs/plan-mode)）    |
 | 没有前缀的文本           | 模型的最终回答                                     |
 
-每条消息在完整收到后才打印。标准错误中是会话 ID（`session 3`）、模型请求的重试，以及没有正常完成的回合是如何结束的（`error: the turn failed (...)`、`the turn was cancelled (...)`）。
+每条消息在完整收到后才打印。标准错误中是会话 ID（`session 3`）、模型请求的重试（`retrying the model request (1/3): 原因`），以及没有正常完成的回合是如何结束的（`error: the turn failed (...)`、`the turn was cancelled (...)`）。
 
 模型每完成一段思考，标准错误就打印一行，如 `· thought for 12s`（整秒，向下取整），只有时长，没有思考内容。被回合结束打断的思考不打印这一行。思考内容可以在 `--json` 的事件中读取（[思考](/docs/json-events#reasoning)）。
 

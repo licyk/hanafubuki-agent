@@ -128,5 +128,5 @@ reasoningEffort = "medium"   # minimal、low、medium、high、xhigh
 
 - 模型请求失败（例如无法连接）时最多尝试 3 次，之后回合以 `model_request_retries_exhausted` 失败。
 - 响应流中断时会重试，终端界面的状态行显示 `Reconnecting`。
-- 一个回合最多 32 次模型请求，最长 30 分钟。其他限制见 [`turnBudget`](/docs/config-reference#model-policy)。
+- 一个回合最多 32 次模型请求，最长 30 分钟（`agent turn stopped at its time limit of 30 minutes; send a message to continue`）。压缩之后对话仍然太长时，回合以 `the conversation is still too long for the model's context window after it was compacted; start a new conversation or attach less context` 结束。其他限制见 [`turnBudget`](/docs/config-reference#model-policy)。
 - 访问 Provider 使用 Agent 进程的代理环境变量，而不是 `network.proxy`，见[网络与日志](/docs/network-logging#provider-proxy)。

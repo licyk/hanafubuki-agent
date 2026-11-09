@@ -128,5 +128,5 @@ With `imageInput` of `[modelPolicy.inputCapabilities]` set to `"auto"` (the defa
 
 - A failed model request (it cannot connect, say) is tried up to three times; then the turn fails with `model_request_retries_exhausted`.
 - A response stream that breaks off is retried; the terminal interface's status line says `Reconnecting`.
-- A turn asks the model at most 32 times, and runs for at most 30 minutes. The other limits are in [`turnBudget`](/docs/config-reference#model-policy).
+- A turn asks the model at most 32 times, and runs for at most 30 minutes (`agent turn stopped at its time limit of 30 minutes; send a message to continue`). A conversation still too long after compaction ends the turn with `the conversation is still too long for the model's context window after it was compacted; start a new conversation or attach less context`. The other limits are in [`turnBudget`](/docs/config-reference#model-policy).
 - Requests to a Provider use the Agent process's proxy variables, not `network.proxy`; see [Network and logging](/docs/network-logging#provider-proxy).
