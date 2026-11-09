@@ -96,10 +96,11 @@ impl AgentService {
         }
         let cell = self.session(session_id)?;
         let cancelled = {
-            let record = cell.lock()?;
+            let mut record = cell.lock()?;
             if let Some(compaction) = &record.runtime.compaction {
                 compaction.cancellation.cancel();
             }
+            record.runtime.background_compaction.cancel();
             record
                 .runtime
                 .turn
@@ -124,6 +125,7 @@ impl AgentService {
                     .then_some(()),
             )
         });
+        self.await_cancelled_background_compaction(session_id);
         if let Ok(record) = cell.lock() {
             self.inner.sessions.remove(record);
         }

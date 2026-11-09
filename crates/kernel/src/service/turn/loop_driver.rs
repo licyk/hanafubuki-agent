@@ -60,6 +60,8 @@ impl AgentService {
                 Err(error) => return Err(error),
             };
             compacted_after_context_error = false;
+            self.maybe_launch_background_compaction(identity, &step, None)
+                .await;
             self.check_cancelled(identity)?;
             let assistant_messages = sampled
                 .items

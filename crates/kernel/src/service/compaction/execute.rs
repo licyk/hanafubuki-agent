@@ -1,5 +1,6 @@
 use super::*;
 
+use super::commit::InstallMode;
 use super::replacement::{local_summary_replacement, remote_replacement, remote_v2_replacement};
 use super::source::canonical_context_digest;
 use super::status::compaction_usage;
@@ -26,7 +27,10 @@ impl AgentService {
                     Some(compaction_usage(&sample)),
                 )
                 .await?;
-                match self.commit_compaction(plan, sample).await {
+                match self
+                    .commit_compaction(&plan, &sample, InstallMode::Cas)
+                    .await
+                {
                     Ok((outcome, event)) => {
                         event_sink.emit(event);
                         Ok(outcome)
@@ -73,7 +77,7 @@ impl AgentService {
         result
     }
 
-    async fn execute_compaction_inner(
+    pub(super) async fn execute_compaction_inner(
         &self,
         plan: &CompactionPlan,
     ) -> Result<CompactionSample, AgentError> {
@@ -145,7 +149,9 @@ impl AgentService {
         let mut removed_inputs = 0usize;
         let mut request = plan.request.clone();
         loop {
-            self.check_compaction_cancelled(plan.identity)?;
+            if plan.cancellation.is_cancelled() {
+                return Err(AgentError::Cancelled);
+            }
             let mut stream = match plan
                 .model
                 .stream(request.clone(), plan.cancellation.clone())

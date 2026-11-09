@@ -11,17 +11,17 @@
 use std::ops::ControlFlow;
 use std::sync::Arc;
 
-use hanafubuki_agent_config::AgentConfig;
+use hanafubuki_agent_config::{AgentConfig, AgentSettings};
 use hanafubuki_agent_contracts::{ContextRequest, TurnAdmissionRequest, TurnExtensions};
 use hanafubuki_agent_execution::{AgentExecutionScope, AgentExecutionService};
 use hanafubuki_agent_foundation::blocking::{run_blocking_operation, BlockingOperationPort};
 use hanafubuki_agent_kernel::{
-    AgentChildSessionRequest, AgentError, AgentEvent, AgentEventSink, AgentKernelRegistries,
-    AgentPermissionMode, AgentService, AgentSessionId, AgentSessionLifecycle,
-    AgentSessionListRequest, AgentSessionMode, AgentSessionOrigin, AgentSessionParentFilter,
-    AgentSessionPersistence, AgentSessionRuntimeSnapshot, AgentSessionSummary,
-    AgentSessionTitleRenameRequest, AgentTurnInput, AgentTurnOrigin, AgentTurnOutcome,
-    AgentWorldStateSnapshot, ConversationItem, AGENT_SESSION_PAGE_SIZE_MAX,
+    AgentBackgroundCompactionThreshold, AgentChildSessionRequest, AgentError, AgentEvent,
+    AgentEventSink, AgentKernelRegistries, AgentPermissionMode, AgentService, AgentSessionId,
+    AgentSessionLifecycle, AgentSessionListRequest, AgentSessionMode, AgentSessionOrigin,
+    AgentSessionParentFilter, AgentSessionPersistence, AgentSessionRuntimeSnapshot,
+    AgentSessionSummary, AgentSessionTitleRenameRequest, AgentTurnInput, AgentTurnOrigin,
+    AgentTurnOutcome, AgentWorldStateSnapshot, ConversationItem, AGENT_SESSION_PAGE_SIZE_MAX,
 };
 use hanafubuki_agent_sandbox::{platform_default_mode, SandboxSettings};
 
@@ -482,16 +482,16 @@ impl AgentSessionDriver {
         &self,
         session_id: AgentSessionId,
     ) -> Result<SandboxSettings, AgentError> {
+        let settings = self.read_settings().await?;
+        self.sandbox_settings(session_id, settings)
+    }
+
+    fn sandbox_settings(
+        &self,
+        session_id: AgentSessionId,
+        settings: AgentSettings,
+    ) -> Result<SandboxSettings, AgentError> {
         let session_mode = self.core.session_sandbox_mode(session_id)?;
-        let config = self.config.clone();
-        let settings = run_blocking_operation(
-            self.blocking.as_ref(),
-            "agent settings read worker",
-            move || config.settings(),
-        )
-        .await
-        .map_err(AgentError::Persistence)?
-        .map_err(AgentError::Persistence)?;
         Ok(SandboxSettings {
             mode: session_mode
                 .or(settings.sandbox_mode)
@@ -502,21 +502,39 @@ impl AgentSessionDriver {
         })
     }
 
+    async fn read_settings(&self) -> Result<AgentSettings, AgentError> {
+        let config = self.config.clone();
+        run_blocking_operation(
+            self.blocking.as_ref(),
+            "agent settings read worker",
+            move || config.settings(),
+        )
+        .await
+        .map_err(AgentError::Persistence)?
+        .map_err(AgentError::Persistence)
+    }
+
     /// The turn's extensions: what the turn admission contributors plugins
     /// registered return (the `skills` plugin freezes the turn's Skill
-    /// catalog), and the sandbox its commands run in.
+    /// catalog), the sandbox its commands run in, and the threshold of
+    /// `[compaction.background]`.
     pub(crate) async fn collect_turn_extensions(
         &self,
         session_id: AgentSessionId,
         mode: AgentSessionMode,
     ) -> Result<TurnExtensions, AgentError> {
-        let sandbox = self.turn_sandbox(session_id).await?;
+        let settings = self.read_settings().await?;
+        let background = AgentBackgroundCompactionThreshold {
+            percent: settings.compaction.background.threshold_percent,
+        };
+        let sandbox = self.sandbox_settings(session_id, settings)?;
         let mut turn = hanafubuki_agent_kernel::collect_turn_extensions(
             &self.registries.turn_admission,
             &TurnAdmissionRequest { session_id, mode },
         )
         .await?;
         turn.insert(Arc::new(sandbox));
+        turn.insert(Arc::new(background));
         Ok(turn)
     }
 }

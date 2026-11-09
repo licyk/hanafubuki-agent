@@ -81,7 +81,8 @@ pub use loop_control::{
 pub use model::{
     AgentActivityAction, AgentActivityId, AgentActivityKind, AgentActivityOutputPreview,
     AgentActivityPhase, AgentActivityPresentation, AgentActivitySnapshot, AgentAttachmentId,
-    AgentChildSessionBase, AgentChildSessionRequest, AgentCompactionGeneration, AgentCompactionId,
+    AgentBackgroundCompactionState, AgentBackgroundCompactionThreshold, AgentChildSessionBase,
+    AgentChildSessionRequest, AgentCompactionGeneration, AgentCompactionId,
     AgentCompactionImplementation, AgentCompactionOutcome, AgentCompactionPhase,
     AgentCompactionReason, AgentCompactionSnapshot, AgentCompactionStatus, AgentCompactionStrategy,
     AgentCompactionTrigger, AgentCompactionUsage, AgentContextTokenStatus, AgentContextWindowId,

@@ -54,9 +54,10 @@ impl CompactionSource {
     }
 }
 
-/// The history before the compaction boundary (a pre-turn compaction keeps
-/// the starting turn out of it), the next context window, and the request
-/// that compacts that history with the session's compaction implementation.
+/// The history before the compaction boundary (a pre-turn or background
+/// compaction keeps the current turn out of it), the next context window,
+/// and the request that compacts that history with the session's compaction
+/// implementation.
 pub(super) fn compaction_source(
     record: &SessionRecord,
     phase: AgentCompactionPhase,
@@ -64,7 +65,10 @@ pub(super) fn compaction_source(
     images: &LoadedImages,
     transport: &CompactionTransport,
 ) -> Result<CompactionSource, AgentError> {
-    let compaction_boundary = if phase == AgentCompactionPhase::PreTurn {
+    let compaction_boundary = if matches!(
+        phase,
+        AgentCompactionPhase::PreTurn | AgentCompactionPhase::Background
+    ) {
         let identity = turn_identity.ok_or_else(|| {
             AgentError::Protocol("pre-turn compaction is missing its turn identity".to_string())
         })?;

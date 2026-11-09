@@ -120,6 +120,9 @@ pub enum AgentCompactionPhase {
     StandaloneTurn,
     PreTurn,
     MidTurn,
+    /// Run on a snapshot of the completed turns while the session went on,
+    /// and installed at a later checkpoint before the work added since.
+    Background,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]

@@ -8,17 +8,19 @@ impl AgentService {
         diagnostics
     }
 
-    /// Stops accepting work, cancels every running turn and compaction and
-    /// waits, blocking, until each session has settled and every managed turn
-    /// task has ended, or `deadline` passes. Off the async runtime only (the
+    /// Stops accepting work, cancels every running turn and compaction, the
+    /// background ones included, and waits, blocking, until each session has
+    /// settled and every managed turn and background compaction task has
+    /// ended, or `deadline` passes. Off the async runtime only (the
     /// application's shutdown thread).
     pub fn stop_operations(&self, deadline: Instant) -> Vec<AgentShutdownDiagnostic> {
         self.inner.accepting.store(false, Ordering::Release);
         let mut cancelled_turns = Vec::new();
         for cell in self.inner.sessions.cells() {
-            let Ok(record) = cell.lock() else {
+            let Ok(mut record) = cell.lock() else {
                 continue;
             };
+            record.runtime.background_compaction.cancel();
             if let Some(turn) = &record.runtime.turn {
                 if !turn.phase.is_terminal() {
                     turn.cancellation.cancel();
@@ -69,9 +71,11 @@ impl AgentService {
         }
         let managed_turn_running = !managed_turns.is_empty();
         drop(managed_turns);
-        if unsettled || managed_turn_running {
+        // Its usage is recorded once it ends, so it is waited for too.
+        let background_running = !self.wait_for_background_tasks(None, deadline);
+        if unsettled || managed_turn_running || background_running {
             vec![AgentShutdownDiagnostic {
-                message: "shutdown deadline elapsed with an active Agent turn, managed worker, compaction, or history commit".to_string(),
+                message: "shutdown deadline elapsed with an active Agent turn, managed worker, compaction, background compaction, or history commit".to_string(),
             }]
         } else {
             Vec::new()
@@ -152,6 +156,9 @@ impl AgentService {
             });
         }
         let previous = record.rollback_state();
+        if next == AgentSessionLifecycle::Archived {
+            record.runtime.background_compaction.cancel();
+        }
         record.status.lifecycle = next;
         record.status.updated_at = now_millis();
         record.status.revision = record
@@ -163,6 +170,9 @@ impl AgentService {
         let staged = StagedPersistence::commit(&cell, record, previous);
         drop(guard);
         self.persist_staged_blocking(staged)?;
+        if next == AgentSessionLifecycle::Archived {
+            self.await_cancelled_background_compaction(session_id);
+        }
         let moved = match next {
             AgentSessionLifecycle::Archived => self
                 .inner
@@ -237,6 +247,7 @@ impl AgentService {
                         validate_session_mutation(&record, generation, revision)?;
                     }
                     record.status.disposing = true;
+                    record.runtime.background_compaction.cancel();
                     Ok(ConfirmedAgentSessionDeletion {
                         session_id: cell.session_id(),
                         generation: record.status.generation,
@@ -305,6 +316,9 @@ impl AgentService {
             .iter()
             .map(|member| member.session_id)
             .collect::<Vec<_>>();
+        for session_id in &session_ids {
+            self.await_cancelled_background_compaction(*session_id);
+        }
         if let Err(error) = self
             .inner
             .history_store

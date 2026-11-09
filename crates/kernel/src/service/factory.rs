@@ -131,6 +131,8 @@ impl AgentService {
                 next_user_input_request_id: AtomicU64::new(1),
                 managed_turns: Mutex::new(HashMap::new()),
                 managed_turns_changed: Condvar::new(),
+                managed_background: Mutex::new(HashSet::new()),
+                managed_background_changed: Condvar::new(),
                 event_sinks: Mutex::new(HashMap::new()),
                 accepting: AtomicBool::new(true),
                 kernel_faults,

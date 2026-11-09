@@ -41,15 +41,16 @@ pub use lineage::{
 pub(crate) use reasoning::AgentReasoningTransitionError;
 pub use reasoning::{AgentReasoningCheckpoint, AgentReasoningPhase, AgentReasoningSnapshot};
 pub use session::{
-    AgentCompactionStrategy, AgentHostContext, AgentPlanImplementationRequest, AgentSessionConfig,
-    AgentSessionForkOutcome, AgentSessionForkRequest, AgentSessionHeadForkOutcome,
-    AgentSessionHeadForkRequest, AgentSessionModelConfigurationUpdate, AgentSessionRuntimeSnapshot,
-    AgentSessionSummary, AgentSessionTitle, AgentSessionTitleRenameRequest,
-    AgentSessionTitleSource, AgentSkillRef, AgentTaskPlanSnapshot, AgentTaskPlanStep,
-    AgentTaskPlanStepStatus, AgentTurnInput, AgentUserInputAccepted, AgentUserInputAnswer,
-    AgentUserInputOption, AgentUserInputQuestion, AgentUserInputRequest, AgentUserInputResolution,
-    ConfirmedAgentSessionDeletion, PreparedAgentSessionDeletion, AGENT_SESSION_TITLE_MAX_CHARS,
-    MAXIMUM_HOST_CONTEXT_BYTES, MAXIMUM_USER_IMAGES_PER_MESSAGE,
+    AgentBackgroundCompactionState, AgentBackgroundCompactionThreshold, AgentCompactionStrategy,
+    AgentHostContext, AgentPlanImplementationRequest, AgentSessionConfig, AgentSessionForkOutcome,
+    AgentSessionForkRequest, AgentSessionHeadForkOutcome, AgentSessionHeadForkRequest,
+    AgentSessionModelConfigurationUpdate, AgentSessionRuntimeSnapshot, AgentSessionSummary,
+    AgentSessionTitle, AgentSessionTitleRenameRequest, AgentSessionTitleSource, AgentSkillRef,
+    AgentTaskPlanSnapshot, AgentTaskPlanStep, AgentTaskPlanStepStatus, AgentTurnInput,
+    AgentUserInputAccepted, AgentUserInputAnswer, AgentUserInputOption, AgentUserInputQuestion,
+    AgentUserInputRequest, AgentUserInputResolution, ConfirmedAgentSessionDeletion,
+    PreparedAgentSessionDeletion, AGENT_SESSION_TITLE_MAX_CHARS, MAXIMUM_HOST_CONTEXT_BYTES,
+    MAXIMUM_USER_IMAGES_PER_MESSAGE,
 };
 pub use turn::{
     AgentCompactionImplementation, AgentCompactionOutcome, AgentCompactionPhase,

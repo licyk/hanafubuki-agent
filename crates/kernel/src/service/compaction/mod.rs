@@ -2,17 +2,21 @@
 //! `prepare` reserves it and snapshots its `source` under the session lock,
 //! `execute` asks the model and builds the `replacement` from the snapshot
 //! alone, and `commit` installs it; `status` holds the transitions shared by
-//! every step and the terminal ones.
+//! every step and the terminal ones. `background` runs the same compaction
+//! on a task of its own and installs it later, rebased.
 
 use super::*;
 
 mod admission;
+mod background;
 mod commit;
 mod execute;
 mod prepare;
 mod replacement;
 mod source;
 mod status;
+
+pub(in crate::service) use background::{BackgroundAdoption, BackgroundCompactionSlot};
 
 // Verbatim from codex-rs/prompts/templates/compact/prompt.md at bdd3118.
 const SUMMARIZATION_PROMPT: &str = include_str!("../../prompts/compact.md");
@@ -39,6 +43,7 @@ struct CompactionTransport {
 /// began: executing it reads nothing else from the session record but its
 /// cancellation.
 struct CompactionPlan {
+    /// A background compaction's generation is the install's, not this one.
     identity: CompactionIdentity,
     phase: AgentCompactionPhase,
     implementation: AgentCompactionImplementation,

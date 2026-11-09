@@ -17,17 +17,17 @@ impl CompactedHistory {
     }
 }
 
-pub(super) fn compacted_history(
+pub(super) fn compacted_history<T: std::borrow::Borrow<AgentHistoryItem>>(
     sample: &CompactionSample,
     world_state_checkpoint: Option<ConversationItem>,
-    suffix: &[AgentHistoryItem],
+    suffix: &[T],
 ) -> CompactedHistory {
     CompactedHistory {
         prefix: world_state_checkpoint
             .into_iter()
             .chain(sample.replacement_history.iter().cloned())
             .collect(),
-        suffix: suffix.to_vec(),
+        suffix: suffix.iter().map(|item| item.borrow().clone()).collect(),
     }
 }
 

@@ -96,6 +96,10 @@ struct AgentServiceInner {
     managed_turns: Mutex<HashMap<TurnIdentity, Option<tokio::task::AbortHandle>>>,
     /// Signalled when a managed turn task ends; shutdown waits on it.
     managed_turns_changed: Condvar,
+    /// The background compactions' tasks (`compaction::background`), by
+    /// session; shutdown, archive and delete wait for them.
+    managed_background: Mutex<HashSet<(AgentSessionId, AgentCompactionId)>>,
+    managed_background_changed: Condvar,
     event_sinks: Mutex<HashMap<AgentSessionId, Arc<dyn AgentEventSink>>>,
     accepting: AtomicBool,
     /// Told of a panic the kernel caught in its own code.

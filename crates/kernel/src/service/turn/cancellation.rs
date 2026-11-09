@@ -34,6 +34,8 @@ impl AgentService {
                 .map_err(map_budget_error)?;
             turn.pending_steering.clear();
             turn.cancellation.cancel();
+            // Wakes a turn waiting for its session's background compaction.
+            cell.notify_terminal();
         }
         self.abort_pending_approvals(identity);
         self.abort_pending_user_inputs(identity).await;

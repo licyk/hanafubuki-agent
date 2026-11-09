@@ -25,8 +25,8 @@ pub struct AgentSessionConfig {
 }
 
 /// What starts a reduction of a session's context. Every strategy keeps the
-/// standard compaction as its floor; until `background` and `hierarchical`
-/// are built, a session set to either compacts as `standard` does.
+/// standard compaction as its floor; until `hierarchical` is built, a
+/// session set to it compacts as `standard` does.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AgentCompactionStrategy {
@@ -44,6 +44,24 @@ where
 {
     let value = serde_json::Value::deserialize(deserializer)?;
     Ok(serde_json::from_value(value).unwrap_or_default())
+}
+
+/// The share of the context window at which a session with the `background`
+/// strategy starts a compaction in the background, from
+/// `[compaction.background]`: the facade puts it in each turn's extensions.
+/// A turn without it starts none.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct AgentBackgroundCompactionThreshold {
+    pub percent: u8,
+}
+
+/// The session's compaction in the background, while it has one: running, or
+/// ready to be installed at the turn's next checkpoint.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentBackgroundCompactionState {
+    Running,
+    Ready,
 }
 
 impl AgentSessionConfig {
@@ -315,6 +333,9 @@ pub struct AgentSessionRuntimeSnapshot {
     pub usage: Option<AgentModelUsage>,
     pub context_window: AgentContextWindowSnapshot,
     pub compaction: Option<AgentCompactionSnapshot>,
+    /// Never persisted: a session read from the history store has none.
+    #[serde(default)]
+    pub background_compaction: Option<AgentBackgroundCompactionState>,
     pub task_plan: Option<AgentTaskPlanSnapshot>,
     pub pending_user_input: Option<AgentUserInputRequest>,
     pub turn: Option<AgentTurnSnapshot>,

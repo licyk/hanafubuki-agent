@@ -175,7 +175,11 @@ schema 遵循同样的按协议规则：支持 `strict_json_schema` 的协议（
 
 压缩用本地摘要或 Responses 的压缩替换历史，由会话的压缩能力选择。它在会话记录的克隆上暂存，并作为 `Compacted { checkpoint }` 边界安装，所以失败只丢弃克隆，历史不变。它保留用户消息（最新的优先，在预算内）和摘要，从不摘要上下文段：下一个请求从注册表重新渲染每个段，所以轮次中途被压缩的窗口仍带有 Skill 目录和记忆。触发条件：轮次前和轮次中达到阈值（默认窗口的 80%）、手动、Provider 报告上下文窗口错误之后。最后一种有上限：每步一次压缩加重试，成功响应之前第二次出错则轮次失败（`context_window_exceeded`）。
 
-会话还有压缩策略（`AgentSessionConfig.compaction_strategy`）：`standard` 即上面的压缩；`background` 将在会话工作时对快照运行它并采用结果；`hierarchical` 将让模型把历史折叠成摘要，在请求时投影。后两者正在构建，在此之前设为其中之一的会话按 `standard` 压缩。每种策略都以这种压缩为底线（手动、模型的 `new_context`、上下文错误后的重试）。facade 在每次模型操作前从 `[compaction]` 读取策略，并在会话空闲时应用（`set_session_compaction_strategy`）；临时会话（`/side`）总是 `standard`；`background.childSessions` 关闭时，子会话（子代理的、评审的）以 `standard` 代替 `background`。同一次激活还把修改后的 `remoteCompaction` 写入会话的压缩能力，压缩会用它核对传输。
+会话还有压缩策略（`AgentSessionConfig.compaction_strategy`）：`standard` 即上面的压缩；`background` 在会话工作时对快照运行它，稍后安装结果；`hierarchical` 将让模型把历史折叠成摘要，在请求时投影。`hierarchical` 正在构建，在此之前设为它的会话按 `standard` 压缩。每种策略都以这种压缩为底线（手动、模型的 `new_context`、上下文错误后的重试）。facade 在每次模型操作前从 `[compaction]` 读取策略，并在会话空闲时应用（`set_session_compaction_strategy`）；临时会话（`/side`）总是 `standard`；`background.childSessions` 关闭时，子会话（子代理的、评审的）以 `standard` 代替 `background`。同一次激活还把修改后的 `remoteCompaction` 写入会话的压缩能力，压缩会用它核对传输。
+
+**后台压缩**（`background`，来自 Codex 的 `async_compaction`）运行会话自己的实现，三种中的任一种，适用任何 Provider。轮次在第一个请求之前和每个请求之后启动它，条件是：上下文达到或超过窗口的 `[compaction.background] thresholdPercent`（facade 把它放进轮次扩展）且低于前台阈值，之前已有完成的轮次，轮次没有被取消、没有预算压力，并且自动压缩开着。它只压缩已完成的轮次，即当前轮次 `TurnStart` 之前的历史，所以它之后的部分总是从一个轮次开始，安装后的历史保持完整的轮次结构。它运行在会话拥有的任务上，而不是作为会话的操作：轮次、steering、`/model` 和其他所有更改照常进行，中断轮次只停止这个轮次的启动。它的槽位不持久化，所以重启丢弃它，不留下恢复义务。
+
+结果在下一个检查点安装：步骤的自动压缩检查之前，或 `/compact` 之前。需要压缩时（阈值、Provider 的上下文错误、`/compact`），如果有一个仍在运行，就等待它而不发送自己的请求，直到轮次被中断；结果失败、不适用或过期时在线压缩，安装后的结果仍让下一个请求超过阈值时再在线压缩一次。模型请求的新上下文总是在线压缩。安装是变基（`InstallMode::Rebase`）：窗口必须仍是它压缩的那个，历史必须仍以它读取的历史开头，之后添加的历史保留在替换之后。它的用量属于会话，在它结束时记录，无论是否安装，任何轮次的预算都不计入它。关闭、归档和删除会取消它并等待它的任务；策略或压缩能力的更改会取消它。
 
 ## 思考 [#thinking]
 
@@ -241,7 +245,7 @@ schema 遵循同样的按协议规则：支持 `strict_json_schema` 的协议（
 - **渲染器是数据**，**注册拒绝、规划改名**（见上文）。
 - **轮次限制对模型不可见。** 历史中没有失败轮次原因的条目；用户读轮次的错误消息，没有什么需要模型看到它。
 - **沙箱改写 argv；进程 crate 不知道它。** `sandbox` 把一个命令变成辅助进程的命令行：辅助进程就是 Agent 自己的程序文件，由第一个参数选中（`--hanafubuki-agent-sandbox`，和 Codex 选择它的其他辅助进程一样），它先限制自身，再原地执行那个命令。`ExecutorManager` 像对待其他进程一样启动、拥有和回收这个进程，管道和 PTY 模式都一样，所以 `process`（Hanafubuki 那份的孪生）没有改动；Codex 按 argv[0] 选择的方式需要它能设置 `arg0`。它所在的位置：回合冻结会话的沙箱设置（`SandboxSettings`，门面准备回合时加入的扩展），`plugin-execution` 把它和命令一起交给 `execution`，`execution` 在自己的工作区根目录上解析它，并在启动前包装已获批准的命令。在 Linux 上，辅助进程使用 Codex 的 Landlock 流程，而不是它默认的 bubblewrap：不需要许多发行版都会限制的用户命名空间，不需要从 C 构建的随附 `bwrap`，而 Codex 放弃 Landlock 的理由（它的 app-server 的 Unix 套接字、拒绝访问的例外路径）在这里都不适用。在 macOS 上没有辅助进程：命令行是 `/usr/bin/sandbox-exec` 加上 Codex 的 Seatbelt 策略，可写根目录和只读的例外路径（`.git`，Landlock 做不到）作为参数（`-D`）传入，而不是拼进策略的文本。机器无法执行的模式会让命令失败，绝不会不受限地运行它（[权限](/docs/permissions#sandbox-unavailable)）。
-- **没有做的：** 代码模式（用 JS 调用所有工具）、第三种压缩路径、后台压缩、跨会话的 MCP 连接池、无论目录大小都延迟所有 MCP 工具、MCP 的 prompts/subscriptions/sampling/roots、Skill 注册的工具或 `allowed-tools` 的执行、从 Agent 写设置的 Skill 安装流程，以及进程外的 Agent。
+- **没有做的：** 代码模式（用 JS 调用所有工具）、第三种压缩路径、跨会话的 MCP 连接池、无论目录大小都延迟所有 MCP 工具、MCP 的 prompts/subscriptions/sampling/roots、Skill 注册的工具或 `allowed-tools` 的执行、从 Agent 写设置的 Skill 安装流程，以及进程外的 Agent。
 
 与 Codex（`codex-rs`）相比，Agent 的机制都对照过它：
 

@@ -405,7 +405,10 @@ A panic in kernel code (a turn's task, the Agent's worker groups, the host's tas
     Stop the Skill watcher (2 s); close the slot, cancelling a start under way and waiting up to 8 s
     for it.
   </Step>
-  <Step>Stop accepting turns, and cancel turns and compactions (5 s).</Step>
+  <Step>
+    Stop accepting turns, and cancel turns and compactions, background compactions included, and
+    wait for them (5 s): a background compaction that finished records its usage first.
+  </Step>
   <Step>
     MCP: cancel the background connects, close every connection and confirm its process gone (4 s).
   </Step>
@@ -440,7 +443,7 @@ Unlike the standalone configuration, an embedded one has **no layers** (no profi
 | `mcp_set_credential(key, value)`, `mcp_remove_credential(key)` | change one MCP credential and keep the rest; a removal an enabled server depends on is refused. `McpCredentialKey::for_server_secret(server, name)` is the key a form stores a secret variable or header under: `SERVER-NAME`, any other character `_`                     |
 | `mcp_oauth_login(server, open_url, cancelled)`                 | an MCP server's OAuth login: listens on `127.0.0.1` at a free port, hands `open_url` the authorization URL to show or open, waits up to 5 minutes for the browser's redirect to `/callback`, or until the `cancelled` future completes, and cancels the flow if none comes |
 
-Each model operation (a turn, a compaction, a plan's implementation) first activates its session as the settings now describe it: `[compaction]`'s `strategy` reaches the session through the kernel's `set_session_compaction_strategy`, and the model policy's `remoteCompaction` reaches the session's configuration with the Provider's transport. Both change only while the session is idle and are persisted, but neither moves the session's revision, so a revision the caller read before the call is still current.
+Each model operation (a turn, a compaction, a plan's implementation) first activates its session as the settings now describe it: `[compaction]`'s `strategy` reaches the session through the kernel's `set_session_compaction_strategy`, and the model policy's `remoteCompaction` reaches the session's configuration with the Provider's transport. Both change only while the session is idle and are persisted, but neither moves the session's revision, so a revision the caller read before the call is still current. A turn's extensions carry `[compaction.background]`'s `thresholdPercent` (`AgentBackgroundCompactionThreshold`), read at its admission; a host that admits turns through the kernel itself puts it there, or the turn starts no background compaction. While one runs or its result waits to be installed, the session's runtime snapshot says so (`backgroundCompaction`: `running` or `ready`); it is not an operation of the session and refuses nothing. Archiving or deleting a session cancels it and waits up to 5 s for it, and changing the strategy or `remoteCompaction` cancels it.
 
 Reads are tolerant: an invalid value takes its default, unknown keys are logged and stay in the file, and a file that needed repair is copied into `.recovery/` before the repaired values are written; when the original cannot be kept, the repaired values are used from memory and the file refuses writes until a restart. Each repair is an `AgentConfigRecovery` (file, problem, whether read-only, time); `AgentConfig::recoveries()` returns those since the configuration was opened (the last 20 a file), and a host should show them to the user. The keys, defaults and repair rules are in [Configuration](/docs/configuration) and [Configuration reference](/docs/config-reference).
 

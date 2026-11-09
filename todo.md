@@ -61,9 +61,71 @@ and pushed, and notes what Hanafubuki must change at its next pin.
     `activate_model_session` may now commit (persisting a changed remote
     compaction). Its own constructions of `AgentSessionConfig` add the
     field.
-- [ ] P3: background compaction in the kernel (slot, launch, adoption,
+- [x] P3: background compaction in the kernel (slot, launch, adoption,
       `wait_for_pending`, the rebase install, cancellation, shutdown,
-      usage, `AgentCompactionPhase::Background`).
+      usage, `AgentCompactionPhase::Background`). Done:
+      `service/compaction/background/` (`mod`: the slot and the task
+      registry; `launch`; `adopt`). The slot is `SessionRuntime.
+      background_compaction`, never persisted and not an active operation;
+      its run is shared by `Arc` (outcome behind its own lock) so a
+      rolled-back commit cannot lose what the task wrote. The task is
+      `tokio::spawn`ed and registered in `managed_background` (its own
+      `Condvar`) before the record's lock is released; `stop_operations`
+      cancels every slot and waits for the set, archive and delete cancel
+      and wait for the session's tasks (5 s), a strategy change and a
+      committed `remoteCompaction` change cancel. The threshold reaches a
+      turn as `AgentBackgroundCompactionThreshold` in its extensions
+      (`collect_turn_extensions`, one settings read with the sandbox).
+      Launch: in `maybe_auto_compact` on the pre-turn step (with the step's
+      estimate) and after each sampling request (with the provider's count
+      only, no second estimate). Adoption: non-blocking before every
+      automatic check, waiting (`wait_until`, woken by
+      `request_turn_cancellation` advancing `terminal`) when a context-limit
+      compaction is required and before `/compact`; one in-line pass when
+      still over the threshold. `commit_compaction` takes `InstallMode::
+      {Cas, Rebase}`. Usage is committed (no revision) when the run ends
+      with a sample, so the install adds none and a discarded result is
+      counted once. Tests: `compaction_contract/background/` (launch gates,
+      a failed attempt, pre-turn and mid-turn adoption with work and world
+      state after the snapshot plus a fork after it, the wait's success,
+      failure, interrupt and still-over-threshold, `/compact` reuse and its
+      manual fallback, a stale window refused at install, usage once and no
+      turn budget, shutdown waiting, restart, archive, v1 and v2), and the
+      facade golden `background_compacted_request` (HTTP fake, local
+      summary, reopened from the JSONL history). `standard` goldens
+      unchanged.
+  - Deviations: the attempt key is (window, items before the current turn,
+    model, implementation): a failed run is retried once another turn has
+    completed, not only in a new window. The rebased world-state checkpoint
+    is the state where the uncompacted part begins, not the live history's:
+    the suffix's own updates (a removal included) must still apply, or
+    validation refuses a stale removal. "Stale (model changed)" is covered
+    by the window case and the strategy change: the kernel fakes cannot
+    change a session's model without a real transport. No Codex code was
+    copied, so no notices entry.
+  - Open: the pre-turn in-line install has the stale-removal problem the
+    rebase avoided: its checkpoint is the whole history's world state, so
+    a current turn whose initial world-state update removes a section fails
+    validation (`stale world-state removal`). Fixing it changes what a
+    pre-turn install writes (a model-visible change, goldens to check).
+  - Open: a turn admitted while `/compact` waits for a background run can
+    take the result first; `/compact` then finds nothing and may fail with
+    a stale revision (unguarded race).
+  - Open: nothing observable tells a test that a turn is waiting on the
+    background compaction, so the wait tests hold the compaction until the
+    turn is admitted and assert the outcome (one compaction request, the
+    background install, no in-line request after an interrupt) whichever
+    checkpoint took it.
+  - Hanafubuki, at its next pin: `AgentCompactionPhase::Background`
+    (`phase: "background"` in `compaction_updated`, an appear);
+    `AgentSessionRuntimeSnapshot.background_compaction`
+    (`Option<AgentBackgroundCompactionState>`: `running`, `ready`;
+    `#[serde(default)]`); new kernel types `AgentBackgroundCompactionThreshold`
+    (a turn's extensions carry it from `collect_turn_extensions`; a host
+    admitting turns through the kernel itself adds it) and
+    `AgentBackgroundCompactionState`. Shutdown's stop step now also waits
+    for background compactions. Golden to copy:
+    `background_compacted_request.json`.
 - [ ] P4: background compaction in the interface and docs.
 - [x] P5: `crates/compression` core (model, refs, boundaries, parse,
       project, protect, apply, prune, render) with the ported tests;

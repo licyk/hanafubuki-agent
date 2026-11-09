@@ -3,32 +3,74 @@ use super::*;
 use super::replacement::{compacted_history, CompactedHistory};
 use super::status::compaction_usage;
 
+/// How an install proves that the history it compacted is still the
+/// session's.
+pub(super) enum InstallMode<'a> {
+    /// Nothing was committed to the session since the compaction began.
+    Cas,
+    /// The session went on while it ran (`background`): the window is still
+    /// the one it compacted, the history still begins with the one it read,
+    /// and what was added since stays after the replacement.
+    Rebase(RebaseInstall<'a>),
+}
+
+/// What a rebasing install records and estimates the next request with,
+/// none of which the compaction knew when it began.
+pub(super) struct RebaseInstall<'a> {
+    pub(super) turn_generation: AgentGeneration,
+    pub(super) images: &'a LoadedImages,
+    pub(super) tool_plan: &'a AgentToolPlan,
+    pub(super) prompt: &'a RequestContext,
+}
+
 impl AgentService {
     /// Installs a compaction that is ready, on a clone of the session record
     /// that replaces it only once every check passed.
     pub(super) async fn commit_compaction(
         &self,
-        plan: CompactionPlan,
-        sample: CompactionSample,
+        plan: &CompactionPlan,
+        sample: &CompactionSample,
+        mode: InstallMode<'_>,
     ) -> Result<(AgentCompactionOutcome, AgentEvent), AgentError> {
         let cell = self.session(plan.identity.session_id)?;
         let (persisted, outcome, event) = {
             let mut guard = cell.lock_after_persistence().await?;
             let record = &mut *guard;
             let previous = record.rollback_state();
-            validate_unchanged_since_plan(record, &plan)?;
-            let compacted = compacted_history(
-                &sample,
-                plan.world_state_checkpoint.clone(),
-                &plan.current_turn_suffix,
-            );
+            let compacted = match &mode {
+                InstallMode::Cas => {
+                    validate_unchanged_since_plan(record, plan)?;
+                    compacted_history(
+                        sample,
+                        plan.world_state_checkpoint.clone(),
+                        &plan.current_turn_suffix,
+                    )
+                }
+                // The world state where the suffix begins: the suffix's own
+                // updates, removals included, still apply to it in order.
+                InstallMode::Rebase(_) => {
+                    let suffix = rebased_suffix(record, plan)?;
+                    let compacted = &record.conversation.history[..plan.source_items.len()];
+                    compacted_history(
+                        sample,
+                        crate::model::full_world_state_checkpoint(compacted),
+                        suffix,
+                    )
+                }
+            };
             let mut staged = record.clone();
+            let identity = match &mode {
+                InstallMode::Cas => plan.identity,
+                InstallMode::Rebase(rebase) => {
+                    reserve_background_install(&mut staged, plan, rebase.turn_generation)
+                }
+            };
             let installed = compacted.contents();
             validate_persisted_history(&installed, &staged.settings.config, self.inner.limits)?;
             let previous_tokens = estimate_conversation_items_tokens(&plan.source_items)?;
             let compacted_prefix_tokens = estimate_conversation_items_tokens(&compacted.prefix)?;
             let installed_tokens = estimate_conversation_items_tokens(&installed)?;
-            let compaction_snapshot = &exact_compaction(&staged, plan.identity)?.snapshot;
+            let compaction_snapshot = &exact_compaction(&staged, identity)?.snapshot;
             let context_limit_compaction = compaction_snapshot.trigger
                 == AgentCompactionTrigger::Automatic
                 && compaction_snapshot.reason == AgentCompactionReason::ContextLimit;
@@ -40,24 +82,51 @@ impl AgentService {
             }
             let snapshot = stage_compacted_history(
                 &mut staged,
-                &plan,
-                &sample,
+                identity,
+                plan,
+                sample,
                 compacted,
                 &installed,
                 installed_tokens,
             )?;
-            if snapshot.trigger == AgentCompactionTrigger::Automatic {
-                charge_turn_budget(&mut staged, plan.identity.session_id, &snapshot)?;
-            }
-            staged.runtime.usage = next_model_usage(
-                &staged,
-                sample.reported_usage,
-                sample.estimated_input_tokens,
-                sample.estimated_output_tokens,
-            )?
-            .or(staged.runtime.usage);
-            let next_context_tokens =
-                estimate_next_request(&staged, &plan, context_limit_compaction, self.inner.limits)?;
+            // A background compaction counts toward no turn's budget, and its
+            // usage was recorded when it finished (`background`).
+            let next_context_tokens = match &mode {
+                InstallMode::Cas => {
+                    if snapshot.trigger == AgentCompactionTrigger::Automatic {
+                        charge_turn_budget(&mut staged, plan.identity.session_id, &snapshot)?;
+                    }
+                    staged.runtime.usage = next_model_usage(
+                        &staged,
+                        sample.reported_usage,
+                        sample.estimated_input_tokens,
+                        sample.estimated_output_tokens,
+                    )?
+                    .or(staged.runtime.usage);
+                    estimate_next_request(
+                        &staged,
+                        NextRequest {
+                            images: &plan.images,
+                            tool_plan: &plan.next_tool_plan,
+                            prompt: &plan.next_prompt,
+                        },
+                        context_limit_compaction,
+                        self.inner.limits,
+                    )?
+                }
+                // Still over the threshold is not a failure: the turn then
+                // compacts in line as well.
+                InstallMode::Rebase(rebase) => estimate_next_request(
+                    &staged,
+                    NextRequest {
+                        images: rebase.images,
+                        tool_plan: rebase.tool_plan,
+                        prompt: rebase.prompt,
+                    },
+                    false,
+                    self.inner.limits,
+                )?,
+            };
             if let Some(usage) = staged.runtime.usage.as_mut() {
                 usage.context_consumed_tokens = Some(next_context_tokens);
             }
@@ -108,11 +177,87 @@ fn validate_unchanged_since_plan(
     Ok(())
 }
 
+/// The rebase's proof that the history the compaction read is a prefix of
+/// the session's, and the history added after the part it compacted. The
+/// session keeps no other history in a window (a compaction opens a new one,
+/// editing forks), so the window and the prefix of item ids prove it.
+fn rebased_suffix<'a>(
+    record: &'a SessionRecord,
+    plan: &CompactionPlan,
+) -> Result<&'a [Arc<AgentHistoryItem>], AgentError> {
+    let history = &record.conversation.history;
+    if record
+        .runtime
+        .compaction
+        .as_ref()
+        .is_some_and(|value| !value.snapshot.status.is_terminal())
+    {
+        return Err(AgentError::CompactionAlreadyRunning);
+    }
+    if record.runtime.context_window.window_id != plan.source_window.window_id
+        || history.len() < plan.source_item_ids.len()
+        || history
+            .iter()
+            .zip(&plan.source_item_ids)
+            .any(|(item, id)| item.item_id != *id)
+    {
+        return Err(AgentError::StaleRevision);
+    }
+    Ok(&history[plan.source_items.len()..])
+}
+
+/// Records a background compaction as the session's, ready to install: it
+/// had no reserved or running record, since nothing of it was persisted.
+fn reserve_background_install(
+    staged: &mut SessionRecord,
+    plan: &CompactionPlan,
+    turn_generation: AgentGeneration,
+) -> CompactionIdentity {
+    let generation = AgentCompactionGeneration::new(
+        staged
+            .runtime
+            .compaction
+            .as_ref()
+            .map_or(0, |value| value.snapshot.generation.value())
+            .checked_add(1)
+            .expect("agent compaction generation exhausted"),
+    );
+    let now = now_millis_u64();
+    staged.runtime.compaction = Some(CompactionRecord {
+        snapshot: AgentCompactionSnapshot {
+            id: plan.identity.id,
+            generation,
+            trigger: AgentCompactionTrigger::Automatic,
+            phase: AgentCompactionPhase::Background,
+            reason: AgentCompactionReason::ContextLimit,
+            implementation: plan.implementation,
+            status: AgentCompactionStatus::ReadyToInstall,
+            source_revision: plan.source_revision,
+            source_window_id: plan.source_window.window_id,
+            target_window: plan.target_window,
+            turn_generation: Some(turn_generation),
+            summary: None,
+            usage: None,
+            last_error: None,
+            created_at: now,
+            updated_at: now,
+        },
+        cancellation: CancellationToken::default(),
+        operation_revision: staged.status.revision,
+    });
+    CompactionIdentity {
+        session_id: plan.identity.session_id,
+        id: plan.identity.id,
+        generation,
+    }
+}
+
 /// Replaces the staged history with `compacted` and its display summary,
 /// opens the target window on it behind a `Compacted` boundary, and returns
 /// the completed compaction.
 fn stage_compacted_history(
     staged: &mut SessionRecord,
+    identity: CompactionIdentity,
     plan: &CompactionPlan,
     sample: &CompactionSample,
     compacted: CompactedHistory,
@@ -128,7 +273,7 @@ fn stage_compacted_history(
     };
     let checkpoint_item = append_history_item(staged, display);
     let snapshot = {
-        let compaction = exact_compaction_mut(staged, plan.identity)?;
+        let compaction = exact_compaction_mut(staged, identity)?;
         compaction.snapshot.status = AgentCompactionStatus::Completed;
         compaction.snapshot.summary = sample.summary.clone();
         compaction.snapshot.usage = Some(compaction_usage(sample));
@@ -218,20 +363,27 @@ fn charge_turn_budget(
     Ok(())
 }
 
+/// What the request that follows an install is built with.
+struct NextRequest<'a> {
+    images: &'a LoadedImages,
+    tool_plan: &'a AgentToolPlan,
+    prompt: &'a RequestContext,
+}
+
 /// The estimate of the request that follows the install. A compaction for
 /// the context limit fails when that request would still reach the
 /// threshold.
 fn estimate_next_request(
     staged: &SessionRecord,
-    plan: &CompactionPlan,
+    next: NextRequest<'_>,
     context_limit_compaction: bool,
     limits: AgentHardLimits,
 ) -> Result<u64, AgentError> {
     let next_request = step_model_request(
         staged,
-        &plan.images,
-        &plan.next_tool_plan,
-        &plan.next_prompt,
+        next.images,
+        next.tool_plan,
+        next.prompt,
         limits.maximum_tool_output_bytes,
     )?;
     let next_context_tokens = estimate_model_request_tokens(&next_request)?;

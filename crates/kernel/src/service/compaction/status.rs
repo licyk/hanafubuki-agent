@@ -53,22 +53,6 @@ impl AgentService {
         Ok(())
     }
 
-    pub(super) fn check_compaction_cancelled(
-        &self,
-        identity: CompactionIdentity,
-    ) -> Result<(), AgentError> {
-        let cell = self.session(identity.session_id)?;
-        let record = cell.lock()?;
-        if exact_compaction(&record, identity)?
-            .cancellation
-            .is_cancelled()
-        {
-            Err(AgentError::Cancelled)
-        } else {
-            Ok(())
-        }
-    }
-
     /// Commits the compaction's end and returns its event; nothing when the
     /// session or the compaction is gone or the compaction already ended.
     pub(super) async fn finish_compaction_terminal(

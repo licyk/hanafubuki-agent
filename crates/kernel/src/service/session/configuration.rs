@@ -113,6 +113,8 @@ impl AgentService {
             return Err(AgentError::CompactionAlreadyRunning);
         }
         let previous = record.rollback_state();
+        // A result made for the strategy it leaves is discarded.
+        record.runtime.background_compaction.cancel();
         record.settings.config.compaction_strategy = strategy;
         let staged = StagedPersistence::commit(&cell, record, previous);
         drop(guard);

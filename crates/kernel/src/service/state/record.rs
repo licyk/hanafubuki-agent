@@ -96,6 +96,11 @@ pub(in crate::service) struct SessionRuntime {
     /// mode; the kernel only keeps it for the application.
     pub(in crate::service) sandbox_mode:
         Option<hanafubuki_agent_foundation::agent_settings::AgentSandboxMode>,
+    /// The compaction running in the background, never persisted (a restart
+    /// drops it) and not an active operation: turns and every other change
+    /// go on while it runs.
+    pub(in crate::service) background_compaction:
+        crate::service::compaction::BackgroundCompactionSlot,
 }
 
 /// Bounded rollback state for one staged durable mutation: every group but
@@ -167,6 +172,7 @@ impl SessionRuntime {
             allowances: BTreeSet::new(),
             permission_mode: None,
             sandbox_mode: None,
+            background_compaction: Default::default(),
         }
     }
 }

@@ -145,6 +145,7 @@ impl AgentService {
                 allowances: BTreeSet::new(),
                 permission_mode: None,
                 sandbox_mode: None,
+                background_compaction: Default::default(),
             },
         }
     }

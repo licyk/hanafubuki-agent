@@ -36,6 +36,7 @@ pub(in crate::service) fn snapshot(
             .compaction
             .as_ref()
             .map(|compaction| compaction.snapshot.clone()),
+        background_compaction: record.runtime.background_compaction.state(),
         task_plan: record.runtime.task_plan.clone(),
         pending_user_input: record.runtime.pending_user_input.clone(),
         turn: record.runtime.turn.as_ref().map(|turn| AgentTurnSnapshot {
@@ -102,6 +103,7 @@ pub(in crate::service) fn persisted_runtime_snapshot(
         usage: runtime.usage,
         context_window: runtime.context_window,
         compaction: runtime.compaction,
+        background_compaction: None,
         task_plan: runtime.task_plan,
         pending_user_input: runtime.pending_user_input,
         turn: runtime.turn.map(|turn| AgentTurnSnapshot {

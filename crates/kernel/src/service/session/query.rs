@@ -145,6 +145,8 @@ impl AgentService {
         // The configured remote compaction changed since the session last
         // took it: compaction checks the transport against the session.
         let previous = record.rollback_state();
+        // A background result made with the old implementation is unusable.
+        record.runtime.background_compaction.cancel();
         record.settings.config = config;
         record.settings.model = model;
         // Not a revision: no snapshot shows the capability, and a caller that

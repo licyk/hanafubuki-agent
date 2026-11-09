@@ -512,107 +512,6 @@ async fn memory_summary_request_matches_golden() {
     assert_golden("memory_summary_request", &body);
 }
 
-/// A manual compaction after one turn: the summary request it sends, and the
-/// next turn's request, which starts from the installed checkpoint. The
-/// session carries a Skill catalog and workspace instructions, so what the
-/// compaction keeps of the initial context is visible.
-#[tokio::test]
-async fn compacted_request_matches_golden() {
-    let server = FakeServer::start(vec![
-        (assistant_events("Done."), Duration::ZERO),
-        (
-            assistant_events("The user said hello; nothing else happened."),
-            Duration::ZERO,
-        ),
-        (assistant_events("Still here."), Duration::ZERO),
-    ])
-    .await;
-    let (service, paths) = configured_service("golden-compacted", &server.base_url);
-    enable_two_skills(&service, &paths);
-    std::fs::write(
-        paths.managed_instances_dir.join("AGENTS.md"),
-        "# Workspace rules\n\nRun the narrow checks first.\n",
-    )
-    .unwrap();
-    let session = service
-        .create_session(AgentSessionMode::Default)
-        .await
-        .unwrap();
-    service
-        .start_turn(session.id, "Hello.".to_string().into())
-        .await
-        .unwrap();
-    let before = service.snapshot(session.id).unwrap();
-    service
-        .compact_session(session.id, before.generation, before.revision)
-        .await
-        .unwrap();
-    service
-        .start_turn(session.id, "Are you there?".to_string().into())
-        .await
-        .unwrap();
-
-    let requests = server.requests();
-    assert_eq!(requests.len(), 3);
-    let body = |index: usize| -> Value { serde_json::from_slice(&requests[index].body).unwrap() };
-    let pinned = serde_json::json!({
-        "compaction_request": body(1),
-        "next_request": body(2),
-    });
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
-    let normalized = normalize(&pinned, &paths.app_data_dir);
-    let _ = std::fs::remove_dir_all(paths.app_data_dir);
-    assert_golden("compacted_request", &normalized);
-}
-
-/// A window compacted mid-turn (the model asked for a new context) renders
-/// every section again from the registry: the step after the compaction
-/// carries the Skill catalog, as the first step did, beside the compacted
-/// window's own initial context.
-#[tokio::test]
-async fn a_window_compacted_mid_turn_keeps_the_skill_catalog() {
-    let server = FakeServer::start(vec![
-        (tool_events("new_context", "{}"), Duration::ZERO),
-        (
-            assistant_events("The user asked for a fresh context."),
-            Duration::ZERO,
-        ),
-        (assistant_events("Done."), Duration::ZERO),
-    ])
-    .await;
-    let (service, paths) = configured_service("compacted-mid-turn", &server.base_url);
-    enable_two_skills(&service, &paths);
-    let session = service
-        .create_session(AgentSessionMode::Default)
-        .await
-        .unwrap();
-    service
-        .start_turn(session.id, "Start over.".to_string().into())
-        .await
-        .unwrap();
-
-    let requests = server.requests();
-    assert_eq!(requests.len(), 3);
-    let input = |index: usize| -> Vec<Value> {
-        let body: Value = serde_json::from_slice(&requests[index].body).unwrap();
-        body["input"].as_array().unwrap().clone()
-    };
-    let has_text =
-        |items: &[Value], needle: &str| items.iter().any(|item| item.to_string().contains(needle));
-    assert!(has_text(&input(0), "<skills_instructions>"));
-    assert!(!has_text(&input(1), "<skills_instructions>"));
-    let after = input(2);
-    assert!(has_text(&after, "<skills_instructions>"));
-    assert!(has_text(&after, "Mode: default"));
-    assert!(has_text(&after, "The user asked for a fresh context."));
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
-    let _ = std::fs::remove_dir_all(paths.app_data_dir);
-}
-
 /// MCP tools as the model receives them, from three scripted servers:
 /// `fixture` (Direct) with a plain name, a 64-byte name, a name the wire
 /// table fits to the 128-byte Responses limit, a name with an illegal
@@ -779,7 +678,7 @@ fn transcript_digest(page: &Value) -> Value {
     Value::Array(out)
 }
 
-fn normalize(value: &Value, app_data_dir: &Path) -> Value {
+pub(super) fn normalize(value: &Value, app_data_dir: &Path) -> Value {
     let app_data_dir = app_data_dir.to_string_lossy().into_owned();
     let replace = |text: &str| {
         let text = text.replace(&app_data_dir, "<APP_DATA>").replace(
@@ -870,7 +769,7 @@ fn golden_path(name: &str) -> PathBuf {
         .join(name)
 }
 
-fn assert_golden(name: &str, actual: &Value) {
+pub(super) fn assert_golden(name: &str, actual: &Value) {
     let path = golden_path(&format!("{name}.json"));
     let rendered = format!("{}\n", serde_json::to_string_pretty(actual).unwrap());
     if updating() {
@@ -886,7 +785,7 @@ fn assert_golden(name: &str, actual: &Value) {
     );
 }
 
-fn agent_history_dir(paths: &TestPaths) -> PathBuf {
+pub(super) fn agent_history_dir(paths: &TestPaths) -> PathBuf {
     paths.data_dir.join("agent-test").join("history")
 }
 
@@ -899,7 +798,7 @@ fn record_history_fixture(paths: &TestPaths, corpus: &str) {
     copy_tree(&agent_history_dir(paths), &target);
 }
 
-fn copy_tree(source: &Path, target: &Path) {
+pub(super) fn copy_tree(source: &Path, target: &Path) {
     std::fs::create_dir_all(target).unwrap();
     for entry in std::fs::read_dir(source).unwrap() {
         let entry = entry.unwrap();
