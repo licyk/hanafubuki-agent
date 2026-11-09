@@ -4,10 +4,11 @@ use crate::{prepare_and_stage_images, AgentSteeringRequest, AgentTurnRequest};
 use hanafubuki_agent_contracts::{ContextRequest, TurnAdmissionRequest, TurnExtensions};
 use hanafubuki_agent_kernel::{
     AgentCompactionGeneration, AgentCompactionId, AgentCompactionOutcome, AgentError,
-    AgentEventSink, AgentGeneration, AgentPlanImplementationRequest, AgentRevision, AgentSessionId,
-    AgentSessionMode, AgentSteeringAccepted, AgentTurnAccepted, AgentTurnCancellationOutcome,
-    AgentTurnId, AgentTurnOutcome, AgentUserInputAccepted, AgentUserInputAnswer,
-    AgentUserInputRequestId, AgentWorldStateSnapshot, ApprovalRequestId, ApprovalUserDecision,
+    AgentEventSink, AgentGeneration, AgentPermissionMode, AgentPlanImplementationRequest,
+    AgentRevision, AgentSessionId, AgentSessionMode, AgentSteeringAccepted, AgentTurnAccepted,
+    AgentTurnCancellationOutcome, AgentTurnId, AgentTurnOutcome, AgentUserInputAccepted,
+    AgentUserInputAnswer, AgentUserInputRequestId, AgentWorldStateSnapshot, ApprovalRequestId,
+    ApprovalUserDecision,
 };
 use std::sync::Arc;
 
@@ -34,6 +35,9 @@ impl AgentApplicationService {
             .activate_provider_session(session_id)
             .await
             .map_err(AgentError::InvalidInput)?;
+        if let Some(mode) = self.core.session_permission_mode(session_id)? {
+            input.permission_mode = mode;
+        }
         let world_state = self
             .collect_world_state(
                 session_id,
@@ -66,7 +70,7 @@ impl AgentApplicationService {
             .flatten();
         let core = self.core.clone();
         let files = self.files.clone();
-        let permission_mode = self.load_agent_settings().await?.permission_mode;
+        let permission_mode = self.turn_permission_mode(session_id).await?;
         let world_state = self
             .collect_world_state(session_id, session.mode, permission_mode, input.host)
             .await
@@ -132,7 +136,7 @@ impl AgentApplicationService {
     ) -> Result<AgentTurnAccepted, String> {
         self.activate_provider_session(request.session_id).await?;
         let core = self.core.clone();
-        let permission_mode = self.load_agent_settings().await?.permission_mode;
+        let permission_mode = self.turn_permission_mode(request.session_id).await?;
         // Implementing the plan returns the session to Default mode.
         let world_state = self
             .collect_world_state(
@@ -281,9 +285,62 @@ impl AgentApplicationService {
         self.core
             .resolve_approval(session_id, turn_id, generation, request_id, decision)
     }
+
+    /// The permission mode the user chose for the session
+    /// ([`Self::set_session_permission_mode`]); `None` while the configured
+    /// `permissionMode` applies.
+    pub fn session_permission_mode(
+        &self,
+        session_id: AgentSessionId,
+    ) -> Result<Option<AgentPermissionMode>, AgentError> {
+        self.activate_session(session_id)?;
+        self.core.session_permission_mode(session_id)
+    }
+
+    /// Sets the session's permission mode, in place of the configured
+    /// `permissionMode`, until the session ends; it is not persisted. A
+    /// running turn keeps its mode; the next turn takes this one.
+    pub fn set_session_permission_mode(
+        &self,
+        session_id: AgentSessionId,
+        mode: AgentPermissionMode,
+    ) -> Result<(), AgentError> {
+        self.activate_session(session_id)?;
+        self.core.set_session_permission_mode(session_id, mode)
+    }
+
+    /// Records that the user approves the action automatic permission review
+    /// `review_id` denied (one of the session's ten latest denials): a
+    /// context note the model and the next review read. It starts no turn,
+    /// and a retry of the action is reviewed again. Refused while a turn or
+    /// a compaction runs.
+    pub fn approve_denied_action(
+        &self,
+        session_id: AgentSessionId,
+        review_id: &str,
+    ) -> Result<(), AgentError> {
+        self.activate_session(session_id)?;
+        self.core.approve_denied_action(session_id, review_id)
+    }
 }
 
 impl AgentApplicationService {
+    /// The permission mode of the session's next turn: the session's choice,
+    /// else the configured one.
+    async fn turn_permission_mode(
+        &self,
+        session_id: AgentSessionId,
+    ) -> Result<AgentPermissionMode, String> {
+        match self
+            .core
+            .session_permission_mode(session_id)
+            .map_err(|error| error.to_string())?
+        {
+            Some(mode) => Ok(mode),
+            None => Ok(self.load_agent_settings().await?.permission_mode),
+        }
+    }
+
     /// The turn's world state, from the context contributors plugins
     /// registered. `host` is what the host submitted with the turn.
     async fn collect_world_state(

@@ -15,6 +15,32 @@ impl AgentService {
             .collect()
     }
 
+    /// The permission mode the user chose for the session, if any. Turns
+    /// take it in place of the configured one.
+    pub fn session_permission_mode(
+        &self,
+        session_id: AgentSessionId,
+    ) -> Result<Option<hanafubuki_agent_approval::AgentPermissionMode>, AgentError> {
+        let cell = self.session(session_id)?;
+        let record = cell.lock()?;
+        Ok(record.runtime.permission_mode)
+    }
+
+    /// Sets the session's permission mode until the session ends. A running
+    /// turn keeps the mode it was admitted with; the next one takes this.
+    /// Off the async runtime only.
+    pub fn set_session_permission_mode(
+        &self,
+        session_id: AgentSessionId,
+        mode: hanafubuki_agent_approval::AgentPermissionMode,
+    ) -> Result<(), AgentError> {
+        let cell = self.session(session_id)?;
+        // After the staged commit settles, so its rollback cannot undo this.
+        let mut record = cell.lock_after_persistence_blocking()?;
+        record.runtime.permission_mode = Some(mode);
+        Ok(())
+    }
+
     pub fn set_session_turn_budget_policy(
         &self,
         session_id: AgentSessionId,

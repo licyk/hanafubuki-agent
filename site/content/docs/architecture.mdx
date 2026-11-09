@@ -143,7 +143,7 @@ schema 遵循同样的按协议规则：支持 `strict_json_schema` 的协议（
 
 ### 审批 [#approval]
 
-`AgentPermissionMode` 是 `Manual`（默认）、`AutoReview` 或 `FullAccess`，每个轮次从设置中冻结。每个工具调用由处理器的 `permission` 分类为一个 `ApprovalAction`（类型、风险等级、规范化摘要）。规则只能收紧。用户可以对 `Manual` 模式的提示回答 `AllowForSession`：之后同一工具（按 `(provider id, tool id, generation)`）在会话剩余时间内不再询问，只保存在运行时状态中，所以重启、分叉和改变了的工具都会重新询问（对 MCP 工具来说是服务器的配置、凭据或目录条目改变了；未改变的服务器重新连接后，许可仍然有效）。审批产生一次性的 `AuthorizedAction`；修改型工具在 `invoke` 中重新计算动作并要求它们完全一致。没有操作系统沙箱：审批就是那道门。
+`AgentPermissionMode` 是 `Manual`（默认）、`AutoReview` 或 `FullAccess`，每个轮次冻结：会话被设置了自己的模式时（`set_session_permission_mode`，与会话的许可一样只在运行时状态中）取它，否则取设置。每个工具调用由处理器的 `permission` 分类为一个 `ApprovalAction`（类型、风险等级、规范化摘要）。规则只能收紧。用户可以对 `Manual` 模式的提示回答 `AllowForSession`：之后同一工具（按 `(provider id, tool id, generation)`）在会话剩余时间内不再询问，只保存在运行时状态中，所以重启、分叉和改变了的工具都会重新询问（对 MCP 工具来说是服务器的配置、凭据或目录条目改变了；未改变的服务器重新连接后，许可仍然有效）。审批产生一次性的 `AuthorizedAction`；修改型工具在 `invoke` 中重新计算动作并要求它们完全一致。没有操作系统沙箱：审批就是那道门。用户事后批准的 `AutoReview` 拒绝（`approve_denied_action`，会话最近十个被拒绝的 `PermissionReview` 条目之一，在轮次之间）成为内核的 `ContinuationContext` 说明，provider 为 `kernel`，hook 为 `approved-denied-action`：模型把它读作可信的上下文，审查证据把它作为 `user approval` 条目与用户的消息一起保留。它本身不授权任何东西，所以重试仍会再次审查；历史格式不变。
 
 ## 上下文 [#context]
 

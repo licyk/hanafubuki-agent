@@ -23,6 +23,14 @@ hanafubuki-agent --permission-mode full-access exec "..." # 只对这次运行
 
 也可以写在配置档中，例如 `[profiles.review] permissionMode = "auto_review"`，再用 `-p review` 选择。权限模式在每个回合开始时确定，终端界面中没有修改它的命令；`/status` 会显示当前的模式。
 
+### 单个会话的模式 [#session-mode]
+
+一个会话可以使用与配置不同的模式，直到会话结束，不改变 `permissionMode`。嵌入的宿主用 `set_session_permission_mode` 设置它（[嵌入 Agent](/docs/embedding#permissions)）。
+
+- 随时可以修改。正在运行的回合保持开始时的模式，会话的下一个回合使用新模式。
+- 只属于这个会话：其他会话，以及从它分叉出的会话，仍使用配置的模式。
+- 只保存在内存中：重启后，会话回到 `permissionMode`。
+
 <Callout type="warn" title="没有操作系统沙箱">
   Agent
   不在沙箱中运行命令。获得允许的命令以你的用户权限运行，可以读写你能访问的任何文件，也可以访问网络。完全访问模式下，模型提出的每个命令都会直接执行。只在可以承受后果的环境中使用它。
@@ -74,8 +82,29 @@ hanafubuki-agent --permission-mode full-access exec "..." # 只对这次运行
 - 连续三次拒绝会停止回合，避免模型反复尝试。
 - 审查超时（90 秒）或失败时拒绝这个操作。
 - 审查过程记录在会话历史中，`exec --json` 中是 `permission_review_*` 事件。
+- 审查拒绝的操作可以由你批准，见下文。
 
 自动审查会增加模型请求，也依赖模型的判断。它适合日常的、可以撤销的工作。
+
+### 批准被拒绝的操作 [#approve-denied]
+
+审查拒绝了一个你确实需要的操作时，可以批准它（嵌入的宿主调用 `approve_denied_action`，见[嵌入 Agent](/docs/embedding#permissions)）。只能批准会话最近十次拒绝中的一次，回合或压缩运行期间不能批准。
+
+批准不会执行这个操作，也不会开始回合。它在会话历史中加入一条说明，模型从下一次请求起读到它：
+
+```text
+The user has manually approved a specific action that automatic permission review previously denied.
+
+Treat this as approval to perform that exact action in the same context in which it was originally requested.
+Do not assume this also authorizes similar operations with different payloads.
+
+Approved action:
+<操作的摘要>
+```
+
+- 模型把这条说明视为可信的上下文，你让它继续时，它可以再次尝试这个操作。
+- 重试**仍然要经过审查**。审查模型在你自己的消息中看到这条说明，标记为 `user approval`，并被告知它只授权这个确切的操作。其他操作，或参数不同的同一操作，照常判断。
+- 这条说明保存在会话历史中，重启后仍在。[压缩](/docs/providers-models#compaction)既不保留这条说明，也不保留拒绝记录：压缩之后，这次批准就不再有效。
 
 ## 完全访问 [#full-access]
 

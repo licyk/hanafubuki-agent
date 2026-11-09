@@ -162,6 +162,7 @@ panic 消息进入日志和插件状态，从不进入模型。`mcp` 插件自�
 
 - 钩子请求在候选的最终回答之后让轮次继续。内核在开始采样步骤时为注册表取快照；如果步骤以最终回答结束，就按顺序询问钩子。每次调用持有条目租约，观察轮次取消的子令牌，受轮次的工具空闲超时限制。插件正在停止的钩子被跳过。
 - `Pass` 询问下一个钩子，`Stop` 结束轮次而不询问其余钩子，`Continue` 返回 1 到 `MAXIMUM_CONTINUATION_FRAGMENTS_PER_HOOK` 个非空片段（每个最多 `MAXIMUM_CONTINUATION_FRAGMENT_BYTES`），内核把它们作为 `ContinuationContext` 提交后再次采样。失败或超时在 `FailTurn` 下让轮次失败，在 `Ignore` 下被跳过。目前没有注册任何钩子。
+- 内核自己在任何钩子和轮次之外提交一种 `ContinuationContext`：用户批准了自动权限审查拒绝的操作的说明（`approve_denied_action`），provider 为 `kernel`，hook 为 `approved-denied-action`。插件钩子不使用这两个 ID：权限审查把它们下的片段读作用户的授权（[权限与审批](/docs/permissions#approve-denied)）。
 
 ## 观察者 [#observers]
 

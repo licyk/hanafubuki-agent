@@ -949,6 +949,7 @@ async fn wait_for_active_turn(
 
 mod approval;
 mod approval_rules;
+mod approved_action;
 mod budget;
 mod context_and_skills;
 mod continuation;

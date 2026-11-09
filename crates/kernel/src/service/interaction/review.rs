@@ -1,6 +1,65 @@
 use super::*;
+use crate::approved_action::approved_action_note;
+
+/// How many of the session's latest denied reviews the user may approve.
+const APPROVABLE_DENIED_REVIEWS: usize = 10;
 
 impl AgentService {
+    /// Commits the user's approval of the action that automatic permission
+    /// review `review_id`, one of the session's ten latest denials, denied:
+    /// a context note the next sampling step and the next review read. It
+    /// starts no turn and authorizes nothing by itself, so a retry is still
+    /// reviewed. Refused while a turn or a compaction runs. Off the async
+    /// runtime only.
+    pub fn approve_denied_action(
+        &self,
+        session_id: AgentSessionId,
+        review_id: &str,
+    ) -> Result<(), AgentError> {
+        let cell = self.session(session_id)?;
+        let (staged, event) = {
+            let mut guard = cell.lock_after_persistence_blocking()?;
+            let record = &mut *guard;
+            ensure_no_staged_commit(record)?;
+            if record
+                .runtime
+                .turn
+                .as_ref()
+                .is_some_and(|turn| !turn.phase.is_terminal())
+            {
+                return Err(AgentError::TurnAlreadyRunning);
+            }
+            if record
+                .runtime
+                .compaction
+                .as_ref()
+                .is_some_and(|compaction| !compaction.snapshot.status.is_terminal())
+            {
+                return Err(AgentError::CompactionAlreadyRunning);
+            }
+            let items = [approved_action_note(denied_action_summary(
+                record, review_id,
+            )?)];
+            validate_history_append(record, &items, self.inner.limits)?;
+            let previous = record.rollback_state();
+            let start_index = record.conversation.history.len();
+            append_history(record, &items);
+            let event = record_session_event(
+                record,
+                AgentEventKind::HistoryCommitted {
+                    start_index,
+                    item_count: items.len(),
+                    usage: None,
+                },
+                self.inner.limits,
+            );
+            (StagedPersistence::commit(&cell, record, previous), event)
+        };
+        self.persist_staged_blocking(staged)?;
+        self.emit_session_event(session_id, event);
+        Ok(())
+    }
+
     pub(super) async fn record_auto_review_outcome(
         &self,
         identity: TurnIdentity,
@@ -137,4 +196,30 @@ impl AgentService {
         event_sink.emit(event);
         Ok(())
     }
+}
+
+/// The summary of the action review `review_id` denied, if it is one of the
+/// session's latest denials.
+fn denied_action_summary<'a>(
+    record: &'a SessionRecord,
+    review_id: &str,
+) -> Result<&'a str, AgentError> {
+    record
+        .conversation
+        .history
+        .iter()
+        .rev()
+        .filter_map(|item| match &item.content {
+            ConversationItem::PermissionReview {
+                review_id,
+                action_summary,
+                status: PermissionReviewStatus::Denied,
+                ..
+            } => Some((review_id, action_summary)),
+            _ => None,
+        })
+        .take(APPROVABLE_DENIED_REVIEWS)
+        .find(|(candidate, _)| *candidate == review_id)
+        .map(|(_, action_summary)| action_summary.as_str())
+        .ok_or(AgentError::ApprovalNotFound)
 }

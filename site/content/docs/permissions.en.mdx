@@ -23,6 +23,14 @@ hanafubuki-agent --permission-mode full-access exec "…"   # for this run only
 
 A profile can hold it too, such as `[profiles.review] permissionMode = "auto_review"`, selected with `-p review`. The mode is fixed when a turn starts, and the terminal interface has no command to change it; `/status` shows it.
 
+### One session's mode [#session-mode]
+
+A session can run in another mode than the configured one, until it ends, without changing `permissionMode`. An embedding host sets it with `set_session_permission_mode` ([Embedding the Agent](/docs/embedding#permissions)).
+
+- It can be changed at any time. A running turn keeps the mode it started with; the session's next turn takes the new one.
+- It belongs to that session only: other sessions, and a fork of it, keep the configured mode.
+- It is kept in memory only: after a restart the session is back on `permissionMode`.
+
 <Callout type="warn" title="There is no operating-system sandbox">
   The Agent does not run commands in a sandbox. An allowed command runs with your user's rights: it
   can read and write any file you can, and reach the network. In full-access mode, every command the
@@ -76,8 +84,29 @@ In automatic review mode, an operation that needs an approval is reviewed by **t
 - Three denials in a row stop the turn, so the model does not keep trying.
 - A review that times out (after 90 seconds) or fails denies the operation.
 - The review is kept in the session's history; `exec --json` has it as the `permission_review_*` events.
+- You can approve an operation a review denied; see below.
 
 Automatic review costs extra model requests and relies on the model's judgement. It suits everyday work you can undo.
+
+### Approving a denied operation [#approve-denied]
+
+When a review denies an operation you did want, you can approve it (an embedding host calls `approve_denied_action`; see [Embedding the Agent](/docs/embedding#permissions)). Only one of the session's ten latest denials can be approved, and not while a turn or a compaction runs.
+
+The approval does not run the operation and starts no turn. It adds a note to the session's history, which the model reads from its next request:
+
+```text
+The user has manually approved a specific action that automatic permission review previously denied.
+
+Treat this as approval to perform that exact action in the same context in which it was originally requested.
+Do not assume this also authorizes similar operations with different payloads.
+
+Approved action:
+<the operation's summary>
+```
+
+- The model sees the note as trusted context, so when you ask it to go on it can try the operation again.
+- The retry is **still reviewed**. The reviewer sees the note among your own messages, labelled `user approval`, and is told it authorizes that exact operation and nothing else. A different operation, or the same one with other arguments, is judged as before.
+- The note is kept in the session's history, also after a restart. A [compaction](/docs/providers-models#compaction) keeps neither the note nor the denials: after one, the approval is gone.
 
 ## Full access [#full-access]
 

@@ -7,6 +7,7 @@
 
 pub mod activity;
 mod admission;
+mod approved_action;
 pub mod budget;
 mod context;
 pub mod conversation;

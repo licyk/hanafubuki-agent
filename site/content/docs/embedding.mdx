@@ -439,6 +439,18 @@ impl AgentEventSink for PrintEvents {
 - **历史**：`list_sessions_page`（分页、可搜索）、`open_session`（会话及其最近的转录）、`read_transcript_page` 和 `read_turn_page` 读取已提交的 `ConversationItem`。思考内容是 `ConversationItem::Reasoning { text, duration_millis, sampling_step, truncated }`，只用于展示，从不作为模型输入回放。
 - **运行投影**：`AgentSlot::list_run_projections` 与 `get_run_projection`（活动 ID、轮次号、阶段、时间、错误），Hanafubuki 把它们映射到任务中心。
 
+## 权限 [#permissions]
+
+轮次的权限模式在它开始时确定。`submit_turn_with_sink` 和 `submit_plan_implementation_with_sink` 在会话有自己的模式时使用它，否则使用配置的 `permissionMode`；`start_turn` 用会话的模式代替输入中的模式。各模式和审批的行为见[权限与审批](/docs/permissions)。
+
+| 调用                                            | 作用                                                                                                                                                                                                                                                                                         |
+| ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `set_session_permission_mode(session_id, mode)` | 会话的模式，代替 `permissionMode`，直到会话结束；只保存在内存中，不持久化，也不随分叉复制。正在运行的轮次保持原来的模式，下一个轮次使用这个模式                                                                                                                                              |
+| `session_permission_mode(session_id)`           | 会话被设置的模式；仍使用 `permissionMode` 时为 `None`                                                                                                                                                                                                                                        |
+| `approve_denied_action(session_id, review_id)`  | 用户批准自动审查 `review_id`（来自 `PermissionReviewCompleted { status: Denied }`）拒绝的操作，必须是会话最近十次拒绝之一：提交一条模型和下一次审查都会读到的上下文说明，并把不带轮次 ID 的 `HistoryCommitted` 发给会话最近一个轮次的 sink。它不开始轮次，也不执行任何操作；重试仍会再次审查 |
+
+审查不是这些拒绝之一时，`approve_denied_action` 返回 `ApprovalNotFound`；轮次或压缩运行期间返回 `TurnAlreadyRunning` 或 `CompactionAlreadyRunning`。这三个调用可能加载会话的历史或等待它正在暂存的提交，所以要像 `rename_session` 和 `set_session_mode` 一样在异步运行时之外调用。
+
 ## 功能调用 [#feature-calls]
 
 有些功能由插件行承担，服务 API 每次调用时找到它们：

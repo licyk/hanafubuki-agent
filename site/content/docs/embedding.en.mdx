@@ -449,6 +449,18 @@ impl AgentEventSink for PrintEvents {
 - **History**: `list_sessions_page` (paged, searchable), `open_session` (a session with its latest transcript), `read_transcript_page` and `read_turn_page` read the committed `ConversationItem`s. Thinking is `ConversationItem::Reasoning { text, duration_millis, sampling_step, truncated }`, for presentation only and never replayed as model input.
 - **Run projections**: `AgentSlot::list_run_projections` and `get_run_projection` (activity id, turn number, phase, times, error); Hanafubuki maps them to its Task Center.
 
+## Permissions [#permissions]
+
+A turn's permission mode is fixed when it starts. `submit_turn_with_sink` and `submit_plan_implementation_with_sink` take the session's own mode when it has one, else the configured `permissionMode`; `start_turn` takes the session's mode over the one in its input. What the modes and the approvals do is in [Permissions and approvals](/docs/permissions).
+
+| Call                                            | What it does                                                                                                                                                                                                                                                                                                                                                                                   |
+| ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `set_session_permission_mode(session_id, mode)` | the session's mode, in place of `permissionMode`, until the session ends; kept in memory only, never persisted nor forked. A running turn keeps its mode; the next turn takes this one                                                                                                                                                                                                         |
+| `session_permission_mode(session_id)`           | the mode the session was given, or `None` while `permissionMode` applies                                                                                                                                                                                                                                                                                                                       |
+| `approve_denied_action(session_id, review_id)`  | the user's approval of the operation the automatic review `review_id` (of a `PermissionReviewCompleted { status: Denied }`) denied, one of the session's ten latest denials: commits a context note the model and the next review read, and emits `HistoryCommitted`, with no turn id, to the sink of the session's latest turn. It starts no turn and runs nothing; a retry is reviewed again |
+
+`approve_denied_action` returns `ApprovalNotFound` for a review that is not one of those denials, and `TurnAlreadyRunning` or `CompactionAlreadyRunning` while one runs. The three calls may load the session's history or wait for its staged commit, so call them off the async runtime, as `rename_session` and `set_session_mode`.
+
 ## Feature calls [#feature-calls]
 
 Some features are served by a plugin row, and the service API reaches them per call:

@@ -162,6 +162,7 @@ The model's arguments are read tolerantly; a mistake is a field-named error the 
 
 - A hook asks to keep a turn going after a candidate final answer. The kernel snapshots the registry when it starts a sampling step and, if the step ends with a final answer, asks the hooks in order. Each call holds an entry lease and observes a child of the turn's cancellation, bounded by the turn's tool idle timeout. A hook whose plugin is stopping is skipped.
 - `Pass` asks the next hook, `Stop` ends the turn without the remaining hooks, and `Continue` returns 1 to `MAXIMUM_CONTINUATION_FRAGMENTS_PER_HOOK` non-blank fragments of at most `MAXIMUM_CONTINUATION_FRAGMENT_BYTES`, which the kernel commits as `ContinuationContext` before it samples again. A failure or timeout fails the turn under `FailTurn` and is skipped under `Ignore`. None is registered today.
+- The kernel commits one `ContinuationContext` of its own, outside any hook and any turn: the note that the user approved an action automatic permission review denied (`approve_denied_action`), under provider `kernel` and hook `approved-denied-action`. A plugin hook does not use those ids: the permission reviewer reads a fragment under them as the user's authorization ([Permissions and approvals](/docs/permissions#approve-denied)).
 
 ## Observers [#observers]
 

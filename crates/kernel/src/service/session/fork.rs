@@ -139,6 +139,7 @@ impl AgentService {
                 task_plan: None,
                 pending_user_input: None,
                 allowed_tools: BTreeSet::new(),
+                permission_mode: None,
             },
         };
         let cell = self.inner.sessions.insert(record, &self.inner.accepting)?;

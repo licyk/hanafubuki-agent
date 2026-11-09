@@ -115,4 +115,5 @@ pub(super) fn approved_command() -> String {
 
 mod background_execution;
 mod lifecycle;
+mod permissions;
 mod provider;

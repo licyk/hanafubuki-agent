@@ -75,6 +75,9 @@ pub(in crate::service) struct SessionRuntime {
     /// (`ApprovalUserDecision::AllowForSession`). Never persisted: a session
     /// recovered by a new Agent instance starts without any.
     pub(in crate::service) allowed_tools: BTreeSet<crate::AgentToolSelection>,
+    /// The permission mode the user chose for the session's next turns, in
+    /// place of the configured one. Never persisted, like `allowed_tools`.
+    pub(in crate::service) permission_mode: Option<hanafubuki_agent_approval::AgentPermissionMode>,
 }
 
 /// Bounded rollback state for one staged durable mutation: every group but
@@ -144,6 +147,7 @@ impl SessionRuntime {
             task_plan: None,
             pending_user_input: None,
             allowed_tools: BTreeSet::new(),
+            permission_mode: None,
         }
     }
 }
