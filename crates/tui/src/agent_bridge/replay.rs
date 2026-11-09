@@ -27,6 +27,12 @@ pub(crate) struct OpenedSession {
 #[derive(Debug)]
 pub(crate) enum ReplayedItem {
     User(String),
+    /// What the model thought, as Markdown, and for how long.
+    Reasoning {
+        text: String,
+        duration_millis: u64,
+        truncated: bool,
+    },
     /// An assistant message's markdown.
     Assistant(String),
     /// A proposed plan's markdown.
@@ -52,6 +58,16 @@ pub(crate) fn transcript(agent: &AgentHandle, items: Vec<ConversationItem>) -> V
             | ConversationItem::SteeringMessage { text, .. } => {
                 transcript.push(ReplayedItem::User(text))
             }
+            ConversationItem::Reasoning {
+                text,
+                duration_millis,
+                truncated,
+                ..
+            } => transcript.push(ReplayedItem::Reasoning {
+                text,
+                duration_millis,
+                truncated,
+            }),
             ConversationItem::AssistantMessage {
                 text,
                 proposed_plan,

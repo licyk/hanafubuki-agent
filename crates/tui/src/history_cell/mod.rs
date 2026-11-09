@@ -7,6 +7,7 @@
 mod plan;
 mod reports;
 mod status;
+mod thinking;
 mod tool;
 
 use std::any::Any;
@@ -27,6 +28,7 @@ use crate::wrapping::{word_wrap_lines, RtOptions};
 pub(crate) use plan::{new_plan_update, new_proposed_plan_stream};
 pub(crate) use reports::{new_mcp_output, new_skills_output};
 pub(crate) use status::new_status_output;
+pub(crate) use thinking::ThinkingCell;
 pub(crate) use tool::{new_tool_call, ToolCallCell, ToolResultView};
 
 /// An entry of the conversation, rendered at a width.
@@ -35,6 +37,20 @@ pub(crate) trait HistoryCell: std::fmt::Debug + Send + Sync + Any {
 
     fn desired_height(&self, width: u16) -> u16 {
         Paragraph::new(Text::from(self.display_lines(width)))
+            .wrap(Wrap { trim: false })
+            .line_count(width)
+            .try_into()
+            .unwrap_or(0)
+    }
+
+    /// The cell as the transcript pager shows it, which may show more than
+    /// the scrollback (a collapsed cell's text).
+    fn transcript_lines(&self, width: u16) -> Vec<Line<'static>> {
+        self.display_lines(width)
+    }
+
+    fn desired_transcript_height(&self, width: u16) -> u16 {
+        Paragraph::new(Text::from(self.transcript_lines(width)))
             .wrap(Wrap { trim: false })
             .line_count(width)
             .try_into()

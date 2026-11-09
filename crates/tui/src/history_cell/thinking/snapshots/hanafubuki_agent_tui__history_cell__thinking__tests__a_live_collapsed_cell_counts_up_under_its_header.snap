@@ -1,0 +1,5 @@
+---
+source: crates/tui/src/history_cell/thinking/tests.rs
+expression: "render(&live(THOUGHT, false).display_lines(40))"
+---
+• Thinking 5s

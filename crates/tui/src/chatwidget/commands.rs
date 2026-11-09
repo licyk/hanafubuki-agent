@@ -92,6 +92,8 @@ impl ChatWidget {
     /// far. What the previous session left running is gone with it.
     fn on_session_opened(&mut self, opened: OpenedSession) {
         self.running_tools.clear();
+        self.live_thinking.clear();
+        self.sync_thinking_toggle();
         self.stream_controller = None;
         self.plan_stream_controller = None;
         self.deferred.clear();
@@ -117,6 +119,16 @@ impl ChatWidget {
                 ReplayedItem::User(text) => {
                     self.add_to_history(history_cell::new_user_prompt(text))
                 }
+                ReplayedItem::Reasoning {
+                    text,
+                    duration_millis,
+                    truncated,
+                } => self.add_to_history(history_cell::ThinkingCell::completed(
+                    text,
+                    duration_millis,
+                    truncated,
+                    self.thinking_expanded,
+                )),
                 ReplayedItem::Assistant(text) => {
                     let mut controller = StreamController::new(width.map(|w| w.saturating_sub(2)));
                     controller.push(&text);

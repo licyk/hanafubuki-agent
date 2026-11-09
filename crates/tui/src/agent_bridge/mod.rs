@@ -17,11 +17,11 @@ use std::sync::Arc;
 
 use hanafubuki_agent::{
     AgentAvailability, AgentCompactionOutcome, AgentEvent, AgentEventKind, AgentEventSink,
-    AgentHandle, AgentHistorySortDirection, AgentSessionId, AgentSessionMode, AgentSlot,
-    AgentStatusEventSink, AgentSteeringRequest, AgentTaskPlanSnapshot, AgentTurnAccepted,
-    AgentTurnPageRequest, AgentTurnRequest, AgentTurnTerminalReason, AgentUserInputRequest,
-    AgentUserInputRequestId, ApprovalRequest, ApprovalRequestId, McpApplicationSnapshot,
-    SkillCatalogSnapshot,
+    AgentHandle, AgentHistorySortDirection, AgentReasoningId, AgentSessionId, AgentSessionMode,
+    AgentSlot, AgentStatusEventSink, AgentSteeringRequest, AgentTaskPlanSnapshot,
+    AgentTurnAccepted, AgentTurnPageRequest, AgentTurnRequest, AgentTurnTerminalReason,
+    AgentUserInputRequest, AgentUserInputRequestId, ApprovalRequest, ApprovalRequestId,
+    McpApplicationSnapshot, SkillCatalogSnapshot,
 };
 
 use crate::app_event::{AppEvent, AppEventSender, Op};
@@ -37,6 +37,15 @@ const TOOL_ITEMS_PAGE: usize = 64;
 #[derive(Debug)]
 pub(crate) enum TurnUpdate {
     Started,
+    ReasoningStarted(AgentReasoningId),
+    ReasoningDelta {
+        reasoning_id: AgentReasoningId,
+        delta: String,
+    },
+    ReasoningCompleted {
+        reasoning_id: AgentReasoningId,
+        duration_millis: u64,
+    },
     MessageDelta(String),
     MessageCompleted,
     PlanDelta(String),
@@ -230,6 +239,23 @@ impl AgentBridge {
         }
         let update = match event.kind {
             AgentEventKind::TurnStarted => TurnUpdate::Started,
+            AgentEventKind::ReasoningStarted { reasoning_id, .. } => {
+                TurnUpdate::ReasoningStarted(reasoning_id)
+            }
+            AgentEventKind::ReasoningDelta {
+                reasoning_id,
+                delta,
+            } => TurnUpdate::ReasoningDelta {
+                reasoning_id,
+                delta,
+            },
+            AgentEventKind::ReasoningCompleted {
+                reasoning_id,
+                duration_millis,
+            } => TurnUpdate::ReasoningCompleted {
+                reasoning_id,
+                duration_millis,
+            },
             AgentEventKind::AssistantTextDelta { delta, .. } => TurnUpdate::MessageDelta(delta),
             AgentEventKind::AssistantMessageCompleted { .. } => TurnUpdate::MessageCompleted,
             AgentEventKind::ProposedPlanDelta { delta, .. } => TurnUpdate::PlanDelta(delta),

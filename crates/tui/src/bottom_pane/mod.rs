@@ -55,6 +55,7 @@ use crate::tui::FrameRequester;
 use approval_overlay::ApprovalOverlay;
 use bottom_pane_view::BottomPaneView;
 use chat_composer::ChatComposer;
+pub(crate) use footer::ThinkingToggle;
 use list_selection_view::ListSelectionView;
 pub(crate) use list_selection_view::{SelectionItem, SelectionViewParams};
 use paste_burst::PasteBurst;
@@ -254,6 +255,11 @@ impl BottomPane {
 
     pub(crate) fn clear_quit_shortcut_hint(&mut self) {
         self.composer.clear_quit_shortcut_hint(self.has_input_focus);
+        self.request_redraw();
+    }
+
+    pub(crate) fn set_thinking_toggle(&mut self, toggle: Option<ThinkingToggle>) {
+        self.composer.set_thinking_toggle(toggle);
         self.request_redraw();
     }
 

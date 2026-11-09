@@ -75,6 +75,14 @@ path = "crates/tui/src/history_cell/tool/tests.rs"
 reason = "The tool call cell over the Agent's tool results."
 
 [[original]]
+path = "crates/tui/src/history_cell/thinking.rs"
+reason = "The thinking cell over the Agent's reasoning events and items, written for the Agent."
+
+[[original]]
+path = "crates/tui/src/history_cell/thinking/tests.rs"
+reason = "The thinking cell's states, written with it."
+
+[[original]]
 path = "crates/tui/src/slash_command/tests.rs"
 reason = "The command table's lookups, written for the port."
 

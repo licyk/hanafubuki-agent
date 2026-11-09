@@ -7,7 +7,8 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use hanafubuki_agent::test_support::{
-    assistant_events, configure_test_provider, tool_events, FakeServer, MemorySecretStore,
+    assistant_events, configure_test_provider, reasoning_answer_events, reasoning_tool_events,
+    tool_events, FakeServer, MemorySecretStore,
 };
 use hanafubuki_agent::{
     AgentConfig, AgentDirs, AgentHandle, AgentRuntime, AgentRuntimeHost, AgentRuntimeOptions,
@@ -117,7 +118,11 @@ impl Harness {
     }
 
     fn key(&mut self, code: KeyCode) {
-        let event = AppEvent::Key(KeyEvent::new(code, KeyModifiers::NONE));
+        self.key_with(code, KeyModifiers::NONE);
+    }
+
+    fn key_with(&mut self, code: KeyCode, modifiers: KeyModifiers) {
+        let event = AppEvent::Key(KeyEvent::new(code, modifiers));
         assert!(self.app.handle_event(&mut self.tui, event));
     }
 
@@ -199,7 +204,11 @@ fn session(agent: &AgentHandle) -> hanafubuki_agent::AgentSessionId {
 }
 
 fn command_call(command: &str) -> Vec<u8> {
-    let arguments = serde_json::json!({
+    tool_events("exec_command", &command_arguments(command))
+}
+
+fn command_arguments(command: &str) -> String {
+    serde_json::json!({
         "cmd": command,
         "shell": null,
         "login": null,
@@ -207,8 +216,8 @@ fn command_call(command: &str) -> Vec<u8> {
         "yield_time_ms": 5_000,
         "max_output_bytes": 32_768,
         "workdir": null
-    });
-    tool_events("exec_command", &arguments.to_string())
+    })
+    .to_string()
 }
 
 #[test]
@@ -314,4 +323,85 @@ fn a_resumed_session_replays_its_tool_calls_with_their_output() {
     let transcript = harness.transcript();
     assert!(transcript.contains("exec_command"), "{transcript}");
     assert!(transcript.contains("replayed-output"), "{transcript}");
+}
+
+#[test]
+fn a_thinking_turn_writes_its_thought_before_the_answer_and_the_pager_shows_the_text() {
+    let mut harness = Harness::start(vec![reasoning_answer_events(
+        "Weighing the **question**.",
+        "The answer is 42.",
+    )]);
+    harness.type_and_submit("What is the answer?");
+    let screen = harness.pump_until_screen_shows("The answer is 42.");
+    let thought = screen.find("• Thought for").expect(&screen);
+    assert!(
+        thought < screen.find("The answer is 42.").unwrap(),
+        "{screen}"
+    );
+    assert!(!screen.contains("Weighing the question."), "{screen}");
+    harness.pump_until_turn_ends();
+
+    harness.key_with(KeyCode::Char('t'), KeyModifiers::CONTROL);
+    let pager = harness.pump_until_screen_shows("T R A N S C R I P T");
+    assert!(pager.contains("Weighing the question."), "{pager}");
+}
+
+#[test]
+fn a_resumed_session_replays_its_thinking() {
+    let mut harness = Harness::start(vec![reasoning_answer_events(
+        "Weighing the question.",
+        "The answer is 42.",
+    )]);
+    harness.type_and_submit("What is the answer?");
+    harness.pump_until_screen_shows("The answer is 42.");
+    harness.pump_until_turn_ends();
+    let finished = harness.app.bridge.session_id();
+
+    harness.type_and_submit("/new");
+    harness.pump_until("a new session", |harness| {
+        harness.app.bridge.session_id() != finished
+    });
+    harness.type_and_submit("/resume");
+    harness.pump_until_screen_shows("Resume a previous session");
+    harness.key(KeyCode::Enter);
+    harness.pump_until("the resumed transcript", |harness| {
+        harness.transcript().contains("The answer is 42.")
+    });
+    let transcript = harness.transcript();
+    let thought = transcript.find("• Thought for").expect(&transcript);
+    assert!(
+        thought < transcript.find("The answer is 42.").unwrap(),
+        "{transcript}"
+    );
+}
+
+#[test]
+fn each_step_writes_its_thought_before_its_call_or_answer() {
+    let mut harness = Harness::start(vec![
+        reasoning_tool_events(
+            "Run it first.",
+            "exec_command",
+            &command_arguments("echo thought-output"),
+        ),
+        reasoning_answer_events("It ran.", "The command ran."),
+    ]);
+    harness.type_and_submit("Run the command.");
+    harness.pump_until_screen_shows("Yes, proceed");
+    harness.key(KeyCode::Char('y'));
+    harness.pump_until_screen_shows("The command ran.");
+    harness.pump_until_turn_ends();
+    let transcript = harness.transcript();
+    let order = [
+        "• Thought for",
+        "exec_command",
+        "• Thought for",
+        "The command ran.",
+    ];
+    let mut from = 0;
+    for text in order {
+        let at = transcript[from..]
+            .find(text)
+            .unwrap_or_else(|| panic!("{text:?} not in order:\n{transcript}"));
+        from += at + text.len();
+    }
 }

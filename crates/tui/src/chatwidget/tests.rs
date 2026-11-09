@@ -44,6 +44,38 @@ fn drain(events: &Receiver<AppEvent>) -> (Vec<String>, Vec<Op>) {
     (cells, ops)
 }
 
+/// The chat's viewport as drawn at `width`.
+fn screen(chat: &ChatWidget, width: u16) -> String {
+    let area = ratatui::layout::Rect::new(0, 0, width, chat.desired_height(width));
+    let mut buf = ratatui::buffer::Buffer::empty(area);
+    chat.render(area, &mut buf);
+    (0..area.height)
+        .map(|y| {
+            (0..area.width)
+                .map(|x| buf[(x, y)].symbol().to_string())
+                .collect::<String>()
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn reasoning_id(id: u64) -> hanafubuki_agent::AgentReasoningId {
+    hanafubuki_agent::AgentReasoningId::new(id)
+}
+
+fn think(chat: &mut ChatWidget, id: u64, text: &str, duration_millis: u64) {
+    let reasoning_id = reasoning_id(id);
+    chat.handle_turn_update(TurnUpdate::ReasoningStarted(reasoning_id));
+    chat.handle_turn_update(TurnUpdate::ReasoningDelta {
+        reasoning_id,
+        delta: text.to_string(),
+    });
+    chat.handle_turn_update(TurnUpdate::ReasoningCompleted {
+        reasoning_id,
+        duration_millis,
+    });
+}
+
 #[test]
 fn a_streamed_message_is_written_when_it_completes() {
     let (mut chat, events) = chat();
@@ -253,4 +285,129 @@ fn a_model_picked_from_the_catalogs_is_set_on_the_session() {
             model: "model-b".to_string(),
         })]
     );
+}
+
+#[test]
+fn thinking_is_live_in_the_viewport_and_ctrl_o_expands_it_for_the_session() {
+    let (mut chat, events) = chat();
+    chat.handle_turn_update(TurnUpdate::Started);
+    drain(&events);
+    let first = reasoning_id(1);
+    chat.handle_turn_update(TurnUpdate::ReasoningStarted(first));
+    chat.handle_turn_update(TurnUpdate::ReasoningDelta {
+        reasoning_id: first,
+        delta: "Weighing the **options**.".to_string(),
+    });
+    let collapsed = screen(&chat, 60);
+    assert!(collapsed.contains("• Thinking 0s"), "{collapsed}");
+    assert!(!collapsed.contains("Weighing"), "{collapsed}");
+    assert!(collapsed.contains("Working"), "{collapsed}");
+    assert!(
+        collapsed.contains("ctrl + o to show thinking"),
+        "{collapsed}"
+    );
+
+    let ctrl_o = KeyEvent::new(KeyCode::Char('o'), KeyModifiers::CONTROL);
+    chat.handle_key_event(ctrl_o);
+    let expanded = screen(&chat, 60);
+    assert!(expanded.contains("Weighing the options."), "{expanded}");
+    assert!(expanded.contains("ctrl + o to hide thinking"), "{expanded}");
+    assert!(drain(&events).0.is_empty());
+
+    chat.handle_turn_update(TurnUpdate::ReasoningCompleted {
+        reasoning_id: first,
+        duration_millis: 1_500,
+    });
+    assert_eq!(
+        drain(&events).0,
+        vec!["• Thought for 1s\n  Weighing the options."]
+    );
+    assert!(!screen(&chat, 60).contains("ctrl + o"));
+
+    // The next cell opens expanded; toggling back collapses it.
+    think(&mut chat, 2, "Second thought.", 0);
+    assert_eq!(
+        drain(&events).0,
+        vec!["• Thought for 0s\n  Second thought."]
+    );
+    chat.handle_key_event(ctrl_o);
+    think(&mut chat, 3, "Third thought.", 0);
+    assert_eq!(drain(&events).0, vec!["• Thought for 0s"]);
+}
+
+#[test]
+fn thinking_is_written_before_the_answer_of_its_step() {
+    let (mut chat, events) = chat();
+    chat.handle_turn_update(TurnUpdate::Started);
+    drain(&events);
+    think(&mut chat, 1, "First part.", 2_000);
+    think(&mut chat, 2, "Second part.", 3_000);
+    chat.handle_turn_update(TurnUpdate::MessageDelta("The answer.".to_string()));
+    chat.handle_turn_update(TurnUpdate::MessageCompleted);
+    chat.handle_turn_update(TurnUpdate::Ended(TurnEnd::Completed));
+    assert_eq!(
+        drain(&events).0,
+        vec!["• Thought for 2s", "• Thought for 3s", "• The answer."]
+    );
+}
+
+#[test]
+fn thinking_after_a_streaming_message_waits_for_the_message() {
+    let (mut chat, events) = chat();
+    chat.handle_turn_update(TurnUpdate::Started);
+    drain(&events);
+    chat.handle_turn_update(TurnUpdate::MessageDelta("Looking.".to_string()));
+    think(&mut chat, 1, "Then this.", 4_000);
+    assert!(chat.live_thinking.is_empty());
+    assert!(drain(&events).0.is_empty());
+    chat.handle_turn_update(TurnUpdate::MessageCompleted);
+    assert_eq!(drain(&events).0, vec!["• Looking.", "• Thought for 4s"]);
+}
+
+#[test]
+fn a_turn_that_ends_while_thinking_writes_the_thinking_so_far() {
+    let (mut chat, events) = chat();
+    chat.handle_turn_update(TurnUpdate::Started);
+    drain(&events);
+    let reasoning_id = reasoning_id(1);
+    chat.handle_turn_update(TurnUpdate::ReasoningStarted(reasoning_id));
+    chat.handle_turn_update(TurnUpdate::ReasoningDelta {
+        reasoning_id,
+        delta: "Halfway".to_string(),
+    });
+    chat.handle_turn_update(TurnUpdate::Ended(TurnEnd::Failed(
+        "the provider went away".to_string(),
+    )));
+    let (cells, _) = drain(&events);
+    assert_eq!(
+        cells,
+        vec!["• Thought for 0s", "■ the provider went away"],
+        "{cells:?}"
+    );
+    assert!(chat.live_thinking.is_empty());
+    assert!(!screen(&chat, 60).contains("Thinking"));
+}
+
+#[test]
+fn a_replayed_reasoning_item_is_a_completed_cell() {
+    let (mut chat, events) = chat();
+    drain(&events);
+    chat.handle_turn_update(TurnUpdate::SessionOpened(OpenedSession {
+        session_id: hanafubuki_agent::AgentSessionId::new(7),
+        model: "fixture-model".to_string(),
+        mode: hanafubuki_agent::AgentSessionMode::Default,
+        transcript: vec![
+            ReplayedItem::User("Why?".to_string()),
+            ReplayedItem::Reasoning {
+                text: "Because.".to_string(),
+                duration_millis: 12_000,
+                truncated: false,
+            },
+            ReplayedItem::Assistant("Here is why.".to_string()),
+        ],
+        earlier_items: false,
+    }));
+    let (cells, _) = drain(&events);
+    assert_eq!(cells[2], "• Thought for 12s", "{cells:?}");
+    assert_eq!(cells[3], "• Here is why.", "{cells:?}");
 }

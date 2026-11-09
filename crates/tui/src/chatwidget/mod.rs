@@ -15,16 +15,18 @@ use std::cell::Cell;
 use std::collections::VecDeque;
 use std::time::{Duration, Instant};
 
-use hanafubuki_agent::AgentSessionMode;
+use hanafubuki_agent::{AgentReasoningId, AgentSessionMode};
 use ratatui::buffer::Buffer;
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::layout::Rect;
 
 use crate::agent_bridge::TurnUpdate;
 use crate::app_event::{AppEvent, AppEventSender, Op};
-use crate::bottom_pane::{BottomPane, BottomPaneParams, CancellationEvent, InputResult};
+use crate::bottom_pane::{
+    BottomPane, BottomPaneParams, CancellationEvent, InputResult, ThinkingToggle,
+};
 use crate::file_search::FileMatch;
-use crate::history_cell::{self, HistoryCell, ToolCallCell};
+use crate::history_cell::{self, HistoryCell, ThinkingCell, ToolCallCell};
 use crate::key_hint::{self, KeyBinding};
 use crate::render::renderable::{
     ColumnRenderable, FlexRenderable, Renderable, RenderableExt, RenderableItem,
@@ -35,6 +37,8 @@ use crate::tui::FrameRequester;
 
 /// How long a first Ctrl-C (or Ctrl-D) waits for the second that quits.
 const QUIT_SHORTCUT_TIMEOUT: Duration = Duration::from_secs(1);
+/// How often a live thinking cell is redrawn, for its shimmer and timer.
+const THINKING_FRAME: Duration = Duration::from_millis(32);
 
 pub(crate) struct ChatWidgetInit {
     pub(crate) app_event_tx: AppEventSender,
@@ -50,6 +54,12 @@ pub(crate) struct ChatWidget {
     bottom_pane: BottomPane,
     /// The tool calls that run, in the order they started.
     running_tools: Vec<ToolCallCell>,
+    /// The reasoning items the model is thinking in, in the order they
+    /// started.
+    live_thinking: Vec<(AgentReasoningId, ThinkingCell)>,
+    /// Whether thinking is shown expanded: Ctrl-O toggles it for the live
+    /// cells and every later one.
+    thinking_expanded: bool,
     stream_controller: Option<StreamController>,
     plan_stream_controller: Option<PlanStreamController>,
     /// Updates held back while a message streams, so what the model said
@@ -90,6 +100,8 @@ impl ChatWidget {
             frame_requester,
             bottom_pane,
             running_tools: Vec::new(),
+            live_thinking: Vec::new(),
+            thinking_expanded: false,
             stream_controller: None,
             plan_stream_controller: None,
             deferred: VecDeque::new(),
@@ -114,6 +126,10 @@ impl ChatWidget {
                     return;
                 }
                 KeyCode::Char(c) if c.eq_ignore_ascii_case(&'d') && self.on_ctrl_d() => return,
+                KeyCode::Char(c) if c.eq_ignore_ascii_case(&'o') => {
+                    self.toggle_thinking();
+                    return;
+                }
                 _ => {}
             }
         }
@@ -205,6 +221,25 @@ impl ChatWidget {
         true
     }
 
+    fn toggle_thinking(&mut self) {
+        self.thinking_expanded = !self.thinking_expanded;
+        for (_, cell) in &mut self.live_thinking {
+            cell.set_expanded(self.thinking_expanded);
+        }
+        self.sync_thinking_toggle();
+        self.request_redraw();
+    }
+
+    /// The footer offers the thinking toggle while a thinking cell is live.
+    fn sync_thinking_toggle(&mut self) {
+        let toggle = (!self.live_thinking.is_empty()).then_some(if self.thinking_expanded {
+            ThinkingToggle::Collapse
+        } else {
+            ThinkingToggle::Expand
+        });
+        self.bottom_pane.set_thinking_toggle(toggle);
+    }
+
     fn quit_shortcut_active_for(&self, key: KeyBinding) -> bool {
         self.quit_shortcut_key == Some(key)
             && self
@@ -264,11 +299,14 @@ impl ChatWidget {
 
     fn as_renderable(&self) -> RenderableItem<'_> {
         let mut tools = ColumnRenderable::new();
+        for (_, cell) in &self.live_thinking {
+            tools.push_ref(cell);
+        }
         for cell in &self.running_tools {
             tools.push_ref(cell);
         }
         let mut flex = FlexRenderable::new();
-        if !self.running_tools.is_empty() {
+        if !self.running_tools.is_empty() || !self.live_thinking.is_empty() {
             flex.push(
                 1,
                 RenderableItem::Owned(Box::new(tools)).inset(Insets::tlbr(1, 0, 0, 0)),
@@ -295,8 +333,28 @@ impl Renderable for ToolCallCell {
     }
 }
 
+/// A live thinking cell taller than the viewport leaves shows its latest
+/// lines.
+impl Renderable for ThinkingCell {
+    fn render(&self, area: Rect, buf: &mut Buffer) {
+        use ratatui::widgets::{Paragraph, Widget};
+        let lines = self.display_lines(area.width);
+        let overflow = lines.len().saturating_sub(usize::from(area.height));
+        Paragraph::new(lines)
+            .scroll((u16::try_from(overflow).unwrap_or(u16::MAX), 0))
+            .render(area, buf);
+    }
+
+    fn desired_height(&self, width: u16) -> u16 {
+        HistoryCell::desired_height(self, width)
+    }
+}
+
 impl Renderable for ChatWidget {
     fn render(&self, area: Rect, buf: &mut Buffer) {
+        if !self.live_thinking.is_empty() {
+            self.frame_requester.schedule_frame_in(THINKING_FRAME);
+        }
         self.as_renderable().render(area, buf);
         self.last_rendered_width.set(Some(area.width as usize));
     }

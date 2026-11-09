@@ -3,12 +3,12 @@
 //! What the chat does with each update of the turn: Codex's
 //! `dispatch_event_msg` and its `on_*` handlers, over [`TurnUpdate`].
 
-use hanafubuki_agent::AgentTaskPlanSnapshot;
+use hanafubuki_agent::{AgentReasoningId, AgentTaskPlanSnapshot};
 
 use super::ChatWidget;
 use crate::agent_bridge::{TurnEnd, TurnUpdate};
 use crate::app_event::AppEvent;
-use crate::history_cell::{self, ToolResultView};
+use crate::history_cell::{self, ThinkingCell, ToolResultView};
 use crate::streaming::controller::{PlanStreamController, StreamController};
 
 const WORKING: &str = "Working";
@@ -29,13 +29,18 @@ impl ChatWidget {
 
     /// While a message streams, what would be written below it waits for
     /// the stream to finish; once anything waits, everything after it
-    /// waits too, so the order holds.
+    /// waits too, so the order holds. A thinking cell written on its
+    /// completion would otherwise land above the message's lines still to
+    /// be committed.
     fn defers(&self, update: &TurnUpdate) -> bool {
         let streaming = self.stream_controller.is_some() || !self.deferred.is_empty();
         streaming
             && matches!(
                 update,
-                TurnUpdate::ToolStarted { .. }
+                TurnUpdate::ReasoningStarted(_)
+                    | TurnUpdate::ReasoningDelta { .. }
+                    | TurnUpdate::ReasoningCompleted { .. }
+                    | TurnUpdate::ToolStarted { .. }
                     | TurnUpdate::ToolCompleted { .. }
                     | TurnUpdate::ApprovalRequested(_)
                     | TurnUpdate::UserInputRequested(_)
@@ -45,6 +50,23 @@ impl ChatWidget {
     fn handle_now(&mut self, update: TurnUpdate) {
         match update {
             TurnUpdate::Started => self.on_task_started(),
+            TurnUpdate::ReasoningStarted(reasoning_id) => self.on_reasoning_started(reasoning_id),
+            TurnUpdate::ReasoningDelta {
+                reasoning_id,
+                delta,
+            } => {
+                if let Some((_, cell)) = self
+                    .live_thinking
+                    .iter_mut()
+                    .find(|(id, _)| *id == reasoning_id)
+                {
+                    cell.push(&delta);
+                }
+            }
+            TurnUpdate::ReasoningCompleted {
+                reasoning_id,
+                duration_millis,
+            } => self.on_reasoning_completed(reasoning_id, duration_millis),
             TurnUpdate::MessageDelta(delta) => self.on_message_delta(delta),
             TurnUpdate::MessageCompleted => self.on_message_completed(),
             TurnUpdate::PlanDelta(delta) => self.on_plan_delta(delta),
@@ -112,6 +134,27 @@ impl ChatWidget {
         self.retry_status_header = None;
         self.plan_stream_controller = None;
         self.bottom_pane.update_status(WORKING.to_string(), None);
+    }
+
+    fn on_reasoning_started(&mut self, reasoning_id: AgentReasoningId) {
+        self.restore_retry_status_header();
+        self.live_thinking
+            .push((reasoning_id, ThinkingCell::live(self.thinking_expanded)));
+        self.sync_thinking_toggle();
+    }
+
+    fn on_reasoning_completed(&mut self, reasoning_id: AgentReasoningId, duration_millis: u64) {
+        let Some(index) = self
+            .live_thinking
+            .iter()
+            .position(|(id, _)| *id == reasoning_id)
+        else {
+            return;
+        };
+        let (_, mut cell) = self.live_thinking.remove(index);
+        cell.complete(Some(duration_millis));
+        self.add_to_history(cell);
+        self.sync_thinking_toggle();
     }
 
     fn on_message_delta(&mut self, delta: String) {
@@ -187,6 +230,13 @@ impl ChatWidget {
 
     fn on_turn_ended(&mut self, end: TurnEnd) {
         self.on_message_completed();
+        // A turn that failed mid-stream sends no completion: its thinking
+        // ends with the time so far.
+        for (_, mut cell) in std::mem::take(&mut self.live_thinking) {
+            cell.complete(None);
+            self.add_to_history(cell);
+        }
+        self.sync_thinking_toggle();
         if let Some(cell) = self
             .plan_stream_controller
             .take()

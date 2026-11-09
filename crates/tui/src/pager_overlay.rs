@@ -8,8 +8,9 @@
 //!
 //! Codex's transcript overlay also renders a live tail of the in-flight
 //! active cell and highlights a message for backtracking (Esc); neither is
-//! ported: here the overlay shows the committed cells, a cell committed
-//! while it is open is appended, and Esc closes it.
+//! ported: here the overlay shows the committed cells as their transcript
+//! lines (a collapsed thinking cell with its text), a cell committed while
+//! it is open is appended, and Esc closes it.
 
 use std::sync::Arc;
 
@@ -359,12 +360,13 @@ struct CellRenderable {
 
 impl Renderable for CellRenderable {
     fn render(&self, area: Rect, buf: &mut Buffer) {
-        let p = Paragraph::new(Text::from(self.cell.display_lines(area.width))).style(self.style);
+        let p =
+            Paragraph::new(Text::from(self.cell.transcript_lines(area.width))).style(self.style);
         p.render(area, buf);
     }
 
     fn desired_height(&self, width: u16) -> u16 {
-        self.cell.desired_height(width)
+        self.cell.desired_transcript_height(width)
     }
 }
 
