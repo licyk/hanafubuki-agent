@@ -42,6 +42,25 @@ moves its pin.
       request headers) and the MCP manager and form (`/mcp`, `/mcp verbose`,
       `/mcp login`, secret rows as credentials, OAuth loopback
       `mcp_oauth_login`, CLI `mcp login`, MCP ids validated on read).
+  - [x] The facade's and the CLI's half: `test_provider_draft` (the same
+        probe as `list_provider_models`, nothing saved); `mcp_set_credential`
+        and `mcp_remove_credential` (atomic under the MCP configuration
+        gate, so no revision); `McpCredentialKey::for_server_secret`
+        (`<server>-<NAME>`); `mcp_oauth_login` (a loopback on
+        `127.0.0.1:0`, 5 minutes, cancellable; derived from Codex's
+        `perform_oauth_login.rs`); CLI `mcp login ID`, `mcp add --oauth`,
+        `providers add --header NAME=VALUE`; a server id is checked on read
+        (a bad one is dropped with a repair) and on write. Fixed on the way:
+        a removed credential stayed in `mcp.toml` (the writer merges; removed
+        keys are now written as null). Still: a credential entry the
+        read-time repair drops stays in the file.
+  - [ ] The interface's half: the screens and first-run setup.
+  - Hanafubuki, at its next pin: new calls `test_provider_draft`,
+    `mcp_set_credential`, `mcp_remove_credential`, `mcp_oauth_login`;
+    re-exports `McpCredentialKey`, `McpOAuthPhase`, `McpOAuthPolicy`,
+    `AgentProviderHeaderSettings`; `mcp_write_server` now refuses an
+    invalid id; `mcp_write_credentials` really removes a dropped key. The
+    goldens and the corpus are unchanged.
 - [ ] P2: the new interface (Codex's owned transcript, layers A–G):
       terminal extensions, the `HistoryCell` extension, `TranscriptView`,
       the owned shell, the clipboard, keymap core; owned mode by default;
