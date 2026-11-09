@@ -23,6 +23,9 @@ fn verify_score_is_none_for_non_match() {
     assert_eq!(score, None);
 }
 
+/// Long enough for a loaded runner; every wait ends as soon as its outcome is in.
+const WAIT: Duration = Duration::from_secs(60);
+
 #[derive(Default)]
 struct RecordingReporter {
     updates: Mutex<Vec<FileSearchSnapshot>>,
@@ -35,10 +38,10 @@ struct RecordingReporter {
 impl RecordingReporter {
     fn wait_for_complete(&self, timeout: Duration) -> bool {
         let completes = self.complete_times.lock().unwrap();
-        if !completes.is_empty() {
-            return true;
-        }
-        let (completes, _) = self.complete_cv.wait_timeout(completes, timeout).unwrap();
+        let (completes, _) = self
+            .complete_cv
+            .wait_timeout_while(completes, timeout, |completes| completes.is_empty())
+            .unwrap();
         !completes.is_empty()
     }
     fn clear(&self) {
@@ -52,10 +55,10 @@ impl RecordingReporter {
 
     fn wait_for_updates_at_least(&self, min_len: usize, timeout: Duration) -> bool {
         let updates = self.updates.lock().unwrap();
-        if updates.len() >= min_len {
-            return true;
-        }
-        let (updates, _) = self.update_cv.wait_timeout(updates, timeout).unwrap();
+        let (updates, _) = self
+            .update_cv
+            .wait_timeout_while(updates, timeout, |updates| updates.len() < min_len)
+            .unwrap();
         updates.len() >= min_len
     }
 
@@ -111,7 +114,7 @@ fn session_scanned_file_count_is_monotonic_across_queries() {
     session.update_query("file-01");
     thread::sleep(Duration::from_millis(20));
     let second_snapshot = reporter.snapshot();
-    let _ = reporter.wait_for_complete(Duration::from_secs(5));
+    let _ = reporter.wait_for_complete(WAIT);
     let completed_snapshot = reporter.snapshot();
 
     assert!(second_snapshot.scanned_file_count >= first_snapshot.scanned_file_count);
@@ -125,7 +128,7 @@ fn session_streams_updates_before_walk_complete() {
     let session = session(dir.path(), &reporter);
 
     session.update_query("file-0");
-    let completed = reporter.wait_for_complete(Duration::from_secs(5));
+    let completed = reporter.wait_for_complete(WAIT);
 
     assert!(completed);
     let updates = reporter.updates();
@@ -141,11 +144,11 @@ fn session_accepts_query_updates_after_walk_complete() {
     let session = session(dir.path(), &reporter);
 
     session.update_query("alpha");
-    assert!(reporter.wait_for_complete(Duration::from_secs(5)));
+    assert!(reporter.wait_for_complete(WAIT));
     let updates_before = reporter.updates().len();
 
     session.update_query("beta");
-    assert!(reporter.wait_for_updates_at_least(updates_before + 1, Duration::from_secs(5),));
+    assert!(reporter.wait_for_updates_at_least(updates_before + 1, WAIT,));
 
     let updates = reporter.updates();
     let last_update = updates.last().cloned().expect("update");
@@ -164,7 +167,7 @@ fn session_emits_complete_when_query_changes_with_no_matches() {
     let session = session(dir.path(), &reporter);
 
     session.update_query("asdf");
-    assert!(reporter.wait_for_complete(Duration::from_secs(5)));
+    assert!(reporter.wait_for_complete(WAIT));
 
     let completed_snapshot = reporter.snapshot();
     assert_eq!(completed_snapshot.matches, Vec::new());
@@ -173,7 +176,7 @@ fn session_emits_complete_when_query_changes_with_no_matches() {
     reporter.clear();
 
     session.update_query("asdfa");
-    assert!(reporter.wait_for_complete(Duration::from_secs(5)));
+    assert!(reporter.wait_for_complete(WAIT));
     assert!(!reporter.updates().is_empty());
 }
 
@@ -184,13 +187,13 @@ fn session_emits_updates_when_query_changes() {
     let session = session(dir.path(), &reporter);
 
     session.update_query("zzzzzzzz");
-    let completed = reporter.wait_for_complete(Duration::from_secs(5));
+    let completed = reporter.wait_for_complete(WAIT);
     assert!(completed);
 
     reporter.clear();
 
     session.update_query("zzzzzzzzq");
-    let completed = reporter.wait_for_complete(Duration::from_secs(5));
+    let completed = reporter.wait_for_complete(WAIT);
     assert!(completed);
 
     let updates = reporter.updates();
@@ -204,7 +207,7 @@ fn completed_matches(roots: Vec<PathBuf>, query: &str) -> Vec<FileMatch> {
     let reporter = Arc::new(RecordingReporter::default());
     let session = create_session(roots, reporter.clone());
     session.update_query(query);
-    let deadline = Instant::now() + Duration::from_secs(10);
+    let deadline = Instant::now() + WAIT;
     loop {
         {
             let updates = reporter.updates.lock().unwrap();
