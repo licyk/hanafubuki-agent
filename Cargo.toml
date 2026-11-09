@@ -32,6 +32,7 @@ hanafubuki-agent-plugin-workspace-fs = { path = "crates/plugin-workspace-fs", ve
 hanafubuki-agent-plugin-worktree = { path = "crates/plugin-worktree", version = "0.2.0" }
 hanafubuki-agent-process = { path = "crates/process", version = "0.2.0" }
 hanafubuki-agent-runtime = { path = "crates/runtime", version = "0.2.0" }
+hanafubuki-agent-sandbox = { path = "crates/sandbox", version = "0.2.0" }
 hanafubuki-agent-skills = { path = "crates/skills", version = "0.2.0" }
 hanafubuki-agent-tui = { path = "crates/tui", version = "0.2.0" }
 hanafubuki-agent-tool-contracts = { path = "crates/tool-contracts", version = "0.2.0" }

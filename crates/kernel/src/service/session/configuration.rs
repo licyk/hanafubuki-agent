@@ -41,6 +41,31 @@ impl AgentService {
         Ok(())
     }
 
+    /// The sandbox mode the user chose for the session's commands, if any.
+    pub fn session_sandbox_mode(
+        &self,
+        session_id: AgentSessionId,
+    ) -> Result<Option<hanafubuki_agent_foundation::agent_settings::AgentSandboxMode>, AgentError>
+    {
+        let cell = self.session(session_id)?;
+        let record = cell.lock()?;
+        Ok(record.runtime.sandbox_mode)
+    }
+
+    /// Sets the session's sandbox mode until the session ends. Off the
+    /// async runtime only.
+    pub fn set_session_sandbox_mode(
+        &self,
+        session_id: AgentSessionId,
+        mode: hanafubuki_agent_foundation::agent_settings::AgentSandboxMode,
+    ) -> Result<(), AgentError> {
+        let cell = self.session(session_id)?;
+        // After the staged commit settles, so its rollback cannot undo this.
+        let mut record = cell.lock_after_persistence_blocking()?;
+        record.runtime.sandbox_mode = Some(mode);
+        Ok(())
+    }
+
     pub fn set_session_turn_budget_policy(
         &self,
         session_id: AgentSessionId,

@@ -40,6 +40,18 @@ The plugin names that mean something in `disabledPlugins`:
 
 Other names are accepted and do nothing.
 
+### Sandbox [#sandbox]
+
+What the commands the model runs can reach; see [The sandbox](/docs/permissions#sandbox).
+
+| Key                                   | Type and values                                     | Default                                                        | Means                                                                                             |
+| ------------------------------------- | --------------------------------------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `sandboxMode`                         | `"read-only"`, `"workspace-write"`, `"full-access"` | unset: `"workspace-write"` on Linux, `"full-access"` elsewhere | The sandbox mode. An unset mode is never written, so it follows the platforms that gain a sandbox |
+| `sandboxWorkspaceWrite.writableRoots` | An array of absolute paths                          | `[]`                                                           | More directories workspace-write lets commands write in                                           |
+| `sandboxWorkspaceWrite.networkAccess` | `true`, `false`                                     | `false`                                                        | Whether workspace-write lets commands use the network                                             |
+
+A `sandboxMode` that cannot be read is repaired to `"read-only"`, the most restrictive, rather than to the default; a `writableRoots` holding a relative path is dropped whole.
+
 ### Memory [#memory]
 
 | Key                             | Type and values           | Default | Means                                                                    |

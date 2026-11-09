@@ -77,6 +77,8 @@ use hanafubuki_agent_runtime::ContainedRuntime;
 use parking_lot::Mutex;
 
 fn main() -> Result<(), String> {
+    // 0. First, before any thread: the sandbox helper (see below).
+    hanafubuki_agent::sandbox::helper_dispatch();
     let config_dir = PathBuf::from("/var/lib/my-app/config/agent");
     let storage = AgentStoragePaths::under(PathBuf::from("/var/lib/my-app/data/agent"));
     let project = PathBuf::from("/srv/project");
@@ -186,6 +188,8 @@ use hanafubuki_agent::{
 };
 
 fn main() -> Result<(), String> {
+    // First, before any thread starts (see "The sandbox helper").
+    hanafubuki_agent::sandbox::helper_dispatch();
     let runtime = AgentRuntime::standalone(
         AgentRuntimeOptions {
             dirs: AgentDirs::standalone()?,
@@ -334,6 +338,21 @@ impl SecretStore for MemorySecrets {
 
 `AgentTurnRequest`, `AgentSteeringRequest` and `AgentFileSearch` each have a `host: TurnExtensions` field: what the host submits beside a message or a search, keyed by type. The Agent passes it on unread, to the context contributors (`ContextRequest::turn`), to `HostContextPort` and to `WorkspaceRootsPort`. The host's plugins and ports read the types they put in.
 
+## The sandbox helper [#sandbox-helper]
+
+On Linux a sandboxed command ([The sandbox](/docs/permissions#sandbox)) runs as the program that embeds the Agent, started again with `--hanafubuki-agent-sandbox` as its first argument: that run confines itself and then becomes the command. So the program's `main` calls `hanafubuki_agent::sandbox::helper_dispatch()` first, before it starts any thread:
+
+```rust
+fn main() {
+    hanafubuki_agent::sandbox::helper_dispatch();
+    // … the program, as before …
+}
+```
+
+- Started as the helper, the call never returns. Otherwise it records that this program (`std::env::current_exe()`) can serve as the helper, and returns at once.
+- Without the call the Agent has no sandbox: `AgentApplicationService::sandbox_status()` (and `sandbox::Sandbox::detect().status()`) is `Unavailable`, and every command whose sandbox mode is not full access fails, unrun. On Linux the default `sandboxMode` is workspace-write, so a host that does not call it must configure `sandboxMode = "full-access"` to run commands.
+- The `ExecutorManager` spawns the helper like any command; the host's process code is not involved.
+
 ## The panic-hook bridge [#the-panic-hook-bridge]
 
 The Agent's fault isolation rests on unwinding: a panic in plugin or kernel code unwinds, on a thread marked contained, to its catch, and becomes a tool error, a plugin fault or a kernel restart. So:
@@ -405,11 +424,11 @@ The processes the Agent starts are the Agent's: it has its own `ExecutorManager`
 
 The host names a configuration directory for the Agent and opens it with `AgentConfig::new(dir)` (Hanafubuki's is `<app_data>/config/agent/`). It holds three TOML files, each its own revision domain with its own lock:
 
-| File             | Contents                                                              |
-| ---------------- | --------------------------------------------------------------------- |
-| `config.toml`    | permission mode, memory, `disabledPlugins`, web search and fetch      |
-| `providers.toml` | the Provider registry and its revision, tokens verbatim (owner-only)  |
-| `mcp.toml`       | the MCP servers and credential values and their revision (owner-only) |
+| File             | Contents                                                                  |
+| ---------------- | ------------------------------------------------------------------------- |
+| `config.toml`    | permission mode, sandbox, memory, `disabledPlugins`, web search and fetch |
+| `providers.toml` | the Provider registry and its revision, tokens verbatim (owner-only)      |
+| `mcp.toml`       | the MCP servers and credential values and their revision (owner-only)     |
 
 Unlike the standalone configuration, an embedded one has **no layers** (no profile, project file or `-c`) and ignores `[network]` and `logLevel` (reported as unknown keys): the host supplies the proxy and the logger. The host reads and writes the settings through the service API (`settings_view`, `write_settings`, the Provider and MCP methods), and a write applies the settings to the plugins. Among them:
 
@@ -460,9 +479,12 @@ A turn's permission mode is fixed when it starts. `submit_turn_with_sink` and `s
 | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `set_session_permission_mode(session_id, mode)` | the session's mode, in place of `permissionMode`, until the session ends; kept in memory only, never persisted nor forked. A running turn keeps its mode; the next turn takes this one                                                                                                                                                                                                         |
 | `session_permission_mode(session_id)`           | the mode the session was given, or `None` while `permissionMode` applies                                                                                                                                                                                                                                                                                                                       |
+| `set_session_sandbox_mode(session_id, mode)`    | the session's `AgentSandboxMode` (`ReadOnly`, `WorkspaceWrite`, `FullAccess`), in place of `sandboxMode`, until the session ends; kept in memory only, never persisted nor forked; a sub-agent takes its parent's. A running turn keeps its sandbox; the next turn takes this one. Independent of the permission mode                                                                          |
+| `session_sandbox_mode(session_id)`              | the sandbox mode the session was given, or `None` while `sandboxMode` (or the platform's default) applies                                                                                                                                                                                                                                                                                      |
+| `sandbox_status()`                              | `SandboxStatus::Available { backend }` (Linux: `"Landlock (ABI n) and seccomp"`) or `Unavailable { reason }`: whether a command that asks for a sandbox can run ([The sandbox helper](#sandbox-helper))                                                                                                                                                                                        |
 | `approve_denied_action(session_id, review_id)`  | the user's approval of the operation the automatic review `review_id` (of a `PermissionReviewCompleted { status: Denied }`) denied, one of the session's ten latest denials: commits a context note the model and the next review read, and emits `HistoryCommitted`, with no turn id, to the sink of the session's latest turn. It starts no turn and runs nothing; a retry is reviewed again |
 
-`approve_denied_action` returns `ApprovalNotFound` for a review that is not one of those denials, and `TurnAlreadyRunning` or `CompactionAlreadyRunning` while one runs. The three calls may load the session's history or wait for its staged commit, so call them off the async runtime, as `rename_session` and `set_session_mode`.
+`approve_denied_action` returns `ApprovalNotFound` for a review that is not one of those denials, and `TurnAlreadyRunning` or `CompactionAlreadyRunning` while one runs. The calls but `sandbox_status` may load the session's history or wait for its staged commit, so call them off the async runtime, as `rename_session` and `set_session_mode`.
 
 ## Child sessions [#child-sessions]
 

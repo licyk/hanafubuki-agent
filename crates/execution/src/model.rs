@@ -4,6 +4,7 @@ use std::path::PathBuf;
 
 use hanafubuki_agent_approval::ApprovalOrigin;
 use hanafubuki_agent_process::executor::{ExecutorIoMode, ExecutorStatus, OutputStream};
+use hanafubuki_agent_sandbox::{SandboxError, SandboxSettings};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -116,6 +117,8 @@ pub struct ExecCommandRequest {
     pub workdir: Option<PathBuf>,
     pub environment: BTreeMap<String, String>,
     pub origin: ApprovalOrigin,
+    /// The sandbox the command runs in, over the service's workspace roots.
+    pub sandbox: SandboxSettings,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -298,6 +301,9 @@ pub enum AgentExecutionError {
     NotInteractive,
     Cancelled,
     Process(String),
+    /// The command asked for a sandbox this machine cannot give it, and
+    /// was not run.
+    Sandbox(SandboxError),
     CleanupRetained {
         execution_id: AgentExecutionId,
         message: String,
@@ -321,6 +327,7 @@ impl fmt::Display for AgentExecutionError {
             Self::NotInteractive => formatter.write_str("Agent execution is not interactive"),
             Self::Cancelled => formatter.write_str("Agent execution request cancelled"),
             Self::Process(message) => write!(formatter, "Agent execution process error: {message}"),
+            Self::Sandbox(error) => error.fmt(formatter),
             Self::CleanupRetained {
                 execution_id,
                 message,

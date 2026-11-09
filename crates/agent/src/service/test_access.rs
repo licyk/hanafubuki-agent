@@ -10,9 +10,7 @@ impl AgentApplicationService {
     }
 
     pub(crate) fn test_replace_executions(&mut self, executions: AgentExecutionService) {
-        if let Some(directory) = self.executions.working_directory() {
-            executions.set_working_directory(directory);
-        }
+        executions.set_workspace_roots(self.executions.workspace_roots());
         self.executions = executions;
     }
 

@@ -12,6 +12,7 @@ hanafubuki-agent-contracts.workspace = true
 hanafubuki-agent-execution.workspace = true
 hanafubuki-agent-approval.workspace = true
 hanafubuki-agent-foundation.workspace = true
+hanafubuki-agent-sandbox.workspace = true
 hanafubuki-agent-tool-contracts.workspace = true
 kardia-core.workspace = true
 log.workspace = true

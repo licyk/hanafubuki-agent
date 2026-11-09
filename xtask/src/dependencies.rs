@@ -38,9 +38,10 @@ const LAYERS: &[(&str, &[&str])] = &[
     ("hanafubuki-agent-workspace-fs", &[APPROVAL, FOUNDATION]),
     (WORKTREE, &[FOUNDATION, PROCESS]),
     (HOOKS, &[FOUNDATION, PROCESS]),
+    (SANDBOX, &[FOUNDATION]),
     (
         "hanafubuki-agent-execution",
-        &[APPROVAL, FOUNDATION, PROCESS],
+        &[APPROVAL, FOUNDATION, PROCESS, SANDBOX],
     ),
     (
         "hanafubuki-agent-mcp",
@@ -73,6 +74,7 @@ const LAYERS: &[(&str, &[&str])] = &[
             CONTRACTS,
             "hanafubuki-agent-execution",
             FOUNDATION,
+            SANDBOX,
             TOOL_CONTRACTS,
         ],
     ),
@@ -140,6 +142,7 @@ const LAYERS: &[(&str, &[&str])] = &[
             "hanafubuki-agent-plugin-worktree",
             PROCESS,
             "hanafubuki-agent-runtime",
+            SANDBOX,
             SKILLS,
             TOOL_CONTRACTS,
             "hanafubuki-agent-workspace-fs",
@@ -166,6 +169,7 @@ const MCP: &str = "hanafubuki-agent-mcp";
 const SKILLS: &str = "hanafubuki-agent-skills";
 const WORKTREE: &str = "hanafubuki-agent-worktree";
 const HOOKS: &str = "hanafubuki-agent-hooks";
+const SANDBOX: &str = "hanafubuki-agent-sandbox";
 const PLUGIN_PREFIX: &str = "hanafubuki-agent-plugin-";
 const KARDIA: [&str; 4] = ["kardia", "kardia-bridge", "kardia-core", "kardia-macros"];
 

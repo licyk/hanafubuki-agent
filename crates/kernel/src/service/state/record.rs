@@ -91,6 +91,11 @@ pub(in crate::service) struct SessionRuntime {
     /// The permission mode the user chose for the session's next turns, in
     /// place of the configured one. Never persisted, like `allowed_tools`.
     pub(in crate::service) permission_mode: Option<hanafubuki_agent_approval::AgentPermissionMode>,
+    /// The sandbox mode the user chose for the session's commands, in
+    /// place of the configured one. Never persisted, like the permission
+    /// mode; the kernel only keeps it for the application.
+    pub(in crate::service) sandbox_mode:
+        Option<hanafubuki_agent_foundation::agent_settings::AgentSandboxMode>,
 }
 
 /// Bounded rollback state for one staged durable mutation: every group but
@@ -161,6 +166,7 @@ impl SessionRuntime {
             pending_user_input: None,
             allowed_tools: BTreeSet::new(),
             permission_mode: None,
+            sandbox_mode: None,
         }
     }
 }

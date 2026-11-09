@@ -10,8 +10,8 @@ use super::AgentApplicationService;
 use crate::AgentWorkspaceRoots;
 
 impl AgentApplicationService {
-    /// Points the filesystem tools' policy and the commands' working
-    /// directory at `roots`. Refused, with nothing changed, while a turn, a
+    /// Points the filesystem tools' policy, the commands' working directory
+    /// and their workspace-write sandbox at `roots`. Refused, with nothing changed, while a turn, a
     /// compaction or a background terminal runs in any session: each was
     /// started, and approved, in the old workspace.
     pub(crate) fn move_workspace(&self, roots: &AgentWorkspaceRoots) -> Result<(), String> {
@@ -22,8 +22,7 @@ impl AgentApplicationService {
             WorkspaceFsPolicy::new(roots.roots().to_vec(), self.workspace.protected_roots())
                 .map_err(|error| error.to_string())?;
         self.files.replace_policy(policy);
-        self.executions
-            .set_working_directory(roots.primary().clone());
+        self.executions.set_workspace_roots(roots.roots().to_vec());
         log::info!(
             "agent workspace moved count={} primary={}",
             roots.roots().len(),

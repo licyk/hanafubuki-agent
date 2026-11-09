@@ -23,6 +23,7 @@ use hanafubuki_agent_kernel::{
     AgentSessionTitleRenameRequest, AgentTurnInput, AgentTurnOrigin, AgentTurnOutcome,
     AgentWorldStateSnapshot, ConversationItem, AGENT_SESSION_PAGE_SIZE_MAX,
 };
+use hanafubuki_agent_sandbox::{platform_default_mode, SandboxSettings};
 
 use crate::conversation_reader::{AgentConversationReader, ConversationMessage};
 use crate::model_api_protocol;
@@ -237,7 +238,9 @@ impl AgentSessionDriver {
     }
 
     /// Gives `child` the permission mode `parent`'s next turn would run
-    /// with, until the child ends or is given another.
+    /// with, and the sandbox mode `parent` was given if any (else the child
+    /// takes the configured one, as `parent` does), until the child ends or
+    /// is given others.
     pub(crate) async fn inherit_permission_mode(
         &self,
         parent: AgentSessionId,
@@ -247,11 +250,17 @@ impl AgentSessionDriver {
             .turn_permission_mode(parent)
             .await
             .map_err(AgentError::InvalidInput)?;
+        let sandbox_mode = self.core.session_sandbox_mode(parent)?;
         let core = self.core.clone();
         run_blocking_operation(
             self.blocking.as_ref(),
             "agent child permission mode worker",
-            move || core.set_session_permission_mode(child, mode),
+            move || {
+                if let Some(sandbox_mode) = sandbox_mode {
+                    core.set_session_sandbox_mode(child, sandbox_mode)?;
+                }
+                core.set_session_permission_mode(child, mode)
+            },
         )
         .await
         .map_err(AgentError::Persistence)?
@@ -431,18 +440,48 @@ impl AgentSessionDriver {
         hanafubuki_agent_kernel::collect_world_state(&self.registries.context, &request).await
     }
 
-    /// The turn's extensions, from the turn admission contributors plugins
-    /// registered (the `skills` plugin freezes the turn's Skill catalog).
+    /// The sandbox of the session's next turn's commands: the session's
+    /// mode, else the configured `sandboxMode`, else the platform's
+    /// default, with the configured `[sandboxWorkspaceWrite]`.
+    pub(crate) async fn turn_sandbox(
+        &self,
+        session_id: AgentSessionId,
+    ) -> Result<SandboxSettings, AgentError> {
+        let session_mode = self.core.session_sandbox_mode(session_id)?;
+        let config = self.config.clone();
+        let settings = run_blocking_operation(
+            self.blocking.as_ref(),
+            "agent settings read worker",
+            move || config.settings(),
+        )
+        .await
+        .map_err(AgentError::Persistence)?
+        .map_err(AgentError::Persistence)?;
+        Ok(SandboxSettings {
+            mode: session_mode
+                .or(settings.sandbox_mode)
+                .unwrap_or_else(platform_default_mode),
+            writable_roots: settings.sandbox_workspace_write.writable_roots,
+            network_access: settings.sandbox_workspace_write.network_access,
+        })
+    }
+
+    /// The turn's extensions: what the turn admission contributors plugins
+    /// registered return (the `skills` plugin freezes the turn's Skill
+    /// catalog), and the sandbox its commands run in.
     pub(crate) async fn collect_turn_extensions(
         &self,
         session_id: AgentSessionId,
         mode: AgentSessionMode,
     ) -> Result<TurnExtensions, AgentError> {
-        hanafubuki_agent_kernel::collect_turn_extensions(
+        let sandbox = self.turn_sandbox(session_id).await?;
+        let mut turn = hanafubuki_agent_kernel::collect_turn_extensions(
             &self.registries.turn_admission,
             &TurnAdmissionRequest { session_id, mode },
         )
-        .await
+        .await?;
+        turn.insert(Arc::new(sandbox));
+        Ok(turn)
     }
 }
 

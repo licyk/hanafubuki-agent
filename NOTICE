@@ -85,6 +85,14 @@ Third-party notices
     `codex-rs/protocol/src/review_format.rs`,
     `codex-rs/core/src/tasks/review.rs` and
     `codex-rs/core/src/session/review.rs` (commit `57a808a392`); each says
+    so in its first lines;
+  - the sandbox of the commands the model runs, `crates/sandbox`
+    (`src/policy.rs`, `src/backend.rs`, `src/helper.rs` and `src/linux/`),
+    is derived from Codex's `codex-rs/sandboxing` (`src/manager.rs`,
+    `src/landlock.rs`), `codex-rs/linux-sandbox` (`src/linux_run_main.rs`,
+    `src/seccomp.rs`), `codex-rs/arg0/src/lib.rs`,
+    `codex-rs/protocol/src/protocol.rs` (`SandboxPolicy`) and
+    `codex-rs/config/src/config_toml.rs` (commit `57a808a392`); each says
     so in its first lines.
   Codex's NOTICE and its license follow.
 - Ratatui (https://github.com/ratatui/ratatui), MIT License: Codex's

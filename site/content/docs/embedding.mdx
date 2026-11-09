@@ -77,6 +77,8 @@ use hanafubuki_agent_runtime::ContainedRuntime;
 use parking_lot::Mutex;
 
 fn main() -> Result<(), String> {
+    // 0. 最先、在任何线程启动之前：沙箱辅助进程（见下文）。
+    hanafubuki_agent::sandbox::helper_dispatch();
     let config_dir = PathBuf::from("/var/lib/my-app/config/agent");
     let storage = AgentStoragePaths::under(PathBuf::from("/var/lib/my-app/data/agent"));
     let project = PathBuf::from("/srv/project");
@@ -186,6 +188,8 @@ use hanafubuki_agent::{
 };
 
 fn main() -> Result<(), String> {
+    // 最先、在任何线程启动之前（见“沙箱辅助进程”）。
+    hanafubuki_agent::sandbox::helper_dispatch();
     let runtime = AgentRuntime::standalone(
         AgentRuntimeOptions {
             dirs: AgentDirs::standalone()?,
@@ -334,6 +338,21 @@ impl SecretStore for MemorySecrets {
 
 `AgentTurnRequest`、`AgentSteeringRequest` 和 `AgentFileSearch` 都有一个 `host: TurnExtensions` 字段：宿主随消息或搜索提交的数据，按类型存放。Agent 原样传递、从不读取：它交给上下文贡献者（`ContextRequest::turn`）、`HostContextPort` 和 `WorkspaceRootsPort`。宿主的插件和端口读取它们自己放入的类型。
 
+## 沙箱辅助进程 [#sandbox-helper]
+
+在 Linux 上，沙箱中的命令（[沙箱](/docs/permissions#sandbox)）以嵌入 Agent 的那个程序运行：程序被再次启动，第一个参数是 `--hanafubuki-agent-sandbox`，这次运行先限制自身，再变成那个命令。所以程序的 `main` 要最先、在启动任何线程之前调用 `hanafubuki_agent::sandbox::helper_dispatch()`：
+
+```rust
+fn main() {
+    hanafubuki_agent::sandbox::helper_dispatch();
+    // ……程序其余部分不变……
+}
+```
+
+- 作为辅助进程启动时，这个调用不会返回。否则它记下这个程序（`std::env::current_exe()`）可以充当辅助进程，并立即返回。
+- 不调用它，Agent 就没有沙箱：`AgentApplicationService::sandbox_status()`（以及 `sandbox::Sandbox::detect().status()`）为 `Unavailable`，沙箱模式不是完全访问的每个命令都会失败，不会运行。Linux 上 `sandboxMode` 的默认值是 workspace-write，所以不调用它的宿主必须配置 `sandboxMode = "full-access"` 才能运行命令。
+- `ExecutorManager` 像启动其他命令一样启动辅助进程；不涉及宿主自己的进程代码。
+
 ## panic hook 桥 [#the-panic-hook-bridge]
 
 Agent 的故障隔离依赖展开（unwinding）：插件或内核代码里的 panic 在被标记为“已隔离”的线程上展开到它的捕获点，变成一次工具错误、一个插件故障或一次内核重启。所以：
@@ -397,7 +416,7 @@ Agent 启动的进程归 Agent 所有：它有自己的 `ExecutorManager`，与�
 
 | 文件             | 内容                                                    |
 | ---------------- | ------------------------------------------------------- |
-| `config.toml`    | 权限模式、记忆、`disabledPlugins`、Web 搜索与抓取       |
+| `config.toml`    | 权限模式、沙箱、记忆、`disabledPlugins`、Web 搜索与抓取 |
 | `providers.toml` | Provider 注册表及其修订号，令牌原样保存（仅所有者可读） |
 | `mcp.toml`       | MCP 服务器与凭据值及其修订号（仅所有者可读）            |
 
@@ -450,9 +469,12 @@ impl AgentEventSink for PrintEvents {
 | ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `set_session_permission_mode(session_id, mode)` | 会话的模式，代替 `permissionMode`，直到会话结束；只保存在内存中，不持久化，也不随分叉复制。正在运行的轮次保持原来的模式，下一个轮次使用这个模式                                                                                                                                              |
 | `session_permission_mode(session_id)`           | 会话被设置的模式；仍使用 `permissionMode` 时为 `None`                                                                                                                                                                                                                                        |
+| `set_session_sandbox_mode(session_id, mode)`    | 会话的 `AgentSandboxMode`（`ReadOnly`、`WorkspaceWrite`、`FullAccess`），代替 `sandboxMode`，直到会话结束；只保存在内存中，不持久化，也不随分叉复制；子代理沿用父会话的。正在运行的回合保持它的沙箱，下一个回合使用新的。与权限模式无关                                                      |
+| `session_sandbox_mode(session_id)`              | 会话被设置的沙箱模式；仍使用 `sandboxMode`（或平台默认值）时为 `None`                                                                                                                                                                                                                        |
+| `sandbox_status()`                              | `SandboxStatus::Available { backend }`（Linux 上为 `"Landlock (ABI n) and seccomp"`）或 `Unavailable { reason }`：需要沙箱的命令能否运行（[沙箱辅助进程](#sandbox-helper)）                                                                                                                  |
 | `approve_denied_action(session_id, review_id)`  | 用户批准自动审查 `review_id`（来自 `PermissionReviewCompleted { status: Denied }`）拒绝的操作，必须是会话最近十次拒绝之一：提交一条模型和下一次审查都会读到的上下文说明，并把不带轮次 ID 的 `HistoryCommitted` 发给会话最近一个轮次的 sink。它不开始轮次，也不执行任何操作；重试仍会再次审查 |
 
-审查不是这些拒绝之一时，`approve_denied_action` 返回 `ApprovalNotFound`；轮次或压缩运行期间返回 `TurnAlreadyRunning` 或 `CompactionAlreadyRunning`。这三个调用可能加载会话的历史或等待它正在暂存的提交，所以要像 `rename_session` 和 `set_session_mode` 一样在异步运行时之外调用。
+审查不是这些拒绝之一时，`approve_denied_action` 返回 `ApprovalNotFound`；轮次或压缩运行期间返回 `TurnAlreadyRunning` 或 `CompactionAlreadyRunning`。除 `sandbox_status` 外，这些调用可能加载会话的历史或等待它正在暂存的提交，所以要像 `rename_session` 和 `set_session_mode` 一样在异步运行时之外调用。
 
 ## 子会话 [#child-sessions]
 

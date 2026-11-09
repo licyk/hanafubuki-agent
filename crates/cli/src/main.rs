@@ -22,6 +22,9 @@ use crate::cli::{Cli, Command};
 use crate::exit::SUCCESS;
 
 fn main() -> ExitCode {
+    // First, before any thread: a sandboxed command re-executes this
+    // binary as the sandbox helper, which never returns from here.
+    hanafubuki_agent::sandbox::helper_dispatch();
     let cli = Cli::parse();
     let global = &cli.global;
     let result = match cli.command {

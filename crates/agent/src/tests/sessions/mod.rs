@@ -64,6 +64,7 @@ pub(super) fn install_fake_background_execution(
         workdir: Some(std::env::current_dir().unwrap()),
         environment: BTreeMap::new(),
         origin: ApprovalOrigin::Model,
+        sandbox: hanafubuki_agent_sandbox::SandboxSettings::full_access(),
     };
     let action = service
         .test_executions()
@@ -120,3 +121,4 @@ mod export;
 mod lifecycle;
 mod permissions;
 mod provider;
+mod sandbox;

@@ -7,7 +7,8 @@ use serde_json::json;
 
 use super::*;
 use crate::{
-    AgentConfigProblem, AgentPermissionMode, AgentProviderSettings, AgentWebSearchProvider,
+    AgentConfigProblem, AgentPermissionMode, AgentProviderSettings, AgentSandboxMode,
+    AgentSandboxWorkspaceWrite, AgentWebSearchProvider,
 };
 
 fn recovered(directory: &Path) -> Vec<String> {
@@ -443,4 +444,65 @@ fn a_new_file_lists_the_keys_in_their_declared_order() {
         AgentConfig::new(directory.path()).settings().unwrap(),
         AgentSettings::default()
     );
+}
+
+#[test]
+fn the_sandbox_settings_read_tolerantly_and_an_unset_mode_is_never_written() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join(AGENT_SETTINGS_FILE);
+    let config = AgentConfig::new(directory.path());
+    assert_eq!(config.settings().unwrap().sandbox_mode, None);
+    config
+        .write_settings(AgentSettingsPatch {
+            permission_mode: Some(AgentPermissionMode::AutoReview),
+            ..AgentSettingsPatch::default()
+        })
+        .unwrap();
+    assert!(!fs::read_to_string(&path).unwrap().contains("sandboxMode"));
+
+    fs::write(
+        &path,
+        "sandboxMode = \"workspace-write\"\n[sandboxWorkspaceWrite]\nwritableRoots = [\"/data\"]\nnetworkAccess = true\n",
+    )
+    .unwrap();
+    let settings = AgentConfig::new(directory.path()).settings().unwrap();
+    assert_eq!(
+        settings.sandbox_mode,
+        Some(AgentSandboxMode::WorkspaceWrite)
+    );
+    assert_eq!(
+        settings.sandbox_workspace_write,
+        AgentSandboxWorkspaceWrite {
+            writable_roots: vec!["/data".into()],
+            network_access: true,
+        }
+    );
+
+    // An unreadable mode is the most restrictive; a relative root drops the
+    // list, not the network switch beside it.
+    fs::write(
+        &path,
+        "sandboxMode = \"sandboxed\"\n[sandboxWorkspaceWrite]\nwritableRoots = [\"/data\", \"relative\"]\nnetworkAccess = true\n",
+    )
+    .unwrap();
+    let config = AgentConfig::new(directory.path());
+    let settings = config.settings().unwrap();
+    assert_eq!(settings.sandbox_mode, Some(AgentSandboxMode::ReadOnly));
+    assert!(settings.sandbox_workspace_write.writable_roots.is_empty());
+    assert!(settings.sandbox_workspace_write.network_access);
+    assert!(matches!(
+        &config.recoveries()[0].problem,
+        AgentConfigProblem::Repaired { repairs } if repairs.len() == 2
+    ));
+
+    let refused = config.write_settings(AgentSettingsPatch {
+        sandbox_workspace_write: Some(AgentSandboxWorkspaceWrite {
+            writable_roots: vec!["relative".into()],
+            network_access: false,
+        }),
+        ..AgentSettingsPatch::default()
+    });
+    assert!(refused.is_err());
+    let reset: AgentSettingsPatch = serde_json::from_value(json!({"sandboxMode": null})).unwrap();
+    assert_eq!(config.write_settings(reset).unwrap().sandbox_mode, None);
 }

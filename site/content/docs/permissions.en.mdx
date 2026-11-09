@@ -1,6 +1,6 @@
 ---
 title: Permissions and approvals
-description: The three permission modes, what needs an approval, how to answer one, and the protection the Agent does not give.
+description: The three permission modes, the sandbox of the commands, what needs an approval, how to answer one, and the protection the Agent does not give.
 icon: ShieldCheck
 ---
 
@@ -31,11 +31,54 @@ A session can run in another mode than the configured one, until it ends, withou
 - It belongs to that session only: other sessions, and a fork of it, keep the configured mode.
 - It is kept in memory only: after a restart the session is back on `permissionMode`.
 
-<Callout type="warn" title="There is no operating-system sandbox">
-  The Agent does not run commands in a sandbox. An allowed command runs with your user's rights: it
-  can read and write any file you can, and reach the network. In full-access mode, every command the
-  model proposes runs at once. Use it only where you can live with the consequences.
-</Callout>
+## The sandbox [#sandbox]
+
+The permission mode decides who approves a command; the **sandbox** decides what an approved command can reach. The two are independent: a command the full-access mode runs without asking still runs in the sandbox.
+
+| `sandboxMode`                                      | A command the model runs can                                                                                                                                                                                                                    |
+| -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `"read-only"`                                      | read every file your user can; write nothing but `/dev/null` and `/dev/tty`; not use the network                                                                                                                                                |
+| `"workspace-write"` (the default on Linux)         | read every file; write under the [workspace roots](/docs/tools#workspace), `/tmp`, the Agent's temporary directory (`TMPDIR`) and `sandboxWorkspaceWrite.writableRoots`; use the network only with `sandboxWorkspaceWrite.networkAccess = true` |
+| `"full-access"` (the default on macOS and Windows) | everything your user can: no sandbox                                                                                                                                                                                                            |
+
+```sh
+hanafubuki-agent config set sandboxMode read-only
+hanafubuki-agent config set sandboxWorkspaceWrite.networkAccess true
+```
+
+These are Codex's `sandbox_mode` and `[sandbox_workspace_write]`; its default preset is workspace-write without the network. The keys are in the [Configuration reference](/docs/config-reference#sandbox). A turn's sandbox is fixed when it starts, like its permission mode.
+
+### Platforms [#sandbox-platforms]
+
+- **Linux**: Landlock confines the filesystem (Linux 5.13 or later, with Landlock enabled) and seccomp the network (x86_64 and aarch64). A sandboxed command starts the `hanafubuki-agent` binary again as a helper, which confines itself and then becomes the command, so the command is still the process the Agent owns. This is Codex's Landlock pipeline; Codex itself now prefers bubblewrap, which needs user namespaces that many systems restrict, and a bundled `bwrap`.
+- **macOS and Windows**: no sandbox yet (macOS's Seatbelt and a Windows restricted token are planned). An unset `sandboxMode` is full-access there; any other mode makes every command fail, as below.
+
+`hanafubuki-agent doctor` reports the sandbox mode in effect and whether this machine can give it.
+
+### When it is unavailable [#sandbox-unavailable]
+
+A command that asks for a sandbox this machine cannot give is **not run**: the Agent never runs it unconfined instead. The tool call fails before anyone is asked to approve it, and the model reads why:
+
+```text
+the command was not run: it needs the workspace-write sandbox, which is unavailable (this kernel has no Landlock (Linux 5.13 or later, with Landlock enabled)); set sandboxMode to "full-access" to run commands without a sandbox
+```
+
+On such a machine, set `sandboxMode = "full-access"` to run commands again, unconfined. A program that embeds the Agent must let its binary serve as the helper, or every sandboxed command fails the same way ([Embedding the Agent](/docs/embedding#sandbox-helper)).
+
+### What it does not cover [#sandbox-limits]
+
+- Only the commands the model runs (`exec_command`, and the terminals they leave running) are sandboxed. The file tools are bounded by the workspace roots and their approvals; MCP servers and [hooks](/docs/configuration#hooks), which you configure, run outside the sandbox.
+- Reading is not restricted.
+- Nothing under a writable root stays read-only, `.git` included: Landlock only grants rights, so Codex's read-only `.git` inside the workspace is not ported.
+- Without network access, every socket but a Unix one is refused, and so is connecting any socket, Unix ones included (an SSH agent, Docker's socket). With it, only VM sockets stay refused. Either way `io_uring`, which could open a socket past the filter, is refused.
+- In a terminal (PTY) command, `/dev/stdout` and `/dev/stderr` name the terminal's `/dev/pts` device, which is not writable: write to the output itself, or to `/dev/tty`, which is (the command's own terminal).
+- On a kernel older than 6.2, truncating a file outside the writable roots is not restricted (Landlock's ABI before version 3 cannot).
+- There is no escalation: unlike Codex, the model cannot ask to run one command outside the sandbox. Change the mode instead.
+- The model is not told the sandbox mode; a write or connection the sandbox refuses fails as the operating system reports it (`Permission denied`, `Operation not permitted`).
+
+### One session's sandbox [#session-sandbox]
+
+Like its permission mode, a session can have its own sandbox mode until it ends, without changing `sandboxMode` (`set_session_sandbox_mode`, see [Embedding the Agent](/docs/embedding#permissions)). The session's next turn takes it; it is kept in memory only; a fork starts without one, and a sub-agent takes its parent's. `sandboxWorkspaceWrite` still comes from the configuration.
 
 ## What needs an approval [#what-asks]
 
@@ -112,6 +155,7 @@ Approved action:
 
 In full-access mode, every operation that needs an approval is allowed without asking. What still applies:
 
+- The [sandbox](#sandbox): a command runs as confined as `sandboxMode` says.
 - The operations that always ask you (turning a Skill on or off, `git clone`).
 - The calls refused outright: an MCP tool its server's policy denies, a command or path that cannot be resolved.
 - [Plan mode](/docs/plan-mode) still offers read-only tools only.
@@ -128,6 +172,7 @@ A [review](/docs/sessions#reviews) session is read-only, in place of the read-on
 
 ## Other controls [#other-controls]
 
+- The [sandbox](#sandbox) confines what an allowed command can write and reach.
 - [Plan mode](/docs/plan-mode) gives the model read-only tools only, whatever the permission mode.
 - MCP servers have their own approval policies (`allow`, `ask`, `deny`); see [MCP](/docs/mcp#policies).
 - `disabledPlugins` removes a whole kind of tool: `["execution"]` leaves the model no way to run commands; see the [Configuration reference](/docs/config-reference#general).

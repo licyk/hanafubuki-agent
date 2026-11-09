@@ -159,6 +159,36 @@ path = "crates/hooks/src/engine.rs"
 markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
 notice = "crates/hooks"
 
+[[derived]]
+path = "crates/sandbox/src/policy.rs"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
+notice = "crates/sandbox"
+
+[[derived]]
+path = "crates/sandbox/src/backend.rs"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
+notice = "crates/sandbox"
+
+[[derived]]
+path = "crates/sandbox/src/helper.rs"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
+notice = "crates/sandbox"
+
+[[derived]]
+path = "crates/sandbox/src/linux/mod.rs"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
+notice = "crates/sandbox"
+
+[[derived]]
+path = "crates/sandbox/src/linux/filesystem.rs"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
+notice = "crates/sandbox"
+
+[[derived]]
+path = "crates/sandbox/src/linux/network.rs"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
+notice = "crates/sandbox"
+
 [[mit]]
 path = "crates/tui/src/custom_terminal.rs"
 holder = "Copyright (c) 2016-2022 Florian Dehau"

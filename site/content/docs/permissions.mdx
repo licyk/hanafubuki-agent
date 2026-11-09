@@ -1,6 +1,6 @@
 ---
 title: 权限与审批
-description: 三种权限模式、哪些操作需要审批、如何回答审批，以及 Agent 没有提供的保护。
+description: 三种权限模式、命令的沙箱、哪些操作需要审批、如何回答审批，以及 Agent 没有提供的保护。
 icon: ShieldCheck
 ---
 
@@ -31,10 +31,54 @@ hanafubuki-agent --permission-mode full-access exec "..." # 只对这次运行
 - 只属于这个会话：其他会话，以及从它分叉出的会话，仍使用配置的模式。
 - 只保存在内存中：重启后，会话回到 `permissionMode`。
 
-<Callout type="warn" title="没有操作系统沙箱">
-  Agent
-  不在沙箱中运行命令。获得允许的命令以你的用户权限运行，可以读写你能访问的任何文件，也可以访问网络。完全访问模式下，模型提出的每个命令都会直接执行。只在可以承受后果的环境中使用它。
-</Callout>
+## 沙箱 [#sandbox]
+
+权限模式决定由谁批准一个命令；**沙箱**决定获得批准的命令能触及什么。两者互相独立：完全访问模式下不经询问就运行的命令，仍在沙箱中运行。
+
+| `sandboxMode`                                  | 模型运行的命令可以                                                                                                                                                                                               |
+| ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `"read-only"`                                  | 读取你的用户能读的所有文件；除 `/dev/null` 和 `/dev/tty` 外不能写入；不能使用网络                                                                                                                                |
+| `"workspace-write"`（Linux 上的默认值）        | 读取所有文件；只能写入[工作区根目录](/docs/tools#workspace)、`/tmp`、Agent 的临时目录（`TMPDIR`）和 `sandboxWorkspaceWrite.writableRoots` 之下；只有 `sandboxWorkspaceWrite.networkAccess = true` 时才能使用网络 |
+| `"full-access"`（macOS 和 Windows 上的默认值） | 你的用户能做的一切：没有沙箱                                                                                                                                                                                     |
+
+```sh
+hanafubuki-agent config set sandboxMode read-only
+hanafubuki-agent config set sandboxWorkspaceWrite.networkAccess true
+```
+
+它们就是 Codex 的 `sandbox_mode` 和 `[sandbox_workspace_write]`；Codex 的默认预设是不带网络的 workspace-write。这些键见[配置参考](/docs/config-reference#sandbox)。和权限模式一样，一个回合的沙箱在回合开始时确定。
+
+### 平台 [#sandbox-platforms]
+
+- **Linux**：Landlock 限制文件系统（Linux 5.13 或更新，且启用了 Landlock），seccomp 限制网络（x86_64 和 aarch64）。沙箱中的命令会再次启动 `hanafubuki-agent` 程序作为辅助进程，它先限制自身，再变成那个命令，所以命令仍是 Agent 所拥有的那个进程。这是 Codex 的 Landlock 流程；Codex 自己现在优先使用 bubblewrap，它需要许多系统都会限制的用户命名空间，以及一个随附的 `bwrap`。
+- **macOS 和 Windows**：暂时没有沙箱（计划使用 macOS 的 Seatbelt 和 Windows 的受限令牌）。在这些平台上，未设置的 `sandboxMode` 即 full-access；设为其他模式会让每个命令都失败，见下文。
+
+`hanafubuki-agent doctor` 会报告当前生效的沙箱模式，以及这台机器能否提供它。
+
+### 沙箱不可用时 [#sandbox-unavailable]
+
+需要沙箱、而这台机器无法提供的命令**不会运行**：Agent 绝不会改为不受限地运行它。这个工具调用在请求任何人审批之前就失败，模型会读到原因：
+
+```text
+the command was not run: it needs the workspace-write sandbox, which is unavailable (this kernel has no Landlock (Linux 5.13 or later, with Landlock enabled)); set sandboxMode to "full-access" to run commands without a sandbox
+```
+
+在这样的机器上，设置 `sandboxMode = "full-access"` 即可重新运行命令，不受限制。嵌入 Agent 的程序必须让自己的程序文件充当辅助进程，否则每个沙箱中的命令都会这样失败（[嵌入 Agent](/docs/embedding#sandbox-helper)）。
+
+### 它不涵盖的内容 [#sandbox-limits]
+
+- 只有模型运行的命令（`exec_command`，以及它们留在后台运行的终端）在沙箱中。文件工具受工作区根目录和审批约束；你配置的 MCP 服务器和[钩子](/docs/configuration#hooks)在沙箱之外运行。
+- 读取不受限制。
+- 可写根目录之下没有任何内容保持只读，包括 `.git`：Landlock 只能授予权限，所以 Codex 把工作区中的 `.git` 设为只读的做法没有移植。
+- 没有网络访问时，除 Unix 套接字外的所有套接字都会被拒绝，连接任何套接字也会被拒绝，包括 Unix 套接字（SSH agent、Docker 的套接字）。有网络访问时，只有虚拟机套接字仍被拒绝。两种情况下，可以绕过过滤器打开套接字的 `io_uring` 都会被拒绝。
+- 在终端（PTY）命令中，`/dev/stdout` 和 `/dev/stderr` 指向终端的 `/dev/pts` 设备，它不可写：请直接写到输出，或写到可写的 `/dev/tty`（命令自己的终端）。
+- 在早于 6.2 的内核上，截断可写根目录之外的文件不受限制（Landlock 第 3 版之前的 ABI 做不到）。
+- 没有提升权限的途径：与 Codex 不同，模型不能请求在沙箱之外运行某个命令。需要时请改变模式。
+- 模型不会被告知沙箱模式；被沙箱拒绝的写入或连接，会以操作系统报告的错误失败（`Permission denied`、`Operation not permitted`）。
+
+### 单个会话的沙箱 [#session-sandbox]
+
+和权限模式一样，一个会话可以有自己的沙箱模式，直到会话结束，不改变 `sandboxMode`（`set_session_sandbox_mode`，见[嵌入 Agent](/docs/embedding#permissions)）。会话的下一个回合使用它；它只保存在内存中；分叉出的会话不带它，子代理沿用父会话的。`sandboxWorkspaceWrite` 仍取自配置。
 
 ## 哪些操作需要审批 [#what-asks]
 
@@ -110,6 +154,7 @@ Approved action:
 
 完全访问模式下，需要审批的操作直接允许，不再询问。仍然有效的限制：
 
+- [沙箱](#sandbox)：命令按 `sandboxMode` 的规定受限运行。
 - 总是询问你的操作（启用或停用 Skill、`git clone`）。
 - 被直接拒绝的调用，例如 MCP 服务器设置为 `deny` 的工具、无法解析的命令或路径。
 - [计划模式](/docs/plan-mode)仍然只提供只读工具。
@@ -126,6 +171,7 @@ Approved action:
 
 ## 其他控制 [#other-controls]
 
+- [沙箱](#sandbox)限制获得允许的命令能写入和访问的内容。
 - [计划模式](/docs/plan-mode)让模型只能使用只读工具，与权限模式无关。
 - MCP 服务器有自己的审批策略（`allow`、`ask`、`deny`），见 [MCP](/docs/mcp#policies)。
 - `disabledPlugins` 可以整个去掉某类工具，例如 `["execution"]` 让模型无法运行命令，见[配置参考](/docs/config-reference#general)。

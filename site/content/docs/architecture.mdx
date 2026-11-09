@@ -18,16 +18,16 @@ Agent 是一个**内核**（`hanafubuki-agent-kernel`），拥有会话、轮次
 
 依赖只向下指。`cargo xtask check-dependencies` 按层表（`xtask/src/dependencies.rs` 的 `LAYERS`）检查每个成员只依赖它那一行允许的成员。
 
-| 层         | crate                                                                                                              | 作用                                                                                                                            |
-| ---------- | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
-| 中性机制   | `foundation`、`tool-contracts`、`process`、`runtime`、`host`                                                       | 路径、取消、阻塞边界、panic 隔离；工具规格类型；进程所有权；被隔离的 Tokio 运行时；通用模块宿主（注册表、租约、故障、重启策略） |
-| 领域       | `approval`、`skills`、`web-search`、`model-api`、`workspace-fs`、`execution`、`mcp`、`memory`、`worktree`、`hooks` | 各自独立、可单独测试的能力                                                                                                      |
-| 插件 API   | `contracts`                                                                                                        | 注册表与扩展点契约；重新导出 `host` 的注册与故障机制，插件只依赖它                                                              |
-| 内核与历史 | `kernel`、`history`                                                                                                | 会话、轮次循环、工具规划与流水线、请求组装、世界状态、压缩、审批流程、恢复；JSONL 历史与 SQLite 索引                            |
-| 插件       | `plugin-web`、`plugin-workspace-fs`、`plugin-execution`、`plugin-mcp`、`plugin-worktree`、`plugin-hooks`           | 每个把一个领域 crate 绑定到扩展点，或作为服务提供给门面的调用                                                                   |
-| 配置       | `config`                                                                                                           | Agent 自己的配置（`AgentConfig`）：三个 TOML 文件，独立模式下分层                                                               |
-| 门面       | `hanafubuki-agent`（`crates/agent`）                                                                               | 组合：插件宿主与清单、Agent 自己的插件、槽位、服务 API、宿主接口、独立运行时、数据目录锁、日志                                  |
-| 界面       | `tui`、`cli`                                                                                                       | 终端界面（只依赖门面）和 `hanafubuki-agent` 二进制（依赖门面与终端界面）                                                        |
+| 层         | crate                                                                                                                         | 作用                                                                                                                            |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| 中性机制   | `foundation`、`tool-contracts`、`process`、`runtime`、`host`                                                                  | 路径、取消、阻塞边界、panic 隔离；工具规格类型；进程所有权；被隔离的 Tokio 运行时；通用模块宿主（注册表、租约、故障、重启策略） |
+| 领域       | `approval`、`skills`、`web-search`、`model-api`、`workspace-fs`、`execution`、`mcp`、`memory`、`worktree`、`hooks`、`sandbox` | 各自独立、可单独测试的能力                                                                                                      |
+| 插件 API   | `contracts`                                                                                                                   | 注册表与扩展点契约；重新导出 `host` 的注册与故障机制，插件只依赖它                                                              |
+| 内核与历史 | `kernel`、`history`                                                                                                           | 会话、轮次循环、工具规划与流水线、请求组装、世界状态、压缩、审批流程、恢复；JSONL 历史与 SQLite 索引                            |
+| 插件       | `plugin-web`、`plugin-workspace-fs`、`plugin-execution`、`plugin-mcp`、`plugin-worktree`、`plugin-hooks`                      | 每个把一个领域 crate 绑定到扩展点，或作为服务提供给门面的调用                                                                   |
+| 配置       | `config`                                                                                                                      | Agent 自己的配置（`AgentConfig`）：三个 TOML 文件，独立模式下分层                                                               |
+| 门面       | `hanafubuki-agent`（`crates/agent`）                                                                                          | 组合：插件宿主与清单、Agent 自己的插件、槽位、服务 API、宿主接口、独立运行时、数据目录锁、日志                                  |
+| 界面       | `tui`、`cli`                                                                                                                  | 终端界面（只依赖门面）和 `hanafubuki-agent` 二进制（依赖门面与终端界面）                                                        |
 
 （表中省略了 `hanafubuki-agent-` 前缀。）除了层表，检查还执行与表无关的规则：不依赖任何 Hanafubuki crate（任何来源）；内核不依赖任何插件；插件依赖插件 API，不依赖内核、门面或其他插件；每个插件 crate 都是门面的依赖（门面挂载它）；只有门面依赖配置 crate；`host` 只依赖 `foundation`；kardia 只出现在 `host`、插件 API、内核、插件和门面中，而且从不使用 `kardia` 门面 crate（它带有 WASM/dylib 热重载）。
 
@@ -238,23 +238,25 @@ schema 遵循同样的按协议规则：支持 `strict_json_schema` 的协议（
 - **插件宿主关闭 `module_faults`、开启自动重启。** 那个标志是关于应用的模块故障 sink 的，插件故障从不使用它，而是通过 `PluginFaults` 到达 Agent 的宿主。
 - **渲染器是数据**，**注册拒绝、规划改名**（见上文）。
 - **轮次限制对模型不可见。** 历史中没有失败轮次原因的条目；用户读轮次的错误消息，没有什么需要模型看到它。
+- **沙箱改写 argv；进程 crate 不知道它。** `sandbox` 把一个命令变成辅助进程的命令行：辅助进程就是 Agent 自己的程序文件，由第一个参数选中（`--hanafubuki-agent-sandbox`，和 Codex 选择它的其他辅助进程一样），它先限制自身，再原地执行那个命令。`ExecutorManager` 像对待其他进程一样启动、拥有和回收这个进程，管道和 PTY 模式都一样，所以 `process`（Hanafubuki 那份的孪生）没有改动；Codex 按 argv[0] 选择的方式需要它能设置 `arg0`。它所在的位置：回合冻结会话的沙箱设置（`SandboxSettings`，门面准备回合时加入的扩展），`plugin-execution` 把它和命令一起交给 `execution`，`execution` 在自己的工作区根目录上解析它，并在启动前包装已获批准的命令。在 Linux 上，辅助进程使用 Codex 的 Landlock 流程，而不是它默认的 bubblewrap：不需要许多发行版都会限制的用户命名空间，不需要从 C 构建的随附 `bwrap`，而 Codex 放弃 Landlock 的理由（它的 app-server 的 Unix 套接字、拒绝访问的例外路径）在这里都不适用。机器无法执行的模式会让命令失败，绝不会不受限地运行它（[权限](/docs/permissions#sandbox-unavailable)）。
 - **没有做的：** 代码模式（用 JS 调用所有工具）、第三种压缩路径、后台压缩、跨会话的 MCP 连接池、无论目录大小都延迟所有 MCP 工具、MCP 的 prompts/subscriptions/sampling/roots、Skill 注册的工具或 `allowed-tools` 的执行、从 Agent 写设置的 Skill 安装流程，以及进程外的 Agent。
 
 与 Codex（`codex-rs`）相比，Agent 的机制都对照过它：
 
-| 方面      | Codex                           | hanafubuki-agent                                     |
-| --------- | ------------------------------- | ---------------------------------------------------- |
-| 工具快照  | 每步一个工具路由器              | 每步一个工具计划，带计划租约                         |
-| 名字      | `{namespace, name}`，只做查找   | 相同；每个请求一张线路名表，按协议适配               |
-| 延迟工具  | `tool_search`；选择保存在历史中 | 相同，通过 `ToolSelection` 条目直到压缩              |
-| Schema    | 精简的关键字集合，从不 strict   | 协议接受时发送完整 schema，否则可移植的，从不 strict |
-| 审批      | 执行之前                        | 决定等待时在门外；`AllowForSession`                  |
-| 工具超时  | 注册表层面没有                  | 按描述符，否则轮次的空闲超时                         |
-| MCP 存活  | 只对一个内置服务器重连          | 每台服务器：`Failed`，然后有界重连                   |
-| AGENTS.md | 每步读取；错过项目内的就地编辑  | 每个轮次读取并按摘要比较；用户与项目文件             |
-| 上下文段  | 类型化的世界状态                | 类型化的段，渲染器与槽位属于插件                     |
-| 压缩      | 多条路径；重新渲染初始上下文    | 本地与 Responses；重新渲染每个段；有上限的重试       |
-| 记忆      | 两个阶段、租约、引用            | 相同的设计，加上先判断资格再限量和两阶段退避         |
+| 方面      | Codex                                                   | hanafubuki-agent                                     |
+| --------- | ------------------------------------------------------- | ---------------------------------------------------- |
+| 工具快照  | 每步一个工具路由器                                      | 每步一个工具计划，带计划租约                         |
+| 名字      | `{namespace, name}`，只做查找                           | 相同；每个请求一张线路名表，按协议适配               |
+| 延迟工具  | `tool_search`；选择保存在历史中                         | 相同，通过 `ToolSelection` 条目直到压缩              |
+| Schema    | 精简的关键字集合，从不 strict                           | 协议接受时发送完整 schema，否则可移植的，从不 strict |
+| 审批      | 执行之前                                                | 决定等待时在门外；`AllowForSession`                  |
+| 工具超时  | 注册表层面没有                                          | 按描述符，否则轮次的空闲超时                         |
+| MCP 存活  | 只对一个内置服务器重连                                  | 每台服务器：`Failed`，然后有界重连                   |
+| AGENTS.md | 每步读取；错过项目内的就地编辑                          | 每个轮次读取并按摘要比较；用户与项目文件             |
+| 上下文段  | 类型化的世界状态                                        | 类型化的段，渲染器与槽位属于插件                     |
+| 压缩      | 多条路径；重新渲染初始上下文                            | 本地与 Responses；重新渲染每个段；有上限的重试       |
+| 记忆      | 两个阶段、租约、引用                                    | 相同的设计，加上先判断资格再限量和两阶段退避         |
+| 沙箱      | bubblewrap 和 seccomp、Seatbelt、受限令牌；审批后可提升 | 只在 Linux 上，Landlock 和 seccomp；没有提升         |
 
 ## 已知的限制 [#known-limits]
 
@@ -263,4 +265,5 @@ schema 遵循同样的按协议规则：支持 `strict_json_schema` 的协议（
 - MCP 重连复用打开连接时的密钥，所以过期的 OAuth 令牌会让重连失败，直到用户手动连接。
 - Skill 监视器只监视启动时存在的根目录；之后出现的根目录依靠读取时的标记。
 - 内置的上下文窗口只覆盖公开了上限的模型系列（GPT、o 系列、Claude、Gemini 2.5）；其他模型需要 Provider 的列表或设置才能自动压缩。
+- 命令沙箱只存在于 Linux；macOS（Seatbelt）和 Windows（受限令牌及其提权设置）还没有，所以在那里未设置的 `sandboxMode` 即完全访问。
 - 在 Linux 之外未验证：`notify` 监视器的 macOS 与 Windows 后端、Skill 目录中显示的 Windows 路径、Windows 上 MCP stdio 的退出原因和已退出子进程的释放，以及 Windows 上记忆制品的安装重命名。

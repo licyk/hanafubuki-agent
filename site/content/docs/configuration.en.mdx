@@ -14,11 +14,11 @@ The standalone Agent keeps its configuration in the configuration directory: by 
 
 ## The three files [#files]
 
-| File             | Holds                                                                                                                                       | Layers | Permissions         |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ------------------- |
-| `config.toml`    | The settings (permission mode, memory, plugins, web tools, proxy, log level, the terminal interface), the profiles and the trusted projects | Yes    | Ordinary            |
-| `providers.toml` | The model Providers, their tokens, and the model policy (model, reasoning effort, compaction)                                               | No     | Owner only (`0600`) |
-| `mcp.toml`       | The MCP servers and their credentials                                                                                                       | No     | Owner only (`0600`) |
+| File             | Holds                                                                                                                                                | Layers | Permissions         |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ------------------- |
+| `config.toml`    | The settings (permission mode, sandbox, memory, plugins, web tools, proxy, log level, the terminal interface), the profiles and the trusted projects | Yes    | Ordinary            |
+| `providers.toml` | The model Providers, their tokens, and the model policy (model, reasoning effort, compaction)                                                        | No     | Owner only (`0600`) |
+| `mcp.toml`       | The MCP servers and their credentials                                                                                                                | No     | Owner only (`0600`) |
 
 Each file is created when it is first needed: `config.toml` by the first `config set`, `providers.toml` by the first `providers add`, and so on. Without a file the defaults apply. Every key is camelCase. Each key's type and default are in the [Configuration reference](/docs/config-reference).
 
@@ -40,6 +40,7 @@ hanafubuki-agent config get memory      # one table
 ```sh
 hanafubuki-agent config set logLevel debug
 hanafubuki-agent config set memory.enabled true
+hanafubuki-agent config set sandboxMode read-only
 hanafubuki-agent config set network.proxy http://127.0.0.1:7890
 hanafubuki-agent config set tui.alternateScreen never
 hanafubuki-agent config set profiles.review.permissionMode auto_review
@@ -132,7 +133,12 @@ A hook runs only once you trusted it, and while it is enabled. Each hook has a k
 ```toml
 # ~/.config/hanafubuki-agent/config.toml
 permissionMode = "manual"
+sandboxMode = "workspace-write"
 logLevel = "info"
+
+[sandboxWorkspaceWrite]
+writableRoots = ["/home/me/.cargo"]
+networkAccess = true
 
 [memory]
 enabled = true
@@ -150,6 +156,7 @@ terminalTitle = ["activity", "project-name"]
 # hanafubuki-agent -p review
 [profiles.review]
 permissionMode = "auto_review"
+sandboxMode = "read-only"
 
 [projects."/home/me/src/my-project"]
 trustLevel = "trusted"

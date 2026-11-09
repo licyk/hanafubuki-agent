@@ -149,12 +149,20 @@ pub fn service_with_host(
 }
 
 /// One enabled Responses provider at `base_url`, the default, with the model
-/// `fixture-model`.
+/// `fixture-model`; and `sandboxMode = "full-access"`, since a test binary
+/// is no sandbox helper (`sandbox::helper_dispatch`), so a sandboxed
+/// command would fail there. A test of the sandbox sets another mode.
 pub fn configure_test_provider(
     config: &AgentConfig,
     base_url: &str,
     reasoning_effort: Option<hanafubuki_agent_kernel::ModelReasoningEffort>,
 ) {
+    config
+        .write_settings(crate::AgentSettingsPatch {
+            sandbox_mode: Some(Some(crate::AgentSandboxMode::FullAccess)),
+            ..crate::AgentSettingsPatch::default()
+        })
+        .unwrap();
     config
         .mutate_providers(0, |registry| {
             registry.default_provider_id = Some("provider-1".into());

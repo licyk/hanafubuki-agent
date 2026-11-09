@@ -1,0 +1,25 @@
+[package]
+name = "hanafubuki-agent-sandbox"
+description = "The sandbox of hanafubuki-agent's commands: read-only, workspace-write or full access, enforced by Landlock and seccomp on Linux"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+hanafubuki-agent-foundation.workspace = true
+
+[target.'cfg(target_os = "linux")'.dependencies]
+landlock = "0.4.7"
+libc = "0.2"
+seccompiler = "0.5.0"
+
+[dev-dependencies]
+tempfile.workspace = true
+
+# Its own `main` answers the helper's command line first, as the Agent's
+# binary does, so the sandboxed commands it starts re-execute it.
+[[test]]
+name = "linux"
+harness = false

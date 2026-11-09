@@ -10,6 +10,7 @@ use hanafubuki_agent_contracts::tools::arguments::{
 };
 use hanafubuki_agent_contracts::{object_arguments, ToolCallValidationError};
 use hanafubuki_agent_execution::{ExecCommandRequest, PlatformShell};
+use hanafubuki_agent_sandbox::SandboxSettings;
 use serde_json::Value;
 
 use crate::tool::ExecToolKind;
@@ -80,6 +81,8 @@ pub(crate) fn parse(
                 workdir: nullable_bounded_string(arguments, "workdir", 4096)?.map(PathBuf::from),
                 environment: Default::default(),
                 origin: ApprovalOrigin::Model,
+                // The turn's, which the tool sets (`tool::parse_call`).
+                sandbox: SandboxSettings::full_access(),
             })
         }
         ExecToolKind::WriteStdin => {

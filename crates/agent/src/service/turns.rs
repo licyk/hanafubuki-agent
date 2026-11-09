@@ -1,6 +1,7 @@
 use super::AgentApplicationService;
 use crate::titles::provisional_agent_title;
 use crate::{prepare_and_stage_images, AgentSteeringRequest, AgentTurnRequest};
+use hanafubuki_agent_config::AgentSandboxMode;
 use hanafubuki_agent_contracts::TurnExtensions;
 use hanafubuki_agent_kernel::{
     AgentCompactionGeneration, AgentCompactionId, AgentCompactionOutcome, AgentError,
@@ -320,6 +321,37 @@ impl AgentApplicationService {
     ) -> Result<(), AgentError> {
         self.activate_session(session_id)?;
         self.core.set_session_permission_mode(session_id, mode)
+    }
+
+    /// The sandbox mode the user chose for the session
+    /// ([`Self::set_session_sandbox_mode`]); `None` while the configured
+    /// `sandboxMode` (or the platform's default) applies.
+    pub fn session_sandbox_mode(
+        &self,
+        session_id: AgentSessionId,
+    ) -> Result<Option<AgentSandboxMode>, AgentError> {
+        self.activate_session(session_id)?;
+        self.core.session_sandbox_mode(session_id)
+    }
+
+    /// Sets the sandbox the session's commands run in, in place of the
+    /// configured `sandboxMode`, until the session ends; it is not
+    /// persisted. Independent of the permission mode: a command a
+    /// full-access permission mode runs without asking is still sandboxed.
+    /// A running turn keeps its sandbox; the next turn takes this one.
+    pub fn set_session_sandbox_mode(
+        &self,
+        session_id: AgentSessionId,
+        mode: AgentSandboxMode,
+    ) -> Result<(), AgentError> {
+        self.activate_session(session_id)?;
+        self.core.set_session_sandbox_mode(session_id, mode)
+    }
+
+    /// The sandbox this machine gives the commands that ask for one, or
+    /// why it cannot.
+    pub fn sandbox_status(&self) -> hanafubuki_agent_sandbox::SandboxStatus {
+        self.executions.sandbox().status()
     }
 
     /// Records that the user approves the action automatic permission review

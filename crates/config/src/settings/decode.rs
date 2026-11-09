@@ -3,7 +3,8 @@ use std::collections::BTreeSet;
 use serde_json::{Map, Value};
 
 use super::{
-    is_plugin_name, normalize_search_endpoint, validate_memory, AgentMemorySettings, AgentSettings,
+    is_plugin_name, normalize_search_endpoint, validate_memory, validate_sandbox_workspace_write,
+    AgentMemorySettings, AgentSandboxMode, AgentSandboxWorkspaceWrite, AgentSettings,
     AgentWebSearchProvider, MAX_AGENT_DISABLED_PLUGINS,
 };
 use crate::fields::{read_member, read_object, FieldRead, Fields};
@@ -18,6 +19,13 @@ pub(crate) fn decode_settings(
 ) -> AgentSettings {
     let mut fields = Fields::new(object, repairs);
     let permission_mode = fields.read("permissionMode", defaults.permission_mode);
+    let sandbox_mode = decode_sandbox_mode(&mut fields, defaults.sandbox_mode);
+    let sandbox_workspace_write = read_object(
+        &mut fields,
+        "sandboxWorkspaceWrite",
+        &defaults.sandbox_workspace_write,
+        decode_sandbox_workspace_write,
+    );
     let memory = read_object(&mut fields, "memory", &defaults.memory, decode_memory);
     let disabled_plugins = decode_disabled_plugins(&mut fields, &defaults.disabled_plugins);
     let searxng_base_url = fields.read_checked(
@@ -34,12 +42,56 @@ pub(crate) fn decode_settings(
         fields.read("webFetchUseJinaReader", defaults.web_fetch_use_jina_reader);
     AgentSettings {
         permission_mode,
+        sandbox_mode,
+        sandbox_workspace_write,
         memory,
         disabled_plugins,
         web_search_provider,
         searxng_base_url,
         web_fetch_use_jina_reader,
     }
+}
+
+/// A mode that cannot be read is read-only, the most restrictive: the user
+/// asked for some sandbox, and an unreadable one never grants more.
+fn decode_sandbox_mode(
+    fields: &mut Fields<'_>,
+    default: Option<AgentSandboxMode>,
+) -> Option<AgentSandboxMode> {
+    match fields.read_quiet::<AgentSandboxMode>("sandboxMode", Ok) {
+        FieldRead::Valid(mode) => Some(mode),
+        FieldRead::Missing => default,
+        FieldRead::Invalid => {
+            fields.invalid(
+                "sandboxMode",
+                Some("the sandbox mode is not supported; commands run read-only until one is chosen again"),
+            );
+            Some(AgentSandboxMode::ReadOnly)
+        }
+    }
+}
+
+/// Each falls back on its own; a list holding a relative root is dropped
+/// whole, which leaves fewer places writable, never more.
+fn decode_sandbox_workspace_write(
+    fields: &mut Fields<'_>,
+    settings: &mut AgentSandboxWorkspaceWrite,
+) {
+    let validate = validate_sandbox_workspace_write;
+    read_member(
+        fields,
+        settings,
+        "writableRoots",
+        |s| &mut s.writable_roots,
+        validate,
+    );
+    read_member(
+        fields,
+        settings,
+        "networkAccess",
+        |s| &mut s.network_access,
+        validate,
+    );
 }
 
 /// Each memory setting falls back on its own; its bounds are the ones the

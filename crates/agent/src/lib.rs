@@ -33,6 +33,16 @@ pub mod panic {
     };
 }
 mod plugins;
+/// The sandbox of the commands the model runs. A program that starts the
+/// Agent calls [`sandbox::helper_dispatch`] first in its `main`, before any
+/// thread starts: a sandboxed command re-executes that program as the
+/// sandbox helper, and without the call every command that asks for a
+/// sandbox fails.
+pub mod sandbox {
+    pub use hanafubuki_agent_sandbox::{
+        helper_dispatch, platform_default_mode, Sandbox, SandboxStatus,
+    };
+}
 mod service;
 mod session_driver;
 mod session_workspace;
@@ -138,10 +148,10 @@ use std::path::Path;
 pub use hanafubuki_agent_config::{
     AgentAlternateScreen, AgentConfig, AgentConfigProblem, AgentConfigRecovery, AgentDirs,
     AgentLogLevel, AgentModelProtocol, AgentProviderHeaderSettings, AgentProviderSettings,
-    AgentSettings, AgentSettingsPatch, AgentStandaloneSettings, AgentTuiPreferences,
-    AgentTuiPreferencesPatch, ConfigLayerSource, ConfigLayers, ConfigOverrides,
-    AGENT_CREDENTIAL_FILES, AGENT_HOME_ENV, AGENT_MCP_FILE, AGENT_PROVIDERS_FILE,
-    AGENT_SETTINGS_FILE,
+    AgentSandboxMode, AgentSandboxWorkspaceWrite, AgentSettings, AgentSettingsPatch,
+    AgentStandaloneSettings, AgentTuiPreferences, AgentTuiPreferencesPatch, ConfigLayerSource,
+    ConfigLayers, ConfigOverrides, AGENT_CREDENTIAL_FILES, AGENT_HOME_ENV, AGENT_MCP_FILE,
+    AGENT_PROVIDERS_FILE, AGENT_SETTINGS_FILE,
 };
 pub use hanafubuki_agent_execution::{
     AgentBackgroundTerminalSnapshot, AgentBackgroundTerminalStopFailure,

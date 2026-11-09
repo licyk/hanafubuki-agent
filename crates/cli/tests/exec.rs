@@ -292,3 +292,43 @@ fn an_interrupt_cancels_the_turn_and_exits_with_130() {
     );
     assert!(run.stdout().contains("interrupted; cancelling the turn"));
 }
+
+/// The binary is its own sandbox helper: by default on Linux a command
+/// writes in the workspace (and `/tmp`), nowhere else. Skipped where the
+/// kernel has no Landlock, which `doctor` reports.
+#[cfg(target_os = "linux")]
+#[test]
+fn a_command_runs_in_the_workspace_write_sandbox_by_default() {
+    let home = Home::new();
+    if !home
+        .run(&["doctor"])
+        .stdout()
+        .contains("ok    sandbox   workspace-write")
+    {
+        eprintln!("skipped: the Linux sandbox is unavailable here");
+        return;
+    }
+    let outside = tempfile::tempdir_in(env!("CARGO_TARGET_TMPDIR")).unwrap();
+    let escaped = outside.path().join("escaped.txt");
+    let command = format!(
+        "echo in > inside.txt; echo out > '{}' || echo refused-outside",
+        escaped.display()
+    );
+    let model = Model::start(vec![command_call(&command), assistant_events("It ran.")]);
+    // The fixture Provider's configuration is full access; unset the mode
+    // again, back to the default.
+    let home = home.with_provider(&model.server.base_url);
+    let config = home
+        .file("config.toml")
+        .replace("sandboxMode = \"full-access\"\n", "");
+    std::fs::write(home.home.join("config.toml"), config).unwrap();
+    home.run(&["exec", "--approve", "allow:exec_command", "Run it."])
+        .expect(0);
+    assert_eq!(
+        std::fs::read_to_string(home.cwd.join("inside.txt")).unwrap(),
+        "in\n"
+    );
+    assert!(!escaped.exists());
+    let output = String::from_utf8_lossy(&model.server.requests()[1].body).into_owned();
+    assert!(output.contains("refused-outside"), "{output}");
+}

@@ -1,9 +1,10 @@
 //! `doctor`: whether the standalone Agent can run here. Each check prints
 //! one line (`ok`, `FAIL`, or `skip`); any failure fails the command.
 
+use hanafubuki_agent::sandbox;
 use hanafubuki_agent::{
     probe_keyring, AgentConfig, AgentConfigProblem, AgentProviderModelCatalogRequest,
-    AgentRuntimeHost, ConfigLayerSource, DataDirLock, McpConnectionPhase,
+    AgentRuntimeHost, AgentSandboxMode, ConfigLayerSource, DataDirLock, McpConnectionPhase,
 };
 
 use crate::agent::{block_on, Standalone};
@@ -22,6 +23,7 @@ pub(crate) fn run(global: &GlobalArgs, online: bool) -> Result<u8, Failure> {
     };
     let config = standalone.runtime.config();
     configuration(&mut report, config);
+    sandbox(&mut report, config);
     let default_provider = providers(&mut report, config);
     mcp(&mut report, config);
     recoveries(&mut report, config);
@@ -52,6 +54,30 @@ pub(crate) fn run(global: &GlobalArgs, online: bool) -> Result<u8, Failure> {
     }
     standalone.shutdown();
     Ok(report.code())
+}
+
+/// The configured sandbox mode, and whether this machine can give it: a
+/// mode it cannot is a failure, since every command would fail.
+fn sandbox(report: &mut Report, config: &AgentConfig) {
+    let Ok(settings) = config.settings() else {
+        return;
+    };
+    let mode = settings
+        .sandbox_mode
+        .unwrap_or_else(sandbox::platform_default_mode);
+    let mode_name = mode.as_str();
+    match (mode, sandbox::Sandbox::detect().status()) {
+        (AgentSandboxMode::FullAccess, _) => {
+            report.ok("sandbox", "full-access: commands run without a sandbox")
+        }
+        (_, sandbox::SandboxStatus::Available { backend }) => {
+            report.ok("sandbox", &format!("{mode_name}: {backend}"))
+        }
+        (_, sandbox::SandboxStatus::Unavailable { reason }) => report.fail(
+            "sandbox",
+            &format!("{mode_name} is unavailable ({reason}); commands fail until sandboxMode is \"full-access\""),
+        ),
+    }
 }
 
 fn configuration(report: &mut Report, config: &AgentConfig) {

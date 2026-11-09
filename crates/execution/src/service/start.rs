@@ -44,9 +44,12 @@ impl AgentExecutionService {
     ) -> Result<AgentExecutionSnapshot, AgentExecutionError> {
         let prepared = prepare_exec_command(&request, self.working_directory().as_deref())?;
         exact_approval(prepared.action(), approval)?;
+        // The approval is of the command; the sandbox confines it after.
+        let mut plan = prepared.plan;
+        plan.command = self.sandboxed(plan.command, &request.sandbox)?;
         self.start_plan(
             scope,
-            prepared.plan,
+            plan,
             AgentExecutionKind::UnifiedExec,
             Some(bound_utf8(&request.cmd, MAX_COMMAND_DISPLAY_BYTES)),
             cancellation,

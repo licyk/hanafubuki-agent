@@ -19,6 +19,7 @@ use hanafubuki_agent_process::executor::{
 use hanafubuki_agent_process::ownership::{
     OwnedReleaseStatus, ProcessOwnerId, ProcessReceipt, ProcessReservation,
 };
+use hanafubuki_agent_sandbox::{Sandbox, SandboxSettings};
 use parking_lot::{Condvar, Mutex, RwLock};
 
 use crate::model::{
@@ -70,10 +71,13 @@ struct AgentExecutionServiceInner {
     registry: Mutex<ExecutionRegistry>,
     /// Signalled with `registry` whenever an execution's observer is released.
     observer_released: Condvar,
-    /// Where a command without an absolute `workdir` runs: the primary
-    /// workspace root, which the application sets, and sets again when the
-    /// workspace changes.
-    working_directory: RwLock<Option<PathBuf>>,
+    /// The workspace roots, which the application sets, and sets again when
+    /// the workspace changes. The first (the primary root) is where a
+    /// command without an absolute `workdir` runs; all are writable in a
+    /// workspace-write sandbox.
+    workspace_roots: RwLock<Vec<PathBuf>>,
+    /// What confines a command that asks for a sandbox.
+    sandbox: Sandbox,
 }
 
 impl AgentExecutionService {
@@ -100,7 +104,13 @@ impl AgentExecutionService {
         Self::with_process_port(Arc::new(ExecutorAgentExecutionPort::new(executor)))
     }
 
+    /// The service over `process`, with this machine's sandbox
+    /// ([`Sandbox::detect`]).
     pub fn with_process_port(process: Arc<dyn AgentExecutionProcessPort>) -> Self {
+        Self::with_sandbox(process, Sandbox::detect())
+    }
+
+    pub fn with_sandbox(process: Arc<dyn AgentExecutionProcessPort>, sandbox: Sandbox) -> Self {
         Self {
             inner: Arc::new(AgentExecutionServiceInner {
                 process,
@@ -109,9 +119,14 @@ impl AgentExecutionService {
                     records: HashMap::new(),
                 }),
                 observer_released: Condvar::new(),
-                working_directory: RwLock::new(None),
+                workspace_roots: RwLock::new(Vec::new()),
+                sandbox,
             }),
         }
+    }
+
+    pub fn sandbox(&self) -> &Sandbox {
+        &self.inner.sandbox
     }
 
     #[cfg(any(test, feature = "test-support"))]
@@ -126,20 +141,39 @@ impl AgentExecutionService {
         &self,
         request: &ExecCommandRequest,
     ) -> Result<hanafubuki_agent_approval::ApprovalAction, AgentExecutionError> {
-        Ok(
-            prepare_exec_command(request, self.working_directory().as_deref())?
-                .action()
-                .clone(),
-        )
+        let prepared = prepare_exec_command(request, self.working_directory().as_deref())?;
+        // A command its sandbox cannot run is refused before anyone is
+        // asked to approve it.
+        self.sandboxed(prepared.plan.command.clone(), &request.sandbox)?;
+        Ok(prepared.action().clone())
     }
 
-    /// Sets the directory a command without an absolute `workdir` runs in
-    /// (see [`ExecCommandRequest::workdir`]).
-    pub fn set_working_directory(&self, directory: PathBuf) {
-        *self.inner.working_directory.write() = Some(directory);
+    /// Sets the workspace roots, the primary first: the directory a command
+    /// without an absolute `workdir` runs in (see
+    /// [`ExecCommandRequest::workdir`]), and what a workspace-write sandbox
+    /// lets commands write.
+    pub fn set_workspace_roots(&self, roots: Vec<PathBuf>) {
+        *self.inner.workspace_roots.write() = roots;
+    }
+
+    pub fn workspace_roots(&self) -> Vec<PathBuf> {
+        self.inner.workspace_roots.read().clone()
     }
 
     pub fn working_directory(&self) -> Option<PathBuf> {
-        self.inner.working_directory.read().clone()
+        self.inner.workspace_roots.read().first().cloned()
+    }
+
+    /// `command` as `settings` confine it over the workspace roots.
+    fn sandboxed(
+        &self,
+        command: Vec<String>,
+        settings: &SandboxSettings,
+    ) -> Result<Vec<String>, AgentExecutionError> {
+        let policy = settings.policy(&self.workspace_roots());
+        self.inner
+            .sandbox
+            .wrap(&policy, command)
+            .map_err(AgentExecutionError::Sandbox)
     }
 }

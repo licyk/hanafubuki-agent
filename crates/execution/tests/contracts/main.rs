@@ -17,6 +17,8 @@ use hanafubuki_agent_execution::{
 };
 use hanafubuki_agent_foundation::cancellation::CancellationToken;
 use hanafubuki_agent_process::executor::{EnvironmentInheritance, ExecutorIoMode};
+#[cfg(unix)]
+use hanafubuki_agent_sandbox::SandboxSettings;
 
 fn command_request() -> StartCommandRequest {
     StartCommandRequest {
@@ -73,6 +75,7 @@ fn exec_request(tty: bool) -> ExecCommandRequest {
         workdir: Some(std::env::current_dir().unwrap()),
         environment: BTreeMap::new(),
         origin: ApprovalOrigin::Model,
+        sandbox: SandboxSettings::full_access(),
     }
 }
 

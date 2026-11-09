@@ -48,9 +48,9 @@ pub use providers::{
 };
 pub use recovery::{AgentConfigProblem, AgentConfigRecovery};
 pub use settings::{
-    agent_settings_fields, AgentMemorySettings, AgentPermissionMode, AgentSettings,
-    AgentSettingsPatch, AgentWebSearchProvider, MAX_AGENT_DISABLED_PLUGINS,
-    MAX_AGENT_PLUGIN_NAME_BYTES,
+    agent_settings_fields, AgentMemorySettings, AgentPermissionMode, AgentSandboxMode,
+    AgentSandboxWorkspaceWrite, AgentSettings, AgentSettingsPatch, AgentWebSearchProvider,
+    MAX_AGENT_DISABLED_PLUGINS, MAX_AGENT_PLUGIN_NAME_BYTES,
 };
 pub use standalone::{AgentLogLevel, AgentNetworkSettings, AgentStandaloneSettings};
 pub use store::{

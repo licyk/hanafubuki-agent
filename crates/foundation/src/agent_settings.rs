@@ -21,6 +21,30 @@ pub enum AgentPermissionMode {
     FullAccess,
 }
 
+/// What the operating system lets the commands the model runs do, Codex's
+/// `sandbox_mode`: read anything and write nothing, also write in the
+/// workspace, or no sandbox. Independent of [`AgentPermissionMode`], which
+/// decides who approves a command, not what it can reach.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum AgentSandboxMode {
+    ReadOnly,
+    WorkspaceWrite,
+    FullAccess,
+}
+
+impl AgentSandboxMode {
+    pub const ALL: &'static [Self] = &[Self::ReadOnly, Self::WorkspaceWrite, Self::FullAccess];
+
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::ReadOnly => "read-only",
+            Self::WorkspaceWrite => "workspace-write",
+            Self::FullAccess => "full-access",
+        }
+    }
+}
+
 /// Whether a session's history may feed memory generation. The kernel
 /// persists it with the session and the memory store per source, both in
 /// this snake_case form.

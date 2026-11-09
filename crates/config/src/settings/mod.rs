@@ -2,8 +2,9 @@
 //! plugins run and how its web tools reach the network.
 
 use std::collections::BTreeSet;
+use std::path::PathBuf;
 
-pub use hanafubuki_agent_foundation::agent_settings::AgentPermissionMode;
+pub use hanafubuki_agent_foundation::agent_settings::{AgentPermissionMode, AgentSandboxMode};
 use hanafubuki_agent_foundation::url_policy::{UrlPolicy, MAX_URL_BYTES};
 use serde::{Deserialize, Deserializer, Serialize};
 
@@ -17,6 +18,12 @@ pub use schema::agent_settings_fields;
 #[serde(rename_all = "camelCase")]
 pub struct AgentSettings {
     pub permission_mode: AgentPermissionMode,
+    /// What the commands the model runs can reach. `None` is the
+    /// platform's default (`hanafubuki_agent_sandbox::platform_default_mode`),
+    /// which is never written to the file, so it follows the platforms that
+    /// gain a sandbox.
+    pub sandbox_mode: Option<AgentSandboxMode>,
+    pub sandbox_workspace_write: AgentSandboxWorkspaceWrite,
     pub memory: AgentMemorySettings,
     /// Names of the Agent plugins the user turned off. The plugin host leaves
     /// them unmounted and disposes one that is running when it is added; a
@@ -34,6 +41,8 @@ impl Default for AgentSettings {
             // The most restrictive mode, so an unreadable mode never grants
             // more than the user chose.
             permission_mode: AgentPermissionMode::Manual,
+            sandbox_mode: None,
+            sandbox_workspace_write: AgentSandboxWorkspaceWrite::default(),
             memory: AgentMemorySettings::default(),
             disabled_plugins: BTreeSet::new(),
             web_search_provider: AgentWebSearchProvider::Auto,
@@ -61,6 +70,17 @@ impl AgentWebSearchProvider {
             Self::Searxng => "searxng",
         }
     }
+}
+
+/// Codex's `[sandbox_workspace_write]`: what workspace-write allows beside
+/// the workspace roots and the temporary directories.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AgentSandboxWorkspaceWrite {
+    /// More directories commands may write in, each absolute.
+    pub writable_roots: Vec<PathBuf>,
+    /// Whether commands may use the network.
+    pub network_access: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -108,6 +128,10 @@ pub const MAX_AGENT_PLUGIN_NAME_BYTES: usize = 128;
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct AgentSettingsPatch {
     pub permission_mode: Option<AgentPermissionMode>,
+    /// `null` returns to the platform's default; a missing key leaves it.
+    #[serde(default, deserialize_with = "present")]
+    pub sandbox_mode: Option<Option<AgentSandboxMode>>,
+    pub sandbox_workspace_write: Option<AgentSandboxWorkspaceWrite>,
     pub memory: Option<AgentMemorySettings>,
     pub web_search_provider: Option<AgentWebSearchProvider>,
     /// `null` clears the endpoint; a missing key leaves it.
@@ -126,6 +150,13 @@ impl AgentSettingsPatch {
     pub(crate) fn apply(self, settings: &mut AgentSettings) -> Result<(), String> {
         if let Some(mode) = self.permission_mode {
             settings.permission_mode = mode;
+        }
+        if let Some(mode) = self.sandbox_mode {
+            settings.sandbox_mode = mode;
+        }
+        if let Some(workspace_write) = self.sandbox_workspace_write {
+            validate_sandbox_workspace_write(&workspace_write)?;
+            settings.sandbox_workspace_write = workspace_write;
         }
         if let Some(memory) = self.memory {
             validate_memory(&memory)?;
@@ -149,6 +180,19 @@ impl AgentSettingsPatch {
         }
         validate_search_pair(settings)
     }
+}
+
+pub(crate) fn validate_sandbox_workspace_write(
+    settings: &AgentSandboxWorkspaceWrite,
+) -> Result<(), String> {
+    if settings
+        .writable_roots
+        .iter()
+        .any(|root| !root.is_absolute())
+    {
+        return Err("sandboxWorkspaceWrite.writableRoots must hold absolute paths".to_string());
+    }
+    Ok(())
 }
 
 pub(crate) fn validate_memory(settings: &AgentMemorySettings) -> Result<(), String> {

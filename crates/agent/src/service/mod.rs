@@ -284,7 +284,7 @@ impl AgentApplicationService {
             workspace_roots.roots().len(),
             workspace_roots.primary().display()
         );
-        executions.set_working_directory(workspace_roots.primary().clone());
+        executions.set_workspace_roots(workspace_roots.roots().to_vec());
         let files = WorkspaceFsService::new(
             WorkspaceFsPolicy::new(workspace_roots.into_vec(), workspace.protected_roots())
                 .map_err(|error| error.to_string())?,

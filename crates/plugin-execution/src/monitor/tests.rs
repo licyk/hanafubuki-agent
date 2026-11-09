@@ -55,6 +55,7 @@ fn unified_exec_watcher_publishes_before_wait_without_consuming_model_output() {
         workdir: Some(std::env::current_dir().unwrap()),
         environment: BTreeMap::new(),
         origin: ApprovalOrigin::Model,
+        sandbox: hanafubuki_agent_sandbox::SandboxSettings::full_access(),
     };
     let action = executions.prepare_exec_command_action(&request).unwrap();
     let approval_context =
@@ -177,6 +178,7 @@ fn watcher_registration_failure_is_explicit_and_confirms_process_cleanup() {
         workdir: Some(std::env::current_dir().unwrap()),
         environment: BTreeMap::new(),
         origin: ApprovalOrigin::Model,
+        sandbox: hanafubuki_agent_sandbox::SandboxSettings::full_access(),
     };
     let action = executions.prepare_exec_command_action(&request).unwrap();
     let approval_context =

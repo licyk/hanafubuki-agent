@@ -674,7 +674,7 @@ fn a_command_runs_in_the_working_directory_not_the_processs() {
         Err(AgentExecutionError::Resolution(_))
     ));
 
-    service.set_working_directory(workspace.path().to_path_buf());
+    service.set_workspace_roots(vec![workspace.path().to_path_buf()]);
     for (workdir, expected) in [
         (None, root.clone()),
         (Some("sub"), root.join("sub")),
@@ -692,4 +692,53 @@ fn a_command_runs_in_the_working_directory_not_the_processs() {
             .unwrap();
         assert_eq!(process.starts().last().unwrap().cwd, Some(expected));
     }
+}
+
+/// A command that asks for a sandbox this machine cannot give is refused
+/// before its approval and again at its start, and nothing is spawned; one
+/// that asks for none runs as it is.
+#[test]
+#[cfg(unix)]
+fn a_command_whose_sandbox_is_unavailable_fails_closed() {
+    let process = FakeAgentExecutionProcessPort::shared();
+    process.finish_on_start("", 0);
+    let service = AgentExecutionService::with_sandbox(
+        process.clone(),
+        hanafubuki_agent_sandbox::Sandbox::unavailable("simulated"),
+    );
+    let unsandboxed = exec_request(false);
+    let action = service.prepare_exec_command_action(&unsandboxed).unwrap();
+
+    for mode in [
+        hanafubuki_agent_sandbox::AgentSandboxMode::ReadOnly,
+        hanafubuki_agent_sandbox::AgentSandboxMode::WorkspaceWrite,
+    ] {
+        let mut request = exec_request(false);
+        request.sandbox.mode = mode;
+        let refused = service.prepare_exec_command_action(&request).unwrap_err();
+        assert!(
+            matches!(&refused, AgentExecutionError::Sandbox(_)),
+            "{refused:?}"
+        );
+        assert!(refused.to_string().contains("simulated"), "{refused}");
+        let started = service.start_exec_command(
+            AgentExecutionScope::for_agent_session(41).unwrap(),
+            request,
+            Some(&approve_action(&action)),
+            &CancellationToken::default(),
+        );
+        assert!(matches!(started, Err(AgentExecutionError::Sandbox(_))));
+    }
+    assert!(process.starts().is_empty());
+
+    service
+        .start_exec_command(
+            AgentExecutionScope::for_agent_session(41).unwrap(),
+            unsandboxed,
+            Some(&approve_action(&action)),
+            &CancellationToken::default(),
+        )
+        .unwrap();
+    let command = &process.starts()[0].command;
+    assert_eq!(command[1..], ["-lc", "printf unified"]);
 }

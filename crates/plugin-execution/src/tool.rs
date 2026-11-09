@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use hanafubuki_agent_approval::{ApprovalAction, AuthorizedAction, PermissionRequirement};
+use hanafubuki_agent_contracts::tools::arguments::ArgumentNotes;
 use hanafubuki_agent_contracts::{
     AgentActivityAction, AgentMemoryContextEffect, AgentToolError, AgentToolHandler,
     AgentToolProgressUpdate, BlockingService, ToolDescriptor, ToolEffect, ToolFuture,
@@ -12,6 +13,7 @@ use hanafubuki_agent_execution::{
 };
 use hanafubuki_agent_foundation::background_worker::BackgroundWorkerGroup;
 use hanafubuki_agent_foundation::cancellation::CancellationToken;
+use hanafubuki_agent_sandbox::SandboxSettings;
 use hanafubuki_agent_tool_contracts::{
     ToolContractError, ToolExecutionClass, ToolExposure, ToolName,
 };
@@ -94,8 +96,7 @@ impl AgentToolHandler for ExecTool {
         invocation: &'a ToolInvocation,
     ) -> ToolFuture<'a, Result<PermissionRequirement<ApprovalAction>, AgentToolError>> {
         Box::pin(async move {
-            let (ExecCall::ExecCommand(request), _) = parse(self.kind, &invocation.arguments)?
-            else {
+            let (ExecCall::ExecCommand(request), _) = parse_call(self.kind, invocation)? else {
                 return Ok(PermissionRequirement::NotRequired);
             };
             let executions = self.services.executions.clone();
@@ -121,7 +122,7 @@ impl AgentToolHandler for ExecTool {
         approval: Option<AuthorizedAction>,
     ) -> ToolFuture<'_, Result<ToolResult, AgentToolError>> {
         Box::pin(async move {
-            let (call, notes) = parse(self.kind, &invocation.arguments)?;
+            let (call, notes) = parse_call(self.kind, &invocation)?;
             let services = self.services.clone();
             let activity = ExecutionActivity {
                 session_id: invocation.context.session_id,
@@ -143,6 +144,28 @@ impl AgentToolHandler for ExecTool {
                 .map_err(AgentToolError::Failed)
         })
     }
+}
+
+/// The call `invocation` makes, its command confined by the sandbox its
+/// turn froze. A turn without one (restored after a restart, which keeps no
+/// turn data) runs no command, rather than one unconfined.
+fn parse_call(
+    kind: ExecToolKind,
+    invocation: &ToolInvocation,
+) -> Result<(ExecCall, ArgumentNotes), AgentToolError> {
+    let (mut call, notes) = parse(kind, &invocation.arguments)?;
+    if let ExecCall::ExecCommand(request) = &mut call {
+        request.sandbox = invocation
+            .turn
+            .get::<SandboxSettings>()
+            .cloned()
+            .ok_or_else(|| {
+                AgentToolError::Failed(
+                    "the turn has no sandbox settings, so it runs no command".to_string(),
+                )
+            })?;
+    }
+    Ok((call, notes))
 }
 
 fn execute(

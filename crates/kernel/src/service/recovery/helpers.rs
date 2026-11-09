@@ -144,6 +144,7 @@ impl AgentService {
                 pending_user_input: runtime.pending_user_input,
                 allowed_tools: BTreeSet::new(),
                 permission_mode: None,
+                sandbox_mode: None,
             },
         }
     }
