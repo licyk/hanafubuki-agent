@@ -156,7 +156,7 @@ moves its pin.
         `tui.terminalTitle`. Not ported: Codex's model-named themes, a
         background query for the default theme, a streaming highlighter.
   - [ ] P5b: `/keymap`, `/presets`, `/config`, `/warnings`, `/memories`.
-- [ ] P6: per-session permission mode (`set_session_permission_mode`,
+- [x] P6: per-session permission mode (`set_session_permission_mode`,
       `turns.rs` no longer overrides it), `/permissions`, `/approve`
       (`approve_denied_action`, a model-visible note: goldens).
   - [x] The facade's half: `set_session_permission_mode` and
@@ -170,15 +170,17 @@ moves its pin.
         evidence). No golden or corpus change; the note's text is pinned in
         `kernel/tests/loop_contract/approved_action.rs`. Permissions,
         "Session mode" and "Approving a denied action".
-  - [ ] The interface's half: `/permissions`, `/approve` (the review ids of
-        `PermissionReviewCompleted { Denied }`); `/status` shows the mode in
-        effect (the session's, else `settings_view().settings.permission_mode`).
-  - Hanafubuki, at its next pin: new calls `set_session_permission_mode`,
+  - [x] The interface's half: `/permissions [mode]` (full access asks
+        first; the session only; `/status` and the status line show the
+        mode in effect); `/approve` (the session's latest ten denied
+        reviews, searchable; the retry is still reviewed).
+  - Hanafubuki, at its next pin: the re-export `PermissionReviewStatus`;
+    new calls `set_session_permission_mode`,
     `session_permission_mode`, `approve_denied_action`; kernel variant
     `PermissionReviewEvidenceRole::UserApproval`; the review prompt gained
     one sentence (no golden covers review requests). Differences from
     Codex: refused during a turn; a compaction drops older denials.
-- [ ] P7: a mutable standalone workspace, `WorkspaceFsPolicy` rebuilt,
+- [x] P7: a mutable standalone workspace, `WorkspaceFsPolicy` rebuilt,
       `exec_command`'s default workdir (the `-C` bug), `/cd`;
       `hanafubuki-agent-worktree` and `plugin-worktree`, `/worktree`, the
       worktree choice in `/fork`.
@@ -194,8 +196,11 @@ moves its pin.
         worktree's git metadata) and the `worktree` row; facade calls
         `worktree_create`, `worktree_list`, `worktree_bind`,
         `worktree_remove` (feature calls).
-  - [ ] The interface's half: `/cd`, `/worktree`, the worktree choice in
-        `/fork`.
+  - [x] The interface's half: `/cd [path]` (says the project
+        configuration stays the one read at start); `/worktree` (continue
+        this conversation, start a new one, browse: resume, copy, remove);
+        `/fork` asks "here" or "into a new worktree" in a Git repository.
+        `hanafubuki_agent_tui::run` takes `&Arc<AgentRuntime>`.
   - Open: the project configuration layer (trust level, the project's
     `config.toml`) does not follow `/cd`; it stays the project read at
     start (switching it needs a new instance). The worktree service type
