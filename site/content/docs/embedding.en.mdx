@@ -1,9 +1,452 @@
 ---
-title: Embedding
-description: Embed the Agent in an application.
-icon: Boxes
+title: Embedding the Agent
+description: Embed hanafubuki-agent in a host application as a Rust library — dependencies, composition, host ports, the panic-hook bridge, start and shutdown.
+icon: Package
 ---
 
-{/* placeholder: replaced by the development writer */}
+hanafubuki-agent runs in two ways, and both are the same composition:
 
-<Callout type="warn">This page is being written.</Callout>
+- **Standalone**: the `hanafubuki-agent` command line and terminal interface. The facade crate's `AgentRuntime::standalone` supplies a default for every host port (the working directory as the workspace, the operating system's keyring, the proxy from the configuration file).
+- **Embedded**: a host application (such as [Hanafubuki](https://github.com/licyk/Hanafubuki)) composes the Agent itself and supplies plugins, workspace, context, instructions, network settings and a secret store through the **host interface**. The Agent knows none of the host's domains and depends on none of its crates; dependencies point one way: the host depends on the Agent.
+
+This page covers embedding. Writing a host plugin is [Host plugins](/docs/host-plugins); how the parts work together is [Architecture](/docs/architecture).
+
+## Adding the crates
+
+```toml
+[dependencies]
+hanafubuki-agent = "0.1"
+hanafubuki-agent-contracts = "0.1"
+hanafubuki-agent-runtime = "0.1"
+# The tools of a host plugin also need:
+hanafubuki-agent-approval = "0.1"
+hanafubuki-agent-tool-contracts = "0.1"
+kardia-core = "0.2.0"
+```
+
+| Crate                             | What it is for                                                                                                              |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `hanafubuki-agent`                | The facade: the composition, the slot, the service API, the host interface, the configuration (it re-exports `AgentConfig`) |
+| `hanafubuki-agent-contracts`      | The plugin API: registries, the tool and context contracts, `TurnExtensions` (which `WorkspaceRootsPort` needs)             |
+| `hanafubuki-agent-runtime`        | `ContainedRuntime`: each Agent instance's runtime, named in `AgentConstructor`'s signature                                  |
+| `hanafubuki-agent-approval`       | The approval types a host plugin's tools use (`ApprovalAction`, `PermissionRequirement`, `AuthorizedAction`)                |
+| `hanafubuki-agent-tool-contracts` | Tool names and tool-spec types (`ToolName`, `ToolExposure`, `ToolExecutionClass`)                                           |
+
+Plugins are kardia `PluginDef`s, hence `kardia-core`. A host should not depend on the kernel (`hanafubuki-agent-kernel`), the model API or any other internal crate; the facade re-exports what a host needs.
+
+<Callout title="Versions">
+  Before 1.0 a minor release may break (Cargo's rule for `0.x`), so depend on a minor requirement
+  such as `"0.1"` and move with each minor release by hand. Until the first release is on crates.io,
+  a host pins a git revision instead (as Hanafubuki does today).
+</Callout>
+
+## Composition
+
+Embedded, the host assembles the parts the standalone mode uses too:
+
+| Part                      | What it does                                                                                                                        |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `AgentSlot`               | The Agent's state machine and supervisor: start, automatic restarts after a kernel fault, the crash-loop stop, on and off, status   |
+| `AgentStartMarker`        | The crash-loop marker (`start-marker.json`), which also holds the data directory's lock                                             |
+| `DesktopAgent`            | The slot, the marker and the environment of the Agent's child processes; `start` and `shutdown`                                     |
+| `AgentLaunch`             | The closure that builds every Agent instance (`AgentConstructor`) and the path of the process-group ledger                          |
+| `AgentServiceInputs`      | What the closure hands `AgentApplicationService::open`: configuration, storage, Skill roots, blocking pool, event sinks, host ports |
+| `AgentApplicationService` | The running Agent's service API: sessions, turns, settings, Providers, MCP, Skills, memory, plugin status                           |
+
+The construct closure runs on every start: the first, a user's restart, an automatic restart after a kernel fault, turning the Agent back on. So the host ports are **built again for every instance** inside the closure: each instance mounts the plugin rows it is given once.
+
+A complete minimal example:
+
+```rust
+use std::collections::{BTreeMap, HashMap};
+use std::path::PathBuf;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
+
+use hanafubuki_agent::{
+    agent_workspace_roots_from, AgentApplicationService, AgentConfig, AgentConstructor, AgentEvent,
+    AgentEventKind, AgentEventSink, AgentHostInstructions, AgentHostPorts, AgentInstanceInputs,
+    AgentLaunch, AgentPluginGroup, AgentPluginRow, AgentProxy, AgentServiceInputs,
+    AgentSessionMode, AgentSlot, AgentStartMarker, AgentStatusEventSink, AgentStoragePaths,
+    AgentTurnRequest, AgentWorkspaceRoots, DesktopAgent, NetworkSettingsPort, NoHostContext,
+    NoopAgentPluginEventSink, NoopMcpEventSink, SecretFuture, SecretKey, SecretStore, SkillRoots,
+    WorkspaceRootsPort, AGENT_SHUTDOWN_BUDGET,
+};
+use hanafubuki_agent_contracts::TurnExtensions;
+use hanafubuki_agent_runtime::ContainedRuntime;
+use parking_lot::Mutex;
+
+fn main() -> Result<(), String> {
+    let config_dir = PathBuf::from("/var/lib/my-app/config/agent");
+    let storage = AgentStoragePaths::under(PathBuf::from("/var/lib/my-app/data/agent"));
+    let project = PathBuf::from("/srv/project");
+
+    // 1. The slot and its crash-loop marker, then the Agent beside the host.
+    let marker = AgentStartMarker::new(storage.start_marker_file.clone())
+        .with_crash_record(storage.crash_record_file.clone());
+    let slot = AgentSlot::new(marker.disabled_reason(true), Arc::new(LogStatus));
+    let agent = DesktopAgent::new(slot, marker, HashMap::new())?;
+
+    // 2. What builds every Agent instance: the first start and each restart.
+    let process_groups_file = storage.process_groups_file.clone();
+    let construct: AgentConstructor = Arc::new(
+        move |runtime: &ContainedRuntime, instance: AgentInstanceInputs| {
+            let blocking = runtime.blocking_port();
+            AgentApplicationService::open(AgentServiceInputs {
+                config: AgentConfig::new(&config_dir),
+                storage_paths: storage.clone(),
+                skill_roots: SkillRoots {
+                    system: storage.skills_root.join("system"),
+                    user: storage.skills_root.join("packages"),
+                    install_bundled_system_skills: true,
+                    state_file: storage.skill_state_file.clone(),
+                },
+                blocking,
+                mcp_event_sink: Arc::new(NoopMcpEventSink),
+                plugin_event_sink: Arc::new(NoopAgentPluginEventSink),
+                host: AgentHostPorts {
+                    plugins: vec![AgentPluginRow::unconfigured(
+                        AgentPluginGroup::Capability,
+                        app_info_plugin(),
+                    )],
+                    workspace: Arc::new(ProjectRoots(project.clone())),
+                    steering_context: Arc::new(NoHostContext),
+                    instructions: AgentHostInstructions {
+                        identity: "You are My App's coding agent.".to_string(),
+                        application: "My App".to_string(),
+                        ..AgentHostInstructions::default()
+                    },
+                    network: Arc::new(SystemProxy),
+                    secrets: Arc::new(MemorySecrets::default()),
+                },
+                instance,
+            })
+        },
+    );
+
+    // 3. Start, and wait for the running Agent.
+    agent.start(AgentLaunch {
+        construct,
+        process_groups_file,
+    });
+    let handle = agent
+        .slot()
+        .wait_until_started(Instant::now() + Duration::from_secs(120))
+        .map_err(|unavailable| unavailable.to_string())?;
+
+    // 4. Every call into the Agent runs on its own runtime.
+    let turn = handle
+        .runtime()
+        .block_on({
+            let handle = handle.clone();
+            async move {
+                let session = handle.create_session(AgentSessionMode::Default).await?;
+                let request = AgentTurnRequest {
+                    text: "Summarize the README.".to_string(),
+                    images: Vec::new(),
+                    skills: Vec::new(),
+                    host: TurnExtensions::default(),
+                };
+                handle
+                    .submit_turn_with_sink(session.id, request, Arc::new(PrintEvents))
+                    .await
+            }
+        })
+        .map_err(|failure| failure.to_string())??;
+    println!("turn {:?} accepted", turn.turn_id);
+
+    // 5. Shut down within the budget, outside any async context.
+    for diagnostic in agent.shutdown(AGENT_SHUTDOWN_BUDGET) {
+        eprintln!("{} did not stop: {}", diagnostic.worker, diagnostic.message);
+    }
+    Ok(())
+}
+```
+
+`ProjectRoots`, `SystemProxy` and `MemorySecrets` (under [The host interface](#the-host-interface)) and `LogStatus` and `PrintEvents` (under [Events and history](#events-and-history)) are the host's own small types, in the same file as the code above and using its `use` lines; `app_info_plugin` is the example plugin of [Host plugins](/docs/host-plugins).
+
+Points to note:
+
+- `AgentSlot::new` takes an `Option<AgentDisabledReason>` first: `None` means the Agent will start. `AgentStartMarker::disabled_reason(module_enabled)` gives the reason to stay off when the host turned the Agent off, or when the last starts never finished (a crash loop, `CRASH_LOOP_STARTS` being 3).
+- `DesktopAgent::new`'s third argument is the environment the Agent's child processes inherit in place of this process's (`HashMap<String, Option<String>>`, `None` removing a variable). When the host's proxy changes, `DesktopAgent::replace_child_environment` replaces the overlay applied last.
+- `start` returns at once: the start runs on the Agent instance's own runtime (construction and recovery on its blocking pool, the plugins as its tasks, the MCP servers connecting in the background). A failure leaves the slot `Failed` and never reaches the host.
+- `wait_until_started` returns the running `AgentHandle`, or why the Agent does not run (`AgentUnavailable`, whose `Display` is "the Agent is unavailable: …").
+- `AgentHandle` dereferences to `AgentApplicationService`. Its async methods run on `handle.runtime()` (`ContainedRuntime::block_on`, or `spawn` on its handle): kardia and the Agent's tasks run only there, and only there is a panic contained.
+
+### The same composition, standalone
+
+Without a host, `AgentRuntime::standalone` composes the same slot, marker, `DesktopAgent` and `AgentLaunch`, with a default for every port. The command line uses it like this:
+
+```rust
+use std::time::Duration;
+
+use hanafubuki_agent::{
+    logging, panic, AgentDirs, AgentRuntime, AgentRuntimeHost, AgentRuntimeOptions,
+    AgentStartOptions, ConfigOverrides, AGENT_SHUTDOWN_BUDGET,
+};
+
+fn main() -> Result<(), String> {
+    let runtime = AgentRuntime::standalone(
+        AgentRuntimeOptions {
+            dirs: AgentDirs::standalone()?,
+            bundled_skills: None,
+            cwd: std::env::current_dir().map_err(|error| error.to_string())?,
+            add_dirs: Vec::new(),
+            profile: None,
+            overrides: ConfigOverrides::default(),
+            start: AgentStartOptions::default(),
+        },
+        AgentRuntimeHost::default(),
+    )?;
+    panic::configure_crash_record(runtime.storage_paths().crash_record_file.clone());
+    panic::install_panic_hook(logging::logging_blocked);
+
+    runtime.start();
+    let agent = runtime
+        .wait_until_started(Duration::from_secs(120))
+        .map_err(|unavailable| unavailable.to_string())?;
+    // … call the agent's methods on agent.runtime(), as embedded …
+    drop(agent);
+    runtime.shutdown(AGENT_SHUTDOWN_BUDGET);
+    Ok(())
+}
+```
+
+`AgentRuntimeOptions` holds the directories (`AgentDirs`, which follows `HANAFUBUKI_AGENT_HOME`), an optional System Skills directory, the working directory and `--add-dir`s, the configuration profile, the `-c` overrides and the first start's options. `AgentRuntime::standalone` reads the layered configuration once right away, so a bad profile fails there. A standalone first start always runs: a command line that starts the Agent asks for it, so an earlier run's unfinished starts do not keep it off (the crash marker still counts them).
+
+`AgentRuntimeHost` is what a standalone consumer replaces:
+
+| Field           | Default                              | Notes                                                           |
+| --------------- | ------------------------------------ | --------------------------------------------------------------- |
+| `secrets`       | `None`: the OS keyring (`keyring` 4) | service `org.licyk.hanafubuki-agent.secrets`                    |
+| `status`        | `NoopAgentStatusEventSink`           | `status_changed()` on every change of the slot, with no payload |
+| `plugin_events` | `NoopAgentPluginEventSink`           | hints that the plugin status changed                            |
+| `mcp_events`    | `NoopMcpEventSink`                   | MCP status and catalog changes                                  |
+
+Turn and session events do not go through it: they go to the `AgentEventSink` each call is given (see [Events and history](#events-and-history)).
+
+## The host interface
+
+A host adds to the Agent only through `AgentHostPorts`. The interface takes plain values (`PathBuf`, strings, maps) or the Agent's own types: the Agent carries its own copies of the foundation, process and module-host crates, whose types are distinct from a host's of the same name, so the host adapts at the edge.
+
+| Field              | Type                           | What it supplies                                                                                      | Standalone default                                    |
+| ------------------ | ------------------------------ | ----------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| `plugins`          | `Vec<AgentPluginRow>`          | the host's plugin rows                                                                                | none                                                  |
+| `workspace`        | `Arc<dyn WorkspaceRootsPort>`  | the workspace roots, extra read roots, the directory instruction discovery selects, file-search roots | the working directory, its Git root, the `--add-dir`s |
+| `steering_context` | `Arc<dyn HostContextPort>`     | the host context a steering message carries                                                           | `NoHostContext`                                       |
+| `instructions`     | `AgentHostInstructions`        | identity, application name, and what the host adds to the base instructions                           | `AgentHostInstructions::default()`                    |
+| `network`          | `Arc<dyn NetworkSettingsPort>` | the proxy the web tools, MCP and OAuth use                                                            | the configuration's `[network] proxy`                 |
+| `secrets`          | `Arc<dyn SecretStore>`         | where MCP OAuth tokens are kept                                                                       | the OS keyring                                        |
+
+### Plugin rows
+
+`AgentPluginRow::unconfigured(group, plugin)`, with `group` either `AgentPluginGroup::Capability` (tools, tool sources and their rules) or `AgentPluginGroup::Context` (world-state sections). A host's rows mount after the Agent's own capability plugins and before its context plugins, so the host's world-state sections come before the workspace roots, environment and permission mode. Host plugins follow the same rules as the Agent's own: `disabledPlugins` turns them off and safe mode leaves them unmounted. How to write one is [Host plugins](/docs/host-plugins).
+
+### `WorkspaceRootsPort`
+
+```rust
+/// One project directory as the whole workspace.
+struct ProjectRoots(PathBuf);
+
+impl WorkspaceRootsPort for ProjectRoots {
+    fn roots(&self) -> Result<AgentWorkspaceRoots, String> {
+        agent_workspace_roots_from([self.0.clone()]).ok_or_else(|| "no workspace".to_string())
+    }
+
+    fn extra_read_roots(&self) -> Vec<PathBuf> {
+        Vec::new()
+    }
+
+    fn selected(&self, _host: &TurnExtensions) -> Option<PathBuf> {
+        None
+    }
+
+    fn search_roots(&self, _host: &TurnExtensions) -> Result<Vec<(String, PathBuf)>, String> {
+        Ok(vec![("project".to_string(), self.0.clone())])
+    }
+}
+```
+
+- `roots()` is read again for every turn and every Skill catalog read; the first root is the base of relative requests. `agent_workspace_roots_from` removes duplicates (by path identity) and roots nested in an earlier one.
+- `extra_read_roots()`: directories outside the workspace the file tools may read without approval (Hanafubuki: the application's data and log directories).
+- `selected(host)`: the directory the turn's host input selects; `AGENTS.md` files are read from each root down to it (Hanafubuki: the instance the user is looking at).
+- `search_roots(host)`: the directories `@` file search walks, each with its label.
+- Every method may block; the Agent calls them on its blocking pool.
+
+### `HostContextPort`
+
+The host context a steering message (a message added to a running turn) carries: `steering_context(host)` returns an `Option<AgentHostContext>` (a `ContextSectionKind` and its content, at most `MAXIMUM_HOST_CONTEXT_BYTES`, 4 KiB). The kernel writes it to the world state as a section of that kind when it changed; the host's plugin registers the kind's renderer. Use `NoHostContext` when there is none.
+
+### `AgentHostInstructions`
+
+| Field         | What it is                                                                        | Default (standalone)                     |
+| ------------- | --------------------------------------------------------------------------------- | ---------------------------------------- |
+| `identity`    | the sentence that opens the base instructions (`{identity}` in `prompts/base.md`) | `You are a coding and operations agent.` |
+| `application` | the application name the environment section reports                              | `hanafubuki-agent`                       |
+| `sections`    | Markdown after the tool guidance: how the host's tools and context are used       | empty                                    |
+| `ownership`   | the paragraph that closes "Approval and ownership": what the host owns            | empty                                    |
+
+The blocks are joined one blank line apart. The text is model-visible, so a host pins it with goldens of its own (Hanafubuki's are in `hanafubuki-agent-integration`).
+
+### `NetworkSettingsPort` and `SecretStore`
+
+```rust
+struct SystemProxy;
+
+impl NetworkSettingsPort for SystemProxy {
+    fn proxy(&self) -> Result<AgentProxy, String> {
+        Ok(AgentProxy::System)
+    }
+}
+
+/// Keeps MCP OAuth tokens in memory; a real host uses the platform's store.
+#[derive(Default)]
+struct MemorySecrets(Mutex<BTreeMap<SecretKey, Vec<u8>>>);
+
+impl SecretStore for MemorySecrets {
+    fn get<'a>(&'a self, key: &'a SecretKey) -> SecretFuture<'a, Option<Vec<u8>>> {
+        Box::pin(async move { Ok(self.0.lock().get(key).cloned()) })
+    }
+
+    fn set<'a>(&'a self, key: &'a SecretKey, value: Vec<u8>) -> SecretFuture<'a, ()> {
+        Box::pin(async move {
+            self.0.lock().insert(key.clone(), value);
+            Ok(())
+        })
+    }
+
+    fn delete<'a>(&'a self, key: &'a SecretKey) -> SecretFuture<'a, ()> {
+        Box::pin(async move {
+            self.0.lock().remove(key);
+            Ok(())
+        })
+    }
+}
+```
+
+- `NetworkSettingsPort::proxy()` is read when the Agent starts and again whenever the host calls `AgentSlot::apply_saved_settings`; it answers from memory and must not block. `AgentProxy` is `System`, `Disabled` or `Explicit(url)`.
+- `SecretStore` calls may block (a keyring), so a host runs them on the Agent's blocking pool (`ContainedRuntime::blocking_port` with `run_blocking_operation`), as Hanafubuki's `KeyringSecretStore` does.
+- Locks are `parking_lot`'s: an Agent panic unwinds on a contained thread, which would poison a std lock.
+
+### Host input
+
+`AgentTurnRequest`, `AgentSteeringRequest` and `AgentFileSearch` each have a `host: TurnExtensions` field: what the host submits beside a message or a search, keyed by type. The Agent passes it on unread, to the context contributors (`ContextRequest::turn`), to `HostContextPort` and to `WorkspaceRootsPort`. The host's plugins and ports read the types they put in.
+
+## The panic-hook bridge
+
+The Agent's fault isolation rests on unwinding: a panic in plugin or kernel code unwinds, on a thread marked contained, to its catch, and becomes a tool error, a plugin fault or a kernel restart. So:
+
+- A host must **not** build with `panic = "abort"`.
+- A host that installs its own panic hook, and has it abort on a panic it does not see as contained, must also ask the Agent: the Agent marks its threads and guards in **its own** foundation, which the host's hook cannot see.
+
+```rust
+// Where the host's hook decides whether a panic is contained:
+let contained = host_says_contained() || hanafubuki_agent::panic::is_panic_contained();
+```
+
+Without the bridge every Agent panic aborts the host application. Hanafubuki's `platform::panic_hook` installs its hook with this second check and tests both outcomes in a child process (with the bridge the panic unwinds, without it the process aborts); that test is the host's.
+
+Before a fatal panic aborts the process, the host's hook should write the crash record at `AgentStoragePaths::crash_record_file` (`<data>/crash-record.json`): the Agent's crash-loop marker reads it to tell that an unfinished start ended in the host's own fatal panic. A host with no hook of its own can install the Agent foundation's, as the standalone binary does: `panic::configure_crash_record(...)`, then `panic::install_panic_hook(logging::logging_blocked)`.
+
+## The data directory's lock
+
+`<data_dir>/.lock` is an advisory lock (`flock` on Unix, `LockFileEx` on Windows) held from the Agent's first start until its shutdown, embedded and standalone alike. The history's SQLite index, the memory store and the process-group ledger assume one writer process; two processes on one data directory would corrupt the history and kill each other's processes.
+
+- A host does nothing for it: the start marker holds it.
+- While another process holds it, the start fails at construction with an error naming the directory; the host application runs on without its Agent.
+- Turning a host's Agent off (`AgentSlot::turn_off`) keeps the lock until the application quits, so a standalone Agent on that data directory is refused meanwhile.
+
+## Start, on and off, shutdown
+
+The slot's state (`AgentStatus::availability`) is `Disabled` (`setting` or `crashLoop`), `Starting`, `Running`, `Faulted`, `Stopping`, `Failed { stage, reason }` (`construct`, `recover`, `start`) or `Stopped`. `AgentStatusEventSink::status_changed()` carries no payload: read `AgentSlot::status()` again. The status also has the `generation` (which instance of this run), `safe_mode`, `degraded` (a plugin failed, its teardown is stuck, or it runs with a warning) and the quarantined sessions.
+
+| Call                                      | What it does                                                                                                                         |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `DesktopAgent::start(launch)`             | hands over the launch and starts the first instance; returns at once                                                                 |
+| `AgentSlot::wait_until_started(deadline)` | waits for the start to settle; the `AgentHandle`, or why there is none                                                               |
+| `AgentSlot::agent()`                      | the running Agent, or why there is none; holders resolve it **per call** rather than keep a handle                                   |
+| `AgentSlot::restart(options)`             | the user's restart, optionally in safe mode (`AgentStartOptions { safe_mode, rebuild_history_index }`); resets the crash-loop marker |
+| `AgentSlot::enable()` / `disable()`       | turns the Agent on / off; `turn_off(deadline)` turns it off and waits until the deadline                                             |
+| `AgentSlot::apply_saved_settings()`       | after the host saved its settings (the proxy): reconfigures the plugins on the Agent's runtime; returns at once                      |
+| `AgentSlot::list_run_projections()`       | the Agent's runs (`AgentRunProjection`) for a host's activity view                                                                   |
+| `DesktopAgent::shutdown(budget)`          | shuts down within the budget; blocks the caller, which must not be in an async context                                               |
+
+A panic in kernel code (a turn's task, the Agent's worker groups, the host's tasks) makes the slot mark the Agent `Faulted`, stop it, and start a new instance after 2 s, 10 s and 30 s (at most three in a 10-minute window, `AgentRestartPolicy`), rebuilding the sessions from disk. Calls in flight on the old instance fail; a held `AgentHandle` whose `generation()` differs from `status().generation` belongs to an instance that is gone.
+
+`AGENT_SHUTDOWN_BUDGET` is 20 s, spent in fixed stages, each with its own deadline:
+
+<Steps>
+  <Step>
+    Stop the Skill watcher (2 s); close the slot, cancelling a start under way and waiting up to 8 s
+    for it.
+  </Step>
+  <Step>Stop accepting turns, and cancel turns and compactions (5 s).</Step>
+  <Step>
+    MCP: cancel the background connects, close every connection and confirm its process gone (4 s).
+  </Step>
+  <Step>Stop the plugins: one disposal of the kardia root (5 s).</Step>
+  <Step>
+    Stop the memory workers, close the history, stop the service workers and executions (3 s).
+  </Step>
+  <Step>
+    Sweep the instance's process owner group: terminate what the Agent started and left running (1
+    s).
+  </Step>
+  <Step>Stop the instance's runtime, with a 2 s bound for its blocking pool.</Step>
+</Steps>
+
+The processes the Agent starts are the Agent's: it has its own `ExecutorManager`, a process-ownership domain apart from the host's. The host neither needs to nor can terminate them for it.
+
+## Configuration in a host
+
+The host names a configuration directory for the Agent and opens it with `AgentConfig::new(dir)` (Hanafubuki's is `<app_data>/config/agent/`). It holds three TOML files, each its own revision domain with its own lock:
+
+| File             | Contents                                                              |
+| ---------------- | --------------------------------------------------------------------- |
+| `config.toml`    | permission mode, memory, `disabledPlugins`, web search and fetch      |
+| `providers.toml` | the Provider registry and its revision, tokens verbatim (owner-only)  |
+| `mcp.toml`       | the MCP servers and credential values and their revision (owner-only) |
+
+Unlike the standalone configuration, an embedded one has **no layers** (no profile, project file or `-c`) and ignores `[network]` and `logLevel` (reported as unknown keys): the host supplies the proxy and the logger. The host reads and writes the settings through the service API (`settings_view`, `write_settings`, the Provider and MCP methods), and a write applies the settings to the plugins.
+
+Reads are tolerant: an invalid value takes its default, unknown keys are logged and stay in the file, and a file that needed repair is copied into `.recovery/` before the repaired values are written; when the original cannot be kept, the repaired values are used from memory and the file refuses writes until a restart. Each repair is an `AgentConfigRecovery` (file, problem, whether read-only, time); `AgentConfig::recoveries()` returns those since the configuration was opened (the last 20 a file), and a host should show them to the user. The keys, defaults and repair rules are in [Configuration](/docs/configuration) and [Configuration reference](/docs/config-reference).
+
+Moving settings from an older format is the host's business: while `config.toml` does not exist (`AgentConfig::exists`), Hanafubuki's construct closure runs `import_legacy_agent_settings`, which writes the whole configuration once with `AgentConfig::create` (`config.toml` last, so an import that stopped part-way runs again) and leaves the old files untouched.
+
+## Events and history
+
+```rust
+struct LogStatus;
+
+impl AgentStatusEventSink for LogStatus {
+    fn status_changed(&self) {
+        eprintln!("the Agent's status changed");
+    }
+}
+
+struct PrintEvents;
+
+impl AgentEventSink for PrintEvents {
+    fn emit(&self, event: AgentEvent) {
+        if let AgentEventKind::TurnCompleted { .. } = event.kind {
+            println!("turn completed");
+        }
+    }
+}
+```
+
+- **Turn events** go to the `AgentEventSink` each call is given: `submit_turn_with_sink`, `steer_turn_with_sink`, `submit_plan_implementation_with_sink`, `compact_session_with_sink`. `emit` is called on the Agent's threads and does bounded work only (sending to a channel, say); it must not block. The event kinds (`AgentEventKind`) are those `exec --json` prints: [JSON events](/docs/json-events).
+- **Approvals and questions**: answer `ApprovalRequested` with `resolve_approval` and `UserInputRequested` with `resolve_user_input`; `cancel_turn` cancels a turn.
+- **The event journal**: each session keeps a bounded journal of its events; `events_since(session, after)` returns the `AgentEventBatch` after a sequence number, for catching up after a disconnect, and `snapshot(session)` the session's current runtime state.
+- **History**: `list_sessions_page` (paged, searchable), `open_session` (a session with its latest transcript), `read_transcript_page` and `read_turn_page` read the committed `ConversationItem`s. Thinking is `ConversationItem::Reasoning { text, duration_millis, sampling_step, truncated }`, for presentation only and never replayed as model input.
+- **Run projections**: `AgentSlot::list_run_projections` and `get_run_projection` (activity id, turn number, phase, times, error); Hanafubuki maps them to its Task Center.
+
+## Logging
+
+The facade installs no logger: the host keeps its own `log` implementation, and the Agent's records go there. The standalone binary uses `logging::install_file_logger` (`hanafubuki-agent.log`, rotated past 8 MiB into `.1`…`.3`). The Agent's own records follow its content-logging rule: model content, reasoning, tool arguments and tool results appear only at `trace`, truncated to a bound, and headers and credentials never. So the host's log level is how a user selects `trace` (Hanafubuki's `log_level` setting).
+
+## Testing
+
+- Turn on the `test-support` feature of `hanafubuki-agent` in `[dev-dependencies]` for `hanafubuki_agent::test_support`: `mount` (mounts a plugin in a context that provides the registries and `PluginFaults`), `test_host`, the scripted model and MCP servers.
+- A host keeps goldens of its own that pin what the model receives with its plugins and instructions; a model-visible change on the Agent's side changes them too, and they are regenerated on purpose.
+- A host tests the panic-hook bridge, in a child process.
