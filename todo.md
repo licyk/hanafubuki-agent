@@ -122,9 +122,25 @@ moves its pin.
     pages; images are not restored to the composer (it has none).
   - Hanafubuki, at its next pin: the call `edit_from_turn`, the re-export
     `AgentEditFromTurn`.
-- [ ] P4: `/rename /archive /delete /resume [id|title] /fork /clear /export
+- [x] P4: `/rename /archive /delete /resume [id|title] /fork /clear /export
       /copy /ps /stop /pwd /init`; `export_session_markdown`; `cwd` and
       `branch` in session summaries.
+  - Done: one call family (`AgentCommand::Session`, `agent_bridge/
+    sessions.rs`); `/rename` with the suggestion (Tab takes it); `/archive`
+    and `/delete` confirmed, then no session; `/resume ID|TITLE`; the
+    picker's Branch and Directory columns, Tab for the archived list,
+    Ctrl+A to archive or restore; `/fork [name]`; `/clear [name]`;
+    `/export [path]` (copy or save; never overwrites) over the facade's
+    `export_session_markdown` (Codex's layout, thinking left out);
+    `/copy` (the answer, code blocks, quotes; owned mode: select);
+    `/ps`; `/stop` and `/clean`; `/pwd` and `/cwd`; `/init` (Codex's
+    prompt); `/recap`. Terminal interface, "Session commands"; sessions,
+    "Export".
+  - Open: `/rename`, `/archive`, `/resume` are off during a turn (Codex
+    allows them); `/resume TITLE` and the picker's archive run on the
+    interface thread; the export is written in place (no temp file);
+    the picker has no Ctrl+T preview.
+  - Hanafubuki, at its next pin: the call `export_session_markdown`.
 - [ ] P5: `/theme` (syntect and two-face, also syntax highlighting),
       `/keymap`, `/title`, `/statusline`, `/presets`, `/config`,
       `/warnings`, `/memories`.
@@ -177,7 +193,7 @@ moves its pin.
     the process's directory); new crates and a `worktree` row (Capability);
     `AgentStoragePaths::worktrees_root`; `AgentExecutionService::
     set_working_directory`; `WorkspaceFsService::replace_policy`.
-- [ ] P8: the shared structured request (from the titles plugin), the
+- [x] P8: the shared structured request (from the titles plugin), the
       `recap` plugin, `/recap`, `suggest_session_title` in `/rename`.
   - [x] The facade's half: `plugins/structured_request.rs` (the titles
         plugin uses it, unchanged); the feature-call helper
@@ -187,7 +203,7 @@ moves its pin.
         (`RecapService`, the last 8 exchanges within 8192 estimated tokens,
         Codex's prompt) and the `titles` row's `TitleService`; the narrow
         port `AgentConversationReader`. Embedding, "Feature calls".
-  - [ ] The interface's half: `/recap`, the suggestion in `/rename`.
+  - [x] The interface's half: `/recap`, the suggestion in `/rename` (P4).
   - Hanafubuki, at its next pin: `AgentError` is now exported and has
     `FeatureUnavailable { feature, reason }` (an exhaustive match needs an
     arm); new calls `recap_session`, `suggest_session_title`, type
