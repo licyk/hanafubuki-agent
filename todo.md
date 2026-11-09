@@ -335,12 +335,10 @@ and pushed, and notes what Hanafubuki must change at its next pin.
     a state), a rollback-safe marker in the kernel and the history store
     carrying the last state forward in `runtime_json`, materialization
     and lag catch-up: a persisted-format change across two crates, left
-    for a decision. The double projection is not fixed: at most ~80 ms a
-    step at 8 000 folded messages, against the model's latency.
-  - Open: bound the state's disk growth: an incremental record (a
-    mutation carrying only the refs and blocks a step added) or the state
-    out of the rollout record with carry-forward in the store; either is
-    a format change Hanafubuki follows. The crate's per-call cost is
+    for a decision (done in P8b, incrementally). The double projection is
+    not fixed: at most ~80 ms a step at 8 000 folded messages, against the
+    model's latency.
+  - Open: the crate's per-call cost is
     superlinear in the window (677 ms at 10 000 unfolded messages, without
     the nudge too): profile `process_turn`. A child forked before its
     parent's running turn has no test of its own (it shares
@@ -355,6 +353,73 @@ and pushed, and notes what Hanafubuki must change at its next pin.
     (a child at head, `/side` included, projects the parent's blocks), and
     a session whose state is missing or unreadable gets it back from its
     `compress` calls at load.
+- [x] P8b: the hierarchical state persisted incrementally. Done: a chain
+      of links (`kernel model/compression/chain.rs`), one in each runtime
+      checkpoint that changed the state, as
+      `PersistedAgentRuntimeState.compression_update`
+      (`AgentCompressionUpdate`: `snapshot`, `delta`, `dropped`, and
+      `unreadable` for one that cannot be read; `#[serde(default)]`,
+      skipped when none, so `standard` records are unchanged). A delta
+      (`AgentCompressionDelta`) carries its `seq` after the snapshot, the
+      ref bindings minted or changed, the blocks made or changed other than
+      in age (whole), the age of the blocks that only aged (`survived`),
+      the token counts added and dropped, and the other fields whole when
+      one changed. A snapshot writes the ref map one way (`by_raw`;
+      `by_ref` derived on read, without `BLOCKED` and `REF_FLOOR_ID`): 15 %
+      smaller. The kernel diffs against `SessionRuntime.compression_head`
+      (`next_link` in `conversation_commit`): staged with the commit and
+      restored with the runtime on rollback, so it is the last durable link
+      once the commit settles (staged commits are serialized by
+      `persisting_revision`). No head after a load, a fork or a child: the
+      first link is a snapshot; so is a change a delta cannot carry (a
+      binding or block gone, blocks reordered), and so is the link once
+      the deltas since the snapshot would outweigh it. A checkpoint that
+      changed nothing carries no link. The history store keeps the links
+      as rows of `agent_compression_links` (a snapshot or `dropped`
+      replaces the session's rows; deleted with the session), strips the
+      state from `runtime_json`, and folds the rows
+      (`AgentCompressionChain`) into `compression` when it loads a runtime
+      (`load_runtime_state`, recovery); the index is schema 6, so an older
+      index is rebuilt from the rollouts once, a record from before the
+      chain reading as a snapshot. `EphemeralAgentHistoryStore` folds the
+      same way. A chain that does not fold (no snapshot, a skipped `seq`,
+      a delta naming a block or token count the state lacks, an unreadable
+      link) loads as none, and P8's load-time rebuild replays the
+      `compress` calls. Tests: kernel `model::compression::chain` (10: the
+      first link a snapshot written one way, many steps folding back to the
+      exact state with periodic snapshots, a delta carrying only the
+      change, nothing for an unchanged state, snapshots for removals,
+      `dropped`, broken chains repaired by the next snapshot, a delta for
+      another state, the ref floor); `persistence_contract::
+      compression_chain` (a failed commit rolls back the head: the next
+      one is delta 1 and the store folds to the live state); facade
+      `tests::compression` (a folded session over 14 turns: the rollout
+      holds snapshots and more deltas, a restart reads back the exact
+      state, so does a schema-5 index rebuilt from the rollouts, and with a
+      delta row deleted the state is rebuilt from the `compress` calls; a
+      fork from `edit_from_turn` reads back after a restart; a `standard`
+      session writes no `compression` key and no row). Goldens unchanged.
+  - Measurements (release, the P8 recipe as a temporary kernel test:
+    rounds of ten messages, each folded by the next round's `compress`,
+    `process_turn` per round, one step per round): the state P8 wrote
+    whole into every checkpoint was 92 KB at 1 000 messages, 187 KB at
+    2 000, 378 KB at 4 000, 759 KB at 8 000 (one-way refs: 78, 159, 321,
+    645 KB); the link a step now writes once is 3.0 KB, 4.1 KB, 6.3 KB,
+    10.7 KB, growing with the active blocks' ages (~13 B each; every block
+    stays active in this recipe, the worst case). Over 500 steps the state
+    took 117.7 MB of rollout per checkpoint copy before (×1–3 a step);
+    now 4.9 MB in all, 23 snapshots and 477 deltas included (24× less
+    before the per-step multiplier).
+  - Open: the `survived` ages are O(active blocks) a step; a session that
+    keeps hundreds of tier-1 blocks active pays ~13 B each per step.
+  - Hanafubuki, at its next pin: `PersistedAgentRuntimeState.
+    compression_update` (its constructions add `compression_update:
+    None`); `compression` is now what a store loads (the folded chain)
+    and what records written before the chain carry. New kernel types
+    `AgentCompressionUpdate`, `AgentCompressionDelta`,
+    `AgentCompressionChain` (a host store folds its links with it). The
+    history index is schema 6 (`agent_compression_links`); an older index
+    is rebuilt from the rollouts at the first open.
 - [ ] P9: decompress, search, media refs.
   - Crate half done (decompress, search, media, rebuild); the kernel half
     lands with P7. `decompress` (`collect_block_content` one tier up or

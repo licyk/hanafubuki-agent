@@ -566,6 +566,7 @@ impl AgentHistoryStore for RecordingHistoryStore {
 mod children;
 mod commit_rollback;
 mod compaction_recovery;
+mod compression_chain;
 mod creation_deletion;
 mod drop_guards;
 mod off_worker;

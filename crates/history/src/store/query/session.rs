@@ -95,9 +95,43 @@ impl FileAgentHistoryStore {
         }
         let model_context = self.load_latest_model_context_inner(session_id)?;
         Ok(AgentRecoveredSession {
-            runtime,
+            runtime: self.with_compression(runtime)?,
             model_context,
         })
+    }
+
+    /// `runtime` with the compression state its chain's rows fold to; none
+    /// when the chain is broken, which the kernel rebuilds from the history.
+    pub(in crate::store) fn with_compression(
+        &self,
+        mut runtime: hanafubuki_agent_kernel::PersistedAgentRuntimeState,
+    ) -> Result<hanafubuki_agent_kernel::PersistedAgentRuntimeState, AgentHistoryStoreError> {
+        let links = {
+            let _database = self.inner.database_gate.lock();
+            let connection = self.connection()?;
+            let mut statement = connection
+                .prepare(
+                    "SELECT link_json FROM agent_compression_links WHERE session_id = ? ORDER BY record_ordinal",
+                )
+                .map_err(database_error)?;
+            let rows = statement
+                .query_map(params![to_i64(runtime.id.value(), "session id")?], |row| {
+                    row.get::<_, String>(0)
+                })
+                .map_err(database_error)?;
+            rows.collect::<Result<Vec<_>, _>>()
+                .map_err(database_error)?
+        };
+        let mut chain = AgentCompressionChain::default();
+        for link in links {
+            chain.push(serde_json::from_str(&link).unwrap_or_else(|error| {
+                log::warn!("Agent session compression link could not be read: {error}");
+                AgentCompressionUpdate::Unreadable
+            }));
+        }
+        runtime.compression = chain.into_state();
+        runtime.compression_update = None;
+        Ok(runtime)
     }
 
     pub(in crate::store) fn load_runtime_state_inner(

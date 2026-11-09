@@ -175,15 +175,26 @@ pub struct PersistedAgentRuntimeState {
     pub context_window: AgentContextWindowSnapshot,
     pub compaction: Option<AgentCompactionSnapshot>,
     /// The hierarchical compression state (`hierarchical` strategy, or the
-    /// blocks it left when the session switched away). Absent from a record
-    /// written before it existed and left out when none; a state that cannot
-    /// be read is dropped with a warning.
+    /// blocks it left when the session switched away), as a store loads it:
+    /// the chain of `compression_update`s folded. The kernel writes it in no
+    /// record; a record written before the chain existed carries the whole
+    /// state here, which a store reads as a snapshot. A state that cannot be
+    /// read is dropped with a warning.
     #[serde(
         default,
         deserialize_with = "crate::model::tolerant_compression_state",
         skip_serializing_if = "Option::is_none"
     )]
     pub compression: Option<crate::AgentCompressionState>,
+    /// The link of the compression chain this checkpoint adds, when it
+    /// changed the state: a snapshot, a delta since the previous link, or the
+    /// state's end. One that cannot be read is `Unreadable`.
+    #[serde(
+        default,
+        deserialize_with = "crate::model::tolerant_compression_update",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub compression_update: Option<crate::AgentCompressionUpdate>,
     pub turn: Option<PersistedAgentTurn>,
     pub activities: Vec<AgentActivitySnapshot>,
     pub task_plan: Option<AgentTaskPlanSnapshot>,

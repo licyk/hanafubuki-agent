@@ -297,6 +297,7 @@ fn idle_session(
         context_window: hanafubuki_agent_kernel::AgentContextWindowSnapshot::initial(),
         compaction: None,
         compression: None,
+        compression_update: None,
         turn: Some(turn),
         activities: Vec::new(),
         task_plan: None,

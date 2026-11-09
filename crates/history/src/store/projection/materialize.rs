@@ -102,7 +102,8 @@ fn project_record(
         )
         .map_err(database_error)?;
     if let Some(runtime) = runtime {
-        let runtime_json = serde_json::to_string(runtime).map_err(json_error)?;
+        project_compression_link(transaction, record, runtime)?;
+        let runtime_json = runtime_json(runtime)?;
         let summary = session_summary(runtime);
         let summary_json = serde_json::to_string(&summary).map_err(json_error)?;
         let recovery_needed = runtime_recovery_needed(runtime);
@@ -259,6 +260,66 @@ WHERE session_id = ? AND turn_id = ?
             .map_err(database_error)?;
     }
     Ok(())
+}
+
+/// The compression chain's link a checkpoint carries, as a row: a snapshot
+/// (or a record written before the chain, whose whole state is one) or the
+/// state's end replaces the session's rows. Loading folds them.
+fn project_compression_link(
+    transaction: &rusqlite::Transaction<'_>,
+    record: &AgentHistoryRecord,
+    runtime: &hanafubuki_agent_kernel::PersistedAgentRuntimeState,
+) -> Result<(), AgentHistoryStoreError> {
+    let legacy;
+    let link = match (&runtime.compression_update, &runtime.compression) {
+        (Some(link), _) => link,
+        (None, Some(state)) => {
+            legacy = AgentCompressionUpdate::Snapshot(Box::new(state.clone()));
+            &legacy
+        }
+        (None, None) => return Ok(()),
+    };
+    let session_id = to_i64(record.session_id.value(), "session id")?;
+    if matches!(
+        link,
+        AgentCompressionUpdate::Snapshot(_) | AgentCompressionUpdate::Dropped
+    ) {
+        transaction
+            .execute(
+                "DELETE FROM agent_compression_links WHERE session_id = ?",
+                params![session_id],
+            )
+            .map_err(database_error)?;
+    }
+    if *link != AgentCompressionUpdate::Dropped {
+        transaction
+            .execute(
+                "INSERT OR REPLACE INTO agent_compression_links(session_id, record_ordinal, link_json) VALUES (?, ?, ?)",
+                params![
+                    session_id,
+                    to_i64(record.ordinal, "record ordinal")?,
+                    serde_json::to_string(link).map_err(json_error)?,
+                ],
+            )
+            .map_err(database_error)?;
+    }
+    Ok(())
+}
+
+/// The runtime as the index keeps it: without its compression state, which
+/// the chain's rows hold.
+fn runtime_json(
+    runtime: &hanafubuki_agent_kernel::PersistedAgentRuntimeState,
+) -> Result<String, AgentHistoryStoreError> {
+    if runtime.compression.is_none() && runtime.compression_update.is_none() {
+        return serde_json::to_string(runtime).map_err(json_error);
+    }
+    serde_json::to_string(&hanafubuki_agent_kernel::PersistedAgentRuntimeState {
+        compression: None,
+        compression_update: None,
+        ..runtime.clone()
+    })
+    .map_err(json_error)
 }
 
 fn project_delta_head(

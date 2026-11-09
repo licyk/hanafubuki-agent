@@ -101,9 +101,14 @@ pub(in crate::service) struct SessionRuntime {
     /// go on while it runs.
     pub(in crate::service) background_compaction:
         crate::service::compaction::BackgroundCompactionSlot,
-    /// The hierarchical compression state, persisted with every runtime
-    /// checkpoint. Shared by `Arc`, so a rollback state never copies it.
+    /// The hierarchical compression state, persisted as a chain of links in
+    /// the runtime checkpoints that change it. Shared by `Arc`, so a rollback
+    /// state never copies it.
     pub(in crate::service) compression: Option<Arc<crate::AgentCompressionState>>,
+    /// The chain's last link this run staged. A rollback restores it with
+    /// the rest of the runtime, so it is always the last durable link once
+    /// the commit settles; none until this run writes one.
+    pub(in crate::service) compression_head: Option<crate::model::CompressionChainHead>,
 }
 
 /// Bounded rollback state for one staged durable mutation: every group but
@@ -177,6 +182,7 @@ impl SessionRuntime {
             sandbox_mode: None,
             background_compaction: Default::default(),
             compression: None,
+            compression_head: None,
         }
     }
 }

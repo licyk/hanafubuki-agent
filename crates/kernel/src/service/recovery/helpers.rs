@@ -148,6 +148,7 @@ impl AgentService {
                 sandbox_mode: None,
                 background_compaction: Default::default(),
                 compression: runtime.compression.map(Arc::new),
+                compression_head: None,
             },
         };
         // A state that was lost (it could not be read) is rebuilt from the

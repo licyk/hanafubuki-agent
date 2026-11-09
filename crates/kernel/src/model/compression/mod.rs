@@ -1,4 +1,9 @@
+mod chain;
+
 use serde::Deserialize;
+
+pub(crate) use chain::{next_link, CompressionChainHead};
+pub use chain::{AgentCompressionChain, AgentCompressionDelta, AgentCompressionUpdate};
 
 /// A session's hierarchical compression state: the refs minted over its
 /// window, the blocks the model folded and the nudge's baselines.
@@ -91,5 +96,23 @@ where
             log::warn!("Agent session compression state dropped: it could not be read: {error}");
             None
         }
+    }))
+}
+
+/// The chain link a record carries; one that cannot be read is
+/// [`AgentCompressionUpdate::Unreadable`], which breaks the chain, so the
+/// state is rebuilt instead of read wrong.
+pub(crate) fn tolerant_compression_update<'de, D>(
+    deserializer: D,
+) -> Result<Option<AgentCompressionUpdate>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = Option::<serde_json::Value>::deserialize(deserializer)?;
+    Ok(value.map(|value| {
+        serde_json::from_value(value).unwrap_or_else(|error| {
+            log::warn!("Agent session compression link could not be read: {error}");
+            AgentCompressionUpdate::Unreadable
+        })
     }))
 }

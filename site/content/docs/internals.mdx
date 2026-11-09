@@ -213,7 +213,13 @@ Provider 的流是外部输入（[模型 API](/docs/architecture#the-model-api)�
 
 `hierarchical` 策略（[压缩](/docs/architecture#compaction)）是内核的 `service/compression/`（`mod.rs` 中的投影、`adapter.rs`、`tools.rs`、`receipts.rs`），建立在纯 crate `hanafubuki-agent-compression` 之上。
 
-**状态。** `PersistedAgentRuntimeState.compression` 保存该 crate 的 `State`，以 `AgentCompressionState` 重新导出：在窗口上生成的引用、块（只失效，从不删除）、token 快照和提醒的基线。它随每个运行时检查点写入。在它出现之前写入的记录没有它；无法解码的状态带一条警告被丢弃（`tolerant_compression_state`），并在会话加载时重建（见下文）。历史格式及其版本没有变化。切换到 `hierarchical` 时，如果还没有状态，就装入一个空状态。
+**状态。** `PersistedAgentRuntimeState.compression` 保存该 crate 的 `State`，以 `AgentCompressionState` 重新导出：在窗口上生成的引用、块（只失效，从不删除）、token 快照和提醒的基线。它以追加为主：引用从不重新分配，块从不删除，其余部分（提醒、统计、锁存、计数器）很小。所以它写成一条链（`model/compression/chain.rs`），每个改变了它的运行时检查点带一个链节，即 `PersistedAgentRuntimeState.compression_update`（`AgentCompressionUpdate`，没有变化时省略，所以 `standard` 的记录没有新字段）：
+
+- **`snapshot`**：整个状态，引用映射只写一个方向（`by_raw`；读取时推导出 `by_ref`，不含 `BLOCKED` 和分叉的 `REF_FLOOR_ID`）。它开始一条链。
+- **`delta`**（`AgentCompressionDelta`）：它在快照之后的位置（`seq`，从 1 开始）、新生成或改变的引用绑定、新建或除了年龄之外有变化的块（整个）、只是变老的块的年龄（`survived`：每个活动块每个请求老一步）、首次渲染的 token 计数和被去掉的计数，以及其他字段中有一个变化时的全部其他字段。
+- **`dropped`**：状态结束了（切换离开并压缩过的会话）。
+
+内核对照链头做差分（`SessionRuntime.compression_head`，`conversation_commit` 中的 `next_link`）：它暂存的最后一个链节的状态和 `seq`。回滚连同运行时的其余部分一起恢复链头，所以下一个链节接在最后一个持久的链节之后。加载之后，或者对于新会话（分叉、子会话），没有链头，所以它们的第一个链节是快照；差分无法表达的变化（绑定或块消失、块重新排序）也写成快照；自上次快照以来的差分将超过快照本身时也写快照，这让读取链的开销与状态成正比。没有改变状态的检查点不带链节，所以一个步骤只写一次状态，而不是它的每个检查点各写一次。历史存储把链节保存在 `agent_compression_links` 中（每个链节一行，快照或 `dropped` 替换会话的所有行），并从 `runtime_json` 中去掉状态；加载运行时（`load_runtime_state`、恢复）时把这些行折叠（`AgentCompressionChain`）进 `compression`。内存存储以同样方式折叠。折叠不了的链（之前没有快照的差分、跳号的 `seq`、提到状态中不存在的块或 token 计数的差分、无法读取的链节 `Unreadable`）加载为没有状态，由内核重建（见下文）。链出现之前写入的记录在 `compression` 中带着整个状态，存储把它当作快照读取。历史格式及其版本没有变化；索引的模式版本是 6。切换到 `hierarchical` 时，如果还没有状态，就装入一个空状态。
 
 **分叉、子会话和加载。** 条目 ID 在分叉中保留，所以状态映射的消息 ID 也保留。在头部创建的分叉，以及在父会话头部创建的子会话（包括 `/side`），原样沿用源会话的状态。在某个轮次之前创建的分叉（因此也包括 `edit_from_turn`），以及在父会话运行中的轮次之前创建的子会话，从源会话的状态中采纳（`inherited_state`，基于该 crate 的 `adopt_fork_state`，仿照 billion-context 的分叉采纳）：覆盖的消息全部在分叉中的块被保留，并且是活动的，层级块消耗过的块作为原来那样的非活动记录随之保留；已展开或已被消耗的块，或覆盖了分叉中没有的消息的块，被丢弃。分叉持有的每条消息保留它的引用和冻结的 token 计数，源会话的最高引用被保留下来（引用映射中的 `REF_FLOOR_ID`），所以分叉自己的消息从它之上编号。孤立调用、截断、渲染延迟和视图的锁存随之保留；提醒的基线、统计和终止计数重新开始。空的子会话没有状态。源会话没有状态，或者会话加载时没有状态（没有写入，或者无法读取）时，通过重放窗口中的 `compress` 调用重建状态（`rebuild_state`），使用源会话最近一次的调优（加载时用默认值），并放宽压缩限制和最近区，因为这些调用已经通过过它们一次；回执表明失败、被拒绝或无操作的调用不重放。含有压缩（`CompactionSummary`、`ProviderCompaction`）的窗口不重建：压缩之后，引用从窗口里已经看不到的编号继续，重放可能折叠错误的消息。没有 `compress` 调用的窗口不得到状态，所以 `standard` 的分叉仍然没有状态。
 
@@ -321,7 +327,7 @@ Provider 的流是外部输入（[模型 API](/docs/architecture#the-model-api)�
 
 [数据目录](/docs/data-directory#contents)之外的细节：
 
-- `history/active/YYYY/MM/DD/session-<YYYY-MM-DD>T<HH-MM-SS>-<id>.jsonl`（创建时的本地时间）、`history/archived/`、`history/attachments/<id>/blobs/<sha256>.blob`、`history/trash/` 和 `history/index.sqlite3`。分叉通过谱系表共享父会话的前缀。索引的模式版本是 5，它为会话列表的父会话过滤增加了 `agent_sessions.parent_session_id`（带索引）；其他版本的索引（包括更旧的）在打开时被丢弃，并从 rollout 重建一次。
+- `history/active/YYYY/MM/DD/session-<YYYY-MM-DD>T<HH-MM-SS>-<id>.jsonl`（创建时的本地时间）、`history/archived/`、`history/attachments/<id>/blobs/<sha256>.blob`、`history/trash/` 和 `history/index.sqlite3`。分叉通过谱系表共享父会话的前缀。索引的模式版本是 6：5 为会话列表的父会话过滤增加了 `agent_sessions.parent_session_id`（带索引），6 增加了分层压缩链的 `agent_compression_links`；其他版本的索引（包括更旧的）在打开时被丢弃，并从 rollout 重建一次。
 - `memory/memory.sqlite3`、`memory/ad-hoc-notes.jsonl`（模型留下的笔记）、`memory/artifacts/`（发布的制品，包括 `MEMORY.md` 和 `memory_summary.md`）、`memory/staging/` 和 `memory/reset-trash/`。
 
 ### 记忆存储 [#memory-store]

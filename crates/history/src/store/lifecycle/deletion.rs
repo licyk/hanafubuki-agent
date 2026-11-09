@@ -333,6 +333,7 @@ fn delete_projection_rows(
             "agent_history_records",
             "agent_history_projection_state",
             "agent_projection_repairs",
+            "agent_compression_links",
         ] {
             transaction
                 .execute(

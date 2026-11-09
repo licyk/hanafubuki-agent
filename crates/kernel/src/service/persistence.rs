@@ -370,6 +370,11 @@ pub(super) fn conversation_commit(
     record: &mut SessionRecord,
 ) -> AgentConversationCommit {
     debug_assert!(record.status.persisting_revision.is_none());
+    let (compression_update, compression_head) = crate::model::next_link(
+        record.runtime.compression_head.as_ref(),
+        record.runtime.compression.as_ref(),
+    );
+    record.runtime.compression_head = compression_head;
     let commit = AgentConversationCommit {
         runtime: PersistedAgentRuntimeState {
             id: session_id,
@@ -393,7 +398,8 @@ pub(super) fn conversation_commit(
                 .compaction
                 .as_ref()
                 .map(|compaction| compaction.snapshot.clone()),
-            compression: record.runtime.compression.as_deref().cloned(),
+            compression: None,
+            compression_update,
             turn: record.runtime.turn.as_ref().map(|turn| PersistedAgentTurn {
                 id: turn.id,
                 generation: turn.generation,

@@ -9,14 +9,15 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use hanafubuki_agent_foundation::background_worker::BackgroundWorkerGroup;
 use hanafubuki_agent_foundation::persistence::discard_sqlite;
 use hanafubuki_agent_kernel::{
-    AgentConversationCommit, AgentConversationDelta, AgentHistoryAppendAck, AgentHistoryBase,
-    AgentHistoryItem, AgentHistoryMutation, AgentHistoryRecord, AgentHistoryRecordPayload,
-    AgentHistorySortDirection, AgentHistoryStore, AgentHistoryStoreError,
-    AgentModelContextBoundary, AgentRecoveredSession, AgentRecoveryLoadFailure, AgentRevision,
-    AgentSessionId, AgentSessionLifecycle, AgentSessionListRequest, AgentSessionPage,
-    AgentSessionSummary, AgentTranscriptPage, AgentTranscriptPageRequest, AgentTurnId,
-    AgentTurnPageRequest, AgentTurnPhase, ConversationItem, AGENT_HISTORY_FORMAT_VERSION,
-    AGENT_SESSION_PAGE_SIZE_MAX, AGENT_TRANSCRIPT_PAGE_SIZE_MAX,
+    AgentCompressionChain, AgentCompressionUpdate, AgentConversationCommit, AgentConversationDelta,
+    AgentHistoryAppendAck, AgentHistoryBase, AgentHistoryItem, AgentHistoryMutation,
+    AgentHistoryRecord, AgentHistoryRecordPayload, AgentHistorySortDirection, AgentHistoryStore,
+    AgentHistoryStoreError, AgentModelContextBoundary, AgentRecoveredSession,
+    AgentRecoveryLoadFailure, AgentRevision, AgentSessionId, AgentSessionLifecycle,
+    AgentSessionListRequest, AgentSessionPage, AgentSessionSummary, AgentTranscriptPage,
+    AgentTranscriptPageRequest, AgentTurnId, AgentTurnPageRequest, AgentTurnPhase,
+    ConversationItem, AGENT_HISTORY_FORMAT_VERSION, AGENT_SESSION_PAGE_SIZE_MAX,
+    AGENT_TRANSCRIPT_PAGE_SIZE_MAX,
 };
 use parking_lot::Mutex;
 use rusqlite::{
@@ -428,7 +429,7 @@ impl AgentHistoryStore for FileAgentHistoryStore {
         &self,
         session_id: AgentSessionId,
     ) -> Result<hanafubuki_agent_kernel::PersistedAgentRuntimeState, AgentHistoryStoreError> {
-        self.load_runtime_state_inner(session_id)
+        self.with_compression(self.load_runtime_state_inner(session_id)?)
     }
 
     fn load_latest_model_context(

@@ -7,6 +7,32 @@ pub struct EphemeralAgentHistoryStore {
     attachments: parking_lot::Mutex<
         std::collections::HashMap<(AgentSessionId, crate::AgentAttachmentId), Vec<u8>>,
     >,
+    /// Each session's compression chain, folded as its links arrive; a load
+    /// puts its state in the runtime.
+    compression:
+        parking_lot::Mutex<std::collections::HashMap<AgentSessionId, crate::AgentCompressionChain>>,
+}
+
+impl EphemeralAgentHistoryStore {
+    fn add_link(&self, runtime: &mut PersistedAgentRuntimeState) {
+        if let Some(link) = runtime.compression_update.take() {
+            self.compression
+                .lock()
+                .entry(runtime.id)
+                .or_default()
+                .push(link);
+        }
+    }
+
+    fn loaded(&self, session: &AgentRecoveredSession) -> AgentRecoveredSession {
+        let mut session = session.clone();
+        session.runtime.compression = self
+            .compression
+            .lock()
+            .get(&session.runtime.id)
+            .and_then(|chain| chain.state().cloned());
+        session
+    }
 }
 
 impl AgentHistoryStore for EphemeralAgentHistoryStore {
@@ -22,8 +48,10 @@ impl AgentHistoryStore for EphemeralAgentHistoryStore {
 
     fn create_session(
         &self,
-        commit: AgentConversationCommit,
+        mut commit: AgentConversationCommit,
     ) -> Result<(), AgentHistoryStoreError> {
+        self.compression.lock().remove(&commit.runtime.id);
+        self.add_link(&mut commit.runtime);
         self.sessions.lock().insert(
             commit.runtime.id,
             AgentRecoveredSession {
@@ -34,8 +62,17 @@ impl AgentHistoryStore for EphemeralAgentHistoryStore {
         Ok(())
     }
 
-    fn append_commit(&self, commit: AgentConversationCommit) -> Result<(), AgentHistoryStoreError> {
+    fn append_commit(
+        &self,
+        mut commit: AgentConversationCommit,
+    ) -> Result<(), AgentHistoryStoreError> {
         let mut sessions = self.sessions.lock();
+        if !sessions.contains_key(&commit.runtime.id) {
+            return Err(AgentHistoryStoreError::NotFound {
+                session_id: commit.runtime.id,
+            });
+        }
+        self.add_link(&mut commit.runtime);
         let session =
             sessions
                 .get_mut(&commit.runtime.id)
@@ -231,7 +268,12 @@ impl AgentHistoryStore for EphemeralAgentHistoryStore {
         &self,
     ) -> Result<Vec<Result<AgentRecoveredSession, AgentRecoveryLoadFailure>>, AgentHistoryStoreError>
     {
-        Ok(self.sessions.lock().values().cloned().map(Ok).collect())
+        Ok(self
+            .sessions
+            .lock()
+            .values()
+            .map(|session| Ok(self.loaded(session)))
+            .collect())
     }
 
     fn load_runtime_state(
@@ -241,7 +283,7 @@ impl AgentHistoryStore for EphemeralAgentHistoryStore {
         self.sessions
             .lock()
             .get(&session_id)
-            .map(|session| session.runtime.clone())
+            .map(|session| self.loaded(session).runtime)
             .ok_or(AgentHistoryStoreError::NotFound { session_id })
     }
 

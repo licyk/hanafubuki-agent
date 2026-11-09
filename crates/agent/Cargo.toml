@@ -63,6 +63,7 @@ url.workspace = true
 [dev-dependencies]
 axum.workspace = true
 hanafubuki-agent-execution = { workspace = true, features = ["test-support"] }
+hanafubuki-agent-kernel = { workspace = true, features = ["test-support"] }
 hanafubuki-agent-approval = { workspace = true, features = ["test-support"] }
 hanafubuki-agent-mcp = { workspace = true, features = ["test-support"] }
 hanafubuki-agent-process = { workspace = true, features = ["test-support"] }

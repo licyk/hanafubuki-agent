@@ -1,8 +1,9 @@
 use crate::store::*;
 
 /// The index's `user_version`. An index of another version is discarded at
-/// open and rebuilt from the rollouts (5 added `parent_session_id`).
-const INDEX_SCHEMA_VERSION: i64 = 5;
+/// open and rebuilt from the rollouts (5 added `parent_session_id`, 6 the
+/// compression chain).
+const INDEX_SCHEMA_VERSION: i64 = 6;
 
 impl FileAgentHistoryStore {
     pub(in crate::store) fn initialize_database(&self) -> Result<(), AgentHistoryStoreError> {
@@ -22,7 +23,7 @@ impl FileAgentHistoryStore {
 PRAGMA journal_mode = WAL;
 PRAGMA foreign_keys = ON;
 PRAGMA synchronous = FULL;
-PRAGMA user_version = 5;
+PRAGMA user_version = 6;
 
 CREATE TABLE IF NOT EXISTS agent_store_state (
     key TEXT PRIMARY KEY,
@@ -127,6 +128,13 @@ CREATE TABLE IF NOT EXISTS agent_session_lineage (
 );
 CREATE INDEX IF NOT EXISTS idx_agent_lineage_parent
     ON agent_session_lineage(parent_session_id);
+
+CREATE TABLE IF NOT EXISTS agent_compression_links (
+    session_id INTEGER NOT NULL,
+    record_ordinal INTEGER NOT NULL,
+    link_json TEXT NOT NULL,
+    PRIMARY KEY(session_id, record_ordinal)
+);
                 "#,
             )
             .map_err(database_error)?;

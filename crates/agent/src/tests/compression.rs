@@ -1,9 +1,15 @@
 //! The `hierarchical` strategy through the facade: switching away from it
-//! between turns and editing an earlier message of a folded session. The
-//! helpers here serve `compression_golden.rs` too.
+//! between turns, editing an earlier message of a folded session, and the
+//! state's chain in the history across restarts. The helpers here serve
+//! `compression_golden.rs` too.
+
+use std::path::{Path, PathBuf};
 
 use super::*;
+use crate::test_support::test_host;
 use crate::{AgentCompactionSettings, AgentCompactionStrategy, AgentConfig};
+use hanafubuki_agent_kernel::AgentCompressionState;
+use hanafubuki_agent_process::executor::ExecutorManager;
 use serde_json::Value;
 
 const SUMMARY: &str = "The user asked and the assistant answered at length; nothing in it is still open, and no file was changed.";
@@ -105,7 +111,8 @@ async fn switching_to_standard_keeps_the_blocks_until_a_compaction() {
 }
 
 /// Editing a message after a fold forks the session before that message's
-/// turn with the block, which keeps projecting the fork.
+/// turn with the block, which keeps projecting the fork. The fork's chain
+/// starts with a snapshot of its own, so a restart reads its state back.
 // The managed turns' tasks must finish while `shutdown` blocks this thread.
 #[tokio::test(flavor = "multi_thread")]
 async fn editing_a_later_message_keeps_the_fold() {
@@ -130,7 +137,7 @@ async fn editing_a_later_message_keeps_the_fold() {
         .collect(),
     )
     .await;
-    let (service, paths) = service_with("compression-edit", |_, config| {
+    let (service, paths, config) = service_with_config("compression-edit", |_, config| {
         configure(config, &server.base_url)
     });
     let session = service
@@ -159,7 +166,207 @@ async fn editing_a_later_message_keeps_the_fold() {
     assert!(!text.contains(&first));
     assert!(text.contains("First answer"));
     assert!(fork["instructions"].as_str().unwrap().contains("ACP TAGS"));
+    let live = compression_state(&service, edited.session.id).unwrap();
+    assert_eq!(live.active_blocks().count(), 1);
+    shut_down(service);
+
+    let reopened = reopen(config, &paths);
+    reopened.core.activate_session(edited.session.id).unwrap();
+    assert_eq!(
+        compression_state(&reopened, edited.session.id).as_ref(),
+        Some(&live)
+    );
+    finish(reopened, paths);
+}
+
+/// A folded session written over many steps: its rollout holds the state
+/// as snapshots and the deltas after them, a restart reads back the exact
+/// state, so does one that rebuilds the index from the rollouts, and with a
+/// link missing from the index the state is rebuilt from the `compress`
+/// calls.
+// The managed turns' tasks must finish while `shutdown` blocks this thread.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_state_is_written_as_a_chain_and_read_back_whole() {
+    let first = "The first answer is long. ".repeat(1_000);
+    let mut responses = vec![
+        with_usage(assistant_events(&first), 1_000),
+        with_usage(
+            call_events(
+                "fold-1",
+                "compress",
+                &json!({ "content": format!("m00002–m00002 First answer\n{SUMMARY}") }),
+            ),
+            1_000,
+        ),
+        with_usage(assistant_events("Folded."), 1_000),
+    ];
+    for index in 0..12 {
+        responses.push(with_usage(
+            assistant_events(&format!("Answer {index}.")),
+            1_000,
+        ));
+    }
+    let server = FakeServer::start(
+        responses
+            .into_iter()
+            .map(|response| (response, Duration::ZERO))
+            .collect(),
+    )
+    .await;
+    let (service, paths, config) = service_with_config("compression-chain", |_, config| {
+        configure(config, &server.base_url)
+    });
+    let session = service
+        .create_session(AgentSessionMode::Default)
+        .await
+        .unwrap();
+    let prompts = ["Hello.".to_string(), "Fold it.".to_string()]
+        .into_iter()
+        .chain((0..12).map(|index| format!("Question {index}.")));
+    for prompt in prompts {
+        service.start_turn(session.id, prompt.into()).await.unwrap();
+    }
+    let live = compression_state(&service, session.id).unwrap();
+    assert_eq!(live.active_blocks().count(), 1);
+    let rollout = rollouts(&paths);
+    let snapshots = rollout
+        .matches(r#""compressionUpdate":{"snapshot""#)
+        .count();
+    let deltas = rollout.matches(r#""compressionUpdate":{"delta""#).count();
+    assert!(
+        snapshots >= 1 && deltas > snapshots,
+        "{snapshots} snapshots, {deltas} deltas"
+    );
+    shut_down(service);
+
+    let reopened = reopen(config.clone(), &paths);
+    reopened.core.activate_session(session.id).unwrap();
+    assert_eq!(
+        compression_state(&reopened, session.id).as_ref(),
+        Some(&live)
+    );
+    shut_down(reopened);
+
+    // An index of the schema before the chain is rebuilt from the rollouts.
+    let index = rusqlite::Connection::open(index_path(&paths)).unwrap();
+    index.pragma_update(None, "user_version", 5).unwrap();
+    drop(index);
+    let reindexed = reopen(config.clone(), &paths);
+    reindexed.core.activate_session(session.id).unwrap();
+    assert_eq!(
+        compression_state(&reindexed, session.id).as_ref(),
+        Some(&live)
+    );
+    shut_down(reindexed);
+
+    let index = rusqlite::Connection::open(index_path(&paths)).unwrap();
+    let removed = index
+        .execute(
+            r#"DELETE FROM agent_compression_links WHERE record_ordinal = (
+                SELECT MIN(record_ordinal) FROM agent_compression_links
+                WHERE link_json LIKE '{"delta"%')"#,
+            [],
+        )
+        .unwrap();
+    assert_eq!(removed, 1);
+    drop(index);
+    let rebuilt = reopen(config, &paths);
+    rebuilt.core.activate_session(session.id).unwrap();
+    let state = compression_state(&rebuilt, session.id).unwrap();
+    let blocks = |state: &AgentCompressionState| {
+        state
+            .blocks
+            .iter()
+            .map(|block| (block.summary.clone(), block.effective_message_ids.clone()))
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(blocks(&state), blocks(&live));
+    finish(rebuilt, paths);
+}
+
+/// A `standard` session writes no compression state at all.
+// The managed turns' tasks must finish while `shutdown` blocks this thread.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_standard_session_writes_no_compression_state() {
+    let server = FakeServer::start(vec![(assistant_events("Done."), Duration::ZERO); 2]).await;
+    let (service, paths) = configured_service("compression-standard", &server.base_url);
+    let session = service
+        .create_session(AgentSessionMode::Default)
+        .await
+        .unwrap();
+    for prompt in ["One.", "Two."] {
+        service
+            .start_turn(session.id, prompt.to_string().into())
+            .await
+            .unwrap();
+    }
+    assert!(!rollouts(&paths).contains("\"compression"));
+    let index = rusqlite::Connection::open(index_path(&paths)).unwrap();
+    let links: i64 = index
+        .query_row("SELECT COUNT(*) FROM agent_compression_links", [], |row| {
+            row.get(0)
+        })
+        .unwrap();
+    assert_eq!(links, 0);
+    drop(index);
     finish(service, paths);
+}
+
+fn compression_state(
+    service: &AgentApplicationService,
+    session_id: AgentSessionId,
+) -> Option<AgentCompressionState> {
+    service.core.test_compression_state(session_id).unwrap()
+}
+
+fn history_root(paths: &TestPaths) -> PathBuf {
+    paths.data_dir.join("agent-test")
+}
+
+fn index_path(paths: &TestPaths) -> PathBuf {
+    hanafubuki_agent_history::AgentHistoryPaths::under(history_root(paths)).sqlite_database
+}
+
+/// Every rollout's text, one after the other.
+fn rollouts(paths: &TestPaths) -> String {
+    fn collect(directory: &Path, text: &mut String) {
+        for entry in std::fs::read_dir(directory).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                collect(&path, text);
+            } else if path
+                .extension()
+                .is_some_and(|extension| extension == "jsonl")
+            {
+                text.push_str(&std::fs::read_to_string(&path).unwrap());
+            }
+        }
+    }
+    let mut text = String::new();
+    collect(&history_root(paths), &mut text);
+    text
+}
+
+/// A new Agent over `paths`' storage, as after a restart.
+fn reopen(config: AgentConfig, paths: &TestPaths) -> AgentApplicationService {
+    AgentApplicationService::new_with_host(
+        config,
+        test_host(paths),
+        AgentStoragePaths::under(history_root(paths)),
+        SkillRoots {
+            system: paths.data_dir.join("agent-test/skills-bundled"),
+            user: paths.data_dir.join("agent-test/skills-user"),
+            install_bundled_system_skills: false,
+            state_file: paths.data_dir.join("agent-test/skills-state.json"),
+        },
+        ExecutorManager::default(),
+    )
+    .unwrap()
+}
+
+fn shut_down(service: AgentApplicationService) {
+    let diagnostics = service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE);
+    assert!(diagnostics.is_empty(), "{diagnostics:?}");
 }
 
 /// The `[compaction]` table the sessions run with: `hierarchical`, only the
@@ -216,7 +423,6 @@ pub(super) fn with_usage(events: Vec<u8>, input_tokens: u64) -> Vec<u8> {
 }
 
 fn finish(service: AgentApplicationService, paths: TestPaths) {
-    let diagnostics = service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE);
-    assert!(diagnostics.is_empty(), "{diagnostics:?}");
+    shut_down(service);
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }

@@ -14,8 +14,13 @@ pub use activity::{
     AgentActivityKind, AgentActivityOutputPreview, AgentActivityPhase, AgentActivitySnapshot,
     AgentExecutionActivityRef,
 };
-pub(crate) use compression::tolerant_compression_state;
-pub use compression::{AgentCompressionState, AgentHierarchicalCompression};
+pub(crate) use compression::{
+    next_link, tolerant_compression_state, tolerant_compression_update, CompressionChainHead,
+};
+pub use compression::{
+    AgentCompressionChain, AgentCompressionDelta, AgentCompressionState, AgentCompressionUpdate,
+    AgentHierarchicalCompression,
+};
 pub use conversation_item::{
     AgentAttachmentId, AgentImageAttachmentRef, AgentMessagePhase, AgentPlanBlock,
     AgentToolOutputTruncation, ConversationItem,
