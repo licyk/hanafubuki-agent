@@ -66,14 +66,23 @@ impl AgentService {
         {
             return Ok(outcome);
         }
-        if let Some(abort) = self
+        let abort = self
             .inner
             .managed_turns
             .lock()
             .get(&identity)
-            .and_then(Clone::clone)
-        {
-            abort.abort();
+            .and_then(Clone::clone);
+        if let Some(abort) = abort {
+            // A turn that staged its end is committing it and emits its
+            // events once that is durable, which a slow disk can hold past
+            // the grace: aborting it then would drop them. Decided under the
+            // record's lock, where a turn stages its end.
+            let cell = self.session(session_id)?;
+            let record = cell.lock()?;
+            if exact_turn(&record, turn_id, generation).is_ok_and(|turn| !turn.phase.is_terminal())
+            {
+                abort.abort();
+            }
         }
         let remaining = CONFIRMATION_DEADLINE.saturating_sub(started.elapsed());
         self.wait_for_turn_terminal(identity, remaining)

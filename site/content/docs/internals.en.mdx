@@ -61,7 +61,7 @@ A session cell has two signals: `persisted`, which advances when the staged comm
 - **Blocking waits** are for callers off the async runtime only: the synchronous service methods a host runs on blocking workers, and the facade's blocking boundary, which also runs a session's activation before a model operation and submits turns; `list_snapshots`; `flush_for_diagnostics`; and `stop_operations` and `shutdown` on the shutdown thread, where every session's wait, its progress flush and then the wait for the managed turn tasks (their own `Condvar`) share one deadline.
 - **Never blocking:** the drop guards, execution progress and the kernel's async `start_turn` wait on no blocking side.
 
-`cancel_turn_confirmed` requests the cancellation, waits 500 ms for the turn to end cooperatively (`COOPERATIVE_GRACE`), then aborts its managed task and waits for the rest of a 5 s deadline (`CONFIRMATION_DEADLINE`) for the cancellation to be durable; past it, `CancellationNotConfirmed`. Both waits are async, so a cancel holds no blocking worker.
+`cancel_turn_confirmed` requests the cancellation, waits 500 ms for the turn to end cooperatively (`COOPERATIVE_GRACE`), then aborts its managed task (unless the turn has already staged its end, under the record's lock: it emits that end's events once the commit is durable, which a slow disk can hold past the grace, and an abort would drop them) and waits for the rest of a 5 s deadline (`CONFIRMATION_DEADLINE`) for the cancellation to be durable; past it, `CancellationNotConfirmed`. Both waits are async, so a cancel holds no blocking worker.
 
 ## The history store's refusals [#history-refusals]
 

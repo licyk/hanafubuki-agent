@@ -1,9 +1,9 @@
 //! A dropped turn or compaction ends without its drop guard waiting: the
 //! guard hands its terminal commit to the history store, deferring it behind
 //! a commit still in flight, and the store's acknowledgement publishes it,
-//! wakes the terminal waiters and makes it visible. Each test runs on a
-//! single-threaded runtime, where a guard that waited would hold the only
-//! thread.
+//! wakes the terminal waiters and makes it visible. A turn already committing
+//! its end is not dropped. Each test runs on a single-threaded runtime, where
+//! a guard that waited would hold the only thread.
 
 use std::time::Instant;
 
@@ -58,6 +58,25 @@ impl ModelPort for AnswerThenPendingModel {
         }
         let events = final_answer_events("Done.");
         Box::pin(async move { Ok(Box::new(ScriptedPersistenceStream { events }) as ModelStream) })
+    }
+}
+
+/// Fails its request with `Cancelled` once the turn is cancelled, as a
+/// provider's stream does.
+struct CancelledWithTheTurnModel;
+
+impl ModelPort for CancelledWithTheTurnModel {
+    fn stream(
+        &self,
+        _request: ModelRequest,
+        cancellation: CancellationToken,
+    ) -> ModelFuture<'_, ModelResult<ModelStream>> {
+        Box::pin(async move {
+            while !cancellation.is_cancelled() {
+                tokio::time::sleep(Duration::from_millis(2)).await;
+            }
+            Err(ModelError::Cancelled)
+        })
     }
 }
 
@@ -274,4 +293,56 @@ fn an_aborted_compaction_hands_its_terminal_state_to_the_store_without_waiting()
             .map(|compaction| compaction.status),
         Some(AgentCompactionStatus::Cancelled)
     );
+}
+
+/// Cancelled while it waits for the model, a managed turn commits its
+/// cancellation; a store slower to acknowledge it than the cancellation's
+/// cooperative grace does not get the turn aborted under that commit, which
+/// would leave its end untold.
+#[test]
+fn a_confirmed_cancellation_whose_commit_outlasts_the_grace_is_told() {
+    let store = Arc::new(RecordingHistoryStore::default());
+    let service = AgentService::with_history_store(
+        Arc::new(CancelledWithTheTurnModel),
+        AgentKernelRegistries::default(),
+        store.clone(),
+    );
+    let session_id = service.create_session(text_session_config()).unwrap().id;
+    let sink = Arc::new(RecordingSink::default());
+    let gate = Arc::new(AppendGate::new());
+
+    let outcome = on_a_current_thread_runtime({
+        let (service, store, sink) = (service.clone(), store.clone(), sink.clone());
+        move || async move {
+            let turn = service
+                .submit_turn_with_sink(session_id, "hello", sink.clone())
+                .unwrap();
+            assert!(
+                until(|| sink.saw(|kind| matches!(kind, AgentEventKind::SamplingStarted { .. })))
+                    .await
+            );
+            *store.commit_gate.lock().unwrap() = Some(gate.clone());
+            let cancelling = tokio::spawn({
+                let service = service.clone();
+                async move {
+                    service
+                        .cancel_turn_confirmed(session_id, turn.turn_id, turn.generation)
+                        .await
+                }
+            });
+            meet(|gate| &gate.started, &gate).await;
+            // Past the grace (500 ms), after which an uncooperative turn is
+            // aborted.
+            tokio::time::sleep(Duration::from_secs(1)).await;
+            meet(|gate| &gate.release, &gate).await;
+            let outcome = cancelling.await.unwrap().unwrap();
+            assert!(
+                until(|| sink.saw(cancelled)).await,
+                "the cancellation was never told"
+            );
+            outcome
+        }
+    });
+
+    assert_eq!(outcome.phase, AgentTurnPhase::Cancelled);
 }

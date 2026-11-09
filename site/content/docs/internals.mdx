@@ -53,7 +53,7 @@ icon: Microscope
 - **阻塞等待**只给异步运行时之外的调用方：宿主在阻塞工作线程上运行的同步服务方法，以及门面的阻塞边界（它也负责模型操作前的会话激活和轮次提交）；`list_snapshots`；`flush_for_diagnostics`；还有关闭线程上的 `stop_operations` 和 `shutdown`，在那里每个会话的等待、它的进度刷新，以及之后对托管轮次任务（它们自己的 `Condvar`）的等待共用一个期限。
 - **从不阻塞：** drop guard、执行进度和内核的异步 `start_turn` 不在任何阻塞的一侧上等待。
 
-`cancel_turn_confirmed` 请求取消后，先等待 500 毫秒让轮次协作地结束（`COOPERATIVE_GRACE`），然后中止它的托管任务，并在 5 秒期限（`CONFIRMATION_DEADLINE`）的剩余时间里等待取消持久化；超过则返回 `CancellationNotConfirmed`。两次等待都是异步的，所以取消不占用阻塞工作线程。
+`cancel_turn_confirmed` 请求取消后，先等待 500 毫秒让轮次协作地结束（`COOPERATIVE_GRACE`），然后中止它的托管任务（除非轮次已在记录的锁下暂存了它的结束：那次提交持久化后它才发出结束的事件，慢速磁盘可能让这超过宽限时间，此时中止会丢掉这些事件），并在 5 秒期限（`CONFIRMATION_DEADLINE`）的剩余时间里等待取消持久化；超过则返回 `CancellationNotConfirmed`。两次等待都是异步的，所以取消不占用阻塞工作线程。
 
 ## 历史存储的拒绝规则 [#history-refusals]
 
