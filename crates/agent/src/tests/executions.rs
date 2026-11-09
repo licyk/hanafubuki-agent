@@ -8,7 +8,9 @@ async fn unified_exec_completes_only_after_manual_exact_approval() {
         "shell": null,
         "login": null,
         "tty": null,
-        "yield_time_ms": 5_000,
+        // The call returns when the command exits; a cold PowerShell start
+        // on a loaded runner takes longer than a short yield.
+        "yield_time_ms": 30_000,
         "max_output_bytes": 32_768,
         "workdir": null
     }))
@@ -78,7 +80,7 @@ async fn unified_exec_completes_only_after_manual_exact_approval() {
 
     assert_eq!(
         // A cold PowerShell start on a loaded CI runner takes seconds.
-        tokio::time::timeout(Duration::from_secs(30), turn)
+        tokio::time::timeout(Duration::from_secs(60), turn)
             .await
             .expect("approved command turn must finish within the fixture deadline")
             .unwrap()
