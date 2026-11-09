@@ -392,8 +392,17 @@ moves its pin.
         `writableRoots`, `networkAccess` (default false); per-session
         `set_session_sandbox_mode` (a subagent inherits it); `doctor`
         shows the sandbox. `crates/process` unchanged.
-  - [ ] P14b, macOS: Seatbelt (`sandbox-exec`) in `Sandbox::wrap`; the
-        macOS default.
+  - [x] P14b, macOS: Seatbelt through `/usr/bin/sandbox-exec -p <policy>
+        -DWRITABLE_ROOT_N=…` (Codex's three `.sbpl` files, unchanged but
+        for a header and `/dev/tty`); writes only under the writable roots,
+        an existing `.git`, `.agents` and `.hanafubuki-agent` read-only;
+        network only when allowed; available when `sandbox-exec` exists,
+        else fail closed; workspace-write is now the macOS default.
+        Verified on Linux (policy and command-line tests) and by a macOS
+        target check of the sandbox crate only; `tests/macos.rs` first
+        runs on the macOS CI job.
+  - Open (P14b): on macOS in workspace-write, `git commit` and anything
+    writing `.git` fail (as in Codex) until P14d's escalation.
   - [ ] P14c, Windows: the restricted-token backend through
         `helper_dispatch`, TEMP as a writable root, the elevated setup,
         `/setup-default-sandbox`, `windows.sandbox`; the Windows default.
