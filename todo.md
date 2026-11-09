@@ -1,5 +1,27 @@
 # Follow-ups
 
+## Plan: visible thinking and the documentation site (2026-11-09)
+
+The plan is [docs/plan-thinking-and-site.md](docs/plan-thinking-and-site.md);
+every recommendation in its §5 was accepted (store thinking in history; drop
+Hanafubuki's separate thinking timer; a bilingual site, zh-CN by default;
+`extraction-plan.md` not carried over; GitHub Pages; one new history-corpus
+fixture recorded deliberately; Giscus follows the site's theme and locale).
+The next release with it is 0.2.0 (the headline event is removed).
+
+- [ ] T1: thinking in the model API (three protocols, `reasoning.summary`)
+      and the kernel (three events, `ConversationItem::Reasoning`, its own
+      budget), the headline removed.
+- [ ] T2: the TUI thinking cell, the toggle key, Working without the
+      headline; `exec` output and `docs/cli.md`.
+- [ ] T3 (Hanafubuki): the thinking block, Working without the headline or
+      the thinking timer, the Task Center showing the configuration's
+      recoveries.
+- [ ] D1: the `site/` framework, tooling, Giscus, Umami, `site.yml`.
+- [ ] D2: the content rewrite, bilingual; `docs/` removed; links re-pointed.
+- [ ] D2b (Hanafubuki): its links into this repository's docs re-pointed.
+- [ ] D3: GitHub Pages.
+
 ## Extraction from Hanafubuki
 
 The phases are in [docs/extraction-plan.md](docs/extraction-plan.md) §14;
@@ -137,7 +159,7 @@ done: the workspace, the decoupling inside Hanafubuki's tree, and the move.
       `doctor` prints; a new file lists its keys in declared order. A hand
       edit is read at the next write or restart, by design (as Hanafubuki's
       Config and Codex).
-- [ ] Hanafubuki, at its first pin past this (0.1.1): the recoveries in
+- [ ] Hanafubuki, at its first pin past this (T3 does it): the recoveries in
       the Task Center's configuration recovery notice (the integration maps
       `AgentConfigRecovery` onto a `ConfigRecoveryReport` for the Agent's
       files); nothing else changes.
