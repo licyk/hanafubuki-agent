@@ -427,9 +427,29 @@ moves its pin.
         runs on the macOS CI job.
   - Open (P14b): on macOS in workspace-write, `git commit` and anything
     writing `.git` fail (as in Codex) until P14d's escalation.
-  - [ ] P14c, Windows: the restricted-token backend through
-        `helper_dispatch`, TEMP as a writable root, the elevated setup,
-        `/setup-default-sandbox`, `windows.sandbox`; the Windows default.
+  - [x] P14c, Windows, unelevated: Codex's restricted-token sandbox
+        (`crates/sandbox/src/windows/`) through `helper_dispatch`: a
+        write-restricted token whose restricting SIDs are one capability
+        SID per writable root (SHA-256 of its `PathKey`, no state file),
+        write ACEs on the roots, deny-write ACEs on an existing `.git`,
+        `.agents`, `.hanafubuki-agent`; a private desktop; a kill-on-close
+        job; TEMP a writable root on every platform. Opt-in by
+        `[windows] sandbox = "unelevated"`; unset or `"elevated"` refuses
+        sandboxed modes; the Windows default stays full-access.
+        `/setup-default-sandbox` (Windows only) explains. Compiled and
+        linted for Windows only; `tests/windows.rs` and the CLI test first
+        run on the Windows CI job.
+  - [ ] P14e, Windows, elevated: sandbox users from a UAC setup, network
+        blocked by firewall rules, the command runner, readiness; a real
+        `/setup-default-sandbox` writing `windows.sandbox = "elevated"`;
+        then the Windows default.
+  - Open (P14c): unelevated does not block the network (Codex's offline
+    environment variables only), yet the `sandbox` section says
+    `networkAccess: false`; a background process ends with its command;
+    `sandbox_status()` ignores `windows.sandbox` (doctor applies it).
+  - Hanafubuki, at its next pin (P14c): `AgentSettings::windows`
+    (`AgentWindowsSandbox`); a settings table whose values are all unset
+    is no longer written.
   - [x] P14d: `exec_command`'s `sandbox_permissions` (`use_default` |
         `require_escalated`) and `justification`; an escalated command is
         approved like any action (Manual asks, AutoReview's reviewer sees
