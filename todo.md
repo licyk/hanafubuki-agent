@@ -50,8 +50,19 @@ The next release with it is 0.2.0 (the headline event is removed).
       `summary`; a Responses request with an effort sends
       `"reasoning":{"effort":…,"summary":"auto"}`, which changes a host's
       request goldens only where they set an effort.
+    - `AgentHardLimits` has `maximum_reasoning_text_bytes`: a struct
+      literal without `..FIRST_BATCH_HARD_LIMITS` needs it.
+      `history_committed`'s `itemCount` counts the step's reasoning items.
     - Test support: `reasoning_tool_events` and `reasoning_answer_events`
       (Responses streams whose reasoning summary streams).
+  - Open: reasoning items count toward the history bounds
+    (`maximum_history_bytes`, 4 MiB, and `maximum_history_items`, 1024, one
+    more item per thinking step) but not toward the token estimate that
+    triggers compaction. Compaction drops them, so a session that compacts is
+    unaffected; a long session that thinks a lot and uses little context
+    can now reach `LimitExceeded { "history bytes" }` sooner. Decide whether
+    compaction also triggers on the history bounds, or whether a reasoning
+    item's bytes leave `retained_bytes`.
 - [ ] T2: the TUI thinking cell, the toggle key, Working without the
       headline; `exec` output and `docs/cli.md`.
   - T1 left the TUI compiling only: the bridge ignores the three events

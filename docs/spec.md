@@ -1029,8 +1029,9 @@ the same start permits and maintenance leases as the UI does.
   content it stays `StreamInterrupted`; a body cut mid-event stays a
   protocol error). Responses `response.incomplete` is the terminal
   `ModelEvent::ResponseIncomplete { reason }`: the kernel keeps the items
-  completed and the text streamed so far (an unfinished reasoning or other
-  item is accepted), logs the reason at warn, and fails only when nothing
+  completed and the text streamed so far (an unfinished reasoning item is
+  completed with what streamed, an unfinished other item is accepted), logs
+  the reason at warn, and fails only when nothing
   was produced. An item completed without `output_item.added` is started
   by the kernel then completed; a missing `summary_index` is 0. Thinking
   is `ModelEvent::ReasoningDelta { item_id, kind, index, delta }` (`kind`
