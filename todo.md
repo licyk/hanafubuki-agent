@@ -63,15 +63,23 @@ The next release with it is 0.2.0 (the headline event is removed).
     can now reach `LimitExceeded { "history bytes" }` sooner. Decide whether
     compaction also triggers on the history bounds, or whether a reasoning
     item's bytes leave `retained_bytes`.
-- [ ] T2: the TUI thinking cell, the toggle key, Working without the
-      headline; `exec` output and `docs/cli.md`.
-  - T1 left the TUI compiling only: the bridge ignores the three events
-    (`agent_bridge/mod.rs` `event`, the `_ => return None` arm), `TurnUpdate::Status`
-    is gone with the headline, and the resume replay
-    (`agent_bridge/replay.rs`) and `sessions show` (`cli/src/sessions.rs`)
-    skip `ConversationItem::Reasoning` through their catch-all arms;
-    `exec`'s human output prints nothing for them and `--json` already
-    carries them.
+- [x] T2: the TUI thinking cell (`history_cell/thinking.rs`), Ctrl-O,
+      Working without the headline; `exec`'s `· thought for 12s` on
+      standard error and `sessions show`'s `thought for 12s` line
+      ([docs/cli.md](docs/cli.md) "Thinking", architecture.md §3.7).
+  - What T3 mirrors: collapsed by default; live `Thinking 5s` counting up
+    from the cell's own start, completed `Thought for 12s` from the
+    kernel's `durationMillis` (seconds, rounded down; `(truncated)` when
+    the item says so); an empty text shows the header only; the turn's
+    terminal event completes a live block with the time so far; one
+    toggle for the live block and every later one; a reasoning update
+    that arrives while a message streams is held until that message
+    completes, so the transcript keeps the model's order. The live text
+    is the streamed text; for an item that streamed both a summary and
+    raw text the committed item (the summary) is what a reload shows.
+  - Open (found in T2, not changed): `sessions show` prints its items
+    latest first, in the page's order, where a person reads a transcript
+    oldest first.
 - [ ] T3 (Hanafubuki): the thinking block, Working without the headline or
       the thinking timer, the Task Center showing the configuration's
       recoveries.

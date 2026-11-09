@@ -11,7 +11,8 @@ The Agent's crates live here, moved from
 through the `hanafubuki-agent` facade. The facade also runs without a host
 (`AgentRuntime::standalone`), and the `hanafubuki-agent` binary runs the
 terminal interface, ported from Codex's (with its slash commands, transcript
-pager, `@` file mentions and session picker), or one headless turn (`exec`),
+pager, `@` file mentions and session picker, and the model's thinking shown
+as it streams), or one headless turn (`exec`),
 and manages its configuration on it. Each release publishes the crates on
 crates.io and binaries for Linux (x86_64), macOS (x86_64, Apple silicon)
 and Windows (x86_64) on GitHub ([releasing](docs/release.md)).

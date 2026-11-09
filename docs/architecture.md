@@ -339,13 +339,32 @@ the fixed theme Codex falls back to without it.
   the Agent recovers from) leaves the interface running.
 - **Keys.** Enter submits, Shift+Enter (with the keyboard enhancement
   flags) or Ctrl+J inserts a newline, Up and Down walk the session's
-  messages; Esc or Ctrl-C interrupts a running turn; Ctrl-C twice, Ctrl-D
-  twice on an empty composer, or `/quit` quits.
+  messages; Esc or Ctrl-C interrupts a running turn; Ctrl-O shows or hides
+  the model's thinking; Ctrl-C twice, Ctrl-D twice on an empty composer, or
+  `/quit` quits.
+- **Thinking.** The bridge maps the reasoning events
+  (`ReasoningStarted`, `ReasoningDelta`, `ReasoningCompleted`) onto a
+  thinking cell (`history_cell/thinking.rs`) that lives in the viewport
+  beside the running tool calls: `Thinking 5s`, counting up, and, expanded,
+  the streamed Markdown, dimmed. The status line stays `Working`. On
+  `ReasoningCompleted` the cell goes into the scrollback as shown, with the
+  kernel's `durationMillis` (`Thought for 12s`); a turn's end completes a
+  live cell with the time so far, since a turn that fails mid-stream sends
+  no completion. While a message streams, the reasoning updates wait behind
+  it as tool updates do, so the scrollback keeps the model's order. Ctrl-O
+  toggles one flag of the chat widget, for the live cells and every later
+  one; the footer offers it while a cell is live. The scrollback cannot be
+  rewritten, so the transcript pager draws each cell's `transcript_lines`,
+  which for thinking always include the text; the resume replay maps
+  `ConversationItem::Reasoning` to a completed cell. The live text is the
+  streamed text: in the rare item that streams both a summary and raw
+  text, the committed item keeps the summary, which a resumed session
+  shows.
 - **Sessions through the bridge.** The interface opens every session
   through the bridge (`AgentBridge::open`, over `open_session`): a new one,
   one named by `resume`, the latest, or one picked from the resume picker.
   The session's latest transcript items are read back into what the chat
-  replays (`agent_bridge/replay.rs`: messages, plans, tool calls with the
+  replays (`agent_bridge/replay.rs`: messages, thinking, plans, tool calls with the
   output and the `apply_patch` diff read from their committed items, the
   way a finished call's are), after its header. `/new` and `/resume` switch
   the bridge's session; the events of the one left are ignored.

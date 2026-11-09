@@ -60,7 +60,7 @@ need the data directory to themselves.
 | `mcp remove ID` | Disconnects and removes a server. |
 | `mcp connect ID` | Connects a server and prints its phase and tool count; fails when it does not reach `ready`. |
 | `sessions list [--archived] [--json]` | The sessions, the latest first: id, last update, model, title (`--json`: one session summary per line). |
-| `sessions show ID [--json]` | The session's latest 200 transcript items: messages, tool calls and their results (`--json`: the transcript page). |
+| `sessions show ID [--json]` | The session's latest 200 transcript items: messages, how long the model thought (`thought for 12s`), tool calls and their results (`--json`: the transcript page, the thinking's text included). |
 | `sessions archive ID`, `sessions delete ID` | Archives a session; deletes one and its history. |
 | `skills list`, `skills install DIR [--overwrite]`, `skills remove ID` | The Skill catalog; installs the Skill in `DIR`; removes an installed Skill. |
 | `memory status`, `memory reset` | The memory's state; forgets everything it holds. |
@@ -84,11 +84,28 @@ time, an option to pick for each.
 | Tab | In the command popup, completes the command; in the file popup, inserts the file |
 | Esc, Ctrl-C | Interrupts the running turn; Esc first closes a popup; Ctrl-C first clears a composer that has text, and in an approval denies it and those waiting |
 | Ctrl-T | The transcript in a pager (below) |
+| Ctrl-O | Shows or hides the model's thinking (below), for the live thinking and the rest of the session |
 | `?` on an empty composer | The shortcuts |
 | Ctrl-C twice, Ctrl-D twice on an empty composer, `/quit` | Quits |
 
 Quitting restores the terminal and shuts the Agent down; the exit code is
 0, or 1 when the Agent could not start or the terminal could not be used.
+
+### Thinking
+
+While the model thinks, the viewport shows `• Thinking 5s`, counting up;
+the status line stays `Working`. Ctrl-O expands it to the thinking's text
+as it streams (the provider's summary of its reasoning, or its raw
+reasoning, as Markdown) and collapses it again; the choice holds for every
+later thinking in the session, and the footer offers it while thinking is
+shown. When the thinking ends, it goes into the scrollback as it was
+shown: `• Thought for 12s` (with `(truncated)` when its text was cut at
+the Agent's bound), or that line and the text. The scrollback cannot be
+changed afterwards, so the transcript pager (Ctrl-T) always shows the
+text. A turn that ends while the model thinks ends its thinking with the
+time so far; a provider that sends no text leaves only the line. A resumed
+session shows its thinking the same way, collapsed unless Ctrl-O expanded
+thinking.
 
 ### Commands
 
@@ -126,17 +143,18 @@ its tools.
 
 ### The pager and the resume picker
 
-Ctrl-T shows the session's transcript, and `/diff` its diff, on the
-terminal's alternate screen: Up, Down (`k`, `j`), Page Up, Page Down
-(Space), Home and End scroll; `q` (and for the transcript Esc or Ctrl-T)
-closes it. What the turn writes meanwhile appears in the scrollback when
-it closes.
+Ctrl-T shows the session's transcript (each thinking with its text), and
+`/diff` its diff, on the terminal's alternate screen: Up, Down (`k`, `j`),
+Page Up, Page Down (Space), Home and End scroll; `q` (and for the
+transcript Esc or Ctrl-T) closes it. What the turn writes meanwhile
+appears in the scrollback when it closes.
 
 The resume picker lists the sessions a turn ran in, the latest first, by
 title (a session's first message until it is named) and when it was last
 updated; typing searches the titles. Enter reopens the session: the
 interface shows its header and its latest 200 transcript items (messages,
-plans, tool calls with their output), and the next message continues it.
+thinking, plans, tool calls with their output), and the next message
+continues it.
 Esc goes back (at `resume`'s start, to a new session); Ctrl-C quits.
 
 ## `exec`
@@ -163,8 +181,9 @@ Each assistant message is printed when it completes, commentary prefixed
 with `·`, the final answer as it is; a proposed plan follows `plan:`; a
 tool call is `→ NAME[: SUBJECT]` and its end `  NAME done` or `  NAME
 failed`; `exec`'s own notes (approvals it answered) are prefixed with `·`.
-Standard error has the session's id, model retries, and how a turn that
-did not complete ended.
+Standard error has the session's id, how long each thinking took (`·
+thought for 3s`; its text is not printed), model retries, and how a turn
+that did not complete ended.
 
 With `--json`, standard output has one JSON object per line: every event of
 the turn as the facade serializes it (`AgentEvent`), in order. `exec`'s own
