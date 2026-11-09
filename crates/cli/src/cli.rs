@@ -176,6 +176,9 @@ pub(crate) enum ProvidersCommand {
         /// Reads its API token from this environment variable.
         #[arg(long, value_name = "VAR")]
         api_key_env: Option<String>,
+        /// A header sent with each of its requests.
+        #[arg(long = "header", value_name = "NAME=VALUE")]
+        headers: Vec<String>,
         /// Adds it turned off.
         #[arg(long)]
         disabled: bool,
@@ -207,6 +210,10 @@ pub(crate) enum McpCommand {
         id: String,
         #[arg(long, conflicts_with = "command")]
         url: Option<String>,
+        /// Whether the Streamable HTTP server takes an OAuth login (`mcp
+        /// login`); `disabled` when not given.
+        #[arg(long, value_enum)]
+        oauth: Option<OAuth>,
         /// An environment variable of the stdio program.
         #[arg(long = "env", value_name = "KEY=VALUE")]
         environment: Vec<String>,
@@ -221,6 +228,16 @@ pub(crate) enum McpCommand {
     Remove { id: String },
     /// Connects a server and reports how it went.
     Connect { id: String },
+    /// Logs in to a Streamable HTTP server with OAuth: prints the URL to open
+    /// in a browser and waits for the authorization.
+    Login { id: String },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
+pub(crate) enum OAuth {
+    Disabled,
+    Optional,
+    Required,
 }
 
 #[derive(Debug, Subcommand)]

@@ -171,6 +171,7 @@ fn settings_repair_clamps_numbers_and_reports_every_dropped_entry() {
     overlap["transport"]["publicEnvironment"] = json!({"TOKEN": "public"});
     let mut bad_program = named_server("bad-program");
     bad_program["transport"]["program"] = json!("../bin/server");
+    let bad_id = named_server("bad id");
     let (settings, repairs) = repair_settings(settings_document(vec![
         named_server("kept"),
         clamped,
@@ -180,6 +181,7 @@ fn settings_repair_clamps_numbers_and_reports_every_dropped_entry() {
         bad_environment,
         overlap,
         bad_program,
+        bad_id,
         named_server("kept"),
     ]));
 
@@ -232,7 +234,7 @@ fn settings_repair_clamps_numbers_and_reports_every_dropped_entry() {
         .filter(|repair| repair.kind == McpSettingsRepairKind::ServerDropped)
         .map(|repair| (repair.subject.as_deref(), repair.detail.as_str()))
         .collect::<Vec<_>>();
-    assert_eq!(dropped.len(), 7);
+    assert_eq!(dropped.len(), 8);
     assert_eq!(
         dropped
             .iter()
@@ -245,6 +247,7 @@ fn settings_repair_clamps_numbers_and_reports_every_dropped_entry() {
             Some("bad-environment"),
             Some("overlap"),
             Some("bad-program"),
+            None,
             Some("kept"),
         ]
     );
@@ -252,7 +255,8 @@ fn settings_repair_clamps_numbers_and_reports_every_dropped_entry() {
     assert!(dropped[3].1.contains("environment variable name"));
     assert!(dropped[4].1.contains("overlap"));
     assert!(dropped[5].1.contains("stdio program"));
-    assert!(dropped[6].1.contains("same id"));
+    assert!(dropped[6].1.contains("server id"));
+    assert!(dropped[7].1.contains("same id"));
     // Nothing a report carries comes from a value in the file.
     let encoded = serde_json::to_string(&repairs).unwrap();
     assert!(!encoded.contains("secret-value") && !encoded.contains("password"));

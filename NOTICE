@@ -17,6 +17,9 @@ Third-party notices
   Copyright 2025 OpenAI:
   - `crates/config/src/overrides.rs` and its tests are derived from Codex's
     `codex-rs/common/src/config_override.rs` (`rust-v0.93.0`);
+  - `crates/agent/src/service/mcp/oauth_login.rs`, the loopback that
+    receives an MCP server's OAuth redirect, is derived from Codex's
+    `codex-rs/rmcp-client/src/perform_oauth_login.rs` (`57a808a392`);
   - the terminal interface, `crates/tui`, is ported from Codex's
     `codex-rs/tui` at two revisions, `rust-v0.93.0` and the later
     `57a808a392`, and its file search (`crates/tui/src/file_search`) from

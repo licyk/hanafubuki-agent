@@ -30,6 +30,24 @@ impl AgentApplicationService {
         self.mcp_application.mcp_write_credentials(request).await
     }
 
+    /// Sets the credential `key` to `value`, keeping the others; the
+    /// servers that use it reconnect.
+    pub async fn mcp_set_credential(
+        &self,
+        key: hanafubuki_agent_mcp::McpCredentialKey,
+        value: String,
+    ) -> Result<McpApplicationSnapshot, String> {
+        self.mcp_application.mcp_set_credential(key, value).await
+    }
+
+    /// Removes the credential `key`, refused while an enabled server uses it.
+    pub async fn mcp_remove_credential(
+        &self,
+        key: hanafubuki_agent_mcp::McpCredentialKey,
+    ) -> Result<McpApplicationSnapshot, String> {
+        self.mcp_application.mcp_remove_credential(key).await
+    }
+
     pub async fn mcp_connect(
         &self,
         server_id: hanafubuki_agent_mcp::McpServerId,
@@ -60,6 +78,23 @@ impl AgentApplicationService {
         request: McpOAuthLoginRequest,
     ) -> Result<hanafubuki_agent_mcp::McpOAuthLogin, String> {
         self.mcp_application.mcp_oauth_start(request).await
+    }
+
+    /// Logs in to the MCP server `server_id` through the browser.
+    ///
+    /// `open_url` gets the authorization URL to show or open; the login then
+    /// waits for the browser's redirect to a loopback port
+    /// (`http://127.0.0.1:<port>/callback`) for up to 5 minutes, or until
+    /// `cancelled` completes, and cancels the flow if none comes.
+    pub async fn mcp_oauth_login(
+        &self,
+        server_id: hanafubuki_agent_mcp::McpServerId,
+        open_url: impl FnOnce(&str) + Send,
+        cancelled: impl std::future::Future<Output = ()> + Send,
+    ) -> Result<McpApplicationSnapshot, String> {
+        self.mcp_application
+            .mcp_oauth_login(server_id, open_url, cancelled)
+            .await
     }
 
     pub async fn mcp_oauth_complete(

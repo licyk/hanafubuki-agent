@@ -663,7 +663,7 @@ async fn a_proxy_change_rebuilds_the_mcp_client_once() {
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }
 
-fn mcp_application(paths: &TestPaths) -> AgentMcpApplication {
+pub(super) fn mcp_application(paths: &TestPaths) -> AgentMcpApplication {
     AgentMcpApplication {
         mcp: Arc::new(hanafubuki_agent_mcp::McpManager::new(
             Arc::new(hanafubuki_agent_process::executor::ExecutorManager::default()),
@@ -758,5 +758,73 @@ credentialEnvironment = {{}}
              "detail": "MCP configuration is invalid: stdio program must be an absolute executable path or a PATH command name"}
         ])
     );
+    let _ = std::fs::remove_dir_all(paths.app_data_dir);
+}
+
+/// One credential is set or removed with the rest of the set kept; a
+/// credential an enabled server uses is not removed.
+#[tokio::test]
+async fn one_credential_is_set_or_removed_and_the_others_are_kept() {
+    let paths = test_paths("mcp-credential-helpers");
+    let application = mcp_application(&paths);
+    let server_id = hanafubuki_agent_mcp::McpServerId::parse("docs").unwrap();
+    let token =
+        hanafubuki_agent_mcp::McpCredentialKey::for_server_secret(&server_id, "Authorization");
+    let other = hanafubuki_agent_mcp::McpCredentialKey::parse("other").unwrap();
+
+    application
+        .mcp_set_credential(other.clone(), "kept".into())
+        .await
+        .unwrap();
+    application
+        .mcp_set_credential(token.clone(), "Bearer first".into())
+        .await
+        .unwrap();
+    let snapshot = application
+        .mcp_set_credential(token.clone(), "Bearer second".into())
+        .await
+        .unwrap();
+    let credential = |key| {
+        let credential = &snapshot.settings.credentials[key];
+        (credential.value.as_str(), credential.generation)
+    };
+    assert_eq!(credential(&token), ("Bearer second", 2));
+    assert_eq!(credential(&other), ("kept", 1));
+    assert!(application
+        .mcp_set_credential(token.clone(), String::new())
+        .await
+        .is_err());
+
+    let mut server = hanafubuki_agent_mcp::test_support::oauth::oauth_config("http://127.0.0.1:9");
+    server.id = server_id;
+    let hanafubuki_agent_mcp::McpTransportConfig::StreamableHttp(http) = &mut server.transport
+    else {
+        unreachable!("the fixture's server is Streamable HTTP");
+    };
+    http.oauth = hanafubuki_agent_mcp::McpOAuthPolicy::Disabled;
+    http.credential_headers
+        .insert("Authorization".into(), token.clone());
+    application
+        .mcp_write_server(McpServerWriteRequest {
+            expected_revision: snapshot.settings.revision,
+            server,
+        })
+        .await
+        .unwrap();
+    let error = application
+        .mcp_remove_credential(token.clone())
+        .await
+        .unwrap_err();
+    assert!(error.contains("enabled MCP servers: docs"), "{error}");
+    let snapshot = application
+        .mcp_remove_credential(other.clone())
+        .await
+        .unwrap();
+    assert_eq!(
+        snapshot.settings.credentials.keys().collect::<Vec<_>>(),
+        [&token]
+    );
+    // The removal reached the file, so a second one finds nothing.
+    assert!(application.mcp_remove_credential(other).await.is_err());
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }

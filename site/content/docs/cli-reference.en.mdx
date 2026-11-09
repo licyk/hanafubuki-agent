@@ -71,26 +71,27 @@ See [Configuration](/docs/configuration).
 
 ## providers [#providers]
 
-| Command                                                                                                                           | Does                                                                                                                                                                    |
-| --------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `providers list`                                                                                                                  | Prints the model policy's model, and each Provider's id, name, whether it is the default or disabled, protocol, address, whether a token is set, and its headers' names |
-| `providers add NAME --base-url URL [--protocol responses\|chat-completions\|anthropic-messages] [--api-key-env VAR] [--disabled]` | Adds a Provider and prints its id. The protocol defaults to `responses`; the token is read from `VAR`. The first one becomes the default                                |
-| `providers remove ID`                                                                                                             | Removes a Provider; when it was the default, another becomes the default                                                                                                |
-| `providers default ID [--model MODEL]`                                                                                            | Makes a Provider the default, and optionally sets the model policy's model                                                                                              |
+| Command                                                                                                                                                  | Does                                                                                                                                                                       |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `providers list`                                                                                                                                         | Prints the model policy's model, and each Provider's id, name, whether it is the default or disabled, protocol, address, whether a token is set, and its headers' names    |
+| `providers add NAME --base-url URL [--protocol responses\|chat-completions\|anthropic-messages] [--api-key-env VAR] [--header NAME=VALUE]… [--disabled]` | Adds a Provider and prints its id. The protocol defaults to `responses`; the token is read from `VAR`; `--header` adds a request header. The first one becomes the default |
+| `providers remove ID`                                                                                                                                    | Removes a Provider; when it was the default, another becomes the default                                                                                                   |
+| `providers default ID [--model MODEL]`                                                                                                                   | Makes a Provider the default, and optionally sets the model policy's model                                                                                                 |
 
 See [Providers and models](/docs/providers-models).
 
 ## mcp [#mcp]
 
-| Command                                                        | Does                                                                                                                                                                               |
-| -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `mcp list`                                                     | Prints each server's id, whether it is disabled, its transport and target, the names (never the values) of its environment variables or headers; then the credentials that are set |
-| `mcp add ID --url URL [--disabled]`                            | Adds a Streamable HTTP server                                                                                                                                                      |
-| `mcp add ID [--env KEY=VALUE]… [--disabled] -- PROGRAM [ARG]…` | Adds a stdio server: the program and its arguments follow `--`. An enabled server is connected at once, and how that went is printed                                               |
-| `mcp remove ID`                                                | Disconnects and removes a server                                                                                                                                                   |
-| `mcp connect ID`                                               | Connects a server and prints its state and tool count; fails when it does not reach `ready`                                                                                        |
+| Command                                                                    | Does                                                                                                                                                                               |
+| -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `mcp list`                                                                 | Prints each server's id, whether it is disabled, its transport and target, the names (never the values) of its environment variables or headers; then the credentials that are set |
+| `mcp add ID --url URL [--oauth disabled\|optional\|required] [--disabled]` | Adds a Streamable HTTP server; `--oauth` sets whether it takes an OAuth login (`disabled` by default)                                                                              |
+| `mcp add ID [--env KEY=VALUE]… [--disabled] -- PROGRAM [ARG]…`             | Adds a stdio server: the program and its arguments follow `--`. An enabled server is connected at once, and how that went is printed                                               |
+| `mcp remove ID`                                                            | Disconnects and removes a server                                                                                                                                                   |
+| `mcp connect ID`                                                           | Connects a server and prints its state and tool count; fails when it does not reach `ready`                                                                                        |
+| `mcp login ID`                                                             | Logs in to a server with OAuth: prints the URL to open in a browser on this machine, waits up to 5 minutes for the authorization, then prints the servers' states                  |
 
-A server id has letters, digits, `-`, `_` and `.` only. Credentials are edited in `mcp.toml`; see [MCP](/docs/mcp).
+A server id has 1 to 128 letters, digits, `-`, `_` and `.` only. Credentials are edited in `mcp.toml`; see [MCP](/docs/mcp).
 
 ## sessions [#sessions]
 

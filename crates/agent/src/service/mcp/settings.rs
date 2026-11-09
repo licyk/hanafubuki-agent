@@ -3,7 +3,7 @@ use crate::{
     McpApplicationSnapshot, McpCredentialsWriteRequest, McpServerDeleteRequest,
     McpServerWriteRequest,
 };
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 impl AgentMcpApplication {
     pub async fn mcp_write_server(
@@ -75,7 +75,44 @@ impl AgentMcpApplication {
         let _gate = self.mcp_configuration_gate.lock().await;
         let current = self.load_settings().await?;
         require_revision(&current, request.expected_revision)?;
-        for value in request.credentials.values() {
+        self.replace_credentials(current, request.credentials).await
+    }
+
+    /// Sets one credential, keeping the others.
+    pub async fn mcp_set_credential(
+        &self,
+        key: hanafubuki_agent_mcp::McpCredentialKey,
+        value: String,
+    ) -> Result<McpApplicationSnapshot, String> {
+        let _gate = self.mcp_configuration_gate.lock().await;
+        let current = self.load_settings().await?;
+        let mut credentials = credential_values(&current);
+        credentials.insert(key, value);
+        self.replace_credentials(current, credentials).await
+    }
+
+    /// Removes one credential, refused while an enabled server uses it.
+    pub async fn mcp_remove_credential(
+        &self,
+        key: hanafubuki_agent_mcp::McpCredentialKey,
+    ) -> Result<McpApplicationSnapshot, String> {
+        let _gate = self.mcp_configuration_gate.lock().await;
+        let current = self.load_settings().await?;
+        let mut credentials = credential_values(&current);
+        if credentials.remove(&key).is_none() {
+            return Err("MCP credential does not exist".to_string());
+        }
+        self.replace_credentials(current, credentials).await
+    }
+
+    /// Writes `desired` as the whole credential set over `current`, which the
+    /// caller read under the configuration gate.
+    async fn replace_credentials(
+        &self,
+        current: hanafubuki_agent_mcp::McpSettings,
+        desired: BTreeMap<hanafubuki_agent_mcp::McpCredentialKey, String>,
+    ) -> Result<McpApplicationSnapshot, String> {
+        for value in desired.values() {
             hanafubuki_agent_mcp::validate_credential_value(value)
                 .map_err(|error| error.to_string())?;
         }
@@ -88,7 +125,7 @@ impl AgentMcpApplication {
             .filter(|server| {
                 credential_references(server)
                     .iter()
-                    .any(|key| !request.credentials.contains_key(key))
+                    .any(|key| !desired.contains_key(key))
             })
             .map(|server| server.id.as_str().to_string())
             .collect::<Vec<_>>();
@@ -99,8 +136,7 @@ impl AgentMcpApplication {
                 broken.join(", ")
             ));
         }
-        let changed = request
-            .credentials
+        let changed = desired
             .iter()
             .filter(|(key, value)| {
                 current
@@ -113,13 +149,12 @@ impl AgentMcpApplication {
                 current
                     .credentials
                     .keys()
-                    .filter(|key| !request.credentials.contains_key(*key))
+                    .filter(|key| !desired.contains_key(*key))
                     .cloned(),
             )
             .collect::<BTreeSet<_>>();
-        let desired = request.credentials;
         let settings = self
-            .update_settings(request.expected_revision, move |settings| {
+            .update_settings(current.revision, move |settings| {
                 let keys = settings
                     .credentials
                     .keys()
@@ -146,4 +181,14 @@ impl AgentMcpApplication {
         }
         self.mcp_snapshot_with_settings(settings).await
     }
+}
+
+fn credential_values(
+    settings: &hanafubuki_agent_mcp::McpSettings,
+) -> BTreeMap<hanafubuki_agent_mcp::McpCredentialKey, String> {
+    settings
+        .credentials
+        .iter()
+        .map(|(key, credential)| (key.clone(), credential.value.clone()))
+        .collect()
 }

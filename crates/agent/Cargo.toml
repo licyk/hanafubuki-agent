@@ -10,7 +10,7 @@ readme = "../../README.md"
 
 [features]
 # Fixtures for a host's integration tests (`test_support`).
-test-support = ["dep:axum", "dep:rmcp", "hanafubuki-agent-mcp/test-support", "tokio/io-util"]
+test-support = ["dep:axum", "dep:rmcp", "hanafubuki-agent-mcp/test-support"]
 
 [dependencies]
 hanafubuki-agent-kernel.workspace = true
@@ -52,7 +52,7 @@ serde_json.workspace = true
 sha2.workspace = true
 kardia-core.workspace = true
 rmcp = { workspace = true, features = ["server", "transport-streamable-http-server"], optional = true }
-tokio = { workspace = true, features = ["net", "rt", "rt-multi-thread", "sync", "time"] }
+tokio = { workspace = true, features = ["io-util", "macros", "net", "rt", "rt-multi-thread", "sync", "time"] }
 url.workspace = true
 
 [dev-dependencies]

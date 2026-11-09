@@ -8,10 +8,11 @@ repository.workspace = true
 rust-version.workspace = true
 
 [features]
-test-support = []
+test-support = ["dep:axum", "tokio/net"]
 
 [dependencies]
 async-trait = "0.1"
+axum = { workspace = true, optional = true }
 hanafubuki-agent-foundation.workspace = true
 hanafubuki-agent-host.workspace = true
 hanafubuki-agent-process.workspace = true

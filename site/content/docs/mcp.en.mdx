@@ -29,10 +29,12 @@ The servers are kept in `mcp.toml` in the configuration directory; every field i
     hanafubuki-agent mcp add docs --url https://mcp.example.com/mcp
     ```
 
+    A server that needs an OAuth login takes `--oauth required` (`optional` when it also works without one); see [OAuth login](#oauth).
+
   </Tab>
 </Tabs>
 
-- A server id has letters, digits, `-`, `_` and `.` only.
+- A server id has 1 to 128 letters, digits, `-`, `_` and `.` only. A server in `mcp.toml` with another id is dropped when the file is read, as a broken server is (see [Configuration recovery](/docs/recovery)), and the other servers stay.
 - A new server has the defaults: the approval policy `ask`, the exposure policy `deferred`, a 120-second call timeout, and so on.
 - An enabled server is connected as soon as it is added, and the command prints how that went, such as `files: ready`. `--disabled` adds it turned off.
 
@@ -90,11 +92,21 @@ The servers are kept in `mcp.toml` in the configuration directory; every field i
 
 `mcp list` prints only the names of the environment variables and headers, and which credentials are set, never their values.
 
-<Callout title="OAuth">
-  `mcp.toml` has an `oauth` setting, but the standalone command line has no OAuth login yet, and
-  `mcp add` always writes `oauth = "disabled"`. A server that needs an OAuth login cannot be used
-  from the command line for now; if the server allows it, use a token header instead.
-</Callout>
+A host sets or removes one credential at a time (`mcp_set_credential`, `mcp_remove_credential`); see [Embedding](/docs/embedding#configuration-in-a-host).
+
+## OAuth login [#oauth]
+
+A Streamable HTTP server whose `oauth` is `"optional"` or `"required"` takes an OAuth login:
+
+```sh
+hanafubuki-agent mcp add docs --oauth required --url https://mcp.example.com/mcp
+hanafubuki-agent mcp login docs
+```
+
+- `mcp login` prints the authorization URL. Open it in a browser on the same machine: after you authorize, the browser is sent back to `http://127.0.0.1:PORT/callback`, a port the command listens on for this login only, and the page says you can close the tab.
+- The command waits up to 5 minutes; then it prints `docs: logged in` and the servers' states. Ctrl-C ends it.
+- The tokens are kept in the platform's secure store (the keyring), not in `mcp.toml`; without a reachable keyring (`doctor` checks it) the login cannot keep them.
+- A server whose `oauth` is `"disabled"` (the default) refuses the login: `OAuth is disabled for this MCP server`.
 
 ## Approval and exposure policies [#policies]
 

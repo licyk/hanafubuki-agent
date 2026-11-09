@@ -1,17 +1,18 @@
-//! `mcp list|add|remove|connect`. The list reads `mcp.toml`; the changes
-//! and the connect go through the running Agent's MCP API, which connects a
-//! server it is told about.
+//! `mcp list|add|remove|connect|login`. The list reads `mcp.toml`; the
+//! changes, the connect and the login go through the running Agent's MCP
+//! API, which connects a server it is told about.
 
 use std::collections::BTreeMap;
+use std::io::Write;
 
 use hanafubuki_agent::{
-    AgentRuntimeHost, McpApplicationSnapshot, McpConnectionPhase, McpServerConfig,
+    AgentRuntimeHost, McpApplicationSnapshot, McpConnectionPhase, McpOAuthPolicy, McpServerConfig,
     McpServerDeleteRequest, McpServerId, McpServerWriteRequest, McpStdioConfig,
     McpStreamableHttpConfig, McpTransportConfig,
 };
 
 use crate::agent::{block_on, with_agent, Standalone};
-use crate::cli::{GlobalArgs, McpCommand};
+use crate::cli::{GlobalArgs, McpCommand, OAuth};
 use crate::exit::Failure;
 
 pub(crate) fn run(global: &GlobalArgs, command: McpCommand) -> Result<(), Failure> {
@@ -32,12 +33,13 @@ pub(crate) fn run(global: &GlobalArgs, command: McpCommand) -> Result<(), Failur
         McpCommand::Add {
             id,
             url,
+            oauth,
             environment,
             disabled,
             command,
         } => {
             let id = server_id(&id)?;
-            let transport = transport(url, environment, command)?;
+            let transport = transport(url, oauth, environment, command)?;
             with_agent(global, |agent| {
                 let snapshot = block_on(agent, move |agent| async move {
                     let current = agent.mcp_snapshot().await?;
@@ -112,6 +114,29 @@ pub(crate) fn run(global: &GlobalArgs, command: McpCommand) -> Result<(), Failur
                 }
             })
         }
+        // No browser is opened: the URL is printed for the user to open, on
+        // this machine since the authorization comes back to a local port.
+        McpCommand::Login { id } => {
+            let server_id = server_id(&id)?;
+            with_agent(global, |agent| {
+                let snapshot = block_on(agent, move |agent| async move {
+                    agent
+                        .mcp_oauth_login(
+                            server_id,
+                            |url| {
+                                println!("Open this URL in a browser on this machine to log in:");
+                                println!("{url}");
+                                let _ = std::io::stdout().flush();
+                            },
+                            std::future::pending(),
+                        )
+                        .await
+                })?;
+                println!("{id}: logged in");
+                print_status(&snapshot);
+                Ok(())
+            })
+        }
     }
 }
 
@@ -125,6 +150,7 @@ fn server_id(id: &str) -> Result<McpServerId, Failure> {
 
 fn transport(
     url: Option<String>,
+    oauth: Option<OAuth>,
     environment: Vec<String>,
     command: Vec<String>,
 ) -> Result<McpTransportConfig, Failure> {
@@ -137,9 +163,16 @@ fn transport(
                 url,
                 public_headers: BTreeMap::new(),
                 credential_headers: BTreeMap::new(),
-                oauth: Default::default(),
+                oauth: match oauth {
+                    None | Some(OAuth::Disabled) => McpOAuthPolicy::Disabled,
+                    Some(OAuth::Optional) => McpOAuthPolicy::Optional,
+                    Some(OAuth::Required) => McpOAuthPolicy::Required,
+                },
             },
         ));
+    }
+    if oauth.is_some() {
+        return Err(Failure::usage("--oauth is for a Streamable HTTP server"));
     }
     let mut command = command.into_iter();
     let program = command

@@ -382,6 +382,49 @@ async fn model_catalog_sends_the_credentials_stored_with_the_provider() {
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }
 
+/// A draft's catalog is read as a saved Provider's would be, with its token
+/// and headers, and the draft is not saved; a draft whose catalog cannot be
+/// read gets why.
+#[tokio::test]
+async fn a_provider_draft_lists_its_models_without_being_saved() {
+    let server = FakeServer::start(vec![(
+        br#"{"data":[{"id":"model-a"}]}"#.to_vec(),
+        Duration::ZERO,
+    )])
+    .await;
+    let (service, paths) = service_with("provider-draft-catalog", |_, _| {});
+    let mut draft = provider_draft(&server.base_url);
+    draft.enabled = false;
+    draft.api_token = Some("draft-token".into());
+    draft.request_headers = vec![AgentProviderHeaderSettings {
+        name: "X-Draft".into(),
+        value: "draft-header".into(),
+    }];
+
+    let models = service.test_provider_draft(draft.clone()).await.unwrap();
+
+    assert_eq!(
+        models
+            .iter()
+            .map(|model| model.id.as_str())
+            .collect::<Vec<_>>(),
+        ["model-a"]
+    );
+    let requests = server.requests();
+    assert_eq!(
+        requests[0].headers.get("authorization").unwrap(),
+        "Bearer draft-token"
+    );
+    assert_eq!(requests[0].headers.get("x-draft").unwrap(), "draft-header");
+    let registry = service.provider_registry_snapshot().await.unwrap();
+    assert!(registry.providers.is_empty());
+    assert_eq!(registry.revision, 0);
+
+    draft.base_url = "not an endpoint".into();
+    assert!(service.test_provider_draft(draft).await.is_err());
+    let _ = std::fs::remove_dir_all(paths.app_data_dir);
+}
+
 #[tokio::test]
 async fn model_catalog_keeps_successful_provider_results_when_another_provider_fails() {
     let server = FakeServer::start(vec![(

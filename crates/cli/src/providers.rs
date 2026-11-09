@@ -4,7 +4,8 @@
 
 use hanafubuki_agent::{
     AgentModelPolicyWriteRequest, AgentModelProtocol, AgentProviderDeleteRequest,
-    AgentProviderDraft, AgentProviderRegistrySnapshot, AgentProviderWriteRequest, AgentRuntimeHost,
+    AgentProviderDraft, AgentProviderHeaderSettings, AgentProviderRegistrySnapshot,
+    AgentProviderWriteRequest, AgentRuntimeHost,
 };
 
 use crate::agent::{block_on, with_agent, Standalone};
@@ -25,6 +26,7 @@ pub(crate) fn run(global: &GlobalArgs, command: ProvidersCommand) -> Result<(), 
             base_url,
             protocol,
             api_key_env,
+            headers,
             disabled,
         } => {
             let api_token = match api_key_env {
@@ -43,7 +45,20 @@ pub(crate) fn run(global: &GlobalArgs, command: ProvidersCommand) -> Result<(), 
                 },
                 base_url,
                 api_token,
-                request_headers: Vec::new(),
+                request_headers: headers
+                    .iter()
+                    .map(|header| {
+                        header
+                            .split_once('=')
+                            .map(|(name, value)| AgentProviderHeaderSettings {
+                                name: name.to_string(),
+                                value: value.to_string(),
+                            })
+                            .ok_or_else(|| {
+                                Failure::usage(format!("--header {header} is not NAME=VALUE"))
+                            })
+                    })
+                    .collect::<Result<_, _>>()?,
             };
             with_agent(global, |agent| {
                 block_on(agent, |agent| async move {

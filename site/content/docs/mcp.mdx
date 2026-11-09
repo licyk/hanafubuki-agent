@@ -29,10 +29,12 @@ MCP（Model Context Protocol）服务器可以把本地程序或远程服务的�
     hanafubuki-agent mcp add docs --url https://mcp.example.com/mcp
     ```
 
+    需要 OAuth 登录的服务器加上 `--oauth required`（不登录也能用时为 `optional`），见 [OAuth 登录](#oauth)。
+
   </Tab>
 </Tabs>
 
-- 服务器 ID 只能包含字母、数字、`-`、`_` 和 `.`。
+- 服务器 ID 只能包含 1 到 128 个字母、数字、`-`、`_` 和 `.`。读取 `mcp.toml` 时，ID 不符合要求的服务器会像其他无法使用的服务器一样被丢弃（见[配置恢复](/docs/recovery)），其他服务器保留。
 - 新服务器使用默认设置：审批策略 `ask`、暴露策略 `deferred`、调用超时 120 秒等。
 - 启用的服务器添加后立即连接，命令打印连接结果，例如 `files: ready`。`--disabled` 添加一个禁用的服务器。
 
@@ -90,11 +92,21 @@ MCP（Model Context Protocol）服务器可以把本地程序或远程服务的�
 
 `mcp list` 只打印环境变量和请求头的名字，以及哪些凭据已经设置，从不打印它们的值。
 
-<Callout title="OAuth">
-  `mcp.toml` 中有 `oauth` 设置，但独立运行的命令行目前没有 OAuth 登录流程，`mcp add`
-  添加的服务器总是 `oauth = "disabled"`。需要 OAuth
-  登录的服务器暂时无法在命令行中使用；如果服务器支持，请改用令牌请求头。
-</Callout>
+宿主可以一次设置或删除一个凭据（`mcp_set_credential`、`mcp_remove_credential`），见[嵌入 Agent](/docs/embedding#configuration-in-a-host)。
+
+## OAuth 登录 [#oauth]
+
+`oauth` 为 `"optional"` 或 `"required"` 的 Streamable HTTP 服务器可以用 OAuth 登录：
+
+```sh
+hanafubuki-agent mcp add docs --oauth required --url https://mcp.example.com/mcp
+hanafubuki-agent mcp login docs
+```
+
+- `mcp login` 打印授权 URL。请在同一台机器的浏览器中打开它：授权后浏览器会被带回 `http://127.0.0.1:端口/callback`，这是命令只为这次登录监听的端口，页面提示可以关闭标签页。
+- 命令最多等待 5 分钟，之后打印 `docs: logged in` 和服务器的状态。Ctrl-C 可以结束它。
+- 令牌保存在平台的安全存储（钥匙串）中，不在 `mcp.toml` 里；钥匙串不可用时（`doctor` 会检查），登录无法保存令牌。
+- `oauth` 为 `"disabled"`（默认）的服务器拒绝登录：`OAuth is disabled for this MCP server`。
 
 ## 审批和暴露策略 [#policies]
 

@@ -125,9 +125,10 @@ use std::path::Path;
 /// and the standalone Agent layers.
 pub use hanafubuki_agent_config::{
     AgentConfig, AgentConfigProblem, AgentConfigRecovery, AgentDirs, AgentLogLevel,
-    AgentModelProtocol, AgentSettings, AgentSettingsPatch, AgentStandaloneSettings,
-    ConfigLayerSource, ConfigLayers, ConfigOverrides, AGENT_CREDENTIAL_FILES, AGENT_HOME_ENV,
-    AGENT_MCP_FILE, AGENT_PROVIDERS_FILE, AGENT_SETTINGS_FILE,
+    AgentModelProtocol, AgentProviderHeaderSettings, AgentSettings, AgentSettingsPatch,
+    AgentStandaloneSettings, ConfigLayerSource, ConfigLayers, ConfigOverrides,
+    AGENT_CREDENTIAL_FILES, AGENT_HOME_ENV, AGENT_MCP_FILE, AGENT_PROVIDERS_FILE,
+    AGENT_SETTINGS_FILE,
 };
 pub use hanafubuki_agent_execution::{
     AgentBackgroundTerminalSnapshot, AgentBackgroundTerminalStopFailure,
@@ -164,8 +165,9 @@ pub use hanafubuki_agent_kernel::{
 /// What the Agent tells a host about its MCP servers, and the servers it is
 /// told to connect.
 pub use hanafubuki_agent_mcp::{
-    McpConnectionPhase, McpEventSink, McpServerConfig, McpServerId, McpStdioConfig,
-    McpStreamableHttpConfig, McpTransportConfig, NoopMcpEventSink,
+    McpConnectionPhase, McpCredentialKey, McpEventSink, McpOAuthPhase, McpOAuthPolicy,
+    McpServerConfig, McpServerId, McpStdioConfig, McpStreamableHttpConfig, McpTransportConfig,
+    NoopMcpEventSink,
 };
 pub use hanafubuki_agent_tool_contracts::{ToolOutput, ToolOutputContent};
 use hanafubuki_agent_workspace_fs::WorkspaceFsService;

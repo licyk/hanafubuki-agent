@@ -143,6 +143,13 @@ pub enum McpOAuthPolicy {
 
 impl McpServerConfig {
     pub fn validate(&self) -> Result<(), McpError> {
+        // The id decodes as any string, so a file or a request can carry one
+        // `McpServerId::parse` refuses.
+        McpServerId::parse(self.id.as_str()).map_err(|_| {
+            McpError::InvalidConfig(
+                "the server id must be 1 to 128 letters, digits, `-`, `_` or `.`".into(),
+            )
+        })?;
         validate_timeout("connect", self.connect_timeout_seconds)?;
         validate_timeout("initialize", self.initialize_timeout_seconds)?;
         validate_timeout("list", self.list_timeout_seconds)?;

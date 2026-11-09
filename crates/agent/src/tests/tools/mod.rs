@@ -49,4 +49,5 @@ pub(super) fn configured_service(
 mod execution;
 mod filesystem;
 mod mcp;
+mod mcp_oauth;
 mod skills;

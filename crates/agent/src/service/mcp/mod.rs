@@ -10,6 +10,7 @@ mod contracts;
 mod facade;
 mod local_status;
 mod oauth;
+mod oauth_login;
 mod proxy;
 mod settings;
 mod snapshot;

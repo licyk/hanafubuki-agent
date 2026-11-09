@@ -52,6 +52,7 @@ Provider 和模型策略都保存在配置目录的 `providers.toml` 中，见[�
 </Tabs>
 
 - `--api-key-env 变量` 在添加时从环境变量读取令牌，并原样保存在 `providers.toml` 中（仅自己可读）。令牌不能直接写在命令行上，避免留在 Shell 历史里。变量没有设置时，命令以退出码 2 退出。
+- `--header 名称=值` 添加一个随该 Provider 的每个请求发送的请求头（可重复），保存在 `providers.toml` 中。与令牌不同，它的值写在命令行上。
 - `--disabled` 添加一个禁用的 Provider。
 - 命令打印新 Provider 的 ID，例如 `added provider-2`。ID 是最小的空闲 `provider-N`。
 
@@ -71,7 +72,7 @@ provider-2 DeepSeek  ChatCompletions  https://api.deepseek.com/v1  token: set
 
 - 第一个添加的 Provider 成为默认 Provider。默认 Provider 被删除或禁用时，默认改为列表中第一个启用的 Provider。
 - `providers list` 从不打印令牌和请求头的值。
-- 更换令牌、启用 Provider、添加自定义请求头（`requestHeaders`）需要编辑 `providers.toml`，或者删除后重新添加。编辑前请先退出正在运行的 Agent。
+- 更换令牌或请求头（`requestHeaders`）、启用 Provider 需要编辑 `providers.toml`，或者删除后重新添加。编辑前请先退出正在运行的 Agent。
 
 ## 模型 [#model]
 
@@ -81,7 +82,7 @@ provider-2 DeepSeek  ChatCompletions  https://api.deepseek.com/v1  token: set
 | `-m 模型`                      | 本次运行中的新会话（以及恢复的会话），在默认 Provider 上运行 |
 | 终端界面的 `/model`            | 当前会话；从已启用 Provider 的模型目录中选择                 |
 
-`/model` 列出每个已启用 Provider 的模型目录（从 `models` 接口读取）。某个 Provider 的目录无法读取时，列表会显示原因。`doctor --online` 会检查默认 Provider 是否能列出模型。
+`/model` 列出每个已启用 Provider 的模型目录（从 `models` 接口读取）。某个 Provider 的目录无法读取时，列表会显示原因。`doctor --online` 会检查默认 Provider 是否能列出模型。宿主可以在保存 Provider 之前读取它的模型目录，以测试地址、令牌和请求头（`test_provider_draft`，见[嵌入 Agent](/docs/embedding#configuration-in-a-host)）。
 
 ## 推理强度与思考过程 [#reasoning]
 

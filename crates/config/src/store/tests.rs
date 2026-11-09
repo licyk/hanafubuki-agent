@@ -1,6 +1,8 @@
 use std::fs;
 
-use hanafubuki_agent_mcp::{McpError, McpServerConfig, McpSettingsRepairKind};
+use hanafubuki_agent_mcp::{
+    McpCredentialKey, McpCredentialSettings, McpError, McpServerConfig, McpSettingsRepairKind,
+};
 use serde_json::json;
 
 use super::*;
@@ -312,6 +314,44 @@ fn mcp_repairs_keep_the_original_and_the_next_read_is_clean() {
     assert_eq!(recovered(directory.path()), [original]);
     assert_eq!(McpSettingsStore::new(path).load().unwrap(), settings);
     assert_eq!(recovered(directory.path()).len(), 1);
+}
+
+#[test]
+fn a_removed_mcp_credential_leaves_the_file() {
+    let directory = tempfile::tempdir().unwrap();
+    let store = McpSettingsStore::new(directory.path().join(AGENT_MCP_FILE));
+    let credential = |value: &str| McpCredentialSettings {
+        value: value.into(),
+        generation: 1,
+    };
+    let kept = McpCredentialKey::parse("kept").unwrap();
+    let removed = McpCredentialKey::parse("removed").unwrap();
+    store
+        .update(1, |settings| {
+            settings
+                .credentials
+                .insert(kept.clone(), credential("kept-value"));
+            settings
+                .credentials
+                .insert(removed.clone(), credential("removed-value"));
+            Ok(())
+        })
+        .unwrap();
+
+    store
+        .update(2, |settings| {
+            settings.credentials.remove(&removed);
+            Ok(())
+        })
+        .unwrap();
+
+    let settings = McpSettingsStore::new(store.path().to_path_buf())
+        .load()
+        .unwrap();
+    assert_eq!(settings.credentials.keys().collect::<Vec<_>>(), [&kept]);
+    assert!(!fs::read_to_string(store.path())
+        .unwrap()
+        .contains("removed-value"));
 }
 
 /// A regular file where `.recovery/` belongs, so keeping an original fails

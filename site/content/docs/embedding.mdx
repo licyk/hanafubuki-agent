@@ -399,7 +399,13 @@ Agent 启动的进程归 Agent 所有：它有自己的 `ExecutorManager`，与�
 | `providers.toml` | Provider 注册表及其修订号，令牌原样保存（仅所有者可读） |
 | `mcp.toml`       | MCP 服务器与凭据值及其修订号（仅所有者可读）            |
 
-与独立模式不同，嵌入的配置**没有分层**（没有 profile、项目文件和 `-c`），并忽略 `[network]` 与 `logLevel`（报告为未知键）：代理和日志由宿主提供。宿主通过服务 API 读写设置（`settings_view`、`write_settings`、Provider 与 MCP 的方法），写入后服务会把设置应用到插件。
+与独立模式不同，嵌入的配置**没有分层**（没有 profile、项目文件和 `-c`），并忽略 `[network]` 与 `logLevel`（报告为未知键）：代理和日志由宿主提供。宿主通过服务 API 读写设置（`settings_view`、`write_settings`、Provider 与 MCP 的方法），写入后服务会把设置应用到插件。其中：
+
+| 调用                                                           | 作用                                                                                                                                                                                               |
+| -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `test_provider_draft(draft)`                                   | 读取一个未保存 Provider 的模型目录，方式与 `list_provider_models` 读取已保存的相同，或返回 Provider 的错误；不写入任何内容                                                                         |
+| `mcp_set_credential(key, value)`、`mcp_remove_credential(key)` | 修改一个 MCP 凭据并保留其他凭据；删除启用的服务器依赖的凭据会被拒绝。`McpCredentialKey::for_server_secret(server, name)` 是表单保存秘密变量或请求头所用的键：`服务器-名称`，其他字符换成 `_`       |
+| `mcp_oauth_login(server, open_url, cancelled)`                 | MCP 服务器的 OAuth 登录：在 `127.0.0.1` 的空闲端口上监听，把授权 URL 交给 `open_url` 显示或打开，最多等待 5 分钟浏览器重定向到 `/callback`，或直到 `cancelled` future 完成；没有等到时取消这次登录 |
 
 读取是容错的：无效值取默认值，未知键记录日志并保留在文件里，需要修复的文件先复制到 `.recovery/` 再写入修复后的值；无法保留原件时，修复后的值只用在内存里，文件在重启前拒绝写入。每次修复都是一条 `AgentConfigRecovery`（文件、问题、是否只读、时间），`AgentConfig::recoveries()` 返回本次打开以来的修复（每个文件最近 20 条），宿主应当把它们展示给用户。键名、默认值和修复规则见[配置](/docs/configuration)与[配置参考](/docs/config-reference)。
 

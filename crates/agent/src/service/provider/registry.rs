@@ -1,13 +1,16 @@
+use super::resolve_provider_definition;
 use crate::service::AgentApplicationService;
 use crate::{
     model_api_protocol, AgentModelPolicyWriteRequest, AgentProviderDeleteRequest,
     AgentProviderDraft, AgentProviderEnabledRequest, AgentProviderModelCatalogRequest,
     AgentProviderModelCatalogResult, AgentProviderRegistrySnapshot, AgentProviderWriteRequest,
+    ResolvedAgentProvider,
 };
 use hanafubuki_agent_config::{
-    validate_agent_model_policy, AgentProviderRegistrySettings, AgentProviderSettings,
-    AgentSettings, MAX_AGENT_PROVIDERS,
+    validate_agent_model_policy, AgentModelPolicySettings, AgentProviderRegistrySettings,
+    AgentProviderSettings, AgentSettings, MAX_AGENT_PROVIDERS,
 };
+use hanafubuki_agent_kernel::ModelCatalogEntry;
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::atomic::Ordering;
 
@@ -100,16 +103,7 @@ impl AgentApplicationService {
             tasks.spawn(async move {
                 let result = async {
                     let resolved = service.resolve_provider(&provider_id).await?;
-                    service
-                        .core
-                        .list_provider_models(
-                            model_api_protocol(resolved.definition.protocol),
-                            &resolved.definition.base_url,
-                            resolved.credential,
-                            resolved.headers,
-                        )
-                        .await
-                        .map_err(|error| error.to_string())
+                    service.provider_models(resolved).await
                 }
                 .await;
                 AgentProviderModelCatalogResult {
@@ -133,6 +127,38 @@ impl AgentApplicationService {
                 .then_with(|| left.provider_id.cmp(&right.provider_id))
         });
         Ok(results)
+    }
+
+    /// The model catalog of a Provider not yet saved, read as
+    /// `list_provider_models` reads a saved one's; nothing is written.
+    pub async fn test_provider_draft(
+        &self,
+        draft: AgentProviderDraft,
+    ) -> Result<Vec<ModelCatalogEntry>, String> {
+        if !self.accepting.load(Ordering::Acquire) {
+            return Err("Agent service is shutting down".to_string());
+        }
+        // The policy does not reach the catalog request.
+        let resolved = resolve_provider_definition(
+            draft.into_settings(String::new()),
+            &AgentModelPolicySettings::default(),
+        )?;
+        self.provider_models(resolved).await
+    }
+
+    async fn provider_models(
+        &self,
+        resolved: ResolvedAgentProvider,
+    ) -> Result<Vec<ModelCatalogEntry>, String> {
+        self.core
+            .list_provider_models(
+                model_api_protocol(resolved.definition.protocol),
+                &resolved.definition.base_url,
+                resolved.credential,
+                resolved.headers,
+            )
+            .await
+            .map_err(|error| error.to_string())
     }
 
     pub async fn provider_registry_snapshot(

@@ -52,6 +52,7 @@ A trailing `/` on the endpoint makes no difference: the protocol's path is appen
 </Tabs>
 
 - `--api-key-env VAR` reads the token from the environment variable when the Provider is added, and keeps it as it is in `providers.toml` (readable only by you). A token cannot be written on the command line, so it does not end up in your shell's history. When the variable is not set, the command exits with code 2.
+- `--header NAME=VALUE` adds a request header sent with each of the Provider's requests (repeatable), kept in `providers.toml`. Unlike the token, its value is on the command line.
 - `--disabled` adds the Provider turned off.
 - The command prints the new Provider's id, such as `added provider-2`: the lowest free `provider-N`.
 
@@ -71,7 +72,7 @@ provider-2 DeepSeek  ChatCompletions  https://api.deepseek.com/v1  token: set
 
 - The first Provider you add becomes the default. When the default is removed or disabled, the first enabled Provider in the list becomes the default.
 - `providers list` never prints a token's or a header's value.
-- To change a token, enable a Provider, or add request headers (`requestHeaders`), edit `providers.toml`, or remove the Provider and add it again. Quit any running Agent before you edit it.
+- To change a token or the request headers (`requestHeaders`), or enable a Provider, edit `providers.toml`, or remove the Provider and add it again. Quit any running Agent before you edit it.
 
 ## The model [#model]
 
@@ -81,7 +82,7 @@ provider-2 DeepSeek  ChatCompletions  https://api.deepseek.com/v1  token: set
 | `-m MODEL`                         | This run's new (or resumed) sessions, on the default Provider          |
 | `/model` in the terminal interface | The current session, picked from the enabled Providers' model catalogs |
 
-`/model` lists each enabled Provider's model catalog (read from `models`); a Provider whose catalog cannot be read says why. `doctor --online` checks that the default Provider lists its models.
+`/model` lists each enabled Provider's model catalog (read from `models`); a Provider whose catalog cannot be read says why. `doctor --online` checks that the default Provider lists its models. A host can read the catalog of a Provider before saving it, to test the endpoint, token and headers (`test_provider_draft`, see [Embedding](/docs/embedding#configuration-in-a-host)).
 
 ## Reasoning effort and thinking [#reasoning]
 

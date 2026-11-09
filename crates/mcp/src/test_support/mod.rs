@@ -1,11 +1,14 @@
 //! A hook for tests of the code that runs MCP tool calls: a call the
-//! client panics in, which no server can cause.
+//! client panics in, which no server can cause; and an OAuth authorization
+//! server (`oauth`).
 
 use std::collections::BTreeSet;
 
 use parking_lot::Mutex;
 
 use crate::{McpServerId, McpToolBinding};
+
+pub mod oauth;
 
 /// The `(server id, remote tool name)` pairs whose calls panic.
 static PANICKING_CALLS: Mutex<BTreeSet<(String, String)>> = Mutex::new(BTreeSet::new());

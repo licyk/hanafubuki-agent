@@ -207,7 +207,7 @@ At most 64.
 
 | Key                          | Type and values                                             | Default      | Means                                                                |
 | ---------------------------- | ----------------------------------------------------------- | ------------ | -------------------------------------------------------------------- |
-| `id`                         | letters, digits, `-`, `_`, `.`                              |              | The server's id                                                      |
+| `id`                         | 1–128 letters, digits, `-`, `_`, `.`                        |              | The server's id; a server with another id is dropped                 |
 | `enabled`                    | boolean                                                     | `true`       | Whether it is enabled; enabled servers connect when the Agent starts |
 | `required`                   | boolean                                                     | `false`      | A required server: a step fails when its tools cannot be used        |
 | `protocolMode`               | `"legacy"`, `"v20260728"`                                   | `"legacy"`   | The MCP protocol version                                             |

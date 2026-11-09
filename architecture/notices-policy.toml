@@ -39,6 +39,11 @@ path = "crates/agent/src/plugins/recap/history.rs"
 markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
 notice = "crates/agent/src/plugins/recap"
 
+[[derived]]
+path = "crates/agent/src/service/mcp/oauth_login.rs"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
+notice = "crates/agent/src/service/mcp/oauth_login.rs"
+
 [[mit]]
 path = "crates/tui/src/custom_terminal.rs"
 holder = "Copyright (c) 2016-2022 Florian Dehau"

@@ -3,7 +3,9 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use hanafubuki_agent_mcp::{repair_settings, McpError, McpSettings, McpSettingsRepair};
+use hanafubuki_agent_mcp::{
+    repair_settings, McpCredentialKey, McpError, McpSettings, McpSettingsRepair,
+};
 use parking_lot::Mutex;
 use serde_json::Value;
 
@@ -58,24 +60,44 @@ impl McpSettingsStore {
         if settings.revision != expected_revision {
             return Err(McpError::StaleGeneration);
         }
+        let before = settings.credentials.keys().cloned().collect::<Vec<_>>();
         update(&mut settings)?;
         settings.revision = settings
             .revision
             .checked_add(1)
             .ok_or(McpError::LimitExceeded)?;
         settings.validate()?;
-        self.write_locked(&settings)?;
+        let removed = before
+            .iter()
+            .filter(|key| !settings.credentials.contains_key(*key));
+        self.write_locked(&settings, removed)?;
         Ok(settings)
     }
 
     /// Writes `settings` whole, for a store that has none yet.
     pub(crate) fn write(&self, settings: &McpSettings) -> Result<(), McpError> {
         let _guard = self.access.lock();
-        self.write_locked(settings)
+        self.write_locked(settings, std::iter::empty())
     }
 
-    fn write_locked(&self, settings: &McpSettings) -> Result<(), McpError> {
-        self.file.write(settings).map_err(McpError::Unavailable)
+    /// The write keeps every key the file has that `settings` does not name,
+    /// so a removed credential is written as `null` to leave the file.
+    fn write_locked<'a>(
+        &self,
+        settings: &McpSettings,
+        removed_credentials: impl Iterator<Item = &'a McpCredentialKey>,
+    ) -> Result<(), McpError> {
+        let mut document = serde_json::to_value(settings)
+            .map_err(|error| McpError::Unavailable(error.to_string()))?;
+        if let Some(credentials) = document
+            .get_mut("credentials")
+            .and_then(Value::as_object_mut)
+        {
+            for key in removed_credentials {
+                credentials.insert(key.as_str().to_string(), Value::Null);
+            }
+        }
+        self.file.write(&document).map_err(McpError::Unavailable)
     }
 
     pub(crate) fn file(&self) -> &ConfigFile {

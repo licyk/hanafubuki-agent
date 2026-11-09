@@ -111,6 +111,10 @@ fn providers_are_added_made_default_listed_without_tokens_and_removed() {
             "http://127.0.0.1:9/v1",
             "--api-key-env",
             "TEST_PROVIDER_TOKEN",
+            "--header",
+            "X-Organization=acme-secret",
+            "--header",
+            "X-Trace=on",
         ])
         .env("TEST_PROVIDER_TOKEN", "sk-secret-value")
         .output()
@@ -140,6 +144,9 @@ fn providers_are_added_made_default_listed_without_tokens_and_removed() {
     assert!(list.contains("model: fixture-model"), "{list}");
     assert!(list.contains("provider-1 Local  Responses"), "{list}");
     assert!(list.contains("token: set"), "{list}");
+    assert!(list.contains("headers: X-Organization, X-Trace"), "{list}");
+    assert!(!list.contains("acme-secret"), "{list}");
+    assert!(home.file("providers.toml").contains("acme-secret"));
     assert!(
         list.contains("provider-2 Other (default)  ChatCompletions"),
         "{list}"
@@ -155,6 +162,16 @@ fn providers_are_added_made_default_listed_without_tokens_and_removed() {
         "the default moves: {list}"
     );
     home.run(&["providers", "remove", "provider-9"]).expect(1);
+    home.run(&[
+        "providers",
+        "add",
+        "Bad",
+        "--base-url",
+        "http://127.0.0.1:9/v1",
+        "--header",
+        "X-No-Value",
+    ])
+    .expect(2);
 }
 
 #[test]
@@ -181,6 +198,18 @@ fn mcp_servers_are_added_listed_without_secrets_and_removed() {
         "http://127.0.0.1:9/mcp",
     ])
     .expect(0);
+    home.run(&[
+        "mcp",
+        "add",
+        "signed",
+        "--disabled",
+        "--oauth",
+        "required",
+        "--url",
+        "http://127.0.0.1:9/signed",
+    ])
+    .expect(0);
+    assert!(home.file("mcp.toml").contains("oauth = \"required\""));
     let list = home.run(&["mcp", "list"]).expect(0).stdout();
     assert!(
         list.contains("local (disabled)  stdio fake-mcp --stdio  env: API_TOKEN"),
@@ -198,6 +227,26 @@ fn mcp_servers_are_added_listed_without_secrets_and_removed() {
     home.run(&["mcp", "add", "bad id", "--url", "http://127.0.0.1:9/mcp"])
         .expect(2);
     home.run(&["mcp", "add", "nothing"]).expect(2);
+    home.run(&[
+        "mcp", "add", "local", "--oauth", "required", "--", "fake-mcp",
+    ])
+    .expect(2);
+
+    // A login needs a server that takes one; the loopback itself is tested
+    // with the facade.
+    let run = home.run(&["mcp", "login", "remote"]).expect(1);
+    assert!(
+        run.stderr()
+            .contains("OAuth is disabled for this MCP server"),
+        "{}",
+        run.stderr()
+    );
+    let run = home.run(&["mcp", "login", "missing"]).expect(1);
+    assert!(
+        run.stderr().contains("MCP server does not exist"),
+        "{}",
+        run.stderr()
+    );
 }
 
 #[test]

@@ -100,7 +100,7 @@ hanafubuki-agent 的许可证是 **GPL-3.0-only**（[LICENSE](https://github.com
 
 部分代码派生自其他项目，按它们的许可证保留署名：
 
-- **OpenAI Codex**（Apache License 2.0）：终端界面 `crates/tui` 移植自 Codex 的 `codex-rs/tui`（`rust-v0.93.0`，之后的工作来自 `57a808a392`），它的文件搜索（`crates/tui/src/file_search`）来自 `codex-rs/file-search`；`crates/config/src/overrides.rs` 及其测试派生自 `codex-rs/common/src/config_override.rs`；`recap` 插件的提示词和对话选取（`crates/agent/src/plugins/recap/prompt.rs`、`history.rs`）派生自 `codex-rs/context-fragments/src/recap_prompt.rs`、`codex-rs/tui/src/app/recap.rs` 和 `recap_history.rs`（提交 `57a808a392`）。每个派生的文件在开头几行说明这一点及其来源版本（“Modified from OpenAI Codex rust-v0.93.0 (Apache-2.0).”、“Modified from OpenAI Codex 57a808a392 (Apache-2.0).” 或注明来源的 “Derived from OpenAI Codex” 文件头）。NOTICE 带有 Codex 的 NOTICE 和许可证。
+- **OpenAI Codex**（Apache License 2.0）：终端界面 `crates/tui` 移植自 Codex 的 `codex-rs/tui`（`rust-v0.93.0`，之后的工作来自 `57a808a392`），它的文件搜索（`crates/tui/src/file_search`）来自 `codex-rs/file-search`；`crates/config/src/overrides.rs` 及其测试派生自 `codex-rs/common/src/config_override.rs`；`recap` 插件的提示词和对话选取（`crates/agent/src/plugins/recap/prompt.rs`、`history.rs`）派生自 `codex-rs/context-fragments/src/recap_prompt.rs`、`codex-rs/tui/src/app/recap.rs` 和 `recap_history.rs`，`crates/agent/src/service/mcp/oauth_login.rs`（MCP OAuth 的本机回调）派生自 `codex-rs/rmcp-client/src/perform_oauth_login.rs`（提交 `57a808a392`）。每个派生的文件在开头几行说明这一点及其来源版本（“Modified from OpenAI Codex rust-v0.93.0 (Apache-2.0).”、“Modified from OpenAI Codex 57a808a392 (Apache-2.0).” 或注明来源的 “Derived from OpenAI Codex” 文件头）。NOTICE 带有 Codex 的 NOTICE 和许可证。
 - **Ratatui**（MIT）：`crates/tui/src/custom_terminal.rs` 派生自 `ratatui::Terminal`，保留它的 MIT 头。
 
 `cargo xtask check-notices` 对照 `architecture/notices-policy.toml` 检查这些署名：
