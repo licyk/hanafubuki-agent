@@ -24,9 +24,9 @@ pub trait WorkspaceRootsPort: Send + Sync {
     /// against.
     fn roots(&self) -> Result<AgentWorkspaceRoots, String>;
 
-    /// Directories the filesystem tools may also read without approval,
-    /// outside the roots.
-    fn extra_read_roots(&self) -> Vec<PathBuf>;
+    /// Directories the filesystem tools refuse, reads included, even under a
+    /// root: the host's own data, its credentials among it.
+    fn protected_roots(&self) -> Vec<PathBuf>;
 
     /// The directory what the host submitted with the turn (`host`) selects,
     /// which narrows where workspace instructions are looked up.

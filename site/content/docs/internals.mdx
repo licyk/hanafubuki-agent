@@ -297,7 +297,7 @@ Provider 的流是外部输入（[模型 API](/docs/architecture#the-model-api)�
 ### 执行与文件 [#execution-files]
 
 - `exec_command` 通过预留的 Executor 进程运行；`execution` 插件的活动监视器作为执行的观察者挂上，释放已结束的执行时会有界地等待，直到监视器报告了最终的输出和状态。活动预览只提交以换行结尾的行，未完成的行临时显示。结果是纯文本（`render_plain_text`）。通用的 argv `start` 只在 `test-support` 下存在。
-- `WorkspaceFsService` 把每个请求解析为策略根目录内不可变的计划，在 I/O 之前重新校验，并原子地写入；`preview_patch` 是纯函数。`WorkspaceRootsPort::extra_read_roots` 指定的目录是策略的受保护根目录：每个文件工具，包括读取，都拒绝其下的路径（"direct filesystem tools cannot access application-owned path …"，`ProtectedPath`）。
+- `WorkspaceFsService` 把每个请求解析为策略根目录内不可变的计划，在 I/O 之前重新校验，并原子地写入；`preview_patch` 是纯函数。`WorkspaceRootsPort::protected_roots` 指定的目录是策略的受保护根目录：每个文件工具，包括读取，都拒绝其下的路径（"direct filesystem tools cannot access application-owned path …"，`ProtectedPath`）。
 
 ### 关闭 [#shutdown-details]
 

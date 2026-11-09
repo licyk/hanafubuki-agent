@@ -267,7 +267,7 @@ impl AgentApplicationService {
             workspace_roots.primary().display()
         );
         let files = WorkspaceFsService::new(
-            WorkspaceFsPolicy::new(workspace_roots.into_vec(), workspace.extra_read_roots())
+            WorkspaceFsPolicy::new(workspace_roots.into_vec(), workspace.protected_roots())
                 .map_err(|error| error.to_string())?,
         );
         // A catalog that cannot open leaves the Agent without Skills, which

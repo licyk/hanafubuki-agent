@@ -135,11 +135,6 @@ The next release with it is 0.2.0 (the headline event is removed).
       (`var_os(..).is_some()`), `0` and the empty string included.
     - `check-plugin-panics` covers only `crates/plugin-*`.
     - `sessions show` lists its items latest first (see T2 above).
-    - `WorkspaceRootsPort::extra_read_roots` is documented as directories
-      the file tools may read without approval, but the facade passes them
-      to `WorkspaceFsPolicy` as protected roots, so every request under
-      them fails with `ProtectedPath` (`crates/agent/src/service/mod.rs`);
-      the name and docs or the code are wrong.
 - [ ] D2b (Hanafubuki): its links into this repository's docs re-pointed.
 - [x] D3: GitHub Pages. Pages is enabled (source: GitHub Actions) and
       `site.yml`'s `deploy` job publishes every push to main

@@ -63,7 +63,7 @@ impl WorkspaceRootsPort for StandaloneWorkspace {
         Ok(self.roots.clone())
     }
 
-    fn extra_read_roots(&self) -> Vec<PathBuf> {
+    fn protected_roots(&self) -> Vec<PathBuf> {
         Vec::new()
     }
 

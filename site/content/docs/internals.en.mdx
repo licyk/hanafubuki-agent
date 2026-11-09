@@ -305,7 +305,7 @@ Beside [MCP](/docs/architecture#mcp) and [External producers](/docs/plugin-rules
 ### Execution and files [#execution-files]
 
 - `exec_command` runs through reserved Executor processes; the `execution` plugin's activity monitor attaches as the execution's observer, and disposing a finished execution waits, bounded, until the monitor has reported the final output and status. The activity preview commits only lines that end in a newline and shows the unfinished one provisionally. Results are plain text (`render_plain_text`). The generic argv `start` exists only under `test-support`.
-- `WorkspaceFsService` resolves every request into an immutable plan within the policy's roots, revalidates before I/O and writes atomically; `preview_patch` is pure. The directories `WorkspaceRootsPort::extra_read_roots` names are the policy's protected roots: every file tool, reads included, refuses a path under them ("direct filesystem tools cannot access application-owned path …", `ProtectedPath`).
+- `WorkspaceFsService` resolves every request into an immutable plan within the policy's roots, revalidates before I/O and writes atomically; `preview_patch` is pure. The directories `WorkspaceRootsPort::protected_roots` names are the policy's protected roots: every file tool, reads included, refuses a path under them ("direct filesystem tools cannot access application-owned path …", `ProtectedPath`).
 
 ### Shutdown [#shutdown-details]
 

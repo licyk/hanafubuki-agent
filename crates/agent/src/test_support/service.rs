@@ -77,7 +77,7 @@ pub fn test_host(paths: &TestPaths) -> AgentHostPorts {
         plugins: Vec::new(),
         workspace: Arc::new(FixedWorkspaceRoots {
             roots: agent_workspace_roots_from([root.native().to_path_buf()]).unwrap(),
-            extra_read_roots: vec![paths.app_data_dir.clone(), paths.logs_dir.clone()],
+            protected_roots: vec![paths.app_data_dir.clone(), paths.logs_dir.clone()],
         }),
         steering_context: Arc::new(NoHostContext),
         instructions: AgentHostInstructions::default(),
@@ -98,7 +98,7 @@ impl NetworkSettingsPort for FixedProxy {
 /// Roots that never change; nothing a host submits selects or adds one.
 pub struct FixedWorkspaceRoots {
     pub roots: AgentWorkspaceRoots,
-    pub extra_read_roots: Vec<PathBuf>,
+    pub protected_roots: Vec<PathBuf>,
 }
 
 impl WorkspaceRootsPort for FixedWorkspaceRoots {
@@ -106,8 +106,8 @@ impl WorkspaceRootsPort for FixedWorkspaceRoots {
         Ok(self.roots.clone())
     }
 
-    fn extra_read_roots(&self) -> Vec<PathBuf> {
-        self.extra_read_roots.clone()
+    fn protected_roots(&self) -> Vec<PathBuf> {
+        self.protected_roots.clone()
     }
 
     fn selected(&self, _host: &TurnExtensions) -> Option<PathBuf> {
