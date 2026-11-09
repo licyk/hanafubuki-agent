@@ -215,6 +215,31 @@ moves its pin.
       goal templates), `/goal` and its status-line item.
 - [ ] P13: `hanafubuki-agent-hooks` and `plugin-hooks`, the
       `ToolLifecycleHookRegistry` extension point, hook events, `/hooks`.
+  - [x] The facade's half: `crates/hooks` (Codex's `[hooks]` and
+        `hooks.json` from the home and a trusted project; tolerant;
+        matchers, with `Bash`/`Write`/`Edit` aliases; command handlers
+        through the executor; trust by sha256 of the definition and
+        enablement in `<data>/hooks-state.json`); `crates/plugin-hooks`;
+        `ToolLifecycleHookRegistry` in contracts (deny-only before a call,
+        context after the step's outputs, fail-open); Stop as the first
+        continuation hook; SessionStart and UserPromptSubmit as a
+        `hook_context` section; `AgentEventKind::Hook{Started,Completed}`;
+        facade `hooks_list`, `set_hook_enabled`, `trust_hooks`. `[hooks]`
+        is no longer reported as an unknown configuration key. No golden
+        changed; `kernel/src/activity.rs`'s ceiling rose from 641 to 643
+        (its exhaustive event match).
+  - [ ] The interface's half: `/hooks`.
+  - Open: dropped events (model request, permission request, compaction,
+    session end, subagent start/stop, interrupt) and handlers (`mcp_tool`,
+    `prompt`, `agent`, async) are diagnostics; a project with only
+    `hooks.json` is not seen until the configuration exposes the project
+    root; hooks of one event run in turn; UserPromptSubmit cannot block;
+    `trust_hooks` hashes the definition on disk at call time.
+  - Hanafubuki, at its next pin: `ContextRequest` has a new field
+    `user_message` (a struct literal needs it); new events `hook_started`
+    and `hook_completed`; `AgentContinuationHook::applies` (default true);
+    new crates and a `hooks` row; facade `hooks_list`, `set_hook_enabled`,
+    `trust_hooks`; `AgentStoragePaths.hooks_state_file`.
 - [ ] P14 (decision 4): `hanafubuki-agent-sandbox`, sandbox presets in
       `/permissions`, `/setup-default-sandbox` on Windows.
 
