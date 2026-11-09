@@ -1,11 +1,12 @@
 [package]
 name = "hanafubuki-agent-cli"
-description = "The hanafubuki-agent command line: exec, the configuration, Providers, MCP servers, sessions and doctor"
+description = "The hanafubuki-agent command line and terminal interface: the chat, exec, resume, the configuration, Providers, MCP servers, sessions and doctor"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
+readme = "../../README.md"
 
 [[bin]]
 name = "hanafubuki-agent"
