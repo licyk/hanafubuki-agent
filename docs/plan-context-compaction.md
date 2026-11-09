@@ -658,6 +658,15 @@ Each phase is committed and pushed. Each phase also does the following:
 
 Each phase depends on the ones before it, except that P5–P6 depend only on P2 and can run alongside P3–P4.
 
+**As built** (todo.md is the record):
+
+- **Line references** are at `2907aee`. P1 moved the compaction code into `source.rs`, `replacement.rs`, `status.rs` and the rest, so the plan's references to `commit.rs`, `prepare.rs` and `compaction/mod.rs` predate that move.
+- **Parallel work and splits.** P5–P6 ran alongside P3–P4. P9 and P10 each landed as a crate half and a kernel half.
+- **P8b was added.** P8 measured the hierarchical state at over 90% of each checkpoint, so P8b persists it incrementally as a chain of snapshots and deltas. The history index went to schema 6.
+- **P12 came after the plan.** It ports billion-context's message timestamps, so `messageTimestamps` acts.
+- **§3.4 was redesigned before P3,** after the fact-check: the live suffix keeps its ids inside `replacement_history`, and the cutoff stays the display item.
+- **P4 cells.** Every completed compaction's event renders the one "Context compacted" cell; `/compact`'s reply reports only failures.
+
 ## 8. Decisions
 
 Each decision has a recommendation. **All were accepted as recommended (2026-11-09)**, except decision 12, decided as written there.
