@@ -1,0 +1,19 @@
+[
+  "text=No Skills are installed.",
+  "type=assistant_message",
+  "text=None are installed, so say so.",
+  "type=reasoning",
+  "type=structured",
+  "type=tool_output",
+  "name=skills_list",
+  "type=tool_call",
+  "text=**Listing Skills**\n\nThe catalog says which are installed.",
+  "type=reasoning",
+  "text=List the Skills.",
+  "type=user_message",
+  "type=world_state_update",
+  "kind=environment",
+  "kind=permission_mode",
+  "kind=workspace_roots",
+  "type=turn_start"
+]

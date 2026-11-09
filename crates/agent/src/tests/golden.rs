@@ -45,22 +45,36 @@ async fn plan_mode_request_matches_golden() {
 
 #[tokio::test]
 async fn tool_round_trip_matches_golden() {
-    let (requests, kinds) = run_tool_round_trip("golden-round-trip", |_| {}).await;
+    let (requests, kinds) = run_tool_round_trip(
+        "golden-round-trip",
+        [
+            tool_events("skills_list", "{}"),
+            assistant_events(SKILLS_ANSWER),
+        ],
+        |_| {},
+    )
+    .await;
     assert_golden("tool_round_trip_request", &requests);
     assert_golden("tool_round_trip_events", &kinds);
 }
 
-/// Runs one `skills_list` round trip and returns the normalized second request
-/// and the presentation event kinds. `after_shutdown` sees the paths once the
-/// history is flushed.
+const SKILLS_ANSWER: &str = "No Skills are installed.";
+
+/// Runs one `skills_list` round trip over the two model `responses` (the call,
+/// then the answer [`SKILLS_ANSWER`]) and returns the normalized second
+/// request and the presentation event kinds. `after_shutdown` sees the paths
+/// once the history is flushed.
 async fn run_tool_round_trip(
     name: &str,
+    responses: [Vec<u8>; 2],
     after_shutdown: impl FnOnce(&TestPaths),
 ) -> (Value, Value) {
-    let server = FakeServer::start(vec![
-        (tool_events("skills_list", "{}"), Duration::ZERO),
-        (assistant_events("No Skills are installed."), Duration::ZERO),
-    ])
+    let server = FakeServer::start(
+        responses
+            .into_iter()
+            .map(|response| (response, Duration::ZERO))
+            .collect(),
+    )
     .await;
     let (service, paths) = configured_service(name, &server.base_url);
     let session = service
@@ -71,7 +85,7 @@ async fn run_tool_round_trip(
         .start_turn(session.id, "List the Skills.".to_string().into())
         .await
         .unwrap();
-    assert_eq!(outcome.final_answer, "No Skills are installed.");
+    assert_eq!(outcome.final_answer, SKILLS_ANSWER);
 
     let requests = server.requests();
     let second: Value = serde_json::from_slice(&requests[1].body).unwrap();
@@ -98,11 +112,57 @@ async fn run_tool_round_trip(
 #[tokio::test]
 async fn recorded_history_reopens_and_continues() {
     if updating_history() {
-        run_tool_round_trip("golden-history-corpus", record_history_fixture).await;
+        run_tool_round_trip(
+            "golden-history-corpus",
+            [
+                tool_events("skills_list", "{}"),
+                assistant_events(SKILLS_ANSWER),
+            ],
+            |paths| record_history_fixture(paths, "history"),
+        )
+        .await;
     }
+    reopen_and_continue("history", "recorded_history_transcript", "List the tasks.").await;
+}
+
+/// Reasoning items written by the build that recorded the fixture open with
+/// their text and stay out of the next request (`golden/history-reasoning/`,
+/// which Hanafubuki's integration mirror holds the same bytes of).
+#[tokio::test]
+async fn recorded_reasoning_history_reopens_and_continues() {
+    if updating_history() {
+        run_tool_round_trip(
+            "golden-reasoning-corpus",
+            [
+                reasoning_tool_events(RECORDED_TOOL_THINKING, "skills_list", "{}"),
+                reasoning_answer_events(RECORDED_ANSWER_THINKING, SKILLS_ANSWER),
+            ],
+            |paths| record_history_fixture(paths, "history-reasoning"),
+        )
+        .await;
+    }
+    let request = reopen_and_continue(
+        "history-reasoning",
+        "recorded_reasoning_history_transcript",
+        "List the Skills.",
+    )
+    .await;
+    assert!(request.contains(SKILLS_ANSWER));
+    for thinking in [RECORDED_TOOL_THINKING, RECORDED_ANSWER_THINKING] {
+        assert!(!request.contains(thinking), "thinking is never model input");
+    }
+}
+
+const RECORDED_TOOL_THINKING: &str = "**Listing Skills**\n\nThe catalog says which are installed.";
+const RECORDED_ANSWER_THINKING: &str = "None are installed, so say so.";
+
+/// Opens the one session of the `corpus` history, compares its transcript
+/// with the `transcript` golden, runs a turn in it, and returns the body of
+/// that turn's request. `recorded_prompt` is the recorded turn's prompt.
+async fn reopen_and_continue(corpus: &str, transcript: &str, recorded_prompt: &str) -> String {
     let server = FakeServer::start(vec![(assistant_events("Continued."), Duration::ZERO)]).await;
-    let (service, paths) = service_with("golden-history", |paths, config| {
-        copy_tree(&golden_path("history"), &agent_history_dir(paths));
+    let (service, paths) = service_with(&format!("golden-{corpus}"), |paths, config| {
+        copy_tree(&golden_path(corpus), &agent_history_dir(paths));
         configure_test_provider(config, &server.base_url, None);
     });
     let sessions = service
@@ -114,7 +174,7 @@ async fn recorded_history_reopens_and_continues() {
 
     let opened = service.open_session(session_id, 50).unwrap();
     assert_golden(
-        "recorded_history_transcript",
+        transcript,
         &transcript_digest(&serde_json::to_value(&opened.transcript).unwrap()),
     );
 
@@ -133,13 +193,15 @@ async fn recorded_history_reopens_and_continues() {
         })
         .unwrap();
     let rendered = serde_json::to_string(&page).unwrap();
-    assert!(rendered.contains("List the tasks."));
+    assert!(rendered.contains(recorded_prompt));
     assert!(rendered.contains("Continued."));
+    let request = String::from_utf8(server.requests()[0].body.clone()).unwrap();
 
     assert!(service
         .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
         .is_empty());
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
+    request
 }
 
 #[tokio::test]
@@ -570,10 +632,11 @@ fn agent_history_dir(paths: &TestPaths) -> PathBuf {
     paths.data_dir.join("agent-test").join("history")
 }
 
-/// Stores the session JSONL written by this build. The SQLite index is a
-/// projection and is rebuilt on open, so the corpus leaves it out.
-fn record_history_fixture(paths: &TestPaths) {
-    let target = golden_path("history");
+/// Stores the session JSONL written by this build as the `corpus` fixture.
+/// The SQLite index is a projection and is rebuilt on open, so the corpus
+/// leaves it out.
+fn record_history_fixture(paths: &TestPaths, corpus: &str) {
+    let target = golden_path(corpus);
     let _ = std::fs::remove_dir_all(&target);
     copy_tree(&agent_history_dir(paths), &target);
 }
