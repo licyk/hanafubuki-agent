@@ -26,8 +26,8 @@ mod network;
 /// `install_panic_hook(logging::logging_blocked)`.
 pub mod panic {
     pub use hanafubuki_agent_foundation::panic::{
-        configure_crash_record, install_panic_hook, is_panic_contained, recorded_panics,
-        PanicFaultSummary,
+        catch_panic, catch_panic_async, configure_crash_record, install_panic_hook,
+        is_panic_contained, recorded_panics, PanicFaultSummary,
     };
 }
 mod plugins;

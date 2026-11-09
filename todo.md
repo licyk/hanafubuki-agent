@@ -14,11 +14,16 @@ moves its pin.
       per-module isolation of dispatch, view input and render over the
       re-exported `catch_panic`; a bridge without a session, and the
       session created with the first message.
-- [ ] P0b (facade): the feature-call helper (`ModuleHost::service`,
-      `PluginFaults::guard_async`, `AgentError::FeatureUnavailable`);
-      `check-plugin-panics` over `crates/agent/src/plugins/`; the `[tui]`
-      section and `tui_preferences` / `write_tui_preferences`;
-      `hanafubuki_agent::panic::catch_panic` re-exported.
+- [x] P0b (facade): `check-plugin-panics` also covers
+      `crates/agent/src/plugins/` (no violation there);
+      `hanafubuki_agent::panic::{catch_panic, catch_panic_async}`
+      re-exported (the embedding page, "The panic-hook bridge").
+  - Moved, as AGENTS.md adds nothing before its first user: the
+    feature-call helper (`ModuleHost::service`, `PluginFaults::guard_async`,
+    `AgentError::FeatureUnavailable`) comes with the first feature plugin
+    (P7's worktree or P8's recap, whichever lands first); the `[tui]`
+    section comes with its first keys in P2, and grows with each command.
+  - Hanafubuki, at its next pin: nothing to change (two re-exports).
 - [ ] P1: the provider screen (`/providers`, first-run setup when there is
       no default provider or the model is empty, `test_provider_draft`,
       request headers) and the MCP manager and form (`/mcp`, `/mcp verbose`,
@@ -193,7 +198,7 @@ The next release with it is 0.2.0 (the headline event is removed).
       kept only in `.recovery/`).
     - The golden update variables trigger on any value
       (`var_os(..).is_some()`), `0` and the empty string included.
-    - `check-plugin-panics` covers only `crates/plugin-*`.
+    - `check-plugin-panics` covers only `crates/plugin-*` (fixed in P0b).
     - `sessions show` lists its items latest first (see T2 above).
 - [ ] D2b (Hanafubuki): its links into this repository's docs re-pointed.
 - [x] D3: GitHub Pages. Pages is enabled (source: GitHub Actions) and

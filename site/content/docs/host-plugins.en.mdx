@@ -322,7 +322,7 @@ async fn registers_app_info_until_stopped() {
 - Assert what it registered, dispose it, then assert that every registration is gone. A configuration the plugin rejects leaves it `Failed` with nothing registered.
 - Test argument parsing and domain logic directly where kardia is not needed.
 - The host's goldens pin what the model receives with its plugins.
-- The Agent repository's `cargo xtask check-plugin-panics` checks the Agent's own plugin crates only; a host checks its plugins itself (Hanafubuki: `bun run xtask check-agent-dependencies`).
+- The Agent repository's `cargo xtask check-plugin-panics` checks the Agent's own plugins only (its plugin crates and the facade's plugins); a host checks its plugins itself (Hanafubuki: `bun run xtask check-agent-dependencies`).
 
 ## Example: Hanafubuki's plugins [#example-hanafubukis-plugins]
 

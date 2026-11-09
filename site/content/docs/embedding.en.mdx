@@ -348,6 +348,8 @@ Without the bridge every Agent panic aborts the host application. Hanafubuki's `
 
 Before a fatal panic aborts the process, the host's hook should write the crash record at `AgentStoragePaths::crash_record_file` (`<data>/crash-record.json`): the Agent's crash-loop marker reads it to tell that an unfinished start ended in the host's own fatal panic. A host with no hook of its own can install the Agent foundation's, as the standalone binary does: `panic::configure_crash_record(...)`, then `panic::install_panic_hook(logging::logging_blocked)`.
 
+A frontend that calls into its own code from a thread the Agent did not start (the terminal interface's main thread) can contain a region there with `panic::catch_panic` or `panic::catch_panic_async`: they mark the region contained in the Agent's foundation and return the panic's message as an error. The terminal interface runs each command module under them.
+
 ## The data directory's lock [#the-data-directorys-lock]
 
 `<data_dir>/.lock` is an advisory lock (`flock` on Unix, `LockFileEx` on Windows) held from the Agent's first start until its shutdown, embedded and standalone alike. The history's SQLite index, the memory store and the process-group ledger assume one writer process; two processes on one data directory would corrupt the history and kill each other's processes.

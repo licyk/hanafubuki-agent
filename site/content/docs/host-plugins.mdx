@@ -322,7 +322,7 @@ async fn registers_app_info_until_stopped() {
 - 断言注册的内容，释放插件，再断言所有注册都已移除。插件拒绝的配置应让它保持 `Failed`，什么都不注册。
 - 不需要 kardia 的地方（参数解析、领域逻辑）直接测试处理函数。
 - 宿主的 golden 测试固定加上宿主插件后模型收到的内容。
-- Agent 仓库的 `cargo xtask check-plugin-panics` 只检查 Agent 自己的插件 crate，宿主要自己检查它的插件（Hanafubuki：`bun run xtask check-agent-dependencies`）。
+- Agent 仓库的 `cargo xtask check-plugin-panics` 只检查 Agent 自己的插件（插件 crate 和门面自己的插件），宿主要自己检查它的插件（Hanafubuki：`bun run xtask check-agent-dependencies`）。
 
 ## 例子：Hanafubuki 的插件 [#example-hanafubukis-plugins]
 

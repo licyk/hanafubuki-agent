@@ -348,6 +348,8 @@ let contained = host_says_contained() || hanafubuki_agent::panic::is_panic_conta
 
 宿主的 hook 在致命 panic 中止进程前应写下崩溃记录，路径为 `AgentStoragePaths::crash_record_file`（`<data>/crash-record.json`）：Agent 的崩溃循环标记会读它，判断上一次未完成的启动是不是因为宿主自己的致命 panic。没有自己 hook 的宿主可以直接安装 Agent foundation 的 hook，就像独立的二进制那样：`panic::configure_crash_record(...)`，然后 `panic::install_panic_hook(logging::logging_blocked)`。
 
+在 Agent 没有启动的线程上（例如终端界面的主线程）调用自己代码的前端，可以用 `panic::catch_panic` 或 `panic::catch_panic_async` 隔离一段代码：它们在 Agent 的 foundation 中把这段代码标记为受隔离，并把 panic 的消息作为错误返回。终端界面的每个命令模块都在它们之下运行。
+
 ## 数据目录锁 [#the-data-directorys-lock]
 
 `<data_dir>/.lock` 是一个建议锁（Unix 上是 `flock`，Windows 上是 `LockFileEx`），从 Agent 的首次启动一直持有到关闭，嵌入与独立模式相同。历史的 SQLite 索引、记忆存储和进程组台账都假定只有一个写进程，两个进程使用同一个数据目录会损坏历史，并互相杀掉对方的进程。

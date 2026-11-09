@@ -8,7 +8,8 @@ use std::path::Path;
 use crate::source_layout::relative;
 
 /// Every `.unwrap()` and `.expect(` in the production sources of the plugin
-/// crates (`crates/plugin-*`).
+/// crates (`crates/plugin-*`) and of the facade's own plugins
+/// (`crates/agent/src/plugins`).
 pub fn run(root: &Path) -> Result<(), String> {
     let mut violations = Vec::new();
     let crates = root.join("crates");
@@ -26,6 +27,11 @@ pub fn run(root: &Path) -> Result<(), String> {
     for plugin in plugins {
         check_plugin_sources_do_not_panic(root, &plugin.join("src"), &mut violations);
     }
+    check_plugin_sources_do_not_panic(
+        root,
+        &crates.join("agent").join("src").join("plugins"),
+        &mut violations,
+    );
     if violations.is_empty() {
         println!("Plugin panic check passed.");
         return Ok(());
