@@ -430,6 +430,12 @@ impl AgentApplicationService {
         hanafubuki_agent_workspace_fs::preview_patch(patch)
     }
 
+    /// The workspace roots as the host's port reads them now, the one
+    /// relative paths resolve against first.
+    pub fn workspace_roots(&self) -> Result<crate::AgentWorkspaceRoots, String> {
+        self.workspace.roots()
+    }
+
     pub fn memory_status(&self) -> Result<hanafubuki_agent_memory::AgentMemoryStatus, String> {
         self.memory.status()
     }
