@@ -675,5 +675,6 @@ fn the_hooks_are_checked_once_a_run_and_waiting_ones_are_a_warning() {
 
     chat.handle_turn_update(TurnUpdate::Hooks(HooksReply::NeedReview(1)));
     assert_eq!(drain(&events).0, ["• 1 hook needs review: /hooks"]);
-    assert_eq!(chat.warnings, ["1 hook needs review: /hooks"]);
+    let warnings: Vec<&str> = chat.warnings.iter().map(|w| w.text.as_str()).collect();
+    assert_eq!(warnings, ["1 hook needs review: /hooks"]);
 }

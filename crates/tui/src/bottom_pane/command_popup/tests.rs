@@ -44,7 +44,10 @@ fn model_is_first_suggestion_for_mo() {
 
 #[test]
 fn filtered_commands_keep_presentation_order_for_prefix() {
-    assert_eq!(filtered("/m"), vec!["model", "mode", "mention", "mcp"]);
+    assert_eq!(
+        filtered("/m"),
+        vec!["model", "mode", "mention", "mcp", "memories"]
+    );
 }
 
 #[test]
@@ -99,6 +102,11 @@ fn the_unfiltered_list_is_the_registry_in_order() {
             "statusline",
             "title",
             "tui",
+            "config",
+            "keymap",
+            "presets",
+            "memories",
+            "warnings",
             "ps",
             "stop",
             "clear",
@@ -111,7 +119,7 @@ fn the_unfiltered_list_is_the_registry_in_order() {
 fn a_command_turned_off_is_left_out() {
     assert_eq!(
         filtered_without("/m", vec!["mode"]),
-        vec!["model", "mention", "mcp"]
+        vec!["model", "mention", "mcp", "memories"]
     );
     assert!(!filtered_without("/", vec!["mode"]).contains(&"mode"));
     assert!(filtered_without("/qu", vec!["exit"]).is_empty());

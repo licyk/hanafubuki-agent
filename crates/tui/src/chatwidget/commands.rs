@@ -9,7 +9,7 @@ use hanafubuki_agent::panic::catch_panic;
 use hanafubuki_agent::AgentCompactionStatus;
 
 use super::ChatWidget;
-use crate::agent_bridge::{setup_needed, TurnUpdate};
+use crate::agent_bridge::{setup_needed, SettingsReply, TurnUpdate, Warning, WarningSource};
 use crate::app_event::{AppEvent, Op};
 use crate::commands::{self, CommandContext, CommandSpec, CommandStep};
 use crate::history_cell;
@@ -33,7 +33,7 @@ impl ChatWidget {
 
     /// Runs `call` as `command`'s: a panic in it turns the command off
     /// instead of ending the interface. A command turned off runs nothing.
-    fn run_command(
+    pub(super) fn run_command(
         &mut self,
         command: &'static CommandSpec,
         call: impl FnOnce(&mut CommandContext<'_>),
@@ -46,9 +46,9 @@ impl ChatWidget {
             &self.app_event_tx,
             &mut self.bottom_pane,
             self.mode,
-            self.fullscreen_preference,
             self.owned_transcript,
             &self.appearance,
+            &self.preferences,
         );
         if let Err(message) = catch_panic(|| call(&mut context)) {
             self.command_failed(command.name, &message);
@@ -85,7 +85,8 @@ impl ChatWidget {
         let warning =
             format!("'/{name}' failed and is turned off for the rest of this run: {message}");
         self.add_to_history(history_cell::new_error_event(warning.clone()));
-        self.warnings.push(warning);
+        self.warnings
+            .push(Warning::new(WarningSource::Interface, warning));
         self.request_redraw();
     }
 
@@ -143,6 +144,10 @@ impl ChatWidget {
             TurnUpdate::Skills(catalog) => {
                 self.add_to_history(history_cell::new_skills_output(&catalog))
             }
+            TurnUpdate::Settings(SettingsReply::Warnings(warnings)) => self.show_warnings(warnings),
+            TurnUpdate::Settings(reply) => self.run_command(&commands::MEMORIES, |context| {
+                commands::on_settings_reply(context, reply)
+            }),
             TurnUpdate::Session(reply) => {
                 // `/cd` and `/worktree` moved: the next session's header
                 // names the new directory.
@@ -163,7 +168,8 @@ impl ChatWidget {
             }),
             TurnUpdate::Hooks(reply) => {
                 if let Some(warning) = commands::hooks::startup_warning(&reply) {
-                    self.warnings.push(warning);
+                    self.warnings
+                        .push(Warning::new(WarningSource::Hooks, warning));
                 }
                 self.run_command(&commands::HOOKS, |context| {
                     commands::hooks::on_reply(context, reply)

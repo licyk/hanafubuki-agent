@@ -26,6 +26,7 @@ mod providers;
 mod replay;
 mod review;
 mod sessions;
+mod settings;
 mod status;
 mod workspace;
 
@@ -53,6 +54,7 @@ pub(crate) use providers::{ProviderCall, ProviderReply};
 pub(crate) use replay::{OlderTranscript, OpenedSession, ReplayedItem};
 pub(crate) use review::{ReviewCall, ReviewEnd, ReviewReply};
 pub(crate) use sessions::{ExportDestination, SessionCall, SessionReply};
+pub(crate) use settings::{MemoriesState, SettingsCall, SettingsReply, Warning, WarningSource};
 pub(crate) use status::{SessionStatus, UsageSummary};
 
 /// How many of the turn's latest items are read for a finished call.
@@ -108,6 +110,8 @@ pub(crate) enum TurnUpdate {
     Mcp(McpReply),
     Skills(SkillCatalogSnapshot),
     Session(SessionReply),
+    /// What `/warnings` and `/memories` asked for.
+    Settings(SettingsReply),
     /// What the status line and the terminal title show of the session.
     SessionStatus(Box<SessionStatus>),
     Review(ReviewReply),

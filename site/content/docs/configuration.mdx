@@ -61,7 +61,7 @@ hanafubuki-agent config set "projects.'$PWD'.trustLevel" trusted
 error: `nosuch` is not a setting of config.toml
 ```
 
-写入只修改这一个键，保留文件中的注释和其他内容。`config set` 不能删除一个键；要删除，请编辑文件。终端界面的 [`/tui` 和 `/raw`](/docs/terminal-interface#modes)、[`/theme`](/docs/terminal-interface#highlighting)、[`/statusline` 和 `/title`](/docs/terminal-interface#status-line) 以同样的方式写入它们的 `[tui]` 键。自定义高亮主题不在配置目录中：它们是数据目录 `themes/` 下的 `.tmTheme` 文件。
+写入只修改这一个键，保留文件中的注释和其他内容。`config set` 不能删除一个键；要删除，请编辑文件。终端界面的 [`/tui` 和 `/raw`](/docs/terminal-interface#modes)、[`/theme`](/docs/terminal-interface#highlighting)、[`/statusline` 和 `/title`](/docs/terminal-interface#status-line)、[`/keymap`](/docs/terminal-interface#keymap)、[`/presets`](/docs/terminal-interface#presets) 和 [`/config`](/docs/terminal-interface#config) 以同样的方式写入它们的 `[tui]` 键，`/memories` 写入 `memory` 下的键。自定义高亮主题不在配置目录中：它们是数据目录 `themes/` 下的 `.tmTheme` 文件。
 
 ## 编辑文件 [#edit]
 
@@ -152,6 +152,13 @@ rawOutput = false
 theme = "catppuccin-mocha"
 statusLine = ["model-with-reasoning", "git-branch", "context-remaining"]
 terminalTitle = ["activity", "project-name"]
+
+[tui.keymap.global]
+open_transcript = "ctrl-g"
+
+[tui.presets.1]
+input = "/statusline git-branch context-remaining --colors"
+label = "Branch and context"
 
 # hanafubuki-agent -p review
 [profiles.review]

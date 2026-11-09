@@ -127,7 +127,8 @@ impl ChatWidget {
             | TurnUpdate::Session(_)
             | TurnUpdate::Review(_)
             | TurnUpdate::Goal(_)
-            | TurnUpdate::Hooks(_) => {}
+            | TurnUpdate::Hooks(_)
+            | TurnUpdate::Settings(_) => {}
             TurnUpdate::SessionStatus(_) => {}
         }
     }

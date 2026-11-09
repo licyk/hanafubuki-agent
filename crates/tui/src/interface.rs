@@ -137,9 +137,10 @@ pub fn run(
     if let Some(update) = app.bridge.reply(AgentReply::SessionOpened(opened)) {
         app.show_update(update);
     }
-    for warning in warnings {
-        app.chat_widget.add_warning(warning);
-    }
+    warnings.extend(app.apply_preferences(preferences));
+    let config_warnings = app.bridge.config_warnings();
+    app.chat_widget
+        .add_startup_warnings(warnings, config_warnings);
     if let Some(prompt) = options.prompt {
         app.chat_widget.submit_user_message(prompt);
     }

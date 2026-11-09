@@ -517,6 +517,18 @@ impl AgentApplicationService {
     pub fn reset_memory(&self, expected_generation: u64) -> Result<u64, String> {
         self.memory.reset(expected_generation)
     }
+
+    /// What the reads of the configuration files had to fix since the
+    /// configuration was opened, oldest first.
+    pub fn config_recoveries(&self) -> Vec<hanafubuki_agent_config::AgentConfigRecovery> {
+        self.config.recoveries()
+    }
+
+    /// What the layers of `config.toml` hold that the settings cannot use:
+    /// unknown keys, and values the layer below replaces.
+    pub fn config_layer_warnings(&self) -> Result<Vec<String>, String> {
+        self.config.layer_warnings()
+    }
 }
 
 /// Stops the Agent's worker groups when its construction fails part-way:

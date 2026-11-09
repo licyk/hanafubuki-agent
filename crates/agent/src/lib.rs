@@ -80,6 +80,7 @@ pub use hanafubuki_agent_foundation::secrets::{
 /// What a hook in [`AgentHook`] is for, where it comes from and whether it
 /// is trusted.
 pub use hanafubuki_agent_hooks::{HookEventName, HookSource, HookTrust};
+pub use hanafubuki_agent_memory::{AgentMemoryContributionMode, AgentMemoryStatus};
 pub use host::{
     AgentPluginContextContribution, AgentPluginContributions, AgentPluginEventSink,
     AgentPluginGroup, AgentPluginLock, AgentPluginRow, AgentPluginState, AgentPluginStatus,
@@ -147,11 +148,11 @@ use std::path::Path;
 /// and the standalone Agent layers.
 pub use hanafubuki_agent_config::{
     AgentAlternateScreen, AgentConfig, AgentConfigProblem, AgentConfigRecovery, AgentDirs,
-    AgentLogLevel, AgentModelProtocol, AgentProviderHeaderSettings, AgentProviderSettings,
-    AgentSandboxMode, AgentSandboxWorkspaceWrite, AgentSettings, AgentSettingsPatch,
-    AgentStandaloneSettings, AgentTuiPreferences, AgentTuiPreferencesPatch, ConfigLayerSource,
-    ConfigLayers, ConfigOverrides, AGENT_CREDENTIAL_FILES, AGENT_HOME_ENV, AGENT_MCP_FILE,
-    AGENT_PROVIDERS_FILE, AGENT_SETTINGS_FILE,
+    AgentLogLevel, AgentMemorySettings, AgentModelProtocol, AgentProviderHeaderSettings,
+    AgentProviderSettings, AgentSandboxMode, AgentSandboxWorkspaceWrite, AgentSettings,
+    AgentSettingsPatch, AgentStandaloneSettings, AgentTuiPreferences, AgentTuiPreferencesPatch,
+    AgentTuiPreset, ConfigLayerSource, ConfigLayers, ConfigOverrides, AGENT_CREDENTIAL_FILES,
+    AGENT_HOME_ENV, AGENT_MCP_FILE, AGENT_PROVIDERS_FILE, AGENT_SETTINGS_FILE,
 };
 pub use hanafubuki_agent_execution::{
     AgentBackgroundTerminalSnapshot, AgentBackgroundTerminalStopFailure,

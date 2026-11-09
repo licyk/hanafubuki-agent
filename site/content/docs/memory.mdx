@@ -27,6 +27,8 @@ running jobs: 0
   都为 `true` 时创建的会话才会被提取。启用记忆之前的会话不会被读取。
 </Callout>
 
+在[终端界面](/docs/terminal-interface)中，`/memories` 可以直接开启记忆。
+
 记忆需要一个启用的默认 Provider。提取和整合默认使用模型策略中的模型，可以分别用 `memory.extractionModel` 和 `memory.consolidationModel` 指定其他模型（例如更便宜的模型）。
 
 ## 它如何工作 [#how]
@@ -76,5 +78,13 @@ hanafubuki-agent memory reset
 
 - `memory status`：是否启用、读过的会话数、提取的记忆数、运行中的任务数和最近的错误。
 - `memory reset`：删除提取的结果和整合后的记忆，把所有会话标记为未提取。之后符合条件的会话会被重新提取；如果不想这样，先关闭记忆再重置。
+
+在终端界面中，`/memories` 显示状态（读过的会话、记忆数、最近一轮和最近的错误），并提供：
+
+- **Use memories** 和 **Generate memories**：即 `memory.useMemories` 和 `memory.generateMemories`，立即保存；
+- **This session contributes**：当前显示的会话是否参与记忆（还没有会话时不可修改；开启 `memory.excludeExternalContext` 后用过外部内容的会话不再参与）；
+- **Reset memory…**：确认后执行 `memory reset`。
+
+记忆关闭时，它提供 **Turn memory on**（`memory.enabled`）。
 
 记忆保存在数据目录的 `memory/` 中。关闭 `memory` 插件（`disabledPlugins`）后，模型看不到记忆，也没有记忆工具。

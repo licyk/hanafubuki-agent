@@ -1,4 +1,5 @@
 // Modified from OpenAI Codex rust-v0.93.0 (Apache-2.0).
+// Modified from OpenAI Codex 57a808a392 (Apache-2.0).
 
 //! Overlay UIs rendered in an alternate screen.
 //!
@@ -25,6 +26,7 @@ use ratatui::widgets::Wrap;
 
 use crate::key_hint;
 use crate::key_hint::KeyBinding;
+use crate::keymap::{self, Action, Binding};
 use crate::render::renderable::Renderable;
 pub(crate) use transcript::TranscriptOverlay;
 
@@ -57,37 +59,38 @@ impl Overlay {
     }
 }
 
-const KEY_UP: KeyBinding = key_hint::plain(KeyCode::Up);
-const KEY_DOWN: KeyBinding = key_hint::plain(KeyCode::Down);
-const KEY_K: KeyBinding = key_hint::plain(KeyCode::Char('k'));
-const KEY_J: KeyBinding = key_hint::plain(KeyCode::Char('j'));
-const KEY_PAGE_UP: KeyBinding = key_hint::plain(KeyCode::PageUp);
-const KEY_PAGE_DOWN: KeyBinding = key_hint::plain(KeyCode::PageDown);
-const KEY_SPACE: KeyBinding = key_hint::plain(KeyCode::Char(' '));
-const KEY_SHIFT_SPACE: KeyBinding = key_hint::shift(KeyCode::Char(' '));
-const KEY_HOME: KeyBinding = key_hint::plain(KeyCode::Home);
-const KEY_END: KeyBinding = key_hint::plain(KeyCode::End);
-const KEY_CTRL_F: KeyBinding = key_hint::ctrl(KeyCode::Char('f'));
-const KEY_CTRL_D: KeyBinding = key_hint::ctrl(KeyCode::Char('d'));
-const KEY_CTRL_B: KeyBinding = key_hint::ctrl(KeyCode::Char('b'));
-const KEY_CTRL_U: KeyBinding = key_hint::ctrl(KeyCode::Char('u'));
-const KEY_Q: KeyBinding = key_hint::plain(KeyCode::Char('q'));
-const KEY_ESC: KeyBinding = key_hint::plain(KeyCode::Esc);
-const KEY_CTRL_T: KeyBinding = key_hint::ctrl(KeyCode::Char('t'));
-const KEY_CTRL_C: KeyBinding = key_hint::ctrl(KeyCode::Char('c'));
-
 // Common pager navigation hints rendered on the first line
-const PAGER_KEY_HINTS: &[(&[KeyBinding], &str)] = &[
-    (&[KEY_UP, KEY_DOWN], "to scroll"),
-    (&[KEY_PAGE_UP, KEY_PAGE_DOWN], "to page"),
-    (&[KEY_HOME, KEY_END], "to jump"),
+const PAGER_KEY_HINTS: &[(&[Action], &str)] = &[
+    (&[Action::ScrollUp, Action::ScrollDown], "to scroll"),
+    (&[Action::PageUp, Action::PageDown], "to page"),
+    (&[Action::JumpTop, Action::JumpBottom], "to jump"),
 ];
 
-// Render a single line of key hints from (key(s), description) pairs.
-fn render_key_hints(area: Rect, buf: &mut Buffer, pairs: &[(&[KeyBinding], &str)]) {
+/// Render a single line of key hints from (actions, description) pairs, the
+/// keys as the keymap has them: the first key of each of several actions,
+/// or every key of one.
+fn render_key_hints(area: Rect, buf: &mut Buffer, pairs: &[(&[Action], &str)]) {
+    let keymap = keymap::current();
     let mut spans: Vec<Span<'static>> = vec![" ".into()];
     let mut first = true;
-    for (keys, desc) in pairs {
+    for (actions, desc) in pairs {
+        let keys: Vec<KeyBinding> = match actions {
+            [action] => keymap
+                .bindings(*action)
+                .iter()
+                .filter_map(|binding| match binding {
+                    Binding::Key(key) => Some(key.hint()),
+                    _ => None,
+                })
+                .collect(),
+            actions => actions
+                .iter()
+                .filter_map(|action| keymap.hint(*action))
+                .collect(),
+        };
+        if keys.is_empty() {
+            continue;
+        }
         if !first {
             spans.push("   ".into());
         }
@@ -102,6 +105,24 @@ fn render_key_hints(area: Rect, buf: &mut Buffer, pairs: &[(&[KeyBinding], &str)
         first = false;
     }
     Paragraph::new(vec![Line::from(spans).dim()]).render(area, buf);
+}
+
+/// The pager action `key` triggers, of those the pagers take.
+fn pager_action(key: &KeyEvent) -> Option<Action> {
+    [
+        Action::Close,
+        Action::CloseTranscript,
+        Action::ScrollUp,
+        Action::ScrollDown,
+        Action::PageUp,
+        Action::PageDown,
+        Action::HalfPageUp,
+        Action::HalfPageDown,
+        Action::JumpTop,
+        Action::JumpBottom,
+    ]
+    .into_iter()
+    .find(|action| keymap::matches(*action, key))
 }
 
 /// Generic widget for rendering a pager view.
@@ -224,40 +245,29 @@ impl PagerView {
     }
 
     fn handle_key_event(&mut self, key_event: KeyEvent, viewport_area: Rect) {
-        match key_event {
-            e if KEY_UP.is_press(e) || KEY_K.is_press(e) => {
-                self.scroll_offset = self.scroll_offset.saturating_sub(1);
-            }
-            e if KEY_DOWN.is_press(e) || KEY_J.is_press(e) => {
-                self.scroll_offset = self.scroll_offset.saturating_add(1);
-            }
-            e if KEY_PAGE_UP.is_press(e)
-                || KEY_SHIFT_SPACE.is_press(e)
-                || KEY_CTRL_B.is_press(e) =>
-            {
+        let half_page = || {
+            let area = self.content_area(viewport_area);
+            (area.height as usize).saturating_add(1) / 2
+        };
+        match pager_action(&key_event) {
+            Some(Action::ScrollUp) => self.scroll_offset = self.scroll_offset.saturating_sub(1),
+            Some(Action::ScrollDown) => self.scroll_offset = self.scroll_offset.saturating_add(1),
+            Some(Action::PageUp) => {
                 let page_height = self.page_height(viewport_area);
                 self.scroll_offset = self.scroll_offset.saturating_sub(page_height);
             }
-            e if KEY_PAGE_DOWN.is_press(e) || KEY_SPACE.is_press(e) || KEY_CTRL_F.is_press(e) => {
+            Some(Action::PageDown) => {
                 let page_height = self.page_height(viewport_area);
                 self.scroll_offset = self.scroll_offset.saturating_add(page_height);
             }
-            e if KEY_CTRL_D.is_press(e) => {
-                let area = self.content_area(viewport_area);
-                let half_page = (area.height as usize).saturating_add(1) / 2;
-                self.scroll_offset = self.scroll_offset.saturating_add(half_page);
+            Some(Action::HalfPageDown) => {
+                self.scroll_offset = self.scroll_offset.saturating_add(half_page());
             }
-            e if KEY_CTRL_U.is_press(e) => {
-                let area = self.content_area(viewport_area);
-                let half_page = (area.height as usize).saturating_add(1) / 2;
-                self.scroll_offset = self.scroll_offset.saturating_sub(half_page);
+            Some(Action::HalfPageUp) => {
+                self.scroll_offset = self.scroll_offset.saturating_sub(half_page());
             }
-            e if KEY_HOME.is_press(e) => {
-                self.scroll_offset = 0;
-            }
-            e if KEY_END.is_press(e) => {
-                self.scroll_offset = usize::MAX;
-            }
+            Some(Action::JumpTop) => self.scroll_offset = 0,
+            Some(Action::JumpBottom) => self.scroll_offset = usize::MAX,
             _ => {}
         }
     }
@@ -333,8 +343,7 @@ impl StaticOverlay {
         let line1 = Rect::new(area.x, area.y, area.width, 1);
         let line2 = Rect::new(area.x, area.y.saturating_add(1), area.width, 1);
         render_key_hints(line1, buf, PAGER_KEY_HINTS);
-        let pairs: Vec<(&[KeyBinding], &str)> = vec![(&[KEY_Q], "to quit")];
-        render_key_hints(line2, buf, &pairs);
+        render_key_hints(line2, buf, &[(&[Action::Close], "to quit")]);
     }
 
     pub(crate) fn render(&mut self, area: Rect, buf: &mut Buffer) {
@@ -347,17 +356,21 @@ impl StaticOverlay {
 
     /// Handles a key; `viewport` is the screen the overlay is drawn on.
     pub(crate) fn handle_key_event(&mut self, key_event: KeyEvent, viewport: Rect) {
-        match key_event {
-            e if KEY_Q.is_press(e) || KEY_CTRL_C.is_press(e) => {
-                self.is_done = true;
-            }
-            other => self.view.handle_key_event(other, viewport),
+        if is_ctrl_c(&key_event) || keymap::matches(Action::Close, &key_event) {
+            self.is_done = true;
+        } else {
+            self.view.handle_key_event(key_event, viewport);
         }
     }
 
     pub(crate) fn is_done(&self) -> bool {
         self.is_done
     }
+}
+
+/// Ctrl-C closes a pager, whatever the keymap says.
+fn is_ctrl_c(key: &KeyEvent) -> bool {
+    key_hint::ctrl(KeyCode::Char('c')).is_press(*key)
 }
 
 fn render_offset_content(

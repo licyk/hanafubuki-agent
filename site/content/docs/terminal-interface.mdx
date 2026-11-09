@@ -59,8 +59,11 @@ Fullscreen 下，对话占满底部区域上方的屏幕。Scrollback 下，界�
 | Ctrl-T                     | Fullscreen：就地显示对话的详细内容；Scrollback：打开对话记录（见下文）                                 |
 | Ctrl-O                     | 显示或隐藏模型的思考过程（见下文）                                                                     |
 | `?`（输入框为空时）        | 显示快捷键说明                                                                                         |
+| Ctrl-X P                   | 打开[预设](#presets)                                                                                   |
 
 Fullscreen 下还有阅读对话的按键：Page Up/Page Down、F3、F4、Ctrl-Space 等，见[阅读对话](#reading)。
+
+以上是默认按键。[按键映射](#keymap)可以修改其中各个动作的按键（Enter、历史、Esc 中断、Ctrl-T、Ctrl-O、编辑键、对话和分页器的按键）；Ctrl-C、Ctrl-D、Tab、`?` 以及弹出列表和列表自己的按键保持不变。
 
 输入框支持常见的 Emacs 风格编辑键：Ctrl-A/E 到行首/行尾，Ctrl-W 删除前一个词，Ctrl-U/K 删除到行首/行尾，Alt-B/F 按词移动等。
 
@@ -110,6 +113,11 @@ Fullscreen 下还有阅读对话的按键：Page Up/Page Down、F3、F4、Ctrl-S
 | `/statusline`            | 设置[状态栏](#status-line)的项目和颜色；`/statusline 项目 [--colors\|--no-colors]` 只对本次运行有效                                         | 可用   |
 | `/title`                 | 设置[终端标题](#status-line)的项目；`/title 项目` 或 `/title --clear` 只对本次运行有效                                                      | 可用   |
 | `/tui`                   | 为下次启动选择 Scrollback 或 Fullscreen（见下文）                                                                                           | 可用   |
+| `/config`                | 在一个面板中修改界面的设置，并打开其他编辑界面（[见下文](#config)）                                                                         | 可用   |
+| `/keymap [debug]`        | 修改某个动作的按键；`/keymap debug` 列出所有动作的按键（[见下文](#keymap)）                                                                 | 可用   |
+| `/presets`               | 运行、新建、编辑和删除保存在 0 到 9 号位置的输入（[见下文](#presets)）                                                                      | 可用   |
+| `/memories`              | 使用、生成或重置[记忆](/docs/memory#status-reset)，以及本会话是否参与记忆                                                                   | 可用   |
+| `/warnings`              | 列出本次运行的警告，可以复制或忽略（[见下文](#warnings)）                                                                                   | 可用   |
 | `/ps`                    | 列出会话的后台终端：命令、状态、目录、最近的输出                                                                                            | 可用   |
 | `/stop`、`/clean`        | 确认后停止会话的所有后台终端                                                                                                                | 可用   |
 | `/clear [name]`          | 清空终端的滚动历史和屏幕（Fullscreen 下清空对话）并离开会话；下一个会话使用这个名字                                                         | 不可用 |
@@ -117,7 +125,7 @@ Fullscreen 下还有阅读对话的按键：Page Up/Page Down、F3、F4、Ctrl-S
 
 - 回合进行中输入不可用的命令，会显示 `'/x' is disabled while a task is in progress.`。
 - 不认识的 `/名字` 不会发送，而是提示 `Unrecognized command`。包含斜杠的路径（如 `/usr/bin/env`）或以空格开头的文本会作为普通消息发送。
-- 除 `/permissions`、`/rename`、`/resume`、`/fork`、`/review`、`/goal`、`/export`、`/cd`、`/clear`、`/raw`、`/mcp`、`/statusline` 和 `/title` 外，命令不带参数。`/model gpt-5.1` 这样在名字后面写了内容的消息会作为普通消息发给模型。`/mcp` 后面跟 `verbose` 或 `login ID` 以外的内容时，会提示 `Usage: /mcp [verbose | login ID]`。
+- 除 `/permissions`、`/rename`、`/resume`、`/fork`、`/review`、`/goal`、`/export`、`/cd`、`/clear`、`/raw`、`/mcp`、`/statusline`、`/title` 和 `/keymap` 外，命令不带参数。`/model gpt-5.1` 这样在名字后面写了内容的消息会作为普通消息发给模型。`/mcp` 后面跟 `verbose` 或 `login ID` 以外的内容时，会提示 `Usage: /mcp [verbose | login ID]`。
 - `/raw` 立即生效并保存（`tui.rawOutput`），下次启动时沿用。Fullscreen 下整个对话以原始形式重新显示；Scrollback 下已经写入滚动历史的内容保持不变，只有之后的内容是原始形式。`/raw` 后面跟 `on`、`off` 以外的内容时，会提示 `Usage: /raw [on|off]`。
 - `/tui` 保存 `tui.fullscreenTranscript`，从下次启动起生效：正在运行的界面保持当前方式。届时 `--no-alt-screen` 和 `tui.alternateScreen` 仍然适用。
 - 命令或它打开的列表因内部错误（panic）失败时，该命令在本次运行的剩余时间内关闭：对话中显示 `'/x' failed and is turned off for the rest of this run`，命令列表不再列出它，再输入它会提示它已关闭。会话、输入框和其他命令照常工作。聊天本身（输入框、对话内容、流式回答）的内部错误仍会结束界面，结束前会恢复终端状态。
@@ -231,6 +239,7 @@ Fullscreen 下，对话会跟随最新输出，直到你向上滚动。向上滚
 | 输入框为空时按 Enter                    | 回到最新输出                                                                                         |
 | 拖动                                    | 选择文本；双击选择一个词，三击选择一行，Shift-点击扩展选择                                           |
 | Ctrl-Space                              | 用键盘开始选择；方向键和 Shift-方向键移动                                                            |
+| Ctrl-X `[`                              | 选择模式：对话中出现一个光标，用按键移动，选择并复制                                                 |
 | Ctrl-C、Ctrl-Shift-C、Ctrl-Insert       | 有选择时：复制                                                                                       |
 | Enter                                   | 有选择时：复制并回到最新输出                                                                         |
 | 右键单击                                | 复制选择的内容                                                                                       |
@@ -255,7 +264,7 @@ Scrollback 下，Ctrl-T 在终端的备用屏幕上打开整个会话的对话�
 | Page Up/Page Down（Space、Ctrl-B/F）      | 滚动一页    |
 | Ctrl-U/Ctrl-D                             | 滚动半页    |
 | Home/End                                  | 到开头/结尾 |
-| `q`、Ctrl-C；对话记录还可以用 Esc、Ctrl-T | 关闭        |
+| `q`、Esc、Ctrl-C；对话记录还可以用 Ctrl-T | 关闭        |
 
 对话记录显示每次思考的全文和工具调用的完整输出（滚动历史只显示输出的开头和结尾几行），已完成的内容之后是正在运行的工具调用。其中的选择、复制和搜索与[阅读对话](#reading)相同（拖动、Ctrl-Space、F3）。
 
@@ -345,7 +354,7 @@ hanafubuki-agent resume 12 "继续" # 恢复后发送一条消息
 - 在列表中移动时，高亮的主题立即生效，并显示在一段示例差异上：终端较宽时在列表旁边，否则在列表下方。输入文字可以筛选列表。
 - Enter 保留这个主题，并保存为 `tui.theme`。Esc 和 Ctrl-C 恢复打开列表时使用的主题。
 - 自定义主题是[数据目录](/docs/data-directory#contents)下 `themes/` 目录中的 `.tmTheme` 文件，名字是去掉 `.tmTheme` 的文件名。无法作为主题读取的文件不会列出；与内置主题同名的自定义主题以内置主题为准。
-- 没有设置 `tui.theme` 时使用 `ansi` 主题，它用终端自己的调色板着色，因此在浅色和深色背景下都清晰。`tui.theme` 指定的主题不存在，或者自定义主题无法读取时，启动时会在对话中提示，并使用默认主题。
+- 没有设置 `tui.theme` 时使用 `ansi` 主题，它用终端自己的调色板着色，因此在浅色和深色背景下都清晰。`tui.theme` 指定的主题不存在，或者自定义主题无法读取时，会产生一条[警告](#warnings)，并使用默认主题。
 - 对话中已经显示的内容保持绘制时的颜色。
 
 ## 状态栏和终端标题 [#status-line]
@@ -383,9 +392,125 @@ hanafubuki-agent resume 12 "继续" # 恢复后发送一条消息
 
 - 不带参数的 `/statusline` 或 `/title` 打开设置界面：上下键移动，空格打开或关闭高亮的项目，左右键调整它的顺序，Enter 保存（`tui.statusLine` 和 `tui.statusLineColors`，或 `tui.terminalTitle`），Esc 取消。状态栏的设置界面预览这一行，会话还没有的值用示例代替。标题的设置界面打开期间直接设置终端标题；Esc 会恢复原来的标题。
 - 带参数时只对本次运行有效，不会保存。`/statusline git-branch context-remaining` 按这个顺序显示这些项目；`--colors` 和 `--no-colors` 打开或关闭颜色。`/title app-name model` 设置标题的项目；`/title --clear` 把标题交还给终端。不认识的项目会被拒绝，并列出所有项目。
-- `[tui]` 中界面不认识的项目会被忽略，启动时给出警告。
+- `[tui]` 中界面不认识的项目会被忽略，每个都产生一条[警告](#warnings)。
 - 标题写入前会清理：删除控制字符和不可见的或双向文本格式字符，连续空白合并为一个空格，最长 240 个字符。在 GNU Screen 中（设置了 `STY`）只使用 ASCII。
 - 第一次设置标题前，界面把终端原来的标题压入终端的标题栈（XTWINOPS），不再设置标题时和退出时再弹出恢复。不支持标题栈的终端会留下空标题。
+
+## 按键映射 [#keymap]
+
+下表中的每个动作都有默认按键，`tui.keymap.上下文.动作` 可以修改它们：一个按键或一组按键，`[]` 表示取消这个动作的绑定。动作先取它所在上下文中的设置，没有时取 `tui.keymap.global.动作`（只要没有同名的全局动作：`global.page_up` 同时设置 `transcript.page_up` 和 `pager.page_up`），再没有时使用默认按键。
+
+```toml
+[tui.keymap.global]
+open_transcript = "ctrl-g"
+leader = "ctrl-b"
+
+[tui.keymap.chat]
+toggle_thinking = ["ctrl-o", "f2"]
+open_presets = "ctrl-b 1"
+
+[tui.keymap.editor]
+yank = []
+```
+
+- **按键**写作修饰键加按键，用 `-` 连接：`ctrl-t`、`alt-<`、`shift-enter`、`page-down`、`f3`、`space`、`minus`；大写字母等于 `shift-` 加这个字母。
+- **组合键**是用空格分开的两个按键（`ctrl-g o`）：第一个键等待第二个键一秒钟。`leader K` 是前导键（`global.leader`，默认 Ctrl-X）再按 `K`；前导键会一直等到下一个键。没有完成任何组合的按键，或 Esc，会把两个键都丢弃。如果配置的某个按键正是默认前导键，它优先：除非 `global.leader` 另行设置，前导键就没有绑定。
+- **上下文**是读取按键的地方：`global` 处处有效，`chat` 和 `composer` 在输入框获得按键时有效，`editor` 在所有文本输入框中有效，`transcript` 在 Fullscreen 的对话中（与输入框同时）有效，`pager` 在对话记录和 `/diff` 中有效。在输入框旁边，不能绑定会输入文字的按键（不带 Ctrl 或 Alt 的字母），也不能绑定以它开头的组合键。
+- **冲突**：同一个按键（或组合键）不能触发同时读取的两个动作，不能是另一个动作的组合键的开头，也不能是界面保留的 Ctrl-C（以及 Ctrl-D，编辑框和分页器中除外）。默认就共用按键的动作仍然允许：`chat.interrupt_turn` 和 `chat.edit_previous`（Esc）、`composer.submit` 和 `editor.insert_newline`（Enter）、历史和编辑框的 Up、Down、`global.open_transcript` 和 `pager.close_transcript`。
+- 无法使用的设置（不认识的上下文或动作、不是按键的字符串、冲突）会让这个动作保留默认按键，并产生一条[警告](#warnings)。
+
+`/keymap` 列出所有动作及其按键（输入文字可以搜索）。选中一个动作后，可以替换它的按键或增加一个（一个按键、两个按键，或前导键加一个按键）、删除其中一个、取消绑定，或恢复默认按键。新的按键在按下时捕获（Esc 取消）；冲突的按键会被拒绝并说明原因，可以再换一个。修改保存到 `tui.keymap`，立即生效。`/keymap debug` 列出每个动作的按键，并标明 `default`（默认）或 `configured`（已配置）。
+
+弹出列表、列表、表单、审批和提问保留它们自己的按键（方向键、Enter、Esc、Tab），对话中的选择、搜索和选择模式，以及浏览之前的消息也一样。
+
+| 动作                          | 默认按键                                                              | 作用                                                         |
+| ----------------------------- | --------------------------------------------------------------------- | ------------------------------------------------------------ |
+| `global.leader`               | `ctrl-x`                                                              | 开始一个前导键组合（`leader p`）的键                         |
+| `global.open_transcript`      | `ctrl-t`                                                              | 显示对话的详细内容（Fullscreen）或打开对话记录（Scrollback） |
+| `global.find_transcript`      | `f3`                                                                  | 在对话中查找文本                                             |
+| `global.focus_activity`       | `f4`                                                                  | 聚焦工具调用的分组，以展开或折叠                             |
+| `global.select_transcript`    | `leader [`                                                            | 用键盘在对话中选择（Fullscreen）                             |
+| `chat.interrupt_turn`         | `esc`                                                                 | 中断正在运行的回合                                           |
+| `chat.edit_previous`          | `esc`                                                                 | 在空输入框上按两次：编辑之前的消息                           |
+| `chat.toggle_thinking`        | `ctrl-o`                                                              | 显示或隐藏模型的思考过程                                     |
+| `chat.open_presets`           | `leader p`                                                            | 打开预设                                                     |
+| `composer.submit`             | `enter`                                                               | 发送消息                                                     |
+| `composer.history_previous`   | `up`、`ctrl-p`                                                        | 上一条发送过的消息                                           |
+| `composer.history_next`       | `down`、`ctrl-n`                                                      | 下一条发送过的消息                                           |
+| `editor.insert_newline`       | `ctrl-j`、`ctrl-m`、`enter`、`shift-enter`、`alt-enter`、`ctrl-enter` | 换行                                                         |
+| `editor.move_left`            | `left`、`ctrl-b`                                                      | 左移                                                         |
+| `editor.move_right`           | `right`、`ctrl-f`                                                     | 右移                                                         |
+| `editor.move_up`              | `up`、`ctrl-p`                                                        | 上移                                                         |
+| `editor.move_down`            | `down`、`ctrl-n`                                                      | 下移                                                         |
+| `editor.move_word_left`       | `alt-b`、`alt-left`、`ctrl-left`                                      | 移到前一个词                                                 |
+| `editor.move_word_right`      | `alt-f`、`alt-right`、`ctrl-right`                                    | 移过下一个词                                                 |
+| `editor.move_line_start`      | `home`、`ctrl-a`                                                      | 移到行首                                                     |
+| `editor.move_line_end`        | `end`、`ctrl-e`                                                       | 移到行尾                                                     |
+| `editor.delete_backward`      | `backspace`、`shift-backspace`、`ctrl-h`                              | 删除前一个字符                                               |
+| `editor.delete_forward`       | `delete`、`shift-delete`、`ctrl-d`                                    | 删除后一个字符                                               |
+| `editor.delete_backward_word` | `alt-backspace`、`ctrl-backspace`、`ctrl-w`、`ctrl-alt-h`             | 删除前一个词                                                 |
+| `editor.delete_forward_word`  | `alt-delete`、`ctrl-delete`、`alt-d`                                  | 删除后一个词                                                 |
+| `editor.kill_line_start`      | `ctrl-u`                                                              | 删除到行首                                                   |
+| `editor.kill_line_end`        | `ctrl-k`                                                              | 删除到行尾                                                   |
+| `editor.yank`                 | `ctrl-y`                                                              | 粘回最近删除的内容                                           |
+| `transcript.page_up`          | `page-up`                                                             | 对话向上滚动一页                                             |
+| `transcript.page_down`        | `page-down`                                                           | 对话向下滚动一页                                             |
+| `transcript.jump_top`         | `ctrl-home`、`alt-<`、`alt-shift-`、``                                | 到对话开头                                                   |
+| `transcript.jump_bottom`      | `ctrl-end`、`alt->`、`alt-shift-.`                                    | 到最新输出                                                   |
+| `transcript.start_selection`  | `ctrl-space`                                                          | 从视图第一行开始选择                                         |
+| `pager.scroll_up`             | `up`、`k`                                                             | 向上滚动一行                                                 |
+| `pager.scroll_down`           | `down`、`j`                                                           | 向下滚动一行                                                 |
+| `pager.page_up`               | `page-up`、`shift-space`、`ctrl-b`                                    | 向上滚动一页                                                 |
+| `pager.page_down`             | `page-down`、`space`、`ctrl-f`                                        | 向下滚动一页                                                 |
+| `pager.half_page_up`          | `ctrl-u`                                                              | 向上滚动半页                                                 |
+| `pager.half_page_down`        | `ctrl-d`                                                              | 向下滚动半页                                                 |
+| `pager.jump_top`              | `home`                                                                | 到开头                                                       |
+| `pager.jump_bottom`           | `end`                                                                 | 到结尾                                                       |
+| `pager.close`                 | `q`、`esc`                                                            | 关闭分页器                                                   |
+| `pager.close_transcript`      | `ctrl-t`                                                              | 关闭对话记录                                                 |
+
+## 预设 [#presets]
+
+预设是保存在 0 到 9 号位置中的一段输入（`tui.presets."N"`），可以带一个标签。运行时，它像输入后发送一样经过斜杠命令的解析，因此可以是一条消息，也可以是 `/status`、`/statusline git-branch --colors` 这样的命令。输入不能为空，不能超过 8000 字节，也不能以 `!` 开头。
+
+`/presets`（或 Ctrl-X P）列出所有位置：
+
+| 按键    | 作用                                                                                          |
+| ------- | --------------------------------------------------------------------------------------------- |
+| `0`–`9` | 运行这个位置的预设                                                                            |
+| Enter   | 运行选中的预设                                                                                |
+| `n`     | 新建预设：位置（第一个空位）、输入和标签                                                      |
+| `s`     | 从当前设置新建预设：会话的 `/permissions …`、终端标题的 `/title …` 或状态栏的 `/statusline …` |
+| `e`     | 编辑选中的预设                                                                                |
+| `d`     | 按 `y` 确认后删除选中的预设                                                                   |
+
+本界面中 `/model` 不带参数，所以模型不能做成预设。配置档、项目配置或 `-c` 中设置的预设优先于用户文件中的：保存到这个位置时会说明这一点。
+
+## 设置 [#config]
+
+`/config` 汇集了 `[tui]` 的设置：Space 或 Enter 打开或关闭一项（选项用 Left 和 Right），每次修改立即应用并保存。
+
+| 行                 | 键                         | 何时生效        |
+| ------------------ | -------------------------- | --------------- |
+| Raw output         | `tui.rawOutput`            | 立即，同 `/raw` |
+| Status line colors | `tui.statusLineColors`     | 立即            |
+| Fullscreen         | `tui.fullscreenTranscript` | 下次启动        |
+| Alternate screen   | `tui.alternateScreen`      | 下次启动        |
+
+其他行打开各个编辑界面：Providers（`/providers`）、MCP servers（`/mcp`）、Memories（`/memories`）、Theme（`/theme`）、Status line（`/statusline`）、Terminal title（`/title`）、Keyboard（`/keymap`）、Presets（`/presets`）和 Interface mode（`/tui`）。
+
+## 警告 [#warnings]
+
+界面或 Agent 无法按配置使用的内容会在本次运行中保留下来，`/warnings` 列出它们：最新的在前，每条只出现一次，并按来源计数：
+
+- **configuration**：读取 `config.toml`、`providers.toml` 和 `mcp.toml` 时做的修复（[配置恢复](/docs/recovery)），以及 `config.toml` 的某一层中设置无法使用的内容：不认识的键，或被下一层替换的值；
+- **plugins**：失败的插件，或被排除在回合之外的插件；
+- **MCP**：服务器最近的错误或警告，以及读取 `mcp.toml` 时做的修复；
+- **hooks**：钩子配置中的问题；
+- **panics**：Agent 捕获到的内部错误；
+- **interface**：因内部错误而关闭的命令、`[tui]` 中不认识的主题或项目、无法使用的按键映射设置。
+
+启动时如果有警告，会有一行说明数量（`2 warnings: /warnings`）。在列表中，`c` 复制选中的警告，`d` 在本次运行的剩余时间内忽略它。没有警告时，`/warnings` 显示 `No warnings.`。
 
 ## 终端要求 [#terminal]
 

@@ -9,13 +9,14 @@
 use std::io::{self, Write};
 use std::time::Instant;
 
-use hanafubuki_agent::AgentTuiPreferencesPatch;
+use hanafubuki_agent::{AgentTuiPreferences, AgentTuiPreferencesPatch};
 use ratatui::backend::Backend;
 
 use super::App;
 use crate::appearance::items::ids;
 use crate::appearance::{AppearanceEvent, SPINNER_INTERVAL};
 use crate::history_cell::HistoryRenderMode;
+use crate::keymap::{self, Keymap};
 use crate::pager_overlay::Overlay;
 use crate::tui::Tui;
 
@@ -135,14 +136,55 @@ impl App {
         let _ = self.terminal_title.restore(tui.terminal.backend_mut());
     }
 
-    /// Writes `patch` into `config.toml`, then says `message`, or why it
-    /// was not saved.
-    fn save(&mut self, patch: AgentTuiPreferencesPatch, message: String) {
-        match self.bridge.write_tui_preferences(patch) {
-            Ok(()) => self.chat_widget.add_info_message(message),
+    /// Writes `patch` into `config.toml` and applies what it changed, then
+    /// says `message`, or why it was not saved.
+    pub(super) fn save(&mut self, patch: AgentTuiPreferencesPatch, mut message: String) {
+        match self.bridge.write_tui_preferences(patch.clone()) {
+            Ok(preferences) => {
+                if shadowed(&patch, &preferences) {
+                    message.push_str(
+                        " A profile, the project's configuration or -c sets it too, and that \
+                         one applies.",
+                    );
+                }
+                // What the keymap cannot use was kept for `/warnings` at
+                // start, and `/keymap` refuses what it would add.
+                self.apply_preferences(preferences);
+                self.chat_widget.add_info_message(message);
+            }
             Err(error) => self
                 .chat_widget
                 .add_error_message(format!("{message} It was not saved: {error}")),
         }
     }
+
+    /// Makes `preferences` the ones in force: the keymap they resolve to,
+    /// the presets and the rest the commands read. Returns what of the
+    /// keymap could not be used.
+    pub(crate) fn apply_preferences(&mut self, preferences: AgentTuiPreferences) -> Vec<String> {
+        let (keymap, warnings) = Keymap::resolve(&preferences.keymap);
+        keymap::install(keymap);
+        self.chords.clear();
+        self.chat_widget.set_preferences(preferences);
+        warnings
+    }
+}
+
+/// Whether a keymap entry or a preset `patch` wrote resolves to something
+/// else: a layer above the user's file sets it.
+fn shadowed(patch: &AgentTuiPreferencesPatch, preferences: &AgentTuiPreferences) -> bool {
+    let keymap = patch.keymap.iter().any(|(context, actions)| {
+        actions.iter().any(|(action, keys)| {
+            let resolved = preferences
+                .keymap
+                .get(context)
+                .and_then(|actions| actions.get(action));
+            keys.is_some() && resolved != keys.as_ref()
+        })
+    });
+    let presets = patch
+        .presets
+        .iter()
+        .any(|(slot, preset)| preferences.presets.get(slot) != preset.as_ref());
+    keymap || presets
 }

@@ -24,6 +24,7 @@ mod history_cell;
 mod insert_history;
 mod interface;
 mod key_hint;
+mod keymap;
 mod markdown;
 mod markdown_render;
 mod markdown_stream;

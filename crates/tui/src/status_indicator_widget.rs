@@ -7,7 +7,6 @@ use std::time::Duration;
 use std::time::Instant;
 
 use ratatui::buffer::Buffer;
-use ratatui::crossterm::event::KeyCode;
 use ratatui::layout::Rect;
 use ratatui::style::Stylize;
 use ratatui::text::Line;
@@ -18,7 +17,7 @@ use ratatui::widgets::Widget;
 use unicode_width::UnicodeWidthStr;
 
 use crate::app_event::{AppEvent, AppEventSender, Op};
-use crate::key_hint;
+use crate::keymap::{self, Action};
 use crate::render::renderable::Renderable;
 use crate::shimmer::{shimmer_spans, spinner};
 use crate::text_formatting::capitalize_first;
@@ -198,10 +197,11 @@ impl Renderable for StatusIndicatorWidget {
             spans.push(self.header.clone().into());
         }
         spans.push(" ".into());
-        if self.show_interrupt_hint {
+        if let Some(key) = keymap::hint(Action::InterruptTurn).filter(|_| self.show_interrupt_hint)
+        {
             spans.extend(vec![
                 format!("({pretty_elapsed} • ").dim(),
-                key_hint::plain(KeyCode::Esc).into(),
+                key.into(),
                 " to interrupt)".dim(),
             ]);
         } else {

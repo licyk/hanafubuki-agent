@@ -16,9 +16,12 @@
 
 mod backtrack;
 mod history_pages;
+mod keys;
 mod owned;
 mod preferences;
 mod requests;
+
+use keys::is_transcript_key;
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -29,13 +32,12 @@ use std::time::{Duration, Instant};
 use std::io::{self, Write};
 
 use ratatui::backend::Backend;
-use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::text::Line;
 
 use ratatui::crossterm::event::MouseEvent;
 
 use crate::agent_bridge::{AgentBridge, OlderTranscript, TurnUpdate};
-use crate::app_event::{AgentCommand, AppEvent, AppEventSender, Op};
+use crate::app_event::{AppEvent, AppEventSender};
 use crate::appearance::terminal_title::{TerminalTitle, TitleEncoding};
 use crate::chatwidget::ChatWidget;
 use crate::clipboard::Clipboard;
@@ -43,9 +45,10 @@ use crate::diff_render::git_diff_lines;
 use crate::file_search::FileSearchManager;
 use crate::get_git_diff::get_git_diff;
 use crate::history_cell::{HistoryCell, HistoryRenderMode};
-use crate::pager_overlay::{Overlay, TranscriptOverlay};
+use crate::keymap::ChordState;
+use crate::pager_overlay::Overlay;
 use crate::render::renderable::Renderable;
-use crate::resume_picker::{ResumePicker, SessionSelection};
+use crate::resume_picker::ResumePicker;
 use crate::transcript_mode::TranscriptMode;
 use crate::transcript_view::{TranscriptHistoryState, TranscriptView, ViewAction};
 use crate::tui::Tui;
@@ -94,6 +97,8 @@ pub(crate) struct App {
     last_frame: Option<Instant>,
     backtrack: backtrack::Backtrack,
     terminal_title: TerminalTitle,
+    /// A chord's first key, while it waits for the second.
+    chords: ChordState,
 }
 
 impl App {
@@ -128,6 +133,7 @@ impl App {
             last_frame: None,
             backtrack: backtrack::Backtrack::default(),
             terminal_title: TerminalTitle::new(TitleEncoding::detect()),
+            chords: ChordState::default(),
         }
     }
 
@@ -304,70 +310,6 @@ impl App {
         }
         self.load_older_pages();
         self.schedule_frame(Instant::now());
-    }
-
-    /// `false` when the app should exit.
-    fn handle_key_event<B: Backend<Error = io::Error> + Write>(
-        &mut self,
-        tui: &mut Tui<B>,
-        key: KeyEvent,
-    ) -> bool {
-        if let Some(picker) = self.resume_picker.as_mut() {
-            let selection = picker.handle_key(key);
-            self.schedule_frame(Instant::now());
-            let Some(selection) = selection else {
-                self.load_picker_pages();
-                return true;
-            };
-            self.resume_picker = None;
-            // The session left is replaced, header and all: what it wrote
-            // while the picker was open is not shown.
-            if matches!(selection, SessionSelection::Resume(_)) {
-                self.deferred_history_lines.clear();
-            }
-            self.leave_alt_screen(tui);
-            match selection {
-                SessionSelection::StartFresh => {}
-                SessionSelection::Resume(session_id) => self
-                    .app_event_tx
-                    .send(AppEvent::Op(Op::Command(AgentCommand::Resume(session_id)))),
-                SessionSelection::Exit => return false,
-            }
-            return true;
-        }
-        if self.handle_backtrack_key(tui, key) {
-            return true;
-        }
-        if let Some(overlay) = self.overlay.as_mut() {
-            let action = match overlay {
-                Overlay::Transcript(transcript) => transcript.handle_key(key),
-                Overlay::Static(pager) => {
-                    pager.handle_key_event(key, tui.terminal.viewport_area);
-                    None
-                }
-            };
-            if overlay.is_done() {
-                self.overlay = None;
-                self.reset_backtrack();
-                self.leave_alt_screen(tui);
-            } else if let Some(action) = action {
-                self.apply_view_action(action);
-            }
-            self.schedule_frame(Instant::now());
-            return true;
-        }
-        if self.mode.is_owned() {
-            if self.handle_owned_key(key) {
-                self.schedule_frame(Instant::now());
-                return true;
-            }
-        } else if is_transcript_key(key) {
-            let overlay = TranscriptOverlay::new(self.transcript_cells.clone(), self.render_mode);
-            self.open_overlay(tui, Overlay::Transcript(overlay));
-            return true;
-        }
-        self.chat_widget.handle_key_event(key);
-        true
     }
 
     fn alt_screen_open(&self) -> bool {
@@ -608,14 +550,6 @@ impl App {
         }
         Ok(())
     }
-}
-
-/// The transcript overlay's key in terminal mode, the detailed
-/// presentation's in owned mode.
-fn is_transcript_key(key: KeyEvent) -> bool {
-    key.kind == KeyEventKind::Press
-        && key.modifiers == KeyModifiers::CONTROL
-        && matches!(key.code, KeyCode::Char('t'))
 }
 
 /// A transcript view in `render_mode`'s compact presentation.

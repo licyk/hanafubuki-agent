@@ -12,8 +12,10 @@ use hanafubuki_agent::{
 };
 use ratatui::crossterm::event::{KeyEvent, MouseEvent};
 
+use hanafubuki_agent::AgentTuiPreferencesPatch;
+
 use crate::agent_bridge::{
-    AgentReply, GoalCall, HooksCall, McpCall, ProviderCall, ReviewCall, SessionCall,
+    AgentReply, GoalCall, HooksCall, McpCall, ProviderCall, ReviewCall, SessionCall, SettingsCall,
 };
 use crate::appearance::AppearanceEvent;
 use crate::commands::CommandStep;
@@ -83,6 +85,14 @@ pub(crate) enum AppCommand {
     /// `/resume TEXT`: the session with this id, else the one session with
     /// this title, else the picker searching for it.
     ResumeNamed(String),
+    /// Runs the text as if it were typed and sent: a command, or a message
+    /// (`/presets`, `/config`'s entries).
+    Replay(String),
+    /// Saves the change into `[tui]` and applies it (the keymap, the
+    /// presets), then says the message, or why it was not saved.
+    SavePreferences(AgentTuiPreferencesPatch, String),
+    /// Hides the warning with this key (`Warning::key`) for the run.
+    DismissWarning(String),
 }
 
 /// The widgets' requests of the Agent, which the bridge turns into calls.
@@ -126,6 +136,7 @@ pub(crate) enum AgentCommand {
     Review(ReviewCall),
     Goal(GoalCall),
     Hooks(HooksCall),
+    Settings(SettingsCall),
 }
 
 /// The app loop's channel, as the widgets and the Agent's sinks hold it.

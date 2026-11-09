@@ -38,6 +38,9 @@ impl App {
             AppCommand::ClearScreen => self.clear_screen(tui),
             AppCommand::Submit(text) => self.chat_widget.submit_user_message(text),
             AppCommand::ResumeNamed(text) => self.resume_named(tui, text),
+            AppCommand::Replay(text) => self.chat_widget.replay_input(text),
+            AppCommand::SavePreferences(patch, message) => self.save(patch, message),
+            AppCommand::DismissWarning(key) => self.chat_widget.dismiss_warning(key),
         }
     }
 

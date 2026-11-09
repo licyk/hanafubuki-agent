@@ -75,6 +75,7 @@ use crate::app_event::AppEventSender;
 use crate::key_hint;
 use crate::key_hint::has_ctrl_or_alt;
 use crate::key_hint::KeyBinding;
+use crate::keymap::{self, Action};
 use crate::render::renderable::Renderable;
 use crate::render::Insets;
 use crate::render::RectExt;
@@ -324,27 +325,20 @@ impl ChatComposer {
                 kind: KeyEventKind::Press,
                 ..
             } if self.is_empty() => (InputResult::None, false),
-            // -------------------------------------------------------------
-            // History navigation (Up / Down) – only when the composer is not
-            // empty or when the cursor is at the correct position, to avoid
-            // interfering with normal cursor movement.
-            // -------------------------------------------------------------
-            KeyEvent {
-                code: KeyCode::Up | KeyCode::Down,
-                ..
-            }
-            | KeyEvent {
-                code: KeyCode::Char('p') | KeyCode::Char('n'),
-                modifiers: KeyModifiers::CONTROL,
-                ..
-            } => {
+            // History navigation – only when the composer is not empty or
+            // the cursor is at the correct position, to avoid interfering
+            // with normal cursor movement.
+            key if keymap::matches(Action::HistoryPrevious, &key)
+                || keymap::matches(Action::HistoryNext, &key) =>
+            {
                 if self
                     .history
                     .should_handle_navigation(self.textarea.text(), self.textarea.cursor())
                 {
-                    let replace_entry = match key_event.code {
-                        KeyCode::Up | KeyCode::Char('p') => self.history.navigate_up(),
-                        _ => self.history.navigate_down(),
+                    let replace_entry = if keymap::matches(Action::HistoryPrevious, &key) {
+                        self.history.navigate_up()
+                    } else {
+                        self.history.navigate_down()
                     };
                     if let Some(entry) = replace_entry {
                         self.set_text_content(entry);
@@ -354,11 +348,7 @@ impl ChatComposer {
                 }
                 self.handle_input_basic(key_event)
             }
-            KeyEvent {
-                code: KeyCode::Enter,
-                modifiers: KeyModifiers::NONE,
-                ..
-            } => self.handle_submission(Instant::now()),
+            key if keymap::matches(Action::Submit, &key) => self.handle_submission(Instant::now()),
             input => self.handle_input_basic(input),
         }
     }

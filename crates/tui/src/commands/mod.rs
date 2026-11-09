@@ -11,6 +11,7 @@
 
 mod cd;
 mod clear;
+mod config;
 mod confirm;
 mod copy;
 mod exit;
@@ -19,11 +20,15 @@ mod fork;
 pub(crate) mod goal;
 pub(crate) mod hooks;
 mod init;
+mod keymap;
 mod leave;
 pub(crate) mod mcp;
+mod memories;
 mod mode;
 mod model;
+mod parse;
 mod permissions;
+mod presets;
 mod prompt;
 pub(crate) mod providers;
 mod pwd;
@@ -39,14 +44,17 @@ mod terminals;
 mod theme;
 mod title;
 mod tui;
+mod warnings;
 mod workspace;
 mod worktree;
 
 use std::fmt;
 
-use hanafubuki_agent::AgentSessionMode;
+use hanafubuki_agent::{AgentSessionMode, AgentTuiPreferences};
 
-use crate::agent_bridge::{HooksReply, McpReply, ProviderReply, SessionCall, SessionReply};
+use crate::agent_bridge::{
+    HooksReply, McpReply, ProviderReply, SessionCall, SessionReply, SettingsReply,
+};
 use crate::app_event::{AgentCommand, AppEvent, AppEventSender, Op};
 use crate::appearance::Appearance;
 use crate::bottom_pane::{BottomPane, BottomPaneView, SelectionViewParams};
@@ -54,13 +62,17 @@ use crate::history_cell::{self, HistoryCell};
 pub(crate) use goal::GOAL;
 pub(crate) use hooks::HOOKS;
 pub(crate) use mcp::MCP;
+pub(crate) use memories::MEMORIES;
 pub(crate) use mode::mode_name;
 pub(crate) use model::{show_model_choices, MODEL};
+pub(crate) use parse::{parse_input, ParsedInput};
+pub(crate) use presets::PRESETS;
 pub(crate) use providers::PROVIDERS;
 pub(crate) use review::REVIEW;
+pub(crate) use warnings::{show_warnings, WARNINGS};
 
 /// Every command, in presentation order: the most used first.
-pub(crate) static COMMANDS: [&CommandSpec; 36] = [
+pub(crate) static COMMANDS: [&CommandSpec; 41] = [
     &model::MODEL,
     &providers::PROVIDERS,
     &mode::MODE,
@@ -93,6 +105,11 @@ pub(crate) static COMMANDS: [&CommandSpec; 36] = [
     &statusline::STATUSLINE,
     &title::TITLE,
     &tui::TUI,
+    &config::CONFIG,
+    &keymap::KEYMAP,
+    &presets::PRESETS,
+    &memories::MEMORIES,
+    &warnings::WARNINGS,
     &terminals::PS,
     &terminals::STOP,
     &clear::CLEAR,
@@ -189,6 +206,26 @@ pub(crate) enum CommandReply {
     Mcp(McpReply),
     Session(SessionReply),
     Hooks(HooksReply),
+    Settings(SettingsReply),
+}
+
+/// What `/memories` asked; `/warnings`' answer goes through the chat,
+/// which adds its own warnings.
+pub(crate) fn on_settings_reply(context: &mut CommandContext<'_>, reply: SettingsReply) {
+    match reply {
+        // An open panel says it under its rows.
+        SettingsReply::Failed { .. } => {
+            if let Some(CommandReply::Settings(SettingsReply::Failed { command, error })) =
+                context.offer_reply(CommandReply::Settings(reply))
+            {
+                context.add_to_history(history_cell::new_error_event(format!(
+                    "/{command}: {error}"
+                )));
+            }
+        }
+        SettingsReply::Memories(state) => memories::on_reply(context, *state),
+        SettingsReply::Warnings(_) => {}
+    }
 }
 
 /// The command a session call's reply belongs to.
@@ -261,9 +298,9 @@ pub(crate) struct CommandContext<'a> {
     app_event_tx: &'a AppEventSender,
     bottom_pane: &'a mut BottomPane,
     mode: AgentSessionMode,
-    fullscreen_preference: bool,
     owned_transcript: bool,
     appearance: &'a Appearance,
+    preferences: &'a AgentTuiPreferences,
 }
 
 impl<'a> CommandContext<'a> {
@@ -272,19 +309,24 @@ impl<'a> CommandContext<'a> {
         app_event_tx: &'a AppEventSender,
         bottom_pane: &'a mut BottomPane,
         mode: AgentSessionMode,
-        fullscreen_preference: bool,
         owned_transcript: bool,
         appearance: &'a Appearance,
+        preferences: &'a AgentTuiPreferences,
     ) -> Self {
         Self {
             command,
             app_event_tx,
             bottom_pane,
             mode,
-            fullscreen_preference,
             owned_transcript,
             appearance,
+            preferences,
         }
+    }
+
+    /// `[tui]` as the configuration resolves it now.
+    pub(crate) fn preferences(&self) -> &AgentTuiPreferences {
+        self.preferences
     }
 
     /// The theme, the status line and the title as this run has them.
@@ -316,7 +358,7 @@ impl<'a> CommandContext<'a> {
 
     /// The saved `tui.fullscreenTranscript`.
     pub(crate) fn fullscreen_preference(&self) -> bool {
-        self.fullscreen_preference
+        self.preferences.fullscreen_transcript
     }
 
     /// A turn, or the work of a command that shows as one, runs.

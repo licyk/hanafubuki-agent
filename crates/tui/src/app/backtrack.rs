@@ -38,6 +38,7 @@ use unicode_width::UnicodeWidthStr;
 use super::{is_transcript_key, App};
 use crate::agent_bridge::AgentReply;
 use crate::history_cell::UserHistoryCell;
+use crate::keymap::{self, Action};
 use crate::pager_overlay::{Overlay, TranscriptOverlay};
 use crate::transcript_view::TranscriptBookmark;
 use crate::tui::Tui;
@@ -80,7 +81,7 @@ impl App {
         if self.backtrack.browsing.is_some() {
             return self.handle_browsing_key(tui, key);
         }
-        if key.code == KeyCode::Esc && key.modifiers == KeyModifiers::NONE && self.can_prime() {
+        if keymap::matches(Action::EditPrevious, &key) && self.can_prime() {
             if key.kind == KeyEventKind::Press {
                 if self.backtrack.primed {
                     self.begin_browsing(tui);

@@ -171,6 +171,7 @@ impl AgentBridge {
             AgentCommand::Review(call) => return Ok(self.review_call(call)),
             AgentCommand::Goal(call) => return Ok(self.goal_call(call)),
             AgentCommand::Hooks(call) => return Ok(self.hooks_call(call)),
+            AgentCommand::Settings(call) => self.settings_call(call),
             AgentCommand::Skills => {
                 let catalog = self
                     .agent
@@ -204,17 +205,17 @@ impl AgentBridge {
             .unwrap_or_default()
     }
 
-    /// Saves `patch` into the interface's preferences.
+    /// Saves `patch` into the interface's preferences, and returns them as
+    /// the layers now resolve them.
     pub(crate) fn write_tui_preferences(
         &self,
         patch: AgentTuiPreferencesPatch,
-    ) -> Result<(), String> {
+    ) -> Result<AgentTuiPreferences, String> {
         let agent = self.agent.clone();
         self.agent
             .runtime()
             .block_on(async move { agent.write_tui_preferences(patch).await })
             .map_err(|failure| failure.to_string())?
-            .map(drop)
     }
 
     /// The workspace roots, the first the one relative paths are read

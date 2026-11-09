@@ -75,6 +75,10 @@ impl BottomPaneView for ModuleView {
     fn command(&self) -> Option<&'static str> {
         Some(self.guard.command)
     }
+
+    fn captures_keys(&self) -> bool {
+        self.guard.run(false, || self.view.captures_keys())
+    }
 }
 
 impl Renderable for ModuleView {

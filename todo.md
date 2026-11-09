@@ -141,7 +141,7 @@ moves its pin.
     interface thread; the export is written in place (no temp file);
     the picker has no Ctrl+T preview.
   - Hanafubuki, at its next pin: the call `export_session_markdown`.
-- [ ] P5: `/theme` (syntect and two-face, also syntax highlighting),
+- [x] P5: `/theme` (syntect and two-face, also syntax highlighting),
       `/keymap`, `/title`, `/statusline`, `/presets`, `/config`,
       `/warnings`, `/memories`.
   - [x] P5a: highlighting of fenced code and diffs (syntect 5.3, two-face
@@ -155,7 +155,25 @@ moves its pin.
         popped); `tui.theme`, `tui.statusLine`, `tui.statusLineColors`,
         `tui.terminalTitle`. Not ported: Codex's model-named themes, a
         background query for the default theme, a streaming highlighter.
-  - [ ] P5b: `/keymap`, `/presets`, `/config`, `/warnings`, `/memories`.
+  - [x] P5b: the keymap (`crates/tui/src/keymap/`: contexts global,
+        chat, composer, editor, transcript, pager; context → global →
+        defaults; chords; leader Ctrl-X; conflicts refused; `tui.keymap`)
+        and `/keymap [debug]`; `/presets` (`tui.presets` slots 0–9, run
+        through the slash parser, "from current settings" with
+        `/permissions`, `/title`, `/statusline`); `/config`; `/warnings`
+        (the configuration's layer warnings and recoveries, plugins, MCP,
+        hooks, panics, the interface's own; "N warnings: /warnings" at
+        start, which closes the D2 item on lost first-read warnings);
+        `/memories`. The `TextArea::input` module-size exception is gone.
+  - Open (P5b): popup, list, form, select-mode, search and browsing keys
+    stay fixed as in Codex; `config set tui.keymap.<context>` is refused
+    (only the whole table); a slot a profile or `-c` overrides is
+    reported after the save, not refused.
+  - Hanafubuki, at its next pin: `AgentTuiPreferences` has `keymap` and
+    `presets` (struct literals); new `AgentTuiPreset`,
+    `AgentConfig::layer_warnings`; facade `config_recoveries`,
+    `config_layer_warnings`; re-exports `AgentMemorySettings`,
+    `AgentMemoryStatus`, `AgentMemoryContributionMode`.
 - [x] P6: per-session permission mode (`set_session_permission_mode`,
       `turns.rs` no longer overrides it), `/permissions`, `/approve`
       (`approve_denied_action`, a model-visible note: goldens).
@@ -545,7 +563,7 @@ The next release with it is 0.2.0 (the headline event is removed).
     - `mcp.toml` server ids are not validated on read.
     - `.git/` may show in `@` mention results.
     - Configuration warnings from the first read are lost for commands
-      that do not start the Agent.
+      that do not start the Agent (the interface keeps them since P5b).
     - Every start of the terminal interface creates a session that
       `sessions list` shows (see Phase 5b below).
     - `skills/src/service/mutations.rs`: `source_folder_name`'s comment

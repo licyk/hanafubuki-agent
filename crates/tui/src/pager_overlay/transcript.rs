@@ -165,10 +165,10 @@ impl TranscriptOverlay {
             hints,
             buf,
             &[
-                (&[KEY_UP, KEY_DOWN], "scroll"),
-                (&[KEY_PAGE_UP, KEY_PAGE_DOWN], "page"),
-                (&[KEY_HOME, KEY_END], "jump"),
-                (&[KEY_Q, KEY_ESC], "close"),
+                (&[Action::ScrollUp, Action::ScrollDown], "scroll"),
+                (&[Action::PageUp, Action::PageDown], "page"),
+                (&[Action::JumpTop, Action::JumpBottom], "jump"),
+                (&[Action::Close], "close"),
             ],
         );
         None
@@ -185,26 +185,26 @@ impl TranscriptOverlay {
             }
         }
         let page = self.content_area.height.max(2) as isize - 1;
-        let rows = match key {
-            e if KEY_Q.is_press(e)
-                || KEY_ESC.is_press(e)
-                || KEY_CTRL_C.is_press(e)
-                || KEY_CTRL_T.is_press(e) =>
-            {
+        if is_ctrl_c(&key) {
+            self.is_done = true;
+            return Some(ViewAction::Changed);
+        }
+        let rows = match pager_action(&key) {
+            Some(Action::Close | Action::CloseTranscript) => {
                 self.is_done = true;
                 return Some(ViewAction::Changed);
             }
-            e if KEY_UP.is_press(e) || KEY_K.is_press(e) => -1,
-            e if KEY_DOWN.is_press(e) || KEY_J.is_press(e) => 1,
-            e if KEY_SPACE.is_press(e) || KEY_CTRL_F.is_press(e) => page,
-            e if KEY_SHIFT_SPACE.is_press(e) || KEY_CTRL_B.is_press(e) => -page,
-            e if KEY_CTRL_D.is_press(e) => page / 2,
-            e if KEY_CTRL_U.is_press(e) => -page / 2,
-            e if KEY_HOME.is_press(e) => {
+            Some(Action::ScrollUp) => -1,
+            Some(Action::ScrollDown) => 1,
+            Some(Action::PageDown) => page,
+            Some(Action::PageUp) => -page,
+            Some(Action::HalfPageDown) => page / 2,
+            Some(Action::HalfPageUp) => -page / 2,
+            Some(Action::JumpTop) => {
                 self.view.jump_to_beginning(&self.cells);
                 return Some(ViewAction::Changed);
             }
-            e if KEY_END.is_press(e) => {
+            Some(Action::JumpBottom) => {
                 self.view.jump_to_latest();
                 return Some(ViewAction::Changed);
             }

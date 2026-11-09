@@ -9,7 +9,6 @@ use std::time::Instant;
 use super::ChatWidget;
 use crate::agent_bridge::SessionStatus;
 use crate::appearance::AppearanceEvent;
-use crate::history_cell;
 
 impl ChatWidget {
     /// A change of the theme, the status line or the title.
@@ -36,13 +35,5 @@ impl ChatWidget {
             self.appearance.terminal_title(now),
             self.appearance.title_is_animated(),
         )
-    }
-
-    /// Something the interface could not apply as configured: shown, and
-    /// kept for `/warnings`.
-    pub(crate) fn add_warning(&mut self, warning: String) {
-        self.add_to_history(history_cell::new_error_event(warning.clone()));
-        self.warnings.push(warning);
-        self.request_redraw();
     }
 }

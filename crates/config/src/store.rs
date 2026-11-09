@@ -113,6 +113,13 @@ impl AgentConfig {
         self.standalone_settings().map(|standalone| standalone.tui)
     }
 
+    /// What the layers of `config.toml` hold that the settings cannot use
+    /// (unknown keys, values the layer below replaces), as the last read
+    /// found it; empty for a host's configuration, which is not layered.
+    pub fn layer_warnings(&self) -> Result<Vec<String>, String> {
+        self.resolved().map(|resolved| resolved.warnings)
+    }
+
     /// Writes the keys `patch` names into the `[tui]` table of the user's
     /// `config.toml`, keeping the rest of the file as written, and returns
     /// the preferences as the layers now resolve them.
@@ -310,10 +317,11 @@ impl AgentConfig {
             .write(mcp)
             .map_err(|error| error.to_string())?;
         self.inner.settings_file.write(settings)?;
-        *self.inner.settings.lock() = self.inner.layers.is_none().then(|| Resolved {
-            settings: settings.clone(),
-            standalone: AgentStandaloneSettings::default(),
-        });
+        *self.inner.settings.lock() = self
+            .inner
+            .layers
+            .is_none()
+            .then(|| Resolved::unlayered(settings.clone()));
         *self.inner.providers.lock() = Some(providers.clone());
         Ok(())
     }
@@ -329,10 +337,7 @@ impl AgentConfig {
         update(&mut settings)?;
         self.inner.settings_file.write(&settings)?;
         let resolved = match &self.inner.layers {
-            None => Resolved {
-                settings,
-                standalone: AgentStandaloneSettings::default(),
-            },
+            None => Resolved::unlayered(settings),
             Some(_) => self.load_resolved()?,
         };
         *cached = Some(resolved.clone());
@@ -359,10 +364,7 @@ impl AgentConfig {
     fn load_resolved(&self) -> Result<Resolved, String> {
         let user = self.load_user_settings()?;
         match &self.inner.layers {
-            None => Ok(Resolved {
-                settings: user.value,
-                standalone: AgentStandaloneSettings::default(),
-            }),
+            None => Ok(Resolved::unlayered(user.value)),
             Some(layers) => {
                 layers.resolve(self.inner.settings_file.path(), user.value, &user.document)
             }

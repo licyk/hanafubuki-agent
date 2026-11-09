@@ -61,7 +61,7 @@ It refuses a key it does not know and a value the Agent could not use:
 error: `nosuch` is not a setting of config.toml
 ```
 
-A write changes that one key and keeps the file's comments and everything else. `config set` cannot remove a key; edit the file for that. The terminal interface's [`/tui` and `/raw`](/docs/terminal-interface#modes), [`/theme`](/docs/terminal-interface#highlighting), [`/statusline` and `/title`](/docs/terminal-interface#status-line) write their `[tui]` keys the same way. Custom highlighting themes are not in the configuration directory: they are `.tmTheme` files in the data directory's `themes/`.
+A write changes that one key and keeps the file's comments and everything else. `config set` cannot remove a key; edit the file for that. The terminal interface's [`/tui` and `/raw`](/docs/terminal-interface#modes), [`/theme`](/docs/terminal-interface#highlighting), [`/statusline` and `/title`](/docs/terminal-interface#status-line), [`/keymap`](/docs/terminal-interface#keymap), [`/presets`](/docs/terminal-interface#presets) and [`/config`](/docs/terminal-interface#config) write their `[tui]` keys the same way, and `/memories` its `memory` keys. Custom highlighting themes are not in the configuration directory: they are `.tmTheme` files in the data directory's `themes/`.
 
 ## Editing the file [#edit]
 
@@ -152,6 +152,13 @@ rawOutput = false
 theme = "catppuccin-mocha"
 statusLine = ["model-with-reasoning", "git-branch", "context-remaining"]
 terminalTitle = ["activity", "project-name"]
+
+[tui.keymap.global]
+open_transcript = "ctrl-g"
+
+[tui.presets.1]
+input = "/statusline git-branch context-remaining --colors"
+label = "Branch and context"
 
 # hanafubuki-agent -p review
 [profiles.review]

@@ -61,6 +61,11 @@ fn the_table_keeps_the_presentation_order() {
             "statusline",
             "title",
             "tui",
+            "config",
+            "keymap",
+            "presets",
+            "memories",
+            "warnings",
             "ps",
             "stop",
             "clear",
@@ -96,6 +101,11 @@ fn availability_follows_the_spec() {
             "statusline",
             "title",
             "tui",
+            "config",
+            "keymap",
+            "presets",
+            "memories",
+            "warnings",
             "ps",
             "stop",
             "exit"
@@ -138,6 +148,7 @@ fn availability_follows_the_spec() {
             "raw",
             "statusline",
             "title",
+            "keymap",
             "clear"
         ]
     );

@@ -59,8 +59,11 @@ In the conversation your messages start with `›`; a tool call is `• Called T
 | Ctrl-T                    | Fullscreen: shows the conversation in detail, in place; Scrollback: opens the transcript (below)                                                                 |
 | Ctrl-O                    | Shows or hides the model's thinking (below)                                                                                                                      |
 | `?` on an empty composer  | Shows the shortcuts                                                                                                                                              |
+| Ctrl-X P                  | Opens the [presets](#presets)                                                                                                                                    |
 
 Fullscreen has the conversation's keys too: Page Up/Page Down, F3, F4, Ctrl-Space and the others in [Reading the conversation](#reading).
+
+These are the default keys. [The keymap](#keymap) changes the keys of its actions (Enter, the history, Esc to interrupt, Ctrl-T, Ctrl-O, the editing keys, the conversation's and the pagers' keys); Ctrl-C, Ctrl-D, Tab, `?` and the keys of popups and lists stay as they are.
 
 The composer has the usual Emacs-style editing keys: Ctrl-A/E for the start and end of the line, Ctrl-W to delete the previous word, Ctrl-U/K to delete to the start or end of the line, Alt-B/F to move by word, and so on.
 
@@ -113,6 +116,11 @@ A message that starts with `/` is a command. Typing `/` opens a popup of them, n
 | `/statusline`            | Sets the [status line](#status-line)'s items and colors; `/statusline ITEMS [--colors\|--no-colors]` for this run only                                                                                                     | Yes           |
 | `/title`                 | Sets the [terminal title](#status-line)'s items; `/title ITEMS` or `/title --clear` for this run only                                                                                                                      | Yes           |
 | `/tui`                   | Picks Scrollback or Fullscreen for the next launch (below)                                                                                                                                                                 | Yes           |
+| `/config`                | The interface's settings in one panel, and the other editors ([below](#config))                                                                                                                                            | Yes           |
+| `/keymap [debug]`        | Changes the keys of an action; `/keymap debug` lists every action's keys ([below](#keymap))                                                                                                                                | Yes           |
+| `/presets`               | Runs, writes, edits and deletes the inputs kept in slots 0 to 9 ([below](#presets))                                                                                                                                        | Yes           |
+| `/memories`              | Uses, generates or resets the [memories](/docs/memory#status-reset), and whether this session contributes                                                                                                                  | Yes           |
+| `/warnings`              | Lists the warnings of this run, to copy or dismiss ([below](#warnings))                                                                                                                                                    | Yes           |
 | `/ps`                    | Lists the session's background terminals: command, state, directory, latest output                                                                                                                                         | Yes           |
 | `/stop`, `/clean`        | After a confirmation, stops all of the session's background terminals                                                                                                                                                      | Yes           |
 | `/clear [name]`          | Clears the terminal's scrollback and screen (in Fullscreen, the conversation) and leaves the session; the next session gets the name                                                                                       | No            |
@@ -120,7 +128,7 @@ A message that starts with `/` is a command. Typing `/` opens a popup of them, n
 
 - A command that is not available during a turn says `'/x' is disabled while a task is in progress.`
 - A `/name` that is no command is not sent; you get `Unrecognized command` instead. A path with a slash in it (`/usr/bin/env`), or text that starts with a space, is sent as a message.
-- Commands take no arguments, but `/permissions`, `/rename`, `/resume`, `/fork`, `/review`, `/goal`, `/export`, `/cd`, `/clear`, `/raw`, `/mcp`, `/statusline` and `/title`. A message such as `/model gpt-5.1`, with text after the name, goes to the model as an ordinary message. `/mcp` with anything but `verbose` or `login ID` says `Usage: /mcp [verbose | login ID]`.
+- Commands take no arguments, but `/permissions`, `/rename`, `/resume`, `/fork`, `/review`, `/goal`, `/export`, `/cd`, `/clear`, `/raw`, `/mcp`, `/statusline`, `/title` and `/keymap`. A message such as `/model gpt-5.1`, with text after the name, goes to the model as an ordinary message. `/mcp` with anything but `verbose` or `login ID` says `Usage: /mcp [verbose | login ID]`.
 - `/raw` applies at once and is saved (`tui.rawOutput`), so the next launch starts with it. In Fullscreen the whole conversation is shown again in its raw form; in Scrollback what is already in the scrollback stays as it is, and only what follows is raw. `/raw` with anything but `on` or `off` says `Usage: /raw [on|off]`.
 - `/tui` saves `tui.fullscreenTranscript` and applies from the next launch: the running interface keeps its mode. `--no-alt-screen` and `tui.alternateScreen` still apply then.
 - A command, or a list it opened, that fails with an internal error (a panic) is turned off for the rest of the run: the conversation says `'/x' failed and is turned off for the rest of this run`, the popup leaves it out, and typing it says it is off. The session, the composer and the other commands go on. An internal error in the chat itself (the composer, the conversation, a streaming answer) still ends the interface, after the terminal is restored.
@@ -234,6 +242,7 @@ In Fullscreen the conversation follows the latest output until you scroll. Scrol
 | Enter on an empty composer             | Back to the latest output                                                                                                                                |
 | Drag                                   | Selects; a double click selects a word, a triple click a line, Shift-click extends the selection                                                         |
 | Ctrl-Space                             | Starts a selection with the keyboard; arrows and Shift-arrows move it                                                                                    |
+| Ctrl-X `[`                             | Select mode: a cursor in the conversation, moved with the keys, to select and copy                                                                       |
 | Ctrl-C, Ctrl-Shift-C, Ctrl-Insert      | With a selection: copies it                                                                                                                              |
 | Enter                                  | With a selection: copies it and goes back to the latest output                                                                                           |
 | Right click                            | Copies the selection                                                                                                                                     |
@@ -258,7 +267,7 @@ In Scrollback, Ctrl-T opens the whole session's transcript (`T R A N S C R I P T
 | Page Up/Page Down (Space, Ctrl-B/F)              | Scrolls one page        |
 | Ctrl-U/Ctrl-D                                    | Scrolls half a page     |
 | Home/End                                         | To the start or the end |
-| `q`, Ctrl-C; for the transcript also Esc, Ctrl-T | Closes it               |
+| `q`, Esc, Ctrl-C; for the transcript also Ctrl-T | Closes it               |
 
 The transcript shows every thinking's text and a tool call's whole output, where the scrollback shows its first and last lines, and the tool calls still running after what has completed. Its selection, copying and search are the ones of [Reading the conversation](#reading) (drag, Ctrl-Space, F3).
 
@@ -348,7 +357,7 @@ The grammars and the 32 themes are the ones [two-face](https://github.com/Cosmic
 - Moving through the list makes the highlighted theme the one in use, shown on a sample diff: beside the list in a wide terminal, under it otherwise. Typing filters the list.
 - Enter keeps the theme and saves it as `tui.theme`. Esc and Ctrl-C put back the theme in use when the list opened.
 - A custom theme is a `.tmTheme` file in the `themes/` directory of the [data directory](/docs/data-directory#contents), named by its file name without `.tmTheme`. A file that cannot be read as a theme is not listed; a custom theme with a bundled theme's name is the bundled one.
-- Without `tui.theme` the theme is `ansi`, which colors with the terminal's own palette and so reads on a light background as on a dark one. A `tui.theme` that names no theme, or a custom theme that cannot be read, is reported in the conversation at launch, and the default is used.
+- Without `tui.theme` the theme is `ansi`, which colors with the terminal's own palette and so reads on a light background as on a dark one. A `tui.theme` that names no theme, or a custom theme that cannot be read, is a [warning](#warnings), and the default is used.
 - What the conversation already shows keeps the colors it was drawn with.
 
 ## Status line and terminal title [#status-line]
@@ -386,9 +395,125 @@ The terminal's title (OSC 0) shows items of its own, joined with `|`; by default
 
 - `/statusline` or `/title` alone opens a setup: Up and Down move, Space turns the highlighted item on or off, Left and Right move it in the order, Enter saves (`tui.statusLine` and `tui.statusLineColors`, or `tui.terminalTitle`), Esc cancels. The status line's setup previews the line, with sample values for what the session does not have yet. The title's sets the terminal's title while it is open; Esc puts it back.
 - With arguments they apply to this run only, and nothing is saved. `/statusline git-branch context-remaining` shows those items in that order; `--colors` and `--no-colors` turn the colors on and off. `/title app-name model` sets the title's items; `/title --clear` gives the terminal its own title back. An unknown item is refused with the list of the items.
-- Items that `[tui]` names and the interface does not know are left out, with a warning at launch.
+- Items that `[tui]` names and the interface does not know are left out, each with a [warning](#warnings).
 - The title is sanitized before it is written: control characters and invisible or bidirectional formatting characters are dropped, whitespace runs become one space, and it is cut at 240 characters. Under GNU Screen (`STY` is set) it is ASCII.
 - Before its first title the interface pushes the terminal's title on the terminal's title stack (XTWINOPS), and pops it back when it stops setting one and at exit. A terminal without the stack is left with an empty title.
+
+## The keymap [#keymap]
+
+Each action in the table below has default keys, and `tui.keymap.CONTEXT.ACTION` changes them: one key or a list of them, `[]` to unbind the action. An action takes its context's entry, else `tui.keymap.global.ACTION` (when no global action has that name: `global.page_up` sets both `transcript.page_up` and `pager.page_up`), else its default keys.
+
+```toml
+[tui.keymap.global]
+open_transcript = "ctrl-g"
+leader = "ctrl-b"
+
+[tui.keymap.chat]
+toggle_thinking = ["ctrl-o", "f2"]
+open_presets = "ctrl-b 1"
+
+[tui.keymap.editor]
+yank = []
+```
+
+- **Keys** are modifiers then a key, joined with `-`: `ctrl-t`, `alt-<`, `shift-enter`, `page-down`, `f3`, `space`, `minus`; an upper-case letter is `shift-` and the letter.
+- **Chords** are two keys separated by a space (`ctrl-g o`): the first waits a second for the second. `leader K` is the leader key (`global.leader`, Ctrl-X by default) then `K`; the leader waits until the next key. A key that completes no chord, or Esc, drops both. A configured key that is the default leader's takes it: the leader is then unbound unless `global.leader` sets one.
+- **Contexts** are where the keys are read: `global` everywhere, `chat` and `composer` while the composer has the keys, `editor` in every text field, `transcript` in the Fullscreen conversation beside the composer, `pager` in the transcript and `/diff`. Beside the composer, a key that types text (a letter without Ctrl or Alt) cannot be bound, and neither can a chord that starts with one.
+- **Conflicts**: one key (or chord) cannot trigger two actions read together, nor start another action's chord, nor be Ctrl-C (or Ctrl-D but in the editor and the pagers), which the interface keeps. The pairs that share keys by default stay allowed: `chat.interrupt_turn` and `chat.edit_previous` (Esc), `composer.submit` and `editor.insert_newline` (Enter), the history and the editor's Up and Down, `global.open_transcript` and `pager.close_transcript`.
+- What cannot be used (an unknown context or action, a key that is not one, a conflict) leaves the action its default keys, with a [warning](#warnings).
+
+`/keymap` lists the actions with their keys (type to search). Picking one offers to replace its keys or add one (a key, two keys, or the leader and a key), to remove one, to unbind it, and to put its defaults back. A new key is captured as it is pressed (Esc cancels); one that conflicts is refused with the reason, and another can be tried. A change is saved into `tui.keymap` and applies at once. `/keymap debug` lists every action's keys, each marked `default` or `configured`.
+
+Popups, lists, forms, approvals and questions keep their own keys (arrows, Enter, Esc, Tab), and so do a selection, a search and select mode in the conversation, and browsing the earlier messages.
+
+| Action                        | Default keys                                                          | Does                                                                             |
+| ----------------------------- | --------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `global.leader`               | `ctrl-x`                                                              | The key that starts a leader chord (`leader p`)                                  |
+| `global.open_transcript`      | `ctrl-t`                                                              | Show the conversation in detail (Fullscreen) or open the transcript (Scrollback) |
+| `global.find_transcript`      | `f3`                                                                  | Find text in the conversation                                                    |
+| `global.focus_activity`       | `f4`                                                                  | Focus the tool calls' groups to open or close them                               |
+| `global.select_transcript`    | `leader [`                                                            | Select in the conversation with the keys (Fullscreen)                            |
+| `chat.interrupt_turn`         | `esc`                                                                 | Interrupt the running turn                                                       |
+| `chat.edit_previous`          | `esc`                                                                 | Twice on an empty composer: edit an earlier message                              |
+| `chat.toggle_thinking`        | `ctrl-o`                                                              | Show or hide the model's thinking                                                |
+| `chat.open_presets`           | `leader p`                                                            | Open the presets                                                                 |
+| `composer.submit`             | `enter`                                                               | Send the message                                                                 |
+| `composer.history_previous`   | `up`, `ctrl-p`                                                        | The previous message sent                                                        |
+| `composer.history_next`       | `down`, `ctrl-n`                                                      | The next message sent                                                            |
+| `editor.insert_newline`       | `ctrl-j`, `ctrl-m`, `enter`, `shift-enter`, `alt-enter`, `ctrl-enter` | A new line                                                                       |
+| `editor.move_left`            | `left`, `ctrl-b`                                                      | Move left                                                                        |
+| `editor.move_right`           | `right`, `ctrl-f`                                                     | Move right                                                                       |
+| `editor.move_up`              | `up`, `ctrl-p`                                                        | Move up                                                                          |
+| `editor.move_down`            | `down`, `ctrl-n`                                                      | Move down                                                                        |
+| `editor.move_word_left`       | `alt-b`, `alt-left`, `ctrl-left`                                      | Move to the previous word                                                        |
+| `editor.move_word_right`      | `alt-f`, `alt-right`, `ctrl-right`                                    | Move past the next word                                                          |
+| `editor.move_line_start`      | `home`, `ctrl-a`                                                      | Move to the line's start                                                         |
+| `editor.move_line_end`        | `end`, `ctrl-e`                                                       | Move to the line's end                                                           |
+| `editor.delete_backward`      | `backspace`, `shift-backspace`, `ctrl-h`                              | Delete the previous character                                                    |
+| `editor.delete_forward`       | `delete`, `shift-delete`, `ctrl-d`                                    | Delete the next character                                                        |
+| `editor.delete_backward_word` | `alt-backspace`, `ctrl-backspace`, `ctrl-w`, `ctrl-alt-h`             | Delete the previous word                                                         |
+| `editor.delete_forward_word`  | `alt-delete`, `ctrl-delete`, `alt-d`                                  | Delete the next word                                                             |
+| `editor.kill_line_start`      | `ctrl-u`                                                              | Delete to the line's start                                                       |
+| `editor.kill_line_end`        | `ctrl-k`                                                              | Delete to the line's end                                                         |
+| `editor.yank`                 | `ctrl-y`                                                              | Put back what was deleted last                                                   |
+| `transcript.page_up`          | `page-up`                                                             | Scroll the conversation up a page                                                |
+| `transcript.page_down`        | `page-down`                                                           | Scroll the conversation down a page                                              |
+| `transcript.jump_top`         | `ctrl-home`, `alt-<`, `alt-shift-`, ``                                | Go to the conversation's start                                                   |
+| `transcript.jump_bottom`      | `ctrl-end`, `alt->`, `alt-shift-.`                                    | Go to the latest output                                                          |
+| `transcript.start_selection`  | `ctrl-space`                                                          | Start selecting at the view's first row                                          |
+| `pager.scroll_up`             | `up`, `k`                                                             | Scroll up a line                                                                 |
+| `pager.scroll_down`           | `down`, `j`                                                           | Scroll down a line                                                               |
+| `pager.page_up`               | `page-up`, `shift-space`, `ctrl-b`                                    | Scroll up a page                                                                 |
+| `pager.page_down`             | `page-down`, `space`, `ctrl-f`                                        | Scroll down a page                                                               |
+| `pager.half_page_up`          | `ctrl-u`                                                              | Scroll up half a page                                                            |
+| `pager.half_page_down`        | `ctrl-d`                                                              | Scroll down half a page                                                          |
+| `pager.jump_top`              | `home`                                                                | Go to the start                                                                  |
+| `pager.jump_bottom`           | `end`                                                                 | Go to the end                                                                    |
+| `pager.close`                 | `q`, `esc`                                                            | Close the pager                                                                  |
+| `pager.close_transcript`      | `ctrl-t`                                                              | Close the transcript                                                             |
+
+## Presets [#presets]
+
+A preset is an input kept in a slot from 0 to 9 (`tui.presets."N"`), with an optional label: run, it goes through the slash commands as if typed and sent, so it is a message or a command such as `/status` or `/statusline git-branch --colors`. Its input cannot be empty, longer than 8,000 bytes, or start with `!`.
+
+`/presets` (or Ctrl-X P) lists the slots:
+
+| Key     | Does                                                                                                                                         |
+| ------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `0`–`9` | Runs that slot's preset                                                                                                                      |
+| Enter   | Runs the selected one                                                                                                                        |
+| `n`     | A new preset: its slot (the first free one), input and label                                                                                 |
+| `s`     | A new preset from the current settings: the session's `/permissions …`, the terminal title's `/title …` or the status line's `/statusline …` |
+| `e`     | Edits the selected one                                                                                                                       |
+| `d`     | Deletes the selected one, after `y`                                                                                                          |
+
+`/model` takes no argument in this interface, so the model cannot be a preset. A preset that a profile, the project's file or `-c` sets wins over the user's file: saving into its slot says so.
+
+## Settings [#config]
+
+`/config` gathers the `[tui]` settings: Space or Enter turns one on or off (Left and Right for a choice), and each change is applied and saved at once.
+
+| Row                | Key                        | Applies            |
+| ------------------ | -------------------------- | ------------------ |
+| Raw output         | `tui.rawOutput`            | At once, as `/raw` |
+| Status line colors | `tui.statusLineColors`     | At once            |
+| Fullscreen         | `tui.fullscreenTranscript` | At the next launch |
+| Alternate screen   | `tui.alternateScreen`      | At the next launch |
+
+Its other rows open the editors: Providers (`/providers`), MCP servers (`/mcp`), Memories (`/memories`), Theme (`/theme`), Status line (`/statusline`), Terminal title (`/title`), Keyboard (`/keymap`), Presets (`/presets`) and Interface mode (`/tui`).
+
+## Warnings [#warnings]
+
+What the interface or the Agent could not use as configured is kept for the run, and `/warnings` lists it, newest first, each once, counted by source:
+
+- **configuration**: what reading `config.toml`, `providers.toml` and `mcp.toml` had to repair ([Configuration recovery](/docs/recovery)), and what a layer of `config.toml` holds that the settings cannot use: an unknown key, or a value the layer below replaces;
+- **plugins**: a plugin that failed, or that is left out of turns;
+- **MCP**: a server's latest error or warning, and what reading `mcp.toml` repaired;
+- **hooks**: the hooks' configuration problems;
+- **panics**: the internal errors the Agent caught;
+- **interface**: a command turned off after an internal error, a theme or an item of `[tui]` it does not know, a keymap entry it could not use.
+
+When there are any at launch, one line says how many (`2 warnings: /warnings`). In the list, `c` copies the selected warning and `d` dismisses it for the rest of the run. With none, `/warnings` says `No warnings.`
 
 ## Terminal requirements [#terminal]
 

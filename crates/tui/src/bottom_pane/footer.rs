@@ -19,6 +19,7 @@
 //! editor and backtracking; none of those are ported.
 use crate::key_hint;
 use crate::key_hint::KeyBinding;
+use crate::keymap::{self, Action, Binding};
 use crate::render::line_utils::prefix_lines;
 use crate::ui_consts::FOOTER_INDENT_COLS;
 use ratatui::buffer::Buffer;
@@ -58,10 +59,11 @@ impl ThinkingToggle {
             ThinkingToggle::Expand => " to show thinking",
             ThinkingToggle::Collapse => " to hide thinking",
         };
-        Line::from(vec![
-            key_hint::ctrl(KeyCode::Char('o')).into(),
-            label.into(),
-        ])
+        let mut line = Line::from(label.trim_start().to_string());
+        if let Some(key) = keymap::hint(Action::ToggleThinking) {
+            line = Line::from(vec![key.into(), label.into()]);
+        }
+        line
     }
 }
 
@@ -151,7 +153,9 @@ fn footer_lines(props: FooterProps<'_>) -> Vec<Line<'static>> {
         FooterMode::ShortcutOverlay => shortcut_overlay_lines(props),
         FooterMode::ComposerHasDraft => vec![props.status_line.cloned().unwrap_or_default()],
         FooterMode::EscHint => vec![Line::from(vec![
-            key_hint::plain(KeyCode::Esc).into(),
+            keymap::hint(Action::EditPrevious)
+                .unwrap_or(key_hint::plain(KeyCode::Esc))
+                .into(),
             " again to edit a previous message".into(),
         ])
         .dim()],
@@ -163,21 +167,40 @@ fn quit_shortcut_reminder_line(key: KeyBinding) -> Line<'static> {
 }
 
 fn shortcut_overlay_lines(props: FooterProps<'_>) -> Vec<Line<'static>> {
-    let newline = if props.use_shift_enter_hint {
-        key_hint::shift(KeyCode::Enter)
+    let shift_enter = key_hint::shift(KeyCode::Enter);
+    let newlines: Vec<KeyBinding> = keymap::current()
+        .bindings(Action::InsertNewline)
+        .iter()
+        .filter_map(|binding| match binding {
+            Binding::Key(key) => Some(key.hint()),
+            _ => None,
+        })
+        .collect();
+    // Shift+Enter only where the terminal reports it.
+    let newline = if props.use_shift_enter_hint && newlines.contains(&shift_enter) {
+        Some(shift_enter)
     } else {
-        key_hint::ctrl(KeyCode::Char('j'))
+        newlines.into_iter().find(|key| *key != shift_enter)
     };
     let entry = |key: KeyBinding, label: &'static str| Line::from(vec![key.into(), label.into()]);
-    let mut entries = vec![
-        entry(key_hint::plain(KeyCode::Char('/')), " for commands"),
-        entry(newline, " for newline"),
-        entry(key_hint::plain(KeyCode::Char('@')), " for file paths"),
-        entry(key_hint::plain(KeyCode::Esc), " to interrupt"),
-        entry(key_hint::plain(KeyCode::Up), " for previous message"),
-        entry(key_hint::ctrl(KeyCode::Char('c')), " to exit"),
-        entry(key_hint::ctrl(KeyCode::Char('t')), " to view transcript"),
+    let mut entries = vec![entry(key_hint::plain(KeyCode::Char('/')), " for commands")];
+    entries.extend(newline.map(|key| entry(key, " for newline")));
+    entries.push(entry(
+        key_hint::plain(KeyCode::Char('@')),
+        " for file paths",
+    ));
+    let actions = [
+        (Action::InterruptTurn, " to interrupt"),
+        (Action::HistoryPrevious, " for previous message"),
     ];
+    entries.extend(
+        actions
+            .into_iter()
+            .filter_map(|(action, label)| Some(entry(keymap::hint(action)?, label))),
+    );
+    entries.push(entry(key_hint::ctrl(KeyCode::Char('c')), " to exit"));
+    entries
+        .extend(keymap::hint(Action::OpenTranscript).map(|key| entry(key, " to view transcript")));
     entries.extend(props.thinking_toggle.map(ThinkingToggle::hint));
     build_columns(entries)
 }

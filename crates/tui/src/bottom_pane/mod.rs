@@ -26,6 +26,7 @@ mod file_search_popup;
 mod footer;
 mod form;
 mod list_selection_view;
+mod menu_view;
 mod module_view;
 mod multi_select_picker;
 mod paste_burst;
@@ -51,6 +52,7 @@ use crate::commands::{CommandReply, CommandSpec};
 use crate::file_search::FileMatch;
 use crate::key_hint;
 use crate::key_hint::KeyBinding;
+use crate::keymap::{self, Action};
 use crate::render::renderable::FlexRenderable;
 use crate::render::renderable::Renderable;
 use crate::render::renderable::RenderableItem;
@@ -62,11 +64,13 @@ use chat_composer::ChatComposer;
 pub(crate) use footer::ThinkingToggle;
 pub(crate) use form::{FieldId, FormEvent, FormItem, FormView, RowValue, TextField};
 pub(crate) use list_selection_view::{ListSelectionView, SelectionItem, SelectionViewParams};
+pub(crate) use menu_view::{MenuKey, MenuModel, MenuView};
 pub(crate) use module_view::ViewFailure;
 use module_view::{ModuleView, ViewFailures};
 pub(crate) use multi_select_picker::{MultiSelectItem, MultiSelectPicker};
 use paste_burst::PasteBurst;
 use request_user_input::RequestUserInputOverlay;
+pub(crate) use selection_popup_common::{render_menu_surface, GenericDisplayRow};
 pub(crate) use textarea::{TextArea, TextAreaState};
 
 /// How long the "press again to quit" hint stays visible.
@@ -154,6 +158,13 @@ impl BottomPane {
         self.status.as_ref()
     }
 
+    /// Whether the open view takes every key as it is (`/keymap`'s
+    /// capture): no binding of the chat or the app applies.
+    pub(crate) fn captures_keys(&self) -> bool {
+        self.active_view()
+            .is_some_and(BottomPaneView::captures_keys)
+    }
+
     fn active_view(&self) -> Option<&dyn BottomPaneView> {
         self.view_stack.last().map(std::convert::AsRef::as_ref)
     }
@@ -177,7 +188,10 @@ impl BottomPane {
         // If a task is running and a status line is visible, allow Esc to
         // send an interrupt even while the composer has focus; with a popup
         // open, Esc closes the popup.
-        if key_event.code == KeyCode::Esc && self.is_task_running && !self.composer.popup_active() {
+        if keymap::matches(Action::InterruptTurn, &key_event)
+            && self.is_task_running
+            && !self.composer.popup_active()
+        {
             if let Some(status) = &self.status {
                 status.interrupt();
                 self.request_redraw();

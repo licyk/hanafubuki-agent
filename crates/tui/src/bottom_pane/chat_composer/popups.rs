@@ -18,6 +18,7 @@ use crate::app_event::AppEvent;
 use crate::bottom_pane::footer::reset_mode_after_activity;
 use crate::bottom_pane::textarea::TextArea;
 use crate::commands;
+use crate::commands::{parse_input, ParsedInput};
 use crate::file_search::FileMatch;
 use crate::history_cell;
 
@@ -203,13 +204,8 @@ impl ChatComposer {
     /// message is no command, or text follows a command that takes none.
     /// A command turned off is not run: the transcript says so.
     pub(super) fn try_dispatch_slash_command(&mut self) -> Option<InputResult> {
-        let text = self.textarea.text();
-        let (name, rest) = parse_slash_name(text.lines().next().unwrap_or(""))?;
-        let command = commands::find(name)?;
-        let args = match (command.inline_args, rest.is_empty()) {
-            (true, _) => parse_slash_name(text)?.1.trim_end().to_string(),
-            (false, true) => String::new(),
-            (false, false) => return None,
+        let ParsedInput::Command(command, args) = parse_input(self.textarea.text()) else {
+            return None;
         };
         self.textarea.set_text_clearing_elements("");
         if self.command_disabled(command.name) {
@@ -230,12 +226,9 @@ impl ChatComposer {
     /// the name (a path), sends it as it is.
     pub(super) fn reject_unrecognized_command(&mut self) -> bool {
         let text = self.textarea.text().to_string();
-        let Some((name, _rest)) = parse_slash_name(&text) else {
+        let ParsedInput::Unrecognized(name) = parse_input(&text) else {
             return false;
         };
-        if name.contains('/') || commands::find(name).is_some() {
-            return false;
-        }
         let message = format!(
             r#"Unrecognized command '/{name}'. Type "/" for a list of supported commands."#
         );
@@ -547,20 +540,6 @@ impl ChatComposer {
         let new_cursor = start_idx.saturating_add(inserted.len()).saturating_add(1);
         self.textarea.set_cursor(new_cursor);
     }
-}
-
-/// The `/name` a line starts with and what follows it, trimmed at the start.
-fn parse_slash_name(line: &str) -> Option<(&str, &str)> {
-    let stripped = line.strip_prefix('/')?;
-    let name_end = stripped
-        .char_indices()
-        .find(|(_, ch)| ch.is_whitespace())
-        .map_or(stripped.len(), |(idx, _)| idx);
-    let name = &stripped[..name_end];
-    if name.is_empty() {
-        return None;
-    }
-    Some((name, stripped[name_end..].trim_start()))
 }
 
 #[cfg(test)]

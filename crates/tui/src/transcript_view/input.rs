@@ -14,11 +14,11 @@ use ratatui::layout::Position as ScreenPosition;
 
 use super::*;
 use crate::key_hint::normalize_key_parts;
+use crate::keymap::{self, Action};
 use crate::text_selection::{click_count, is_copy_key};
 
 /// The rows one wheel step scrolls.
 const WHEEL_ROWS: isize = 3;
-const FIND_KEY: KeyCode = KeyCode::F(3);
 
 /// What the caller does after the view took an event.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -41,38 +41,22 @@ pub(crate) enum JumpTarget {
 }
 
 impl JumpTarget {
+    /// The keymap's `transcript.jump_top` and `jump_bottom`.
     pub(crate) fn from_key(key: KeyEvent) -> Option<Self> {
-        if key.kind == KeyEventKind::Release {
-            return None;
-        }
-        match (key.code, key.modifiers) {
-            (KeyCode::Home, KeyModifiers::CONTROL) => Some(Self::Beginning),
-            (KeyCode::End, KeyModifiers::CONTROL) => Some(Self::Latest),
-            // Zellij can leave the shifted character out of enhanced keys.
-            (KeyCode::Char(','), modifiers)
-                if modifiers == KeyModifiers::ALT | KeyModifiers::SHIFT =>
-            {
-                Some(Self::Beginning)
-            }
-            (KeyCode::Char('.'), modifiers)
-                if modifiers == KeyModifiers::ALT | KeyModifiers::SHIFT =>
-            {
-                Some(Self::Latest)
-            }
-            // Terminals differ on whether shifted punctuation keeps Shift.
-            (KeyCode::Char('<'), modifiers)
-                if modifiers.difference(KeyModifiers::SHIFT) == KeyModifiers::ALT =>
-            {
-                Some(Self::Beginning)
-            }
-            (KeyCode::Char('>'), modifiers)
-                if modifiers.difference(KeyModifiers::SHIFT) == KeyModifiers::ALT =>
-            {
-                Some(Self::Latest)
-            }
-            _ => None,
+        if keymap::matches(Action::TranscriptTop, &key) {
+            Some(Self::Beginning)
+        } else if keymap::matches(Action::TranscriptBottom, &key) {
+            Some(Self::Latest)
+        } else {
+            None
         }
     }
+}
+
+/// The keymap's `transcript.page_up` and `page_down`.
+fn is_page_key(key: &KeyEvent) -> bool {
+    keymap::matches(Action::TranscriptPageUp, key)
+        || keymap::matches(Action::TranscriptPageDown, key)
 }
 
 impl TranscriptView {
@@ -83,7 +67,7 @@ impl TranscriptView {
             return false;
         }
         let (code, modifiers) = normalize_key_parts(key.code, key.modifiers);
-        if (code == KeyCode::Char(' ') && modifiers == KeyModifiers::CONTROL)
+        if keymap::matches(Action::StartSelection, &key)
             || JumpTarget::from_key(key).is_some()
             || self.select_mode.is_some()
         {
@@ -98,15 +82,13 @@ impl TranscriptView {
                         code,
                         KeyCode::Left | KeyCode::Right | KeyCode::Up | KeyCode::Down
                     ))
-                || (modifiers == KeyModifiers::NONE
-                    && matches!(code, KeyCode::PageUp | KeyCode::PageDown));
+                || is_page_key(&key);
         }
         self.search.is_active()
             && (code == KeyCode::Esc
                 || (code == KeyCode::Enter
                     && (self.is_search_editing() || modifiers == KeyModifiers::NONE))
-                || (modifiers == KeyModifiers::NONE
-                    && matches!(code, KeyCode::PageUp | KeyCode::PageDown))
+                || is_page_key(&key)
                 || (modifiers == KeyModifiers::CONTROL
                     && matches!(code, KeyCode::Char('c' | 'n' | 'p'))))
     }
@@ -131,8 +113,7 @@ impl TranscriptView {
             }
             self.end_selection(cells);
         }
-        let (code, modifiers) = normalize_key_parts(key.code, key.modifiers);
-        if modifiers == KeyModifiers::CONTROL && code == KeyCode::Char(' ') {
+        if keymap::matches(Action::StartSelection, &key) {
             self.begin_selection(cells, self.area.x, self.area.y, 1);
             if let Some(selection) = &mut self.selection {
                 selection.dragging = false;
@@ -140,7 +121,7 @@ impl TranscriptView {
             }
             return Some(ViewAction::Changed);
         }
-        if code == FIND_KEY && modifiers == KeyModifiers::NONE && !self.is_search_editing() {
+        if keymap::matches(Action::FindTranscript, &key) && !self.is_search_editing() {
             self.begin_search();
             return Some(ViewAction::Changed);
         }
@@ -169,7 +150,7 @@ impl TranscriptView {
                 return Some(ViewAction::Changed);
             }
         }
-        if key.code == FIND_KEY && key.modifiers == KeyModifiers::NONE {
+        if keymap::matches(Action::FindTranscript, &key) {
             self.begin_search();
             return Some(ViewAction::Changed);
         }
@@ -302,8 +283,8 @@ impl TranscriptView {
         // A page keeps one row of the last one.
         let page = (self.area.height.max(1) as isize - 1).max(1);
         match (key.code, key.modifiers) {
-            (KeyCode::PageUp, KeyModifiers::NONE) => self.scroll(cells, -page),
-            (KeyCode::PageDown, KeyModifiers::NONE) => self.scroll(cells, page),
+            _ if keymap::matches(Action::TranscriptPageUp, &key) => self.scroll(cells, -page),
+            _ if keymap::matches(Action::TranscriptPageDown, &key) => self.scroll(cells, page),
             (KeyCode::Esc, KeyModifiers::NONE) if self.can_return_to_latest() => {
                 self.jump_to_latest();
             }

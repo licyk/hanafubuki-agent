@@ -13,28 +13,30 @@ mod commands;
 mod live_tail;
 mod replay;
 mod turn;
+mod warnings;
 
 pub(crate) use live_tail::ActiveCellTranscriptKey;
 
 use std::cell::Cell;
-use std::collections::VecDeque;
+use std::collections::{HashSet, VecDeque};
 use std::time::{Duration, Instant};
 
-use hanafubuki_agent::{AgentReasoningId, AgentSessionMode};
+use hanafubuki_agent::{AgentReasoningId, AgentSessionMode, AgentTuiPreferences};
 use ratatui::buffer::Buffer;
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::layout::Rect;
 
-use crate::agent_bridge::TurnUpdate;
+use crate::agent_bridge::{TurnUpdate, Warning};
 use crate::app_event::{AppEvent, AppEventSender, Op};
 use crate::appearance::Appearance;
 use crate::bottom_pane::{
     BottomPane, BottomPaneParams, CancellationEvent, InputResult, ThinkingToggle,
 };
-use crate::commands::PROVIDERS;
+use crate::commands::{PRESETS, PROVIDERS};
 use crate::file_search::FileMatch;
 use crate::history_cell::{self, HistoryCell, ThinkingCell, ToolCallCell};
 use crate::key_hint::{self, KeyBinding};
+use crate::keymap::{self, Action};
 use crate::render::renderable::{
     ColumnRenderable, FlexRenderable, Renderable, RenderableExt, RenderableItem,
 };
@@ -96,15 +98,18 @@ pub(crate) struct ChatWidget {
     /// The session's mode, which `/mode` offers to change.
     mode: AgentSessionMode,
     /// What went wrong in the interface itself in this run, such as a
-    /// command turned off after it panicked.
-    #[allow(dead_code, reason = "`/warnings` will read them")]
-    warnings: Vec<String>,
+    /// command turned off after it panicked, for `/warnings`.
+    warnings: Vec<Warning>,
     appearance: Appearance,
     /// Advanced by every change to the live cells, so a cached layout of
     /// the live tail is refreshed.
     live_revision: u64,
     owned_transcript: bool,
-    fullscreen_preference: bool,
+    /// `[tui]` as the configuration resolves it (the saved
+    /// `tui.fullscreenTranscript`, which `/tui` marks, among them).
+    preferences: AgentTuiPreferences,
+    /// The warnings dismissed in this run, by `Warning::key`.
+    dismissed_warnings: HashSet<String>,
     /// The interface shows a session, or the first message is creating one.
     session_open: bool,
     /// With no session: no Provider or no model is set up, so a message
@@ -156,7 +161,11 @@ impl ChatWidget {
             appearance,
             live_revision: 0,
             owned_transcript,
-            fullscreen_preference,
+            preferences: AgentTuiPreferences {
+                fullscreen_transcript: fullscreen_preference,
+                ..AgentTuiPreferences::default()
+            },
+            dismissed_warnings: HashSet::new(),
             session_open: false,
             setup_needed: false,
             model_override,
@@ -174,7 +183,13 @@ impl ChatWidget {
                     self.reap_failed_views();
                     return;
                 }
-                KeyCode::Char(c) if c.eq_ignore_ascii_case(&'d') && self.on_ctrl_d() => return,
+                KeyCode::Char(c)
+                    if c.eq_ignore_ascii_case(&'d')
+                        && !self.bottom_pane.captures_keys()
+                        && self.on_ctrl_d() =>
+                {
+                    return
+                }
                 _ => {}
             }
         }
@@ -182,10 +197,16 @@ impl ChatWidget {
             self.bottom_pane.clear_quit_shortcut_hint();
             self.quit_shortcut_expires_at = None;
             self.quit_shortcut_key = None;
-            if key_event.modifiers.contains(KeyModifiers::CONTROL)
-                && matches!(key_event.code, KeyCode::Char(c) if c.eq_ignore_ascii_case(&'o'))
-            {
+        }
+        if !self.bottom_pane.captures_keys() {
+            if keymap::matches(Action::ToggleThinking, &key_event) {
                 self.toggle_thinking();
+                return;
+            }
+            if keymap::matches(Action::OpenPresets, &key_event)
+                && self.bottom_pane.no_modal_or_popup_active()
+            {
+                self.dispatch_command(&PRESETS, String::new());
                 return;
             }
         }
@@ -229,7 +250,18 @@ impl ChatWidget {
     }
 
     pub(crate) fn set_fullscreen_preference(&mut self, enabled: bool) {
-        self.fullscreen_preference = enabled;
+        self.preferences.fullscreen_transcript = enabled;
+    }
+
+    /// `[tui]` as the configuration resolves it after a change.
+    pub(crate) fn set_preferences(&mut self, preferences: AgentTuiPreferences) {
+        self.preferences = preferences;
+    }
+
+    /// Whether the open view takes every key as it is (`/keymap`'s
+    /// capture).
+    pub(crate) fn captures_keys(&self) -> bool {
+        self.bottom_pane.captures_keys()
     }
 
     /// Adds a dim note to the transcript.

@@ -14,9 +14,9 @@ use ratatui::style::{Modifier, Style};
 
 use super::*;
 use crate::key_hint::normalize_key_parts;
+use crate::keymap::{self, Action};
 use crate::style::accent_color;
 
-const FOCUS_ACTIVITY_KEY: KeyCode = KeyCode::F(4);
 /// How many activities a page key moves the focus.
 const PAGE_ACTIVITIES: usize = 5;
 
@@ -216,7 +216,7 @@ impl TranscriptView {
         if self.detailed || self.mode != HistoryRenderMode::Rich || self.is_search_editing() {
             return None;
         }
-        if key.code == FOCUS_ACTIVITY_KEY && key.modifiers == KeyModifiers::NONE {
+        if keymap::matches(Action::FocusActivity, &key) {
             if self.is_activity_focused() {
                 self.disclosure.focused = None;
             } else {

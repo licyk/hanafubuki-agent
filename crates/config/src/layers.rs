@@ -56,6 +56,19 @@ pub enum ConfigLayerSource {
 pub(crate) struct Resolved {
     pub(crate) settings: AgentSettings,
     pub(crate) standalone: AgentStandaloneSettings,
+    /// What the layers hold that the settings cannot use: unknown keys and
+    /// values replaced by the layer below, each naming its layer.
+    pub(crate) warnings: Vec<String>,
+}
+
+impl Resolved {
+    pub(crate) fn unlayered(settings: AgentSettings) -> Self {
+        Self {
+            settings,
+            standalone: AgentStandaloneSettings::default(),
+            warnings: Vec::new(),
+        }
+    }
 }
 
 impl ConfigLayers {
@@ -79,12 +92,13 @@ impl ConfigLayers {
         let mut resolved = Resolved {
             settings: user,
             standalone,
+            warnings: Vec::new(),
         };
         let user_source = user_path.display().to_string();
         report(
             &user_source,
             document,
-            &resolved,
+            &mut resolved,
             &[PROFILES, PROJECTS, HOOKS],
             repairs,
         )?;
@@ -184,32 +198,35 @@ fn apply(source: &str, layer: &Map<String, Value>, resolved: &mut Resolved) -> R
     let mut repairs = Vec::new();
     let settings = decode_settings(layer, &resolved.settings, &mut repairs);
     let standalone = decode_standalone(layer, &resolved.standalone, &mut repairs);
-    *resolved = Resolved {
-        settings,
-        standalone,
-    };
+    resolved.settings = settings;
+    resolved.standalone = standalone;
     report(source, layer, resolved, &[HOOKS], repairs)
 }
 
-/// Logs the keys of `layer` the settings do not have (but those in
-/// `tables`, which the layering itself reads) and the values that could not
-/// be used.
+/// Logs, and keeps in `resolved` for the interface's `/warnings`, the keys
+/// of `layer` the settings do not have (but those in `tables`, which the
+/// layering itself reads) and the values that could not be used.
 fn report(
     source: &str,
     layer: &Map<String, Value>,
-    resolved: &Resolved,
+    resolved: &mut Resolved,
     tables: &[&str],
     repairs: Vec<String>,
 ) -> Result<(), String> {
     let mut known = object(&resolved.settings)?;
     known.extend(object(&resolved.standalone)?);
-    for key in unknown_keys(layer, &known) {
-        if !tables.contains(&key.split('.').next().unwrap_or_default()) {
-            log::warn!("Agent configuration {source} has the unknown key {key}; it is ignored");
-        }
-    }
-    for repair in repairs {
-        log::warn!("Agent configuration {source} has a value that cannot be used, so the one below it is: {repair}");
+    let unknown = unknown_keys(layer, &known)
+        .into_iter()
+        .filter(|key| !tables.contains(&key.split('.').next().unwrap_or_default()))
+        .map(|key| {
+            format!("Agent configuration {source} has the unknown key {key}; it is ignored")
+        });
+    let unusable = repairs.into_iter().map(|repair| {
+        format!("Agent configuration {source} has a value that cannot be used, so the one below it is: {repair}")
+    });
+    for warning in unknown.chain(unusable) {
+        log::warn!("{warning}");
+        resolved.warnings.push(warning);
     }
     Ok(())
 }
