@@ -5,26 +5,32 @@
 // Modified for hanafubuki-agent: the tools run on the session's record, and
 // `acp_cache` reports from the usage the Agent records.
 
-//! The compression tools: `compress` and `decompress` change the state,
+//! The compression tools: `compress`, `decompress` and the opt-in
+//! features' `absorb`, `acp_retrieve` and `acp_rule` change the state;
 //! `search_context`, `acp_status` and `acp_cache` only read it. Each runs
 //! on the session's record, under its lock.
 
 mod decompress;
+mod export;
+mod opt_in;
 mod search;
 
 use hanafubuki_agent_compression::{
     apply_compression, build_cache_report, build_status_report, format_cache_report,
-    parse_compress_args, ApplyInput, CacheDetail, CacheReportOptions, CacheSample, FoldEvent,
-    FormatCacheReportOptions, StatusReportOptions, StatusScope, StatusSort, StatusView,
+    parse_compress_args, store_covered_originals, ApplyInput, CacheDetail, CacheReportOptions,
+    CacheSample, FoldEvent, FormatCacheReportOptions, StatusReportOptions, StatusScope, StatusSort,
+    StatusView,
 };
 use hanafubuki_agent_tool_contracts::{ToolOutput, ToolOutputContent};
 use serde_json::Value;
 
 use super::*;
 use crate::AgentImageAttachmentRef;
+pub(in crate::service) use export::ToolExport;
 
-/// A compression tool's output, the state it leaves when it changed it, the
-/// images it brings back and the file it asks to write.
+/// A compression tool's output, the state and content store it leaves when
+/// it changed them, the images it brings back and the file it asks to
+/// write.
 pub(in crate::service) struct CompressionToolRun {
     pub(in crate::service) output: ToolOutput,
     pub(in crate::service) state: Option<AgentCompressionState>,
@@ -33,50 +39,8 @@ pub(in crate::service) struct CompressionToolRun {
     /// Text the output is written to instead: the call's output is
     /// [`ToolExport::output`] once the file is written, with no lock held.
     pub(in crate::service) export: Option<ToolExport>,
-}
-
-/// A tool's text bound for one of the session's export files.
-pub(in crate::service) struct ToolExport {
-    pub(in crate::service) file_name: String,
-    header: String,
-    body: String,
-}
-
-impl ToolExport {
-    pub(in crate::service) fn body(&self) -> &str {
-        &self.body
-    }
-
-    /// The output once the body was written to `written`'s path, or failed
-    /// with its error.
-    pub(in crate::service) fn output(&self, written: Result<String, String>) -> ToolOutput {
-        let length = self.body.encode_utf16().count();
-        match written {
-            Ok(path) => text_output(
-                format!(
-                    "{}\nContent ({length} chars) written to: {path} (this session's export file; toFile only asks for one)\nUse the read tool to access it.",
-                    self.header
-                ),
-                false,
-            ),
-            Err(error) => {
-                let preview = utf16_window(&self.body, 0, 4000);
-                let shown = preview.encode_utf16().count();
-                let scope = if shown < length {
-                    format!("partial content follows ({shown} of {length} chars)")
-                } else {
-                    "full content follows".to_owned()
-                };
-                text_output(
-                    format!(
-                        "[decompress FAILED: could not write export {}: {error}]\nThe export did NOT complete — {scope}. Omit toFile to restore inline.\n{preview}",
-                        self.file_name
-                    ),
-                    true,
-                )
-            }
-        }
-    }
+    /// The content store with the originals a fold covered added.
+    pub(in crate::service) content_store: Option<AgentContentStore>,
 }
 
 /// Runs the compression tool `tool` called as `call_id` with `arguments`
@@ -100,9 +64,17 @@ pub(in crate::service) fn compression_tool_output(
     let run = catch_panic(|| {
         panic_if_asked(&state);
         match tool {
-            crate::AgentCoreTool::Compress => {
-                compress(&log, &config, &state, call_id, arguments, now_ms)
-            }
+            crate::AgentCoreTool::Compress => compress(
+                &log,
+                &config,
+                &state,
+                record.runtime.compression_runtime.content_store(),
+                Call {
+                    call_id,
+                    arguments,
+                    now_ms,
+                },
+            ),
             crate::AgentCoreTool::Decompress => {
                 decompress::decompress(&log, &state, arguments, images_supported)
             }
@@ -118,6 +90,16 @@ pub(in crate::service) fn compression_tool_output(
             crate::AgentCoreTool::AcpCache => {
                 read_only(acp_cache(record, &state, arguments, now_ms))
             }
+            crate::AgentCoreTool::Absorb => {
+                opt_in::absorb(&log, &config, &state, call_id, arguments, now_ms)
+            }
+            crate::AgentCoreTool::AcpRetrieve => opt_in::retrieve(
+                record.runtime.compression_runtime.content_store(),
+                &config,
+                &state,
+                arguments,
+            ),
+            crate::AgentCoreTool::AcpRule => opt_in::rule(&config, &state, arguments),
             _ => unreachable!("only the compression tools reach here"),
         }
     });
@@ -132,15 +114,21 @@ pub(in crate::service) fn compression_tool_output(
     })
 }
 
+/// A call as the model made it.
+struct Call<'a> {
+    call_id: &'a str,
+    arguments: &'a Value,
+    now_ms: u64,
+}
+
 fn compress(
     log: &MessageLog<'_>,
     config: &hanafubuki_agent_compression::Config,
     state: &AgentCompressionState,
-    call_id: &str,
-    arguments: &Value,
-    now_ms: u64,
+    content_store: Option<&AgentContentStore>,
+    call: Call<'_>,
 ) -> CompressionToolRun {
-    let parsed = parse_compress_args(arguments, Some(call_id));
+    let parsed = parse_compress_args(call.arguments, Some(call.call_id));
     if parsed.ranges.is_empty() {
         return output_run(text_output(receipts::unparsed(&parsed), true), None);
     }
@@ -150,7 +138,7 @@ fn compress(
         state,
         config,
         protected_refs: None,
-        now_ms,
+        now_ms: call.now_ms,
     });
     let result = &outcome.result;
     let changed = outcome
@@ -165,10 +153,31 @@ fn compress(
         .collect::<Vec<_>>();
     let receipt = receipts::applied(&parsed.ranges, &parsed.diagnostics, result, &changed);
     let folded = result.blocks_created > 0;
-    output_run(
-        text_output(receipt, !folded && !result.errors.is_empty()),
-        folded.then_some(outcome.state),
-    )
+    let content_store = (folded && config.content_store.enabled)
+        .then(|| {
+            let mut store = content_store.cloned().unwrap_or_default();
+            let entries = store.by_ref.len();
+            let block_ids = changed
+                .iter()
+                .map(|block| block.block_id.clone())
+                .collect::<Vec<_>>();
+            store_covered_originals(
+                &mut store,
+                &log.messages,
+                &outcome.state,
+                &block_ids,
+                config.content_store.max_head_chars,
+            );
+            (store.by_ref.len() > entries).then_some(store)
+        })
+        .flatten();
+    CompressionToolRun {
+        content_store,
+        ..output_run(
+            text_output(receipt, !folded && !result.errors.is_empty()),
+            folded.then_some(outcome.state),
+        )
+    }
 }
 
 fn acp_status(
@@ -263,6 +272,7 @@ fn output_run(output: ToolOutput, state: Option<AgentCompressionState>) -> Compr
         state,
         images: Vec::new(),
         export: None,
+        content_store: None,
     }
 }
 

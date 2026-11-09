@@ -9,6 +9,11 @@ pub use chain::{AgentCompressionChain, AgentCompressionDelta, AgentCompressionUp
 /// window, the blocks the model folded and the nudge's baselines.
 pub use hanafubuki_agent_compression::State as AgentCompressionState;
 
+/// The originals a `hierarchical` session's content store replaced, by ref.
+/// A host's history store keeps it in a file of its own, apart from the
+/// rollout's records.
+pub use hanafubuki_agent_compression::ContentStore as AgentContentStore;
+
 /// The tuning of the `hierarchical` strategy, from
 /// `[compaction.hierarchical]`: the facade puts it in each turn's extensions.
 /// A turn without it uses the defaults.
@@ -29,6 +34,18 @@ pub struct AgentHierarchicalCompression {
     pub tiers: bool,
     /// Tools whose calls and results never fold.
     pub protected_tools: Vec<String>,
+    /// A large tool result asks the model to distil it with `absorb`, and
+    /// is then hidden.
+    pub absorb: bool,
+    /// A large tool result is replaced on arrival by a placeholder, and
+    /// `acp_retrieve` returns the original.
+    pub content_store: bool,
+    /// JSON, code and logs in large tool results are folded
+    /// deterministically before `absorb` is asked for; only with `absorb`.
+    pub crush: bool,
+    /// The model records persistent reminders with `acp_rule`, shown in the
+    /// instructions.
+    pub rules: bool,
 }
 
 impl Default for AgentHierarchicalCompression {
@@ -44,6 +61,10 @@ impl Default for AgentHierarchicalCompression {
             max_summary_length: 20_000,
             tiers: true,
             protected_tools: Vec::new(),
+            absorb: false,
+            content_store: false,
+            crush: false,
+            rules: false,
         }
     }
 }
@@ -72,6 +93,10 @@ impl AgentHierarchicalCompression {
         config.compress.max_summary_length = to_usize(self.max_summary_length);
         config.tiers.enabled = self.tiers;
         config.protected_tools = self.protected_tools.clone();
+        config.absorb.enabled = self.absorb;
+        config.content_store.enabled = self.content_store;
+        config.crush.enabled = self.crush;
+        config.rules.enabled = self.rules;
         config
     }
 }

@@ -179,7 +179,7 @@ async fn a_name_collision_renames_the_later_tool_deterministically() {
 
 #[test]
 fn core_tools_are_direct_exclusive_and_name_their_actions() {
-    let registrations = core_tool_registrations(false).unwrap();
+    let registrations = core_tool_registrations(&[]).unwrap();
     let catalog = AgentToolPlan::build(registrations.clone()).unwrap();
     for registration in &registrations {
         assert_eq!(

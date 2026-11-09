@@ -166,3 +166,54 @@ fn an_export_is_replaced_by_name_and_deleted_with_its_session() {
     store.delete_sessions_confirmed(&[session_id]).unwrap();
     assert!(!exports.exists());
 }
+
+/// A session's content store is written whole beside its attachments, read
+/// back as it was written, set aside (not deleted) when it cannot be read,
+/// left alone by the blob sweep and deleted with the session.
+#[test]
+fn a_content_store_is_read_back_set_aside_when_unreadable_and_deleted_with_its_session() {
+    let (_temporary, paths, _workers, store) = open_store();
+    let session_id = AgentSessionId::new(1);
+    store
+        .create_session(AgentConversationCommit {
+            runtime: runtime(session_id, 0, 1),
+            history_mutations: Vec::new(),
+        })
+        .unwrap();
+    assert_eq!(store.load_compression_store(session_id).unwrap(), None);
+    let mut content = hanafubuki_agent_kernel::AgentContentStore::default();
+    content
+        .by_hash
+        .insert("hash".to_string(), "the original".to_string());
+    store.write_compression_store(session_id, &content).unwrap();
+    assert_eq!(
+        store.load_compression_store(session_id).unwrap(),
+        Some(content.clone())
+    );
+    assert!(store
+        .write_compression_store(AgentSessionId::new(999), &content)
+        .is_err());
+    store
+        .cleanup_unreferenced_image_attachments(session_id)
+        .unwrap();
+    assert!(store.load_compression_store(session_id).unwrap().is_some());
+
+    let session_root = paths.attachments.join(session_id.value().to_string());
+    std::fs::write(session_root.join("compression-store.json"), "{ not json").unwrap();
+    assert_eq!(store.load_compression_store(session_id).unwrap(), None);
+    let aside = std::fs::read_dir(&session_root)
+        .unwrap()
+        .filter_map(|entry| entry.ok())
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .filter(|name| name.starts_with("compression-store.unreadable-"))
+        .collect::<Vec<_>>();
+    assert_eq!(aside.len(), 1);
+    store.write_compression_store(session_id, &content).unwrap();
+    assert_eq!(
+        store.load_compression_store(session_id).unwrap(),
+        Some(content)
+    );
+
+    store.delete_sessions_confirmed(&[session_id]).unwrap();
+    assert!(!session_root.exists());
+}

@@ -105,7 +105,12 @@ impl AgentService {
     ) -> Result<(), AgentError> {
         self.commit_history_with(
             identity,
-            |_| (std::borrow::Cow::Borrowed(items), None),
+            |_| {
+                (
+                    std::borrow::Cow::Borrowed(items),
+                    super::compression::CompressionChange::default(),
+                )
+            },
             event_sink,
         )
         .await
@@ -113,7 +118,7 @@ impl AgentService {
 
     /// Commits the items `prepare` builds from the record under the commit's
     /// lock, with the compression state it returns, if any, in the same
-    /// commit.
+    /// commit (and the content store in the record, written after it).
     pub(super) async fn commit_history_with<'a>(
         &self,
         identity: TurnIdentity,
@@ -121,7 +126,7 @@ impl AgentService {
             &SessionRecord,
         ) -> (
             std::borrow::Cow<'a, [ConversationItem]>,
-            Option<crate::AgentCompressionState>,
+            super::compression::CompressionChange,
         ),
         event_sink: &dyn AgentEventSink,
     ) -> Result<(), AgentError> {
@@ -181,8 +186,11 @@ impl AgentService {
             exact_turn_mut(record, identity)?.budget_ledger = next_ledger;
             let start_index = record.conversation.history.len();
             append_history(record, items);
-            if let Some(compression) = compression {
-                record.runtime.compression = Some(Arc::new(compression));
+            if let Some(state) = compression.state {
+                record.runtime.compression = Some(Arc::new(state));
+            }
+            if let Some(store) = compression.content_store {
+                record.runtime.compression_runtime.keep_content_store(store);
             }
             let event = record_event(
                 record,

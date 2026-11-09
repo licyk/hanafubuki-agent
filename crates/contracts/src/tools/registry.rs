@@ -7,7 +7,7 @@ use crate::{AgentActivityAction, RegistrationError, Registry, RegistryService};
 
 /// The names no plugin may register: the kernel's own tools and the plan's
 /// `tool_search`, which are not registry entries.
-pub const RESERVED_TOOL_NAMES: [&str; 9] = [
+pub const RESERVED_TOOL_NAMES: [&str; 12] = [
     "new_context",
     "update_plan",
     "request_user_input",
@@ -16,6 +16,9 @@ pub const RESERVED_TOOL_NAMES: [&str; 9] = [
     "search_context",
     "acp_status",
     "acp_cache",
+    "absorb",
+    "acp_retrieve",
+    "acp_rule",
     "tool_search",
 ];
 

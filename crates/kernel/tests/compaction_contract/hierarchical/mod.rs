@@ -1,18 +1,20 @@
 //! The `hierarchical` strategy (billion-context): the projection the
 //! requests are built from, the compression tools and the state they
-//! commit, persistence across a restart, the standard compaction as its
-//! floor, switching to and from it, and a panic in the algorithm contained.
+//! commit, the opt-in features, persistence across a restart, the standard
+//! compaction as its floor, switching to and from it, and a panic in the
+//! algorithm contained.
 //! The fake model answers from one queue; every request it saw is kept.
 
 use hanafubuki_agent_kernel::{
-    AgentCompactionStrategy, AgentCompressionState, AgentHierarchicalCompression, AgentSessionId,
-    EphemeralAgentHistoryStore,
+    AgentCompactionStrategy, AgentCompressionState, AgentContentStore,
+    AgentHierarchicalCompression, AgentSessionId, EphemeralAgentHistoryStore,
 };
 
 use super::*;
 
 mod fallbacks;
 mod forks;
+mod opt_in;
 mod projection;
 mod switching;
 mod tools;

@@ -3,27 +3,31 @@
 //! is never rewritten: each request is built from a projection of it, in
 //! which the blocks the model folded replace the messages they cover. The
 //! state (refs, blocks, the nudge's baselines) is persisted with the runtime
-//! checkpoint. Every call into the algorithm is caught: a panic there costs
+//! checkpoint, the content store's originals in a file of their own
+//! (`runtime`). Every call into the algorithm is caught: a panic there costs
 //! the projection (the request carries the full history and the turn goes on
 //! as `standard`) or the tool call, never the session.
 
 mod adapter;
 mod inherit;
 mod receipts;
+mod runtime;
 mod tools;
 
 use std::sync::OnceLock;
 
 use hanafubuki_agent_compression::{
-    hide_consumed_compress_calls, process_turn, prune, render_nudge_text, DocCache, Prompts,
-    RenderStrategy, TokenCountSource, TurnInput,
+    build_absorb_system_prompt, format_rules_for_prompt, hide_consumed_compress_calls,
+    process_turn_with, prune, render_nudge_text, DocCache, Prompts, RenderStrategy,
+    TokenCountSource, TurnExtras, TurnInput, RULES_USAGE_PROMPT,
 };
 use hanafubuki_agent_foundation::panic::catch_panic;
 
 use super::*;
-use crate::{AgentCompressionState, AgentHierarchicalCompression};
+use crate::{AgentCompressionState, AgentContentStore, AgentHierarchicalCompression};
 use adapter::MessageLog;
 pub(super) use inherit::inherited_state;
+pub(super) use runtime::CompressionRuntime;
 pub(super) use tools::compression_tool_output;
 
 /// `search_context`'s document features, kept per session while it is
@@ -80,6 +84,14 @@ impl CompressionMode {
     }
 }
 
+/// What a committed compression tool leaves: the state and the content
+/// store, each when it changed them.
+#[derive(Default)]
+pub(super) struct CompressionChange {
+    pub(super) state: Option<AgentCompressionState>,
+    pub(super) content_store: Option<AgentContentStore>,
+}
+
 /// One request's view of the history.
 pub(super) struct RequestProjection {
     /// The history the request is built from: covered items out, summaries
@@ -93,6 +105,16 @@ pub(super) struct RequestProjection {
     /// Neither compression nor truncation can bring the context under the
     /// limit any more: a standard compaction is due (decision 10).
     pub(super) terminal_escape: bool,
+    /// The content store, when this request stored originals in it.
+    pub(super) content_store: Option<AgentContentStore>,
+    /// What `hierarchical` adds to the instructions: the static prompt and
+    /// the sections of the opt-in features that are on. None while the
+    /// blocks are only carried.
+    pub(super) instructions: Option<String>,
+    /// The token count the request was projected with.
+    pub(super) token_count: u64,
+    /// A user interrupt was booked into the nudge.
+    pub(super) abort_booked: bool,
 }
 
 /// The projection of `items` (the window's history the request shows) for
@@ -103,46 +125,105 @@ pub(super) fn project_request(
     mode: CompressionMode,
 ) -> Result<RequestProjection, String> {
     let log = MessageLog::new(items);
-    let config = hierarchical_config(record);
-    let state = record
+    let mut config = hierarchical_config(record);
+    if mode != CompressionMode::Hierarchical {
+        // Carried blocks keep projecting, but no feature acts without its
+        // tool: absorbed pairs stay hidden, stored originals show again.
+        config.absorb.enabled = false;
+        config.crush.enabled = false;
+        config.content_store.enabled = false;
+        config.rules.enabled = false;
+    }
+    let mut state = record
         .runtime
         .compression
         .as_deref()
         .cloned()
         .unwrap_or_default();
     let (token_count, token_count_source) = token_count(record, items);
-    let output = catch_panic(|| {
+    // Cloned only while the feature is on: an empty store stores nothing.
+    let content_store = config
+        .content_store
+        .enabled
+        .then(|| record.runtime.compression_runtime.content_store().cloned())
+        .flatten()
+        .unwrap_or_default();
+    let entries = content_store.by_ref.len();
+    let abort_anchor = record
+        .runtime
+        .compression_runtime
+        .abort_anchor
+        .filter(|_| mode == CompressionMode::Hierarchical);
+    let (output, content_store, abort_booked) = catch_panic(|| {
         panic_if_asked(&state);
-        process_turn(TurnInput {
-            messages: &log.messages,
-            state,
-            config: &config,
-            token_count,
-            token_count_source: Some(token_count_source),
-            render: RenderStrategy::TextAndToolResults,
-        })
+        let abort_booked = abort_anchor
+            .is_some_and(|anchor| state.nudge.absorb_aborted_turn_growth(anchor, token_count));
+        let (output, content_store) = process_turn_with(
+            TurnInput {
+                messages: &log.messages,
+                state,
+                config: &config,
+                token_count,
+                token_count_source: Some(token_count_source),
+                render: RenderStrategy::TextAndToolResults,
+            },
+            TurnExtras {
+                content_store,
+                filters: &[],
+            },
+        );
+        (output, content_store, abort_booked)
     })?;
-    let trailing = (mode == CompressionMode::Hierarchical)
-        .then(|| {
-            if output.nudge.should_inject {
-                let anthropic = record.settings.config.provider_protocol
-                    == hanafubuki_agent_model_api::ModelApiProtocol::AnthropicMessages;
-                catch_panic(|| {
-                    render_nudge_text(&output.nudge, &Prompts::default(), anthropic).text
-                })
-                .map(Some)
+    let (trailing, instructions) = if mode == CompressionMode::Hierarchical {
+        let anthropic = record.settings.config.provider_protocol
+            == hanafubuki_agent_model_api::ModelApiProtocol::AnthropicMessages;
+        catch_panic(|| {
+            let trailing = if output.nudge.should_inject {
+                Some(render_nudge_text(&output.nudge, &Prompts::default(), anthropic).text)
             } else {
-                Ok(output.status_line.clone())
-            }
-        })
-        .transpose()?
-        .flatten();
+                output.status_line.clone()
+            };
+            (trailing, Some(instructions(&config, &output.state)))
+        })?
+    } else {
+        (None, None)
+    };
     Ok(RequestProjection {
         history: log.apply_view(&output.messages),
         state: output.state,
         trailing,
         terminal_escape: output.terminal_escape.is_some(),
+        content_store: (content_store.by_ref.len() > entries).then_some(content_store),
+        instructions,
+        token_count,
+        abort_booked,
     })
+}
+
+/// The compression tools a request of `record` plans: none unless the
+/// strategy is `hierarchical`, then the core ones and those of the opt-in
+/// features that are on.
+pub(super) fn planned_tools(record: &SessionRecord) -> Vec<crate::AgentCoreTool> {
+    if CompressionMode::of(record) != CompressionMode::Hierarchical {
+        return Vec::new();
+    }
+    let config = hierarchical_config(record);
+    let opt_in = [
+        (config.absorb.enabled, crate::AgentCoreTool::Absorb),
+        (
+            config.content_store.enabled,
+            crate::AgentCoreTool::AcpRetrieve,
+        ),
+        (config.rules.enabled, crate::AgentCoreTool::AcpRule),
+    ];
+    crate::AgentCoreTool::COMPRESSION
+        .into_iter()
+        .chain(
+            opt_in
+                .into_iter()
+                .filter_map(|(enabled, tool)| enabled.then_some(tool)),
+        )
+        .collect()
 }
 
 /// What a standard compaction compacts while blocks are active: the
@@ -168,13 +249,42 @@ pub(super) fn project_compaction_source(
     Ok(Some(log.apply_view(&view)))
 }
 
-/// The static prompt appended to a `hierarchical` session's instructions;
-/// the same bytes for every request.
-pub(super) fn compression_instructions() -> &'static str {
+/// What a `hierarchical` request appends to the instructions: the static
+/// prompt, then the absorb section while `absorb` is on, then the rules'
+/// usage and the rules recorded while `rules` is on. The same bytes for
+/// every request until a rule is recorded or removed.
+fn instructions(
+    config: &hanafubuki_agent_compression::Config,
+    state: &AgentCompressionState,
+) -> String {
     static PROMPT: OnceLock<String> = OnceLock::new();
-    PROMPT.get_or_init(|| {
-        hanafubuki_agent_compression::build_compress_system_prompt(&Prompts::default())
-    })
+    let mut text = PROMPT
+        .get_or_init(|| {
+            hanafubuki_agent_compression::build_compress_system_prompt(&Prompts::default())
+        })
+        .clone();
+    if config.absorb.enabled {
+        text.push_str("\n\n");
+        text.push_str(&build_absorb_system_prompt());
+    }
+    if config.rules.enabled {
+        text.push_str("\n\n");
+        text.push_str(RULES_USAGE_PROMPT);
+        let rules = format_rules_for_prompt(state);
+        if !rules.is_empty() {
+            text.push_str("\n\n");
+            text.push_str(&rules);
+        }
+    }
+    text
+}
+
+/// A user interrupt ended a `hierarchical` turn: the nudge books the growth
+/// it skipped once the context grows past what the turn was sent with.
+pub(super) fn note_interrupt(record: &mut SessionRecord) {
+    if CompressionMode::of(record) == CompressionMode::Hierarchical {
+        record.runtime.compression_runtime.interrupted();
+    }
 }
 
 /// After a standard compaction installs: the items the blocks covered left

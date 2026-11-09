@@ -32,6 +32,7 @@ use crate::{
 };
 
 mod attachments;
+mod content_store;
 mod exports;
 mod filesystem;
 mod jsonl;
@@ -414,6 +415,21 @@ impl AgentHistoryStore for FileAgentHistoryStore {
         contents: &str,
     ) -> Result<String, AgentHistoryStoreError> {
         self.write_session_export_inner(session_id, file_name, contents)
+    }
+
+    fn write_compression_store(
+        &self,
+        session_id: AgentSessionId,
+        store: &hanafubuki_agent_kernel::AgentContentStore,
+    ) -> Result<(), AgentHistoryStoreError> {
+        self.write_compression_store_inner(session_id, store)
+    }
+
+    fn load_compression_store(
+        &self,
+        session_id: AgentSessionId,
+    ) -> Result<Option<hanafubuki_agent_kernel::AgentContentStore>, AgentHistoryStoreError> {
+        self.load_compression_store_inner(session_id)
     }
 
     fn flush_session(&self, session_id: AgentSessionId) -> Result<(), AgentHistoryStoreError> {

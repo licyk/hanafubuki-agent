@@ -30,10 +30,15 @@ pub enum AgentCoreTool {
     SearchContext,
     AcpStatus,
     AcpCache,
+    /// The opt-in features' tools, each planned only while its feature is
+    /// on: `absorb`, the content store's `acp_retrieve`, `acp_rule`.
+    Absorb,
+    AcpRetrieve,
+    AcpRule,
 }
 
 impl AgentCoreTool {
-    pub const ALL: [Self; 8] = [
+    pub const ALL: [Self; 11] = [
         Self::NewContext,
         Self::UpdatePlan,
         Self::RequestUserInput,
@@ -42,6 +47,9 @@ impl AgentCoreTool {
         Self::SearchContext,
         Self::AcpStatus,
         Self::AcpCache,
+        Self::Absorb,
+        Self::AcpRetrieve,
+        Self::AcpRule,
     ];
 
     /// The tools every session plans.
@@ -67,6 +75,9 @@ impl AgentCoreTool {
             Self::SearchContext => hanafubuki_agent_compression::SEARCH_CONTEXT_TOOL_NAME,
             Self::AcpStatus => hanafubuki_agent_compression::ACP_STATUS_TOOL_NAME,
             Self::AcpCache => hanafubuki_agent_compression::ACP_CACHE_TOOL_NAME,
+            Self::Absorb => hanafubuki_agent_compression::ABSORB_TOOL_NAME,
+            Self::AcpRetrieve => hanafubuki_agent_compression::RETRIEVE_TOOL_NAME,
+            Self::AcpRule => hanafubuki_agent_compression::RULE_TOOL_NAME,
         }
     }
 
@@ -79,14 +90,21 @@ impl AgentCoreTool {
                 | Self::SearchContext
                 | Self::AcpStatus
                 | Self::AcpCache
+                | Self::Absorb
+                | Self::AcpRetrieve
+                | Self::AcpRule
         )
     }
 
     /// A compression tool that changes the session's compression state: it
     /// is applied again when its output is committed, so the state and the
-    /// output it explains land in one commit.
+    /// output it explains land in one commit. `acp_retrieve` counts its
+    /// retrievals in the state.
     pub const fn changes_compression_state(self) -> bool {
-        matches!(self, Self::Compress | Self::Decompress)
+        matches!(
+            self,
+            Self::Compress | Self::Decompress | Self::Absorb | Self::AcpRetrieve | Self::AcpRule
+        )
     }
 
     pub fn model_spec(self) -> ModelToolSpec {
@@ -117,7 +135,10 @@ impl AgentCoreTool {
             | Self::Decompress
             | Self::SearchContext
             | Self::AcpStatus
-            | Self::AcpCache => AgentActivityAction::USE_TOOL,
+            | Self::AcpCache
+            | Self::Absorb
+            | Self::AcpRetrieve
+            | Self::AcpRule => AgentActivityAction::USE_TOOL,
             Self::UpdatePlan => AgentActivityAction::UPDATE_PLAN,
             Self::RequestUserInput => AgentActivityAction::REQUEST_USER_INPUT,
         }

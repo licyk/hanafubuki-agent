@@ -111,6 +111,9 @@ pub(in crate::service) struct SessionRuntime {
     pub(in crate::service) compression_head: Option<crate::model::CompressionChainHead>,
     /// `search_context`'s cache of document features, never persisted.
     pub(in crate::service) compression_search: crate::service::compression::SearchCache,
+    /// The content store and the interrupt the nudge still has to book,
+    /// kept apart from the checkpoints.
+    pub(in crate::service) compression_runtime: crate::service::compression::CompressionRuntime,
 }
 
 /// Bounded rollback state for one staged durable mutation: every group but
@@ -186,6 +189,7 @@ impl SessionRuntime {
             compression: None,
             compression_head: None,
             compression_search: Default::default(),
+            compression_runtime: Default::default(),
         }
     }
 }

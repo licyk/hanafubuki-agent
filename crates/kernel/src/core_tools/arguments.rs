@@ -66,7 +66,10 @@ fn parse(
         | AgentCoreTool::Decompress
         | AgentCoreTool::SearchContext
         | AgentCoreTool::AcpStatus
-        | AgentCoreTool::AcpCache => Ok(CoreToolCall::Compression(tool)),
+        | AgentCoreTool::AcpCache
+        | AgentCoreTool::Absorb
+        | AgentCoreTool::AcpRetrieve
+        | AgentCoreTool::AcpRule => Ok(CoreToolCall::Compression(tool)),
     }
 }
 

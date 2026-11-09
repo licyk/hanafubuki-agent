@@ -372,6 +372,94 @@ async fn decompress_to_a_file_writes_under_the_session_and_goes_with_it() {
     finish(service, paths);
 }
 
+/// The content store under `hierarchical`: a fold stores the originals it
+/// covered in the session's own file, an `acp_retrieve` of a large one is
+/// exported to the session's export file and answered with its path, and
+/// deleting the session removes both.
+// The managed turns' tasks must finish while `shutdown` blocks this thread.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_content_store_is_written_under_the_session_and_goes_with_it() {
+    let first = "The first answer is long. ".repeat(1_000);
+    let server = FakeServer::start(
+        [
+            with_usage(assistant_events(&first), 1_000),
+            with_usage(
+                call_events(
+                    "fold-1",
+                    "compress",
+                    &json!({ "content": format!("m00002–m00002 First answer\n{SUMMARY}") }),
+                ),
+                1_000,
+            ),
+            with_usage(
+                call_events("retrieve", "acp_retrieve", &json!({ "ref": "m00002" })),
+                1_000,
+            ),
+            with_usage(assistant_events("Retrieved."), 1_000),
+        ]
+        .into_iter()
+        .map(|response| (response, Duration::ZERO))
+        .collect(),
+    )
+    .await;
+    let (service, paths) = service_with("compression-content-store", |_, config| {
+        configure(config, &server.base_url);
+        let mut compaction = tuned();
+        compaction.hierarchical.content_store = true;
+        config
+            .write_settings(AgentSettingsPatch {
+                compaction: Some(compaction),
+                ..AgentSettingsPatch::default()
+            })
+            .unwrap();
+    });
+    let session = service
+        .create_session(AgentSessionMode::Default)
+        .await
+        .unwrap();
+    for prompt in ["Hello.", "Fold it, then get it back."] {
+        service
+            .start_turn(session.id, prompt.to_string().into())
+            .await
+            .unwrap();
+    }
+
+    let session_root = hanafubuki_agent_history::AgentHistoryPaths::under(history_root(&paths))
+        .attachments
+        .join(session.id.value().to_string());
+    let file = session_root.join("compression-store.json");
+    let stored: hanafubuki_agent_kernel::AgentContentStore =
+        serde_json::from_slice(&std::fs::read(&file).unwrap()).unwrap();
+    assert_eq!(stored.retrieve("m00002").unwrap().1, first);
+    let requests = server.requests();
+    let last: Value = serde_json::from_slice(&requests.last().unwrap().body).unwrap();
+    let output = last["input"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|item| item["call_id"] == "retrieve" && item["type"] == "function_call_output")
+        .map(|item| item["output"][0]["text"].as_str().unwrap().to_owned())
+        .unwrap();
+    assert!(output.contains("[acp-retrieved #m00002 · "), "{output}");
+    let path = output
+        .split_once("path=\"")
+        .and_then(|(_, rest)| rest.split_once('"'))
+        .map(|(path, _)| PathBuf::from(path))
+        .unwrap();
+    let expected = ResolvedPath::resolve(session_root.join("exports").join("m00002.txt")).unwrap();
+    assert_eq!(path, expected.native());
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), first);
+    assert!(!last.to_string().contains(&first));
+
+    let before = service.snapshot(session.id).unwrap();
+    service
+        .delete_session_confirmed(session.id, before.generation, before.revision)
+        .unwrap();
+    assert!(!file.exists());
+    assert!(!path.exists());
+    finish(service, paths);
+}
+
 /// A `standard` session writes no compression state at all.
 // The managed turns' tasks must finish while `shutdown` blocks this thread.
 #[tokio::test(flavor = "multi_thread")]

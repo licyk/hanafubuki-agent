@@ -97,7 +97,7 @@ panic 消息进入日志和插件状态，从不进入模型。`mcp` 插件自�
 - 工具源可以随贡献返回 `ToolPlanLease`；计划保留每个租约，每个调用以 `ToolInvocation::plan_leases` 收到它们。用 `ToolInvocation::plan_lease::<T>()` 找自己的，从不向下转换 `Arc`。
 - 轮次数据以 `ToolInvocation::turn`（按类型存放的 `TurnExtensions`）到达调用：轮次准入贡献者为轮次冻结的内容。用 `turn.get::<T>()` 读取，缺失的值视为工具错误。契约只命名内核自己读取的值（`SelectableSkills`）。
 - 工具通过随 `ToolResult` 返回 `ToolContextFragment` 向对话加入指令。内核在输出之后立即把它作为 `source` 指名的 Skill 的上下文提交，每个轮次每个 Skill 一次，不是 Skill ID 的 `source` 变成工具错误。
-- 内核自己的工具（`AgentCoreTool`：`new_context`、`update_plan`、`request_user_input`，以及压缩工具 `compress`、`decompress`、`search_context`、`acp_status`、`acp_cache`）作用于轮次或会话的压缩状态，不是插件；压缩工具只在会话的压缩策略为 `hierarchical` 时被规划，计划模式下也是。`tool_search`（计划对延迟工具的搜索）也不是插件。它们的九个名字是 `RESERVED_TOOL_NAMES`：插件不能用其中任何一个注册工具。
+- 内核自己的工具（`AgentCoreTool`：`new_context`、`update_plan`、`request_user_input`，以及压缩工具 `compress`、`decompress`、`search_context`、`acp_status`、`acp_cache`、`absorb`、`acp_retrieve`、`acp_rule`）作用于轮次或会话的压缩状态，不是插件；压缩工具只在会话的压缩策略为 `hierarchical` 时被规划，计划模式下也是，最后三个还要求各自的功能开启。`tool_search`（计划对延迟工具的搜索）也不是插件。它们的十二个名字是 `RESERVED_TOOL_NAMES`：插件不能用其中任何一个注册工具。
 - 活动动作是开放的标识符（`AgentActivityAction`）；界面为认识的名字加标签，否则显示通用的工具标签，所以新工具不需要前端改动。
 
 ### 工具名 [#tool-names]

@@ -19,7 +19,7 @@ pub(crate) use compression::{
 };
 pub use compression::{
     AgentCompressionChain, AgentCompressionDelta, AgentCompressionState, AgentCompressionUpdate,
-    AgentHierarchicalCompression,
+    AgentContentStore, AgentHierarchicalCompression,
 };
 pub use conversation_item::{
     AgentAttachmentId, AgentImageAttachmentRef, AgentMessagePhase, AgentPlanBlock,

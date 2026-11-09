@@ -1,6 +1,6 @@
 use super::*;
 
-async fn set_strategy(
+pub(super) async fn set_strategy(
     service: &AgentService,
     session: AgentSessionId,
     strategy: AgentCompactionStrategy,

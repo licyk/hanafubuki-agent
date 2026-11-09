@@ -104,8 +104,7 @@ impl AgentService {
                 provider_capabilities: model.tool_capabilities(),
                 selected_deferred_tools: BTreeSet::new(),
                 memory_contribution_enabled: false,
-                compression_tools: super::super::compression::CompressionMode::of(record)
-                    == super::super::compression::CompressionMode::Hierarchical,
+                compression_tools: super::super::compression::planned_tools(record),
             };
             (model, context)
         };

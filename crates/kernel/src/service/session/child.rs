@@ -274,6 +274,10 @@ fn child_record(
         journal: SessionJournal::empty(),
         runtime: SessionRuntime {
             context_window: base.context_window,
+            compression_runtime: parent
+                .runtime
+                .compression_runtime
+                .forked(base.compression.as_deref()),
             compression: base.compression,
             ..SessionRuntime::idle()
         },

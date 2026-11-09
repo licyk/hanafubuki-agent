@@ -269,6 +269,9 @@ impl AgentService {
         turn.last_error = transition.error;
         turn.terminal_reason = Some(transition.reason);
         record.runtime.context_window.new_context_requested = false;
+        if transition.reason == AgentTurnTerminalReason::UserInterrupted {
+            super::super::compression::note_interrupt(record);
+        }
         let reasoning_event = close_reasoning_for_terminal(record, identity, self.inner.limits)?;
         let event = record_event(record, identity, transition.event, self.inner.limits);
         settle_turn_working_time(record, identity)?;

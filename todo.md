@@ -528,10 +528,82 @@ and pushed, and notes what Hanafubuki must change at its next pin.
     `decompress` schema changed (model-visible): golden to copy,
     `hierarchical_requests.json`. The compression crate's `Role::name` is
     public. `NOTICE` names `crates/kernel/src/core_tools/compression_spec.rs`.
-- [ ] P10: the opt-in features (absorb, content store, crush, rules,
-      filter), off by default.
-  - Crate half done; the kernel half (tools, the content store's files,
-    settings) lands after P7. `absorb` (the `[ACP absorb]` demand, the
+- [x] P10: the opt-in features (absorb, content store, crush, rules,
+      filter), off by default. Done (kernel half): `[compaction.
+      hierarchical]` `absorb`/`contentStore`/`crush`/`rules` reach the
+      kernel as four fields of `AgentHierarchicalCompression`, which turn
+      on the crate's `Config` sections of those names (their other settings
+      keep the crate's defaults; no new keys). `project_request` runs
+      `process_turn_with` with the session's content store (cloned only
+      while the feature is on) and no filters (the Agent has none, so the
+      filter step stays empty and `messageFilters` is not a setting). Three
+      more `AgentCoreTool`s, `Absorb`, `AcpRetrieve`, `AcpRule` (schemas
+      from the crate; `ALL` 11, `RESERVED_TOOL_NAMES` 12), planned after the
+      five core ones only while their feature is on (`planned_tools`;
+      `AgentToolCatalogContext.compression_tools` is now that list); all
+      three are applied again at their commit like `compress` (`acp_retrieve`
+      counts its retrievals in the state). `absorb` (`parse_absorb_input`,
+      `apply_absorb`; "already absorbed" changes nothing), `acp_rule`
+      (`execute_rule`), `acp_retrieve` (`apply_retrieve`, `note_retrieval`;
+      an `Export` goes through `write_session_export` as `exports/<ref>.txt`
+      with `build_retrieval_pointer`'s path, and comes back inline, framed,
+      with a note when the store keeps no files). `ToolExport` carries its
+      kind (`tools/export.rs`). A `compress` that folds calls
+      `store_covered_originals` with the blocks it made or refolded, at its
+      commit. Instructions under `hierarchical`: the static prompt, then
+      `build_absorb_system_prompt` while `absorb`, then `RULES_USAGE_PROMPT`
+      and `format_rules_for_prompt` (nothing when empty) while `rules`.
+      The content store lives in `SessionRuntime.compression_runtime`
+      (`CompressionRuntime`, never in the records); only `begin_sampling`
+      keeps the one the projection returns (when it grew); after
+      `begin_sampling`'s and a compression tool's commit the kernel writes
+      it whole, lock released, when it has more entries than the copy
+      (`persist_content_store`, entries only ever added) through the new
+      `AgentHistoryStore::write_compression_store` (default refuses: memory
+      only) and reads it at load with `load_compression_store` (default
+      none). The file store: `attachments/<session>/compression-store.json`
+      (staged and published like the exports; the blob sweeps read only
+      `blobs/`; removed with the session); an unreadable one is renamed to
+      `compression-store.unreadable-<millis>.json` and reads as none.
+      `EphemeralAgentHistoryStore` keeps a map. At load, a fork and a child,
+      an entry is kept only while the state binds its ref to the same
+      message (a rebuilt state may number differently). Consistency: the
+      store is a cache of the history; a placeholder is built from the
+      original alone, so a lost entry is stored again byte for byte at the
+      next projection; only folded originals the window no longer holds
+      are lost (`acp_retrieve`: "not found"). A user interrupt of a
+      `hierarchical` turn (`stage_terminal`) keeps the token count its last
+      request was projected with; later projections call
+      `NudgeState::absorb_aborted_turn_growth` until it books (in memory
+      only). The features act only under `Hierarchical`: a session that
+      switched away (`Carry`) keeps absorbed pairs hidden, shows stored
+      originals again and gets no demand. Tests: kernel
+      `compaction_contract::hierarchical::opt_in` (8:
+      defaults change nothing; absorb asks, hides and records; crush folds
+      JSON so absorb does not ask; the content store's placeholder is the
+      same bytes on every request, retrieval inline when the store cannot
+      export, a made-up ref, the store read back after a restart; a fold
+      stores its covered originals and one is retrieved inline; a rule in
+      the instructions; an interrupt booked only once the count passes it;
+      after a switch to `standard`, no placeholder or demand),
+      history `a_content_store_is_read_back_set_aside_when_unreadable_and_
+      deleted_with_its_session`, facade `tests::compression::the_content_
+      store_is_written_under_the_session_and_goes_with_it` (the file, the
+      export and its path, both removed by `delete_session_confirmed`).
+      `standard` and `hierarchical` goldens unchanged (no new golden: the
+      contract tests pin the texts).
+  - Open: `absorbed` and `rules` ride in the chain's `rest` on every
+    change; no test restarts through the chain with a record or a rule in
+    it (the chain tests are generic). The projection clones the content
+    store (all originals) on each projection while the feature is on,
+    twice a step (the estimate and the request), as P8's double
+    projection; the file is rewritten whole when it grows, synchronously
+    on the turn's worker (as the exports). A fork or child writes its copy of the store only at its
+    first request. The abort anchor is not persisted (a restart forgets
+    an interrupt). A `/compact` outside a turn plans no opt-in tool (no
+    turn extensions: the defaults). The status report's store counters are
+    not ported (the crate's note).
+  - Crate half (before the kernel half). `absorb` (the `[ACP absorb]` demand, the
     candidate rules, `apply_absorb`, `parse_absorb_input`, hiding the
     pair, the system-prompt section), `store` (`ContentStore`: plain data,
     SHA-256-keyed texts and per-ref entries, persisted by the host apart
@@ -574,9 +646,23 @@ and pushed, and notes what Hanafubuki must change at its next pin.
     instructions; persist `ContentStore` beside the state; call
     `store_covered_originals` after a fold and `note_retrieval` after a
     hit.
-  - Hanafubuki, at its next pin: nothing to change; the compression crate
-    gains public items and fields (`Config`, `State` and `Stats` are built
-    with `Config::new` and `Default`).
+  - Hanafubuki, at its next pin (crate half): nothing to change; the
+    compression crate gains public items and fields (`Config`, `State` and
+    `Stats` are built with `Config::new` and `Default`).
+  - Hanafubuki, at its next pin (kernel half): `AgentHierarchicalCompression`
+    has four more fields (`absorb`, `content_store`, `crush`, `rules`; a
+    struct literal adds them, mapped from its `[compaction.hierarchical]`);
+    `AgentCoreTool` has three more variants (`ALL` is 11);
+    `RESERVED_TOOL_NAMES` has 12 (`absorb`, `acp_retrieve`, `acp_rule`);
+    `AgentToolCatalogContext.compression_tools` is a `Vec<AgentCoreTool>`;
+    `AgentHistoryStore::write_compression_store`/`load_compression_store`
+    (defaults: refuse / none, so the store lives in memory): a host store
+    that keeps files implements them to keep the content store across
+    restarts, and removes the file with the session; new re-export
+    `AgentContentStore`; `AgentService::test_content_store` (test
+    support). Goldens unchanged. `NOTICE` already names
+    `crates/kernel/src/service/compression` (two new derived files in
+    `tools/`).
 - [ ] P11: `/compression`, status line, `context_compressed`, docs,
       attribution; pty smoke.
 

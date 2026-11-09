@@ -76,6 +76,10 @@ impl AgentService {
             },
             journal: SessionJournal::empty(),
             runtime: SessionRuntime {
+                compression_runtime: source
+                    .runtime
+                    .compression_runtime
+                    .forked(compression.as_deref()),
                 compression,
                 ..SessionRuntime::idle()
             },
@@ -166,6 +170,10 @@ impl AgentService {
                 compression: source.runtime.compression.clone(),
                 compression_head: None,
                 compression_search: Default::default(),
+                compression_runtime: source
+                    .runtime
+                    .compression_runtime
+                    .forked(source.runtime.compression.as_deref()),
             },
         };
         let cell = self.inner.sessions.insert(record, &self.inner.accepting)?;

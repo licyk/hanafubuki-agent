@@ -114,6 +114,12 @@ pub(super) struct RequestCompression {
     /// The state after the projection, which only the step's own request
     /// persists.
     pub(super) state: Option<crate::AgentCompressionState>,
+    /// The content store, when the projection stored originals in it; kept
+    /// like the state.
+    pub(super) content_store: Option<crate::AgentContentStore>,
+    /// The token count the request was projected with, and whether it
+    /// booked a user interrupt.
+    pub(super) sent: Option<(u64, bool)>,
     /// A standard compaction is due (`hierarchical`'s terminal escape).
     pub(super) terminal_escape: bool,
     /// The algorithm panicked: the request carries the full history.
@@ -183,7 +189,7 @@ fn regular_model_request(
         })
         .cloned()
         .collect::<Vec<_>>();
-    let (visible_history, trailing, compression, hierarchical) =
+    let (visible_history, trailing, compression, compression_instructions) =
         projected_history(record, &visible_items);
     let normalized_history = normalized_tool_pairs_for_model(&visible_history)?;
     let latest_world_state_updates = normalized_history
@@ -245,9 +251,9 @@ fn regular_model_request(
             )
         }
     };
-    if hierarchical {
+    if let Some(compression_instructions) = compression_instructions {
         instructions.push_str("\n\n");
-        instructions.push_str(super::compression::compression_instructions());
+        instructions.push_str(&compression_instructions);
     }
     let request = ModelRequest {
         model: record.settings.config.model.clone(),
@@ -264,7 +270,7 @@ fn regular_model_request(
 
 /// The history the request shows (projected while blocks or the strategy
 /// call for it), its trailing nudge or status line, what the projection
-/// left, and whether the request is `hierarchical`'s (its prompt).
+/// left, and what `hierarchical` adds to the instructions.
 fn projected_history(
     record: &SessionRecord,
     items: &[Arc<AgentHistoryItem>],
@@ -272,13 +278,13 @@ fn projected_history(
     Vec<ConversationItem>,
     Option<String>,
     RequestCompression,
-    bool,
+    Option<String>,
 ) {
     use super::compression::{project_request, CompressionMode};
     let mode = CompressionMode::of(record);
     let full = || items.iter().map(|item| item.content.clone()).collect();
     if mode == CompressionMode::Off {
-        return (full(), None, RequestCompression::default(), false);
+        return (full(), None, RequestCompression::default(), None);
     }
     match project_request(record, items, mode) {
         Ok(projection) => (
@@ -286,10 +292,12 @@ fn projected_history(
             projection.trailing,
             RequestCompression {
                 state: Some(projection.state),
+                content_store: projection.content_store,
+                sent: Some((projection.token_count, projection.abort_booked)),
                 terminal_escape: projection.terminal_escape,
                 failed: false,
             },
-            mode == CompressionMode::Hierarchical,
+            projection.instructions,
         ),
         Err(message) => {
             log::warn!(
@@ -303,7 +311,7 @@ fn projected_history(
                     failed: true,
                     ..RequestCompression::default()
                 },
-                false,
+                None,
             )
         }
     }

@@ -79,11 +79,18 @@ impl AgentService {
                             }
                             images.extend(run.images);
                         }
-                        (std::borrow::Cow::Owned(items), run.state)
+                        (
+                            std::borrow::Cow::Owned(items),
+                            super::super::compression::CompressionChange {
+                                state: run.state,
+                                content_store: run.content_store,
+                            },
+                        )
                     },
                     event_sink,
                 )
-                .await?
+                .await?;
+                self.persist_content_store(identity.session_id);
             }
         }
         self.emit(

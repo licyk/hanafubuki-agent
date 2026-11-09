@@ -22,8 +22,14 @@ const DECOMPRESS_IMAGE: &str = "Optional mNNNNN message ref whose IMAGE payload 
 const DECOMPRESS_IMAGE_NOTE: &str = " Pass imageRef (an mNNNNN ref) to restore a folded image's original pixels, attached to the result; imageRef:\"list\" shows what is restorable.";
 
 pub(super) fn compression_spec(tool: AgentCoreTool) -> ModelToolSpec {
+    let opt_in = [
+        hanafubuki_agent_compression::absorb_tool(),
+        hanafubuki_agent_compression::retrieve_tool(),
+        hanafubuki_agent_compression::rule_tool(),
+    ];
     let schema = hanafubuki_agent_compression::acp_tools()
         .into_iter()
+        .chain(opt_in)
         .find(|schema| schema.name == tool.name())
         .expect("every compression core tool has a schema");
     let mut spec = ModelToolSpec {

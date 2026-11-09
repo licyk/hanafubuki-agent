@@ -87,6 +87,9 @@ pub(super) fn model_spec(tool: AgentCoreTool) -> ModelToolSpec {
             | AgentCoreTool::Decompress
             | AgentCoreTool::SearchContext
             | AgentCoreTool::AcpStatus
-            | AgentCoreTool::AcpCache => compression_spec(tool),
+            | AgentCoreTool::AcpCache
+            | AgentCoreTool::Absorb
+            | AgentCoreTool::AcpRetrieve
+            | AgentCoreTool::AcpRule => compression_spec(tool),
     }
 }

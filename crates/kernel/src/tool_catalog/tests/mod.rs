@@ -153,7 +153,7 @@ fn plan_context(mode: AgentSessionMode, strict_json_schema: bool) -> AgentToolCa
         generation: serde_json::from_value(json!(1)).unwrap(),
         session_revision: serde_json::from_value(json!(1)).unwrap(),
         sampling_step: 1,
-        compression_tools: false,
+        compression_tools: Vec::new(),
         mode,
         input_capabilities: hanafubuki_agent_model_api::ModelInputCapabilities::default(),
         provider_capabilities: ToolProviderCapabilities {

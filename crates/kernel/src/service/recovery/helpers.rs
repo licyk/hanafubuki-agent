@@ -150,6 +150,7 @@ impl AgentService {
                 compression: runtime.compression.map(Arc::new),
                 compression_head: None,
                 compression_search: Default::default(),
+                compression_runtime: Default::default(),
             },
         };
         // A state that was lost (it could not be read) is rebuilt from the
@@ -160,6 +161,13 @@ impl AgentService {
                 None,
                 &record.conversation.history,
             );
+        }
+        if let Some(state) = record.runtime.compression.as_deref() {
+            record.runtime.compression_runtime =
+                super::super::compression::CompressionRuntime::loaded(
+                    self.load_content_store(record.session_id),
+                    Some(state),
+                );
         }
         record
     }

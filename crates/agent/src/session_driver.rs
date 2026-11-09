@@ -556,6 +556,10 @@ fn hierarchical_compression(
         max_summary_length: settings.max_summary_length,
         tiers: settings.tiers,
         protected_tools: settings.protected_tools.clone(),
+        absorb: settings.absorb,
+        content_store: settings.content_store,
+        crush: settings.crush,
+        rules: settings.rules,
     }
 }
 

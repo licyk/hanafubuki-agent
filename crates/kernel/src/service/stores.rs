@@ -156,6 +156,22 @@ impl AgentHistoryStore for SessionStores {
             .write_session_export(session_id, file_name, contents)
     }
 
+    fn write_compression_store(
+        &self,
+        session_id: AgentSessionId,
+        store: &crate::AgentContentStore,
+    ) -> Result<(), AgentHistoryStoreError> {
+        self.store(session_id)
+            .write_compression_store(session_id, store)
+    }
+
+    fn load_compression_store(
+        &self,
+        session_id: AgentSessionId,
+    ) -> Result<Option<crate::AgentContentStore>, AgentHistoryStoreError> {
+        self.store(session_id).load_compression_store(session_id)
+    }
+
     /// An ephemeral session's own images are in memory and its inherited
     /// ones in the durable store: a load of inherited images only goes
     /// through the durable session they came from, and a mixed one is read

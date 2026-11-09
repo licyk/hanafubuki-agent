@@ -417,11 +417,7 @@ fn format_message(message: &Message) -> String {
 
 fn exported(file_name: String, header: String, body: String) -> CompressionToolRun {
     CompressionToolRun {
-        export: Some(ToolExport {
-            file_name,
-            header,
-            body,
-        }),
+        export: Some(ToolExport::restore(file_name, header, body)),
         ..output_run(text_output(String::new(), false), None)
     }
 }

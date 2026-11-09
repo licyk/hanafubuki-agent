@@ -41,7 +41,7 @@ impl FileAgentHistoryStore {
         Ok(target.native_text().to_owned())
     }
 
-    fn ensure_session_exists(
+    pub(in crate::store) fn ensure_session_exists(
         &self,
         session_id: AgentSessionId,
     ) -> Result<(), AgentHistoryStoreError> {

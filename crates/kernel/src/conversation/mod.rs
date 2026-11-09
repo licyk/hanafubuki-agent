@@ -584,6 +584,30 @@ pub trait AgentHistoryStore: Send + Sync {
             "this session's history store keeps no files".to_string(),
         ))
     }
+    /// Replaces the session's content store (`hierarchical`'s originals,
+    /// kept apart from the records) with `store`, atomically. It lives with
+    /// the session's data and is removed when the session is deleted. This
+    /// default, for stores that keep no files, refuses: the store then lives
+    /// in memory only.
+    fn write_compression_store(
+        &self,
+        session_id: AgentSessionId,
+        store: &crate::AgentContentStore,
+    ) -> Result<(), AgentHistoryStoreError> {
+        let _ = (session_id, store);
+        Err(AgentHistoryStoreError::Io(
+            "this session's history store keeps no files".to_string(),
+        ))
+    }
+    /// The session's content store, none when it has none. One that cannot
+    /// be read is set aside (never deleted) and reads as none.
+    fn load_compression_store(
+        &self,
+        session_id: AgentSessionId,
+    ) -> Result<Option<crate::AgentContentStore>, AgentHistoryStoreError> {
+        let _ = session_id;
+        Ok(None)
+    }
     fn load_visible_image_attachment(
         &self,
         session_id: AgentSessionId,

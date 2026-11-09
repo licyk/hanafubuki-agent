@@ -238,7 +238,7 @@ Provider 的流是外部输入（[模型 API](/docs/architecture#the-model-api)�
 
 窗口第一个 `TurnStart` 之前的每条消息（压缩过的前缀）也受保护：它从不折叠。消息的 ID 是 `<来源会话 ID>:<条目 ID>`，在会话的谱系内唯一。模型读到的引用（`m00001`……）不是这些 ID，因为压缩之后条目 ID 不再按历史顺序排列：该 crate 按历史顺序生成引用，从不重用。
 
-**投影。** `regular_model_request` 从 `projected_history` 构建输入，后者对消息日志、状态、配置和上下文大小（上一个响应中 Provider 报告的 `context_consumed_tokens`，否则是窗口历史的估算）运行该 crate 的 `process_turn`。`apply_view` 把该 crate 的视图变回条目：
+**投影。** `regular_model_request` 从 `projected_history` 构建输入，后者对消息日志、状态、配置和上下文大小（上一个响应中 Provider 报告的 `context_consumed_tokens`，否则是窗口历史的估算）运行该 crate 的 `process_turn_with`，并传入会话的内容存储（没有消息过滤器：Agent 没有任何过滤器）。`apply_view` 把该 crate 的视图变回条目：
 
 - 被覆盖的条目被省略；
 - 视图改变了文本的消息得到新文本：用户、助手或工具输出文本前面的 `<acp tokens="…" type="…">mNNNNN</acp>` 标签（助手消息写入它的 `model_text`；工具输出的文本部分合成一段文本，图片和资源保留），或者仍然有效的 `compress` 调用的参数被压缩到仍然有效的范围。工具调用的参数从不带标签；
@@ -248,18 +248,27 @@ Provider 的流是外部输入（[模型 API](/docs/architecture#the-model-api)�
 
 **哪个请求保留状态。** 构建请求会在内存中推进状态：为新消息生成的引用、token 快照、提醒的基线。只有步骤自己的请求（在 `begin_sampling` 中构建）保留它：状态存到记录上，由步骤的提交持久化。自动压缩的估算和安装之后的检查构建同样的请求（`step_model_request_projected`），但丢弃状态，所以计算一个请求的大小从不改变状态。
 
-**工具。** `compress`、`decompress`、`search_context`、`acp_status` 和 `acp_cache` 是 `AgentCoreTool`，在模式为 `Hierarchical` 时被规划（目录上下文中的 `compression_tools`），计划模式下也是；它们的名字在 `RESERVED_TOOL_NAMES` 中。每个工具都在会话记录的锁下对记录运行（`execute_compression_tool`），让它的钩子得到一个结果。随后，`compress` 和 `decompress` 在写入其输出的那次提交的锁下（`commit_history_with`），针对那一刻的状态再应用一次：提交的输出就是提交的状态所对应的输出，同一步骤中的两次调用按调用顺序应用。被拒绝的调用让状态保持原样。
+**工具。** `compress`、`decompress`、`search_context`、`acp_status` 和 `acp_cache` 是 `AgentCoreTool`，在模式为 `Hierarchical` 时被规划（目录上下文中的 `compression_tools`，即 `planned_tools` 生成的列表），计划模式下也是；功能开启时，其后还有 `absorb`、`acp_retrieve` 和 `acp_rule`（见下文）；这八个名字都在 `RESERVED_TOOL_NAMES` 中。每个工具都在会话记录的锁下对记录运行（`execute_compression_tool`），让它的钩子得到一个结果。随后，`compress`、`decompress` 和三个可选工具在写入其输出的那次提交的锁下（`commit_history_with`），针对那一刻的状态再应用一次：提交的输出就是提交的状态所对应的输出，同一步骤中的两次调用按调用顺序应用。被拒绝的调用让状态保持原样。
 
 - **`compress`** 用 billion-context 的回执回答：带摘要指纹的 `[Compressed …]`、`[Compression FAILED`、`[Compression no-op`。
 - **`decompress`** 用 billion-context 宿主的措辞回答，有四种方式。默认把块的内容（上一层，或用 `full` 时的全部原文）作为输出原地返回，并把有效的块标记为已原地恢复（只有第一次恢复改变状态）；之后对它的范围调用 `compress` 会以同一个 ID 原地重新折叠它。带 `startId` 和 `endId` 时（它们和 `imageRef` 一起出现在 schema 中，是宿主的扩展，见 `core_tools/compression_spec.rs`），只返回块中引用落在范围内的消息，从历史读取（宿主为此需要它的内容存储；Agent 保留完整历史），且不改变任何东西。带非空的 `toFile` 时，文本改写到会话的导出文件：这个值只表示要一个文件，因为写到模型指定的位置就是一次未经批准的写入。工具提出请求（`CompressionToolRun.export`）；`execute_compression_tool` 在释放记录的锁之后通过 `AgentHistoryStore::write_session_export` 写入，输出给出路径；写入失败时说明这一点，并原地附上前 4 000 个字符。文件存储写 `history/attachments/<session>/exports/decompress-<block>[-full|-<start>-<end>].txt`，同名的下一次导出替换它，删除会话时一并删除；不保存文件的存储（内存中的那个，因此每个临时会话都是）拒绝，这是该 trait 方法的默认行为。不像宿主那样在超过 10 000 个字符时不经请求就写到文件：请求会限制它的历史工具输出（`project_model_tool_outputs`），大的原地恢复也在内。带 `imageRef` 时取回图片：`list` 列出窗口中每条带图片的消息（引用、类型、大小，最多 50 条）；`mNNNNN` 引用或摘要的 MEDIA REFS 列出的句柄（适配器作为消息图片句柄传入的附件 ID，crate 在折叠时把它追加到块的摘要中）把该消息的图片附在输出上。`full` 恢复和范围恢复也附上它们返回的消息的图片。这些是历史自己的附件（`CompressionToolRun.images`，写入所提交的 `ToolOutput` 的 `images`），所以之后的每个请求都像加载任何工具输出的图片一样加载它们，不接受图片输入的模型会被去掉它们；此时图片恢复被拒绝。
 - **`search_context`** 先搜索块摘要（包括有效的和已被折叠掉的），再搜索被折叠的原文（crate 的 `folded_message_inputs`，即有效块覆盖的消息），两者都和 billion-context 的宿主一样按查询词的字面出现（`Algorithm::Substring`，最低分 1e-9）：出现一次就是命中，没有出现就是不匹配，而混合搜索的模糊 n-gram 会把什么都不匹配的查询变成弱匹配。摘要行给出块覆盖的引用，以及它最有区分度的词周围的一段，用 【】 标出；原文行给出一个没有被摘要行列出的块、它最佳消息的引用和那一段；三个及以上词的查询，在某个词只有排名靠后的块包含时，得到宿主的提示。文档特征按会话缓存（`SessionRuntime.compression_search`，crate 的 `DocCache`，最多 8 Mi 个 UTF-16 单元的文本），从不持久化。宿主的计划感知引导没有移植：它默认关闭，而 Agent 没有这样的设置。
 - **`acp_status`** 是该 crate 的状态报告。**`acp_cache`** 根据 Agent 记录的内容报告：上一个响应的用量和各次折叠。模型 API 的 `ModelUsage` 只有输入和输出 token，没有缓存的 token，所以在它报告之前没有 token 算作缓存。
 
+**可选功能。** `[compaction.hierarchical]` 的 `absorb`、`contentStore`、`crush` 和 `rules` 设置该 crate 的 `Config` 中同名的部分（它们的其他设置保留该 crate 的默认值：4 000 个 token 的门槛、96 个字符的开头、50 条规则、每条 300 个字符），`process_turn_with` 按内核的顺序应用它们：内容存储、隐藏已吸收的调用和结果、crush（只在 `absorb` 开启时）、吸收要求。它们只在 `Hierarchical` 下起作用：已切换走的会话（`Carry`）仍隐藏已吸收的调用和结果，但重新显示已保存的原文，也不再有吸收要求，因为它们的工具已不再被规划。
+
+- **`absorb`。** 4 000 个 token 及以上、不受保护且不属于 ACP 工具的工具结果，在视图中被附加 `[ACP absorb]` 要求（从不保存），指令中加入 `build_absorb_system_prompt` 的一节。`absorb` 调用（`parse_absorb_input`、`apply_absorb`）在状态中记录一条 `AbsorbRecord`，从下一个请求起，目标的调用和结果被去掉；`absorb` 调用本身留下作为记录。
+- **`crush`。** 在决定是否要求吸收之前，大结果中的 JSON、代码或日志被确定性地折叠（`apply_crush_to_messages`）；折叠后低于门槛的结果不再被要求吸收。
+- **内容存储。** 大的工具结果第一次出现时，在视图中被替换为它的占位符（`📦 [acp-stored #mNNNNN · kind · tokens tok] …`），一次折叠保存它的块所覆盖的原文（`store_covered_originals`，随 `compress` 在其提交时应用）。存储（`AgentContentStore`，即该 crate 的 `ContentStore`）保存在 `SessionRuntime.compression_runtime` 中，不在记录里：与状态一样，只有步骤自己的请求保留它的投影返回的存储。在使它增长的提交之后（步骤开始、一次 `compress`），内核在释放记录锁后，通过 `AgentHistoryStore::write_compression_store` 把它整个写出；文件存储写入 `history/attachments/<session>/compression-store.json`（先暂存再发布），blob 清扫从不读取它，删除会话时将它移除。加载会话时用 `load_compression_store` 读取；无法读取的文件被移到一旁，名为 `compression-store.unreadable-<millis>.json`，读作没有。分叉或子会话取得源会话的存储。每个条目只在状态把它的 ref 绑定到同一条消息时保留（从 `compress` 调用重建的状态可能编号不同）。存储是历史的缓存：占位符只由原文构建，所以丢失的条目（写入前崩溃、写入失败、被丢弃的条目）会在下一个显示该消息的请求中再次保存，逐字节相同；只有窗口已不再包含的被折叠原文会丢失，此时 `acp_retrieve` 回答该 ref 没有保存的原文。`acp_retrieve`（`apply_retrieve`、`note_retrieval`）把原文作为不可信数据内联返回，或者从 4 000 个 token 起把它写入会话的导出文件 `<ref>.txt`（`write_session_export`，与 `decompress` 的 `toFile` 相同），并以 `build_retrieval_pointer` 给出路径；不保存文件的存储把它内联返回。
+- **`rules`。** `acp_rule`（`execute_rule`）在状态中记录、删除、清空或列出 `RuleRecord`。指令中加入 `RULES_USAGE_PROMPT`，有规则后再加入 `format_rules_for_prompt` 的列表，位于静态提示和吸收一节之后：规则改变之前字节相同。
+
+**被中断的轮次。** 用户中断一个 `hierarchical` 轮次时，`stage_terminal` 记下它最后一个请求投影时的 token 数（`CompressionRuntime`，从不持久化）。之后的每次投影，一旦计数超过它，就用 `NudgeState::absorb_aborted_turn_growth` 把它记入提醒（billion-context 的 #5415）：增长基准向前移动，从第二次中断起，跳过的增长作为欠账偿还。重启后它被遗忘。
+
 **此策略下的压缩。** 在 `Hierarchical` 下，自动检查（`maybe_auto_compact`）不看阈值：它像以前一样在轮次有预算压力时压缩，或者在投影报告最终出口时压缩（该 crate 统计的、超过紧急阈值且已没有可折叠或可截短内容的请求数达到三），并且只在 `autoCompactionEnabled` 开启时。标准压缩的来源是对有效块的投影（`project_compaction_source`：去掉被覆盖的条目，摘要作为文本，没有标签）。安装时，`after_standard_compaction` 在 `hierarchical` 下重新开始最终出口的计数，块所覆盖的条目已离开窗口，这些块在下一次投影时失效；已切换走的会话丢弃它的状态。
 
 **Panic。** 对该 crate 的每次调用都在 `catch_panic` 下运行。请求投影中的 panic 让这个请求带完整历史发送，并设置轮次的 `compression_fallback`：轮次之后的步骤按 `standard` 运行（没有提示、工具和提醒，阈值恢复），记录一条警告，下一轮次再尝试。投影压缩来源时的 panic 让压缩读取完整历史。工具中的 panic 是这次调用的错误 `[Compression FAILED: … (internal error)]`，状态保持原样。
 
-**设置。** facade 每个轮次读取 `[compaction.hierarchical]`，作为 `AgentHierarchicalCompression` 放进轮次扩展；内核把它映射到该 crate 的 `Config` 上，以会话的上下文窗口作为模型的上限：`maxContextLimitPercent` 设定压力区间，`emergencyThresholdPercent` 设定紧急提醒和截短阈值（从不低于压力区间），`nudgeGrowthTokens` 设定增长步长，其余按名字映射。没有它的轮次取默认值；上下文窗口未知时什么都不施加压力。`messageTimestamps` 和可选功能还没有映射。
+**设置。** facade 每个轮次读取 `[compaction.hierarchical]`，作为 `AgentHierarchicalCompression` 放进轮次扩展；内核把它映射到该 crate 的 `Config` 上，以会话的上下文窗口作为模型的上限：`maxContextLimitPercent` 设定压力区间，`emergencyThresholdPercent` 设定紧急提醒和截短阈值（从不低于压力区间），`nudgeGrowthTokens` 设定增长步长，其余按名字映射。没有它的轮次取默认值；上下文窗口未知时什么都不施加压力。`absorb`、`contentStore`、`crush` 和 `rules` 开启该 crate 中同名的部分；`messageTimestamps` 还没有映射。
 
 ## 其他细节 [#other-details]
 

@@ -59,6 +59,17 @@ impl AgentService {
         Ok(record.runtime.compression.as_deref().cloned())
     }
 
+    /// The session's content store (`hierarchical`'s originals).
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn test_content_store(
+        &self,
+        session_id: AgentSessionId,
+    ) -> Result<Option<crate::AgentContentStore>, AgentError> {
+        let cell = self.session(session_id)?;
+        let record = cell.lock_after_persistence_blocking()?;
+        Ok(record.runtime.compression_runtime.content_store().cloned())
+    }
+
     /// Replaces the session's hierarchical compression state in memory, as
     /// a corrupt one would be read.
     #[cfg(any(test, feature = "test-support"))]

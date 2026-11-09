@@ -11,6 +11,9 @@ pub struct EphemeralAgentHistoryStore {
     /// puts its state in the runtime.
     compression:
         parking_lot::Mutex<std::collections::HashMap<AgentSessionId, crate::AgentCompressionChain>>,
+    /// Each session's content store, as last written.
+    content_stores:
+        parking_lot::Mutex<std::collections::HashMap<AgentSessionId, crate::AgentContentStore>>,
 }
 
 impl EphemeralAgentHistoryStore {
@@ -264,6 +267,25 @@ impl AgentHistoryStore for EphemeralAgentHistoryStore {
 
     fn discard_live_session(&self, _session_id: AgentSessionId) {}
 
+    fn write_compression_store(
+        &self,
+        session_id: AgentSessionId,
+        store: &crate::AgentContentStore,
+    ) -> Result<(), AgentHistoryStoreError> {
+        if !self.sessions.lock().contains_key(&session_id) {
+            return Err(AgentHistoryStoreError::NotFound { session_id });
+        }
+        self.content_stores.lock().insert(session_id, store.clone());
+        Ok(())
+    }
+
+    fn load_compression_store(
+        &self,
+        session_id: AgentSessionId,
+    ) -> Result<Option<crate::AgentContentStore>, AgentHistoryStoreError> {
+        Ok(self.content_stores.lock().get(&session_id).cloned())
+    }
+
     fn load_recovery_candidates(
         &self,
     ) -> Result<Vec<Result<AgentRecoveredSession, AgentRecoveryLoadFailure>>, AgentHistoryStoreError>
@@ -388,6 +410,9 @@ impl AgentHistoryStore for EphemeralAgentHistoryStore {
         self.attachments
             .lock()
             .retain(|(session_id, _), _| !session_ids.contains(session_id));
+        self.content_stores
+            .lock()
+            .retain(|session_id, _| !session_ids.contains(session_id));
         Ok(())
     }
 

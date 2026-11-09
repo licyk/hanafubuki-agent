@@ -67,8 +67,7 @@ impl AgentService {
                     provider_capabilities: model.tool_capabilities(),
                     selected_deferred_tools: selected_deferred_tools(&record.conversation.history),
                     memory_contribution_enabled,
-                    compression_tools: super::super::compression::CompressionMode::of(record)
-                        == super::super::compression::CompressionMode::Hierarchical,
+                    compression_tools: super::super::compression::planned_tools(record),
                 },
                 turn.cancellation.clone(),
                 model,
@@ -190,6 +189,15 @@ impl AgentService {
             if let Some(state) = compression.state {
                 record.runtime.compression = Some(Arc::new(state));
             }
+            if let Some(store) = compression.content_store {
+                record.runtime.compression_runtime.keep_content_store(store);
+            }
+            if let Some((tokens, abort_booked)) = compression.sent {
+                record
+                    .runtime
+                    .compression_runtime
+                    .sent(tokens, abort_booked);
+            }
             if compression.failed {
                 exact_turn_mut(record, identity)?.compression_fallback = true;
             }
@@ -202,6 +210,7 @@ impl AgentService {
             )
         };
         self.persist_staged(staged).await?;
+        self.persist_content_store(identity.session_id);
         if let Some(history_event) = history_event {
             event_sink.emit(history_event);
         }
