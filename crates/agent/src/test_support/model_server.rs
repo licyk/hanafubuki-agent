@@ -219,3 +219,14 @@ pub fn assistant_events(text: &str) -> Vec<u8> {
     )
     .into_bytes()
 }
+
+/// `events` (an answer's) with the provider's count of the request's input tokens.
+pub fn with_input_tokens(events: Vec<u8>, input_tokens: u64) -> Vec<u8> {
+    String::from_utf8(events)
+        .unwrap()
+        .replace(
+            "\"end_turn\":true}",
+            &format!("\"end_turn\":true,\"usage\":{{\"input_tokens\":{input_tokens},\"output_tokens\":1}}}}"),
+        )
+        .into_bytes()
+}

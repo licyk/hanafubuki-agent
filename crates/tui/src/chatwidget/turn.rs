@@ -45,6 +45,7 @@ impl ChatWidget {
                     | TurnUpdate::ToolCompleted { .. }
                     | TurnUpdate::ApprovalRequested(_)
                     | TurnUpdate::UserInputRequested(_)
+                    | TurnUpdate::Compacted
             )
     }
 
@@ -110,6 +111,10 @@ impl ChatWidget {
                 self.retry_status_header = Some(header.clone());
                 self.bottom_pane.update_status(header, None);
             }
+            TurnUpdate::Compacted => self.add_to_history(history_cell::new_info_event(
+                "Context compacted".to_string(),
+                None,
+            )),
             TurnUpdate::Ended(end) => self.on_turn_ended(end),
             TurnUpdate::Error(message) => {
                 self.add_to_history(history_cell::new_error_event(message))
@@ -119,7 +124,6 @@ impl ChatWidget {
             | TurnUpdate::ModelChoices(_)
             | TurnUpdate::ModelChanged(_)
             | TurnUpdate::ModeChanged(_)
-            | TurnUpdate::Compacted(_)
             | TurnUpdate::StatusReport(_)
             | TurnUpdate::Providers(_)
             | TurnUpdate::Mcp(_)

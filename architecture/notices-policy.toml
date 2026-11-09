@@ -287,6 +287,10 @@ path = "crates/tui/src/app/tests/backtrack.rs"
 reason = "Editing an earlier message end to end over the standalone Agent: browsing, the fork and the archived original."
 
 [[original]]
+path = "crates/tui/src/app/tests/compaction.rs"
+reason = "The compaction cells and /status's background compaction end to end over the standalone Agent."
+
+[[original]]
 path = "crates/tui/src/agent_bridge/providers.rs"
 reason = "The Provider screen's calls onto the facade's Provider API."
 

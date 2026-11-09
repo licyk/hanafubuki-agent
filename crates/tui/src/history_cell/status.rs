@@ -2,12 +2,13 @@
 
 //! The `/status` card (Codex's `status` module, trimmed): the session's
 //! model and Provider, the workspace, the permission mode and the session
-//! mode, its id, and the tokens it used. Codex's account, rate limits,
+//! mode, its id, the tokens it used and a compaction running in the
+//! background. Codex's account, rate limits,
 //! sandbox and AGENTS.md lines have no counterpart here.
 
 use std::path::PathBuf;
 
-use hanafubuki_agent::{AgentPermissionMode, AgentSessionMode};
+use hanafubuki_agent::{AgentBackgroundCompactionState, AgentPermissionMode, AgentSessionMode};
 use ratatui::style::Stylize;
 use ratatui::text::{Line, Span};
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
@@ -16,7 +17,7 @@ use super::{plain_lines, with_border, HistoryCell};
 use crate::agent_bridge::StatusReport;
 use crate::text_formatting::center_truncate_path;
 
-const LABELS: [&str; 8] = [
+const LABELS: [&str; 9] = [
     "Model",
     "Provider",
     "Directory",
@@ -25,6 +26,7 @@ const LABELS: [&str; 8] = [
     "Session",
     "Token usage",
     "Context window",
+    "Compaction",
 ];
 
 #[derive(Debug)]
@@ -40,6 +42,9 @@ pub(crate) struct StatusHistoryCell {
     output_tokens: u64,
     /// The tokens in the context and the window's size, when both are known.
     context: Option<(u64, u64)>,
+    /// Read from the snapshot as the command ran: it changes without a
+    /// revision.
+    background_compaction: Option<AgentBackgroundCompactionState>,
 }
 
 pub(crate) fn new_status_output(report: &StatusReport) -> StatusHistoryCell {
@@ -60,6 +65,7 @@ pub(crate) fn new_status_output(report: &StatusReport) -> StatusHistoryCell {
         output_tokens: usage.map_or(0, |usage| usage.cumulative_output_tokens),
         context: usage
             .and_then(|usage| Some((usage.context_consumed_tokens?, usage.context_window_tokens?))),
+        background_compaction: session.background_compaction,
     }
 }
 
@@ -147,6 +153,15 @@ impl HistoryCell for StatusHistoryCell {
         lines.push(formatter.line("Token usage", self.token_usage_spans()));
         if let Some(spans) = self.context_window_spans() {
             lines.push(formatter.line("Context window", spans));
+        }
+        if let Some(state) = self.background_compaction {
+            let state = match state {
+                AgentBackgroundCompactionState::Running => "compacting in the background",
+                AgentBackgroundCompactionState::Ready => {
+                    "compacted in the background, installed before the next request"
+                }
+            };
+            lines.push(formatter.line("Compaction", vec![Span::from(state)]));
         }
 
         let content_width = lines.iter().map(Line::width).max().unwrap_or(0);

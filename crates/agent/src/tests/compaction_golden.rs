@@ -170,17 +170,6 @@ async fn background_compacted_request_matches_golden() {
     assert_golden("background_compacted_request", &normalized);
 }
 
-/// `events` with the provider's count of the request's input tokens.
-fn with_input_tokens(events: Vec<u8>, input_tokens: u64) -> Vec<u8> {
-    String::from_utf8(events)
-        .unwrap()
-        .replace(
-            "\"end_turn\":true}",
-            &format!("\"end_turn\":true,\"usage\":{{\"input_tokens\":{input_tokens},\"output_tokens\":1}}}}"),
-        )
-        .into_bytes()
-}
-
 /// A window compacted mid-turn (the model asked for a new context) renders
 /// every section again from the registry: the step after the compaction
 /// carries the Skill catalog, as the first step did, beside the compacted

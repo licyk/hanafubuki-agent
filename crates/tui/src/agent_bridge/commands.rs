@@ -86,10 +86,9 @@ impl AgentBridge {
                             sink,
                         )
                         .await
-                        .map(|outcome| {
-                            Some(AgentReply::Update(Box::new(TurnUpdate::Compacted(outcome))))
-                        })
-                        .map_err(|error| format!("the conversation was not compacted: {error}"))
+                        .map_err(|error| format!("the conversation was not compacted: {error}"))?;
+                    // The install's event showed it, as every install's does.
+                    Ok(None)
                 })
             }
             AgentCommand::ListModels => {

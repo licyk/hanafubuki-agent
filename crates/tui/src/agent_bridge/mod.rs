@@ -39,7 +39,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use hanafubuki_agent::{
-    AgentAvailability, AgentCompactionOutcome, AgentEvent, AgentEventKind, AgentEventSink,
+    AgentAvailability, AgentCompactionStatus, AgentEvent, AgentEventKind, AgentEventSink,
     AgentGoal, AgentHandle, AgentHistorySortDirection, AgentPermissionMode, AgentReasoningId,
     AgentRuntime, AgentSessionId, AgentSessionMode, AgentSlot, AgentStatusEventSink,
     AgentSteeringRequest, AgentTaskPlanSnapshot, AgentTurnAccepted, AgentTurnPageRequest,
@@ -111,7 +111,9 @@ pub(crate) enum TurnUpdate {
     ModelChoices(ModelChoices),
     ModelChanged(String),
     ModeChanged(AgentSessionMode),
-    Compacted(AgentCompactionOutcome),
+    /// The session's context was compacted: by `/compact`, automatically
+    /// or in the background.
+    Compacted,
     StatusReport(Box<StatusReport>),
     Providers(ProviderReply),
     Mcp(McpReply),
@@ -479,6 +481,13 @@ impl AgentBridge {
             AgentEventKind::TaskPlanUpdated { plan } => {
                 self.send_session_status();
                 TurnUpdate::TaskPlan(plan)
+            }
+            // Every install, `/compact`'s included, is shown from its event.
+            AgentEventKind::CompactionUpdated { compaction }
+                if compaction.status == AgentCompactionStatus::Completed =>
+            {
+                self.send_session_status();
+                TurnUpdate::Compacted
             }
             AgentEventKind::HistoryCommitted { .. }
             | AgentEventKind::SessionTitleUpdated { .. }

@@ -72,6 +72,16 @@ impl Harness {
         with_provider: bool,
         mode: TranscriptMode,
     ) -> Self {
+        Self::start_configured(responses, with_provider, mode, |_| {})
+    }
+
+    /// `configure` changes the configuration before the Agent starts.
+    fn start_configured(
+        responses: Vec<(Vec<u8>, Duration)>,
+        with_provider: bool,
+        mode: TranscriptMode,
+        configure: impl FnOnce(&AgentConfig),
+    ) -> Self {
         let model_runtime = tokio::runtime::Runtime::new().unwrap();
         let server = model_runtime.block_on(FakeServer::start(responses));
         let home = tempfile::tempdir().unwrap();
@@ -82,9 +92,11 @@ impl Harness {
             "disabledPlugins = [\"titles\"]\n",
         )
         .unwrap();
+        let config = AgentConfig::new(home.path());
         if with_provider {
-            configure_test_provider(&AgentConfig::new(home.path()), &server.base_url, None);
+            configure_test_provider(&config, &server.base_url, None);
         }
+        configure(&config);
 
         let (sender, events) = channel();
         let sender = AppEventSender::new(sender);
@@ -641,6 +653,7 @@ fn a_resumed_session_loads_its_earlier_pages_into_the_owned_transcript() {
 mod agents;
 mod appearance;
 mod backtrack;
+mod compaction;
 mod features;
 mod preferences;
 mod session_commands;

@@ -126,7 +126,34 @@ and pushed, and notes what Hanafubuki must change at its next pin.
     `AgentBackgroundCompactionState`. Shutdown's stop step now also waits
     for background compactions. Golden to copy:
     `background_compacted_request.json`.
-- [ ] P4: background compaction in the interface and docs.
+- [x] P4: background compaction in the interface and docs. Done: the
+      terminal interface shows `Context compacted` from every
+      `CompactionUpdated` that is `completed` (manual, pre-turn, mid-turn,
+      new context, context error, background); `/compact`'s reply carries
+      only a failure, so neither a manual compaction nor one `/compact` takes
+      from the background shows twice; the cell waits behind a streaming
+      message like tool updates. `/status` has a `Compaction` row from the
+      snapshot it reads as it runs (`compacting in the background`, or ready
+      and installed before the next request). Docs: json-events
+      (`compaction_updated`'s `phase`, `reason`, `implementation`, `usage`;
+      a background run's one `completed` event), terminal-interface (the
+      cell, `/compact`, `/status`), internals (the bridge), architecture
+      ("a third compaction path" dropped from "Not built": the three
+      implementations and the background strategy are built; the Codex
+      row). `with_input_tokens` moved into the facade's `test_support`.
+      Tests: `app/tests/compaction.rs` (a background compaction installed
+      in the turn that took it shows once, between the question and the
+      answer, and once on resume; `/status` while it runs; `/compact` shows
+      one cell, replayed once). Goldens unchanged.
+  - Open: a compaction that fails during a turn shows nothing in the
+    terminal interface (as before); only `/compact`'s failure is shown.
+    The status line has no background item; `/status` is the only view.
+  - Hanafubuki, at its next pin: the facade re-exports
+    `AgentBackgroundCompactionState`; `test_support::with_input_tokens` is
+    new. A host's compacted marker belongs on `compaction_updated` with
+    `status: completed` (every phase, `background` included), and a status
+    view reads `backgroundCompaction` from a fresh snapshot (it changes
+    without a revision).
 - [x] P5: `crates/compression` core (model, refs, boundaries, parse,
       project, protect, apply, prune, render) with the ported tests;
       notices and attribution. Pure (serde and serde_json only); 361
