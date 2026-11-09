@@ -18,7 +18,7 @@ impl AgentExecutionService {
         self.inner
             .process
             .resize(&receipt, cols, rows)
-            .map_err(AgentExecutionError::Process)?;
+            .map_err(|error| self.port_error(execution_id, error))?;
         Ok(InteractiveResizeAccepted {
             execution_id,
             generation,

@@ -14,6 +14,7 @@ impl AgentExecutionService {
                     &record.scope == scope
                         && record.kind == AgentExecutionKind::UnifiedExec
                         && record.receipt.is_some()
+                        && !record.disposing
                 })
                 .map(|(execution_id, record)| {
                     (

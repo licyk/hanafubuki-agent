@@ -40,12 +40,12 @@ impl AgentExecutionService {
                     .inner
                     .process
                     .write(&receipt, chars.as_bytes().to_vec(), false)
-                    .map_err(AgentExecutionError::Process)?,
+                    .map_err(|error| self.port_error(request.session_id, error))?,
                 (ExecutorIoMode::Pipe, "\u{3}") => self
                     .inner
                     .process
                     .interrupt(&receipt)
-                    .map_err(AgentExecutionError::Process)?,
+                    .map_err(|error| self.port_error(request.session_id, error))?,
                 (ExecutorIoMode::Pipe, _) => return Err(AgentExecutionError::NotInteractive),
             }
         }
@@ -116,6 +116,9 @@ impl AgentExecutionService {
         if completed {
             self.await_observer_release(execution_id);
             if let Err(error) = self.dispose(scope, execution_id) {
+                if matches!(error, AgentExecutionError::NotFound) {
+                    return Err(error);
+                }
                 log::warn!(
                     "agent_diag stage=unified_exec.complete execution_id={} unified_exec_outcome=cleanup_retained unified_exec_session_live=false cleanup_obligation=true",
                     execution_id

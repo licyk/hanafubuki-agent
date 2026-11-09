@@ -11,7 +11,7 @@ impl AgentExecutionService {
             .inner
             .process
             .info(&receipt)
-            .map_err(AgentExecutionError::Process)?;
+            .map_err(|error| self.port_error(execution_id, error))?;
         self.update_and_snapshot(execution_id, &info, None)
     }
 
@@ -33,7 +33,7 @@ impl AgentExecutionService {
             .inner
             .process
             .read(&receipt, from_offset, Some(max_bytes))
-            .map_err(AgentExecutionError::Process)?;
+            .map_err(|error| self.port_error(execution_id, error))?;
         let now = now_millis();
         if let Some(record) = self.inner.registry.lock().records.get_mut(&execution_id) {
             record.updated_at_ms = now;

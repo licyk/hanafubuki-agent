@@ -22,6 +22,9 @@ pub(super) struct ExecutionRecord {
     pub(super) unified_output_offset: u64,
     /// A progress reporter is streaming this execution's output.
     pub(super) observed: bool,
+    /// One caller is disposing this execution; to every other caller it is
+    /// already gone (`NotFound`).
+    pub(super) disposing: bool,
 }
 
 impl AgentExecutionService {
@@ -64,6 +67,7 @@ impl AgentExecutionService {
                 interactive,
                 unified_output_offset: 0,
                 observed: false,
+                disposing: false,
             },
         );
         Ok((execution_id, process_id))
@@ -116,6 +120,7 @@ impl AgentExecutionService {
         let record = registry
             .records
             .get(&execution_id)
+            .filter(|record| !record.disposing)
             .ok_or(AgentExecutionError::NotFound)?;
         if &record.scope != scope {
             return Err(AgentExecutionError::CrossScope);
@@ -132,6 +137,7 @@ impl AgentExecutionService {
         let record = registry
             .records
             .get(&execution_id)
+            .filter(|record| !record.disposing)
             .ok_or(AgentExecutionError::NotFound)?;
         if &record.scope != scope {
             return Err(AgentExecutionError::CrossScope);
@@ -155,6 +161,7 @@ impl AgentExecutionService {
         let record = registry
             .records
             .get(&execution_id)
+            .filter(|record| !record.disposing)
             .ok_or(AgentExecutionError::NotFound)?;
         if &record.scope != scope {
             return Err(AgentExecutionError::CrossScope);
@@ -220,6 +227,43 @@ impl AgentExecutionService {
         })
     }
 
+    /// Claims the execution's disposal for this caller and returns its
+    /// receipt; a concurrent caller then finds it gone.
+    pub(super) fn claim_disposal(
+        &self,
+        scope: &AgentExecutionScope,
+        execution_id: AgentExecutionId,
+    ) -> Result<ProcessReceipt, AgentExecutionError> {
+        let mut registry = self.inner.registry.lock();
+        let record = registry
+            .records
+            .get_mut(&execution_id)
+            .filter(|record| !record.disposing)
+            .ok_or(AgentExecutionError::NotFound)?;
+        if &record.scope != scope {
+            return Err(AgentExecutionError::CrossScope);
+        }
+        let receipt = record
+            .receipt
+            .clone()
+            .ok_or(AgentExecutionError::NotFound)?;
+        record.disposing = true;
+        Ok(receipt)
+    }
+
+    /// A failed disposal ends its claim: the execution stays, owing cleanup,
+    /// for anyone to retry.
+    pub(super) fn release_failed_disposal(
+        &self,
+        execution_id: AgentExecutionId,
+        error: String,
+    ) -> AgentExecutionError {
+        if let Some(record) = self.inner.registry.lock().records.get_mut(&execution_id) {
+            record.disposing = false;
+        }
+        self.retain_cleanup_error(execution_id, error)
+    }
+
     pub(super) fn retain_cleanup_error(
         &self,
         execution_id: AgentExecutionId,
@@ -235,6 +279,30 @@ impl AgentExecutionService {
             execution_id,
             message: error,
         }
+    }
+
+    /// The error for a failed port call. A caller that fetched the receipt
+    /// before another caller disposed the execution, or began to, finds the
+    /// process gone: that is `NotFound`, not a process failure.
+    pub(super) fn port_error(
+        &self,
+        execution_id: AgentExecutionId,
+        error: String,
+    ) -> AgentExecutionError {
+        if self.is_live(execution_id) {
+            AgentExecutionError::Process(error)
+        } else {
+            AgentExecutionError::NotFound
+        }
+    }
+
+    pub(super) fn is_live(&self, execution_id: AgentExecutionId) -> bool {
+        self.inner
+            .registry
+            .lock()
+            .records
+            .get(&execution_id)
+            .is_some_and(|record| !record.disposing)
     }
 }
 
