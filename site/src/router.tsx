@@ -9,6 +9,10 @@ export function getRouter() {
     routeTree,
     basepath: routerBasePath(import.meta.env.BASE_URL),
     defaultPreload: "intent",
+    // Static hosts serve a prerendered page at `page/` and redirect `page`
+    // there, and giscus maps `location.pathname` as it is: in-site links that
+    // dropped the slash would give every page a second discussion.
+    trailingSlash: "always",
     scrollRestoration: true,
     defaultNotFoundComponent: NotFound,
   });

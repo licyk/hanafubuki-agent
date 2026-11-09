@@ -91,7 +91,9 @@ The next release with it is 0.2.0 (the headline event is removed).
       `site/content/docs/**/*.mdx`. Under the Pages base, TanStack Start's
       static server functions fetched from the origin root, which broke
       client-side navigation: `patches/` prefixes Vite's base
-      (AGENTS.md, "Site").
+      (AGENTS.md, "Site"). The router links with a trailing slash, so
+      giscus's `pathname` term is the same for a page reached by URL or by
+      in-site navigation.
 - [ ] D2: the content rewrite, bilingual; `docs/` removed; links re-pointed.
   - `index`, `installation` and `quick-start` (both languages) are drafts
     to replace; the sidebar's sections go in `meta.json` and
@@ -105,11 +107,11 @@ The next release with it is 0.2.0 (the headline event is removed).
     add a deploy job to `site.yml` on push to main that publishes the
     built `site/.output/public` (the `site` artifact today; `404.html` is
     the SPA shell, `.nojekyll` is in it).
-  - Giscus maps `pathname`: a page reached by URL is
-    `/hanafubuki-agent/docs/x/` (Pages adds the slash) and by in-site
-    navigation `/hanafubuki-agent/docs/x`. Check whether giscus keeps the
-    slash in the term (two discussions per page); if it does, map
-    `specific` with a normalized term, as Hanafubuki does.
+  - Giscus maps `pathname`, which keeps a trailing slash: Pages serves a
+    page at `/hanafubuki-agent/docs/x/`, so the router links with the
+    slash too (`trailingSlash: "always"`, checked locally against a
+    server that redirects as Pages does). Confirm on the live site that
+    a page reached by URL and by in-site navigation opens one thread.
 
 ## Extraction from Hanafubuki
 
