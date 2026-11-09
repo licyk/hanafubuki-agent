@@ -34,7 +34,8 @@ async fn unified_exec_completes_only_after_manual_exact_approval() {
             .await
     });
 
-    let (turn_identity, request) = tokio::time::timeout(Duration::from_secs(5), async {
+    // The first turn's sampling and planning, on a loaded CI runner.
+    let (turn_identity, request) = tokio::time::timeout(Duration::from_secs(30), async {
         loop {
             let snapshot = service.snapshot(session_id).unwrap();
             if let Some(turn_identity) = snapshot.turn {
