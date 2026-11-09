@@ -380,6 +380,40 @@ moves its pin.
     `trust_hooks`; `AgentStoragePaths.hooks_state_file`.
 - [ ] P14 (decision 4): `hanafubuki-agent-sandbox`, sandbox presets in
       `/permissions`, `/setup-default-sandbox` on Windows.
+  - [x] P14a, Linux: `crates/sandbox` (`SandboxPolicy` read-only |
+        workspace-write | full-access); the model's commands run through
+        the binary as a helper (`--hanafubuki-agent-sandbox`: no_new_privs,
+        Landlock writes only to the writable roots, `/dev/null`,
+        `/dev/tty`; seccomp blocks the network unless allowed), Codex's
+        Landlock + seccomp path rather than bubblewrap; fail closed (a
+        mode the machine cannot enforce refuses the command, before
+        approval). `sandboxMode` (unset: workspace-write on Linux,
+        full-access elsewhere until P14b/c), `[sandboxWorkspaceWrite]`
+        `writableRoots`, `networkAccess` (default false); per-session
+        `set_session_sandbox_mode` (a subagent inherits it); `doctor`
+        shows the sandbox. `crates/process` unchanged.
+  - [ ] P14b, macOS: Seatbelt (`sandbox-exec`) in `Sandbox::wrap`; the
+        macOS default.
+  - [ ] P14c, Windows: the restricted-token backend through
+        `helper_dispatch`, TEMP as a writable root, the elevated setup,
+        `/setup-default-sandbox`, `windows.sandbox`; the Windows default.
+  - [ ] P14d: escalation (the model asks to run one command outside the
+        sandbox, approved like any action: Codex's
+        `sandbox_permissions`/`justification`; a model-visible schema
+        change, goldens) and telling the model the sandbox mode; the
+        `/permissions` presets combining a mode with a sandbox.
+  - Open: on Linux the network is now off by default for the model's
+    commands, and until P14d nothing lets one command out; test support's
+    `configure_test_provider` also writes `sandboxMode = "full-access"`
+    (test binaries cannot be the helper); `.git` under a writable root
+    stays writable (Landlock cannot carve sub-paths); review sessions are
+    not backed by a read-only sandbox yet.
+  - Hanafubuki, at its next pin: call `hanafubuki_agent::sandbox::
+    helper_dispatch()` first in `main` (else every command fails on Linux
+    by default, or set `sandboxMode = "full-access"`); `AgentSettings`
+    has `sandbox_mode` and `sandbox_workspace_write`;
+    `ExecCommandRequest.sandbox`; `set_working_directory` is now
+    `set_workspace_roots`; a new crate.
 
 ## Plan: visible thinking and the documentation site (2026-11-09)
 
