@@ -1,5 +1,44 @@
 # Follow-ups
 
+## Plan: installable plugins on Kardia, compatible with Codex, with our own format (2026-11-10)
+
+The plan is [docs/plan-plugin-system.md](docs/plan-plugin-system.md). Every
+§9 decision was accepted as recommended. Sources: Codex `57a808a392`,
+Kardia (`cordis-rs`) v0.2.0, pykardia. Each phase is validated, documented
+in both languages, committed and pushed, and notes what Hanafubuki must
+change at its next pin. Publishing Kardia to crates.io is confirmed with the
+user first.
+
+- [ ] P1: `crates/packages` package store: identity, the four manifest
+      formats, marketplaces (local, git), versioned cache, data dirs, staged
+      atomic install/uninstall, commands to Skills, content hashes,
+      `install.json`; `plugins/` in the data dir; `[plugins]` and
+      `[marketplaces]` (camelCase keys).
+- [ ] P2: content sources: `plugin:` Skill roots, plugin-owned MCP servers
+      (`.mcp.json`, Agent Plugins `mcp.json`), `HookSource::Plugin` with
+      package-content trust, the "available plugins" section, live reload.
+- [ ] P3: lifecycle API (facade), `plugins` CLI, TUI `/plugins` (Codex's
+      port), built-in rows with retry, `--safe-mode`, `package_changed`.
+- [ ] P4: kernel deadlines at the five untimed points (context, admission,
+      tool source, prompt `prepare`, tool `permission`).
+- [ ] K1: Kardia (`cordis-rs`): public async guest transport, `Spawner`,
+      async calls with timeouts and request ids, exit monitoring, meta from
+      outside, command and args, stderr tail, frame limit, WASM engine
+      limits; `kardia-guest/2` in kardia-guest and pykardia; the guest SDKs
+      relicensed permissively; release (0.2.x if additive, after the user
+      confirms publishing).
+- [ ] P5: guest host `crates/plugin-packages`: the `plugins` row with a
+      kardia-loader subtree, `Resolver`, `ExecutorManager` spawner, the
+      sandbox's plugin profile, exit watcher, guest state and restart loop.
+- [ ] P6: contribution proxies (tools as sourced tools, context sections,
+      prompt fragments, lifecycle and continuation hooks, observers), the
+      host-function allowlist, settings from `configSchema`.
+- [ ] P7: developer story: `plugins new|dev|validate`, Rust and Python
+      examples, the "Writing plugins" page.
+- [ ] P8: WASM guests with fuel/epoch and memory limits.
+- [ ] P9: end-to-end crash tests (panic, hang, kill -9, abort, garbage,
+      oversize frame, restart loop) and a pty smoke test.
+
 ## Plan: background compaction, hierarchical compression, a choice between them (2026-11-09)
 
 The plan is [docs/plan-context-compaction.md](docs/plan-context-compaction.md).
