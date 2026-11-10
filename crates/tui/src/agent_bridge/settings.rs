@@ -13,7 +13,7 @@ use hanafubuki_agent::panic::recorded_panics;
 use hanafubuki_agent::{
     AgentCompactionStrategy, AgentConfigProblem, AgentConfigRecovery, AgentHandle,
     AgentMemoryContributionMode, AgentMemorySettings, AgentMemoryStatus, AgentPluginState,
-    AgentSessionId, AgentSettingsPatch,
+    AgentSessionId, AgentSettingsPatch, GuestState,
 };
 
 use super::{AgentBridge, AgentReply, TurnUpdate};
@@ -229,7 +229,20 @@ async fn agent_warnings(agent: &AgentHandle) -> Vec<Warning> {
     match agent.packages().await {
         Ok(packages) => {
             for package in packages {
-                for issue in &package.issues {
+                let guest = package.guest.as_ref().map(|guest| &guest.status);
+                let failed = guest
+                    .filter(|status| status.state == GuestState::Failed)
+                    .map(|status| {
+                        let error = status.error.as_deref().unwrap_or("it stopped");
+                        format!("its code failed: {error}")
+                    });
+                let guest_issues = guest.into_iter().flat_map(|status| &status.issues);
+                for issue in package
+                    .issues
+                    .iter()
+                    .chain(failed.as_ref())
+                    .chain(guest_issues)
+                {
                     let text = format!("Installed plugin `{}`: {issue}", package.id);
                     warnings.push(Warning::new(WarningSource::InstalledPlugins, text));
                 }

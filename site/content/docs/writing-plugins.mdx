@@ -224,7 +224,7 @@ kardia-guest 和 pykardia 的访客 SDK（`pykardia/guest/` 以及导出时一�
 | 一直失败                                     | 分别在 2 秒、10 秒和 30 秒后重启；10 分钟内第四次失败后保持 `failed`，直到 `plugins retry`（或 `/plugins` 中的 **Retry plugin**）；启动失败不会重启 |
 | 安装后包里的文件被改动                       | 重新安装之前不会启动                                                                                                                                |
 
-Agent 的其余部分以及嵌入它的宿主都不受影响：程序是另一个进程，模块在 wasmtime 的沙箱中运行，陷阱或限制只会停止它自己的实例。`plugins info ID` 显示访客的状态和错误；`/plugins` 和 `/warnings` 显示它的问题。
+Agent 的其余部分以及嵌入它的宿主都不受影响：程序是另一个进程，模块在 wasmtime 的沙箱中运行，陷阱或限制只会停止它自己的实例。`plugins info ID` 显示访客的状态和错误；`/plugins` 显示它的状态和问题，`/warnings` 显示它的问题，以及在重试之前它的失败。
 
 ## 发布 [#publishing]
 

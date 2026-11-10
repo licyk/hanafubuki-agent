@@ -607,7 +607,7 @@ What the interface or the Agent could not use as configured is kept for the run,
 
 - **configuration**: what reading `config.toml`, `providers.toml` and `mcp.toml` had to repair ([Configuration recovery](/docs/recovery)), and what a layer of `config.toml` holds that the settings cannot use: an unknown key, or a value the layer below replaces;
 - **plugins**: a plugin that failed, or that is left out of turns;
-- **installed plugins**: what an [installed plugin](#plugins) could not use: a manifest field, a component, an MCP server that gives way to another of its name;
+- **installed plugins**: what an [installed plugin](#plugins) could not use: a manifest field, a component, an MCP server that gives way to another of its name; a plugin whose code failed (its fourth failure within 10 minutes, or a start that failed) until it is retried, and what its code left out;
 - **MCP**: a server's latest error or warning, and what reading `mcp.toml` repaired;
 - **hooks**: the hooks' configuration problems;
 - **panics**: the internal errors the Agent caught;

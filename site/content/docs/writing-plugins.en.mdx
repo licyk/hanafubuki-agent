@@ -224,7 +224,7 @@ With `--run` it then installs the plugin into a throwaway home (its own configur
 | it keeps failing                                                 | restarts after 2 s, 10 s and 30 s; a fourth failure within 10 minutes leaves it `failed` until `plugins retry` (or **Retry plugin** in `/plugins`); a failed start is not restarted |
 | its package's files change after the install                     | it does not start until it is installed again                                                                                                                                       |
 
-The rest of the Agent, and a host that embeds it, is never affected: a program is another process, and a module runs in wasmtime's sandbox, where a trap or a limit stops only its own instance. `plugins info ID` shows the guest's state and error; `/plugins` and `/warnings` show its issues.
+The rest of the Agent, and a host that embeds it, is never affected: a program is another process, and a module runs in wasmtime's sandbox, where a trap or a limit stops only its own instance. `plugins info ID` shows the guest's state and error; `/plugins` shows its state and issues, and `/warnings` its issues and, until it is retried, its failure.
 
 ## Publish it [#publishing]
 

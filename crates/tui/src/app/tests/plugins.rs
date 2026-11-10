@@ -1,7 +1,8 @@
 //! `/plugins` and `/mcp` end to end over the standalone Agent: a plugin
 //! installed from a marketplace, its hook trusted, turned off and on and
 //! uninstalled with its data; a built-in plugin turned off, refused a
-//! retry, and on again; a plugin's MCP server in `/mcp`, read-only.
+//! retry, and on again; a plugin's MCP server in `/mcp`, read-only; a
+//! plugin whose code failed in `/warnings`.
 
 use std::path::Path;
 
@@ -180,4 +181,48 @@ fn mcp_lists_a_plugins_server_read_only() {
     harness.keys(KeyCode::Down, 3);
     harness.key(KeyCode::Enter);
     harness.pump_until_screen_shows("Add an MCP server");
+}
+
+#[test]
+fn warnings_show_a_plugin_whose_code_failed() {
+    let mut harness = Harness::start(Vec::new());
+    // A WebAssembly plugin, which runs without a sandbox, whose module
+    // cannot load: its guest fails to start.
+    let source = harness.home.path().join("sources/broken");
+    write(
+        &source.join(".hanafubuki-plugin/plugin.json"),
+        &json!({
+            "name": "broken",
+            "version": "1.0.0",
+            "runtime": { "type": "wasm", "module": "./broken.wasm" },
+        })
+        .to_string(),
+    );
+    write(&source.join("broken.wasm"), "not a module");
+    harness.on_agent(|agent| async move {
+        agent
+            .install_package(AgentPackageSource::Directory {
+                path: source,
+                marketplace: None,
+            })
+            .await
+    });
+    harness.pump_until("the guest to fail", |harness| {
+        harness
+            .on_agent(|agent| async move { agent.packages().await })
+            .iter()
+            .any(|package| {
+                package
+                    .guest
+                    .as_ref()
+                    .is_some_and(|guest| guest.status.state == hanafubuki_agent::GuestState::Failed)
+            })
+    });
+
+    harness.type_and_submit("/warnings");
+    let list = harness.pump_until_screen_shows("d dismiss");
+    assert!(
+        list.contains("[installed plugins] Installed plugin `broken@local`: its code failed:"),
+        "{list}"
+    );
 }
