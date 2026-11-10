@@ -29,6 +29,8 @@ pub(in crate::service) struct CompressionRuntime {
     /// once the count moves past it
     /// (`NudgeState::absorb_aborted_turn_growth`). Never persisted.
     pub(super) abort_anchor: Option<u64>,
+    /// The latest projection, for the step's second request.
+    pub(super) projection: super::cache::ProjectionCache,
     /// The clock a test fixed for the session's message timestamps.
     #[cfg(any(test, feature = "test-support"))]
     pub(in crate::service) fixed_clock: Option<hanafubuki_agent_compression::LocalTime>,
@@ -67,8 +69,12 @@ impl CompressionRuntime {
         self.content_store.as_deref()
     }
 
-    pub(in crate::service) fn keep_content_store(&mut self, store: AgentContentStore) {
-        self.content_store = Some(Arc::new(store));
+    pub(super) fn shared_content_store(&self) -> Option<&Arc<AgentContentStore>> {
+        self.content_store.as_ref()
+    }
+
+    pub(in crate::service) fn keep_content_store(&mut self, store: Arc<AgentContentStore>) {
+        self.content_store = Some(store);
     }
 
     /// The store, when it holds entries its copy does not.

@@ -107,11 +107,11 @@ fn add_estimated_image_tokens(
 
 /// The tokens `items` are estimated at, by their retained bytes. Reasoning
 /// is never model input, so it is no context.
-pub(in crate::service) fn estimate_conversation_items_tokens(
-    items: &[ConversationItem],
+pub(in crate::service) fn estimate_conversation_items_tokens<'a>(
+    items: impl IntoIterator<Item = &'a ConversationItem>,
 ) -> Result<u64, AgentError> {
     let mut context = items
-        .iter()
+        .into_iter()
         .filter(|item| !matches!(item, ConversationItem::Reasoning { .. }));
     let bytes = context.try_fold(0usize, |total, item| {
         total

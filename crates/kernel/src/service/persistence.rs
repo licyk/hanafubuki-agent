@@ -190,7 +190,10 @@ impl AgentService {
                 record.runtime.compression = Some(Arc::new(state));
             }
             if let Some(store) = compression.content_store {
-                record.runtime.compression_runtime.keep_content_store(store);
+                record
+                    .runtime
+                    .compression_runtime
+                    .keep_content_store(Arc::new(store));
             }
             let mut events = vec![record_event(
                 record,

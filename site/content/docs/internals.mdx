@@ -246,7 +246,7 @@ Provider 的流是外部输入（[模型 API](/docs/architecture#the-model-api)�
 
 保存的条目从不改变。随后 `project_model_tool_outputs` 像对任何请求一样限制历史工具输出的大小。在 `Hierarchical` 下，请求还在指令之后（计划模式的后缀之后）追加 `build_compress_system_prompt` 的文本（只构建一次，每个请求的字节都相同），并把提醒（在 Anthropic Messages 上用它的 Anthropic 措辞）或者状态行作为最后一条输入：一段用户文本，从不持久化。
 
-**哪个请求保留状态。** 构建请求会在内存中推进状态：为新消息生成的引用、token 快照、提醒的基线。只有步骤自己的请求（在 `begin_sampling` 中构建）保留它：状态存到记录上，由步骤的提交持久化。自动压缩的估算和安装之后的检查构建同样的请求（`step_model_request_projected`），但丢弃状态，所以计算一个请求的大小从不改变状态。
+**哪个请求保留状态。** 构建请求会在内存中推进状态：为新消息生成的引用、token 快照、提醒的基线。只有步骤自己的请求（在 `begin_sampling` 中构建）保留它：状态存到记录上，由步骤的提交持久化。自动压缩的估算和安装之后的检查构建同样的请求（`step_model_request_projected`），但丢弃状态，所以计算一个请求的大小从不改变状态。一个步骤仍只投影一次：投影连同它的输入保存在会话上（`compression/cache.rs`，只在内存中）——历史条目、状态和内容存储按身份比较，设置和 token 数按值比较——下一个由相同输入构建的请求（估算之后步骤自己的请求）直接取用它，不再重新投影。开启消息时间戳时，它标记的消息保留估算时的时间。
 
 **工具。** `compress`、`decompress`、`search_context`、`acp_status` 和 `acp_cache` 是 `AgentCoreTool`，在模式为 `Hierarchical` 时被规划（目录上下文中的 `compression_tools`，即 `planned_tools` 生成的列表），计划模式下也是；功能开启时，其后还有 `absorb`、`acp_retrieve` 和 `acp_rule`（见下文）；这八个名字都在 `RESERVED_TOOL_NAMES` 中。每个工具都在会话记录的锁下对记录运行（`execute_compression_tool`），让它的钩子得到一个结果。随后，`compress`、`decompress` 和三个可选工具在写入其输出的那次提交的锁下（`commit_history_with`），针对那一刻的状态再应用一次：提交的输出就是提交的状态所对应的输出，同一步骤中的两次调用按调用顺序应用。被拒绝的调用让状态保持原样。
 

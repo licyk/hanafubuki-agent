@@ -340,9 +340,10 @@ and pushed, and notes what Hanafubuki must change at its next pin.
     sample (the last response) and no cached tokens: the model API reports
     none. Budget pressure still compacts under `hierarchical`. A
     `[Compression FAILED`/refused receipt is an error output (`is_error`).
-  - Open: the projection runs twice per step under `hierarchical` (the
-    estimate and the request), and the state is persisted with every
-    checkpoint: both measured in P8, see its deviations. Forks, children
+  - Open: the state is persisted with every checkpoint: measured in P8,
+    see its deviations. The projection ran twice per step under
+    `hierarchical` (the estimate and the request): done after P12, the
+    request takes the estimate's projection (see P8). Forks, children
     and an unreadable state: done in P8. The emergency voice nudges from
     `maxContextLimitPercent`; post-install `ContextBudgetExceeded` still
     applies to a terminal-escape compaction. The panic-containment test's
@@ -423,8 +424,8 @@ and pushed, and notes what Hanafubuki must change at its next pin.
     `process_turn` per call: folded 3.8 ms at 1 000 messages, 7.8 ms at
     2 000, 16 ms at 4 000, 40 ms at 8 000; unfolded 16 ms at 1 000,
     38 ms at 2 000, 175 ms at 5 000, 677 ms at 10 000, with or without
-    the nudge's screening; cloning the state 0.2–2 ms. A step projects
-    twice (its estimate and its request).
+    the nudge's screening; cloning the state 0.2–2 ms. A step projected
+    twice (its estimate and its request; once since, see the deviations).
   - Deviations: the state is still written with every checkpoint. The
     measurement says it matters for long sessions, but writing it only in
     checkpoints after a change removes only the one-to-three duplicates
@@ -433,9 +434,25 @@ and pushed, and notes what Hanafubuki must change at its next pin.
     a state), a rollback-safe marker in the kernel and the history store
     carrying the last state forward in `runtime_json`, materialization
     and lag catch-up: a persisted-format change across two crates, left
-    for a decision (done in P8b, incrementally). The double projection is
-    not fixed: at most ~80 ms a step at 8 000 folded messages, against the
-    model's latency.
+    for a decision (done in P8b, incrementally). The double projection was
+    fixed after P12: the projection is kept on the session
+    (`service/compression/cache.rs`, in memory) with its inputs (the
+    history items, the state and the content store by identity, the
+    settings, token count, mode and interrupt anchor by value; the
+    clock's reading is left out, so with timestamps on a reused
+    projection keeps the estimate's stamps), and the step's request takes
+    it; the estimate counts tokens without cloning the history, and the
+    projection hands the history, the state and the store on by `Arc`.
+    Measured end to end (a scratch kernel harness, removed: a session
+    seeded through the history store with the rounds above, one-step
+    turns, release; 880 messages is 990 items, about the most a window
+    holds under `FIRST_BATCH_HARD_LIMITS`' 1 024 items and 4 MB, so the
+    kernel never projects the 10 000-message windows the crate is measured
+    at): a one-step turn under `standard` 1.2 / 2.2 / 3.7 ms at 200 / 480 /
+    880 messages; under `hierarchical`, unfolded 6.7 / 16.1 / 32.0 ms
+    before, 4.2 / 8.5 / 15.1 with the crate's fixes alone, 2.8 / 5.6 /
+    9.5 after; folded (every round but the last two) 2.6 / 4.6 / 7.2 ms
+    before, 1.6 / 2.5 / 3.8 after.
   - Done after P12: the crate's per-call cost was superlinear in the
     window (677 ms at 10 000 unfolded messages, without the nudge too).
     Profiled (`tests/compression/scale.rs`, an ignored release harness:
@@ -709,9 +726,10 @@ and pushed, and notes what Hanafubuki must change at its next pin.
   - Open: `absorbed` and `rules` ride in the chain's `rest` on every
     change; no test restarts through the chain with a record or a rule in
     it (the chain tests are generic). The projection clones the content
-    store (all originals) on each projection while the feature is on,
-    twice a step (the estimate and the request), as P8's double
-    projection; the file is rewritten whole when it grows, synchronously
+    store (all originals) while the feature is on, once a step since the
+    request takes the estimate's projection (P8; it was twice); taking
+    the store by reference and returning only what was added would be a
+    crate API change, not measured as needed; the file is rewritten whole when it grows, synchronously
     on the turn's worker (as the exports). A fork or child writes its copy of the store only at its
     first request. The abort anchor is not persisted (a restart forgets
     an interrupt). A `/compact` outside a turn plans no opt-in tool (no

@@ -113,10 +113,10 @@ pub(super) fn step_model_request(
 pub(super) struct RequestCompression {
     /// The state after the projection, which only the step's own request
     /// persists.
-    pub(super) state: Option<crate::AgentCompressionState>,
+    pub(super) state: Option<Arc<crate::AgentCompressionState>>,
     /// The content store, when the projection stored originals in it; kept
     /// like the state.
-    pub(super) content_store: Option<crate::AgentContentStore>,
+    pub(super) content_store: Option<Arc<crate::AgentContentStore>>,
     /// The token count the request was projected with, and whether it
     /// booked a user interrupt.
     pub(super) sent: Option<(u64, bool)>,
@@ -276,14 +276,14 @@ fn projected_history(
     record: &SessionRecord,
     items: &[Arc<AgentHistoryItem>],
 ) -> (
-    Vec<ConversationItem>,
+    Arc<Vec<ConversationItem>>,
     Option<String>,
     RequestCompression,
     Option<String>,
 ) {
     use super::compression::{project_request, CompressionMode};
     let mode = CompressionMode::of(record);
-    let full = || items.iter().map(|item| item.content.clone()).collect();
+    let full = || Arc::new(items.iter().map(|item| item.content.clone()).collect());
     if mode == CompressionMode::Off {
         return (full(), None, RequestCompression::default(), None);
     }

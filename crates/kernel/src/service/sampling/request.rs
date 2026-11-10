@@ -187,7 +187,7 @@ impl AgentService {
                 self.inner.limits.maximum_tool_output_bytes,
             )?;
             if let Some(state) = compression.state {
-                record.runtime.compression = Some(Arc::new(state));
+                record.runtime.compression = Some(state);
             }
             if let Some(store) = compression.content_store {
                 record.runtime.compression_runtime.keep_content_store(store);

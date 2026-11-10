@@ -9,6 +9,7 @@
 //! as `standard`) or the tool call, never the session.
 
 mod adapter;
+mod cache;
 mod inherit;
 mod receipts;
 mod runtime;
@@ -27,6 +28,7 @@ use hanafubuki_agent_foundation::panic::catch_panic;
 use super::*;
 use crate::{AgentCompressionState, AgentContentStore, AgentHierarchicalCompression};
 use adapter::MessageLog;
+use cache::ProjectionKey;
 pub(super) use inherit::inherited_state;
 pub(super) use runtime::CompressionRuntime;
 pub(super) use tools::{compression_tool_output, Fold};
@@ -96,12 +98,13 @@ pub(super) struct CompressionChange {
 }
 
 /// One request's view of the history.
+#[derive(Clone)]
 pub(super) struct RequestProjection {
     /// The history the request is built from: covered items out, summaries
     /// in, ref tags and compacted `compress` arguments written in.
-    pub(super) history: Vec<ConversationItem>,
+    pub(super) history: Arc<Vec<ConversationItem>>,
     /// The state after this request, which the step persists.
-    pub(super) state: AgentCompressionState,
+    pub(super) state: Arc<AgentCompressionState>,
     /// The nudge or the status line, the request's last input; never
     /// persisted.
     pub(super) trailing: Option<String>,
@@ -109,7 +112,7 @@ pub(super) struct RequestProjection {
     /// limit any more: a standard compaction is due (decision 10).
     pub(super) terminal_escape: bool,
     /// The content store, when this request stored originals in it.
-    pub(super) content_store: Option<AgentContentStore>,
+    pub(super) content_store: Option<Arc<AgentContentStore>>,
     /// What `hierarchical` adds to the instructions: the static prompt and
     /// the sections of the opt-in features that are on. None while the
     /// blocks are only carried.
@@ -121,13 +124,13 @@ pub(super) struct RequestProjection {
 }
 
 /// The projection of `items` (the window's history the request shows) for
-/// `mode`, or the panic message of the algorithm.
+/// `mode`, or the panic message of the algorithm. A step's request takes the
+/// projection its admission estimate made from the same inputs.
 pub(super) fn project_request(
     record: &SessionRecord,
     items: &[Arc<AgentHistoryItem>],
     mode: CompressionMode,
 ) -> Result<RequestProjection, String> {
-    let log = MessageLog::new(items);
     let settings = hierarchical_settings(record);
     let mut config = settings.config(window(record));
     let clock = message_clock(record, &settings);
@@ -139,35 +142,53 @@ pub(super) fn project_request(
         config.content_store.enabled = false;
         config.rules.enabled = false;
     }
-    let mut state = record
-        .runtime
-        .compression
-        .as_deref()
-        .cloned()
-        .unwrap_or_default();
-    let (token_count, token_count_source) = token_count(record, items);
-    // Cloned only while the feature is on: an empty store stores nothing.
-    let content_store = config
-        .content_store
-        .enabled
-        .then(|| record.runtime.compression_runtime.content_store().cloned())
-        .flatten()
-        .unwrap_or_default();
+    let runtime = &record.runtime.compression_runtime;
+    let key = ProjectionKey {
+        items: items.to_vec(),
+        state: record.runtime.compression.clone(),
+        // Only while the feature is on: an empty store stores nothing.
+        content_store: config
+            .content_store
+            .enabled
+            .then(|| runtime.shared_content_store().cloned())
+            .flatten(),
+        mode,
+        config,
+        clock_offset: clock.map(|clock| clock.utc_offset_seconds),
+        token_count: token_count(record, items),
+        abort_anchor: runtime
+            .abort_anchor
+            .filter(|_| mode == CompressionMode::Hierarchical),
+        anthropic: record.settings.config.provider_protocol
+            == hanafubuki_agent_model_api::ModelApiProtocol::AnthropicMessages,
+    };
+    if let Some(projection) = runtime.projection.take(&key) {
+        return Ok(projection);
+    }
+    let projection = project(&key, clock)?;
+    runtime.projection.keep(key, projection.clone());
+    Ok(projection)
+}
+
+/// The projection of what `key` holds, the new messages stamped with
+/// `clock`.
+fn project(key: &ProjectionKey, clock: Option<LocalTime>) -> Result<RequestProjection, String> {
+    let log = MessageLog::new(&key.items);
+    let config = &key.config;
+    let mut state = key.state.as_deref().cloned().unwrap_or_default();
+    let (token_count, token_count_source) = key.token_count;
+    let content_store = key.content_store.as_deref().cloned().unwrap_or_default();
     let entries = content_store.by_ref.len();
-    let abort_anchor = record
-        .runtime
-        .compression_runtime
-        .abort_anchor
-        .filter(|_| mode == CompressionMode::Hierarchical);
     let (output, content_store, abort_booked) = catch_panic(|| {
         panic_if_asked(&state);
-        let abort_booked = abort_anchor
+        let abort_booked = key
+            .abort_anchor
             .is_some_and(|anchor| state.nudge.absorb_aborted_turn_growth(anchor, token_count));
         let (output, content_store) = process_turn_with(
             TurnInput {
                 messages: &log.messages,
                 state,
-                config: &config,
+                config,
                 token_count,
                 token_count_source: Some(token_count_source),
                 render: RenderStrategy::TextAndToolResults,
@@ -180,29 +201,27 @@ pub(super) fn project_request(
         );
         (output, content_store, abort_booked)
     })?;
-    let (trailing, instructions) = if mode == CompressionMode::Hierarchical {
-        let anthropic = record.settings.config.provider_protocol
-            == hanafubuki_agent_model_api::ModelApiProtocol::AnthropicMessages;
+    let (trailing, instructions) = if key.mode == CompressionMode::Hierarchical {
         catch_panic(|| {
             let trailing = if output.nudge.should_inject {
-                Some(render_nudge_text(&output.nudge, &Prompts::default(), anthropic).text)
+                Some(render_nudge_text(&output.nudge, &Prompts::default(), key.anthropic).text)
             } else {
                 output.status_line.clone()
             };
             (
                 trailing,
-                Some(instructions(&config, &output.state, clock.is_some())),
+                Some(instructions(config, &output.state, clock.is_some())),
             )
         })?
     } else {
         (None, None)
     };
     Ok(RequestProjection {
-        history: log.apply_view(&output.messages),
-        state: output.state,
+        history: Arc::new(log.apply_view(&output.messages)),
+        state: Arc::new(output.state),
         trailing,
         terminal_escape: output.terminal_escape.is_some(),
-        content_store: (content_store.by_ref.len() > entries).then_some(content_store),
+        content_store: (content_store.by_ref.len() > entries).then(|| Arc::new(content_store)),
         instructions,
         token_count,
         abort_booked,
@@ -402,12 +421,8 @@ fn token_count(record: &SessionRecord, items: &[Arc<AgentHistoryItem>]) -> (u64,
     {
         return (tokens, TokenCountSource::Usage);
     }
-    let contents = items
-        .iter()
-        .map(|item| item.content.clone())
-        .collect::<Vec<_>>();
     (
-        estimate_conversation_items_tokens(&contents).unwrap_or(0),
+        estimate_conversation_items_tokens(items.iter().map(|item| &item.content)).unwrap_or(0),
         TokenCountSource::Estimate,
     )
 }
