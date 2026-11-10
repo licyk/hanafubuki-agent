@@ -103,7 +103,7 @@ fn a_marketplaces_plugin_is_installed_trusted_turned_off_and_on_and_uninstalled(
 
     harness.key(KeyCode::Right);
     harness.pump_until_screen_shows("[Marketplaces (1)]");
-    assert!(harness.screen().contains("0 of 1 installed"));
+    harness.pump_until_screen_shows("0 of 1 installed");
     harness.key(KeyCode::Enter);
     harness.pump_until_screen_shows("demo-market marketplace");
     harness.key(KeyCode::Enter);

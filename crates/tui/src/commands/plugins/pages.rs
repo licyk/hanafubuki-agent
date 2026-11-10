@@ -203,10 +203,10 @@ fn marketplace_rows(state: &PluginsState) -> Vec<Row> {
                 .iter()
                 .filter(|plugin| plugin.installed)
                 .count();
+            // The source comes last: a long path is what a narrow screen cuts.
             let mut description = format!(
-                "{} · {} · {installed} of {} installed",
+                "{} · {installed} of {} installed",
                 source_kind(marketplace),
-                marketplace.source,
                 marketplace.plugins.len()
             );
             if !marketplace.enabled {
@@ -215,6 +215,7 @@ fn marketplace_rows(state: &PluginsState) -> Vec<Row> {
             if let Some(error) = &marketplace.error {
                 description.push_str(&format!(" · {error}"));
             }
+            description.push_str(&format!(" · {}", marketplace.source));
             let item = SelectionItem {
                 name: marketplace_name(marketplace),
                 description: Some(description),
