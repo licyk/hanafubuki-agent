@@ -96,8 +96,12 @@ pub async fn a_guest_gets_only_its_environment_and_runs_in_its_data_directory() 
     fixture.host.apply(vec![package.clone()]).await;
     fixture.wait(&package.id.key(), "start", running).await;
 
-    let env: BTreeMap<String, String> =
+    let mut env: BTreeMap<String, String> =
         serde_json::from_value(fixture.call(&package, "env", Value::Null).await.unwrap()).unwrap();
+    // macOS adds this to a process whose environment was cleared.
+    if cfg!(target_os = "macos") {
+        env.remove("__CF_USER_TEXT_ENCODING");
+    }
     let root = ResolvedPath::resolve(&package.root).unwrap();
     let data = ResolvedPath::resolve(&package.data_root).unwrap();
     let mut expected = BTreeMap::from([
