@@ -480,7 +480,7 @@ impl AgentEventSink for PrintEvents {
 
 ## Permissions [#permissions]
 
-A turn's permission mode is fixed when it starts. `submit_turn_with_sink` and `submit_plan_implementation_with_sink` take the session's own mode when it has one, else the configured `permissionMode`; `start_turn` takes the session's mode over the one in its input. What the modes and the approvals do is in [Permissions and approvals](/docs/permissions).
+A turn's permission mode is fixed when it starts. `submit_turn_with_sink` and `submit_plan_implementation_with_sink` take the session's own mode when it has one, else the configured `permissionMode`; `start_turn` takes the session's mode over the one in its input, and never reads `permissionMode`: an input made from text (`AgentTurnInput::from`) is `Manual`. What the modes and the approvals do is in [Permissions and approvals](/docs/permissions).
 
 | Call                                            | What it does                                                                                                                                                                                                                                                                                                                                                                                   |
 | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

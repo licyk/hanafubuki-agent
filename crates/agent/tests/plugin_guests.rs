@@ -3,15 +3,18 @@
 //! sandbox; then a turn against the scripted model, whose request carries
 //! the guest's context section and prompt fragment, which calls the guest's
 //! tool, and whose next request carries the tool's output and the guest's
-//! hook context; the guest observes the turn's end. A guest that crashes in
-//! a tool call is that call's error: the turn ends with its answer, and the
-//! guest comes back.
+//! hook context; the guest observes the turn's end. The tool's call is
+//! approved like an MCP tool's, by the turn's permission mode: the user in
+//! `Manual`, the reviewer model in `AutoReview`, no one in `FullAccess`.
+//! A guest that crashes in a tool call is that call's error: the turn ends
+//! with its answer, and the guest comes back.
 //!
 //! This binary is also the guest (kardia-guest's `serve`, with
 //! [`GUEST_ARG`]) and the sandbox helper, so the guest it installs, and
 //! confines, re-executes it. It runs where the sandbox's plugin profile was
 //! checked (Linux), and skips elsewhere.
 
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use hanafubuki_agent::test_support::{
@@ -19,8 +22,9 @@ use hanafubuki_agent::test_support::{
     FakeServer, TEST_SHUTDOWN_DEADLINE, TEST_WAIT,
 };
 use hanafubuki_agent::{
-    AgentApplicationService, AgentEventKind, AgentPackageSource, AgentPackageStatus,
-    AgentSessionId, AgentSessionMode, AgentTurnOutcome, ApprovalActionKind, ApprovalUserDecision,
+    AgentApplicationService, AgentEvent, AgentEventKind, AgentEventSink, AgentPackageSource,
+    AgentPackageStatus, AgentPermissionMode, AgentSessionId, AgentSessionMode, AgentSettingsPatch,
+    AgentTurnOutcome, AgentTurnPhase, AgentTurnRequest, ApprovalActionKind, ApprovalUserDecision,
     GuestState, PackagePermissions, WorkspaceAccess,
 };
 use kardia_guest::{json, Guest, Host, Map, Meta, Request, Result, Value};
@@ -129,8 +133,8 @@ async fn running(service: &AgentApplicationService, before: Option<u32>) -> Agen
     }
 }
 
-/// Runs a turn on `text` whose one tool call the user allows once: a
-/// plugin's tool asks for approval, as an MCP server's does.
+/// Runs a turn on `text` whose one tool call the user allows once, as a
+/// `Manual` turn asks.
 async fn turn_approved(
     service: &AgentApplicationService,
     session_id: AgentSessionId,
@@ -166,6 +170,43 @@ async fn turn_approved(
         .unwrap()
 }
 
+/// Submits a turn on `text` as the terminal interface and `exec` do, so it
+/// runs in the session's permission mode, else the configured one, and
+/// waits for its end: its permission mode and how it ended.
+async fn submitted_turn(
+    service: &AgentApplicationService,
+    session_id: AgentSessionId,
+    text: &str,
+) -> (AgentPermissionMode, AgentTurnPhase) {
+    struct Discard;
+    impl AgentEventSink for Discard {
+        fn emit(&self, _event: AgentEvent) {}
+    }
+    let request = AgentTurnRequest {
+        text: text.into(),
+        images: Vec::new(),
+        skills: Vec::new(),
+        host: Default::default(),
+    };
+    service
+        .submit_turn_with_sink(session_id, request, Arc::new(Discard))
+        .await
+        .unwrap();
+    let deadline = Instant::now() + TEST_WAIT;
+    loop {
+        let turn = service.snapshot(session_id).unwrap().turn.unwrap();
+        if turn.phase.is_terminal() {
+            return (turn.permission_mode, turn.phase);
+        }
+        assert!(
+            Instant::now() < deadline,
+            "the turn did not end: {:?}",
+            approvals(service, session_id)
+        );
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+}
+
 fn approvals(
     service: &AgentApplicationService,
     session_id: AgentSessionId,
@@ -187,6 +228,9 @@ async fn a_code_plugin_contributes_to_a_turn_and_its_crash_stays_its_own() {
         [
             namespace_tool_events("demo", "echo", r#"{"q":"x"}"#),
             assistant_events("The plugin answered."),
+            namespace_tool_events("demo", "echo", r#"{"q":"y"}"#),
+            assistant_events(&review_allows()),
+            assistant_events("The reviewer allowed it."),
             namespace_tool_events("demo", "crash", "{}"),
             assistant_events("The plugin crashed; going on."),
         ]
@@ -199,6 +243,13 @@ async fn a_code_plugin_contributes_to_a_turn_and_its_crash_stays_its_own() {
         configure_test_provider(config, &server.base_url, None);
         // Its title requests would take the scripted answers.
         config.set_plugin_disabled("titles", true).unwrap();
+        // A session given no mode of its own runs in this one.
+        config
+            .write_settings(AgentSettingsPatch {
+                permission_mode: Some(AgentPermissionMode::FullAccess),
+                ..AgentSettingsPatch::default()
+            })
+            .unwrap();
     });
     let source = paths.app_data_dir.join("sources/demo");
     let program = std::env::current_exe().unwrap();
@@ -269,6 +320,9 @@ async fn a_code_plugin_contributes_to_a_turn_and_its_crash_stays_its_own() {
         .create_session(AgentSessionMode::Default)
         .await
         .unwrap();
+    service
+        .set_session_permission_mode(session.id, AgentPermissionMode::Manual)
+        .unwrap();
     let outcome = turn_approved(&service, session.id, "Use the demo plugin.").await;
     assert_eq!(outcome.final_answer, "The plugin answered.");
     let requests = server.requests();
@@ -294,11 +348,40 @@ async fn a_code_plugin_contributes_to_a_turn_and_its_crash_stays_its_own() {
         tokio::time::sleep(Duration::from_millis(20)).await;
     }
 
-    // A crash in a tool call is that call's error; the turn goes on.
+    // In `AutoReview` the reviewer model allows the call; no one is asked.
+    service
+        .set_session_permission_mode(session.id, AgentPermissionMode::AutoReview)
+        .unwrap();
+    let outcome = tokio::time::timeout(
+        TEST_WAIT,
+        service.start_turn(session.id, "Use the demo plugin again.".into()),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    assert_eq!(outcome.final_answer, "The reviewer allowed it.");
+    assert_eq!(approvals(&service, session.id).len(), 1);
+    let review = String::from_utf8(server.requests()[3].body.clone()).unwrap();
+    assert!(
+        review.contains("Call the tool echo of the plugin demo@local"),
+        "{review}"
+    );
+    let reviewed = String::from_utf8(server.requests()[4].body.clone()).unwrap();
+    assert!(reviewed.contains("echoed"), "{reviewed}");
+
+    // In `FullAccess`, here the configured mode of a session given none,
+    // the call runs without asking. A crash in it is that call's error; the
+    // turn goes on.
     let pid = first.guest.as_ref().unwrap().status.process_id;
-    let outcome = turn_approved(&service, session.id, "Crash the demo plugin.").await;
-    assert_eq!(outcome.final_answer, "The plugin crashed; going on.");
-    let after_crash = String::from_utf8(server.requests()[3].body.clone()).unwrap();
+    let unset = service
+        .create_session(AgentSessionMode::Default)
+        .await
+        .unwrap();
+    let (mode, phase) = submitted_turn(&service, unset.id, "Crash the demo plugin.").await;
+    assert_eq!(mode, AgentPermissionMode::FullAccess);
+    assert_eq!(phase, AgentTurnPhase::Completed);
+    assert!(approvals(&service, unset.id).is_empty());
+    let after_crash = String::from_utf8(server.requests()[6].body.clone()).unwrap();
     assert!(
         after_crash.contains("the plugin demo@local failed"),
         "{after_crash}"
@@ -310,4 +393,15 @@ async fn a_code_plugin_contributes_to_a_turn_and_its_crash_stays_its_own() {
         .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
         .is_empty());
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
+}
+
+/// The reviewer model's answer allowing the action.
+fn review_allows() -> String {
+    json!({
+        "riskLevel": "low",
+        "userAuthorization": "explicit",
+        "outcome": "allow",
+        "rationale": "The user asked for the plugin's tool."
+    })
+    .to_string()
 }

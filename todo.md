@@ -484,9 +484,14 @@ user first.
     threads) stand; the kernel's issues kept for `guest:<id>` are not
     cleared when a package is uninstalled; two packages with one manifest
     name (different marketplaces) derive one prompt kind, so the second's
-    prompt is refused with an issue; the first facade run under
-    `permissionMode = "full_access"` waited for an approval it should not
-    have needed (not investigated; the test now approves explicitly).
+    prompt is refused with an issue. (Resolved: the first facade run under
+    `permissionMode = "full_access"` waited for an approval because the
+    test's `start_turn(id, text.into())` never reads `permissionMode`, as
+    embedding documents: an input from text is `Manual`, replaced only by
+    the session's own mode; `submit_turn_with_sink`, the TUI's and `exec`'s
+    path, reads it. A plugin tool is approved exactly as an MCP tool that
+    asks. `plugin_guests.rs` now checks each mode: `Manual` asks the user,
+    `AutoReview` the reviewer, configured `FullAccess` no one.)
   - Hanafubuki, at its next pin: `ApprovalActionKind::PluginToolCall`
     (`plugin_tool_call`; an exhaustive match needs an arm);
     `PluginSettings.settings` (a struct literal needs it) and
