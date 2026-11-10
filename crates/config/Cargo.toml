@@ -10,6 +10,7 @@ rust-version.workspace = true
 [dependencies]
 hanafubuki-agent-foundation.workspace = true
 hanafubuki-agent-mcp.workspace = true
+hanafubuki-agent-packages.workspace = true
 # The operating system's configuration and data directories (AgentDirs).
 dirs = "7"
 log.workspace = true

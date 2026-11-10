@@ -1,0 +1,8 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "portable-demo",
+  "version": "1.0.0",
+  "description": "An Agent Plugins package",
+  "author": { "name": "Portable Author" },
+  "homepage": "https://example.com/portable"
+}

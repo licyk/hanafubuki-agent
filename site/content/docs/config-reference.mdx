@@ -153,6 +153,36 @@ icon: ListTree
 
 用户的文件和被读取的项目文件都可以有它们，各自旁边的 `hooks.json` 也可以。它们不是设置：`config get` 和 `config set` 不处理它们，钩子的信任与启用状态也不是 `config.toml` 的键（见[钩子](/docs/configuration#hooks)）。
 
+### 插件 [#plugins]
+
+按插件 id（`<插件>@<市场>`）设置哪些[已安装的插件](/docs/architecture#installed-plugins)启用。这些表来自 Codex，键名用 camelCase。
+
+| 键                                                  | 类型和取值        | 默认值 | 含义                                             |
+| --------------------------------------------------- | ----------------- | ------ | ------------------------------------------------ |
+| `plugins._default.enabled`                          | `true` 或 `false` | 无     | 自身条目没有说明的包是否启用                     |
+| `plugins."插件@市场".enabled`                       | `true` 或 `false` | 无     | 这个包是否启用                                   |
+| `plugins."插件@市场".mcpServers.名字.enabled`       | `true` 或 `false` | `true` | 这个包的 MCP 服务器 `名字` 是否运行              |
+| `plugins."插件@市场".mcpServers.名字.enabledTools`  | 工具名数组        | 全部   | 只提供该服务器的这些工具                         |
+| `plugins."插件@市场".mcpServers.名字.disabledTools` | 工具名数组        | 无     | 在 `enabledTools` 之后，不提供该服务器的这些工具 |
+
+已安装的包默认启用，除非：它的市场被关闭（见下文），或它的条目写了 `enabled = false`，或它的条目没有说明而 `_default.enabled` 为 `false`。键不是插件 id 的条目保留在文件中，但和未知键一样被忽略。包的 MCP 服务器如何运行由包决定，`mcpServers` 只做限制。
+
+### 市场 [#marketplaces]
+
+按名字列出你添加的市场：Agent 从这里找到它们的包。
+
+| 键                               | 类型和取值                | 含义                                                 |
+| -------------------------------- | ------------------------- | ---------------------------------------------------- |
+| `marketplaces.名字.sourceType`   | `"git"` 或 `"local"`      | 来源类型；必填                                       |
+| `marketplaces.名字.source`       | 字符串                    | git URL，或本地市场的目录；必填                      |
+| `marketplaces.名字.ref`          | 字符串                    | git 市场检出的分支、标签或提交                       |
+| `marketplaces.名字.sparsePaths`  | 路径数组                  | git 市场只检出这些路径                               |
+| `marketplaces.名字.lastUpdated`  | RFC 3339 时间             | 最近一次添加或升级的时间                             |
+| `marketplaces.名字.lastRevision` | git 修订                  | 检出的修订                                           |
+| `marketplaces.名字.enabled`      | `true` 或 `false`；`true` | 为 `false` 时关闭它的所有包，不管 `[plugins]` 怎么写 |
+
+git 市场检出在数据目录的 `plugins/marketplaces/名字/` 中；本地市场在原处读取。没有可用的 `sourceType` 和 `source` 的条目保留在文件中，但被忽略。两个表可以写在任何一层，`config get` 和 `config set` 能处理它们的键（`config set plugins."demo@my-mkt".enabled false`）；`-c` 覆盖不能给键加引号，所以只能指定名字中没有点的包（`-c plugins.demo@my-mkt.enabled=false`）。
+
 ## providers.toml [#providers-toml]
 
 `providers.toml` 没有分层，只有自己可读。通常用 `providers` 命令修改；推理强度等设置需要直接编辑。修改时请先退出正在运行的 Agent。

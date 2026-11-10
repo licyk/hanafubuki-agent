@@ -9,11 +9,58 @@ in both languages, committed and pushed, and notes what Hanafubuki must
 change at its next pin. Publishing Kardia to crates.io is confirmed with the
 user first.
 
-- [ ] P1: `crates/packages` package store: identity, the four manifest
+- [x] P1: `crates/packages` package store: identity, the four manifest
       formats, marketplaces (local, git), versioned cache, data dirs, staged
       atomic install/uninstall, commands to Skills, content hashes,
       `install.json`; `plugins/` in the data dir; `[plugins]` and
       `[marketplaces]` (camelCase keys).
+      Done: `hanafubuki-agent-packages` (domain layer: foundation, process),
+      ported from Codex `57a808a392` with notices markers. `PluginId`;
+      `find_manifest`/`load_manifest` over five formats, probed
+      `.hanafubuki-plugin` (ours: Codex's fields plus typed, unused
+      `runtime`/`contributes`/`permissions`/`configSchema`), Agent Plugins
+      root `plugin.json`, `.codex-plugin`, `.claude-plugin`,
+      `.cursor-plugin`; each field read on its own with issues (Agent
+      Plugins `$schema`/`name` strict). `PackageStore::open(plugins_root,
+      executor)`: `install_directory`, `install_from_marketplace` (local,
+      `url`, `git-subdir` with ref/sha, sparse clone), staged copy, fallback
+      manifest, byte check, command migration, atomic swap, prune;
+      `installed()` walks the cache (survives a quarantined record), `read`,
+      `uninstall(id, purge_data)`, `data_root`, `content_hash`;
+      `install.json` (version, format, source, content hash) tolerant per
+      field, quarantined when unreadable. Marketplaces: `load_marketplace`,
+      `list_marketplaces(roots)`, `configured_marketplaces(records)`,
+      `add_marketplace(request, configured)` / `upgrade_marketplace` /
+      `remove_marketplace` returning the `[marketplaces]` record for the
+      caller to write; `git` through the `ExecutorManager`. Config:
+      `AgentSettings.plugins` (`PluginsSettings`, `_default`, per-package
+      `enabled` and `mcpServers.<name>` overlay) and `.marketplaces`
+      (`MarketplaceRecord` + `enabled`), merged per entry across layers;
+      `package_enabled(id)`; writes `set_package_settings` /
+      `set_marketplace` (`None` removes the entry); `config get/set` reach
+      the keys. `AgentStoragePaths.plugins_root`. Docs: architecture
+      "Installed plugins", config-reference "Plugins"/"Marketplaces",
+      config-layers, data-directory, plugin-rules, contributing.
+      Open: no manifest cache (nothing reloads repeatedly yet); npm sources
+      (decision 9); marketplace discovery from `$HOME`/the workspace repo
+      not ported (callers pass roots; P3 decides); `install.json` has no
+      granted permissions yet (P5); `content_hash` has no cancellation (P2
+      hook trust may want it); for Agent Plugins P2's loader must ignore
+      `paths.hooks` and discover Skills as direct children (Codex
+      `loader.rs:931,984`); no automatic marketplace upgrades; `-c` cannot
+      quote a key, so a dotted plugin name cannot be overridden there; the
+      writes are dedicated calls, not `AgentSettingsPatch` fields (like
+      `disabledPlugins`). Deviations from Codex: wrong-typed manifest
+      fields dropped rather than failing; `file://` accepted by
+      `marketplace add`; `.git` not copied into the cache; the content hash
+      uses `/` separators; marketplace `lastRevision` in the record instead
+      of a metadata file in the checkout.
+      Hanafubuki: the data directory gains `plugins/`
+      (`AgentStoragePaths.plugins_root`); `AgentSettings` gains `plugins`
+      and `marketplaces` (a settings import reads them through
+      `read_settings_document`; a settings page can ignore them); config
+      now depends on the new published crate `hanafubuki-agent-packages`;
+      no facade API change yet.
 - [ ] P2: content sources: `plugin:` Skill roots, plugin-owned MCP servers
       (`.mcp.json`, Agent Plugins `mcp.json`), `HookSource::Plugin` with
       package-content trust, the "available plugins" section, live reload.

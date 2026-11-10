@@ -1,0 +1,7 @@
+{
+  "name": "claude-demo",
+  "version": "1.0.0",
+  "description": "A Claude Code plugin with a Skill, a command, an MCP server and a hook",
+  "author": { "name": "Demo Author" },
+  "keywords": ["demo"]
+}

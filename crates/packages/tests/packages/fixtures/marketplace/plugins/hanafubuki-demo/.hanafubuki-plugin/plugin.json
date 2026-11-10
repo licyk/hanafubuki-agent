@@ -1,0 +1,16 @@
+{
+  "name": "hanafubuki-demo",
+  "version": "0.1.0",
+  "description": "A package in this project's format, with code",
+  "skills": "./skills",
+  "runtime": { "type": "process", "command": ["./bin/jira-helper"], "protocol": "kardia-guest/2" },
+  "contributes": {
+    "tools": [
+      { "name": "jira_search", "description": "Search Jira", "inputSchema": { "type": "object" } }
+    ],
+    "contextSections": [{ "kind": "jira_board", "renderer": "markdown" }],
+    "observers": ["turn_completed"]
+  },
+  "permissions": { "network": true, "workspace": "read", "env": ["JIRA_TOKEN"] },
+  "configSchema": { "type": "object", "properties": { "board": { "type": "string" } } }
+}

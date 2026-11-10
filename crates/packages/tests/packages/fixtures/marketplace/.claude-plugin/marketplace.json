@@ -1,0 +1,41 @@
+{
+  "name": "demo-market",
+  "owner": { "name": "Demo" },
+  "interface": { "displayName": "Demo marketplace" },
+  "plugins": [
+    {
+      "name": "claude-demo",
+      "source": "./plugins/claude-demo",
+      "description": "A Claude Code plugin",
+      "category": "Development"
+    },
+    {
+      "name": "codex-demo",
+      "source": { "source": "local", "path": "./plugins/codex-demo" }
+    },
+    {
+      "name": "portable-demo",
+      "source": "./plugins/portable-demo"
+    },
+    {
+      "name": "hanafubuki-demo",
+      "source": "./plugins/hanafubuki-demo"
+    },
+    {
+      "name": "fallback-demo",
+      "source": "./plugins/fallback-demo",
+      "description": "A package whose manifest is this entry",
+      "version": "0.3.0",
+      "author": { "name": "Entry Author" }
+    },
+    {
+      "name": "unavailable-demo",
+      "source": "./plugins/codex-demo",
+      "policy": { "installation": "NOT_AVAILABLE" }
+    },
+    {
+      "name": "npm-demo",
+      "source": { "source": "npm", "package": "@demo/plugin" }
+    }
+  ]
+}

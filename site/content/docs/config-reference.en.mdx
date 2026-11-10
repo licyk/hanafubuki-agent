@@ -153,6 +153,36 @@ Both go only in the user's `config.toml`.
 
 The user's file and a read project's file may both have them, as may a `hooks.json` beside each. They are not settings: `config get` and `config set` do not reach them, and a hook's trust and enablement are not keys of `config.toml` (see [Hooks](/docs/configuration#hooks)).
 
+### Plugins [#plugins]
+
+Which [installed plugins](/docs/architecture#installed-plugins) are on, by plugin id (`<plugin>@<marketplace>`). The tables are Codex's, with camelCase keys.
+
+| Key                                                          | Type and values        | Default | Means                                                  |
+| ------------------------------------------------------------ | ---------------------- | ------- | ------------------------------------------------------ |
+| `plugins._default.enabled`                                   | `true` or `false`      | none    | Whether a package whose own entry does not say is on   |
+| `plugins."PLUGIN@MARKETPLACE".enabled`                       | `true` or `false`      | none    | Whether the package is on                              |
+| `plugins."PLUGIN@MARKETPLACE".mcpServers.NAME.enabled`       | `true` or `false`      | `true`  | Whether the package's MCP server `NAME` runs           |
+| `plugins."PLUGIN@MARKETPLACE".mcpServers.NAME.enabledTools`  | An array of tool names | all     | The only tools of that server offered                  |
+| `plugins."PLUGIN@MARKETPLACE".mcpServers.NAME.disabledTools` | An array of tool names | none    | Tools of that server not offered, after `enabledTools` |
+
+An installed package is on unless its marketplace is turned off (below), or its entry says `enabled = false`, or its entry does not say and `_default.enabled` is `false`. An entry whose key is not a plugin id is kept in the file and ignored, as an unknown key is. How a package's MCP servers run is the package's; `mcpServers` only restricts them.
+
+### Marketplaces [#marketplaces]
+
+The marketplaces you added, by name: where the Agent finds their packages.
+
+| Key                              | Type and values           | Means                                                              |
+| -------------------------------- | ------------------------- | ------------------------------------------------------------------ |
+| `marketplaces.NAME.sourceType`   | `"git"` or `"local"`      | Where it comes from; required                                      |
+| `marketplaces.NAME.source`       | A string                  | The git URL, or the local marketplace's directory; required        |
+| `marketplaces.NAME.ref`          | A string                  | The branch, tag or commit a git marketplace checks out             |
+| `marketplaces.NAME.sparsePaths`  | An array of paths         | The only paths a git marketplace checks out                        |
+| `marketplaces.NAME.lastUpdated`  | An RFC 3339 time          | When it was last added or upgraded                                 |
+| `marketplaces.NAME.lastRevision` | A git revision            | The revision checked out                                           |
+| `marketplaces.NAME.enabled`      | `true` or `false`; `true` | `false` turns off every package from it, whatever `[plugins]` says |
+
+A git marketplace is checked out in the data directory's `plugins/marketplaces/NAME/`; a local one is read where it is. An entry without a usable `sourceType` and `source` is kept in the file and ignored. Both tables go in any layer, and `config get` and `config set` reach their keys (`config set plugins."demo@my-mkt".enabled false`); a `-c` override cannot quote a key, so it names a package without dots only (`-c plugins.demo@my-mkt.enabled=false`).
+
 ## providers.toml [#providers-toml]
 
 `providers.toml` has no layers and is readable by its owner only. The `providers` commands usually change it; settings such as the reasoning effort are edited by hand. Quit any running Agent before you edit it.

@@ -1,0 +1,13 @@
+{
+  "name": "codex-demo",
+  "version": "2.1.0",
+  "description": "A Codex plugin",
+  "skills": "./skills",
+  "mcpServers": { "counter": { "type": "http", "url": "https://example.com/mcp" } },
+  "interface": {
+    "displayName": "Codex Demo",
+    "category": "Productivity",
+    "defaultPrompt": "Search my notes",
+    "logo": "./assets/logo.svg"
+  }
+}

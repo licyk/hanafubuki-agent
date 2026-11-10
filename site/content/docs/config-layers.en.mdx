@@ -4,7 +4,7 @@ description: How the defaults, the user's file, profiles, trusted projects' file
 icon: Layers
 ---
 
-The settings of `config.toml` are read in layers, lowest first. Each layer sets only the keys it names; a key it leaves out keeps the value of the layer below. Only `config.toml` has layers: `providers.toml` and `mcp.toml` have none.
+The settings of `config.toml` are read in layers, lowest first. Each layer sets only the keys it names; a key it leaves out keeps the value of the layer below. The tables keyed by what you installed and added, `[plugins]` and `[marketplaces]`, merge entry by entry: a layer's `[plugins."demo@my-mkt"]` changes that package's keys it sets, and every other entry stays. Only `config.toml` has layers: `providers.toml` and `mcp.toml` have none.
 
 1. **The defaults**
 2. **The user's `config.toml`**

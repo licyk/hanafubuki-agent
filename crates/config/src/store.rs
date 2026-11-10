@@ -4,6 +4,9 @@ use std::path::Path;
 use std::sync::Arc;
 
 use hanafubuki_agent_mcp::McpSettings;
+use hanafubuki_agent_packages::{
+    validate_marketplace_name, MarketplaceRecord, PluginId, PluginSettings,
+};
 use parking_lot::Mutex;
 use serde::Serialize;
 use serde_json::{Map, Value};
@@ -173,6 +176,51 @@ impl AgentConfig {
             }
             validate_disabled_plugins(&settings.disabled_plugins)
         })
+    }
+
+    /// Writes the `[plugins]` entry of `id`, or removes it (`None`), in the
+    /// user's `config.toml`, keeping the rest of the file as written, and
+    /// returns the settings as the layers now resolve them.
+    pub fn set_package_settings(
+        &self,
+        id: &PluginId,
+        settings: Option<&PluginSettings>,
+    ) -> Result<AgentSettings, String> {
+        self.write_entry(&["plugins".to_string(), id.key()], settings)
+    }
+
+    /// Writes the `[marketplaces]` record of `name`, or removes it
+    /// (`None`), as [`Self::set_package_settings`] does.
+    pub fn set_marketplace(
+        &self,
+        name: &str,
+        record: Option<&MarketplaceRecord>,
+    ) -> Result<AgentSettings, String> {
+        validate_marketplace_name(name).map_err(|error| error.to_string())?;
+        self.write_entry(&["marketplaces".to_string(), name.to_string()], record)
+    }
+
+    /// A table's entry, written whole or removed: an unset field is written
+    /// as `null`, which the write removes from the file.
+    fn write_entry<T: Serialize>(
+        &self,
+        path: &[String],
+        value: Option<&T>,
+    ) -> Result<AgentSettings, String> {
+        let value = match value {
+            Some(value) => serde_json::to_value(value)
+                .map_err(|_| "the Agent configuration cannot be encoded".to_string())?,
+            None => Value::Null,
+        };
+        {
+            let mut cached = self.inner.settings.lock();
+            self.load_user_settings()?;
+            let mut change = Map::new();
+            keys::insert(&mut change, path, value);
+            self.inner.settings_file.write(&change)?;
+            *cached = None;
+        }
+        self.settings()
     }
 
     /// The settings with every layer applied, as one document (`config

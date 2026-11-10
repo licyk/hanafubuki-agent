@@ -16,4 +16,5 @@ fn derives_every_durable_agent_store_from_one_root() {
     assert_eq!(paths.logs_dir, root.join("logs"));
     assert_eq!(paths.worktrees_root, root.join("worktrees"));
     assert_eq!(paths.hooks_state_file, root.join("hooks-state.json"));
+    assert_eq!(paths.plugins_root, root.join("plugins"));
 }

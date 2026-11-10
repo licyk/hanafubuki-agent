@@ -3,6 +3,7 @@ use std::collections::BTreeSet;
 use serde_json::{Map, Value};
 
 use super::compaction::decode_compaction;
+use super::packages::{decode_marketplaces, decode_plugins};
 use super::{
     is_plugin_name, normalize_search_endpoint, validate_memory, validate_sandbox_workspace_write,
     AgentMemorySettings, AgentSandboxMode, AgentSandboxWorkspaceWrite, AgentSettings,
@@ -48,6 +49,8 @@ pub(crate) fn decode_settings(
         &defaults.compaction,
         decode_compaction,
     );
+    let plugins = decode_plugins(&mut fields, &defaults.plugins);
+    let marketplaces = decode_marketplaces(&mut fields, &defaults.marketplaces);
     AgentSettings {
         permission_mode,
         sandbox_mode,
@@ -59,6 +62,8 @@ pub(crate) fn decode_settings(
         searxng_base_url,
         web_fetch_use_jina_reader,
         compaction,
+        plugins,
+        marketplaces,
     }
 }
 

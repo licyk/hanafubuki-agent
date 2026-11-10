@@ -1723,6 +1723,7 @@ dependencies = [
  "dirs",
  "hanafubuki-agent-foundation",
  "hanafubuki-agent-mcp",
+ "hanafubuki-agent-packages",
  "log",
  "parking_lot",
  "serde",
@@ -1909,6 +1910,24 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
+]
+
+[[package]]
+name = "hanafubuki-agent-packages"
+version = "0.2.0"
+dependencies = [
+ "chrono",
+ "hanafubuki-agent-foundation",
+ "hanafubuki-agent-process",
+ "hex",
+ "log",
+ "parking_lot",
+ "semver",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "sha2 0.11.1",
+ "tempfile",
 ]
 
 [[package]]

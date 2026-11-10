@@ -60,6 +60,22 @@ Third-party notices
     `codex-rs/config/src/hook_config.rs`, `codex-rs/config/src/fingerprint.rs`
     and `codex-rs/core/src/tools/hook_names.rs` (commit `57a808a392`); each
     says so in its first lines;
+  - the package store, `crates/packages` (the plugin identity, the
+    manifest probe and parsers, the versioned cache and its staged
+    install, the command migration, the content hash, the marketplaces
+    and their add, upgrade and remove, the `[plugins]` and
+    `[marketplaces]` tables, and the tests of them), is derived from
+    Codex's `codex-rs/core-plugin-common` (`src/plugin_id.rs`,
+    `src/installed.rs`), `codex-rs/plugin/src/manifest.rs`,
+    `codex-rs/core-plugins` (`src/manifest.rs`,
+    `src/agent_plugin_manifest.rs`, `src/store.rs`, `src/marketplace.rs`,
+    `src/marketplace_add`, `src/marketplace_upgrade`,
+    `src/marketplace_remove.rs`, `src/installed_marketplaces.rs`,
+    `src/command_migration` and their tests),
+    `codex-rs/utils/plugins` (`src/lib.rs`, `src/plugin_namespace.rs`),
+    `codex-rs/hooks/src/engine/plugin_fingerprint.rs` and
+    `codex-rs/config/src/types.rs` (commit `57a808a392`); each file of it
+    so derived says so in its first lines;
   - the `goal` plugin's model-visible parts (`crates/agent/src/plugins/goal`:
     `templates.rs`, `tools.rs` and `context.rs`) are derived from Codex's
     `codex-rs/ext/goal` (`templates/goals/continuation.md`,

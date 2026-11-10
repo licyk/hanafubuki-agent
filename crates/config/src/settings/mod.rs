@@ -1,18 +1,20 @@
 //! The Agent's settings: how it may act, what it remembers, which of its
-//! plugins run, how its web tools reach the network and how it reduces a
-//! session's context.
+//! plugins and installed packages run, how its web tools reach the network
+//! and how it reduces a session's context.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
 pub use hanafubuki_agent_foundation::agent_settings::{
     AgentPermissionMode, AgentSandboxMode, AgentWindowsSandbox,
 };
 use hanafubuki_agent_foundation::url_policy::{UrlPolicy, MAX_URL_BYTES};
+use hanafubuki_agent_packages::{is_package_enabled, MarketplaceRecord, PluginId, PluginsSettings};
 use serde::{Deserialize, Deserializer, Serialize};
 
 mod compaction;
 mod decode;
+mod packages;
 mod schema;
 
 pub use compaction::{
@@ -43,6 +45,22 @@ pub struct AgentSettings {
     pub searxng_base_url: Option<String>,
     pub web_fetch_use_jina_reader: bool,
     pub compaction: AgentCompactionSettings,
+    /// `[plugins]`: which installed packages are on. Changed by the package
+    /// lifecycle ([`crate::AgentConfig::set_package_settings`]) or by hand,
+    /// never patched.
+    pub plugins: PluginsSettings,
+    /// `[marketplaces]`: the marketplaces the user added, by name. Changed
+    /// by the marketplace calls ([`crate::AgentConfig::set_marketplace`]).
+    pub marketplaces: BTreeMap<String, MarketplaceRecord>,
+}
+
+impl AgentSettings {
+    /// Whether the installed package `id` is on: its marketplace is not
+    /// turned off, and its entry's `enabled`, else `[plugins._default]`'s,
+    /// else on.
+    pub fn package_enabled(&self, id: &PluginId) -> bool {
+        is_package_enabled(id, &self.plugins, &self.marketplaces)
+    }
 }
 
 impl Default for AgentSettings {
@@ -60,6 +78,8 @@ impl Default for AgentSettings {
             searxng_base_url: None,
             web_fetch_use_jina_reader: false,
             compaction: AgentCompactionSettings::default(),
+            plugins: PluginsSettings::default(),
+            marketplaces: BTreeMap::new(),
         }
     }
 }

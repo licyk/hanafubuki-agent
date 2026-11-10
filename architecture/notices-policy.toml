@@ -125,6 +125,136 @@ markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
 notice = "crates/agent/src/plugins/review"
 
 [[derived]]
+path = "crates/packages/src/id.rs"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
+notice = "crates/packages"
+
+[[derived]]
+path = "crates/packages/src/id/tests.rs"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
+notice = "crates/packages"
+
+[[derived]]
+path = "crates/packages/src/version.rs"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
+notice = "crates/packages"
+
+[[derived]]
+path = "crates/packages/src/manifest/mod.rs"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
+notice = "crates/packages"
+
+[[derived]]
+path = "crates/packages/src/manifest/probe.rs"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
+notice = "crates/packages"
+
+[[derived]]
+path = "crates/packages/src/manifest/legacy.rs"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
+notice = "crates/packages"
+
+[[derived]]
+path = "crates/packages/src/manifest/agent_plugins.rs"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
+notice = "crates/packages"
+
+[[derived]]
+path = "crates/packages/src/commands/mod.rs"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
+notice = "crates/packages"
+
+[[derived]]
+path = "crates/packages/src/commands/render.rs"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
+notice = "crates/packages"
+
+[[derived]]
+path = "crates/packages/src/commands/tests.rs"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
+notice = "crates/packages"
+
+[[derived]]
+path = "crates/packages/src/hash.rs"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
+notice = "crates/packages"
+
+[[derived]]
+path = "crates/packages/src/git.rs"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
+notice = "crates/packages"
+
+[[derived]]
+path = "crates/packages/src/settings.rs"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
+notice = "crates/packages"
+
+[[derived]]
+path = "crates/packages/src/store/mod.rs"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
+notice = "crates/packages"
+
+[[derived]]
+path = "crates/packages/src/store/install.rs"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
+notice = "crates/packages"
+
+[[derived]]
+path = "crates/packages/src/store/stage.rs"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
+notice = "crates/packages"
+
+[[derived]]
+path = "crates/packages/src/store/stage/tests.rs"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
+notice = "crates/packages"
+
+[[derived]]
+path = "crates/packages/src/marketplace/mod.rs"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
+notice = "crates/packages"
+
+[[derived]]
+path = "crates/packages/src/marketplace/entry.rs"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
+notice = "crates/packages"
+
+[[derived]]
+path = "crates/packages/src/marketplace/source.rs"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
+notice = "crates/packages"
+
+[[derived]]
+path = "crates/packages/src/marketplace/source/tests.rs"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
+notice = "crates/packages"
+
+[[derived]]
+path = "crates/packages/src/marketplace/manage.rs"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
+notice = "crates/packages"
+
+[[derived]]
+path = "crates/packages/tests/packages/probe.rs"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
+notice = "crates/packages"
+
+[[derived]]
+path = "crates/packages/tests/packages/manifest.rs"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
+notice = "crates/packages"
+
+[[derived]]
+path = "crates/packages/tests/packages/store.rs"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
+notice = "crates/packages"
+
+[[derived]]
+path = "crates/packages/tests/packages/marketplace.rs"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
+notice = "crates/packages"
+
+[[derived]]
 path = "crates/hooks/src/event.rs"
 markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
 notice = "crates/hooks"

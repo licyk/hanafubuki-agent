@@ -59,12 +59,17 @@ pub(crate) fn check_setting(
     value: &Value,
     below: &AgentSettings,
 ) -> Result<(), String> {
-    if lookup(&known_settings()?, path).is_none() {
-        return Err(format!("`{key}` is not a setting of config.toml"));
-    }
     let before = repairs(document, below);
     let mut changed = document.clone();
     insert(&mut changed, path, value.clone());
+    // `[plugins]` and `[marketplaces]` are keyed by what the user installed
+    // and added: a key there is a setting when the changed document holds
+    // it once read.
+    if lookup(&known_settings()?, path).is_none()
+        && lookup(&object(&decoded(&changed, below))?, path).is_none()
+    {
+        return Err(format!("`{key}` is not a setting of config.toml"));
+    }
     match repairs(&changed, below)
         .into_iter()
         .find(|repair| !before.contains(repair))
@@ -119,6 +124,10 @@ pub(crate) fn insert(document: &mut Map<String, Value>, path: &[String], value: 
         table = next;
     }
     table.insert(last.clone(), value);
+}
+
+fn decoded(document: &Map<String, Value>, below: &AgentSettings) -> AgentSettings {
+    decode_settings(document, below, &mut Vec::new())
 }
 
 fn repairs(document: &Map<String, Value>, below: &AgentSettings) -> Vec<String> {

@@ -18,16 +18,16 @@ Agent 是一个**内核**（`hanafubuki-agent-kernel`），拥有会话、轮次
 
 依赖只向下指。`cargo xtask check-dependencies` 按层表（`xtask/src/dependencies.rs` 的 `LAYERS`）检查每个成员只依赖它那一行允许的成员。
 
-| 层         | crate                                                                                                                                        | 作用                                                                                                                            |
-| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| 中性机制   | `foundation`、`tool-contracts`、`process`、`runtime`、`host`                                                                                 | 路径、取消、阻塞边界、panic 隔离；工具规格类型；进程所有权；被隔离的 Tokio 运行时；通用模块宿主（注册表、租约、故障、重启策略） |
-| 领域       | `approval`、`skills`、`web-search`、`model-api`、`workspace-fs`、`execution`、`mcp`、`memory`、`worktree`、`hooks`、`sandbox`、`compression` | 各自独立、可单独测试的能力                                                                                                      |
-| 插件 API   | `contracts`                                                                                                                                  | 注册表与扩展点契约；重新导出 `host` 的注册与故障机制，插件只依赖它                                                              |
-| 内核与历史 | `kernel`、`history`                                                                                                                          | 会话、轮次循环、工具规划与流水线、请求组装、世界状态、压缩与分层压缩、审批流程、恢复；JSONL 历史与 SQLite 索引                  |
-| 插件       | `plugin-web`、`plugin-workspace-fs`、`plugin-execution`、`plugin-mcp`、`plugin-worktree`、`plugin-hooks`                                     | 每个把一个领域 crate 绑定到扩展点，或作为服务提供给门面的调用                                                                   |
-| 配置       | `config`                                                                                                                                     | Agent 自己的配置（`AgentConfig`）：三个 TOML 文件，独立模式下分层                                                               |
-| 门面       | `hanafubuki-agent`（`crates/agent`）                                                                                                         | 组合：插件宿主与清单、Agent 自己的插件、槽位、服务 API、宿主接口、独立运行时、数据目录锁、日志                                  |
-| 界面       | `tui`、`cli`                                                                                                                                 | 终端界面（只依赖门面）和 `hanafubuki-agent` 二进制（依赖门面与终端界面）                                                        |
+| 层         | crate                                                                                                                                                    | 作用                                                                                                                            |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| 中性机制   | `foundation`、`tool-contracts`、`process`、`runtime`、`host`                                                                                             | 路径、取消、阻塞边界、panic 隔离；工具规格类型；进程所有权；被隔离的 Tokio 运行时；通用模块宿主（注册表、租约、故障、重启策略） |
+| 领域       | `approval`、`skills`、`web-search`、`model-api`、`workspace-fs`、`execution`、`mcp`、`memory`、`worktree`、`hooks`、`sandbox`、`compression`、`packages` | 各自独立、可单独测试的能力                                                                                                      |
+| 插件 API   | `contracts`                                                                                                                                              | 注册表与扩展点契约；重新导出 `host` 的注册与故障机制，插件只依赖它                                                              |
+| 内核与历史 | `kernel`、`history`                                                                                                                                      | 会话、轮次循环、工具规划与流水线、请求组装、世界状态、压缩与分层压缩、审批流程、恢复；JSONL 历史与 SQLite 索引                  |
+| 插件       | `plugin-web`、`plugin-workspace-fs`、`plugin-execution`、`plugin-mcp`、`plugin-worktree`、`plugin-hooks`                                                 | 每个把一个领域 crate 绑定到扩展点，或作为服务提供给门面的调用                                                                   |
+| 配置       | `config`                                                                                                                                                 | Agent 自己的配置（`AgentConfig`）：三个 TOML 文件，独立模式下分层                                                               |
+| 门面       | `hanafubuki-agent`（`crates/agent`）                                                                                                                     | 组合：插件宿主与清单、Agent 自己的插件、槽位、服务 API、宿主接口、独立运行时、数据目录锁、日志                                  |
+| 界面       | `tui`、`cli`                                                                                                                                             | 终端界面（只依赖门面）和 `hanafubuki-agent` 二进制（依赖门面与终端界面）                                                        |
 
 （表中省略了 `hanafubuki-agent-` 前缀。）除了层表，检查还执行与表无关的规则：不依赖任何 Hanafubuki crate（任何来源）；内核不依赖任何插件；插件依赖插件 API，不依赖内核、门面或其他插件；每个插件 crate 都是门面的依赖（门面挂载它）；只有门面依赖配置 crate；`host` 只依赖 `foundation`；kardia 只出现在 `host`、插件 API、内核、插件和门面中，而且从不使用 `kardia` 门面 crate（它带有 WASM/dylib 热重载）。
 
@@ -207,6 +207,18 @@ schema 遵循同样的按协议规则：支持 `strict_json_schema` 的协议（
 - **配置**（`hanafubuki-agent-config`）：三个 TOML 文件，各自一个修订域和一把锁（`config.toml`、`providers.toml`、`mcp.toml`，后两者只有所有者可读）。读取逐字段解码，无效值取默认值，未知键保留，需要修复的文件先复制到 `.recovery/`；写入用 `toml_edit` 编辑磁盘上的文档（注释、布局和未知键得以保留），再原子重命名。独立模式下设置是分层的（profile、受信任的项目文件、`-c`），但只有用户的文件会被修复或写入。详见[配置](/docs/configuration)。
 - **数据目录锁**：`<data_dir>/.lock`，因为历史索引、记忆存储和进程组台账都假定只有一个写进程。
 - **持久化格式是不稳定的。** 规则是读取方容错解码，隔离它不能使用的东西，从不删除用户数据。
+
+## 已安装的插件 [#installed-plugins]
+
+已安装的插件是一个**包**：一个带清单的目录，从目录或市场安装，名字是 `<插件>@<市场>`。它不是插件宿主的一行。包存储（`hanafubuki-agent-packages`，移植自 Codex 的插件存储）把它们放在数据目录的 `plugins/` 中（[数据目录](/docs/data-directory#contents)）；配置中的 `[plugins]` 和 `[marketplaces]` 决定哪些启用（[插件](/docs/config-reference#plugins)）。
+
+- **五种清单格式**，按以下顺序探测：本项目的 `.hanafubuki-plugin/plugin.json`、Agent Plugins 1.0.0 的根 `plugin.json`（按 `$schema` 识别），然后是 Codex 的 `.codex-plugin`、Claude Code 的 `.claude-plugin` 和 Cursor 的 `.cursor-plugin` 中的 `plugin.json`。清单或其目录是符号链接或不是普通文件时，探测停止，这样无害的清单无法遮住另一个清单。我们的格式是 Codex 的清单加上供代码使用的 `runtime`、`contributes`、`permissions` 和 `configSchema`；存储保留它们，留给将来运行代码的部分。
+- **按外部来源读取。** 无法使用的清单字段或组件路径会被略去并记录一个问题；只有不是 JSON 对象的清单，或无法读取的 Agent Plugins 名字或 `$schema`，才会失败。路径必须以 `./` 开头并留在包内。Codex 遇到某些类型错误的字段会让整个清单失败；这里只略去该字段。
+- **市场**是 `.agents/plugins/marketplace.json`、`.agents/plugins/api_marketplace.json`、`.claude-plugin/marketplace.json` 或 `.cursor-plugin/marketplace.json`，支持本地、`url` 和 `git-subdir` 来源（暂不支持 npm）。无法使用的条目会被跳过；只有无法读取的文件才让它的市场失败。市场可以从目录添加（留在原处），也可以从 git 仓库添加（克隆到 `plugins/marketplaces/`）；升级时取得远端的修订并替换检出。存储返回 `[marketplaces]` 记录，由调用方写入配置。
+- **安装先暂存再替换。** 包被复制到暂存区（不含符号链接和 `.git`）；没有清单时，把市场条目的字段写成它的清单；暂存的清单逐字节与来源核对；带描述的 `commands/*.md` 变成 Skill；然后把副本重命名为 `plugins/cache/<市场>/<插件>/<版本>/`，同一版本的旧副本保留到替换成功，更旧的版本被清理。使用中的版本：有 `local` 时用 `local`，否则用最高版本。包的数据目录在卸载后保留，除非清除。
+- **`git` 通过 Agent 的 `ExecutorManager` 运行**，和工作树一样隔离：不继承仓库选择变量，不运行钩子，不提示，并有超时。
+
+包存储尚未接入 Agent：还没有任何部分加载包的 Skill、MCP 服务器或钩子，命令行和终端界面也都不能安装包。
 
 ## MCP [#mcp]
 

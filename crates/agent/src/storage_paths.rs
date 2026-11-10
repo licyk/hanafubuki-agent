@@ -30,6 +30,9 @@ pub struct AgentStoragePaths {
     pub worktrees_root: PathBuf,
     /// The hooks' trust and enablement (`hanafubuki-agent-hooks`).
     pub hooks_state_file: PathBuf,
+    /// The installed plugins: their cache, their data, the git-added
+    /// marketplaces and the install record (`hanafubuki-agent-packages`).
+    pub plugins_root: PathBuf,
 }
 
 impl AgentStoragePaths {
@@ -45,6 +48,7 @@ impl AgentStoragePaths {
             logs_dir: root.join("logs"),
             worktrees_root: root.join("worktrees"),
             hooks_state_file: root.join("hooks-state.json"),
+            plugins_root: root.join("plugins"),
             root,
         }
     }

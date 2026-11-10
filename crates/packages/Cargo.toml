@@ -1,0 +1,25 @@
+[package]
+name = "hanafubuki-agent-packages"
+description = "Installed plugins for hanafubuki-agent: Codex-compatible packages and marketplaces, a versioned cache, staged installs and the install record"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+hanafubuki-agent-foundation.workspace = true
+hanafubuki-agent-process.workspace = true
+hex.workspace = true
+log.workspace = true
+parking_lot.workspace = true
+semver = "1"
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+serde_yaml.workspace = true
+sha2.workspace = true
+tempfile.workspace = true
+
+[dev-dependencies]
+hanafubuki-agent-process = { workspace = true, features = ["test-support"] }
