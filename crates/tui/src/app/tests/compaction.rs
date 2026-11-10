@@ -1,11 +1,12 @@
 //! Context compactions in the conversation, end to end: every install shows
 //! one "Context compacted" cell, whether `/compact` asked for it or a turn
 //! took it from the background, and a resumed session replays it once;
-//! `/status` shows a compaction running in the background.
+//! `/status` shows a compaction running in the background; a failed one
+//! shows a warning when a turn ran it, and `/compact`'s reply otherwise.
 
 use std::time::Duration;
 
-use hanafubuki_agent::test_support::{assistant_events, with_input_tokens};
+use hanafubuki_agent::test_support::{assistant_events, tool_events, with_input_tokens};
 use hanafubuki_agent::{
     AgentBackgroundCompactionState, AgentCompactionSettings, AgentCompactionStrategy,
     AgentSettingsPatch,
@@ -153,4 +154,49 @@ fn compact_shows_one_cell_and_a_resumed_session_replays_it_once() {
 
     harness.resume_again("Still here.");
     assert_eq!(harness.compacted_cells(), 1, "{}", harness.transcript());
+}
+
+#[test]
+fn a_compaction_that_fails_in_a_turn_shows_a_warning_and_compacts_reply_shows_once() {
+    const WARNING: &str = "Context compaction failed";
+    // A summary that calls a tool is refused, so both compactions fail.
+    let mut harness = Harness::start_configured(
+        vec![
+            (
+                with_input_tokens(assistant_events("The answer is 42."), 90_000),
+                Duration::ZERO,
+            ),
+            (tool_events("skills_list", "{}"), Duration::ZERO),
+            (tool_events("skills_list", "{}"), Duration::ZERO),
+        ],
+        true,
+        TranscriptMode::Terminal,
+        |config| {
+            config
+                .mutate_providers(1, |registry| {
+                    registry.model_policy.context_window_tokens = Some(100_000);
+                    Ok(())
+                })
+                .unwrap();
+        },
+    );
+    harness.exchange("What is the answer?", "The answer is 42.");
+
+    harness.type_and_submit("/compact");
+    harness.pump_until_screen_shows("the conversation was not compacted");
+    assert!(!harness.transcript().contains(WARNING));
+
+    // Over the threshold, the next turn compacts first, and fails with it.
+    harness.type_and_submit("Are you there?");
+    harness.pump_until_screen_shows(WARNING);
+    harness.pump_until_turn_ends();
+    let transcript = harness.transcript();
+    assert_eq!(transcript.matches(WARNING).count(), 1, "{transcript}");
+    assert!(
+        transcript.contains("local compaction returned a forbidden output item"),
+        "{transcript}"
+    );
+    harness.type_and_submit("/warnings");
+    let list = harness.pump_until_screen_shows("1 compaction");
+    assert!(list.contains(&format!("[compaction] {WARNING}")), "{list}");
 }

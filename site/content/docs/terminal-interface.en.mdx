@@ -313,7 +313,7 @@ While an approval, a question or a list is open, the keys are its own; the mouse
 
 Fullscreen captures the mouse, so the terminal's own selection usually needs Shift held while you drag. To copy with the terminal's selection, `/raw` shows the conversation without its styles.
 
-Each time the session's context is compacted, the conversation shows `• Context compacted` where it happened: after `/compact`, when a turn compacts it (at the threshold, when the model asks for a new context, after the Provider's context-window error), and when a turn installs a compaction that ran [in the background](/docs/config-reference#compaction). A resumed session shows its earlier compactions the same way.
+Each time the session's context is compacted, the conversation shows `• Context compacted` where it happened: after `/compact`, when a turn compacts it (at the threshold, when the model asks for a new context, after the Provider's context-window error), and when a turn installs a compaction that ran [in the background](/docs/config-reference#compaction). A resumed session shows its earlier compactions the same way. When a compaction a turn runs fails, the conversation shows a warning, `⚠ Context compaction failed: …` with the error, and [`/warnings`](#warnings) keeps it; a failed `/compact` says so in its reply instead (`the conversation was not compacted: …`). A cancelled compaction shows nothing.
 
 ## Hierarchical compression [#compression]
 
@@ -597,6 +597,7 @@ What the interface or the Agent could not use as configured is kept for the run,
 - **MCP**: a server's latest error or warning, and what reading `mcp.toml` repaired;
 - **hooks**: the hooks' configuration problems;
 - **panics**: the internal errors the Agent caught;
+- **compaction**: a compaction a turn ran that failed ([above](#reading));
 - **interface**: a command turned off after an internal error, a theme or an item of `[tui]` it does not know, a keymap entry it could not use.
 
 When there are any at launch, one line says how many (`2 warnings: /warnings`). In the list, `c` copies the selected warning and `d` dismisses it for the rest of the run. With none, `/warnings` says `No warnings.`

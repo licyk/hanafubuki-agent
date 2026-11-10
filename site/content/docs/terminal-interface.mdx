@@ -310,7 +310,7 @@ Fullscreen 下，对话会跟随最新输出，直到你向上滚动。向上滚
 
 Fullscreen 会捕获鼠标，所以使用终端自己的选择时通常需要按住 Shift 拖动。要用终端的选择复制，可以用 `/raw` 显示不带样式的对话。
 
-会话的上下文每压缩一次，对话就在发生的位置显示 `• Context compacted`：`/compact` 之后，回合压缩上下文时（达到阈值、模型请求新上下文、Provider 报告上下文窗口错误之后），以及回合安装一个[在后台](/docs/config-reference#compaction)运行的压缩时。恢复的会话以同样的方式显示之前的压缩。
+会话的上下文每压缩一次，对话就在发生的位置显示 `• Context compacted`：`/compact` 之后，回合压缩上下文时（达到阈值、模型请求新上下文、Provider 报告上下文窗口错误之后），以及回合安装一个[在后台](/docs/config-reference#compaction)运行的压缩时。恢复的会话以同样的方式显示之前的压缩。回合运行的压缩失败时，对话显示一条警告 `⚠ Context compaction failed: …`，带着错误，[`/warnings`](#warnings) 会保留它；`/compact` 失败时改由它的回复说明（`the conversation was not compacted: …`）。被取消的压缩不显示任何内容。
 
 ## 分层压缩 [#compression]
 
@@ -594,6 +594,7 @@ yank = []
 - **MCP**：服务器最近的错误或警告，以及读取 `mcp.toml` 时做的修复；
 - **hooks**：钩子配置中的问题；
 - **panics**：Agent 捕获到的内部错误；
+- **compaction**：回合运行的压缩失败（[上文](#reading)）；
 - **interface**：因内部错误而关闭的命令、`[tui]` 中不认识的主题或项目、无法使用的按键映射设置。
 
 启动时如果有警告，会有一行说明数量（`2 warnings: /warnings`）。在列表中，`c` 复制选中的警告，`d` 在本次运行的剩余时间内忽略它。没有警告时，`/warnings` 显示 `No warnings.`。

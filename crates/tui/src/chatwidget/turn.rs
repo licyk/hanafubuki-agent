@@ -47,6 +47,7 @@ impl ChatWidget {
                     | TurnUpdate::UserInputRequested(_)
                     | TurnUpdate::Compacted
                     | TurnUpdate::CompressionFailed(_)
+                    | TurnUpdate::CompactionFailed(_)
             )
     }
 
@@ -123,6 +124,12 @@ impl ChatWidget {
                 self.add_to_history(history_cell::new_warning_event(warning.clone()));
                 self.warnings
                     .push(Warning::new(WarningSource::Panics, warning));
+            }
+            TurnUpdate::CompactionFailed(message) => {
+                let warning = format!("Context compaction failed: {message}");
+                self.add_to_history(history_cell::new_warning_event(warning.clone()));
+                self.warnings
+                    .push(Warning::new(WarningSource::Compaction, warning));
             }
             TurnUpdate::Ended(end) => self.on_turn_ended(end),
             TurnUpdate::Error(message) => {

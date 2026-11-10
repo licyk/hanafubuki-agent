@@ -39,12 +39,12 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use hanafubuki_agent::{
-    AgentAvailability, AgentCompactionStatus, AgentEvent, AgentEventKind, AgentEventSink,
-    AgentGoal, AgentHandle, AgentHistorySortDirection, AgentPermissionMode, AgentReasoningId,
-    AgentRuntime, AgentSessionId, AgentSessionMode, AgentSlot, AgentStatusEventSink,
-    AgentSteeringRequest, AgentTaskPlanSnapshot, AgentTurnAccepted, AgentTurnPageRequest,
-    AgentTurnRequest, AgentTurnTerminalReason, AgentUserInputRequest, AgentUserInputRequestId,
-    ApprovalRequest, ApprovalRequestId, SkillCatalogSnapshot,
+    AgentAvailability, AgentCompactionStatus, AgentCompactionTrigger, AgentEvent, AgentEventKind,
+    AgentEventSink, AgentGoal, AgentHandle, AgentHistorySortDirection, AgentPermissionMode,
+    AgentReasoningId, AgentRuntime, AgentSessionId, AgentSessionMode, AgentSlot,
+    AgentStatusEventSink, AgentSteeringRequest, AgentTaskPlanSnapshot, AgentTurnAccepted,
+    AgentTurnPageRequest, AgentTurnRequest, AgentTurnTerminalReason, AgentUserInputRequest,
+    AgentUserInputRequestId, ApprovalRequest, ApprovalRequestId, SkillCatalogSnapshot,
 };
 use tokio::sync::oneshot;
 
@@ -117,6 +117,8 @@ pub(crate) enum TurnUpdate {
     /// The hierarchical compression failed for a request: the turn goes on
     /// with the full history.
     CompressionFailed(String),
+    /// An automatic compaction failed, with its error.
+    CompactionFailed(String),
     StatusReport(Box<StatusReport>),
     Providers(ProviderReply),
     Mcp(McpReply),
@@ -491,6 +493,14 @@ impl AgentBridge {
             {
                 self.send_session_status();
                 TurnUpdate::Compacted
+            }
+            // `/compact`'s failure is its reply; a cancelled one is no failure.
+            AgentEventKind::CompactionUpdated { compaction }
+                if compaction.status == AgentCompactionStatus::Failed
+                    && compaction.trigger == AgentCompactionTrigger::Automatic =>
+            {
+                self.send_session_status();
+                TurnUpdate::CompactionFailed(compaction.last_error.unwrap_or_default())
             }
             AgentEventKind::ContextCompressionFailed { message } => {
                 TurnUpdate::CompressionFailed(message)

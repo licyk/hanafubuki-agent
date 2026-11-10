@@ -26,6 +26,7 @@ pub(crate) enum WarningSource {
     Mcp,
     Hooks,
     Panics,
+    Compaction,
     Interface,
 }
 
@@ -37,6 +38,7 @@ impl WarningSource {
             Self::Mcp => "MCP",
             Self::Hooks => "hooks",
             Self::Panics => "panics",
+            Self::Compaction => "compaction",
             Self::Interface => "interface",
         }
     }

@@ -198,9 +198,29 @@ and pushed, and notes what Hanafubuki must change at its next pin.
       in the turn that took it shows once, between the question and the
       answer, and once on resume; `/status` while it runs; `/compact` shows
       one cell, replayed once). Goldens unchanged.
-  - Open: a compaction that fails during a turn shows nothing in the
-    terminal interface (as before); only `/compact`'s failure is shown.
-    The status line has no background item; `/status` is the only view.
+  - Done (after P12): a compaction that fails during a turn showed
+    nothing in the terminal interface. The bridge turns a
+    `CompactionUpdated` that is `failed` with trigger `automatic` into
+    `TurnUpdate::CompactionFailed`: a warning cell (`Context compaction
+    failed: <error>`, deferred behind a streaming message like the
+    compacted cell) kept in `/warnings` under a new source, `compaction`.
+    `/compact`'s failure stays its reply only (trigger `manual`), and a
+    cancelled compaction shows nothing. The turn that ran it still ends
+    with its own failure. A background run that fails sends no event, so
+    it still shows nothing (the turn compacts in line when it must). The
+    facade re-exports `AgentCompactionTrigger`. Test: TUI `app::tests::
+    compaction::a_compaction_that_fails_in_a_turn_shows_a_warning_and_
+    compacts_reply_shows_once` (a summary that calls a tool fails both a
+    `/compact`, whose reply shows and no warning, and the next turn's
+    pre-turn compaction: one warning, listed as `[compaction]`). Docs:
+    terminal-interface (the warning, the source) and internals (both
+    languages).
+  - Open: the status line has no background item; `/status` is the only
+    view.
+  - Hanafubuki, at its next pin (the failure warning): the facade
+    re-exports `AgentCompactionTrigger`; a host can show the same warning
+    from `compaction_updated` with `status: failed` and `trigger:
+    automatic`.
   - Hanafubuki, at its next pin: the facade re-exports
     `AgentBackgroundCompactionState`; `test_support::with_input_tokens` is
     new. A host's compacted marker belongs on `compaction_updated` with
