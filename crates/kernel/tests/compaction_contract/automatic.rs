@@ -80,7 +80,12 @@ async fn auto_compaction_runs_mid_turn_only_before_followup_sampling() {
     );
     let requests = model.requests();
     assert_eq!(requests.len(), 3);
-    assert!(requests[1].tools.is_empty());
+    // The turn's tools, which the summary may not call.
+    assert_eq!(requests[1].tools, requests[0].tools);
+    assert_eq!(
+        requests[1].tool_choice,
+        hanafubuki_agent_model_api::ModelToolChoice::None
+    );
 }
 #[tokio::test]
 async fn auto_compaction_runs_once_at_sampling_admission_and_uses_new_history() {
@@ -113,7 +118,11 @@ async fn auto_compaction_runs_once_at_sampling_admission_and_uses_new_history() 
     assert_eq!(compaction.status, AgentCompactionStatus::Completed);
     let requests = model.requests();
     assert_eq!(requests.len(), 3);
-    assert!(requests[1].tools.is_empty());
+    assert_eq!(requests[1].tools, requests[0].tools);
+    assert_eq!(
+        requests[1].tool_choice,
+        hanafubuki_agent_model_api::ModelToolChoice::None
+    );
     let summary_index = requests[2]
         .input
         .iter()

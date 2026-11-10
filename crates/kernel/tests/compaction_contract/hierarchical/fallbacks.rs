@@ -69,7 +69,11 @@ async fn a_context_error_compacts_the_projection_once_and_retries() {
     let requests = model.requests();
     assert_eq!(requests.len(), 7);
     let compaction = &requests[5];
-    assert!(compaction.tools.is_empty());
+    assert_eq!(compaction.tools, requests[4].tools);
+    assert_eq!(
+        compaction.tool_choice,
+        hanafubuki_agent_model_api::ModelToolChoice::None
+    );
     assert!(!text(compaction).contains("a long first answer"));
     assert!(text(compaction).contains("First exchange"));
     assert!(text(compaction).contains("a long second answer"));
@@ -114,7 +118,11 @@ async fn the_terminal_escape_runs_one_standard_compaction() {
     assert_eq!(outcome.final_answer, "No instances.");
     let requests = model.requests();
     assert_eq!(requests.len(), 5);
-    assert!(requests[3].tools.is_empty());
+    assert_eq!(requests[3].tools, requests[2].tools);
+    assert_eq!(
+        requests[3].tool_choice,
+        hanafubuki_agent_model_api::ModelToolChoice::None
+    );
     let compaction = service.snapshot(session.id).unwrap().compaction.unwrap();
     assert_eq!(
         compaction.reason,

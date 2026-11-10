@@ -161,8 +161,7 @@ fn compaction_request(
             "compaction transport capability changed after session creation".to_string(),
         ));
     }
-    let local_summary = implementation == AgentCompactionImplementation::LocalSummary;
-    if local_summary {
+    if implementation == AgentCompactionImplementation::LocalSummary {
         if let Some(task_plan) = record.runtime.task_plan.as_ref() {
             input.push(task_plan_model_input(task_plan));
         }
@@ -170,17 +169,16 @@ fn compaction_request(
     } else if implementation == AgentCompactionImplementation::ResponsesCompactV2 {
         input.push(ModelInputItem::CompactionTrigger);
     }
+    // The turn's tools, never called (`None`): Anthropic Messages refuses
+    // history tool blocks in a request that declares no tools, and the
+    // provider's cached prefix of instructions and tools stays the turn's.
     let request = ModelRequest {
         model: record.settings.config.model.clone(),
         instructions: record.settings.config.instructions.clone(),
         input,
-        tools: if local_summary {
-            Vec::new()
-        } else {
-            tool_plan.model_specs()
-        },
+        tools: tool_plan.model_specs(),
         tool_choice: hanafubuki_agent_model_api::ModelToolChoice::None,
-        parallel_tool_calls: !local_summary && tool_plan.parallel_tool_calls(),
+        parallel_tool_calls: tool_plan.parallel_tool_calls(),
         reasoning: record.settings.config.effective_reasoning(),
         output_format: None,
     };

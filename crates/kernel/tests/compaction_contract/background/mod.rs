@@ -95,8 +95,8 @@ struct ScriptedTurnResponse {
 }
 
 /// A model that tells the turn's requests from its compactions: a local
-/// summary sends no tools, a v2 compaction ends with its trigger, a v1 one
-/// is `compact`.
+/// summary may call no tool, a v2 compaction ends with its trigger, a v1
+/// one is `compact`.
 #[derive(Clone)]
 struct BackgroundModel {
     turns: Arc<Mutex<VecDeque<ScriptedTurnResponse>>>,
@@ -169,7 +169,7 @@ impl ModelPort for BackgroundModel {
         request: ModelRequest,
         cancellation: CancellationToken,
     ) -> ModelFuture<'_, ModelResult<ModelStream>> {
-        let compacting = request.tools.is_empty()
+        let compacting = request.tool_choice == hanafubuki_agent_model_api::ModelToolChoice::None
             || matches!(
                 request.input.last(),
                 Some(ModelInputItem::CompactionTrigger)

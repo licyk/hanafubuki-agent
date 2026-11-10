@@ -173,7 +173,7 @@ schema 遵循同样的按协议规则：支持 `strict_json_schema` 的协议（
 
 ### 压缩 [#compaction]
 
-压缩用本地摘要或 Responses 的压缩替换历史，由会话的压缩能力选择。它在会话记录的克隆上暂存，并作为 `Compacted { checkpoint }` 边界安装，所以失败只丢弃克隆，历史不变。它保留用户消息（最新的优先，在预算内）和摘要，从不摘要上下文段：下一个请求从注册表重新渲染每个段，所以轮次中途被压缩的窗口仍带有 Skill 目录和记忆。触发条件：轮次前和轮次中达到阈值（默认窗口的 80%）、手动、Provider 报告上下文窗口错误之后。最后一种有上限：每步一次压缩加重试，成功响应之前第二次出错则轮次失败（`context_window_exceeded`）。
+压缩用本地摘要或 Responses 的压缩替换历史，由会话的压缩能力选择。它在会话记录的克隆上暂存，并作为 `Compacted { checkpoint }` 边界安装，所以失败只丢弃克隆，历史不变。本地摘要的请求声明轮次的工具，工具选择为 `none`（回答里的工具调用是错误）：Anthropic Messages 拒绝历史含工具调用却不声明工具的请求，而且 Provider 缓存的指令和工具前缀与轮次的相同。它保留用户消息（最新的优先，在预算内）和摘要，从不摘要上下文段：下一个请求从注册表重新渲染每个段，所以轮次中途被压缩的窗口仍带有 Skill 目录和记忆。触发条件：轮次前和轮次中达到阈值（默认窗口的 80%）、手动、Provider 报告上下文窗口错误之后。最后一种有上限：每步一次压缩加重试，成功响应之前第二次出错则轮次失败（`context_window_exceeded`）。
 
 会话还有压缩策略（`AgentSessionConfig.compaction_strategy`）：`standard` 即上面的压缩；`background` 在会话工作时对快照运行它，稍后安装结果；`hierarchical` 由模型自己把历史折叠成摘要，在请求时投影（源自 [billion-context](https://github.com/ranxianglei/billion-context)）。每种策略都以这种压缩为底线（手动、模型的 `new_context`、上下文错误后的重试）。facade 在每次模型操作前从 `[compaction]` 读取策略，并在会话空闲时应用（`set_session_compaction_strategy`）；临时会话（`/side`）总是 `standard`；`background.childSessions` 关闭时，子会话（子代理的、评审的）以 `standard` 代替 `background`。同一次激活还把修改后的 `remoteCompaction` 写入会话的压缩能力，压缩会用它核对传输。
 

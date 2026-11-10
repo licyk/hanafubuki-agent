@@ -246,8 +246,18 @@ async fn manual_compaction_replaces_a_safe_prefix_and_commits_usage_atomically()
     );
     assert_eq!(after.model_context.len(), 3);
     assert_eq!(after.usage.unwrap().cumulative_input_tokens, 30);
-    assert!(model.requests()[2].tools.is_empty());
-    assert!(!model.requests()[2].parallel_tool_calls);
+    // The turn's tools and their parallel setting, which the summary may
+    // not call.
+    let requests = model.requests();
+    assert_eq!(requests[2].tools, requests[1].tools);
+    assert_eq!(
+        requests[2].parallel_tool_calls,
+        requests[1].parallel_tool_calls
+    );
+    assert_eq!(
+        requests[2].tool_choice,
+        hanafubuki_agent_model_api::ModelToolChoice::None
+    );
     let lifecycle = service
         .events_since(session.id, None)
         .unwrap()

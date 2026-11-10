@@ -205,3 +205,53 @@ async fn a_strategy_applied_between_operations_survives_a_restart() {
     );
     finish(reopened, paths);
 }
+
+/// A local summary on Anthropic Messages, of a history that holds a tool
+/// call: the request declares the turn's tools, which the summary may not
+/// call, as the API refuses tool blocks in a request without tools (the
+/// fake answers such a request with its error).
+#[tokio::test(flavor = "multi_thread")]
+async fn an_anthropic_local_summary_declares_the_turns_tools_and_calls_none() {
+    let server = FakeServer::start(vec![
+        (anthropic_tool_events("skills_list", "{}"), Duration::ZERO),
+        (anthropic_assistant_events("Listed."), Duration::ZERO),
+        (
+            anthropic_assistant_events("The user listed the Skills."),
+            Duration::ZERO,
+        ),
+    ])
+    .await;
+    let (service, paths) = service_with("anthropic-local-summary", |_, config| {
+        configure_test_provider(config, &server.base_url, None);
+        config
+            .mutate_providers(1, |registry| {
+                registry.providers[0].protocol = AgentModelProtocol::AnthropicMessages;
+                Ok(())
+            })
+            .unwrap();
+    });
+    let session = service
+        .create_session(AgentSessionMode::Default)
+        .await
+        .unwrap();
+    service
+        .start_turn(session.id, "List the Skills.".to_string().into())
+        .await
+        .unwrap();
+
+    let read = service.snapshot(session.id).unwrap();
+    let outcome = service
+        .compact_session(session.id, read.generation, read.revision)
+        .await
+        .unwrap();
+    assert_eq!(outcome.compaction.status, AgentCompactionStatus::Completed);
+    let requests = server.requests();
+    assert_eq!(requests.len(), 3);
+    let body = |index: usize| -> Value { serde_json::from_slice(&requests[index].body).unwrap() };
+    let (turn, summary) = (body(1), body(2));
+    assert!(summary.to_string().contains("tool_result"));
+    assert_eq!(summary["tools"], turn["tools"]);
+    assert!(!summary["tools"].as_array().unwrap().is_empty());
+    assert_eq!(summary["tool_choice"], serde_json::json!({"type": "none"}));
+    finish(service, paths);
+}

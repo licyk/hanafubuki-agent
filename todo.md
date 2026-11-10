@@ -42,15 +42,40 @@ and pushed, and notes what Hanafubuki must change at its next pin.
     `agent_settings_fields()` is the web tools' form (rendered in
     Hanafubuki's Tools panel, flat patch keys), so `compaction` has no
     entry there: it is a nested table patched whole, like `memory`.
-  - Open: Anthropic Messages with `LocalSummary` sends history `tool_use`
-    / `tool_result` blocks with no `tools` key (`compaction_request` sets
-    `tools: []`; `anthropic_messages/encode.rs` writes `tools` only when
-    non-empty). The live API rejects such requests ("Requests which
-    include `tool_use` or `tool_result` blocks must define tools"), from
-    memory, not checked against the live API; the fake does not enforce
-    it. Likely fix: send the tool specs with `tool_choice: none` on the
-    local summary request (model-visible, regenerates the goldens), or
-    have the Anthropic encoder declare the tools the history calls.
+  - Done (after P12): the Anthropic Messages local summary. It sent
+    history `tool_use` / `tool_result` blocks with no `tools` key
+    (`compaction_request` set `tools: []`, and `anthropic_messages/
+    encode.rs` writes `tools` only when non-empty). Every compaction
+    request now declares the step's tools and their parallel setting
+    (`tool_plan.model_specs()`, as the turn's request) with
+    `ModelToolChoice::None`, encoded `"none"` (Responses, Chat
+    Completions) and `{"type":"none"}` (Anthropic), which every protocol
+    already wrote; the prompt and the output handling are unchanged (a
+    tool call in the answer is still a protocol error), and the provider's
+    cached prefix of instructions and tools stays the turn's. The refusal
+    ("Requests which include `tool_use` or `tool_result` blocks must
+    define tools") is not stated in the published docs (checked: the tool
+    use overview and handle-tool-calls pages); `tool_choice` `none` with
+    tools is documented, and the docs' own replay recipe keeps the tools
+    and sets `none` to the same end. Not checked against the live API.
+    The facade's fake server now speaks Anthropic Messages for a provider
+    of that protocol (`anthropic_assistant_events`,
+    `anthropic_tool_events`, `CapturedRequest.path`) and answers a
+    `/messages` request with tool blocks and no tools with that 400,
+    taking no answer. Tests: facade `sessions::compaction::an_anthropic_
+    local_summary_declares_the_turns_tools_and_calls_none` (fails before
+    the fix with the fake's 400); the kernel's compaction contracts
+    assert the turn's tools and `None` (the background fake tells a
+    compaction by `None` now). Goldens regenerated on purpose:
+    `compacted_request.json` and `background_compacted_request.json`,
+    whose `compaction_request` gains the next request's 30 tools and
+    `parallel_tool_calls: true` (was `[]` and `false`); nothing else
+    changed. Docs: architecture (both languages).
+  - Hanafubuki, at its next pin (the local summary): goldens to copy,
+    `compacted_request.json` and `background_compacted_request.json`. A
+    host fake that tells a compaction from a turn by its empty `tools`
+    now tells it by `tool_choice` `None`. The facade's test-support
+    `CapturedRequest` has a `path` field.
   - Hanafubuki, at its next pin: `AgentSettings.compaction`
     (`AgentCompactionSettings`: `strategy`, `background`, `hierarchical`)
     and `AgentSettingsPatch.compaction` (the table whole, strict); new

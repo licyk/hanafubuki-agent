@@ -1,6 +1,8 @@
 //! A scripted model provider in the test process: a loopback HTTP server
-//! that answers each request with the next Responses event stream it was
-//! given, and keeps every request it received.
+//! that answers each request with the next event stream it was given
+//! (Responses, or Anthropic Messages for a provider of that protocol), and
+//! keeps every request it received. An Anthropic Messages request the API
+//! would refuse is answered with its error instead, taking no answer.
 
 use std::collections::{BTreeMap, VecDeque};
 use std::sync::{Arc, Mutex};
@@ -11,6 +13,7 @@ use tokio::net::{TcpListener, TcpStream};
 
 #[derive(Clone)]
 pub struct CapturedRequest {
+    pub path: String,
     pub headers: BTreeMap<String, String>,
     pub body: Vec<u8>,
 }
@@ -29,10 +32,21 @@ impl FakeServer {
         let captured = requests.clone();
         let task = tokio::spawn(async move {
             let mut responses = VecDeque::from(responses);
-            while let Some((body, delay)) = responses.pop_front() {
+            while !responses.is_empty() {
                 let (mut stream, _) = listener.accept().await.unwrap();
                 let request = read_request(&mut stream).await;
+                let refusal = anthropic_refusal(&request);
                 captured.lock().unwrap().push(request);
+                if let Some(error) = refusal {
+                    let response = format!(
+                        "HTTP/1.1 400 Bad Request\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{error}",
+                        error.len()
+                    );
+                    let _ = stream.write_all(response.as_bytes()).await;
+                    let _ = stream.shutdown().await;
+                    continue;
+                }
+                let (body, delay) = responses.pop_front().unwrap();
                 let headers = format!(
                     "HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\ncontent-length: {}\r\nconnection: close\r\n\r\n",
                     body.len()
@@ -74,8 +88,9 @@ async fn read_request(stream: &mut TcpStream) -> CapturedRequest {
             break position + 4;
         }
     };
-    let headers = std::str::from_utf8(&bytes[..header_end])
-        .unwrap()
+    let head = std::str::from_utf8(&bytes[..header_end]).unwrap();
+    let path = head.split(' ').nth(1).unwrap_or_default().to_string();
+    let headers = head
         .split("\r\n")
         .skip(1)
         .filter(|line| !line.is_empty())
@@ -94,9 +109,76 @@ async fn read_request(stream: &mut TcpStream) -> CapturedRequest {
         bytes.extend_from_slice(&buffer[..count]);
     }
     CapturedRequest {
+        path,
         headers,
         body: bytes[header_end..header_end + length].to_vec(),
     }
+}
+
+/// The Anthropic Messages API's error for a request it refuses: one whose
+/// history holds `tool_use` or `tool_result` blocks but that declares no
+/// tools.
+fn anthropic_refusal(request: &CapturedRequest) -> Option<String> {
+    if !request.path.ends_with("/messages") {
+        return None;
+    }
+    let body: serde_json::Value = serde_json::from_slice(&request.body).ok()?;
+    let declares_tools = body["tools"]
+        .as_array()
+        .is_some_and(|tools| !tools.is_empty());
+    let has_tool_blocks = body["messages"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|message| message["content"].as_array())
+        .flatten()
+        .any(|block| matches!(block["type"].as_str(), Some("tool_use" | "tool_result")));
+    (has_tool_blocks && !declares_tools).then(|| {
+        serde_json::json!({
+            "type": "error",
+            "error": {
+                "type": "invalid_request_error",
+                "message": "Requests which include `tool_use` or `tool_result` blocks must define tools."
+            }
+        })
+        .to_string()
+    })
+}
+
+/// An Anthropic Messages stream: one text answer that ends the turn.
+pub fn anthropic_assistant_events(text: &str) -> Vec<u8> {
+    let text = serde_json::to_string(text).unwrap();
+    format!(
+        concat!(
+            "event: message_start\ndata: {{\"type\":\"message_start\",\"message\":{{\"id\":\"msg-text\",\"usage\":{{\"input_tokens\":10,\"output_tokens\":1}}}}}}\n\n",
+            "event: content_block_start\ndata: {{\"type\":\"content_block_start\",\"index\":0,\"content_block\":{{\"type\":\"text\",\"text\":\"\"}}}}\n\n",
+            "event: content_block_delta\ndata: {{\"type\":\"content_block_delta\",\"index\":0,\"delta\":{{\"type\":\"text_delta\",\"text\":{text}}}}}\n\n",
+            "event: content_block_stop\ndata: {{\"type\":\"content_block_stop\",\"index\":0}}\n\n",
+            "event: message_delta\ndata: {{\"type\":\"message_delta\",\"delta\":{{\"stop_reason\":\"end_turn\"}},\"usage\":{{\"output_tokens\":5}}}}\n\n",
+            "event: message_stop\ndata: {{\"type\":\"message_stop\"}}\n\n"
+        ),
+        text = text,
+    )
+    .into_bytes()
+}
+
+/// An Anthropic Messages stream: one call of `name` with `input` (a JSON
+/// object).
+pub fn anthropic_tool_events(name: &str, input: &str) -> Vec<u8> {
+    let input = serde_json::to_string(input).unwrap();
+    format!(
+        concat!(
+            "event: message_start\ndata: {{\"type\":\"message_start\",\"message\":{{\"id\":\"msg-tool\",\"usage\":{{\"input_tokens\":10,\"output_tokens\":1}}}}}}\n\n",
+            "event: content_block_start\ndata: {{\"type\":\"content_block_start\",\"index\":0,\"content_block\":{{\"type\":\"tool_use\",\"id\":\"toolu-1\",\"name\":\"{name}\",\"input\":{{}}}}}}\n\n",
+            "event: content_block_delta\ndata: {{\"type\":\"content_block_delta\",\"index\":0,\"delta\":{{\"type\":\"input_json_delta\",\"partial_json\":{input}}}}}\n\n",
+            "event: content_block_stop\ndata: {{\"type\":\"content_block_stop\",\"index\":0}}\n\n",
+            "event: message_delta\ndata: {{\"type\":\"message_delta\",\"delta\":{{\"stop_reason\":\"tool_use\"}},\"usage\":{{\"output_tokens\":5}}}}\n\n",
+            "event: message_stop\ndata: {{\"type\":\"message_stop\"}}\n\n"
+        ),
+        name = name,
+        input = input,
+    )
+    .into_bytes()
 }
 
 pub fn tool_events(name: &str, arguments: &str) -> Vec<u8> {
