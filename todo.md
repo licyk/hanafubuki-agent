@@ -13,8 +13,14 @@ preserving the existing layered configuration and atomic writers.
       summaries and layer/warning counts; `/config <section>` selects its
       domain and `/config quick` keeps the previous quick editor while the
       full forms are built.
-- [ ] C2: every `config.toml` domain form, typed atomic saves and
-      override warnings.
+- [x] C2: every `config.toml` domain form, typed atomic saves and
+      override warnings. Done: General, Sandbox, Memory, Web, Compaction,
+      Network/logging and Interface have whole-domain forms; saves go
+      through `AgentSettingsPatch`, the running Agent's standalone patch or
+      `AgentTuiPreferencesPatch`; proxy credentials stay secret; comments
+      and unknown keys survive; a coverage test pins every scalar setting
+      to a form or specialized editor; and a write a higher layer replaces
+      says so.
 - [ ] C3: the complete shared Provider model policy, including turn
       budgets and revision conflicts.
 - [ ] C4: MCP protocol mode and per-tool concurrency, approval and

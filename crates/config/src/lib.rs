@@ -54,7 +54,9 @@ pub use settings::{
     AgentSettingsPatch, AgentWebSearchProvider, AgentWindowsSandbox, AgentWindowsSettings,
     MAX_AGENT_DISABLED_PLUGINS, MAX_AGENT_PLUGIN_NAME_BYTES,
 };
-pub use standalone::{AgentLogLevel, AgentNetworkSettings, AgentStandaloneSettings};
+pub use standalone::{
+    AgentLogLevel, AgentNetworkSettings, AgentStandaloneSettings, AgentStandaloneSettingsPatch,
+};
 pub use store::{
     read_mcp_document, read_providers_document, read_settings_document, AgentConfig,
     AGENT_CREDENTIAL_FILES, AGENT_MCP_FILE, AGENT_PROVIDERS_FILE, AGENT_SETTINGS_FILE,

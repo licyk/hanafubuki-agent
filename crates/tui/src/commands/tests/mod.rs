@@ -162,6 +162,7 @@ fn availability_follows_the_spec() {
             "raw",
             "statusline",
             "title",
+            "config",
             "keymap",
             "clear"
         ]

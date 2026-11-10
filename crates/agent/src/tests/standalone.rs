@@ -307,6 +307,39 @@ fn the_configured_proxy_reaches_the_agents_processes() {
 }
 
 #[test]
+fn the_standalone_settings_are_read_and_written_through_the_running_agent() {
+    let fixture = standalone("http://127.0.0.1:9");
+    let runtime = fixture.runtime().unwrap();
+    runtime.start();
+    let agent = runtime.wait_until_started(TEST_WAIT).unwrap();
+    let call = agent.clone();
+    let (before, written) = agent
+        .runtime()
+        .block_on(async move {
+            let before = call.standalone_settings_view().await.unwrap();
+            let written = call
+                .write_standalone_settings(AgentStandaloneSettingsPatch {
+                    network: Some(AgentNetworkSettings {
+                        proxy: AgentProxy::Disabled,
+                    }),
+                    log_level: Some(AgentLogLevel::Debug),
+                })
+                .await
+                .unwrap();
+            (before, written)
+        })
+        .unwrap();
+    assert_eq!(before.settings.network.proxy, AgentProxy::System);
+    assert_eq!(written.settings.network.proxy, AgentProxy::Disabled);
+    assert_eq!(written.settings.log_level, AgentLogLevel::Debug);
+    let file = std::fs::read_to_string(fixture.home.join("config.toml")).unwrap();
+    assert!(file.contains("proxy = \"disabled\""), "{file}");
+    assert!(file.contains("logLevel = \"debug\""), "{file}");
+    assert!(file.contains("[profiles.ci]"), "{file}");
+    runtime.shutdown(AGENT_SHUTDOWN_BUDGET);
+}
+
+#[test]
 fn the_interface_preferences_are_read_and_written_through_the_running_agent() {
     let fixture = standalone("http://127.0.0.1:9");
     let runtime = fixture.runtime().unwrap();

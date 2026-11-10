@@ -14,7 +14,7 @@ use hanafubuki_agent::{
     AgentCompactionStrategy, AgentConfigProblem, AgentConfigRecovery, AgentHandle,
     AgentMemoryContributionMode, AgentMemorySettings, AgentMemoryStatus, AgentPluginState,
     AgentSessionId, AgentSettingsPatch, AgentSettingsView, AgentStandaloneSettings,
-    ConfigLayerSource, GuestState,
+    AgentStandaloneSettingsPatch, ConfigLayerSource, GuestState,
 };
 
 use super::{AgentBridge, AgentReply, TurnUpdate};
@@ -170,22 +170,63 @@ impl AgentBridge {
         config_warnings(&self.agent)
     }
 
-    /// The configuration center's whole first page. Reads the facade's
-    /// settings on the Agent's runtime and the standalone files beside
-    /// them; no embedded-host API gains the standalone part.
+    /// The configuration center's whole first page, read from the running
+    /// Agent's own configuration.
     pub(crate) fn config_state(&self) -> Result<ConfigState, String> {
+        let agent = self.config_state_agent();
         let call = self.agent.clone();
-        let agent = self
+        let standalone = self
             .agent
             .runtime()
-            .block_on(async move { call.settings_view().await })
+            .block_on(async move { call.standalone_settings_view().await })
             .map_err(|failure| failure.to_string())??;
-        let config = self.runtime.config();
         Ok(ConfigState {
-            agent,
-            standalone: config.standalone_settings()?,
-            layers: config.layer_sources()?,
-            warnings: config.layer_warnings()?,
+            agent: agent?,
+            standalone: standalone.settings,
+            layers: standalone.layers,
+            warnings: standalone.warnings,
+        })
+    }
+
+    fn config_state_agent(&self) -> Result<AgentSettingsView, String> {
+        let call = self.agent.clone();
+        self.agent
+            .runtime()
+            .block_on(async move { call.settings_view().await })
+            .map_err(|failure| failure.to_string())?
+    }
+
+    /// Saves an Agent settings patch and returns the center's refreshed
+    /// state.
+    pub(crate) fn write_agent_settings(
+        &self,
+        patch: AgentSettingsPatch,
+    ) -> Result<ConfigState, String> {
+        let call = self.agent.clone();
+        self.agent
+            .runtime()
+            .block_on(async move { call.write_settings(patch).await })
+            .map_err(|failure| failure.to_string())??;
+        self.config_state()
+    }
+
+    /// Saves standalone network/logging keys, brings the Agent's network
+    /// consumers up to date, and returns the center's refreshed state.
+    pub(crate) fn write_standalone_settings(
+        &self,
+        patch: AgentStandaloneSettingsPatch,
+    ) -> Result<ConfigState, String> {
+        let call = self.agent.clone();
+        let written = self
+            .agent
+            .runtime()
+            .block_on(async move { call.write_standalone_settings(patch).await })
+            .map_err(|failure| failure.to_string())??;
+        Ok(ConfigState {
+            agent: self.config_state_agent()?,
+            standalone: written.settings,
+            layers: written.layers,
+            warnings: written.warnings,
         })
     }
 }

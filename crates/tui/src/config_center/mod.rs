@@ -3,11 +3,17 @@
 //! layers around it. Opening a domain is delegated to the command that owns
 //! it until that domain gains its own form.
 
+mod forms;
 mod render;
+#[cfg(test)]
+mod tests;
 
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use ratatui::style::Stylize;
 
 use crate::agent_bridge::ConfigState;
+use crate::bottom_pane::{FormEvent, FormView};
+pub(crate) use forms::ConfigChange;
 
 /// A configuration domain the center lists.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -151,10 +157,11 @@ impl ConfigSection {
 }
 
 /// What the app does with a key in the center.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub(crate) enum ConfigAction {
     Close,
     Replay(String),
+    Save(Box<ConfigChange>),
 }
 
 pub(crate) struct ConfigCenter {
@@ -164,6 +171,7 @@ pub(crate) struct ConfigCenter {
     selected: usize,
     scroll_top: usize,
     view_rows: Option<usize>,
+    form: Option<(ConfigSection, FormView)>,
 }
 
 impl ConfigCenter {
@@ -175,15 +183,49 @@ impl ConfigCenter {
             selected: 0,
             scroll_top: 0,
             view_rows: None,
+            form: None,
         }
     }
 
-    pub(crate) fn select(&mut self, section: ConfigSection) {
+    pub(crate) fn open(&mut self, section: ConfigSection, direct: bool) {
+        self.select(section);
+        if direct && section.editable() {
+            self.open_form(section);
+        }
+    }
+
+    fn select(&mut self, section: ConfigSection) {
         self.selected = ConfigSection::ALL
             .into_iter()
             .position(|candidate| candidate == section)
             .unwrap_or_default();
         self.scroll_top = 0;
+    }
+
+    fn open_form(&mut self, section: ConfigSection) {
+        if let Ok(state) = &self.state {
+            self.form = Some((section, forms::section_form(section, state)));
+        }
+    }
+
+    pub(crate) fn save_finished(&mut self, saved: Result<ConfigState, String>, shadowed: bool) {
+        let Some((_, form)) = self.form.as_mut() else {
+            return;
+        };
+        match saved {
+            Ok(state) => {
+                self.state = Ok(state);
+                let message = if shadowed {
+                    "Saved to the user's configuration; a higher layer still applies."
+                } else {
+                    "Saved."
+                };
+                form.set_status(vec![ratatui::text::Line::from(message.green())]);
+            }
+            Err(error) => {
+                form.set_status(vec![ratatui::text::Line::from(format!("✗ {error}").red())])
+            }
+        }
     }
 
     pub(crate) fn handle_key(&mut self, key: KeyEvent) -> Option<ConfigAction> {
@@ -193,6 +235,20 @@ impl ConfigCenter {
         let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
         if ctrl && key.code == KeyCode::Char('c') {
             return Some(ConfigAction::Close);
+        }
+        if let Some((section, form)) = self.form.as_mut() {
+            return match form.handle_key(key) {
+                FormEvent::Cancel => {
+                    self.form = None;
+                    None
+                }
+                FormEvent::Action(_) => {
+                    let current = self.state.as_ref().ok()?;
+                    forms::draft(*section, form, current)
+                        .map(|change| ConfigAction::Save(Box::new(change)))
+                }
+                FormEvent::None => None,
+            };
         }
         if self.search_focused {
             match key.code {
@@ -237,6 +293,12 @@ impl ConfigCenter {
             KeyCode::End => self.move_by(&rows, isize::MAX),
             KeyCode::Enter => {
                 let section = rows.get(self.selected).copied()?;
+                if section.editable() {
+                    if self.state.is_ok() {
+                        self.open_form(section);
+                    }
+                    return None;
+                }
                 let command = section.command()?;
                 return Some(ConfigAction::Replay(command.to_string()));
             }

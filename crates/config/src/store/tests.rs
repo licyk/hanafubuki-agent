@@ -7,8 +7,9 @@ use serde_json::json;
 
 use super::*;
 use crate::{
-    AgentConfigProblem, AgentPermissionMode, AgentProviderSettings, AgentSandboxMode,
-    AgentSandboxWorkspaceWrite, AgentWebSearchProvider,
+    AgentConfigProblem, AgentLogLevel, AgentNetworkSettings, AgentPermissionMode,
+    AgentProviderSettings, AgentProxy, AgentSandboxMode, AgentSandboxWorkspaceWrite,
+    AgentWebSearchProvider,
 };
 
 fn recovered(directory: &Path) -> Vec<String> {
@@ -77,6 +78,30 @@ fn a_missing_configuration_reads_as_the_defaults_and_writes_nothing() {
     assert_eq!(fs::read_dir(directory.path()).unwrap().count(), 0);
 }
 
+#[test]
+fn a_standalone_patch_writes_only_its_keys_and_keeps_the_file() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join(AGENT_SETTINGS_FILE);
+    fs::write(&path, "# proxy\nfutureKey = 3\n").unwrap();
+    let config = AgentConfig::layered(directory.path(), ConfigLayers::default());
+
+    let written = config
+        .write_standalone_settings(AgentStandaloneSettingsPatch {
+            network: Some(AgentNetworkSettings {
+                proxy: AgentProxy::Disabled,
+            }),
+            log_level: Some(AgentLogLevel::Debug),
+        })
+        .unwrap();
+
+    assert_eq!(written.network.proxy, AgentProxy::Disabled);
+    assert_eq!(written.log_level, AgentLogLevel::Debug);
+    let text = fs::read_to_string(&path).unwrap();
+    assert!(text.contains("# proxy\n"), "{text}");
+    assert!(text.contains("futureKey = 3"), "{text}");
+    assert!(text.contains("proxy = \"disabled\""), "{text}");
+    assert!(text.contains("logLevel = \"debug\""), "{text}");
+}
 #[test]
 fn a_write_keeps_comments_and_unknown_keys_and_reads_back() {
     let directory = tempfile::tempdir().unwrap();

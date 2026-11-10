@@ -9,6 +9,7 @@ use ratatui::widgets::{Clear, Widget};
 
 use super::{ConfigCenter, ConfigSection};
 use crate::key_hint;
+use crate::render::renderable::Renderable;
 use crate::text_formatting::truncate_text;
 use ratatui::crossterm::event::KeyCode;
 
@@ -17,6 +18,10 @@ const LABEL_WIDTH: usize = 30;
 impl ConfigCenter {
     pub(crate) fn render(&mut self, area: Rect, buf: &mut Buffer) {
         Clear.render(area, buf);
+        if let Some((_, form)) = &self.form {
+            form.render(area, buf);
+            return;
+        }
         let [title, search, notice, list, hint] = Layout::vertical([
             Constraint::Length(1),
             Constraint::Length(1),

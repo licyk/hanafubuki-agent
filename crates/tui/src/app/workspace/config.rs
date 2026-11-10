@@ -7,8 +7,9 @@ use ratatui::backend::Backend;
 use ratatui::crossterm::event::KeyEvent;
 
 use super::App;
+use crate::agent_bridge::ConfigState;
 use crate::app_event::{AppCommand, AppEvent};
-use crate::config_center::{ConfigAction, ConfigCenter, ConfigSection};
+use crate::config_center::{ConfigAction, ConfigCenter, ConfigChange, ConfigSection};
 use crate::tui::Tui;
 
 impl App {
@@ -16,6 +17,7 @@ impl App {
         &mut self,
         tui: &mut Tui<B>,
         section: ConfigSection,
+        direct: bool,
     ) {
         if self.workspace.config.is_some() {
             return;
@@ -23,7 +25,7 @@ impl App {
         let state = self.bridge.config_state();
         self.enter_alt_screen(tui, false);
         let mut center = ConfigCenter::new(state);
-        center.select(section);
+        center.open(section, direct);
         self.workspace.config = Some(center);
     }
 
@@ -64,11 +66,40 @@ impl App {
         tui: &mut Tui<B>,
         action: ConfigAction,
     ) {
-        self.close_config_center(tui);
-        if let ConfigAction::Replay(command) = action {
-            self.app_event_tx
-                .send(AppEvent::Command(AppCommand::Replay(command)));
+        match action {
+            ConfigAction::Close => self.close_config_center(tui),
+            ConfigAction::Replay(command) => {
+                self.close_config_center(tui);
+                self.app_event_tx
+                    .send(AppEvent::Command(AppCommand::Replay(command)));
+            }
+            ConfigAction::Save(change) => {
+                let change = *change;
+                let (saved, shadowed) = self.write_config_change(change);
+                if let Some(center) = self.workspace.config.as_mut() {
+                    center.save_finished(saved, shadowed);
+                }
+            }
         }
+    }
+
+    fn write_config_change(&mut self, change: ConfigChange) -> (Result<ConfigState, String>, bool) {
+        let result = match change.clone() {
+            ConfigChange::Agent(patch) => self.bridge.write_agent_settings(patch),
+            ConfigChange::Standalone(patch) => self.bridge.write_standalone_settings(patch),
+            ConfigChange::Tui(patch) => match self.bridge.write_tui_preferences(patch) {
+                Ok(preferences) => {
+                    self.apply_preferences(preferences);
+                    self.bridge.config_state()
+                }
+                Err(error) => Err(error),
+            },
+        };
+        let shadowed = result
+            .as_ref()
+            .ok()
+            .is_some_and(|state| change.is_shadowed_by(state));
+        (result, shadowed)
     }
 
     fn close_config_center<B: Backend<Error = io::Error> + Write>(&mut self, tui: &mut Tui<B>) {

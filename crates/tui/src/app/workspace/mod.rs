@@ -72,7 +72,10 @@ pub(crate) enum WorkspaceEvent {
     /// `/agents`.
     OpenAgents,
     /// `/config [section]`: the full-screen configuration center.
-    OpenConfig(ConfigSection),
+    OpenConfig {
+        section: ConfigSection,
+        direct: bool,
+    },
 }
 
 /// Which conversation: the main one, or the second.
@@ -312,7 +315,9 @@ impl App {
                 }
             }
             WorkspaceEvent::OpenAgents => self.open_agents_center(tui),
-            WorkspaceEvent::OpenConfig(section) => self.open_config_center(tui, section),
+            WorkspaceEvent::OpenConfig { section, direct } => {
+                self.open_config_center(tui, section, direct)
+            }
         }
         self.schedule_frame(Instant::now());
     }

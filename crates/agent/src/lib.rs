@@ -120,11 +120,12 @@ pub use service::{
     AgentProviderEnabledRequest, AgentProviderModelCatalogRequest, AgentProviderModelCatalogResult,
     AgentProviderRegistrySnapshot, AgentProviderWriteRequest, AgentRunProjection,
     AgentServiceInputs, AgentSessionModelSelectionRequest, AgentSessionReasoningEffortRequest,
-    AgentSettingsView, AgentSkillSessionState, AgentWorktree, LocalSkillInstallRequest,
-    McpApplicationSnapshot, McpCredentialPresence, McpCredentialsWriteRequest,
-    McpLocalPolicySummary, McpLocalServerStatus, McpLocalStatusSnapshot, McpOAuthCallbackRequest,
-    McpOAuthCancelRequest, McpOAuthLoginRequest, McpPluginServer, McpPluginServerSnapshot,
-    McpServerDeleteRequest, McpServerWriteRequest, McpToolSnapshot, SkillMcpDependencyStatus,
+    AgentSettingsView, AgentSkillSessionState, AgentStandaloneSettingsView, AgentWorktree,
+    LocalSkillInstallRequest, McpApplicationSnapshot, McpCredentialPresence,
+    McpCredentialsWriteRequest, McpLocalPolicySummary, McpLocalServerStatus,
+    McpLocalStatusSnapshot, McpOAuthCallbackRequest, McpOAuthCancelRequest, McpOAuthLoginRequest,
+    McpPluginServer, McpPluginServerSnapshot, McpServerDeleteRequest, McpServerWriteRequest,
+    McpToolSnapshot, SkillMcpDependencyStatus,
 };
 pub(crate) use service::{ResolvedAgentProvider, ResolvedModelPolicy};
 pub(crate) use shutdown::shutdown_agent;
@@ -170,11 +171,12 @@ pub use hanafubuki_agent_config::{
     AgentAlternateScreen, AgentBackgroundCompactionSettings, AgentCompactionSettings,
     AgentCompactionStrategy, AgentConfig, AgentConfigProblem, AgentConfigRecovery, AgentDirs,
     AgentHierarchicalCompactionSettings, AgentLogLevel, AgentMemorySettings, AgentModelProtocol,
-    AgentProviderHeaderSettings, AgentProviderSettings, AgentSandboxMode,
+    AgentNetworkSettings, AgentProviderHeaderSettings, AgentProviderSettings, AgentSandboxMode,
     AgentSandboxWorkspaceWrite, AgentSettings, AgentSettingsPatch, AgentStandaloneSettings,
-    AgentTuiPreferences, AgentTuiPreferencesPatch, AgentTuiPreset, AgentWindowsSandbox,
-    AgentWindowsSettings, ConfigLayerSource, ConfigLayers, ConfigOverrides, AGENT_CREDENTIAL_FILES,
-    AGENT_HOME_ENV, AGENT_MCP_FILE, AGENT_PROVIDERS_FILE, AGENT_SETTINGS_FILE,
+    AgentStandaloneSettingsPatch, AgentTuiPreferences, AgentTuiPreferencesPatch, AgentTuiPreset,
+    AgentWebSearchProvider, AgentWindowsSandbox, AgentWindowsSettings, ConfigLayerSource,
+    ConfigLayers, ConfigOverrides, AGENT_CREDENTIAL_FILES, AGENT_HOME_ENV, AGENT_MCP_FILE,
+    AGENT_PROVIDERS_FILE, AGENT_SETTINGS_FILE,
 };
 pub use hanafubuki_agent_execution::{
     AgentBackgroundTerminalSnapshot, AgentBackgroundTerminalStopFailure,

@@ -61,6 +61,7 @@ const SCREENS: [AgentAlternateScreen; 3] = [
 
 fn dispatch(context: &mut CommandContext<'_>, args: &str) {
     let section = args.trim().to_lowercase().replace('_', "-");
+    let direct = !section.is_empty();
     if section == "quick" {
         return context.agent_command(AgentCommand::Settings(SettingsCall::Config));
     }
@@ -70,7 +71,10 @@ fn dispatch(context: &mut CommandContext<'_>, args: &str) {
              network, interface, providers, mcp, plugins, hooks or layers"
         )));
     };
-    context.send(AppEvent::Workspace(WorkspaceEvent::OpenConfig(section)));
+    context.send(AppEvent::Workspace(WorkspaceEvent::OpenConfig {
+        section,
+        direct,
+    }));
 }
 
 /// The compaction strategy read or saved: into the open panel, or a new

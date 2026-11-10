@@ -21,8 +21,8 @@ use crate::recovery::{AgentConfigProblem, AgentConfigRecovery};
 use crate::settings::{decode_settings, validate_disabled_plugins};
 use crate::{
     AgentProviderRegistrySettings, AgentSettings, AgentSettingsPatch, AgentStandaloneSettings,
-    AgentTuiPreferences, AgentTuiPreferencesPatch, ConfigLayerSource, ConfigLayers,
-    McpSettingsStore,
+    AgentStandaloneSettingsPatch, AgentTuiPreferences, AgentTuiPreferencesPatch, ConfigLayerSource,
+    ConfigLayers, McpSettingsStore,
 };
 
 /// The settings, without credentials.
@@ -139,6 +139,21 @@ impl AgentConfig {
             *cached = None;
         }
         self.tui_preferences()
+    }
+
+    /// Writes the keys `patch` names into the user's `config.toml` and
+    /// returns the standalone settings as the layers now resolve them.
+    pub fn write_standalone_settings(
+        &self,
+        patch: AgentStandaloneSettingsPatch,
+    ) -> Result<AgentStandaloneSettings, String> {
+        {
+            let mut cached = self.inner.settings.lock();
+            self.load_user_settings()?;
+            self.inner.settings_file.write(&patch.document())?;
+            *cached = None;
+        }
+        self.standalone_settings()
     }
 
     /// The settings read so far, without reading the file: `None` before

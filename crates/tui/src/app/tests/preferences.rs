@@ -235,7 +235,94 @@ fn the_config_center_lists_searches_and_opens_the_quick_editor() {
 
     harness.key(KeyCode::Enter);
     harness.key(KeyCode::Enter);
-    harness.pump_until_screen_shows("Settings");
+    let screen = harness.pump_until_screen_shows("Compaction");
+    assert!(screen.contains("Strategy"), "{screen}");
+    harness.key(KeyCode::Right);
+    for _ in 0..4 {
+        harness.key(KeyCode::Tab);
+    }
+    harness.key(KeyCode::Enter);
+    harness.pump_until_screen_shows("Saved.");
+    assert!(harness.config_file().contains("strategy = \"background\""));
+}
+
+#[test]
+fn the_general_form_saves_the_persisted_permission_mode() {
+    let mut harness = Harness::start(Vec::new());
+    harness.open("/config general", "General & permissions");
+    harness.key(KeyCode::Right);
+    harness.key(KeyCode::Tab);
+    harness.key(KeyCode::Enter);
+    harness.pump_until_screen_shows("Saved.");
+    assert!(harness
+        .config_file()
+        .contains("permissionMode = \"auto_review\""));
+}
+
+#[test]
+fn the_memory_form_saves_whether_memory_is_enabled() {
+    let mut harness = Harness::start(Vec::new());
+    harness.open("/config memory", "Memory");
+    harness.key(KeyCode::Char(' '));
+    for _ in 0..5 {
+        harness.key(KeyCode::Tab);
+    }
+    harness.key(KeyCode::Enter);
+    harness.pump_until_screen_shows("Saved.");
+    assert!(harness.config_file().contains("[memory]"));
+    assert!(harness.config_file().contains("enabled = true"));
+    assert!(harness.agent_memory().enabled);
+}
+
+#[test]
+fn the_web_form_saves_the_search_provider_and_endpoint_together() {
+    let mut harness = Harness::start(Vec::new());
+    harness.open("/config web", "Web tools");
+    harness.key(KeyCode::Right);
+    harness.key(KeyCode::Right);
+    harness.key(KeyCode::Tab);
+    harness.type_text("https://search.example.test/");
+    harness.key(KeyCode::Tab);
+    harness.key(KeyCode::Tab);
+    harness.key(KeyCode::Enter);
+    harness.pump_until_screen_shows("Saved.");
+    let file = harness.config_file();
+    assert!(file.contains("webSearchProvider = \"searxng\""), "{file}");
+    assert!(
+        file.contains("searxngBaseUrl = \"https://search.example.test\""),
+        "{file}"
+    );
+}
+
+#[test]
+fn the_network_form_saves_standalone_keys_and_keeps_the_proxy_secret() {
+    let mut harness = Harness::start(Vec::new());
+    let screen = harness.open("/config network", "Network & logging");
+    assert!(!screen.contains("user:password"), "{screen}");
+    harness.key(KeyCode::Tab);
+    harness.key(KeyCode::Right);
+    harness.key(KeyCode::Tab);
+    harness.key(KeyCode::Enter);
+    harness.pump_until_screen_shows("Saved.");
+    let file = harness.config_file();
+    assert!(file.contains("logLevel = \"debug\""), "{file}");
+    assert!(file.contains("proxy = \"system\""), "{file}");
+}
+
+#[test]
+fn the_interface_form_saves_and_applies_its_scalar_preferences() {
+    let mut harness = Harness::start(Vec::new());
+    harness.open("/config interface", "Interface");
+    harness.key(KeyCode::Char(' '));
+    for _ in 0..4 {
+        harness.key(KeyCode::Tab);
+    }
+    harness.key(KeyCode::Enter);
+    let screen = harness.pump_until_screen_shows("Saved.");
+    assert!(!screen.contains("higher layer"), "{screen}");
+    assert!(harness
+        .config_file()
+        .contains("fullscreenTranscript = false"));
 }
 
 #[test]

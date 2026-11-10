@@ -62,6 +62,7 @@ pub use skill_operations::{AgentSkillSessionState, LocalSkillInstallRequest};
 #[cfg(test)]
 mod test_access;
 mod tui_preferences;
+pub use tui_preferences::AgentStandaloneSettingsView;
 mod turns;
 mod workspace;
 mod worktree;

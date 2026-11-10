@@ -22,6 +22,30 @@ pub struct AgentStandaloneSettings {
     pub tui: AgentTuiPreferences,
 }
 
+/// A change to the standalone settings from the configuration center: each
+/// field present is replaced, and the write changes only those keys.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct AgentStandaloneSettingsPatch {
+    pub network: Option<AgentNetworkSettings>,
+    pub log_level: Option<AgentLogLevel>,
+}
+
+impl AgentStandaloneSettingsPatch {
+    pub(crate) fn document(&self) -> Map<String, Value> {
+        let mut table = Map::new();
+        if let Some(network) = &self.network {
+            table.insert(
+                "network".into(),
+                serde_json::json!({ "proxy": network.proxy }),
+            );
+        }
+        if let Some(level) = self.log_level {
+            table.insert("logLevel".into(), Value::String(level.as_str().to_string()));
+        }
+        table
+    }
+}
+
 impl Default for AgentStandaloneSettings {
     fn default() -> Self {
         Self {
@@ -50,6 +74,18 @@ pub enum AgentLogLevel {
     Debug,
     /// The only level that records model and tool content.
     Trace,
+}
+impl AgentLogLevel {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Off => "off",
+            Self::Error => "error",
+            Self::Warn => "warn",
+            Self::Info => "info",
+            Self::Debug => "debug",
+            Self::Trace => "trace",
+        }
+    }
 }
 
 impl From<AgentLogLevel> for log::LevelFilter {
