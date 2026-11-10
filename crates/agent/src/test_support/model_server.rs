@@ -1,8 +1,10 @@
 //! A scripted model provider in the test process: a loopback HTTP server
 //! that answers each request with the next event stream it was given
 //! (Responses, or Anthropic Messages for a provider of that protocol), and
-//! keeps every request it received. An Anthropic Messages request the API
-//! would refuse is answered with its error instead, taking no answer.
+//! keeps every request it received. An Anthropic Messages request with
+//! tool blocks and no tools is answered with an error instead, taking no
+//! answer, so a request that leaves out the tools its history used is
+//! caught (whether the live API refuses it was not checked).
 
 use std::collections::{BTreeMap, VecDeque};
 use std::sync::{Arc, Mutex};
@@ -115,9 +117,9 @@ async fn read_request(stream: &mut TcpStream) -> CapturedRequest {
     }
 }
 
-/// The Anthropic Messages API's error for a request it refuses: one whose
-/// history holds `tool_use` or `tool_result` blocks but that declares no
-/// tools.
+/// An Anthropic Messages error for a request whose history holds
+/// `tool_use` or `tool_result` blocks but that declares no tools (the
+/// message is the one reported for it, not checked against the live API).
 fn anthropic_refusal(request: &CapturedRequest) -> Option<String> {
     if !request.path.ends_with("/messages") {
         return None;

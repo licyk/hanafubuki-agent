@@ -57,7 +57,9 @@ and pushed, and notes what Hanafubuki must change at its next pin.
     define tools") is not stated in the published docs (checked: the tool
     use overview and handle-tool-calls pages); `tool_choice` `none` with
     tools is documented, and the docs' own replay recipe keeps the tools
-    and sets `none` to the same end. Not checked against the live API.
+    and sets `none` to the same end. Not checked against the live API,
+    so the docs and comments give as the reason the replay pattern (the
+    tools kept, calls forbidden) and the cached prefix, not a refusal.
     The facade's fake server now speaks Anthropic Messages for a provider
     of that protocol (`anthropic_assistant_events`,
     `anthropic_tool_events`, `CapturedRequest.path`) and answers a

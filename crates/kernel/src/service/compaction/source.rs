@@ -174,9 +174,10 @@ fn compaction_request(
     } else if implementation == AgentCompactionImplementation::ResponsesCompactV2 {
         input.push(ModelInputItem::CompactionTrigger);
     }
-    // The turn's tools, never called (`None`): Anthropic Messages refuses
-    // history tool blocks in a request that declares no tools, and the
-    // provider's cached prefix of instructions and tools stays the turn's.
+    // The turn's tools, never called (`None`), as a replayed request keeps
+    // its tools: the provider's cached prefix of instructions and tools
+    // stays the turn's, and the history's tool calls and results go out
+    // beside the tools that made them, on every protocol.
     let request = ModelRequest {
         model: record.settings.config.model.clone(),
         instructions: record.settings.config.instructions.clone(),

@@ -208,8 +208,7 @@ async fn a_strategy_applied_between_operations_survives_a_restart() {
 
 /// A local summary on Anthropic Messages, of a history that holds a tool
 /// call: the request declares the turn's tools, which the summary may not
-/// call, as the API refuses tool blocks in a request without tools (the
-/// fake answers such a request with its error).
+/// call (the fake answers tool blocks without tools with an error).
 #[tokio::test(flavor = "multi_thread")]
 async fn an_anthropic_local_summary_declares_the_turns_tools_and_calls_none() {
     let server = FakeServer::start(vec![
