@@ -13,6 +13,13 @@ use crate::model::{Kind, Message, Role};
 /// A burst without reasoning is a group too; user messages, system messages
 /// and orphan reasoning belong to none. Groups are disjoint.
 pub fn compute_turn_groups(messages: &[Message]) -> Vec<Vec<String>> {
+    turn_groups(messages)
+        .into_iter()
+        .map(|group| group.into_iter().map(str::to_owned).collect())
+        .collect()
+}
+
+fn turn_groups(messages: &[Message]) -> Vec<Vec<&str>> {
     let mut first_result: HashMap<&str, &str> = HashMap::new();
     for message in messages
         .iter()
@@ -25,10 +32,10 @@ pub fn compute_turn_groups(messages: &[Message]) -> Vec<Vec<String>> {
         }
     }
 
-    let mut grouped: HashSet<String> = HashSet::new();
+    let mut grouped: HashSet<&str> = HashSet::new();
     let mut groups = Vec::new();
     for (index, message) in messages.iter().enumerate() {
-        if message.id.is_empty() || grouped.contains(&message.id) {
+        if message.id.is_empty() || grouped.contains(message.id.as_str()) {
             continue;
         }
         if !(message.kind == Kind::Reasoning || message.is_assistant_act()) {
@@ -64,24 +71,22 @@ pub fn compute_turn_groups(messages: &[Message]) -> Vec<Vec<String>> {
             burst_end += 1;
         }
 
-        let mut members = OrderedIds::new();
+        let mut members: Vec<&str> = Vec::new();
+        let mut seen: HashSet<&str> = HashSet::new();
         for member in messages[reasoning_start..=burst_end]
             .iter()
             .filter(|member| !member.id.is_empty())
         {
-            members.insert(&member.id);
-            if member.role == Role::Assistant && member.kind == Kind::ToolCall {
-                if let Some(result) = member
-                    .tool_call_id
-                    .as_deref()
-                    .and_then(|id| first_result.get(id))
-                {
-                    members.insert(result);
+            let result = (member.role == Role::Assistant && member.kind == Kind::ToolCall)
+                .then(|| first_result.get(member.tool_call_id.as_deref()?).copied())
+                .flatten();
+            for id in std::iter::once(member.id.as_str()).chain(result) {
+                if seen.insert(id) {
+                    members.push(id);
                 }
             }
         }
-        let members = members.to_vec();
-        grouped.extend(members.iter().cloned());
+        grouped.extend(members.iter().copied());
         groups.push(members);
     }
     groups
@@ -98,39 +103,69 @@ pub struct IntegrityWithdrawals {
 
 /// The per-message inputs of the integrity gate, built once per array.
 #[derive(Clone, Debug, Default)]
-pub(crate) struct IntegrityPre {
-    reasoning_ids: HashSet<String>,
-    call_ids: HashSet<String>,
+pub(crate) struct IntegrityPre<'a> {
+    reasoning_ids: HashSet<&'a str>,
+    call_ids: HashSet<&'a str>,
     /// Each assistant tool call's message id and tool-call id.
-    calls: Vec<(String, Option<String>)>,
-    result_by_call: HashMap<String, String>,
-    groups: Vec<Vec<String>>,
+    calls: Vec<(&'a str, Option<&'a str>)>,
+    result_by_call: HashMap<&'a str, &'a str>,
+    groups: Vec<Vec<&'a str>>,
+    /// The groups each id belongs to, and the calls whose call or result
+    /// message it is: a group or a pair no folded id touches can never
+    /// split, so the gate visits only those a fold touches.
+    groups_of: HashMap<&'a str, Vec<usize>>,
+    calls_of: HashMap<&'a str, Vec<usize>>,
 }
 
-impl IntegrityPre {
-    pub(crate) fn new(messages: &[Message]) -> Self {
+impl<'a> IntegrityPre<'a> {
+    pub(crate) fn new(messages: &'a [Message]) -> Self {
         let mut pre = Self {
-            groups: compute_turn_groups(messages),
+            groups: turn_groups(messages),
             ..Self::default()
         };
         for message in messages.iter().filter(|message| !message.id.is_empty()) {
+            let id = message.id.as_str();
             if message.kind == Kind::Reasoning {
-                pre.reasoning_ids.insert(message.id.clone());
+                pre.reasoning_ids.insert(id);
             }
             if message.role == Role::Assistant && message.kind == Kind::ToolCall {
-                pre.call_ids.insert(message.id.clone());
-                pre.calls
-                    .push((message.id.clone(), message.tool_call_id.clone()));
+                pre.call_ids.insert(id);
+                pre.calls.push((id, message.tool_call_id.as_deref()));
             }
             if message.kind == Kind::ToolResult {
-                if let Some(call_id) = &message.tool_call_id {
-                    pre.result_by_call
-                        .entry(call_id.clone())
-                        .or_insert_with(|| message.id.clone());
+                if let Some(call_id) = message.tool_call_id.as_deref() {
+                    pre.result_by_call.entry(call_id).or_insert(id);
                 }
             }
         }
+        for (index, group) in pre.groups.iter().enumerate() {
+            for id in group {
+                pre.groups_of.entry(id).or_default().push(index);
+            }
+        }
+        for (index, (message_id, call_id)) in pre.calls.iter().enumerate() {
+            let result_id = call_id.and_then(|call_id| pre.result_by_call.get(call_id));
+            for id in std::iter::once(message_id).chain(result_id) {
+                pre.calls_of.entry(id).or_default().push(index);
+            }
+        }
         pre
+    }
+
+    /// The groups and the calls an id of `ids` belongs to, in array order.
+    fn touched_by(&self, ids: &HashSet<String>) -> (Vec<usize>, Vec<usize>) {
+        let touched = |of: &HashMap<&str, Vec<usize>>| {
+            let mut indices: Vec<usize> = ids
+                .iter()
+                .filter_map(|id| of.get(id.as_str()))
+                .flatten()
+                .copied()
+                .collect();
+            indices.sort_unstable();
+            indices.dedup();
+            indices
+        };
+        (touched(&self.groups_of), touched(&self.calls_of))
     }
 }
 
@@ -154,23 +189,26 @@ pub fn compute_integrity_withdrawals(
 }
 
 pub(crate) fn withdrawals(
-    pre: &IntegrityPre,
+    pre: &IntegrityPre<'_>,
     folded: &HashSet<String>,
     invisible: Option<&HashSet<String>>,
 ) -> IntegrityWithdrawals {
-    let mut remaining = folded.clone();
+    let mut remaining: HashSet<&str> = folded.iter().map(String::as_str).collect();
     let mut withdrawn = OrderedIds::new();
     let mut handled_turns: HashSet<usize> = HashSet::new();
     let mut handled_pairs: HashSet<&str> = HashSet::new();
     let is_invisible = |id: &str| invisible.is_some_and(|invisible| invisible.contains(id));
+    // Only what a folded id touches can split: `remaining` only shrinks.
+    let (groups, calls) = pre.touched_by(folded);
 
     let mut changed = true;
     while changed {
         changed = false;
-        for (index, group) in pre.groups.iter().enumerate() {
+        for &index in &groups {
             if handled_turns.contains(&index) {
                 continue;
             }
+            let group = &pre.groups[index];
             let fold_has_reasoning = group
                 .iter()
                 .any(|id| remaining.contains(id) && pre.reasoning_ids.contains(id));
@@ -187,14 +225,15 @@ pub(crate) fn withdrawals(
             }
             changed = true;
         }
-        for (message_id, call_id) in &pre.calls {
-            let Some(call_id) = call_id.as_deref() else {
+        for &call in &calls {
+            let (message_id, call_id) = pre.calls[call];
+            let Some(call_id) = call_id else {
                 continue;
             };
             if handled_pairs.contains(call_id) {
                 continue;
             }
-            let Some(result_id) = pre.result_by_call.get(call_id) else {
+            let Some(&result_id) = pre.result_by_call.get(call_id) else {
                 continue;
             };
             if remaining.contains(message_id) == remaining.contains(result_id) {

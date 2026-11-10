@@ -281,8 +281,12 @@ and pushed, and notes what Hanafubuki must change at its next pin.
     search and preview cases of `truncate-surrogates`. Not ported: host-set `dangerous`
     ranges, checkpoint carriers and media gaps, packs and section
     overrides, tokenizer injection, the text and hybrid protocols.
-    Screening costs units × messages (release: 0.33 s at 10k messages,
-    1.26 s at 20k, against the kernel's 0.57 s): measure with P8. Tool
+    Screening cost units × messages (release: 0.33 s at 10k messages,
+    1.26 s at 20k, against the kernel's 0.57 s): each unit's integrity
+    gate walked every turn group and tool call of the history, and its
+    boundaries every active block's messages. Fixed with P8's profile:
+    the gate visits only the groups and pairs a unit's ids touch, and the
+    blocks' positions are computed once per call (see P8). Tool
     parameters are `serde_json::Value`, so their keys are sorted. The
     cache report shows times as UTC plus an offset the host passes; the
     kernel's fold-attribution offset quirk is kept; the per-tool listing
@@ -432,9 +436,25 @@ and pushed, and notes what Hanafubuki must change at its next pin.
     for a decision (done in P8b, incrementally). The double projection is
     not fixed: at most ~80 ms a step at 8 000 folded messages, against the
     model's latency.
-  - Open: the crate's per-call cost is
-    superlinear in the window (677 ms at 10 000 unfolded messages, without
-    the nudge too): profile `process_turn`. A child forked before its
+  - Done after P12: the crate's per-call cost was superlinear in the
+    window (677 ms at 10 000 unfolded messages, without the nudge too).
+    Profiled (`tests/compression/scale.rs`, an ignored release harness:
+    the rounds above, with the first half or all but the last two rounds
+    folded, quiet and at 80 % of a 200 000-token window): screening was
+    units × messages (the integrity gate walked every turn group and tool
+    call per unit, the boundaries every active block's messages per
+    unit); the rest was token counts, UTF-16 lengths and tool-pattern
+    lowercasing allocating per message. Now the gate is indexed by id,
+    the blocks' positions are computed once per call, ASCII text and
+    tool names take a fast path, and the recent zone counts tokens only
+    for the tail it walks. The views are the same bytes (the harness
+    prints a digest of each output: identical before and after). Release,
+    quiet (under pressure the same within noise), before → after:
+    unfolded 12.1 → 4.8 ms at 1 008 messages, 34 → 10.6 ms at 2 008,
+    168 → 29 ms at 5 008, 603 → 62 ms at 10 008, 2 424 → 142 ms at
+    20 008; half folded 8.5 → 3.6, 24.7 → 7.4, 124 → 20.5, 455 → 42,
+    1 835 → 98 ms; folded 1.8 → 1.5, 3.4 → 3.0, 8.2 → 8.1, 16.8 → 15.8,
+    38 → 38 ms (linear already: a few passes over the history). A child forked before its
     parent's running turn has no test of its own (it shares
     `inherited_state` with the fork before a turn). The rebuild at load
     uses the default tuning, so a session with `protectedTools` may number

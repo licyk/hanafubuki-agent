@@ -10,6 +10,14 @@ use crate::model::Message;
 
 /// An exact name or a trailing-`*` prefix glob, without regard to case.
 pub fn match_tool_pattern(tool_name: &str, pattern: &str) -> bool {
+    if tool_name.is_ascii() && pattern.is_ascii() {
+        return match pattern.strip_suffix('*') {
+            Some(prefix) => tool_name
+                .get(..prefix.len())
+                .is_some_and(|head| head.eq_ignore_ascii_case(prefix)),
+            None => tool_name.eq_ignore_ascii_case(pattern),
+        };
+    }
     let name = tool_name.to_lowercase();
     let pattern = pattern.to_lowercase();
     match pattern.strip_suffix('*') {
@@ -59,15 +67,11 @@ pub fn is_never_preserve_recent(
     let Some(tool_name) = message.tool_name.as_deref().filter(|name| !name.is_empty()) else {
         return false;
     };
-    let built_in: Vec<String>;
-    let base = match patterns {
-        Some(patterns) => patterns,
-        None => {
-            built_in = NEVER_PRESERVE_RECENT_TOOLS.map(str::to_owned).to_vec();
-            &built_in
-        }
+    let base: Vec<&str> = match patterns {
+        Some(patterns) => patterns.iter().map(String::as_str).collect(),
+        None => NEVER_PRESERVE_RECENT_TOOLS.to_vec(),
     };
-    base.iter()
+    base.into_iter()
         .filter(|tool| {
             !preserve_patterns
                 .iter()

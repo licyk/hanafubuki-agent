@@ -9,6 +9,9 @@
 
 /// The length of `text` in UTF-16 code units.
 pub(crate) fn utf16_len(text: &str) -> usize {
+    if text.is_ascii() {
+        return text.len();
+    }
     text.chars().map(char::len_utf16).sum()
 }
 

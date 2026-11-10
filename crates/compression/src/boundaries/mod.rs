@@ -119,6 +119,53 @@ pub(crate) fn index_by_message_id(messages: &[Message]) -> HashMap<&str, usize> 
         .collect()
 }
 
+/// The positions ranges resolve against, built once per message array and
+/// state: each message id's last index, and where each active block shows.
+pub(crate) struct MessageIndex<'a> {
+    pub(crate) by_id: HashMap<&'a str, usize>,
+    /// Each active block, in state order, with the positions of its rendered
+    /// summary and of its earliest visible message.
+    active_blocks: Vec<(&'a Block, Option<usize>, Option<usize>)>,
+}
+
+impl<'a> MessageIndex<'a> {
+    pub(crate) fn new(messages: &'a [Message], state: &'a State) -> Self {
+        let by_id = index_by_message_id(messages);
+        let active_blocks = state
+            .active_blocks()
+            .map(|block| {
+                let summary = by_id
+                    .get(summary_message_id(&block.block_id).as_str())
+                    .copied();
+                let earliest = earliest_index_of_ids(&block.effective_message_ids, &by_id);
+                (block, summary, earliest)
+            })
+            .collect();
+        Self {
+            by_id,
+            active_blocks,
+        }
+    }
+
+    /// The active blocks in `start..=end`, in state order. A block is in a
+    /// range when its rendered summary or its earliest visible message is:
+    /// the first user message survives a fold with its summary placed
+    /// before it, outside a range that still holds the message.
+    pub(crate) fn blocks_in_range(
+        &self,
+        start: usize,
+        end: usize,
+    ) -> impl Iterator<Item = &'a Block> + '_ {
+        let within = move |position: Option<usize>| {
+            position.is_some_and(|position| (start..=end).contains(&position))
+        };
+        self.active_blocks
+            .iter()
+            .filter(move |(_, summary, earliest)| within(*summary) || within(*earliest))
+            .map(|(block, _, _)| *block)
+    }
+}
+
 /// Resolves `start..end` to indices of `messages`: a message ref to its
 /// message (or the active block now covering it), a block ref to the
 /// block's visible anchor. Reversed endpoints are swapped with a note; an
@@ -135,7 +182,7 @@ pub fn resolve_boundaries(
         end_ref,
         messages,
         state,
-        &index_by_message_id(messages),
+        &MessageIndex::new(messages, state),
     )
 }
 
@@ -144,8 +191,9 @@ pub(crate) fn resolve_boundaries_indexed(
     end_ref: &str,
     messages: &[Message],
     state: &State,
-    index: &HashMap<&str, usize>,
+    message_index: &MessageIndex<'_>,
 ) -> Result<ResolvedRange, BoundaryError> {
+    let index = &message_index.by_id;
     let (Some(start), Some(end)) = (parse_boundary(start_ref), parse_boundary(end_ref)) else {
         return Err(BoundaryError {
             kind: BoundaryErrorKind::Invalid,
@@ -183,10 +231,8 @@ pub(crate) fn resolve_boundaries_indexed(
         BoundaryKind::Message
     };
     let mut nested_block_ids: Vec<String> = Vec::new();
-    for block in state.active_blocks() {
-        if block_visible_in_range(block, index, start_index, end_index)
-            && !nested_block_ids.contains(&block.block_id)
-        {
+    for block in message_index.blocks_in_range(start_index, end_index) {
+        if !nested_block_ids.contains(&block.block_id) {
             nested_block_ids.push(block.block_id.clone());
         }
     }
@@ -416,25 +462,6 @@ pub(crate) fn visible_block_anchor(block: &Block, index: &HashMap<&str, usize>) 
         .get(summary_message_id(&block.block_id).as_str())
         .copied()
         .or_else(|| earliest_index_of_ids(&block.effective_message_ids, index))
-}
-
-/// A block is in a range when its rendered summary or its earliest visible
-/// message is: the first user message survives a fold with its summary
-/// placed before it, outside a range that still holds the message.
-pub(crate) fn block_visible_in_range(
-    block: &Block,
-    index: &HashMap<&str, usize>,
-    start: usize,
-    end: usize,
-) -> bool {
-    let within = |position: usize| (start..=end).contains(&position);
-    if index
-        .get(summary_message_id(&block.block_id).as_str())
-        .is_some_and(|position| within(*position))
-    {
-        return true;
-    }
-    earliest_index_of_ids(&block.effective_message_ids, index).is_some_and(within)
 }
 
 pub(crate) fn earliest_index_of_ids(ids: &[String], index: &HashMap<&str, usize>) -> Option<usize> {

@@ -31,6 +31,7 @@ mod refold;
 mod refs;
 mod render;
 mod report;
+mod scale;
 mod search;
 mod timestamps;
 mod truncate;

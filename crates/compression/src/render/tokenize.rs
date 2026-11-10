@@ -12,6 +12,9 @@ use crate::text::utf16_len;
 /// about one to one) and a quarter token per other UTF-16 code unit,
 /// rounded up.
 pub fn default_count_tokens(text: &str) -> u64 {
+    if text.is_ascii() {
+        return text.len().div_ceil(4) as u64;
+    }
     let cjk = text.chars().filter(|character| is_cjk(*character)).count();
     let rest = utf16_len(text) - cjk;
     (cjk + rest.div_ceil(4)) as u64

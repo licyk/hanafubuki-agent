@@ -18,10 +18,7 @@ pub use integrity::{compute_integrity_withdrawals, compute_turn_groups, Integrit
 pub use pairs::{adjust_boundaries_for_reasoning_pairs, adjust_boundaries_for_tool_pairs};
 pub use segment::{segment_groups, viable_ranges, SegmentItem, VIABLE_RANGE_MIN_TOKENS};
 
-use crate::boundaries::{
-    block_visible_in_range, index_by_message_id, resolve_boundaries_indexed, BoundaryError,
-    BoundaryKind,
-};
+use crate::boundaries::{resolve_boundaries_indexed, BoundaryError, BoundaryKind, MessageIndex};
 use crate::ids::OrderedIds;
 use crate::model::{Config, Kind, Message, State};
 use crate::protect::{
@@ -37,7 +34,7 @@ pub struct ProjectionContext<'a> {
     messages: &'a [Message],
     state: &'a State,
     config: &'a Config,
-    by_id: HashMap<&'a str, usize>,
+    index: MessageIndex<'a>,
     failed_compress_call_ids: HashSet<String>,
     latest: LatestProtected,
     aged_compress_call_ids: HashSet<String>,
@@ -48,7 +45,7 @@ pub struct ProjectionContext<'a> {
     pair_by_call_id: HashMap<String, (String, String)>,
     tool_pair_extremes: HashMap<String, (usize, usize)>,
     anchor_message: Option<&'a Message>,
-    integrity: IntegrityPre,
+    integrity: IntegrityPre<'a>,
 }
 
 impl<'a> ProjectionContext<'a> {
@@ -85,7 +82,7 @@ impl<'a> ProjectionContext<'a> {
             messages,
             state,
             config,
-            by_id: index_by_message_id(messages),
+            index: MessageIndex::new(messages, state),
             failed_compress_call_ids,
             latest,
             aged_compress_call_ids,
@@ -98,7 +95,8 @@ impl<'a> ProjectionContext<'a> {
     }
 
     fn message(&self, id: &str) -> Option<&'a Message> {
-        self.by_id
+        self.index
+            .by_id
             .get(id)
             .and_then(|index| self.messages.get(*index))
     }
@@ -222,7 +220,7 @@ fn project_excluding(
         request.end_ref,
         context.messages,
         state,
-        &context.by_id,
+        &context.index,
     )?;
     let range_message_ids: Vec<String> =
         pairs::widened_range_ids(&resolved, context.messages, &context.tool_pair_extremes)
@@ -234,15 +232,13 @@ fn project_excluding(
     let mut nested_block_ids = resolved.nested_block_ids.clone();
     if range_message_ids.len() > resolved.message_ids.len() {
         let position = |id: Option<&String>, fallback| {
-            id.and_then(|id| context.by_id.get(id.as_str()).copied())
+            id.and_then(|id| context.index.by_id.get(id.as_str()).copied())
                 .unwrap_or(fallback)
         };
         let start = position(range_message_ids.first(), resolved.start_index);
         let end = position(range_message_ids.last(), resolved.end_index);
-        for block in state.active_blocks() {
-            if !nested_block_ids.contains(&block.block_id)
-                && block_visible_in_range(block, &context.by_id, start, end)
-            {
+        for block in context.index.blocks_in_range(start, end) {
+            if !nested_block_ids.contains(&block.block_id) {
                 nested_block_ids.push(block.block_id.clone());
             }
         }

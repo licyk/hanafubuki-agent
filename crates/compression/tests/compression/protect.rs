@@ -501,6 +501,10 @@ fn tool_patterns_ignore_case() {
     assert!(match_tool_pattern("READ_FILE", "read*"));
     assert!(match_tool_pattern("search_context", "SEARCH*"));
     assert!(!match_tool_pattern("write_file", "read*"));
+    assert!(match_tool_pattern("ÉCRIRE_FICHIER", "écrire*"));
+    assert!(match_tool_pattern("Lire", "LIRE"));
+    assert!(!match_tool_pattern("é", "e*"));
+    assert!(!match_tool_pattern("r", "read*"));
 }
 
 #[test]

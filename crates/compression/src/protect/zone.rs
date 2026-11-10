@@ -46,10 +46,10 @@ pub fn compute_protected_refs(
             .by_raw
             .get(&message.id)
             .filter(|r#ref| *r#ref != BLOCKED_REF)
-            .cloned()
+            .map(String::as_str)
     };
 
-    let visible: Vec<(String, u64)> = messages
+    let visible: Vec<(&str, &Message)> = messages
         .iter()
         .filter(|message| !is_synthetic_or_pruned(message))
         .filter(|message| {
@@ -59,28 +59,32 @@ pub fn compute_protected_refs(
                 &config.preserve_recent_tools,
             )
         })
-        .filter_map(|message| Some((ref_of(message)?, count_message_tokens(message))))
+        .filter_map(|message| Some((ref_of(message)?, message)))
         .collect();
 
     let mut zone = HashSet::new();
     let preserve_messages = config.preserve_recent_messages;
     if preserve_messages > 0 {
         let start = visible.len().saturating_sub(preserve_messages);
-        zone.extend(visible[start..].iter().map(|(r#ref, _)| r#ref.clone()));
+        zone.extend(
+            visible[start..]
+                .iter()
+                .map(|(r#ref, _)| (*r#ref).to_owned()),
+        );
     }
     if config.preserve_recent_tokens > 0 {
         let mut tokens = 0;
-        for (r#ref, message_tokens) in visible.iter().rev() {
+        for (r#ref, message) in visible.iter().rev() {
             if tokens >= config.preserve_recent_tokens {
                 break;
             }
-            zone.insert(r#ref.clone());
-            tokens += message_tokens;
+            zone.insert((*r#ref).to_owned());
+            tokens += count_message_tokens(message);
         }
     }
     if preserve_messages > 0 {
         if let Some(r#ref) = last_user_anchor(messages, &covered).and_then(ref_of) {
-            zone.insert(r#ref);
+            zone.insert(r#ref.to_owned());
         }
     }
 
@@ -91,20 +95,20 @@ pub fn compute_protected_refs(
 /// A large-result tool's result never enters the zone while its call can,
 /// and keeping the call while its result folds strands the call: protect
 /// both halves of every pair one half of which is protected.
-fn close_tool_pairs(
-    messages: &[Message],
+fn close_tool_pairs<'a>(
+    messages: &'a [Message],
     zone: &mut HashSet<String>,
     is_synthetic_or_pruned: impl Fn(&Message) -> bool,
-    ref_of: impl Fn(&Message) -> Option<String>,
+    ref_of: impl Fn(&Message) -> Option<&'a str>,
 ) {
-    let mut message_by_ref: HashMap<String, &Message> = HashMap::new();
+    let mut message_by_ref: HashMap<&str, &Message> = HashMap::new();
     for message in messages.iter().filter(|message| !message.id.is_empty()) {
         if let Some(r#ref) = ref_of(message) {
             message_by_ref.insert(r#ref, message);
         }
     }
-    let mut call_refs: HashMap<&str, String> = HashMap::new();
-    let mut result_refs: HashMap<&str, String> = HashMap::new();
+    let mut call_refs: HashMap<&str, &str> = HashMap::new();
+    let mut result_refs: HashMap<&str, &str> = HashMap::new();
     for message in messages {
         let Some(call_id) = message.tool_call_id.as_deref() else {
             continue;
@@ -127,7 +131,7 @@ fn close_tool_pairs(
     }
     let protected: Vec<String> = zone.iter().cloned().collect();
     for r#ref in protected {
-        let Some(message) = message_by_ref.get(&r#ref) else {
+        let Some(message) = message_by_ref.get(r#ref.as_str()) else {
             continue;
         };
         let Some(call_id) = message.tool_call_id.as_deref() else {
@@ -139,7 +143,7 @@ fn close_tool_pairs(
             Kind::Text | Kind::Reasoning => None,
         };
         if let Some(partner) = partner {
-            zone.insert(partner.clone());
+            zone.insert((*partner).to_owned());
         }
     }
 }

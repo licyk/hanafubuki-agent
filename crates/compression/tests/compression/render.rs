@@ -37,6 +37,15 @@ fn a_tag_carries_the_ref_its_frozen_tokens_and_the_message_type() {
 }
 
 #[test]
+fn a_count_is_a_cjk_character_or_a_quarter_of_any_other_utf16_unit() {
+    assert_eq!(default_count_tokens(""), 0);
+    assert_eq!(default_count_tokens("hello"), 2);
+    assert_eq!(default_count_tokens("café"), 1);
+    assert_eq!(default_count_tokens("🙂🙂🙂"), 2);
+    assert_eq!(default_count_tokens("中文 ab"), 3);
+}
+
+#[test]
 fn the_snapshot_keeps_tags_stable_whatever_the_count_would_be_now() {
     let messages = vec![
         user("a", "你好世界这是一段中文消息"),

@@ -503,3 +503,7 @@ reason = "JavaScript's rounding and number formatting, standing in for the Math.
 [[original]]
 path = "crates/compression/src/json.rs"
 reason = "Order-preserving JSON, standing in for the key order JavaScript's JSON.parse and JSON.stringify keep."
+
+[[original]]
+path = "crates/compression/tests/compression/scale.rs"
+reason = "A release timing harness of process_turn over long histories, written for this port."
