@@ -28,6 +28,7 @@ use parking_lot::Mutex;
 use serde_json::{json, Map, Value};
 
 use crate::guest::GUEST_ARG;
+use crate::watchdog::step;
 
 /// How long a check waits for an outcome before it fails.
 pub const DEADLINE: Duration = Duration::from_secs(60);
@@ -77,6 +78,7 @@ pub struct Fixture {
 
 impl Fixture {
     pub async fn start(options: Options) -> Self {
+        step("the fixture starts");
         let directory = tempfile::tempdir_in(env!("CARGO_TARGET_TMPDIR")).unwrap();
         let workspace = directory.path().join("workspace");
         fs::create_dir_all(&workspace).unwrap();
@@ -132,6 +134,7 @@ impl Fixture {
             .unwrap();
         let plugin = root.plugin_def(&host.plugin(), Value::Null).unwrap();
         plugin.settled().await.unwrap();
+        step("the fixture started");
         Self {
             directory,
             host,
@@ -229,6 +232,18 @@ impl Fixture {
         }
     }
 
+    /// Applies `packages` (as the packages the guest host follows).
+    pub async fn apply(&self, packages: Vec<GuestPackage>) {
+        let names: Vec<&str> = packages
+            .iter()
+            .map(|package| package.name.as_str())
+            .collect();
+        let names = names.join(", ");
+        step(format!("applying [{names}]"));
+        self.host.apply(packages).await;
+        step(format!("applied [{names}]"));
+    }
+
     /// The status of `id` once `until` holds.
     pub async fn wait(
         &self,
@@ -236,12 +251,22 @@ impl Fixture {
         what: &str,
         until: impl Fn(&GuestStatus) -> bool,
     ) -> GuestStatus {
+        step(format!("{id}: waiting for {what}"));
         let mut changes = self.host.changes();
         let deadline = Instant::now() + DEADLINE;
+        let mut seen = None;
         loop {
             let status = self.host.status(id);
             if let Some(status) = status.as_ref().filter(|status| until(status)) {
+                step(format!("{id}: {what} reached"));
                 return status.clone();
+            }
+            let state = status
+                .as_ref()
+                .map(|status| (status.state, status.restarts, status.error.clone()));
+            if seen.as_ref() != Some(&state) {
+                step(format!("{id}: {state:?}"));
+                seen = Some(state);
             }
             let remaining = deadline.saturating_duration_since(Instant::now());
             assert!(
@@ -271,20 +296,33 @@ impl Fixture {
         method: &str,
         args: Value,
     ) -> Result<Value, String> {
-        self.host
+        let id = package.id.key();
+        step(format!("{id}: calling {method}"));
+        let result = self
+            .host
             .call(&package.id, method, args, Duration::from_secs(20))
-            .await
+            .await;
+        step(format!("{id}: {method} answered"));
+        result
+    }
+}
+
+impl Drop for Fixture {
+    fn drop(&mut self) {
+        step("dropping the fixture");
     }
 }
 
 /// Waits until `condition` holds, checking it again every few
 /// milliseconds, for at most [`DEADLINE`].
 pub async fn eventually(what: &str, condition: impl Fn() -> bool) {
+    step(format!("waiting for {what}"));
     let deadline = Instant::now() + DEADLINE;
     while !condition() {
         assert!(Instant::now() < deadline, "no {what} within {DEADLINE:?}");
         tokio::time::sleep(Duration::from_millis(10)).await;
     }
+    step(what);
 }
 
 /// Running, with a live process (a process that just ended leaves its

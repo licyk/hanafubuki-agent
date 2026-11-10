@@ -38,7 +38,7 @@ pub async fn the_sandbox_keeps_a_guest_to_its_package_its_data_and_its_grant() {
     fs::write(fixture.workspace.join("notes"), "workspace").unwrap();
     let path = |path: &std::path::Path| json!(path.to_str().unwrap());
 
-    fixture.host.apply(vec![package.clone()]).await;
+    fixture.apply(vec![package.clone()]).await;
     fixture.wait(&id, "start", running).await;
     assert_eq!(
         fixture
@@ -69,7 +69,7 @@ pub async fn the_sandbox_keeps_a_guest_to_its_package_its_data_and_its_grant() {
     // start under a new profile.
     package.permissions.workspace = WorkspaceAccess::Read;
     package.granted = Some(package.permissions.clone());
-    fixture.host.apply(vec![package.clone()]).await;
+    fixture.apply(vec![package.clone()]).await;
     fixture.wait(&id, "start with the workspace", running).await;
     assert_eq!(
         fixture

@@ -129,7 +129,6 @@ pub async fn a_wasm_guest_runs_without_a_process_and_contributes_a_tool() {
     let mut viewer = fixture.wasm_package("viewer", &module("viewer", VIEW), Default::default());
     viewer.permissions.workspace = WorkspaceAccess::Write;
     fixture
-        .host
         .apply(vec![
             echo.clone(),
             refusing.clone(),
@@ -202,7 +201,6 @@ pub async fn an_endless_wasm_call_is_stopped_and_the_guest_restarts_alone() {
     );
     let steady = fixture.wasm_package("steady", &module("steady", ECHO), Default::default());
     fixture
-        .host
         .apply(vec![spinning.clone(), burning.clone(), steady.clone()])
         .await;
     for package in [&spinning, &burning, &steady] {
@@ -262,10 +260,7 @@ pub async fn a_wasm_guest_that_outgrows_its_memory_traps_and_restarts() {
     );
     // The default 256 MiB lets it grow.
     let roomy = fixture.wasm_package("roomy", &module("roomy", GROW), Default::default());
-    fixture
-        .host
-        .apply(vec![capped.clone(), roomy.clone()])
-        .await;
+    fixture.apply(vec![capped.clone(), roomy.clone()]).await;
     fixture.wait(&capped.id.key(), "start", running).await;
     fixture.wait(&roomy.id.key(), "start", running).await;
 
@@ -302,7 +297,7 @@ pub async fn a_trapping_wasm_guests_contributions_retire_and_return() {
         "crash_board",
     );
     let id = package.id.key();
-    fixture.host.apply(vec![package.clone()]).await;
+    fixture.apply(vec![package.clone()]).await;
     fixture.wait(&id, "start", running).await;
     eventually("its contributions", || {
         owners::<ToolSourceRegistry>(&fixture).len() == 1

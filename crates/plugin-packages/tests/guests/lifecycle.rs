@@ -19,7 +19,7 @@ pub async fn a_guest_starts_is_disabled_enabled_and_uninstalled() {
     let mut package = fixture.package("demo", "run");
     let id = package.id.key();
 
-    fixture.host.apply(vec![package.clone()]).await;
+    fixture.apply(vec![package.clone()]).await;
     let first = fixture
         .wait(&id, "start", |status| {
             running(status) && status.stderr_tail.contains("the test guest applies")
@@ -34,7 +34,7 @@ pub async fn a_guest_starts_is_disabled_enabled_and_uninstalled() {
     assert_eq!(fixture.processes(), 1);
 
     package.enabled = false;
-    fixture.host.apply(vec![package.clone()]).await;
+    fixture.apply(vec![package.clone()]).await;
     fixture
         .wait(&id, "stop", |status| status.state == GuestState::Stopped)
         .await;
@@ -42,12 +42,12 @@ pub async fn a_guest_starts_is_disabled_enabled_and_uninstalled() {
     assert!(fixture.call(&package, "echo", Value::Null).await.is_err());
 
     package.enabled = true;
-    fixture.host.apply(vec![package.clone()]).await;
+    fixture.apply(vec![package.clone()]).await;
     let second = fixture.wait(&id, "start again", running).await;
     assert_ne!(second.process_id, first.process_id);
     assert_eq!(second.restarts, 0);
 
-    fixture.host.apply(Vec::new()).await;
+    fixture.apply(Vec::new()).await;
     assert_eq!(fixture.host.status(&id), None);
     fixture.wait_for_processes(0).await;
     // The tree mirrors the settings: applying them writes nothing back.
@@ -61,7 +61,7 @@ pub async fn a_guest_without_its_permissions_starts_only_once_they_are_granted()
     let requested = package.permissions.clone();
 
     package.granted = None;
-    fixture.host.apply(vec![package.clone()]).await;
+    fixture.apply(vec![package.clone()]).await;
     let blocked = fixture.host.status(&id).unwrap();
     assert_eq!(blocked.state, GuestState::Blocked);
     assert!(blocked.error.unwrap().contains("not granted"));
@@ -70,7 +70,7 @@ pub async fn a_guest_without_its_permissions_starts_only_once_they_are_granted()
         env: Vec::new(),
         ..requested.clone()
     });
-    fixture.host.apply(vec![package.clone()]).await;
+    fixture.apply(vec![package.clone()]).await;
     let blocked = fixture.host.status(&id).unwrap();
     assert_eq!(blocked.state, GuestState::Blocked);
     assert!(
@@ -84,7 +84,7 @@ pub async fn a_guest_without_its_permissions_starts_only_once_they_are_granted()
     assert_eq!(fixture.processes(), 0);
 
     package.granted = Some(requested);
-    fixture.host.apply(vec![package.clone()]).await;
+    fixture.apply(vec![package.clone()]).await;
     fixture.wait(&id, "start once granted", running).await;
 }
 
@@ -93,7 +93,7 @@ pub async fn a_guest_gets_only_its_environment_and_runs_in_its_data_directory() 
     std::env::set_var("HANAFUBUKI_TEST_NOT_GRANTED", "not for the guest");
     let fixture = Fixture::start(Options::default()).await;
     let package = fixture.package("demo", "run");
-    fixture.host.apply(vec![package.clone()]).await;
+    fixture.apply(vec![package.clone()]).await;
     fixture.wait(&package.id.key(), "start", running).await;
 
     let mut env: BTreeMap<String, String> =
@@ -125,7 +125,7 @@ pub async fn a_guest_process_is_the_instances_and_stops_with_the_guest_host() {
     let fixture = Fixture::start(Options::default()).await;
     let package = fixture.package("demo", "run");
     let id = package.id.key();
-    fixture.host.apply(vec![package.clone()]).await;
+    fixture.apply(vec![package.clone()]).await;
     let first = fixture.wait(&id, "start", running).await;
     assert_eq!(fixture.processes(), 1);
 

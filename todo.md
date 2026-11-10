@@ -700,6 +700,20 @@ user first.
     huge module costs the blocking pool); WASI modules (pykardia's WASM
     export) do not load (no WASI imports); the release binary's size
     growth from wasmtime was not measured here.
+  - Open (CI, first run of P8): on macOS (arm64) the `guests` suite hung
+    for 35 minutes in its first WASM check, after every process check
+    passed, while the facade's WASM package test and the CLI's
+    `hello-wasm` example ran on the same runner. Not reproduced on Linux
+    (also with 1 to 3 CPUs). The suite now runs each check under a 120 s
+    watchdog that prints its steps (fixture start, `apply`, waits, calls),
+    its latest log records (the guest host logs each module's load at
+    `debug`) and, on macOS, `sample`'s stacks of every thread, then exits;
+    CI jobs time out after 60 minutes. Candidates the next run should
+    settle: four engines compiled at once (the others one), the `liar`
+    module dropped while others load, wasmtime's Mach exception port in a
+    process that ran guest processes before; if it is the Mach port,
+    `Config::macos_use_mach_ports(false)` needs kardia-hmr to take a
+    wasmtime `Config` (an upstream change).
   - Hanafubuki, at its next pin: `PackageRuntime` is an enum
     (`Process(ProcessRuntime)` | `Wasm(WasmRuntime)`), new
     `ProcessRuntime`, `WasmRuntime`, `WasmRuntimeLimits`,

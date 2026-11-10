@@ -21,7 +21,7 @@ pub async fn a_guest_views_only_its_workspace_and_its_settings() {
     package.permissions.workspace = WorkspaceAccess::Read;
     package.granted = Some(package.permissions.clone());
     package.settings = settings("B-1");
-    fixture.host.apply(vec![package.clone()]).await;
+    fixture.apply(vec![package.clone()]).await;
     let first = fixture.wait(&id, "start", running).await;
 
     let guest = package.clone();
@@ -58,7 +58,7 @@ pub async fn a_guest_views_only_its_workspace_and_its_settings() {
 
     // New settings restart the guest with them.
     package.settings = settings("B-2");
-    fixture.host.apply(vec![package.clone()]).await;
+    fixture.apply(vec![package.clone()]).await;
     fixture
         .wait(&id, "restart with its settings", |status| {
             running(status) && status.process_id != first.process_id
@@ -73,7 +73,7 @@ pub async fn a_guest_views_only_its_workspace_and_its_settings() {
     // Without workspace access, the workspace has no roots.
     package.permissions.workspace = WorkspaceAccess::None;
     package.granted = Some(package.permissions.clone());
-    fixture.host.apply(vec![package.clone()]).await;
+    fixture.apply(vec![package.clone()]).await;
     // A new grant is a new start: wait for its view.
     let mut answer = Err(String::new());
     let deadline = std::time::Instant::now() + crate::fixture::DEADLINE;
@@ -90,7 +90,7 @@ pub async fn a_guest_that_provides_another_service_is_stopped() {
     // While it starts: it restarts until the restart policy gives up.
     let package = fixture.package("thief", "provide-apply");
     let id = package.id.key();
-    fixture.host.apply(vec![package.clone()]).await;
+    fixture.apply(vec![package.clone()]).await;
     let failed = fixture
         .wait(&id, "fail", |status| status.state == GuestState::Failed)
         .await;
@@ -107,7 +107,7 @@ pub async fn a_guest_that_provides_another_service_is_stopped() {
     // While it runs: it fails at once, and restarts as after any fault.
     let package = fixture.package("demo", "run");
     let id = package.id.key();
-    fixture.host.apply(vec![package.clone()]).await;
+    fixture.apply(vec![package.clone()]).await;
     let first = fixture.wait(&id, "start", running).await;
     let _ = fixture
         .call(&package, "provide", json!("agent-tools"))

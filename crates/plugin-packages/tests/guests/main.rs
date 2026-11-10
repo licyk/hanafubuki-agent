@@ -3,7 +3,8 @@
 //! guests it starts, and confines, re-execute it; and with WASM guests
 //! written in the text format. Without a harness, `main`
 //! answers those command lines first, then runs each check in turn (those
-//! whose name contains one of the arguments, when there are any).
+//! whose name contains one of the arguments, when there are any), each
+//! under a watchdog that ends a hung check with what it reached.
 
 mod contribute;
 mod faults;
@@ -14,6 +15,7 @@ mod lifecycle;
 mod logging;
 mod sandbox;
 mod wasm;
+mod watchdog;
 
 use std::future::Future;
 use std::pin::Pin;
@@ -117,7 +119,7 @@ fn main() {
         if !filters.is_empty() && !filters.iter().any(|filter| name.contains(filter.as_str())) {
             continue;
         }
-        runtime.block_on(check());
+        watchdog::guard(name, || runtime.block_on(check()));
         eprintln!("ok: {name}");
     }
 }

@@ -1,12 +1,18 @@
 //! What a guest writes (its stderr, its log lines) reaches the Agent's log
 //! only at `trace` (AGENTS.md, "Agent Content Logging").
 
+use std::time::Duration;
+
 use parking_lot::Mutex;
 use serde_json::Value;
 
 use crate::fixture::{eventually, running, Fixture, Options};
 
-static RECORDS: Mutex<Vec<(log::Level, String)>> = Mutex::new(Vec::new());
+/// Every record: its level, target and message.
+static RECORDS: Mutex<Vec<(log::Level, String, String)>> = Mutex::new(Vec::new());
+
+/// The targets of the WASM compiler's many records, which reports skip.
+const COMPILER_TARGETS: &[&str] = &["cranelift", "regalloc2", "wasmtime_cranelift"];
 
 struct Capture;
 
@@ -20,9 +26,11 @@ impl log::Log for Capture {
         {
             eprintln!("{} {}", record.level(), record.args());
         }
+        // Formatted before taking the lock, which formatting could need.
+        let message = record.args().to_string();
         RECORDS
             .lock()
-            .push((record.level(), record.args().to_string()));
+            .push((record.level(), record.target().to_string(), message));
     }
 
     fn flush(&self) {}
@@ -34,19 +42,38 @@ pub fn capture() {
     log::set_max_level(log::LevelFilter::Trace);
 }
 
+/// The latest `count` records but the compiler's, unless a stuck thread
+/// holds their lock.
+pub fn latest(count: usize) -> Option<Vec<String>> {
+    let records = RECORDS.try_lock_for(Duration::from_secs(1))?;
+    let mut latest: Vec<String> = records
+        .iter()
+        .rev()
+        .filter(|(_, target, _)| {
+            !COMPILER_TARGETS
+                .iter()
+                .any(|compiler| target.starts_with(compiler))
+        })
+        .take(count)
+        .map(|(level, target, message)| format!("{level} {target}: {message}"))
+        .collect();
+    latest.reverse();
+    Some(latest)
+}
+
 fn levels_of(text: &str) -> Vec<log::Level> {
     RECORDS
         .lock()
         .iter()
-        .filter(|(_, message)| message.contains(text))
-        .map(|(level, _)| *level)
+        .filter(|(_, _, message)| message.contains(text))
+        .map(|(level, _, _)| *level)
         .collect()
 }
 
 pub async fn a_guests_own_words_are_logged_only_at_trace() {
     let fixture = Fixture::start(Options::default()).await;
     let package = fixture.package("demo", "run");
-    fixture.host.apply(vec![package.clone()]).await;
+    fixture.apply(vec![package.clone()]).await;
     fixture.wait(&package.id.key(), "start", running).await;
 
     fixture.call(&package, "speak", Value::Null).await.unwrap();

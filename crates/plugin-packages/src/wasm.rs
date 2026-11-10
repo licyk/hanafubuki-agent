@@ -13,7 +13,7 @@
 //! so it restarts as a process guest that exits does.
 
 use std::collections::BTreeSet;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use hanafubuki_agent_packages::{PackageContributes, WasmRuntime};
 use kardia_core::{Error, PluginDef};
@@ -41,7 +41,20 @@ pub(crate) fn plugin(
     runtime: &WasmRuntime,
     call_timeout: Duration,
 ) -> PluginDef {
-    match load(package, runtime, call_timeout) {
+    let started = Instant::now();
+    log::debug!("plugin {}: its module loads", package.id);
+    let loaded = load(package, runtime, call_timeout);
+    let outcome = if loaded.is_ok() {
+        "loaded"
+    } else {
+        "did not load"
+    };
+    log::debug!(
+        "plugin {}: its module {outcome} in {} ms",
+        package.id,
+        started.elapsed().as_millis()
+    );
+    match loaded {
         Ok(plugin) => plugin.name(guest_name(package)),
         Err(error) => failing(package, error),
     }

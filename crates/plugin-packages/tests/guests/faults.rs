@@ -14,7 +14,7 @@ pub async fn a_killed_guest_fails_and_the_restart_loop_brings_it_back() {
     let fixture = Fixture::start(Options::default()).await;
     let package = fixture.package("demo", "run");
     let id = package.id.key();
-    fixture.host.apply(vec![package.clone()]).await;
+    fixture.apply(vec![package.clone()]).await;
     let first = fixture.wait(&id, "start", running).await;
 
     kill_hard(first.process_id.unwrap());
@@ -41,7 +41,7 @@ pub async fn a_call_past_its_deadline_kills_the_guest_which_restarts() {
     let fixture = Fixture::start(Options::default()).await;
     let package = fixture.package("demo", "run");
     let id = package.id.key();
-    fixture.host.apply(vec![package.clone()]).await;
+    fixture.apply(vec![package.clone()]).await;
     let first = fixture.wait(&id, "start", running).await;
 
     let error = fixture
@@ -66,7 +66,7 @@ pub async fn a_fourth_fault_in_the_window_leaves_the_guest_failed_until_it_is_re
     let fixture = Fixture::start(Options::default()).await;
     let package = fixture.package("demo", "run");
     let id = package.id.key();
-    fixture.host.apply(vec![package.clone()]).await;
+    fixture.apply(vec![package.clone()]).await;
     let mut current = fixture.wait(&id, "start", running).await;
 
     for restarts in 1..=3 {
@@ -105,7 +105,7 @@ pub async fn a_changed_package_does_not_start() {
     )
     .unwrap();
 
-    fixture.host.apply(vec![package.clone()]).await;
+    fixture.apply(vec![package.clone()]).await;
 
     let failed = fixture
         .wait(&id, "refusal", |status| status.state == GuestState::Failed)
@@ -130,7 +130,7 @@ pub async fn a_start_that_hangs_or_fails_stays_failed() {
     .await;
     let hangs = fixture.package("hangs", "hang-apply");
     let fails = fixture.package("fails", "fail-apply");
-    fixture.host.apply(vec![hangs.clone(), fails.clone()]).await;
+    fixture.apply(vec![hangs.clone(), fails.clone()]).await;
 
     let hung = fixture
         .wait(&hangs.id.key(), "a failed start", |status| {

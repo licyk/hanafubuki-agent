@@ -146,12 +146,18 @@ pub async fn planned(fixture: &Fixture) -> Result<Vec<SourcedTool>, AgentToolErr
     let sources = entries::<ToolSourceRegistry>(fixture);
     assert_eq!(sources.len(), 1);
     let step = step();
+    crate::watchdog::step("planning the tools");
     let contribution = sources[0].contribute(&step).await?;
+    crate::watchdog::step("planned the tools");
     Ok(contribution.tools)
 }
 
 /// Runs `tool` with `arguments`, approved as its permission asks.
 pub async fn run(tool: &SourcedTool, arguments: Value) -> Result<ToolOutput, AgentToolError> {
+    crate::watchdog::step(format!(
+        "running the tool {}",
+        tool.handler.descriptor().name.flattened_alias()
+    ));
     let call = invocation(arguments.clone());
     let PermissionRequirement::ReviewRequired(action) = tool.handler.permission(&call).await?
     else {
@@ -169,7 +175,9 @@ pub async fn run(tool: &SourcedTool, arguments: Value) -> Result<ToolOutput, Age
         ApprovalDecisionSource::FullAccess,
     )
     .unwrap();
-    Ok(tool.handler.invoke(call, Some(approval)).await?.output)
+    let output = tool.handler.invoke(call, Some(approval)).await;
+    crate::watchdog::step("the tool ran");
+    Ok(output?.output)
 }
 
 pub fn tool<'a>(tools: &'a [SourcedTool], name: &str) -> &'a SourcedTool {
@@ -183,7 +191,7 @@ pub async fn a_guest_contributes_what_its_manifest_declares() {
     let fixture = Fixture::start(Options::default()).await;
     let package = contributing(&fixture, "run");
     let id = package.id.key();
-    fixture.host.apply(vec![package.clone()]).await;
+    fixture.apply(vec![package.clone()]).await;
     let status = fixture
         .wait(&id, "its contributions", |status| {
             running(status) && !status.issues.is_empty()
@@ -391,7 +399,7 @@ pub async fn a_guests_contributions_retire_with_it_and_its_failures_stay_its_own
     .await;
     let package = contributing(&fixture, "hang-contributions");
     let id = package.id.key();
-    fixture.host.apply(vec![package.clone()]).await;
+    fixture.apply(vec![package.clone()]).await;
     fixture
         .wait(&id, "its contributions", |status| {
             running(status) && !status.issues.is_empty()
