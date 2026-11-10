@@ -1,3 +1,23 @@
+## Plan: a configuration center for every Agent setting (2026-11-11)
+
+The plan is [docs/plan-configuration-center.md](docs/plan-configuration-center.md).
+Each phase is implemented separately, validated, committed and pushed. The
+work turns `/config` into a searchable configuration center over the typed
+Agent, standalone, Provider, MCP, plugin and interface settings while
+preserving the existing layered configuration and atomic writers.
+
+- [ ] C1: state, `/config` routing, full-screen navigation, search and
+      layer summaries.
+- [ ] C2: every `config.toml` domain form, typed atomic saves and
+      override warnings.
+- [ ] C3: the complete shared Provider model policy, including turn
+      budgets and revision conflicts.
+- [ ] C4: MCP protocol mode and per-tool concurrency, approval and
+      exposure policies.
+- [ ] C5: integrated plugin, hook and interface editors plus the layers
+      page.
+- [ ] C6: bilingual documentation and the full validation matrix.
+
 # Follow-ups
 
 ## Plan: installable plugins on Kardia, compatible with Codex, with our own format (2026-11-10)
