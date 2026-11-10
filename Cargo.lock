@@ -1855,6 +1855,7 @@ dependencies = [
  "kardia-core",
  "kardia-guest",
  "keyring",
+ "libc",
  "log",
  "notify",
  "parking_lot",

@@ -9,6 +9,9 @@ in both languages, committed and pushed, and notes what Hanafubuki must
 change at its next pin. Publishing Kardia to crates.io is confirmed with the
 user first.
 
+All phases (P1–P9 and K1) are done (2026-11-10); the open items each phase
+lists below still stand.
+
 - [x] P1: `crates/packages` package store: identity, the four manifest
       formats, marketplaces (local, git), versioned cache, data dirs, staged
       atomic install/uninstall, commands to Skills, content hashes,
@@ -251,12 +254,17 @@ user first.
     (`AgentService::limits().plugin_call_deadline`); new
     `AgentService::limits`. A host's context or admission contributor that
     takes over 10 s is now left out of the turn.
-- [ ] K1: Kardia (`cordis-rs`): public async guest transport, `Spawner`,
+- [x] K1: Kardia (`cordis-rs`): public async guest transport, `Spawner`,
       async calls with timeouts and request ids, exit monitoring, meta from
       outside, command and args, stderr tail, frame limit, WASM engine
       limits; `kardia-guest/2` in kardia-guest and pykardia; the guest SDKs
       relicensed permissively; release (0.2.x if additive, after the user
       confirms publishing).
+  - Done: Kardia 0.2.1 and 0.2.2 released on crates.io (0.2.2 made
+    kardia-loader's `preserve_order` a feature, P5); pykardia's
+    kardia-guest/2 and its relicensed guest SDK pushed. Open: pykardia's
+    PyPI release (PyPI has 0.1.0, which predates kardia-guest/2) is the
+    user's to publish; until then CI does not run the Python example.
 - [x] P5: guest host `crates/plugin-packages`: the `plugins` row with a
       kardia-loader subtree, `Resolver`, `ExecutorManager` spawner, the
       sandbox's plugin profile, exit watcher, guest state and restart loop.
@@ -726,8 +734,78 @@ user first.
     must accept), and the first WASM guest installs wasmtime's signal
     handlers in Hanafubuki's process: its own handlers for SIGSEGV, SIGBUS,
     SIGILL or SIGFPE, if any, must be installed first or chain.
-- [ ] P9: end-to-end crash tests (panic, hang, kill -9, abort, garbage,
+- [x] P9: end-to-end crash tests (panic, hang, kill -9, abort, garbage,
       oversize frame, restart loop) and a pty smoke test.
+  - Done: `crates/agent/tests/plugin_crashes/` (harness = false; the binary
+    is the guest, a stdio MCP server and the sandbox helper; each check
+    under a 150 s watchdog with its steps), one check per row of the plan's
+    §5.1, each over the whole Agent and the scripted model and each ending
+    in a turn that completes with the other plugins' contributions: a
+    content package whose installed manifest is broken, one whose
+    `.mcp.json` and hooks file do not read (its Skill loads; the hooks
+    file is a hooks diagnostic) and a code package whose program is
+    missing (failed start), beside healthy ones; a plugin's stdio MCP
+    server that exits mid-call (the call is a tool error, the turn ends,
+    the supervision reconnects it, the next turn's call works); trusted
+    hooks that exit 1, name no program, time out and print bad JSON (no
+    effect; the tool runs); a guest panic (the call's error with the
+    guest's words; same process, no restart); a tool past its 1 s timeout
+    and a context that never answers (killed, restarted; the section left
+    out, the turn goes on); abort, `SIGSEGV` (the handler reset to the
+    default first: Rust's runtime swallows a raised one) and
+    out-of-memory (`RLIMIT_AS` 256 MiB, then a 1 GiB reservation, nothing
+    touched: an allocation failure, `SIGABRT`), each in a guest of its own,
+    and `kill -9` from outside (the OOM killer's way); protocol garbage on
+    stdout and a 5 MiB answer (`Killed`, "invalid message from guest",
+    "exceeds the limit"); a restart loop (three exits restarted after 2,
+    10, 30 s, a fourth fault `failed`, a turn meanwhile without it,
+    `retry_package`); a panic of the `plugins` row (`Failed`, then its
+    restart; the guest comes back as a new process with no fault of its
+    own; Skill and MCP server untouched, the server not restarted). Linux
+    with a sandbox runs all; elsewhere the guest checks skip and the
+    content ones run (hooks: Unix). The row's panic goes through
+    `AgentApplicationService::panic_in_plugin` (test-support): a real panic
+    inside the host's fault guard, owned by the row. Stress: 10 rounds × 4
+    parallel copies, 40/40 passed (about 90 s a copy).
+  - Fixed: `/warnings` did not show a guest that failed (§5.1 says it
+    does): it now lists, under "installed plugins", a package whose code
+    is `failed` (`its code failed: …`) and its guest's issues (TUI test
+    with a WebAssembly package whose module does not load).
+    `plugins info` and `plugins retry` printed the guest's state the
+    moment the command's own Agent started, so an enabled, granted guest
+    always read `stopped`; both now wait as `grant` and `dev` do
+    (`settled`; `plugin_examples` checks `info` shows `running` for the
+    Rust and WASM examples). `settled` itself waited its whole 30 s for a
+    guest that cannot start, in safe mode or with the `plugins` row off
+    (`grant`, `dev` and now `info`); it waits on `stopped` only while that
+    row is pending or active (`plugin_development` times `--safe-mode
+    plugins info`).
+  - Smoke (debug binary, a fresh `HANAFUBUKI_AGENT_HOME`, a 50x160 pty, a
+    scripted Responses server): `plugins new hello`, `cargo build`, the
+    program copied into `package/`, `plugins validate`, `plugins add`,
+    `plugins grant`; the TUI: `/plugins` lists `hello@local`, its page's
+    Code row `running`; the model calls `hello__greet`, approved with `y`,
+    the turn answers; `kill -9` of the guest from outside: the Code row
+    `restarting: the guest process exited (signal: 9 (SIGKILL))`, then a
+    new process and `running`; three more kills (after 10 s and 30 s
+    restarts) leave it `failed`, which `/warnings` shows; **Retry plugin**
+    runs it again; Space turns it off (its process gone), **Uninstall
+    plugin**, `/exit` with code 0 and no guest process left.
+  - Docs (both languages): a new "Plugins" page (installing, consent,
+    lifecycle, failures) after Skills; architecture's "Not built" says
+    a Skill is not installed on its own (it comes with its plugin), npm
+    is "not supported"; `/warnings` (terminal-interface, architecture,
+    writing-plugins); `disabledPlugins = ["plugins"]` also stops the
+    code (config-reference); `AgentPackageGuest`/`GuestStatus` fields
+    (embedding); `info`/`retry` (cli-reference); the `renderer` wording
+    (plugin-rules); the new suite (building-testing); the index.
+  - Open: a hooks file that is JSON of the wrong shape (`{"hooks": 7}`)
+    is ignored without a diagnostic; a bad hooks file is a hooks
+    diagnostic, not one of its package's issues; the plan document can be
+    retired now that every phase is done (AGENTS.md keeps only an active
+    plan under `docs/`).
+  - Hanafubuki, at its next pin: `AgentApplicationService::panic_in_plugin`
+    (test-support only, additive). Nothing else changes for a host.
 
 ## Plan: background compaction, hierarchical compression, a choice between them (2026-11-09)
 

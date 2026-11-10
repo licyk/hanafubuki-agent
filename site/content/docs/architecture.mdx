@@ -214,7 +214,7 @@ schema 遵循同样的按协议规则：支持 `strict_json_schema` 的协议（
 
 - **五种清单格式**，按以下顺序探测：本项目的 `.hanafubuki-plugin/plugin.json`、Agent Plugins 1.0.0 的根 `plugin.json`（按 `$schema` 识别），然后是 Codex 的 `.codex-plugin`、Claude Code 的 `.claude-plugin` 和 Cursor 的 `.cursor-plugin` 中的 `plugin.json`。清单或其目录是符号链接或不是普通文件时，探测停止，这样无害的清单无法遮住另一个清单。我们的格式是 Codex 的清单加上供代码使用的 `runtime`、`contributes`、`permissions` 和 `configSchema`；存储保留它们，留给将来运行代码的部分。
 - **按外部来源读取。** 无法使用的清单字段或组件路径会被略去并记录一个问题；只有不是 JSON 对象的清单，或无法读取的 Agent Plugins 名字或 `$schema`，才会失败。路径必须以 `./` 开头并留在包内。Codex 遇到某些类型错误的字段会让整个清单失败；这里只略去该字段。
-- **市场**是 `.agents/plugins/marketplace.json`、`.agents/plugins/api_marketplace.json`、`.claude-plugin/marketplace.json` 或 `.cursor-plugin/marketplace.json`，支持本地、`url` 和 `git-subdir` 来源（暂不支持 npm）。无法使用的条目会被跳过；只有无法读取的文件才让它的市场失败。市场可以从目录添加（留在原处），也可以从 git 仓库添加（克隆到 `plugins/marketplaces/`）；升级时取得远端的修订并替换检出。存储返回 `[marketplaces]` 记录，由调用方写入配置。
+- **市场**是 `.agents/plugins/marketplace.json`、`.agents/plugins/api_marketplace.json`、`.claude-plugin/marketplace.json` 或 `.cursor-plugin/marketplace.json`，支持本地、`url` 和 `git-subdir` 来源（不支持 npm）。无法使用的条目会被跳过；只有无法读取的文件才让它的市场失败。市场可以从目录添加（留在原处），也可以从 git 仓库添加（克隆到 `plugins/marketplaces/`）；升级时取得远端的修订并替换检出。存储返回 `[marketplaces]` 记录，由调用方写入配置。
 - **安装先暂存再替换。** 包被复制到暂存区（不含符号链接和 `.git`）；没有清单时，把市场条目的字段写成它的清单；暂存的清单逐字节与来源核对；带描述的 `commands/*.md` 变成 Skill；然后把副本重命名为 `plugins/cache/<市场>/<插件>/<版本>/`，同一版本的旧副本保留到替换成功，更旧的版本被清理。使用中的版本：有 `local` 时用 `local`，否则用最高版本。包的数据目录在卸载后保留，除非清除。
 - **`git` 通过 Agent 的 `ExecutorManager` 运行**，和工作树一样隔离：不继承仓库选择变量，不运行钩子，不提示，并有超时。
 
@@ -235,7 +235,7 @@ schema 遵循同样的按协议规则：支持 `strict_json_schema` 的协议（
 - **市场**（`marketplaces`、`add_marketplace`、`upgrade_marketplace`、`remove_marketplace`）只包括用户添加的那些（`[marketplaces]`）：不会从主目录或仓库中发现市场。每个调用写入它的记录并重新加载。
 - **`package_changed`**：对包的每个生命周期调用都会在重新加载之后告诉插件事件接收器（`AgentPluginEventSink::package_changed`）发生了什么：`installed`、`removed`、`enabled`、`disabled`、`updated`，或 `failed` 以及原因。它不在 `exec --json` 的事件流中，那里的事件属于会话；`exec` 回合期间没有任何东西改变这些包。
 
-`plugins` 命令和 `/plugins`（[终端界面](/docs/terminal-interface#plugins)）是这些调用的界面；`mcp list` 和 `/mcp` 显示包的服务器并标明所属包，`/warnings` 显示包的问题。
+`plugins` 命令和 `/plugins`（[终端界面](/docs/terminal-interface#plugins)）是这些调用的界面；`mcp list` 和 `/mcp` 显示包的服务器并标明所属包，`/warnings` 显示包的问题和失败的访客。使用方法见[插件](/docs/plugins)。
 
 ### 代码插件：访客宿主 [#code-plugins]
 
@@ -299,7 +299,7 @@ schema 遵循同样的按协议规则：支持 `strict_json_schema` 的协议（
 - **轮次限制对模型不可见。** 历史中没有失败轮次原因的条目；用户读轮次的错误消息，没有什么需要模型看到它。
 - **沙箱改写 argv；进程 crate 不知道它。** `sandbox` 把一个命令变成辅助进程的命令行：辅助进程就是 Agent 自己的程序文件，由第一个参数选中（`--hanafubuki-agent-sandbox`，和 Codex 选择它的其他辅助进程一样），它先限制自身，再原地执行那个命令。`ExecutorManager` 像对待其他进程一样启动、拥有和回收这个进程，管道和 PTY 模式都一样，所以 `process`（Hanafubuki 那份的孪生）没有改动；Codex 按 argv[0] 选择的方式需要它能设置 `arg0`。它所在的位置：回合冻结会话的沙箱设置（`SandboxSettings`，门面准备回合时加入的扩展），`plugin-execution` 把它和命令一起交给 `execution`，`execution` 在自己的工作区根目录上解析它，并在启动前包装已获批准的命令。在 Linux 上，辅助进程使用 Codex 的 Landlock 流程，而不是它默认的 bubblewrap：不需要许多发行版都会限制的用户命名空间，不需要从 C 构建的随附 `bwrap`，而 Codex 放弃 Landlock 的理由（它的 app-server 的 Unix 套接字、拒绝访问的例外路径）在这里都不适用。在 macOS 上没有辅助进程：命令行是 `/usr/bin/sandbox-exec` 加上 Codex 的 Seatbelt 策略，可写根目录和只读的例外路径（`.git`，Landlock 做不到）作为参数（`-D`）传入，而不是拼进策略的文本。机器无法执行的模式会让命令失败，绝不会不受限地运行它（[权限](/docs/permissions#sandbox-unavailable)）。
 - **`hierarchical` 是内置策略，不是插件。** 做成插件需要一个内核每次请求都调用的新注册表，于是每个请求都依赖插件可以替换的代码（[组合规则 1](/docs/plugin-rules#composition-rules)），而且契约无法引用模型 API 的类型。所以算法是一个纯 crate（没有 I/O、没有异步，生产代码不 panic，与插件一样受检查），内核在 `catch_panic` 下调用它：那里的失败只损失一个请求的投影或一次工具调用，不会损失会话，这正是插件的隔离本来能给的。
-- **没有做的：** 代码模式（用 JS 调用所有工具）、跨会话的 MCP 连接池、无论目录大小都延迟所有 MCP 工具、MCP 的 prompts/subscriptions/sampling/roots、Skill 注册的工具或 `allowed-tools` 的执行、从 Agent 写设置的 Skill 安装流程，以及进程外的 Agent。
+- **没有做的：** 代码模式（用 JS 调用所有工具）、跨会话的 MCP 连接池、无论目录大小都延迟所有 MCP 工具、MCP 的 prompts/subscriptions/sampling/roots、Skill 注册的工具或 `allowed-tools` 的执行、从 Agent 单独安装一个 Skill（Skill 随携带它的[插件](/docs/plugins)一起安装，或者手动复制到某个 Skill 根目录），以及进程外的 Agent。
 
 与 Codex（`codex-rs`）相比，Agent 的机制都对照过它：
 

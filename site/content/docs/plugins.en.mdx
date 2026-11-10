@@ -1,0 +1,39 @@
+---
+title: Plugins
+description: Installing plugins of Codex's, Claude Code's, Cursor's or the Agent Plugins format, or this project's with code; what they may do, turning them on and off, and what happens when one fails.
+icon: Blocks
+---
+
+An installed plugin is a package that adds to the Agent. A package in Codex's, Claude Code's, Cursor's or the Agent Plugins format brings [Skills](/docs/skills#sources), [MCP servers](/docs/mcp#plugin-servers) and [hooks](/docs/configuration#hooks-plugins). One in this project's format can also run code that contributes tools, context sections, prompt fragments, hooks and observers ([Writing plugins](/docs/writing-plugins)). How the Agent loads them is in [Architecture](/docs/architecture#installed-plugins).
+
+## Install one [#install]
+
+- **From a marketplace**: add it with `plugins marketplace add SOURCE` (`owner/repo`, a git URL or a local directory), then `plugins add PLUGIN@MARKETPLACE`. In the terminal interface: `/plugins`, **Marketplaces**, **Add a marketplace…**, then the plugin's **Install plugin**.
+- **From a directory**: `plugins add DIR`, or **Install from a directory…** on the **Installed** tab. Its id is `<name>@local`.
+
+An install turns the plugin on, and its Skills, MCP servers and hooks join the Agent's without a restart. The commands are in [Command-line reference](/docs/cli-reference#plugins), the browser in [Terminal interface](/docs/terminal-interface#plugins), the settings in [Configuration reference](/docs/config-reference#plugins).
+
+## What it may do [#consent]
+
+- **Its hooks** run only once you trust them: an install lists them and asks, and `/hooks` or the plugin's page trusts them later. Once the package's files change, they wait to be trusted again.
+- **Its code** starts only once you grant what its manifest asks for: the network, the workspace (`none`, `read` or `write`) and environment variables (`plugins grant ID`, or **Grant its permissions** in `/plugins`). A program runs in a process of its own under the sandbox's plugin profile: it reads the system's directories and its package, and writes only its own data directory. A WebAssembly module needs no grant and reaches nothing. Code whose package changed after the install does not start until it is installed again.
+- **Its tools** are approved as an MCP tool that asks is: by you in `manual`, by the reviewer in `auto-review`, by no one in `full-access` ([Permissions](/docs/permissions#modes)).
+
+## On, off and away [#lifecycle]
+
+`plugins enable ID` and `plugins disable ID` (Space in `/plugins`) turn a plugin on or off without a restart; turning off one with code stops its process. `plugins update ID` installs it again from its marketplace or directory. `plugins remove ID` uninstalls it and keeps its data directory unless `--purge-data`. Started with `--safe-mode`, the Agent loads no installed plugin. Turning off the built-in row `plugins` (`disabledPlugins`) stops every plugin's code; their Skills, MCP servers and hooks still run.
+
+## When one fails [#failures]
+
+A plugin's failure is its own: the turn goes on, and the session and the other plugins keep working.
+
+| What fails                                                         | What happens                                                                                                                               |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| its manifest, or a part of it (a Skill, `.mcp.json`, a hooks file) | that part is left out with a warning (`/warnings`); the rest of it, and the other plugins, load                                            |
+| its MCP server crashes                                             | the call is a tool error; the server is connected again after 2 s, 10 s and 30 s, at most three times in ten minutes                       |
+| a hook fails, times out or answers what cannot be read             | it has no effect; the call goes on                                                                                                         |
+| its code panics in a call                                          | the call's error; the code runs on                                                                                                         |
+| its code hangs, crashes, runs out of memory or breaks the protocol | it is stopped, and the call is a tool error (a section is left out); it starts again after 2 s, 10 s and 30 s, with its tools and sections |
+| its code fails a fourth time within ten minutes                    | it stays `failed`, shown in `/plugins` and `/warnings`, until `plugins retry ID` (or **Retry plugin**)                                     |
+
+`plugins info ID` and the plugin's page in `/plugins` show its code's state, how its process last ended and its issues; [Writing plugins](/docs/writing-plugins#failures) has the failures of code by kind.

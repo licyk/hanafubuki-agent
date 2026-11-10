@@ -1,0 +1,39 @@
+---
+title: 插件
+description: 安装 Codex、Claude Code、Cursor 或 Agent Plugins 格式的插件，或者本项目格式、带代码的插件；它们能做什么，如何启用和停用，以及插件失败时会发生什么。
+icon: Blocks
+---
+
+已安装的插件是一个为 Agent 增添内容的包。Codex、Claude Code、Cursor 或 Agent Plugins 格式的包带来 [Skill](/docs/skills#sources)、[MCP 服务器](/docs/mcp#plugin-servers)和[钩子](/docs/configuration#hooks-plugins)。本项目格式的包还可以运行代码，贡献工具、上下文段、提示片段、钩子和观察者（[编写插件](/docs/writing-plugins)）。Agent 如何加载它们见[架构](/docs/architecture#installed-plugins)。
+
+## 安装 [#install]
+
+- **从市场安装**：先用 `plugins marketplace add SOURCE` 添加市场（`owner/repo`、git URL 或本地目录），再运行 `plugins add PLUGIN@MARKETPLACE`。在终端界面中：`/plugins`，**Marketplaces**，**Add a marketplace…**，然后在插件上选择 **Install plugin**。
+- **从目录安装**：`plugins add DIR`，或者 **Installed** 标签页上的 **Install from a directory…**。它的 ID 是 `<名字>@local`。
+
+安装会启用插件，它的 Skill、MCP 服务器和钩子无需重启就加入 Agent。命令见[命令行参考](/docs/cli-reference#plugins)，浏览器见[终端界面](/docs/terminal-interface#plugins)，设置见[配置参考](/docs/config-reference#plugins)。
+
+## 它能做什么 [#consent]
+
+- **它的钩子**只在你信任之后运行：安装时会列出它们并询问，之后也可以在 `/hooks` 或插件的页面中信任。包的文件一旦改变，它们就要再次等待信任。
+- **它的代码**只在你授予清单请求的权限之后启动：网络、工作区（`none`、`read` 或 `write`）和环境变量（`plugins grant ID`，或 `/plugins` 中的 **Grant its permissions**）。程序在自己的进程中、在沙箱的插件配置下运行：它可以读取系统目录和自己的包，只能写入自己的数据目录。WebAssembly 模块不需要授权，也什么都访问不到。安装后包被改动过的代码不会启动，直到重新安装。
+- **它的工具**像需要询问的 MCP 工具一样被批准：`manual` 下由你批准，`auto-review` 下由评审模型批准，`full-access` 下无需批准（[权限](/docs/permissions#modes)）。
+
+## 启用、停用和卸载 [#lifecycle]
+
+`plugins enable ID` 和 `plugins disable ID`（`/plugins` 中按空格）无需重启就启用或停用插件；停用带代码的插件会停止它的进程。`plugins update ID` 从它的市场或目录重新安装它。`plugins remove ID` 卸载它，除非加上 `--purge-data`，否则保留它的数据目录。用 `--safe-mode` 启动时，Agent 不加载任何已安装的插件。停用内置的 `plugins` 行（`disabledPlugins`）会停止所有插件的代码；它们的 Skill、MCP 服务器和钩子仍然运行。
+
+## 插件失败时 [#failures]
+
+插件的失败只属于它自己：回合继续进行，会话和其他插件照常工作。
+
+| 失败的是什么                                                | 会发生什么                                                                                                     |
+| ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| 它的清单，或其中一部分（某个 Skill、`.mcp.json`、钩子文件） | 这部分被略过，并给出一条警告（`/warnings`）；插件的其余部分和其他插件照常加载                                  |
+| 它的 MCP 服务器崩溃                                         | 这次调用是一个工具错误；服务器在 2 秒、10 秒和 30 秒后重新连接，十分钟内最多三次                               |
+| 钩子失败、超时或回答了无法读取的内容                        | 它没有任何效果；调用继续进行                                                                                   |
+| 它的代码在调用中 panic                                      | 这是这次调用的错误；代码继续运行                                                                               |
+| 它的代码卡住、崩溃、内存耗尽或破坏协议                      | 它被停止，这次调用是一个工具错误（上下文段被省略）；它在 2 秒、10 秒和 30 秒后重新启动，工具和上下文段随之回来 |
+| 它的代码在十分钟内第四次失败                                | 它保持 `failed`，显示在 `/plugins` 和 `/warnings` 中，直到 `plugins retry ID`（或 **Retry plugin**）           |
+
+`plugins info ID` 和 `/plugins` 中插件的页面显示它的代码的状态、进程上次如何结束以及它的问题；[编写插件](/docs/writing-plugins#failures)按类型列出了代码的失败。

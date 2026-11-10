@@ -119,6 +119,19 @@ impl AgentApplicationService {
         self.host.retry(name).await
     }
 
+    /// Panics in a call into the plugin `name` guarded as every call into a
+    /// plugin is, as a panic in that plugin's own code would: the host stops
+    /// it, shows it `Failed` with the panic, and starts it again under its
+    /// restart policy. For the end-to-end tests of a built-in row's fault.
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn panic_in_plugin(&self, name: &str) {
+        let _ = self.host.faults().guard(
+            name,
+            hanafubuki_agent_host::FaultPoint::new("test call"),
+            || panic!("a test made the plugin {name} panic"),
+        );
+    }
+
     /// Stops the Agent's plugins after turns are stopped and MCP is shut
     /// down; see `site/content/docs/architecture.en.mdx`, "Start and
     /// shutdown".

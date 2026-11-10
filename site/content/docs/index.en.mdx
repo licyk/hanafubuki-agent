@@ -23,12 +23,12 @@ The model comes from the Providers you configure. Three protocols are supported,
 
 ## Two ways to run it
 
-|                 | Standalone                                                        | Embedded                                                            |
-| --------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------- |
-| Entry point     | The `hanafubuki-agent` command: the interface, `exec`, management | The host application starts it through the `hanafubuki-agent` crate |
-| Configuration   | Its own directory, with layers, profiles and `-c` overrides       | A directory the host names, usually edited in the host's settings   |
-| Interface       | The terminal interface, or one run printed as text or JSON        | The host's own                                                      |
-| What it can use | The built-in tools, MCP, Skills and memory                        | Also the tools and context the host adds as plugins                 |
+|                 | Standalone                                                                     | Embedded                                                            |
+| --------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------- |
+| Entry point     | The `hanafubuki-agent` command: the interface, `exec`, management              | The host application starts it through the `hanafubuki-agent` crate |
+| Configuration   | Its own directory, with layers, profiles and `-c` overrides                    | A directory the host names, usually edited in the host's settings   |
+| Interface       | The terminal interface, or one run printed as text or JSON                     | The host's own                                                      |
+| What it can use | The built-in tools, MCP, Skills, [installed plugins](/docs/plugins) and memory | Also the tools and context the host adds as plugins                 |
 
 Most of this documentation is about the standalone command line. To embed the Agent in your own application, read [Embedding](/docs/embedding).
 

@@ -77,11 +77,22 @@ rusqlite = { workspace = true, features = ["bundled"] }
 tempfile.workspace = true
 tokio = { workspace = true, features = ["io-util", "macros", "net", "rt-multi-thread", "sync", "test-util", "time"] }
 
+# The crash tests' guest raises its own signals and limits its own memory.
+[target.'cfg(unix)'.dev-dependencies]
+libc = "0.2"
+
 # Its own `main` answers the sandbox helper's command line and the test
 # guest's first, so the code plugin it installs, and confines, re-executes
 # it.
 [[test]]
 name = "plugin_guests"
 path = "tests/plugin_guests.rs"
+harness = false
+required-features = ["test-support"]
+
+# The same: it is also the crashing guests and MCP server it installs.
+[[test]]
+name = "plugin_crashes"
+path = "tests/plugin_crashes/main.rs"
 harness = false
 required-features = ["test-support"]
