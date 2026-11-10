@@ -12,6 +12,7 @@ use hanafubuki_agent_process::executor::ExecutorManager;
 
 use super::*;
 
+mod code;
 #[cfg(unix)]
 mod lifecycle;
 mod manage;

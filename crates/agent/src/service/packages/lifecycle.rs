@@ -186,11 +186,16 @@ impl AgentApplicationService {
 
     /// Loads the installed plugins again and returns the package `id` as
     /// it is then: what a package's failure needs to be tried again. A
-    /// package of content has nothing running, so a reload is all.
+    /// package of content has nothing running, so a reload is all; a code
+    /// package's guest that failed (its start, or more often than the
+    /// restart policy allows) starts again, with an empty restart window.
     pub async fn retry_package(&self, id: &str) -> Result<AgentPackageStatus, String> {
-        let key = plugin_id(id)?.key();
+        let plugin = plugin_id(id)?;
         self.reload_packages().await?;
-        self.installed_status(&key).await
+        // A guest that has not failed, or a package without code, has
+        // nothing to retry.
+        let _ = self.packages.guests().retry(&plugin).await;
+        self.installed_status(&plugin.key()).await
     }
 
     async fn installed_status(&self, id: &str) -> Result<AgentPackageStatus, String> {
@@ -209,13 +214,20 @@ impl AgentApplicationService {
                 Ok((status_of(packages, &id), packages.hooks_to_trust(&id)))
             })
             .await?;
+        let package = package.ok_or_else(|| format!("plugin `{}` is not installed", outcome.id))?;
+        // What its code asks for and was not granted: the consent to ask.
+        let permissions = package
+            .guest
+            .as_ref()
+            .filter(|guest| guest.granted_permissions.as_ref() != Some(&guest.permissions))
+            .map(|guest| guest.permissions.clone());
         Ok(AgentPackageInstall {
-            package: package.ok_or_else(|| format!("plugin `{}` is not installed", outcome.id))?,
+            package,
             root: outcome.root,
             migrated_commands: outcome.migrated_commands,
             issues: outcome.issues,
             hooks_to_trust: hooks.iter().map(super::super::hooks::agent_hook).collect(),
-            permissions: Vec::new(),
+            permissions,
         })
     }
 }

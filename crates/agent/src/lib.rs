@@ -86,7 +86,11 @@ pub use hanafubuki_agent_foundation::secrets::{
 pub use hanafubuki_agent_hooks::{HookEventName, HookSource, HookTrust};
 pub use hanafubuki_agent_memory::{AgentMemoryContributionMode, AgentMemoryStatus};
 pub use hanafubuki_agent_packages::{
-    ManifestFormat, MarketplaceAddRequest, MarketplaceSourceType, PackageSource,
+    ManifestFormat, MarketplaceAddRequest, MarketplaceSourceType, PackagePermissions,
+    PackageSource, WorkspaceAccess,
+};
+pub use hanafubuki_agent_plugin_packages::{
+    GuestExitCause, GuestExitReport, GuestState, GuestStatus,
 };
 pub use host::{
     AgentPluginContextContribution, AgentPluginContributions, AgentPluginEventSink,
@@ -98,8 +102,9 @@ pub use memory::AgentMemoryApplication;
 pub use network::{AgentProxy, NetworkSettingsPort};
 pub use packages::{
     AgentMarketplace, AgentMarketplaceAdded, AgentMarketplacePlugin, AgentMarketplaceUpgrade,
-    AgentPackageChange, AgentPackageChangeKind, AgentPackageContent, AgentPackageInstall,
-    AgentPackageSource, AgentPackageStatus, AgentPackageUninstall, LOCAL_MARKETPLACE,
+    AgentPackageChange, AgentPackageChangeKind, AgentPackageContent, AgentPackageGuest,
+    AgentPackageInstall, AgentPackageSource, AgentPackageStatus, AgentPackageUninstall,
+    LOCAL_MARKETPLACE,
 };
 pub use plugins::{
     AgentGoalBudgets, AgentRecap, AgentReviewCodeLocation, AgentReviewCommit, AgentReviewFinding,

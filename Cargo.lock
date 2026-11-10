@@ -1651,6 +1651,7 @@ dependencies = [
  "hanafubuki-agent-plugin-execution",
  "hanafubuki-agent-plugin-hooks",
  "hanafubuki-agent-plugin-mcp",
+ "hanafubuki-agent-plugin-packages",
  "hanafubuki-agent-plugin-web",
  "hanafubuki-agent-plugin-workspace-fs",
  "hanafubuki-agent-plugin-worktree",
@@ -1982,6 +1983,31 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.11.1",
+ "tokio",
+]
+
+[[package]]
+name = "hanafubuki-agent-plugin-packages"
+version = "0.2.0"
+dependencies = [
+ "futures-util",
+ "hanafubuki-agent-contracts",
+ "hanafubuki-agent-foundation",
+ "hanafubuki-agent-host",
+ "hanafubuki-agent-packages",
+ "hanafubuki-agent-process",
+ "hanafubuki-agent-sandbox",
+ "hex",
+ "kardia-core",
+ "kardia-guest",
+ "kardia-hmr",
+ "kardia-loader",
+ "log",
+ "parking_lot",
+ "serde",
+ "serde_json",
+ "sha2 0.11.1",
+ "tempfile",
  "tokio",
 ]
 
@@ -2773,9 +2799,9 @@ dependencies = [
 
 [[package]]
 name = "kardia-core"
-version = "0.2.0"
+version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "87ffe29aea49be7ffa47527073912867a702246d5db080d9971023c61a5abc26"
+checksum = "d9e3a8bd9b17cc196476d8086cfcd466985d130713e0c3fe8ef863f39d9cf591"
 dependencies = [
  "futures",
  "indexmap",
@@ -2788,10 +2814,64 @@ dependencies = [
 ]
 
 [[package]]
-name = "kardia-macros"
-version = "0.2.0"
+name = "kardia-fs"
+version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e07f7f8cc3abdfeb8666ab8f63dd947cd595fab0397dea0c51029095f30d769"
+checksum = "089b3ac05a716706e838dac2bee92d15a3b0edb60ae3bd150fa7630df4c3224d"
+dependencies = [
+ "globset",
+ "kardia-core",
+ "notify",
+ "parking_lot",
+ "tokio",
+]
+
+[[package]]
+name = "kardia-guest"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f273f7645a40b3784caf4dcab59f7ac747828e79d899fb3f6b48015ccf3d8d62"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "kardia-hmr"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "559d142442d59fcef848c62de903a477843c9a4fbe081c2c7641bd0bdb8fb4ec"
+dependencies = [
+ "futures",
+ "indexmap",
+ "kardia-core",
+ "kardia-fs",
+ "kardia-loader",
+ "parking_lot",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "kardia-loader"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "abcaa8aec30e4bee23af860afaef955577b7c6b7ecefab0da5d27fadb835cf4e"
+dependencies = [
+ "futures",
+ "kardia-core",
+ "parking_lot",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tokio",
+]
+
+[[package]]
+name = "kardia-macros"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "79a7d9af45478aac4cf249b3a2f420e7bb823af24acd70886a6e2bbc309e525f"
 dependencies = [
  "proc-macro2",
  "quote",

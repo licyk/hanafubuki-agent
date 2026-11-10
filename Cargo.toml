@@ -29,6 +29,7 @@ hanafubuki-agent-packages = { path = "crates/packages", version = "0.2.0" }
 hanafubuki-agent-plugin-execution = { path = "crates/plugin-execution", version = "0.2.0" }
 hanafubuki-agent-plugin-hooks = { path = "crates/plugin-hooks", version = "0.2.0" }
 hanafubuki-agent-plugin-mcp = { path = "crates/plugin-mcp", version = "0.2.0" }
+hanafubuki-agent-plugin-packages = { path = "crates/plugin-packages", version = "0.2.0" }
 hanafubuki-agent-plugin-web = { path = "crates/plugin-web", version = "0.2.0" }
 hanafubuki-agent-plugin-workspace-fs = { path = "crates/plugin-workspace-fs", version = "0.2.0" }
 hanafubuki-agent-plugin-worktree = { path = "crates/plugin-worktree", version = "0.2.0" }
@@ -50,8 +51,8 @@ hex = "0.4"
 http = "1"
 ignore = "0.4"
 image = { version = "0.25", default-features = false }
-kardia-core = "0.2.0"
-kardia-macros = "0.2.0"
+kardia-core = "0.2.2"
+kardia-macros = "0.2.2"
 log = "0.4"
 parking_lot = "0.12"
 regex = "1"

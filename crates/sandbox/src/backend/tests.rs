@@ -82,6 +82,45 @@ fn seatbelt_runs_a_sandboxed_command_under_sandbox_exec() {
 }
 
 #[test]
+fn a_plugin_profile_restricts_reads_through_the_helper_and_fails_closed_without_a_sandbox() {
+    let policy = SandboxPolicy::Plugin {
+        readable_roots: vec!["/package".into()],
+        writable_roots: vec!["/data".into()],
+        network_access: false,
+    };
+    let helper = Sandbox {
+        backend: super::windows_backend("/agent".into()),
+    };
+    let wrapped = helper.wrap(&policy, command()).unwrap();
+    assert_eq!(
+        wrapped,
+        [
+            "/agent",
+            crate::HELPER_ARG,
+            "--writable-root",
+            "/data",
+            "--restrict-reads",
+            "--readable-root",
+            "/package",
+            "--",
+            "/bin/sh",
+            "-c",
+            "true"
+        ]
+    );
+    let error = Sandbox::unavailable("simulated")
+        .wrap(&policy, command())
+        .unwrap_err();
+    assert_eq!(
+        error,
+        SandboxError::PluginUnavailable {
+            reason: "simulated".to_string()
+        }
+    );
+    assert!(!error.to_string().contains("full-access"), "{error}");
+}
+
+#[test]
 fn the_windows_sandbox_setting_chooses_a_backend_only_on_windows() {
     let available = Sandbox {
         backend: super::windows_backend("C:\\agent.exe".into()),

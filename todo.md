@@ -257,9 +257,140 @@ user first.
       limits; `kardia-guest/2` in kardia-guest and pykardia; the guest SDKs
       relicensed permissively; release (0.2.x if additive, after the user
       confirms publishing).
-- [ ] P5: guest host `crates/plugin-packages`: the `plugins` row with a
+- [x] P5: guest host `crates/plugin-packages`: the `plugins` row with a
       kardia-loader subtree, `Resolver`, `ExecutorManager` spawner, the
       sandbox's plugin profile, exit watcher, guest state and restart loop.
+  - Kardia 0.2.2: kardia-loader 0.2.1 turned on `serde_json/preserve_order`,
+    which features unify across the Agent's build (every `serde_json::Map`
+    insertion-ordered: pinned fragments, a compression hash and "first in
+    key order" precedence changed; five tests failed). 0.2.2 makes it the
+    `preserve-order` feature of kardia-loader (and a pass-through of
+    kardia-hmr), on by default; the guest host takes both with
+    `default-features = false`, so `cargo tree -e features -i serde_json`
+    shows no `preserve_order`. A member that adds kardia-loader or
+    kardia-hmr must do the same.
+  - Done: `hanafubuki-agent-plugin-packages` (`GuestHost`), mounted by the
+    facade's `plugins` row as its child fiber `plugin-guests` (the row keeps
+    P2's "available plugins" section; moving the section would need the
+    facade's package data in the crate). Inside: kardia-loader's plugin over
+    `GuestResolver` and `SettingsTree` (`TreeBackend`), and
+    `plugin-guest-supervisor` (injects `loader`, `plugin-faults`). The
+    facade hands the code packages (`GuestPackage`, from
+    `LoadedPackage.guest`) to `GuestHost::apply` at every reload; the
+    supervisor turns them into the tree with a group update (one entry per
+    package, id = package key, name `<id>#<digest of version, recorded
+    hash, runtime, asked/granted permissions, dirs>`, `isolate: {plugin:
+    true}`, `disabled` unless on and allowed), which commits nothing, so the
+    settings port (`GuestSettingsPort::set_enabled`, the facade's
+    `PackageSettingsWriter`: tokio task, blocking pool, writes only a value
+    that differs) sees only the loader's own write-back. The resolver caches
+    one `ProcessGuest::plugin(GuestMeta::new(manifest name).provide("plugin"))`
+    per entry name, renamed `guest:<id>`, timeout/handshake =
+    `plugin_call_deadline` (10 s), frame limit 4 MiB. Spawner: trust check
+    (content hash = recorded), data dir, command (`./` in the package, or an
+    interpreter: absolute or on `PATH`), plugin profile, reserve owner,
+    `start_reserved_pipe_executor` (new in crates/process: pipes handed out,
+    no reader/writer, the session keeps the real `ExitStatus`;
+    `wait_reserved_executor`), `GuestChild` adapter (kill = receipt
+    terminate, wait = session end, then dispose = owner released; a drop
+    before confirmation disposes on a contained thread). Env cleared but
+    granted `env`, `PLUGIN_ROOT`, `PLUGIN_DATA` (+ `SystemRoot` on Windows);
+    cwd = data dir. Sandbox: `SandboxPolicy::Plugin { readable_roots,
+    writable_roots, network_access }`, helper `--restrict-reads
+    --readable-root`, Landlock read rules on Codex's platform roots + roots,
+    Seatbelt subpath reads + Codex's restricted-read platform defaults
+    (`seatbelt_read_only_platform_defaults.sbpl`), Windows token unchanged
+    (reads unrestricted); `SandboxError::PluginUnavailable`; guests use
+    `Sandbox::detect()` whatever `[windows] sandbox` says and never start
+    unconfined. State: `GuestState::{Stopped, Blocked, Starting, Running,
+    Restarting, Failed}` from `StatusChanged` (Loading/Active/Failed/
+    Disposed) on the entry's current fiber, handle from `GuestStarted`, exit
+    report from `GuestExited` or the handle; a failure after `Active` is a
+    fault: `RestartWindow` (RestartPolicy 2/10/30 s, 3 per 10 min) →
+    `restarting`, the worker restarts with `update_with(config, true)` after
+    the delay (epoch check), else `failed` until `retry`; a failed start is
+    not restarted; nothing reaches `[plugins]`. `GuestHost::call(id, method,
+    args, timeout)` calls the guest's `plugin` service (`live_as` in its
+    private realm). Logging: host's `LogExporter` sends loggers named
+    `guest:*` (`GUEST_LOGGER_PREFIX`) to `trace`, bounded; the guest host
+    logs its decisions at info/warn without guest words.
+    `bounded_trace_content`/`MAX_TRACE_CONTENT_BYTES` moved to
+    `foundation::trace_content` (model-api re-exports them). Packages:
+    `install.json` `grantedPermissions` (`InstallRecord.granted_permissions`,
+    kept across reinstalls), `PackageStore::grant_permissions`,
+    `PackagePermissions`/`WorkspaceAccess` serde (+ `Ord` on the access).
+    Facade: `grant_package_permissions(id, permissions)` (records, reloads),
+    `retry_package(id)`; `AgentPackageStatus.guest: Option<AgentPackageGuest
+    { permissions, granted_permissions, status: GuestStatus }>`; re-exports
+    `GuestState`, `GuestStatus`, `GuestExitReport`, `GuestExitCause`,
+    `PackagePermissions`, `WorkspaceAccess`. xtask: `kardia-loader` and
+    `kardia-hmr` restricted to the guest host; LAYERS row (contracts,
+    foundation, host, packages, process, sandbox). kardia-core/macros 0.2.2.
+    Tests: `crates/plugin-packages/tests/guests` (harness = false; the binary
+    is the test guest via kardia-guest `serve` and the sandbox helper):
+    start/disable/enable/uninstall, permissions blocked until granted,
+    environment and cwd, owner group + `process-groups.json` + reap at next
+    start + stop with the guest host, `kill -9` → restart, call deadline →
+    killed and restarted, 4th fault → failed until retry, changed package
+    refused, hanging/failing `apply` stays failed, guest stderr/log only at
+    trace, the sandbox (Linux only): package read, outside and workspace
+    unreadable with `none`, data writable, package read-only, workspace
+    read after a new grant. Plus process (handed-out pipes), sandbox (helper
+    flags, Seatbelt policy, Landlock end to end), packages (grant record),
+    host (exporter), xtask (dependency rule), facade (`tests::packages::code`:
+    blocked → grant → fails closed without a sandbox; retry). Stress: the
+    `guests` binary 20 rounds × 4 parallel copies: 2/80 failed first (the
+    test read `process-groups.json` the instant before the session forgot
+    its group, which `finalize` does just after it announces the end; the
+    check now waits), then 0/80.
+  - Deviations from the plan: Kardia's `Failed` is used (the bridge fails a
+    guest's fiber on exit; restart via `update_with(config, true)` since
+    `restart()` keeps a failed fiber failed) instead of a state kept only
+    by the guest host; an upgrade is a new entry name (rebuild), not
+    `registry().replace`; the `plugins` row mounts the guest host rather
+    than being it; the loader's own tree is the subtree (not
+    `create_tree`); every guest must declare and provide the service
+    `plugin` (its meta is checked); the trust check is at every spawn; a
+    guest's stderr is logged at trace, not debug (the plan's §4.3 said
+    debug; AGENTS.md's content rule wins).
+  - Open: P6 contributions (proxies call `GuestHost::call`); a guest can
+    still provide other service keys in the root realm (only `plugin` is
+    isolated; P6 should isolate or refuse the rest); `view`/`invoke` host
+    calls are refused (empty `inject`), the allowlist is P6; re-approving a
+    changed package (today: reinstall); the settings port writes `enabled` only
+    (P6's `configSchema` settings are the entry's `config`, `{}` today) and
+    does not reload after its write; the executor's final environment
+    overlay (proxy variables) reaches guests; Windows restricted token does
+    not restrict reads and its guest path is untested on Windows CI beyond
+    `cargo check` (the `guests` suite will first run there and on macOS
+    in CI); the sandbox check is Linux-only, macOS's Seatbelt profile is
+    untested on macOS; kardia-hmr's `guest-stdin`/`guest-stdout`/
+    `guest-stderr` threads are plain `std::thread`s, not contained (a
+    panic there would abort the process; an upstream ask); `cargo about`
+    was not run here (kardia-fs/-hmr/-loader are GPL-3.0-only, accepted);
+    K1 above is not ticked here (another phase's); a guest's
+    `GuestStarted` handle shows a dead process as `running` (no pid) until
+    its fiber fails.
+  - With P3: `retry_package` (P3's: reload, return the status) also
+    retries a failed guest; `AgentPackageInstall.permissions` is now
+    `Option<PackagePermissions>`, what a code package asks for and was not
+    granted (`None` for content); `/plugins`' package page offers **Grant
+    its permissions** (`PluginsCall::GrantPermissions`) and a **Code** row
+    with the guest's state. The CLI has no grant command yet (P7's `plugins
+    dev`/consent prompts, or a `plugins grant`).
+  - Hanafubuki, at its next pin: new published crate
+    `hanafubuki-agent-plugin-packages` (the facade depends on it);
+    `AgentPackageStatus` gains `guest`; new facade call
+    `grant_package_permissions`; `retry_package` also retries a guest;
+    `AgentPackageInstall.permissions` is `Option<PackagePermissions>`; re-exports above; the
+    program must call `helper_dispatch()` for guests to run (else they fail
+    closed); twins: `hanafubuki-foundation` takes `trace_content`, and
+    `hanafubuki-module-contracts`' `logging` the `GUEST_LOGGER_PREFIX`
+    branch (additive); `hanafubuki-process` takes
+    `start_reserved_pipe_executor`, `ExecutorPipes`,
+    `wait_reserved_executor` and the session's `exit_status` (additive);
+    kardia-core/macros 0.2.2 (additive); a Hanafubuki crate that takes
+    kardia-loader or kardia-hmr takes it without `preserve-order`.
 - [ ] P6: contribution proxies (tools as sourced tools, context sections,
       prompt fragments, lifecycle and continuation hooks, observers), the
       host-function allowlist, settings from `configSchema`.

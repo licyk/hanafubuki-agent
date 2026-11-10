@@ -59,6 +59,6 @@ fn confine(request: &HelperRequest) -> Result<(), String> {
             std::io::Error::last_os_error()
         ));
     }
-    filesystem::restrict_writes(&request.writable_roots)?;
+    filesystem::restrict(&request.writable_roots, request.readable_roots.as_deref())?;
     network::restrict_network(request.network_access)
 }

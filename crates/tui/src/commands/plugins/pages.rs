@@ -154,7 +154,7 @@ fn tabs_line(state: &PluginsState, active: Tab) -> Line<'static> {
     Line::from(spans)
 }
 
-type Row = (SelectionItem, Option<Choice>);
+pub(super) type Row = (SelectionItem, Option<Choice>);
 
 fn installed_rows(state: &PluginsState) -> Vec<Row> {
     let mut rows: Vec<Row> = state
@@ -327,6 +327,7 @@ pub(super) fn package_page(package: &AgentPackageStatus) -> PageView {
             )),
         ));
     }
+    rows.extend(super::code::grant_row(package));
     rows.extend([
         action(
             "Update plugin",
@@ -356,6 +357,7 @@ pub(super) fn package_page(package: &AgentPackageStatus) -> PageView {
         [] => none.to_string(),
         items => items.join(", "),
     };
+    rows.extend(super::code::state_row(package));
     rows.extend([
         info("Source", &source_text(package.source.as_ref())),
         info("Version", &package.version),
@@ -572,7 +574,7 @@ fn page(header: Vec<Line<'static>>, hint: &str, rows: Vec<Row>) -> PageView {
     }
 }
 
-fn action(name: &str, description: &str, choice: Option<Choice>) -> Row {
+pub(super) fn action(name: &str, description: &str, choice: Option<Choice>) -> Row {
     let item = SelectionItem {
         name: name.to_string(),
         description: Some(description.to_string()),
@@ -581,7 +583,7 @@ fn action(name: &str, description: &str, choice: Option<Choice>) -> Row {
     (item, choice)
 }
 
-fn info(name: &str, value: &str) -> Row {
+pub(super) fn info(name: &str, value: &str) -> Row {
     let item = SelectionItem {
         name: name.to_string(),
         description: Some(value.to_string()),

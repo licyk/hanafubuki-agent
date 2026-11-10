@@ -19,7 +19,7 @@ use parking_lot::Mutex;
 use sha2::{Digest, Sha256};
 
 use crate::id::{validate_marketplace_name, validate_plugin_name};
-use crate::manifest::{load_manifest, LoadedManifest, ManifestFormat};
+use crate::manifest::{load_manifest, LoadedManifest, ManifestFormat, PackagePermissions};
 use crate::version::active_version;
 use crate::{PackageError, PluginId};
 
@@ -239,6 +239,30 @@ impl PackageStore {
             removed,
             purged_data,
         })
+    }
+
+    /// Records that the user granted the code of the installed package `id`
+    /// `permissions`, replacing an earlier grant.
+    pub fn grant_permissions(
+        &self,
+        id: &PluginId,
+        permissions: PackagePermissions,
+    ) -> Result<(), PackageError> {
+        let _change = self.changes.lock();
+        let mut found = false;
+        self.update_record(|records| {
+            if let Some(record) = records.get_mut(id) {
+                record.granted_permissions = Some(permissions);
+                found = true;
+            }
+        })?;
+        if !found {
+            return Err(PackageError::NotFound(format!(
+                "plugin `{id}` has no install record"
+            )));
+        }
+        log::info!("plugin {id} permissions granted");
+        Ok(())
     }
 
     pub(crate) fn executor(&self) -> &ExecutorManager {

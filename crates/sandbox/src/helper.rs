@@ -8,8 +8,9 @@
 // argument, as Codex selects its other helpers (and its Windows sandbox
 // wrapper, `--run-as-windows-sandbox`), rather than by argv[0], so the
 // Agent's `ExecutorManager` spawns it like any command; it takes its
-// writable roots and network switch as flags instead of a JSON policy; no
-// PATH aliases, `.env` loading or other helpers.
+// writable roots and network switch as flags instead of a JSON policy, and
+// a plugin's readable roots likewise; no PATH aliases, `.env` loading or
+// other helpers.
 
 use std::ffi::OsString;
 use std::path::PathBuf;
@@ -21,6 +22,8 @@ pub const HELPER_ARG: &str = "--hanafubuki-agent-sandbox";
 pub const HELPER_FAILURE_EXIT_CODE: i32 = 126;
 
 const WRITABLE_ROOT_FLAG: &str = "--writable-root";
+const READABLE_ROOT_FLAG: &str = "--readable-root";
+const RESTRICT_READS_FLAG: &str = "--restrict-reads";
 const NETWORK_FLAG: &str = "--allow-network";
 const SEPARATOR: &str = "--";
 
@@ -50,6 +53,9 @@ pub(crate) fn registered_helper() -> Option<&'static PathBuf> {
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) struct HelperRequest {
     pub(crate) writable_roots: Vec<PathBuf>,
+    /// `None`: the command reads everything. Otherwise it reads only the
+    /// platform's system directories, these roots and its writable ones.
+    pub(crate) readable_roots: Option<Vec<PathBuf>>,
     pub(crate) network_access: bool,
     pub(crate) command: Vec<OsString>,
 }
@@ -65,6 +71,13 @@ impl HelperRequest {
             args.push(WRITABLE_ROOT_FLAG.to_string());
             args.push(root.to_str()?.to_string());
         }
+        if let Some(readable_roots) = &self.readable_roots {
+            args.push(RESTRICT_READS_FLAG.to_string());
+            for root in readable_roots {
+                args.push(READABLE_ROOT_FLAG.to_string());
+                args.push(root.to_str()?.to_string());
+            }
+        }
         args.push(SEPARATOR.to_string());
         for argument in &self.command {
             args.push(argument.to_str()?.to_string());
@@ -76,6 +89,7 @@ impl HelperRequest {
     /// refused, so a mistake never runs a command less confined.
     pub(crate) fn parse(args: Vec<OsString>) -> Result<Self, String> {
         let mut writable_roots = Vec::new();
+        let mut readable_roots: Option<Vec<PathBuf>> = None;
         let mut network_access = false;
         let mut args = args.into_iter();
         while let Some(arg) = args.next() {
@@ -87,6 +101,20 @@ impl HelperRequest {
                         .ok_or_else(|| format!("{WRITABLE_ROOT_FLAG} needs a path"))?;
                     writable_roots.push(PathBuf::from(root));
                 }
+                Some(RESTRICT_READS_FLAG) => {
+                    readable_roots.get_or_insert_with(Vec::new);
+                }
+                Some(READABLE_ROOT_FLAG) => {
+                    let root = args
+                        .next()
+                        .ok_or_else(|| format!("{READABLE_ROOT_FLAG} needs a path"))?;
+                    readable_roots
+                        .as_mut()
+                        .ok_or_else(|| {
+                            format!("{READABLE_ROOT_FLAG} follows {RESTRICT_READS_FLAG}")
+                        })?
+                        .push(PathBuf::from(root));
+                }
                 Some(SEPARATOR) => {
                     let command: Vec<OsString> = args.collect();
                     if command.is_empty() {
@@ -94,6 +122,7 @@ impl HelperRequest {
                     }
                     return Ok(Self {
                         writable_roots,
+                        readable_roots,
                         network_access,
                         command,
                     });

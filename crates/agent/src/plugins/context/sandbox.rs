@@ -27,9 +27,15 @@ pub(super) fn section(
     });
     match policy {
         SandboxPolicy::ReadOnly => content["networkAccess"] = false.into(),
+        // A turn's policy is never a plugin's; it would read as its writes.
         SandboxPolicy::WorkspaceWrite {
             writable_roots,
             network_access,
+        }
+        | SandboxPolicy::Plugin {
+            writable_roots,
+            network_access,
+            ..
         } => {
             content["networkAccess"] = (*network_access).into();
             content["writableRoots"] = writable_roots

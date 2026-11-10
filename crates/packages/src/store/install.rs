@@ -157,6 +157,9 @@ impl PackageStore {
         let content_hash =
             content_hash(&root).map_err(|error| io_error("hash the installed plugin", error))?;
         self.update_record(|records| {
+            let granted_permissions = records
+                .get(id)
+                .and_then(|previous| previous.granted_permissions.clone());
             records.insert(
                 id.clone(),
                 InstallRecord {
@@ -164,6 +167,7 @@ impl PackageStore {
                     format: Some(staged.format),
                     source: Some(recorded),
                     content_hash: Some(content_hash.clone()),
+                    granted_permissions,
                 },
             );
         })?;

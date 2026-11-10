@@ -4,7 +4,7 @@
 
 use std::path::PathBuf;
 
-use hanafubuki_agent_packages::MarketplaceSourceType;
+use hanafubuki_agent_packages::{MarketplaceSourceType, PackagePermissions};
 use serde::Serialize;
 
 use super::AgentPackageStatus;
@@ -43,9 +43,10 @@ pub struct AgentPackageInstall {
     /// Its hooks, which do not run until they are trusted
     /// (`trust_hooks`).
     pub hooks_to_trust: Vec<AgentHook>,
-    /// The permissions it asks to be granted: always empty for a package
+    /// What its code asks for and the user has not granted yet, which its
+    /// guest waits for (`grant_package_permissions`); none for a package
     /// of content, which runs no code of its own.
-    pub permissions: Vec<String>,
+    pub permissions: Option<PackagePermissions>,
 }
 
 /// What an uninstall did.

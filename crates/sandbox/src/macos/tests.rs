@@ -27,7 +27,7 @@ fn definitions(pairs: &[(&str, &str)]) -> Vec<(String, String)> {
 
 #[test]
 fn read_only_denies_by_default_reads_everything_and_writes_nothing() {
-    let (text, params) = policy(&[], false);
+    let (text, params) = policy(&[], None, false);
     assert!(text.contains("(version 1)"));
     assert!(text.contains("(deny default)"));
     assert!(text.contains("\n(allow file-read*)"));
@@ -40,7 +40,11 @@ fn read_only_denies_by_default_reads_everything_and_writes_nothing() {
 
 #[test]
 fn workspace_write_names_each_root_by_a_parameter_and_keeps_it_from_being_replaced() {
-    let (text, params) = policy(&[root("/work", &[]), root("/private/tmp", &[])], false);
+    let (text, params) = policy(
+        &[root("/work", &[]), root("/private/tmp", &[])],
+        None,
+        false,
+    );
     assert!(
         text.contains(
             "(allow file-write*\n\
@@ -65,7 +69,11 @@ fn workspace_write_names_each_root_by_a_parameter_and_keeps_it_from_being_replac
 
 #[test]
 fn what_stays_read_only_is_excluded_from_its_root_with_what_is_beneath_it() {
-    let (text, params) = policy(&[root("/work", &["/work/.git", "/work/.agents"])], false);
+    let (text, params) = policy(
+        &[root("/work", &["/work/.git", "/work/.agents"])],
+        None,
+        false,
+    );
     assert!(
         text.contains(
             "(allow file-write*\n(require-all (subpath (param \"WRITABLE_ROOT_0\")) \
@@ -89,11 +97,11 @@ fn what_stays_read_only_is_excluded_from_its_root_with_what_is_beneath_it() {
 #[test]
 fn the_network_is_allowed_only_when_asked_and_the_denies_come_last() {
     let roots = [root("/work", &[])];
-    let (without, _) = policy(&roots, false);
+    let (without, _) = policy(&roots, None, false);
     assert!(!without.contains("(allow network"), "{without}");
     assert!(!without.contains("com.apple.TrustEvaluationAgent"));
 
-    let (with, _) = policy(&roots, true);
+    let (with, _) = policy(&roots, None, true);
     let network = with
         .find("(allow network-outbound)\n(allow network-inbound)\n")
         .expect("the network rules");
@@ -112,12 +120,21 @@ fn the_network_is_allowed_only_when_asked_and_the_denies_come_last() {
 fn the_command_line_runs_the_fixed_sandbox_exec_with_the_roots_as_definitions() {
     let workspace = tempfile::tempdir().unwrap();
     let command = vec!["/bin/sh".to_string(), "-c".to_string(), "true".to_string()];
-    let line = command_line(&[workspace.path().to_path_buf()], true, command.clone());
+    let line = command_line(
+        &[workspace.path().to_path_buf()],
+        None,
+        true,
+        command.clone(),
+    );
 
     assert_eq!(line[0], SANDBOX_EXEC);
     assert_eq!(SANDBOX_EXEC, "/usr/bin/sandbox-exec");
     assert_eq!(line[1], "-p");
-    let (expected_policy, _) = policy(&resolve_roots(&[workspace.path().to_path_buf()]), true);
+    let (expected_policy, _) = policy(
+        &resolve_roots(&[workspace.path().to_path_buf()]),
+        None,
+        true,
+    );
     assert_eq!(line[2], expected_policy);
     assert_eq!(
         line[3..],
@@ -134,7 +151,7 @@ fn the_command_line_runs_the_fixed_sandbox_exec_with_the_roots_as_definitions() 
 #[test]
 fn read_only_has_no_definitions() {
     let command = vec!["/bin/true".to_string()];
-    let line = command_line(&[], false, command);
+    let line = command_line(&[], None, false, command);
     assert_eq!(line[0], SANDBOX_EXEC);
     assert_eq!(line[3..], ["--".to_string(), "/bin/true".to_string()]);
 }
@@ -218,4 +235,21 @@ fn a_git_file_keeps_the_repository_it_points_to_read_only_too() {
         roots[0].read_only,
         [base.join(".git").to_str().unwrap().to_string()]
     );
+}
+
+#[test]
+fn a_plugin_reads_only_the_platform_defaults_its_readable_roots_and_its_writable_ones() {
+    let readable = ["/package".to_string()];
+    let (text, params) = policy(&[root("/data", &[])], Some(&readable), false);
+    assert!(!text.contains("\n(allow file-read*)"), "{text}");
+    assert!(
+        text.contains(
+            "(allow file-read*\n\
+             (subpath (param \"READABLE_ROOT_0\")) (subpath (param \"WRITABLE_ROOT_0\"))\n)"
+        ),
+        "{text}"
+    );
+    assert!(text.contains("(subpath \"/usr/lib\")"), "{text}");
+    assert!(!text.contains("(allow user-preference-read)"), "{text}");
+    assert!(params.contains(&("READABLE_ROOT_0".to_string(), "/package".to_string())));
 }

@@ -4,7 +4,7 @@
 
 use std::collections::HashMap;
 use std::io::Read;
-use std::process::{Child, Command, Stdio};
+use std::process::{Child, ChildStderr, ChildStdin, ChildStdout, Command, Stdio};
 use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
@@ -25,6 +25,24 @@ const READ_BUF: usize = 16 * 1024;
 /// Bounded grace to let readers drain after the process exits.
 const DRAIN_GRACE: Duration = Duration::from_millis(500);
 
+/// The three pipes of a process whose owner reads and writes them itself
+/// ([`crate::executor::manager::start_reserved_pipe_executor`]): the
+/// executor keeps no reader or writer on them, only the process.
+pub struct ExecutorPipes {
+    pub stdin: ChildStdin,
+    pub stdout: ChildStdout,
+    pub stderr: ChildStderr,
+    pub process_id: u32,
+}
+
+/// Whether the session's backend reads the process's output into its
+/// buffer and queues its input, or hands the pipes to the caller.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum PipeHandling {
+    Buffered,
+    HandedOut,
+}
+
 struct PipeBackend {
     child: Arc<Mutex<Child>>,
     stdin: Option<StdinWriter>,
@@ -40,7 +58,10 @@ impl ExecutorBackend for PipeBackend {
     fn write_stdin(&self, bytes: Vec<u8>, close: bool) -> Result<(), String> {
         self.stdin
             .as_ref()
-            .ok_or_else(|| "stdin is not available (stream_stdin was not set)".to_string())?
+            .ok_or_else(|| {
+                "stdin is not available (stream_stdin was not set, or its owner holds the pipe)"
+                    .to_string()
+            })?
             .write(bytes, close)
     }
 
@@ -67,7 +88,8 @@ pub(crate) fn spawn(
     request: &ExecutorStartRequest,
     supervision: ProcessSupervision,
     inherited_environment: &HashMap<String, Option<String>>,
-) -> Result<Box<dyn ExecutorBackend>, String> {
+    handling: PipeHandling,
+) -> Result<(Box<dyn ExecutorBackend>, Option<ExecutorPipes>), String> {
     // Supervision selects a Windows Job Object policy. Elsewhere the child is
     // always given its own session below, and whether it outlives this process
     // depends only on whether anyone signals that group, so there is no
@@ -94,13 +116,14 @@ pub(crate) fn spawn(
         apply_env(&mut cmd, inherited_environment);
     }
     apply_env(&mut cmd, &request.env);
-    if request.stream_output {
+    let handed_out = handling == PipeHandling::HandedOut;
+    if request.stream_output || handed_out {
         cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
     } else {
         // Output capture disabled: discard child output entirely.
         cmd.stdout(Stdio::null()).stderr(Stdio::null());
     }
-    cmd.stdin(if request.stream_stdin {
+    cmd.stdin(if request.stream_stdin || handed_out {
         Stdio::piped()
     } else {
         Stdio::null()
@@ -147,7 +170,6 @@ pub(crate) fn spawn(
         session.executor_id,
         child_spawn_started.elapsed().as_millis()
     );
-    let pid = Some(child.id());
     // On Windows, place the child in a Job Object so termination kills its tree.
     #[cfg(windows)]
     let job = match supervision {
@@ -163,28 +185,31 @@ pub(crate) fn spawn(
         },
         ProcessSupervision::Independent => None,
     };
-    let stdin = match child.stdin.take() {
-        Some(stdin) => match StdinWriter::spawn(&session.executor_id, Box::new(stdin)) {
-            Ok(writer) => Some(writer),
-            Err(error) => {
-                let _ = child.kill();
-                let _ = child.wait();
-                return Err(error);
-            }
-        },
-        None => None,
+    let pid = Some(child.id());
+    let (stdin, readers, pipes) = if handed_out {
+        (None, Vec::new(), Some(hand_out(&mut child)?))
+    } else {
+        let stdin = match child.stdin.take() {
+            Some(stdin) => match StdinWriter::spawn(&session.executor_id, Box::new(stdin)) {
+                Ok(writer) => Some(writer),
+                Err(error) => {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return Err(error);
+                }
+            },
+            None => None,
+        };
+        let mut readers = Vec::new();
+        if let Some(out) = child.stdout.take() {
+            readers.push(spawn_reader(&session, out, OutputStream::Stdout));
+        }
+        if let Some(err) = child.stderr.take() {
+            readers.push(spawn_reader(&session, err, OutputStream::Stderr));
+        }
+        (stdin, readers, None)
     };
-    let stdout = child.stdout.take();
-    let stderr = child.stderr.take();
     let child = Arc::new(Mutex::new(child));
-
-    let mut readers = Vec::new();
-    if let Some(out) = stdout {
-        readers.push(spawn_reader(&session, out, OutputStream::Stdout));
-    }
-    if let Some(err) = stderr {
-        readers.push(spawn_reader(&session, err, OutputStream::Stderr));
-    }
 
     let waiter_child = child.clone();
     let waiter_session = session.clone();
@@ -201,13 +226,34 @@ pub(crate) fn spawn(
         pipe_spawn_started.elapsed().as_millis()
     );
 
-    Ok(Box::new(PipeBackend {
-        child,
-        stdin,
-        pid,
-        #[cfg(windows)]
-        job: Mutex::new(job),
-    }))
+    Ok((
+        Box::new(PipeBackend {
+            child,
+            stdin,
+            pid,
+            #[cfg(windows)]
+            job: Mutex::new(job),
+        }),
+        pipes,
+    ))
+}
+
+/// The child's three pipes, for an owner that reads and writes them itself;
+/// a child without them is killed.
+fn hand_out(child: &mut Child) -> Result<ExecutorPipes, String> {
+    match (child.stdin.take(), child.stdout.take(), child.stderr.take()) {
+        (Some(stdin), Some(stdout), Some(stderr)) => Ok(ExecutorPipes {
+            stdin,
+            stdout,
+            stderr,
+            process_id: child.id(),
+        }),
+        _ => {
+            let _ = child.kill();
+            let _ = child.wait();
+            Err("the process's pipes were not opened".to_string())
+        }
+    }
 }
 
 fn apply_env(cmd: &mut Command, env: &HashMap<String, Option<String>>) {
@@ -261,10 +307,10 @@ fn waiter(
         "agent_diag stage=executor.pipe.waiter.begin executor_id={}",
         session.executor_id
     );
-    let code = loop {
+    let status = loop {
         let status = child.lock().try_wait();
         match status {
-            Ok(Some(status)) => break status.code(),
+            Ok(Some(status)) => break status,
             Ok(None) => {}
             Err(err) => {
                 session.finalize(None, Some(format!("wait failed: {err}")));
@@ -280,7 +326,7 @@ fn waiter(
         thread::sleep(POLL);
     }
 
-    session.finalize(code, None);
+    session.finalize_exited(status);
     log::info!(
         "agent_diag stage=executor.pipe.waiter.end executor_id={} outcome=terminal elapsed_ms={}",
         session.executor_id,

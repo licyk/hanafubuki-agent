@@ -9,7 +9,8 @@
 // Modified for hanafubuki-agent: a package's components become the Skill,
 // MCP and hook sources of this Agent's domains; what cannot be read is an
 // issue of the package; no manifest cache, no apps, no remote plugins; the
-// package's data directory is made before its content is read.
+// package's data directory is made before its content is read; its code is
+// the guest host's.
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -57,6 +58,7 @@ pub(super) fn load(
         skill_roots: Vec::new(),
         mcp_servers: Vec::new(),
         hooks: None,
+        guest: super::guest::guest_package(package, active),
         issues: package.issues.clone(),
     };
     let Some(manifest) = manifest.filter(|_| active) else {

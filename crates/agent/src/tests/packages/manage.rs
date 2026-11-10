@@ -103,7 +103,7 @@ async fn a_local_marketplaces_plugin_is_installed_turned_off_and_on_updated_and_
     assert!(install.package.enabled);
     assert_eq!(install.package.version, "1.0.0");
     assert_eq!(install.hooks_to_trust.len(), 1);
-    assert!(install.permissions.is_empty());
+    assert!(install.permissions.is_none());
     assert_eq!(
         install.package.hooks_to_trust,
         [install.hooks_to_trust[0].key.clone()]

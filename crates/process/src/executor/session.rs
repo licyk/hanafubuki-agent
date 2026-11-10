@@ -1,5 +1,6 @@
 //! Per-execution session state and the control-backend abstraction.
 
+use std::process::ExitStatus;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -32,6 +33,9 @@ pub(crate) trait ExecutorBackend: Send + Sync {
 pub(crate) struct SessionInner {
     pub status: ExecutorStatus,
     pub exit_code: Option<i32>,
+    /// How the process ended, as the pipe backend observed it (a signal
+    /// too, which `exit_code` cannot carry).
+    pub exit_status: Option<ExitStatus>,
     pub error: Option<String>,
     pub ended_at_ms: Option<u128>,
 }
@@ -77,6 +81,7 @@ impl ExecutorSession {
             inner: Mutex::new(SessionInner {
                 status: ExecutorStatus::Starting,
                 exit_code: None,
+                exit_status: None,
                 error: None,
                 ended_at_ms: None,
             }),
@@ -208,6 +213,20 @@ impl ExecutorSession {
     /// Record the terminal outcome (called once by the waiter thread). The final
     /// status reflects timeout / cancellation / spawn error / normal exit.
     pub(crate) fn finalize(&self, exit_code: Option<i32>, error: Option<String>) {
+        self.finalize_with(exit_code, error, None);
+    }
+
+    /// [`Self::finalize`] for a process whose exit status was observed.
+    pub(crate) fn finalize_exited(&self, status: ExitStatus) {
+        self.finalize_with(status.code(), None, Some(status));
+    }
+
+    fn finalize_with(
+        &self,
+        exit_code: Option<i32>,
+        error: Option<String>,
+        exit_status: Option<ExitStatus>,
+    ) {
         let mut inner = self.inner.lock();
         if inner.status.is_terminal() {
             return;
@@ -223,6 +242,7 @@ impl ExecutorSession {
         };
         inner.status = status;
         inner.exit_code = exit_code;
+        inner.exit_status = exit_status;
         inner.error = error;
         inner.ended_at_ms = Some(now_ms());
         self.finished.store(true, Ordering::Release);

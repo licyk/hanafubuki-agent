@@ -6,6 +6,7 @@ use std::time::Duration;
 use bytes::Bytes;
 use futures_util::{Stream, StreamExt};
 use hanafubuki_agent_foundation::cancellation::CancellationToken;
+use hanafubuki_agent_foundation::trace_content::bounded_trace_content;
 use reqwest::header::{HeaderMap, HeaderValue, ACCEPT, AUTHORIZATION, CONTENT_TYPE};
 use reqwest::{Method, Response, StatusCode, Url};
 use serde_json::Value;
@@ -17,23 +18,8 @@ use crate::sse::SseDecoder;
 
 const MAX_REMOTE_ERROR_BYTES: usize = 64 * 1024;
 const MAX_METADATA_VALUE_BYTES: usize = 1024;
-/// The most content a single `trace` record carries, cut on a UTF-8 boundary.
-pub const MAX_TRACE_CONTENT_BYTES: usize = 64 * 1024;
 const CANCELLATION_POLL_INTERVAL: Duration = Duration::from_millis(10);
 pub(crate) const ANTHROPIC_VERSION: &str = "2023-06-01";
-
-/// `value` cut to [`MAX_TRACE_CONTENT_BYTES`] on a UTF-8 boundary, for every
-/// `trace` record that carries wire, model, or tool content.
-pub fn bounded_trace_content(value: &str) -> String {
-    if value.len() <= MAX_TRACE_CONTENT_BYTES {
-        return value.to_owned();
-    }
-    let mut boundary = MAX_TRACE_CONTENT_BYTES;
-    while !value.is_char_boundary(boundary) {
-        boundary -= 1;
-    }
-    value[..boundary].to_owned()
-}
 
 /// Record the raw wire payload sent to or received from a model provider at
 /// `trace` level only, behind the existing log-level gate. The payload is
@@ -507,6 +493,3 @@ fn value_to_string(value: &Value) -> Option<String> {
         _ => None,
     }
 }
-
-#[cfg(test)]
-mod tests;

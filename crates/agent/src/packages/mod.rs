@@ -6,7 +6,9 @@
 //!
 //! The set is loaded when the Agent is built and again by every reload
 //! (`AgentApplicationService::reload_packages`), which the facade runs after
-//! a settings change and after each change to the installed packages.
+//! a settings change and after each change to the installed packages. A
+//! package in this project's format with a runtime also has code, which
+//! the guest host runs (`hanafubuki-agent-plugin-packages`).
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
@@ -14,7 +16,8 @@ use std::sync::Arc;
 use hanafubuki_agent_config::{AgentConfig, AgentSettings};
 use hanafubuki_agent_hooks::{HooksEngine, PluginHookSource};
 use hanafubuki_agent_mcp::McpServerId;
-use hanafubuki_agent_packages::{ManifestFormat, PackageStore, PluginId};
+use hanafubuki_agent_packages::{ManifestFormat, PackagePermissions, PackageStore, PluginId};
+use hanafubuki_agent_plugin_packages::{GuestHost, GuestPackage};
 use hanafubuki_agent_skills::PluginSkillRoot;
 use parking_lot::RwLock;
 
@@ -22,17 +25,19 @@ use crate::service::{AgentMcpApplication, McpPluginServer};
 use crate::skills::AgentSkillApplication;
 
 mod content;
+mod guest;
 mod lifecycle;
 mod marketplaces;
 mod status;
 
+pub(crate) use guest::guest_host;
 pub use lifecycle::{
     AgentMarketplace, AgentMarketplaceAdded, AgentMarketplacePlugin, AgentMarketplaceUpgrade,
     AgentPackageChange, AgentPackageChangeKind, AgentPackageInstall, AgentPackageSource,
     AgentPackageUninstall, LOCAL_MARKETPLACE,
 };
 pub(crate) use marketplaces::{configured_marketplace, marketplace_view};
-pub use status::{AgentPackageContent, AgentPackageStatus};
+pub use status::{AgentPackageContent, AgentPackageGuest, AgentPackageStatus};
 
 /// The installed packages and the content of those that are on, as last
 /// loaded, with the sources that follow them; shared with the `plugins`
@@ -50,6 +55,8 @@ pub(crate) struct AgentPackages {
     skills: AgentSkillApplication,
     mcp: AgentMcpApplication,
     hooks: Arc<HooksEngine>,
+    /// The code packages' guests, which the `plugins` row runs.
+    guests: GuestHost,
 }
 
 /// Every installed package, by id, and what each that is on contributes.
@@ -73,13 +80,16 @@ pub(crate) struct LoadedPackage {
     /// the same name for.
     pub(crate) mcp_servers: Vec<hanafubuki_agent_mcp::McpServerConfig>,
     pub(crate) hooks: Option<PluginHookSource>,
+    /// Its code, on or off.
+    pub(crate) guest: Option<GuestPackage>,
     pub(crate) issues: Vec<String>,
 }
 
 impl AgentPackages {
     /// The packages of `store`, loaded as `config` leaves them on, with the
     /// Skill catalog, the hooks and the MCP side following them; the MCP
-    /// servers connect with the Agent's start. Blocking.
+    /// servers connect with the Agent's start, and the guests start with
+    /// the `plugins` row. Blocking.
     pub(crate) fn open(
         store: PackageStore,
         safe_mode: bool,
@@ -87,7 +97,10 @@ impl AgentPackages {
         skills: AgentSkillApplication,
         mcp: AgentMcpApplication,
         hooks: Arc<HooksEngine>,
+        guests: impl FnOnce(Vec<GuestPackage>) -> GuestHost,
     ) -> Result<Self, String> {
+        let settings = config.settings()?;
+        let installed = Self::read(&store, safe_mode, &settings, &user_servers(config)?);
         let packages = Self {
             store: Arc::new(store),
             safe_mode,
@@ -96,10 +109,10 @@ impl AgentPackages {
             skills,
             mcp,
             hooks,
+            guests: guests(installed.guest_packages()),
         };
-        let loaded = packages.load(&config.settings()?, &user_servers(config)?);
-        *packages.mcp.plugin_servers.write() = loaded.mcp_servers();
-        packages.follow(loaded);
+        *packages.mcp.plugin_servers.write() = installed.mcp_servers();
+        packages.follow(installed);
         Ok(packages)
     }
 
@@ -107,6 +120,10 @@ impl AgentPackages {
     /// per data directory, since opening one sweeps its staging area.
     pub(crate) fn store(&self) -> &Arc<PackageStore> {
         &self.store
+    }
+
+    pub(crate) fn guests(&self) -> &GuestHost {
+        &self.guests
     }
 
     pub(crate) fn loaded(&self) -> Arc<LoadedPackages> {
@@ -130,8 +147,10 @@ impl AgentPackages {
         )
         .await??;
         let servers = loaded.mcp_servers();
+        let guests = loaded.guest_packages();
         self.follow(loaded);
         self.mcp.set_plugin_servers(servers).await;
+        self.guests.apply(guests).await;
         Ok(())
     }
 
@@ -165,7 +184,11 @@ impl AgentPackages {
                     .iter()
                     .find(|installed| installed.id == package.id)
                     .and_then(|installed| installed.record.as_ref());
-                status::package_status(package, record, &skills, &hooks)
+                let guest = package
+                    .guest
+                    .as_ref()
+                    .and_then(|guest| self.guest_status(guest));
+                status::package_status(package, record, &skills, &hooks, guest)
             })
             .collect()
     }
@@ -185,6 +208,26 @@ impl AgentPackages {
             .collect()
     }
 
+    fn guest_status(&self, guest: &GuestPackage) -> Option<AgentPackageGuest> {
+        Some(AgentPackageGuest {
+            permissions: guest.permissions.clone(),
+            granted_permissions: guest.granted.clone(),
+            status: self.guests.status(&guest.id.key())?,
+        })
+    }
+
+    /// Records that the user granted the code of `id` `permissions`.
+    /// Blocking; the guest follows at the next reload.
+    pub(crate) fn grant(
+        &self,
+        id: &PluginId,
+        permissions: PackagePermissions,
+    ) -> Result<(), String> {
+        self.store
+            .grant_permissions(id, permissions)
+            .map_err(|error| error.to_string())
+    }
+
     /// Reads the installed packages and the content of those `settings`
     /// leave on (none in safe mode); `user_servers` are the user's MCP servers, which a
     /// package's server of the same name gives way to. Blocking.
@@ -193,7 +236,16 @@ impl AgentPackages {
         settings: &AgentSettings,
         user_servers: &BTreeSet<McpServerId>,
     ) -> LoadedPackages {
-        let mut installed = self.store.installed();
+        Self::read(&self.store, self.safe_mode, settings, user_servers)
+    }
+
+    fn read(
+        store: &PackageStore,
+        safe_mode: bool,
+        settings: &AgentSettings,
+        user_servers: &BTreeSet<McpServerId>,
+    ) -> LoadedPackages {
+        let mut installed = store.installed();
         installed.sort_by_key(|package| package.id.key());
         let mut packages = installed
             .iter()
@@ -205,7 +257,7 @@ impl AgentPackages {
                     .map(|settings| settings.mcp_servers.clone())
                     .unwrap_or_default();
                 let enabled = settings.package_enabled(&package.id);
-                content::load(package, enabled, enabled && !self.safe_mode, &overlay)
+                content::load(package, enabled, enabled && !safe_mode, &overlay)
             })
             .collect::<Vec<_>>();
         resolve_server_names(&mut packages, user_servers);
@@ -227,6 +279,14 @@ impl LoadedPackages {
     pub(crate) fn hook_sources(&self) -> Vec<PluginHookSource> {
         self.enabled()
             .filter_map(|package| package.hooks.clone())
+            .collect()
+    }
+
+    /// The code packages, on or off.
+    pub(crate) fn guest_packages(&self) -> Vec<GuestPackage> {
+        self.packages
+            .iter()
+            .filter_map(|package| package.guest.clone())
             .collect()
     }
 

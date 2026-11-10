@@ -432,6 +432,54 @@ fn domain_owned_write_and_resize_require_the_committed_receipt() {
     dispose_reserved_executor(&manager, &receipt).unwrap();
 }
 
+#[cfg(unix)]
+#[test]
+fn a_handed_out_pipe_executor_gives_its_owner_the_pipes_and_its_exit_status() {
+    use std::io::{BufRead, BufReader};
+    use std::os::unix::process::ExitStatusExt;
+
+    let manager = ExecutorManager::default();
+    let owner = ProcessOwnerId::generate();
+    let reservation = reserve_executor_id(&manager, "handed-out", &owner).unwrap();
+    let mut request = request(vec![
+        "/bin/sh".to_string(),
+        "-c".to_string(),
+        "read line; echo \"got $line\"; echo err >&2; exec sleep 30".to_string(),
+    ]);
+    request.executor_id = Some("handed-out".to_string());
+    let (_, receipt, mut pipes) =
+        start_reserved_pipe_executor(&manager, request, &reservation).unwrap();
+
+    writeln!(pipes.stdin, "hello").unwrap();
+    let mut line = String::new();
+    BufReader::new(&mut pipes.stdout)
+        .read_line(&mut line)
+        .unwrap();
+    assert_eq!(line, "got hello\n");
+    let mut error = String::new();
+    BufReader::new(&mut pipes.stderr)
+        .read_line(&mut error)
+        .unwrap();
+    assert_eq!(error, "err\n");
+    // The session reads and writes nothing of its own.
+    let output = read_reserved_executor_output(&manager, &receipt, None, None).unwrap();
+    assert!(output.chunks.is_empty());
+    assert!(write_reserved_executor_stdin(&manager, &receipt, b"x".to_vec(), false).is_err());
+    assert_eq!(
+        wait_reserved_executor(&manager, &receipt, Duration::ZERO).unwrap(),
+        None
+    );
+
+    terminate_reserved_executor(&manager, &receipt).unwrap();
+    let status = wait_reserved_executor(&manager, &receipt, Duration::from_secs(10))
+        .unwrap()
+        .unwrap();
+    assert_eq!(status.signal(), Some(libc::SIGTERM));
+    assert!(pipes.process_id > 0);
+    dispose_reserved_executor(&manager, &receipt).unwrap();
+    assert!(!reserved_executor_exists(&manager, &receipt));
+}
+
 const PROCESS_TREE_HELPER_TEST: &str = "executor::manager::tests::process_tree_helper";
 
 #[test]

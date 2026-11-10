@@ -31,6 +31,7 @@ pub use model::{
     EnvironmentInheritance, ExecutorInfo, ExecutorIoMode, ExecutorOutput, ExecutorStartRequest,
     ExecutorStatus, OutputDelta, OutputStream,
 };
+pub use pipe::ExecutorPipes;
 
 #[cfg(all(test, unix))]
 mod tests;

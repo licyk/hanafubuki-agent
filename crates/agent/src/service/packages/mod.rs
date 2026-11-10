@@ -12,6 +12,7 @@ use std::sync::Arc;
 use hanafubuki_agent_config::AgentConfig;
 use hanafubuki_agent_hooks::HooksEngine;
 use hanafubuki_agent_packages::{PackageStore, PluginId};
+use hanafubuki_agent_plugin_packages::{GuestHost, GuestPackage};
 use hanafubuki_agent_process::executor::ExecutorManager;
 
 use super::{hooks, AgentApplicationService, AgentMcpApplication};
@@ -113,7 +114,8 @@ impl AgentApplicationService {
 
 /// The package store under the data directory and the content of its
 /// enabled packages, which the Skill catalog, the hooks (built here) and
-/// the MCP side follow from the start.
+/// the MCP side follow from the start, and the guest host of its code
+/// packages.
 pub(super) fn open_packages(
     storage_paths: &AgentStoragePaths,
     safe_mode: bool,
@@ -121,6 +123,7 @@ pub(super) fn open_packages(
     config: &AgentConfig,
     skills: &AgentSkillApplication,
     mcp: &AgentMcpApplication,
+    guests: impl FnOnce(Vec<GuestPackage>) -> GuestHost,
 ) -> Result<(AgentPackages, Arc<HooksEngine>), String> {
     let hooks = Arc::new(HooksEngine::new(
         hooks::hook_sources(config)?,
@@ -134,6 +137,7 @@ pub(super) fn open_packages(
         skills.clone(),
         mcp.clone(),
         hooks.clone(),
+        guests,
     )?;
     Ok((packages, hooks))
 }

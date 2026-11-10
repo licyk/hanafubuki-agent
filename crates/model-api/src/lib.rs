@@ -25,6 +25,9 @@ pub mod test_support;
 
 pub use anthropic_messages::AnthropicMessagesModelTransport;
 pub use chat_completions::ChatCompletionsModelTransport;
+pub use hanafubuki_agent_foundation::trace_content::{
+    bounded_trace_content, MAX_TRACE_CONTENT_BYTES,
+};
 pub use hanafubuki_agent_tool_contracts::{ToolProviderCapabilities, ToolSpec};
 pub use image_input::{
     classify_remote_model_error, request_contains_images, sanitize_images_for_unsupported_input,
@@ -51,5 +54,4 @@ pub use provider::{
     ModelCredential, ModelEndpoint, ModelHeader, ModelProvider, ModelRetryPolicy, ModelTimeouts,
 };
 pub use responses::ResponsesModelTransport;
-pub use streaming::{bounded_trace_content, MAX_TRACE_CONTENT_BYTES};
 pub use tool_lowering::flattened_tool_call_name;

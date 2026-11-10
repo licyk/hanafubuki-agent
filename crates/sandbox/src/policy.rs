@@ -10,7 +10,8 @@
 // external-sandbox policy, no `exclude_tmpdir_env_var` or
 // `exclude_slash_tmp`; the read-only carve-outs under a writable root
 // (`.git`) are the macOS and Windows backends', since Landlock cannot make
-// them; Windows's sandbox is chosen by `[windows] sandbox`, as in Codex.
+// them; Windows's sandbox is chosen by `[windows] sandbox`, as in Codex;
+// a plugin profile reads only the platform's directories and its own roots.
 
 use std::path::{Path, PathBuf};
 
@@ -29,13 +30,25 @@ pub enum SandboxPolicy {
     },
     /// No sandbox.
     FullAccess,
+    /// An installed plugin's process (its guest): read only the platform's
+    /// system directories and `readable_roots`, write only under
+    /// `writable_roots` (which it reads too), the network as allowed.
+    /// Windows' unelevated sandbox cannot deny reads, so there it reads
+    /// what its user can.
+    Plugin {
+        readable_roots: Vec<PathBuf>,
+        writable_roots: Vec<PathBuf>,
+        network_access: bool,
+    },
 }
 
 impl SandboxPolicy {
+    /// The mode the policy is closest to: a plugin's writes are confined to
+    /// its roots, as workspace-write's are.
     pub fn mode(&self) -> AgentSandboxMode {
         match self {
             Self::ReadOnly => AgentSandboxMode::ReadOnly,
-            Self::WorkspaceWrite { .. } => AgentSandboxMode::WorkspaceWrite,
+            Self::WorkspaceWrite { .. } | Self::Plugin { .. } => AgentSandboxMode::WorkspaceWrite,
             Self::FullAccess => AgentSandboxMode::FullAccess,
         }
     }

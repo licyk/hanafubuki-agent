@@ -1,6 +1,7 @@
 //! `plugins/install.json`: what the store knows of each installed package
 //! beyond its files, the version installed, where it came from and the
-//! content hash taken at install. It is the Agent's own state, written as a
+//! content hash taken at install, and the permissions the user granted its
+//! code. It is the Agent's own state, written as a
 //! whole (a temporary file renamed over it) and read tolerantly: unknown
 //! fields are ignored, each field falls back on its own, an entry whose
 //! key is not a plugin id is skipped, and a file that does not read at all
@@ -16,7 +17,7 @@ use hanafubuki_agent_foundation::persistence::quarantine_file;
 use serde::Serialize;
 use serde_json::{Map, Value};
 
-use crate::{ManifestFormat, PackageSource, PluginId};
+use crate::{ManifestFormat, PackagePermissions, PackageSource, PluginId};
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -26,6 +27,9 @@ pub struct InstallRecord {
     pub source: Option<PackageSource>,
     /// [`crate::content_hash`] of the package as installed.
     pub content_hash: Option<String>,
+    /// What the user granted its code; kept across updates, so an update
+    /// that asks for more waits for a new grant.
+    pub granted_permissions: Option<PackagePermissions>,
 }
 
 pub(crate) type InstallRecords = BTreeMap<PluginId, InstallRecord>;
@@ -86,6 +90,8 @@ fn entry_of(value: &Value) -> InstallRecord {
         format: field("format").and_then(|format| serde_json::from_value(format).ok()),
         source: field("source").and_then(|source| serde_json::from_value(source).ok()),
         content_hash: string("contentHash"),
+        granted_permissions: field("grantedPermissions")
+            .and_then(|permissions| serde_json::from_value(permissions).ok()),
     }
 }
 

@@ -68,6 +68,7 @@ mod worktree;
 pub use worktree::AgentWorktree;
 mod hooks;
 pub use hooks::{AgentHook, AgentHookHandler, AgentHooks};
+mod guests;
 mod packages;
 
 /// What the application hands the Agent when it builds it.
@@ -328,6 +329,15 @@ impl AgentApplicationService {
             &config,
             &skills,
             &mcp_application,
+            |guests| {
+                crate::packages::guest_host(
+                    &executor,
+                    &config,
+                    blocking.clone(),
+                    workspace.clone(),
+                    guests,
+                )
+            },
         )?;
         let history_paths = AgentHistoryPaths::under(storage_paths.history_root.clone());
         let history_store = Arc::new(

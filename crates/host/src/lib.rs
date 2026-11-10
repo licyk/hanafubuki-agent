@@ -29,7 +29,7 @@ pub use host::{
     HostProfile, ModuleHost, ModuleHostOptions, ModuleRow, RootServices, ServiceContext,
     ServiceMount, ServiceStop, SettingsConfig, PLUGIN_START_TIMEOUT, PLUGIN_STOP_BOUND,
 };
-pub use logging::LogExporter;
+pub use logging::{LogExporter, GUEST_LOGGER_PREFIX};
 pub use registry::{
     EntryLease, Register, RegistrationError, Registry, RegistryEntry, RegistryService,
     RegistrySnapshot, DRAIN_GRACE, RETIRE_CANCEL_BOUND,

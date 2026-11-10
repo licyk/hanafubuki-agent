@@ -190,7 +190,7 @@ fn a_directory_is_installed_under_local_or_the_marketplace_named() {
         .stdout();
     let installed: Value = serde_json::from_str(&installed).unwrap();
     assert_eq!(installed["package"]["id"], "solo@local");
-    assert_eq!(installed["permissions"], json!([]));
+    assert_eq!(installed["permissions"], Value::Null);
     home.run(&[
         "plugins",
         "add",

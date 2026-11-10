@@ -19,6 +19,7 @@ hanafubuki-agent-host.workspace = true
 hanafubuki-agent-plugin-execution.workspace = true
 hanafubuki-agent-plugin-hooks.workspace = true
 hanafubuki-agent-plugin-mcp.workspace = true
+hanafubuki-agent-plugin-packages.workspace = true
 hanafubuki-agent-plugin-web.workspace = true
 hanafubuki-agent-plugin-workspace-fs.workspace = true
 hanafubuki-agent-plugin-worktree.workspace = true

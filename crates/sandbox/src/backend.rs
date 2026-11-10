@@ -7,7 +7,8 @@
 // probed once; Seatbelt on macOS when `/usr/bin/sandbox-exec` exists; on
 // Windows only the unelevated (restricted token) sandbox, through the
 // helper, and only when `[windows] sandbox` chooses it; a policy no backend
-// can enforce is an error, never a command run unconfined; no network
+// can enforce is an error, never a command run unconfined; a plugin's
+// profile restricts reads too (not on Windows); no network
 // proxy.
 
 use std::fmt;
@@ -73,6 +74,9 @@ pub enum SandboxError {
         mode: AgentSandboxMode,
         reason: String,
     },
+    /// A plugin's process asked for its profile, which this machine cannot
+    /// give it.
+    PluginUnavailable { reason: String },
     /// A path the helper's command line cannot carry.
     NotUtf8,
 }
@@ -85,6 +89,10 @@ impl fmt::Display for SandboxError {
                 "the command was not run: it needs the {} sandbox, which is unavailable ({reason}); \
                  set sandboxMode to \"full-access\" to run commands without a sandbox",
                 mode.as_str()
+            ),
+            Self::PluginUnavailable { reason } => write!(
+                formatter,
+                "the plugin was not started: its sandbox is unavailable ({reason})"
             ),
             Self::NotUtf8 => formatter
                 .write_str("the command was not run: a sandboxed command and its writable roots must be UTF-8"),
@@ -175,31 +183,47 @@ impl Sandbox {
         policy: &SandboxPolicy,
         command: Vec<String>,
     ) -> Result<Vec<String>, SandboxError> {
-        let (writable_roots, network_access) = match policy {
+        let (writable_roots, readable_roots, network_access) = match policy {
             SandboxPolicy::FullAccess => return Ok(command),
-            SandboxPolicy::ReadOnly => (Vec::new(), false),
+            SandboxPolicy::ReadOnly => (Vec::new(), None, false),
             SandboxPolicy::WorkspaceWrite {
                 writable_roots,
                 network_access,
-            } => (writable_roots.clone(), *network_access),
+            } => (writable_roots.clone(), None, *network_access),
+            SandboxPolicy::Plugin {
+                readable_roots,
+                writable_roots,
+                network_access,
+            } => (
+                writable_roots.clone(),
+                Some(readable_roots.clone()),
+                *network_access,
+            ),
         };
         match &self.backend {
             Backend::Helper { helper, .. } => helper_command(
                 helper,
                 HelperRequest {
                     writable_roots,
+                    readable_roots,
                     network_access,
                     command: command.into_iter().map(Into::into).collect(),
                 },
             ),
             Backend::Seatbelt => Ok(crate::macos::command_line(
                 &writable_roots,
+                readable_roots.as_deref(),
                 network_access,
                 command,
             )),
-            Backend::Unavailable { reason } => Err(SandboxError::Unavailable {
-                mode: policy.mode(),
-                reason: reason.clone(),
+            Backend::Unavailable { reason } => Err(match policy {
+                SandboxPolicy::Plugin { .. } => SandboxError::PluginUnavailable {
+                    reason: reason.clone(),
+                },
+                _ => SandboxError::Unavailable {
+                    mode: policy.mode(),
+                    reason: reason.clone(),
+                },
             }),
         }
     }

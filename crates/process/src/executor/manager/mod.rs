@@ -20,8 +20,8 @@ use hanafubuki_agent_foundation::environment::ChildProcessEnvironment;
 pub use access::{
     get_executor_info, get_reserved_executor_info, interrupt_reserved_executor,
     read_executor_output, read_reserved_executor_output, reserved_executor_exists,
-    resize_executor_pty, resize_reserved_executor_pty, write_executor_stdin,
-    write_reserved_executor_stdin,
+    resize_executor_pty, resize_reserved_executor_pty, wait_reserved_executor,
+    write_executor_stdin, write_reserved_executor_stdin,
 };
 pub use disposal::{
     confirm_reserved_executor_termination, dispose_executor, dispose_reserved_executor,
@@ -33,7 +33,10 @@ pub use reservation::{
     finalize_executor_reservation_handle, release_executor_reservation, reserve_executor_id,
 };
 pub use run::{run_and_wait, RunOutcome};
-pub use start::{start_executor, start_independent_executor, start_reserved_executor};
+pub use start::{
+    start_executor, start_independent_executor, start_reserved_executor,
+    start_reserved_pipe_executor,
+};
 
 #[derive(Default)]
 struct ExecutorRegistry {

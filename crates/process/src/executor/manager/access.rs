@@ -1,6 +1,8 @@
 //! Executor lookup, output reads, stdin, and resize, by id or by process receipt.
 
+use std::process::ExitStatus;
 use std::sync::Arc;
+use std::time::Duration;
 
 use super::{ExecutorManager, ReservedExecutorReceipt};
 use crate::executor::model::{ExecutorInfo, ExecutorOutput};
@@ -29,6 +31,28 @@ fn get_reserved_session(
 
 pub fn reserved_executor_exists(manager: &ExecutorManager, receipt: &ProcessReceipt) -> bool {
     get_reserved_session(manager, receipt.process_id(), receipt.owner_id()).is_ok()
+}
+
+/// Waits up to `timeout` for the reserved executor's process to end, and
+/// returns how it ended; `None` while it still runs. A process whose end
+/// was observed without an exit status (a failed wait, a PTY) is an error.
+pub fn wait_reserved_executor(
+    manager: &ExecutorManager,
+    receipt: &ProcessReceipt,
+    timeout: Duration,
+) -> Result<Option<ExitStatus>, String> {
+    let session = get_reserved_session(manager, receipt.process_id(), receipt.owner_id())?;
+    if !session.wait_for_completion(timeout) {
+        return Ok(None);
+    }
+    let inner = session.inner.lock();
+    match inner.exit_status {
+        Some(status) => Ok(Some(status)),
+        None => Err(inner
+            .error
+            .clone()
+            .unwrap_or_else(|| "the process ended without an exit status".to_string())),
+    }
 }
 
 pub fn get_reserved_executor_info(

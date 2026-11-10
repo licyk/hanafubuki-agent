@@ -4,7 +4,7 @@
 
 use hanafubuki_agent::{
     AgentHandle, AgentMarketplace, AgentPackageInstall, AgentPackageSource, AgentPackageStatus,
-    AgentPluginStatus, MarketplaceAddRequest,
+    AgentPluginStatus, MarketplaceAddRequest, PackagePermissions,
 };
 
 use super::{AgentBridge, AgentReply, TurnUpdate};
@@ -25,6 +25,11 @@ pub(crate) enum PluginsCall {
     Update(String),
     Retry(String),
     TrustHooks(Vec<String>),
+    /// What a code package's guest asks for, as its page showed it.
+    GrantPermissions {
+        id: String,
+        permissions: PackagePermissions,
+    },
     AddMarketplace(String),
     UpgradeMarketplace(String),
     RemoveMarketplace(String),
@@ -130,6 +135,10 @@ async fn run(agent: &AgentHandle, call: PluginsCall) -> Result<Option<PluginsDon
                 .await
                 .map_err(|error| error.to_string())?;
             notice(format!("Trusted {count} hook(s)."))
+        }
+        PluginsCall::GrantPermissions { id, permissions } => {
+            agent.grant_package_permissions(&id, permissions).await?;
+            notice(format!("Granted {id} its permissions."))
         }
         PluginsCall::AddMarketplace(source) => {
             let added = agent

@@ -10,8 +10,8 @@
 use std::fs;
 
 use hanafubuki_agent_packages::{
-    content_hash, load_marketplace, migrated_command_skills_root, ManifestFormat, PackageSource,
-    PackageStore, PluginId,
+    content_hash, load_marketplace, migrated_command_skills_root, ManifestFormat,
+    PackagePermissions, PackageSource, PackageStore, PluginId, WorkspaceAccess,
 };
 use hanafubuki_agent_process::executor::ExecutorManager;
 
@@ -478,6 +478,49 @@ fn a_bad_record_field_or_entry_costs_only_itself() {
     assert_eq!(record.version, None);
     assert_eq!(record.source, None);
     assert_eq!(record.content_hash.as_deref(), Some("sha256:00"));
+}
+
+#[test]
+fn a_grant_is_recorded_kept_by_a_reinstall_and_refused_for_a_package_not_installed() {
+    let fixture = fixture();
+    let sample = id("sample-plugin", "debug");
+    let source = write_plugin(fixture.path(), "sample", "sample-plugin", None);
+    fixture.store.install_directory(&source, &sample).unwrap();
+    assert_eq!(
+        fixture
+            .store
+            .read(&sample)
+            .unwrap()
+            .record
+            .unwrap()
+            .granted_permissions,
+        None
+    );
+    let granted = PackagePermissions {
+        network: true,
+        workspace: WorkspaceAccess::Write,
+        env: vec!["TOKEN".to_string()],
+    };
+
+    fixture
+        .store
+        .grant_permissions(&sample, granted.clone())
+        .unwrap();
+    fixture.store.install_directory(&source, &sample).unwrap();
+
+    let record = fixture.store.read(&sample).unwrap().record.unwrap();
+    assert_eq!(record.granted_permissions, Some(granted.clone()));
+    let file: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(fixture.plugins().join("install.json")).unwrap())
+            .unwrap();
+    assert_eq!(
+        file["packages"]["sample-plugin@debug"]["grantedPermissions"],
+        serde_json::json!({"network": true, "workspace": "write", "env": ["TOKEN"]})
+    );
+    assert!(fixture
+        .store
+        .grant_permissions(&id("other", "debug"), granted)
+        .is_err());
 }
 
 #[test]

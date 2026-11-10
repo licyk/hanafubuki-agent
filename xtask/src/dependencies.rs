@@ -10,8 +10,9 @@
 //! no other plugin, the kernel or the facade; the facade mounts every plugin
 //! and alone reads the configuration; model-api cannot reach the context
 //! section kinds; the plugin host depends on no member but the foundation;
-//! and kardia stays inside the host, the plugin API, the kernel, the plugins
-//! and the facade.
+//! kardia stays inside the host, the plugin API, the kernel, the plugins and
+//! the facade; and its loader and guest bridge (kardia-loader, kardia-hmr)
+//! inside the guest host.
 
 use std::collections::BTreeSet;
 use std::path::Path;
@@ -120,6 +121,12 @@ const LAYERS: &[(&str, &[&str])] = &[
         "hanafubuki-agent-plugin-hooks",
         &[CONTRACTS, FOUNDATION, HOOKS, PROCESS, TOOL_CONTRACTS],
     ),
+    // The guest host: `RestartPolicy`, which the plugin API does not
+    // re-export, comes from the host.
+    (
+        GUEST_HOST,
+        &[CONTRACTS, FOUNDATION, HOST, PACKAGES, PROCESS, SANDBOX],
+    ),
     // The configuration.
     (CONFIG, &[FOUNDATION, MCP, PACKAGES]),
     // The facade: the composition over everything below.
@@ -141,6 +148,7 @@ const LAYERS: &[(&str, &[&str])] = &[
             "hanafubuki-agent-plugin-execution",
             "hanafubuki-agent-plugin-hooks",
             "hanafubuki-agent-plugin-mcp",
+            GUEST_HOST,
             "hanafubuki-agent-plugin-web",
             "hanafubuki-agent-plugin-workspace-fs",
             "hanafubuki-agent-plugin-worktree",
@@ -175,8 +183,18 @@ const WORKTREE: &str = "hanafubuki-agent-worktree";
 const HOOKS: &str = "hanafubuki-agent-hooks";
 const PACKAGES: &str = "hanafubuki-agent-packages";
 const SANDBOX: &str = "hanafubuki-agent-sandbox";
+const GUEST_HOST: &str = "hanafubuki-agent-plugin-packages";
 const PLUGIN_PREFIX: &str = "hanafubuki-agent-plugin-";
-const KARDIA: [&str; 4] = ["kardia", "kardia-bridge", "kardia-core", "kardia-macros"];
+const KARDIA: [&str; 6] = [
+    "kardia",
+    "kardia-bridge",
+    "kardia-core",
+    "kardia-hmr",
+    "kardia-loader",
+    "kardia-macros",
+];
+/// The kardia crates only the guest host may use.
+const GUEST_KARDIA: [&str; 2] = ["kardia-hmr", "kardia-loader"];
 
 /// The part of `cargo metadata --no-deps` the check reads. Without the
 /// dependency graph, `packages` holds exactly the workspace members.
@@ -352,8 +370,12 @@ pub fn rule_violations(metadata: &Metadata) -> Vec<String> {
             ));
         }
         let may_use_kardia = matches!(name, HOST | CONTRACTS | KERNEL | FACADE) || is_plugin(name);
-        if !may_use_kardia {
-            for kardia in KARDIA.iter().filter(|kardia| depends_on(kardia)) {
+        for kardia in KARDIA.iter().filter(|kardia| depends_on(kardia)) {
+            if GUEST_KARDIA.contains(kardia) && name != GUEST_HOST {
+                violations.push(format!(
+                    "{name} depends on {kardia}; only the guest host ({GUEST_HOST}) may"
+                ));
+            } else if !may_use_kardia {
                 violations.push(format!(
                     "{name} depends on {kardia}; only the plugin host, the plugin API, the kernel, the plugins and the facade may"
                 ));

@@ -1,7 +1,10 @@
 //! The plugin browser's pages over hand-built plugins: the tabs wrap, and
 //! a plugin's page offers what its state allows.
 
-use hanafubuki_agent::{AgentPackageContent, AgentPackageStatus};
+use hanafubuki_agent::{
+    AgentPackageContent, AgentPackageGuest, AgentPackageStatus, GuestState, GuestStatus,
+    PackagePermissions, WorkspaceAccess,
+};
 
 use super::pages::{self, After, Choice, Page, Tab};
 use crate::agent_bridge::PluginsCall;
@@ -17,6 +20,7 @@ fn package(enabled: bool, hooks_to_trust: Vec<String>) -> AgentPackageStatus {
         enabled,
         content: AgentPackageContent::default(),
         hooks_to_trust,
+        guest: None,
         issues: vec!["its manifest has no name".to_string()],
     }
 }
@@ -71,4 +75,38 @@ fn a_plugins_page_offers_what_its_state_allows() {
             ..
         }
     )));
+}
+
+#[test]
+fn a_code_plugins_page_offers_to_grant_what_it_asks_for_until_granted() {
+    let asked = PackagePermissions {
+        network: true,
+        workspace: WorkspaceAccess::Read,
+        env: vec!["TOKEN".to_string()],
+    };
+    let mut code = package(true, Vec::new());
+    code.guest = Some(AgentPackageGuest {
+        permissions: asked.clone(),
+        granted_permissions: None,
+        status: GuestStatus {
+            state: GuestState::Blocked,
+            error: Some("its permissions are not granted".to_string()),
+            last_exit: None,
+            stderr_tail: String::new(),
+            restarts: 0,
+            process_id: None,
+        },
+    });
+    let grants = |page: &pages::PageView| {
+        page.choices.iter().flatten().any(|choice| {
+            matches!(
+                choice,
+                Choice::Call { call: PluginsCall::GrantPermissions { id, permissions }, .. }
+                    if id == "demo@market" && *permissions == asked
+            )
+        })
+    };
+    assert!(grants(&pages::package_page(&code)));
+    code.guest.as_mut().unwrap().granted_permissions = Some(asked.clone());
+    assert!(!grants(&pages::package_page(&code)));
 }

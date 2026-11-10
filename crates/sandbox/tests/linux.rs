@@ -35,7 +35,7 @@ mod linux {
             return;
         }
         type Check = fn(&Sandbox);
-        let checks: [(&str, Check); 5] = [
+        let checks: [(&str, Check); 6] = [
             (
                 "read_only_cannot_write_the_workspace",
                 read_only_cannot_write_the_workspace,
@@ -47,6 +47,10 @@ mod linux {
             (
                 "network_is_blocked_unless_allowed",
                 network_is_blocked_unless_allowed,
+            ),
+            (
+                "a_plugin_reads_only_the_platform_and_its_roots",
+                a_plugin_reads_only_the_platform_and_its_roots,
             ),
             ("full_access_is_unrestricted", full_access_is_unrestricted),
             (
@@ -186,6 +190,35 @@ mod linux {
         ));
         assert!(connects(sandbox, &workspace_write(workspace.path(), true)));
         assert!(connects(sandbox, &SandboxPolicy::FullAccess));
+    }
+
+    fn a_plugin_reads_only_the_platform_and_its_roots(sandbox: &Sandbox) {
+        let package = directory();
+        let data = directory();
+        let outside = directory();
+        std::fs::write(package.path().join("manifest"), "package").unwrap();
+        std::fs::write(outside.path().join("secret"), "secret").unwrap();
+        let policy = SandboxPolicy::Plugin {
+            readable_roots: vec![package.path().to_path_buf()],
+            writable_roots: vec![data.path().to_path_buf()],
+            network_access: false,
+        };
+        let cat =
+            |path: &Path| run_confined(sandbox, &policy, sh(&format!("cat '{}'", path.display())));
+        let read = cat(&package.path().join("manifest"));
+        assert!(read.status.success(), "{read:?}");
+        assert_eq!(read.stdout, b"package");
+        let secret = cat(&outside.path().join("secret"));
+        assert!(!secret.status.success(), "{secret:?}");
+        assert!(secret.stdout.is_empty());
+
+        let file = data.path().join("file");
+        let written = write(sandbox, &policy, &file);
+        assert!(written.status.success(), "{written:?}");
+        assert!(cat(&file).status.success());
+        let into_package = package.path().join("file");
+        assert!(!write(sandbox, &policy, &into_package).status.success());
+        assert!(!into_package.exists());
     }
 
     fn full_access_is_unrestricted(sandbox: &Sandbox) {

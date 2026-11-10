@@ -24,12 +24,12 @@ Agent 是一个**内核**（`hanafubuki-agent-kernel`），拥有会话、轮次
 | 领域       | `approval`、`skills`、`web-search`、`model-api`、`workspace-fs`、`execution`、`mcp`、`memory`、`worktree`、`hooks`、`sandbox`、`compression`、`packages` | 各自独立、可单独测试的能力                                                                                                      |
 | 插件 API   | `contracts`                                                                                                                                              | 注册表与扩展点契约；重新导出 `host` 的注册与故障机制，插件只依赖它                                                              |
 | 内核与历史 | `kernel`、`history`                                                                                                                                      | 会话、轮次循环、工具规划与流水线、请求组装、世界状态、压缩与分层压缩、审批流程、恢复；JSONL 历史与 SQLite 索引                  |
-| 插件       | `plugin-web`、`plugin-workspace-fs`、`plugin-execution`、`plugin-mcp`、`plugin-worktree`、`plugin-hooks`                                                 | 每个把一个领域 crate 绑定到扩展点，或作为服务提供给门面的调用                                                                   |
+| 插件       | `plugin-web`、`plugin-workspace-fs`、`plugin-execution`、`plugin-mcp`、`plugin-worktree`、`plugin-hooks`、`plugin-packages`                              | 每个把一个领域 crate 绑定到扩展点，或作为服务提供给门面的调用；`plugin-packages` 是访客宿主，在进程外运行已安装插件的代码       |
 | 配置       | `config`                                                                                                                                                 | Agent 自己的配置（`AgentConfig`）：三个 TOML 文件，独立模式下分层                                                               |
 | 门面       | `hanafubuki-agent`（`crates/agent`）                                                                                                                     | 组合：插件宿主与清单、Agent 自己的插件、槽位、服务 API、宿主接口、独立运行时、数据目录锁、日志                                  |
 | 界面       | `tui`、`cli`                                                                                                                                             | 终端界面（只依赖门面）和 `hanafubuki-agent` 二进制（依赖门面与终端界面）                                                        |
 
-（表中省略了 `hanafubuki-agent-` 前缀。）除了层表，检查还执行与表无关的规则：不依赖任何 Hanafubuki crate（任何来源）；内核不依赖任何插件；插件依赖插件 API，不依赖内核、门面或其他插件；每个插件 crate 都是门面的依赖（门面挂载它）；只有门面依赖配置 crate；`host` 只依赖 `foundation`；kardia 只出现在 `host`、插件 API、内核、插件和门面中，而且从不使用 `kardia` 门面 crate（它带有 WASM/dylib 热重载）。
+（表中省略了 `hanafubuki-agent-` 前缀。）除了层表，检查还执行与表无关的规则：不依赖任何 Hanafubuki crate（任何来源）；内核不依赖任何插件；插件依赖插件 API，不依赖内核、门面或其他插件；每个插件 crate 都是门面的依赖（门面挂载它）；只有门面依赖配置 crate；`host` 只依赖 `foundation`；kardia 只出现在 `host`、插件 API、内核、插件和门面中，它的加载器和访客桥（`kardia-loader`、`kardia-hmr`）只出现在访客宿主（`plugin-packages`）中，而且从不使用 `kardia` 门面 crate（它带有 WASM/dylib 热重载）。
 
 三条边界承载了大部分设计：
 
@@ -226,16 +226,30 @@ schema 遵循同样的按协议规则：支持 `strict_json_schema` 的协议（
 
 读不了的包，或包中读不了的组件，记为该包的问题；其他包照常加载。这一组包在构建 Agent 时加载（MCP 服务器随启动连接），并由 `reload_packages` 重新加载：门面在每次写入设置和 `mcp.toml` 之后运行它，每个生命周期调用也在变更后运行它；它替换 Skill 根目录和钩子来源，只连接或断开有变化的 MCP 服务器，无需重启。`packages()` 列出每个已安装的包及其版本、格式、启用状态、内容和问题（`AgentPackageStatus`）。
 
-模型通过 `plugins` 行得知启用的包：当某个包向本轮的 Skill 目录贡献 Skill 或贡献 MCP 服务器时，Capabilities 槽位带有一个"可用插件"段落（Codex 的 `PluginCapabilitySummary`：显示名称、单行且至多 1,024 个字符的描述、Skill 前缀、MCP 服务器名称）；没有这样的包就没有该段落，所以没有包的 Agent 的请求不变。该行只拥有这份摘要，所以关闭它只隐藏摘要，内容仍经由 `skills`、`mcp` 和 `hooks` 行流入；将来运行包代码的访客宿主会接管这一行。安全模式下这些包会被列出，但都不加载。
+模型通过 `plugins` 行得知启用的包：当某个包向本轮的 Skill 目录贡献 Skill 或贡献 MCP 服务器时，Capabilities 槽位带有一个"可用插件"段落（Codex 的 `PluginCapabilitySummary`：显示名称、单行且至多 1,024 个字符的描述、Skill 前缀、MCP 服务器名称）；没有这样的包就没有该段落，所以没有包的 Agent 的请求不变。该行拥有这份摘要并挂载访客宿主（[代码插件](#code-plugins)），所以关闭它会隐藏摘要并停止所有访客，而内容仍经由 `skills`、`mcp` 和 `hooks` 行流入。安全模式下这些包会被列出，但都不加载。
 
 生命周期由门面负责（参照 Codex 的插件管理器），并且只通过 Agent 打开的那一个包存储进行，因为再打开一个会清扫它的暂存区：
 
 - **安装**（`install_package`，来自已添加的市场或一个目录；没有指定市场时归入 `local`）通过存储安装，写入 `[plugins."<id>"] enabled = true`（合并进用户的文件，所以条目中的 `mcpServers` 保留），重新加载，并返回这个包和它需要的东西：需要信任的钩子（对代码包还有需要授予的权限；内容包没有）。
-- **卸载**删除包及其 `[plugins]` 条目；除非清除，它的数据目录会保留。**启用**和**停用**写入 `enabled`；所属市场被关闭的包不能启用。**更新**从它的市场（按市场当前的内容）或它的目录重新安装。**重试**即重新加载。
+- **卸载**删除包及其 `[plugins]` 条目；除非清除，它的数据目录会保留。**启用**和**停用**写入 `enabled`；所属市场被关闭的包不能启用。**更新**从它的市场（按市场当前的内容）或它的目录重新安装。**重试**重新加载，并以空的重启窗口再次启动失败的访客。
 - **市场**（`marketplaces`、`add_marketplace`、`upgrade_marketplace`、`remove_marketplace`）只包括用户添加的那些（`[marketplaces]`）：不会从主目录或仓库中发现市场。每个调用写入它的记录并重新加载。
 - **`package_changed`**：对包的每个生命周期调用都会在重新加载之后告诉插件事件接收器（`AgentPluginEventSink::package_changed`）发生了什么：`installed`、`removed`、`enabled`、`disabled`、`updated`，或 `failed` 以及原因。它不在 `exec --json` 的事件流中，那里的事件属于会话；`exec` 回合期间没有任何东西改变这些包。
 
 `plugins` 命令和 `/plugins`（[终端界面](/docs/terminal-interface#plugins)）是这些调用的界面；`mcp list` 和 `/mcp` 显示包的服务器并标明所属包，`/warnings` 显示包的问题。
+
+### 代码插件：访客宿主 [#code-plugins]
+
+本项目格式的包还可以带代码：清单的 `runtime` 指明一个讲 Kardia 访客协议（`kardia-guest/2`，或版本 1）的程序，它**在进程外**运行，所以它的崩溃、中止或挂起都到不了 Agent 的进程。访客宿主（`hanafubuki-agent-plugin-packages`）运行它，由 `plugins` 行挂载为其子 fiber（`plugin-guests`）。
+
+- **一棵 kardia-loader 子树。** 访客宿主是一个 kardia-loader，它的树中每个代码包一个条目：条目的 id 就是包的 id，它的插件以启动所依赖的一切命名（版本、记录的内容哈希、命令、请求与授予的权限），任何一项变化都会重新启动它。每次重新加载之后，门面把代码包（无论启用与否）交给访客宿主，访客宿主用一次组更新把它们应用到树上：安装时创建条目，包关闭时禁用条目，卸载时移除条目。树的 `TreeBackend` 把加载器自己做出的变更（自行释放的插件被写回为关闭）通过门面提供的设置端口写入 `[plugins]`，交给门面的阻塞写入者排队，并且只在值不同时写入；组更新是设置的镜像，不写回任何东西。
+- **每个包版本一个解析器条目。** 条目的名字解析为一个缓存的 kardia-hmr `ProcessGuest`，它的元数据来自清单（`name`，以及每个访客都在自己的领域中提供的服务 `plugin`），所以解析不会启动任何东西；访客启动时必须声明相同的元数据，否则启动失败。它的插件名为 `guest:<插件>@<市场>`，使访客在注册表和日志中区别于内置行。
+- **进程属于 Agent。** 访客的启动器先预留所有者，再通过实例的 `ExecutorManager` 以预留的管道执行器启动进程，并把管道交给访客桥；访客桥只通过收据结束进程，确认进程结束后才释放执行器。进程属于实例的所有者组，记录在 `process-groups.json` 中，在实例停止时被清扫，在下次启动时被回收（[进程](/docs/internals#plugin-guests)）。
+- **启动需要什么。** 运行时必须是 `process`（还不运行 WASM）；清单请求的权限必须已授予（`install.json` 保存授权，由 `grant_package_permissions` 记录）；包的内容哈希必须仍是安装时记录的那个。等待授权的访客处于 `blocked`；内容变化的包启动失败。
+- **插件配置。** 进程以空环境启动，只带被授予的 `env` 变量、`PLUGIN_ROOT` 和 `PLUGIN_DATA`（在 Windows 上还有 `SystemRoot`），工作目录是它的数据目录，并受沙箱的插件配置（`SandboxPolicy::Plugin`）约束：它读取平台的系统目录和它的包，只写它的数据目录，按授权访问工作区（`none`、`read` 或 `write`），只有被授权时才能使用网络。Linux（Landlock）和 macOS（Seatbelt）强制限制读取；Windows 的受限令牌不能拒绝读取，所以在那里访客能读它的用户能读的一切，`workspace: "none"` 不被强制。访客使用平台的沙箱，无论 `[windows] sandbox` 怎样设置（该设置管的是模型的命令）；没有沙箱的地方（没有调用 `helper_dispatch` 的程序、没有 Landlock 的 Linux 内核），访客不会启动。
+- **它的状态**属于访客宿主：`starting`、`running`、`restarting`、`failed`、`stopped` 或 `blocked`，附带原因、最后一次退出报告（自行退出、被杀死或被释放，原因与状态）以及 stderr 的最后 16 KiB。`packages()` 连同请求与授予的权限一起显示它（`AgentPackageStatus.guest`）。
+- **重启。** 运行之后失败的访客（进程退出或被杀死、调用超过期限、违反协议或发送超过 4 MiB 的帧）使它的 fiber 失败，即 Kardia 的 `Failed`；访客宿主随后按重启策略（2 秒、10 秒、30 秒之后，10 分钟内三次）通过更新失败的 fiber 来重启它，这不写任何配置。窗口内的第四次故障使它保持 `failed`，直到 `retry_package`。启动失败不会被重启。因故障停止不等于关闭：这些都不会写入 `[plugins]`。
+
+访客对 Agent 注册表的贡献（工具、上下文段、提示片段、钩子、观察者）是下一步；在此之前访客会运行，访客宿主可以调用它提供的服务。
 
 ## MCP [#mcp]
 
@@ -308,6 +322,7 @@ schema 遵循同样的按协议规则：支持 `strict_json_schema` 的协议（
 - MCP 重连复用打开连接时的密钥，所以过期的 OAuth 令牌会让重连失败，直到用户手动连接。
 - Skill 监视器只监视启动时存在的根目录；之后出现的根目录（包括之后启用的包的根目录）依靠读取时的标记。
 - 手动编辑 `[plugins]` 在下次启动或重新加载时生效；Agent 只在它自己写入设置之后重新加载包。
+- 已安装插件的访客会运行，但还不向 Agent 的注册表贡献任何东西。在 Windows 上，它的沙箱不限制读取。
 - 内置的上下文窗口只覆盖公开了上限的模型系列（GPT、o 系列、Claude、Gemini 2.5）；其他模型需要 Provider 的列表或设置才能自动压缩。
 - 命令沙箱只存在于 Linux 和 macOS；Windows（受限令牌及其提权设置）还没有，所以在那里未设置的 `sandboxMode` 即完全访问。macOS 的沙箱只由它在 macOS 上运行的测试检查。
 - 在 Linux 之外未验证：`notify` 监视器的 macOS 与 Windows 后端、Skill 目录中显示的 Windows 路径、Windows 上 MCP stdio 的退出原因和已退出子进程的释放，以及 Windows 上记忆制品的安装重命名。

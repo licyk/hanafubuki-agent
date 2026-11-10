@@ -431,6 +431,10 @@ path = "crates/tui/src/custom_terminal.rs"
 holder = "Copyright (c) 2016-2022 Florian Dehau"
 
 [[original]]
+path = "crates/tui/src/commands/plugins/code.rs"
+reason = "A code plugin's rows on /plugins (its grant, its guest's state), for the Agent's guest host, which Codex does not have."
+
+[[original]]
 path = "crates/tui/src/lib.rs"
 reason = "The crate's own entry: its docs and module declarations."
 

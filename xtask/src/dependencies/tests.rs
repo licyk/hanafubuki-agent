@@ -189,3 +189,23 @@ fn the_host_model_api_and_kardia_stay_in_their_place() {
         ]
     );
 }
+
+#[test]
+fn only_the_guest_host_runs_kardias_loader_and_guests() {
+    let metadata = metadata(&[
+        (
+            FACADE,
+            &[GUEST_HOST, "hanafubuki-agent-plugin-a", "kardia-hmr"],
+        ),
+        (GUEST_HOST, &[CONTRACTS, "kardia-hmr", "kardia-loader"]),
+        ("hanafubuki-agent-plugin-a", &[CONTRACTS, "kardia-loader"]),
+        (CONTRACTS, &[]),
+    ]);
+    assert_eq!(
+        rule_violations(&metadata),
+        [
+            "hanafubuki-agent depends on kardia-hmr; only the guest host (hanafubuki-agent-plugin-packages) may",
+            "hanafubuki-agent-plugin-a depends on kardia-loader; only the guest host (hanafubuki-agent-plugin-packages) may",
+        ]
+    );
+}

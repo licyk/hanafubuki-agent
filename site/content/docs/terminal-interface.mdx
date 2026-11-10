@@ -205,7 +205,7 @@ Fullscreen 下还有阅读对话的按键：Page Up/Page Down、F3、F4、Ctrl-S
 `/plugins` 打开插件浏览器（对应 Codex 的插件目录），有三个标签页，用 ←/→ 切换：**Installed**（已安装）、**Marketplaces**（市场）和 **Built-in**（内置）。每个改动立即保存；进行中时页面会显示（`Installing…`），完成后重新读取全部内容。对应的命令见[命令行参考](/docs/cli-reference#plugins)。
 
 - **Installed** 列出[已安装插件](/docs/cli-reference#plugins)：每个插件的状态、版本、需要审查的 hook 和问题。空格启用或停用选中的插件；Enter 打开它；**Install from a directory…** 要求输入一个插件目录，按 `<名字>@local` 安装。
-- 插件页面提供 **Disable plugin** 或 **Enable plugin**、有 hook 等待信任时的 **Trust its N hook(s)**、**Update plugin**（从它的市场或目录重新安装）、**Retry plugin**（重新加载）和 **Uninstall plugin**（会询问是否保留它的数据目录）。下面列出它的来源、版本、格式、Skill、MCP 服务器、hook 和问题。
+- 插件页面提供 **Disable plugin** 或 **Enable plugin**、有 hook 等待信任时的 **Trust its N hook(s)**、代码插件的权限未授予时的 **Grant its permissions**（说明它的代码能访问什么；**Code** 一行显示它的访客状态）、**Update plugin**（从它的市场或目录重新安装）、**Retry plugin**（重新加载，并再次启动失败的访客）和 **Uninstall plugin**（会询问是否保留它的数据目录）。下面列出它的来源、版本、格式、Skill、MCP 服务器、hook 和问题。
 - **Marketplaces** 列出已添加的市场，每个显示来源和其中已安装的插件数量。Enter 打开一个市场：列出它的插件，标为 **Available**、**Installed**、**Disabled** 或 **Not installable**；在未安装的插件上按 Enter 显示 **Install plugin**。Ctrl+U 升级 git 市场，Ctrl+R 确认后删除市场。**Add a marketplace…** 要求输入来源：`owner/repo`、git URL 或本地市场目录。
 - 安装带 hook 的插件后，会列出这些 hook 的命令并询问是否信任（**Trust them**，或 **Not now**：之后在 `/hooks` 或插件页面信任）。hook 只有被信任后才会运行。
 - **Built-in** 列出编译进 Agent 的插件及其状态：空格或 Enter 启用或停用（`disabledPlugins`；核心插件不能停用），`r` 重新启动失败的插件。

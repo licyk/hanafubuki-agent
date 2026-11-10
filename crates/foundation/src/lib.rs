@@ -17,5 +17,6 @@ pub mod paths;
 pub mod persistence;
 pub mod secrets;
 pub mod terminal_text;
+pub mod trace_content;
 pub mod url_policy;
 pub mod user_agent;

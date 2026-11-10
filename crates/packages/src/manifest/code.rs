@@ -4,6 +4,7 @@
 //! them; the store keeps them. Each is read on its own: a block that cannot
 //! be used is dropped with an issue, and so is one entry of a list.
 
+use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
 use super::fields::{kind, Fields};
@@ -58,7 +59,10 @@ pub struct ContributedSection {
     pub renderer: Option<String>,
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+/// What a package's code may reach: what its manifest asks for, and what
+/// the user granted, which the install record keeps.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
 pub struct PackagePermissions {
     pub network: bool,
     pub workspace: WorkspaceAccess,
@@ -66,7 +70,9 @@ pub struct PackagePermissions {
     pub env: Vec<String>,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+/// Ordered by what it allows: `None < Read < Write`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub enum WorkspaceAccess {
     None,
     #[default]

@@ -1,0 +1,48 @@
+[package]
+name = "hanafubuki-agent-plugin-packages"
+description = "The hanafubuki-agent plugin that runs installed plugins' code: out-of-process Kardia guests, sandboxed, owned by the Agent's executor and restarted after a crash"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[features]
+# Guests that run without the platform's sandbox, for tests on any machine
+# (`GuestHostInputs::unconfined`).
+test-support = []
+
+[dependencies]
+hanafubuki-agent-contracts.workspace = true
+hanafubuki-agent-foundation.workspace = true
+hanafubuki-agent-host.workspace = true
+hanafubuki-agent-packages.workspace = true
+hanafubuki-agent-process.workspace = true
+hanafubuki-agent-sandbox.workspace = true
+hex.workspace = true
+kardia-core.workspace = true
+# Only here: the guest host is the one crate that runs a loader subtree and
+# out-of-process guests (`cargo xtask check-dependencies`).
+kardia-loader = { version = "0.2.2", default-features = false }
+kardia-hmr = { version = "0.2.2", default-features = false, features = ["process"] }
+futures-util.workspace = true
+log.workspace = true
+parking_lot.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+sha2.workspace = true
+tokio = { workspace = true, features = ["rt", "sync", "time", "macros"] }
+
+[dev-dependencies]
+hanafubuki-agent-process = { workspace = true, features = ["test-support"] }
+kardia-guest = "0.2.2"
+tempfile.workspace = true
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync", "time"] }
+
+# Its own `main` answers the sandbox helper's command line and the test
+# guest's first, so the guests it starts (and confines) re-execute it.
+[[test]]
+name = "guests"
+path = "tests/guests/main.rs"
+harness = false
+required-features = ["test-support"]

@@ -4,7 +4,10 @@
 //! request of the turn then lists the packages that contribute Skills (in
 //! the turn's Skill catalog) or MCP servers, and none when no package does.
 //! The packages' content itself reaches the Agent through the `skills`,
-//! `mcp` and `hooks` rows, so turning this row off hides only the summary.
+//! `mcp` and `hooks` rows. The row also mounts the guest host
+//! (`hanafubuki-agent-plugin-packages`), which runs the code packages'
+//! guests as its child fibers, so turning this row off hides the summary
+//! and stops every guest.
 
 mod prompt;
 
@@ -19,12 +22,12 @@ use hanafubuki_agent_contracts::{
     TurnExtensions,
 };
 use kardia_core::{Context, Inject, PluginDef, Service};
+use serde_json::Value;
 
 use self::prompt::{AvailablePluginsPrompt, AVAILABLE_PLUGINS_RENDERER};
 use crate::packages::AgentPackages;
 
-/// The row's name. The guest host takes it over when installed plugins can
-/// carry code (docs/plan-plugin-system.md, §4.2).
+/// The row's name.
 pub(crate) const PACKAGES_PLUGIN: &str = "plugins";
 
 /// An enabled package as the turn's summary carries it.
@@ -48,12 +51,14 @@ pub(crate) fn packages_plugin(packages: AgentPackages) -> PluginDef {
     PluginDef::new(move |ctx: Context, _| {
         let packages = packages.clone();
         async move {
+            let guests = packages.guests().plugin();
             ctx.get::<TurnAdmissionRegistry>()?
                 .register(Arc::new(PluginTurnAdmission(packages)))?;
             ctx.get::<PromptContributorRegistry>()?
                 .register(Arc::new(AvailablePluginsPrompt))?;
             ctx.get::<ContextRendererRegistry>()?
                 .register(AVAILABLE_PLUGINS_RENDERER)?;
+            ctx.plugin_def(&guests, Value::Null)?;
             Ok(())
         }
     })

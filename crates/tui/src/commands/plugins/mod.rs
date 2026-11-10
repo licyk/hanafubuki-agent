@@ -10,6 +10,7 @@
 //! sharing, apps and their auth are not ported.
 
 mod browser;
+mod code;
 mod pages;
 
 use super::{CommandContext, CommandReply, CommandSpec};

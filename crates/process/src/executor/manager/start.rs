@@ -7,6 +7,7 @@ use std::time::Instant;
 use super::{ExecutorManager, ExecutorReservation, ProcessSupervision, ReservedExecutorReceipt};
 use crate::executor::model::{ExecutorInfo, ExecutorStartRequest};
 use crate::executor::output::DEFAULT_OUTPUT_CAP;
+use crate::executor::pipe::{ExecutorPipes, PipeHandling};
 use crate::executor::session::ExecutorSession;
 use crate::executor::{pipe, pty};
 
@@ -15,7 +16,14 @@ pub fn start_executor(
     manager: &ExecutorManager,
     request: ExecutorStartRequest,
 ) -> Result<ExecutorInfo, String> {
-    start_executor_impl(manager, request, None, ProcessSupervision::Tree).map(|(info, _)| info)
+    start_executor_impl(
+        manager,
+        request,
+        None,
+        ProcessSupervision::Tree,
+        PipeHandling::Buffered,
+    )
+    .map(|(info, _, _)| info)
 }
 
 /// Start a pipe execution that is allowed to outlive the current process.
@@ -31,8 +39,14 @@ pub fn start_independent_executor(
     if request.io_mode.uses_pty() {
         return Err("independent executor start supports pipe mode only".to_string());
     }
-    start_executor_impl(manager, request, None, ProcessSupervision::Independent)
-        .map(|(info, _)| info)
+    start_executor_impl(
+        manager,
+        request,
+        None,
+        ProcessSupervision::Independent,
+        PipeHandling::Buffered,
+    )
+    .map(|(info, _, _)| info)
 }
 
 pub fn start_reserved_executor(
@@ -40,15 +54,43 @@ pub fn start_reserved_executor(
     request: ExecutorStartRequest,
     reservation: &ExecutorReservation,
 ) -> Result<(ExecutorInfo, ReservedExecutorReceipt), String> {
-    let (info, receipt) = start_executor_impl(
+    let (info, receipt, _) = start_executor_impl(
         manager,
         request,
         Some(reservation),
         ProcessSupervision::Tree,
+        PipeHandling::Buffered,
     )?;
     Ok((
         info,
         receipt.expect("reserved executor start always returns a receipt"),
+    ))
+}
+
+/// [`start_reserved_executor`] in pipe mode, handing the process's stdin,
+/// stdout and stderr to the caller, who reads and writes them itself: the
+/// session buffers no output and queues no input. Everything else is the
+/// reserved executor's: the owner, the receipt, termination, the owner
+/// group and its record.
+pub fn start_reserved_pipe_executor(
+    manager: &ExecutorManager,
+    request: ExecutorStartRequest,
+    reservation: &ExecutorReservation,
+) -> Result<(ExecutorInfo, ReservedExecutorReceipt, ExecutorPipes), String> {
+    if request.io_mode.uses_pty() {
+        return Err("a handed-out pipe executor runs in pipe mode".to_string());
+    }
+    let (info, receipt, pipes) = start_executor_impl(
+        manager,
+        request,
+        Some(reservation),
+        ProcessSupervision::Tree,
+        PipeHandling::HandedOut,
+    )?;
+    Ok((
+        info,
+        receipt.expect("reserved executor start always returns a receipt"),
+        pipes.expect("a handed-out pipe start always returns the pipes"),
     ))
 }
 
@@ -57,7 +99,15 @@ fn start_executor_impl(
     mut request: ExecutorStartRequest,
     reservation: Option<&ExecutorReservation>,
     supervision: ProcessSupervision,
-) -> Result<(ExecutorInfo, Option<ReservedExecutorReceipt>), String> {
+    handling: PipeHandling,
+) -> Result<
+    (
+        ExecutorInfo,
+        Option<ReservedExecutorReceipt>,
+        Option<ExecutorPipes>,
+    ),
+    String,
+> {
     if request.command.is_empty() || request.command[0].trim().is_empty() {
         return Err("executor command must not be empty".to_string());
     }
@@ -139,13 +189,14 @@ fn start_executor_impl(
     );
     let inherited_environment = manager.child_process_environment.inherited_snapshot();
     let spawned = if request.io_mode.uses_pty() {
-        pty::spawn(session.clone(), &request, &inherited_environment)
+        pty::spawn(session.clone(), &request, &inherited_environment).map(|backend| (backend, None))
     } else {
         pipe::spawn(
             session.clone(),
             &request,
             supervision,
             &inherited_environment,
+            handling,
         )
     };
     log::info!(
@@ -156,7 +207,7 @@ fn start_executor_impl(
     );
 
     match spawned {
-        Ok(backend) => {
+        Ok((backend, pipes)) => {
             // Before the session is published: a crash from here on leaves
             // its process group in the owner's record.
             if let Some(leader) = backend.process_group_leader() {
@@ -190,7 +241,7 @@ fn start_executor_impl(
                 request.io_mode,
                 request.command[0]
             );
-            Ok((session.info(), receipt))
+            Ok((session.info(), receipt, pipes))
         }
         Err(err) => {
             let mut registry = manager.registry.lock();

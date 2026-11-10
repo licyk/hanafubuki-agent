@@ -1,7 +1,8 @@
 //! An installed package as the facade reports it.
 
 use hanafubuki_agent_hooks::{HookEntry, HookSource, HookTrust};
-use hanafubuki_agent_packages::{InstallRecord, ManifestFormat, PackageSource};
+use hanafubuki_agent_packages::{InstallRecord, ManifestFormat, PackagePermissions, PackageSource};
+use hanafubuki_agent_plugin_packages::GuestStatus;
 use hanafubuki_agent_skills::SkillCatalogEntry;
 use serde::Serialize;
 
@@ -28,6 +29,8 @@ pub struct AgentPackageStatus {
     /// The keys of its hooks that do not run until they are trusted (new,
     /// or changed since, or in a package whose contents changed since).
     pub hooks_to_trust: Vec<String>,
+    /// Its code, for a package in this project's format with a runtime.
+    pub guest: Option<AgentPackageGuest>,
     /// What could not be read or used: its manifest's fields, its
     /// components, an MCP server that gives way to another of its name.
     pub issues: Vec<String>,
@@ -44,13 +47,27 @@ pub struct AgentPackageContent {
     pub hooks: Vec<String>,
 }
 
-/// `package` with its install `record`, its Skills among `skills` and its
-/// hooks among `hooks`.
+/// A code package's guest: what it may reach and how it runs.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentPackageGuest {
+    /// What its manifest asks for, which its guest needs granted to start.
+    pub permissions: PackagePermissions,
+    /// What the user granted; none before a grant.
+    pub granted_permissions: Option<PackagePermissions>,
+    /// Its state, why it is not running, how its last process ended and
+    /// the end of its stderr.
+    pub status: GuestStatus,
+}
+
+/// `package` with its install `record`, its Skills among `skills`, its
+/// hooks among `hooks` and its `guest`.
 pub(super) fn package_status(
     package: &LoadedPackage,
     record: Option<&InstallRecord>,
     skills: &[SkillCatalogEntry],
     hooks: &[HookEntry],
+    guest: Option<AgentPackageGuest>,
 ) -> AgentPackageStatus {
     let id = package.id.key();
     let own_hooks = hooks
@@ -85,6 +102,7 @@ pub(super) fn package_status(
         enabled: package.enabled,
         content,
         hooks_to_trust,
+        guest,
         issues: package.issues.clone(),
         id,
     }
