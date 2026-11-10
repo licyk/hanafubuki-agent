@@ -4,7 +4,9 @@
 //! (plan implementation, tests) simply carries none.
 
 use hanafubuki_agent_contracts::TurnExtensions;
-use hanafubuki_agent_kernel::AgentHostContext;
+use hanafubuki_agent_kernel::{
+    AgentHostContext, AgentImageAttachmentRef, AgentPermissionMode, AgentSkillRef,
+};
 
 use super::DesktopAgentImageInput;
 
@@ -12,9 +14,38 @@ use super::DesktopAgentImageInput;
 pub struct AgentTurnRequest {
     pub text: String,
     pub images: Vec<DesktopAgentImageInput>,
-    pub skills: Vec<hanafubuki_agent_kernel::AgentSkillRef>,
+    pub skills: Vec<AgentSkillRef>,
     /// Handed to the context contributors in the turn's `ContextRequest`.
     pub host: TurnExtensions,
+}
+
+/// A turn `start_turn` runs and waits for, as the plugins' child turns run.
+/// From text it carries no images, no Skills and no permission mode.
+#[derive(Clone, Debug)]
+pub struct AgentTurnInput {
+    pub text: String,
+    pub images: Vec<AgentImageAttachmentRef>,
+    pub skills: Vec<AgentSkillRef>,
+    /// The turn's mode; `None` for the session's own mode, else the
+    /// configured `permissionMode`.
+    pub permission_mode: Option<AgentPermissionMode>,
+}
+
+impl From<String> for AgentTurnInput {
+    fn from(text: String) -> Self {
+        Self {
+            text,
+            images: Vec::new(),
+            skills: Vec::new(),
+            permission_mode: None,
+        }
+    }
+}
+
+impl From<&str> for AgentTurnInput {
+    fn from(text: &str) -> Self {
+        Self::from(text.to_string())
+    }
 }
 
 /// A message that steers a running turn.

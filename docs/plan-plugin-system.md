@@ -497,7 +497,7 @@ P4 does not depend on the earlier phases and can run alongside them. K1 can also
   - at the user's request, `kardia_*` aliases for the guest ABI in both hosts, with both SDKs exporting both name sets;
   - pykardia's relicense, which also covers the four `pykardia/core` files every exported guest embeds.
 - **The guest host uses both mechanisms.** It keeps its own restart loop and also uses Kardia's `Failed` state. The `plugins` row mounts it as a child fiber rather than being it.
-- **The `full_access` wait seen in P6** was the test starting a turn through `start_turn`, which never reads `permissionMode`. It was not a product bug.
+- **The `full_access` wait seen in P6** was the test starting a turn through `start_turn`, which then never read `permissionMode`. It was not a product bug; after P9 `start_turn` reads it (todo.md, P6).
 - **P9's crash tests found three bugs, all fixed:** `/warnings` hid failed code; `plugins info`/`retry` printed before the guest settled; their wait ran out where no guest could start.
 
 ## 9. Decisions

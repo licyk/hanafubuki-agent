@@ -259,7 +259,7 @@ async fn a_driven_child_runs_a_turn_answers_and_is_interrupted() {
     assert_eq!(driver.last_answer(child.id).unwrap(), None);
 
     let outcome = driver
-        .run_turn(child.id, "Do the subtask.".into(), None)
+        .run_turn(child.id, "Do the subtask.".into())
         .await
         .unwrap();
     assert_eq!(outcome.final_answer, "Child answer.");
@@ -276,7 +276,7 @@ async fn a_driven_child_runs_a_turn_answers_and_is_interrupted() {
 
     let running = tokio::spawn({
         let driver = driver.clone();
-        async move { driver.run_turn(child.id, "Take long.".into(), None).await }
+        async move { driver.run_turn(child.id, "Take long.".into()).await }
     });
     wait_until("the child's turn runs", || turn_running(&service, child.id)).await;
     driver.interrupt(child.id).await.unwrap();

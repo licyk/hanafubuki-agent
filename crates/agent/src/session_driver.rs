@@ -84,31 +84,27 @@ impl AgentSessionDriver {
         self.core.snapshot(child.id)
     }
 
-    /// Runs a turn of `text` on `session_id` and waits for its outcome. The
-    /// turn runs in `permission_mode`, else in the session's.
+    /// Runs `input`'s turn on `session_id` and waits for its outcome, in
+    /// the mode [`Self::turn_permission_mode`] resolves.
     pub(crate) async fn run_turn(
         &self,
         session_id: AgentSessionId,
-        text: String,
-        permission_mode: Option<AgentPermissionMode>,
+        input: crate::AgentTurnInput,
     ) -> Result<AgentTurnOutcome, AgentError> {
         let session = self
             .activate_provider_session(session_id)
             .await
             .map_err(AgentError::InvalidInput)?;
-        let permission_mode = match permission_mode {
-            Some(mode) => mode,
-            None => self
-                .turn_permission_mode(session_id)
-                .await
-                .map_err(AgentError::InvalidInput)?,
-        };
+        let permission_mode = self
+            .turn_permission_mode(session_id, input.permission_mode)
+            .await
+            .map_err(AgentError::InvalidInput)?;
         let world_state = self
             .collect_world_state(
                 session_id,
                 session.mode,
                 permission_mode,
-                Some(text.clone()),
+                Some(input.text.clone()),
                 TurnExtensions::default(),
             )
             .await?;
@@ -119,11 +115,14 @@ impl AgentSessionDriver {
             .start_turn(
                 session_id,
                 AgentTurnInput {
+                    text: input.text,
+                    images: input.images,
+                    skills: input.skills,
                     permission_mode,
                     turn,
                     world_state,
                     origin: AgentTurnOrigin::Programmatic,
-                    ..AgentTurnInput::from(text)
+                    provisional_title: None,
                 },
             )
             .await
@@ -255,7 +254,7 @@ impl AgentSessionDriver {
         child: AgentSessionId,
     ) -> Result<(), AgentError> {
         let mode = self
-            .turn_permission_mode(parent)
+            .turn_permission_mode(parent, None)
             .await
             .map_err(AgentError::InvalidInput)?;
         let sandbox_mode = self.core.session_sandbox_mode(parent)?;
@@ -420,12 +419,16 @@ impl AgentSessionDriver {
         Ok(snapshot)
     }
 
-    /// The permission mode of the session's next turn: the session's choice,
-    /// else the configured one.
+    /// The permission mode a turn of the session starts in: `requested`,
+    /// else the session's choice, else the configured one.
     pub(crate) async fn turn_permission_mode(
         &self,
         session_id: AgentSessionId,
+        requested: Option<AgentPermissionMode>,
     ) -> Result<AgentPermissionMode, String> {
+        if let Some(mode) = requested {
+            return Ok(mode);
+        }
         if let Some(mode) = self
             .core
             .session_permission_mode(session_id)

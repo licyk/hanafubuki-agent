@@ -68,6 +68,132 @@ async fn a_session_permission_mode_replaces_the_configured_one_for_that_session_
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }
 
+/// A turn `start_turn` runs from text takes the session's own mode, else the
+/// configured one; a mode in the input wins over both. Under a configured
+/// `FullAccess` the command runs without asking, and `Manual`, the
+/// session's or the input's, asks the user.
+#[tokio::test(flavor = "multi_thread")]
+async fn start_turn_runs_in_the_inputs_mode_else_the_sessions_else_the_configured_one() {
+    use AgentPermissionMode::{FullAccess, Manual};
+    let arguments = json!({
+        "cmd": approved_command(),
+        "shell": null,
+        "login": null,
+        "tty": null,
+        "yield_time_ms": 30_000,
+        "max_output_bytes": 32_768,
+        "workdir": null
+    })
+    .to_string();
+    let mut responses = Vec::new();
+    for _ in 0..4 {
+        responses.push((tool_events("exec_command", &arguments), Duration::ZERO));
+        responses.push((assistant_events("Ran it."), Duration::ZERO));
+    }
+    let server = FakeServer::start(responses).await;
+    let (service, paths, _) = service_with_config("start-turn-permission-mode", |_, config| {
+        configure_test_provider(config, &server.base_url, None);
+        config
+            .write_settings(crate::AgentSettingsPatch {
+                permission_mode: Some(FullAccess),
+                // No sandbox, so the command runs.
+                sandbox_mode: Some(Some(AgentSandboxMode::FullAccess)),
+                ..Default::default()
+            })
+            .unwrap();
+    });
+    let unset = service
+        .create_session(AgentSessionMode::Default)
+        .await
+        .unwrap();
+    let chosen = service
+        .create_session(AgentSessionMode::Default)
+        .await
+        .unwrap();
+    service
+        .set_session_permission_mode(chosen.id, Manual)
+        .unwrap();
+
+    // The session, the mode the input gives, the mode the turn runs in,
+    // and whether the user is asked.
+    for (session, given, expected, asks) in [
+        (unset.id, None, FullAccess, false),
+        (unset.id, Some(Manual), Manual, true),
+        (chosen.id, None, Manual, true),
+        (chosen.id, Some(FullAccess), FullAccess, false),
+    ] {
+        let input = crate::AgentTurnInput {
+            permission_mode: given,
+            .."Run it.".into()
+        };
+        let asked = turn_allowing_once(&service, session, input, asks).await;
+        assert_eq!(asked, usize::from(asks), "{given:?}");
+        let turn = service.snapshot(session).unwrap().turn.unwrap();
+        assert_eq!(turn.permission_mode, expected);
+        let ran = String::from_utf8(server.requests().last().unwrap().body.clone()).unwrap();
+        assert!(ran.contains("approved-agent-command"), "{ran}");
+    }
+    let diagnostics = service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE);
+    assert!(diagnostics.is_empty(), "{diagnostics:?}");
+    let _ = std::fs::remove_dir_all(paths.app_data_dir);
+}
+
+/// Runs `input`'s turn on `session_id`, allowing once the approval it asks
+/// for if it `asks`: how many approvals the turn asked for.
+async fn turn_allowing_once(
+    service: &AgentApplicationService,
+    session_id: AgentSessionId,
+    input: crate::AgentTurnInput,
+    asks: bool,
+) -> usize {
+    let before = approvals(service, session_id).len();
+    let running = service.clone();
+    let turn = tokio::spawn(async move { running.start_turn(session_id, input).await });
+    if asks {
+        let deadline = Instant::now() + TEST_WAIT;
+        let request = loop {
+            if let Some(request) = approvals(service, session_id).into_iter().nth(before) {
+                break request;
+            }
+            assert!(Instant::now() < deadline, "no approval asked for");
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        };
+        let identity = service.snapshot(session_id).unwrap().turn.unwrap();
+        service
+            .resolve_approval(
+                session_id,
+                identity.id,
+                identity.generation,
+                request.request_id,
+                ApprovalUserDecision::AllowOnce,
+            )
+            .unwrap();
+    }
+    let outcome = tokio::time::timeout(TEST_WAIT, turn)
+        .await
+        .expect("the turn ends without another approval")
+        .unwrap()
+        .unwrap();
+    assert_eq!(outcome.final_answer, "Ran it.");
+    approvals(service, session_id).len() - before
+}
+
+fn approvals(
+    service: &AgentApplicationService,
+    session_id: AgentSessionId,
+) -> Vec<hanafubuki_agent_approval::ApprovalRequest> {
+    service
+        .events_since(session_id, None)
+        .unwrap()
+        .events
+        .into_iter()
+        .filter_map(|event| match event.kind {
+            AgentEventKind::ApprovalRequested { request } => Some(request),
+            _ => None,
+        })
+        .collect()
+}
+
 /// The note survives a restart and reaches the next turn's request; the
 /// session's permission mode does not survive it.
 #[tokio::test]

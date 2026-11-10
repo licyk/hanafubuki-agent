@@ -85,12 +85,11 @@ impl ReviewService {
         // For this turn only: a later turn of the session, which a person
         // may start, runs in the session's own mode.
         // Boxed: a turn's future is too large for a caller's stack.
-        let outcome = Box::pin(self.driver.run_turn(
-            child,
-            prompt,
-            Some(AgentPermissionMode::FullAccess),
-        ))
-        .await;
+        let input = crate::AgentTurnInput {
+            permission_mode: Some(AgentPermissionMode::FullAccess),
+            ..prompt.into()
+        };
+        let outcome = Box::pin(self.driver.run_turn(child, input)).await;
         let output = outcome.map(|outcome| parse_review_answer(&outcome.final_answer, child));
         let note = review_exit_note(output.as_ref().ok()).map_err(AgentError::Internal)?;
         self.tell_parent(parent, note).await?;

@@ -301,7 +301,7 @@ async fn record_lineage_history() {
         })
         .unwrap();
     driver
-        .run_turn(child.id, "Child question.".into(), None)
+        .run_turn(child.id, "Child question.".into())
         .await
         .unwrap();
     assert!(service

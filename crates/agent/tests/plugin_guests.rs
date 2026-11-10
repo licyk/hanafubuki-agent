@@ -16,7 +16,6 @@
 //! confines, re-executes it. It runs where the sandbox's plugin profile was
 //! checked (Linux), and skips elsewhere.
 
-use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use hanafubuki_agent::test_support::{
@@ -24,10 +23,10 @@ use hanafubuki_agent::test_support::{
     FakeServer, TEST_SHUTDOWN_DEADLINE, TEST_WAIT,
 };
 use hanafubuki_agent::{
-    AgentApplicationService, AgentEvent, AgentEventKind, AgentEventSink, AgentPackageSource,
-    AgentPackageStatus, AgentPermissionMode, AgentSessionId, AgentSessionMode, AgentSettingsPatch,
-    AgentTurnOutcome, AgentTurnPhase, AgentTurnRequest, ApprovalActionKind, ApprovalUserDecision,
-    GuestState, PackagePermissions, WorkspaceAccess,
+    AgentApplicationService, AgentEventKind, AgentPackageSource, AgentPackageStatus,
+    AgentPermissionMode, AgentSessionId, AgentSessionMode, AgentSettingsPatch, AgentTurnInput,
+    AgentTurnOutcome, ApprovalActionKind, ApprovalUserDecision, GuestState, PackagePermissions,
+    WorkspaceAccess,
 };
 use kardia_guest::{json, Guest, Host, Map, Meta, Request, Result, Value};
 
@@ -174,8 +173,8 @@ async fn running(service: &AgentApplicationService, before: Option<u32>) -> Agen
     }
 }
 
-/// Runs a turn on `text` whose one tool call the user allows once, as a
-/// `Manual` turn asks.
+/// Runs a turn on `text` in `Manual`, whose one tool call the user allows
+/// once.
 async fn turn_approved(
     service: &AgentApplicationService,
     session_id: AgentSessionId,
@@ -183,8 +182,11 @@ async fn turn_approved(
 ) -> AgentTurnOutcome {
     let asked = approvals(service, session_id).len();
     let running = service.clone();
-    let text = text.to_string();
-    let turn = tokio::spawn(async move { running.start_turn(session_id, text.into()).await });
+    let input = AgentTurnInput {
+        permission_mode: Some(AgentPermissionMode::Manual),
+        ..text.into()
+    };
+    let turn = tokio::spawn(async move { running.start_turn(session_id, input).await });
     let deadline = Instant::now() + TEST_WAIT;
     let request = loop {
         if let Some(request) = approvals(service, session_id).into_iter().nth(asked) {
@@ -209,43 +211,6 @@ async fn turn_approved(
         .unwrap()
         .unwrap()
         .unwrap()
-}
-
-/// Submits a turn on `text` as the terminal interface and `exec` do, so it
-/// runs in the session's permission mode, else the configured one, and
-/// waits for its end: its permission mode and how it ended.
-async fn submitted_turn(
-    service: &AgentApplicationService,
-    session_id: AgentSessionId,
-    text: &str,
-) -> (AgentPermissionMode, AgentTurnPhase) {
-    struct Discard;
-    impl AgentEventSink for Discard {
-        fn emit(&self, _event: AgentEvent) {}
-    }
-    let request = AgentTurnRequest {
-        text: text.into(),
-        images: Vec::new(),
-        skills: Vec::new(),
-        host: Default::default(),
-    };
-    service
-        .submit_turn_with_sink(session_id, request, Arc::new(Discard))
-        .await
-        .unwrap();
-    let deadline = Instant::now() + TEST_WAIT;
-    loop {
-        let turn = service.snapshot(session_id).unwrap().turn.unwrap();
-        if turn.phase.is_terminal() {
-            return (turn.permission_mode, turn.phase);
-        }
-        assert!(
-            Instant::now() < deadline,
-            "the turn did not end: {:?}",
-            approvals(service, session_id)
-        );
-        tokio::time::sleep(Duration::from_millis(20)).await;
-    }
 }
 
 fn approvals(
@@ -334,9 +299,6 @@ async fn a_code_plugin_contributes_to_a_turn_and_its_crash_stays_its_own() {
         .create_session(AgentSessionMode::Default)
         .await
         .unwrap();
-    service
-        .set_session_permission_mode(session.id, AgentPermissionMode::Manual)
-        .unwrap();
     let outcome = turn_approved(&service, session.id, "Use the demo plugin.").await;
     assert_eq!(outcome.final_answer, "The plugin answered.");
     let requests = server.requests();
@@ -391,9 +353,16 @@ async fn a_code_plugin_contributes_to_a_turn_and_its_crash_stays_its_own() {
         .create_session(AgentSessionMode::Default)
         .await
         .unwrap();
-    let (mode, phase) = submitted_turn(&service, unset.id, "Crash the demo plugin.").await;
-    assert_eq!(mode, AgentPermissionMode::FullAccess);
-    assert_eq!(phase, AgentTurnPhase::Completed);
+    let outcome = tokio::time::timeout(
+        TEST_WAIT,
+        service.start_turn(unset.id, "Crash the demo plugin.".into()),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    assert_eq!(outcome.final_answer, "The plugin crashed; going on.");
+    let turn = service.snapshot(unset.id).unwrap().turn.unwrap();
+    assert_eq!(turn.permission_mode, AgentPermissionMode::FullAccess);
     assert!(approvals(&service, unset.id).is_empty());
     let after_crash = String::from_utf8(server.requests()[6].body.clone()).unwrap();
     assert!(

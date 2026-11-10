@@ -353,7 +353,7 @@ Provider 的流是外部输入（[模型 API](/docs/architecture#the-model-api)�
 
 ### 标题 [#titles]
 
-- 门面的提交把轮次标为 `User`，对没有标题的会话，把提交的文本折成一行、截到 36 个字符，作为 `AgentTurnInput::provisional_title` 传入。如果会话仍然没有标题，准入就把它随轮次一起提交（`session_title_updated` 在 `turn_started` 和 `history_committed` 之后）。来源和临时标题都不随轮次持久化。
+- 门面的提交把轮次标为 `User`，对没有标题的会话，把提交的文本折成一行、截到 36 个字符，作为内核的 `AgentTurnInput::provisional_title` 传入。如果会话仍然没有标题，准入就把它随轮次一起提交（`session_title_updated` 在 `turn_started` 和 `history_committed` 之后）。来源和临时标题都不随轮次持久化。
 - `titles` 插件的观察者把每个提交了临时标题的 `User` 轮次的 `TurnAdmitted` 排入有界队列（`try_send`）。它的工作线程（`spawn_scoped_worker`，一次处理一个标题，随插件停止）通过 `BlockingService` 上的 `AgentTitleApplication` 读取轮次的用户消息（`AgentService::turn_user_message`）和当前设置中该会话的 Provider，让一个私有的模型会话生成标题（提示截到 960 字节，30 秒），并用 `replace_automatic_session_title_if_expected` 提交，这是对临时标题的比较并交换，所以期间的重命名优先。插件关闭时临时标题保留。
 - 这个请求是共用的结构化请求（`plugins/structured_request.rs`）：提供者支持时用 JSON schema 输出（`ModelStructuredOutputCapability::NativeJsonSchema`），否则强制调用一个以该对象为参数的工具；有时间上限，随插件停止而取消。概要和标题建议也使用它。
 - 标题建议（`suggest_session_title`）通过 `AgentConversationReader` 读取会话最近 8 条用户和助手消息（从记录中由新到旧），每条截到 960 字节的平均份额，不提交任何东西。

@@ -1,6 +1,6 @@
 use super::AgentApplicationService;
 use crate::titles::provisional_agent_title;
-use crate::{prepare_and_stage_images, AgentSteeringRequest, AgentTurnRequest};
+use crate::{prepare_and_stage_images, AgentSteeringRequest, AgentTurnInput, AgentTurnRequest};
 use hanafubuki_agent_config::AgentSandboxMode;
 use hanafubuki_agent_contracts::TurnExtensions;
 use hanafubuki_agent_kernel::{
@@ -26,34 +26,16 @@ impl AgentApplicationService {
             .map_err(|error| error.to_string())
     }
 
+    /// Runs `input`'s turn and waits for its outcome. It runs in the
+    /// input's permission mode, else the session's own, else the configured
+    /// `permissionMode`.
     pub async fn start_turn(
         &self,
         session_id: AgentSessionId,
-        mut input: hanafubuki_agent_kernel::AgentTurnInput,
+        input: AgentTurnInput,
     ) -> Result<AgentTurnOutcome, AgentError> {
-        let session = self
-            .activate_provider_session(session_id)
-            .await
-            .map_err(AgentError::InvalidInput)?;
-        if let Some(mode) = self.core.session_permission_mode(session_id)? {
-            input.permission_mode = mode;
-        }
-        let world_state = self
-            .driver
-            .collect_world_state(
-                session_id,
-                session.mode,
-                input.permission_mode,
-                Some(input.text.clone()),
-                TurnExtensions::default(),
-            )
-            .await?;
-        input.turn = self
-            .driver
-            .collect_turn_extensions(session_id, session.mode)
-            .await?;
-        input.world_state = world_state;
-        self.core.start_turn(session_id, input).await
+        self.host.ensure_started().await;
+        self.driver.run_turn(session_id, input).await
     }
 
     pub async fn submit_turn_with_sink(
@@ -73,7 +55,7 @@ impl AgentApplicationService {
             .flatten();
         let core = self.core.clone();
         let files = self.files.clone();
-        let permission_mode = self.driver.turn_permission_mode(session_id).await?;
+        let permission_mode = self.driver.turn_permission_mode(session_id, None).await?;
         let world_state = self
             .driver
             .collect_world_state(
@@ -147,7 +129,10 @@ impl AgentApplicationService {
     ) -> Result<AgentTurnAccepted, String> {
         self.activate_provider_session(request.session_id).await?;
         let core = self.core.clone();
-        let permission_mode = self.driver.turn_permission_mode(request.session_id).await?;
+        let permission_mode = self
+            .driver
+            .turn_permission_mode(request.session_id, None)
+            .await?;
         // Implementing the plan returns the session to Default mode.
         let world_state = self
             .driver

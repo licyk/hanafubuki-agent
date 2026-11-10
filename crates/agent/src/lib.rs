@@ -97,7 +97,9 @@ pub use host::{
     AgentPluginGroup, AgentPluginLock, AgentPluginRow, AgentPluginState, AgentPluginStatus,
     AgentPlugins, NoopAgentPluginEventSink,
 };
-pub use host_inputs::{AgentSteeringRequest, AgentTurnRequest, HostContextPort, NoHostContext};
+pub use host_inputs::{
+    AgentSteeringRequest, AgentTurnInput, AgentTurnRequest, HostContextPort, NoHostContext,
+};
 pub use memory::AgentMemoryApplication;
 pub use network::{AgentProxy, NetworkSettingsPort};
 pub use packages::validate_package;
@@ -195,11 +197,11 @@ pub use hanafubuki_agent_kernel::{
     AgentSessionParentFilter, AgentSessionRuntimeSnapshot, AgentSessionSummary, AgentSessionTitle,
     AgentSessionTitleRenameRequest, AgentSessionTitleSource, AgentSkillRef, AgentSteeringAccepted,
     AgentTranscriptPage, AgentTranscriptPageRequest, AgentTurnAccepted,
-    AgentTurnCancellationOutcome, AgentTurnId, AgentTurnInput, AgentTurnOutcome,
-    AgentTurnPageRequest, AgentTurnPhase, AgentTurnTerminalReason, AgentUserInputAccepted,
-    AgentUserInputAnswer, AgentUserInputRequest, AgentUserInputRequestId, ApprovalRequest,
-    ApprovalRequestId, ApprovalUserDecision, ConfirmedAgentSessionDeletion, ConversationItem,
-    ModelCatalogEntry, MAXIMUM_HOST_CONTEXT_BYTES,
+    AgentTurnCancellationOutcome, AgentTurnId, AgentTurnOutcome, AgentTurnPageRequest,
+    AgentTurnPhase, AgentTurnTerminalReason, AgentUserInputAccepted, AgentUserInputAnswer,
+    AgentUserInputRequest, AgentUserInputRequestId, ApprovalRequest, ApprovalRequestId,
+    ApprovalUserDecision, ConfirmedAgentSessionDeletion, ConversationItem, ModelCatalogEntry,
+    MAXIMUM_HOST_CONTEXT_BYTES,
 };
 pub use hanafubuki_agent_kernel::{AgentQuarantinedSession, AgentRecoveryReport};
 use hanafubuki_agent_kernel::{AgentService, ModelCompactionCapability};

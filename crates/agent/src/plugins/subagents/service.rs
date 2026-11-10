@@ -445,7 +445,7 @@ impl SubagentService {
         let runs = self.runs.clone();
         let driver = self.driver.clone();
         tokio::spawn(async move {
-            let outcome = catch_panic_async(driver.run_turn(child, text, None)).await;
+            let outcome = catch_panic_async(driver.run_turn(child, text.into())).await;
             runs.finish(child, turn, AgentRunStatus::of_turn(outcome));
         });
         Ok(())

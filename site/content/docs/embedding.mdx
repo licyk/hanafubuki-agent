@@ -472,7 +472,7 @@ impl AgentEventSink for PrintEvents {
 
 ## 权限 [#permissions]
 
-轮次的权限模式在它开始时确定。`submit_turn_with_sink` 和 `submit_plan_implementation_with_sink` 在会话有自己的模式时使用它，否则使用配置的 `permissionMode`；`start_turn` 用会话的模式代替输入中的模式，从不读取 `permissionMode`：由文本构造的输入（`AgentTurnInput::from`）是 `Manual`。各模式和审批的行为见[权限与审批](/docs/permissions)。
+轮次的权限模式在它开始时确定：启动时给定的模式，否则是会话自己的模式（如果有），否则是配置的 `permissionMode`。`submit_turn_with_sink` 和 `submit_plan_implementation_with_sink` 不给定模式；`start_turn` 给定它的输入中的模式（`AgentTurnInput { text, images, skills, permission_mode }`，一个 `Option<AgentPermissionMode>`），由文本构造的输入（`AgentTurnInput::from`）不给定（`None`）。各模式和审批的行为见[权限与审批](/docs/permissions)。
 
 | 调用                                            | 作用                                                                                                                                                                                                                                                                                         |
 | ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

@@ -494,12 +494,30 @@ lists below still stand.
     name (different marketplaces) derive one prompt kind, so the second's
     prompt is refused with an issue. (Resolved: the first facade run under
     `permissionMode = "full_access"` waited for an approval because the
-    test's `start_turn(id, text.into())` never reads `permissionMode`, as
-    embedding documents: an input from text is `Manual`, replaced only by
-    the session's own mode; `submit_turn_with_sink`, the TUI's and `exec`'s
-    path, reads it. A plugin tool is approved exactly as an MCP tool that
-    asks. `plugin_guests.rs` now checks each mode: `Manual` asks the user,
-    `AutoReview` the reviewer, configured `FullAccess` no one.)
+    test's `start_turn(id, text.into())` did not read `permissionMode`: an
+    input from text was `Manual`, replaced only by the session's own mode,
+    while `submit_turn_with_sink`, the TUI's and `exec`'s path, read it.
+    Fixed after P9 (a breaking facade change the user approved): the
+    facade has its own `AgentTurnInput { text, images, skills,
+    permission_mode: Option<AgentPermissionMode> }` (the kernel's stays
+    strict, with a concrete mode), `From<String>`/`From<&str>` give `None`,
+    and every facade turn resolves its mode in one place
+    (`AgentSessionDriver::turn_permission_mode`: the requested mode, else
+    the session's, else the configured one); `start_turn` runs through the
+    driver's `run_turn`, as the plugins' child turns do. A plugin tool is
+    approved exactly as an MCP tool that asks. `plugin_guests.rs` checks
+    each mode: `Manual` given in the input asks the user, the session's
+    `AutoReview` the reviewer, configured `FullAccess` no one, all through
+    `start_turn`; `sessions/permissions.rs` pins the order.)
+  - Hanafubuki, at its next pin: `AgentTurnInput` is now the facade's own
+    type, `{ text, images, skills, permission_mode }`, with
+    `permission_mode: Option<AgentPermissionMode>` (a literal gives
+    `Some(mode)` or `None`; `turn`, `world_state`, `origin` and
+    `provisional_title` are gone, the facade sets them). `start_turn` with
+    text now runs in the session's own mode, else the configured
+    `permissionMode`, not `Manual`: a host relying on `Manual` must say so
+    (`permission_mode: Some(AgentPermissionMode::Manual)`). A mode given in
+    the input now wins over the session's own, which used to replace it.
   - Hanafubuki, at its next pin: `ApprovalActionKind::PluginToolCall`
     (`plugin_tool_call`; an exhaustive match needs an arm);
     `PluginSettings.settings` (a struct literal needs it) and

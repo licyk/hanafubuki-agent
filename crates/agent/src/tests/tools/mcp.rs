@@ -594,15 +594,9 @@ async fn an_unrecognised_allowed_tool_neither_hides_a_skill_nor_expands_the_tool
     service
         .start_turn(
             session.id,
-            hanafubuki_agent_kernel::AgentTurnInput {
-                text: "use it".into(),
-                images: Vec::new(),
+            crate::AgentTurnInput {
                 skills: vec![hanafubuki_agent_kernel::AgentSkillRef { skill: entry.id }],
-                turn: Default::default(),
-                world_state: Default::default(),
-                permission_mode: hanafubuki_agent_kernel::AgentPermissionMode::Manual,
-                origin: Default::default(),
-                provisional_title: None,
+                .."use it".into()
             },
         )
         .await
