@@ -100,7 +100,9 @@ fn a_subagents_approval_is_shown_in_the_parent_and_answered_on_the_subagent() {
     // The subagent runs in Manual mode, as its parent: its call waits.
     // The shell's name is the platform's: Posix, or PowerShell on Windows.
     let approval = harness.pump_until_screen_shows("Subagent counter: Run");
-    assert!(approval.contains("echo child-output"), "{approval}");
+    // The summary names the temporary directory, so where it wraps varies.
+    let unwrapped = approval.split_whitespace().collect::<Vec<_>>().join(" ");
+    assert!(unwrapped.contains("echo child-output"), "{approval}");
     assert!(approval.contains("Yes, proceed"), "{approval}");
     harness.key(KeyCode::Char('y'));
     harness.pump_until_screen_shows("The subagent ran it.");
