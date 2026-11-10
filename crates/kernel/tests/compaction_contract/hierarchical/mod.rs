@@ -39,7 +39,7 @@ fn hierarchical_config() -> AgentSessionConfig {
 
 /// The tuning the turns run with: only the newest message is kept out of a
 /// fold, and a fold spans at least 1 000 characters.
-fn tuning() -> AgentHierarchicalCompression {
+pub(super) fn tuning() -> AgentHierarchicalCompression {
     AgentHierarchicalCompression {
         preserve_recent_messages: 1,
         preserve_recent_tokens: 0,
@@ -88,7 +88,7 @@ fn call(name: &str, call_id: &str, arguments: serde_json::Value) -> ScriptedResp
 }
 
 /// A `compress` call folding `range` under `topic`.
-fn compress(call_id: &str, range: &str, topic: &str) -> ScriptedResponse {
+pub(super) fn compress(call_id: &str, range: &str, topic: &str) -> ScriptedResponse {
     call(
         "compress",
         call_id,

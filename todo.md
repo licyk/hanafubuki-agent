@@ -144,6 +144,25 @@ and pushed, and notes what Hanafubuki must change at its next pin.
     compaction_keeps_the_turns_world_state_removal` (failed before with
     the validation error). Goldens unchanged (none has a pre-turn
     install). Docs: internals (both languages). Nothing for Hanafubuki.
+  - Done (after P12): the rebasing install's boundary. It cut the history
+    at `plan.source_items.len()` for its world-state checkpoint and its
+    suffix, but `source_items` is the history before the boundary
+    projected over the active compression blocks (a session that left
+    `hierarchical` with a block, before its first standard compaction),
+    which has fewer items: the install then kept compacted items in the
+    suffix. The plan now carries `source_boundary`, the number of history
+    items before the boundary, which the suffix starts at, and the rebase
+    takes the plan's world-state checkpoint (the state at that boundary,
+    since the pre-turn fix). The in-line install already used the raw
+    boundary (`current_turn_suffix`, the checkpoint). `CompactionSummary.
+    compacted_item_count` still counts the items the compaction read (not
+    model-visible). Test: kernel `compaction_contract::background::
+    adoption::a_result_read_from_a_projected_history_is_installed_at_the_
+    history_s_boundary` (a fold of `m00001–m00002`, a switch to
+    `background`, a turn launching the compaction and the next installing
+    it; before the fix the folded turn's answer stayed after the summary).
+    Docs: internals (both languages). Goldens unchanged. Nothing for
+    Hanafubuki.
   - Done (after P12): the `/compact` and turn-admission race. A turn
     admitted while `/compact` waited for a background run could take the
     result first; `/compact` then found it spent and compacted with the

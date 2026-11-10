@@ -46,17 +46,11 @@ impl AgentService {
                         &plan.current_turn_suffix,
                     )
                 }
-                // The world state where the suffix begins: the suffix's own
-                // updates, removals included, still apply to it in order.
-                InstallMode::Rebase(_) => {
-                    let suffix = rebased_suffix(record, plan)?;
-                    let compacted = &record.conversation.history[..plan.source_items.len()];
-                    compacted_history(
-                        sample,
-                        crate::model::full_world_state_checkpoint(compacted),
-                        suffix,
-                    )
-                }
+                InstallMode::Rebase(_) => compacted_history(
+                    sample,
+                    plan.world_state_checkpoint.clone(),
+                    rebased_suffix(record, plan)?,
+                ),
             };
             let mut staged = record.clone();
             let identity = match &mode {
@@ -203,7 +197,7 @@ fn rebased_suffix<'a>(
     {
         return Err(AgentError::StaleRevision);
     }
-    Ok(&history[plan.source_items.len()..])
+    Ok(&history[plan.source_boundary..])
 }
 
 /// Records a background compaction as the session's, ready to install: it

@@ -6,6 +6,7 @@ use super::*;
 /// replaces, the windows it moves between, and the request that compacts it.
 pub(super) struct CompactionSource {
     items: Vec<ConversationItem>,
+    boundary: usize,
     item_ids: Vec<AgentHistoryItemId>,
     current_turn_suffix: Vec<AgentHistoryItem>,
     world_state_checkpoint: Option<ConversationItem>,
@@ -39,6 +40,7 @@ impl CompactionSource {
             model: transport.model,
             cancellation,
             source_items: self.items,
+            source_boundary: self.boundary,
             source_item_ids: self.item_ids,
             current_turn_suffix: self.current_turn_suffix,
             world_state_checkpoint: self.world_state_checkpoint,
@@ -101,6 +103,7 @@ pub(super) fn compaction_source(
         &transport.tool_plan,
     )?;
     Ok(CompactionSource {
+        boundary: compaction_boundary,
         item_ids: record
             .conversation
             .history

@@ -54,14 +54,19 @@ struct CompactionPlan {
     next_prompt: RequestContext,
     model: Arc<dyn ModelSession>,
     cancellation: CancellationToken,
+    /// What the compaction read: the history before `source_boundary`,
+    /// projected over the active compression blocks, so it may have fewer
+    /// items than that history.
     source_items: Vec<ConversationItem>,
+    /// How many items of the history come before the compaction boundary:
+    /// the ones it replaces, whatever `source_items` counts.
+    source_boundary: usize,
     /// The whole history's ids when the compaction began, not only those of
     /// `source_items`.
     source_item_ids: Vec<AgentHistoryItemId>,
     current_turn_suffix: Vec<AgentHistoryItem>,
-    /// The world state of the whole history when the compaction began. The
-    /// install's compare-and-swap refuses any commit in between, so it is
-    /// the state of the history the compaction installs into.
+    /// The world state of the history before `source_boundary`, where the
+    /// suffix the install keeps begins.
     world_state_checkpoint: Option<ConversationItem>,
     source_revision: AgentRevision,
     source_window: AgentContextWindowSnapshot,

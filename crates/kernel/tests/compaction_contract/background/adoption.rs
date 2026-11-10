@@ -205,3 +205,80 @@ fn new_context_tool_turn() -> ScriptedTurnResponse {
         response: new_context_tool_response(),
     }
 }
+
+/// A session that left `hierarchical` with an active block compacts the
+/// projected history, which has fewer items than the history itself: the
+/// install still cuts the history where the compaction read it, so the
+/// turn added since follows the summary whole and nothing it compacted.
+#[tokio::test]
+async fn a_result_read_from_a_projected_history_is_installed_at_the_history_s_boundary() {
+    let model = BackgroundModel::local(
+        [
+            answer(&FIRST_ANSWER, 100),
+            ScriptedTurnResponse {
+                gate: None,
+                response: super::hierarchical::compress("fold-1", "m00001–m00002", "Greeting"),
+            },
+            answer("folded", 100),
+            answer("second answer", IN_BAND),
+            answer("third answer", 200),
+        ],
+        [compaction(Answer::Summary("the first turns"))],
+    );
+    let service = AgentService::new(
+        Arc::new(model.clone()),
+        FakeTools::new([]).await.registries(),
+    );
+    let session = service
+        .create_session(AgentSessionConfig {
+            compaction_strategy: AgentCompactionStrategy::Hierarchical,
+            ..background_config(ModelCompactionCapability::LocalSummary)
+        })
+        .unwrap();
+    let hierarchical = |text: &str| {
+        let mut input = AgentTurnInput::from(text);
+        input.turn = TurnExtensions::default().with(Arc::new(super::hierarchical::tuning()));
+        input
+    };
+    service
+        .start_turn(session.id, hierarchical("first"))
+        .await
+        .unwrap();
+    service
+        .start_turn(session.id, hierarchical("fold"))
+        .await
+        .unwrap();
+    let strategy = tokio::task::spawn_blocking({
+        let service = service.clone();
+        move || {
+            service.set_session_compaction_strategy(session.id, AgentCompactionStrategy::Background)
+        }
+    });
+    assert!(strategy.await.unwrap().unwrap());
+    service
+        .start_turn(session.id, turn("second"))
+        .await
+        .unwrap();
+    background_ready(&service, session.id).await;
+    // The compaction read the fold's summary, not what it folded.
+    let compacted = format!("{:?}", model.compaction_requests()[0].input);
+    assert!(compacted.contains("Greeting"));
+    assert!(!compacted.contains("a long first answer"));
+
+    service.start_turn(session.id, turn("third")).await.unwrap();
+    assert!(background_completed(&service, session.id));
+    assert_eq!(
+        layout(&service.test_model_context(session.id).unwrap()),
+        [
+            "user:first",
+            "user:fold",
+            "summary:the first turns",
+            "turn",
+            "user:second",
+            "assistant:second answer",
+            "turn",
+            "user:third",
+            "assistant:third answer",
+        ]
+    );
+}
