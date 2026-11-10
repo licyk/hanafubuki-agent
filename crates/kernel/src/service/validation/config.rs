@@ -293,6 +293,7 @@ pub(in crate::service) fn assert_valid_limits(limits: AgentHardLimits) {
     assert!(limits.event_buffer_capacity > 0);
     assert!(!limits.approval_timeout.is_zero());
     assert!(!limits.turn_deadline.is_zero());
+    assert!(!limits.plugin_call_deadline.is_zero());
 }
 
 /// Repairs the fields of a session config a rule may have tightened since it

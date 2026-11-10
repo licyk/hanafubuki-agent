@@ -2,6 +2,7 @@ use std::collections::{BTreeSet, HashSet};
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
+use std::time::Duration;
 
 use hanafubuki_agent_foundation::cancellation::CancellationToken;
 use hanafubuki_agent_model_api::ModelToolSpec;

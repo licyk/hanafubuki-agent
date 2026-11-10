@@ -19,8 +19,31 @@ user first.
       package-content trust, the "available plugins" section, live reload.
 - [ ] P3: lifecycle API (facade), `plugins` CLI, TUI `/plugins` (Codex's
       port), built-in rows with retry, `--safe-mode`, `package_changed`.
-- [ ] P4: kernel deadlines at the five untimed points (context, admission,
+- [x] P4: kernel deadlines at the five untimed points (context, admission,
       tool source, prompt `prepare`, tool `permission`).
+  - Done: `AgentHardLimits::plugin_call_deadline` (10 s) bounds each. A
+    context or turn admission contributor past it is cancelled and left out
+    with an issue on its plugin; a tool source fails (its trust decides); a
+    prompt preparer's values are left out with a warning; a `permission`
+    past it is the tool error "the tool's permission check did not finish
+    within N s and was stopped". `collect_world_state` and
+    `collect_turn_extensions` take the admission's token and the deadline;
+    each call observes a child of that token, cancelled too when the
+    collection is dropped (`bounded_call`). Contract tests:
+    `crates/kernel/tests/loop_contract/deadlines.rs`. Goldens unchanged.
+    The bounds per extension point are a table in plugin-rules ("Bounds on
+    plugin calls").
+  - Open: the facade's admission token is fresh per admission (nothing
+    cancels an admission still being prepared but dropping it); the
+    deadline is not a setting. The facade's feature calls
+    (`service/features.rs`) are outside the kernel and have no deadline.
+  - Hanafubuki, at its next pin: `AgentHardLimits` has a new field
+    `plugin_call_deadline` (a struct literal needs it, or
+    `..FIRST_BATCH_HARD_LIMITS`); `collect_world_state` and
+    `collect_turn_extensions` take `&CancellationToken` and a `Duration`
+    (`AgentService::limits().plugin_call_deadline`); new
+    `AgentService::limits`. A host's context or admission contributor that
+    takes over 10 s is now left out of the turn.
 - [ ] K1: Kardia (`cordis-rs`): public async guest transport, `Spawner`,
       async calls with timeouts and request ids, exit monitoring, meta from
       outside, command and args, stderr tail, frame limit, WASM engine

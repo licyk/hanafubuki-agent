@@ -146,17 +146,17 @@ impl AgentToolHandler for AppInfoTool {
 
 `ToolDescriptor` 在整个注册期间固定工具的模型可见规格和行为：
 
-| 字段              | 含义                                                                                             |
-| ----------------- | ------------------------------------------------------------------------------------------------ |
-| `name`            | `ToolName::parse`：命名空间段与本地名；扁平形式 `namespace__name` 必须唯一，内核的工具名是保留的 |
-| `description`     | 模型读到的说明                                                                                   |
-| `input_schema`    | JSON Schema，`additionalProperties: false`；内核按完整 schema 校验参数                           |
-| `exposure`        | `Direct`、`Deferred`（通过 `tool_search` 找到）、`DirectModelOnly` 或 `Hidden`                   |
-| `execution_class` | `ConcurrentRead`（与其他读取同时运行）或 `Exclusive`                                             |
-| `effect`          | `ReadOnly`（计划模式只提供这类工具）或 `Mutating`                                                |
-| `action`          | 活动动作，界面用它给工具活动加标签；未知的动作显示通用标签                                       |
-| `memory_effect`   | 工具输出是否让会话不能再贡献记忆（外部内容用 `PollutesContribution`）                            |
-| `timeout`         | `invoke` 的上限；`None` 取轮次的工具空闲超时（10 分钟）。权限检查和审批等待不计入                |
+| 字段              | 含义                                                                                                                     |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `name`            | `ToolName::parse`：命名空间段与本地名；扁平形式 `namespace__name` 必须唯一，内核的工具名是保留的                         |
+| `description`     | 模型读到的说明                                                                                                           |
+| `input_schema`    | JSON Schema，`additionalProperties: false`；内核按完整 schema 校验参数                                                   |
+| `exposure`        | `Direct`、`Deferred`（通过 `tool_search` 找到）、`DirectModelOnly` 或 `Hidden`                                           |
+| `execution_class` | `ConcurrentRead`（与其他读取同时运行）或 `Exclusive`                                                                     |
+| `effect`          | `ReadOnly`（计划模式只提供这类工具）或 `Mutating`                                                                        |
+| `action`          | 活动动作，界面用它给工具活动加标签；未知的动作显示通用标签                                                               |
+| `memory_effect`   | 工具输出是否让会话不能再贡献记忆（外部内容用 `PollutesContribution`）                                                    |
+| `timeout`         | `invoke` 的上限；`None` 取轮次的工具空闲超时（10 分钟）。审批等待不计入，权限检查也不计入，它受插件调用期限（10 秒）约束 |
 
 调用流水线由内核拥有，插件不能改变它的顺序：参数规范化 → 模式策略 → `permission` → 需要时审批（审批规则 → 会话的许可 → 权限模式）→ `invoke`。
 

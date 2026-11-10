@@ -103,6 +103,11 @@ impl AgentService {
         )
     }
 
+    /// The limits this kernel was built with.
+    pub fn limits(&self) -> AgentHardLimits {
+        self.inner.limits
+    }
+
     pub(crate) fn with_optional_model(
         default_model: Option<Arc<dyn ModelPort>>,
         registries: AgentKernelRegistries,

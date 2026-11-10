@@ -146,17 +146,17 @@ impl AgentToolHandler for AppInfoTool {
 
 A `ToolDescriptor` fixes the tool's model-visible spec and behaviour for the lifetime of the registration:
 
-| Field             | Meaning                                                                                                                                     |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `name`            | `ToolName::parse`: namespace segments and a local name; the flattened `namespace__name` is unique, and the kernel's tool names are reserved |
-| `description`     | what the model reads                                                                                                                        |
-| `input_schema`    | a JSON Schema with `additionalProperties: false`; the kernel validates arguments against the whole schema                                   |
-| `exposure`        | `Direct`, `Deferred` (found through `tool_search`), `DirectModelOnly` or `Hidden`                                                           |
-| `execution_class` | `ConcurrentRead` (runs beside other reads) or `Exclusive`                                                                                   |
-| `effect`          | `ReadOnly` (the only tools Plan mode offers) or `Mutating`                                                                                  |
-| `action`          | the activity action an interface labels the tool's activity by; an unknown one gets the generic label                                       |
-| `memory_effect`   | whether the tool's output stops the session contributing to memory (`PollutesContribution` for external content)                            |
-| `timeout`         | the bound on `invoke`; `None` takes the turn's tool idle timeout (10 min). The permission check and the approval wait do not count          |
+| Field             | Meaning                                                                                                                                                                               |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`            | `ToolName::parse`: namespace segments and a local name; the flattened `namespace__name` is unique, and the kernel's tool names are reserved                                           |
+| `description`     | what the model reads                                                                                                                                                                  |
+| `input_schema`    | a JSON Schema with `additionalProperties: false`; the kernel validates arguments against the whole schema                                                                             |
+| `exposure`        | `Direct`, `Deferred` (found through `tool_search`), `DirectModelOnly` or `Hidden`                                                                                                     |
+| `execution_class` | `ConcurrentRead` (runs beside other reads) or `Exclusive`                                                                                                                             |
+| `effect`          | `ReadOnly` (the only tools Plan mode offers) or `Mutating`                                                                                                                            |
+| `action`          | the activity action an interface labels the tool's activity by; an unknown one gets the generic label                                                                                 |
+| `memory_effect`   | whether the tool's output stops the session contributing to memory (`PollutesContribution` for external content)                                                                      |
+| `timeout`         | the bound on `invoke`; `None` takes the turn's tool idle timeout (10 min). The approval wait does not count, nor does the permission check, which has the plugin call deadline (10 s) |
 
 The kernel owns the call pipeline and a plugin cannot reorder it: argument normalization → mode policy → `permission` → approval when review is required (the approval rules → the session's allowance → the permission mode) → `invoke`.
 

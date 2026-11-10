@@ -10,7 +10,7 @@ const CANCELLATION_POLL: Duration = Duration::from_millis(25);
 ///
 /// The token is polled rather than parked on, so the wait holds no blocking
 /// thread for its whole duration.
-pub(super) async fn cancellable_delay(cancellation: &CancellationToken, delay: Duration) -> bool {
+pub(crate) async fn cancellable_delay(cancellation: &CancellationToken, delay: Duration) -> bool {
     let deadline = tokio::time::Instant::now() + delay;
     loop {
         if cancellation.is_cancelled() {

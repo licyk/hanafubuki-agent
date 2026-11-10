@@ -25,6 +25,7 @@ fn first_batch_hard_limits_are_an_explicit_contract() {
             stream_idle_timeout: Duration::from_secs(120),
             approval_timeout: Duration::from_secs(15 * 60),
             turn_deadline: Duration::from_secs(30 * 60),
+            plugin_call_deadline: Duration::from_secs(10),
             event_buffer_capacity: 1024,
         }
     );

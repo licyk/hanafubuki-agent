@@ -89,7 +89,7 @@ Agent 是一个**内核**（`hanafubuki-agent-kernel`），拥有会话、轮次
 - **会话之间从不互相等待。** `SessionTable` 只在查找、插入或删除时持有它的锁；每个单元有自己的锁，只在内存中工作时持有，从不跨越 await、历史追加或其他 I/O，也从不同时持有另一个单元的锁。
 - **取消**先协作，再中止任务，并在 5 秒内确认。被重启打断的轮次在恢复时变为 `Interrupted`。恢复拒绝的会话被**隔离**而不是致命：不改写也不删除它的任何文件，其他会话照常打开。
 - **独立运行时工作区可以移动。** `AgentRuntime::set_working_directory` 不新建实例就改变独立模式的工作区（它的根目录在一把锁后面）：文件工具的 `WorkspaceFsPolicy` 按新的根目录重建，没有 `workdir` 的命令在新的第一个根目录中运行，所以活着的会话保持活着，每个会话在下一个轮次的 `workspace_roots` 段中看到新的根目录，不需要别的提示。有轮次、压缩或后台终端在运行时它被拒绝，因为它们都是在旧工作区中启动和批准的。配置的项目层仍是启动时读取的那一个。嵌入的宿主拥有自己的 `WorkspaceRootsPort`，所以这个调用只用于独立模式。工作树（`hanafubuki-agent-worktree`，由 `worktree` 行提供）是数据目录下的分离检出，使用者用这种方式移入其中。
-- **限制**（`AgentHardLimits`）：一个轮次最多采样 32 次，超过则以 `budget_exceeded` 失败（之前的输出都已提交）；30 分钟的期限像用户取消一样取消轮次，以 `deadline_exceeded` 失败。两者都不让模型看到。
+- **限制**（`AgentHardLimits`）：一个轮次最多采样 32 次，超过则以 `budget_exceeded` 失败（之前的输出都已提交）；30 分钟的期限像用户取消一样取消轮次，以 `deadline_exceeded` 失败。两者都不让模型看到。内核对插件的调用若没有自己的上限（上下文、轮次准入、工具源或提示 `prepare` 的贡献，工具的 `permission`），就在 `plugin_call_deadline`（10 秒）内运行，所以挂起的内置、宿主或客体插件只损失它的贡献，从不拖住轮次（[插件调用的上限](/docs/plugin-rules#bounds-on-plugin-calls)）。
 
 ## 工具 [#tools]
 
@@ -126,7 +126,8 @@ schema 遵循同样的按协议规则：支持 `strict_json_schema` 的协议（
   <Step>
     **门。** 调用取得步骤的门：一个在途许可，然后对 `ConcurrentRead`
     工具取得读访问，否则取得独占访问，先到先得。在门下运行模式策略、工具源工具的 schema
-    检查和处理器的 `permission`，所以分类能看到同一步骤之前的调用做了什么。
+    检查和处理器的
+    `permission`（在插件调用期限内，超过即为工具错误），所以分类能看到同一步骤之前的调用做了什么。
   </Step>
   <Step>
     **审批路由。** 任何规则 `Deny` 就拒绝；否则任何 `RequireUser`

@@ -296,7 +296,7 @@ mod persistence;
 mod plan_output;
 mod progress;
 mod recovery;
-mod retry_wait;
+pub(crate) mod retry_wait;
 mod sampling;
 mod session;
 mod state;

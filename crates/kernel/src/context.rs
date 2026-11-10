@@ -2,12 +2,14 @@
 //! registered.
 
 use std::collections::BTreeMap;
+use std::time::Duration;
 
 use hanafubuki_agent_contracts::{
     ContextRegistry, ContextRequest, ContextSectionKind, ExtensionPoint, RegistryService,
 };
 use hanafubuki_agent_foundation::cancellation::CancellationToken;
 
+use crate::bounded_call::{bounded, overran, Bounded};
 use crate::{AgentError, AgentWorldStateSection, AgentWorldStateSnapshot};
 
 /// Runs every contributor of one registry snapshot, one after another, and
@@ -16,47 +18,49 @@ use crate::{AgentError, AgentWorldStateSection, AgentWorldStateSnapshot};
 /// slot order.
 ///
 /// A contributor that fails (an error, a panic reported as a fault of its
-/// plugin) or whose plugin is stopping is left out of this turn: its kinds
-/// are absent, as if its plugin had not started, and its plugin shows the
-/// issue in its status until a later turn's contribution succeeds. A section
+/// plugin, no answer within `deadline`) or whose plugin is stopping is left
+/// out of this turn: its kinds are absent, as if its plugin had not started,
+/// and its plugin shows the issue in its status until a later turn's contribution succeeds. A section
 /// of a kind its contributor did not declare, or of a kind already produced,
 /// is left out the same way, and so is a plugin kind past
 /// `MAXIMUM_AGENT_PLUGIN_WORLD_STATE_SECTIONS`. The sections' sizes are
 /// validated by the admission itself.
+///
+/// Each call observes a child of `admission`: cancelling it cancels the call
+/// in flight and fails the collection with `Cancelled`, and so does dropping
+/// the collection.
 pub async fn collect_world_state(
     registry: &ContextRegistry,
     request: &ContextRequest,
+    admission: &CancellationToken,
+    deadline: Duration,
 ) -> Result<AgentWorldStateSnapshot, AgentError> {
     let snapshot = registry.registry().snapshot();
     let mut sections = BTreeMap::new();
     for entry in snapshot.entries() {
         let contributor = entry.item();
-        let cancellation = CancellationToken::default();
-        let Some(_lease) = entry.acquire(&cancellation) else {
+        let call = admission.child();
+        let Some(_lease) = entry.acquire(&call) else {
             log::debug!(
                 "agent context contributor {} left out: its plugin is stopping",
                 contributor.id()
             );
             continue;
         };
-        let contributed = match entry
-            .guard_async(ExtensionPoint::Context, |contributor| {
-                contributor.contribute(request, cancellation.clone())
-            })
-            .await
-        {
-            Ok(Ok(contributed)) => contributed,
-            Ok(Err(error)) => {
-                leave_out(entry.faults(), entry.owner(), contributor.id(), error);
-                continue;
-            }
-            Err(_) => {
-                leave_out(
-                    entry.faults(),
-                    entry.owner(),
-                    contributor.id(),
-                    "it failed with an internal error".to_string(),
-                );
+        let contributed = entry.guard_async(ExtensionPoint::Context, |contributor| {
+            contributor.contribute(request, call.clone())
+        });
+        let answer = match bounded(contributed, call.clone(), admission, deadline).await {
+            Bounded::Returned(Ok(Ok(contributed))) => Ok(contributed),
+            Bounded::Returned(Ok(Err(error))) => Err(error),
+            Bounded::Returned(Err(_)) => Err("it failed with an internal error".to_string()),
+            Bounded::Overran => Err(overran(deadline)),
+            Bounded::Cancelled => return Err(AgentError::Cancelled),
+        };
+        let contributed = match answer {
+            Ok(contributed) => contributed,
+            Err(issue) => {
+                leave_out(entry.faults(), entry.owner(), contributor.id(), issue);
                 continue;
             }
         };

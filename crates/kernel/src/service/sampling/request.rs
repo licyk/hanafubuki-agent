@@ -91,7 +91,13 @@ impl AgentService {
             generation: identity.generation,
             sampling_step: step,
         };
-        let prepared = prepare_prompt_step(&contributors, prompt_step, &cancellation).await?;
+        let prepared = prepare_prompt_step(
+            &contributors,
+            prompt_step,
+            &cancellation,
+            self.inner.limits.plugin_call_deadline,
+        )
+        .await?;
         let prompt = request_context(
             &contributors,
             self.inner.registries.context_renderers.snapshot(),

@@ -99,7 +99,10 @@ fn sources_plugin(name: &'static str, sources: Vec<Arc<dyn AgentToolSource>>) ->
 
 async fn plan_with_sources(sources: &ToolSourceRegistry) -> AgentToolPlan {
     AgentToolPlanner::default()
-        .with_sources(sources.registry().snapshot())
+        .with_sources(
+            sources.registry().snapshot(),
+            crate::FIRST_BATCH_HARD_LIMITS.plugin_call_deadline,
+        )
         .build(
             plan_context(AgentSessionMode::Default, true),
             CancellationToken::default(),
@@ -180,9 +183,10 @@ async fn a_failed_optional_source_is_omitted_with_its_lease_and_a_required_one_f
         let contributors = sources
             .into_iter()
             .map(|source| {
-                Arc::new(SourcedAgentToolContributor::new(detached_entry(
-                    "sources", source,
-                ))) as Arc<dyn AgentToolContributor>
+                Arc::new(SourcedAgentToolContributor::new(
+                    detached_entry("sources", source),
+                    crate::FIRST_BATCH_HARD_LIMITS.plugin_call_deadline,
+                )) as Arc<dyn AgentToolContributor>
             })
             .collect();
         AgentToolPlanner::new(contributors)
@@ -271,7 +275,10 @@ async fn a_required_source_stopped_while_it_is_asked_is_omitted_not_fatal() {
     let snapshot = kernel.sources.registry().snapshot();
     let planning = tokio::spawn(async move {
         AgentToolPlanner::default()
-            .with_sources(snapshot)
+            .with_sources(
+                snapshot,
+                crate::FIRST_BATCH_HARD_LIMITS.plugin_call_deadline,
+            )
             .build(
                 plan_context(AgentSessionMode::Default, true),
                 CancellationToken::default(),

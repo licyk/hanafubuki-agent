@@ -110,7 +110,14 @@ async fn sections_are_collected_in_kind_name_order_not_registration_order() {
     ])
     .await;
 
-    let snapshot = collect_world_state(&registry, &request()).await.unwrap();
+    let snapshot = collect_world_state(
+        &registry,
+        &request(),
+        &CancellationToken::default(),
+        crate::FIRST_BATCH_HARD_LIMITS.plugin_call_deadline,
+    )
+    .await
+    .unwrap();
 
     let kinds = snapshot
         .sections
@@ -150,7 +157,14 @@ async fn a_failing_contributor_or_section_is_left_out_and_its_plugin_shows_the_i
         ]),
     })])
     .await;
-    let snapshot = collect_world_state(&undeclared, &request()).await.unwrap();
+    let snapshot = collect_world_state(
+        &undeclared,
+        &request(),
+        &CancellationToken::default(),
+        crate::FIRST_BATCH_HARD_LIMITS.plugin_call_deadline,
+    )
+    .await
+    .unwrap();
     assert_eq!(
         snapshot
             .sections
@@ -173,7 +187,14 @@ async fn a_failing_contributor_or_section_is_left_out_and_its_plugin_shows_the_i
         ]),
     })])
     .await;
-    let snapshot = collect_world_state(&repeated, &request()).await.unwrap();
+    let snapshot = collect_world_state(
+        &repeated,
+        &request(),
+        &CancellationToken::default(),
+        crate::FIRST_BATCH_HARD_LIMITS.plugin_call_deadline,
+    )
+    .await
+    .unwrap();
     assert_eq!(snapshot.sections.len(), 1);
     assert_eq!(snapshot.sections[0].content, "a");
     assert!(faults.issues("contributors")[0].contains("environment was produced twice"));
@@ -187,7 +208,14 @@ async fn a_failing_contributor_or_section_is_left_out_and_its_plugin_shows_the_i
         producing("roots", &[ContextSectionKind::WORKSPACE_ROOTS]),
     ])
     .await;
-    let snapshot = collect_world_state(&failing, &request()).await.unwrap();
+    let snapshot = collect_world_state(
+        &failing,
+        &request(),
+        &CancellationToken::default(),
+        crate::FIRST_BATCH_HARD_LIMITS.plugin_call_deadline,
+    )
+    .await
+    .unwrap();
     assert_eq!(
         snapshot
             .sections
@@ -211,7 +239,14 @@ async fn a_stopped_plugin_contributes_nothing() {
     .await;
     root.fiber().dispose().await.unwrap();
 
-    let snapshot = collect_world_state(&registry, &request()).await.unwrap();
+    let snapshot = collect_world_state(
+        &registry,
+        &request(),
+        &CancellationToken::default(),
+        crate::FIRST_BATCH_HARD_LIMITS.plugin_call_deadline,
+    )
+    .await
+    .unwrap();
 
     assert!(snapshot.sections.is_empty());
 }
@@ -233,7 +268,14 @@ async fn the_built_in_kinds_never_use_up_the_plugin_kind_bound() {
     contributors.push(producing("plugin", &plugin_kinds));
     let (_root, registry, faults) = registry_with(contributors).await;
 
-    let snapshot = collect_world_state(&registry, &request()).await.unwrap();
+    let snapshot = collect_world_state(
+        &registry,
+        &request(),
+        &CancellationToken::default(),
+        crate::FIRST_BATCH_HARD_LIMITS.plugin_call_deadline,
+    )
+    .await
+    .unwrap();
 
     // Four built-in sections and seven plugin ones: the eighth plugin kind is
     // left out and reported, the turn is not.

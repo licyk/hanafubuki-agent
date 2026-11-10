@@ -22,7 +22,10 @@ impl AgentService {
                 registries.tools.registry().snapshot(),
             )),
         ])
-        .with_sources(registries.tool_sources.registry().snapshot())
+        .with_sources(
+            registries.tool_sources.registry().snapshot(),
+            self.inner.limits.plugin_call_deadline,
+        )
         .with_search_cache(self.inner.tool_search_cache.clone())
         .with_spec_cache(self.inner.tool_spec_cache.clone())
         .build(context, cancellation)

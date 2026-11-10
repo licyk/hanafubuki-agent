@@ -23,6 +23,11 @@ pub struct AgentHardLimits {
     pub stream_idle_timeout: Duration,
     pub approval_timeout: Duration,
     pub turn_deadline: Duration,
+    /// How long the kernel waits for one context, turn admission, tool
+    /// source or prompt `prepare` contribution, or for a tool's
+    /// `permission`. A call past it is cancelled: the contribution is left
+    /// out, the permission check fails the tool call.
+    pub plugin_call_deadline: Duration,
     pub event_buffer_capacity: usize,
 }
 
@@ -40,5 +45,6 @@ pub const FIRST_BATCH_HARD_LIMITS: AgentHardLimits = AgentHardLimits {
     stream_idle_timeout: Duration::from_secs(120),
     approval_timeout: Duration::from_secs(15 * 60),
     turn_deadline: Duration::from_secs(30 * 60),
+    plugin_call_deadline: Duration::from_secs(10),
     event_buffer_capacity: 1_024,
 };

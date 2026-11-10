@@ -89,7 +89,7 @@ A start claims a generation, builds the runtime and the process owner group, rea
 - **Sessions never wait for one another.** `SessionTable` holds its lock only to look a cell up, insert or remove one; each cell has its own lock, held only for in-memory work, never across an await, a history append or other I/O, and never with another cell's lock.
 - **Cancellation** is cooperative first, then aborts the task, confirmed within 5 s. Turns interrupted by a restart are recovered as `Interrupted`. A session recovery rejects is **quarantined**, not fatal: none of its files is rewritten or deleted, and the other sessions open.
 - **The workspace can move in a standalone run.** `AgentRuntime::set_working_directory` changes the standalone workspace (its roots behind a lock) without a new instance: the filesystem tools' `WorkspaceFsPolicy` is rebuilt from the new roots and a command without a `workdir` runs in the new first root, so live sessions stay live, and each sees the new roots in its next turn's `workspace_roots` section; no other note is needed. It is refused while a turn, a compaction or a background terminal runs, each started and approved in the old workspace. The configuration's project layer stays the one read at start. An embedded host owns its `WorkspaceRootsPort`, so the call is standalone only. A worktree (`hanafubuki-agent-worktree`, served by the `worktree` row) is a detached checkout under the data directory that a consumer moves into this way.
-- **Limits** (`AgentHardLimits`): a turn samples at most 32 times, then fails `budget_exceeded` with every earlier output committed; its 30-minute deadline cancels it as a user's cancel would and fails it `deadline_exceeded`. Neither is shown to the model.
+- **Limits** (`AgentHardLimits`): a turn samples at most 32 times, then fails `budget_exceeded` with every earlier output committed; its 30-minute deadline cancels it as a user's cancel would and fails it `deadline_exceeded`. Neither is shown to the model. A kernel call into a plugin that has no bound of its own (a context, turn admission, tool source or prompt `prepare` contribution, a tool's `permission`) runs within `plugin_call_deadline` (10 s), so a hung built-in, host or guest plugin costs only its contribution, never the turn ([Bounds on plugin calls](/docs/plugin-rules#bounds-on-plugin-calls)).
 
 ## Tools [#tools]
 
@@ -130,8 +130,9 @@ The kernel owns the pipeline, and plugins cannot reorder it:
   <Step>
     **The gate.** The call takes the step's gate: an in-flight permit, then read access for a
     `ConcurrentRead` tool or exclusive access, first come, first served. Under it run mode policy,
-    the schema check of a sourced tool and the handler's `permission`, so classification sees what
-    the step's earlier calls did.
+    the schema check of a sourced tool and the handler's `permission` (within the plugin call
+    deadline, past which the call is a tool error), so classification sees what the step's earlier
+    calls did.
   </Step>
   <Step>
     **Approval routing.** Any rule's `Deny` rejects; else any `RequireUser` asks the user; else the

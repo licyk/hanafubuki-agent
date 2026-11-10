@@ -60,14 +60,15 @@ fn prompt_inputs(
 /// merges what they return. Runs with no kernel lock held.
 ///
 /// A contributor whose plugin is stopping prepares nothing. Its error, its
-/// panic (reported as a fault of its plugin), or a value of a type an
-/// earlier contributor already prepared, leaves its values out with a
-/// warning: a plugin never fails the step. Only the turn's cancellation
-/// does.
+/// panic (reported as a fault of its plugin), no answer within `deadline`
+/// (the call is cancelled), or a value of a type an earlier contributor
+/// already prepared, leaves its values out with a warning: a plugin never
+/// fails the step. Only the turn's cancellation does.
 pub(super) async fn prepare_prompt_step(
     contributors: &PromptContributorSnapshot,
     step: hanafubuki_agent_contracts::PromptStep,
     cancellation: &CancellationToken,
+    deadline: Duration,
 ) -> Result<hanafubuki_agent_contracts::TurnExtensions, AgentError> {
     let mut prepared = hanafubuki_agent_contracts::TurnExtensions::default();
     for entry in contributors.entries() {
@@ -76,12 +77,23 @@ pub(super) async fn prepare_prompt_step(
         let Some(_lease) = entry.acquire(&call) else {
             continue;
         };
-        let prepared_values = entry
-            .guard_async(
+        let prepared_values = tokio::time::timeout(
+            deadline,
+            entry.guard_async(
                 hanafubuki_agent_contracts::ExtensionPoint::PromptPrepare,
-                |contributor| contributor.prepare(&step, call),
-            )
-            .await;
+                |contributor| contributor.prepare(&step, call.clone()),
+            ),
+        )
+        .await;
+        let Ok(prepared_values) = prepared_values else {
+            call.cancel();
+            log::warn!(
+                "Agent prompt contributor {} did not prepare the step within {} s and was cancelled; its values are left out",
+                contributor.id(),
+                deadline.as_secs_f64()
+            );
+            continue;
+        };
         let Ok(prepared_values) = prepared_values else {
             log::warn!(
                 "Agent prompt contributor of the {} plugin failed with an internal error; its values are left out",

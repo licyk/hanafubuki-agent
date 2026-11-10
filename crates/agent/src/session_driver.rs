@@ -15,6 +15,7 @@ use hanafubuki_agent_config::{AgentConfig, AgentSettings};
 use hanafubuki_agent_contracts::{ContextRequest, TurnAdmissionRequest, TurnExtensions};
 use hanafubuki_agent_execution::{AgentExecutionScope, AgentExecutionService};
 use hanafubuki_agent_foundation::blocking::{run_blocking_operation, BlockingOperationPort};
+use hanafubuki_agent_foundation::cancellation::CancellationToken;
 use hanafubuki_agent_kernel::{
     AgentBackgroundCompactionThreshold, AgentChildSessionRequest, AgentError, AgentEvent,
     AgentEventSink, AgentKernelRegistries, AgentPermissionMode, AgentService, AgentSessionId,
@@ -471,7 +472,13 @@ impl AgentSessionDriver {
             user_message,
             turn: host,
         };
-        hanafubuki_agent_kernel::collect_world_state(&self.registries.context, &request).await
+        hanafubuki_agent_kernel::collect_world_state(
+            &self.registries.context,
+            &request,
+            &admission_cancellation(),
+            self.core.limits().plugin_call_deadline,
+        )
+        .await
     }
 
     /// The sandbox of the session's next turn's commands: the session's
@@ -533,6 +540,8 @@ impl AgentSessionDriver {
         let mut turn = hanafubuki_agent_kernel::collect_turn_extensions(
             &self.registries.turn_admission,
             &TurnAdmissionRequest { session_id, mode },
+            &admission_cancellation(),
+            self.core.limits().plugin_call_deadline,
         )
         .await?;
         turn.insert(Arc::new(sandbox));
@@ -540,6 +549,13 @@ impl AgentSessionDriver {
         turn.insert(Arc::new(hierarchical));
         Ok(turn)
     }
+}
+
+/// The cancellation of one admission's plugin calls. No one cancels an
+/// admission still being prepared: the caller drops it, which cancels the
+/// call in flight.
+fn admission_cancellation() -> CancellationToken {
+    CancellationToken::default()
 }
 
 /// `[compaction.hierarchical]` for a turn admitted now, with the local

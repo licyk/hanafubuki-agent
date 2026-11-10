@@ -14,13 +14,20 @@ use super::*;
 /// host is shutting down) has left the configuration: whatever it answers, it
 /// contributes no tools and the step records an omission. `Required` only
 /// makes a running source's failure fail the plan.
+///
+/// A source that has not answered within `deadline` is cancelled and fails
+/// like a source that returned an error.
 pub(super) struct SourcedAgentToolContributor {
     entry: Arc<RegistryEntry<Arc<dyn AgentToolSource>>>,
+    deadline: Duration,
 }
 
 impl SourcedAgentToolContributor {
-    pub(super) fn new(entry: Arc<RegistryEntry<Arc<dyn AgentToolSource>>>) -> Self {
-        Self { entry }
+    pub(super) fn new(
+        entry: Arc<RegistryEntry<Arc<dyn AgentToolSource>>>,
+        deadline: Duration,
+    ) -> Self {
+        Self { entry, deadline }
     }
 }
 
@@ -53,22 +60,34 @@ impl AgentToolContributor for SourcedAgentToolContributor {
                 generation: context.generation,
                 session_revision: context.session_revision,
                 memory_contribution: context.memory_contribution_enabled,
-                cancellation: call,
+                cancellation: call.clone(),
             };
             let source = self.entry.item();
-            // A panicking source fails like a source that returned an error:
-            // its trust decides whether the step goes on without it.
-            let answer = self
-                .entry
-                .guard_async(ExtensionPoint::ToolSource, |source| {
-                    source.contribute(&step)
-                })
-                .await
-                .unwrap_or_else(|_| {
+            // A panicking or overrunning source fails like a source that
+            // returned an error: its trust decides whether the step goes on
+            // without it.
+            let answer = tokio::time::timeout(
+                self.deadline,
+                self.entry
+                    .guard_async(ExtensionPoint::ToolSource, |source| {
+                        source.contribute(&step)
+                    }),
+            )
+            .await;
+            let answer = match answer {
+                Ok(answer) => answer.unwrap_or_else(|_| {
                     Err(AgentToolError::Failed(
                         "the source failed with an internal error".to_string(),
                     ))
-                });
+                }),
+                Err(_) => {
+                    call.cancel();
+                    Err(AgentToolError::Failed(format!(
+                        "the source did not answer within {} s and was cancelled",
+                        self.deadline.as_secs_f64()
+                    )))
+                }
+            };
             if matches!(answer, Err(AgentToolError::Cancelled)) && cancellation.is_cancelled() {
                 return Err(AgentToolCatalogError::Cancelled);
             }

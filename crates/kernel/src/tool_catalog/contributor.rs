@@ -101,15 +101,20 @@ impl AgentToolPlanner {
 
     /// Adds the tool sources plugins registered, from one snapshot of the
     /// `ToolSourceRegistry` taken for the sampling step. Each source keeps
-    /// its own trust: an optional one that fails is omitted.
-    pub fn with_sources(mut self, sources: RegistrySnapshot<Arc<dyn AgentToolSource>>) -> Self {
+    /// its own trust: an optional one that fails, or does not answer within
+    /// `deadline`, is omitted.
+    pub fn with_sources(
+        mut self,
+        sources: RegistrySnapshot<Arc<dyn AgentToolSource>>,
+        deadline: Duration,
+    ) -> Self {
         self.contributors.extend(
             sources
                 .entries()
                 .iter()
                 .filter(|entry| !entry.is_retired())
                 .map(|entry| {
-                    Arc::new(SourcedAgentToolContributor::new(entry.clone()))
+                    Arc::new(SourcedAgentToolContributor::new(entry.clone(), deadline))
                         as Arc<dyn AgentToolContributor>
                 }),
         );

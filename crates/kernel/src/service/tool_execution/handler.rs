@@ -9,8 +9,8 @@ impl AgentService {
     /// Runs a plugin's handler (registered, or planned by a tool source)
     /// through the kernel's fixed pipeline, under the step's gate: mode
     /// policy, the arguments against the schema of a sourced tool, the
-    /// handler's permission classification, approval when review is
-    /// required, then the call itself, bounded by the tool's timeout, under a
+    /// handler's permission classification (within the plugin call
+    /// deadline), approval when review is required, then the call itself, bounded by the tool's timeout, under a
     /// lease on its registry entry (the source's entry for a sourced tool).
     /// A wait for the reviewer or the user lets go of the gate, so the
     /// step's other calls proceed meanwhile, and the call takes it again
@@ -82,13 +82,28 @@ impl AgentService {
             plan_leases: context.tool_plan_leases.clone(),
             turn,
         };
-        let requirement = match binding
-            .guard_async(ExtensionPoint::ToolPermission, |handler| {
+        let deadline = self.inner.limits.plugin_call_deadline;
+        let Ok(requirement) = tokio::time::timeout(
+            deadline,
+            binding.guard_async(ExtensionPoint::ToolPermission, |handler| {
                 handler.permission(&invocation)
-            })
-            .await
-            .unwrap_or_else(|_| Err(internal_tool_error()))
-        {
+            }),
+        )
+        .await
+        else {
+            call_cancellation.cancel();
+            if cancellation.is_cancelled() {
+                return Err(AgentError::Cancelled);
+            }
+            return handler_failure(
+                AgentToolError::Failed(format!(
+                    "the tool's permission check did not finish within {} s and was stopped",
+                    deadline.as_secs_f64()
+                )),
+                &cancellation,
+            );
+        };
+        let requirement = match requirement.unwrap_or_else(|_| Err(internal_tool_error())) {
             Ok(requirement) => requirement,
             Err(error) => return handler_failure(error, &cancellation),
         };

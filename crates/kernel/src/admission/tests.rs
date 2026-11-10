@@ -110,9 +110,14 @@ async fn every_contributor_adds_its_values_to_the_turn() {
     ])
     .await;
 
-    let turn = collect_turn_extensions(&registry, &request())
-        .await
-        .unwrap();
+    let turn = collect_turn_extensions(
+        &registry,
+        &request(),
+        &CancellationToken::default(),
+        crate::FIRST_BATCH_HARD_LIMITS.plugin_call_deadline,
+    )
+    .await
+    .unwrap();
 
     assert_eq!(turn.get::<Catalog>(), Some(&Catalog("frozen")));
     assert_eq!(turn.get::<Names>(), Some(&Names(vec!["a"])));
@@ -131,7 +136,14 @@ async fn a_type_produced_twice_or_a_contributor_error_is_left_out_and_shown() {
         },
     ])
     .await;
-    let turn = collect_turn_extensions(&twice, &request()).await.unwrap();
+    let turn = collect_turn_extensions(
+        &twice,
+        &request(),
+        &CancellationToken::default(),
+        crate::FIRST_BATCH_HARD_LIMITS.plugin_call_deadline,
+    )
+    .await
+    .unwrap();
     assert_eq!(turn.get::<Catalog>(), Some(&Catalog("first")));
     assert_eq!(
         faults.issues("contributors"),
@@ -149,7 +161,14 @@ async fn a_type_produced_twice_or_a_contributor_error_is_left_out_and_shown() {
         },
     ])
     .await;
-    let turn = collect_turn_extensions(&failing, &request()).await.unwrap();
+    let turn = collect_turn_extensions(
+        &failing,
+        &request(),
+        &CancellationToken::default(),
+        crate::FIRST_BATCH_HARD_LIMITS.plugin_call_deadline,
+    )
+    .await
+    .unwrap();
     assert_eq!(turn.get::<Catalog>(), None);
     assert_eq!(turn.get::<Names>(), Some(&Names(vec!["a"])));
     assert_eq!(
@@ -167,9 +186,14 @@ async fn a_stopped_plugin_contributes_nothing() {
     .await;
     root.fiber().dispose().await.unwrap();
 
-    let turn = collect_turn_extensions(&registry, &request())
-        .await
-        .unwrap();
+    let turn = collect_turn_extensions(
+        &registry,
+        &request(),
+        &CancellationToken::default(),
+        crate::FIRST_BATCH_HARD_LIMITS.plugin_call_deadline,
+    )
+    .await
+    .unwrap();
 
     assert_eq!(turn.get::<Catalog>(), None);
 }

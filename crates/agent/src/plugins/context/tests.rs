@@ -27,6 +27,8 @@ async fn permission_mode_renders_the_turns_mode_while_its_plugin_runs() {
     let snapshot = hanafubuki_agent_kernel::collect_world_state(
         &mounted.context,
         &request(TurnExtensions::default()),
+        &Default::default(),
+        hanafubuki_agent_kernel::FIRST_BATCH_HARD_LIMITS.plugin_call_deadline,
     )
     .await
     .unwrap();
@@ -74,9 +76,14 @@ async fn the_sandbox_section_states_the_sandbox_and_how_to_leave_it() {
             };
             let context = mounted.context.clone();
             async move {
-                let snapshot = hanafubuki_agent_kernel::collect_world_state(&context, &request)
-                    .await
-                    .unwrap();
+                let snapshot = hanafubuki_agent_kernel::collect_world_state(
+                    &context,
+                    &request,
+                    &Default::default(),
+                    hanafubuki_agent_kernel::FIRST_BATCH_HARD_LIMITS.plugin_call_deadline,
+                )
+                .await
+                .unwrap();
                 let section = snapshot
                     .sections
                     .into_iter()
