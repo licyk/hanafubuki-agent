@@ -143,6 +143,56 @@ async fn auto_compaction_runs_once_at_sampling_admission_and_uses_new_history() 
     assert!(summary_index < second_user_index);
 }
 
+/// A turn whose initial world-state update removes a section, compacted
+/// before it samples: the checkpoint is the world state where the turn
+/// begins, so the turn's own removal still applies after it.
+#[tokio::test]
+async fn a_pre_turn_compaction_keeps_the_turns_world_state_removal() {
+    let model = ScriptedModel::new([
+        response("one", &"transient answer ".repeat(1_000), 12_000),
+        response("compact", "The first exchange is summarized.", 100),
+        response("two", "second answer", 200),
+    ]);
+    let service = AgentService::new(
+        Arc::new(model.clone()),
+        FakeTools::new([]).await.registries(),
+    );
+    let mut config = config();
+    config.context_window_tokens = Some(15_000);
+    config.auto_compact_threshold_percent = 67;
+    let session = service.create_session(config).unwrap();
+    let mut first = AgentTurnInput::from("first");
+    first.world_state = hanafubuki_agent_kernel::AgentWorldStateSnapshot {
+        sections: vec![hanafubuki_agent_kernel::AgentWorldStateSection::new(
+            hanafubuki_agent_kernel::ContextSectionKind::fixed("host_location"),
+            "instance chooser".to_string(),
+        )],
+    };
+    service.start_turn(session.id, first).await.unwrap();
+    let outcome = service.start_turn(session.id, "second").await.unwrap();
+    assert_eq!(outcome.final_answer, "second answer");
+
+    let snapshot = test_session_view(&service, session.id).unwrap();
+    let compaction = snapshot.runtime.compaction.as_ref().unwrap();
+    assert_eq!(
+        compaction.phase,
+        hanafubuki_agent_kernel::AgentCompactionPhase::PreTurn
+    );
+    assert_eq!(compaction.status, AgentCompactionStatus::Completed);
+    let updates = snapshot
+        .model_context
+        .iter()
+        .filter_map(|item| match item {
+            ConversationItem::WorldStateUpdate { updates } => Some(format!("{updates:?}")),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(updates.len(), 2, "{updates:?}");
+    assert!(updates[0].contains("instance chooser"));
+    assert!(updates[1].contains("Remove"));
+    assert!(!format!("{:?}", model.requests()[2].input).contains("instance chooser"));
+}
+
 #[tokio::test]
 async fn provider_context_error_compacts_and_retries_the_same_turn() {
     let model = ScriptedModel::new([

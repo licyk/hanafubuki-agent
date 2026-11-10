@@ -131,11 +131,19 @@ and pushed, and notes what Hanafubuki must change at its next pin.
     by the window case and the strategy change: the kernel fakes cannot
     change a session's model without a real transport. No Codex code was
     copied, so no notices entry.
-  - Open: the pre-turn in-line install has the stale-removal problem the
-    rebase avoided: its checkpoint is the whole history's world state, so
-    a current turn whose initial world-state update removes a section fails
-    validation (`stale world-state removal`). Fixing it changes what a
-    pre-turn install writes (a model-visible change, goldens to check).
+  - Done (after P12): the pre-turn in-line install's stale removal. Its
+    world-state checkpoint was the whole history's, so a current turn
+    whose initial world-state update removed a section failed validation
+    (`stale world-state removal`). `compaction_source` now takes the
+    checkpoint of the history before the compaction boundary (the current
+    turn's `TurnStart` for a pre-turn or background compaction; the whole
+    history for the others, unchanged), as the rebase does. What a
+    pre-turn install writes changes only for the sections the turn's own
+    update touches, which a request renders at their latest update
+    anyway. Test: kernel `compaction_contract::automatic::a_pre_turn_
+    compaction_keeps_the_turns_world_state_removal` (failed before with
+    the validation error). Goldens unchanged (none has a pre-turn
+    install). Docs: internals (both languages). Nothing for Hanafubuki.
   - Open: a turn admitted while `/compact` waits for a background run can
     take the result first; `/compact` then finds nothing and may fail with
     a stale revision (unguarded race).

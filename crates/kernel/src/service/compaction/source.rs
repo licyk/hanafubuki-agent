@@ -111,8 +111,10 @@ pub(super) fn compaction_source(
             .iter()
             .map(|item| item.as_ref().clone())
             .collect(),
+        // The world state where the suffix begins: the current turn's own
+        // updates, removals included, still apply to it in order.
         world_state_checkpoint: crate::model::full_world_state_checkpoint(
-            &record.conversation.history,
+            &record.conversation.history[..compaction_boundary],
         ),
         items,
         revision: AgentRevision::new(record.status.revision),
