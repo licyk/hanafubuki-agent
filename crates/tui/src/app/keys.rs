@@ -45,6 +45,9 @@ impl App {
         if self.handle_agents_key(tui, key) {
             return true;
         }
+        if self.handle_config_key(tui, key) {
+            return true;
+        }
         let contexts: &[Context] = if self.chat_widget.captures_keys() {
             &[]
         } else if self.overlay.is_some() {

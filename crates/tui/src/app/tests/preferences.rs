@@ -216,9 +216,32 @@ fn a_message_preset_is_sent_and_one_starts_from_the_current_settings() {
 }
 
 #[test]
+fn the_config_center_lists_searches_and_opens_the_quick_editor() {
+    let mut harness = Harness::start(Vec::new());
+    let screen = harness.open("/config", "Agent settings");
+    assert!(screen.contains("General & permissions"), "{screen}");
+    assert!(screen.contains("Compaction"), "{screen}");
+    assert!(screen.contains("1 layers · 0 warnings"), "{screen}");
+
+    harness.key(KeyCode::Char('/'));
+    harness.type_text("compact");
+    harness.pump_until("the search to filter the domains", |harness| {
+        let screen = harness.screen();
+        screen.contains("Compaction") && !screen.contains("General & permissions")
+    });
+    let screen = harness.screen();
+    assert!(screen.contains("Compaction"), "{screen}");
+    assert!(!screen.contains("General & permissions"), "{screen}");
+
+    harness.key(KeyCode::Enter);
+    harness.key(KeyCode::Enter);
+    harness.pump_until_screen_shows("Settings");
+}
+
+#[test]
 fn config_toggles_and_choices_write_the_settings_and_its_entries_open_the_editors() {
     let mut harness = Harness::start(Vec::new());
-    harness.open("/config", "Settings");
+    harness.open("/config quick", "Settings");
     // Raw output, at once and saved.
     harness.key(KeyCode::Char(' '));
     harness.pump_until_screen_shows("Raw output on");

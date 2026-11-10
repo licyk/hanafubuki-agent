@@ -61,7 +61,9 @@ pub(crate) use providers::{ProviderCall, ProviderReply};
 pub(crate) use replay::{OlderTranscript, OpenedSession, ReplayedItem};
 pub(crate) use review::{ReviewCall, ReviewEnd, ReviewReply};
 pub(crate) use sessions::{ExportDestination, SessionCall, SessionReply};
-pub(crate) use settings::{MemoriesState, SettingsCall, SettingsReply, Warning, WarningSource};
+pub(crate) use settings::{
+    ConfigState, MemoriesState, SettingsCall, SettingsReply, Warning, WarningSource,
+};
 pub(crate) use side::OpenedSide;
 pub(crate) use status::{SessionStatus, UsageSummary};
 pub(crate) use subagents::{ChildApproval, SubagentsCall, SubagentsReply};

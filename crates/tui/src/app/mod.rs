@@ -535,6 +535,9 @@ impl App {
         if self.draw_agents_center(tui)? {
             return Ok(());
         }
+        if self.draw_config_center(tui)? {
+            return Ok(());
+        }
         if self.overlay.is_some() {
             return self.draw_overlay(tui);
         }

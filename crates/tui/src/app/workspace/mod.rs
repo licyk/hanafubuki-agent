@@ -26,6 +26,7 @@
 //! session has at most one side conversation.
 
 mod agents;
+mod config;
 mod keys;
 mod panes;
 
@@ -43,6 +44,7 @@ use crate::agent_bridge::{AgentBridge, AgentReply, OlderTranscript, OpenedSide};
 use crate::agents_center::AgentsCenter;
 use crate::app_event::{AppEvent, AppEventSender};
 use crate::chatwidget::ChatWidget;
+use crate::config_center::{ConfigCenter, ConfigSection};
 use crate::history_cell::HistoryCell;
 use crate::keymap::{self, Action};
 use crate::transcript_view::{TranscriptHistoryState, TranscriptView};
@@ -69,6 +71,8 @@ pub(crate) enum WorkspaceEvent {
     FocusOther,
     /// `/agents`.
     OpenAgents,
+    /// `/config [section]`: the full-screen configuration center.
+    OpenConfig(ConfigSection),
 }
 
 /// Which conversation: the main one, or the second.
@@ -147,6 +151,7 @@ pub(super) struct Workspace {
     /// The parked conversation whose event is being handled.
     handling: Option<Focus>,
     agents: Option<AgentsCenter>,
+    config: Option<ConfigCenter>,
 }
 
 impl Workspace {
@@ -307,6 +312,7 @@ impl App {
                 }
             }
             WorkspaceEvent::OpenAgents => self.open_agents_center(tui),
+            WorkspaceEvent::OpenConfig(section) => self.open_config_center(tui, section),
         }
         self.schedule_frame(Instant::now());
     }

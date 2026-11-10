@@ -6,8 +6,13 @@ work turns `/config` into a searchable configuration center over the typed
 Agent, standalone, Provider, MCP, plugin and interface settings while
 preserving the existing layered configuration and atomic writers.
 
-- [ ] C1: state, `/config` routing, full-screen navigation, search and
-      layer summaries.
+- [x] C1: state, `/config` routing, full-screen navigation, search and
+      layer summaries. Done: `ConfigState` reads the facade settings plus
+      standalone settings, layer sources and warnings inside the TUI bridge;
+      `ConfigCenter` is a full-screen searchable overview with per-domain
+      summaries and layer/warning counts; `/config <section>` selects its
+      domain and `/config quick` keeps the previous quick editor while the
+      full forms are built.
 - [ ] C2: every `config.toml` domain form, typed atomic saves and
       override warnings.
 - [ ] C3: the complete shared Provider model policy, including turn

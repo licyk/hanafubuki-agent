@@ -17,6 +17,7 @@ mod bottom_pane;
 mod chatwidget;
 mod clipboard;
 mod commands;
+mod config_center;
 mod custom_terminal;
 mod diff_render;
 mod file_search;

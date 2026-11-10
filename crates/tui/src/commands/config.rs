@@ -11,16 +11,18 @@ use ratatui::crossterm::event::{KeyCode, KeyEvent};
 
 use super::{CommandContext, CommandReply, CommandSpec};
 use crate::agent_bridge::{SettingsCall, SettingsReply};
+use crate::app::WorkspaceEvent;
 use crate::app_event::{AgentCommand, AppCommand, AppEvent, AppEventSender, Op};
 use crate::appearance::AppearanceEvent;
 use crate::bottom_pane::{GenericDisplayRow, MenuKey, MenuModel, MenuView};
+use crate::config_center::ConfigSection;
 use crate::history_cell;
 
 pub(crate) static CONFIG: CommandSpec = CommandSpec {
     name: "config",
     aliases: &[],
-    description: "change the interface's settings",
-    inline_args: false,
+    description: "view and change every Agent setting",
+    inline_args: true,
     during_task: true,
     needs_session: false,
     dispatch,
@@ -57,8 +59,18 @@ const SCREENS: [AgentAlternateScreen; 3] = [
     AgentAlternateScreen::Never,
 ];
 
-fn dispatch(context: &mut CommandContext<'_>, _args: &str) {
-    context.agent_command(AgentCommand::Settings(SettingsCall::Config));
+fn dispatch(context: &mut CommandContext<'_>, args: &str) {
+    let section = args.trim().to_lowercase().replace('_', "-");
+    if section == "quick" {
+        return context.agent_command(AgentCommand::Settings(SettingsCall::Config));
+    }
+    let Some(section) = ConfigSection::parse(&section) else {
+        return context.add_to_history(history_cell::new_error_event(format!(
+            "/config: unknown section `{args}`; use general, sandbox, memory, web, compaction, \
+             network, interface, providers, mcp, plugins, hooks or layers"
+        )));
+    };
+    context.send(AppEvent::Workspace(WorkspaceEvent::OpenConfig(section)));
 }
 
 /// The compaction strategy read or saved: into the open panel, or a new

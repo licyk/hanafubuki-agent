@@ -13,7 +13,8 @@ use hanafubuki_agent::panic::recorded_panics;
 use hanafubuki_agent::{
     AgentCompactionStrategy, AgentConfigProblem, AgentConfigRecovery, AgentHandle,
     AgentMemoryContributionMode, AgentMemorySettings, AgentMemoryStatus, AgentPluginState,
-    AgentSessionId, AgentSettingsPatch, GuestState,
+    AgentSessionId, AgentSettingsPatch, AgentSettingsView, AgentStandaloneSettings,
+    ConfigLayerSource, GuestState,
 };
 
 use super::{AgentBridge, AgentReply, TurnUpdate};
@@ -67,6 +68,25 @@ impl Warning {
     /// What dismissing it is remembered by.
     pub(crate) fn key(&self) -> String {
         format!("{}\n{}", self.source.name(), self.text)
+    }
+}
+
+/// Everything `/config`'s center shows: the Agent's settings and defaults,
+/// the standalone settings, and the layers and warnings around them. The
+/// proxy is left out of `Debug`, since it may hold credentials.
+pub(crate) struct ConfigState {
+    pub(crate) agent: AgentSettingsView,
+    pub(crate) standalone: AgentStandaloneSettings,
+    pub(crate) layers: Vec<ConfigLayerSource>,
+    pub(crate) warnings: Vec<String>,
+}
+
+impl std::fmt::Debug for ConfigState {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("ConfigState")
+            .field("agent", &self.agent)
+            .finish_non_exhaustive()
     }
 }
 
@@ -148,6 +168,25 @@ impl AgentBridge {
     /// interface shows at start.
     pub(crate) fn config_warnings(&self) -> Vec<Warning> {
         config_warnings(&self.agent)
+    }
+
+    /// The configuration center's whole first page. Reads the facade's
+    /// settings on the Agent's runtime and the standalone files beside
+    /// them; no embedded-host API gains the standalone part.
+    pub(crate) fn config_state(&self) -> Result<ConfigState, String> {
+        let call = self.agent.clone();
+        let agent = self
+            .agent
+            .runtime()
+            .block_on(async move { call.settings_view().await })
+            .map_err(|failure| failure.to_string())??;
+        let config = self.runtime.config();
+        Ok(ConfigState {
+            agent,
+            standalone: config.standalone_settings()?,
+            layers: config.layer_sources()?,
+            warnings: config.layer_warnings()?,
+        })
     }
 }
 
