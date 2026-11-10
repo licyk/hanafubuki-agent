@@ -254,10 +254,13 @@ fn seed_repository(paths: &TestPaths) -> PathBuf {
     workspace
 }
 
+/// Waits for the command up to the 30 s maximum: on a loaded runner a
+/// `git` can outlast the default 10 s, and the result then holds a live
+/// session with no output yet.
 fn exec_arguments(cmd: &str) -> String {
     serde_json::json!({
         "cmd": cmd, "shell": null, "login": null, "tty": null,
-        "yield_time_ms": null, "max_output_bytes": null, "workdir": null
+        "yield_time_ms": 30_000, "max_output_bytes": null, "workdir": null
     })
     .to_string()
 }

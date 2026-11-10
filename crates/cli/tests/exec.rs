@@ -45,7 +45,7 @@ fn command_call(command: &str) -> Vec<u8> {
         "shell": null,
         "login": null,
         "tty": null,
-        "yield_time_ms": 5_000,
+        "yield_time_ms": 30_000,
         "max_output_bytes": 32_768,
         "workdir": null
     });
@@ -360,7 +360,7 @@ fn an_escalated_command_reaches_the_network_the_sandbox_refused() {
             "shell": null,
             "login": null,
             "tty": null,
-            "yield_time_ms": 5_000,
+            "yield_time_ms": 30_000,
             "max_output_bytes": 32_768,
             "workdir": null,
             "sandbox_permissions": null,

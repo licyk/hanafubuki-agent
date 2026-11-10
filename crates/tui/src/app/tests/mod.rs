@@ -254,7 +254,7 @@ fn command_arguments(command: &str) -> String {
         "shell": null,
         "login": null,
         "tty": null,
-        "yield_time_ms": 5_000,
+        "yield_time_ms": 30_000,
         "max_output_bytes": 32_768,
         "workdir": null
     })
