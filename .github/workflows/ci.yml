@@ -45,6 +45,8 @@ jobs:
   rust:
     name: Rust (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    # A run takes 8 to 18 minutes, a cold macOS build alone about 10: a hang fails instead of holding the runner.
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
