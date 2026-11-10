@@ -72,7 +72,7 @@ impl AgentService {
         }
         let mut transport = self.prepare_compaction_transport(session_id).await?;
         let mut revision = revision;
-        if let Some(adopted) = self
+        match self
             .adopt_manual_background_compaction(
                 session_id,
                 generation,
@@ -82,11 +82,17 @@ impl AgentService {
             )
             .await?
         {
-            if !self.over_compaction_threshold(session_id)? {
-                return Ok(adopted);
+            None => {}
+            // A turn admitted while this waited took it: the turn compacts
+            // further when it must.
+            Some(AdoptedCompaction::InstalledElsewhere(adopted)) => return Ok(adopted),
+            Some(AdoptedCompaction::Installed(adopted)) => {
+                if !self.over_compaction_threshold(session_id)? {
+                    return Ok(adopted);
+                }
+                revision = adopted.revision;
+                transport = self.prepare_compaction_transport(session_id).await?;
             }
-            revision = adopted.revision;
-            transport = self.prepare_compaction_transport(session_id).await?;
         }
         let plan = self
             .begin_compaction(
@@ -112,7 +118,7 @@ impl AgentService {
         revision: AgentRevision,
         transport: &CompactionTransport,
         event_sink: &dyn AgentEventSink,
-    ) -> Result<Option<AgentCompactionOutcome>, AgentError> {
+    ) -> Result<Option<AdoptedCompaction>, AgentError> {
         {
             let cell = self.session(session_id)?;
             let record = cell.lock_after_persistence().await?;

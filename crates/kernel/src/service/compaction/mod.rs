@@ -16,7 +16,9 @@ mod replacement;
 mod source;
 mod status;
 
-pub(in crate::service) use background::{BackgroundAdoption, BackgroundCompactionSlot};
+pub(in crate::service) use background::{
+    AdoptedCompaction, BackgroundAdoption, BackgroundCompactionSlot,
+};
 
 // Verbatim from codex-rs/prompts/templates/compact/prompt.md at bdd3118.
 const SUMMARIZATION_PROMPT: &str = include_str!("../../prompts/compact.md");

@@ -12,6 +12,65 @@ pub(in crate::service) enum BackgroundAdoption<'a> {
     Required(Option<&'a CancellationToken>),
 }
 
+/// A background compaction installed for a checkpoint.
+pub(in crate::service) enum AdoptedCompaction {
+    /// The checkpoint installed it.
+    Installed(AgentCompactionOutcome),
+    /// Another checkpoint took it while this one waited, and installed it
+    /// (a turn admitted while `/compact` waited).
+    InstalledElsewhere(AgentCompactionOutcome),
+}
+
+/// What a checkpoint finds in a run that is no longer going.
+enum Taken {
+    /// The result, now the taker's to install.
+    Result(Box<(CompactionPlan, CompactionSample)>),
+    InstalledElsewhere(Box<AgentCompactionOutcome>),
+    Nothing,
+}
+
+impl BackgroundRun {
+    /// Takes what the run left; `None` while it runs or another checkpoint
+    /// installs its result.
+    fn take(&self) -> Option<Taken> {
+        let mut outcome = self.outcome.lock();
+        let (kept, taken) = match std::mem::replace(&mut *outcome, BackgroundOutcome::Spent) {
+            BackgroundOutcome::Ready(result) => {
+                (BackgroundOutcome::Installing, Some(Taken::Result(result)))
+            }
+            BackgroundOutcome::Installed(installed) => (
+                BackgroundOutcome::Installed(installed.clone()),
+                Some(Taken::InstalledElsewhere(installed)),
+            ),
+            BackgroundOutcome::Spent => (BackgroundOutcome::Spent, Some(Taken::Nothing)),
+            pending @ (BackgroundOutcome::Running | BackgroundOutcome::Installing) => {
+                (pending, None)
+            }
+        };
+        *outcome = kept;
+        taken
+    }
+}
+
+/// A taken result being installed: what it ends as, for a checkpoint that
+/// waits for it, is `Installed` once the install succeeds and `Spent`
+/// otherwise, however the installing checkpoint stops.
+struct InstallClaim {
+    cell: Arc<SessionCell>,
+    run: Arc<BackgroundRun>,
+    installed: Option<AgentCompactionOutcome>,
+}
+
+impl Drop for InstallClaim {
+    fn drop(&mut self) {
+        *self.run.outcome.lock() = match self.installed.take() {
+            Some(outcome) => BackgroundOutcome::Installed(Box::new(outcome)),
+            None => BackgroundOutcome::Spent,
+        };
+        self.cell.notify_terminal();
+    }
+}
+
 impl AgentService {
     /// Installs the session's background compaction when its result is
     /// usable, before the history added since; the request that follows is
@@ -27,7 +86,7 @@ impl AgentService {
         tool_plan: &AgentToolPlan,
         prompt: &RequestContext,
         event_sink: &dyn AgentEventSink,
-    ) -> Result<Option<AgentCompactionOutcome>, AgentError> {
+    ) -> Result<Option<AdoptedCompaction>, AgentError> {
         let cell = self.session(session_id)?;
         let run = {
             let mut record = cell.lock()?;
@@ -51,15 +110,21 @@ impl AgentService {
             }
             run
         };
-        if let BackgroundAdoption::Required(cancellation) = adoption {
-            cell.wait_until(|_| {
-                if cancellation.is_some_and(CancellationToken::is_cancelled) {
-                    return Err(AgentError::Cancelled);
-                }
-                Ok((!matches!(*run.outcome.lock(), BackgroundOutcome::Running)).then_some(()))
-            })
-            .await?;
-        }
+        let taken = match adoption {
+            BackgroundAdoption::Ready => match run.take() {
+                Some(taken) => taken,
+                None => return Ok(None),
+            },
+            BackgroundAdoption::Required(cancellation) => {
+                cell.wait_until(|_| {
+                    if cancellation.is_some_and(CancellationToken::is_cancelled) {
+                        return Err(AgentError::Cancelled);
+                    }
+                    Ok(run.take())
+                })
+                .await?
+            }
+        };
         let model_changed = {
             let mut record = cell.lock()?;
             let slot = &mut record.runtime.background_compaction;
@@ -72,10 +137,17 @@ impl AgentService {
             }
             !run.attempt.same_model(&record)
         };
-        let BackgroundOutcome::Ready(result) =
-            std::mem::replace(&mut *run.outcome.lock(), BackgroundOutcome::Spent)
-        else {
-            return Ok(None);
+        let result = match taken {
+            Taken::Result(result) => result,
+            Taken::InstalledElsewhere(outcome) => {
+                return Ok(Some(AdoptedCompaction::InstalledElsewhere(*outcome)))
+            }
+            Taken::Nothing => return Ok(None),
+        };
+        let mut claim = InstallClaim {
+            cell: cell.clone(),
+            run: run.clone(),
+            installed: None,
         };
         if model_changed {
             return Ok(None);
@@ -90,8 +162,9 @@ impl AgentService {
         });
         match self.commit_compaction(&plan, &sample, install).await {
             Ok((outcome, event)) => {
+                claim.installed = Some(outcome.clone());
                 event_sink.emit(event);
-                Ok(Some(outcome))
+                Ok(Some(AdoptedCompaction::Installed(outcome)))
             }
             Err(error) => {
                 log::debug!(

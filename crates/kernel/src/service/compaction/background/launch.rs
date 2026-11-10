@@ -254,9 +254,10 @@ fn launch_attempt(
         implementation: AgentCompactionImplementation::from(config.compaction_capability),
     };
     let slot = &record.runtime.background_compaction;
-    let usable = slot.run.as_ref().is_some_and(|run| {
-        run.attempt.matches(record) && !matches!(*run.outcome.lock(), BackgroundOutcome::Spent)
-    });
+    let usable = slot
+        .run
+        .as_ref()
+        .is_some_and(|run| run.attempt.matches(record) && run.outcome.lock().state().is_some());
     if usable || slot.last_attempt.as_ref() == Some(&attempt) {
         return Ok(None);
     }

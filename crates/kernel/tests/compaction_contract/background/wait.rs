@@ -216,3 +216,48 @@ async fn compact_takes_the_running_compaction_and_compacts_itself_when_it_fails(
         );
     }
 }
+
+/// A turn admitted while `/compact` waits for the running compaction takes
+/// its result first: `/compact` reports that install rather than failing on
+/// the revision the turn moved. The test holds `/compact` at its wait (it
+/// is polled only by the test, on this one thread) while the compaction
+/// ends and the turn installs it.
+#[tokio::test]
+async fn compact_reports_the_install_of_a_turn_admitted_while_it_waited() {
+    let background = Gate::default();
+    let model = BackgroundModel::local(
+        seed_then([answer("third answer", 200)]),
+        [held(&background, Answer::Summary("the first turn"))],
+    );
+    let service = AgentService::new(
+        Arc::new(model.clone()),
+        FakeTools::new([]).await.registries(),
+    );
+    let session = service
+        .create_session(background_config(ModelCompactionCapability::LocalSummary))
+        .unwrap();
+    seed(&service, session.id).await;
+    background_sent(&model).await;
+    let before = service.snapshot(session.id).unwrap();
+    let mut compacting =
+        std::pin::pin!(service.compact_session(session.id, before.generation, before.revision));
+    // Nothing it awaits before its wait needs another task, so these polls
+    // leave it waiting for the running compaction.
+    for _ in 0..16 {
+        tokio::select! {
+            biased;
+            outcome = &mut compacting => panic!("`/compact` ended while held: {outcome:?}"),
+            () = tokio::task::yield_now() => {}
+        }
+    }
+
+    background.open();
+    background_ready(&service, session.id).await;
+    service.start_turn(session.id, turn("third")).await.unwrap();
+    assert!(background_completed(&service, session.id));
+
+    let outcome = compacting.await.unwrap();
+    assert_eq!(outcome.compaction.phase, AgentCompactionPhase::Background);
+    assert_eq!(outcome.compaction.status, AgentCompactionStatus::Completed);
+    assert_eq!(model.compaction_requests().len(), 1);
+}

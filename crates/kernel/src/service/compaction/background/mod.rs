@@ -13,7 +13,7 @@ use super::*;
 mod adopt;
 mod launch;
 
-pub(in crate::service) use adopt::BackgroundAdoption;
+pub(in crate::service) use adopt::{AdoptedCompaction, BackgroundAdoption};
 
 /// The session's background compaction: the inputs of the last one
 /// launched, which are not launched again, and its run while there is one.
@@ -49,17 +49,28 @@ struct BackgroundRun {
 enum BackgroundOutcome {
     Running,
     Ready(Box<(CompactionPlan, CompactionSample)>),
-    /// Failed, cancelled, or taken by an adoption.
+    /// Taken by a checkpoint that is installing it; another one waiting
+    /// for the run waits for the install too.
+    Installing,
+    /// Installed by the checkpoint that took it, for one that waited.
+    Installed(Box<AgentCompactionOutcome>),
+    /// Failed, cancelled, or taken and not installed.
     Spent,
+}
+
+impl BackgroundOutcome {
+    fn state(&self) -> Option<crate::AgentBackgroundCompactionState> {
+        match self {
+            Self::Running => Some(crate::AgentBackgroundCompactionState::Running),
+            Self::Ready(_) | Self::Installing => Some(crate::AgentBackgroundCompactionState::Ready),
+            Self::Installed(_) | Self::Spent => None,
+        }
+    }
 }
 
 impl BackgroundCompactionSlot {
     pub(in crate::service) fn state(&self) -> Option<crate::AgentBackgroundCompactionState> {
-        match *self.run.as_ref()?.outcome.lock() {
-            BackgroundOutcome::Running => Some(crate::AgentBackgroundCompactionState::Running),
-            BackgroundOutcome::Ready(_) => Some(crate::AgentBackgroundCompactionState::Ready),
-            BackgroundOutcome::Spent => None,
-        }
+        self.run.as_ref()?.outcome.lock().state()
     }
 
     /// Cancels the run and forgets the slot, the last attempt included. A

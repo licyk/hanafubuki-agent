@@ -144,9 +144,26 @@ and pushed, and notes what Hanafubuki must change at its next pin.
     compaction_keeps_the_turns_world_state_removal` (failed before with
     the validation error). Goldens unchanged (none has a pre-turn
     install). Docs: internals (both languages). Nothing for Hanafubuki.
-  - Open: a turn admitted while `/compact` waits for a background run can
-    take the result first; `/compact` then finds nothing and may fail with
-    a stale revision (unguarded race).
+  - Done (after P12): the `/compact` and turn-admission race. A turn
+    admitted while `/compact` waited for a background run could take the
+    result first; `/compact` then found it spent and compacted with the
+    generation and revision it had read (`StaleGeneration`). The run's
+    outcome gains `Installing` (taken by a checkpoint, under the outcome's
+    lock, in the same check that saw it ready) and `Installed(outcome)`:
+    the taker's `InstallClaim` sets `Installed` after its commit and
+    `Spent` however else it stops, then advances `terminal`. A waiter
+    waits through `Installing`, and one that finds `Installed` gets
+    `AdoptedCompaction::InstalledElsewhere`: `/compact` returns that
+    outcome (the turn compacts further when it must). `/status` shows a
+    result being installed as ready. Test: kernel `compaction_contract::
+    background::wait::compact_reports_the_install_of_a_turn_admitted_
+    while_it_waited` holds `/compact` at its wait by polling it only from
+    the test (current-thread runtime), lets the compaction end and a turn
+    install it, then resumes `/compact` (failed before with
+    `StaleGeneration`). Docs: internals and terminal-interface (both
+    languages). Nothing for Hanafubuki: kernel-internal, public API
+    unchanged; a host's `/compact` that waits can now return a background
+    outcome a turn installed (`phase: background`).
   - Open: nothing observable tells a test that a turn is waiting on the
     background compaction, so the wait tests hold the compaction until the
     turn is admitted and assert the outcome (one compaction request, the
