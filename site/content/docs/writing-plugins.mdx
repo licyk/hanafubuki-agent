@@ -1,0 +1,242 @@
+---
+title: 编写插件
+description: 编写带代码的可安装插件——用 Rust、Python 或任何语言写一个由 Agent 在进程外运行的程序——然后校验它、在实时重载中开发它，并通过市场发布它。
+icon: Puzzle
+---
+
+可安装插件是一个**包**：一个带清单的目录，Agent 从一个目录或一个[市场](#publishing)安装它（[已安装插件](/docs/architecture#installed-plugins)）。Codex、Claude Code、Cursor 或 Agent Plugins 格式的插件提供内容（Skill、MCP 服务器、hook），不需要代码。本页讲的是本项目自己的格式 `.hanafubuki-plugin/plugin.json`：这种插件还可以带**代码**——一个程序，即插件的**访客**（guest）。Agent 在进程外启动它，用沙箱限制它，并为清单声明的工具、上下文段、提示片段、hook 和观察者调用它（[代码插件](/docs/architecture#code-plugins)）。访客崩溃或卡住，损失的只是它自己的贡献。
+
+## 创建插件 [#start]
+
+`hanafubuki-agent plugins new 名字` 写出一个带代码、可以直接构建的插件：
+
+```sh
+hanafubuki-agent plugins new my-plugin                  # Rust，位于 ./my-plugin
+hanafubuki-agent plugins new my-plugin --lang python --dir plugins/my-plugin
+```
+
+```text
+my-plugin/
+├── Cargo.toml                          访客的 Cargo 项目（Rust），或 plugin.py（Python）
+├── src/main.rs
+├── README.md                           如何构建、检查和运行它
+└── package/                            Agent 安装的插件
+    └── .hanafubuki-plugin/plugin.json
+```
+
+Rust 插件提供一个工具（`greet`）、一个上下文段（`<名字>_status`，它读取工作区）和一个观察者（`turn_finished`）；Python 插件提供一个工具（`count_words`）和一个提示片段。两者的清单都声明了权限和 `configSchema`。仓库的 [`examples/plugins/`](https://github.com/licyk/hanafubuki-agent/tree/main/examples/plugins) 收有这两个插件，内容与 `plugins new` 写出的完全相同（`hello-rust`、`hello-python`）。
+
+`package/` 特意与源码分开：安装会把整个包（`.git` 和符号链接除外）复制到数据目录并计算哈希，只有包仍是这个哈希时访客才会启动。如果构建目录（`target/`）在包里，每次安装都会复制它并计算哈希。构建时把程序放进 `package/`：
+
+```sh
+cargo build --release && cp target/release/my-plugin package/                 # Rust
+python3 -m pykardia.guest.export process plugin.py Plugin package/my-plugin.pyz  # Python
+```
+
+## 包 [#package]
+
+| 路径                                                    | 是什么                                                                                                                                                                |
+| ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.hanafubuki-plugin/plugin.json`                        | [清单](#manifest)                                                                                                                                                     |
+| 访客的程序                                              | `runtime.command` 指定的文件（`./my-plugin`、`./my-plugin.pyz`）；访客只能读它                                                                                        |
+| `skills/`、`.mcp.json`、`hooks/hooks.json`、`commands/` | 内容，与 Codex 和 Claude Code 的格式相同（[Skill](/docs/skills#sources)、[插件的服务器](/docs/mcp#plugin-servers)、[插件的 hook](/docs/configuration#hooks-plugins)） |
+
+插件可以只有内容、只有代码，或两者都有。它的 ID 是 `<名字>@<市场>`；从目录安装的插件是 `<名字>@local`。访客运行时，工作目录是插件自己的数据目录（`PLUGIN_DATA`），也是它唯一能写的地方；`PLUGIN_ROOT` 是安装后的包。
+
+## 清单 [#manifest]
+
+```json
+{
+  "name": "my-plugin",
+  "version": "0.1.0",
+  "description": "What it does.",
+  "runtime": { "type": "process", "command": ["./my-plugin"], "protocol": "kardia-guest/2" },
+  "contributes": {
+    "tools": [
+      {
+        "name": "greet",
+        "description": "Greets someone by name.",
+        "inputSchema": {
+          "type": "object",
+          "properties": { "name": { "type": "string" } },
+          "required": ["name"],
+          "additionalProperties": false
+        },
+        "timeout": 10
+      }
+    ],
+    "contextSections": [{ "kind": "my_plugin_status" }],
+    "prompt": { "slot": "capabilities" },
+    "toolLifecycleHooks": false,
+    "continuationHooks": false,
+    "observers": ["turn_finished"]
+  },
+  "permissions": { "network": false, "workspace": "read", "env": [] },
+  "configSchema": {
+    "type": "object",
+    "properties": { "greeting": { "type": "string" } },
+    "additionalProperties": false
+  }
+}
+```
+
+清单按外部生产者的数据读取：无法使用的字段或列表中的条目会被略过并记为问题，其余部分照常使用。`plugins validate` 会列出所有问题。
+
+| 字段                                                              | 含义                                                                                                                                                                                                               |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `name`                                                            | 插件的名字：它 ID 的第一部分、它的工具的命名空间，也是它的访客声明的名字                                                                                                                                           |
+| `version`、`description`、`keywords`、`interface`                 | 与 Codex 的清单相同；版本是安装副本的名字                                                                                                                                                                          |
+| `skills`、`mcpServers`、`hooks`、`commands`                       | 内容，每个都是以 `./` 开头、留在包内的路径（`mcpServers` 和 `hooks` 也可以直接写在清单里）                                                                                                                         |
+| `runtime.type`                                                    | `process`（尚不运行 WASM）                                                                                                                                                                                         |
+| `runtime.command`                                                 | 程序和参数；程序是包里的文件（`./…`），或者在 `runtime.interpreter: true` 时是一个解释器（绝对路径，或 Agent 的 `PATH` 上的名字），以包里的文件作为参数                                                            |
+| `runtime.protocol`                                                | `kardia-guest/2`                                                                                                                                                                                                   |
+| `contributes.tools[]`                                             | `name`（ASCII 字母、数字、`_`、`-`）、`description`、`inputSchema`（JSON Schema 对象）、`timeout`（秒，大于 0 且不超过 3600；未设置时为 10 秒的调用期限）。模型看到的名字是 `<插件>__<名字>`；每次调用都要用户批准 |
+| `contributes.contextSections[]`                                   | `kind`（小写字母、数字和 `_`，不能是 Agent 自己的种类）；最多 7 个                                                                                                                                                 |
+| `contributes.prompt.slot`                                         | `instructions`、`worldState`、`capabilities`（默认）或 `memory`                                                                                                                                                    |
+| `contributes.toolLifecycleHooks`、`contributes.continuationHooks` | 为 `true` 时，每次工具调用前后、每个候选最终回答都会询问它                                                                                                                                                         |
+| `contributes.observers`                                           | 要通知它的事件：`turn_admitted`、`sampling_committed`、`turn_finished`、`memory_contribution_changed`、`session_archived`、`session_restored`                                                                      |
+| `permissions.network`                                             | 为 `true` 时可以访问网络（默认关闭）                                                                                                                                                                               |
+| `permissions.workspace`                                           | `none`、`read`（默认）或 `write`                                                                                                                                                                                   |
+| `permissions.env`                                                 | 访客会收到的 Agent 环境变量的名字                                                                                                                                                                                  |
+| `configSchema`                                                    | 一个对象的 JSON Schema：插件的设置，`plugins settings` 和 `/plugins` 按它检查设置                                                                                                                                  |
+
+每种声明变成什么、有哪些限制，见[访客贡献什么](/docs/plugin-rules#guest-contributions)。
+
+## 访客 [#guest]
+
+访客是一个在标准输入和输出上使用 Kardia 访客协议（`kardia-guest/2`）的程序：它的元数据恰好是清单中的 `name`，只提供一个服务 `plugin`；它的 `apply` 收到它的设置并提供 `plugin`；Agent 调用 `plugin` 的方法，每种贡献一个：`tool`、`context`、`prompt`、`beforeToolUse`、`afterToolUse`、`continuation`、`observe`。这些方法、参数和回答见[访客协议](/docs/plugin-rules#guest-protocol)；访客可以 `view` 什么（它的工作区和它的设置）见[访客能访问什么](/docs/plugin-rules#guest-host-calls)。
+
+标准输出属于协议：访客绝不能向它打印。它把日志写到标准错误，或通过宿主的 `log` 发送；Agent 保留它标准错误的最后 16 KiB 作为状态的一部分，并且只在 `trace` 级别记录访客的原话。
+
+### Rust [#rust]
+
+[kardia-guest](https://crates.io/crates/kardia-guest) 实现了这个协议：实现它的 `Guest` trait，在 `main` 中调用 `serve`。
+
+```rust
+use kardia_guest::{json, Guest, Host, Map, Meta, Request, Result, Value};
+
+struct Plugin;
+
+impl Guest for Plugin {
+    type Config = Value;
+
+    fn meta() -> Meta {
+        Meta::plugin("my-plugin").provide("plugin")
+    }
+
+    fn apply(host: &Host, _settings: Value, _imports: Map<String, Value>) -> Result<Self> {
+        host.provide("plugin", &json!({}))?;
+        Ok(Plugin)
+    }
+
+    fn call(&mut self, _host: &Host, request: Request) -> Result<Value> {
+        match request.method.as_str() {
+            "tool" => {
+                let name = request.args["arguments"]["name"].as_str().unwrap_or("world");
+                Ok(json!(format!("Hello, {name}!")))
+            }
+            method => Err(format!("no method {method}").into()),
+        }
+    }
+}
+
+fn main() {
+    kardia_guest::serve::<Plugin>();
+}
+```
+
+调用中的 panic 会被捕获，成为该调用的错误。
+
+### Python [#python]
+
+[pykardia](https://github.com/licyk/pykardia) 的访客 SDK 用 Python 实现了这个协议：继承 `pykardia.guest.Guest`，再把这个类导出为进程访客——一个打包了 SDK 的 zipapp，可在任何 Python 3.10 及以上版本运行：
+
+```sh
+python3 -m pip install git+https://github.com/licyk/pykardia
+python3 -m pykardia.guest.export process plugin.py Plugin package/my-plugin.pyz
+```
+
+清单用 Agent 的 `PATH` 上的解释器运行它：`"command": ["python3", "./my-plugin.pyz"], "interpreter": true`。在沙箱中，访客只能读系统目录（`/usr`、`/lib` 等）、它的包和它的解释器程序本身，所以解释器必须是系统的：主目录下的虚拟环境或版本管理器的 Python 在那里读不到自己的标准库。这个 SDK 从其仓库的 `main` 开始使用 `kardia-guest/2`；PyPI 上的 0.1.0 版本更早。
+
+### SDK 的许可证 [#licences]
+
+kardia-guest 和 pykardia 的访客 SDK（`pykardia/guest/` 以及导出时一并打包的模块）采用 **MIT OR Apache-2.0** 许可证，所以链接或打包它们的插件可以自行选择许可证；导出的 zipapp 附带它们的许可证文件。Kardia 和 pykardia 的其余部分以及 Agent 本身是 GPL-3.0-only；访客是一个独立的程序，Agent 运行它并通过管道与它通信。
+
+### 其他语言 [#other-languages]
+
+用其他语言写的访客自己实现线路格式。每条消息都是一行上的一个 JSON 对象（最多 4 MiB）：Agent 的消息写到访客的标准输入，访客的消息写到它的标准输出。
+
+1. Agent 先发送 `{"export":"hello","input":{"protocol":"kardia-guest/2"}}`；访客回答 `{"ready":"kardia-guest/2"}`。
+2. 每个导出都带一个 `id`：`{"export":"meta","id":1}`、`{"export":"apply","id":2,"input":{"config":{…},"imports":{}}}`、`{"export":"call","id":3,"input":{"key":"plugin","method":"tool","args":{…}}}`，最后是 `{"export":"dispose","id":4}`。
+3. 访客对一个导出最多回答一条 `{"output":"<文本>","id":…}`（结果的 JSON 文本，或错误消息），然后回答 `{"done":0,"id":…}`；失败时回答 `{"done":1,"id":…}`。`meta` 的输出是 `{"deps":[],"plugin":{"name":"my-plugin","inject":[],"provide":["plugin"]}}`。
+4. 导出运行期间，访客可以用该导出的 `id` 调用宿主：`{"call":"provide","key":"plugin","value":{}}`（在 `apply` 中）、`{"call":"view","key":"workspace"}`，Agent 回答 `{"result":…}` 或 `{"error":"…"}`；以及 `{"call":"log","level":2,"text":"…"}`（0 为 error，3 为 debug），Agent 不回答它。
+5. Agent 随时可能发送 `{"ping":n}`，访客应立即回答 `{"pong":n}`；以及 `{"cancel":id}`，此后该导出的结果会被丢弃。
+
+## 检查 [#validate]
+
+`hanafubuki-agent plugins validate 目录` 像安装那样读取插件，并像访客宿主运行它那样检查它的代码，但不安装也不启动任何东西：
+
+- 清单的问题（被略过的字段、超出范围的超时、未知的贡献），以及声明了却不存在的路径；
+- 运行时：`process` 运行时、协议、包里存在（且可执行）的程序，或 `PATH` 上的解释器，以及参数指定的包内文件；
+- 注册时会被略过的内容：不是合法工具名的名字、过大或过深的 schema、不是插件种类的上下文种类、超过 7 个种类、不存在的提示槽位、没有观察者能收到的事件、重复声明的名字；
+- 不描述对象的 `configSchema`。
+
+加上 `--run` 时，它接着把插件安装到一个临时主目录（它自己的配置和数据目录，事后删除），授予代码请求的权限，在沙箱中启动它的访客，并报告访客的状态、启动时略过的内容、它的退出情况和标准错误：握手、元数据和 `apply` 都与在 Agent 中一样进行。有任何问题，或访客没有运行，它都会失败（退出码 1）；`--json` 打印 `{"validation": …, "started": …}`。
+
+## 开发 [#dev]
+
+`hanafubuki-agent plugins dev 目录` 把插件安装为 `<名字>@local` 并启用，显示它的代码请求什么并授予（会先询问；`--grant` 不询问直接授予），然后打印访客的状态。之后它监视这个目录：一次改动（新的构建或导出）之后，文件安静片刻，它就重新安装插件，访客带着改动重新启动，授权和设置保持不变；请求更多权限的改动会再次询问。Ctrl+C 停止监视；插件仍保持安装（`plugins remove <名字>@local` 删除它）。
+
+`plugins dev` 运行着 Agent，它占用数据目录，所以期间不能在这个目录上运行其他 Agent：要在终端界面或 `exec` 中试用插件，先停止它，插件仍保持安装。一个临时主目录能让开发中的插件不进入你自己的配置和数据：用同一个 [`HANAFUBUKI_AGENT_HOME`](/docs/environment#read) 先运行 `plugins dev`，再运行终端界面。
+
+## 设置和权限 [#settings-permissions]
+
+- **权限**由用户授予，插件自己永远不能授予：权限未被授予的访客处于 `blocked` 状态。`plugins grant ID` 授予清单请求的权限，`/plugins` 中插件页面的 **Grant its permissions** 也一样。请求更多权限的更新要等待新的授权。
+- **沙箱的插件配置**限制访客：它能读系统目录和它的包，只能写它的数据目录，按授予的权限访问工作区，只有被授予时才能访问网络；启动时环境为空，只有被授予的 `env`、`PLUGIN_ROOT` 和 `PLUGIN_DATA`。Linux 和 macOS 强制执行读取限制；Windows 无法禁止读取，所以那里不强制 `workspace: "none"`。没有沙箱的地方，访客不会启动。
+- **设置**是 `config.toml` 中的 `[plugins."ID"].settings`：`plugins settings ID --set '{"greeting": "Hi"}'` 替换它们（按 `configSchema` 检查），`--set null` 删除它们，`plugins settings ID` 打印它们和 schema；`/plugins` 也能编辑它们。它们是 `apply` 收到的配置，也是访客的 `settings` 视图；修改后访客会带着新设置重新启动。
+
+## 出错时 [#failures]
+
+| 发生了什么                        | Agent 怎么做                                                                                                                                        |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 清单或组件有误                    | 该字段或组件记为问题，其余照常加载；运行时无法运行的访客不会启动                                                                                    |
+| 访客在调用中 panic                | SDK 把它作为该调用的错误返回：给模型的工具错误、被略过的上下文段                                                                                    |
+| 调用超过期限                      | 杀死访客并重启它；本轮在没有这项贡献的情况下继续                                                                                                    |
+| 访客退出、中止或内存耗尽          | 它的贡献立即撤回，访客重启后重新注册                                                                                                                |
+| 违反协议，或发送超过 4 MiB 的一行 | 按崩溃处理：杀死并重启                                                                                                                              |
+| 一直失败                          | 分别在 2 秒、10 秒和 30 秒后重启；10 分钟内第四次失败后保持 `failed`，直到 `plugins retry`（或 `/plugins` 中的 **Retry plugin**）；启动失败不会重启 |
+| 安装后包里的文件被改动            | 重新安装之前不会启动                                                                                                                                |
+
+Agent 的其余部分以及嵌入它的宿主都不受影响：访客是另一个进程。`plugins info ID` 显示访客的状态和错误；`/plugins` 和 `/warnings` 显示它的问题。
+
+## 发布 [#publishing]
+
+插件通过**市场**发布：一个目录或 git 仓库，其中的 `marketplace.json` 列出插件（`.agents/plugins/marketplace.json`，或 Claude Code 的 `.claude-plugin/marketplace.json`）：
+
+```json
+{
+  "name": "my-marketplace",
+  "plugins": [
+    { "name": "my-plugin", "source": "./plugins/my-plugin/package" },
+    {
+      "name": "other-plugin",
+      "source": {
+        "source": "git-subdir",
+        "url": "https://github.com/me/other-plugin",
+        "path": "package",
+        "ref": "v1.0.0"
+      }
+    }
+  ]
+}
+```
+
+来源可以是市场内的路径（`./…`）、`{"source": "local", "path": …}`、一个 git 仓库（`{"source": "url", "url": …}`）或其中的一个目录（`{"source": "git-subdir", "url": …, "path": …}`），可选 `ref` 或 `sha`。用户添加市场并从中安装：
+
+```sh
+hanafubuki-agent plugins marketplace add me/my-marketplace
+hanafubuki-agent plugins add my-plugin@my-marketplace
+hanafubuki-agent plugins grant my-plugin@my-marketplace
+```
+
+带编译程序的插件把这个程序放在包内发布，为它支持的每个平台分别构建；没有任何签名，所以用户信任一个市场就像信任它的来源。`plugins update` 安装新版本，`plugins marketplace upgrade` 先获取 git 市场的改动。命令见[命令行参考](/docs/cli-reference#plugins)，配置见[配置参考](/docs/config-reference#plugins)。

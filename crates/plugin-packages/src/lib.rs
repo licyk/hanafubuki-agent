@@ -27,7 +27,10 @@
 //! context sections, a prompt, hooks, an observer) call the service it
 //! provides ([`GUEST_SERVICE`]), each within a deadline. It may view only
 //! its workspace and its settings, and provide only that service.
+//! [`check_package`] finds, without starting anything, what of a package's
+//! code would not start or register (`plugins validate`).
 
+mod check;
 mod contribute;
 mod guests;
 mod host_services;
@@ -39,6 +42,7 @@ mod spawn;
 mod state;
 mod supervise;
 
+pub use check::check_package;
 pub use guests::{GuestHost, GuestHostInputs};
 pub use package::{GuestPackage, GUEST_SERVICE};
 pub use plugin::GUESTS_PLUGIN;

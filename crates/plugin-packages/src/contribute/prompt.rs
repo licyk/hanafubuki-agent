@@ -60,7 +60,7 @@ pub(super) fn register(
         .then_some(kind)
 }
 
-fn slot(declared: &str) -> Option<ContextSlot> {
+pub(super) fn slot(declared: &str) -> Option<ContextSlot> {
     match declared {
         "instructions" => Some(ContextSlot::Instructions),
         "worldState" | "world_state" => Some(ContextSlot::WorldState),
@@ -72,7 +72,7 @@ fn slot(declared: &str) -> Option<ContextSlot> {
 
 /// `plugin_<name>`: the plugin's name in lowercase, with what a kind cannot
 /// hold replaced by `_`, cut to a kind's length.
-fn prompt_kind(id: &PluginId) -> String {
+pub(super) fn prompt_kind(id: &PluginId) -> String {
     let mut kind = String::from("plugin_");
     kind.extend(
         id.plugin_name

@@ -346,10 +346,67 @@ pub(crate) enum PluginsCommand {
     },
     /// Loads the installed plugins again and shows the plugin as it is then.
     Retry { id: String },
+    /// Grants an installed plugin's code what its manifest asks for (the
+    /// network, the workspace, environment variables), so its guest starts.
+    Grant { id: String },
+    /// Shows or replaces the settings of an installed plugin's code
+    /// (`[plugins."ID"].settings`), which must fit its configSchema.
+    #[command(
+        after_help = "Examples:\n  hanafubuki-agent plugins settings demo@local\n  hanafubuki-agent plugins settings demo@local --set '{\"greeting\": \"Hi\"}'\n  hanafubuki-agent plugins settings demo@local --set null"
+    )]
+    Settings {
+        id: String,
+        /// Replaces them with a JSON object; `null` removes them.
+        #[arg(long, value_name = "JSON")]
+        set: Option<String>,
+        /// Prints them and their configSchema (what it does without --set).
+        #[arg(long, conflicts_with = "set")]
+        get: bool,
+    },
+    /// Creates a plugin with code: a package whose manifest declares a
+    /// tool and more, and the guest program's source in Rust or Python.
+    #[command(
+        after_help = "Examples:\n  hanafubuki-agent plugins new my-plugin\n  hanafubuki-agent plugins new my-plugin --lang python --dir plugins/my-plugin"
+    )]
+    New {
+        /// The plugin's name: lowercase letters, digits and `-`, starting
+        /// with a letter.
+        name: String,
+        #[arg(long, value_enum, default_value = "rust")]
+        lang: PluginLanguage,
+        /// The directory to create (default: ./NAME).
+        #[arg(long, value_name = "DIR")]
+        dir: Option<PathBuf>,
+    },
+    /// Checks the plugin in a directory as an install would read it, and
+    /// its code as the Agent would run it; with --run, also starts it.
+    Validate {
+        dir: PathBuf,
+        /// Also installs it into a throwaway home, grants its permissions
+        /// and starts its guest, then reports how it ran.
+        #[arg(long)]
+        run: bool,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Installs the plugin in a directory as NAME@local, turns it on, and
+    /// installs it again each time its files change, until Ctrl+C.
+    Dev {
+        dir: PathBuf,
+        /// Grants what its code asks for without asking.
+        #[arg(long)]
+        grant: bool,
+    },
     /// Adds, lists, upgrades and removes the marketplaces plugins are
     /// installed from.
     #[command(subcommand)]
     Marketplace(MarketplaceCommand),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
+pub(crate) enum PluginLanguage {
+    Rust,
+    Python,
 }
 
 #[derive(Debug, Subcommand)]

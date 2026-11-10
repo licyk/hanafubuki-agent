@@ -16,6 +16,7 @@
 //! are keyed by type, so one contributor of the guest host asks every guest
 //! that declares a prompt ([`prompt`]).
 
+mod check;
 mod context;
 mod hooks;
 mod observers;
@@ -36,6 +37,7 @@ use crate::guests::{GuestHost, Shared};
 use crate::package::GuestPackage;
 use crate::state::GuestState;
 
+pub(crate) use check::check_contributes;
 pub(crate) use prompt::GuestPrompts;
 pub(crate) use protocol::GuestMethod;
 

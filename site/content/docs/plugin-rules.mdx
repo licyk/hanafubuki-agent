@@ -279,7 +279,7 @@ MCP 服务器、Skill 作者或提取模型产生的东西被容错读取；一�
 | `continuation`  | `{ sessionId, turnId, samplingStep, candidateFinalAnswer }`                          | `null` 或 `"pass"`、`"stop"`，或 `{ "continue": [文本, …] }` |
 | `observe`       | `{ event, sessionId, turnId? }`                                                      | 忽略                                                         |
 
-其他回答即该调用失败。同一个访客的调用逐个进行。
+其他回答即该调用失败。同一个访客的调用逐个进行。这些方法之下的 SDK 和线路格式见[编写插件](/docs/writing-plugins#guest)。
 
 ## 日志 [#logging]
 
@@ -312,6 +312,8 @@ kardia 的日志通过宿主安装在根上的 `LogExporter` 到达 `log` facade
 这也是挂载顺序，宿主的行在 `plugins` 之后、`workspace-context` 之前。门面自己的插件在 `crates/agent/src/plugins/` 中，因为它们使用 Agent 的服务。工具：8 个内核工具（3 个在每个计划中，5 个压缩工具只在 `hierarchical` 下）和 29 个注册的工具（3 个延迟）；`tool_search` 是计划自己的绑定。每一步，工具源加上已连接 MCP 服务器的工具和最多 4 个记忆工具。golden 的默认模式请求（没有 MCP 服务器、记忆关闭、图片输入开启）带 30 个工具：26 个直接注册的工具、3 个内核工具和 `tool_search`；计划模式的带 14 个只读注册工具和 `request_user_input`。
 
 ## 编写插件 [#writing-a-plugin]
+
+本节讲的是编译进来的 Agent 自己的插件和宿主的插件。可安装插件——代码作为访客运行的包——的写法见[编写插件](/docs/writing-plugins)。
 
 先选择它放在哪里：
 

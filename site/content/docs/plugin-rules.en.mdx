@@ -279,7 +279,7 @@ A guest is a Kardia guest (`kardia-guest/2`) whose metadata is `{ "name": <manif
 | `continuation`  | `{ sessionId, turnId, samplingStep, candidateFinalAnswer }`                            | `null` or `"pass"`, `"stop"`, or `{ "continue": [text, …] }`                                   |
 | `observe`       | `{ event, sessionId, turnId? }`                                                        | ignored                                                                                        |
 
-Another answer is that call's failure. The calls of one guest run one at a time.
+Another answer is that call's failure. The calls of one guest run one at a time. The SDKs and the wire beneath these methods are in [Writing plugins](/docs/writing-plugins#guest).
 
 ## Logging [#logging]
 
@@ -312,6 +312,8 @@ kardia's logs reach the `log` facade through the `LogExporter` the host installs
 That is also the mount order, a host's rows coming after `plugins` and before `workspace-context`. The facade's own plugins live in `crates/agent/src/plugins/` because they use the Agent's services. Tools: 8 kernel tools (3 in every plan, the 5 compression tools only under `hierarchical`) and 29 registered tools (3 of them deferred); `tool_search` is the plan's own binding. Per step the tool sources add the connected MCP servers' tools and up to 4 memory tools. The golden Default-mode request (no MCP server, memory off, image input on) carries 30 tools: the 26 direct registered tools, the 3 kernel tools and `tool_search`; the Plan-mode one carries the 14 read-only registered tools and `request_user_input`.
 
 ## Writing a plugin [#writing-a-plugin]
+
+This section is about the Agent's own plugins and a host's, compiled in. An installable plugin, a package whose code runs as a guest, is written as in [Writing plugins](/docs/writing-plugins).
 
 Choose where it lives:
 

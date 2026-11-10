@@ -7,7 +7,9 @@
 //! approved like an MCP tool's, by the turn's permission mode: the user in
 //! `Manual`, the reviewer model in `AutoReview`, no one in `FullAccess`.
 //! A guest that crashes in a tool call is that call's error: the turn ends
-//! with its answer, and the guest comes back.
+//! with its answer, and the guest comes back. The changed package installed
+//! again from its directory (what `plugins dev` does on a change) starts
+//! anew with the change.
 //!
 //! This binary is also the guest (kardia-guest's `serve`, with
 //! [`GUEST_ARG`]) and the sandbox helper, so the guest it installs, and
@@ -81,7 +83,11 @@ impl Guest for DemoGuest {
         match request.method.as_str() {
             "tool" if args["name"] == "crash" => std::process::exit(9),
             "tool" => Ok(json!({ "echoed": args["arguments"] })),
-            "context" => Ok(json!(format!("Board {} is open.", self.board))),
+            "context" => Ok(json!(format!(
+                "Board {} is open ({}).",
+                self.board,
+                args["kind"].as_str().unwrap_or_default()
+            ))),
             "prompt" => Ok(json!(format!("Use board {} for plugin work.", self.board))),
             "beforeToolUse" => Ok(Value::Null),
             "afterToolUse" => Ok(json!({
@@ -104,6 +110,41 @@ impl Guest for DemoGuest {
 fn write(path: &std::path::Path, contents: &str) {
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     std::fs::write(path, contents).unwrap();
+}
+
+/// The demo plugin's manifest at `source`: this binary as its guest, its
+/// `version` and its context sections of `kinds`.
+fn write_manifest(source: &std::path::Path, version: &str, kinds: &[&str]) {
+    let program = std::env::current_exe().unwrap();
+    let sections: Vec<Value> = kinds.iter().map(|kind| json!({ "kind": kind })).collect();
+    write(
+        &source.join(".hanafubuki-plugin/plugin.json"),
+        &json!({
+            "name": "demo",
+            "version": version,
+            "runtime": {
+                "type": "process",
+                "command": [program.to_str().unwrap(), GUEST_ARG],
+                "interpreter": true,
+            },
+            "contributes": {
+                "tools": [
+                    { "name": "echo", "description": "Echoes.", "inputSchema": { "type": "object" } },
+                    { "name": "crash", "description": "Crashes.", "inputSchema": { "type": "object" } },
+                ],
+                "contextSections": sections,
+                "prompt": { "slot": "capabilities" },
+                "toolLifecycleHooks": true,
+                "observers": ["turn_finished"],
+            },
+            "permissions": { "workspace": "none" },
+            "configSchema": {
+                "type": "object",
+                "properties": { "board": { "type": "string" } },
+            },
+        })
+        .to_string(),
+    );
 }
 
 async fn package(service: &AgentApplicationService) -> AgentPackageStatus {
@@ -233,6 +274,7 @@ async fn a_code_plugin_contributes_to_a_turn_and_its_crash_stays_its_own() {
             assistant_events("The reviewer allowed it."),
             namespace_tool_events("demo", "crash", "{}"),
             assistant_events("The plugin crashed; going on."),
+            assistant_events("The plugin was updated."),
         ]
         .into_iter()
         .map(|body| (body, Duration::ZERO))
@@ -252,39 +294,11 @@ async fn a_code_plugin_contributes_to_a_turn_and_its_crash_stays_its_own() {
             .unwrap();
     });
     let source = paths.app_data_dir.join("sources/demo");
-    let program = std::env::current_exe().unwrap();
-    write(
-        &source.join(".hanafubuki-plugin/plugin.json"),
-        &json!({
-            "name": "demo",
-            "version": "1.0.0",
-            "runtime": {
-                "type": "process",
-                "command": [program.to_str().unwrap(), GUEST_ARG],
-                "interpreter": true,
-            },
-            "contributes": {
-                "tools": [
-                    { "name": "echo", "description": "Echoes.", "inputSchema": { "type": "object" } },
-                    { "name": "crash", "description": "Crashes.", "inputSchema": { "type": "object" } },
-                ],
-                "contextSections": [{ "kind": "demo_board" }],
-                "prompt": { "slot": "capabilities" },
-                "toolLifecycleHooks": true,
-                "observers": ["turn_finished"],
-            },
-            "permissions": { "workspace": "none" },
-            "configSchema": {
-                "type": "object",
-                "properties": { "board": { "type": "string" } },
-            },
-        })
-        .to_string(),
-    );
+    write_manifest(&source, "1.0.0", &["demo_board"]);
     service.start_plugins().await;
     service
         .install_package(AgentPackageSource::Directory {
-            path: source,
+            path: source.clone(),
             marketplace: None,
         })
         .await
@@ -328,7 +342,7 @@ async fn a_code_plugin_contributes_to_a_turn_and_its_crash_stays_its_own() {
     let requests = server.requests();
     let first_request = String::from_utf8(requests[0].body.clone()).unwrap();
     assert!(
-        first_request.contains("Board B-7 is open."),
+        first_request.contains("Board B-7 is open (demo_board)."),
         "{first_request}"
     );
     assert!(first_request.contains("Use board B-7 for plugin work."));
@@ -387,7 +401,29 @@ async fn a_code_plugin_contributes_to_a_turn_and_its_crash_stays_its_own() {
         "{after_crash}"
     );
     let back = running(&service, pid).await;
-    assert_eq!(back.guest.unwrap().status.restarts, 1);
+    assert_eq!(back.guest.as_ref().unwrap().status.restarts, 1);
+
+    // `plugins dev`'s reload: the changed directory installed again. The
+    // guest starts anew with the change, its grant and settings kept.
+    write_manifest(&source, "1.0.1", &["demo_board", "demo_notes"]);
+    let updated = service.update_package(ID).await.unwrap();
+    assert_eq!(updated.package.version, "1.0.1");
+    assert_eq!(updated.permissions, None);
+    let pid = back.guest.unwrap().status.process_id;
+    let reloaded = running(&service, pid).await;
+    let guest = reloaded.guest.as_ref().unwrap();
+    assert_eq!(guest.settings["board"], "B-7");
+    assert!(guest.status.issues.is_empty(), "{:?}", guest.status.issues);
+    let outcome = service
+        .start_turn(session.id, "Is the plugin updated?".into())
+        .await
+        .unwrap();
+    assert_eq!(outcome.final_answer, "The plugin was updated.");
+    let after_update = String::from_utf8(server.requests().last().unwrap().body.clone()).unwrap();
+    assert!(
+        after_update.contains("Board B-7 is open (demo_notes)."),
+        "{after_update}"
+    );
 
     assert!(service
         .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)

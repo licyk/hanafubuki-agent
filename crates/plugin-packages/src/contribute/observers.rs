@@ -20,7 +20,7 @@ use crate::package::GuestPackage;
 const QUEUE: usize = 64;
 
 /// The kinds a guest may observe, as its manifest names them.
-const EVENTS: [&str; 6] = [
+pub(super) const EVENTS: [&str; 6] = [
     "turn_admitted",
     "sampling_committed",
     "turn_finished",

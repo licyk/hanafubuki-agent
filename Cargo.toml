@@ -1,6 +1,8 @@
 [workspace]
 resolver = "2"
 members = ["crates/*", "xtask"]
+# The example plugins are projects of their own (`plugins new`).
+exclude = ["examples"]
 
 [workspace.package]
 version = "0.2.0"

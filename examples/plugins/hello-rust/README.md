@@ -1,0 +1,25 @@
+# hello-rust
+
+A hanafubuki-agent plugin written in Rust, with the guest SDK
+[kardia-guest](https://crates.io/crates/kardia-guest) (MIT OR Apache-2.0). It
+contributes a tool (`greet`), a context section (`hello_rust_status`) and an
+observer (`turn_finished`). `package/` is the plugin the Agent installs; the
+Cargo project around it builds its program.
+
+Build the program into the package (on Windows, copy `hello-rust.exe` and name
+it in `runtime.command`):
+
+```sh
+cargo build --release
+cp target/release/hello-rust package/
+```
+
+Check it, start it once, then run it in the Agent and reload it at each new
+build until Ctrl+C:
+
+```sh
+hanafubuki-agent plugins validate package --run
+hanafubuki-agent plugins dev package
+```
+
+See [Writing plugins](https://licyk.github.io/hanafubuki-agent/docs/writing-plugins/).

@@ -100,11 +100,12 @@ pub use host::{
 pub use host_inputs::{AgentSteeringRequest, AgentTurnRequest, HostContextPort, NoHostContext};
 pub use memory::AgentMemoryApplication;
 pub use network::{AgentProxy, NetworkSettingsPort};
+pub use packages::validate_package;
 pub use packages::{
     AgentMarketplace, AgentMarketplaceAdded, AgentMarketplacePlugin, AgentMarketplaceUpgrade,
     AgentPackageChange, AgentPackageChangeKind, AgentPackageContent, AgentPackageGuest,
     AgentPackageInstall, AgentPackageSource, AgentPackageStatus, AgentPackageUninstall,
-    LOCAL_MARKETPLACE,
+    AgentPackageValidation, LOCAL_MARKETPLACE,
 };
 pub use plugins::{
     AgentGoalBudgets, AgentRecap, AgentReviewCodeLocation, AgentReviewCommit, AgentReviewFinding,

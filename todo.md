@@ -380,7 +380,7 @@ user first.
     granted (`None` for content); `/plugins`' package page offers **Grant
     its permissions** (`PluginsCall::GrantPermissions`) and a **Code** row
     with the guest's state. The CLI has no grant command yet (P7's `plugins
-    dev`/consent prompts, or a `plugins grant`).
+    dev`/consent prompts, or a `plugins grant`: done in P7, both).
   - Hanafubuki, at its next pin: new published crate
     `hanafubuki-agent-plugin-packages` (the facade depends on it);
     `AgentPackageStatus` gains `guest`; new facade call
@@ -478,8 +478,8 @@ user first.
     64 KiB world-state total can still be exceeded by large sections of
     several plugins together (pre-existing, host kinds too); a hook's deny
     reason and a tool's failure carry the guest's words to the model (as
-    MCP's do); no CLI for settings (`config set plugins."p@m".settings.k`
-    untested); the sandboxed facade path is checked on Linux only; the
+    MCP's do); (no CLI for settings: done in P7, `plugins settings`);
+    the sandboxed facade path is checked on Linux only; the
     P5 open items (Windows reads, Seatbelt untested on macOS, hmr's plain
     threads) stand; the kernel's issues kept for `guest:<id>` are not
     cleared when a package is uninstalled; two packages with one manifest
@@ -501,8 +501,107 @@ user first.
     settings}`; the guest host now depends on approval and tool-contracts
     and its plugin injects the registries (a host mounting it must provide
     them, as the kernel does).
-- [ ] P7: developer story: `plugins new|dev|validate`, Rust and Python
+- [x] P7: developer story: `plugins new|dev|validate`, Rust and Python
       examples, the "Writing plugins" page.
+  - Done: CLI (`crates/cli/src/plugins/` now a directory: `mod.rs` the
+    P3 commands, `scaffold.rs`, `develop.rs`, `code.rs`). `plugins new NAME
+    [--lang rust|python] [--dir DIR]` writes from `crates/cli/templates/
+    plugins/` (`.tmpl`, so neither cargo nor xtask reads them) a project
+    whose installable plugin is its `package/` (the build tree stays out of
+    what an install copies and hashes): Rust (kardia-guest 0.2.2; a tool
+    `greet`, a section `<name>_status` that views `workspace`, an observer
+    `turn_finished`, permissions, `configSchema`) or Python (pykardia's
+    guest SDK exported as a zipapp run by `python3` with `interpreter:
+    true`; a tool `count_words` and a prompt fragment). `plugins validate
+    DIR [--run] [--json]`: the facade's new free function
+    `validate_package(dir) -> AgentPackageValidation { name, version,
+    format, manifest, code, issues }` (manifest issues, declared paths that
+    do not exist, and plugin-packages' new `check_package`: runtime kind,
+    protocol, the program in the package (executable on Unix) or the
+    interpreter on the `PATH`, `./` arguments, contributions as
+    registration would leave them out, `configSchema` an object and within
+    the tool-schema bounds); `--run` composes the Agent over a throwaway
+    home (config and data in a temp dir: `Standalone::open_in`,
+    `with_agent_in`), installs, grants, waits until the guest settles and
+    prints its state, issues, exit and stderr; exit 1 on any issue or a
+    guest not running. The registration rules are shared: `contribute/
+    check.rs` uses `context::guest_kind`/`MAXIMUM_GUEST_KINDS`,
+    `prompt::{slot, prompt_kind}`, `observers::EVENTS`; spawn's
+    `resolve`/`in_package`/`interpreter` are used by `check_package`.
+    `plugins dev DIR [--grant]`: install as `<name>@local` (on), ask on the
+    terminal to grant (non-terminal without `--grant`: usage error), print
+    the guest; `notify` 8 watches the directory (not `.git`), 400 ms
+    debounce, then `install_package` again (a new content hash → a new
+    entry name → the guest starts anew; grant and settings kept; new
+    permissions ask again), until Ctrl+C (`tokio::signal::ctrl_c` on the
+    Agent's runtime). `plugins grant ID` (running it is the consent;
+    prints what it granted and the guest), `plugins settings ID [--get |
+    --set JSON]` (`null` removes; prints `{settings, configSchema}`).
+    `plugins add` of code says to grant; `plugins info` shows the code's
+    state, error and issues. Examples: `examples/plugins/hello-rust` (with
+    its `Cargo.lock`) and `hello-python` are `plugins new`'s output
+    (a test compares them); the workspace `exclude`s `examples`. Tests:
+    CLI `tests/plugin_development.rs` (scaffold contents for both
+    languages, bad name, non-empty dir; examples equal `new`'s output;
+    validate good and bad: missing program, protocol, tool name, timeout,
+    duplicate, kinds, slot, observer, unknown contribution, schema type,
+    `--json`, no manifest; add/info blocked/grant/settings refused by the
+    schema, bad JSON, set/get/null, a content plugin has no code),
+    `tests/plugin_examples.rs` (Unix: builds hello-rust with the
+    workspace's cargo `--locked` into `target/plugin-examples`, validates,
+    and on Linux `--run` → running unless the machine has no sandbox;
+    hello-python exported and run the same when
+    `HANAFUBUKI_AGENT_TEST_PYTHON` names an interpreter with pykardia; this
+    is P6's deferred Python guest check: it starts only when its metadata is
+    exactly `{name, provide: ["plugin"]}`), facade
+    `tests/plugin_guests.rs` (dev's reload: the changed directory installed
+    again with `update_package` restarts the guest with a new section, grant
+    and settings kept, the next request carries it). Run here: the Python
+    test with `/root/micromamba/envs/py311/bin/python` (pykardia `main`),
+    guest started under Landlock with `/usr/bin/python3`. Docs: new page
+    "Writing plugins" (`writing-plugins(.en).mdx`, after `skills` in both
+    metas): start, package layout, manifest reference, the guest (Rust,
+    Python, licences, the wire for other languages), validate, dev,
+    settings/permissions/sandbox, failures (§5.1), publishing via a
+    marketplace; cli-reference (five commands, `info`), plugin-rules
+    (links from `#writing-a-plugin` and `#guest-protocol`; the protocol
+    table stays there), architecture (Code plugins), embedding
+    (`validate_package`), config-reference, building-testing; NOTICE and
+    the notices policy follow `plugins.rs` → `plugins/mod.rs`.
+  - Deviations: `validate --run` installs into a throwaway home through the
+    real Agent rather than a bare handshake (the process stays the
+    executor's, and the sandbox, metadata check, `apply` and registration
+    all run); `plugins dev` holds the data directory's lock, so the
+    terminal interface cannot run on the same home meanwhile (documented:
+    stop it, or a scratch `HANAFUBUKI_AGENT_HOME`); it reinstalls with
+    `install_package`, not kardia-hmr's `reconcile`; the example READMEs
+    are Markdown files outside the site (the scaffold's README, which the
+    task asked for); the tool-name rule in `contribute/check.rs` restates
+    `ToolName::parse` + `ToolId::parse` instead of calling
+    `contribute/tools.rs` (left untouched while the approval investigation
+    works there; fold it in later); Python CI skipped (PyPI's pykardia
+    0.1.0, 2026-11-06, predates kardia-guest/2 and the guest SDK's
+    relicence, 2026-11-10); no `/plugins` form from `configSchema` (the JSON
+    field stays).
+  - Open: the example test is Unix only (a manifest names `./<name>`, not
+    `.exe`; Windows would need its own command or an `.exe` probe in
+    `in_package`); `dev` stops at a first install that fails (later
+    failures are printed and it keeps watching); `dev` does not offer to
+    remove the package on exit; `validate --run` runs no turn (a tool call
+    end to end is the facade test's); the configSchema check is a shape
+    check (object, bounds), not a JSON Schema meta-validation; publishing
+    a compiled guest means a binary per platform in the package (no
+    per-platform `runtime.command`); a published pykardia release with
+    kardia-guest/2 would let CI run the Python example; no per-tool
+    read-only hint in the manifest (every guest tool call still asks); a
+    guest of an enabled package reads `stopped` for a moment while a
+    reinstall replaces its fiber (the supervisor's `Disposed` handling, by
+    design), which the CLI's `settled()` waits through but `/plugins` and
+    `packages()` callers can see.
+  - Hanafubuki, at its next pin: new facade function `validate_package`
+    and type `AgentPackageValidation` (additive);
+    `hanafubuki-agent-plugin-packages::check_package` (additive). Nothing
+    else changes for a host.
 - [ ] P8: WASM guests with fuel/epoch and memory limits.
 - [ ] P9: end-to-end crash tests (panic, hang, kill -9, abort, garbage,
       oversize frame, restart loop) and a pty smoke test.

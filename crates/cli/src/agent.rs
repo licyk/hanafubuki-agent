@@ -30,7 +30,16 @@ impl Standalone {
     /// Composes the Agent from the global flags with `host`'s sinks, then
     /// installs the panic hook and the log file; nothing starts yet.
     pub(crate) fn open(global: &GlobalArgs, host: AgentRuntimeHost) -> Result<Self, Failure> {
-        let dirs = dirs(global)?;
+        Self::open_in(global, dirs(global)?, host)
+    }
+
+    /// [`Self::open`] in the directories `dirs`, not the flags' or the
+    /// environment's.
+    pub(crate) fn open_in(
+        global: &GlobalArgs,
+        dirs: AgentDirs,
+        host: AgentRuntimeHost,
+    ) -> Result<Self, Failure> {
         let cwd = match &global.cd {
             Some(directory) => directory.clone(),
             None => std::env::current_dir()
@@ -94,7 +103,16 @@ pub(crate) fn with_agent<T>(
     global: &GlobalArgs,
     command: impl FnOnce(&AgentHandle) -> Result<T, Failure>,
 ) -> Result<T, Failure> {
-    let standalone = Standalone::open(global, AgentRuntimeHost::default())?;
+    with_agent_in(global, dirs(global)?, command)
+}
+
+/// [`with_agent`] on an Agent in the directories `dirs`.
+pub(crate) fn with_agent_in<T>(
+    global: &GlobalArgs,
+    dirs: AgentDirs,
+    command: impl FnOnce(&AgentHandle) -> Result<T, Failure>,
+) -> Result<T, Failure> {
+    let standalone = Standalone::open_in(global, dirs, AgentRuntimeHost::default())?;
     let result = standalone.start().and_then(|agent| command(&agent));
     standalone.shutdown();
     result

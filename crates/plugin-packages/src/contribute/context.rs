@@ -20,7 +20,7 @@ use crate::package::GuestPackage;
 
 /// The most context kinds one guest may declare: the kernel's bound on the
 /// sections of every plugin together.
-const MAXIMUM_GUEST_KINDS: usize = 7;
+pub(super) const MAXIMUM_GUEST_KINDS: usize = 7;
 /// The longest section a guest may give; a longer one is cut.
 const MAXIMUM_SECTION_BYTES: usize = 4 * 1024;
 

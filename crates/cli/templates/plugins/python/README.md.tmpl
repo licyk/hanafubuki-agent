@@ -1,0 +1,25 @@
+# {{name}}
+
+A hanafubuki-agent plugin written in Python, with
+[pykardia](https://github.com/licyk/pykardia)'s guest SDK (MIT OR
+Apache-2.0). It contributes a tool (`count_words`) and a prompt fragment.
+`package/` is the plugin the Agent installs; `plugin.py` is its source.
+
+Export the guest into the package: a zipapp that bundles the SDK, which the
+Agent runs with `python3` from the `PATH`. The export needs a pykardia that
+speaks kardia-guest/2 (its repository's `main`; PyPI's 0.1.0 is older):
+
+```sh
+python3 -m pip install git+https://github.com/licyk/pykardia
+python3 -m pykardia.guest.export process plugin.py Plugin package/{{name}}.pyz
+```
+
+Check it, start it once, then run it in the Agent and reload it at each new
+export until Ctrl+C:
+
+```sh
+hanafubuki-agent plugins validate package --run
+hanafubuki-agent plugins dev package
+```
+
+See [Writing plugins](https://licyk.github.io/hanafubuki-agent/docs/writing-plugins/).

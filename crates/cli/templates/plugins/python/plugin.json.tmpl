@@ -1,0 +1,40 @@
+{
+  "name": "{{name}}",
+  "version": "0.1.0",
+  "description": "A hanafubuki-agent plugin written in Python.",
+  "runtime": {
+    "type": "process",
+    "command": ["python3", "./{{name}}.pyz"],
+    "interpreter": true,
+    "protocol": "kardia-guest/2"
+  },
+  "contributes": {
+    "tools": [
+      {
+        "name": "count_words",
+        "description": "Counts the words of a text.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "text": { "type": "string", "description": "The text to count." }
+          },
+          "required": ["text"],
+          "additionalProperties": false
+        }
+      }
+    ],
+    "prompt": { "slot": "capabilities" }
+  },
+  "permissions": {
+    "network": false,
+    "workspace": "none",
+    "env": []
+  },
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "unit": { "type": "string", "description": "What the count calls a word." }
+    },
+    "additionalProperties": false
+  }
+}

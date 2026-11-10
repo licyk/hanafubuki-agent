@@ -157,12 +157,12 @@ fn check_content(package: &GuestPackage) -> Result<(), String> {
     Ok(())
 }
 
-fn resolve(path: &Path, what: &str) -> Result<ResolvedPath, String> {
+pub(crate) fn resolve(path: &Path, what: &str) -> Result<ResolvedPath, String> {
     ResolvedPath::resolve(path).map_err(|error| format!("{what} does not resolve: {error}"))
 }
 
 /// A path in the package (`./…`), which must stay inside it.
-fn in_package(root: &ResolvedPath, path: &str) -> Result<ResolvedPath, String> {
+pub(crate) fn in_package(root: &ResolvedPath, path: &str) -> Result<ResolvedPath, String> {
     let relative = path
         .strip_prefix("./")
         .ok_or_else(|| format!("`{path}` is not a path in the package (./…)"))?;
@@ -179,7 +179,7 @@ fn in_package(root: &ResolvedPath, path: &str) -> Result<ResolvedPath, String> {
 
 /// An interpreter outside the package: an absolute path, or a name found
 /// on the Agent's `PATH`.
-fn interpreter(program: &str) -> Result<ResolvedPath, String> {
+pub(crate) fn interpreter(program: &str) -> Result<ResolvedPath, String> {
     let path = Path::new(program);
     if path.is_absolute() {
         return resolve(path, "its interpreter");

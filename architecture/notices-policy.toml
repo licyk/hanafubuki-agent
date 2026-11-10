@@ -320,9 +320,9 @@ markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
 notice = "crates/agent/src/service/packages"
 
 [[derived]]
-path = "crates/cli/src/plugins.rs"
+path = "crates/cli/src/plugins/mod.rs"
 markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
-notice = "crates/cli/src/plugins.rs"
+notice = "crates/cli/src/plugins/mod.rs"
 
 [[derived]]
 path = "crates/agent/src/plugins/packages/prompt.rs"

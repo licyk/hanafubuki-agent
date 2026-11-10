@@ -10,7 +10,13 @@
 // Agent's facade calls; `add` also takes a plugin's directory; `enable`,
 // `disable`, `update`, `info` and `retry` are added, and `remove` can
 // purge the plugin's data; the list shows the installed plugins unless
-// `--available`; remote marketplaces, apps and their auth are not ported.
+// `--available`; remote marketplaces, apps and their auth are not ported;
+// `grant`, `settings`, `new`, `validate` and `dev` (the code of plugins in
+// this project's format) are this project's own.
+
+mod code;
+mod develop;
+mod scaffold;
 
 use std::path::Path;
 
@@ -25,6 +31,15 @@ use crate::cli::{GlobalArgs, MarketplaceCommand, PluginsCommand};
 use crate::exit::Failure;
 
 pub(crate) fn run(global: &GlobalArgs, command: PluginsCommand) -> Result<(), Failure> {
+    // The author's commands run without the Agent, or start their own.
+    let command = match command {
+        PluginsCommand::New { name, lang, dir } => return scaffold::run(&name, lang, dir),
+        PluginsCommand::Validate { dir, run, json } => {
+            return develop::validate(global, &dir, run, json)
+        }
+        PluginsCommand::Dev { dir, grant } => return develop::dev(global, &dir, grant),
+        command => command,
+    };
     // A selection that cannot be used fails before the Agent starts.
     if let PluginsCommand::Add {
         plugin,
@@ -99,7 +114,14 @@ pub(crate) fn run(global: &GlobalArgs, command: PluginsCommand) -> Result<(), Fa
             print_package(&package);
             Ok(())
         }
+        PluginsCommand::Grant { id } => code::grant(agent, id),
+        PluginsCommand::Settings { id, set, get: _ } => code::settings(agent, id, set),
         PluginsCommand::Marketplace(command) => marketplace(agent, command),
+        PluginsCommand::New { .. }
+        | PluginsCommand::Validate { .. }
+        | PluginsCommand::Dev { .. } => {
+            unreachable!("handled before the Agent starts")
+        }
     })
 }
 
@@ -347,6 +369,12 @@ fn print_install_notes(install: &AgentPackageInstall) {
     for skill in &install.migrated_commands {
         println!("Its command became the Skill {skill}.");
     }
+    if install.permissions.is_some() {
+        println!(
+            "Its code waits for what it asks for to be granted: `plugins grant {}` shows and grants it.",
+            install.package.id
+        );
+    }
     match install.hooks_to_trust.len() {
         0 => {}
         count => println!(
@@ -375,6 +403,16 @@ fn print_package(package: &AgentPackageStatus) {
     println!("  hooks:       {}", list(&package.content.hooks));
     if !package.hooks_to_trust.is_empty() {
         println!("  to trust:    {}", list(&package.hooks_to_trust));
+    }
+    if let Some(guest) = &package.guest {
+        let status = &guest.status;
+        println!("  code:        {}", code::state_text(status.state));
+        if let Some(error) = &status.error {
+            println!("  code error:  {error}");
+        }
+        for issue in &status.issues {
+            println!("  code issue:  {issue}");
+        }
     }
     for issue in &package.issues {
         println!("  issue:       {issue}");

@@ -96,7 +96,7 @@ Third-party notices
     `marketplaces.rs`) are derived from Codex's
     `codex-rs/core-plugins/src/manager.rs` and
     `codex-rs/cli/src/marketplace_cmd.rs`, and the `plugins` command
-    (`crates/cli/src/plugins.rs`) from Codex's
+    (`crates/cli/src/plugins/mod.rs`) from Codex's
     `codex-rs/cli/src/plugin_cmd.rs` and
     `codex-rs/cli/src/marketplace_cmd.rs` (commit `57a808a392`); each says
     so in its first lines;

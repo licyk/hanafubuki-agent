@@ -1,0 +1,73 @@
+//! hello-rust: a hanafubuki-agent plugin. The Agent starts this program and
+//! calls it over the guest protocol (kardia-guest/2) on its stdin and
+//! stdout, so it never prints to stdout: it logs to stderr or through the
+//! host.
+
+use kardia_guest::{json, Guest, Host, Map, Meta, Request, Result, Value};
+
+struct Plugin {
+    /// Its settings' `greeting` (`configSchema` in the manifest).
+    greeting: String,
+    /// The turns it observed finishing since it started.
+    turns: u64,
+}
+
+impl Guest for Plugin {
+    type Config = Value;
+
+    /// The manifest's name, providing the one service the Agent calls.
+    fn meta() -> Meta {
+        Meta::plugin("hello-rust").provide("plugin")
+    }
+
+    /// Starts with its settings: an object, `{}` until some are set.
+    fn apply(host: &Host, config: Value, _imports: Map<String, Value>) -> Result<Self> {
+        host.provide("plugin", &json!({}))?;
+        let greeting = config["greeting"].as_str().unwrap_or("Hello").to_string();
+        Ok(Self { greeting, turns: 0 })
+    }
+
+    /// The Agent's calls: one method per kind of contribution the manifest
+    /// declares, each with one JSON object.
+    fn call(&mut self, host: &Host, request: Request) -> Result<Value> {
+        let args = request.args;
+        match request.method.as_str() {
+            "tool" => self.tool(&args),
+            "context" => self.context(host),
+            "observe" => {
+                if args["event"] == "turn_finished" {
+                    self.turns += 1;
+                }
+                Ok(Value::Null)
+            }
+            method => Err(format!("no method {method}").into()),
+        }
+    }
+}
+
+impl Plugin {
+    /// A string is the tool's text; any other value is structured content.
+    fn tool(&self, args: &Value) -> Result<Value> {
+        match args["name"].as_str().unwrap_or_default() {
+            "greet" => {
+                let name = args["arguments"]["name"].as_str().unwrap_or("world");
+                Ok(json!(format!("{}, {name}!", self.greeting)))
+            }
+            name => Err(format!("no tool {name}").into()),
+        }
+    }
+
+    /// The section `hello_rust_status`: text, or `null` for none.
+    fn context(&self, host: &Host) -> Result<Value> {
+        let workspace = host.view("workspace")?;
+        let roots = workspace["roots"].as_array().map_or(0, Vec::len);
+        Ok(json!(format!(
+            "hello-rust has seen {} turns finish; it reads {roots} workspace roots.",
+            self.turns
+        )))
+    }
+}
+
+fn main() {
+    kardia_guest::serve::<Plugin>();
+}

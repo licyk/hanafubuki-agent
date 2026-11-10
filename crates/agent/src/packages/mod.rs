@@ -29,6 +29,7 @@ mod guest;
 mod lifecycle;
 mod marketplaces;
 mod status;
+mod validate;
 
 pub(crate) use guest::guest_host;
 pub use lifecycle::{
@@ -38,6 +39,7 @@ pub use lifecycle::{
 };
 pub(crate) use marketplaces::{configured_marketplace, marketplace_view};
 pub use status::{AgentPackageContent, AgentPackageGuest, AgentPackageStatus};
+pub use validate::{validate_package, AgentPackageValidation};
 
 /// The installed packages and the content of those that are on, as last
 /// loaded, with the sources that follow them; shared with the `plugins`
