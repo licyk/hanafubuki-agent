@@ -101,10 +101,8 @@ pub(crate) fn run(global: &GlobalArgs, command: PluginsCommand) -> Result<(), Fa
             Ok(())
         }
         PluginsCommand::Info { id, json } => {
-            let package = block_on(agent, move |agent| async move {
-                let package = agent.package(&id).await?;
-                package.ok_or_else(|| format!("plugin `{id}` is not installed"))
-            })?;
+            // This run's Agent starts the guest just now.
+            let package = code::settled(agent, &id)?;
             if json {
                 return print_json(&package);
             }
@@ -112,11 +110,11 @@ pub(crate) fn run(global: &GlobalArgs, command: PluginsCommand) -> Result<(), Fa
             Ok(())
         }
         PluginsCommand::Retry { id } => {
-            let package = block_on(
-                agent,
-                move |agent| async move { agent.retry_package(&id).await },
-            )?;
-            print_package(&package);
+            let retried = id.clone();
+            block_on(agent, move |agent| async move {
+                agent.retry_package(&retried).await
+            })?;
+            print_package(&code::settled(agent, &id)?);
             Ok(())
         }
         PluginsCommand::Grant { id } => code::grant(agent, id),

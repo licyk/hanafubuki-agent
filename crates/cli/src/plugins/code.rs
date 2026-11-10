@@ -5,7 +5,8 @@ use std::io::{BufRead, IsTerminal, Write};
 use std::time::{Duration, Instant};
 
 use hanafubuki_agent::{
-    AgentHandle, AgentPackageStatus, GuestState, PackagePermissions, RuntimeKind, WorkspaceAccess,
+    AgentHandle, AgentPackageStatus, AgentPluginState, GuestState, PackagePermissions, RuntimeKind,
+    WorkspaceAccess,
 };
 use serde_json::Value;
 
@@ -114,7 +115,9 @@ pub(crate) fn installed(agent: &AgentHandle, id: &str) -> Result<AgentPackageSta
 
 /// The package `id` once its guest no longer starts or restarts, or as it
 /// is after [`SETTLE_TIMEOUT`]. A guest of a package that is on reads
-/// `stopped` for a moment while a new start replaces its last one.
+/// `stopped` until the command's Agent starts it, and for a moment while a
+/// new start replaces its last one; it stays `stopped` when the `plugins`
+/// row, which runs the guests, does not run (safe mode, or turned off).
 pub(crate) fn settled(agent: &AgentHandle, id: &str) -> Result<AgentPackageStatus, Failure> {
     let deadline = Instant::now() + SETTLE_TIMEOUT;
     loop {
@@ -122,7 +125,7 @@ pub(crate) fn settled(agent: &AgentHandle, id: &str) -> Result<AgentPackageStatu
         let state = package.guest.as_ref().map(|guest| guest.status.state);
         let moving = match state {
             Some(GuestState::Starting | GuestState::Restarting) => true,
-            Some(GuestState::Stopped) => package.enabled,
+            Some(GuestState::Stopped) => package.enabled && guests_run(agent),
             _ => false,
         };
         if !moving || Instant::now() >= deadline {
@@ -130,6 +133,17 @@ pub(crate) fn settled(agent: &AgentHandle, id: &str) -> Result<AgentPackageStatu
         }
         std::thread::sleep(SETTLE_POLL);
     }
+}
+
+/// Whether the `plugins` row, which runs the guests, is running or about to.
+fn guests_run(agent: &AgentHandle) -> bool {
+    agent.plugin_status().iter().any(|row| {
+        row.name == "plugins"
+            && matches!(
+                row.state,
+                AgentPluginState::Pending | AgentPluginState::Active
+            )
+    })
 }
 
 /// How the package's guest is doing: its state, why it is not running, what

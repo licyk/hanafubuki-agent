@@ -436,6 +436,19 @@ fn grant_and_settings_change_an_installed_plugins_code() {
         json!({ "network": true, "workspace": "write", "env": ["LOOKUP_TOKEN"] })
     );
     assert_ne!(info["guest"]["status"]["state"], "blocked");
+    // Its guest cannot start while the `plugins` row does not run: `info`
+    // shows it stopped without waiting for it.
+    let started = std::time::Instant::now();
+    let info = home
+        .run(&["--safe-mode", "plugins", "info", "lookup@local"])
+        .expect(0)
+        .stdout();
+    assert!(info.contains("code:        stopped"), "{info}");
+    assert!(
+        started.elapsed() < std::time::Duration::from_secs(20),
+        "{:?}",
+        started.elapsed()
+    );
 
     let refused = home
         .run(&[

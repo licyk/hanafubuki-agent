@@ -66,6 +66,33 @@ fn validate(home: &Home, package: &Path) {
         "{}",
         run.stdout()
     );
+    let id = installed(home, package);
+    home.run(&["plugins", "grant", &id]).expect(0);
+    shown_running(home, &id, "running");
+}
+
+/// Installs `package` into `home`, returning its id.
+fn installed(home: &Home, package: &Path) -> String {
+    let run = home
+        .run(&["plugins", "add", package.to_str().unwrap()])
+        .expect(0);
+    let added = run.stdout();
+    let id = added
+        .split('`')
+        .nth(1)
+        .unwrap_or_else(|| panic!("no id in {added}"));
+    id.to_string()
+}
+
+/// `plugins info` of the installed `id` shows its code `state` once its
+/// guest started in that command's own run of the Agent.
+fn shown_running(home: &Home, id: &str, state: &str) {
+    let run = home.run(&["plugins", "info", id]).expect(0);
+    assert!(
+        run.stdout().contains(&format!("code:        {state}")),
+        "{}",
+        run.stdout()
+    );
 }
 
 #[test]
@@ -131,6 +158,8 @@ fn the_wasm_example_builds_validates_and_runs() {
         "{}",
         run.stdout()
     );
+    let id = installed(&home, &package);
+    shown_running(&home, &id, "running (WebAssembly)");
 }
 
 #[test]
