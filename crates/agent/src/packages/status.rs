@@ -5,6 +5,7 @@ use hanafubuki_agent_packages::{InstallRecord, ManifestFormat, PackagePermission
 use hanafubuki_agent_plugin_packages::GuestStatus;
 use hanafubuki_agent_skills::SkillCatalogEntry;
 use serde::Serialize;
+use serde_json::{Map, Value};
 
 use super::LoadedPackage;
 
@@ -58,6 +59,12 @@ pub struct AgentPackageGuest {
     /// Its state, why it is not running, how its last process ended and
     /// the end of its stderr.
     pub status: GuestStatus,
+    /// Its settings (`[plugins."<id>"].settings`), its guest's
+    /// configuration.
+    pub settings: Map<String, Value>,
+    /// What its manifest says its settings are (`configSchema`, a JSON
+    /// Schema), which a change of them is checked against.
+    pub config_schema: Option<Map<String, Value>>,
 }
 
 /// `package` with its install `record`, its Skills among `skills`, its

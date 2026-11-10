@@ -6,7 +6,7 @@ use hanafubuki_agent::{
     PackagePermissions, WorkspaceAccess,
 };
 
-use super::pages::{self, After, Choice, Page, Tab};
+use super::pages::{self, After, Choice, Page, Prompt, Tab};
 use crate::agent_bridge::PluginsCall;
 
 fn package(enabled: bool, hooks_to_trust: Vec<String>) -> AgentPackageStatus {
@@ -95,7 +95,10 @@ fn a_code_plugins_page_offers_to_grant_what_it_asks_for_until_granted() {
             stderr_tail: String::new(),
             restarts: 0,
             process_id: None,
+            issues: Vec::new(),
         },
+        settings: serde_json::Map::from_iter([("board".to_string(), serde_json::json!("B-1"))]),
+        config_schema: None,
     });
     let grants = |page: &pages::PageView| {
         page.choices.iter().flatten().any(|choice| {
@@ -109,4 +112,11 @@ fn a_code_plugins_page_offers_to_grant_what_it_asks_for_until_granted() {
     assert!(grants(&pages::package_page(&code)));
     code.guest.as_mut().unwrap().granted_permissions = Some(asked.clone());
     assert!(!grants(&pages::package_page(&code)));
+    // Its settings are a row that opens their form, starting from them.
+    assert!(pages::package_page(&code)
+        .choices
+        .iter()
+        .flatten()
+        .any(|choice| *choice == Choice::Open(Page::Prompt(Prompt::Settings))));
+    assert_eq!(super::code::settings_text(&code), r#"{"board":"B-1"}"#);
 }

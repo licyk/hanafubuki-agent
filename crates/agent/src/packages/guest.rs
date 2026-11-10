@@ -13,6 +13,7 @@ use hanafubuki_agent_plugin_packages::{
 };
 use hanafubuki_agent_process::executor::ExecutorManager;
 use hanafubuki_agent_sandbox::Sandbox;
+use serde_json::{Map, Value};
 
 use crate::WorkspaceRootsPort;
 
@@ -50,8 +51,12 @@ pub(crate) fn guest_host(
 }
 
 /// `package`'s guest, when its manifest is this project's and has a
-/// runtime.
-pub(super) fn guest_package(package: &InstalledPackage, enabled: bool) -> Option<GuestPackage> {
+/// runtime, configured with `settings`.
+pub(super) fn guest_package(
+    package: &InstalledPackage,
+    enabled: bool,
+    settings: Map<String, Value>,
+) -> Option<GuestPackage> {
     let manifest = package.manifest.as_ref()?;
     let code = manifest.manifest.code.as_ref()?;
     let record = package.record.as_ref();
@@ -65,6 +70,8 @@ pub(super) fn guest_package(package: &InstalledPackage, enabled: bool) -> Option
         permissions: code.permissions.clone(),
         granted: record.and_then(|record| record.granted_permissions.clone()),
         content_hash: record.and_then(|record| record.content_hash.clone()),
+        contributes: code.contributes.clone(),
+        settings,
         enabled,
     })
 }

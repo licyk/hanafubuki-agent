@@ -3,16 +3,22 @@
 use std::path::PathBuf;
 
 use hanafubuki_agent_packages::{
-    PackagePermissions, PackageRuntime, PluginId, RuntimeKind, WorkspaceAccess,
+    PackageContributes, PackagePermissions, PackageRuntime, PluginId, RuntimeKind, WorkspaceAccess,
 };
-use serde_json::{json, Value};
+use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
+
+use crate::host_services::{SETTINGS_SERVICE, WORKSPACE_SERVICE};
 
 /// The service every guest provides, in a realm of its own: the Agent calls
 /// a guest through it. A guest declares it in its metadata
 /// (`Meta::plugin(<manifest name>).provide("plugin")`) and provides it in
 /// `apply`.
 pub const GUEST_SERVICE: &str = "plugin";
+
+/// What ends the id of a guest's host-services entry: the loader entry,
+/// beside the guest's, whose plugin provides what the guest may view.
+pub(crate) const HOST_ENTRY_SUFFIX: &str = "#host";
 
 /// An installed package with code, as the facade read it from the store and
 /// the settings.
@@ -35,6 +41,11 @@ pub struct GuestPackage {
     /// The content hash the install recorded, which the package must still
     /// have when its guest starts.
     pub content_hash: Option<String>,
+    /// What its manifest declares the guest contributes.
+    pub contributes: PackageContributes,
+    /// Its settings (`[plugins."<id>"].settings`): the guest's configuration
+    /// and its `settings` view.
+    pub settings: Map<String, Value>,
     /// Whether the settings leave it on.
     pub enabled: bool,
 }
@@ -74,17 +85,46 @@ impl GuestPackage {
         self.enabled && self.refusal().is_none()
     }
 
-    /// Its guest's loader entry, off unless the guest runs. The plugin is
-    /// named by everything its start depends on, so a new version, a
-    /// changed install or grant starts it anew.
-    pub(crate) fn entry(&self) -> Value {
-        json!({
-            "id": self.id.key(),
-            "name": self.entry_name(),
-            "disabled": !self.runs(),
-            "isolate": { GUEST_SERVICE: true },
-            "config": {},
-        })
+    /// Its loader entries, off unless the guest runs: the guest's, and its
+    /// host services' beside it. The guest's `plugin` is a realm of its own;
+    /// what it may view (`workspace`, `settings`) is in a realm the two
+    /// entries share, which the guest's entry declares (`inject`), so the
+    /// guest starts once its host services run. The plugins are named by
+    /// everything their start depends on, so a new version, a changed
+    /// install or grant starts them anew; the settings are their
+    /// configuration, so a change restarts both.
+    pub(crate) fn entries(&self) -> [Value; 2] {
+        let label = format!("guest:{}", self.id.key());
+        let config = Value::Object(self.settings.clone());
+        [
+            json!({
+                "id": self.host_entry_id(),
+                "name": self.host_entry_name(),
+                "disabled": !self.runs(),
+                "isolate": { WORKSPACE_SERVICE: label, SETTINGS_SERVICE: label },
+                "config": config,
+            }),
+            json!({
+                "id": self.id.key(),
+                "name": self.entry_name(),
+                "disabled": !self.runs(),
+                "isolate": {
+                    GUEST_SERVICE: true,
+                    WORKSPACE_SERVICE: label,
+                    SETTINGS_SERVICE: label,
+                },
+                "inject": [WORKSPACE_SERVICE, SETTINGS_SERVICE],
+                "config": config,
+            }),
+        ]
+    }
+
+    pub(crate) fn host_entry_id(&self) -> String {
+        format!("{}{HOST_ENTRY_SUFFIX}", self.id.key())
+    }
+
+    pub(crate) fn host_entry_name(&self) -> String {
+        format!("{}{HOST_ENTRY_SUFFIX}", self.entry_name())
     }
 
     pub(crate) fn entry_name(&self) -> String {

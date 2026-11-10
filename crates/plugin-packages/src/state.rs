@@ -4,6 +4,7 @@
 use std::sync::Arc;
 use std::time::Instant;
 
+use hanafubuki_agent_contracts::ContextSectionKind;
 use hanafubuki_agent_host::{RestartPolicy, RestartWindow};
 use kardia_hmr::{ExitCause, GuestExit, GuestHandle};
 use serde::Serialize;
@@ -44,6 +45,10 @@ pub struct GuestStatus {
     pub restarts: usize,
     /// The running process's id.
     pub process_id: Option<u32>,
+    /// What of its declared contributions was left out when it last
+    /// started, and what the Agent's calls into it went without (a context
+    /// section it did not give in time, say).
+    pub issues: Vec<String>,
 }
 
 /// How a guest's process ended.
@@ -97,6 +102,10 @@ pub(crate) struct GuestRecord {
     /// fault the restart loop answers, one before it a failed start.
     pub(crate) started: bool,
     pub(crate) window: RestartWindow,
+    /// What its last start left out of its contributions.
+    pub(crate) issues: Vec<String>,
+    /// The kind of its prompt fragments while it runs and has a prompt.
+    pub(crate) prompt: Option<ContextSectionKind>,
     /// Changed by every decision about the guest (a new package, a retry, a
     /// scheduled restart), so a restart scheduled before it does not run.
     pub(crate) epoch: u64,
@@ -111,6 +120,8 @@ impl GuestRecord {
             last_exit: None,
             started: false,
             window: RestartWindow::default(),
+            issues: Vec::new(),
+            prompt: None,
             epoch: 0,
         }
     }
@@ -133,6 +144,7 @@ impl GuestRecord {
             stderr_tail: String::from_utf8_lossy(&tail).into_owned(),
             restarts: self.window.count(policy, Instant::now()),
             process_id: live.and_then(GuestHandle::id),
+            issues: self.issues.clone(),
         }
     }
 }

@@ -6,10 +6,15 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use hanafubuki_agent_contracts::PluginFaults;
+use hanafubuki_agent_contracts::{
+    ContextRegistry, ContextRendererRegistry, ContinuationHookRegistry, ObserverRegistry,
+    PluginFaults, PromptContributorRegistry, RegistryService, ToolLifecycleHookRegistry,
+    ToolSourceRegistry,
+};
 use hanafubuki_agent_host::{LogExporter, RestartPolicy};
 use hanafubuki_agent_packages::{
-    content_hash, PackagePermissions, PackageRuntime, PluginId, RuntimeKind, WorkspaceAccess,
+    content_hash, PackageContributes, PackagePermissions, PackageRuntime, PluginId, RuntimeKind,
+    WorkspaceAccess,
 };
 use hanafubuki_agent_plugin_packages::{
     GuestHost, GuestHostInputs, GuestPackage, GuestSettingsPort, GuestStatus,
@@ -18,9 +23,9 @@ use hanafubuki_agent_process::executor::manager::executor_registry_counts;
 use hanafubuki_agent_process::executor::ExecutorManager;
 use hanafubuki_agent_process::process_groups::{ProcessGroupRecord, ProcessOwnerGroup};
 use hanafubuki_agent_sandbox::Sandbox;
-use kardia_core::{Context, Fiber, PluginDef, Service};
+use kardia_core::{Context, Fiber, PluginDef, Service, Svc};
 use parking_lot::Mutex;
-use serde_json::{json, Value};
+use serde_json::{json, Map, Value};
 
 use crate::guest::GUEST_ARG;
 
@@ -67,7 +72,7 @@ pub struct Fixture {
     pub settings: Arc<RecordedSettings>,
     pub plugin: Fiber,
     pub workspace: PathBuf,
-    _root: Context,
+    root: Context,
 }
 
 impl Fixture {
@@ -97,11 +102,29 @@ impl Fixture {
         };
         let root = Context::new();
         root.add_exporter(Arc::new(LogExporter)).unwrap();
+        // What the kernel provides: the faults and the registries guests
+        // contribute to.
         let services = PluginDef::new(|ctx: Context, _| async move {
             ctx.provide(PluginFaults::default())?;
+            ctx.provide(ToolSourceRegistry::default())?;
+            ctx.provide(ContextRegistry::default())?;
+            ctx.provide(ContextRendererRegistry::default())?;
+            ctx.provide(PromptContributorRegistry::default())?;
+            ctx.provide(ToolLifecycleHookRegistry::default())?;
+            ctx.provide(ContinuationHookRegistry::default())?;
+            ctx.provide(ObserverRegistry::default())?;
             Ok(())
         })
-        .provides([PluginFaults::NAME]);
+        .provides([
+            PluginFaults::NAME,
+            ToolSourceRegistry::NAME,
+            ContextRegistry::NAME,
+            ContextRendererRegistry::NAME,
+            PromptContributorRegistry::NAME,
+            ToolLifecycleHookRegistry::NAME,
+            ContinuationHookRegistry::NAME,
+            ObserverRegistry::NAME,
+        ]);
         root.plugin_def(&services, Value::Null)
             .unwrap()
             .settled()
@@ -118,8 +141,13 @@ impl Fixture {
             settings,
             plugin,
             workspace,
-            _root: root,
+            root,
         }
+    }
+
+    /// The registry `S` the guests contribute to.
+    pub fn registry<S: RegistryService>(&self) -> Svc<S> {
+        self.root.get::<S>().unwrap()
     }
 
     /// A package named `name`, on, with its permissions granted, whose
@@ -160,6 +188,8 @@ impl Fixture {
             },
             granted: Some(permissions.clone()),
             permissions,
+            contributes: PackageContributes::default(),
+            settings: Map::new(),
             enabled: true,
         }
     }

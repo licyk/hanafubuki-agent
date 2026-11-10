@@ -125,7 +125,16 @@ const LAYERS: &[(&str, &[&str])] = &[
     // re-export, comes from the host.
     (
         GUEST_HOST,
-        &[CONTRACTS, FOUNDATION, HOST, PACKAGES, PROCESS, SANDBOX],
+        &[
+            APPROVAL,
+            CONTRACTS,
+            FOUNDATION,
+            HOST,
+            PACKAGES,
+            PROCESS,
+            SANDBOX,
+            TOOL_CONTRACTS,
+        ],
     ),
     // The configuration.
     (CONFIG, &[FOUNDATION, MCP, PACKAGES]),

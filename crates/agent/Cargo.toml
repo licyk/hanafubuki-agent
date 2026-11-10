@@ -63,6 +63,7 @@ tokio = { workspace = true, features = ["io-util", "macros", "net", "rt", "rt-mu
 url.workspace = true
 
 [dev-dependencies]
+kardia-guest = "0.2.2"
 axum.workspace = true
 hanafubuki-agent-execution = { workspace = true, features = ["test-support"] }
 hanafubuki-agent-kernel = { workspace = true, features = ["test-support"] }
@@ -73,3 +74,12 @@ rmcp = { workspace = true, features = ["server", "transport-streamable-http-serv
 rusqlite = { workspace = true, features = ["bundled"] }
 tempfile.workspace = true
 tokio = { workspace = true, features = ["io-util", "macros", "net", "rt-multi-thread", "sync", "test-util", "time"] }
+
+# Its own `main` answers the sandbox helper's command line and the test
+# guest's first, so the code plugin it installs, and confines, re-executes
+# it.
+[[test]]
+name = "plugin_guests"
+path = "tests/plugin_guests.rs"
+harness = false
+required-features = ["test-support"]

@@ -96,7 +96,11 @@ impl PluginsBrowser {
             return;
         };
         if let Page::Prompt(prompt) = self.page {
-            self.form = Some(prompt_form(prompt));
+            let settings = self
+                .settings_package()
+                .map(super::code::settings_text)
+                .unwrap_or_default();
+            self.form = Some(prompt_form(prompt, &settings));
             self.list = None;
             return;
         }
@@ -197,6 +201,15 @@ impl PluginsBrowser {
         true
     }
 
+    /// The plugin whose page opened the settings form.
+    fn settings_package(&self) -> Option<&AgentPackageStatus> {
+        let Some((Page::Package(id), _)) = self.back.last() else {
+            return None;
+        };
+        let state = self.state.as_ref()?;
+        state.packages.iter().find(|package| package.id == *id)
+    }
+
     fn selected_marketplace(&self) -> Option<String> {
         let state = self.state.as_ref()?;
         Some(state.marketplaces.get(self.selected()?)?.name.clone())
@@ -210,6 +223,9 @@ impl PluginsBrowser {
             FormEvent::Cancel => self.go_back(),
             FormEvent::Action(_) => {
                 let source = form.text(SOURCE).trim().to_string();
+                if prompt == Prompt::Settings {
+                    return self.submit_settings(&source);
+                }
                 if source.is_empty() {
                     form.set_error(SOURCE, "Type a source.");
                     return;
@@ -223,6 +239,7 @@ impl PluginsBrowser {
                         }),
                         "Installing…",
                     ),
+                    Prompt::Settings => return,
                 };
                 form.set_status(vec![busy.dim().into()]);
                 self.send(call);
@@ -230,6 +247,28 @@ impl PluginsBrowser {
             }
             FormEvent::None => {}
         }
+    }
+
+    /// Saves `text`, the settings as JSON: an object, or nothing to remove
+    /// them.
+    fn submit_settings(&mut self, text: &str) {
+        let id = self.settings_package().map(|package| package.id.clone());
+        let Some(form) = self.form.as_mut() else {
+            return;
+        };
+        let Some(id) = id else {
+            return form.set_error(SOURCE, "The plugin is gone.");
+        };
+        let settings = match text {
+            "" => serde_json::Value::Null,
+            text => match serde_json::from_str::<serde_json::Value>(text) {
+                Ok(settings @ serde_json::Value::Object(_)) => settings,
+                _ => return form.set_error(SOURCE, "Type a JSON object, such as {\"key\": 1}."),
+            },
+        };
+        form.set_status(vec!["Saving…".dim().into()]);
+        self.send(PluginsCall::SetSettings { id, settings });
+        self.pending = Some(After::Stay);
     }
 
     fn reply(&mut self, reply: PluginsReply) {
@@ -424,7 +463,8 @@ fn page_view(state: &PluginsState, page: &Page) -> Option<PageView> {
     })
 }
 
-fn prompt_form(prompt: Prompt) -> FormView {
+/// The form of `prompt`; a settings form starts from `settings`.
+fn prompt_form(prompt: Prompt, settings: &str) -> FormView {
     let (title, subtitle, label, placeholder, submit) = match prompt {
         Prompt::AddMarketplace => (
             "Add a marketplace",
@@ -440,11 +480,23 @@ fn prompt_form(prompt: Prompt) -> FormView {
             "the plugin's directory",
             "Install plugin",
         ),
+        Prompt::Settings => (
+            "Plugin settings",
+            "A JSON object, checked against what its manifest says; empty removes them. Its code starts again with them.",
+            "Settings",
+            "{\"key\": \"value\"}",
+            "Save settings",
+        ),
+    };
+    let value = if prompt == Prompt::Settings {
+        settings
+    } else {
+        ""
     };
     FormView::new(
         title,
         vec![
-            FormItem::text(SOURCE, label, "").placeholder(placeholder),
+            FormItem::text(SOURCE, label, value).placeholder(placeholder),
             FormItem::action(SUBMIT, submit),
         ],
     )

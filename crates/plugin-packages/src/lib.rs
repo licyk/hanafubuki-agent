@@ -22,11 +22,15 @@
 //! restart policy; one that fails more often stays failed until it is
 //! retried. What a guest writes is logged only at `trace`.
 //!
-//! What a guest contributes to the Agent's registries is the next phase's
-//! (P6); here a guest runs, and can be called through the service it
-//! provides ([`GUEST_SERVICE`]).
+//! What a guest contributes is what its manifest declares: once its fiber
+//! is active, proxies registered as that fiber's effects (a tool source,
+//! context sections, a prompt, hooks, an observer) call the service it
+//! provides ([`GUEST_SERVICE`]), each within a deadline. It may view only
+//! its workspace and its settings, and provide only that service.
 
+mod contribute;
 mod guests;
+mod host_services;
 mod package;
 mod plugin;
 mod resolver;

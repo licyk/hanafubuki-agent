@@ -4,6 +4,8 @@
 //! them; the store keeps them. Each is read on its own: a block that cannot
 //! be used is dropped with an issue, and so is one entry of a list.
 
+use std::time::Duration;
+
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
@@ -51,6 +53,9 @@ pub struct ContributedTool {
     pub name: String,
     pub description: String,
     pub input_schema: Map<String, Value>,
+    /// How long one call may run (`timeout`, in seconds); unset takes the
+    /// guest host's call deadline.
+    pub timeout: Option<Duration>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -211,12 +216,32 @@ fn tool(
         ));
         return None;
     };
+    let timeout = match fields.raw("timeout") {
+        None | Some(Value::Null) => None,
+        Some(value) => match value
+            .as_f64()
+            .filter(|seconds| *seconds > 0.0 && *seconds <= MAXIMUM_TOOL_TIMEOUT_SECONDS)
+        {
+            Some(seconds) => Some(Duration::from_secs_f64(seconds)),
+            None => {
+                fields.issue(
+                    "timeout",
+                    "expected a number of seconds above 0 and at most 3600; the call deadline is used",
+                );
+                None
+            }
+        },
+    };
     Some(ContributedTool {
         name,
         description: fields.string("description").unwrap_or_default(),
         input_schema,
+        timeout,
     })
 }
+
+/// The longest a manifest may let one tool call run.
+const MAXIMUM_TOOL_TIMEOUT_SECONDS: f64 = 3600.0;
 
 fn section(
     object: &Map<String, Value>,

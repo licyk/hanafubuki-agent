@@ -4,9 +4,11 @@
 //! answers those command lines first, then runs each check in turn (those
 //! whose name contains one of the arguments, when there are any).
 
+mod contribute;
 mod faults;
 mod fixture;
 mod guest;
+mod host_calls;
 mod lifecycle;
 mod logging;
 mod sandbox;
@@ -56,6 +58,23 @@ const CHECKS: &[(&str, Check)] = &[
     }),
     ("a_guests_own_words_are_logged_only_at_trace", || {
         Box::pin(logging::a_guests_own_words_are_logged_only_at_trace())
+    }),
+    ("a_guest_contributes_what_its_manifest_declares", || {
+        Box::pin(contribute::a_guest_contributes_what_its_manifest_declares())
+    }),
+    (
+        "a_guests_contributions_retire_with_it_and_its_failures_stay_its_own",
+        || {
+            Box::pin(
+                contribute::a_guests_contributions_retire_with_it_and_its_failures_stay_its_own(),
+            )
+        },
+    ),
+    ("a_guest_views_only_its_workspace_and_its_settings", || {
+        Box::pin(host_calls::a_guest_views_only_its_workspace_and_its_settings())
+    }),
+    ("a_guest_that_provides_another_service_is_stopped", || {
+        Box::pin(host_calls::a_guest_that_provides_another_service_is_stopped())
     }),
     (
         "the_sandbox_keeps_a_guest_to_its_package_its_data_and_its_grant",

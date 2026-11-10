@@ -20,7 +20,7 @@ use hanafubuki_agent_hooks::{PluginHookDeclaration, PluginHookSource};
 use hanafubuki_agent_mcp::{agent_plugin_mcp_servers, plugin_mcp_servers, PluginMcpServers};
 use hanafubuki_agent_packages::{
     migrated_command_skills_root, HooksDeclaration, InstalledPackage, LoadedManifest,
-    ManifestFormat, McpServersDeclaration, PluginMcpServerSettings,
+    ManifestFormat, McpServersDeclaration, PluginMcpServerSettings, PluginSettings,
 };
 use hanafubuki_agent_skills::PluginSkillRoot;
 use serde_json::Value;
@@ -33,13 +33,15 @@ const DEFAULT_HOOKS: &str = "hooks/hooks.json";
 
 /// `package` as the Agent runs it: when `active` (it is `enabled` and the
 /// Agent is not in safe mode), its Skill roots, its MCP servers with the
-/// user's `overlay` applied, and its hooks.
+/// user's overlay in its `settings` entry applied, and its hooks; and its
+/// code, configured with the settings there.
 pub(super) fn load(
     package: &InstalledPackage,
     enabled: bool,
     active: bool,
-    overlay: &BTreeMap<String, PluginMcpServerSettings>,
+    settings: &PluginSettings,
 ) -> LoadedPackage {
+    let overlay = &settings.mcp_servers;
     let manifest = package.manifest.as_ref();
     let mut loaded = LoadedPackage {
         id: package.id.clone(),
@@ -58,7 +60,14 @@ pub(super) fn load(
         skill_roots: Vec::new(),
         mcp_servers: Vec::new(),
         hooks: None,
-        guest: super::guest::guest_package(package, active),
+        guest: super::guest::guest_package(
+            package,
+            active,
+            settings.settings.clone().unwrap_or_default(),
+        ),
+        config_schema: manifest
+            .and_then(|manifest| manifest.manifest.code.as_ref())
+            .and_then(|code| code.config_schema.clone()),
         issues: package.issues.clone(),
     };
     let Some(manifest) = manifest.filter(|_| active) else {

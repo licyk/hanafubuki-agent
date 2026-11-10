@@ -83,6 +83,8 @@ pub enum ApprovalActionKind {
     InteractiveExecution,
     SkillManagement,
     McpToolCall,
+    /// A tool an installed plugin's code contributes.
+    PluginToolCall,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]

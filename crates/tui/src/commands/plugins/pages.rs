@@ -55,11 +55,13 @@ pub(super) enum Page {
     Prompt(Prompt),
 }
 
-/// A source to type.
+/// A source to type, or a code plugin's settings.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Prompt {
     AddMarketplace,
     InstallDirectory,
+    /// The settings of the plugin whose page opened it.
+    Settings,
 }
 
 /// Where the browser goes once a call's answer is in.
@@ -358,6 +360,7 @@ pub(super) fn package_page(package: &AgentPackageStatus) -> PageView {
         items => items.join(", "),
     };
     rows.extend(super::code::state_row(package));
+    rows.extend(super::code::settings_row(package));
     rows.extend([
         info("Source", &source_text(package.source.as_ref())),
         info("Version", &package.version),

@@ -204,6 +204,7 @@ async fn the_users_settings_restrict_a_plugins_server() {
                         },
                     ),
                 ]),
+                settings: None,
             }),
         )
         .unwrap();

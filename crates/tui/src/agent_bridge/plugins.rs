@@ -30,6 +30,11 @@ pub(crate) enum PluginsCall {
         id: String,
         permissions: PackagePermissions,
     },
+    /// A code package's settings, an object, or `null` to remove them.
+    SetSettings {
+        id: String,
+        settings: serde_json::Value,
+    },
     AddMarketplace(String),
     UpgradeMarketplace(String),
     RemoveMarketplace(String),
@@ -139,6 +144,10 @@ async fn run(agent: &AgentHandle, call: PluginsCall) -> Result<Option<PluginsDon
         PluginsCall::GrantPermissions { id, permissions } => {
             agent.grant_package_permissions(&id, permissions).await?;
             notice(format!("Granted {id} its permissions."))
+        }
+        PluginsCall::SetSettings { id, settings } => {
+            agent.set_package_settings(&id, settings).await?;
+            notice(format!("Saved the settings of {id}."))
         }
         PluginsCall::AddMarketplace(source) => {
             let added = agent

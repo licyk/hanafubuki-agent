@@ -248,7 +248,9 @@ fn question(kind: ApprovalActionKind) -> &'static str {
         | ApprovalActionKind::FileMove
         | ApprovalActionKind::FileDelete => "Would you like to make the following edits?",
         ApprovalActionKind::FileRead => "Would you like to allow reading the following?",
-        ApprovalActionKind::McpToolCall => "Would you like to allow this tool call?",
+        ApprovalActionKind::McpToolCall | ApprovalActionKind::PluginToolCall => {
+            "Would you like to allow this tool call?"
+        }
         ApprovalActionKind::SkillManagement => "Would you like to allow this Skill change?",
         ApprovalActionKind::DomainMutation => "Would you like to allow this action?",
     }

@@ -1666,6 +1666,7 @@ dependencies = [
  "ignore",
  "image",
  "kardia-core",
+ "kardia-guest",
  "keyring",
  "log",
  "notify",
@@ -1991,12 +1992,14 @@ name = "hanafubuki-agent-plugin-packages"
 version = "0.2.0"
 dependencies = [
  "futures-util",
+ "hanafubuki-agent-approval",
  "hanafubuki-agent-contracts",
  "hanafubuki-agent-foundation",
  "hanafubuki-agent-host",
  "hanafubuki-agent-packages",
  "hanafubuki-agent-process",
  "hanafubuki-agent-sandbox",
+ "hanafubuki-agent-tool-contracts",
  "hex",
  "kardia-core",
  "kardia-guest",

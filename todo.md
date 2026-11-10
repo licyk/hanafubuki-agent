@@ -353,12 +353,15 @@ user first.
     `plugin` (its meta is checked); the trust check is at every spawn; a
     guest's stderr is logged at trace, not debug (the plan's §4.3 said
     debug; AGENTS.md's content rule wins).
-  - Open: P6 contributions (proxies call `GuestHost::call`); a guest can
-    still provide other service keys in the root realm (only `plugin` is
-    isolated; P6 should isolate or refuse the rest); `view`/`invoke` host
-    calls are refused (empty `inject`), the allowlist is P6; re-approving a
-    changed package (today: reinstall); the settings port writes `enabled` only
-    (P6's `configSchema` settings are the entry's `config`, `{}` today) and
+  - Open: (P6 contributions, proxies calling `GuestHost::call`: done in
+    P6) a guest can still provide other service keys in the root realm
+    (only `plugin` is isolated; P6 should isolate or refuse the rest: done
+    in P6, refused by failing the guest); `view`/`invoke` host calls are
+    refused (empty `inject`), the allowlist is P6 (done in P6: `workspace`,
+    `settings`); re-approving a changed package (today: reinstall); the
+    settings port writes `enabled` only (P6's `configSchema` settings are
+    the entry's `config`, `{}` today: done in P6, written by the facade's
+    `set_package_settings`) and
     does not reload after its write; the executor's final environment
     overlay (proxy variables) reaches guests; Windows restricted token does
     not restrict reads and its guest path is untested on Windows CI beyond
@@ -391,9 +394,108 @@ user first.
     `wait_reserved_executor` and the session's `exit_status` (additive);
     kardia-core/macros 0.2.2 (additive); a Hanafubuki crate that takes
     kardia-loader or kardia-hmr takes it without `preserve-order`.
-- [ ] P6: contribution proxies (tools as sourced tools, context sections,
+- [x] P6: contribution proxies (tools as sourced tools, context sections,
       prompt fragments, lifecycle and continuation hooks, observers), the
       host-function allowlist, settings from `configSchema`.
+  - Done: `crates/plugin-packages/src/contribute/` builds proxies from the
+    manifest's `contributes` (`GuestPackage.contributes`) and registers them
+    in the supervisor's `StatusChanged(Active)` listener, before the guest is
+    marked `running`, through the guest fiber's own context (`plugin-guests`
+    now injects the seven registries and `PluginFaults`), so each is that
+    fiber's effect (owner `guest:<id>`) and retires with every failure, stop
+    and restart. Tools: one `Optional` source `plugin:<id>`, tools
+    `<plugin>__<tool>` (namespace = plugin name), provider
+    `plugin.<plugin>.<marketplace>`, generation = hash of entry name and
+    declaration, `Exclusive`/`Mutating`/`PollutesContribution`, approval
+    `ApprovalActionKind::PluginToolCall` (new, high risk, always
+    `ReviewRequired`, re-checked in `invoke`), guest call `tool` within the
+    manifest tool's new `timeout` (seconds, ≤ 3600; `ContributedTool.timeout`)
+    or the call deadline, kernel bound + 2 s; a string answer is text, else
+    structured; a failure is the call's error with the guest's words (model
+    only). Context: a contributor + renderer per kind (≤ 7 per guest; valid,
+    not a known kind; WorldState, developer, versioned, a no-authority
+    preamble), `context` within 80% of the deadline, cut to 4 KiB. Prompt:
+    renderer of kind `plugin_<name>` in the declared slot; one contributor of
+    the guest host (`GuestPrompts`, `plugin-guests`) prepares every running
+    guest's `prompt` at once, each within 80% of the deadline. Hooks: a tool
+    lifecycle hook (`tool-use`) and a continuation hook (`continuation`,
+    `Ignore`), priority 200, `applies` while running. Observers: kinds named
+    after the notifications (`turn_finished`, …), a 64-event queue, a scoped
+    worker of the guest fiber calls `observe`. Errors told to the kernel
+    (which logs them at warn) are the Agent's words; the guest's at `trace`.
+    Calls observe cancellation (50 ms check). Issues of left-out
+    declarations + the kernel's issues for `guest:<id>` →
+    `GuestStatus.issues`. Host functions: a host-services loader entry
+    `<id>#host` beside each guest's provides `workspace` (`{access, roots}`,
+    roots only when readable, read at each view) and `settings`, isolated
+    under the shared label `guest:<id>`; the guest's entry isolates them the
+    same and `inject`s them (kardia-loader's outer fiber), so `view` reaches
+    exactly these; checked access finds nothing else viewable or invokable.
+    Provisions: the supervisor listens to `ServiceChanged`; a binding in the
+    shared realm whose provider is a guest fiber fails that fiber
+    (`Fiber::fail`, provisions withdrawn): during start like a failed
+    start, while running a fault (restart). Settings: `PluginSettings.settings`
+    (`[plugins."p@m"].settings`, a table; tolerant, a non-table is a repair;
+    not serialized when unset, so entry writes keep it),
+    `AgentConfig::set_package_code_settings` (replace: removes the old table
+    first, since writes merge), both loader entries' `config` (so a change
+    restarts the guest), facade `set_package_settings(id, Value)` (object or
+    null; checked against `configSchema` with the kernel's schema check;
+    refused for a package without code), `AgentPackageGuest.{settings,
+    config_schema}`; `/plugins` code page **Settings** row → a JSON form
+    (`Prompt::Settings`, `PluginsCall::SetSettings`). Fixture observer kind
+    `turn_completed` → `turn_finished`. Tests: guests suite +4 checks
+    (contributions through every registry incl. approval, left-out
+    declarations and issues; a hanging/crashing guest's contributions retire
+    and return, its context/prompt left out in time, a tool exit is the
+    call's error; views of workspace/settings vs refused keys and invoke;
+    settings reach apply and restart it; a provided service fails the
+    guest), facade `tests/plugin_guests.rs` (harness = false, the binary is
+    the guest and the sandbox helper; Linux only, skips without a sandbox):
+    install, grant, settings refused by `configSchema` then set, a turn whose
+    request has the section and fragment, the model calls the tool (user
+    approval `plugin_tool_call`), the next request has the output and the
+    hook's context, `turn_finished` observed, a crashing tool is the call's
+    error and the guest restarts; packages (tool timeout), config (settings
+    decode, replace, kept by entry writes), TUI (settings row). Docs:
+    plugin-rules "Code plugins" (contributions, host calls, the guest
+    protocol), architecture, internals, embedding, config-reference,
+    terminal-interface, json-events (`plugin_tool_call`), both languages.
+  - Deviations: registration in the Active listener, not inside `apply`
+    (kardia-hmr's bridge owns `apply`); one prompt contributor for all
+    guests (`TurnExtensions` is keyed by type); the allowlist is by
+    construction (realms + `inject`), not a host-call filter, and a refused
+    `view` reads as kardia's access error; another provision is refused by
+    failing the guest after kardia bound it (a brief window in the shared
+    realm), not before; context kinds are the declared names (not
+    namespaced), a colliding one is refused; `renderer` is read but unused;
+    approval for every guest tool call (no read-only hint in the manifest);
+    the settings UI is a JSON text field, not a form from `configSchema`;
+    no Python guest test (pykardia is not in CI; P7's example).
+  - Open: kardia-hmr's `GuestHost::provide` could honour the declared meta
+    upstream (closing the window); the calls of one guest are serialized
+    (a long tool call makes its context/prompt wait and fail); the kernel's
+    64 KiB world-state total can still be exceeded by large sections of
+    several plugins together (pre-existing, host kinds too); a hook's deny
+    reason and a tool's failure carry the guest's words to the model (as
+    MCP's do); no CLI for settings (`config set plugins."p@m".settings.k`
+    untested); the sandboxed facade path is checked on Linux only; the
+    P5 open items (Windows reads, Seatbelt untested on macOS, hmr's plain
+    threads) stand; the kernel's issues kept for `guest:<id>` are not
+    cleared when a package is uninstalled; two packages with one manifest
+    name (different marketplaces) derive one prompt kind, so the second's
+    prompt is refused with an issue; the first facade run under
+    `permissionMode = "full_access"` waited for an approval it should not
+    have needed (not investigated; the test now approves explicitly).
+  - Hanafubuki, at its next pin: `ApprovalActionKind::PluginToolCall`
+    (`plugin_tool_call`; an exhaustive match needs an arm);
+    `PluginSettings.settings` (a struct literal needs it) and
+    `AgentConfig::set_package_code_settings`; `ContributedTool.timeout`;
+    `AgentPackageGuest.{settings, config_schema}` and `GuestStatus.issues`;
+    new facade call `set_package_settings`; `GuestPackage.{contributes,
+    settings}`; the guest host now depends on approval and tool-contracts
+    and its plugin injects the registries (a host mounting it must provide
+    them, as the kernel does).
 - [ ] P7: developer story: `plugins new|dev|validate`, Rust and Python
       examples, the "Writing plugins" page.
 - [ ] P8: WASM guests with fuel/epoch and memory limits.

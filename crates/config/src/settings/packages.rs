@@ -62,6 +62,7 @@ fn decode_plugin(fields: &mut Fields<'_>, below: PluginSettings) -> PluginSettin
     PluginSettings {
         enabled,
         mcp_servers,
+        settings: fields.read("settings", below.settings),
     }
 }
 

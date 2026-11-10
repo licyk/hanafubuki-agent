@@ -1,9 +1,10 @@
 //! A code plugin's rows on its page: the grant of what its code asks for,
-//! while it is not granted, and its guest's state.
+//! while it is not granted, its guest's state, and its settings, which a
+//! form edits as JSON.
 
 use hanafubuki_agent::{AgentPackageStatus, PackagePermissions, WorkspaceAccess};
 
-use super::pages::{action, call, info, After, Row};
+use super::pages::{action, call, info, After, Choice, Page, Prompt, Row};
 use crate::agent_bridge::PluginsCall;
 
 /// **Grant its permissions**, for a code plugin whose grant does not cover
@@ -38,6 +39,33 @@ pub(super) fn state_row(package: &AgentPackageStatus) -> Option<Row> {
             None => state,
         },
     ))
+}
+
+/// **Settings**: what its code is configured with, which the settings
+/// form edits.
+pub(super) fn settings_row(package: &AgentPackageStatus) -> Option<Row> {
+    let guest = package.guest.as_ref()?;
+    let current = settings_text(package);
+    let described = match (&guest.config_schema, guest.settings.is_empty()) {
+        (_, false) => current,
+        (Some(_), true) => "none yet; its manifest describes them".to_string(),
+        (None, true) => "none".to_string(),
+    };
+    Some(action(
+        "Settings",
+        &described,
+        Some(Choice::Open(Page::Prompt(Prompt::Settings))),
+    ))
+}
+
+/// Its settings as one line of JSON, the form's starting text.
+pub(super) fn settings_text(package: &AgentPackageStatus) -> String {
+    let settings = package
+        .guest
+        .as_ref()
+        .map(|guest| guest.settings.clone())
+        .unwrap_or_default();
+    serde_json::Value::Object(settings).to_string()
 }
 
 /// What a code plugin's guest may reach, as its consent says it.

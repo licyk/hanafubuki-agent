@@ -481,7 +481,7 @@ fn hanafubuki_manifests_carry_their_code_blocks() {
     assert_eq!(runtime.protocol.as_deref(), Some("kardia-guest/2"));
     assert_eq!(code.contributes.tools[0].name, "jira_search");
     assert_eq!(code.contributes.context_sections[0].kind, "jira_board");
-    assert_eq!(code.contributes.observers, vec!["turn_completed"]);
+    assert_eq!(code.contributes.observers, vec!["turn_finished"]);
     assert!(code.permissions.network);
     assert_eq!(code.permissions.workspace, WorkspaceAccess::Read);
     assert_eq!(code.permissions.env, vec!["JIRA_TOKEN"]);
@@ -497,7 +497,9 @@ fn a_bad_code_entry_costs_only_itself() {
         r#"{"name": "guest",
             "runtime": {"type": "native", "command": ["./bin/guest"]},
             "contributes": {
-              "tools": [{"name": "ok", "inputSchema": {"type": "object"}}, {"name": "no-schema"}, 3],
+              "tools": [{"name": "ok", "inputSchema": {"type": "object"}, "timeout": 2.5},
+                        {"name": "slow", "inputSchema": {"type": "object"}, "timeout": "long"},
+                        {"name": "no-schema"}, 3],
               "approvalRules": [],
               "contextSections": [{"renderer": "markdown"}]
             },
@@ -514,11 +516,17 @@ fn a_bad_code_entry_costs_only_itself() {
         .iter()
         .map(|tool| tool.name.as_str())
         .collect::<Vec<_>>();
-    assert_eq!(tools, vec!["ok"]);
+    assert_eq!(tools, vec!["ok", "slow"]);
+    assert_eq!(
+        code.contributes.tools[0].timeout,
+        Some(std::time::Duration::from_millis(2_500))
+    );
+    // A timeout that is not a number of seconds costs only itself.
+    assert_eq!(code.contributes.tools[1].timeout, None);
     assert!(code.contributes.context_sections.is_empty());
     assert_eq!(code.permissions.workspace, WorkspaceAccess::Read);
     assert!(!code.permissions.network);
-    assert_eq!(loaded.issues.len(), 7, "{:?}", loaded.issues);
+    assert_eq!(loaded.issues.len(), 8, "{:?}", loaded.issues);
 }
 
 #[test]

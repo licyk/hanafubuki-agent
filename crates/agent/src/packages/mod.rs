@@ -82,6 +82,8 @@ pub(crate) struct LoadedPackage {
     pub(crate) hooks: Option<PluginHookSource>,
     /// Its code, on or off.
     pub(crate) guest: Option<GuestPackage>,
+    /// What its code's settings are (`configSchema`).
+    pub(crate) config_schema: Option<serde_json::Map<String, serde_json::Value>>,
     pub(crate) issues: Vec<String>,
 }
 
@@ -184,10 +186,7 @@ impl AgentPackages {
                     .iter()
                     .find(|installed| installed.id == package.id)
                     .and_then(|installed| installed.record.as_ref());
-                let guest = package
-                    .guest
-                    .as_ref()
-                    .and_then(|guest| self.guest_status(guest));
+                let guest = self.guest_status(package);
                 status::package_status(package, record, &skills, &hooks, guest)
             })
             .collect()
@@ -208,11 +207,14 @@ impl AgentPackages {
             .collect()
     }
 
-    fn guest_status(&self, guest: &GuestPackage) -> Option<AgentPackageGuest> {
+    fn guest_status(&self, package: &LoadedPackage) -> Option<AgentPackageGuest> {
+        let guest = package.guest.as_ref()?;
         Some(AgentPackageGuest {
             permissions: guest.permissions.clone(),
             granted_permissions: guest.granted.clone(),
             status: self.guests.status(&guest.id.key())?,
+            settings: guest.settings.clone(),
+            config_schema: package.config_schema.clone(),
         })
     }
 
@@ -250,14 +252,14 @@ impl AgentPackages {
         let mut packages = installed
             .iter()
             .map(|package| {
-                let overlay = settings
+                let entry = settings
                     .plugins
                     .packages
                     .get(&package.id.key())
-                    .map(|settings| settings.mcp_servers.clone())
+                    .cloned()
                     .unwrap_or_default();
                 let enabled = settings.package_enabled(&package.id);
-                content::load(package, enabled, enabled && !safe_mode, &overlay)
+                content::load(package, enabled, enabled && !safe_mode, &entry)
             })
             .collect::<Vec<_>>();
         resolve_server_names(&mut packages, user_servers);

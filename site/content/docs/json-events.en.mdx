@@ -135,7 +135,7 @@ The fields of `request`:
 
 `action` has `kind` (what sort of operation), `risk` (`low`, `medium`, `high`, `critical`), `origin` (`{"type":"user"}`, `{"type":"model"}`, or `{"type":"skill",...}` for one a Skill supplied), `summary`, `digest` (a hash of the operation) and `details` (`null`, or an object with a `type`, such as a command's `program`, `argv` and `cwd`); a command the model asked to run [outside the sandbox](/docs/permissions#escalation) also has `sandboxEscalation`, `{"justification":"…"}` (`justification` is `null` when the model gave none), which is absent otherwise. The values of `kind`:
 
-`command_execution`, `shell_execution`, `code_execution`, `interactive_execution`, `file_read`, `file_write`, `file_patch`, `file_move`, `file_delete`, `mcp_tool_call`, `skill_management`, `domain_mutation`.
+`command_execution`, `shell_execution`, `code_execution`, `interactive_execution`, `file_read`, `file_write`, `file_patch`, `file_move`, `file_delete`, `mcp_tool_call`, `plugin_tool_call`, `skill_management`, `domain_mutation`.
 
 `resolution` has `requestId`, `decision`, `source` and `resolvedAtMs`. `decision` is `allow_once`, `allow_for_session`, `deny`, `aborted` or `timed_out`; on this event `source` is `user` (`exec` answering by `--approve`), or `system` when the approval timed out or was aborted.
 

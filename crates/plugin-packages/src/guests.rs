@@ -5,7 +5,8 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use hanafubuki_agent_host::RestartPolicy;
+use hanafubuki_agent_contracts::PluginFaults;
+use hanafubuki_agent_host::{RestartPolicy, GUEST_LOGGER_PREFIX};
 use hanafubuki_agent_packages::PluginId;
 use hanafubuki_agent_process::executor::ExecutorManager;
 use hanafubuki_agent_sandbox::Sandbox;
@@ -53,7 +54,7 @@ pub(crate) struct Shared {
     pub(crate) policy: RestartPolicy,
     pub(crate) settings: Arc<dyn GuestSettingsPort>,
     pub(crate) resolver: GuestResolver,
-    packages: Mutex<Vec<GuestPackage>>,
+    pub(crate) packages: Mutex<Vec<GuestPackage>>,
     mount: Mutex<Option<Mount>>,
     pub(crate) records: Mutex<BTreeMap<String, GuestRecord>>,
     /// Held by an application of the packages to the tree, so the later of
@@ -67,6 +68,8 @@ pub(crate) struct Shared {
 pub(crate) struct Mount {
     pub(crate) loader: Loader,
     pub(crate) restarts: mpsc::UnboundedSender<Restart>,
+    /// Where the kernel records what it went without from a guest.
+    pub(crate) faults: Arc<PluginFaults>,
 }
 
 impl GuestHost {
@@ -120,8 +123,18 @@ impl GuestHost {
 
     /// The status of the guest of package `id`, if it has code.
     pub fn status(&self, id: &str) -> Option<GuestStatus> {
-        let records = self.0.records.lock();
-        records.get(id).map(|record| record.status(&self.0.policy))
+        let mut status = {
+            let records = self.0.records.lock();
+            records
+                .get(id)
+                .map(|record| record.status(&self.0.policy))?
+        };
+        if let Some(mount) = self.0.mount() {
+            status
+                .issues
+                .extend(mount.faults.issues(&format!("{GUEST_LOGGER_PREFIX}{id}")));
+        }
+        Some(status)
     }
 
     /// A counter that changes with every guest's status.
@@ -227,7 +240,7 @@ impl Shared {
         };
         let packages = self.packages.lock().clone();
         self.resolver.follow(&packages, &self.context);
-        let entries = packages.iter().map(GuestPackage::entry).collect();
+        let entries = packages.iter().flat_map(GuestPackage::entries).collect();
         mount.loader.root().update(entries).await;
     }
 

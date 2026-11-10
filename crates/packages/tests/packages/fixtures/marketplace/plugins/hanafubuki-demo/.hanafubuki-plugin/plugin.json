@@ -9,7 +9,7 @@
       { "name": "jira_search", "description": "Search Jira", "inputSchema": { "type": "object" } }
     ],
     "contextSections": [{ "kind": "jira_board", "renderer": "markdown" }],
-    "observers": ["turn_completed"]
+    "observers": ["turn_finished"]
   },
   "permissions": { "network": true, "workspace": "read", "env": ["JIRA_TOKEN"] },
   "configSchema": { "type": "object", "properties": { "board": { "type": "string" } } }

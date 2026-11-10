@@ -189,6 +189,32 @@ impl AgentConfig {
         self.write_entry(&["plugins".to_string(), id.key()], settings)
     }
 
+    /// Replaces the settings of the code of `id`
+    /// (`[plugins."<id>"].settings`), or removes them (`None`), as
+    /// [`Self::set_package_settings`] writes the rest of its entry.
+    pub fn set_package_code_settings(
+        &self,
+        id: &PluginId,
+        settings: Option<&Map<String, Value>>,
+    ) -> Result<AgentSettings, String> {
+        let path = ["plugins".to_string(), id.key(), "settings".to_string()];
+        let written = self
+            .settings()?
+            .plugins
+            .packages
+            .get(&id.key())
+            .is_some_and(|entry| entry.settings.is_some());
+        // A write merges into the table it finds, which would keep the keys
+        // the new settings drop: the old table goes first.
+        if written {
+            self.write_entry(&path, None::<&Value>)?;
+        }
+        match settings {
+            Some(settings) => self.write_entry(&path, Some(settings)),
+            None => self.settings(),
+        }
+    }
+
     /// Writes the `[marketplaces]` record of `name`, or removes it
     /// (`None`), as [`Self::set_package_settings`] does.
     pub fn set_marketplace(

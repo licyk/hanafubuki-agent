@@ -36,8 +36,10 @@ fn plugins_and_marketplaces_read_field_by_field() {
             "_default": {"enabled": false},
             "demo@my-mkt": {
                 "enabled": true,
-                "mcpServers": {"server1": {"enabledTools": ["a"], "disabledTools": "b"}}
+                "mcpServers": {"server1": {"enabledTools": ["a"], "disabledTools": "b"}},
+                "settings": {"board": "B-1", "limit": 3}
             },
+            "broken@my-mkt": {"settings": "everything"},
             "not an id": {"enabled": true},
             "other@my-mkt": "on"
         },
@@ -56,10 +58,17 @@ fn plugins_and_marketplaces_read_field_by_field() {
     );
     assert_eq!(
         settings.plugins.packages.keys().collect::<Vec<_>>(),
-        vec!["demo@my-mkt"]
+        vec!["broken@my-mkt", "demo@my-mkt"]
     );
     let demo = &settings.plugins.packages["demo@my-mkt"];
     assert_eq!(demo.enabled, Some(true));
+    assert_eq!(
+        demo.settings
+            .as_ref()
+            .map(|settings| Value::Object(settings.clone())),
+        Some(json!({"board": "B-1", "limit": 3}))
+    );
+    assert_eq!(settings.plugins.packages["broken@my-mkt"].settings, None);
     assert_eq!(
         demo.mcp_servers["server1"],
         PluginMcpServerSettings {
@@ -80,6 +89,7 @@ fn plugins_and_marketplaces_read_field_by_field() {
     assert_eq!(
         repairs,
         vec![
+            "plugins.broken@my-mkt.settings: the value is invalid and was replaced with its default",
             "plugins.demo@my-mkt.mcpServers.server1.disabledTools: the value is invalid and was replaced with its default",
             "marketplaces.my-mkt.enabled: the value is invalid and was replaced with its default",
         ]
@@ -158,6 +168,24 @@ fn package_and_marketplace_entries_are_written_and_removed() {
     config
         .set_marketplace("my-mkt", Some(&git_record("https://example.com/m.git")))
         .unwrap();
+    config
+        .set_package_settings(
+            &id,
+            Some(&PluginSettings {
+                enabled: Some(true),
+                ..PluginSettings::default()
+            }),
+        )
+        .unwrap();
+    let board = |board: &str| Map::from_iter([("board".to_string(), json!(board))]);
+    let mut first = board("B-0");
+    first.insert("limit".to_string(), json!(3));
+    config.set_package_code_settings(&id, Some(&first)).unwrap();
+    // New settings replace the old, and writing the rest of the entry
+    // keeps them.
+    config
+        .set_package_code_settings(&id, Some(&board("B-1")))
+        .unwrap();
     let settings = config
         .set_package_settings(
             &id,
@@ -167,6 +195,10 @@ fn package_and_marketplace_entries_are_written_and_removed() {
             }),
         )
         .unwrap();
+    assert_eq!(
+        settings.plugins.packages[&id.key()].settings,
+        Some(board("B-1"))
+    );
 
     assert!(settings.package_enabled(&id));
     let text = fs::read_to_string(&path).unwrap();
@@ -178,10 +210,13 @@ fn package_and_marketplace_entries_are_written_and_removed() {
         "sparsePaths = [\"plugins\"]",
         "[plugins.\"demo@my-mkt\"]",
         "enabled = true",
+        "[plugins.\"demo@my-mkt\".settings]",
+        "board = \"B-1\"",
     ] {
         assert!(text.contains(written), "{written:?} missing from:\n{text}");
     }
     assert!(!text.contains("enabled = false"), "{text}");
+    assert!(!text.contains("limit"), "{text}");
     assert_eq!(
         AgentConfig::new(directory.path()).settings().unwrap(),
         settings

@@ -135,7 +135,7 @@ icon: Braces
 
 `action` 的字段：`kind`（操作类型）、`risk`（`low`、`medium`、`high`、`critical`）、`origin`（`{"type":"user"}`、`{"type":"model"}` 或来自 Skill 的 `{"type":"skill",...}`）、`summary`（摘要）、`digest`（操作的哈希）和 `details`（`null` 或带 `type` 的详细信息，例如命令的 `program`、`argv`、`cwd`）；模型请求[在沙箱之外](/docs/permissions#escalation)运行的命令还有 `sandboxEscalation`，即 `{"justification":"…"}`（模型没有给出理由时 `justification` 为 `null`），其他情况下没有这个字段。`kind` 的取值：
 
-`command_execution`、`shell_execution`、`code_execution`、`interactive_execution`、`file_read`、`file_write`、`file_patch`、`file_move`、`file_delete`、`mcp_tool_call`、`skill_management`、`domain_mutation`。
+`command_execution`、`shell_execution`、`code_execution`、`interactive_execution`、`file_read`、`file_write`、`file_patch`、`file_move`、`file_delete`、`mcp_tool_call`、`plugin_tool_call`、`skill_management`、`domain_mutation`。
 
 `resolution` 的字段：`requestId`、`decision`、`source`、`resolvedAtMs`。`decision` 是 `allow_once`、`allow_for_session`、`deny`、`aborted` 或 `timed_out`；在这个事件中，`source` 是 `user`（由 `exec` 按 `--approve` 回答），或者在超时和中止时是 `system`。
 

@@ -12,6 +12,7 @@
 use std::collections::BTreeMap;
 
 use serde::Serialize;
+use serde_json::{Map, Value};
 
 use crate::PluginId;
 
@@ -40,6 +41,12 @@ pub struct PluginSettings {
     /// The overlay on the package's MCP servers, by server name.
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub mcp_servers: BTreeMap<String, PluginMcpServerSettings>,
+    /// The settings of its code (as its manifest's `configSchema` describes
+    /// them), which its guest is configured with. Unset is not written, so
+    /// writing the entry keeps them; they are replaced on their own
+    /// (`AgentConfig::set_package_code_settings`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub settings: Option<Map<String, Value>>,
 }
 
 /// A package's MCP server as the user restricts it; how it runs stays the
