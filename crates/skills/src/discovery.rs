@@ -20,7 +20,7 @@ use crate::fs_util::{
 };
 use crate::interface::{parse_interface, MAX_INTERFACE_BYTES};
 use crate::model::{
-    SkillAvailability, SkillCatalogEntry, SkillError, SkillId, SkillLoadIssue,
+    PluginSkillRoot, SkillAvailability, SkillCatalogEntry, SkillError, SkillId, SkillLoadIssue,
     SkillResourceDescriptor, SkillResourceKind, SkillScope,
 };
 use crate::parser::parse_skill;
@@ -47,14 +47,27 @@ pub(crate) struct RootScan {
     pub(crate) issues: Vec<SkillLoadIssue>,
 }
 
-/// Load every Skill under one root.
-pub(crate) fn scan_root(root: &Path, scope: SkillScope) -> RootScan {
+/// Load every Skill under one root. A plugin's root names its Skills by
+/// its package and namespace, and an Agent Plugins root holds its Skills as
+/// direct children only.
+pub(crate) fn scan_root(
+    root: &Path,
+    scope: SkillScope,
+    plugin: Option<&PluginSkillRoot>,
+) -> RootScan {
     let mut scan = RootScan::default();
     if !root.is_dir() {
         return scan;
     }
     let mut directories = Vec::new();
-    if let Err(error) = collect_skill_directories(root, 0, &mut directories, &mut scan.issues) {
+    let maximum_depth = if plugin.is_some_and(|plugin| plugin.direct_children_only) {
+        0
+    } else {
+        MAX_DIRECTORY_DEPTH
+    };
+    if let Err(error) =
+        collect_skill_directories(root, 0, maximum_depth, &mut directories, &mut scan.issues)
+    {
         scan.issues
             .push(SkillLoadIssue::error(native_text(root), error.to_string()));
         return scan;
@@ -70,7 +83,12 @@ pub(crate) fn scan_root(root: &Path, scope: SkillScope) -> RootScan {
                 continue;
             }
         };
-        match load_skill(&directory, scope, &relative) {
+        let relative = match plugin {
+            Some(plugin) => format!("{}:{relative}", plugin.plugin),
+            None => relative,
+        };
+        let namespace = plugin.map(|plugin| plugin.namespace.as_str());
+        match load_skill(&directory, scope, &relative, namespace) {
             Ok(mut skill) => {
                 scan.issues.append(&mut skill.issues);
                 scan.skills.push(skill);
@@ -85,25 +103,34 @@ pub(crate) fn scan_root(root: &Path, scope: SkillScope) -> RootScan {
 }
 
 /// Read one Skill directory. `relative` is its path under the scope root and
-/// becomes the tail of its id; its last segment is the default name.
+/// becomes the tail of its id; its last segment is the default name. A
+/// `namespace` (a plugin's) prefixes the names the Skill is shown by,
+/// `<namespace>:<name>`.
 pub(crate) fn load_skill(
     directory: &Path,
     scope: SkillScope,
     relative: &str,
+    namespace: Option<&str>,
 ) -> Result<LoadedSkill, SkillError> {
     let id = SkillId::new(scope, relative)?;
     let files = collect_files(directory)?;
-    let parsed = parse_skill(
+    let mut parsed = parse_skill(
         &read_bounded(&directory.join(SKILL_FILE), MAX_SKILL_MD_BYTES)?,
         id.folder_name(),
     )?;
     let interface_path = directory.join("agents").join("openai.yaml");
-    let interface = interface_path
+    let mut interface = interface_path
         .is_file()
         .then(|| read_bounded(&interface_path, MAX_INTERFACE_BYTES).ok())
         .flatten()
         .map(|bytes| parse_interface(&bytes))
         .unwrap_or_default();
+    if let Some(namespace) = namespace {
+        parsed.name = format!("{namespace}:{}", parsed.name);
+        if let Some(display_name) = interface.interface.display_name.as_mut() {
+            *display_name = format!("{namespace}:{display_name}");
+        }
+    }
     let skill_file = native_text(&directory.join(SKILL_FILE));
     let interface_file = native_text(&interface_path);
     let issues = parsed
@@ -172,10 +199,11 @@ pub(crate) fn resource_kind(path: &str) -> SkillResourceKind {
 fn collect_skill_directories(
     directory: &Path,
     depth: usize,
+    maximum_depth: usize,
     output: &mut Vec<PathBuf>,
     issues: &mut Vec<SkillLoadIssue>,
 ) -> Result<(), SkillError> {
-    if depth > MAX_DIRECTORY_DEPTH {
+    if depth > maximum_depth {
         return Ok(());
     }
     let entries = match std::fs::read_dir(directory) {
@@ -217,7 +245,13 @@ fn collect_skill_directories(
             output.push(path);
             continue;
         }
-        collect_skill_directories(&path, depth.saturating_add(1), output, issues)?;
+        collect_skill_directories(
+            &path,
+            depth.saturating_add(1),
+            maximum_depth,
+            output,
+            issues,
+        )?;
     }
     Ok(())
 }

@@ -21,7 +21,7 @@ fn every_bundled_skill_parses() {
     let root = temporary.path().join("system");
     synchronize_system_skills(&root).unwrap();
 
-    let scan = crate::discovery::scan_root(&root, crate::model::SkillScope::System);
+    let scan = crate::discovery::scan_root(&root, crate::model::SkillScope::System, None);
     assert!(scan.issues.is_empty(), "{:?}", scan.issues);
     assert_eq!(
         scan.skills

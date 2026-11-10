@@ -184,6 +184,7 @@ for line in sys.stdin:
             hanafubuki_agent_mcp::McpHttpProxyPolicy::Disabled,
         )),
         lifetime: Default::default(),
+        plugin_servers: Default::default(),
     };
     let disabled_revision = runtime.block_on(async {
         let registered = application
@@ -683,6 +684,7 @@ pub(super) fn mcp_application(paths: &TestPaths) -> AgentMcpApplication {
             hanafubuki_agent_mcp::McpHttpProxyPolicy::Disabled,
         )),
         lifetime: Default::default(),
+        plugin_servers: Default::default(),
     }
 }
 

@@ -7,9 +7,8 @@ impl AgentMcpApplication {
         server_id: hanafubuki_agent_mcp::McpServerId,
     ) -> Result<McpApplicationSnapshot, String> {
         let settings = self.load_settings().await?;
-        let server = settings
-            .server(&server_id)
-            .cloned()
+        let server = self
+            .server_config(&settings, &server_id)
             .ok_or_else(|| "MCP server does not exist".to_string())?;
         self.connect_mcp_server(&server, &settings).await?;
         self.mcp_snapshot_with_settings(settings).await

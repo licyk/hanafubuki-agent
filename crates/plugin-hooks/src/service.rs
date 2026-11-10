@@ -18,7 +18,7 @@ impl HooksService {
     /// Every configured hook, by source in configuration order, with its
     /// trust and enablement, and what could not be used.
     pub async fn list(&self) -> Result<Arc<HookCatalog>, String> {
-        self.runtime.refresh().await
+        self.runtime.refresh(true).await
     }
 
     /// Turns the hook `key` on or off.
@@ -45,6 +45,6 @@ impl HooksService {
             .run(label, move || change(&engine))
             .await
             .map_err(|error| error.to_string())??;
-        self.runtime.refresh().await.map(|_| ())
+        self.runtime.refresh(false).await.map(|_| ())
     }
 }

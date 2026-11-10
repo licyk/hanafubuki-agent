@@ -38,6 +38,18 @@ The servers are kept in `mcp.toml` in the configuration directory; every field i
 - A new server has the defaults: the approval policy `ask`, the exposure policy `deferred`, a 120-second call timeout, and so on.
 - An enabled server is connected as soon as it is added, and the command prints how that went, such as `files: ready`. `--disabled` adds it turned off.
 
+## Plugins' servers [#plugin-servers]
+
+An enabled [installed plugin](/docs/architecture#installed-plugins) runs the MCP servers it declares. They are the plugin's: they are not in `mcp.toml`, cannot be edited there, and come and go with the plugin, connecting when it is turned on and disconnecting when it is turned off, without a restart. They run like the servers you add: the same connection, reconnect and approval rules, with the defaults of a new server (approval `ask`, exposure `deferred`).
+
+- **Codex's, Claude Code's and Cursor's packages** declare them in `.mcp.json` at the package's root, or in the manifest's `mcpServers` (a path to such a file, or the servers themselves), as `{"mcpServers": {"NAME": {...}}}` or as the bare map of servers by name. A server has `command`, `args`, `env` and `cwd` (stdio) or `url` and `headers` (`http_headers`) (Streamable HTTP), and may have `type`, `enabled`, `required`, `startup_timeout_sec`, `tool_timeout_sec`, `enabled_tools`, `disabled_tools` and `oauth` (which allows a login). A relative `cwd` or command path is in the package; `${CLAUDE_PLUGIN_ROOT}`, `${CLAUDE_PLUGIN_DATA}`, `${PLUGIN_ROOT}` and `${PLUGIN_DATA}` are replaced by the package's directory and its data directory, and a stdio server runs with those four variables set. Other fields are ignored; `bearer_token_env_var` and `env_http_headers` are refused.
+- **An Agent Plugins package** declares them in its root's `mcp.json`, read strictly by its 1.0.0 schema: `$schema` and `mcpServers` only; a `stdio` server's `command` is a bare name or a `./` path in the package, its `args` and `env` may use `${PLUGIN_ROOT}` and `${PLUGIN_DATA}` (which `env` may not set), and its `cwd` is `./…`, `${PLUGIN_ROOT}/…` or `${PLUGIN_DATA}/…`, which must exist and stay inside; a `streamable-http` server's URL is HTTPS unless it is on loopback, and the client's own headers (`Authorization`, `Content-Type`, …) are dropped; `sse` is not supported. A field the schema does not define fails its server.
+- **One bad server costs only itself**: it is listed among the plugin's issues and its siblings run.
+- **A name runs once.** Your server in `mcp.toml` comes first: a plugin's server of the same name gives way, and runs again once yours is deleted. Among plugins, the first in key order (`<plugin>@<marketplace>`) wins. The one that gives way is its plugin's issue.
+- **You restrict a plugin's server** in `[plugins."PLUGIN@MARKETPLACE".mcpServers.NAME]`: `enabled`, `enabledTools` and `disabledTools` ([Plugins](/docs/config-reference#plugins)).
+
+The facade's MCP snapshot lists them as `pluginServers`, each with its plugin, its configuration and its status.
+
 ## In the terminal interface [#interface]
 
 `/mcp` in the [terminal interface](/docs/terminal-interface#mcp) opens the manager, where a server is added and edited in a form and the changes apply at once:

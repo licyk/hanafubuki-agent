@@ -7,9 +7,10 @@
 // (http://www.apache.org/licenses/LICENSE-2.0).
 // Modified for hanafubuki-agent: the sources are the user's and a trusted
 // project's configuration directories, each with `hooks.json` and the
-// `[hooks]` table of `config.toml`; there are no managed, plugin or
-// environment hooks; the state is the Agent's own file; a file that cannot
-// be read is a diagnostic, never a failure.
+// `[hooks]` table of `config.toml`, then the enabled installed plugins'
+// hook files; there are no managed or environment hooks; the state is the
+// Agent's own file; a file that cannot be read is a diagnostic, never a
+// failure.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -22,6 +23,7 @@ use sha2::{Digest, Sha256};
 use crate::config::{decode_events, CommandConfig, GroupConfig};
 use crate::event::HookEventName;
 use crate::matcher::HookMatcher;
+use crate::plugin::{plugin_tables, plugin_trust, PluginHookSource};
 use crate::state::{HookState, HookStates};
 
 const DEFAULT_TIMEOUT_SEC: u64 = 600;
@@ -29,20 +31,29 @@ const HOOKS_JSON: &str = "hooks.json";
 const CONFIG_TOML: &str = "config.toml";
 
 /// Where hooks are configured: each directory's `hooks.json` and the
-/// `[hooks]` table of its `config.toml`.
+/// `[hooks]` table of its `config.toml`, then the enabled plugins' hooks.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct HookSources {
     /// The user's configuration directory.
     pub user: PathBuf,
     /// A trusted project's configuration directory (`.hanafubuki-agent`).
     pub project: Option<PathBuf>,
+    /// The enabled installed plugins' hooks, in plugin order.
+    pub plugins: Vec<PluginHookSource>,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum HookSource {
     User,
     Project,
+    /// An installed plugin `id` (`<plugin>@<marketplace>`), installed at
+    /// `root`, with its own data directory `data`.
+    Plugin {
+        id: String,
+        root: PathBuf,
+        data: PathBuf,
+    },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
@@ -75,11 +86,15 @@ pub struct HookEntry {
     pub handler: HookHandler,
     pub source: HookSource,
     pub source_path: PathBuf,
-    /// `sha256:<hex>` of the normalized definition.
+    /// `sha256:<hex>` of the normalized definition; for a plugin's hook,
+    /// followed by `/` and its package's content hash when it was read.
     pub current_hash: String,
     pub trust: HookTrust,
     pub enabled: bool,
     pub(crate) compiled: Option<HookMatcher>,
+    /// The package content hash a plugin's hook was trusted with, which
+    /// the package must still have when the hook runs.
+    pub(crate) trusted_content_hash: Option<String>,
 }
 
 impl HookEntry {
@@ -116,9 +131,21 @@ impl HookCatalog {
     }
 }
 
+/// Where a table of hooks was read: the source its hooks are listed under,
+/// what their keys start with, the file a person reads it in and, for a
+/// plugin's hooks read for a listing, its package's content hash.
+pub(crate) struct TableOrigin {
+    pub(crate) source: HookSource,
+    pub(crate) key_source: String,
+    pub(crate) source_path: PathBuf,
+    pub(crate) content_hash: Option<String>,
+}
+
 /// The hooks of `sources`, the user's first, each directory's `hooks.json`
-/// before its `config.toml`.
-pub(crate) fn discover(sources: &HookSources, states: &HookStates) -> HookCatalog {
+/// before its `config.toml`, then the plugins'. A listing hashes each
+/// plugin's package to tell whether its hooks are still trusted; a run
+/// hashes it before each of them runs instead.
+pub(crate) fn discover(sources: &HookSources, states: &HookStates, listing: bool) -> HookCatalog {
     let mut catalog = HookCatalog::default();
     let directories = std::iter::once((sources.user.as_path(), HookSource::User)).chain(
         sources
@@ -138,20 +165,30 @@ pub(crate) fn discover(sources: &HookSources, states: &HookStates) -> HookCatalo
             ));
         }
         for (path, table) in tables.into_iter().flatten() {
-            append(&mut catalog, source, &path, &table, states);
+            let origin = TableOrigin {
+                source: source.clone(),
+                key_source: path.native_text().to_string(),
+                source_path: path.native().to_path_buf(),
+                content_hash: None,
+            };
+            append(&mut catalog, &origin, &table, states);
+        }
+    }
+    for plugin in &sources.plugins {
+        for (origin, table) in plugin_tables(plugin, listing, &mut catalog.diagnostics) {
+            append(&mut catalog, &origin, &table, states);
         }
     }
     catalog
 }
 
-fn append(
+pub(crate) fn append(
     catalog: &mut HookCatalog,
-    source: HookSource,
-    path: &ResolvedPath,
+    origin: &TableOrigin,
     table: &Map<String, Value>,
     states: &HookStates,
 ) {
-    let source_text = path.native_text();
+    let source_text = origin.key_source.as_str();
     for (event, groups) in decode_events(table, source_text, &mut catalog.diagnostics) {
         for group in groups {
             let GroupConfig {
@@ -179,19 +216,28 @@ fn append(
                     continue;
                 };
                 let key = format!("{source_text}:{}:{index}:{handler_index}", event.label());
-                let current_hash = hook_hash(event, matcher.as_deref(), &handler);
+                let declaration_hash = hook_hash(event, matcher.as_deref(), &handler);
                 let state = states.get(&key).cloned().unwrap_or_default();
+                let (trust, current_hash) = match &origin.source {
+                    HookSource::Plugin { .. } => {
+                        plugin_trust(&state, &declaration_hash, origin.content_hash.as_deref())
+                    }
+                    HookSource::User | HookSource::Project => {
+                        (trust(&state, &declaration_hash), declaration_hash)
+                    }
+                };
                 catalog.hooks.push(HookEntry {
-                    trust: trust(&state, &current_hash),
+                    trust,
                     enabled: state.enabled != Some(false),
                     key,
                     event,
                     matcher: matcher.clone(),
                     handler,
-                    source,
-                    source_path: path.native().to_path_buf(),
+                    source: origin.source.clone(),
+                    source_path: origin.source_path.clone(),
                     current_hash,
                     compiled: compiled.clone(),
+                    trusted_content_hash: state.trusted_content_hash.clone(),
                 });
             }
         }
@@ -214,7 +260,7 @@ fn normalize(handler: CommandConfig) -> Option<HookHandler> {
     })
 }
 
-fn trust(state: &HookState, current_hash: &str) -> HookTrust {
+pub(crate) fn trust(state: &HookState, current_hash: &str) -> HookTrust {
     match state.trusted_hash.as_deref() {
         Some(trusted) if trusted == current_hash => HookTrust::Trusted,
         Some(_) => HookTrust::Modified,
@@ -274,23 +320,15 @@ fn sorted(value: Value) -> Value {
     }
 }
 
-fn read_hooks_json(
+pub(crate) fn read_hooks_json(
     path: &Path,
     diagnostics: &mut Vec<String>,
 ) -> Option<(ResolvedPath, Map<String, Value>)> {
     let (path, text) = read(path, diagnostics)?;
     match serde_json::from_str::<Value>(&text) {
-        Ok(Value::Object(mut file)) => match file.remove("hooks") {
-            Some(Value::Object(hooks)) if !hooks.is_empty() => Some((path, hooks)),
-            None | Some(Value::Object(_)) => None,
-            Some(_) => {
-                diagnostics.push(format!(
-                    "{}: `hooks` is not a table and is ignored",
-                    path.native_text()
-                ));
-                None
-            }
-        },
+        Ok(Value::Object(file)) => {
+            hooks_table(file, path.native_text(), diagnostics).map(|hooks| (path, hooks))
+        }
         Ok(_) => {
             diagnostics.push(format!(
                 "{} is not a JSON object and is ignored",
@@ -303,6 +341,22 @@ fn read_hooks_json(
                 "{} cannot be read and is ignored: {error}",
                 path.native_text()
             ));
+            None
+        }
+    }
+}
+
+/// The `hooks` table of a `hooks.json` document; `None` without one.
+pub(crate) fn hooks_table(
+    mut file: Map<String, Value>,
+    source: &str,
+    diagnostics: &mut Vec<String>,
+) -> Option<Map<String, Value>> {
+    match file.remove("hooks") {
+        Some(Value::Object(hooks)) if !hooks.is_empty() => Some(hooks),
+        None | Some(Value::Object(_)) => None,
+        Some(_) => {
+            diagnostics.push(format!("{source}: `hooks` is not a table and is ignored"));
             None
         }
     }

@@ -19,6 +19,7 @@ mod kernel_tasks;
 pub mod logging;
 mod memory;
 mod network;
+mod packages;
 /// The Agent's half of the host's panic hook: its threads and guards are
 /// marked in its own foundation, which the host's hook cannot see, so the
 /// host's hook treats a panic as contained when this says so too.
@@ -92,6 +93,7 @@ pub use host::{
 pub use host_inputs::{AgentSteeringRequest, AgentTurnRequest, HostContextPort, NoHostContext};
 pub use memory::AgentMemoryApplication;
 pub use network::{AgentProxy, NetworkSettingsPort};
+pub use packages::{AgentPackageContent, AgentPackageStatus};
 pub use plugins::{
     AgentGoalBudgets, AgentRecap, AgentReviewCodeLocation, AgentReviewCommit, AgentReviewFinding,
     AgentReviewLineRange, AgentReviewOutput, AgentReviewTarget, AgentReviewTargets,
@@ -106,8 +108,8 @@ pub use service::{
     AgentSettingsView, AgentSkillSessionState, AgentWorktree, LocalSkillInstallRequest,
     McpApplicationSnapshot, McpCredentialPresence, McpCredentialsWriteRequest,
     McpLocalPolicySummary, McpLocalServerStatus, McpLocalStatusSnapshot, McpOAuthCallbackRequest,
-    McpOAuthCancelRequest, McpOAuthLoginRequest, McpServerDeleteRequest, McpServerWriteRequest,
-    McpToolSnapshot, SkillMcpDependencyStatus,
+    McpOAuthCancelRequest, McpOAuthLoginRequest, McpPluginServer, McpPluginServerSnapshot,
+    McpServerDeleteRequest, McpServerWriteRequest, McpToolSnapshot, SkillMcpDependencyStatus,
 };
 pub(crate) use service::{ResolvedAgentProvider, ResolvedModelPolicy};
 pub(crate) use shutdown::shutdown_agent;

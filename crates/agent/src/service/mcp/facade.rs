@@ -9,18 +9,27 @@ impl AgentApplicationService {
         self.mcp_application.mcp_snapshot().await
     }
 
+    /// Writes the user's server; one of the same name an installed plugin
+    /// runs gives way to it, and the plugins are reloaded in the
+    /// background.
     pub async fn mcp_write_server(
         &self,
         request: McpServerWriteRequest,
     ) -> Result<McpApplicationSnapshot, String> {
-        self.mcp_application.mcp_write_server(request).await
+        let snapshot = self.mcp_application.mcp_write_server(request).await?;
+        self.spawn_package_reload();
+        Ok(snapshot)
     }
 
+    /// Deletes the user's server; an installed plugin's of the same name
+    /// runs again once the plugins are reloaded, in the background.
     pub async fn mcp_delete_server(
         &self,
         request: McpServerDeleteRequest,
     ) -> Result<McpApplicationSnapshot, String> {
-        self.mcp_application.mcp_delete_server(request).await
+        let snapshot = self.mcp_application.mcp_delete_server(request).await?;
+        self.spawn_package_reload();
+        Ok(snapshot)
     }
 
     pub async fn mcp_write_credentials(

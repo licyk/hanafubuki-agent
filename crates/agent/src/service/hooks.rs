@@ -109,6 +109,7 @@ pub(super) fn hook_sources(config: &AgentConfig) -> Result<HookSources, String> 
     Ok(HookSources {
         user: user.ok_or("the configuration has no directory")?,
         project,
+        plugins: Vec::new(),
     })
 }
 
@@ -139,7 +140,7 @@ fn agent_hook(hook: &HookEntry) -> AgentHook {
             timeout_sec: *timeout_sec,
             status_message: status_message.clone(),
         },
-        source: hook.source,
+        source: hook.source.clone(),
         source_path: hook.source_path.clone(),
         trust: hook.trust,
         enabled: hook.enabled,

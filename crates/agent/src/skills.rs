@@ -12,7 +12,7 @@ pub use hanafubuki_agent_skills::{
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use hanafubuki_agent_skills::{repository_skill_roots, SkillService};
+use hanafubuki_agent_skills::{repository_skill_roots, PluginSkillRoot, SkillService};
 
 use crate::WorkspaceRootsPort;
 
@@ -92,6 +92,11 @@ impl AgentSkillApplication {
         self.service()?
             .list_with_request(SkillCatalogListRequest { force_reload })
             .map_err(to_message)
+    }
+
+    /// The enabled installed plugins' Skill roots, read from now on.
+    pub(crate) fn set_plugin_roots(&self, roots: Vec<PluginSkillRoot>) -> Result<(), String> {
+        self.service()?.set_plugin_roots(roots).map_err(to_message)
     }
 
     pub(crate) fn invalidate_root(&self, root: &std::path::Path) -> Result<(), String> {

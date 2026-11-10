@@ -19,6 +19,9 @@ pub struct McpApplicationSnapshot {
     pub settings_repairs: Vec<hanafubuki_agent_mcp::McpSettingsRepair>,
     /// What a server the user adds starts with.
     pub server_defaults: hanafubuki_agent_mcp::McpServerDefaults,
+    /// The servers the enabled installed plugins run, which `settings`
+    /// does not hold and the user does not edit.
+    pub plugin_servers: Vec<super::McpPluginServerSnapshot>,
 }
 
 /// Whether a referenced credential is configured.

@@ -32,6 +32,7 @@ mod golden;
 #[cfg(unix)]
 mod hooks;
 mod memory;
+mod packages;
 #[cfg(unix)]
 mod pipeline;
 mod plugin_faults;

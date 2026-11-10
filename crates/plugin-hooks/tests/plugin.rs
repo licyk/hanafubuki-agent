@@ -57,6 +57,7 @@ async fn registers_its_hooks_and_service_while_it_runs() {
         HookSources {
             user: directory.path().to_path_buf(),
             project: None,
+            plugins: Vec::new(),
         },
         directory.path().join("hooks-state.json"),
         ExecutorManager::default(),

@@ -14,6 +14,7 @@ mod liveness;
 mod manager;
 mod oauth;
 mod output;
+mod plugin_config;
 mod program;
 mod request;
 mod settings;
@@ -62,6 +63,9 @@ pub use manager::{
 };
 pub use oauth::{McpOAuthFlowId, McpOAuthLogin, McpOAuthManager, McpOAuthPhase, McpOAuthStatus};
 pub use output::convert_tool_output;
+pub use plugin_config::{
+    agent_plugin_mcp_servers, plugin_mcp_servers, PluginMcpServerError, PluginMcpServers,
+};
 pub use program::{resolve_stdio_program, validate_stdio_program_shape, McpResolvedProgram};
 pub use settings::{repair_settings, McpSettings, McpSettingsRepair, McpSettingsRepairKind};
 pub use stdio::{

@@ -11,6 +11,7 @@ mod facade;
 mod local_status;
 mod oauth;
 mod oauth_login;
+mod plugin_servers;
 mod proxy;
 mod settings;
 mod snapshot;
@@ -22,6 +23,7 @@ pub use contracts::{
     McpOAuthCancelRequest, McpOAuthLoginRequest, McpServerDeleteRequest, McpServerWriteRequest,
     McpToolSnapshot, SkillMcpDependencyStatus,
 };
+pub use plugin_servers::{McpPluginServer, McpPluginServerSnapshot};
 pub(crate) use proxy::mcp_proxy_policy;
 pub(crate) use startup::McpLifetime;
 
@@ -36,6 +38,8 @@ pub(crate) struct AgentMcpApplication {
     pub(crate) proxy: Arc<parking_lot::Mutex<hanafubuki_agent_mcp::McpHttpProxyPolicy>>,
     /// Cancelled at shutdown; every connect observes it.
     pub(crate) lifetime: Arc<McpLifetime>,
+    /// The installed plugins' servers that run, which no file holds.
+    pub(crate) plugin_servers: Arc<parking_lot::RwLock<Vec<McpPluginServer>>>,
 }
 
 impl AgentMcpApplication {
@@ -69,6 +73,7 @@ impl AgentMcpApplication {
             blocking,
             proxy: Arc::new(parking_lot::Mutex::new(proxy)),
             lifetime: Arc::new(McpLifetime::default()),
+            plugin_servers: Arc::default(),
         })
     }
 }

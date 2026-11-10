@@ -36,8 +36,8 @@ pub(crate) use mcp::AgentMcpApplication;
 pub use mcp::{
     McpApplicationSnapshot, McpCredentialPresence, McpCredentialsWriteRequest,
     McpLocalPolicySummary, McpLocalServerStatus, McpLocalStatusSnapshot, McpOAuthCallbackRequest,
-    McpOAuthCancelRequest, McpOAuthLoginRequest, McpServerDeleteRequest, McpServerWriteRequest,
-    McpToolSnapshot, SkillMcpDependencyStatus,
+    McpOAuthCancelRequest, McpOAuthLoginRequest, McpPluginServer, McpPluginServerSnapshot,
+    McpServerDeleteRequest, McpServerWriteRequest, McpToolSnapshot, SkillMcpDependencyStatus,
 };
 mod plugins;
 pub use plugins::AgentSettingsView;
@@ -68,6 +68,7 @@ mod worktree;
 pub use worktree::AgentWorktree;
 mod hooks;
 pub use hooks::{AgentHook, AgentHookHandler, AgentHooks};
+mod packages;
 
 /// What the application hands the Agent when it builds it.
 pub struct AgentServiceInputs {
@@ -132,6 +133,8 @@ pub struct AgentApplicationService {
     /// The base instructions with the host's additions.
     pub(crate) base_instructions: Arc<str>,
     host: Arc<AgentHost>,
+    /// The installed plugins, whose content the Skills, MCP and hooks follow.
+    packages: crate::packages::AgentPackages,
     /// The workspace policy, for user image attachments and their preview.
     pub(crate) files: WorkspaceFsService,
     /// Where this instance's kernel faults go (the slot that started it).
@@ -316,6 +319,13 @@ impl AgentApplicationService {
             blocking.clone(),
         )?;
         let mcp = mcp_application.mcp.clone();
+        let (packages, hooks) = packages::open_packages(
+            &storage_paths,
+            &executor,
+            &config,
+            &skills,
+            &mcp_application,
+        )?;
         let history_paths = AgentHistoryPaths::under(storage_paths.history_root.clone());
         let history_store = Arc::new(
             if instance.options.rebuild_history_index {
@@ -389,11 +399,8 @@ impl AgentApplicationService {
                         executor.clone(),
                     ),
                     git: hanafubuki_agent_worktree::GitQueries::new(executor.clone()),
-                    hooks: Arc::new(hanafubuki_agent_hooks::HooksEngine::new(
-                        hooks::hook_sources(&config)?,
-                        storage_paths.hooks_state_file.clone(),
-                        executor.clone(),
-                    )),
+                    hooks,
+                    packages: packages.clone(),
                     working_directory: hooks::working_directory(workspace.clone()),
                 },
                 host.plugins,
@@ -425,6 +432,7 @@ impl AgentApplicationService {
             steering_context: host.steering_context,
             base_instructions: agent_base_instructions(&host.instructions).into(),
             host: plugin_host,
+            packages,
             files,
             kernel_faults,
         })

@@ -32,11 +32,12 @@ description: 根据 git 历史为这个仓库撰写发布说明，按功能、�
 
 ## Skill 从哪里来 [#sources]
 
-| 来源 | 位置                                                                      | ID 示例                |
-| ---- | ------------------------------------------------------------------------- | ---------------------- |
-| 内置 | 数据目录的 `skills/system/`，每次启动时更新                               | `system:skill-creator` |
-| 安装 | 数据目录的 `skills/packages/`，由 `skills install` 放入                   | `user:release-notes`   |
-| 仓库 | 每个工作区目录及其上级目录（直到 Git 根目录）中的 `.agents/skills/`，只读 | `repo:web/lint`        |
+| 来源 | 位置                                                                                                                         | ID 示例                     |
+| ---- | ---------------------------------------------------------------------------------------------------------------------------- | --------------------------- |
+| 内置 | 数据目录的 `skills/system/`，每次启动时更新                                                                                  | `system:skill-creator`      |
+| 安装 | 数据目录的 `skills/packages/`，由 `skills install` 放入                                                                      | `user:release-notes`        |
+| 仓库 | 每个工作区目录及其上级目录（直到 Git 根目录）中的 `.agents/skills/`，只读                                                    | `repo:web/lint`             |
+| 插件 | 启用的[已安装插件](/docs/architecture#installed-plugins)的 `skills/`（或其清单指定的目录）以及由它的命令转换成的 Skill，只读 | `plugin:demo@my-mkt:search` |
 
 内置的两个 Skill：
 
@@ -44,6 +45,8 @@ description: 根据 git 历史为这个仓库撰写发布说明，按功能、�
 - `system:skill-manager`：查看 Skill、启用或停用某个 Skill、从目录或 Git 仓库安装 Skill，并解释某个 Skill 为什么在或不在本次回合中使用。
 
 把团队共用的 Skill 放进仓库的 `.agents/skills/` 中，所有在这个仓库中工作的人都能使用。
+
+插件的 Skill 以插件命名，与 Codex 相同：插件 `demo` 的 Skill `search` 在列表中和对模型都叫 `demo:search`（`$demo:search` 选择它），它的 ID 写明包：`plugin:demo@my-mkt:search`。Agent Plugins 包的 Skill 是其 `skills/` 的直接子目录；其他包的 Skill 在任意深度都会被找到。它们随插件出现和消失：关闭插件就会移除它们，无需重启。它们和其他 Skill 一样可以单独开关。
 
 ## 查看和安装 [#manage]
 

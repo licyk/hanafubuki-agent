@@ -39,8 +39,8 @@ impl McpLifetime {
 }
 
 impl AgentMcpApplication {
-    /// Connects every enabled server in the background, once per Agent
-    /// instance. An optional server that fails is a warning, a required one
+    /// Connects every enabled server (the user's, then the plugins') in
+    /// the background, once per Agent instance. An optional server that fails is a warning, a required one
     /// an error; either way the failure is that server's MCP status, and the
     /// Agent runs without it.
     pub(crate) fn spawn_start(
@@ -79,8 +79,13 @@ impl AgentMcpApplication {
         let servers = settings
             .servers
             .iter()
-            .filter(|server| server.enabled)
             .cloned()
+            .chain(
+                self.plugin_servers()
+                    .into_iter()
+                    .map(|plugin| plugin.server),
+            )
+            .filter(|server| server.enabled)
             .collect();
         let mut warnings = Vec::new();
         let mut required_failures = Vec::new();

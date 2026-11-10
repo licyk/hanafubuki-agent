@@ -18,7 +18,7 @@ fn a_directory_holding_skill_md_is_a_skill() {
     write(&root.join("demo/LICENSE.txt"), "MIT");
     write(&root.join("demo/logo.png"), "png");
 
-    let scan = scan_root(root, SkillScope::User);
+    let scan = scan_root(root, SkillScope::User, None);
     assert!(scan.issues.is_empty());
     assert_eq!(scan.skills.len(), 1);
     let skill = &scan.skills[0];
@@ -55,7 +55,7 @@ fn skills_are_found_at_any_depth_but_never_inside_one_another() {
         DOCUMENT,
     );
 
-    let scan = scan_root(root, SkillScope::Repo);
+    let scan = scan_root(root, SkillScope::Repo, None);
     assert_eq!(
         scan.skills
             .iter()
@@ -72,7 +72,7 @@ fn a_broken_skill_is_reported_and_the_rest_still_load() {
     write(&root.join("good/SKILL.md"), DOCUMENT);
     write(&root.join("broken/SKILL.md"), "no frontmatter here\n");
 
-    let scan = scan_root(root, SkillScope::User);
+    let scan = scan_root(root, SkillScope::User, None);
     assert_eq!(scan.skills.len(), 1);
     assert_eq!(scan.skills[0].entry.id.as_str(), "user:good");
     assert_eq!(scan.issues.len(), 1);
@@ -83,7 +83,7 @@ fn a_broken_skill_is_reported_and_the_rest_still_load() {
 #[test]
 fn a_missing_root_is_simply_empty() {
     let temporary = tempfile::tempdir().unwrap();
-    let scan = scan_root(&temporary.path().join("absent"), SkillScope::System);
+    let scan = scan_root(&temporary.path().join("absent"), SkillScope::System, None);
     assert!(scan.skills.is_empty());
     assert!(scan.issues.is_empty());
 }
@@ -97,7 +97,7 @@ fn only_user_skills_are_editable() {
         (SkillScope::System, false),
         (SkillScope::Repo, false),
     ] {
-        let scan = scan_root(temporary.path(), scope);
+        let scan = scan_root(temporary.path(), scope, None);
         assert_eq!(scan.skills[0].entry.editable, editable);
     }
 }
@@ -115,7 +115,7 @@ fn what_a_loaded_skill_ignored_is_reported_against_its_file() {
         "interface:\n  display_name: 42\n  short_description: Short\n",
     );
 
-    let scan = scan_root(root, SkillScope::User);
+    let scan = scan_root(root, SkillScope::User, None);
     assert_eq!(scan.skills.len(), 1);
     let skill = &scan.skills[0];
     assert_eq!(skill.entry.version, None);
@@ -160,7 +160,7 @@ fn an_unreadable_directory_below_the_root_is_skipped_with_an_issue() {
     // A process that ignores permissions (root, CAP_DAC_READ_SEARCH) can still
     // list the directory, so there is nothing to skip and nothing to test.
     let still_readable = std::fs::read_dir(&locked).is_ok();
-    let scan = (!still_readable).then(|| scan_root(root, SkillScope::User));
+    let scan = (!still_readable).then(|| scan_root(root, SkillScope::User, None));
     std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o755)).unwrap();
     let Some(scan) = scan else {
         return;
@@ -189,7 +189,7 @@ fn an_unreadable_root_still_fails_as_a_whole() {
     write(&root.join("good/SKILL.md"), DOCUMENT);
     std::fs::set_permissions(&root, std::fs::Permissions::from_mode(0o000)).unwrap();
     let still_readable = std::fs::read_dir(&root).is_ok();
-    let scan = (!still_readable).then(|| scan_root(&root, SkillScope::User));
+    let scan = (!still_readable).then(|| scan_root(&root, SkillScope::User, None));
     std::fs::set_permissions(&root, std::fs::Permissions::from_mode(0o755)).unwrap();
     let Some(scan) = scan else {
         return;
@@ -216,7 +216,7 @@ fn a_symlink_inside_a_skill_is_never_one_of_its_resources() {
     .unwrap();
     std::os::unix::fs::symlink(temporary.path().join("outside"), root.join("demo/linked")).unwrap();
 
-    let scan = scan_root(&root, SkillScope::User);
+    let scan = scan_root(&root, SkillScope::User, None);
     assert!(scan.issues.is_empty());
     assert!(scan.skills[0].entry.resources.is_empty());
 }
@@ -250,4 +250,81 @@ fn repository_roots_climb_to_the_git_root_and_no_further() {
             base.join(".agents").join("skills"),
         ]
     );
+}
+
+fn plugin_root(path: &std::path::Path, direct_children_only: bool) -> PluginSkillRoot {
+    PluginSkillRoot {
+        plugin: "demo@local".to_string(),
+        namespace: "demo".to_string(),
+        path: path.to_path_buf(),
+        direct_children_only,
+    }
+}
+
+#[test]
+fn a_plugins_skills_carry_its_package_in_their_ids_and_its_namespace_in_their_names() {
+    let temporary = tempfile::tempdir().unwrap();
+    let root = temporary.path();
+    write(&root.join("search/SKILL.md"), DOCUMENT);
+    write(
+        &root.join("titled/SKILL.md"),
+        "---\nname: titled\ndescription: Has a title.\n---\nBody.\n",
+    );
+    write(
+        &root.join("titled/agents/openai.yaml"),
+        "interface:\n  display_name: Titled Skill\n",
+    );
+    write(&root.join("group/nested/SKILL.md"), DOCUMENT);
+
+    let plugin = plugin_root(root, false);
+    let scan = scan_root(root, SkillScope::Plugin, Some(&plugin));
+
+    let skills = scan
+        .skills
+        .iter()
+        .map(|skill| {
+            (
+                skill.entry.id.as_str(),
+                skill.entry.name.as_str(),
+                skill.entry.display_name(),
+                skill.entry.editable,
+            )
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        skills,
+        vec![
+            (
+                "plugin:demo@local:group/nested",
+                "demo:demo",
+                "demo:demo",
+                false
+            ),
+            ("plugin:demo@local:search", "demo:demo", "demo:demo", false),
+            (
+                "plugin:demo@local:titled",
+                "demo:titled",
+                "demo:Titled Skill",
+                false
+            ),
+        ]
+    );
+}
+
+#[test]
+fn an_agent_plugins_root_holds_its_skills_as_direct_children_only() {
+    let temporary = tempfile::tempdir().unwrap();
+    let root = temporary.path();
+    write(&root.join("search/SKILL.md"), DOCUMENT);
+    write(&root.join("group/nested/SKILL.md"), DOCUMENT);
+
+    let plugin = plugin_root(root, true);
+    let scan = scan_root(root, SkillScope::Plugin, Some(&plugin));
+
+    let ids = scan
+        .skills
+        .iter()
+        .map(|skill| skill.entry.id.as_str())
+        .collect::<Vec<_>>();
+    assert_eq!(ids, vec!["plugin:demo@local:search"]);
 }

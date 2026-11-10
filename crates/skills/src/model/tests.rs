@@ -66,3 +66,32 @@ fn an_entry_prefers_its_interface_name_and_shortest_description() {
     assert_eq!(entry.display_name(), "Demo Skill");
     assert_eq!(entry.summary(), "Shorter.");
 }
+
+#[test]
+fn a_plugin_skills_id_names_its_package() {
+    let id = SkillId::from_untrusted("plugin:demo.tools@my-mkt:search/web").unwrap();
+    assert_eq!(id.scope(), SkillScope::Plugin);
+    assert_eq!(id.plugin(), Some("demo.tools@my-mkt"));
+    assert_eq!(id.relative_path(), "search/web");
+    assert_eq!(id.folder_name(), "web");
+    assert_eq!(
+        SkillId::from_untrusted("user:search").unwrap().plugin(),
+        None
+    );
+
+    for invalid in [
+        "plugin:search",
+        "plugin:demo:search",
+        "plugin:@mkt:search",
+        "plugin:demo@:search",
+        "plugin:de/mo@mkt:search",
+        "plugin:demo@mkt:",
+        "plugin:demo@mkt:a:b",
+        "plugin:demo@mkt:../search",
+    ] {
+        assert!(
+            SkillId::from_untrusted(invalid).is_err(),
+            "{invalid} must not be a Skill id"
+        );
+    }
+}

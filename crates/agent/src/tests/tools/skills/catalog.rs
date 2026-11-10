@@ -253,6 +253,7 @@ fn skill_mcp_dependency_states_come_from_typed_config_runtime_and_oauth_authorit
             hanafubuki_agent_mcp::McpHttpProxyPolicy::Disabled,
         )),
         lifetime: Default::default(),
+        plugin_servers: Default::default(),
     };
     let dependency = SkillToolDependency {
         server_id: "fixture-http".to_string(),

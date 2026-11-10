@@ -33,6 +33,8 @@ pub enum SkillScope {
     User,
     /// `.agents/skills` beside the Agent's workspace roots. Read-only.
     Repo,
+    /// An enabled installed plugin's Skills. Read-only.
+    Plugin,
 }
 
 impl SkillScope {
@@ -41,6 +43,7 @@ impl SkillScope {
             Self::System => "system",
             Self::User => "user",
             Self::Repo => "repo",
+            Self::Plugin => "plugin",
         }
     }
 
@@ -49,6 +52,7 @@ impl SkillScope {
             "system" => Some(Self::System),
             "user" => Some(Self::User),
             "repo" => Some(Self::Repo),
+            "plugin" => Some(Self::Plugin),
             _ => None,
         }
     }
@@ -61,7 +65,8 @@ impl fmt::Display for SkillScope {
 }
 
 /// `"<scope>:<directory path relative to that scope's root>"`, for example
-/// `user:pdf-tools` or `repo:web/lint`.
+/// `user:pdf-tools` or `repo:web/lint`; a plugin's Skill names its package
+/// too, `plugin:<plugin>@<marketplace>:<path>`.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 #[serde(transparent)]
 pub struct SkillId(String);
@@ -78,7 +83,17 @@ impl SkillId {
             return Err(invalid());
         }
         let (scope, relative) = value.split_once(':').ok_or_else(invalid)?;
-        if SkillScope::parse(scope).is_none() || relative.is_empty() {
+        let scope = SkillScope::parse(scope).ok_or_else(invalid)?;
+        let relative = if scope == SkillScope::Plugin {
+            let (package, relative) = relative.split_once(':').ok_or_else(invalid)?;
+            if !is_package_id(package) {
+                return Err(invalid());
+            }
+            relative
+        } else {
+            relative
+        };
+        if relative.is_empty() {
             return Err(invalid());
         }
         for segment in relative.split('/') {
@@ -103,10 +118,24 @@ impl SkillId {
         SkillScope::parse(scope).expect("a validated id has a known scope")
     }
 
-    /// The Skill directory's path relative to its scope root, `/`-separated.
+    /// The Skill directory's path relative to its scope root (a plugin's
+    /// Skill root), `/`-separated.
     pub fn relative_path(&self) -> &str {
         let (_, relative) = self.0.split_once(':').expect("a validated id has a scope");
-        relative
+        match self.scope() {
+            SkillScope::Plugin => relative
+                .split_once(':')
+                .map_or(relative, |(_, relative)| relative),
+            _ => relative,
+        }
+    }
+
+    /// The plugin a plugin's Skill comes from, `<plugin>@<marketplace>`.
+    pub fn plugin(&self) -> Option<&str> {
+        let (_, relative) = self.0.split_once(':').expect("a validated id has a scope");
+        (self.scope() == SkillScope::Plugin)
+            .then(|| relative.split_once(':').map(|(package, _)| package))
+            .flatten()
     }
 
     /// The last path segment — the Skill's folder name.
@@ -120,6 +149,17 @@ impl SkillId {
     pub fn as_str(&self) -> &str {
         &self.0
     }
+}
+
+/// `<plugin>@<marketplace>`, as the package store names an installed plugin.
+fn is_package_id(value: &str) -> bool {
+    value.split_once('@').is_some_and(|(plugin, marketplace)| {
+        !plugin.is_empty()
+            && !marketplace.is_empty()
+            && value.chars().all(|character| {
+                character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | '.' | '@')
+            })
+    })
 }
 
 impl fmt::Display for SkillId {
@@ -372,6 +412,21 @@ pub struct SkillRoots {
     /// disable that to supply isolated fixtures.
     pub install_bundled_system_skills: bool,
     pub state_file: PathBuf,
+}
+
+/// An enabled installed plugin's Skill root: its `skills/` (or the
+/// directories its manifest names) or the Skills its commands became.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PluginSkillRoot {
+    /// `<plugin>@<marketplace>`, which the Skills' ids carry.
+    pub plugin: String,
+    /// The manifest's name, which prefixes the Skills' names
+    /// (`<namespace>:<name>`), as Codex names a plugin's Skills.
+    pub namespace: String,
+    pub path: PathBuf,
+    /// An Agent Plugins package's Skills are its root's direct children;
+    /// other roots are searched in depth.
+    pub direct_children_only: bool,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]

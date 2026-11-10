@@ -1,5 +1,6 @@
 //! The hooks' trust and enablement, keyed by hook: whether each is turned
-//! off, and the hash of the definition the user trusted. It is the Agent's
+//! off, and the hash of the definition the user trusted (with, for a
+//! plugin's hook, its package's content hash). It is the Agent's
 //! own state, a file in the data directory written as a whole (a temporary
 //! file renamed over it), and read tolerantly: unknown fields are ignored,
 //! an entry that does not read is skipped, and a file that does not read
@@ -23,6 +24,9 @@ pub(crate) struct HookState {
     pub(crate) enabled: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) trusted_hash: Option<String>,
+    /// For a plugin's hook, the content hash of its package when trusted.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) trusted_content_hash: Option<String>,
 }
 
 pub(crate) type HookStates = BTreeMap<String, HookState>;

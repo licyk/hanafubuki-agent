@@ -52,7 +52,7 @@ impl ContextContributor for HookContext {
         cancellation: CancellationToken,
     ) -> ContextFuture<'a> {
         Box::pin(async move {
-            self.0.refresh().await?;
+            self.0.refresh(false).await?;
             let mut parts = Vec::new();
             if let Some(context) = self.session_start(request, &cancellation).await? {
                 parts.push(context);

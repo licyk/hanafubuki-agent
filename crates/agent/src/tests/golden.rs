@@ -474,6 +474,29 @@ async fn skill_catalog_request_matches_golden() {
     assert_golden("skill_catalog_request", &body);
 }
 
+/// An installed Claude Code plugin's Skill, listed under its namespace, and
+/// the plugin itself in the "available plugins" section, with its MCP
+/// server (which never connects).
+#[tokio::test]
+async fn installed_plugin_request_matches_golden() {
+    let body = first_request_with(
+        "golden-installed-plugin",
+        AgentSessionMode::Default,
+        |paths, _| {
+            let source = super::packages::claude_plugin(
+                paths,
+                "demo",
+                serde_json::json!({ "files": { "command": "hanafubuki-golden-missing-server" } }),
+                None,
+            );
+            super::packages::install(paths, &source, "demo@local");
+        },
+        |_, _| {},
+    )
+    .await;
+    assert_golden("installed_plugin_request", &body);
+}
+
 #[tokio::test]
 async fn workspace_instructions_request_matches_golden() {
     let body = first_request_with(

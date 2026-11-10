@@ -25,11 +25,10 @@ impl AgentMcpApplication {
         dependencies
             .iter()
             .map(|dependency| {
-                let Some(server) = settings
-                    .servers
-                    .iter()
-                    .find(|server| server.id.as_str() == dependency.server_id)
-                else {
+                let server = hanafubuki_agent_mcp::McpServerId::parse(&dependency.server_id)
+                    .ok()
+                    .and_then(|id| self.server_config(&settings, &id));
+                let Some(server) = server.as_ref() else {
                     return Ok(SkillMcpDependencyStatus {
                         dependency: dependency.clone(),
                         state: SkillAvailabilityState::Missing,
@@ -189,6 +188,7 @@ impl AgentMcpApplication {
             .map(|server| self.mcp.diagnostic_summary(&server.id))
             .collect();
         Ok(McpApplicationSnapshot {
+            plugin_servers: self.plugin_server_snapshots(),
             settings,
             servers,
             oauth,

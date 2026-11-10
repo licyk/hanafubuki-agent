@@ -74,8 +74,8 @@ impl SkillService {
     pub(super) fn reload(&self) -> Result<SkillCatalogSnapshot, SkillError> {
         let mut skills: BTreeMap<SkillId, LoadedSkill> = BTreeMap::new();
         let mut issues = Vec::new();
-        for (root, scope) in self.discovery_roots() {
-            let scan = scan_root(&root, scope);
+        for (root, scope, plugin) in self.scanned_roots() {
+            let scan = scan_root(&root, scope, plugin.as_ref());
             issues.extend(scan.issues);
             for skill in scan.skills {
                 // Repo roots can nest, so the same relative path is reachable

@@ -35,6 +35,7 @@ The plugin names that mean something in `disabledPlugins`:
 | `subagents`         | No sub-agents: the model has no sub-agent tools or guidance; the facade's `subagents` calls are unavailable       |
 | `review`            | No reviews: the review calls are unavailable, and a review session is neither guided nor kept read-only           |
 | `worktree`          | No worktrees (`/worktree`, the facade's `worktree_*` calls)                                                       |
+| `plugins`           | The model is not told of the installed plugins; their Skills, MCP servers and hooks still run                     |
 | `workspace-context` | The model is not shown `AGENTS.md`, the workspace roots or the environment                                        |
 | `permission-mode`   | The model is not told the permission mode                                                                         |
 
@@ -165,7 +166,7 @@ Which [installed plugins](/docs/architecture#installed-plugins) are on, by plugi
 | `plugins."PLUGIN@MARKETPLACE".mcpServers.NAME.enabledTools`  | An array of tool names | all     | The only tools of that server offered                  |
 | `plugins."PLUGIN@MARKETPLACE".mcpServers.NAME.disabledTools` | An array of tool names | none    | Tools of that server not offered, after `enabledTools` |
 
-An installed package is on unless its marketplace is turned off (below), or its entry says `enabled = false`, or its entry does not say and `_default.enabled` is `false`. An entry whose key is not a plugin id is kept in the file and ignored, as an unknown key is. How a package's MCP servers run is the package's; `mcpServers` only restricts them.
+An installed package is on unless its marketplace is turned off (below), or its entry says `enabled = false`, or its entry does not say and `_default.enabled` is `false`. An entry whose key is not a plugin id is kept in the file and ignored, as an unknown key is. How a package's MCP servers run is the package's; `mcpServers` only restricts them ([Plugins' servers](/docs/mcp#plugin-servers)). A change the Agent writes applies at once: it reloads its packages after each settings write; a hand edit applies at the next start.
 
 ### Marketplaces [#marketplaces]
 

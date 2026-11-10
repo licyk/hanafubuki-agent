@@ -9,6 +9,7 @@
 // and the executor's own timeout ends it; a cancelled run is terminated and
 // disposed of before it returns.
 
+use std::collections::HashMap;
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
@@ -42,13 +43,15 @@ pub(crate) struct CommandRun {
 }
 
 /// Runs `command` in `cwd` through the user's shell with `input` on its
-/// stdin, to its end, its timeout, or `cancellation`.
+/// stdin and `env` added to the Agent's environment, to its end, its
+/// timeout, or `cancellation`.
 pub(crate) fn run_command(
     executor: &ExecutorManager,
     command: &str,
     timeout: Duration,
     input: &str,
     cwd: &Path,
+    env: HashMap<String, Option<String>>,
     cancellation: &CancellationToken,
 ) -> CommandRun {
     let executor_id = format!("hook-{}", NEXT_HOOK.fetch_add(1, Ordering::Relaxed));
@@ -62,7 +65,7 @@ pub(crate) fn run_command(
         command: shell_command(command),
         cwd: Some(cwd.to_path_buf()),
         environment_inheritance: EnvironmentInheritance::Inherit,
-        env: Default::default(),
+        env,
         io_mode: ExecutorIoMode::Pipe,
         stream_stdin: true,
         stream_output: true,

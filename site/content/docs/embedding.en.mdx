@@ -546,6 +546,16 @@ A review is a durable child session (origin `Review`), listed among its parent's
 
 A sub-agent is a durable child session (origin `Subagent`), so its turns, events and history are read like any session's: a status feed reads the sub-agents from `subagents(parent)` and each one's events with `events_since`; no parent-side event is added. Its turns run with no `AgentEventSink` of the caller's: the events land in its journal. A turn the user starts on a sub-agent goes through `submit_turn_with_sink` as on any session.
 
+## Installed plugins [#installed-plugins]
+
+The [installed plugins](/docs/architecture#installed-plugins) are in the data directory's `plugins/`, and `[plugins]` in the Agent's settings says which are on. The service reads them when it is built and again on each reload:
+
+- `reload_packages()` loads the installed packages again as the settings leave them on and brings the Agent up to date without a restart: the Skill catalog reads the enabled packages' Skills, the next turn's hooks include theirs, and their MCP servers run (one added or changed has connected, or failed, when it returns; one that is gone is disconnected). The service calls it in the background after `write_settings`, `set_plugin_enabled`, `mcp_write_server` and `mcp_delete_server`; a host that writes `[plugins]` or changes the store by other means calls it itself.
+- `packages()` returns `Vec<AgentPackageStatus { id, version, format, display_name, description, enabled, content, issues }>`: every installed package, on or off; `content` (`AgentPackageContent { skills, mcp_servers, hooks }`) is what it contributes while on (Skill ids, the names of its MCP servers that run, hook keys), and `issues` what could not be read or used.
+- A plugin's hook is listed by `hooks_list()` with `source` `{"plugin": {"id", "root", "data"}}` (`HookSource::Plugin`); the user's and the project's stay `"user"` and `"project"`.
+- `mcp_snapshot()` lists the plugins' servers as `plugin_servers` (`McpPluginServerSnapshot { plugin, server, status }`); `settings` stays `mcp.toml`'s.
+- `plugin_status()` has the `plugins` row, which tells the model of the enabled packages.
+
 ## Logging [#logging]
 
 The facade installs no logger: the host keeps its own `log` implementation, and the Agent's records go there. The standalone binary uses `logging::install_file_logger` (`hanafubuki-agent.log`, rotated past 8 MiB into `.1`…`.3`). The Agent's own records follow its content-logging rule: model content, reasoning, tool arguments and tool results appear only at `trace`, truncated to a bound, and headers and credentials never. So the host's log level is how a user selects `trace` (Hanafubuki's `log_level` setting).

@@ -38,6 +38,18 @@ MCP（Model Context Protocol）服务器可以把本地程序或远程服务的�
 - 新服务器使用默认设置：审批策略 `ask`、暴露策略 `deferred`、调用超时 120 秒等。
 - 启用的服务器添加后立即连接，命令打印连接结果，例如 `files: ready`。`--disabled` 添加一个禁用的服务器。
 
+## 插件的服务器 [#plugin-servers]
+
+启用的[已安装插件](/docs/architecture#installed-plugins)运行它声明的 MCP 服务器。它们属于插件：不在 `mcp.toml` 中，不能在那里编辑，随插件出现和消失，插件启用时连接、关闭时断开，无需重启。它们和你添加的服务器一样运行：同样的连接、重连和审批规则，使用新服务器的默认设置（审批 `ask`、暴露 `deferred`）。
+
+- **Codex、Claude Code 和 Cursor 的包**在包根目录的 `.mcp.json` 中声明它们，或在清单的 `mcpServers` 中声明（指向这样一个文件的路径，或者服务器本身），写成 `{"mcpServers": {"NAME": {...}}}` 或按名称排列的服务器映射本身。服务器有 `command`、`args`、`env` 和 `cwd`（stdio）或 `url` 和 `headers`（`http_headers`）（Streamable HTTP），还可以有 `type`、`enabled`、`required`、`startup_timeout_sec`、`tool_timeout_sec`、`enabled_tools`、`disabled_tools` 和 `oauth`（允许登录）。相对的 `cwd` 或命令路径位于包内；`${CLAUDE_PLUGIN_ROOT}`、`${CLAUDE_PLUGIN_DATA}`、`${PLUGIN_ROOT}` 和 `${PLUGIN_DATA}` 被替换为包的目录及其数据目录，stdio 服务器运行时设置这四个变量。其他字段被忽略；`bearer_token_env_var` 和 `env_http_headers` 被拒绝。
+- **Agent Plugins 包**在其根目录的 `mcp.json` 中声明它们，按其 1.0.0 schema 严格读取：只有 `$schema` 和 `mcpServers`；`stdio` 服务器的 `command` 是裸名称或包内的 `./` 路径，它的 `args` 和 `env` 可以使用 `${PLUGIN_ROOT}` 和 `${PLUGIN_DATA}`（`env` 不能设置这两个变量），它的 `cwd` 是 `./…`、`${PLUGIN_ROOT}/…` 或 `${PLUGIN_DATA}/…`，必须存在并留在其中；`streamable-http` 服务器的 URL 必须是 HTTPS，除非在回环地址上，客户端自己的头（`Authorization`、`Content-Type` 等）被丢弃；不支持 `sse`。schema 未定义的字段会使该服务器失败。
+- **一个坏服务器只影响它自己**：它列在插件的问题中，其他服务器照常运行。
+- **一个名称只运行一次。**你在 `mcp.toml` 中的服务器优先：插件的同名服务器让出，在你删除自己的服务器后再次运行。插件之间，键的顺序（`<plugin>@<marketplace>`）中的第一个胜出。让出的服务器记为其插件的问题。
+- **你可以限制插件的服务器**，在 `[plugins."PLUGIN@MARKETPLACE".mcpServers.NAME]` 中设置 `enabled`、`enabledTools` 和 `disabledTools`（[插件](/docs/config-reference#plugins)）。
+
+门面的 MCP 快照把它们列为 `pluginServers`，每个带有它的插件、配置和状态。
+
 ## 在终端界面中 [#interface]
 
 [终端界面](/docs/terminal-interface#mcp)中的 `/mcp` 打开管理界面，在表单中添加和编辑服务器，修改立即生效：

@@ -32,11 +32,12 @@ Fields it does not know are ignored. A Skill directory may also have an `agents/
 
 ## Where Skills come from [#sources]
 
-| Source     | Where                                                                                                 | Id, for example        |
-| ---------- | ----------------------------------------------------------------------------------------------------- | ---------------------- |
-| Built in   | `skills/system/` in the data directory, refreshed at every start                                      | `system:skill-creator` |
-| Installed  | `skills/packages/` in the data directory, where `skills install` puts them                            | `user:release-notes`   |
-| Repository | `.agents/skills/` in each workspace root and the directories above it (up to its Git root), read-only | `repo:web/lint`        |
+| Source     | Where                                                                                                                                                                 | Id, for example             |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------- |
+| Built in   | `skills/system/` in the data directory, refreshed at every start                                                                                                      | `system:skill-creator`      |
+| Installed  | `skills/packages/` in the data directory, where `skills install` puts them                                                                                            | `user:release-notes`        |
+| Repository | `.agents/skills/` in each workspace root and the directories above it (up to its Git root), read-only                                                                 | `repo:web/lint`             |
+| Plugin     | an enabled [installed plugin](/docs/architecture#installed-plugins)'s `skills/` (or the directories its manifest names) and the Skills its commands became, read-only | `plugin:demo@my-mkt:search` |
 
 The two built-in Skills:
 
@@ -44,6 +45,8 @@ The two built-in Skills:
 - `system:skill-manager`: inspects the Skills, turns one on or off, installs one from a folder or a Git repository, and explains why a Skill is or is not in play for this turn.
 
 Put the Skills a team shares in the repository's `.agents/skills/`, and everyone working in it can use them.
+
+A plugin's Skills are named after the plugin, as Codex names them: the Skill `search` of the plugin `demo` is `demo:search` in the list and to the model (`$demo:search` selects it), and its id names the package, `plugin:demo@my-mkt:search`. An Agent Plugins package's Skills are the direct children of its `skills/`; other packages' are found at any depth. They come and go with their plugin: turning the plugin off removes them without a restart. They are turned on and off like any Skill.
 
 ## Listing and installing [#manage]
 

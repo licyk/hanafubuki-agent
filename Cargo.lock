@@ -1647,6 +1647,7 @@ dependencies = [
  "hanafubuki-agent-kernel",
  "hanafubuki-agent-mcp",
  "hanafubuki-agent-memory",
+ "hanafubuki-agent-packages",
  "hanafubuki-agent-plugin-execution",
  "hanafubuki-agent-plugin-hooks",
  "hanafubuki-agent-plugin-mcp",
@@ -1804,6 +1805,7 @@ name = "hanafubuki-agent-hooks"
 version = "0.2.0"
 dependencies = [
  "hanafubuki-agent-foundation",
+ "hanafubuki-agent-packages",
  "hanafubuki-agent-process",
  "log",
  "parking_lot",

@@ -51,12 +51,20 @@ impl HooksRuntime {
         self.catalog().runnable(event, inputs).next().is_some()
     }
 
-    /// Discovers the hooks again, on the blocking pool.
-    pub(crate) async fn refresh(&self) -> Result<Arc<HookCatalog>, String> {
+    /// Discovers the hooks again, on the blocking pool; for a `listing`,
+    /// with each plugin's package hashed to tell whether its hooks are
+    /// still trusted.
+    pub(crate) async fn refresh(&self, listing: bool) -> Result<Arc<HookCatalog>, String> {
         let engine = self.engine.clone();
         let catalog = self
             .blocking
-            .run("agent hooks discovery", move || Arc::new(engine.discover()))
+            .run("agent hooks discovery", move || {
+                Arc::new(if listing {
+                    engine.list()
+                } else {
+                    engine.discover()
+                })
+            })
             .await
             .map_err(|error| error.to_string())?;
         for diagnostic in &catalog.diagnostics {

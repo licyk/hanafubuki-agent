@@ -226,7 +226,15 @@ An installed plugin is a **package**: a directory with a manifest, installed fro
 - **An install is staged and swapped.** The package is copied into staging (without symbolic links or `.git`), the marketplace entry's fields are written as its manifest when it has none, the staged manifest is checked byte for byte against the source, `commands/*.md` with a description become Skills, and the copy is renamed into `plugins/cache/<marketplace>/<plugin>/<version>/`, the previous copy of the same version kept until the swap succeeded and older versions pruned. The version in use is `local` when there is one, else the highest. The package's data directory survives uninstall unless it is purged.
 - **`git` runs through the Agent's `ExecutorManager`**, isolated as the worktrees' is: no inherited repository selectors, no hooks, no prompt, bounded by a timeout.
 
-The store is not wired into the Agent yet: nothing loads a package's Skills, MCP servers or hooks, and neither the command line nor the terminal interface installs one.
+A package is content, not code: what it contributes flows into the domains' own sources, each a built-in row already. The facade (`crates/agent/src/packages`, after Codex's `load_plugin`) reads the installed packages the settings leave on, in key order, and turns each into:
+
+- **Skill roots**: the manifest's `skills` (else `skills/`) and, but for Agent Plugins, the Skills its commands became. Their ids are `plugin:<plugin>@<marketplace>:<path>` and their names `<manifest name>:<name>`, as Codex names them ([Where Skills come from](/docs/skills#sources)). An Agent Plugins package's Skills are its root's direct children.
+- **MCP servers** owned by the package ([Plugins' servers](/docs/mcp#plugin-servers)): `.mcp.json` (or the manifest's `mcpServers`) or an Agent Plugins `mcp.json`, never written to `mcp.toml`, restricted by `[plugins."p@m".mcpServers]` and run under the same supervision as the user's. The user's server of a name comes first, then the first package in key order; a server that gives way is the package's issue.
+- **Hook sources** after the user's and the project's (`HookSource::Plugin`), trusted by their definition and their package's content hash, which a run checks again ([Plugins' hooks](/docs/configuration#hooks-plugins)). An Agent Plugins package's hooks never run, as in Codex.
+
+A package that does not read, or a component of one, is an issue of that package; the others load. The set is loaded when the Agent is built (the MCP servers connect with the start) and again by `reload_packages`, which the facade runs after every settings write and `mcp.toml` write, and which the lifecycle calls will run after each change: it swaps the Skill roots and the hook sources and connects or disconnects only the MCP servers that changed, without a restart. `packages()` lists every installed package with its version, format, enablement, content and issues (`AgentPackageStatus`).
+
+The model is told of the enabled packages by the `plugins` row: when a package contributes Skills to the turn's catalog or MCP servers, the Capabilities slot carries an "available plugins" section (Codex's `PluginCapabilitySummary`: the display name, the description on one line and at most 1,024 characters, the Skill prefix, the MCP server names); without one, no section, so the requests of an Agent with no packages do not change. The row owns only that summary, so turning it off hides the summary and the content keeps flowing through the `skills`, `mcp` and `hooks` rows; the guest host that will run packages' code takes the row over. Neither the command line nor the terminal interface installs a package yet.
 
 ## MCP [#mcp]
 
@@ -297,7 +305,8 @@ Compared with Codex (`codex-rs`), which the Agent's mechanisms were checked agai
 - The file tools' policy roots are fixed when the Agent is built; only the Skill roots and the context sections follow the workspace per read.
 - A session created before its model's window was known keeps none until its model is selected again; recovery does not resolve it.
 - An MCP reconnect reuses the secrets the connection was opened with, so an expired OAuth token fails it until the user connects by hand.
-- The Skill watcher watches only the roots that exist at start; later roots rely on the stamp each read takes.
+- The Skill watcher watches only the roots that exist at start; later roots, an enabled package's among them, rely on the stamp each read takes.
+- A hand edit of `[plugins]` takes effect at the next start or reload; the Agent reloads its packages after its own settings writes only.
 - The built-in context windows cover only families whose limits are published (GPT, o-series, Claude, Gemini 2.5); any other model needs the Provider's listing or the setting before it compacts automatically.
 - The command sandbox exists on Linux and macOS only; Windows (a restricted token, its elevated setup) has none yet, so an unset `sandboxMode` is full access there. The macOS sandbox is checked by its tests on macOS only.
 - Not verified off Linux: the `notify` watcher's macOS and Windows backends, Windows paths in the directories the Skill catalog shows, the MCP stdio exit reason and a dead child's disposal on Windows, and the memory artifact install rename on Windows.

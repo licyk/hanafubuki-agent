@@ -9,6 +9,7 @@ rust-version.workspace = true
 
 [dependencies]
 hanafubuki-agent-foundation.workspace = true
+hanafubuki-agent-packages.workspace = true
 hanafubuki-agent-process.workspace = true
 log.workspace = true
 parking_lot.workspace = true

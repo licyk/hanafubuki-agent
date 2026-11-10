@@ -115,6 +115,46 @@ fn the_repository_roots_follow_the_workspace_without_a_force_reload() {
 }
 
 #[test]
+fn the_plugin_roots_follow_the_enabled_plugins_and_turn_off_like_any_skill() {
+    let fixture = Fixture::new();
+    fixture.write("cache/demo/skills/search/SKILL.md", DOCUMENT);
+    fixture
+        .service
+        .set_plugin_roots(vec![crate::model::PluginSkillRoot {
+            plugin: "demo@local".to_string(),
+            namespace: "demo".to_string(),
+            path: fixture.root.join("cache/demo/skills"),
+            direct_children_only: false,
+        }])
+        .unwrap();
+
+    let turn = fixture.service.turn_catalog().unwrap();
+    let names = turn
+        .entries
+        .iter()
+        .map(|entry| (entry.id.as_str(), entry.name.as_str()))
+        .collect::<Vec<_>>();
+    assert_eq!(names, vec![("plugin:demo@local:search", "demo:demo")]);
+    assert!(fixture
+        .service
+        .discovery_roots()
+        .contains(&(fixture.root.join("cache/demo/skills"), SkillScope::Plugin)));
+
+    fixture
+        .service
+        .disable(&id("plugin:demo@local:search"))
+        .unwrap();
+    assert!(fixture.service.turn_catalog().unwrap().entries.is_empty());
+    fixture
+        .service
+        .enable(&id("plugin:demo@local:search"))
+        .unwrap();
+
+    fixture.service.set_plugin_roots(Vec::new()).unwrap();
+    assert!(fixture.service.list().unwrap().entries.is_empty());
+}
+
+#[test]
 fn a_discovered_skill_is_on_until_the_user_turns_it_off() {
     let fixture = Fixture::new();
     fixture.write("user/pdf/SKILL.md", DOCUMENT);

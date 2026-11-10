@@ -96,7 +96,7 @@ hanafubuki-agent config set compaction.hierarchical.contentStore true
 
 钩子是你配置的命令，在 Agent 触发某个事件时运行：工具调用之前或之后、会话开始时、你提交消息时、轮次结束之前。格式与 Codex 相同，所以它的 `hooks.json` 文件和 `[hooks]` 表可以原样使用。钩子只有在你信任之后才会运行。
 
-它们从两个地方读取，每处都可以写成 `hooks.json` 或 `config.toml` 的 `[hooks]` 表（两者选其一）：
+它们从两个地方读取，每处都可以写成 `hooks.json` 或 `config.toml` 的 `[hooks]` 表（两者选其一），然后从启用的已安装插件读取（[插件的钩子](#hooks-plugins)）：
 
 - 配置目录，即用户自己的钩子；
 - 项目的 `.hanafubuki-agent/`，在读取项目配置时：用户的 `config.toml` 信任该项目（[配置层](/docs/config-layers#projects)），并且项目有 `.hanafubuki-agent/config.toml`。
@@ -146,6 +146,15 @@ timeout = 30
 ### 信任 [#hooks-trust]
 
 钩子只有在你信任之后、并且处于启用状态时才会运行。每个钩子有一个键 `<文件>:<事件>:<组>:<钩子>`（`/home/me/.config/hanafubuki-agent/hooks.json:pre_tool_use:0:0`），信任它会记录它定义的哈希（事件、matcher、命令、超时和状态消息）。定义改变了的钩子是 `modified`，在你再次信任之前不会运行。基于 Agent 的应用通过门面的钩子调用列出钩子及其信任状态、信任它们并开关它们（[功能调用](/docs/embedding#feature-calls)）；在终端界面中由 `/hooks` 完成（[终端界面](/docs/terminal-interface#hooks)），界面启动时还会说明有几个钩子需要审查。信任与启用状态保存在数据目录的 `hooks-state.json` 中，而不是 `config.toml`；Codex 的 `[hooks.state]` 被忽略。
+
+### 插件的钩子 [#hooks-plugins]
+
+启用的 Codex、Claude Code 或 Cursor 格式的[已安装插件](/docs/architecture#installed-plugins)带来它的钩子：清单的 `hooks` 指定的文件（或写在清单中的钩子文件），否则是 `hooks/hooks.json`。它们排在用户和项目的钩子之后，随插件出现和消失。与 Codex 相同，Agent Plugins 包的钩子从不运行。
+
+- 插件钩子的键写明插件和插件内的文件：`<plugin>@<marketplace>:<路径>:<事件>:<组>:<钩子>`（`demo@my-mkt:hooks/hooks.json:pre_tool_use:0:0`；写在清单中的钩子是 `plugin.json#hooks[N]`），所以它的状态在插件更新后仍然保留。
+- 信任它会记录它定义的哈希和它整个包的内容哈希（不计 `__pycache__`、`.venv`、`*.pyc` 和 `*.egg-info`）；它的哈希显示为 `<定义>/<内容>`。每次运行它的钩子之前都会重新计算包的哈希：包中任何内容改变后，它的钩子就是 `modified`，不会运行，并以 "plugin contents changed; hook approval required" 失败，直到你再次信任它们。
+- 它运行时 `PLUGIN_ROOT` 和 `CLAUDE_PLUGIN_ROOT` 设为包的目录，`PLUGIN_DATA` 和 `CLAUDE_PLUGIN_DATA` 设为它自己的数据目录，所以写成 `${CLAUDE_PLUGIN_ROOT}/hooks/check.sh` 的命令运行的是包里的脚本。
+- 插件同样只运行上面五个事件；其他事件和你自己的钩子一样被报告。`/hooks` 列出插件的钩子及其插件。
 
 ## 示例 [#example]
 

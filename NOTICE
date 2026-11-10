@@ -52,14 +52,29 @@ Third-party notices
     `codex-rs/context-fragments/src/side_conversation.rs` (commit
     `57a808a392`), as its first lines say;
   - the hooks, `crates/hooks` (`src/event.rs`, `src/matcher.rs`,
-    `src/config.rs`, `src/discovery.rs`, `src/command.rs`, `src/output.rs`
-    and `src/engine.rs`), are derived from Codex's `codex-rs/hooks`
-    (`src/lib.rs`, `src/engine/matcher.rs`, `src/engine/discovery.rs`,
-    `src/engine/command_runner.rs`, `src/engine/output_parser.rs`,
+    `src/config.rs`, `src/discovery.rs`, `src/command.rs`, `src/output.rs`,
+    `src/engine.rs` and `src/plugin.rs`), are derived from Codex's
+    `codex-rs/hooks` (`src/lib.rs`, `src/engine/matcher.rs`,
+    `src/engine/discovery.rs`, `src/engine/command_runner.rs`,
+    `src/engine/output_parser.rs`, `src/engine/plugin_trust.rs`,
     `src/schema.rs` and `src/events`), `codex-rs/protocol/src/hooks.rs`,
-    `codex-rs/config/src/hook_config.rs`, `codex-rs/config/src/fingerprint.rs`
-    and `codex-rs/core/src/tools/hook_names.rs` (commit `57a808a392`); each
-    says so in its first lines;
+    `codex-rs/config/src/hook_config.rs`, `codex-rs/config/src/fingerprint.rs`,
+    `codex-rs/core/src/tools/hook_names.rs` and
+    `codex-rs/core-plugins/src/loader.rs` (commit `57a808a392`); each says
+    so in its first lines;
+  - the installed plugins' MCP servers, `crates/mcp/src/plugin_config`
+    (`mod.rs` and `agent_plugins.rs`), are derived from Codex's
+    `codex-rs/codex-mcp/src/plugin_config.rs` and
+    `codex-rs/codex-mcp/src/agent_plugin_config.rs`, and the server fields
+    of `codex-rs/config/src/mcp_types.rs` (commit `57a808a392`); each says
+    so in its first lines;
+  - the installed plugins' content (`crates/agent/src/packages/content.rs`)
+    is derived from Codex's `codex-rs/core-plugins/src/loader.rs`, and the
+    "available plugins" section (`crates/agent/src/plugins/packages/prompt.rs`)
+    from Codex's `codex-rs/plugin/src/load_outcome.rs`,
+    `codex-rs/prompts/src/model_messages/plugins.rs` and
+    `codex-rs/core/src/context/available_plugins_instructions.rs` (commit
+    `57a808a392`); each says so in its first lines;
   - the package store, `crates/packages` (the plugin identity, the
     manifest probe and parsers, the versioned cache and its staged
     install, the command migration, the content hash, the marketplaces

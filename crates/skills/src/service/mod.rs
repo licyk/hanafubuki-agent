@@ -16,7 +16,8 @@ use parking_lot::{Mutex, RwLock};
 use crate::discovery::LoadedSkill;
 use crate::fs_util::ensure_directory;
 use crate::model::{
-    SkillCatalogSnapshot, SkillError, SkillId, SkillLoadIssue, SkillRoots, SkillScope,
+    PluginSkillRoot, SkillCatalogSnapshot, SkillError, SkillId, SkillLoadIssue, SkillRoots,
+    SkillScope,
 };
 
 mod catalog;
@@ -45,6 +46,8 @@ struct Inner {
     roots: SkillRoots,
     /// The repository roots of the Agent's current workspace, nearest first.
     repo: RwLock<Vec<PathBuf>>,
+    /// The Skill roots of the enabled installed plugins, in plugin order.
+    plugins: RwLock<Vec<PluginSkillRoot>>,
     /// Serializes everything that writes to a root or to the state file.
     mutation: Mutex<()>,
     catalog: RwLock<CatalogState>,
@@ -76,6 +79,7 @@ impl SkillService {
             inner: Arc::new(Inner {
                 roots,
                 repo: RwLock::new(Vec::new()),
+                plugins: RwLock::new(Vec::new()),
                 mutation: Mutex::new(()),
                 catalog: RwLock::new(CatalogState::default()),
             }),
@@ -122,18 +126,50 @@ impl SkillService {
         Ok(())
     }
 
+    /// Follows the enabled installed plugins: discovery reads `plugins`'
+    /// roots after the System root from now on. A changed set drops the
+    /// cached scan, as [`Self::set_repo_roots`] does.
+    pub fn set_plugin_roots(&self, plugins: Vec<PluginSkillRoot>) -> Result<(), SkillError> {
+        if plugins.iter().any(|root| !root.path.is_absolute()) {
+            return Err(SkillError::InvalidPath(
+                "Skill roots must be resolved absolute paths".to_string(),
+            ));
+        }
+        if *self.inner.plugins.read() == plugins {
+            return Ok(());
+        }
+        *self.inner.plugins.write() = plugins;
+        self.inner.catalog.write().fingerprint = None;
+        Ok(())
+    }
+
     /// Roots in the order they are searched: nearest repository first, then the
-    /// managed user root, then the bundled Skills.
+    /// managed user root, the bundled Skills and the plugins' roots.
     pub fn discovery_roots(&self) -> Vec<(PathBuf, SkillScope)> {
+        self.scanned_roots()
+            .into_iter()
+            .map(|(root, scope, _)| (root, scope))
+            .collect()
+    }
+
+    /// [`Self::discovery_roots`], each plugin root with its plugin.
+    pub(crate) fn scanned_roots(&self) -> Vec<(PathBuf, SkillScope, Option<PluginSkillRoot>)> {
         let mut roots = self
             .inner
             .repo
             .read()
             .iter()
-            .map(|root| (root.clone(), SkillScope::Repo))
+            .map(|root| (root.clone(), SkillScope::Repo, None))
             .collect::<Vec<_>>();
-        roots.push((self.inner.roots.user.clone(), SkillScope::User));
-        roots.push((self.inner.roots.system.clone(), SkillScope::System));
+        roots.push((self.inner.roots.user.clone(), SkillScope::User, None));
+        roots.push((self.inner.roots.system.clone(), SkillScope::System, None));
+        roots.extend(
+            self.inner
+                .plugins
+                .read()
+                .iter()
+                .map(|root| (root.path.clone(), SkillScope::Plugin, Some(root.clone()))),
+        );
         roots
     }
 }

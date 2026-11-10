@@ -38,8 +38,8 @@ const LAYERS: &[(&str, &[&str])] = &[
     (MODEL_API, &[FOUNDATION, TOOL_CONTRACTS]),
     ("hanafubuki-agent-workspace-fs", &[APPROVAL, FOUNDATION]),
     (WORKTREE, &[FOUNDATION, PROCESS]),
-    (HOOKS, &[FOUNDATION, PROCESS]),
     (PACKAGES, &[FOUNDATION, PROCESS]),
+    (HOOKS, &[FOUNDATION, PACKAGES, PROCESS]),
     (SANDBOX, &[FOUNDATION]),
     (
         "hanafubuki-agent-execution",
@@ -137,6 +137,7 @@ const LAYERS: &[(&str, &[&str])] = &[
             KERNEL,
             MCP,
             "hanafubuki-agent-memory",
+            PACKAGES,
             "hanafubuki-agent-plugin-execution",
             "hanafubuki-agent-plugin-hooks",
             "hanafubuki-agent-plugin-mcp",

@@ -358,9 +358,10 @@ fn hook_item(hook: &AgentHook) -> SelectionItem {
         None => command.clone(),
     };
     let state = if hook.enabled { "on" } else { "off" };
-    let source = match hook.source {
-        HookSource::User => "user",
-        HookSource::Project => "project",
+    let source = match &hook.source {
+        HookSource::User => "user".to_string(),
+        HookSource::Project => "project".to_string(),
+        HookSource::Plugin { id, .. } => format!("plugin {id}"),
     };
     let mut description = format!(
         "{} · {state} · {source} {} · {timeout_sec}s",

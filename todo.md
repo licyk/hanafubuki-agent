@@ -61,9 +61,88 @@ user first.
       `read_settings_document`; a settings page can ignore them); config
       now depends on the new published crate `hanafubuki-agent-packages`;
       no facade API change yet.
-- [ ] P2: content sources: `plugin:` Skill roots, plugin-owned MCP servers
+- [x] P2: content sources: `plugin:` Skill roots, plugin-owned MCP servers
       (`.mcp.json`, Agent Plugins `mcp.json`), `HookSource::Plugin` with
       package-content trust, the "available plugins" section, live reload.
+      Done: the facade's `crates/agent/src/packages` (after Codex's
+      `load_plugin`) loads installed ∩ enabled in key order into each
+      domain's own plugin source; a bad package or component is an issue of
+      that package only. Skills: `SkillScope::Plugin`, ids
+      `plugin:<p@m>:<path>`, names (and an `openai.yaml` display name)
+      `<manifest name>:<name>`; roots = manifest `skills` else `skills/`,
+      plus the migrated-command root (not for Agent Plugins, whose Skills
+      are direct children only); `SkillService::set_plugin_roots`;
+      `skills_list`'s `authority` enum unchanged (goldens). MCP:
+      `hanafubuki-agent-mcp::{plugin_mcp_servers, agent_plugin_mcp_servers}`
+      (`src/plugin_config`, ported from `codex-mcp`): both `.mcp.json`
+      shapes, Claude keys (`type`, `headers`, `oauth`), relative `cwd` and
+      command joined to the root; Agent Plugins strict by its field lists
+      (no `deny_unknown_fields`), `./` command and `cwd` resolved and
+      contained through `foundation::paths`; the overlay
+      (`enabled`/`enabledTools`/`disabledTools`); precedence user
+      `mcp.toml` > first plugin in key order, losers are package issues;
+      `AgentMcpApplication.plugin_servers` (never in `mcp.toml`), included
+      in `start_servers`, `mcp_connect`, Skill dependencies and the snapshot
+      (`McpApplicationSnapshot.plugin_servers`); `set_plugin_servers`
+      connects added/changed and disconnects removed ones (not a name the
+      user's server took over). Hooks: `HookSources.plugins`
+      (`PluginHookSource { id, root, data, declarations }`),
+      `HookSource::Plugin { id, root, data }`, keys
+      `<p@m>:<relative path>:<event>:<g>:<h>` (`plugin.json#hooks[i]` inline)
+      so state survives updates; trust = definition hash + package content
+      hash (`trusted_content_hash` in `hooks-state.json`), `current_hash`
+      `decl/content` in a listing (`HooksEngine::list`), re-hashed once per
+      package per event before a run ("plugin contents changed; hook
+      approval required"); env `PLUGIN_ROOT`/`PLUGIN_DATA`/`CLAUDE_PLUGIN_*`;
+      Agent Plugins hooks ignored (issue); hooks now depends on packages
+      (`content_hash`, LAYERS row). Model view: a new built-in row `plugins`
+      (`crates/agent/src/plugins/packages`, Capability, after `hooks`)
+      freezes the enabled packages at admission and renders
+      `available_plugins` (Capabilities slot) only for a plugin with Skills
+      in the turn's catalog or MCP servers; golden
+      `installed_plugin_request.json` added, every other golden unchanged.
+      Reload: `AgentApplicationService::reload_packages()` (serialized; MCP
+      connects awaited), run in the background after `write_settings`,
+      `set_plugin_enabled`, `mcp_write_server`, `mcp_delete_server`; the
+      construct loads the same set at start (MCP servers connect with the
+      start). Status: `packages() -> Vec<AgentPackageStatus { id, version,
+      format, display_name, description, enabled, content:
+      AgentPackageContent { skills, mcp_servers, hooks }, issues }>`. Tests:
+      skills/hooks/mcp unit and suite tests; facade `tests::packages`
+      (lifecycle with Skill `$mention`, hook trust/deny/content change/off;
+      MCP on/off, precedence and takeover, overlay; Agent Plugins rules; a
+      broken package and component). Docs: architecture, internals, skills,
+      mcp, configuration (hooks), config-reference, plugin-rules, embedding.
+      Deviations from Codex: legacy `.mcp.json` expands
+      `${CLAUDE_PLUGIN_ROOT}`/`${CLAUDE_PLUGIN_DATA}`/`${PLUGIN_*}` and sets
+      the four variables on stdio servers (Codex passes them literally);
+      Claude's `headers` read as `http_headers`; `bearer_token_env_var` and
+      `env_http_headers` refused; `oauth` means an optional login; the
+      section lists the plugins (Codex's generic text lists none, its
+      summaries feed `@plugin` mentions); a package that cannot be hashed
+      lists its hooks untrusted rather than dropping them.
+      Open: P3 should reuse the facade's `PackageStore` (opening another
+      sweeps staging) and call `reload_packages` after each lifecycle call;
+      a hand edit of `[plugins]` applies at the next start or reload (no
+      watch); the Skill watcher watches the plugin roots present at start
+      only (reads re-stamp every root); `/mcp` and `mcp list` show no plugin
+      servers yet (the snapshot has them; P3's `/plugins` or `/mcp`);
+      `/warnings` does not list package issues yet; `content_hash` still
+      has no cancellation (a hook run hashes on the blocking pool); the
+      plan's §3.2 overlay key is `mcpServers` (camelCase), not
+      `mcp_servers`; no manifest cache (each reload rereads).
+      Hanafubuki, at its next pin: `HookSource` gains `Plugin { id, root,
+      data }` (no longer `Copy`; serialized `{"plugin": {...}}`, the others
+      unchanged); `HookSources` gains `plugins`; `HooksEngine::list` (hashes
+      packages) beside `discover`; `McpApplicationSnapshot.plugin_servers`
+      (`McpPluginServerSnapshot { plugin, server, status }`); new facade
+      calls `reload_packages()` and `packages()` and the re-exports
+      `AgentPackageStatus`, `AgentPackageContent`, `McpPluginServer`,
+      `McpPluginServerSnapshot`; `plugin_status()` lists a new row `plugins`
+      (and `disabledPlugins` accepts it); `SkillScope::Plugin` and
+      `SkillId::plugin()`; the facade now depends on
+      `hanafubuki-agent-packages`, and hooks does too; a host that writes
+      `[plugins]` itself calls `reload_packages()`.
 - [ ] P3: lifecycle API (facade), `plugins` CLI, TUI `/plugins` (Codex's
       port), built-in rows with retry, `--safe-mode`, `package_changed`.
 - [x] P4: kernel deadlines at the five untimed points (context, admission,

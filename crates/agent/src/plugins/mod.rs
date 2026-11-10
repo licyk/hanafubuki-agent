@@ -4,6 +4,7 @@
 mod context;
 mod goal;
 mod memory;
+mod packages;
 mod recap;
 mod review;
 mod skills;
@@ -21,6 +22,7 @@ pub use goal::{AgentGoalBudgets, MAXIMUM_GOAL_OBJECTIVE_CHARS};
 pub(crate) use memory::memory_plugin;
 #[cfg(test)]
 pub(crate) use memory::memory_tools;
+pub(crate) use packages::packages_plugin;
 pub use recap::AgentRecap;
 pub(crate) use recap::{recap_plugin, RecapService, RECAP_PLUGIN};
 pub(crate) use review::{review_plugin, ReviewService, REVIEW_PLUGIN};

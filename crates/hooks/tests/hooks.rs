@@ -33,6 +33,7 @@ fn fixture() -> Fixture {
         HookSources {
             user: user.clone(),
             project: Some(project.clone()),
+            plugins: Vec::new(),
         },
         root.path().join("data/hooks-state.json"),
         ExecutorManager::default(),
@@ -74,7 +75,14 @@ fn hooks_are_discovered_from_both_files_of_both_directories() {
     let hooks = catalog
         .hooks
         .iter()
-        .map(|hook| (hook.event, hook.source, hook.matcher.clone(), &hook.handler))
+        .map(|hook| {
+            (
+                hook.event,
+                hook.source.clone(),
+                hook.matcher.clone(),
+                &hook.handler,
+            )
+        })
         .collect::<Vec<_>>();
     assert_eq!(
         hooks,
@@ -223,6 +231,7 @@ fn a_state_file_that_does_not_read_leaves_every_hook_untrusted() {
         HookSources {
             user: root.path().to_path_buf(),
             project: None,
+            plugins: Vec::new(),
         },
         state.clone(),
         ExecutorManager::default(),

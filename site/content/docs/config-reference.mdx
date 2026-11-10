@@ -35,6 +35,7 @@ icon: ListTree
 | `subagents`         | 没有子代理：模型没有子代理工具和指引；门面的 `subagents` 调用不可用                                     |
 | `review`            | 没有评审：评审调用不可用，评审会话既不带评审准则，也不保持只读                                          |
 | `worktree`          | 没有工作树（`/worktree`，门面的 `worktree_*` 调用）                                                     |
+| `plugins`           | 模型不再被告知已安装的插件；它们的 Skill、MCP 服务器和钩子仍然运行                                      |
 | `workspace-context` | 模型看不到 `AGENTS.md`、工作区目录和环境信息                                                            |
 | `permission-mode`   | 模型不再被告知当前的权限模式                                                                            |
 
@@ -165,7 +166,7 @@ icon: ListTree
 | `plugins."插件@市场".mcpServers.名字.enabledTools`  | 工具名数组        | 全部   | 只提供该服务器的这些工具                         |
 | `plugins."插件@市场".mcpServers.名字.disabledTools` | 工具名数组        | 无     | 在 `enabledTools` 之后，不提供该服务器的这些工具 |
 
-已安装的包默认启用，除非：它的市场被关闭（见下文），或它的条目写了 `enabled = false`，或它的条目没有说明而 `_default.enabled` 为 `false`。键不是插件 id 的条目保留在文件中，但和未知键一样被忽略。包的 MCP 服务器如何运行由包决定，`mcpServers` 只做限制。
+已安装的包默认启用，除非：它的市场被关闭（见下文），或它的条目写了 `enabled = false`，或它的条目没有说明而 `_default.enabled` 为 `false`。键不是插件 id 的条目保留在文件中，但和未知键一样被忽略。包的 MCP 服务器如何运行由包决定，`mcpServers` 只做限制（[插件的服务器](/docs/mcp#plugin-servers)）。Agent 写入的更改立即生效：它在每次写入设置之后重新加载包；手动编辑在下次启动时生效。
 
 ### 市场 [#marketplaces]
 

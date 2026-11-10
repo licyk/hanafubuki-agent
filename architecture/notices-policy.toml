@@ -290,6 +290,31 @@ markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
 notice = "crates/hooks"
 
 [[derived]]
+path = "crates/hooks/src/plugin.rs"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
+notice = "crates/hooks"
+
+[[derived]]
+path = "crates/mcp/src/plugin_config/mod.rs"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
+notice = "crates/mcp/src/plugin_config"
+
+[[derived]]
+path = "crates/mcp/src/plugin_config/agent_plugins.rs"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
+notice = "crates/mcp/src/plugin_config"
+
+[[derived]]
+path = "crates/agent/src/packages/content.rs"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
+notice = "crates/agent/src/packages/content.rs"
+
+[[derived]]
+path = "crates/agent/src/plugins/packages/prompt.rs"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
+notice = "crates/agent/src/plugins/packages/prompt.rs"
+
+[[derived]]
 path = "crates/sandbox/src/policy.rs"
 markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
 notice = "crates/sandbox"

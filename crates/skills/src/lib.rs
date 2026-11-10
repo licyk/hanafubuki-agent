@@ -26,7 +26,7 @@ mod yaml_fields;
 
 pub use discovery::repository_skill_roots;
 pub use model::{
-    SkillAssetRead, SkillAvailability, SkillAvailabilityState, SkillCatalogEntry,
+    PluginSkillRoot, SkillAssetRead, SkillAvailability, SkillAvailabilityState, SkillCatalogEntry,
     SkillCatalogListRequest, SkillCatalogSnapshot, SkillCreateRequest, SkillDeleteFileRequest,
     SkillDuplicateRequest, SkillError, SkillFileRead, SkillId, SkillInstallRequest, SkillInterface,
     SkillIssueSeverity, SkillLoadIssue, SkillMcpTransport, SkillRead, SkillResourceDescriptor,

@@ -44,11 +44,14 @@ impl AgentApplicationService {
     /// event sink hears of it; a proxy change reconnects the Streamable HTTP
     /// servers in the background. Each reads the latest settings under its
     /// own lock, so of two quick changes the later one wins whatever order
-    /// their work runs in. Runs on the Agent runtime.
+    /// their work runs in. The installed plugins are reloaded in the
+    /// background too ([`Self::reload_packages`]). Runs on the Agent
+    /// runtime.
     pub fn apply_settings_to_plugins(&self) {
         for (name, settle) in self.host.reconfigure() {
             tokio::spawn(report_reconfigured(name, settle));
         }
+        self.spawn_package_reload();
         let mcp = self.mcp_application.clone();
         let network = self.network.clone();
         crate::kernel_tasks::spawn_kernel_task(&self.kernel_faults, "settings", async move {

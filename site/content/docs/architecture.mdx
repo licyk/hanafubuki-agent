@@ -218,7 +218,15 @@ schema 遵循同样的按协议规则：支持 `strict_json_schema` 的协议（
 - **安装先暂存再替换。** 包被复制到暂存区（不含符号链接和 `.git`）；没有清单时，把市场条目的字段写成它的清单；暂存的清单逐字节与来源核对；带描述的 `commands/*.md` 变成 Skill；然后把副本重命名为 `plugins/cache/<市场>/<插件>/<版本>/`，同一版本的旧副本保留到替换成功，更旧的版本被清理。使用中的版本：有 `local` 时用 `local`，否则用最高版本。包的数据目录在卸载后保留，除非清除。
 - **`git` 通过 Agent 的 `ExecutorManager` 运行**，和工作树一样隔离：不继承仓库选择变量，不运行钩子，不提示，并有超时。
 
-包存储尚未接入 Agent：还没有任何部分加载包的 Skill、MCP 服务器或钩子，命令行和终端界面也都不能安装包。
+包是内容而不是代码：它贡献的东西流入各领域自己的来源，而这些来源本身已经是内置行。门面（`crates/agent/src/packages`，仿照 Codex 的 `load_plugin`）按键的顺序读取设置启用的已安装包，把每个包变成：
+
+- **Skill 根目录**：清单的 `skills`（否则是 `skills/`），以及（Agent Plugins 除外）由它的命令转换成的 Skill。它们的 ID 是 `plugin:<plugin>@<marketplace>:<路径>`，名称是 `<清单名称>:<名称>`，与 Codex 的命名相同（[Skill 从哪里来](/docs/skills#sources)）。Agent Plugins 包的 Skill 是其根目录的直接子目录。
+- **包拥有的 MCP 服务器**（[插件的服务器](/docs/mcp#plugin-servers)）：`.mcp.json`（或清单的 `mcpServers`）或 Agent Plugins 的 `mcp.json`，从不写入 `mcp.toml`，由 `[plugins."p@m".mcpServers]` 限制，与用户的服务器在同一套监管下运行。同名时用户的服务器优先，其次是键的顺序中第一个包；让出的服务器记为该包的问题。
+- **钩子来源**，排在用户和项目之后（`HookSource::Plugin`），凭定义和包的内容哈希被信任，每次运行前再次检查（[插件的钩子](/docs/configuration#hooks-plugins)）。与 Codex 相同，Agent Plugins 包的钩子从不运行。
+
+读不了的包，或包中读不了的组件，记为该包的问题；其他包照常加载。这一组包在构建 Agent 时加载（MCP 服务器随启动连接），并由 `reload_packages` 重新加载：门面在每次写入设置和 `mcp.toml` 之后运行它，生命周期调用也将在每次变更后运行它；它替换 Skill 根目录和钩子来源，只连接或断开有变化的 MCP 服务器，无需重启。`packages()` 列出每个已安装的包及其版本、格式、启用状态、内容和问题（`AgentPackageStatus`）。
+
+模型通过 `plugins` 行得知启用的包：当某个包向本轮的 Skill 目录贡献 Skill 或贡献 MCP 服务器时，Capabilities 槽位带有一个"可用插件"段落（Codex 的 `PluginCapabilitySummary`：显示名称、单行且至多 1,024 个字符的描述、Skill 前缀、MCP 服务器名称）；没有这样的包就没有该段落，所以没有包的 Agent 的请求不变。该行只拥有这份摘要，所以关闭它只隐藏摘要，内容仍经由 `skills`、`mcp` 和 `hooks` 行流入；将来运行包代码的访客宿主会接管这一行。命令行和终端界面都还不能安装包。
 
 ## MCP [#mcp]
 
@@ -289,7 +297,8 @@ schema 遵循同样的按协议规则：支持 `strict_json_schema` 的协议（
 - 文件工具的策略根目录在构建 Agent 时固定；只有 Skill 根目录和上下文段按每次读取跟随工作区。
 - 在模型窗口已知之前创建的会话没有窗口，直到再次选择它的模型；恢复不会解析它。
 - MCP 重连复用打开连接时的密钥，所以过期的 OAuth 令牌会让重连失败，直到用户手动连接。
-- Skill 监视器只监视启动时存在的根目录；之后出现的根目录依靠读取时的标记。
+- Skill 监视器只监视启动时存在的根目录；之后出现的根目录（包括之后启用的包的根目录）依靠读取时的标记。
+- 手动编辑 `[plugins]` 在下次启动或重新加载时生效；Agent 只在它自己写入设置之后重新加载包。
 - 内置的上下文窗口只覆盖公开了上限的模型系列（GPT、o 系列、Claude、Gemini 2.5）；其他模型需要 Provider 的列表或设置才能自动压缩。
 - 命令沙箱只存在于 Linux 和 macOS；Windows（受限令牌及其提权设置）还没有，所以在那里未设置的 `sandboxMode` 即完全访问。macOS 的沙箱只由它在 macOS 上运行的测试检查。
 - 在 Linux 之外未验证：`notify` 监视器的 macOS 与 Windows 后端、Skill 目录中显示的 Windows 路径、Windows 上 MCP stdio 的退出原因和已退出子进程的释放，以及 Windows 上记忆制品的安装重命名。

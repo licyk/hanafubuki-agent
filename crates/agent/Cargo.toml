@@ -31,6 +31,7 @@ hanafubuki-agent-runtime.workspace = true
 hanafubuki-agent-sandbox.workspace = true
 hanafubuki-agent-approval.workspace = true
 hanafubuki-agent-mcp.workspace = true
+hanafubuki-agent-packages.workspace = true
 hanafubuki-agent-process.workspace = true
 hanafubuki-agent-skills.workspace = true
 hanafubuki-agent-workspace-fs.workspace = true

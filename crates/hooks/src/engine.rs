@@ -7,7 +7,8 @@
 // (http://www.apache.org/licenses/LICENSE-2.0).
 // Modified for hanafubuki-agent: the matched hooks run one after another,
 // and a PreToolUse denial ends the event; the input has no transcript,
-// model or permission mode.
+// model or permission mode; a plugin's hook runs only while its package
+// still has the content it was trusted with.
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -16,10 +17,13 @@ use hanafubuki_agent_foundation::cancellation::CancellationToken;
 use hanafubuki_agent_process::executor::ExecutorManager;
 use serde_json::{json, Value};
 
+use parking_lot::RwLock;
+
 use crate::command::run_command;
 use crate::discovery::{discover, HookCatalog, HookHandler, HookSources};
 use crate::event::HookEventName;
 use crate::output::{interpret, Effect};
+use crate::plugin::{plugin_environment, trusted_hashes, PackageCheck, PluginHookSource};
 use crate::state::HookStateStore;
 
 /// The source a session start reports.
@@ -112,7 +116,7 @@ pub struct HookOutcome {
 /// The hooks of one Agent: where they are configured, the state of their
 /// trust and enablement, and the executor their commands run on.
 pub struct HooksEngine {
-    sources: HookSources,
+    sources: RwLock<HookSources>,
     state: HookStateStore,
     executor: ExecutorManager,
 }
@@ -120,16 +124,31 @@ pub struct HooksEngine {
 impl HooksEngine {
     pub fn new(sources: HookSources, state_file: PathBuf, executor: ExecutorManager) -> Self {
         Self {
-            sources,
+            sources: RwLock::new(sources),
             state: HookStateStore::new(state_file),
             executor,
         }
     }
 
-    /// The hooks configured now, with their trust and enablement. Reads
-    /// the files; blocking.
+    /// Follows the enabled installed plugins: the next discovery reads
+    /// `plugins`' hooks after the user's and the project's.
+    pub fn set_plugin_sources(&self, plugins: Vec<PluginHookSource>) {
+        self.sources.write().plugins = plugins;
+    }
+
+    /// The hooks configured now, with their trust and enablement, as a run
+    /// reads them: a plugin's hook trusted by its definition is runnable,
+    /// and its package is checked when it runs. Reads the files; blocking.
     pub fn discover(&self) -> HookCatalog {
-        discover(&self.sources, &self.state.load())
+        let sources = self.sources.read().clone();
+        discover(&sources, &self.state.load(), false)
+    }
+
+    /// [`Self::discover`], each plugin's package hashed to tell whether its
+    /// hooks are still trusted: what a person is shown.
+    pub fn list(&self) -> HookCatalog {
+        let sources = self.sources.read().clone();
+        discover(&sources, &self.state.load(), true)
     }
 
     /// Turns the hook `key` on or off.
@@ -140,24 +159,32 @@ impl HooksEngine {
         })
     }
 
-    /// Trusts each hook of `keys` as it is defined now; a later change to
-    /// its definition takes the trust back.
+    /// Trusts each hook of `keys` as it is defined now, and a plugin's hook
+    /// with its package's contents as they are now; a later change to its
+    /// definition, or to its package, takes the trust back.
     pub fn trust(&self, keys: &[String]) -> Result<(), String> {
-        let catalog = self.discover();
+        let catalog = self.list();
         let hashes = keys
             .iter()
             .map(|key| {
-                catalog
+                let hook = catalog
                     .hooks
                     .iter()
                     .find(|hook| &hook.key == key)
-                    .map(|hook| (key.clone(), hook.current_hash.clone()))
-                    .ok_or_else(|| format!("no hook is configured as `{key}`"))
+                    .ok_or_else(|| format!("no hook is configured as `{key}`"))?;
+                match trusted_hashes(hook) {
+                    (_, Some(content)) if content.is_empty() => Err(format!(
+                        "the hook `{key}` cannot be trusted: its plugin's contents cannot be hashed"
+                    )),
+                    (declaration, content) => Ok((key.clone(), declaration, content)),
+                }
             })
             .collect::<Result<Vec<_>, _>>()?;
         self.state.update(|states| {
-            for (key, hash) in hashes {
-                states.entry(key).or_default().trusted_hash = Some(hash);
+            for (key, declaration, content) in hashes {
+                let state = states.entry(key).or_default();
+                state.trusted_hash = Some(declaration);
+                state.trusted_content_hash = content;
             }
         })
     }
@@ -174,9 +201,15 @@ impl HooksEngine {
         let inputs = event.matcher_inputs();
         let input = command_input(event, scope).to_string();
         let mut outcome = HookOutcome::default();
+        let mut packages = PackageCheck::default();
         for hook in catalog.runnable(event.name(), &inputs) {
             if cancellation.is_cancelled() {
                 break;
+            }
+            if let Some(why) = packages.refusal(hook) {
+                log::warn!("hook {} did not run: {why}", hook.key);
+                outcome.failures.push((hook.key.clone(), why));
+                continue;
             }
             let HookHandler::Command {
                 command,
@@ -189,6 +222,7 @@ impl HooksEngine {
                 Duration::from_secs(*timeout_sec),
                 &input,
                 &scope.cwd,
+                plugin_environment(&hook.source),
                 cancellation,
             );
             match interpret(hook.event, &run) {

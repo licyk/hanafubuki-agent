@@ -56,7 +56,7 @@ impl SkillService {
     pub fn inspect_source(&self, source: &Path) -> Result<SkillSourceInspection, SkillError> {
         let directory = skill_directory_of(source)?;
         let folder_name = source_folder_name(&directory)?;
-        let skill = load_skill(&directory, SkillScope::User, &folder_name)?;
+        let skill = load_skill(&directory, SkillScope::User, &folder_name, None)?;
         Ok(SkillSourceInspection {
             name: skill.entry.name,
             description: skill.entry.description,
@@ -77,7 +77,7 @@ impl SkillService {
         let folder_name = source_folder_name(&directory)?;
         // Load it before anything is written: an unreadable source must fail
         // here rather than half-way through a copy.
-        load_skill(&directory, SkillScope::User, &folder_name)?;
+        load_skill(&directory, SkillScope::User, &folder_name, None)?;
         let destination = self.managed_path(&folder_name)?;
         if destination.exists() && !request.overwrite {
             return Err(SkillError::AlreadyExists(folder_name));

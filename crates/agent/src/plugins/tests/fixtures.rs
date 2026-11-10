@@ -29,5 +29,6 @@ pub(crate) fn disconnected_mcp_application(
             hanafubuki_agent_mcp::McpHttpProxyPolicy::Disabled,
         )),
         lifetime: Default::default(),
+        plugin_servers: Default::default(),
     }
 }

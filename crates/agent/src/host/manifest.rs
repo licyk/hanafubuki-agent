@@ -23,9 +23,11 @@ use std::sync::Arc;
 use super::{AgentPluginGroup, AgentPluginRow, AgentPluginSettings};
 use crate::conversation_reader::AgentConversationReader;
 use crate::goals::AgentGoalApplication;
+use crate::packages::AgentPackages;
 use crate::plugins::{
-    goal_plugin, memory_plugin, permission_mode_plugin, recap_plugin, review_plugin, skills_plugin,
-    subagents_plugin, titles_plugin, view_image_plugin, workspace_context_plugin,
+    goal_plugin, memory_plugin, packages_plugin, permission_mode_plugin, recap_plugin,
+    review_plugin, skills_plugin, subagents_plugin, titles_plugin, view_image_plugin,
+    workspace_context_plugin,
 };
 use crate::service::AgentMcpApplication;
 use crate::session_driver::AgentSessionDriver;
@@ -65,6 +67,8 @@ pub(crate) struct AgentPluginInputs {
     pub(crate) hooks: Arc<HooksEngine>,
     /// Where a hook's command runs: the first workspace root.
     pub(crate) working_directory: WorkingDirectory,
+    /// The installed plugins, which the `plugins` row summarizes.
+    pub(crate) packages: AgentPackages,
 }
 
 /// The manifest rows in mount order. Each declares its group, which the
@@ -104,6 +108,7 @@ pub(crate) fn agent_plugin_manifest(
             Capability,
             hooks_plugin(inputs.hooks, inputs.working_directory),
         ),
+        AgentPluginRow::unconfigured(Capability, packages_plugin(inputs.packages)),
     ];
     rows.extend(host);
     rows.extend([
