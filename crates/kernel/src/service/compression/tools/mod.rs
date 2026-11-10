@@ -72,7 +72,24 @@ pub(in crate::service) fn compression_tool_output(
         .as_deref()
         .cloned()
         .unwrap_or_default();
-    let images_supported = record.settings.effective_input_capabilities.image_input;
+    // What a restore's images may still take: the turn's tool-output budget
+    // fails the turn at the commit, so a restore attaches only what fits.
+    let image_budget = record
+        .settings
+        .effective_input_capabilities
+        .image_input
+        .then(|| {
+            let used = record
+                .runtime
+                .turn
+                .as_ref()
+                .map_or(0, |turn| turn.budget_ledger.tool_output_bytes);
+            record
+                .settings
+                .budget_policy
+                .maximum_tool_output_bytes
+                .saturating_sub(used)
+        });
     let run = catch_panic(|| {
         panic_if_asked(&state);
         match tool {
@@ -89,7 +106,7 @@ pub(in crate::service) fn compression_tool_output(
                 settings.message_timestamps,
             ),
             crate::AgentCoreTool::Decompress => {
-                decompress::decompress(&log, &state, arguments, images_supported)
+                decompress::decompress(&log, &state, arguments, image_budget)
             }
             crate::AgentCoreTool::SearchContext => search::search_context(
                 &log,

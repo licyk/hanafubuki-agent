@@ -616,12 +616,23 @@ and pushed, and notes what Hanafubuki must change at its next pin.
     session search, no archived-block receipts.
   - Open: an export path under the data directory is readable by the
     `read` tool only where the data directory is not a protected root
-    (standalone: none are). Images attached by a restore count toward the
-    turn's tool-output byte budget; a `full` restore of a block with many
-    images can exhaust it. The commit re-runs every `decompress` (only
-    exports keep the first output), and a re-run's inline output bypasses
-    `canonicalize_agent_tool_output` as in P7 (the request cap still
-    applies).
+    (standalone: none are).
+  - Done: a restore's images fit the turn's tool-output budget. The commit
+    charges the budget with the output and its images and fails the turn
+    past it, so `decompress` (`fit_images`, given what is left of the
+    budget by `compression_tool_output`) attaches a `full`, range or
+    `imageRef` restore's images in history order only while they fit with
+    the output, and a note ahead of the body names the rest by handle (at
+    most 50) to restore one at a time by `imageRef`; an `imageRef` restore
+    none of whose images fits is refused and the turn goes on. The commit's
+    re-run of a compression tool now bounds its inline output with
+    `canonicalize_tool_output` and records that truncation, where it kept
+    the unbounded output and the first run's truncation. Tests: kernel
+    `compaction_contract::hierarchical::tools::a_restore_attaches_only_the_
+    images_the_turn_has_room_for` (five 100 kB images, a 256 000-byte
+    budget: two attached, three named, the third refused in that turn and
+    restored by handle in the next) and `a_restore_committed_is_bounded_as_
+    any_output`. Goldens unchanged.
   - For P10: `apply_retrieve`'s `Export { file_name, .. }` can go through
     `write_session_export` as `decompress`'s does (`ToolExport`); the
     content store's originals need files of their own (§4.6), which

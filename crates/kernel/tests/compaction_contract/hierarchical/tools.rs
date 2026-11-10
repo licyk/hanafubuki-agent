@@ -1,4 +1,7 @@
-use hanafubuki_agent_kernel::{AgentImageAttachmentRef, AgentImageDetail, PreparedAgentImage};
+use hanafubuki_agent_kernel::{
+    AgentHardLimits, AgentImageAttachmentRef, AgentImageDetail, PreparedAgentImage,
+    FIRST_BATCH_HARD_LIMITS,
+};
 
 use super::*;
 
@@ -267,6 +270,169 @@ async fn a_folded_image_is_reached_again() {
         restored.contains("AQID"),
         "the pixels are in the request again"
     );
+}
+
+/// A `full` restore of a block whose images outgrow what is left of the
+/// turn's tool-output budget attaches the first ones that fit and names the
+/// rest by handle; the turn goes on. In the same turn a left-out image is
+/// refused for want of room, in the next one its handle brings it back.
+#[tokio::test]
+async fn a_restore_attaches_only_the_images_the_turn_has_room_for() {
+    const IMAGE_BYTES: usize = 100_000;
+    let model = ScriptedModel::new([]);
+    let service = AgentService::new(
+        Arc::new(model.clone()),
+        FakeTools::new([]).await.registries(),
+    );
+    let session = service.create_session(hierarchical_config()).unwrap();
+    let images = (0..5u8)
+        .map(|fill| {
+            service
+                .stage_image_attachment(
+                    session.id,
+                    PreparedAgentImage {
+                        // The in-memory store names an image by its length.
+                        bytes: vec![fill; IMAGE_BYTES + usize::from(fill)],
+                        mime_type: "image/png".to_string(),
+                        width: 64,
+                        height: 64,
+                        display_name: format!("shot-{fill}.png"),
+                        detail: AgentImageDetail::High,
+                    },
+                )
+                .unwrap()
+        })
+        .collect::<Vec<_>>();
+    let third = images[2].attachment_id.as_str().to_owned();
+    model.push(two_exchanges().into_iter().chain([
+        response(
+            "three",
+            &"the screenshots show a failure ".repeat(100),
+            2_000,
+        ),
+        compress("fold", "m00005–m00006", "The screenshots"),
+        response("four", "Folded.", 3_000),
+        call(
+            "decompress",
+            "full",
+            json!({ "blockId": "b1", "full": true }),
+        ),
+        call("decompress", "third-now", json!({ "imageRef": third })),
+        response("five", "Saw two.", 3_000),
+        call("decompress", "third-later", json!({ "imageRef": third })),
+        response("six", "Saw the third.", 3_000),
+    ]));
+    seed(&service, session.id).await;
+    let mut with_images = turn("Here are five screenshots of the failure.");
+    with_images.images = images.clone();
+    service.start_turn(session.id, with_images).await.unwrap();
+    service
+        .start_turn(session.id, turn("Fold the screenshots."))
+        .await
+        .unwrap();
+    // Room for two images and the restore's text, not for three.
+    service
+        .set_session_turn_budget_policy(
+            session.id,
+            AgentTurnBudgetPolicy {
+                maximum_tool_output_bytes: 256_000,
+                ..AgentTurnBudgetPolicy::default()
+            },
+        )
+        .unwrap();
+
+    service
+        .start_turn(session.id, turn("Look at the screenshots again."))
+        .await
+        .unwrap();
+
+    assert_eq!(output_images(&service, session.id, "full"), images[..2]);
+    let full = tool_output(&service, session.id, "full");
+    assert!(
+        full.contains("[3 image(s) not attached — this turn's tool-output budget holds no more."),
+        "{full}"
+    );
+    for image in &images[2..] {
+        assert!(
+            full.contains(&format!(
+                "- {} [png 64x64 · 98KB]",
+                image.attachment_id.as_str()
+            )),
+            "{full}"
+        );
+    }
+    let note = full.find("not attached").unwrap();
+    assert!(
+        note < full.find("the screenshots show a failure").unwrap(),
+        "the note comes ahead of the body"
+    );
+    assert!(output_images(&service, session.id, "third-now").is_empty());
+    let refused = tool_output(&service, session.id, "third-now");
+    assert!(
+        refused.contains("do not fit in what is left of this turn's tool-output budget"),
+        "{refused}"
+    );
+
+    service
+        .start_turn(session.id, turn("Now the third one."))
+        .await
+        .unwrap();
+
+    assert_eq!(
+        output_images(&service, session.id, "third-later"),
+        vec![images[2].clone()]
+    );
+}
+
+/// A restore's output is bounded as a first run's: the commit applies the
+/// call again and canonicalizes what that run returns.
+#[tokio::test]
+async fn a_restore_committed_is_bounded_as_any_output() {
+    const OUTPUT_LIMIT: usize = 2_048;
+    let mut responses = two_exchanges();
+    responses.extend([
+        compress("fold", "m00002–m00002", "First exchange"),
+        call(
+            "decompress",
+            "full",
+            json!({ "blockId": "b1", "full": true }),
+        ),
+        response("three", "Restored.", 3_000),
+    ]);
+    let model = ScriptedModel::new(responses);
+    let service = AgentService::with_limits(
+        Arc::new(model.clone()),
+        FakeTools::new([]).await.registries(),
+        AgentHardLimits {
+            maximum_tool_output_bytes: OUTPUT_LIMIT,
+            ..FIRST_BATCH_HARD_LIMITS
+        },
+    );
+    let session = service.create_session(hierarchical_config()).unwrap();
+    seed(&service, session.id).await;
+    service
+        .start_turn(session.id, turn("Fold and restore."))
+        .await
+        .unwrap();
+
+    let (output, truncation) = service
+        .test_model_context(session.id)
+        .unwrap()
+        .into_iter()
+        .find_map(|item| match item {
+            ConversationItem::ToolOutput {
+                call_id,
+                output,
+                truncation,
+                ..
+            } if call_id == "full" => Some((output, truncation)),
+            _ => None,
+        })
+        .unwrap();
+    assert!(serde_json::to_vec(&output).unwrap().len() <= OUTPUT_LIMIT);
+    assert!(truncation.is_some());
+    let text = serde_json::to_string(&output.content).unwrap();
+    assert!(text.contains("[Block b1 content — "), "{text}");
 }
 
 /// `toFile` asks for the session's export file. A store that keeps no files

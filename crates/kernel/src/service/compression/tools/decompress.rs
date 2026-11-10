@@ -26,11 +26,14 @@ use super::*;
 /// How many images `imageRef: "list"` names at most.
 const LISTED_IMAGES: usize = 50;
 
+/// `image_budget` is what is left of the turn's tool-output budget, which
+/// the commit charges with the output and every image attached to it, or
+/// `None` when the model takes no image input.
 pub(super) fn decompress(
     log: &MessageLog<'_>,
     state: &AgentCompressionState,
     arguments: &Value,
-    images_supported: bool,
+    image_budget: Option<u64>,
 ) -> CompressionToolRun {
     // An image restore is chosen by a non-blank `imageRef` alone: models
     // send "" or null for the optional fields they do not mean.
@@ -38,7 +41,7 @@ pub(super) fn decompress(
         None | Some(Value::Null) => {}
         Some(Value::String(raw)) if raw.trim().is_empty() => {}
         Some(Value::String(raw)) => {
-            return restore_images(log, state, raw.trim(), images_supported)
+            return restore_images(log, state, raw.trim(), image_budget)
         }
         Some(_) => return failed(
             "[decompress FAILED: imageRef must be a string (an mNNNNN ref or \"list\") — omit it to restore a text block]"
@@ -63,11 +66,11 @@ pub(super) fn decompress(
     let start = blank_to_none(arguments.get("startId"));
     let end = blank_to_none(arguments.get("endId"));
     if start.is_some() || end.is_some() {
-        return restore_range(log, state, block, (start, end), to_file, images_supported);
+        return restore_range(log, state, block, (start, end), to_file, image_budget);
     }
     let full = matches!(arguments.get("full"), Some(Value::Bool(true)))
         || arguments.get("full").and_then(Value::as_str) == Some("true");
-    restore_block(log, state, block, full, to_file, images_supported)
+    restore_block(log, state, block, full, to_file, image_budget)
 }
 
 /// The whole block, one tier up or `full`. An inline restore of an active
@@ -79,7 +82,7 @@ fn restore_block(
     block: &Block,
     full: bool,
     to_file: bool,
-    images_supported: bool,
+    image_budget: Option<u64>,
 ) -> CompressionToolRun {
     let block_id = block.block_id.clone();
     let collected = collect_block_content(state, block, &log.messages, full);
@@ -102,17 +105,14 @@ fn restore_block(
         );
     }
     // Every original comes back in full, its images too.
-    let images = if full && images_supported {
-        images_of(log, block.effective_message_ids.iter().map(String::as_str))
-    } else {
-        Vec::new()
+    let images = match image_budget {
+        Some(_) if full => images_of(log, block.effective_message_ids.iter().map(String::as_str)),
+        _ => Vec::new(),
     };
     if !block.active {
-        return with_images(
-            text_output(format!("{header}\n{body}"), false),
-            None,
-            images,
-        );
+        return fitted(image_budget, images, None, |note| {
+            format!("{header}\n{note}{body}")
+        });
     }
     // The content is now in the conversation: a later compress over the same
     // span refolds the block in place. Only the first restore changes the
@@ -120,13 +120,12 @@ fn restore_block(
     let first_restore = !block.restored_inline;
     let mut restored = state.clone();
     let marked = mark_block_restored_inline(&mut restored, &block_id);
-    with_images(
-        text_output(
-            format!("{header}\n{body}\n\n{}", refold_hint(&block_id, marked)),
-            false,
-        ),
-        first_restore.then_some(restored),
+    let hint = refold_hint(&block_id, marked);
+    fitted(
+        image_budget,
         images,
+        first_restore.then_some(restored),
+        |note| format!("{header}\n{note}{body}\n\n{hint}"),
     )
 }
 
@@ -149,7 +148,7 @@ fn restore_range(
     block: &Block,
     (start, end): (Option<&str>, Option<&str>),
     to_file: bool,
-    images_supported: bool,
+    image_budget: Option<u64>,
 ) -> CompressionToolRun {
     let (Some(start), Some(end)) = (start, end) else {
         return failed("[decompress FAILED: startId and endId must be given together — pass both mNNNNN refs, or omit both to restore the whole block]".to_owned());
@@ -213,16 +212,13 @@ fn restore_range(
             body,
         );
     }
-    let images = if images_supported {
-        images_of(log, picked)
-    } else {
-        Vec::new()
+    let images = match image_budget {
+        Some(_) => images_of(log, picked),
+        None => Vec::new(),
     };
-    with_images(
-        text_output(format!("{header}\n{body}"), false),
-        None,
-        images,
-    )
+    fitted(image_budget, images, None, |note| {
+        format!("{header}\n{note}{body}")
+    })
 }
 
 /// A message's images, by its ref or by a handle a summary's MEDIA REFS
@@ -231,7 +227,7 @@ fn restore_images(
     log: &MessageLog<'_>,
     state: &AgentCompressionState,
     raw: &str,
-    supported: bool,
+    image_budget: Option<u64>,
 ) -> CompressionToolRun {
     let by_message = log.images_by_message();
     if raw.eq_ignore_ascii_case("list") {
@@ -259,20 +255,21 @@ fn restore_images(
     if images.is_empty() {
         return failed(format!("[decompress FAILED: no restorable image for ref \"{raw}\" (it carries no image, or is not in this session's context window). Call decompress({{ imageRef: \"list\" }}) to see what is available.]"));
     }
-    if !supported {
+    let Some(budget) = image_budget else {
         return failed(format!("[decompress FAILED: the current model takes no image input — the image(s) for \"{raw}\" cannot be shown to it.]"));
+    };
+    let restored = |count: usize, note: &str| {
+        format!("[Restored {count} image(s) for {raw} — attached to this result.]\n{note}")
+            .trim_end()
+            .to_owned()
+    };
+    // Measured with every image counted: fewer kept is never wider.
+    let output_bytes = encoded_len(&text_output(restored(images.len(), ""), false));
+    let (kept, note) = fit_images(images, budget, output_bytes);
+    if kept.is_empty() {
+        return failed(format!("[decompress FAILED: the image(s) for \"{raw}\" do not fit in what is left of this turn's tool-output budget ({budget} bytes) — ask for them again in a later turn, one handle at a time.]"));
     }
-    with_images(
-        text_output(
-            format!(
-                "[Restored {} image(s) for {raw} — attached to this result.]",
-                images.len()
-            ),
-            false,
-        ),
-        None,
-        images,
-    )
+    with_images(text_output(restored(kept.len(), &note), false), None, kept)
 }
 
 fn list_images(
@@ -297,20 +294,12 @@ fn list_images(
         .into_iter()
         .flat_map(|(_, message_ref, images)| {
             images.iter().enumerate().map(move |(index, image)| {
-                let kind = image
-                    .mime_type
-                    .rsplit_once('/')
-                    .map_or(image.mime_type.as_str(), |(_, kind)| kind);
-                let kilobytes = ((image.byte_length as f64 / 1024.0).round() as u64).max(1);
                 let suffix = if index > 0 {
                     format!("[-{index}]")
                 } else {
                     String::new()
                 };
-                format!(
-                    "{message_ref}{suffix} [{kind} {}x{} · {kilobytes}KB]",
-                    image.width, image.height
-                )
+                format!("{message_ref}{suffix} {}", describe(image))
             })
         })
         .take(LISTED_IMAGES)
@@ -402,6 +391,87 @@ fn images_of<'a>(
         }
     }
     images
+}
+
+/// `[png 4x3 · 1KB]`.
+fn describe(image: &AgentImageAttachmentRef) -> String {
+    let kind = image
+        .mime_type
+        .rsplit_once('/')
+        .map_or(image.mime_type.as_str(), |(_, kind)| kind);
+    let kilobytes = ((image.byte_length as f64 / 1024.0).round() as u64).max(1);
+    format!("[{kind} {}x{} · {kilobytes}KB]", image.width, image.height)
+}
+
+/// A restore of a block's text with its messages' `images`: `render` puts
+/// the note naming the images left out (empty, or ending in a newline)
+/// ahead of the body, where a truncation of the output keeps it.
+fn fitted(
+    image_budget: Option<u64>,
+    images: Vec<AgentImageAttachmentRef>,
+    state: Option<AgentCompressionState>,
+    render: impl Fn(&str) -> String,
+) -> CompressionToolRun {
+    let (kept, note) = match image_budget {
+        Some(budget) if !images.is_empty() => {
+            fit_images(images, budget, encoded_len(&text_output(render(""), false)))
+        }
+        _ => (Vec::new(), String::new()),
+    };
+    with_images(text_output(render(&note), false), state, kept)
+}
+
+/// The longest run of `images`, from the first, that fits in `budget` with
+/// an output of `output_bytes` and the note naming the rest, which the
+/// output grows by: the commit charges the turn with the output's encoded
+/// bytes and every attached image's, and past the budget fails the turn.
+fn fit_images(
+    mut images: Vec<AgentImageAttachmentRef>,
+    budget: u64,
+    output_bytes: usize,
+) -> (Vec<AgentImageAttachmentRef>, String) {
+    let mut kept = images.len();
+    let mut image_bytes = images
+        .iter()
+        .fold(0u64, |bytes, image| bytes.saturating_add(image.byte_length));
+    loop {
+        let note = left_out_note(&images[kept..]);
+        let cost = (output_bytes as u64)
+            .saturating_add(encoded_len(&note) as u64 - encoded_len("") as u64)
+            .saturating_add(image_bytes);
+        if cost <= budget || kept == 0 {
+            images.truncate(kept);
+            return (images, note);
+        }
+        kept -= 1;
+        image_bytes -= images[kept].byte_length;
+    }
+}
+
+fn left_out_note(left_out: &[AgentImageAttachmentRef]) -> String {
+    if left_out.is_empty() {
+        return String::new();
+    }
+    let mut note = format!("[{} image(s) not attached — this turn's tool-output budget holds no more. Restore each by its handle, one at a time, with decompress({{ imageRef: \"<handle>\" }}), in a later turn if this one has no room left:]\n", left_out.len());
+    for image in left_out.iter().take(LISTED_IMAGES) {
+        note.push_str(&format!(
+            "- {} {}\n",
+            image.attachment_id.as_str(),
+            describe(image)
+        ));
+    }
+    if left_out.len() > LISTED_IMAGES {
+        note.push_str(&format!(
+            "…+{} more — decompress({{ imageRef: \"list\" }}) lists every restorable image.\n",
+            left_out.len() - LISTED_IMAGES
+        ));
+    }
+    note
+}
+
+/// The bytes `value` is charged as: its JSON encoding.
+fn encoded_len(value: &(impl serde::Serialize + ?Sized)) -> usize {
+    serde_json::to_vec(value).map_or(usize::MAX, |encoded| encoded.len())
 }
 
 fn format_message(message: &Message) -> String {

@@ -69,13 +69,21 @@ impl AgentService {
                             now,
                         );
                         let mut items = committed_items;
-                        if let Some(ConversationItem::ToolOutput { output, images, .. }) =
-                            items.first_mut()
+                        if let Some(ConversationItem::ToolOutput {
+                            output,
+                            truncation,
+                            images,
+                            ..
+                        }) = items.first_mut()
                         {
                             // An export's output names the file the call
                             // wrote; this run writes none.
                             if run.export.is_none() {
-                                *output = run.output;
+                                (*output, *truncation) =
+                                    crate::tool_output::canonicalize_tool_output(
+                                        run.output,
+                                        self.inner.limits.maximum_tool_output_bytes,
+                                    );
                             }
                             images.extend(run.images);
                         }
