@@ -3,7 +3,7 @@
 
 use hanafubuki_agent::{
     AgentPackageContent, AgentPackageGuest, AgentPackageStatus, GuestState, GuestStatus,
-    PackagePermissions, WorkspaceAccess,
+    PackagePermissions, RuntimeKind, WorkspaceAccess,
 };
 
 use super::pages::{self, After, Choice, Page, Prompt, Tab};
@@ -86,6 +86,7 @@ fn a_code_plugins_page_offers_to_grant_what_it_asks_for_until_granted() {
     };
     let mut code = package(true, Vec::new());
     code.guest = Some(AgentPackageGuest {
+        runtime: RuntimeKind::Process,
         permissions: asked.clone(),
         granted_permissions: None,
         status: GuestStatus {
@@ -111,6 +112,10 @@ fn a_code_plugins_page_offers_to_grant_what_it_asks_for_until_granted() {
     };
     assert!(grants(&pages::package_page(&code)));
     code.guest.as_mut().unwrap().granted_permissions = Some(asked.clone());
+    assert!(!grants(&pages::package_page(&code)));
+    // A WASM guest needs no grant.
+    let guest = code.guest.as_mut().unwrap();
+    (guest.runtime, guest.granted_permissions) = (RuntimeKind::Wasm, None);
     assert!(!grants(&pages::package_page(&code)));
     // Its settings are a row that opens their form, starting from them.
     assert!(pages::package_page(&code)

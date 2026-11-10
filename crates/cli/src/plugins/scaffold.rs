@@ -1,19 +1,45 @@
 //! `plugins new`: a plugin with code, from the templates under
-//! `templates/plugins/`. The plugin the Agent installs is the directory's
+//! `templates/plugins/` (Rust as a process or a WebAssembly module, Python
+//! as a process). The plugin the Agent installs is the directory's
 //! `package/`; around it, the guest program's source and how to build it.
 //! `examples/plugins/` holds these templates' output.
 
 use std::path::{Path, PathBuf};
 
-use crate::cli::PluginLanguage;
+use crate::cli::{PluginLanguage, PluginTarget};
 use crate::exit::Failure;
 
 /// The files a language's plugin starts with: where each goes, and its
 /// template, in which `{{name}}` is the plugin's name and `{{kind}}` that
-/// name as a context kind.
-fn templates(language: PluginLanguage) -> &'static [(&'static str, &'static str)] {
-    match language {
-        PluginLanguage::Rust => &[
+/// name as a context kind (and a Cargo library's file name).
+fn templates(
+    language: PluginLanguage,
+    target: PluginTarget,
+) -> &'static [(&'static str, &'static str)] {
+    match (language, target) {
+        (PluginLanguage::Rust, PluginTarget::Wasm) => &[
+            (
+                "Cargo.toml",
+                include_str!("../../templates/plugins/rust-wasm/Cargo.toml.tmpl"),
+            ),
+            (
+                "src/lib.rs",
+                include_str!("../../templates/plugins/rust-wasm/lib.rs.tmpl"),
+            ),
+            (
+                "package/.hanafubuki-plugin/plugin.json",
+                include_str!("../../templates/plugins/rust-wasm/plugin.json.tmpl"),
+            ),
+            (
+                "README.md",
+                include_str!("../../templates/plugins/rust-wasm/README.md.tmpl"),
+            ),
+            (
+                ".gitignore",
+                include_str!("../../templates/plugins/rust-wasm/gitignore.tmpl"),
+            ),
+        ],
+        (PluginLanguage::Rust, PluginTarget::Process) => &[
             (
                 "Cargo.toml",
                 include_str!("../../templates/plugins/rust/Cargo.toml.tmpl"),
@@ -35,7 +61,7 @@ fn templates(language: PluginLanguage) -> &'static [(&'static str, &'static str)
                 include_str!("../../templates/plugins/rust/gitignore.tmpl"),
             ),
         ],
-        PluginLanguage::Python => &[
+        (PluginLanguage::Python, _) => &[
             (
                 "plugin.py",
                 include_str!("../../templates/plugins/python/plugin.py.tmpl"),
@@ -59,9 +85,15 @@ fn templates(language: PluginLanguage) -> &'static [(&'static str, &'static str)
 pub(crate) fn run(
     name: &str,
     language: PluginLanguage,
+    target: PluginTarget,
     dir: Option<PathBuf>,
 ) -> Result<(), Failure> {
     check_name(name)?;
+    if (language, target) == (PluginLanguage::Python, PluginTarget::Wasm) {
+        return Err(Failure::usage(
+            "`--target wasm` writes a Rust plugin: a Python guest runs as a process",
+        ));
+    }
     let dir = dir.unwrap_or_else(|| PathBuf::from(name));
     let occupied = std::fs::read_dir(&dir).is_ok_and(|mut entries| entries.next().is_some());
     if occupied {
@@ -71,22 +103,30 @@ pub(crate) fn run(
         )));
     }
     let kind = name.replace('-', "_");
-    for (path, template) in templates(language) {
+    for (path, template) in templates(language, target) {
         let contents = template
             .replace("{{name}}", name)
             .replace("{{kind}}", &kind);
         write(&dir.join(path), &contents)?;
     }
     println!("Created plugin `{name}` in {}.", dir.display());
-    let build = match language {
-        PluginLanguage::Rust => {
+    let build = match (language, target) {
+        (PluginLanguage::Rust, PluginTarget::Wasm) => format!(
+            "cargo build --release --target wasm32-unknown-unknown && \
+             cp target/wasm32-unknown-unknown/release/{kind}.wasm package/{name}.wasm"
+        ),
+        (PluginLanguage::Rust, PluginTarget::Process) => {
             format!("cargo build --release && cp target/release/{name} package/")
         }
-        PluginLanguage::Python => {
+        (PluginLanguage::Python, _) => {
             format!("python3 -m pykardia.guest.export process plugin.py Plugin package/{name}.pyz")
         }
     };
-    println!("Build its program into the package, in {}:", dir.display());
+    let built = match target {
+        PluginTarget::Process => "program",
+        PluginTarget::Wasm => "module",
+    };
+    println!("Build its {built} into the package, in {}:", dir.display());
     println!("  {build}");
     println!("Then run it in the Agent, reloaded at each build:");
     println!(

@@ -602,7 +602,116 @@ user first.
     and type `AgentPackageValidation` (additive);
     `hanafubuki-agent-plugin-packages::check_package` (additive). Nothing
     else changes for a host.
-- [ ] P8: WASM guests with fuel/epoch and memory limits.
+- [x] P8: WASM guests with fuel/epoch and memory limits.
+  - Done: kardia-hmr 0.2.2's `wasm` feature in the guest host (`process`,
+    `wasm`, still `default-features = false`: `cargo tree -e features -i
+    serde_json` shows no `preserve_order`); wasmtime 34 + cranelift, ~20 s
+    more of a clean build here (96 s CPU). Manifest (`crates/packages`):
+    `PackageRuntime` is now an enum, `Process(ProcessRuntime { command,
+    interpreter, protocol })` | `Wasm(WasmRuntime { module, limits:
+    WasmRuntimeLimits { fuel, timeout, memory_bytes } })`, `kind() ->
+    RuntimeKind` (now `Serialize`); `runtime: { type: "wasm", module:
+    "./x.wasm", limits?: { fuel?, timeoutMs?, memoryBytes? } }` read per
+    field (fuel ≥ 1; timeoutMs 1..=3600000; memoryBytes 64 KiB..=4 GiB,
+    default 256 MiB, `DEFAULT_WASM_MEMORY_BYTES`; out of bounds = issue +
+    default); a wasm runtime without `module` is ignored with an issue;
+    a wasm package's `permissions` are ignored with an issue and normalized
+    to nothing (no network, workspace `none`, no env). Guest host
+    (`src/wasm.rs`): the resolver keeps a `OnceCell` per entry name that
+    its first resolution fills on the blocking pool: content check, module
+    `in_package`, `WasmSource::with_limits` (time always set: `timeoutMs`,
+    else max(call deadline, longest tool `timeout`); memory; fuel if set),
+    a `ModuleGraph` of that one module (`deps` refused), `import` compiles
+    and reads the meta from a first instance; name/inject/provide checked
+    against the manifest (as kardia's own check for process guests), then
+    renamed `guest:<id>`; a load failure resolves to a plugin whose start
+    fails with the reason (a failed start, not stuck `starting`). Faults:
+    `GuestHost::call` matches a WASM call's error text (`wasm trap:`,
+    `forcing trap when growing`, `the guest was stopped`, `error while
+    executing at wasm backtrace`) and `fiber.fail`s the guest, so the P5
+    restart loop/window applies and its contributions retire and return; a
+    guest's own error (status ≠ 0) is only the call's. No grant and no
+    sandbox: `GuestPackage::needs_grant()` (process only), `refusal()` only
+    for process guests, the `workspace` view says `none` for a module
+    whatever the package carries. Facade: `AgentPackageGuest.runtime:
+    RuntimeKind` and `ungranted()` (none for WASM), used by the install's
+    `permissions` and `/plugins`' grant row; re-export `RuntimeKind`. CLI:
+    `plugins grant` of a WASM plugin fails ("needs no grant"); `plugins
+    info`, `validate --run`, `dev` and `/plugins`' Code row add
+    `(WebAssembly)` to the state; `plugins new NAME --target wasm` (Rust
+    only; `--lang python --target wasm` is a usage error) writes a `cdylib`
+    crate with `kardia_guest::export!(Plugin)` (templates `rust-wasm/`:
+    a tool, a section that does not view the workspace, an observer;
+    `memoryBytes` 64 MiB), and `examples/plugins/hello-wasm` (with its
+    `Cargo.lock`) is its output; built here to a 110 KB module that
+    `validate --run` starts. `plugins validate`: the module is in the
+    package and starts with `\0asm`; a tool `timeout` longer than
+    `limits.timeoutMs` is an issue. CI: `targets: wasm32-unknown-unknown`
+    on the toolchain step (all three OSes) for the example test.
+    `about.toml` accepts `Apache-2.0 WITH LLVM-exception` (wasmtime,
+    cranelift-*, regalloc2, target-lexicon, pulley-*; checked: generation
+    fails without it); `cargo about generate --locked --fail` passed with
+    the release workflow's pinned cargo-about 0.9.2. Tests: guests suite
+    +4 checks with text-format modules assembled by `wat` (dev-dependency,
+    already in the graph via wasmtime): a module runs with the sandbox
+    unavailable, no process and no grant, its tool runs as its `call`; a
+    meta mismatch is a failed start; its `workspace` view is `none` even
+    when the package asks for `write`; a guest's own error does not
+    restart it; an endless call stopped by time (300 ms deadline,
+    `interrupt`) and by fuel (`fuel`), each restarts once while a third
+    guest keeps running; memory growth past 1 MiB traps (`growing
+    memory`) and restarts, the default lets it grow; a trapping tool is the
+    call's error, the guest is `restarting` with `unreachable`, its tool
+    source and context retire and return, and its trapping context is left
+    out. Packages (wasm runtime, limits out of bounds, no module), facade
+    (`tests::packages::code`: a WASM package installs with nothing to
+    grant and runs where the process guest fails closed), CLI (scaffold,
+    python+wasm refused, the example equals `new`'s output, validate: not a
+    module, missing module, timeout over the limit, memory bound,
+    permissions issue; add prints no grant hint, grant refused),
+    `plugin_examples` (hello-wasm built for wasm32 with `--locked`, then
+    `validate --run` → `running (WebAssembly)`; skipped without the
+    target). Docs (both languages): writing-plugins (WebAssembly section,
+    manifest fields, scaffold, validate, permissions, failures, publish),
+    architecture (code plugins, a stale known limit replaced), plugin-rules
+    (crate row, threads, code plugins, view, protocol, logging), internals
+    (WebAssembly guests), embedding (`runtime`, `ungranted`, wasmtime's
+    signal handlers), cli-reference (`--target`, grant), building-testing.
+  - Deviations: the meta is read from the guest at load (one
+    instantiation, no host calls), not given from outside: kardia-hmr's
+    WASM `GuestCode` is private, so there is no `guest_plugin(code, meta)`
+    for it; the guest host checks it against the manifest instead. A WASM
+    guest's failure is found from the call's error text (kardia-hmr hands
+    traps over as `Error::msg`), not a typed signal or an exit report. WASM
+    permissions are ignored with an issue rather than refused, and a WASM
+    guest needs no grant at all (the plan's consent was for what a process
+    may reach). The default time limit is the longest call the guest may
+    take, not the call deadline, since `WasmLimits::timeout` caps every
+    call (a caller's deadline can only shorten it).
+  - Open: a WASM call whose caller dropped it (a cancelled turn) is not
+    followed: its stopped instance is failed by its next call, which fails;
+    each running module version keeps kardia-hmr's `wasm-epoch` thread (a
+    plain `std::thread`, like the pipe threads of P5's open item); wasmtime
+    installs its signal handlers (and a Mach port on macOS) process-wide at
+    the first WASM guest (documented for hosts in embedding); an upstream
+    kardia-hmr could expose the WASM `GuestCode` (meta from outside, no
+    load-time instance) and a typed "instance failed" error, and honour
+    `CallControl` cancellation in WASM; no module size cap (compiling a
+    huge module costs the blocking pool); WASI modules (pykardia's WASM
+    export) do not load (no WASI imports); the release binary's size
+    growth from wasmtime was not measured here.
+  - Hanafubuki, at its next pin: `PackageRuntime` is an enum
+    (`Process(ProcessRuntime)` | `Wasm(WasmRuntime)`), new
+    `ProcessRuntime`, `WasmRuntime`, `WasmRuntimeLimits`,
+    `DEFAULT_WASM_MEMORY_BYTES`, `PackageRuntime::kind()`, `RuntimeKind`
+    is `Serialize`; `AgentPackageGuest.runtime` (a struct literal needs
+    it) and `AgentPackageGuest::ungranted()`; re-export `RuntimeKind`;
+    a WASM package's install returns
+    `permissions: None`. The guest host now pulls wasmtime/cranelift
+    (`Apache-2.0 WITH LLVM-exception`, which Hanafubuki's licence policy
+    must accept), and the first WASM guest installs wasmtime's signal
+    handlers in Hanafubuki's process: its own handlers for SIGSEGV, SIGBUS,
+    SIGILL or SIGFPE, if any, must be installed first or chain.
 - [ ] P9: end-to-end crash tests (panic, hang, kill -9, abort, garbage,
       oversize frame, restart loop) and a pty smoke test.
 

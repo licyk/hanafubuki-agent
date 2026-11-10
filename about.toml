@@ -14,6 +14,8 @@ accepted = [
     "GPL-3.0-only",
     # arboard's Windows clipboard (clipboard-win, error-code).
     "BSL-1.0",
+    # wasmtime and cranelift, which run WASM plugins (kardia-hmr's `wasm`).
+    "Apache-2.0 WITH LLVM-exception",
 ]
 targets = [
     "x86_64-unknown-linux-gnu",

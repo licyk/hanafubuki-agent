@@ -1,10 +1,10 @@
 ---
 title: Writing plugins
-description: Write an installable plugin with code — a program in Rust, Python or any language that the Agent runs out of process — then validate it, develop it with live reloads and publish it in a marketplace.
+description: Write an installable plugin with code — a program in Rust, Python or any language that the Agent runs out of process, or a WebAssembly module it runs within limits — then validate it, develop it with live reloads and publish it in a marketplace.
 icon: Puzzle
 ---
 
-An installable plugin is a **package**: a directory with a manifest, which the Agent installs from a directory or a [marketplace](#publishing) ([Installed plugins](/docs/architecture#installed-plugins)). A plugin in Codex's, Claude Code's, Cursor's or the Agent Plugins format brings content (Skills, MCP servers, hooks) and needs no code. This page is about this project's own format, `.hanafubuki-plugin/plugin.json`, whose plugin can also carry **code**: a program, the plugin's **guest**, that the Agent starts out of process, confined by the sandbox, and calls for the tools, context sections, prompt fragments, hooks and observers its manifest declares ([Code plugins](/docs/architecture#code-plugins)). A guest that crashes or hangs costs only its own contributions.
+An installable plugin is a **package**: a directory with a manifest, which the Agent installs from a directory or a [marketplace](#publishing) ([Installed plugins](/docs/architecture#installed-plugins)). A plugin in Codex's, Claude Code's, Cursor's or the Agent Plugins format brings content (Skills, MCP servers, hooks) and needs no code. This page is about this project's own format, `.hanafubuki-plugin/plugin.json`, whose plugin can also carry **code**, the plugin's **guest**: a program that the Agent starts out of process, confined by the sandbox, or a [WebAssembly module](#wasm) that it runs within limits of fuel, time and memory. The Agent calls it for the tools, context sections, prompt fragments, hooks and observers its manifest declares ([Code plugins](/docs/architecture#code-plugins)). A guest that crashes or hangs costs only its own contributions.
 
 ## Start a plugin [#start]
 
@@ -12,24 +12,27 @@ An installable plugin is a **package**: a directory with a manifest, which the A
 
 ```sh
 hanafubuki-agent plugins new my-plugin                  # Rust, in ./my-plugin
+hanafubuki-agent plugins new my-plugin --target wasm    # Rust, compiled to WebAssembly
 hanafubuki-agent plugins new my-plugin --lang python --dir plugins/my-plugin
 ```
 
 ```text
 my-plugin/
 ├── Cargo.toml                          the guest's Cargo project (Rust), or plugin.py (Python)
-├── src/main.rs
+├── src/main.rs                         (src/lib.rs for WebAssembly)
 ├── README.md                           how to build, check and run it
 └── package/                            the plugin the Agent installs
     └── .hanafubuki-plugin/plugin.json
 ```
 
-The Rust plugin contributes a tool (`greet`), a context section (`<name>_status`, which reads the workspace) and an observer (`turn_finished`); the Python one a tool (`count_words`) and a prompt fragment. Each manifest also declares its permissions and a `configSchema`. The repository's [`examples/plugins/`](https://github.com/licyk/hanafubuki-agent/tree/main/examples/plugins) holds both, as `plugins new` writes them (`hello-rust`, `hello-python`).
+The Rust plugin contributes a tool (`greet`), a context section (`<name>_status`, which reads the workspace) and an observer (`turn_finished`); the WebAssembly one the same, but its section does not read the workspace, which a module cannot reach; the Python one a tool (`count_words`) and a prompt fragment. Each manifest also declares a `configSchema`, and a program's its permissions. The repository's [`examples/plugins/`](https://github.com/licyk/hanafubuki-agent/tree/main/examples/plugins) holds all three, as `plugins new` writes them (`hello-rust`, `hello-wasm`, `hello-python`).
 
-`package/` is apart from the source on purpose: an install copies the whole package (all but `.git` and symbolic links) into the data directory and hashes it, and its guest starts only while the package still has that hash. A build tree (`target/`) inside the package would be copied and hashed at every install. The build puts the program into `package/`:
+`package/` is apart from the source on purpose: an install copies the whole package (all but `.git` and symbolic links) into the data directory and hashes it, and its guest starts only while the package still has that hash. A build tree (`target/`) inside the package would be copied and hashed at every install. The build puts the program or the module into `package/`:
 
 ```sh
 cargo build --release && cp target/release/my-plugin package/                 # Rust
+cargo build --release --target wasm32-unknown-unknown \
+  && cp target/wasm32-unknown-unknown/release/my_plugin.wasm package/my-plugin.wasm  # WebAssembly
 python3 -m pykardia.guest.export process plugin.py Plugin package/my-plugin.pyz  # Python
 ```
 
@@ -38,10 +41,10 @@ python3 -m pykardia.guest.export process plugin.py Plugin package/my-plugin.pyz 
 | Path                                                    | What it is                                                                                                                                                                           |
 | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `.hanafubuki-plugin/plugin.json`                        | the [manifest](#manifest)                                                                                                                                                            |
-| the guest's program                                     | what `runtime.command` names (`./my-plugin`, `./my-plugin.pyz`); read-only to it                                                                                                     |
+| the guest's program or module                           | what `runtime.command` names (`./my-plugin`, `./my-plugin.pyz`), read-only to it, or what `runtime.module` names (`./my-plugin.wasm`)                                                |
 | `skills/`, `.mcp.json`, `hooks/hooks.json`, `commands/` | content, as in Codex's and Claude Code's formats ([Skills](/docs/skills#sources), [Plugins' servers](/docs/mcp#plugin-servers), [Plugins' hooks](/docs/configuration#hooks-plugins)) |
 
-A plugin may have content, code or both. Its id is `<name>@<marketplace>`; one installed from a directory is `<name>@local`. While its guest runs, its working directory is the plugin's own data directory (`PLUGIN_DATA`), the one place it writes, and `PLUGIN_ROOT` is the installed package.
+A plugin may have content, code or both. Its id is `<name>@<marketplace>`; one installed from a directory is `<name>@local`. While a program runs, its working directory is the plugin's own data directory (`PLUGIN_DATA`), the one place it writes, and `PLUGIN_ROOT` is the installed package; a module has neither.
 
 ## The manifest [#manifest]
 
@@ -82,23 +85,25 @@ A plugin may have content, code or both. Its id is `<name>@<marketplace>`; one i
 
 The manifest is read as an external producer's: a field, or an entry of a list, that cannot be used is left out with an issue, and the rest is used. `plugins validate` lists every issue.
 
-| Field                                                             | Meaning                                                                                                                                                                                                                                               |
-| ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `name`                                                            | the plugin's name: its id's first part, the namespace of its tools and the name its guest declares                                                                                                                                                    |
-| `version`, `description`, `keywords`, `interface`                 | as in Codex's manifest; the version names the installed copy                                                                                                                                                                                          |
-| `skills`, `mcpServers`, `hooks`, `commands`                       | content, each a path that starts `./` and stays in the package (`mcpServers` and `hooks` may also be written inline)                                                                                                                                  |
-| `runtime.type`                                                    | `process` (WASM is not run yet)                                                                                                                                                                                                                       |
-| `runtime.command`                                                 | the program and its arguments; the program is a file in the package (`./…`), or, with `runtime.interpreter: true`, an interpreter (an absolute path, or a name on the Agent's `PATH`) with the package's files as arguments                           |
-| `runtime.protocol`                                                | `kardia-guest/2`                                                                                                                                                                                                                                      |
-| `contributes.tools[]`                                             | `name` (ASCII letters, digits, `_`, `-`), `description`, `inputSchema` (a JSON Schema object), `timeout` (seconds, above 0 and at most 3600; else the 10 s call deadline). The model sees `<plugin>__<name>`; every call asks for the user's approval |
-| `contributes.contextSections[]`                                   | `kind` (lowercase letters, digits and `_`, not one of the Agent's own); at most 7                                                                                                                                                                     |
-| `contributes.prompt.slot`                                         | `instructions`, `worldState`, `capabilities` (the default) or `memory`                                                                                                                                                                                |
-| `contributes.toolLifecycleHooks`, `contributes.continuationHooks` | `true` to be asked before and after each tool call, and about each candidate final answer                                                                                                                                                             |
-| `contributes.observers`                                           | events to be told of: `turn_admitted`, `sampling_committed`, `turn_finished`, `memory_contribution_changed`, `session_archived`, `session_restored`                                                                                                   |
-| `permissions.network`                                             | `true` to reach the network (off by default)                                                                                                                                                                                                          |
-| `permissions.workspace`                                           | `none`, `read` (the default) or `write`                                                                                                                                                                                                               |
-| `permissions.env`                                                 | the names of the Agent's environment variables the guest receives                                                                                                                                                                                     |
-| `configSchema`                                                    | a JSON Schema of an object: the plugin's settings, which `plugins settings` and `/plugins` check against it                                                                                                                                           |
+| Field                                                             | Meaning                                                                                                                                                                                                                                                             |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`                                                            | the plugin's name: its id's first part, the namespace of its tools and the name its guest declares                                                                                                                                                                  |
+| `version`, `description`, `keywords`, `interface`                 | as in Codex's manifest; the version names the installed copy                                                                                                                                                                                                        |
+| `skills`, `mcpServers`, `hooks`, `commands`                       | content, each a path that starts `./` and stays in the package (`mcpServers` and `hooks` may also be written inline)                                                                                                                                                |
+| `runtime.type`                                                    | `process` (a program) or `wasm` (a [WebAssembly module](#wasm))                                                                                                                                                                                                     |
+| `runtime.command`                                                 | `process`: the program and its arguments; the program is a file in the package (`./…`), or, with `runtime.interpreter: true`, an interpreter (an absolute path, or a name on the Agent's `PATH`) with the package's files as arguments                              |
+| `runtime.protocol`                                                | `process`: `kardia-guest/2`                                                                                                                                                                                                                                         |
+| `runtime.module`                                                  | `wasm`: the module, a binary `.wasm` file in the package (`./…`)                                                                                                                                                                                                    |
+| `runtime.limits`                                                  | `wasm`: what each call may use, each optional: `fuel` (about one unit per instruction; unset, none is counted), `timeoutMs` (at most 3600000; unset, its longest call: the 10 s call deadline or a longer tool `timeout`), `memoryBytes` (64 KiB to 4 GiB; 256 MiB) |
+| `contributes.tools[]`                                             | `name` (ASCII letters, digits, `_`, `-`), `description`, `inputSchema` (a JSON Schema object), `timeout` (seconds, above 0 and at most 3600; else the 10 s call deadline). The model sees `<plugin>__<name>`; every call asks for the user's approval               |
+| `contributes.contextSections[]`                                   | `kind` (lowercase letters, digits and `_`, not one of the Agent's own); at most 7                                                                                                                                                                                   |
+| `contributes.prompt.slot`                                         | `instructions`, `worldState`, `capabilities` (the default) or `memory`                                                                                                                                                                                              |
+| `contributes.toolLifecycleHooks`, `contributes.continuationHooks` | `true` to be asked before and after each tool call, and about each candidate final answer                                                                                                                                                                           |
+| `contributes.observers`                                           | events to be told of: `turn_admitted`, `sampling_committed`, `turn_finished`, `memory_contribution_changed`, `session_archived`, `session_restored`                                                                                                                 |
+| `permissions.network`                                             | `true` to reach the network (off by default). The three permissions are a program's: a module asks for none                                                                                                                                                         |
+| `permissions.workspace`                                           | `none`, `read` (the default) or `write`                                                                                                                                                                                                                             |
+| `permissions.env`                                                 | the names of the Agent's environment variables the guest receives                                                                                                                                                                                                   |
+| `configSchema`                                                    | a JSON Schema of an object: the plugin's settings, which `plugins settings` and `/plugins` check against it                                                                                                                                                         |
 
 What each declaration becomes, and its bounds, is in [What a guest contributes](/docs/plugin-rules#guest-contributions).
 
@@ -162,6 +167,17 @@ The manifest runs it with the interpreter on the Agent's `PATH`: `"command": ["p
 
 kardia-guest and pykardia's guest SDK (`pykardia/guest/` and the modules an export bundles) are under **MIT OR Apache-2.0**, so a plugin that links or bundles them chooses its own licence; an exported zipapp carries their licence files. The rest of Kardia and pykardia, and the Agent itself, are GPL-3.0-only; a guest is a separate program, which the Agent runs and talks to over a pipe.
 
+### WebAssembly [#wasm]
+
+A guest may instead be a WebAssembly module (`"runtime": {"type": "wasm", "module": "./my-plugin.wasm"}`), which the Agent runs inside its own process with wasmtime. It speaks the same methods through the guest ABI's exports and host functions instead of a pipe, and the same Rust source builds it: in a `cdylib` crate, `kardia_guest::export!(Plugin)` takes the place of `main`, and `cargo build --target wasm32-unknown-unknown` builds it (`plugins new --target wasm` writes such a crate).
+
+- **It reaches nothing outside itself.** The only functions it may import are the guest ABI's (`read`, `write`, `log`, `provide`, `view`, `invoke`, from the module `cordis` or `kardia`): no files, network, clock or environment. A module that imports anything else (WASI, say) does not load. So it asks for no permissions, needs no grant and no sandbox, and starts as soon as it is installed and on, on every platform; its `workspace` view reports `{"access": "none", "roots": []}`, and its `settings` view is its settings, as a program's.
+- **Its limits bound each call** (`runtime.limits`): its fuel (instructions), its time (the call's own deadline, and at most `timeoutMs`) and its linear memory (`memoryBytes`, 256 MiB by default). A call that runs out of fuel or time, a memory that would grow past the limit, and any trap (a Rust guest's panic is one) fail that call and the guest's instance: the guest restarts, as a program that crashed. An error the guest reports itself is only the call's.
+- **It is loaded once per version.** The module is compiled, and its metadata read from a first instance of it, when its guest first starts; a restart takes a fresh instance (fresh memory) of the same compiled module. Its metadata must be exactly the manifest's name providing `plugin`, and declare no other modules (`deps`).
+- **One file for every platform**, which a marketplace publishes as it is.
+
+A module in another language exports the ABI itself: `memory`, `cordis_meta() -> i32`, `cordis_apply(len) -> i32`, `cordis_call(len) -> i32` and optionally `cordis_dispose()` (or the same named `kardia_*`). Each export's input is a message of `len` bytes that `read(ptr)` copies into its memory; it sets its result (or its error, with a status other than 0) with `write(ptr, len)`. The messages are the JSON of the process wire's exports ([Any other language](#other-languages)). pykardia can export a Python guest as a WASI module, which needs WASI and so does not load here.
+
 ### Any other language [#other-languages]
 
 A guest in another language implements the wire itself. Every message is one JSON object on one line (at most 4 MiB): the Agent's on the guest's standard input, the guest's on its standard output.
@@ -177,11 +193,11 @@ A guest in another language implements the wire itself. Every message is one JSO
 `hanafubuki-agent plugins validate DIR` reads the plugin as an install reads it and checks its code as the guest host would run it, without installing or starting anything:
 
 - the manifest's issues (a field left out, a timeout out of range, an unknown contribution) and declared paths that do not exist;
-- the runtime: a `process` runtime, the protocol, a program in the package that exists (and is executable), or an interpreter on the `PATH`, and the package files its arguments name;
+- the runtime: for a program, the protocol, a program in the package that exists (and is executable), or an interpreter on the `PATH`, and the package files its arguments name; for a module, a file in the package that is a binary WebAssembly module, and a tool `timeout` longer than `limits.timeoutMs`, which would stop it first;
 - what registration would leave out: a tool name that is not one, a schema too large or too deep, a context kind that is not a plugin's, more than 7 kinds, a prompt slot that does not exist, an event no observer receives, names declared twice;
 - a `configSchema` that does not describe an object.
 
-With `--run` it then installs the plugin into a throwaway home (its own configuration and data directory, deleted afterwards), grants what the code asks for, starts its guest under the sandbox, and reports its state, what its start left out, its exit and its standard error: the handshake, the metadata and `apply` all happen as in the Agent. It fails (exit code 1) on any issue, or when the guest does not run; `--json` prints `{"validation": …, "started": …}`.
+With `--run` it then installs the plugin into a throwaway home (its own configuration and data directory, deleted afterwards), grants what the code asks for, starts its guest (a program under the sandbox; a module, which needs none, compiled and instantiated), and reports its state, what its start left out, its exit and its standard error: the handshake, the metadata and `apply` all happen as in the Agent. It fails (exit code 1) on any issue, or when the guest does not run; `--json` prints `{"validation": …, "started": …}`.
 
 ## Develop it [#dev]
 
@@ -191,23 +207,24 @@ With `--run` it then installs the plugin into a throwaway home (its own configur
 
 ## Settings and permissions [#settings-permissions]
 
-- **Permissions** are granted by the user, never by the plugin: a guest whose permissions are not granted is `blocked`. `plugins grant ID` grants what the manifest asks for, as does **Grant its permissions** on the plugin's page in `/plugins`. An update that asks for more waits for a new grant.
-- **The sandbox's plugin profile** confines the guest: it reads the system's directories and its package, writes only its data directory, reaches the workspace as granted and the network only if granted, and starts with an empty environment but its granted `env`, `PLUGIN_ROOT` and `PLUGIN_DATA`. Linux and macOS enforce the reads; Windows cannot deny them, so there `workspace: "none"` is not enforced. Where there is no sandbox, a guest does not start.
+- **Permissions** are granted by the user, never by the plugin: a program whose permissions are not granted is `blocked`. `plugins grant ID` grants what the manifest asks for, as does **Grant its permissions** on the plugin's page in `/plugins`. An update that asks for more waits for a new grant. A WebAssembly module asks for nothing and is never `blocked`.
+- **The sandbox's plugin profile** confines a program: it reads the system's directories and its package, writes only its data directory, reaches the workspace as granted and the network only if granted, and starts with an empty environment but its granted `env`, `PLUGIN_ROOT` and `PLUGIN_DATA`. Linux and macOS enforce the reads; Windows cannot deny them, so there `workspace: "none"` is not enforced. Where there is no sandbox, a guest does not start.
 - **Settings** are `[plugins."ID"].settings` in `config.toml`: `plugins settings ID --set '{"greeting": "Hi"}'` replaces them (checked against `configSchema`), `--set null` removes them, `plugins settings ID` prints them with the schema; `/plugins` edits them too. They are the configuration `apply` receives and the guest's `settings` view, and a change starts the guest again with them.
 
 ## When it fails [#failures]
 
-| What happens                                       | What the Agent does                                                                                                                                                                 |
-| -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| a bad manifest or component                        | that field or component is an issue, the rest loads; a guest whose runtime cannot run does not start                                                                                |
-| the guest panics in a call                         | the SDK returns it as the call's error: a tool error to the model, a section left out                                                                                               |
-| a call outlives its deadline                       | the guest is killed and restarts; the turn goes on without that contribution                                                                                                        |
-| the guest exits, aborts or runs out of memory      | its contributions retire at once and the guest restarts, which registers them again                                                                                                 |
-| it breaks the protocol, or sends a line over 4 MiB | as a crash: killed, restarted                                                                                                                                                       |
-| it keeps failing                                   | restarts after 2 s, 10 s and 30 s; a fourth failure within 10 minutes leaves it `failed` until `plugins retry` (or **Retry plugin** in `/plugins`); a failed start is not restarted |
-| its package's files change after the install       | it does not start until it is installed again                                                                                                                                       |
+| What happens                                                     | What the Agent does                                                                                                                                                                 |
+| ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| a bad manifest or component                                      | that field or component is an issue, the rest loads; a guest whose runtime cannot run does not start                                                                                |
+| the guest panics in a call                                       | the SDK returns it as the call's error: a tool error to the model, a section left out                                                                                               |
+| a call outlives its deadline                                     | the guest is killed and restarts; the turn goes on without that contribution                                                                                                        |
+| the guest exits, aborts or runs out of memory                    | its contributions retire at once and the guest restarts, which registers them again                                                                                                 |
+| it breaks the protocol, or sends a line over 4 MiB               | as a crash: killed, restarted                                                                                                                                                       |
+| a module traps, uses up its fuel or time, or outgrows its memory | the call's error; the guest's instance is dropped and the guest restarts with a new one                                                                                             |
+| it keeps failing                                                 | restarts after 2 s, 10 s and 30 s; a fourth failure within 10 minutes leaves it `failed` until `plugins retry` (or **Retry plugin** in `/plugins`); a failed start is not restarted |
+| its package's files change after the install                     | it does not start until it is installed again                                                                                                                                       |
 
-The rest of the Agent, and a host that embeds it, is never affected: the guest is another process. `plugins info ID` shows the guest's state and error; `/plugins` and `/warnings` show its issues.
+The rest of the Agent, and a host that embeds it, is never affected: a program is another process, and a module runs in wasmtime's sandbox, where a trap or a limit stops only its own instance. `plugins info ID` shows the guest's state and error; `/plugins` and `/warnings` show its issues.
 
 ## Publish it [#publishing]
 
@@ -239,4 +256,4 @@ hanafubuki-agent plugins add my-plugin@my-marketplace
 hanafubuki-agent plugins grant my-plugin@my-marketplace
 ```
 
-A plugin with a compiled program publishes that program inside its package, built for each platform it supports; nothing is signed, so users trust a marketplace as they trust its source. `plugins update` installs a new version, and `plugins marketplace upgrade` fetches a git marketplace's changes first. The commands are in [Command-line reference](/docs/cli-reference#plugins), the configuration in [Configuration reference](/docs/config-reference#plugins).
+A plugin with a compiled program publishes that program inside its package, built for each platform it supports (a WebAssembly module is one file for all); nothing is signed, so users trust a marketplace as they trust its source. `plugins update` installs a new version, and `plugins marketplace upgrade` fetches a git marketplace's changes first. The commands are in [Command-line reference](/docs/cli-reference#plugins), the configuration in [Configuration reference](/docs/config-reference#plugins).

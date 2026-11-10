@@ -1,6 +1,7 @@
 //! The guest host end to end, with real guest processes: this binary is
 //! also the guest (kardia-guest's `serve`) and the sandbox helper, so the
-//! guests it starts, and confines, re-execute it. Without a harness, `main`
+//! guests it starts, and confines, re-execute it; and with WASM guests
+//! written in the text format. Without a harness, `main`
 //! answers those command lines first, then runs each check in turn (those
 //! whose name contains one of the arguments, when there are any).
 
@@ -12,6 +13,7 @@ mod host_calls;
 mod lifecycle;
 mod logging;
 mod sandbox;
+mod wasm;
 
 use std::future::Future;
 use std::pin::Pin;
@@ -79,6 +81,22 @@ const CHECKS: &[(&str, Check)] = &[
     (
         "the_sandbox_keeps_a_guest_to_its_package_its_data_and_its_grant",
         || Box::pin(sandbox::the_sandbox_keeps_a_guest_to_its_package_its_data_and_its_grant()),
+    ),
+    (
+        "a_wasm_guest_runs_without_a_process_and_contributes_a_tool",
+        || Box::pin(wasm::a_wasm_guest_runs_without_a_process_and_contributes_a_tool()),
+    ),
+    (
+        "an_endless_wasm_call_is_stopped_and_the_guest_restarts_alone",
+        || Box::pin(wasm::an_endless_wasm_call_is_stopped_and_the_guest_restarts_alone()),
+    ),
+    (
+        "a_wasm_guest_that_outgrows_its_memory_traps_and_restarts",
+        || Box::pin(wasm::a_wasm_guest_that_outgrows_its_memory_traps_and_restarts()),
+    ),
+    (
+        "a_trapping_wasm_guests_contributions_retire_and_return",
+        || Box::pin(wasm::a_trapping_wasm_guests_contributions_retire_and_return()),
     ),
 ];
 

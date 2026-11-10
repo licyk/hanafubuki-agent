@@ -12,7 +12,8 @@ use std::path::Path;
 
 use hanafubuki_agent_packages::{
     load_manifest, HooksDeclaration, ManifestFormat, ManifestInterface, McpServersDeclaration,
-    PackageManifest, RuntimeKind, WorkspaceAccess, AGENT_PLUGINS_SCHEMA,
+    PackageManifest, PackagePermissions, PackageRuntime, RuntimeKind, WasmRuntime,
+    WasmRuntimeLimits, WorkspaceAccess, AGENT_PLUGINS_SCHEMA, DEFAULT_WASM_MEMORY_BYTES,
 };
 use serde_json::json;
 
@@ -476,7 +477,10 @@ fn hanafubuki_manifests_carry_their_code_blocks() {
     assert_eq!(loaded.issues, Vec::<String>::new());
     assert_eq!(loaded.manifest.paths.skills, vec![root.join("skills")]);
     let runtime = code.runtime.unwrap();
-    assert_eq!(runtime.kind, RuntimeKind::Process);
+    assert_eq!(runtime.kind(), RuntimeKind::Process);
+    let PackageRuntime::Process(runtime) = runtime else {
+        panic!("a process runtime");
+    };
     assert_eq!(runtime.command, vec!["./bin/jira-helper"]);
     assert_eq!(runtime.protocol.as_deref(), Some("kardia-guest/2"));
     assert_eq!(code.contributes.tools[0].name, "jira_search");
@@ -527,6 +531,82 @@ fn a_bad_code_entry_costs_only_itself() {
     assert_eq!(code.permissions.workspace, WorkspaceAccess::Read);
     assert!(!code.permissions.network);
     assert_eq!(loaded.issues.len(), 8, "{:?}", loaded.issues);
+}
+
+#[test]
+fn a_wasm_runtime_names_its_module_and_limits_and_asks_for_nothing() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path().join("guest");
+    write(
+        &root.join(".hanafubuki-plugin/plugin.json"),
+        r#"{"name": "guest",
+            "runtime": {"type": "wasm", "module": "./guest.wasm",
+                        "limits": {"fuel": 1000000, "timeoutMs": 2500, "memoryBytes": 1048576}},
+            "permissions": {"network": true, "workspace": "write", "env": ["TOKEN"]}}"#,
+    );
+
+    let loaded = load_manifest(&root).unwrap();
+    let code = loaded.manifest.code.unwrap();
+
+    assert_eq!(
+        code.runtime,
+        Some(PackageRuntime::Wasm(WasmRuntime {
+            module: "./guest.wasm".to_string(),
+            limits: WasmRuntimeLimits {
+                fuel: Some(1_000_000),
+                timeout: Some(std::time::Duration::from_millis(2_500)),
+                memory_bytes: 1_048_576,
+            },
+        }))
+    );
+    // It can reach none of what it asked for, so it asks for nothing.
+    assert_eq!(
+        code.permissions,
+        PackagePermissions {
+            network: false,
+            workspace: WorkspaceAccess::None,
+            env: Vec::new(),
+        }
+    );
+    assert_eq!(loaded.issues.len(), 1, "{:?}", loaded.issues);
+    assert!(
+        loaded.issues[0].contains("permissions"),
+        "{:?}",
+        loaded.issues
+    );
+}
+
+#[test]
+fn a_wasm_limit_out_of_its_bounds_takes_its_default() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path().join("guest");
+    write(
+        &root.join(".hanafubuki-plugin/plugin.json"),
+        r#"{"name": "guest",
+            "runtime": {"type": "wasm", "module": "./guest.wasm",
+                        "limits": {"fuel": 0, "timeoutMs": "soon", "memoryBytes": 8589934592}}}"#,
+    );
+    let loaded = load_manifest(&root).unwrap();
+    let code = loaded.manifest.code.unwrap();
+    let Some(PackageRuntime::Wasm(runtime)) = code.runtime else {
+        panic!("a wasm runtime");
+    };
+    assert_eq!(runtime.limits, WasmRuntimeLimits::default());
+    assert_eq!(runtime.limits.memory_bytes, DEFAULT_WASM_MEMORY_BYTES);
+    assert_eq!(loaded.issues.len(), 3, "{:?}", loaded.issues);
+
+    // Without a module there is nothing to run.
+    write(
+        &root.join(".hanafubuki-plugin/plugin.json"),
+        r#"{"name": "guest", "runtime": {"type": "wasm", "command": ["./guest"]}}"#,
+    );
+    let loaded = load_manifest(&root).unwrap();
+    assert_eq!(loaded.manifest.code.unwrap().runtime, None);
+    assert!(
+        loaded.issues[0].contains("runtime.module"),
+        "{:?}",
+        loaded.issues
+    );
 }
 
 #[test]

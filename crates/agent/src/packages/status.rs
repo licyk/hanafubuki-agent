@@ -1,7 +1,9 @@
 //! An installed package as the facade reports it.
 
 use hanafubuki_agent_hooks::{HookEntry, HookSource, HookTrust};
-use hanafubuki_agent_packages::{InstallRecord, ManifestFormat, PackagePermissions, PackageSource};
+use hanafubuki_agent_packages::{
+    InstallRecord, ManifestFormat, PackagePermissions, PackageSource, RuntimeKind,
+};
 use hanafubuki_agent_plugin_packages::GuestStatus;
 use hanafubuki_agent_skills::SkillCatalogEntry;
 use serde::Serialize;
@@ -52,7 +54,11 @@ pub struct AgentPackageContent {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentPackageGuest {
-    /// What its manifest asks for, which its guest needs granted to start.
+    /// What runs its code: a process, or a WebAssembly module, which
+    /// reaches nothing outside itself and needs no grant.
+    pub runtime: RuntimeKind,
+    /// What its manifest asks for, which a process guest needs granted to
+    /// start (nothing, for a WASM guest).
     pub permissions: PackagePermissions,
     /// What the user granted; none before a grant.
     pub granted_permissions: Option<PackagePermissions>,
@@ -65,6 +71,15 @@ pub struct AgentPackageGuest {
     /// What its manifest says its settings are (`configSchema`, a JSON
     /// Schema), which a change of them is checked against.
     pub config_schema: Option<Map<String, Value>>,
+}
+
+impl AgentPackageGuest {
+    /// What it asks for and was not granted, which a user's consent grants:
+    /// none for a WASM guest, which needs no grant.
+    pub fn ungranted(&self) -> Option<&PackagePermissions> {
+        let granted = self.granted_permissions.as_ref() == Some(&self.permissions);
+        (self.runtime == RuntimeKind::Process && !granted).then_some(&self.permissions)
+    }
 }
 
 /// `package` with its install `record`, its Skills among `skills`, its

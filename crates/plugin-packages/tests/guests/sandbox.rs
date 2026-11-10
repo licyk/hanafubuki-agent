@@ -5,7 +5,7 @@
 
 use std::fs;
 
-use hanafubuki_agent_packages::{content_hash, WorkspaceAccess};
+use hanafubuki_agent_packages::{content_hash, PackageRuntime, ProcessRuntime, WorkspaceAccess};
 use hanafubuki_agent_plugin_packages::GuestPackage;
 use hanafubuki_agent_sandbox::{Sandbox, SandboxStatus};
 use serde_json::json;
@@ -91,13 +91,16 @@ fn installed_binary(mut package: GuestPackage) -> GuestPackage {
     if fs::hard_link(std::env::current_exe().unwrap(), &guest).is_err() {
         fs::copy(std::env::current_exe().unwrap(), &guest).unwrap();
     }
-    package.runtime.command = vec![
-        "./bin/guest".to_string(),
-        GUEST_ARG.to_string(),
-        package.name.clone(),
-        "run".to_string(),
-    ];
-    package.runtime.interpreter = false;
+    package.runtime = PackageRuntime::Process(ProcessRuntime {
+        command: vec![
+            "./bin/guest".to_string(),
+            GUEST_ARG.to_string(),
+            package.name.clone(),
+            "run".to_string(),
+        ],
+        interpreter: false,
+        protocol: None,
+    });
     package.content_hash = Some(content_hash(&package.root).unwrap());
     package
 }

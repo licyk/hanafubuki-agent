@@ -87,7 +87,7 @@ pub use hanafubuki_agent_hooks::{HookEventName, HookSource, HookTrust};
 pub use hanafubuki_agent_memory::{AgentMemoryContributionMode, AgentMemoryStatus};
 pub use hanafubuki_agent_packages::{
     ManifestFormat, MarketplaceAddRequest, MarketplaceSourceType, PackagePermissions,
-    PackageSource, WorkspaceAccess,
+    PackageSource, RuntimeKind, WorkspaceAccess,
 };
 pub use hanafubuki_agent_plugin_packages::{
     GuestExitCause, GuestExitReport, GuestState, GuestStatus,

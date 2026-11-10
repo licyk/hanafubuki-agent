@@ -219,8 +219,8 @@ impl AgentApplicationService {
         let permissions = package
             .guest
             .as_ref()
-            .filter(|guest| guest.granted_permissions.as_ref() != Some(&guest.permissions))
-            .map(|guest| guest.permissions.clone());
+            .and_then(|guest| guest.ungranted())
+            .cloned();
         Ok(AgentPackageInstall {
             package,
             root: outcome.root,

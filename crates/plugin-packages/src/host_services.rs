@@ -27,11 +27,14 @@ pub(crate) const WORKSPACE_SERVICE: &str = "workspace";
 pub(crate) const SETTINGS_SERVICE: &str = "settings";
 
 /// The plugin of `package`'s host-services entry: it provides the workspace
-/// as granted, read again at every view, and the settings it is configured
-/// with.
+/// as granted (nothing to a WASM guest, which reads no file), read again at
+/// every view, and the settings it is configured with.
 pub(crate) fn host_services(package: &GuestPackage, context: &Arc<SpawnContext>) -> PluginDef {
     let granted = package.granted.clone().unwrap_or_default();
-    let access = package.permissions.workspace.min(granted.workspace);
+    let access = match package.needs_grant() {
+        true => package.permissions.workspace.min(granted.workspace),
+        false => WorkspaceAccess::None,
+    };
     let roots = context.workspace.clone();
     PluginDef::new(move |ctx: Context, settings: Value| {
         let roots = roots.clone();

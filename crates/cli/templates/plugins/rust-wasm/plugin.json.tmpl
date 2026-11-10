@@ -1,0 +1,38 @@
+{
+  "name": "{{name}}",
+  "version": "0.1.0",
+  "description": "A hanafubuki-agent plugin compiled to WebAssembly.",
+  "runtime": {
+    "type": "wasm",
+    "module": "./{{name}}.wasm",
+    "limits": {
+      "memoryBytes": 67108864
+    }
+  },
+  "contributes": {
+    "tools": [
+      {
+        "name": "greet",
+        "description": "Greets someone by name.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "name": { "type": "string", "description": "Who to greet." }
+          },
+          "required": ["name"],
+          "additionalProperties": false
+        },
+        "timeout": 10
+      }
+    ],
+    "contextSections": [{ "kind": "{{kind}}_status" }],
+    "observers": ["turn_finished"]
+  },
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "greeting": { "type": "string", "description": "What a greeting starts with." }
+    },
+    "additionalProperties": false
+  }
+}

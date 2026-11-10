@@ -1,10 +1,12 @@
 //! A code package checked as the guest host would run it, without starting
-//! anything: its runtime's command, its contributions and its settings'
-//! schema (`plugins validate`).
+//! anything: its runtime's command or module, its contributions and its
+//! settings' schema (`plugins validate`).
 
 use std::path::Path;
 
-use hanafubuki_agent_packages::{PackageCode, PluginId, RuntimeKind};
+use hanafubuki_agent_packages::{
+    PackageCode, PackageContributes, PackageRuntime, PluginId, WasmRuntime,
+};
 use hanafubuki_agent_tool_contracts::validate_json_schema;
 use serde_json::Value;
 
@@ -24,10 +26,11 @@ pub fn check_package(id: &PluginId, root: &Path, code: &PackageCode) -> Vec<Stri
              so nothing runs"
                 .to_string(),
         ),
-        Some(runtime) if runtime.kind != RuntimeKind::Process => {
-            issues.push("its runtime is not supported yet: only \"process\" runs".to_string());
+        Some(PackageRuntime::Wasm(runtime)) => {
+            issues.extend(module_issue(root, &runtime.module));
+            issues.extend(time_issues(runtime, &code.contributes));
         }
-        Some(runtime) => {
+        Some(PackageRuntime::Process(runtime)) => {
             if let Some(protocol) = runtime.protocol.as_deref().filter(|p| *p != PROTOCOL) {
                 issues.push(format!(
                     "runtime.protocol `{protocol}` is not the one the Agent speaks ({PROTOCOL})"
@@ -50,6 +53,45 @@ pub fn check_package(id: &PluginId, root: &Path, code: &PackageCode) -> Vec<Stri
         }
     }
     issues
+}
+
+/// What keeps the module from loading: a path that is not in the package,
+/// or a file that is not a binary WebAssembly module.
+fn module_issue(root: &Path, module: &str) -> Option<String> {
+    let found = resolve(root, "its package directory").and_then(|root| in_package(&root, module));
+    let path = match found {
+        Ok(path) => path,
+        Err(error) => return Some(format!("runtime.module: {error}")),
+    };
+    let mut magic = [0; 4];
+    let read = std::fs::File::open(path.system())
+        .and_then(|mut file| std::io::Read::read_exact(&mut file, &mut magic));
+    match read {
+        Ok(()) if magic == *b"\0asm" => None,
+        Ok(()) | Err(_) => Some(format!(
+            "runtime.module: `{module}` is not a WebAssembly module (a binary .wasm file)"
+        )),
+    }
+}
+
+/// The tools whose `timeout` a shorter `limits.timeoutMs` cuts.
+fn time_issues(runtime: &WasmRuntime, contributes: &PackageContributes) -> Vec<String> {
+    let Some(limit) = runtime.limits.timeout else {
+        return Vec::new();
+    };
+    contributes
+        .tools
+        .iter()
+        .filter(|tool| tool.timeout.is_some_and(|timeout| timeout > limit))
+        .map(|tool| {
+            format!(
+                "tool `{}`: its timeout is longer than runtime.limits.timeoutMs ({} ms), which \
+                 stops its calls first",
+                tool.name,
+                limit.as_millis()
+            )
+        })
+        .collect()
 }
 
 /// What keeps `command` from starting: a program in the package

@@ -1,0 +1,65 @@
+//! hello-wasm: a hanafubuki-agent plugin compiled to WebAssembly. The Agent
+//! loads the module and calls its exports (the guest ABI): it runs in the
+//! Agent's process but reaches nothing outside itself, within the fuel,
+//! time and memory its manifest's `runtime.limits` give it. A panic stops
+//! it, and the Agent starts it anew.
+
+use kardia_guest::{json, Guest, Host, Map, Meta, Request, Result, Value};
+
+struct Plugin {
+    /// Its settings' `greeting` (`configSchema` in the manifest).
+    greeting: String,
+    /// The turns it observed finishing since it started.
+    turns: u64,
+}
+
+impl Guest for Plugin {
+    type Config = Value;
+
+    /// The manifest's name, providing the one service the Agent calls.
+    fn meta() -> Meta {
+        Meta::plugin("hello-wasm").provide("plugin")
+    }
+
+    /// Starts with its settings: an object, `{}` until some are set.
+    fn apply(host: &Host, config: Value, _imports: Map<String, Value>) -> Result<Self> {
+        host.provide("plugin", &json!({}))?;
+        let greeting = config["greeting"].as_str().unwrap_or("Hello").to_string();
+        Ok(Self { greeting, turns: 0 })
+    }
+
+    /// The Agent's calls: one method per kind of contribution the manifest
+    /// declares, each with one JSON object.
+    fn call(&mut self, _host: &Host, request: Request) -> Result<Value> {
+        let args = request.args;
+        match request.method.as_str() {
+            "tool" => self.tool(&args),
+            "context" => Ok(json!(format!(
+                "hello-wasm has seen {} turns finish.",
+                self.turns
+            ))),
+            "observe" => {
+                if args["event"] == "turn_finished" {
+                    self.turns += 1;
+                }
+                Ok(Value::Null)
+            }
+            method => Err(format!("no method {method}").into()),
+        }
+    }
+}
+
+impl Plugin {
+    /// A string is the tool's text; any other value is structured content.
+    fn tool(&self, args: &Value) -> Result<Value> {
+        match args["name"].as_str().unwrap_or_default() {
+            "greet" => {
+                let name = args["arguments"]["name"].as_str().unwrap_or("world");
+                Ok(json!(format!("{}, {name}!", self.greeting)))
+            }
+            name => Err(format!("no tool {name}").into()),
+        }
+    }
+}
+
+kardia_guest::export!(Plugin);

@@ -1,6 +1,6 @@
-//! The guest host: the code of installed plugins, run out of process as
-//! Kardia guests (docs/plan-plugin-system.md, §4.2; the site's
-//! architecture page, "Code plugins").
+//! The guest host: the code of installed plugins, run as Kardia guests, out
+//! of process or as WebAssembly modules (docs/plan-plugin-system.md, §4.2;
+//! the site's architecture page, "Code plugins").
 //!
 //! A package in this project's format may declare a `runtime`, a program
 //! speaking Kardia's guest protocol (`kardia-guest/2`). The facade's
@@ -22,6 +22,13 @@
 //! restart policy; one that fails more often stays failed until it is
 //! retried. What a guest writes is logged only at `trace`.
 //!
+//! A package may instead name a WebAssembly module, run in the
+//! Agent's process by kardia-hmr's wasmtime backend within the fuel, time
+//! and memory its manifest allows; it reaches nothing outside itself, so it
+//! needs no process, sandbox or grant, and an instance that traps or
+//! outruns a limit fails its guest, which restarts as a process guest that
+//! exits does.
+//!
 //! What a guest contributes is what its manifest declares: once its fiber
 //! is active, proxies registered as that fiber's effects (a tool source,
 //! context sections, a prompt, hooks, an observer) call the service it
@@ -41,6 +48,7 @@ mod settings;
 mod spawn;
 mod state;
 mod supervise;
+mod wasm;
 
 pub use check::check_package;
 pub use guests::{GuestHost, GuestHostInputs};

@@ -364,9 +364,10 @@ pub(crate) enum PluginsCommand {
         get: bool,
     },
     /// Creates a plugin with code: a package whose manifest declares a
-    /// tool and more, and the guest program's source in Rust or Python.
+    /// tool and more, and the guest's source in Rust or Python, run as a
+    /// process or (Rust) compiled to a WebAssembly module.
     #[command(
-        after_help = "Examples:\n  hanafubuki-agent plugins new my-plugin\n  hanafubuki-agent plugins new my-plugin --lang python --dir plugins/my-plugin"
+        after_help = "Examples:\n  hanafubuki-agent plugins new my-plugin\n  hanafubuki-agent plugins new my-plugin --target wasm\n  hanafubuki-agent plugins new my-plugin --lang python --dir plugins/my-plugin"
     )]
     New {
         /// The plugin's name: lowercase letters, digits and `-`, starting
@@ -374,6 +375,10 @@ pub(crate) enum PluginsCommand {
         name: String,
         #[arg(long, value_enum, default_value = "rust")]
         lang: PluginLanguage,
+        /// What runs it: a program (`process`), or a WebAssembly module
+        /// (`wasm`, Rust only).
+        #[arg(long, value_enum, default_value = "process")]
+        target: PluginTarget,
         /// The directory to create (default: ./NAME).
         #[arg(long, value_name = "DIR")]
         dir: Option<PathBuf>,
@@ -383,7 +388,8 @@ pub(crate) enum PluginsCommand {
     Validate {
         dir: PathBuf,
         /// Also installs it into a throwaway home, grants its permissions
-        /// and starts its guest, then reports how it ran.
+        /// (a program's; a WebAssembly module asks for none) and starts its
+        /// guest, then reports how it ran.
         #[arg(long)]
         run: bool,
         #[arg(long)]
@@ -407,6 +413,12 @@ pub(crate) enum PluginsCommand {
 pub(crate) enum PluginLanguage {
     Rust,
     Python,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
+pub(crate) enum PluginTarget {
+    Process,
+    Wasm,
 }
 
 #[derive(Debug, Subcommand)]

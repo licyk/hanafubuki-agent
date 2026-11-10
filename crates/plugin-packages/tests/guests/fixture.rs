@@ -13,8 +13,8 @@ use hanafubuki_agent_contracts::{
 };
 use hanafubuki_agent_host::{LogExporter, RestartPolicy};
 use hanafubuki_agent_packages::{
-    content_hash, PackageContributes, PackagePermissions, PackageRuntime, PluginId, RuntimeKind,
-    WorkspaceAccess,
+    content_hash, PackageContributes, PackagePermissions, PackageRuntime, PluginId, ProcessRuntime,
+    WasmRuntime, WasmRuntimeLimits, WorkspaceAccess,
 };
 use hanafubuki_agent_plugin_packages::{
     GuestHost, GuestHostInputs, GuestPackage, GuestSettingsPort, GuestStatus,
@@ -175,8 +175,7 @@ impl Fixture {
             data_root: self.directory.path().join("data").join(name),
             root,
             name: name.to_string(),
-            runtime: PackageRuntime {
-                kind: RuntimeKind::Process,
+            runtime: PackageRuntime::Process(ProcessRuntime {
                 command: vec![
                     program.to_str().unwrap().to_string(),
                     GUEST_ARG.to_string(),
@@ -185,9 +184,45 @@ impl Fixture {
                 ],
                 interpreter: true,
                 protocol: Some("kardia-guest/2".to_string()),
-            },
+            }),
             granted: Some(permissions.clone()),
             permissions,
+            contributes: PackageContributes::default(),
+            settings: Map::new(),
+            enabled: true,
+        }
+    }
+
+    /// A package named `name`, on, whose guest is the WASM module `wat`
+    /// (the text format, assembled into `./guest.wasm`) with `limits`. It
+    /// asks for nothing and has no grant: a WASM guest needs none.
+    pub fn wasm_package(&self, name: &str, wat: &str, limits: WasmRuntimeLimits) -> GuestPackage {
+        let root = self.directory.path().join("packages").join(name);
+        fs::create_dir_all(root.join(".hanafubuki-plugin")).unwrap();
+        fs::write(
+            root.join(".hanafubuki-plugin/plugin.json"),
+            json!({ "name": name, "runtime": { "type": "wasm", "module": "./guest.wasm" } })
+                .to_string(),
+        )
+        .unwrap();
+        fs::write(root.join("guest.wasm"), wat::parse_str(wat).unwrap()).unwrap();
+        GuestPackage {
+            id: PluginId::new(name, "local").unwrap(),
+            version: "local".to_string(),
+            content_hash: Some(content_hash(&root).unwrap()),
+            data_root: self.directory.path().join("data").join(name),
+            root,
+            name: name.to_string(),
+            runtime: PackageRuntime::Wasm(WasmRuntime {
+                module: "./guest.wasm".to_string(),
+                limits,
+            }),
+            granted: None,
+            permissions: PackagePermissions {
+                network: false,
+                workspace: WorkspaceAccess::None,
+                env: Vec::new(),
+            },
             contributes: PackageContributes::default(),
             settings: Map::new(),
             enabled: true,

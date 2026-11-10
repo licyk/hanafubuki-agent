@@ -212,6 +212,7 @@ impl AgentPackages {
     fn guest_status(&self, package: &LoadedPackage) -> Option<AgentPackageGuest> {
         let guest = package.guest.as_ref()?;
         Some(AgentPackageGuest {
+            runtime: guest.runtime.kind(),
             permissions: guest.permissions.clone(),
             granted_permissions: guest.granted.clone(),
             status: self.guests.status(&guest.id.key())?,

@@ -60,7 +60,7 @@ fn contributing(fixture: &Fixture, mode: &str) -> GuestPackage {
     package
 }
 
-fn entries<S: RegistryService>(fixture: &Fixture) -> Vec<S::Item>
+pub fn entries<S: RegistryService>(fixture: &Fixture) -> Vec<S::Item>
 where
     S::Item: Clone,
 {
@@ -69,7 +69,7 @@ where
     snapshot.items().cloned().collect()
 }
 
-fn owners<S: RegistryService>(fixture: &Fixture) -> Vec<String> {
+pub fn owners<S: RegistryService>(fixture: &Fixture) -> Vec<String> {
     let registry = fixture.registry::<S>();
     let snapshot = registry.registry().snapshot();
     snapshot
@@ -109,7 +109,7 @@ fn invocation(arguments: Value) -> ToolInvocation {
     }
 }
 
-fn context_request() -> ContextRequest {
+pub fn context_request() -> ContextRequest {
     ContextRequest {
         session_id: AgentSessionId::new(1),
         mode: AgentSessionMode::Default,
@@ -142,7 +142,7 @@ fn continuation(answer: &str) -> AgentContinuationContext {
 }
 
 /// The tools the guest's source plans for a step.
-async fn planned(fixture: &Fixture) -> Result<Vec<SourcedTool>, AgentToolError> {
+pub async fn planned(fixture: &Fixture) -> Result<Vec<SourcedTool>, AgentToolError> {
     let sources = entries::<ToolSourceRegistry>(fixture);
     assert_eq!(sources.len(), 1);
     let step = step();
@@ -151,7 +151,7 @@ async fn planned(fixture: &Fixture) -> Result<Vec<SourcedTool>, AgentToolError> 
 }
 
 /// Runs `tool` with `arguments`, approved as its permission asks.
-async fn run(tool: &SourcedTool, arguments: Value) -> Result<ToolOutput, AgentToolError> {
+pub async fn run(tool: &SourcedTool, arguments: Value) -> Result<ToolOutput, AgentToolError> {
     let call = invocation(arguments.clone());
     let PermissionRequirement::ReviewRequired(action) = tool.handler.permission(&call).await?
     else {
@@ -172,7 +172,7 @@ async fn run(tool: &SourcedTool, arguments: Value) -> Result<ToolOutput, AgentTo
     Ok(tool.handler.invoke(call, Some(approval)).await?.output)
 }
 
-fn tool<'a>(tools: &'a [SourcedTool], name: &str) -> &'a SourcedTool {
+pub fn tool<'a>(tools: &'a [SourcedTool], name: &str) -> &'a SourcedTool {
     tools
         .iter()
         .find(|tool| tool.handler.descriptor().name.flattened_alias() == name)

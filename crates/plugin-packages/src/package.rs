@@ -51,11 +51,11 @@ pub struct GuestPackage {
 }
 
 impl GuestPackage {
-    /// Why its guest may not start at all: a runtime this host does not
-    /// run, or a permission the user has not granted.
+    /// Why its guest may not start at all: a permission the user has not
+    /// granted. A WASM guest asks for none, and needs no grant.
     pub(crate) fn refusal(&self) -> Option<String> {
-        if self.runtime.kind != RuntimeKind::Process {
-            return Some("its runtime is not supported yet: only \"process\" runs".to_string());
+        if !self.needs_grant() {
+            return None;
         }
         let Some(granted) = &self.granted else {
             return Some("its permissions are not granted".to_string());
@@ -78,6 +78,13 @@ impl GuestPackage {
                 .map(|name| format!("env {name}")),
         );
         (!missing.is_empty()).then(|| format!("permissions not granted: {}", missing.join(", ")))
+    }
+
+    /// Whether its guest starts only once the user granted what it asks
+    /// for: a process guest's. A WASM guest reaches nothing outside its
+    /// module.
+    pub(crate) fn needs_grant(&self) -> bool {
+        self.runtime.kind() == RuntimeKind::Process
     }
 
     /// Whether its guest runs: it is on and may start.

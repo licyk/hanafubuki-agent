@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use hanafubuki_agent_contracts::PluginFaults;
 use hanafubuki_agent_host::{RestartPolicy, GUEST_LOGGER_PREFIX};
-use hanafubuki_agent_packages::PluginId;
+use hanafubuki_agent_packages::{PluginId, RuntimeKind};
 use hanafubuki_agent_process::executor::ExecutorManager;
 use hanafubuki_agent_sandbox::Sandbox;
 use kardia_core::{Fiber, FiberState};
@@ -23,6 +23,7 @@ use crate::settings::GuestSettingsPort;
 use crate::spawn::{SpawnContext, WorkspaceRoots};
 use crate::state::{GuestRecord, GuestState, GuestStatus};
 use crate::supervise::Restart;
+use crate::wasm;
 
 /// What the guest host is built from.
 pub struct GuestHostInputs {
@@ -169,7 +170,10 @@ impl GuestHost {
 
     /// Calls `method` of the service the guest of `id` provides
     /// ([`GUEST_SERVICE`]), with `args`, killing the guest if it has not
-    /// answered within `timeout`. Dropping the future cancels the call.
+    /// answered within `timeout`. Dropping the future cancels the call. A
+    /// WASM guest whose instance failed in the call (a trap, its fuel or
+    /// time used up, a memory it may not grow) is failed, as a process
+    /// guest that exits is, and restarts under the restart policy.
     pub async fn call(
         &self,
         id: &PluginId,
@@ -187,10 +191,19 @@ impl GuestHost {
             .context()
             .live_as::<GuestService>(GUEST_SERVICE)
             .ok_or_else(|| format!("the guest of plugin `{id}` provides no service"))?;
-        service
-            .call_async(method, args, Some(timeout))
-            .await
-            .map_err(|error| error.to_string())
+        let error = match service.call_async(method, args, Some(timeout)).await {
+            Ok(answer) => return Ok(answer),
+            Err(error) => error.to_string(),
+        };
+        let wasm = self
+            .0
+            .package(&id)
+            .is_some_and(|package| package.runtime.kind() == RuntimeKind::Wasm);
+        if wasm && wasm::instance_failed(&error) {
+            log::warn!("plugin {id}: its WASM guest's instance failed in a call");
+            drop(fiber.fail(kardia_core::Error::msg(error.clone())));
+        }
+        Err(error)
     }
 }
 

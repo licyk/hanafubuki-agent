@@ -1,7 +1,7 @@
 //! The example plugins (`examples/plugins/`) built as their READMEs say and
 //! checked with `plugins validate`, then started with `--run` on Linux,
 //! where the sandbox's plugin profile was checked (skipped when the machine
-//! has no sandbox). The Rust one is built with the workspace's cargo; the
+//! has no sandbox), and the WASM one wherever its target is installed. The Rust one is built with the workspace's cargo; the
 //! Python one needs an interpreter with a pykardia that speaks
 //! kardia-guest/2 (PyPI's 0.1.0 does not), named by
 //! `HANAFUBUKI_AGENT_TEST_PYTHON`, and is skipped without one. Unix only:
@@ -86,6 +86,51 @@ fn the_rust_example_builds_validates_and_runs() {
     )
     .unwrap();
     validate(&home, &example.join("package"));
+}
+
+/// The WASM example needs no sandbox, so it starts on every machine that
+/// has the target to build it (CI installs it).
+#[test]
+fn the_wasm_example_builds_validates_and_runs() {
+    let sysroot = Command::new("rustc")
+        .args(["--print", "sysroot"])
+        .output()
+        .unwrap();
+    let sysroot = PathBuf::from(String::from_utf8(sysroot.stdout).unwrap().trim());
+    if !sysroot.join("lib/rustlib/wasm32-unknown-unknown").is_dir() {
+        eprintln!("skipped: the wasm32-unknown-unknown target is not installed");
+        return;
+    }
+    let home = Home::new();
+    let example = copy_example("hello-wasm", &home.project);
+    let target = repository().join("target/plugin-examples");
+    let built = Command::new(env!("CARGO"))
+        .args([
+            "build",
+            "--release",
+            "--locked",
+            "--target",
+            "wasm32-unknown-unknown",
+        ])
+        .current_dir(&example)
+        .env("CARGO_TARGET_DIR", &target)
+        .status()
+        .unwrap();
+    assert!(built.success(), "the example did not build");
+    std::fs::copy(
+        target.join("wasm32-unknown-unknown/release/hello_wasm.wasm"),
+        example.join("package/hello-wasm.wasm"),
+    )
+    .unwrap();
+    let package = example.join("package");
+    let run = home
+        .run(&["plugins", "validate", package.to_str().unwrap(), "--run"])
+        .expect(0);
+    assert!(
+        run.stdout().contains("guest:    running (WebAssembly)"),
+        "{}",
+        run.stdout()
+    );
 }
 
 #[test]

@@ -15,7 +15,7 @@ use std::time::Duration;
 use hanafubuki_agent_foundation::background_worker::spawn_contained_thread;
 use hanafubuki_agent_foundation::module_faults::FaultOwner;
 use hanafubuki_agent_foundation::paths::ResolvedPath;
-use hanafubuki_agent_packages::{content_hash, WorkspaceAccess};
+use hanafubuki_agent_packages::{content_hash, ProcessRuntime, WorkspaceAccess};
 use hanafubuki_agent_process::executor::manager::{
     dispose_reserved_executor, release_executor_reservation, reserve_executor_id,
     reserved_executor_exists, start_reserved_pipe_executor, terminate_reserved_executor,
@@ -53,6 +53,7 @@ pub(crate) struct SpawnContext {
 /// Starts the processes of one package's guest.
 pub(crate) struct GuestSpawner {
     package: GuestPackage,
+    runtime: ProcessRuntime,
     context: Arc<SpawnContext>,
 }
 
@@ -65,8 +66,16 @@ struct Launch {
 }
 
 impl GuestSpawner {
-    pub(crate) fn new(package: GuestPackage, context: Arc<SpawnContext>) -> Self {
-        Self { package, context }
+    pub(crate) fn new(
+        package: GuestPackage,
+        runtime: ProcessRuntime,
+        context: Arc<SpawnContext>,
+    ) -> Self {
+        Self {
+            package,
+            runtime,
+            context,
+        }
     }
 
     fn launch(&self) -> Result<Launch, String> {
@@ -76,12 +85,12 @@ impl GuestSpawner {
             .map_err(|error| format!("its data directory cannot be created: {error}"))?;
         let root = resolve(&package.root, "its package directory")?;
         let data = resolve(&package.data_root, "its data directory")?;
-        let (first, rest) = package
+        let (first, rest) = self
             .runtime
             .command
             .split_first()
             .ok_or("its runtime has no command")?;
-        let program = if package.runtime.interpreter {
+        let program = if self.runtime.interpreter {
             interpreter(first)?
         } else {
             in_package(&root, first)?
@@ -94,7 +103,7 @@ impl GuestSpawner {
             });
         }
         let mut readable_roots = vec![root.native().to_path_buf()];
-        if package.runtime.interpreter {
+        if self.runtime.interpreter {
             readable_roots.push(program.native().to_path_buf());
         }
         let argv = match &self.context.sandbox {
@@ -141,7 +150,7 @@ impl Spawner for GuestSpawner {
 
 /// The package still has the content recorded at install, or its guest
 /// does not start.
-fn check_content(package: &GuestPackage) -> Result<(), String> {
+pub(crate) fn check_content(package: &GuestPackage) -> Result<(), String> {
     let recorded = package
         .content_hash
         .as_deref()

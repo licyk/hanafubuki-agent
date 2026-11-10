@@ -20,9 +20,33 @@ pub struct PackageCode {
     pub config_schema: Option<Map<String, Value>>,
 }
 
+/// What runs a package's code: a program speaking the guest protocol, or a
+/// WebAssembly module speaking the guest ABI.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct PackageRuntime {
-    pub kind: RuntimeKind,
+pub enum PackageRuntime {
+    Process(ProcessRuntime),
+    Wasm(WasmRuntime),
+}
+
+impl PackageRuntime {
+    pub fn kind(&self) -> RuntimeKind {
+        match self {
+            Self::Process(_) => RuntimeKind::Process,
+            Self::Wasm(_) => RuntimeKind::Wasm,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum RuntimeKind {
+    Process,
+    Wasm,
+}
+
+/// `runtime.type = "process"`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ProcessRuntime {
     /// The program and its arguments; a path in the package starts `./`.
     pub command: Vec<String>,
     /// Whether `command` starts with an interpreter outside the package.
@@ -30,11 +54,45 @@ pub struct PackageRuntime {
     pub protocol: Option<String>,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum RuntimeKind {
-    Process,
-    Wasm,
+/// `runtime.type = "wasm"`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct WasmRuntime {
+    /// The module in the package (`./…`).
+    pub module: String,
+    pub limits: WasmRuntimeLimits,
 }
+
+/// What one instance of a WASM guest may use (`runtime.limits`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct WasmRuntimeLimits {
+    /// The fuel each export may burn (about one unit per instruction);
+    /// unset, none is counted.
+    pub fuel: Option<u64>,
+    /// How long each export may run (`timeoutMs`); unset, the longest any
+    /// call of the guest may take (the call deadline, or a longer tool
+    /// `timeout`).
+    pub timeout: Option<Duration>,
+    /// The most linear memory the instance may have (`memoryBytes`).
+    pub memory_bytes: u64,
+}
+
+impl Default for WasmRuntimeLimits {
+    fn default() -> Self {
+        Self {
+            fuel: None,
+            timeout: None,
+            memory_bytes: DEFAULT_WASM_MEMORY_BYTES,
+        }
+    }
+}
+
+/// A WASM guest's memory unless its manifest says otherwise: 256 MiB.
+pub const DEFAULT_WASM_MEMORY_BYTES: u64 = 256 * 1024 * 1024;
+/// The bounds of `memoryBytes`: one page, and all a 32-bit module can
+/// address.
+const WASM_MEMORY_BYTES: std::ops::RangeInclusive<u64> = 64 * 1024..=4 * 1024 * 1024 * 1024;
+/// The longest `timeoutMs`: an hour, as a tool's `timeout`.
+const MAXIMUM_WASM_TIMEOUT_MS: u64 = 3_600_000;
 
 /// What the guest contributes, declared up front.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -113,11 +171,25 @@ pub(super) fn parse(object: &Map<String, Value>, issues: &mut Vec<String>) -> Op
         .object("contributes")
         .map(|contributes| self::contributes(contributes, fields.issues()))
         .unwrap_or_default();
-    let permissions = fields
+    let mut permissions = fields
         .object("permissions")
         .map(|permissions| self::permissions(permissions, fields.issues()))
         .unwrap_or_default();
     let config_schema = fields.object("configSchema").cloned();
+    if matches!(runtime, Some(PackageRuntime::Wasm(_))) {
+        if fields.raw("permissions").is_some() {
+            fields.issue(
+                "permissions",
+                "a WASM guest reaches nothing outside its module (no files, network or \
+                 environment), so it asks for nothing",
+            );
+        }
+        permissions = PackagePermissions {
+            network: false,
+            workspace: WorkspaceAccess::None,
+            env: Vec::new(),
+        };
+    }
     Some(PackageCode {
         runtime,
         contributes,
@@ -128,31 +200,85 @@ pub(super) fn parse(object: &Map<String, Value>, issues: &mut Vec<String>) -> Op
 
 fn runtime(object: &Map<String, Value>, issues: &mut Vec<String>) -> Option<PackageRuntime> {
     let mut fields = Fields::new(object, "runtime.", issues);
-    let kind = match fields.string("type").as_deref() {
-        Some("process") => RuntimeKind::Process,
-        Some("wasm") => RuntimeKind::Wasm,
+    match fields.string("type").as_deref() {
+        Some("process") => process_runtime(fields),
+        Some("wasm") => wasm_runtime(fields),
         _ => {
             fields.issue(
                 "type",
                 "expected \"process\" or \"wasm\"; the runtime is ignored",
             );
-            return None;
+            None
         }
-    };
+    }
+}
+
+fn process_runtime(mut fields: Fields<'_>) -> Option<PackageRuntime> {
     let command = fields.strings("command");
     if command.is_empty() {
         fields.issue(
             "command",
-            "a runtime needs a command; the runtime is ignored",
+            "a process runtime needs a command; the runtime is ignored",
         );
         return None;
     }
-    Some(PackageRuntime {
-        kind,
+    Some(PackageRuntime::Process(ProcessRuntime {
         command,
         interpreter: fields.bool("interpreter").unwrap_or(false),
         protocol: fields.string("protocol"),
-    })
+    }))
+}
+
+fn wasm_runtime(mut fields: Fields<'_>) -> Option<PackageRuntime> {
+    let Some(module) = fields.string("module").filter(|module| !module.is_empty()) else {
+        fields.issue(
+            "module",
+            "a wasm runtime needs a module (./….wasm); the runtime is ignored",
+        );
+        return None;
+    };
+    let limits = fields
+        .object("limits")
+        .map(|limits| {
+            let mut fields = Fields::new(limits, "runtime.limits.", fields.issues());
+            wasm_limits(&mut fields)
+        })
+        .unwrap_or_default();
+    Some(PackageRuntime::Wasm(WasmRuntime { module, limits }))
+}
+
+/// Each limit on its own: one out of its bounds is an issue, and its
+/// default applies.
+fn wasm_limits(fields: &mut Fields<'_>) -> WasmRuntimeLimits {
+    let mut whole = |key: &str, bounds: std::ops::RangeInclusive<u64>, fallback: &str| {
+        let value = fields.raw(key)?;
+        let number = value.as_u64().filter(|number| bounds.contains(number));
+        if number.is_none() {
+            fields.issue(
+                key,
+                &format!(
+                    "expected a whole number from {} to {}; {fallback}",
+                    bounds.start(),
+                    bounds.end()
+                ),
+            );
+        }
+        number
+    };
+    let fuel = whole("fuel", 1..=u64::MAX, "no fuel is counted");
+    let timeout = whole(
+        "timeoutMs",
+        1..=MAXIMUM_WASM_TIMEOUT_MS,
+        "the guest's longest call bounds it",
+    )
+    .map(Duration::from_millis);
+    let memory_bytes = whole("memoryBytes", WASM_MEMORY_BYTES, "256 MiB is used")
+        .unwrap_or(DEFAULT_WASM_MEMORY_BYTES);
+    WasmRuntimeLimits {
+        fuel,
+        timeout,
+        memory_bytes,
+    }
 }
 
 fn contributes(object: &Map<String, Value>, issues: &mut Vec<String>) -> PackageContributes {

@@ -33,7 +33,12 @@ use crate::exit::Failure;
 pub(crate) fn run(global: &GlobalArgs, command: PluginsCommand) -> Result<(), Failure> {
     // The author's commands run without the Agent, or start their own.
     let command = match command {
-        PluginsCommand::New { name, lang, dir } => return scaffold::run(&name, lang, dir),
+        PluginsCommand::New {
+            name,
+            lang,
+            target,
+            dir,
+        } => return scaffold::run(&name, lang, target, dir),
         PluginsCommand::Validate { dir, run, json } => {
             return develop::validate(global, &dir, run, json)
         }
@@ -406,7 +411,11 @@ fn print_package(package: &AgentPackageStatus) {
     }
     if let Some(guest) = &package.guest {
         let status = &guest.status;
-        println!("  code:        {}", code::state_text(status.state));
+        println!(
+            "  code:        {}{}",
+            code::state_text(status.state),
+            code::runtime_text(guest.runtime)
+        );
         if let Some(error) = &status.error {
             println!("  code error:  {error}");
         }

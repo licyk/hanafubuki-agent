@@ -1,7 +1,8 @@
 //! The plugin author's commands, run as the built binary: `plugins new`
 //! (what it writes, and that `examples/plugins/` is its output),
-//! `plugins validate` on a good and a bad plugin, and `plugins grant` and
-//! `plugins settings` on an installed one.
+//! `plugins validate` on good and bad plugins, a process's and a WASM
+//! module's, and `plugins grant` and `plugins settings` on an installed
+//! one.
 
 mod support;
 
@@ -86,7 +87,7 @@ fn merge(target: &mut Value, changes: Value) {
 }
 
 #[test]
-fn new_scaffolds_a_rust_or_python_plugin_and_refuses_a_bad_name_or_a_full_directory() {
+fn new_scaffolds_a_rust_python_or_wasm_plugin_and_refuses_a_bad_name_or_a_full_directory() {
     let home = Home::new();
     let rust = home.project.join("demo-plugin");
     let created = home
@@ -166,6 +167,50 @@ fn new_scaffolds_a_rust_or_python_plugin_and_refuses_a_bad_name_or_a_full_direct
     assert_eq!(manifest["contributes"]["prompt"]["slot"], "capabilities");
     assert!(read(&python.join("plugin.py")).contains(r#"Meta.plugin("py-demo").provide("plugin")"#));
 
+    let wasm = home.project.join("wasm");
+    let created = home
+        .run(&[
+            "plugins",
+            "new",
+            "wasm-demo",
+            "--target",
+            "wasm",
+            "--dir",
+            wasm.to_str().unwrap(),
+        ])
+        .expect(0)
+        .stdout();
+    assert!(
+        created.contains("--target wasm32-unknown-unknown"),
+        "{created}"
+    );
+    assert_eq!(
+        files(&wasm),
+        [
+            ".gitignore",
+            "Cargo.toml",
+            "README.md",
+            "package/.hanafubuki-plugin/plugin.json",
+            "src/lib.rs",
+        ]
+        .map(PathBuf::from)
+    );
+    let manifest: Value =
+        serde_json::from_str(&read(&wasm.join("package/.hanafubuki-plugin/plugin.json"))).unwrap();
+    assert_eq!(manifest["runtime"]["type"], "wasm");
+    assert_eq!(manifest["runtime"]["module"], "./wasm-demo.wasm");
+    assert_eq!(manifest.get("permissions"), None);
+    assert!(read(&wasm.join("Cargo.toml")).contains(r#"crate-type = ["cdylib"]"#));
+    let source = read(&wasm.join("src/lib.rs"));
+    assert!(source.contains(r#"Meta::plugin("wasm-demo").provide("plugin")"#));
+    assert!(source.contains("kardia_guest::export!(Plugin);"));
+    assert!(read(&wasm.join("README.md")).contains("release/wasm_demo.wasm package/wasm-demo.wasm"));
+    // A Python guest runs as a process only.
+    home.run(&[
+        "plugins", "new", "py-wasm", "--lang", "python", "--target", "wasm",
+    ])
+    .expect(2);
+
     home.run(&["plugins", "new", "Not_A_Name"]).expect(2);
     let full = home
         .run(&[
@@ -185,7 +230,11 @@ fn new_scaffolds_a_rust_or_python_plugin_and_refuses_a_bad_name_or_a_full_direct
 fn the_example_plugins_are_what_new_writes() {
     let home = Home::new();
     let examples = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples/plugins");
-    for (name, lang) in [("hello-rust", "rust"), ("hello-python", "python")] {
+    for (name, lang, target) in [
+        ("hello-rust", "rust", "process"),
+        ("hello-python", "python", "process"),
+        ("hello-wasm", "rust", "wasm"),
+    ] {
         let fresh = home.project.join(name);
         home.run(&[
             "plugins",
@@ -193,6 +242,8 @@ fn the_example_plugins_are_what_new_writes() {
             name,
             "--lang",
             lang,
+            "--target",
+            target,
             "--dir",
             fresh.to_str().unwrap(),
         ])
@@ -272,6 +323,82 @@ fn validate_accepts_a_good_plugin_and_names_what_a_bad_one_gets_wrong() {
         .run(&["plugins", "validate", empty.to_str().unwrap()])
         .expect(1);
     assert!(run.stderr().contains("holds no plugin"), "{}", run.stderr());
+}
+
+/// A WASM plugin `name` at `root` whose manifest is `manifest` over a
+/// valid one, with `module` as its module's bytes.
+fn wasm_plugin(root: &Path, name: &str, changes: Value, module: &[u8]) -> PathBuf {
+    let mut manifest = json!({
+        "name": name,
+        "version": "1.0.0",
+        "runtime": { "type": "wasm", "module": "./guest.wasm" },
+        "contributes": {
+            "tools": [{ "name": "lookup", "inputSchema": { "type": "object" }, "timeout": 30 }],
+        },
+    });
+    merge(&mut manifest, changes);
+    write(
+        &root.join(".hanafubuki-plugin/plugin.json"),
+        &manifest.to_string(),
+    );
+    std::fs::write(root.join("guest.wasm"), module).unwrap();
+    root.to_path_buf()
+}
+
+/// The smallest WebAssembly module: its magic and its version.
+const EMPTY_MODULE: &[u8] = b"\0asm\x01\0\0\0";
+
+#[test]
+fn validate_checks_a_wasm_plugins_module_limits_and_permissions() {
+    let home = Home::new();
+    let good = wasm_plugin(&home.project.join("good"), "good", json!({}), EMPTY_MODULE);
+    let run = home
+        .run(&["plugins", "validate", good.to_str().unwrap()])
+        .expect(0);
+    assert!(run.stdout().contains("No issues."), "{}", run.stdout());
+
+    let issues = |root: &Path| {
+        let run = home
+            .run(&["plugins", "validate", root.to_str().unwrap(), "--json"])
+            .expect(1);
+        let report: Value = serde_json::from_str(&run.stdout()).unwrap();
+        report["validation"]["issues"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|issue| issue.as_str().unwrap().to_string())
+            .collect::<Vec<_>>()
+    };
+    let has = |issues: &[String], text: &str| {
+        assert!(
+            issues.iter().any(|issue| issue.contains(text)),
+            "no issue with `{text}` in {issues:#?}"
+        );
+    };
+    let text = wasm_plugin(
+        &home.project.join("text"),
+        "text",
+        json!({
+            "runtime": { "limits": { "timeoutMs": 5000, "memoryBytes": 1 } },
+            "permissions": { "network": true },
+        }),
+        b"(module)",
+    );
+    let found = issues(&text);
+    has(&found, "`./guest.wasm` is not a WebAssembly module");
+    has(
+        &found,
+        "tool `lookup`: its timeout is longer than runtime.limits.timeoutMs",
+    );
+    has(&found, "runtime.limits.memoryBytes");
+    has(&found, "a WASM guest reaches nothing outside its module");
+    let outside = wasm_plugin(
+        &home.project.join("outside"),
+        "outside",
+        json!({ "runtime": { "module": "./missing.wasm" } }),
+        EMPTY_MODULE,
+    );
+    has(&issues(&outside), "runtime.module: `./missing.wasm`");
 }
 
 #[test]
@@ -363,4 +490,20 @@ fn grant_and_settings_change_an_installed_plugins_code() {
         .expect(0);
     let run = home.run(&["plugins", "grant", "content@local"]).expect(1);
     assert!(run.stderr().contains("has no code"), "{}", run.stderr());
+
+    // A WASM module asks for nothing: no grant to wait for or give.
+    let module = home.project.join("module");
+    wasm_plugin(&module, "module", json!({}), EMPTY_MODULE);
+    let added = home
+        .run(&["plugins", "add", module.to_str().unwrap()])
+        .expect(0)
+        .stdout();
+    assert!(!added.contains("plugins grant"), "{added}");
+    let run = home.run(&["plugins", "grant", "module@local"]).expect(1);
+    assert!(run.stderr().contains("needs no grant"), "{}", run.stderr());
+    let info = home
+        .run(&["plugins", "info", "module@local"])
+        .expect(0)
+        .stdout();
+    assert!(info.contains("(WebAssembly)"), "{info}");
 }

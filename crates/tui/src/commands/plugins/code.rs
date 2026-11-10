@@ -2,7 +2,7 @@
 //! while it is not granted, its guest's state, and its settings, which a
 //! form edits as JSON.
 
-use hanafubuki_agent::{AgentPackageStatus, PackagePermissions, WorkspaceAccess};
+use hanafubuki_agent::{AgentPackageStatus, PackagePermissions, RuntimeKind, WorkspaceAccess};
 
 use super::pages::{action, call, info, After, Choice, Page, Prompt, Row};
 use crate::agent_bridge::PluginsCall;
@@ -10,17 +10,14 @@ use crate::agent_bridge::PluginsCall;
 /// **Grant its permissions**, for a code plugin whose grant does not cover
 /// what its manifest asks for.
 pub(super) fn grant_row(package: &AgentPackageStatus) -> Option<Row> {
-    let guest = package
-        .guest
-        .as_ref()
-        .filter(|guest| guest.granted_permissions.as_ref() != Some(&guest.permissions))?;
+    let permissions = package.guest.as_ref()?.ungranted()?;
     Some(action(
         "Grant its permissions",
-        &permissions_text(&guest.permissions),
+        &permissions_text(permissions),
         Some(call(
             PluginsCall::GrantPermissions {
                 id: package.id.clone(),
-                permissions: guest.permissions.clone(),
+                permissions: permissions.clone(),
             },
             "Granting…",
             After::Stay,
@@ -30,8 +27,12 @@ pub(super) fn grant_row(package: &AgentPackageStatus) -> Option<Row> {
 
 /// The guest's state, and why it is not running.
 pub(super) fn state_row(package: &AgentPackageStatus) -> Option<Row> {
-    let status = &package.guest.as_ref()?.status;
-    let state = format!("{:?}", status.state).to_lowercase();
+    let guest = package.guest.as_ref()?;
+    let status = &guest.status;
+    let mut state = format!("{:?}", status.state).to_lowercase();
+    if guest.runtime == RuntimeKind::Wasm {
+        state.push_str(" (WebAssembly)");
+    }
     Some(info(
         "Code",
         &match &status.error {

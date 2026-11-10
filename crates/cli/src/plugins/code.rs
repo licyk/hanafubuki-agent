@@ -5,7 +5,7 @@ use std::io::{BufRead, IsTerminal, Write};
 use std::time::{Duration, Instant};
 
 use hanafubuki_agent::{
-    AgentHandle, AgentPackageStatus, GuestState, PackagePermissions, WorkspaceAccess,
+    AgentHandle, AgentPackageStatus, GuestState, PackagePermissions, RuntimeKind, WorkspaceAccess,
 };
 use serde_json::Value;
 
@@ -25,6 +25,12 @@ pub(crate) fn grant(agent: &AgentHandle, id: String) -> Result<(), Failure> {
             "plugin `{id}` has no code: it asks for nothing"
         )));
     };
+    if guest.runtime == RuntimeKind::Wasm {
+        return Err(Failure::new(format!(
+            "plugin `{id}`'s code is a WebAssembly module, which reaches nothing outside itself: \
+             it needs no grant"
+        )));
+    }
     let shown = permissions_text(&guest.permissions);
     grant_permissions(agent, &id, guest.permissions.clone())?;
     println!("Granted plugin `{id}` {shown}.");
@@ -137,7 +143,11 @@ pub(crate) fn print_guest(package: &AgentPackageStatus) {
         return;
     };
     let status = &guest.status;
-    println!("  guest:    {}", state_text(status.state));
+    println!(
+        "  guest:    {}{}",
+        state_text(status.state),
+        runtime_text(guest.runtime)
+    );
     if let Some(error) = &status.error {
         println!("  error:    {error}");
     }
@@ -159,6 +169,14 @@ pub(crate) fn print_guest(package: &AgentPackageStatus) {
         for line in status.stderr_tail.trim_end().lines() {
             println!("    {line}");
         }
+    }
+}
+
+/// What follows a guest's state for a WebAssembly guest.
+pub(crate) fn runtime_text(runtime: RuntimeKind) -> &'static str {
+    match runtime {
+        RuntimeKind::Process => "",
+        RuntimeKind::Wasm => " (WebAssembly)",
     }
 }
 

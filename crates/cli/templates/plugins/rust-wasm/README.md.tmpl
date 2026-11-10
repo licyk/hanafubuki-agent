@@ -1,0 +1,30 @@
+# {{name}}
+
+A hanafubuki-agent plugin written in Rust and compiled to WebAssembly, with
+the guest SDK [kardia-guest](https://crates.io/crates/kardia-guest) (MIT OR
+Apache-2.0). It contributes a tool (`greet`), a context section
+(`{{kind}}_status`) and an observer (`turn_finished`). `package/` is the
+plugin the Agent installs; the Cargo project around it builds its module,
+one file for every platform.
+
+Build the module into the package:
+
+```sh
+rustup target add wasm32-unknown-unknown
+cargo build --release --target wasm32-unknown-unknown
+cp target/wasm32-unknown-unknown/release/{{kind}}.wasm package/{{name}}.wasm
+```
+
+Check it, start it once, then run it in the Agent and reload it at each new
+build until Ctrl+C:
+
+```sh
+hanafubuki-agent plugins validate package --run
+hanafubuki-agent plugins dev package
+```
+
+The module reaches nothing outside itself: no files, network or
+environment, so it asks for no permissions. `runtime.limits` bounds what
+each call may use (fuel, `timeoutMs`, `memoryBytes`).
+
+See [Writing plugins](https://licyk.github.io/hanafubuki-agent/docs/writing-plugins/).
