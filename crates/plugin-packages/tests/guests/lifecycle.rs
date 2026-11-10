@@ -141,8 +141,9 @@ pub async fn a_guest_process_is_the_instances_and_stops_with_the_guest_host() {
     assert_eq!(second.restarts, 1);
 
     // The process group is recorded while it runs, so the next start reaps
-    // it after a crash.
-    if cfg!(unix) {
+    // it after a crash. Only Linux records one: macOS has no leader identity
+    // the ledger reads yet.
+    if cfg!(target_os = "linux") {
         let pid = second.process_id.unwrap();
         let recorded =
             std::fs::read_to_string(fixture.directory.path().join("process-groups.json")).unwrap();
