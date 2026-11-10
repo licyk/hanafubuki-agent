@@ -131,7 +131,7 @@ fn new_scaffolds_a_rust_python_or_wasm_plugin_and_refuses_a_bad_name_or_a_full_d
     assert!(manifest["configSchema"].is_object());
     let source = read(&rust.join("src/main.rs"));
     assert!(source.contains(r#"Meta::plugin("demo-plugin").provide("plugin")"#));
-    assert!(read(&rust.join("Cargo.toml")).contains("kardia-guest = \"0.2.2\""));
+    assert!(read(&rust.join("Cargo.toml")).contains("kardia-guest = \"0.2.3\""));
     assert!(!read(&rust.join("README.md")).contains("{{"));
 
     let python = home.project.join("py");

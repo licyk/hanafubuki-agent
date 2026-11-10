@@ -173,7 +173,7 @@ kardia-guest 和 pykardia 的访客 SDK（`pykardia/guest/` 以及导出时一�
 
 - **它访问不到自身以外的任何东西。**它能导入的函数只有访客 ABI 的函数（`read`、`write`、`log`、`provide`、`view`、`invoke`，来自模块 `cordis` 或 `kardia`）：没有文件、网络、时钟或环境变量。导入其他任何东西（例如 WASI）的模块无法加载。所以它不请求任何权限，不需要授权也不需要沙箱，安装并启用后即在所有平台上启动；它的 `workspace` 视图报告 `{"access": "none", "roots": []}`，`settings` 视图与程序一样是它的设置。
 - **它的限制约束每次调用**（`runtime.limits`）：燃料（指令数）、时间（调用自己的期限，且不超过 `timeoutMs`）和线性内存（`memoryBytes`，默认 256 MiB）。燃料或时间用尽的调用、要增长到超过限制的内存，以及任何陷阱（Rust 访客的 panic 就是一个陷阱），都会让该调用和访客的实例失败：访客像崩溃的程序一样重启。访客自己报告的错误只属于该调用。
-- **每个版本只加载一次。**访客第一次启动时，模块被编译，并从它的第一个实例读取元数据；重启使用同一个已编译模块的新实例（新的内存）。它的元数据必须恰好是清单中的名字、只提供 `plugin`，并且不声明其他模块（`deps`）。
+- **每个版本只加载一次。**访客第一次启动时编译模块，此时不实例化任何东西：元数据取自清单。重启使用同一个已编译模块的新实例（新的内存）。每个实例的元数据必须恰好是清单中的名字、只提供 `plugin`，否则它不会启动；它声明的其他模块（`deps`）不会被加载。
 - **所有平台共用一个文件**，市场原样发布它。
 
 用其他语言写的模块自己导出这个 ABI：`memory`、`cordis_meta() -> i32`、`cordis_apply(len) -> i32`、`cordis_call(len) -> i32`，以及可选的 `cordis_dispose()`（或同样功能、名为 `kardia_*` 的导出）。每个导出的输入是一条 `len` 字节的消息，`read(ptr)` 把它复制到模块的内存中；导出用 `write(ptr, len)` 设置结果（或错误，此时状态不为 0）。消息就是进程线路格式中各导出的 JSON（[其他语言](#other-languages)）。pykardia 可以把 Python 访客导出为 WASI 模块，它需要 WASI，因此不能在这里加载。
@@ -185,7 +185,7 @@ kardia-guest 和 pykardia 的访客 SDK（`pykardia/guest/` 以及导出时一�
 1. Agent 先发送 `{"export":"hello","input":{"protocol":"kardia-guest/2"}}`；访客回答 `{"ready":"kardia-guest/2"}`。
 2. 每个导出都带一个 `id`：`{"export":"meta","id":1}`、`{"export":"apply","id":2,"input":{"config":{…},"imports":{}}}`、`{"export":"call","id":3,"input":{"key":"plugin","method":"tool","args":{…}}}`，最后是 `{"export":"dispose","id":4}`。
 3. 访客对一个导出最多回答一条 `{"output":"<文本>","id":…}`（结果的 JSON 文本，或错误消息），然后回答 `{"done":0,"id":…}`；失败时回答 `{"done":1,"id":…}`。`meta` 的输出是 `{"deps":[],"plugin":{"name":"my-plugin","inject":[],"provide":["plugin"]}}`。
-4. 导出运行期间，访客可以用该导出的 `id` 调用宿主：`{"call":"provide","key":"plugin","value":{}}`（在 `apply` 中）、`{"call":"view","key":"workspace"}`，Agent 回答 `{"result":…}` 或 `{"error":"…"}`；以及 `{"call":"log","level":2,"text":"…"}`（0 为 error，3 为 debug），Agent 不回答它。
+4. 导出运行期间，访客可以用该导出的 `id` 调用宿主：`{"call":"provide","key":"plugin","value":{}}`（在 `apply` 中；其他任何键都会以错误被拒绝）、`{"call":"view","key":"workspace"}`，Agent 回答 `{"result":…}` 或 `{"error":"…"}`；以及 `{"call":"log","level":2,"text":"…"}`（0 为 error，3 为 debug），Agent 不回答它。
 5. Agent 随时可能发送 `{"ping":n}`，访客应立即回答 `{"pong":n}`；以及 `{"cancel":id}`，此后该导出的结果会被丢弃。
 
 ## 检查 [#validate]

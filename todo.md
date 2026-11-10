@@ -9,8 +9,8 @@ in both languages, committed and pushed, and notes what Hanafubuki must
 change at its next pin. Publishing Kardia to crates.io is confirmed with the
 user first.
 
-All phases (P1–P9 and K1) are done (2026-11-10); the open items each phase
-lists below still stand.
+All phases (P1–P9 and K1) are done (2026-11-10), and K2 after them; the
+open items each phase lists below still stand, but for those K2 closed.
 
 - [x] P1: `crates/packages` package store: identity, the four manifest
       formats, marketplaces (local, git), versioned cache, data dirs, staged
@@ -375,9 +375,10 @@ lists below still stand.
     not restrict reads and its guest path is untested on Windows CI beyond
     `cargo check` (the `guests` suite will first run there and on macOS
     in CI); the sandbox check is Linux-only, macOS's Seatbelt profile is
-    untested on macOS; kardia-hmr's `guest-stdin`/`guest-stdout`/
-    `guest-stderr` threads are plain `std::thread`s, not contained (a
-    panic there would abort the process; an upstream ask); `cargo about`
+    untested on macOS; (kardia-hmr's `guest-stdin`/`guest-stdout`/
+    `guest-stderr` threads were plain `std::thread`s, not contained: done
+    in K2, Kardia 0.2.3 catches their panics and the guest host registers
+    its containment check); `cargo about`
     was not run here (kardia-fs/-hmr/-loader are GPL-3.0-only, accepted);
     K1 above is not ticked here (another phase's); a guest's
     `GuestStarted` handle shows a dead process as `running` (no pid) until
@@ -480,16 +481,17 @@ lists below still stand.
     approval for every guest tool call (no read-only hint in the manifest);
     the settings UI is a JSON text field, not a form from `configSchema`;
     no Python guest test (pykardia is not in CI; P7's example).
-  - Open: kardia-hmr's `GuestHost::provide` could honour the declared meta
-    upstream (closing the window); the calls of one guest are serialized
+  - Open: (kardia-hmr's `GuestHost::provide` could honour the declared
+    meta upstream, closing the window: done in K2, Kardia 0.2.3 refuses an
+    undeclared key and the watcher is gone); the calls of one guest are serialized
     (a long tool call makes its context/prompt wait and fail); the kernel's
     64 KiB world-state total can still be exceeded by large sections of
     several plugins together (pre-existing, host kinds too); a hook's deny
     reason and a tool's failure carry the guest's words to the model (as
     MCP's do); (no CLI for settings: done in P7, `plugins settings`);
     the sandboxed facade path is checked on Linux only; the
-    P5 open items (Windows reads, Seatbelt untested on macOS, hmr's plain
-    threads) stand; the kernel's issues kept for `guest:<id>` are not
+    P5 open items (Windows reads, Seatbelt untested on macOS) stand (hmr's
+    plain threads: done in K2); the kernel's issues kept for `guest:<id>` are not
     cleared when a package is uninstalled; two packages with one manifest
     name (different marketplaces) derive one prompt kind, so the second's
     prompt is refused with an issue. (Resolved: the first facade run under
@@ -708,7 +710,9 @@ lists below still stand.
     WASM `GuestCode` is private, so there is no `guest_plugin(code, meta)`
     for it; the guest host checks it against the manifest instead. A WASM
     guest's failure is found from the call's error text (kardia-hmr hands
-    traps over as `Error::msg`), not a typed signal or an exit report. WASM
+    traps over as `Error::msg`), not a typed signal or an exit report.
+    (Both replaced in K2: `WasmGuest::plugin` with the manifest's meta,
+    `GuestFailure::of`.) WASM
     permissions are ignored with an issue rather than refused, and a WASM
     guest needs no grant at all (the plan's consent was for what a process
     may reach). The default time limit is the longest call the guest may
@@ -716,13 +720,15 @@ lists below still stand.
     call (a caller's deadline can only shorten it).
   - Open: a WASM call whose caller dropped it (a cancelled turn) is not
     followed: its stopped instance is failed by its next call, which fails;
-    each running module version keeps kardia-hmr's `wasm-epoch` thread (a
-    plain `std::thread`, like the pipe threads of P5's open item); wasmtime
-    installs its signal handlers (and a Mach port on macOS) process-wide at
-    the first WASM guest (documented for hosts in embedding); an upstream
+    (each running module version kept kardia-hmr's `wasm-epoch` thread, a
+    plain `std::thread`: done in K2, one engine and thread per set of
+    limits, and the thread contained); wasmtime installs its signal
+    handlers process-wide at the first WASM guest (documented for hosts in
+    embedding; the Mach port on macOS is off since K2); (an upstream
     kardia-hmr could expose the WASM `GuestCode` (meta from outside, no
-    load-time instance) and a typed "instance failed" error, and honour
-    `CallControl` cancellation in WASM; no module size cap (compiling a
+    load-time instance) and a typed "instance failed" error: done in K2,
+    Kardia 0.2.3); kardia-hmr could honour `CallControl` cancellation in
+    WASM; no module size cap (compiling a
     huge module costs the blocking pool); WASI modules (pykardia's WASM
     export) do not load (no WASI imports); the release binary's size
     growth from wasmtime was not measured here.
@@ -739,7 +745,14 @@ lists below still stand.
     module dropped while others load, wasmtime's Mach exception port in a
     process that ran guest processes before; if it is the Mach port,
     `Config::macos_use_mach_ports(false)` needs kardia-hmr to take a
-    wasmtime `Config` (an upstream change).
+    wasmtime `Config` (an upstream change). K2 turned the Mach port off
+    (Kardia 0.2.3's `set_macos_mach_ports(false)`), shares one engine
+    per set of limits (the suite's four default-limit modules now compile
+    on one engine) and no longer instantiates a module at load (the
+    `liar` module's mismatch is found at its own start), so all three
+    candidates moved: a recurrence points at something new. The watchdog
+    stays until a macOS run passes repeatedly (unverified here: Linux
+    only).
   - Hanafubuki, at its next pin: `PackageRuntime` is an enum
     (`Process(ProcessRuntime)` | `Wasm(WasmRuntime)`), new
     `ProcessRuntime`, `WasmRuntime`, `WasmRuntimeLimits`,
@@ -824,6 +837,82 @@ lists below still stand.
     plan under `docs/`).
   - Hanafubuki, at its next pin: `AgentApplicationService::panic_in_plugin`
     (test-support only, additive). Nothing else changes for a host.
+- [x] K2: Kardia 0.2.3 (crates.io): typed guest failures, `WasmGuest`,
+      contained kardia-hmr threads, refused undeclared provisions, Mach
+      ports off on macOS.
+  - Done: kardia-core/-macros/-loader/-hmr and the dev kardia-guest at
+    0.2.3 (kardia-loader and kardia-hmr still `default-features = false`;
+    `cargo tree -e features -i serde_json` shows no `preserve_order`); the
+    `plugins new` templates and `examples/plugins/hello-{rust,wasm}` take
+    kardia-guest 0.2.3 (their `Cargo.lock`s updated). Faults:
+    `GuestHost::call` finds a `GuestFailure` in the call's error
+    (`GuestFailure::of`) instead of matching four strings, and fails the
+    fiber on every kind but a process guest's `Exited`, `Killed` and
+    `Timeout` (its process ended or was killed, so kardia-hmr's exit
+    watcher fails the fiber with the exit report; failing it from the call
+    too would race that report); a guest's own error stays the call's; the
+    call's text is unchanged. WASM: the module is read (`system()`) and
+    compiled with `WasmSource::guest` and made a plugin with
+    `WasmGuest::plugin(GuestMeta::new(name).provide("plugin"))`: no
+    instantiation at load, kardia-hmr checks each instance's meta at its
+    start (the `liar` module is still a failed start); `deps` are no longer
+    read (the `ModuleGraph`/`OneModule`/`check_meta` are gone). Engines:
+    `WasmEngines` in the resolver keeps one `WasmSource` per set of limits
+    (fuel, the computed time limit, memory), so guests with identical
+    limits share an engine and its `wasm-epoch` thread; pruned at each
+    `follow` to the limits a package needs (a running guest keeps its own
+    engine alive through its module). Mach ports: the guest host calls
+    `set_macos_mach_ports(false)` before each new engine (idempotent; an
+    error, a host engine that fixed Mach ports first, is a warning, the
+    guests keep Mach ports): signals are Linux's tested path and hosts
+    already chain them, Mach ports are a second process-wide mechanism and
+    the suspect of P8's macOS hang. Every process that runs guests takes
+    the same value, the tests' included, since the call is in the guest
+    host. Panic seam: foundation's `register_containment_check(fn() ->
+    bool)` (one per process, the first stays) is ORed into
+    `is_panic_contained`, so both the Agent's hook and a host's hook that
+    asks `hanafubuki_agent::panic::is_panic_contained` see it; the guest
+    host registers `kardia_hmr::is_panic_contained` in `GuestHost::build`,
+    before any kardia-hmr thread exists (foundation stays free of kardia).
+    Provisions: the supervisor's `ServiceChanged` watcher is removed:
+    kardia-hmr refuses an undeclared key before anything is bound, so
+    there is nothing to withdraw; the refusal is the guest's error like
+    any host call's (an `apply` that returns it fails the start; a call
+    that returns it fails only that call and the guest keeps running).
+    Tests: guests suite `a_guest_that_provides_another_service_is_refused`
+    (was `…_is_stopped`: the start fails with `cannot provide "stolen"`,
+    no restart; while running the call fails, same process, no restart,
+    no binding, the next call works); new
+    `a_panic_on_a_guest_thread_is_contained_under_the_agents_hook` (the
+    binary re-runs itself as a child with the Agent's panic hook; the test
+    logger panics on a marker line the guest writes to stderr, on
+    kardia-hmr's `guest-stderr` thread; the child checks the guest was
+    killed with `the guest-stderr thread panicked`, restarted, and the
+    hook recorded the panic as contained; without the registration the
+    child aborts with SIGABRT, checked by hand); foundation unit test of a
+    registered check. Stress (10 rounds × 4 parallel copies): `guests`
+    40/40, `plugin_crashes` 40/40 (no check skipped). Docs (both languages): plugin-rules (where Agent
+    code runs, a guest provides only `plugin`), architecture, internals
+    (WebAssembly guests, a failed instance, provisions), embedding (Mach
+    ports, kardia-hmr's threads), writing-plugins, contributing (the
+    `panic` twin), building-testing.
+  - Open: the Mach-port decision is unverified on macOS (the next CI runs
+    are the test; the watchdog stays); a host whose wasmtime engine fixed
+    Mach ports first leaves the guests on them (warned, not refused); a
+    second `register_containment_check` is ignored (one registrant today);
+    with engines shared, an engine whose `wasm-epoch` thread died (it
+    only increments and sleeps) fails every timed call of every guest with
+    those limits, restarts included, until no package needs them (no code for
+    it: unlikely).
+  - Hanafubuki, at its next pin: Kardia 0.2.3 (additive; a Hanafubuki
+    crate on kardia-hmr takes it without `preserve-order`, as before); the
+    panic-hook bridge is unchanged (`is_panic_contained` now also covers
+    kardia-hmr's guest threads, no third check); `hanafubuki-foundation`'s
+    `panic` twin need not take `register_containment_check` (Agent only,
+    noted in contributing); a wasmtime engine Hanafubuki makes itself must
+    use `macos_use_mach_ports(false)` on macOS (wasmtime panics on a
+    mismatch); a guest that provided an undeclared service is no longer
+    failed and restarted but refused.
 
 ## Plan: background compaction, hierarchical compression, a choice between them (2026-11-09)
 

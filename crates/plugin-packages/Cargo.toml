@@ -25,8 +25,8 @@ hex.workspace = true
 kardia-core.workspace = true
 # Only here: the guest host is the one crate that runs a loader subtree and
 # out-of-process guests (`cargo xtask check-dependencies`).
-kardia-loader = { version = "0.2.2", default-features = false }
-kardia-hmr = { version = "0.2.2", default-features = false, features = ["process", "wasm"] }
+kardia-loader = { version = "0.2.3", default-features = false }
+kardia-hmr = { version = "0.2.3", default-features = false, features = ["process", "wasm"] }
 futures-util.workspace = true
 log.workspace = true
 parking_lot.workspace = true
@@ -38,7 +38,7 @@ tokio = { workspace = true, features = ["rt", "sync", "time", "macros"] }
 [dev-dependencies]
 hanafubuki-agent-approval = { workspace = true, features = ["test-support"] }
 hanafubuki-agent-process = { workspace = true, features = ["test-support"] }
-kardia-guest = "0.2.2"
+kardia-guest = "0.2.3"
 tempfile.workspace = true
 # The WASM test guests, written in the text format (wasmtime takes it too).
 wat = "1"

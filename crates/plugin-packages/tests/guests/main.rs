@@ -6,6 +6,7 @@
 //! whose name contains one of the arguments, when there are any), each
 //! under a watchdog that ends a hung check with what it reached.
 
+mod contained;
 mod contribute;
 mod faults;
 mod fixture;
@@ -60,6 +61,10 @@ const CHECKS: &[(&str, Check)] = &[
     ("a_start_that_hangs_or_fails_stays_failed", || {
         Box::pin(faults::a_start_that_hangs_or_fails_stays_failed())
     }),
+    (
+        "a_panic_on_a_guest_thread_is_contained_under_the_agents_hook",
+        || Box::pin(contained::a_panic_on_a_guest_thread_is_contained_under_the_agents_hook()),
+    ),
     ("a_guests_own_words_are_logged_only_at_trace", || {
         Box::pin(logging::a_guests_own_words_are_logged_only_at_trace())
     }),
@@ -77,8 +82,8 @@ const CHECKS: &[(&str, Check)] = &[
     ("a_guest_views_only_its_workspace_and_its_settings", || {
         Box::pin(host_calls::a_guest_views_only_its_workspace_and_its_settings())
     }),
-    ("a_guest_that_provides_another_service_is_stopped", || {
-        Box::pin(host_calls::a_guest_that_provides_another_service_is_stopped())
+    ("a_guest_that_provides_another_service_is_refused", || {
+        Box::pin(host_calls::a_guest_that_provides_another_service_is_refused())
     }),
     (
         "the_sandbox_keeps_a_guest_to_its_package_its_data_and_its_grant",
@@ -110,6 +115,14 @@ fn main() {
         return;
     }
     logging::capture();
+    if args.first().map(String::as_str) == Some(contained::CONTAINED_PANIC_ARG) {
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        runtime.block_on(contained::child());
+        return;
+    }
     let filters: Vec<&String> = args.iter().filter(|arg| !arg.starts_with('-')).collect();
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()

@@ -1,9 +1,9 @@
 //! The test guest: this binary, started with [`GUEST_ARG`], serves the
 //! guest protocol with kardia-guest. Its plugin's name and its behaviour in
 //! `apply` come from its arguments; its methods let a check make it answer,
-//! hang, exit, read a file or report its environment, and answer the
-//! Agent's contribution calls (`tool`, `context`, `prompt`, the hooks,
-//! `observe`) as `contribute` expects.
+//! hang, exit, write a line to stderr, read a file or report its
+//! environment, and answer the Agent's contribution calls (`tool`,
+//! `context`, `prompt`, the hooks, `observe`) as `contribute` expects.
 
 use std::collections::BTreeMap;
 use std::sync::{Mutex, OnceLock};
@@ -77,6 +77,10 @@ impl Guest for TestGuest {
             "speak" => {
                 eprintln!("SECRET-STDERR");
                 host.log(Level::Error, "SECRET-LOG");
+                Ok(Value::Null)
+            }
+            "stderr" => {
+                eprintln!("{}", request.args.as_str().unwrap_or_default());
                 Ok(Value::Null)
             }
             "hang" => hangs(),

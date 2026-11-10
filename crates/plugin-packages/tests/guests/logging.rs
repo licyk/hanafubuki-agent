@@ -11,6 +11,10 @@ use crate::fixture::{eventually, running, Fixture, Options};
 /// Every record: its level, target and message.
 static RECORDS: Mutex<Vec<(log::Level, String, String)>> = Mutex::new(Vec::new());
 
+/// A guest's stderr line that makes the logger panic on kardia-hmr's
+/// `guest-stderr` thread, which forwards it (`contained`).
+pub const PANIC_ON_STDERR: &str = "PANIC-ON-THE-STDERR-THREAD";
+
 /// The targets of the WASM compiler's many records, which reports skip.
 const COMPILER_TARGETS: &[&str] = &["cranelift", "regalloc2", "wasmtime_cranelift"];
 
@@ -28,6 +32,11 @@ impl log::Log for Capture {
         }
         // Formatted before taking the lock, which formatting could need.
         let message = record.args().to_string();
+        if message.contains(PANIC_ON_STDERR)
+            && std::thread::current().name() == Some("guest-stderr")
+        {
+            panic!("the test logger panics");
+        }
         RECORDS
             .lock()
             .push((record.level(), record.target().to_string(), message));

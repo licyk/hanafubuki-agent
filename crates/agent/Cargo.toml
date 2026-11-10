@@ -63,7 +63,7 @@ tokio = { workspace = true, features = ["io-util", "macros", "net", "rt", "rt-mu
 url.workspace = true
 
 [dev-dependencies]
-kardia-guest = "0.2.2"
+kardia-guest = "0.2.3"
 # A WASM test guest, written in the text format.
 wat = "1"
 axum.workspace = true

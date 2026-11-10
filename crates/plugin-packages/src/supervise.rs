@@ -11,13 +11,12 @@ use std::time::{Duration, Instant};
 
 use hanafubuki_agent_contracts::CancellationToken;
 use hanafubuki_agent_foundation::trace_content::bounded_trace_content;
-use kardia_core::{Context, Fiber, FiberState, RealmId};
+use kardia_core::{Fiber, FiberState};
 use kardia_hmr::{ExitCause, GuestExit, GuestHandle};
 use tokio::sync::mpsc;
 use tokio::task::JoinSet;
 
 use crate::guests::{restart_fiber, Shared};
-use crate::package::GUEST_SERVICE;
 use crate::state::GuestState;
 
 /// A restart the policy allows, after its delay.
@@ -136,28 +135,6 @@ impl Shared {
             }
         }
         self.changed();
-    }
-
-    /// Stops the guest that provided `key` in `realm`, the realm every
-    /// plugin shares: a guest provides only its `plugin`, in a realm of its
-    /// own, and must not take a service another plugin provides or waits
-    /// for. Its fiber fails, which withdraws what it provided; a guest that
-    /// had started restarts under the restart policy, as after any fault.
-    pub(crate) fn on_service(&self, ctx: &Context, key: &str, realm: RealmId) {
-        let Some(provider) = ctx.binding_provider(key, realm) else {
-            return;
-        };
-        let fiber = provider.fiber();
-        let Some(id) = self.guest_of(&fiber) else {
-            return;
-        };
-        log::warn!(
-            "plugin {id}: its guest provided the service `{key}`, but a guest provides only \
-             `{GUEST_SERVICE}`; it is stopped"
-        );
-        drop(fiber.fail(kardia_core::Error::msg(format!(
-            "it provided the service `{key}`, but a guest provides only `{GUEST_SERVICE}`"
-        ))));
     }
 
     pub(crate) fn on_started(&self, fiber: &Fiber, handle: &GuestHandle) {

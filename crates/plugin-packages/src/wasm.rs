@@ -5,45 +5,109 @@
 //! bound each export: fuel and time (by epoch interruption), and the
 //! linear memory it may grow to.
 //!
-//! The module is compiled, and its metadata read from one instance of it,
-//! when its plugin is first resolved; the metadata must be the manifest's
-//! name providing only [`GUEST_SERVICE`], as a process guest's. A guest
-//! that traps, runs out of fuel or time, or outgrows its memory fails the
-//! call; [`GuestHost::call`](crate::GuestHost::call) then fails its fiber,
-//! so it restarts as a process guest that exits does.
+//! The module is compiled when its plugin is first resolved, and nothing
+//! is instantiated then: its metadata comes from the manifest, the
+//! manifest's name providing only [`GUEST_SERVICE`], as a process guest's,
+//! and each instance must declare the same when it starts. Guests with the
+//! same limits share one engine ([`WasmEngines`]), and so one epoch thread.
+//! A guest that traps, runs out of fuel or time, or outgrows its memory
+//! fails the call with a typed failure; [`GuestHost::call`](crate::GuestHost::call)
+//! then fails its fiber, so it restarts as a process guest that exits does.
 
-use std::collections::BTreeSet;
+use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use hanafubuki_agent_packages::{PackageContributes, WasmRuntime};
+use hanafubuki_agent_packages::{PackageContributes, PackageRuntime, WasmRuntime};
 use kardia_core::{Error, PluginDef};
-use kardia_hmr::{Exports, ModuleCode, ModuleGraph, ModuleSource, WasmLimits, WasmSource};
+use kardia_hmr::{set_macos_mach_ports, GuestMeta, WasmLimits, WasmSource};
+use parking_lot::Mutex;
 
 use crate::package::{GuestPackage, GUEST_SERVICE};
 use crate::resolver::guest_name;
 use crate::spawn::{check_content, in_package, resolve};
 
-/// What a WASM call's error says when the instance itself went wrong (a
-/// trap, its fuel or time used up, a memory it may not grow), not the guest
-/// reporting an error of its own. kardia-hmr hands both over as text.
-const INSTANCE_FAILURES: &[&str] = &[
-    "wasm trap:",
-    "forcing trap when growing",
-    "the guest was stopped",
-    "error while executing at wasm backtrace",
-];
+/// The engines of the WASM guests, one per set of limits, kept while a
+/// package needs it. Clones share them.
+#[derive(Clone, Default)]
+pub(crate) struct WasmEngines(Arc<Mutex<HashMap<Limits, Arc<WasmSource>>>>);
+
+/// A module's limits, as its engine is made with them.
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+struct Limits {
+    fuel: Option<u64>,
+    timeout: Duration,
+    memory: usize,
+}
+
+impl WasmEngines {
+    /// Drops the engines no package of `packages` needs. A running guest
+    /// keeps its own engine alive until it stops.
+    pub(crate) fn follow(&self, packages: &[GuestPackage], call_timeout: Duration) {
+        let needed: HashSet<Limits> = packages
+            .iter()
+            .filter_map(|package| match &package.runtime {
+                PackageRuntime::Wasm(runtime) => Some(Limits::of(package, runtime, call_timeout)),
+                PackageRuntime::Process(_) => None,
+            })
+            .collect();
+        self.0.lock().retain(|limits, _| needed.contains(limits));
+    }
+
+    /// The engine for `limits`, made on first need.
+    fn source(&self, limits: Limits) -> Arc<WasmSource> {
+        self.0
+            .lock()
+            .entry(limits)
+            .or_insert_with(|| {
+                use_signals_on_macos();
+                Arc::new(WasmSource::with_limits(limits.wasm()))
+            })
+            .clone()
+    }
+}
+
+impl Limits {
+    fn of(package: &GuestPackage, runtime: &WasmRuntime, call_timeout: Duration) -> Self {
+        Self {
+            fuel: runtime.limits.fuel,
+            timeout: time_limit(runtime, &package.contributes, call_timeout),
+            memory: usize::try_from(runtime.limits.memory_bytes).unwrap_or(usize::MAX),
+        }
+    }
+
+    fn wasm(self) -> WasmLimits {
+        let limits = WasmLimits::new().timeout(self.timeout).memory(self.memory);
+        match self.fuel {
+            Some(fuel) => limits.fuel(fuel),
+            None => limits,
+        }
+    }
+}
+
+/// wasmtime handles traps on macOS through Mach exception ports by
+/// default, a process-wide mechanism of its own beside the trap signals
+/// every platform uses: the Agent asks for signals, as on Linux, before its
+/// first engine. A host that made an engine with Mach ports first keeps
+/// them, which every later engine then uses.
+fn use_signals_on_macos() {
+    if let Err(error) = set_macos_mach_ports(false) {
+        log::warn!("WASM guests keep wasmtime's Mach exception ports: {error}");
+    }
+}
 
 /// The plugin of `package`'s WASM guest, named `guest:<id>`; one whose
-/// module cannot run fails its start with the reason. Blocking: it hashes
-/// the package and compiles the module.
+/// module cannot be compiled fails its start with the reason. Blocking: it
+/// hashes the package and compiles the module.
 pub(crate) fn plugin(
     package: &GuestPackage,
     runtime: &WasmRuntime,
     call_timeout: Duration,
+    engines: &WasmEngines,
 ) -> PluginDef {
     let started = Instant::now();
     log::debug!("plugin {}: its module loads", package.id);
-    let loaded = load(package, runtime, call_timeout);
+    let loaded = load(package, runtime, call_timeout, engines);
     let outcome = if loaded.is_ok() {
         "loaded"
     } else {
@@ -69,12 +133,6 @@ pub(crate) fn failing(package: &GuestPackage, error: String) -> PluginDef {
     .name(guest_name(package))
 }
 
-/// Whether `error`, from a call into a WASM guest, means its instance
-/// failed: it is not called again, but started anew.
-pub(crate) fn instance_failed(error: &str) -> bool {
-    INSTANCE_FAILURES.iter().any(|mark| error.contains(mark))
-}
-
 /// How long each export may run: the manifest's `timeoutMs`, else the
 /// longest any call of the guest may take, the call deadline or a longer
 /// tool `timeout`. Each call is stopped at its own deadline too.
@@ -96,65 +154,16 @@ fn load(
     package: &GuestPackage,
     runtime: &WasmRuntime,
     call_timeout: Duration,
+    engines: &WasmEngines,
 ) -> Result<PluginDef, String> {
     check_content(package)?;
     let root = resolve(&package.root, "its package directory")?;
     let module = in_package(&root, &runtime.module)?;
-    let mut limits = WasmLimits::new()
-        .timeout(time_limit(runtime, &package.contributes, call_timeout))
-        .memory(usize::try_from(runtime.limits.memory_bytes).unwrap_or(usize::MAX));
-    if let Some(fuel) = runtime.limits.fuel {
-        limits = limits.fuel(fuel);
-    }
-    let graph = ModuleGraph::new(OneModule(WasmSource::with_limits(limits)));
-    let exports = graph
-        .import(module.native_text())
+    let bytes = std::fs::read(module.system())
+        .map_err(|error| format!("its module did not read: {error}"))?;
+    let source = engines.source(Limits::of(package, runtime, call_timeout));
+    let guest = source
+        .guest(bytes)
         .map_err(|error| format!("its module did not load: {error}"))?;
-    let Exports::Plugin(plugin) = exports else {
-        return Err("its module exports no plugin".to_string());
-    };
-    check_meta(&plugin, package)?;
-    Ok(plugin)
-}
-
-/// The guest's own metadata is what the manifest makes it: its name,
-/// injecting nothing, providing [`GUEST_SERVICE`] only.
-fn check_meta(plugin: &PluginDef, package: &GuestPackage) -> Result<(), String> {
-    let provides: BTreeSet<&str> = plugin
-        .provide_spec()
-        .iter()
-        .map(|key| key.as_str())
-        .collect();
-    let injects: Vec<&str> = plugin
-        .inject_spec()
-        .keys()
-        .map(|key| key.as_str())
-        .collect();
-    if plugin.plugin_name() == Some(package.name.as_str())
-        && injects.is_empty()
-        && provides == BTreeSet::from([GUEST_SERVICE])
-    {
-        return Ok(());
-    }
-    Err(format!(
-        "the guest declares the plugin {:?} injecting {injects:?} and providing {provides:?}, \
-         but its manifest makes it {:?}, providing only `{GUEST_SERVICE}`",
-        plugin.plugin_name().unwrap_or_default(),
-        package.name,
-    ))
-}
-
-/// The package's module alone: a guest imports no other module.
-struct OneModule(WasmSource);
-
-impl ModuleSource for OneModule {
-    fn load(&self, id: &str) -> kardia_core::Result<ModuleCode> {
-        let code = self.0.load(id)?;
-        if !code.deps.is_empty() {
-            return Err(Error::msg(
-                "it declares other modules it depends on (`deps`), which a guest cannot have",
-            ));
-        }
-        Ok(code)
-    }
+    Ok(guest.plugin(GuestMeta::new(&package.name).provide(GUEST_SERVICE)))
 }

@@ -6,12 +6,13 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use hanafubuki_agent_contracts::PluginFaults;
+use hanafubuki_agent_foundation::panic::register_containment_check;
 use hanafubuki_agent_host::{RestartPolicy, GUEST_LOGGER_PREFIX};
 use hanafubuki_agent_packages::{PluginId, RuntimeKind};
 use hanafubuki_agent_process::executor::ExecutorManager;
 use hanafubuki_agent_sandbox::Sandbox;
 use kardia_core::{Fiber, FiberState};
-use kardia_hmr::GuestService;
+use kardia_hmr::{GuestFailure, GuestFailureKind, GuestService};
 use kardia_loader::Loader;
 use parking_lot::Mutex;
 use serde_json::Value;
@@ -23,7 +24,6 @@ use crate::settings::GuestSettingsPort;
 use crate::spawn::{SpawnContext, WorkspaceRoots};
 use crate::state::{GuestRecord, GuestState, GuestStatus};
 use crate::supervise::Restart;
-use crate::wasm;
 
 /// What the guest host is built from.
 pub struct GuestHostInputs {
@@ -92,6 +92,9 @@ impl GuestHost {
         sandbox: Option<Sandbox>,
         packages: Vec<GuestPackage>,
     ) -> Self {
+        // kardia-hmr's guest threads catch their panics: the Agent's panic
+        // hook must let them unwind (before any of them starts).
+        register_containment_check(kardia_hmr::is_panic_contained);
         let context = Arc::new(SpawnContext {
             executor: inputs.executor,
             sandbox,
@@ -171,9 +174,10 @@ impl GuestHost {
     /// Calls `method` of the service the guest of `id` provides
     /// ([`GUEST_SERVICE`]), with `args`, killing the guest if it has not
     /// answered within `timeout`. Dropping the future cancels the call. A
-    /// WASM guest whose instance failed in the call (a trap, its fuel or
-    /// time used up, a memory it may not grow) is failed, as a process
-    /// guest that exits is, and restarts under the restart policy.
+    /// guest whose instance failed in the call ([`GuestFailure`]: a WASM
+    /// trap, its fuel, time or memory used up, a panic serving it) is
+    /// failed, as a process guest that exits is, and restarts under the
+    /// restart policy; an error the guest reports itself is the call's.
     pub async fn call(
         &self,
         id: &PluginId,
@@ -193,17 +197,30 @@ impl GuestHost {
             .ok_or_else(|| format!("the guest of plugin `{id}` provides no service"))?;
         let error = match service.call_async(method, args, Some(timeout)).await {
             Ok(answer) => return Ok(answer),
-            Err(error) => error.to_string(),
+            Err(error) => error,
         };
-        let wasm = self
-            .0
-            .package(&id)
-            .is_some_and(|package| package.runtime.kind() == RuntimeKind::Wasm);
-        if wasm && wasm::instance_failed(&error) {
-            log::warn!("plugin {id}: its WASM guest's instance failed in a call");
-            drop(fiber.fail(kardia_core::Error::msg(error.clone())));
+        let runtime = self.0.package(&id).map(|package| package.runtime.kind());
+        if let Some(failure) =
+            GuestFailure::of(&error).filter(|failure| fails_guest(failure, runtime))
+        {
+            log::warn!(
+                "plugin {id}: its guest's instance failed in a call ({:?})",
+                failure.kind
+            );
+            drop(fiber.fail(failure.clone().into()));
         }
-        Err(error)
+        Err(error.to_string())
+    }
+}
+
+/// Whether a call's failure is the guest's to answer by failing its fiber.
+/// A process guest that ended or was killed (also at its deadline) is not:
+/// kardia-hmr's exit watcher fails its fiber with the exit report.
+fn fails_guest(failure: &GuestFailure, runtime: Option<RuntimeKind>) -> bool {
+    match failure.kind {
+        GuestFailureKind::Exited | GuestFailureKind::Killed => false,
+        GuestFailureKind::Timeout => runtime == Some(RuntimeKind::Wasm),
+        _ => true,
     }
 }
 

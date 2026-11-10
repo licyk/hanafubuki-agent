@@ -44,7 +44,7 @@ Agent 运行的所有东西都在 panic 被隔离的线程上：panic hook 让�
 - **由 Agent 自己的 foundation 隔离。** 这些标记和守卫是 `hanafubuki-agent-foundation` 的线程局部变量，宿主的 foundation 看不到。所以宿主的 panic hook 必须把 `hanafubuki_agent::panic::is_panic_contained` 作为第二个隔离检查：任一 foundation 说被隔离，panic 就被隔离。
 - **Agent 的工作线程**全部在 `BackgroundWorkerGroup::contained` 组中：历史写入线程、MCP stdio 读取线程、记忆监督者（它自己的当前线程运行时也标记它的阻塞池）、`execution` 插件的活动监视器和 Skill 目录监视器；以及槽位的监督线程（`agent-supervisor`）。
 
-不是 Agent 线程的地方，panic 仍会中止进程：宿主的线程、Agent 调用的服务的线程（执行器的读取与等待线程），以及 kardia-hmr 自己的线程（进程访客的管道线程、WebAssembly 引擎推进 epoch 的线程）。WebAssembly 访客的代码本身在 Agent 运行时的阻塞线程池上运行，陷阱在那里是错误而不是 panic。Agent 代码里新的 spawn 必须落在环境运行时或被隔离的组中，从不落在普通线程上。
+不是 Agent 线程的地方，panic 仍会中止进程：宿主的线程，以及 Agent 调用的服务的线程（执行器的读取与等待线程）。kardia-hmr 自己的线程（进程访客的 `guest-stdin`、`guest-stdout` 和 `guest-stderr`，WebAssembly 引擎推进 epoch 的 `wasm-epoch` 线程）会捕获自己的 panic，并杀死它所服务的访客（退出报告给出原因，访客像任何故障之后那样重启）；kardia-hmr 自己标记这些线程，访客宿主在构建时用 foundation 的 `register_containment_check` 注册 kardia-hmr 的检查（`kardia_hmr::is_panic_contained`），所以 `is_panic_contained` 在这些线程上也为真。WebAssembly 访客的代码本身在 Agent 运行时的阻塞线程池上运行，陷阱在那里是错误而不是 panic。Agent 代码里新的 spawn 必须落在环境运行时或被隔离的组中，从不落在普通线程上。
 
 ## 扩展点 [#extension-points]
 
@@ -263,7 +263,7 @@ MCP 服务器、Skill 作者或提取模型产生的东西被容错读取；一�
 
 - **`view`** 只能访问两个服务，各自位于访客的 loader 条目与其宿主服务条目（`<id>#host`，以标签 `guest:<id>` `isolate`）共享的 realm 中，访客的条目声明了它们（`inject`），所以访客在它们运行后才启动：`workspace`，即 `{ "access": "none" | "read" | "write", "roots": [...] }`，只在可读时给出 Agent 的工作区根（原生路径，每次 view 时读取；WebAssembly 模块不读任何文件，从不给出）；以及 `settings`，即它的设置（`[plugins."<id>"].settings`），也就是它的 `apply` 收到的配置。
 - **其余一律拒绝。** kardia 的受检访问只能找到访客的 fiber 链上提供或声明的东西，而这条链上没有其他东西带 JSON 视图（`view`）或是访客的服务（`invoke`）；访客访问不到其他访客（决策 6）。
-- **访客只提供 `plugin`。** 它的元数据必须恰好声明这一项（否则启动失败）；在启动或运行中提供其他服务的访客（那会落到所有插件共享的 realm 中）会立即失败，其提供被撤回：启动期间如同启动失败，运行期间则像任何故障之后那样重启。
+- **访客只提供 `plugin`。** 它的元数据必须恰好声明这一项（否则启动失败）；kardia-hmr 拒绝它提供任何其他服务（`cannot provide "<key>": the plugin does not declare it in provide`），在任何东西到达所有插件共享的 realm 之前。这个拒绝是访客自己的错误，与任何宿主调用的错误一样：返回它的 `apply` 使启动失败；返回它的调用只让那次调用失败，访客继续运行，因为什么也没有被提供。
 
 ### 访客协议 [#guest-protocol]
 

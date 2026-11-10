@@ -367,7 +367,11 @@ Agent 的故障隔离依赖展开（unwinding）：插件或内核代码里的 p
 let contained = host_says_contained() || hanafubuki_agent::panic::is_panic_contained();
 ```
 
-WebAssembly 插件访客在宿主的进程内、在 wasmtime 中运行。加载第一个 WebAssembly 访客时，wasmtime 会为访客陷阱引发的信号安装自己的处理器（Unix 上是 `SIGSEGV`、`SIGBUS`、`SIGILL` 和 `SIGFPE`，macOS 上还有一个 Mach 异常端口），并把不属于访客的信号交给在它之前安装的处理器。为这些信号安装自己处理器的宿主，应在此之前安装，或在替换时链接到被替换的处理器。
+WebAssembly 插件访客在宿主的进程内、在 wasmtime 中运行。加载第一个 WebAssembly 访客时，wasmtime 会为访客陷阱引发的信号安装自己的处理器（Unix 上是 `SIGSEGV`、`SIGBUS`、`SIGILL` 和 `SIGFPE`），并把不属于访客的信号交给在它之前安装的处理器。为这些信号安装自己处理器的宿主，应在此之前安装，或在替换时链接到被替换的处理器。
+
+在 macOS 上，Agent 让 wasmtime 用这些信号处理陷阱，而不是通过 Mach 异常端口：在生成第一个 WebAssembly 引擎之前，访客宿主调用 kardia-hmr 的 `set_macos_mach_ports(false)`。信号是 Agent 的检查在 Linux 上走的路径，宿主也已经链接了它们（见上）；Mach 端口会再加一套进程级机制，并且是 macOS CI 上第一个 WebAssembly 检查间歇性挂起（在一个已经启动过访客进程的进程中）的嫌疑原因。这个设置是进程级的，由第一个引擎固定：自己生成 wasmtime 引擎的宿主，也要用 `Config::macos_use_mach_ports(false)` 生成它们（之后的引擎请求另一种设置时 wasmtime 会 panic）；如果宿主使用 Mach 端口的引擎先出现，Agent 的访客就沿用 Mach 端口，访客宿主记录一条警告。
+
+kardia-hmr 自己的线程（进程访客的 `guest-stdin`、`guest-stdout` 和 `guest-stderr`，WebAssembly 的 `wasm-epoch` 线程）会捕获自己的 panic，并杀死它所服务的访客。访客宿主把 kardia-hmr 的检查注册到 Agent 的 foundation（`register_containment_check`），所以上面的 `hanafubuki_agent::panic::is_panic_contained` 在这些线程上也为真：宿主的 hook 不需要第三个检查。
 
 没有这个桥，每个 Agent panic 都会中止宿主应用。Hanafubuki 在 `platform::panic_hook` 里安装了带第二个检查的 hook，并在子进程里测试两种结果（有桥时展开，没有时中止）；这个测试是宿主的责任。
 

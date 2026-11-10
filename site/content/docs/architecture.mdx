@@ -71,7 +71,7 @@ Agent 是一个**内核**（`hanafubuki-agent-kernel`），拥有会话、轮次
 
 **为什么内核故障要重建整个 Agent：** 锁不会中毒（全部使用 `parking_lot`），所以 panic 后什么都不会回滚，内存中的会话状态可能只改了一半；磁盘上的历史才是一致的副本。
 
-这一切依赖展开。进程的 panic hook 只允许已知会被捕获的 panic 展开：Agent 的线程运行在被隔离的运行时（`ContainedRuntime`，线程名 `agent-rt`）和被隔离的工作线程组上，守卫也做标记。这些标记在 Agent 自己的 foundation 里，所以宿主的 hook 必须询问 `hanafubuki_agent::panic::is_panic_contained`（[panic hook 桥](/docs/embedding#the-panic-hook-bridge)）。
+这一切依赖展开。进程的 panic hook 只允许已知会被捕获的 panic 展开：Agent 的线程运行在被隔离的运行时（`ContainedRuntime`，线程名 `agent-rt`）和被隔离的工作线程组上，守卫也做标记。这些标记在 Agent 自己的 foundation 里，所以宿主的 hook 必须询问 `hanafubuki_agent::panic::is_panic_contained`（[panic hook 桥](/docs/embedding#the-panic-hook-bridge)）。kardia-hmr 的访客线程自己捕获 panic，并在 kardia-hmr 中标记自己；访客宿主把这个检查注册到 foundation，所以同一个函数也为它们回答。
 
 ### 启动与关闭 [#start-and-shutdown]
 
@@ -242,7 +242,7 @@ schema 遵循同样的按协议规则：支持 `strict_json_schema` 的协议（
 本项目格式的包还可以带代码：清单的 `runtime` 指明一个讲 Kardia 访客协议（`kardia-guest/2`，或版本 1）的程序，它**在进程外**运行，所以它的崩溃、中止或挂起都到不了 Agent 的进程；或者指明一个讲访客 ABI 的 **WebAssembly 模块**，它在 Agent 的进程内、在 wasmtime 中运行，受燃料、时间和内存的限制。访客宿主（`hanafubuki-agent-plugin-packages`）运行这两种访客，由 `plugins` 行挂载为其子 fiber（`plugin-guests`）。
 
 - **一棵 kardia-loader 子树。** 访客宿主是一个 kardia-loader，它的树中每个代码包一个条目：条目的 id 就是包的 id，它的插件以启动所依赖的一切命名（版本、记录的内容哈希、命令、请求与授予的权限），任何一项变化都会重新启动它。每次重新加载之后，门面把代码包（无论启用与否）交给访客宿主，访客宿主用一次组更新把它们应用到树上：安装时创建条目，包关闭时禁用条目，卸载时移除条目。树的 `TreeBackend` 把加载器自己做出的变更（自行释放的插件被写回为关闭）通过门面提供的设置端口写入 `[plugins]`，交给门面的阻塞写入者排队，并且只在值不同时写入；组更新是设置的镜像，不写回任何东西。
-- **每个包版本一个解析器条目。** 条目的名字解析为一个缓存的 kardia-hmr `ProcessGuest`，它的元数据来自清单（`name`，以及每个访客都在自己的领域中提供的服务 `plugin`），所以解析不会启动任何东西；访客启动时必须声明相同的元数据，否则启动失败。模块的条目在第一次解析时解析为 kardia-hmr 的 WASM 访客：在阻塞线程池上按它的限制编译模块，并从它的第一个实例读取元数据，元数据必须相同；之后这个插件就属于这个名字。它的插件名为 `guest:<插件>@<市场>`，使访客在注册表和日志中区别于内置行。
+- **每个包版本一个解析器条目。** 条目的名字解析为一个缓存的 kardia-hmr `ProcessGuest`，它的元数据来自清单（`name`，以及每个访客都在自己的领域中提供的服务 `plugin`），所以解析不会启动任何东西；访客启动时必须声明相同的元数据，否则启动失败。模块的条目在第一次解析时解析为一个 kardia-hmr `WasmGuest`：在阻塞线程池上，模块在它的限制所对应的引擎上编译（限制相同的访客共享一个引擎及其 epoch 线程），元数据同样来自清单，所以生成它不实例化任何东西；每个实例启动时都声明相同的元数据，否则启动失败；之后这个插件就属于这个名字。它的插件名为 `guest:<插件>@<市场>`，使访客在注册表和日志中区别于内置行。
 - **进程属于 Agent。** 程序访客的启动器先预留所有者，再通过实例的 `ExecutorManager` 以预留的管道执行器启动进程，并把管道交给访客桥；访客桥只通过收据结束进程，确认进程结束后才释放执行器。进程属于实例的所有者组，记录在 `process-groups.json` 中，在实例停止时被清扫，在下次启动时被回收（[进程](/docs/internals#plugin-guests)）。
 - **启动需要什么。** 对程序，清单请求的权限必须已授予（`install.json` 保存授权，由 `grant_package_permissions` 记录）；包的内容哈希必须仍是安装时记录的那个（每次启动进程时检查，模块则在编译前检查一次）。等待授权的访客处于 `blocked`；内容变化的包启动失败。
 - **模块什么也访问不到。** 它能导入的只有访客 ABI 的宿主函数（`view` 和 `invoke` 与程序一样受限），所以它没有文件、网络、时钟或环境变量：清单的 `permissions` 被忽略并记为问题，它不需要授权（`AgentPackageGuest::ungranted` 为 `None`）也不需要沙箱，在所有平台上都能启动。它的限制（`runtime.limits`）约束每个导出：燃料、通过 epoch 中断实现的时间（默认为它最长的调用可能用的时间，每次调用自己的期限也同样生效）以及线性内存（默认 256 MiB）。
@@ -251,7 +251,7 @@ schema 遵循同样的按协议规则：支持 `strict_json_schema` 的协议（
 - **重启。** 运行之后失败的访客（进程退出或被杀死、调用超过期限、违反协议或发送超过 4 MiB 的帧；模块触发陷阱、用尽燃料或时间，或要把内存增长到超过限制，`GuestHost::call` 从调用的错误中识别这些情况）使它的 fiber 失败，即 Kardia 的 `Failed`；访客宿主随后按重启策略（2 秒、10 秒、30 秒之后，10 分钟内三次）通过更新失败的 fiber 来重启它，这不写任何配置。窗口内的第四次故障使它保持 `failed`，直到 `retry_package`。启动失败不会被重启。因故障停止不等于关闭：这些都不会写入 `[plugins]`。
 
 - **通过代理贡献。** 访客贡献的是它的清单声明的东西（`contributes`），从不是访客自己说的：它的 fiber 变为活动时，访客宿主把代理注册为该 fiber 的副作用（一个工具源、每个上下文段 kind 一个上下文贡献者和渲染器、一个提示渲染器、一个工具生命周期钩子和一个继续钩子、一个观察者），所以它们随每次失败、停止或重启撤销，并随下一次启动回来。每个代理在比内核自身更短的期限内调用访客 `plugin` 服务的一个方法，所以挂起的访客会被终止并重启，而内核仍能及时走该调用的错误路径：一个工具错误、一个被略去的段或片段、一个没有发言权的钩子、一个被丢弃的事件。由于一个步骤准备好的值按类型区分，提示片段统一经过访客宿主的一个贡献者。审批规则和轮次准入不对访客开放。规则与协议见[插件规则](/docs/plugin-rules#code-plugins-rules)。
-- **访客能访问什么，以及它的设置。** 在每个访客的 loader 条目旁边，一个宿主服务条目（`<id>#host`）在两者按标签共享的 realm 中提供 `workspace` 和 `settings`，访客的条目声明了它们；受检访问找不到访客能 `view` 或 `invoke` 的其他东西，提供 `plugin` 以外任何服务的访客会立即失败。它的设置 `[plugins."<id>"].settings` 是两个条目的配置，所以 `set_package_settings`（按清单的 `configSchema` 校验）会以新设置重启它。
+- **访客能访问什么，以及它的设置。** 在每个访客的 loader 条目旁边，一个宿主服务条目（`<id>#host`）在两者按标签共享的 realm 中提供 `workspace` 和 `settings`，访客的条目声明了它们；受检访问找不到访客能 `view` 或 `invoke` 的其他东西，kardia-hmr 拒绝访客提供 `plugin` 以外的任何服务（这个拒绝是访客自己的错误）。它的设置 `[plugins."<id>"].settings` 是两个条目的配置，所以 `set_package_settings`（按清单的 `configSchema` 校验）会以新设置重启它。
 - **编写代码插件。** `plugins new` 生成一个代码插件，`plugins validate` 像访客宿主运行它那样检查它（加 `--run` 时在临时主目录中启动它），`plugins dev` 在每次改动后重新安装它；包、清单、SDK 和线路格式见[编写插件](/docs/writing-plugins)。
 
 ## MCP [#mcp]
@@ -326,7 +326,7 @@ schema 遵循同样的按协议规则：支持 `strict_json_schema` 的协议（
 - Skill 监视器只监视启动时存在的根目录；之后出现的根目录（包括之后启用的包的根目录）依靠读取时的标记。
 - 手动编辑 `[plugins]` 在下次启动或重新加载时生效；Agent 只在它自己写入设置之后重新加载包。
 - 在 Windows 上，程序访客的沙箱不限制读取。
-- WebAssembly 访客的实例失败是从调用的错误文本中识别的（kardia-hmr 以文本形式交出陷阱），而且只能由调用者等到结果的调用识别：在调用者已放弃的调用（被取消的轮次）中停止的访客，由它的下一次调用使其失败，而那次调用本身也会失败。每个运行中的模块版本都有一个线程，每 10 毫秒推进一次 wasmtime 的 epoch。
+- WebAssembly 访客的实例失败只能由调用者等到结果的调用识别：在调用者已放弃的调用（被取消的轮次）中停止的访客，由它的下一次调用使其失败，而那次调用本身也会失败。每组在用的限制保留一个引擎，以及一个每 10 毫秒推进一次其 epoch 的线程。
 - 内置的上下文窗口只覆盖公开了上限的模型系列（GPT、o 系列、Claude、Gemini 2.5）；其他模型需要 Provider 的列表或设置才能自动压缩。
 - 命令沙箱只存在于 Linux 和 macOS；Windows（受限令牌及其提权设置）还没有，所以在那里未设置的 `sandboxMode` 即完全访问。macOS 的沙箱只由它在 macOS 上运行的测试检查。
 - 在 Linux 之外未验证：`notify` 监视器的 macOS 与 Windows 后端、Skill 目录中显示的 Windows 路径、Windows 上 MCP stdio 的退出原因和已退出子进程的释放，以及 Windows 上记忆制品的安装重命名。

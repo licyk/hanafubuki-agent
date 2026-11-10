@@ -12,8 +12,9 @@
 //! that aborts on panic (std locks that would poison, promises that would
 //! never settle). A panic is known to be caught on a thread marked contained
 //! ([`mark_thread_contained`]: the contained runtimes' threads, contained
-//! worker groups' members and contained threads) and inside [`catch_panic`]
-//! or [`catch_panic_async`].
+//! worker groups' members and contained threads), inside [`catch_panic`]
+//! or [`catch_panic_async`], and where a registered check says so
+//! ([`register_containment_check`]: kardia-hmr's guest threads).
 
 use std::any::Any;
 use std::future::Future;
@@ -26,7 +27,9 @@ mod faults;
 mod hook;
 
 use containment::GuardScope;
-pub use containment::{is_panic_contained, mark_thread_contained, unmark_thread_contained};
+pub use containment::{
+    is_panic_contained, mark_thread_contained, register_containment_check, unmark_thread_contained,
+};
 pub use crash_record::{configure_crash_record, read_crash_record, CrashRecord};
 pub use faults::{
     recorded_panics, PanicFault, PanicFaultLog, PanicFaultSummary, MAX_RECORDED_PANICS,

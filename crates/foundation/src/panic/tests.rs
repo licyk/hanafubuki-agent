@@ -87,6 +87,27 @@ fn a_marked_thread_is_contained_until_unmarked() {
     .unwrap();
 }
 
+thread_local! {
+    static CAUGHT_ELSEWHERE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+fn caught_elsewhere() -> bool {
+    CAUGHT_ELSEWHERE.with(std::cell::Cell::get)
+}
+
+#[test]
+fn a_registered_check_contains_the_panics_on_the_threads_it_names() {
+    register_containment_check(caught_elsewhere);
+    std::thread::spawn(|| {
+        assert!(!is_panic_contained());
+        CAUGHT_ELSEWHERE.with(|caught| caught.set(true));
+        assert!(is_panic_contained());
+    })
+    .join()
+    .unwrap();
+    assert!(!is_panic_contained(), "another thread's mark is its own");
+}
+
 #[test]
 fn the_fault_log_counts_every_panic_and_keeps_the_latest() {
     let log = PanicFaultLog::new(2);

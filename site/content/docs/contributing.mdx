@@ -88,7 +88,7 @@ Agent 是从 [Hanafubuki](https://github.com/licyk/Hanafubuki) 中提取出来�
 | `hanafubuki-agent-host`                                      | `hanafubuki-module-contracts`                                                | `error`、`fault`、`host`（没有 `RootServices::serve_bridge`）、`logging`、`registry`、`restart`、`status`、`test_support`、`worker`                                                 | 只在 Hanafubuki：`bridge`                                                                                                                                               |
 | 门面的 golden 与历史语料（`crates/agent/src/tests/golden/`） | 集成的 golden 与历史语料（`hanafubuki-agent-integration/src/tests/golden/`） | 历史语料在两边是相同的字节；历史格式变化要在两边都重新录制                                                                                                                          |                                                                                                                                                                         |
 
-`panic` 模块有一处不同：宿主的 hook 接受第二个隔离检查（[panic hook 桥](/docs/embedding#the-panic-hook-bridge)），Agent 的不接受；崩溃记录的 JSON 跨越这座桥共享：Hanafubuki 的 hook 写 `data/agent/crash-record.json`，Agent 的启动标记读它。
+`panic` 模块有两处不同：宿主的 hook 接受第二个隔离检查（[panic hook 桥](/docs/embedding#the-panic-hook-bridge)），Agent 的不接受；Agent 的 `is_panic_contained` 还会询问库注册的检查（`register_containment_check`，即访客宿主注册的 kardia-hmr 的检查），Hanafubuki 的不需要它；崩溃记录的 JSON 跨越这座桥共享：Hanafubuki 的 hook 写 `data/agent/crash-record.json`，Agent 的启动标记读它。
 
 之所以是副本而不是让 Hanafubuki 使用 Agent 发布的 crate：那样 Hanafubuki 的 foundation、process 或模块宿主的每次修改都要等 Agent 发布，而这些是 Hanafubuki 每个领域赖以构建的 crate。代价是两个进程所有权域（Agent 拥有自己的 `ExecutorManager`）、类型不跨越边界（宿主接口只接受普通值），以及副本会分叉。
 

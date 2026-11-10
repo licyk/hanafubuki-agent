@@ -1,14 +1,14 @@
 //! What a guest may reach of the Agent: it views its workspace (as granted)
 //! and its settings, which are also its configuration; every other service
 //! is out of reach of `view` and `invoke`. A guest provides only its
-//! `plugin`: one that provides another service is stopped.
+//! `plugin`: kardia-hmr refuses it any other, which is the guest's error.
 
 use hanafubuki_agent_foundation::paths::ResolvedPath;
 use hanafubuki_agent_packages::WorkspaceAccess;
 use hanafubuki_agent_plugin_packages::GuestState;
 use serde_json::{json, Map, Value};
 
-use crate::fixture::{eventually, running, Fixture, Options};
+use crate::fixture::{running, Fixture, Options};
 
 fn settings(board: &str) -> Map<String, Value> {
     Map::from_iter([("board".to_string(), json!(board))])
@@ -84,10 +84,10 @@ pub async fn a_guest_views_only_its_workspace_and_its_settings() {
     }
 }
 
-pub async fn a_guest_that_provides_another_service_is_stopped() {
+pub async fn a_guest_that_provides_another_service_is_refused() {
     let fixture = Fixture::start(Options::default()).await;
 
-    // While it starts: it restarts until the restart policy gives up.
+    // While it starts: an `apply` that returns the refusal fails the start.
     let package = fixture.package("thief", "provide-apply");
     let id = package.id.key();
     fixture.apply(vec![package.clone()]).await;
@@ -99,27 +99,31 @@ pub async fn a_guest_that_provides_another_service_is_stopped() {
             .error
             .as_deref()
             .unwrap_or_default()
-            .contains("stolen"),
+            .contains("cannot provide \"stolen\""),
         "{failed:?}"
     );
+    assert_eq!(failed.restarts, 0);
     assert!(fixture.plugin.context().bindings("stolen").is_empty());
 
-    // While it runs: it fails at once, and restarts as after any fault.
+    // While it runs: the refusal is the call's error; nothing was provided,
+    // so the guest keeps running.
     let package = fixture.package("demo", "run");
     let id = package.id.key();
     fixture.apply(vec![package.clone()]).await;
     let first = fixture.wait(&id, "start", running).await;
-    let _ = fixture
+    let refused = fixture
         .call(&package, "provide", json!("agent-tools"))
-        .await;
-    let second = fixture
-        .wait(&id, "restart", |status| {
-            running(status) && status.process_id != first.process_id
-        })
-        .await;
-    assert_eq!(second.restarts, 1);
-    eventually("the binding withdrawn", || {
-        fixture.plugin.context().bindings("agent-tools").is_empty()
-    })
-    .await;
+        .await
+        .unwrap_err();
+    assert!(
+        refused.contains("cannot provide \"agent-tools\""),
+        "{refused}"
+    );
+    assert!(fixture.plugin.context().bindings("agent-tools").is_empty());
+    let status = fixture.host.status(&id).unwrap();
+    assert!(
+        running(&status) && status.restarts == 0 && status.process_id == first.process_id,
+        "{status:?}"
+    );
+    assert_eq!(fixture.call(&package, "echo", json!(1)).await, Ok(json!(1)));
 }

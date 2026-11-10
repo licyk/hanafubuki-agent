@@ -9,7 +9,7 @@ use hanafubuki_agent_contracts::{
     ObserverRegistry, PluginFaults, PromptContributorRegistry, Register, ToolLifecycleHookRegistry,
     ToolSourceRegistry,
 };
-use kardia_core::{Context, Inject, PluginDef, Service, ServiceChanged, StatusChanged};
+use kardia_core::{Context, Inject, PluginDef, Service, StatusChanged};
 use kardia_hmr::{GuestExited, GuestStarted};
 use kardia_loader::Loader;
 use serde_json::Value;
@@ -75,10 +75,6 @@ fn supervisor(shared: Arc<Shared>) -> PluginDef {
             ctx.on(move |event: &GuestStarted| listener.on_started(&event.fiber, &event.handle))?;
             let listener = shared.clone();
             ctx.on(move |event: &GuestExited| listener.on_exited(&event.fiber, &event.exit))?;
-            let (listener, watcher) = (shared.clone(), ctx.clone());
-            ctx.on(move |event: &ServiceChanged| {
-                listener.on_service(&watcher, &event.key, event.realm)
-            })?;
             shared.mounted(Mount {
                 loader,
                 restarts,
