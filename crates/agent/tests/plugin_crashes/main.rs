@@ -78,9 +78,29 @@ fn main() {
         Some(mcp_server::MCP_ARG) => return mcp_server::serve(&args[1..]),
         _ => {}
     }
-    let filters: Vec<&String> = args.iter().filter(|arg| !arg.starts_with('-')).collect();
+    let filters: Vec<String> = args
+        .into_iter()
+        .filter(|arg| !arg.starts_with('-'))
+        .collect();
+    // A check's future is the whole Agent's turn, polled by `block_on` on
+    // the calling thread: in a debug build it outgrows the 1 MiB main
+    // thread Windows gives a program, so the checks run on a thread of
+    // their own.
+    std::thread::Builder::new()
+        .name("checks".into())
+        .stack_size(CHECK_STACK)
+        .spawn(move || run_checks(&filters))
+        .unwrap()
+        .join()
+        .unwrap();
+}
+
+const CHECK_STACK: usize = 32 * 1024 * 1024;
+
+fn run_checks(filters: &[String]) {
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
+        .thread_stack_size(CHECK_STACK)
         .build()
         .unwrap();
     for (name, check) in CHECKS {
