@@ -44,7 +44,10 @@ impl Standalone {
                 add_dirs: global.add_dirs.clone(),
                 profile: global.profile.clone(),
                 overrides: overrides(global)?,
-                start: AgentStartOptions::default(),
+                start: AgentStartOptions {
+                    safe_mode: global.safe_mode,
+                    ..AgentStartOptions::default()
+                },
             },
             host,
         )

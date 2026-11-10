@@ -224,9 +224,18 @@ schema 遵循同样的按协议规则：支持 `strict_json_schema` 的协议（
 - **包拥有的 MCP 服务器**（[插件的服务器](/docs/mcp#plugin-servers)）：`.mcp.json`（或清单的 `mcpServers`）或 Agent Plugins 的 `mcp.json`，从不写入 `mcp.toml`，由 `[plugins."p@m".mcpServers]` 限制，与用户的服务器在同一套监管下运行。同名时用户的服务器优先，其次是键的顺序中第一个包；让出的服务器记为该包的问题。
 - **钩子来源**，排在用户和项目之后（`HookSource::Plugin`），凭定义和包的内容哈希被信任，每次运行前再次检查（[插件的钩子](/docs/configuration#hooks-plugins)）。与 Codex 相同，Agent Plugins 包的钩子从不运行。
 
-读不了的包，或包中读不了的组件，记为该包的问题；其他包照常加载。这一组包在构建 Agent 时加载（MCP 服务器随启动连接），并由 `reload_packages` 重新加载：门面在每次写入设置和 `mcp.toml` 之后运行它，生命周期调用也将在每次变更后运行它；它替换 Skill 根目录和钩子来源，只连接或断开有变化的 MCP 服务器，无需重启。`packages()` 列出每个已安装的包及其版本、格式、启用状态、内容和问题（`AgentPackageStatus`）。
+读不了的包，或包中读不了的组件，记为该包的问题；其他包照常加载。这一组包在构建 Agent 时加载（MCP 服务器随启动连接），并由 `reload_packages` 重新加载：门面在每次写入设置和 `mcp.toml` 之后运行它，每个生命周期调用也在变更后运行它；它替换 Skill 根目录和钩子来源，只连接或断开有变化的 MCP 服务器，无需重启。`packages()` 列出每个已安装的包及其版本、格式、启用状态、内容和问题（`AgentPackageStatus`）。
 
-模型通过 `plugins` 行得知启用的包：当某个包向本轮的 Skill 目录贡献 Skill 或贡献 MCP 服务器时，Capabilities 槽位带有一个"可用插件"段落（Codex 的 `PluginCapabilitySummary`：显示名称、单行且至多 1,024 个字符的描述、Skill 前缀、MCP 服务器名称）；没有这样的包就没有该段落，所以没有包的 Agent 的请求不变。该行只拥有这份摘要，所以关闭它只隐藏摘要，内容仍经由 `skills`、`mcp` 和 `hooks` 行流入；将来运行包代码的访客宿主会接管这一行。命令行和终端界面都还不能安装包。
+模型通过 `plugins` 行得知启用的包：当某个包向本轮的 Skill 目录贡献 Skill 或贡献 MCP 服务器时，Capabilities 槽位带有一个"可用插件"段落（Codex 的 `PluginCapabilitySummary`：显示名称、单行且至多 1,024 个字符的描述、Skill 前缀、MCP 服务器名称）；没有这样的包就没有该段落，所以没有包的 Agent 的请求不变。该行只拥有这份摘要，所以关闭它只隐藏摘要，内容仍经由 `skills`、`mcp` 和 `hooks` 行流入；将来运行包代码的访客宿主会接管这一行。安全模式下这些包会被列出，但都不加载。
+
+生命周期由门面负责（参照 Codex 的插件管理器），并且只通过 Agent 打开的那一个包存储进行，因为再打开一个会清扫它的暂存区：
+
+- **安装**（`install_package`，来自已添加的市场或一个目录；没有指定市场时归入 `local`）通过存储安装，写入 `[plugins."<id>"] enabled = true`（合并进用户的文件，所以条目中的 `mcpServers` 保留），重新加载，并返回这个包和它需要的东西：需要信任的钩子（对代码包还有需要授予的权限；内容包没有）。
+- **卸载**删除包及其 `[plugins]` 条目；除非清除，它的数据目录会保留。**启用**和**停用**写入 `enabled`；所属市场被关闭的包不能启用。**更新**从它的市场（按市场当前的内容）或它的目录重新安装。**重试**即重新加载。
+- **市场**（`marketplaces`、`add_marketplace`、`upgrade_marketplace`、`remove_marketplace`）只包括用户添加的那些（`[marketplaces]`）：不会从主目录或仓库中发现市场。每个调用写入它的记录并重新加载。
+- **`package_changed`**：对包的每个生命周期调用都会在重新加载之后告诉插件事件接收器（`AgentPluginEventSink::package_changed`）发生了什么：`installed`、`removed`、`enabled`、`disabled`、`updated`，或 `failed` 以及原因。它不在 `exec --json` 的事件流中，那里的事件属于会话；`exec` 回合期间没有任何东西改变这些包。
+
+`plugins` 命令和 `/plugins`（[终端界面](/docs/terminal-interface#plugins)）是这些调用的界面；`mcp list` 和 `/mcp` 显示包的服务器并标明所属包，`/warnings` 显示包的问题。
 
 ## MCP [#mcp]
 

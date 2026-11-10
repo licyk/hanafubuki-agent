@@ -15,17 +15,18 @@ hanafubuki-agent [选项] <命令> [参数]
 
 全局选项可以写在命令之前或之后，对所有命令有效。
 
-| 选项                                                 | 作用                                                                                                |
-| ---------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| `-c`、`--config 键=值`                               | 本次运行覆盖 `config.toml` 的一个键，可重复，后面的优先。值按 TOML 解析，不是合法 TOML 时作为字符串 |
-| `-p`、`--profile 名字`                               | 在用户设置之上读取配置档 `[profiles.名字]`；配置文件中没有这个配置档时报错                          |
-| `-m`、`--model 模型`                                 | 新会话（以及恢复的会话）使用的模型，在默认 Provider 上运行，代替模型策略中的模型                    |
-| `-C`、`--cd 目录`                                    | 工作目录：第一个工作区目录；它所在的 Git 仓库根目录决定读取哪个项目配置                             |
-| `--add-dir 目录`                                     | 再添加一个工作区目录，可重复                                                                        |
-| `--permission-mode manual\|auto-review\|full-access` | 本次运行的[权限模式](/docs/permissions)，相当于 `-c permissionMode=...`，优先于 `-c`                |
-| `--log-level off\|error\|warn\|info\|debug\|trace`   | 本次运行的日志级别，相当于 `-c logLevel=...`，优先于 `-c`                                           |
-| `--data-dir 目录`                                    | 数据目录（历史、记忆、Skill、日志），代替平台默认位置或 `HANAFUBUKI_AGENT_HOME` 指定的位置          |
-| `--no-alt-screen`                                    | [终端界面](#interface)把对话写入终端的滚动历史；其他命令忽略它                                      |
+| 选项                                                 | 作用                                                                                                                   |
+| ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `-c`、`--config 键=值`                               | 本次运行覆盖 `config.toml` 的一个键，可重复，后面的优先。值按 TOML 解析，不是合法 TOML 时作为字符串                    |
+| `-p`、`--profile 名字`                               | 在用户设置之上读取配置档 `[profiles.名字]`；配置文件中没有这个配置档时报错                                             |
+| `-m`、`--model 模型`                                 | 新会话（以及恢复的会话）使用的模型，在默认 Provider 上运行，代替模型策略中的模型                                       |
+| `-C`、`--cd 目录`                                    | 工作目录：第一个工作区目录；它所在的 Git 仓库根目录决定读取哪个项目配置                                                |
+| `--add-dir 目录`                                     | 再添加一个工作区目录，可重复                                                                                           |
+| `--permission-mode manual\|auto-review\|full-access` | 本次运行的[权限模式](/docs/permissions)，相当于 `-c permissionMode=...`，优先于 `-c`                                   |
+| `--log-level off\|error\|warn\|info\|debug\|trace`   | 本次运行的日志级别，相当于 `-c logLevel=...`，优先于 `-c`                                                              |
+| `--data-dir 目录`                                    | 数据目录（历史、记忆、Skill、日志），代替平台默认位置或 `HANAFUBUKI_AGENT_HOME` 指定的位置                             |
+| `--no-alt-screen`                                    | [终端界面](#interface)把对话写入终端的滚动历史；其他命令忽略它                                                         |
+| `--safe-mode`                                        | 以安全模式启动 Agent：只运行核心，不运行任何插件行（`disabledPlugins` 不变），也不加载任何[已安装插件](#plugins)的内容 |
 
 <Callout>
   选项中的值使用连字符（`auto-review`、`full-access`），而配置文件和 `-c`
@@ -85,14 +86,14 @@ hanafubuki-agent exec [选项] [提示词|-]
 
 ## mcp [#mcp]
 
-| 命令                                                                       | 作用                                                                                                  |
-| -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| `mcp list`                                                                 | 打印每个服务器的 ID、是否禁用、传输方式和目标、环境变量或请求头的名字（不打印值），然后是已设置的凭据 |
-| `mcp add ID --url URL [--oauth disabled\|optional\|required] [--disabled]` | 添加一个 Streamable HTTP 服务器；`--oauth` 设置它是否用 OAuth 登录（默认 `disabled`）                 |
-| `mcp add ID [--env 键=值]… [--disabled] -- 程序 [参数]…`                   | 添加一个 stdio 服务器，`--` 之后是程序和参数。启用的服务器添加后立即连接，并打印连接结果              |
-| `mcp remove ID`                                                            | 断开并删除服务器                                                                                      |
-| `mcp connect ID`                                                           | 连接服务器并打印它的状态和工具数量；没有达到 `ready` 时失败                                           |
-| `mcp login ID`                                                             | 用 OAuth 登录服务器：打印要在本机浏览器中打开的 URL，最多等待 5 分钟完成授权，然后打印服务器的状态    |
+| 命令                                                                       | 作用                                                                                                                                                                                                                    |
+| -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `mcp list`                                                                 | 打印每个服务器的 ID、是否禁用、传输方式和目标、环境变量或请求头的名字（不打印值）；然后是启用的[已安装插件](#plugins)运行的服务器，每行以 `(plugin ID)` 结尾（它们用 `plugins` 修改，不在这里修改）；最后是已设置的凭据 |
+| `mcp add ID --url URL [--oauth disabled\|optional\|required] [--disabled]` | 添加一个 Streamable HTTP 服务器；`--oauth` 设置它是否用 OAuth 登录（默认 `disabled`）                                                                                                                                   |
+| `mcp add ID [--env 键=值]… [--disabled] -- 程序 [参数]…`                   | 添加一个 stdio 服务器，`--` 之后是程序和参数。启用的服务器添加后立即连接，并打印连接结果                                                                                                                                |
+| `mcp remove ID`                                                            | 断开并删除服务器                                                                                                                                                                                                        |
+| `mcp connect ID`                                                           | 连接服务器并打印它的状态和工具数量；没有达到 `ready` 时失败                                                                                                                                                             |
+| `mcp login ID`                                                             | 用 OAuth 登录服务器：打印要在本机浏览器中打开的 URL，最多等待 5 分钟完成授权，然后打印服务器的状态                                                                                                                      |
 
 服务器 ID 只能包含 1 到 128 个字母、数字、`-`、`_` 和 `.`。凭据需要编辑 `mcp.toml`，见 [MCP](/docs/mcp)。
 
@@ -117,6 +118,27 @@ hanafubuki-agent exec [选项] [提示词|-]
 
 见 [Skill](/docs/skills)。
 
+## plugins [#plugins]
+
+已安装插件是 Codex、Claude Code、Cursor 或 Agent Plugins 格式的包：安装并启用后，它们的 Skill、MCP 服务器和 hook 加入 Agent。插件来自用户添加的市场（marketplace），或来自一个目录。模型能看到每个插件提供的内容；插件存放的位置和相关设置见[配置参考](/docs/config-reference#plugins)。
+
+| 命令                                                           | 作用                                                                                                                                                                                                                                                                                          |
+| -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `plugins list [--available] [--json]`                          | 列出已安装插件：ID、`enabled` 或 `disabled`、版本和来源。`--available` 改为在每个已添加的市场下列出它的插件（`installed, enabled`、`installed, disabled`、`not installed`、`not installable`），然后列出不由任何市场提供的已安装插件。`--json`：`{"installed": [...], "marketplaces": [...]}` |
+| `plugins add 插件@市场`、`plugins add 插件 --marketplace 市场` | 安装市场中的插件并启用它（`[plugins."插件@市场"] enabled = true`）；打印它的根目录、读取时略过的内容、由命令转换成的 Skill，以及有多少 hook 等待信任（用 `/hooks` 或 `/plugins` 信任）。`--json` 打印完整结果                                                                                 |
+| `plugins add 目录 [--marketplace 名字]`                        | 安装目录中的插件，归入市场 `名字`（不指定时为 `local`）：它的 ID 是 `<清单中的名字>@local`                                                                                                                                                                                                    |
+| `plugins remove ID [--purge-data]`                             | 卸载插件并删除它的 `[plugins]` 条目；除非加 `--purge-data`，它的数据目录会保留                                                                                                                                                                                                                |
+| `plugins enable ID`、`plugins disable ID`                      | 启用或停用一个已安装插件；所属市场被关闭的插件不能启用                                                                                                                                                                                                                                        |
+| `plugins update ID`                                            | 从插件的市场（按市场当前的内容；git 市场先升级）或它原来的目录重新安装；内容变化的插件的 hook 需要重新信任                                                                                                                                                                                    |
+| `plugins info ID [--json]`                                     | 显示插件：状态、版本、格式、来源、它的 Skill、MCP 服务器和 hook、等待信任的 hook 以及问题                                                                                                                                                                                                     |
+| `plugins retry ID`                                             | 重新加载已安装插件，并显示该插件此时的状态                                                                                                                                                                                                                                                    |
+| `plugins marketplace add 来源 [--ref 引用] [--sparse 路径]…`   | 添加一个市场：本地目录（原地使用），或 git 仓库（`owner/repo[@ref]`、HTTPS 或 SSH URL、`file://`），克隆到数据目录的 `plugins/marketplaces/` 下；`--sparse` 只检出这些路径。再次添加相同来源不会有任何变化                                                                                    |
+| `plugins marketplace list [--json]`                            | 列出已添加的市场：名字、`local` 或 `git`、`on`、`off` 或 `unreadable`，以及根目录                                                                                                                                                                                                             |
+| `plugins marketplace upgrade [名字]`                           | 把 git 市场 `名字`（或所有已添加的 git 市场）更新到远程的最新提交；其中已安装的插件保持不变，直到执行 `plugins update`                                                                                                                                                                        |
+| `plugins marketplace remove 名字`                              | 删除市场（以及 git 市场的检出）；从它安装的插件仍然保留                                                                                                                                                                                                                                       |
+
+插件 ID 是 `插件@市场`。命令行中 `--marketplace` 没有简写 `-m`：`-m` 是全局的 `--model`。
+
 ## memory [#memory]
 
 | 命令            | 作用                                                                   |
@@ -137,7 +159,7 @@ hanafubuki-agent exec [选项] [提示词|-]
 
 ## 哪些命令会启动 Agent [#agent-start]
 
-`config`、`providers list`、`mcp list` 和不带 `--online` 的 `doctor` 只读写配置，不启动 Agent，可以在另一个 Agent 进程运行时使用。其他命令会启动 Agent，需要独占数据目录。
+`config`、`providers list` 和不带 `--online` 的 `doctor` 只读写配置，不启动 Agent，可以在另一个 Agent 进程运行时使用。其他命令会启动 Agent，需要独占数据目录。
 
 每个命令都会先读取配置，再安装崩溃处理和日志文件，然后才启动 Agent 或修改任何内容。会启动 Agent 的管理命令也会像每次启动一样在后台连接启用的 MCP 服务器。
 

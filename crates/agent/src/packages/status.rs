@@ -1,7 +1,7 @@
 //! An installed package as the facade reports it.
 
-use hanafubuki_agent_hooks::{HookEntry, HookSource};
-use hanafubuki_agent_packages::ManifestFormat;
+use hanafubuki_agent_hooks::{HookEntry, HookSource, HookTrust};
+use hanafubuki_agent_packages::{InstallRecord, ManifestFormat, PackageSource};
 use hanafubuki_agent_skills::SkillCatalogEntry;
 use serde::Serialize;
 
@@ -19,9 +19,15 @@ pub struct AgentPackageStatus {
     pub format: Option<ManifestFormat>,
     pub display_name: String,
     pub description: Option<String>,
+    /// Where it was installed from (a directory, or a marketplace entry's
+    /// source); `None` when the install record has no entry for it.
+    pub source: Option<PackageSource>,
     pub enabled: bool,
     /// What it contributes while it is on.
     pub content: AgentPackageContent,
+    /// The keys of its hooks that do not run until they are trusted (new,
+    /// or changed since, or in a package whose contents changed since).
+    pub hooks_to_trust: Vec<String>,
     /// What could not be read or used: its manifest's fields, its
     /// components, an MCP server that gives way to another of its name.
     pub issues: Vec<String>,
@@ -38,13 +44,19 @@ pub struct AgentPackageContent {
     pub hooks: Vec<String>,
 }
 
-/// `package` with its Skills among `skills` and its hooks among `hooks`.
+/// `package` with its install `record`, its Skills among `skills` and its
+/// hooks among `hooks`.
 pub(super) fn package_status(
     package: &LoadedPackage,
+    record: Option<&InstallRecord>,
     skills: &[SkillCatalogEntry],
     hooks: &[HookEntry],
 ) -> AgentPackageStatus {
     let id = package.id.key();
+    let own_hooks = hooks
+        .iter()
+        .filter(|hook| matches!(&hook.source, HookSource::Plugin { id: owner, .. } if *owner == id))
+        .collect::<Vec<_>>();
     let content = AgentPackageContent {
         skills: skills
             .iter()
@@ -57,21 +69,22 @@ pub(super) fn package_status(
             .filter(|server| server.enabled)
             .map(|server| server.id.as_str().to_string())
             .collect(),
-        hooks: hooks
-            .iter()
-            .filter(
-                |hook| matches!(&hook.source, HookSource::Plugin { id: owner, .. } if *owner == id),
-            )
-            .map(|hook| hook.key.clone())
-            .collect(),
+        hooks: own_hooks.iter().map(|hook| hook.key.clone()).collect(),
     };
+    let hooks_to_trust = own_hooks
+        .iter()
+        .filter(|hook| hook.trust != HookTrust::Trusted)
+        .map(|hook| hook.key.clone())
+        .collect();
     AgentPackageStatus {
         version: package.version.clone(),
         format: package.format,
         display_name: package.display_name.clone(),
         description: package.description.clone(),
+        source: record.and_then(|record| record.source.clone()),
         enabled: package.enabled,
         content,
+        hooks_to_trust,
         issues: package.issues.clone(),
         id,
     }

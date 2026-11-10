@@ -85,6 +85,9 @@ pub use hanafubuki_agent_foundation::secrets::{
 /// is trusted.
 pub use hanafubuki_agent_hooks::{HookEventName, HookSource, HookTrust};
 pub use hanafubuki_agent_memory::{AgentMemoryContributionMode, AgentMemoryStatus};
+pub use hanafubuki_agent_packages::{
+    ManifestFormat, MarketplaceAddRequest, MarketplaceSourceType, PackageSource,
+};
 pub use host::{
     AgentPluginContextContribution, AgentPluginContributions, AgentPluginEventSink,
     AgentPluginGroup, AgentPluginLock, AgentPluginRow, AgentPluginState, AgentPluginStatus,
@@ -93,7 +96,11 @@ pub use host::{
 pub use host_inputs::{AgentSteeringRequest, AgentTurnRequest, HostContextPort, NoHostContext};
 pub use memory::AgentMemoryApplication;
 pub use network::{AgentProxy, NetworkSettingsPort};
-pub use packages::{AgentPackageContent, AgentPackageStatus};
+pub use packages::{
+    AgentMarketplace, AgentMarketplaceAdded, AgentMarketplacePlugin, AgentMarketplaceUpgrade,
+    AgentPackageChange, AgentPackageChangeKind, AgentPackageContent, AgentPackageInstall,
+    AgentPackageSource, AgentPackageStatus, AgentPackageUninstall, LOCAL_MARKETPLACE,
+};
 pub use plugins::{
     AgentGoalBudgets, AgentRecap, AgentReviewCodeLocation, AgentReviewCommit, AgentReviewFinding,
     AgentReviewLineRange, AgentReviewOutput, AgentReviewTarget, AgentReviewTargets,
@@ -202,7 +209,7 @@ pub use hanafubuki_agent_kernel::{
 /// told to connect.
 pub use hanafubuki_agent_mcp::{
     McpApprovalPolicy, McpConnectionPhase, McpCredentialKey, McpEventSink, McpExposurePolicy,
-    McpOAuthPhase, McpOAuthPolicy, McpServerConfig, McpServerId, McpStdioConfig,
+    McpOAuthPhase, McpOAuthPolicy, McpServerConfig, McpServerId, McpServerStatus, McpStdioConfig,
     McpStreamableHttpConfig, McpTransportConfig, NoopMcpEventSink,
 };
 pub use hanafubuki_agent_tool_contracts::{ToolOutput, ToolOutputContent};

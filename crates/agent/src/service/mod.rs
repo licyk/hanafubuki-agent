@@ -135,6 +135,8 @@ pub struct AgentApplicationService {
     host: Arc<AgentHost>,
     /// The installed plugins, whose content the Skills, MCP and hooks follow.
     packages: crate::packages::AgentPackages,
+    /// Told of the plugins' changes, and of the installed plugins'.
+    plugin_events: Arc<dyn AgentPluginEventSink>,
     /// The workspace policy, for user image attachments and their preview.
     pub(crate) files: WorkspaceFsService,
     /// Where this instance's kernel faults go (the slot that started it).
@@ -321,6 +323,7 @@ impl AgentApplicationService {
         let mcp = mcp_application.mcp.clone();
         let (packages, hooks) = packages::open_packages(
             &storage_paths,
+            instance.options.safe_mode,
             &executor,
             &config,
             &skills,
@@ -375,7 +378,7 @@ impl AgentApplicationService {
             blocking.clone(),
             config.clone(),
             host.network.clone(),
-            plugin_event_sink,
+            plugin_event_sink.clone(),
             agent_plugin_manifest(
                 AgentPluginInputs {
                     user_instructions_dir: storage_paths.root.clone(),
@@ -433,6 +436,7 @@ impl AgentApplicationService {
             base_instructions: agent_base_instructions(&host.instructions).into(),
             host: plugin_host,
             packages,
+            plugin_events: plugin_event_sink,
             files,
             kernel_faults,
         })

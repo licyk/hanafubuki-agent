@@ -166,7 +166,7 @@ Which [installed plugins](/docs/architecture#installed-plugins) are on, by plugi
 | `plugins."PLUGIN@MARKETPLACE".mcpServers.NAME.enabledTools`  | An array of tool names | all     | The only tools of that server offered                  |
 | `plugins."PLUGIN@MARKETPLACE".mcpServers.NAME.disabledTools` | An array of tool names | none    | Tools of that server not offered, after `enabledTools` |
 
-An installed package is on unless its marketplace is turned off (below), or its entry says `enabled = false`, or its entry does not say and `_default.enabled` is `false`. An entry whose key is not a plugin id is kept in the file and ignored, as an unknown key is. How a package's MCP servers run is the package's; `mcpServers` only restricts them ([Plugins' servers](/docs/mcp#plugin-servers)). A change the Agent writes applies at once: it reloads its packages after each settings write; a hand edit applies at the next start.
+An installed package is on unless its marketplace is turned off (below), or its entry says `enabled = false`, or its entry does not say and `_default.enabled` is `false`. An entry whose key is not a plugin id is kept in the file and ignored, as an unknown key is. How a package's MCP servers run is the package's; `mcpServers` only restricts them ([Plugins' servers](/docs/mcp#plugin-servers)). A change the Agent writes applies at once: it reloads its packages after each settings write; a hand edit applies at the next start. `plugins add` (and an install in `/plugins`) writes `enabled = true`, `plugins enable` and `disable` write `enabled` alone, and `plugins remove` removes the entry ([plugins](/docs/cli-reference#plugins)).
 
 ### Marketplaces [#marketplaces]
 
@@ -182,7 +182,7 @@ The marketplaces you added, by name: where the Agent finds their packages.
 | `marketplaces.NAME.lastRevision` | A git revision            | The revision checked out                                           |
 | `marketplaces.NAME.enabled`      | `true` or `false`; `true` | `false` turns off every package from it, whatever `[plugins]` says |
 
-A git marketplace is checked out in the data directory's `plugins/marketplaces/NAME/`; a local one is read where it is. An entry without a usable `sourceType` and `source` is kept in the file and ignored. Both tables go in any layer, and `config get` and `config set` reach their keys (`config set plugins."demo@my-mkt".enabled false`); a `-c` override cannot quote a key, so it names a package without dots only (`-c plugins.demo@my-mkt.enabled=false`).
+`plugins marketplace add`, `upgrade` and `remove` write these entries ([plugins](/docs/cli-reference#plugins)). A git marketplace is checked out in the data directory's `plugins/marketplaces/NAME/`; a local one is read where it is. An entry without a usable `sourceType` and `source` is kept in the file and ignored. Both tables go in any layer, and `config get` and `config set` reach their keys (`config set plugins."demo@my-mkt".enabled false`); a `-c` override cannot quote a key, so it names a package without dots only (`-c plugins.demo@my-mkt.enabled=false`).
 
 ## providers.toml [#providers-toml]
 

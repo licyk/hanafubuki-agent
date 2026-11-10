@@ -55,6 +55,11 @@ pub(crate) struct GlobalArgs {
     /// scrollback, off the alternate screen.
     #[arg(long, global = true)]
     pub(crate) no_alt_screen: bool,
+    /// Starts the Agent in safe mode: only its core runs, with no plugin
+    /// row (`disabledPlugins` is unchanged) and no installed plugin's
+    /// content.
+    #[arg(long, global = true)]
+    pub(crate) safe_mode: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
@@ -115,6 +120,10 @@ pub(crate) enum Command {
     /// Lists, installs and removes Skills.
     #[command(subcommand)]
     Skills(SkillsCommand),
+    /// Installs, lists, turns on and off, updates and removes plugins, and
+    /// manages the marketplaces they come from.
+    #[command(subcommand)]
+    Plugins(PluginsCommand),
     /// Shows and resets the memory.
     #[command(subcommand)]
     Memory(MemoryCommand),
@@ -287,4 +296,85 @@ pub(crate) enum MemoryCommand {
     Status,
     /// Forgets everything the memory holds.
     Reset,
+}
+
+#[derive(Debug, Subcommand)]
+pub(crate) enum PluginsCommand {
+    /// Lists the installed plugins; with --available, every plugin the
+    /// added marketplaces offer too.
+    List {
+        #[arg(long)]
+        available: bool,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Installs a plugin from an added marketplace (PLUGIN@MARKETPLACE, or
+    /// PLUGIN with --marketplace), or the plugin in a directory (filed
+    /// under --marketplace, `local` when not given), and turns it on.
+    #[command(
+        after_help = "Examples:\n  hanafubuki-agent plugins add demo@my-marketplace\n  hanafubuki-agent plugins add demo --marketplace my-marketplace\n  hanafubuki-agent plugins add ./path/to/plugin"
+    )]
+    Add {
+        /// PLUGIN[@MARKETPLACE], or a directory holding a plugin.
+        #[arg(value_name = "PLUGIN[@MARKETPLACE] | DIR")]
+        plugin: String,
+        /// (No `-m`: it is the global `--model`.)
+        #[arg(long, value_name = "MARKETPLACE")]
+        marketplace: Option<String>,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Uninstalls a plugin; its data directory is kept unless --purge-data.
+    Remove {
+        /// PLUGIN@MARKETPLACE.
+        id: String,
+        #[arg(long)]
+        purge_data: bool,
+    },
+    /// Turns an installed plugin on.
+    Enable { id: String },
+    /// Turns an installed plugin off.
+    Disable { id: String },
+    /// Installs a plugin again from its marketplace (as it is now) or the
+    /// directory it came from.
+    Update { id: String },
+    /// Shows an installed plugin: its source, content, hooks and issues.
+    Info {
+        id: String,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Loads the installed plugins again and shows the plugin as it is then.
+    Retry { id: String },
+    /// Adds, lists, upgrades and removes the marketplaces plugins are
+    /// installed from.
+    #[command(subcommand)]
+    Marketplace(MarketplaceCommand),
+}
+
+#[derive(Debug, Subcommand)]
+pub(crate) enum MarketplaceCommand {
+    /// Adds a marketplace: a local directory, a git URL or owner/repo[@ref].
+    #[command(
+        after_help = "Examples:\n  hanafubuki-agent plugins marketplace add ./path/to/marketplace\n  hanafubuki-agent plugins marketplace add owner/repo --ref main\n  hanafubuki-agent plugins marketplace add https://github.com/owner/repo --sparse plugins/foo"
+    )]
+    Add {
+        source: String,
+        /// The git ref to check out.
+        #[arg(long = "ref", value_name = "REF")]
+        ref_name: Option<String>,
+        /// A path to check out alone (a git source; repeatable).
+        #[arg(long = "sparse", value_name = "PATH")]
+        sparse_paths: Vec<String>,
+    },
+    /// Lists the added marketplaces and their roots.
+    List {
+        #[arg(long)]
+        json: bool,
+    },
+    /// Brings a git marketplace, or every added one, to its remote's
+    /// revision.
+    Upgrade { name: Option<String> },
+    /// Removes an added marketplace; the plugins installed from it stay.
+    Remove { name: String },
 }

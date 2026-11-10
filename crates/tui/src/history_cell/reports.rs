@@ -2,12 +2,15 @@
 
 //! What `/mcp` and `/skills` write into the transcript. Codex's `/mcp`
 //! lists its configured servers with their tools (`new_mcp_tools_output`);
-//! here the servers and their state come from the Agent's MCP snapshot.
+//! here the servers and their state come from the Agent's MCP snapshot,
+//! the installed plugins' servers after the user's, each labelled with its
+//! plugin.
 //! Codex's `/skills` opens a menu; here it writes the catalog the way
 //! `/mcp` writes the servers.
 
 use hanafubuki_agent::{
-    McpApplicationSnapshot, McpConnectionPhase, McpTransportConfig, SkillCatalogSnapshot,
+    McpApplicationSnapshot, McpConnectionPhase, McpServerConfig, McpServerStatus,
+    McpTransportConfig, SkillCatalogSnapshot,
 };
 use ratatui::style::Stylize;
 use ratatui::text::{Line, Span};
@@ -22,71 +25,93 @@ pub(crate) fn new_mcp_output(snapshot: &McpApplicationSnapshot) -> PlainHistoryC
         "".into(),
     ];
 
-    if snapshot.settings.servers.is_empty() {
+    if snapshot.settings.servers.is_empty() && snapshot.plugin_servers.is_empty() {
         lines.push("  • No MCP servers configured.".italic().into());
         lines.push("".into());
     }
 
     for server in &snapshot.settings.servers {
-        let mut header: Vec<Span<'static>> =
-            vec!["  • ".into(), server.id.as_str().to_string().into()];
-        if !server.enabled {
-            header.push(" ".into());
-            header.push("(disabled)".red());
-            lines.push(header.into());
-            lines.push(Line::from(""));
-            continue;
-        }
-        lines.push(header.into());
         let status = snapshot
             .servers
             .iter()
             .find(|status| status.server_id == server.id);
-        let phase = status.map_or(McpConnectionPhase::Disabled, |status| status.phase);
-        let phase_span = match phase {
-            McpConnectionPhase::Ready => "ready".green(),
-            McpConnectionPhase::Failed => "failed".red(),
-            McpConnectionPhase::Starting => "starting".into(),
-            McpConnectionPhase::Refreshing => "refreshing".into(),
-            McpConnectionPhase::Stopping => "stopping".into(),
-            McpConnectionPhase::Disabled => "not connected".dim(),
-        };
-        lines.push(vec!["    • Status: ".into(), phase_span].into());
-        if let Some(error) = status.and_then(|status| status.last_error.as_ref()) {
-            lines.push(vec!["    • Error: ".into(), error.clone().red()].into());
-        }
-
-        match &server.transport {
-            McpTransportConfig::Stdio(stdio) => {
-                let args_suffix = if stdio.argv.is_empty() {
-                    String::new()
-                } else {
-                    format!(" {}", stdio.argv.join(" "))
-                };
-                let cmd_display = format!("{}{args_suffix}", stdio.program);
-                lines.push(vec!["    • Command: ".into(), cmd_display.into()].into());
-            }
-            McpTransportConfig::StreamableHttp(http) => {
-                lines.push(vec!["    • URL: ".into(), http.url.clone().into()].into());
-            }
-        }
-
-        let mut names: Vec<String> = snapshot
-            .tools
-            .iter()
-            .filter(|tool| tool.server_id == server.id)
-            .map(|tool| tool.remote_name.clone())
-            .collect();
-        names.sort();
-        if names.is_empty() {
-            lines.push("    • Tools: (none)".into());
-        } else {
-            lines.push(vec!["    • Tools: ".into(), names.join(", ").into()].into());
-        }
-        lines.push(Line::from(""));
+        push_server(&mut lines, snapshot, server, None, status);
+    }
+    for plugin in &snapshot.plugin_servers {
+        push_server(
+            &mut lines,
+            snapshot,
+            &plugin.server,
+            Some(&plugin.plugin),
+            Some(&plugin.status),
+        );
     }
 
     PlainHistoryCell::new(lines)
+}
+
+/// A server of `/mcp verbose`, labelled with the plugin that runs it.
+fn push_server(
+    lines: &mut Vec<Line<'static>>,
+    snapshot: &McpApplicationSnapshot,
+    server: &McpServerConfig,
+    plugin: Option<&str>,
+    status: Option<&McpServerStatus>,
+) {
+    let mut header: Vec<Span<'static>> = vec!["  • ".into(), server.id.as_str().to_string().into()];
+    if let Some(plugin) = plugin {
+        header.push(format!(" (plugin {plugin})").dim());
+    }
+    if !server.enabled {
+        header.push(" ".into());
+        header.push("(disabled)".red());
+        lines.push(header.into());
+        lines.push(Line::from(""));
+        return;
+    }
+    lines.push(header.into());
+    let phase = status.map_or(McpConnectionPhase::Disabled, |status| status.phase);
+    let phase_span = match phase {
+        McpConnectionPhase::Ready => "ready".green(),
+        McpConnectionPhase::Failed => "failed".red(),
+        McpConnectionPhase::Starting => "starting".into(),
+        McpConnectionPhase::Refreshing => "refreshing".into(),
+        McpConnectionPhase::Stopping => "stopping".into(),
+        McpConnectionPhase::Disabled => "not connected".dim(),
+    };
+    lines.push(vec!["    • Status: ".into(), phase_span].into());
+    if let Some(error) = status.and_then(|status| status.last_error.as_ref()) {
+        lines.push(vec!["    • Error: ".into(), error.clone().red()].into());
+    }
+
+    match &server.transport {
+        McpTransportConfig::Stdio(stdio) => {
+            let args_suffix = if stdio.argv.is_empty() {
+                String::new()
+            } else {
+                format!(" {}", stdio.argv.join(" "))
+            };
+            let cmd_display = format!("{}{args_suffix}", stdio.program);
+            lines.push(vec!["    • Command: ".into(), cmd_display.into()].into());
+        }
+        McpTransportConfig::StreamableHttp(http) => {
+            lines.push(vec!["    • URL: ".into(), http.url.clone().into()].into());
+        }
+    }
+
+    let mut names: Vec<String> = snapshot
+        .tools
+        .iter()
+        .filter(|tool| tool.server_id == server.id)
+        .map(|tool| tool.remote_name.clone())
+        .collect();
+    names.sort();
+    if names.is_empty() {
+        lines.push("    • Tools: (none)".into());
+    } else {
+        lines.push(vec!["    • Tools: ".into(), names.join(", ").into()].into());
+    }
+    lines.push(Line::from(""));
 }
 
 pub(crate) fn new_skills_output(catalog: &SkillCatalogSnapshot) -> PlainHistoryCell {

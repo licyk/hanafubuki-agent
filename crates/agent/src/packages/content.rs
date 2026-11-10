@@ -30,11 +30,13 @@ const DEFAULT_SKILLS: &str = "skills";
 const DEFAULT_MCP: &str = ".mcp.json";
 const DEFAULT_HOOKS: &str = "hooks/hooks.json";
 
-/// `package` as the Agent runs it: when `enabled`, its Skill roots, its MCP
-/// servers with the user's `overlay` applied, and its hooks.
+/// `package` as the Agent runs it: when `active` (it is `enabled` and the
+/// Agent is not in safe mode), its Skill roots, its MCP servers with the
+/// user's `overlay` applied, and its hooks.
 pub(super) fn load(
     package: &InstalledPackage,
     enabled: bool,
+    active: bool,
     overlay: &BTreeMap<String, PluginMcpServerSettings>,
 ) -> LoadedPackage {
     let manifest = package.manifest.as_ref();
@@ -57,7 +59,7 @@ pub(super) fn load(
         hooks: None,
         issues: package.issues.clone(),
     };
-    let Some(manifest) = manifest.filter(|_| enabled) else {
+    let Some(manifest) = manifest.filter(|_| active) else {
         return loaded;
     };
     loaded.issues.extend(manifest.issues.iter().cloned());

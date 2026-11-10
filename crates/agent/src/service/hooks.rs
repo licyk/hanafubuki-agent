@@ -125,7 +125,7 @@ fn agent_hooks(catalog: &HookCatalog) -> AgentHooks {
     }
 }
 
-fn agent_hook(hook: &HookEntry) -> AgentHook {
+pub(super) fn agent_hook(hook: &HookEntry) -> AgentHook {
     let HookHandler::Command {
         command,
         timeout_sec,

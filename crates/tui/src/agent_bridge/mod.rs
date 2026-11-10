@@ -24,6 +24,7 @@ mod goal;
 mod hooks;
 mod mcp;
 mod permissions;
+mod plugins;
 mod providers;
 mod replay;
 mod review;
@@ -55,6 +56,7 @@ pub(crate) use goal::{GoalCall, GoalReply};
 pub(crate) use hooks::{needing_review, HooksCall, HooksReply};
 pub(crate) use mcp::{McpCall, McpReply};
 pub(crate) use permissions::DeniedAction;
+pub(crate) use plugins::{PluginsCall, PluginsDone, PluginsReply, PluginsState};
 pub(crate) use providers::{ProviderCall, ProviderReply};
 pub(crate) use replay::{OlderTranscript, OpenedSession, ReplayedItem};
 pub(crate) use review::{ReviewCall, ReviewEnd, ReviewReply};
@@ -131,6 +133,7 @@ pub(crate) enum TurnUpdate {
     Review(ReviewReply),
     Goal(GoalReply),
     Hooks(HooksReply),
+    Plugins(PluginsReply),
     Subagents(SubagentsReply),
 }
 

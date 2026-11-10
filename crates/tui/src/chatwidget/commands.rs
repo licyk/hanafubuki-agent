@@ -172,6 +172,9 @@ impl ChatWidget {
                     commands::hooks::on_reply(context, reply)
                 })
             }
+            TurnUpdate::Plugins(reply) => self.run_command(&commands::PLUGINS, |context| {
+                commands::plugins::on_reply(context, reply)
+            }),
             update => return Some(update),
         }
         None

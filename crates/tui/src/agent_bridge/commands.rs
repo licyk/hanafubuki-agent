@@ -170,6 +170,7 @@ impl AgentBridge {
             AgentCommand::Review(call) => return Ok(self.review_call(call)),
             AgentCommand::Goal(call) => return Ok(self.goal_call(call)),
             AgentCommand::Hooks(call) => return Ok(self.hooks_call(call)),
+            AgentCommand::Plugins(call) => return Ok(self.plugins_call(call)),
             AgentCommand::Settings(call) => self.settings_call(call),
             AgentCommand::Subagents(call) => return Ok(self.subagents_call(call)),
             AgentCommand::Skills => {

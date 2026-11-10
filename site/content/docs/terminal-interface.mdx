@@ -112,6 +112,7 @@ Fullscreen 下还有阅读对话的按键：Page Up/Page Down、F3、F4、Ctrl-S
 | `/status`                 | 显示模型和推理强度、Provider、工作区目录、生效的权限模式（会话自己的，否则是配置的）、会话模式和 ID、token 用量、上下文剩余比例，以及后台的压缩（`compacting in the background`，或已就绪、等待安装） | 可用   |
 | `/pwd`、`/cwd`            | 显示工作目录（第一个工作区目录）和其他工作区目录                                                                                                                                                      | 可用   |
 | `/cd [path]`              | 切换工作目录；不带路径时切换到主目录（[见下文](#worktrees)）                                                                                                                                          | 不可用 |
+| `/plugins`                | 打开插件浏览器：已安装插件、市场和内置插件；安装、启用、停用、更新和卸载插件，添加市场（[见下文](#plugins)）                                                                                          | 可用   |
 | `/mcp`                    | 打开 [MCP](/docs/mcp) 管理界面（[见下文](#mcp)）。`/mcp verbose` 列出服务器：连接状态、错误、命令或 URL、工具。`/mcp login ID` 登录其中一个                                                           | 可用   |
 | `/hooks`                  | 打开钩子浏览器：各事件的钩子及其信任状态和开关；信任钩子、开启或关闭钩子（[见下文](#hooks)）                                                                                                          | 可用   |
 | `/raw [on\|off]`          | 以生成对话的原始纯文本显示对话，不带样式，便于用终端自己的选择复制；不带参数时切换（见下文）                                                                                                          | 可用   |
@@ -199,9 +200,21 @@ Fullscreen 下还有阅读对话的按键：Page Up/Page Down、F3、F4、Ctrl-S
 
 `/providers` 列出 Provider：★ 标记默认 Provider，每一项显示协议、基础 URL、是否设置了令牌（不会显示令牌本身）以及是否已停用。Enter 编辑选中的一项，`a` 添加，`d` 确认后删除，`e` 启用或停用，`*` 设为默认，Esc 关闭列表。表单、**Test**、保存和模型选择见 [Provider 与模型](/docs/providers-models#interface)。
 
+## 插件 [#plugins]
+
+`/plugins` 打开插件浏览器（对应 Codex 的插件目录），有三个标签页，用 ←/→ 切换：**Installed**（已安装）、**Marketplaces**（市场）和 **Built-in**（内置）。每个改动立即保存；进行中时页面会显示（`Installing…`），完成后重新读取全部内容。对应的命令见[命令行参考](/docs/cli-reference#plugins)。
+
+- **Installed** 列出[已安装插件](/docs/cli-reference#plugins)：每个插件的状态、版本、需要审查的 hook 和问题。空格启用或停用选中的插件；Enter 打开它；**Install from a directory…** 要求输入一个插件目录，按 `<名字>@local` 安装。
+- 插件页面提供 **Disable plugin** 或 **Enable plugin**、有 hook 等待信任时的 **Trust its N hook(s)**、**Update plugin**（从它的市场或目录重新安装）、**Retry plugin**（重新加载）和 **Uninstall plugin**（会询问是否保留它的数据目录）。下面列出它的来源、版本、格式、Skill、MCP 服务器、hook 和问题。
+- **Marketplaces** 列出已添加的市场，每个显示来源和其中已安装的插件数量。Enter 打开一个市场：列出它的插件，标为 **Available**、**Installed**、**Disabled** 或 **Not installable**；在未安装的插件上按 Enter 显示 **Install plugin**。Ctrl+U 升级 git 市场，Ctrl+R 确认后删除市场。**Add a marketplace…** 要求输入来源：`owner/repo`、git URL 或本地市场目录。
+- 安装带 hook 的插件后，会列出这些 hook 的命令并询问是否信任（**Trust them**，或 **Not now**：之后在 `/hooks` 或插件页面信任）。hook 只有被信任后才会运行。
+- **Built-in** 列出编译进 Agent 的插件及其状态：空格或 Enter 启用或停用（`disabledPlugins`；核心插件不能停用），`r` 重新启动失败的插件。
+
+Esc 返回上一页，在标签页上关闭浏览器。用 `--safe-mode` 启动时，浏览器会提示没有加载任何已安装插件。
+
 ## MCP 服务器 [#mcp]
 
-`/mcp` 列出 MCP 服务器，每一项显示传输方式、连接阶段、工具数量和最近的错误。Enter 编辑选中的一项，`a` 添加，`d` 确认后删除，`e` 启用或停用，`c` 连接（已连接的会重新连接），`l` 开始 OAuth 登录，`o` 登出，Esc 关闭列表。表单和其中的机密见 [MCP](/docs/mcp#interface)。
+`/mcp` 列出 MCP 服务器，每一项显示传输方式、连接阶段、工具数量和最近的错误。之后以暗色列出启用的已安装插件运行的服务器，标为 `(plugin ID)`：它们不能被选中，随插件改变（[/plugins](#plugins)）；`/mcp verbose` 也会列出它们。Enter 编辑选中的一项，`a` 添加，`d` 确认后删除，`e` 启用或停用，`c` 连接（已连接的会重新连接），`l` 开始 OAuth 登录，`o` 登出，Esc 关闭列表。表单和其中的机密见 [MCP](/docs/mcp#interface)。
 
 ## 评审 [#review]
 
@@ -591,6 +604,7 @@ yank = []
 
 - **configuration**：读取 `config.toml`、`providers.toml` 和 `mcp.toml` 时做的修复（[配置恢复](/docs/recovery)），以及 `config.toml` 的某一层中设置无法使用的内容：不认识的键，或被下一层替换的值；
 - **plugins**：失败的插件，或被排除在回合之外的插件；
+- **installed plugins**：[已安装插件](#plugins)无法使用的内容：清单字段、组件、因同名而让位的 MCP 服务器；
 - **MCP**：服务器最近的错误或警告，以及读取 `mcp.toml` 时做的修复；
 - **hooks**：钩子配置中的问题；
 - **panics**：Agent 捕获到的内部错误；

@@ -15,8 +15,8 @@ use ratatui::crossterm::event::{KeyEvent, MouseEvent};
 use hanafubuki_agent::AgentTuiPreferencesPatch;
 
 use crate::agent_bridge::{
-    AgentReply, GoalCall, HooksCall, McpCall, ProviderCall, ReviewCall, SessionCall, SettingsCall,
-    SubagentsCall,
+    AgentReply, GoalCall, HooksCall, McpCall, PluginsCall, ProviderCall, ReviewCall, SessionCall,
+    SettingsCall, SubagentsCall,
 };
 use crate::app::WorkspaceEvent;
 use crate::appearance::AppearanceEvent;
@@ -145,6 +145,7 @@ pub(crate) enum AgentCommand {
     Review(ReviewCall),
     Goal(GoalCall),
     Hooks(HooksCall),
+    Plugins(PluginsCall),
     Settings(SettingsCall),
     Subagents(SubagentsCall),
 }

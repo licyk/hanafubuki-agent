@@ -10,6 +10,7 @@ mod exit;
 mod interactive;
 mod mcp;
 mod memory;
+mod plugins;
 mod providers;
 mod sessions;
 mod skills;
@@ -40,6 +41,7 @@ fn main() -> ExitCode {
         Some(Command::Mcp(command)) => mcp::run(global, command).map(|()| SUCCESS),
         Some(Command::Sessions(command)) => sessions::run(global, command).map(|()| SUCCESS),
         Some(Command::Skills(command)) => skills::run(global, command).map(|()| SUCCESS),
+        Some(Command::Plugins(command)) => plugins::run(global, command).map(|()| SUCCESS),
         Some(Command::Memory(command)) => memory::run(global, command).map(|()| SUCCESS),
         Some(Command::Doctor { online }) => doctor::run(global, online),
     };

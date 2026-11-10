@@ -48,3 +48,10 @@ impl AgentApplicationService {
             .unwrap();
     }
 }
+
+impl AgentApplicationService {
+    /// Tells `events` of the plugins' changes from now on.
+    pub(crate) fn test_replace_plugin_events(&mut self, events: Arc<dyn AgentPluginEventSink>) {
+        self.plugin_events = events;
+    }
+}

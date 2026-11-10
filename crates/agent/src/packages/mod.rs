@@ -22,8 +22,16 @@ use crate::service::{AgentMcpApplication, McpPluginServer};
 use crate::skills::AgentSkillApplication;
 
 mod content;
+mod lifecycle;
+mod marketplaces;
 mod status;
 
+pub use lifecycle::{
+    AgentMarketplace, AgentMarketplaceAdded, AgentMarketplacePlugin, AgentMarketplaceUpgrade,
+    AgentPackageChange, AgentPackageChangeKind, AgentPackageInstall, AgentPackageSource,
+    AgentPackageUninstall, LOCAL_MARKETPLACE,
+};
+pub(crate) use marketplaces::{configured_marketplace, marketplace_view};
 pub use status::{AgentPackageContent, AgentPackageStatus};
 
 /// The installed packages and the content of those that are on, as last
@@ -32,6 +40,9 @@ pub use status::{AgentPackageContent, AgentPackageStatus};
 #[derive(Clone)]
 pub(crate) struct AgentPackages {
     store: Arc<PackageStore>,
+    /// The Agent runs in safe mode: the packages are listed, and none
+    /// contributes anything.
+    safe_mode: bool,
     loaded: Arc<RwLock<Arc<LoadedPackages>>>,
     /// Held by a reload from its read of the settings to its last change,
     /// so the later of two reloads is the one that stays.
@@ -71,6 +82,7 @@ impl AgentPackages {
     /// servers connect with the Agent's start. Blocking.
     pub(crate) fn open(
         store: PackageStore,
+        safe_mode: bool,
         config: &AgentConfig,
         skills: AgentSkillApplication,
         mcp: AgentMcpApplication,
@@ -78,6 +90,7 @@ impl AgentPackages {
     ) -> Result<Self, String> {
         let packages = Self {
             store: Arc::new(store),
+            safe_mode,
             loaded: Arc::default(),
             reload: Arc::default(),
             skills,
@@ -88,6 +101,12 @@ impl AgentPackages {
         *packages.mcp.plugin_servers.write() = loaded.mcp_servers();
         packages.follow(loaded);
         Ok(packages)
+    }
+
+    /// The store every change to the installed packages goes through: one
+    /// per data directory, since opening one sweeps its staging area.
+    pub(crate) fn store(&self) -> &Arc<PackageStore> {
+        &self.store
     }
 
     pub(crate) fn loaded(&self) -> Arc<LoadedPackages> {
@@ -127,24 +146,47 @@ impl AgentPackages {
         *self.loaded.write() = Arc::new(loaded);
     }
 
-    /// Every installed package, with what it contributes. Blocking: reads
-    /// the Skill catalog and the hooks.
+    /// Every installed package, with what it contributes and its hooks'
+    /// trust (each package with hooks hashed). Blocking: reads the Skill
+    /// catalog, the hooks and the install record.
     pub(crate) fn status(&self) -> Vec<AgentPackageStatus> {
         let skills = self
             .skills
             .list()
             .map(|catalog| catalog.entries)
             .unwrap_or_default();
-        let hooks = self.hooks.discover().hooks;
+        let hooks = self.hooks.list().hooks;
+        let installed = self.store.installed();
         self.loaded()
             .packages
             .iter()
-            .map(|package| status::package_status(package, &skills, &hooks))
+            .map(|package| {
+                let record = installed
+                    .iter()
+                    .find(|installed| installed.id == package.id)
+                    .and_then(|installed| installed.record.as_ref());
+                status::package_status(package, record, &skills, &hooks)
+            })
+            .collect()
+    }
+
+    /// The hooks of the package `id` that wait to be trusted. Blocking:
+    /// hashes the packages with hooks.
+    pub(crate) fn hooks_to_trust(&self, id: &PluginId) -> Vec<hanafubuki_agent_hooks::HookEntry> {
+        let key = id.key();
+        self.hooks
+            .list()
+            .hooks
+            .into_iter()
+            .filter(|hook| {
+                matches!(&hook.source, hanafubuki_agent_hooks::HookSource::Plugin { id, .. } if *id == key)
+                    && hook.trust != hanafubuki_agent_hooks::HookTrust::Trusted
+            })
             .collect()
     }
 
     /// Reads the installed packages and the content of those `settings`
-    /// leave on; `user_servers` are the user's MCP servers, which a
+    /// leave on (none in safe mode); `user_servers` are the user's MCP servers, which a
     /// package's server of the same name gives way to. Blocking.
     pub(crate) fn load(
         &self,
@@ -162,7 +204,8 @@ impl AgentPackages {
                     .get(&package.id.key())
                     .map(|settings| settings.mcp_servers.clone())
                     .unwrap_or_default();
-                content::load(package, settings.package_enabled(&package.id), &overlay)
+                let enabled = settings.package_enabled(&package.id);
+                content::load(package, enabled, enabled && !self.safe_mode, &overlay)
             })
             .collect::<Vec<_>>();
         resolve_server_names(&mut packages, user_servers);

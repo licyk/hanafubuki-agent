@@ -310,6 +310,21 @@ markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
 notice = "crates/agent/src/packages/content.rs"
 
 [[derived]]
+path = "crates/agent/src/service/packages/lifecycle.rs"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
+notice = "crates/agent/src/service/packages"
+
+[[derived]]
+path = "crates/agent/src/service/packages/marketplaces.rs"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
+notice = "crates/agent/src/service/packages"
+
+[[derived]]
+path = "crates/cli/src/plugins.rs"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
+notice = "crates/cli/src/plugins.rs"
+
+[[derived]]
 path = "crates/agent/src/plugins/packages/prompt.rs"
 markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
 notice = "crates/agent/src/plugins/packages/prompt.rs"
@@ -610,6 +625,18 @@ reason = "The hooks browser over a hand-built list of hooks."
 [[original]]
 path = "crates/tui/src/app/tests/features.rs"
 reason = "/review, /goal and /hooks end to end over the standalone Agent."
+
+[[original]]
+path = "crates/tui/src/agent_bridge/plugins.rs"
+reason = "/plugins' calls onto the facade's calls on the installed plugins, their marketplaces and the built-in rows, everything read again after each change."
+
+[[original]]
+path = "crates/tui/src/commands/plugins/tests.rs"
+reason = "The plugin browser's pages over hand-built plugins."
+
+[[original]]
+path = "crates/tui/src/app/tests/plugins.rs"
+reason = "/plugins and /mcp end to end over the standalone Agent."
 
 [[original]]
 path = "crates/tui/src/app/tests/preferences.rs"

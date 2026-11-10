@@ -15,17 +15,18 @@ With no command it opens the [terminal interface](/docs/terminal-interface), `PR
 
 They go before or after the command, and apply to every command.
 
-| Flag                                                 | Does                                                                                                                                |
-| ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `-c`, `--config KEY=VALUE`                           | Overrides a key of `config.toml` for this run; repeatable, the later wins. The value is TOML, or a string when it is not valid TOML |
-| `-p`, `--profile NAME`                               | Reads the profile `[profiles.NAME]` over the user's settings; a profile the file does not have is an error                          |
-| `-m`, `--model MODEL`                                | The model a new (or resumed) session runs on the default Provider, in place of the model policy's                                   |
-| `-C`, `--cd DIR`                                     | The working directory: the first workspace root; its Git root decides which project configuration may be read                       |
-| `--add-dir DIR`                                      | Another workspace root; repeatable                                                                                                  |
-| `--permission-mode manual\|auto-review\|full-access` | This run's [permission mode](/docs/permissions), as `-c permissionMode=…`, winning over `-c`                                        |
-| `--log-level off\|error\|warn\|info\|debug\|trace`   | This run's log level, as `-c logLevel=…`, winning over `-c`                                                                         |
-| `--data-dir DIR`                                     | The data directory (history, memory, Skills, logs), in place of the platform's or the one `HANAFUBUKI_AGENT_HOME` names             |
-| `--no-alt-screen`                                    | The [terminal interface](#interface) writes the conversation into the terminal's scrollback; other commands ignore it               |
+| Flag                                                 | Does                                                                                                                                            |
+| ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `-c`, `--config KEY=VALUE`                           | Overrides a key of `config.toml` for this run; repeatable, the later wins. The value is TOML, or a string when it is not valid TOML             |
+| `-p`, `--profile NAME`                               | Reads the profile `[profiles.NAME]` over the user's settings; a profile the file does not have is an error                                      |
+| `-m`, `--model MODEL`                                | The model a new (or resumed) session runs on the default Provider, in place of the model policy's                                               |
+| `-C`, `--cd DIR`                                     | The working directory: the first workspace root; its Git root decides which project configuration may be read                                   |
+| `--add-dir DIR`                                      | Another workspace root; repeatable                                                                                                              |
+| `--permission-mode manual\|auto-review\|full-access` | This run's [permission mode](/docs/permissions), as `-c permissionMode=…`, winning over `-c`                                                    |
+| `--log-level off\|error\|warn\|info\|debug\|trace`   | This run's log level, as `-c logLevel=…`, winning over `-c`                                                                                     |
+| `--data-dir DIR`                                     | The data directory (history, memory, Skills, logs), in place of the platform's or the one `HANAFUBUKI_AGENT_HOME` names                         |
+| `--no-alt-screen`                                    | The [terminal interface](#interface) writes the conversation into the terminal's scrollback; other commands ignore it                           |
+| `--safe-mode`                                        | Starts the Agent in safe mode: only its core runs, no plugin row (`disabledPlugins` is unchanged) and no [installed plugin](#plugins)'s content |
 
 <Callout>
   The flag's values have hyphens (`auto-review`, `full-access`); the configuration file and `-c` use
@@ -85,14 +86,14 @@ See [Providers and models](/docs/providers-models).
 
 ## mcp [#mcp]
 
-| Command                                                                    | Does                                                                                                                                                                               |
-| -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `mcp list`                                                                 | Prints each server's id, whether it is disabled, its transport and target, the names (never the values) of its environment variables or headers; then the credentials that are set |
-| `mcp add ID --url URL [--oauth disabled\|optional\|required] [--disabled]` | Adds a Streamable HTTP server; `--oauth` sets whether it takes an OAuth login (`disabled` by default)                                                                              |
-| `mcp add ID [--env KEY=VALUE]… [--disabled] -- PROGRAM [ARG]…`             | Adds a stdio server: the program and its arguments follow `--`. An enabled server is connected at once, and how that went is printed                                               |
-| `mcp remove ID`                                                            | Disconnects and removes a server                                                                                                                                                   |
-| `mcp connect ID`                                                           | Connects a server and prints its state and tool count; fails when it does not reach `ready`                                                                                        |
-| `mcp login ID`                                                             | Logs in to a server with OAuth: prints the URL to open in a browser on this machine, waits up to 5 minutes for the authorization, then prints the servers' states                  |
+| Command                                                                    | Does                                                                                                                                                                                                                                                                                                                      |
+| -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `mcp list`                                                                 | Prints each server's id, whether it is disabled, its transport and target, the names (never the values) of its environment variables or headers; then the servers the enabled [installed plugins](#plugins) run, each ending `(plugin ID)` (they are changed with `plugins`, not here); then the credentials that are set |
+| `mcp add ID --url URL [--oauth disabled\|optional\|required] [--disabled]` | Adds a Streamable HTTP server; `--oauth` sets whether it takes an OAuth login (`disabled` by default)                                                                                                                                                                                                                     |
+| `mcp add ID [--env KEY=VALUE]… [--disabled] -- PROGRAM [ARG]…`             | Adds a stdio server: the program and its arguments follow `--`. An enabled server is connected at once, and how that went is printed                                                                                                                                                                                      |
+| `mcp remove ID`                                                            | Disconnects and removes a server                                                                                                                                                                                                                                                                                          |
+| `mcp connect ID`                                                           | Connects a server and prints its state and tool count; fails when it does not reach `ready`                                                                                                                                                                                                                               |
+| `mcp login ID`                                                             | Logs in to a server with OAuth: prints the URL to open in a browser on this machine, waits up to 5 minutes for the authorization, then prints the servers' states                                                                                                                                                         |
 
 A server id has 1 to 128 letters, digits, `-`, `_` and `.` only. Credentials are edited in `mcp.toml`; see [MCP](/docs/mcp).
 
@@ -117,6 +118,27 @@ See [Sessions](/docs/sessions).
 
 See [Skills](/docs/skills).
 
+## plugins [#plugins]
+
+Installed plugins are packages in Codex's, Claude Code's, Cursor's or the Agent Plugins format: their Skills, MCP servers and hooks join the Agent's once installed and on. They come from a marketplace the user added, or from a directory. The model sees what each contributes; the store and the settings they live in are described in [Configuration reference](/docs/config-reference#plugins).
+
+| Command                                                                          | Does                                                                                                                                                                                                                                                                                                                                             |
+| -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `plugins list [--available] [--json]`                                            | Lists the installed plugins: id, `enabled` or `disabled`, version and source. `--available` lists each added marketplace's plugins under it instead (`installed, enabled`, `installed, disabled`, `not installed`, `not installable`), then the installed plugins no marketplace offers. `--json`: `{"installed": [...], "marketplaces": [...]}` |
+| `plugins add PLUGIN@MARKETPLACE`, `plugins add PLUGIN --marketplace MARKETPLACE` | Installs the marketplace's plugin and turns it on (`[plugins."PLUGIN@MARKETPLACE"] enabled = true`); prints its root, what its reading left out, the Skills its commands became and how many of its hooks wait to be trusted (`/hooks` or `/plugins` trusts them). `--json` prints the whole result                                              |
+| `plugins add DIR [--marketplace NAME]`                                           | Installs the plugin in the directory `DIR`, filed under the marketplace `NAME` (`local` when not given): its id is `<its manifest's name>@local`                                                                                                                                                                                                 |
+| `plugins remove ID [--purge-data]`                                               | Uninstalls the plugin and removes its `[plugins]` entry; its data directory is kept unless `--purge-data`                                                                                                                                                                                                                                        |
+| `plugins enable ID`, `plugins disable ID`                                        | Turns an installed plugin on or off; a plugin whose marketplace is turned off cannot be turned on                                                                                                                                                                                                                                                |
+| `plugins update ID`                                                              | Installs the plugin again from its marketplace, as the marketplace is now (upgrade a git marketplace first), or from the directory it came from; a changed plugin's hooks wait to be trusted again                                                                                                                                               |
+| `plugins info ID [--json]`                                                       | Shows the plugin: status, version, format, source, its Skills, MCP servers and hooks, the hooks waiting to be trusted and its issues                                                                                                                                                                                                             |
+| `plugins retry ID`                                                               | Loads the installed plugins again and shows the plugin as it is then                                                                                                                                                                                                                                                                             |
+| `plugins marketplace add SOURCE [--ref REF] [--sparse PATH]…`                    | Adds a marketplace: a local directory, used where it is, or a git repository (`owner/repo[@ref]`, an HTTPS or SSH URL, `file://`), cloned under the data directory's `plugins/marketplaces/`; `--sparse` checks out only those paths. Adding the same source again changes nothing                                                               |
+| `plugins marketplace list [--json]`                                              | Lists the added marketplaces: name, `local` or `git`, `on`, `off` or `unreadable`, and root                                                                                                                                                                                                                                                      |
+| `plugins marketplace upgrade [NAME]`                                             | Brings the git marketplace `NAME`, or every added git marketplace, to its remote's revision; its installed plugins stay as they are until `plugins update`                                                                                                                                                                                       |
+| `plugins marketplace remove NAME`                                                | Removes the marketplace (and a git one's checkout); the plugins installed from it stay installed                                                                                                                                                                                                                                                 |
+
+A plugin's id is `PLUGIN@MARKETPLACE`. The command line has no `-m` for `--marketplace`: `-m` is the global `--model`.
+
 ## memory [#memory]
 
 | Command         | Does                                                                                                             |
@@ -137,7 +159,7 @@ See [Troubleshooting](/docs/troubleshooting#doctor).
 
 ## Which commands start the Agent [#agent-start]
 
-`config`, `providers list`, `mcp list` and `doctor` without `--online` only read and write the configuration: they do not start the Agent, and work while another Agent process runs. The other commands start it, and need the data directory to themselves.
+`config`, `providers list` and `doctor` without `--online` only read and write the configuration: they do not start the Agent, and work while another Agent process runs. The other commands start it, and need the data directory to themselves.
 
 Every command reads the configuration first, then installs the crash handler and the log file, before it starts the Agent or changes anything. A management command that starts the Agent also connects the enabled MCP servers in the background, as every start does.
 

@@ -91,6 +91,15 @@ Third-party notices
     `codex-rs/hooks/src/engine/plugin_fingerprint.rs` and
     `codex-rs/config/src/types.rs` (commit `57a808a392`); each file of it
     so derived says so in its first lines;
+  - the installed plugins' lifecycle and marketplace calls
+    (`crates/agent/src/service/packages`: `lifecycle.rs` and
+    `marketplaces.rs`) are derived from Codex's
+    `codex-rs/core-plugins/src/manager.rs` and
+    `codex-rs/cli/src/marketplace_cmd.rs`, and the `plugins` command
+    (`crates/cli/src/plugins.rs`) from Codex's
+    `codex-rs/cli/src/plugin_cmd.rs` and
+    `codex-rs/cli/src/marketplace_cmd.rs` (commit `57a808a392`); each says
+    so in its first lines;
   - the `goal` plugin's model-visible parts (`crates/agent/src/plugins/goal`:
     `templates.rs`, `tools.rs` and `context.rs`) are derived from Codex's
     `codex-rs/ext/goal` (`templates/goals/continuation.md`,

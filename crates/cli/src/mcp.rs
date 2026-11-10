@@ -1,35 +1,36 @@
-//! `mcp list|add|remove|connect|login`. The list reads `mcp.toml`; the
-//! changes, the connect and the login go through the running Agent's MCP
-//! API, which connects a server it is told about.
+//! `mcp list|add|remove|connect|login`, through the running Agent's MCP
+//! API, which connects a server it is told about. The list shows the
+//! servers of `mcp.toml`, then those the enabled installed plugins run,
+//! each labelled with its plugin (they are not edited here).
 
 use std::collections::BTreeMap;
 use std::io::Write;
 
 use hanafubuki_agent::{
-    AgentRuntimeHost, McpApplicationSnapshot, McpConnectionPhase, McpOAuthPolicy, McpServerConfig,
+    McpApplicationSnapshot, McpConnectionPhase, McpOAuthPolicy, McpServerConfig,
     McpServerDeleteRequest, McpServerId, McpServerWriteRequest, McpStdioConfig,
     McpStreamableHttpConfig, McpTransportConfig,
 };
 
-use crate::agent::{block_on, with_agent, Standalone};
+use crate::agent::{block_on, with_agent};
 use crate::cli::{GlobalArgs, McpCommand, OAuth};
 use crate::exit::Failure;
 
 pub(crate) fn run(global: &GlobalArgs, command: McpCommand) -> Result<(), Failure> {
     match command {
-        McpCommand::List => {
-            let standalone = Standalone::open(global, AgentRuntimeHost::default())?;
-            let settings = standalone.runtime.config().mcp().load();
-            standalone.shutdown();
-            let settings = settings.map_err(|error| Failure::new(error.to_string()))?;
-            for server in &settings.servers {
+        McpCommand::List => with_agent(global, |agent| {
+            let snapshot = block_on(agent, |agent| async move { agent.mcp_snapshot().await })?;
+            for server in &snapshot.settings.servers {
                 println!("{}", describe(server));
             }
-            for key in settings.credentials.keys() {
+            for server in &snapshot.plugin_servers {
+                println!("{}  (plugin {})", describe(&server.server), server.plugin);
+            }
+            for key in snapshot.settings.credentials.keys() {
                 println!("credential {} (set)", key.as_str());
             }
             Ok(())
-        }
+        }),
         McpCommand::Add {
             id,
             url,

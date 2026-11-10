@@ -23,6 +23,7 @@ use super::{AgentBridge, AgentReply, TurnUpdate};
 pub(crate) enum WarningSource {
     Configuration,
     Plugins,
+    InstalledPlugins,
     Mcp,
     Hooks,
     Panics,
@@ -35,6 +36,7 @@ impl WarningSource {
         match self {
             Self::Configuration => "configuration",
             Self::Plugins => "plugins",
+            Self::InstalledPlugins => "installed plugins",
             Self::Mcp => "MCP",
             Self::Hooks => "hooks",
             Self::Panics => "panics",
@@ -223,6 +225,20 @@ async fn agent_warnings(agent: &AgentHandle) -> Vec<Warning> {
             let text = format!("Plugin `{}`: {problem}", plugin.name);
             warnings.push(Warning::new(WarningSource::Plugins, text));
         }
+    }
+    match agent.packages().await {
+        Ok(packages) => {
+            for package in packages {
+                for issue in &package.issues {
+                    let text = format!("Installed plugin `{}`: {issue}", package.id);
+                    warnings.push(Warning::new(WarningSource::InstalledPlugins, text));
+                }
+            }
+        }
+        Err(error) => warnings.push(Warning::new(
+            WarningSource::InstalledPlugins,
+            format!("The installed plugins could not be read: {error}"),
+        )),
     }
     match agent.mcp_snapshot().await {
         Ok(snapshot) => {

@@ -43,7 +43,7 @@ user first.
       config-layers, data-directory, plugin-rules, contributing.
       Open: no manifest cache (nothing reloads repeatedly yet); npm sources
       (decision 9); marketplace discovery from `$HOME`/the workspace repo
-      not ported (callers pass roots; P3 decides); `install.json` has no
+      not ported (callers pass roots; P3 decided: only `[marketplaces]`); `install.json` has no
       granted permissions yet (P5); `content_hash` has no cancellation (P2
       hook trust may want it); for Agent Plugins P2's loader must ignore
       `paths.hooks` and discover Skills as direct children (Codex
@@ -121,13 +121,11 @@ user first.
       section lists the plugins (Codex's generic text lists none, its
       summaries feed `@plugin` mentions); a package that cannot be hashed
       lists its hooks untrusted rather than dropping them.
-      Open: P3 should reuse the facade's `PackageStore` (opening another
-      sweeps staging) and call `reload_packages` after each lifecycle call;
-      a hand edit of `[plugins]` applies at the next start or reload (no
+      Open: (P3 reuses the facade's `PackageStore` and reloads after each
+      lifecycle call: done) a hand edit of `[plugins]` applies at the next start or reload (no
       watch); the Skill watcher watches the plugin roots present at start
-      only (reads re-stamp every root); `/mcp` and `mcp list` show no plugin
-      servers yet (the snapshot has them; P3's `/plugins` or `/mcp`);
-      `/warnings` does not list package issues yet; `content_hash` still
+      only (reads re-stamp every root); (`/mcp`, `mcp list` and `/warnings`
+      show plugin servers and package issues: done in P3); `content_hash` still
       has no cancellation (a hook run hashes on the blocking pool); the
       plan's §3.2 overlay key is `mcpServers` (camelCase), not
       `mcp_servers`; no manifest cache (each reload rereads).
@@ -143,8 +141,91 @@ user first.
       `SkillId::plugin()`; the facade now depends on
       `hanafubuki-agent-packages`, and hooks does too; a host that writes
       `[plugins]` itself calls `reload_packages()`.
-- [ ] P3: lifecycle API (facade), `plugins` CLI, TUI `/plugins` (Codex's
+- [x] P3: lifecycle API (facade), `plugins` CLI, TUI `/plugins` (Codex's
       port), built-in rows with retry, `--safe-mode`, `package_changed`.
+      Done: facade (`service/packages/{mod,lifecycle,marketplaces}.rs`, after
+      Codex's `manager.rs` and `marketplace_cmd.rs`) over the one store
+      (`AgentPackages::store()`; nothing else opens one): `package(id)`,
+      `install_package(AgentPackageSource::{Marketplace{marketplace,
+      plugin}, Directory{path, marketplace}})` (a directory is filed under
+      `local` unless named) → `AgentPackageInstall { package, root,
+      migrated_commands, issues, hooks_to_trust: Vec<AgentHook>, permissions
+      (empty for content) }`, writes `enabled = true`; `uninstall_package(id,
+      purge_data)` removes the `[plugins]` entry, an absent package is an
+      error; `set_package_enabled` writes `enabled` alone (merge keeps
+      `mcpServers`), refused while the marketplace is off; `update_package`
+      (the added marketplace as it is now, else the recorded directory);
+      `retry_package` (reload); `marketplaces()` (only `[marketplaces]`:
+      the P1 "discovery" item is decided: none), `add_marketplace`,
+      `upgrade_marketplace(Option<name>)`, `remove_marketplace`; each
+      writes the config and awaits `reload_packages`. `AgentPackageStatus`
+      gains `source` and `hooks_to_trust` (packages are hashed for trust:
+      `HooksEngine::list`). Safe mode: `AgentPackages` lists the packages
+      and loads no content (no Skills, servers, hooks). `package_changed`:
+      `AgentPluginEventSink::package_changed(&AgentPackageChange { id, kind:
+      installed|removed|enabled|disabled|updated|failed, error })`, default
+      empty, after the reload. CLI `plugins list [--available] [--json] |
+      add | remove [--purge-data] | enable | disable | update | info
+      [--json] | retry` and `plugins marketplace add [--ref] [--sparse] |
+      list [--json] | upgrade [NAME] | remove` (after Codex's
+      `plugin_cmd.rs`/`marketplace_cmd.rs`); global `--safe-mode`
+      (`AgentStartOptions::safe_mode`); `mcp list` now starts the Agent and
+      prints the plugins' servers `(plugin ID)`. TUI `/plugins`
+      (`commands/plugins/{mod,browser,pages}.rs`, Codex's catalog): tabs
+      Installed / Marketplaces / Built-in (←/→); package page (toggle, trust
+      hooks, update, retry, uninstall with or without data; source, version,
+      format, Skills, servers, hooks, issues); marketplace page → install;
+      install-from-directory and add-marketplace forms; Ctrl+U/Ctrl+R on a
+      marketplace; trust page after an install with hooks; built-in rows:
+      space toggles (`set_plugin_enabled`), `r` retries (`retry_plugin`).
+      `/mcp` and `/mcp verbose` show plugin servers read-only, labelled;
+      `/warnings` gains the source "installed plugins". Tests: facade
+      `tests::packages::manage` (local marketplace lifecycle with the event
+      sequence and the overlay kept; directory install, marketplace off;
+      git marketplace from a bare repo: add, already added, install,
+      upgrade after a push, update, remove), CLI `tests/plugins.rs`, TUI
+      `app::tests::plugins` (install from a marketplace, trust, disable,
+      enable, uninstall; built-in off, retry refused, on; `/mcp` row) and
+      `commands::plugins::tests`. A pty smoke of the debug binary
+      (`--no-alt-screen`, a 50x160 pty, a minimal VT emulator in Python, a
+      Provider at an unused port, a fresh `HANAFUBUKI_AGENT_HOME`): `/plugins`
+      → Marketplaces → add a local marketplace by typing its path, install a
+      Claude Code plugin with a Skill, `/skills` lists `greeter:hello`,
+      disable (gone from `/skills`), enable, uninstall, `/exit` (code 0). Docs: cli-reference, terminal-interface,
+      architecture, embedding, config-reference (both languages).
+      Deviations: `package_changed` is not in `exec --json` (its events are a
+      session's; nothing changes packages during an `exec` turn) but on the
+      plugin event sink, documented in architecture/embedding; no `-m` for
+      `--marketplace` (it is `--model`); the browser's tabs are pages of one
+      view (no `SelectionTab` here); the TUI list is not searchable; Codex's
+      `plugin list` shows marketplace plugins by default, ours the installed
+      ones (`--available` for Codex's); `update` is ours (Codex has none);
+      marketplace removal keeps installed packages (as Codex).
+      Open: `package_changed` has no consumer in the standalone binary (the
+      TUI reads after its own calls); installs from git marketplaces have no
+      cancellation (git timeout only); `plugins update` of a package whose
+      marketplace no longer offers it fails rather than falling back to its
+      recorded source; the CLI cannot trust hooks (points to `/hooks` and
+      `/plugins`); `set_package_settings` for the `mcpServers` overlay has no
+      UI (config edits); the status line does not show failed packages;
+      `packages()` hashes every package with hooks on each call (trust),
+      which `/plugins`, `/warnings` and `plugins list` pay; with the `hooks`
+      row off, `/plugins` lists hooks to trust but trusting them fails
+      (`FeatureUnavailable`, as `/hooks`); `mcp list` now starts the Agent,
+      so it takes the data directory's lock.
+      Hanafubuki, at its next pin: new facade calls `package`,
+      `install_package`, `uninstall_package`, `set_package_enabled`,
+      `update_package`, `retry_package`, `marketplaces`, `add_marketplace`,
+      `upgrade_marketplace`, `remove_marketplace`; new re-exports
+      `AgentPackageSource`, `AgentPackageInstall`, `AgentPackageUninstall`,
+      `AgentPackageChange`, `AgentPackageChangeKind`, `AgentMarketplace`,
+      `AgentMarketplacePlugin`, `AgentMarketplaceAdded`,
+      `AgentMarketplaceUpgrade`, `LOCAL_MARKETPLACE`,
+      `MarketplaceAddRequest`, `MarketplaceSourceType`, `PackageSource`,
+      `ManifestFormat`, `McpServerStatus`; `AgentPackageStatus` gains
+      `source` and `hooks_to_trust` (a struct literal needs them);
+      `AgentPluginEventSink` gains `package_changed` with an empty default;
+      in safe mode installed packages contribute nothing.
 - [x] P4: kernel deadlines at the five untimed points (context, admission,
       tool source, prompt `prepare`, tool `permission`).
   - Done: `AgentHardLimits::plugin_call_deadline` (10 s) bounds each. A

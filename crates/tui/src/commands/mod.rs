@@ -30,6 +30,7 @@ mod mode;
 mod model;
 mod parse;
 mod permissions;
+pub(crate) mod plugins;
 mod presets;
 mod prompt;
 pub(crate) mod providers;
@@ -58,7 +59,7 @@ use std::fmt;
 use hanafubuki_agent::{AgentSessionMode, AgentSubagentStatus, AgentTuiPreferences};
 
 use crate::agent_bridge::{
-    HooksReply, McpReply, ProviderReply, SessionCall, SessionReply, SettingsReply,
+    HooksReply, McpReply, PluginsReply, ProviderReply, SessionCall, SessionReply, SettingsReply,
 };
 use crate::app_event::{AgentCommand, AppEvent, AppEventSender, Op};
 use crate::appearance::Appearance;
@@ -72,6 +73,7 @@ pub(crate) use memories::MEMORIES;
 pub(crate) use mode::mode_name;
 pub(crate) use model::{show_model_choices, MODEL};
 pub(crate) use parse::{parse_input, ParsedInput};
+pub(crate) use plugins::PLUGINS;
 pub(crate) use presets::PRESETS;
 pub(crate) use providers::PROVIDERS;
 pub(crate) use review::REVIEW;
@@ -80,7 +82,7 @@ pub(crate) use subagents::SUBAGENTS;
 pub(crate) use warnings::{show_warnings, WARNINGS};
 
 /// Every command, in presentation order: the most used first.
-pub(crate) static COMMANDS: [&CommandSpec; 46] = [
+pub(crate) static COMMANDS: [&CommandSpec; 47] = [
     &model::MODEL,
     &providers::PROVIDERS,
     &mode::MODE,
@@ -111,6 +113,7 @@ pub(crate) static COMMANDS: [&CommandSpec; 46] = [
     &reports::STATUS,
     &pwd::PWD,
     &cd::CD,
+    &plugins::PLUGINS,
     &mcp::MCP,
     &hooks::HOOKS,
     &raw::RAW,
@@ -227,6 +230,7 @@ pub(crate) enum CommandReply {
     Mcp(McpReply),
     Session(SessionReply),
     Hooks(HooksReply),
+    Plugins(PluginsReply),
     Settings(SettingsReply),
     /// The subagents' statuses, read again while they run.
     Subagents(Vec<AgentSubagentStatus>),

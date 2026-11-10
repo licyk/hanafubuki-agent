@@ -656,6 +656,7 @@ mod backtrack;
 mod compaction;
 mod compression;
 mod features;
+mod plugins;
 mod preferences;
 mod session_commands;
 mod settings;

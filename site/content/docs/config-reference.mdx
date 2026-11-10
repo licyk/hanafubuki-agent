@@ -166,7 +166,7 @@ icon: ListTree
 | `plugins."插件@市场".mcpServers.名字.enabledTools`  | 工具名数组        | 全部   | 只提供该服务器的这些工具                         |
 | `plugins."插件@市场".mcpServers.名字.disabledTools` | 工具名数组        | 无     | 在 `enabledTools` 之后，不提供该服务器的这些工具 |
 
-已安装的包默认启用，除非：它的市场被关闭（见下文），或它的条目写了 `enabled = false`，或它的条目没有说明而 `_default.enabled` 为 `false`。键不是插件 id 的条目保留在文件中，但和未知键一样被忽略。包的 MCP 服务器如何运行由包决定，`mcpServers` 只做限制（[插件的服务器](/docs/mcp#plugin-servers)）。Agent 写入的更改立即生效：它在每次写入设置之后重新加载包；手动编辑在下次启动时生效。
+已安装的包默认启用，除非：它的市场被关闭（见下文），或它的条目写了 `enabled = false`，或它的条目没有说明而 `_default.enabled` 为 `false`。键不是插件 id 的条目保留在文件中，但和未知键一样被忽略。包的 MCP 服务器如何运行由包决定，`mcpServers` 只做限制（[插件的服务器](/docs/mcp#plugin-servers)）。Agent 写入的更改立即生效：它在每次写入设置之后重新加载包；手动编辑在下次启动时生效。`plugins add`（以及 `/plugins` 中的安装）写入 `enabled = true`，`plugins enable` 和 `disable` 只写 `enabled`，`plugins remove` 删除该条目（[plugins](/docs/cli-reference#plugins)）。
 
 ### 市场 [#marketplaces]
 
@@ -182,7 +182,7 @@ icon: ListTree
 | `marketplaces.名字.lastRevision` | git 修订                  | 检出的修订                                           |
 | `marketplaces.名字.enabled`      | `true` 或 `false`；`true` | 为 `false` 时关闭它的所有包，不管 `[plugins]` 怎么写 |
 
-git 市场检出在数据目录的 `plugins/marketplaces/名字/` 中；本地市场在原处读取。没有可用的 `sourceType` 和 `source` 的条目保留在文件中，但被忽略。两个表可以写在任何一层，`config get` 和 `config set` 能处理它们的键（`config set plugins."demo@my-mkt".enabled false`）；`-c` 覆盖不能给键加引号，所以只能指定名字中没有点的包（`-c plugins.demo@my-mkt.enabled=false`）。
+`plugins marketplace add`、`upgrade` 和 `remove` 写入这些条目（[plugins](/docs/cli-reference#plugins)）。git 市场检出在数据目录的 `plugins/marketplaces/名字/` 中；本地市场在原处读取。没有可用的 `sourceType` 和 `source` 的条目保留在文件中，但被忽略。两个表可以写在任何一层，`config get` 和 `config set` 能处理它们的键（`config set plugins."demo@my-mkt".enabled false`）；`-c` 覆盖不能给键加引号，所以只能指定名字中没有点的包（`-c plugins.demo@my-mkt.enabled=false`）。
 
 ## providers.toml [#providers-toml]
 

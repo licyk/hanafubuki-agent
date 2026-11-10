@@ -14,6 +14,7 @@ use super::*;
 
 #[cfg(unix)]
 mod lifecycle;
+mod manage;
 #[cfg(unix)]
 mod mcp;
 mod rules;

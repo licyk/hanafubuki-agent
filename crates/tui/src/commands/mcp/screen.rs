@@ -5,7 +5,7 @@
 
 use hanafubuki_agent::{
     McpApplicationSnapshot, McpConnectionPhase, McpCredentialKey, McpServerConfig, McpServerId,
-    McpTransportConfig,
+    McpServerStatus, McpTransportConfig,
 };
 use ratatui::buffer::Buffer;
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
@@ -98,6 +98,17 @@ impl McpScreen {
             description: Some("a program to run, or a Streamable HTTP address".to_string()),
             ..Default::default()
         });
+        // Read-only, after the rows the keys act on: /plugins changes them.
+        let plugin_servers = self
+            .snapshot
+            .as_ref()
+            .map_or(&[][..], |snapshot| snapshot.plugin_servers.as_slice());
+        items.extend(plugin_servers.iter().map(|plugin| SelectionItem {
+            name: format!("{} (plugin {})", plugin.server.id.as_str(), plugin.plugin),
+            description: Some(server_description(&plugin.server, Some(&plugin.status))),
+            is_disabled: true,
+            ..Default::default()
+        }));
         let list = ListSelectionView::new(
             SelectionViewParams {
                 title: Some("MCP servers".to_string()),
@@ -123,27 +134,9 @@ impl McpScreen {
                 .iter()
                 .find(|status| status.server_id == server.id)
         });
-        let transport = match &server.transport {
-            McpTransportConfig::Stdio(_) => "stdio",
-            McpTransportConfig::StreamableHttp(_) => "http",
-        };
-        let mut description = match status {
-            Some(status) => format!(
-                "{transport} · {} · {} tools",
-                phase_name(status.phase),
-                status.tool_count
-            ),
-            None => format!("{transport} · not started"),
-        };
-        if !server.enabled {
-            description.push_str(" · disabled");
-        }
-        if let Some(error) = status.and_then(|status| status.last_error.as_deref()) {
-            description.push_str(&format!(" · {error}"));
-        }
         SelectionItem {
             name: server.id.as_str().to_string(),
-            description: Some(description),
+            description: Some(server_description(server, status)),
             ..Default::default()
         }
     }
@@ -515,6 +508,28 @@ impl McpScreen {
 }
 
 /// A connection phase as it is serialized (`ready`).
+fn server_description(server: &McpServerConfig, status: Option<&McpServerStatus>) -> String {
+    let transport = match &server.transport {
+        McpTransportConfig::Stdio(_) => "stdio",
+        McpTransportConfig::StreamableHttp(_) => "http",
+    };
+    let mut description = match status {
+        Some(status) => format!(
+            "{transport} · {} · {} tools",
+            phase_name(status.phase),
+            status.tool_count
+        ),
+        None => format!("{transport} · not started"),
+    };
+    if !server.enabled {
+        description.push_str(" · disabled");
+    }
+    if let Some(error) = status.and_then(|status| status.last_error.as_deref()) {
+        description.push_str(&format!(" · {error}"));
+    }
+    description
+}
+
 fn phase_name(phase: McpConnectionPhase) -> &'static str {
     match phase {
         McpConnectionPhase::Disabled => "disabled",

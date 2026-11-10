@@ -98,6 +98,7 @@ fn the_unfiltered_list_is_the_registry_in_order() {
         "status",
         "pwd",
         "cd",
+        "plugins",
         "mcp",
         "hooks",
         "raw",
