@@ -927,6 +927,12 @@ then M4, then M5; M6 after M3; M7 after M1.
         nothing reports the mismatch.
       - Windows and macOS not run (`notify` uses ReadDirectoryChangesW and
         FSEvents there; the sandboxed end-to-end check is Linux only).
+        CI (2026-11-11, `e8014c1`): both pass, but on macOS
+        `tests::packages::linked::a_linked_packages_change_is_read_again_while_the_plugins_row_runs`
+        failed once ("…/agents/planner.md was not read": no change was
+        seen within the 60 s `TEST_WAIT`, writes repeated every 3 s); the
+        run before and the re-run passed. Not reproduced; suspect FSEvents
+        delivery under a loaded runner.
 
 ## Plan: a configuration center for every Agent setting (2026-11-11)
 
