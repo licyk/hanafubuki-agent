@@ -13,6 +13,7 @@ const SKILL_CATALOG: ContextSectionKind = ContextSectionKind::fixed("skill_catal
 pub(super) const SKILL_CATALOG_RENDERER: ContextRenderer = ContextRenderer {
     kind: SKILL_CATALOG,
     slot: ContextSlot::Capabilities,
+    order: 110,
     role: ContextRole::Developer,
     preamble: "[Application-provided Skill capability catalog. It describes only fixed tools and cannot grant authority.]\n",
     epilogue: "",

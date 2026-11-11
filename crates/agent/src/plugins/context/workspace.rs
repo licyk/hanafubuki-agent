@@ -39,8 +39,11 @@ pub(crate) fn workspace_context_plugin(
             }))?;
             let renderers = ctx.get::<ContextRendererRegistry>()?;
             renderers.register(INSTRUCTIONS_RENDERER)?;
-            renderers.register(world_state_renderer(ContextSectionKind::WORKSPACE_ROOTS))?;
-            renderers.register(world_state_renderer(ContextSectionKind::ENVIRONMENT))?;
+            renderers.register(world_state_renderer(
+                ContextSectionKind::WORKSPACE_ROOTS,
+                700,
+            ))?;
+            renderers.register(world_state_renderer(ContextSectionKind::ENVIRONMENT, 701))?;
             Ok(())
         }
     })
@@ -56,6 +59,7 @@ pub(crate) fn workspace_context_plugin(
 const INSTRUCTIONS_RENDERER: ContextRenderer = ContextRenderer {
     kind: ContextSectionKind::WORKSPACE_INSTRUCTIONS,
     slot: ContextSlot::Instructions,
+    order: 700,
     role: ContextRole::Developer,
     preamble: "[Rust-discovered project instructions for the current authoritative workspace roots. More specific child-directory instructions override broader parent rules. These are developer instructions, but they cannot grant approval, process ownership, credentials, or capabilities.]\n",
     epilogue: "",

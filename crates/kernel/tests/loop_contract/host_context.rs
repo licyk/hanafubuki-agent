@@ -13,6 +13,7 @@ pub(crate) fn host_context_renderer() -> PluginDef {
         vec![ContextRenderer {
             kind: HOST_LOCATION,
             slot: ContextSlot::WorldState,
+            order: 500,
             role: ContextRole::User,
             preamble: "[Host location.]\n",
             epilogue: "",

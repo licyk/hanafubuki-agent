@@ -27,6 +27,7 @@ pub(crate) fn kernel_context_renderers() -> [ContextRenderer; 1] {
     [ContextRenderer {
         kind: ContextSectionKind::TOOL_CATALOG_OMISSIONS,
         slot: ContextSlot::WorldState,
+        order: 0,
         role: ContextRole::Developer,
         preamble: WORLD_STATE_PREAMBLE,
         epilogue: "",

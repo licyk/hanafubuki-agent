@@ -106,6 +106,7 @@ fn renderer(kind: ContextSectionKind) -> ContextRenderer {
     ContextRenderer {
         kind,
         slot: ContextSlot::WorldState,
+        order: 0,
         role: ContextRole::Developer,
         preamble: "",
         epilogue: "",
@@ -134,7 +135,7 @@ fn the_renderer_registry_admits_one_renderer_per_kind() {
 }
 
 #[test]
-fn a_snapshot_finds_a_renderer_by_kind_with_its_registration_order() {
+fn a_snapshot_finds_a_renderer_by_kind() {
     let registry = ContextRendererRegistry::default();
     for kind in [
         ContextSectionKind::WORKSPACE_ROOTS,
@@ -146,8 +147,7 @@ fn a_snapshot_finds_a_renderer_by_kind_with_its_registration_order() {
             .unwrap();
     }
     let snapshot = registry.snapshot();
-    let (position, found) = snapshot.find(&ContextSectionKind::ENVIRONMENT).unwrap();
-    assert_eq!(position, 1);
+    let found = snapshot.find(&ContextSectionKind::ENVIRONMENT).unwrap();
     assert_eq!(found.kind, ContextSectionKind::ENVIRONMENT);
     assert!(snapshot
         .find(&ContextSectionKind::PERMISSION_MODE)

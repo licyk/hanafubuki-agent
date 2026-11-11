@@ -19,7 +19,7 @@ use hanafubuki_agent_packages::PluginId;
 use kardia_core::Context;
 use serde_json::json;
 
-use super::context::{guest_kind, GUEST_PREAMBLE};
+use super::context::{guest_kind, GUEST_ORDER, GUEST_PREAMBLE};
 use super::{bounded, register_in, text_answer, GuestCaller, GuestMethod};
 use crate::guests::{GuestHost, Shared};
 use crate::package::GuestPackage;
@@ -51,6 +51,7 @@ pub(super) fn register(
     let renderer = ContextRenderer {
         kind: kind.clone(),
         slot,
+        order: GUEST_ORDER,
         role: ContextRole::Developer,
         preamble: GUEST_PREAMBLE,
         epilogue: "",

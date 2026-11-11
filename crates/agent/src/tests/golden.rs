@@ -16,6 +16,7 @@
 
 use std::path::{Path, PathBuf};
 
+use super::host::AgentPluginState;
 use super::*;
 use crate::{
     AgentHistorySortDirection, AgentSessionListRequest, AgentSessionOrigin,
@@ -39,6 +40,65 @@ async fn default_mode_request_matches_golden() {
     )
     .await;
     assert_golden("default_mode_request", &body);
+}
+
+/// A remounted context plugin's sections keep their place: the first request
+/// of a session after `workspace-context` is turned off and on again is the
+/// one before, byte for byte, and still the golden.
+#[tokio::test]
+async fn a_remounted_context_plugin_leaves_the_request_unchanged() {
+    let server = FakeServer::start(vec![
+        (assistant_events("Done."), Duration::ZERO),
+        (assistant_events("Done."), Duration::ZERO),
+    ])
+    .await;
+    let (service, paths) = configured_service("golden-remount", &server.base_url);
+    let session = service
+        .create_session(AgentSessionMode::Default)
+        .await
+        .unwrap();
+    service
+        .start_turn(session.id, "Hello.".to_string().into())
+        .await
+        .unwrap();
+    for (enabled, state) in [
+        (false, AgentPluginState::Disabled),
+        (true, AgentPluginState::Active),
+    ] {
+        service
+            .set_plugin_enabled("workspace-context".into(), enabled)
+            .await
+            .unwrap();
+        let deadline = Instant::now() + TEST_WAIT;
+        while service
+            .plugin_status()
+            .iter()
+            .any(|status| status.name == "workspace-context" && status.state != state)
+        {
+            assert!(Instant::now() < deadline, "the row is not {state:?}");
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    }
+    let session = service
+        .create_session(AgentSessionMode::Default)
+        .await
+        .unwrap();
+    service
+        .start_turn(session.id, "Hello.".to_string().into())
+        .await
+        .unwrap();
+
+    let requests = server.requests();
+    assert!(requests[1].body == requests[0].body);
+    let body: Value = serde_json::from_slice(&requests[1].body).unwrap();
+    assert_golden(
+        "default_mode_request",
+        &normalize(&body, &paths.app_data_dir),
+    );
+    assert!(service
+        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
+        .is_empty());
+    let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }
 
 #[tokio::test]

@@ -53,7 +53,7 @@ Agent 运行的所有东西都在 panic 被隔离的线程上：panic hook 让�
 | `ToolRegistry`              | `AgentToolHandler`                  | 扁平工具名，保留名除外（[工具名](#tool-names)）             | 每个采样步骤，随工具计划                     | 内核的流水线                                                                                                                      |
 | `ToolSourceRegistry`        | `AgentToolSource`                   | 工具源 ID                                                   | 每个采样步骤                                 | 在核心与注册的工具之后规划；失败的工具源按它的信任级别处理                                                                        |
 | `ContextRegistry`           | `ContextContributor`                | 贡献者 ID，且每种类型一个贡献者                             | 轮次准入时                                   | 按类型名收集；按渲染器槽位展示                                                                                                    |
-| `ContextRendererRegistry`   | `ContextRenderer`（数据）           | 段类型                                                      | 每个模型请求一次快照                         | 槽位，然后注册顺序                                                                                                                |
+| `ContextRendererRegistry`   | `ContextRenderer`（数据）           | 段类型                                                      | 每个模型请求一次快照                         | 槽位，然后渲染器的 `order`，然后类型名                                                                                            |
 | `TurnAdmissionRegistry`     | `TurnAdmissionContributor`          | 贡献者 ID                                                   | 轮次准入时                                   | 按 rank 与 ID 合并进轮次的 `TurnExtensions`；失败或返回已有类型的贡献者被略过                                                     |
 | `PromptContributorRegistry` | `PromptContributor`                 | 贡献者 ID                                                   | 每个采样步骤一次快照，准备一次，每个请求询问 | 准备的值按 rank 与 ID 合并（重复的类型被略过）；片段按槽位加入对话开头的段                                                        |
 | `ApprovalRuleRegistry`      | `ApprovalRule`                      | 规则 ID                                                     | 随每个步骤的工具计划冻结                     | 拒绝 > 需要用户 > 会话许可 > 模式                                                                                                 |
@@ -151,10 +151,19 @@ panic 消息进入日志和插件状态，从不进入模型。`mcp` 插件自�
 ### 上下文渲染器 [#context-renderers]
 
 - 模型可见、既不是历史也不是工具的所有内容都是某个 `ContextSectionKind` 的上下文段：世界状态段（持久化，来自 `ContextContributor`）或提示片段（每个请求，来自 `PromptContributor`）。段通过它类型的 `ContextRenderer` 展示给模型，渲染器由拥有该类型的插件注册在 `ContextRendererRegistry` 中（每种类型一个；无效或重复的类型让注册的插件失败）。
-- 渲染器是数据：`ContextSlot`、`ContextRole`、`preamble`（这段是什么、它**没有**什么权威）、`epilogue` 和 `versioned`（把内容放进 `<agent_world_state kind=".." version="..">` 元素）。类型的包装文字在拥有它的插件里，从不在 `hanafubuki-agent-model-api` 里，后者原样发送片段的角色和渲染后的文本，不匹配任何段类型。没有自己框架的段使用 `WORLD_STATE_PREAMBLE`。
-- 内核在构建注册表时注册它自己写的类型（`tool_catalog_omissions`）的渲染器；`workspace-context`、`permission-mode`、`skills`、`memory`、`subagents`、`review` 插件和宿主的插件随它们的贡献者注册各自的渲染器。内核不知道任何宿主类型。
+- 渲染器是数据：`ContextSlot`、它在槽位内的 `order`、`ContextRole`、`preamble`（这段是什么、它**没有**什么权威）、`epilogue` 和 `versioned`（把内容放进 `<agent_world_state kind=".." version="..">` 元素）。类型的包装文字在拥有它的插件里，从不在 `hanafubuki-agent-model-api` 里，后者原样发送片段的角色和渲染后的文本，不匹配任何段类型。没有自己框架的段使用 `WORLD_STATE_PREAMBLE`。
+- 内核在构建注册表时注册它自己写的类型（`tool_catalog_omissions`）的渲染器；`workspace-context`、`permission-mode`、`skills`、`memory`、`goal`、`subagents`、`review`、`hooks`、`plugins` 插件、访客宿主和宿主的插件随它们的贡献者注册各自的渲染器。内核不知道任何宿主类型。
 - 内核为每个模型请求取一次渲染器快照。类型没有渲染器的段（插件已停止）不出现在那个请求中；世界状态段留在历史里，下一次准入在没有贡献者产生它时移除它。
-- 顺序：请求中每一串相邻的段按槽位（`Instructions`、`WorldState`、`Capabilities`、`Memory`），再按渲染器注册顺序（内核的，然后清单的挂载顺序，宿主的行在 Agent 的能力插件之后、上下文插件之前；重新挂载的插件的渲染器移到它的槽位末尾）；其他条目保持位置。提示片段加入对话开头的那一串。之后变化的世界状态段显示在它变化的位置。只显示每种类型的最新版本，所以不存在“替换先前提供的内容”的通知，也没有段变化事件：持久化的 `WorldStateUpdate` 就是变化记录。
+- 顺序：请求中每一串相邻的段按槽位（`Instructions`、`WorldState`、`Capabilities`、`Memory`），再按渲染器的 `order`，再按类型名排序；其他条目保持位置。注册顺序和挂载顺序从不体现出来：重新启动的插件（故障、重新配置、关闭再打开）的段仍显示在原来的位置，所以提供方缓存的前缀不受影响，清单中的行也可以只为挂载的原因添加或移动。提示片段加入对话开头的那一串。之后变化的世界状态段显示在它变化的位置。只显示每种类型的最新版本，所以不存在“替换先前提供的内容”的通知，也没有段变化事件：持久化的 `WorldStateUpdate` 就是变化记录。
+- 顺序值按所有者分段；渲染器在其所有者的区段中选一个空闲的值，放在它的段应在的位置，同一槽位有两个渲染器的插件给每个渲染器各自的值。区段是约定，注册时不检查。
+
+| `order` | 渲染器                                                                                                                                                                                                                                                                              |
+| ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0       | 内核：`tool_catalog_omissions`                                                                                                                                                                                                                                                      |
+| 100–499 | Agent 的能力插件，按清单顺序 100、110、…：`memory` 100（`agent_memory`）、`skills` 110（`skill_catalog`）、`goal` 120（`goal`）、`subagents` 130（`subagent_guidance`）、`review` 140（`review_instructions`）、`hooks` 150（`hook_context`）、`plugins` 160（`available_plugins`） |
+| 500–599 | 宿主的插件（[宿主插件](/docs/host-plugins#context-sections-and-renderers)）                                                                                                                                                                                                         |
+| 700–899 | Agent 的上下文插件：`workspace-context` 700（`workspace_instructions`、`workspace_roots`）和 701（`environment`），`permission-mode` 710（`permission_mode`）和 711（`sandbox`）                                                                                                    |
+| 900     | 已安装插件的代码：每个访客的上下文段和提示，所以它们排在 Agent 和宿主之后，彼此按类型名排序                                                                                                                                                                                         |
 
 ### 轮次准入 [#turn-admission]
 
@@ -343,7 +352,7 @@ kardia 的日志通过宿主安装在根上的 `LogExporter` 到达 `log` facade
 - 在一个新的 `kardia_core::Context` 上，把它挂载在一个提供它注入的注册表（以及用 `spawn_scoped_worker` 时的 `PluginFaults`）的插件之下（门面或宿主插件用 `hanafubuki_agent::test_support::mount`，它两者都提供），等待 `settled()`，断言 `state()`：插件因缺少服务仍是 `Pending` 时 `settled()` 也会返回。
 - 断言它的注册，更新它的配置，释放它，断言每个注册都已移除。插件拒绝的配置让它保持 `Failed`，什么都不注册。
 - 不需要 kardia 的地方直接测试处理函数和领域逻辑。
-- **请求 golden**（`crates/agent/src/tests/golden.rs`，在 Agent 自己的插件上，宿主不添加任何行、上下文或指令）固定模型收到的内容：默认与计划模式下、带 Skill 目录、工作区指令、记忆摘要、压缩之后、带来自脚本化进程内服务器的 MCP 工具、围绕一次工具调用和一次 `tool_search` 的指令、工具目录和输入条目，以及一次工具往返的展示事件；`compaction_golden.rs` 和 `compression_golden.rs` 固定各种压缩，以及 `hierarchical` 策略的请求（它的提示词、工具、标签和提醒，一次折叠之后、一次第二层提炼之后、切换走之后）。模型能看到的变化**有意地**改变请求 golden：用 `HANAFUBUKI_AGENT_UPDATE_GOLDEN=1 cargo test -p hanafubuki-agent --lib golden` 重新生成并审查 fixture 的 diff。
+- **请求 golden**（`crates/agent/src/tests/golden.rs`，在 Agent 自己的插件上，宿主不添加任何行、上下文或指令）固定模型收到的内容：默认与计划模式下、带 Skill 目录、工作区指令、记忆摘要、压缩之后、带来自脚本化进程内服务器的 MCP 工具、围绕一次工具调用和一次 `tool_search` 的指令、工具目录和输入条目，以及一次工具往返的展示事件，并固定 `workspace-context` 重新启动后会话的第一个请求与默认模式的请求逐字节相同；`compaction_golden.rs` 和 `compression_golden.rs` 固定各种压缩，以及 `hierarchical` 策略的请求（它的提示词、工具、标签和提醒，一次折叠之后、一次第二层提炼之后、切换走之后）。模型能看到的变化**有意地**改变请求 golden：用 `HANAFUBUKI_AGENT_UPDATE_GOLDEN=1 cargo test -p hanafubuki-agent --lib golden` 重新生成并审查 fixture 的 diff。
 - **历史语料**（`golden/history/` 与 `golden/history-reasoning/`）只在有意的历史格式变化之后用 `HANAFUBUKI_AGENT_UPDATE_GOLDEN_HISTORY=1` 重新录制；否则它们持续证明旧的历史仍能打开。
 - 宿主保留它自己的、覆盖它的行的 golden（Hanafubuki 的在 `hanafubuki-agent-integration`），这里模型可见的变化也会改变它们。fixture 只在 Linux 上有效。
 

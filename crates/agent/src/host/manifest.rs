@@ -82,11 +82,8 @@ pub(crate) struct AgentPluginManifest {
 /// plugin manager groups them by.
 ///
 /// The host's rows (`host`) mount after the Agent's capability plugins and
-/// before its context plugins. A renderer's registration orders its section
-/// within its slot, so a host's world-state sections (its UI context) come
-/// before the workspace roots, environment and permission mode; only the
-/// kernel's own tool catalog omissions, registered with the registries, come
-/// first.
+/// before its context plugins. Mount order shows nowhere in a request: each
+/// renderer's `order` places its section within its slot.
 pub(crate) fn agent_plugin_manifest(
     inputs: AgentPluginInputs,
     host: Vec<(AgentPluginRow, AgentPluginDescriptor)>,

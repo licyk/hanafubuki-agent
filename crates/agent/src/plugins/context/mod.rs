@@ -26,8 +26,11 @@ pub(crate) fn permission_mode_plugin() -> PluginDef {
         let registry = ctx.get::<ContextRegistry>()?;
         registry.register(Arc::new(PermissionModeContext))?;
         let renderers = ctx.get::<ContextRendererRegistry>()?;
-        renderers.register(world_state_renderer(ContextSectionKind::PERMISSION_MODE))?;
-        renderers.register(world_state_renderer(ContextSectionKind::SANDBOX))?;
+        renderers.register(world_state_renderer(
+            ContextSectionKind::PERMISSION_MODE,
+            710,
+        ))?;
+        renderers.register(world_state_renderer(ContextSectionKind::SANDBOX, 711))?;
         Ok(())
     })
     .name("permission-mode")
@@ -38,11 +41,13 @@ pub(crate) fn permission_mode_plugin() -> PluginDef {
     )
 }
 
-/// A section of the application's state, shown with its kind and version.
-fn world_state_renderer(kind: ContextSectionKind) -> ContextRenderer {
+/// A section of the application's state, shown with its kind and version
+/// at `order` in the world state.
+fn world_state_renderer(kind: ContextSectionKind, order: u16) -> ContextRenderer {
     ContextRenderer {
         kind,
         slot: ContextSlot::WorldState,
+        order,
         role: ContextRole::Developer,
         preamble: WORLD_STATE_PREAMBLE,
         epilogue: "",

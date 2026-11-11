@@ -160,7 +160,7 @@ schema 遵循同样的按协议规则：支持 `strict_json_schema` 的协议（
 - **世界状态段**在轮次准入时由 `ContextContributor` 产生，按类型与内容的 SHA-256 定版本，只把变化作为 `WorldStateUpdate` 提交。内核每个步骤自己写 `tool_catalog_omissions`，steering 在轮次中替换它携带的宿主上下文。
 - **提示片段**每个请求由 `PromptContributor` 产生：先 `prepare`（异步，每步一次，可以 I/O），再 `contribute`（纯函数）。`skills` 插件渲染 Skill 目录（`skill_catalog`），`memory` 插件渲染记忆摘要（`agent_memory`）。
 
-段通过它类型的 `ContextRenderer` 展示给模型：一个槽位、一个角色、前言、后记和是否带版本。**渲染器是数据**，渲染不运行插件代码，所以它不需要守卫、租约或超时，请求也不会因它失败。每一串相邻的段按槽位（`Instructions`、`WorldState`、`Capabilities`、`Memory`）排序，再按渲染器注册顺序；稳定的槽位在前，每步都可能变化的记忆摘要在最后，以保持缓存的前缀尽量长。
+段通过它类型的 `ContextRenderer` 展示给模型：一个槽位、槽位内的顺序、一个角色、前言、后记和是否带版本。**渲染器是数据**，渲染不运行插件代码，所以它不需要守卫、租约或超时，请求也不会因它失败。每一串相邻的段按槽位（`Instructions`、`WorldState`、`Capabilities`、`Memory`）排序，再按渲染器的 `order`，再按类型名；稳定的槽位在前，每步都可能变化的记忆摘要在最后，以保持缓存的前缀尽量长。顺序是显式的，按所有者分段（内核 0，Agent 的能力插件从 100 起，宿主的 500–599，Agent 的上下文插件从 700 起，已安装插件 900；[上下文渲染器](/docs/plugin-rules#context-renderers)），而不是注册顺序，所以插件重新启动不会改变请求的顺序、让提供方缓存的前缀失效，清单的顺序也不会被模型看到。
 
 **变化检测：** 每种类型只显示最新版本，放在它最后变化的位置；更早的版本不再出现在请求中。所以没有“替换先前提供的内容”的通知，也没有段变化事件：持久化的 `WorldStateUpdate` 就是变化记录。
 

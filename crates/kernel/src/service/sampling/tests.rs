@@ -157,15 +157,14 @@ fn tool_omission_world_state_changes_only_for_replace_or_remove() {
     .is_none());
 }
 
-/// Each run of adjacent sections is ordered by slot, then registration; an
-/// item between two runs keeps them apart.
+/// Each run of adjacent sections is ordered by slot, then renderer order,
+/// then kind; an item between two runs keeps them apart.
 #[test]
-fn every_run_of_sections_is_ordered_by_slot_and_items_keep_their_place() {
+fn every_run_of_sections_is_ordered_by_slot_order_and_kind_and_items_keep_their_place() {
     use hanafubuki_agent_contracts::ContextSlot;
 
-    let section = |slot, registration, kind: &str| PlacedInput::Section {
-        slot,
-        registration,
+    let section = |slot, order, kind: &str| PlacedInput::Section {
+        position: (slot, order, kind.to_string()),
         item: ModelInputItem::ContextFragment {
             role: ModelContextRole::Developer,
             kind: kind.to_string(),
@@ -173,14 +172,16 @@ fn every_run_of_sections_is_ordered_by_slot_and_items_keep_their_place() {
         },
     };
     let placed = vec![
-        section(ContextSlot::Memory, 0, "memory"),
-        section(ContextSlot::Capabilities, 1, "catalog"),
-        section(ContextSlot::WorldState, 3, "permission"),
-        section(ContextSlot::WorldState, 2, "roots"),
-        section(ContextSlot::Instructions, 4, "instructions"),
+        section(ContextSlot::Memory, 100, "memory"),
+        section(ContextSlot::Capabilities, 900, "zeta_board"),
+        section(ContextSlot::Capabilities, 900, "alpha_board"),
+        section(ContextSlot::Capabilities, 110, "catalog"),
+        section(ContextSlot::WorldState, 710, "permission"),
+        section(ContextSlot::WorldState, 700, "roots"),
+        section(ContextSlot::Instructions, 700, "instructions"),
         PlacedInput::Item(ModelInputItem::user_text("hello")),
-        section(ContextSlot::WorldState, 3, "later permission"),
-        section(ContextSlot::Instructions, 4, "later instructions"),
+        section(ContextSlot::WorldState, 710, "later_permission"),
+        section(ContextSlot::Instructions, 700, "later_instructions"),
     ];
 
     let order = ordered_input(placed)
@@ -190,6 +191,8 @@ fn every_run_of_sections_is_ordered_by_slot_and_items_keep_their_place() {
             _ => "user".to_string(),
         })
         .collect::<Vec<_>>();
+    // Equal slot and order fall back to the kind name, whatever order the
+    // sections came in.
     assert_eq!(
         order,
         [
@@ -197,10 +200,12 @@ fn every_run_of_sections_is_ordered_by_slot_and_items_keep_their_place() {
             "roots",
             "permission",
             "catalog",
+            "alpha_board",
+            "zeta_board",
             "memory",
             "user",
-            "later instructions",
-            "later permission",
+            "later_instructions",
+            "later_permission",
         ]
     );
 }

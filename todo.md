@@ -21,7 +21,7 @@ the deny-only combinations) unchanged and adds declarative layers above it:
 - linked development packages.
 
 **Status.** Every §9 decision (D1–D9) was accepted as recommended (2026-11-11), and
-the plan records them. M1 has landed; M2–M7 have not started.
+the plan records them. M1 and M2 have landed; M3–M7 have not started.
 
 **For each milestone,** record when it is done:
 
@@ -102,12 +102,55 @@ then M4, then M5; M6 after M3; M7 after M1.
         an option (a nested object), which fails it as any issue does.
       - `AgentPackageGuest.settings` is the checked settings: the JSON form
         and `plugins settings ID` show, and a save writes back, those.
-- [ ] M2: explicit context order.
+- [x] M2: explicit context order.
       - `ContextRenderer.order`; requests ordered by `(slot, order, kind)`.
       - Ranks reproduce today's order, so the request goldens do not change.
       - A remounted plugin keeps its sections' place (new test).
       - Hanafubuki's host renderers take the 500–599 band.
-      Done: —. Open: —.
+      Done (2026-11-11):
+      - `ContextRenderer.order: u16`, its position within its slot;
+        `ContextRendererSnapshot::find` returns the renderer alone. The
+        kernel (`sampling/prompt.rs`) orders each run of adjacent sections,
+        world-state sections and prompt fragments alike, by `(slot, order,
+        kind name)`; registration and mount order no longer show.
+      - Ranks, reproducing the previous order: the kernel's
+        `tool_catalog_omissions` 0; capability plugins in manifest order,
+        `memory` 100, `skills` 110, `goal` 120, `subagents` 130, `review`
+        140, `hooks` 150, `plugins` 160; host rows 500–599;
+        `workspace-context` 700 (`workspace_instructions`,
+        `workspace_roots`) and 701 (`environment`), `permission-mode` 710
+        (`permission_mode`) and 711 (`sandbox`); every guest section and
+        prompt 900 (`GUEST_ORDER`), so guests sort by kind among themselves.
+      - Tests: `a_remounted_context_plugin_leaves_the_request_unchanged`
+        (`golden.rs`: `workspace-context` off and on, then a new session's
+        first request is the one before byte for byte and still
+        `default_mode_request`; it failed before the change, with the
+        roots and environment after the sandbox); the kernel's ordering
+        test now covers ties broken by kind.
+      - Docs (both languages): plugin-rules (`#context-renderers`, with the
+        rank table; the registry table; the goldens), architecture
+        (`#sections-slots-and-renderers`), host-plugins (the example sets
+        `order: 500`; choosing an order in the host band), writing-plugins
+        (a guest's sections come last in their slot, by kind).
+      - Validation: `cargo fmt --all --check`, `RUSTFLAGS="-D warnings"
+        cargo check --workspace --all-targets --all-features`, `cargo clippy
+        --workspace --all-targets --all-features -- -D warnings`, `cargo
+        xtask check`, `cargo test --workspace --all-features`; the site's
+        `bun install --frozen-lockfile`, `format:site`, `format:check:site`,
+        `site:check`, `site:test`, `site:build`. Request goldens and history
+        corpora unchanged; no diff under `crates/host`, `crates/foundation`,
+        `crates/process` or `architecture/`.
+      - Hanafubuki at its next pin: every host renderer sets `order` in
+        500–599 (each its own, in its current registration order), and its
+        goldens must not change.
+      Open:
+      - The bands are a convention: registration does not check that a
+        renderer's `order` is in its owner's band.
+      - An installed code plugin with two or more sections or a prompt in
+        one slot now shows them in kind order, after the context plugins',
+        not in declaration and start order: model-visible without a
+        remount, as the plan's 900 band prescribes. No golden has a guest
+        section, so none pins it.
 - [ ] M3: roles: definitions, sources, resolution.
       - `agents/*.toml` and `[agents]` in every layer, with Codex key aliases.
       - Precedence: built-in, then package, user, profile, trusted project.

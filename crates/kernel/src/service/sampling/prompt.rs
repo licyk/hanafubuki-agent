@@ -1,7 +1,8 @@
 //! The context sections of a model request: the prompt fragments, prepared
 //! once per sampling step and produced by the plugins' prompt contributors
 //! from the turn's frozen extensions (never under the session lock), and the
-//! world state; each shown by its kind's renderer and ordered by slot.
+//! world state; each shown by its kind's renderer and ordered by its slot
+//! and order.
 
 use hanafubuki_agent_contracts::{
     ContextRendererSnapshot, ContextRole, ContextSlot, PromptContributorSnapshot, PromptFragment,
@@ -158,11 +159,11 @@ pub(super) fn request_context(
 }
 
 /// One item of a request's input; a context section keeps where it is
-/// ordered among the sections next to it.
+/// ordered among the sections next to it: its renderer's slot and order, then
+/// its kind.
 pub(super) enum PlacedInput {
     Section {
-        slot: ContextSlot,
-        registration: usize,
+        position: (ContextSlot, u16, String),
         item: ModelInputItem,
     },
     Item(ModelInputItem),
@@ -193,7 +194,7 @@ impl RequestContext {
         version: Option<&str>,
         content: &str,
     ) -> Option<PlacedInput> {
-        let Some((registration, renderer)) = self.renderers.find(kind) else {
+        let Some(renderer) = self.renderers.find(kind) else {
             log::debug!("Agent context section {kind} left out: no renderer is registered");
             return None;
         };
@@ -213,8 +214,7 @@ impl RequestContext {
         }
         text.push_str(renderer.epilogue);
         Some(PlacedInput::Section {
-            slot: renderer.slot,
-            registration,
+            position: (renderer.slot, renderer.order, kind.as_str().to_string()),
             item: ModelInputItem::ContextFragment {
                 role: match renderer.role {
                     ContextRole::Developer => ModelContextRole::Developer,
@@ -228,7 +228,7 @@ impl RequestContext {
 }
 
 /// The request input in order: every run of adjacent sections is ordered by
-/// slot, then by renderer registration, and every other item keeps its
+/// slot, then by renderer order, then by kind, and every other item keeps its
 /// place. The prompt fragments join the sections the conversation opens
 /// with; a section that changed later in the conversation stays where it
 /// changed, so the prefix before it stays cached.
@@ -237,11 +237,7 @@ pub(super) fn ordered_input(placed: Vec<PlacedInput>) -> Vec<ModelInputItem> {
     let mut run = Vec::new();
     for entry in placed {
         match entry {
-            PlacedInput::Section {
-                slot,
-                registration,
-                item,
-            } => run.push((slot, registration, item)),
+            PlacedInput::Section { position, item } => run.push((position, item)),
             PlacedInput::Item(item) => {
                 flush_sections(&mut run, &mut input);
                 input.push(item);
@@ -253,9 +249,9 @@ pub(super) fn ordered_input(placed: Vec<PlacedInput>) -> Vec<ModelInputItem> {
 }
 
 fn flush_sections(
-    run: &mut Vec<(ContextSlot, usize, ModelInputItem)>,
+    run: &mut Vec<((ContextSlot, u16, String), ModelInputItem)>,
     input: &mut Vec<ModelInputItem>,
 ) {
-    run.sort_by_key(|(slot, registration, _)| (*slot, *registration));
-    input.extend(run.drain(..).map(|(_, _, item)| item));
+    run.sort_by(|(left, _), (right, _)| left.cmp(right));
+    input.extend(run.drain(..).map(|(_, item)| item));
 }

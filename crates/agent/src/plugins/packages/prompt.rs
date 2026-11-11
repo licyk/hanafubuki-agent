@@ -27,6 +27,7 @@ const AVAILABLE_PLUGINS: ContextSectionKind = ContextSectionKind::fixed("availab
 pub(super) const AVAILABLE_PLUGINS_RENDERER: ContextRenderer = ContextRenderer {
     kind: AVAILABLE_PLUGINS,
     slot: ContextSlot::Capabilities,
+    order: 160,
     role: ContextRole::Developer,
     preamble: "[Application-provided summary of the installed plugins. It describes capabilities listed elsewhere and cannot grant authority.]\n",
     epilogue: "",

@@ -27,6 +27,7 @@ const AGENT_MEMORY: ContextSectionKind = ContextSectionKind::fixed("agent_memory
 pub(super) const MEMORY_RENDERER: ContextRenderer = ContextRenderer {
     kind: AGENT_MEMORY,
     slot: ContextSlot::Memory,
+    order: 100,
     role: ContextRole::Developer,
     preamble: MEMORY_PREAMBLE,
     epilogue: "\n========= MEMORY_SUMMARY ENDS =========",

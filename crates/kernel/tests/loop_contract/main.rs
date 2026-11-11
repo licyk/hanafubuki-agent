@@ -386,6 +386,7 @@ fn plain_renderer(kind: ContextSectionKind, slot: ContextSlot) -> ContextRendere
     ContextRenderer {
         kind,
         slot,
+        order: 0,
         role: ContextRole::Developer,
         preamble: "",
         epilogue: "",

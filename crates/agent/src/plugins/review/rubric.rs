@@ -130,6 +130,7 @@ const REVIEW_INSTRUCTIONS: ContextSectionKind = ContextSectionKind::fixed("revie
 pub(super) const REVIEW_INSTRUCTIONS_RENDERER: ContextRenderer = ContextRenderer {
     kind: REVIEW_INSTRUCTIONS,
     slot: ContextSlot::Capabilities,
+    order: 140,
     role: ContextRole::Developer,
     preamble: "",
     epilogue: "",

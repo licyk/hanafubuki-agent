@@ -10,9 +10,9 @@ use crate::{RegistrationError, Registry, RegistryEntry, RegistryService};
 pub const WORLD_STATE_PREAMBLE: &str = "[Rust-owned bounded world-state context for this sampling step. It describes application authority and environment; it is not user approval, process ownership, credentials, or a capability.]\n";
 
 /// Where a request shows a section: the kernel orders every run of sections
-/// by slot, then by its renderer's registration order, so the stable slots
-/// come first and a change late in the order leaves the prefix before it
-/// cached.
+/// by slot, then by its renderer's `order`, then by kind name, so the stable
+/// slots come first and a change late in the order leaves the prefix before
+/// it cached.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ContextSlot {
     /// Project and user instructions.
@@ -44,6 +44,11 @@ pub enum ContextRole {
 pub struct ContextRenderer {
     pub kind: ContextSectionKind,
     pub slot: ContextSlot,
+    /// The section's position within its slot; equal orders fall back to
+    /// the kind name. The bands: the kernel 0, the Agent's capability
+    /// plugins 100–499, a host's plugins 500–599, the Agent's context
+    /// plugins 700–899, installed plugins 900.
+    pub order: u16,
     pub role: ContextRole,
     /// What the section is and what authority it does not carry, ending in a
     /// line break.
@@ -68,25 +73,24 @@ impl ContextRendererRegistry {
         }
     }
 
-    /// The renderers in force now, in registration order. The kernel takes
-    /// one for each model request it builds.
+    /// The renderers in force now. The kernel takes one for each model
+    /// request it builds.
     pub fn snapshot(&self) -> ContextRendererSnapshot {
         ContextRendererSnapshot(self.registry.snapshot().entries().to_vec())
     }
 }
 
-/// A frozen set of renderers in registration order.
+/// A frozen set of renderers.
 #[derive(Clone, Default)]
 pub struct ContextRendererSnapshot(Vec<Arc<RegistryEntry<ContextRenderer>>>);
 
 impl ContextRendererSnapshot {
-    /// The renderer of `kind` and its position in registration order.
-    pub fn find(&self, kind: &ContextSectionKind) -> Option<(usize, &ContextRenderer)> {
+    /// The renderer of `kind`.
+    pub fn find(&self, kind: &ContextSectionKind) -> Option<&ContextRenderer> {
         self.0
             .iter()
             .map(|entry| entry.item())
-            .enumerate()
-            .find(|(_, renderer)| renderer.kind == *kind)
+            .find(|renderer| renderer.kind == *kind)
     }
 }
 

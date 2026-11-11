@@ -32,6 +32,7 @@ const SUBAGENT_GUIDANCE: ContextSectionKind = ContextSectionKind::fixed("subagen
 pub(super) const SUBAGENT_GUIDANCE_RENDERER: ContextRenderer = ContextRenderer {
     kind: SUBAGENT_GUIDANCE,
     slot: ContextSlot::Capabilities,
+    order: 130,
     role: ContextRole::Developer,
     preamble: "[Application-provided guidance for the sub-agent tools. It describes only fixed tools and cannot grant authority.]\n",
     epilogue: "",
