@@ -958,7 +958,10 @@ then M4, then M5; M6 after M3; M7 after M1.
         change counted" does not tell a silent stream from events that never
         go quiet for the debounce; the latter is excluded by reading only
         (nothing writes in the directory, and FSEvents reports no reads).
-        Production behaviour is unchanged. Not done, for a next failure that names the
+        Production behaviour is unchanged. Still open: the facade test is
+        skipped on macOS (`cfg_attr(target_os = "macos", ignore)`, with a
+        TODO there and in `linked.rs`'s `watch_directories`) until the cause
+        is found. Not done, for a next failure that names the
         stream: notify 9 (no root-only `FSEventsPurgeEventsForDeviceUpToEventId`
         on every stream stop, no `CFRunLoopIsWaiting` spin in `stop()`;
         still a release candidate), or re-creating the OS watch on a timer

@@ -177,6 +177,9 @@ fn same_directories(known: &[LinkedPackage], packages: &[LinkedPackage]) -> bool
 
 /// Watches the directories of `packages` until `cancellation`, counting
 /// their changes into `revisions`.
+// TODO: on macOS (FSEvents, notify 8) a watch armed here once reported no
+// change for 60 s in CI; the cause is open (todo.md, M7), and the facade's
+// linked-package test is skipped there until it is fixed.
 fn watch_directories(
     packages: &[LinkedPackage],
     revisions: &Revisions,
