@@ -21,7 +21,7 @@ the deny-only combinations) unchanged and adds declarative layers above it:
 - linked development packages.
 
 **Status.** Every §9 decision (D1–D9) was accepted as recommended (2026-11-11), and
-the plan records them. M1 and M2 have landed; M3–M7 have not started.
+the plan records them. M1, M2 and M3 have landed; M4–M7 have not started.
 
 **For each milestone,** record when it is done:
 
@@ -151,7 +151,7 @@ then M4, then M5; M6 after M3; M7 after M1.
         not in declaration and start order: model-visible without a
         remount, as the plan's 900 band prescribes. No golden has a guest
         section, so none pins it.
-- [ ] M3: roles: definitions, sources, resolution.
+- [x] M3: roles: definitions, sources, resolution.
       - `agents/*.toml` and `[agents]` in every layer, with Codex key aliases.
       - Precedence: built-in, then package, user, profile, trusted project.
       - `extends`, with the narrowing merge table and provenance.
@@ -159,7 +159,98 @@ then M4, then M5; M6 after M3; M7 after M1.
       - `roles list/show`, `doctor`, `/warnings`.
       - A new bilingual `roles` page.
       - No session uses roles yet.
-      Done: —. Open: —.
+      Done (2026-11-11):
+      - `crates/config/src/roles/`: `AgentConfig::role_sources()` reads, per
+        source and lowest first, the user's `agents/` (recursive, by path
+        key) and `[agents]`, the profile's `[profiles.NAME.agents]`, and a
+        trusted project's `.hanafubuki-agent/agents/` and `[agents]` (trust
+        checked directly, so a project with only `agents/` counts); a host's
+        configuration has the user's alone. `RoleDefinition` per role:
+        camelCase keys plus Codex's `developer_instructions`, `model`,
+        `model_reasoning_effort` (ours wins over an alias, with an issue),
+        `configFile`/`config_file` relative to the layer's folder (the
+        entry's keys over the file's; the file is then skipped by the
+        directory, by `key()`). A wrong-typed key is left out with an
+        issue; unknown and other Codex keys are ignored with an issue; a
+        role name has no `:` (reserved for package roles). `agents` is
+        exempt from the layers' unknown-key warnings (but reported under
+        `-c`), and never a repair of `config.toml`.
+      - Kernel `model/scope.rs` (re-exported by the kernel and the facade):
+        `ToolPattern` (`Name` glob, `Plugin`, `Provider` glob; `parse`,
+        `matches`, `Display`), `ToolIdentity`, `AgentToolScope { allow:
+        Vec<BTreeSet<ToolPattern>>, deny }`, `AgentCapabilityScope { role,
+        tools, plugins_off, permission_mode_cap }` with `narrow` and
+        `stricter_permission_mode`. Not in `AgentSessionConfig`, no serde:
+        M4 adds both.
+      - `crates/agent/src/roles/`: `resolve` (built-ins, then each source;
+        a higher source replaces a name whole, an unusable role included;
+        within a source the first keeps it, the other is a duplicate
+        issue), the chain (at most 8 roles; missing or unusable parent,
+        cycle, self-extends: unusable with why), the merge table root
+        first via `AgentCapabilityScope::narrow`, per-field provenance
+        (field → deciding roles, nearest first), `AgentRoleCatalog`
+        (`load`, `role`, `roles`, `unusable_role`, `unusable`, `issues`),
+        built-in `default` and `explorer` (Codex's description adapted).
+        The service keeps it (`AgentRoles`: compute under a rebuild gate,
+        then assign), built at construction and rebuilt by every
+        `reload_packages`, which each settings write and package change
+        runs; `AgentApplicationService::roles()`.
+      - CLI `roles list` / `roles show NAME` (no Agent start; `-p` adds the
+        profile's roles), `doctor`'s `roles` lines (never `FAIL`), TUI
+        `/warnings` source **roles**.
+      - Tests: config `roles/tests.rs` (every key, tolerant keys, narrowing
+        keys unusable, Codex aliases, names and stems, entries before
+        files and `configFile`, profile and trusted project, a trusted
+        project with only `agents/`, untrusted project and host, `agents`
+        not an unknown key); kernel
+        `model/scope/tests.rs`; facade `roles/tests.rs` (built-ins, the
+        merge table field by field, a three-level deny's provenance, a
+        seeded 500-chain monotonicity property, cycles, missing/unusable
+        parents, depth, descriptions, duplicates, precedence, `load` and
+        rebuild); CLI `management.rs`
+        `roles_list_and_show_resolve_without_the_agent_and_doctor_reports_them`;
+        TUI `warnings_list_the_issues_of_the_roles`.
+      - Docs (both languages): new `roles` page (Configuration group, after
+        config-reference in both sidebars), config-reference (`#agents`),
+        config-layers (`#roles`), configuration (`agents/`), cli-reference
+        (`#roles`, `doctor`, which commands start the Agent),
+        troubleshooting (`roles` line), terminal-interface (`/warnings`),
+        exit-codes, embedding (`roles()`), architecture (the CLI's commands
+        that never start the Agent).
+      - Validation: `cargo fmt --all --check`, `RUSTFLAGS="-D warnings"
+        cargo check --workspace --all-targets --all-features`, `cargo clippy
+        --workspace --all-targets --all-features -- -D warnings`, `cargo
+        xtask check`, `cargo test --workspace --all-features`; the site's
+        `bun install --frozen-lockfile`, `format:site`, `format:check:site`,
+        `site:check`, `site:test`, `site:build` (the roles page prerendered,
+        both languages' bundles built). Request goldens and history corpora
+        unchanged; no diff under `crates/host`, `crates/foundation`,
+        `crates/process` or `architecture/`.
+      - Deviations from the plan: `tools.allow` resolves to a list of allow
+        lists, every one of which must match (the plan's flat
+        `Option<Vec<ToolPattern>>` cannot intersect globs or `plugin:`
+        patterns exactly); provenance names every deciding role, not one
+        source; `instructions_mode` and `permission_mode_cap` are not
+        separate fields of `AgentResolvedRole` (the instructions are merged,
+        the cap is in `scope`); a narrowing key (`extends`,
+        `permissionModeCap`, `tools`, `plugins` and their lists) that cannot
+        be read makes the role unusable instead of being dropped, since
+        dropping it would widen the role; the description is required after
+        the merge (the merge table inherits it); no package or host source
+        kind exists yet (M6, D5).
+      - Hanafubuki: none.
+      Open:
+      - There is no `config reload` command: the catalog is rebuilt at
+        construction and by `reload_packages` (each settings write, package
+        and MCP change); a hand-edited role file applies then or at the
+        next start.
+      - A user role named `default` replaces the built-in one like any
+        other; M4 relies on `default` meaning the empty scope, so decide
+        there whether to reserve the name.
+      - `[agents]` is written by hand only: `config get/set` do not reach
+        it.
+      - The "pattern matches nothing" warning needs the live registries,
+        and comes with M4.
 - [ ] M4: the session capability scope.
       - `AgentCapabilityScope` in `AgentSessionConfig`, tolerant and normalized.
       - Filters:

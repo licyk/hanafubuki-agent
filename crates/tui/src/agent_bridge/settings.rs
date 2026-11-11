@@ -2,7 +2,7 @@
 
 //! `/warnings`, `/memories` and `/config` onto the facade's calls: the
 //! warnings the Agent keeps (the configuration's recoveries and layers, the
-//! plugins, MCP, the hooks, the panics), memory's settings, status, the
+//! roles, the plugins, MCP, the hooks, the panics), memory's settings, status, the
 //! session's contribution and the reset, and the compaction strategy. What a
 //! call found comes back as a [`SettingsReply`]; a failure names the
 //! command.
@@ -23,6 +23,7 @@ use super::{AgentBridge, AgentReply, TurnUpdate};
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub(crate) enum WarningSource {
     Configuration,
+    Roles,
     Plugins,
     InstalledPlugins,
     Mcp,
@@ -36,6 +37,7 @@ impl WarningSource {
     pub(crate) fn name(self) -> &'static str {
         match self {
             Self::Configuration => "configuration",
+            Self::Roles => "roles",
             Self::Plugins => "plugins",
             Self::InstalledPlugins => "installed plugins",
             Self::Mcp => "MCP",
@@ -320,6 +322,13 @@ async fn run(
 /// Every warning the Agent holds now.
 async fn agent_warnings(agent: &AgentHandle) -> Vec<Warning> {
     let mut warnings = config_warnings(agent);
+    warnings.extend(agent.roles().issues().iter().map(|issue| {
+        let text = match &issue.role {
+            Some(role) => format!("Role `{role}`: {}", issue.message),
+            None => format!("Roles: {}", issue.message),
+        };
+        Warning::new(WarningSource::Roles, text)
+    }));
     for plugin in agent.plugin_status() {
         let failed = (plugin.state == AgentPluginState::Failed).then(|| {
             plugin

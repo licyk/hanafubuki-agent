@@ -204,6 +204,18 @@ defaultWaitSeconds = 60
 
 这个表按插件和键跨层合并，就像 `[plugins]` 按条目合并：某层设置的键替换下层的，其余键保留。每个键单独读取：类型不对的值，或不合适的文本，取选项的默认值；越界的整数被截取到边界；两者都会产生一条警告，指明层、插件和键（`/warnings`，以及 `/plugins` 中该插件的选项）。插件不接受的键保留在文件中但被忽略，并有一条警告；插件没有选项的表没有意义，就像 `disabledPlugins` 中的未知名字。写入是严格的：`config set pluginOptions.名字.键 值`、选项表单和 `set_plugin_options` 按插件的选项检查每个值，在写入任何内容之前带着原因拒绝不合适的值；`config get pluginOptions.名字.键` 打印各层解析出的值，没有设置时打印默认值。配置档或项目的 `pluginOptions` 需要手动编写。Agent 写入的更改立即生效：`subagents` 就地接受新的运行中代理上限，对新的等待界限则重新启动，它运行的子代理继续运行。`web` 插件的设置仍是上面的 `webSearchProvider`、`searxngBaseUrl` 和 `webFetchUseJinaReader`，网络表单也使用它们。
 
+### 角色 [#agents]
+
+某一层定义的[角色](/docs/roles)，按名字：`[agents.名字]`，键与角色文件相同（[键](/docs/roles#keys)）。
+
+| 键                       | 类型和取值                     | 含义                                                                                             |
+| ------------------------ | ------------------------------ | ------------------------------------------------------------------------------------------------ |
+| `agents.名字`            | 角色的键组成的表               | 角色 `名字`                                                                                      |
+| `agents.名字.configFile` | 路径，相对于本文件所在的文件夹 | 一个角色文件，条目的键覆盖在它的键之上读取（Codex 的 `config_file`）；`agents/` 不会再读这个文件 |
+| `profiles.配置档.agents` | 角色组成的表，同 `agents`      | 配置档 `配置档` 的角色                                                                           |
+
+用户的文件、其中的配置档以及受信任项目的文件都可以写。它们不跨层合并：较高层的角色整体替换下一层的同名角色（[角色的来源](/docs/roles#sources)）。它们不是设置：`config get` 和 `config set` 不处理它们，`-c agents.…` 覆盖是未知的键，其中无法使用的内容是角色的问题（`roles list`、`doctor`、`/warnings`），从不会修复文件。
+
 ## providers.toml [#providers-toml]
 
 `providers.toml` 没有分层，只有自己可读。通常用 `providers` 命令修改；终端界面的 `/providers` 可以编辑 Provider，按 `p` 或 `/providers policy` 可以编辑共享的模型策略；也可以直接编辑文件。修改时请先退出正在运行的 Agent。

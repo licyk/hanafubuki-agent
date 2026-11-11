@@ -82,6 +82,10 @@ hanafubuki-agent -c permissionMode=manual --permission-mode full-access config g
 
 `-m`、`-C`、`--add-dir` 和 `--data-dir` 不是 `config.toml` 的键，不参与分层。
 
+## 角色 [#roles]
+
+[角色](/docs/roles)在设置之外有自己的分层：用户的（用户 `config.toml` 旁边的 `agents/` 目录及其中的 `[agents]`）、配置档的 `[profiles.名字.agents]`，以及受信任项目的（`.hanafubuki-agent/agents/` 和其配置文件中的 `[agents]`；只在项目受信任时读取，即使项目没有 `config.toml`）。它们不按键合并：较高层的角色整体替换下一层的同名角色，角色要在另一个角色之上构建时使用 `extends`（[角色的来源](/docs/roles#sources)）。`-c` 覆盖中没有角色。
+
 ## 无法使用的值 [#invalid]
 
 一层中无法使用的值不会生效，通常保留下一层的值。有两个例外：

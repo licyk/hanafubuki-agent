@@ -4,7 +4,8 @@
 use hanafubuki_agent::sandbox;
 use hanafubuki_agent::{
     probe_keyring, AgentConfig, AgentConfigProblem, AgentProviderModelCatalogRequest,
-    AgentRuntimeHost, AgentSandboxMode, ConfigLayerSource, DataDirLock, McpConnectionPhase,
+    AgentRoleCatalog, AgentRuntimeHost, AgentSandboxMode, ConfigLayerSource, DataDirLock,
+    McpConnectionPhase,
 };
 
 use crate::agent::{block_on, Standalone};
@@ -26,6 +27,7 @@ pub(crate) fn run(global: &GlobalArgs, online: bool) -> Result<u8, Failure> {
     sandbox(&mut report, config);
     let default_provider = providers(&mut report, config);
     mcp(&mut report, config);
+    roles(&mut report, config);
     recoveries(&mut report, config);
     match probe_keyring() {
         Ok(()) => report.ok("keyring", hanafubuki_agent::KEYRING_SERVICE),
@@ -178,6 +180,25 @@ fn mcp(report: &mut Report, config: &AgentConfig) {
             );
         }
         Err(error) => report.fail("mcp", &error.to_string()),
+    }
+}
+
+/// The roles and what reading them left out. A role that cannot be used
+/// is reported, but does not fail: the Agent runs without it.
+fn roles(report: &mut Report, config: &AgentConfig) {
+    let catalog = AgentRoleCatalog::load(config);
+    let usable: Vec<&str> = catalog.roles().map(|role| role.name.as_str()).collect();
+    let unusable = catalog.unusable().count();
+    let unusable = match unusable {
+        0 => String::new(),
+        count => format!("; {count} unusable"),
+    };
+    report.ok(
+        "roles",
+        &format!("{} usable ({}){unusable}", usable.len(), usable.join(", ")),
+    );
+    for issue in catalog.issues() {
+        report.ok("roles", &issue.to_string());
     }
 }
 

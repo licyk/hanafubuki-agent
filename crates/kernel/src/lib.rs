@@ -121,6 +121,10 @@ pub use model::{
     MAXIMUM_AGENT_WORLD_STATE_TOTAL_BYTES, MAXIMUM_HOST_CONTEXT_BYTES,
     MAXIMUM_USER_IMAGES_PER_MESSAGE,
 };
+pub use model::{
+    stricter_permission_mode, AgentCapabilityScope, AgentToolScope, ToolIdentity, ToolPattern,
+    MAX_TOOL_PATTERN_BYTES,
+};
 pub use parallel_tool_runtime::{
     AgentToolExecutionGate, AgentToolExecutionGateError, AgentToolExecutionPermit, CompletionSet,
     ToolCallRuntime,

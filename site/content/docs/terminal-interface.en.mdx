@@ -616,6 +616,7 @@ A domain is saved whole: its form drafts a typed patch, checks it, writes it ato
 What the interface or the Agent could not use as configured is kept for the run, and `/warnings` lists it, newest first, each once, counted by source:
 
 - **configuration**: what reading `config.toml`, `providers.toml` and `mcp.toml` had to repair ([Configuration recovery](/docs/recovery)), and what a layer of `config.toml` holds that the settings cannot use: an unknown key, or a value the layer below replaces;
+- **roles**: what reading the [roles](/docs/roles#issues) left out, a role defined twice in one source, and each role that cannot be used, with why;
 - **plugins**: a plugin that failed, or that is left out of turns;
 - **installed plugins**: what an [installed plugin](#plugins) could not use: a manifest field, a component, an MCP server that gives way to another of its name; a plugin whose code failed (its fourth failure within 10 minutes, or a start that failed) until it is retried, and what its code left out;
 - **MCP**: a server's latest error or warning, and what reading `mcp.toml` repaired;

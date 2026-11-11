@@ -13,12 +13,13 @@ use serde_json::{Map, Value};
 
 use crate::fields::unknown_keys;
 use crate::file::{ConfigFile, FileAccess, FileRead};
-use crate::keys::{self, KeyTarget, PLUGIN_OPTIONS};
+use crate::keys::{self, KeyTarget, AGENTS, PLUGIN_OPTIONS};
 use crate::layers::Resolved;
 use crate::overrides::parse_value;
 use crate::plugin_options::checked_patch;
 use crate::providers::{decode_registry, validate_agent_provider_registry};
 use crate::recovery::{AgentConfigProblem, AgentConfigRecovery};
+use crate::roles::{read_role_sources, RoleSource};
 use crate::settings::{decode_settings, validate_disabled_plugins};
 use crate::{
     AgentProviderRegistrySettings, AgentSettings, AgentSettingsPatch, AgentStandaloneSettings,
@@ -350,6 +351,19 @@ impl AgentConfig {
         Ok(())
     }
 
+    /// The roles the configuration defines, read now from each source,
+    /// lowest first: the user's `agents/` and `[agents]`, the profile's
+    /// `[agents]`, and a trusted project's `agents/` and `[agents]`
+    /// ([`RoleSource`]). A host's configuration has the user's alone.
+    pub fn role_sources(&self) -> Result<Vec<RoleSource>, String> {
+        let user = self.load_user_settings()?.document;
+        Ok(read_role_sources(
+            self.inner.settings_file.path(),
+            &user,
+            self.inner.layers.as_ref(),
+        ))
+    }
+
     /// The layers the settings are read from, lowest first (`doctor`).
     pub fn layer_sources(&self) -> Result<Vec<ConfigLayerSource>, String> {
         let path = self.inner.settings_file.path().to_path_buf();
@@ -467,7 +481,8 @@ impl AgentConfig {
                     repairs,
                 )
             },
-            self.inner.layers.is_none(),
+            // A layered configuration reports them with its layers.
+            self.inner.layers.is_none().then_some(&[AGENTS][..]),
         )
     }
 
@@ -489,7 +504,7 @@ impl AgentConfig {
                 let mut repairs = Vec::new();
                 (decode_registry(document, &mut repairs), repairs)
             },
-            true,
+            Some(&[]),
         )
         .map(|loaded| loaded.value)
     }
@@ -543,12 +558,13 @@ pub(crate) struct Loaded<T> {
 /// the defaults, or with the repaired values over the user's own document.
 /// When that fails, the fixed values are used from memory and the file
 /// refuses writes: one would replace the user's original with no copy kept.
-/// Unknown keys stay in the file, and are logged when `report_unknown`.
+/// Unknown keys stay in the file, and are logged when `report_unknown`
+/// gives the tables other readers read, which are not.
 pub(crate) fn load<T: Serialize>(
     file: &ConfigFile,
     defaults: impl FnOnce() -> T,
     decode: impl FnOnce(&Map<String, Value>) -> (T, Vec<String>),
-    report_unknown: bool,
+    report_unknown: Option<&[&str]>,
 ) -> Result<Loaded<T>, String> {
     let path = file.path().display();
     let fresh = !file.is_read_only();
@@ -578,8 +594,13 @@ pub(crate) fn load<T: Serialize>(
         FileRead::Document(document) => {
             let (value, repairs) = decode(&document);
             let canonical = object(&value)?;
-            if report_unknown {
-                for key in unknown_keys(&document, &canonical) {
+            if let Some(tables) = report_unknown {
+                let read_elsewhere =
+                    |key: &String| tables.contains(&key.split('.').next().unwrap_or_default());
+                for key in unknown_keys(&document, &canonical)
+                    .into_iter()
+                    .filter(|key| !read_elsewhere(key))
+                {
                     log::warn!(
                         "Agent configuration {path} has the unknown key {key}; it is kept and ignored"
                     );

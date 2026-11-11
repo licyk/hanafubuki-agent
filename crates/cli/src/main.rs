@@ -12,6 +12,7 @@ mod mcp;
 mod memory;
 mod plugins;
 mod providers;
+mod roles;
 mod sessions;
 mod skills;
 
@@ -43,6 +44,7 @@ fn main() -> ExitCode {
         Some(Command::Skills(command)) => skills::run(global, command).map(|()| SUCCESS),
         Some(Command::Plugins(command)) => plugins::run(global, command).map(|()| SUCCESS),
         Some(Command::Memory(command)) => memory::run(global, command).map(|()| SUCCESS),
+        Some(Command::Roles(command)) => roles::run(global, command).map(|()| SUCCESS),
         Some(Command::Doctor { online }) => doctor::run(global, online),
     };
     match result {

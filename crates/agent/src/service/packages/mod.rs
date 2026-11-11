@@ -30,11 +30,15 @@ impl AgentApplicationService {
     /// changed has connected, or failed, when this returns; one that is gone
     /// is disconnected). The facade calls it after a settings change and
     /// after every change to the installed packages; a caller that changes
-    /// `[plugins]` or the store by other means calls it too.
+    /// `[plugins]` or the store by other means calls it too. The role
+    /// catalog is read again too, whether or not the packages loaded.
     pub async fn reload_packages(&self) -> Result<(), String> {
-        self.packages
+        let loaded = self
+            .packages
             .reload(self.config.clone(), self.blocking.as_ref())
-            .await
+            .await;
+        self.reload_roles().await;
+        loaded
     }
 
     /// Every installed package, on or off, with the content it contributes,

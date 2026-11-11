@@ -15,7 +15,7 @@ use serde_json::{Map, Value};
 
 use crate::fields::unknown_keys;
 use crate::file::{ConfigFile, FileAccess, FileRead};
-use crate::keys::{HOOKS, PROFILES, PROJECTS, TRUST_LEVEL};
+use crate::keys::{AGENTS, HOOKS, PROFILES, PROJECTS, TRUST_LEVEL};
 use crate::settings::decode_settings;
 use crate::standalone::decode_standalone;
 use crate::store::object;
@@ -99,24 +99,35 @@ impl ConfigLayers {
             &user_source,
             document,
             &mut resolved,
-            &[PROFILES, PROJECTS, HOOKS],
+            &[PROFILES, PROJECTS, HOOKS, AGENTS],
             repairs,
         )?;
         if let Some(name) = &self.profile {
             let profile = profile(document, name).ok_or_else(|| {
                 format!("{user_source} has no profile `{name}` ([profiles.{name}])")
             })?;
-            apply(&format!("profile `{name}`"), profile, &mut resolved)?;
+            apply(
+                &format!("profile `{name}`"),
+                profile,
+                &mut resolved,
+                &[HOOKS, AGENTS],
+            )?;
         }
         if let Some((path, project)) = self.project_document(document) {
-            apply(&path.display().to_string(), &project, &mut resolved)?;
+            apply(
+                &path.display().to_string(),
+                &project,
+                &mut resolved,
+                &[HOOKS, AGENTS],
+            )?;
         }
         if !self.overrides.is_empty() {
             let overrides = match serde_json::to_value(self.overrides.document()) {
                 Ok(Value::Object(overrides)) => overrides,
                 _ => return Err("the -c overrides cannot be read as settings".to_string()),
             };
-            apply("-c", &overrides, &mut resolved)?;
+            // Roles are read from files, so `-c agents.…` is an unknown key.
+            apply("-c", &overrides, &mut resolved, &[HOOKS])?;
         }
         Ok(resolved)
     }
@@ -180,7 +191,7 @@ fn profile<'a>(document: &'a Map<String, Value>, name: &str) -> Option<&'a Map<S
 
 /// Whether the user's `[projects]` table trusts `project`, comparing
 /// locations, not spellings.
-fn is_trusted(user: &Map<String, Value>, project: &Path) -> bool {
+pub(crate) fn is_trusted(user: &Map<String, Value>, project: &Path) -> bool {
     let Ok(project) = ResolvedPath::resolve(project) else {
         return false;
     };
@@ -193,14 +204,19 @@ fn is_trusted(user: &Map<String, Value>, project: &Path) -> bool {
     })
 }
 
-/// Decodes `layer` over `resolved`.
-fn apply(source: &str, layer: &Map<String, Value>, resolved: &mut Resolved) -> Result<(), String> {
+/// Decodes `layer` over `resolved`; the keys of `tables` are read by others.
+fn apply(
+    source: &str,
+    layer: &Map<String, Value>,
+    resolved: &mut Resolved,
+    tables: &[&str],
+) -> Result<(), String> {
     let mut repairs = Vec::new();
     let settings = decode_settings(layer, &resolved.settings, source, &mut repairs);
     let standalone = decode_standalone(layer, &resolved.standalone, &mut repairs);
     resolved.settings = settings;
     resolved.standalone = standalone;
-    report(source, layer, resolved, &[HOOKS], repairs)
+    report(source, layer, resolved, tables, repairs)
 }
 
 /// Logs, and keeps in `resolved` for the interface's `/warnings`, the keys

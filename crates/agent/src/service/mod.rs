@@ -72,6 +72,7 @@ mod hooks;
 pub use hooks::{AgentHook, AgentHookHandler, AgentHooks};
 mod guests;
 mod packages;
+mod roles;
 
 /// What the application hands the Agent when it builds it.
 pub struct AgentServiceInputs {
@@ -141,6 +142,8 @@ pub struct AgentApplicationService {
     packages: crate::packages::AgentPackages,
     /// Told of the plugins' changes, and of the installed plugins'.
     plugin_events: Arc<dyn AgentPluginEventSink>,
+    /// The roles, rebuilt whenever the settings or the packages are.
+    roles: Arc<crate::roles::AgentRoles>,
     /// The workspace policy, for user image attachments and their preview.
     pub(crate) files: WorkspaceFsService,
     /// Where this instance's kernel faults go (the slot that started it).
@@ -427,6 +430,7 @@ impl AgentApplicationService {
                 restart_policy: plugin_restarts,
             },
         )?);
+        let roles = Arc::new(crate::roles::AgentRoles::load(&config));
         unbuilt.built();
         Ok(Self {
             config,
@@ -450,6 +454,7 @@ impl AgentApplicationService {
             host: plugin_host,
             packages,
             plugin_events: plugin_event_sink,
+            roles,
             files,
             kernel_faults,
         })

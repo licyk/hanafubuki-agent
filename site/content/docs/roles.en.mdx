@@ -1,0 +1,164 @@
+---
+title: Roles
+description: Named, inheritable definitions of how the Agent works, which only narrow it — role files, [agents] entries, where they come from, extends and the merge, the built-in roles.
+icon: UserCog
+---
+
+A role is a named definition of how the Agent works: instructions, a model, a reasoning effort, a permission-mode cap, and the tools and plugins it may use. A role only ever **narrows** the Agent it runs in: it can take tools and plugins away and tighten the permission mode, never add or widen anything, so no role is more capable than the instance itself. Approval rules, your hooks and the sandbox are out of every role's reach.
+
+Roles are defined in TOML, by you, a profile or a trusted project, beside two built-in ones. This version reads, checks and lists them (`hanafubuki-agent roles`, `doctor`, `/warnings`); **no session runs with a role yet**: choosing one for a session, and for a sub-agent, comes in a later version.
+
+## Defining a role [#define]
+
+A role file is a `.toml` file in an `agents/` directory: the user's beside `config.toml` (`~/.config/hanafubuki-agent/agents/` on Linux), or a trusted project's `.hanafubuki-agent/agents/`.
+
+```toml
+# ~/.config/hanafubuki-agent/agents/reader.toml
+description = "Reads the code and reports findings; never edits files."
+extends = "explorer"
+instructions = """
+Answer with file paths and line numbers.
+"""
+model = "gpt-5.4-mini"
+reasoningEffort = "low"
+permissionModeCap = "manual"
+
+[tools]
+allow = ["read_file", "search_text", "list_directory"]
+deny = ["fetch_web_page"]
+
+[plugins]
+off = ["titles", "goal"]
+```
+
+The role's name is the file's `name` key, else its file name without `.toml` (`reader`). Files in subdirectories of `agents/` are read too.
+
+## Keys [#keys]
+
+| Key                 | Type and values                                                                | Default                          | Means                                                                                                        |
+| ------------------- | ------------------------------------------------------------------------------ | -------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `name`              | A role name                                                                    | the file's stem                  | The role's name, in a role file. An `[agents.NAME]` entry is named by its key                                |
+| `description`       | Text                                                                           | the parent's                     | What the role is for, as the guidance that offers it will show. A role needs one, its own or one it inherits |
+| `extends`           | A role's name                                                                  | none                             | The role it builds on ([below](#extends))                                                                    |
+| `instructions`      | Text                                                                           | none                             | What the role adds to the Agent's instructions                                                               |
+| `instructionsMode`  | `"append"` or `"replace"`                                                      | `"append"`                       | Whether the instructions follow those of the roles it extends, or replace them                               |
+| `model`             | A model id                                                                     | the parent's, else the session's | The model the role runs                                                                                      |
+| `reasoningEffort`   | `minimal`, `low`, `medium`, `high`, `xhigh`, or another effort the model takes | the parent's                     | The reasoning effort                                                                                         |
+| `permissionModeCap` | `"manual"`, `"auto_review"` or `"full_access"`                                 | none                             | The widest permission mode the role runs in; it only tightens                                                |
+| `spawnable`         | `true` or `false`                                                              | the parent's, else `true`        | Whether a sub-agent may be given the role                                                                    |
+| `tools.allow`       | An array of [tool patterns](#tool-patterns)                                    | everything the parent allows     | The only tools the role may use                                                                              |
+| `tools.deny`        | An array of tool patterns                                                      | none                             | Tools the role may not use, whatever `allow` says                                                            |
+| `plugins.off`       | An array of plugin names (`guest:<id>` for an installed plugin's code)         | none                             | Plugins whose tools and context the role's sessions do not get                                               |
+
+A role name holds 1 to 128 bytes without spaces, control characters or `:`, which an installed plugin's roles will use (`<plugin>:<role>`).
+
+## Tool patterns [#tool-patterns]
+
+Each entry of `tools.allow` and `tools.deny` is one of:
+
+- **a tool name**, as the model calls it (`read_file`, `mcp__github__list_issues`), where `*` matches any run of characters (`mcp__github__*`, `read_*`);
+- **`plugin:NAME`**: every tool the plugin `NAME` registers or provides (`plugin:web`; `plugin:guest:demo@my-mkt` for an installed plugin's code);
+- **`provider:ID`**: every tool a tool provider supplies, `*` allowed (`provider:mcp.github`, `provider:plugin.demo.*`).
+
+An entry that is none of these (empty, with a space, or with another `kind:`) is left out, with an issue. A pattern that matches no tool is not an error: tools come and go.
+
+## Where roles come from [#sources]
+
+Roles come from these sources, lowest first. A role of a higher source **replaces** a role of the same name below it, whole: nothing of the lower one is kept. To build on a role, give yours another name and `extends` it.
+
+1. **The built-in roles**, `default` and `explorer` ([below](#built-in)).
+2. **The user's**: the role files of the user's `agents/` and the `[agents]` entries of the user's `config.toml`.
+3. **The profile's**: the `[profiles.NAME.agents]` entries of the profile `-p NAME` selects.
+4. **The trusted project's**: the role files of `.hanafubuki-agent/agents/` and the `[agents]` entries of `.hanafubuki-agent/config.toml`, read only when the user's `config.toml` trusts the project ([The project's file](/docs/config-layers#projects)).
+
+Within one source, the `[agents]` entries come first, by name, then the role files, by path. When two define the same name, the first keeps it and the other is ignored, with an issue. A role that cannot be used still takes its name: it never lets a lower role of that name through.
+
+An embedding application's configuration has the user's source alone: its `agents/` and `[agents]`.
+
+## Entries in config.toml [#inline]
+
+A role can be written in any layer's `config.toml` instead of a file, with the same keys:
+
+```toml
+[agents.reviewer]
+description = "Reviews a change and lists the problems it finds."
+extends = "explorer"
+reasoningEffort = "high"
+
+[agents.reader]
+configFile = "agents/reader.toml"
+model = "gpt-5.4"
+```
+
+`configFile` (Codex's `config_file`) names a role file, relative to the folder of the `config.toml` that names it: the entry's keys are read over the file's, and the entry's key is the name. That file is the entry's, so the directory does not read it a second time. A `configFile` that cannot be read makes the role unusable.
+
+`[agents]` is not a setting: `config get` and `config set` do not reach it, and a `-c agents.…` override is an unknown key.
+
+## extends and the merge [#extends]
+
+`extends` names one parent, found by name among every source's roles after precedence. A chain holds at most 8 roles (the role and the roles it extends). A role whose parent is missing or unusable, whose chain is a cycle (a role extending itself included) or longer than 8, is unusable, and says why; it never falls back to something else.
+
+The chain is merged field by field, from the root to the role, each rule only narrowing:
+
+| Field                                                  | Rule                                                                                                                                                       |
+| ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `description`, `model`, `reasoningEffort`, `spawnable` | The role's if it sets it, else its parent's                                                                                                                |
+| `instructions`                                         | `append`: the parent's, a blank line, then the role's. `replace`: the role's alone (none, if it has none)                                                  |
+| `permissionModeCap`                                    | The stricter of the two: `manual`, then `auto_review`, then `full_access`                                                                                  |
+| `tools.allow`                                          | A tool must be allowed by every role of the chain that sets `allow`: a role's own list never adds a tool its parent leaves out. No `allow` is the parent's |
+| `tools.deny`, `plugins.off`                            | Every role's, together                                                                                                                                     |
+
+So a role removes any one inherited tool with `deny`, and an allow list narrows what its parent allows: a child of `explorer` with `allow = ["read_*"]` may use `read_file` and nothing else.
+
+## The built-in roles [#built-in]
+
+| Role       | Narrows                                                                                                     | Spawnable |
+| ---------- | ----------------------------------------------------------------------------------------------------------- | --------- |
+| `default`  | Nothing: the Agent as it is configured. The role a session has without one                                  | yes       |
+| `explorer` | Its tools: `list_directory`, `search_text`, `read_file`, `view_image`, `web_search`, `fetch_web_page` alone | yes       |
+
+`explorer`'s description is Codex's, adapted: explorers answer specific questions about the codebase, are trusted without being checked again, and run in parallel for independent questions. A role of yours named `default` or `explorer` replaces the built-in one.
+
+## Codex role files [#codex]
+
+A Codex role file works unchanged in `agents/`: its `developer_instructions`, `model` and `model_reasoning_effort` are read as `instructions`, `model` and `reasoningEffort`. When both a key and its Codex name are set, ours is used, with an issue. Its other Codex keys (`sandbox_mode`, `nickname_candidates` and the rest) are settings of the whole Agent here, so they are ignored, each with an issue. Codex's `[agents]` settings (`max_threads` and the like) are not roles, and are ignored with an issue.
+
+## What cannot be used [#issues]
+
+A role file is configuration you wrote, so it is read tolerantly and never rewritten:
+
+- Each key is read on its own. A key of the wrong type (a `model` that is a number) is left out, with an issue, and the parent's value or the default is used. An unknown key is ignored, with an issue.
+- An array item of `tools.allow`, `tools.deny` or `plugins.off` that is not text is left out alone, which narrows a list, never widens it.
+- A key that narrows and cannot be read at all (an `extends` that is not a name, a `permissionModeCap` that is not a mode, a `tools` or `plugins` that is not a table, an `allow`, `deny` or `off` that is not an array) makes the role **unusable**: leaving it out would allow more than the role says.
+- A file that is not valid TOML is an unusable role of its file name; a file whose name cannot be a role's is ignored, with an issue.
+- A role without a description, of its own or inherited, is unusable.
+
+The issues and the unusable roles, with why, show in `hanafubuki-agent roles list` (on standard error), in the `roles` lines of [`doctor`](/docs/troubleshooting#doctor), and in the terminal interface's [`/warnings`](/docs/terminal-interface#warnings), under **roles**. A role that cannot be used never stops the Agent.
+
+## Seeing the roles [#inspect]
+
+```sh
+hanafubuki-agent roles list
+hanafubuki-agent roles show reader
+hanafubuki-agent -p review roles show reader   # with the profile's roles
+```
+
+```text
+reader  user file /home/me/.config/hanafubuki-agent/agents/reader.toml
+chain: reader (user file /home/me/.config/hanafubuki-agent/agents/reader.toml) → explorer (built-in)
+description: Reads the code and reports findings; never edits files.  [from reader]
+instructions: Answer with file paths and line numbers.  [from reader]
+model: gpt-5.4-mini  [from reader]
+reasoningEffort: low  [from reader]
+spawnable: true  [from explorer]
+permissionModeCap: manual  [from reader]
+tools.allow: every one of [list_directory, read_file, search_text] and [fetch_web_page, list_directory, read_file, search_text, view_image, web_search]  [from reader, explorer]
+tools.deny: fetch_web_page  [from reader]
+plugins.off: goal, titles  [from reader]
+```
+
+`roles show` prints each field as the chain resolves it, and which roles of the chain decide it, nearest first. Neither command starts the Agent ([CLI reference](/docs/cli-reference#roles)).
+
+## When roles are read [#reload]
+
+A running Agent reads the roles when it starts, and again each time it reloads its installed plugins, which it does after every settings write it makes. A role file you edit by hand takes effect then, or at the next start; `roles list`, `roles show` and `doctor` read the files each time they run.

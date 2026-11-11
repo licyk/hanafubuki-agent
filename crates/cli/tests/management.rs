@@ -392,3 +392,99 @@ fn doctor_offline_checks_each_part_and_fails_on_any_failure() {
     assert_eq!(run.code(), i32::from(failed), "{report}");
     assert!(report.contains("keyring"), "{report}");
 }
+
+#[test]
+fn roles_list_and_show_resolve_without_the_agent_and_doctor_reports_them() {
+    let home = Home::new();
+    std::fs::write(
+        home.home.join("config.toml"),
+        "[agents.reader]\ndescription = \"Reads.\"\nextends = \"explorer\"\n\
+         tools.allow = [\"read_*\"]\npermissionModeCap = \"manual\"\n\n\
+         [profiles.ci.agents.reader]\ndescription = \"The profile's.\"\n",
+    )
+    .unwrap();
+    let agents = home.home.join("agents");
+    std::fs::create_dir_all(&agents).unwrap();
+    std::fs::write(
+        agents.join("orphan.toml"),
+        "description = \"Lost.\"\nextends = \"nobody\"\ncolour = 1\n",
+    )
+    .unwrap();
+
+    let run = home.run(&["roles", "list"]).expect(0);
+    let list = run.stdout();
+    let names: Vec<&str> = list
+        .lines()
+        .map(|line| line.split("  ").next().unwrap())
+        .collect();
+    assert_eq!(names, ["default", "explorer", "orphan", "reader"], "{list}");
+    assert!(
+        list.contains("explorer  built-in  Use `explorer`"),
+        "{list}"
+    );
+    assert!(list.contains("orphan  user file "), "{list}");
+    assert!(
+        list.contains("unusable: `orphan` extends `nobody`"),
+        "{list}"
+    );
+    assert!(
+        run.stderr().contains("warning: role `orphan`: "),
+        "{}",
+        run.stderr()
+    );
+    assert!(run.stderr().contains("`colour`"), "{}", run.stderr());
+
+    let show = home.run(&["roles", "show", "reader"]).expect(0).stdout();
+    assert!(
+        show.starts_with("reader  user [agents.reader] in "),
+        "{show}"
+    );
+    assert!(
+        show.contains("chain: reader (user [agents.reader]"),
+        "{show}"
+    );
+    assert!(show.contains(" → explorer (built-in)"), "{show}");
+    assert!(
+        show.contains("description: Reads.  [from reader]"),
+        "{show}"
+    );
+    assert!(
+        show.contains("permissionModeCap: manual  [from reader]"),
+        "{show}"
+    );
+    assert!(
+        show.contains("tools.allow: every one of [") && show.contains("[from reader, explorer]"),
+        "{show}"
+    );
+    assert!(show.contains("model: (not set)"), "{show}");
+    let profile = home
+        .run(&["-p", "ci", "roles", "show", "reader"])
+        .expect(0)
+        .stdout();
+    assert!(
+        profile.starts_with("reader  profile `ci` [profiles.ci.agents.reader]"),
+        "{profile}"
+    );
+    assert!(profile.contains("tools.allow: every tool"), "{profile}");
+    let unusable = home.run(&["roles", "show", "orphan"]).expect(0).stdout();
+    assert!(
+        unusable.contains("unusable: `orphan` extends `nobody`"),
+        "{unusable}"
+    );
+    let missing = home.run(&["roles", "show", "nope"]).expect(1);
+    assert!(
+        missing.stderr().contains("no role `nope`"),
+        "{}",
+        missing.stderr()
+    );
+
+    let report = home.run(&["doctor"]).stdout();
+    assert!(
+        report.contains("ok    roles     3 usable (default, explorer, reader); 1 unusable"),
+        "{report}"
+    );
+    assert!(
+        report.contains("ok    roles     role `orphan`: "),
+        "{report}"
+    );
+}

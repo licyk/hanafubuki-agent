@@ -11,7 +11,8 @@
 //! The standalone Agent finds the directory itself ([`AgentDirs`]) and
 //! layers a profile, a trusted project's file and `-c` overrides over the
 //! user's `config.toml` ([`ConfigLayers`],
-//! site/content/docs/config-layers.en.mdx).
+//! site/content/docs/config-layers.en.mdx). Role definitions are read from
+//! each layer's `agents/` and `[agents]` ([`RoleSource`]).
 
 mod dirs;
 mod fields;
@@ -24,6 +25,7 @@ mod overrides;
 mod plugin_options;
 mod providers;
 mod recovery;
+mod roles;
 mod settings;
 mod standalone;
 mod store;
@@ -53,6 +55,10 @@ pub use providers::{
     MAX_AGENT_PROVIDER_HEADERS, MAX_AGENT_TOOL_INVOCATIONS, MAX_AGENT_TOOL_OUTPUT_BYTES,
 };
 pub use recovery::{AgentConfigProblem, AgentConfigRecovery};
+pub use roles::{
+    is_role_name, InstructionsMode, RoleDefinition, RoleLayer, RoleOrigin, RoleSource,
+    MAX_ROLE_NAME_BYTES, ROLE_DIR,
+};
 pub use settings::{
     agent_settings_fields, AgentBackgroundCompactionSettings, AgentCompactionSettings,
     AgentCompactionStrategy, AgentHierarchicalCompactionSettings, AgentMemorySettings,

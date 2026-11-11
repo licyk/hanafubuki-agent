@@ -449,6 +449,8 @@ Agent 启动的进程归 Agent 所有：它有自己的 `ExecutorManager`，与�
 
 读取是容错的：无效值取默认值，未知键记录日志并保留在文件里，需要修复的文件先复制到 `.recovery/` 再写入修复后的值；无法保留原件时，修复后的值只用在内存里，文件在重启前拒绝写入。每次修复都是一条 `AgentConfigRecovery`（文件、问题、是否只读、时间），`AgentConfig::recoveries()` 返回本次打开以来的修复（每个文件最近 20 条），宿主应当把它们展示给用户。键名、默认值和修复规则见[配置](/docs/configuration)与[配置参考](/docs/config-reference)。
 
+配置目录中还可以有[角色](/docs/roles)：它的 `agents/` 和其 `config.toml` 中的 `[agents]` 条目，这是嵌入的 Agent 在内置角色之外唯一的角色来源。`roles()` 返回服务最近一次读取的 `AgentRoleCatalog`（构建时读取，之后每次 `reload_packages` 再读）：可用的角色（`AgentResolvedRole`，含继承链、合并后的字段、`AgentCapabilityScope` 和每个字段的来源）、不可用的角色及原因，以及问题；宿主应把这些问题与配置的问题放在一起展示。`AgentRoleCatalog::load(&config)` 不需要服务即可读取。目前还没有会话使用角色。
+
 从旧格式迁移设置是宿主自己的事：Hanafubuki 在 `config.toml` 不存在时（`AgentConfig::exists`），由它的构造闭包运行 `import_legacy_agent_settings`，用 `AgentConfig::create` 一次写入整份配置（`config.toml` 最后写，所以中途停止的导入会重来），旧文件保持不变。
 
 ## 事件与历史 [#events-and-history]

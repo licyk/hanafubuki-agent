@@ -82,6 +82,10 @@ hanafubuki-agent -c permissionMode=manual --permission-mode full-access config g
 
 `-m`, `-C`, `--add-dir` and `--data-dir` are not keys of `config.toml`, and have no layer.
 
+## Roles [#roles]
+
+[Roles](/docs/roles) have layers of their own, beside the settings': the user's (the `agents/` directory beside the user's `config.toml`, and its `[agents]`), the profile's `[profiles.NAME.agents]`, and the trusted project's (`.hanafubuki-agent/agents/` and the `[agents]` of its file, read only when the project is trusted, even without a `config.toml`). They do not merge key by key: a role of a higher layer replaces the role of the same name below it whole, and a role builds on another with `extends` ([Where roles come from](/docs/roles#sources)). The `-c` overrides have no roles.
+
 ## Values that cannot be used [#invalid]
 
 A value in a layer that cannot be used does not take effect; usually the layer below's value stays. Two exceptions:

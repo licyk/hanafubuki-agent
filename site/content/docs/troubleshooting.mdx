@@ -15,6 +15,7 @@ hanafubuki-agent doctor --online
 ok    config    /home/me/.config/hanafubuki-agent/config.toml
 ok    providers 1 configured; the default provider-1 (https://api.openai.com/v1) runs gpt-5.1
 ok    mcp       2 configured, 2 enabled
+ok    roles     2 usable (default, explorer)
 FAIL  keyring   No default store has been set, so cannot search or create entries
 ok    data      /home/me/.local/share/hanafubuki-agent (not in use)
 skip  online    the Provider and the MCP servers are reached with --online
@@ -27,6 +28,7 @@ skip  online    the Provider and the MCP servers are reached with --online
 | `config`    | 读取了哪些层：用户的 `config.toml`（或者没有，使用默认值）、配置档、项目配置（以及项目是否受信任）、`-c` 覆盖。不存在的配置档为 `FAIL`。还会列出本次运行中修复过的文件，见[配置恢复](/docs/recovery#doctor) |
 | `providers` | Provider 的数量，以及默认 Provider 的地址和模型。没有默认 Provider 或没有设置模型为 `FAIL`                                                                                                                  |
 | `mcp`       | MCP 服务器的数量和启用的数量                                                                                                                                                                                |
+| `roles`     | 可用的角色，以及有几个不可用；然后每个读取或解析时的问题各占一行（[角色](/docs/roles#issues)）。不可用的角色不算 `FAIL`                                                                                     |
 | `keyring`   | 系统密钥环能否读取                                                                                                                                                                                          |
 | `data`      | 数据目录是否空闲；被另一个 Agent 进程占用为 `FAIL`                                                                                                                                                          |
 | `online`    | 只在 `--online` 且数据目录空闲时运行：启动 Agent，列出默认 Provider 的模型（`provider` 行），连接每个启用的 MCP 服务器（`mcp` 行）                                                                          |

@@ -13,6 +13,8 @@ pub(crate) const PROFILES: &str = "profiles";
 pub(crate) const PROJECTS: &str = "projects";
 /// Read by the hooks plugin from each layer's file, not by the settings.
 pub(crate) const HOOKS: &str = "hooks";
+/// Read as role definitions from each layer's file, not by the settings.
+pub(crate) const AGENTS: &str = "agents";
 pub(crate) const TRUST_LEVEL: &str = "trustLevel";
 /// Checked against the plugin's schema, which the caller has
 /// ([`crate::AgentConfig::set_plugin_options`]).

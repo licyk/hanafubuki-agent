@@ -15,6 +15,7 @@ hanafubuki-agent doctor --online
 ok    config    /home/me/.config/hanafubuki-agent/config.toml
 ok    providers 1 configured; the default provider-1 (https://api.openai.com/v1) runs gpt-5.1
 ok    mcp       2 configured, 2 enabled
+ok    roles     2 usable (default, explorer)
 FAIL  keyring   No default store has been set, so cannot search or create entries
 ok    data      /home/me/.local/share/hanafubuki-agent (not in use)
 skip  online    the Provider and the MCP servers are reached with --online
@@ -27,6 +28,7 @@ Each check prints one line, `ok`, `FAIL` or `skip`, and any `FAIL` exits with co
 | `config`    | The layers read: the user's `config.toml` (or none, the defaults), the profile, the project's file (and whether the project is trusted), the `-c` overrides. A profile that does not exist fails. Then each file this run repaired; see [Configuration recovery](/docs/recovery#doctor) |
 | `providers` | How many Providers, and the default's endpoint and model. No default, or no model, fails                                                                                                                                                                                                |
 | `mcp`       | How many MCP servers, and how many are enabled                                                                                                                                                                                                                                          |
+| `roles`     | The roles that can be used, and how many cannot; then one line for each issue of reading or resolving them ([Roles](/docs/roles#issues)). A role that cannot be used does not fail                                                                                                      |
 | `keyring`   | Whether the operating system's keyring answers a read                                                                                                                                                                                                                                   |
 | `data`      | Whether the data directory is free; held by another Agent process fails                                                                                                                                                                                                                 |
 | `online`    | With `--online`, when the data directory is free: starts the Agent, lists the default Provider's models (the `provider` line), and connects each enabled MCP server (the `mcp` lines)                                                                                                   |

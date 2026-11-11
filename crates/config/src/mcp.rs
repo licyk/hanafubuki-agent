@@ -115,7 +115,7 @@ impl McpSettingsStore {
                 repairs = found;
                 (settings, messages)
             },
-            true,
+            Some(&[]),
         )
         .map_err(McpError::Unavailable)?;
         if !loaded.recorded {

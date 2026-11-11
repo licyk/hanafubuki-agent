@@ -6,6 +6,7 @@ mod event;
 mod goal;
 mod lineage;
 mod reasoning;
+mod scope;
 mod session;
 mod turn;
 mod world_state;
@@ -50,6 +51,10 @@ pub use lineage::{
 };
 pub(crate) use reasoning::AgentReasoningTransitionError;
 pub use reasoning::{AgentReasoningCheckpoint, AgentReasoningPhase, AgentReasoningSnapshot};
+pub use scope::{
+    stricter_permission_mode, AgentCapabilityScope, AgentToolScope, ToolIdentity, ToolPattern,
+    MAX_TOOL_PATTERN_BYTES,
+};
 pub use session::{
     AgentBackgroundCompactionState, AgentBackgroundCompactionThreshold, AgentCompactionStrategy,
     AgentHostContext, AgentPlanImplementationRequest, AgentSessionConfig, AgentSessionForkOutcome,

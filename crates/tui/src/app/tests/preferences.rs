@@ -1,4 +1,5 @@
-//! `/keymap`, `/presets`, `/config`, `/warnings` and `/memories` end to end
+//! `/keymap`, `/presets`, `/config`, `/warnings` (the roles' issues among
+//! them) and `/memories` end to end
 //! over the standalone Agent: driven by keys, with what they saved read
 //! back from `config.toml` and what they changed seen on the screen.
 
@@ -450,6 +451,35 @@ fn warnings_are_merged_counted_deduplicated_and_dismissed() {
     });
     harness.type_and_submit("/warnings");
     harness.pump_until_screen_shows("No warnings.");
+}
+
+#[test]
+fn warnings_list_the_issues_of_the_roles() {
+    let mut harness = Harness::start(Vec::new());
+    let agents = harness.home.path().join("agents");
+    std::fs::create_dir_all(&agents).unwrap();
+    std::fs::write(
+        agents.join("orphan.toml"),
+        "description = \"Lost.\"\nextends = \"nobody\"\n",
+    )
+    .unwrap();
+    // A settings publication reads the roles again.
+    let agent = harness.runtime.slot().agent().unwrap();
+    harness
+        .runtime
+        .slot()
+        .agent()
+        .unwrap()
+        .runtime()
+        .block_on(async move { agent.reload_packages().await })
+        .unwrap()
+        .unwrap();
+
+    let list = harness.open("/warnings", "d dismiss");
+    assert!(
+        list.contains("[roles] Role `orphan`:") && list.contains("which no source defines"),
+        "{list}"
+    );
 }
 
 #[test]

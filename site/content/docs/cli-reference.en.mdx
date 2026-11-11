@@ -153,18 +153,27 @@ A plugin's id is `PLUGIN@MARKETPLACE`. The command line has no `-m` for `--marke
 
 See [Memory](/docs/memory).
 
+## roles [#roles]
+
+| Command           | Does                                                                                                                                                                                                      |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `roles list`      | Lists every role by name: its source and the first line of its description (`(not spawnable)` when it is not), or `unusable:` and why; the issues of reading and resolving the roles go to standard error |
+| `roles show NAME` | Prints the role's source and chain, then each field as the chain resolves it, with the roles that decide it (`[from reader, explorer]`); for an unusable role, why. A name no source defines exits with 1 |
+
+`-p` reads the profile's roles as well. Neither command starts the Agent. See [Roles](/docs/roles).
+
 ## doctor [#doctor]
 
-| Command           | Does                                                                                                                                                                           |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `doctor`          | Checks the configuration, the [sandbox](/docs/permissions#sandbox), the Providers, the MCP servers, the keyring and the data directory, one line each; any `FAIL` exits with 1 |
-| `doctor --online` | Also starts the Agent, lists the default Provider's models, and connects each enabled MCP server                                                                               |
+| Command           | Does                                                                                                                                                                                                     |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `doctor`          | Checks the configuration, the [sandbox](/docs/permissions#sandbox), the Providers, the MCP servers, the [roles](/docs/roles), the keyring and the data directory, one line each; any `FAIL` exits with 1 |
+| `doctor --online` | Also starts the Agent, lists the default Provider's models, and connects each enabled MCP server                                                                                                         |
 
 See [Troubleshooting](/docs/troubleshooting#doctor).
 
 ## Which commands start the Agent [#agent-start]
 
-`config`, `providers list` and `doctor` without `--online` only read and write the configuration: they do not start the Agent, and work while another Agent process runs. The other commands start it, and need the data directory to themselves.
+`config`, `providers list`, `roles` and `doctor` without `--online` only read and write the configuration: they do not start the Agent, and work while another Agent process runs. The other commands start it, and need the data directory to themselves.
 
 Every command reads the configuration first, then installs the crash handler and the log file, before it starts the Agent or changes anything. A management command that starts the Agent also connects the enabled MCP servers in the background, as every start does.
 

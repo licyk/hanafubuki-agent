@@ -1,0 +1,164 @@
+---
+title: 角色
+description: 有名字、可继承、只会收窄 Agent 的工作方式定义——角色文件、[agents] 条目、来源与优先级、extends 与合并规则、内置角色。
+icon: UserCog
+---
+
+角色是 Agent 工作方式的一份有名字的定义：指令、模型、推理强度、权限模式上限，以及它可以使用的工具和插件。角色只会**收窄**它所在的 Agent：它可以拿走工具和插件、收紧权限模式，但绝不增加或放宽任何东西，所以没有哪个角色比实例本身能做的更多。审批规则、你的钩子和沙箱都不受任何角色影响。
+
+角色用 TOML 定义，可以由你、配置档或受信任的项目提供，另有两个内置角色。这个版本会读取、检查并列出角色（`hanafubuki-agent roles`、`doctor`、`/warnings`）；**目前还没有会话以某个角色运行**：为会话和子代理选择角色将在后续版本提供。
+
+## 定义角色 [#define]
+
+角色文件是 `agents/` 目录中的 `.toml` 文件：用户的在 `config.toml` 旁边（Linux 上是 `~/.config/hanafubuki-agent/agents/`），受信任项目的在 `.hanafubuki-agent/agents/`。
+
+```toml
+# ~/.config/hanafubuki-agent/agents/reader.toml
+description = "阅读代码并报告发现；从不编辑文件。"
+extends = "explorer"
+instructions = """
+回答时给出文件路径和行号。
+"""
+model = "gpt-5.4-mini"
+reasoningEffort = "low"
+permissionModeCap = "manual"
+
+[tools]
+allow = ["read_file", "search_text", "list_directory"]
+deny = ["fetch_web_page"]
+
+[plugins]
+off = ["titles", "goal"]
+```
+
+角色名是文件中的 `name` 键，没有时是去掉 `.toml` 的文件名（`reader`）。`agents/` 子目录中的文件也会读取。
+
+## 键 [#keys]
+
+| 键                  | 类型和取值                                                       | 默认值                | 含义                                                                         |
+| ------------------- | ---------------------------------------------------------------- | --------------------- | ---------------------------------------------------------------------------- |
+| `name`              | 角色名                                                           | 文件名（不含扩展名）  | 角色文件中的角色名。`[agents.名字]` 条目以它的键为名                         |
+| `description`       | 文本                                                             | 父角色的              | 角色的用途，将由提供它的引导文字展示。角色必须有描述，自己的或继承来的都可以 |
+| `extends`           | 一个角色的名字                                                   | 无                    | 它所基于的角色（[见下](#extends)）                                           |
+| `instructions`      | 文本                                                             | 无                    | 角色追加到 Agent 指令中的内容                                                |
+| `instructionsMode`  | `"append"` 或 `"replace"`                                        | `"append"`            | 指令是接在所继承角色的指令之后，还是替换它们                                 |
+| `model`             | 模型 id                                                          | 父角色的，否则会话的  | 角色运行的模型                                                               |
+| `reasoningEffort`   | `minimal`、`low`、`medium`、`high`、`xhigh` 或模型接受的其他强度 | 父角色的              | 推理强度                                                                     |
+| `permissionModeCap` | `"manual"`、`"auto_review"` 或 `"full_access"`                   | 无                    | 角色运行时最宽的权限模式；只会收紧                                           |
+| `spawnable`         | `true` 或 `false`                                                | 父角色的，否则 `true` | 子代理能否被赋予这个角色                                                     |
+| `tools.allow`       | [工具模式](#tool-patterns)数组                                   | 父角色允许的全部      | 角色只能使用的工具                                                           |
+| `tools.deny`        | 工具模式数组                                                     | 无                    | 不论 `allow` 怎样写，角色都不能使用的工具                                    |
+| `plugins.off`       | 插件名数组（已安装插件的代码写作 `guest:<id>`）                  | 无                    | 角色的会话不获得其工具和上下文的插件                                         |
+
+角色名为 1 到 128 字节，不含空格、控制字符或 `:`；`:` 留给已安装插件的角色使用（`<插件>:<角色>`）。
+
+## 工具模式 [#tool-patterns]
+
+`tools.allow` 和 `tools.deny` 的每一项是下面之一：
+
+- **工具名**，即模型调用时使用的名字（`read_file`、`mcp__github__list_issues`），其中 `*` 匹配任意一段字符（`mcp__github__*`、`read_*`）；
+- **`plugin:名字`**：插件 `名字` 注册或提供的全部工具（`plugin:web`；已安装插件的代码写作 `plugin:guest:demo@my-mkt`）；
+- **`provider:ID`**：某个工具提供方提供的全部工具，可以用 `*`（`provider:mcp.github`、`provider:plugin.demo.*`）。
+
+不属于以上任何一种的项（空的、含空格的、带其他 `类型:` 前缀的）会被略去，并记一条问题。匹配不到任何工具的模式不是错误：工具会出现也会消失。
+
+## 角色的来源 [#sources]
+
+角色来自以下来源，从低到高。较高来源中的角色会**整体替换**较低来源中的同名角色：较低那个什么都不保留。想在某个角色的基础上修改，请给你的角色另起名字并 `extends` 它。
+
+1. **内置角色**：`default` 和 `explorer`（[见下](#built-in)）。
+2. **用户的**：用户 `agents/` 中的角色文件，以及用户 `config.toml` 中的 `[agents]` 条目。
+3. **配置档的**：`-p 名字` 选择的配置档中的 `[profiles.名字.agents]` 条目。
+4. **受信任项目的**：`.hanafubuki-agent/agents/` 中的角色文件，以及 `.hanafubuki-agent/config.toml` 中的 `[agents]` 条目；只有用户的 `config.toml` 信任该项目时才读取（[项目配置](/docs/config-layers#projects)）。
+
+同一来源中，先是 `[agents]` 条目（按名字），再是角色文件（按路径）。两者定义了同一个名字时，前一个保留这个名字，另一个被忽略并记一条问题。不可用的角色依然占有它的名字：它不会让较低来源的同名角色顶上来。
+
+嵌入应用的配置只有用户这一个来源：它的 `agents/` 和 `[agents]`。
+
+## config.toml 中的条目 [#inline]
+
+角色也可以写在任意一层的 `config.toml` 中，而不是单独的文件，键相同：
+
+```toml
+[agents.reviewer]
+description = "审查一处改动并列出发现的问题。"
+extends = "explorer"
+reasoningEffort = "high"
+
+[agents.reader]
+configFile = "agents/reader.toml"
+model = "gpt-5.4"
+```
+
+`configFile`（Codex 的 `config_file`）指向一个角色文件，路径相对于写着它的 `config.toml` 所在的文件夹：条目的键覆盖在文件的键之上读取，条目的键名就是角色名。这个文件归这个条目所有，目录不会再读一遍。读不了的 `configFile` 会让角色不可用。
+
+`[agents]` 不是设置：`config get` 和 `config set` 不处理它，`-c agents.…` 覆盖是未知的键。
+
+## extends 与合并 [#extends]
+
+`extends` 指定一个父角色，按名字在应用优先级之后的所有来源的角色中查找。一条继承链最多包含 8 个角色（角色本身和它继承的角色）。父角色不存在或不可用、继承链成环（包括继承自己）或长于 8 的角色是不可用的，并说明原因；它从不悄悄退回到别的东西。
+
+继承链从根到角色逐字段合并，每条规则都只会收窄：
+
+| 字段                                                   | 规则                                                                                                           |
+| ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------- |
+| `description`、`model`、`reasoningEffort`、`spawnable` | 角色设置了就用角色的，否则用父角色的                                                                           |
+| `instructions`                                         | `append`：父角色的、一个空行、再接角色的。`replace`：只用角色自己的（它没有就没有）                            |
+| `permissionModeCap`                                    | 两者中更严格的：`manual`，其次 `auto_review`，再次 `full_access`                                               |
+| `tools.allow`                                          | 工具必须被链上每一个设置了 `allow` 的角色允许：角色自己的列表不会加入父角色排除的工具。没有 `allow` 即父角色的 |
+| `tools.deny`、`plugins.off`                            | 所有角色的合在一起                                                                                             |
+
+因此角色可以用 `deny` 去掉任意一个继承来的工具，而 allow 列表只会收窄父角色允许的范围：`explorer` 的子角色写 `allow = ["read_*"]`，就只能使用 `read_file`。
+
+## 内置角色 [#built-in]
+
+| 角色       | 收窄的内容                                                                                                | 可派生 |
+| ---------- | --------------------------------------------------------------------------------------------------------- | ------ |
+| `default`  | 什么都不收窄：即按配置运行的 Agent。没有指定角色的会话就是这个角色                                        | 是     |
+| `explorer` | 它的工具：只有 `list_directory`、`search_text`、`read_file`、`view_image`、`web_search`、`fetch_web_page` | 是     |
+
+`explorer` 的描述改编自 Codex：explorer 回答关于代码库的具体问题，其结果直接采信而不必再核对，彼此独立的问题可以并行交给多个 explorer。你自己名为 `default` 或 `explorer` 的角色会替换内置的那个。
+
+## Codex 角色文件 [#codex]
+
+Codex 的角色文件放进 `agents/` 无需修改即可使用：它的 `developer_instructions`、`model` 和 `model_reasoning_effort` 分别作为 `instructions`、`model` 和 `reasoningEffort` 读取。一个键和它的 Codex 名字同时设置时使用我们的，并记一条问题。其他 Codex 键（`sandbox_mode`、`nickname_candidates` 等）在这里是整个 Agent 的设置，因此被忽略，各记一条问题。Codex 的 `[agents]` 设置（`max_threads` 之类）不是角色，被忽略并记一条问题。
+
+## 无法使用的内容 [#issues]
+
+角色文件是你写的配置，因此宽容地读取，并且从不改写：
+
+- 每个键单独读取。类型错误的键（例如 `model` 写成数字）会被略去并记一条问题，改用父角色的值或默认值。未知的键被忽略并记一条问题。
+- `tools.allow`、`tools.deny` 或 `plugins.off` 中不是文本的数组项会被单独略去，这只会让列表变窄，不会变宽。
+- 起收窄作用、却完全读不出来的键（不是名字的 `extends`、不是权限模式的 `permissionModeCap`、不是表的 `tools` 或 `plugins`、不是数组的 `allow`、`deny` 或 `off`）会让角色**不可用**：略去它会允许比角色写明的更多。
+- 不是有效 TOML 的文件，作为以其文件名命名的不可用角色列出；文件名无法作为角色名的文件被忽略并记一条问题。
+- 没有描述（自己的或继承来的）的角色不可用。
+
+这些问题以及不可用的角色和原因，会显示在 `hanafubuki-agent roles list`（标准错误）、[`doctor`](/docs/troubleshooting#doctor) 的 `roles` 行，以及终端界面 [`/warnings`](/docs/terminal-interface#warnings) 的 **roles** 来源下。无法使用的角色从不会让 Agent 停止。
+
+## 查看角色 [#inspect]
+
+```sh
+hanafubuki-agent roles list
+hanafubuki-agent roles show reader
+hanafubuki-agent -p review roles show reader   # 带上配置档的角色
+```
+
+```text
+reader  user file /home/me/.config/hanafubuki-agent/agents/reader.toml
+chain: reader (user file /home/me/.config/hanafubuki-agent/agents/reader.toml) → explorer (built-in)
+description: 阅读代码并报告发现；从不编辑文件。  [from reader]
+instructions: 回答时给出文件路径和行号。  [from reader]
+model: gpt-5.4-mini  [from reader]
+reasoningEffort: low  [from reader]
+spawnable: true  [from explorer]
+permissionModeCap: manual  [from reader]
+tools.allow: every one of [list_directory, read_file, search_text] and [fetch_web_page, list_directory, read_file, search_text, view_image, web_search]  [from reader, explorer]
+tools.deny: fetch_web_page  [from reader]
+plugins.off: goal, titles  [from reader]
+```
+
+`roles show` 按继承链解析后的结果打印每个字段，以及链上决定它的角色，最近的在前。两个命令都不会启动 Agent（[命令行参考](/docs/cli-reference#roles)）。
+
+## 何时读取角色 [#reload]
+
+运行中的 Agent 在启动时读取角色，之后每次重新加载已安装插件时再读一次，而它自己每次写入设置后都会重新加载。手动编辑的角色文件在那时生效，或者在下次启动时生效；`roles list`、`roles show` 和 `doctor` 每次运行都会读取这些文件。

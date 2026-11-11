@@ -127,6 +127,10 @@ pub(crate) enum Command {
     /// Shows and resets the memory.
     #[command(subcommand)]
     Memory(MemoryCommand),
+    /// Lists and shows the roles: the built-in ones, the user's, the
+    /// profile's and a trusted project's.
+    #[command(subcommand)]
+    Roles(RolesCommand),
     /// Checks the configuration, the Providers, the data directory, the
     /// keyring and the MCP servers.
     Doctor {
@@ -296,6 +300,16 @@ pub(crate) enum MemoryCommand {
     Status,
     /// Forgets everything the memory holds.
     Reset,
+}
+
+#[derive(Debug, Subcommand)]
+pub(crate) enum RolesCommand {
+    /// Lists every role: its name, source and description, or why it is
+    /// not usable; the issues go to standard error.
+    List,
+    /// Shows a role's effective fields, each with the roles of its chain
+    /// that set it.
+    Show { name: String },
 }
 
 #[derive(Debug, Subcommand)]

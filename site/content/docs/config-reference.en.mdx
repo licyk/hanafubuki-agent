@@ -204,6 +204,18 @@ defaultWaitSeconds = 60
 
 The table merges across the layers per plugin and key, as `[plugins]` merges per entry: a key a layer sets replaces the one below, and the other keys stay. Each key is read on its own: a value of the wrong type, or a text that does not fit, takes the option's default; an integer out of range is clamped to it; either is a warning that names the layer, the plugin and the key (`/warnings`, and the plugin's options in `/plugins`). A key the plugin does not take is kept in the file and ignored, with a warning; a table whose plugin has no options means nothing, as an unknown name in `disabledPlugins` does. A write is strict: `config set pluginOptions.NAME.KEY VALUE`, the options form and `set_plugin_options` check every value against the plugin's options and refuse one that does not fit, with the reason, before anything is written; `config get pluginOptions.NAME.KEY` prints the value the layers resolve, the default when nothing sets it. A profile's or a project's `pluginOptions` is written by hand. A change the Agent writes applies at once: `subagents` takes a new running-agent limit in place and starts again for new wait bounds, and the sub-agents it runs keep running. The `web` plugin's settings stay `webSearchProvider`, `searxngBaseUrl` and `webFetchUseJinaReader` (above), which the network form shares.
 
+### Roles [#agents]
+
+The [roles](/docs/roles) a layer defines, by name: `[agents.NAME]`, with the keys of a role file ([Keys](/docs/roles#keys)).
+
+| Key                       | Type and values                        | Means                                                                                                                    |
+| ------------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `agents.NAME`             | A table of a role's keys               | The role `NAME`                                                                                                          |
+| `agents.NAME.configFile`  | A path, relative to this file's folder | A role file whose keys the entry's are read over (Codex's `config_file`); the file is then not read again from `agents/` |
+| `profiles.PROFILE.agents` | A table of roles, as `agents`          | The roles of the profile `PROFILE`                                                                                       |
+
+The user's file, its profiles and a trusted project's file may each have them. They do not merge across layers: a role of a higher layer replaces the one below whole ([Where roles come from](/docs/roles#sources)). They are not settings: `config get` and `config set` do not reach them, a `-c agents.…` override is an unknown key, and what cannot be used in them is an issue of the roles (`roles list`, `doctor`, `/warnings`), never a repair of the file.
+
 ## providers.toml [#providers-toml]
 
 `providers.toml` has no layers and is readable by its owner only. The `providers` commands usually change it; `/providers` in the terminal interface edits a Provider and, with `p` or `/providers policy`, the shared model policy; it can also be edited by hand. Quit any running Agent before you edit it.

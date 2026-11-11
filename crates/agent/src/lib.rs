@@ -34,6 +34,7 @@ pub mod panic {
     };
 }
 mod plugins;
+mod roles;
 /// The sandbox of the commands the model runs. A program that starts the
 /// Agent calls [`sandbox::helper_dispatch`] first in its `main`, before any
 /// thread starts: a sandboxed command re-executes that program as the
@@ -116,6 +117,10 @@ pub use plugins::{
     AgentReviewLineRange, AgentReviewOutput, AgentReviewTarget, AgentReviewTargets,
     AgentSubagentState, AgentSubagentStatus, MAXIMUM_GOAL_OBJECTIVE_CHARS,
 };
+pub use roles::{
+    AgentResolvedRole, AgentRoleCatalog, AgentRoleIssue, AgentRoleLink, AgentRoleSource,
+    AgentUnusableRole, DEFAULT_ROLE, EXPLORER_ROLE, MAX_ROLE_CHAIN,
+};
 pub use service::{
     AgentApplicationService, AgentEditFromTurn, AgentHook, AgentHookHandler, AgentHooks,
     AgentHostPorts, AgentModelPolicyWriteRequest, AgentProviderDeleteRequest, AgentProviderDraft,
@@ -179,13 +184,14 @@ pub use hanafubuki_agent_config::{
     AgentSettingsPatch, AgentStandaloneSettings, AgentStandaloneSettingsPatch, AgentTuiPreferences,
     AgentTuiPreferencesPatch, AgentTuiPreset, AgentTurnBudgetSettings, AgentWebSearchProvider,
     AgentWindowsSandbox, AgentWindowsSettings, ConfigLayerSource, ConfigLayers, ConfigOverrides,
-    PluginOption, PluginOptionKey, PluginOptionKind, PluginOptionSchema, PluginOptionValue,
-    PluginOptionsSettings, ResolvedPluginOption, ResolvedPluginOptions, AGENT_CREDENTIAL_FILES,
-    AGENT_HOME_ENV, AGENT_MCP_FILE, AGENT_PROVIDERS_FILE, AGENT_SETTINGS_FILE,
-    MAX_AGENT_CONSECUTIVE_STALLED_STEPS, MAX_AGENT_CUMULATIVE_MODEL_INPUT_TOKENS,
-    MAX_AGENT_CUMULATIVE_MODEL_OUTPUT_TOKENS, MAX_AGENT_HOOK_FRAGMENT_BYTES,
-    MAX_AGENT_IDLE_TIMEOUT_SECONDS, MAX_AGENT_IN_FLIGHT_TOOLS, MAX_AGENT_PENDING_INPUT_ITEMS,
-    MAX_AGENT_TOOL_INVOCATIONS, MAX_AGENT_TOOL_OUTPUT_BYTES, MAX_PLUGIN_OPTIONS,
+    InstructionsMode, PluginOption, PluginOptionKey, PluginOptionKind, PluginOptionSchema,
+    PluginOptionValue, PluginOptionsSettings, ResolvedPluginOption, ResolvedPluginOptions,
+    RoleLayer, RoleOrigin, AGENT_CREDENTIAL_FILES, AGENT_HOME_ENV, AGENT_MCP_FILE,
+    AGENT_PROVIDERS_FILE, AGENT_SETTINGS_FILE, MAX_AGENT_CONSECUTIVE_STALLED_STEPS,
+    MAX_AGENT_CUMULATIVE_MODEL_INPUT_TOKENS, MAX_AGENT_CUMULATIVE_MODEL_OUTPUT_TOKENS,
+    MAX_AGENT_HOOK_FRAGMENT_BYTES, MAX_AGENT_IDLE_TIMEOUT_SECONDS, MAX_AGENT_IN_FLIGHT_TOOLS,
+    MAX_AGENT_PENDING_INPUT_ITEMS, MAX_AGENT_TOOL_INVOCATIONS, MAX_AGENT_TOOL_OUTPUT_BYTES,
+    MAX_PLUGIN_OPTIONS,
 };
 pub use hanafubuki_agent_execution::{
     AgentBackgroundTerminalSnapshot, AgentBackgroundTerminalStopFailure,
@@ -213,6 +219,10 @@ pub use hanafubuki_agent_kernel::{
     AgentUserInputRequest, AgentUserInputRequestId, ApprovalRequest, ApprovalRequestId,
     ApprovalUserDecision, ConfirmedAgentSessionDeletion, ConversationItem, ModelCatalogEntry,
     MAXIMUM_HOST_CONTEXT_BYTES,
+};
+/// What a role narrows (`AgentResolvedRole::scope`).
+pub use hanafubuki_agent_kernel::{
+    AgentCapabilityScope, AgentToolScope, ToolIdentity, ToolPattern,
 };
 pub use hanafubuki_agent_kernel::{AgentQuarantinedSession, AgentRecoveryReport};
 use hanafubuki_agent_kernel::{AgentService, ModelCompactionCapability};
