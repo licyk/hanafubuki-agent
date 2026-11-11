@@ -14,6 +14,8 @@ A host plugin lives in the host's own crate (Hanafubuki: `hanafubuki-agent-integ
 AgentPluginRow::unconfigured(AgentPluginGroup::Capability, app_info_plugin())
 ```
 
+Each row is paired with its descriptor in `AgentHostPorts::plugins`, `(row, AgentPluginDescriptor::new("app-info", "What My App is"))`: its name, as the `PluginDef` names it, and a summary of what it gives the model or the user. A row with tunables can take options as the Agent's own plugins do ([Plugin rows](/docs/embedding#plugin-rows)).
+
 The `Capability` group holds tools, tool sources and their approval rules; the `Context` group holds world-state sections. A host's rows mount after the Agent's capability plugins and before its context plugins, one after another, each once the previous one settled or timed out (20 s). The dependencies are in [Embedding the Agent](/docs/embedding#adding-the-crates).
 
 ## The shape of a plugin [#the-shape-of-a-plugin]

@@ -89,6 +89,29 @@ impl AgentApplicationService {
         Ok(settings)
     }
 
+    /// Writes `patch` into the options of the plugin `name`
+    /// (`[pluginOptions.<name>]` of the user's `config.toml`), each value
+    /// checked against its descriptor's schema before anything is written
+    /// (`null` returns an option to its default), then applies the settings
+    /// to the plugins: a plugin that takes the change in place keeps
+    /// running, another restarts. Returns the persisted settings.
+    pub async fn set_plugin_options(
+        &self,
+        name: String,
+        patch: serde_json::Map<String, serde_json::Value>,
+    ) -> Result<AgentSettings, String> {
+        let schema = self.host.option_schema(&name)?;
+        let config = self.config.clone();
+        let settings = hanafubuki_agent_foundation::blocking::run_blocking_operation(
+            self.blocking.as_ref(),
+            "agent plugin options write worker",
+            move || config.set_plugin_options(&name, &schema, &patch),
+        )
+        .await??;
+        self.apply_settings_to_plugins();
+        Ok(settings)
+    }
+
     /// The Agent's settings, with their defaults and the settings page's
     /// form for the web tools.
     pub async fn settings_view(&self) -> Result<AgentSettingsView, String> {

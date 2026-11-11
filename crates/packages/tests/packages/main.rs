@@ -15,6 +15,7 @@ use hanafubuki_agent_process::executor::ExecutorManager;
 mod lifecycle;
 mod manifest;
 mod marketplace;
+mod options;
 mod probe;
 mod settings;
 mod store;

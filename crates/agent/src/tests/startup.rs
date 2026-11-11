@@ -49,7 +49,10 @@ pub(super) fn unrecovered_with(
     paths: &TestPaths,
     storage: AgentStoragePaths,
     config: AgentConfig,
-    extra: Vec<super::host::AgentPluginRow>,
+    extra: Vec<(
+        super::host::AgentPluginRow,
+        super::host::AgentPluginDescriptor,
+    )>,
 ) -> AgentConstructor {
     let paths = paths.clone();
     // The extra rows go to the first instance; later ones run without them.
@@ -641,8 +644,13 @@ fn shutdown_cancels_an_mcp_connect_under_way_and_leaves_no_process() {
 }
 
 /// A plugin whose start never returns; `entered` is set once it began.
-fn never_starting_plugin(entered: Arc<AtomicBool>) -> super::host::AgentPluginRow {
-    super::host::AgentPluginRow::unconfigured(
+fn never_starting_plugin(
+    entered: Arc<AtomicBool>,
+) -> (
+    super::host::AgentPluginRow,
+    super::host::AgentPluginDescriptor,
+) {
+    let row = super::host::AgentPluginRow::unconfigured(
         AgentPluginGroup::Capability,
         kardia_core::PluginDef::new(move |_, _| {
             let entered = entered.clone();
@@ -652,6 +660,10 @@ fn never_starting_plugin(entered: Arc<AtomicBool>) -> super::host::AgentPluginRo
             }
         })
         .name("never-starts"),
+    );
+    (
+        row,
+        super::host::AgentPluginDescriptor::new("never-starts", "a test plugin"),
     )
 }
 
@@ -719,6 +731,10 @@ fn a_plugin_that_never_stops_does_not_hold_shutdown_past_its_budget() {
             Ok(())
         })
         .name("never-stops"),
+    );
+    let stuck = (
+        stuck,
+        super::host::AgentPluginDescriptor::new("never-stops", "a test plugin"),
     );
     let slot = AgentSlot::new(None, Arc::new(NoopAgentStatusEventSink));
     let marker = marker(&paths);

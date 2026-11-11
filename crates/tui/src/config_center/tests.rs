@@ -106,3 +106,76 @@ fn leaves_of(value: &Value, prefix: &str, leaves: &mut Vec<String>) {
         Value::Null => leaves.push(prefix.to_string()),
     }
 }
+
+/// The generic editor covers every option of every descriptor: each has
+/// its field, an untouched form saves nothing, and an edited field saves
+/// what the write checks.
+#[test]
+fn every_option_of_every_descriptor_has_the_generic_editor() {
+    use hanafubuki_agent::{agent_plugin_descriptors, ResolvedPluginOption};
+    use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+    let mut described = 0;
+    for descriptor in agent_plugin_descriptors() {
+        let Some(schema) = descriptor.options else {
+            continue;
+        };
+        let values = schema
+            .options
+            .iter()
+            .map(|option| ResolvedPluginOption {
+                key: option.key.clone(),
+                value: option.default.clone(),
+                layer: None,
+            })
+            .collect::<Vec<_>>();
+        let mut form = super::options_form(descriptor.name, &schema, &values);
+        for index in 0..schema.options.len() {
+            let id = super::options::option_field(index);
+            form.set_error(id, "probe");
+            assert_eq!(
+                form.error(id),
+                Some("probe"),
+                "{}",
+                schema.options[index].key
+            );
+            described += 1;
+        }
+        assert_eq!(
+            super::changed_options(&mut form, &schema, &values),
+            Some(serde_json::Map::new())
+        );
+    }
+    assert_eq!(described, 4, "the subagents options");
+
+    let schema = agent_plugin_descriptors()
+        .into_iter()
+        .find_map(|descriptor| descriptor.options)
+        .unwrap();
+    let values = schema
+        .options
+        .iter()
+        .map(|option| ResolvedPluginOption {
+            key: option.key.clone(),
+            value: option.default.clone(),
+            layer: None,
+        })
+        .collect::<Vec<_>>();
+    let mut form = super::options_form("subagents", &schema, &values);
+    let key = |code| KeyEvent::new(code, KeyModifiers::NONE);
+    form.handle_key(key(KeyCode::Backspace));
+    form.handle_key(key(KeyCode::Char('5')));
+    assert_eq!(
+        super::changed_options(&mut form, &schema, &values),
+        Some(serde_json::Map::from_iter([(
+            "maximumRunningAgents".to_string(),
+            serde_json::json!(5)
+        )]))
+    );
+    form.handle_key(key(KeyCode::Char('0')));
+    assert_eq!(super::changed_options(&mut form, &schema, &values), None);
+    assert_eq!(
+        form.error(super::options::option_field(0)),
+        Some("`maximumRunningAgents` is between 1 and 16")
+    );
+}

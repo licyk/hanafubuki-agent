@@ -14,7 +14,8 @@ use ratatui::style::Stylize;
 use ratatui::text::Line;
 use ratatui::widgets::{Paragraph, Widget};
 
-use super::pages::{self, After, Choice, Page, PageView, Prompt, Tab};
+use super::options;
+use super::pages::{self, After, Choice, OptionsOf, Page, PageView, Prompt, Tab};
 use crate::agent_bridge::{PluginsCall, PluginsDone, PluginsReply, PluginsState};
 use crate::app_event::{AgentCommand, AppEvent, AppEventSender, Op};
 use crate::bottom_pane::{
@@ -104,6 +105,13 @@ impl PluginsBrowser {
             self.list = None;
             return;
         }
+        if let Page::Options(target) = &self.page {
+            if let Some(form) = options::form(state, target) {
+                self.form = Some(form);
+                self.list = None;
+                return;
+            }
+        }
         let Some(view) = page_view(state, &self.page) else {
             let tab = self.tab();
             self.back.clear();
@@ -187,6 +195,19 @@ impl PluginsBrowser {
                     self.choose(choice.clone());
                 }
             }
+            (Tab::Installed, KeyCode::Char('o')) if plain => {
+                if let Some(target) = self.selected_package().and_then(options::of_package) {
+                    self.open(Page::Options(target));
+                }
+            }
+            (Tab::BuiltIn, KeyCode::Char('o')) if plain => {
+                let target = self.selected().and_then(|index| {
+                    options::of_builtin(self.state.as_ref()?.builtins.get(index)?)
+                });
+                if let Some(target) = target {
+                    self.open(Page::Options(target));
+                }
+            }
             (Tab::BuiltIn, KeyCode::Char('r')) if plain => {
                 let name = self.selected().and_then(|index| {
                     let state = self.state.as_ref()?;
@@ -244,6 +265,23 @@ impl PluginsBrowser {
                 form.set_status(vec![busy.dim().into()]);
                 self.send(call);
                 self.pending = Some(After::Stay);
+            }
+            FormEvent::None => {}
+        }
+    }
+
+    fn handle_options_key(&mut self, target: OptionsOf, key: KeyEvent) {
+        let (Some(form), Some(state)) = (self.form.as_mut(), self.state.as_ref()) else {
+            return;
+        };
+        match form.handle_key(key) {
+            FormEvent::Cancel => self.go_back(),
+            FormEvent::Action(_) => {
+                if let Some(call) = options::save(form, state, &target) {
+                    form.set_status(vec!["Saving…".dim().into()]);
+                    self.send(call);
+                    self.pending = Some(After::Stay);
+                }
             }
             FormEvent::None => {}
         }
@@ -312,8 +350,8 @@ impl PluginsBrowser {
                         self.show(Page::Tab(tab), None);
                     }
                     Some(After::Stay) => match &self.page {
-                        // A typed source that worked leads back to its tab.
-                        Page::Prompt(_) => self.go_back(),
+                        // A typed source or options that worked lead back.
+                        Page::Prompt(_) | Page::Options(_) => self.go_back(),
                         Page::TrustHooks { id, .. } => {
                             let page = Page::Package(id.clone());
                             self.show(page, Some(0));
@@ -330,7 +368,9 @@ impl PluginsBrowser {
                 if self.state.is_none() {
                     self.state = Some(PluginsState::default());
                 }
-                if let (Some(form), Page::Prompt(_)) = (self.form.as_mut(), &self.page) {
+                if let (Some(form), Page::Prompt(_) | Page::Options(_)) =
+                    (self.form.as_mut(), &self.page)
+                {
                     form.set_status(vec![error.red().into()]);
                     return;
                 }
@@ -348,6 +388,9 @@ impl BottomPaneView for PluginsBrowser {
         }
         if let Page::Prompt(prompt) = self.page {
             return self.handle_form_key(prompt, key);
+        }
+        if let (Page::Options(target), Some(_)) = (&self.page, &self.form) {
+            return self.handle_options_key(target.clone(), key);
         }
         if self.list.is_none() {
             self.done = key.code == KeyCode::Esc;
@@ -459,7 +502,7 @@ fn page_view(state: &PluginsState, page: &Page) -> Option<PageView> {
             pages::confirm_remove_marketplace(&marketplace(name)?.name)
         }
         Page::TrustHooks { id, hooks } => pages::trust_hooks_page(id, hooks),
-        Page::Prompt(_) => return None,
+        Page::Prompt(_) | Page::Options(_) => return None,
     })
 }
 

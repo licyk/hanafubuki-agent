@@ -10,13 +10,16 @@ use super::{
     AgentWebSearchProvider, AgentWindowsSettings, MAX_AGENT_DISABLED_PLUGINS,
 };
 use crate::fields::{read_member, read_object, FieldRead, Fields};
+use crate::plugin_options::decode_plugin_options;
 
 /// The settings `object` holds; a missing or invalid field takes its value
 /// in `defaults` (the defaults, or the layer below in a layered
-/// configuration).
+/// configuration). `layer` names the layer `object` is, which each plugin
+/// option it sets remembers.
 pub(crate) fn decode_settings(
     object: &Map<String, Value>,
     defaults: &AgentSettings,
+    layer: &str,
     repairs: &mut Vec<String>,
 ) -> AgentSettings {
     let mut fields = Fields::new(object, repairs);
@@ -51,6 +54,7 @@ pub(crate) fn decode_settings(
     );
     let plugins = decode_plugins(&mut fields, &defaults.plugins);
     let marketplaces = decode_marketplaces(&mut fields, &defaults.marketplaces);
+    let plugin_options = decode_plugin_options(&mut fields, &defaults.plugin_options, layer);
     AgentSettings {
         permission_mode,
         sandbox_mode,
@@ -64,6 +68,7 @@ pub(crate) fn decode_settings(
         compaction,
         plugins,
         marketplaces,
+        plugin_options,
     }
 }
 

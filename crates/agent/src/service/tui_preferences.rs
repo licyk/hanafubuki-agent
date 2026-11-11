@@ -8,6 +8,7 @@ use hanafubuki_agent_config::{
 };
 
 use super::AgentApplicationService;
+use crate::host::AgentHost;
 
 /// The standalone settings the terminal interface shows around its Agent
 /// settings. Embedded hosts have no use for this view: they supply the
@@ -20,11 +21,15 @@ pub struct AgentStandaloneSettingsView {
 }
 
 impl AgentStandaloneSettingsView {
-    fn of(config: &hanafubuki_agent_config::AgentConfig) -> Result<Self, String> {
+    /// The view of `config`, whose warnings include the plugin options
+    /// `host`'s rows cannot use.
+    fn of(config: &hanafubuki_agent_config::AgentConfig, host: &AgentHost) -> Result<Self, String> {
+        let mut warnings = config.layer_warnings()?;
+        warnings.extend(host.option_issues(&config.settings()?));
         Ok(Self {
             settings: config.standalone_settings()?,
             layers: config.layer_sources()?,
-            warnings: config.layer_warnings()?,
+            warnings,
         })
     }
 }
@@ -45,10 +50,11 @@ impl AgentApplicationService {
     /// interface's configuration center shows.
     pub async fn standalone_settings_view(&self) -> Result<AgentStandaloneSettingsView, String> {
         let config = self.config.clone();
+        let host = self.host.clone();
         hanafubuki_agent_foundation::blocking::run_blocking_operation(
             self.blocking.as_ref(),
             "agent standalone settings read worker",
-            move || AgentStandaloneSettingsView::of(&config),
+            move || AgentStandaloneSettingsView::of(&config, &host),
         )
         .await?
     }
@@ -60,12 +66,13 @@ impl AgentApplicationService {
         patch: AgentStandaloneSettingsPatch,
     ) -> Result<AgentStandaloneSettingsView, String> {
         let config = self.config.clone();
+        let host = self.host.clone();
         let written = hanafubuki_agent_foundation::blocking::run_blocking_operation(
             self.blocking.as_ref(),
             "agent standalone settings write worker",
             move || {
                 config.write_standalone_settings(patch)?;
-                AgentStandaloneSettingsView::of(&config)
+                AgentStandaloneSettingsView::of(&config, &host)
             },
         )
         .await??;

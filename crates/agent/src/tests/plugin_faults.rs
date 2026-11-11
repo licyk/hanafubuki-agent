@@ -380,6 +380,17 @@ fn healthy_plugin(observer: Arc<HealthyObserver>) -> PluginDef {
     )
 }
 
+/// A test plugin's row, with its descriptor.
+fn described(
+    name: &'static str,
+    plugin: PluginDef,
+) -> (AgentPluginRow, super::host::AgentPluginDescriptor) {
+    (
+        AgentPluginRow::unconfigured(AgentPluginGroup::Capability, plugin),
+        super::host::AgentPluginDescriptor::new(name, "a test plugin"),
+    )
+}
+
 /// A service over `server` with the application's plugins, `faulty` and
 /// `healthy`, a session, and the plugins started.
 struct Fixture {
@@ -408,14 +419,8 @@ impl Fixture {
                 state_file: paths.data_dir.join("agent-test/skills-state.json"),
             },
             vec![
-                AgentPluginRow::unconfigured(
-                    AgentPluginGroup::Capability,
-                    faulty_plugin(plan.clone()),
-                ),
-                AgentPluginRow::unconfigured(
-                    AgentPluginGroup::Capability,
-                    healthy_plugin(healthy.clone()),
-                ),
+                described("faulty", faulty_plugin(plan.clone())),
+                described("healthy", healthy_plugin(healthy.clone())),
             ],
         )
         .unwrap();
@@ -822,7 +827,6 @@ async fn a_plugin_registering_a_taken_tool_name_fails_alone() {
     let config = AgentConfig::new(&paths.config_dir);
     configure_test_provider(&config, &server.base_url, None);
     let healthy = Arc::new(HealthyObserver::default());
-    let row = |plugin| AgentPluginRow::unconfigured(AgentPluginGroup::Capability, plugin);
     let service = AgentApplicationService::new_with_test_plugins(
         &paths,
         config,
@@ -834,10 +838,10 @@ async fn a_plugin_registering_a_taken_tool_name_fails_alone() {
             state_file: paths.data_dir.join("agent-test/skills-state.json"),
         },
         vec![
-            row(healthy_plugin(healthy.clone())),
-            row(squatting_plugin("searcher", "tool_search")),
-            row(squatting_plugin("planner", "update_plan")),
-            row(squatting_plugin("copycat", "healthy_tool")),
+            described("healthy", healthy_plugin(healthy.clone())),
+            described("searcher", squatting_plugin("searcher", "tool_search")),
+            described("planner", squatting_plugin("planner", "update_plan")),
+            described("copycat", squatting_plugin("copycat", "healthy_tool")),
         ],
     )
     .unwrap();

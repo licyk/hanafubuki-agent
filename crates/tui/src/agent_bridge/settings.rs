@@ -72,11 +72,13 @@ impl Warning {
 }
 
 /// Everything `/config`'s center shows: the Agent's settings and defaults,
-/// the standalone settings, and the layers and warnings around them. The
-/// proxy is left out of `Debug`, since it may hold credentials.
+/// the standalone settings, the built-in plugins that have options, and the
+/// layers and warnings around them. The proxy is left out of `Debug`, since
+/// it may hold credentials.
 pub(crate) struct ConfigState {
     pub(crate) agent: AgentSettingsView,
     pub(crate) standalone: AgentStandaloneSettings,
+    pub(crate) plugins: Vec<hanafubuki_agent::AgentPluginStatus>,
     pub(crate) layers: Vec<ConfigLayerSource>,
     pub(crate) warnings: Vec<String>,
 }
@@ -183,9 +185,32 @@ impl AgentBridge {
         Ok(ConfigState {
             agent: agent?,
             standalone: standalone.settings,
+            plugins: self.optioned_plugins(),
             layers: standalone.layers,
             warnings: standalone.warnings,
         })
+    }
+
+    /// The built-in plugins that have options, with them.
+    fn optioned_plugins(&self) -> Vec<hanafubuki_agent::AgentPluginStatus> {
+        let mut plugins = self.agent.plugin_status();
+        plugins.retain(|plugin| plugin.options.is_some());
+        plugins
+    }
+
+    /// Saves the options a plugin's form changed, applies them to the
+    /// plugins, and returns the center's refreshed state.
+    pub(crate) fn write_plugin_options(
+        &self,
+        row: String,
+        options: serde_json::Map<String, serde_json::Value>,
+    ) -> Result<ConfigState, String> {
+        let call = self.agent.clone();
+        self.agent
+            .runtime()
+            .block_on(async move { call.set_plugin_options(row, options).await })
+            .map_err(|failure| failure.to_string())??;
+        self.config_state()
     }
 
     fn config_state_agent(&self) -> Result<AgentSettingsView, String> {
@@ -225,6 +250,7 @@ impl AgentBridge {
         Ok(ConfigState {
             agent: self.config_state_agent()?,
             standalone: written.settings,
+            plugins: self.optioned_plugins(),
             layers: written.layers,
             warnings: written.warnings,
         })

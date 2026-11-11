@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use hanafubuki_agent_mcp::McpSettings;
 use hanafubuki_agent_packages::{
-    validate_marketplace_name, MarketplaceRecord, PluginId, PluginSettings,
+    validate_marketplace_name, MarketplaceRecord, PluginId, PluginOptionSchema, PluginSettings,
 };
 use parking_lot::Mutex;
 use serde::Serialize;
@@ -13,9 +13,10 @@ use serde_json::{Map, Value};
 
 use crate::fields::unknown_keys;
 use crate::file::{ConfigFile, FileAccess, FileRead};
-use crate::keys::{self, KeyTarget};
+use crate::keys::{self, KeyTarget, PLUGIN_OPTIONS};
 use crate::layers::Resolved;
 use crate::overrides::parse_value;
+use crate::plugin_options::checked_patch;
 use crate::providers::{decode_registry, validate_agent_provider_registry};
 use crate::recovery::{AgentConfigProblem, AgentConfigRecovery};
 use crate::settings::{decode_settings, validate_disabled_plugins};
@@ -230,6 +231,24 @@ impl AgentConfig {
         }
     }
 
+    /// Writes `patch` into the plugin `row`'s options
+    /// (`[pluginOptions.<row>]`) of the user's `config.toml`: each value is
+    /// checked against `schema` first, and the write refused with the
+    /// reason when one does not fit, before anything is written. A `null`
+    /// removes its key, which returns the option to its default; the keys
+    /// `patch` leaves out stay as written. Returns the settings as the
+    /// layers now resolve them: a layer above the user's file may still
+    /// set the option.
+    pub fn set_plugin_options(
+        &self,
+        row: &str,
+        schema: &PluginOptionSchema,
+        patch: &Map<String, Value>,
+    ) -> Result<AgentSettings, String> {
+        let patch = checked_patch(row, schema, patch)?;
+        self.write_entry(&[PLUGIN_OPTIONS.to_string(), row.to_string()], Some(&patch))
+    }
+
     /// Writes the `[marketplaces]` record of `name`, or removes it
     /// (`None`), as [`Self::set_package_settings`] does.
     pub fn set_marketplace(
@@ -299,6 +318,7 @@ impl AgentConfig {
     /// of the file stays as written.
     pub fn set_user_value(&self, key: &str, raw: &str) -> Result<(), String> {
         let path = keys::parse_key(key)?;
+        keys::refuse_plugin_option(key, &path)?;
         let value = serde_json::to_value(parse_value(raw))
             .map_err(|error| format!("`{key}` cannot take this value: {error}"))?;
         let mut cached = self.inner.settings.lock();
@@ -436,13 +456,14 @@ impl AgentConfig {
     /// The user's settings file. A layered configuration reports its unknown
     /// keys once the layers are known, since the layers read some of them.
     fn load_user_settings(&self) -> Result<Loaded<AgentSettings>, String> {
+        let layer = self.inner.settings_file.path().display().to_string();
         load(
             &self.inner.settings_file,
             AgentSettings::default,
             |document| {
                 let mut repairs = Vec::new();
                 (
-                    decode_settings(document, &AgentSettings::default(), &mut repairs),
+                    decode_settings(document, &AgentSettings::default(), &layer, &mut repairs),
                     repairs,
                 )
             },
@@ -480,7 +501,12 @@ impl AgentConfig {
 pub fn read_settings_document(document: &Map<String, Value>) -> (AgentSettings, Vec<String>) {
     let mut repairs = Vec::new();
     (
-        decode_settings(document, &AgentSettings::default(), &mut repairs),
+        decode_settings(
+            document,
+            &AgentSettings::default(),
+            AGENT_SETTINGS_FILE,
+            &mut repairs,
+        ),
         repairs,
     )
 }

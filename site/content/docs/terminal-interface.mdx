@@ -204,11 +204,12 @@ Fullscreen 下还有阅读对话的按键：Page Up/Page Down、F3、F4、Ctrl-S
 
 `/plugins` 打开插件浏览器（对应 Codex 的插件目录），有三个标签页，用 ←/→ 切换：**Installed**（已安装）、**Marketplaces**（市场）和 **Built-in**（内置）。每个改动立即保存；进行中时页面会显示（`Installing…`），完成后重新读取全部内容。对应的命令见[命令行参考](/docs/cli-reference#plugins)。
 
-- **Installed** 列出[已安装插件](/docs/cli-reference#plugins)：每个插件的状态、版本、需要审查的 hook 和问题。空格启用或停用选中的插件；Enter 打开它；**Install from a directory…** 要求输入一个插件目录，按 `<名字>@local` 安装。
+- **Installed** 列出[已安装插件](/docs/cli-reference#plugins)：每个插件的状态、版本、需要审查的 hook 和问题。空格启用或停用选中的插件；Enter 打开它；`o` 打开代码插件的选项，前提是它的 `configSchema` 能降低为选项（即下面的通用选项表单；保存时写入它的设置，选项未描述的键保留，并重新启动它的代码）；**Install from a directory…** 要求输入一个插件目录，按 `<名字>@local` 安装。
 - 插件页面提供 **Disable plugin** 或 **Enable plugin**、有 hook 等待信任时的 **Trust its N hook(s)**、代码插件的权限未授予时的 **Grant its permissions**（说明它的代码能访问什么；**Code** 一行显示它的访客状态）、代码插件的 **Settings**（一个以单个 JSON 对象编辑其设置的表单，按清单的 `configSchema` 校验；留空表示移除；它的代码以新设置重新启动）、**Update plugin**（从它的市场或目录重新安装）、**Retry plugin**（重新加载，并再次启动失败的访客）和 **Uninstall plugin**（会询问是否保留它的数据目录）。下面列出它的来源、版本、格式、Skill、MCP 服务器、hook 和问题。
 - **Marketplaces** 列出已添加的市场，每个显示来源和其中已安装的插件数量。Enter 打开一个市场：列出它的插件，标为 **Available**、**Installed**、**Disabled** 或 **Not installable**；在未安装的插件上按 Enter 显示 **Install plugin**。Ctrl+U 升级 git 市场，Ctrl+R 确认后删除市场。**Add a marketplace…** 要求输入来源：`owner/repo`、git URL 或本地市场目录。
 - 安装带 hook 的插件后，会列出这些 hook 的命令并询问是否信任（**Trust them**，或 **Not now**：之后在 `/hooks` 或插件页面信任）。hook 只有被信任后才会运行。
-- **Built-in** 列出编译进 Agent 的插件及其状态：空格或 Enter 启用或停用（`disabledPlugins`；核心插件不能停用），`r` 重新启动失败的插件。
+- **Built-in** 列出编译进 Agent 的插件（以及宿主的插件）及其状态和摘要：空格或 Enter 启用或停用（`disabledPlugins`；核心插件不能停用），`r` 重新启动失败的插件，`o` 打开有选项的插件的选项（`[pluginOptions.名字]`）。
+- **选项表单**是通用的：插件的每个选项一个字段，标签为它的摘要和键，形式为开关、数字（占位符显示它的界限）、选择、文本（机密时显示为圆点）或用逗号分隔的文本列表。保存时按写入的方式检查每个值，不合适的字段下显示原因；只写入改动过的值，写入用户的 `config.toml`（[插件选项](/docs/config-reference#plugin-options)），插件立即接受它们。
 
 Esc 返回上一页，在标签页上关闭浏览器。用 `--safe-mode` 启动时，浏览器会提示没有加载任何已安装插件。
 
@@ -599,11 +600,11 @@ yank = []
 | 界面            | 四个标量 `[tui]` 偏好，并提供打开 `/theme`、`/statusline`、`/title`、`/keymap`、`/presets` 和 `/tui` 的操作 |
 | Provider 与策略 | 打开 `/providers policy`：所有 Provider 和共享的模型策略                                                    |
 | MCP 服务器      | 打开 `/mcp`，包括协议模式和按工具的策略                                                                     |
-| 插件与包        | 打开 `/plugins`                                                                                             |
+| 插件与包        | 每个有选项的内置插件的选项表单，以及打开 `/plugins` 的链接                                                  |
 | 钩子            | 打开 `/hooks`                                                                                               |
 | 分层与文件      | 按从低到高的顺序列出读取的文件、它们的警告，以及写入去向                                                    |
 
-每个域整份保存：表单先起草类型化补丁、检查、原子写入，然后才替换界面中的状态；无效输入留在表单中，并在对应字段下显示错误。如果配置档、项目文件或 `-c` 覆盖了这次写入，界面会说明。`providers.toml` 和 `mcp.toml` 没有分层，它们的表单会说明这一点。
+每个域整份保存：表单先起草类型化补丁、检查、原子写入，然后才替换界面中的状态；无效输入留在表单中，并在对应字段下显示错误。如果配置档、项目文件或 `-c` 覆盖了这次写入，界面会说明；插件的选项表单只保存它改动过的选项。`providers.toml` 和 `mcp.toml` 没有分层，它们的表单会说明这一点。
 
 `/config quick` 保留原来的单面板编辑器，用于 `[tui]` 标量设置和压缩策略；`config set` 是修改单个键的命令行等价方式。
 

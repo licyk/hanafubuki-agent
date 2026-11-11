@@ -10,10 +10,11 @@ use serde::Serialize;
 use serde_json::{Map, Value};
 
 use super::LoadedPackage;
+use crate::host::AgentPluginOptionsStatus;
 
 /// One installed package: whether it is on, what it contributes and what
 /// is wrong with it.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentPackageStatus {
     /// `<plugin>@<marketplace>`.
@@ -51,7 +52,7 @@ pub struct AgentPackageContent {
 }
 
 /// A code package's guest: what it may reach and how it runs.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentPackageGuest {
     /// What runs its code: a process, or a WebAssembly module, which
@@ -65,12 +66,16 @@ pub struct AgentPackageGuest {
     /// Its state, why it is not running, how its last process ended and
     /// the end of its stderr.
     pub status: GuestStatus,
-    /// Its settings (`[plugins."<id>"].settings`), its guest's
-    /// configuration.
+    /// Its settings (`[plugins."<id>"].settings`) as its guest receives
+    /// them: checked against its `options`, so a value that did not fit is
+    /// its default here, or left out.
     pub settings: Map<String, Value>,
     /// What its manifest says its settings are (`configSchema`, a JSON
     /// Schema), which a change of them is checked against.
     pub config_schema: Option<Map<String, Value>>,
+    /// The options its `configSchema` lowers to, their values and what
+    /// the settings set that could not be used; `None` without a schema.
+    pub options: Option<AgentPluginOptionsStatus>,
 }
 
 impl AgentPackageGuest {

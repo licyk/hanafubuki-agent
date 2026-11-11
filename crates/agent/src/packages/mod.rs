@@ -86,6 +86,8 @@ pub(crate) struct LoadedPackage {
     pub(crate) guest: Option<GuestPackage>,
     /// What its code's settings are (`configSchema`).
     pub(crate) config_schema: Option<serde_json::Map<String, serde_json::Value>>,
+    /// The options its `configSchema` lowers to and the settings' values.
+    pub(crate) options: Option<crate::host::AgentPluginOptionsStatus>,
     pub(crate) issues: Vec<String>,
 }
 
@@ -218,6 +220,7 @@ impl AgentPackages {
             status: self.guests.status(&guest.id.key())?,
             settings: guest.settings.clone(),
             config_schema: package.config_schema.clone(),
+            options: package.options.clone(),
         })
     }
 

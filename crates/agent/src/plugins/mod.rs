@@ -31,7 +31,9 @@ pub use review::{
     AgentReviewOutput, AgentReviewTarget, AgentReviewTargets,
 };
 pub(crate) use skills::skills_plugin;
-pub(crate) use subagents::{subagents_plugin, SubagentService, SUBAGENTS_PLUGIN};
+pub(crate) use subagents::{
+    subagents_option_schema, subagents_plugin, SubagentService, SUBAGENTS_PLUGIN,
+};
 pub use subagents::{AgentSubagentState, AgentSubagentStatus};
 pub(crate) use titles::{titles_plugin, TitleService, TITLES_PLUGIN};
 pub(crate) use view_image::view_image_plugin;

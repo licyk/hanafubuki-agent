@@ -4,7 +4,7 @@ description: 默认值、用户文件、配置档、受信任项目的配置和 
 icon: Layers
 ---
 
-`config.toml` 中的设置分层读取，从低到高。每一层只设置它写出的键；没写的键保留下一层的值。以安装和添加的内容为键的两个表 `[plugins]` 和 `[marketplaces]` 按条目合并：某一层的 `[plugins."demo@my-mkt"]` 只改变这个包中它写出的键，其他条目保持不变。只有 `config.toml` 分层，`providers.toml` 和 `mcp.toml` 没有分层。
+`config.toml` 中的设置分层读取，从低到高。每一层只设置它写出的键；没写的键保留下一层的值。以安装和添加的内容为键的两个表 `[plugins]` 和 `[marketplaces]` 按条目合并：某一层的 `[plugins."demo@my-mkt"]` 只改变这个包中它写出的键，其他条目保持不变。`[pluginOptions]` 同样按插件和键合并（[插件选项](/docs/config-reference#plugin-options)）。只有 `config.toml` 分层，`providers.toml` 和 `mcp.toml` 没有分层。
 
 1. **默认值**
 2. **用户的 `config.toml`**

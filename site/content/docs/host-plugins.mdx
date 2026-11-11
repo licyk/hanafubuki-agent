@@ -14,6 +14,8 @@ icon: Plug
 AgentPluginRow::unconfigured(AgentPluginGroup::Capability, app_info_plugin())
 ```
 
+每一行在 `AgentHostPorts::plugins` 中与它的描述符配对，`(row, AgentPluginDescriptor::new("app-info", "What My App is"))`：它的名字（即 `PluginDef` 的名字），以及它给模型或用户提供什么的摘要。有可调项的行可以像 Agent 自己的插件一样接受选项（[插件行](/docs/embedding#plugin-rows)）。
+
 `Capability` 组放工具、工具源和它们的审批规则，`Context` 组放世界状态段。宿主行挂载在 Agent 的能力插件之后、上下文插件之前，各行依次挂载，前一行就绪或超时（20 秒）后才挂载下一行。依赖见[嵌入 Agent](/docs/embedding#adding-the-crates)。
 
 ## 插件的形状 [#the-shape-of-a-plugin]

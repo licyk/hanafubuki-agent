@@ -7,6 +7,7 @@
 
 mod forms;
 mod layers;
+mod options;
 mod render;
 #[cfg(test)]
 mod tests;
@@ -17,6 +18,7 @@ use ratatui::style::Stylize;
 use crate::agent_bridge::ConfigState;
 use crate::bottom_pane::{FormEvent, FormView};
 pub(crate) use forms::ConfigChange;
+pub(crate) use options::{changed_options, options_form};
 
 /// A configuration domain the center lists.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -175,6 +177,8 @@ pub(crate) struct ConfigCenter {
     scroll_top: usize,
     view_rows: Option<usize>,
     form: Option<(ConfigSection, FormView)>,
+    /// The plugin whose options form is open, over `/config plugins`.
+    options_of: Option<String>,
     layers_open: bool,
 }
 
@@ -188,6 +192,7 @@ impl ConfigCenter {
             scroll_top: 0,
             view_rows: None,
             form: None,
+            options_of: None,
             layers_open: false,
         }
     }
@@ -219,6 +224,7 @@ impl ConfigCenter {
     fn open_form(&mut self, section: ConfigSection) {
         if let Ok(state) = &self.state {
             self.form = Some((section, forms::section_form(section, state)));
+            self.options_of = None;
         }
     }
 
@@ -261,9 +267,11 @@ impl ConfigCenter {
             };
         }
         if let Some((section, form)) = self.form.as_mut() {
+            let section = *section;
             return match form.handle_key(key) {
                 FormEvent::Cancel => {
                     self.form = None;
+                    self.options_of = None;
                     None
                 }
                 FormEvent::Action(action) => {
@@ -271,8 +279,19 @@ impl ConfigCenter {
                         return Some(ConfigAction::Replay(command.to_string()));
                     }
                     let current = self.state.as_ref().ok()?;
-                    forms::draft(*section, form, current)
-                        .map(|change| ConfigAction::Save(Box::new(change)))
+                    let change = match (section, &self.options_of) {
+                        (ConfigSection::Plugins, Some(row)) => {
+                            options::draft_plugin_options(current, row, form)
+                        }
+                        (ConfigSection::Plugins, None) => {
+                            let (row, options) = options::plugin_options_form(current, action)?;
+                            self.form = Some((section, options));
+                            self.options_of = Some(row);
+                            return None;
+                        }
+                        (section, _) => forms::draft(section, form, current),
+                    };
+                    change.map(|change| ConfigAction::Save(Box::new(change)))
                 }
                 FormEvent::None => None,
             };

@@ -134,9 +134,10 @@ pub(crate) fn draft(
             status_line_colors: Some(form.toggle(STATUS_COLORS)),
             ..AgentTuiPreferencesPatch::default()
         }),
+        // The center drafts a plugin's options itself (`options.rs`).
+        ConfigSection::Plugins => return None,
         ConfigSection::Providers
         | ConfigSection::Mcp
-        | ConfigSection::Plugins
         | ConfigSection::Hooks
         | ConfigSection::Layers => unreachable!("no form"),
     };

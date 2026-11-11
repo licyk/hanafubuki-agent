@@ -24,7 +24,7 @@ use hanafubuki_agent_contracts::{
     TurnExtensions,
 };
 
-use super::service::{SubagentService, MAXIMUM_RUNNING_AGENTS};
+use super::service::SubagentService;
 
 const SUBAGENT_GUIDANCE: ContextSectionKind = ContextSectionKind::fixed("subagent_guidance");
 
@@ -84,16 +84,16 @@ impl PromptContributor for SubagentGuidancePrompt {
         vec![PromptFragment {
             kind: SUBAGENT_GUIDANCE,
             version: None,
-            content: guidance(),
+            content: guidance(self.service.limits().maximum_running_agents),
         }]
     }
 }
 
-fn guidance() -> String {
+fn guidance(maximum_running_agents: usize) -> String {
     format!(
         r#"<subagents>
 ## Sub-agents
-`spawn_agent` delegates a task to a sub-agent: a separate conversation that runs in the background with your model, your tools and your permission mode. At most {MAXIMUM_RUNNING_AGENTS} sub-agents run at once, and a sub-agent cannot spawn sub-agents of its own.
+`spawn_agent` delegates a task to a sub-agent: a separate conversation that runs in the background with your model, your tools and your permission mode. At most {maximum_running_agents} sub-agents run at once, and a sub-agent cannot spawn sub-agents of its own.
 
 - Do not spawn sub-agents unless the user or applicable AGENTS.md/skill instructions explicitly ask for sub-agents, delegation, or parallel agent work.
 - When they do, prefer multiple sub-agents to parallelize your work: time is a constraint, and parallelism resolves the task faster. When your plan has multiple steps, process them in parallel by spawning one agent per step when this is possible.

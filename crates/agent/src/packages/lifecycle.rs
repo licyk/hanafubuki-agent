@@ -29,7 +29,7 @@ pub enum AgentPackageSource {
 
 /// What an install or an update did, and what the package asks for before
 /// all of it works.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentPackageInstall {
     /// The package as it is now: on, its content loaded.

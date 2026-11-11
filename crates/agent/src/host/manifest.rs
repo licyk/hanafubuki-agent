@@ -20,14 +20,14 @@ use hanafubuki_agent_worktree::{GitQueries, WorktreeManager};
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use super::{AgentPluginGroup, AgentPluginRow, AgentPluginSettings};
+use super::{AgentPluginDescriptor, AgentPluginGroup, AgentPluginRow, AgentPluginSettings};
 use crate::conversation_reader::AgentConversationReader;
 use crate::goals::AgentGoalApplication;
 use crate::packages::AgentPackages;
 use crate::plugins::{
     goal_plugin, memory_plugin, packages_plugin, permission_mode_plugin, recap_plugin,
     review_plugin, skills_plugin, subagents_plugin, titles_plugin, view_image_plugin,
-    workspace_context_plugin,
+    workspace_context_plugin, SUBAGENTS_PLUGIN,
 };
 use crate::service::AgentMcpApplication;
 use crate::session_driver::AgentSessionDriver;
@@ -71,6 +71,13 @@ pub(crate) struct AgentPluginInputs {
     pub(crate) packages: AgentPackages,
 }
 
+/// The rows the host mounts after its core ones, and the descriptors of the
+/// host's rows among them (the Agent's own are `agent_plugin_descriptors`).
+pub(crate) struct AgentPluginManifest {
+    pub(crate) rows: Vec<AgentPluginRow>,
+    pub(crate) host_descriptors: Vec<AgentPluginDescriptor>,
+}
+
 /// The manifest rows in mount order. Each declares its group, which the
 /// plugin manager groups them by.
 ///
@@ -82,8 +89,8 @@ pub(crate) struct AgentPluginInputs {
 /// first.
 pub(crate) fn agent_plugin_manifest(
     inputs: AgentPluginInputs,
-    host: Vec<AgentPluginRow>,
-) -> Vec<AgentPluginRow> {
+    host: Vec<(AgentPluginRow, AgentPluginDescriptor)>,
+) -> AgentPluginManifest {
     use AgentPluginGroup::{Capability, Context};
     let mut rows = vec![
         AgentPluginRow::from_settings(Capability, web_plugin(), |settings| {
@@ -101,7 +108,11 @@ pub(crate) fn agent_plugin_manifest(
         AgentPluginRow::unconfigured(Capability, titles_plugin(inputs.titles)),
         AgentPluginRow::unconfigured(Capability, recap_plugin(inputs.conversations)),
         AgentPluginRow::unconfigured(Capability, goal_plugin(inputs.goals)),
-        AgentPluginRow::unconfigured(Capability, subagents_plugin(inputs.driver.clone())),
+        AgentPluginRow::from_settings(
+            Capability,
+            subagents_plugin(inputs.driver.clone()),
+            |settings| settings.options_value(SUBAGENTS_PLUGIN),
+        ),
         AgentPluginRow::unconfigured(Capability, review_plugin(inputs.driver, inputs.git)),
         AgentPluginRow::unconfigured(Capability, worktree_plugin(inputs.worktrees)),
         AgentPluginRow::unconfigured(
@@ -110,7 +121,8 @@ pub(crate) fn agent_plugin_manifest(
         ),
         AgentPluginRow::unconfigured(Capability, packages_plugin(inputs.packages)),
     ];
-    rows.extend(host);
+    let (host_rows, host_descriptors) = host.into_iter().unzip::<_, _, Vec<_>, Vec<_>>();
+    rows.extend(host_rows);
     rows.extend([
         AgentPluginRow::unconfigured(
             Context,
@@ -122,7 +134,10 @@ pub(crate) fn agent_plugin_manifest(
         ),
         AgentPluginRow::unconfigured(Context, permission_mode_plugin()),
     ]);
-    rows
+    AgentPluginManifest {
+        rows,
+        host_descriptors,
+    }
 }
 
 fn web_config(settings: &AgentPluginSettings) -> Result<WebPluginConfig, String> {

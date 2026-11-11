@@ -21,6 +21,7 @@ mod layers;
 mod mcp;
 mod network;
 mod overrides;
+mod plugin_options;
 mod providers;
 mod recovery;
 mod settings;
@@ -30,10 +31,15 @@ mod tui;
 
 pub use dirs::{AgentDirs, AGENT_HOME_ENV};
 pub use file::{write_atomic, FileAccess};
+pub use hanafubuki_agent_packages::{
+    PluginOption, PluginOptionKind, PluginOptionSchema, PluginOptionValue, ResolvedPluginOption,
+    ResolvedPluginOptions, MAX_PLUGIN_OPTIONS,
+};
 pub use layers::{ConfigLayerSource, ConfigLayers, PROJECT_CONFIG_DIR};
 pub use mcp::McpSettingsStore;
 pub use network::AgentProxy;
-pub use overrides::ConfigOverrides;
+pub use overrides::{parse_config_value, ConfigOverrides};
+pub use plugin_options::{PluginOptionKey, PluginOptionsSettings};
 pub use providers::{
     validate_agent_model_policy, validate_agent_provider, validate_agent_provider_base_url,
     validate_agent_provider_credential, validate_agent_provider_registry, AgentImageInputPolicy,

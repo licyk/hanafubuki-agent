@@ -134,3 +134,82 @@ async fn a_wasm_package_asks_for_nothing_and_runs_without_the_sandbox() {
     assert_eq!(guest.granted_permissions, None);
     finish(service, paths).await;
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_guest_receives_its_settings_checked_against_its_config_schema() {
+    let (service, paths, config) = service_with_config("packages-code-settings", |_, _| {});
+    let source = paths.app_data_dir.join("sources/tuned");
+    write(
+        &source.join(".hanafubuki-plugin/plugin.json"),
+        &json!({
+            "name": "tuned",
+            "version": "1.0.0",
+            "runtime": { "type": "process", "command": ["./bin/guest"] },
+            "permissions": { "workspace": "none" },
+            "configSchema": {
+                "type": "object",
+                "properties": {
+                    "level": { "type": "integer", "minimum": 1, "maximum": 5, "default": 2 },
+                    "label": { "type": "string", "maxLength": 4 },
+                    "nested": { "type": "object" },
+                },
+            },
+        })
+        .to_string(),
+    );
+    write(&source.join("bin/guest"), "not a program");
+    service
+        .install_package(AgentPackageSource::Directory {
+            path: source,
+            marketplace: None,
+        })
+        .await
+        .unwrap();
+    // Written by hand: nothing checked it.
+    let id = hanafubuki_agent_packages::PluginId::parse("tuned@local").unwrap();
+    let written = json!({ "level": 9, "label": "far too long", "nested": { "a": 1 } });
+    config
+        .set_package_code_settings(&id, written.as_object())
+        .unwrap();
+    let file = std::fs::read_to_string(paths.config_dir.join("config.toml")).unwrap();
+    service.reload_packages().await.unwrap();
+
+    let package = package(&service, "tuned@local").await;
+    let guest = package.guest.unwrap();
+    assert_eq!(
+        serde_json::Value::Object(guest.settings),
+        json!({ "level": 5, "nested": { "a": 1 } })
+    );
+    let options = guest.options.unwrap();
+    let keys = options
+        .schema
+        .options
+        .iter()
+        .map(|option| option.key.as_str())
+        .collect::<Vec<_>>();
+    assert_eq!(keys, ["label", "level"]);
+    assert_eq!(options.issues.len(), 2, "{:?}", options.issues);
+    assert!(
+        package
+            .issues
+            .iter()
+            .any(|issue| issue.contains("`nested` is of type `object`")),
+        "{:?}",
+        package.issues
+    );
+    // The fallback is the guest's; the file keeps what was written.
+    assert_eq!(
+        std::fs::read_to_string(paths.config_dir.join("config.toml")).unwrap(),
+        file
+    );
+
+    let refused = service
+        .set_package_settings("tuned@local", json!({ "level": 9 }))
+        .await
+        .unwrap_err();
+    assert!(
+        refused.contains("configSchema") && refused.contains("between 1 and 5"),
+        "{refused}"
+    );
+    finish(service, paths).await;
+}

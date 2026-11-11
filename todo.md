@@ -21,7 +21,7 @@ the deny-only combinations) unchanged and adds declarative layers above it:
 - linked development packages.
 
 **Status.** Every §9 decision (D1–D9) was accepted as recommended (2026-11-11), and
-the plan records them. Implementation has not started.
+the plan records them. M1 has landed; M2–M7 have not started.
 
 **For each milestone,** record when it is done:
 
@@ -39,7 +39,7 @@ then M4, then M5; M6 after M3; M7 after M1.
       (D4); no host roles yet (D5); linked development packages (D6, so M7 is in
       scope); `agent_type` (D7); role switching between turns (D8);
       `[pluginOptions.<row>]` (D9).
-- [ ] M1: typed plugin options and row descriptors.
+- [x] M1: typed plugin options and row descriptors.
       - `[pluginOptions.<row>]`, decoded per key and tolerant, with strict writes.
       - The `PluginOptionSchema` vocabulary; a guest's `configSchema` lowered to it
         and enforced.
@@ -48,7 +48,60 @@ then M4, then M5; M6 after M3; M7 after M1.
       - A generic options form in `/plugins` and `/config plugins`, with the
         coverage test extended.
       - Not model-visible.
-      Done: —. Open: —.
+      Done (2026-11-11):
+      - The vocabulary (`PluginOptionSchema`, kinds, values, the tolerant
+        `resolve` and strict `PluginOption::check`) and the `configSchema`
+        lowering live in `hanafubuki-agent-packages` (`src/options/`), since
+        the guest host may not depend on the configuration; the config crate
+        re-exports them. `crates/config/src/plugin_options.rs` holds
+        `[pluginOptions]`, layered per row and key with each value's layer,
+        `AgentConfig::set_plugin_options` (checked before writing) and
+        `PluginOptionKey`; `config set` refuses `pluginOptions.*` and a
+        profile's `pluginOptions` unchecked, the CLI's `config get/set
+        pluginOptions.<row>.<key>` check against the descriptors.
+      - `crates/agent/src/host/descriptors.rs`: one descriptor per row (the
+        core rows included); `AgentHostPorts::plugins` is
+        `Vec<(AgentPluginRow, AgentPluginDescriptor)>`; a row without one
+        refuses construction. `AgentPluginSettings::options_value`;
+        `AgentPluginStatus` gains `summary` and `options`; option issues join
+        the configuration warnings.
+      - `subagents`: `maximumRunningAgents` (1–16, 3), `defaultWaitSeconds`,
+        `minimumWaitSeconds`, `maximumWaitSeconds` (10–300; 30, 10, 300),
+        `PluginDef::typed` from `from_settings`; `on_update` takes a new
+        running limit in place and restarts for new wait bounds (which
+        `wait_agent`'s spec states).
+      - Guests: lowering issues are package issues and `plugins validate`
+        issues; settings are checked before the guest receives them (fallback
+        with a warning, file untouched); `set_package_settings` also checks
+        the lowered bounds. `AgentPackageGuest.options`.
+      - TUI: the generic options form (`config_center/options.rs`), `o` on
+        the Built-in and Installed tabs, `/config plugins` lists each row's
+        options form; coverage test
+        `every_option_of_every_descriptor_has_the_generic_editor`.
+      - Docs (both languages): config-reference (`#plugin-options`),
+        configuration, config-layers, plugin-rules, terminal-interface,
+        writing-plugins (`#config-schema`), embedding, host-plugins.
+      - Validation: `cargo fmt --all --check`, `RUSTFLAGS="-D warnings"
+        cargo check --workspace --all-targets --all-features`, `cargo clippy
+        --workspace --all-targets --all-features -- -D warnings`, `cargo
+        xtask check`, `cargo test --workspace --all-features`; the site's
+        `bun install --frozen-lockfile`, `format:check:site`, `site:check`,
+        `site:test`, `site:build`. Goldens and history corpora unchanged; no
+        diff under `crates/host`, `crates/foundation`, `crates/process`.
+      - Hanafubuki at its next pin: its host rows supply descriptors (D2),
+        and its `AgentPluginStatus`/`AgentPackageStatus` uses no longer
+        derive `Eq` (a number option's bounds are `f64`).
+      Open:
+      - A profile's or a project's `pluginOptions` is written by hand only.
+      - Guest option properties show in key order (the `configSchema`'s
+        property order is not kept: `serde_json` sorts its maps).
+      - A `secret` option's value would show in clear in
+        `AgentPluginStatus.options` (and diagnostics); no option is secret
+        yet.
+      - `plugins validate` now reports a `configSchema` property that is not
+        an option (a nested object), which fails it as any issue does.
+      - `AgentPackageGuest.settings` is the checked settings: the JSON form
+        and `plugins settings ID` show, and a save writes back, those.
 - [ ] M2: explicit context order.
       - `ContextRenderer.order`; requests ordered by `(slot, order, kind)`.
       - Ranks reproduce today's order, so the request goldens do not change.

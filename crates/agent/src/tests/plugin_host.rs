@@ -101,6 +101,28 @@ fn observing_plugin(life: Arc<ProbeLife>) -> PluginDef {
     .inject(Inject::new().with(ObserverRegistry::NAME))
 }
 
+/// `rows`, with a descriptor for each of the test plugins.
+fn test_manifest(rows: Vec<AgentPluginRow>) -> super::host::AgentPluginManifest {
+    let names = [
+        "after",
+        "breaks",
+        "fixed",
+        "flaky",
+        "follows",
+        "probe",
+        "slow",
+        "stubborn",
+        "stuck",
+        "unconfigured",
+    ];
+    super::host::AgentPluginManifest {
+        rows,
+        host_descriptors: names
+            .map(|name| super::host::AgentPluginDescriptor::new(name, "a test plugin"))
+            .into(),
+    }
+}
+
 fn host_with(
     name: &str,
     manifest: Vec<AgentPluginRow>,
@@ -127,7 +149,7 @@ fn host_configured(
         config.clone(),
         Arc::new(FixedProxy(AgentProxy::System)),
         events.clone(),
-        manifest,
+        test_manifest(manifest),
         super::host::AgentHostOptions::default(),
     )
     .unwrap();
@@ -351,7 +373,7 @@ async fn a_faulted_plugin_starts_again_by_itself_under_the_restart_policy() {
         config,
         Arc::new(FixedProxy(AgentProxy::System)),
         Arc::new(CountingEvents::default()),
-        vec![AgentPluginRow::unconfigured(Capability, breaking)],
+        test_manifest(vec![AgentPluginRow::unconfigured(Capability, breaking)]),
         super::host::AgentHostOptions {
             restart_policy: hanafubuki_agent_host::RestartPolicy {
                 delays: vec![Duration::from_millis(300); 3],

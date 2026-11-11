@@ -19,13 +19,14 @@ use std::path::Path;
 use hanafubuki_agent_hooks::{PluginHookDeclaration, PluginHookSource};
 use hanafubuki_agent_mcp::{agent_plugin_mcp_servers, plugin_mcp_servers, PluginMcpServers};
 use hanafubuki_agent_packages::{
-    migrated_command_skills_root, HooksDeclaration, InstalledPackage, LoadedManifest,
-    ManifestFormat, McpServersDeclaration, PluginMcpServerSettings, PluginSettings,
+    lower_config_schema, migrated_command_skills_root, HooksDeclaration, InstalledPackage,
+    LoadedManifest, ManifestFormat, McpServersDeclaration, PluginMcpServerSettings, PluginSettings,
 };
 use hanafubuki_agent_skills::PluginSkillRoot;
-use serde_json::Value;
+use serde_json::{Map, Value};
 
 use super::LoadedPackage;
+use crate::host::AgentPluginOptionsStatus;
 
 const DEFAULT_SKILLS: &str = "skills";
 const DEFAULT_MCP: &str = ".mcp.json";
@@ -34,7 +35,8 @@ const DEFAULT_HOOKS: &str = "hooks/hooks.json";
 /// `package` as the Agent runs it: when `active` (it is `enabled` and the
 /// Agent is not in safe mode), its Skill roots, its MCP servers with the
 /// user's overlay in its `settings` entry applied, and its hooks; and its
-/// code, configured with the settings there.
+/// code, configured with the settings there as its `configSchema` lets
+/// them be.
 pub(super) fn load(
     package: &InstalledPackage,
     enabled: bool,
@@ -43,6 +45,14 @@ pub(super) fn load(
 ) -> LoadedPackage {
     let overlay = &settings.mcp_servers;
     let manifest = package.manifest.as_ref();
+    let config_schema = manifest
+        .and_then(|manifest| manifest.manifest.code.as_ref())
+        .and_then(|code| code.config_schema.clone());
+    let (code_settings, options, option_issues) = code_settings(
+        package,
+        config_schema.as_ref(),
+        settings.settings.clone().unwrap_or_default(),
+    );
     let mut loaded = LoadedPackage {
         id: package.id.clone(),
         version: package.version.clone(),
@@ -60,20 +70,16 @@ pub(super) fn load(
         skill_roots: Vec::new(),
         mcp_servers: Vec::new(),
         hooks: None,
-        guest: super::guest::guest_package(
-            package,
-            active,
-            settings.settings.clone().unwrap_or_default(),
-        ),
-        config_schema: manifest
-            .and_then(|manifest| manifest.manifest.code.as_ref())
-            .and_then(|code| code.config_schema.clone()),
+        guest: super::guest::guest_package(package, active, code_settings),
+        config_schema,
+        options,
         issues: package.issues.clone(),
     };
     let Some(manifest) = manifest.filter(|_| active) else {
         return loaded;
     };
     loaded.issues.extend(manifest.issues.iter().cloned());
+    loaded.issues.extend(option_issues);
     if let Err(error) = fs::create_dir_all(&package.data_root) {
         loaded.issues.push(format!(
             "its data directory {} was not made: {error}",
@@ -95,6 +101,34 @@ pub(super) fn load(
         .collect();
     loaded.hooks = hooks(package, manifest, &mut loaded.issues);
     loaded
+}
+
+/// The settings of `package`'s code as its guest receives them: checked
+/// against its `configSchema`, lowered to options, when it has one. A value
+/// that does not fit falls back to its default (or is left out) with an
+/// issue; the file is never rewritten. Also the options' status and the
+/// issues of the lowering and of the check.
+fn code_settings(
+    package: &InstalledPackage,
+    config_schema: Option<&Map<String, Value>>,
+    settings: Map<String, Value>,
+) -> (
+    Map<String, Value>,
+    Option<AgentPluginOptionsStatus>,
+    Vec<String>,
+) {
+    let Some(config_schema) = config_schema else {
+        return (settings, None, Vec::new());
+    };
+    let (schema, mut issues) = lower_config_schema(config_schema);
+    let table = format!("plugins.\"{}\".settings", package.id.key());
+    let (checked, resolved) = schema.check_settings(&table, &settings);
+    for issue in &resolved.issues {
+        log::warn!("Agent plugin {}: {issue}", package.id.key());
+    }
+    issues.extend(resolved.issues.iter().cloned());
+    let options = AgentPluginOptionsStatus::new(schema, resolved);
+    (checked, Some(options), issues)
 }
 
 /// Its `skills` (the manifest's, else `skills/`) and, but for an Agent

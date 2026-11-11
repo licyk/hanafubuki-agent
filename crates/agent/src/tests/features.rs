@@ -183,9 +183,9 @@ async fn a_panicking_feature_call_is_its_rows_fault() {
             install_bundled_system_skills: false,
             state_file: paths.data_dir.join("agent-test/skills-state.json"),
         },
-        vec![AgentPluginRow::unconfigured(
-            AgentPluginGroup::Capability,
-            feature_probe_plugin(),
+        vec![(
+            AgentPluginRow::unconfigured(AgentPluginGroup::Capability, feature_probe_plugin()),
+            super::host::AgentPluginDescriptor::new("feature-test", "a test plugin"),
         )],
     )
     .unwrap();

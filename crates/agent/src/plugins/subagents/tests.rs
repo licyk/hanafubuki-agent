@@ -477,3 +477,96 @@ async fn with_the_subagents_plugin_off_the_tools_are_gone_and_the_calls_unavaila
     assert!(!request.contains("<subagents>"));
     finish(service, paths);
 }
+
+/// A write of the running-agent limit is taken in place: the service, and
+/// the runs it tracks, stay, and the guidance says the new limit. A write
+/// of a wait bound, which `wait_agent`'s spec states, restarts the plugin
+/// with the new spec. A value out of bounds is refused before it is
+/// written.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_option_write_is_taken_in_place_or_restarts_the_plugin() {
+    let server = FakeServer::start(vec![(assistant_events("Done."), Duration::ZERO)]).await;
+    let (service, paths) = started("subagents-options", &server).await;
+    let options = |value: Value| value.as_object().unwrap().clone();
+    let before = subagents(&service).await;
+    assert_eq!(before.limits().maximum_running_agents, 3);
+    let refused = service
+        .set_plugin_options(
+            SUBAGENTS_PLUGIN.into(),
+            options(json!({ "maximumRunningAgents": 17 })),
+        )
+        .await
+        .unwrap_err();
+    assert!(refused.contains("between 1 and 16"), "{refused}");
+
+    service
+        .set_plugin_options(
+            SUBAGENTS_PLUGIN.into(),
+            options(json!({ "maximumRunningAgents": 5 })),
+        )
+        .await
+        .unwrap();
+    wait_until("the limit is taken in place", || {
+        before.limits().maximum_running_agents == 5
+    })
+    .await;
+    assert!(Arc::ptr_eq(&before, &subagents(&service).await));
+    let status = service
+        .plugin_status()
+        .into_iter()
+        .find(|status| status.name == SUBAGENTS_PLUGIN)
+        .unwrap();
+    let shown = status.options.unwrap();
+    assert_eq!(
+        shown.values[0].value,
+        Some(hanafubuki_agent_config::PluginOptionValue::Integer(5))
+    );
+    assert!(shown.values[0].layer.is_some() && shown.values[1].layer.is_none());
+    let parent = service
+        .create_session(AgentSessionMode::Default)
+        .await
+        .unwrap()
+        .id;
+    service
+        .start_turn(parent, "Hello.".to_string().into())
+        .await
+        .unwrap();
+    assert!(body(&server, 0).contains("At most 5 sub-agents run at once"));
+
+    service
+        .set_plugin_options(
+            SUBAGENTS_PLUGIN.into(),
+            options(json!({ "defaultWaitSeconds": 60 })),
+        )
+        .await
+        .unwrap();
+    let deadline = Instant::now() + Duration::from_secs(10);
+    let after = loop {
+        let current = service
+            .feature(
+                SUBAGENTS_PLUGIN,
+                |subagents: Arc<SubagentService>| async move { Ok(subagents) },
+            )
+            .await;
+        match current {
+            Ok(current) if !Arc::ptr_eq(&before, &current) => break current,
+            _ => {
+                assert!(Instant::now() < deadline, "the plugin did not restart");
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        }
+    };
+    let limits = after.limits();
+    assert_eq!(limits.maximum_running_agents, 5);
+    assert_eq!(limits.waits.default, Duration::from_secs(60));
+    let wait = SubagentTool::new(SubagentToolKind::WaitAgent, after).unwrap();
+    assert!(
+        wait.descriptor()
+            .input_schema
+            .to_string()
+            .contains("Defaults to 60000"),
+        "{}",
+        wait.descriptor().input_schema
+    );
+    finish(service, paths);
+}

@@ -8,12 +8,13 @@
 
 use hanafubuki_agent::{
     AgentMarketplace, AgentMarketplacePlugin, AgentPackageSource, AgentPackageStatus,
-    AgentPluginState, AgentPluginStatus, MarketplaceSourceType, PackageSource,
+    MarketplaceSourceType, PackageSource,
 };
 use ratatui::style::Stylize;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Paragraph, Wrap};
 
+use super::builtin;
 use crate::agent_bridge::{PluginsCall, PluginsState};
 use crate::bottom_pane::{SelectionItem, SelectionViewParams};
 
@@ -47,12 +48,22 @@ pub(super) enum Page {
     },
     ConfirmUninstall(String),
     ConfirmRemoveMarketplace(String),
+    /// The options form of a built-in plugin or a code plugin.
+    Options(OptionsOf),
     /// After an install: its hooks, each `(key, command)`, to trust.
     TrustHooks {
         id: String,
         hooks: Vec<(String, String)>,
     },
     Prompt(Prompt),
+}
+
+/// Whose options a form edits: a built-in plugin's (`[pluginOptions]`) or
+/// a code plugin's settings, by its `configSchema`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) enum OptionsOf {
+    Builtin(String),
+    Package(String),
 }
 
 /// A source to type, or a code plugin's settings.
@@ -103,7 +114,7 @@ pub(super) fn tab_page(state: &PluginsState, tab: Tab) -> PageView {
     let (rows, hint, subtitle) = match tab {
         Tab::Installed => (
             installed_rows(state),
-            "enter details · space on/off · ←/→ tabs · esc close",
+            "enter details · space on/off · o options · ←/→ tabs · esc close",
             "Plugins installed from a marketplace or a directory.",
         ),
         Tab::Marketplaces => (
@@ -112,8 +123,8 @@ pub(super) fn tab_page(state: &PluginsState, tab: Tab) -> PageView {
             "The marketplaces plugins are installed from.",
         ),
         Tab::BuiltIn => (
-            builtin_rows(state),
-            "space/enter on/off · r retry · ←/→ tabs · esc close",
+            builtin::builtin_rows(state),
+            "space/enter on/off · r retry · o options · ←/→ tabs · esc close",
             "The plugins compiled into the Agent (disabledPlugins).",
         ),
     };
@@ -238,48 +249,6 @@ fn marketplace_rows(state: &PluginsState) -> Vec<Row> {
         Some(Choice::Open(Page::Prompt(Prompt::AddMarketplace))),
     ));
     rows
-}
-
-fn builtin_rows(state: &PluginsState) -> Vec<Row> {
-    state
-        .builtins
-        .iter()
-        .map(|plugin| {
-            let mut description = builtin_state(plugin).to_string();
-            if plugin.lock.is_some() {
-                description.push_str(" · always on");
-            }
-            if let Some(error) = plugin.error.as_ref().or(plugin.warning.as_ref()) {
-                description.push_str(&format!(" · {error}"));
-            }
-            let item = SelectionItem {
-                name: plugin.name.clone(),
-                description: Some(description),
-                ..Default::default()
-            };
-            (item, builtin_toggle(plugin))
-        })
-        .collect()
-}
-
-/// Turning a built-in plugin on or off; a core one cannot be.
-pub(super) fn builtin_toggle(plugin: &AgentPluginStatus) -> Option<Choice> {
-    if plugin.lock.is_some() {
-        return None;
-    }
-    let enabled = !plugin.enabled;
-    Some(call(
-        PluginsCall::SetBuiltinEnabled {
-            name: plugin.name.clone(),
-            enabled,
-        },
-        if enabled {
-            "Turning it on…"
-        } else {
-            "Turning it off…"
-        },
-        After::Stay,
-    ))
 }
 
 /// An installed plugin: what can be done with it, then what it is.
@@ -610,16 +579,6 @@ fn offered_state(plugin: &AgentMarketplacePlugin) -> &'static str {
         (true, false) => "Disabled",
         _ if !plugin.installable => "Not installable",
         _ => "Available",
-    }
-}
-
-fn builtin_state(plugin: &AgentPluginStatus) -> &'static str {
-    match plugin.state {
-        AgentPluginState::Pending => "starting",
-        AgentPluginState::Active => "on",
-        AgentPluginState::Failed => "failed",
-        AgentPluginState::Disabled => "off",
-        AgentPluginState::Disposed => "stopped",
     }
 }
 

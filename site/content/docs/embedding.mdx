@@ -66,7 +66,8 @@ use std::time::{Duration, Instant};
 use hanafubuki_agent::{
     agent_workspace_roots_from, AgentApplicationService, AgentConfig, AgentConstructor, AgentEvent,
     AgentEventKind, AgentEventSink, AgentHostInstructions, AgentHostPorts, AgentInstanceInputs,
-    AgentLaunch, AgentPluginGroup, AgentPluginRow, AgentProxy, AgentServiceInputs,
+    AgentLaunch, AgentPluginDescriptor, AgentPluginGroup, AgentPluginRow, AgentProxy,
+    AgentServiceInputs,
     AgentSessionMode, AgentSlot, AgentStartMarker, AgentStatusEventSink, AgentStoragePaths,
     AgentTurnRequest, AgentWorkspaceRoots, DesktopAgent, NetworkSettingsPort, NoHostContext,
     NoopAgentPluginEventSink, NoopMcpEventSink, SecretFuture, SecretKey, SecretStore, SkillRoots,
@@ -107,9 +108,12 @@ fn main() -> Result<(), String> {
                 mcp_event_sink: Arc::new(NoopMcpEventSink),
                 plugin_event_sink: Arc::new(NoopAgentPluginEventSink),
                 host: AgentHostPorts {
-                    plugins: vec![AgentPluginRow::unconfigured(
-                        AgentPluginGroup::Capability,
-                        app_info_plugin(),
+                    plugins: vec![(
+                        AgentPluginRow::unconfigured(
+                            AgentPluginGroup::Capability,
+                            app_info_plugin(),
+                        ),
+                        AgentPluginDescriptor::new("app-info", "What My App is"),
                     )],
                     workspace: Arc::new(ProjectRoots(project.clone())),
                     steering_context: Arc::new(NoHostContext),
@@ -235,18 +239,20 @@ fn main() -> Result<(), String> {
 
 宿主只能通过 `AgentHostPorts` 向 Agent 添加东西。接口只接受普通值（`PathBuf`、字符串、映射）或 Agent 自己的类型：Agent 带有自己的 foundation、process 和模块宿主的副本，与宿主的同名类型是不同的类型，宿主在边界处做转换。
 
-| 字段               | 类型                           | 作用                                                           | 独立模式默认                           |
-| ------------------ | ------------------------------ | -------------------------------------------------------------- | -------------------------------------- |
-| `plugins`          | `Vec<AgentPluginRow>`          | 宿主插件行                                                     | 无                                     |
-| `workspace`        | `Arc<dyn WorkspaceRootsPort>`  | 工作区根目录、受保护的目录、指令查找的选中目录、文件搜索根目录 | 工作目录、它的 Git 根目录、`--add-dir` |
-| `steering_context` | `Arc<dyn HostContextPort>`     | steering 消息携带的宿主上下文                                  | `NoHostContext`                        |
-| `instructions`     | `AgentHostInstructions`        | 身份、应用名，以及宿主加入基础指令的段落                       | `AgentHostInstructions::default()`     |
-| `network`          | `Arc<dyn NetworkSettingsPort>` | Web 工具、MCP 与 OAuth 使用的代理                              | 配置文件的 `[network] proxy`           |
-| `secrets`          | `Arc<dyn SecretStore>`         | MCP OAuth 令牌的存放处                                         | 操作系统钥匙串                         |
+| 字段               | 类型                                           | 作用                                                           | 独立模式默认                           |
+| ------------------ | ---------------------------------------------- | -------------------------------------------------------------- | -------------------------------------- |
+| `plugins`          | `Vec<(AgentPluginRow, AgentPluginDescriptor)>` | 宿主插件行，各带其描述符                                       | 无                                     |
+| `workspace`        | `Arc<dyn WorkspaceRootsPort>`                  | 工作区根目录、受保护的目录、指令查找的选中目录、文件搜索根目录 | 工作目录、它的 Git 根目录、`--add-dir` |
+| `steering_context` | `Arc<dyn HostContextPort>`                     | steering 消息携带的宿主上下文                                  | `NoHostContext`                        |
+| `instructions`     | `AgentHostInstructions`                        | 身份、应用名，以及宿主加入基础指令的段落                       | `AgentHostInstructions::default()`     |
+| `network`          | `Arc<dyn NetworkSettingsPort>`                 | Web 工具、MCP 与 OAuth 使用的代理                              | 配置文件的 `[network] proxy`           |
+| `secrets`          | `Arc<dyn SecretStore>`                         | MCP OAuth 令牌的存放处                                         | 操作系统钥匙串                         |
 
 ### 插件行 [#plugin-rows]
 
 `AgentPluginRow::unconfigured(group, plugin)`，`group` 为 `AgentPluginGroup::Capability`（工具、工具源及其规则）或 `AgentPluginGroup::Context`（世界状态段）。宿主行挂载在 Agent 自己的能力插件之后、上下文插件之前，所以宿主的世界状态段排在工作区根目录、环境和权限模式之前。宿主插件与 Agent 自己的插件遵守同一套规则：`disabledPlugins` 可以关闭它们，安全模式不挂载它们。写法见[宿主插件](/docs/host-plugins)。
+
+每一行都带着它的 `AgentPluginDescriptor`：`AgentPluginDescriptor::new(name, summary)`，`name` 是它的 `PluginDef` 的名字，`summary` 是一行说明它给模型或用户提供什么，`plugin_status` 和 `/plugins` 显示它。没有描述符的行，或 Agent 或另一行已经描述过的名字，会让 Agent 无法构建。有选项的行加上 `.with_options(schema)`（一个 `PluginOptionSchema`，每个选项带默认值），用 `AgentPluginRow::from_settings(group, plugin, |settings| settings.options_value("名字"))`，并用 `PluginDef::typed` 解码它的配置；这些选项就是 Agent 配置中的 `[pluginOptions.名字]`，按模式检查，用 `set_plugin_options` 编辑（[插件选项](/docs/config-reference#plugin-options)）。
 
 ### `WorkspaceRootsPort` [#workspacerootsport]
 

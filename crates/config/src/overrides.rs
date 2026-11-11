@@ -67,6 +67,12 @@ fn parse_override(raw: &str) -> Result<(String, Value), String> {
     Ok((key.to_string(), parse_value(value)))
 }
 
+/// `raw` as `config set` reads a value: TOML, or a string when it is not
+/// TOML.
+pub fn parse_config_value(raw: &str) -> Result<serde_json::Value, String> {
+    serde_json::to_value(parse_value(raw)).map_err(|error| format!("the value: {error}"))
+}
+
 /// `raw` as a TOML value, or as a string when it is not one.
 pub(crate) fn parse_value(raw: &str) -> Value {
     // Attempt to parse as TOML. If that fails, treat it as a raw string. This

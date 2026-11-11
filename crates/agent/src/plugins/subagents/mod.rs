@@ -7,7 +7,10 @@
 //! permission mode. The plugin provides [`SubagentService`] under its name,
 //! which the facade's `subagents` and `interrupt_subagent` resolve per call;
 //! with the plugin off, the tools are gone and those calls are unavailable.
+//! Its options ([`SubagentsOptions`]) set how many agents run at once and
+//! how long a wait lasts.
 
+mod options;
 mod prompt;
 mod service;
 mod tools;
@@ -21,6 +24,8 @@ use hanafubuki_agent_kernel::AgentSessionId;
 use kardia_core::{Context, Inject, PluginDef, Service};
 use serde::Serialize;
 
+pub(crate) use self::options::subagents_option_schema;
+use self::options::{SubagentLimits, SubagentsOptions};
 use self::prompt::{SubagentGuidancePrompt, SUBAGENT_GUIDANCE_RENDERER};
 use self::service::SubagentRuns;
 pub(crate) use self::service::SubagentService;
@@ -55,18 +60,32 @@ pub enum AgentSubagentState {
 
 /// Registers the subagent tools and the orchestrator guidance over
 /// `driver`, and provides the [`SubagentService`]. The runs it tracks
-/// outlive a restart of the plugin.
+/// outlive a restart of the plugin. A change of the running-agent limit is
+/// taken in place; one of the wait bounds, which `wait_agent`'s spec
+/// states, restarts the plugin.
 pub(crate) fn subagents_plugin(driver: AgentSessionDriver) -> PluginDef {
     let runs = SubagentRuns::default();
-    PluginDef::new(move |ctx: Context, _| {
+    PluginDef::typed(move |ctx: Context, options: Arc<SubagentsOptions>| {
         let driver = driver.clone();
         let runs = runs.clone();
         async move {
+            let limits = SubagentLimits::of(&options);
             let service = Arc::new(SubagentService {
                 driver,
                 runs,
                 blocking: ctx.get::<BlockingService>()?.arc().clone(),
+                limits: parking_lot::Mutex::new(limits),
             });
+            let updated = service.clone();
+            ctx.on_update(move |options: &SubagentsOptions| {
+                let limits = SubagentLimits::of(options);
+                let mut current = updated.limits.lock();
+                if limits.waits != current.waits {
+                    return false;
+                }
+                *current = limits;
+                true
+            })?;
             let tools = ctx.get::<ToolRegistry>()?;
             for kind in SubagentToolKind::ALL {
                 let tool =

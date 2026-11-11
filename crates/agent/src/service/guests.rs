@@ -33,7 +33,9 @@ impl AgentApplicationService {
     /// (`[plugins."<id>"].settings`), or removes them (`Value::Null`), then
     /// reloads the packages: its guest starts again with them, and views
     /// them as its `settings`. They are an object, which must fit what the
-    /// package's manifest says they are (`configSchema`) when it says.
+    /// package's manifest says they are (`configSchema`) when it says: the
+    /// JSON Schema, and each value the bounds of the option it lowers to,
+    /// so the guest receives them as written.
     pub async fn set_package_settings(&self, id: &str, settings: Value) -> Result<(), String> {
         let id = PluginId::parse(id).map_err(|error| error.to_string())?;
         let settings = match settings {
@@ -64,6 +66,15 @@ impl AgentApplicationService {
                 };
                 format!("the settings do not fit its configSchema: {reason}")
             })?;
+        }
+        if let (Some(options), Some(settings)) = (&package.options, &settings) {
+            for option in &options.schema.options {
+                if let Some(value) = settings.get(&option.key) {
+                    option.check(value).map_err(|reason| {
+                        format!("the settings do not fit its configSchema: {reason}")
+                    })?;
+                }
+            }
         }
         let config = self.config.clone();
         run_blocking_operation(

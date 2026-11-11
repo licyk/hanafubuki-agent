@@ -92,6 +92,7 @@ pub(super) fn action_command(action: FieldId) -> Option<&'static str> {
         OPEN_KEYMAP => Some("/keymap"),
         OPEN_PRESETS => Some("/presets"),
         OPEN_TUI => Some("/tui"),
+        super::options::OPEN_PLUGINS => Some("/plugins"),
         _ => None,
     }
 }
@@ -102,6 +103,11 @@ pub(crate) enum ConfigChange {
     Agent(AgentSettingsPatch),
     Standalone(AgentStandaloneSettingsPatch),
     Tui(AgentTuiPreferencesPatch),
+    /// What a plugin's options form changed (`[pluginOptions.<row>]`).
+    PluginOptions {
+        row: String,
+        options: serde_json::Map<String, serde_json::Value>,
+    },
 }
 
 impl ConfigChange {
@@ -173,6 +179,9 @@ impl ConfigChange {
                     .log_level
                     .is_some_and(|value| state.standalone.log_level != value)
             }
+            Self::PluginOptions { row, options } => {
+                super::options::is_shadowed(state, row, options)
+            }
             Self::Tui(patch) => {
                 let preferences = &state.standalone.tui;
                 patch
@@ -202,6 +211,7 @@ impl ConfigSection {
                 | Self::Compaction
                 | Self::Network
                 | Self::Interface
+                | Self::Plugins
         )
     }
 }
@@ -375,9 +385,9 @@ pub(super) fn section_form(section: ConfigSection, state: &ConfigState) -> FormV
             ],
         )
         .with_subtitle("The linked editors save their own [tui] keys."),
+        ConfigSection::Plugins => super::options::plugins_form(state),
         ConfigSection::Providers
         | ConfigSection::Mcp
-        | ConfigSection::Plugins
         | ConfigSection::Hooks
         | ConfigSection::Layers => {
             unreachable!("the overview opens these domains in their own editors")

@@ -34,9 +34,9 @@ use hanafubuki_agent_tool_contracts::{
 };
 use serde_json::{json, Map, Value};
 
+use super::options::WaitBounds;
 use super::service::{
     AgentRunStatus, Delivery, ListedAgent, SpawnRequest, SubagentService, WaitOutcome,
-    DEFAULT_WAIT, MAXIMUM_WAIT, MINIMUM_WAIT,
 };
 
 /// The longest message an agent is sent, as the kernel's steering bound.
@@ -93,7 +93,8 @@ impl SubagentTool {
         kind: SubagentToolKind,
         service: Arc<SubagentService>,
     ) -> Result<Self, ToolContractError> {
-        let (description, input_schema) = spec(kind);
+        let waits = service.limits().waits;
+        let (description, input_schema) = spec(kind, waits);
         Ok(Self {
             kind,
             service,
@@ -122,7 +123,7 @@ impl SubagentTool {
                 },
                 // A wait runs to its own bound, past the turn's tool timeout.
                 timeout: (kind == SubagentToolKind::WaitAgent)
-                    .then(|| MAXIMUM_WAIT + Duration::from_secs(30)),
+                    .then(|| waits.maximum + Duration::from_secs(30)),
             },
         })
     }
@@ -184,12 +185,13 @@ impl AgentToolHandler for SubagentTool {
                 }
                 SubagentToolKind::WaitAgent => {
                     let mut notes = ArgumentNotes::default();
+                    let waits = service.limits().waits;
                     let timeout = Duration::from_millis(clamped_u64(
                         arguments,
                         "timeout_ms",
-                        millis(MINIMUM_WAIT),
-                        millis(MAXIMUM_WAIT),
-                        millis(DEFAULT_WAIT),
+                        millis(waits.minimum),
+                        millis(waits.maximum),
+                        millis(waits.default),
                         &mut notes,
                     )?);
                     let outcome = service
@@ -355,8 +357,9 @@ Note that passing `fork_turns="none"` will not pass any surrounding context to t
 
 const WAIT_AGENT_DESCRIPTION: &str = "Wait until an agent you spawned finishes its turn. Returns the final status of every agent that finished since your previous wait: its final answer when it completed, or its error. Returns at once when such an update is pending or when no agent is running, and with `timed_out` when no agent finishes before the deadline.";
 
-/// The model-visible description and input schema of `kind`.
-fn spec(kind: SubagentToolKind) -> (String, Value) {
+/// The model-visible description and input schema of `kind`, with `waits`
+/// the bounds `wait_agent` states.
+fn spec(kind: SubagentToolKind, waits: WaitBounds) -> (String, Value) {
     let target = |description: &str| json!({ "type": "string", "description": description });
     let (description, properties, required): (&str, Value, &[&str]) = match kind {
         SubagentToolKind::SpawnAgent => (
@@ -400,9 +403,9 @@ fn spec(kind: SubagentToolKind) -> (String, Value) {
                     "type": "integer",
                     "description": format!(
                         "Timeout in milliseconds. Defaults to {}, min {}, max {}.",
-                        millis(DEFAULT_WAIT),
-                        millis(MINIMUM_WAIT),
-                        millis(MAXIMUM_WAIT)
+                        millis(waits.default),
+                        millis(waits.minimum),
+                        millis(waits.maximum)
                     )
                 }
             }),

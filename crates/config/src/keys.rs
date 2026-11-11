@@ -14,6 +14,9 @@ pub(crate) const PROJECTS: &str = "projects";
 /// Read by the hooks plugin from each layer's file, not by the settings.
 pub(crate) const HOOKS: &str = "hooks";
 pub(crate) const TRUST_LEVEL: &str = "trustLevel";
+/// Checked against the plugin's schema, which the caller has
+/// ([`crate::AgentConfig::set_plugin_options`]).
+pub(crate) const PLUGIN_OPTIONS: &str = "pluginOptions";
 /// The values of a project's `trustLevel`; only the first trusts it.
 const TRUST_LEVELS: [&str; 2] = ["trusted", "untrusted"];
 
@@ -31,6 +34,22 @@ pub(crate) fn parse_key(key: &str) -> Result<Vec<String>, String> {
     let keys = toml_edit::Key::parse(key)
         .map_err(|_| format!("`{key}` is not a key (write a dotted TOML key)"))?;
     Ok(keys.iter().map(|key| key.get().to_string()).collect())
+}
+
+/// Refuses a write of a plugin option the generic path cannot check: one
+/// is written with its plugin's schema ([`crate::AgentConfig::set_plugin_options`]).
+pub(crate) fn refuse_plugin_option(key: &str, path: &[String]) -> Result<(), String> {
+    let options = |path: &[String]| path.first().is_some_and(|first| first == PLUGIN_OPTIONS);
+    match path {
+        _ if options(path) => Err(format!(
+            "`{key}` is a plugin option, checked against the plugin's options: write \
+             {PLUGIN_OPTIONS}.<plugin>.<option>"
+        )),
+        [first, _, rest @ ..] if first == PROFILES && options(rest) => Err(format!(
+            "`{key}` is a profile's plugin option, which is written in the file by hand"
+        )),
+        _ => Ok(()),
+    }
 }
 
 pub(crate) fn target<'a>(key: &str, path: &'a [String]) -> Result<KeyTarget<'a>, String> {
@@ -127,12 +146,12 @@ pub(crate) fn insert(document: &mut Map<String, Value>, path: &[String], value: 
 }
 
 fn decoded(document: &Map<String, Value>, below: &AgentSettings) -> AgentSettings {
-    decode_settings(document, below, &mut Vec::new())
+    decode_settings(document, below, "", &mut Vec::new())
 }
 
 fn repairs(document: &Map<String, Value>, below: &AgentSettings) -> Vec<String> {
     let mut repairs = Vec::new();
-    decode_settings(document, below, &mut repairs);
+    decode_settings(document, below, "", &mut repairs);
     decode_standalone(document, &AgentStandaloneSettings::default(), &mut repairs);
     repairs
 }

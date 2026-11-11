@@ -44,6 +44,12 @@ pub(crate) enum PluginsCall {
         enabled: bool,
     },
     RetryBuiltin(String),
+    /// The options a built-in plugin's form changed
+    /// (`[pluginOptions.<name>]`), each `null` to return to its default.
+    SetBuiltinOptions {
+        name: String,
+        options: serde_json::Map<String, serde_json::Value>,
+    },
 }
 
 /// Everything `/plugins` shows.
@@ -180,6 +186,10 @@ async fn run(agent: &AgentHandle, call: PluginsCall) -> Result<Option<PluginsDon
                 "The built-in plugin {name} is {}.",
                 on_or_off(enabled)
             ))
+        }
+        PluginsCall::SetBuiltinOptions { name, options } => {
+            agent.set_plugin_options(name.clone(), options).await?;
+            notice(format!("Saved the options of the built-in plugin {name}."))
         }
         PluginsCall::RetryBuiltin(name) => {
             agent.retry_plugin(&name).await?;

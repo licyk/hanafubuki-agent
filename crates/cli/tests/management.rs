@@ -99,6 +99,65 @@ fn config_get_reads_every_layer_and_set_writes_the_users_file() {
 }
 
 #[test]
+fn config_get_and_set_check_a_plugin_option_against_its_plugin() {
+    let home = Home::new();
+    let get = |arguments: &[&str]| home.run(arguments).expect(0).stdout().trim().to_string();
+    let key = "pluginOptions.subagents.maximumRunningAgents";
+    assert_eq!(get(&["config", "get", key]), "3", "its default");
+    home.run(&["config", "set", key, "6"]).expect(0);
+    assert_eq!(get(&["config", "get", key]), "6");
+    assert!(home
+        .file("config.toml")
+        .contains("maximumRunningAgents = 6"));
+    assert_eq!(
+        get(&["-c", &format!("{key}=40"), "config", "get", key]),
+        "16"
+    );
+
+    let run = home.run(&["config", "set", key, "40"]).expect(1);
+    assert!(
+        run.stderr().contains("between 1 and 16"),
+        "{}",
+        run.stderr()
+    );
+    let run = home
+        .run(&["config", "set", "pluginOptions.subagents.speed", "1"])
+        .expect(1);
+    assert!(
+        run.stderr().contains("no option `speed`"),
+        "{}",
+        run.stderr()
+    );
+    let run = home
+        .run(&["config", "set", "pluginOptions.web.proxy", "1"])
+        .expect(1);
+    assert!(run.stderr().contains("has no options"), "{}", run.stderr());
+    assert!(home
+        .file("config.toml")
+        .contains("maximumRunningAgents = 6"));
+    // The table, a plugin's and a profile's read as the file sets them.
+    assert_eq!(
+        get(&["config", "get", "pluginOptions.subagents"]),
+        "maximumRunningAgents = 6"
+    );
+    assert!(get(&["config", "get", "pluginOptions"]).contains("maximumRunningAgents = 6"));
+    std::fs::write(
+        home.home.join("config.toml"),
+        "[profiles.ci.pluginOptions.subagents]\nmaximumRunningAgents = 2\n",
+    )
+    .unwrap();
+    assert_eq!(
+        get(&[
+            "config",
+            "get",
+            "profiles.ci.pluginOptions.subagents.maximumRunningAgents"
+        ]),
+        "2"
+    );
+    assert_eq!(get(&["-p", "ci", "config", "get", key]), "2");
+}
+
+#[test]
 fn providers_are_added_made_default_listed_without_tokens_and_removed() {
     let home = Home::new();
     let run = home

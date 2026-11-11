@@ -18,14 +18,16 @@
 //! generic host's (`site/content/docs/plugin-rules.en.mdx`).
 
 mod contributions;
+mod descriptors;
 mod events;
 mod manifest;
 mod status;
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Instant;
 
-use hanafubuki_agent_config::{AgentConfig, AgentSettings};
+use hanafubuki_agent_config::{AgentConfig, AgentSettings, ResolvedPluginOptions};
 use hanafubuki_agent_contracts::{BlockingService, PluginFaults};
 use hanafubuki_agent_foundation::background_worker::WorkerShutdownDiagnostic;
 use hanafubuki_agent_foundation::blocking::BlockingOperationPort;
@@ -35,11 +37,13 @@ pub(crate) use hanafubuki_agent_host::{PLUGIN_START_TIMEOUT, PLUGIN_STOP_BOUND};
 use hanafubuki_agent_kernel::{kernel_plugin, AgentKernelFaultSink, AgentKernelRegistries};
 use kardia_core::{Context, PluginDef, Service, Settle};
 
+pub(crate) use descriptors::AgentPluginDescriptors;
+pub use descriptors::{agent_plugin_descriptors, AgentPluginDescriptor};
 pub use events::{AgentPluginEventSink, NoopAgentPluginEventSink};
-pub(crate) use manifest::{agent_plugin_manifest, AgentPluginInputs};
+pub(crate) use manifest::{agent_plugin_manifest, AgentPluginInputs, AgentPluginManifest};
 pub use status::{
     AgentPluginContextContribution, AgentPluginContributions, AgentPluginGroup, AgentPluginLock,
-    AgentPluginState, AgentPluginStatus,
+    AgentPluginOptionsStatus, AgentPluginState, AgentPluginStatus,
 };
 
 /// How one Agent instance's host runs.
@@ -66,19 +70,37 @@ impl Default for AgentHostOptions {
 
 /// One plugin to mount, its group, and where its configuration comes from.
 /// A host builds its own rows (`AgentHostPorts::plugins`) with
-/// `AgentPluginRow::unconfigured`.
+/// `AgentPluginRow::unconfigured`, or with `AgentPluginRow::from_settings`
+/// for a row whose descriptor has options.
 pub type AgentPluginRow = ModuleRow<AgentPlugins>;
 
 /// What the rows' configuration and enablement derive from: the Agent's
-/// settings and the host's proxy.
+/// settings, the host's proxy and every row's options.
 pub struct AgentPluginSettings {
     pub(crate) agent: AgentSettings,
     pub(crate) proxy: Result<crate::AgentProxy, String>,
+    /// By row, for each row whose descriptor has options; checked against
+    /// the schema, so a row decodes them without failing.
+    pub(crate) options: BTreeMap<String, ResolvedPluginOptions>,
+}
+
+impl AgentPluginSettings {
+    /// The options of the row `name` as one object, its configuration: a
+    /// non-capturing closure over it is a row's `SettingsConfig`
+    /// (`AgentPluginRow::from_settings(group, plugin, |settings|
+    /// settings.options_value("name"))`).
+    pub fn options_value(&self, name: &str) -> Result<serde_json::Value, String> {
+        self.options
+            .get(name)
+            .map(|options| serde_json::Value::Object(options.to_object()))
+            .ok_or_else(|| format!("the Agent plugin `{name}` has no options in its descriptor"))
+    }
 }
 
 /// The Agent's profile of the generic host.
 pub struct AgentPlugins {
     config: AgentConfig,
+    descriptors: Arc<AgentPluginDescriptors>,
     network: Arc<dyn crate::NetworkSettingsPort>,
     events: Arc<dyn AgentPluginEventSink>,
     kernel_faults: Arc<dyn AgentKernelFaultSink>,
@@ -93,8 +115,10 @@ impl HostProfile for AgentPlugins {
     const SHUTDOWN_WORKER: &'static str = "agent-plugins";
 
     fn settings(&self) -> Option<AgentPluginSettings> {
+        let agent = self.config.settings_snapshot()?;
         Some(AgentPluginSettings {
-            agent: self.config.settings_snapshot()?,
+            options: self.descriptors.resolve(&agent),
+            agent,
             proxy: self.network.proxy(),
         })
     }
@@ -116,6 +140,8 @@ impl HostProfile for AgentPlugins {
 pub(crate) struct AgentHost {
     registries: AgentKernelRegistries,
     host: Arc<ModuleHost<AgentPlugins>>,
+    config: AgentConfig,
+    descriptors: Arc<AgentPluginDescriptors>,
 }
 
 impl AgentHost {
@@ -123,16 +149,19 @@ impl AgentHost {
     /// settings, which the caller has loaded, and the host's network
     /// settings. `registries` are the ones the
     /// kernel was constructed with; the kernel plugin publishes them, and
-    /// their `PluginFaults` is where the plugins' code reports.
+    /// their `PluginFaults` is where the plugins' code reports. Every row
+    /// has exactly one descriptor: the Agent's, or one of the manifest's
+    /// for a host's row.
     pub(crate) fn new(
         registries: AgentKernelRegistries,
         blocking: Arc<dyn BlockingOperationPort>,
         config: AgentConfig,
         network: Arc<dyn crate::NetworkSettingsPort>,
         events: Arc<dyn AgentPluginEventSink>,
-        manifest: Vec<AgentPluginRow>,
+        manifest: AgentPluginManifest,
         options: AgentHostOptions,
     ) -> Result<Self, String> {
+        let descriptors = Arc::new(AgentPluginDescriptors::new(manifest.host_descriptors)?);
         let fixed = [
             AgentPluginRow::unconfigured(
                 AgentPluginGroup::Core,
@@ -142,13 +171,14 @@ impl AgentHost {
         ];
         let host = ModuleHost::new(
             AgentPlugins {
-                config,
+                config: config.clone(),
+                descriptors: descriptors.clone(),
                 network,
                 events,
                 kernel_faults: options.kernel_faults,
             },
             registries.faults.clone(),
-            fixed.into_iter().chain(manifest).collect(),
+            fixed.into_iter().chain(manifest.rows).collect(),
             ModuleHostOptions {
                 safe_mode: options.safe_mode,
                 // A plugin's faults reach the host through its
@@ -159,9 +189,12 @@ impl AgentHost {
                 automatic_restarts: Some(options.restart_policy),
             },
         )?;
+        descriptors.check_rows(host.status().iter().map(|status| status.name.as_str()))?;
         Ok(Self {
             registries,
             host: Arc::new(host),
+            config,
+            descriptors,
         })
     }
 
@@ -184,14 +217,41 @@ impl AgentHost {
         // Read the registries before the plugin lock: the two are never held
         // together.
         let mut contributions = contributions::contributions_by_plugin(&self.registries);
+        let settings = self.config.settings_snapshot().unwrap_or_default();
         self.host
             .status()
             .into_iter()
             .map(|status| {
                 let contributions = contributions.remove(&status.name).unwrap_or_default();
-                AgentPluginStatus::of(status, contributions)
+                let descriptor = self.descriptors.get(&status.name);
+                let options = descriptor.and_then(|descriptor| {
+                    let schema = descriptor.options.clone()?;
+                    let resolved = settings.plugin_options.resolve(descriptor.name, &schema);
+                    Some(AgentPluginOptionsStatus::new(schema, resolved))
+                });
+                AgentPluginStatus::of(status, descriptor, contributions, options)
             })
             .collect()
+    }
+
+    /// The options of the row `name`, which a write is checked against.
+    pub(crate) fn option_schema(
+        &self,
+        name: &str,
+    ) -> Result<hanafubuki_agent_config::PluginOptionSchema, String> {
+        self.descriptors
+            .options(name)
+            .cloned()
+            .ok_or_else(|| match self.descriptors.get(name) {
+                Some(_) => format!("the Agent plugin `{name}` has no options"),
+                None => format!("there is no Agent plugin `{name}`"),
+            })
+    }
+
+    /// What the rows' options set that cannot be used, as configuration
+    /// warnings.
+    pub(crate) fn option_issues(&self, settings: &AgentSettings) -> Vec<String> {
+        self.descriptors.issues(&settings.plugin_options)
     }
 
     /// The service of type `T` the active row `name` provides under its

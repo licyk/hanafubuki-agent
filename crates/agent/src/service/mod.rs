@@ -1,6 +1,7 @@
 use super::host::AgentHostOptions;
 use super::host::{
-    agent_plugin_manifest, AgentHost, AgentPluginEventSink, AgentPluginInputs, AgentPluginRow,
+    agent_plugin_manifest, AgentHost, AgentPluginDescriptor, AgentPluginEventSink,
+    AgentPluginInputs, AgentPluginRow,
 };
 use super::session_driver::AgentSessionDriver;
 use super::skills::AgentSkillApplication;
@@ -93,8 +94,9 @@ pub struct AgentServiceInputs {
 /// Built for every Agent instance, since plugin rows are mounted once.
 pub struct AgentHostPorts {
     /// The host's plugins, mounted after the Agent's capability plugins and
-    /// before its context plugins.
-    pub plugins: Vec<AgentPluginRow>,
+    /// before its context plugins, each with its descriptor: its name (the
+    /// row's plugin name), its summary and its options.
+    pub plugins: Vec<(AgentPluginRow, AgentPluginDescriptor)>,
     /// Where the Agent works.
     pub workspace: Arc<dyn WorkspaceRootsPort>,
     /// The context steering carries.
@@ -233,7 +235,7 @@ impl AgentApplicationService {
         config: AgentConfig,
         storage_paths: AgentStoragePaths,
         skill_roots: SkillRoots,
-        extra: Vec<AgentPluginRow>,
+        extra: Vec<(AgentPluginRow, AgentPluginDescriptor)>,
     ) -> Result<Self, String> {
         let mut host = crate::test_support::test_host(paths);
         host.plugins = extra;
@@ -549,9 +551,12 @@ impl AgentApplicationService {
     }
 
     /// What the layers of `config.toml` hold that the settings cannot use:
-    /// unknown keys, and values the layer below replaces.
+    /// unknown keys, values the layer below replaces, and plugin options
+    /// that do not fit their plugin's.
     pub fn config_layer_warnings(&self) -> Result<Vec<String>, String> {
-        self.config.layer_warnings()
+        let mut warnings = self.config.layer_warnings()?;
+        warnings.extend(self.host.option_issues(&self.config.settings()?));
+        Ok(warnings)
     }
 }
 

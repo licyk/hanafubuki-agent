@@ -11,11 +11,12 @@
 // turn is reported by the parent's next `wait_agent`, which returns the
 // final answer, and agents never message their parent or each other; a
 // message to a running agent steers its turn and one to an idle agent waits
-// for its next follow-up task; at most 3 agents of one parent run at once
-// (Codex's 4 threads per session less the root, counted by running turns
-// since nothing is evicted), only a session without a parent spawns
-// (Codex's `agents.max_depth` default), and a wait lasts at most 5 minutes
-// (the turn's own tool timeout and deadline bound it).
+// for its next follow-up task; by default at most 3 agents of one parent
+// run at once (Codex's 4 threads per session less the root, counted by
+// running turns since nothing is evicted), only a session without a parent
+// spawns (Codex's `agents.max_depth` default), and a wait lasts at most 5
+// minutes (the turn's own tool timeout and deadline bound it); the limits
+// and the wait bounds are the plugin's options.
 
 //! What the subagent tools and the facade's subagent calls do, over the
 //! session driver. The runs live in [`SubagentRuns`], which outlives the
@@ -36,14 +37,10 @@ use hanafubuki_agent_kernel::{
 use parking_lot::Mutex;
 use tokio::sync::Notify;
 
+use super::options::SubagentLimits;
 use super::{AgentSubagentState, AgentSubagentStatus};
 use crate::session_driver::AgentSessionDriver;
 
-/// How many agents of one parent run a turn at once.
-pub(super) const MAXIMUM_RUNNING_AGENTS: usize = 3;
-pub(super) const DEFAULT_WAIT: Duration = Duration::from_secs(30);
-pub(super) const MINIMUM_WAIT: Duration = Duration::from_secs(10);
-pub(super) const MAXIMUM_WAIT: Duration = Duration::from_secs(300);
 /// The longest last answer the facade's status carries.
 const ANSWER_EXCERPT_CHARS: usize = 400;
 const CANCELLATION_POLL_INTERVAL: Duration = Duration::from_millis(50);
@@ -203,9 +200,15 @@ pub(crate) struct SubagentService {
     pub(super) driver: AgentSessionDriver,
     pub(super) runs: SubagentRuns,
     pub(super) blocking: Arc<BlockingService>,
+    /// The plugin's options; the running-agent limit changes in place.
+    pub(super) limits: Mutex<SubagentLimits>,
 }
 
 impl SubagentService {
+    pub(super) fn limits(&self) -> SubagentLimits {
+        *self.limits.lock()
+    }
+
     /// Creates `request.task_name` under `parent` and runs its first turn,
     /// the message, in the background.
     pub(super) async fn spawn(
@@ -407,8 +410,9 @@ impl SubagentService {
     }
 
     fn ensure_capacity(&self, parent: AgentSessionId) -> Result<(), AgentError> {
-        if self.runs.running(parent) >= MAXIMUM_RUNNING_AGENTS {
-            return Err(capacity_refusal());
+        let maximum = self.limits().maximum_running_agents;
+        if self.runs.running(parent) >= maximum {
+            return Err(capacity_refusal(maximum));
         }
         Ok(())
     }
@@ -423,14 +427,15 @@ impl SubagentService {
         message: String,
     ) -> Result<(), AgentError> {
         self.driver.inherit_permission_mode(parent, child).await?;
+        let maximum = self.limits().maximum_running_agents;
         let (text, turn) = {
             let mut runs = self.runs.runs.lock();
             let running = runs
                 .values()
                 .filter(|run| run.parent == parent && run.status == AgentRunStatus::Running)
                 .count();
-            if running >= MAXIMUM_RUNNING_AGENTS {
-                return Err(capacity_refusal());
+            if running >= maximum {
+                return Err(capacity_refusal(maximum));
             }
             let run = runs
                 .entry(child)
@@ -522,9 +527,9 @@ impl AgentRun {
     }
 }
 
-fn capacity_refusal() -> AgentError {
+fn capacity_refusal(maximum: usize) -> AgentError {
     refused(format!(
-        "at most {MAXIMUM_RUNNING_AGENTS} agents can run at once; wait for one to finish or interrupt one"
+        "at most {maximum} agents can run at once; wait for one to finish or interrupt one"
     ))
 }
 

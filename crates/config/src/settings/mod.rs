@@ -12,6 +12,8 @@ use hanafubuki_agent_foundation::url_policy::{UrlPolicy, MAX_URL_BYTES};
 use hanafubuki_agent_packages::{is_package_enabled, MarketplaceRecord, PluginId, PluginsSettings};
 use serde::{Deserialize, Deserializer, Serialize};
 
+use crate::plugin_options::PluginOptionsSettings;
+
 mod compaction;
 mod decode;
 mod packages;
@@ -52,6 +54,10 @@ pub struct AgentSettings {
     /// `[marketplaces]`: the marketplaces the user added, by name. Changed
     /// by the marketplace calls ([`crate::AgentConfig::set_marketplace`]).
     pub marketplaces: BTreeMap<String, MarketplaceRecord>,
+    /// `[pluginOptions]`: the built-in plugins' options, by plugin and key.
+    /// Changed by [`crate::AgentConfig::set_plugin_options`], which checks
+    /// them against the plugin's schema, never patched.
+    pub plugin_options: PluginOptionsSettings,
 }
 
 impl AgentSettings {
@@ -80,6 +86,7 @@ impl Default for AgentSettings {
             compaction: AgentCompactionSettings::default(),
             plugins: PluginsSettings::default(),
             marketplaces: BTreeMap::new(),
+            plugin_options: PluginOptionsSettings::default(),
         }
     }
 }

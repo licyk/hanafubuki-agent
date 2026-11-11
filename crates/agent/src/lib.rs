@@ -94,9 +94,10 @@ pub use hanafubuki_agent_plugin_packages::{
     GuestExitCause, GuestExitReport, GuestState, GuestStatus,
 };
 pub use host::{
-    AgentPluginContextContribution, AgentPluginContributions, AgentPluginEventSink,
-    AgentPluginGroup, AgentPluginLock, AgentPluginRow, AgentPluginState, AgentPluginStatus,
-    AgentPlugins, NoopAgentPluginEventSink,
+    agent_plugin_descriptors, AgentPluginContextContribution, AgentPluginContributions,
+    AgentPluginDescriptor, AgentPluginEventSink, AgentPluginGroup, AgentPluginLock,
+    AgentPluginOptionsStatus, AgentPluginRow, AgentPluginSettings, AgentPluginState,
+    AgentPluginStatus, AgentPlugins, NoopAgentPluginEventSink,
 };
 pub use host_inputs::{
     AgentSteeringRequest, AgentTurnInput, AgentTurnRequest, HostContextPort, NoHostContext,
@@ -169,20 +170,22 @@ use std::path::Path;
 /// The Agent's configuration, which the host opens in the directory it names
 /// and the standalone Agent layers.
 pub use hanafubuki_agent_config::{
-    AgentAlternateScreen, AgentBackgroundCompactionSettings, AgentCompactionSettings,
-    AgentCompactionStrategy, AgentConfig, AgentConfigProblem, AgentConfigRecovery, AgentDirs,
-    AgentHierarchicalCompactionSettings, AgentImageInputPolicy, AgentInputCapabilitiesSettings,
-    AgentLogLevel, AgentMemorySettings, AgentModelPolicySettings, AgentModelProtocol,
-    AgentNetworkSettings, AgentProviderHeaderSettings, AgentProviderSettings,
+    parse_config_value, AgentAlternateScreen, AgentBackgroundCompactionSettings,
+    AgentCompactionSettings, AgentCompactionStrategy, AgentConfig, AgentConfigProblem,
+    AgentConfigRecovery, AgentDirs, AgentHierarchicalCompactionSettings, AgentImageInputPolicy,
+    AgentInputCapabilitiesSettings, AgentLogLevel, AgentMemorySettings, AgentModelPolicySettings,
+    AgentModelProtocol, AgentNetworkSettings, AgentProviderHeaderSettings, AgentProviderSettings,
     AgentRemoteCompactionCapability, AgentSandboxMode, AgentSandboxWorkspaceWrite, AgentSettings,
     AgentSettingsPatch, AgentStandaloneSettings, AgentStandaloneSettingsPatch, AgentTuiPreferences,
     AgentTuiPreferencesPatch, AgentTuiPreset, AgentTurnBudgetSettings, AgentWebSearchProvider,
     AgentWindowsSandbox, AgentWindowsSettings, ConfigLayerSource, ConfigLayers, ConfigOverrides,
-    AGENT_CREDENTIAL_FILES, AGENT_HOME_ENV, AGENT_MCP_FILE, AGENT_PROVIDERS_FILE,
-    AGENT_SETTINGS_FILE, MAX_AGENT_CONSECUTIVE_STALLED_STEPS,
-    MAX_AGENT_CUMULATIVE_MODEL_INPUT_TOKENS, MAX_AGENT_CUMULATIVE_MODEL_OUTPUT_TOKENS,
-    MAX_AGENT_HOOK_FRAGMENT_BYTES, MAX_AGENT_IDLE_TIMEOUT_SECONDS, MAX_AGENT_IN_FLIGHT_TOOLS,
-    MAX_AGENT_PENDING_INPUT_ITEMS, MAX_AGENT_TOOL_INVOCATIONS, MAX_AGENT_TOOL_OUTPUT_BYTES,
+    PluginOption, PluginOptionKey, PluginOptionKind, PluginOptionSchema, PluginOptionValue,
+    PluginOptionsSettings, ResolvedPluginOption, ResolvedPluginOptions, AGENT_CREDENTIAL_FILES,
+    AGENT_HOME_ENV, AGENT_MCP_FILE, AGENT_PROVIDERS_FILE, AGENT_SETTINGS_FILE,
+    MAX_AGENT_CONSECUTIVE_STALLED_STEPS, MAX_AGENT_CUMULATIVE_MODEL_INPUT_TOKENS,
+    MAX_AGENT_CUMULATIVE_MODEL_OUTPUT_TOKENS, MAX_AGENT_HOOK_FRAGMENT_BYTES,
+    MAX_AGENT_IDLE_TIMEOUT_SECONDS, MAX_AGENT_IN_FLIGHT_TOOLS, MAX_AGENT_PENDING_INPUT_ITEMS,
+    MAX_AGENT_TOOL_INVOCATIONS, MAX_AGENT_TOOL_OUTPUT_BYTES, MAX_PLUGIN_OPTIONS,
 };
 pub use hanafubuki_agent_execution::{
     AgentBackgroundTerminalSnapshot, AgentBackgroundTerminalStopFailure,

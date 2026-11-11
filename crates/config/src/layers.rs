@@ -196,7 +196,7 @@ fn is_trusted(user: &Map<String, Value>, project: &Path) -> bool {
 /// Decodes `layer` over `resolved`.
 fn apply(source: &str, layer: &Map<String, Value>, resolved: &mut Resolved) -> Result<(), String> {
     let mut repairs = Vec::new();
-    let settings = decode_settings(layer, &resolved.settings, &mut repairs);
+    let settings = decode_settings(layer, &resolved.settings, source, &mut repairs);
     let standalone = decode_standalone(layer, &resolved.standalone, &mut repairs);
     resolved.settings = settings;
     resolved.standalone = standalone;

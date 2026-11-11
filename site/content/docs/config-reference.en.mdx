@@ -167,7 +167,7 @@ Which [installed plugins](/docs/architecture#installed-plugins) are on, by plugi
 | `plugins."PLUGIN@MARKETPLACE".mcpServers.NAME.disabledTools` | An array of tool names | none    | Tools of that server not offered, after `enabledTools`                                                                                          |
 | `plugins."PLUGIN@MARKETPLACE".settings`                      | A table                | none    | The settings of the package's code, as its manifest's `configSchema` describes them: its guest's configuration (`plugins settings`, `/plugins`) |
 
-An installed package is on unless its marketplace is turned off (below), or its entry says `enabled = false`, or its entry does not say and `_default.enabled` is `false`. An entry whose key is not a plugin id is kept in the file and ignored, as an unknown key is. How a package's MCP servers run is the package's; `mcpServers` only restricts them ([Plugins' servers](/docs/mcp#plugin-servers)). A change the Agent writes applies at once: it reloads its packages after each settings write; a hand edit applies at the next start. `plugins add` (and an install in `/plugins`) writes `enabled = true`, `plugins enable` and `disable` write `enabled` alone, and `plugins remove` removes the entry ([plugins](/docs/cli-reference#plugins)). `settings` is replaced whole by `set_package_settings` (and the **Settings** row of a code plugin's page in `/plugins`), which checks it against the manifest's `configSchema` and restarts the guest with it; a value that is not a table is a repair. The guest reads it as its configuration and as its `settings` view ([Code plugins](/docs/plugin-rules#guest-host-calls)).
+An installed package is on unless its marketplace is turned off (below), or its entry says `enabled = false`, or its entry does not say and `_default.enabled` is `false`. An entry whose key is not a plugin id is kept in the file and ignored, as an unknown key is. How a package's MCP servers run is the package's; `mcpServers` only restricts them ([Plugins' servers](/docs/mcp#plugin-servers)). A change the Agent writes applies at once: it reloads its packages after each settings write; a hand edit applies at the next start. `plugins add` (and an install in `/plugins`) writes `enabled = true`, `plugins enable` and `disable` write `enabled` alone, and `plugins remove` removes the entry ([plugins](/docs/cli-reference#plugins)). `settings` is replaced whole by `set_package_settings` (and the **Settings** row of a code plugin's page in `/plugins`, or its options form, `o`), which checks it against the manifest's `configSchema` and the options it lowers to, and restarts the guest with it; a value that is not a table is a repair. The guest reads it as its configuration and as its `settings` view ([Code plugins](/docs/plugin-rules#guest-host-calls)), checked against those options when the package is read: a key that does not fit its option gets the option's default, or is left out when the schema gives none, with an issue of the package and a log warning; an integer or a number out of range is clamped. The file is never rewritten for it ([configSchema](/docs/writing-plugins#config-schema)).
 
 ### Marketplaces [#marketplaces]
 
@@ -184,6 +184,25 @@ The marketplaces you added, by name: where the Agent finds their packages.
 | `marketplaces.NAME.enabled`      | `true` or `false`; `true` | `false` turns off every package from it, whatever `[plugins]` says |
 
 `plugins marketplace add`, `upgrade` and `remove` write these entries ([plugins](/docs/cli-reference#plugins)). A git marketplace is checked out in the data directory's `plugins/marketplaces/NAME/`; a local one is read where it is. An entry without a usable `sourceType` and `source` is kept in the file and ignored. Both tables go in any layer, and `config get` and `config set` reach their keys (`config set plugins."demo@my-mkt".enabled false`); a `-c` override cannot quote a key, so it names a package without dots only (`-c plugins.demo@my-mkt.enabled=false`).
+
+### Plugin options [#plugin-options]
+
+The options of the plugins compiled into the Agent (and of a host's plugins), by plugin name, then by option: `[pluginOptions.NAME]`. A plugin's descriptor says which options it takes, with their kind, bounds and defaults; `/plugins` and `/config plugins` show them in a form.
+
+| Key                                            | Type and values       | Default | Means                                                                                           |
+| ---------------------------------------------- | --------------------- | ------- | ----------------------------------------------------------------------------------------------- |
+| `pluginOptions.subagents.maximumRunningAgents` | An integer, 1 to 16   | `3`     | How many sub-agents of one conversation run a turn at once                                      |
+| `pluginOptions.subagents.defaultWaitSeconds`   | An integer, 10 to 300 | `30`    | How long `wait_agent` waits when the model gives no timeout, taken into the minimum and maximum |
+| `pluginOptions.subagents.minimumWaitSeconds`   | An integer, 10 to 300 | `10`    | The shortest timeout `wait_agent` takes; one above the maximum is taken down to it              |
+| `pluginOptions.subagents.maximumWaitSeconds`   | An integer, 10 to 300 | `300`   | The longest timeout `wait_agent` takes                                                          |
+
+```toml
+[pluginOptions.subagents]
+maximumRunningAgents = 4
+defaultWaitSeconds = 60
+```
+
+The table merges across the layers per plugin and key, as `[plugins]` merges per entry: a key a layer sets replaces the one below, and the other keys stay. Each key is read on its own: a value of the wrong type, or a text that does not fit, takes the option's default; an integer out of range is clamped to it; either is a warning that names the layer, the plugin and the key (`/warnings`, and the plugin's options in `/plugins`). A key the plugin does not take is kept in the file and ignored, with a warning; a table whose plugin has no options means nothing, as an unknown name in `disabledPlugins` does. A write is strict: `config set pluginOptions.NAME.KEY VALUE`, the options form and `set_plugin_options` check every value against the plugin's options and refuse one that does not fit, with the reason, before anything is written; `config get pluginOptions.NAME.KEY` prints the value the layers resolve, the default when nothing sets it. A profile's or a project's `pluginOptions` is written by hand. A change the Agent writes applies at once: `subagents` takes a new running-agent limit in place and starts again for new wait bounds, and the sub-agents it runs keep running. The `web` plugin's settings stay `webSearchProvider`, `searxngBaseUrl` and `webFetchUseJinaReader` (above), which the network form shares.
 
 ## providers.toml [#providers-toml]
 

@@ -207,11 +207,12 @@ The screens of `/providers` and `/mcp` edit in a form:
 
 `/plugins` opens the plugin browser (Codex's plugin catalog) on three tabs, switched with ←/→: **Installed**, **Marketplaces** and **Built-in**. Each change is saved at once; while it runs, the page says so (`Installing…`), and everything is read again after it. The commands' equivalents are in [Command-line reference](/docs/cli-reference#plugins).
 
-- **Installed** lists the [installed plugins](/docs/cli-reference#plugins): each with its state, version, hooks that need review and issues. Space turns the highlighted one on or off; Enter opens it; **Install from a directory…** asks for a plugin's directory, which is installed as `<name>@local`.
+- **Installed** lists the [installed plugins](/docs/cli-reference#plugins): each with its state, version, hooks that need review and issues. Space turns the highlighted one on or off; Enter opens it; `o` opens a code plugin's options, when its `configSchema` lowers to some (the generic options form below; saving writes its settings, keys the options do not describe kept, and starts its code again); **Install from a directory…** asks for a plugin's directory, which is installed as `<name>@local`.
 - A plugin's page offers **Disable plugin** or **Enable plugin**, **Trust its N hook(s)** while some wait, **Grant its permissions** while a code plugin's are not granted (it says what its code may reach; a **Code** row shows its guest's state), **Settings** for a code plugin (a form with its settings as one JSON object, checked against its manifest's `configSchema`; empty removes them; its code starts again with them), **Update plugin** (again from its marketplace or directory), **Retry plugin** (load it again, and start a failed guest again) and **Uninstall plugin**, which asks whether to keep its data directory. Below them: its source, version, format, Skills, MCP servers, hooks and issues.
 - **Marketplaces** lists the added marketplaces, each with its source and how many of its plugins are installed. Enter opens one: its plugins, each **Available**, **Installed**, **Disabled** or **Not installable**; Enter on one that is not installed shows **Install plugin**. Ctrl+U upgrades a git marketplace, Ctrl+R removes one after asking. **Add a marketplace…** asks for a source: `owner/repo`, a git URL, or a local marketplace directory.
 - After an install, a plugin with hooks lists their commands and asks to trust them (**Trust them**, or **Not now**: `/hooks` and the plugin's page trust them later). A hook runs only once trusted.
-- **Built-in** lists the plugins compiled into the Agent, with their state: Space or Enter turns one on or off (`disabledPlugins`; the core ones cannot be), `r` starts a failed one again.
+- **Built-in** lists the plugins compiled into the Agent (and the host's), with their state and summary: Space or Enter turns one on or off (`disabledPlugins`; the core ones cannot be), `r` starts a failed one again, and `o` opens the options of one that has some (`[pluginOptions.NAME]`).
+- The **options form** is generic: a field per option of the plugin, labelled with its summary and key, as a toggle, a number (its bounds as the placeholder), a choice, a text (masked when it is secret) or a list of texts separated by commas. Save checks every value as the write does and shows the reason under a field that does not fit; only the values changed are written, into the user's `config.toml` ([Plugin options](/docs/config-reference#plugin-options)), and the plugin takes them at once.
 
 Esc goes back a page, and closes the browser from a tab. Started with `--safe-mode`, the browser says no installed plugin is loaded.
 
@@ -602,11 +603,11 @@ A preset is an input kept in a slot from 0 to 9 (`tui.presets."N"`), with an opt
 | Interface             | the four scalar `[tui]` preferences, with actions that open `/theme`, `/statusline`, `/title`, `/keymap`, `/presets` and `/tui` |
 | Providers & policy    | opens `/providers policy`: every Provider and the shared model policy                                                           |
 | MCP servers           | opens `/mcp`, including protocol mode and per-tool policies                                                                     |
-| Plugins & packages    | opens `/plugins`                                                                                                                |
+| Plugins & packages    | the options form of each built-in plugin that has options, and a link to `/plugins`                                             |
 | Hooks                 | opens `/hooks`                                                                                                                  |
 | Layers & files        | the files read, lowest first, their warnings, and where writes go                                                               |
 
-A domain is saved whole: its form drafts a typed patch, checks it, writes it atomically, and only then replaces the screen's state; invalid input stays in the form with the field's error. A save that a profile, the project's file or `-c` replaces says so. `providers.toml` and `mcp.toml` have no layers, and their forms say so.
+A domain is saved whole: its form drafts a typed patch, checks it, writes it atomically, and only then replaces the screen's state; invalid input stays in the form with the field's error. A save that a profile, the project's file or `-c` replaces says so; a plugin's options form saves only the options it changed. `providers.toml` and `mcp.toml` have no layers, and their forms say so.
 
 `/config quick` keeps the former one-panel editor for the `[tui]` scalars and the compaction strategy; `config set` is the command-line equivalent for one key.
 

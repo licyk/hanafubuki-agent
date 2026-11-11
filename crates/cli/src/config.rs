@@ -1,10 +1,13 @@
 //! `config path|get|set|edit`: the user's `config.toml`, read with every
-//! layer applied and written through the configuration's own writer.
+//! layer applied and written through the configuration's own writer. A
+//! plugin option (`pluginOptions.<plugin>.<option>`) is read and checked
+//! against its plugin's descriptor.
 
 use std::process::Command;
 
 use hanafubuki_agent::{
-    AgentConfig, AgentRuntimeHost, AGENT_MCP_FILE, AGENT_PROVIDERS_FILE, AGENT_SETTINGS_FILE,
+    agent_plugin_descriptors, parse_config_value, AgentConfig, AgentRuntimeHost, PluginOptionKey,
+    PluginOptionSchema, AGENT_MCP_FILE, AGENT_PROVIDERS_FILE, AGENT_SETTINGS_FILE,
 };
 use serde_json::{Map, Value};
 
@@ -20,11 +23,7 @@ pub(crate) fn run(global: &GlobalArgs, command: ConfigCommand) -> Result<(), Fai
             Ok(())
         }
         ConfigCommand::Get { key } => get(standalone.runtime.config(), key.as_deref()),
-        ConfigCommand::Set { key, value } => standalone
-            .runtime
-            .config()
-            .set_user_value(&key, &value)
-            .map_err(Failure::new),
+        ConfigCommand::Set { key, value } => set(standalone.runtime.config(), &key, &value),
         ConfigCommand::Edit => edit(&standalone),
     };
     standalone.shutdown();
@@ -51,6 +50,16 @@ fn path(standalone: &Standalone) {
 }
 
 fn get(config: &AgentConfig, key: Option<&str>) -> Result<(), Failure> {
+    if let Some(option) = key.map(plugin_option).transpose()?.flatten() {
+        let schema = option_schema(&option.row)?;
+        let settings = config.settings().map_err(Failure::new)?;
+        let resolved = settings.plugin_options.resolve(&option.row, &schema);
+        let value = resolved
+            .value(&option.key)
+            .ok_or_else(|| unknown_option(&option))?;
+        println!("{}", render(value.to_json())?);
+        return Ok(());
+    }
     let value = match key {
         Some(key) => config.value(key).map_err(Failure::new)?,
         None => Some(Value::Object(
@@ -61,6 +70,39 @@ fn get(config: &AgentConfig, key: Option<&str>) -> Result<(), Failure> {
         println!("{}", render(without_credentials(value))?);
     }
     Ok(())
+}
+
+fn set(config: &AgentConfig, key: &str, raw: &str) -> Result<(), Failure> {
+    let Some(option) = plugin_option(key)? else {
+        return config.set_user_value(key, raw).map_err(Failure::new);
+    };
+    let schema = option_schema(&option.row)?;
+    let value = parse_config_value(raw).map_err(Failure::new)?;
+    let patch = Map::from_iter([(option.key.clone(), value)]);
+    config
+        .set_plugin_options(&option.row, &schema, &patch)
+        .map(drop)
+        .map_err(Failure::new)
+}
+
+fn plugin_option(key: &str) -> Result<Option<PluginOptionKey>, Failure> {
+    PluginOptionKey::parse(key).map_err(Failure::new)
+}
+
+/// The options of the built-in plugin `row`, as its descriptor has them.
+fn option_schema(row: &str) -> Result<PluginOptionSchema, Failure> {
+    agent_plugin_descriptors()
+        .into_iter()
+        .find(|descriptor| descriptor.name == row)
+        .and_then(|descriptor| descriptor.options)
+        .ok_or_else(|| Failure::new(format!("the plugin `{row}` has no options")))
+}
+
+fn unknown_option(option: &PluginOptionKey) -> Failure {
+    Failure::new(format!(
+        "the plugin `{}` has no option `{}`",
+        option.row, option.key
+    ))
 }
 
 /// The value with the credentials of a URL in it (a proxy's

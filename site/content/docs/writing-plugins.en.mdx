@@ -103,7 +103,7 @@ The manifest is read as an external producer's: a field, or an entry of a list, 
 | `permissions.network`                                             | `true` to reach the network (off by default). The three permissions are a program's: a module asks for none                                                                                                                                                         |
 | `permissions.workspace`                                           | `none`, `read` (the default) or `write`                                                                                                                                                                                                                             |
 | `permissions.env`                                                 | the names of the Agent's environment variables the guest receives                                                                                                                                                                                                   |
-| `configSchema`                                                    | a JSON Schema of an object: the plugin's settings, which `plugins settings` and `/plugins` check against it                                                                                                                                                         |
+| `configSchema`                                                    | a JSON Schema of an object: the plugin's settings, lowered to options that `plugins settings` and `/plugins` check them against, and that its guest receives them checked by ([configSchema](#config-schema))                                                       |
 
 What each declaration becomes, and its bounds, is in [What a guest contributes](/docs/plugin-rules#guest-contributions).
 
@@ -195,7 +195,7 @@ A guest in another language implements the wire itself. Every message is one JSO
 - the manifest's issues (a field left out, a timeout out of range, an unknown contribution) and declared paths that do not exist;
 - the runtime: for a program, the protocol, a program in the package that exists (and is executable), or an interpreter on the `PATH`, and the package files its arguments name; for a module, a file in the package that is a binary WebAssembly module, and a tool `timeout` longer than `limits.timeoutMs`, which would stop it first;
 - what registration would leave out: a tool name that is not one, a schema too large or too deep, a context kind that is not a plugin's, more than 7 kinds, a prompt slot that does not exist, an event no observer receives, names declared twice;
-- a `configSchema` that does not describe an object.
+- a `configSchema` that does not describe an object, and each property of it that cannot be an option ([configSchema](#config-schema)).
 
 With `--run` it then installs the plugin into a throwaway home (its own configuration and data directory, deleted afterwards), grants what the code asks for, starts its guest (a program under the sandbox; a module, which needs none, compiled and instantiated), and reports its state, what its start left out, its exit and its standard error: the handshake, the metadata and `apply` all happen as in the Agent. It fails (exit code 1) on any issue, or when the guest does not run; `--json` prints `{"validation": …, "started": …}`.
 
@@ -210,6 +210,24 @@ With `--run` it then installs the plugin into a throwaway home (its own configur
 - **Permissions** are granted by the user, never by the plugin: a program whose permissions are not granted is `blocked`. `plugins grant ID` grants what the manifest asks for, as does **Grant its permissions** on the plugin's page in `/plugins`. An update that asks for more waits for a new grant. A WebAssembly module asks for nothing and is never `blocked`.
 - **The sandbox's plugin profile** confines a program: it reads the system's directories and its package, writes only its data directory, reaches the workspace as granted and the network only if granted, and starts with an empty environment but its granted `env`, `PLUGIN_ROOT` and `PLUGIN_DATA`. Linux and macOS enforce the reads; Windows cannot deny them, so there `workspace: "none"` is not enforced. Where there is no sandbox, a guest does not start.
 - **Settings** are `[plugins."ID"].settings` in `config.toml`: `plugins settings ID --set '{"greeting": "Hi"}'` replaces them (checked against `configSchema`), `--set null` removes them, `plugins settings ID` prints them with the schema; `/plugins` edits them too. They are the configuration `apply` receives and the guest's `settings` view, and a change starts the guest again with them.
+
+### configSchema [#config-schema]
+
+The `configSchema` is enforced. When the package is read, each property of its `properties` is lowered to an option, which the options form in `/plugins` (`o` on the plugin) shows and the settings are checked against. The keywords it reads:
+
+| Keyword                                        | Becomes                                                                     |
+| ---------------------------------------------- | --------------------------------------------------------------------------- |
+| `type: "boolean"`                              | a toggle                                                                    |
+| `type: "integer"`, `"number"`                  | a number, within `minimum` and `maximum` when they are given                |
+| `type: "string"`                               | a text, at most `maxLength` characters when it is given                     |
+| `enum` of strings                              | a choice among them (with `type: "string"` or no `type`)                    |
+| `type: "array"`, `items: { "type": "string" }` | a list of texts, at most `maxItems` items of at most the items' `maxLength` |
+| `default`                                      | the option's default, when it fits the option                               |
+| `description`                                  | the form's label, its first line                                            |
+
+Another keyword constrains nothing here, as for a tool's schema; `required` and `additionalProperties: false` are still checked when the settings are written. A property that is none of these (an object, a list of anything but strings, a union of types, a non-string `enum`) is not an option: it is an issue of the package (`plugins validate` lists it), and its value reaches the guest unchecked. At most 64 properties are options.
+
+The guest receives its settings checked against the options: a value that does not fit its option gets the option's `default`, or is left out when the schema gives none, and an integer or a number out of range is clamped; each is an issue of the package and a warning in the log, and `config.toml` keeps what was written. A key the settings leave out stays out (the guest's own default applies), and a key no option describes reaches the guest as it is. A write is strict: `plugins settings --set`, `set_package_settings` and the forms refuse settings that do not fit, with the reason, and write nothing.
 
 ## When it fails [#failures]
 

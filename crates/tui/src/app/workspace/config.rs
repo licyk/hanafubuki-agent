@@ -93,6 +93,9 @@ impl App {
         let result = match change.clone() {
             ConfigChange::Agent(patch) => self.bridge.write_agent_settings(patch),
             ConfigChange::Standalone(patch) => self.bridge.write_standalone_settings(patch),
+            ConfigChange::PluginOptions { row, options } => {
+                self.bridge.write_plugin_options(row, options)
+            }
             ConfigChange::Tui(patch) => match self.bridge.write_tui_preferences(patch) {
                 Ok(preferences) => {
                     self.apply_preferences(preferences);

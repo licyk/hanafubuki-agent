@@ -1,11 +1,11 @@
 //! A code package checked as the guest host would run it, without starting
 //! anything: its runtime's command or module, its contributions and its
-//! settings' schema (`plugins validate`).
+//! settings' schema, as the options it lowers to (`plugins validate`).
 
 use std::path::Path;
 
 use hanafubuki_agent_packages::{
-    PackageCode, PackageContributes, PackageRuntime, PluginId, WasmRuntime,
+    lower_config_schema, PackageCode, PackageContributes, PackageRuntime, PluginId, WasmRuntime,
 };
 use hanafubuki_agent_tool_contracts::validate_json_schema;
 use serde_json::Value;
@@ -40,8 +40,8 @@ pub fn check_package(id: &PluginId, root: &Path, code: &PackageCode) -> Vec<Stri
         }
     }
     issues.extend(check_contributes(id, &code.contributes));
-    if let Some(schema) = &code.config_schema {
-        let schema = Value::Object(schema.clone());
+    if let Some(config_schema) = &code.config_schema {
+        let schema = Value::Object(config_schema.clone());
         if validate_json_schema(&schema).is_err() {
             issues.push("its configSchema is too large or too deep".to_string());
         }
@@ -51,6 +51,8 @@ pub fn check_package(id: &PluginId, root: &Path, code: &PackageCode) -> Vec<Stri
         {
             issues.push("its configSchema must describe an object: settings are one".to_string());
         }
+        // What the options form and the settings check read of it.
+        issues.extend(lower_config_schema(config_schema).1);
     }
     issues
 }

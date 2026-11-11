@@ -1,11 +1,14 @@
 //! What the host reports about each plugin it runs.
 
+use hanafubuki_agent_config::{PluginOptionSchema, ResolvedPluginOption, ResolvedPluginOptions};
 /// Why an Agent plugin cannot be turned off.
 pub use hanafubuki_agent_host::ModuleLock as AgentPluginLock;
 /// The coarse state of one Agent plugin: a row's state on the generic host.
 pub use hanafubuki_agent_host::ModuleState as AgentPluginState;
 use hanafubuki_agent_host::{ModuleGroup, ModuleRestart, ModuleStatus};
 use serde::Serialize;
+
+use super::AgentPluginDescriptor;
 
 /// Where a plugin sits in the Agent's composition.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
@@ -49,10 +52,33 @@ pub struct AgentPluginContributions {
     pub observers: Vec<String>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+/// A plugin's options: what it takes, what each is now and where that was
+/// set, and what its settings set that could not be used.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentPluginOptionsStatus {
+    pub schema: PluginOptionSchema,
+    /// One per option of the schema, in its order.
+    pub values: Vec<ResolvedPluginOption>,
+    pub issues: Vec<String>,
+}
+
+impl AgentPluginOptionsStatus {
+    pub(crate) fn new(schema: PluginOptionSchema, resolved: ResolvedPluginOptions) -> Self {
+        Self {
+            schema,
+            values: resolved.values,
+            issues: resolved.issues,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentPluginStatus {
     pub name: String,
+    /// What it gives the model or the user (its descriptor's).
+    pub summary: String,
     pub group: AgentPluginGroup,
     pub state: AgentPluginState,
     pub error: Option<String>,
@@ -68,13 +94,18 @@ pub struct AgentPluginStatus {
     /// counts.
     pub restart: Option<ModuleRestart>,
     pub contributions: AgentPluginContributions,
+    /// Its options, for a plugin that takes some.
+    pub options: Option<AgentPluginOptionsStatus>,
 }
 
 impl AgentPluginStatus {
-    /// The host's status of a row, with what it contributes now.
+    /// The host's status of a row, with its descriptor's summary, what it
+    /// contributes now and its options.
     pub(super) fn of(
         status: ModuleStatus<AgentPluginGroup>,
+        descriptor: Option<&AgentPluginDescriptor>,
         contributions: AgentPluginContributions,
+        options: Option<AgentPluginOptionsStatus>,
     ) -> Self {
         let ModuleStatus {
             name,
@@ -90,6 +121,9 @@ impl AgentPluginStatus {
         } = status;
         Self {
             name,
+            summary: descriptor
+                .map_or("", |descriptor| descriptor.summary)
+                .to_string(),
             group,
             state,
             error,
@@ -98,6 +132,7 @@ impl AgentPluginStatus {
             lock,
             restart,
             contributions,
+            options,
         }
     }
 }

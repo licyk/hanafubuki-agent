@@ -86,6 +86,7 @@ fn compaction_fields_fall_back_one_by_one() {
     let settings = decode_settings(
         object.as_object().unwrap(),
         &AgentSettings::default(),
+        "config.toml",
         &mut repairs,
     );
     let compaction = settings.compaction;
@@ -118,6 +119,7 @@ fn compaction_fields_fall_back_one_by_one() {
     let settings = decode_settings(
         object.as_object().unwrap(),
         &AgentSettings::default(),
+        "config.toml",
         &mut repairs,
     );
     assert_eq!(settings.compaction, AgentCompactionSettings::default());

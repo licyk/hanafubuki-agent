@@ -24,6 +24,7 @@ mod hash;
 mod id;
 mod manifest;
 mod marketplace;
+mod options;
 mod settings;
 mod store;
 mod version;
@@ -43,6 +44,10 @@ pub use marketplace::{
     find_marketplace_manifest, list_marketplaces, load_marketplace, InstallationPolicy,
     ManifestFallback, Marketplace, MarketplaceAddRequest, MarketplaceAdded, MarketplaceListing,
     MarketplacePlugin, MarketplaceUpgrade, PackageSource,
+};
+pub use options::{
+    lower_config_schema, PluginOption, PluginOptionKind, PluginOptionSchema, PluginOptionValue,
+    ResolvedPluginOption, ResolvedPluginOptions, MAX_PLUGIN_OPTIONS,
 };
 pub use settings::{
     is_package_enabled, MarketplaceRecord, MarketplaceSourceType, PluginDefaults,

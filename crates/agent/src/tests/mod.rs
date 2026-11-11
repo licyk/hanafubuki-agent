@@ -24,6 +24,7 @@ mod compaction_golden;
 mod compression;
 #[cfg(target_os = "linux")]
 mod compression_golden;
+mod descriptors;
 mod executions;
 mod features;
 mod goal;

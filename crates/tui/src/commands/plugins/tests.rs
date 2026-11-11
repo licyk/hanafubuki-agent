@@ -100,6 +100,7 @@ fn a_code_plugins_page_offers_to_grant_what_it_asks_for_until_granted() {
         },
         settings: serde_json::Map::from_iter([("board".to_string(), serde_json::json!("B-1"))]),
         config_schema: None,
+        options: None,
     });
     let grants = |page: &pages::PageView| {
         page.choices.iter().flatten().any(|choice| {
@@ -124,4 +125,70 @@ fn a_code_plugins_page_offers_to_grant_what_it_asks_for_until_granted() {
         .flatten()
         .any(|choice| *choice == Choice::Open(Page::Prompt(Prompt::Settings))));
     assert_eq!(super::code::settings_text(&code), r#"{"board":"B-1"}"#);
+}
+
+/// `o` opens a code plugin's options when its `configSchema` lowers to
+/// some; saving writes its settings whole, the keys the options do not
+/// describe kept.
+#[test]
+fn a_code_plugins_options_save_its_settings_whole() {
+    use hanafubuki_agent::{
+        AgentPluginOptionsStatus, PluginOption, PluginOptionKind, PluginOptionSchema,
+        PluginOptionValue, ResolvedPluginOption,
+    };
+    use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+    let mut code = package(true, Vec::new());
+    assert_eq!(super::options::of_package(&code), None);
+    code.guest = Some(AgentPackageGuest {
+        runtime: RuntimeKind::Wasm,
+        permissions: PackagePermissions::default(),
+        granted_permissions: None,
+        status: GuestStatus {
+            state: GuestState::Running,
+            error: None,
+            last_exit: None,
+            stderr_tail: String::new(),
+            restarts: 0,
+            process_id: None,
+            issues: Vec::new(),
+        },
+        settings: serde_json::Map::from_iter([("nested".to_string(), serde_json::json!({}))]),
+        config_schema: None,
+        options: Some(AgentPluginOptionsStatus {
+            schema: PluginOptionSchema {
+                options: vec![PluginOption {
+                    key: "level".to_string(),
+                    summary: "How loud".to_string(),
+                    kind: PluginOptionKind::Integer {
+                        minimum: 1,
+                        maximum: 5,
+                    },
+                    default: Some(PluginOptionValue::Integer(2)),
+                }],
+            },
+            values: vec![ResolvedPluginOption {
+                key: "level".to_string(),
+                value: Some(PluginOptionValue::Integer(2)),
+                layer: None,
+            }],
+            issues: Vec::new(),
+        }),
+    });
+    let target = super::options::of_package(&code).unwrap();
+    let state = crate::agent_bridge::PluginsState {
+        packages: vec![code],
+        ..Default::default()
+    };
+    let mut form = super::options::form(&state, &target).unwrap();
+    let key = |code| KeyEvent::new(code, KeyModifiers::NONE);
+    form.handle_key(key(KeyCode::Backspace));
+    form.handle_key(key(KeyCode::Char('4')));
+    assert_eq!(
+        super::options::save(&mut form, &state, &target),
+        Some(PluginsCall::SetSettings {
+            id: "demo@market".to_string(),
+            settings: serde_json::json!({ "nested": {}, "level": 4 }),
+        })
+    );
 }
