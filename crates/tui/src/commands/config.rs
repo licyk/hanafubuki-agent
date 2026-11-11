@@ -68,7 +68,7 @@ fn dispatch(context: &mut CommandContext<'_>, args: &str) {
     let Some(section) = ConfigSection::parse(&section) else {
         return context.add_to_history(history_cell::new_error_event(format!(
             "/config: unknown section `{args}`; use general, sandbox, memory, web, compaction, \
-             network, interface, providers, mcp, plugins, hooks or layers"
+             network, interface, providers, role, mcp, plugins, hooks or layers"
         )));
     };
     context.send(AppEvent::Workspace(WorkspaceEvent::OpenConfig {

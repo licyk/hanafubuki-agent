@@ -157,7 +157,7 @@ Fullscreen 下还有阅读对话的按键：Page Up/Page Down、F3、F4、Ctrl-S
 - **`/role 名字`** 在下一个轮次之前给会话这个角色：它的指令、它设置了的模型和推理强度，以及它的收窄。对话中显示 `Role set to 名字`。没有任何来源定义的角色、或不可用的角色会被拒绝，并列出可用的角色。**`/role default`** 再去掉所有收窄。
 - 单独的 **`/role`** 列出可用的角色及其描述的第一行，会话当前的角色被标出；选中的那个按 `/role 名字` 的方式设置。
 - 轮次进行中不可用。没有会话时，`/role` 会先创建一个。
-- 角色显示在 `/status` 中，也可以用状态栏的 `role` 项显示。
+- 角色显示在 `/status` 中，也可以用状态栏的 `role` 项显示。配置中心的**会话角色**域（`/config role`）打开同一个列表。
 
 ## 权限 [#permissions]
 
@@ -598,7 +598,7 @@ yank = []
 
 ## 设置 [#config]
 
-`/config` 在整个屏幕上打开配置中心：可搜索的配置域列表，每一项显示当前生效值，上方显示分层和警告数量。`/` 搜索，上下键移动，Enter 打开，Esc 返回或关闭。`/config 域` 直接打开一个域；可用的域是 `general`、`sandbox`、`memory`、`web`、`compaction`、`network`、`interface`、`providers`、`mcp`、`plugins`、`hooks` 和 `layers`。
+`/config` 在整个屏幕上打开配置中心：可搜索的配置域列表，每一项显示当前生效值，上方显示分层和警告数量。`/` 搜索，上下键移动，Enter 打开，Esc 返回或关闭。`/config 域` 直接打开一个域；可用的域是 `general`、`sandbox`、`memory`、`web`、`compaction`、`network`、`interface`、`providers`、`role`、`mcp`、`plugins`、`hooks` 和 `layers`。
 
 | 域              | 修改什么                                                                                                    |
 | --------------- | ----------------------------------------------------------------------------------------------------------- |
@@ -610,6 +610,7 @@ yank = []
 | 网络与日志      | `network.proxy` 和 `logLevel`；代理立即生效，日志级别在下次启动时生效                                       |
 | 界面            | 四个标量 `[tui]` 偏好，并提供打开 `/theme`、`/statusline`、`/title`、`/keymap`、`/presets` 和 `/tui` 的操作 |
 | Provider 与策略 | 打开 `/providers policy`：所有 Provider 和共享的模型策略                                                    |
+| 会话角色        | 显示会话的角色和可用角色的数量，并打开 [`/role`](#role) 的列表，在轮次之间选择另一个角色                    |
 | MCP 服务器      | 打开 `/mcp`，包括协议模式和按工具的策略                                                                     |
 | 插件与包        | 每个有选项的内置插件的选项表单，以及打开 `/plugins` 的链接                                                  |
 | 钩子            | 打开 `/hooks`                                                                                               |

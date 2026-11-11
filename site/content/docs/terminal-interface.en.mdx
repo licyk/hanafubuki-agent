@@ -160,7 +160,7 @@ A session's [role](/docs/roles#sessions) narrows what it may use: its tools, the
 - **`/role NAME`** gives the session that role before its next turn: its instructions, its model and reasoning effort if it sets them, and its narrowing. The conversation says `Role set to NAME`. A role no source defines, or one that cannot be used, is refused with the usable roles named. **`/role default`** takes every narrowing away again.
 - **`/role`** alone lists the usable roles with the first line of their description, the session's marked; the one chosen is set as `/role NAME` sets it.
 - It is not available during a turn. Without a session, `/role` creates one first.
-- The role shows in `/status`, and in the status line with the `role` item.
+- The role shows in `/status`, and in the status line with the `role` item. The configuration center's **Session role** domain (`/config role`) opens the same list.
 
 ## Permissions [#permissions]
 
@@ -601,7 +601,7 @@ A preset is an input kept in a slot from 0 to 9 (`tui.presets."N"`), with an opt
 
 ## Settings [#config]
 
-`/config` opens the configuration center over the whole screen: a searchable list of every configuration domain, each with its effective value, above the number of layers and warnings. `/` searches, Up and Down move, Enter opens, Esc goes back or closes. `/config SECTION` opens a domain directly; the sections are `general`, `sandbox`, `memory`, `web`, `compaction`, `network`, `interface`, `providers`, `mcp`, `plugins`, `hooks` and `layers`.
+`/config` opens the configuration center over the whole screen: a searchable list of every configuration domain, each with its effective value, above the number of layers and warnings. `/` searches, Up and Down move, Enter opens, Esc goes back or closes. `/config SECTION` opens a domain directly; the sections are `general`, `sandbox`, `memory`, `web`, `compaction`, `network`, `interface`, `providers`, `role`, `mcp`, `plugins`, `hooks` and `layers`.
 
 | Domain                | What it changes                                                                                                                 |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
@@ -613,6 +613,7 @@ A preset is an input kept in a slot from 0 to 9 (`tui.presets."N"`), with an opt
 | Network & logging     | `network.proxy` and `logLevel`; the proxy applies now, the log level at the next launch                                         |
 | Interface             | the four scalar `[tui]` preferences, with actions that open `/theme`, `/statusline`, `/title`, `/keymap`, `/presets` and `/tui` |
 | Providers & policy    | opens `/providers policy`: every Provider and the shared model policy                                                           |
+| Session role          | shows the session's role and how many are usable, and opens [`/role`](#role)'s list to choose another between turns             |
 | MCP servers           | opens `/mcp`, including protocol mode and per-tool policies                                                                     |
 | Plugins & packages    | the options form of each built-in plugin that has options, and a link to `/plugins`                                             |
 | Hooks                 | opens `/hooks`                                                                                                                  |

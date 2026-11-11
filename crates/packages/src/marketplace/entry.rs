@@ -28,8 +28,8 @@ pub enum PackageSource {
     },
     /// A directory linked for development (`plugins link`): the package is
     /// that directory itself, never copied into the cache nor pinned by a
-    /// content hash. Only the install record holds it; no marketplace entry
-    /// does.
+    /// content hash. Only a linked package's record carries it, read from
+    /// `linked.json`; no marketplace entry does.
     Linked {
         path: PathBuf,
     },

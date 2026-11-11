@@ -1,7 +1,8 @@
 // Modified from OpenAI Codex 57a808a392 (Apache-2.0).
 
 //! The configuration center's coverage contract: every known scalar
-//! `config.toml` setting is owned by a form or a specialized editor.
+//! `config.toml` setting is owned by a form or a specialized editor, and
+//! every domain opens from its key.
 
 use hanafubuki_agent::{AgentSettings, AgentStandaloneSettings};
 use serde_json::Value;
@@ -178,4 +179,22 @@ fn every_option_of_every_descriptor_has_the_generic_editor() {
         form.error(super::options::option_field(0)),
         Some("`maximumRunningAgents` is between 1 and 16")
     );
+}
+
+/// Each domain opens from its key; the session's role opens `/role`'s
+/// picker, which lists the usable roles and sets the session's between
+/// turns.
+#[test]
+fn every_domain_opens_from_its_key_and_the_role_opens_the_role_picker() {
+    use super::{ConfigAction, ConfigCenter, ConfigSection};
+
+    for section in ConfigSection::ALL {
+        assert_eq!(ConfigSection::parse(section.key()), Some(section));
+    }
+    assert_eq!(ConfigSection::parse("roles"), Some(ConfigSection::Role));
+    let mut center = ConfigCenter::new(Err("not read".to_string()));
+    assert!(matches!(
+        center.open(ConfigSection::Role, true),
+        Some(ConfigAction::Replay(command)) if command == "/role"
+    ));
 }

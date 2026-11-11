@@ -81,6 +81,10 @@ pub(crate) struct ConfigState {
     pub(crate) agent: AgentSettingsView,
     pub(crate) standalone: AgentStandaloneSettings,
     pub(crate) plugins: Vec<hanafubuki_agent::AgentPluginStatus>,
+    /// The session's role (`None` for `default`, or with no session) and
+    /// how many roles are usable, which `/role` offers.
+    pub(crate) role: Option<String>,
+    pub(crate) roles: usize,
     pub(crate) layers: Vec<ConfigLayerSource>,
     pub(crate) warnings: Vec<String>,
 }
@@ -188,6 +192,8 @@ impl AgentBridge {
             agent: agent?,
             standalone: standalone.settings,
             plugins: self.optioned_plugins(),
+            role: self.current().ok().and_then(|session| session.role),
+            roles: self.agent.roles().roles().count(),
             layers: standalone.layers,
             warnings: standalone.warnings,
         })
@@ -249,12 +255,12 @@ impl AgentBridge {
             .runtime()
             .block_on(async move { call.write_standalone_settings(patch).await })
             .map_err(|failure| failure.to_string())??;
+        let state = self.config_state()?;
         Ok(ConfigState {
-            agent: self.config_state_agent()?,
             standalone: written.settings,
-            plugins: self.optioned_plugins(),
             layers: written.layers,
             warnings: written.warnings,
+            ..state
         })
     }
 }

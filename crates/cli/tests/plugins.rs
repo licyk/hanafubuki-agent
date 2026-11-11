@@ -3,7 +3,8 @@
 //! turned off and on, updated, shown and removed; a plugin installed from a
 //! directory; a directory linked, listed as linked, read as it is now,
 //! never updated, and unlinked with the directory kept; its MCP server in
-//! `mcp list`, and none in safe mode.
+//! `mcp list`, and none in safe mode; the installed plugins' roles in
+//! `roles` and `doctor`, read without a write to the store.
 
 mod support;
 
@@ -255,4 +256,128 @@ fn a_linked_directory_is_read_as_it_is_never_updated_and_kept_when_unlinked() {
     assert!(source.join("skills/wave/SKILL.md").is_file());
     let list = home.run(&["plugins", "list"]).expect(0).stdout();
     assert!(list.contains("No plugins are installed."), "{list}");
+}
+
+/// A Claude Code plugin `name` at `root` with one agent file, `reviewer`,
+/// whose Claude model is an issue.
+fn plugin_with_agent(root: &Path, name: &str) {
+    write(
+        &root.join(".claude-plugin/plugin.json"),
+        &json!({ "name": name, "version": "1.0.0" }).to_string(),
+    );
+    write(
+        &root.join("agents/reviewer.md"),
+        "---\nname: reviewer\ndescription: Reviews the change.\ntools: Read, Grep\n\
+         model: sonnet\n---\nReview it.\n",
+    );
+}
+
+/// Every path under `root` with its bytes (`None` for a directory).
+fn tree(root: &Path) -> Vec<(std::path::PathBuf, Option<Vec<u8>>)> {
+    let mut entries = Vec::new();
+    let mut pending = vec![root.to_path_buf()];
+    while let Some(directory) = pending.pop() {
+        for entry in std::fs::read_dir(&directory).unwrap() {
+            let path = entry.unwrap().path();
+            let relative = path.strip_prefix(root).unwrap().to_path_buf();
+            if path.is_dir() {
+                entries.push((relative, None));
+                pending.push(path);
+            } else {
+                entries.push((relative, Some(std::fs::read(&path).unwrap())));
+            }
+        }
+    }
+    entries.sort();
+    entries
+}
+
+#[test]
+fn roles_and_doctor_read_the_installed_plugins_roles_without_writing_to_the_store() {
+    let home = Home::new();
+    let demo = home.project.join("demo");
+    plugin_with_agent(&demo, "demo");
+    let quiet = home.project.join("quiet");
+    plugin_with_agent(&quiet, "quiet");
+    let demo_path = demo.to_str().unwrap();
+    home.run(&["plugins", "add", demo_path]).expect(0);
+    home.run(&["plugins", "add", demo_path, "--marketplace", "mine"])
+        .expect(0);
+    home.run(&["plugins", "add", quiet.to_str().unwrap()])
+        .expect(0);
+    home.run(&["plugins", "disable", "quiet@local"]).expect(0);
+    // What only opening the store, or loading a package, would change.
+    let plugins = home.home.join("plugins");
+    write(&plugins.join(".staging/marker"), "work in progress");
+    std::fs::remove_dir_all(plugins.join("data")).unwrap();
+    let before = tree(&plugins);
+
+    let run = home.run(&["roles", "list"]).expect(0);
+    let list = run.stdout();
+    let names: Vec<&str> = list
+        .lines()
+        .map(|line| line.split("  ").next().unwrap())
+        .collect();
+    assert_eq!(names, ["default", "demo:reviewer", "explorer"], "{list}");
+    assert!(
+        list.contains("demo:reviewer  plugin `demo@local` file ")
+            && list.contains("  Reviews the change."),
+        "{list}"
+    );
+    let stderr = run.stderr();
+    assert!(
+        stderr.contains("warning: plugin `demo@local`: role `demo:reviewer`: ")
+            && stderr.contains("sonnet"),
+        "{stderr}"
+    );
+    assert!(
+        stderr.contains("warning: plugin `demo@mine`: its roles are left out: `demo@local`"),
+        "{stderr}"
+    );
+    assert!(!stderr.contains("quiet"), "{stderr}");
+
+    let show = home
+        .run(&["roles", "show", "demo:reviewer"])
+        .expect(0)
+        .stdout();
+    assert!(
+        show.starts_with("demo:reviewer  plugin `demo@local` file "),
+        "{show}"
+    );
+    assert!(
+        show.contains("tools.allow: every one of [read_file, search_text]"),
+        "{show}"
+    );
+    assert!(show.contains("instructions: Review it."), "{show}");
+    let off = home.run(&["roles", "show", "quiet:reviewer"]).expect(1);
+    assert!(off.stderr().contains("no role `quiet:reviewer`"));
+
+    let report = home.run(&["doctor"]).stdout();
+    assert!(
+        report.contains("ok    roles     3 usable (default, demo:reviewer, explorer)"),
+        "{report}"
+    );
+    assert!(
+        report.contains("ok    roles     plugin `demo@mine`: its roles are left out"),
+        "{report}"
+    );
+    assert_eq!(tree(&plugins), before);
+
+    // Beside an Agent that holds the data directory.
+    let lock = hanafubuki_agent::DataDirLock::acquire(&home.home).unwrap();
+    let beside = home.run(&["roles", "list"]).expect(0).stdout();
+    assert!(beside.contains("demo:reviewer"), "{beside}");
+    drop(lock);
+
+    let safe = home.run(&["--safe-mode", "roles", "list"]).expect(0);
+    assert!(!safe.stdout().contains("demo:"), "{}", safe.stdout());
+
+    // An install record that does not read stays where it is; the cache's
+    // packages are still read.
+    std::fs::write(plugins.join("install.json"), "{not json").unwrap();
+    let before = tree(&plugins);
+    let list = home.run(&["roles", "list"]).expect(0).stdout();
+    assert!(list.contains("demo:reviewer"), "{list}");
+    home.run(&["doctor"]);
+    assert_eq!(tree(&plugins), before);
 }

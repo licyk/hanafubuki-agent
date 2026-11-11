@@ -1,7 +1,9 @@
 //! The installed plugins' content: the packages in the store that the
 //! settings leave on, each read for its Skill roots, its MCP servers, its
 //! hooks and its roles, which the Agent's Skill catalog, MCP side, hooks
-//! and role catalog then follow.
+//! and role catalog then follow. A command that does not start the Agent
+//! reads the roles alone, without opening the store
+//! ([`read_installed_roles`]).
 //! One package that cannot be read, or one of its components, costs only
 //! itself: what went wrong is that package's issue.
 //!
@@ -46,6 +48,7 @@ pub use lifecycle::{
 };
 pub(crate) use marketplaces::{configured_marketplace, marketplace_view};
 pub(crate) use reload::PackageReload;
+pub(crate) use roles::read_installed_roles;
 pub use status::{AgentPackageContent, AgentPackageGuest, AgentPackageStatus};
 pub use validate::{validate_package, AgentPackageValidation};
 
@@ -284,7 +287,12 @@ impl AgentPackages {
             })
             .collect::<Vec<_>>();
         resolve_server_names(&mut packages, user_servers);
-        resolve_role_names(&mut packages);
+        roles::resolve_names(
+            packages
+                .iter_mut()
+                .filter(|package| package.enabled)
+                .map(|package| (&package.id, &mut package.roles, &mut package.issues)),
+        );
         LoadedPackages { packages }
     }
 }
@@ -376,31 +384,6 @@ fn resolve_server_names(packages: &mut [LoadedPackage], user_servers: &BTreeSet<
             true
         });
         package.issues.extend(issues);
-    }
-}
-
-/// Keeps the roles of a plugin name (`<plugin>:…`) to one package: the
-/// first by id with roles; another package of that plugin name, from
-/// another marketplace, contributes none, and that is its issue.
-fn resolve_role_names(packages: &mut [LoadedPackage]) {
-    let mut owners = BTreeMap::<String, String>::new();
-    for package in packages
-        .iter_mut()
-        .filter(|package| package.enabled && !package.roles.is_empty())
-    {
-        let plugin = &package.id.plugin_name;
-        match owners.get(plugin) {
-            Some(owner) => {
-                package.issues.push(format!(
-                    "its roles are left out: `{owner}` comes first, and its roles are named \
-                     `{plugin}:…` already"
-                ));
-                package.roles.clear();
-            }
-            None => {
-                owners.insert(plugin.clone(), package.id.key());
-            }
-        }
     }
 }
 

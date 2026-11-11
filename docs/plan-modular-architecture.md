@@ -781,7 +781,8 @@ KohakuTerrarium's editable installs (`<name>.link`) shorten the plugin author's 
 The equivalent here:
 
 - `hanafubuki-agent plugins link <dir>` records a package **by reference**:
-  - `install.json` source `linked`;
+  - a `plugins/linked.json` entry (first built as an `install.json` source
+    `linked`, which an older build's rewrite nulled);
   - no copy into the cache, no content hash pin.
 - Linked packages are listed as such and are never auto-updated.
 - The guest host watches the linked directory, debounced at 500 ms like the Skill
@@ -1106,7 +1107,8 @@ component), roles page (package roles). Update `docs/plan-plugin-system.md` §3.
 
 **Work.**
 
-- `plugins link <dir>`: `install.json` source `linked`.
+- `plugins link <dir>`: a `plugins/linked.json` entry (first built as an
+  `install.json` source `linked`; moved by the follow-up of 2026-11-11).
 - A watcher in the guest host, built as a `BackgroundWorkerGroup::contained` worker,
   never a plain thread.
 - Guest restart via kardia-loader `replace`; content re-read.
@@ -1131,7 +1133,7 @@ is additive and tolerant.
 | User/project files | new `agents/*.toml` directories (M3) | none exist: only built-in roles | not read |
 | `[plugins."<id>"].settings` | now validated against the guest's `configSchema` (M1) | a value that does not fit falls back to its default, **with a warning**; nothing is rewritten | — |
 | Session config in history | new `scope` field, `skip_serializing_if` default (M4) | old sessions open with the empty scope (`default` role); default sessions' bytes unchanged | a session with a scope opens, and the field is ignored: the older build runs it unscoped. Acceptable, since downgrading is not a supported security boundary; say so in the release notes |
-| `install.json` | new source kind `linked` (M7) | unchanged | an unknown source reads as none, the entry's other fields kept (existing tolerant reader). As built, a linked package has no cache directory, so an older build does not list it at all (not "listed with an issue"), and that build's next write of `install.json` keeps the entry with `"source": null`; this build then no longer lists it either, until it is linked again. The directory is never touched |
+| `install.json`, `linked.json` | linked packages recorded in a new `plugins/linked.json` (M7; follow-up 2026-11-11: first built as an `install.json` source kind `linked`) | `install.json` holds the cache's packages only; an `install.json` entry of source `linked` from the first build is read as a link, and the store's next write moves it to `linked.json` | an older build never reads `linked.json`, so it does not list a linked package (it has no cache directory), and its rewrites of `install.json` cannot drop or null the link: this build still lists it. The directory is never touched |
 | `ContextRenderer` (contracts) | new `order` field (M2) | built-in ranks reproduce the current order | — (compile-time API; host code must set it) |
 | `spawn_agent` spec | new optional `agent_type` (M5) | calls without it behave as today | — |
 | `exec --json` | new `role` field on the session object (M4) | additive under the stability rule | — |

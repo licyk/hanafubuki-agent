@@ -1,5 +1,6 @@
-//! `roles list|show`: the roles the configuration defines over the built-in
-//! ones, read and resolved without starting the Agent
+//! `roles list|show`: the roles the configuration and the installed plugins
+//! that are on define over the built-in ones, read and resolved without
+//! starting the Agent or opening the plugins' store
 //! (site/content/docs/roles.en.mdx).
 
 use hanafubuki_agent::{
@@ -12,7 +13,11 @@ use crate::exit::Failure;
 
 pub(crate) fn run(global: &GlobalArgs, command: RolesCommand) -> Result<(), Failure> {
     let standalone = Standalone::open(global, AgentRuntimeHost::default())?;
-    let catalog = AgentRoleCatalog::load(standalone.runtime.config());
+    let catalog = AgentRoleCatalog::load(
+        standalone.runtime.config(),
+        &standalone.runtime.storage_paths().plugins_root,
+        global.safe_mode,
+    );
     standalone.shutdown();
     match command {
         RolesCommand::List => {

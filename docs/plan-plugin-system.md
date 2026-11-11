@@ -180,9 +180,10 @@ plugins/data/<plugin>-<marketplace>/              the package's own data directo
 plugins/data/agent-plugins/<sha256 prefix>/       the same for Agent Plugins packages, as Codex names it
 plugins/marketplaces/<name>/                      git-added marketplaces
 plugins/install.json                              install record: id, version, source, content hash, granted permissions
+plugins/linked.json                               linked packages (docs/plan-modular-architecture.md, M7): id, directory, granted permissions
 ```
 
-`install.json` is our own persisted state, which changes as packages are enabled and permissions granted. So it is read tolerantly per field and quarantined when unreadable, like the rest of our persisted data. The content hash it records is of the package; the package is what gets re-hashed and compared. Third-party manifests are external producers and are read tolerantly too: one bad field or component costs only itself.
+`install.json` (and `linked.json`) is our own persisted state, which changes as packages are enabled and permissions granted. So it is read tolerantly per field and quarantined when unreadable, like the rest of our persisted data. The content hash it records is of the package; the package is what gets re-hashed and compared. Third-party manifests are external producers and are read tolerantly too: one bad field or component costs only itself.
 
 **Configuration** (`config.toml`, layered). The tables are Codex's, but the keys follow this file's camelCase convention (decision 13), since the two programs don't share configuration files:
 

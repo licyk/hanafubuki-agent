@@ -137,6 +137,7 @@ pub(crate) fn draft(
         // The center drafts a plugin's options itself (`options.rs`).
         ConfigSection::Plugins => return None,
         ConfigSection::Providers
+        | ConfigSection::Role
         | ConfigSection::Mcp
         | ConfigSection::Hooks
         | ConfigSection::Layers => unreachable!("no form"),

@@ -1,6 +1,8 @@
 //! `doctor`: whether the standalone Agent can run here. Each check prints
 //! one line (`ok`, `FAIL`, or `skip`); any failure fails the command.
 
+use std::path::Path;
+
 use hanafubuki_agent::sandbox;
 use hanafubuki_agent::{
     probe_keyring, AgentConfig, AgentConfigProblem, AgentProviderModelCatalogRequest,
@@ -27,7 +29,12 @@ pub(crate) fn run(global: &GlobalArgs, online: bool) -> Result<u8, Failure> {
     sandbox(&mut report, config);
     let default_provider = providers(&mut report, config);
     mcp(&mut report, config);
-    roles(&mut report, config);
+    roles(
+        &mut report,
+        config,
+        &standalone.runtime.storage_paths().plugins_root,
+        global.safe_mode,
+    );
     recoveries(&mut report, config);
     match probe_keyring() {
         Ok(()) => report.ok("keyring", hanafubuki_agent::KEYRING_SERVICE),
@@ -183,10 +190,11 @@ fn mcp(report: &mut Report, config: &AgentConfig) {
     }
 }
 
-/// The roles and what reading them left out. A role that cannot be used
-/// is reported, but does not fail: the Agent runs without it.
-fn roles(report: &mut Report, config: &AgentConfig) {
-    let catalog = AgentRoleCatalog::load(config);
+/// The roles, the installed plugins' among them, and what reading them
+/// left out. A role that cannot be used is reported, but does not fail: the
+/// Agent runs without it.
+fn roles(report: &mut Report, config: &AgentConfig, plugins_root: &Path, safe_mode: bool) {
+    let catalog = AgentRoleCatalog::load(config, plugins_root, safe_mode);
     let usable: Vec<&str> = catalog.roles().map(|role| role.name.as_str()).collect();
     let unusable = catalog.unusable().count();
     let unusable = match unusable {

@@ -408,6 +408,24 @@ then M4, then M5; M6 after M3; M7 after M1.
         `None`/`null` for `default`), so `exec --json` names the role on its
         first line; json-events and exec (both languages) say so. Hanafubuki:
         a match on `TurnStarted` becomes `TurnStarted { .. }`.
+      Follow-up (2026-11-11): the configuration center offers role choice:
+        a **Session role** domain (`ConfigSection::Role`, `/config role` or
+        `roles`), summarized as the session's role and the usable count
+        (`ConfigState.role`, `roles`), opens `/role`'s picker by replaying
+        `/role`, so `/role`'s own gates apply (not during a turn, a session
+        made first) and the choice goes through `set_session_role`. Test:
+        `config_center/tests.rs` (every domain parses from its key; the role
+        domain replays `/role`). Docs: terminal-interface (`#config`'s
+        sections and table, `#role`), both languages. Hanafubuki: none.
+        Validation (Linux only): `cargo fmt --all --check`,
+        `RUSTFLAGS="-D warnings" cargo check --workspace --all-targets
+        --all-features`, `cargo clippy --workspace --all-targets
+        --all-features -- -D warnings`, `cargo xtask check`, `cargo test
+        --workspace --all-features`; the site's `bun install
+        --frozen-lockfile`, `format:site`, `format:check:site`,
+        `site:check`, `site:test`, `site:build` (every page prerendered).
+        Goldens and history corpora unchanged; no diff under `crates/host`,
+        `crates/foundation`, `crates/process` or `architecture/`.
       Open:
       - The "a pattern that matches nothing" warning: the sourced tools
         vary per step, so it needs the live registries at selection; not
@@ -417,8 +435,6 @@ then M4, then M5; M6 after M3; M7 after M1.
       - An older build reading a scoped session runs it unscoped (the
         plan's migration table accepts it); a deny pattern a later build
         writes that this one cannot parse is dropped, which widens.
-      - The configuration center does not offer role choice yet; the TUI's
-        `/role` and the CLI's `--role` do.
 - [x] M5: role-aware subagents.
       - `spawn_agent { agent_type }` (D7).
       - `AgentRoleCatalogReader`; children take the role's instructions, model and
@@ -671,11 +687,43 @@ then M4, then M5; M6 after M3; M7 after M1.
         counterpart) no longer reads the sub-agent guidance;
         `tests/packages/roles.rs` checks the plugin roles' listing from a
         default session.
+      Follow-up (2026-11-11): `roles list`, `roles show` and `doctor` show
+        the installed plugins' roles. Packages crate:
+        `PackageStore::read_installed(root)`, the store's listing without a
+        store (no staging sweep, a record file that does not read not
+        quarantined, nothing written, no lock); `installed()` shares it.
+        Facade: `AgentRoleCatalog::load(config, plugins_root, safe_mode)`
+        (was `load(config)`) reads them through
+        `packages::read_installed_roles`: the packages the settings leave
+        on (`package_enabled`, none in safe mode), by id, each read with
+        `packages/roles.rs` alone (no `content::load`, which makes the data
+        directory), and the one-package-per-plugin-name rule
+        (`roles::resolve_names`, now shared with the running load); what
+        reading them left out joins the catalog's issues as `plugin `<id>`:
+        …` on this path only. CLI `roles` and `doctor` pass the data
+        directory's `plugins/` and `--safe-mode`. Test: CLI
+        `tests/plugins.rs` (a Claude plugin with an agent installed twice
+        and a disabled one: `roles list`/`show` and `doctor` list
+        `demo:reviewer` from `demo@local`, not the disabled plugin's, the
+        model issue and the second package's issue on standard error and
+        in `doctor`; none with `--safe-mode`; `plugins/` byte for byte
+        unchanged, a planted `.staging/marker` and a removed `data/`
+        included, and again with an `install.json` that does not read).
+        Docs (both languages): roles (`#plugins`), cli-reference (`#roles`,
+        `#agent-start`), troubleshooting (`#doctor`), architecture (the CLI
+        crate), embedding (`AgentRoleCatalog::load`). Hanafubuki: a call of
+        `AgentRoleCatalog::load(&config)` becomes `load(&config,
+        &storage_paths.plugins_root, safe_mode)`.
+        Validation (Linux only): `cargo fmt --all --check`,
+        `RUSTFLAGS="-D warnings" cargo check --workspace --all-targets
+        --all-features`, `cargo clippy --workspace --all-targets
+        --all-features -- -D warnings`, `cargo xtask check`, `cargo test
+        --workspace --all-features`; the site's `bun install
+        --frozen-lockfile`, `format:site`, `format:check:site`,
+        `site:check`, `site:test`, `site:build` (every page prerendered).
+        Goldens and history corpora unchanged; no diff under `crates/host`,
+        `crates/foundation`, `crates/process` or `architecture/`.
       Open:
-      - `roles list`, `roles show` and `doctor` read the configuration
-        without starting the Agent, so they do not show the plugins'
-        roles (opening the package store would sweep its staging area
-        under a running Agent); `plugins info` and `/plugins` list them.
       - No test spawns a sub-agent with `agent_type: "demo:reviewer"`: the
         spawn looks the name up in the same catalog (`spawn_role`, no
         check of `:`), and the guidance listing it is tested.
@@ -818,6 +866,43 @@ then M4, then M5; M6 after M3; M7 after M1.
         `PackageSource` or `AgentPackageSource` exhaustively (new `Linked`
         variants) or builds `GuestHostInputs` (new `workers`) or
         `GuestPackage` (new `linked`) literals; it does none today.
+      Follow-up (2026-11-11): linked packages are recorded in
+        `plugins/linked.json` (`{"packages": {"<id>": {path, version,
+        format, grantedPermissions}}}`, read and quarantined as
+        `install.json` is, an entry without a `path` skipped), so
+        `install.json` holds the cache's packages alone and an older build's
+        rewrite of it (dropping the entry or nulling its source) no longer
+        loses a link. The store keeps the two files' records apart
+        (`record::Records`): the cache decides which is the package when
+        both name an id, a grant goes to the link unless the id is cached,
+        uninstall clears both, and a write writes `linked.json` first (only
+        when there is a link or the file exists). An `install.json` entry
+        of source `linked` from the first build is read as a link (unless
+        `linked.json` has the id) and moved by the store's next write; a
+        read alone moves nothing. `PackageSource::Linked` and
+        `InstallRecord::linked` stay as the in-memory record a linked
+        `InstalledPackage` carries. Tests: packages `tests/packages/link.rs`
+        (the record in `linked.json` and not in `install.json`; a link, its
+        grant and the install refusal survive an `install.json` rewritten
+        with `"source": null` and with the entry dropped; a grant then goes
+        to the link; the first build's entry moved at the next write;
+        `read_installed` lists what the store lists and leaves a staging
+        marker and an unreadable `linked.json` in place). Docs (both
+        languages): writing-plugins (`#link`), data-directory (`plugins/`),
+        architecture (`#installed-plugins`, what a start needs), internals
+        (the load); the plan's migration row and M7 lines,
+        `docs/plan-plugin-system.md`'s store layout. This supersedes the
+        deviation above that an older build's next write nulls the source:
+        that write no longer reaches the link. Hanafubuki: none.
+        Validation (Linux only): `cargo fmt --all --check`,
+        `RUSTFLAGS="-D warnings" cargo check --workspace --all-targets
+        --all-features`, `cargo clippy --workspace --all-targets
+        --all-features -- -D warnings`, `cargo xtask check`, `cargo test
+        --workspace --all-features`; the site's `bun install
+        --frozen-lockfile`, `format:site`, `format:check:site`,
+        `site:check`, `site:test`, `site:build` (every page prerendered).
+        Goldens and history corpora unchanged; no diff under `crates/host`,
+        `crates/foundation`, `crates/process` or `architecture/`.
       Open:
       - The watch is recursive over the whole directory, a build output
         (`target/`, `node_modules/`) included: a big tree costs inotify

@@ -167,11 +167,12 @@ impl PackageStore {
         let root = self.package_root(id, &version);
         let content_hash =
             content_hash(&root).map_err(|error| io_error("hash the installed plugin", error))?;
-        self.update_record(|records| {
+        self.update_records(|records| {
             let granted_permissions = records
+                .installed
                 .get(id)
                 .and_then(|previous| previous.granted_permissions.clone());
-            records.insert(
+            records.installed.insert(
                 id.clone(),
                 InstallRecord {
                     version: Some(version.clone()),

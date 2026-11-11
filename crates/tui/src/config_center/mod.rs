@@ -31,6 +31,7 @@ pub(crate) enum ConfigSection {
     Network,
     Interface,
     Providers,
+    Role,
     Mcp,
     Plugins,
     Hooks,
@@ -38,7 +39,7 @@ pub(crate) enum ConfigSection {
 }
 
 impl ConfigSection {
-    pub(crate) const ALL: [Self; 12] = [
+    pub(crate) const ALL: [Self; 13] = [
         Self::General,
         Self::Sandbox,
         Self::Memory,
@@ -47,6 +48,7 @@ impl ConfigSection {
         Self::Network,
         Self::Interface,
         Self::Providers,
+        Self::Role,
         Self::Mcp,
         Self::Plugins,
         Self::Hooks,
@@ -63,6 +65,7 @@ impl ConfigSection {
             "network" => Some(Self::Network),
             "interface" => Some(Self::Interface),
             "providers" => Some(Self::Providers),
+            "role" | "roles" => Some(Self::Role),
             "mcp" => Some(Self::Mcp),
             "plugins" => Some(Self::Plugins),
             "hooks" => Some(Self::Hooks),
@@ -81,6 +84,7 @@ impl ConfigSection {
             Self::Network => "network",
             Self::Interface => "interface",
             Self::Providers => "providers",
+            Self::Role => "role",
             Self::Mcp => "mcp",
             Self::Plugins => "plugins",
             Self::Hooks => "hooks",
@@ -98,6 +102,7 @@ impl ConfigSection {
             Self::Network => "Network & logging",
             Self::Interface => "Interface",
             Self::Providers => "Providers & model policy",
+            Self::Role => "Session role",
             Self::Mcp => "MCP servers",
             Self::Plugins => "Plugins & packages",
             Self::Hooks => "Hooks",
@@ -113,6 +118,7 @@ impl ConfigSection {
             Self::Memory => Some("/memories"),
             Self::Compaction | Self::Interface => Some("/config quick"),
             Self::Providers => Some("/providers policy"),
+            Self::Role => Some("/role"),
             Self::Mcp => Some("/mcp"),
             Self::Plugins => Some("/plugins"),
             Self::Hooks => Some("/hooks"),
@@ -149,6 +155,11 @@ impl ConfigSection {
                 }
             ),
             Self::Providers => "model Providers and policy".to_string(),
+            Self::Role => format!(
+                "{} · {} usable",
+                state.role.as_deref().unwrap_or("default"),
+                state.roles
+            ),
             Self::Mcp => "servers and credentials".to_string(),
             Self::Plugins => format!("{} disabled", settings.disabled_plugins.len()),
             Self::Hooks => "trust and enablement".to_string(),

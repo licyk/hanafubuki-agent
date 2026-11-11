@@ -4,12 +4,101 @@
 //! `<plugin>:<role>` after the package id's plugin name. What their reading
 //! leaves out is the package's issue; resolving them is the catalog's.
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use hanafubuki_agent_config::{is_role_name, read_role_files, RoleDefinition, RoleOrigin};
-use hanafubuki_agent_packages::{read_claude_agents, ClaudeAgent, LoadedManifest, ManifestFormat};
+use hanafubuki_agent_config::{
+    is_role_name, read_role_files, AgentSettings, RoleDefinition, RoleOrigin,
+};
+use hanafubuki_agent_packages::{
+    read_claude_agents, ClaudeAgent, LoadedManifest, ManifestFormat, PackageStore, PluginId,
+};
+
+use crate::roles::AgentPackageRoles;
 
 const DEFAULT_AGENTS: &str = "agents";
+
+/// The roles of the packages installed under `plugins_root` that
+/// `settings` leave on (none in `safe_mode`), as a started Agent's catalog
+/// takes them, and what reading them left out, each issue naming its
+/// package. Read without opening the store: nothing is swept, quarantined,
+/// made or written, so a command may read them beside a running Agent.
+pub(crate) fn read_installed_roles(
+    plugins_root: &Path,
+    settings: &AgentSettings,
+    safe_mode: bool,
+) -> (Vec<AgentPackageRoles>, Vec<String>) {
+    let mut installed = PackageStore::read_installed(plugins_root);
+    installed.sort_by_key(|package| package.id.key());
+    let mut packages: Vec<(PluginId, Vec<RoleDefinition>, Vec<String>)> = installed
+        .into_iter()
+        .filter(|package| !safe_mode && settings.package_enabled(&package.id))
+        .filter_map(|package| {
+            let manifest = package.manifest.as_ref()?;
+            let mut issues = Vec::new();
+            let roles = roles(
+                &package.root,
+                &package.id.plugin_name,
+                manifest,
+                &mut issues,
+            );
+            Some((package.id, roles, issues))
+        })
+        .collect();
+    resolve_names(
+        packages
+            .iter_mut()
+            .map(|(id, roles, issues)| (&*id, roles, issues)),
+    );
+    let issues = packages
+        .iter()
+        .flat_map(|(id, _, issues)| {
+            issues
+                .iter()
+                .map(move |issue| format!("plugin `{id}`: {issue}"))
+        })
+        .collect();
+    let roles = packages
+        .into_iter()
+        .filter(|(_, roles, _)| !roles.is_empty())
+        .map(|(id, definitions, _)| AgentPackageRoles {
+            id: id.key(),
+            definitions,
+        })
+        .collect();
+    (roles, issues)
+}
+
+/// Keeps the roles of a plugin name (`<plugin>:…`) to one of the packages
+/// that are on, given by id with their roles and issues: the first with
+/// roles; another of that plugin name, from another marketplace,
+/// contributes none, and that is its issue.
+pub(super) fn resolve_names<'a>(
+    packages: impl Iterator<
+        Item = (
+            &'a PluginId,
+            &'a mut Vec<RoleDefinition>,
+            &'a mut Vec<String>,
+        ),
+    >,
+) {
+    let mut owners = BTreeMap::<String, String>::new();
+    for (id, roles, issues) in packages.filter(|(_, roles, _)| !roles.is_empty()) {
+        let plugin = &id.plugin_name;
+        match owners.get(plugin) {
+            Some(owner) => {
+                issues.push(format!(
+                    "its roles are left out: `{owner}` comes first, and its roles are named \
+                     `{plugin}:…` already"
+                ));
+                roles.clear();
+            }
+            None => {
+                owners.insert(plugin.clone(), id.key());
+            }
+        }
+    }
+}
 
 /// The roles of the package at `root`, of the plugin name `plugin`: those
 /// of the manifest's `agents`, else of `agents/`. A Codex, Cursor or Agent

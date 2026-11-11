@@ -557,7 +557,11 @@ fn the_catalog_loads_from_the_configuration() {
         "description = \"Filed.\"\ntools.deny = [\"fetch_web_page\"]\n",
     )
     .unwrap();
-    let catalog = AgentRoleCatalog::load(&AgentConfig::new(&config_dir));
+    let catalog = AgentRoleCatalog::load(
+        &AgentConfig::new(&config_dir),
+        &root.path().join("plugins"),
+        false,
+    );
     let names: Vec<_> = catalog.roles().map(|role| role.name.as_str()).collect();
     assert_eq!(names, [DEFAULT_ROLE, EXPLORER_ROLE, "filed", "inline"]);
     let inline = usable(&catalog, "inline");

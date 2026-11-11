@@ -12,6 +12,7 @@ mod resolve;
 
 use std::collections::BTreeMap;
 use std::fmt;
+use std::path::Path;
 use std::sync::Arc;
 
 use hanafubuki_agent_config::{AgentConfig, RoleDefinition, RoleLayer, RoleOrigin};
@@ -149,12 +150,35 @@ pub(crate) struct AgentPackageRoles {
 }
 
 impl AgentRoleCatalog {
-    /// The roles `config` defines now, over the built-in ones; the
-    /// installed plugins' roles are only in a running Agent's catalog. A
-    /// configuration that cannot be read leaves the built-in roles, with
+    /// The roles a started Agent would resolve now, read without starting
+    /// it: those `config` defines and those of the installed plugins under
+    /// `plugins_root` that it leaves on (none in `safe_mode`), over the
+    /// built-in ones. The plugins are read without opening their store
+    /// (nothing written, no lock), so this is safe beside a running Agent;
+    /// what reading their roles left out is an issue here too, each naming
+    /// its plugin, where a running Agent's catalog leaves it to the plugin.
+    /// A configuration that cannot be read leaves the built-in roles, with
     /// an issue.
-    pub fn load(config: &AgentConfig) -> Self {
-        Self::load_with(config, Vec::new())
+    pub fn load(config: &AgentConfig, plugins_root: &Path, safe_mode: bool) -> Self {
+        let (packages, package_issues) = match config.settings() {
+            Ok(settings) => {
+                crate::packages::read_installed_roles(plugins_root, &settings, safe_mode)
+            }
+            Err(error) => (
+                Vec::new(),
+                vec![format!(
+                    "the installed plugins' roles are not read: {error}"
+                )],
+            ),
+        };
+        let mut catalog = Self::load_with(config, packages);
+        catalog
+            .issues
+            .extend(package_issues.into_iter().map(|message| AgentRoleIssue {
+                role: None,
+                message,
+            }));
+        catalog
     }
 
     /// The roles of `config` and of `packages`, over the built-in ones.

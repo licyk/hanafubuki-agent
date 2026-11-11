@@ -1,5 +1,5 @@
-//! A package linked for development (`plugins link`): the install record
-//! names its directory, which is the package itself. Nothing is copied
+//! A package linked for development (`plugins link`): its `linked.json`
+//! record names its directory, which is the package itself. Nothing is copied
 //! into the cache, no content hash pins it, and nothing is written into the
 //! directory, so its `commands/` are not turned into Skills.
 
@@ -7,10 +7,10 @@ use std::path::{Path, PathBuf};
 
 use hanafubuki_agent_foundation::paths::ResolvedPath;
 
-use super::{validate_name_of_source, InstallRecord, PackageStore};
+use super::{validate_name_of_source, LinkedRecord, PackageStore};
 use crate::commands::declares_commands;
 use crate::manifest::load_manifest;
-use crate::{PackageError, PackageSource, PluginId};
+use crate::{PackageError, PluginId};
 
 /// What a link did.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -64,17 +64,17 @@ impl PackageStore {
             );
         }
         let root = directory.native().to_path_buf();
-        self.update_record(|records| {
+        self.update_records(|records| {
             let granted_permissions = records
+                .linked
                 .get(id)
                 .and_then(|previous| previous.granted_permissions.clone());
-            records.insert(
+            records.linked.insert(
                 id.clone(),
-                InstallRecord {
+                LinkedRecord {
+                    path: root.clone(),
                     version: loaded.manifest.version.clone(),
                     format: Some(loaded.format),
-                    source: Some(PackageSource::Linked { path: root.clone() }),
-                    content_hash: None,
                     granted_permissions,
                 },
             );

@@ -162,7 +162,7 @@ See [Memory](/docs/memory).
 | `roles list`      | Lists every role by name: its source and the first line of its description (`(not spawnable)` when it is not), or `unusable:` and why; the issues of reading and resolving the roles go to standard error |
 | `roles show NAME` | Prints the role's source and chain, then each field as the chain resolves it, with the roles that decide it (`[from reader, explorer]`); for an unusable role, why. A name no source defines exits with 1 |
 
-`-p` reads the profile's roles as well. Neither command starts the Agent, so neither shows the installed plugins' roles ([Plugins' roles](/docs/roles#plugins)); `plugins info` lists a plugin's. A session takes a role with the global `--role NAME`, or with `/role NAME` in the terminal interface. See [Roles](/docs/roles).
+`-p` reads the profile's roles as well. Both list the roles of the installed plugins that are on ([Plugins' roles](/docs/roles#plugins)), none with `--safe-mode`; neither starts the Agent, and the plugins are read without writing anything to their directory. A session takes a role with the global `--role NAME`, or with `/role NAME` in the terminal interface. See [Roles](/docs/roles).
 
 ## doctor [#doctor]
 
@@ -175,7 +175,7 @@ See [Troubleshooting](/docs/troubleshooting#doctor).
 
 ## Which commands start the Agent [#agent-start]
 
-`config`, `providers list`, `roles` and `doctor` without `--online` only read and write the configuration: they do not start the Agent, and work while another Agent process runs. The other commands start it, and need the data directory to themselves.
+`config`, `providers list`, `roles` and `doctor` without `--online` only read and write the configuration (`roles` and `doctor` also read the installed plugins, writing nothing there): they do not start the Agent, and work while another Agent process runs. The other commands start it, and need the data directory to themselves.
 
 Every command reads the configuration first, then installs the crash handler and the log file, before it starts the Agent or changes anything. A management command that starts the Agent also connects the enabled MCP servers in the background, as every start does.
 

@@ -162,7 +162,7 @@ hanafubuki-agent exec [选项] [提示词|-]
 | `roles list`      | 按名字列出每个角色：它的来源和描述的第一行（不可派生时加 `(not spawnable)`），或 `unusable:` 及原因；读取和解析角色时的问题输出到标准错误                  |
 | `roles show 名字` | 打印角色的来源和继承链，然后是继承链解析后的每个字段，以及决定它的角色（`[from reader, explorer]`）；不可用的角色打印原因。没有任何来源定义的名字以 1 退出 |
 
-`-p` 会同时读取配置档的角色。两个命令都不启动 Agent，所以都不显示已安装插件的角色（[插件的角色](/docs/roles#plugins)）；`plugins info` 会列出某个插件的角色。会话用全局的 `--role 名字` 或终端界面中的 `/role 名字` 取得角色。见[角色](/docs/roles)。
+`-p` 会同时读取配置档的角色。两个命令都列出开启的已安装插件的角色（[插件的角色](/docs/roles#plugins)），`--safe-mode` 时不列出；两个命令都不启动 Agent，读取插件时也不向它们的目录写入任何东西。会话用全局的 `--role 名字` 或终端界面中的 `/role 名字` 取得角色。见[角色](/docs/roles)。
 
 ## doctor [#doctor]
 
@@ -175,7 +175,7 @@ hanafubuki-agent exec [选项] [提示词|-]
 
 ## 哪些命令会启动 Agent [#agent-start]
 
-`config`、`providers list`、`roles` 和不带 `--online` 的 `doctor` 只读写配置，不启动 Agent，可以在另一个 Agent 进程运行时使用。其他命令会启动 Agent，需要独占数据目录。
+`config`、`providers list`、`roles` 和不带 `--online` 的 `doctor` 只读写配置（`roles` 和 `doctor` 还会读取已安装插件，但不在那里写入任何东西），不启动 Agent，可以在另一个 Agent 进程运行时使用。其他命令会启动 Agent，需要独占数据目录。
 
 每个命令都会先读取配置，再安装崩溃处理和日志文件，然后才启动 Agent 或修改任何内容。会启动 Agent 的管理命令也会像每次启动一样在后台连接启用的 MCP 服务器。
 

@@ -6,10 +6,10 @@
 // (http://www.apache.org/licenses/LICENSE-2.0).
 // Modified for hanafubuki-agent: the store's root is the data directory's
 // `plugins/`, which also holds the git-added marketplaces, the staging area
-// and the install record; installed packages are listed with their
-// manifest and record, and so are the directories linked for development;
-// uninstall can purge the data directory; the remote install metadata is
-// not ported.
+// and the install records; installed packages are listed with their
+// manifest and record, and so are the directories linked for development,
+// also without opening a store; uninstall can purge the data directory;
+// the remote install metadata is not ported.
 
 use std::fs;
 use std::io::ErrorKind;
@@ -32,13 +32,13 @@ mod stage;
 pub use install::InstallOutcome;
 pub use link::LinkOutcome;
 pub use record::InstallRecord;
+use record::{LinkedRecord, Records};
 
 const CACHE_DIR: &str = "cache";
 const DATA_DIR: &str = "data";
 const AGENT_PLUGINS_DATA_DIR: &str = "agent-plugins";
 const MARKETPLACES_DIR: &str = "marketplaces";
 const STAGING_DIR: &str = ".staging";
-const RECORD_FILE: &str = "install.json";
 
 /// The installed packages under the data directory's `plugins/`:
 ///
@@ -47,15 +47,18 @@ const RECORD_FILE: &str = "install.json";
 /// data/<plugin>-<marketplace>/              its own data (PLUGIN_DATA)
 /// data/agent-plugins/<sha256>/              the same for Agent Plugins
 /// marketplaces/<name>/                      a git-added marketplace
-/// install.json                              the install record
+/// install.json                              the cache's packages' records
+/// linked.json                               the linked packages' records
 /// .staging/                                 work in progress
 /// ```
 ///
 /// A package linked for development (`plugins link`) has no directory in
-/// the cache: its install record names the directory that is the package.
+/// the cache: its `linked.json` record names the directory that is the
+/// package.
 ///
 /// One store per data directory: opening one sweeps the staging area, and
-/// its changes are serialized among themselves.
+/// its changes are serialized among themselves. A reader beside a running
+/// Agent lists the packages with [`PackageStore::read_installed`] instead.
 pub struct PackageStore {
     root: PathBuf,
     executor: ExecutorManager,
@@ -122,10 +125,7 @@ impl PackageStore {
     }
 
     pub fn package_base(&self, id: &PluginId) -> PathBuf {
-        self.root
-            .join(CACHE_DIR)
-            .join(&id.marketplace_name)
-            .join(&id.plugin_name)
+        package_base(&self.root, id)
     }
 
     pub fn package_root(&self, id: &PluginId, version: &str) -> PathBuf {
@@ -145,18 +145,7 @@ impl PackageStore {
     /// `data/<plugin>-<marketplace>`, or for an Agent Plugins package
     /// `data/agent-plugins/<sha256 of marketplace NUL plugin>`.
     pub fn data_root(&self, id: &PluginId, format: ManifestFormat) -> PathBuf {
-        let data = self.root.join(DATA_DIR);
-        match format {
-            ManifestFormat::AgentPlugins => {
-                let mut digest = Sha256::new();
-                digest.update(id.marketplace_name.as_bytes());
-                digest.update([0]);
-                digest.update(id.plugin_name.as_bytes());
-                data.join(AGENT_PLUGINS_DATA_DIR)
-                    .join(hex::encode(digest.finalize()))
-            }
-            _ => data.join(format!("{}-{}", id.plugin_name, id.marketplace_name)),
-        }
+        data_root(&self.root, id, format)
     }
 
     /// Where a git-added marketplace is checked out.
@@ -166,116 +155,35 @@ impl PackageStore {
 
     /// Every package in the cache, by id, then every linked one.
     pub fn installed(&self) -> Vec<InstalledPackage> {
-        let records = record::read(&self.record_path());
-        let mut packages = Vec::new();
-        for marketplace in directory_names(&self.root.join(CACHE_DIR)) {
-            if validate_marketplace_name(&marketplace).is_err() {
-                continue;
-            }
-            let base = self.root.join(CACHE_DIR).join(&marketplace);
-            for plugin in directory_names(&base) {
-                let Ok(id) = PluginId::new(&plugin, &marketplace) else {
-                    continue;
-                };
-                if let Some(package) = self.cached(id, &records) {
-                    packages.push(package);
-                }
-            }
-        }
-        let cached = packages.len();
-        for id in records.keys() {
-            if !packages[..cached].iter().any(|package| package.id == *id) {
-                packages.extend(self.linked(id.clone(), &records));
-            }
-        }
-        packages
+        list(&self.root, &self.records())
+    }
+
+    /// The packages installed under `root` (the data directory's
+    /// `plugins/`), as [`Self::installed`] lists them, read without
+    /// opening a store: the staging area is not swept, a record that does
+    /// not read is not quarantined, and nothing is written or locked, so a
+    /// command may read them beside a running Agent.
+    pub fn read_installed(root: &Path) -> Vec<InstalledPackage> {
+        list(root, &Records::read(root))
     }
 
     /// The installed package `id`.
     pub fn read(&self, id: &PluginId) -> Result<InstalledPackage, PackageError> {
-        let records = record::read(&self.record_path());
-        self.cached(id.clone(), &records)
-            .or_else(|| self.linked(id.clone(), &records))
+        let records = self.records();
+        cached(&self.root, id.clone(), &records)
+            .or_else(|| linked(&self.root, id.clone(), &records))
             .ok_or_else(|| PackageError::NotFound(format!("plugin `{id}` is not installed")))
     }
 
     /// The directory the package `id` is linked to, when it is linked.
     pub(crate) fn linked_path(&self, id: &PluginId) -> Option<PathBuf> {
-        record::read(&self.record_path())
+        self.records()
+            .linked
             .get(id)
-            .and_then(InstallRecord::linked)
-            .map(Path::to_path_buf)
+            .map(|record| record.path.clone())
     }
 
-    /// The package `id` linked to the directory its record names, read as
-    /// that directory is now; one whose directory does not read is listed
-    /// with the issue.
-    fn linked(&self, id: PluginId, records: &record::InstallRecords) -> Option<InstalledPackage> {
-        let record = records.get(&id)?;
-        let root = record.linked()?.to_path_buf();
-        let mut issues = Vec::new();
-        let manifest = match load_manifest(&root) {
-            Ok(manifest) => Some(manifest),
-            Err(error) => {
-                issues.push(format!(
-                    "its linked directory {} does not read: {error}",
-                    root.display()
-                ));
-                None
-            }
-        };
-        let version = manifest
-            .as_ref()
-            .and_then(|manifest| manifest.manifest.version.clone())
-            .unwrap_or_else(|| LOCAL_VERSION.to_string());
-        let format = manifest
-            .as_ref()
-            .map(|manifest| manifest.format)
-            .or(record.format)
-            .unwrap_or(ManifestFormat::Codex);
-        Some(InstalledPackage {
-            data_root: self.data_root(&id, format),
-            id,
-            version,
-            root,
-            manifest,
-            record: Some(record.clone()),
-            issues,
-        })
-    }
-
-    fn cached(&self, id: PluginId, records: &record::InstallRecords) -> Option<InstalledPackage> {
-        let version = self.active_version(&id)?;
-        let root = self.package_root(&id, &version);
-        let mut issues = Vec::new();
-        let manifest = match load_manifest(&root) {
-            Ok(manifest) => Some(manifest),
-            Err(error) => {
-                issues.push(error.to_string());
-                None
-            }
-        };
-        let record = records.get(&id).cloned();
-        if record.is_none() {
-            issues.push("the install record has no entry for it".to_string());
-        }
-        let format = manifest
-            .as_ref()
-            .map(|manifest| manifest.format)
-            .or(record.as_ref().and_then(|record| record.format))
-            .unwrap_or(ManifestFormat::Codex);
-        Some(InstalledPackage {
-            data_root: self.data_root(&id, format),
-            id,
-            version,
-            root,
-            manifest,
-            record,
-            issues,
-        })
-    }
-
-    /// Removes the package `id` from the cache and the record. Its data
+    /// Removes the package `id` from the cache and the records. Its data
     /// directory is kept unless `purge_data`. A linked package's record
     /// goes, and its directory stays as it is.
     pub fn uninstall(
@@ -284,22 +192,21 @@ impl PackageStore {
         purge_data: bool,
     ) -> Result<UninstallOutcome, PackageError> {
         let _change = self.changes.lock();
-        let recorded = record::read(&self.record_path()).remove(id);
-        let linked = recorded
-            .as_ref()
-            .and_then(InstallRecord::linked)
-            .map(Path::to_path_buf);
+        let records = self.records();
+        let linked = records.linked.get(id).map(|record| record.path.clone());
         let format = self
             .active_root(id)
             .or(linked.clone())
             .and_then(|root| load_manifest(&root).ok())
             .map(|manifest| manifest.format)
-            .or(recorded.and_then(|record| record.format))
+            .or(records.installed.get(id).and_then(|record| record.format))
+            .or(records.linked.get(id).and_then(|record| record.format))
             .unwrap_or(ManifestFormat::Codex);
         let base = self.package_base(id);
         let removed = remove_existing(&base)? || linked.is_some();
-        self.update_record(|records| {
-            records.remove(id);
+        self.update_records(|records| {
+            records.installed.remove(id);
+            records.linked.remove(id);
         })?;
         let data = self.data_root(id, format);
         let purged_data = if purge_data && remove_existing(&data)? {
@@ -322,12 +229,18 @@ impl PackageStore {
         permissions: PackagePermissions,
     ) -> Result<(), PackageError> {
         let _change = self.changes.lock();
+        let cached = self.active_version(id).is_some();
         let mut found = false;
-        self.update_record(|records| {
-            if let Some(record) = records.get_mut(id) {
-                record.granted_permissions = Some(permissions);
-                found = true;
-            }
+        self.update_records(|records| {
+            let granted = match records.linked.get_mut(id) {
+                Some(linked) if !cached => &mut linked.granted_permissions,
+                _ => match records.installed.get_mut(id) {
+                    Some(record) => &mut record.granted_permissions,
+                    None => return,
+                },
+            };
+            *granted = Some(permissions);
+            found = true;
         })?;
         if !found {
             return Err(PackageError::NotFound(format!(
@@ -356,18 +269,136 @@ impl PackageStore {
             .map_err(|error| io_error("create a staging directory", error))
     }
 
-    fn record_path(&self) -> PathBuf {
-        self.root.join(RECORD_FILE)
+    /// Both record files, a file that does not read quarantined.
+    fn records(&self) -> Records {
+        let records = Records::read(&self.root);
+        records.quarantine_unreadable();
+        records
     }
 
-    pub(crate) fn update_record(
+    pub(crate) fn update_records(
         &self,
-        change: impl FnOnce(&mut record::InstallRecords),
+        change: impl FnOnce(&mut Records),
     ) -> Result<(), PackageError> {
-        let path = self.record_path();
-        let mut records = record::read(&path);
+        let mut records = self.records();
         change(&mut records);
-        record::write(&path, &records).map_err(PackageError::Io)
+        records.write(&self.root).map_err(PackageError::Io)
+    }
+}
+
+/// Every package in the cache under `root`, by id, then every linked one
+/// whose id the cache does not hold.
+fn list(root: &Path, records: &Records) -> Vec<InstalledPackage> {
+    let mut packages = Vec::new();
+    for marketplace in directory_names(&root.join(CACHE_DIR)) {
+        if validate_marketplace_name(&marketplace).is_err() {
+            continue;
+        }
+        let base = root.join(CACHE_DIR).join(&marketplace);
+        for plugin in directory_names(&base) {
+            let Ok(id) = PluginId::new(&plugin, &marketplace) else {
+                continue;
+            };
+            packages.extend(cached(root, id, records));
+        }
+    }
+    let cached = packages.len();
+    for id in records.linked.keys() {
+        if !packages[..cached].iter().any(|package| package.id == *id) {
+            packages.extend(linked(root, id.clone(), records));
+        }
+    }
+    packages
+}
+
+/// The package `id` in the cache under `root`.
+fn cached(root: &Path, id: PluginId, records: &Records) -> Option<InstalledPackage> {
+    let base = package_base(root, &id);
+    let version = active_version(&base)?;
+    let root_of_version = base.join(&version);
+    let mut issues = Vec::new();
+    let manifest = match load_manifest(&root_of_version) {
+        Ok(manifest) => Some(manifest),
+        Err(error) => {
+            issues.push(error.to_string());
+            None
+        }
+    };
+    let record = records.installed.get(&id).cloned();
+    if record.is_none() {
+        issues.push("the install record has no entry for it".to_string());
+    }
+    let format = manifest
+        .as_ref()
+        .map(|manifest| manifest.format)
+        .or(record.as_ref().and_then(|record| record.format))
+        .unwrap_or(ManifestFormat::Codex);
+    Some(InstalledPackage {
+        data_root: data_root(root, &id, format),
+        id,
+        version,
+        root: root_of_version,
+        manifest,
+        record,
+        issues,
+    })
+}
+
+/// The package `id` linked to the directory its record names, read as that
+/// directory is now; one whose directory does not read is listed with the
+/// issue.
+fn linked(root: &Path, id: PluginId, records: &Records) -> Option<InstalledPackage> {
+    let record: &LinkedRecord = records.linked.get(&id)?;
+    let directory = record.path.clone();
+    let mut issues = Vec::new();
+    let manifest = match load_manifest(&directory) {
+        Ok(manifest) => Some(manifest),
+        Err(error) => {
+            issues.push(format!(
+                "its linked directory {} does not read: {error}",
+                directory.display()
+            ));
+            None
+        }
+    };
+    let version = manifest
+        .as_ref()
+        .and_then(|manifest| manifest.manifest.version.clone())
+        .unwrap_or_else(|| LOCAL_VERSION.to_string());
+    let format = manifest
+        .as_ref()
+        .map(|manifest| manifest.format)
+        .or(record.format)
+        .unwrap_or(ManifestFormat::Codex);
+    Some(InstalledPackage {
+        data_root: data_root(root, &id, format),
+        id,
+        version,
+        root: directory,
+        manifest,
+        record: Some(record.install_record()),
+        issues,
+    })
+}
+
+fn package_base(root: &Path, id: &PluginId) -> PathBuf {
+    root.join(CACHE_DIR)
+        .join(&id.marketplace_name)
+        .join(&id.plugin_name)
+}
+
+fn data_root(root: &Path, id: &PluginId, format: ManifestFormat) -> PathBuf {
+    let data = root.join(DATA_DIR);
+    match format {
+        ManifestFormat::AgentPlugins => {
+            let mut digest = Sha256::new();
+            digest.update(id.marketplace_name.as_bytes());
+            digest.update([0]);
+            digest.update(id.plugin_name.as_bytes());
+            data.join(AGENT_PLUGINS_DATA_DIR)
+                .join(hex::encode(digest.finalize()))
+        }
+        _ => data.join(format!("{}-{}", id.plugin_name, id.marketplace_name)),
     }
 }
 

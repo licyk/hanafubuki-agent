@@ -387,6 +387,7 @@ pub(super) fn section_form(section: ConfigSection, state: &ConfigState) -> FormV
         .with_subtitle("The linked editors save their own [tui] keys."),
         ConfigSection::Plugins => super::options::plugins_form(state),
         ConfigSection::Providers
+        | ConfigSection::Role
         | ConfigSection::Mcp
         | ConfigSection::Hooks
         | ConfigSection::Layers => {
