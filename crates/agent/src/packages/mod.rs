@@ -1,6 +1,7 @@
 //! The installed plugins' content: the packages in the store that the
-//! settings leave on, each read for its Skill roots, its MCP servers and its
-//! hooks, which the Agent's Skill catalog, MCP side and hooks then follow.
+//! settings leave on, each read for its Skill roots, its MCP servers, its
+//! hooks and its roles, which the Agent's Skill catalog, MCP side, hooks
+//! and role catalog then follow.
 //! One package that cannot be read, or one of its components, costs only
 //! itself: what went wrong is that package's issue.
 //!
@@ -13,7 +14,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
-use hanafubuki_agent_config::{AgentConfig, AgentSettings};
+use hanafubuki_agent_config::{AgentConfig, AgentSettings, RoleDefinition};
 use hanafubuki_agent_hooks::{HooksEngine, PluginHookSource};
 use hanafubuki_agent_mcp::McpServerId;
 use hanafubuki_agent_packages::{ManifestFormat, PackagePermissions, PackageStore, PluginId};
@@ -21,6 +22,7 @@ use hanafubuki_agent_plugin_packages::{GuestHost, GuestPackage};
 use hanafubuki_agent_skills::PluginSkillRoot;
 use parking_lot::RwLock;
 
+use crate::roles::AgentPackageRoles;
 use crate::service::{AgentMcpApplication, McpPluginServer};
 use crate::skills::AgentSkillApplication;
 
@@ -28,6 +30,7 @@ mod content;
 mod guest;
 mod lifecycle;
 mod marketplaces;
+mod roles;
 mod status;
 mod validate;
 
@@ -82,6 +85,9 @@ pub(crate) struct LoadedPackage {
     /// the same name for.
     pub(crate) mcp_servers: Vec<hanafubuki_agent_mcp::McpServerConfig>,
     pub(crate) hooks: Option<PluginHookSource>,
+    /// Its roles, named `<plugin>:<role>`; none when another package of its
+    /// plugin name comes first.
+    pub(crate) roles: Vec<RoleDefinition>,
     /// Its code, on or off.
     pub(crate) guest: Option<GuestPackage>,
     /// What its code's settings are (`configSchema`).
@@ -269,6 +275,7 @@ impl AgentPackages {
             })
             .collect::<Vec<_>>();
         resolve_server_names(&mut packages, user_servers);
+        resolve_role_names(&mut packages);
         LoadedPackages { packages }
     }
 }
@@ -287,6 +294,17 @@ impl LoadedPackages {
     pub(crate) fn hook_sources(&self) -> Vec<PluginHookSource> {
         self.enabled()
             .filter_map(|package| package.hooks.clone())
+            .collect()
+    }
+
+    /// The roles of each package that is on.
+    pub(crate) fn roles(&self) -> Vec<AgentPackageRoles> {
+        self.enabled()
+            .filter(|package| !package.roles.is_empty())
+            .map(|package| AgentPackageRoles {
+                id: package.id.key(),
+                definitions: package.roles.clone(),
+            })
             .collect()
     }
 
@@ -336,6 +354,31 @@ fn resolve_server_names(packages: &mut [LoadedPackage], user_servers: &BTreeSet<
             true
         });
         package.issues.extend(issues);
+    }
+}
+
+/// Keeps the roles of a plugin name (`<plugin>:…`) to one package: the
+/// first by id with roles; another package of that plugin name, from
+/// another marketplace, contributes none, and that is its issue.
+fn resolve_role_names(packages: &mut [LoadedPackage]) {
+    let mut owners = BTreeMap::<String, String>::new();
+    for package in packages
+        .iter_mut()
+        .filter(|package| package.enabled && !package.roles.is_empty())
+    {
+        let plugin = &package.id.plugin_name;
+        match owners.get(plugin) {
+            Some(owner) => {
+                package.issues.push(format!(
+                    "its roles are left out: `{owner}` comes first, and its roles are named \
+                     `{plugin}:…` already"
+                ));
+                package.roles.clear();
+            }
+            None => {
+                owners.insert(plugin.clone(), package.id.key());
+            }
+        }
     }
 }
 

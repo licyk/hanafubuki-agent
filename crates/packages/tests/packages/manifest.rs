@@ -174,6 +174,7 @@ fn component_paths_resolve_below_the_package_root() {
   "mcpServers": "./.mcp.json",
   "hooks": "./hooks.json",
   "commands": "./cmds",
+  "agents": ["./roles", "./more/reviewer.md"],
   "interface": {"displayName": "Demo Plugin", "composerIcon": "./assets/icon.svg"}
 }"#,
     );
@@ -193,6 +194,10 @@ fn component_paths_resolve_below_the_package_root() {
         Some(HooksDeclaration::Paths(vec![root.join("hooks.json")]))
     );
     assert_eq!(manifest.paths.commands, vec![root.join("cmds")]);
+    assert_eq!(
+        manifest.paths.agents,
+        vec![root.join("roles"), root.join("more/reviewer.md")]
+    );
     assert_eq!(
         manifest.interface,
         Some(ManifestInterface {

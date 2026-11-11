@@ -4,14 +4,14 @@ description: Installing plugins of Codex's, Claude Code's, Cursor's or the Agent
 icon: Blocks
 ---
 
-An installed plugin is a package that adds to the Agent. A package in Codex's, Claude Code's, Cursor's or the Agent Plugins format brings [Skills](/docs/skills#sources), [MCP servers](/docs/mcp#plugin-servers) and [hooks](/docs/configuration#hooks-plugins). One in this project's format can also run code that contributes tools, context sections, prompt fragments, hooks and observers ([Writing plugins](/docs/writing-plugins)). How the Agent loads them is in [Architecture](/docs/architecture#installed-plugins).
+An installed plugin is a package that adds to the Agent. A package in Codex's, Claude Code's, Cursor's or the Agent Plugins format brings [Skills](/docs/skills#sources), [MCP servers](/docs/mcp#plugin-servers) and [hooks](/docs/configuration#hooks-plugins); one in Claude Code's or this project's format also [roles](/docs/roles#plugins). One in this project's format can also run code that contributes tools, context sections, prompt fragments, hooks and observers ([Writing plugins](/docs/writing-plugins)). How the Agent loads them is in [Architecture](/docs/architecture#installed-plugins).
 
 ## Install one [#install]
 
 - **From a marketplace**: add it with `plugins marketplace add SOURCE` (`owner/repo`, a git URL or a local directory), then `plugins add PLUGIN@MARKETPLACE`. In the terminal interface: `/plugins`, **Marketplaces**, **Add a marketplace…**, then the plugin's **Install plugin**.
 - **From a directory**: `plugins add DIR`, or **Install from a directory…** on the **Installed** tab. Its id is `<name>@local`.
 
-An install turns the plugin on, and its Skills, MCP servers and hooks join the Agent's without a restart. The commands are in [Command-line reference](/docs/cli-reference#plugins), the browser in [Terminal interface](/docs/terminal-interface#plugins), the settings in [Configuration reference](/docs/config-reference#plugins).
+An install turns the plugin on, and its Skills, MCP servers, hooks and roles join the Agent's without a restart. The commands are in [Command-line reference](/docs/cli-reference#plugins), the browser in [Terminal interface](/docs/terminal-interface#plugins), the settings in [Configuration reference](/docs/config-reference#plugins).
 
 ## What it may do [#consent]
 
@@ -21,7 +21,7 @@ An install turns the plugin on, and its Skills, MCP servers and hooks join the A
 
 ## On, off and away [#lifecycle]
 
-`plugins enable ID` and `plugins disable ID` (Space in `/plugins`) turn a plugin on or off without a restart; turning off one with code stops its process. `plugins update ID` installs it again from its marketplace or directory. `plugins remove ID` uninstalls it and keeps its data directory unless `--purge-data`. Started with `--safe-mode`, the Agent loads no installed plugin. Turning off the built-in row `plugins` (`disabledPlugins`) stops every plugin's code; their Skills, MCP servers and hooks still run.
+`plugins enable ID` and `plugins disable ID` (Space in `/plugins`) turn a plugin on or off without a restart; turning off one with code stops its process. `plugins update ID` installs it again from its marketplace or directory. `plugins remove ID` uninstalls it and keeps its data directory unless `--purge-data`. Started with `--safe-mode`, the Agent loads no installed plugin. Turning off the built-in row `plugins` (`disabledPlugins`) stops every plugin's code; their Skills, MCP servers and hooks still run, and their roles stay.
 
 ## When one fails [#failures]
 

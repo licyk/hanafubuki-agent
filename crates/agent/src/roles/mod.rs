@@ -1,6 +1,7 @@
 //! Roles (site/content/docs/roles.en.mdx): named, inheritable definitions
 //! of how a session's Agent works, which only narrow it. The configuration
-//! reads their definitions per source; this module ranks the sources,
+//! reads their definitions per source, and the installed plugins' with
+//! their content (`packages/roles.rs`); this module ranks the sources,
 //! follows `extends`, merges each chain field by field and keeps where each
 //! field came from. A session takes its role from the catalog when it is
 //! created or switched (`service/roles.rs`).
@@ -13,7 +14,7 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::sync::Arc;
 
-use hanafubuki_agent_config::{AgentConfig, RoleLayer, RoleOrigin};
+use hanafubuki_agent_config::{AgentConfig, RoleDefinition, RoleLayer, RoleOrigin};
 use hanafubuki_agent_foundation::agent_settings::ModelReasoningEffort;
 use hanafubuki_agent_kernel::AgentCapabilityScope;
 use parking_lot::{Mutex, RwLock};
@@ -30,6 +31,9 @@ pub const MAX_ROLE_CHAIN: usize = 8;
 pub enum AgentRoleSource {
     /// Compiled into the Agent.
     BuiltIn,
+    /// A role file of the installed plugin `id` (`<plugin>@<marketplace>`),
+    /// while it is on.
+    Package { id: String, origin: RoleOrigin },
     /// A role file or an `[agents]` entry of the user, the profile or a
     /// trusted project.
     Configured {
@@ -42,6 +46,7 @@ impl fmt::Display for AgentRoleSource {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::BuiltIn => formatter.write_str("built-in"),
+            Self::Package { id, origin } => write!(formatter, "plugin `{id}` {origin}"),
             Self::Configured { layer, origin } => write!(formatter, "{layer} {origin}"),
         }
     }
@@ -134,15 +139,30 @@ pub struct AgentRoleCatalog {
     issues: Vec<AgentRoleIssue>,
 }
 
+/// The roles of one installed plugin that is on, each named
+/// `<plugin>:<role>`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct AgentPackageRoles {
+    /// `<plugin>@<marketplace>`.
+    pub(crate) id: String,
+    pub(crate) definitions: Vec<RoleDefinition>,
+}
+
 impl AgentRoleCatalog {
-    /// The roles `config` defines now, over the built-in ones. A
+    /// The roles `config` defines now, over the built-in ones; the
+    /// installed plugins' roles are only in a running Agent's catalog. A
     /// configuration that cannot be read leaves the built-in roles, with
     /// an issue.
     pub fn load(config: &AgentConfig) -> Self {
+        Self::load_with(config, Vec::new())
+    }
+
+    /// The roles of `config` and of `packages`, over the built-in ones.
+    pub(crate) fn load_with(config: &AgentConfig, packages: Vec<AgentPackageRoles>) -> Self {
         match config.role_sources() {
-            Ok(sources) => resolve::resolve(sources),
+            Ok(sources) => resolve::resolve(packages, sources),
             Err(error) => {
-                let mut catalog = resolve::resolve(Vec::new());
+                let mut catalog = resolve::resolve(packages, Vec::new());
                 catalog.issues.push(AgentRoleIssue {
                     role: None,
                     message: format!("the roles of the configuration are not read: {error}"),
@@ -179,8 +199,8 @@ impl AgentRoleCatalog {
     }
 }
 
-/// The instance's role catalog, rebuilt from the configuration whenever
-/// the settings or the installed plugins are published.
+/// The instance's role catalog, rebuilt from the configuration and the
+/// installed plugins whenever the settings or the plugins are published.
 pub(crate) struct AgentRoles {
     /// Held while one is built, so of two rebuilds the later one's read is
     /// the one kept.
@@ -189,10 +209,10 @@ pub(crate) struct AgentRoles {
 }
 
 impl AgentRoles {
-    pub(crate) fn load(config: &AgentConfig) -> Self {
+    pub(crate) fn load(config: &AgentConfig, packages: Vec<AgentPackageRoles>) -> Self {
         Self {
             rebuild: Mutex::new(()),
-            catalog: RwLock::new(Arc::new(AgentRoleCatalog::load(config))),
+            catalog: RwLock::new(Arc::new(AgentRoleCatalog::load_with(config, packages))),
         }
     }
 
@@ -200,10 +220,16 @@ impl AgentRoles {
         self.catalog.read().clone()
     }
 
-    /// Reads the roles again. Blocking: reads the role files.
-    pub(crate) fn rebuild(&self, config: &AgentConfig) {
+    /// Reads the roles again, with the plugins' roles `packages` gives
+    /// (called under the rebuild gate, so the later rebuild reads the later
+    /// packages). Blocking: reads the role files.
+    pub(crate) fn rebuild(
+        &self,
+        config: &AgentConfig,
+        packages: impl FnOnce() -> Vec<AgentPackageRoles>,
+    ) {
         let _rebuild = self.rebuild.lock();
-        let catalog = Arc::new(AgentRoleCatalog::load(config));
+        let catalog = Arc::new(AgentRoleCatalog::load_with(config, packages()));
         *self.catalog.write() = catalog;
     }
 }

@@ -6,7 +6,7 @@ icon: UserCog
 
 角色是 Agent 工作方式的一份有名字的定义：指令、模型、推理强度、权限模式上限，以及它可以使用的工具和插件。角色只会**收窄**它所在的 Agent：它可以拿走工具和插件、收紧权限模式，但绝不增加或放宽任何东西，所以没有哪个角色比实例本身能做的更多。审批规则、你的钩子和沙箱都不受任何角色影响。
 
-角色用 TOML 定义，可以由你、配置档或受信任的项目提供，另有两个内置角色。Agent 会读取、检查并列出角色（`hanafubuki-agent roles`、`doctor`、`/warnings`），会话以你选择的角色运行（[会话中的角色](#sessions)），子代理以父会话的模型给它的角色运行（[子代理的角色](#subagents)）。
+角色用 TOML 定义，可以由你、配置档或受信任的项目提供，另有两个内置角色；[已安装插件](#plugins)也可以带来角色。Agent 会读取、检查并列出角色（`hanafubuki-agent roles`、`doctor`、`/warnings`），会话以你选择的角色运行（[会话中的角色](#sessions)），子代理以父会话的模型给它的角色运行（[子代理的角色](#subagents)）。
 
 ## 定义角色 [#define]
 
@@ -50,7 +50,7 @@ off = ["titles", "goal"]
 | `tools.deny`        | 工具模式数组                                                     | 无                    | 不论 `allow` 怎样写，角色都不能使用的工具                                    |
 | `plugins.off`       | 插件名数组（已安装插件的代码写作 `guest:<id>`）                  | 无                    | 角色的会话不获得其工具和上下文的插件                                         |
 
-角色名为 1 到 128 字节，不含空格、控制字符或 `:`；`:` 留给已安装插件的角色使用（`<插件>:<角色>`）。
+角色名为 1 到 128 字节，不含空格、控制字符或 `:`；`:` 由已安装插件的角色使用（`<插件>:<角色>`，[见下](#plugins)）。
 
 ## 工具模式 [#tool-patterns]
 
@@ -67,9 +67,10 @@ off = ["titles", "goal"]
 角色来自以下来源，从低到高。较高来源中的角色会**整体替换**较低来源中的同名角色：较低那个什么都不保留。想在某个角色的基础上修改，请给你的角色另起名字并 `extends` 它。
 
 1. **内置角色**：`default` 和 `explorer`（[见下](#built-in)）。
-2. **用户的**：用户 `agents/` 中的角色文件，以及用户 `config.toml` 中的 `[agents]` 条目。
-3. **配置档的**：`-p 名字` 选择的配置档中的 `[profiles.名字.agents]` 条目。
-4. **受信任项目的**：`.hanafubuki-agent/agents/` 中的角色文件，以及 `.hanafubuki-agent/config.toml` 中的 `[agents]` 条目；只有用户的 `config.toml` 信任该项目时才读取（[项目配置](/docs/config-layers#projects)）。
+2. **已安装插件的**：在插件开启期间提供，各以 `<插件>:<角色>` 命名（[见下](#plugins)）。
+3. **用户的**：用户 `agents/` 中的角色文件，以及用户 `config.toml` 中的 `[agents]` 条目。
+4. **配置档的**：`-p 名字` 选择的配置档中的 `[profiles.名字.agents]` 条目。
+5. **受信任项目的**：`.hanafubuki-agent/agents/` 中的角色文件，以及 `.hanafubuki-agent/config.toml` 中的 `[agents]` 条目；只有用户的 `config.toml` 信任该项目时才读取（[项目配置](/docs/config-layers#projects)）。
 
 同一来源中，先是 `[agents]` 条目（按名字），再是角色文件（按路径）。两者定义了同一个名字时，前一个保留这个名字，另一个被忽略并记一条问题。不可用的角色依然占有它的名字：它不会让较低来源的同名角色顶上来。
 
@@ -153,6 +154,22 @@ model = "gpt-5.4"
 
 每次派生都读取当时的角色，指引在每一步也是如此；`agent_type` 描述中的列表则是 `subagents` 插件启动时的那份，直到插件重启（修改它的等待选项、把它关闭再打开，或 Agent 下次启动）。
 
+## 插件的角色 [#plugins]
+
+[已安装插件](/docs/plugins)通过它的 `agents` 组件带来角色（[编写插件](/docs/writing-plugins#roles)）：
+
+- 本项目格式的插件提供角色文件：它的 `agents/`（或清单中 `agents` 指定的路径）中的 `.toml` 文件，读取方式和你的完全一样，包括每一个键；
+- Claude Code 插件提供代理文件：它的 `agents/` 中的 `.md` 文件，frontmatter 中的 `name`、`description`、`tools`、`model` 和正文（即指令）作为角色读取，Claude 的工具名映射为本 Agent 的（[对照表](/docs/writing-plugins#claude-agents)）；
+- Codex、Cursor 或 Agent Plugins 格式的插件没有角色。
+
+**名字。** 插件的角色名为 `<插件>:<角色>`：插件 id 中的插件名（`demo@my-mkt` 的 `demo`），再加上角色自己的名字（它的 `name`，没有时是文件名）。你的角色不会占用这个名字，因为你的角色名不含 `:`。来自不同市场的两个同名插件同时开启时：id 在前的（`demo@alpha` 先于 `demo@beta`）保留这个名字，另一个不带来任何角色，并记一条问题。`extends` 按目录中的名字引用角色，所以插件的角色继承同一插件的另一个角色时写作 `extends = "demo:base"`。
+
+**生命周期。** 插件的角色只在插件开启期间存在于目录中：开启或关闭插件（以及安装、更新或移除它）都会重新读取角色，无需重启。安全模式下没有插件带来角色。已经有某个插件角色的会话保留它当时取得的内容，和任何角色一样。
+
+**只会收窄。** 插件的角色和你的角色经过同样的合并：它只能拿走工具和插件、收紧权限模式，所以绝不会比它所在的实例更宽。你的角色 `extends` 它时会进一步收窄它，也可以重新设置它的 `spawnable`。
+
+读取插件角色文件时略去的内容（未知的键、没有对应工具的 Claude 工具名）是**插件的**问题，显示在 `plugins info` 和 `/plugins` 中该插件的条目里；插件中无法使用的角色是角色问题，和你的一样。插件的角色属于运行中 Agent 的角色目录：会话（`--role demo:reviewer`、`/role`）和子代理（`agent_type`）都可以使用它们，`/plugins` 按插件列出它们。`roles list`、`roles show` 和 `doctor` 只读取配置、不启动 Agent，所以不显示它们。
+
 ## Codex 角色文件 [#codex]
 
 Codex 的角色文件放进 `agents/` 无需修改即可使用：它的 `developer_instructions`、`model` 和 `model_reasoning_effort` 分别作为 `instructions`、`model` 和 `reasoningEffort` 读取。一个键和它的 Codex 名字同时设置时使用我们的，并记一条问题。其他 Codex 键（`sandbox_mode`、`nickname_candidates` 等）在这里是整个 Agent 的设置，因此被忽略，各记一条问题。Codex 的 `[agents]` 设置（`max_threads` 之类）不是角色，被忽略并记一条问题。
@@ -196,4 +213,4 @@ plugins.off: goal, titles  [from reader]
 
 ## 何时读取角色 [#reload]
 
-运行中的 Agent 在启动时读取角色，之后每次重新加载已安装插件时再读一次，而它自己每次写入设置后都会重新加载。手动编辑的角色文件在那时生效，或者在下次启动时生效，对此后选择它的会话有效；已经有这个角色的会话保留它当时取得的内容。`roles list`、`roles show` 和 `doctor` 每次运行都会读取这些文件。
+运行中的 Agent 在启动时读取角色，之后每次重新加载已安装插件时再读一次（插件的角色按这次重新加载的结果），而它自己每次写入设置后、每次已安装插件发生变化后都会重新加载。手动编辑的角色文件在那时生效，或者在下次启动时生效，对此后选择它的会话有效；已经有这个角色的会话保留它当时取得的内容。`roles list`、`roles show` 和 `doctor` 每次运行都会读取这些文件。

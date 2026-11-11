@@ -170,23 +170,26 @@ fn collect_markdown_files(directory: &Path, files: &mut Vec<PathBuf>) -> io::Res
 }
 
 fn parse_command(content: &str) -> ParsedCommand {
-    let whole = || ParsedCommand {
-        description: None,
-        body: content.to_string(),
-    };
-    let Some(rest) = content
-        .strip_prefix("---\n")
-        .or_else(|| content.strip_prefix("---\r\n"))
-    else {
-        return whole();
-    };
-    let Some((end, body_start)) = frontmatter_end(rest) else {
-        return whole();
-    };
-    ParsedCommand {
-        description: description(&rest[..end]),
-        body: rest[body_start..].to_string(),
+    match split_frontmatter(content) {
+        Some((frontmatter, body)) => ParsedCommand {
+            description: description(frontmatter),
+            body: body.to_string(),
+        },
+        None => ParsedCommand {
+            description: None,
+            body: content.to_string(),
+        },
     }
+}
+
+/// The frontmatter of `content` (between its opening `---` line and the
+/// next one) and the body after it; `None` without one.
+pub(crate) fn split_frontmatter(content: &str) -> Option<(&str, &str)> {
+    let rest = content
+        .strip_prefix("---\n")
+        .or_else(|| content.strip_prefix("---\r\n"))?;
+    let (end, body_start) = frontmatter_end(rest)?;
+    Some((&rest[..end], &rest[body_start..]))
 }
 
 fn frontmatter_end(rest: &str) -> Option<(usize, usize)> {

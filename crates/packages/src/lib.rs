@@ -11,12 +11,14 @@
 //! the marketplace entry's manifest when the package has none, checks the
 //! staged manifest against the source, turns `commands/` into Skills and
 //! swaps the copy in, keeping the previous version until the swap succeeded
-//! ([`PackageStore`]). Marketplaces are added from a directory or a git
-//! repository, upgraded and removed; the store returns their
+//! ([`PackageStore`]). A Claude Code package's agent files are read as
+//! roles ([`read_claude_agents`]). Marketplaces are added from a directory
+//! or a git repository, upgraded and removed; the store returns their
 //! `[marketplaces]` records and never writes the configuration
 //! ([`PluginsSettings`], [`MarketplaceRecord`]). `git` runs through the
 //! Agent's `ExecutorManager`.
 
+mod claude_agents;
 mod commands;
 mod error;
 mod git;
@@ -29,6 +31,7 @@ mod settings;
 mod store;
 mod version;
 
+pub use claude_agents::{read_claude_agents, ClaudeAgent, ClaudeAgentFiles};
 pub use commands::migrated_command_skills_root;
 pub use error::PackageError;
 pub use hash::content_hash;

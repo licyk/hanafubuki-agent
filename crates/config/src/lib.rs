@@ -56,8 +56,8 @@ pub use providers::{
 };
 pub use recovery::{AgentConfigProblem, AgentConfigRecovery};
 pub use roles::{
-    is_role_name, InstructionsMode, RoleDefinition, RoleLayer, RoleOrigin, RoleSource,
-    MAX_ROLE_NAME_BYTES, ROLE_DIR,
+    is_role_name, read_role_files, InstructionsMode, RoleDefinition, RoleFiles, RoleLayer,
+    RoleOrigin, RoleSource, MAX_ROLE_NAME_BYTES, ROLE_DIR,
 };
 pub use settings::{
     agent_settings_fields, AgentBackgroundCompactionSettings, AgentCompactionSettings,

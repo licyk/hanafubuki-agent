@@ -160,9 +160,25 @@ pub struct RoleSource {
     pub issues: Vec<String>,
 }
 
+/// The role files an installed plugin's `agents` component holds, by path,
+/// each named as in an `agents/` directory (the plugin's name is the
+/// caller's to add), and what could not be read as a role at all.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct RoleFiles {
+    pub definitions: Vec<RoleDefinition>,
+    pub issues: Vec<String>,
+}
+
+/// The role files of `paths`: each a directory, whose `.toml` files (in
+/// its subdirectories too) are read, or one role file. Read as the user's
+/// role files are, tolerantly; nothing is ever written beside them.
+pub fn read_role_files(paths: &[PathBuf]) -> RoleFiles {
+    discover::read_paths(paths)
+}
+
 /// A name a role can have: 1 to [`MAX_ROLE_NAME_BYTES`] bytes without
-/// spaces, control characters or `:`, which an installed plugin's roles
-/// use (`<plugin>:<role>`).
+/// spaces, control characters or `:`, which separates an installed
+/// plugin's name from its role's (`<plugin>:<role>`).
 pub fn is_role_name(name: &str) -> bool {
     !name.is_empty()
         && name.len() <= MAX_ROLE_NAME_BYTES

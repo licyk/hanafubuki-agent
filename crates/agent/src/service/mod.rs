@@ -391,7 +391,10 @@ impl AgentApplicationService {
             blocking.clone(),
             base_instructions.clone(),
         );
-        let roles = Arc::new(crate::roles::AgentRoles::load(&config));
+        let roles = Arc::new(crate::roles::AgentRoles::load(
+            &config,
+            packages.loaded().roles(),
+        ));
         let plugin_host = Arc::new(AgentHost::new(
             registries,
             blocking.clone(),

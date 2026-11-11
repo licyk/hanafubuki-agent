@@ -10,9 +10,10 @@ use crate::roles::{AgentRoleCatalog, AgentSessionRole, DEFAULT_ROLE};
 use crate::{AgentSessionModelSelectionRequest, AgentSessionReasoningEffortRequest};
 
 impl AgentApplicationService {
-    /// The roles as the last settings or package publication left them:
-    /// read when the Agent is built and again by every
-    /// [`Self::reload_packages`], which each settings write runs. A session
+    /// The roles as the last settings or package publication left them,
+    /// the installed plugins' that are on included: read when the Agent is
+    /// built and again by every [`Self::reload_packages`], which each
+    /// settings write runs. A session
     /// takes its role from it when it is created or its role is set.
     pub fn roles(&self) -> Arc<AgentRoleCatalog> {
         self.roles.current()
@@ -92,15 +93,17 @@ impl AgentApplicationService {
         Ok(role.session_role())
     }
 
-    /// Reads the roles again on the blocking pool; a failure keeps the
-    /// catalog as it was.
+    /// Reads the roles again on the blocking pool, with the roles of the
+    /// installed plugins as last loaded; a failure keeps the catalog as it
+    /// was.
     pub(super) async fn reload_roles(&self) {
         let roles = self.roles.clone();
         let config = self.config.clone();
+        let packages = self.packages.clone();
         let rebuilt = hanafubuki_agent_foundation::blocking::run_blocking_operation(
             self.blocking.as_ref(),
             "agent role catalog rebuild",
-            move || roles.rebuild(&config),
+            move || roles.rebuild(&config, || packages.loaded().roles()),
         )
         .await;
         if let Err(error) = rebuilt {

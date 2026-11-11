@@ -57,10 +57,19 @@ fn a_plugins_page_offers_what_its_state_allows() {
     // choose nothing.
     assert_eq!(
         off.choices.iter().filter(|choice| choice.is_none()).count(),
-        7
+        8
     );
 
-    let on = pages::package_page(&package(true, Vec::new()));
+    let mut on = package(true, Vec::new());
+    on.content.roles = vec!["demo:reviewer".to_string(), "demo:planner".to_string()];
+    let on = pages::package_page(&on);
+    let roles = on
+        .params
+        .items
+        .iter()
+        .find(|item| item.name == "Roles")
+        .and_then(|item| item.description.as_deref());
+    assert_eq!(roles, Some("demo:reviewer, demo:planner"));
     assert!(on.choices.iter().flatten().any(|choice| matches!(
         choice,
         Choice::Call {

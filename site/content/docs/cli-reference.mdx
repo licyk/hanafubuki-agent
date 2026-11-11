@@ -121,7 +121,7 @@ hanafubuki-agent exec [选项] [提示词|-]
 
 ## plugins [#plugins]
 
-已安装插件是 Codex、Claude Code、Cursor 或 Agent Plugins 格式的包：安装并启用后，它们的 Skill、MCP 服务器和 hook 加入 Agent。插件来自用户添加的市场（marketplace），或来自一个目录；本项目格式的插件还可以运行代码（[编写插件](/docs/writing-plugins)）。模型能看到每个插件提供的内容；插件存放的位置和相关设置见[配置参考](/docs/config-reference#plugins)，它们能做什么、如何失败见[插件](/docs/plugins)。
+已安装插件是 Codex、Claude Code、Cursor 或 Agent Plugins 格式的包：安装并启用后，它们的 Skill、MCP 服务器、hook 和角色加入 Agent。插件来自用户添加的市场（marketplace），或来自一个目录；本项目格式的插件还可以运行代码（[编写插件](/docs/writing-plugins)）。模型能看到每个插件提供的内容；插件存放的位置和相关设置见[配置参考](/docs/config-reference#plugins)，它们能做什么、如何失败见[插件](/docs/plugins)。
 
 | 命令                                                                           | 作用                                                                                                                                                                                                                                                                                          |
 | ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -131,7 +131,7 @@ hanafubuki-agent exec [选项] [提示词|-]
 | `plugins remove ID [--purge-data]`                                             | 卸载插件并删除它的 `[plugins]` 条目；除非加 `--purge-data`，它的数据目录会保留                                                                                                                                                                                                                |
 | `plugins enable ID`、`plugins disable ID`                                      | 启用或停用一个已安装插件；所属市场被关闭的插件不能启用                                                                                                                                                                                                                                        |
 | `plugins update ID`                                                            | 从插件的市场（按市场当前的内容；git 市场先升级）或它原来的目录重新安装；内容变化的插件的 hook 需要重新信任                                                                                                                                                                                    |
-| `plugins info ID [--json]`                                                     | 显示插件：状态、版本、格式、来源、它的 Skill、MCP 服务器和 hook、等待信任的 hook、它的代码的状态（等到命令自己的 Agent 启动了它，最多 30 秒；`code: running`、`blocked` 等；安全模式下或 `plugins` 行停用时立即显示 `stopped`）以及问题                                                       |
+| `plugins info ID [--json]`                                                     | 显示插件：状态、版本、格式、来源、它的 Skill、MCP 服务器、hook 和角色、等待信任的 hook、它的代码的状态（等到命令自己的 Agent 启动了它，最多 30 秒；`code: running`、`blocked` 等；安全模式下或 `plugins` 行停用时立即显示 `stopped`）以及问题                                                 |
 | `plugins retry ID`                                                             | 重新加载已安装插件，代码失败时重新启动它，并像 `info` 一样，在代码启动后显示该插件                                                                                                                                                                                                            |
 | `plugins grant ID`                                                             | 授予插件代码其清单请求的权限（网络、工作区、环境变量）并打印它们；程序访客在获得授权前处于 `blocked` 状态；WebAssembly 访客不需要授权，对它执行此命令会失败                                                                                                                                   |
 | `plugins settings ID [--get]`、`plugins settings ID --set JSON`                | 打印插件代码的设置（`[plugins."ID"].settings`）和它的 `configSchema`；`--set` 用一个按 schema 检查的 JSON 对象替换设置，`--set null` 删除它们；访客会带着新设置重新启动                                                                                                                       |
@@ -161,7 +161,7 @@ hanafubuki-agent exec [选项] [提示词|-]
 | `roles list`      | 按名字列出每个角色：它的来源和描述的第一行（不可派生时加 `(not spawnable)`），或 `unusable:` 及原因；读取和解析角色时的问题输出到标准错误                  |
 | `roles show 名字` | 打印角色的来源和继承链，然后是继承链解析后的每个字段，以及决定它的角色（`[from reader, explorer]`）；不可用的角色打印原因。没有任何来源定义的名字以 1 退出 |
 
-`-p` 会同时读取配置档的角色。两个命令都不启动 Agent。会话用全局的 `--role 名字` 或终端界面中的 `/role 名字` 取得角色。见[角色](/docs/roles)。
+`-p` 会同时读取配置档的角色。两个命令都不启动 Agent，所以都不显示已安装插件的角色（[插件的角色](/docs/roles#plugins)）；`plugins info` 会列出某个插件的角色。会话用全局的 `--role 名字` 或终端界面中的 `/role 名字` 取得角色。见[角色](/docs/roles)。
 
 ## doctor [#doctor]
 

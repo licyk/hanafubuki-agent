@@ -214,7 +214,7 @@ Fullscreen 下还有阅读对话的按键：Page Up/Page Down、F3、F4、Ctrl-S
 
 `/plugins` 打开插件浏览器（对应 Codex 的插件目录），有三个标签页，用 ←/→ 切换：**Installed**（已安装）、**Marketplaces**（市场）和 **Built-in**（内置）。每个改动立即保存；进行中时页面会显示（`Installing…`），完成后重新读取全部内容。对应的命令见[命令行参考](/docs/cli-reference#plugins)。
 
-- **Installed** 列出[已安装插件](/docs/cli-reference#plugins)：每个插件的状态、版本、需要审查的 hook 和问题。空格启用或停用选中的插件；Enter 打开它；`o` 打开代码插件的选项，前提是它的 `configSchema` 能降低为选项（即下面的通用选项表单；保存时写入它的设置，选项未描述的键保留，并重新启动它的代码）；**Install from a directory…** 要求输入一个插件目录，按 `<名字>@local` 安装。
+- **Installed** 列出[已安装插件](/docs/cli-reference#plugins)：每个插件的状态、版本、需要审查的 hook 和问题。空格启用或停用选中的插件；Enter 打开它（它的来源、版本、格式、Skill、MCP 服务器、hook、[角色](/docs/roles#plugins)和问题）；`o` 打开代码插件的选项，前提是它的 `configSchema` 能降低为选项（即下面的通用选项表单；保存时写入它的设置，选项未描述的键保留，并重新启动它的代码）；**Install from a directory…** 要求输入一个插件目录，按 `<名字>@local` 安装。
 - 插件页面提供 **Disable plugin** 或 **Enable plugin**、有 hook 等待信任时的 **Trust its N hook(s)**、代码插件的权限未授予时的 **Grant its permissions**（说明它的代码能访问什么；**Code** 一行显示它的访客状态）、代码插件的 **Settings**（一个以单个 JSON 对象编辑其设置的表单，按清单的 `configSchema` 校验；留空表示移除；它的代码以新设置重新启动）、**Update plugin**（从它的市场或目录重新安装）、**Retry plugin**（重新加载，并再次启动失败的访客）和 **Uninstall plugin**（会询问是否保留它的数据目录）。下面列出它的来源、版本、格式、Skill、MCP 服务器、hook 和问题。
 - **Marketplaces** 列出已添加的市场，每个显示来源和其中已安装的插件数量。Enter 打开一个市场：列出它的插件，标为 **Available**、**Installed**、**Disabled** 或 **Not installable**；在未安装的插件上按 Enter 显示 **Install plugin**。Ctrl+U 升级 git 市场，Ctrl+R 确认后删除市场。**Add a marketplace…** 要求输入来源：`owner/repo`、git URL 或本地市场目录。
 - 安装带 hook 的插件后，会列出这些 hook 的命令并询问是否信任（**Trust them**，或 **Not now**：之后在 `/hooks` 或插件页面信任）。hook 只有被信任后才会运行。
@@ -626,7 +626,7 @@ yank = []
 - **configuration**：读取 `config.toml`、`providers.toml` 和 `mcp.toml` 时做的修复（[配置恢复](/docs/recovery)），以及 `config.toml` 的某一层中设置无法使用的内容：不认识的键，或被下一层替换的值；
 - **roles**：读取[角色](/docs/roles#issues)时略去的内容、同一来源中定义了两次的角色，以及每个不可用的角色及其原因；
 - **plugins**：失败的插件，或被排除在回合之外的插件；
-- **installed plugins**：[已安装插件](#plugins)无法使用的内容：清单字段、组件、因同名而让位的 MCP 服务器；代码失败的插件（10 分钟内第四次失败，或启动失败），直到重试为止，以及它的代码遗漏的内容；
+- **installed plugins**：[已安装插件](#plugins)无法使用的内容：清单字段、组件、它的[角色](/docs/roles#plugins)略去的内容、因同名而让位的 MCP 服务器；代码失败的插件（10 分钟内第四次失败，或启动失败），直到重试为止，以及它的代码遗漏的内容；
 - **MCP**：服务器最近的错误或警告，以及读取 `mcp.toml` 时做的修复；
 - **hooks**：钩子配置中的问题；
 - **panics**：Agent 捕获到的内部错误；

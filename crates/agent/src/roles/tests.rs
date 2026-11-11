@@ -70,7 +70,7 @@ fn provenance<'a>(role: &'a AgentResolvedRole, field: &str) -> Vec<&'a str> {
 
 #[test]
 fn the_built_in_roles_are_default_and_explorer() {
-    let catalog = resolve(Vec::new());
+    let catalog = resolve(Vec::new(), Vec::new());
     let names: Vec<_> = catalog.roles().map(|role| role.name.as_str()).collect();
     assert_eq!(names, [DEFAULT_ROLE, EXPLORER_ROLE]);
     assert!(catalog.issues().is_empty());
@@ -111,7 +111,7 @@ fn description_model_effort_and_spawnable_are_the_childs_else_the_parents() {
     grandchild.model = Some("own-model".into());
     grandchild.reasoning_effort = Some(ModelReasoningEffort::Low);
     grandchild.spawnable = Some(true);
-    let catalog = resolve(user(vec![parent, child, grandchild]));
+    let catalog = resolve(Vec::new(), user(vec![parent, child, grandchild]));
 
     let child = usable(&catalog, "child");
     assert_eq!(child.description, "parent's description");
@@ -147,7 +147,10 @@ fn instructions_append_by_default_and_replace_only_the_ancestors() {
     let mut cleared = extending("cleared", "appended");
     cleared.instructions_mode = InstructionsMode::Replace;
     let silent = extending("silent", "appended");
-    let catalog = resolve(user(vec![root, appended, replaced, cleared, silent]));
+    let catalog = resolve(
+        Vec::new(),
+        user(vec![root, appended, replaced, cleared, silent]),
+    );
 
     let appended = usable(&catalog, "appended");
     assert_eq!(appended.instructions.as_deref(), Some("Root.\n\nAppended."));
@@ -171,7 +174,7 @@ fn the_permission_mode_cap_is_the_stricter() {
     let mut stricter = extending("stricter", "root");
     stricter.permission_mode_cap = Some(AgentPermissionMode::Manual);
     let unset = extending("unset", "root");
-    let catalog = resolve(user(vec![root, wider, stricter, unset]));
+    let catalog = resolve(Vec::new(), user(vec![root, wider, stricter, unset]));
 
     let wider = usable(&catalog, "wider");
     assert_eq!(
@@ -198,7 +201,7 @@ fn allow_is_intersected_and_an_absent_one_is_the_parents() {
     let same = extending("same", EXPLORER_ROLE);
     let mut nothing = extending("nothing", EXPLORER_ROLE);
     nothing.tools_allow = Some(Vec::new());
-    let catalog = resolve(user(vec![reader, same, nothing]));
+    let catalog = resolve(Vec::new(), user(vec![reader, same, nothing]));
 
     let reader = usable(&catalog, "reader");
     assert!(reader.scope.tools.allows(&tool("read_file")));
@@ -224,7 +227,7 @@ fn a_chain_with_more_tool_patterns_than_a_session_holds_is_unusable() {
     wide.tools_deny = (0..100).map(|index| format!("tool_{index}")).collect();
     let mut wider = extending("wider", "wide");
     wider.tools_allow = Some((0..29).map(|index| format!("read_{index}")).collect());
-    let catalog = resolve(user(vec![wide, wider]));
+    let catalog = resolve(Vec::new(), user(vec![wide, wider]));
     usable(&catalog, "wide");
     assert_eq!(
         unusable(&catalog, "wider"),
@@ -236,7 +239,10 @@ fn a_chain_with_more_tool_patterns_than_a_session_holds_is_unusable() {
 fn reserved_default_is_never_replaced() {
     let mut mine = role(DEFAULT_ROLE);
     mine.tools_allow = Some(Vec::new());
-    let catalog = resolve(user(vec![mine, extending("plain", DEFAULT_ROLE)]));
+    let catalog = resolve(
+        Vec::new(),
+        user(vec![mine, extending("plain", DEFAULT_ROLE)]),
+    );
     assert!(usable(&catalog, DEFAULT_ROLE).scope.tools.allow.is_empty());
     assert!(usable(&catalog, "plain").scope.tools.allow.is_empty());
     assert!(catalog.unusable_role(DEFAULT_ROLE).is_none());
@@ -256,7 +262,7 @@ fn deny_and_plugins_off_are_united_and_attributed_through_the_chain() {
     let mut child = extending("child", "parent");
     child.tools_deny = texts(&["apply_patch"]);
     child.plugins_off = texts(&["goal"]);
-    let catalog = resolve(user(vec![grandparent, parent, child]));
+    let catalog = resolve(Vec::new(), user(vec![grandparent, parent, child]));
 
     let child = usable(&catalog, "child");
     let deny: BTreeSet<_> = ["exec_command", "apply_patch"]
@@ -282,7 +288,7 @@ fn a_pattern_that_cannot_be_read_is_left_out_with_an_issue() {
     let mut odd = role("odd");
     odd.tools_allow = Some(texts(&["read_file", "mode:x"]));
     odd.tools_deny = texts(&[""]);
-    let catalog = resolve(user(vec![odd]));
+    let catalog = resolve(Vec::new(), user(vec![odd]));
     let odd = usable(&catalog, "odd");
     assert_eq!(odd.scope.tools.allow[0].len(), 1);
     assert!(odd.scope.tools.deny.is_empty());
@@ -385,7 +391,7 @@ fn a_child_never_allows_what_its_parent_does_not() {
                     .collect()
             })
             .collect();
-        let catalog = resolve(user(definitions));
+        let catalog = resolve(Vec::new(), user(definitions));
         for index in 1..length {
             let child = usable(&catalog, &format!("r{index}"));
             let parent = usable(&catalog, &format!("r{}", index - 1));
@@ -433,7 +439,7 @@ fn a_cycle_a_missing_or_unusable_parent_and_a_deep_chain_are_unusable() {
         extending("heir", "broken"),
     ];
     definitions.extend(deep);
-    let catalog = resolve(user(definitions));
+    let catalog = resolve(Vec::new(), user(definitions));
 
     assert!(unusable(&catalog, "a").contains("a → b → a is a cycle"));
     assert!(unusable(&catalog, "selfish").contains("extends itself"));
@@ -462,7 +468,7 @@ fn a_role_needs_a_description_of_its_own_or_its_chains() {
     child.description = None;
     let mut described = extending("described", "root");
     described.description = Some("Mine.".into());
-    let catalog = resolve(user(vec![root, child, described]));
+    let catalog = resolve(Vec::new(), user(vec![root, child, described]));
     assert!(unusable(&catalog, "root").contains("no description"));
     assert!(unusable(&catalog, "child").contains("no description"));
     assert_eq!(usable(&catalog, "described").description, "Mine.");
@@ -477,7 +483,7 @@ fn within_a_source_the_first_keeps_a_name() {
     second.origin = RoleOrigin::File {
         path: PathBuf::from("/roles/z/twin.toml"),
     };
-    let catalog = resolve(user(vec![first, second]));
+    let catalog = resolve(Vec::new(), user(vec![first, second]));
     assert_eq!(usable(&catalog, "twin").model.as_deref(), Some("first"));
     let issue = catalog
         .issues()
@@ -516,7 +522,7 @@ fn a_higher_source_replaces_a_role_whole() {
         ),
         source(RoleLayer::Project, vec![project_role, project_broken]),
     ];
-    let catalog = resolve(sources);
+    let catalog = resolve(Vec::new(), sources);
 
     let mine = usable(&catalog, "mine");
     assert_eq!(mine.model, None);
@@ -563,9 +569,65 @@ fn the_catalog_loads_from_the_configuration() {
         .starts_with("user [agents.inline] in "));
     assert!(catalog.issues().is_empty(), "{:?}", catalog.issues());
 
-    let roles = AgentRoles::load(&AgentConfig::new(&config_dir));
+    let roles = AgentRoles::load(&AgentConfig::new(&config_dir), Vec::new());
     std::fs::remove_file(config_dir.join("agents").join("filed.toml")).unwrap();
     assert!(roles.current().role("filed").is_some());
-    roles.rebuild(&AgentConfig::new(&config_dir));
+    roles.rebuild(&AgentConfig::new(&config_dir), || {
+        vec![package("demo@local", vec![role("demo:helper")])]
+    });
     assert!(roles.current().role("filed").is_none());
+    assert!(roles.current().role("demo:helper").is_some());
+}
+
+fn package(id: &str, definitions: Vec<RoleDefinition>) -> AgentPackageRoles {
+    AgentPackageRoles {
+        id: id.to_string(),
+        definitions,
+    }
+}
+
+#[test]
+fn a_plugins_roles_rank_between_the_built_in_and_the_users_and_only_narrow() {
+    let mut reviewer = extending("demo:reviewer", EXPLORER_ROLE);
+    reviewer.tools_allow = Some(texts(&["read_file", "apply_patch"]));
+    reviewer.spawnable = Some(false);
+    // Every tool its file lists was left out: it allows none.
+    let mut planner = role("demo:planner");
+    planner.tools_allow = Some(Vec::new());
+    let twin = role("demo:reviewer");
+    let mut user_reviewer = extending("strict", "demo:reviewer");
+    user_reviewer.spawnable = Some(true);
+    let catalog = resolve(
+        vec![package("demo@local", vec![reviewer, planner, twin])],
+        user(vec![user_reviewer]),
+    );
+
+    let reviewer = usable(&catalog, "demo:reviewer");
+    assert_eq!(
+        reviewer.source.to_string(),
+        "plugin `demo@local` file /roles/demo:reviewer.toml"
+    );
+    assert!(reviewer.scope.tools.allows(&tool("read_file")));
+    // `explorer` leaves `apply_patch` out, so its child cannot add it.
+    assert!(!reviewer.scope.tools.allows(&tool("apply_patch")));
+    assert!(!reviewer.spawnable);
+    assert!(catalog
+        .issues()
+        .iter()
+        .any(|issue| issue.role.as_deref() == Some("demo:reviewer")
+            && issue.message.contains("defines it again")));
+    let planner = usable(&catalog, "demo:planner");
+    assert!(!planner.scope.tools.allows(&tool("read_file")));
+    // A user's role extending it may make it spawnable, never wider.
+    let strict = usable(&catalog, "strict");
+    assert!(strict.spawnable);
+    assert_eq!(
+        strict
+            .chain
+            .iter()
+            .map(|link| link.name.as_str())
+            .collect::<Vec<_>>(),
+        ["strict", "demo:reviewer", EXPLORER_ROLE]
+    );
+    assert!(!strict.scope.tools.allows(&tool("apply_patch")));
 }

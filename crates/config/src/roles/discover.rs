@@ -9,7 +9,7 @@ use hanafubuki_agent_foundation::paths::{PathKey, ResolvedPath};
 use serde_json::{Map, Value};
 
 use super::decode::decode_role;
-use super::{is_role_name, RoleDefinition, RoleOrigin, RoleSource};
+use super::{is_role_name, RoleDefinition, RoleFiles, RoleOrigin, RoleSource};
 use crate::file::{ConfigFile, FileAccess, FileRead};
 
 const CONFIG_FILE: &str = "configFile";
@@ -147,14 +147,42 @@ pub(super) fn read_directory(directory: &Path, declared: &[PathKey], source: &mu
     };
     let mut files = Vec::new();
     collect_files(&root, 0, &mut files, &mut source.issues);
-    files.sort_by(|first, second| first.key().cmp(second.key()));
-    for file in files {
-        if declared.contains(file.key()) {
-            continue;
+    files.retain(|file| !declared.contains(file.key()));
+    read_definitions(files, &mut source.definitions, &mut source.issues);
+}
+
+/// The role files of `paths`: each a directory, read as an `agents/` is,
+/// or one role file.
+pub(super) fn read_paths(paths: &[PathBuf]) -> RoleFiles {
+    let mut read = RoleFiles::default();
+    let mut files = Vec::new();
+    for path in paths {
+        match ResolvedPath::resolve(path) {
+            Ok(path) if path.system().is_dir() => {
+                collect_files(&path, 0, &mut files, &mut read.issues)
+            }
+            Ok(path) => files.push(path),
+            Err(error) => read
+                .issues
+                .push(format!("{} cannot be read: {error}", path.display())),
         }
+    }
+    read_definitions(files, &mut read.definitions, &mut read.issues);
+    read
+}
+
+/// The definitions of `files`, by path, each read once.
+fn read_definitions(
+    mut files: Vec<ResolvedPath>,
+    definitions: &mut Vec<RoleDefinition>,
+    issues: &mut Vec<String>,
+) {
+    files.sort_by(|first, second| first.key().cmp(second.key()));
+    files.dedup_by(|second, first| first.key() == second.key());
+    for file in files {
         match read_file_definition(&file) {
-            Ok(definition) => source.definitions.push(definition),
-            Err(issue) => source.issues.push(issue),
+            Ok(definition) => definitions.push(definition),
+            Err(issue) => issues.push(issue),
         }
     }
 }

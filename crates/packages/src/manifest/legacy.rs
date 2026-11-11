@@ -41,6 +41,7 @@ pub(super) fn parse(
         mcp_servers: mcp_servers(root, &mut fields),
         hooks: hooks(root, &mut fields),
         commands: resolve_paths(root, &mut fields, "commands"),
+        agents: resolve_paths(root, &mut fields, "agents"),
     };
     let interface = fields
         .object("interface")

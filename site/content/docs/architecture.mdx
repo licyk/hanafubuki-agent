@@ -224,8 +224,9 @@ schema 遵循同样的按协议规则：支持 `strict_json_schema` 的协议（
 - **Skill 根目录**：清单的 `skills`（否则是 `skills/`），以及（Agent Plugins 除外）由它的命令转换成的 Skill。它们的 ID 是 `plugin:<plugin>@<marketplace>:<路径>`，名称是 `<清单名称>:<名称>`，与 Codex 的命名相同（[Skill 从哪里来](/docs/skills#sources)）。Agent Plugins 包的 Skill 是其根目录的直接子目录。
 - **包拥有的 MCP 服务器**（[插件的服务器](/docs/mcp#plugin-servers)）：`.mcp.json`（或清单的 `mcpServers`）或 Agent Plugins 的 `mcp.json`，从不写入 `mcp.toml`，由 `[plugins."p@m".mcpServers]` 限制，与用户的服务器在同一套监管下运行。同名时用户的服务器优先，其次是键的顺序中第一个包；让出的服务器记为该包的问题。
 - **钩子来源**，排在用户和项目之后（`HookSource::Plugin`），凭定义和包的内容哈希被信任，每次运行前再次检查（[插件的钩子](/docs/configuration#hooks-plugins)）。与 Codex 相同，Agent Plugins 包的钩子从不运行。
+- **角色**（`packages/roles.rs`）：清单的 `agents`（没有时是 `agents/`）。本项目格式的包中是角色文件，由配置的角色读取器读取；Claude Code 包中是代理文件，由 packages crate 读取（`read_claude_agents`：frontmatter 逐键读取，Claude 工具名按固定对照表映射，一个不含任何我们工具的 `tools` 不允许任何工具）；Codex、Cursor 或 Agent Plugins 包没有角色。每个角色以 `<插件>:<角色>` 命名，插件部分取自 id 中的插件名；同一插件名的两个包中，id 在前的保留它，另一个包的角色记为它的问题。角色目录把它们排在内置角色之上、用户的角色之下，和所有角色一样经过合并和收窄（[插件的角色](/docs/roles#plugins)）；读取时略去的内容是该包的问题。
 
-读不了的包，或包中读不了的组件，记为该包的问题；其他包照常加载。这一组包在构建 Agent 时加载（MCP 服务器随启动连接），并由 `reload_packages` 重新加载：门面在每次写入设置和 `mcp.toml` 之后运行它，每个生命周期调用也在变更后运行它；它替换 Skill 根目录和钩子来源，只连接或断开有变化的 MCP 服务器，无需重启。`packages()` 列出每个已安装的包及其版本、格式、启用状态、内容和问题（`AgentPackageStatus`）。
+读不了的包，或包中读不了的组件，记为该包的问题；其他包照常加载。这一组包在构建 Agent 时加载（MCP 服务器随启动连接），并由 `reload_packages` 重新加载：门面在每次写入设置和 `mcp.toml` 之后运行它，每个生命周期调用也在变更后运行它；它替换 Skill 根目录和钩子来源，只连接或断开有变化的 MCP 服务器，并带着包的角色重建角色目录，无需重启。`packages()` 列出每个已安装的包及其版本、格式、启用状态、内容和问题（`AgentPackageStatus`）。
 
 模型通过 `plugins` 行得知启用的包：当某个包向本轮的 Skill 目录贡献 Skill 或贡献 MCP 服务器时，Capabilities 槽位带有一个"可用插件"段落（Codex 的 `PluginCapabilitySummary`：显示名称、单行且至多 1,024 个字符的描述、Skill 前缀、MCP 服务器名称）；没有这样的包就没有该段落，所以没有包的 Agent 的请求不变。该行拥有这份摘要并挂载访客宿主（[代码插件](#code-plugins)），所以关闭它会隐藏摘要并停止所有访客，而内容仍经由 `skills`、`mcp` 和 `hooks` 行流入。安全模式下这些包会被列出，但都不加载。
 

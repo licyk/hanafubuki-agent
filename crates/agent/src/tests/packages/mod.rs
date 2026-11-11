@@ -1,6 +1,6 @@
 //! Installed plugins end to end: a package installed into the store and
-//! turned on in `[plugins]` contributes its Skills, MCP servers and hooks
-//! after a reload, and stops once turned off, without a restart; the
+//! turned on in `[plugins]` contributes its Skills, MCP servers, hooks and
+//! roles after a reload, and stops once turned off, without a restart; the
 //! user's MCP server and an earlier plugin come first for a server name;
 //! an Agent Plugins package's Skills are its root's direct children and its
 //! hooks never run; a broken package costs only itself.
@@ -18,6 +18,7 @@ mod lifecycle;
 mod manage;
 #[cfg(unix)]
 mod mcp;
+mod roles;
 mod rules;
 
 /// Writes `contents` at `path`, making its directories.
@@ -70,7 +71,6 @@ pub(super) fn install(paths: &TestPaths, source: &Path, id: &str) -> PathBuf {
         .root
 }
 
-#[cfg(unix)]
 pub(super) fn set_enabled(config: &AgentConfig, id: &str, enabled: bool) {
     config
         .set_package_settings(

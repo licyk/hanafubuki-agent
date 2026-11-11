@@ -404,6 +404,7 @@ fn print_package(package: &AgentPackageStatus) {
     println!("  Skills:      {}", list(&package.content.skills));
     println!("  MCP servers: {}", list(&package.content.mcp_servers));
     println!("  hooks:       {}", list(&package.content.hooks));
+    println!("  roles:       {}", list(&package.content.roles));
     if !package.hooks_to_trust.is_empty() {
         println!("  to trust:    {}", list(&package.hooks_to_trust));
     }

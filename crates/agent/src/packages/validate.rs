@@ -1,7 +1,7 @@
 //! A plugin's directory checked before it is installed (`plugins
 //! validate`): its manifest read as an install reads it, the files it
-//! declares, and, for a package with code, what the guest host would refuse
-//! or leave out. Nothing is installed and nothing starts.
+//! declares, its roles, and, for a package with code, what the guest host
+//! would refuse or leave out. Nothing is installed and nothing starts.
 
 use std::path::{Path, PathBuf};
 
@@ -37,8 +37,9 @@ pub struct AgentPackageValidation {
 /// install accepts, or one that cannot be read at all.
 pub fn validate_package(root: &Path) -> Result<AgentPackageValidation, String> {
     let loaded = load_manifest(root).map_err(|error| error.to_string())?;
-    let mut issues = loaded.issues;
+    let mut issues = loaded.issues.clone();
     issues.extend(missing_paths(&loaded.manifest));
+    super::roles::roles(root, &loaded.manifest.name, &loaded, &mut issues);
     let code = loaded.manifest.code.as_ref();
     if let Some(code) = code {
         match PluginId::new(&loaded.manifest.name, LOCAL_MARKETPLACE) {

@@ -85,6 +85,7 @@ pub(super) fn parse(
             mcp_servers: Some(McpServersDeclaration::Path(root.join("mcp.json"))),
             hooks: None,
             commands: Vec::new(),
+            agents: Vec::new(),
         },
         interface: Some(ManifestInterface {
             display_name: Some(name),

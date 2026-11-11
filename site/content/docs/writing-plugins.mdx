@@ -43,6 +43,7 @@ python3 -m pykardia.guest.export process plugin.py Plugin package/my-plugin.pyz 
 | `.hanafubuki-plugin/plugin.json`                        | [清单](#manifest)                                                                                                                                                     |
 | 访客的程序或模块                                        | `runtime.command` 指定的文件（`./my-plugin`、`./my-plugin.pyz`），访客只能读它；或 `runtime.module` 指定的文件（`./my-plugin.wasm`）                                  |
 | `skills/`、`.mcp.json`、`hooks/hooks.json`、`commands/` | 内容，与 Codex 和 Claude Code 的格式相同（[Skill](/docs/skills#sources)、[插件的服务器](/docs/mcp#plugin-servers)、[插件的 hook](/docs/configuration#hooks-plugins)） |
+| `agents/`                                               | 内容：角色文件（[角色](#roles)）                                                                                                                                      |
 
 插件可以只有内容、只有代码，或两者都有。它的 ID 是 `<名字>@<市场>`；从目录安装的插件是 `<名字>@local`。程序运行时，工作目录是插件自己的数据目录（`PLUGIN_DATA`），也是它唯一能写的地方；`PLUGIN_ROOT` 是安装后的包。模块两者都没有。
 
@@ -89,7 +90,7 @@ python3 -m pykardia.guest.export process plugin.py Plugin package/my-plugin.pyz 
 | ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `name`                                                            | 插件的名字：它 ID 的第一部分、它的工具的命名空间，也是它的访客声明的名字                                                                                                                                                          |
 | `version`、`description`、`keywords`、`interface`                 | 与 Codex 的清单相同；版本是安装副本的名字                                                                                                                                                                                         |
-| `skills`、`mcpServers`、`hooks`、`commands`                       | 内容，每个都是以 `./` 开头、留在包内的路径（`mcpServers` 和 `hooks` 也可以直接写在清单里）                                                                                                                                        |
+| `skills`、`mcpServers`、`hooks`、`commands`、`agents`             | 内容，每个都是以 `./` 开头、留在包内的路径（`mcpServers` 和 `hooks` 也可以直接写在清单里）；`agents` 是一个角色文件目录或单个文件，或它们的列表，用来代替 `agents/`（[角色](#roles)）                                             |
 | `runtime.type`                                                    | `process`（程序）或 `wasm`（[WebAssembly 模块](#wasm)）                                                                                                                                                                           |
 | `runtime.command`                                                 | `process`：程序和参数；程序是包里的文件（`./…`），或者在 `runtime.interpreter: true` 时是一个解释器（绝对路径，或 Agent 的 `PATH` 上的名字），以包里的文件作为参数                                                                |
 | `runtime.protocol`                                                | `process`：`kardia-guest/2`                                                                                                                                                                                                       |
@@ -106,6 +107,44 @@ python3 -m pykardia.guest.export process plugin.py Plugin package/my-plugin.pyz 
 | `configSchema`                                                    | 一个对象的 JSON Schema：插件的设置，降低为选项，`plugins settings` 和 `/plugins` 按这些选项检查设置，访客收到的设置也按它们检查过（[configSchema](#config-schema)）                                                               |
 
 每种声明变成什么、有哪些限制，见[访客贡献什么](/docs/plugin-rules#guest-contributions)。
+
+## 角色 [#roles]
+
+插件可以带来[角色](/docs/roles)：只会收窄 Agent 的工作方式定义，会话或子代理随后以它们运行。本项目格式的插件以角色文件的形式提供它们：`agents/`（包括子目录）或清单中 `agents` 指定的路径里的 `.toml` 文件，可以使用[角色文件](/docs/roles#keys)的每一个键：
+
+```toml
+# agents/reviewer.toml
+description = "审查一次改动并列出发现的问题；从不编辑。"
+extends = "explorer"
+instructions = "每个问题都给出文件和行号。"
+```
+
+每个角色以 `<插件>:<角色>` 命名，插件部分取自它 id 中的插件名（`my-plugin:reviewer`）；`extends` 按角色目录中的名字引用角色（同一插件的角色写作 `my-plugin:base`）。插件开启期间这些角色才存在。读取它们时略去的内容是插件的问题：`plugins validate` 会列出它，插件安装并开启后 `plugins info` 也会列出。优先级、合并规则和会话见[插件的角色](/docs/roles#plugins)。
+
+### Claude Code 代理文件 [#claude-agents]
+
+Claude Code 插件的代理文件，即它的 `agents/`（或清单中 `agents`）里的 `.md` 文件，也会作为角色读取。frontmatter 逐键读取，类型错误的键会被略去并记一条问题：
+
+- `name`：角色名，接在插件名之后（`<插件>:<name>`）；无法作为角色名或者没有写时，改用文件名。
+- `description`：角色的描述，角色必须有它。
+- `tools`：角色只能使用的工具，逗号分隔的列表（`Read, Grep, Glob`）或 YAML 列表，按下表映射。表中没有的名字会被略去并记一条问题；因此一个全由表中没有的名字组成的列表**不允许任何**工具。没有 `tools` 时，角色不收窄工具。既不是文本也不是列表的 `tools` 会让角色不可用，因为略去它会允许所有工具。
+- `model`：`inherit` 沿用会话的模型。其他值（`sonnet`、`opus`、`haiku`）不是本 Agent 的任何模型，因此被忽略并记一条问题，模型同样沿用。
+- frontmatter 之后的正文：角色的指令。
+
+其他键（`color` 之类）被忽略。其中 `disallowedTools` 和 `permissionMode` 在 Claude Code 中会收窄代理，而这里不读取，因此各记一条问题：角色允许的比文件写明的更多。没有 frontmatter 的文件，或者 frontmatter 即使给含有 `: ` 的普通值加上引号后仍不是 YAML 的文件，会被略去并记一条问题。
+
+| Claude Code                  | 本 Agent                      |
+| ---------------------------- | ----------------------------- |
+| `Read`                       | `read_file`                   |
+| `Grep`                       | `search_text`                 |
+| `Glob`、`LS`                 | `list_directory`              |
+| `Edit`、`MultiEdit`、`Write` | `apply_patch`                 |
+| `Bash`                       | `exec_command`                |
+| `WebFetch`                   | `fetch_web_page`              |
+| `WebSearch`                  | `web_search`                  |
+| `mcp__<服务器>__<工具>`      | 同名，即某个 MCP 服务器的工具 |
+
+Codex 格式的包没有角色。
 
 ## 访客 [#guest]
 
@@ -193,6 +232,7 @@ kardia-guest 和 pykardia 的访客 SDK（`pykardia/guest/` 以及导出时一�
 `hanafubuki-agent plugins validate 目录` 像安装那样读取插件，并像访客宿主运行它那样检查它的代码，但不安装也不启动任何东西：
 
 - 清单的问题（被略过的字段、超出范围的超时、未知的贡献），以及声明了却不存在的路径；
+- 它的[角色](#roles)略去的内容：角色文件中的键、Claude 代理文件中没有对应工具的工具名或它的 Claude `model`；
 - 运行时：对程序，检查协议、包里存在（且可执行）的程序，或 `PATH` 上的解释器，以及参数指定的包内文件；对模块，检查包里的文件是二进制 WebAssembly 模块，以及比 `limits.timeoutMs` 更长、会先被它截断的工具 `timeout`；
 - 注册时会被略过的内容：不是合法工具名的名字、过大或过深的 schema、不是插件种类的上下文种类、超过 7 个种类、不存在的提示槽位、没有观察者能收到的事件、重复声明的名字；
 - 不描述对象的 `configSchema`，以及其中不能成为选项的每个属性（[configSchema](#config-schema)）。

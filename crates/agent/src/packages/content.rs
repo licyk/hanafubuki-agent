@@ -34,9 +34,9 @@ const DEFAULT_HOOKS: &str = "hooks/hooks.json";
 
 /// `package` as the Agent runs it: when `active` (it is `enabled` and the
 /// Agent is not in safe mode), its Skill roots, its MCP servers with the
-/// user's overlay in its `settings` entry applied, and its hooks; and its
-/// code, configured with the settings there as its `configSchema` lets
-/// them be.
+/// user's overlay in its `settings` entry applied, its hooks and its roles;
+/// and its code, configured with the settings there as its `configSchema`
+/// lets them be.
 pub(super) fn load(
     package: &InstalledPackage,
     enabled: bool,
@@ -70,6 +70,7 @@ pub(super) fn load(
         skill_roots: Vec::new(),
         mcp_servers: Vec::new(),
         hooks: None,
+        roles: Vec::new(),
         guest: super::guest::guest_package(package, active, code_settings),
         config_schema,
         options,
@@ -100,6 +101,12 @@ pub(super) fn load(
         .filter_map(|server| apply_overlay(server, overlay, &mut loaded.issues))
         .collect();
     loaded.hooks = hooks(package, manifest, &mut loaded.issues);
+    loaded.roles = super::roles::roles(
+        &package.root,
+        &package.id.plugin_name,
+        manifest,
+        &mut loaded.issues,
+    );
     loaded
 }
 

@@ -4,14 +4,14 @@ description: 安装 Codex、Claude Code、Cursor 或 Agent Plugins 格式的插�
 icon: Blocks
 ---
 
-已安装的插件是一个为 Agent 增添内容的包。Codex、Claude Code、Cursor 或 Agent Plugins 格式的包带来 [Skill](/docs/skills#sources)、[MCP 服务器](/docs/mcp#plugin-servers)和[钩子](/docs/configuration#hooks-plugins)。本项目格式的包还可以运行代码，贡献工具、上下文段、提示片段、钩子和观察者（[编写插件](/docs/writing-plugins)）。Agent 如何加载它们见[架构](/docs/architecture#installed-plugins)。
+已安装的插件是一个为 Agent 增添内容的包。Codex、Claude Code、Cursor 或 Agent Plugins 格式的包带来 [Skill](/docs/skills#sources)、[MCP 服务器](/docs/mcp#plugin-servers)和[钩子](/docs/configuration#hooks-plugins)；Claude Code 格式和本项目格式的包还会带来[角色](/docs/roles#plugins)。本项目格式的包还可以运行代码，贡献工具、上下文段、提示片段、钩子和观察者（[编写插件](/docs/writing-plugins)）。Agent 如何加载它们见[架构](/docs/architecture#installed-plugins)。
 
 ## 安装 [#install]
 
 - **从市场安装**：先用 `plugins marketplace add SOURCE` 添加市场（`owner/repo`、git URL 或本地目录），再运行 `plugins add PLUGIN@MARKETPLACE`。在终端界面中：`/plugins`，**Marketplaces**，**Add a marketplace…**，然后在插件上选择 **Install plugin**。
 - **从目录安装**：`plugins add DIR`，或者 **Installed** 标签页上的 **Install from a directory…**。它的 ID 是 `<名字>@local`。
 
-安装会启用插件，它的 Skill、MCP 服务器和钩子无需重启就加入 Agent。命令见[命令行参考](/docs/cli-reference#plugins)，浏览器见[终端界面](/docs/terminal-interface#plugins)，设置见[配置参考](/docs/config-reference#plugins)。
+安装会启用插件，它的 Skill、MCP 服务器、钩子和角色无需重启就加入 Agent。命令见[命令行参考](/docs/cli-reference#plugins)，浏览器见[终端界面](/docs/terminal-interface#plugins)，设置见[配置参考](/docs/config-reference#plugins)。
 
 ## 它能做什么 [#consent]
 
@@ -21,7 +21,7 @@ icon: Blocks
 
 ## 启用、停用和卸载 [#lifecycle]
 
-`plugins enable ID` 和 `plugins disable ID`（`/plugins` 中按空格）无需重启就启用或停用插件；停用带代码的插件会停止它的进程。`plugins update ID` 从它的市场或目录重新安装它。`plugins remove ID` 卸载它，除非加上 `--purge-data`，否则保留它的数据目录。用 `--safe-mode` 启动时，Agent 不加载任何已安装的插件。停用内置的 `plugins` 行（`disabledPlugins`）会停止所有插件的代码；它们的 Skill、MCP 服务器和钩子仍然运行。
+`plugins enable ID` 和 `plugins disable ID`（`/plugins` 中按空格）无需重启就启用或停用插件；停用带代码的插件会停止它的进程。`plugins update ID` 从它的市场或目录重新安装它。`plugins remove ID` 卸载它，除非加上 `--purge-data`，否则保留它的数据目录。用 `--safe-mode` 启动时，Agent 不加载任何已安装的插件。停用内置的 `plugins` 行（`disabledPlugins`）会停止所有插件的代码；它们的 Skill、MCP 服务器和钩子仍然运行，角色也保留。
 
 ## 插件失败时 [#failures]
 

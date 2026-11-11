@@ -1,11 +1,12 @@
-//! From the sources' definitions to the catalog: the highest source keeps a
-//! name, the first definition by path within a source; each role's chain is
+//! From the sources' definitions to the catalog (the built-in roles, the
+//! installed plugins', then the configuration's): the highest source keeps
+//! a name, the first definition by path within a source; each role's chain is
 //! followed through `extends` and merged root first, every rule only
 //! narrowing.
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use hanafubuki_agent_config::{InstructionsMode, RoleDefinition, RoleSource};
+use hanafubuki_agent_config::{InstructionsMode, RoleDefinition, RoleOrigin, RoleSource};
 use hanafubuki_agent_foundation::agent_settings::ModelReasoningEffort;
 use hanafubuki_agent_kernel::{
     AgentCapabilityScope, AgentToolScope, ToolPattern, MAX_SCOPE_TOOL_PATTERNS,
@@ -13,8 +14,8 @@ use hanafubuki_agent_kernel::{
 
 use super::builtin::{built_in_roles, DEFAULT_ROLE};
 use super::{
-    AgentResolvedRole, AgentRoleCatalog, AgentRoleIssue, AgentRoleLink, AgentRoleSource,
-    AgentUnusableRole, MAX_ROLE_CHAIN,
+    AgentPackageRoles, AgentResolvedRole, AgentRoleCatalog, AgentRoleIssue, AgentRoleLink,
+    AgentRoleSource, AgentUnusableRole, MAX_ROLE_CHAIN,
 };
 
 /// One role as its source defines it, its patterns read.
@@ -33,48 +34,44 @@ pub(super) struct Candidate {
     pub(super) unusable: Option<String>,
 }
 
-pub(super) fn resolve(sources: Vec<RoleSource>) -> AgentRoleCatalog {
+pub(super) fn resolve(
+    packages: Vec<AgentPackageRoles>,
+    sources: Vec<RoleSource>,
+) -> AgentRoleCatalog {
     let mut issues = Vec::new();
     let mut candidates: BTreeMap<String, Candidate> = built_in_roles()
         .into_iter()
         .map(|candidate| (candidate.name.clone(), candidate))
         .collect();
+    // The plugins' roles are named `<plugin>:<role>`, so they never take
+    // the name of another source's role, nor of another plugin's.
+    for package in packages {
+        let id = package.id;
+        add_source(
+            package.definitions,
+            |origin| AgentRoleSource::Package {
+                id: id.clone(),
+                origin,
+            },
+            &mut candidates,
+            &mut issues,
+        );
+    }
     for source in sources {
         issues.extend(source.issues.into_iter().map(|message| AgentRoleIssue {
             role: None,
             message: format!("{} roles: {message}", source.layer),
         }));
-        let mut kept: BTreeMap<String, AgentRoleSource> = BTreeMap::new();
-        for definition in source.definitions {
-            let place = AgentRoleSource::Configured {
-                layer: source.layer.clone(),
-                origin: definition.origin.clone(),
-            };
-            // `default` always narrows nothing: a session switched back to
-            // it has the empty scope.
-            if definition.name == DEFAULT_ROLE {
-                issues.push(AgentRoleIssue {
-                    role: Some(definition.name.clone()),
-                    message: format!(
-                        "{place} is not usable: the name is reserved for the built-in role, \
-                         which narrows nothing; give this role another name"
-                    ),
-                });
-                continue;
-            }
-            if let Some(first) = kept.get(&definition.name) {
-                issues.push(AgentRoleIssue {
-                    role: Some(definition.name.clone()),
-                    message: format!(
-                        "{place} defines it again; {first} keeps the name, and this one is ignored"
-                    ),
-                });
-                continue;
-            }
-            kept.insert(definition.name.clone(), place.clone());
-            let candidate = candidate(definition, place, &mut issues);
-            candidates.insert(candidate.name.clone(), candidate);
-        }
+        let layer = source.layer;
+        add_source(
+            source.definitions,
+            |origin| AgentRoleSource::Configured {
+                layer: layer.clone(),
+                origin,
+            },
+            &mut candidates,
+            &mut issues,
+        );
     }
     let mut roles = BTreeMap::new();
     let mut unusable = BTreeMap::new();
@@ -103,6 +100,44 @@ pub(super) fn resolve(sources: Vec<RoleSource>) -> AgentRoleCatalog {
         roles,
         unusable,
         issues,
+    }
+}
+
+/// Adds the `definitions` of one source, each from `place`, over the
+/// lower sources' `candidates`: the first of a name keeps it.
+fn add_source(
+    definitions: Vec<RoleDefinition>,
+    place: impl Fn(RoleOrigin) -> AgentRoleSource,
+    candidates: &mut BTreeMap<String, Candidate>,
+    issues: &mut Vec<AgentRoleIssue>,
+) {
+    let mut kept: BTreeMap<String, AgentRoleSource> = BTreeMap::new();
+    for definition in definitions {
+        let place = place(definition.origin.clone());
+        // `default` always narrows nothing: a session switched back to it
+        // has the empty scope.
+        if definition.name == DEFAULT_ROLE {
+            issues.push(AgentRoleIssue {
+                role: Some(definition.name.clone()),
+                message: format!(
+                    "{place} is not usable: the name is reserved for the built-in role, which \
+                     narrows nothing; give this role another name"
+                ),
+            });
+            continue;
+        }
+        if let Some(first) = kept.get(&definition.name) {
+            issues.push(AgentRoleIssue {
+                role: Some(definition.name.clone()),
+                message: format!(
+                    "{place} defines it again; {first} keeps the name, and this one is ignored"
+                ),
+            });
+            continue;
+        }
+        kept.insert(definition.name.clone(), place.clone());
+        let candidate = candidate(definition, place, issues);
+        candidates.insert(candidate.name.clone(), candidate);
     }
 }
 

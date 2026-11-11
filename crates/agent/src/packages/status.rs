@@ -49,6 +49,8 @@ pub struct AgentPackageContent {
     pub mcp_servers: Vec<String>,
     /// The keys of its hooks.
     pub hooks: Vec<String>,
+    /// The names of its roles (`<plugin>:<role>`), usable or not.
+    pub roles: Vec<String>,
 }
 
 /// A code package's guest: what it may reach and how it runs.
@@ -114,6 +116,7 @@ pub(super) fn package_status(
             .map(|server| server.id.as_str().to_string())
             .collect(),
         hooks: own_hooks.iter().map(|hook| hook.key.clone()).collect(),
+        roles: package.roles.iter().map(|role| role.name.clone()).collect(),
     };
     let hooks_to_trust = own_hooks
         .iter()

@@ -345,6 +345,7 @@ pub(super) fn package_page(package: &AgentPackageStatus) -> PageView {
             &list(&package.content.mcp_servers, "No plugin MCP servers"),
         ),
         info("Hooks", &hooks_text(package)),
+        info("Roles", &list(&package.content.roles, "No plugin roles")),
     ]);
     rows.extend(package.issues.iter().map(|issue| info("Issue", issue)));
     page(header, "enter select · esc back", rows)

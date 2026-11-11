@@ -81,7 +81,8 @@ pub struct PackageManifest {
 
 /// The components a manifest declares. When one is not declared, Claude's
 /// default location applies (`skills/`, `.mcp.json`, `hooks/hooks.json`,
-/// `commands/`); that is for the reader of each component to apply.
+/// `commands/`, `agents/`); that is for the reader of each component to
+/// apply.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ManifestPaths {
     pub skills: Vec<PathBuf>,
@@ -89,6 +90,9 @@ pub struct ManifestPaths {
     pub hooks: Option<HooksDeclaration>,
     /// Read only at install, when commands become Skills.
     pub commands: Vec<PathBuf>,
+    /// Roles: role files in this project's format, Claude Code's agent
+    /// files in Claude's; no other format has them.
+    pub agents: Vec<PathBuf>,
 }
 
 #[derive(Clone, Debug, PartialEq)]

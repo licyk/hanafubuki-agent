@@ -403,3 +403,43 @@ fn role_names_leave_the_colon_to_installed_plugins() {
         assert!(!is_role_name(name), "{name:?}");
     }
 }
+
+#[test]
+fn a_plugins_role_files_are_read_from_its_directories_and_files() {
+    let root = tempfile::tempdir().unwrap();
+    let roles = root.path().join("roles");
+    fs::create_dir_all(roles.join("nested")).unwrap();
+    fs::write(
+        roles.join("lead.toml"),
+        "description = \"Leads.\"\nmood = 1\n",
+    )
+    .unwrap();
+    fs::write(
+        roles.join("nested/scout.toml"),
+        "description = \"Scouts.\"\n",
+    )
+    .unwrap();
+    fs::write(roles.join("notes.md"), "not a role\n").unwrap();
+    let single = root.path().join("single.toml");
+    fs::write(&single, "name = \"solo\"\ndescription = \"Alone.\"\n").unwrap();
+
+    let read = read_role_files(&[
+        roles.clone(),
+        roles.join("lead.toml"),
+        single,
+        root.path().join("missing"),
+    ]);
+
+    let names: Vec<&str> = read
+        .definitions
+        .iter()
+        .map(|definition| definition.name.as_str())
+        .collect();
+    assert_eq!(names, ["lead", "scout", "solo"]);
+    assert_eq!(
+        read.definitions[0].issues,
+        ["`mood` is not a role key (a Codex setting is process-wide here); it is ignored"]
+    );
+    assert_eq!(read.issues.len(), 1, "{:?}", read.issues);
+    assert!(read.issues[0].contains("missing"));
+}

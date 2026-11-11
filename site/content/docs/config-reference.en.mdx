@@ -20,24 +20,24 @@ These keys go in the user's `config.toml`, in a profile `[profiles.NAME]` and in
 
 The plugin names that mean something in `disabledPlugins`:
 
-| Plugin              | Turned off                                                                                                          |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `execution`         | No commands (`exec_command`, `write_stdin`, `resize_execution`)                                                     |
-| `workspace-fs`      | No file reads or writes (`read_file`, `list_directory`, `search_text`, `apply_patch`, `move_path`, `delete_path`)   |
-| `web`               | No web search or fetch (`web_search`, `fetch_web_page`)                                                             |
-| `view-image`        | No image viewing (`view_image`)                                                                                     |
-| `mcp`               | The model sees no MCP tools or resources; the servers still connect                                                 |
-| `skills`            | No Skill catalog, Skill tools or `$name` mentions                                                                   |
-| `memory`            | The model sees no memories and has no memory tools                                                                  |
-| `titles`            | No model-made session titles; the start of the first message stays the title; no title suggestions                  |
-| `recap`             | No recaps                                                                                                           |
-| `goal`              | No session goals: no goal tools, context or continuation, no goal calls; a goal already set stays stored            |
-| `subagents`         | No sub-agents: the model has no sub-agent tools or guidance; the facade's `subagents` calls are unavailable         |
-| `review`            | No reviews: the review calls are unavailable, and a review session is neither guided nor kept read-only             |
-| `worktree`          | No worktrees (`/worktree`, the facade's `worktree_*` calls)                                                         |
-| `plugins`           | The model is not told of the installed plugins, and their code stops; their Skills, MCP servers and hooks still run |
-| `workspace-context` | The model is not shown `AGENTS.md`, the workspace roots or the environment                                          |
-| `permission-mode`   | The model is not told the permission mode                                                                           |
+| Plugin              | Turned off                                                                                                                                |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `execution`         | No commands (`exec_command`, `write_stdin`, `resize_execution`)                                                                           |
+| `workspace-fs`      | No file reads or writes (`read_file`, `list_directory`, `search_text`, `apply_patch`, `move_path`, `delete_path`)                         |
+| `web`               | No web search or fetch (`web_search`, `fetch_web_page`)                                                                                   |
+| `view-image`        | No image viewing (`view_image`)                                                                                                           |
+| `mcp`               | The model sees no MCP tools or resources; the servers still connect                                                                       |
+| `skills`            | No Skill catalog, Skill tools or `$name` mentions                                                                                         |
+| `memory`            | The model sees no memories and has no memory tools                                                                                        |
+| `titles`            | No model-made session titles; the start of the first message stays the title; no title suggestions                                        |
+| `recap`             | No recaps                                                                                                                                 |
+| `goal`              | No session goals: no goal tools, context or continuation, no goal calls; a goal already set stays stored                                  |
+| `subagents`         | No sub-agents: the model has no sub-agent tools or guidance; the facade's `subagents` calls are unavailable                               |
+| `review`            | No reviews: the review calls are unavailable, and a review session is neither guided nor kept read-only                                   |
+| `worktree`          | No worktrees (`/worktree`, the facade's `worktree_*` calls)                                                                               |
+| `plugins`           | The model is not told of the installed plugins, and their code stops; their Skills, MCP servers and hooks still run, and their roles stay |
+| `workspace-context` | The model is not shown `AGENTS.md`, the workspace roots or the environment                                                                |
+| `permission-mode`   | The model is not told the permission mode                                                                                                 |
 
 Other names are accepted and do nothing.
 

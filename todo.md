@@ -21,7 +21,7 @@ the deny-only combinations) unchanged and adds declarative layers above it:
 - linked development packages.
 
 **Status.** Every §9 decision (D1–D9) was accepted as recommended (2026-11-11), and
-the plan records them. M1, M2, M3, M4 and M5 have landed; M6 and M7 have not
+the plan records them. M1, M2, M3, M4, M5 and M6 have landed; M7 has not
 started.
 
 **For each milestone,** record when it is done:
@@ -537,12 +537,160 @@ then M4, then M5; M6 after M3; M7 after M1.
       - The 200-character cut leaves `explorer`'s "Rules:" (how to use
         explorers) out of what the model reads; its description could be
         reordered or shortened.
-- [ ] M6: roles from packages.
+- [x] M6: roles from packages.
       - The `agents` component of our format.
       - Claude Code `agents/*.md`, with the tool-name table.
       - `<plugin>:<role>` ids, present while the package is enabled.
       - Update `docs/plan-plugin-system.md` §3.3 and §10.
-      Done: —. Open: —.
+      Done (2026-11-11):
+      - Packages crate: `ManifestPaths.agents`, read by the legacy reader
+        (ours, Codex, Claude, Cursor) like `commands`; Agent Plugins has
+        none. `claude_agents.rs`: `read_claude_agents(paths)` (each a
+        directory of `.md` files, recursive to depth 8, or one file; by
+        `ResolvedPath` key, each once) returns `ClaudeAgent { file, name,
+        description, instructions, tools, unusable, issues }` and the
+        files that are no agent; frontmatter key by key (a wrong type left
+        out with an issue; other keys ignored, as the Skill catalog does,
+        but Claude's narrowing `disallowedTools` and `permissionMode`
+        reported as not read), the body the instructions; `tools` a
+        comma-separated string or a YAML list, mapped by the §3.6 table
+        (`mcp__<server>__<tool>` unchanged), an unknown name left out with an issue, so a list of
+        unknown names is `Some([])` and allows nothing; a `tools` that is
+        neither text nor a list makes the agent unusable; `model: inherit`
+        honoured, any other value ignored with an issue. Frontmatter that
+        is not YAML gets one repair (a top-level plain value holding `: `
+        quoted) before it is an issue. `commands`' frontmatter split is
+        now `split_frontmatter`, shared.
+      - Config crate: `read_role_files(paths) -> RoleFiles { definitions,
+        issues }`, the M3 reader over a plugin's directories or files
+        (bare names; `discover::read_paths`, sharing `read_definitions`
+        with `read_directory`).
+      - Facade `packages/roles.rs`: when a package is active, the
+        manifest's `agents` (else `agents/` if it exists) as role files
+        (our format) or agent files (Claude); a Codex, Cursor or Agent
+        Plugins package with a declared `agents` gets an issue. Each role
+        is renamed `<plugin>:<role>` (the id's plugin name) and its read
+        issues become the package's (`role `<name>`: …`).
+        `LoadedPackage.roles`; `resolve_role_names` (beside
+        `resolve_server_names`): among enabled packages with roles, the
+        first by id keeps a plugin name, a later one brings none, with an
+        issue. `LoadedPackages::roles()` → `AgentPackageRoles { id,
+        definitions }`.
+      - Facade roles: `AgentRoleSource::Package { id, origin }` (`plugin
+        `<id>` file …`); `resolve(packages, sources)` adds the packages'
+        definitions after the built-ins and before the configuration's
+        (`add_source`, the one per-source rule: `default` reserved, the
+        first of a name keeps it), through the same candidate, chain and
+        narrowing merge. `AgentRoleCatalog::load(config)` stays
+        configuration-only (CLI `roles`, `doctor`); `load_with(config,
+        packages)` is the service's. `AgentRoles::load(config, packages)`
+        at construction (after the packages opened) and `rebuild(config,
+        || packages.loaded().roles())`, read under the rebuild gate, by
+        every `reload_packages`.
+      - `AgentPackageContent.roles` (names); CLI `plugins info` prints a
+        `roles:` line; TUI `/plugins` page a **Roles** row. `plugins
+        validate` also reads the roles and lists what they leave out, so
+        (failing on any issue, as it does) it now fails a plugin whose
+        agent file has, say, `model: sonnet`, as `--run` would through the
+        package's issues anyway.
+      - Tests: packages `claude_agents/tests.rs` (every key, the whole tool
+        table, unknown tools left out, a list of unknown tools allows none,
+        no `tools` and an unreadable `tools`, `model: inherit` and others,
+        a wrong-typed key left out alone, a description holding `: `,
+        files without frontmatter or YAML, paths read once),
+        `tests/packages/manifest.rs` (`agents` paths); config
+        `roles/tests.rs` (`read_role_files` over directories and files);
+        facade `roles/tests.rs` (a package role between built-in and user,
+        narrowed by `explorer`, a within-package duplicate, an empty allow
+        list allowing nothing, a user role extending it, `rebuild` with
+        packages), `tests/packages/roles.rs` (enable and disable add and
+        remove a Claude and an own-format package's roles, the package's
+        issues, `content.roles`, a session in `demo:reviewer` offered only
+        its tools with its instructions, the guidance listing it, refused
+        once off; two `demo` packages from two marketplaces; `plugins
+        validate` lists a role's issue); TUI `commands/plugins/tests.rs`
+        (the Roles row).
+      - Docs (both languages): roles (`#plugins`, the sources list, the
+        `:` note, `#reload`), writing-plugins (the `agents/` row and
+        field, `#roles`, `#claude-agents` with the table, `#validate`), architecture
+        (`#installed-plugins`: the roles bullet and the reload), plugins
+        (intro, `#install`, `#lifecycle`), terminal-interface (`#plugins`:
+        the page's rows; `/warnings`' installed plugins), cli-reference
+        (`#plugins`, `plugins info`, `#roles`), config-reference (the
+        `plugins` row), embedding (`roles()`, `AgentPackageContent`). `docs/plan-plugin-system.md` §3.3 and §10
+        point at this plan for `agents/`.
+      - Validation (Linux only): `cargo fmt --all --check`,
+        `RUSTFLAGS="-D warnings" cargo check --workspace --all-targets
+        --all-features`, `cargo clippy --workspace --all-targets
+        --all-features -- -D warnings`, `cargo xtask check`, `cargo test
+        --workspace --all-features`; the site's `bun install
+        --frozen-lockfile`, `format:site`, `format:check:site`,
+        `site:check`, `site:test`, `site:build` (every page prerendered,
+        the new sections in both languages' output). Request goldens and
+        history corpora unchanged (the installed-plugin golden's package
+        has no `agents/`); no diff under `crates/host`,
+        `crates/foundation`, `crates/process` or `architecture/`.
+      - The §3.6 table checked: `read_file`, `search_text`,
+        `list_directory`, `apply_patch` (workspace-fs), `exec_command`
+        (execution), `fetch_web_page`, `web_search` (web) all exist, and an
+        MCP tool is `mcp__<server>__<tool>` (`flattened_alias`). No
+        mismatch, but the server part is the MCP crate's `safe_identifier`
+        of the server id (a character other than ASCII letters, digits, `-`
+        and `_` becomes `_`), so a Claude name written with such a
+        character matches nothing.
+      - Deviations from the plan: a `tools` that is neither text nor a
+        list makes the role unusable instead of being dropped (as M3 does
+        for narrowing keys: dropping it would allow every tool); the
+        duplicate rule is per plugin name, not per role: the later package
+        brings no role at all; the prefix is the id's plugin name (the
+        validated one), not the manifest's `name` that Skills use; what
+        reading a package's roles leaves out is the package's issue
+        (`plugins info`, `/plugins`, `plugins validate`), what resolving
+        them finds is the catalog's (`/warnings`); `RoleLayer` gained no
+        variant (the facade's `AgentRoleSource` did); a declared `agents`
+        replaces `agents/`, as `skills` and `commands` do here (Claude Code
+        adds declared paths to its defaults); unknown frontmatter keys are
+        silent but for Claude's two narrowing ones; `plugins validate`
+        reads roles too; the
+        frontmatter repair is a small one of the packages crate's, since it
+        cannot use the Skill parser's.
+      - Model-visible only through M5's guidance and `agent_type` when a
+        spawnable package role exists; the goldens have none.
+      - Hanafubuki: none required. Compile-time only if it matches
+        `AgentRoleSource` exhaustively (new `Package` variant) or builds
+        `AgentPackageContent` or `ManifestPaths` literals (new `roles`,
+        `agents`).
+      Open:
+      - `roles list`, `roles show` and `doctor` read the configuration
+        without starting the Agent, so they do not show the plugins'
+        roles (opening the package store would sweep its staging area
+        under a running Agent); `plugins info` and `/plugins` list them.
+      - `spawn_agent`'s `agent_type` description is fixed at the plugin's
+        start (M5's Open): a package role enabled later is in the
+        guidance and accepted by a spawn, but in the schema only after the
+        `subagents` plugin restarts.
+      - Claude Code keys that narrow but are not in the plan
+        (`disallowedTools`, `permissionMode`) and tool specifiers
+        (`Bash(git:*)`) are not mapped: the key is ignored, the specifier
+        left out, each with an issue, so such a role is wider than its
+        author meant (never wider than the instance).
+      - No test spawns a sub-agent with `agent_type: "demo:reviewer"`: the
+        spawn looks the name up in the same catalog (`spawn_role`, no
+        check of `:`), and the guidance listing it is tested.
+      - The guidance lists at most 16 spawnable roles by name, so a plugin
+        with many agent files can push `explorer` out of the list (still
+        spawnable by name).
+      - Nearly every Claude agent file sets a Claude `model`, so most
+        Claude plugins with agents carry a standing `model` issue in
+        `/plugins` and `/warnings`, and fail `plugins validate`.
+      - `tools:` with no value reads as absent (YAML `null`), so it
+        narrows nothing.
+      - An `extends` inside a package names the full `<plugin>:<role>`;
+        a bare name is looked up among every source's roles.
+      - M7's linked packages will need the roles read again on their
+        change signal (the reload already does it).
+      - Windows and macOS not run; the new end-to-end tests are not
+        `cfg(unix)`, and `set_enabled` is no longer gated.
 - [ ] M7 (D6): linked development packages.
       - `plugins link <dir>`.
       - A contained watcher that restarts the guest and re-reads its content.

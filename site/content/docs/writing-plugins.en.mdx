@@ -43,6 +43,7 @@ python3 -m pykardia.guest.export process plugin.py Plugin package/my-plugin.pyz 
 | `.hanafubuki-plugin/plugin.json`                        | the [manifest](#manifest)                                                                                                                                                            |
 | the guest's program or module                           | what `runtime.command` names (`./my-plugin`, `./my-plugin.pyz`), read-only to it, or what `runtime.module` names (`./my-plugin.wasm`)                                                |
 | `skills/`, `.mcp.json`, `hooks/hooks.json`, `commands/` | content, as in Codex's and Claude Code's formats ([Skills](/docs/skills#sources), [Plugins' servers](/docs/mcp#plugin-servers), [Plugins' hooks](/docs/configuration#hooks-plugins)) |
+| `agents/`                                               | content: role files ([Roles](#roles))                                                                                                                                                |
 
 A plugin may have content, code or both. Its id is `<name>@<marketplace>`; one installed from a directory is `<name>@local`. While a program runs, its working directory is the plugin's own data directory (`PLUGIN_DATA`), the one place it writes, and `PLUGIN_ROOT` is the installed package; a module has neither.
 
@@ -89,7 +90,7 @@ The manifest is read as an external producer's: a field, or an entry of a list, 
 | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `name`                                                            | the plugin's name: its id's first part, the namespace of its tools and the name its guest declares                                                                                                                                                                  |
 | `version`, `description`, `keywords`, `interface`                 | as in Codex's manifest; the version names the installed copy                                                                                                                                                                                                        |
-| `skills`, `mcpServers`, `hooks`, `commands`                       | content, each a path that starts `./` and stays in the package (`mcpServers` and `hooks` may also be written inline)                                                                                                                                                |
+| `skills`, `mcpServers`, `hooks`, `commands`, `agents`             | content, each a path that starts `./` and stays in the package (`mcpServers` and `hooks` may also be written inline); `agents` is a directory of role files or one file, or a list of them, in place of `agents/` ([Roles](#roles))                                 |
 | `runtime.type`                                                    | `process` (a program) or `wasm` (a [WebAssembly module](#wasm))                                                                                                                                                                                                     |
 | `runtime.command`                                                 | `process`: the program and its arguments; the program is a file in the package (`./…`), or, with `runtime.interpreter: true`, an interpreter (an absolute path, or a name on the Agent's `PATH`) with the package's files as arguments                              |
 | `runtime.protocol`                                                | `process`: `kardia-guest/2`                                                                                                                                                                                                                                         |
@@ -106,6 +107,44 @@ The manifest is read as an external producer's: a field, or an entry of a list, 
 | `configSchema`                                                    | a JSON Schema of an object: the plugin's settings, lowered to options that `plugins settings` and `/plugins` check them against, and that its guest receives them checked by ([configSchema](#config-schema))                                                       |
 
 What each declaration becomes, and its bounds, is in [What a guest contributes](/docs/plugin-rules#guest-contributions).
+
+## Roles [#roles]
+
+A plugin can bring [roles](/docs/roles): definitions of how the Agent works that only narrow it, which a session or a sub-agent then runs in. A plugin in this project's format keeps them as role files, the `.toml` files of `agents/` (its subdirectories too) or of the paths its manifest's `agents` names, with every key of a [role file](/docs/roles#keys):
+
+```toml
+# agents/reviewer.toml
+description = "Reviews a change and lists the problems it finds; never edits."
+extends = "explorer"
+instructions = "List each problem with its file and line."
+```
+
+Each role is named `<plugin>:<role>`, after the plugin name of its id (`my-plugin:reviewer`); an `extends` names a role as the catalog does (`my-plugin:base` for one of the plugin's own). The roles are there while the plugin is on. What reading them leaves out is the plugin's issue: `plugins validate` lists it, and `plugins info` once the plugin is installed and on. Precedence, the merge and the sessions are in [Plugins' roles](/docs/roles#plugins).
+
+### Claude Code agent files [#claude-agents]
+
+A Claude Code plugin's agent files, the `.md` files of its `agents/` (or of its manifest's `agents`), are read as roles too. The frontmatter is read key by key, a key of the wrong type left out with an issue:
+
+- `name`: the role's name, after the plugin's (`<plugin>:<name>`); one that cannot be a role's name, or none, gives way to the file's name.
+- `description`: the role's description, which it needs.
+- `tools`: the only tools the role may use, a comma-separated list (`Read, Grep, Glob`) or a YAML list, mapped by the table below. A name the table does not know is left out, with an issue; so a list of names it knows none of allows **no** tool. Without `tools`, the role narrows no tool. A `tools` that is neither text nor a list makes the role unusable, since leaving it out would allow every tool.
+- `model`: `inherit` keeps the session's model. Any other value (`sonnet`, `opus`, `haiku`) names none of this Agent's models, so it is ignored, with an issue, and the model is inherited as well.
+- the body after the frontmatter: the role's instructions.
+
+Other keys (`color` and the like) are ignored. Of them, `disallowedTools` and `permissionMode`, which narrow an agent in Claude Code and are not read here, each come with an issue: the role allows more than its file says. A file without frontmatter, or whose frontmatter is not YAML even with a plain value holding `: ` quoted, is left out with an issue.
+
+| Claude Code                  | This Agent                            |
+| ---------------------------- | ------------------------------------- |
+| `Read`                       | `read_file`                           |
+| `Grep`                       | `search_text`                         |
+| `Glob`, `LS`                 | `list_directory`                      |
+| `Edit`, `MultiEdit`, `Write` | `apply_patch`                         |
+| `Bash`                       | `exec_command`                        |
+| `WebFetch`                   | `fetch_web_page`                      |
+| `WebSearch`                  | `web_search`                          |
+| `mcp__<server>__<tool>`      | the same name, an MCP server's tool's |
+
+A Codex package has no roles.
 
 ## The guest [#guest]
 
@@ -193,6 +232,7 @@ A guest in another language implements the wire itself. Every message is one JSO
 `hanafubuki-agent plugins validate DIR` reads the plugin as an install reads it and checks its code as the guest host would run it, without installing or starting anything:
 
 - the manifest's issues (a field left out, a timeout out of range, an unknown contribution) and declared paths that do not exist;
+- what its [roles](#roles) leave out: a role file's key, a Claude agent file's tool with no counterpart or its Claude `model`;
 - the runtime: for a program, the protocol, a program in the package that exists (and is executable), or an interpreter on the `PATH`, and the package files its arguments name; for a module, a file in the package that is a binary WebAssembly module, and a tool `timeout` longer than `limits.timeoutMs`, which would stop it first;
 - what registration would leave out: a tool name that is not one, a schema too large or too deep, a context kind that is not a plugin's, more than 7 kinds, a prompt slot that does not exist, an event no observer receives, names declared twice;
 - a `configSchema` that does not describe an object, and each property of it that cannot be an option ([configSchema](#config-schema)).

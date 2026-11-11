@@ -6,7 +6,7 @@ icon: UserCog
 
 A role is a named definition of how the Agent works: instructions, a model, a reasoning effort, a permission-mode cap, and the tools and plugins it may use. A role only ever **narrows** the Agent it runs in: it can take tools and plugins away and tighten the permission mode, never add or widen anything, so no role is more capable than the instance itself. Approval rules, your hooks and the sandbox are out of every role's reach.
 
-Roles are defined in TOML, by you, a profile or a trusted project, beside two built-in ones. The Agent reads, checks and lists them (`hanafubuki-agent roles`, `doctor`, `/warnings`), and a session runs with the one you choose ([Roles in sessions](#sessions)), and a sub-agent with the one its parent's model gives it ([Roles for sub-agents](#subagents)).
+Roles are defined in TOML, by you, a profile or a trusted project, beside two built-in ones; an [installed plugin](#plugins) can bring roles too. The Agent reads, checks and lists them (`hanafubuki-agent roles`, `doctor`, `/warnings`), and a session runs with the one you choose ([Roles in sessions](#sessions)), and a sub-agent with the one its parent's model gives it ([Roles for sub-agents](#subagents)).
 
 ## Defining a role [#define]
 
@@ -50,7 +50,7 @@ The role's name is the file's `name` key, else its file name without `.toml` (`r
 | `tools.deny`        | An array of tool patterns                                                      | none                             | Tools the role may not use, whatever `allow` says                                                            |
 | `plugins.off`       | An array of plugin names (`guest:<id>` for an installed plugin's code)         | none                             | Plugins whose tools and context the role's sessions do not get                                               |
 
-A role name holds 1 to 128 bytes without spaces, control characters or `:`, which an installed plugin's roles will use (`<plugin>:<role>`).
+A role name holds 1 to 128 bytes without spaces, control characters or `:`, which an installed plugin's roles use (`<plugin>:<role>`, [below](#plugins)).
 
 ## Tool patterns [#tool-patterns]
 
@@ -67,9 +67,10 @@ An entry that is none of these (empty, with a space, or with another `kind:`) is
 Roles come from these sources, lowest first. A role of a higher source **replaces** a role of the same name below it, whole: nothing of the lower one is kept. To build on a role, give yours another name and `extends` it.
 
 1. **The built-in roles**, `default` and `explorer` ([below](#built-in)).
-2. **The user's**: the role files of the user's `agents/` and the `[agents]` entries of the user's `config.toml`.
-3. **The profile's**: the `[profiles.NAME.agents]` entries of the profile `-p NAME` selects.
-4. **The trusted project's**: the role files of `.hanafubuki-agent/agents/` and the `[agents]` entries of `.hanafubuki-agent/config.toml`, read only when the user's `config.toml` trusts the project ([The project's file](/docs/config-layers#projects)).
+2. **The installed plugins'**, each named `<plugin>:<role>`, while the plugin is on ([below](#plugins)).
+3. **The user's**: the role files of the user's `agents/` and the `[agents]` entries of the user's `config.toml`.
+4. **The profile's**: the `[profiles.NAME.agents]` entries of the profile `-p NAME` selects.
+5. **The trusted project's**: the role files of `.hanafubuki-agent/agents/` and the `[agents]` entries of `.hanafubuki-agent/config.toml`, read only when the user's `config.toml` trusts the project ([The project's file](/docs/config-layers#projects)).
 
 Within one source, the `[agents]` entries come first, by name, then the role files, by path. When two define the same name, the first keeps it and the other is ignored, with an issue. A role that cannot be used still takes its name: it never lets a lower role of that name through.
 
@@ -153,6 +154,22 @@ The model gives a [sub-agent](/docs/sessions#subagents) a role with `spawn_agent
 
 A spawn reads the roles as they are then, and so does the guidance at every step; the list in `agent_type`'s description is the one the `subagents` plugin started with, until the plugin restarts (a change of its wait options, turning it off and on again, or the Agent's next start).
 
+## Plugins' roles [#plugins]
+
+An [installed plugin](/docs/plugins) brings roles with its `agents` component ([Writing plugins](/docs/writing-plugins#roles)):
+
+- a plugin in this project's format, role files: the `.toml` files of its `agents/` (or of the paths its manifest's `agents` names), read exactly as yours are, every key included;
+- a Claude Code plugin, agent files: the `.md` files of its `agents/`, whose frontmatter's `name`, `description`, `tools` and `model` and whose body (the instructions) are read as a role, its Claude tools mapped to this Agent's ([the table](/docs/writing-plugins#claude-agents));
+- a Codex, Cursor or Agent Plugins plugin has none.
+
+**Names.** A plugin's role is named `<plugin>:<role>`: the plugin name of its id (`demo` for `demo@my-mkt`), then the role's own name (its `name`, else its file name). No role of yours can take that name, since yours have no `:`. Two plugins of the same name from different marketplaces, both on: the first by id (`demo@alpha` before `demo@beta`) keeps the name, and the other brings no role, with an issue. An `extends` names a role as the catalog names it, so a plugin's role extending another of its own writes `extends = "demo:base"`.
+
+**Lifetime.** A plugin's roles are in the catalog while the plugin is on: turning it on or off (or installing, updating or removing it) reads the roles again, without a restart. In safe mode no plugin brings a role. A session that already has a plugin's role keeps what it took, as for any role.
+
+**Only narrowing.** A plugin's role goes through the same merge as yours: it can only take tools and plugins away and tighten the mode, so it is never wider than the instance it runs in. A role of yours that `extends` it narrows it further, and may set its `spawnable` again.
+
+What reading a plugin's role files left out (an unknown key, a Claude tool with no counterpart) is the **plugin's** issue, shown with it in `plugins info` and `/plugins`; a plugin's role that cannot be used is a role issue, as yours are. The plugins' roles are part of the running Agent's catalog: sessions (`--role demo:reviewer`, `/role`) and sub-agents (`agent_type`) take them, and `/plugins` lists them per plugin. `roles list`, `roles show` and `doctor` read the configuration alone, without starting the Agent, so they do not show them.
+
 ## Codex role files [#codex]
 
 A Codex role file works unchanged in `agents/`: its `developer_instructions`, `model` and `model_reasoning_effort` are read as `instructions`, `model` and `reasoningEffort`. When both a key and its Codex name are set, ours is used, with an issue. Its other Codex keys (`sandbox_mode`, `nickname_candidates` and the rest) are settings of the whole Agent here, so they are ignored, each with an issue. Codex's `[agents]` settings (`max_threads` and the like) are not roles, and are ignored with an issue.
@@ -196,4 +213,4 @@ plugins.off: goal, titles  [from reader]
 
 ## When roles are read [#reload]
 
-A running Agent reads the roles when it starts, and again each time it reloads its installed plugins, which it does after every settings write it makes. A role file you edit by hand takes effect then, or at the next start, for the sessions that choose it from then on; a session that has it already keeps what it took. `roles list`, `roles show` and `doctor` read the files each time they run.
+A running Agent reads the roles when it starts, and again each time it reloads its installed plugins (with the plugins' roles as the reload left them), which it does after every settings write it makes and after every change to the installed plugins. A role file you edit by hand takes effect then, or at the next start, for the sessions that choose it from then on; a session that has it already keeps what it took. `roles list`, `roles show` and `doctor` read the files each time they run.

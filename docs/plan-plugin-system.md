@@ -266,7 +266,7 @@ Ported from `codex-rs/plugin`, `core-plugin-common` and the portable part of `co
 - `extensions["com.openai"]` (the onboarding Skill);
 - the `@openai-bundled` hook allowlist;
 - executor (remote environment) discovery;
-- Claude Code's `agents/`, output styles, LSP servers and status line, which Codex doesn't read either.
+- Claude Code's output styles, LSP servers and status line, which Codex doesn't read either. Its `agents/` are read as roles since M6 of [the modular-architecture plan](plan-modular-architecture.md) (§3.6).
 
 ## 4. Our format: code packages on an extended Kardia
 
@@ -523,7 +523,7 @@ Each decision has a recommendation. **All were accepted as recommended (2026-11-
 ## 10. Not built
 
 - **From Codex:** apps and connectors; the remote Plugin Service and sharing; the curated sync and recommended plugins; telemetry; admin source restrictions (`requirements.toml`); executor discovery; `@plugin` mentions in the composer (possible later).
-- **From Claude Code:** `agents/`, output styles, LSP servers, the status line.
+- **From Claude Code:** output styles, LSP servers, the status line. Its `agents/` are roles since M6 of [the modular-architecture plan](plan-modular-architecture.md) (§3.6).
 - **Our format:**
   - signing;
   - a hosted registry;
