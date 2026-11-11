@@ -527,6 +527,10 @@ path = "crates/tui/src/commands/mcp/tests.rs"
 reason = "The MCP form's argument line."
 
 [[original]]
+path = "crates/tui/src/commands/mcp/form/tests.rs"
+reason = "The MCP form's protocol and per-tool policy round trip."
+
+[[original]]
 path = "crates/tui/src/commands/providers/tests.rs"
 reason = "The Provider form's draft and the first-run rule."
 

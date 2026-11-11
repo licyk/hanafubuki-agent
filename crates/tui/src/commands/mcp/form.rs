@@ -13,7 +13,8 @@ use std::path::PathBuf;
 
 use hanafubuki_agent::{
     McpApplicationSnapshot, McpApprovalPolicy, McpCredentialKey, McpExposurePolicy, McpOAuthPolicy,
-    McpServerConfig, McpServerId, McpStdioConfig, McpStreamableHttpConfig, McpTransportConfig,
+    McpProtocolMode, McpServerConfig, McpServerId, McpStdioConfig, McpStreamableHttpConfig,
+    McpTransportConfig,
 };
 
 use crate::bottom_pane::{FieldId, FormItem, FormView, RowValue};
@@ -29,10 +30,14 @@ pub(super) const OAUTH: FieldId = "oauth";
 pub(super) const HEADERS: FieldId = "headers";
 pub(super) const ENABLED: FieldId = "enabled";
 pub(super) const REQUIRED: FieldId = "required";
+pub(super) const PROTOCOL: FieldId = "protocol";
 pub(super) const APPROVAL: FieldId = "approval";
 pub(super) const EXPOSURE: FieldId = "exposure";
 pub(super) const ENABLED_TOOLS: FieldId = "enabled_tools";
 pub(super) const DISABLED_TOOLS: FieldId = "disabled_tools";
+pub(super) const TOOL_CALLS: FieldId = "tool_calls";
+pub(super) const TOOL_APPROVALS: FieldId = "tool_approvals";
+pub(super) const TOOL_EXPOSURES: FieldId = "tool_exposures";
 pub(super) const SAVE: FieldId = "save";
 
 const STDIO: usize = 0;
@@ -53,6 +58,7 @@ const EXPOSURES: [McpExposurePolicy; 4] = [
     McpExposurePolicy::Deferred,
     McpExposurePolicy::Hidden,
 ];
+const PROTOCOLS: [McpProtocolMode; 2] = [McpProtocolMode::Legacy, McpProtocolMode::V20260728];
 /// The timeouts and the call limit: their field, label and value.
 const NUMBERS: [(FieldId, &str); 6] = [
     ("connect_timeout", "Connect timeout (s)"),
@@ -106,6 +112,15 @@ pub(super) fn server_form(
         server.shutdown_timeout_seconds,
         server.maximum_concurrent_calls as u64,
     ];
+    let tool_calls = named_rows(&server.tool_maximum_concurrent_calls, |limit| {
+        limit.to_string()
+    });
+    let tool_approvals = named_rows(&server.tool_approval_policies, |policy| {
+        approval_name(*policy).to_string()
+    });
+    let tool_exposures = named_rows(&server.tool_exposure_policies, |policy| {
+        exposure_name(*policy).to_string()
+    });
     let mut items = Vec::new();
     if existing.is_none() {
         items.push(FormItem::text(ID, "Id", "").placeholder("my-server"));
@@ -158,6 +173,13 @@ pub(super) fn server_form(
         FormItem::toggle(ENABLED, "Enabled", server.enabled),
         FormItem::toggle(REQUIRED, "Required", server.required),
         FormItem::choice(
+            PROTOCOL,
+            "Protocol mode",
+            &["legacy", "v20260728"],
+            index_of(&PROTOCOLS, server.protocol_mode),
+        )
+        .advanced(),
+        FormItem::choice(
             APPROVAL,
             "Approval",
             &["allow", "ask", "deny"],
@@ -185,6 +207,27 @@ pub(super) fn server_form(
         )
         .placeholder("none")
         .advanced(),
+        FormItem::rows(
+            TOOL_CALLS,
+            "Per-tool concurrent calls",
+            tool_calls,
+            "Add a tool limit",
+        )
+        .advanced(),
+        FormItem::rows(
+            TOOL_APPROVALS,
+            "Per-tool approval",
+            tool_approvals,
+            "Add an approval override",
+        )
+        .advanced(),
+        FormItem::rows(
+            TOOL_EXPOSURES,
+            "Per-tool exposure",
+            tool_exposures,
+            "Add an exposure override",
+        )
+        .advanced(),
     ]);
     for ((id, label), value) in NUMBERS.into_iter().zip(numbers) {
         items.push(FormItem::text(id, label, &value.to_string()).advanced());
@@ -194,7 +237,11 @@ pub(super) fn server_form(
         Some(server) => format!("Edit MCP server {}", server.id.as_str()),
         None => "Add an MCP server".to_string(),
     };
-    FormView::new(title, items)
+    FormView::new(title, items).with_subtitle(
+        "Per-tool approval values: allow, ask, deny. Exposure values: direct, \
+         direct_model_only, deferred, hidden. mcp.toml is not layered; saving changes only \
+         this owner's file.",
+    )
 }
 
 /// What saving writes; `None`, with the form saying why, when a field the
@@ -295,10 +342,35 @@ pub(super) fn server_write(
     server.maximum_concurrent_calls = usize::try_from(maximum_calls).unwrap_or(usize::MAX);
     server.enabled = form.toggle(ENABLED);
     server.required = form.toggle(REQUIRED);
+    server.protocol_mode = PROTOCOLS[form.choice(PROTOCOL).min(PROTOCOLS.len() - 1)];
     server.approval_policy = APPROVALS[form.choice(APPROVAL).min(APPROVALS.len() - 1)];
     server.exposure_policy = EXPOSURES[form.choice(EXPOSURE).min(EXPOSURES.len() - 1)];
     server.enabled_tools = split_tools(form.text(ENABLED_TOOLS));
     server.disabled_tools = split_tools(form.text(DISABLED_TOOLS));
+    match tool_limits(form.rows(TOOL_CALLS)) {
+        Ok(limits) => server.tool_maximum_concurrent_calls = limits,
+        Err(error) => {
+            form.set_error(TOOL_CALLS, error);
+            valid = false;
+        }
+    }
+    match tool_approvals(form.rows(TOOL_APPROVALS)) {
+        Ok(policies) => server.tool_approval_policies = policies,
+        Err(error) => {
+            form.set_error(TOOL_APPROVALS, error);
+            valid = false;
+        }
+    }
+    match tool_exposures(form.rows(TOOL_EXPOSURES)) {
+        Ok(policies) => server.tool_exposure_policies = policies,
+        Err(error) => {
+            form.set_error(TOOL_EXPOSURES, error);
+            valid = false;
+        }
+    }
+    if !valid {
+        return None;
+    }
     let kept = credential_names(&server);
     let dropped = previous
         .into_values()
@@ -382,6 +454,81 @@ fn index_of<T: PartialEq>(options: &[T], value: T) -> usize {
         .unwrap_or(0)
 }
 
+/// The rows of a map, its keys in order and each value shown.
+fn named_rows<T>(values: &BTreeMap<String, T>, display: impl Fn(&T) -> String) -> Vec<RowValue> {
+    values
+        .iter()
+        .map(|(name, value)| RowValue {
+            name: name.clone(),
+            value: display(value),
+            secret: false,
+        })
+        .collect()
+}
+
+fn approval_name(policy: McpApprovalPolicy) -> &'static str {
+    match policy {
+        McpApprovalPolicy::Allow => "allow",
+        McpApprovalPolicy::Ask => "ask",
+        McpApprovalPolicy::Deny => "deny",
+    }
+}
+
+fn exposure_name(policy: McpExposurePolicy) -> &'static str {
+    match policy {
+        McpExposurePolicy::Direct => "direct",
+        McpExposurePolicy::DirectModelOnly => "direct_model_only",
+        McpExposurePolicy::Deferred => "deferred",
+        McpExposurePolicy::Hidden => "hidden",
+    }
+}
+
+fn tool_limits(rows: Vec<RowValue>) -> Result<BTreeMap<String, usize>, String> {
+    let mut limits = BTreeMap::new();
+    for row in rows {
+        let limit = match row.value.trim().parse::<usize>() {
+            Ok(limit) if (1..=64).contains(&limit) => limit,
+            _ => return Err("Each call limit is a whole number from 1 to 64.".to_string()),
+        };
+        limits.insert(row.name, limit);
+    }
+    Ok(limits)
+}
+
+fn tool_approvals(rows: Vec<RowValue>) -> Result<BTreeMap<String, McpApprovalPolicy>, String> {
+    let mut policies = BTreeMap::new();
+    for row in rows {
+        let policy = match row.value.trim().to_ascii_lowercase().as_str() {
+            "allow" => McpApprovalPolicy::Allow,
+            "ask" => McpApprovalPolicy::Ask,
+            "deny" => McpApprovalPolicy::Deny,
+            _ => return Err("Each approval is allow, ask or deny.".to_string()),
+        };
+        policies.insert(row.name, policy);
+    }
+    Ok(policies)
+}
+
+fn tool_exposures(rows: Vec<RowValue>) -> Result<BTreeMap<String, McpExposurePolicy>, String> {
+    let mut policies = BTreeMap::new();
+    for row in rows {
+        let value = row.value.trim().to_ascii_lowercase().replace('-', "_");
+        let policy = match value.as_str() {
+            "direct" => McpExposurePolicy::Direct,
+            "direct_model_only" => McpExposurePolicy::DirectModelOnly,
+            "deferred" => McpExposurePolicy::Deferred,
+            "hidden" => McpExposurePolicy::Hidden,
+            _ => {
+                return Err(
+                    "Each exposure is direct, direct_model_only, deferred or hidden.".to_string(),
+                )
+            }
+        };
+        policies.insert(row.name, policy);
+    }
+    Ok(policies)
+}
+
 fn join_tools(tools: &BTreeSet<String>) -> String {
     tools.iter().cloned().collect::<Vec<_>>().join(", ")
 }
@@ -448,3 +595,6 @@ pub(super) fn split_arguments(line: &str) -> Vec<String> {
     }
     arguments
 }
+
+#[cfg(test)]
+mod tests;

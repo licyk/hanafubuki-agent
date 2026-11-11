@@ -225,8 +225,8 @@ pub use hanafubuki_agent_kernel::{
 /// told to connect.
 pub use hanafubuki_agent_mcp::{
     McpApprovalPolicy, McpConnectionPhase, McpCredentialKey, McpEventSink, McpExposurePolicy,
-    McpOAuthPhase, McpOAuthPolicy, McpServerConfig, McpServerId, McpServerStatus, McpStdioConfig,
-    McpStreamableHttpConfig, McpTransportConfig, NoopMcpEventSink,
+    McpOAuthPhase, McpOAuthPolicy, McpProtocolMode, McpServerConfig, McpServerId, McpServerStatus,
+    McpStdioConfig, McpStreamableHttpConfig, McpTransportConfig, NoopMcpEventSink,
 };
 pub use hanafubuki_agent_tool_contracts::{ToolOutput, ToolOutputContent};
 use hanafubuki_agent_workspace_fs::WorkspaceFsService;
