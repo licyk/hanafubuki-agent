@@ -927,12 +927,43 @@ then M4, then M5; M6 after M3; M7 after M1.
         nothing reports the mismatch.
       - Windows and macOS not run (`notify` uses ReadDirectoryChangesW and
         FSEvents there; the sandboxed end-to-end check is Linux only).
-        CI (2026-11-11, `e8014c1`): both pass, but on macOS
-        `tests::packages::linked::a_linked_packages_change_is_read_again_while_the_plugins_row_runs`
-        failed once ("…/agents/planner.md was not read": no change was
-        seen within the 60 s `TEST_WAIT`, writes repeated every 3 s); the
-        run before and the re-run passed. Not reproduced; suspect FSEvents
-        delivery under a loaded runner.
+        CI (2026-11-11, `e8014c1`, macos-26-arm64): the facade's
+        `a_linked_packages_change_is_read_again_while_the_plugins_row_runs`
+        failed once ("…/agents/planner.md was not read"): none of the
+        writes, every 3 s for the 60 s `TEST_WAIT` from ~0.2 s after the
+        test started, reached the roles, though for the last 30 s no other
+        test of the binary ran; the run before and the re-run passed. The
+        cause is not confirmed: no macOS machine, and the test said nothing
+        but its timeout. Ruled out: a lost wakeup (`linked_changes` is a
+        `watch` counter, which keeps a change the row's worker has not
+        seen); a reload held behind a gate (with no guest entries
+        `reconcile`'s group update awaits nothing, `set_plugin_servers`
+        returns at once with no servers, nothing else takes the packages'
+        reload lock); a stale role rebuild (it reads the packages under its
+        own gate); a disarm never re-armed (every disarm is re-armed at the
+        next 100 ms poll, and that counts as a change); leaked watchers or
+        OS watches (at most one inotify instance and two Skill watcher
+        threads at a time, sampled every 2 s over a full run of the facade's
+        tests on Linux). Most likely, by elimination from reading and Linux
+        runs only, so unconfirmed: the OS watch, an FSEvents stream armed but
+        silent, or `watch()` not returning (notify 8 starts the stream in
+        it; the facade test now tells the two apart). Done: the watch records which linked directories it follows now (a set
+        per run, `GuestHost::linked_watched()` under `test-support`); the
+        facade test and the guests harness wait for it before their first
+        write (which no longer races the arm, saving the 3 s retry), and
+        on a timeout the facade test names the stage: the `plugins` row's
+        state, the directories watched, the changes counted, the package's
+        roles and issues as last read, and `roles()` (the guests harness:
+        the directories watched and the changes counted). "Watched, no
+        change counted" does not tell a silent stream from events that never
+        go quiet for the debounce; the latter is excluded by reading only
+        (nothing writes in the directory, and FSEvents reports no reads).
+        Production behaviour is unchanged. Not done, for a next failure that names the
+        stream: notify 9 (no root-only `FSEventsPurgeEventsForDeviceUpToEventId`
+        on every stream stop, no `CFRunLoopIsWaiting` spin in `stop()`;
+        still a release candidate), or re-creating the OS watch on a timer
+        (on notify 8 each re-creation blocks the worker in `stop()` while
+        the purge call fails, and on inotify re-walks the whole tree).
 
 ## Plan: a configuration center for every Agent setting (2026-11-11)
 

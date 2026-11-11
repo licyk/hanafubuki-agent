@@ -112,6 +112,11 @@ impl AgentApplicationService {
     pub(super) fn spawn_package_reload(&self) {
         self.package_reload().spawn();
     }
+
+    #[cfg(test)]
+    pub(crate) fn guest_host(&self) -> &GuestHost {
+        self.packages.guests()
+    }
 }
 
 /// The package store under the data directory and the content of its

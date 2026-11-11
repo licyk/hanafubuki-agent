@@ -62,6 +62,9 @@ struct WatchState {
     mounted: bool,
     /// Stops the running watch.
     current: Option<CancellationToken>,
+    /// The ids of the running watch's packages whose directory it watches
+    /// now; a new set for each watch, so a stopping one never writes it.
+    watching: Arc<Mutex<BTreeSet<String>>>,
 }
 
 /// A linked directory as the watch follows it.
@@ -71,6 +74,8 @@ struct Watched {
     /// The directory as it is watched; `None` while it is not: it did not
     /// exist, or it was removed.
     armed: Option<Armed>,
+    /// Its watch's [`WatchState::watching`].
+    watching: Arc<Mutex<BTreeSet<String>>>,
 }
 
 struct Armed {
@@ -117,6 +122,7 @@ impl LinkedWatch {
         if let Some(current) = state.current.take() {
             current.cancel();
         }
+        state.watching = Arc::default();
     }
 
     /// How many changes of the linked package `id`'s directory were seen.
@@ -128,20 +134,29 @@ impl LinkedWatch {
         self.revisions.changes.subscribe()
     }
 
+    /// The ids of the linked packages whose directory the OS watch follows
+    /// now.
+    #[cfg(any(test, feature = "test-support"))]
+    pub(crate) fn watched(&self) -> BTreeSet<String> {
+        self.watch.lock().watching.lock().clone()
+    }
+
     fn restart(&self, state: &mut WatchState) {
         if let Some(previous) = state.current.take() {
             previous.cancel();
         }
+        state.watching = Arc::default();
         if state.packages.is_empty() {
             return;
         }
         let packages = state.packages.clone();
         let revisions = self.revisions.clone();
+        let watching = state.watching.clone();
         let cancellation = CancellationToken::default();
         let started = self.workers.spawn_with_cancellation(
             "plugin-linked-watcher",
             cancellation.clone(),
-            move |cancellation| watch_directories(&packages, &revisions, &cancellation),
+            move |cancellation| watch_directories(&packages, &revisions, &watching, &cancellation),
         );
         match started {
             Ok(_) => state.current = Some(cancellation),
@@ -165,6 +180,7 @@ fn same_directories(known: &[LinkedPackage], packages: &[LinkedPackage]) -> bool
 fn watch_directories(
     packages: &[LinkedPackage],
     revisions: &Revisions,
+    watching: &Arc<Mutex<BTreeSet<String>>>,
     cancellation: &CancellationToken,
 ) {
     let (events, received) = mpsc::channel();
@@ -185,6 +201,7 @@ fn watch_directories(
             id: package.id.key(),
             root: package.root.clone(),
             armed: None,
+            watching: watching.clone(),
         })
         .collect::<Vec<_>>();
     for directory in &mut watched {
@@ -225,6 +242,7 @@ impl Watched {
             git: PathKey::of(&directory.system().join(".git")),
             directory,
         });
+        self.watching.lock().insert(self.id.clone());
         true
     }
 
@@ -245,6 +263,7 @@ impl Watched {
         if removed || !armed.directory.system().is_dir() {
             let _ = watcher.unwatch(armed.directory.system());
             self.armed = None;
+            self.watching.lock().remove(&self.id);
         }
     }
 }

@@ -71,6 +71,7 @@ hanafubuki-agent-execution = { workspace = true, features = ["test-support"] }
 hanafubuki-agent-kernel = { workspace = true, features = ["test-support"] }
 hanafubuki-agent-approval = { workspace = true, features = ["test-support"] }
 hanafubuki-agent-mcp = { workspace = true, features = ["test-support"] }
+hanafubuki-agent-plugin-packages = { workspace = true, features = ["test-support"] }
 hanafubuki-agent-process = { workspace = true, features = ["test-support"] }
 rmcp = { workspace = true, features = ["server", "transport-streamable-http-server"] }
 rusqlite = { workspace = true, features = ["bundled"] }

@@ -169,6 +169,13 @@ impl GuestHost {
         self.0.linked.changes()
     }
 
+    /// The ids of the linked packages whose directory the OS watch follows
+    /// now: a change made in one before it is listed may be missed.
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn linked_watched(&self) -> std::collections::BTreeSet<String> {
+        self.0.linked.watched()
+    }
+
     /// Starts the guest of `id` again after it failed, with an empty restart
     /// window. Returns once it is started, not once it runs.
     pub async fn retry(&self, id: &PluginId) -> Result<(), String> {

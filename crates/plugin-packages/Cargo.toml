@@ -9,7 +9,8 @@ rust-version.workspace = true
 
 [features]
 # Guests that run without the platform's sandbox, for tests on any machine
-# (`GuestHostInputs::unconfined`).
+# (`GuestHost::unconfined`), and which linked directories the OS watch
+# follows (`GuestHost::linked_watched`).
 test-support = []
 
 [dependencies]

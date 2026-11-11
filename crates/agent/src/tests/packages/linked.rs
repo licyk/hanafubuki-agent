@@ -27,10 +27,28 @@ fn work_plugin(paths: &TestPaths) -> PathBuf {
 
 const PLANNER: &str = "---\ndescription: Plans.\n---\nPlan.\n";
 
-/// Writes `contents` at `path` until `condition` holds: the OS watch is
-/// armed on its own thread, so a change made before it is lost, and made
-/// again after a while.
-async fn change_until(path: &Path, contents: &str, condition: impl Fn() -> bool) {
+/// Waits until the OS watch, armed on its own thread, follows the linked
+/// directory: a change made before that is not seen.
+async fn watched(service: &AgentApplicationService) {
+    let deadline = Instant::now() + TEST_WAIT;
+    while !service.guest_host().linked_watched().contains(ID) {
+        if Instant::now() >= deadline {
+            panic!(
+                "the linked directory is not watched: {}",
+                stages(service).await
+            );
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+}
+
+/// Writes `contents` at `path` until `condition` holds, again every 3 s.
+async fn change_until(
+    service: &AgentApplicationService,
+    path: &Path,
+    contents: &str,
+    condition: impl Fn() -> bool,
+) {
     let deadline = Instant::now() + TEST_WAIT;
     loop {
         write(path, contents);
@@ -41,8 +59,38 @@ async fn change_until(path: &Path, contents: &str, condition: impl Fn() -> bool)
             }
             tokio::time::sleep(Duration::from_millis(20)).await;
         }
-        assert!(Instant::now() < deadline, "{} was not read", path.display());
+        if Instant::now() >= deadline {
+            panic!("{} was not read: {}", path.display(), stages(service).await);
+        }
     }
+}
+
+/// Where a change stopped on its way to the roles: the `plugins` row that
+/// runs the watch, the directories it follows and the changes it counted
+/// (each one a reload), what the package read at the last reload, and the
+/// role catalog.
+async fn stages(service: &AgentApplicationService) -> String {
+    let row = service
+        .plugin_status()
+        .into_iter()
+        .find(|status| status.name == "plugins")
+        .map(|status| format!("{:?} {:?}", status.state, status.error));
+    let guests = service.guest_host();
+    let changes = *guests.linked_changes().borrow();
+    // Bounded: a wedged service must not turn the failure into a hang.
+    let package = tokio::time::timeout(Duration::from_secs(5), service.packages())
+        .await
+        .map(|packages| {
+            packages
+                .map(|packages| packages.into_iter().find(|package| package.id == ID))
+                .map(|package| package.map(|package| (package.content.roles, package.issues)))
+        });
+    format!(
+        "`plugins` row {row:?}; watched {:?}; changes counted {changes}; \
+         the package's roles and issues {package:?}; roles {:?}",
+        guests.linked_watched(),
+        plugin_roles(service),
+    )
 }
 
 fn plugin_roles(service: &AgentApplicationService) -> Vec<String> {
@@ -76,15 +124,19 @@ async fn a_linked_packages_change_is_read_again_while_the_plugins_row_runs() {
     ));
     assert_eq!(plugin_roles(&service), ["work:reviewer"]);
     service.start_plugins().await;
+    watched(&service).await;
 
     let planner = || plugin_roles(&service).contains(&"work:planner".to_string());
-    change_until(&root.join("agents/planner.md"), PLANNER, planner).await;
+    change_until(&service, &root.join("agents/planner.md"), PLANNER, planner).await;
     // A manifest saved broken leaves the plugin without its roles, and its
     // directory still watched, so the repair is read.
     let manifest = root.join(".claude-plugin/plugin.json");
     let repaired = std::fs::read_to_string(&manifest).unwrap();
-    change_until(&manifest, "{not json", || plugin_roles(&service).is_empty()).await;
-    change_until(&manifest, &repaired, planner).await;
+    change_until(&service, &manifest, "{not json", || {
+        plugin_roles(&service).is_empty()
+    })
+    .await;
+    change_until(&service, &manifest, &repaired, planner).await;
     let package = package(&service, ID).await;
     assert!(
         package.content.roles.contains(&"work:planner".to_string()),

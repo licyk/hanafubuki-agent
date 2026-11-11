@@ -7,7 +7,7 @@
 use std::fs;
 use std::time::{Duration, Instant};
 
-use hanafubuki_agent_plugin_packages::{GuestPackage, LinkedPackage};
+use hanafubuki_agent_plugin_packages::{GuestHost, GuestPackage, LinkedPackage};
 use tokio::sync::watch;
 
 use crate::fixture::{running, Fixture, Options, DEADLINE};
@@ -27,8 +27,9 @@ pub async fn a_linked_guest_starts_anew_once_its_directory_changes() {
     let mut changes = fixture.host.linked_changes();
     fixture.apply(vec![package.clone()]).await;
     let first = fixture.wait(&id, "start", running).await;
+    watched(&fixture.host, &id).await;
 
-    let elapsed = change_until_signalled(&package, &mut changes).await;
+    let elapsed = change_until_signalled(&fixture.host, &package, &mut changes).await;
     assert!(elapsed >= AT_LEAST, "signalled after {elapsed:?}");
     // Applied again as the facade's reload does: the package is not as it
     // was when its guest started, and starts all the same.
@@ -51,12 +52,13 @@ pub async fn a_linked_guest_starts_anew_once_its_directory_changes() {
     copy_dir(&package.root, &copy);
     fs::remove_dir_all(&package.root).unwrap();
     fs::rename(&copy, &package.root).unwrap();
-    change_until_signalled(&package, &mut changes).await;
+    change_until_signalled(&fixture.host, &package, &mut changes).await;
     // Once quiet, a change made in the replaced directory is seen too.
     tokio::time::sleep(Duration::from_secs(1)).await;
-    change_until_signalled(&package, &mut changes).await;
+    change_until_signalled(&fixture.host, &package, &mut changes).await;
 
     fixture.host.follow_linked(Vec::new());
+    assert!(fixture.host.linked_watched().is_empty());
     changes.borrow_and_update();
     fs::write(package.root.join("package.txt"), "unwatched").unwrap();
     // Long past the debounce: a watched change would have signalled by now.
@@ -84,10 +86,21 @@ fn linked(package: &GuestPackage) -> LinkedPackage {
     }
 }
 
+/// Waits until the OS watch, armed on its own thread, follows the
+/// directory of the package `id`: a change made before that is not seen.
+async fn watched(host: &GuestHost, id: &str) {
+    step(format!("{id}: waiting for its directory to be watched"));
+    let deadline = Instant::now() + DEADLINE;
+    while !host.linked_watched().contains(id) {
+        assert!(Instant::now() < deadline, "not watched within {DEADLINE:?}");
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+}
+
 /// Changes a file in `package`'s directory until the guest host signals,
-/// and how long after the change that was. The OS watch is armed on its own
-/// thread, so a change made before it is lost: it is made again.
+/// again every 3 s, and how long after the change that was.
 async fn change_until_signalled(
+    host: &GuestHost,
     package: &GuestPackage,
     changes: &mut watch::Receiver<u64>,
 ) -> Duration {
@@ -108,6 +121,11 @@ async fn change_until_signalled(
             signalled.unwrap();
             return written.elapsed();
         }
-        assert!(Instant::now() < deadline, "no signal within {DEADLINE:?}");
+        assert!(
+            Instant::now() < deadline,
+            "no signal within {DEADLINE:?}; watched {:?}, changes counted {}",
+            host.linked_watched(),
+            *changes.borrow(),
+        );
     }
 }
