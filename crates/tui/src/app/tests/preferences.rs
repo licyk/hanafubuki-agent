@@ -476,8 +476,10 @@ fn warnings_list_the_issues_of_the_roles() {
         .unwrap();
 
     let list = harness.open("/warnings", "d dismiss");
+    // The file's path is long on some systems, so the line wraps.
+    let flat = list.split_whitespace().collect::<Vec<_>>().join(" ");
     assert!(
-        list.contains("[roles] Role `orphan`:") && list.contains("which no source defines"),
+        flat.contains("[roles] Role `orphan`:") && flat.contains("which no source defines"),
         "{list}"
     );
 }
