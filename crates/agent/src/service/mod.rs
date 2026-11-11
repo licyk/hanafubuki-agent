@@ -3,6 +3,7 @@ use super::host::{
     agent_plugin_manifest, AgentHost, AgentPluginDescriptor, AgentPluginEventSink,
     AgentPluginInputs, AgentPluginRow,
 };
+use super::model_metadata_store::FileModelMetadataStore;
 use super::session_driver::AgentSessionDriver;
 use super::skills::AgentSkillApplication;
 use super::titles::AgentTitleApplication;
@@ -370,11 +371,16 @@ impl AgentApplicationService {
         // The kernel reads the registries the host's plugins fill; the
         // `titles` plugin reads and titles the kernel's sessions.
         let registries = AgentKernelRegistries::default();
+        let model_metadata = Arc::new(FileModelMetadataStore::open(
+            storage_paths.model_metadata_file.clone(),
+            &workers,
+        )?);
         let core = AgentService::without_default_model_reporting_faults(
             registries.clone(),
             history_store.clone(),
             approvals.clone(),
             kernel_faults.clone(),
+            model_metadata,
         );
         let memory = AgentMemoryApplication::new(
             config.clone(),

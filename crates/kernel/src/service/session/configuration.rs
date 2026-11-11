@@ -267,9 +267,9 @@ impl AgentService {
         record.settings.config.model = update.model;
         record.settings.config.instructions = update.instructions;
         record.settings.config.reasoning_effort = update.reasoning_effort;
-        record.settings.config.context_window_tokens = self.inner.model_catalog.context_window(
+        record.settings.config.context_window_tokens = self.session_context_window(
             update.context_window_tokens,
-            base_url,
+            model.as_ref(),
             &record.settings.config.model,
         );
         record.settings.config.input_capabilities = update.input_capabilities;

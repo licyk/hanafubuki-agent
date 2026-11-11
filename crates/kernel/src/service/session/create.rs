@@ -14,8 +14,8 @@ impl AgentService {
     }
 
     /// Creates a session over a configured provider in `workspace`; the
-    /// session's context window is the configured one or the
-    /// [`crate::model_catalog`]'s.
+    /// session's context window is the configured one or what the model
+    /// metadata knows ([`crate::model_metadata`]).
     #[allow(
         clippy::too_many_arguments,
         reason = "independent inputs that a parameter struct would only regroup"
@@ -31,23 +31,20 @@ impl AgentService {
         compaction_capability: hanafubuki_agent_model_api::ModelCompactionCapability,
         workspace: crate::AgentSessionWorkspace,
     ) -> Result<AgentSessionRuntimeSnapshot, AgentError> {
-        config.context_window_tokens = self.inner.model_catalog.context_window(
-            config.context_window_tokens,
+        let model = configured_model(
+            protocol,
             base_url,
+            credential,
+            headers,
+            request_retry_policy,
+            compaction_capability,
+        )?;
+        config.context_window_tokens = self.session_context_window(
+            config.context_window_tokens,
+            model.as_ref(),
             &config.model,
         );
-        self.create_session_with_model(
-            config,
-            configured_model(
-                protocol,
-                base_url,
-                credential,
-                headers,
-                request_retry_policy,
-                compaction_capability,
-            )?,
-            workspace,
-        )
+        self.create_session_with_model(config, model, workspace)
     }
 
     pub fn create_unconfigured_session(
@@ -93,7 +90,11 @@ impl AgentService {
         let now = now_millis();
         let observed_image_input = model
             .route_key(&config.model)
-            .map(|key| self.inner.image_capabilities.lock().capability(&key, now))
+            .map(|key| {
+                self.inner
+                    .model_metadata
+                    .observed_image_input(&key, now_millis_u64())
+            })
             .unwrap_or(ModelImageInputCapability::Unknown);
         let effective_input_capabilities =
             config.input_capabilities.effective(observed_image_input);

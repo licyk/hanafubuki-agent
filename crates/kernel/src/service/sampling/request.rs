@@ -380,9 +380,8 @@ impl AgentService {
     ) -> Result<(), AgentError> {
         if let Some(route_key) = model.route_key(model_id) {
             self.inner
-                .image_capabilities
-                .lock()
-                .record_unsupported(route_key, now_millis());
+                .model_metadata
+                .learn_image_input_unsupported(&route_key, now_millis_u64());
         }
         let cell = self.session(identity.session_id)?;
         let mut guard = cell.lock_after_persistence().await?;

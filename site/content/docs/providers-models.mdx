@@ -94,7 +94,7 @@ provider-2 DeepSeek  ChatCompletions  https://api.deepseek.com/v1  token: set
 | `-m 模型`                      | 本次运行中的新会话（以及恢复的会话），在默认 Provider 上运行 |
 | 终端界面的 `/model`            | 当前会话；从已启用 Provider 的模型目录中选择                 |
 
-`/model` 列出每个已启用 Provider 的模型目录（从 `models` 接口读取）。某个 Provider 的目录无法读取时，列表会显示原因。Agent 从目录中的每个模型读取它报告的上下文窗口（见[上下文窗口与压缩](#compaction)），也读取它的最大输出、是否读图、是否推理，但目前还不据此行事。没有可用 ID 的模型会被略去，无法读取的字段视为未报告，所以一个异常的模型不会让整个目录读取失败。`doctor --online` 会检查默认 Provider 是否能列出模型。宿主可以在保存 Provider 之前读取它的模型目录，以测试地址、令牌和请求头（`test_provider_draft`，见[嵌入 Agent](/docs/embedding#configuration-in-a-host)）。
+`/model` 列出每个已启用 Provider 的模型目录（从 `models` 接口读取）。某个 Provider 的目录无法读取时，列表会显示原因。Agent 从目录中的每个模型读取它报告的上下文窗口（见[上下文窗口与压缩](#compaction)），也读取它的最大输出、是否读图、是否推理，但目前还不据此行事。目录报告的内容保存在数据目录的 `model-metadata.json` 中，重启后依然有效；之后的目录不再列出的模型会再保留 7 天。没有可用 ID 的模型会被略去，无法读取的字段视为未报告，所以一个异常的模型不会让整个目录读取失败。`doctor --online` 会检查默认 Provider 是否能列出模型。宿主可以在保存 Provider 之前读取它的模型目录，以测试地址、令牌和请求头（`test_provider_draft`，见[嵌入 Agent](/docs/embedding#configuration-in-a-host)）。
 
 ## 推理强度与思考过程 [#reasoning]
 
@@ -120,7 +120,7 @@ reasoningEffort = "medium"   # minimal、low、medium、high、xhigh
 
 ## 上下文窗口与压缩 [#compaction]
 
-模型的上下文窗口依次取自：`[modelPolicy]` 中的 `contextWindowTokens`、Provider 模型目录报告的值、内置的常见模型表（如 GPT-5 系列、Claude、Gemini 2.5）。都没有时不会自动压缩。
+模型的上下文窗口依次取自：`[modelPolicy]` 中的 `contextWindowTokens`、Provider 模型目录最近一次报告的值、内置的常见模型表（如 GPT-5 系列、Claude、Gemini 2.5）。都没有时不会自动压缩。
 
 上下文用到窗口的 `autoCompactThresholdPercent`（默认 80%）时，Agent 会在回合开始前或回合中自动压缩：把较早的对话总结成摘要，保留最近的消息。Provider 报告上下文超出窗口时，Agent 会压缩一次并重试；再次超出时回合失败（`context_window_exceeded`）。
 
@@ -137,7 +137,7 @@ reasoningEffort = "medium"   # minimal、low、medium、high、xhigh
 
 ## 图片 [#images]
 
-`[modelPolicy.inputCapabilities]` 的 `imageInput` 为 `"auto"`（默认）时，Agent 会向接受图片的模型发送图片（例如 `view_image` 工具查看的图片）。模型拒绝图片时，Agent 会去掉图片重试一次。设为 `"disabled"` 则从不发送图片。
+`[modelPolicy.inputCapabilities]` 的 `imageInput` 为 `"auto"`（默认）时，Agent 会向接受图片的模型发送图片（例如 `view_image` 工具查看的图片）。模型拒绝图片时，Agent 会去掉图片重试一次，并在 7 天内（重启后也一样）不再向该模型发送图片。设为 `"disabled"` 则从不发送图片。
 
 ## 重试与限制 [#limits]
 

@@ -1,6 +1,6 @@
 ---
 title: 内部细节
-description: 架构页没有展开的实现细节：持久提交与 drop guard、执行进度、请求中的图片、会话上的等待、历史存储的拒绝规则、MCP 设置的修复与诊断、Skill 文件的问题、Provider 流的容错解码、崩溃循环标记、分层压缩，以及 Agent 其余的内部机制。
+description: 架构页没有展开的实现细节：持久提交与 drop guard、执行进度、请求中的图片、会话上的等待、历史存储的拒绝规则、MCP 设置的修复与诊断、Skill 文件的问题、Provider 流的容错解码、模型元数据、崩溃循环标记、分层压缩，以及 Agent 其余的内部机制。
 icon: Microscope
 ---
 
@@ -184,6 +184,16 @@ Provider 的流是外部输入（[模型 API](/docs/architecture#the-model-api)�
 | 模型列表           | 其他字段，或上面这些字段中类型不对的                                                                                                                                        | 忽略                                                                                                                                                                                                   |
 
 空响应、认证错误和 HTTP 错误仍是错误。在模型列表中，标志是布尔值或 Anthropic 的 `{"supported": boolean}`；空列表、不含字符串的列表或其他值不表示任何结论。“是”优先于“否”，因为错误的“是”只多一次被拒绝的请求，而错误的“否”会让能读图或能推理的模型拿不到图像或推理参数。列表只在某页没有 `data` 数组或超出上限（每页 2 MiB、1000 个条目、Anthropic 10 页）时失败；Anthropic 的某页有 `has_more` 却没有 `last_id` 时，列表以已读到的内容结束。各协议的思考事件见[思考](/docs/architecture#thinking)。
+
+## 模型元数据 [#model-metadata]
+
+注册表（[模型元数据](/docs/architecture#model-metadata)）在 `kernel/src/model_metadata/`；facade 的存储在 `model_metadata_store.rs`。
+
+- **列表逐个模型合并。** 列表列出的模型采用该条目的事实，包括它不再报告的（变为未知）；列表没列出的模型保留之前列表报告的内容，直到最后一次被列出后 7 天，而最新列表列出的模型会一直保留，直到某次列表不再列出它。注册表记录的列表总是替换该端点（协议和 base URL）的模型清单。
+- **缩水保护**（来自 Hoshimi）：如果一份列表的模型数不到该端点上次记录的列表的一半（更可能是列表被截断，而不是 Provider 下架了一半模型），它不会被记录，仅此一次；下一份列表无论内容如何都会记录，所以真的下架了模型的 Provider 第二次会被相信。只看数量：换成同样多个其他模型的列表（比如换了模型重启的本地服务）会立即记录。无论哪种情况，`list_provider_models` 都返回该列表。草稿 Provider 的列表（`test_provider_draft`）和其他列表一样会被记录。
+- **过期与上限。** 学到的事实从学到时起保留 7 天。注册表最多保留 4096 个路由和 32 个端点的列表，超出时丢弃观察或列出时间最早的，但从不丢弃刚学到事实的路由。过期的事实在下一次变化时丢弃，在那之前被忽略。
+- **文件**（`model-metadata.json`）的结构是 `{"version": 1, "routes": [...], "listings": [...]}`：每个路由有它的键（端点的协议和 `baseUrlSha256`，以及模型 ID）和它的 `reported`、`learned`、`catalog` 事实，每项事实有值、来源和 `observedAtMs`；每个列表有它的端点、`listedAtMs`、`models`，以及是否正在 `held` 一份缩水的列表。文件只在构建 Agent 时读取一次：未知字段被忽略，读不出的路由或列表被略去，读不出的事实视为未知，事实的来源取自它所在的分组，时间不会晚于当前时间。超过 16 MiB、不是 JSON 对象或版本不是 1 的文件会被隔离到 `.recovery/`，本次运行从一无所知开始。
+- **写入**不让任何调用方等待：注册表每次变化后把快照交给存储（在它的锁内，所以有序），存储再交给 Agent 工作线程组中的写入线程，它写入排队中最新的快照（先写临时文件再重命名覆盖），Agent 停止时写入最后一份。写入失败会以 warn 级别记录，不影响其他任何事情。没有记录任何内容的运行不写文件。
 
 ## 崩溃循环标记 [#crash-loop-marker]
 
@@ -379,7 +389,7 @@ Provider 的流是外部输入（[模型 API](/docs/architecture#the-model-api)�
 [记忆](/docs/memory#how)之外的细节：
 
 - **一轮处理**按从新到旧分页浏览空闲的历史会话（`AgentMemoryHistoryQuery::older_than`，每页 100 个，每轮最多 1000 个），最多领取 `maxSessionsPerPass` 个。会话能否被提取（参与贡献、有尚未提取的修订、没有退避、没有租约）由记忆存储决定，所以已经提取过的较新会话从不让较旧的会话一直等待。
-- **阶段一的证据预算**是提取模型的上下文窗口（按会话会得到的方式解析：`AgentService::model_context_window`，即配置的值，否则 Provider 的列表，否则内置表，否则 160K）的 70%，最多 120K token。
+- **阶段一的证据预算**是提取模型的上下文窗口（按会话会得到的方式解析：`AgentService::model_context_window`，即配置的值，否则[模型元数据](/docs/architecture#model-metadata)中的值，否则 160K）的 70%，最多 120K token。
 - **退避**从 30 秒翻倍到一天：阶段一按来源（`memory_sources.retry_count`、`next_retry_at`），阶段二全局（`memory_meta.global_retry_count`、`global_next_retry_at`）；成功或重置会清除它。引用用量的变化如果移动了正在进行的整合的排名截止点，会让那次发布因过时而失败，由退避重试。
 - **发布**先暂存并校验制品（`MEMORY.md` 最多 128 KiB，`memory_summary.md` 最多 16 KiB 且以 `v1` 行开头），提交数据库（新代次这时就是已发布的代次），然后才换入制品。提交之后的崩溃或重命名失败会把它们留在 `staging/generation-<n>` 中，下次打开或下次整合领取时，在任何东西把制品读作基线之前安装它们。
 - **打开时**就地迁移版本 4 的数据库（它缺少阶段二的退避；丢弃路径还会删除已发布的制品）。只有当数据库不是数据库、已损坏（`SQLITE_CORRUPT`、`SQLITE_NOTADB`）或是其他 schema 时，才连同派生的制品一起丢弃它；繁忙、被锁或 I/O 失败会让打开失败，于是 Agent 的构造带着原因失败，由重启再试。每个连接最多等待 5 秒获得锁（`busy_timeout`），与历史索引的连接相同。schema 版本是 5。`memory reset` 是用户触发的唯一丢弃。

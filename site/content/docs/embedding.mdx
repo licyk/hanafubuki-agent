@@ -439,11 +439,11 @@ Agent 启动的进程归 Agent 所有：它有自己的 `ExecutorManager`，与�
 
 与独立模式不同，嵌入的配置**没有分层**（没有 profile、项目文件和 `-c`），并忽略 `[network]` 与 `logLevel`（报告为未知键）：代理和日志由宿主提供。宿主通过服务 API 读写设置（`settings_view`、`write_settings`、Provider 与 MCP 的方法），写入后服务会把设置应用到插件。其中：
 
-| 调用                                                           | 作用                                                                                                                                                                                               |
-| -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `test_provider_draft(draft)`                                   | 读取一个未保存 Provider 的模型目录，方式与 `list_provider_models` 读取已保存的相同，或返回 Provider 的错误；不写入任何内容                                                                         |
-| `mcp_set_credential(key, value)`、`mcp_remove_credential(key)` | 修改一个 MCP 凭据并保留其他凭据；删除启用的服务器依赖的凭据会被拒绝。`McpCredentialKey::for_server_secret(server, name)` 是表单保存秘密变量或请求头所用的键：`服务器-名称`，其他字符换成 `_`       |
-| `mcp_oauth_login(server, open_url, cancelled)`                 | MCP 服务器的 OAuth 登录：在 `127.0.0.1` 的空闲端口上监听，把授权 URL 交给 `open_url` 显示或打开，最多等待 5 分钟浏览器重定向到 `/callback`，或直到 `cancelled` future 完成；没有等到时取消这次登录 |
+| 调用                                                           | 作用                                                                                                                                                                                                    |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `test_provider_draft(draft)`                                   | 读取一个未保存 Provider 的模型目录，方式与 `list_provider_models` 读取已保存的相同，或返回 Provider 的错误；不写入任何设置（列表像其他列表一样记录到[模型元数据](/docs/architecture#model-metadata)中） |
+| `mcp_set_credential(key, value)`、`mcp_remove_credential(key)` | 修改一个 MCP 凭据并保留其他凭据；删除启用的服务器依赖的凭据会被拒绝。`McpCredentialKey::for_server_secret(server, name)` 是表单保存秘密变量或请求头所用的键：`服务器-名称`，其他字符换成 `_`            |
+| `mcp_oauth_login(server, open_url, cancelled)`                 | MCP 服务器的 OAuth 登录：在 `127.0.0.1` 的空闲端口上监听，把授权 URL 交给 `open_url` 显示或打开，最多等待 5 分钟浏览器重定向到 `/callback`，或直到 `cancelled` future 完成；没有等到时取消这次登录      |
 
 会话在每次模型操作（轮次、压缩、实现计划）之前按当前设置激活：`[compaction]` 的 `strategy` 通过内核的 `set_session_compaction_strategy` 应用到会话，模型策略的 `remoteCompaction` 随 Provider 的传输一起写入会话配置。两者都只在会话空闲时改变、都会持久化，但都不推进会话的 revision，所以调用方在调用前读到的 revision 仍然有效。轮次的扩展带有 `[compaction.background]` 的 `thresholdPercent`（`AgentBackgroundCompactionThreshold`），在轮次准入时读取；直接通过内核准入轮次的宿主需要自己放入它，否则这个轮次不会启动后台压缩。后台压缩运行期间或其结果等待安装时，会话的运行时快照会表明（`backgroundCompaction`：`running` 或 `ready`）；它不是会话的操作，不拒绝任何东西。归档或删除会话会取消它并最多等待 5 秒，改变策略或 `remoteCompaction` 会取消它。
 

@@ -18,6 +18,7 @@ mod host_inputs;
 mod kernel_tasks;
 pub mod logging;
 mod memory;
+mod model_metadata_store;
 mod network;
 mod packages;
 /// The Agent's half of the host's panic hook: its threads and guards are

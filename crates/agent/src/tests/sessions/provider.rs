@@ -425,6 +425,70 @@ async fn a_provider_draft_lists_its_models_without_being_saved() {
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }
 
+/// What a listing reported outlives the run that read it: a new Agent on
+/// the same data directory gives a session the window it reported without
+/// listing again.
+#[tokio::test]
+async fn a_listing_is_known_to_the_next_run() {
+    let server = FakeServer::start(vec![
+        (
+            br#"{"data":[{"id":"fixture-model","context_length":123456}]}"#.to_vec(),
+            Duration::ZERO,
+        ),
+        (
+            with_input_tokens(assistant_events("Done."), 1_000),
+            Duration::ZERO,
+        ),
+    ])
+    .await;
+    let (service, paths, config) = service_with_config("model-metadata-kept", |_, config| {
+        configure_test_provider(config, &server.base_url, None);
+    });
+    service
+        .list_provider_models(AgentProviderModelCatalogRequest::default())
+        .await
+        .unwrap();
+    assert!(service
+        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
+        .is_empty());
+    let storage = AgentStoragePaths::under(paths.data_dir.join("agent-test"));
+    assert!(storage.model_metadata_file.exists());
+
+    let reopened = AgentApplicationService::new(
+        &paths,
+        config,
+        storage,
+        SkillRoots {
+            system: paths.data_dir.join("agent-test/skills-bundled"),
+            user: paths.data_dir.join("agent-test/skills-user"),
+            install_bundled_system_skills: false,
+            state_file: paths.data_dir.join("agent-test/skills-state.json"),
+        },
+        hanafubuki_agent_process::executor::ExecutorManager::default(),
+    )
+    .unwrap();
+    let session = reopened
+        .create_session(AgentSessionMode::Default, None)
+        .await
+        .unwrap();
+    reopened
+        .start_turn(session.id, "hello".into())
+        .await
+        .unwrap();
+
+    let usage = reopened.snapshot(session.id).unwrap().usage.unwrap();
+    assert_eq!(usage.context_window_tokens, Some(123_456));
+    assert_eq!(
+        server.requests().len(),
+        2,
+        "the next run did not list again"
+    );
+    assert!(reopened
+        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
+        .is_empty());
+    let _ = std::fs::remove_dir_all(paths.app_data_dir);
+}
+
 #[tokio::test]
 async fn model_catalog_keeps_successful_provider_results_when_another_provider_fails() {
     let server = FakeServer::start(vec![(

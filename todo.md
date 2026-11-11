@@ -36,11 +36,54 @@ Hoshimi `83f7813`. Every §9 decision (D1–D7) was accepted as recommended
     `capabilities.thinking.supported` are read beyond §3's table. Anthropic's
     `capabilities.effort.<level>` and OpenRouter's `reasoning.supported_efforts`
     and `default_effort` are documented but left for M6.
-- Open: M2 the metadata registry and `model-metadata.json`; M3 background
-  discovery and late resolution at turn start; M4 learned context windows; M5
-  vision facts; M6 reasoning narrowing and the refusal fallback (and the
-  documented effort lists above); M7 showing it, and per-model overrides; M8
-  models.dev (optional).
+- M2 (done): `kernel::ModelMetadataRegistry` (`kernel/src/model_metadata/`)
+  replaces `ModelCatalog` and the image capability cache, and the facade keeps
+  it in `model-metadata.json` through the kernel's `ModelMetadataStore` port.
+  - Keyed by `ModelRouteKey`, now in model-api's `route.rs` with
+    `ModelEndpointKey` (protocol and endpoint: a listing's scope), both serde.
+    Deviation: the endpoint is the SHA-256 of the canonical base URL, not the
+    URL, since the key is persisted and a base URL's query may hold a
+    credential (model-api gains `sha2`).
+  - Per route: reported, learned and catalog facts, each an M1
+    `ModelMetadata`; resolved per fact as §4.2 (`resolve`), with the
+    configured window and image input passed in (`ConfiguredModelFacts`). A
+    learned fact only in the safe direction: a window while smaller than the
+    others' (or theirs is unknown), a "no" over a reported "yes"; a learned
+    "yes" is ignored. Catalog facts are resolved but nothing writes them.
+  - `record_listing` merges per model: a listed model takes its entry whole
+    (window, max output, image input, reasoning with efforts and default),
+    unknowns included; a model left out keeps its reported facts for 7 days
+    after it was last listed, a model the latest listing names keeps them
+    with no expiry. The shrink guard counts, as Hoshimi's does: a listing
+    with fewer than half the models of the endpoint's last recorded one is
+    held once (the hold is persisted), the next is recorded whatever it
+    says; as many other models (a local server restarted with another one)
+    are recorded at once. Residual: a real drop to under half (3 models,
+    then 1 new one) holds the new model's facts for one listing.
+    Learned facts expire after 7 days. Bounds: 4096 routes, 32 endpoints'
+    listings, the oldest observed dropped, never the route just learned.
+  - The store: `load` once when the kernel is built, `save(snapshot)` after
+    each change, handed over under the registry's lock so in order. The
+    facade's `FileModelMetadataStore` passes it to a writer in the Agent's
+    worker group, which writes the newest snapshot waiting (config's
+    `write_atomic`) and the last one at shutdown; `{"version": 1, ...}`, 16
+    MiB at most; a file that does not read is quarantined (`quarantine_file`)
+    and the run starts empty. A run that records nothing writes nothing. The
+    kernel's other constructors keep a `NoopModelMetadataStore`.
+    `AgentService::without_default_model_reporting_faults` takes the store,
+    `model_context_window` takes the protocol.
+  - Behaviour changes: the image refusal is learned for 7 days, not 6 h, and
+    persisted, so it holds across restarts (planned for M5, landed here with
+    the fold); sessions still read only the learned image fact (`Unknown`
+    otherwise) until M5. A listing's facts hold across restarts, and a model
+    a new listing leaves out keeps its window for 7 days (it lost it at once
+    before). A draft's listing (`test_provider_draft`) is now written to the
+    file too, as it was recorded in memory before.
+- Open: M3 background discovery and late resolution at turn start; M4
+  learned context windows; M5 vision facts (seeding sessions from the image
+  fact; persisting the learned refusal is done); M6 reasoning narrowing and
+  the refusal fallback (and the documented effort lists above); M7 showing
+  it, and per-model overrides; M8 models.dev (optional).
 
 ## Plan: Codex's messages sent while the Agent works, in the terminal interface (2026-11-11)
 

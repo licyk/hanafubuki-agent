@@ -56,9 +56,8 @@ impl AgentService {
             .route_key(&runtime.config.model)
             .map(|key| {
                 self.inner
-                    .image_capabilities
-                    .lock()
-                    .capability(&key, now_millis())
+                    .model_metadata
+                    .observed_image_input(&key, now_millis_u64())
             })
             .unwrap_or(ModelImageInputCapability::Unknown);
         let turn = runtime.turn.map(|turn| TurnRecord {

@@ -179,7 +179,19 @@ The `workspace-context` plugin's `workspace_instructions` section is read at eve
 
 ### The context window and the token estimate [#the-context-window-and-the-token-estimate]
 
-A session's `context_window_tokens` is resolved when it is created or its model selected: the configured window, else the one the Provider's model listing reported in this run, else a small table of known model families; without one there is no automatic compaction. The Agent has one token estimate (`hanafubuki_agent_contracts::tokens`, bytes / 4). The counts agree because they count the same request: the admission check, the step's request and an automatic compaction's check of the next request all build it with `step_model_request` and count it with `estimate_model_request_tokens`, tools and memory included.
+A session's `context_window_tokens` is resolved when it is created or its model selected: the configured window, else what the [model metadata](#model-metadata) knows of its model (a window a Provider's model listing reported, else a small table of known model families); without one there is no automatic compaction. The Agent has one token estimate (`hanafubuki_agent_contracts::tokens`, bytes / 4). The counts agree because they count the same request: the admission check, the step's request and an automatic compaction's check of the next request all build it with `step_model_request` and count it with `estimate_model_request_tokens`, tools and memory included.
+
+### Model metadata [#model-metadata]
+
+What the Agent knows about each model it reaches is the kernel's `ModelMetadataRegistry`, one per Agent, keyed by route (`ModelRouteKey`: the protocol, the canonical base URL and the model id, so two Providers serving one model id are kept apart). Each fact (context window, largest output, reasoning and its efforts, image input) is optional and carries its source and when it was observed (`ModelMetadata`). The registry keeps three sources per route and resolves each fact on its own, in this order:
+
+1. **Configured**: the setting, passed in by the caller (the registry reads no configuration).
+2. **Learned**, from a Provider's refusal, and only in the safe direction: a learned window only while it is smaller than the one the other sources give, a learned "no" over a reported "yes". A learned fact holds for 7 days.
+3. **Reported**, by the route's own model listing (`list_provider_models`, whose every entry is recorded whole).
+4. **Catalog**, a third-party catalog, which only fills what nothing else says (nothing writes it yet).
+5. **Built-in**: the window table.
+
+What is acted on so far: the window, at a session's creation and model selection, and the learned image refusal, which sets a session's observed image input to unsupported as the [image fallback](/docs/providers-models#images) always did (a reported image input is not acted on yet). The kernel never touches the data directory: its owner injects a `ModelMetadataStore`, which the registry loads once and hands a snapshot after every change. The facade's store is `model-metadata.json` ([Data directory](/docs/data-directory#contents)); the kernel's other constructors keep the facts for the run only. The listing's merge, the expiry and the file are in [Internals](/docs/internals#model-metadata).
 
 ### Compaction [#compaction]
 
@@ -278,7 +290,7 @@ A package in this project's format may also carry code: its manifest's `runtime`
 
 ## The model API [#the-model-api]
 
-`hanafubuki-agent-model-api` implements three protocols, Responses, Chat Completions and Anthropic Messages: encoding, streaming decode, tool lowering and the model listing. It knows no plugin and no context section kind, and does not depend on the plugin API. A Provider's stream is external input, decoded tolerantly: empty tool arguments are `{}`; unparseable ones `{}` plus an `argument_error`; a missing usage count is 0; a stream without a finish reason ends with `end_turn` unknown; Responses `response.incomplete` keeps the completed items and the text streamed so far, and fails only when nothing was produced. Wire bodies are logged only as the [content-logging rule](/docs/contributing#content-logging) allows: at `trace`, truncated.
+`hanafubuki-agent-model-api` implements three protocols, Responses, Chat Completions and Anthropic Messages: encoding, streaming decode, tool lowering and the model listing. It names a model as the Agent reaches it with `ModelRouteKey` (in an endpoint's `ModelEndpointKey`), whose endpoint is the SHA-256 of the canonical base URL rather than the URL, since a key is logged and persisted and a base URL's query may hold a credential. It knows no plugin and no context section kind, and does not depend on the plugin API. A Provider's stream is external input, decoded tolerantly: empty tool arguments are `{}`; unparseable ones `{}` plus an `argument_error`; a missing usage count is 0; a stream without a finish reason ends with `end_turn` unknown; Responses `response.incomplete` keeps the completed items and the text streamed so far, and fails only when nothing was produced. Wire bodies are logged only as the [content-logging rule](/docs/contributing#content-logging) allows: at `trace`, truncated.
 
 ## The terminal interface and the command line [#the-terminal-interface-and-the-command-line]
 

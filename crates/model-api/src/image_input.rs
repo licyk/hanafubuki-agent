@@ -1,41 +1,9 @@
 use hanafubuki_agent_tool_contracts::ToolOutputContent;
 
-use std::fmt;
-
-use crate::{
-    ModelApiProtocol, ModelEndpoint, ModelError, ModelInputItem, ModelRequest, ModelUserContent,
-};
+use crate::{ModelError, ModelInputItem, ModelRequest, ModelUserContent};
 
 pub const IMAGE_INPUT_OMITTED_PLACEHOLDER: &str =
     "image content omitted because the selected model endpoint does not support image input";
-
-#[derive(Clone, PartialEq, Eq, Hash)]
-pub struct ModelRouteKey {
-    protocol: ModelApiProtocol,
-    endpoint_identity: String,
-    model: String,
-}
-
-impl ModelRouteKey {
-    pub fn new(protocol: ModelApiProtocol, endpoint: &ModelEndpoint, model: &str) -> Self {
-        Self {
-            protocol,
-            endpoint_identity: endpoint.canonical_identity().to_string(),
-            model: model.trim().to_string(),
-        }
-    }
-}
-
-impl fmt::Debug for ModelRouteKey {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter
-            .debug_struct("ModelRouteKey")
-            .field("protocol", &self.protocol)
-            .field("endpoint_identity", &"[redacted]")
-            .field("model", &self.model)
-            .finish()
-    }
-}
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct ImageSanitizationReport {

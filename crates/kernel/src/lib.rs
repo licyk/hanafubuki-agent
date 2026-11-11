@@ -18,7 +18,7 @@ pub mod limits;
 pub mod loop_control;
 mod memory;
 pub mod model;
-mod model_catalog;
+mod model_metadata;
 pub mod parallel_tool_runtime;
 pub mod permission;
 pub mod plugin;
@@ -125,6 +125,7 @@ pub use model::{
     stricter_permission_mode, AgentCapabilityScope, AgentCapabilityScopeSummary, AgentToolScope,
     ToolIdentity, ToolPattern, CORE_PLUGINS, MAX_SCOPE_TOOL_PATTERNS, MAX_TOOL_PATTERN_BYTES,
 };
+pub use model_metadata::{ModelMetadataSnapshot, ModelMetadataStore};
 pub use parallel_tool_runtime::{
     AgentToolExecutionGate, AgentToolExecutionGateError, AgentToolExecutionPermit, CompletionSet,
     ToolCallRuntime,

@@ -15,6 +15,7 @@ pub mod port;
 pub mod protocol;
 pub mod provider;
 mod responses;
+mod route;
 mod sse;
 mod streaming;
 mod tolerant_decode;
@@ -32,7 +33,7 @@ pub use hanafubuki_agent_foundation::trace_content::{
 pub use hanafubuki_agent_tool_contracts::{ToolProviderCapabilities, ToolSpec};
 pub use image_input::{
     classify_remote_model_error, request_contains_images, sanitize_images_for_unsupported_input,
-    ImageSanitizationReport, ModelRouteKey, IMAGE_INPUT_OMITTED_PLACEHOLDER,
+    ImageSanitizationReport, IMAGE_INPUT_OMITTED_PLACEHOLDER,
 };
 pub use model::{
     ModelCompactionCapability, ModelCompactionResult, ModelContextRole, ModelEvent,
@@ -56,4 +57,5 @@ pub use provider::{
     ModelCredential, ModelEndpoint, ModelHeader, ModelProvider, ModelRetryPolicy, ModelTimeouts,
 };
 pub use responses::ResponsesModelTransport;
+pub use route::{ModelEndpointKey, ModelRouteKey};
 pub use tool_lowering::flattened_tool_call_name;

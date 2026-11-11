@@ -171,7 +171,19 @@ schema 遵循同样的按协议规则：支持 `strict_json_schema` 的协议（
 
 ### 上下文窗口与 token 估算 [#the-context-window-and-the-token-estimate]
 
-会话的 `context_window_tokens` 在创建会话或选择模型时解析：配置的窗口，否则本次运行中 Provider 的模型列表报告的窗口，否则一张已知模型系列的小表；都没有就不做自动压缩。整个 Agent 只有一种 token 估算（`hanafubuki_agent_contracts::tokens`，字节数 / 4）。计数之所以一致，是因为它们数的是同一个请求：准入检查、步骤的请求和自动压缩对下一个请求的检查都用 `step_model_request` 构建请求，用 `estimate_model_request_tokens` 计数，工具和记忆都包括在内。
+会话的 `context_window_tokens` 在创建会话或选择模型时解析：配置的窗口，否则[模型元数据](#model-metadata)对该模型所知的窗口（Provider 的模型列表报告的窗口，否则一张已知模型系列的小表）；都没有就不做自动压缩。整个 Agent 只有一种 token 估算（`hanafubuki_agent_contracts::tokens`，字节数 / 4）。计数之所以一致，是因为它们数的是同一个请求：准入检查、步骤的请求和自动压缩对下一个请求的检查都用 `step_model_request` 构建请求，用 `estimate_model_request_tokens` 计数，工具和记忆都包括在内。
+
+### 模型元数据 [#model-metadata]
+
+Agent 对它访问的每个模型所知道的内容，是内核的 `ModelMetadataRegistry`，每个 Agent 一个，按路由（`ModelRouteKey`：协议、规范化的 base URL 和模型 ID，所以提供同一模型 ID 的两个 Provider 互不混淆）存放。每项事实（上下文窗口、最大输出、推理及其强度、图片输入）都可以未知，并带有来源和观察到的时间（`ModelMetadata`）。注册表为每个路由保存三种来源，逐项事实分别解析，顺序如下：
+
+1. **配置**：设置中的值，由调用方传入（注册表不读配置）。
+2. **学到的**，来自 Provider 的拒绝，且只朝安全的方向：学到的窗口只在小于其他来源给出的窗口时采用，学到的“不支持”优先于报告的“支持”。学到的事实保留 7 天。
+3. **报告的**，来自该路由自己的模型列表（`list_provider_models`，每个条目整条记录）。
+4. **目录**，第三方模型目录，只补充其他来源都没说的事实（目前没有写入它的地方）。
+5. **内置**：窗口表。
+
+目前据此行事的有：窗口，在创建会话和选择模型时；以及学到的图片拒绝，它像[图片回退](/docs/providers-models#images)一直以来那样把会话观察到的图片输入能力设为不支持（报告的图片输入目前还不据此行事）。内核从不访问数据目录：它的所有者注入一个 `ModelMetadataStore`，注册表启动时加载一次，每次变化后把快照交给它。facade 的存储是 `model-metadata.json`（[数据目录](/docs/data-directory#contents)）；内核的其他构造方式只在本次运行中保留这些事实。列表的合并、过期和文件格式见[内部细节](/docs/internals#model-metadata)。
 
 ### 压缩 [#compaction]
 
@@ -270,7 +282,7 @@ schema 遵循同样的按协议规则：支持 `strict_json_schema` 的协议（
 
 ## 模型 API [#the-model-api]
 
-`hanafubuki-agent-model-api` 实现三种协议：Responses、Chat Completions 和 Anthropic Messages，包括编码、流式解码、工具降级和模型列表。它不知道任何插件和任何上下文段类型，也不依赖插件 API。Provider 的流是外部输入，容错解码：空的工具参数是 `{}`；无法解析的是 `{}` 加 `argument_error`；缺失的用量计数是 0；没有结束原因的流以未知的 `end_turn` 结束；Responses 的 `response.incomplete` 保留已完成的条目和已流出的文本，只有什么都没产生时才失败。线路正文只按[内容日志规则](/docs/contributing#content-logging)在 `trace` 级别、截断后记录。
+`hanafubuki-agent-model-api` 实现三种协议：Responses、Chat Completions 和 Anthropic Messages，包括编码、流式解码、工具降级和模型列表。它用 `ModelRouteKey`（其中端点为 `ModelEndpointKey`）命名 Agent 访问的模型，端点取规范化 base URL 的 SHA-256 而不是 URL 本身，因为键会写入日志和磁盘，而 base URL 的查询串里可能带有凭据。它不知道任何插件和任何上下文段类型，也不依赖插件 API。Provider 的流是外部输入，容错解码：空的工具参数是 `{}`；无法解析的是 `{}` 加 `argument_error`；缺失的用量计数是 0；没有结束原因的流以未知的 `end_turn` 结束；Responses 的 `response.incomplete` 保留已完成的条目和已流出的文本，只有什么都没产生时才失败。线路正文只按[内容日志规则](/docs/contributing#content-logging)在 `trace` 级别、截断后记录。
 
 ## 终端界面与命令行 [#the-terminal-interface-and-the-command-line]
 

@@ -12,9 +12,9 @@ use hanafubuki_agent_foundation::cancellation::CancellationToken;
 use hanafubuki_agent_model_api::{
     AnthropicMessagesModelTransport, ChatCompletionsModelTransport, ModelApiProtocol,
     ModelCatalogClient, ModelCatalogEntry, ModelContextRole, ModelCredential, ModelEndpoint,
-    ModelError, ModelEvent, ModelImageInputCapability, ModelInputCapabilities, ModelInputItem,
-    ModelOutputItem, ModelPort, ModelProvider, ModelRequest, ModelRetryPolicy, ModelSession,
-    ModelSessionFactory, ModelToolCall, ResponsesModelTransport,
+    ModelEndpointKey, ModelError, ModelEvent, ModelImageInputCapability, ModelInputCapabilities,
+    ModelInputItem, ModelOutputItem, ModelPort, ModelProvider, ModelRequest, ModelRetryPolicy,
+    ModelRouteKey, ModelSession, ModelSessionFactory, ModelToolCall, ResponsesModelTransport,
 };
 use parking_lot::{Condvar, Mutex};
 use serde_json::json;
@@ -87,8 +87,9 @@ struct AgentServiceInner {
     sessions: SessionTable,
     next_turn_id: AtomicU64,
     next_compaction_id: AtomicU64,
-    image_capabilities: Mutex<ModelImageCapabilityCache>,
-    model_catalog: crate::model_catalog::ModelCatalog,
+    /// What is known about each model route, kept through the owner's
+    /// store.
+    model_metadata: crate::model_metadata::ModelMetadataRegistry,
     approvals: ApprovalService,
     pending_approvals: Mutex<HashMap<ApprovalRequestId, PendingApprovalRoute>>,
     pending_user_inputs: Mutex<HashMap<AgentUserInputRequestId, PendingUserInputRoute>>,
@@ -308,7 +309,6 @@ mod validation;
 use diagnostics::{trace_tool_call, trace_tool_result};
 use durable::StagedPersistence;
 use factory::configured_model;
-use image_capability::ModelImageCapabilityCache;
 use persistence::*;
 use sampling::*;
 use state::*;

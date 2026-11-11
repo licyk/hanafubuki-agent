@@ -100,18 +100,6 @@ fn no_images_produces_zero_report_and_equal_request() {
 }
 
 #[test]
-fn route_key_debug_never_exposes_the_endpoint_or_query() {
-    let endpoint = ModelEndpoint::parse("https://example.test/v1?api_key=route-secret").unwrap();
-    let key = ModelRouteKey::new(ModelApiProtocol::Responses, &endpoint, "fixture-model");
-    let debug = format!("{key:?}");
-    assert!(debug.contains("Responses"));
-    assert!(debug.contains("fixture-model"));
-    assert!(!debug.contains("example.test"));
-    assert!(!debug.contains("route-secret"));
-    assert!(!debug.contains("api_key"));
-}
-
-#[test]
 fn classifier_accepts_explicit_rejections_and_rejects_unrelated_failures() {
     for (status, message) in [
         (Some(400), "Model only supports text input"),

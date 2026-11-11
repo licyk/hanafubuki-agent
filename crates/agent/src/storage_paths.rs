@@ -33,6 +33,9 @@ pub struct AgentStoragePaths {
     /// The installed plugins: their cache, their data, the git-added
     /// marketplaces and the install record (`hanafubuki-agent-packages`).
     pub plugins_root: PathBuf,
+    /// What the Agent knows about each model it reaches
+    /// (`hanafubuki_agent_kernel::ModelMetadataSnapshot`).
+    pub model_metadata_file: PathBuf,
 }
 
 impl AgentStoragePaths {
@@ -49,6 +52,7 @@ impl AgentStoragePaths {
             worktrees_root: root.join("worktrees"),
             hooks_state_file: root.join("hooks-state.json"),
             plugins_root: root.join("plugins"),
+            model_metadata_file: root.join("model-metadata.json"),
             root,
         }
     }

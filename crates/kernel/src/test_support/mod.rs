@@ -24,6 +24,7 @@ pub fn service_reporting_kernel_faults(
         hanafubuki_agent_approval::ApprovalService::manual(),
         crate::FIRST_BATCH_HARD_LIMITS,
         kernel_faults,
+        std::sync::Arc::new(crate::model_metadata::NoopModelMetadataStore),
     )
 }
 

@@ -1,4 +1,5 @@
 use super::*;
+use crate::model_metadata::{ModelMetadataRegistry, ModelMetadataStore, NoopModelMetadataStore};
 use crate::{AgentKernelFaultSink, NoopAgentKernelFaultSink};
 
 impl AgentService {
@@ -28,6 +29,7 @@ impl AgentService {
             ApprovalService::manual(),
             FIRST_BATCH_HARD_LIMITS,
             Arc::new(NoopAgentKernelFaultSink),
+            Arc::new(NoopModelMetadataStore),
         )
     }
 
@@ -43,6 +45,7 @@ impl AgentService {
             ApprovalService::manual(),
             limits,
             Arc::new(NoopAgentKernelFaultSink),
+            Arc::new(NoopModelMetadataStore),
         )
     }
 
@@ -58,6 +61,7 @@ impl AgentService {
             ApprovalService::manual(),
             FIRST_BATCH_HARD_LIMITS,
             Arc::new(NoopAgentKernelFaultSink),
+            Arc::new(NoopModelMetadataStore),
         )
     }
 
@@ -82,16 +86,19 @@ impl AgentService {
             history_store,
             approvals,
             Arc::new(NoopAgentKernelFaultSink),
+            Arc::new(NoopModelMetadataStore),
         )
     }
 
-    /// The application's kernel: no default model, and every panic the
-    /// kernel catches in its own code is reported to `kernel_faults`.
+    /// The application's kernel: no default model, every panic the kernel
+    /// catches in its own code reported to `kernel_faults`, and what it
+    /// learns about models kept in `model_metadata`.
     pub fn without_default_model_reporting_faults(
         registries: AgentKernelRegistries,
         history_store: Arc<dyn AgentHistoryStore>,
         approvals: ApprovalService,
         kernel_faults: Arc<dyn AgentKernelFaultSink>,
+        model_metadata: Arc<dyn ModelMetadataStore>,
     ) -> Self {
         Self::with_optional_model(
             None,
@@ -100,6 +107,7 @@ impl AgentService {
             approvals,
             FIRST_BATCH_HARD_LIMITS,
             kernel_faults,
+            model_metadata,
         )
     }
 
@@ -115,6 +123,7 @@ impl AgentService {
         approvals: ApprovalService,
         limits: AgentHardLimits,
         kernel_faults: Arc<dyn AgentKernelFaultSink>,
+        model_metadata: Arc<dyn ModelMetadataStore>,
     ) -> Self {
         assert_valid_limits(limits);
         Self {
@@ -128,8 +137,7 @@ impl AgentService {
                 sessions: SessionTable::default(),
                 next_turn_id: AtomicU64::new(1),
                 next_compaction_id: AtomicU64::new(1),
-                image_capabilities: Mutex::new(ModelImageCapabilityCache::default()),
-                model_catalog: Default::default(),
+                model_metadata: ModelMetadataRegistry::open(model_metadata, now_millis_u64()),
                 approvals,
                 pending_approvals: Mutex::new(HashMap::new()),
                 pending_user_inputs: Mutex::new(HashMap::new()),
@@ -145,6 +153,8 @@ impl AgentService {
         }
     }
 
+    /// Lists the models of the Provider at `base_url`, and records the
+    /// listing in the model metadata.
     pub async fn list_provider_models(
         &self,
         protocol: ModelApiProtocol,
@@ -157,6 +167,7 @@ impl AgentService {
         }
         let endpoint = ModelEndpoint::parse(base_url)
             .map_err(|error| AgentError::InvalidInput(error.to_string()))?;
+        let endpoint_key = ModelEndpointKey::new(protocol, &endpoint);
         let credential = credential
             .map(ModelCredential::new)
             .transpose()
@@ -172,7 +183,9 @@ impl AgentService {
             .await
             .map_err(|error| AgentError::Model(error.to_string()))?
             .entries;
-        self.inner.model_catalog.record_listing(base_url, &entries);
+        self.inner
+            .model_metadata
+            .record_listing(&endpoint_key, &entries, now_millis_u64());
         Ok(entries)
     }
 
@@ -181,12 +194,34 @@ impl AgentService {
     pub fn model_context_window(
         &self,
         configured: Option<u64>,
+        protocol: ModelApiProtocol,
         base_url: &str,
         model: &str,
     ) -> Option<u64> {
-        self.inner
-            .model_catalog
-            .context_window(configured, base_url, model)
+        let route = ModelEndpoint::parse(base_url)
+            .ok()
+            .map(|endpoint| ModelRouteKey::new(protocol, &endpoint, model));
+        self.inner.model_metadata.context_window(
+            configured,
+            route.as_ref(),
+            model,
+            now_millis_u64(),
+        )
+    }
+
+    /// The context window a session on `model_id` over `model` is given.
+    pub(super) fn session_context_window(
+        &self,
+        configured: Option<u64>,
+        model: &dyn ModelPort,
+        model_id: &str,
+    ) -> Option<u64> {
+        self.inner.model_metadata.context_window(
+            configured,
+            model.route_key(model_id).as_ref(),
+            model_id,
+            now_millis_u64(),
+        )
     }
 }
 
