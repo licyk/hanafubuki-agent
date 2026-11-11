@@ -25,9 +25,13 @@ impl App {
             return;
         }
         let state = self.bridge.config_state();
-        self.enter_alt_screen(tui, false);
         let mut center = ConfigCenter::new(state);
-        center.open(section, direct);
+        if let Some(ConfigAction::Replay(command)) = center.open(section, direct) {
+            self.app_event_tx
+                .send(AppEvent::Command(AppCommand::Replay(command)));
+            return;
+        }
+        self.enter_alt_screen(tui, false);
         self.workspace.config = Some(center);
     }
 

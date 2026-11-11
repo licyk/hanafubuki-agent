@@ -6,6 +6,7 @@
 //! it until that domain gains its own form.
 
 mod forms;
+mod layers;
 mod render;
 #[cfg(test)]
 mod tests;
@@ -109,7 +110,7 @@ impl ConfigSection {
             Self::General | Self::Sandbox => Some("/permissions"),
             Self::Memory => Some("/memories"),
             Self::Compaction | Self::Interface => Some("/config quick"),
-            Self::Providers => Some("/providers"),
+            Self::Providers => Some("/providers policy"),
             Self::Mcp => Some("/mcp"),
             Self::Plugins => Some("/plugins"),
             Self::Hooks => Some("/hooks"),
@@ -174,6 +175,7 @@ pub(crate) struct ConfigCenter {
     scroll_top: usize,
     view_rows: Option<usize>,
     form: Option<(ConfigSection, FormView)>,
+    layers_open: bool,
 }
 
 impl ConfigCenter {
@@ -186,14 +188,24 @@ impl ConfigCenter {
             scroll_top: 0,
             view_rows: None,
             form: None,
+            layers_open: false,
         }
     }
 
-    pub(crate) fn open(&mut self, section: ConfigSection, direct: bool) {
+    pub(crate) fn open(&mut self, section: ConfigSection, direct: bool) -> Option<ConfigAction> {
         self.select(section);
-        if direct && section.editable() {
-            self.open_form(section);
+        if direct {
+            match section {
+                section if section.editable() => self.open_form(section),
+                ConfigSection::Layers => self.open_layers(),
+                _ => {
+                    return section
+                        .command()
+                        .map(|command| ConfigAction::Replay(command.to_string()));
+                }
+            }
         }
+        None
     }
 
     fn select(&mut self, section: ConfigSection) {
@@ -238,13 +250,26 @@ impl ConfigCenter {
         if ctrl && key.code == KeyCode::Char('c') {
             return Some(ConfigAction::Close);
         }
+        if self.layers_open {
+            return match key.code {
+                KeyCode::Esc => {
+                    self.layers_open = false;
+                    None
+                }
+                KeyCode::Char('q') => Some(ConfigAction::Close),
+                _ => None,
+            };
+        }
         if let Some((section, form)) = self.form.as_mut() {
             return match form.handle_key(key) {
                 FormEvent::Cancel => {
                     self.form = None;
                     None
                 }
-                FormEvent::Action(_) => {
+                FormEvent::Action(action) => {
+                    if let Some(command) = forms::action_command(action) {
+                        return Some(ConfigAction::Replay(command.to_string()));
+                    }
                     let current = self.state.as_ref().ok()?;
                     forms::draft(*section, form, current)
                         .map(|change| ConfigAction::Save(Box::new(change)))
@@ -298,6 +323,12 @@ impl ConfigCenter {
                 if section.editable() {
                     if self.state.is_ok() {
                         self.open_form(section);
+                    }
+                    return None;
+                }
+                if section == ConfigSection::Layers {
+                    if self.state.is_ok() {
+                        self.open_layers();
                     }
                     return None;
                 }
@@ -359,12 +390,6 @@ impl ConfigCenter {
 
     fn page_step(&self) -> isize {
         isize::try_from(self.view_rows.unwrap_or(10).max(1)).unwrap_or(10)
-    }
-
-    fn selected_command(&self) -> Option<&'static str> {
-        self.rows()
-            .get(self.selected)
-            .and_then(|section| section.command())
     }
 
     fn state_summary(&self) -> Result<String, String> {

@@ -35,6 +35,8 @@ pub(super) struct ProvidersScreen {
     tx: AppEventSender,
     /// The first-run setup: done once a model is chosen.
     setup: bool,
+    /// Open the shared model policy as soon as the registry is read.
+    policy_first: bool,
     registry: Option<AgentProviderRegistrySnapshot>,
     stage: Stage,
     complete: bool,
@@ -73,9 +75,18 @@ enum Stage {
 
 impl ProvidersScreen {
     pub(super) fn new(tx: AppEventSender, setup: bool) -> Self {
+        Self::with_policy_first(tx, setup, false)
+    }
+
+    pub(super) fn new_at_policy(tx: AppEventSender) -> Self {
+        Self::with_policy_first(tx, false, true)
+    }
+
+    fn with_policy_first(tx: AppEventSender, setup: bool, policy_first: bool) -> Self {
         Self {
             tx,
             setup,
+            policy_first,
             registry: None,
             stage: Stage::Loading,
             complete: false,
@@ -107,6 +118,11 @@ impl ProvidersScreen {
 
     /// The setup goes to what is missing; otherwise the list.
     fn after_load(&mut self) {
+        if self.policy_first {
+            self.policy_first = false;
+            self.open_policy();
+            return;
+        }
         let Some(registry) = self.registry.as_ref().filter(|_| self.setup) else {
             return self.show_list(None, None);
         };

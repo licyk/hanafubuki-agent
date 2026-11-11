@@ -531,6 +531,10 @@ path = "crates/tui/src/commands/mcp/form/tests.rs"
 reason = "The MCP form's protocol and per-tool policy round trip."
 
 [[original]]
+path = "crates/tui/src/config_center/layers.rs"
+reason = "The configuration center's layers and warnings page, over the facade's layer sources."
+
+[[original]]
 path = "crates/tui/src/commands/providers/tests.rs"
 reason = "The Provider form's draft and the first-run rule."
 

@@ -172,7 +172,37 @@ impl App {
 
 /// Whether a keymap entry or a preset `patch` wrote resolves to something
 /// else: a layer above the user's file sets it.
-fn shadowed(patch: &AgentTuiPreferencesPatch, preferences: &AgentTuiPreferences) -> bool {
+pub(super) fn shadowed(
+    patch: &AgentTuiPreferencesPatch,
+    preferences: &AgentTuiPreferences,
+) -> bool {
+    let scalars = patch
+        .fullscreen_transcript
+        .is_some_and(|value| preferences.fullscreen_transcript != value)
+        || patch
+            .alternate_screen
+            .is_some_and(|value| preferences.alternate_screen != value)
+        || patch
+            .raw_output
+            .is_some_and(|value| preferences.raw_output != value)
+        || patch
+            .status_line_colors
+            .is_some_and(|value| preferences.status_line_colors != value)
+        || patch
+            .theme
+            .as_ref()
+            .is_some_and(|value| preferences.theme.as_ref() != Some(value))
+        || patch
+            .status_line
+            .as_ref()
+            .is_some_and(|value| preferences.status_line != *value)
+        || patch
+            .terminal_title
+            .as_ref()
+            .is_some_and(|value| preferences.terminal_title != *value);
+    if scalars {
+        return true;
+    }
     let keymap = patch.keymap.iter().any(|(context, actions)| {
         actions.iter().any(|(action, keys)| {
             let resolved = preferences

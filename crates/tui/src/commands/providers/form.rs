@@ -73,10 +73,10 @@ pub(super) fn provider_form(provider: Option<&AgentProviderSettings>, setup: boo
     let form = FormView::new(title, items);
     if setup && provider.is_none() {
         form.with_subtitle(
-            "The Agent needs a model Provider before the first message: its endpoint and token. Test it, then save.",
+            "The Agent needs a model Provider before the first message: its endpoint and token. Test it, then save. providers.toml is not layered; saving changes only this owner's file.",
         )
     } else {
-        form
+        form.with_subtitle("providers.toml is not layered; saving changes only this owner's file.")
     }
 }
 

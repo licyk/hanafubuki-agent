@@ -36,6 +36,12 @@ const FULLSCREEN: FieldId = "fullscreen";
 const ALTERNATE_SCREEN: FieldId = "alternate_screen";
 const RAW_OUTPUT: FieldId = "raw_output";
 const STATUS_COLORS: FieldId = "status_colors";
+const OPEN_THEME: FieldId = "open_theme";
+const OPEN_STATUS_LINE: FieldId = "open_status_line";
+const OPEN_TITLE: FieldId = "open_title";
+const OPEN_KEYMAP: FieldId = "open_keymap";
+const OPEN_PRESETS: FieldId = "open_presets";
+const OPEN_TUI: FieldId = "open_tui";
 
 const PERMISSIONS: [AgentPermissionMode; 3] = [
     AgentPermissionMode::Manual,
@@ -76,6 +82,19 @@ const SCREENS: [AgentAlternateScreen; 3] = [
     AgentAlternateScreen::Always,
     AgentAlternateScreen::Never,
 ];
+
+/// The command a linked editor action opens.
+pub(super) fn action_command(action: FieldId) -> Option<&'static str> {
+    match action {
+        OPEN_THEME => Some("/theme"),
+        OPEN_STATUS_LINE => Some("/statusline"),
+        OPEN_TITLE => Some("/title"),
+        OPEN_KEYMAP => Some("/keymap"),
+        OPEN_PRESETS => Some("/presets"),
+        OPEN_TUI => Some("/tui"),
+        _ => None,
+    }
+}
 
 /// What a domain's Save button asks the app to write.
 #[derive(Clone, Debug)]
@@ -346,10 +365,16 @@ pub(super) fn section_form(section: ConfigSection, state: &ConfigState) -> FormV
                     "Status line colors",
                     state.standalone.tui.status_line_colors,
                 ),
+                FormItem::action(OPEN_THEME, "Theme ›"),
+                FormItem::action(OPEN_STATUS_LINE, "Status line ›"),
+                FormItem::action(OPEN_TITLE, "Terminal title ›"),
+                FormItem::action(OPEN_KEYMAP, "Keyboard ›"),
+                FormItem::action(OPEN_PRESETS, "Presets ›"),
+                FormItem::action(OPEN_TUI, "Interface mode ›"),
                 FormItem::action(SAVE, "Save"),
             ],
         )
-        .with_subtitle("Theme, status line, title, keymap and presets have their own editors."),
+        .with_subtitle("The linked editors save their own [tui] keys."),
         ConfigSection::Providers
         | ConfigSection::Mcp
         | ConfigSection::Plugins

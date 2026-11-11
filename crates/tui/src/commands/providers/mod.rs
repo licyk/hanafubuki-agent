@@ -22,16 +22,33 @@ pub(crate) static PROVIDERS: CommandSpec = CommandSpec {
     name: "providers",
     aliases: &[],
     description: "add, edit and test model Providers, and choose the default model",
-    inline_args: false,
+    inline_args: true,
     during_task: false,
     needs_session: false,
-    dispatch: |context, _args| open(context, false),
+    dispatch,
 };
+
+fn dispatch(context: &mut CommandContext<'_>, args: &str) {
+    match args.trim() {
+        "" => open(context, false),
+        "policy" => open_policy(context),
+        _ => context.add_to_history(history_cell::new_error_event(
+            "Usage: /providers [policy]".to_string(),
+        )),
+    }
+}
 
 /// Opens the screen on the Providers as they are read; `setup` leads
 /// through what is missing before the first message.
 pub(crate) fn open(context: &mut CommandContext<'_>, setup: bool) {
     let screen = ProvidersScreen::new(context.app_event_tx(), setup);
+    context.show_view(Box::new(screen));
+    context.agent_command(AgentCommand::Providers(ProviderCall::Load));
+}
+
+/// Opens the screen at the shared model policy.
+fn open_policy(context: &mut CommandContext<'_>) {
+    let screen = ProvidersScreen::new_at_policy(context.app_event_tx());
     context.show_view(Box::new(screen));
     context.agent_command(AgentCommand::Providers(ProviderCall::Load));
 }

@@ -148,6 +148,7 @@ fn availability_follows_the_spec() {
     assert_eq!(
         inline_args,
         [
+            "providers",
             "permissions",
             "rename",
             "resume",

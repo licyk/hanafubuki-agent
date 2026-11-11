@@ -20,6 +20,10 @@ const LABEL_WIDTH: usize = 30;
 impl ConfigCenter {
     pub(crate) fn render(&mut self, area: Rect, buf: &mut Buffer) {
         Clear.render(area, buf);
+        if self.layers_open {
+            self.render_layers(area, buf);
+            return;
+        }
         if let Some((_, form)) = &self.form {
             form.render(area, buf);
             return;
@@ -70,9 +74,18 @@ fn notice_line(center: &ConfigCenter) -> Line<'static> {
     if center.state.is_err() {
         return Line::from("The configuration could not be read.".red());
     }
-    match center.selected_command() {
+    let Some(section) = center.rows().get(center.selected).copied() else {
+        return Line::default();
+    };
+    if section == ConfigSection::Layers {
+        return Line::from("Enter shows the layers, their files and the warnings.".dim());
+    }
+    if section.editable() {
+        return Line::from(format!("Enter edits {}.", section.label()).dim());
+    }
+    match section.command() {
         Some(command) => Line::from(format!("Enter opens {command}.").dim()),
-        None => Line::from("This domain's form is coming in the next phase.".dim()),
+        None => Line::default(),
     }
 }
 

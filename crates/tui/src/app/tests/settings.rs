@@ -272,6 +272,20 @@ fn the_provider_policy_form_saves_reasoning_context_and_the_whole_budget() {
 }
 
 #[test]
+fn the_configuration_center_opens_the_model_policy_directly() {
+    let mut harness = Harness::start(Vec::new());
+    harness.type_and_submit("/config providers");
+    harness.pump_until_screen_shows("Model policy");
+}
+
+#[test]
+fn the_providers_command_opens_the_model_policy_directly() {
+    let mut harness = Harness::start(Vec::new());
+    harness.type_and_submit("/providers policy");
+    harness.pump_until_screen_shows("Model policy");
+}
+
+#[test]
 fn the_mcp_manager_adds_a_server_with_a_secret_and_deletes_it() {
     let mut harness = Harness::start(Vec::new());
     harness.type_and_submit("/mcp");

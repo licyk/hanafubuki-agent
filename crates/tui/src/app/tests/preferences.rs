@@ -3,10 +3,11 @@
 //! back from `config.toml` and what they changed seen on the screen.
 
 use hanafubuki_agent::test_support::assistant_events;
-use hanafubuki_agent::{AgentTuiPreferencesPatch, AgentTuiPreset};
+use hanafubuki_agent::{AgentTuiPreferences, AgentTuiPreferencesPatch, AgentTuiPreset};
 use ratatui::crossterm::event::{KeyCode, KeyModifiers};
 
 use super::Harness;
+use crate::app::preferences::shadowed;
 use crate::history_cell::HistoryRenderMode;
 use crate::transcript_mode::TranscriptMode;
 
@@ -314,7 +315,7 @@ fn the_interface_form_saves_and_applies_its_scalar_preferences() {
     let mut harness = Harness::start(Vec::new());
     harness.open("/config interface", "Interface");
     harness.key(KeyCode::Char(' '));
-    for _ in 0..4 {
+    for _ in 0..10 {
         harness.key(KeyCode::Tab);
     }
     harness.key(KeyCode::Enter);
@@ -323,6 +324,40 @@ fn the_interface_form_saves_and_applies_its_scalar_preferences() {
     assert!(harness
         .config_file()
         .contains("fullscreenTranscript = false"));
+}
+
+#[test]
+fn the_configuration_center_shows_the_layers_and_opens_the_linked_editors() {
+    let mut harness = Harness::start(Vec::new());
+    let screen = harness.open("/config layers", "Layers & files");
+    assert!(screen.contains("config.toml"), "{screen}");
+    assert!(screen.contains("Warnings ("), "{screen}");
+    harness.key(KeyCode::Esc);
+    harness.pump_until_screen_shows("Agent settings");
+    harness.key(KeyCode::Esc);
+
+    harness.open("/config interface", "Interface");
+    for _ in 0..4 {
+        harness.key(KeyCode::Tab);
+    }
+    harness.key(KeyCode::Enter);
+    harness.pump_until_screen_shows("Select Syntax Theme");
+}
+
+#[test]
+fn a_scalar_preference_a_higher_layer_replaces_is_shadowed() {
+    let preferences = AgentTuiPreferences::default();
+    let same = AgentTuiPreferencesPatch {
+        raw_output: Some(preferences.raw_output),
+        ..AgentTuiPreferencesPatch::default()
+    };
+    assert!(!shadowed(&same, &preferences));
+
+    let replaced = AgentTuiPreferencesPatch {
+        raw_output: Some(!preferences.raw_output),
+        ..AgentTuiPreferencesPatch::default()
+    };
+    assert!(shadowed(&replaced, &preferences));
 }
 
 #[test]

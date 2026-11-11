@@ -190,7 +190,7 @@ pub(super) fn policy_form(registry: &AgentProviderRegistrySnapshot) -> FormView 
     }
     items.push(FormItem::action(SAVE, "Save"));
     FormView::new("Model policy", items).with_subtitle(
-        "One policy runs every Provider; a protocol that cannot use a value narrows it for a session.",
+        "One policy runs every Provider; a protocol that cannot use a value narrows it for a session. providers.toml is not layered; saving changes only this owner's file.",
     )
 }
 
