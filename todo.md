@@ -1,3 +1,101 @@
+## Plan: a more customizable modular architecture, after KohakuTerrarium (2026-11-11)
+
+The plan is [docs/plan-modular-architecture.md](docs/plan-modular-architecture.md).
+
+**Sources.**
+
+- KohakuTerrarium `c1d17b45`, read from source. Its architecture summary file is
+  empty.
+- Codex `57a808a392` (agent roles).
+- kardia-core 0.2.3.
+
+**What it adds.** It keeps the plugin mechanism (kardia, the registries, the guards,
+the deny-only combinations) unchanged and adds declarative layers above it:
+
+- typed plugin options;
+- explicit context order;
+- roles: inheritable, per-session agent definitions;
+- a kernel-owned, narrowing-only capability scope;
+- role-aware subagents;
+- roles from packages;
+- linked development packages.
+
+**Status.** Every §9 decision (D1–D9) was accepted as recommended (2026-11-11), and
+the plan records them. Implementation has not started.
+
+**For each milestone,** record when it is done:
+
+- what landed;
+- the validation commands that ran;
+- whether the goldens changed;
+- what Hanafubuki must change at its next pin.
+
+None touches the `hanafubuki-agent-host` twin. Order: M1 and M2 are independent; M3,
+then M4, then M5; M6 after M3; M7 after M1.
+
+- [x] Decisions: D1–D9 of the plan's §9 answered. Done (2026-11-11): all accepted as
+      recommended. Narrowing-only definitions (D1); descriptors for host rows (D2);
+      `web` stays on the shared settings (D3); built-in `default` and `explorer`
+      (D4); no host roles yet (D5); linked development packages (D6, so M7 is in
+      scope); `agent_type` (D7); role switching between turns (D8);
+      `[pluginOptions.<row>]` (D9).
+- [ ] M1: typed plugin options and row descriptors.
+      - `[pluginOptions.<row>]`, decoded per key and tolerant, with strict writes.
+      - The `PluginOptionSchema` vocabulary; a guest's `configSchema` lowered to it
+        and enforced.
+      - A descriptor per row, shown in `AgentPluginStatus`.
+      - `subagents` limits become options, applied through `on_update`.
+      - A generic options form in `/plugins` and `/config plugins`, with the
+        coverage test extended.
+      - Not model-visible.
+      Done: —. Open: —.
+- [ ] M2: explicit context order.
+      - `ContextRenderer.order`; requests ordered by `(slot, order, kind)`.
+      - Ranks reproduce today's order, so the request goldens do not change.
+      - A remounted plugin keeps its sections' place (new test).
+      - Hanafubuki's host renderers take the 500–599 band.
+      Done: —. Open: —.
+- [ ] M3: roles: definitions, sources, resolution.
+      - `agents/*.toml` and `[agents]` in every layer, with Codex key aliases.
+      - Precedence: built-in, then package, user, profile, trusted project.
+      - `extends`, with the narrowing merge table and provenance.
+      - `AgentRoleCatalog`; the built-in `default` and `explorer` (D4).
+      - `roles list/show`, `doctor`, `/warnings`.
+      - A new bilingual `roles` page.
+      - No session uses roles yet.
+      Done: —. Open: —.
+- [ ] M4: the session capability scope.
+      - `AgentCapabilityScope` in `AgentSessionConfig`, tolerant and normalized.
+      - Filters:
+        - tools and sources at planning (core tools and `tool_search` never
+          filtered; a filtered tool is "no tool named");
+        - context, admission, prompt and continuation entries by owner;
+        - the permission-mode cap.
+      - Never filtered: approval rules, tool lifecycle hooks, observers.
+      - Children narrowed; forks copy.
+      - `create_session(role)`, `set_session_role`, `--role`, `/role`, the `role`
+        event field.
+      - Default sessions' requests and history bytes unchanged; one new explorer
+        golden.
+      Done: —. Open: —.
+- [ ] M5: role-aware subagents.
+      - `spawn_agent { agent_type }` (D7).
+      - `AgentRoleCatalogReader`; children take the role's instructions, model and
+        narrowed scope.
+      - The guidance lists spawnable roles (at most 16, sorted).
+      - Model-visible: regenerate the goldens on purpose, here and in Hanafubuki.
+      Done: —. Open: —.
+- [ ] M6: roles from packages.
+      - The `agents` component of our format.
+      - Claude Code `agents/*.md`, with the tool-name table.
+      - `<plugin>:<role>` ids, present while the package is enabled.
+      - Update `docs/plan-plugin-system.md` §3.3 and §10.
+      Done: —. Open: —.
+- [ ] M7 (D6): linked development packages.
+      - `plugins link <dir>`.
+      - A contained watcher that restarts the guest and re-reads its content.
+      Done: —. Open: —.
+
 ## Plan: a configuration center for every Agent setting (2026-11-11)
 
 The plan is [docs/plan-configuration-center.md](docs/plan-configuration-center.md);
