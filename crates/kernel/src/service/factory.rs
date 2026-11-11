@@ -209,6 +209,28 @@ impl AgentService {
             .map(|window| window.value)
     }
 
+    /// What is known of whether and how `model` at the Provider at
+    /// `base_url` reasons (its resolved fact): none when nothing is, or when
+    /// `base_url` is not an endpoint.
+    pub fn model_reasoning(
+        &self,
+        protocol: ModelApiProtocol,
+        base_url: &str,
+        model: &str,
+    ) -> Option<hanafubuki_agent_model_api::ModelReasoningSupport> {
+        let route = ModelRouteKey::new(protocol, &ModelEndpoint::parse(base_url).ok()?, model);
+        self.inner
+            .model_metadata
+            .resolve(
+                Some(&route),
+                model,
+                crate::model_metadata::ConfiguredModelFacts::default(),
+                now_millis_u64(),
+            )
+            .reasoning
+            .map(|fact| fact.value)
+    }
+
     /// When the latest listing of the Provider at `base_url` was recorded,
     /// in milliseconds since the Unix epoch: none when it never was, or
     /// when `base_url` is not an endpoint.

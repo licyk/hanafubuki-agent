@@ -15,6 +15,8 @@ mod model_metadata;
 pub mod port;
 pub mod protocol;
 pub mod provider;
+mod reasoning_effort;
+mod reasoning_refusal;
 mod responses;
 mod route;
 mod sse;
@@ -42,11 +44,11 @@ pub use model::{
     ModelImageDetail, ModelImageInputCapability, ModelImageInputPolicy, ModelInputCapabilities,
     ModelInputCapabilityPolicy, ModelInputItem, ModelJsonSchemaOutput, ModelMessagePhase,
     ModelOpaqueCompactionPayload, ModelOutputFormat, ModelOutputItem, ModelReasoningConfig,
-    ModelReasoningEffort, ModelReasoningTextKind, ModelRequest, ModelResponseMetadata,
-    ModelStructuredOutputCapability, ModelToolArgumentError, ModelToolCall, ModelToolCallOrigin,
-    ModelToolChoice, ModelToolSpec, ModelUsage, ModelUserContent, RateLimitMetadata,
-    FALLBACK_TOOL_SEARCH_NAME, MAX_MODEL_REASONING_EFFORT_BYTES, MAX_TOOL_ARGUMENT_PREVIEW_BYTES,
-    NATIVE_TOOL_SEARCH_NAME,
+    ModelReasoningEffort, ModelReasoningReplay, ModelReasoningTextKind, ModelRequest,
+    ModelResponseMetadata, ModelStructuredOutputCapability, ModelToolArgumentError, ModelToolCall,
+    ModelToolCallOrigin, ModelToolChoice, ModelToolSpec, ModelUsage, ModelUserContent,
+    RateLimitMetadata, FALLBACK_TOOL_SEARCH_NAME, MAX_MODEL_REASONING_EFFORT_BYTES,
+    MAX_MODEL_REASONING_REPLAY_BYTES, MAX_TOOL_ARGUMENT_PREVIEW_BYTES, NATIVE_TOOL_SEARCH_NAME,
 };
 pub use model_catalog::{ModelCatalogClient, ModelCatalogEntry, ModelCatalogListing};
 pub use model_metadata::{ModelMetadata, ModelMetadataSource, ModelReasoningSupport, Sourced};
@@ -58,6 +60,7 @@ pub use protocol::ModelApiProtocol;
 pub use provider::{
     ModelCredential, ModelEndpoint, ModelHeader, ModelProvider, ModelRetryPolicy, ModelTimeouts,
 };
+pub use reasoning_effort::{reasoning_effort_rank, request_reasoning_effort};
 pub use responses::ResponsesModelTransport;
 pub use route::{ModelEndpointKey, ModelRouteKey};
 pub use tool_lowering::flattened_tool_call_name;

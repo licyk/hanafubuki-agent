@@ -140,3 +140,40 @@ fn opening_drops_what_expired() {
 
     assert!(reopened.state.lock().routes.is_empty());
 }
+
+/// A refused reasoning parameter is learned as "no reasoning", beats the
+/// listing's "yes", holds across a restart, and expires after 7 days.
+#[test]
+fn a_learned_reasoning_refusal_beats_a_reported_yes_and_is_kept_for_seven_days() {
+    let (registry, store) = opened(ModelMetadataSnapshot::default());
+    let model = route(PROVIDER, "model");
+    let mut reasons = entry("model", None);
+    reasons.reasoning = Some(true);
+    registry.record_listing(&endpoint(PROVIDER), &[reasons], NOW);
+    registry.learn_reasoning_unsupported(&model, NOW);
+
+    let (reopened, _) = opened(last_saved(&store));
+    let reasoning = |at: u64| {
+        reopened
+            .resolve(Some(&model), "model", ConfiguredModelFacts::default(), at)
+            .reasoning
+            .map(|fact| (fact.value, fact.source))
+    };
+    assert_eq!(
+        reasoning(NOW + 1),
+        Some((
+            ModelReasoningSupport::Unsupported,
+            ModelMetadataSource::Learned
+        ))
+    );
+    assert_eq!(
+        reasoning(NOW + LEARNED_TTL_MS + 1),
+        Some((
+            ModelReasoningSupport::Supported {
+                efforts: Vec::new(),
+                default: None,
+            },
+            ModelMetadataSource::Reported
+        ))
+    );
+}

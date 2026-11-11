@@ -85,6 +85,7 @@ async fn reasoning_and_unknown_items_preserve_order_without_becoming_messages_or
                 item_id: "reason-1".to_string(),
                 summary: Vec::new(),
                 content: Vec::new(),
+                replay: None,
             },
         }),
         Ok(ModelEvent::OutputItemAdded {
@@ -92,6 +93,7 @@ async fn reasoning_and_unknown_items_preserve_order_without_becoming_messages_or
                 item_id: "reason-2".to_string(),
                 summary: Vec::new(),
                 content: Vec::new(),
+                replay: None,
             },
         }),
         Ok(ModelEvent::OutputItemCompleted {
@@ -99,6 +101,7 @@ async fn reasoning_and_unknown_items_preserve_order_without_becoming_messages_or
                 item_id: "reason-1".to_string(),
                 summary: vec!["first summary".to_string()],
                 content: Vec::new(),
+                replay: None,
             },
         }),
         Ok(ModelEvent::OutputItemCompleted {
@@ -106,6 +109,7 @@ async fn reasoning_and_unknown_items_preserve_order_without_becoming_messages_or
                 item_id: "reason-2".to_string(),
                 summary: vec!["second summary".to_string()],
                 content: Vec::new(),
+                replay: None,
             },
         }),
         Ok(ModelEvent::OutputItemAdded {
@@ -239,6 +243,7 @@ async fn stream_failure_closes_active_reasoning_before_the_terminal_event() {
                 item_id: "reason-active".to_string(),
                 summary: vec!["private reasoning".to_string()],
                 content: Vec::new(),
+                replay: None,
             },
         }),
         Err(ModelError::StreamInterrupted(
@@ -295,6 +300,7 @@ fn with_reasoning(
             item_id: item_id.to_string(),
             summary: Vec::new(),
             content: Vec::new(),
+            replay: None,
         },
     })];
     for (kind, index, delta) in fragments {
@@ -310,6 +316,7 @@ fn with_reasoning(
             item_id: item_id.to_string(),
             summary: summary.iter().map(|part| (*part).to_string()).collect(),
             content: Vec::new(),
+            replay: None,
         },
     }));
     assert!(matches!(events[0], Ok(ModelEvent::ResponseStarted { .. })));
@@ -358,6 +365,7 @@ fn reasoning_items(items: &[ConversationItem]) -> Vec<(String, u64, u32, bool)> 
                 duration_millis,
                 sampling_step,
                 truncated,
+                ..
             } => Some((text.clone(), *duration_millis, *sampling_step, *truncated)),
             _ => None,
         })
@@ -568,6 +576,7 @@ async fn an_incomplete_response_completes_its_open_reasoning_and_keeps_what_stre
                 item_id: "thinking".to_string(),
                 summary: Vec::new(),
                 content: Vec::new(),
+                replay: None,
             },
         }),
         Ok(ModelEvent::ReasoningDelta {

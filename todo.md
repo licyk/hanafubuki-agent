@@ -264,13 +264,143 @@ Hoshimi `83f7813`. Every §9 decision (D1–D7) was accepted as recommended
     override it until D3's per-model `imageInput` (M7): the policy has
     only `auto` and `disabled`, a learned "yes" is ignored, and a model
     its listing still names keeps the reported fact with no expiry.
-- Open: M5's residuals (sanitize a compaction's request when images are
-  off; D3's per-model `imageInput` to override a wrong reported "no");
-  M6 reasoning narrowing and the refusal fallback (and the
-  documented effort lists above); M7 showing it, the `/config` editor of
-  `modelMetadata.discovery` (with its settings-patch field and
-  strict-decoding entry), and per-model overrides; M8 models.dev
-  (optional).
+- M6 (done): the effort a request carries is narrowed to what the route
+  is known to take, a refused reasoning parameter is retried once without
+  it and learned, and every protocol sends an effort (D1).
+  - Listing (model-api `model_catalog/shapes.rs`): the documented effort
+    lists M1 left, OpenRouter's `reasoning.supported_efforts` and
+    `default_effort`, Anthropic's `capabilities.effort.<level>.supported`
+    (from the M1 fixtures); Codex's levels first, then OpenRouter's, then
+    Anthropic's, the first that lists any. Deviation: the efforts are now
+    sorted on the ladder (`reasoning_effort_rank`), those off it after in
+    the entry's order (M1 kept Codex's order).
+  - Narrowing (`request_reasoning_effort`, model-api `reasoning_effort.rs`,
+    used by the kernel's `service/reasoning.rs`): §4.7's table; ladder
+    `minimal < low < medium < high < xhigh < max`; listed → as is, else
+    Hoshimi's alias if listed (`minimal`/`light` → `low`, `balanced` →
+    `medium`, `deep` → `high`, `xhigh` → `max`), else the nearest ranked
+    listed level (a tie goes lower), else none (an unranked effort not
+    listed, or no listed level ranked). Resolved per request in
+    `begin_sampling` and in both compaction entries (`prepare.rs`,
+    `background/launch.rs`, through a new `compaction_source` parameter);
+    the estimate requests still build with the configured effort. The
+    request also carries the route's largest output
+    (`ModelReasoningConfig.max_output_tokens`, host-visible). Deviation:
+    the one warning per session is a `log::warn!`
+    (`SessionRuntime.reasoning_narrowing_logged`, per run), not an event:
+    a new `AgentEventKind` would grow `activity.rs` past its ceiling.
+  - D5 (`reasoning_refusal.rs`): `ModelError::UnsupportedReasoning` /
+    `AgentError::UnsupportedReasoning`, after the overflow and image
+    classifiers; 400/422 only (in-band never), a message naming
+    `reasoning`, `thinking`, `effort` or `output_config`, and a code
+    `unsupported_parameter`/`unsupported_value` or a refusal wording
+    (`unsupported`, `not supported`, `does not support`, …, `unknown`,
+    `unrecognized`, `not allowed`, `not permitted`, `unexpected
+    keyword`). No Chinese wording (no real example found). The fallback in
+    `run_sampling_request`: once, only if the request carried reasoning,
+    `ModelRetryScheduled { stage: ReasoningFallback }` (new
+    `AgentModelRetryStage`, `reasoning_fallback` in `exec --json`),
+    `ModelMetadataRegistry::learn_reasoning_unsupported` (7 days,
+    persisted, beats a reported yes). The image fallback now sanitizes the
+    active request, so the two compose. Residual: a no-route transport
+    learns nothing and is refused once per request; a refused level
+    (`unsupported_value`) teaches "no reasoning", not the levels.
+  - D1: Chat Completions sends `reasoning_effort` (OpenAI, OpenRouter's
+    parameters page and DeepSeek take it; no `max_completion_tokens`).
+    Anthropic: `takes_manual_thinking(model)` by id: Claude 3 and 4 up to
+    4.5 (dated ids, Bedrock/Vertex ids included) and every non-Claude id
+    take `thinking: {type: "enabled", budget_tokens}` (budgets 1024, 4096,
+    8192 (`medium` and off-ladder), 16384, 24576, 32000 for `minimal` …
+    `max`; `max_tokens` = budget + 16384 under the route's largest
+    output, else 16384 with the budget cut to leave 4096; under 1024 →
+    no thinking; never with a forced tool); every other Claude id takes
+    `thinking: {type: "adaptive", display: "summarized"}` with
+    `output_config: {effort}` (`minimal` → `low`), `max_tokens` 32768
+    under the largest output, else 16384. No temperature/top_p/top_k is
+    sent. `supports_reasoning_effort` is removed; `normalize_session_config`
+    keeps an effort on every protocol (drops it only for a neutral
+    session). The helpers are `chat_completions/reasoning.rs`,
+    `anthropic_messages/thinking.rs` and `anthropic_messages/assistant.rs`.
+  - Thinking round trip: the Anthropic decoder keeps each `thinking`
+    block's text and signature (`signature_delta`) and each
+    `redacted_thinking` block's `data` as `ModelOutputItem::Reasoning.replay`
+    (`ModelReasoningReplay`, ≤ 1 MiB a block, Debug redacted,
+    `#[serde(skip)]`), carried on `ConversationItem::Reasoning.replay`
+    (`#[serde(skip)]`: in memory only, no history-format change, the
+    corpora unchanged). `regular_model_request` places the current turn's
+    blocks (after its last `TurnStart`) as the new
+    `ModelInputItem::Reasoning`; only Anthropic with manual thinking sends
+    them, first in the assistant message they preceded; Responses and Chat
+    skip them. Guard: a manual request continuing tool calls whose message
+    has no block (recovered turn, mid-turn compaction, a step that thought
+    nothing) is sent without thinking. Deviation from the brief: adaptive
+    thinking sends no block back. Anthropic drops the "must start with a
+    thinking block" rule there and lists removing every block as valid,
+    while its 5.1+ models refuse a block whose prefix (system, tools, any
+    earlier message) changed, which the Agent's requests do between steps
+    (task plan last, world state moved, `tool_search` tools); the binding
+    models all refuse manual thinking, so replay is required exactly where
+    binding cannot happen. Residuals: adaptive models that do not bind
+    (4.6–5) lose interleaved reasoning continuity; once a manual step's
+    response has no signed block, the guard keeps thinking off for the
+    rest of that turn; the blocks stay in memory while the session is
+    loaded (≤ 1 MiB each), uncounted, and the token estimate does not count
+    them; the fake server's manual-thinking refusal is a model of
+    Anthropic's rule, not a recorded body. Unverified against a live
+    Provider.
+  - Behaviour change: a Chat Completions or Anthropic session with an
+    effort configured now sends it (it was dropped); a refusal the
+    classifier misses (in-band, or a body without `error.message`) fails
+    the turn where the effort used to be left out.
+  - Interface: `/model` has no effort step and `/config` no effort field,
+    so only the `/providers` policy form changed: a choice of the default
+    model's known levels (with "Provider default", and the configured
+    effort kept when unlisted), free text otherwise; the levels are read
+    with the registry (`ProviderReply::Loaded { registry,
+    reasoning_efforts }`) through the new facade
+    `AgentApplicationService::model_reasoning_efforts` and kernel
+    `AgentService::model_reasoning`; `FormView::chosen`.
+  - M5 residual fixed: a compaction's request is sanitized for images
+    when the session takes none, and both compaction entries refresh the
+    session's image input first.
+  - Tests: model-api (`reasoning_effort/tests.rs`, `reasoning_refusal/tests.rs`
+    with the bodies found (openai/openai-python#2532, Anthropic's
+    documented 400s; the other wordings illustrative) and negatives, `anthropic_messages/thinking/tests.rs`,
+    `tests/provider_protocols/thinking.rs`: Chat field, adaptive and
+    manual bodies, budgets, guards, a fake-server round trip of a signed
+    and a redacted block, adaptive sending none; the listing suite's
+    effort fields); kernel (`service/reasoning/tests.rs`: narrowing,
+    unsupported, refusal → one retry, event, learned, next turn none, a
+    second refusal fails; compaction narrowed and sanitized; registry
+    persistence of the learned refusal); facade
+    (`tests/model_reasoning.rs`: a manual-thinking round trip through the
+    real Anthropic transport against a fake that refuses a continuation
+    without the block, and a refusal in one run not sent in the next);
+    TUI (`app/tests/settings.rs`: the policy form's choice). Deliberate
+    test changes: the protocol policy test that expected Chat/Anthropic to
+    refuse reasoning, the normalization and persistence-contract tests
+    that expected the effort dropped, the Anthropic decoder test that
+    expected signatures dropped. No request golden or history corpus
+    changed.
+  - Docs: `providers-models` (effort per protocol, narrowing, the
+    budget table, the fallback, the round trip, the policy form),
+    `architecture` (model metadata: reasoning; thinking; the model API),
+    `internals` (listing rows, decoder row, the refusal classifier,
+    normalization, thinking details), `json-events`
+    (`reasoning_fallback`), `config-reference` (`reasoningEffort`),
+    `embedding` (`model_reasoning_efforts`), `data-directory` (the learned
+    fact), both languages. `terminal-interface` defers the form to
+    `providers-models#interface`, so it is unchanged.
+  - Module size: `encode_anthropic_request` fell to 184 lines, so its
+    exception was removed from `architecture/module-size-policy.toml`
+    (the check requires it); `encode_chat_request` is at 219 of 227.
+- Open: D3's per-model `imageInput` (and `reasoningEfforts`) to override a
+  wrong reported fact; M7 showing it (badges, `/status` with the effort
+  sent or dropped, placeholders), forgetting learned facts, per-model
+  overrides (D3), the `/config` editor of `modelMetadata.discovery` (with
+  its settings-patch field and strict-decoding entry); Chat Completions'
+  `reasoning_content` sent back in tool loops (DeepSeek's thinking mode
+  requires it); M8 models.dev (optional).
 
 ## Plan: Codex's messages sent while the Agent works, in the terminal interface (2026-11-11)
 

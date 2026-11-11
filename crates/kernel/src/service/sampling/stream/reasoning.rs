@@ -33,6 +33,7 @@ struct CompletedReasoning {
     text: String,
     truncated: bool,
     duration_millis: u64,
+    replay: Option<hanafubuki_agent_model_api::ModelReasoningReplay>,
 }
 
 impl PendingReasoning {
@@ -78,8 +79,9 @@ impl PendingReasoning {
         (!shown.is_empty()).then(|| shown.to_string())
     }
 
-    /// Completes the item with the text of its completed item, and returns
-    /// the rest of the kept text still to show and the item's duration.
+    /// Completes the item with the text of its completed item and the
+    /// block to send back, and returns the rest of the kept text still to
+    /// show and the item's duration.
     ///
     /// The kept text is the summary when there is one, else the raw text,
     /// each from the completed item when it carries any, else as streamed.
@@ -90,6 +92,7 @@ impl PendingReasoning {
         &mut self,
         summary: Vec<String>,
         content: Vec<String>,
+        replay: Option<hanafubuki_agent_model_api::ModelReasoningReplay>,
         limit: usize,
     ) -> (Option<String>, u64) {
         let (text, truncated) = match (
@@ -121,6 +124,7 @@ impl PendingReasoning {
             text,
             truncated,
             duration_millis,
+            replay,
         });
         (tail, duration_millis)
     }
@@ -133,6 +137,7 @@ impl PendingReasoning {
             duration_millis: completed.duration_millis,
             sampling_step,
             truncated: completed.truncated,
+            replay: completed.replay,
         })
     }
 }
@@ -188,7 +193,7 @@ impl AgentService {
             if reasoning.is_completed() {
                 continue;
             }
-            let (tail, duration_millis) = reasoning.complete(Vec::new(), Vec::new(), limit);
+            let (tail, duration_millis) = reasoning.complete(Vec::new(), Vec::new(), None, limit);
             let reasoning_id = reasoning.reasoning_id;
             self.reasoning_completed(identity, reasoning_id, tail, duration_millis, event_sink)
                 .await?;

@@ -98,6 +98,9 @@ impl Default for AgentSamplingRetryPolicy {
 pub enum AgentModelRetryStage {
     ResponseStream,
     ImageInputFallback,
+    /// The Provider refused the request's reasoning parameter; the request
+    /// is sent once more without it.
+    ReasoningFallback,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]

@@ -121,6 +121,14 @@ pub fn classify_remote_model_error(
             message,
             request_id,
         }
+    } else if crate::reasoning_refusal::is_unsupported_reasoning(status, code.as_deref(), &message)
+    {
+        ModelError::UnsupportedReasoning {
+            status,
+            code,
+            message,
+            request_id,
+        }
     } else {
         ModelError::Remote {
             status,

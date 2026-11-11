@@ -210,6 +210,7 @@ async fn responses_streams_summary_and_raw_reasoning_deltas_with_their_part_inde
                 item_id: "reason-1".into(),
                 summary: vec!["**Mapping the app**".into(), "Checking routes".into()],
                 content: vec!["raw reasoning".into()],
+                replay: None,
             },
         }
     );

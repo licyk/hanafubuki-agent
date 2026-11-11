@@ -28,7 +28,10 @@ impl AgentService {
             ensure_no_staged_commit(record)?;
             let previous = record.rollback_state();
             validate_compaction_start(record, trigger, phase, expected_session, turn_identity)?;
-            let source = compaction_source(record, phase, turn_identity, &images, &transport)?;
+            self.refresh_image_input(record);
+            let reasoning = self.request_reasoning(record);
+            let source =
+                compaction_source(record, phase, turn_identity, &images, &transport, reasoning)?;
             let generation = AgentCompactionGeneration::new(
                 record
                     .runtime

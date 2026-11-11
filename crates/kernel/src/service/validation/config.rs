@@ -300,20 +300,21 @@ pub(in crate::service) fn assert_valid_limits(limits: AgentHardLimits) {
 /// was written, or a producer set where it does not apply, so a session is
 /// never refused over one: an out-of-range value is clamped, an inapplicable
 /// one is dropped, each with a warning; the capability scope is put in its
-/// one form ([`crate::AgentCapabilityScope::normalize`]). It is the one place the values only
-/// the Responses protocol carries (reasoning effort, remote compaction) are
-/// narrowed for a session on another protocol: the shared model policy keeps
-/// them, the application passes them through, and every session the kernel
-/// creates, reconfigures or recovers is narrowed here. Identity (provider id,
+/// one form ([`crate::AgentCapabilityScope::normalize`]). It is the one place the value only
+/// the Responses protocol carries (remote compaction) is narrowed for a
+/// session on another protocol: the shared model policy keeps it, the
+/// application passes it through, and every session the kernel creates,
+/// reconfigures or recovers is narrowed here. Every protocol carries a
+/// reasoning effort. Identity (provider id,
 /// model) and size bounds are not repaired; [`validate_session_config`]
 /// still checks them after this.
 pub(in crate::service) fn normalize_session_config(config: &mut AgentSessionConfig) {
     let mut repaired = Vec::new();
     let neutral = config.model.is_empty();
     let protocol = config.provider_protocol;
-    if config.reasoning_effort.is_some() && (neutral || !protocol.supports_reasoning_effort()) {
+    if config.reasoning_effort.is_some() && neutral {
         config.reasoning_effort = None;
-        repaired.push("reasoning effort (supported only by the Responses protocol)");
+        repaired.push("reasoning effort (an unconfigured session sends none)");
     }
     if config.compaction_capability
         != hanafubuki_agent_model_api::ModelCompactionCapability::LocalSummary

@@ -68,6 +68,7 @@ fn messages_plans_and_calls_become_sections_in_order() {
             duration_millis: 10,
             sampling_step: 0,
             truncated: false,
+            replay: None,
         },
         call("call-1", "exec_command", json!({"cmd": "ls"})),
         output("call-1", "a.txt\nb.txt", false),

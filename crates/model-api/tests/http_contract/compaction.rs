@@ -13,6 +13,7 @@ async fn responses_compact_uses_exact_endpoint_body_headers_and_typed_replacemen
     let mut request = compact_request();
     request.reasoning = Some(ModelReasoningConfig {
         effort: ModelReasoningEffort::Low,
+        max_output_tokens: None,
     });
     let result = transport
         .compact(request, CancellationToken::default())

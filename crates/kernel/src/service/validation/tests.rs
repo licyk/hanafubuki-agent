@@ -340,12 +340,13 @@ fn responses_only_config(
     }
 }
 
-/// The one rule for values only Responses carries: kept on Responses,
-/// dropped elsewhere, with everything protocol-neutral untouched. The
-/// application passes the shared policy through, so this covers what its
-/// resolution used to narrow.
+/// The one rule for the value only Responses carries: remote compaction is
+/// kept on Responses and dropped elsewhere; the reasoning effort, which
+/// every protocol carries, and everything protocol-neutral are untouched.
+/// The application passes the shared policy through, so this covers what
+/// its resolution used to narrow.
 #[test]
-fn only_a_responses_session_keeps_reasoning_effort_and_remote_compaction() {
+fn only_a_responses_session_keeps_remote_compaction_and_every_one_its_effort() {
     let mut responses =
         responses_only_config(hanafubuki_agent_model_api::ModelApiProtocol::Responses);
     normalize_session_config(&mut responses);
@@ -361,7 +362,11 @@ fn only_a_responses_session_keeps_reasoning_effort_and_remote_compaction() {
     ] {
         let mut config = responses_only_config(protocol);
         normalize_session_config(&mut config);
-        assert_eq!(config.reasoning_effort, None, "{protocol:?}");
+        assert_eq!(
+            config.reasoning_effort,
+            responses_only_config(protocol).reasoning_effort,
+            "{protocol:?}"
+        );
         assert_eq!(
             config.compaction_capability,
             hanafubuki_agent_model_api::ModelCompactionCapability::LocalSummary,

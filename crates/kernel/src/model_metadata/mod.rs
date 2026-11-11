@@ -11,7 +11,7 @@ use std::sync::Arc;
 
 use hanafubuki_agent_model_api::{
     ModelCatalogEntry, ModelEndpointKey, ModelImageInputCapability, ModelMetadata,
-    ModelMetadataSource, ModelRouteKey, Sourced,
+    ModelMetadataSource, ModelReasoningSupport, ModelRouteKey, Sourced,
 };
 use parking_lot::Mutex;
 
@@ -66,6 +66,19 @@ impl ModelMetadataRegistry {
             state.learn(route, now_ms, |learned| {
                 learned.image_input = Some(Sourced {
                     value: false,
+                    source: ModelMetadataSource::Learned,
+                    observed_at_ms: now_ms,
+                });
+            })
+        });
+    }
+
+    /// Learns that `route` refuses a reasoning parameter.
+    pub(crate) fn learn_reasoning_unsupported(&self, route: &ModelRouteKey, now_ms: u64) {
+        self.change(|state| {
+            state.learn(route, now_ms, |learned| {
+                learned.reasoning = Some(Sourced {
+                    value: ModelReasoningSupport::Unsupported,
                     source: ModelMetadataSource::Learned,
                     observed_at_ms: now_ms,
                 });

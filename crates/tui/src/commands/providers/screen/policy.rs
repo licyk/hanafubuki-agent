@@ -99,7 +99,15 @@ const BUDGET_NUMBERS: [(FieldId, &str, u64, u64); 11] = [
     ),
 ];
 
-pub(super) fn policy_form(registry: &AgentProviderRegistrySnapshot) -> FormView {
+/// The reasoning effort's choice that sends none.
+const PROVIDER_DEFAULT: &str = "Provider default";
+
+/// The form of `registry`'s policy; `efforts` are the levels its model is
+/// known to take, offered as a choice (free text when none are known).
+pub(super) fn policy_form(
+    registry: &AgentProviderRegistrySnapshot,
+    efforts: &[ModelReasoningEffort],
+) -> FormView {
     let policy = &registry.model_policy;
     let providers = enabled_providers(registry);
     let default = registry
@@ -123,15 +131,7 @@ pub(super) fn policy_form(registry: &AgentProviderRegistrySnapshot) -> FormView 
     let mut items = vec![
         FormItem::choice(DEFAULT_PROVIDER, "Default Provider", &options, default),
         FormItem::text(MODEL, "Model", &policy.model).placeholder("gpt-5.1"),
-        FormItem::text(
-            REASONING,
-            "Reasoning effort",
-            policy
-                .reasoning_effort
-                .as_ref()
-                .map_or("", |effort| effort.as_str()),
-        )
-        .placeholder("Provider default"),
+        reasoning_item(policy.reasoning_effort.as_ref(), efforts),
         FormItem::choice(
             IMAGE_INPUT,
             "Image input",
@@ -230,6 +230,31 @@ fn provider_label(registry: &AgentProviderRegistrySnapshot, provider_id: &str) -
     }
 }
 
+/// The reasoning effort's field: a choice of the known levels, with the
+/// configured effort kept when it is not one of them; free text otherwise.
+fn reasoning_item(
+    configured: Option<&ModelReasoningEffort>,
+    efforts: &[ModelReasoningEffort],
+) -> FormItem {
+    if efforts.is_empty() {
+        return FormItem::text(
+            REASONING,
+            "Reasoning effort",
+            configured.map_or("", |effort| effort.as_str()),
+        )
+        .placeholder(PROVIDER_DEFAULT);
+    }
+    let mut options = vec![PROVIDER_DEFAULT];
+    options.extend(efforts.iter().map(ModelReasoningEffort::as_str));
+    if let Some(configured) = configured.filter(|effort| !efforts.contains(effort)) {
+        options.push(configured.as_str());
+    }
+    let selected = configured
+        .and_then(|effort| options.iter().position(|option| *option == effort.as_str()))
+        .unwrap_or(0);
+    FormItem::choice(REASONING, "Reasoning effort", &options, selected)
+}
+
 fn provider_option(registry: &AgentProviderRegistrySnapshot, provider_id: &str) -> Option<usize> {
     enabled_providers(registry)
         .iter()
@@ -238,7 +263,11 @@ fn provider_option(registry: &AgentProviderRegistrySnapshot, provider_id: &str) 
 
 pub(super) fn policy_draft(form: &mut FormView) -> Option<AgentModelPolicySettings> {
     form.clear_errors();
-    let reasoning = form.text(REASONING).trim();
+    let reasoning = match form.chosen(REASONING) {
+        Some(PROVIDER_DEFAULT) => "",
+        Some(chosen) => chosen,
+        None => form.text(REASONING).trim(),
+    };
     let reasoning = if reasoning.is_empty() {
         None
     } else {

@@ -91,6 +91,12 @@ pub enum ModelInputItem {
         phase: Option<ModelMessagePhase>,
         text: String,
     },
+    /// A reasoning block of the current turn that the provider asks to have
+    /// sent back with the assistant message after it; only Anthropic
+    /// Messages sends it, and only with manual thinking.
+    Reasoning {
+        replay: super::ModelReasoningReplay,
+    },
     ToolCall {
         call_id: String,
         /// The native namespace of the call, replayed as the provider sent

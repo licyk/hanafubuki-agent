@@ -116,6 +116,11 @@ impl FakeServer {
                 let Some((body, delay)) = responses.pop_front() else {
                     continue;
                 };
+                if body.starts_with(b"HTTP/1.1 ") {
+                    let _ = stream.write_all(&body).await;
+                    let _ = stream.shutdown().await;
+                    continue;
+                }
                 let headers = format!(
                     "HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\ncontent-length: {}\r\nconnection: close\r\n\r\n",
                     body.len()
@@ -209,11 +214,17 @@ async fn read_request(stream: &mut TcpStream) -> CapturedRequest {
 /// An Anthropic Messages error for a request whose history holds
 /// `tool_use` or `tool_result` blocks but that declares no tools (the
 /// message is the one reported for it, not checked against the live API).
+/// Anthropic's refusals the fake answers as Anthropic does: tool blocks in a
+/// request without tools, and, with manual thinking, a tool result after an
+/// assistant message that does not start with a thinking block.
 fn anthropic_refusal(request: &CapturedRequest) -> Option<String> {
     if !request.path.ends_with("/messages") {
         return None;
     }
     let body: serde_json::Value = serde_json::from_slice(&request.body).ok()?;
+    if let Some(message) = manual_thinking_refusal(&body) {
+        return Some(anthropic_error(message));
+    }
     let declares_tools = body["tools"]
         .as_array()
         .is_some_and(|tools| !tools.is_empty());
@@ -225,15 +236,74 @@ fn anthropic_refusal(request: &CapturedRequest) -> Option<String> {
         .flatten()
         .any(|block| matches!(block["type"].as_str(), Some("tool_use" | "tool_result")));
     (has_tool_blocks && !declares_tools).then(|| {
-        serde_json::json!({
-            "type": "error",
-            "error": {
-                "type": "invalid_request_error",
-                "message": "Requests which include `tool_use` or `tool_result` blocks must define tools."
-            }
-        })
-        .to_string()
+        anthropic_error(
+            "Requests which include `tool_use` or `tool_result` blocks must define tools.",
+        )
     })
+}
+
+fn manual_thinking_refusal(body: &serde_json::Value) -> Option<&'static str> {
+    if body["thinking"]["type"] != "enabled" {
+        return None;
+    }
+    let messages = body["messages"].as_array()?;
+    let continues_tools = messages.last()?["content"]
+        .as_array()?
+        .iter()
+        .any(|block| block["type"] == "tool_result");
+    let assistant = messages
+        .iter()
+        .rev()
+        .find(|message| message["role"] == "assistant")?;
+    let starts_thinking = matches!(
+        assistant["content"][0]["type"].as_str(),
+        Some("thinking" | "redacted_thinking")
+    );
+    (continues_tools && !starts_thinking).then_some(
+        "messages.1.content.0.type: Expected `thinking` or `redacted_thinking`, but found `tool_use`. When `thinking` is enabled, a final `assistant` message must start with a thinking block.",
+    )
+}
+
+fn anthropic_error(message: &str) -> String {
+    serde_json::json!({
+        "type": "error",
+        "error": {"type": "invalid_request_error", "message": message}
+    })
+    .to_string()
+}
+
+/// A whole HTTP response with `status` and the JSON `body`, which the fake
+/// sends as it is, in place of an event stream.
+pub fn http_error(status: u16, body: &str) -> Vec<u8> {
+    format!(
+        "HTTP/1.1 {status} Error\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{body}",
+        body.len()
+    )
+    .into_bytes()
+}
+
+/// An Anthropic Messages stream that thinks (`thinking`, signed with
+/// `signature`) and then calls `name` with no input.
+pub fn anthropic_thinking_tool_events(thinking: &str, signature: &str, name: &str) -> Vec<u8> {
+    let thinking = serde_json::to_string(thinking).unwrap();
+    let signature = serde_json::to_string(signature).unwrap();
+    format!(
+        concat!(
+            "event: message_start\ndata: {{\"type\":\"message_start\",\"message\":{{\"id\":\"msg-think\",\"usage\":{{\"input_tokens\":10,\"output_tokens\":1}}}}}}\n\n",
+            "event: content_block_start\ndata: {{\"type\":\"content_block_start\",\"index\":0,\"content_block\":{{\"type\":\"thinking\",\"thinking\":\"\",\"signature\":\"\"}}}}\n\n",
+            "event: content_block_delta\ndata: {{\"type\":\"content_block_delta\",\"index\":0,\"delta\":{{\"type\":\"thinking_delta\",\"thinking\":{thinking}}}}}\n\n",
+            "event: content_block_delta\ndata: {{\"type\":\"content_block_delta\",\"index\":0,\"delta\":{{\"type\":\"signature_delta\",\"signature\":{signature}}}}}\n\n",
+            "event: content_block_stop\ndata: {{\"type\":\"content_block_stop\",\"index\":0}}\n\n",
+            "event: content_block_start\ndata: {{\"type\":\"content_block_start\",\"index\":1,\"content_block\":{{\"type\":\"tool_use\",\"id\":\"toolu-think\",\"name\":\"{name}\",\"input\":{{}}}}}}\n\n",
+            "event: content_block_stop\ndata: {{\"type\":\"content_block_stop\",\"index\":1}}\n\n",
+            "event: message_delta\ndata: {{\"type\":\"message_delta\",\"delta\":{{\"stop_reason\":\"tool_use\"}},\"usage\":{{\"output_tokens\":5}}}}\n\n",
+            "event: message_stop\ndata: {{\"type\":\"message_stop\"}}\n\n"
+        ),
+        thinking = thinking,
+        signature = signature,
+        name = name,
+    )
+    .into_bytes()
 }
 
 /// An Anthropic Messages stream: one text answer that ends the turn.

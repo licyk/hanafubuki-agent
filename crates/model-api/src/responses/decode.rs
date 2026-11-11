@@ -360,6 +360,7 @@ fn reasoning_item(value: &Value, stage: &'static str) -> ModelResult<ModelOutput
         item_id,
         summary,
         content,
+        replay: None,
     })
 }
 

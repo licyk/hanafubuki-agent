@@ -210,6 +210,7 @@ fn filter_remote_replacement(
             | ModelInputItem::ToolSearchOutput { .. }
             | ModelInputItem::ContinuationContext { .. }
             | ModelInputItem::CompactionSummary { .. }
+            | ModelInputItem::Reasoning { .. }
             | ModelInputItem::CompactionTrigger => {}
         }
     }

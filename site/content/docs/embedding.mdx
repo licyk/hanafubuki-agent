@@ -442,6 +442,7 @@ Agent 启动的进程归 Agent 所有：它有自己的 `ExecutorManager`，与�
 | 调用                                                           | 作用                                                                                                                                                                                                    |
 | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `test_provider_draft(draft)`                                   | 读取一个未保存 Provider 的模型目录，方式与 `list_provider_models` 读取已保存的相同，或返回 Provider 的错误；不写入任何设置（列表像其他列表一样记录到[模型元数据](/docs/architecture#model-metadata)中） |
+| `model_reasoning_efforts(provider_id, model)`                  | 该 Provider 上的 `model` 已知接受的推理强度，来自它的模型目录：一无所知、模型不接受推理参数或目录没有列出档位时为空（[推理强度](/docs/providers-models#reasoning)）                                     |
 | `mcp_set_credential(key, value)`、`mcp_remove_credential(key)` | 修改一个 MCP 凭据并保留其他凭据；删除启用的服务器依赖的凭据会被拒绝。`McpCredentialKey::for_server_secret(server, name)` 是表单保存秘密变量或请求头所用的键：`服务器-名称`，其他字符换成 `_`            |
 | `mcp_oauth_login(server, open_url, cancelled)`                 | MCP 服务器的 OAuth 登录：在 `127.0.0.1` 的空闲端口上监听，把授权 URL 交给 `open_url` 显示或打开，最多等待 5 分钟浏览器重定向到 `/callback`，或直到 `cancelled` future 完成；没有等到时取消这次登录      |
 

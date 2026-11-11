@@ -196,13 +196,14 @@ impl AgentService {
                 AgentEventKind::ReasoningUpdated { reasoning },
                 self.inner.limits,
             );
-            let (request, compression) = step_model_request_projected(
+            let (mut request, compression) = step_model_request_projected(
                 record,
                 &images,
                 tool_plan,
                 prompt,
                 self.inner.limits.maximum_tool_output_bytes,
             )?;
+            request.reasoning = self.request_reasoning(record);
             if let Some(state) = compression.state {
                 record.runtime.compression = Some(state);
             }
@@ -278,10 +279,10 @@ impl AgentService {
             policy.initial_backoff_millis,
             policy.maximum_backoff_millis,
         );
-        let original_request = request;
-        let mut active_request = original_request.clone();
+        let mut active_request = request;
         let mut retries = 0u32;
         let mut image_fallback_used = false;
+        let mut reasoning_fallback_used = false;
         loop {
             if cancellation.is_cancelled() {
                 return Err(AgentError::Cancelled);
@@ -298,7 +299,10 @@ impl AgentService {
                 )
                 .await
             {
-                Err(AgentError::UnsupportedImageInput { .. }) if cancellation.is_cancelled() => {
+                Err(
+                    AgentError::UnsupportedImageInput { .. }
+                    | AgentError::UnsupportedReasoning { .. },
+                ) if cancellation.is_cancelled() => {
                     return Err(AgentError::Cancelled);
                 }
                 Err(AgentError::UnsupportedImageInput {
@@ -309,7 +313,7 @@ impl AgentService {
                 }) if !image_fallback_used && !cancellation.is_cancelled() => {
                     let (sanitized, report) =
                         hanafubuki_agent_model_api::sanitize_images_for_unsupported_input(
-                            &original_request,
+                            &active_request,
                         );
                     if report.total_replaced() == 0 {
                         return Err(AgentError::UnsupportedImageInput {
@@ -322,7 +326,7 @@ impl AgentService {
                     self.record_unsupported_image_input(
                         identity,
                         model.as_ref(),
-                        &original_request.model,
+                        &active_request.model,
                     )
                     .await?;
                     self.emit(
@@ -342,6 +346,19 @@ impl AgentService {
                     .await?;
                     active_request = sanitized;
                     image_fallback_used = true;
+                }
+                Err(AgentError::UnsupportedReasoning { .. })
+                    if !reasoning_fallback_used && active_request.reasoning.is_some() =>
+                {
+                    self.fall_back_from_reasoning(
+                        identity,
+                        model.as_ref(),
+                        &active_request.model,
+                        event_sink,
+                    )
+                    .await?;
+                    active_request.reasoning = None;
+                    reasoning_fallback_used = true;
                 }
                 Err(AgentError::ModelStreamInterrupted(message))
                     if retries < policy.maximum_retries && !cancellation.is_cancelled() =>
@@ -393,6 +410,30 @@ impl AgentService {
                 result => return result,
             }
         }
+    }
+
+    /// The Provider refused the request's reasoning parameter: the route
+    /// learns it, and the request is retried once without it.
+    async fn fall_back_from_reasoning(
+        &self,
+        identity: TurnIdentity,
+        model: &dyn ModelSession,
+        model_id: &str,
+        event_sink: &dyn AgentEventSink,
+    ) -> Result<(), AgentError> {
+        self.record_unsupported_reasoning(model, model_id);
+        self.emit(
+            identity,
+            AgentEventKind::ModelRetryScheduled {
+                stage: AgentModelRetryStage::ReasoningFallback,
+                current_retry: 1,
+                maximum_retries: 1,
+                delay_millis: 0,
+                reason: "reasoning parameter unsupported; retrying without it".to_string(),
+            },
+            event_sink,
+        )
+        .await
     }
 
     pub(super) async fn record_unsupported_image_input(

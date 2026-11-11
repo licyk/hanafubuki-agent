@@ -47,7 +47,7 @@ impl AgentService {
 
     /// A session whose transport names no route keeps what it has: the
     /// refusal it fell back from (`record_unsupported_image_input`) stays.
-    fn refresh_image_input(&self, record: &mut SessionRecord) {
+    pub(super) fn refresh_image_input(&self, record: &mut SessionRecord) {
         let settings = &record.settings;
         let Some(route) = settings.model.route_key(&settings.config.model) else {
             return;

@@ -10,7 +10,7 @@ use hanafubuki_agent_config::{
     validate_agent_model_policy, AgentModelPolicySettings, AgentProviderRegistrySettings,
     AgentProviderSettings, AgentSettings, MAX_AGENT_PROVIDERS,
 };
-use hanafubuki_agent_kernel::ModelCatalogEntry;
+use hanafubuki_agent_kernel::{ModelCatalogEntry, ModelReasoningEffort, ModelReasoningSupport};
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::atomic::Ordering;
 
@@ -166,6 +166,33 @@ impl AgentApplicationService {
         &self,
     ) -> Result<AgentProviderRegistrySnapshot, String> {
         self.load_provider_settings().await
+    }
+
+    /// The reasoning efforts `model` on the Provider `provider_id` is known
+    /// to take: its listed levels, none when nothing is known, when it
+    /// takes no reasoning parameter, or when it reasons at levels its
+    /// listing does not name.
+    pub async fn model_reasoning_efforts(
+        &self,
+        provider_id: &str,
+        model: &str,
+    ) -> Result<Vec<ModelReasoningEffort>, String> {
+        let registry = self.load_provider_settings().await?;
+        let provider = registry
+            .providers
+            .iter()
+            .find(|provider| provider.id == provider_id)
+            .ok_or_else(|| format!("Agent Provider {provider_id} no longer exists"))?;
+        Ok(
+            match self.core.model_reasoning(
+                model_api_protocol(provider.protocol),
+                &provider.base_url,
+                model,
+            ) {
+                Some(ModelReasoningSupport::Supported { efforts, .. }) => efforts,
+                _ => Vec::new(),
+            },
+        )
     }
 
     /// Create or replace one Provider in full.

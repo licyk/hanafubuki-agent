@@ -21,6 +21,7 @@ pub use output::{
 };
 pub use reasoning::{
     ModelCompactionCapability, ModelOpaqueCompactionPayload, ModelReasoningConfig,
+    ModelReasoningReplay, MAX_MODEL_REASONING_REPLAY_BYTES,
 };
 pub use request::{
     ModelCompactionResult, ModelJsonSchemaOutput, ModelOutputFormat, ModelRequest,

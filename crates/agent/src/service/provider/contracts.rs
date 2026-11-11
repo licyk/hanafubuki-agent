@@ -108,11 +108,12 @@ pub(crate) struct ResolvedAgentProvider {
 
 /// The shared model policy, resolved for a session.
 ///
-/// Reasoning effort and remote compaction exist only on the Responses
-/// protocol. The stored policy keeps whatever the user configured and this
-/// carries it unchanged; the kernel narrows it for a session on another
-/// protocol (`normalize_session_config`), so switching the active Provider
-/// degrades instead of failing.
+/// Remote compaction exists only on the Responses protocol. The stored
+/// policy keeps whatever the user configured and this carries it
+/// unchanged; the kernel narrows it for a session on another protocol
+/// (`normalize_session_config`), so switching the active Provider degrades
+/// instead of failing. The reasoning effort, which every protocol carries,
+/// is narrowed per request to what the model is known to take.
 #[derive(Debug)]
 pub(crate) struct ResolvedModelPolicy {
     pub model: String,

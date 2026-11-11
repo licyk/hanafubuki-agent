@@ -210,7 +210,24 @@ fn regular_model_request(
         })
         .flatten()
         .collect::<BTreeMap<_, _>>();
+    // The current turn's reasoning blocks go back with it; the provider
+    // needs no earlier turn's.
+    let turn_start = normalized_history
+        .iter()
+        .rposition(|item| matches!(item, ConversationItem::TurnStart { .. }));
     for (index, item) in normalized_history.iter().enumerate() {
+        if let ConversationItem::Reasoning {
+            replay: Some(replay),
+            ..
+        } = item
+        {
+            if turn_start.is_some_and(|start| index > start) {
+                placed.push(PlacedInput::Item(ModelInputItem::Reasoning {
+                    replay: replay.clone(),
+                }));
+            }
+            continue;
+        }
         if let ConversationItem::WorldStateUpdate { updates } = item {
             for update in updates {
                 let AgentWorldStateUpdate::Replace {
@@ -519,6 +536,17 @@ pub(super) fn map_model_error(error: ModelError) -> AgentError {
             message,
             request_id,
         } => AgentError::UnsupportedImageInput {
+            status,
+            code,
+            message,
+            request_id,
+        },
+        ModelError::UnsupportedReasoning {
+            status,
+            code,
+            message,
+            request_id,
+        } => AgentError::UnsupportedReasoning {
             status,
             code,
             message,

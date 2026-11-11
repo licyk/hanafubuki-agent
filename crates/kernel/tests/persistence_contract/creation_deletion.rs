@@ -328,10 +328,10 @@ fn reasoning_choices_are_durable_and_survive_session_recovery() {
     assert_eq!(persisted_after_recovery.config, persisted.config);
 }
 
-/// Reasoning effort applies only to the Responses protocol; elsewhere it is
-/// ignored with a warning, never a refused session.
+/// Every protocol carries a reasoning effort: a Chat Completions session
+/// keeps the one it is configured with, and persists it.
 #[test]
-fn reasoning_effort_on_another_protocol_is_ignored() {
+fn reasoning_effort_on_another_protocol_is_kept() {
     let store = Arc::new(EphemeralAgentHistoryStore::default());
     let service = AgentService::with_history_store(
         Arc::new(ResponseStartedThenErrorModel),
@@ -342,14 +342,15 @@ fn reasoning_effort_on_another_protocol_is_ignored() {
     config.provider_protocol = hanafubuki_agent_model_api::ModelApiProtocol::ChatCompletions;
     config.reasoning_effort = Some(hanafubuki_agent_model_api::ModelReasoningEffort::High);
     let session = service.create_session(config).unwrap();
-    assert_eq!(session.reasoning_effort, None);
+    let high = Some(hanafubuki_agent_model_api::ModelReasoningEffort::High);
+    assert_eq!(session.reasoning_effort, high);
     assert_eq!(
         store
             .load_runtime_state(session.id)
             .unwrap()
             .config
             .reasoning_effort,
-        None
+        high
     );
 }
 

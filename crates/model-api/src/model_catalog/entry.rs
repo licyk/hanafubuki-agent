@@ -21,9 +21,7 @@ pub(super) fn decode_entry(item: &Value) -> Option<ModelCatalogEntry> {
         .and_then(Value::as_str)
         .filter(|name| !name.trim().is_empty())
         .map(|name| bounded_text(name, MAX_MODEL_ID_BYTES));
-    let default_reasoning_effort = item
-        .get("default_reasoning_level")
-        .and_then(reasoning_effort);
+    let default_reasoning_effort = shapes::default_reasoning_effort(item);
     let supported_reasoning_efforts = supported_reasoning_efforts(item);
     let reports_levels =
         default_reasoning_effort.is_some() || !supported_reasoning_efforts.is_empty();
@@ -39,17 +37,12 @@ pub(super) fn decode_entry(item: &Value) -> Option<ModelCatalogEntry> {
     })
 }
 
-/// Codex's `supported_reasoning_levels[].effort`, in its order, each once,
-/// the first 32.
+/// The efforts the entry lists (`shapes::reasoning_efforts`), each once,
+/// the first 32, on the ladder's order (`reasoning_effort_rank`) with the
+/// efforts off it after, in the entry's order.
 fn supported_reasoning_efforts(item: &Value) -> Vec<ModelReasoningEffort> {
-    let levels = item
-        .get("supported_reasoning_levels")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(|level| level.get("effort").and_then(reasoning_effort));
     let mut efforts = Vec::new();
-    for effort in levels {
+    for effort in shapes::reasoning_efforts(item) {
         if efforts.len() == MAX_REASONING_EFFORTS_PER_MODEL {
             break;
         }
@@ -57,11 +50,8 @@ fn supported_reasoning_efforts(item: &Value) -> Vec<ModelReasoningEffort> {
             efforts.push(effort);
         }
     }
+    efforts.sort_by_key(|effort| crate::reasoning_effort_rank(effort).unwrap_or(u8::MAX));
     efforts
-}
-
-fn reasoning_effort(value: &Value) -> Option<ModelReasoningEffort> {
-    ModelReasoningEffort::parse(value.as_str()?).ok()
 }
 
 fn bounded_text(value: &str, maximum: usize) -> String {

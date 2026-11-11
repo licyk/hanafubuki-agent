@@ -322,6 +322,14 @@ impl FormView {
         }
     }
 
+    /// The option chosen in the field `id`; none when it is not a choice.
+    pub(crate) fn chosen(&self, id: FieldId) -> Option<&str> {
+        match self.item(id).map(|item| &item.kind) {
+            Some(Kind::Choice { options, selected }) => options.get(*selected).map(String::as_str),
+            _ => None,
+        }
+    }
+
     pub(crate) fn toggle(&self, id: FieldId) -> bool {
         matches!(
             self.item(id).map(|item| &item.kind),

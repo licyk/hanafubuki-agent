@@ -9,7 +9,7 @@ use hanafubuki_agent::{
     AgentHandle, AgentModelPolicySettings, AgentModelPolicyWriteRequest,
     AgentProviderDeleteRequest, AgentProviderDraft, AgentProviderEnabledRequest,
     AgentProviderModelCatalogRequest, AgentProviderRegistrySnapshot, AgentProviderWriteRequest,
-    ModelCatalogEntry,
+    ModelCatalogEntry, ModelReasoningEffort,
 };
 
 use super::{AgentBridge, AgentReply, TurnUpdate};
@@ -55,7 +55,12 @@ pub(crate) enum ProviderCall {
 
 /// What the Agent answered.
 pub(crate) enum ProviderReply {
-    Loaded(AgentProviderRegistrySnapshot),
+    /// The registry, and the reasoning efforts its policy's model is known
+    /// to take on the default Provider (none when nothing is known).
+    Loaded {
+        registry: AgentProviderRegistrySnapshot,
+        reasoning_efforts: Vec<ModelReasoningEffort>,
+    },
     Tested(Result<Vec<ModelCatalogEntry>, String>),
     /// A Provider was written; the registry it left.
     Saved(AgentProviderRegistrySnapshot),
@@ -79,7 +84,7 @@ impl ProviderReply {
     /// The registry as the Agent now has it, when the reply carries it.
     pub(crate) fn registry(&self) -> Option<&AgentProviderRegistrySnapshot> {
         match self {
-            Self::Loaded(registry)
+            Self::Loaded { registry, .. }
             | Self::Saved(registry)
             | Self::Changed(registry)
             | Self::ModelPolicySaved(registry) => Some(registry),
@@ -109,7 +114,7 @@ impl fmt::Debug for ProviderCall {
 impl fmt::Debug for ProviderReply {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Loaded(_) => formatter.write_str("Loaded"),
+            Self::Loaded { .. } => formatter.write_str("Loaded"),
             Self::Tested(result) => {
                 write!(formatter, "Tested({:?})", result.as_ref().map(Vec::len))
             }
@@ -136,7 +141,13 @@ impl AgentBridge {
 async fn run(agent: &AgentHandle, call: ProviderCall) -> ProviderReply {
     match call {
         ProviderCall::Load => match agent.provider_registry_snapshot().await {
-            Ok(registry) => ProviderReply::Loaded(registry),
+            Ok(registry) => {
+                let reasoning_efforts = reasoning_efforts(agent, &registry).await;
+                ProviderReply::Loaded {
+                    registry,
+                    reasoning_efforts,
+                }
+            }
             Err(error) => ProviderReply::Failed {
                 error: format!("the Providers were not read: {error}"),
                 reloaded: None,
@@ -274,4 +285,19 @@ async fn reply(
                 .filter(|registry| registry.revision != expected_revision),
         },
     }
+}
+
+/// The reasoning efforts the policy's model is known to take on the
+/// default Provider; none when nothing is known or there is no default.
+async fn reasoning_efforts(
+    agent: &AgentHandle,
+    registry: &AgentProviderRegistrySnapshot,
+) -> Vec<ModelReasoningEffort> {
+    let Some(provider_id) = registry.default_provider_id.as_deref() else {
+        return Vec::new();
+    };
+    agent
+        .model_reasoning_efforts(provider_id, &registry.model_policy.model)
+        .await
+        .unwrap_or_default()
 }

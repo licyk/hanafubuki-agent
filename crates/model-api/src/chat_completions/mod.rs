@@ -1,4 +1,5 @@
 mod encode;
+mod reasoning;
 
 use encode::{encode_chat_request, value_to_string};
 use std::collections::{BTreeMap, VecDeque};
@@ -213,6 +214,7 @@ impl ChatDecoder {
                     item_id: item_id.clone(),
                     summary: Vec::new(),
                     content: Vec::new(),
+                    replay: None,
                 },
             });
             self.reasoning = Some(OpenReasoning {
@@ -239,6 +241,7 @@ impl ChatDecoder {
                     item_id: reasoning.item_id,
                     summary: Vec::new(),
                     content: vec![reasoning.text],
+                    replay: None,
                 },
             });
         }

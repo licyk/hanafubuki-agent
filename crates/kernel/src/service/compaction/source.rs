@@ -1,3 +1,4 @@
+use hanafubuki_agent_model_api::ModelReasoningConfig;
 use sha2::{Digest, Sha256};
 
 use super::*;
@@ -59,13 +60,14 @@ impl CompactionSource {
 /// The history before the compaction boundary (a pre-turn or background
 /// compaction keeps the current turn out of it), the next context window,
 /// and the request that compacts that history with the session's compaction
-/// implementation.
+/// implementation, carrying `reasoning` (`AgentService::request_reasoning`).
 pub(super) fn compaction_source(
     record: &SessionRecord,
     phase: AgentCompactionPhase,
     turn_identity: Option<TurnIdentity>,
     images: &LoadedImages,
     transport: &CompactionTransport,
+    reasoning: Option<ModelReasoningConfig>,
 ) -> Result<CompactionSource, AgentError> {
     let compaction_boundary = if matches!(
         phase,
@@ -101,6 +103,7 @@ pub(super) fn compaction_source(
         images,
         transport.model.as_ref(),
         &transport.tool_plan,
+        reasoning,
     )?;
     Ok(CompactionSource {
         boundary: compaction_boundary,
@@ -150,13 +153,15 @@ fn source_items(record: &SessionRecord, boundary: usize) -> Vec<ConversationItem
 }
 
 /// The model request that compacts `source` with the session's compaction
-/// implementation, and the local-trim prefix ends of its input.
+/// implementation, and the local-trim prefix ends of its input. Its images
+/// are placeholders when the session's model takes none, as a turn's are.
 fn compaction_request(
     record: &SessionRecord,
     source: &[ConversationItem],
     images: &LoadedImages,
     model: &dyn ModelSession,
     tool_plan: &AgentToolPlan,
+    reasoning: Option<ModelReasoningConfig>,
 ) -> Result<(ModelRequest, AgentCompactionImplementation, Vec<usize>), AgentError> {
     let (mut input, local_trim_prefix_ends) = build_compaction_input(source, images)?;
     let implementation =
@@ -185,8 +190,13 @@ fn compaction_request(
         tools: tool_plan.model_specs(),
         tool_choice: hanafubuki_agent_model_api::ModelToolChoice::None,
         parallel_tool_calls: tool_plan.parallel_tool_calls(),
-        reasoning: record.settings.config.effective_reasoning(),
+        reasoning,
         output_format: None,
+    };
+    let request = if record.settings.effective_input_capabilities.image_input {
+        request
+    } else {
+        hanafubuki_agent_model_api::sanitize_images_for_unsupported_input(&request).0
     };
     Ok((request, implementation, local_trim_prefix_ends))
 }

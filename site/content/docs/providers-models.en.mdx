@@ -82,7 +82,7 @@ provider-2 DeepSeek  ChatCompletions  https://api.deepseek.com/v1  token: set
 - **The form**: name, protocol (`responses`, `chat_completions` or `anthropic_messages`), base URL, API token, enabled, and the request headers as rows. The token is shown as dots: leave it as it is to keep it, clear it to remove it. The keys are in [Forms](/docs/terminal-interface#forms).
 - **Test** lists the models of what the form holds, with its token and headers, and saves nothing: it says how many models the Provider lists, or the Provider's error.
 - **Save** writes the Provider whole. For an enabled Provider the model picker follows: the model you pick (or type, with **Enter a model id…**, when the Provider does not list it) becomes the one new sessions run, and the Provider the default. Esc leaves the model as it was. `/model` still changes only the running session's model.
-- **The model policy** (`p` in the list, or `/providers policy`): the default Provider and model, reasoning effort, image input, context window, automatic compaction and its threshold, remote compaction, and either the Agent defaults or all eleven turn-budget fields. It writes through the same revision gate.
+- **The model policy** (`p` in the list, or `/providers policy`): the default Provider and model, reasoning effort (a choice of the levels the model's catalog names, when it names any, else free text), image input, context window, automatic compaction and its threshold, remote compaction, and either the Agent defaults or all eleven turn-budget fields. It writes through the same revision gate.
 - Each write names the version of `providers.toml` the screen read. When something else changed the file meanwhile (a `providers` command in another terminal, say), the write is refused: the screen reads the Providers again, keeps what the form holds and says so, and saving again applies it.
 - With no default Provider or no model, the interface opens this screen by itself at the start: see [First-run setup](/docs/terminal-interface#setup).
 
@@ -94,7 +94,7 @@ provider-2 DeepSeek  ChatCompletions  https://api.deepseek.com/v1  token: set
 | `-m MODEL`                         | This run's new (or resumed) sessions, on the default Provider          |
 | `/model` in the terminal interface | The current session, picked from the enabled Providers' model catalogs |
 
-`/model` lists each enabled Provider's model catalog (read from `models`); a Provider whose catalog cannot be read says why. From each model in a catalog the Agent reads the context window it reports and its largest output (see [The context window and compaction](#compaction)), whether it reads images (see [Images](#images)), and whether it reasons, which it does not act on yet. What a catalog reports is kept in the data directory's `model-metadata.json`, so it still holds after a restart; a model a later catalog leaves out keeps it for 7 days. The Agent also reads the catalogs by itself, in the background: the default Provider's when it starts, and a Provider's when a session is created on it, given one of its models or runs a turn on it, at most once a day per Provider (once every 15 minutes after a catalog that could not be read). Nothing waits for it, and a catalog that cannot be read is only tried again later. `modelMetadata.discovery = "off"` in `config.toml` turns this off ([Configuration reference](/docs/config-reference#model-metadata)); the catalogs you open are still read and kept. A model listed without a usable id is left out, and a field that cannot be read counts as not reported, so one odd model never fails the catalog. `doctor --online` checks that the default Provider lists its models. A host can read the catalog of a Provider before saving it, to test the endpoint, token and headers (`test_provider_draft`, see [Embedding](/docs/embedding#configuration-in-a-host)).
+`/model` lists each enabled Provider's model catalog (read from `models`); a Provider whose catalog cannot be read says why. From each model in a catalog the Agent reads the context window it reports and its largest output (see [The context window and compaction](#compaction)), whether it reads images (see [Images](#images)), and whether it reasons and at which efforts (see [Reasoning effort and thinking](#reasoning)). What a catalog reports is kept in the data directory's `model-metadata.json`, so it still holds after a restart; a model a later catalog leaves out keeps it for 7 days. The Agent also reads the catalogs by itself, in the background: the default Provider's when it starts, and a Provider's when a session is created on it, given one of its models or runs a turn on it, at most once a day per Provider (once every 15 minutes after a catalog that could not be read). Nothing waits for it, and a catalog that cannot be read is only tried again later. `modelMetadata.discovery = "off"` in `config.toml` turns this off ([Configuration reference](/docs/config-reference#model-metadata)); the catalogs you open are still read and kept. A model listed without a usable id is left out, and a field that cannot be read counts as not reported, so one odd model never fails the catalog. `doctor --online` checks that the default Provider lists its models. A host can read the catalog of a Provider before saving it, to test the endpoint, token and headers (`test_provider_draft`, see [Embedding](/docs/embedding#configuration-in-a-host)).
 
 ## Reasoning effort and thinking [#reasoning]
 
@@ -106,7 +106,41 @@ model = "gpt-5.1"
 reasoningEffort = "medium"   # minimal, low, medium, high, xhigh
 ```
 
-The reasoning effort applies to the Responses protocol only; a session on another protocol leaves it out. `/status` shows the session's effort.
+Every protocol carries it, as its own field:
+
+| Protocol           | What a request sends                                                                                                                                                                                                                          |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Responses          | `reasoning: {effort, summary: "auto"}`                                                                                                                                                                                                        |
+| Chat Completions   | `reasoning_effort`, OpenAI's field, which DeepSeek documents too and OpenRouter lists among its parameters (its reasoning guide names only its `reasoning` object for Anthropic models)                                                       |
+| Anthropic Messages | Claude 4.6 and later: adaptive thinking, `thinking: {type: "adaptive", display: "summarized"}`, with `output_config: {effort}` (`minimal` is sent as `low`). Claude up to 4.5, and a model whose id names no Claude: a thinking budget, below |
+
+With no effort set, a request carries none, and the Provider's default applies. `/status` shows the session's effort.
+
+The effort a request carries also depends on what is known of the model, from its Provider's catalog or from the Provider's refusal:
+
+| What is known                           | The effort sent                                                                                                                                                                                                                                          |
+| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Nothing                                 | The effort set                                                                                                                                                                                                                                           |
+| It reasons, at levels the catalog names | The effort set if listed; else its alias if listed (`minimal` → `low`, `xhigh` → `max`); else the nearest listed level on `minimal < low < medium < high < xhigh < max`, the lower on a tie; else none. A change is logged once per session as a warning |
+| It reasons, levels not named            | The effort set                                                                                                                                                                                                                                           |
+| It takes no reasoning                   | None, whatever is set                                                                                                                                                                                                                                    |
+
+A catalog names levels as `supported_reasoning_levels` (Codex), `reasoning.supported_efforts` (OpenRouter) or `capabilities.effort` (Anthropic); `none` is never one, since an effort of `none` is not accepted: no effort set, or a model that takes none, is how a request goes without. When the policy's model has known levels, the policy form offers them as a choice instead of a text field.
+
+A Provider that refuses the reasoning parameter (status 400 or 422, naming the parameter, see [Internals](/docs/internals#reasoning-refusals)) gets the request once more without it (`exec --json` reports `model_retry_scheduled` with the stage `reasoning_fallback`), and the model is then taken to take no reasoning for 7 days, kept in `model-metadata.json`, whatever its catalog says.
+
+**Anthropic's thinking budget.** For a model that takes a budget, the effort sets `budget_tokens`:
+
+| Effort                                | `budget_tokens` |
+| ------------------------------------- | --------------- |
+| `minimal`                             | 1,024           |
+| `low`                                 | 4,096           |
+| `medium`, or one not on the list here | 8,192           |
+| `high`                                | 16,384          |
+| `xhigh`                               | 24,576          |
+| `max`                                 | 32,000          |
+
+`max_tokens` is the budget plus 16,384 for the answer, but never more than the model's largest output; with that unknown, it stays 16,384, and the budget is cut to leave the answer 4,096 of it. A budget that cannot keep 1,024 tokens is not sent. Thinking with a budget is also left out of a request that forces a tool, and of one that answers tool calls whose message holds no thinking to send back. With adaptive thinking `max_tokens` is 32,768 under the model's largest output, 16,384 when that is unknown.
 
 The model's thinking is shown: as a `Thinking` line you can expand with Ctrl-O in the terminal interface (see [Terminal interface](/docs/terminal-interface#thinking)), and as the `reasoning_*` events of `exec --json` (see [exec --json events](/docs/json-events#reasoning)); `exec`'s human output and `sessions show` say only how long it took (`thought for 12s`). What there is to see depends on the Provider:
 
@@ -114,9 +148,9 @@ The model's thinking is shown: as a `Thinking` line you can expand with Ctrl-O i
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Responses          | With a reasoning effort set, the Agent asks for a summary of the thinking; a compatible server (gpt-oss on vLLM, say) may send the raw thinking text instead |
 | Chat Completions   | What the service sends in `reasoning_content` or `reasoning` (DeepSeek, Qwen, OpenRouter and others)                                                         |
-| Anthropic Messages | Thinking is not requested yet, so there is none; a `thinking` block the service sends anyway is shown                                                        |
+| Anthropic Messages | The summary adaptive thinking is asked for, or the thinking a budget allows; a `thinking` block the service sends unasked is shown too                       |
 
-The thinking is kept in the session's history, each stretch up to 256 KiB (the rest is cut). It is there to be read: it is never sent to the model again.
+The thinking is kept in the session's history, each stretch up to 256 KiB (the rest is cut). That text is there to be read: it is never sent to the model again. Anthropic's thinking with a budget is the exception the protocol requires: the turn's thinking blocks, whole and with their signatures, go back with the tool calls they preceded, for the rest of that turn only. They are kept in memory, never written to the history, so a turn recovered after a restart sends its next request without thinking. Adaptive thinking sends no block back: Anthropic allows leaving them out there, and its newest models refuse a block once what came before it changed, which the Agent's requests do from one step to the next.
 
 ## The context window and compaction [#compaction]
 

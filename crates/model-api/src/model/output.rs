@@ -109,11 +109,15 @@ pub enum ModelOutputItem {
         call: ModelToolCall,
     },
     /// A reasoning item with its summary parts and its raw reasoning text
-    /// parts (`content`), either of which a provider may leave empty.
+    /// parts (`content`), either of which a provider may leave empty, and
+    /// the block the provider asks to have sent back with the turn, if any,
+    /// which is never serialized.
     Reasoning {
         item_id: String,
         summary: Vec<String>,
         content: Vec<String>,
+        #[serde(skip)]
+        replay: Option<super::ModelReasoningReplay>,
     },
     Compaction {
         item_id: String,

@@ -2,6 +2,13 @@
 //! under, across the listing shapes: OpenAI-compatible servers, OpenRouter,
 //! Anthropic, vLLM and Codex.
 //!
+//! Reasoning efforts are the first list of these that names any: Codex's
+//! `supported_reasoning_levels[].effort`, OpenRouter's
+//! `reasoning.supported_efforts`, Anthropic's `capabilities.effort.<level>`
+//! whose `supported` is true. The default is Codex's
+//! `default_reasoning_level`, else OpenRouter's `reasoning.default_effort`.
+//! An effort that does not parse (`none` among them) is left out.
+//!
 //! A limit is the first of its fields that holds a positive integer. A
 //! capability is yes when any of its fields says yes, else no when any says
 //! no, else unknown: a wrong yes costs one refused request, a wrong no would
@@ -9,6 +16,8 @@
 //! not a boolean, or a list that holds no string, says nothing.
 
 use serde_json::Value;
+
+use crate::ModelReasoningEffort;
 
 const CONTEXT_WINDOW_FIELDS: &[&[&str]] = &[
     &["max_input_tokens"],
@@ -72,6 +81,48 @@ pub(super) fn reasoning(item: &Value, reports_levels: bool) -> Option<bool> {
             .into_iter()
             .chain(flags(item, REASONING_FLAGS)),
     )
+}
+
+/// The efforts the entry lists, in its order; see the module's note.
+pub(super) fn reasoning_efforts(item: &Value) -> Vec<ModelReasoningEffort> {
+    let codex = item
+        .get("supported_reasoning_levels")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|level| level.get("effort"));
+    let openrouter = field(item, &["reasoning", "supported_efforts"])
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten();
+    let anthropic = field(item, &["capabilities", "effort"])
+        .and_then(Value::as_object)
+        .into_iter()
+        .flatten()
+        .filter(|(_, level)| level.get("supported").and_then(Value::as_bool) == Some(true))
+        .filter_map(|(name, _)| ModelReasoningEffort::parse(name.as_str()).ok());
+    let parsed = |values: &mut dyn Iterator<Item = &Value>| {
+        values.filter_map(reasoning_effort).collect::<Vec<_>>()
+    };
+    [
+        parsed(&mut codex.into_iter()),
+        parsed(&mut openrouter.into_iter()),
+        anthropic.collect(),
+    ]
+    .into_iter()
+    .find(|efforts| !efforts.is_empty())
+    .unwrap_or_default()
+}
+
+/// The effort the entry names its default; see the module's note.
+pub(super) fn default_reasoning_effort(item: &Value) -> Option<ModelReasoningEffort> {
+    item.get("default_reasoning_level")
+        .and_then(reasoning_effort)
+        .or_else(|| field(item, &["reasoning", "default_effort"]).and_then(reasoning_effort))
+}
+
+fn reasoning_effort(value: &Value) -> Option<ModelReasoningEffort> {
+    ModelReasoningEffort::parse(value.as_str()?).ok()
 }
 
 fn first_positive(item: &Value, paths: &[&[&str]]) -> Option<u64> {

@@ -297,6 +297,7 @@ mod lifecycle;
 mod persistence;
 mod plan_output;
 mod progress;
+mod reasoning;
 mod recovery;
 pub(crate) mod retry_wait;
 mod sampling;

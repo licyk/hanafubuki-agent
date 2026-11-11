@@ -82,7 +82,7 @@ provider-2 DeepSeek  ChatCompletions  https://api.deepseek.com/v1  token: set
 - **表单**：名称、协议（`responses`、`chat_completions` 或 `anthropic_messages`）、基础 URL、API 令牌、是否启用，以及按行填写的请求头。令牌显示为圆点：保持不动就保留原值，清空就删除它。按键见[表单](/docs/terminal-interface#forms)。
 - **Test** 用表单中的内容（包括令牌和请求头）列出模型，不保存任何东西：它显示 Provider 列出的模型数量，或者 Provider 返回的错误。
 - **Save** 完整写入这个 Provider。对于已启用的 Provider，接着会打开模型选择：选中的模型（Provider 没有列出时，用 **Enter a model id…** 手动输入）成为新会话使用的模型，这个 Provider 成为默认 Provider。按 Esc 则保持原来的模型。`/model` 仍然只修改当前会话的模型。
-- **模型策略**（列表中的 `p`，或 `/providers policy`）：默认 Provider 和模型、推理强度、图片输入、上下文窗口、自动压缩及其阈值、远程压缩，以及 Agent 默认值或全部十一个回合预算字段。它通过同一套修订号保护写入。
+- **模型策略**（列表中的 `p`，或 `/providers policy`）：默认 Provider 和模型、推理强度（模型目录列出了档位时是这些档位的选项，否则是文本框）、图片输入、上下文窗口、自动压缩及其阈值、远程压缩，以及 Agent 默认值或全部十一个回合预算字段。它通过同一套修订号保护写入。
 - 每次写入都会带上界面读取时 `providers.toml` 的版本。如果期间文件被其他地方修改（例如另一个终端中的 `providers` 命令），写入会被拒绝：界面重新读取 Provider，保留表单中的内容并给出提示，再保存一次即可。
 - 没有默认 Provider 或没有模型时，界面启动时会自动打开这个界面，见[首次设置](/docs/terminal-interface#setup)。
 
@@ -94,7 +94,7 @@ provider-2 DeepSeek  ChatCompletions  https://api.deepseek.com/v1  token: set
 | `-m 模型`                      | 本次运行中的新会话（以及恢复的会话），在默认 Provider 上运行 |
 | 终端界面的 `/model`            | 当前会话；从已启用 Provider 的模型目录中选择                 |
 
-`/model` 列出每个已启用 Provider 的模型目录（从 `models` 接口读取）。某个 Provider 的目录无法读取时，列表会显示原因。Agent 从目录中的每个模型读取它报告的上下文窗口和最大输出（见[上下文窗口与压缩](#compaction)）、是否读图（见[图片](#images)），以及是否推理，但目前还不据推理行事。目录报告的内容保存在数据目录的 `model-metadata.json` 中，重启后依然有效；之后的目录不再列出的模型会再保留 7 天。Agent 也会自己在后台读取目录：启动时读取默认 Provider 的目录；在某个 Provider 上创建会话、选用它的模型或在它上面运行轮次时，读取该 Provider 的目录，每个 Provider 每天最多一次（目录读取失败后每 15 分钟最多一次）。没有什么会等待它，读取失败的目录只是稍后再试。在 `config.toml` 中设置 `modelMetadata.discovery = "off"` 可以关闭它（[配置参考](/docs/config-reference#model-metadata)）；你打开的目录仍会被读取和保存。没有可用 ID 的模型会被略去，无法读取的字段视为未报告，所以一个异常的模型不会让整个目录读取失败。`doctor --online` 会检查默认 Provider 是否能列出模型。宿主可以在保存 Provider 之前读取它的模型目录，以测试地址、令牌和请求头（`test_provider_draft`，见[嵌入 Agent](/docs/embedding#configuration-in-a-host)）。
+`/model` 列出每个已启用 Provider 的模型目录（从 `models` 接口读取）。某个 Provider 的目录无法读取时，列表会显示原因。Agent 从目录中的每个模型读取它报告的上下文窗口和最大输出（见[上下文窗口与压缩](#compaction)）、是否读图（见[图片](#images)），以及是否推理、支持哪些推理强度（见[推理强度与思考过程](#reasoning)）。目录报告的内容保存在数据目录的 `model-metadata.json` 中，重启后依然有效；之后的目录不再列出的模型会再保留 7 天。Agent 也会自己在后台读取目录：启动时读取默认 Provider 的目录；在某个 Provider 上创建会话、选用它的模型或在它上面运行轮次时，读取该 Provider 的目录，每个 Provider 每天最多一次（目录读取失败后每 15 分钟最多一次）。没有什么会等待它，读取失败的目录只是稍后再试。在 `config.toml` 中设置 `modelMetadata.discovery = "off"` 可以关闭它（[配置参考](/docs/config-reference#model-metadata)）；你打开的目录仍会被读取和保存。没有可用 ID 的模型会被略去，无法读取的字段视为未报告，所以一个异常的模型不会让整个目录读取失败。`doctor --online` 会检查默认 Provider 是否能列出模型。宿主可以在保存 Provider 之前读取它的模型目录，以测试地址、令牌和请求头（`test_provider_draft`，见[嵌入 Agent](/docs/embedding#configuration-in-a-host)）。
 
 ## 推理强度与思考过程 [#reasoning]
 
@@ -106,7 +106,41 @@ model = "gpt-5.1"
 reasoningEffort = "medium"   # minimal、low、medium、high、xhigh
 ```
 
-推理强度只对 Responses 协议有效；其他协议的会话会忽略它。`/status` 会显示当前会话的推理强度。
+每种协议都会发送推理强度，各用自己的字段：
+
+| 协议               | 请求发送的内容                                                                                                                                                                                                  |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Responses          | `reasoning: {effort, summary: "auto"}`                                                                                                                                                                          |
+| Chat Completions   | `reasoning_effort`，OpenAI 的字段，DeepSeek 的文档也列出了它，OpenRouter 把它列在参数中（其推理指南对 Anthropic 模型只提到它的 `reasoning` 对象）                                                               |
+| Anthropic Messages | Claude 4.6 及以后：自适应思考 `thinking: {type: "adaptive", display: "summarized"}`，加上 `output_config: {effort}`（`minimal` 按 `low` 发送）。Claude 4.5 及以前，以及 ID 不是 Claude 的模型：思考预算，见下文 |
+
+没有设置推理强度时，请求不携带它，由 Provider 的默认值决定。`/status` 会显示当前会话的推理强度。
+
+请求实际携带的推理强度还取决于对该模型已知的信息，这些信息来自 Provider 的模型目录或 Provider 的拒绝：
+
+| 已知的信息             | 发送的推理强度                                                                                                                                                                                                                                  |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 一无所知               | 设置的推理强度                                                                                                                                                                                                                                  |
+| 会推理，目录列出了档位 | 设置的推理强度在列表中则用它；否则它的别名在列表中则用别名（`minimal` → `low`，`xhigh` → `max`）；否则用 `minimal < low < medium < high < xhigh < max` 上最近的已列出档位，距离相同时取较低者；否则不发送。发生改变时，每个会话记录一次警告日志 |
+| 会推理，目录未列出档位 | 设置的推理强度                                                                                                                                                                                                                                  |
+| 不接受推理参数         | 不发送，无论设置了什么                                                                                                                                                                                                                          |
+
+目录用 `supported_reasoning_levels`（Codex）、`reasoning.supported_efforts`（OpenRouter）或 `capabilities.effort`（Anthropic）列出档位；`none` 不会作为档位，因为推理强度不接受 `none`：不设置推理强度，或模型不接受推理参数，才是请求不带推理的方式。模型策略中的模型有已知档位时，策略表单会以选项而不是文本框提供它们。
+
+Provider 拒绝推理参数时（状态码 400 或 422，并指名该参数，见[内部实现](/docs/internals#reasoning-refusals)），请求会去掉它重发一次（`exec --json` 报告 `model_retry_scheduled`，阶段为 `reasoning_fallback`），之后 7 天内无论目录怎么说，都认为该模型不接受推理参数，这一点保存在 `model-metadata.json` 中。
+
+**Anthropic 的思考预算。** 对于使用预算的模型，推理强度决定 `budget_tokens`：
+
+| 推理强度                     | `budget_tokens` |
+| ---------------------------- | --------------- |
+| `minimal`                    | 1,024           |
+| `low`                        | 4,096           |
+| `medium`，或此处未列出的强度 | 8,192           |
+| `high`                       | 16,384          |
+| `xhigh`                      | 24,576          |
+| `max`                        | 32,000          |
+
+`max_tokens` 为预算加上留给回答的 16,384，但不超过模型的最大输出；最大输出未知时，它保持 16,384，并缩减预算，为回答留出其中的 4,096。保不住 1,024 个 token 的预算不会发送。强制调用某个工具的请求，以及回应的工具调用所在消息中没有可回传思考块的请求，也不会带上预算思考。使用自适应思考时，`max_tokens` 为 32,768，且不超过模型的最大输出；最大输出未知时为 16,384。
 
 模型的思考过程会显示出来，在终端界面中是一行可以用 Ctrl-O 展开的 `Thinking`（见[终端界面](/docs/terminal-interface#thinking)），在 `exec --json` 中是 `reasoning_*` 事件（见 [exec --json 事件](/docs/json-events#reasoning)）；`exec` 的普通输出和 `sessions show` 只显示思考了多久（`thought for 12s`）。能看到什么取决于 Provider：
 
@@ -114,9 +148,9 @@ reasoningEffort = "medium"   # minimal、low、medium、high、xhigh
 | ------------------ | ------------------------------------------------------------------------------------------------ |
 | Responses          | 设置了推理强度时，Agent 会请求思考摘要；兼容服务（例如 vLLM 上的 gpt-oss）也可能发送原始思考文本 |
 | Chat Completions   | 服务在 `reasoning_content` 或 `reasoning` 中发送的内容（DeepSeek、Qwen、OpenRouter 等）          |
-| Anthropic Messages | 目前不会请求思考，因此没有内容；服务仍然发送的 `thinking` 块会显示出来                           |
+| Anthropic Messages | 请求的自适应思考摘要，或预算允许的思考内容；服务未经请求发送的 `thinking` 块也会显示出来         |
 
-思考内容保存在会话历史中，每一段最多 256 KiB，超出的部分被截断。它只用于显示，不会再发送给模型。
+思考内容保存在会话历史中，每一段最多 256 KiB，超出的部分被截断。这些文本只用于显示，不会再发送给模型。使用预算的 Anthropic 思考是协议要求的例外：本轮的思考块会连同签名原样随它之前的工具调用回传，仅限该轮剩余的请求。它们只保存在内存中，从不写入历史，所以重启后恢复的轮次，下一个请求不带思考。自适应思考不回传任何思考块：Anthropic 允许在此省略它们，而它最新的模型会拒绝前文已改变的思考块，Agent 的请求在步骤之间恰恰会改变前文。
 
 ## 上下文窗口与压缩 [#compaction]
 

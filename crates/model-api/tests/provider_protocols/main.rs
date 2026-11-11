@@ -118,4 +118,5 @@ mod chat;
 mod cross_protocol;
 mod reasoning;
 mod responses;
+mod thinking;
 mod tolerance;

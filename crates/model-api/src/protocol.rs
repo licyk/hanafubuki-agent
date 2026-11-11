@@ -85,16 +85,6 @@ impl ModelApiProtocol {
         }
     }
 
-    /// Whether a request carries a reasoning effort. A session on another
-    /// protocol drops the effort its policy names (the Agent kernel's
-    /// session config normalization).
-    pub const fn supports_reasoning_effort(self) -> bool {
-        match self {
-            Self::Responses => true,
-            Self::ChatCompletions | Self::AnthropicMessages => false,
-        }
-    }
-
     /// Whether a session may compact on the provider. A session on another
     /// protocol summarizes locally whatever its policy names.
     pub const fn supports_remote_compaction(self) -> bool {

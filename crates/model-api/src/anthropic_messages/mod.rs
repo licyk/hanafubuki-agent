@@ -1,4 +1,6 @@
+mod assistant;
 mod encode;
+mod thinking;
 
 use encode::{encode_anthropic_request, required_string, required_u64};
 use std::collections::{BTreeMap, VecDeque};
@@ -8,8 +10,8 @@ use hanafubuki_agent_foundation::cancellation::CancellationToken;
 use serde_json::Value;
 
 use crate::model::{
-    ModelEvent, ModelOutputItem, ModelReasoningTextKind, ModelRequest, ModelToolArgumentError,
-    ModelToolCall, ModelUsage,
+    ModelEvent, ModelOutputItem, ModelReasoningReplay, ModelReasoningTextKind, ModelRequest,
+    ModelToolArgumentError, ModelToolCall, ModelUsage,
 };
 use crate::port::{ModelError, ModelEventStream, ModelFuture, ModelPort, ModelResult, ModelStream};
 use crate::provider::ModelProvider;
@@ -91,9 +93,16 @@ enum ContentBlock {
         initial_input: Option<Value>,
         partial_json: String,
     },
+    /// A thinking block: its text and its signature (`signature_delta`),
+    /// kept whole to be sent back.
     Thinking {
         item_id: String,
         text: String,
+        signature: String,
+    },
+    RedactedThinking {
+        item_id: String,
+        data: String,
     },
     Ignored,
 }
@@ -265,18 +274,33 @@ impl AnthropicDecoder {
                     .unwrap_or_default()
                     .to_owned();
                 crate::streaming::trace_reasoning(PROTOCOL, "block_started", &item_id, &text);
+                let signature = block
+                    .get("signature")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default()
+                    .to_owned();
                 (
                     ContentBlock::Thinking {
                         item_id: item_id.clone(),
                         text,
+                        signature,
                     },
-                    Some(ModelEvent::OutputItemAdded {
-                        item: ModelOutputItem::Reasoning {
-                            item_id,
-                            summary: Vec::new(),
-                            content: Vec::new(),
-                        },
-                    }),
+                    Some(reasoning_added(item_id)),
+                )
+            }
+            "redacted_thinking" => {
+                let item_id = format!("{}:thinking:{index}", self.response_id()?);
+                let data = block
+                    .get("data")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default()
+                    .to_owned();
+                (
+                    ContentBlock::RedactedThinking {
+                        item_id: item_id.clone(),
+                        data,
+                    },
+                    Some(reasoning_added(item_id)),
                 )
             }
             _ => (ContentBlock::Ignored, None),
@@ -315,7 +339,16 @@ impl AnthropicDecoder {
                 );
                 Ok(Vec::new())
             }
-            (ContentBlock::Thinking { item_id, text }, "thinking_delta") => {
+            (ContentBlock::Thinking { signature, .. }, "signature_delta") => {
+                signature.push_str(
+                    delta
+                        .get("signature")
+                        .and_then(Value::as_str)
+                        .unwrap_or_default(),
+                );
+                Ok(Vec::new())
+            }
+            (ContentBlock::Thinking { item_id, text, .. }, "thinking_delta") => {
                 let value = delta
                     .get("thinking")
                     .and_then(Value::as_str)
@@ -371,13 +404,28 @@ impl AnthropicDecoder {
                     },
                 }])
             }
-            ContentBlock::Thinking { item_id, text } => Ok(vec![ModelEvent::OutputItemCompleted {
+            ContentBlock::Thinking {
+                item_id,
+                text,
+                signature,
+            } => Ok(vec![ModelEvent::OutputItemCompleted {
                 item: ModelOutputItem::Reasoning {
                     item_id,
                     summary: Vec::new(),
-                    content: vec![text],
+                    content: vec![text.clone()],
+                    replay: ModelReasoningReplay::thinking(text, signature),
                 },
             }]),
+            ContentBlock::RedactedThinking { item_id, data } => {
+                Ok(vec![ModelEvent::OutputItemCompleted {
+                    item: ModelOutputItem::Reasoning {
+                        item_id,
+                        summary: Vec::new(),
+                        content: Vec::new(),
+                        replay: ModelReasoningReplay::redacted_thinking(data),
+                    },
+                }])
+            }
             ContentBlock::Ignored => Ok(Vec::new()),
         }
     }
@@ -417,6 +465,17 @@ impl AnthropicDecoder {
                 _ => None,
             },
         }])
+    }
+}
+
+fn reasoning_added(item_id: String) -> ModelEvent {
+    ModelEvent::OutputItemAdded {
+        item: ModelOutputItem::Reasoning {
+            item_id,
+            summary: Vec::new(),
+            content: Vec::new(),
+            replay: None,
+        },
     }
 }
 

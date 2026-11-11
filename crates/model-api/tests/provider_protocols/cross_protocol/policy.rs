@@ -37,6 +37,7 @@ async fn responses_encodes_explicit_reasoning_and_omits_provider_default() {
     let mut explicit_request = fixture_request();
     explicit_request.reasoning = Some(ModelReasoningConfig {
         effort: ModelReasoningEffort::High,
+        max_output_tokens: None,
     });
     let _ = collect_request(
         &ResponsesModelTransport::new(provider(&explicit)).unwrap(),
@@ -56,28 +57,6 @@ async fn responses_encodes_explicit_reasoning_and_omits_provider_default() {
         json!({"effort": "high", "summary": "auto"})
     );
     assert!(omitted_body.get("reasoning").is_none());
-}
-
-#[tokio::test]
-async fn non_responses_protocols_reject_reasoning_instead_of_ignoring_it() {
-    let server = FakeHttpServer::start(Vec::new()).await;
-    let mut request = fixture_request();
-    request.reasoning = Some(ModelReasoningConfig {
-        effort: ModelReasoningEffort::Medium,
-    });
-    for transport in [
-        Box::new(ChatCompletionsModelTransport::new(provider(&server)).unwrap())
-            as Box<dyn ModelPort>,
-        Box::new(AnthropicMessagesModelTransport::new(provider(&server)).unwrap()),
-    ] {
-        assert!(matches!(
-            transport
-                .stream(request.clone(), CancellationToken::default())
-                .await,
-            Err(ModelError::InvalidRequest(_))
-        ));
-    }
-    assert!(server.requests().is_empty());
 }
 
 #[tokio::test]
@@ -265,6 +244,7 @@ async fn unsupported_reasoning_effort_is_not_downgraded_or_retried() {
     let mut request = fixture_request();
     request.reasoning = Some(ModelReasoningConfig {
         effort: ModelReasoningEffort::XHigh,
+        max_output_tokens: None,
     });
     let error = match ResponsesModelTransport::new(provider(&server))
         .unwrap()

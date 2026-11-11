@@ -60,12 +60,15 @@ impl AgentService {
             let Some(attempt) = launchable(record)? else {
                 return Ok(());
             };
+            self.refresh_image_input(record);
+            let reasoning = self.request_reasoning(record);
             let source = compaction_source(
                 record,
                 AgentCompactionPhase::Background,
                 Some(identity),
                 &images,
                 &transport,
+                reasoning,
             )?;
             let run = Arc::new(BackgroundRun {
                 attempt: attempt.clone(),

@@ -198,6 +198,7 @@ async fn an_incomplete_response_keeps_its_partial_answer() {
                 item_id: "thinking".to_string(),
                 summary: Vec::new(),
                 content: Vec::new(),
+                replay: None,
             },
         }),
         Ok(ModelEvent::OutputItemAdded {
@@ -263,6 +264,7 @@ async fn items_completed_without_being_announced_are_kept() {
                 item_id: "thinking".to_string(),
                 summary: vec!["Considered it".to_string()],
                 content: Vec::new(),
+                replay: None,
             },
         }),
         Ok(ModelEvent::OutputItemCompleted {

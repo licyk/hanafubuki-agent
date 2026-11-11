@@ -11,9 +11,10 @@ mod service;
 #[cfg(unix)]
 pub use mcp_server::{annotated_tool, scripted_tool, McpCallHold, ScriptedMcpServers};
 pub use model_server::{
-    anthropic_assistant_events, anthropic_tool_events, assistant_events, namespace_tool_events,
-    reasoning_answer_events, reasoning_tool_events, tool_calls_events, tool_events,
-    tool_search_events, with_input_tokens, CapturedRequest, FakeListing, FakeServer,
+    anthropic_assistant_events, anthropic_thinking_tool_events, anthropic_tool_events,
+    assistant_events, http_error, namespace_tool_events, reasoning_answer_events,
+    reasoning_tool_events, tool_calls_events, tool_events, tool_search_events, with_input_tokens,
+    CapturedRequest, FakeListing, FakeServer,
 };
 pub use plugins::{mount, mount_tool_plugin, test_tool_context, MountedPlugin, MountedToolPlugin};
 pub use service::{

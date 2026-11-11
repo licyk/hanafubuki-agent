@@ -64,6 +64,9 @@ async fn the_documented_openrouter_listing_reports_limits_and_capabilities() {
     assert_eq!(
         vision_reasoner,
         ModelCatalogEntry {
+            // `reasoning.supported_efforts`, highest first, on the ladder.
+            supported_reasoning_efforts: efforts(&["minimal", "low", "medium", "high"]),
+            default_reasoning_effort: Some(ModelReasoningEffort::Medium),
             context_window: Some(400_000),
             max_output_tokens: Some(128_000),
             image_input: Some(true),
@@ -87,6 +90,8 @@ async fn the_documented_anthropic_listing_reports_limits_and_capabilities() {
         opus,
         ModelCatalogEntry {
             display_name: Some("Claude Opus 5.5".into()),
+            // `capabilities.effort.<level>.supported`, on the ladder.
+            supported_reasoning_efforts: efforts(&["low", "medium", "high", "xhigh", "max"]),
             image_input: Some(true),
             reasoning: Some(true),
             ..unknown_entry("claude-opus-5-5")
@@ -256,6 +261,61 @@ async fn list_one_page(
         .unwrap()
         .list(protocol, CancellationToken::default())
         .await
+}
+
+fn efforts(levels: &[&str]) -> Vec<ModelReasoningEffort> {
+    levels
+        .iter()
+        .map(|level| ModelReasoningEffort::parse(*level).unwrap())
+        .collect()
+}
+
+#[tokio::test]
+async fn effort_lists_skip_what_does_not_parse_and_the_first_shape_listing_any_wins() {
+    let page = json!({"data": [
+        // OpenRouter's `none` and a level off the ladder.
+        {"id": "router", "reasoning": {"supported_efforts": ["high", "none", "turbo", 7, "low"], "default_effort": "none"}},
+        // Codex's levels win over OpenRouter's.
+        {"id": "codex", "supported_reasoning_levels": [{"effort": "high"}], "reasoning": {"supported_efforts": ["low"], "default_effort": "low"}},
+        // An Anthropic level is listed only when it says it is supported.
+        {"id": "anthropic", "capabilities": {"effort": {"supported": true, "low": {"supported": true}, "max": {"supported": false}, "high": null}}},
+        // A null allowlist lists nothing.
+        {"id": "open", "reasoning": {"supported_efforts": null, "default_effort": "medium"}},
+    ]});
+    let listing = list_one_page(ModelApiProtocol::ChatCompletions, &page.to_string())
+        .await
+        .unwrap();
+    let by_id = |id: &str| {
+        listing
+            .entries
+            .iter()
+            .find(|entry| entry.id == id)
+            .unwrap()
+            .clone()
+    };
+    assert_eq!(
+        by_id("router").supported_reasoning_efforts,
+        efforts(&["low", "high", "turbo"])
+    );
+    assert_eq!(by_id("router").default_reasoning_effort, None);
+    assert_eq!(
+        by_id("codex").supported_reasoning_efforts,
+        efforts(&["high"])
+    );
+    assert_eq!(
+        by_id("codex").default_reasoning_effort,
+        Some(ModelReasoningEffort::Low)
+    );
+    assert_eq!(
+        by_id("anthropic").supported_reasoning_efforts,
+        efforts(&["low"])
+    );
+    assert_eq!(by_id("anthropic").reasoning, Some(true));
+    assert!(by_id("open").supported_reasoning_efforts.is_empty());
+    assert_eq!(
+        by_id("open").default_reasoning_effort,
+        Some(ModelReasoningEffort::Medium)
+    );
 }
 
 fn unknown_entry(id: &str) -> ModelCatalogEntry {

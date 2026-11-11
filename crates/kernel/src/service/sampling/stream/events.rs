@@ -20,14 +20,14 @@ pub(super) fn stream_event(
         Err(ModelError::StreamInterrupted(message)) => Err(AgentError::Model(format!(
             "model response stream interrupted after the first model event: {message}"
         ))),
-        Err(error @ ModelError::UnsupportedImageInput { .. })
-            if response.started_response_id.is_none() =>
-        {
-            Err(map_model_error(error))
-        }
-        Err(error @ ModelError::UnsupportedImageInput { .. }) => {
-            Err(AgentError::Model(error.to_string()))
-        }
+        Err(
+            error @ (ModelError::UnsupportedImageInput { .. }
+            | ModelError::UnsupportedReasoning { .. }),
+        ) if response.started_response_id.is_none() => Err(map_model_error(error)),
+        Err(
+            error @ (ModelError::UnsupportedImageInput { .. }
+            | ModelError::UnsupportedReasoning { .. }),
+        ) => Err(AgentError::Model(error.to_string())),
         Err(error @ ModelError::ContextWindowExceeded { .. }) if !response.saw_output_item => {
             Err(map_model_error(error))
         }
@@ -410,6 +410,7 @@ impl AgentService {
                 item_id,
                 summary,
                 content,
+                replay,
             } => {
                 let limit = self.inner.limits.maximum_reasoning_text_bytes;
                 let (reasoning_id, tail, duration_millis) = match response
@@ -417,7 +418,8 @@ impl AgentService {
                     .get_mut(&item_id)
                 {
                     Some(PendingModelItem::Reasoning(reasoning)) if !reasoning.is_completed() => {
-                        let (tail, duration_millis) = reasoning.complete(summary, content, limit);
+                        let (tail, duration_millis) =
+                            reasoning.complete(summary, content, replay, limit);
                         (reasoning.reasoning_id, tail, duration_millis)
                     }
                     Some(PendingModelItem::Reasoning(_)) => {
@@ -508,6 +510,7 @@ fn unannounced_item_start(
                 item_id: item_id.clone(),
                 summary: Vec::new(),
                 content: Vec::new(),
+                replay: None,
             })
         }
         ModelOutputItem::Other {

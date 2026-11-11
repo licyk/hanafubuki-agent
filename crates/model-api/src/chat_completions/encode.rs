@@ -8,11 +8,6 @@ pub(super) fn encode_chat_request(request: &ModelRequest) -> ModelResult<Vec<u8>
             "model request requires a non-empty model".into(),
         ));
     }
-    if request.reasoning.is_some() {
-        return Err(ModelError::InvalidRequest(
-            "Chat Completions does not support Responses reasoning effort".into(),
-        ));
-    }
     if request.input.iter().any(|item| {
         matches!(
             item,
@@ -176,6 +171,8 @@ pub(super) fn encode_chat_request(request: &ModelRequest) -> ModelResult<Vec<u8>
                 }));
                 index += 1;
             }
+            // Only Anthropic Messages sends a reasoning block back.
+            ModelInputItem::Reasoning { .. } => index += 1,
             ModelInputItem::CompactionTrigger | ModelInputItem::Compaction { .. } => {
                 return Err(ModelError::InvalidRequest(
                     "Chat Completions cannot replay a Responses compaction item".to_string(),
@@ -207,6 +204,7 @@ pub(super) fn encode_chat_request(request: &ModelRequest) -> ModelResult<Vec<u8>
         "stream_options": {"include_usage": true},
         "store": false
     });
+    super::reasoning::encode_reasoning(&mut body, request.reasoning.as_ref());
     if let Some(output_format) = &request.output_format {
         body["response_format"] = encode_chat_output_format(output_format)?;
     }

@@ -119,12 +119,17 @@ impl AgentSessionConfig {
         }
     }
 
+    /// The configured effort as a request carries it before it is narrowed
+    /// to what the route takes (`AgentService::request_reasoning`).
     pub(crate) fn effective_reasoning(
         &self,
     ) -> Option<hanafubuki_agent_model_api::ModelReasoningConfig> {
-        self.reasoning_effort
-            .clone()
-            .map(|effort| hanafubuki_agent_model_api::ModelReasoningConfig { effort })
+        self.reasoning_effort.clone().map(|effort| {
+            hanafubuki_agent_model_api::ModelReasoningConfig {
+                effort,
+                max_output_tokens: None,
+            }
+        })
     }
 
     /// Where the session's window came from: none while it has none, and

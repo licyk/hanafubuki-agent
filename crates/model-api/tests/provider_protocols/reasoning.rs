@@ -23,6 +23,7 @@ fn outline(events: &[ModelEvent]) -> Vec<(&'static str, String, String)> {
                         item_id,
                         summary,
                         content,
+                        ..
                     },
             } => {
                 assert!(summary.is_empty());
@@ -114,7 +115,7 @@ async fn chat_reasoning_before_a_tool_call_completes_before_the_call_starts() {
 }
 
 #[tokio::test]
-async fn anthropic_thinking_blocks_are_reasoning_items_and_their_signatures_are_dropped() {
+async fn anthropic_thinking_blocks_are_reasoning_items_whose_signatures_are_never_serialized() {
     let payload = concat!(
         "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg-think\",\"usage\":{\"input_tokens\":3,\"output_tokens\":1}}}\n\n",
         "event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"thinking\",\"thinking\":\"\"}}\n\n",
@@ -150,13 +151,23 @@ async fn anthropic_thinking_blocks_are_reasoning_items_and_their_signatures_are_
             ("message_added", "msg-think:text:1", ""),
         ])
     );
+    // The signed block is kept, to be sent back, but never serialized.
+    assert!(events.iter().any(|event| matches!(
+        event,
+        ModelEvent::OutputItemCompleted {
+            item: ModelOutputItem::Reasoning { replay: Some(replay), .. }
+        } if *replay == hanafubuki_agent_model_api::ModelReasoningReplay::Thinking {
+            thinking: "Weigh the options.".into(),
+            signature: "opaque-signature".into(),
+        }
+    )));
     assert!(!serde_json::to_string(&events)
         .unwrap()
         .contains("opaque-signature"));
     let body: Value = serde_json::from_slice(&server.requests()[0].body).unwrap();
     assert!(
         body.get("thinking").is_none(),
-        "thinking is not requested: with tools its signed blocks must be replayed"
+        "thinking is requested only with an effort"
     );
 }
 

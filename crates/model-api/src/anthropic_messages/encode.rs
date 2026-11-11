@@ -1,4 +1,5 @@
-use super::DEFAULT_MAX_OUTPUT_TOKENS;
+use super::assistant::assistant_message;
+use super::thinking::Thinking;
 use crate::model::{ModelInputItem, ModelRequest, ModelToolChoice};
 use crate::port::{ModelError, ModelResult};
 use serde_json::{json, Value};
@@ -7,11 +8,6 @@ pub(super) fn encode_anthropic_request(request: &ModelRequest) -> ModelResult<Ve
     if request.model.trim().is_empty() {
         return Err(ModelError::InvalidRequest(
             "model request requires a non-empty model".into(),
-        ));
-    }
-    if request.reasoning.is_some() {
-        return Err(ModelError::InvalidRequest(
-            "Anthropic Messages does not support Responses reasoning effort".into(),
         ));
     }
     if request.output_format.is_some() {
@@ -33,6 +29,7 @@ pub(super) fn encode_anthropic_request(request: &ModelRequest) -> ModelResult<Ve
             "Anthropic Messages does not support custom or native tool-search history".into(),
         ));
     }
+    let thinking = Thinking::of(request);
     let mut messages = Vec::new();
     let mut index = 0;
     while index < request.input.len() {
@@ -77,34 +74,14 @@ pub(super) fn encode_anthropic_request(request: &ModelRequest) -> ModelResult<Ve
                 }));
                 index += 1;
             }
-            ModelInputItem::AssistantMessage { text, .. } => {
-                let mut content = vec![json!({"type": "text", "text": text})];
-                index += 1;
-                while let Some(ModelInputItem::ToolCall {
-                    call_id,
-                    namespace,
-                    name,
-                    arguments,
-                }) = request.input.get(index)
-                {
-                    content.push(tool_use_block(call_id, namespace, name, arguments));
-                    index += 1;
-                }
-                messages.push(json!({"role": "assistant", "content": content}));
-            }
-            ModelInputItem::ToolCall { .. } => {
-                let mut content = Vec::new();
-                while let Some(ModelInputItem::ToolCall {
-                    call_id,
-                    namespace,
-                    name,
-                    arguments,
-                }) = request.input.get(index)
-                {
-                    content.push(tool_use_block(call_id, namespace, name, arguments));
-                    index += 1;
-                }
-                messages.push(json!({"role": "assistant", "content": content}));
+            ModelInputItem::Reasoning { .. }
+            | ModelInputItem::AssistantMessage { .. }
+            | ModelInputItem::ToolCall { .. } => {
+                messages.extend(assistant_message(
+                    &request.input,
+                    &mut index,
+                    thinking.replay,
+                ));
             }
             ModelInputItem::ToolOutput { .. } => {
                 let mut content = Vec::new();
@@ -189,9 +166,10 @@ pub(super) fn encode_anthropic_request(request: &ModelRequest) -> ModelResult<Ve
         "model": request.model,
         "system": request.instructions,
         "messages": messages,
-        "max_tokens": DEFAULT_MAX_OUTPUT_TOKENS,
+        "max_tokens": thinking.max_tokens,
         "stream": true
     });
+    thinking.apply(&mut body);
     if !tools.is_empty() {
         body["tools"] = Value::Array(tools);
         body["tool_choice"] = match &request.tool_choice {
@@ -216,20 +194,6 @@ pub(super) fn encode_anthropic_request(request: &ModelRequest) -> ModelResult<Ve
     }
     serde_json::to_vec(&body).map_err(|_| {
         ModelError::InvalidRequest("Anthropic Messages request could not be encoded".into())
-    })
-}
-
-fn tool_use_block(
-    call_id: &str,
-    namespace: &Option<String>,
-    name: &str,
-    arguments: &Value,
-) -> Value {
-    json!({
-        "type": "tool_use",
-        "id": call_id,
-        "name": crate::tool_lowering::flattened_tool_call_name(namespace.as_deref(), name),
-        "input": arguments
     })
 }
 

@@ -29,7 +29,8 @@ fn terminal_reason_for_error(error: &AgentError) -> AgentTurnTerminalReason {
         AgentError::Model(_)
         | AgentError::ModelStreamInterrupted(_)
         | AgentError::ProviderContextWindowExceeded { .. }
-        | AgentError::UnsupportedImageInput { .. } => AgentTurnTerminalReason::ModelError,
+        | AgentError::UnsupportedImageInput { .. }
+        | AgentError::UnsupportedReasoning { .. } => AgentTurnTerminalReason::ModelError,
         _ => AgentTurnTerminalReason::InternalFailure,
     }
 }

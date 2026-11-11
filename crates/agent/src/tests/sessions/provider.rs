@@ -217,8 +217,8 @@ async fn responses_only_policy_values_survive_a_protocol_switch() {
 
     // The configured policy is kept verbatim rather than cleared or rejected;
     // a session on the Anthropic Provider is narrowed by the kernel (its
-    // session config normalization), so switching back restores the full
-    // behaviour.
+    // session config normalization drops remote compaction), so switching
+    // back restores the full behaviour. Every protocol carries the effort.
     assert_eq!(
         switched.model_policy.reasoning_effort,
         Some(hanafubuki_agent_kernel::ModelReasoningEffort::High)
@@ -239,7 +239,10 @@ async fn responses_only_policy_values_survive_a_protocol_switch() {
         !session.model.is_empty(),
         "a configured session, not a neutral one"
     );
-    assert_eq!(session.reasoning_effort, None);
+    assert_eq!(
+        session.reasoning_effort,
+        Some(hanafubuki_agent_kernel::ModelReasoningEffort::High)
+    );
 
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }

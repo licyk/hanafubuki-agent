@@ -43,6 +43,13 @@ pub enum AgentError {
         message: String,
         request_id: Option<String>,
     },
+    /// The Provider refused the request's reasoning parameter.
+    UnsupportedReasoning {
+        status: Option<u16>,
+        code: Option<String>,
+        message: String,
+        request_id: Option<String>,
+    },
     ProviderContextWindowExceeded {
         status: Option<u16>,
         code: Option<String>,
@@ -143,6 +150,15 @@ impl fmt::Display for AgentError {
             } => write!(
                 formatter,
                 "agent model endpoint does not support image input status={status:?} code={code:?} request_id={request_id:?}: {message}"
+            ),
+            Self::UnsupportedReasoning {
+                status,
+                code,
+                message,
+                request_id,
+            } => write!(
+                formatter,
+                "agent model endpoint does not support the reasoning parameter status={status:?} code={code:?} request_id={request_id:?}: {message}"
             ),
             Self::ProviderContextWindowExceeded {
                 status,

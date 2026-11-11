@@ -271,6 +271,48 @@ fn the_provider_policy_form_saves_reasoning_context_and_the_whole_budget() {
     assert_eq!(budget.approval_timeout_seconds, 900);
 }
 
+/// Once the default model's listing names its reasoning levels, the policy
+/// form offers them as a choice (free text while none are known, as the
+/// tests above type it), and saves the one chosen.
+#[test]
+fn the_policy_form_offers_the_listed_reasoning_levels() {
+    let listing = serde_json::json!({"data": [
+        {"id": "fixture-model", "reasoning": {"supported_efforts": ["high", "low"]}}
+    ]});
+    let mut harness = Harness::start(vec![listing.to_string().into_bytes()]);
+    let agent = harness.runtime.slot().agent().unwrap();
+    let call = agent.clone();
+    agent
+        .runtime()
+        .block_on(async move {
+            call.list_provider_models(hanafubuki_agent::AgentProviderModelCatalogRequest::default())
+                .await
+        })
+        .unwrap()
+        .unwrap();
+    harness.type_and_submit("/providers policy");
+    let screen = harness.pump_until_screen_shows("○ low");
+    assert!(
+        screen.contains("● Provider default") && screen.contains("○ high"),
+        "{screen}"
+    );
+    // Reasoning: low, then Advanced and Save.
+    harness.tab(2);
+    harness.key(KeyCode::Right);
+    harness.tab(2);
+    harness.key(KeyCode::Enter);
+    harness.pump_until_screen_shows("Saved.");
+    assert_eq!(
+        harness
+            .registry()
+            .model_policy
+            .reasoning_effort
+            .as_ref()
+            .map(|effort| effort.as_str()),
+        Some("low")
+    );
+}
+
 #[test]
 fn the_configuration_center_opens_the_model_policy_directly() {
     let mut harness = Harness::start(Vec::new());

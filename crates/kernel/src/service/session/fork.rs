@@ -174,6 +174,7 @@ impl AgentService {
                     .runtime
                     .compression_runtime
                     .forked(source.runtime.compression.as_deref()),
+                reasoning_narrowing_logged: false,
             },
         };
         let cell = self.inner.sessions.insert(record, &self.inner.accepting)?;

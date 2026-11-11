@@ -114,6 +114,10 @@ pub(in crate::service) struct SessionRuntime {
     /// The content store and the interrupt the nudge still has to book,
     /// kept apart from the checkpoints.
     pub(in crate::service) compression_runtime: crate::service::compression::CompressionRuntime,
+    /// Whether this run logged that the session's configured reasoning
+    /// effort was narrowed (`AgentService::request_reasoning`), which it
+    /// logs once.
+    pub(in crate::service) reasoning_narrowing_logged: bool,
 }
 
 /// Bounded rollback state for one staged durable mutation: every group but
@@ -190,6 +194,7 @@ impl SessionRuntime {
             compression_head: None,
             compression_search: Default::default(),
             compression_runtime: Default::default(),
+            reasoning_narrowing_logged: false,
         }
     }
 }

@@ -9,7 +9,7 @@ pub(super) fn encode_responses_request(request: &ModelRequest) -> ModelResult<Ve
     let input = request
         .input
         .iter()
-        .map(encode_input_item)
+        .filter_map(|item| encode_input_item(item).transpose())
         .collect::<ModelResult<Vec<_>>>()?;
     let tools = coalesce_response_namespaces(&request.tools)?
         .iter()
@@ -65,7 +65,7 @@ pub(super) fn encode_responses_compact_request(request: &ModelRequest) -> ModelR
     let input = request
         .input
         .iter()
-        .map(encode_input_item)
+        .filter_map(|item| encode_input_item(item).transpose())
         .collect::<ModelResult<Vec<_>>>()?;
     let tools = coalesce_response_namespaces(&request.tools)?
         .iter()
@@ -279,8 +279,11 @@ fn responses_tool_supports_required_name(
     }
 }
 
-fn encode_input_item(item: &ModelInputItem) -> ModelResult<Value> {
-    Ok(match item {
+/// The Responses item of `item`; none for a reasoning block only Anthropic
+/// Messages sends back.
+fn encode_input_item(item: &ModelInputItem) -> ModelResult<Option<Value>> {
+    Ok(Some(match item {
+        ModelInputItem::Reasoning { .. } => return Ok(None),
         ModelInputItem::ContextFragment { role, content, .. } => json!({
             "role": match role {
                 crate::ModelContextRole::Developer => "developer",
@@ -401,7 +404,7 @@ fn encode_input_item(item: &ModelInputItem) -> ModelResult<Value> {
             "type": "compaction",
             "encrypted_content": payload.as_str(),
         }),
-    })
+    }))
 }
 
 fn encode_message_phase(phase: ModelMessagePhase) -> &'static str {

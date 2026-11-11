@@ -139,8 +139,8 @@ pub enum ConversationItem {
         memory_citations: Vec<crate::AgentMemoryCitationSnapshot>,
     },
     /// The text one reasoning item of the model showed while it thought, at
-    /// most the reasoning text bound (`truncated` when it was cut). It is
-    /// presentation only: never model input, never context.
+    /// most the reasoning text bound (`truncated` when it was cut). The text
+    /// is presentation only: never model input, never context.
     Reasoning {
         text: String,
         #[serde(default)]
@@ -148,6 +148,13 @@ pub enum ConversationItem {
         sampling_step: u32,
         #[serde(default)]
         truncated: bool,
+        /// The block the provider asks to have sent back with the rest of
+        /// the turn (Anthropic's signed thinking), which the turn's later
+        /// requests carry as it came. Kept in memory only: never
+        /// persisted, never in a snapshot; a turn recovered without it
+        /// sends its next request without thinking.
+        #[serde(skip)]
+        replay: Option<hanafubuki_agent_model_api::ModelReasoningReplay>,
     },
     SteeringMessage {
         sequence: AgentSteeringSequence,
