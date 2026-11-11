@@ -11,8 +11,10 @@
 
 mod registry;
 
+use std::collections::BTreeSet;
 use std::future::Future;
 use std::pin::Pin;
+use std::sync::Arc;
 
 use hanafubuki_agent_foundation::cancellation::CancellationToken;
 
@@ -30,13 +32,18 @@ pub struct PromptFragment {
 }
 
 /// The sampling step a contributor prepares for.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PromptStep {
     pub session_id: AgentSessionId,
     pub turn_id: AgentTurnId,
     pub generation: AgentGeneration,
     /// The turn's sampling step, counted from 1.
     pub sampling_step: u32,
+    /// The names of the tools the step's plan offers (the names scope
+    /// patterns match; Deferred tools included, Hidden ones not): what the
+    /// session's mode and scope leave. Guidance about a tool is shown only
+    /// when the tool is here.
+    pub tools: Arc<BTreeSet<String>>,
 }
 
 /// What a contributor renders from.

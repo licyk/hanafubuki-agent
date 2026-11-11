@@ -35,7 +35,7 @@ fn only_denials_are_kept_the_latest_ten_newest_first() {
     ] {
         denials.observe(session, &review(99, status));
     }
-    denials.observe(session, &AgentEventKind::TurnStarted);
+    denials.observe(session, &AgentEventKind::TurnStarted { role: None });
     assert_eq!(ids(&denials, session), Vec::<String>::new());
 
     for id in 0..12 {

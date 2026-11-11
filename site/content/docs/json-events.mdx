@@ -36,14 +36,14 @@ icon: Braces
 
 ### 回合 [#turn]
 
-| `kind.type`        | 字段                   | 说明                                                                   |
-| ------------------ | ---------------------- | ---------------------------------------------------------------------- |
-| `turn_started`     |                        | 回合开始                                                               |
-| `sampling_started` | `step`                 | 第 `step` 次请求模型（一个回合可能多次请求：每次工具调用后再请求一次） |
-| `response_started` | `responseId`           | Provider 开始返回响应，`responseId` 是 Provider 的响应 ID（字符串）    |
-| `turn_completed`   | `finalAnswerMessageId` | 回合完成；最终回答的消息 ID                                            |
-| `turn_cancelled`   | `reason`               | 回合被取消，`reason` 是 `user_interrupted`                             |
-| `turn_failed`      | `reason`、`message`    | 回合失败，`message` 是给人看的说明                                     |
+| `kind.type`        | 字段                   | 说明                                                                            |
+| ------------------ | ---------------------- | ------------------------------------------------------------------------------- |
+| `turn_started`     | `role`                 | 回合开始，在会话的[角色](/docs/roles#sessions)中：角色名，`default` 时为 `null` |
+| `sampling_started` | `step`                 | 第 `step` 次请求模型（一个回合可能多次请求：每次工具调用后再请求一次）          |
+| `response_started` | `responseId`           | Provider 开始返回响应，`responseId` 是 Provider 的响应 ID（字符串）             |
+| `turn_completed`   | `finalAnswerMessageId` | 回合完成；最终回答的消息 ID                                                     |
+| `turn_cancelled`   | `reason`               | 回合被取消，`reason` 是 `user_interrupted`                                      |
+| `turn_failed`      | `reason`、`message`    | 回合失败，`message` 是给人看的说明                                              |
 
 `turn_failed` 的 `reason` 取值：
 
@@ -164,7 +164,7 @@ icon: Braces
 | `continuation_hook_started`、`continuation_hook_completed` | `providerId`、`hookId`，以及 `outcome`                             | 插件的继续钩子，例如用户的 [Stop 钩子](/docs/configuration#hooks)（`providerId` 为 `hooks`，`hookId` 为 `stop`），或活动[目标](/docs/sessions#goals)的钩子（`goal`、`continue`）。`outcome` 是 `passed`、`continued`、`stopped`、`ignored_failure` 或 `failed`                                                                                                                                                                                                                                                                                                                                        |
 | `hook_started`、`hook_completed`                           | `providerId`、`hookId`、`callId`、`event`，以及 `outcome`          | 插件在工具调用 `callId` 前后的钩子，例如用户的 [PreToolUse 与 PostToolUse 钩子](/docs/configuration#hooks)（`providerId` 为 `hooks`，`hookId` 为 `tool-use`）。`event` 是 `pre_tool_use` 或 `post_tool_use`；`outcome` 是 `passed`、`denied`（调用没有运行）、`added_context`、`failed` 或 `timed_out`（没有效果）。只报告适用于该调用的钩子                                                                                                                                                                                                                                                          |
 
-事件流中没有会话对象，会话的[角色](/docs/roles#sessions)改变时也没有事件：`exec` 的会话在整个回合中都是 `--role` 给它的角色；`sessions list --json` 把会话的角色作为它摘要中的 `role` 给出，`default` 时不出现（一个新增字段，遵循[兼容性规则](#stability)）。
+事件流中没有会话对象，会话的[角色](/docs/roles#sessions)改变时也没有事件：角色只在回合之间改变，所以每个回合的 `turn_started` 给出整个回合所用的角色（`role`，`default` 时为 `null`；对 `exec` 来说就是 `--role` 给的角色）。`sessions list --json` 把它作为会话摘要中的 `role` 给出，`default` 时不出现。
 
 ## 活动 [#activity]
 

@@ -243,7 +243,9 @@ impl AgentService {
         let started_event = record_event(
             record,
             identity,
-            AgentEventKind::TurnStarted,
+            AgentEventKind::TurnStarted {
+                role: record.settings.config.scope.role.clone(),
+            },
             self.inner.limits,
         );
         let history_event = record_event(

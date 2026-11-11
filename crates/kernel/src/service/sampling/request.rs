@@ -100,6 +100,7 @@ impl AgentService {
             turn_id: identity.turn_id,
             generation: identity.generation,
             sampling_step: step,
+            tools: Arc::new(tool_plan.offered_tool_names()),
         };
         let prepared = prepare_prompt_step(
             &contributors,

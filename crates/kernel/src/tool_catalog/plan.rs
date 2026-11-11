@@ -322,6 +322,16 @@ impl AgentToolPlan {
         &self.registrations
     }
 
+    /// The names of the plan's tools (the ones scope patterns match): every
+    /// tool it offers directly or through a search, not the Hidden ones.
+    pub(crate) fn offered_tool_names(&self) -> BTreeSet<String> {
+        self.registrations
+            .iter()
+            .filter(|registration| registration.exposure != ToolExposure::Hidden)
+            .map(|registration| registration.model_spec.name.clone())
+            .collect()
+    }
+
     pub fn deferred_registrations(&self) -> impl Iterator<Item = &AgentPlannedTool> {
         self.registrations
             .iter()

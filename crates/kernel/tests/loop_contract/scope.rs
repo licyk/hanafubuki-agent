@@ -3,14 +3,15 @@
 //! unknown one, the kernel's own tools and `tool_search` survive any scope,
 //! a plugin it turns off neither prompts nor continues the turn, approval
 //! rules and tool lifecycle hooks still apply, the cap tightens the turn's
-//! mode, children are never wider, and the role changes only between turns.
+//! mode, children are never wider, the role changes only between turns,
+//! and a contributor is told the tools the step offers.
 
 use std::collections::BTreeSet;
 
 use hanafubuki_agent_contracts::{
     PostToolUseDecision, PostToolUseFuture, PreToolUseDecision, PreToolUseFuture,
-    ToolLifecycleCall, ToolLifecycleHook, ToolLifecycleHookRegistration, ToolLifecycleHookRegistry,
-    ToolLifecyclePhase,
+    PromptPrepareFuture, PromptStep, ToolLifecycleCall, ToolLifecycleHook,
+    ToolLifecycleHookRegistration, ToolLifecycleHookRegistry, ToolLifecyclePhase,
 };
 use hanafubuki_agent_kernel::{
     AgentCapabilityScope, AgentChildSessionBase, AgentChildSessionRequest, AgentPermissionMode,
@@ -438,6 +439,78 @@ async fn a_plugin_the_scope_turns_off_neither_prompts_nor_continues_the_turn() {
     assert_eq!(outcome.final_answer, "third");
     assert_eq!(model.requests().len(), 3);
     assert!(has_section(&model.requests()[1], "scope_note"));
+}
+
+/// Records the tools each step offers, as its contributors are told.
+#[derive(Default)]
+struct StepTools(Mutex<Vec<BTreeSet<String>>>);
+
+impl PromptContributor for StepTools {
+    fn id(&self) -> &str {
+        "step-tools"
+    }
+
+    fn rank(&self) -> u32 {
+        0
+    }
+
+    fn prepare<'a>(
+        &'a self,
+        step: &'a PromptStep,
+        _cancellation: CancellationToken,
+    ) -> PromptPrepareFuture<'a> {
+        self.0.lock().unwrap().push(step.tools.as_ref().clone());
+        Box::pin(async { Ok(TurnExtensions::default()) })
+    }
+
+    fn contribute(&self, _request: &PromptRequest<'_>) -> Vec<PromptFragment> {
+        Vec::new()
+    }
+}
+
+#[tokio::test]
+async fn a_contributor_is_told_the_tools_the_step_offers() {
+    let model = ScriptedEventModel::new([
+        deterministic_assistant_events("first"),
+        deterministic_assistant_events("second"),
+        deterministic_assistant_events("third"),
+    ]);
+    let tools = FakeTools::new([]).await;
+    let recorder = Arc::new(StepTools::default());
+    tools
+        .mount(&registering::<PromptContributorRegistry>(
+            "recording",
+            vec![recorder.clone() as Arc<dyn PromptContributor>],
+        ))
+        .await;
+    let service = AgentService::new(Arc::new(model.clone()), tools.registries());
+    let mut plan = config();
+    plan.mode = hanafubuki_agent_kernel::AgentSessionMode::Plan;
+    for config in [config(), scoped(deny(&["control_instance"])), plan] {
+        let session = service.create_session(config).unwrap();
+        service
+            .start_turn(session.id, "Hello".to_string())
+            .await
+            .unwrap();
+    }
+
+    let steps = recorder.0.lock().unwrap().clone();
+    let [unscoped, scoped, plan] = steps.as_slice() else {
+        panic!("one step per turn: {steps:?}");
+    };
+    // Deferred tools are offered too, through the search.
+    for name in ["control_instance", "configure_instance", "list_instances"] {
+        assert!(unscoped.contains(name), "{unscoped:?}");
+    }
+    let requests = model.requests();
+    assert!(tool_names(&requests[0])
+        .iter()
+        .all(|name| unscoped.contains(name)));
+    // What the scope or the mode leaves out is not.
+    assert!(!scoped.contains("control_instance"), "{scoped:?}");
+    assert!(scoped.contains("configure_instance") && scoped.contains("list_instances"));
+    assert!(!plan.contains("control_instance") && !plan.contains("configure_instance"));
+    assert!(plan.contains("list_instances"), "{plan:?}");
 }
 
 #[tokio::test]

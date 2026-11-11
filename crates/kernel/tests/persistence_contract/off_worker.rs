@@ -141,7 +141,7 @@ struct StartedSink(AtomicBool);
 
 impl AgentEventSink for StartedSink {
     fn emit(&self, event: AgentEvent) {
-        if matches!(event.kind, AgentEventKind::TurnStarted) {
+        if matches!(event.kind, AgentEventKind::TurnStarted { .. }) {
             self.0.store(true, Ordering::SeqCst);
         }
     }

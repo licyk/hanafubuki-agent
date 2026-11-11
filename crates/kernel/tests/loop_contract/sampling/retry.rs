@@ -184,7 +184,7 @@ async fn per_turn_sink_observes_committed_events_in_sequence_outside_the_registr
     let events = sink.events.lock().unwrap();
     assert!(matches!(
         events.first().unwrap().kind,
-        AgentEventKind::TurnStarted
+        AgentEventKind::TurnStarted { role: None }
     ));
     assert!(matches!(
         events.last().unwrap().kind,

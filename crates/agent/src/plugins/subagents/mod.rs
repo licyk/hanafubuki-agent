@@ -66,8 +66,8 @@ pub enum AgentSubagentState {
 /// [`SubagentService`]. The runs it tracks outlive a restart of the plugin.
 /// A change of the running-agent limit is taken in place; one of the wait
 /// bounds, which `wait_agent`'s spec states, restarts the plugin.
-/// `spawn_agent`'s spec lists the spawnable roles as the plugin starts;
-/// the guidance and a spawn read them at each step and call.
+/// The guidance and a spawn read the spawnable roles at each step and call;
+/// `spawn_agent`'s spec names none, so it never goes stale.
 pub(crate) fn subagents_plugin(
     driver: AgentSessionDriver,
     roles: AgentRoleCatalogReader,

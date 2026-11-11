@@ -73,11 +73,11 @@ hanafubuki-agent exec --json "列出最大的五个文件"
   "generation": 1,
   "sequence": 1,
   "activity": null,
-  "kind": { "type": "turn_started" }
+  "kind": { "type": "turn_started", "role": null }
 }
 ```
 
-回合的最后一行是 `turn_completed`、`turn_cancelled` 或 `turn_failed`。每种事件的字段、顺序和兼容性规则见 [exec --json 事件](/docs/json-events)。事件流中没有会话对象：会话的角色在它的摘要中（`sessions list --json` 的 `role`）。
+回合的最后一行是 `turn_completed`、`turn_cancelled` 或 `turn_failed`。每种事件的字段、顺序和兼容性规则见 [exec --json 事件](/docs/json-events)。第一行 `turn_started` 给出会话的[角色](/docs/roles#sessions)（`role`，`default` 时为 `null`），即 `--role` 给它的角色。
 
 ## 审批与提问 [#approvals]
 

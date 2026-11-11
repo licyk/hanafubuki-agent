@@ -53,7 +53,11 @@ pub enum AgentEventKind {
     SessionGoalUpdated {
         goal: Option<super::AgentGoal>,
     },
-    TurnStarted,
+    /// The turn started, in the session's `role` (its scope's), which no
+    /// change reaches while the turn runs; `None` for `default`.
+    TurnStarted {
+        role: Option<String>,
+    },
     SamplingStarted {
         step: u32,
     },

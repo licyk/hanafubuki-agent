@@ -163,7 +163,10 @@ async fn admission_commits_the_provisional_title_after_the_turn_events() {
         .unwrap();
 
     let admission = sink.0.lock().unwrap()[..3].to_vec();
-    assert!(matches!(admission[0].kind, AgentEventKind::TurnStarted));
+    assert!(matches!(
+        admission[0].kind,
+        AgentEventKind::TurnStarted { role: None }
+    ));
     assert!(matches!(
         admission[1].kind,
         AgentEventKind::HistoryCommitted { .. }

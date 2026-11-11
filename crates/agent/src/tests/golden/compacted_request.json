@@ -739,7 +739,7 @@
           "additionalProperties": false,
           "properties": {
             "agent_type": {
-              "description": "Role of the new agent. Defaults to `default`, which keeps your tools and instructions. A role can only take tools away, and may run another model. The roles:\n- `default`: The Agent as it is configured: every tool and plugin the instance has, nothing narrowed.\n- `explorer`: Use `explorer` for specific, well-scoped questions about the codebase. Explorers are fast and authoritative: they list, search and read files and images and search and read the web, and never edit fil…",
+              "description": "Role of the new agent: one of the roles listed in the sub-agent guidance. Defaults to `default`, which keeps your tools and instructions. A role can only take tools away, and may run another model.",
               "type": "string"
             },
             "fork_turns": {
@@ -1828,7 +1828,7 @@
           "additionalProperties": false,
           "properties": {
             "agent_type": {
-              "description": "Role of the new agent. Defaults to `default`, which keeps your tools and instructions. A role can only take tools away, and may run another model. The roles:\n- `default`: The Agent as it is configured: every tool and plugin the instance has, nothing narrowed.\n- `explorer`: Use `explorer` for specific, well-scoped questions about the codebase. Explorers are fast and authoritative: they list, search and read files and images and search and read the web, and never edit fil…",
+              "description": "Role of the new agent: one of the roles listed in the sub-agent guidance. Defaults to `default`, which keeps your tools and instructions. A role can only take tools away, and may run another model.",
               "type": "string"
             },
             "fork_turns": {

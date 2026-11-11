@@ -261,7 +261,7 @@ impl AgentBridge {
             return;
         }
         self.turn_running = true;
-        if !matches!(kind, AgentEventKind::TurnStarted) {
+        if !matches!(kind, AgentEventKind::TurnStarted { .. }) {
             let started = AgentReply::Update(Box::new(TurnUpdate::Started));
             self.app_event_tx.send(AppEvent::AgentReply(started));
         }

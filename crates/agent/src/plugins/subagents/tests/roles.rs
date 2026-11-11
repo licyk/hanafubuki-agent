@@ -3,7 +3,8 @@
 //! its parent's narrowed by its role's, its instructions its role's (its
 //! parent's without one); its model and reasoning effort its role's, else
 //! its parent's; `list_agents` names each one's role; and the guidance
-//! lists the spawnable roles, bounded and sorted.
+//! lists the spawnable roles, bounded and sorted, as they are at each step,
+//! while `spawn_agent`'s spec names none.
 
 use hanafubuki_agent_kernel::ModelReasoningEffort;
 
@@ -209,6 +210,35 @@ async fn a_child_is_its_parent_narrowed_by_its_role() {
     finish(service, paths);
 }
 
+/// The guidance is shown only where the step offers `spawn_agent`: to a
+/// lead whose role allows it, not to an explorer whose role leaves it out.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_guidance_follows_whether_the_step_offers_spawn_agent() {
+    let server = FakeServer::start(vec![(assistant_events("Done."), Duration::ZERO); 2]).await;
+    let (service, paths) =
+        started_with_roles("subagents-role-guidance-scope", &server, &[("lead", LEAD)]).await;
+    for (role, text) in [("lead", "As a lead."), ("explorer", "As an explorer.")] {
+        let session = service
+            .create_session(AgentSessionMode::Default, Some(role.to_string()))
+            .await
+            .unwrap()
+            .id;
+        service
+            .start_turn(session, text.to_string().into())
+            .await
+            .unwrap();
+        wait_until("the turn ends", || !turn_running(&service, session)).await;
+    }
+
+    let lead = request_with(&server, "As a lead.").await;
+    assert!(tools(&lead).contains(&"spawn_agent".to_string()));
+    assert!(lead["input"].to_string().contains("<subagents>"));
+    let explorer = request_with(&server, "As an explorer.").await;
+    assert!(!tools(&explorer).contains(&"spawn_agent".to_string()));
+    assert!(!explorer["input"].to_string().contains("<subagents>"));
+    finish(service, paths);
+}
+
 /// A role's model and reasoning effort are the child's; what the role does
 /// not set is the parent's, the effort even when the role changes the
 /// model (whose Provider policy has another).
@@ -296,7 +326,8 @@ async fn a_child_takes_its_roles_model_and_effort_else_its_parents() {
 
 /// The guidance lists at most 16 spawnable roles, by name, whatever order
 /// their files were written in, each description on one line and cut at
-/// 200 characters (never inside a character).
+/// 200 characters (never inside a character); `spawn_agent`'s spec lists
+/// none.
 #[tokio::test(flavor = "multi_thread")]
 async fn the_guidance_lists_the_spawnable_roles_bounded_and_sorted() {
     let server = FakeServer::start(vec![(assistant_events("Done."), Duration::ZERO)]).await;
@@ -358,18 +389,20 @@ async fn the_guidance_lists_the_spawnable_roles_bounded_and_sorted() {
     let agent_type = spawn["parameters"]["properties"]["agent_type"]["description"]
         .as_str()
         .unwrap();
-    assert!(agent_type.contains(&cut) && agent_type.contains("- `r13`: "));
-    assert!(!agent_type.contains("`r14`"));
+    assert!(agent_type.contains("sub-agent guidance"), "{agent_type}");
+    assert!(!agent_type.contains("- `") && !agent_type.contains("r00"));
     finish(service, paths);
 }
 
 /// A role written after the Agent started is spawnable once the roles are
 /// read again: a spawn reads the catalog at its call, and the guidance at
-/// its step.
+/// its step; `spawn_agent`'s spec, which names no role, is the same before
+/// and after.
 // The turns' tasks must finish while `shutdown` blocks this thread.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_spawn_and_the_guidance_read_the_roles_as_they_are_now() {
     let server = FakeServer::start(vec![
+        (assistant_events("Early."), Duration::ZERO),
         (assistant_events("Late."), Duration::ZERO),
         (assistant_events("Hello."), Duration::ZERO),
     ])
@@ -381,6 +414,12 @@ async fn a_spawn_and_the_guidance_read_the_roles_as_they_are_now() {
         .await
         .unwrap()
         .id;
+    service
+        .start_turn(parent, "Before.".to_string().into())
+        .await
+        .unwrap();
+    wait_until("the first turn ends", || !turn_running(&service, parent)).await;
+    let before: Value = serde_json::from_str(&body(&server, 0)).unwrap();
     write_role(&paths, "late", "description = \"Came later.\"\n");
     service.reload_packages().await.unwrap();
 
@@ -401,7 +440,19 @@ async fn a_spawn_and_the_guidance_read_the_roles_as_they_are_now() {
         .start_turn(parent, "Hello.".to_string().into())
         .await
         .unwrap();
-    let guidance = String::from_utf8(server.requests()[1].body.clone()).unwrap();
-    assert!(guidance.contains("- `late`: Came later."), "{guidance}");
+    let after = body(&server, 2);
+    assert!(after.contains("- `late`: Came later."), "{after}");
+    assert!(!body(&server, 0).contains("`late`"));
+    let after: Value = serde_json::from_str(&after).unwrap();
+    assert_eq!(spawn_agent_spec(&after), spawn_agent_spec(&before));
     finish(service, paths);
+}
+
+fn spawn_agent_spec(request: &Value) -> &Value {
+    request["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|tool| tool["name"] == "spawn_agent")
+        .unwrap()
 }

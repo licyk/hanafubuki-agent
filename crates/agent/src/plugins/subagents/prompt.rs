@@ -12,26 +12,29 @@
 // that only an explicit request authorizes spawning; they name the
 // `spawn_agent` and `wait_agent` tools; they end with the roles a
 // sub-agent may be given; they are shown only to a conversation that may
-// spawn, as a prompt fragment.
+// spawn (a top-level session whose step offers `spawn_agent`), as a prompt
+// fragment.
 
 //! The orchestrator guidance: how to coordinate sub-agents and the roles
-//! they may be given, shown to a conversation that may spawn them (a
-//! top-level session in Default mode).
+//! they may be given, shown to a conversation that may spawn them: a
+//! top-level session whose step offers `spawn_agent` (so not in Plan mode,
+//! nor in a role whose scope leaves it out).
 
 use std::sync::Arc;
 
 use hanafubuki_agent_contracts::{
-    AgentSessionMode, CancellationToken, ContextRenderer, ContextRole, ContextSectionKind,
-    ContextSlot, PromptContributor, PromptFragment, PromptPrepareFuture, PromptRequest, PromptStep,
+    CancellationToken, ContextRenderer, ContextRole, ContextSectionKind, ContextSlot,
+    PromptContributor, PromptFragment, PromptPrepareFuture, PromptRequest, PromptStep,
     TurnExtensions,
 };
 
 use super::service::SubagentService;
+use super::tools::SubagentToolKind;
 use crate::roles::AgentSpawnableRole;
 
-/// The most roles the guidance and `spawn_agent`'s spec list.
+/// The most roles the guidance lists.
 const MAXIMUM_LISTED_ROLES: usize = 16;
-/// The longest role description they show, in characters.
+/// The longest role description it shows, in characters.
 const MAXIMUM_ROLE_DESCRIPTION_CHARS: usize = 200;
 
 const SUBAGENT_GUIDANCE: ContextSectionKind = ContextSectionKind::fixed("subagent_guidance");
@@ -69,13 +72,16 @@ impl PromptContributor for SubagentGuidancePrompt {
         _cancellation: CancellationToken,
     ) -> PromptPrepareFuture<'a> {
         Box::pin(async move {
+            let mut prepared = TurnExtensions::default();
+            if !step.tools.contains(SubagentToolKind::SpawnAgent.name()) {
+                return Ok(prepared);
+            }
             let session = self
                 .service
                 .session(step.session_id)
                 .await
                 .map_err(|error| error.to_string())?;
-            let mut prepared = TurnExtensions::default();
-            if session.parent_session_id.is_none() && session.mode == AgentSessionMode::Default {
+            if session.parent_session_id.is_none() {
                 prepared.insert(Arc::new(MaySpawn));
             }
             Ok(prepared)
@@ -104,7 +110,7 @@ impl PromptContributor for SubagentGuidancePrompt {
 /// The spawnable `roles` (by name, as the catalog lists them), one line
 /// each: at most [`MAXIMUM_LISTED_ROLES`], each description on one line and
 /// cut at [`MAXIMUM_ROLE_DESCRIPTION_CHARS`].
-pub(super) fn role_list(roles: &[AgentSpawnableRole]) -> String {
+fn role_list(roles: &[AgentSpawnableRole]) -> String {
     roles
         .iter()
         .take(MAXIMUM_LISTED_ROLES)

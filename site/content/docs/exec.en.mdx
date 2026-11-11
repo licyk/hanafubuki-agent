@@ -73,11 +73,11 @@ hanafubuki-agent exec --json "List the five largest files"
   "generation": 1,
   "sequence": 1,
   "activity": null,
-  "kind": { "type": "turn_started" }
+  "kind": { "type": "turn_started", "role": null }
 }
 ```
 
-The turn's last line is `turn_completed`, `turn_cancelled` or `turn_failed`. Every event's fields, their order and the compatibility rule are in [exec --json events](/docs/json-events). The stream has no session object: the session's role is in its summary (`sessions list --json`, `role`).
+The turn's last line is `turn_completed`, `turn_cancelled` or `turn_failed`. Every event's fields, their order and the compatibility rule are in [exec --json events](/docs/json-events). The first line, `turn_started`, names the session's [role](/docs/roles#sessions) (`role`, `null` for `default`), as `--role` gave it.
 
 ## Approvals and questions [#approvals]
 

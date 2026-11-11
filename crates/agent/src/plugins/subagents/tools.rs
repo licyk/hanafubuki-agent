@@ -37,11 +37,10 @@ use hanafubuki_agent_tool_contracts::{
 use serde_json::{json, Map, Value};
 
 use super::options::WaitBounds;
-use super::prompt::role_list;
 use super::service::{
     AgentRunStatus, Delivery, ListedAgent, SpawnRequest, SubagentService, WaitOutcome,
 };
-use crate::roles::{AgentRoleCatalogReader, AgentSpawnableRole, DEFAULT_ROLE};
+use crate::roles::{AgentRoleCatalogReader, DEFAULT_ROLE};
 
 /// The longest message an agent is sent, as the kernel's steering bound.
 const MAXIMUM_MESSAGE_BYTES: usize = 64 * 1024;
@@ -69,7 +68,7 @@ impl SubagentToolKind {
         Self::InterruptAgent,
     ];
 
-    const fn name(self) -> &'static str {
+    pub(super) const fn name(self) -> &'static str {
         match self {
             Self::SpawnAgent => "spawn_agent",
             Self::SendMessage => "send_message",
@@ -99,7 +98,7 @@ impl SubagentTool {
         service: Arc<SubagentService>,
     ) -> Result<Self, ToolContractError> {
         let waits = service.limits().waits;
-        let (description, input_schema) = spec(kind, waits, &service.roles.spawnable());
+        let (description, input_schema) = spec(kind, waits);
         Ok(Self {
             kind,
             service,
@@ -386,13 +385,10 @@ Note that passing `fork_turns="none"` will not pass any surrounding context to t
 const WAIT_AGENT_DESCRIPTION: &str = "Wait until an agent you spawned finishes its turn. Returns the final status of every agent that finished since your previous wait: its final answer when it completed, or its error. Returns at once when such an update is pending or when no agent is running, and with `timed_out` when no agent finishes before the deadline.";
 
 /// The model-visible description and input schema of `kind`, with `waits`
-/// the bounds `wait_agent` states and `roles` the roles `spawn_agent`
-/// lists.
-fn spec(
-    kind: SubagentToolKind,
-    waits: WaitBounds,
-    roles: &[AgentSpawnableRole],
-) -> (String, Value) {
+/// the bounds `wait_agent` states. `spawn_agent`'s names no role: a spec is
+/// fixed while the plugin runs, and the roles are listed by the guidance,
+/// which reads them at each step.
+fn spec(kind: SubagentToolKind, waits: WaitBounds) -> (String, Value) {
     let target = |description: &str| json!({ "type": "string", "description": description });
     let (description, properties, required): (&str, Value, &[&str]) = match kind {
         SubagentToolKind::SpawnAgent => (
@@ -412,10 +408,7 @@ fn spec(
                 },
                 "agent_type": {
                     "type": "string",
-                    "description": format!(
-                        "Role of the new agent. Defaults to `default`, which keeps your tools and instructions. A role can only take tools away, and may run another model. The roles:\n{}",
-                        role_list(roles)
-                    )
+                    "description": "Role of the new agent: one of the roles listed in the sub-agent guidance. Defaults to `default`, which keeps your tools and instructions. A role can only take tools away, and may run another model."
                 }
             }),
             &["task_name", "message"],

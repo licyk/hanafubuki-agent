@@ -3,7 +3,8 @@
 //! project's format enter the catalog as `<plugin>:<role>` while the
 //! package is on, and leave it once it is off; what their reading left out
 //! is the package's issue; a second package of the same plugin name gives
-//! way; a session runs in a plugin's role, and the model is offered it; a
+//! way; a session runs in a plugin's role, and a session that can spawn is
+//! offered it; a
 //! Claude agent's `disallowedTools` and `permissionMode` narrow its
 //! sessions, and `plan`'s deny list is what Plan mode removes.
 
@@ -74,7 +75,11 @@ fn plugin_roles(service: &AgentApplicationService) -> Vec<String> {
 
 #[tokio::test]
 async fn a_plugins_roles_are_in_the_catalog_while_it_is_on() {
-    let server = FakeServer::start(vec![(assistant_events("Reviewed."), Duration::ZERO)]).await;
+    let server = FakeServer::start(vec![
+        (assistant_events("Reviewed."), Duration::ZERO),
+        (assistant_events("Listed."), Duration::ZERO),
+    ])
+    .await;
     let (service, paths, config) = service_with_config("packages-roles", |_, config| {
         configure_test_provider(config, &server.base_url, None);
     });
@@ -173,8 +178,26 @@ async fn a_plugins_roles_are_in_the_catalog_while_it_is_on() {
     assert!(!tools.contains(&"exec_command") && !tools.contains(&"apply_patch"));
     let text = request.to_string();
     assert!(text.contains("Review the diff and list the problems."));
-    // The spawnable plugin roles are offered to the model; `kit:lead` is not
-    // spawnable.
+    // The reviewer cannot spawn (Claude's `Task` has no counterpart), so it
+    // is shown no sub-agent guidance.
+    assert!(!tools.contains(&"spawn_agent") && !text.contains("<subagents>"));
+    // A session that can spawn is offered the spawnable plugin roles;
+    // `kit:lead` is not spawnable.
+    let session = service
+        .create_session(AgentSessionMode::Default, None)
+        .await
+        .unwrap();
+    service
+        .start_turn(session.id, "List them.".to_string().into())
+        .await
+        .unwrap();
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    while server.requests().len() < 2 {
+        assert!(std::time::Instant::now() < deadline, "no second request");
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    let text = String::from_utf8_lossy(&server.requests()[1].body).into_owned();
+    assert!(text.contains("List them.") && text.contains("<subagents>"));
     assert!(text.contains("`demo:reviewer`"), "{text}");
     assert!(!text.contains("`kit:lead`"));
 

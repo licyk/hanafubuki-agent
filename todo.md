@@ -403,6 +403,11 @@ then M4, then M5; M6 after M3; M7 after M1.
         `collect_world_state` or `collect_turn_extensions` passes a scope.
         Its goldens and the shared corpus do not change; it may offer role
         choice with `roles()` and `set_session_role`.
+      Follow-up (2026-11-11): the kernel's `turn_started` event carries the
+        session's `role` (`AgentEventKind::TurnStarted { role }`, the scope's,
+        `None`/`null` for `default`), so `exec --json` names the role on its
+        first line; json-events and exec (both languages) say so. Hanafubuki:
+        a match on `TurnStarted` becomes `TurnStarted { .. }`.
       Open:
       - The "a pattern that matches nothing" warning: the sourced tools
         vary per step, so it needs the live registries at selection; not
@@ -517,21 +522,19 @@ then M4, then M5; M6 after M3; M7 after M1.
         guidance and `spawn_agent`'s spec); regenerate and review them.
         Struct literals of `AgentChildSessionRequest` take
         `role_instructions: None`.
+      Follow-up (2026-11-11): `agent_type`'s description lists no role (it
+        points at the guidance, which is read per step), so no spec goes
+        stale; the guidance is shown only when the step's tool plan offers
+        `spawn_agent`, from the kernel's new `PromptStep.tools` (the names
+        the plan offers, Hidden ones left out), so the `explorer` golden
+        lost it. Request goldens regenerated on purpose: 17 `agent_type`
+        hunks and the `explorer` guidance; history corpora unchanged.
+        Hanafubuki: `PromptStep` gains `tools` and is no longer `Copy`;
+        regenerate its integration goldens.
       Open:
-      - `spawn_agent`'s descriptor is fixed per registration, so the roles
-        its `agent_type` description lists are those of the plugin's start:
-        a role added or removed later is in the guidance (read per step)
-        and accepted or refused by a spawn (read per call), but the schema
-        catches up only when the plugin restarts. Restarting the plugin on
-        a catalog change would mean carrying the roles in its row
-        configuration; not done.
       - A role's model selection that fails (its Provider gone or
         disabled) fails the spawn after the child exists: the agent is
         listed, idle, with its parent's model, and takes follow-up tasks.
-      - The `explorer` golden shows the guidance (with its role list)
-        though its scope leaves `spawn_agent` out: the guidance's
-        contributor belongs to `subagents`, which the scope does not turn
-        off. Unchanged from M4.
       - With more than 16 spawnable roles, the rest are not listed but can
         still be spawned by name.
       - The 200-character cut leaves `explorer`'s "Rules:" (how to use
@@ -661,15 +664,18 @@ then M4, then M5; M6 after M3; M7 after M1.
         `AgentPackageContent` or `ManifestPaths` literals (new `roles`,
         `agents`).
       Follow-up (2026-11-11): `disallowedTools` → deny list, `permissionMode` → cap (`plan` also denies `PLAN_MODE_DENIED_TOOLS` and, without `tools`, `mcp__*`).
+      Follow-up (2026-11-11): a package role enabled later needs no
+        `subagents` restart: `agent_type`'s description lists no role (see
+        M5's follow-up). A session in a plugin role that leaves
+        `spawn_agent` out (every Claude agent with `tools`: `Task` has no
+        counterpart) no longer reads the sub-agent guidance;
+        `tests/packages/roles.rs` checks the plugin roles' listing from a
+        default session.
       Open:
       - `roles list`, `roles show` and `doctor` read the configuration
         without starting the Agent, so they do not show the plugins'
         roles (opening the package store would sweep its staging area
         under a running Agent); `plugins info` and `/plugins` list them.
-      - `spawn_agent`'s `agent_type` description is fixed at the plugin's
-        start (M5's Open): a package role enabled later is in the
-        guidance and accepted by a spawn, but in the schema only after the
-        `subagents` plugin restarts.
       - No test spawns a sub-agent with `agent_type: "demo:reviewer"`: the
         spawn looks the name up in the same catalog (`spawn_role`, no
         check of `:`), and the guidance listing it is tested.

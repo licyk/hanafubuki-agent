@@ -295,6 +295,7 @@ pub async fn a_guest_contributes_what_its_manifest_declares() {
         turn_id: AgentTurnId::new(2),
         generation: AgentGeneration::new(1),
         sampling_step: 3,
+        tools: Arc::default(),
     };
     let prepared = contributor
         .prepare(&step, CancellationToken::default())
@@ -434,6 +435,7 @@ pub async fn a_guests_contributions_retire_with_it_and_its_failures_stay_its_own
         turn_id: AgentTurnId::new(2),
         generation: AgentGeneration::new(1),
         sampling_step: 1,
+        tools: Arc::default(),
     };
     let prepared = prompts
         .prepare(&step, CancellationToken::default())

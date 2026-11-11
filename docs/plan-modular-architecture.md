@@ -690,8 +690,9 @@ existing rules, and are documented and tested:
    under it between two turns.
 
 **Snapshots and events.** The session snapshot carries `role` and a compact scope
-summary: counts, plus `plugins_off`. The `exec --json` session object gains `role`,
-which is an additive event field ([exec --json events](../site/content/docs/json-events.en.mdx)
+summary: counts, plus `plugins_off`. The `exec --json` stream has no session object:
+each turn's `turn_started` event carries the session's `role` (`null` for `default`), as
+built in the follow-up of 2026-11-11 ([exec --json events](../site/content/docs/json-events.en.mdx)
 stability rule).
 
 **Plan mode and review.** Plan mode still keeps only `ReadOnly` tools, after the
@@ -725,9 +726,11 @@ spawnable roles:
 - at most 16 roles, each description cut at 200 characters on a character boundary;
 - sorted by name, so the request is stable.
 
-The `spawn_agent` schema adds `agent_type` as a string with that list in its
-description. This is model-visible, so the request goldens are regenerated on
-purpose. Hanafubuki's goldens change too.
+The `spawn_agent` schema adds `agent_type` as a string whose description points at
+that list in the guidance (the follow-up of 2026-11-11: a descriptor is fixed while
+the plugin runs, so a list in it went stale), and the guidance is shown only when the
+step's tool plan offers `spawn_agent`. This is model-visible, so the request goldens
+are regenerated on purpose. Hanafubuki's goldens change too.
 
 **Limits.** The `maximumRunningAgents` option (M1) bounds the running children, as
 the constant does today.

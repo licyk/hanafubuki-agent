@@ -445,7 +445,7 @@ impl AgentBridge {
             });
         }
         let update = match event.kind {
-            AgentEventKind::TurnStarted => TurnUpdate::Started,
+            AgentEventKind::TurnStarted { .. } => TurnUpdate::Started,
             AgentEventKind::ReasoningStarted { reasoning_id, .. } => {
                 TurnUpdate::ReasoningStarted(reasoning_id)
             }

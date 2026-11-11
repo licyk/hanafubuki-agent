@@ -145,6 +145,8 @@ fn json_prints_one_event_per_line_ending_with_the_completion() {
         .map(|event| event["kind"]["type"].as_str().unwrap().to_string())
         .collect::<Vec<_>>();
     assert_eq!(kinds.first().map(String::as_str), Some("turn_started"));
+    // A session without a role (`default`): the field is there, `null`.
+    assert_eq!(events[0]["kind"].get("role"), Some(&Value::Null));
     assert_eq!(kinds.last().map(String::as_str), Some("turn_completed"));
     assert!(kinds.iter().any(|kind| kind == "assistant_text_delta"));
     for event in &events {
@@ -475,4 +477,17 @@ fn a_role_narrows_the_session_and_an_unknown_one_fails_before_any_turn() {
         run.stderr()
     );
     assert_eq!(model.request_count(), 1);
+}
+
+#[test]
+fn json_names_the_sessions_role_on_turn_started() {
+    let model = Model::start(vec![assistant_events("Read only.")]);
+    let home = Home::new().with_provider(&model.server.base_url);
+    let run = home
+        .run(&["exec", "--json", "--role", "explorer", "What is here?"])
+        .expect(0);
+    let stdout = run.stdout();
+    let first: Value = serde_json::from_str(stdout.lines().next().unwrap_or_default()).unwrap();
+    assert_eq!(first["kind"]["type"], "turn_started", "{first}");
+    assert_eq!(first["kind"]["role"], "explorer", "{first}");
 }

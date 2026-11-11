@@ -189,7 +189,7 @@ impl AgentActivityTracker {
                 self.finish_turn_activities(AgentActivityPhase::Failed, now);
                 None
             }
-            AgentEventKind::TurnStarted
+            AgentEventKind::TurnStarted { .. }
             | AgentEventKind::SessionTitleUpdated { .. }
             | AgentEventKind::SessionGoalUpdated { .. }
             | AgentEventKind::ReasoningUpdated { .. }

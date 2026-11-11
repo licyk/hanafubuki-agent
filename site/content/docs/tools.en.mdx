@@ -108,7 +108,7 @@ The model can hand a task to a sub-agent: a conversation of its own, a child of 
 
 - **Limits**: only a session that is not itself a child spawns, so a sub-agent cannot spawn its own; at most 3 sub-agents of a session run at once; a task name is used once per session.
 - **Approvals**: the tools need none. A sub-agent's own tool calls are approved in its own conversation, under the permission mode it takes from the session at each task: one that needs your answer waits there until you open the sub-agent and answer it.
-- **Guidance**: in Default mode, the model of a session that may spawn also reads guidance on coordinating sub-agents (spawn only when asked to, run independent steps in parallel, wait for them before answering) and the roles it may give them ([Roles for sub-agents](/docs/roles#subagents)). In Plan mode only `wait_agent` and `list_agents` are offered.
+- **Guidance**: the model of a top-level session whose step offers `spawn_agent` (not in Plan mode, nor in a [role](/docs/roles#sessions) that leaves the tool out) also reads guidance on coordinating sub-agents (spawn only when asked to, run independent steps in parallel, wait for them before answering) and the roles it may give them ([Roles for sub-agents](/docs/roles#subagents)). In Plan mode only `wait_agent` and `list_agents` are offered.
 - A sub-agent is a session like any other: its turns and events are in its own history, and an interface lists a session's sub-agents through the `subagents` call ([Embedding the Agent](/docs/embedding#feature-calls)). `subagents` in `disabledPlugins` takes the tools and the guidance away.
 
 ## Workspace roots [#workspace]
