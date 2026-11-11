@@ -89,16 +89,7 @@ impl AgentService {
             .allocate_session_id()
             .map_err(history_store_error)?;
         let now = now_millis();
-        let observed_image_input = model
-            .route_key(&config.model)
-            .map(|key| {
-                self.inner
-                    .model_metadata
-                    .observed_image_input(&key, now_millis_u64())
-            })
-            .unwrap_or(ModelImageInputCapability::Unknown);
-        let effective_input_capabilities =
-            config.input_capabilities.effective(observed_image_input);
+        let effective_input_capabilities = self.session_input_capabilities(model.as_ref(), &config);
         let record = SessionRecord {
             session_id,
             forked_from_session_id: None,

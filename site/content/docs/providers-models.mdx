@@ -94,7 +94,7 @@ provider-2 DeepSeek  ChatCompletions  https://api.deepseek.com/v1  token: set
 | `-m 模型`                      | 本次运行中的新会话（以及恢复的会话），在默认 Provider 上运行 |
 | 终端界面的 `/model`            | 当前会话；从已启用 Provider 的模型目录中选择                 |
 
-`/model` 列出每个已启用 Provider 的模型目录（从 `models` 接口读取）。某个 Provider 的目录无法读取时，列表会显示原因。Agent 从目录中的每个模型读取它报告的上下文窗口（见[上下文窗口与压缩](#compaction)），也读取它的最大输出、是否读图、是否推理，但目前还不据此行事。目录报告的内容保存在数据目录的 `model-metadata.json` 中，重启后依然有效；之后的目录不再列出的模型会再保留 7 天。Agent 也会自己在后台读取目录：启动时读取默认 Provider 的目录；在某个 Provider 上创建会话、选用它的模型或在它上面运行轮次时，读取该 Provider 的目录，每个 Provider 每天最多一次（目录读取失败后每 15 分钟最多一次）。没有什么会等待它，读取失败的目录只是稍后再试。在 `config.toml` 中设置 `modelMetadata.discovery = "off"` 可以关闭它（[配置参考](/docs/config-reference#model-metadata)）；你打开的目录仍会被读取和保存。没有可用 ID 的模型会被略去，无法读取的字段视为未报告，所以一个异常的模型不会让整个目录读取失败。`doctor --online` 会检查默认 Provider 是否能列出模型。宿主可以在保存 Provider 之前读取它的模型目录，以测试地址、令牌和请求头（`test_provider_draft`，见[嵌入 Agent](/docs/embedding#configuration-in-a-host)）。
+`/model` 列出每个已启用 Provider 的模型目录（从 `models` 接口读取）。某个 Provider 的目录无法读取时，列表会显示原因。Agent 从目录中的每个模型读取它报告的上下文窗口和最大输出（见[上下文窗口与压缩](#compaction)）、是否读图（见[图片](#images)），以及是否推理，但目前还不据推理行事。目录报告的内容保存在数据目录的 `model-metadata.json` 中，重启后依然有效；之后的目录不再列出的模型会再保留 7 天。Agent 也会自己在后台读取目录：启动时读取默认 Provider 的目录；在某个 Provider 上创建会话、选用它的模型或在它上面运行轮次时，读取该 Provider 的目录，每个 Provider 每天最多一次（目录读取失败后每 15 分钟最多一次）。没有什么会等待它，读取失败的目录只是稍后再试。在 `config.toml` 中设置 `modelMetadata.discovery = "off"` 可以关闭它（[配置参考](/docs/config-reference#model-metadata)）；你打开的目录仍会被读取和保存。没有可用 ID 的模型会被略去，无法读取的字段视为未报告，所以一个异常的模型不会让整个目录读取失败。`doctor --online` 会检查默认 Provider 是否能列出模型。宿主可以在保存 Provider 之前读取它的模型目录，以测试地址、令牌和请求头（`test_provider_draft`，见[嵌入 Agent](/docs/embedding#configuration-in-a-host)）。
 
 ## 推理强度与思考过程 [#reasoning]
 
@@ -139,7 +139,12 @@ Provider 以超出模型窗口为由拒绝请求时，Agent 会压缩一次并�
 
 ## 图片 [#images]
 
-`[modelPolicy.inputCapabilities]` 的 `imageInput` 为 `"auto"`（默认）时，Agent 会向接受图片的模型发送图片（例如 `view_image` 工具查看的图片）。模型拒绝图片时，Agent 会去掉图片重试一次，并在 7 天内（重启后也一样）不再向该模型发送图片。设为 `"disabled"` 则从不发送图片。
+`[modelPolicy.inputCapabilities]` 的 `imageInput` 为 `"auto"`（默认）时，Agent 是否向模型发送图片（你的图片，以及 `view_image` 查看的图片），取决于它对这个模型所知道的：
+
+- **它读图**（Provider 的模型目录这样说），或者**没有任何来源说明**：发送图片，并提供 `view_image`。如果模型仍然拒绝了图片，Agent 会去掉图片重试一次，并从此在 7 天内（重启后也一样）把它当作不读图的模型。
+- **它不读图**（模型目录这样说，或从拒绝中学到）：不会有图片发给它，所以不会先有请求被拒绝。对话中已有的图片会被替换成一条说明图片已略去的文字，不提供 `view_image`，带图片的消息会被拒绝（`the configured model does not support image input`）。
+
+拒绝的分量重于目录：目录说读图、却拒绝过图片的模型，在这 7 天内不会收到图片。对话在开始、选用模型或恢复时采用已知的信息，并在每次请求前再取一次，所以之后才读到的目录从下一次请求起生效。设为 `"disabled"` 则无论模型如何都从不发送图片。
 
 ## 重试与限制 [#limits]
 

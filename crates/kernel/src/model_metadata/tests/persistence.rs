@@ -26,7 +26,7 @@ fn only_a_change_is_saved() {
     let (registry, store) = opened(ModelMetadataSnapshot::default());
     let model = route(PROVIDER, "model");
     window(&registry, None, &model, NOW);
-    registry.observed_image_input(&model, NOW);
+    registry.observed_image_input(&model, None, NOW);
     assert!(store.saved.lock().is_empty());
 
     registry.record_listing(&endpoint(PROVIDER), &[entry("model", Some(64_000))], NOW);
@@ -48,7 +48,7 @@ fn what_was_saved_is_what_the_next_run_knows() {
 
     assert_eq!(window(&reopened, None, &listed, NOW + 1), Some(64_000));
     assert_eq!(
-        reopened.observed_image_input(&refused, NOW + 1),
+        reopened.observed_image_input(&refused, None, NOW + 1),
         ModelImageInputCapability::Unsupported
     );
     assert!(store.saved.lock().is_empty(), "opening saves nothing");
@@ -121,7 +121,7 @@ fn a_saved_snapshot_reads_tolerantly() {
         "a fact is never observed later than now"
     );
     assert_eq!(
-        registry.observed_image_input(&other, NOW),
+        registry.observed_image_input(&other, None, NOW),
         ModelImageInputCapability::Unsupported
     );
     assert_eq!(registry.state.lock().routes.len(), 2);

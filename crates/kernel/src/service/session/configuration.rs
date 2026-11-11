@@ -284,12 +284,9 @@ impl AgentService {
         if let Some(usage) = record.runtime.usage.as_mut() {
             usage.context_window_tokens = record.settings.config.context_window_tokens;
         }
+        record.settings.effective_input_capabilities =
+            self.session_input_capabilities(model.as_ref(), &record.settings.config);
         record.settings.model = model;
-        record.settings.effective_input_capabilities = record
-            .settings
-            .config
-            .input_capabilities
-            .effective(ModelImageInputCapability::Unknown);
         record.settings.budget_policy = update
             .turn_budget
             .validate()

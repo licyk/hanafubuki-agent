@@ -34,6 +34,7 @@ mod golden;
 mod hooks;
 mod memory;
 mod model_discovery;
+mod model_vision;
 mod packages;
 #[cfg(unix)]
 mod pipeline;

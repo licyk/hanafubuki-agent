@@ -144,24 +144,26 @@ impl ModelMetadataRegistry {
             .map(|listing| listing.listed_at_ms)
     }
 
-    /// What the Agent observed of `route`'s image input: unsupported while
-    /// a refusal it learned holds, else unknown. What a listing reports is
-    /// not acted on.
+    /// What a session observes of `route`'s image input: its resolved fact
+    /// (`resolve`, with what the person `configured`), supported or
+    /// unsupported, else unknown.
     pub(crate) fn observed_image_input(
         &self,
         route: &ModelRouteKey,
+        configured: Option<bool>,
         now_ms: u64,
     ) -> ModelImageInputCapability {
-        let refused = self
-            .state
-            .lock()
-            .live_facts(route, now_ms)
-            .and_then(|facts| facts.learned.image_input)
-            .is_some_and(|fact| !fact.value);
-        if refused {
-            ModelImageInputCapability::Unsupported
-        } else {
-            ModelImageInputCapability::Unknown
+        let configured = ConfiguredModelFacts {
+            image_input: configured,
+            ..ConfiguredModelFacts::default()
+        };
+        match self
+            .resolve(Some(route), route.model(), configured, now_ms)
+            .image_input
+        {
+            Some(fact) if fact.value => ModelImageInputCapability::Supported,
+            Some(_) => ModelImageInputCapability::Unsupported,
+            None => ModelImageInputCapability::Unknown,
         }
     }
 

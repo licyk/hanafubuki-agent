@@ -177,7 +177,7 @@ fn a_learned_refusal_is_route_scoped_and_expires() {
     registry.learn_image_input_unsupported(&target, NOW);
 
     assert_eq!(
-        registry.observed_image_input(&target, NOW),
+        registry.observed_image_input(&target, None, NOW),
         ModelImageInputCapability::Unsupported
     );
     for other in [
@@ -190,16 +190,16 @@ fn a_learned_refusal_is_route_scoped_and_expires() {
         route("https://one.test/v1", "other"),
     ] {
         assert_eq!(
-            registry.observed_image_input(&other, NOW),
+            registry.observed_image_input(&other, None, NOW),
             ModelImageInputCapability::Unknown
         );
     }
     assert_eq!(
-        registry.observed_image_input(&target, NOW + LEARNED_TTL_MS),
+        registry.observed_image_input(&target, None, NOW + LEARNED_TTL_MS),
         ModelImageInputCapability::Unsupported
     );
     assert_eq!(
-        registry.observed_image_input(&target, NOW + LEARNED_TTL_MS + 1),
+        registry.observed_image_input(&target, None, NOW + LEARNED_TTL_MS + 1),
         ModelImageInputCapability::Unknown
     );
 }
@@ -216,7 +216,7 @@ fn the_routes_are_bounded_dropping_the_oldest() {
 
     assert_eq!(registry.state.lock().routes.len(), MAX_ROUTES);
     assert_eq!(
-        registry.observed_image_input(&oldest, NOW + 1),
+        registry.observed_image_input(&oldest, None, NOW + 1),
         ModelImageInputCapability::Unknown,
         "the route observed longest ago is dropped"
     );
@@ -224,7 +224,7 @@ fn the_routes_are_bounded_dropping_the_oldest() {
     registry.learn_image_input_unsupported(&newest, NOW + 1);
     assert_eq!(registry.state.lock().routes.len(), MAX_ROUTES);
     assert_eq!(
-        registry.observed_image_input(&newest, NOW + 1),
+        registry.observed_image_input(&newest, None, NOW + 1),
         ModelImageInputCapability::Unsupported,
         "the route just learned is never the one dropped"
     );

@@ -157,9 +157,13 @@ fn a_learned_refusal_beats_a_reported_yes() {
         Some(sourced(true, ModelMetadataSource::Reported, NOW))
     );
     assert_eq!(
-        registry.observed_image_input(&model, NOW),
-        ModelImageInputCapability::Unknown,
-        "what a listing reports is not acted on yet"
+        registry.observed_image_input(&model, None, NOW),
+        ModelImageInputCapability::Supported
+    );
+    assert_eq!(
+        registry.observed_image_input(&model, Some(false), NOW),
+        ModelImageInputCapability::Unsupported,
+        "what the person configured wins"
     );
 
     registry.learn_image_input_unsupported(&model, NOW + 1);
@@ -185,7 +189,7 @@ fn a_learned_refusal_beats_a_reported_yes() {
         ))
     );
     assert_eq!(
-        registry.observed_image_input(&model, NOW + 1),
+        registry.observed_image_input(&model, None, NOW + 1),
         ModelImageInputCapability::Unsupported
     );
     let configured = registry.resolve(
@@ -252,6 +256,21 @@ fn a_catalog_only_adds_what_nothing_else_says() {
     assert_eq!(
         after_refusal.image_input,
         Some(sourced(false, ModelMetadataSource::Learned, NOW))
+    );
+
+    let says_no = route(PROVIDER, "says-no");
+    set_catalog(
+        &registry,
+        &says_no,
+        ModelMetadata {
+            image_input: Some(sourced(false, ModelMetadataSource::Catalog, NOW)),
+            ..ModelMetadata::default()
+        },
+    );
+    assert_eq!(
+        registry.observed_image_input(&says_no, None, NOW),
+        ModelImageInputCapability::Unknown,
+        "a catalog's no keeps images going to the model"
     );
 }
 

@@ -52,14 +52,8 @@ impl AgentService {
         let history_bytes = contents.iter().fold(0usize, |total, item| {
             total.saturating_add(item.retained_bytes())
         });
-        let observed_image_input = model
-            .route_key(&runtime.config.model)
-            .map(|key| {
-                self.inner
-                    .model_metadata
-                    .observed_image_input(&key, now_millis_u64())
-            })
-            .unwrap_or(ModelImageInputCapability::Unknown);
+        let effective_input_capabilities =
+            self.session_input_capabilities(model.as_ref(), &runtime.config);
         let turn = runtime.turn.map(|turn| TurnRecord {
             id: turn.id,
             generation: turn.generation,
@@ -100,10 +94,7 @@ impl AgentService {
             },
             created_at: runtime.created_at,
             settings: SessionSettings {
-                effective_input_capabilities: runtime
-                    .config
-                    .input_capabilities
-                    .effective(observed_image_input),
+                effective_input_capabilities,
                 model,
                 title: runtime.title,
                 goal: runtime.goal,

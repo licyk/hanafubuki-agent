@@ -1,19 +1,35 @@
-use hanafubuki_agent_model_api::{ModelImageInputCapability, ModelRouteKey};
+//! The image input a session's model takes: the person's policy over what
+//! the model metadata knows of the model's route. A session takes it when
+//! it is created, recovered or given a model, and again before each turn's
+//! admission, steering, sampling step, tool call and snapshot, so a fact a
+//! listing reported or a refusal taught since applies at once.
 
-use super::{now_millis_u64, AgentError, AgentService, AgentSessionId, SessionCell, SessionRecord};
+use hanafubuki_agent_model_api::{ModelImageInputPolicy, ModelInputCapabilities, ModelRouteKey};
+
+use super::*;
 
 impl AgentService {
-    /// Applies the latest observed image input capability of the session's
-    /// model route.
+    /// The image input a session configured as `config` takes over
+    /// `model`: none when the person disabled it, else none when the route
+    /// is known not to read images, else images are sent (the model reads
+    /// them, or nothing says, and a refusal falls back once). A transport
+    /// that names no route has nothing known of it.
+    pub(super) fn session_input_capabilities(
+        &self,
+        model: &dyn ModelPort,
+        config: &AgentSessionConfig,
+    ) -> ModelInputCapabilities {
+        self.input_capabilities_at(model.route_key(&config.model).as_ref(), config)
+    }
+
+    /// Gives the session the image input its route resolves to now.
     pub(super) async fn refresh_session_image_input_capability(
         &self,
         session_id: AgentSessionId,
     ) -> Result<(), AgentError> {
         let cell = self.session(session_id)?;
-        if let Some((route_key, observed)) = self.observed_image_input(&cell)? {
-            let mut record = cell.lock_after_persistence().await?;
-            apply_observed_image_input(&mut record, &route_key, observed);
-        }
+        let mut record = cell.lock_after_persistence().await?;
+        self.refresh_image_input(&mut record);
         Ok(())
     }
 
@@ -24,50 +40,45 @@ impl AgentService {
         session_id: AgentSessionId,
     ) -> Result<(), AgentError> {
         let cell = self.session(session_id)?;
-        if let Some((route_key, observed)) = self.observed_image_input(&cell)? {
-            let mut record = cell.lock_after_persistence_blocking()?;
-            apply_observed_image_input(&mut record, &route_key, observed);
-        }
+        let mut record = cell.lock_after_persistence_blocking()?;
+        self.refresh_image_input(&mut record);
         Ok(())
     }
 
-    fn observed_image_input(
-        &self,
-        cell: &SessionCell,
-    ) -> Result<Option<(ModelRouteKey, ModelImageInputCapability)>, AgentError> {
-        let route_key = {
-            let record = cell.lock()?;
-            record
-                .settings
-                .model
-                .route_key(&record.settings.config.model)
+    /// A session whose transport names no route keeps what it has: the
+    /// refusal it fell back from (`record_unsupported_image_input`) stays.
+    fn refresh_image_input(&self, record: &mut SessionRecord) {
+        let settings = &record.settings;
+        let Some(route) = settings.model.route_key(&settings.config.model) else {
+            return;
         };
-        Ok(route_key.map(|route_key| {
-            let observed = self
-                .inner
-                .model_metadata
-                .observed_image_input(&route_key, now_millis_u64());
-            (route_key, observed)
-        }))
+        let capabilities = self.input_capabilities_at(Some(&route), &settings.config);
+        record.settings.effective_input_capabilities = capabilities;
+    }
+
+    fn input_capabilities_at(
+        &self,
+        route: Option<&ModelRouteKey>,
+        config: &AgentSessionConfig,
+    ) -> ModelInputCapabilities {
+        let observed = route.map_or(ModelImageInputCapability::Unknown, |route| {
+            self.inner.model_metadata.observed_image_input(
+                route,
+                configured_image_input(config),
+                now_millis_u64(),
+            )
+        });
+        config.input_capabilities.effective(observed)
     }
 }
 
-fn apply_observed_image_input(
-    record: &mut SessionRecord,
-    route_key: &ModelRouteKey,
-    observed: ModelImageInputCapability,
-) {
-    if record
-        .settings
-        .model
-        .route_key(&record.settings.config.model)
-        .as_ref()
-        == Some(route_key)
-    {
-        record.settings.effective_input_capabilities = record
-            .settings
-            .config
-            .input_capabilities
-            .effective(observed);
-    }
+/// The image input the person configured for the session's model, which
+/// beats every other source: `"disabled"` is a "no" (which `effective`
+/// applies too); nothing configures a "yes" yet. A per-model setting would
+/// be read here.
+fn configured_image_input(config: &AgentSessionConfig) -> Option<bool> {
+    (config.input_capabilities.image_input == ModelImageInputPolicy::Disabled).then_some(false)
 }
+
+#[cfg(test)]
+mod tests;

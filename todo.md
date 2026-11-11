@@ -202,12 +202,75 @@ Hoshimi `83f7813`. Every §9 decision (D1–D7) was accepted as recommended
     the new kind's arm, so its exception's ceiling went from 646 to 647
     (`architecture/module-size-policy.toml`), rather than a rewrite only to
     fit the number.
-- Open: M5 vision facts (seeding sessions from
-  the image fact; persisting the learned refusal is done); M6 reasoning
-  narrowing and the refusal fallback (and the documented effort lists
-  above); M7 showing it, the `/config` editor of `modelMetadata.discovery`
-  (with its settings-patch field and strict-decoding entry), and per-model
-  overrides; M8 models.dev (optional).
+- M5 (done): a session's image input is its route's resolved image fact
+  under the person's policy, so a model known not to read images is sent
+  none from the first request.
+  - `ModelMetadataRegistry::observed_image_input(route, configured, now)`
+    maps the resolved fact (`resolve`, so a learned "no" beats a reported
+    "yes" and a catalog "no" is ignored): yes `Supported` (produced for the
+    first time; it acts as unknown does), no `Unsupported`, none `Unknown`.
+    `ModelInputCapabilityPolicy::effective` still applies the policy last.
+  - `ConfiguredModelFacts.image_input`: `imageInput = "disabled"` is the
+    configured "no" (`Some(false)`), `"auto"` configures nothing; read in
+    one place, `configured_image_input` (`service/image_capability.rs`),
+    where D3's per-model override is to be read. Behaviour-identical to
+    leaving it unset, since `effective` applies the policy too; it makes
+    the resolved fact's source honest for M7.
+  - Applied where the capability was set: creation, model selection (was
+    reset to `Unknown`), recovery (was learned-only) through
+    `AgentService::session_input_capabilities`; and the refresh before a
+    turn's admission, a steering, each sampling step, each tool call and
+    each snapshot (unchanged points), now one step under the session's
+    lock (`lock_after_persistence`) instead of a route read, a registry
+    read and a re-check. A session whose transport names no route keeps
+    what it has, as before (`record_unsupported_image_input` still sets
+    `Unsupported` directly). Child sessions and forks copy their source's.
+    Deviation: the snapshot of a session not loaded
+    (`persisted_runtime_snapshot`) has no transport, hence no route, and
+    still shows the policy alone.
+  - Behaviour: a model reported (or learned) without image input gets no
+    image: the step's request replaces history images by the placeholder
+    before it is sent (no refused round trip, no `ImageInputFallback`),
+    `view_image` is not planned, and a host's image at a turn's start or in
+    a steering is refused with the existing `InvalidInput` message. A fact
+    that changes mid-turn applies from the next step (the plan and the
+    request read the refreshed capability; a `view_image` planned before is
+    refused when it runs). Known yes or unknown: as before. No request
+    golden or history corpus changed; no host-visible API changed (the
+    snapshot's `input_capabilities.image_input` is now `false` for such a
+    model).
+  - Tests: kernel `service/image_capability/tests.rs` (a listing's "no"
+    after an image was sent: placeholder at once, no fallback, a turn with
+    an image refused; steering with an image refused; a reported "yes"
+    sent images until a refusal, which then beats it for every session;
+    `disabled` over a reported "yes"; recovery seeds the record; creation
+    and selection over real transports); the registry's `precedence.rs`
+    (a reported yes is `Supported`, configured "no" wins, a catalog "no"
+    stays `Unknown`); facade `tests/model_vision.rs` (a listing of
+    `input_modalities: ["text"]` through `list_provider_models`: the next
+    request has no `view_image` and no image, a turn with an image is
+    refused; an in-band image refusal in one run, then the next run over
+    the same data directory: a new session takes no images and offers no
+    `view_image`).
+  - Docs: `providers-models` (images; the stale "largest output … not
+    acted on"), `architecture` (model metadata: image input),
+    `config-reference` (`inputCapabilities.imageInput`). `internals`
+    documents no image capability path, so it is unchanged.
+  - Residual: a compaction's own request (`compaction/source.rs`) is not
+    sanitized, so images in history from before the "no" was known reach
+    a model known not to read them (as with a learned refusal before M5).
+  - Residual: a listing's wrong "no" now keeps every image from the model
+    (the person's included, refused at the turn's start) with nothing to
+    override it until D3's per-model `imageInput` (M7): the policy has
+    only `auto` and `disabled`, a learned "yes" is ignored, and a model
+    its listing still names keeps the reported fact with no expiry.
+- Open: M5's residuals (sanitize a compaction's request when images are
+  off; D3's per-model `imageInput` to override a wrong reported "no");
+  M6 reasoning narrowing and the refusal fallback (and the
+  documented effort lists above); M7 showing it, the `/config` editor of
+  `modelMetadata.discovery` (with its settings-patch field and
+  strict-decoding entry), and per-model overrides; M8 models.dev
+  (optional).
 
 ## Plan: Codex's messages sent while the Agent works, in the terminal interface (2026-11-11)
 
