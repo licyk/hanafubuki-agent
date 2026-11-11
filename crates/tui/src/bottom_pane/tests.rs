@@ -331,7 +331,8 @@ fn tabs_within_a_paste_burst_are_the_pastes_and_send_nothing() {
                 "{code:?} while running: {running}"
             );
         }
-        std::thread::sleep(BottomPane::paste_burst_flush_delay() * 2);
+        // Buffering is active, so its idle timeout applies (longer on Windows).
+        std::thread::sleep(PasteBurst::recommended_active_flush_delay());
         assert!(pane.flush_paste_burst_if_due());
         assert_eq!(pane.composer_text(), "abc\n\t\td");
         assert!(ops(&rx).is_empty());
