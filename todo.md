@@ -1,3 +1,15 @@
+## Plan: model metadata from the Provider, with fallbacks (2026-11-11)
+
+The plan is [docs/plan-model-metadata.md](docs/plan-model-metadata.md), after
+Hoshimi `83f7813`. Every §9 decision (D1–D7) was accepted as recommended
+(2026-11-11).
+
+- Open: M1 tolerant, richer listing; M2 the metadata registry and
+  `model-metadata.json`; M3 background discovery and late resolution at turn
+  start; M4 learned context windows; M5 vision facts; M6 reasoning narrowing
+  and the refusal fallback; M7 showing it, and per-model overrides; M8
+  models.dev (optional).
+
 ## Plan: Codex's messages sent while the Agent works, in the terminal interface (2026-11-11)
 
 Ported from Codex `57a808a392` (`codex-rs/tui/src/chatwidget/input_queue.rs`,
