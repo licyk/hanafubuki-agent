@@ -1,11 +1,13 @@
 //! The guest host's handle, which the facade keeps: the packages whose code
-//! runs, each guest's status, retry, and a call into a guest.
+//! runs, the linked packages it watches, each guest's status, retry, and a
+//! call into a guest.
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
 
 use hanafubuki_agent_contracts::PluginFaults;
+use hanafubuki_agent_foundation::background_worker::BackgroundWorkerGroup;
 use hanafubuki_agent_foundation::panic::register_containment_check;
 use hanafubuki_agent_host::{RestartPolicy, GUEST_LOGGER_PREFIX};
 use hanafubuki_agent_packages::{PluginId, RuntimeKind};
@@ -18,6 +20,7 @@ use parking_lot::Mutex;
 use serde_json::Value;
 use tokio::sync::{mpsc, watch};
 
+use crate::linked::{LinkedPackage, LinkedWatch};
 use crate::package::{GuestPackage, GUEST_SERVICE};
 use crate::resolver::GuestResolver;
 use crate::settings::GuestSettingsPort;
@@ -42,6 +45,9 @@ pub struct GuestHostInputs {
     /// The bound on a guest's handshake and on each export without a
     /// deadline of its own; past it, the guest's process is killed.
     pub call_timeout: Duration,
+    /// The instance's contained worker group, whose thread watches the
+    /// linked packages while the guest host runs.
+    pub workers: BackgroundWorkerGroup,
 }
 
 /// The code of the installed plugins: one out-of-process Kardia guest per
@@ -58,6 +64,7 @@ pub(crate) struct Shared {
     pub(crate) packages: Mutex<Vec<GuestPackage>>,
     mount: Mutex<Option<Mount>>,
     pub(crate) records: Mutex<BTreeMap<String, GuestRecord>>,
+    linked: LinkedWatch,
     /// Held by an application of the packages to the tree, so the later of
     /// two is the one that stays.
     applying: tokio::sync::Mutex<()>,
@@ -109,6 +116,7 @@ impl GuestHost {
             packages: Mutex::new(Vec::new()),
             mount: Mutex::new(None),
             records: Mutex::new(BTreeMap::new()),
+            linked: LinkedWatch::new(inputs.workers),
             applying: tokio::sync::Mutex::new(()),
             changes: watch::Sender::new(0),
         });
@@ -144,6 +152,21 @@ impl GuestHost {
     /// A counter that changes with every guest's status.
     pub fn changes(&self) -> watch::Receiver<u64> {
         self.0.changes.subscribe()
+    }
+
+    /// Watches the directories of `linked`, the packages linked for
+    /// development (with code or not), in place of the last set, while the
+    /// guest host runs.
+    pub fn follow_linked(&self, linked: Vec<LinkedPackage>) {
+        self.0.linked.follow(linked);
+    }
+
+    /// A counter that changes once a linked package's directory changed
+    /// and was then quiet for 500 ms. The packages are to be read and
+    /// applied again then: the next [`Self::apply`] starts that package's
+    /// guest anew.
+    pub fn linked_changes(&self) -> watch::Receiver<u64> {
+        self.0.linked.changes()
     }
 
     /// Starts the guest of `id` again after it failed, with an empty restart
@@ -235,12 +258,17 @@ impl Shared {
         records.retain(|id, _| packages.iter().any(|package| package.id.key() == *id));
         for package in &packages {
             let before = previous.iter().find(|known| known.id == package.id);
+            let revision = match package.linked {
+                true => self.linked.revision(&package.id.key()),
+                false => 0,
+            };
             let record = records
                 .entry(package.id.key())
                 .or_insert_with(|| GuestRecord::new(GuestState::Stopped));
-            if before == Some(package) {
+            if before == Some(package) && record.revision == revision {
                 continue;
             }
+            record.revision = revision;
             record.epoch += 1;
             record.started = false;
             if before.is_none_or(|before| !before.runs()) {
@@ -269,9 +297,27 @@ impl Shared {
             return;
         };
         let packages = self.packages.lock().clone();
-        self.resolver.follow(&packages, &self.context);
-        let entries = packages.iter().flat_map(GuestPackage::entries).collect();
+        let named = packages
+            .into_iter()
+            .map(|package| {
+                let revision = self.revision(&package.id.key());
+                (package, revision)
+            })
+            .collect::<Vec<_>>();
+        self.resolver.follow(&named, &self.context);
+        let entries = named
+            .iter()
+            .flat_map(|(package, revision)| package.entries(*revision))
+            .collect();
         mount.loader.root().update(entries).await;
+    }
+
+    /// The revision the entry of the package `id` is named after.
+    pub(crate) fn revision(&self, id: &str) -> u64 {
+        self.records
+            .lock()
+            .get(id)
+            .map_or(0, |record| record.revision)
     }
 
     pub(crate) fn mount(&self) -> Option<Mount> {
@@ -280,10 +326,13 @@ impl Shared {
 
     pub(crate) fn mounted(&self, mount: Mount) {
         *self.mount.lock() = Some(mount);
+        self.linked.start();
     }
 
-    /// The guest host's plugin stopped, and its guests with it.
+    /// The guest host's plugin stopped, and its guests and its watch with
+    /// it.
     pub(crate) fn unmounted(&self) {
+        self.linked.stop();
         *self.mount.lock() = None;
         let mut records = self.records.lock();
         for record in records.values_mut() {

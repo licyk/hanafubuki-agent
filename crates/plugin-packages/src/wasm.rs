@@ -43,9 +43,12 @@ struct Limits {
 impl WasmEngines {
     /// Drops the engines no package of `packages` needs. A running guest
     /// keeps its own engine alive until it stops.
-    pub(crate) fn follow(&self, packages: &[GuestPackage], call_timeout: Duration) {
+    pub(crate) fn follow<'a>(
+        &self,
+        packages: impl Iterator<Item = &'a GuestPackage>,
+        call_timeout: Duration,
+    ) {
         let needed: HashSet<Limits> = packages
-            .iter()
             .filter_map(|package| match &package.runtime {
                 PackageRuntime::Wasm(runtime) => Some(Limits::of(package, runtime, call_timeout)),
                 PackageRuntime::Process(_) => None,

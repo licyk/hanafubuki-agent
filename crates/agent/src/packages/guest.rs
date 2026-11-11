@@ -5,6 +5,7 @@
 use std::sync::Arc;
 
 use hanafubuki_agent_config::AgentConfig;
+use hanafubuki_agent_foundation::background_worker::BackgroundWorkerGroup;
 use hanafubuki_agent_foundation::blocking::{run_blocking_operation, BlockingOperationPort};
 use hanafubuki_agent_host::RestartPolicy;
 use hanafubuki_agent_packages::{InstalledPackage, PluginId};
@@ -20,12 +21,14 @@ use crate::WorkspaceRootsPort;
 /// The guest host over the instance's executor: every guest confined by
 /// the platform's sandbox (the restricted token on Windows whatever
 /// `[windows] sandbox` says, which governs the model's commands), reading
-/// or writing the workspace roots as granted.
+/// or writing the workspace roots as granted; its watch of the linked
+/// packages runs in `workers`.
 pub(crate) fn guest_host(
     executor: &ExecutorManager,
     config: &AgentConfig,
     blocking: Arc<dyn BlockingOperationPort>,
     workspace: Arc<dyn WorkspaceRootsPort>,
+    workers: BackgroundWorkerGroup,
     packages: Vec<GuestPackage>,
 ) -> GuestHost {
     GuestHost::new(
@@ -45,6 +48,7 @@ pub(crate) fn guest_host(
             }),
             restart_policy: RestartPolicy::default(),
             call_timeout: hanafubuki_agent_kernel::FIRST_BATCH_HARD_LIMITS.plugin_call_deadline,
+            workers,
         },
         packages,
     )
@@ -70,6 +74,7 @@ pub(super) fn guest_package(
         permissions: code.permissions.clone(),
         granted: record.and_then(|record| record.granted_permissions.clone()),
         content_hash: record.and_then(|record| record.content_hash.clone()),
+        linked: package.linked().is_some(),
         contributes: code.contributes.clone(),
         settings,
         enabled,

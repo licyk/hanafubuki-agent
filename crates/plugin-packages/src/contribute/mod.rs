@@ -137,12 +137,13 @@ impl Shared {
             return;
         };
         let guest = GuestCaller::new(GuestHost(self.clone()), package.id.clone());
+        let entry = package.entry_name(self.revision(id));
         let ctx = fiber.context();
         let mut issues = Vec::new();
-        tools::register(ctx, &guest, &package, &mut issues);
+        tools::register(ctx, &guest, &package, &entry, &mut issues);
         context::register(ctx, &guest, &package, &mut issues);
         let prompt = prompt::register(ctx, &package, &mut issues);
-        hooks::register(ctx, &guest, &package, &mut issues);
+        hooks::register(ctx, &guest, &package, &entry, &mut issues);
         observers::register(ctx, &guest, &package, &mut issues);
         for issue in &issues {
             log::warn!("plugin {id}: {issue}");

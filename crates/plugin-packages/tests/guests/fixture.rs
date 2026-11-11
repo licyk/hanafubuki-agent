@@ -11,6 +11,7 @@ use hanafubuki_agent_contracts::{
     PluginFaults, PromptContributorRegistry, RegistryService, ToolLifecycleHookRegistry,
     ToolSourceRegistry,
 };
+use hanafubuki_agent_foundation::background_worker::BackgroundWorkerGroup;
 use hanafubuki_agent_host::{LogExporter, RestartPolicy};
 use hanafubuki_agent_packages::{
     content_hash, PackageContributes, PackagePermissions, PackageRuntime, PluginId, ProcessRuntime,
@@ -97,6 +98,7 @@ impl Fixture {
             workspace: Arc::new(move || roots.clone()),
             restart_policy: options.policy,
             call_timeout: options.call_timeout,
+            workers: BackgroundWorkerGroup::contained(),
         };
         let host = match options.sandbox {
             Some(_) => GuestHost::new(inputs, Vec::new()),
@@ -175,6 +177,7 @@ impl Fixture {
             id: PluginId::new(name, "local").unwrap(),
             version: "local".to_string(),
             content_hash: Some(content_hash(&root).unwrap()),
+            linked: false,
             data_root: self.directory.path().join("data").join(name),
             root,
             name: name.to_string(),
@@ -213,6 +216,7 @@ impl Fixture {
             id: PluginId::new(name, "local").unwrap(),
             version: "local".to_string(),
             content_hash: Some(content_hash(&root).unwrap()),
+            linked: false,
             data_root: self.directory.path().join("data").join(name),
             root,
             name: name.to_string(),

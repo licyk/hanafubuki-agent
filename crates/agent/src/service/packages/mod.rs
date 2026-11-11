@@ -17,7 +17,7 @@ use hanafubuki_agent_process::executor::ExecutorManager;
 
 use super::{hooks, AgentApplicationService, AgentMcpApplication};
 use crate::packages::{
-    AgentPackageChange, AgentPackageChangeKind, AgentPackageStatus, AgentPackages,
+    AgentPackageChange, AgentPackageChangeKind, AgentPackageStatus, AgentPackages, PackageReload,
 };
 use crate::skills::AgentSkillApplication;
 use crate::AgentStoragePaths;
@@ -29,16 +29,23 @@ impl AgentApplicationService {
     /// their hooks, and their MCP servers run (one that was added or
     /// changed has connected, or failed, when this returns; one that is gone
     /// is disconnected). The facade calls it after a settings change and
-    /// after every change to the installed packages; a caller that changes
-    /// `[plugins]` or the store by other means calls it too. The role
-    /// catalog is read again too, whether or not the packages loaded.
+    /// after every change to the installed packages, and the `plugins` row
+    /// after a change to a linked package's directory; a caller that
+    /// changes `[plugins]` or the store by other means calls it too. The
+    /// role catalog is read again too, whether or not the packages loaded.
     pub async fn reload_packages(&self) -> Result<(), String> {
-        let loaded = self
-            .packages
-            .reload(self.config.clone(), self.blocking.as_ref())
-            .await;
-        self.reload_roles().await;
-        loaded
+        self.package_reload().run().await
+    }
+
+    /// What [`Self::reload_packages`] runs.
+    pub(super) fn package_reload(&self) -> PackageReload {
+        PackageReload {
+            packages: self.packages.clone(),
+            config: self.config.clone(),
+            blocking: self.blocking.clone(),
+            roles: self.roles.clone(),
+            faults: self.kernel_faults.clone(),
+        }
     }
 
     /// Every installed package, on or off, with the content it contributes,
@@ -103,16 +110,7 @@ impl AgentApplicationService {
     /// [`Self::reload_packages`] in the background, for the settings and
     /// `mcp.toml` writes, which do not wait for it.
     pub(super) fn spawn_package_reload(&self) {
-        let service = self.clone();
-        crate::kernel_tasks::spawn_kernel_task(
-            &self.kernel_faults,
-            "plugin packages",
-            async move {
-                if let Err(error) = service.reload_packages().await {
-                    log::warn!("the installed plugins were not reloaded: {error}");
-                }
-            },
-        );
+        self.package_reload().spawn();
     }
 }
 

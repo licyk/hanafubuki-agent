@@ -3,10 +3,13 @@
 //! content hash taken at install, and the permissions the user granted its
 //! code. It is the Agent's own state, written as a
 //! whole (a temporary file renamed over it) and read tolerantly: unknown
-//! fields are ignored, each field falls back on its own, an entry whose
+//! fields are ignored, each field falls back on its own (a source of a
+//! kind this build does not know is none), an entry whose
 //! key is not a plugin id is skipped, and a file that does not read at all
 //! is quarantined and taken as empty. The packages themselves are the
-//! cache's directories; a package without an entry is still installed.
+//! cache's directories; a package without an entry is still installed. A
+//! linked package (source `linked`) is its entry alone: the directory it
+//! names is the package, with no content hash.
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -30,6 +33,16 @@ pub struct InstallRecord {
     /// What the user granted its code; kept across updates, so an update
     /// that asks for more waits for a new grant.
     pub granted_permissions: Option<PackagePermissions>,
+}
+
+impl InstallRecord {
+    /// The directory the package is linked to, when it is linked.
+    pub fn linked(&self) -> Option<&Path> {
+        match &self.source {
+            Some(PackageSource::Linked { path }) => Some(path),
+            _ => None,
+        }
+    }
 }
 
 pub(crate) type InstallRecords = BTreeMap<PluginId, InstallRecord>;

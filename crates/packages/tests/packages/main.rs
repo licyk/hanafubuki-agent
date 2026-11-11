@@ -13,6 +13,7 @@ use hanafubuki_agent_process::executor::manager::executor_registry_counts;
 use hanafubuki_agent_process::executor::ExecutorManager;
 
 mod lifecycle;
+mod link;
 mod manifest;
 mod marketplace;
 mod options;

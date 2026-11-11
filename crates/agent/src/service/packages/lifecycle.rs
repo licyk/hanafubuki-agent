@@ -6,14 +6,18 @@
 // (http://www.apache.org/licenses/LICENSE-2.0).
 // Modified for hanafubuki-agent: a package is installed from an added
 // marketplace or from a directory (filed under `local` unless a
-// marketplace is named); uninstall keeps the package's data unless asked
-// to purge it; enable, disable, update (the same source again) and retry
-// are calls of their own; each change reloads the installed plugins and
-// is told to the plugin event sink; remote plugins and apps are not
-// ported.
+// marketplace is named), or a directory is linked; uninstall keeps the
+// package's data unless asked to purge it, and a linked package's
+// directory always; enable, disable, update (the same source again, never
+// for a linked package) and retry are calls of their own; each change
+// reloads the installed plugins and is told to the plugin event sink;
+// remote plugins and apps are not ported.
+
+use std::path::{Path, PathBuf};
 
 use hanafubuki_agent_packages::{
-    load_manifest, InstallOutcome, PackageSource, PackageStore, PluginId, PluginSettings,
+    load_manifest, InstallOutcome, LinkOutcome, PackageSource, PackageStore, PluginId,
+    PluginSettings,
 };
 
 use super::{plugin_id, AgentApplicationService};
@@ -24,10 +28,11 @@ use crate::packages::{
 use hanafubuki_agent_config::AgentConfig;
 
 impl AgentApplicationService {
-    /// Installs a package from an added marketplace or a directory and
-    /// turns it on (`[plugins."<id>"] enabled = true`), then reloads: its
-    /// Skills and MCP servers are there when this returns, and its hooks
-    /// once trusted. Returns what it asks for: the hooks to trust.
+    /// Installs a package from an added marketplace or a directory, or
+    /// links a directory, and turns it on (`[plugins."<id>"] enabled =
+    /// true`), then reloads: its Skills and MCP servers are there when this
+    /// returns, and its hooks once trusted. Returns what it asks for: the
+    /// hooks to trust.
     pub async fn install_package(
         &self,
         source: AgentPackageSource,
@@ -41,22 +46,24 @@ impl AgentApplicationService {
         let outcome = self
             .with_packages("agent plugin install", move |packages, config| {
                 let store = packages.store();
-                let outcome = match source {
+                let outcome: Installed = match source {
                     AgentPackageSource::Marketplace {
                         marketplace,
                         plugin,
-                    } => install_from_marketplace(store, config, &marketplace, &plugin)?,
+                    } => install_from_marketplace(store, config, &marketplace, &plugin)?.into(),
                     AgentPackageSource::Directory { path, marketplace } => {
-                        let name = load_manifest(&path)
-                            .map_err(|error| error.to_string())?
-                            .manifest
-                            .name;
-                        let marketplace = marketplace.as_deref().unwrap_or(LOCAL_MARKETPLACE);
-                        let id =
-                            PluginId::new(&name, marketplace).map_err(|error| error.to_string())?;
+                        let id = directory_id(&path, marketplace.as_deref())?;
                         store
                             .install_directory(&path, &id)
                             .map_err(|error| error.to_string())?
+                            .into()
+                    }
+                    AgentPackageSource::Linked { path, marketplace } => {
+                        let id = directory_id(&path, marketplace.as_deref())?;
+                        store
+                            .link_directory(&path, &id)
+                            .map_err(|error| error.to_string())?
+                            .into()
                     }
                 };
                 config.set_package_settings(&outcome.id, Some(&enabled(true)))?;
@@ -69,7 +76,8 @@ impl AgentApplicationService {
     /// Installs the package `id` again from where it came from: its added
     /// marketplace (as that marketplace is now), else the directory it was
     /// installed from. It stays on or off as it was; a changed package's
-    /// hooks wait to be trusted again.
+    /// hooks wait to be trusted again. A linked package is refused: it is
+    /// its directory as it is, and is never updated.
     pub async fn update_package(&self, id: &str) -> Result<AgentPackageInstall, String> {
         let id = plugin_id(id)?;
         let result = self.update(id.clone()).await;
@@ -84,6 +92,10 @@ impl AgentApplicationService {
                 let added = config.settings()?.marketplaces.contains_key(&id.marketplace_name);
                 let source = installed.record.and_then(|record| record.source);
                 match source {
+                    Some(PackageSource::Linked { path }) => Err(format!(
+                        "plugin `{id}` is linked to {}: it is that directory as it is, and is never updated",
+                        path.display()
+                    )),
                     _ if added => install_from_marketplace(
                         store,
                         config,
@@ -100,11 +112,12 @@ impl AgentApplicationService {
                 }
             })
             .await?;
-        self.installed(outcome).await
+        self.installed(outcome.into()).await
     }
 
     /// Removes the installed package `id` and its `[plugins]` entry, then
-    /// reloads. Its data directory is kept unless `purge_data`.
+    /// reloads. Its data directory is kept unless `purge_data`; a linked
+    /// package's directory is always kept.
     pub async fn uninstall_package(
         &self,
         id: &str,
@@ -204,9 +217,9 @@ impl AgentApplicationService {
             .ok_or_else(|| format!("plugin `{id}` is not installed"))
     }
 
-    /// Reloads after an install of `outcome`, and reports it with the
-    /// package's hooks that wait to be trusted.
-    async fn installed(&self, outcome: InstallOutcome) -> Result<AgentPackageInstall, String> {
+    /// Reloads after an install or a link of `outcome`, and reports it with
+    /// the package's hooks that wait to be trusted.
+    async fn installed(&self, outcome: Installed) -> Result<AgentPackageInstall, String> {
         self.reload_packages().await?;
         let id = outcome.id.clone();
         let (package, hooks) = self
@@ -232,6 +245,36 @@ impl AgentApplicationService {
     }
 }
 
+/// What an install or a link did, as its report needs it.
+struct Installed {
+    id: PluginId,
+    root: PathBuf,
+    migrated_commands: Vec<String>,
+    issues: Vec<String>,
+}
+
+impl From<InstallOutcome> for Installed {
+    fn from(outcome: InstallOutcome) -> Self {
+        Self {
+            id: outcome.id,
+            root: outcome.root,
+            migrated_commands: outcome.migrated_commands,
+            issues: outcome.issues,
+        }
+    }
+}
+
+impl From<LinkOutcome> for Installed {
+    fn from(outcome: LinkOutcome) -> Self {
+        Self {
+            id: outcome.id,
+            root: outcome.root,
+            migrated_commands: Vec::new(),
+            issues: outcome.issues,
+        }
+    }
+}
+
 /// The id `source` installs, when it is known before the install reads
 /// the package.
 fn source_id(source: &AgentPackageSource) -> Option<PluginId> {
@@ -240,11 +283,22 @@ fn source_id(source: &AgentPackageSource) -> Option<PluginId> {
             marketplace,
             plugin,
         } => PluginId::new(plugin, marketplace).ok(),
-        AgentPackageSource::Directory { path, marketplace } => {
-            let name = load_manifest(path).ok()?.manifest.name;
-            PluginId::new(&name, marketplace.as_deref().unwrap_or(LOCAL_MARKETPLACE)).ok()
+        AgentPackageSource::Directory { path, marketplace }
+        | AgentPackageSource::Linked { path, marketplace } => {
+            directory_id(path, marketplace.as_deref()).ok()
         }
     }
+}
+
+/// The id of the package in the directory `path`: its manifest's name,
+/// under `marketplace` ([`LOCAL_MARKETPLACE`] when `None`).
+fn directory_id(path: &Path, marketplace: Option<&str>) -> Result<PluginId, String> {
+    let name = load_manifest(path)
+        .map_err(|error| error.to_string())?
+        .manifest
+        .name;
+    PluginId::new(&name, marketplace.unwrap_or(LOCAL_MARKETPLACE))
+        .map_err(|error| error.to_string())
 }
 
 /// Installs the entry `plugin` of the added marketplace `marketplace`.

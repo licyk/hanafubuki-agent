@@ -7,7 +7,8 @@
 // (http://www.apache.org/licenses/LICENSE-2.0).
 // Modified for hanafubuki-agent: an entry is read field by field from its
 // JSON object; npm sources are skipped as unsupported (not ported yet); a
-// source is recorded with the install, so it is serializable.
+// source is recorded with the install, so it is serializable; a linked
+// directory is a source of the install record alone.
 
 use std::path::{Component, Path, PathBuf};
 
@@ -23,6 +24,13 @@ use crate::{ManifestInterface, ManifestPaths, PackageManifest, PluginId};
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum PackageSource {
     Local {
+        path: PathBuf,
+    },
+    /// A directory linked for development (`plugins link`): the package is
+    /// that directory itself, never copied into the cache nor pinned by a
+    /// content hash. Only the install record holds it; no marketplace entry
+    /// does.
+    Linked {
         path: PathBuf,
     },
     Git {
@@ -75,7 +83,9 @@ pub(super) fn resolve(
         PackageSource::Git { .. } if fallback.has_metadata => {
             parse_fallback(Path::new(""), &fallback).map(without_paths)
         }
-        PackageSource::Local { .. } | PackageSource::Git { .. } => None,
+        PackageSource::Local { .. } | PackageSource::Git { .. } | PackageSource::Linked { .. } => {
+            None
+        }
     };
     let mut interface = manifest
         .as_ref()

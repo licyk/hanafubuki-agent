@@ -28,10 +28,12 @@ use crate::package::GuestPackage;
 /// After the user's hooks (0) and the goal's (100).
 const PRIORITY: i32 = 200;
 
+/// `entry` is the guest's entry name, which the hooks' generation follows.
 pub(super) fn register(
     ctx: &Context,
     guest: &GuestCaller,
     package: &GuestPackage,
+    entry: &str,
     issues: &mut Vec<String>,
 ) {
     let contributes = &package.contributes;
@@ -50,8 +52,7 @@ pub(super) fn register(
         ));
         return;
     };
-    let generation =
-        AgentContinuationHookGeneration(Sha256::digest(package.entry_name().as_bytes()).into());
+    let generation = AgentContinuationHookGeneration(Sha256::digest(entry.as_bytes()).into());
     let hook = Arc::new(GuestHooks(guest.clone()));
     if contributes.tool_lifecycle_hooks {
         let registration = ToolLifecycleHookRegistration {

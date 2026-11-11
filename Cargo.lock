@@ -2196,6 +2196,7 @@ dependencies = [
  "kardia-hmr",
  "kardia-loader",
  "log",
+ "notify",
  "parking_lot",
  "serde",
  "serde_json",

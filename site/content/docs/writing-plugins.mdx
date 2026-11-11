@@ -245,6 +245,12 @@ kardia-guest 和 pykardia 的访客 SDK（`pykardia/guest/` 以及导出时一�
 
 `plugins dev` 运行着 Agent，它占用数据目录，所以期间不能在这个目录上运行其他 Agent：要在终端界面或 `exec` 中试用插件，先停止它，插件仍保持安装。一个临时主目录能让开发中的插件不进入你自己的配置和数据：用同一个 [`HANAFUBUKI_AGENT_HOME`](/docs/environment#read) 先运行 `plugins dev`，再运行终端界面。
 
+### 链接 [#link]
+
+`hanafubuki-agent plugins link 目录` 则是链接插件：它是 `<名字>@local`（或归入 `--marketplace 名字`），被启用，它的目录本身就是包。不复制进缓存，也没有内容哈希固定它，所以不需要像 `plugins dev` 那样让一个 Agent 一直运行：之后运行的 Agent（终端界面、`exec`、宿主）按目录当前的样子读取它。在内置的 `plugins` 行运行期间，这个 Agent 监视每个启用的已链接插件；某个链接目录改动之后文件安静 500 毫秒（读取文件不算改动，`.git` 中的改动也不算），它就重新加载已安装的插件：插件的 Skill、MCP 服务器、钩子和角色被重新读取，它的代码带着改动重新启动。
+
+已链接的插件与已安装的插件受到完全相同的信任：它的代码在同样的授权和同样的沙箱配置下运行（它的目录只读），请求更多权限的改动会让它处于 `blocked`，直到 `plugins grant`；每次改动之后它的钩子都要重新信任，就像已安装插件的文件改变之后那样。`plugins list` 把它的来源显示为 `linked 目录`。它从不更新：`plugins update` 拒绝它，同一 ID 的 `plugins add` 在它被删除之前也会拒绝（`link` 同样拒绝一个已安装的 ID）。`plugins remove <名字>@local` 取消链接：它的记录和 `[plugins]` 条目被删除，目录保持原样（数据目录也保留，除非加 `--purge-data`）。链接不向目录写入任何东西，所以它的 `commands/` 不会变成 Skill（安装才转换它们）；目录不存在时，插件仍被列出并带有问题。
+
 ## 设置和权限 [#settings-permissions]
 
 - **权限**由用户授予，插件自己永远不能授予：权限未被授予的程序处于 `blocked` 状态。`plugins grant ID` 授予清单请求的权限，`/plugins` 中插件页面的 **Grant its permissions** 也一样。请求更多权限的更新要等待新的授权。WebAssembly 模块什么也不请求，从不处于 `blocked`。

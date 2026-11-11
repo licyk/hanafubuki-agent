@@ -11,8 +11,11 @@
 //! the marketplace entry's manifest when the package has none, checks the
 //! staged manifest against the source, turns `commands/` into Skills and
 //! swaps the copy in, keeping the previous version until the swap succeeded
-//! ([`PackageStore`]). A Claude Code package's agent files are read as
-//! roles ([`read_claude_agents`]). Marketplaces are added from a directory
+//! ([`PackageStore`]). A package can instead be linked for development: its
+//! directory, recorded in `install.json` as source `linked`, is the package
+//! itself, never copied nor pinned ([`PackageStore::link_directory`]). A
+//! Claude Code package's agent files are read as roles
+//! ([`read_claude_agents`]). Marketplaces are added from a directory
 //! or a git repository, upgraded and removed; the store returns their
 //! `[marketplaces]` records and never writes the configuration
 //! ([`PluginsSettings`], [`MarketplaceRecord`]). `git` runs through the
@@ -56,5 +59,7 @@ pub use settings::{
     is_package_enabled, MarketplaceRecord, MarketplaceSourceType, PluginDefaults,
     PluginMcpServerSettings, PluginSettings, PluginsSettings,
 };
-pub use store::{InstallOutcome, InstallRecord, InstalledPackage, PackageStore, UninstallOutcome};
+pub use store::{
+    InstallOutcome, InstallRecord, InstalledPackage, LinkOutcome, PackageStore, UninstallOutcome,
+};
 pub use version::{active_version, compare_versions, validate_version_segment, LOCAL_VERSION};

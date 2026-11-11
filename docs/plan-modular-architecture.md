@@ -1,14 +1,16 @@
 # Plan: a more customizable modular architecture, after KohakuTerrarium
 
-Date: 2026-11-11. Status: accepted. Every §9 decision was accepted as recommended
-(2026-11-11). M1, M2, M3, M4, M5 and M6 have landed (2026-11-11); M7 has not
-started.
+Date: 2026-11-11. Status: implemented. Every §9 decision was accepted as
+recommended (2026-11-11), and every milestone, M1 to M7, has landed (2026-11-11).
+`todo.md` records what each did, how it deviated from this plan, and what is still
+open.
 
 This plan compares the Agent's plugin composition with KohakuTerrarium's module
 architecture. It then specifies what to adopt, in which form and in which order.
 It is a handoff to the developer who implements it: each milestone in §8 names its
 files, its contracts, its tests, the documents it updates, and what Hanafubuki must
-change at its next pin. Nothing here is implemented yet.
+change at its next pin. It was written before any of it was implemented; where the
+implementation differs, `todo.md` says so.
 
 **Sources.**
 
@@ -1121,7 +1123,7 @@ is additive and tolerant.
 | User/project files | new `agents/*.toml` directories (M3) | none exist: only built-in roles | not read |
 | `[plugins."<id>"].settings` | now validated against the guest's `configSchema` (M1) | a value that does not fit falls back to its default, **with a warning**; nothing is rewritten | — |
 | Session config in history | new `scope` field, `skip_serializing_if` default (M4) | old sessions open with the empty scope (`default` role); default sessions' bytes unchanged | a session with a scope opens, and the field is ignored: the older build runs it unscoped. Acceptable, since downgrading is not a supported security boundary; say so in the release notes |
-| `install.json` | new source kind `linked` (M7) | unchanged | an unknown source is quarantined per field (existing tolerant reader); the package is listed with an issue |
+| `install.json` | new source kind `linked` (M7) | unchanged | an unknown source reads as none, the entry's other fields kept (existing tolerant reader). As built, a linked package has no cache directory, so an older build does not list it at all (not "listed with an issue"), and that build's next write of `install.json` keeps the entry with `"source": null`; this build then no longer lists it either, until it is linked again. The directory is never touched |
 | `ContextRenderer` (contracts) | new `order` field (M2) | built-in ranks reproduce the current order | — (compile-time API; host code must set it) |
 | `spawn_agent` spec | new optional `agent_type` (M5) | calls without it behave as today | — |
 | `exec --json` | new `role` field on the session object (M4) | additive under the stability rule | — |

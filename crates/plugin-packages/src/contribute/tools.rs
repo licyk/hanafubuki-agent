@@ -34,10 +34,12 @@ use crate::package::GuestPackage;
 /// guest's deadline, which kills a hung guest, is the one that fires.
 const KERNEL_MARGIN: Duration = Duration::from_secs(2);
 
+/// `entry` is the guest's entry name, which a tool's identity carries.
 pub(super) fn register(
     ctx: &Context,
     guest: &GuestCaller,
     package: &GuestPackage,
+    entry: &str,
     issues: &mut Vec<String>,
 ) {
     if package.contributes.tools.is_empty() {
@@ -56,7 +58,7 @@ pub(super) fn register(
         .tools
         .iter()
         .filter_map(|tool| {
-            let planned = plan(tool, &namespace, &provider_id, package, guest);
+            let planned = plan(tool, &namespace, &provider_id, package, entry, guest);
             if planned.is_none() {
                 issues.push(format!(
                     "the tool `{}` was left out: its name is not a tool name",
@@ -91,6 +93,7 @@ fn plan(
     namespace: &str,
     provider_id: &ToolProviderId,
     package: &GuestPackage,
+    entry: &str,
     guest: &GuestCaller,
 ) -> Option<SourcedTool> {
     let name = ToolName::namespaced(vec![namespace.to_string()], tool.name.clone()).ok()?;
@@ -98,7 +101,7 @@ fn plan(
     let timeout = tool.timeout.unwrap_or_else(|| guest.deadline());
     let schema = Value::Object(tool.input_schema.clone());
     let identity = serde_json::to_vec(&json!([
-        package.entry_name(),
+        entry,
         tool.name,
         tool.description,
         canonical_json(&schema),

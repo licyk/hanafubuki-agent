@@ -10,6 +10,7 @@ icon: Blocks
 
 - **从市场安装**：先用 `plugins marketplace add SOURCE` 添加市场（`owner/repo`、git URL 或本地目录），再运行 `plugins add PLUGIN@MARKETPLACE`。在终端界面中：`/plugins`，**Marketplaces**，**Add a marketplace…**，然后在插件上选择 **Install plugin**。
 - **从目录安装**：`plugins add DIR`，或者 **Installed** 标签页上的 **Install from a directory…**。它的 ID 是 `<名字>@local`。
+- **开发期间链接**：`plugins link DIR` 就地使用这个目录，运行中的 Agent 跟随它的改动（[链接](/docs/writing-plugins#link)）。
 
 安装会启用插件，它的 Skill、MCP 服务器、钩子和角色无需重启就加入 Agent。命令见[命令行参考](/docs/cli-reference#plugins)，浏览器见[终端界面](/docs/terminal-interface#plugins)，设置见[配置参考](/docs/config-reference#plugins)。
 
@@ -21,7 +22,7 @@ icon: Blocks
 
 ## 启用、停用和卸载 [#lifecycle]
 
-`plugins enable ID` 和 `plugins disable ID`（`/plugins` 中按空格）无需重启就启用或停用插件；停用带代码的插件会停止它的进程。`plugins update ID` 从它的市场或目录重新安装它。`plugins remove ID` 卸载它，除非加上 `--purge-data`，否则保留它的数据目录。用 `--safe-mode` 启动时，Agent 不加载任何已安装的插件。停用内置的 `plugins` 行（`disabledPlugins`）会停止所有插件的代码；它们的 Skill、MCP 服务器和钩子仍然运行，角色也保留。
+`plugins enable ID` 和 `plugins disable ID`（`/plugins` 中按空格）无需重启就启用或停用插件；停用带代码的插件会停止它的进程。`plugins update ID` 从它的市场或目录重新安装它（已链接的插件从不更新）。`plugins remove ID` 卸载它，或者取消链接已链接的插件并保留它的目录；除非加上 `--purge-data`，否则保留它的数据目录。用 `--safe-mode` 启动时，Agent 不加载任何已安装的插件。停用内置的 `plugins` 行（`disabledPlugins`）会停止所有插件的代码；它们的 Skill、MCP 服务器和钩子仍然运行，角色也保留。
 
 ## 插件失败时 [#failures]
 

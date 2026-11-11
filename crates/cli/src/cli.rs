@@ -341,7 +341,24 @@ pub(crate) enum PluginsCommand {
         #[arg(long)]
         json: bool,
     },
-    /// Uninstalls a plugin; its data directory is kept unless --purge-data.
+    /// Links the plugin in a directory for development, filed under
+    /// --marketplace (`local` when not given), and turns it on: the
+    /// directory is the plugin, never copied, and the running Agent reads it
+    /// again and restarts its code each time it changes. `remove` unlinks
+    /// it and keeps the directory.
+    #[command(
+        after_help = "Examples:\n  hanafubuki-agent plugins link ./path/to/plugin\n  hanafubuki-agent plugins remove my-plugin@local"
+    )]
+    Link {
+        dir: PathBuf,
+        /// (No `-m`: it is the global `--model`.)
+        #[arg(long, value_name = "MARKETPLACE")]
+        marketplace: Option<String>,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Uninstalls a plugin, or unlinks a linked one (its directory is
+    /// kept); its data directory is kept unless --purge-data.
     Remove {
         /// PLUGIN@MARKETPLACE.
         id: String,
@@ -353,7 +370,7 @@ pub(crate) enum PluginsCommand {
     /// Turns an installed plugin off.
     Disable { id: String },
     /// Installs a plugin again from its marketplace (as it is now) or the
-    /// directory it came from.
+    /// directory it came from; a linked plugin is never updated.
     Update { id: String },
     /// Shows an installed plugin: its source, content, hooks and issues.
     Info {

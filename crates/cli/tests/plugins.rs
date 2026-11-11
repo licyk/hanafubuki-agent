@@ -1,7 +1,9 @@
 //! `plugins` and `plugins marketplace`, run as the built binary in a
 //! temporary home: a local marketplace added, its plugin installed, listed,
 //! turned off and on, updated, shown and removed; a plugin installed from a
-//! directory; its MCP server in `mcp list`, and none in safe mode.
+//! directory; a directory linked, listed as linked, read as it is now,
+//! never updated, and unlinked with the directory kept; its MCP server in
+//! `mcp list`, and none in safe mode.
 
 mod support;
 
@@ -208,4 +210,49 @@ fn a_directory_is_installed_under_local_or_the_marketplace_named() {
         .map(|package| package["id"].as_str().unwrap())
         .collect();
     assert_eq!(ids, ["solo@local", "solo@mine"]);
+}
+
+#[test]
+fn a_linked_directory_is_read_as_it_is_never_updated_and_kept_when_unlinked() {
+    let home = Home::new();
+    let source = home.project.join("work");
+    plugin(&source, "work", "0.1.0");
+
+    let linked = home
+        .run(&["plugins", "link", source.to_str().unwrap()])
+        .expect(0)
+        .stdout();
+    assert!(linked.contains("Linked plugin `work@local`"), "{linked}");
+    let list = home.run(&["plugins", "list"]).expect(0).stdout();
+    assert!(
+        list.contains("work@local  enabled  0.1.0    linked "),
+        "{list}"
+    );
+    assert!(skills(&home).contains("greet"));
+    write(
+        &source.join("skills/wave/SKILL.md"),
+        "---\nname: wave\ndescription: Waves.\n---\nWave.\n",
+    );
+    assert!(skills(&home).contains("wave"));
+
+    let refused = home
+        .run(&["plugins", "update", "work@local"])
+        .expect(1)
+        .stderr();
+    assert!(refused.contains("never updated"), "{refused}");
+    let installed = home
+        .run(&["plugins", "add", source.to_str().unwrap()])
+        .expect(1)
+        .stderr();
+    assert!(installed.contains("is linked"), "{installed}");
+
+    let removed = home
+        .run(&["plugins", "remove", "work@local"])
+        .expect(0)
+        .stdout();
+    assert!(removed.contains("Removed plugin `work@local`"), "{removed}");
+    assert!(source.join(".claude-plugin/plugin.json").is_file());
+    assert!(source.join("skills/wave/SKILL.md").is_file());
+    let list = home.run(&["plugins", "list"]).expect(0).stdout();
+    assert!(list.contains("No plugins are installed."), "{list}");
 }

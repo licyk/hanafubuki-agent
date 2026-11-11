@@ -610,6 +610,7 @@ fn source_text(source: Option<&PackageSource>) -> String {
     match source {
         None => "unknown".to_string(),
         Some(PackageSource::Local { path }) => format!("Local · {}", path.display()),
+        Some(PackageSource::Linked { path }) => format!("Linked · {}", path.display()),
         Some(PackageSource::Git { url, ref_name, .. }) => match ref_name {
             Some(ref_name) => format!("Git · {url}@{ref_name}"),
             None => format!("Git · {url}"),

@@ -72,6 +72,9 @@ pub(super) fn load(
         hooks: None,
         roles: Vec::new(),
         guest: super::guest::guest_package(package, active, code_settings),
+        // While it is on, even when its manifest does not read: its
+        // directory stays watched, so the repair is seen.
+        linked: package.linked().filter(|_| active).map(Path::to_path_buf),
         config_schema,
         options,
         issues: package.issues.clone(),

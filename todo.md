@@ -21,8 +21,8 @@ the deny-only combinations) unchanged and adds declarative layers above it:
 - linked development packages.
 
 **Status.** Every §9 decision (D1–D9) was accepted as recommended (2026-11-11), and
-the plan records them. M1, M2, M3, M4, M5 and M6 have landed; M7 has not
-started.
+the plan records them. Every milestone, M1 to M7, has landed (2026-11-11); what is
+still open is listed under each.
 
 **For each milestone,** record when it is done:
 
@@ -691,10 +691,155 @@ then M4, then M5; M6 after M3; M7 after M1.
         change signal (the reload already does it).
       - Windows and macOS not run; the new end-to-end tests are not
         `cfg(unix)`, and `set_enabled` is no longer gated.
-- [ ] M7 (D6): linked development packages.
+- [x] M7 (D6): linked development packages.
       - `plugins link <dir>`.
       - A contained watcher that restarts the guest and re-reads its content.
-      Done: —. Open: —.
+      Done (2026-11-11):
+      - Packages crate: `PackageSource::Linked { path }` (`{"type":
+        "linked", "path": …}` in `install.json`, the resolved directory's
+        `native()` form); `InstallRecord::linked`, `InstalledPackage::linked`.
+        `store/link.rs`: `PackageStore::link_directory(dir, id) ->
+        LinkOutcome { id, root, issues }` (`ResolvedPath`; the manifest's
+        name must be the id's; no copy, no `contentHash`, nothing written
+        into the directory, so `commands/` are not migrated, with an
+        issue; a re-link keeps the grant, as an install does). `installed()`
+        and `read()` list a linked record after the cache's packages, read
+        as the directory is now (its manifest's version, else `local`; a
+        directory that does not read is an issue, the package still
+        listed). A link refuses an id in the cache, and an install refuses
+        a linked id. `uninstall` removes a linked record (`removed: true`)
+        and never touches the directory. A marketplace entry cannot carry
+        the variant (refused, typed).
+      - Guest host: `linked.rs`, `LinkedWatch`: `GuestHost::follow_linked(
+        Vec<LinkedPackage { id, root }>)` (code or content; a changed set by
+        id and `PathKey` replaces the watch), started at the supervisor's
+        mount, stopped at its disposer. The watch is a thread
+        (`plugin-linked-watcher`) of the instance's contained worker group
+        (`GuestHostInputs.workers`, the service's
+        `contained_with_panic_handler` group, so a panic is a kernel fault
+        and the group's shutdown joins it): one recursive `notify` watch
+        armed on that thread on each directory that is one; a directory
+        missing, removed (its `Remove` event) or gone is tried again every
+        100 ms and its reappearance is a change, so an export that replaces
+        the directory is followed; `Access` and paths in `.git` ignored, an
+        unattributed event counts for every directory; 500 ms debounce; the
+        token checked every 100 ms. Each
+        changed directory's revision counts one more, and
+        `GuestHost::linked_changes()` (a `watch` counter) moves.
+        `GuestPackage.linked`: `check_content` passes (no pin); the entry
+        name digests `linked <revision>` (an installed package's name is
+        unchanged), so `Shared::follow` (now comparing the record's
+        `revision` too) gives a new epoch, and `reconcile` a new name, which
+        kardia-loader answers by disposing the fiber and starting the new
+        plugin (a WASM module compiled anew). The tools' identity and the
+        hooks' generation take that entry name.
+      - Facade: `packages/reload.rs`, `PackageReload { packages, config,
+        blocking, roles, faults }`: `run()` is what `reload_packages` did
+        (the packages, then the role catalog; the service's `reload_roles`
+        is gone), `spawn()` what `spawn_package_reload` did; both service
+        calls now build and run it. `AgentPluginInputs.packages` is a
+        `PackageReload`; the `plugins` row's scoped worker (`plugins-linked`)
+        waits on `linked_changes` and spawns `PackageReload::spawn` (a
+        changed burst during a reload is one more reload). The facade hands
+        the guest host the active linked packages (`LoadedPackage.linked`,
+        `LoadedPackages::linked()`, set for every active linked package,
+        even one whose manifest does not read, so its repair is seen) at
+        open and at every reload.
+        `AgentPackageSource::Linked { path, marketplace }` through
+        `install_package` (an `Installed` report shared with installs);
+        `update_package` refuses a linked package before the marketplace
+        arm; uninstall is the unlink.
+      - CLI `plugins link DIR [--marketplace NAME] [--json]`; `plugins
+        remove` unlinks (the minimal surface: no `unlink`); `list`/`info`
+        source `linked <dir>`; TUI `/plugins` source `Linked · <dir>`.
+      - Tests: packages `tests/packages/link.rs` (recorded by reference, no
+        cache, nothing written, read as it is now, a directory that is
+        gone; remove keeps the directory, a re-link keeps the grant; link
+        and install of one id refuse each other, wrong name, missing
+        directory); guests harness `linked.rs` (a linked guest starts with
+        no hash, signals no sooner than ~the debounce after a change, the
+        packages applied again start it anew, unchanged packages keep it,
+        a directory replaced by a moved-in copy is watched anew, an
+        unlinked directory no longer signals); facade
+        `tests/packages/linked.rs` (a role file added to the linked
+        directory reaches `roles()` and `content.roles` with no call while
+        the `plugins` row runs, a manifest saved broken drops the roles and
+        its repair brings them back (checked to fail without the fix); `update_package` and a directory install
+        refused; uninstall keeps the directory and clears the entry);
+        `tests/plugin_guests.rs` (Linux, sandboxed: a linked code plugin's
+        guest starts anew on its own once a file in its directory
+        changes); CLI `tests/plugins.rs` (link, list as linked, a new Skill
+        read, update and add refused, remove keeps the directory). The
+        timing tests poll with bounds (a write repeated every 3 s until it
+        is seen, within the test's deadline, since the OS watch arms on its
+        own thread); the fixed waits are the negative check (2 s after an
+        unlinked write) and 1 s of quiet between two changes in the
+        guests harness.
+      - Docs (both languages): writing-plugins (`#link` under `#dev`),
+        cli-reference (`plugins link`, `remove` unlinks, `update` refuses),
+        plugins (`#install`, `#lifecycle`), architecture
+        (`#installed-plugins`: a link is a record; `#code-plugins`: the
+        entry name, what a start needs, linked packages follow their
+        directory, writing one), internals (`#plugin-guests`: the load,
+        the content check, the linked packages bullet), embedding
+        (`AgentPackageSource::Linked`, uninstall, update, `reload_packages`),
+        plugin-rules (the guest host and `plugins` rows), data-directory
+        (`install.json`). The plan's header and its `install.json`
+        migration row.
+      - Validation (Linux only): `cargo fmt --all --check`,
+        `RUSTFLAGS="-D warnings" cargo check --workspace --all-targets
+        --all-features`, `cargo clippy --workspace --all-targets
+        --all-features -- -D warnings`, `cargo xtask check`, `cargo test
+        --workspace --all-features`, the new watcher tests run again
+        several times; the site's `bun install --frozen-lockfile`,
+        `format:site`, `format:check:site`, `site:check`, `site:test`,
+        `site:build` (all 35 slugs prerendered, `#link` in both
+        languages). Request goldens and history corpora unchanged; no
+        diff under `crates/host`, `crates/foundation`, `crates/process` or
+        `architecture/`; no module-size exception added or raised.
+      - Deviations from the plan: the restart is the existing upgrade
+        path, a new loader entry name (kardia-loader disposes the old
+        fiber and starts the new plugin); this codebase never calls
+        kardia-core's `registry().replace`, which kardia-hmr's own reload
+        uses. The Skill watcher's debounce is 250 ms, not 500 ms; the
+        linked watch uses the plan's 500 ms and the Skill watcher is
+        unchanged. The watch lives with the guest host (the `plugins` row),
+        so with that row off a linked package's content is read again only
+        by other reloads. The migration row was wrong for this design: an
+        older build does not list a linked package (it has no cache
+        directory) and its next record write nulls the source (the plan's
+        row now says so). `notify` 8 is now a dependency of the guest host
+        too (the facade's and the CLI's version). Unlink is `plugins
+        remove`, no separate command.
+      - Model-visible: nothing (goldens unchanged).
+      - Hanafubuki: none required. Compile-time only if it matches
+        `PackageSource` or `AgentPackageSource` exhaustively (new `Linked`
+        variants) or builds `GuestHostInputs` (new `workers`) or
+        `GuestPackage` (new `linked`) literals; it does none today.
+      Open:
+      - The watch is recursive over the whole directory, a build output
+        (`target/`, `node_modules/`) included: a big tree costs inotify
+        watches (and can hit `max_user_watches`), and a build's writes
+        restart the guest once the build is quiet. Nothing is excluded but
+        `.git`.
+      - A change made before the OS watch armed (just after the Agent or
+        the `plugins` row started) is not seen until the next change.
+      - The hook trust's content hash does not skip `.git` while the watch
+        does: a commit in a linked directory makes its hooks `modified`
+        without a reload (the next listing or run sees it).
+      - A directory replaced so fast that neither its `Remove` event nor
+        the 100 ms check sees it gone would keep a dead OS watch; the
+        moved-in copy case is tested, other platforms are not.
+      - Every change of a linked package with hooks makes them `modified`
+        until trusted again (the hook trust hashes the package), by design
+        ("trusted exactly as an installed one"), which is tedious while
+        developing hooks.
+      - `plugins dev` still reinstalls on change; it and `link` overlap,
+        and `dev` on a linked id fails (an install refuses a linked id).
+      - A linked package whose manifest renames the plugin keeps its id;
+        nothing reports the mismatch.
+      - Windows and macOS not run (`notify` uses ReadDirectoryChangesW and
+        FSEvents there; the sandboxed end-to-end check is Linux only).
 
 ## Plan: a configuration center for every Agent setting (2026-11-11)
 

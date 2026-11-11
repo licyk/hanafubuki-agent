@@ -149,8 +149,11 @@ impl Spawner for GuestSpawner {
 }
 
 /// The package still has the content recorded at install, or its guest
-/// does not start.
+/// does not start. A linked package has none to keep.
 pub(crate) fn check_content(package: &GuestPackage) -> Result<(), String> {
+    if package.linked {
+        return Ok(());
+    }
     let recorded = package
         .content_hash
         .as_deref()

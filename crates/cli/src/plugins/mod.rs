@@ -11,8 +11,8 @@
 // `disable`, `update`, `info` and `retry` are added, and `remove` can
 // purge the plugin's data; the list shows the installed plugins unless
 // `--available`; remote marketplaces, apps and their auth are not ported;
-// `grant`, `settings`, `new`, `validate` and `dev` (the code of plugins in
-// this project's format) are this project's own.
+// `grant`, `settings`, `new`, `validate`, `dev` and `link` (the code of
+// plugins in this project's format) are this project's own.
 
 mod code;
 mod develop;
@@ -72,6 +72,27 @@ pub(crate) fn run(global: &GlobalArgs, command: PluginsCommand) -> Result<(), Fa
             let id = &install.package.id;
             println!("Added plugin `{id}` (version {}).", install.package.version);
             println!("Installed plugin root: {}", install.root.display());
+            print_install_notes(&install);
+            Ok(())
+        }
+        PluginsCommand::Link {
+            dir,
+            marketplace,
+            json,
+        } => {
+            let path = std::path::absolute(&dir)
+                .map_err(|error| Failure::usage(format!("{}: {error}", dir.display())))?;
+            let source = AgentPackageSource::Linked { path, marketplace };
+            let install = block_on(
+                agent,
+                |agent| async move { agent.install_package(source).await },
+            )?;
+            if json {
+                return print_json(&install);
+            }
+            let id = &install.package.id;
+            println!("Linked plugin `{id}` to {}.", install.root.display());
+            println!("`plugins remove {id}` unlinks it and keeps the directory.");
             print_install_notes(&install);
             Ok(())
         }
@@ -439,6 +460,7 @@ fn source_text(source: Option<&PackageSource>) -> String {
     match source {
         None => "unknown".to_string(),
         Some(PackageSource::Local { path }) => path.display().to_string(),
+        Some(PackageSource::Linked { path }) => format!("linked {}", path.display()),
         Some(PackageSource::Git {
             url,
             path,

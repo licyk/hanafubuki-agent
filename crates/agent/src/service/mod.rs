@@ -341,6 +341,7 @@ impl AgentApplicationService {
                     &config,
                     blocking.clone(),
                     workspace.clone(),
+                    workers.clone(),
                     guests,
                 )
             },
@@ -426,7 +427,13 @@ impl AgentApplicationService {
                     ),
                     git: hanafubuki_agent_worktree::GitQueries::new(executor.clone()),
                     hooks,
-                    packages: packages.clone(),
+                    packages: crate::packages::PackageReload {
+                        packages: packages.clone(),
+                        config: config.clone(),
+                        blocking: blocking.clone(),
+                        roles: roles.clone(),
+                        faults: kernel_faults.clone(),
+                    },
                     working_directory: hooks::working_directory(workspace.clone()),
                 },
                 host.plugins,

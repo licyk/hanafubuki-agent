@@ -7,7 +7,10 @@
 //! `mcp` and `hooks` rows. The row also mounts the guest host
 //! (`hanafubuki-agent-plugin-packages`), which runs the code packages'
 //! guests as its child fibers, so turning this row off hides the summary
-//! and stops every guest.
+//! and stops every guest. While it runs, a change to a linked package's
+//! directory, which the guest host watches, reloads the installed plugins
+//! in the background: their content is read again, and that package's
+//! guest starts anew.
 
 mod prompt;
 
@@ -15,17 +18,18 @@ mod prompt;
 mod tests;
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use hanafubuki_agent_contracts::{
-    CancellationToken, ContextRendererRegistry, PromptContributorRegistry, Register,
-    TurnAdmissionContributor, TurnAdmissionFuture, TurnAdmissionRegistry, TurnAdmissionRequest,
-    TurnExtensions,
+    spawn_scoped_worker, CancellationToken, ContextRendererRegistry, PluginFaults,
+    PromptContributorRegistry, Register, TurnAdmissionContributor, TurnAdmissionFuture,
+    TurnAdmissionRegistry, TurnAdmissionRequest, TurnExtensions,
 };
 use kardia_core::{Context, Inject, PluginDef, Service};
 use serde_json::Value;
 
 use self::prompt::{AvailablePluginsPrompt, AVAILABLE_PLUGINS_RENDERER};
-use crate::packages::AgentPackages;
+use crate::packages::{AgentPackages, PackageReload};
 
 /// The row's name.
 pub(crate) const PACKAGES_PLUGIN: &str = "plugins";
@@ -47,11 +51,19 @@ pub(crate) struct PluginSummary {
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(crate) struct AvailablePlugins(pub(crate) Vec<PluginSummary>);
 
-pub(crate) fn packages_plugin(packages: AgentPackages) -> PluginDef {
+/// How often the linked packages' follower checks that the row stops.
+const CANCELLATION_CHECK: Duration = Duration::from_millis(50);
+
+pub(crate) fn packages_plugin(reload: PackageReload) -> PluginDef {
     PluginDef::new(move |ctx: Context, _| {
-        let packages = packages.clone();
+        let reload = reload.clone();
         async move {
+            let packages = reload.packages.clone();
             let guests = packages.guests().plugin();
+            let changes = packages.guests().linked_changes();
+            spawn_scoped_worker(&ctx, "plugins-linked", move |cancellation| {
+                follow_linked(reload, changes, cancellation)
+            })?;
             ctx.get::<TurnAdmissionRegistry>()?
                 .register(Arc::new(PluginTurnAdmission(packages)))?;
             ctx.get::<PromptContributorRegistry>()?
@@ -67,8 +79,36 @@ pub(crate) fn packages_plugin(packages: AgentPackages) -> PluginDef {
         Inject::new()
             .with(TurnAdmissionRegistry::NAME)
             .with(PromptContributorRegistry::NAME)
-            .with(ContextRendererRegistry::NAME),
+            .with(ContextRendererRegistry::NAME)
+            .with(PluginFaults::NAME),
     )
+}
+
+/// Reloads the installed plugins in the background after each change to a
+/// linked package's directory, until the row stops. Changes made while a
+/// reload runs are taken by one more.
+async fn follow_linked(
+    reload: PackageReload,
+    mut changes: tokio::sync::watch::Receiver<u64>,
+    cancellation: CancellationToken,
+) {
+    loop {
+        tokio::select! {
+            changed = changes.changed() => {
+                if changed.is_err() {
+                    return;
+                }
+            }
+            () = cancelled(&cancellation) => return,
+        }
+        reload.spawn();
+    }
+}
+
+async fn cancelled(cancellation: &CancellationToken) {
+    while !cancellation.is_cancelled() {
+        tokio::time::sleep(CANCELLATION_CHECK).await;
+    }
 }
 
 struct PluginTurnAdmission(AgentPackages);

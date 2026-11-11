@@ -7,18 +7,21 @@
 //!
 //! The set is loaded when the Agent is built and again by every reload
 //! (`AgentApplicationService::reload_packages`), which the facade runs after
-//! a settings change and after each change to the installed packages. A
-//! package in this project's format with a runtime also has code, which
-//! the guest host runs (`hanafubuki-agent-plugin-packages`).
+//! a settings change and after each change to the installed packages, and
+//! the `plugins` row after a change to a linked package's directory, which
+//! the guest host watches. A package in this project's format with a
+//! runtime also has code, which the guest host runs
+//! (`hanafubuki-agent-plugin-packages`).
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use hanafubuki_agent_config::{AgentConfig, AgentSettings, RoleDefinition};
 use hanafubuki_agent_hooks::{HooksEngine, PluginHookSource};
 use hanafubuki_agent_mcp::McpServerId;
 use hanafubuki_agent_packages::{ManifestFormat, PackagePermissions, PackageStore, PluginId};
-use hanafubuki_agent_plugin_packages::{GuestHost, GuestPackage};
+use hanafubuki_agent_plugin_packages::{GuestHost, GuestPackage, LinkedPackage};
 use hanafubuki_agent_skills::PluginSkillRoot;
 use parking_lot::RwLock;
 
@@ -30,6 +33,7 @@ mod content;
 mod guest;
 mod lifecycle;
 mod marketplaces;
+mod reload;
 mod roles;
 mod status;
 mod validate;
@@ -41,6 +45,7 @@ pub use lifecycle::{
     AgentPackageUninstall, LOCAL_MARKETPLACE,
 };
 pub(crate) use marketplaces::{configured_marketplace, marketplace_view};
+pub(crate) use reload::PackageReload;
 pub use status::{AgentPackageContent, AgentPackageGuest, AgentPackageStatus};
 pub use validate::{validate_package, AgentPackageValidation};
 
@@ -90,6 +95,8 @@ pub(crate) struct LoadedPackage {
     pub(crate) roles: Vec<RoleDefinition>,
     /// Its code, on or off.
     pub(crate) guest: Option<GuestPackage>,
+    /// The directory it is linked to, while it is linked and active.
+    pub(crate) linked: Option<PathBuf>,
     /// What its code's settings are (`configSchema`).
     pub(crate) config_schema: Option<serde_json::Map<String, serde_json::Value>>,
     /// The options its `configSchema` lowers to and the settings' values.
@@ -123,6 +130,7 @@ impl AgentPackages {
             hooks,
             guests: guests(installed.guest_packages()),
         };
+        packages.guests.follow_linked(installed.linked());
         *packages.mcp.plugin_servers.write() = installed.mcp_servers();
         packages.follow(installed);
         Ok(packages)
@@ -160,6 +168,7 @@ impl AgentPackages {
         .await??;
         let servers = loaded.mcp_servers();
         let guests = loaded.guest_packages();
+        self.guests.follow_linked(loaded.linked());
         self.follow(loaded);
         self.mcp.set_plugin_servers(servers).await;
         self.guests.apply(guests).await;
@@ -304,6 +313,19 @@ impl LoadedPackages {
             .map(|package| AgentPackageRoles {
                 id: package.id.key(),
                 definitions: package.roles.clone(),
+            })
+            .collect()
+    }
+
+    /// The linked packages that are active, which the guest host watches.
+    pub(crate) fn linked(&self) -> Vec<LinkedPackage> {
+        self.enabled()
+            .filter_map(|package| {
+                let root = package.linked.clone()?;
+                Some(LinkedPackage {
+                    id: package.id.clone(),
+                    root,
+                })
             })
             .collect()
     }

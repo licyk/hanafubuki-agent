@@ -109,6 +109,8 @@ pub(crate) struct GuestRecord {
     /// Changed by every decision about the guest (a new package, a retry, a
     /// scheduled restart), so a restart scheduled before it does not run.
     pub(crate) epoch: u64,
+    /// The revision of its linked directory its entry is named after.
+    pub(crate) revision: u64,
 }
 
 impl GuestRecord {
@@ -123,6 +125,7 @@ impl GuestRecord {
             issues: Vec::new(),
             prompt: None,
             epoch: 0,
+            revision: 0,
         }
     }
 

@@ -4,8 +4,8 @@
 //! blocking pool, at its first resolution, with its metadata from the
 //! manifest too; and its host-services entry's name to the plugin that
 //! provides what the guest may view. Each name keeps one plugin, the stable identity
-//! kardia-loader needs across restarts; a new version, install or grant is
-//! a new name.
+//! kardia-loader needs across restarts; a new version, install or grant, or
+//! a linked package's change, is a new name.
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -53,22 +53,30 @@ struct WasmLoad {
 }
 
 impl GuestResolver {
-    /// Keeps the plugins of `packages`, building those it does not have,
-    /// and drops the rest.
-    pub(crate) fn follow(&self, packages: &[GuestPackage], context: &Arc<SpawnContext>) {
+    /// Keeps the plugins of `packages`, each with the revision its entry is
+    /// named after, building those it does not have, and drops the rest.
+    pub(crate) fn follow(&self, packages: &[(GuestPackage, u64)], context: &Arc<SpawnContext>) {
         let names: HashSet<String> = packages
             .iter()
-            .flat_map(|package| [package.entry_name(), package.host_entry_name()])
+            .flat_map(|(package, revision)| {
+                [
+                    package.entry_name(*revision),
+                    package.host_entry_name(*revision),
+                ]
+            })
             .collect();
-        self.engines.follow(packages, context.call_timeout);
+        self.engines.follow(
+            packages.iter().map(|(package, _)| package),
+            context.call_timeout,
+        );
         let mut plugins = self.plugins.write();
         plugins.retain(|name, _| names.contains(name));
-        for package in packages {
+        for (package, revision) in packages {
             plugins
-                .entry(package.entry_name())
+                .entry(package.entry_name(*revision))
                 .or_insert_with(|| self.guest_plugin(package, context));
             plugins
-                .entry(package.host_entry_name())
+                .entry(package.host_entry_name(*revision))
                 .or_insert_with(|| Resolved::Plugin(host_services(package, context)));
         }
     }

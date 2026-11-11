@@ -8,8 +8,9 @@
 // (http://www.apache.org/licenses/LICENSE-2.0).
 // Modified for hanafubuki-agent: the clone of a git source runs through the
 // Agent's `ExecutorManager`; the install takes the package's content hash
-// and records it with the version and the source in `install.json`; the
-// curated-marketplace version and npm sources are not ported.
+// and records it with the version and the source in `install.json`; a
+// package linked under the same id is not replaced; the curated-marketplace
+// version and npm sources are not ported.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -102,6 +103,10 @@ impl PackageStore {
                     .map_or(checkout.clone(), |path| checkout.join(path));
                 self.install(&source, &entry.id, fallback, entry.source.clone())
             }
+            PackageSource::Linked { .. } => Err(PackageError::Invalid(format!(
+                "plugin `{}`: a marketplace entry cannot link a directory",
+                entry.id
+            ))),
         }
     }
 
@@ -112,6 +117,12 @@ impl PackageStore {
         fallback: Option<&str>,
         recorded: PackageSource,
     ) -> Result<InstallOutcome, PackageError> {
+        if let Some(linked) = self.linked_path(id) {
+            return Err(PackageError::Invalid(format!(
+                "plugin `{id}` is linked to {}; remove it (the directory is kept) before installing it",
+                linked.display()
+            )));
+        }
         if !fs::metadata(source).is_ok_and(|metadata| metadata.is_dir()) {
             return Err(PackageError::Invalid(format!(
                 "plugin source path is not a directory: {}",

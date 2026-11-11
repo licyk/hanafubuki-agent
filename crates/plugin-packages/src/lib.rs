@@ -22,6 +22,12 @@
 //! restart policy; one that fails more often stays failed until it is
 //! retried. What a guest writes is logged only at `trace`.
 //!
+//! A package linked for development (`plugins link`) runs from its own
+//! directory, with no content to keep: while the guest host runs, it
+//! watches each linked directory, and once one has changed and been quiet
+//! for 500 ms, it tells the facade, whose reload of the packages starts
+//! that guest anew under the same grant and sandbox profile.
+//!
 //! A package may instead name a WebAssembly module, run in the
 //! Agent's process by kardia-hmr's wasmtime backend within the fuel, time
 //! and memory its manifest allows; it reaches nothing outside itself, so it
@@ -41,6 +47,7 @@ mod check;
 mod contribute;
 mod guests;
 mod host_services;
+mod linked;
 mod package;
 mod plugin;
 mod resolver;
@@ -52,6 +59,7 @@ mod wasm;
 
 pub use check::check_package;
 pub use guests::{GuestHost, GuestHostInputs};
+pub use linked::LinkedPackage;
 pub use package::{GuestPackage, GUEST_SERVICE};
 pub use plugin::GUESTS_PLUGIN;
 pub use settings::GuestSettingsPort;

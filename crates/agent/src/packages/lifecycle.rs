@@ -25,6 +25,13 @@ pub enum AgentPackageSource {
         path: PathBuf,
         marketplace: Option<String>,
     },
+    /// The package in the directory `path`, linked for development: used
+    /// where it is, never copied nor pinned, and read again whenever it
+    /// changes. Filed and named as [`Self::Directory`].
+    Linked {
+        path: PathBuf,
+        marketplace: Option<String>,
+    },
 }
 
 /// What an install or an update did, and what the package asks for before
@@ -34,7 +41,8 @@ pub enum AgentPackageSource {
 pub struct AgentPackageInstall {
     /// The package as it is now: on, its content loaded.
     pub package: AgentPackageStatus,
-    /// Where it was installed.
+    /// Where it was installed: its directory in the cache, or the linked
+    /// directory.
     pub root: PathBuf,
     /// The Skills its `commands/` became.
     pub migrated_commands: Vec<String>,

@@ -23,7 +23,7 @@ use std::sync::Arc;
 use super::{AgentPluginDescriptor, AgentPluginGroup, AgentPluginRow, AgentPluginSettings};
 use crate::conversation_reader::AgentConversationReader;
 use crate::goals::AgentGoalApplication;
-use crate::packages::AgentPackages;
+use crate::packages::PackageReload;
 use crate::plugins::{
     goal_plugin, memory_plugin, packages_plugin, permission_mode_plugin, recap_plugin,
     review_plugin, skills_plugin, subagents_plugin, titles_plugin, view_image_plugin,
@@ -70,8 +70,9 @@ pub(crate) struct AgentPluginInputs {
     pub(crate) hooks: Arc<HooksEngine>,
     /// Where a hook's command runs: the first workspace root.
     pub(crate) working_directory: WorkingDirectory,
-    /// The installed plugins, which the `plugins` row summarizes.
-    pub(crate) packages: AgentPackages,
+    /// The installed plugins, which the `plugins` row summarizes, and their
+    /// reload, which it runs once a linked package changed.
+    pub(crate) packages: PackageReload,
 }
 
 /// The rows the host mounts after its core ones, and the descriptors of the

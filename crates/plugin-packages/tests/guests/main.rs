@@ -13,6 +13,7 @@ mod fixture;
 mod guest;
 mod host_calls;
 mod lifecycle;
+mod linked;
 mod logging;
 mod sandbox;
 mod wasm;
@@ -54,6 +55,10 @@ const CHECKS: &[(&str, Check)] = &[
                 faults::a_fourth_fault_in_the_window_leaves_the_guest_failed_until_it_is_retried(),
             )
         },
+    ),
+    (
+        "a_linked_guest_starts_anew_once_its_directory_changes",
+        || Box::pin(linked::a_linked_guest_starts_anew_once_its_directory_changes()),
     ),
     ("a_changed_package_does_not_start", || {
         Box::pin(faults::a_changed_package_does_not_start())

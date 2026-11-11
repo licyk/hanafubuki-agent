@@ -35,6 +35,12 @@ pub fn migrated_command_skills_root(package_root: &Path) -> PathBuf {
         .join("migrated-command-skills")
 }
 
+/// Whether the package at `root` has commands to turn into Skills: the
+/// manifest's `commands`, else a `commands/` directory.
+pub(crate) fn declares_commands(root: &Path, declared: &[PathBuf]) -> bool {
+    !declared.is_empty() || root.join(DEFAULT_COMMANDS_DIR).is_dir()
+}
+
 /// Turns the commands of the package at `root` (the manifest's `commands`,
 /// else `commands/`) into Skills under [`migrated_command_skills_root`],
 /// replacing what an earlier migration wrote; returns their names.

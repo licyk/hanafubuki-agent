@@ -25,7 +25,8 @@ pub struct AgentPackageStatus {
     pub display_name: String,
     pub description: Option<String>,
     /// Where it was installed from (a directory, or a marketplace entry's
-    /// source); `None` when the install record has no entry for it.
+    /// source), or the directory it is linked to; `None` when the install
+    /// record has no entry for it.
     pub source: Option<PackageSource>,
     pub enabled: bool,
     /// What it contributes while it is on.

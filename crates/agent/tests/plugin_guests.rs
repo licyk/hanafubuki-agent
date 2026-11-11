@@ -9,7 +9,8 @@
 //! A guest that crashes in a tool call is that call's error: the turn ends
 //! with its answer, and the guest comes back. The changed package installed
 //! again from its directory (what `plugins dev` does on a change) starts
-//! anew with the change.
+//! anew with the change. The same plugin linked instead runs from its
+//! directory, and starts anew on its own once a file there changes.
 //!
 //! This binary is also the guest (kardia-guest's `serve`, with
 //! [`GUEST_ARG`]) and the sandbox helper, so the guest it installs, and
@@ -55,6 +56,8 @@ fn main() {
         .unwrap();
     runtime.block_on(a_code_plugin_contributes_to_a_turn_and_its_crash_stays_its_own());
     eprintln!("ok: a_code_plugin_contributes_to_a_turn_and_its_crash_stays_its_own");
+    runtime.block_on(a_linked_code_plugin_starts_anew_once_its_directory_changes());
+    eprintln!("ok: a_linked_code_plugin_starts_anew_once_its_directory_changes");
 }
 
 /// The plugin's guest: its tools echo or crash, its section and prompt
@@ -393,6 +396,57 @@ async fn a_code_plugin_contributes_to_a_turn_and_its_crash_stays_its_own() {
         after_update.contains("Board B-7 is open (demo_notes)."),
         "{after_update}"
     );
+
+    assert!(service
+        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
+        .is_empty());
+    let _ = std::fs::remove_dir_all(paths.app_data_dir);
+}
+
+async fn a_linked_code_plugin_starts_anew_once_its_directory_changes() {
+    let (service, paths, _) = service_with_host("plugin-guests-linked", test_host, |_, _| {});
+    let source = paths.app_data_dir.join("sources/demo");
+    write_manifest(&source, "1.0.0", &["demo_board"]);
+    service.start_plugins().await;
+    let linked = service
+        .install_package(AgentPackageSource::Linked {
+            path: source.clone(),
+            marketplace: None,
+        })
+        .await
+        .unwrap();
+    let permissions = linked.permissions.unwrap();
+    service
+        .grant_package_permissions(ID, permissions)
+        .await
+        .unwrap();
+    let first = running(&service, None).await;
+    let pid = first.guest.unwrap().status.process_id;
+
+    // The OS watch is armed on its own thread: a change made before it is
+    // lost, so it is made again until the guest starts anew.
+    let deadline = Instant::now() + TEST_WAIT;
+    let mut attempt = 0;
+    let restarted = 'changes: loop {
+        attempt += 1;
+        write(&source.join("notes.txt"), &format!("change {attempt}"));
+        let retry = Instant::now() + Duration::from_secs(3);
+        while Instant::now() < retry {
+            let package = package(&service).await;
+            let status = &package.guest.as_ref().unwrap().status;
+            if status.state == GuestState::Running
+                && status.process_id.is_some()
+                && status.process_id != pid
+            {
+                break 'changes package;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+        assert!(Instant::now() < deadline, "{:#?}", package(&service).await);
+    };
+    let guest = restarted.guest.as_ref().unwrap();
+    assert_eq!(guest.status.restarts, 0);
+    assert!(guest.status.issues.is_empty(), "{:?}", guest.status.issues);
 
     assert!(service
         .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)

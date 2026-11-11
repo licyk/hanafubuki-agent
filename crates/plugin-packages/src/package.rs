@@ -41,6 +41,10 @@ pub struct GuestPackage {
     /// The content hash the install recorded, which the package must still
     /// have when its guest starts.
     pub content_hash: Option<String>,
+    /// Linked for development (`plugins link`): `root` is the package's own
+    /// directory, with no content hash to keep, and its guest starts anew
+    /// once that directory changes.
+    pub linked: bool,
     /// What its manifest declares the guest contributes.
     pub contributes: PackageContributes,
     /// Its settings (`[plugins."<id>"].settings`): the guest's configuration
@@ -98,22 +102,23 @@ impl GuestPackage {
     /// entries share, which the guest's entry declares (`inject`), so the
     /// guest starts once its host services run. The plugins are named by
     /// everything their start depends on, so a new version, a changed
-    /// install or grant starts them anew; the settings are their
-    /// configuration, so a change restarts both.
-    pub(crate) fn entries(&self) -> [Value; 2] {
+    /// install or grant, or a linked package's next `revision` starts them
+    /// anew; the settings are their configuration, so a change restarts
+    /// both.
+    pub(crate) fn entries(&self, revision: u64) -> [Value; 2] {
         let label = format!("guest:{}", self.id.key());
         let config = Value::Object(self.settings.clone());
         [
             json!({
                 "id": self.host_entry_id(),
-                "name": self.host_entry_name(),
+                "name": self.host_entry_name(revision),
                 "disabled": !self.runs(),
                 "isolate": { WORKSPACE_SERVICE: label, SETTINGS_SERVICE: label },
                 "config": config,
             }),
             json!({
                 "id": self.id.key(),
-                "name": self.entry_name(),
+                "name": self.entry_name(revision),
                 "disabled": !self.runs(),
                 "isolate": {
                     GUEST_SERVICE: true,
@@ -130,12 +135,14 @@ impl GuestPackage {
         format!("{}{HOST_ENTRY_SUFFIX}", self.id.key())
     }
 
-    pub(crate) fn host_entry_name(&self) -> String {
-        format!("{}{HOST_ENTRY_SUFFIX}", self.entry_name())
+    pub(crate) fn host_entry_name(&self, revision: u64) -> String {
+        format!("{}{HOST_ENTRY_SUFFIX}", self.entry_name(revision))
     }
 
-    pub(crate) fn entry_name(&self) -> String {
-        let identity = format!(
+    /// Its guest's entry name; `revision` counts a linked package's
+    /// changes, and an installed package's name ignores it.
+    pub(crate) fn entry_name(&self, revision: u64) -> String {
+        let mut identity = format!(
             "{:?}",
             (
                 &self.version,
@@ -148,6 +155,9 @@ impl GuestPackage {
                 &self.name,
             )
         );
+        if self.linked {
+            identity.push_str(&format!(" linked {revision}"));
+        }
         let digest = hex::encode(Sha256::digest(identity.as_bytes()));
         format!("{}#{}", self.id.key(), &digest[..16])
     }
