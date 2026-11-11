@@ -193,6 +193,7 @@ fn a_report_on_a_runtime_that_has_shut_down_frees_the_consumer_slot() {
                 compaction_capability:
                     hanafubuki_agent_model_api::ModelCompactionCapability::LocalSummary,
                 sampling_retry_policy: crate::AgentSamplingRetryPolicy::default(),
+                context_window_source: None,
                 compaction_strategy: Default::default(),
                 scope: Default::default(),
                 role_instructions: None,

@@ -62,9 +62,10 @@ pub use roles::{
 pub use settings::{
     agent_settings_fields, AgentBackgroundCompactionSettings, AgentCompactionSettings,
     AgentCompactionStrategy, AgentHierarchicalCompactionSettings, AgentMemorySettings,
-    AgentPermissionMode, AgentSandboxMode, AgentSandboxWorkspaceWrite, AgentSettings,
-    AgentSettingsPatch, AgentWebSearchProvider, AgentWindowsSandbox, AgentWindowsSettings,
-    MAX_AGENT_DISABLED_PLUGINS, MAX_AGENT_PLUGIN_NAME_BYTES,
+    AgentModelDiscovery, AgentModelMetadataSettings, AgentPermissionMode, AgentSandboxMode,
+    AgentSandboxWorkspaceWrite, AgentSettings, AgentSettingsPatch, AgentWebSearchProvider,
+    AgentWindowsSandbox, AgentWindowsSettings, MAX_AGENT_DISABLED_PLUGINS,
+    MAX_AGENT_PLUGIN_NAME_BYTES,
 };
 pub use standalone::{
     AgentLogLevel, AgentNetworkSettings, AgentStandaloneSettings, AgentStandaloneSettingsPatch,

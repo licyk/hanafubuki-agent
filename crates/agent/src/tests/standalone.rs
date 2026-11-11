@@ -28,7 +28,7 @@ fn standalone(base_url: &str) -> Standalone {
     configure_test_provider(&AgentConfig::new(&home), base_url, None);
     std::fs::write(
         home.join("config.toml"),
-        "permissionMode = \"manual\"\n\n[profiles.ci]\npermissionMode = \"auto_review\"\n",
+        "permissionMode = \"manual\"\n\n[modelMetadata]\ndiscovery = \"off\"\n\n[profiles.ci]\npermissionMode = \"auto_review\"\n",
     )
     .unwrap();
     Standalone {

@@ -67,7 +67,9 @@ fn window(
     route: &ModelRouteKey,
     now_ms: u64,
 ) -> Option<u64> {
-    registry.context_window(configured, Some(route), route.model(), now_ms)
+    registry
+        .context_window(configured, Some(route), route.model(), now_ms)
+        .map(|fact| fact.value)
 }
 
 /// `route`'s facts from a third-party catalog, which nothing records yet.

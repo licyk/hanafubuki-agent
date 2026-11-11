@@ -33,6 +33,7 @@ mod golden;
 #[cfg(unix)]
 mod hooks;
 mod memory;
+mod model_discovery;
 mod packages;
 #[cfg(unix)]
 mod pipeline;

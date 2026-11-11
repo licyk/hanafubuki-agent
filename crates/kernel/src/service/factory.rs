@@ -154,13 +154,15 @@ impl AgentService {
     }
 
     /// Lists the models of the Provider at `base_url`, and records the
-    /// listing in the model metadata.
+    /// listing in the model metadata. Cancelled through `cancellation`, it
+    /// records nothing.
     pub async fn list_provider_models(
         &self,
         protocol: ModelApiProtocol,
         base_url: &str,
         credential: Option<String>,
         headers: Vec<hanafubuki_agent_model_api::ModelHeader>,
+        cancellation: CancellationToken,
     ) -> Result<Vec<ModelCatalogEntry>, AgentError> {
         if !self.inner.accepting.load(Ordering::Acquire) {
             return Err(AgentError::ShuttingDown);
@@ -179,7 +181,7 @@ impl AgentService {
         let catalog = ModelCatalogClient::new(provider)
             .map_err(|error| AgentError::InvalidInput(error.to_string()))?;
         let entries = catalog
-            .list(protocol, CancellationToken::default())
+            .list(protocol, cancellation)
             .await
             .map_err(|error| AgentError::Model(error.to_string()))?
             .entries;
@@ -201,21 +203,34 @@ impl AgentService {
         let route = ModelEndpoint::parse(base_url)
             .ok()
             .map(|endpoint| ModelRouteKey::new(protocol, &endpoint, model));
-        self.inner.model_metadata.context_window(
-            configured,
-            route.as_ref(),
-            model,
-            now_millis_u64(),
-        )
+        self.inner
+            .model_metadata
+            .context_window(configured, route.as_ref(), model, now_millis_u64())
+            .map(|window| window.value)
     }
 
-    /// The context window a session on `model_id` over `model` is given.
+    /// When the latest listing of the Provider at `base_url` was recorded,
+    /// in milliseconds since the Unix epoch: none when it never was, or
+    /// when `base_url` is not an endpoint.
+    pub fn model_listing_recorded_at(
+        &self,
+        protocol: ModelApiProtocol,
+        base_url: &str,
+    ) -> Option<u64> {
+        let endpoint = ModelEndpoint::parse(base_url).ok()?;
+        self.inner
+            .model_metadata
+            .listed_at_ms(&ModelEndpointKey::new(protocol, &endpoint))
+    }
+
+    /// The context window a session on `model_id` over `model` is given,
+    /// and its source.
     pub(super) fn session_context_window(
         &self,
         configured: Option<u64>,
         model: &dyn ModelPort,
         model_id: &str,
-    ) -> Option<u64> {
+    ) -> Option<hanafubuki_agent_model_api::Sourced<u64>> {
         self.inner.model_metadata.context_window(
             configured,
             model.route_key(model_id).as_ref(),

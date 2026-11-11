@@ -4,7 +4,9 @@
 //! keeps every request it received. An Anthropic Messages request with
 //! tool blocks and no tools is answered with an error instead, taking no
 //! answer, so a request that leaves out the tools its history used is
-//! caught (whether the live API refuses it was not checked).
+//! caught (whether the live API refuses it was not checked). A server
+//! given model listings ([`FakeServer::with_listings`]) answers `GET
+//! …/models` with them instead, apart from the event streams.
 
 use std::collections::{BTreeMap, VecDeque};
 use std::sync::{Arc, Mutex};
@@ -15,28 +17,91 @@ use tokio::net::{TcpListener, TcpStream};
 
 #[derive(Clone)]
 pub struct CapturedRequest {
+    pub method: String,
     pub path: String,
     pub headers: BTreeMap<String, String>,
     pub body: Vec<u8>,
 }
 
+/// The answer to one `GET …/models`: its status and body, sent once
+/// `release` is notified when it has one.
+#[derive(Clone)]
+pub struct FakeListing {
+    pub status: u16,
+    pub body: Vec<u8>,
+    pub release: Option<Arc<tokio::sync::Notify>>,
+}
+
+impl FakeListing {
+    /// A listing of `body` (a JSON document), sent at once.
+    pub fn ok(body: &str) -> Self {
+        Self {
+            status: 200,
+            body: body.as_bytes().to_vec(),
+            release: None,
+        }
+    }
+
+    /// A refusal with `status`, which the client does not retry when it
+    /// is a client error.
+    pub fn failing(status: u16) -> Self {
+        Self {
+            status,
+            body: br#"{"error":{"message":"no models here"}}"#.to_vec(),
+            release: None,
+        }
+    }
+
+    /// This answer, sent only once `release` is notified.
+    pub fn held(self, release: Arc<tokio::sync::Notify>) -> Self {
+        Self {
+            release: Some(release),
+            ..self
+        }
+    }
+}
+
 pub struct FakeServer {
     pub base_url: String,
     pub requests: Arc<Mutex<Vec<CapturedRequest>>>,
+    /// The `GET …/models` requests a server with listings answered.
+    pub listing_requests: Arc<Mutex<Vec<CapturedRequest>>>,
     pub task: tokio::task::JoinHandle<()>,
 }
 
 impl FakeServer {
     pub async fn start(responses: Vec<(Vec<u8>, Duration)>) -> Self {
+        Self::with_listings(responses, Vec::new()).await
+    }
+
+    /// A server that answers `GET …/models` with `listings`, in order, each
+    /// on a task of its own (so one held does not hold the event streams),
+    /// and every other request with the next of `responses`. Without
+    /// listings, a listing request takes the next response, as any other.
+    pub async fn with_listings(
+        responses: Vec<(Vec<u8>, Duration)>,
+        listings: Vec<FakeListing>,
+    ) -> Self {
         let listener = TcpListener::bind(("127.0.0.1", 0)).await.unwrap();
         let address = listener.local_addr().unwrap();
         let requests = Arc::new(Mutex::new(Vec::new()));
+        let listing_requests = Arc::new(Mutex::new(Vec::new()));
         let captured = requests.clone();
+        let listed = listing_requests.clone();
         let task = tokio::spawn(async move {
             let mut responses = VecDeque::from(responses);
-            while !responses.is_empty() {
+            let mut listings = VecDeque::from(listings);
+            let routes_listings = !listings.is_empty();
+            while !responses.is_empty() || !listings.is_empty() {
                 let (mut stream, _) = listener.accept().await.unwrap();
                 let request = read_request(&mut stream).await;
+                if routes_listings && request.method == "GET" && request.path.ends_with("/models") {
+                    listed.lock().unwrap().push(request);
+                    if let Some(listing) = listings.pop_front() {
+                        tokio::spawn(answer_listing(stream, listing));
+                    }
+                    continue;
+                }
                 let refusal = anthropic_refusal(&request);
                 captured.lock().unwrap().push(request);
                 if let Some(error) = refusal {
@@ -48,7 +113,9 @@ impl FakeServer {
                     let _ = stream.shutdown().await;
                     continue;
                 }
-                let (body, delay) = responses.pop_front().unwrap();
+                let Some((body, delay)) = responses.pop_front() else {
+                    continue;
+                };
                 let headers = format!(
                     "HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\ncontent-length: {}\r\nconnection: close\r\n\r\n",
                     body.len()
@@ -65,6 +132,7 @@ impl FakeServer {
         Self {
             base_url: format!("http://{address}/v1"),
             requests,
+            listing_requests,
             task,
         }
     }
@@ -72,6 +140,24 @@ impl FakeServer {
     pub fn requests(&self) -> Vec<CapturedRequest> {
         self.requests.lock().unwrap().clone()
     }
+
+    pub fn listing_requests(&self) -> Vec<CapturedRequest> {
+        self.listing_requests.lock().unwrap().clone()
+    }
+}
+
+async fn answer_listing(mut stream: TcpStream, listing: FakeListing) {
+    if let Some(release) = listing.release {
+        release.notified().await;
+    }
+    let head = format!(
+        "HTTP/1.1 {} Fake\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n",
+        listing.status,
+        listing.body.len()
+    );
+    let _ = stream.write_all(head.as_bytes()).await;
+    let _ = stream.write_all(&listing.body).await;
+    let _ = stream.shutdown().await;
 }
 
 impl Drop for FakeServer {
@@ -91,7 +177,9 @@ async fn read_request(stream: &mut TcpStream) -> CapturedRequest {
         }
     };
     let head = std::str::from_utf8(&bytes[..header_end]).unwrap();
-    let path = head.split(' ').nth(1).unwrap_or_default().to_string();
+    let mut request_line = head.split(' ');
+    let method = request_line.next().unwrap_or_default().to_string();
+    let path = request_line.next().unwrap_or_default().to_string();
     let headers = head
         .split("\r\n")
         .skip(1)
@@ -111,6 +199,7 @@ async fn read_request(stream: &mut TcpStream) -> CapturedRequest {
         bytes.extend_from_slice(&buffer[..count]);
     }
     CapturedRequest {
+        method,
         path,
         headers,
         body: bytes[header_end..header_end + length].to_vec(),

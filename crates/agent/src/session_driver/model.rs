@@ -28,6 +28,7 @@ impl AgentSessionDriver {
         )
         .await??;
         let resolved = resolve_settings_provider(&registry, &request.provider_id)?;
+        self.discovery.request(Some(&request.provider_id));
         let policy = resolved.policy;
         let provider = resolved.definition;
         let model = request.model;

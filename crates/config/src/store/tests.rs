@@ -7,9 +7,9 @@ use serde_json::json;
 
 use super::*;
 use crate::{
-    AgentConfigProblem, AgentLogLevel, AgentNetworkSettings, AgentPermissionMode,
-    AgentProviderSettings, AgentProxy, AgentSandboxMode, AgentSandboxWorkspaceWrite,
-    AgentWebSearchProvider,
+    AgentConfigProblem, AgentLogLevel, AgentModelDiscovery, AgentNetworkSettings,
+    AgentPermissionMode, AgentProviderSettings, AgentProxy, AgentSandboxMode,
+    AgentSandboxWorkspaceWrite, AgentWebSearchProvider,
 };
 
 fn recovered(directory: &Path) -> Vec<String> {
@@ -569,4 +569,52 @@ fn an_unreadable_windows_sandbox_is_dropped_which_turns_it_off() {
         .unwrap();
     let written = fs::read_to_string(&path).unwrap();
     assert!(!written.contains("windows"), "{written}");
+}
+
+#[test]
+fn model_discovery_reads_tolerantly_and_is_set_by_its_key() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join(AGENT_SETTINGS_FILE);
+    let discovery = |config: &AgentConfig| config.settings().unwrap().model_metadata.discovery;
+    assert_eq!(
+        discovery(&AgentConfig::new(directory.path())),
+        AgentModelDiscovery::Auto
+    );
+
+    // A key a later version adds is ignored, and the one beside it read.
+    fs::write(
+        &path,
+        "[modelMetadata]\ndiscovery = \"off\"\nmodelsDev = true\n",
+    )
+    .unwrap();
+    let config = AgentConfig::new(directory.path());
+    assert_eq!(discovery(&config), AgentModelDiscovery::Off);
+    assert!(config.recoveries().is_empty());
+
+    for unusable in [
+        "[modelMetadata]\ndiscovery = \"sometimes\"\n",
+        "modelMetadata = 3\n",
+    ] {
+        fs::write(&path, unusable).unwrap();
+        let config = AgentConfig::new(directory.path());
+        assert_eq!(discovery(&config), AgentModelDiscovery::Auto, "{unusable}");
+        assert!(matches!(
+            &config.recoveries()[0].problem,
+            AgentConfigProblem::Repaired { repairs } if repairs.len() == 1
+        ));
+    }
+
+    fs::remove_file(&path).unwrap();
+    let config = AgentConfig::new(directory.path());
+    config
+        .set_user_value("modelMetadata.discovery", "off")
+        .unwrap();
+    assert_eq!(discovery(&config), AgentModelDiscovery::Off);
+    assert!(config
+        .set_user_value("modelMetadata.discovery", "sometimes")
+        .is_err());
+    assert_eq!(
+        config.value("modelMetadata.discovery").unwrap(),
+        Some(json!("off"))
+    );
 }

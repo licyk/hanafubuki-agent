@@ -75,7 +75,7 @@ Agent 是一个**内核**（`hanafubuki-agent-kernel`），拥有会话、轮次
 
 ### 启动与关闭 [#start-and-shutdown]
 
-启动领取一个代次，构建运行时和进程所有者组，回收上一次运行留下的进程组（`process-groups.json`），在运行时的阻塞池上构造服务并运行恢复，启动插件，安排 MCP 连接（同时最多四个，各有自己的超时），然后把服务装为 `Running`。崩溃循环标记（`start-marker.json`）在三次未完成的启动后停止自动启动。关闭在 20 秒预算内按固定阶段进行：关闭槽位、停止轮次、MCP、插件（一次性释放 kardia 根）、记忆、历史与执行、进程组、运行时。插件不拥有 MCP、记忆、历史或执行的生命周期，所以它们拆除的顺序无关紧要。
+启动领取一个代次，构建运行时和进程所有者组，回收上一次运行留下的进程组（`process-groups.json`），在运行时的阻塞池上构造服务（构造时启动[模型发现](#model-metadata)，在后台列出默认 Provider 的模型）并运行恢复，启动插件，安排 MCP 连接（同时最多四个，各有自己的超时），然后把服务装为 `Running`。崩溃循环标记（`start-marker.json`）在三次未完成的启动后停止自动启动。关闭在 20 秒预算内按固定阶段进行：关闭槽位、停止轮次、MCP、插件（一次性释放 kardia 根）、记忆、历史与执行、进程组、运行时。插件不拥有 MCP、记忆、历史或执行的生命周期，所以它们拆除的顺序无关紧要。
 
 ## 会话与轮次 [#sessions-and-turns]
 
@@ -171,7 +171,7 @@ schema 遵循同样的按协议规则：支持 `strict_json_schema` 的协议（
 
 ### 上下文窗口与 token 估算 [#the-context-window-and-the-token-estimate]
 
-会话的 `context_window_tokens` 在创建会话或选择模型时解析：配置的窗口，否则[模型元数据](#model-metadata)对该模型所知的窗口（Provider 的模型列表报告的窗口，否则一张已知模型系列的小表）；都没有就不做自动压缩。整个 Agent 只有一种 token 估算（`hanafubuki_agent_contracts::tokens`，字节数 / 4）。计数之所以一致，是因为它们数的是同一个请求：准入检查、步骤的请求和自动压缩对下一个请求的检查都用 `step_model_request` 构建请求，用 `estimate_model_request_tokens` 计数，工具和记忆都包括在内。
+会话的 `context_window_tokens` 在创建会话或选择模型时解析，每个轮次开始时再解析一次：配置的窗口，否则[模型元数据](#model-metadata)对该模型所知的窗口（Provider 的模型列表报告的窗口，否则一张已知模型系列的小表）；都没有就不做自动压缩。整个 Agent 只有一种 token 估算（`hanafubuki_agent_contracts::tokens`，字节数 / 4）。计数之所以一致，是因为它们数的是同一个请求：准入检查、步骤的请求和自动压缩对下一个请求的检查都用 `step_model_request` 构建请求，用 `estimate_model_request_tokens` 计数，工具和记忆都包括在内。
 
 ### 模型元数据 [#model-metadata]
 
@@ -183,7 +183,11 @@ Agent 对它访问的每个模型所知道的内容，是内核的 `ModelMetadat
 4. **目录**，第三方模型目录，只补充其他来源都没说的事实（目前没有写入它的地方）。
 5. **内置**：窗口表。
 
-目前据此行事的有：窗口，在创建会话和选择模型时；以及学到的图片拒绝，它像[图片回退](/docs/providers-models#images)一直以来那样把会话观察到的图片输入能力设为不支持（报告的图片输入目前还不据此行事）。内核从不访问数据目录：它的所有者注入一个 `ModelMetadataStore`，注册表启动时加载一次，每次变化后把快照交给它。facade 的存储是 `model-metadata.json`（[数据目录](/docs/data-directory#contents)）；内核的其他构造方式只在本次运行中保留这些事实。列表的合并、过期和文件格式见[内部细节](/docs/internals#model-metadata)。
+目前据此行事的有：窗口，在创建会话、选择模型和每个轮次开始时（见下文）；以及学到的图片拒绝，它像[图片回退](/docs/providers-models#images)一直以来那样把会话观察到的图片输入能力设为不支持（报告的图片输入目前还不据此行事）。内核从不访问数据目录：它的所有者注入一个 `ModelMetadataStore`，注册表启动时加载一次，每次变化后把快照交给它。facade 的存储是 `model-metadata.json`（[数据目录](/docs/data-directory#contents)）；内核的其他构造方式只在本次运行中保留这些事实。列表的合并、过期和文件格式见[内部细节](/docs/internals#model-metadata)。
+
+**模型发现。** facade 自己列出各 Provider 的模型，所以在任何人打开模型列表之前，列表报告的事实就已知道（`model_discovery.rs`）。Agent 的 worker 组里有一个 worker，带自己的运行时，从通道接收请求，一次列出一个 Provider，经由内核的 `list_provider_models`：用该 Provider 的端点、令牌和请求头，与它的请求相同，列表也像其他列表一样被记录。构建服务时请求一次（默认 Provider）；此后每当会话绑定到某个 Provider 时都请求：在它上面创建会话，选用它的模型（`/model`、角色的模型），或为一个轮次激活会话，这也覆盖了在另一个 Provider 上恢复的会话。请求只是往通道发送一条消息，所以从不延迟会话的创建、模型选择或轮次。一个端点只有在它最近一次记录的列表已满一天，并且在本次运行中距它上次列出已满一天、或距上次失败的列出已满 15 分钟时，才会再次列出。这一天从模型元数据保存的列出时间（`listedAtMs`）算起，所以新的运行（包括每次 `exec`）不会再列一次，用户自己请求的列表也计算在内；失败只在本次运行中记住。失败以 warn 级别记录 Provider 的 id，从不记录它的回答（那是它的内容，可能回显凭据），也从不让轮次失败。关闭时 worker 组会取消进行中的列出；被取消的列出不记录任何东西。`modelMetadata.discovery = "off"`（[配置参考](/docs/config-reference#model-metadata)）让所有请求都不被执行；用户自己请求的列表（模型列表、Provider 的测试、`doctor --online`）仍会记录。facade 的测试构造方式无论设置如何都不运行模型发现，测试用 Provider（`test_support::configure_test_provider`）也会关掉它，所以脚本化的模型服务器只看到测试自己的请求。
+
+**延后解析。** 会话以创建时已知的信息创建，从不等待列表。每个轮次被接纳时，内核在会话的锁内、在接纳该轮次的同一次提交中，再次解析会话的路由（`service/context_window.rs`）：值或来源不同的窗口会替换 `context_window_tokens`，会话记录的用量也在同一次提交中改用这个窗口计量，所以恢复时“用量与窗口一致”的检查仍然成立。会话记住窗口的来源（`AgentSessionConfig.context_window_source`，未知时省略，所以之前写入的会话保持不变）。配置的窗口从不被替换；没有来源的窗口（在记录来源之前写入的会话）视为配置的；没有窗口的会话采用已知的窗口。路由完全解析不出窗口时（报告它的列表已过期，也没有其他来源知道这个模型），会话保留已有的窗口：轮次开始时从不丢弃已知的窗口。尚未绑定到 Provider 的会话没有路由，不会被解析，所以内置表不会单独替换 Provider 报告的窗口。
 
 ### 压缩 [#compaction]
 
@@ -339,7 +343,7 @@ Agent 对它访问的每个模型所知道的内容，是内核的 `ModelMetadat
 ## 已知的限制 [#known-limits]
 
 - 文件工具的策略根目录在构建 Agent 时固定；只有 Skill 根目录和上下文段按每次读取跟随工作区。
-- 在模型窗口已知之前创建的会话没有窗口，直到再次选择它的模型；恢复不会解析它。
+- 会话的窗口只在轮次开始时重新解析：轮次运行期间得知的窗口在会话的下一个轮次才采用，模型元数据完全不再知道的窗口会一直保留，直到再次选择会话的模型。
 - MCP 重连复用打开连接时的密钥，所以过期的 OAuth 令牌会让重连失败，直到用户手动连接。
 - Skill 监视器只监视启动时存在的根目录；之后出现的根目录（包括之后启用的包的根目录）依靠读取时的标记。
 - 手动编辑 `[plugins]` 在下次启动或重新加载时生效；Agent 只在它自己写入设置之后重新加载包。

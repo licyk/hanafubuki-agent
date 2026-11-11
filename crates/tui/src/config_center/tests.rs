@@ -59,6 +59,11 @@ const FORM_KEYS: [&str; 43] = [
 /// patch, write these dynamic records.
 const PLUGIN_KEYS: [&str; 3] = ["disabledPlugins", "plugins", "marketplaces"];
 
+/// Set with `config set` or by hand: no form edits them yet (the model
+/// metadata's editor comes with its display, M7 of
+/// `docs/plan-model-metadata.md`).
+const COMMAND_KEYS: [&str; 1] = ["modelMetadata.discovery"];
+
 /// Owned by the terminal interface's specialized editors.
 const INTERFACE_KEYS: [&str; 5] = [
     "tui.theme",
@@ -82,6 +87,7 @@ fn every_known_scalar_setting_has_an_editor() {
             && !leaf.starts_with("plugins.")
             && !leaf.starts_with("marketplaces.")
             && !INTERFACE_KEYS.contains(&leaf.as_str())
+            && !COMMAND_KEYS.contains(&leaf.as_str())
     });
 
     let mut covered = FORM_KEYS;

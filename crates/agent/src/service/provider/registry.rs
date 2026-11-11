@@ -156,6 +156,7 @@ impl AgentApplicationService {
                 &resolved.definition.base_url,
                 resolved.credential,
                 resolved.headers,
+                hanafubuki_agent_foundation::cancellation::CancellationToken::default(),
             )
             .await
             .map_err(|error| error.to_string())

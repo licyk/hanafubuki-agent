@@ -193,6 +193,7 @@ impl AgentService {
             }
         }
         validate_history_append(record, &turn_items, self.inner.limits)?;
+        self.refresh_context_window(record);
         if implementing_plan {
             record.settings.config.mode = crate::AgentSessionMode::Default;
         }

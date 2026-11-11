@@ -55,3 +55,10 @@ impl AgentApplicationService {
         self.plugin_events = events;
     }
 }
+
+impl AgentApplicationService {
+    /// The model discovery, which counts the requests it handled.
+    pub(crate) fn test_model_discovery(&self) -> &crate::model_discovery::ModelDiscovery {
+        &self.discovery
+    }
+}

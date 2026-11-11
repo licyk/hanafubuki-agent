@@ -185,6 +185,7 @@ fn skills_read_output_and_context_round_trip_as_a_valid_persisted_group() {
         auto_compact_threshold_percent: 80,
         compaction_capability: hanafubuki_agent_model_api::ModelCompactionCapability::LocalSummary,
         sampling_retry_policy: AgentSamplingRetryPolicy::default(),
+        context_window_source: None,
         compaction_strategy: Default::default(),
         scope: Default::default(),
         role_instructions: None,
@@ -332,6 +333,7 @@ fn responses_only_config(
         compaction_capability:
             hanafubuki_agent_model_api::ModelCompactionCapability::ResponsesCompact,
         sampling_retry_policy: AgentSamplingRetryPolicy::default(),
+        context_window_source: None,
         compaction_strategy: Default::default(),
         scope: Default::default(),
         role_instructions: None,
@@ -434,4 +436,39 @@ fn a_default_session_config_is_unchanged_and_a_role_survives_its_record() {
     value["roleInstructions"] = serde_json::json!(5);
     let read: AgentSessionConfig = serde_json::from_value(value).unwrap();
     assert_eq!((read.role_instructions, read.scope), (None, role.scope));
+}
+
+/// A window's source is written only while it is known; one this build
+/// cannot read is none (the window then counts as configured), and
+/// normalization drops a source the window lost.
+#[test]
+fn a_context_window_source_reads_tolerantly_and_goes_with_its_window() {
+    use hanafubuki_agent_model_api::ModelMetadataSource;
+    let config = responses_only_config(hanafubuki_agent_model_api::ModelApiProtocol::Responses);
+    let value = serde_json::to_value(&config).unwrap();
+    assert!(value.get("contextWindowSource").is_none());
+
+    let mut reported = config.clone();
+    reported.context_window_source = Some(ModelMetadataSource::Reported);
+    let mut value = serde_json::to_value(&reported).unwrap();
+    assert_eq!(value["contextWindowSource"], "reported");
+    let read: AgentSessionConfig = serde_json::from_value(value.clone()).unwrap();
+    assert_eq!(read, reported);
+    value["contextWindowSource"] = serde_json::json!("models_dev");
+    let read: AgentSessionConfig = serde_json::from_value(value).unwrap();
+    assert_eq!(read.context_window_source, None);
+    assert_eq!(
+        read.context_window_origin(),
+        Some(ModelMetadataSource::Configured)
+    );
+
+    reported.context_window_tokens = Some(0);
+    normalize_session_config(&mut reported);
+    assert_eq!(
+        (
+            reported.context_window_tokens,
+            reported.context_window_source
+        ),
+        (None, None)
+    );
 }

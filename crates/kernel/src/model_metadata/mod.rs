@@ -86,21 +86,30 @@ impl ModelMetadataRegistry {
         resolve::resolve(facts.as_ref(), configured, built_in::context_window(model))
     }
 
-    /// The context window a session on `model` is given.
+    /// The context window a session on `model` is given, and its source.
     pub(crate) fn context_window(
         &self,
         configured: Option<u64>,
         route: Option<&ModelRouteKey>,
         model: &str,
         now_ms: u64,
-    ) -> Option<u64> {
+    ) -> Option<Sourced<u64>> {
         let configured = ConfiguredModelFacts {
             context_window: configured,
             ..ConfiguredModelFacts::default()
         };
         self.resolve(route, model, configured, now_ms)
             .context_window
-            .map(|fact| fact.value)
+    }
+
+    /// When `endpoint`'s latest listing was recorded, in milliseconds since
+    /// the Unix epoch; none when it never was (or no longer is kept).
+    pub(crate) fn listed_at_ms(&self, endpoint: &ModelEndpointKey) -> Option<u64> {
+        self.state
+            .lock()
+            .listings
+            .get(endpoint)
+            .map(|listing| listing.listed_at_ms)
     }
 
     /// What the Agent observed of `route`'s image input: unsupported while

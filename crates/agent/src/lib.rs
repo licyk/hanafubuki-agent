@@ -18,6 +18,7 @@ mod host_inputs;
 mod kernel_tasks;
 pub mod logging;
 mod memory;
+mod model_discovery;
 mod model_metadata_store;
 mod network;
 mod packages;
@@ -179,10 +180,11 @@ pub use hanafubuki_agent_config::{
     parse_config_value, AgentAlternateScreen, AgentBackgroundCompactionSettings,
     AgentCompactionSettings, AgentCompactionStrategy, AgentConfig, AgentConfigProblem,
     AgentConfigRecovery, AgentDirs, AgentHierarchicalCompactionSettings, AgentImageInputPolicy,
-    AgentInputCapabilitiesSettings, AgentLogLevel, AgentMemorySettings, AgentModelPolicySettings,
-    AgentModelProtocol, AgentNetworkSettings, AgentProviderHeaderSettings, AgentProviderSettings,
-    AgentRemoteCompactionCapability, AgentSandboxMode, AgentSandboxWorkspaceWrite, AgentSettings,
-    AgentSettingsPatch, AgentStandaloneSettings, AgentStandaloneSettingsPatch, AgentTuiPreferences,
+    AgentInputCapabilitiesSettings, AgentLogLevel, AgentMemorySettings, AgentModelDiscovery,
+    AgentModelMetadataSettings, AgentModelPolicySettings, AgentModelProtocol, AgentNetworkSettings,
+    AgentProviderHeaderSettings, AgentProviderSettings, AgentRemoteCompactionCapability,
+    AgentSandboxMode, AgentSandboxWorkspaceWrite, AgentSettings, AgentSettingsPatch,
+    AgentStandaloneSettings, AgentStandaloneSettingsPatch, AgentTuiPreferences,
     AgentTuiPreferencesPatch, AgentTuiPreset, AgentTurnBudgetSettings, AgentWebSearchProvider,
     AgentWindowsSandbox, AgentWindowsSettings, ConfigLayerSource, ConfigLayers, ConfigOverrides,
     InstructionsMode, PluginOption, PluginOptionKey, PluginOptionKind, PluginOptionSchema,

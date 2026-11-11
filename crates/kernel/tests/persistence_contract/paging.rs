@@ -22,6 +22,7 @@ fn opening_a_completed_session_reads_only_runtime_and_the_requested_transcript_p
                 auto_compact_threshold_percent: 80,
                 compaction_capability: ModelCompactionCapability::LocalSummary,
                 sampling_retry_policy: hanafubuki_agent_kernel::AgentSamplingRetryPolicy::default(),
+                context_window_source: None,
                 compaction_strategy: Default::default(),
                 scope: Default::default(),
                 role_instructions: None,

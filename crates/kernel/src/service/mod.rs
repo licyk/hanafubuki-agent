@@ -287,6 +287,7 @@ enum TurnAdmission {
 
 mod compaction;
 mod compression;
+mod context_window;
 mod diagnostics;
 mod durable;
 mod factory;

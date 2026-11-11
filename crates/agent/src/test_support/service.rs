@@ -154,9 +154,12 @@ pub fn service_with_host(
 }
 
 /// One enabled Responses provider at `base_url`, the default, with the model
-/// `fixture-model`; and `sandboxMode = "full-access"`, since a test binary
-/// is no sandbox helper (`sandbox::helper_dispatch`), so a sandboxed
-/// command would fail there. A test of the sandbox sets another mode.
+/// `fixture-model`; `sandboxMode = "full-access"`, since a test binary is
+/// no sandbox helper (`sandbox::helper_dispatch`), so a sandboxed command
+/// would fail there (a test of the sandbox sets another mode); and
+/// `modelMetadata.discovery = "off"`, so a scripted model server sees only
+/// the requests the test makes, also from an Agent built as a host or the
+/// standalone runtime builds it.
 pub fn configure_test_provider(
     config: &AgentConfig,
     base_url: &str,
@@ -167,6 +170,9 @@ pub fn configure_test_provider(
             sandbox_mode: Some(Some(crate::AgentSandboxMode::FullAccess)),
             ..crate::AgentSettingsPatch::default()
         })
+        .unwrap();
+    config
+        .set_user_value("modelMetadata.discovery", "off")
         .unwrap();
     config
         .mutate_providers(0, |registry| {

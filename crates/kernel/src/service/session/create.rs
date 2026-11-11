@@ -39,11 +39,12 @@ impl AgentService {
             request_retry_policy,
             compaction_capability,
         )?;
-        config.context_window_tokens = self.session_context_window(
+        let window = self.session_context_window(
             config.context_window_tokens,
             model.as_ref(),
             &config.model,
         );
+        config.set_context_window(window);
         self.create_session_with_model(config, model, workspace)
     }
 

@@ -3,6 +3,7 @@ use super::host::{
     agent_plugin_manifest, AgentHost, AgentPluginDescriptor, AgentPluginEventSink,
     AgentPluginInputs, AgentPluginRow,
 };
+use super::model_discovery::{ModelDiscovery, ModelDiscoveryPolicy};
 use super::model_metadata_store::FileModelMetadataStore;
 use super::session_driver::AgentSessionDriver;
 use super::skills::AgentSkillApplication;
@@ -149,6 +150,8 @@ pub struct AgentApplicationService {
     pub(crate) files: WorkspaceFsService,
     /// Where this instance's kernel faults go (the slot that started it).
     pub(crate) kernel_faults: Arc<dyn hanafubuki_agent_kernel::AgentKernelFaultSink>,
+    /// Lists the Providers' models in the background.
+    discovery: ModelDiscovery,
 }
 
 impl AgentApplicationService {
@@ -159,7 +162,8 @@ impl AgentApplicationService {
             .map_err(|error| error.to_string())
     }
 
-    /// The test Agent: built and recovered.
+    /// The test Agent: built and recovered. It discovers no models by
+    /// itself, whatever its settings say.
     #[cfg(any(test, feature = "test-support"))]
     pub fn new_with_host(
         config: AgentConfig,
@@ -167,6 +171,26 @@ impl AgentApplicationService {
         storage_paths: AgentStoragePaths,
         skill_roots: SkillRoots,
         executor: ExecutorManager,
+    ) -> Result<Self, String> {
+        Self::new_with_host_discovering(
+            config,
+            host,
+            storage_paths,
+            skill_roots,
+            executor,
+            ModelDiscoveryPolicy::OFF,
+        )
+    }
+
+    /// [`Self::new_with_host`], discovering models under `discovery`.
+    #[cfg(any(test, feature = "test-support"))]
+    pub(crate) fn new_with_host_discovering(
+        config: AgentConfig,
+        host: AgentHostPorts,
+        storage_paths: AgentStoragePaths,
+        skill_roots: SkillRoots,
+        executor: ExecutorManager,
+        discovery: ModelDiscoveryPolicy,
     ) -> Result<Self, String> {
         let service = Self::construct(
             AgentServiceInputs {
@@ -185,6 +209,7 @@ impl AgentApplicationService {
                 },
             },
             hanafubuki_agent_host::RestartPolicy::default(),
+            discovery,
         )?;
         service.recover()?;
         Ok(service)
@@ -226,6 +251,7 @@ impl AgentApplicationService {
                 instance,
             },
             hanafubuki_agent_host::RestartPolicy::default(),
+            ModelDiscoveryPolicy::OFF,
         )
     }
 
@@ -258,6 +284,7 @@ impl AgentApplicationService {
                 delays: Vec::new(),
                 window: std::time::Duration::ZERO,
             },
+            ModelDiscoveryPolicy::OFF,
         )?;
         service.recover()?;
         Ok(service)
@@ -267,12 +294,17 @@ impl AgentApplicationService {
     /// yet: the caller runs [`Self::recover`] next, before anything else uses
     /// the service.
     pub fn open(inputs: AgentServiceInputs) -> Result<Self, String> {
-        Self::construct(inputs, hanafubuki_agent_host::RestartPolicy::default())
+        Self::construct(
+            inputs,
+            hanafubuki_agent_host::RestartPolicy::default(),
+            ModelDiscoveryPolicy::AUTOMATIC,
+        )
     }
 
     fn construct(
         inputs: AgentServiceInputs,
         plugin_restarts: hanafubuki_agent_host::RestartPolicy,
+        discovery: ModelDiscoveryPolicy,
     ) -> Result<Self, String> {
         let AgentServiceInputs {
             config,
@@ -347,23 +379,7 @@ impl AgentApplicationService {
                 )
             },
         )?;
-        let history_paths = AgentHistoryPaths::under(storage_paths.history_root.clone());
-        let history_store = Arc::new(
-            if instance.options.rebuild_history_index {
-                FileAgentHistoryStore::open_rebuilding_index(
-                    history_paths,
-                    workers.clone(),
-                    instance.history_refusals.clone(),
-                )
-            } else {
-                FileAgentHistoryStore::open_reporting_refusals(
-                    history_paths,
-                    workers.clone(),
-                    instance.history_refusals.clone(),
-                )
-            }
-            .map_err(|error| error.to_string())?,
-        );
+        let history_store = open_history_store(&storage_paths, &instance, &workers)?;
         let memory_repository = AgentMemoryRepository::open(
             hanafubuki_agent_memory::AgentMemoryPaths::under(storage_paths.memory_root),
         )
@@ -382,6 +398,7 @@ impl AgentApplicationService {
             kernel_faults.clone(),
             model_metadata,
         );
+        let discovery = ModelDiscovery::start(discovery, core.clone(), config.clone(), &workers)?;
         let memory = AgentMemoryApplication::new(
             config.clone(),
             core.clone(),
@@ -397,6 +414,7 @@ impl AgentApplicationService {
             executions.clone(),
             blocking.clone(),
             base_instructions.clone(),
+            discovery.clone(),
         );
         let roles = Arc::new(crate::roles::AgentRoles::load(
             &config,
@@ -476,6 +494,7 @@ impl AgentApplicationService {
             roles,
             files,
             kernel_faults,
+            discovery,
         })
     }
 
@@ -582,6 +601,24 @@ impl AgentApplicationService {
         warnings.extend(self.host.option_issues(&self.config.settings()?));
         Ok(warnings)
     }
+}
+
+/// The history store under `storage_paths`, its index rebuilt first when
+/// `instance`'s start asks for it.
+fn open_history_store(
+    storage_paths: &AgentStoragePaths,
+    instance: &AgentInstanceInputs,
+    workers: &BackgroundWorkerGroup,
+) -> Result<Arc<FileAgentHistoryStore>, String> {
+    let paths = AgentHistoryPaths::under(storage_paths.history_root.clone());
+    let refusals = instance.history_refusals.clone();
+    if instance.options.rebuild_history_index {
+        FileAgentHistoryStore::open_rebuilding_index(paths, workers.clone(), refusals)
+    } else {
+        FileAgentHistoryStore::open_reporting_refusals(paths, workers.clone(), refusals)
+    }
+    .map(Arc::new)
+    .map_err(|error| error.to_string())
 }
 
 /// Stops the Agent's worker groups when its construction fails part-way:

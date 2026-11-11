@@ -424,6 +424,7 @@ fn config() -> AgentSessionConfig {
         auto_compact_threshold_percent: 80,
         compaction_capability: ModelCompactionCapability::LocalSummary,
         sampling_retry_policy: hanafubuki_agent_kernel::AgentSamplingRetryPolicy::default(),
+        context_window_source: None,
         compaction_strategy: Default::default(),
         scope: Default::default(),
         role_instructions: None,

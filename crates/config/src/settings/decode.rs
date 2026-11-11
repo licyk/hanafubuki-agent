@@ -3,6 +3,7 @@ use std::collections::BTreeSet;
 use serde_json::{Map, Value};
 
 use super::compaction::decode_compaction;
+use super::model_metadata::decode_model_metadata;
 use super::packages::{decode_marketplaces, decode_plugins};
 use super::{
     is_plugin_name, normalize_search_endpoint, validate_memory, validate_sandbox_workspace_write,
@@ -52,6 +53,12 @@ pub(crate) fn decode_settings(
         &defaults.compaction,
         decode_compaction,
     );
+    let model_metadata = read_object(
+        &mut fields,
+        "modelMetadata",
+        &defaults.model_metadata,
+        decode_model_metadata,
+    );
     let plugins = decode_plugins(&mut fields, &defaults.plugins);
     let marketplaces = decode_marketplaces(&mut fields, &defaults.marketplaces);
     let plugin_options = decode_plugin_options(&mut fields, &defaults.plugin_options, layer);
@@ -66,6 +73,7 @@ pub(crate) fn decode_settings(
         searxng_base_url,
         web_fetch_use_jina_reader,
         compaction,
+        model_metadata,
         plugins,
         marketplaces,
         plugin_options,

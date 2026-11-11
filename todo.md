@@ -79,11 +79,65 @@ Hoshimi `83f7813`. Every §9 decision (D1–D7) was accepted as recommended
     a new listing leaves out keeps its window for 7 days (it lost it at once
     before). A draft's listing (`test_provider_draft`) is now written to the
     file too, as it was recorded in memory before.
-- Open: M3 background discovery and late resolution at turn start; M4
-  learned context windows; M5 vision facts (seeding sessions from the image
-  fact; persisting the learned refusal is done); M6 reasoning narrowing and
-  the refusal fallback (and the documented effort lists above); M7 showing
-  it, and per-model overrides; M8 models.dev (optional).
+- M3 (done): the facade discovers models in the background, and a session
+  takes its window again as each turn starts.
+  - Config: `[modelMetadata] discovery = "auto" | "off"` (default `auto`)
+    in `config.toml` (`AgentSettings.model_metadata`), not `providers.toml`,
+    so `config set`, `-c`, profiles and `AgentConfig::set_user_value` reach
+    it and a host opts out with no new write API; decoded field by field, an
+    unusable value is a repair. It is not in `AgentSettingsPatch`: a nested
+    patch type is strict, which needs a strict-decoding policy entry, left
+    with the `/config` editor for M7 (the TUI's form-coverage test lists the
+    key as set by `config set` only).
+  - Discovery (`agent/src/model_discovery.rs`): one worker in the Agent's
+    worker group, with its own runtime, lists one Provider at a time through
+    the kernel's `list_provider_models` (now taking a cancellation token;
+    shutdown cancels a listing under way and it records nothing). Triggers:
+    the service's construction (the default Provider), `create_session`, a
+    model selection (`/model`, a role's model) and every activation for a
+    turn (`activate_provider_session`). Deviation: the last is beyond the
+    plan's "selected", so a resumed session on a non-default Provider gets
+    its Provider listed; a send on a channel, rate-limited, never waits.
+  - Rate limit, per endpoint (protocol and base URL): due when the
+    endpoint's recorded listing (`listedAtMs`, persisted in the model
+    metadata, and also set by the listings the person asks for) is a day old
+    or ahead of the clock, and this run's last attempt is a day old after a
+    success or 15 minutes after a failure. So a new run (each `exec`) does
+    not list again within the day; failures are this run's only. A failure
+    is logged at warn with the Provider's id, never its answer.
+  - Late resolution (`kernel/src/service/context_window.rs`) runs in
+    `stage_turn_admission`, after its last fallible check, under the
+    session's lock and in the admission's commit (deviation: not
+    `prepare_sampling_step`, which holds the record read-only and commits
+    nothing). `AgentSessionConfig.context_window_source` (tolerant, left out
+    when `None`, kept `None` with no window by `normalize_session_config`);
+    creation and model selection set it. A configured window is never
+    replaced, a window without a source counts as configured, a window no
+    longer known is kept, a session with no route (not bound to its
+    Provider) is not resolved; a changed window rewrites the usage window
+    in the same commit. The kernel re-exports `ModelMetadataSource`.
+  - Tests: the test constructors (`new_with_host` and the crate's) run no
+    discovery, and `test_support::configure_test_provider` writes
+    `discovery = "off"`, which covers the standalone runtime's tests, the
+    CLI's and the TUI's (the standalone fixture that rewrites `config.toml`
+    writes it too). `FakeServer::with_listings` answers `GET …/models` from
+    `FakeListing`s on tasks of their own, kept apart from `requests()`;
+    `CapturedRequest` gained `method`. No request golden or history corpus
+    changed.
+  - Host-visible: `AgentSessionConfig.context_window_source`,
+    `AgentService::list_provider_models(…, cancellation)`,
+    `AgentService::model_listing_recorded_at`, `AgentSettings.model_metadata`
+    (`AgentModelMetadataSettings`, `AgentModelDiscovery`, re-exported by the
+    facade), and the Agent's own `GET /models` at start and on a binding.
+    `construct` fell to 186 code lines (the history store's opening moved
+    to `open_history_store`); `kernel/tests/loop_contract/main.rs` is at
+    899 of 900.
+- Open: M4 learned context windows; M5 vision facts (seeding sessions from
+  the image fact; persisting the learned refusal is done); M6 reasoning
+  narrowing and the refusal fallback (and the documented effort lists
+  above); M7 showing it, the `/config` editor of `modelMetadata.discovery`
+  (with its settings-patch field and strict-decoding entry), and per-model
+  overrides; M8 models.dev (optional).
 
 ## Plan: Codex's messages sent while the Agent works, in the terminal interface (2026-11-11)
 

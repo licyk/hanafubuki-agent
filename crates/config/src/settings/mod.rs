@@ -16,6 +16,7 @@ use crate::plugin_options::PluginOptionsSettings;
 
 mod compaction;
 mod decode;
+mod model_metadata;
 mod packages;
 mod schema;
 
@@ -24,6 +25,7 @@ pub use compaction::{
     AgentHierarchicalCompactionSettings,
 };
 pub(crate) use decode::decode_settings;
+pub use model_metadata::{AgentModelDiscovery, AgentModelMetadataSettings};
 pub use schema::agent_settings_fields;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -47,6 +49,9 @@ pub struct AgentSettings {
     pub searxng_base_url: Option<String>,
     pub web_fetch_use_jina_reader: bool,
     pub compaction: AgentCompactionSettings,
+    /// `[modelMetadata]`: whether the Agent lists the Providers' models by
+    /// itself. Read where it acts, never patched.
+    pub model_metadata: AgentModelMetadataSettings,
     /// `[plugins]`: which installed packages are on. Changed by the package
     /// lifecycle ([`crate::AgentConfig::set_package_settings`]) or by hand,
     /// never patched.
@@ -84,6 +89,7 @@ impl Default for AgentSettings {
             searxng_base_url: None,
             web_fetch_use_jina_reader: false,
             compaction: AgentCompactionSettings::default(),
+            model_metadata: AgentModelMetadataSettings::default(),
             plugins: PluginsSettings::default(),
             marketplaces: BTreeMap::new(),
             plugin_options: PluginOptionsSettings::default(),

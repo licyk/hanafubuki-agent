@@ -331,6 +331,10 @@ pub(in crate::service) fn normalize_session_config(config: &mut AgentSessionConf
         config.context_window_tokens = None;
         repaired.push("context window tokens (0 is unknown)");
     }
+    // An unknown window has no source, so its record stays as it was.
+    if config.context_window_tokens.is_none() {
+        config.context_window_source = None;
+    }
     let threshold = config.auto_compact_threshold_percent.clamp(1, 100);
     if threshold != config.auto_compact_threshold_percent {
         config.auto_compact_threshold_percent = threshold;

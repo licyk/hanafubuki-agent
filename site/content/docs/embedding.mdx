@@ -420,7 +420,7 @@ kardia-hmr 自己的线程（进程访客的 `guest-stdin`、`guest-stdout` 和 
   </Step>
   <Step>MCP：取消后台连接，关闭每个连接并确认其进程已退出（4 秒）。</Step>
   <Step>停止插件：一次性释放 kardia 根（5 秒）。</Step>
-  <Step>停止记忆工作线程，关闭历史，停止服务工作线程与执行（3 秒）。</Step>
+  <Step>停止记忆工作线程，关闭历史，停止服务工作线程（取消进行中的模型列出）与执行（3 秒）。</Step>
   <Step>清理实例的进程所有者组：终止 Agent 自己启动、仍在运行的进程（1 秒）。</Step>
   <Step>停止实例的运行时，阻塞池有 2 秒上限。</Step>
 </Steps>
@@ -431,11 +431,11 @@ Agent 启动的进程归 Agent 所有：它有自己的 `ExecutorManager`，与�
 
 宿主为 Agent 指定一个配置目录，用 `AgentConfig::new(dir)` 打开（Hanafubuki 用 `<app_data>/config/agent/`）。目录里有三个 TOML 文件，各自是一个修订域、各有一把锁：
 
-| 文件             | 内容                                                                    |
-| ---------------- | ----------------------------------------------------------------------- |
-| `config.toml`    | 权限模式、沙箱、记忆、`disabledPlugins`、Web 搜索与抓取、`[compaction]` |
-| `providers.toml` | Provider 注册表及其修订号，令牌原样保存（仅所有者可读）                 |
-| `mcp.toml`       | MCP 服务器与凭据值及其修订号（仅所有者可读）                            |
+| 文件             | 内容                                                                                       |
+| ---------------- | ------------------------------------------------------------------------------------------ |
+| `config.toml`    | 权限模式、沙箱、记忆、`disabledPlugins`、Web 搜索与抓取、`[compaction]`、`[modelMetadata]` |
+| `providers.toml` | Provider 注册表及其修订号，令牌原样保存（仅所有者可读）                                    |
+| `mcp.toml`       | MCP 服务器与凭据值及其修订号（仅所有者可读）                                               |
 
 与独立模式不同，嵌入的配置**没有分层**（没有 profile、项目文件和 `-c`），并忽略 `[network]` 与 `logLevel`（报告为未知键）：代理和日志由宿主提供。宿主通过服务 API 读写设置（`settings_view`、`write_settings`、Provider 与 MCP 的方法），写入后服务会把设置应用到插件。其中：
 
@@ -450,6 +450,8 @@ Agent 启动的进程归 Agent 所有：它有自己的 `ExecutorManager`，与�
 读取是容错的：无效值取默认值，未知键记录日志并保留在文件里，需要修复的文件先复制到 `.recovery/` 再写入修复后的值；无法保留原件时，修复后的值只用在内存里，文件在重启前拒绝写入。每次修复都是一条 `AgentConfigRecovery`（文件、问题、是否只读、时间），`AgentConfig::recoveries()` 返回本次打开以来的修复（每个文件最近 20 条），宿主应当把它们展示给用户。键名、默认值和修复规则见[配置](/docs/configuration)与[配置参考](/docs/config-reference)。
 
 配置目录中还可以有[角色](/docs/roles)：它的 `agents/` 和其 `config.toml` 中的 `[agents]` 条目，这是嵌入的 Agent 唯一的配置角色来源，此外还有内置角色和开启期间的[已安装插件的角色](/docs/roles#plugins)。`roles()` 返回服务最近一次读取的 `AgentRoleCatalog`（构建时读取，之后每次 `reload_packages` 再读）：可用的角色（`AgentResolvedRole`，含继承链、合并后的字段、`AgentCapabilityScope` 和每个字段的来源）、不可用的角色及原因，以及问题；宿主应把这些问题与配置的问题放在一起展示。`AgentRoleCatalog::load(&config, plugins_root, safe_mode)` 不需要服务即可读取角色：配置中的角色，以及 `plugins_root`（`AgentStoragePaths::plugins_root`）下设置开启的已安装插件的角色（安全模式下没有），读取时不打开包存储，所以可以在 Agent 运行时使用；读取插件角色时略去的内容列在它的问题中，并写明该插件。会话在创建或切换时取得角色（[会话与角色](#sessions)）。
+
+Agent 会自己列出各 Provider 的模型（[模型发现](/docs/architecture#model-metadata)）：构建服务时列出默认 Provider 的模型；每当在某个 Provider 上创建会话、选用它的模型或为一个轮次激活会话时，列出该 Provider 的模型，每个 Provider 每天最多一次（失败后每 15 分钟最多一次），使用该 Provider 自己的端点、令牌和请求头。所以宿主的 Agent 会在启动时和这些时候自己发出 `GET {baseUrl}/models`；它从不延迟任何调用，失败只记录日志，从不作为结果返回。它得知的信息是会话在下一个轮次采用的上下文窗口，会话的配置也记住窗口的来源（`AgentSessionConfig.context_window_source`，未知时为 `None`，此时不写入记录；自己构建配置的宿主传 `None`，由内核设置）。宿主在 Agent 的 `config.toml` 中设置 `modelMetadata.discovery = "off"` 即可关闭模型发现，可以手写，也可以调用 `AgentConfig::set_user_value("modelMetadata.discovery", "off")`；设置补丁不包含它。宿主自己请求的 Provider 模型列表（`list_provider_models`、`test_provider_draft`）无论如何都会读取并记录。
 
 从旧格式迁移设置是宿主自己的事：Hanafubuki 在 `config.toml` 不存在时（`AgentConfig::exists`），由它的构造闭包运行 `import_legacy_agent_settings`，用 `AgentConfig::create` 一次写入整份配置（`config.toml` 最后写，所以中途停止的导入会重来），旧文件保持不变。
 
@@ -596,6 +598,6 @@ impl AgentEventSink for PrintEvents {
 
 ## 测试 [#testing]
 
-- 在 `[dev-dependencies]` 中为 `hanafubuki-agent` 打开 `test-support` feature，得到 `hanafubuki_agent::test_support`：`mount`（在一个提供注册表与 `PluginFaults` 的上下文中挂载插件）、`test_host`、脚本化的模型服务器与 MCP 服务器。
+- 在 `[dev-dependencies]` 中为 `hanafubuki-agent` 打开 `test-support` feature，得到 `hanafubuki_agent::test_support`：`mount`（在一个提供注册表与 `PluginFaults` 的上下文中挂载插件）、`test_host`、脚本化的模型服务器与 MCP 服务器。给了模型列表时（`FakeServer::with_listings`、`FakeListing`），脚本化的模型服务器用它们回答 `GET …/models`；否则像对待其他请求一样用下一个响应回答。测试用 Agent（`new_with_host`）不自己发现模型，`configure_test_provider` 也会写入 `modelMetadata.discovery = "off"`，所以即使测试像宿主那样自己构建 Agent（`AgentApplicationService::open`），脚本化服务器也只看到测试自己的请求。
 - 宿主应保留自己的 golden 测试，固定加上宿主插件与指令后模型收到的内容；Agent 一侧模型可见的变化也会改变它们，需要有意地重新生成。
 - panic hook 桥由宿主在子进程中测试。

@@ -30,6 +30,7 @@ use hanafubuki_agent_kernel::{
 use hanafubuki_agent_sandbox::{platform_default_mode, SandboxSettings};
 
 use crate::conversation_reader::{AgentConversationReader, ConversationMessage};
+use crate::model_discovery::ModelDiscovery;
 use crate::service::resolve_settings_provider;
 use crate::{
     model_api_protocol, session_compaction_strategy, warn_unreachable_background_threshold,
@@ -45,6 +46,8 @@ pub(crate) struct AgentSessionDriver {
     /// The base instructions with the host's additions, which a model
     /// selection gives the session.
     base_instructions: Arc<str>,
+    /// Asked for a Provider's listing whenever a session is bound to it.
+    discovery: ModelDiscovery,
 }
 
 impl AgentSessionDriver {
@@ -55,6 +58,7 @@ impl AgentSessionDriver {
         executions: AgentExecutionService,
         blocking: Arc<dyn BlockingOperationPort>,
         base_instructions: Arc<str>,
+        discovery: ModelDiscovery,
     ) -> Self {
         Self {
             core,
@@ -63,6 +67,7 @@ impl AgentSessionDriver {
             executions,
             blocking,
             base_instructions,
+            discovery,
         }
     }
 
@@ -383,6 +388,7 @@ impl AgentSessionDriver {
         )
         .await??;
         let resolved = resolve_settings_provider(&registry, &snapshot.provider_id)?;
+        self.discovery.request(Some(&snapshot.provider_id));
         let strategy = session_compaction_strategy(
             &settings.compaction,
             snapshot.ephemeral,

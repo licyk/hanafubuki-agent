@@ -18,6 +18,17 @@ pub struct AgentSessionConfig {
     pub auto_compact_threshold_percent: u8,
     pub compaction_capability: hanafubuki_agent_model_api::ModelCompactionCapability,
     pub sampling_retry_policy: AgentSamplingRetryPolicy,
+    /// Where `context_window_tokens` came from; `None` while it is unknown.
+    /// A session written before sources were kept, or with one this build
+    /// does not know, has none, and its window counts as configured
+    /// ([`Self::context_window_origin`]). Left out when `None`, so such a
+    /// session's record is unchanged.
+    #[serde(
+        default,
+        deserialize_with = "tolerant_context_window_source",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub context_window_source: Option<hanafubuki_agent_model_api::ModelMetadataSource>,
     /// A session written before the strategy existed, or with one this
     /// build does not know, compacts with `standard`.
     #[serde(default, deserialize_with = "tolerant_compaction_strategy")]
@@ -68,6 +79,16 @@ where
     Ok(value.and_then(|value| value.as_str().map(str::to_string)))
 }
 
+fn tolerant_context_window_source<'de, D>(
+    deserializer: D,
+) -> Result<Option<hanafubuki_agent_model_api::ModelMetadataSource>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = Option::<serde_json::Value>::deserialize(deserializer)?;
+    Ok(value.and_then(|value| serde_json::from_value(value).ok()))
+}
+
 /// The share of the context window at which a session with the `background`
 /// strategy starts a compaction in the background, from
 /// `[compaction.background]`: the facade puts it in each turn's extensions.
@@ -104,6 +125,27 @@ impl AgentSessionConfig {
         self.reasoning_effort
             .clone()
             .map(|effort| hanafubuki_agent_model_api::ModelReasoningConfig { effort })
+    }
+
+    /// Where the session's window came from: none while it has none, and
+    /// configured for a window without a source (a session written before
+    /// sources were kept), which is then never replaced.
+    pub(crate) fn context_window_origin(
+        &self,
+    ) -> Option<hanafubuki_agent_model_api::ModelMetadataSource> {
+        self.context_window_tokens.map(|_| {
+            self.context_window_source
+                .unwrap_or(hanafubuki_agent_model_api::ModelMetadataSource::Configured)
+        })
+    }
+
+    /// Takes `window` (none: unknown) and its source.
+    pub(crate) fn set_context_window(
+        &mut self,
+        window: Option<hanafubuki_agent_model_api::Sourced<u64>>,
+    ) {
+        self.context_window_tokens = window.as_ref().map(|window| window.value);
+        self.context_window_source = window.map(|window| window.source);
     }
 }
 

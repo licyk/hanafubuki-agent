@@ -63,6 +63,7 @@ impl AgentApplicationService {
             .as_deref()
             .ok_or_else(|| "No default Agent Provider is configured".to_string())?;
         let resolved = self.resolve_provider(provider_id).await?;
+        self.discovery.request(Some(provider_id));
         let service = self.clone();
         hanafubuki_agent_foundation::blocking::run_blocking_operation(
             self.blocking.as_ref(),
@@ -126,6 +127,8 @@ impl AgentApplicationService {
                 hanafubuki_agent_kernel::ModelCompactionCapability::LocalSummary
             },
             sampling_retry_policy: hanafubuki_agent_kernel::AgentSamplingRetryPolicy::default(),
+            // The kernel resolves the window and sets its source.
+            context_window_source: None,
             compaction_strategy: session_compaction_strategy(&settings.compaction, false, false),
             scope: role.scope,
             role_instructions: role.instructions,
