@@ -20,7 +20,7 @@ hanafubuki-agent sessions list
 Each line has the id, the last update (local time), the model and the title, the latest first. The title is made from the first message; a session without one shows `(untitled)`.
 
 - `--archived` lists the archived sessions instead.
-- `--json` prints one session summary per line as a JSON object (the id, model, Provider, mode, title, token use, creation and update times, the directory and Git branch it was created in as `cwd` and `branch`, and more), for scripts.
+- `--json` prints one session summary per line as a JSON object (the id, model, Provider, mode, title, token use, creation and update times, the directory and Git branch it was created in as `cwd` and `branch`, its [role](/docs/roles#sessions) as `role` when it has one other than `default`, and more), for scripts.
 - Only sessions without a parent are listed: a [child session](#children) is found under its parent.
 
 <Callout>
@@ -104,9 +104,13 @@ A worktree is a separate checkout of the repository the working directory is in,
 - A session records the directory it was created in (`cwd`): one created in a worktree records the worktree, a fork records its source's.
 - With the `worktree` plugin off (`disabledPlugins`), worktrees are unavailable, and the interface says so.
 
+## Roles [#roles]
+
+Every session has a [role](/docs/roles#sessions): `default`, which narrows nothing, unless you start it with `--role NAME` or switch it between turns with `/role NAME`. The role's instructions, tools, plugins and permission-mode cap are kept with the session: editing or deleting the role file later changes no session that has it, and a resumed session keeps the role it had. `/status` shows it.
+
 ## Child sessions [#children]
 
-A session can be the child of another, made for it rather than started by you: a [side conversation](#side), a [sub-agent](#subagents) or a [review](#reviews). A child records its parent (`parentSessionId` in its summary) and why it was made (`origin`: `side`, `subagent` or `review`), and works in its parent's directory, with its parent's model and settings.
+A session can be the child of another, made for it rather than started by you: a [side conversation](#side), a [sub-agent](#subagents) or a [review](#reviews). A child records its parent (`parentSessionId` in its summary) and why it was made (`origin`: `side`, `subagent` or `review`), and works in its parent's directory, with its parent's model and settings. It keeps its parent's [role](/docs/roles#sessions), and may only narrow it further: a child is never allowed more than its parent. A fork keeps its source's role.
 
 Every session records, when it is created, the workspace's primary directory (`cwd`) and the Git branch checked out there (`branch`, read from the repository's `HEAD`; none for a detached `HEAD` or outside a repository). A child, or a fork, takes its source's. A session from before these fields existed has none.
 

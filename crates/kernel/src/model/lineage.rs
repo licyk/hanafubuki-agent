@@ -44,6 +44,10 @@ pub struct AgentChildSessionRequest {
     /// Model-visible context committed with the child's creation, before
     /// its first turn: `ContinuationContext` items only.
     pub context: Vec<ConversationItem>,
+    /// What narrows the child further than its parent; the child's scope
+    /// is the parent's narrowed by it, so it is never wider. The default
+    /// keeps the parent's.
+    pub scope: crate::AgentCapabilityScope,
 }
 
 /// Reads a persisted origin tolerantly: one this build does not know reads

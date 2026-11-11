@@ -397,7 +397,7 @@ for line in sys.stdin:
         .any(|tool| tool.model_name == "mcp::fixture::echo"));
 
     let session = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     let session_id = session.id;
@@ -588,7 +588,7 @@ async fn an_unrecognised_allowed_tool_neither_hides_a_skill_nor_expands_the_tool
     service.enable_skill(&entry.id).unwrap();
 
     let session = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     service

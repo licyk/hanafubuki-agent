@@ -6,7 +6,7 @@ async fn shutdown_cancels_the_active_model_and_joins_the_tool_worker() {
     let server = FakeServer::start(vec![(Vec::new(), Duration::from_secs(30))]).await;
     let (service, paths) = configured_service("shutdown", &server.base_url);
     let session = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     let executing = service.clone();
@@ -27,7 +27,7 @@ async fn shutdown_cancels_the_active_model_and_joins_the_tool_worker() {
     assert!(diagnostics.is_empty());
     assert_eq!(turn.await.unwrap(), Err(AgentError::Cancelled));
     assert!(service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap_err()
         .contains("shutting down"));

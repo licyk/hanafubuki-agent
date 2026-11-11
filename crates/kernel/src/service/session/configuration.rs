@@ -129,6 +129,62 @@ impl AgentService {
         Ok(true)
     }
 
+    /// The session's capability scope.
+    pub fn session_scope(
+        &self,
+        session_id: AgentSessionId,
+    ) -> Result<crate::AgentCapabilityScope, AgentError> {
+        let cell = self.session(session_id)?;
+        let record = cell.lock()?;
+        Ok(record.settings.config.scope.clone())
+    }
+
+    /// Gives the session the scope and instructions of another role, and
+    /// returns its snapshot. Only while no turn or compaction runs, so no
+    /// running step's plan changes; committed durably as a new revision.
+    /// Off the async runtime only.
+    pub fn set_session_role(
+        &self,
+        session_id: AgentSessionId,
+        scope: crate::AgentCapabilityScope,
+        role_instructions: Option<String>,
+    ) -> Result<AgentSessionRuntimeSnapshot, AgentError> {
+        let cell = self.session(session_id)?;
+        let mut guard = cell.lock_after_persistence_blocking()?;
+        let record = &mut *guard;
+        ensure_no_staged_commit(record)?;
+        if record
+            .runtime
+            .turn
+            .as_ref()
+            .is_some_and(|turn| !turn.phase.is_terminal())
+        {
+            return Err(AgentError::TurnAlreadyRunning);
+        }
+        if has_active_operation(record) {
+            return Err(AgentError::CompactionAlreadyRunning);
+        }
+        let mut config = AgentSessionConfig {
+            scope,
+            role_instructions,
+            ..record.settings.config.clone()
+        };
+        normalize_session_config(&mut config);
+        validate_session_config(&config, self.inner.limits)?;
+        let previous = record.rollback_state();
+        record.settings.config = config;
+        record.status.revision = record
+            .status
+            .revision
+            .checked_add(1)
+            .expect("agent snapshot revision exhausted");
+        record.status.updated_at = now_millis();
+        let staged = StagedPersistence::commit(&cell, record, previous);
+        drop(guard);
+        self.persist_staged_blocking(staged)?;
+        self.snapshot(session_id)
+    }
+
     pub fn set_session_turn_budget_policy(
         &self,
         session_id: AgentSessionId,

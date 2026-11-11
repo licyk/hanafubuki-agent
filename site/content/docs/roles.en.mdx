@@ -1,12 +1,12 @@
 ---
 title: Roles
-description: Named, inheritable definitions of how the Agent works, which only narrow it — role files, [agents] entries, where they come from, extends and the merge, the built-in roles.
+description: Named, inheritable definitions of how the Agent works, which only narrow it — role files, [agents] entries, where they come from, extends and the merge, the built-in roles, and roles in sessions.
 icon: UserCog
 ---
 
 A role is a named definition of how the Agent works: instructions, a model, a reasoning effort, a permission-mode cap, and the tools and plugins it may use. A role only ever **narrows** the Agent it runs in: it can take tools and plugins away and tighten the permission mode, never add or widen anything, so no role is more capable than the instance itself. Approval rules, your hooks and the sandbox are out of every role's reach.
 
-Roles are defined in TOML, by you, a profile or a trusted project, beside two built-in ones. This version reads, checks and lists them (`hanafubuki-agent roles`, `doctor`, `/warnings`); **no session runs with a role yet**: choosing one for a session, and for a sub-agent, comes in a later version.
+Roles are defined in TOML, by you, a profile or a trusted project, beside two built-in ones. The Agent reads, checks and lists them (`hanafubuki-agent roles`, `doctor`, `/warnings`), and a session runs with the one you choose ([Roles in sessions](#sessions)); choosing one for a sub-agent comes in a later version.
 
 ## Defining a role [#define]
 
@@ -117,7 +117,29 @@ So a role removes any one inherited tool with `deny`, and an allow list narrows 
 | `default`  | Nothing: the Agent as it is configured. The role a session has without one                                  | yes       |
 | `explorer` | Its tools: `list_directory`, `search_text`, `read_file`, `view_image`, `web_search`, `fetch_web_page` alone | yes       |
 
-`explorer`'s description is Codex's, adapted: explorers answer specific questions about the codebase, are trusted without being checked again, and run in parallel for independent questions. A role of yours named `default` or `explorer` replaces the built-in one.
+`explorer`'s description is Codex's, adapted: explorers answer specific questions about the codebase, are trusted without being checked again, and run in parallel for independent questions. A role of yours named `explorer` replaces the built-in one. The name `default` is reserved: `default` always narrows nothing, so a role of yours with that name is not usable, with an issue (give it another name; it can still `extends = "default"`).
+
+## Roles in sessions [#sessions]
+
+A session has one role, `default` unless you choose another:
+
+- **When it starts**: `--role NAME` for the terminal interface's new sessions and for [`exec`](/docs/exec), or the `role` of `create_session` when the Agent is [embedded](/docs/embedding#sessions).
+- **Between turns**: `/role NAME` in the [terminal interface](/docs/terminal-interface#role) (`/role` alone lists the usable roles), or `set_session_role`. It is refused while a turn runs. `/role default` takes every narrowing away again.
+
+A role no source defines, or one that cannot be used, is refused, and the message names the usable ones.
+
+What the session takes of its role:
+
+- **Instructions.** The session's instructions are always the Agent's base instructions, which carry the approval guidance, followed by the role's chain merged: `instructionsMode = "replace"` replaces only the instructions of the roles it extends, never the base. Selecting another model keeps them.
+- **Model and reasoning effort**, when the role sets them, through the model selection, so the context window is resolved as for any model. `--model` (or `/model`) afterwards still chooses another.
+- **Its narrowing**, as the session's capability scope ([Capability scope](/docs/plugin-rules#capability-scope)):
+  - only the tools the role allows and does not deny are offered; the kernel's own (`update_plan`, `request_user_input`, `new_context`, the compression tools) and `tool_search` always are. A call to a tool the role leaves out gets the same answer as a call to a tool that does not exist;
+  - a plugin in `plugins.off` gives the session nothing: no tools, no context sections, no prompt, no continuation. With `skills` off, a Skill you reference explicitly is refused ("the Skill catalog is unavailable"), a `$mention` selects no Skill (it stays text), and the Skill tools are absent; with `memory` off, the memory summary and tools are absent, but the session still contributes to memory as its contribution mode says;
+  - every turn runs in the stricter of its permission mode and the role's `permissionModeCap`.
+
+  Approval rules, your hooks, the plugins' observers and the sandbox apply whatever the role says. Plan mode still keeps only the read-only tools among those the role keeps.
+
+The session keeps all this in its own record: editing or deleting the role file later changes no session that has it (a restart keeps it too), until you choose the role again. A [sub-agent or side conversation](/docs/sessions#children) is never wider than its parent's role, and a fork keeps its source's.
 
 ## Codex role files [#codex]
 
@@ -132,6 +154,7 @@ A role file is configuration you wrote, so it is read tolerantly and never rewri
 - A key that narrows and cannot be read at all (an `extends` that is not a name, a `permissionModeCap` that is not a mode, a `tools` or `plugins` that is not a table, an `allow`, `deny` or `off` that is not an array) makes the role **unusable**: leaving it out would allow more than the role says.
 - A file that is not valid TOML is an unusable role of its file name; a file whose name cannot be a role's is ignored, with an issue.
 - A role without a description, of its own or inherited, is unusable.
+- A role whose chain holds more than 128 tool patterns (its allow lists and deny patterns together) is unusable: a session holds no more.
 
 The issues and the unusable roles, with why, show in `hanafubuki-agent roles list` (on standard error), in the `roles` lines of [`doctor`](/docs/troubleshooting#doctor), and in the terminal interface's [`/warnings`](/docs/terminal-interface#warnings), under **roles**. A role that cannot be used never stops the Agent.
 
@@ -161,4 +184,4 @@ plugins.off: goal, titles  [from reader]
 
 ## When roles are read [#reload]
 
-A running Agent reads the roles when it starts, and again each time it reloads its installed plugins, which it does after every settings write it makes. A role file you edit by hand takes effect then, or at the next start; `roles list`, `roles show` and `doctor` read the files each time they run.
+A running Agent reads the roles when it starts, and again each time it reloads its installed plugins, which it does after every settings write it makes. A role file you edit by hand takes effect then, or at the next start, for the sessions that choose it from then on; a session that has it already keeps what it took. `roles list`, `roles show` and `doctor` read the files each time they run.

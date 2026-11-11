@@ -16,6 +16,10 @@ pub struct AgentToolCatalogContext {
     /// strategy is `hierarchical`, then the five core ones and those of the
     /// opt-in features that are on.
     pub compression_tools: Vec<crate::AgentCoreTool>,
+    /// The session's capability scope: a plugin tool it does not allow is
+    /// left out of the plan as if it did not exist, and a tool source of a
+    /// plugin it turns off is not asked.
+    pub scope: crate::AgentCapabilityScope,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -64,6 +68,11 @@ pub(crate) trait AgentToolContributor: Send + Sync {
 
     fn trust(&self) -> AgentToolTrust {
         AgentToolTrust::Trusted
+    }
+
+    /// The plugin whose contribution this is, when it is one plugin's.
+    fn owner(&self) -> Option<&str> {
+        None
     }
 
     fn contribute(
@@ -133,6 +142,12 @@ impl AgentToolPlanner {
             if cancellation.is_cancelled() {
                 return Err(AgentToolCatalogError::Cancelled);
             }
+            if contributor
+                .owner()
+                .is_some_and(|owner| context.scope.turns_off(owner))
+            {
+                continue;
+            }
             let contribution = contributor
                 .contribute(context.clone(), cancellation.clone())
                 .await;
@@ -163,6 +178,9 @@ impl AgentToolPlanner {
         }
         registrations.retain(|registration| {
             if let Some(handler) = &registration.handler {
+                if !scope_allows(&context.scope, registration, handler) {
+                    return false;
+                }
                 if context.mode == crate::AgentSessionMode::Plan
                     && handler.handler().descriptor().effect
                         != hanafubuki_agent_contracts::ToolEffect::ReadOnly
@@ -268,6 +286,26 @@ impl AgentToolPlanner {
                 .with_leases(leases)
         })
     }
+}
+
+/// Whether the session's scope keeps a plugin's tool: its plugin is not
+/// turned off and its tools allow it. The kernel's own tools and
+/// `tool_search` have no handler and are never asked. A tool it leaves out
+/// is absent from the plan, its search index and its omissions alike.
+fn scope_allows(
+    scope: &crate::AgentCapabilityScope,
+    registration: &AgentPlannedTool,
+    handler: &AgentToolHandlerBinding,
+) -> bool {
+    let owner = handler.owner();
+    !scope.turns_off(owner)
+        && scope.tools.allows(&crate::ToolIdentity {
+            name: &registration.model_spec.name,
+            owner,
+            provider: handler
+                .is_sourced()
+                .then(|| registration.provider_id.as_str()),
+        })
 }
 
 /// The one place a planned tool's schema and provider spec are validated:

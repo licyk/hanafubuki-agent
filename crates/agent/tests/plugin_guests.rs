@@ -296,7 +296,7 @@ async fn a_code_plugin_contributes_to_a_turn_and_its_crash_stays_its_own() {
     assert!(guest.status.issues.is_empty(), "{:?}", guest.status.issues);
 
     let session = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     let outcome = turn_approved(&service, session.id, "Use the demo plugin.").await;
@@ -350,7 +350,7 @@ async fn a_code_plugin_contributes_to_a_turn_and_its_crash_stays_its_own() {
     // turn goes on.
     let pid = first.guest.as_ref().unwrap().status.process_id;
     let unset = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     let outcome = tokio::time::timeout(

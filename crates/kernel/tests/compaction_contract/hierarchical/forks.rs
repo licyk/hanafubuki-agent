@@ -163,6 +163,7 @@ async fn a_child_with_the_parents_history_keeps_its_state() {
                 persistence: AgentSessionPersistence::Durable,
                 base,
                 context: Vec::new(),
+                scope: Default::default(),
             })
             .unwrap()
             .id

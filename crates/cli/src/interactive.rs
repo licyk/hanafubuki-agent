@@ -62,6 +62,7 @@ pub(crate) fn run(
         let options = TuiOptions {
             prompt,
             model: global.model.clone(),
+            role: global.role.clone(),
             directory,
             resume,
             no_alt_screen: global.no_alt_screen,

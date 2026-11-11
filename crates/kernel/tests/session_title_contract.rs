@@ -46,6 +46,8 @@ fn config() -> AgentSessionConfig {
         compaction_capability: ModelCompactionCapability::LocalSummary,
         sampling_retry_policy: Default::default(),
         compaction_strategy: Default::default(),
+        scope: Default::default(),
+        role_instructions: None,
     }
 }
 

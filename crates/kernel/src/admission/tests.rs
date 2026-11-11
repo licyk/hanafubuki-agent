@@ -113,6 +113,7 @@ async fn every_contributor_adds_its_values_to_the_turn() {
     let turn = collect_turn_extensions(
         &registry,
         &request(),
+        &crate::AgentCapabilityScope::default(),
         &CancellationToken::default(),
         crate::FIRST_BATCH_HARD_LIMITS.plugin_call_deadline,
     )
@@ -139,6 +140,7 @@ async fn a_type_produced_twice_or_a_contributor_error_is_left_out_and_shown() {
     let turn = collect_turn_extensions(
         &twice,
         &request(),
+        &crate::AgentCapabilityScope::default(),
         &CancellationToken::default(),
         crate::FIRST_BATCH_HARD_LIMITS.plugin_call_deadline,
     )
@@ -164,6 +166,7 @@ async fn a_type_produced_twice_or_a_contributor_error_is_left_out_and_shown() {
     let turn = collect_turn_extensions(
         &failing,
         &request(),
+        &crate::AgentCapabilityScope::default(),
         &CancellationToken::default(),
         crate::FIRST_BATCH_HARD_LIMITS.plugin_call_deadline,
     )
@@ -189,6 +192,7 @@ async fn a_stopped_plugin_contributes_nothing() {
     let turn = collect_turn_extensions(
         &registry,
         &request(),
+        &crate::AgentCapabilityScope::default(),
         &CancellationToken::default(),
         crate::FIRST_BATCH_HARD_LIMITS.plugin_call_deadline,
     )
@@ -196,4 +200,36 @@ async fn a_stopped_plugin_contributes_nothing() {
     .unwrap();
 
     assert_eq!(turn.get::<Catalog>(), None);
+}
+
+#[tokio::test]
+async fn the_contributors_of_a_plugin_the_scope_turns_off_are_not_asked() {
+    let (_root, registry, faults) = registry_with(vec![
+        Fixed {
+            id: "catalog",
+            produces: Produces::Catalog("frozen"),
+        },
+        Fixed {
+            id: "failing",
+            produces: Produces::Failure,
+        },
+    ])
+    .await;
+    let scope = crate::AgentCapabilityScope {
+        plugins_off: ["contributors".to_string()].into(),
+        ..crate::AgentCapabilityScope::default()
+    };
+
+    let turn = collect_turn_extensions(
+        &registry,
+        &request(),
+        &scope,
+        &CancellationToken::default(),
+        crate::FIRST_BATCH_HARD_LIMITS.plugin_call_deadline,
+    )
+    .await
+    .unwrap();
+
+    assert!(turn.get::<Catalog>().is_none());
+    assert!(faults.all_issues().is_empty());
 }

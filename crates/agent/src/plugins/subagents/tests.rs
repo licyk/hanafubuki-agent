@@ -138,7 +138,7 @@ async fn a_spawned_agent_runs_its_task_and_the_wait_returns_its_answer() {
     .await;
     let (service, paths) = started("subagents-spawn", &server).await;
     let parent = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     service
@@ -216,7 +216,7 @@ async fn a_spawned_agent_inherits_the_conversation_before_the_spawning_turn() {
     .await;
     let (service, paths) = started("subagents-fork", &server).await;
     let parent = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap()
         .id;
@@ -263,7 +263,7 @@ async fn messages_steer_a_running_agent_and_wait_for_an_idle_ones_next_turn() {
     let (service, paths) = started("subagents-messages", &server).await;
     let subagents = subagents(&service).await;
     let parent = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap()
         .id;
@@ -358,7 +358,7 @@ async fn the_depth_and_running_limits_refuse_a_spawn_with_a_tool_error() {
     let (service, paths) = started("subagents-limits", &server).await;
     let subagents = subagents(&service).await;
     let parent = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap()
         .id;
@@ -457,7 +457,7 @@ async fn with_the_subagents_plugin_off_the_tools_are_gone_and_the_calls_unavaila
     })
     .await;
     let parent = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap()
         .id;
@@ -523,7 +523,7 @@ async fn an_option_write_is_taken_in_place_or_restarts_the_plugin() {
     );
     assert!(shown.values[0].layer.is_some() && shown.values[1].layer.is_none());
     let parent = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap()
         .id;

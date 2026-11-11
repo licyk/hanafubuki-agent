@@ -20,6 +20,7 @@ They go before or after the command, and apply to every command.
 | `-c`, `--config KEY=VALUE`                           | Overrides a key of `config.toml` for this run; repeatable, the later wins. The value is TOML, or a string when it is not valid TOML             |
 | `-p`, `--profile NAME`                               | Reads the profile `[profiles.NAME]` over the user's settings; a profile the file does not have is an error                                      |
 | `-m`, `--model MODEL`                                | The model a new (or resumed) session runs on the default Provider, in place of the model policy's                                               |
+| `--role NAME`                                        | The [role](/docs/roles#sessions) a new session of the terminal interface or of `exec` takes, in place of `default`; an unknown role is an error |
 | `-C`, `--cd DIR`                                     | The working directory: the first workspace root; its Git root decides which project configuration may be read                                   |
 | `--add-dir DIR`                                      | Another workspace root; repeatable                                                                                                              |
 | `--permission-mode manual\|auto-review\|full-access` | This run's [permission mode](/docs/permissions), as `-c permissionMode=…`, winning over `-c`                                                    |
@@ -160,7 +161,7 @@ See [Memory](/docs/memory).
 | `roles list`      | Lists every role by name: its source and the first line of its description (`(not spawnable)` when it is not), or `unusable:` and why; the issues of reading and resolving the roles go to standard error |
 | `roles show NAME` | Prints the role's source and chain, then each field as the chain resolves it, with the roles that decide it (`[from reader, explorer]`); for an unusable role, why. A name no source defines exits with 1 |
 
-`-p` reads the profile's roles as well. Neither command starts the Agent. See [Roles](/docs/roles).
+`-p` reads the profile's roles as well. Neither command starts the Agent. A session takes a role with the global `--role NAME`, or with `/role NAME` in the terminal interface. See [Roles](/docs/roles).
 
 ## doctor [#doctor]
 

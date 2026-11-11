@@ -48,6 +48,18 @@ impl PromptContributorSnapshot {
         &self.0
     }
 
+    /// The same contributors but those of a plugin `off` names, in the same
+    /// order.
+    pub fn without_plugins(&self, off: impl Fn(&str) -> bool) -> Self {
+        Self(
+            self.0
+                .iter()
+                .filter(|entry| !off(entry.owner()))
+                .cloned()
+                .collect(),
+        )
+    }
+
     /// Every contributor's fragments, in contributor order. A contributor
     /// that panics is reported as a fault of its plugin and contributes
     /// nothing.

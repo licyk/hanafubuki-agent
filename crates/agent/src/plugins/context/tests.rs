@@ -27,6 +27,7 @@ async fn permission_mode_renders_the_turns_mode_while_its_plugin_runs() {
     let snapshot = hanafubuki_agent_kernel::collect_world_state(
         &mounted.context,
         &request(TurnExtensions::default()),
+        &hanafubuki_agent_kernel::AgentCapabilityScope::default(),
         &Default::default(),
         hanafubuki_agent_kernel::FIRST_BATCH_HARD_LIMITS.plugin_call_deadline,
     )
@@ -79,6 +80,7 @@ async fn the_sandbox_section_states_the_sandbox_and_how_to_leave_it() {
                 let snapshot = hanafubuki_agent_kernel::collect_world_state(
                     &context,
                     &request,
+                    &hanafubuki_agent_kernel::AgentCapabilityScope::default(),
                     &Default::default(),
                     hanafubuki_agent_kernel::FIRST_BATCH_HARD_LIMITS.plugin_call_deadline,
                 )

@@ -20,7 +20,7 @@ hanafubuki-agent sessions list
 每行依次是 ID、最后更新时间（本地时间）、模型和标题，最新的在最前面。标题在第一条消息时自动生成；还没有标题的会话显示 `(untitled)`。
 
 - `--archived` 列出已归档的会话，而不是正常的会话。
-- `--json` 每行输出一个会话摘要的 JSON 对象，包含 ID、模型、Provider、模式、标题、token 用量、创建和更新时间、创建时所在的目录和 Git 分支（`cwd` 和 `branch`）等字段，适合脚本处理。
+- `--json` 每行输出一个会话摘要的 JSON 对象，包含 ID、模型、Provider、模式、标题、token 用量、创建和更新时间、创建时所在的目录和 Git 分支（`cwd` 和 `branch`）、不是 `default` 时的[角色](/docs/roles#sessions)（`role`）等字段，适合脚本处理。
 - 只列出没有父会话的会话：[子会话](#children)要在它的父会话下面找。
 
 <Callout>
@@ -104,9 +104,13 @@ hanafubuki-agent sessions delete 2
 - 会话会记录它创建时所在的目录（`cwd`）：在工作树中创建的会话记录工作树，分叉记录来源会话的目录。
 - `worktree` 插件关闭（`disabledPlugins`）时工作树不可用，界面会说明这一点。
 
+## 角色 [#roles]
+
+每个会话都有一个[角色](/docs/roles#sessions)：除非你用 `--role 名字` 开始它，或在轮次之间用 `/role 名字` 切换，否则是什么都不收窄的 `default`。角色的指令、工具、插件和权限模式上限随会话保存：之后编辑或删除角色文件不会改变已有它的会话，恢复的会话保留它原来的角色。`/status` 会显示它。
+
 ## 子会话 [#children]
 
-一个会话可以是另一个会话的子会话：它是为那个会话创建的，而不是由你直接开始的。有[旁路对话](#side)、[子代理](#subagents)和[评审](#reviews)。子会话记录它的父会话（摘要中的 `parentSessionId`）和创建它的原因（`origin`：`side`、`subagent` 或 `review`），并沿用父会话的目录、模型和设置。
+一个会话可以是另一个会话的子会话：它是为那个会话创建的，而不是由你直接开始的。有[旁路对话](#side)、[子代理](#subagents)和[评审](#reviews)。子会话记录它的父会话（摘要中的 `parentSessionId`）和创建它的原因（`origin`：`side`、`subagent` 或 `review`），并沿用父会话的目录、模型和设置。它保留父会话的[角色](/docs/roles#sessions)，只能进一步收窄：子会话得到的永远不会比父会话多。分叉保留源会话的角色。
 
 每个会话在创建时都会记录工作区的主目录（`cwd`）和该目录中检出的 Git 分支（`branch`，从仓库的 `HEAD` 读取；`HEAD` 处于分离状态或不在仓库中时没有分支）。子会话和分叉沿用来源会话的记录。在这些字段出现之前创建的会话没有这两项。
 

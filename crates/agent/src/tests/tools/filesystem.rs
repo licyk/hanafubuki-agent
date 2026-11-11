@@ -17,7 +17,7 @@ async fn direct_file_read_is_unreviewed_and_returns_bounded_content() {
     .await;
     let (service, paths) = configured_service("approved-file-read", &server.base_url);
     let session = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     assert_eq!(

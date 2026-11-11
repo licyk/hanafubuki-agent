@@ -54,7 +54,7 @@ async fn a_remounted_context_plugin_leaves_the_request_unchanged() {
     .await;
     let (service, paths) = configured_service("golden-remount", &server.base_url);
     let session = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     service
@@ -80,7 +80,7 @@ async fn a_remounted_context_plugin_leaves_the_request_unchanged() {
         }
     }
     let session = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     service
@@ -99,6 +99,21 @@ async fn a_remounted_context_plugin_leaves_the_request_unchanged() {
         .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
         .is_empty());
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
+}
+
+/// A session with the built-in `explorer` role: the default request with
+/// only its reading tools and the kernel's own.
+#[tokio::test]
+async fn explorer_request_matches_golden() {
+    let body = first_request_as(
+        "golden-explorer",
+        AgentSessionMode::Default,
+        Some(crate::EXPLORER_ROLE),
+        |_, _| {},
+        |_, _| {},
+    )
+    .await;
+    assert_golden("explorer_request", &body);
 }
 
 #[tokio::test]
@@ -143,7 +158,7 @@ async fn run_tool_round_trip(
     .await;
     let (service, paths) = configured_service(name, &server.base_url);
     let session = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     let outcome = service
@@ -238,6 +253,8 @@ async fn reopen_and_continue(corpus: &str, transcript: &str, recorded_prompt: &s
     let session_id = sessions[0].session_id;
 
     let opened = service.open_session(session_id, 50).unwrap();
+    // Written before roles existed: the empty scope.
+    assert!(opened.runtime.role.is_none() && opened.runtime.scope.is_none());
     assert_golden(
         transcript,
         &transcript_digest(&serde_json::to_value(&opened.transcript).unwrap()),
@@ -343,7 +360,7 @@ async fn record_lineage_history() {
         std::fs::write(head, "ref: refs/heads/main\n").unwrap();
     });
     let parent = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     service
@@ -358,6 +375,7 @@ async fn record_lineage_history() {
             persistence: AgentSessionPersistence::Durable,
             base: AgentChildSessionBase::ParentHead,
             context: Vec::new(),
+            scope: Default::default(),
         })
         .unwrap();
     driver
@@ -440,7 +458,7 @@ async fn record_goal_history() {
     .await;
     let (service, paths) = configured_service("golden-goal-corpus", &server.base_url);
     let session = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     service
@@ -465,7 +483,7 @@ async fn side_conversation_request_matches_golden() {
     let server = FakeServer::start(vec![(assistant_events("Done."), Duration::ZERO); 2]).await;
     let (service, paths) = configured_service("golden-side", &server.base_url);
     let parent = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     service
@@ -497,7 +515,7 @@ async fn review_request_matches_golden() {
         FakeServer::start(vec![(assistant_events("No findings."), Duration::ZERO); 2]).await;
     let (service, paths) = configured_service("golden-review", &server.base_url);
     let parent = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     service
@@ -608,7 +626,7 @@ async fn mcp_tools_request_matches_golden() {
     let (service, paths) = configured_service("golden-mcp", &server.base_url);
     connect_scripted_mcp_servers(&service, &mcp).await;
     let session = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     service
@@ -641,7 +659,7 @@ async fn tool_search_round_trip_matches_golden() {
     let (service, paths) = configured_service("golden-tool-search", &server.base_url);
     connect_scripted_mcp_servers(&service, &mcp).await;
     let session = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     let outcome = service
@@ -715,13 +733,27 @@ async fn first_request_with(
     configure: impl FnOnce(&TestPaths, &AgentConfig),
     prepare: impl FnOnce(&AgentApplicationService, &TestPaths),
 ) -> Value {
+    first_request_as(name, mode, None, configure, prepare).await
+}
+
+/// [`first_request_with`] in a session with the role `role`.
+async fn first_request_as(
+    name: &str,
+    mode: AgentSessionMode,
+    role: Option<&str>,
+    configure: impl FnOnce(&TestPaths, &AgentConfig),
+    prepare: impl FnOnce(&AgentApplicationService, &TestPaths),
+) -> Value {
     let server = FakeServer::start(vec![(assistant_events("Done."), Duration::ZERO)]).await;
     let (service, paths) = service_with(name, |paths, config| {
         configure_test_provider(config, &server.base_url, None);
         configure(paths, config);
     });
     prepare(&service, &paths);
-    let session = service.create_session(mode).await.unwrap();
+    let session = service
+        .create_session(mode, role.map(str::to_string))
+        .await
+        .unwrap();
     service
         .start_turn(session.id, "Hello.".to_string().into())
         .await

@@ -13,7 +13,7 @@ async fn workspace_instruction_changes_refresh_on_the_next_turn_without_a_new_se
     let instructions = paths.managed_instances_dir.join("AGENTS.md");
     std::fs::write(&instructions, "workspace rule one").unwrap();
     let session = service
-        .create_session(hanafubuki_agent_kernel::AgentSessionMode::Default)
+        .create_session(hanafubuki_agent_kernel::AgentSessionMode::Default, None)
         .await
         .unwrap();
     service

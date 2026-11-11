@@ -74,7 +74,7 @@ async fn titled_service(
         .await;
     }
     let session = service
-        .create_session(hanafubuki_agent_kernel::AgentSessionMode::Default)
+        .create_session(hanafubuki_agent_kernel::AgentSessionMode::Default, None)
         .await
         .unwrap();
     (service, paths, session)

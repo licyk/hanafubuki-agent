@@ -21,7 +21,7 @@ the deny-only combinations) unchanged and adds declarative layers above it:
 - linked development packages.
 
 **Status.** Every §9 decision (D1–D9) was accepted as recommended (2026-11-11), and
-the plan records them. M1, M2 and M3 have landed; M4–M7 have not started.
+the plan records them. M1, M2, M3 and M4 have landed; M5–M7 have not started.
 
 **For each milestone,** record when it is done:
 
@@ -244,14 +244,14 @@ then M4, then M5; M6 after M3; M7 after M1.
         construction and by `reload_packages` (each settings write, package
         and MCP change); a hand-edited role file applies then or at the
         next start.
-      - A user role named `default` replaces the built-in one like any
-        other; M4 relies on `default` meaning the empty scope, so decide
-        there whether to reserve the name.
+      - A user role named `default` replacing the built-in one: settled in
+        M4, the name is reserved (a configured `default` is ignored with
+        an issue).
       - `[agents]` is written by hand only: `config get/set` do not reach
         it.
-      - The "pattern matches nothing" warning needs the live registries,
-        and comes with M4.
-- [ ] M4: the session capability scope.
+      - The "pattern matches nothing" warning needs the live registries;
+        M4 did not build it (see M4's Open).
+- [x] M4: the session capability scope.
       - `AgentCapabilityScope` in `AgentSessionConfig`, tolerant and normalized.
       - Filters:
         - tools and sources at planning (core tools and `tool_search` never
@@ -264,7 +264,155 @@ then M4, then M5; M6 after M3; M7 after M1.
         event field.
       - Default sessions' requests and history bytes unchanged; one new explorer
         golden.
-      Done: —. Open: —.
+      Done (2026-11-11):
+      - Kernel `model/scope.rs`: serde for the scope (a pattern as the text
+        it parses from; empty fields left out; `Deserialize` field by field,
+        an unreadable field at its default, an unreadable pattern dropped
+        from its list, an allow list that is not a list allowing nothing),
+        `is_empty`, `capped_permission_mode`, `turns_off`, `summary`
+        (`AgentCapabilityScopeSummary`: allow lists and patterns, deny
+        patterns, plugins off, cap), `normalize` (allow lists sorted and
+        once each, `CORE_PLUGINS` dropped from `plugins_off`, a tool scope
+        over `MAX_SCOPE_TOOL_PATTERNS` = 128 patterns or with one over 256
+        bytes allows no tool); `narrow` keeps the parent's role when the
+        child names none. `AgentSessionConfig` gains `scope` and
+        `role_instructions`, both tolerant and `skip_serializing_if`
+        empty, so a default session's record is byte for byte the old one;
+        `normalize_session_config` normalizes the scope (creation,
+        update, recovery, children); every request (and a compaction's)
+        carries `effective_instructions()`: the base instructions, then the
+        role's.
+      - Filters: `AgentToolCatalogContext.scope`; the planner skips a
+        source whose owner is off (`AgentToolContributor::owner`) and,
+        after the mode policy, keeps a handler tool only if its owner is
+        not off and the tool scope allows it (`provider` only for a sourced
+        tool); core tools and `tool_search` have no handler and are never
+        asked; no omission is recorded. `collect_world_state` and
+        `collect_turn_extensions` take the scope and skip entries whose
+        owner is off; prompt contributors
+        (`PromptContributorSnapshot::without_plugins`, in the step and in
+        `render_prompt`) and continuation hooks (the step's snapshot) the
+        same; `stage_turn_admission` freezes the capped mode, and the
+        facade's `turn_permission_mode` caps it too, so the
+        `permission_mode` section and a child's inherited mode agree.
+        Approval rules, tool lifecycle hooks, observers and renderers are
+        untouched.
+      - Children: `AgentChildSessionRequest.scope`; the child's scope is
+        `parent.narrow(&request.scope)`; forks copy the configuration.
+        Kernel `session_scope` and `set_session_role(session, scope,
+        role_instructions)` (idle only, validated before it is assigned,
+        a new revision, durable).
+      - Snapshot `role` and `scope` (the summary), and the session summary's
+        `role`, all left out for `default`.
+      - Facade: `create_session(mode, role: Option<String>)` resolves from
+        the current catalog (`default` → the empty scope, no instructions;
+        unknown or unusable → invalid input naming the usable roles), takes
+        the role's model and reasoning effort over the Provider policy's,
+        and its scope and instructions; `set_session_role(session, role)`
+        commits scope and instructions, then selects the role's model and
+        reasoning effort if it sets them, and returns the snapshot. The
+        name `default` is reserved: a configured `default` is ignored with
+        an issue (M3's Open item).
+      - CLI global `--role NAME` (interactive and `exec`); TUI `/role
+        NAME`, `/role` alone a picker of the usable roles, `Role set to …`,
+        the role (with what it narrows) in `/status`, a `role` status-line
+        item; `TuiOptions.role`.
+      - Tests: kernel `model/scope/tests.rs` (round trip, tolerant fields,
+        canonical form, bounds, role kept by a child, cap, summary),
+        `validation/tests.rs` (a default config's bytes, an old config, a
+        role's record), `context/tests.rs` and `admission/tests.rs`
+        (contributors of a plugin off not asked), `loop_contract/scope.rs`
+        (a filtered tool is "no tool named" exactly like an unknown one,
+        direct and deferred, with no omission; core tools and
+        `tool_search` survive a scope naming them; a deferred selection of
+        a filtered tool ignored after a switch; a fork keeps the scope; a
+        tool lifecycle hook and an approval rule of a plugin off still
+        deny and still ask under full access; prompt and continuation off;
+        the cap at admission; `set_session_role` refused while a turn
+        runs, `default` clears; a child never wider),
+        `loop_contract/sources.rs` (a source of a plugin off never asked, a
+        `provider:` deny); facade `tests/sessions/roles.rs` (creation with
+        a role file, unknown role, reserved `default`, instructions after
+        a model selection, the cap in the turn and in its `permission_mode`
+        section, `set_session_role` and `default`,
+        recovery after the role file is deleted, `skills` off refuses an
+        explicit Skill, selects nothing for a `$mention` and drops the
+        Skill tools, `memory` off drops the
+        summary and tools while the contribution still reaches the store),
+        `tests/descriptors.rs` (the core rows are `CORE_PLUGINS`),
+        `tests/golden.rs` (every recorded corpus opens with no role and no
+        scope), `roles/tests.rs` (a chain over 128 patterns unusable,
+        `default` reserved and still extendable); CLI
+        `exec.rs` (`--role explorer`, the summary's `role`, an unknown role
+        exits 1 before any request); TUI command tables and the status
+        line snapshot (`Role: explorer`).
+      - Goldens: one new `explorer_request.json` (the default request with
+        only explorer's six tools and the kernel's three; same
+        instructions and input); every other request golden and the
+        history corpora byte-identical.
+      - Docs (both languages): plugin-rules (`#capability-scope`, the
+        never-filtered list, a note under the registry table, the
+        explorer golden), architecture (`#sessions-and-turns`,
+        `#a-plan-per-step`), roles (`#sessions`, `default` reserved,
+        when edits apply), sessions (`#roles`, children and forks, the
+        summary's `role`), cli-reference (`--role`), exec (`--role`, no
+        session object in the stream), json-events (`role` in
+        `sessions list --json`), terminal-interface (`#role`, `/status`,
+        the `role` item), embedding (`#sessions`: `create_session(mode,
+        role)`, `set_session_role`, the snapshot; the cap in permissions).
+      - Validation (Linux only): `cargo fmt --all --check`,
+        `RUSTFLAGS="-D warnings" cargo check --workspace --all-targets
+        --all-features`, `cargo clippy --workspace --all-targets
+        --all-features -- -D warnings`, `cargo xtask check`, `cargo test
+        --workspace --all-features`; the site's `bun install
+        --frozen-lockfile`, `format:site`, `format:check:site`,
+        `site:check`, `site:test`, `site:build` (every page prerendered).
+        One new request golden (`explorer_request.json`, generated alone
+        with `HANAFUBUKI_AGENT_UPDATE_GOLDEN=1` on its test); every other
+        golden and the history corpora byte-identical; no diff under
+        `crates/host`, `crates/foundation`, `crates/process` or
+        `architecture/`.
+      - Deviations from the plan: the role's instructions are a field of
+        their own (`role_instructions`), not part of `instructions` and not
+        of the scope, so a model selection (which sets `instructions`
+        again) and an unconfigured session (whose `instructions` must be
+        empty) keep them, and the canonical-context digest keeps hashing
+        the base instructions alone; the tool-pattern bound fails closed
+        (allow nothing) instead of truncating, since dropping a deny
+        pattern or an allow list widens; `exec --json` has no session
+        object, so `role` went on the session summary
+        (`sessions list --json`) and the runtime snapshot instead, the
+        event stream unchanged; no snapshot event exists in the kernel,
+        so `set_session_role` returns the snapshot as `set_session_model`
+        does and the TUI refreshes its status from it; `set_session_role`
+        with a model or effort is up to three commits (scope first, which
+        holds the idle check); the facade caps the mode as well as the
+        kernel, so the world state shows the frozen mode; a role whose
+        chain holds more than 128 tool patterns is unusable at resolution
+        (with why) rather than giving a session that allows no tool; with
+        `skills` off a `$mention` is not refused, it selects nothing and
+        stays text (the kernel only refuses an explicit reference); the
+        new TUI `/role` file carries the Codex notice header, being
+        modelled on `/model`'s picker (`architecture/` is unchanged).
+      - Hanafubuki at its next pin: `create_session(mode, None)`; struct
+        literals of `AgentSessionConfig` (`scope`, `role_instructions`),
+        `AgentChildSessionRequest` (`scope`), and any of
+        `AgentSessionRuntimeSnapshot`/`AgentSessionSummary` (`role`,
+        `scope`) take the new fields; a direct call of
+        `collect_world_state` or `collect_turn_extensions` passes a scope.
+        Its goldens and the shared corpus do not change; it may offer role
+        choice with `roles()` and `set_session_role`.
+      Open:
+      - The "a pattern that matches nothing" warning: the sourced tools
+        vary per step, so it needs the live registries at selection; not
+        built.
+      - `set_session_role` is not atomic when the role sets a model: a
+        failed model selection leaves the new scope with the old model.
+      - An older build reading a scoped session runs it unscoped (the
+        plan's migration table accepts it); a deny pattern a later build
+        writes that this one cannot parse is dropped, which widens.
+      - The configuration center does not offer role choice yet; the TUI's
+        `/role` and the CLI's `--role` do.
 - [ ] M5: role-aware subagents.
       - `spawn_agent { agent_type }` (D7).
       - `AgentRoleCatalogReader`; children take the role's instructions, model and

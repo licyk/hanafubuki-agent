@@ -22,6 +22,20 @@ pub struct AgentSessionConfig {
     /// build does not know, compacts with `standard`.
     #[serde(default, deserialize_with = "tolerant_compaction_strategy")]
     pub compaction_strategy: AgentCompactionStrategy,
+    /// What the session's role narrows; empty for the `default` role, and
+    /// for a session written before roles existed. Left out when empty, so
+    /// such a session's record is unchanged.
+    #[serde(default, skip_serializing_if = "super::AgentCapabilityScope::is_empty")]
+    pub scope: super::AgentCapabilityScope,
+    /// The role's merged instructions, which every request appends to
+    /// `instructions` (the base instructions): kept apart so a model
+    /// selection, which sets `instructions` again, keeps them.
+    #[serde(
+        default,
+        deserialize_with = "tolerant_role_instructions",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub role_instructions: Option<String>,
 }
 
 /// What starts a reduction of a session's context. Every strategy keeps the
@@ -46,6 +60,14 @@ where
     Ok(serde_json::from_value(value).unwrap_or_default())
 }
 
+fn tolerant_role_instructions<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = Option::<serde_json::Value>::deserialize(deserializer)?;
+    Ok(value.and_then(|value| value.as_str().map(str::to_string)))
+}
+
 /// The share of the context window at which a session with the `background`
 /// strategy starts a compaction in the background, from
 /// `[compaction.background]`: the facade puts it in each turn's extensions.
@@ -65,6 +87,17 @@ pub enum AgentBackgroundCompactionState {
 }
 
 impl AgentSessionConfig {
+    /// The instructions a request carries: the base instructions, then the
+    /// role's.
+    pub(crate) fn effective_instructions(&self) -> String {
+        match &self.role_instructions {
+            Some(role) if !self.instructions.is_empty() => {
+                format!("{}\n\n{}\n", self.instructions.trim_end(), role.trim())
+            }
+            _ => self.instructions.clone(),
+        }
+    }
+
     pub(crate) fn effective_reasoning(
         &self,
     ) -> Option<hanafubuki_agent_model_api::ModelReasoningConfig> {
@@ -326,6 +359,12 @@ pub struct AgentSessionRuntimeSnapshot {
     pub provider_protocol: hanafubuki_agent_model_api::ModelApiProtocol,
     pub model: String,
     pub mode: AgentSessionMode,
+    /// The session's role; none for `default`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub role: Option<String>,
+    /// What the role narrows; none for `default`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scope: Option<super::AgentCapabilityScopeSummary>,
     pub memory_contribution: AgentMemoryContributionState,
     pub reasoning_effort: Option<hanafubuki_agent_model_api::ModelReasoningEffort>,
     pub input_capabilities: hanafubuki_agent_model_api::ModelInputCapabilities,
@@ -371,6 +410,10 @@ pub struct AgentSessionSummary {
     pub provider_protocol: hanafubuki_agent_model_api::ModelApiProtocol,
     pub model: String,
     pub mode: AgentSessionMode,
+    /// The session's role; none for `default`, and in a summary kept from
+    /// before roles existed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub role: Option<String>,
     pub reasoning_effort: Option<hanafubuki_agent_model_api::ModelReasoningEffort>,
     pub title: Option<AgentSessionTitle>,
     pub lifecycle: AgentSessionLifecycle,

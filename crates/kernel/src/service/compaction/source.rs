@@ -180,7 +180,7 @@ fn compaction_request(
     // beside the tools that made them, on every protocol.
     let request = ModelRequest {
         model: record.settings.config.model.clone(),
-        instructions: record.settings.config.instructions.clone(),
+        instructions: record.settings.config.effective_instructions(),
         input,
         tools: tool_plan.model_specs(),
         tool_choice: hanafubuki_agent_model_api::ModelToolChoice::None,

@@ -14,11 +14,11 @@ async fn background_terminal_use_cases_are_session_scoped() {
     let process = FakeAgentExecutionProcessPort::shared();
     service.test_replace_executions(AgentExecutionService::with_process_port(process));
     let first = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     let second = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     install_fake_background_execution(&service, first.id, "first-command");
@@ -84,7 +84,7 @@ async fn cleanup_failure_blocks_archive_and_retries_the_same_execution() {
     let process = FakeAgentExecutionProcessPort::shared();
     service.test_replace_executions(AgentExecutionService::with_process_port(process.clone()));
     let session = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     let execution = install_fake_background_execution(&service, session.id, "retained-command");
@@ -121,7 +121,7 @@ async fn cleanup_failure_cancels_prepared_delete_and_retry_confirms_removal() {
     let process = FakeAgentExecutionProcessPort::shared();
     service.test_replace_executions(AgentExecutionService::with_process_port(process.clone()));
     let session = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     let execution = install_fake_background_execution(&service, session.id, "delete-command");
@@ -159,7 +159,7 @@ async fn shutdown_reports_retained_background_process_authority() {
     let process = FakeAgentExecutionProcessPort::shared();
     service.test_replace_executions(AgentExecutionService::with_process_port(process.clone()));
     let session = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     install_fake_background_execution(&service, session.id, "retained-on-shutdown");
@@ -180,7 +180,7 @@ async fn startup_terminalizes_execution_activity_without_rebuilding_process_auth
             configure_test_provider(config, "http://127.0.0.1:1/v1", None);
         });
     let session = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     service

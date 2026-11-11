@@ -76,6 +76,7 @@ impl ReviewService {
                     persistence: AgentSessionPersistence::Durable,
                     base: AgentChildSessionBase::Empty,
                     context: Vec::new(),
+                    scope: Default::default(),
                 })?;
                 driver.rename(child.id, title)?;
                 driver.set_mode(child.id, AgentSessionMode::Default)?;

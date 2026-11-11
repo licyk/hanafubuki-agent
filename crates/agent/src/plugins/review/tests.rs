@@ -222,7 +222,7 @@ fn finish(service: AgentApplicationService, paths: TestPaths) {
 /// A session in `mode` that has had one turn, answered by the server's
 /// next response.
 async fn parent(service: &AgentApplicationService, mode: AgentSessionMode) -> AgentSessionId {
-    let parent = service.create_session(mode).await.unwrap().id;
+    let parent = service.create_session(mode, None).await.unwrap().id;
     service
         .start_turn(parent, "Hello.".to_string().into())
         .await
@@ -488,7 +488,7 @@ async fn a_conversation_without_a_turn_is_not_reviewed() {
     let server = FakeServer::start(Vec::new()).await;
     let (service, paths) = started("review-no-turn", &server).await;
     let parent = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap()
         .id;
@@ -544,7 +544,7 @@ async fn with_the_review_plugin_off_the_calls_are_unavailable() {
         tokio::time::sleep(Duration::from_millis(10)).await;
     }
     let parent = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap()
         .id;

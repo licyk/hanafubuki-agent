@@ -28,7 +28,7 @@ hanafubuki-agent exec - < task.md
 { echo "Review this change and point out likely problems:"; git diff; } | hanafubuki-agent exec -
 ```
 
-The [global flags](/docs/cli-reference#global-flags) apply to `exec` too: `-m` picks the session's model, `-C` the working directory, `--add-dir` adds a workspace root, `--permission-mode` picks the permission mode, and `-p` and `-c` adjust the configuration.
+The [global flags](/docs/cli-reference#global-flags) apply to `exec` too: `--role` gives the session a [role](/docs/roles#sessions) (its instructions, model, tools and permission-mode cap; an unknown role fails the command with code 1 before any turn), `-m` picks the session's model (over the role's), `-C` the working directory, `--add-dir` adds a workspace root, `--permission-mode` picks the permission mode, and `-p` and `-c` adjust the configuration.
 
 ## Output for a person [#human-output]
 
@@ -77,7 +77,7 @@ hanafubuki-agent exec --json "List the five largest files"
 }
 ```
 
-The turn's last line is `turn_completed`, `turn_cancelled` or `turn_failed`. Every event's fields, their order and the compatibility rule are in [exec --json events](/docs/json-events).
+The turn's last line is `turn_completed`, `turn_cancelled` or `turn_failed`. Every event's fields, their order and the compatibility rule are in [exec --json events](/docs/json-events). The stream has no session object: the session's role is in its summary (`sessions list --json`, `role`).
 
 ## Approvals and questions [#approvals]
 

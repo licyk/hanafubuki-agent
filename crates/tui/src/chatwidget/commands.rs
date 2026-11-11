@@ -104,6 +104,13 @@ impl ChatWidget {
                     None,
                 ))
             }
+            TurnUpdate::RoleChoices(choices) => self.run_command(&commands::ROLE, |context| {
+                commands::show_role_choices(context, choices)
+            }),
+            TurnUpdate::RoleChanged(role) => self.add_to_history(history_cell::new_info_event(
+                format!("Role set to {}", role.as_deref().unwrap_or("default")),
+                None,
+            )),
             TurnUpdate::SessionStatus(status) => self.set_session_status(*status),
             TurnUpdate::ModeChanged(mode) => {
                 self.mode = mode;

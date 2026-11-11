@@ -420,30 +420,35 @@ impl AgentSessionDriver {
     }
 
     /// The permission mode a turn of the session starts in: `requested`,
-    /// else the session's choice, else the configured one.
+    /// else the session's choice, else the configured one, tightened to
+    /// the cap of the session's role (as the kernel freezes it).
     pub(crate) async fn turn_permission_mode(
         &self,
         session_id: AgentSessionId,
         requested: Option<AgentPermissionMode>,
     ) -> Result<AgentPermissionMode, String> {
-        if let Some(mode) = requested {
-            return Ok(mode);
-        }
-        if let Some(mode) = self
+        let scope = self
+            .core
+            .session_scope(session_id)
+            .map_err(|error| error.to_string())?;
+        let chosen = self
             .core
             .session_permission_mode(session_id)
-            .map_err(|error| error.to_string())?
-        {
-            return Ok(mode);
-        }
-        let config = self.config.clone();
-        Ok(run_blocking_operation(
-            self.blocking.as_ref(),
-            "agent settings read worker",
-            move || config.settings(),
-        )
-        .await??
-        .permission_mode)
+            .map_err(|error| error.to_string())?;
+        let mode = match requested.or(chosen) {
+            Some(mode) => mode,
+            None => {
+                let config = self.config.clone();
+                run_blocking_operation(
+                    self.blocking.as_ref(),
+                    "agent settings read worker",
+                    move || config.settings(),
+                )
+                .await??
+                .permission_mode
+            }
+        };
+        Ok(scope.capped_permission_mode(mode))
     }
 
     /// The turn's world state, from the context contributors plugins
@@ -478,6 +483,7 @@ impl AgentSessionDriver {
         hanafubuki_agent_kernel::collect_world_state(
             &self.registries.context,
             &request,
+            &self.core.session_scope(session_id)?,
             &admission_cancellation(),
             self.core.limits().plugin_call_deadline,
         )
@@ -543,6 +549,7 @@ impl AgentSessionDriver {
         let mut turn = hanafubuki_agent_kernel::collect_turn_extensions(
             &self.registries.turn_admission,
             &TurnAdmissionRequest { session_id, mode },
+            &self.core.session_scope(session_id)?,
             &admission_cancellation(),
             self.core.limits().plugin_call_deadline,
         )

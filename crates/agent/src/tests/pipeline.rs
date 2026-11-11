@@ -41,7 +41,7 @@ async fn an_exclusive_call_serializes_the_step_and_each_output_commits_in_call_o
     .await;
     let (service, paths) = pipeline_service("pipeline-gate", &model, &mcp).await;
     let session = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     mcp.hold.arm();
@@ -120,7 +120,7 @@ async fn a_cancel_mid_step_commits_the_finished_call_and_interrupts_the_running_
     .await;
     let (service, paths) = pipeline_service("pipeline-cancel", &model, &mcp).await;
     let session = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     mcp.hold.arm();
@@ -188,7 +188,7 @@ async fn a_call_waiting_for_approval_lets_the_step_proceed_and_allow_for_session
     server.approval_policy = hanafubuki_agent_mcp::McpApprovalPolicy::Ask;
     let (service, paths) = pipeline_service_with("pipeline-approval", &model, server).await;
     let session = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     let turn = spawn_turn(&service, session.id);
@@ -256,7 +256,7 @@ async fn an_mcp_call_past_its_timeout_gets_an_error_and_the_turn_continues() {
     server.call_timeout_seconds = 1;
     let (service, paths) = pipeline_service_with("pipeline-timeout", &model, server).await;
     let session = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     mcp.hold.arm();
@@ -314,7 +314,7 @@ async fn a_panicking_mcp_call_fails_its_call_and_its_server_only() {
         .await
         .unwrap();
     let session = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
 
@@ -390,7 +390,7 @@ async fn an_unknown_tool_gets_an_error_output_and_the_turn_continues() {
     .await;
     let (service, paths) = configured_service("pipeline-unknown", &model.base_url);
     let session = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     let outcome = service.start_turn(session.id, "Go.".into()).await.unwrap();
@@ -427,7 +427,7 @@ async fn bad_arguments_get_error_outputs_and_the_turn_continues() {
     .await;
     let (service, paths) = pipeline_service("pipeline-arguments", &model, &mcp).await;
     let session = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     let outcome = service.start_turn(session.id, "Go.".into()).await.unwrap();
@@ -470,7 +470,7 @@ async fn a_namespaced_mcp_call_resolves_through_the_wire_names_only() {
     .await;
     let (service, paths) = pipeline_service("pipeline-namespace", &model, &mcp).await;
     let session = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     let outcome = service.start_turn(session.id, "Go.".into()).await.unwrap();
@@ -545,7 +545,7 @@ async fn plan_mode_offers_only_the_mcp_tools_annotated_read_only() {
     .await;
     let (service, paths) = pipeline_service("pipeline-plan-mode", &model, &mcp).await;
     for mode in [AgentSessionMode::Plan, AgentSessionMode::Default] {
-        let session = service.create_session(mode).await.unwrap();
+        let session = service.create_session(mode, None).await.unwrap();
         service.start_turn(session.id, "Go.".into()).await.unwrap();
     }
 

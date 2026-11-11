@@ -139,6 +139,8 @@ impl ChatWidget {
             TurnUpdate::SessionOpened(_)
             | TurnUpdate::ModelChoices(_)
             | TurnUpdate::ModelChanged(_)
+            | TurnUpdate::RoleChoices(_)
+            | TurnUpdate::RoleChanged(_)
             | TurnUpdate::ModeChanged(_)
             | TurnUpdate::StatusReport(_)
             | TurnUpdate::Providers(_)

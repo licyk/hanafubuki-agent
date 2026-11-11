@@ -51,7 +51,7 @@ use tokio::sync::oneshot;
 
 use crate::app_event::{AppEvent, AppEventSender, Op};
 use crate::history_cell::ToolResultView;
-pub(crate) use commands::{setup_needed, with_model, ModelChoices, StatusReport};
+pub(crate) use commands::{setup_needed, with_model, ModelChoices, RoleChoices, StatusReport};
 pub(crate) use goal::{GoalCall, GoalReply};
 pub(crate) use hooks::{needing_review, HooksCall, HooksReply};
 pub(crate) use mcp::{McpCall, McpReply};
@@ -114,6 +114,10 @@ pub(crate) enum TurnUpdate {
     SessionOpened(OpenedSession),
     ModelChoices(ModelChoices),
     ModelChanged(String),
+    /// What `/role` offers.
+    RoleChoices(RoleChoices),
+    /// The session's role is now this one (`None` for `default`).
+    RoleChanged(Option<String>),
     ModeChanged(AgentSessionMode),
     /// The session's context was compacted: by `/compact`, automatically
     /// or in the background.
@@ -187,6 +191,8 @@ pub(crate) struct AgentBridge {
     /// The model of the sessions the interface creates, in place of the
     /// model policy's (`-m`).
     model: Option<String>,
+    /// The role of the sessions the interface creates (`--role`).
+    role: Option<String>,
     /// The name `/clear NAME` gives the session the next message creates.
     pending_title: Option<String>,
     /// While a session is being created: what was asked meanwhile, in
@@ -226,6 +232,7 @@ impl AgentBridge {
         runtime: Arc<AgentRuntime>,
         agent: AgentHandle,
         model: Option<String>,
+        role: Option<String>,
         app_event_tx: AppEventSender,
     ) -> Self {
         Self {
@@ -234,6 +241,7 @@ impl AgentBridge {
             agent,
             session_id: None,
             model,
+            role,
             pending_title: None,
             creating: None,
             app_event_tx,
@@ -390,6 +398,10 @@ impl AgentBridge {
                 TurnUpdate::ModelChanged(model) => {
                     self.send_session_status();
                     Some(TurnUpdate::ModelChanged(model))
+                }
+                TurnUpdate::RoleChanged(role) => {
+                    self.send_session_status();
+                    Some(TurnUpdate::RoleChanged(role))
                 }
                 TurnUpdate::Goal(reply) => self.goal_reply(reply),
                 TurnUpdate::Subagents(SubagentsReply::Listed(statuses)) => {

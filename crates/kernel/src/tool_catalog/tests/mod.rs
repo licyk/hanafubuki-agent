@@ -171,6 +171,7 @@ fn plan_context(mode: AgentSessionMode, strict_json_schema: bool) -> AgentToolCa
         },
         selected_deferred_tools: BTreeSet::new(),
         memory_contribution_enabled: false,
+        scope: Default::default(),
     }
 }
 

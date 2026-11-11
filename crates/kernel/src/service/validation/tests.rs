@@ -186,6 +186,8 @@ fn skills_read_output_and_context_round_trip_as_a_valid_persisted_group() {
         compaction_capability: hanafubuki_agent_model_api::ModelCompactionCapability::LocalSummary,
         sampling_retry_policy: AgentSamplingRetryPolicy::default(),
         compaction_strategy: Default::default(),
+        scope: Default::default(),
+        role_instructions: None,
     };
 
     validate_persisted_history(&reconstructed, &config, crate::FIRST_BATCH_HARD_LIMITS).unwrap();
@@ -331,6 +333,8 @@ fn responses_only_config(
             hanafubuki_agent_model_api::ModelCompactionCapability::ResponsesCompact,
         sampling_retry_policy: AgentSamplingRetryPolicy::default(),
         compaction_strategy: Default::default(),
+        scope: Default::default(),
+        role_instructions: None,
     }
 }
 
@@ -396,4 +400,38 @@ fn a_host_context_is_accepted_up_to_the_bound_the_host_cuts_to() {
             if limit == crate::MAXIMUM_HOST_CONTEXT_BYTES
     ));
     assert!(validate_host_context(&context(" ".to_string())).is_err());
+}
+
+/// A session without a role writes the record it wrote before roles
+/// existed, and such a record reads with the empty scope; a role's scope
+/// and instructions are kept, canonical, and requests carry its
+/// instructions after the base ones.
+#[test]
+fn a_default_session_config_is_unchanged_and_a_role_survives_its_record() {
+    let config = responses_only_config(hanafubuki_agent_model_api::ModelApiProtocol::Responses);
+    let value = serde_json::to_value(&config).unwrap();
+    assert!(value.get("scope").is_none() && value.get("roleInstructions").is_none());
+    let read: AgentSessionConfig = serde_json::from_value(value).unwrap();
+    assert!(read.scope.is_empty());
+    assert_eq!(read.effective_instructions(), "fixture");
+
+    let mut role = config.clone();
+    role.instructions = "base\n".to_string();
+    role.role_instructions = Some("Only read.".to_string());
+    role.scope = crate::AgentCapabilityScope {
+        role: Some("reader".to_string()),
+        plugins_off: ["agent-kernel".to_string(), "titles".to_string()].into(),
+        ..Default::default()
+    };
+    normalize_session_config(&mut role);
+    assert_eq!(role.scope.plugins_off, ["titles".to_string()].into());
+    let read: AgentSessionConfig =
+        serde_json::from_value(serde_json::to_value(&role).unwrap()).unwrap();
+    assert_eq!(read, role);
+    assert_eq!(read.effective_instructions(), "base\n\nOnly read.\n");
+    // A field this build cannot read falls back alone.
+    let mut value = serde_json::to_value(&role).unwrap();
+    value["roleInstructions"] = serde_json::json!(5);
+    let read: AgentSessionConfig = serde_json::from_value(value).unwrap();
+    assert_eq!((read.role_instructions, read.scope), (None, role.scope));
 }

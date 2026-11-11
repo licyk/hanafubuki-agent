@@ -71,6 +71,7 @@ fn the_unfiltered_list_is_the_registry_in_order() {
         "model",
         "providers",
         "mode",
+        "role",
         "permissions",
         "approve",
         "setup-default-sandbox",

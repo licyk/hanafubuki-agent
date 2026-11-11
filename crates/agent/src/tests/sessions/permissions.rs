@@ -25,11 +25,11 @@ async fn a_session_permission_mode_replaces_the_configured_one_for_that_session_
         .permission_mode;
     assert_ne!(configured, AgentPermissionMode::FullAccess);
     let chosen = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     let other = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     assert_eq!(service.session_permission_mode(chosen.id), Ok(None));
@@ -103,11 +103,11 @@ async fn start_turn_runs_in_the_inputs_mode_else_the_sessions_else_the_configure
             .unwrap();
     });
     let unset = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     let chosen = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     service
@@ -226,7 +226,7 @@ async fn an_approved_denial_is_a_note_the_next_turn_sends_after_a_restart() {
         configure_test_provider(config, &server.base_url, None);
     });
     let session = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     service

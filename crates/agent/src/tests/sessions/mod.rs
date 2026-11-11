@@ -124,4 +124,5 @@ mod export;
 mod lifecycle;
 mod permissions;
 mod provider;
+mod roles;
 mod sandbox;

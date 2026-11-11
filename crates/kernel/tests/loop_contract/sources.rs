@@ -345,3 +345,56 @@ async fn a_turn_cancelled_while_its_tools_are_planned_is_cancelled_not_failed() 
     assert_eq!(turn.await.unwrap(), Err(AgentError::Cancelled));
     root.fiber().dispose().await.unwrap();
 }
+
+/// A source of a plugin the session's scope turns off is not asked at all,
+/// and a provider pattern names every tool a provider sources.
+#[tokio::test]
+async fn the_scope_leaves_out_a_turned_off_source_and_a_denied_provider() {
+    let registries = AgentKernelRegistries::default();
+    let root = Context::new();
+    root.plugin_def(&kernel_plugin(registries.clone()), Value::Null)
+        .unwrap()
+        .settled()
+        .await
+        .unwrap();
+    // It would hold the step until the turn is cancelled.
+    let planning = Arc::new(AtomicBool::new(false));
+    register_source(
+        &root,
+        Arc::new(PlanningSource {
+            planning: planning.clone(),
+        }),
+    )
+    .await;
+    let model = ScriptedEventModel::new([deterministic_assistant_events("unplanned")]);
+    let service = AgentService::new(Arc::new(model.clone()), registries);
+    let mut scoped = config();
+    scoped.scope.plugins_off = ["fake-source".to_string()].into();
+    let session = service.create_session(scoped).unwrap();
+    let outcome = tokio::time::timeout(
+        Duration::from_secs(10),
+        service.start_turn(session.id, "plan".to_string()),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    assert_eq!(outcome.final_answer, "unplanned");
+    assert!(!planning.load(Ordering::Acquire));
+    root.fiber().dispose().await.unwrap();
+
+    let fixture = fixture().await;
+    let model = ScriptedEventModel::new([deterministic_assistant_events("none")]);
+    let service = AgentService::new(Arc::new(model.clone()), fixture.registries.clone());
+    let mut scoped = config();
+    scoped.scope.tools.deny =
+        [hanafubuki_agent_kernel::ToolPattern::parse("provider:fake.*").unwrap()].into();
+    let session = service.create_session(scoped).unwrap();
+    service
+        .start_turn(session.id, "read".to_string())
+        .await
+        .unwrap();
+    let offered = format!("{:?}", model.requests()[0].tools);
+    assert!(!offered.contains("sourced_"), "{offered}");
+    assert!(offered.contains("update_plan"), "{offered}");
+    fixture.root.fiber().dispose().await.unwrap();
+}

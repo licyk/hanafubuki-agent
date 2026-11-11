@@ -137,6 +137,9 @@ pub(crate) enum AgentCommand {
         model: String,
     },
     SetMode(AgentSessionMode),
+    /// The roles `/role` offers.
+    ListRoles,
+    SetRole(String),
     Status,
     Providers(ProviderCall),
     Mcp(McpCall),

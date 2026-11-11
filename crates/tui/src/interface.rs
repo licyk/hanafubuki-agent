@@ -54,6 +54,8 @@ pub struct TuiOptions {
     /// The model of the sessions the interface creates, and of the one it
     /// resumes at the start, in place of the model policy's (`-m`).
     pub model: Option<String>,
+    /// The role of the sessions the interface creates (`--role`).
+    pub role: Option<String>,
     /// The working directory, as the header shows it.
     pub directory: String,
     /// A session to reopen in place of a new one.
@@ -87,6 +89,7 @@ pub fn run(
         runtime.clone(),
         agent.clone(),
         options.model.clone(),
+        options.role.clone(),
         events.sender.clone(),
     );
     let model_override = options.model.is_some();

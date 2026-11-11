@@ -1,12 +1,12 @@
 ---
 title: 角色
-description: 有名字、可继承、只会收窄 Agent 的工作方式定义——角色文件、[agents] 条目、来源与优先级、extends 与合并规则、内置角色。
+description: 有名字、可继承、只会收窄 Agent 的工作方式定义——角色文件、[agents] 条目、来源与优先级、extends 与合并规则、内置角色，以及会话中的角色。
 icon: UserCog
 ---
 
 角色是 Agent 工作方式的一份有名字的定义：指令、模型、推理强度、权限模式上限，以及它可以使用的工具和插件。角色只会**收窄**它所在的 Agent：它可以拿走工具和插件、收紧权限模式，但绝不增加或放宽任何东西，所以没有哪个角色比实例本身能做的更多。审批规则、你的钩子和沙箱都不受任何角色影响。
 
-角色用 TOML 定义，可以由你、配置档或受信任的项目提供，另有两个内置角色。这个版本会读取、检查并列出角色（`hanafubuki-agent roles`、`doctor`、`/warnings`）；**目前还没有会话以某个角色运行**：为会话和子代理选择角色将在后续版本提供。
+角色用 TOML 定义，可以由你、配置档或受信任的项目提供，另有两个内置角色。Agent 会读取、检查并列出角色（`hanafubuki-agent roles`、`doctor`、`/warnings`），会话以你选择的角色运行（[会话中的角色](#sessions)）；为子代理选择角色将在后续版本提供。
 
 ## 定义角色 [#define]
 
@@ -117,7 +117,29 @@ model = "gpt-5.4"
 | `default`  | 什么都不收窄：即按配置运行的 Agent。没有指定角色的会话就是这个角色                                        | 是     |
 | `explorer` | 它的工具：只有 `list_directory`、`search_text`、`read_file`、`view_image`、`web_search`、`fetch_web_page` | 是     |
 
-`explorer` 的描述改编自 Codex：explorer 回答关于代码库的具体问题，其结果直接采信而不必再核对，彼此独立的问题可以并行交给多个 explorer。你自己名为 `default` 或 `explorer` 的角色会替换内置的那个。
+`explorer` 的描述改编自 Codex：explorer 回答关于代码库的具体问题，其结果直接采信而不必再核对，彼此独立的问题可以并行交给多个 explorer。你自己名为 `explorer` 的角色会替换内置的那个。`default` 这个名字是保留的：`default` 始终什么都不收窄，所以你自己名为 `default` 的角色不可用，并附带一条问题（换个名字即可；它仍可以 `extends = "default"`）。
+
+## 会话中的角色 [#sessions]
+
+会话有一个角色，除非你选择别的，否则是 `default`：
+
+- **开始时**：终端界面的新会话和 [`exec`](/docs/exec) 用 `--role NAME`；Agent [嵌入](/docs/embedding#sessions)时用 `create_session` 的 `role`。
+- **轮次之间**：在[终端界面](/docs/terminal-interface#role)中用 `/role NAME`（单独的 `/role` 列出可用角色），或用 `set_session_role`。有轮次在运行时它被拒绝。`/role default` 再去掉所有收窄。
+
+没有任何来源定义的角色、或不可用的角色会被拒绝，消息中会列出可用的角色。
+
+会话从角色中取得：
+
+- **指令。** 会话的指令始终是 Agent 的基础指令（其中有审批指引），后面跟着角色继承链合并后的指令：`instructionsMode = "replace"` 只替换它所继承角色的指令，从不替换基础指令。选择别的模型会保留它们。
+- **模型和推理强度**（角色设置了的话），通过模型选择应用，所以上下文窗口与任何模型一样解析。之后用 `--model`（或 `/model`）仍可以选择别的。
+- **它的收窄**，作为会话的能力范围（[能力范围](/docs/plugin-rules#capability-scope)）：
+  - 只提供角色允许且没有拒绝的工具；内核自己的工具（`update_plan`、`request_user_input`、`new_context`、压缩工具）和 `tool_search` 始终提供。调用角色排除的工具，得到的回答与调用不存在的工具相同；
+  - `plugins.off` 中的插件不给会话任何东西：没有工具、没有上下文段、没有提示、不继续轮次。`skills` 关闭时，你显式引用的 Skill 被拒绝（"the Skill catalog is unavailable"），`$mention` 不选中任何 Skill（保持为文本），Skill 工具缺失；`memory` 关闭时，记忆摘要和记忆工具缺失，但会话仍按它的贡献模式贡献记忆；
+  - 每个轮次以它的权限模式和角色的 `permissionModeCap` 中更严的那个运行。
+
+  审批规则、你的钩子、插件的观察者和沙箱不受角色影响。计划模式仍只在角色保留的工具中保留只读工具。
+
+会话把这些保存在它自己的记录中：之后编辑或删除角色文件不会改变已有它的会话（重启后也一样），直到你再次选择这个角色。[子代理或旁路对话](/docs/sessions#children)从不比父会话的角色宽，分叉保留源会话的角色。
 
 ## Codex 角色文件 [#codex]
 
@@ -132,6 +154,7 @@ Codex 的角色文件放进 `agents/` 无需修改即可使用：它的 `develop
 - 起收窄作用、却完全读不出来的键（不是名字的 `extends`、不是权限模式的 `permissionModeCap`、不是表的 `tools` 或 `plugins`、不是数组的 `allow`、`deny` 或 `off`）会让角色**不可用**：略去它会允许比角色写明的更多。
 - 不是有效 TOML 的文件，作为以其文件名命名的不可用角色列出；文件名无法作为角色名的文件被忽略并记一条问题。
 - 没有描述（自己的或继承来的）的角色不可用。
+- 继承链中的工具模式（允许列表和拒绝模式合计）超过 128 个的角色不可用：会话最多只能容纳这么多。
 
 这些问题以及不可用的角色和原因，会显示在 `hanafubuki-agent roles list`（标准错误）、[`doctor`](/docs/troubleshooting#doctor) 的 `roles` 行，以及终端界面 [`/warnings`](/docs/terminal-interface#warnings) 的 **roles** 来源下。无法使用的角色从不会让 Agent 停止。
 
@@ -161,4 +184,4 @@ plugins.off: goal, titles  [from reader]
 
 ## 何时读取角色 [#reload]
 
-运行中的 Agent 在启动时读取角色，之后每次重新加载已安装插件时再读一次，而它自己每次写入设置后都会重新加载。手动编辑的角色文件在那时生效，或者在下次启动时生效；`roles list`、`roles show` 和 `doctor` 每次运行都会读取这些文件。
+运行中的 Agent 在启动时读取角色，之后每次重新加载已安装插件时再读一次，而它自己每次写入设置后都会重新加载。手动编辑的角色文件在那时生效，或者在下次启动时生效，对此后选择它的会话有效；已经有这个角色的会话保留它当时取得的内容。`roles list`、`roles show` 和 `doctor` 每次运行都会读取这些文件。

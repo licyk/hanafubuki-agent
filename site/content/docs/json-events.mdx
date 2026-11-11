@@ -164,6 +164,8 @@ icon: Braces
 | `continuation_hook_started`、`continuation_hook_completed` | `providerId`、`hookId`，以及 `outcome`                             | 插件的继续钩子，例如用户的 [Stop 钩子](/docs/configuration#hooks)（`providerId` 为 `hooks`，`hookId` 为 `stop`），或活动[目标](/docs/sessions#goals)的钩子（`goal`、`continue`）。`outcome` 是 `passed`、`continued`、`stopped`、`ignored_failure` 或 `failed`                                                                                                                                                                                                                                                                                                                                        |
 | `hook_started`、`hook_completed`                           | `providerId`、`hookId`、`callId`、`event`，以及 `outcome`          | 插件在工具调用 `callId` 前后的钩子，例如用户的 [PreToolUse 与 PostToolUse 钩子](/docs/configuration#hooks)（`providerId` 为 `hooks`，`hookId` 为 `tool-use`）。`event` 是 `pre_tool_use` 或 `post_tool_use`；`outcome` 是 `passed`、`denied`（调用没有运行）、`added_context`、`failed` 或 `timed_out`（没有效果）。只报告适用于该调用的钩子                                                                                                                                                                                                                                                          |
 
+事件流中没有会话对象，会话的[角色](/docs/roles#sessions)改变时也没有事件：`exec` 的会话在整个回合中都是 `--role` 给它的角色；`sessions list --json` 把会话的角色作为它摘要中的 `role` 给出，`default` 时不出现（一个新增字段，遵循[兼容性规则](#stability)）。
+
 ## 活动 [#activity]
 
 `activity` 在开始或改变一项活动的事件上有值：`sampling_started`、`response_started`、`model_retry_scheduled`、`history_committed`、工具事件、审批事件、`user_input_requested` 和 `execution_progress`。其他事件为 `null`。

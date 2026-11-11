@@ -10,10 +10,11 @@ use hanafubuki_agent_contracts::{
 use hanafubuki_agent_foundation::cancellation::CancellationToken;
 
 use crate::bounded_call::{bounded, overran, Bounded};
-use crate::{AgentError, AgentWorldStateSection, AgentWorldStateSnapshot};
+use crate::{AgentCapabilityScope, AgentError, AgentWorldStateSection, AgentWorldStateSnapshot};
 
-/// Runs every contributor of one registry snapshot, one after another, and
-/// returns their sections in kind name order, so the history records them
+/// Runs every contributor of one registry snapshot, one after another,
+/// but those of a plugin the session's `scope` turns off, and returns
+/// their sections in kind name order, so the history records them
 /// the same way every time; the model is shown them in their renderers'
 /// slot order.
 ///
@@ -32,12 +33,17 @@ use crate::{AgentError, AgentWorldStateSection, AgentWorldStateSnapshot};
 pub async fn collect_world_state(
     registry: &ContextRegistry,
     request: &ContextRequest,
+    scope: &AgentCapabilityScope,
     admission: &CancellationToken,
     deadline: Duration,
 ) -> Result<AgentWorldStateSnapshot, AgentError> {
     let snapshot = registry.registry().snapshot();
     let mut sections = BTreeMap::new();
     for entry in snapshot.entries() {
+        // Its kinds are absent, as for a stopped plugin's.
+        if scope.turns_off(entry.owner()) {
+            continue;
+        }
         let contributor = entry.item();
         let call = admission.child();
         let Some(_lease) = entry.acquire(&call) else {

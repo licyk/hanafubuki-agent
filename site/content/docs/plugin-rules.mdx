@@ -61,6 +61,8 @@ Agent 运行的所有东西都在 panic 被隔离的线程上：panic hook 让�
 | `ToolLifecycleHookRegistry` | `ToolLifecycleHookRegistration`     | （提供者 ID、钩子 ID）；最多 `MAXIMUM_TOOL_LIFECYCLE_HOOKS` | 随每个步骤的工具计划冻结                     | 按优先级、提供者 ID、钩子 ID：调用之前，第一个拒绝即拒绝；调用之后，每个钩子的上下文（[工具生命周期钩子](#tool-lifecycle-hooks)） |
 | `ObserverRegistry`          | `AgentObserver`                     | 观察者 ID                                                   | 每次持久提交之后                             | 全部，按提交顺序                                                                                                                  |
 
+会话的[能力范围](#capability-scope)在该会话中排除它关闭的插件的工具、工具来源、上下文与轮次准入贡献者、提示贡献者和继续钩子；审批规则、工具生命周期钩子、观察者和渲染器始终适用。
+
 ### 插件代码中的 panic [#panics-in-plugin-code]
 
 内核只在守卫下调用插件代码：`RegistryEntry::guard` 或 `guard_async`（条目知道它的所有者），或在手头没有条目时用 `PluginFaults::guard` 与 `guard_async`；门面的功能调用也是如此（[宿主、配置与状态](#host-configuration-and-status)）。那里的 panic 以 error 级别记录，作为条目所有者的 `PluginFault`（插件、`ExtensionPoint`、有界的 panic 消息）报告给 `PluginFaults`，并变成 `PluginPanicked`，由调用方转为那次调用自己的错误路径：
@@ -214,6 +216,33 @@ panic 消息进入日志和插件状态，从不进入模型。`mcp` 插件自�
 - 调用不持有租约：插件正在停止的观察者从它开始退役起就被跳过。
 - 观察者启动的后台工作在插件拥有的工作线程中运行，从 `apply` 用 `spawn_scoped_worker` 生成，通过观察者只 `try_send` 的有界通道喂给它；插件停止时工作线程被取消并等待。它通过应用构造的窄端口（`titles` 插件的 `AgentTitleApplication`）到达内核，从不通过门面；它做的内核修改是比较并交换，所以用户在此期间做的事优先。
 
+## 能力范围 [#capability-scope]
+
+会话的能力范围（`AgentCapabilityScope`，保存在它的 `AgentSessionConfig` 中）是它的[角色](/docs/roles#sessions)所收窄的东西：允许和拒绝哪些工具、关闭哪些插件的贡献、把权限模式限制在多严。它是内核拥有的数据，在内核本来就取快照的地方读取，不是扩展点：插件既看不到也设置不了它。
+
+- **只收窄，从不放宽。** 范围只会移除工具和插件贡献、收紧模式。子会话的范围是父会话的范围再被它自己的收窄（两者的允许列表、任一方的拒绝模式和关闭的插件、更严的上限），所以子会话从不比父会话宽；分叉保留源会话的范围。
+- **内核在哪里应用它**，每处都是它本来就要取的快照：
+
+| 位置                   | 规则                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 工具计划               | 在模式策略之后，插件注册的或来源提供的工具，只有当它的插件没有关闭、每个允许列表都有匹配它的模式、且没有拒绝模式匹配它时才进入计划。**内核自己的工具（`RESERVED_TOOL_NAMES`）和 `tool_search` 从不被过滤。** 被排除的工具就是不存在：调用它得到 "no tool named `<name>` is available in this step"，它不在 `tool_search` 的索引中，也**不**出现在 `tool_catalog_omissions` 中（它是被有意排除的，不是丢失了）。历史中对它的延迟选择被忽略 |
+| 工具来源               | 关闭的插件的来源不会被询问                                                                                                                                                                                                                                                                                                                                                                                                                |
+| 上下文贡献者、轮次准入 | 关闭的插件的贡献者不会被询问：它的类型从会话的世界状态中移除、它的值缺失，与插件停止时一样                                                                                                                                                                                                                                                                                                                                                |
+| 提示贡献者             | 在会话的每个请求中（包括压缩的估算）既不准备也不询问                                                                                                                                                                                                                                                                                                                                                                                      |
+| 继续钩子               | 不进入该步的快照                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| 权限模式               | 轮次冻结它的模式（会话的，或配置的）与上限中更严的那个。`AllowForSession` 不受影响：它本来就从不越过规则                                                                                                                                                                                                                                                                                                                                  |
+
+- **从不过滤**，无论范围怎么写：
+  - [审批规则](#approval-rules)：移除一条会放宽审批；
+  - [工具生命周期钩子](#tool-lifecycle-hooks)：用户的 PreToolUse/PostToolUse 策略，只能拒绝；
+  - [观察者](#observers)：记忆和标题这样的实例服务，不面向模型；
+  - [渲染器](#context-renderers)：数据。
+- **所有者。** `plugin:<owner>` 模式和 `plugins_off` 的条目匹配注册表条目的所有者：一行的名字，或已安装插件代码的 `guest:<id>`。不指向任何插件的条目被保留，没有作用；核心行（`agent-kernel`、`agent-host-services`）从不关闭。
+- **唯一形式。** 每次创建、更新和恢复都会规范化它（`normalize_session_config`）：允许列表排序、各只一次，核心行从 `plugins_off` 中去掉。超过 128 个模式、或有一个超过 256 字节的工具范围，只允许内核自己的工具：去掉其中任何模式都可能放宽它。
+- **持久化**在会话的配置中，逐字段读取：读不了的字段回退到默认值，本构建读不了的模式从它的列表中去掉。空范围（`default`）不写入记录，所以没有角色的会话写出的字节与角色出现之前相同，没有这个字段的历史以空范围打开。角色的指令保存在它旁边（`role_instructions`），在每个请求中追加在基础指令之后，所以选择模型会保留它们。
+- **内核读取其值的两个插件。** `skills` 关闭时轮次没有 `SelectableSkills`：显式的 Skill 引用被拒绝，提示 "the Skill catalog is unavailable"（[轮次准入](#turn-admission)），`$mention` 不选中任何 Skill，Skill 工具缺失。`memory` 关闭时记忆摘要和记忆工具缺失，该步没有 `AgentMemoryStep`（回答原样显示，没有引用）；会话仍按它的贡献模式贡献记忆，因为观察者从不被过滤。
+- 内核的 `loop_contract` 测试集（`scope.rs`，来源见 `sources.rs`）和门面的 `tests/sessions/roles.rs` 固定这些规则；`explorer` golden 固定一个有范围的请求。
+
 ## 外部产出：MCP 服务器、Skill、Web、记忆 [#external-producers-mcp-servers-skills-web-memory]
 
 MCP 服务器、Skill 作者或提取模型产生的东西被容错读取；一个坏条目只损失它自己，严格的规则（MCP 配置、凭据与 OAuth、路径包含、URL 校验、持久化格式）不变。
@@ -352,7 +381,7 @@ kardia 的日志通过宿主安装在根上的 `LogExporter` 到达 `log` facade
 - 在一个新的 `kardia_core::Context` 上，把它挂载在一个提供它注入的注册表（以及用 `spawn_scoped_worker` 时的 `PluginFaults`）的插件之下（门面或宿主插件用 `hanafubuki_agent::test_support::mount`，它两者都提供），等待 `settled()`，断言 `state()`：插件因缺少服务仍是 `Pending` 时 `settled()` 也会返回。
 - 断言它的注册，更新它的配置，释放它，断言每个注册都已移除。插件拒绝的配置让它保持 `Failed`，什么都不注册。
 - 不需要 kardia 的地方直接测试处理函数和领域逻辑。
-- **请求 golden**（`crates/agent/src/tests/golden.rs`，在 Agent 自己的插件上，宿主不添加任何行、上下文或指令）固定模型收到的内容：默认与计划模式下、带 Skill 目录、工作区指令、记忆摘要、压缩之后、带来自脚本化进程内服务器的 MCP 工具、围绕一次工具调用和一次 `tool_search` 的指令、工具目录和输入条目，以及一次工具往返的展示事件，并固定 `workspace-context` 重新启动后会话的第一个请求与默认模式的请求逐字节相同；`compaction_golden.rs` 和 `compression_golden.rs` 固定各种压缩，以及 `hierarchical` 策略的请求（它的提示词、工具、标签和提醒，一次折叠之后、一次第二层提炼之后、切换走之后）。模型能看到的变化**有意地**改变请求 golden：用 `HANAFUBUKI_AGENT_UPDATE_GOLDEN=1 cargo test -p hanafubuki-agent --lib golden` 重新生成并审查 fixture 的 diff。
+- **请求 golden**（`crates/agent/src/tests/golden.rs`，在 Agent 自己的插件上，宿主不添加任何行、上下文或指令）固定模型收到的内容：默认与计划模式下、带 Skill 目录、工作区指令、记忆摘要、压缩之后、带来自脚本化进程内服务器的 MCP 工具、在 `explorer` 角色的会话中、围绕一次工具调用和一次 `tool_search` 的指令、工具目录和输入条目，以及一次工具往返的展示事件，并固定 `workspace-context` 重新启动后会话的第一个请求与默认模式的请求逐字节相同；`compaction_golden.rs` 和 `compression_golden.rs` 固定各种压缩，以及 `hierarchical` 策略的请求（它的提示词、工具、标签和提醒，一次折叠之后、一次第二层提炼之后、切换走之后）。模型能看到的变化**有意地**改变请求 golden：用 `HANAFUBUKI_AGENT_UPDATE_GOLDEN=1 cargo test -p hanafubuki-agent --lib golden` 重新生成并审查 fixture 的 diff。
 - **历史语料**（`golden/history/` 与 `golden/history-reasoning/`）只在有意的历史格式变化之后用 `HANAFUBUKI_AGENT_UPDATE_GOLDEN_HISTORY=1` 重新录制；否则它们持续证明旧的历史仍能打开。
 - 宿主保留它自己的、覆盖它的行的 golden（Hanafubuki 的在 `hanafubuki-agent-integration`），这里模型可见的变化也会改变它们。fixture 只在 Linux 上有效。
 

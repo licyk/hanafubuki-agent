@@ -113,6 +113,7 @@ async fn sections_are_collected_in_kind_name_order_not_registration_order() {
     let snapshot = collect_world_state(
         &registry,
         &request(),
+        &crate::AgentCapabilityScope::default(),
         &CancellationToken::default(),
         crate::FIRST_BATCH_HARD_LIMITS.plugin_call_deadline,
     )
@@ -160,6 +161,7 @@ async fn a_failing_contributor_or_section_is_left_out_and_its_plugin_shows_the_i
     let snapshot = collect_world_state(
         &undeclared,
         &request(),
+        &crate::AgentCapabilityScope::default(),
         &CancellationToken::default(),
         crate::FIRST_BATCH_HARD_LIMITS.plugin_call_deadline,
     )
@@ -190,6 +192,7 @@ async fn a_failing_contributor_or_section_is_left_out_and_its_plugin_shows_the_i
     let snapshot = collect_world_state(
         &repeated,
         &request(),
+        &crate::AgentCapabilityScope::default(),
         &CancellationToken::default(),
         crate::FIRST_BATCH_HARD_LIMITS.plugin_call_deadline,
     )
@@ -211,6 +214,7 @@ async fn a_failing_contributor_or_section_is_left_out_and_its_plugin_shows_the_i
     let snapshot = collect_world_state(
         &failing,
         &request(),
+        &crate::AgentCapabilityScope::default(),
         &CancellationToken::default(),
         crate::FIRST_BATCH_HARD_LIMITS.plugin_call_deadline,
     )
@@ -242,6 +246,7 @@ async fn a_stopped_plugin_contributes_nothing() {
     let snapshot = collect_world_state(
         &registry,
         &request(),
+        &crate::AgentCapabilityScope::default(),
         &CancellationToken::default(),
         crate::FIRST_BATCH_HARD_LIMITS.plugin_call_deadline,
     )
@@ -271,6 +276,7 @@ async fn the_built_in_kinds_never_use_up_the_plugin_kind_bound() {
     let snapshot = collect_world_state(
         &registry,
         &request(),
+        &crate::AgentCapabilityScope::default(),
         &CancellationToken::default(),
         crate::FIRST_BATCH_HARD_LIMITS.plugin_call_deadline,
     )
@@ -285,4 +291,35 @@ async fn the_built_in_kinds_never_use_up_the_plugin_kind_bound() {
         .iter()
         .any(|section| section.kind == unknown("plugin_kind_7")));
     assert!(faults.issues("contributors")[0].contains("past the bound of 7 plugin kinds"));
+}
+
+#[tokio::test]
+async fn the_contributors_of_a_plugin_the_scope_turns_off_are_not_asked() {
+    let (_root, registry, faults) = registry_with(vec![
+        producing("one", &[unknown("alpha")]),
+        // Would fail if it were asked.
+        Arc::new(Fixed {
+            id: "failing",
+            kinds: vec![unknown("beta")],
+            produces: Err("asked".to_string()),
+        }),
+    ])
+    .await;
+    let scope = crate::AgentCapabilityScope {
+        plugins_off: ["contributors".to_string()].into(),
+        ..crate::AgentCapabilityScope::default()
+    };
+
+    let snapshot = collect_world_state(
+        &registry,
+        &request(),
+        &scope,
+        &CancellationToken::default(),
+        crate::FIRST_BATCH_HARD_LIMITS.plugin_call_deadline,
+    )
+    .await
+    .unwrap();
+
+    assert!(snapshot.sections.is_empty());
+    assert!(faults.all_issues().is_empty());
 }

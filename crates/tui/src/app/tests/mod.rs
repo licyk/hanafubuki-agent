@@ -124,7 +124,7 @@ impl Harness {
         runtime.start();
         let agent = runtime.wait_until_started(DEADLINE).unwrap();
 
-        let bridge = AgentBridge::new(runtime.clone(), agent, None, sender.clone());
+        let bridge = AgentBridge::new(runtime.clone(), agent, None, None, sender.clone());
         let chat_widget = ChatWidget::new(ChatWidgetInit {
             app_event_tx: sender.clone(),
             frame_requester: FrameRequester::new(sender.clone()),

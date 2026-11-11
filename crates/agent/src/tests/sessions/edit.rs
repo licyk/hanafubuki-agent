@@ -31,7 +31,7 @@ async fn editing_a_message_forks_before_its_turn_and_archives_the_original() {
     let server = FakeServer::start(vec![(assistant_events("Done."), Duration::ZERO); 4]).await;
     let (service, paths) = configured_service("edit-from-turn", &server.base_url);
     let source = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     for question in ["First question.", "Second question."] {
@@ -102,7 +102,7 @@ async fn editing_is_refused_while_a_turn_runs_and_in_a_side_conversation() {
     .await;
     let (service, paths) = configured_service("edit-refused", &server.base_url);
     let session = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     service

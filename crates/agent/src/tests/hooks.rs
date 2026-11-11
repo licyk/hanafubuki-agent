@@ -97,7 +97,7 @@ async fn a_trusted_pre_tool_use_hook_denies_the_call_with_its_reason() {
     .await;
     trust_every_hook(&service).await;
     let session = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
 
@@ -136,7 +136,7 @@ async fn a_post_tool_use_hook_adds_context_after_the_steps_outputs() {
     .await;
     trust_every_hook(&service).await;
     let session = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
 
@@ -193,7 +193,7 @@ async fn a_stop_hook_keeps_the_turn_going_once() {
     .await;
     trust_every_hook(&service).await;
     let session = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
 
@@ -248,7 +248,7 @@ async fn a_hook_past_its_timeout_has_no_say() {
     .await;
     trust_every_hook(&service).await;
     let session = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     let started = Instant::now();
@@ -304,7 +304,7 @@ async fn an_untrusted_or_modified_hook_never_runs() {
     )
     .await;
     let session = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
 
@@ -366,7 +366,7 @@ async fn with_the_plugin_off_no_hook_runs_and_the_calls_are_unavailable() {
         tokio::time::sleep(Duration::from_millis(10)).await;
     }
     let session = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     service
@@ -401,7 +401,7 @@ async fn session_start_and_user_prompt_submit_hooks_add_world_state() {
     .await;
     trust_every_hook(&service).await;
     let session = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
 

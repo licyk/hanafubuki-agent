@@ -67,7 +67,7 @@ async fn session_in(
     .await;
     let (service, paths) = configured_service(name, &server.base_url);
     let session = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     service

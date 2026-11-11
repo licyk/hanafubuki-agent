@@ -43,7 +43,7 @@ async fn service_with_a_turn(
     let (service, paths) = configured_service(name, &server.base_url);
     service.start_plugins().await;
     let session_id = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap()
         .id;

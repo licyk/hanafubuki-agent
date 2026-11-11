@@ -52,6 +52,8 @@ mod fixtures {
                 hanafubuki_agent_model_api::ModelCompactionCapability::LocalSummary,
             sampling_retry_policy: crate::AgentSamplingRetryPolicy::default(),
             compaction_strategy: Default::default(),
+            scope: Default::default(),
+            role_instructions: None,
         }
     }
 

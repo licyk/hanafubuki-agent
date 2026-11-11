@@ -219,6 +219,35 @@ fn allow_is_intersected_and_an_absent_one_is_the_parents() {
 }
 
 #[test]
+fn a_chain_with_more_tool_patterns_than_a_session_holds_is_unusable() {
+    let mut wide = role("wide");
+    wide.tools_deny = (0..100).map(|index| format!("tool_{index}")).collect();
+    let mut wider = extending("wider", "wide");
+    wider.tools_allow = Some((0..29).map(|index| format!("read_{index}")).collect());
+    let catalog = resolve(user(vec![wide, wider]));
+    usable(&catalog, "wide");
+    assert_eq!(
+        unusable(&catalog, "wider"),
+        "its chain's tool patterns number 129, more than 128"
+    );
+}
+
+#[test]
+fn reserved_default_is_never_replaced() {
+    let mut mine = role(DEFAULT_ROLE);
+    mine.tools_allow = Some(Vec::new());
+    let catalog = resolve(user(vec![mine, extending("plain", DEFAULT_ROLE)]));
+    assert!(usable(&catalog, DEFAULT_ROLE).scope.tools.allow.is_empty());
+    assert!(usable(&catalog, "plain").scope.tools.allow.is_empty());
+    assert!(catalog.unusable_role(DEFAULT_ROLE).is_none());
+    assert!(catalog
+        .issues()
+        .iter()
+        .any(|issue| issue.role.as_deref() == Some(DEFAULT_ROLE)
+            && issue.message.contains("reserved")));
+}
+
+#[test]
 fn deny_and_plugins_off_are_united_and_attributed_through_the_chain() {
     let mut grandparent = role("grandparent");
     grandparent.tools_deny = texts(&["exec_command"]);

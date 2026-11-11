@@ -40,6 +40,7 @@ fn child_request(
         persistence,
         base,
         context: vec![note("Only answer questions.")],
+        scope: Default::default(),
     }
 }
 

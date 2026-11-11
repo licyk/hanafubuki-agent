@@ -41,6 +41,7 @@ mod rename;
 mod reports;
 mod resume;
 pub(crate) mod review;
+mod role;
 mod session;
 mod setup_sandbox;
 mod side;
@@ -77,15 +78,17 @@ pub(crate) use plugins::PLUGINS;
 pub(crate) use presets::PRESETS;
 pub(crate) use providers::PROVIDERS;
 pub(crate) use review::REVIEW;
+pub(crate) use role::{show_role_choices, ROLE};
 pub(crate) use side::SECOND_CONVERSATION_COMMANDS;
 pub(crate) use subagents::SUBAGENTS;
 pub(crate) use warnings::{show_warnings, WARNINGS};
 
 /// Every command, in presentation order: the most used first.
-pub(crate) static COMMANDS: [&CommandSpec; 47] = [
+pub(crate) static COMMANDS: [&CommandSpec; 48] = [
     &model::MODEL,
     &providers::PROVIDERS,
     &mode::MODE,
+    &role::ROLE,
     &permissions::PERMISSIONS,
     &permissions::APPROVE,
     &setup_sandbox::SETUP_DEFAULT_SANDBOX,

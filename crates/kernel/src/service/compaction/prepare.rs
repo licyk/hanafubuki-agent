@@ -105,6 +105,7 @@ impl AgentService {
                 selected_deferred_tools: BTreeSet::new(),
                 memory_contribution_enabled: false,
                 compression_tools: super::super::compression::planned_tools(record),
+                scope: record.settings.config.scope.clone(),
             };
             (model, context)
         };

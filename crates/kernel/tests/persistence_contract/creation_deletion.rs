@@ -25,6 +25,8 @@ async fn image_only_turn_is_durable_and_unsupported_capability_fails_before_admi
             compaction_capability: ModelCompactionCapability::LocalSummary,
             sampling_retry_policy: hanafubuki_agent_kernel::AgentSamplingRetryPolicy::default(),
             compaction_strategy: Default::default(),
+            scope: Default::default(),
+            role_instructions: None,
         })
         .unwrap();
     let forged = hanafubuki_agent_kernel::AgentImageAttachmentRef {
@@ -75,6 +77,8 @@ async fn image_only_turn_is_durable_and_unsupported_capability_fails_before_admi
             compaction_capability: ModelCompactionCapability::LocalSummary,
             sampling_retry_policy: hanafubuki_agent_kernel::AgentSamplingRetryPolicy::default(),
             compaction_strategy: Default::default(),
+            scope: Default::default(),
+            role_instructions: None,
         })
         .unwrap();
     let image = service
@@ -240,6 +244,8 @@ fn session_creation_uses_a_small_runtime_checkpoint_without_history_snapshot() {
                 compaction_capability: ModelCompactionCapability::LocalSummary,
                 sampling_retry_policy: hanafubuki_agent_kernel::AgentSamplingRetryPolicy::default(),
                 compaction_strategy: Default::default(),
+                scope: Default::default(),
+                role_instructions: None,
             },
             hanafubuki_agent_kernel::ModelApiProtocol::Responses,
             "http://127.0.0.1:1/v1",

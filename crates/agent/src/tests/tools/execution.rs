@@ -15,7 +15,7 @@ async fn responses_reasoning_reaches_typed_events_and_history_but_not_the_next_r
     .await;
     let (service, paths) = configured_service("reasoning-lifecycle", &server.base_url);
     let session = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     let outcome = service

@@ -23,6 +23,8 @@ fn opening_a_completed_session_reads_only_runtime_and_the_requested_transcript_p
                 compaction_capability: ModelCompactionCapability::LocalSummary,
                 sampling_retry_policy: hanafubuki_agent_kernel::AgentSamplingRetryPolicy::default(),
                 compaction_strategy: Default::default(),
+                scope: Default::default(),
+                role_instructions: None,
             },
             hanafubuki_agent_kernel::ModelApiProtocol::Responses,
             "http://127.0.0.1:1/v1",

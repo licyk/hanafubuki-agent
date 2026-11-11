@@ -247,6 +247,7 @@ impl SubagentService {
                     persistence: AgentSessionPersistence::Durable,
                     base,
                     context: Vec::new(),
+                    scope: Default::default(),
                 })?;
                 driver.rename(child.id, name)?;
                 Ok(child.id)

@@ -337,7 +337,7 @@ fn a_broken_session_is_quarantined_and_listed_while_the_others_load() {
     let setup = tokio::runtime::Runtime::new().unwrap();
     let [broken, intact] = [0, 1].map(|_| {
         setup
-            .block_on(service.create_session(AgentSessionMode::Default))
+            .block_on(service.create_session(AgentSessionMode::Default, None))
             .unwrap()
             .id
     });
@@ -401,7 +401,7 @@ fn an_unreadable_history_item_quarantines_its_session_and_the_agent_runs() {
     let setup = tokio::runtime::Runtime::new().unwrap();
     let [broken, intact] = [0, 1].map(|_| {
         setup
-            .block_on(service.create_session(AgentSessionMode::Default))
+            .block_on(service.create_session(AgentSessionMode::Default, None))
             .unwrap()
             .id
     });
@@ -495,7 +495,11 @@ fn a_built_agent_that_shutdown_overtakes_is_retired_not_installed() {
     let service = built.lock().unwrap().take().unwrap();
     let runtime = slot.take_runtime().expect("the start built a runtime");
     let refused = runtime
-        .block_on(async move { service.create_session(AgentSessionMode::Default).await })
+        .block_on(async move {
+            service
+                .create_session(AgentSessionMode::Default, None)
+                .await
+        })
         .unwrap();
     runtime.shutdown(Duration::from_secs(2)).unwrap();
     assert_eq!(refused.unwrap_err(), "Agent service is shutting down");

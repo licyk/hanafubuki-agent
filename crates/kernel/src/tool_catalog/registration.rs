@@ -60,7 +60,9 @@ impl AgentToolHandlerBinding {
         }
     }
 
-    fn owner(&self) -> &str {
+    /// The plugin that registered the tool, or its source's for a sourced
+    /// one.
+    pub(crate) fn owner(&self) -> &str {
         match &self.owner {
             HandlerOwner::Registered(entry) => entry.owner(),
             HandlerOwner::Sourced(entry) => entry.owner(),

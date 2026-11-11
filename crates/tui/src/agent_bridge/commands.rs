@@ -40,6 +40,14 @@ pub(crate) struct ModelChoices {
     pub(crate) catalogs: Vec<AgentProviderModelCatalogResult>,
 }
 
+/// What `/role` offers: the usable roles, by name with their
+/// descriptions, and the session's (`None` for `default`).
+#[derive(Debug)]
+pub(crate) struct RoleChoices {
+    pub(crate) current: Option<String>,
+    pub(crate) roles: Vec<(String, String)>,
+}
+
 /// What `/status` shows.
 #[derive(Debug)]
 pub(crate) struct StatusReport {
@@ -123,6 +131,31 @@ impl AgentBridge {
                     Ok(Some(AgentReply::Update(Box::new(
                         TurnUpdate::ModelChanged(session.model),
                     ))))
+                })
+            }
+            AgentCommand::ListRoles => {
+                let session = self.current()?;
+                let roles = self
+                    .agent
+                    .roles()
+                    .roles()
+                    .map(|role| (role.name.clone(), role.description.clone()))
+                    .collect();
+                return Ok(Some(TurnUpdate::RoleChoices(RoleChoices {
+                    current: session.role,
+                    roles,
+                })));
+            }
+            AgentCommand::SetRole(role) => {
+                let session = self.current()?;
+                self.spawn(move |agent| async move {
+                    let session = agent
+                        .set_session_role(session.id, &role)
+                        .await
+                        .map_err(|error| format!("the role was not changed: {error}"))?;
+                    Ok(Some(AgentReply::Update(Box::new(TurnUpdate::RoleChanged(
+                        session.role,
+                    )))))
                 })
             }
             AgentCommand::SetMode(mode) => {
@@ -245,12 +278,13 @@ impl AgentBridge {
         self.creating = Some(waiting);
         let agent = self.agent.clone();
         let model = self.model.clone();
+        let role = self.role.clone();
         let title = self.pending_title.take();
         let worktree = self.pending_worktree.take();
         let sink = self.sink();
         let app_event_tx = self.app_event_tx.clone();
         self.agent.runtime().handle().spawn(async move {
-            let reply = match new_session(&agent, model).await {
+            let reply = match new_session(&agent, model, role).await {
                 Ok(session) => {
                     if let Some(title) = title {
                         let request = AgentSessionTitleRenameRequest {
@@ -380,13 +414,15 @@ pub(super) async fn no_session(agent: &AgentHandle, model: Option<String>) -> Op
     }
 }
 
-/// A new session in the default mode, with `model` when one is given.
+/// A new session in the default mode, with `model` and `role` when they
+/// are given.
 async fn new_session(
     agent: &AgentHandle,
     model: Option<String>,
+    role: Option<String>,
 ) -> Result<AgentSessionRuntimeSnapshot, String> {
     let session = agent
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, role)
         .await
         .map_err(|error| format!("the session was not created: {error}"))?;
     match model {

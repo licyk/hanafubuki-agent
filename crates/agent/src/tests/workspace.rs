@@ -52,7 +52,7 @@ async fn the_workspace_moves_once_no_background_terminal_runs_and_the_tools_foll
     let old_root = native(&paths.managed_instances_dir);
     let (_temporary, new_root, roots) = elsewhere();
     let session = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     install_fake_background_execution(&service, session.id, "sleep 100");
@@ -114,7 +114,7 @@ async fn the_workspace_does_not_move_while_a_turn_runs() {
     let (service, paths) = configured_service("workspace-turn", &server.base_url);
     let (_temporary, _, roots) = elsewhere();
     let session = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     let running = service.clone();

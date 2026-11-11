@@ -95,7 +95,7 @@ fn the_standalone_runtime_runs_a_turn_in_its_working_directory() {
             let sink = sink.clone();
             async move {
                 let session = agent
-                    .create_session(hanafubuki_agent_kernel::AgentSessionMode::Default)
+                    .create_session(hanafubuki_agent_kernel::AgentSessionMode::Default, None)
                     .await
                     .unwrap();
                 agent
@@ -201,7 +201,7 @@ fn the_working_directory_changes_while_the_agent_runs() {
             let agent = agent.clone();
             async move {
                 agent
-                    .create_session(hanafubuki_agent_kernel::AgentSessionMode::Default)
+                    .create_session(hanafubuki_agent_kernel::AgentSessionMode::Default, None)
                     .await
                     .unwrap()
             }

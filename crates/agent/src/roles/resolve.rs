@@ -7,9 +7,11 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use hanafubuki_agent_config::{InstructionsMode, RoleDefinition, RoleSource};
 use hanafubuki_agent_foundation::agent_settings::ModelReasoningEffort;
-use hanafubuki_agent_kernel::{AgentCapabilityScope, AgentToolScope, ToolPattern};
+use hanafubuki_agent_kernel::{
+    AgentCapabilityScope, AgentToolScope, ToolPattern, MAX_SCOPE_TOOL_PATTERNS,
+};
 
-use super::builtin::built_in_roles;
+use super::builtin::{built_in_roles, DEFAULT_ROLE};
 use super::{
     AgentResolvedRole, AgentRoleCatalog, AgentRoleIssue, AgentRoleLink, AgentRoleSource,
     AgentUnusableRole, MAX_ROLE_CHAIN,
@@ -48,6 +50,18 @@ pub(super) fn resolve(sources: Vec<RoleSource>) -> AgentRoleCatalog {
                 layer: source.layer.clone(),
                 origin: definition.origin.clone(),
             };
+            // `default` always narrows nothing: a session switched back to
+            // it has the empty scope.
+            if definition.name == DEFAULT_ROLE {
+                issues.push(AgentRoleIssue {
+                    role: Some(definition.name.clone()),
+                    message: format!(
+                        "{place} is not usable: the name is reserved for the built-in role, \
+                         which narrows nothing; give this role another name"
+                    ),
+                });
+                continue;
+            }
             if let Some(first) = kept.get(&definition.name) {
                 issues.push(AgentRoleIssue {
                     role: Some(definition.name.clone()),
@@ -181,6 +195,21 @@ fn resolve_role(
     let description = merged
         .description
         .ok_or_else(|| "it has no description, and neither has a role it extends".to_string())?;
+    // A session's scope holds no more: past it, the session would allow no
+    // plugin tool at all.
+    let patterns = merged
+        .scope
+        .tools
+        .allow
+        .iter()
+        .map(BTreeSet::len)
+        .sum::<usize>()
+        + merged.scope.tools.deny.len();
+    if patterns > MAX_SCOPE_TOOL_PATTERNS {
+        return Err(format!(
+            "its chain's tool patterns number {patterns}, more than {MAX_SCOPE_TOOL_PATTERNS}"
+        ));
+    }
     let mut provenance = merged.provenance;
     for roles in provenance.values_mut() {
         roles.reverse();

@@ -25,7 +25,7 @@ impl AgentService {
     ) -> Result<SamplingStep, AgentError> {
         self.refresh_session_image_input_capability(identity.session_id)
             .await?;
-        let (catalog_context, cancellation, model, step_prompt_inputs) = {
+        let (catalog_context, cancellation, model, step_prompt_inputs, scope) = {
             let cell = self.session(identity.session_id)?;
             let guard = cell.lock_after_persistence().await?;
             let record = &*guard;
@@ -68,10 +68,12 @@ impl AgentService {
                     selected_deferred_tools: selected_deferred_tools(&record.conversation.history),
                     memory_contribution_enabled,
                     compression_tools: super::super::compression::planned_tools(record),
+                    scope: record.settings.config.scope.clone(),
                 },
                 turn.cancellation.clone(),
                 model,
                 (Some(turn.extensions.clone()), context_window_tokens),
+                record.settings.config.scope.clone(),
             )
         };
         let step = catalog_context.sampling_step;
@@ -82,9 +84,17 @@ impl AgentService {
                 crate::AgentToolCatalogError::Cancelled => AgentError::Cancelled,
                 error => AgentError::Protocol(error.to_string()),
             })?;
-        let hook_catalog = self.inner.registries.continuation_hooks.ordered();
+        // The plugins the session's scope turns off neither continue the
+        // turn nor contribute to its prompt.
+        let mut hook_catalog = self.inner.registries.continuation_hooks.ordered();
+        hook_catalog.retain(|entry| !scope.turns_off(entry.owner()));
         // The request's sections are shown by the renderers in force now.
-        let contributors = self.inner.registries.prompt.snapshot();
+        let contributors = self
+            .inner
+            .registries
+            .prompt
+            .snapshot()
+            .without_plugins(|owner| scope.turns_off(owner));
         let prompt_step = hanafubuki_agent_contracts::PromptStep {
             session_id: identity.session_id,
             turn_id: identity.turn_id,

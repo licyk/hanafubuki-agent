@@ -439,6 +439,7 @@ fn session_summary(
         provider_protocol: runtime.config.provider_protocol,
         model: runtime.config.model.clone(),
         mode: runtime.config.mode,
+        role: runtime.config.scope.role.clone(),
         reasoning_effort: runtime.config.reasoning_effort.clone(),
         title: runtime.title.clone(),
         lifecycle: runtime.lifecycle,

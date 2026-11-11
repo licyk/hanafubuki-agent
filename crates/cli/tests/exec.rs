@@ -451,3 +451,28 @@ fn a_command_runs_in_the_unelevated_windows_sandbox_once_chosen() {
     let output = String::from_utf8_lossy(&model.server.requests()[1].body).into_owned();
     assert!(output.contains("refused-outside"), "{output}");
 }
+
+#[test]
+fn a_role_narrows_the_session_and_an_unknown_one_fails_before_any_turn() {
+    let model = Model::start(vec![assistant_events("Read only.")]);
+    let home = Home::new().with_provider(&model.server.base_url);
+    let run = home
+        .run(&["exec", "--role", "explorer", "What is here?"])
+        .expect(0);
+    assert!(run.stdout().contains("Read only."), "{}", run.stdout());
+    let request: Value = serde_json::from_slice(&model.server.requests()[0].body).unwrap();
+    let tools = request["tools"].to_string();
+    assert!(tools.contains("read_file"), "{tools}");
+    assert!(!tools.contains("exec_command"), "{tools}");
+    let listed = home.run(&["sessions", "list", "--json"]).expect(0);
+    let summary: Value = serde_json::from_str(listed.stdout().trim()).unwrap();
+    assert_eq!(summary["role"], "explorer");
+
+    let run = home.run(&["exec", "--role", "nope", "hi"]).expect(1);
+    assert!(
+        run.stderr().contains("no role is named `nope`"),
+        "{}",
+        run.stderr()
+    );
+    assert_eq!(model.request_count(), 1);
+}

@@ -220,9 +220,10 @@ pub use hanafubuki_agent_kernel::{
     ApprovalUserDecision, ConfirmedAgentSessionDeletion, ConversationItem, ModelCatalogEntry,
     MAXIMUM_HOST_CONTEXT_BYTES,
 };
-/// What a role narrows (`AgentResolvedRole::scope`).
+/// What a role narrows (`AgentResolvedRole::scope`), and what a session's
+/// snapshot shows of it.
 pub use hanafubuki_agent_kernel::{
-    AgentCapabilityScope, AgentToolScope, ToolIdentity, ToolPattern,
+    AgentCapabilityScope, AgentCapabilityScopeSummary, AgentToolScope, ToolIdentity, ToolPattern,
 };
 pub use hanafubuki_agent_kernel::{AgentQuarantinedSession, AgentRecoveryReport};
 use hanafubuki_agent_kernel::{AgentService, ModelCompactionCapability};

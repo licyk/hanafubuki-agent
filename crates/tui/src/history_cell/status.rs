@@ -1,14 +1,17 @@
 // Modified from OpenAI Codex rust-v0.93.0 (Apache-2.0).
 
 //! The `/status` card (Codex's `status` module, trimmed): the session's
-//! model and Provider, the workspace, the permission mode and the session
-//! mode, its id, the tokens it used and a compaction running in the
+//! model and Provider, the workspace, the permission mode, the session
+//! mode and its role, its id, the tokens it used and a compaction running in the
 //! background. Codex's account, rate limits,
 //! sandbox and AGENTS.md lines have no counterpart here.
 
 use std::path::PathBuf;
 
-use hanafubuki_agent::{AgentBackgroundCompactionState, AgentPermissionMode, AgentSessionMode};
+use hanafubuki_agent::{
+    AgentBackgroundCompactionState, AgentCapabilityScopeSummary, AgentPermissionMode,
+    AgentSessionMode,
+};
 use ratatui::style::Stylize;
 use ratatui::text::{Line, Span};
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
@@ -17,12 +20,13 @@ use super::{plain_lines, with_border, HistoryCell};
 use crate::agent_bridge::StatusReport;
 use crate::text_formatting::center_truncate_path;
 
-const LABELS: [&str; 9] = [
+const LABELS: [&str; 10] = [
     "Model",
     "Provider",
     "Directory",
     "Permissions",
     "Mode",
+    "Role",
     "Session",
     "Token usage",
     "Context window",
@@ -37,6 +41,8 @@ pub(crate) struct StatusHistoryCell {
     roots: Vec<PathBuf>,
     permission_mode: AgentPermissionMode,
     mode: AgentSessionMode,
+    /// The session's role and what it narrows; none for `default`.
+    role: Option<(String, Option<AgentCapabilityScopeSummary>)>,
     session: String,
     input_tokens: u64,
     output_tokens: u64,
@@ -60,6 +66,10 @@ pub(crate) fn new_status_output(report: &StatusReport) -> StatusHistoryCell {
         roots: report.roots.clone(),
         permission_mode: report.permission_mode,
         mode: session.mode,
+        role: session
+            .role
+            .clone()
+            .map(|role| (role, session.scope.clone())),
         session: session.id.to_string(),
         input_tokens: usage.map_or(0, |usage| usage.cumulative_input_tokens),
         output_tokens: usage.map_or(0, |usage| usage.cumulative_output_tokens),
@@ -148,6 +158,13 @@ impl HistoryCell for StatusHistoryCell {
             AgentSessionMode::Plan => "plan",
         };
         lines.push(formatter.line("Mode", vec![Span::from(mode)]));
+        if let Some((role, scope)) = &self.role {
+            let mut spans = vec![Span::from(role.clone())];
+            if let Some(narrowed) = scope.as_ref().and_then(scope_note) {
+                spans.push(Span::from(format!(" ({narrowed})")).dim());
+            }
+            lines.push(formatter.line("Role", spans));
+        }
         lines.push(formatter.line("Session", vec![Span::from(self.session.clone())]));
         lines.push(Line::default());
         lines.push(formatter.line("Token usage", self.token_usage_spans()));
@@ -178,6 +195,24 @@ impl HistoryCell for StatusHistoryCell {
     fn raw_lines(&self) -> Vec<Line<'static>> {
         plain_lines(self.display_lines(u16::MAX))
     }
+}
+
+/// What a role narrows, in a few words; `None` when it narrows nothing.
+fn scope_note(scope: &AgentCapabilityScopeSummary) -> Option<String> {
+    let mut parts = Vec::new();
+    if scope.allow_lists > 0 {
+        parts.push(format!("{} allowed tool patterns", scope.allow_patterns));
+    }
+    if scope.deny_patterns > 0 {
+        parts.push(format!("{} denied", scope.deny_patterns));
+    }
+    if !scope.plugins_off.is_empty() {
+        parts.push(format!("off: {}", scope.plugins_off.join(", ")));
+    }
+    if let Some(cap) = scope.permission_mode_cap {
+        parts.push(format!("at most {}", permission_mode_name(cap)));
+    }
+    (!parts.is_empty()).then(|| parts.join("; "))
 }
 
 /// Lays out `label:   value` rows with the values aligned.

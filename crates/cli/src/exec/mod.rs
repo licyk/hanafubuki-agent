@@ -45,7 +45,7 @@ pub(crate) fn run(global: &GlobalArgs, args: ExecArgs) -> Result<u8, Failure> {
             output: output.as_mut(),
             receiver,
         }
-        .run(global.model.clone(), prompt, sender)
+        .run(global.model.clone(), global.role.clone(), prompt, sender)
     });
     standalone.shutdown();
     let code = result?;
@@ -114,10 +114,11 @@ impl Turn<'_> {
     fn run(
         mut self,
         model: Option<String>,
+        role: Option<String>,
         prompt: String,
         sender: Sender<Message>,
     ) -> Result<u8, Failure> {
-        let turn = self.submit(model, prompt, sender.clone())?;
+        let turn = self.submit(model, role, prompt, sender.clone())?;
         watch_interrupts(self.agent, sender);
         let mut unanswered = false;
         loop {
@@ -192,11 +193,14 @@ impl Turn<'_> {
     fn submit(
         &mut self,
         model: Option<String>,
+        role: Option<String>,
         prompt: String,
         sender: Sender<Message>,
     ) -> Result<AgentTurnAccepted, Failure> {
         let session = block_on(self.agent, |agent| async move {
-            let session = agent.create_session(AgentSessionMode::Default).await?;
+            let session = agent
+                .create_session(AgentSessionMode::Default, role)
+                .await?;
             match model {
                 Some(model) => {
                     agent

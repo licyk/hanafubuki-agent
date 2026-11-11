@@ -2,7 +2,8 @@
 //! of how a session's Agent works, which only narrow it. The configuration
 //! reads their definitions per source; this module ranks the sources,
 //! follows `extends`, merges each chain field by field and keeps where each
-//! field came from. No session uses a role yet.
+//! field came from. A session takes its role from the catalog when it is
+//! created or switched (`service/roles.rs`).
 
 mod builtin;
 mod resolve;

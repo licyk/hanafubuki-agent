@@ -91,7 +91,7 @@ async fn codex_cache_packages_install_and_admit_a_turn() {
 
     // The whole catalog is captured for one turn, and admission accepts it.
     let session = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     let named = catalog

@@ -25,7 +25,7 @@ async fn unified_exec_completes_only_after_manual_exact_approval() {
     .await;
     let (service, paths) = configured_service("approved-command", &server.base_url);
     let session = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     let session_id = session.id;

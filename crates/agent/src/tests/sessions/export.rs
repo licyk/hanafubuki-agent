@@ -14,7 +14,7 @@ async fn a_finished_turn_exports_as_markdown_and_an_empty_session_refuses() {
     let (service, paths) = configured_service("export-markdown", &server.base_url);
     service.start_plugins().await;
     let session = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
 

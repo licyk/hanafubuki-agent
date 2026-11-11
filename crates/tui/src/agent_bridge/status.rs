@@ -1,7 +1,7 @@
 //! What the status line and the terminal title show of the session
 //! ([`SessionStatus`]): read from its snapshot when something it shows
 //! changes (a commit's usage, a new title or plan, a compaction, the end
-//! of a turn, a model change), with the configured permission mode and the
+//! of a turn, a model or role change), with the configured permission mode and the
 //! goal, which are read once when the session opens and kept.
 
 use std::path::{Path, PathBuf};
@@ -30,6 +30,8 @@ pub(crate) struct SessionStatus {
     pub(crate) git_branch: Option<String>,
     /// What the hierarchical compression folded, when it ran.
     pub(crate) compression: Option<AgentCompressionSummary>,
+    /// The session's role; none for `default`.
+    pub(crate) role: Option<String>,
 }
 
 /// The session's tokens so far, and its context when the window is known.
@@ -91,6 +93,7 @@ impl AgentBridge {
             goal: cache.and_then(|cache| cache.goal.clone()),
             git_branch: root.as_deref().and_then(git_branch),
             compression: snapshot.compression,
+            role: snapshot.role,
         })))
     }
 

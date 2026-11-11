@@ -180,7 +180,7 @@ async fn published_memory_reaches_the_model_with_the_tools_that_read_it() {
     assert_eq!(memory.repository().generation().unwrap(), 0);
 
     let session = service
-        .create_session(hanafubuki_agent_kernel::AgentSessionMode::Default)
+        .create_session(hanafubuki_agent_kernel::AgentSessionMode::Default, None)
         .await
         .unwrap();
     service
@@ -237,7 +237,7 @@ async fn the_memory_context_item_is_pinned_right_after_the_capability_fragments(
     )
     .unwrap();
     let session = service
-        .create_session(hanafubuki_agent_kernel::AgentSessionMode::Default)
+        .create_session(hanafubuki_agent_kernel::AgentSessionMode::Default, None)
         .await
         .unwrap();
     service
@@ -355,7 +355,7 @@ async fn a_cited_memory_answer_is_stripped_and_its_usage_recorded() {
     assert_eq!(citation_usage(&repository, "9"), 0);
 
     let session = service
-        .create_session(hanafubuki_agent_kernel::AgentSessionMode::Default)
+        .create_session(hanafubuki_agent_kernel::AgentSessionMode::Default, None)
         .await
         .unwrap();
     let outcome = service
@@ -422,7 +422,7 @@ async fn turning_the_memory_plugin_off_removes_memory_from_the_next_request() {
             .count()
     };
     let session = service
-        .create_session(hanafubuki_agent_kernel::AgentSessionMode::Default)
+        .create_session(hanafubuki_agent_kernel::AgentSessionMode::Default, None)
         .await
         .unwrap();
     let request_body =
@@ -509,7 +509,7 @@ async fn disabling_retrieval_withholds_memory_and_its_read_tools() {
     .unwrap();
 
     let session = service
-        .create_session(hanafubuki_agent_kernel::AgentSessionMode::Default)
+        .create_session(hanafubuki_agent_kernel::AgentSessionMode::Default, None)
         .await
         .unwrap();
     service
@@ -594,7 +594,7 @@ async fn a_committed_memory_contribution_reaches_the_memory_store() {
     let server = FakeServer::start(Vec::new()).await;
     let (service, paths) = configured_service("memory-contribution-observer", &server.base_url);
     let session = service
-        .create_session(hanafubuki_agent_kernel::AgentSessionMode::Default)
+        .create_session(hanafubuki_agent_kernel::AgentSessionMode::Default, None)
         .await
         .unwrap();
     let repository = service.test_memory().repository().clone();
@@ -654,7 +654,7 @@ async fn scans_signalled_by_session_actions(name: &str, memory_plugin: bool) -> 
         }
     }
     let session = service
-        .create_session(hanafubuki_agent_kernel::AgentSessionMode::Default)
+        .create_session(hanafubuki_agent_kernel::AgentSessionMode::Default, None)
         .await
         .unwrap();
     let memory = service.test_memory();
@@ -720,7 +720,7 @@ async fn creating_or_forking_a_contributing_session_signals_no_memory_scan() {
 
     let before = memory.test_scan_signals();
     let session = service
-        .create_session(hanafubuki_agent_kernel::AgentSessionMode::Default)
+        .create_session(hanafubuki_agent_kernel::AgentSessionMode::Default, None)
         .await
         .unwrap();
     let fork = service

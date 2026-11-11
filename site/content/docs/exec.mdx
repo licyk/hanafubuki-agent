@@ -28,7 +28,7 @@ hanafubuki-agent exec - < task.md
 { echo "审查下面的改动，指出可能的问题："; git diff; } | hanafubuki-agent exec -
 ```
 
-[全局选项](/docs/cli-reference#global-flags)对 `exec` 同样有效：`-m` 选择这个会话的模型，`-C` 指定工作目录，`--add-dir` 添加工作区目录，`--permission-mode` 选择权限模式，`-p` 和 `-c` 调整配置。
+[全局选项](/docs/cli-reference#global-flags)对 `exec` 同样有效：`--role` 给会话一个[角色](/docs/roles#sessions)（它的指令、模型、工具和权限模式上限；未知的角色让命令在任何回合之前以退出码 1 失败），`-m` 选择这个会话的模型（优先于角色的），`-C` 指定工作目录，`--add-dir` 添加工作区目录，`--permission-mode` 选择权限模式，`-p` 和 `-c` 调整配置。
 
 ## 给人看的输出 [#human-output]
 
@@ -77,7 +77,7 @@ hanafubuki-agent exec --json "列出最大的五个文件"
 }
 ```
 
-回合的最后一行是 `turn_completed`、`turn_cancelled` 或 `turn_failed`。每种事件的字段、顺序和兼容性规则见 [exec --json 事件](/docs/json-events)。
+回合的最后一行是 `turn_completed`、`turn_cancelled` 或 `turn_failed`。每种事件的字段、顺序和兼容性规则见 [exec --json 事件](/docs/json-events)。事件流中没有会话对象：会话的角色在它的摘要中（`sessions list --json` 的 `role`）。
 
 ## 审批与提问 [#approvals]
 

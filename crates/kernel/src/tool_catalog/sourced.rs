@@ -36,6 +36,10 @@ impl AgentToolContributor for SourcedAgentToolContributor {
         self.entry.item().id()
     }
 
+    fn owner(&self) -> Option<&str> {
+        Some(self.entry.owner())
+    }
+
     fn trust(&self) -> AgentToolTrust {
         match self.entry.item().trust() {
             ToolSourceTrust::Required => AgentToolTrust::RequiredExternal,

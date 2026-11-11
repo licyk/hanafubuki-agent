@@ -50,6 +50,7 @@ impl AgentBridge {
             self.runtime.clone(),
             self.agent.clone(),
             self.model.clone(),
+            self.role.clone(),
             app_event_tx,
         )
     }

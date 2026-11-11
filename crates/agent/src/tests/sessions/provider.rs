@@ -228,7 +228,7 @@ async fn responses_only_policy_values_survive_a_protocol_switch() {
         hanafubuki_agent_config::AgentRemoteCompactionCapability::ResponsesCompact
     );
     let session = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     assert_eq!(
@@ -282,7 +282,7 @@ async fn create_session_uses_the_api_token_stored_with_the_provider() {
     )
     .await;
     assert!(service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .is_ok());
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
@@ -500,7 +500,7 @@ async fn model_errors_and_snapshots_redact_the_configured_api_token() {
     )
     .await;
     let session = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     let error = service

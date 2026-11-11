@@ -93,7 +93,7 @@ async fn skill_settings_projection_is_bound_to_one_exact_session() {
     let (service, paths) =
         configured_service("skill-settings-session-state", "http://127.0.0.1:1/v1");
     let session = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     let state = service.skill_session_state(session.id).unwrap();
@@ -414,7 +414,7 @@ async fn named_skill_is_injected_as_full_user_context_on_the_first_model_request
     service.enable_skill(&entry.id).unwrap();
 
     let session = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     service
@@ -499,7 +499,7 @@ async fn description_only_match_exposes_the_codex_trigger_rule_without_preselect
     let entry = service.list_skills().unwrap().entries.remove(0);
     service.enable_skill(&entry.id).unwrap();
     let session = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     service
@@ -546,7 +546,7 @@ async fn disabled_skill_is_absent_from_a_fresh_turn_catalog() {
     service.enable_skill(&entry.id).unwrap();
     service.disable_skill(&entry.id).unwrap();
     let session = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     service
@@ -594,7 +594,7 @@ async fn reading_a_skill_in_a_turn_adopts_it_after_the_tool_output() {
     assert_eq!(entry.id.as_str(), "system:diagnostics");
     service.enable_skill(&entry.id).unwrap();
     let session = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
 
@@ -649,7 +649,7 @@ async fn reading_a_mentioned_skill_does_not_deliver_its_instructions_twice() {
     let entry = service.list_skills().unwrap().entries.remove(0);
     service.enable_skill(&entry.id).unwrap();
     let session = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
 
@@ -709,7 +709,7 @@ async fn skill_catalog_and_selected_skill_fragments_are_pinned() {
         service.enable_skill(&entry.id).unwrap();
     }
     let session = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     service

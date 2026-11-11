@@ -68,7 +68,7 @@ async fn a_claude_code_plugins_skill_and_hook_work_once_on_and_stop_once_off() {
     assert!(matches!(&hook.source, HookSource::Plugin { id, .. } if id == "demo@local"));
     service.trust_hooks(vec![hook.key.clone()]).await.unwrap();
     let session = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
 

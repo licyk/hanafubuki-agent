@@ -49,6 +49,7 @@ fn status() -> SessionStatus {
             active_blocks: 3,
             tokens_compressed: 42_000,
         }),
+        role: Some("explorer".to_string()),
     }
 }
 

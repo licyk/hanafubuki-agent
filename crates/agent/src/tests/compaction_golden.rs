@@ -30,7 +30,7 @@ async fn compacted_request_matches_golden() {
     )
     .unwrap();
     let session = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     service
@@ -105,7 +105,7 @@ async fn background_compacted_request_matches_golden() {
     let (service, paths) =
         service_with("golden-background-compacted", |_, config| configure(config));
     let session = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     for prompt in ["Hello.", "Go on."] {
@@ -188,7 +188,7 @@ async fn a_window_compacted_mid_turn_keeps_the_skill_catalog() {
     let (service, paths) = configured_service("compacted-mid-turn", &server.base_url);
     enable_two_skills(&service, &paths);
     let session = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     service

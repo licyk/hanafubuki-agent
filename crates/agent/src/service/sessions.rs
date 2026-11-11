@@ -37,13 +37,22 @@ impl AgentApplicationService {
             .map_err(|error| error.to_string())
     }
 
+    /// Creates a session in `mode` with the role `role` of the current
+    /// catalog (`default` without one): the role's instructions after the
+    /// base instructions, its model and reasoning effort over the
+    /// Provider's, and its scope. A role no source defines, or that is not
+    /// usable, is refused with the usable ones named.
     pub async fn create_session(
         &self,
         mode: AgentSessionMode,
+        role: Option<String>,
     ) -> Result<AgentSessionRuntimeSnapshot, String> {
         if !self.accepting.load(Ordering::Acquire) {
             return Err("Agent service is shutting down".to_string());
         }
+        let role = self
+            .session_role(role.as_deref())
+            .map_err(|error| error.to_string())?;
         // The memory plugin's observer records the new session's memory
         // contribution, so the plugins must be running.
         self.host.ensure_started().await;
@@ -58,7 +67,7 @@ impl AgentApplicationService {
         hanafubuki_agent_foundation::blocking::run_blocking_operation(
             self.blocking.as_ref(),
             "agent session creation worker",
-            move || service.create_session_with_provider(mode, settings, resolved),
+            move || service.create_session_with_provider(mode, settings, resolved, role),
         )
         .await?
     }
@@ -68,8 +77,15 @@ impl AgentApplicationService {
         mode: AgentSessionMode,
         settings: hanafubuki_agent_config::AgentSettings,
         resolved: ResolvedAgentProvider,
+        role: super::roles::AgentSessionRole,
     ) -> Result<AgentSessionRuntimeSnapshot, String> {
-        let policy = resolved.policy;
+        let mut policy = resolved.policy;
+        if let Some(model) = role.model {
+            policy.model = model;
+        }
+        if role.reasoning_effort.is_some() {
+            policy.reasoning_effort = role.reasoning_effort;
+        }
         let provider = resolved.definition;
         let model_configured = !policy.model.is_empty();
         let instructions = if model_configured {
@@ -111,6 +127,8 @@ impl AgentApplicationService {
             },
             sampling_retry_policy: hanafubuki_agent_kernel::AgentSamplingRetryPolicy::default(),
             compaction_strategy: session_compaction_strategy(&settings.compaction, false, false),
+            scope: role.scope,
+            role_instructions: role.instructions,
         };
         warn_unreachable_background_threshold(
             config.compaction_strategy,

@@ -67,7 +67,7 @@ async fn hierarchical_requests_match_golden() {
         configure(config, &server.base_url)
     });
     let session = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     let clock = |minute: u64| {

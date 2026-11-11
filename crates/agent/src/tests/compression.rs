@@ -48,7 +48,7 @@ async fn switching_to_standard_keeps_the_blocks_until_a_compaction() {
         configure(config, &server.base_url)
     });
     let session = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     for prompt in ["Hello.", "Fold it."] {
@@ -142,7 +142,7 @@ async fn editing_a_later_message_keeps_the_fold() {
         configure(config, &server.base_url)
     });
     let session = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     for prompt in ["Hello.", "Fold it.", "Later question."] {
@@ -218,7 +218,7 @@ async fn the_state_is_written_as_a_chain_and_read_back_whole() {
         configure(config, &server.base_url)
     });
     let session = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     let prompts = ["Hello.".to_string(), "Fold it.".to_string()]
@@ -322,7 +322,7 @@ async fn decompress_to_a_file_writes_under_the_session_and_goes_with_it() {
         configure(config, &server.base_url)
     });
     let session = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     for prompt in ["Hello.", "Fold it, then export it."] {
@@ -414,7 +414,7 @@ async fn the_content_store_is_written_under_the_session_and_goes_with_it() {
             .unwrap();
     });
     let session = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     for prompt in ["Hello.", "Fold it, then get it back."] {
@@ -467,7 +467,7 @@ async fn a_standard_session_writes_no_compression_state() {
     let server = FakeServer::start(vec![(assistant_events("Done."), Duration::ZERO); 2]).await;
     let (service, paths) = configured_service("compression-standard", &server.base_url);
     let session = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     for prompt in ["One.", "Two."] {

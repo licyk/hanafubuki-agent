@@ -29,11 +29,11 @@ async fn a_turn_takes_the_session_sandbox_over_the_configured_one() {
             .unwrap();
     });
     let chosen = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     let other = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     let configured = SandboxSettings {
@@ -100,7 +100,7 @@ async fn a_command_whose_sandbox_is_unavailable_is_refused_before_it_runs() {
     .await;
     let (service, paths) = configured_service("sandbox-unavailable", &server.base_url);
     let session = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     service

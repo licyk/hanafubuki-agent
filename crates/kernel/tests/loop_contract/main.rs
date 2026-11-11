@@ -81,6 +81,8 @@ fn config() -> AgentSessionConfig {
         compaction_capability: hanafubuki_agent_model_api::ModelCompactionCapability::LocalSummary,
         sampling_retry_policy: hanafubuki_agent_kernel::AgentSamplingRetryPolicy::default(),
         compaction_strategy: Default::default(),
+        scope: Default::default(),
+        role_instructions: None,
     }
 }
 
@@ -964,6 +966,7 @@ mod memory_step;
 mod observers;
 mod panics;
 mod sampling;
+mod scope;
 mod sources;
 mod steering;
 mod turn_limits;

@@ -243,15 +243,10 @@ fn regular_model_request(
         maximum_tool_output_bytes,
     )?;
     input.extend(trailing.map(ModelInputItem::user_text));
-    let mut instructions = match record.settings.config.mode {
-        crate::AgentSessionMode::Default => record.settings.config.instructions.clone(),
-        crate::AgentSessionMode::Plan => {
-            format!(
-                "{}\n\n{}",
-                record.settings.config.instructions, PLAN_MODE_INSTRUCTIONS
-            )
-        }
-    };
+    let mut instructions = record.settings.config.effective_instructions();
+    if record.settings.config.mode == crate::AgentSessionMode::Plan {
+        instructions = format!("{instructions}\n\n{PLAN_MODE_INSTRUCTIONS}");
+    }
     if let Some(compression_instructions) = compression_instructions {
         instructions.push_str("\n\n");
         instructions.push_str(&compression_instructions);

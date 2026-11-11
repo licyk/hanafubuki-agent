@@ -9,7 +9,7 @@ async fn create_session_without_a_provider_reports_it_is_not_configured() {
     // contract, so it is asserted here rather than left implicit.
     let (service, paths) = service_with("no-provider", |_, _| {});
     let error = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap_err();
     assert!(
@@ -32,7 +32,7 @@ async fn create_session_without_a_global_model_waits_for_conversation_selection(
     });
 
     let created = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     let opened = service.open_session(created.id, 75).unwrap().runtime;
@@ -75,7 +75,7 @@ async fn create_session_without_a_global_model_waits_for_conversation_selection(
 async fn session_model_selection_rejects_an_empty_model() {
     let (service, paths) = configured_service("empty-model-selection", "http://127.0.0.1:1/v1");
     let session = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     let error = service
@@ -108,7 +108,7 @@ async fn a_turn_with_too_many_images_is_refused_before_staging() {
     }
     let (service, paths) = configured_service("too-many-images", "http://127.0.0.1:1/v1");
     let session = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     let image = DesktopAgentImageInput {
@@ -150,7 +150,7 @@ async fn a_turn_with_too_many_images_is_refused_before_staging() {
 async fn lifecycle_mutation_lazily_opens_a_completed_session_after_restart() {
     let (service, paths) = configured_service("history-lazy-lifecycle", "http://127.0.0.1:1/v1");
     let created = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     let summary = service
@@ -195,7 +195,7 @@ async fn model_selection_lazily_activates_an_opened_session_after_restart() {
             configure_test_provider(config, "http://127.0.0.1:1/v1", None);
         });
     let created = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     assert!(service
@@ -250,7 +250,7 @@ async fn existing_sessions_keep_frozen_reasoning_when_global_settings_change() {
         );
     });
     let first = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     config_state
@@ -261,7 +261,7 @@ async fn existing_sessions_keep_frozen_reasoning_when_global_settings_change() {
         })
         .unwrap();
     let second = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
 

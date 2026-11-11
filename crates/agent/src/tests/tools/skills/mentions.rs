@@ -60,7 +60,7 @@ async fn a_mention_of_a_registered_plugin_tool_selects_no_same_named_skill() {
         ],
     );
     let session = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     service
@@ -156,7 +156,7 @@ for line in sys.stdin:
         ],
     );
     let session = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     service

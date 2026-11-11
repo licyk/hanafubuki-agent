@@ -36,6 +36,9 @@ pub(crate) struct GlobalArgs {
     /// The model a new session runs, in place of the configured one.
     #[arg(short = 'm', long, global = true)]
     pub(crate) model: Option<String>,
+    /// The role a new session takes (`roles list`), in place of `default`.
+    #[arg(long, value_name = "NAME", global = true)]
+    pub(crate) role: Option<String>,
     /// Works in DIR instead of the current directory.
     #[arg(short = 'C', long = "cd", value_name = "DIR", global = true)]
     pub(crate) cd: Option<PathBuf>,

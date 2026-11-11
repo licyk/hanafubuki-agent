@@ -299,7 +299,8 @@ pub(in crate::service) fn assert_valid_limits(limits: AgentHardLimits) {
 /// Repairs the fields of a session config a rule may have tightened since it
 /// was written, or a producer set where it does not apply, so a session is
 /// never refused over one: an out-of-range value is clamped, an inapplicable
-/// one is dropped, each with a warning. It is the one place the values only
+/// one is dropped, each with a warning; the capability scope is put in its
+/// one form ([`crate::AgentCapabilityScope::normalize`]). It is the one place the values only
 /// the Responses protocol carries (reasoning effort, remote compaction) are
 /// narrowed for a session on another protocol: the shared model policy keeps
 /// them, the application passes them through, and every session the kernel
@@ -348,6 +349,7 @@ pub(in crate::service) fn normalize_session_config(config: &mut AgentSessionConf
         config.sampling_retry_policy = normalized_retry;
         repaired.push("response stream retry policy (clamped to its bounds)");
     }
+    repaired.extend(config.scope.normalize());
     for field in repaired {
         log::warn!("Agent session config repaired: {field}");
     }
@@ -382,7 +384,10 @@ pub(in crate::service) fn validate_session_config(
     }
     enforce_size(
         "instructions bytes",
-        config.instructions.len(),
+        config
+            .instructions
+            .len()
+            .saturating_add(config.role_instructions.as_ref().map_or(0, String::len)),
         limits.maximum_history_bytes,
     )?;
     config.sampling_retry_policy.validate()?;

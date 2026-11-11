@@ -122,8 +122,8 @@ pub use model::{
     MAXIMUM_USER_IMAGES_PER_MESSAGE,
 };
 pub use model::{
-    stricter_permission_mode, AgentCapabilityScope, AgentToolScope, ToolIdentity, ToolPattern,
-    MAX_TOOL_PATTERN_BYTES,
+    stricter_permission_mode, AgentCapabilityScope, AgentCapabilityScopeSummary, AgentToolScope,
+    ToolIdentity, ToolPattern, CORE_PLUGINS, MAX_SCOPE_TOOL_PATTERNS, MAX_TOOL_PATTERN_BYTES,
 };
 pub use parallel_tool_runtime::{
     AgentToolExecutionGate, AgentToolExecutionGateError, AgentToolExecutionPermit, CompletionSet,

@@ -20,6 +20,13 @@ async fn every_row_has_exactly_one_descriptor_and_its_status_shows_it() {
         .map(|descriptor| descriptor.name)
         .collect::<Vec<_>>();
     assert_eq!(rows, described);
+    // A capability scope never turns these off.
+    let core = statuses
+        .iter()
+        .filter(|status| status.group == AgentPluginGroup::Core)
+        .map(|status| status.name.as_str())
+        .collect::<Vec<_>>();
+    assert_eq!(core, hanafubuki_agent_kernel::CORE_PLUGINS);
     for status in &statuses {
         let descriptor = agent_plugin_descriptors()
             .into_iter()

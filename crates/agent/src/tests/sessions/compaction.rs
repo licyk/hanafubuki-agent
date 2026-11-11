@@ -33,7 +33,7 @@ async fn a_changed_remote_compaction_reaches_a_session_before_it_compacts() {
     .await;
     let (service, paths) = configured_service("remote-compaction-change", &server.base_url);
     let session = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     service
@@ -89,7 +89,7 @@ async fn the_configured_strategy_reaches_sessions_between_turns() {
         })
     };
     let first = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     assert_eq!(strategy(first.id), AgentCompactionStrategy::Standard);
@@ -101,7 +101,7 @@ async fn the_configured_strategy_reaches_sessions_between_turns() {
     write(compaction.clone()).await.unwrap();
     // A new session takes the setting; an existing one at its next turn.
     let second = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     assert_eq!(strategy(second.id), AgentCompactionStrategy::Hierarchical);
@@ -132,6 +132,7 @@ async fn the_configured_strategy_reaches_sessions_between_turns() {
                 persistence,
                 base,
                 context: Vec::new(),
+                scope: Default::default(),
             })
             .unwrap()
             .id
@@ -168,7 +169,7 @@ async fn a_strategy_applied_between_operations_survives_a_restart() {
             configure_test_provider(config, "http://127.0.0.1:1/v1", None);
         });
     let session = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     assert!(service
@@ -230,7 +231,7 @@ async fn an_anthropic_local_summary_declares_the_turns_tools_and_calls_none() {
             .unwrap();
     });
     let session = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     service

@@ -38,6 +38,7 @@ impl AgentApplicationService {
             persistence: AgentSessionPersistence::Ephemeral,
             base: AgentChildSessionBase::ParentHead,
             context: side_conversation_context(),
+            scope: Default::default(),
         })
     }
 

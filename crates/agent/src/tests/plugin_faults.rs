@@ -425,7 +425,7 @@ impl Fixture {
         )
         .unwrap();
         let session_id = service
-            .create_session(AgentSessionMode::Default)
+            .create_session(AgentSessionMode::Default, None)
             .await
             .unwrap()
             .id;
@@ -846,7 +846,7 @@ async fn a_plugin_registering_a_taken_tool_name_fails_alone() {
     )
     .unwrap();
     let session_id = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap()
         .id;

@@ -39,7 +39,7 @@ fn a_session_the_list_refuses_joins_the_agent_status_at_once() {
     let setup = tokio::runtime::Runtime::new().unwrap();
     let [broken, intact] = [0, 1].map(|_| {
         setup
-            .block_on(service.create_session(AgentSessionMode::Default))
+            .block_on(service.create_session(AgentSessionMode::Default, None))
             .unwrap()
             .id
     });
@@ -96,7 +96,7 @@ fn a_parent_a_quarantined_fork_needs_is_not_deleted_and_keeps_its_memory() {
         configured_service("quarantine-parent-deletion", "http://127.0.0.1:1/v1");
     let setup = tokio::runtime::Runtime::new().unwrap();
     let parent = setup
-        .block_on(service.create_session(AgentSessionMode::Default))
+        .block_on(service.create_session(AgentSessionMode::Default, None))
         .unwrap();
     drop(setup);
     let child = service

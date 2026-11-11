@@ -216,6 +216,9 @@ impl SurfaceValues {
                 let state = format!("{:?}", goal.status).to_lowercase();
                 format!("Goal: {objective}{ellipsis} ({state})")
             }),
+            StatusLineItem::Role => status
+                .and_then(|status| status.role.clone())
+                .map(|role| format!("Role: {role}")),
             StatusLineItem::Compression => {
                 status
                     .and_then(|status| status.compression)

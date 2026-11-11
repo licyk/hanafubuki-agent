@@ -146,7 +146,7 @@ fn main() -> Result<(), String> {
         .block_on({
             let handle = handle.clone();
             async move {
-                let session = handle.create_session(AgentSessionMode::Default).await?;
+                let session = handle.create_session(AgentSessionMode::Default, None).await?;
                 let request = AgentTurnRequest {
                     text: "Summarize the README.".to_string(),
                     images: Vec::new(),
@@ -449,7 +449,7 @@ Agent 启动的进程归 Agent 所有：它有自己的 `ExecutorManager`，与�
 
 读取是容错的：无效值取默认值，未知键记录日志并保留在文件里，需要修复的文件先复制到 `.recovery/` 再写入修复后的值；无法保留原件时，修复后的值只用在内存里，文件在重启前拒绝写入。每次修复都是一条 `AgentConfigRecovery`（文件、问题、是否只读、时间），`AgentConfig::recoveries()` 返回本次打开以来的修复（每个文件最近 20 条），宿主应当把它们展示给用户。键名、默认值和修复规则见[配置](/docs/configuration)与[配置参考](/docs/config-reference)。
 
-配置目录中还可以有[角色](/docs/roles)：它的 `agents/` 和其 `config.toml` 中的 `[agents]` 条目，这是嵌入的 Agent 在内置角色之外唯一的角色来源。`roles()` 返回服务最近一次读取的 `AgentRoleCatalog`（构建时读取，之后每次 `reload_packages` 再读）：可用的角色（`AgentResolvedRole`，含继承链、合并后的字段、`AgentCapabilityScope` 和每个字段的来源）、不可用的角色及原因，以及问题；宿主应把这些问题与配置的问题放在一起展示。`AgentRoleCatalog::load(&config)` 不需要服务即可读取。目前还没有会话使用角色。
+配置目录中还可以有[角色](/docs/roles)：它的 `agents/` 和其 `config.toml` 中的 `[agents]` 条目，这是嵌入的 Agent 在内置角色之外唯一的角色来源。`roles()` 返回服务最近一次读取的 `AgentRoleCatalog`（构建时读取，之后每次 `reload_packages` 再读）：可用的角色（`AgentResolvedRole`，含继承链、合并后的字段、`AgentCapabilityScope` 和每个字段的来源）、不可用的角色及原因，以及问题；宿主应把这些问题与配置的问题放在一起展示。`AgentRoleCatalog::load(&config)` 不需要服务即可读取。会话在创建或切换时取得角色（[会话与角色](#sessions)）。
 
 从旧格式迁移设置是宿主自己的事：Hanafubuki 在 `config.toml` 不存在时（`AgentConfig::exists`），由它的构造闭包运行 `import_legacy_agent_settings`，用 `AgentConfig::create` 一次写入整份配置（`config.toml` 最后写，所以中途停止的导入会重来），旧文件保持不变。
 
@@ -482,9 +482,18 @@ impl AgentEventSink for PrintEvents {
 - **导出**：`export_session_markdown(session)` 返回会话完整对话的 Markdown，读取其历史的全部页面：每条消息和计划一个 `## User`、`## Assistant` 或 `## Plan` 小节，每次工具调用一个 `## Activity` 小节（工具名和参数，以及输出的前几行），不含思考过程（[会话](/docs/sessions#export)）。没有可显示内容的会话返回 `InvalidInput`。它不提交任何内容；它会读取历史，所以要在异步运行时之外调用，与 `rename_session` 一样。
 - **运行投影**：`AgentSlot::list_run_projections` 与 `get_run_projection`（活动 ID、轮次号、阶段、时间、错误），Hanafubuki 把它们映射到任务中心。
 
+## 会话与角色 [#sessions]
+
+| 调用                                          | 作用                                                                                                                                                                                                                                                                                |
+| --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `create_session(mode, role)`（async）         | 以 `mode` 和 `roles()` 中的角色 `role`（`None` 即 `default`）新建会话：角色合并后的指令跟在基础指令之后，角色的模型和推理强度优先于 Provider 的，角色的收窄成为会话的 `AgentCapabilityScope`。没有任何来源定义的角色或不可用的角色被拒绝（一个列出可用角色的无效输入错误）          |
+| `set_session_role(session_id, role)`（async） | 在轮次之间设置会话的角色：它的范围和指令作为新的修订持久提交，然后（角色设置了的话）通过 `set_session_model` 和 `set_session_reasoning_effort` 设置模型和推理强度；返回快照。有轮次运行时返回 `TurnAlreadyRunning`，有压缩运行时返回 `CompactionAlreadyRunning`。`default` 清除范围 |
+
+快照（`AgentSessionRuntimeSnapshot`）带有会话的 `role` 和它范围的摘要（`AgentCapabilityScopeSummary`：多少个允许列表和模式、多少个拒绝模式、关闭的插件、上限）；对 `default` 两者都是 `None`，在序列化的快照中不出现。会话把范围和角色的指令保存在自己的配置中，所以之后编辑或删除角色文件、或重启，都不改变什么。范围的作用见[能力范围](/docs/plugin-rules#capability-scope)；宿主的会话除非提供角色，否则传 `None`。
+
 ## 权限 [#permissions]
 
-轮次的权限模式在它开始时确定：启动时给定的模式，否则是会话自己的模式（如果有），否则是配置的 `permissionMode`。`submit_turn_with_sink` 和 `submit_plan_implementation_with_sink` 不给定模式；`start_turn` 给定它的输入中的模式（`AgentTurnInput { text, images, skills, permission_mode }`，一个 `Option<AgentPermissionMode>`），由文本构造的输入（`AgentTurnInput::from`）不给定（`None`）。各模式和审批的行为见[权限与审批](/docs/permissions)。
+轮次的权限模式在它开始时确定：启动时给定的模式，否则是会话自己的模式（如果有），否则是配置的 `permissionMode`，再收紧到会话角色的 `permissionModeCap`。`submit_turn_with_sink` 和 `submit_plan_implementation_with_sink` 不给定模式；`start_turn` 给定它的输入中的模式（`AgentTurnInput { text, images, skills, permission_mode }`，一个 `Option<AgentPermissionMode>`），由文本构造的输入（`AgentTurnInput::from`）不给定（`None`）。各模式和审批的行为见[权限与审批](/docs/permissions)。
 
 | 调用                                            | 作用                                                                                                                                                                                                                                                                                         |
 | ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

@@ -9,11 +9,11 @@ use hanafubuki_agent_contracts::{
 use hanafubuki_agent_foundation::cancellation::CancellationToken;
 
 use crate::bounded_call::{bounded, overran, Bounded};
-use crate::AgentError;
+use crate::{AgentCapabilityScope, AgentError};
 
 /// Runs every contributor of one registry snapshot, one after another in
-/// `(rank, id)` order, and merges what they return into the turn's
-/// extensions.
+/// `(rank, id)` order, but those of a plugin the session's `scope` turns
+/// off, and merges what they return into the turn's extensions.
 ///
 /// A contributor that fails (an error, a panic reported as a fault of its
 /// plugin, no answer within `deadline`), whose plugin is stopping, or that returns a value of a type
@@ -29,11 +29,16 @@ use crate::AgentError;
 pub async fn collect_turn_extensions(
     registry: &TurnAdmissionRegistry,
     request: &TurnAdmissionRequest,
+    scope: &AgentCapabilityScope,
     admission: &CancellationToken,
     deadline: Duration,
 ) -> Result<TurnExtensions, AgentError> {
     let mut extensions = TurnExtensions::default();
     for entry in registry.ordered() {
+        // Its values are absent, as for a stopped plugin's.
+        if scope.turns_off(entry.owner()) {
+            continue;
+        }
         let contributor = entry.item();
         let call = admission.child();
         let Some(_lease) = entry.acquire(&call) else {

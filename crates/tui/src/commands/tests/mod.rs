@@ -32,6 +32,7 @@ fn the_table_keeps_the_presentation_order() {
             "model",
             "providers",
             "mode",
+            "role",
             "permissions",
             "approve",
             "setup-default-sandbox",
@@ -133,6 +134,7 @@ fn availability_follows_the_spec() {
         [
             "model",
             "mode",
+            "role",
             "permissions",
             "rename",
             "compact",
@@ -149,6 +151,7 @@ fn availability_follows_the_spec() {
         inline_args,
         [
             "providers",
+            "role",
             "permissions",
             "rename",
             "resume",

@@ -73,7 +73,11 @@ fn create_session(agent: &AgentHandle) -> AgentSessionId {
     let creating = agent.clone();
     agent
         .runtime()
-        .block_on(async move { creating.create_session(AgentSessionMode::Default).await })
+        .block_on(async move {
+            creating
+                .create_session(AgentSessionMode::Default, None)
+                .await
+        })
         .unwrap()
         .unwrap()
         .id

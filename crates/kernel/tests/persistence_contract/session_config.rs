@@ -100,6 +100,7 @@ fn the_strategy_is_persisted_between_operations_without_a_revision() {
                 persistence,
                 base: AgentChildSessionBase::Empty,
                 context: Vec::new(),
+                scope: Default::default(),
             })
             .unwrap()
             .id

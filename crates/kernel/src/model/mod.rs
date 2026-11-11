@@ -52,8 +52,8 @@ pub use lineage::{
 pub(crate) use reasoning::AgentReasoningTransitionError;
 pub use reasoning::{AgentReasoningCheckpoint, AgentReasoningPhase, AgentReasoningSnapshot};
 pub use scope::{
-    stricter_permission_mode, AgentCapabilityScope, AgentToolScope, ToolIdentity, ToolPattern,
-    MAX_TOOL_PATTERN_BYTES,
+    stricter_permission_mode, AgentCapabilityScope, AgentCapabilityScopeSummary, AgentToolScope,
+    ToolIdentity, ToolPattern, CORE_PLUGINS, MAX_SCOPE_TOOL_PATTERNS, MAX_TOOL_PATTERN_BYTES,
 };
 pub use session::{
     AgentBackgroundCompactionState, AgentBackgroundCompactionThreshold, AgentCompactionStrategy,

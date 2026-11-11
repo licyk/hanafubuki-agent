@@ -156,3 +156,147 @@ fn the_stricter_mode_is_the_one_that_asks_more() {
         assert_eq!(stricter_permission_mode(first, second), stricter);
     }
 }
+
+fn explorer_like() -> AgentCapabilityScope {
+    AgentCapabilityScope {
+        role: Some("reader".into()),
+        tools: AgentToolScope {
+            allow: vec![
+                patterns(&["read_*", "plugin:web"]),
+                patterns(&["read_file"]),
+            ],
+            deny: patterns(&["provider:mcp.github"]),
+        },
+        plugins_off: ["titles".to_string()].into(),
+        permission_mode_cap: Some(AgentPermissionMode::AutoReview),
+    }
+}
+
+#[test]
+fn a_scope_round_trips_through_its_persisted_form() {
+    let scope = explorer_like();
+    let value = serde_json::to_value(&scope).unwrap();
+    assert_eq!(
+        value,
+        serde_json::json!({
+            "role": "reader",
+            "tools": {
+                "allow": [["read_*", "plugin:web"], ["read_file"]],
+                "deny": ["provider:mcp.github"]
+            },
+            "pluginsOff": ["titles"],
+            "permissionModeCap": "auto_review"
+        })
+    );
+    assert_eq!(
+        serde_json::from_value::<AgentCapabilityScope>(value).unwrap(),
+        scope
+    );
+    // The empty scope writes nothing of what it does not narrow.
+    assert_eq!(
+        serde_json::to_value(AgentCapabilityScope::default()).unwrap(),
+        serde_json::json!({})
+    );
+}
+
+#[test]
+fn a_persisted_scope_is_read_field_by_field_and_never_wider() {
+    let scope: AgentCapabilityScope = serde_json::from_value(serde_json::json!({
+        "role": 7,
+        "tools": {
+            "allow": [["read_file", "mode:x", 3], "not a list"],
+            "deny": ["web_*", "future:kind"]
+        },
+        "pluginsOff": ["goal", 1],
+        "permissionModeCap": "sometimes",
+        "unknown": true
+    }))
+    .unwrap();
+    assert_eq!(scope.role, None);
+    assert_eq!(
+        scope.tools.allow,
+        vec![patterns(&["read_file"]), BTreeSet::new()]
+    );
+    assert_eq!(scope.tools.deny, patterns(&["web_*"]));
+    assert_eq!(scope.plugins_off, ["goal".to_string()].into());
+    assert_eq!(scope.permission_mode_cap, None);
+    // The allow list that was not a list allows nothing.
+    assert!(!scope.tools.allows(&tool("read_file", "fs", None)));
+    assert_eq!(
+        serde_json::from_value::<AgentCapabilityScope>(serde_json::json!("garbage")).unwrap(),
+        AgentCapabilityScope::default()
+    );
+}
+
+#[test]
+fn normalizing_sorts_the_allow_lists_and_keeps_the_core_rows_on() {
+    let mut scope = explorer_like();
+    scope.tools.allow.push(patterns(&["read_*", "plugin:web"]));
+    scope.plugins_off.insert("agent-kernel".to_string());
+    scope.plugins_off.insert("agent-host-services".to_string());
+    let repaired = scope.normalize();
+    assert_eq!(
+        scope.tools.allow,
+        vec![
+            patterns(&["plugin:web", "read_*"]),
+            patterns(&["read_file"])
+        ]
+    );
+    assert_eq!(scope.plugins_off, ["titles".to_string()].into());
+    assert_eq!(repaired.len(), 1, "{repaired:?}");
+    assert!(explorer_like().normalize().is_empty());
+}
+
+#[test]
+fn a_scope_past_its_bounds_allows_no_tool() {
+    let many: BTreeSet<ToolPattern> = (0..=MAX_SCOPE_TOOL_PATTERNS)
+        .map(|index| ToolPattern::Name(format!("tool_{index}")))
+        .collect();
+    for tools in [
+        AgentToolScope {
+            allow: Vec::new(),
+            deny: many.clone(),
+        },
+        AgentToolScope {
+            allow: vec![many],
+            deny: BTreeSet::new(),
+        },
+        AgentToolScope {
+            allow: Vec::new(),
+            deny: [ToolPattern::Name("x".repeat(MAX_TOOL_PATTERN_BYTES + 1))].into(),
+        },
+    ] {
+        let mut scope = AgentCapabilityScope {
+            tools,
+            ..AgentCapabilityScope::default()
+        };
+        assert_eq!(scope.normalize().len(), 1);
+        assert_eq!(scope.tools.allow, vec![BTreeSet::new()]);
+        assert!(!scope.tools.allows(&tool("tool_1", "row", None)));
+    }
+}
+
+#[test]
+fn a_child_without_a_role_keeps_its_parents_and_the_cap_only_tightens() {
+    let parent = explorer_like();
+    let narrowed = parent.narrow(&AgentCapabilityScope::default());
+    assert_eq!(narrowed, parent);
+    use AgentPermissionMode::{AutoReview, FullAccess, Manual};
+    assert_eq!(parent.capped_permission_mode(FullAccess), AutoReview);
+    assert_eq!(parent.capped_permission_mode(Manual), Manual);
+    assert_eq!(
+        AgentCapabilityScope::default().capped_permission_mode(FullAccess),
+        FullAccess
+    );
+    let summary = parent.summary().unwrap();
+    assert_eq!(
+        (
+            summary.allow_lists,
+            summary.allow_patterns,
+            summary.deny_patterns
+        ),
+        (2, 3, 1)
+    );
+    assert_eq!(summary.plugins_off, ["titles"]);
+    assert_eq!(AgentCapabilityScope::default().summary(), None);
+}

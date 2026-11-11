@@ -235,6 +235,7 @@ async fn a_hung_context_contributor_is_left_out_with_an_issue() {
     let world_state = collect_world_state(
         &registries.context,
         &context_request(),
+        &hanafubuki_agent_kernel::AgentCapabilityScope::default(),
         &CancellationToken::default(),
         DEADLINE,
     )
@@ -265,6 +266,7 @@ async fn a_hung_turn_admission_contributor_is_left_out_with_an_issue() {
     collect_turn_extensions(
         &registries.turn_admission,
         &admission_request(),
+        &hanafubuki_agent_kernel::AgentCapabilityScope::default(),
         &CancellationToken::default(),
         DEADLINE,
     )
@@ -301,9 +303,16 @@ async fn cancelling_the_admission_cancels_a_hung_context_or_admission_call() {
     let deadline = Duration::from_secs(3600);
 
     let (context, admission) = (context_request(), admission_request());
+    let scope = hanafubuki_agent_kernel::AgentCapabilityScope::default();
     let cancellation = CancellationToken::default();
     let (world_state, ()) = tokio::join!(
-        collect_world_state(&registries.context, &context, &cancellation, deadline),
+        collect_world_state(
+            &registries.context,
+            &context,
+            &scope,
+            &cancellation,
+            deadline
+        ),
         async {
             called(&context_seen).await;
             cancellation.cancel();
@@ -317,6 +326,7 @@ async fn cancelling_the_admission_cancels_a_hung_context_or_admission_call() {
         collect_turn_extensions(
             &registries.turn_admission,
             &admission,
+            &scope,
             &cancellation,
             deadline
         ),
@@ -343,12 +353,14 @@ async fn dropping_an_admission_cancels_its_call_in_flight() {
         .await;
     let registries = tools.registries();
     let request = context_request();
+    let scope = hanafubuki_agent_kernel::AgentCapabilityScope::default();
     let never_cancelled = CancellationToken::default();
 
     tokio::select! {
         _ = collect_world_state(
             &registries.context,
             &request,
+            &scope,
             &never_cancelled,
             Duration::from_secs(3600),
         ) => panic!("the hung call answered"),

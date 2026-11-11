@@ -145,7 +145,7 @@ impl Agent {
         });
         service.start_plugins().await;
         let session = service
-            .create_session(AgentSessionMode::Default)
+            .create_session(AgentSessionMode::Default, None)
             .await
             .unwrap()
             .id;

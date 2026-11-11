@@ -120,7 +120,12 @@ impl AgentService {
         mut input: crate::AgentTurnInput,
         admission: TurnAdmission,
     ) -> Result<StagedAdmission, AgentError> {
-        let permission_mode = input.permission_mode;
+        // The turn's mode is frozen here, tightened to the session's cap.
+        let permission_mode = record
+            .settings
+            .config
+            .scope
+            .capped_permission_mode(input.permission_mode);
         let origin = input.origin;
         let provisional_title = input.provisional_title.take();
         // Read under the session's lock: shutdown clears the flag before it

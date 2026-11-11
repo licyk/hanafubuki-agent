@@ -23,13 +23,18 @@ impl AgentService {
         &self,
         session_id: AgentSessionId,
     ) -> Result<RequestContext, AgentError> {
-        let inputs = {
+        let (inputs, scope) = {
             let cell = self.session(session_id)?;
             let guard = cell.lock()?;
-            prompt_inputs(&guard)
+            (prompt_inputs(&guard), guard.settings.config.scope.clone())
         };
         Ok(request_context(
-            &self.inner.registries.prompt.snapshot(),
+            &self
+                .inner
+                .registries
+                .prompt
+                .snapshot()
+                .without_plugins(|owner| scope.turns_off(owner)),
             self.inner.registries.context_renderers.snapshot(),
             inputs,
             None,

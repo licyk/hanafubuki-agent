@@ -60,6 +60,7 @@ fn child_of(
         persistence: AgentSessionPersistence::Durable,
         base,
         context: Vec::new(),
+        scope: Default::default(),
     }
 }
 
@@ -76,7 +77,7 @@ async fn a_side_conversation_inherits_its_parent_and_reads_the_side_policy_first
     let server = FakeServer::start(vec![(assistant_events("Done."), Duration::ZERO); 3]).await;
     let (service, paths) = configured_service("side-conversation", &server.base_url);
     let parent = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     service
@@ -182,7 +183,7 @@ async fn a_side_conversation_opened_while_the_parent_works_stops_before_its_runn
     .await;
     let (service, paths) = configured_service("side-running-parent", &server.base_url);
     let parent = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     assert!(
@@ -238,7 +239,7 @@ async fn a_driven_child_runs_a_turn_answers_and_is_interrupted() {
     let (service, paths) = configured_service("driven-child", &server.base_url);
     let driver = service.test_session_driver().clone();
     let parent = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     service
@@ -316,7 +317,7 @@ async fn a_session_records_its_workspace_and_its_children_take_it() {
         std::fs::write(head, "ref: refs/heads/main\n").unwrap();
     });
     let parent = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     let child = service
@@ -355,7 +356,7 @@ async fn archiving_or_deleting_a_session_takes_its_children_with_it() {
     let (service, paths) = configured_service("children-cascade", &server.base_url);
     let driver = service.test_session_driver().clone();
     let parent = service
-        .create_session(AgentSessionMode::Default)
+        .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
     service
