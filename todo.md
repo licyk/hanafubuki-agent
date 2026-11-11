@@ -1,12 +1,13 @@
 ## Plan: a configuration center for every Agent setting (2026-11-11)
 
 The plan is [docs/plan-configuration-center.md](docs/plan-configuration-center.md);
-the C3 stopping point is recorded in
+the implementation handoff is recorded in
 [docs/plan-configuration-center-handoff.md](docs/plan-configuration-center-handoff.md).
-Each phase is implemented separately, validated, committed and pushed. The
-work turns `/config` into a searchable configuration center over the typed
-Agent, standalone, Provider, MCP, plugin and interface settings while
-preserving the existing layered configuration and atomic writers.
+Each phase is implemented and validated separately; C1–C3 are committed and
+pushed, while C4–C6 remain in the working tree pending authorization. The work
+turns `/config` into a searchable configuration center over the typed Agent,
+standalone, Provider, MCP, plugin and interface settings while preserving the
+existing layered configuration and atomic writers.
 
 - [x] C1: state, `/config` routing, full-screen navigation, search and
       layer summaries. Done: `ConfigState` reads the facade settings plus
@@ -27,13 +28,25 @@ preserving the existing layered configuration and atomic writers.
       budgets and revision conflicts. Done: `/providers` gained a `p` policy
       stage for the default Provider and model, reasoning effort, image
       input, context window, automatic and remote compaction, and every
-      turn-budget field; stale revisions reload and keep the form. Work
-      stopped here as requested.
-- [ ] C4: MCP protocol mode and per-tool concurrency, approval and
-      exposure policies.
-- [ ] C5: integrated plugin, hook and interface editors plus the layers
-      page.
-- [ ] C6: bilingual documentation and the full validation matrix.
+      turn-budget field; stale revisions reload and keep the form.
+- [x] C4: MCP protocol mode and per-tool concurrency, approval and
+      exposure policies. Done: the server form edits `protocolMode`, a
+      concurrency row per tool and approval/exposure override rows; values
+      are validated before saving; round-trip and invalid-input tests cover
+      every new field; the form says `mcp.toml` is unlayered and
+      owner-only.
+- [x] C5: integrated plugin, hook and interface editors plus the layers
+      page. Done: `/config providers` opens `/providers policy`; the
+      interface form links Theme, Status line, Terminal title, Keyboard,
+      Presets and Interface mode; `/config layers` lists the files,
+      trust state and warnings; scalar TUI preference writes now report a
+      higher layer that shadows them, as the other domains already did.
+- [x] C6: bilingual documentation and the full validation matrix. Done:
+      the architecture, configuration, configuration-reference,
+      terminal-interface, MCP and Provider pages describe the configuration
+      center in both languages and keep matching heading ids; the full Rust
+      and site matrices passed locally on Windows; all 34 documentation
+      pages prerendered. The changes are in the working tree, not committed.
 
 # Follow-ups
 

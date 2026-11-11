@@ -187,7 +187,7 @@ The marketplaces you added, by name: where the Agent finds their packages.
 
 ## providers.toml [#providers-toml]
 
-`providers.toml` has no layers and is readable by its owner only. The `providers` commands usually change it; settings such as the reasoning effort are edited by hand. Quit any running Agent before you edit it.
+`providers.toml` has no layers and is readable by its owner only. The `providers` commands usually change it; `/providers` in the terminal interface edits a Provider and, with `p` or `/providers policy`, the shared model policy; it can also be edited by hand. Quit any running Agent before you edit it.
 
 ```toml
 revision = 2
@@ -269,7 +269,7 @@ When the default Provider is removed or disabled, the first enabled Provider in 
 
 ## mcp.toml [#mcp-toml]
 
-`mcp.toml` has no layers and is readable by its owner only. `mcp add` writes a new server's defaults; credentials, headers and policies are edited by hand.
+`mcp.toml` has no layers and is readable by its owner only. `mcp add` writes a new server's defaults; `/mcp` in the terminal interface edits a server, its credentials, protocol mode and per-tool policies, and the file can also be edited by hand.
 
 ```toml
 revision = 3

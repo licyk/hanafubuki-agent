@@ -78,10 +78,11 @@ provider-2 DeepSeek  ChatCompletions  https://api.deepseek.com/v1  token: set
 
 [终端界面](/docs/terminal-interface#providers)中的 `/providers` 可以完成上面这些命令的工作，并直接编辑 Provider：
 
-- **列表**：★ 标记默认 Provider；每个 Provider 显示协议、基础 URL、`token set` 或 `no token`，以及 `disabled`。Enter 编辑，`a` 添加，`d` 确认后删除，`e` 启用或停用，`*` 把一个已启用的 Provider 设为默认，Esc 关闭。
+- **列表**：★ 标记默认 Provider；每个 Provider 显示协议、基础 URL、`token set` 或 `no token`，以及 `disabled`。Enter 编辑，`a` 添加，`d` 确认后删除，`e` 启用或停用，`*` 把一个已启用的 Provider 设为默认，`p` 编辑模型策略，Esc 关闭。
 - **表单**：名称、协议（`responses`、`chat_completions` 或 `anthropic_messages`）、基础 URL、API 令牌、是否启用，以及按行填写的请求头。令牌显示为圆点：保持不动就保留原值，清空就删除它。按键见[表单](/docs/terminal-interface#forms)。
 - **Test** 用表单中的内容（包括令牌和请求头）列出模型，不保存任何东西：它显示 Provider 列出的模型数量，或者 Provider 返回的错误。
 - **Save** 完整写入这个 Provider。对于已启用的 Provider，接着会打开模型选择：选中的模型（Provider 没有列出时，用 **Enter a model id…** 手动输入）成为新会话使用的模型，这个 Provider 成为默认 Provider。按 Esc 则保持原来的模型。`/model` 仍然只修改当前会话的模型。
+- **模型策略**（列表中的 `p`，或 `/providers policy`）：默认 Provider 和模型、推理强度、图片输入、上下文窗口、自动压缩及其阈值、远程压缩，以及 Agent 默认值或全部十一个回合预算字段。它通过同一套修订号保护写入。
 - 每次写入都会带上界面读取时 `providers.toml` 的版本。如果期间文件被其他地方修改（例如另一个终端中的 `providers` 命令），写入会被拒绝：界面重新读取 Provider，保留表单中的内容并给出提示，再保存一次即可。
 - 没有默认 Provider 或没有模型时，界面启动时会自动打开这个界面，见[首次设置](/docs/terminal-interface#setup)。
 

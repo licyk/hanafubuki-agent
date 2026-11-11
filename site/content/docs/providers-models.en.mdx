@@ -78,10 +78,11 @@ provider-2 DeepSeek  ChatCompletions  https://api.deepseek.com/v1  token: set
 
 `/providers` in the [terminal interface](/docs/terminal-interface#providers) does what the commands above do, and edits a Provider in place:
 
-- **The list**: ★ marks the default; each Provider shows its protocol, base URL, `token set` or `no token`, and `disabled`. Enter edits, `a` adds, `d` deletes after asking, `e` enables or disables, `*` makes an enabled Provider the default, Esc closes.
+- **The list**: ★ marks the default; each Provider shows its protocol, base URL, `token set` or `no token`, and `disabled`. Enter edits, `a` adds, `d` deletes after asking, `e` enables or disables, `*` makes an enabled Provider the default, `p` edits the model policy, Esc closes.
 - **The form**: name, protocol (`responses`, `chat_completions` or `anthropic_messages`), base URL, API token, enabled, and the request headers as rows. The token is shown as dots: leave it as it is to keep it, clear it to remove it. The keys are in [Forms](/docs/terminal-interface#forms).
 - **Test** lists the models of what the form holds, with its token and headers, and saves nothing: it says how many models the Provider lists, or the Provider's error.
 - **Save** writes the Provider whole. For an enabled Provider the model picker follows: the model you pick (or type, with **Enter a model id…**, when the Provider does not list it) becomes the one new sessions run, and the Provider the default. Esc leaves the model as it was. `/model` still changes only the running session's model.
+- **The model policy** (`p` in the list, or `/providers policy`): the default Provider and model, reasoning effort, image input, context window, automatic compaction and its threshold, remote compaction, and either the Agent defaults or all eleven turn-budget fields. It writes through the same revision gate.
 - Each write names the version of `providers.toml` the screen read. When something else changed the file meanwhile (a `providers` command in another terminal, say), the write is refused: the screen reads the Providers again, keeps what the form holds and says so, and saving again applies it.
 - With no default Provider or no model, the interface opens this screen by itself at the start: see [First-run setup](/docs/terminal-interface#setup).
 

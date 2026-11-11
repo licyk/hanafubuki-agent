@@ -217,7 +217,7 @@ Esc goes back a page, and closes the browser from a tab. Started with `--safe-mo
 
 ## MCP servers [#mcp]
 
-`/mcp` lists the MCP servers, each with its transport, connection phase, number of tools and last error. The servers of the enabled installed plugins follow, dimmed and labelled `(plugin ID)`: they cannot be chosen, and change with the plugin ([/plugins](#plugins)); `/mcp verbose` lists them too. Enter edits the highlighted one, `a` adds one, `d` deletes it after asking, `e` enables or disables it, `c` connects it (a connected one reconnects), `l` starts its OAuth login, `o` logs it out, Esc closes the list. The form and its secrets are in [MCP](/docs/mcp#interface).
+`/mcp` lists the MCP servers, each with its transport, connection phase, number of tools and last error. The servers of the enabled installed plugins follow, dimmed and labelled `(plugin ID)`: they cannot be chosen, and change with the plugin ([/plugins](#plugins)); `/mcp verbose` lists them too. Enter edits the highlighted one, `a` adds one, `d` deletes it after asking, `e` enables or disables it, `c` connects it (a connected one reconnects), `l` starts its OAuth login, `o` logs it out, Esc closes the list. The form covers the transport, its secrets, the protocol mode and the per-tool policies; see [MCP](/docs/mcp#interface).
 
 ## Reviews [#review]
 
@@ -589,17 +589,26 @@ A preset is an input kept in a slot from 0 to 9 (`tui.presets."N"`), with an opt
 
 ## Settings [#config]
 
-`/config` gathers the `[tui]` settings and the compaction strategy: Space or Enter turns one on or off (Left and Right for a choice), and each change is applied and saved at once.
+`/config` opens the configuration center over the whole screen: a searchable list of every configuration domain, each with its effective value, above the number of layers and warnings. `/` searches, Up and Down move, Enter opens, Esc goes back or closes. `/config SECTION` opens a domain directly; the sections are `general`, `sandbox`, `memory`, `web`, `compaction`, `network`, `interface`, `providers`, `mcp`, `plugins`, `hooks` and `layers`.
 
-| Row                | Key                        | Applies                                                                          |
-| ------------------ | -------------------------- | -------------------------------------------------------------------------------- |
-| Raw output         | `tui.rawOutput`            | At once, as `/raw`                                                               |
-| Status line colors | `tui.statusLineColors`     | At once                                                                          |
-| Fullscreen         | `tui.fullscreenTranscript` | At the next launch                                                               |
-| Alternate screen   | `tui.alternateScreen`      | At the next launch                                                               |
-| Compaction         | `compaction.strategy`      | At each session's next turn; see [Compaction](/docs/config-reference#compaction) |
+| Domain                | What it changes                                                                                                                 |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| General & permissions | `permissionMode`; the plugins that are off are summarized and open `/plugins`                                                   |
+| Sandbox               | `sandboxMode`, `sandboxWorkspaceWrite.writableRoots` and `networkAccess`, `windows.sandbox`                                     |
+| Memory                | every `memory.*` field                                                                                                          |
+| Web tools             | `webSearchProvider`, `searxngBaseUrl`, `webFetchUseJinaReader`                                                                  |
+| Compaction            | `compaction.strategy`, the two background fields and every hierarchical field                                                   |
+| Network & logging     | `network.proxy` and `logLevel`; the proxy applies now, the log level at the next launch                                         |
+| Interface             | the four scalar `[tui]` preferences, with actions that open `/theme`, `/statusline`, `/title`, `/keymap`, `/presets` and `/tui` |
+| Providers & policy    | opens `/providers policy`: every Provider and the shared model policy                                                           |
+| MCP servers           | opens `/mcp`, including protocol mode and per-tool policies                                                                     |
+| Plugins & packages    | opens `/plugins`                                                                                                                |
+| Hooks                 | opens `/hooks`                                                                                                                  |
+| Layers & files        | the files read, lowest first, their warnings, and where writes go                                                               |
 
-Its other rows open the editors: Providers (`/providers`), MCP servers (`/mcp`), Memories (`/memories`), Theme (`/theme`), Status line (`/statusline`), Terminal title (`/title`), Keyboard (`/keymap`), Presets (`/presets`) and Interface mode (`/tui`).
+A domain is saved whole: its form drafts a typed patch, checks it, writes it atomically, and only then replaces the screen's state; invalid input stays in the form with the field's error. A save that a profile, the project's file or `-c` replaces says so. `providers.toml` and `mcp.toml` have no layers, and their forms say so.
+
+`/config quick` keeps the former one-panel editor for the `[tui]` scalars and the compaction strategy; `config set` is the command-line equivalent for one key.
 
 ## Warnings [#warnings]
 

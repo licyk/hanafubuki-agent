@@ -187,7 +187,7 @@ icon: ListTree
 
 ## providers.toml [#providers-toml]
 
-`providers.toml` 没有分层，只有自己可读。通常用 `providers` 命令修改；推理强度等设置需要直接编辑。修改时请先退出正在运行的 Agent。
+`providers.toml` 没有分层，只有自己可读。通常用 `providers` 命令修改；终端界面的 `/providers` 可以编辑 Provider，按 `p` 或 `/providers policy` 可以编辑共享的模型策略；也可以直接编辑文件。修改时请先退出正在运行的 Agent。
 
 ```toml
 revision = 2
@@ -269,7 +269,7 @@ requestHeaders = []
 
 ## mcp.toml [#mcp-toml]
 
-`mcp.toml` 没有分层，只有自己可读。`mcp add` 写入新服务器的默认值；凭据、请求头和策略需要直接编辑。
+`mcp.toml` 没有分层，只有自己可读。`mcp add` 写入新服务器的默认值；终端界面的 `/mcp` 可以编辑服务器、凭据、协议模式和按工具的策略，也可以直接编辑文件。
 
 ```toml
 revision = 3

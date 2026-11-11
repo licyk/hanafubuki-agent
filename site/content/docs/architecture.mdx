@@ -204,7 +204,7 @@ schema 遵循同样的按协议规则：支持 `strict_json_schema` 的协议（
 - **历史**（`hanafubuki-agent-history`，格式版本 5）：每个会话一份 JSONL rollout，它是权威的；SQLite 索引是投影，需要时重建。新条目和字段都是增量添加的（`ToolSelection`、`Reasoning`、`ToolCall` 上可选的命名空间；运行时状态的 `parentSessionId`、`origin`、`cwd` 和 `branch`，旧记录中没有，读作空），移除的字段是被忽略的未知键。打开时无法接受的东西只损失它自己的会话：另一种格式的 rollout 移入 `.recovery`，无法投影的留在原处并在每次启动时重试修复，会话被隔离；其他会话和 Agent 照常打开。写入经过每个会话一个的写入线程，追加和它的投影写好后才确认。
 - **记忆**（`hanafubuki-agent-memory`，移植自 Codex）分两阶段从会话历史中派生：阶段一用一个小模型提取每个空闲会话，阶段二由整合子 Agent 处理提取结果，发布 `MEMORY.md` 和 `memory_summary.md`。先判断资格再应用上限，两个阶段都有退避（30 秒翻倍到一天），发布先提交数据库再重命名文件。
 - **Skill**（`hanafubuki-agent-skills`）：仓库 Skill 来自每个工作区根目录及其祖先直到 Git 根目录中的 `.agents/skills`，每次读取目录时重新计算；然后是用户根目录和内置的 System Skills。Skill 的正文作为 `ConversationItem::SkillContext` 每个轮次每个 Skill 只交付一次。Skill 从不注册或限制工具。
-- **配置**（`hanafubuki-agent-config`）：三个 TOML 文件，各自一个修订域和一把锁（`config.toml`、`providers.toml`、`mcp.toml`，后两者只有所有者可读）。读取逐字段解码，无效值取默认值，未知键保留，需要修复的文件先复制到 `.recovery/`；写入用 `toml_edit` 编辑磁盘上的文档（注释、布局和未知键得以保留），再原子重命名。独立模式下设置是分层的（profile、受信任的项目文件、`-c`），但只有用户的文件会被修复或写入。详见[配置](/docs/configuration)。
+- **配置**（`hanafubuki-agent-config`）：三个 TOML 文件，各自一个修订域和一把锁（`config.toml`、`providers.toml`、`mcp.toml`，后两者只有所有者可读）。读取逐字段解码，无效值取默认值，未知键保留，需要修复的文件先复制到 `.recovery/`；写入用 `toml_edit` 编辑磁盘上的文档（注释、布局和未知键得以保留），再原子重命名。独立模式下设置是分层的（profile、受信任的项目文件、`-c`），但只有用户的文件会被修复或写入。终端界面的配置中心是这些设置的视图：它的类型化表单通过相同的补丁和原子写入器保存，自己不做任何配置解析。详见[配置](/docs/configuration)。
 - **数据目录锁**：`<data_dir>/.lock`，因为历史索引、记忆存储和进程组台账都假定只有一个写进程。
 - **持久化格式是不稳定的。** 规则是读取方容错解码，隔离它不能使用的东西，从不删除用户数据。
 
@@ -282,6 +282,7 @@ schema 遵循同样的按协议规则：支持 `strict_json_schema` 的协议（
 - **`@` 文件提及**来自 Codex 的 `file-search` crate，作为界面的 `file_search` 模块而不是单独的 crate 移植，因为只有界面使用它。crates.io 上的 `nucleo` 0.5 没有 Codex 固定的 git 版本读取的匹配分数访问器，所以匹配不带分数（没有地方显示它们）；匹配器在带期限的 std 通道上等待，而 Codex 在 `crossbeam` 通道上 select；锁是 `parking_lot` 的。
 - **终端的恢复。** 每次返回（一个 drop guard）和结束进程的 panic 都会恢复终端：界面的 hook 先恢复终端，再运行 Agent 的 hook。被隔离的 panic 让界面继续运行。
 - **斜杠命令是隔离的模块。** Codex 中平铺的 `SlashCommand` match 变成一张表（`commands`）：每个命令的规格（名字、别名、说明、是否接受行内参数、回合中能否运行、是否需要会话）和它的分派，命令列表、`/名字 参数` 的查找和分派都来自这张表。每次分派，以及命令推入的每个视图（按键处理和绘制），都在 `hanafubuki_agent::panic::catch_panic` 中运行：panic 的命令失去它的视图，在本次运行的剩余时间内关闭，对话中显示一条错误，会话、输入框和其他命令照常工作。聊天本身（输入框、转录、流式输出）不是模块，那里的 panic 仍会结束进程。
+- **配置中心。** `/config` 打开可全屏搜索的列表，列出每个配置域及其当前生效值。每个域以整份类型化表单编辑，通过 `AgentSettingsPatch`、独立设置写入器或 `AgentTuiPreferencesPatch` 保存，或者打开拥有它的编辑界面；分层页面列出读取的文件和警告，写入被配置档、项目文件或 `-c` 覆盖时会说明。Providers 和 MCP 保留按修订号保护的编辑界面，并说明它们是不分层的、仅所有者可读的文件。
 - **需要时才有会话。** Codex 启动时就开始一个线程；这里的桥在第一条消息或需要会话的命令创建会话之前不持有会话（期间提出的请求等它创建好），`/new` 回到没有会话的状态。创建失败（没有默认 Provider）是对话中的一条错误，而不是退出。
 - **语法高亮和状态显示。** `render/highlight` 保留 Codex 的 syntect 和 two-face 组合（Oniguruma 语法、32 个内置主题、自定义 `.tmTheme` 文件），但没有 Codex 自己的以模型命名的主题；由于不查询终端调色板，默认主题是 two-face 的 `ansi`，它用终端的调色板着色，取代 Codex 根据查询到的背景在 Catppuccin Mocha 和 Latte 之间的选择。主题选择器在列表旁边或下方的示例差异上预览。状态栏和标题去掉了 Codex 的账号、速率限制、费用和版本项目，增加了权限模式和目标；会话的值在事件改变它们时从门面的会话快照读取，Git 分支从 `.git/HEAD` 读取，而不是启动 `git` 进程。Codex 不恢复它最后设置的终端标题；这里把标题压入终端的标题栈，退出时弹出。
 - **没有移植的：** 转录分页器中的实时尾部与回溯、自定义提示、编辑框中的 Skill 与应用提及和图片附件、状态卡中的账号与速率限制、状态栏和标题设置界面中的搜索框，以及 Codex 对流式代码的增量高亮（流式回答在每完成一行时整体重新渲染，代码也随之重新高亮）。

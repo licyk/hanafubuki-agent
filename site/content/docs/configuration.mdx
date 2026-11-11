@@ -61,7 +61,7 @@ hanafubuki-agent config set "projects.'$PWD'.trustLevel" trusted
 error: `nosuch` is not a setting of config.toml
 ```
 
-写入只修改这一个键，保留文件中的注释和其他内容。`config set` 不能删除一个键；要删除，请编辑文件。终端界面的 [`/tui` 和 `/raw`](/docs/terminal-interface#modes)、[`/theme`](/docs/terminal-interface#highlighting)、[`/statusline` 和 `/title`](/docs/terminal-interface#status-line)、[`/keymap`](/docs/terminal-interface#keymap)、[`/presets`](/docs/terminal-interface#presets) 和 [`/config`](/docs/terminal-interface#config) 以同样的方式写入它们的 `[tui]` 键，`/memories` 写入 `memory` 下的键。自定义高亮主题不在配置目录中：它们是数据目录 `themes/` 下的 `.tmTheme` 文件。
+写入只修改这一个键，保留文件中的注释和其他内容。`config set` 不能删除一个键；要删除，请编辑文件。终端界面的 [`/config`](/docs/terminal-interface#config) 是可搜索的配置中心：它的类型化表单通过相同的补丁和原子写入器整域写入，并在配置档、项目文件或 `-c` 覆盖了它写入的值时说明；分层页面列出读取的文件和警告。专用编辑界面 [`/tui` 和 `/raw`](/docs/terminal-interface#modes)、[`/theme`](/docs/terminal-interface#highlighting)、[`/statusline` 和 `/title`](/docs/terminal-interface#status-line)、[`/keymap`](/docs/terminal-interface#keymap) 和 [`/presets`](/docs/terminal-interface#presets) 以同样的方式写入它们的 `[tui]` 键，`/memories` 写入 `memory` 下的键。自定义高亮主题不在配置目录中：它们是数据目录 `themes/` 下的 `.tmTheme` 文件。
 
 ## 编辑文件 [#edit]
 

@@ -1,7 +1,8 @@
 # Configuration center handoff, 2026-11-11
 
-The user asked for work to stop after C3. This handoff records the state at
-that boundary. Do not start C4–C6 without a new request.
+The user first asked for work to stop after C3, then requested the C4–C6
+continuation. This handoff records both the C3 boundary and the current
+working-tree state.
 
 ## Completed and pushed
 
@@ -63,7 +64,7 @@ The C2 commit predated the required notice markers on new TUI files, so its
 commit, and the full repository check passes now. Do not replay or cherry-
 pick C2 alone into another branch without adding those markers.
 
-## Remaining work
+## C3 remaining work, completed in the continuation
 
 - C4 — MCP completeness:
   - Add `protocolMode`.
@@ -112,4 +113,75 @@ cargo test -p hanafubuki-agent-tui availability_follows_the_spec
 
 Not run at this stop: the full `cargo test --workspace --all-features`, the
 site checks/build, and non-Windows CI. Do not claim CI or platform
+equivalence from this local Windows run.
+
+## C4–C6 continuation
+
+Completed in the working tree; not committed or pushed.
+
+### C4 — MCP completeness
+
+- The `/mcp` server form edits `protocolMode`, a concurrent-call limit for
+  each tool, and per-tool approval and exposure overrides in Advanced.
+- Invalid protocol, limit, approval or exposure values stay in the form with
+  the field's error; a round-trip test covers every new map and an invalid
+  input test covers the parsers.
+- The form says `mcp.toml` is unlayered and owner-only. Credential handling
+  is unchanged: values stay secret and their generations stay managed by the
+  MCP store.
+
+Key files: `crates/tui/src/commands/mcp/form.rs`,
+`crates/tui/src/commands/mcp/form/tests.rs`, and the
+`McpProtocolMode` re-export in `crates/agent/src/lib.rs`.
+
+### C5 — Integrated editors and layers
+
+- `/config providers` now routes directly to `/providers policy`; `/providers
+  policy` opens the policy stage without first rendering the Provider list.
+- The Interface form links `/theme`, `/statusline`, `/title`, `/keymap`,
+  `/presets` and `/tui`, and replays the chosen editor's command.
+- Enter on `/config layers` opens a layers page listing the user, profile,
+  project and `-c` sources in read order, trust and not-created markers, and
+  every configuration warning.
+- Scalar `[tui]` preference writes now join keymap entries and presets in the
+  higher-layer shadow warning.
+
+Key files: `crates/tui/src/config_center/layers.rs`,
+`crates/tui/src/config_center/mod.rs`,
+`crates/tui/src/config_center/forms/mod.rs`,
+`crates/tui/src/app/preferences.rs`,
+`crates/tui/src/commands/providers/mod.rs` and
+`crates/tui/src/commands/providers/screen/mod.rs`.
+
+### C6 — Documentation and validation
+
+- Both languages describe the configuration center in Architecture,
+  Configuration, Configuration reference, Terminal interface, MCP and
+  Providers & models. Heading ids match between each pair, and `meta.json` and
+  `meta.en.json` are unchanged.
+- `architecture/notices-policy.toml` records the two new original TUI files.
+
+Validation completed on Windows:
+
+```powershell
+cargo fmt --all --check
+$env:RUSTFLAGS='-D warnings'; cargo check --workspace --all-targets --all-features
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+cargo xtask check
+cargo test --workspace --all-features
+bun install --frozen-lockfile
+bun run format:check:site
+bun run site:check
+bun run site:test
+$env:VITE_BASE_PATH='/hanafubuki-agent/'; bun run site:build
+```
+
+`cargo test --workspace --all-features`, `bun install --frozen-lockfile` and
+`bun run site:test` first hit Windows sandbox limitations (`CreateFileMapping
+... Win32 error 5`, Bun temporary-directory `EPERM`, and Vite `spawn EPERM`);
+they passed when rerun outside the sandbox. The build prerendered all 34
+documentation pages; a script compared every source slug with
+`site/.output/public/docs`.
+
+Not run: commit, push, CI, and Linux or macOS coverage. Do not claim platform
 equivalence from this local Windows run.
