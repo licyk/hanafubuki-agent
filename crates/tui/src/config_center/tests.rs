@@ -1,3 +1,5 @@
+// Modified from OpenAI Codex 57a808a392 (Apache-2.0).
+
 //! The configuration center's coverage contract: every known scalar
 //! `config.toml` setting is owned by a form or a specialized editor.
 

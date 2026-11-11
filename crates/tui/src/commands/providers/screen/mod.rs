@@ -15,6 +15,7 @@ use ratatui::text::Line;
 use ratatui::widgets::{Paragraph, Widget};
 
 mod models;
+mod policy;
 
 use super::form::{self, protocol_name, TEST};
 use crate::agent_bridge::{ProviderCall, ProviderReply};
@@ -63,6 +64,10 @@ enum Stage {
     ModelEntry {
         form: FormView,
         provider_id: String,
+    },
+    Policy {
+        form: FormView,
+        busy: bool,
     },
 }
 
@@ -153,7 +158,7 @@ impl ProvidersScreen {
                 subtitle: Some(subtitle),
                 footer_note: notice,
                 footer_hint: Some(Line::from(
-                    "enter edit · a add · d delete · e enable/disable · * default · esc close",
+                    "enter edit · a add · p policy · d delete · e enable/disable · * default · esc close",
                 )),
                 items,
                 initial_selected_idx: selected,
@@ -162,6 +167,16 @@ impl ProvidersScreen {
             self.tx.clone(),
         );
         self.stage = Stage::List(list);
+    }
+
+    fn open_policy(&mut self) {
+        let Some(registry) = self.registry.as_ref() else {
+            return;
+        };
+        self.stage = Stage::Policy {
+            form: policy::policy_form(registry),
+            busy: false,
+        };
     }
 
     fn open_form(&mut self, provider_id: Option<String>) {
@@ -187,6 +202,7 @@ impl ProvidersScreen {
             .cloned();
         match (plain, key.code, provider) {
             (true, KeyCode::Char('a'), _) => self.open_form(None),
+            (true, KeyCode::Char('p'), _) => self.open_policy(),
             (true, KeyCode::Char('d'), Some(provider)) => self.confirm_delete(&provider),
             (true, KeyCode::Char('e'), Some(provider)) => {
                 self.send(ProviderCall::SetEnabled {
@@ -300,6 +316,35 @@ impl ProvidersScreen {
         self.send(call);
     }
 
+    fn handle_policy_key(&mut self, key: KeyEvent) {
+        let expected_revision = self.revision();
+        let Stage::Policy { form, busy } = &mut self.stage else {
+            return;
+        };
+        let call = match form.handle_key(key) {
+            FormEvent::Cancel => return self.show_list(None, None),
+            FormEvent::Action(_) if !*busy => {
+                let Some(policy) = policy::policy_draft(form) else {
+                    return;
+                };
+                let selected = form.choice(policy::DEFAULT_PROVIDER);
+                let Some(registry) = self.registry.as_ref() else {
+                    return;
+                };
+                let default_provider_id = policy::default_provider_id(registry, selected);
+                *busy = true;
+                form.set_status(vec!["Saving…".dim().into()]);
+                ProviderCall::WriteModelPolicy {
+                    expected_revision,
+                    default_provider_id,
+                    policy,
+                }
+            }
+            _ => return,
+        };
+        self.send(call);
+    }
+
     fn reply(&mut self, reply: ProviderReply) {
         match reply {
             ProviderReply::Loaded(registry) => {
@@ -319,6 +364,13 @@ impl ProvidersScreen {
                             .into(),
                         Err(error) => format!("✗ {error}").red().into(),
                     }]);
+                }
+            }
+            ProviderReply::ModelPolicySaved(registry) => {
+                self.registry = Some(registry);
+                if let Stage::Policy { form, busy } = &mut self.stage {
+                    *busy = false;
+                    form.set_status(vec!["Saved.".green().into()]);
                 }
             }
             ProviderReply::Saved(registry) => self.saved(registry),
@@ -385,6 +437,10 @@ impl ProvidersScreen {
                 *busy = false;
                 form.set_status(vec![format!("✗ {message}").red().into()]);
             }
+            Stage::Policy { form, busy, .. } => {
+                *busy = false;
+                form.set_status(vec![format!("✗ {message}").red().into()]);
+            }
             Stage::ModelEntry { form, .. } => {
                 form.set_status(vec![format!("✗ {message}").red().into()]);
             }
@@ -415,7 +471,9 @@ impl ProvidersScreen {
             Stage::List(list) | Stage::ConfirmDelete { list, .. } | Stage::Models { list, .. } => {
                 list
             }
-            Stage::Form { form, .. } | Stage::ModelEntry { form, .. } => form,
+            Stage::Form { form, .. }
+            | Stage::ModelEntry { form, .. }
+            | Stage::Policy { form, .. } => form,
         }
     }
 }
@@ -430,12 +488,15 @@ impl BottomPaneView for ProvidersScreen {
             Stage::Form { .. } => self.handle_form_key(key),
             Stage::Models { .. } => self.handle_models_key(key),
             Stage::ModelEntry { .. } => self.handle_model_entry_key(key),
+            Stage::Policy { .. } => self.handle_policy_key(key),
         }
     }
 
     fn handle_paste(&mut self, pasted: String) -> bool {
         match &mut self.stage {
-            Stage::Form { form, .. } | Stage::ModelEntry { form, .. } => form.handle_paste(&pasted),
+            Stage::Form { form, .. }
+            | Stage::ModelEntry { form, .. }
+            | Stage::Policy { form, .. } => form.handle_paste(&pasted),
             _ => false,
         }
     }

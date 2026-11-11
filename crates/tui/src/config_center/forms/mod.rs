@@ -1,3 +1,5 @@
+// Modified from OpenAI Codex 57a808a392 (Apache-2.0).
+
 //! Building the configuration center's domain forms from typed settings.
 
 mod draft;

@@ -1,3 +1,5 @@
+// Modified from OpenAI Codex 57a808a392 (Apache-2.0).
+
 //! The configuration center on the screen: the search line, the domains
 //! with their effective values, the layers and warnings, and the keys.
 

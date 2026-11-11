@@ -1,6 +1,8 @@
 ## Plan: a configuration center for every Agent setting (2026-11-11)
 
-The plan is [docs/plan-configuration-center.md](docs/plan-configuration-center.md).
+The plan is [docs/plan-configuration-center.md](docs/plan-configuration-center.md);
+the C3 stopping point is recorded in
+[docs/plan-configuration-center-handoff.md](docs/plan-configuration-center-handoff.md).
 Each phase is implemented separately, validated, committed and pushed. The
 work turns `/config` into a searchable configuration center over the typed
 Agent, standalone, Provider, MCP, plugin and interface settings while
@@ -21,8 +23,12 @@ preserving the existing layered configuration and atomic writers.
       and unknown keys survive; a coverage test pins every scalar setting
       to a form or specialized editor; and a write a higher layer replaces
       says so.
-- [ ] C3: the complete shared Provider model policy, including turn
-      budgets and revision conflicts.
+- [x] C3: the complete shared Provider model policy, including turn
+      budgets and revision conflicts. Done: `/providers` gained a `p` policy
+      stage for the default Provider and model, reasoning effort, image
+      input, context window, automatic and remote compaction, and every
+      turn-budget field; stale revisions reload and keep the form. Work
+      stopped here as requested.
 - [ ] C4: MCP protocol mode and per-tool concurrency, approval and
       exposure policies.
 - [ ] C5: integrated plugin, hook and interface editors plus the layers

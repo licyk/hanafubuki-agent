@@ -1,3 +1,5 @@
+// Modified from OpenAI Codex 57a808a392 (Apache-2.0).
+
 //! `/config`'s full-screen center: every configuration domain in one
 //! searchable list, with the effective value that domain holds and the
 //! layers around it. Opening a domain is delegated to the command that owns

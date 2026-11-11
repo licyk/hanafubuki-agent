@@ -6,9 +6,10 @@
 use std::fmt;
 
 use hanafubuki_agent::{
-    AgentHandle, AgentModelPolicyWriteRequest, AgentProviderDeleteRequest, AgentProviderDraft,
-    AgentProviderEnabledRequest, AgentProviderModelCatalogRequest, AgentProviderRegistrySnapshot,
-    AgentProviderWriteRequest, ModelCatalogEntry,
+    AgentHandle, AgentModelPolicySettings, AgentModelPolicyWriteRequest,
+    AgentProviderDeleteRequest, AgentProviderDraft, AgentProviderEnabledRequest,
+    AgentProviderModelCatalogRequest, AgentProviderRegistrySnapshot, AgentProviderWriteRequest,
+    ModelCatalogEntry,
 };
 
 use super::{AgentBridge, AgentReply, TurnUpdate};
@@ -41,6 +42,12 @@ pub(crate) enum ProviderCall {
         provider_id: String,
         model: Option<String>,
     },
+    /// Replaces the shared policy that says how every model runs.
+    WriteModelPolicy {
+        expected_revision: u64,
+        default_provider_id: Option<String>,
+        policy: AgentModelPolicySettings,
+    },
     ListModels {
         provider_id: String,
     },
@@ -54,6 +61,8 @@ pub(crate) enum ProviderReply {
     Saved(AgentProviderRegistrySnapshot),
     /// A Provider was deleted, enabled or disabled, or the default changed.
     Changed(AgentProviderRegistrySnapshot),
+    /// The shared model policy was written.
+    ModelPolicySaved(AgentProviderRegistrySnapshot),
     Models {
         provider_id: String,
         result: Result<Vec<ModelCatalogEntry>, String>,
@@ -70,9 +79,10 @@ impl ProviderReply {
     /// The registry as the Agent now has it, when the reply carries it.
     pub(crate) fn registry(&self) -> Option<&AgentProviderRegistrySnapshot> {
         match self {
-            Self::Loaded(registry) | Self::Saved(registry) | Self::Changed(registry) => {
-                Some(registry)
-            }
+            Self::Loaded(registry)
+            | Self::Saved(registry)
+            | Self::Changed(registry)
+            | Self::ModelPolicySaved(registry) => Some(registry),
             Self::Failed { reloaded, .. } => reloaded.as_ref(),
             Self::Tested(_) | Self::Models { .. } => None,
         }
@@ -89,6 +99,7 @@ impl fmt::Debug for ProviderCall {
             Self::Delete { .. } => "Delete",
             Self::SetEnabled { .. } => "SetEnabled",
             Self::SetDefault { .. } => "SetDefault",
+            Self::WriteModelPolicy { .. } => "WriteModelPolicy",
             Self::ListModels { .. } => "ListModels",
         };
         formatter.write_str(name)
@@ -104,6 +115,7 @@ impl fmt::Debug for ProviderReply {
             }
             Self::Saved(_) => formatter.write_str("Saved"),
             Self::Changed(_) => formatter.write_str("Changed"),
+            Self::ModelPolicySaved(_) => formatter.write_str("ModelPolicySaved"),
             Self::Models { provider_id, .. } => write!(formatter, "Models({provider_id})"),
             Self::Failed { error, .. } => write!(formatter, "Failed({error})"),
         }
@@ -178,6 +190,26 @@ async fn run(agent: &AgentHandle, call: ProviderCall) -> ProviderReply {
         } => {
             let written = set_default(agent, expected_revision, provider_id, model).await;
             reply(agent, expected_revision, written, ProviderReply::Changed).await
+        }
+        ProviderCall::WriteModelPolicy {
+            expected_revision,
+            default_provider_id,
+            policy,
+        } => {
+            let written = agent
+                .write_model_policy(AgentModelPolicyWriteRequest {
+                    expected_revision,
+                    default_provider_id,
+                    policy,
+                })
+                .await;
+            reply(
+                agent,
+                expected_revision,
+                written,
+                ProviderReply::ModelPolicySaved,
+            )
+            .await
         }
         ProviderCall::ListModels { provider_id } => {
             let result = agent

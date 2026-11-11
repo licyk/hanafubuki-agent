@@ -1,3 +1,5 @@
+// Modified from OpenAI Codex 57a808a392 (Apache-2.0).
+
 //! `/config`'s full-screen center in the app: open over the whole screen,
 //! hand keys to its model, and carry its actions back to the command loop.
 

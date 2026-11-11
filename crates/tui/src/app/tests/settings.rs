@@ -196,6 +196,82 @@ fn a_save_over_a_moved_registry_reads_it_again_and_keeps_the_form() {
 }
 
 #[test]
+fn a_policy_save_over_a_moved_registry_reads_it_again_and_keeps_the_form() {
+    let mut harness = Harness::start(Vec::new());
+    harness.type_and_submit("/providers");
+    harness.pump_until_screen_shows("★ Fixture Provider");
+    harness.key(KeyCode::Char('p'));
+    harness.pump_until_screen_shows("Model policy");
+    harness.tab(2);
+    harness.type_keys("low");
+    // Reasoning, Advanced, Save.
+    harness.tab(2);
+    // Another writer moves the registry before the form submits.
+    harness.write_model("fixture-model");
+    harness.key(KeyCode::Enter);
+    harness.pump_until_screen_shows("changed while this screen was open");
+    harness.key(KeyCode::Enter);
+    harness.pump_until_screen_shows("Saved.");
+    let registry = harness.registry();
+    assert_eq!(
+        registry
+            .model_policy
+            .reasoning_effort
+            .as_ref()
+            .map(|effort| effort.as_str()),
+        Some("low")
+    );
+    assert_eq!(registry.revision, 3);
+}
+
+#[test]
+fn the_provider_policy_form_saves_reasoning_context_and_the_whole_budget() {
+    let mut harness = Harness::start(Vec::new());
+    harness.type_and_submit("/providers");
+    harness.pump_until_screen_shows("★ Fixture Provider");
+    harness.key(KeyCode::Char('p'));
+    harness.pump_until_screen_shows("Model policy");
+
+    // Default Provider, model, reasoning, then the Advanced switch.
+    harness.tab(2);
+    harness.type_keys("high");
+    harness.tab(1);
+    harness.key(KeyCode::Enter);
+    // Image input, then the context window.
+    harness.tab(2);
+    harness.type_keys("123456");
+    // Automatic compaction, threshold, remote compaction, turn budget.
+    harness.tab(4);
+    harness.key(KeyCode::Right);
+    // The eleven budget fields, then Save.
+    harness.tab(12);
+    harness.key(KeyCode::Enter);
+    harness.pump_until_screen_shows("Saved.");
+
+    let policy = harness.registry().model_policy;
+    assert_eq!(
+        policy
+            .reasoning_effort
+            .as_ref()
+            .map(|effort| effort.as_str()),
+        Some("high")
+    );
+    assert_eq!(policy.context_window_tokens, Some(123_456));
+    let budget = policy.turn_budget.expect("the custom budget was saved");
+    assert_eq!(budget.maximum_cumulative_model_input_tokens, 8_000_000);
+    assert_eq!(budget.maximum_cumulative_model_output_tokens, 1_000_000);
+    assert_eq!(budget.maximum_tool_invocations, 256);
+    assert_eq!(budget.maximum_tool_output_bytes, 16 * 1024 * 1024);
+    assert_eq!(budget.maximum_hook_fragment_bytes, 1024 * 1024);
+    assert_eq!(budget.maximum_pending_input_items, 64);
+    assert_eq!(budget.maximum_in_flight_tools, 8);
+    assert_eq!(budget.maximum_consecutive_stalled_steps, 4);
+    assert_eq!(budget.model_stream_idle_timeout_seconds, 120);
+    assert_eq!(budget.tool_idle_timeout_seconds, 600);
+    assert_eq!(budget.approval_timeout_seconds, 900);
+}
+
+#[test]
 fn the_mcp_manager_adds_a_server_with_a_secret_and_deletes_it() {
     let mut harness = Harness::start(Vec::new());
     harness.type_and_submit("/mcp");

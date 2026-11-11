@@ -1,3 +1,5 @@
+// Modified from OpenAI Codex 57a808a392 (Apache-2.0).
+
 //! Drafting a domain form into the typed patch that saves it whole.
 
 use super::*;

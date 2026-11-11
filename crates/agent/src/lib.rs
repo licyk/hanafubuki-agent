@@ -75,6 +75,7 @@ pub use contracts::{AgentHostInstructions, AgentModelInfo};
 pub use data_dir_lock::{DataDirLock, DATA_DIR_LOCK_FILE};
 pub use desktop::DesktopAgent;
 pub use file_search::{AgentFileCandidate, AgentFileSearch, AgentFileSearchResult};
+pub use hanafubuki_agent_foundation::agent_settings::ModelReasoningEffort;
 /// The secure store a host hands the Agent (`AgentHostPorts::secrets`), and
 /// the blocking boundary its calls run on (`ContainedRuntime::blocking_port`).
 pub use hanafubuki_agent_foundation::blocking::{run_blocking_operation, BlockingOperationPort};
@@ -170,13 +171,18 @@ use std::path::Path;
 pub use hanafubuki_agent_config::{
     AgentAlternateScreen, AgentBackgroundCompactionSettings, AgentCompactionSettings,
     AgentCompactionStrategy, AgentConfig, AgentConfigProblem, AgentConfigRecovery, AgentDirs,
-    AgentHierarchicalCompactionSettings, AgentLogLevel, AgentMemorySettings, AgentModelProtocol,
-    AgentNetworkSettings, AgentProviderHeaderSettings, AgentProviderSettings, AgentSandboxMode,
-    AgentSandboxWorkspaceWrite, AgentSettings, AgentSettingsPatch, AgentStandaloneSettings,
-    AgentStandaloneSettingsPatch, AgentTuiPreferences, AgentTuiPreferencesPatch, AgentTuiPreset,
-    AgentWebSearchProvider, AgentWindowsSandbox, AgentWindowsSettings, ConfigLayerSource,
-    ConfigLayers, ConfigOverrides, AGENT_CREDENTIAL_FILES, AGENT_HOME_ENV, AGENT_MCP_FILE,
-    AGENT_PROVIDERS_FILE, AGENT_SETTINGS_FILE,
+    AgentHierarchicalCompactionSettings, AgentImageInputPolicy, AgentInputCapabilitiesSettings,
+    AgentLogLevel, AgentMemorySettings, AgentModelPolicySettings, AgentModelProtocol,
+    AgentNetworkSettings, AgentProviderHeaderSettings, AgentProviderSettings,
+    AgentRemoteCompactionCapability, AgentSandboxMode, AgentSandboxWorkspaceWrite, AgentSettings,
+    AgentSettingsPatch, AgentStandaloneSettings, AgentStandaloneSettingsPatch, AgentTuiPreferences,
+    AgentTuiPreferencesPatch, AgentTuiPreset, AgentTurnBudgetSettings, AgentWebSearchProvider,
+    AgentWindowsSandbox, AgentWindowsSettings, ConfigLayerSource, ConfigLayers, ConfigOverrides,
+    AGENT_CREDENTIAL_FILES, AGENT_HOME_ENV, AGENT_MCP_FILE, AGENT_PROVIDERS_FILE,
+    AGENT_SETTINGS_FILE, MAX_AGENT_CONSECUTIVE_STALLED_STEPS,
+    MAX_AGENT_CUMULATIVE_MODEL_INPUT_TOKENS, MAX_AGENT_CUMULATIVE_MODEL_OUTPUT_TOKENS,
+    MAX_AGENT_HOOK_FRAGMENT_BYTES, MAX_AGENT_IDLE_TIMEOUT_SECONDS, MAX_AGENT_IN_FLIGHT_TOOLS,
+    MAX_AGENT_PENDING_INPUT_ITEMS, MAX_AGENT_TOOL_INVOCATIONS, MAX_AGENT_TOOL_OUTPUT_BYTES,
 };
 pub use hanafubuki_agent_execution::{
     AgentBackgroundTerminalSnapshot, AgentBackgroundTerminalStopFailure,
