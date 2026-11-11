@@ -3,6 +3,18 @@ use std::path::Path;
 
 use super::*;
 
+fn names(names: &[&str]) -> Vec<String> {
+    names.iter().map(|name| name.to_string()).collect()
+}
+
+/// The deny list of `permissionMode: plan`, with `extra` added.
+fn plan_denied(extra: &[&str]) -> Vec<String> {
+    let mut denied = names(&PLAN_MODE_DENIED_TOOLS);
+    denied.extend(names(extra));
+    denied.sort();
+    denied
+}
+
 fn write(path: &Path, contents: &str) {
     fs::create_dir_all(path.parent().unwrap()).unwrap();
     fs::write(path, contents).unwrap();
@@ -138,13 +150,13 @@ fn a_key_of_the_wrong_type_is_left_out_alone_and_others_are_ignored() {
     assert_eq!(agent.name, None);
     assert_eq!(agent.description, None);
     assert_eq!(agent.tools, Some(vec!["read_file".to_string()]));
+    assert_eq!(agent.denied_tools, ["exec_command"]);
     assert_eq!(agent.instructions.as_deref(), Some("Read it."));
     assert_eq!(
         agent.issues,
         [
             "`name` is not text; the file's name is used",
             "`description` is not text; it is ignored",
-            "`disallowedTools` is not read, so the role may allow more than the file says",
         ]
     );
 }
@@ -202,4 +214,180 @@ fn files_without_frontmatter_or_yaml_are_issues_and_paths_are_read_once() {
         .issues
         .iter()
         .any(|issue| issue.contains("plain.md") && issue.contains("has no frontmatter")));
+}
+
+#[test]
+fn disallowed_tools_are_denied_through_the_tool_table() {
+    let text = agent(
+        "---\ndescription: D.\ndisallowedTools: Write, Bash, mcp__github__create_issue, Edit\n---\n",
+    );
+    assert_eq!(
+        text.denied_tools,
+        ["apply_patch", "exec_command", "mcp__github__create_issue"]
+    );
+    assert_eq!(text.tools, None);
+    assert_eq!(text.unusable, None);
+    assert!(text.issues.is_empty(), "{:?}", text.issues);
+
+    let list = agent("---\ndescription: D.\ndisallowedTools:\n  - WebFetch\n  - WebSearch\n---\n");
+    assert_eq!(list.denied_tools, ["fetch_web_page", "web_search"]);
+    assert!(list.issues.is_empty(), "{:?}", list.issues);
+}
+
+#[test]
+fn a_denied_mcp_server_denies_every_tool_of_it() {
+    let agent = agent("---\ndescription: D.\ndisallowedTools: mcp__github, mcp__\n---\n");
+    assert_eq!(agent.denied_tools, ["mcp__github__*"]);
+    assert_eq!(agent.issues.len(), 1, "{:?}", agent.issues);
+}
+
+#[test]
+fn a_denied_tool_without_a_counterpart_or_not_text_is_left_out_with_an_issue() {
+    let agent =
+        agent("---\ndescription: D.\ndisallowedTools:\n  - NotebookEdit\n  - 7\n  - Read\n---\n");
+
+    assert_eq!(agent.denied_tools, ["read_file"]);
+    assert_eq!(agent.unusable, None);
+    assert_eq!(
+        agent.issues,
+        [
+            "`disallowedTools[1]` is not text; it is left out",
+            "the denied tool `NotebookEdit` has no counterpart in this Agent, so there is none to \
+             deny; it is left out",
+        ]
+    );
+}
+
+#[test]
+fn a_denied_tool_with_a_specifier_denies_the_whole_tool() {
+    let agent = agent("---\ndescription: D.\ndisallowedTools: Bash(git push:*), Task(x)\n---\n");
+
+    assert_eq!(agent.denied_tools, ["exec_command"]);
+    assert_eq!(
+        agent.issues,
+        [
+            "the denied tool `Bash(git push:*)` names some of a tool's calls, which a role cannot \
+             say; the whole `exec_command` is denied",
+            "the denied tool `Task(x)` has no counterpart in this Agent, so there is none to deny; \
+             it is left out",
+        ]
+    );
+}
+
+#[test]
+fn unreadable_disallowed_tools_make_it_unusable() {
+    assert!(agent("---\ndescription: D.\ndisallowedTools:\n---\n")
+        .denied_tools
+        .is_empty());
+
+    let agent = agent("---\ndescription: D.\ndisallowedTools:\n  Bash: true\n---\n");
+    assert!(agent.denied_tools.is_empty());
+    assert_eq!(
+        agent.unusable.as_deref(),
+        Some(
+            "`disallowedTools` is not text or a list, and leaving it out would allow the tools \
+             it denies"
+        )
+    );
+}
+
+#[test]
+fn each_permission_mode_is_a_cap() {
+    let cap = |mode: &str| {
+        let agent = agent(&format!(
+            "---\ndescription: D.\npermissionMode: {mode}\n---\n"
+        ));
+        assert!(
+            agent.denied_tools.is_empty(),
+            "{mode}: {:?}",
+            agent.denied_tools
+        );
+        assert_eq!(agent.unusable, None, "{mode}");
+        (agent.permission_mode_cap, agent.issues)
+    };
+
+    let none: Vec<String> = Vec::new();
+    assert_eq!(
+        cap("default"),
+        (Some(AgentPermissionMode::Manual), none.clone())
+    );
+    assert_eq!(
+        cap("acceptEdits"),
+        (Some(AgentPermissionMode::AutoReview), none.clone())
+    );
+    assert_eq!(
+        cap("bypassPermissions"),
+        (Some(AgentPermissionMode::FullAccess), none)
+    );
+    assert_eq!(
+        cap("dontAsk"),
+        (
+            Some(AgentPermissionMode::Manual),
+            names(&[
+                "`permissionMode` `dontAsk` denies what it does not allow, which a cap \
+                     cannot say; the role runs in manual"
+            ])
+        )
+    );
+    assert_eq!(
+        cap("sometimes"),
+        (
+            Some(AgentPermissionMode::Manual),
+            names(&[
+                "`permissionMode` `sometimes` is not one of Claude Code's modes; the role \
+                     runs in manual"
+            ])
+        )
+    );
+    assert_eq!(
+        agent("---\ndescription: D.\n---\n").permission_mode_cap,
+        None
+    );
+}
+
+#[test]
+fn a_permission_mode_that_is_not_text_makes_it_unusable() {
+    let agent = agent("---\ndescription: D.\npermissionMode: [plan]\n---\n");
+
+    assert_eq!(agent.permission_mode_cap, None);
+    assert!(agent.denied_tools.is_empty());
+    assert_eq!(
+        agent.unusable.as_deref(),
+        Some("`permissionMode` is not text, and leaving it out would allow every permission mode")
+    );
+}
+
+#[test]
+fn plan_without_tools_denies_the_write_tools_and_every_mcp_tool() {
+    let agent =
+        agent("---\ndescription: D.\npermissionMode: plan\ndisallowedTools: WebFetch\n---\n");
+
+    assert_eq!(agent.permission_mode_cap, Some(AgentPermissionMode::Manual));
+    assert_eq!(
+        agent.denied_tools,
+        plan_denied(&["fetch_web_page", "mcp__*"])
+    );
+    assert!(agent.issues.is_empty(), "{:?}", agent.issues);
+}
+
+#[test]
+fn plan_with_tools_denies_the_write_tools_and_keeps_the_listed_mcp_tools() {
+    let agent = agent(
+        "---\ndescription: D.\ntools: Read, Bash, mcp__github__list_issues\npermissionMode: plan\n\
+         ---\n",
+    );
+
+    assert_eq!(agent.permission_mode_cap, Some(AgentPermissionMode::Manual));
+    assert_eq!(
+        agent.tools,
+        Some(names(&[
+            "exec_command",
+            "mcp__github__list_issues",
+            "read_file"
+        ]))
+    );
+    // The allow list admits only the MCP tool it lists; `exec_command` is
+    // denied, as Plan mode removes it.
+    assert_eq!(agent.denied_tools, plan_denied(&[]));
+    assert!(agent.issues.is_empty(), "{:?}", agent.issues);
 }

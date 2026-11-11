@@ -159,7 +159,7 @@ A spawn reads the roles as they are then, and so does the guidance at every step
 An [installed plugin](/docs/plugins) brings roles with its `agents` component ([Writing plugins](/docs/writing-plugins#roles)):
 
 - a plugin in this project's format, role files: the `.toml` files of its `agents/` (or of the paths its manifest's `agents` names), read exactly as yours are, every key included;
-- a Claude Code plugin, agent files: the `.md` files of its `agents/`, whose frontmatter's `name`, `description`, `tools` and `model` and whose body (the instructions) are read as a role, its Claude tools mapped to this Agent's ([the table](/docs/writing-plugins#claude-agents));
+- a Claude Code plugin, agent files: the `.md` files of its `agents/`, whose frontmatter's `name`, `description`, `tools`, `disallowedTools`, `permissionMode` and `model` and whose body (the instructions) are read as a role, its Claude tools mapped to this Agent's and its `permissionMode` to a `permissionModeCap` ([the tables](/docs/writing-plugins#claude-agents));
 - a Codex, Cursor or Agent Plugins plugin has none.
 
 **Names.** A plugin's role is named `<plugin>:<role>`: the plugin name of its id (`demo` for `demo@my-mkt`), then the role's own name (its `name`, else its file name). No role of yours can take that name, since yours have no `:`. Two plugins of the same name from different marketplaces, both on: the first by id (`demo@alpha` before `demo@beta`) keeps the name, and the other brings no role, with an issue. An `extends` names a role as the catalog names it, so a plugin's role extending another of its own writes `extends = "demo:base"`.

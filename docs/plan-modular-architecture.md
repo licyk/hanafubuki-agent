@@ -756,6 +756,11 @@ the constant does today.
     `tools` means no narrowing.
   - `model: inherit` is honoured. Any other value is ignored with an issue, since
     Claude's aliases do not name this Agent's models.
+  - Follow-up (2026-11-11): `disallowedTools` maps through the same table to the
+    role's deny list (a specifier denies the whole tool; `mcp__<server>` denies
+    that server's tools), and `permissionMode` maps to the cap (`plan` also denies
+    Plan mode's write tools, and every MCP tool unless `tools` lists it). See
+    writing-plugins `#claude-agents`.
 - **Codex packages** have no roles; nothing to read.
 - **Identity and lifetime.** A package role is `<plugin>:<role>`. It exists while the
   package is enabled. Two enabled packages from different marketplaces with the

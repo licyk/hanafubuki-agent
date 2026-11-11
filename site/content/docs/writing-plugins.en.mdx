@@ -127,11 +127,13 @@ A Claude Code plugin's agent files, the `.md` files of its `agents/` (or of its 
 
 - `name`: the role's name, after the plugin's (`<plugin>:<name>`); one that cannot be a role's name, or none, gives way to the file's name.
 - `description`: the role's description, which it needs.
-- `tools`: the only tools the role may use, a comma-separated list (`Read, Grep, Glob`) or a YAML list, mapped by the table below. A name the table does not know is left out, with an issue; so a list of names it knows none of allows **no** tool. Without `tools`, the role narrows no tool. A `tools` that is neither text nor a list makes the role unusable, since leaving it out would allow every tool.
+- `tools`: the only tools the role may use, a comma-separated list (`Read, Grep, Glob`) or a YAML list, mapped by the tool table below. A name the table does not know is left out, with an issue; so a list of names it knows none of allows **no** tool. Without `tools`, the role narrows no tool. A `tools` that is neither text nor a list makes the role unusable, since leaving it out would allow every tool.
+- `disallowedTools`: tools the role denies, written as `tools` is and mapped by the same table; a denied tool wins over an allowed one. A name the table does not know (`NotebookEdit`) is left out, with an issue: this Agent has no such tool to deny. A whole MCP server (`mcp__github`) denies every tool of it (`mcp__github__*`). A tool with a specifier (`Bash(git push:*)`) cannot be said here, since a role names tools, not their calls, so the **whole** tool is denied (`exec_command`), with an issue. An item that is not text is left out, with an issue; a `disallowedTools` that is neither text nor a list makes the role unusable.
+- `permissionMode`: the role's `permissionModeCap`, by the mode table below. One that is not text makes the role unusable.
 - `model`: `inherit` keeps the session's model. Any other value (`sonnet`, `opus`, `haiku`) names none of this Agent's models, so it is ignored, with an issue, and the model is inherited as well.
 - the body after the frontmatter: the role's instructions.
 
-Other keys (`color` and the like) are ignored. Of them, `disallowedTools` and `permissionMode`, which narrow an agent in Claude Code and are not read here, each come with an issue: the role allows more than its file says. A file without frontmatter, or whose frontmatter is not YAML even with a plain value holding `: ` quoted, is left out with an issue.
+Other keys (`color` and the like) are ignored. A file without frontmatter, or whose frontmatter is not YAML even with a plain value holding `: ` quoted, is left out with an issue.
 
 | Claude Code                  | This Agent                            |
 | ---------------------------- | ------------------------------------- |
@@ -143,6 +145,17 @@ Other keys (`color` and the like) are ignored. Of them, `disallowedTools` and `p
 | `WebFetch`                   | `fetch_web_page`                      |
 | `WebSearch`                  | `web_search`                          |
 | `mcp__<server>__<tool>`      | the same name, an MCP server's tool's |
+
+| `permissionMode`    | The role                                                                           |
+| ------------------- | ---------------------------------------------------------------------------------- |
+| `default`           | capped at `manual`                                                                 |
+| `acceptEdits`       | capped at `auto_review`                                                            |
+| `bypassPermissions` | capped at `full_access`, which caps nothing                                        |
+| `plan`              | capped at `manual`, and denies the write tools (below)                             |
+| `dontAsk`           | capped at `manual`, with an issue: denying whatever it does not allow is not a cap |
+| anything else       | capped at `manual`, with an issue                                                  |
+
+`plan` denies what [Plan mode](/docs/plan-mode) removes from a default session, the Agent's own tools that are not read-only: `apply_patch`, `delete_path`, `move_path`, `exec_command`, `write_stdin`, `resize_execution`, `create_goal`, `update_goal`, `spawn_agent`, `followup_task`, `send_message`, `interrupt_agent`, `enable_skill`, `disable_skill` and `append_agent_memory_note`. The kernel's own (`update_plan`, `new_context`, `request_user_input`) stay, as a role never removes them. MCP tools are denied too (`mcp__*`) unless the agent has `tools`: then the role allows only the tools listed, an MCP tool listed included, and denying `mcp__*` would remove it. Unlike Plan mode, which keeps an MCP tool annotated read-only, `plan` keeps only the MCP tools `tools` lists, and it denies no other plugin's tools: a tool an installed plugin's code registers stays, writing or not, unless `tools` leaves it out.
 
 A Codex package has no roles.
 

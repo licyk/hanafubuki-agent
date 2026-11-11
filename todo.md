@@ -660,6 +660,7 @@ then M4, then M5; M6 after M3; M7 after M1.
         `AgentRoleSource` exhaustively (new `Package` variant) or builds
         `AgentPackageContent` or `ManifestPaths` literals (new `roles`,
         `agents`).
+      Follow-up (2026-11-11): `disallowedTools` → deny list, `permissionMode` → cap (`plan` also denies `PLAN_MODE_DENIED_TOOLS` and, without `tools`, `mcp__*`).
       Open:
       - `roles list`, `roles show` and `doctor` read the configuration
         without starting the Agent, so they do not show the plugins'
@@ -669,11 +670,6 @@ then M4, then M5; M6 after M3; M7 after M1.
         start (M5's Open): a package role enabled later is in the
         guidance and accepted by a spawn, but in the schema only after the
         `subagents` plugin restarts.
-      - Claude Code keys that narrow but are not in the plan
-        (`disallowedTools`, `permissionMode`) and tool specifiers
-        (`Bash(git:*)`) are not mapped: the key is ignored, the specifier
-        left out, each with an issue, so such a role is wider than its
-        author meant (never wider than the instance).
       - No test spawns a sub-agent with `agent_type: "demo:reviewer"`: the
         spawn looks the name up in the same catalog (`spawn_role`, no
         check of `:`), and the guidance listing it is tested.

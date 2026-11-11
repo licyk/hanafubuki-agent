@@ -159,7 +159,7 @@ model = "gpt-5.4"
 [已安装插件](/docs/plugins)通过它的 `agents` 组件带来角色（[编写插件](/docs/writing-plugins#roles)）：
 
 - 本项目格式的插件提供角色文件：它的 `agents/`（或清单中 `agents` 指定的路径）中的 `.toml` 文件，读取方式和你的完全一样，包括每一个键；
-- Claude Code 插件提供代理文件：它的 `agents/` 中的 `.md` 文件，frontmatter 中的 `name`、`description`、`tools`、`model` 和正文（即指令）作为角色读取，Claude 的工具名映射为本 Agent 的（[对照表](/docs/writing-plugins#claude-agents)）；
+- Claude Code 插件提供代理文件：它的 `agents/` 中的 `.md` 文件，frontmatter 中的 `name`、`description`、`tools`、`disallowedTools`、`permissionMode`、`model` 和正文（即指令）作为角色读取，Claude 的工具名映射为本 Agent 的，`permissionMode` 映射为 `permissionModeCap`（[对照表](/docs/writing-plugins#claude-agents)）；
 - Codex、Cursor 或 Agent Plugins 格式的插件没有角色。
 
 **名字。** 插件的角色名为 `<插件>:<角色>`：插件 id 中的插件名（`demo@my-mkt` 的 `demo`），再加上角色自己的名字（它的 `name`，没有时是文件名）。你的角色不会占用这个名字，因为你的角色名不含 `:`。来自不同市场的两个同名插件同时开启时：id 在前的（`demo@alpha` 先于 `demo@beta`）保留这个名字，另一个不带来任何角色，并记一条问题。`extends` 按目录中的名字引用角色，所以插件的角色继承同一插件的另一个角色时写作 `extends = "demo:base"`。

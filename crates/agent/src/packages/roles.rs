@@ -90,6 +90,8 @@ fn claude_role(agent: ClaudeAgent) -> Result<RoleDefinition, String> {
         description,
         instructions,
         tools,
+        denied_tools,
+        permission_mode_cap,
         unusable,
         mut issues,
     } = agent;
@@ -119,6 +121,8 @@ fn claude_role(agent: ClaudeAgent) -> Result<RoleDefinition, String> {
     definition.description = description;
     definition.instructions = instructions;
     definition.tools_allow = tools;
+    definition.tools_deny = denied_tools;
+    definition.permission_mode_cap = permission_mode_cap;
     definition.unusable = unusable;
     definition.issues = issues;
     Ok(definition)

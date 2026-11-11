@@ -127,11 +127,13 @@ Claude Code 插件的代理文件，即它的 `agents/`（或清单中 `agents`�
 
 - `name`：角色名，接在插件名之后（`<插件>:<name>`）；无法作为角色名或者没有写时，改用文件名。
 - `description`：角色的描述，角色必须有它。
-- `tools`：角色只能使用的工具，逗号分隔的列表（`Read, Grep, Glob`）或 YAML 列表，按下表映射。表中没有的名字会被略去并记一条问题；因此一个全由表中没有的名字组成的列表**不允许任何**工具。没有 `tools` 时，角色不收窄工具。既不是文本也不是列表的 `tools` 会让角色不可用，因为略去它会允许所有工具。
+- `tools`：角色只能使用的工具，逗号分隔的列表（`Read, Grep, Glob`）或 YAML 列表，按下面的工具对照表映射。表中没有的名字会被略去并记一条问题；因此一个全由表中没有的名字组成的列表**不允许任何**工具。没有 `tools` 时，角色不收窄工具。既不是文本也不是列表的 `tools` 会让角色不可用，因为略去它会允许所有工具。
+- `disallowedTools`：角色禁止的工具，写法与 `tools` 相同，按同一张表映射；禁止优先于允许。表中没有的名字（`NotebookEdit`）会被略去并记一条问题：本 Agent 没有这个工具可禁。整个 MCP 服务器（`mcp__github`）会禁止它的所有工具（`mcp__github__*`）。带限定的工具（`Bash(git push:*)`）在这里无法表达，因为角色只能指名工具，不能指名它的调用，所以禁止**整个**工具（`exec_command`），并记一条问题。不是文本的列表项会被略去并记一条问题；既不是文本也不是列表的 `disallowedTools` 会让角色不可用。
+- `permissionMode`：角色的 `permissionModeCap`，按下面的模式对照表映射。不是文本时角色不可用。
 - `model`：`inherit` 沿用会话的模型。其他值（`sonnet`、`opus`、`haiku`）不是本 Agent 的任何模型，因此被忽略并记一条问题，模型同样沿用。
 - frontmatter 之后的正文：角色的指令。
 
-其他键（`color` 之类）被忽略。其中 `disallowedTools` 和 `permissionMode` 在 Claude Code 中会收窄代理，而这里不读取，因此各记一条问题：角色允许的比文件写明的更多。没有 frontmatter 的文件，或者 frontmatter 即使给含有 `: ` 的普通值加上引号后仍不是 YAML 的文件，会被略去并记一条问题。
+其他键（`color` 之类）被忽略。没有 frontmatter 的文件，或者 frontmatter 即使给含有 `: ` 的普通值加上引号后仍不是 YAML 的文件，会被略去并记一条问题。
 
 | Claude Code                  | 本 Agent                      |
 | ---------------------------- | ----------------------------- |
@@ -143,6 +145,17 @@ Claude Code 插件的代理文件，即它的 `agents/`（或清单中 `agents`�
 | `WebFetch`                   | `fetch_web_page`              |
 | `WebSearch`                  | `web_search`                  |
 | `mcp__<服务器>__<工具>`      | 同名，即某个 MCP 服务器的工具 |
+
+| `permissionMode`    | 角色                                                        |
+| ------------------- | ----------------------------------------------------------- |
+| `default`           | 上限为 `manual`                                             |
+| `acceptEdits`       | 上限为 `auto_review`                                        |
+| `bypassPermissions` | 上限为 `full_access`，即不设上限                            |
+| `plan`              | 上限为 `manual`，并禁止写入类工具（见下）                   |
+| `dontAsk`           | 上限为 `manual`，并记一条问题：拒绝一切未允许的操作不是上限 |
+| 其他值              | 上限为 `manual`，并记一条问题                               |
+
+`plan` 禁止的是[计划模式](/docs/plan-mode)从默认会话中去掉的工具，即 Agent 自己的非只读工具：`apply_patch`、`delete_path`、`move_path`、`exec_command`、`write_stdin`、`resize_execution`、`create_goal`、`update_goal`、`spawn_agent`、`followup_task`、`send_message`、`interrupt_agent`、`enable_skill`、`disable_skill` 和 `append_agent_memory_note`。内核自己的工具（`update_plan`、`new_context`、`request_user_input`）保留，因为角色从不去掉它们。MCP 工具也会被禁止（`mcp__*`），除非代理写了 `tools`：这时角色只允许列出的工具，包括列出的 MCP 工具，禁止 `mcp__*` 会把它们去掉。与 计划模式保留标注为只读的 MCP 工具不同，`plan` 只保留 `tools` 列出的 MCP 工具；它也不禁止其他插件的工具：已安装插件的代码注册的工具，无论是否写入，都会保留，除非 `tools` 没有列出它。
 
 Codex 格式的包没有角色。
 

@@ -34,7 +34,9 @@ mod settings;
 mod store;
 mod version;
 
-pub use claude_agents::{read_claude_agents, ClaudeAgent, ClaudeAgentFiles};
+pub use claude_agents::{
+    read_claude_agents, ClaudeAgent, ClaudeAgentFiles, PLAN_MODE_DENIED_TOOLS,
+};
 pub use commands::migrated_command_skills_root;
 pub use error::PackageError;
 pub use hash::content_hash;
