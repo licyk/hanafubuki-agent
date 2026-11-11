@@ -2,7 +2,8 @@
 source: crates/tui/src/bottom_pane/footer/tests.rs
 expression: terminal.backend()
 ---
-"  / for commands                     ctrl + j for newline                       "
-"  @ for file paths                   esc to interrupt                           "
-"  ↑ for previous message             ctrl + c to exit                           "
-"  ctrl + t to view transcript        ctrl + o to hide thinking                  "
+"  / for commands                   ctrl + j for newline                         "
+"  @ for file paths                 tab to send message                          "
+"  esc to interrupt                 ↑ for previous message                       "
+"  ctrl + c to exit                 ctrl + t to view transcript                  "
+"  ctrl + o to hide thinking                                                     "

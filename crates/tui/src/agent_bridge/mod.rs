@@ -5,8 +5,10 @@
 //! the turn's (here), the slash commands' (`commands`, `sessions`,
 //! `permissions`, `workspace`; `/review`, `/goal`, `/hooks` and
 //! `/subagents` in modules of their own, the side conversation in `side`),
-//! the reading of a session's transcript into what the chat
-//! replays (`replay`), and the editing of an earlier message (`edit`).
+//! the steering of a running turn (`steering`), the reading of a session's
+//! transcript into what the chat replays (`replay`), and the editing of an
+//! earlier message (`edit`). What the person sends while the Agent works
+//! is queued by the chat; the bridge only starts and steers turns.
 //!
 //! The interface starts with no session: the first message creates it, or
 //! a command that needs one (`Op::EnsureSession`), and `/new` drops back to
@@ -32,6 +34,7 @@ mod sessions;
 mod settings;
 mod side;
 mod status;
+mod steering;
 mod subagents;
 mod workspace;
 
@@ -43,9 +46,9 @@ use hanafubuki_agent::{
     AgentAvailability, AgentCompactionStatus, AgentCompactionTrigger, AgentEvent, AgentEventKind,
     AgentEventSink, AgentGoal, AgentHandle, AgentHistorySortDirection, AgentPermissionMode,
     AgentReasoningId, AgentRuntime, AgentSessionId, AgentSessionMode, AgentSlot,
-    AgentStatusEventSink, AgentSteeringRequest, AgentTaskPlanSnapshot, AgentTurnAccepted,
-    AgentTurnPageRequest, AgentTurnRequest, AgentTurnTerminalReason, AgentUserInputRequest,
-    AgentUserInputRequestId, ApprovalRequest, ApprovalRequestId, SkillCatalogSnapshot,
+    AgentStatusEventSink, AgentTaskPlanSnapshot, AgentTurnAccepted, AgentTurnPageRequest,
+    AgentTurnRequest, AgentTurnTerminalReason, AgentUserInputRequest, AgentUserInputRequestId,
+    ApprovalRequest, ApprovalRequestId, SkillCatalogSnapshot,
 };
 use tokio::sync::oneshot;
 
@@ -66,6 +69,7 @@ pub(crate) use settings::{
 };
 pub(crate) use side::OpenedSide;
 pub(crate) use status::{SessionStatus, UsageSummary};
+pub(crate) use steering::SteerOutcome;
 pub(crate) use subagents::{ChildApproval, SubagentsCall, SubagentsReply};
 
 /// How many of the turn's latest items are read for a finished call.
@@ -105,6 +109,16 @@ pub(crate) enum TurnUpdate {
     UserInputRequested(AgentUserInputRequest),
     UserInputResolved(AgentUserInputRequestId),
     TaskPlan(AgentTaskPlanSnapshot),
+    /// What became of the steering message `id` the chat sent.
+    Steered {
+        id: u64,
+        outcome: SteerOutcome,
+    },
+    /// The turn took the steering it was sent through this sequence.
+    SteeringConsumed(u64),
+    /// A message that was to start a turn reached none: it goes back to
+    /// the composer.
+    Undelivered(String),
     Retry(String),
     Ended(TurnEnd),
     /// A call into the Agent failed.
@@ -203,9 +217,6 @@ pub(crate) struct AgentBridge {
     /// A turn was submitted and has not ended; `turn` is unknown until the
     /// submission is accepted.
     turn_running: bool,
-    /// What the person sent while the submission was being accepted, to
-    /// steer the turn with once it is.
-    pending_steering: Vec<String>,
     /// The transcript items a reopened session replays, and each earlier
     /// page holds.
     page_size: usize,
@@ -247,7 +258,6 @@ impl AgentBridge {
             app_event_tx,
             turn: None,
             turn_running: false,
-            pending_steering: Vec::new(),
             page_size: commands::REPLAYED_ITEMS,
             mcp_login: None,
             status: status::StatusCache::default(),
@@ -277,16 +287,19 @@ impl AgentBridge {
             return None;
         }
         match op {
-            Op::UserInput(text) if self.review_running() => self.hold_for_review(text),
-            Op::UserInput(text) => {
-                match (self.session_id, self.turn_running, self.turn) {
-                    (None, ..) => self.create_session(vec![Op::UserInput(text)]),
-                    (Some(session_id), false, _) => self.start_turn(session_id, text),
-                    (Some(_), true, Some(turn)) => self.steer(turn, text),
-                    (Some(_), true, None) => self.pending_steering.push(text),
+            Op::UserInput(text) => match (self.session_id, self.turn_running) {
+                (None, _) => {
+                    self.create_session(vec![Op::UserInput(text)]);
+                    None
                 }
-                None
-            }
+                (Some(session_id), false) => {
+                    self.start_turn(session_id, text);
+                    None
+                }
+                // A subagent's turn the chat has not heard of yet.
+                (Some(_), true) => self.steer(None, text),
+            },
+            Op::Steer { id, text } => self.steer(Some(id), text),
             Op::EnsureSession => {
                 if self.session_id.is_none() {
                     self.create_session(Vec::new());
@@ -351,14 +364,10 @@ impl AgentBridge {
         match reply {
             AgentReply::TurnAccepted(turn) => {
                 self.turn = Some(turn);
-                for text in std::mem::take(&mut self.pending_steering) {
-                    self.steer(turn, text);
-                }
                 None
             }
             AgentReply::TurnRejected(message) => {
                 self.turn_running = false;
-                self.pending_steering.clear();
                 Some(TurnUpdate::Ended(TurnEnd::Failed(message)))
             }
             AgentReply::Failed(message) => Some(TurnUpdate::Error(message)),
@@ -373,10 +382,13 @@ impl AgentBridge {
                 }
                 None
             }
-            AgentReply::SessionNotCreated(message) => {
-                self.creating = None;
-                Some(TurnUpdate::Error(message))
-            }
+            // A message waiting for the session started no turn.
+            AgentReply::SessionNotCreated(message) => match self.creating.take() {
+                Some(waiting) if waiting.iter().any(|op| matches!(op, Op::UserInput(_))) => {
+                    Some(TurnUpdate::Ended(TurnEnd::Failed(message)))
+                }
+                _ => Some(TurnUpdate::Error(message)),
+            },
             AgentReply::SessionOpened(opened) => {
                 if opened.session_id.is_some() {
                     self.pending_worktree = None;
@@ -386,7 +398,6 @@ impl AgentBridge {
                 self.child_approvals.clear();
                 self.turn = None;
                 self.turn_running = false;
-                self.pending_steering.clear();
                 self.load_session_status();
                 Some(TurnUpdate::SessionOpened(opened))
             }
@@ -504,6 +515,9 @@ impl AgentBridge {
                 self.send_session_status();
                 TurnUpdate::TaskPlan(plan)
             }
+            AgentEventKind::SteeringConsumed {
+                through_sequence, ..
+            } => TurnUpdate::SteeringConsumed(through_sequence.value()),
             // Every install, `/compact`'s included, is shown from its event.
             AgentEventKind::CompactionUpdated { compaction }
                 if compaction.status == AgentCompactionStatus::Completed =>
@@ -551,8 +565,7 @@ impl AgentBridge {
     }
 
     /// When the Agent stopped (a kernel fault) during a turn or a review,
-    /// their events and replies stop with it: they are told they failed
-    /// (a review's held messages are then sent, and refused).
+    /// their events and replies stop with it: they are told they failed.
     pub(crate) fn status_changed(&mut self) -> Option<TurnUpdate> {
         let status = self.slot.status();
         let running = matches!(status.availability, AgentAvailability::Running)
@@ -575,7 +588,6 @@ impl AgentBridge {
     fn ended(&mut self, end: TurnEnd) -> TurnUpdate {
         self.turn = None;
         self.turn_running = false;
-        self.pending_steering.clear();
         self.send_session_status();
         self.reshow_child_approvals();
         TurnUpdate::Ended(end)
@@ -603,28 +615,6 @@ impl AgentBridge {
         });
     }
 
-    fn steer(&self, turn: AgentTurnAccepted, text: String) {
-        let sink = self.sink();
-        self.spawn(move |agent| async move {
-            let request = AgentSteeringRequest {
-                text,
-                images: Vec::new(),
-                host: Default::default(),
-            };
-            agent
-                .steer_turn_with_sink(
-                    turn.session_id,
-                    turn.turn_id,
-                    turn.generation,
-                    request,
-                    sink,
-                )
-                .await
-                .map(|_| None)
-                .map_err(|error| format!("the message did not reach the turn: {error}"))
-        });
-    }
-
     /// Runs a call on the Agent's runtime; its failure comes back as a
     /// reply.
     fn spawn<F>(&self, call: impl FnOnce(AgentHandle) -> F)
@@ -644,8 +634,14 @@ impl AgentBridge {
         });
     }
 
+    /// Where a call's events go. A subagent this bridge follows has every
+    /// event of its own from its journal, so a call's copies, which would
+    /// show (and end) its turn twice, are dropped.
     fn sink(&self) -> Arc<dyn AgentEventSink> {
-        Arc::new(EventSink(self.app_event_tx.clone()))
+        match self.following {
+            Some(_) => Arc::new(DiscardSink),
+            None => Arc::new(EventSink(self.app_event_tx.clone())),
+        }
     }
 
     /// What a finished call left in the turn's history: its output, and for
@@ -681,6 +677,12 @@ impl AgentEventSink for EventSink {
     fn emit(&self, event: AgentEvent) {
         self.0.send(AppEvent::Agent(Box::new(event)));
     }
+}
+
+struct DiscardSink;
+
+impl AgentEventSink for DiscardSink {
+    fn emit(&self, _event: AgentEvent) {}
 }
 
 /// The Agent slot's changes into the app loop.

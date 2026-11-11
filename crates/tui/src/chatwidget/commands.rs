@@ -7,15 +7,19 @@
 
 use hanafubuki_agent::panic::catch_panic;
 
+use super::input_queue::Ending;
 use super::ChatWidget;
-use crate::agent_bridge::{setup_needed, SettingsReply, TurnUpdate, Warning, WarningSource};
+use crate::agent_bridge::{
+    setup_needed, ReviewEnd, ReviewReply, SettingsReply, TurnUpdate, Warning, WarningSource,
+};
 use crate::app_event::{AppEvent, Op};
 use crate::commands::{self, CommandContext, CommandSpec, CommandStep};
 use crate::history_cell;
 
 impl ChatWidget {
     pub(crate) fn dispatch_command(&mut self, command: &'static CommandSpec, args: String) {
-        if !command.during_task && self.bottom_pane.is_task_running() {
+        if !command.during_task && (self.bottom_pane.is_task_running() || self.has_pending_input())
+        {
             let message = format!(
                 "'/{}' is disabled while a task is in progress.",
                 command.name
@@ -87,6 +91,27 @@ impl ChatWidget {
         self.warnings
             .push(Warning::new(WarningSource::Interface, warning));
         self.request_redraw();
+    }
+
+    /// A review holds the messages sent meanwhile, as a turn that cannot
+    /// be steered; its end settles them as a turn's end does.
+    fn on_review_reply(&mut self, reply: ReviewReply) {
+        let ending = match &reply {
+            ReviewReply::Started(_) => {
+                self.input_queue.review_started();
+                None
+            }
+            ReviewReply::Ended(ReviewEnd::Cancelled) => Some(Ending::Interrupted),
+            ReviewReply::Ended(_) => Some(Ending::Finished),
+            _ => None,
+        };
+        self.run_command(&commands::REVIEW, |context| {
+            commands::review::on_reply(context, reply)
+        });
+        if let Some(ending) = ending {
+            self.input_queue.review_ended(ending);
+            self.advance_input_queue();
+        }
     }
 
     /// What the commands found; an update of the turn is handed back.
@@ -161,9 +186,7 @@ impl ChatWidget {
                     })
                 }
             }
-            TurnUpdate::Review(reply) => self.run_command(&commands::REVIEW, |context| {
-                commands::review::on_reply(context, reply)
-            }),
+            TurnUpdate::Review(reply) => self.on_review_reply(reply),
             TurnUpdate::Goal(reply) => self.run_command(&commands::GOAL, |context| {
                 commands::goal::on_reply(context, reply)
             }),

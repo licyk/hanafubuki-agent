@@ -5,6 +5,7 @@
 
 use hanafubuki_agent::{AgentReasoningId, AgentTaskPlanSnapshot};
 
+use super::input_queue::Ending;
 use super::ChatWidget;
 use crate::agent_bridge::{TurnEnd, TurnUpdate, Warning, WarningSource};
 use crate::app_event::AppEvent;
@@ -43,6 +44,7 @@ impl ChatWidget {
                     | TurnUpdate::ReasoningCompleted { .. }
                     | TurnUpdate::ToolStarted { .. }
                     | TurnUpdate::ToolCompleted { .. }
+                    | TurnUpdate::SteeringConsumed(_)
                     | TurnUpdate::ApprovalRequested(_)
                     | TurnUpdate::UserInputRequested(_)
                     | TurnUpdate::Compacted
@@ -109,6 +111,9 @@ impl ChatWidget {
                 self.bottom_pane.dismiss_user_input(request_id)
             }
             TurnUpdate::TaskPlan(plan) => self.on_plan_update(&plan),
+            TurnUpdate::Steered { id, outcome } => self.on_steered(id, outcome),
+            TurnUpdate::SteeringConsumed(through) => self.on_steering_consumed(through),
+            TurnUpdate::Undelivered(text) => self.on_undelivered(text),
             TurnUpdate::Retry(header) => {
                 self.retry_status_header = Some(header.clone());
                 self.bottom_pane.update_status(header, None);
@@ -166,6 +171,7 @@ impl ChatWidget {
         self.retry_status_header = None;
         self.plan_stream_controller = None;
         self.bottom_pane.update_status(WORKING.to_string(), None);
+        self.input_queue.turn_started();
     }
 
     fn on_reasoning_started(&mut self, reasoning_id: AgentReasoningId) {
@@ -284,13 +290,27 @@ impl ChatWidget {
         self.bottom_pane.set_task_running(false);
         self.retry_status_header = None;
         self.had_work_activity = false;
-        match end {
-            TurnEnd::Completed => {}
-            TurnEnd::Interrupted => self.add_to_history(history_cell::new_error_event(
-                "Conversation interrupted - tell the model what to do differently.".to_string(),
-            )),
-            TurnEnd::Failed(message) => self.add_to_history(history_cell::new_error_event(message)),
-        }
+        let ending = match end {
+            TurnEnd::Completed => Ending::Finished,
+            TurnEnd::Interrupted if self.input_queue.sends_steers_after_interrupt() => {
+                self.add_info_message(
+                    "Model interrupted to submit steer instructions.".to_string(),
+                );
+                Ending::Interrupted
+            }
+            TurnEnd::Interrupted => {
+                self.add_to_history(history_cell::new_error_event(
+                    "Conversation interrupted - tell the model what to do differently.".to_string(),
+                ));
+                Ending::Interrupted
+            }
+            TurnEnd::Failed(message) => {
+                self.add_to_history(history_cell::new_error_event(message));
+                Ending::Finished
+            }
+        };
+        self.input_queue.turn_ended(ending);
+        self.advance_input_queue();
     }
 
     fn flush_deferred(&mut self) {

@@ -1,8 +1,8 @@
 //! `/review` onto the facade's review calls: whether the session can be
 //! reviewed and what it can review against, the review itself (it waits
 //! for the whole review, so it runs as a task of the Agent's runtime), and
-//! its cancellation. While a review runs the bridge holds it: Esc cancels
-//! it, and a message sent meanwhile waits for it to end, so the next turn
+//! its cancellation. While a review runs no turn does: Esc cancels it, and
+//! the chat holds a message sent meanwhile until it ends, so the next turn
 //! reads what the review found.
 
 use hanafubuki_agent::{
@@ -11,7 +11,6 @@ use hanafubuki_agent::{
 };
 
 use super::{AgentBridge, AgentReply, TurnUpdate};
-use crate::app_event::Op;
 
 /// Why a session cannot be reviewed yet: the review's findings are told to
 /// the conversation, whose history starts with a turn.
@@ -35,8 +34,6 @@ pub(crate) enum ReviewReply {
     Ready(Result<AgentReviewTargets, String>),
     /// The review runs; what it looks at, in a few words.
     Started(String),
-    /// A message sent while the review runs waits for it.
-    Held,
     Cancelling,
     Ended(ReviewEnd),
     /// A call failed; a review that runs goes on.
@@ -50,11 +47,9 @@ pub(crate) enum ReviewEnd {
     Failed(String),
 }
 
-/// The review that runs: the session it reports to, and the messages sent
-/// meanwhile.
+/// The review that runs: the session it reports to.
 pub(super) struct RunningReview {
     parent: AgentSessionId,
-    held: Vec<String>,
 }
 
 impl AgentBridge {
@@ -84,19 +79,8 @@ impl AgentBridge {
         Some(TurnUpdate::Review(reply))
     }
 
-    /// A message sent while a review runs waits for it to end.
-    pub(super) fn hold_for_review(&mut self, text: String) -> Option<TurnUpdate> {
-        self.review.as_mut()?.held.push(text);
-        Some(TurnUpdate::Review(ReviewReply::Held))
-    }
-
-    /// The review ended: the messages it held are sent, the first starting
-    /// a turn that reads what the review found.
     pub(super) fn review_ended(&mut self, end: ReviewEnd) -> Option<TurnUpdate> {
-        let held = self.review.take().map(|review| review.held);
-        for text in held.unwrap_or_default() {
-            self.submit(Op::UserInput(text));
-        }
+        self.review = None;
         Some(TurnUpdate::Review(ReviewReply::Ended(end)))
     }
 
@@ -127,10 +111,7 @@ impl AgentBridge {
     fn start_review(&mut self, target: AgentReviewTarget) -> Result<ReviewReply, String> {
         let parent = self.reviewable()?;
         let hint = target_hint(&target);
-        self.review = Some(RunningReview {
-            parent,
-            held: Vec::new(),
-        });
+        self.review = Some(RunningReview { parent });
         self.spawn(move |agent| async move {
             let end = match agent.start_review(parent, target).await {
                 Ok(output) => ReviewEnd::Finished(Box::new(output)),

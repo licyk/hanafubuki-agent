@@ -5,7 +5,7 @@ use std::sync::mpsc::{channel, Receiver};
 use super::*;
 use crate::agent_bridge::{
     HooksCall, HooksReply, McpCall, ModelChoices, OlderTranscript, OpenedSession, ReplayedItem,
-    TurnEnd,
+    SteerOutcome, TurnEnd,
 };
 use crate::app_event::AgentCommand;
 use crate::bottom_pane::{SelectionItem, SelectionViewParams};
@@ -677,4 +677,254 @@ fn the_hooks_are_checked_once_a_run_and_waiting_ones_are_a_warning() {
     assert_eq!(drain(&events).0, ["• 1 hook needs review: /hooks"]);
     let warnings: Vec<&str> = chat.warnings.iter().map(|w| w.text.as_str()).collect();
     assert_eq!(warnings, ["1 hook needs review: /hooks"]);
+}
+
+fn key(code: KeyCode) -> KeyEvent {
+    KeyEvent::new(code, KeyModifiers::NONE)
+}
+
+/// The cells written, a prompt's blank rows around it trimmed.
+fn trimmed(cells: Vec<String>) -> Vec<String> {
+    cells.iter().map(|cell| cell.trim().to_string()).collect()
+}
+
+fn steer_op(id: u64, text: &str) -> Op {
+    Op::Steer {
+        id,
+        text: text.to_string(),
+    }
+}
+
+#[test]
+fn enter_during_a_turn_steers_it_one_message_at_a_time_and_writes_it_once_read() {
+    let (mut chat, events) = chat();
+    chat.handle_turn_update(TurnUpdate::Started);
+    drain(&events);
+    chat.submit_user_message("Look at the tests.".to_string());
+    chat.submit_user_message("And the docs.".to_string());
+    // Only the first is sent; neither is written yet.
+    assert_eq!(
+        drain(&events),
+        (Vec::new(), vec![steer_op(0, "Look at the tests.")])
+    );
+    let waiting = screen(&chat, 80);
+    assert!(
+        waiting.contains("Messages to be submitted after next tool call"),
+        "{waiting}"
+    );
+    assert!(waiting.contains("↳ And the docs."), "{waiting}");
+
+    chat.handle_turn_update(TurnUpdate::Steered {
+        id: 0,
+        outcome: SteerOutcome::Accepted(1),
+    });
+    assert_eq!(drain(&events).1, vec![steer_op(1, "And the docs.")]);
+    chat.handle_turn_update(TurnUpdate::Steered {
+        id: 1,
+        outcome: SteerOutcome::Accepted(2),
+    });
+    chat.handle_turn_update(TurnUpdate::SteeringConsumed(2));
+    assert_eq!(
+        trimmed(drain(&events).0),
+        vec!["› Look at the tests.", "› And the docs."]
+    );
+    assert!(!screen(&chat, 80).contains("Messages to be submitted"));
+}
+
+#[test]
+fn esc_with_steers_waiting_interrupts_and_sends_them_as_one_turn_keeping_the_draft() {
+    let (mut chat, events) = chat();
+    chat.handle_turn_update(TurnUpdate::Started);
+    chat.submit_user_message("First.".to_string());
+    chat.handle_turn_update(TurnUpdate::Steered {
+        id: 0,
+        outcome: SteerOutcome::Accepted(1),
+    });
+    chat.submit_user_message("Second.".to_string());
+    chat.handle_turn_update(TurnUpdate::Steered {
+        id: 1,
+        outcome: SteerOutcome::Accepted(2),
+    });
+    chat.set_composer_text("draft".to_string());
+    drain(&events);
+
+    chat.handle_key_event(key(KeyCode::Esc));
+    assert_eq!(drain(&events).1, vec![Op::Interrupt]);
+    chat.handle_turn_update(TurnUpdate::Ended(TurnEnd::Interrupted));
+    let (cells, ops) = drain(&events);
+    assert!(
+        cells[0].contains("Model interrupted to submit steer instructions."),
+        "{cells:?}"
+    );
+    assert_eq!(cells[1].trim(), "› First.\n  Second.");
+    assert_eq!(ops, vec![Op::UserInput("First.\nSecond.".to_string())]);
+    assert_eq!(chat.bottom_pane.composer_text(), "draft");
+}
+
+#[test]
+fn an_interrupt_puts_the_waiting_messages_back_before_the_draft() {
+    let (mut chat, events) = chat();
+    chat.handle_turn_update(TurnUpdate::Started);
+    chat.submit_user_message("Steer.".to_string());
+    chat.handle_turn_update(TurnUpdate::Steered {
+        id: 0,
+        outcome: SteerOutcome::Accepted(1),
+    });
+    chat.queue_user_message("Queued.".to_string());
+    chat.set_composer_text("draft".to_string());
+    drain(&events);
+    // Ctrl-C (no Esc): nothing is sent.
+    chat.handle_turn_update(TurnUpdate::Ended(TurnEnd::Interrupted));
+    let (cells, ops) = drain(&events);
+    assert!(cells[0].contains("Conversation interrupted"), "{cells:?}");
+    assert!(ops.is_empty(), "{ops:?}");
+    assert_eq!(chat.bottom_pane.composer_text(), "Steer.\nQueued.\ndraft");
+    assert!(!screen(&chat, 80).contains("Queued follow-up inputs"));
+}
+
+#[test]
+fn tab_queues_while_a_turn_runs_and_sends_at_once_with_nothing_running() {
+    let (mut chat, events) = chat();
+    chat.set_composer_text("now".to_string());
+    chat.handle_key_event(key(KeyCode::Tab));
+    assert_eq!(drain(&events).1, vec![Op::UserInput("now".to_string())]);
+
+    chat.handle_turn_update(TurnUpdate::Started);
+    chat.set_composer_text("later".to_string());
+    let drafting = screen(&chat, 80);
+    assert!(drafting.contains("tab to queue message"), "{drafting}");
+    chat.handle_key_event(key(KeyCode::Tab));
+    assert_eq!(drain(&events), (Vec::new(), Vec::new()));
+    let queued = screen(&chat, 80);
+    assert!(queued.contains("Queued follow-up inputs"), "{queued}");
+    assert!(queued.contains("↳ later"), "{queued}");
+
+    chat.handle_turn_update(TurnUpdate::Ended(TurnEnd::Failed("boom".to_string())));
+    let (cells, ops) = drain(&events);
+    assert_eq!(trimmed(cells), vec!["■ boom", "› later"]);
+    assert_eq!(ops, vec![Op::UserInput("later".to_string())]);
+}
+
+#[test]
+fn shift_left_and_alt_up_put_the_last_queued_message_back_before_the_draft() {
+    let (mut chat, events) = chat();
+    chat.handle_turn_update(TurnUpdate::Started);
+    chat.queue_user_message("one".to_string());
+    chat.queue_user_message("two".to_string());
+    chat.set_composer_text("draft".to_string());
+    chat.handle_key_event(KeyEvent::new(KeyCode::Left, KeyModifiers::SHIFT));
+    assert_eq!(chat.bottom_pane.composer_text(), "two\ndraft");
+    chat.handle_key_event(KeyEvent::new(KeyCode::Up, KeyModifiers::ALT));
+    assert_eq!(chat.bottom_pane.composer_text(), "one\ntwo\ndraft");
+    assert!(!screen(&chat, 80).contains("Queued follow-up inputs"));
+    // Nothing queued: the key is the composer's, which does nothing.
+    chat.handle_key_event(KeyEvent::new(KeyCode::Left, KeyModifiers::SHIFT));
+    assert_eq!(chat.bottom_pane.composer_text(), "one\ntwo\ndraft");
+    chat.handle_turn_update(TurnUpdate::Ended(TurnEnd::Completed));
+    assert!(drain(&events).1.is_empty());
+}
+
+#[test]
+fn a_popup_takes_tab_and_esc_before_the_queue_and_the_interrupt() {
+    let (mut chat, events) = chat();
+    chat.handle_turn_update(TurnUpdate::Started);
+    chat.bottom_pane.insert_str("/stat");
+    assert!(!chat.no_modal_or_popup_active());
+    // Tab completes the command.
+    chat.handle_key_event(key(KeyCode::Tab));
+    assert_eq!(chat.bottom_pane.composer_text(), "/status ");
+    assert!(!screen(&chat, 80).contains("Queued follow-up inputs"));
+    chat.set_composer_text("@src".to_string());
+    assert!(!chat.no_modal_or_popup_active());
+    // Esc closes the popup, and only then interrupts.
+    chat.handle_key_event(key(KeyCode::Esc));
+    assert!(chat.no_modal_or_popup_active());
+    assert!(drain(&events).1.is_empty());
+    chat.handle_key_event(key(KeyCode::Esc));
+    assert_eq!(drain(&events).1, vec![Op::Interrupt]);
+}
+
+#[test]
+fn esc_interrupts_while_the_answer_streams() {
+    let (mut chat, events) = chat();
+    chat.handle_turn_update(TurnUpdate::Started);
+    chat.handle_turn_update(TurnUpdate::MessageDelta("A first line.\nMore".to_string()));
+    chat.on_commit_tick();
+    // The answer streams: the status line is hidden.
+    assert!(chat.bottom_pane.status_widget().is_none());
+    drain(&events);
+    chat.handle_key_event(key(KeyCode::Esc));
+    assert_eq!(drain(&events).1, vec![Op::Interrupt]);
+}
+
+#[test]
+fn a_session_opened_drops_what_waited_for_the_previous_one() {
+    let (mut chat, events) = chat();
+    chat.handle_turn_update(TurnUpdate::Started);
+    chat.queue_user_message("for the old session".to_string());
+    chat.handle_turn_update(TurnUpdate::SessionOpened(OpenedSession {
+        session_id: None,
+        model: "fixture-model".to_string(),
+        mode: hanafubuki_agent::AgentSessionMode::Default,
+        transcript: Vec::new(),
+        older: None,
+        setup_needed: false,
+    }));
+    assert!(!chat.has_pending_input());
+    assert!(!screen(&chat, 80).contains("Queued follow-up inputs"));
+    drain(&events);
+    chat.submit_user_message("fresh".to_string());
+    assert_eq!(drain(&events).1, vec![Op::UserInput("fresh".to_string())]);
+}
+
+#[test]
+fn tab_in_the_file_popup_inserts_the_path_while_a_turn_runs() {
+    let (mut chat, events) = chat();
+    chat.handle_turn_update(TurnUpdate::Started);
+    chat.set_composer_text("Read @not".to_string());
+    chat.apply_file_search_result(
+        "not".to_string(),
+        vec![FileMatch {
+            path: std::path::PathBuf::from("notes.txt"),
+            root: std::path::PathBuf::from("/project"),
+            primary: true,
+            indices: Vec::new(),
+        }],
+    );
+    chat.handle_key_event(key(KeyCode::Tab));
+    assert_eq!(chat.bottom_pane.composer_text(), "Read notes.txt ");
+    assert!(!screen(&chat, 80).contains("Queued follow-up inputs"));
+    assert!(drain(&events).1.is_empty());
+}
+
+#[test]
+fn a_message_that_reached_no_turn_goes_back_to_the_composer() {
+    let (mut chat, events) = chat();
+    chat.set_composer_text("draft".to_string());
+    drain(&events);
+    chat.handle_turn_update(TurnUpdate::Undelivered("Lost?".to_string()));
+    let (cells, _) = drain(&events);
+    assert!(cells[0].contains("did not reach the turn"), "{cells:?}");
+    assert_eq!(chat.bottom_pane.composer_text(), "Lost?\ndraft");
+}
+
+#[test]
+fn enter_before_the_turn_starts_queues_and_a_start_that_failed_releases_it() {
+    let (mut chat, events) = chat();
+    chat.submit_user_message("First.".to_string());
+    // The turn has not started (the session may still be created): a turn
+    // of its own, after.
+    chat.submit_user_message("Second.".to_string());
+    assert_eq!(drain(&events).1, vec![Op::UserInput("First.".to_string())]);
+    assert!(chat.has_pending_input());
+    // The session was not created, or the turn refused at its start.
+    chat.handle_turn_update(TurnUpdate::Ended(TurnEnd::Failed(
+        "no Provider".to_string(),
+    )));
+    let (cells, ops) = drain(&events);
+    assert_eq!(trimmed(cells), vec!["■ no Provider", "› Second."]);
+    assert_eq!(ops, vec![Op::UserInput("Second.".to_string())]);
+    chat.handle_turn_update(TurnUpdate::Started);
+    chat.handle_turn_update(TurnUpdate::Ended(TurnEnd::Completed));
+    assert!(!chat.has_pending_input());
 }

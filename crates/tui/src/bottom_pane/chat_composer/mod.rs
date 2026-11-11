@@ -6,7 +6,7 @@
 //!
 //! - Editing the input buffer (a [`TextArea`]), including the placeholder "elements" that stand
 //!   for large pastes.
-//! - Handling submit vs newline on Enter.
+//! - Handling submit vs newline on Enter, and queueing on Tab while a turn runs.
 //! - Shell-style history navigation (↑/↓) over this session's messages
 //!   ([`ChatComposerHistory`]).
 //! - Routing keys to the active popup (`popups`): the slash commands and the `@` file search.
@@ -217,6 +217,17 @@ impl ChatComposer {
         self.sync_popups();
     }
 
+    /// Puts `text` on lines of its own before the draft, whose pastes stay,
+    /// with the cursor at the end.
+    pub(crate) fn restore_draft(&mut self, text: String) {
+        if self.is_empty() {
+            return self.set_text_content(text);
+        }
+        self.textarea.insert_str_at(0, &format!("{text}\n"));
+        self.textarea.set_cursor(self.textarea.text().len());
+        self.sync_popups();
+    }
+
     pub(crate) fn clear_for_ctrl_c(&mut self) -> Option<String> {
         if self.is_empty() {
             return None;
@@ -352,6 +363,7 @@ impl ChatComposer {
                 }
                 self.handle_input_basic(key_event)
             }
+            key if keymap::matches(Action::Queue, &key) => self.handle_queue_key(Instant::now()),
             key if keymap::matches(Action::Submit, &key) => self.handle_submission(Instant::now()),
             input => self.handle_input_basic(input),
         }
@@ -498,6 +510,33 @@ impl ChatComposer {
 
         match self.prepare_submission_text() {
             Some(text) => (InputResult::Submitted(text), true),
+            None => (InputResult::None, true),
+        }
+    }
+
+    /// Tab (Codex's `composer.queue`): while a turn runs the message is
+    /// queued for after it, a command still runs at once; with nothing
+    /// running it is sent as Enter sends it. Within a paste it is the
+    /// paste's, and the paste goes on: flushing it here would let the
+    /// paste's next Tab send what came before.
+    fn handle_queue_key(&mut self, now: Instant) -> (InputResult, bool) {
+        if self
+            .paste_burst
+            .newline_should_insert_instead_of_submit(now)
+        {
+            if !self.paste_burst.try_append_char_if_active('\t', now) {
+                self.paste_burst.extend_window(now);
+            }
+            return (InputResult::None, true);
+        }
+        if !self.is_task_running {
+            return self.handle_submission(now);
+        }
+        if let Some(result) = self.try_dispatch_slash_command() {
+            return (result, true);
+        }
+        match self.prepare_submission_text() {
+            Some(text) => (InputResult::Queued(text), true),
             None => (InputResult::None, true),
         }
     }
@@ -688,6 +727,7 @@ impl ChatComposer {
             quit_shortcut_key: self.quit_shortcut_key,
             thinking_toggle: self.thinking_toggle,
             status_line: self.status_line.as_ref().filter(|_| shows_status_line),
+            task_running: self.is_task_running,
         }
     }
 

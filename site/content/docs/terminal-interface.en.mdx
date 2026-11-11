@@ -38,8 +38,9 @@ At the start (and after `/new` or a resume) a box shows the version, the model a
 
 1. **The running tool calls**: `• Running TOOL: SUBJECT`. In Fullscreen they are the end of the conversation instead.
 2. **The status line**: during a turn, `• Working (12s • esc to interrupt)` with the elapsed time. While a model request is retried it reads `Reconnecting 1/3: reason`. The timer pauses while an approval or a question waits for you. Once the model's answer starts streaming, the status line is hidden.
-3. **The composer**, starting with `›`.
-4. **The footer**: the [status line](#status-line), by default the model and its reasoning effort, the working directory and the session's title, while the composer is empty or holds a draft with no turn running; `? for shortcuts` when it shows no item.
+3. **The messages waiting** for the turn, while there are any ([below](#composer)).
+4. **The composer**, starting with `›`.
+5. **The footer**: the [status line](#status-line), by default the model and its reasoning effort, the working directory and the session's title, while the composer is empty or holds a draft with no turn running; `? for shortcuts` when it shows no item. A draft written during a turn shows `tab to queue message` instead.
 
 An approval, a question, the `/model` and `/mode` lists and the screens of `/providers` and `/mcp` take the place of the status line and the composer while they are open. A screen stays open when a turn ends.
 
@@ -47,37 +48,43 @@ In the conversation your messages start with `›`; a tool call is `• Called T
 
 ## Keys [#keys]
 
-| Key                        | Does                                                                                                                                                             |
-| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Enter                      | Sends the message: a new turn, or, while one runs, a message that steers it (below). In a popup, picks its entry                                                 |
-| Shift+Enter, Ctrl+J        | A new line. Shift+Enter needs a terminal with the enhanced keyboard protocol; otherwise use Ctrl+J                                                               |
-| Up, Down (Ctrl-P, Ctrl-N)  | On an empty composer, the messages sent in this run; in a popup, its entries                                                                                     |
-| Tab                        | In the command popup, completes the command; in the file popup, inserts the path                                                                                 |
-| Esc                        | Closes a popup; otherwise interrupts the turn while the status line is shown. With no turn running, twice on an empty composer: edits an earlier message (below) |
-| Ctrl-C                     | In turn: denies an approval; clears a composer with text; interrupts a running turn; a second press within one second quits                                      |
-| Ctrl-D                     | On an empty composer, two presses within one second quit; with text, deletes the next character                                                                  |
-| Ctrl-T                     | Fullscreen: shows the conversation in detail, in place; Scrollback: opens the transcript (below)                                                                 |
-| Ctrl-O                     | Shows or hides the model's thinking (below)                                                                                                                      |
-| `?` on an empty composer   | Shows the shortcuts                                                                                                                                              |
-| Ctrl-X P                   | Opens the [presets](#presets)                                                                                                                                    |
-| Ctrl-X Left, Right, Tab, X | With a side conversation or a subagent open: the main conversation, the side one, the other one; closes it ([below](#side))                                      |
+| Key                        | Does                                                                                                                                                                                             |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Enter                      | Sends the message: a new turn, or, while one runs, a message that steers it at its next step ([below](#composer)). In a popup, picks its entry                                                   |
+| Tab                        | While a turn runs, queues the message for after it; with nothing running, sends it as Enter does. In the command popup, completes the command; in the file popup, the path                       |
+| Shift+Left, Alt+Up         | Puts the last queued message back in the composer to edit it                                                                                                                                     |
+| Shift+Enter, Ctrl+J        | A new line. Shift+Enter needs a terminal with the enhanced keyboard protocol; otherwise use Ctrl+J                                                                                               |
+| Up, Down (Ctrl-P, Ctrl-N)  | On an empty composer, the messages sent in this run; in a popup, its entries                                                                                                                     |
+| Esc                        | Closes a popup; otherwise interrupts the running turn, sending at once the steering messages it has not read. With no turn running, twice on an empty composer: edits an earlier message (below) |
+| Ctrl-C                     | In turn: denies an approval; clears a composer with text; interrupts a running turn; a second press within one second quits                                                                      |
+| Ctrl-D                     | On an empty composer, two presses within one second quit; with text, deletes the next character                                                                                                  |
+| Ctrl-T                     | Fullscreen: shows the conversation in detail, in place; Scrollback: opens the transcript (below)                                                                                                 |
+| Ctrl-O                     | Shows or hides the model's thinking (below)                                                                                                                                                      |
+| `?` on an empty composer   | Shows the shortcuts                                                                                                                                                                              |
+| Ctrl-X P                   | Opens the [presets](#presets)                                                                                                                                                                    |
+| Ctrl-X Left, Right, Tab, X | With a side conversation or a subagent open: the main conversation, the side one, the other one; closes it ([below](#side))                                                                      |
 
 Fullscreen has the conversation's keys too: Page Up/Page Down, F3, F4, Ctrl-Space and the others in [Reading the conversation](#reading).
 
-These are the default keys. [The keymap](#keymap) changes the keys of its actions (Enter, the history, Esc to interrupt, Ctrl-T, Ctrl-O, the editing keys, the conversation's and the pagers' keys); Ctrl-C, Ctrl-D, Tab, `?` and the keys of popups and lists stay as they are.
+These are the default keys. [The keymap](#keymap) changes the keys of its actions (Enter, Tab to queue, Shift+Left to edit a queued message, the history, Esc to interrupt, Ctrl-T, Ctrl-O, the editing keys, the conversation's and the pagers' keys); Ctrl-C, Ctrl-D, `?` and the keys of popups and lists (Tab's completion among them) stay as they are.
 
 The composer has the usual Emacs-style editing keys: Ctrl-A/E for the start and end of the line, Ctrl-W to delete the previous word, Ctrl-U/K to delete to the start or end of the line, Alt-B/F to move by word, and so on.
 
 <Callout>
-  Once the model's answer starts streaming the status line is hidden, and Esc no longer interrupts
-  the turn: use Ctrl-C.
+  Esc interrupts the turn whatever it is doing, also while the answer streams and the status line is
+  hidden. It never sends the draft in the composer: with steering messages waiting it sends them as
+  the next turn, otherwise what waited goes back into the composer (below).
 </Callout>
 
 ## The composer [#composer]
 
 - **Pasting**: a paste of more than 1000 characters shows as a `[Pasted Content 1234 chars]` placeholder, expanded when you send; deleting the placeholder deletes the paste.
 - **History**: Up and Down go through the messages sent in this run (drafts cleared with Ctrl-C included), not the earlier messages of a resumed session.
-- **Steering a running turn**: a message you send with Enter while a turn runs does not wait for it to end: it goes to the running turn, and the model sees it at its next step. If the turn ends before the message reaches it, the message is dropped.
+- **Steering a running turn**: a message you send with Enter while a turn runs goes to that turn, and the model reads it at its next step: once the tool calls it is making have run, or after its answer, and the turn goes on. Until then it waits above the composer under `Messages to be submitted after next tool call (press esc to interrupt and send immediately)`; it is written into the conversation once the model has read it. Several are sent in order. Enter before the turn has started queues the message instead (below).
+- **Queueing a message**: Tab while a turn runs queues the message under `Queued follow-up inputs`; with nothing running, Tab sends it as Enter does. A command typed with Tab runs at once, as with Enter. When the turn ends, each queued message starts a turn of its own, the oldest first, one after another, also after a failed turn. Shift+Left (or Alt+Up) puts the last queued message back in the composer, before your draft, to change it.
+- **Nothing is lost**: a steering message the turn did not read (it ended first, it failed, or the Agent refused the message) is sent when it ends, under `Messages to be submitted at end of turn`; several go together as one message, before the queued ones.
+- **Interrupting**: Esc with steering messages waiting interrupts the turn and sends them at once, together, as the next turn (`Model interrupted to submit steer instructions.`); the queue stays, and so does your draft. Ctrl-C, or Esc with no steering message waiting, interrupts and sends nothing: what waited (steering, held and queued messages) goes back into the composer, one per line, before your draft.
+- **Each conversation has its own**: the main conversation, a [side conversation](#side) and a [subagent](#subagents) shown queue apart, and a conversation in the background goes on with its queue. What waits is dropped with a side conversation closed or a subagent left. Moving the conversation to another session (`/new`, `/resume`, editing an earlier message) is refused while a turn runs or a message waits.
 
 ## Slash commands [#commands]
 
@@ -235,7 +242,7 @@ Esc goes back a page, and closes the browser from a tab. Started with `--safe-mo
 `/review` opens a picker of what to review: **Review uncommitted changes** (staged, unstaged and untracked), **Review against a base branch** (the repository's local branches, the current one marked `(current)`, searchable), **Review a commit** (the latest 100 commits, searchable by subject or hash) and **Custom review instructions** (a one-line prompt). Esc on a list goes back to the presets. Outside a Git repository the branch and the commit are unavailable and say why. `/review INSTRUCTIONS` reviews with your instructions at once. How a review runs is in [Sessions](/docs/sessions#reviews).
 
 - A review reports back into the conversation, so the session must have had a turn: before your first message `/review` says `Send a message first; a review reports back into a conversation.` It does not start during a turn, nor while another review runs.
-- While it runs, the conversation shows `>> Code review started: … <<` and the status line `Reviewing …`. Esc, or `/review cancel`, cancels it (`<< Code review cancelled >>`). A message you send meanwhile waits and is sent when the review ends, so the turn it starts reads what the review found.
+- While it runs, the conversation shows `>> Code review started: … <<` and the status line `Reviewing …`. Esc, Ctrl-C or `/review cancel` cancels it (`<< Code review cancelled >>`). A message you send meanwhile waits above the composer under `Messages to be submitted at end of turn` and is sent when the review ends, so the turn it starts reads what the review found. While one waits, Esc does not cancel the review (it says so): Ctrl-C does, and puts the message back in the composer.
 - When it ends, `<< Code review finished >>` is followed by the verdict and its confidence, the explanation, and each finding: its priority and title, its file and lines, and its body.
 - With the `review` plugin off, `/review` says reviews are unavailable and why.
 
@@ -386,7 +393,7 @@ In Fullscreen the conversation's other keys (Page Up/Page Down, Home/End, F3) st
 Enter edits in a copy of the session: it is forked before the message's turn and the interface switches to the fork, whose conversation ends before the message, with the message back in the composer to change and send. The original session is archived, whole: `hanafubuki-agent sessions list --archived` finds it ([Sessions](/docs/sessions#edit)). Files the Agent changed are not restored, which the first edit of a run says. Images the message had are not put back, since the composer cannot attach them; a line says how many.
 
 - A message sent while a turn ran (steering) did not start a turn of its own and cannot be edited by itself: edit the message that started the turn.
-- While a turn runs, Esc interrupts it, as before; the edit is refused until no turn runs.
+- While a turn runs, Esc interrupts it, as before; the edit is refused until no turn runs and no message waits.
 - With no message yet, the second Esc says `No previous message to edit.` In Fullscreen, browsing reaches the messages loaded so far; scrolling up loads earlier ones. In Scrollback, those of a resumed session's latest 200 items.
 
 ## Thinking [#thinking]
@@ -545,9 +552,11 @@ Popups, lists, forms, approvals and questions keep their own keys (arrows, Enter
 | `global.hide_pane`                | `leader x`                                                            | Close the side conversation, or leave the subagent shown                         |
 | `chat.interrupt_turn`             | `esc`                                                                 | Interrupt the running turn                                                       |
 | `chat.edit_previous`              | `esc`                                                                 | Twice on an empty composer: edit an earlier message                              |
+| `chat.edit_queued_message`        | `shift-left`, `alt-up`                                                | Put the last queued message back in the composer                                 |
 | `chat.toggle_thinking`            | `ctrl-o`                                                              | Show or hide the model's thinking                                                |
 | `chat.open_presets`               | `leader p`                                                            | Open the presets                                                                 |
 | `composer.submit`                 | `enter`                                                               | Send the message                                                                 |
+| `composer.queue`                  | `tab`                                                                 | While a turn runs: queue the message for after it                                |
 | `composer.history_previous`       | `up`, `ctrl-p`                                                        | The previous message sent                                                        |
 | `composer.history_next`           | `down`, `ctrl-n`                                                      | The next message sent                                                            |
 | `editor.insert_newline`           | `ctrl-j`, `ctrl-m`, `enter`, `shift-enter`, `alt-enter`, `ctrl-enter` | A new line                                                                       |

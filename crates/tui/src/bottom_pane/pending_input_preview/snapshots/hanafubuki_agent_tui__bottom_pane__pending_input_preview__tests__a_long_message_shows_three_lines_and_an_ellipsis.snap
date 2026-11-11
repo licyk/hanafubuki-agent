@@ -1,0 +1,10 @@
+---
+source: crates/tui/src/bottom_pane/pending_input_preview/tests.rs
+expression: "render(&pending, 40)"
+---
+• Queued follow-up inputs
+  ↳ First
+    Second
+    Third
+    …
+    shift + ← edit last queued message

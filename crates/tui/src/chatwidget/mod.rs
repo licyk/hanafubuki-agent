@@ -6,10 +6,13 @@
 //!
 //! What the turn does arrives as [`TurnUpdate`]s (`turn`); what the person
 //! types goes to the bottom pane, and what it submits leaves as an
-//! [`Op`] for the Agent, or runs as a slash command (`commands`).
+//! [`Op`] for the Agent through the chat's queue (`input_flow`,
+//! `input_queue`), or runs as a slash command (`commands`).
 
 mod appearance;
 mod commands;
+mod input_flow;
+mod input_queue;
 mod live_tail;
 mod replay;
 mod second;
@@ -33,7 +36,7 @@ use crate::appearance::Appearance;
 use crate::bottom_pane::{
     BottomPane, BottomPaneParams, CancellationEvent, InputResult, ThinkingToggle,
 };
-use crate::commands::{PRESETS, PROVIDERS};
+use crate::commands::PRESETS;
 use crate::file_search::FileMatch;
 use crate::history_cell::{self, HistoryCell, ThinkingCell, ToolCallCell};
 use crate::key_hint::{self, KeyBinding};
@@ -119,6 +122,8 @@ pub(crate) struct ChatWidget {
     model_override: bool,
     /// The hooks waiting to be trusted were looked for, once per run.
     hooks_checked: bool,
+    /// What the person sent that the conversation has not taken yet.
+    input_queue: input_queue::InputQueue,
 }
 
 impl ChatWidget {
@@ -171,6 +176,7 @@ impl ChatWidget {
             setup_needed: false,
             model_override,
             hooks_checked: false,
+            input_queue: input_queue::InputQueue::default(),
         }
     }
 
@@ -210,9 +216,21 @@ impl ChatWidget {
                 self.dispatch_command(&PRESETS, String::new());
                 return;
             }
+            if key_event.kind == KeyEventKind::Press
+                && self.bottom_pane.no_modal_or_popup_active()
+                && ((keymap::matches(Action::EditQueuedMessage, &key_event)
+                    && self.edit_queued_message())
+                    || (keymap::matches(Action::InterruptTurn, &key_event)
+                        && self.bottom_pane.is_task_running()
+                        && self.esc_handled()))
+            {
+                self.request_redraw();
+                return;
+            }
         }
         match self.bottom_pane.handle_key_event(key_event) {
             InputResult::Submitted(text) => self.submit_user_message(text),
+            InputResult::Queued(text) => self.queue_user_message(text),
             InputResult::Command(command, args) => self.dispatch_command(command, args),
             InputResult::None => {}
         }
@@ -297,30 +315,6 @@ impl ChatWidget {
     /// Matches for the `@` token being typed, from the file search.
     pub(crate) fn apply_file_search_result(&mut self, query: String, matches: Vec<FileMatch>) {
         self.bottom_pane.on_file_search_result(query, matches);
-    }
-
-    /// Sends `text` to the session, created by it when there is none; with
-    /// no Provider or model set up yet, the text goes back to the composer
-    /// and the setup opens.
-    pub(crate) fn submit_user_message(&mut self, text: String) {
-        if text.trim().is_empty() {
-            return;
-        }
-        if self.setup_needed
-            && !self.session_open
-            && !self.bottom_pane.command_disabled(PROVIDERS.name)
-        {
-            self.bottom_pane.set_composer_text(text);
-            self.add_info_message(
-                "Set up a model Provider and choose a model first; your message is kept."
-                    .to_string(),
-            );
-            self.open_setup();
-            return;
-        }
-        self.session_open = true;
-        self.add_to_history(history_cell::new_user_prompt(text.clone()));
-        self.app_event_tx.send(AppEvent::Op(Op::UserInput(text)));
     }
 
     fn on_ctrl_c(&mut self) {

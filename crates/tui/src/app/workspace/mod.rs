@@ -19,7 +19,8 @@
 //! (`panes`), when the screen is wide enough; a subagent fills the screen.
 //! In scrollback mode the interface switches to the second conversation,
 //! and what the other commits waits until it is shown again. Esc (on an
-//! empty composer, nothing running) returns to the main conversation; the
+//! empty composer, nothing running or waiting) returns to the main
+//! conversation; each conversation's chat queues its own messages; the
 //! panes' keymap actions, the leader Ctrl+X then a key by default, move
 //! between them (`keys`). Codex's sidebar
 //! of several conversations, its chooser and tab strip are not ported: a
@@ -567,7 +568,8 @@ impl App {
             && keymap::matches(Action::EditPrevious, &key)
             && self.chat_widget.no_modal_or_popup_active()
             && self.chat_widget.composer_is_empty()
-            && !self.chat_widget.is_task_running();
+            && !self.chat_widget.is_task_running()
+            && !self.chat_widget.has_pending_input();
         if returns {
             self.return_to_main(tui);
         }

@@ -3,9 +3,9 @@
 //! The bottom pane is the interactive footer of the chat UI.
 //!
 //! The pane owns the [`ChatComposer`] (editable prompt input, with its slash-command and file
-//! popups) and a stack of transient [`BottomPaneView`]s (the approval and question modals, the
-//! selection lists of `/model` and `/mode`) that temporarily replace the composer for focused
-//! interactions.
+//! popups), the messages waiting above it ([`PendingInput`]) and a stack of transient
+//! [`BottomPaneView`]s (the approval and question modals, the selection lists of `/model` and
+//! `/mode`) that temporarily replace the composer for focused interactions.
 //!
 //! Input routing is layered: `BottomPane` decides which local surface receives a key (view vs
 //! composer), while higher-level intent such as "interrupt" or "quit" is decided by the parent
@@ -30,6 +30,7 @@ mod menu_view;
 mod module_view;
 mod multi_select_picker;
 mod paste_burst;
+mod pending_input_preview;
 mod popup_consts;
 mod request_user_input;
 mod scroll_state;
@@ -47,7 +48,7 @@ use ratatui::crossterm::event::KeyEvent;
 use ratatui::layout::Rect;
 use ratatui::text::Line;
 
-use crate::app_event::AppEventSender;
+use crate::app_event::{AppEvent, AppEventSender, Op};
 use crate::commands::{CommandReply, CommandSpec};
 use crate::file_search::FileMatch;
 use crate::key_hint;
@@ -69,6 +70,7 @@ pub(crate) use module_view::ViewFailure;
 use module_view::{ModuleView, ViewFailures};
 pub(crate) use multi_select_picker::{MultiSelectItem, MultiSelectPicker};
 use paste_burst::PasteBurst;
+pub(crate) use pending_input_preview::PendingInput;
 use request_user_input::RequestUserInputOverlay;
 pub(crate) use selection_popup_common::{render_menu_surface, GenericDisplayRow};
 pub(crate) use textarea::{TextArea, TextAreaState};
@@ -87,6 +89,8 @@ pub(crate) const QUIT_SHORTCUT_TIMEOUT: Duration = Duration::from_secs(1);
 pub(crate) enum InputResult {
     /// The message the person sent, trimmed, with large pastes put back.
     Submitted(String),
+    /// The message the person queued (Tab) while a turn runs.
+    Queued(String),
     /// A command, with the text after its name when it takes any.
     Command(&'static CommandSpec, String),
     None,
@@ -115,6 +119,8 @@ pub(crate) struct BottomPane {
     is_task_running: bool,
 
     status: Option<StatusIndicatorWidget>,
+    /// The messages waiting for the turn, shown above the composer.
+    pending_input: PendingInput,
 
     /// What the commands' views reported when they panicked.
     view_failures: ViewFailures,
@@ -150,6 +156,7 @@ impl BottomPane {
             has_input_focus,
             is_task_running: false,
             status: None,
+            pending_input: PendingInput::default(),
             view_failures: ViewFailures::default(),
         }
     }
@@ -185,18 +192,19 @@ impl BottomPane {
             self.request_redraw();
             return InputResult::None;
         }
-        // If a task is running and a status line is visible, allow Esc to
-        // send an interrupt even while the composer has focus; with a popup
-        // open, Esc closes the popup.
+        // While a task runs Esc interrupts it, even while the answer streams
+        // and the status line is hidden; with a popup open, Esc closes the
+        // popup.
         if keymap::matches(Action::InterruptTurn, &key_event)
             && self.is_task_running
             && !self.composer.popup_active()
         {
-            if let Some(status) = &self.status {
-                status.interrupt();
-                self.request_redraw();
-                return InputResult::None;
+            match &self.status {
+                Some(status) => status.interrupt(),
+                None => self.app_event_tx.send(AppEvent::Op(Op::Interrupt)),
             }
+            self.request_redraw();
+            return InputResult::None;
         }
         let (input_result, needs_redraw) = self.composer.handle_key_event(key_event);
         if needs_redraw {
@@ -351,6 +359,20 @@ impl BottomPane {
         self.request_redraw();
     }
 
+    /// Puts messages that did not reach the turn back in the composer,
+    /// before the draft.
+    pub(crate) fn restore_draft(&mut self, text: String) {
+        self.composer.restore_draft(text);
+        self.request_redraw();
+    }
+
+    pub(crate) fn set_pending_input(&mut self, pending_input: PendingInput) {
+        if self.pending_input != pending_input {
+            self.pending_input = pending_input;
+            self.request_redraw();
+        }
+    }
+
     pub(crate) fn update_status(&mut self, header: String, details: Option<String>) {
         if let Some(status) = self.status.as_mut() {
             status.update_header(header);
@@ -442,6 +464,11 @@ impl BottomPane {
 
     pub(crate) fn composer_is_empty(&self) -> bool {
         self.composer.is_empty()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn composer_text(&self) -> String {
+        self.composer.current_text_with_pending()
     }
 
     pub(crate) fn is_task_running(&self) -> bool {
@@ -565,6 +592,10 @@ impl BottomPane {
             let mut flex = FlexRenderable::new();
             if let Some(status) = &self.status {
                 flex.push(0, RenderableItem::Borrowed(status));
+                flex.push(0, RenderableItem::Owned("".into()));
+            }
+            if !self.pending_input.is_empty() {
+                flex.push(0, RenderableItem::Borrowed(&self.pending_input));
                 flex.push(0, RenderableItem::Owned("".into()));
             }
             let mut flex2 = FlexRenderable::new();

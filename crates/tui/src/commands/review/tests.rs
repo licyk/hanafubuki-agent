@@ -207,15 +207,6 @@ fn a_running_review_shows_in_the_status_line_until_it_ends() {
             ">> Code review started: current changes <<".to_string()
         )]
     );
-    // A message sent while it runs waits.
-    chat.handle_turn_update(TurnUpdate::Review(ReviewReply::Held));
-    assert_eq!(
-        sent(&events),
-        [Sent::Cell(
-            "• A review runs; your message is sent when it ends.".to_string()
-        )]
-    );
-
     chat.handle_turn_update(TurnUpdate::Review(ReviewReply::Ended(ReviewEnd::Cancelled)));
     assert!(!chat.is_task_running());
     assert_eq!(

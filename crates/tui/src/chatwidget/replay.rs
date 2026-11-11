@@ -12,8 +12,10 @@ use crate::streaming::controller::{PlanStreamController, StreamController};
 
 impl ChatWidget {
     /// Shows the session from its start. What the previous session left
-    /// running is gone with it.
+    /// running is gone with it, and so is what waited for it.
     pub(super) fn on_session_opened(&mut self, opened: OpenedSession) {
+        self.input_queue = super::input_queue::InputQueue::default();
+        self.sync_pending_input();
         self.running_tools.clear();
         self.live_thinking.clear();
         self.live_revision += 1;

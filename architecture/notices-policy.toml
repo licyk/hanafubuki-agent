@@ -443,6 +443,10 @@ path = "crates/tui/src/agent_bridge/mod.rs"
 reason = "The adapter between the facade and the interface, written for the Agent; it stands where Codex has its ConversationManager."
 
 [[original]]
+path = "crates/tui/src/agent_bridge/steering.rs"
+reason = "The bridge's steering of the running turn for the chat's queue, onto the facade's calls and the kernel's consumption events."
+
+[[original]]
 path = "crates/tui/src/agent_bridge/commands.rs"
 reason = "The bridge's slash commands, onto the facade's calls."
 
@@ -473,6 +477,10 @@ reason = "The first-run setup, /providers and the MCP manager end to end over th
 [[original]]
 path = "crates/tui/src/app/tests/appearance.rs"
 reason = "/theme, /statusline and /title end to end over the standalone Agent: run-only arguments, saved setups and the title written."
+
+[[original]]
+path = "crates/tui/src/app/tests/queue.rs"
+reason = "Steering, interrupting and queueing while a turn runs, end to end over the standalone Agent and its scripted model."
 
 [[original]]
 path = "crates/tui/src/app/tests/backtrack.rs"

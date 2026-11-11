@@ -2,7 +2,7 @@
 
 //! Editing an earlier message (Codex's `app_backtrack`).
 //!
-//! - A first Esc on an empty composer, with nothing running and nothing
+//! - A first Esc on an empty composer, with nothing running, waiting or
 //!   open, primes: the footer says a second Esc edits a previous message
 //!   (and a scrolled owned transcript returns to its latest rows). Any
 //!   other key cancels.
@@ -133,6 +133,7 @@ impl App {
             && self.chat_widget.no_modal_or_popup_active()
             && self.chat_widget.composer_is_empty()
             && !self.chat_widget.is_task_running()
+            && !self.chat_widget.has_pending_input()
             && !(self.mode.is_owned()
                 && (self.transcript_view.has_active_interaction()
                     || self.transcript_view.is_detailed()))
@@ -313,7 +314,7 @@ impl App {
             })
             .collect();
         self.cancel_browsing(tui);
-        if self.chat_widget.is_task_running() {
+        if self.chat_widget.is_task_running() || self.chat_widget.has_pending_input() {
             self.chat_widget.add_error_message(
                 "A turn is running: wait for it to end, or interrupt it, before editing an \
                  earlier message."

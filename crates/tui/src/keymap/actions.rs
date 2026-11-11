@@ -71,9 +71,11 @@ pub(crate) enum Action {
     HidePane,
     InterruptTurn,
     EditPrevious,
+    EditQueuedMessage,
     ToggleThinking,
     OpenPresets,
     Submit,
+    Queue,
     HistoryPrevious,
     HistoryNext,
     InsertNewline,
@@ -194,7 +196,7 @@ macro_rules! action {
 }
 
 /// Every action, in [`Action`]'s order.
-pub(crate) static ACTIONS: [ActionSpec; 51] = [
+pub(crate) static ACTIONS: [ActionSpec; 53] = [
     action!(
         Leader,
         Global,
@@ -301,6 +303,13 @@ pub(crate) static ACTIONS: [ActionSpec; 51] = [
         ["esc"]
     ),
     action!(
+        EditQueuedMessage,
+        Chat,
+        "edit_queued_message",
+        "Put the last queued message back in the composer",
+        ["shift-left", "alt-up"]
+    ),
+    action!(
         ToggleThinking,
         Chat,
         "toggle_thinking",
@@ -315,6 +324,13 @@ pub(crate) static ACTIONS: [ActionSpec; 51] = [
         ["leader p"]
     ),
     action!(Submit, Composer, "submit", "Send the message", ["enter"]),
+    action!(
+        Queue,
+        Composer,
+        "queue",
+        "While a turn runs: queue the message for after it",
+        ["tab"]
+    ),
     action!(
         HistoryPrevious,
         Composer,

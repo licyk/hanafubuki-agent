@@ -1,0 +1,10 @@
+---
+source: crates/tui/src/bottom_pane/pending_input_preview/tests.rs
+expression: "render(&pending, 40)"
+---
+• Messages to be submitted after next
+  tool call (press esc to interrupt and
+  send immediately)
+  ↳ Look at the failing test in the
+    parser module before touching the
+    lexer.

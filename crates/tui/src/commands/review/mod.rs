@@ -64,10 +64,6 @@ pub(crate) fn on_reply(context: &mut CommandContext<'_>, reply: ReviewReply) {
             context.set_task_status(Some(format!("Reviewing {hint}")));
             context.add_to_history(review_banner(format!(">> Code review started: {hint} <<")));
         }
-        ReviewReply::Held => context.add_to_history(history_cell::new_info_event(
-            "A review runs; your message is sent when it ends.".to_string(),
-            None,
-        )),
         ReviewReply::Cancelling => {
             context.set_task_status(Some("Cancelling the review".to_string()))
         }

@@ -658,6 +658,7 @@ mod compression;
 mod features;
 mod plugins;
 mod preferences;
+mod queue;
 mod session_commands;
 mod settings;
 mod side;

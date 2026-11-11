@@ -280,3 +280,60 @@ fn submitted_text_comes_back_from_the_composer() {
     );
     assert!(pane.composer_is_empty());
 }
+
+#[test]
+fn esc_interrupts_while_the_status_line_is_hidden() {
+    let (mut pane, rx) = pane();
+    pane.set_task_running(true);
+    // The answer streams.
+    pane.hide_status_indicator();
+    pane.handle_key_event(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    assert_eq!(ops(&rx), vec![Op::Interrupt]);
+}
+
+#[test]
+fn waiting_messages_show_between_the_status_and_the_composer() {
+    let (mut pane, _rx) = pane();
+    pane.set_task_running(true);
+    pane.set_pending_input(PendingInput {
+        steers: vec!["Check the tests first.".to_string()],
+        held: Vec::new(),
+        queued: vec!["Then update the docs.".to_string()],
+    });
+    pane.set_composer_text("A draft".to_string());
+    let width = 60;
+    let area = Rect::new(0, 0, width, pane.desired_height(width));
+    assert_snapshot!(
+        "status_pending_input_and_composer",
+        render_snapshot(&pane, area)
+    );
+}
+
+#[test]
+fn tabs_within_a_paste_burst_are_the_pastes_and_send_nothing() {
+    for running in [false, true] {
+        let (mut pane, rx) = pane();
+        pane.set_task_running(running);
+        let keys = [
+            KeyCode::Char('a'),
+            KeyCode::Char('b'),
+            KeyCode::Char('c'),
+            KeyCode::Enter,
+            KeyCode::Tab,
+            KeyCode::Tab,
+            KeyCode::Char('d'),
+        ];
+        for code in keys {
+            let result = pane.handle_key_event(KeyEvent::new(code, KeyModifiers::NONE));
+            assert_eq!(
+                result,
+                InputResult::None,
+                "{code:?} while running: {running}"
+            );
+        }
+        std::thread::sleep(BottomPane::paste_burst_flush_delay() * 2);
+        assert!(pane.flush_paste_burst_if_due());
+        assert_eq!(pane.composer_text(), "abc\n\t\td");
+        assert!(ops(&rx).is_empty());
+    }
+}

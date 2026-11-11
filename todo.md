@@ -1,3 +1,70 @@
+## Plan: Codex's messages sent while the Agent works, in the terminal interface (2026-11-11)
+
+Ported from Codex `57a808a392` (`codex-rs/tui/src/chatwidget/input_queue.rs`,
+`input_flow.rs`, `input_restore.rs`, `input_receipts.rs`, `interaction.rs`,
+`bottom_pane/pending_input_preview.rs`, the composer's `queue` key and the
+`edit_queued_message` binding). No kernel or facade change, nothing
+model-visible, no golden.
+
+- [x] One input queue per conversation, in the chat (`chatwidget/input_queue.rs`,
+      `input_flow.rs`), over the bridge's steering (`agent_bridge/steering.rs`).
+      Done (2026-11-11):
+      - Enter while a turn runs steers it: one steer in flight at a time, each
+        kept until the turn's `SteeringConsumed` covers the sequence it was
+        accepted under, and written into the conversation only then. Enter
+        before the turn has started queues (Codex's `user_turn_pending_start`).
+      - Tab (`composer.queue`) while a turn runs queues; with nothing running
+        it sends, as Enter does. A command typed with Tab runs at once (Codex
+        queues it to parse at dequeue: not ported).
+      - A turn's end settles the queue once every steer has its answer.
+        Completed or failed: the unread steers and the held messages go as one
+        turn, else one queued message per turn. Esc with steers waiting
+        interrupts and sends them as one turn; Ctrl-C, or Esc with none, puts
+        everything back in the composer before the draft. Nothing is dropped:
+        a steer that raced the turn's end becomes the next turn.
+      - Esc interrupts while the answer streams (Codex), so the docs' callout
+        is gone.
+      - Shift+Left / Alt+Up (`chat.edit_queued_message`) puts the last queued
+        message back in the composer, before the draft (Codex replaces the
+        draft).
+      - The waiting messages show above the composer (Codex's three groups);
+        a draft written during a turn shows `tab to queue message`, and the
+        `?` shortcuts list Tab (to queue, or to send with nothing running).
+      - A review holds Enter's messages for its end (the bridge's own hold is
+        gone); Esc then warns instead of cancelling the review, Ctrl-C cancels
+        it and puts them back.
+      - Editing an earlier message, `/new`, `/resume` and the other commands
+        that run with no turn are refused while a message waits; a session
+        opened drops the queue.
+      - Changed from before: a cancelled review puts the messages held for
+        it back in the composer (they used to be sent); Enter before a turn
+        has started, the session's creation included, queues a turn of its
+        own (it used to steer the first turn); a failed session creation
+        with a message waiting ends as a failed turn; the commands that run
+        with no turn are refused while a message waits; Tab within a paste
+        (no bracketed paste) is the paste's tab; in a subagent shown, a turn
+        the interface starts there is read from the subagent's journal only
+        (its events came twice, through the call's sink too, so its answer
+        was written twice and its end seen twice).
+      - Validation (Linux): `cargo fmt --all --check`, `RUSTFLAGS="-D
+        warnings" cargo check --workspace --all-targets --all-features`,
+        `cargo clippy --workspace --all-targets --all-features -- -D
+        warnings`, `cargo xtask check`, `cargo test --workspace
+        --all-features`, `bun run format:check:site`, `site:check`,
+        `site:test` and `VITE_BASE_PATH=/hanafubuki-agent/ bun run
+        site:build` (every page prerendered) passed; the timing tests
+        (`app::tests::queue`, the two review tests in `app::tests::features`,
+        `app::tests::subagents`, the paste one) passed 10 runs in a row.
+- [ ] Open:
+      - A rejected turn start (the Agent stopped) drains the queue into
+        failures one message at a time, as Codex does; each stays in the
+        conversation with its error. Not changed.
+      - A subagent left with messages queued drops them with its view, as its
+        draft is dropped; Codex keeps each thread's input. Not ported.
+      - Shift+Left and Alt+Up were tested through crossterm's events only, not
+        on real Windows or macOS terminals, which may report them differently
+        or keep them for themselves.
+
 ## Plan: a more customizable modular architecture, after KohakuTerrarium (2026-11-11)
 
 The plan is [docs/plan-modular-architecture.md](docs/plan-modular-architecture.md).

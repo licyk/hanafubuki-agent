@@ -1,0 +1,8 @@
+---
+source: crates/tui/src/bottom_pane/footer/tests.rs
+expression: terminal.backend()
+---
+"  / for commands          ctrl + j for newline                                  "
+"  @ for file paths        tab to queue message                                  "
+"  esc to interrupt        ↑ for previous message                                "
+"  ctrl + c to exit        ctrl + t to view transcript                           "

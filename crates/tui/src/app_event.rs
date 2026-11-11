@@ -107,8 +107,14 @@ pub(crate) enum AppCommand {
 /// The widgets' requests of the Agent, which the bridge turns into calls.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Op {
-    /// A message from the person: a new turn, or steering of the running one.
+    /// A message from the person that starts a turn.
     UserInput(String),
+    /// A message that steers the running turn; `id` names it in the answer
+    /// (`TurnUpdate::Steered`).
+    Steer {
+        id: u64,
+        text: String,
+    },
     Interrupt,
     Approval {
         request_id: ApprovalRequestId,

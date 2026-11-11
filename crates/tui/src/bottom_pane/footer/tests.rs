@@ -25,6 +25,7 @@ fn props(mode: FooterMode) -> FooterProps<'static> {
         quit_shortcut_key: key_hint::ctrl(KeyCode::Char('c')),
         thinking_toggle: None,
         status_line: None,
+        task_running: false,
     }
 }
 
@@ -36,6 +37,14 @@ fn footer_snapshots() {
         "footer_shortcuts_shift_and_esc",
         FooterProps {
             use_shift_enter_hint: true,
+            ..props(FooterMode::ShortcutOverlay)
+        },
+    );
+
+    snapshot_footer(
+        "footer_shortcuts_while_a_turn_runs",
+        FooterProps {
+            task_running: true,
             ..props(FooterMode::ShortcutOverlay)
         },
     );
@@ -53,6 +62,14 @@ fn footer_snapshots() {
     snapshot_footer(
         "footer_composer_has_draft_queue_hint_disabled",
         props(FooterMode::ComposerHasDraft),
+    );
+
+    snapshot_footer(
+        "footer_composer_has_draft_queue_hint_enabled",
+        FooterProps {
+            task_running: true,
+            ..props(FooterMode::ComposerHasDraft)
+        },
     );
 }
 

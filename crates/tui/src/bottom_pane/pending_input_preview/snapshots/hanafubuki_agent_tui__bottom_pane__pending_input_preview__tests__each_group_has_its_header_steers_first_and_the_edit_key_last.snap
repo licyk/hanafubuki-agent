@@ -1,0 +1,15 @@
+---
+source: crates/tui/src/bottom_pane/pending_input_preview/tests.rs
+expression: "render(&pending, 52)"
+---
+• Messages to be submitted after next tool call
+  (press esc to interrupt and send immediately)
+  ↳ Please continue.
+  ↳ Check the last command output.
+
+• Messages to be submitted at end of turn
+  ↳ Sent while the review ran.
+
+• Queued follow-up inputs
+  ↳ Queued follow-up question
+    shift + ← edit last queued message

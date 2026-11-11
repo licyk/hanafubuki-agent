@@ -14,7 +14,8 @@
 //! After a first Esc on an empty composer, the footer says a second one edits a previous message
 //! (`FooterMode::EscHint`). The status line (`/statusline`) takes the row of
 //! the shortcuts hint while the composer is empty, and while a draft is
-//! written with no turn running. Codex's footer also shows the context window left, the collaboration
+//! written with no turn running; a draft written during a turn shows the key
+//! that queues it instead. Codex's footer also shows the context window left, the collaboration
 //! mode and its width-based collapse rules, and shortcuts for shell commands, images, the external
 //! editor and backtracking; none of those are ported.
 use crate::key_hint;
@@ -44,6 +45,9 @@ pub(crate) struct FooterProps<'a> {
     pub(crate) thinking_toggle: Option<ThinkingToggle>,
     /// The status line, when this mode shows it.
     pub(crate) status_line: Option<&'a Line<'static>>,
+    /// A turn runs: a draft shows the key that queues it, and the
+    /// shortcuts say that key queues.
+    pub(crate) task_running: bool,
 }
 
 /// What the thinking toggle (Ctrl-O) does to the live thinking cells.
@@ -151,7 +155,12 @@ fn footer_lines(props: FooterProps<'_>) -> Vec<Line<'static>> {
             vec![line]
         }
         FooterMode::ShortcutOverlay => shortcut_overlay_lines(props),
-        FooterMode::ComposerHasDraft => vec![props.status_line.cloned().unwrap_or_default()],
+        FooterMode::ComposerHasDraft => vec![match keymap::hint(Action::Queue) {
+            Some(key) if props.task_running => {
+                Line::from(vec![key.into(), " to queue message".dim()])
+            }
+            _ => props.status_line.cloned().unwrap_or_default(),
+        }],
         FooterMode::EscHint => vec![Line::from(vec![
             keymap::hint(Action::EditPrevious)
                 .unwrap_or(key_hint::plain(KeyCode::Esc))
@@ -189,7 +198,13 @@ fn shortcut_overlay_lines(props: FooterProps<'_>) -> Vec<Line<'static>> {
         key_hint::plain(KeyCode::Char('@')),
         " for file paths",
     ));
+    let queue = if props.task_running {
+        " to queue message"
+    } else {
+        " to send message"
+    };
     let actions = [
+        (Action::Queue, queue),
         (Action::InterruptTurn, " to interrupt"),
         (Action::HistoryPrevious, " for previous message"),
     ];

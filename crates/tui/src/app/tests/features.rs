@@ -1,6 +1,6 @@
 //! `/review`, `/goal` and `/hooks` end to end over the standalone Agent:
-//! a review over the scripted model reported into the conversation and
-//! one cancelled, the goal set, replaced and paused, and a hook trusted
+//! a review over the scripted model reported into the conversation, a
+//! message held for a review's end and one cancelled, the goal set, replaced and paused, and a hook trusted
 //! from the browser after the start reported it.
 
 use std::time::Duration;
@@ -10,7 +10,7 @@ use hanafubuki_agent::{
     AgentGoalStatus, AgentSessionId, AgentSessionListRequest, AgentSessionOrigin,
     AgentSessionParentFilter, HookTrust,
 };
-use ratatui::crossterm::event::KeyCode;
+use ratatui::crossterm::event::{KeyCode, KeyModifiers};
 
 use super::Harness;
 use crate::transcript_mode::TranscriptMode;
@@ -87,12 +87,41 @@ fn a_review_needs_a_conversation_and_reports_its_findings_into_it() {
 }
 
 #[test]
-fn esc_cancels_a_running_review_and_a_message_meanwhile_waits_for_it() {
+fn a_message_sent_during_a_review_starts_the_turn_after_it() {
+    let mut harness = Harness::start_timed(
+        vec![
+            (assistant_events("Hi."), Duration::ZERO),
+            (assistant_events(FINDINGS), Duration::from_secs(2)),
+            (assistant_events("Noted."), Duration::ZERO),
+        ],
+        true,
+        TranscriptMode::Terminal,
+    );
+    harness.answered("Hello.", "Hi.");
+    harness.type_and_submit("/review look at the error handling");
+    harness.pump_until("the review to sample", |harness| {
+        harness.server.requests().len() == 2
+    });
+    harness.type_and_submit("What did it find?");
+    harness.pump_until_screen_shows("Messages to be submitted at end of turn");
+    harness.pump_until_screen_shows("Noted.");
+    let transcript = harness.transcript();
+    let finished = transcript
+        .find("<< Code review finished >>")
+        .expect(&transcript);
+    assert!(
+        finished < transcript.find("› What did it find?").expect(&transcript),
+        "{transcript}"
+    );
+    assert_eq!(harness.server.requests().len(), 3);
+}
+
+#[test]
+fn esc_keeps_a_review_holding_messages_and_ctrl_c_cancels_it_into_the_composer() {
     let mut harness = Harness::start_timed(
         vec![
             (assistant_events("Hi."), Duration::ZERO),
             (assistant_events(FINDINGS), Duration::from_secs(30)),
-            (assistant_events("Noted."), Duration::ZERO),
         ],
         true,
         TranscriptMode::Terminal,
@@ -107,14 +136,21 @@ fn esc_cancels_a_running_review_and_a_message_meanwhile_waits_for_it() {
         .contains("Reviewing look at the error handling"));
 
     harness.type_and_submit("What did it find?");
-    harness.pump_until_screen_shows("your message is sent when it ends");
+    harness.pump_until_screen_shows("Messages to be submitted at end of turn");
+    // Esc would send them at once, which a review cannot take: it says so.
     harness.key(KeyCode::Esc);
+    harness.pump_until_screen_shows("Messages sent during /review wait for it to end");
+    assert!(harness.app.chat_widget.is_task_running());
+
+    harness.key_with(KeyCode::Char('c'), KeyModifiers::CONTROL);
     harness.pump_until("the review to be cancelled", |harness| {
         harness.transcript().contains("<< Code review cancelled >>")
     });
-    // The message waited for the review, then started the next turn.
-    harness.pump_until_screen_shows("Noted.");
-    assert_eq!(harness.server.requests().len(), 3);
+    // The message is back in the composer, unsent.
+    let screen = harness.pump_until_screen_shows("› What did it find?");
+    assert!(!screen.contains("Messages to be submitted"), "{screen}");
+    assert!(!harness.transcript().contains("What did it find?"));
+    assert_eq!(harness.server.requests().len(), 2);
 }
 
 #[test]
