@@ -5,14 +5,15 @@
 
 use hanafubuki_agent::{
     AgentImageInputPolicy, AgentModelPolicySettings, AgentProviderRegistrySnapshot,
-    AgentRemoteCompactionCapability, AgentTurnBudgetSettings, ModelReasoningEffort,
-    MAX_AGENT_CONSECUTIVE_STALLED_STEPS, MAX_AGENT_CUMULATIVE_MODEL_INPUT_TOKENS,
-    MAX_AGENT_CUMULATIVE_MODEL_OUTPUT_TOKENS, MAX_AGENT_HOOK_FRAGMENT_BYTES,
-    MAX_AGENT_IDLE_TIMEOUT_SECONDS, MAX_AGENT_IN_FLIGHT_TOOLS, MAX_AGENT_PENDING_INPUT_ITEMS,
-    MAX_AGENT_TOOL_INVOCATIONS, MAX_AGENT_TOOL_OUTPUT_BYTES,
+    AgentRemoteCompactionCapability, AgentTurnBudgetSettings, ModelMetadata, ModelReasoningEffort,
+    ModelReasoningSupport, MAX_AGENT_CONSECUTIVE_STALLED_STEPS,
+    MAX_AGENT_CUMULATIVE_MODEL_INPUT_TOKENS, MAX_AGENT_CUMULATIVE_MODEL_OUTPUT_TOKENS,
+    MAX_AGENT_HOOK_FRAGMENT_BYTES, MAX_AGENT_IDLE_TIMEOUT_SECONDS, MAX_AGENT_IN_FLIGHT_TOOLS,
+    MAX_AGENT_PENDING_INPUT_ITEMS, MAX_AGENT_TOOL_INVOCATIONS, MAX_AGENT_TOOL_OUTPUT_BYTES,
 };
 
 use crate::bottom_pane::{FieldId, FormItem, FormView};
+use crate::model_facts::sourced_window;
 
 pub(super) const DEFAULT_PROVIDER: FieldId = "default_provider";
 const MODEL: FieldId = "model";
@@ -99,15 +100,27 @@ const BUDGET_NUMBERS: [(FieldId, &str, u64, u64); 11] = [
     ),
 ];
 
+/// The context window's placeholder when nothing is known of it.
+const UNKNOWN_WINDOW: &str = "unknown: compacts on the Provider's error";
+
 /// The reasoning effort's choice that sends none.
 const PROVIDER_DEFAULT: &str = "Provider default";
 
-/// The form of `registry`'s policy; `efforts` are the levels its model is
-/// known to take, offered as a choice (free text when none are known).
+/// The form of `registry`'s policy, with what is known of its model:
+/// the levels it takes, offered as a choice (free text when none are
+/// known), and its window, named where the field is left empty.
 pub(super) fn policy_form(
     registry: &AgentProviderRegistrySnapshot,
-    efforts: &[ModelReasoningEffort],
+    metadata: &ModelMetadata,
 ) -> FormView {
+    let efforts = match metadata.reasoning.as_ref().map(|fact| &fact.value) {
+        Some(ModelReasoningSupport::Supported { efforts, .. }) => efforts.as_slice(),
+        _ => &[],
+    };
+    let window = metadata
+        .context_window
+        .as_ref()
+        .map_or_else(|| UNKNOWN_WINDOW.to_string(), sourced_window);
     let policy = &registry.model_policy;
     let providers = enabled_providers(registry);
     let default = registry
@@ -149,7 +162,7 @@ pub(super) fn policy_form(
                 .context_window_tokens
                 .map_or_else(String::new, |value| value.to_string()),
         )
-        .placeholder("catalog or built-in default")
+        .placeholder(&window)
         .advanced(),
         FormItem::toggle(
             AUTO_COMPACTION,

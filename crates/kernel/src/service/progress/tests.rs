@@ -196,6 +196,7 @@ fn a_report_on_a_runtime_that_has_shut_down_frees_the_consumer_slot() {
                 context_window_source: None,
                 compaction_strategy: Default::default(),
                 scope: Default::default(),
+                configured_facts: Default::default(),
                 role_instructions: None,
             },
             hanafubuki_agent_model_api::ModelApiProtocol::Responses,

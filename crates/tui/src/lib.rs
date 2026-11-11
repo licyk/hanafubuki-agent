@@ -30,6 +30,7 @@ mod keymap;
 mod markdown;
 mod markdown_render;
 mod markdown_stream;
+mod model_facts;
 mod pager_overlay;
 mod render;
 mod resume_picker;

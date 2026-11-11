@@ -6,9 +6,7 @@
 //! the registry the screen last read; when it moved, the screen reads it
 //! again and keeps what the form holds.
 
-use hanafubuki_agent::{
-    AgentProviderRegistrySnapshot, AgentProviderSettings, ModelReasoningEffort,
-};
+use hanafubuki_agent::{AgentProviderRegistrySnapshot, AgentProviderSettings, ModelMetadata};
 use ratatui::buffer::Buffer;
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::layout::Rect;
@@ -40,10 +38,10 @@ pub(super) struct ProvidersScreen {
     /// Open the shared model policy as soon as the registry is read.
     policy_first: bool,
     registry: Option<AgentProviderRegistrySnapshot>,
-    /// The reasoning efforts known, when the registry was read, for the
-    /// model of the policy on the default Provider (the Provider's id and
-    /// the model they are for).
-    reasoning_efforts: Option<(String, String, Vec<ModelReasoningEffort>)>,
+    /// What was known, when the registry was read, of the model of the
+    /// policy on the default Provider (the Provider's id and the model it
+    /// is for).
+    model_metadata: Option<(String, String, ModelMetadata)>,
     stage: Stage,
     complete: bool,
 }
@@ -94,7 +92,7 @@ impl ProvidersScreen {
             setup,
             policy_first,
             registry: None,
-            reasoning_efforts: None,
+            model_metadata: None,
             stage: Stage::Loading,
             complete: false,
         }
@@ -196,19 +194,20 @@ impl ProvidersScreen {
         let Some(registry) = self.registry.as_ref() else {
             return;
         };
-        // The levels known when the registry was read, while its default
+        // What was known when the registry was read, while its default
         // Provider and model are still those.
-        let efforts = match &self.reasoning_efforts {
-            Some((provider_id, model, efforts))
+        let unknown = ModelMetadata::default();
+        let metadata = match &self.model_metadata {
+            Some((provider_id, model, metadata))
                 if registry.default_provider_id.as_ref() == Some(provider_id)
                     && registry.model_policy.model == *model =>
             {
-                efforts.as_slice()
+                metadata
             }
-            _ => &[],
+            _ => &unknown,
         };
         self.stage = Stage::Policy {
-            form: policy::policy_form(registry, efforts),
+            form: policy::policy_form(registry, metadata),
             busy: false,
         };
     }
@@ -381,16 +380,9 @@ impl ProvidersScreen {
 
     fn reply(&mut self, reply: ProviderReply) {
         match reply {
-            ProviderReply::Loaded {
-                registry,
-                reasoning_efforts,
-            } => {
-                self.reasoning_efforts = registry.default_provider_id.clone().map(|provider_id| {
-                    (
-                        provider_id,
-                        registry.model_policy.model.clone(),
-                        reasoning_efforts,
-                    )
+            ProviderReply::Loaded { registry, metadata } => {
+                self.model_metadata = registry.default_provider_id.clone().map(|provider_id| {
+                    (provider_id, registry.model_policy.model.clone(), metadata)
                 });
                 self.registry = Some(registry);
                 match &self.stage {

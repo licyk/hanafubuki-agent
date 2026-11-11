@@ -45,14 +45,15 @@ pub use plugin_options::{PluginOptionKey, PluginOptionsSettings};
 pub use providers::{
     validate_agent_model_policy, validate_agent_provider, validate_agent_provider_base_url,
     validate_agent_provider_credential, validate_agent_provider_registry, AgentImageInputPolicy,
-    AgentInputCapabilitiesSettings, AgentModelPolicySettings, AgentModelProtocol,
-    AgentProviderHeaderSettings, AgentProviderRegistrySettings, AgentProviderSettings,
-    AgentRemoteCompactionCapability, AgentTurnBudgetSettings,
-    DEFAULT_AGENT_AUTO_COMPACT_THRESHOLD_PERCENT, MAX_AGENT_CONSECUTIVE_STALLED_STEPS,
-    MAX_AGENT_CUMULATIVE_MODEL_INPUT_TOKENS, MAX_AGENT_CUMULATIVE_MODEL_OUTPUT_TOKENS,
-    MAX_AGENT_HOOK_FRAGMENT_BYTES, MAX_AGENT_IDLE_TIMEOUT_SECONDS, MAX_AGENT_IN_FLIGHT_TOOLS,
-    MAX_AGENT_PENDING_INPUT_ITEMS, MAX_AGENT_PROVIDERS, MAX_AGENT_PROVIDER_CREDENTIAL_BYTES,
-    MAX_AGENT_PROVIDER_HEADERS, MAX_AGENT_TOOL_INVOCATIONS, MAX_AGENT_TOOL_OUTPUT_BYTES,
+    AgentInputCapabilitiesSettings, AgentModelImageInput, AgentModelOverrideSettings,
+    AgentModelPolicySettings, AgentModelProtocol, AgentProviderHeaderSettings,
+    AgentProviderRegistrySettings, AgentProviderSettings, AgentRemoteCompactionCapability,
+    AgentTurnBudgetSettings, DEFAULT_AGENT_AUTO_COMPACT_THRESHOLD_PERCENT,
+    MAX_AGENT_CONSECUTIVE_STALLED_STEPS, MAX_AGENT_CUMULATIVE_MODEL_INPUT_TOKENS,
+    MAX_AGENT_CUMULATIVE_MODEL_OUTPUT_TOKENS, MAX_AGENT_HOOK_FRAGMENT_BYTES,
+    MAX_AGENT_IDLE_TIMEOUT_SECONDS, MAX_AGENT_IN_FLIGHT_TOOLS, MAX_AGENT_PENDING_INPUT_ITEMS,
+    MAX_AGENT_PROVIDERS, MAX_AGENT_PROVIDER_CREDENTIAL_BYTES, MAX_AGENT_PROVIDER_HEADERS,
+    MAX_AGENT_TOOL_INVOCATIONS, MAX_AGENT_TOOL_OUTPUT_BYTES,
 };
 pub use recovery::{AgentConfigProblem, AgentConfigRecovery};
 pub use roles::{

@@ -3,13 +3,16 @@
 //! no images is offered no `view_image` and sent no image, with no request
 //! refused first, and a turn started with one is refused; a model that
 //! refused an image in one run is sent none in the next
-//! (`model-metadata.json`).
+//! (`model-metadata.json`), unless that refusal is forgotten; and what the
+//! person configures for the model (`models."<id>"`) beats the listing,
+//! from a live session's next turn.
 
 use std::io::Cursor;
 
+use hanafubuki_agent_config::{AgentModelImageInput, AgentModelOverrideSettings};
 use hanafubuki_agent_kernel::{
     AgentError, AgentImageAttachmentRef, AgentImageDetail, AgentSessionId, AgentSessionMode,
-    PreparedAgentImage,
+    ModelMetadataSource, PreparedAgentImage,
 };
 use hanafubuki_agent_process::executor::ExecutorManager;
 use image::{DynamicImage, ImageFormat};
@@ -205,5 +208,149 @@ async fn an_image_refused_in_one_run_is_not_sent_in_the_next() {
     assert_eq!(requests.len(), 3);
     assert!(!offers_view_image(&requests[2]));
     stop(&reopened);
+    let _ = std::fs::remove_dir_all(paths.app_data_dir);
+}
+
+/// The Provider refuses an image in one run, and the person forgets what
+/// it taught: the next run sends the model images again.
+#[tokio::test]
+async fn a_forgotten_image_refusal_is_not_kept_by_the_next_run() {
+    let server = FakeServer::start(vec![
+        (IMAGE_REFUSAL.as_bytes().to_vec(), Duration::ZERO),
+        (assistant_events("Seen as text."), Duration::ZERO),
+        (assistant_events("Done."), Duration::ZERO),
+    ])
+    .await;
+    let (service, paths, config) = service_with_config("model-vision-forget", |_, config| {
+        configure_test_provider(config, &server.base_url, None);
+    });
+    let session = service
+        .create_session(AgentSessionMode::Default, None)
+        .await
+        .unwrap();
+    let image = staged(&service, session.id);
+    service
+        .start_turn(session.id, with_image("look", image))
+        .await
+        .unwrap();
+    assert!(!takes_images(&service, session.id));
+
+    assert_eq!(
+        service
+            .forget_learned_model_facts("provider-1", None)
+            .await
+            .unwrap(),
+        1
+    );
+    stop(&service);
+
+    let reopened = reopen(config, &paths);
+    let session = reopened
+        .create_session(AgentSessionMode::Default, None)
+        .await
+        .unwrap();
+    assert!(takes_images(&reopened, session.id));
+    reopened
+        .start_turn(session.id, "hello".into())
+        .await
+        .unwrap();
+    assert!(offers_view_image(&server.requests()[2]));
+    stop(&reopened);
+    let _ = std::fs::remove_dir_all(paths.app_data_dir);
+}
+
+/// The listing says the model reads text only; the person configures it as
+/// reading images, with a window, in `providers.toml` while a session is
+/// open: its next turn offers `view_image` and sends the image, and takes
+/// the window as configured. An edit of the Provider keeps the setting;
+/// once it is removed, the next turn sends no image and the window is
+/// unknown again.
+#[tokio::test]
+async fn a_per_model_override_reaches_a_live_session_at_its_next_turn() {
+    let server = FakeServer::with_listings(
+        vec![
+            (assistant_events("Seen."), Duration::ZERO),
+            (assistant_events("Done."), Duration::ZERO),
+        ],
+        vec![FakeListing::ok(TEXT_ONLY)],
+    )
+    .await;
+    let (service, paths, config) = service_with_config("model-vision-override", |_, config| {
+        configure_test_provider(config, &server.base_url, None);
+    });
+    let session = service
+        .create_session(AgentSessionMode::Default, None)
+        .await
+        .unwrap();
+    service
+        .list_provider_models(AgentProviderModelCatalogRequest::default())
+        .await
+        .unwrap();
+    assert!(!takes_images(&service, session.id));
+    let set = |models: Option<AgentModelOverrideSettings>| {
+        let revision = config.providers().unwrap().revision;
+        config
+            .mutate_providers(revision, |registry| {
+                registry.providers[0].models = models
+                    .into_iter()
+                    .map(|models| ("fixture-model".to_string(), models))
+                    .collect();
+                Ok(())
+            })
+            .unwrap();
+    };
+    set(Some(AgentModelOverrideSettings {
+        context_window_tokens: Some(50_000),
+        image_input: AgentModelImageInput::Supported,
+        ..AgentModelOverrideSettings::default()
+    }));
+
+    let image = staged(&service, session.id);
+    service
+        .start_turn(session.id, with_image("look", image))
+        .await
+        .unwrap();
+    let first = &server.requests()[0];
+    assert!(offers_view_image(first) && sends_an_image(first));
+    let metadata = service.session_model_metadata(session.id).unwrap();
+    let configured = ModelMetadataSource::Configured;
+    assert_eq!(
+        metadata
+            .context_window
+            .map(|fact| (fact.value, fact.source)),
+        Some((50_000, configured))
+    );
+    assert_eq!(
+        metadata.image_input.map(|fact| (fact.value, fact.source)),
+        Some((true, configured))
+    );
+    let registry = service.provider_registry_snapshot().await.unwrap();
+    let edited = service
+        .write_provider(AgentProviderWriteRequest {
+            expected_revision: registry.revision,
+            provider_id: Some("provider-1".to_string()),
+            provider: AgentProviderDraft {
+                display_name: "Renamed".to_string(),
+                enabled: true,
+                protocol: AgentModelProtocol::Responses,
+                base_url: server.base_url.clone(),
+                api_token: None,
+                request_headers: Vec::new(),
+            },
+        })
+        .await
+        .unwrap();
+    assert!(edited.providers[0].models.contains_key("fixture-model"));
+
+    set(None);
+    service
+        .start_turn(session.id, "and now?".into())
+        .await
+        .unwrap();
+    assert!(!offers_view_image(&server.requests()[1]));
+    assert!(!takes_images(&service, session.id));
+    let metadata = service.session_model_metadata(session.id).unwrap();
+    assert_eq!(metadata.context_window, None);
+    stop(&service);
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }

@@ -182,6 +182,27 @@ impl RegistryState {
         true
     }
 
+    /// Drops the learned facts of `endpoint`'s routes (only `model`'s,
+    /// when named). Returns how many routes had any.
+    pub(super) fn forget_learned(
+        &mut self,
+        endpoint: &ModelEndpointKey,
+        model: Option<&str>,
+        now_ms: u64,
+    ) -> usize {
+        let mut forgotten = 0;
+        for (route, facts) in &mut self.routes {
+            let named =
+                route.endpoint() == endpoint && model.is_none_or(|model| route.model() == model);
+            if named && !is_unknown(&facts.learned) {
+                facts.learned = ModelMetadata::default();
+                forgotten += 1;
+            }
+        }
+        self.prune(now_ms);
+        forgotten
+    }
+
     /// `route`'s facts that hold at `now_ms`.
     pub(super) fn live_facts(&self, route: &ModelRouteKey, now_ms: u64) -> Option<RouteFacts> {
         let mut facts = self.routes.get(route)?.clone();

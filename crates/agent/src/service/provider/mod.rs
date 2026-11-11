@@ -19,4 +19,6 @@ pub use contracts::{
 pub(crate) use contracts::{ResolvedAgentProvider, ResolvedModelPolicy};
 #[cfg(test)]
 use resolution::resolve_model_policy;
-pub(crate) use resolution::{resolve_provider_definition, resolve_settings_provider};
+pub(crate) use resolution::{
+    configured_model_facts, resolve_provider_definition, resolve_settings_provider,
+};

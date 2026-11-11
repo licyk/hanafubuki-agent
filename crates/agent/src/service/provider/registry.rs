@@ -1,4 +1,4 @@
-use super::resolve_provider_definition;
+use super::{configured_model_facts, resolve_provider_definition};
 use crate::service::AgentApplicationService;
 use crate::{
     model_api_protocol, AgentModelPolicyWriteRequest, AgentProviderDeleteRequest,
@@ -10,7 +10,7 @@ use hanafubuki_agent_config::{
     validate_agent_model_policy, AgentModelPolicySettings, AgentProviderRegistrySettings,
     AgentProviderSettings, AgentSettings, MAX_AGENT_PROVIDERS,
 };
-use hanafubuki_agent_kernel::{ModelCatalogEntry, ModelReasoningEffort, ModelReasoningSupport};
+use hanafubuki_agent_kernel::{AgentError, AgentSessionId, ModelCatalogEntry, ModelMetadata};
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::atomic::Ordering;
 
@@ -168,31 +168,59 @@ impl AgentApplicationService {
         self.load_provider_settings().await
     }
 
-    /// The reasoning efforts `model` on the Provider `provider_id` is known
-    /// to take: its listed levels, none when nothing is known, when it
-    /// takes no reasoning parameter, or when it reasons at levels its
-    /// listing does not name.
-    pub async fn model_reasoning_efforts(
+    /// What is known of `model` on the Provider `provider_id`, each fact
+    /// with its source: its per-model override (`models."<id>"`, but not
+    /// the policy's window), what its refusals taught, what its listing
+    /// reported and the built-in window. Nothing is known of a Provider
+    /// whose base URL is not an endpoint.
+    pub async fn model_metadata(
         &self,
         provider_id: &str,
         model: &str,
-    ) -> Result<Vec<ModelReasoningEffort>, String> {
+    ) -> Result<ModelMetadata, String> {
         let registry = self.load_provider_settings().await?;
-        let provider = registry
-            .providers
-            .iter()
-            .find(|provider| provider.id == provider_id)
-            .ok_or_else(|| format!("Agent Provider {provider_id} no longer exists"))?;
-        Ok(
-            match self.core.model_reasoning(
+        let provider = find_provider(&registry, provider_id)?;
+        Ok(self
+            .core
+            .model_metadata(
                 model_api_protocol(provider.protocol),
                 &provider.base_url,
                 model,
-            ) {
-                Some(ModelReasoningSupport::Supported { efforts, .. }) => efforts,
-                _ => Vec::new(),
-            },
-        )
+                &configured_model_facts(provider, None, model),
+            )
+            .unwrap_or_default())
+    }
+
+    /// What the session `session_id` knows of its model: what is known of
+    /// its route with what the person configured for it, and the window
+    /// the session has, with its source.
+    pub fn session_model_metadata(
+        &self,
+        session_id: AgentSessionId,
+    ) -> Result<ModelMetadata, AgentError> {
+        self.activate_session(session_id)?;
+        self.core.session_model_metadata(session_id)
+    }
+
+    /// Forgets what the Provider `provider_id`'s refusals taught of
+    /// `model`, or of each of its models when none is named: a learned
+    /// window, and a learned "no" to images or to reasoning. A session
+    /// takes it at its next turn. Returns how many models had something to
+    /// forget.
+    pub async fn forget_learned_model_facts(
+        &self,
+        provider_id: &str,
+        model: Option<&str>,
+    ) -> Result<usize, String> {
+        let registry = self.load_provider_settings().await?;
+        let provider = find_provider(&registry, provider_id)?;
+        self.core
+            .forget_learned_model_facts(
+                model_api_protocol(provider.protocol),
+                &provider.base_url,
+                model,
+            )
+            .map_err(|error| error.to_string())
     }
 
     /// Create or replace one Provider in full.
@@ -227,13 +255,18 @@ impl AgentApplicationService {
                     allocate_provider_id(registry)
                 }
             };
-            let definition = draft.into_settings(provider_id.clone());
+            let mut definition = draft.into_settings(provider_id.clone());
             match registry
                 .providers
                 .iter_mut()
                 .find(|provider| provider.id == provider_id)
             {
-                Some(existing) => *existing = definition,
+                // The draft is the connection; the per-model overrides,
+                // which only the file sets, stay.
+                Some(existing) => {
+                    definition.models = std::mem::take(&mut existing.models);
+                    *existing = definition;
+                }
                 None => registry.providers.push(definition),
             }
             Ok(())
@@ -317,8 +350,20 @@ impl AgentProviderDraft {
             base_url: self.base_url.trim().to_string(),
             api_token: self.api_token.filter(|token| !token.is_empty()),
             request_headers: self.request_headers,
+            models: BTreeMap::new(),
         }
     }
+}
+
+fn find_provider<'a>(
+    registry: &'a AgentProviderRegistrySettings,
+    provider_id: &str,
+) -> Result<&'a AgentProviderSettings, String> {
+    registry
+        .providers
+        .iter()
+        .find(|provider| provider.id == provider_id)
+        .ok_or_else(|| format!("Agent Provider {provider_id} no longer exists"))
 }
 
 fn eligible_as_default(provider: &AgentProviderSettings) -> bool {

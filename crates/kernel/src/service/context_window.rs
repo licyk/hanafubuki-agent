@@ -8,6 +8,7 @@ use hanafubuki_agent_model_api::{
     context_limit_in, ModelMetadataSource, Sourced, PLAUSIBLE_CONTEXT_WINDOW,
 };
 
+use super::model_facts::configured_facts;
 use super::*;
 
 impl AgentService {
@@ -15,35 +16,44 @@ impl AgentService {
     /// measures its usage against it too, since recovery refuses usage
     /// measured against another window. Called under the session's lock,
     /// in a commit: the one that admits a turn, or the one after a refusal
-    /// taught a window. A configured window is never replaced, and a
-    /// window no longer known keeps the last one. Returns the window the
-    /// session took, when it changed.
+    /// taught a window. A configured window wins; a window no longer known
+    /// is kept, unless it was recorded as configured or learned (the
+    /// configuration or the learned fact is gone), and then the session's
+    /// window is unknown.
+    /// Returns the window the session took (none: unknown), when it
+    /// changed.
     pub(super) fn refresh_context_window(
         &self,
         record: &mut SessionRecord,
-    ) -> Option<Sourced<u64>> {
+    ) -> Option<Option<Sourced<u64>>> {
         let config = &record.settings.config;
-        if config.context_window_origin() == Some(ModelMetadataSource::Configured) {
-            return None;
-        }
         // A session not bound to its Provider yet (recovered, its transport
         // unavailable) has no route: the built-in table alone would take
         // the place of what its Provider reported.
         let route = record.settings.model.route_key(&config.model)?;
         let resolved = self.inner.model_metadata.context_window(
-            None,
+            config.configured_facts.context_window_tokens,
             Some(&route),
             &config.model,
             now_millis_u64(),
         );
-        let window = changed_window(config, resolved)?;
+        let window = match resolved {
+            Some(window) => Some(changed_window(config, window)?),
+            // Only a window recorded as configured or learned: one without
+            // a source (written before sources were kept) is kept.
+            None if matches!(
+                config.context_window_source,
+                Some(ModelMetadataSource::Configured | ModelMetadataSource::Learned)
+            ) =>
+            {
+                None
+            }
+            None => return None,
+        };
         if let Some(usage) = record.runtime.usage.as_mut() {
-            usage.context_window_tokens = Some(window.value);
+            usage.context_window_tokens = window.as_ref().map(|window| window.value);
         }
-        record
-            .settings
-            .config
-            .set_context_window(Some(window.clone()));
+        record.settings.config.set_context_window(window.clone());
         Some(window)
     }
 
@@ -89,17 +99,19 @@ impl AgentService {
                 .checked_add(1)
                 .expect("agent snapshot revision exhausted");
             record.status.updated_at = now_millis();
-            let event = (window.source == ModelMetadataSource::Learned).then(|| {
-                record_event(
-                    record,
-                    identity,
-                    AgentEventKind::ModelContextWindowLearned {
-                        tokens: window.value,
-                        previous,
-                    },
-                    self.inner.limits,
-                )
-            });
+            let event = window
+                .filter(|window| window.source == ModelMetadataSource::Learned)
+                .map(|window| {
+                    record_event(
+                        record,
+                        identity,
+                        AgentEventKind::ModelContextWindowLearned {
+                            tokens: window.value,
+                            previous,
+                        },
+                        self.inner.limits,
+                    )
+                });
             (StagedPersistence::commit(&cell, record, rollback), event)
         };
         self.persist_staged(staged).await?;
@@ -113,11 +125,18 @@ impl AgentService {
     /// proactive compaction leaves room for; none when it is unknown or the
     /// session has no route.
     pub(super) fn max_output_tokens(&self, record: &SessionRecord) -> Option<u64> {
-        let model = &record.settings.config.model;
-        let route = record.settings.model.route_key(model)?;
+        let config = &record.settings.config;
+        let route = record.settings.model.route_key(&config.model)?;
         self.inner
             .model_metadata
-            .max_output_tokens(&route, model, now_millis_u64())
+            .resolve(
+                Some(&route),
+                &config.model,
+                configured_facts(config),
+                now_millis_u64(),
+            )
+            .max_output_tokens
+            .map(|fact| fact.value)
     }
 }
 
@@ -133,16 +152,12 @@ fn taught_window(request: &ModelRequest, message: &str) -> Option<u64> {
     })
 }
 
-/// `resolved` when it differs from `config`'s window or its source; none
-/// when it is unknown or the same.
-fn changed_window(
-    config: &AgentSessionConfig,
-    resolved: Option<Sourced<u64>>,
-) -> Option<Sourced<u64>> {
-    resolved.filter(|window| {
-        config.context_window_tokens != Some(window.value)
-            || config.context_window_source != Some(window.source)
-    })
+/// `resolved` when it differs from `config`'s window or its origin (so a
+/// window written without a source, configured, stays so).
+fn changed_window(config: &AgentSessionConfig, resolved: Sourced<u64>) -> Option<Sourced<u64>> {
+    (config.context_window_tokens != Some(resolved.value)
+        || config.context_window_origin() != Some(resolved.source))
+    .then_some(resolved)
 }
 
 #[cfg(test)]

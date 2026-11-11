@@ -164,6 +164,7 @@ fn config(reasoning_effort: Option<&str>) -> AgentSessionConfig {
         context_window_source: None,
         compaction_strategy: Default::default(),
         scope: Default::default(),
+        configured_facts: Default::default(),
         role_instructions: None,
     }
 }
@@ -282,6 +283,44 @@ async fn a_model_listed_without_reasoning_is_sent_none() {
     fixture.turn(session_id).await.unwrap();
     assert_eq!(fixture.model.efforts(), [None]);
     assert_eq!(fixture.fell_back(session_id), 0);
+}
+
+/// The levels the person configured for the model (`reasoningEfforts`)
+/// replace the listed ones, an empty list sends none, and the largest
+/// output configured goes with the effort; a refusal under configured
+/// levels still falls back for its request, and the next turn sends the
+/// effort again.
+#[tokio::test]
+async fn configured_levels_replace_the_listed_ones() {
+    let fixture = Fixture::new([refusal()]);
+    fixture.report(listed(Some(true), &["low", "medium"], Some(64_000)));
+    let configured = |levels: &[&str]| {
+        let mut config = config(Some("xhigh"));
+        config.configured_facts.reasoning_efforts =
+            Some(levels.iter().map(|level| effort(level)).collect());
+        config.configured_facts.max_output_tokens = Some(8_000);
+        fixture.service.create_session(config).unwrap().id
+    };
+    let high = configured(&["high"]);
+    let none = configured(&[]);
+
+    fixture.turn(high).await.unwrap();
+    fixture.turn(high).await.unwrap();
+    fixture.turn(none).await.unwrap();
+
+    assert_eq!(
+        fixture.model.efforts(),
+        [Some("high"), None, Some("high"), None].map(|effort| effort.map(String::from))
+    );
+    assert_eq!(fixture.fell_back(high), 1);
+    assert_eq!(
+        fixture.model.requests()[0]
+            .reasoning
+            .as_ref()
+            .unwrap()
+            .max_output_tokens,
+        Some(8_000)
+    );
 }
 
 /// The Provider refuses the parameter: the request is sent once more

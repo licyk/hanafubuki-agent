@@ -144,6 +144,12 @@ pub(crate) enum TurnUpdate {
     /// The Provider refused a request as too long, and the session's model
     /// is taken to have a window of this many tokens from now on.
     ContextWindowLearned(u64),
+    /// What was learned of `model` was forgotten (`forgotten`: whether
+    /// there was anything).
+    LearnedModelFactsForgotten {
+        model: String,
+        forgotten: bool,
+    },
     StatusReport(Box<StatusReport>),
     Providers(ProviderReply),
     Mcp(McpReply),

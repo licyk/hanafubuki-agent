@@ -150,6 +150,7 @@ fn availability_follows_the_spec() {
     assert_eq!(
         inline_args,
         [
+            "model",
             "providers",
             "role",
             "permissions",

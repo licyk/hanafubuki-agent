@@ -9,9 +9,10 @@ pub(super) use draft::draft;
 use hanafubuki_agent::{
     AgentAlternateScreen, AgentBackgroundCompactionSettings, AgentCompactionSettings,
     AgentCompactionStrategy, AgentHierarchicalCompactionSettings, AgentLogLevel,
-    AgentMemorySettings, AgentNetworkSettings, AgentPermissionMode, AgentProxy, AgentSandboxMode,
-    AgentSandboxWorkspaceWrite, AgentSettingsPatch, AgentStandaloneSettingsPatch,
-    AgentTuiPreferencesPatch, AgentWebSearchProvider, AgentWindowsSandbox, AgentWindowsSettings,
+    AgentMemorySettings, AgentModelDiscovery, AgentModelMetadataSettings, AgentNetworkSettings,
+    AgentPermissionMode, AgentProxy, AgentSandboxMode, AgentSandboxWorkspaceWrite,
+    AgentSettingsPatch, AgentStandaloneSettingsPatch, AgentTuiPreferencesPatch,
+    AgentWebSearchProvider, AgentWindowsSandbox, AgentWindowsSettings,
 };
 
 use crate::agent_bridge::ConfigState;
@@ -21,6 +22,7 @@ use super::ConfigSection;
 
 const SAVE: FieldId = "save";
 const PERMISSION: FieldId = "permission";
+const DISCOVERY: FieldId = "model_discovery";
 const SANDBOX: FieldId = "sandbox";
 const WRITABLE_ROOTS: FieldId = "writable_roots";
 const NETWORK_ACCESS: FieldId = "network_access";
@@ -43,6 +45,7 @@ const OPEN_KEYMAP: FieldId = "open_keymap";
 const OPEN_PRESETS: FieldId = "open_presets";
 const OPEN_TUI: FieldId = "open_tui";
 
+const DISCOVERIES: [AgentModelDiscovery; 2] = [AgentModelDiscovery::Auto, AgentModelDiscovery::Off];
 const PERMISSIONS: [AgentPermissionMode; 3] = [
     AgentPermissionMode::Manual,
     AgentPermissionMode::AutoReview,
@@ -164,6 +167,11 @@ impl ConfigChange {
                         return true;
                     }
                 }
+                if let Some(value) = &patch.model_metadata {
+                    if settings.model_metadata != *value {
+                        return true;
+                    }
+                }
                 patch
                     .compaction
                     .as_ref()
@@ -231,10 +239,19 @@ pub(super) fn section_form(section: ConfigSection, state: &ConfigState) -> FormV
                         .position(|mode| *mode == settings.permission_mode)
                         .unwrap_or_default(),
                 ),
+                FormItem::choice(
+                    DISCOVERY,
+                    "Model discovery",
+                    &["auto", "off"],
+                    DISCOVERIES
+                        .iter()
+                        .position(|discovery| *discovery == settings.model_metadata.discovery)
+                        .unwrap_or_default(),
+                ),
                 FormItem::action(SAVE, "Save"),
             ],
         )
-        .with_subtitle("The plugins that are turned off are managed by /plugins."),
+        .with_subtitle("The plugins that are turned off are managed by /plugins. Model discovery lists the Providers' models in the background, at most once a day each."),
         ConfigSection::Sandbox => {
             let windows = settings.windows.sandbox;
             FormView::new(

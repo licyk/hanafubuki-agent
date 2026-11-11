@@ -193,6 +193,7 @@ pub struct AgentSettingsPatch {
     pub searxng_base_url: Option<Option<String>>,
     pub web_fetch_use_jina_reader: Option<bool>,
     pub compaction: Option<AgentCompactionSettings>,
+    pub model_metadata: Option<AgentModelMetadataSettings>,
 }
 
 fn present<'de, D: Deserializer<'de>, T: Deserialize<'de>>(
@@ -239,6 +240,9 @@ impl AgentSettingsPatch {
         if let Some(compaction) = self.compaction {
             compaction::validate_compaction(&compaction)?;
             settings.compaction = compaction;
+        }
+        if let Some(model_metadata) = self.model_metadata {
+            settings.model_metadata = model_metadata;
         }
         validate_search_pair(settings)
     }

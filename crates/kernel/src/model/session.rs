@@ -47,6 +47,17 @@ pub struct AgentSessionConfig {
         skip_serializing_if = "Option::is_none"
     )]
     pub role_instructions: Option<String>,
+    /// What the person configured for the model, which beats what else is
+    /// known of it; the window here is the one a session is given as
+    /// configured. Taken again each time the session is bound to its
+    /// Provider. Left out when empty, so a session without any keeps its
+    /// record unchanged.
+    #[serde(
+        default,
+        deserialize_with = "super::configured_facts::tolerant_configured_facts",
+        skip_serializing_if = "super::AgentConfiguredModelFacts::is_empty"
+    )]
+    pub configured_facts: super::AgentConfiguredModelFacts,
 }
 
 /// What starts a reduction of a session's context. Every strategy keeps the
@@ -144,6 +155,18 @@ impl AgentSessionConfig {
         })
     }
 
+    /// Keeps a window given as configured (without a source: a host's, or
+    /// one a session was written with before its configured facts were
+    /// kept) as the configured fact, unless the facts name one.
+    pub(crate) fn adopt_configured_window(&mut self) {
+        if self.configured_facts.context_window_tokens.is_none()
+            && self.context_window_origin()
+                == Some(hanafubuki_agent_model_api::ModelMetadataSource::Configured)
+        {
+            self.configured_facts.context_window_tokens = self.context_window_tokens;
+        }
+    }
+
     /// Takes `window` (none: unknown) and its source.
     pub(crate) fn set_context_window(
         &mut self,
@@ -161,7 +184,8 @@ pub struct AgentSessionModelConfigurationUpdate {
     pub model: String,
     pub instructions: String,
     pub reasoning_effort: Option<hanafubuki_agent_model_api::ModelReasoningEffort>,
-    pub context_window_tokens: Option<u64>,
+    /// What the person configured for the model, its window included.
+    pub configured_facts: super::AgentConfiguredModelFacts,
     pub input_capabilities: hanafubuki_agent_model_api::ModelInputCapabilityPolicy,
     pub auto_compaction_enabled: bool,
     pub auto_compact_threshold_percent: u8,

@@ -268,10 +268,11 @@ impl AgentService {
         record.settings.config.instructions = update.instructions;
         record.settings.config.reasoning_effort = update.reasoning_effort;
         let window = self.session_context_window(
-            update.context_window_tokens,
+            update.configured_facts.context_window_tokens,
             model.as_ref(),
             &record.settings.config.model,
         );
+        record.settings.config.configured_facts = update.configured_facts;
         record.settings.config.set_context_window(window);
         record.settings.config.input_capabilities = update.input_capabilities;
         record.settings.config.auto_compaction_enabled = update.auto_compaction_enabled;

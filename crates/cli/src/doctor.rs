@@ -7,7 +7,7 @@ use hanafubuki_agent::sandbox;
 use hanafubuki_agent::{
     probe_keyring, AgentConfig, AgentConfigProblem, AgentProviderModelCatalogRequest,
     AgentRoleCatalog, AgentRuntimeHost, AgentSandboxMode, ConfigLayerSource, DataDirLock,
-    McpConnectionPhase,
+    McpConnectionPhase, ModelMetadata, ModelMetadataSource, ModelReasoningSupport,
 };
 
 use crate::agent::{block_on, Standalone};
@@ -232,8 +232,8 @@ fn recoveries(report: &mut Report, config: &AgentConfig) {
     }
 }
 
-/// Starts the Agent, lists the default Provider's models and connects the
-/// enabled MCP servers.
+/// Starts the Agent, lists the default Provider's models with what is known
+/// of each, and connects the enabled MCP servers.
 fn reach(report: &mut Report, standalone: &Standalone, default_provider: Option<String>) {
     let agent = match standalone.start() {
         Ok(agent) => agent,
@@ -244,25 +244,38 @@ fn reach(report: &mut Report, standalone: &Standalone, default_provider: Option<
     };
     if let Some(provider) = default_provider {
         let listed = block_on(&agent, move |agent| async move {
-            agent
+            let results = agent
                 .list_provider_models(AgentProviderModelCatalogRequest {
                     provider_ids: Some(vec![provider]),
                 })
-                .await
+                .await?;
+            let mut known = Vec::new();
+            for result in &results {
+                for model in &result.models {
+                    let metadata = agent.model_metadata(&result.provider_id, &model.id).await?;
+                    known.push((model.id.clone(), metadata));
+                }
+            }
+            Ok::<_, String>((results, known))
         });
-        match listed.map(|results| results.into_iter().next()) {
-            Ok(Some(result)) => match result.error {
-                None => report.ok(
-                    "provider",
-                    &format!(
-                        "{} answers ({} models)",
-                        result.provider_id,
-                        result.models.len()
-                    ),
-                ),
+        match listed.map(|(results, known)| (results.into_iter().next(), known)) {
+            Ok((Some(result), known)) => match result.error {
+                None => {
+                    report.ok(
+                        "provider",
+                        &format!(
+                            "{} answers ({} models)",
+                            result.provider_id,
+                            result.models.len()
+                        ),
+                    );
+                    for (model, metadata) in known {
+                        report.ok("model", &format!("{model}: {}", model_facts(&metadata)));
+                    }
+                }
                 Some(error) => report.fail("provider", &format!("{}: {error}", result.provider_id)),
             },
-            Ok(None) => report.fail("provider", "the default Provider was not reached"),
+            Ok((None, _)) => report.fail("provider", "the default Provider was not reached"),
             Err(failure) => report.fail("provider", &failure.message),
         }
     }
@@ -302,6 +315,54 @@ fn reach(report: &mut Report, standalone: &Standalone, default_provider: Option<
             Err(failure) => report.fail("mcp", &format!("{}: {}", id.as_str(), failure.message)),
         }
     }
+}
+
+/// What is known of a model, each fact with its source: `window 200000
+/// (reported), images no (learned)`; `nothing known` when nothing is.
+fn model_facts(metadata: &ModelMetadata) -> String {
+    let mut facts = Vec::new();
+    if let Some(window) = &metadata.context_window {
+        facts.push(format!("window {}", sourced(window.value, window.source)));
+    }
+    if let Some(output) = &metadata.max_output_tokens {
+        facts.push(format!(
+            "max output {}",
+            sourced(output.value, output.source)
+        ));
+    }
+    if let Some(images) = &metadata.image_input {
+        let reads = if images.value { "yes" } else { "no" };
+        facts.push(format!("images {}", sourced(reads, images.source)));
+    }
+    if let Some(reasoning) = &metadata.reasoning {
+        let levels = match &reasoning.value {
+            ModelReasoningSupport::Unsupported => "no".to_string(),
+            ModelReasoningSupport::Supported { efforts, .. } if efforts.is_empty() => {
+                "yes".to_string()
+            }
+            ModelReasoningSupport::Supported { efforts, .. } => efforts
+                .iter()
+                .map(|effort| effort.as_str())
+                .collect::<Vec<_>>()
+                .join("/"),
+        };
+        facts.push(format!("reasoning {}", sourced(levels, reasoning.source)));
+    }
+    if facts.is_empty() {
+        return "nothing known".to_string();
+    }
+    facts.join(", ")
+}
+
+fn sourced(value: impl std::fmt::Display, source: ModelMetadataSource) -> String {
+    let source = match source {
+        ModelMetadataSource::Configured => "configured",
+        ModelMetadataSource::Learned => "learned",
+        ModelMetadataSource::Reported => "reported",
+        ModelMetadataSource::Catalog => "catalog",
+        ModelMetadataSource::BuiltIn => "built-in",
+    };
+    format!("{value} ({source})")
 }
 
 #[derive(Default)]

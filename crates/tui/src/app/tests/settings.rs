@@ -313,6 +313,59 @@ fn the_policy_form_offers_the_listed_reasoning_levels() {
     );
 }
 
+/// The policy form's window field, left empty, names the window the
+/// default model's listing reported in its placeholder; the model picker
+/// shows what each entry reports; and `/status` shows a session's window
+/// with its source, or that it is unknown; `/model forget` says when
+/// nothing was learned.
+#[test]
+fn the_reported_window_is_shown_in_the_policy_form_the_picker_and_status() {
+    let listing = serde_json::json!({"data": [
+        {"id": "fixture-model", "context_window": 200000, "input_modalities": ["text", "image"]}
+    ]});
+    let mut harness = Harness::start(vec![
+        assistant_events("First."),
+        listing.to_string().into_bytes(),
+        assistant_events("Second."),
+    ]);
+    harness.exchange("hello", "First.");
+    harness.type_and_submit("/status");
+    harness.pump_until_screen_shows("Context window:");
+    assert!(
+        harness
+            .transcript()
+            .contains("unknown (compacts on the Provider's error)"),
+        "{}",
+        harness.transcript()
+    );
+
+    harness.type_and_submit("/model");
+    let picker = harness.pump_until_screen_shows("200K · vision");
+    assert!(picker.contains("fixture-model"), "{picker}");
+    harness.key(KeyCode::Esc);
+    harness.type_and_submit("/providers policy");
+    harness.pump_until_screen_shows("Model policy");
+    // Advanced, after the default Provider, the model and the reasoning.
+    harness.tab(3);
+    harness.key(KeyCode::Char(' '));
+    harness.pump_until_screen_shows("200K, reported");
+    // Back to the list, then closed.
+    harness.key(KeyCode::Esc);
+    harness.key(KeyCode::Esc);
+
+    harness.exchange("again", "Second.");
+    harness.type_and_submit("/status");
+    harness.pump_until("the reported window in /status", |harness| {
+        harness.transcript().contains("200K, reported)")
+    });
+    harness.type_and_submit("/model forget");
+    harness.pump_until("the forgetting", |harness| {
+        harness
+            .transcript()
+            .contains("Nothing was learned of fixture-model to forget.")
+    });
+}
+
 #[test]
 fn the_configuration_center_opens_the_model_policy_directly() {
     let mut harness = Harness::start(Vec::new());

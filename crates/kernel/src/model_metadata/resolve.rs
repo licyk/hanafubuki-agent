@@ -31,14 +31,14 @@ pub(super) fn resolve(
             built_in_window,
         ),
         max_output_tokens: limit(
-            None,
+            configured.max_output_tokens,
             &learned.max_output_tokens,
             &reported.max_output_tokens,
             &catalog.max_output_tokens,
             None,
         ),
         reasoning: capability(
-            None,
+            configured.reasoning,
             &learned.reasoning,
             &reported.reasoning,
             &catalog.reasoning,

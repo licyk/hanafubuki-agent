@@ -13,6 +13,9 @@ pub(crate) fn draft(
     let change = match section {
         ConfigSection::General => ConfigChange::Agent(AgentSettingsPatch {
             permission_mode: Some(PERMISSIONS.get(form.choice(PERMISSION)).copied()?),
+            model_metadata: Some(AgentModelMetadataSettings {
+                discovery: DISCOVERIES.get(form.choice(DISCOVERY)).copied()?,
+            }),
             ..AgentSettingsPatch::default()
         }),
         ConfigSection::Sandbox => {

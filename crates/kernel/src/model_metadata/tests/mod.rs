@@ -10,6 +10,7 @@ use parking_lot::Mutex;
 use super::state::{LEARNED_TTL_MS, MAX_ROUTES, REPORTED_TTL_MS};
 use super::*;
 
+mod forget;
 mod listing;
 mod persistence;
 mod precedence;

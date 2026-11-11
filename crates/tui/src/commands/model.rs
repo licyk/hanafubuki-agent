@@ -7,16 +7,28 @@ use super::{CommandContext, CommandSpec};
 use crate::agent_bridge::ModelChoices;
 use crate::app_event::{AgentCommand, AppEvent, Op};
 use crate::bottom_pane::{SelectionItem, SelectionViewParams};
+use crate::history_cell;
+use crate::model_facts::entry_badges;
 
 pub(crate) static MODEL: CommandSpec = CommandSpec {
     name: "model",
     aliases: &[],
     description: "choose what model to use",
-    inline_args: false,
+    inline_args: true,
     during_task: false,
     needs_session: true,
-    dispatch: |context, _args| context.agent_command(AgentCommand::ListModels),
+    dispatch,
 };
+
+fn dispatch(context: &mut CommandContext<'_>, args: &str) {
+    match args.trim() {
+        "" => context.agent_command(AgentCommand::ListModels),
+        "forget" => context.agent_command(AgentCommand::ForgetLearnedModelFacts),
+        _ => context.add_to_history(history_cell::new_error_event(
+            "Usage: /model [forget]".to_string(),
+        )),
+    }
+}
 
 /// The picker over the Providers' catalogs: every model each lists, and
 /// the session's own when no catalog has it.
@@ -46,10 +58,14 @@ pub(crate) fn show_model_choices(context: &mut CommandContext<'_>, choices: Mode
         }
         for entry in &catalog.models {
             let current = catalog.provider_id == choices.provider_id && entry.id == choices.model;
+            let description = match entry_badges(entry) {
+                Some(badges) => format!("{} · {badges}", catalog.display_name),
+                None => catalog.display_name.clone(),
+            };
             items.push(model_item(
                 &catalog.provider_id,
                 &entry.id,
-                catalog.display_name.clone(),
+                description,
                 current,
             ));
         }

@@ -294,6 +294,7 @@ mod factory;
 mod image_capability;
 mod interaction;
 mod lifecycle;
+mod model_facts;
 mod persistence;
 mod plan_output;
 mod progress;

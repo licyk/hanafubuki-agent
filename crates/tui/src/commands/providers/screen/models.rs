@@ -17,6 +17,7 @@ use crate::bottom_pane::{
     SelectionViewParams,
 };
 use crate::history_cell;
+use crate::model_facts::entry_badges;
 
 const MODEL: &str = "model";
 const USE_MODEL: &str = "use";
@@ -51,7 +52,7 @@ impl ProvidersScreen {
             Ok(models) => {
                 items.extend(models.iter().map(|model| SelectionItem {
                     name: model.id.clone(),
-                    description: model.display_name.clone(),
+                    description: describe(model),
                     is_current: current.as_deref() == Some(model.id.as_str()),
                     search_value: Some(model.id.clone()),
                     ..Default::default()
@@ -213,4 +214,15 @@ impl ProvidersScreen {
             self.show_list(None, None);
         }
     }
+}
+
+/// An entry's name, if it has one, and what it reports of itself.
+fn describe(model: &ModelCatalogEntry) -> Option<String> {
+    let parts: Vec<String> = model
+        .display_name
+        .iter()
+        .cloned()
+        .chain(entry_badges(model))
+        .collect();
+    (!parts.is_empty()).then(|| parts.join(" · "))
 }

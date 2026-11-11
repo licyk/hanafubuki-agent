@@ -97,6 +97,7 @@ fn failed_durable_commit_does_not_publish_the_staged_runtime_revision() {
                 context_window_source: None,
                 compaction_strategy: Default::default(),
                 scope: Default::default(),
+                configured_facts: Default::default(),
                 role_instructions: None,
             },
             hanafubuki_agent_kernel::ModelApiProtocol::Responses,
@@ -188,7 +189,10 @@ fn model_and_effort_mutations_build_first_and_roll_back_failed_persistence() {
             model: "replacement".into(),
             instructions: "replacement".into(),
             reasoning_effort: Some(hanafubuki_agent_kernel::ModelReasoningEffort::High),
-            context_window_tokens: Some(200_000),
+            configured_facts: AgentConfiguredModelFacts {
+                context_window_tokens: Some(200_000),
+                ..AgentConfiguredModelFacts::default()
+            },
             input_capabilities: Default::default(),
             auto_compaction_enabled: true,
             auto_compact_threshold_percent: 80,
@@ -231,7 +235,10 @@ fn model_and_effort_mutations_build_first_and_roll_back_failed_persistence() {
                 model: "replacement".into(),
                 instructions: "replacement".into(),
                 reasoning_effort: Some(hanafubuki_agent_kernel::ModelReasoningEffort::High),
-                context_window_tokens: Some(200_000),
+                configured_facts: AgentConfiguredModelFacts {
+                    context_window_tokens: Some(200_000),
+                    ..AgentConfiguredModelFacts::default()
+                },
                 input_capabilities: Default::default(),
                 auto_compaction_enabled: true,
                 auto_compact_threshold_percent: 80,
@@ -436,6 +443,7 @@ fn runtime_revision_is_not_observable_until_the_durable_commit_is_acknowledged()
                 context_window_source: None,
                 compaction_strategy: Default::default(),
                 scope: Default::default(),
+                configured_facts: Default::default(),
                 role_instructions: None,
             },
             hanafubuki_agent_kernel::ModelApiProtocol::Responses,

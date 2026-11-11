@@ -31,7 +31,7 @@ use hanafubuki_agent_sandbox::{platform_default_mode, SandboxSettings};
 
 use crate::conversation_reader::{AgentConversationReader, ConversationMessage};
 use crate::model_discovery::ModelDiscovery;
-use crate::service::resolve_settings_provider;
+use crate::service::{configured_model_facts, resolve_settings_provider};
 use crate::{
     model_api_protocol, session_compaction_strategy, warn_unreachable_background_threshold,
 };
@@ -396,6 +396,11 @@ impl AgentSessionDriver {
         );
         let auto_compact_threshold_percent = resolved.policy.auto_compact_threshold_percent;
         let protocol = model_api_protocol(resolved.definition.protocol);
+        let configured_facts = configured_model_facts(
+            &resolved.definition,
+            resolved.policy.context_window_tokens,
+            &snapshot.model,
+        );
         if protocol != snapshot.provider_protocol {
             return Err(format!(
                 "Agent Provider {} protocol changed; select a model explicitly before continuing",
@@ -414,6 +419,7 @@ impl AgentSessionDriver {
                     resolved.headers,
                     hanafubuki_agent_kernel::ModelRetryPolicy::default(),
                     resolved.policy.compaction_capability,
+                    configured_facts,
                     session_id,
                 )?;
                 let changed = core.set_session_compaction_strategy(session_id, strategy)?;

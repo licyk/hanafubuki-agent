@@ -15,6 +15,8 @@ use hanafubuki_agent_model_api::{
 };
 use parking_lot::Mutex;
 
+use crate::AgentConfiguredModelFacts;
+
 mod built_in;
 mod resolve;
 mod state;
@@ -26,10 +28,24 @@ pub use store::{ModelMetadataSnapshot, ModelMetadataStore};
 
 /// What the person configured for a route; each fact set wins over every
 /// other source.
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub(crate) struct ConfiguredModelFacts {
     pub(crate) context_window: Option<u64>,
+    pub(crate) max_output_tokens: Option<u64>,
     pub(crate) image_input: Option<bool>,
+    pub(crate) reasoning: Option<ModelReasoningSupport>,
+}
+
+impl ConfiguredModelFacts {
+    /// What `facts` configure.
+    pub(crate) fn from_configured(facts: &AgentConfiguredModelFacts) -> Self {
+        Self {
+            context_window: facts.context_window_tokens,
+            max_output_tokens: facts.max_output_tokens,
+            image_input: facts.image_input,
+            reasoning: facts.reasoning(),
+        }
+    }
 }
 
 /// The facts per route, for the whole kernel. Every method takes the time,
@@ -106,6 +122,24 @@ impl ModelMetadataRegistry {
         });
     }
 
+    /// Forgets what the Provider's refusals taught of `endpoint`'s model
+    /// `model`, or of every model of the endpoint: learned windows, and a
+    /// learned "no" to images or to reasoning. Returns how many models had
+    /// something to forget.
+    pub(crate) fn forget_learned(
+        &self,
+        endpoint: &ModelEndpointKey,
+        model: Option<&str>,
+        now_ms: u64,
+    ) -> usize {
+        let mut forgotten = 0;
+        self.change(|state| {
+            forgotten = state.forget_learned(endpoint, model, now_ms);
+            forgotten > 0
+        });
+        forgotten
+    }
+
     /// What is known about `model`, at `route` when the transport names
     /// one, with what the person `configured`.
     pub(crate) fn resolve(
@@ -133,18 +167,6 @@ impl ModelMetadataRegistry {
         };
         self.resolve(route, model, configured, now_ms)
             .context_window
-    }
-
-    /// The largest output `model` at `route` is known to give.
-    pub(crate) fn max_output_tokens(
-        &self,
-        route: &ModelRouteKey,
-        model: &str,
-        now_ms: u64,
-    ) -> Option<u64> {
-        self.resolve(Some(route), model, ConfiguredModelFacts::default(), now_ms)
-            .max_output_tokens
-            .map(|fact| fact.value)
     }
 
     /// When `endpoint`'s latest listing was recorded, in milliseconds since

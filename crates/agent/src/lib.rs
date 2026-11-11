@@ -181,7 +181,8 @@ pub use hanafubuki_agent_config::{
     AgentCompactionSettings, AgentCompactionStrategy, AgentConfig, AgentConfigProblem,
     AgentConfigRecovery, AgentDirs, AgentHierarchicalCompactionSettings, AgentImageInputPolicy,
     AgentInputCapabilitiesSettings, AgentLogLevel, AgentMemorySettings, AgentModelDiscovery,
-    AgentModelMetadataSettings, AgentModelPolicySettings, AgentModelProtocol, AgentNetworkSettings,
+    AgentModelImageInput, AgentModelMetadataSettings, AgentModelOverrideSettings,
+    AgentModelPolicySettings, AgentModelProtocol, AgentNetworkSettings,
     AgentProviderHeaderSettings, AgentProviderSettings, AgentRemoteCompactionCapability,
     AgentSandboxMode, AgentSandboxWorkspaceWrite, AgentSettings, AgentSettingsPatch,
     AgentStandaloneSettings, AgentStandaloneSettingsPatch, AgentTuiPreferences,
@@ -222,6 +223,12 @@ pub use hanafubuki_agent_kernel::{
     AgentUserInputRequest, AgentUserInputRequestId, ApprovalRequest, ApprovalRequestId,
     ApprovalUserDecision, ConfirmedAgentSessionDeletion, ConversationItem, ModelCatalogEntry,
     MAXIMUM_HOST_CONTEXT_BYTES,
+};
+/// What is known of a model, fact by fact with its source, and what the
+/// person configured for it.
+pub use hanafubuki_agent_kernel::{
+    request_reasoning_effort, AgentConfiguredModelFacts, ModelMetadata, ModelMetadataSource,
+    ModelReasoningSupport, Sourced,
 };
 /// What a role narrows (`AgentResolvedRole::scope`), and what a session's
 /// snapshot shows of it.

@@ -333,11 +333,17 @@ fn run_memory_pass(
         .extraction_model
         .clone()
         .unwrap_or_else(|| provider_model.clone());
+    let configured_window = configured_model_facts(
+        &provider,
+        registry.model_policy.context_window_tokens,
+        &extraction_model,
+    )
+    .context_window_tokens;
     let resolved = resolve_provider_definition(provider, &registry.model_policy)?;
     let evidence_token_limit = application
         .core
         .model_context_window(
-            registry.model_policy.context_window_tokens,
+            configured_window,
             model_api_protocol(resolved.definition.protocol),
             &resolved.definition.base_url,
             &extraction_model,

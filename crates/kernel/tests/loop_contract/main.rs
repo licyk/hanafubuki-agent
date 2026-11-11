@@ -83,6 +83,7 @@ fn config() -> AgentSessionConfig {
         context_window_source: None,
         compaction_strategy: Default::default(),
         scope: Default::default(),
+        configured_facts: Default::default(),
         role_instructions: None,
     }
 }

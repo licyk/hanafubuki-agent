@@ -2,6 +2,7 @@ use std::collections::BTreeSet;
 
 use serde_json::{Map, Value};
 
+use super::models::decode_models;
 use super::{
     validate_agent_model_policy, validate_agent_provider, AgentModelPolicySettings,
     AgentProviderRegistrySettings, AgentProviderSettings, MAX_AGENT_PROVIDERS,
@@ -61,9 +62,20 @@ fn decode_providers(fields: &mut Fields<'_>) -> Vec<AgentProviderSettings> {
     let mut providers = Vec::new();
     let mut ids = BTreeSet::new();
     for (index, item) in items.iter().enumerate() {
-        let provider = serde_json::from_value::<AgentProviderSettings>(item.clone())
+        // The overrides are read on their own, so one that cannot be used
+        // never drops its Provider.
+        let mut item = item.clone();
+        let models = item.as_object_mut().and_then(|item| item.remove("models"));
+        let provider = serde_json::from_value::<AgentProviderSettings>(item)
             .ok()
-            .filter(|provider| validate_agent_provider(provider).is_ok());
+            .filter(|provider| validate_agent_provider(provider).is_ok())
+            .map(|provider| AgentProviderSettings {
+                models: models
+                    .as_ref()
+                    .map(|models| decode_models(fields, index, models))
+                    .unwrap_or_default(),
+                ..provider
+            });
         let message = match provider {
             Some(_) if providers.len() >= MAX_AGENT_PROVIDERS => {
                 "the Provider registry holds too many Providers; this one was dropped"

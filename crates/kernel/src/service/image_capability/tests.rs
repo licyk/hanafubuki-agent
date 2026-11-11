@@ -162,6 +162,7 @@ fn config(image_input: ModelImageInputPolicy) -> AgentSessionConfig {
         context_window_source: None,
         compaction_strategy: Default::default(),
         scope: Default::default(),
+        configured_facts: Default::default(),
         role_instructions: None,
     }
 }
@@ -288,6 +289,49 @@ async fn a_model_reported_without_image_input_is_never_sent_an_image() {
     assert!(!request_contains_images(&requests[1]));
     assert!(format!("{:?}", requests[1].input).contains(IMAGE_INPUT_OMITTED_PLACEHOLDER));
     assert!(!fell_back(&fixture.service, session_id));
+}
+
+/// The person configures the model as reading images (`imageInput =
+/// "supported"`) over a listing that says it reads none: it is sent
+/// images; a refusal still falls back for its request, and the next turn
+/// is sent images again, while a session without the setting takes the
+/// learned "no". The policy's `disabled` still wins, and a model
+/// configured as reading none is sent none over a listing's "yes".
+#[tokio::test]
+async fn a_configured_image_input_beats_what_is_listed_and_learned() {
+    let fixture = Fixture::new([Reply::RefuseImages]);
+    fixture.report(Some(false));
+    let configured = |policy, image_input| {
+        let mut config = config(policy);
+        config.configured_facts.image_input = Some(image_input);
+        fixture.service.create_session(config).unwrap().id
+    };
+    let session_id = configured(ModelImageInputPolicy::Auto, true);
+    assert!(takes_images(&fixture.service, session_id));
+
+    fixture.turn_with_image(session_id, "look").await.unwrap();
+    assert!(fell_back(&fixture.service, session_id));
+    assert!(takes_images(&fixture.service, session_id));
+    fixture
+        .turn_with_image(session_id, "look again")
+        .await
+        .unwrap();
+    let requests = fixture.model.requests();
+    assert_eq!(requests.len(), 3);
+    assert!(request_contains_images(&requests[0]));
+    assert!(!request_contains_images(&requests[1]), "the fallback");
+    assert!(request_contains_images(&requests[2]));
+    let plain = fixture.session(ModelImageInputPolicy::Auto);
+    assert!(!takes_images(&fixture.service, plain));
+
+    let disabled = configured(ModelImageInputPolicy::Disabled, true);
+    assert!(!takes_images(&fixture.service, disabled));
+    let other = Fixture::new([]);
+    other.report(Some(true));
+    let mut unsupported = config(ModelImageInputPolicy::Auto);
+    unsupported.configured_facts.image_input = Some(false);
+    let session_id = other.service.create_session(unsupported).unwrap().id;
+    assert!(!takes_images(&other.service, session_id));
 }
 
 /// A steering message with an image, to a running turn on a model known
@@ -453,7 +497,7 @@ fn creation_and_model_selection_take_what_is_known_of_the_route() {
             model: model.to_string(),
             instructions: "test".to_string(),
             reasoning_effort: None,
-            context_window_tokens: None,
+            configured_facts: Default::default(),
             input_capabilities: Default::default(),
             auto_compaction_enabled: true,
             auto_compact_threshold_percent: 80,

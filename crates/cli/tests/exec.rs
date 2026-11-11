@@ -491,3 +491,30 @@ fn json_names_the_sessions_role_on_turn_started() {
     assert_eq!(first["kind"]["type"], "turn_started", "{first}");
     assert_eq!(first["kind"]["role"], "explorer", "{first}");
 }
+
+/// `doctor --online` lists the default Provider's models, each with what is
+/// known of it and where that came from.
+#[test]
+fn doctor_online_lists_each_model_with_what_is_known_of_it() {
+    let listing = serde_json::json!({"data": [
+        {"id": "fixture-model", "context_window": 200000, "input_modalities": ["text"]},
+        {"id": "other-model"}
+    ]});
+    let model = Model::start(vec![listing.to_string().into_bytes()]);
+    let home = Home::new().with_provider(&model.server.base_url);
+    let stdout = home.run(&["doctor", "--online"]).stdout();
+    assert!(
+        stdout.contains("ok    provider  provider-1 answers (2 models)"),
+        "{stdout}"
+    );
+    assert!(
+        stdout.contains(
+            "ok    model     fixture-model: window 200000 (reported), images no (reported)"
+        ),
+        "{stdout}"
+    );
+    assert!(
+        stdout.contains("ok    model     other-model: nothing known"),
+        "{stdout}"
+    );
+}

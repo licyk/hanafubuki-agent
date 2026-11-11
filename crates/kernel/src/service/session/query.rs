@@ -166,6 +166,7 @@ impl AgentService {
         headers: Vec<hanafubuki_agent_model_api::ModelHeader>,
         request_retry_policy: ModelRetryPolicy,
         compaction_capability: hanafubuki_agent_model_api::ModelCompactionCapability,
+        configured_facts: crate::AgentConfiguredModelFacts,
         session_id: AgentSessionId,
     ) -> Result<(), AgentError> {
         let model = configured_model(
@@ -188,20 +189,32 @@ impl AgentService {
         {
             return Err(AgentError::TurnAlreadyRunning);
         }
-        let Some(config) = reconciled_compaction_config(record, model.compaction_capability())
-        else {
+        let compaction = reconciled_compaction_config(record, model.compaction_capability());
+        // What the person configured for the model now; the session takes
+        // it from its next turn (the window at that turn's admission).
+        let facts_changed = record.settings.config.configured_facts != configured_facts
+            && !has_active_operation(record)
+            && ensure_no_staged_commit(record).is_ok();
+        if compaction.is_none() && !facts_changed {
             record.settings.model = model;
             return Ok(());
-        };
-        // The configured remote compaction changed since the session last
-        // took it: compaction checks the transport against the session.
+        }
         let previous = record.rollback_state();
-        // A background result made with the old implementation is unusable.
-        record.runtime.background_compaction.cancel();
-        record.settings.config = config;
+        if let Some(config) = compaction {
+            // The configured remote compaction changed since the session
+            // last took it: compaction checks the transport against the
+            // session. A background result made with the old
+            // implementation is unusable.
+            record.runtime.background_compaction.cancel();
+            record.settings.config = config;
+        }
+        if facts_changed {
+            record.settings.config.configured_facts = configured_facts;
+        }
         record.settings.model = model;
-        // Not a revision: no snapshot shows the capability, and a caller that
-        // read the revision before this activation must not find it stale.
+        // Not a revision: no snapshot shows the capability or the facts,
+        // and a caller that read the revision before this activation must
+        // not find it stale.
         let staged = StagedPersistence::commit(&cell, record, previous);
         drop(guard);
         self.persist_staged_blocking(staged)

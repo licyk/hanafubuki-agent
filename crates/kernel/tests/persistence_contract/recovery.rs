@@ -25,6 +25,7 @@ async fn request_retry_exhaustion_reason_survives_durable_runtime_reload() {
             context_window_source: None,
             compaction_strategy: Default::default(),
             scope: Default::default(),
+            configured_facts: Default::default(),
             role_instructions: None,
         })
         .unwrap();
@@ -598,7 +599,7 @@ async fn the_context_window_is_resolved_at_creation_and_model_selection_and_reco
                 model: "gpt-5".into(),
                 instructions: "test".into(),
                 reasoning_effort: None,
-                context_window_tokens: None,
+                configured_facts: Default::default(),
                 input_capabilities: Default::default(),
                 auto_compaction_enabled: true,
                 auto_compact_threshold_percent: 80,

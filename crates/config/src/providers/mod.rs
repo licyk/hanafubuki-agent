@@ -1,14 +1,18 @@
 //! The model Provider registry: where models come from, with their
 //! credentials, and the one policy every Provider's model runs under.
 
+use std::collections::BTreeMap;
+
 use hanafubuki_agent_foundation::agent_settings::{
     parse_model_request_header, ModelReasoningEffort,
 };
 use hanafubuki_agent_foundation::url_policy::{UrlPolicy, UrlRejection};
 
 mod decode;
+mod models;
 
 pub(crate) use decode::decode_registry;
+pub use models::{AgentModelImageInput, AgentModelOverrideSettings};
 
 pub const MAX_AGENT_PROVIDERS: usize = 32;
 pub const MAX_AGENT_PROVIDER_HEADERS: usize = 32;
@@ -79,6 +83,9 @@ pub struct AgentProviderSettings {
     pub api_token: Option<String>,
     #[serde(default)]
     pub request_headers: Vec<AgentProviderHeaderSettings>,
+    /// What the person configured per model, by model id.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub models: BTreeMap<String, AgentModelOverrideSettings>,
 }
 
 /// A custom request header. The name is the identity: header names are unique

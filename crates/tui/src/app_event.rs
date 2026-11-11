@@ -142,6 +142,9 @@ pub(crate) enum AgentCommand {
         provider_id: String,
         model: String,
     },
+    /// `/model forget`: what the Provider's refusals taught of the
+    /// session's model is forgotten.
+    ForgetLearnedModelFacts,
     SetMode(AgentSessionMode),
     /// The roles `/role` offers.
     ListRoles,

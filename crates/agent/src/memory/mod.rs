@@ -13,7 +13,7 @@ use hanafubuki_agent_memory::{
 };
 
 use super::model_api_protocol;
-use super::service::resolve_provider_definition;
+use super::service::{configured_model_facts, resolve_provider_definition};
 
 #[derive(Clone)]
 pub struct AgentMemoryApplication {

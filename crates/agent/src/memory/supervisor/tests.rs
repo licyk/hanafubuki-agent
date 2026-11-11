@@ -292,6 +292,7 @@ fn idle_session(
             compaction_strategy: Default::default(),
             scope: Default::default(),
             role_instructions: None,
+            configured_facts: Default::default(),
         },
         memory_contribution: Default::default(),
         turn_budget_policy: hanafubuki_agent_kernel::AgentTurnBudgetPolicy::default(),

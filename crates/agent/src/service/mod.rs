@@ -49,8 +49,8 @@ mod review;
 pub use projections::AgentRunProjection;
 mod provider;
 pub(crate) use provider::{
-    resolve_provider_definition, resolve_settings_provider, ResolvedAgentProvider,
-    ResolvedModelPolicy,
+    configured_model_facts, resolve_provider_definition, resolve_settings_provider,
+    ResolvedAgentProvider, ResolvedModelPolicy,
 };
 pub use provider::{
     AgentModelPolicyWriteRequest, AgentProviderDeleteRequest, AgentProviderDraft,

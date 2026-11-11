@@ -187,6 +187,7 @@ pub fn configure_test_provider(
                 base_url: base_url.into(),
                 api_token: None,
                 request_headers: Vec::new(),
+                models: Default::default(),
             });
             Ok(())
         })

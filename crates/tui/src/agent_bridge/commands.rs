@@ -12,7 +12,7 @@ use hanafubuki_agent::{
     AgentProviderModelCatalogResult, AgentProviderRegistrySnapshot, AgentSessionId,
     AgentSessionListRequest, AgentSessionMode, AgentSessionModelSelectionRequest, AgentSessionPage,
     AgentSessionRuntimeSnapshot, AgentSessionTitleRenameRequest, AgentTranscriptPageRequest,
-    AgentTuiPreferences, AgentTuiPreferencesPatch,
+    AgentTuiPreferences, AgentTuiPreferencesPatch, ModelMetadata,
 };
 
 use super::{
@@ -56,6 +56,9 @@ pub(crate) struct StatusReport {
     pub(crate) provider: String,
     pub(crate) permission_mode: AgentPermissionMode,
     pub(crate) roots: Vec<PathBuf>,
+    /// What the session knows of its model: its window with its source,
+    /// and what narrows the reasoning effort.
+    pub(crate) metadata: ModelMetadata,
 }
 
 impl AgentBridge {
@@ -133,6 +136,21 @@ impl AgentBridge {
                     ))))
                 })
             }
+            AgentCommand::ForgetLearnedModelFacts => {
+                let session = self.current()?;
+                self.spawn(move |agent| async move {
+                    let forgotten = agent
+                        .forget_learned_model_facts(&session.provider_id, Some(&session.model))
+                        .await
+                        .map_err(|error| format!("nothing was forgotten: {error}"))?;
+                    Ok(Some(AgentReply::Update(Box::new(
+                        TurnUpdate::LearnedModelFactsForgotten {
+                            model: session.model,
+                            forgotten: forgotten > 0,
+                        },
+                    ))))
+                })
+            }
             AgentCommand::ListRoles => {
                 let session = self.current()?;
                 let roles = self
@@ -179,6 +197,9 @@ impl AgentBridge {
                     };
                     let registry = agent.provider_registry_snapshot().await?;
                     let roots = agent.workspace_roots()?.into_vec();
+                    let metadata = agent
+                        .session_model_metadata(session.id)
+                        .map_err(|error| error.to_string())?;
                     let provider = registry
                         .providers
                         .iter()
@@ -193,6 +214,7 @@ impl AgentBridge {
                             provider,
                             permission_mode,
                             roots,
+                            metadata,
                         })),
                     ))))
                 })

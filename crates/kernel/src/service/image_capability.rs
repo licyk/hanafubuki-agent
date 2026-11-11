@@ -4,8 +4,9 @@
 //! admission, steering, sampling step, tool call and snapshot, so a fact a
 //! listing reported or a refusal taught since applies at once.
 
-use hanafubuki_agent_model_api::{ModelImageInputPolicy, ModelInputCapabilities, ModelRouteKey};
+use hanafubuki_agent_model_api::{ModelInputCapabilities, ModelRouteKey};
 
+use super::model_facts::configured_image_input;
 use super::*;
 
 impl AgentService {
@@ -70,14 +71,6 @@ impl AgentService {
         });
         config.input_capabilities.effective(observed)
     }
-}
-
-/// The image input the person configured for the session's model, which
-/// beats every other source: `"disabled"` is a "no" (which `effective`
-/// applies too); nothing configures a "yes" yet. A per-model setting would
-/// be read here.
-fn configured_image_input(config: &AgentSessionConfig) -> Option<bool> {
-    (config.input_capabilities.image_input == ModelImageInputPolicy::Disabled).then_some(false)
 }
 
 #[cfg(test)]

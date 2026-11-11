@@ -1,4 +1,4 @@
-use super::AgentApplicationService;
+use super::{configured_model_facts, AgentApplicationService};
 use crate::session_workspace::session_workspace;
 use crate::{
     model_api_protocol, session_compaction_strategy, warn_unreachable_background_threshold,
@@ -100,6 +100,11 @@ impl AgentApplicationService {
             Default::default()
         };
         let protocol = model_api_protocol(provider.protocol);
+        let configured_facts = if model_configured {
+            configured_model_facts(&provider, policy.context_window_tokens, &policy.model)
+        } else {
+            Default::default()
+        };
         let compaction_capability = policy.compaction_capability;
         let turn_budget = policy.turn_budget;
         let config = AgentSessionConfig {
@@ -113,11 +118,8 @@ impl AgentApplicationService {
             } else {
                 None
             },
-            context_window_tokens: if model_configured {
-                policy.context_window_tokens
-            } else {
-                None
-            },
+            // The kernel resolves the window, the configured one first.
+            context_window_tokens: None,
             input_capabilities: policy.input_capabilities,
             auto_compaction_enabled: policy.auto_compaction_enabled,
             auto_compact_threshold_percent: policy.auto_compact_threshold_percent,
@@ -132,6 +134,7 @@ impl AgentApplicationService {
             compaction_strategy: session_compaction_strategy(&settings.compaction, false, false),
             scope: role.scope,
             role_instructions: role.instructions,
+            configured_facts,
         };
         warn_unreachable_background_threshold(
             config.compaction_strategy,

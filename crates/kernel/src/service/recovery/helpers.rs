@@ -16,6 +16,7 @@ impl AgentService {
         contents: &[ConversationItem],
     ) -> Result<(), AgentError> {
         validate_persisted_counters(runtime, model_context)?;
+        runtime.config.adopt_configured_window();
         normalize_session_config(&mut runtime.config);
         validate_session_config(&runtime.config, self.inner.limits)?;
         validate_persisted_history(contents, &runtime.config, self.inner.limits)?;

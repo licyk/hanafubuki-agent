@@ -121,6 +121,7 @@ fn config(window: Option<u64>, source: Option<ModelMetadataSource>) -> AgentSess
         context_window_source: source,
         compaction_strategy: Default::default(),
         scope: Default::default(),
+        configured_facts: Default::default(),
         role_instructions: None,
     }
 }
@@ -342,7 +343,7 @@ fn creation_and_model_selection_record_the_windows_source() {
         model: "unknown-model".to_string(),
         instructions: "test".to_string(),
         reasoning_effort: None,
-        context_window_tokens: None,
+        configured_facts: Default::default(),
         input_capabilities: Default::default(),
         auto_compaction_enabled: true,
         auto_compact_threshold_percent: 80,
@@ -367,7 +368,7 @@ fn creation_and_model_selection_record_the_windows_source() {
     };
     select(&configured, update.clone());
     assert_eq!(persisted(&store, configured.id), (None, None, None));
-    update.context_window_tokens = Some(64_000);
+    update.configured_facts.context_window_tokens = Some(64_000);
     select(&built_in, update);
     assert_eq!(
         persisted(&store, built_in.id),
@@ -375,4 +376,5 @@ fn creation_and_model_selection_record_the_windows_source() {
     );
 }
 
+mod configured;
 mod learned;

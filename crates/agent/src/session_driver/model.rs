@@ -5,7 +5,7 @@ use hanafubuki_agent_foundation::blocking::run_blocking_operation;
 use hanafubuki_agent_kernel::{AgentSessionId, AgentSessionRuntimeSnapshot, ModelReasoningEffort};
 
 use super::AgentSessionDriver;
-use crate::service::resolve_settings_provider;
+use crate::service::{configured_model_facts, resolve_settings_provider};
 use crate::{model_api_protocol, AgentModelInfo, AgentSessionModelSelectionRequest};
 
 impl AgentSessionDriver {
@@ -32,6 +32,8 @@ impl AgentSessionDriver {
         let policy = resolved.policy;
         let provider = resolved.definition;
         let model = request.model;
+        let configured_facts =
+            configured_model_facts(&provider, policy.context_window_tokens, &model);
         let model_info = AgentModelInfo::from_provider(
             model.clone(),
             provider.protocol,
@@ -59,7 +61,7 @@ impl AgentSessionDriver {
                         model,
                         instructions: model_info.resolve_instructions(None),
                         reasoning_effort: policy.reasoning_effort,
-                        context_window_tokens: policy.context_window_tokens,
+                        configured_facts,
                         input_capabilities: policy.input_capabilities,
                         auto_compaction_enabled: policy.auto_compaction_enabled,
                         auto_compact_threshold_percent: policy.auto_compact_threshold_percent,

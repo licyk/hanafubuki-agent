@@ -7,14 +7,15 @@ use std::time::Duration;
 use hanafubuki_agent_foundation::cancellation::CancellationToken;
 use hanafubuki_agent_kernel::test_support::FakeTools;
 use hanafubuki_agent_kernel::{
-    AgentActivityAction, AgentConversationCommit, AgentEvent, AgentEventKind, AgentEventSink,
-    AgentExecutionProgressStatus, AgentHistoryAppendAck, AgentHistoryBase, AgentHistoryItem,
-    AgentHistoryMutation, AgentHistoryStore, AgentHistoryStoreError, AgentKernelRegistries,
-    AgentRecoveredSession, AgentRevision, AgentService, AgentSessionConfig, AgentSessionId,
-    AgentSessionListRequest, AgentSessionModelConfigurationUpdate, AgentSessionOpenResult,
-    AgentSessionPage, AgentToolProgressUpdate, AgentTranscriptPage, AgentTranscriptPageRequest,
-    AgentTurnId, AgentTurnInput, AgentTurnPageRequest, ConversationItem,
-    EphemeralAgentHistoryStore, ModelCompactionCapability,
+    AgentActivityAction, AgentConfiguredModelFacts, AgentConversationCommit, AgentEvent,
+    AgentEventKind, AgentEventSink, AgentExecutionProgressStatus, AgentHistoryAppendAck,
+    AgentHistoryBase, AgentHistoryItem, AgentHistoryMutation, AgentHistoryStore,
+    AgentHistoryStoreError, AgentKernelRegistries, AgentRecoveredSession, AgentRevision,
+    AgentService, AgentSessionConfig, AgentSessionId, AgentSessionListRequest,
+    AgentSessionModelConfigurationUpdate, AgentSessionOpenResult, AgentSessionPage,
+    AgentToolProgressUpdate, AgentTranscriptPage, AgentTranscriptPageRequest, AgentTurnId,
+    AgentTurnInput, AgentTurnPageRequest, ConversationItem, EphemeralAgentHistoryStore,
+    ModelCompactionCapability,
 };
 use hanafubuki_agent_model_api::{
     ModelError, ModelEvent, ModelEventStream, ModelFuture, ModelMessagePhase, ModelOutputItem,
@@ -219,6 +220,7 @@ fn text_session_config() -> AgentSessionConfig {
         context_window_source: None,
         compaction_strategy: Default::default(),
         scope: Default::default(),
+        configured_facts: Default::default(),
         role_instructions: None,
     }
 }

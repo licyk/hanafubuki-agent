@@ -221,6 +221,18 @@ fn providers_are_added_made_default_listed_without_tokens_and_removed() {
         "the default moves: {list}"
     );
     home.run(&["providers", "remove", "provider-9"]).expect(1);
+    let forgot = home
+        .run(&[
+            "providers",
+            "forget",
+            "provider-1",
+            "--model",
+            "fixture-model",
+        ])
+        .expect(0)
+        .stdout();
+    assert_eq!(forgot.trim(), "forgot what was learned of 0 model(s)");
+    home.run(&["providers", "forget", "provider-9"]).expect(1);
     home.run(&[
         "providers",
         "add",

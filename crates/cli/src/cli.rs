@@ -211,6 +211,13 @@ pub(crate) enum ProvidersCommand {
         #[arg(long)]
         model: Option<String>,
     },
+    /// Forgets what a Provider's refusals taught of its models (a smaller
+    /// context window, no images, no reasoning), or of one of them.
+    Forget {
+        id: String,
+        #[arg(long)]
+        model: Option<String>,
+    },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]

@@ -188,6 +188,7 @@ fn skills_read_output_and_context_round_trip_as_a_valid_persisted_group() {
         context_window_source: None,
         compaction_strategy: Default::default(),
         scope: Default::default(),
+        configured_facts: Default::default(),
         role_instructions: None,
     };
 
@@ -336,6 +337,7 @@ fn responses_only_config(
         context_window_source: None,
         compaction_strategy: Default::default(),
         scope: Default::default(),
+        configured_facts: Default::default(),
         role_instructions: None,
     }
 }

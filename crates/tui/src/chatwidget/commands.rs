@@ -129,6 +129,16 @@ impl ChatWidget {
                     None,
                 ))
             }
+            TurnUpdate::LearnedModelFactsForgotten { model, forgotten } => {
+                self.add_to_history(history_cell::new_info_event(
+                    if forgotten {
+                        format!("Forgot what the Provider's refusals taught of {model}; its next turn takes what else is known.")
+                    } else {
+                        format!("Nothing was learned of {model} to forget.")
+                    },
+                    None,
+                ))
+            }
             TurnUpdate::RoleChoices(choices) => self.run_command(&commands::ROLE, |context| {
                 commands::show_role_choices(context, choices)
             }),

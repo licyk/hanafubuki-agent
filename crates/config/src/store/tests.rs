@@ -6,10 +6,12 @@ use hanafubuki_agent_mcp::{
 use serde_json::json;
 
 use super::*;
+use std::collections::BTreeMap;
+
 use crate::{
-    AgentConfigProblem, AgentLogLevel, AgentModelDiscovery, AgentNetworkSettings,
-    AgentPermissionMode, AgentProviderSettings, AgentProxy, AgentSandboxMode,
-    AgentSandboxWorkspaceWrite, AgentWebSearchProvider,
+    AgentConfigProblem, AgentLogLevel, AgentModelDiscovery, AgentModelImageInput,
+    AgentModelOverrideSettings, AgentNetworkSettings, AgentPermissionMode, AgentProviderSettings,
+    AgentProxy, AgentSandboxMode, AgentSandboxWorkspaceWrite, AgentWebSearchProvider,
 };
 
 fn recovered(directory: &Path) -> Vec<String> {
@@ -30,6 +32,7 @@ fn provider(id: &str) -> AgentProviderSettings {
         base_url: "https://api.example.test/v1".into(),
         api_token: Some("sk-verbatim token".into()),
         request_headers: Vec::new(),
+        models: Default::default(),
     }
 }
 
@@ -616,5 +619,87 @@ fn model_discovery_reads_tolerantly_and_is_set_by_its_key() {
     assert_eq!(
         config.value("modelMetadata.discovery").unwrap(),
         Some(json!("off"))
+    );
+}
+
+/// Per-model overrides read field by field: a field that cannot be used is
+/// unset (an unreadable `reasoningEfforts` unset, never "no levels"), an
+/// entry that is not a table is dropped, and the Provider and its token
+/// stay; a write keeps the overrides, ids with `/` and `.` included.
+#[test]
+fn per_model_overrides_read_field_by_field_and_survive_a_write() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join(AGENT_PROVIDERS_FILE);
+    fs::write(
+        &path,
+        r#"revision = 1
+[[providers]]
+id = "provider-1"
+displayName = "Example"
+enabled = true
+protocol = "responses"
+baseUrl = "https://api.example.test/v1"
+apiToken = "sk-kept"
+
+[providers.models."openai/gpt-4.1"]
+contextWindowTokens = 0
+maxOutputTokens = 32000
+imageInput = "supported"
+reasoningEfforts = ["low", "none"]
+
+[providers.models."claude-3.5"]
+contextWindowTokens = 200000
+imageInput = "unsupported"
+reasoningEfforts = []
+
+[providers.models]
+broken = 3
+"#,
+    )
+    .unwrap();
+
+    let config = AgentConfig::new(directory.path());
+    let registry = config.providers().unwrap();
+
+    let provider = &registry.providers[0];
+    assert_eq!(provider.api_token.as_deref(), Some("sk-kept"));
+    let expected = BTreeMap::from([
+        (
+            "claude-3.5".to_string(),
+            AgentModelOverrideSettings {
+                context_window_tokens: Some(200_000),
+                max_output_tokens: None,
+                image_input: AgentModelImageInput::Unsupported,
+                reasoning_efforts: Some(Vec::new()),
+            },
+        ),
+        (
+            "openai/gpt-4.1".to_string(),
+            AgentModelOverrideSettings {
+                context_window_tokens: None,
+                max_output_tokens: Some(32_000),
+                image_input: AgentModelImageInput::Supported,
+                reasoning_efforts: None,
+            },
+        ),
+    ]);
+    assert_eq!(provider.models, expected);
+    assert!(matches!(
+        &config.recoveries()[0].problem,
+        AgentConfigProblem::Repaired { repairs } if repairs.len() == 3
+    ));
+
+    let saved = config
+        .mutate_providers(1, |registry| {
+            registry.providers[0].display_name = "Renamed".into();
+            Ok(())
+        })
+        .unwrap();
+    assert_eq!(saved.providers[0].models, expected);
+    let reopened = AgentConfig::new(directory.path());
+    assert_eq!(reopened.providers().unwrap().providers[0].models, expected);
+    assert!(
+        reopened.recoveries().is_empty(),
+        "the written file reads clean"
     );
 }

@@ -113,6 +113,12 @@ category = "ipc-request"
 reason = "The hierarchical compaction settings inside `AgentSettingsPatch` (`agent_settings_write`); persisted field by field, never through serde."
 
 [[types]]
+path = "crates/config/src/settings/model_metadata.rs"
+type = "AgentModelMetadataSettings"
+category = "ipc-request"
+reason = "The model metadata settings inside `AgentSettingsPatch` (`agent_settings_write`); persisted field by field, never through serde."
+
+[[types]]
 path = "crates/agent/src/attachments.rs"
 type = "DesktopAgentImageInput"
 category = "ipc-request"

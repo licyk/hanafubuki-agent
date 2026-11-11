@@ -27,6 +27,7 @@ async fn image_only_turn_is_durable_and_unsupported_capability_fails_before_admi
             context_window_source: None,
             compaction_strategy: Default::default(),
             scope: Default::default(),
+            configured_facts: Default::default(),
             role_instructions: None,
         })
         .unwrap();
@@ -80,6 +81,7 @@ async fn image_only_turn_is_durable_and_unsupported_capability_fails_before_admi
             context_window_source: None,
             compaction_strategy: Default::default(),
             scope: Default::default(),
+            configured_facts: Default::default(),
             role_instructions: None,
         })
         .unwrap();
@@ -248,6 +250,7 @@ fn session_creation_uses_a_small_runtime_checkpoint_without_history_snapshot() {
                 context_window_source: None,
                 compaction_strategy: Default::default(),
                 scope: Default::default(),
+                configured_facts: Default::default(),
                 role_instructions: None,
             },
             hanafubuki_agent_kernel::ModelApiProtocol::Responses,

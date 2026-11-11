@@ -82,7 +82,8 @@ provider-2 DeepSeek  ChatCompletions  https://api.deepseek.com/v1  token: set
 - **表单**：名称、协议（`responses`、`chat_completions` 或 `anthropic_messages`）、基础 URL、API 令牌、是否启用，以及按行填写的请求头。令牌显示为圆点：保持不动就保留原值，清空就删除它。按键见[表单](/docs/terminal-interface#forms)。
 - **Test** 用表单中的内容（包括令牌和请求头）列出模型，不保存任何东西：它显示 Provider 列出的模型数量，或者 Provider 返回的错误。
 - **Save** 完整写入这个 Provider。对于已启用的 Provider，接着会打开模型选择：选中的模型（Provider 没有列出时，用 **Enter a model id…** 手动输入）成为新会话使用的模型，这个 Provider 成为默认 Provider。按 Esc 则保持原来的模型。`/model` 仍然只修改当前会话的模型。
-- **模型策略**（列表中的 `p`，或 `/providers policy`）：默认 Provider 和模型、推理强度（模型目录列出了档位时是这些档位的选项，否则是文本框）、图片输入、上下文窗口、自动压缩及其阈值、远程压缩，以及 Agent 默认值或全部十一个回合预算字段。它通过同一套修订号保护写入。
+- **模型选择**在 Provider 目录列出的每个模型旁显示目录报告的信息：窗口（`200K`）、`vision` 和 `reasoning`。`/model` 也一样。
+- **模型策略**（列表中的 `p`，或 `/providers policy`）：默认 Provider 和模型、推理强度（已知模型的档位时，来自其目录或其[单独设置](#per-model)，是这些档位的选项，否则是文本框）、图片输入、上下文窗口（留空时，占位文字写出该模型已知的窗口及其来源，如 `200K, reported`）、自动压缩及其阈值、远程压缩，以及 Agent 默认值或全部十一个回合预算字段。它通过同一套修订号保护写入。模型的单独设置不在这个表单里：它们写在 `providers.toml` 中（[按模型的设置](#per-model)）。
 - 每次写入都会带上界面读取时 `providers.toml` 的版本。如果期间文件被其他地方修改（例如另一个终端中的 `providers` 命令），写入会被拒绝：界面重新读取 Provider，保留表单中的内容并给出提示，再保存一次即可。
 - 没有默认 Provider 或没有模型时，界面启动时会自动打开这个界面，见[首次设置](/docs/terminal-interface#setup)。
 
@@ -94,7 +95,7 @@ provider-2 DeepSeek  ChatCompletions  https://api.deepseek.com/v1  token: set
 | `-m 模型`                      | 本次运行中的新会话（以及恢复的会话），在默认 Provider 上运行 |
 | 终端界面的 `/model`            | 当前会话；从已启用 Provider 的模型目录中选择                 |
 
-`/model` 列出每个已启用 Provider 的模型目录（从 `models` 接口读取）。某个 Provider 的目录无法读取时，列表会显示原因。Agent 从目录中的每个模型读取它报告的上下文窗口和最大输出（见[上下文窗口与压缩](#compaction)）、是否读图（见[图片](#images)），以及是否推理、支持哪些推理强度（见[推理强度与思考过程](#reasoning)）。目录报告的内容保存在数据目录的 `model-metadata.json` 中，重启后依然有效；之后的目录不再列出的模型会再保留 7 天。Agent 也会自己在后台读取目录：启动时读取默认 Provider 的目录；在某个 Provider 上创建会话、选用它的模型或在它上面运行轮次时，读取该 Provider 的目录，每个 Provider 每天最多一次（目录读取失败后每 15 分钟最多一次）。没有什么会等待它，读取失败的目录只是稍后再试。在 `config.toml` 中设置 `modelMetadata.discovery = "off"` 可以关闭它（[配置参考](/docs/config-reference#model-metadata)）；你打开的目录仍会被读取和保存。没有可用 ID 的模型会被略去，无法读取的字段视为未报告，所以一个异常的模型不会让整个目录读取失败。`doctor --online` 会检查默认 Provider 是否能列出模型。宿主可以在保存 Provider 之前读取它的模型目录，以测试地址、令牌和请求头（`test_provider_draft`，见[嵌入 Agent](/docs/embedding#configuration-in-a-host)）。
+`/model` 列出每个已启用 Provider 的模型目录（从 `models` 接口读取）。某个 Provider 的目录无法读取时，列表会显示原因。Agent 从目录中的每个模型读取它报告的上下文窗口和最大输出（见[上下文窗口与压缩](#compaction)）、是否读图（见[图片](#images)），以及是否推理、支持哪些推理强度（见[推理强度与思考过程](#reasoning)）。目录报告的内容保存在数据目录的 `model-metadata.json` 中，重启后依然有效；之后的目录不再列出的模型会再保留 7 天。Agent 也会自己在后台读取目录：启动时读取默认 Provider 的目录；在某个 Provider 上创建会话、选用它的模型或在它上面运行轮次时，读取该 Provider 的目录，每个 Provider 每天最多一次（目录读取失败后每 15 分钟最多一次）。没有什么会等待它，读取失败的目录只是稍后再试。在 `config.toml` 中设置 `modelMetadata.discovery = "off"` 可以关闭它（[配置参考](/docs/config-reference#model-metadata)）；你打开的目录仍会被读取和保存。没有可用 ID 的模型会被略去，无法读取的字段视为未报告，所以一个异常的模型不会让整个目录读取失败。`doctor --online` 会检查默认 Provider 是否能列出模型，并显示对每个模型所知道的信息。宿主可以在保存 Provider 之前读取它的模型目录，以测试地址、令牌和请求头（`test_provider_draft`，见[嵌入 Agent](/docs/embedding#configuration-in-a-host)）。
 
 ## 推理强度与思考过程 [#reasoning]
 
@@ -114,7 +115,7 @@ reasoningEffort = "medium"   # minimal、low、medium、high、xhigh
 | Chat Completions   | `reasoning_effort`，OpenAI 的字段，DeepSeek 的文档也列出了它，OpenRouter 把它列在参数中（其推理指南对 Anthropic 模型只提到它的 `reasoning` 对象）                                                               |
 | Anthropic Messages | Claude 4.6 及以后：自适应思考 `thinking: {type: "adaptive", display: "summarized"}`，加上 `output_config: {effort}`（`minimal` 按 `low` 发送）。Claude 4.5 及以前，以及 ID 不是 Claude 的模型：思考预算，见下文 |
 
-没有设置推理强度时，请求不携带它，由 Provider 的默认值决定。`/status` 会显示当前会话的推理强度。
+没有设置推理强度时，请求不携带它，由 Provider 的默认值决定。`/status` 会显示当前会话的推理强度；当对模型已知的信息改变了它时，还会显示实际发送的值（`reasoning xhigh, sends high`，或 `not sent: the model takes none`）。
 
 请求实际携带的推理强度还取决于对该模型已知的信息，这些信息来自 Provider 的模型目录或 Provider 的拒绝：
 
@@ -125,9 +126,9 @@ reasoningEffort = "medium"   # minimal、low、medium、high、xhigh
 | 会推理，目录未列出档位 | 设置的推理强度                                                                                                                                                                                                                                  |
 | 不接受推理参数         | 不发送，无论设置了什么                                                                                                                                                                                                                          |
 
-目录用 `supported_reasoning_levels`（Codex）、`reasoning.supported_efforts`（OpenRouter）或 `capabilities.effort`（Anthropic）列出档位；`none` 不会作为档位，因为推理强度不接受 `none`：不设置推理强度，或模型不接受推理参数，才是请求不带推理的方式。模型策略中的模型有已知档位时，策略表单会以选项而不是文本框提供它们。
+目录用 `supported_reasoning_levels`（Codex）、`reasoning.supported_efforts`（OpenRouter）或 `capabilities.effort`（Anthropic）列出档位；`none` 不会作为档位，因为推理强度不接受 `none`：不设置推理强度，或模型不接受推理参数，才是请求不带推理的方式。模型自己的 `reasoningEfforts`（[按模型的设置](#per-model)）会取代目录列出的档位，或声明它不接受推理参数。模型策略中的模型有已知档位时，策略表单会以选项而不是文本框提供它们。
 
-Provider 拒绝推理参数时（状态码 400 或 422，并指名该参数，见[内部实现](/docs/internals#reasoning-refusals)），请求会去掉它重发一次（`exec --json` 报告 `model_retry_scheduled`，阶段为 `reasoning_fallback`），之后 7 天内无论目录怎么说，都认为该模型不接受推理参数，这一点保存在 `model-metadata.json` 中。
+Provider 拒绝推理参数时（状态码 400 或 422，并指名该参数，见[内部实现](/docs/internals#reasoning-refusals)），请求会去掉它重发一次（`exec --json` 报告 `model_retry_scheduled`，阶段为 `reasoning_fallback`），之后 7 天内无论目录怎么说，都认为该模型不接受推理参数，这一点保存在 `model-metadata.json` 中，直到被[遗忘](#forget)。在模型自己的 `reasoningEfforts` 下，请求仍会去掉推理参数重发，但下一次请求会再次携带推理强度。
 
 **Anthropic 的思考预算。** 对于使用预算的模型，推理强度决定 `budget_tokens`：
 
@@ -154,11 +155,11 @@ Provider 拒绝推理参数时（状态码 400 或 422，并指名该参数，�
 
 ## 上下文窗口与压缩 [#compaction]
 
-模型的上下文窗口依次取自：`[modelPolicy]` 中的 `contextWindowTokens`、Agent 从 Provider 的拒绝中学到的窗口（见下文，仅在它更小时）、Provider 模型目录最近一次报告的值、内置的常见模型表（如 GPT-5 系列、Claude、Gemini 2.5）。都没有时不会自动压缩。会话在创建或选择模型时取得窗口，并在它的每个轮次开始时再取一次，所以在读取模型目录之前创建的会话会在下一个轮次得到窗口。你设置的窗口从不被替换；当没有任何来源再知道模型的窗口时，会话保留它已有的窗口。
+模型的上下文窗口依次取自：模型自己的 `contextWindowTokens`（[按模型的设置](#per-model)）、`[modelPolicy]` 中的 `contextWindowTokens`、Agent 从 Provider 的拒绝中学到的窗口（见下文，仅在它更小时）、Provider 模型目录最近一次报告的值、内置的常见模型表（如 GPT-5 系列、Claude、Gemini 2.5）。都没有时不会自动压缩。会话在创建或选择模型时取得窗口，并在它的每个轮次开始时再取一次，所以在读取模型目录之前创建的会话会在下一个轮次得到窗口，你在 `providers.toml` 中设置或修改的窗口也在下一个轮次生效。你设置的窗口优先。当没有任何来源再知道模型的窗口时，会话保留它已有的窗口，除非那是设置的或学到的、而现在已不存在（被删除，或被[遗忘](#forget)）：这时它的窗口重新变为未知。`/status` 显示窗口及其来源：`200K (reported)`，或 `unknown (compacts on the Provider's error)`。
 
 上下文用到窗口的 `autoCompactThresholdPercent`（默认 80%）时，Agent 会在回合开始前或回合中自动压缩：把较早的对话总结成摘要，保留最近的消息。如果窗口剩下的部分已容不下一次回复，它会更早压缩：为模型的最大输出留出空间（模型目录没有报告时按 32,768 token 计），但最多为窗口的十分之一、至少 4,096 token，且不超过窗口的一半。所以在默认的 80% 下，窗口在 20,480 token 及以上时由阈值决定，而在 10,000 的窗口上 Agent 在 5,904 时压缩。
 
-Provider 以超出模型窗口为由拒绝请求时，Agent 会压缩一次并重试；再次被拒时回合失败（`context_window_exceeded`）。它还会从拒绝中学习：拒绝中写明的窗口（`maximum context length is 131072 tokens`），或在没有写明时，被拒请求的大小（窗口一定比它小）。会话立即采用这个窗口，于是重试和之后的轮次会在窗口填满前压缩，对话中也会提示（`The Provider refused the request as too long; this model's window is taken as 131072 from now on.`）。此后同一 Provider 上同一模型的每个会话都从这个窗口开始，重启后也一样，为期 7 天；在此之前只有更小的窗口才会替换它。即使关闭了自动压缩也会学习，且从不替换你设置的 `contextWindowTokens`。
+Provider 以超出模型窗口为由拒绝请求时，Agent 会压缩一次并重试；再次被拒时回合失败（`context_window_exceeded`）。它还会从拒绝中学习：拒绝中写明的窗口（`maximum context length is 131072 tokens`），或在没有写明时，被拒请求的大小（窗口一定比它小）。会话立即采用这个窗口，于是重试和之后的轮次会在窗口填满前压缩，对话中也会提示（`The Provider refused the request as too long; this model's window is taken as 131072 from now on.`）。此后同一 Provider 上同一模型的每个会话都从这个窗口开始，重启后也一样，为期 7 天；在此之前只有更小的窗口才会替换它，[遗忘](#forget)则会丢弃它。即使关闭了自动压缩也会学习，且从不替换你设置的 `contextWindowTokens`。
 
 | 设置                          | 默认值       | 作用                                                                                       |
 | ----------------------------- | ------------ | ------------------------------------------------------------------------------------------ |
@@ -167,7 +168,7 @@ Provider 以超出模型窗口为由拒绝请求时，Agent 会压缩一次并�
 | `remoteCompaction`            | `"disabled"` | 设为 `"responses_compact"` 或 `"responses_compact_v2"` 时，在 Responses 协议上由服务端压缩 |
 | `contextWindowTokens`         | 未设置       | 指定上下文窗口                                                                             |
 
-已有会话在下一轮次或 `/compact` 时采用修改后的 `remoteCompaction`；其他键在会话重新选择模型（`/model`）时才采用，新会话则全部采用。除这种压缩外如何缩减上下文，由 `config.toml` 中的[压缩策略](/docs/config-reference#compaction)决定。
+已有会话在下一轮次或 `/compact` 时采用修改后的 `remoteCompaction`，在下一轮次采用修改后的 `contextWindowTokens`（策略的或模型自己的）；其他键在会话重新选择模型（`/model`）时才采用，新会话则全部采用。除这种压缩外如何缩减上下文，由 `config.toml` 中的[压缩策略](/docs/config-reference#compaction)决定。
 
 在终端界面中输入 `/compact` 可以立即压缩。`/status` 显示 token 用量和上下文剩余比例。
 
@@ -178,7 +179,44 @@ Provider 以超出模型窗口为由拒绝请求时，Agent 会压缩一次并�
 - **它读图**（Provider 的模型目录这样说），或者**没有任何来源说明**：发送图片，并提供 `view_image`。如果模型仍然拒绝了图片，Agent 会去掉图片重试一次，并从此在 7 天内（重启后也一样）把它当作不读图的模型。
 - **它不读图**（模型目录这样说，或从拒绝中学到）：不会有图片发给它，所以不会先有请求被拒绝。对话中已有的图片会被替换成一条说明图片已略去的文字，不提供 `view_image`，带图片的消息会被拒绝（`the configured model does not support image input`）。
 
-拒绝的分量重于目录：目录说读图、却拒绝过图片的模型，在这 7 天内不会收到图片。对话在开始、选用模型或恢复时采用已知的信息，并在每次请求前再取一次，所以之后才读到的目录从下一次请求起生效。设为 `"disabled"` 则无论模型如何都从不发送图片。
+拒绝的分量重于目录：目录说读图、却拒绝过图片的模型，在这 7 天内不会收到图片，直到被[遗忘](#forget)。对话在开始、选用模型或恢复时采用已知的信息，并在每次请求前再取一次，所以之后才读到的目录从下一次请求起生效。模型自己的 `imageInput`（[按模型的设置](#per-model)）分量重于这两者：`"supported"` 不论目录怎么说、拒绝教了什么都发送图片，`"unsupported"` 从不发送。策略中的 `"disabled"` 则无论模型及其单独设置如何都从不发送图片。
+
+## 按模型的设置 [#per-model]
+
+目录对模型的报告，或者 Agent 学到的东西，可能是错的；一份策略也无法描述同一 Provider 的两个模型。模型自己的设置写在 `providers.toml` 中它的 Provider 之下，只对这个模型生效，分量重于这两者：
+
+```toml
+[[providers]]
+id = "provider-1"
+# …
+
+[providers.models."qwen3-coder"]
+contextWindowTokens = 262144
+maxOutputTokens = 65536
+imageInput = "unsupported"
+reasoningEfforts = []
+
+[providers.models."openai/gpt-4.1"]
+imageInput = "supported"
+```
+
+| 键                    | 取值                                             | 作用                                                                                                                                                                 |
+| --------------------- | ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `contextWindowTokens` | 正整数                                           | 模型的窗口，优先于 `[modelPolicy]` 的 `contextWindowTokens`、学到的窗口和目录报告的窗口                                                                              |
+| `maxOutputTokens`     | 正整数                                           | 模型的最大输出，阈值为它留出空间，Anthropic 的思考预算也按它计算（[上下文窗口与压缩](#compaction)、[推理强度与思考过程](#reasoning)）                                |
+| `imageInput`          | `"auto"`（默认）、`"supported"`、`"unsupported"` | `"auto"` 按已知的信息（[图片](#images)）；`"supported"` 不论目录怎么说、拒绝教了什么都发送图片：拒绝仍会让那次请求回退，下一次请求再次发送；`"unsupported"` 从不发送 |
+| `reasoningEfforts`    | 推理强度的列表，或 `[]`                          | 模型接受的档位，取代目录列出的档位，发送的推理强度按它收窄、策略表单也提供它们；`[]`：不接受推理参数，不发送推理强度                                                 |
+
+每个键都可省略，省略的键交给其他来源。会话在下一个轮次开始时采用它们（新会话、恢复的会话以及已打开的会话都一样），所以退出 Agent、编辑文件，然后继续即可。无法使用的值会被略去，文件会被[修复](/docs/recovery)，Provider 及其其他设置都保留。它们只能手动编写：`/providers` 界面和 `providers` 命令会原样保留它们。
+
+## 遗忘学到的信息 [#forget]
+
+Agent 从 Provider 的拒绝中学到的信息（更小的窗口、模型不读图、不接受推理参数）保持 7 天。要在此之前再试这个模型，就遗忘它：
+
+- 终端界面中的 `/model forget`，针对会话的模型；
+- `hanafubuki-agent providers forget ID [--model MODEL]`，针对该 Provider 的一个模型或它的全部模型（[命令行参考](/docs/cli-reference#providers)）。
+
+目录报告的信息和按模型的设置都保留。会话在下一个轮次采用这一变化：它的窗口变为其他来源所知道的窗口，什么都不知道时则为未知。
 
 ## 重试与限制 [#limits]
 

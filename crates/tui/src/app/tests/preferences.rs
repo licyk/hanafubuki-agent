@@ -4,7 +4,9 @@
 //! back from `config.toml` and what they changed seen on the screen.
 
 use hanafubuki_agent::test_support::assistant_events;
-use hanafubuki_agent::{AgentTuiPreferences, AgentTuiPreferencesPatch, AgentTuiPreset};
+use hanafubuki_agent::{
+    AgentModelDiscovery, AgentTuiPreferences, AgentTuiPreferencesPatch, AgentTuiPreset,
+};
 use ratatui::crossterm::event::{KeyCode, KeyModifiers};
 
 use super::Harness;
@@ -30,6 +32,10 @@ impl Harness {
     }
 
     fn agent_memory(&self) -> hanafubuki_agent::AgentMemorySettings {
+        self.agent_settings().memory
+    }
+
+    fn agent_settings(&self) -> hanafubuki_agent::AgentSettings {
         let agent = self.runtime.slot().agent().unwrap();
         let call = agent.clone();
         agent
@@ -38,7 +44,6 @@ impl Harness {
             .unwrap()
             .unwrap()
             .settings
-            .memory
     }
 }
 
@@ -249,16 +254,28 @@ fn the_config_center_lists_searches_and_opens_the_quick_editor() {
 }
 
 #[test]
-fn the_general_form_saves_the_persisted_permission_mode() {
+fn the_general_form_saves_the_persisted_permission_mode_and_model_discovery() {
     let mut harness = Harness::start(Vec::new());
     harness.open("/config general", "General & permissions");
+    let discovery = harness.agent_settings().model_metadata.discovery;
+    harness.key(KeyCode::Right);
+    harness.key(KeyCode::Tab);
     harness.key(KeyCode::Right);
     harness.key(KeyCode::Tab);
     harness.key(KeyCode::Enter);
     harness.pump_until_screen_shows("Saved.");
-    assert!(harness
-        .config_file()
-        .contains("permissionMode = \"auto_review\""));
+    let file = harness.config_file();
+    assert!(file.contains("permissionMode = \"auto_review\""), "{file}");
+    let toggled = match discovery {
+        AgentModelDiscovery::Auto => AgentModelDiscovery::Off,
+        AgentModelDiscovery::Off => AgentModelDiscovery::Auto,
+    };
+    assert_eq!(harness.agent_settings().model_metadata.discovery, toggled);
+    let written = match toggled {
+        AgentModelDiscovery::Auto => "discovery = \"auto\"",
+        AgentModelDiscovery::Off => "discovery = \"off\"",
+    };
+    assert!(file.contains(written), "{file}");
 }
 
 #[test]

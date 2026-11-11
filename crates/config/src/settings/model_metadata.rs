@@ -19,8 +19,10 @@ pub enum AgentModelDiscovery {
     Off,
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+/// Strict as the settings patch that carries it (`agent_settings_write`);
+/// the file is read field by field (`decode_model_metadata`).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct AgentModelMetadataSettings {
     pub discovery: AgentModelDiscovery,
 }

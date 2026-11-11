@@ -9,7 +9,7 @@ use hanafubuki_agent::{
     AgentHandle, AgentModelPolicySettings, AgentModelPolicyWriteRequest,
     AgentProviderDeleteRequest, AgentProviderDraft, AgentProviderEnabledRequest,
     AgentProviderModelCatalogRequest, AgentProviderRegistrySnapshot, AgentProviderWriteRequest,
-    ModelCatalogEntry, ModelReasoningEffort,
+    ModelCatalogEntry, ModelMetadata,
 };
 
 use super::{AgentBridge, AgentReply, TurnUpdate};
@@ -55,11 +55,11 @@ pub(crate) enum ProviderCall {
 
 /// What the Agent answered.
 pub(crate) enum ProviderReply {
-    /// The registry, and the reasoning efforts its policy's model is known
-    /// to take on the default Provider (none when nothing is known).
+    /// The registry, and what is known of its policy's model on the
+    /// default Provider (nothing when there is no default).
     Loaded {
         registry: AgentProviderRegistrySnapshot,
-        reasoning_efforts: Vec<ModelReasoningEffort>,
+        metadata: ModelMetadata,
     },
     Tested(Result<Vec<ModelCatalogEntry>, String>),
     /// A Provider was written; the registry it left.
@@ -142,11 +142,8 @@ async fn run(agent: &AgentHandle, call: ProviderCall) -> ProviderReply {
     match call {
         ProviderCall::Load => match agent.provider_registry_snapshot().await {
             Ok(registry) => {
-                let reasoning_efforts = reasoning_efforts(agent, &registry).await;
-                ProviderReply::Loaded {
-                    registry,
-                    reasoning_efforts,
-                }
+                let metadata = model_metadata(agent, &registry).await;
+                ProviderReply::Loaded { registry, metadata }
             }
             Err(error) => ProviderReply::Failed {
                 error: format!("the Providers were not read: {error}"),
@@ -287,17 +284,17 @@ async fn reply(
     }
 }
 
-/// The reasoning efforts the policy's model is known to take on the
-/// default Provider; none when nothing is known or there is no default.
-async fn reasoning_efforts(
+/// What is known of the policy's model on the default Provider; nothing
+/// when nothing is or there is no default.
+async fn model_metadata(
     agent: &AgentHandle,
     registry: &AgentProviderRegistrySnapshot,
-) -> Vec<ModelReasoningEffort> {
+) -> ModelMetadata {
     let Some(provider_id) = registry.default_provider_id.as_deref() else {
-        return Vec::new();
+        return ModelMetadata::default();
     };
     agent
-        .model_reasoning_efforts(provider_id, &registry.model_policy.model)
+        .model_metadata(provider_id, &registry.model_policy.model)
         .await
         .unwrap_or_default()
 }

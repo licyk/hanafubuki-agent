@@ -394,13 +394,145 @@ Hoshimi `83f7813`. Every §9 decision (D1–D7) was accepted as recommended
   - Module size: `encode_anthropic_request` fell to 184 lines, so its
     exception was removed from `architecture/module-size-policy.toml`
     (the check requires it); `encode_chat_request` is at 219 of 227.
-- Open: D3's per-model `imageInput` (and `reasoningEfforts`) to override a
-  wrong reported fact; M7 showing it (badges, `/status` with the effort
-  sent or dropped, placeholders), forgetting learned facts, per-model
-  overrides (D3), the `/config` editor of `modelMetadata.discovery` (with
-  its settings-patch field and strict-decoding entry); Chat Completions'
-  `reasoning_content` sent back in tool loops (DeepSeek's thinking mode
-  requires it); M8 models.dev (optional).
+- M7 (done): per-model overrides (D3), showing what is known (§4.9),
+  forgetting learned facts, and the `/config` editor of
+  `modelMetadata.discovery`.
+  - Config: `providers[].models."<id>" = { contextWindowTokens,
+    maxOutputTokens, imageInput = "auto" | "supported" | "unsupported",
+    reasoningEfforts }` (`AgentProviderSettings.models`, a
+    `BTreeMap<String, AgentModelOverrideSettings>`, config
+    `providers/models.rs`). `decode_providers` takes `models` out of the
+    raw Provider and reads it per model and per field with `Fields`, so a
+    bad override never drops its Provider: a field that cannot be used
+    (a window of 0, an effort list holding `none`) is unset with a repair,
+    an entry that is not a table (or whose id is empty or over 256 bytes)
+    is dropped with one; an unreadable `reasoningEfforts` is unset, never
+    `[]`. `write_provider` keeps the existing `models` (the draft is the
+    connection, strict, and has none), so the overrides are written by
+    hand only. Not in the `/providers` policy form: the form writes the
+    shared policy and its default model is editable in the same form, so
+    per-model fields there would not say which model they belong to.
+  - Kernel: `AgentConfiguredModelFacts { context_window_tokens,
+    max_output_tokens, image_input: Option<bool>, reasoning_efforts }`
+    (public, `model/configured_facts.rs`), kept on the session as
+    `AgentSessionConfig.configured_facts` (tolerant per field, left out
+    when empty, so no history corpus changed). The facade fills it with
+    `configured_model_facts(provider, policy window, model)`: the override,
+    its window else the policy's `contextWindowTokens` (so for that model
+    the override beats the policy key), at creation, model selection
+    (`AgentSessionModelConfigurationUpdate.configured_facts`, which
+    replaces its `context_window_tokens`) and every activation
+    (`activate_model_session` gained the parameter; persisted without a
+    revision, as the compaction reconcile is). So an edit of
+    `providers.toml` reaches a live or resumed session at its next turn.
+    Behaviour change: the policy's `contextWindowTokens` now reaches an
+    existing session at its next turn too (it waited for `/model`).
+    `ConfiguredModelFacts` gained `max_output_tokens` and `reasoning`;
+    `configured_facts(config)` (`service/model_facts.rs`) is used by the
+    reasoning narrowing, the largest output (D4 headroom and Anthropic's
+    budget), the window and the image input. `configured_image_input`
+    moved there: the policy's `disabled` is a "no" over everything, else
+    the model's `imageInput`. `reasoningEfforts = []` is `Unsupported`,
+    a list `Supported { efforts, default: None }`.
+  - Window: the configured window is `configured_facts`'. A window
+    without a source (a host's, or one written before) is adopted into
+    `configured_facts` at creation and at recovery
+    (`adopt_configured_window`), so hosts and old sessions keep it.
+    Deviation from M3's "a window no longer known is kept": a session
+    whose window was configured or learned, and that resolves to none
+    (override removed, learned window forgotten), now has an unknown
+    window; a reported one, and one written without a source (before M3),
+    are still kept (a source-less one gives way to a reported window once
+    its configuration no longer names it). `changed_window` compares the
+    origin, so a source-less configured window stays source-less.
+  - `imageInput = "supported"`: configured wins at resolution; a refusal
+    still falls back for its request and is still learned (so a session
+    without the override, on the same route, takes the "no"), and the next
+    request (step or turn) sends images again. So under it a model that
+    really refuses images is refused once per request; honest and tested.
+    The same for `reasoningEfforts` and a reasoning refusal.
+  - Forgetting: `ModelMetadataRegistry::forget_learned(endpoint,
+    model)` drops the learned facts of one route or every route of an
+    endpoint (reported facts stay), saves once if anything changed, and
+    returns how many routes had any. Kernel `AgentService::
+    forget_learned_model_facts(protocol, base_url, model)`, facade
+    `AgentApplicationService::forget_learned_model_facts(provider_id,
+    model)`, TUI `/model forget` (the session's model; `/model` now takes
+    inline arguments, `Usage: /model [forget]`), CLI `providers forget ID
+    [--model MODEL]`. A live session takes it at its next admission.
+  - Showing it: kernel `AgentService::model_metadata(protocol, base_url,
+    model, &configured)` replaces `model_reasoning`; facade
+    `model_metadata(provider_id, model)` (the override, not the policy's
+    window) replaces `model_reasoning_efforts`, and
+    `session_model_metadata(session_id)` gives the session's facts with its
+    own window and source. Pickers (`/providers`' and `/model`) show
+    `200K · vision · reasoning` for what an entry reports
+    (`tui/src/model_facts.rs`). `/status`: `Context window 80% left (40K
+    used / 200K, reported)`, `200K (reported)` before any usage, or
+    `unknown (compacts on the Provider's error)`; the model line adds
+    `, sends high` or `, not sent: the model takes none` when the effort
+    is narrowed. The policy form's window placeholder is `200K, reported`
+    (else `unknown: compacts on the Provider's error`), and its effort
+    choices take a configured `reasoningEfforts`. `doctor --online` prints
+    a `model` line per listed model: `window 200000 (reported), images no
+    (reported), …` or `nothing known`. The catalog source is named
+    `catalog` (M8 can rename it). The learned-window notice (M4) is
+    unchanged.
+  - `/config general` edits `modelMetadata.discovery`:
+    `AgentSettingsPatch.model_metadata: Option<AgentModelMetadataSettings>`
+    (now `Deserialize` with `deny_unknown_fields`, and listed in
+    `architecture/strict-decoding-policy.toml` as an `ipc-request`);
+    the coverage test's `COMMAND_KEYS` exemption is gone.
+  - Host-visible: `AgentSessionConfig.configured_facts`,
+    `AgentSessionModelConfigurationUpdate.configured_facts` (replaces
+    `context_window_tokens`), `activate_model_session(…,
+    configured_facts, session_id)`, `AgentService::model_metadata`,
+    `session_model_metadata`, `forget_learned_model_facts` (kernel and
+    facade), `model_reasoning` and `model_reasoning_efforts` removed,
+    `AgentProviderSettings.models`, `AgentSettingsPatch.model_metadata`;
+    the facade re-exports `AgentConfiguredModelFacts`, `ModelMetadata`,
+    `ModelMetadataSource`, `ModelReasoningSupport`, `Sourced`,
+    `request_reasoning_effort`, `AgentModelOverrideSettings`,
+    `AgentModelImageInput`.
+  - Tests: config (`per_model_overrides_read_field_by_field_and_survive_a_write`);
+    kernel registry `tests/forget.rs` (one model, an endpoint, persisted,
+    configured over learned and reported), `context_window/tests/
+    configured.rs` (a forgotten learned window no longer limits the next
+    turn, unknown and back to reported; a configured window taken and
+    given up at the next turn), image (`a_configured_image_input_beats_
+    what_is_listed_and_learned`), reasoning (`configured_levels_replace_
+    the_listed_ones`); facade `tests/model_vision.rs` (an override reaching
+    a live session at its next turn and surviving a Provider edit, then
+    removed; a refusal forgotten in one run is not kept by the next); TUI
+    (window in the picker, the form's placeholder and `/status`, `/model
+    forget`; `/config general` saving discovery); CLI (`providers
+    forget`, `doctor --online`'s model lines). No request golden or
+    history corpus changed.
+  - Policies: `architecture/strict-decoding-policy.toml` gained
+    `AgentModelMetadataSettings`; `architecture/notices-policy.toml`
+    lists `tui/src/model_facts.rs` and its tests as original. No
+    module-size exception or ceiling changed.
+  - Docs: `providers-models` (new "Per-model settings" and "Forgetting
+    what was learned"; window order, images, reasoning, the policy form,
+    the picker), `config-reference` (`[providers.models."ID"]`, the
+    discovery editor, the policy rows), `terminal-interface` (`/model
+    forget`, `/status`, `/config general`), `cli-reference` (`providers
+    forget`, `doctor --online`), `troubleshooting`, `embedding` (the new
+    calls, the patch, activation), `architecture` (configured source,
+    late resolution, image input, reasoning, known limits), `internals`
+    and `data-directory` (forgetting), both languages.
+  - Behaviour change: `/model gpt-5.1` (text after `/model`) used to go
+    to the model as a message; it is now `Usage: /model [forget]`.
+  - Unverified: the "sends …" wording of `/status` (only the library
+    narrowing it calls is tested); a second step of the same turn after a
+    refusal under `"supported"` or configured `reasoningEfforts` (one
+    fallback per request is the existing loop's rule, tested per turn); an
+    override picked up across a restart (live pickup through the same
+    activation is tested); `providers forget` persisting across CLI runs
+    (the facade test covers it across runs). `kernel/tests/loop_contract/
+    main.rs` is at 900 of 900.
+- Open: Chat Completions' `reasoning_content` sent back in tool loops
+  (DeepSeek's thinking mode requires it); M8 models.dev (optional).
 
 ## Plan: Codex's messages sent while the Agent works, in the terminal interface (2026-11-11)
 

@@ -142,6 +142,7 @@ fn activation_takes_a_changed_remote_compaction_into_the_session() {
             Vec::new(),
             ModelRetryPolicy::default(),
             ModelCompactionCapability::ResponsesCompactV2,
+            AgentConfiguredModelFacts::default(),
             session.id,
         )
         .unwrap();

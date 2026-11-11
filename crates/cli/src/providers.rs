@@ -1,6 +1,7 @@
-//! `providers list|add|remove|default`. The list reads `providers.toml`;
-//! the changes go through the running Agent's Provider API, which keeps the
-//! default Provider usable and allocates the ids.
+//! `providers list|add|remove|default|forget`. The list reads
+//! `providers.toml`; the changes go through the running Agent's Provider
+//! API, which keeps the default Provider usable and allocates the ids, and
+//! `forget` through its model metadata.
 
 use hanafubuki_agent::{
     AgentModelPolicyWriteRequest, AgentModelProtocol, AgentProviderDeleteRequest,
@@ -108,6 +109,15 @@ pub(crate) fn run(global: &GlobalArgs, command: ProvidersCommand) -> Result<(), 
                     })
                     .await
                     .map(|_| ())
+            })
+        }),
+        ProvidersCommand::Forget { id, model } => with_agent(global, |agent| {
+            block_on(agent, |agent| async move {
+                let forgotten = agent
+                    .forget_learned_model_facts(&id, model.as_deref())
+                    .await?;
+                println!("forgot what was learned of {forgotten} model(s)");
+                Ok::<_, String>(())
             })
         }),
     }

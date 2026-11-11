@@ -9,8 +9,8 @@
 use std::path::PathBuf;
 
 use hanafubuki_agent::{
-    AgentBackgroundCompactionState, AgentCapabilityScopeSummary, AgentPermissionMode,
-    AgentSessionMode,
+    request_reasoning_effort, AgentBackgroundCompactionState, AgentCapabilityScopeSummary,
+    AgentPermissionMode, AgentSessionMode, Sourced,
 };
 use ratatui::style::Stylize;
 use ratatui::text::{Line, Span};
@@ -18,6 +18,7 @@ use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 use super::{plain_lines, with_border, HistoryCell};
 use crate::agent_bridge::StatusReport;
+use crate::model_facts::source_name;
 use crate::text_formatting::center_truncate_path;
 
 const LABELS: [&str; 10] = [
@@ -37,6 +38,9 @@ const LABELS: [&str; 10] = [
 pub(crate) struct StatusHistoryCell {
     model: String,
     reasoning_effort: Option<String>,
+    /// The effort a request carries in place of the configured one, when
+    /// what is known of the model narrows it (`None`: none is sent).
+    reasoning_sent: Option<Option<String>>,
     provider: String,
     roots: Vec<PathBuf>,
     permission_mode: AgentPermissionMode,
@@ -46,8 +50,10 @@ pub(crate) struct StatusHistoryCell {
     session: String,
     input_tokens: u64,
     output_tokens: u64,
-    /// The tokens in the context and the window's size, when both are known.
-    context: Option<(u64, u64)>,
+    /// The tokens in the context, when known.
+    context_used: Option<u64>,
+    /// The session's window and where it came from; none while unknown.
+    context_window: Option<Sourced<u64>>,
     /// Read from the snapshot as the command ran: it changes without a
     /// revision.
     background_compaction: Option<AgentBackgroundCompactionState>,
@@ -56,12 +62,22 @@ pub(crate) struct StatusHistoryCell {
 pub(crate) fn new_status_output(report: &StatusReport) -> StatusHistoryCell {
     let session = &report.session;
     let usage = session.usage.as_ref();
+    let support = report
+        .metadata
+        .reasoning
+        .as_ref()
+        .map(|fact| fact.value.clone());
+    let reasoning_sent = session.reasoning_effort.as_ref().and_then(|configured| {
+        let sent = request_reasoning_effort(Some(configured), support.as_ref());
+        (sent.as_ref() != Some(configured)).then(|| sent.map(|effort| effort.as_str().to_string()))
+    });
     StatusHistoryCell {
         model: session.model.clone(),
         reasoning_effort: session
             .reasoning_effort
             .as_ref()
             .map(|effort| effort.as_str().to_string()),
+        reasoning_sent,
         provider: report.provider.clone(),
         roots: report.roots.clone(),
         permission_mode: report.permission_mode,
@@ -73,8 +89,8 @@ pub(crate) fn new_status_output(report: &StatusReport) -> StatusHistoryCell {
         session: session.id.to_string(),
         input_tokens: usage.map_or(0, |usage| usage.cumulative_input_tokens),
         output_tokens: usage.map_or(0, |usage| usage.cumulative_output_tokens),
-        context: usage
-            .and_then(|usage| Some((usage.context_consumed_tokens?, usage.context_window_tokens?))),
+        context_used: usage.and_then(|usage| usage.context_consumed_tokens),
+        context_window: report.metadata.context_window.clone(),
         background_compaction: session.background_compaction,
     }
 }
@@ -98,17 +114,29 @@ impl StatusHistoryCell {
         ]
     }
 
-    fn context_window_spans(&self) -> Option<Vec<Span<'static>>> {
-        let (used, window) = self.context?;
-        let percent = 100u64.saturating_sub(used.saturating_mul(100) / window.max(1));
-        Some(vec![
+    /// The window's share left with its size and source, its size and
+    /// source while nothing is used yet, or that it is unknown.
+    fn context_window_spans(&self) -> Vec<Span<'static>> {
+        let Some(window) = &self.context_window else {
+            return vec![
+                Span::from("unknown"),
+                Span::from(" (compacts on the Provider's error)").dim(),
+            ];
+        };
+        let size = format_tokens_compact(window.value);
+        let source = source_name(window.source);
+        let Some(used) = self.context_used else {
+            return vec![Span::from(size), Span::from(format!(" ({source})")).dim()];
+        };
+        let percent = 100u64.saturating_sub(used.saturating_mul(100) / window.value.max(1));
+        vec![
             Span::from(format!("{percent}% left")),
             Span::from(" (").dim(),
             Span::from(format_tokens_compact(used)).dim(),
             Span::from(" used / ").dim(),
-            Span::from(format_tokens_compact(window)).dim(),
-            Span::from(")").dim(),
-        ])
+            Span::from(size).dim(),
+            Span::from(format!(", {source})")).dim(),
+        ]
     }
 }
 
@@ -133,7 +161,12 @@ impl HistoryCell for StatusHistoryCell {
 
         let mut model_spans = vec![Span::from(self.model.clone())];
         if let Some(effort) = &self.reasoning_effort {
-            model_spans.push(Span::from(format!(" (reasoning {effort})")).dim());
+            let sent = match &self.reasoning_sent {
+                None => String::new(),
+                Some(Some(sent)) => format!(", sends {sent}"),
+                Some(None) => ", not sent: the model takes none".to_string(),
+            };
+            model_spans.push(Span::from(format!(" (reasoning {effort}{sent})")).dim());
         }
         lines.push(formatter.line("Model", model_spans));
         lines.push(formatter.line("Provider", vec![Span::from(self.provider.clone())]));
@@ -168,9 +201,7 @@ impl HistoryCell for StatusHistoryCell {
         lines.push(formatter.line("Session", vec![Span::from(self.session.clone())]));
         lines.push(Line::default());
         lines.push(formatter.line("Token usage", self.token_usage_spans()));
-        if let Some(spans) = self.context_window_spans() {
-            lines.push(formatter.line("Context window", spans));
-        }
+        lines.push(formatter.line("Context window", self.context_window_spans()));
         if let Some(state) = self.background_compaction {
             let state = match state {
                 AgentBackgroundCompactionState::Running => "compacting in the background",

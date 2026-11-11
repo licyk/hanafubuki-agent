@@ -1,5 +1,6 @@
 mod activity;
 mod compression;
+mod configured_facts;
 mod conversation_item;
 mod error;
 mod event;
@@ -24,6 +25,7 @@ pub use compression::{
 pub(crate) use compression::{
     next_link, tolerant_compression_state, tolerant_compression_update, CompressionChainHead,
 };
+pub use configured_facts::AgentConfiguredModelFacts;
 pub use conversation_item::{
     AgentAttachmentId, AgentImageAttachmentRef, AgentMessagePhase, AgentPlanBlock,
     AgentToolOutputTruncation, ConversationItem,

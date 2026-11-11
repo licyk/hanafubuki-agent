@@ -20,7 +20,7 @@ fn the_configured_window_overrides_every_other_source() {
         "gpt-5",
         ConfiguredModelFacts {
             context_window: Some(64_000),
-            image_input: None,
+            ..ConfiguredModelFacts::default()
         },
         NOW,
     );
@@ -196,8 +196,8 @@ fn a_learned_refusal_beats_a_reported_yes() {
         Some(&model),
         "vision",
         ConfiguredModelFacts {
-            context_window: None,
             image_input: Some(true),
+            ..ConfiguredModelFacts::default()
         },
         NOW + 1,
     );

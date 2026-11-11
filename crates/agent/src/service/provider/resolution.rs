@@ -4,7 +4,7 @@ use hanafubuki_agent_config::{
     AgentImageInputPolicy, AgentInputCapabilitiesSettings, AgentModelPolicySettings,
     AgentProviderRegistrySettings, AgentProviderSettings, AgentTurnBudgetSettings,
 };
-use hanafubuki_agent_kernel::{ModelCredential, ModelHeader};
+use hanafubuki_agent_kernel::{AgentConfiguredModelFacts, ModelCredential, ModelHeader};
 
 /// The shared model policy as the session receives it. Values only some
 /// protocols carry are passed through: the kernel narrows them for the
@@ -80,6 +80,23 @@ pub(crate) fn resolve_provider_definition(
         headers,
         policy,
     })
+}
+
+/// What the person configured for `model` on `provider`: its override
+/// (`models."<id>"`), and its window, else `policy_window` (the policy's
+/// `contextWindowTokens`, which the override beats for this model).
+pub(crate) fn configured_model_facts(
+    provider: &AgentProviderSettings,
+    policy_window: Option<u64>,
+    model: &str,
+) -> AgentConfiguredModelFacts {
+    let overrides = provider.models.get(model).cloned().unwrap_or_default();
+    AgentConfiguredModelFacts {
+        context_window_tokens: overrides.context_window_tokens.or(policy_window),
+        max_output_tokens: overrides.max_output_tokens,
+        image_input: overrides.image_input.configured(),
+        reasoning_efforts: overrides.reasoning_efforts,
+    }
 }
 
 /// A Provider may be the default only while it is available. The model is no

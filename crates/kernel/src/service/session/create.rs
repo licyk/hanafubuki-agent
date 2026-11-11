@@ -39,8 +39,9 @@ impl AgentService {
             request_retry_policy,
             compaction_capability,
         )?;
+        config.adopt_configured_window();
         let window = self.session_context_window(
-            config.context_window_tokens,
+            config.configured_facts.context_window_tokens,
             model.as_ref(),
             &config.model,
         );
@@ -76,6 +77,7 @@ impl AgentService {
         if !self.inner.accepting.load(Ordering::Acquire) {
             return Err(AgentError::ShuttingDown);
         }
+        config.adopt_configured_window();
         normalize_session_config(&mut config);
         validate_session_config(&config, self.inner.limits)?;
         if model.compaction_capability() != config.compaction_capability {

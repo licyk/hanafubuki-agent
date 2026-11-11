@@ -463,6 +463,14 @@ path = "crates/tui/src/agent_bridge/status/tests.rs"
 reason = "The Git branch read from HEAD, in a repository and a worktree."
 
 [[original]]
+path = "crates/tui/src/model_facts.rs"
+reason = "How the interface names what the Agent's model metadata knows of a model (a window and its source, a listing entry's badges), which Codex does not have."
+
+[[original]]
+path = "crates/tui/src/model_facts/tests.rs"
+reason = "The tests of the model metadata's names in the interface."
+
+[[original]]
 path = "crates/tui/src/tui/input.rs"
 reason = "The thread that reads the terminal, written in place of Codex's event-stream broker."
 

@@ -4,8 +4,8 @@
 
 use hanafubuki_agent_model_api::{ModelReasoningConfig, ModelReasoningSupport};
 
+use super::model_facts::configured_facts;
 use super::*;
-use crate::model_metadata::ConfiguredModelFacts;
 
 impl AgentService {
     /// The reasoning `record`'s next request carries
@@ -27,7 +27,7 @@ impl AgentService {
                 self.inner.model_metadata.resolve(
                     Some(&route),
                     &config.model,
-                    ConfiguredModelFacts::default(),
+                    configured_facts(config),
                     now_millis_u64(),
                 )
             })

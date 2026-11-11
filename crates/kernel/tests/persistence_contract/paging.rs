@@ -25,6 +25,7 @@ fn opening_a_completed_session_reads_only_runtime_and_the_requested_transcript_p
                 context_window_source: None,
                 compaction_strategy: Default::default(),
                 scope: Default::default(),
+                configured_facts: Default::default(),
                 role_instructions: None,
             },
             hanafubuki_agent_kernel::ModelApiProtocol::Responses,
