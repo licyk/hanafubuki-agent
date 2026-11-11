@@ -12,6 +12,7 @@ mod image_input;
 pub mod model;
 mod model_catalog;
 mod model_metadata;
+mod models_dev;
 pub mod port;
 pub mod protocol;
 pub mod provider;
@@ -52,6 +53,7 @@ pub use model::{
 };
 pub use model_catalog::{ModelCatalogClient, ModelCatalogEntry, ModelCatalogListing};
 pub use model_metadata::{ModelMetadata, ModelMetadataSource, ModelReasoningSupport, Sourced};
+pub use models_dev::{fetch_models_dev, ModelProviderNames, ModelsDevCatalog, MODELS_DEV_URL};
 pub use port::{
     ModelError, ModelEventStream, ModelFuture, ModelPort, ModelResult, ModelSession,
     ModelSessionFactory, ModelStream,

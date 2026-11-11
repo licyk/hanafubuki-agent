@@ -254,13 +254,17 @@ fn the_config_center_lists_searches_and_opens_the_quick_editor() {
 }
 
 #[test]
-fn the_general_form_saves_the_persisted_permission_mode_and_model_discovery() {
+fn the_general_form_saves_the_persisted_permission_mode_and_model_metadata() {
     let mut harness = Harness::start(Vec::new());
     harness.open("/config general", "General & permissions");
+    harness.pump_until_screen_shows("Use models.dev");
     let discovery = harness.agent_settings().model_metadata.discovery;
+    assert!(!harness.agent_settings().model_metadata.models_dev);
     harness.key(KeyCode::Right);
     harness.key(KeyCode::Tab);
     harness.key(KeyCode::Right);
+    harness.key(KeyCode::Tab);
+    harness.key(KeyCode::Char(' '));
     harness.key(KeyCode::Tab);
     harness.key(KeyCode::Enter);
     harness.pump_until_screen_shows("Saved.");
@@ -276,6 +280,8 @@ fn the_general_form_saves_the_persisted_permission_mode_and_model_discovery() {
         AgentModelDiscovery::Off => "discovery = \"off\"",
     };
     assert!(file.contains(written), "{file}");
+    assert!(harness.agent_settings().model_metadata.models_dev);
+    assert!(file.contains("modelsDev = true"), "{file}");
 }
 
 #[test]

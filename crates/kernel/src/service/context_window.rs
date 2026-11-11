@@ -17,9 +17,9 @@ impl AgentService {
     /// measured against another window. Called under the session's lock,
     /// in a commit: the one that admits a turn, or the one after a refusal
     /// taught a window. A configured window wins; a window no longer known
-    /// is kept, unless it was recorded as configured or learned (the
-    /// configuration or the learned fact is gone), and then the session's
-    /// window is unknown.
+    /// is kept, unless it was recorded as configured, learned or from
+    /// models.dev (the configuration, the learned fact or the copy of
+    /// models.dev is gone), and then the session's window is unknown.
     /// Returns the window the session took (none: unknown), when it
     /// changed.
     pub(super) fn refresh_context_window(
@@ -39,11 +39,16 @@ impl AgentService {
         );
         let window = match resolved {
             Some(window) => Some(changed_window(config, window)?),
-            // Only a window recorded as configured or learned: one without
-            // a source (written before sources were kept) is kept.
+            // Only a window recorded as configured, learned or from
+            // models.dev: one without a source (written before sources were
+            // kept) is kept, and so is a reported one.
             None if matches!(
                 config.context_window_source,
-                Some(ModelMetadataSource::Configured | ModelMetadataSource::Learned)
+                Some(
+                    ModelMetadataSource::Configured
+                        | ModelMetadataSource::Learned
+                        | ModelMetadataSource::Catalog
+                )
             ) =>
             {
                 None

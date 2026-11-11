@@ -1,17 +1,20 @@
-//! The registry's facts per route and its listings per endpoint, with their
-//! expiry, the listing merge and its shrink guard, and the bounds.
+//! The registry's facts per route, its listings per endpoint and its copy
+//! of models.dev, with their expiry, the listing merge and its shrink
+//! guard, and the bounds.
 
 use std::collections::{BTreeSet, HashMap};
+use std::sync::Arc;
 
 use hanafubuki_agent_model_api::{
-    ModelCatalogEntry, ModelEndpointKey, ModelMetadata, ModelMetadataSource, ModelReasoningSupport,
-    ModelRouteKey, Sourced,
+    ModelCatalogEntry, ModelEndpointKey, ModelMetadata, ModelMetadataSource, ModelProviderNames,
+    ModelReasoningSupport, ModelRouteKey, Sourced,
 };
 use serde::{Deserialize, Serialize};
 
+use super::models_dev::ModelsDevCopy;
 use super::store::{tolerant_or_default, ListingRecord, ModelMetadataSnapshot, RouteRecord};
 
-const DAY_MS: u64 = 24 * 60 * 60 * 1_000;
+pub(super) const DAY_MS: u64 = 24 * 60 * 60 * 1_000;
 /// How long a learned fact holds, so a Provider that fixed its model is
 /// tried again.
 pub(super) const LEARNED_TTL_MS: u64 = 7 * DAY_MS;
@@ -26,8 +29,9 @@ pub(super) const MAX_ROUTES: usize = 4_096;
 /// dropped first.
 pub(super) const MAX_LISTINGS: usize = 32;
 
-/// What each source says about one route. Every fact carries its source and
-/// when it was observed.
+/// What the Provider's listing and its refusals say about one route. Every
+/// fact carries its source and when it was observed. (What models.dev says
+/// is looked up by model id, not kept per route.)
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(super) struct RouteFacts {
@@ -43,13 +47,6 @@ pub(super) struct RouteFacts {
         skip_serializing_if = "is_unknown"
     )]
     pub(super) learned: ModelMetadata,
-    /// A third-party catalog's facts; nothing writes them yet.
-    #[serde(
-        default,
-        deserialize_with = "tolerant_or_default",
-        skip_serializing_if = "is_unknown"
-    )]
-    pub(super) catalog: ModelMetadata,
 }
 
 /// An endpoint's latest trusted listing.
@@ -70,6 +67,11 @@ pub(super) struct ListingState {
 pub(super) struct RegistryState {
     pub(super) routes: HashMap<ModelRouteKey, RouteFacts>,
     pub(super) listings: HashMap<ModelEndpointKey, ListingState>,
+    pub(super) models_dev: Option<Arc<ModelsDevCopy>>,
+    /// What the Provider at each endpoint is called, as this run was told
+    /// when it bound a session or read a model's facts there: it picks the
+    /// Provider's own entries in models.dev. Not kept between runs.
+    pub(super) provider_names: HashMap<ModelEndpointKey, ModelProviderNames>,
 }
 
 impl RegistryState {
@@ -88,6 +90,19 @@ impl RegistryState {
                 .into_iter()
                 .map(|record| (record.endpoint, record.listing))
                 .collect(),
+            // A copy fetched "later" than now (a clock set back) counts
+            // from now, so it does not outlive its week.
+            models_dev: snapshot.models_dev.map(|copy| {
+                if copy.fetched_at_ms <= now_ms {
+                    copy
+                } else {
+                    Arc::new(ModelsDevCopy {
+                        fetched_at_ms: now_ms,
+                        catalog: copy.catalog.clone(),
+                    })
+                }
+            }),
+            provider_names: HashMap::new(),
         };
         state.prune(now_ms);
         state.bound(None);
@@ -112,7 +127,23 @@ impl RegistryState {
                     listing: listing.clone(),
                 })
                 .collect(),
+            models_dev: self.models_dev.clone(),
         }
+    }
+
+    /// What models.dev says of `model`, at `route`'s Provider when the
+    /// run knows what it is called: nothing without a live copy.
+    pub(super) fn models_dev_facts(
+        &self,
+        route: Option<&ModelRouteKey>,
+        model: &str,
+        now_ms: u64,
+    ) -> ModelMetadata {
+        let Some(copy) = self.models_dev.as_ref().filter(|copy| copy.live(now_ms)) else {
+            return ModelMetadata::default();
+        };
+        let names = route.and_then(|route| self.provider_names.get(route.endpoint()));
+        copy.catalog.metadata(names, model, copy.fetched_at_ms)
     }
 
     /// Merges `entries`, the listing of `endpoint`, per model: a listed
@@ -210,8 +241,10 @@ impl RegistryState {
         Some(facts)
     }
 
-    /// Drops the facts that expired, and the routes left with none.
+    /// Drops the facts that expired, the routes left with none, and a copy
+    /// of models.dev past its week.
     fn prune(&mut self, now_ms: u64) {
+        self.models_dev.take_if(|copy| !copy.live(now_ms));
         let listings = &self.listings;
         self.routes.retain(|route, facts| {
             facts.expire(listed(listings, route), now_ms);
@@ -265,16 +298,15 @@ impl RouteFacts {
         Self {
             reported: stamped(self.reported, ModelMetadataSource::Reported, now_ms),
             learned: stamped(self.learned, ModelMetadataSource::Learned, now_ms),
-            catalog: stamped(self.catalog, ModelMetadataSource::Catalog, now_ms),
         }
     }
 
     fn is_empty(&self) -> bool {
-        is_unknown(&self.reported) && is_unknown(&self.learned) && is_unknown(&self.catalog)
+        is_unknown(&self.reported) && is_unknown(&self.learned)
     }
 
     fn last_observed_ms(&self) -> u64 {
-        [&self.reported, &self.learned, &self.catalog]
+        [&self.reported, &self.learned]
             .into_iter()
             .flat_map(observed_times)
             .max()

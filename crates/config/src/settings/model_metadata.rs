@@ -25,6 +25,10 @@ pub enum AgentModelDiscovery {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct AgentModelMetadataSettings {
     pub discovery: AgentModelDiscovery,
+    /// Whether the Agent downloads models.dev's public catalogue (once a
+    /// day, from this machine) to fill what nothing else says of a model.
+    /// Off by default: it is a request to a third party.
+    pub models_dev: bool,
 }
 
 /// Each setting falls back on its own.
@@ -33,4 +37,5 @@ pub(crate) fn decode_model_metadata(
     settings: &mut AgentModelMetadataSettings,
 ) {
     settings.discovery = fields.read("discovery", settings.discovery);
+    settings.models_dev = fields.read("modelsDev", settings.models_dev);
 }

@@ -105,6 +105,11 @@ impl ModelEndpoint {
         Ok(Self { base_url })
     }
 
+    /// The base URL's host, when it has one.
+    pub fn host(&self) -> Option<&str> {
+        self.base_url.host_str()
+    }
+
     pub(crate) fn responses_url(&self) -> Result<Url, ModelError> {
         self.join_endpoint("responses", "Responses")
     }

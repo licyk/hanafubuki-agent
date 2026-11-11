@@ -50,7 +50,8 @@ pub struct AgentSettings {
     pub web_fetch_use_jina_reader: bool,
     pub compaction: AgentCompactionSettings,
     /// `[modelMetadata]`: whether the Agent lists the Providers' models by
-    /// itself. Read where it acts, never patched.
+    /// itself, and whether it downloads models.dev's catalogue. Read where
+    /// it acts.
     pub model_metadata: AgentModelMetadataSettings,
     /// `[plugins]`: which installed packages are on. Changed by the package
     /// lifecycle ([`crate::AgentConfig::set_package_settings`]) or by hand,

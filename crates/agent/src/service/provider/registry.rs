@@ -171,8 +171,9 @@ impl AgentApplicationService {
     /// What is known of `model` on the Provider `provider_id`, each fact
     /// with its source: its per-model override (`models."<id>"`, but not
     /// the policy's window), what its refusals taught, what its listing
-    /// reported and the built-in window. Nothing is known of a Provider
-    /// whose base URL is not an endpoint.
+    /// reported, what models.dev says (when it is on) and the built-in
+    /// window. Nothing is known of a Provider whose base URL is not an
+    /// endpoint.
     pub async fn model_metadata(
         &self,
         provider_id: &str,
@@ -183,6 +184,7 @@ impl AgentApplicationService {
         Ok(self
             .core
             .model_metadata(
+                &provider.id,
                 model_api_protocol(provider.protocol),
                 &provider.base_url,
                 model,

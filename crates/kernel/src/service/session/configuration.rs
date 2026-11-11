@@ -262,6 +262,7 @@ impl AgentService {
             return Err(AgentError::CompactionAlreadyRunning);
         }
         let previous = record.rollback_state();
+        self.name_model_provider_at(&update.provider_id, protocol, base_url);
         record.settings.config.provider_id = update.provider_id;
         record.settings.config.provider_protocol = update.provider_protocol;
         record.settings.config.model = update.model;

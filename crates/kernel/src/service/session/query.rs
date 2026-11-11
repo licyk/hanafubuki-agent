@@ -181,6 +181,7 @@ impl AgentService {
         let cell = self.session(session_id)?;
         let mut guard = cell.lock_after_persistence_blocking()?;
         let record = &mut *guard;
+        self.name_model_provider_at(&record.settings.config.provider_id, protocol, base_url);
         if record
             .runtime
             .turn

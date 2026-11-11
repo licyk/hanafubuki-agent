@@ -1,7 +1,5 @@
 use super::*;
 
-use hanafubuki_agent_model_api::ModelMetadata;
-
 const PROVIDER: &str = "https://provider.test/v1";
 
 fn learn_window(registry: &ModelMetadataRegistry, route: &ModelRouteKey, tokens: u64) {
@@ -204,73 +202,6 @@ fn a_learned_refusal_beats_a_reported_yes() {
     assert_eq!(
         configured.image_input,
         Some(sourced(true, ModelMetadataSource::Configured, 0))
-    );
-}
-
-#[test]
-fn a_catalog_only_adds_what_nothing_else_says() {
-    let registry = registry();
-    let listed = route(PROVIDER, "listed");
-    let unlisted = route(PROVIDER, "gpt-5");
-    let refused = route(PROVIDER, "refused");
-    let mut reported = entry("listed", Some(128_000));
-    reported.image_input = Some(false);
-    registry.record_listing(&endpoint(PROVIDER), &[reported], NOW);
-    registry.learn_image_input_unsupported(&refused, NOW);
-    let catalog = ModelMetadata {
-        context_window: Some(sourced(400_000, ModelMetadataSource::Catalog, NOW)),
-        image_input: Some(sourced(true, ModelMetadataSource::Catalog, NOW)),
-        reasoning: Some(sourced(
-            ModelReasoningSupport::Unsupported,
-            ModelMetadataSource::Catalog,
-            NOW,
-        )),
-        ..ModelMetadata::default()
-    };
-    for route in [&listed, &unlisted, &refused] {
-        set_catalog(&registry, route, catalog.clone());
-    }
-
-    let behind_reported = registry.resolve(Some(&listed), "listed", Default::default(), NOW);
-    assert_eq!(
-        behind_reported.context_window.map(|fact| fact.source),
-        Some(ModelMetadataSource::Reported)
-    );
-    assert_eq!(
-        behind_reported.image_input,
-        Some(sourced(false, ModelMetadataSource::Reported, NOW)),
-        "a catalog's yes never contradicts a reported no"
-    );
-    let alone = registry.resolve(Some(&unlisted), "gpt-5", Default::default(), NOW);
-    assert_eq!(
-        alone.context_window,
-        Some(sourced(400_000, ModelMetadataSource::Catalog, NOW)),
-        "a catalog's window comes before the built-in one"
-    );
-    assert_eq!(
-        alone.image_input,
-        Some(sourced(true, ModelMetadataSource::Catalog, NOW))
-    );
-    assert_eq!(alone.reasoning, None, "a catalog's no is ignored");
-    let after_refusal = registry.resolve(Some(&refused), "refused", Default::default(), NOW);
-    assert_eq!(
-        after_refusal.image_input,
-        Some(sourced(false, ModelMetadataSource::Learned, NOW))
-    );
-
-    let says_no = route(PROVIDER, "says-no");
-    set_catalog(
-        &registry,
-        &says_no,
-        ModelMetadata {
-            image_input: Some(sourced(false, ModelMetadataSource::Catalog, NOW)),
-            ..ModelMetadata::default()
-        },
-    );
-    assert_eq!(
-        registry.observed_image_input(&says_no, None, NOW),
-        ModelImageInputCapability::Unknown,
-        "a catalog's no keeps images going to the model"
     );
 }
 

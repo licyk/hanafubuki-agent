@@ -359,7 +359,7 @@ fn sourced(value: impl std::fmt::Display, source: ModelMetadataSource) -> String
         ModelMetadataSource::Configured => "configured",
         ModelMetadataSource::Learned => "learned",
         ModelMetadataSource::Reported => "reported",
-        ModelMetadataSource::Catalog => "catalog",
+        ModelMetadataSource::Catalog => "models.dev",
         ModelMetadataSource::BuiltIn => "built-in",
     };
     format!("{value} ({source})")

@@ -1,6 +1,6 @@
 //! The precedence of the sources, applied per fact: configured, then
-//! learned in the safe direction only, then reported, then a catalog that
-//! only adds, then built-in.
+//! learned in the safe direction only, then reported, then models.dev's
+//! catalogue, which only adds, then built-in.
 
 use hanafubuki_agent_model_api::{
     ModelMetadata, ModelMetadataSource, ModelReasoningSupport, Sourced,
@@ -10,18 +10,16 @@ use super::state::RouteFacts;
 use super::ConfiguredModelFacts;
 
 /// What is known about a route from its `facts` (none when nothing is),
-/// what the person `configured`, and the built-in window of its model.
+/// what the person `configured`, what models.dev's `catalog` says of its
+/// model, and the built-in window of its model.
 pub(super) fn resolve(
     facts: Option<&RouteFacts>,
+    catalog: &ModelMetadata,
     configured: ConfiguredModelFacts,
     built_in_window: Option<u64>,
 ) -> ModelMetadata {
     let empty = RouteFacts::default();
-    let RouteFacts {
-        reported,
-        learned,
-        catalog,
-    } = facts.unwrap_or(&empty);
+    let RouteFacts { reported, learned } = facts.unwrap_or(&empty);
     ModelMetadata {
         context_window: limit(
             configured.context_window,

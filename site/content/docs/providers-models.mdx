@@ -155,7 +155,7 @@ Provider 拒绝推理参数时（状态码 400 或 422，并指名该参数，�
 
 ## 上下文窗口与压缩 [#compaction]
 
-模型的上下文窗口依次取自：模型自己的 `contextWindowTokens`（[按模型的设置](#per-model)）、`[modelPolicy]` 中的 `contextWindowTokens`、Agent 从 Provider 的拒绝中学到的窗口（见下文，仅在它更小时）、Provider 模型目录最近一次报告的值、内置的常见模型表（如 GPT-5 系列、Claude、Gemini 2.5）。都没有时不会自动压缩。会话在创建或选择模型时取得窗口，并在它的每个轮次开始时再取一次，所以在读取模型目录之前创建的会话会在下一个轮次得到窗口，你在 `providers.toml` 中设置或修改的窗口也在下一个轮次生效。你设置的窗口优先。当没有任何来源再知道模型的窗口时，会话保留它已有的窗口，除非那是设置的或学到的、而现在已不存在（被删除，或被[遗忘](#forget)）：这时它的窗口重新变为未知。`/status` 显示窗口及其来源：`200K (reported)`，或 `unknown (compacts on the Provider's error)`。
+模型的上下文窗口依次取自：模型自己的 `contextWindowTokens`（[按模型的设置](#per-model)）、`[modelPolicy]` 中的 `contextWindowTokens`、Agent 从 Provider 的拒绝中学到的窗口（见下文，仅在它更小时）、Provider 模型目录最近一次报告的值、你打开 [models.dev](#models-dev) 时它给出的值、内置的常见模型表（如 GPT-5 系列、Claude、Gemini 2.5）。都没有时不会自动压缩。会话在创建或选择模型时取得窗口，并在它的每个轮次开始时再取一次，所以在读取模型目录之前创建的会话会在下一个轮次得到窗口，你在 `providers.toml` 中设置或修改的窗口也在下一个轮次生效。你设置的窗口优先。当没有任何来源再知道模型的窗口时，会话保留它已有的窗口，除非那是设置的、学到的或来自 models.dev 的、而现在已不存在（被删除、被[遗忘](#forget)，或关闭了 models.dev）：这时它的窗口重新变为未知。`/status` 显示窗口及其来源：`200K (reported)`、`128K (models.dev)`，或 `unknown (compacts on the Provider's error)`。
 
 上下文用到窗口的 `autoCompactThresholdPercent`（默认 80%）时，Agent 会在回合开始前或回合中自动压缩：把较早的对话总结成摘要，保留最近的消息。如果窗口剩下的部分已容不下一次回复，它会更早压缩：为模型的最大输出留出空间（模型目录没有报告时按 32,768 token 计），但最多为窗口的十分之一、至少 4,096 token，且不超过窗口的一半。所以在默认的 80% 下，窗口在 20,480 token 及以上时由阈值决定，而在 10,000 的窗口上 Agent 在 5,904 时压缩。
 
@@ -176,7 +176,7 @@ Provider 以超出模型窗口为由拒绝请求时，Agent 会压缩一次并�
 
 `[modelPolicy.inputCapabilities]` 的 `imageInput` 为 `"auto"`（默认）时，Agent 是否向模型发送图片（你的图片，以及 `view_image` 查看的图片），取决于它对这个模型所知道的：
 
-- **它读图**（Provider 的模型目录这样说），或者**没有任何来源说明**：发送图片，并提供 `view_image`。如果模型仍然拒绝了图片，Agent 会去掉图片重试一次，并从此在 7 天内（重启后也一样）把它当作不读图的模型。
+- **它读图**（Provider 的模型目录这样说，或在其他来源都没说时 [models.dev](#models-dev) 这样说），或者**没有任何来源说明**：发送图片，并提供 `view_image`。如果模型仍然拒绝了图片，Agent 会去掉图片重试一次，并从此在 7 天内（重启后也一样）把它当作不读图的模型。
 - **它不读图**（模型目录这样说，或从拒绝中学到）：不会有图片发给它，所以不会先有请求被拒绝。对话中已有的图片会被替换成一条说明图片已略去的文字，不提供 `view_image`，带图片的消息会被拒绝（`the configured model does not support image input`）。
 
 拒绝的分量重于目录：目录说读图、却拒绝过图片的模型，在这 7 天内不会收到图片，直到被[遗忘](#forget)。对话在开始、选用模型或恢复时采用已知的信息，并在每次请求前再取一次，所以之后才读到的目录从下一次请求起生效。模型自己的 `imageInput`（[按模型的设置](#per-model)）分量重于这两者：`"supported"` 不论目录怎么说、拒绝教了什么都发送图片，`"unsupported"` 从不发送。策略中的 `"disabled"` 则无论模型及其单独设置如何都从不发送图片。
@@ -216,7 +216,17 @@ Agent 从 Provider 的拒绝中学到的信息（更小的窗口、模型不读�
 - 终端界面中的 `/model forget`，针对会话的模型；
 - `hanafubuki-agent providers forget ID [--model MODEL]`，针对该 Provider 的一个模型或它的全部模型（[命令行参考](/docs/cli-reference#providers)）。
 
-目录报告的信息和按模型的设置都保留。会话在下一个轮次采用这一变化：它的窗口变为其他来源所知道的窗口，什么都不知道时则为未知。
+目录报告的信息、[models.dev](#models-dev) 的副本和按模型的设置都保留。会话在下一个轮次采用这一变化：它的窗口变为其他来源所知道的窗口，什么都不知道时则为未知。
+
+## models.dev [#models-dev]
+
+[models.dev](https://models.dev) 是一个按提供商列出模型的公开目录。在 `config.toml` 中设置 `modelMetadata.modelsDev = true`（或在 `/config general` 中打开 **Use models.dev**）后，Agent 会下载它（`https://models.dev/api.json`），并从中取得其他更可靠的来源都没说的模型信息：窗口（`limit.context`）、最大输出（`limit.output`）、它会推理（`reasoning`）以及它读图（`modalities.input` 含 `"image"`）。它默认关闭：**打开后，本机会向第三方 models.dev 发送请求**，大约每天一次，User-Agent 写明 Agent 及其版本，不带任何凭据或关于你的信息。
+
+- **排在其他来源之后。** 模型自己的设置、策略、从拒绝中学到的信息和 Provider 目录报告的信息都优先；models.dev 只补上它们未知的部分，排在内置表之前。它只做加法：它从不说模型不读图或不推理；它说"会推理"时，你设置的推理强度保持不变（它不列出级别）。它的窗口和最大输出与目录报告的一样决定会话何时压缩，但从不改变请求：只有在 models.dev 之外的来源知道最大输出时，Anthropic 的思考预算才在其之内确定（[推理强度与思考过程](#reasoning)）。
+- **用哪一条。** 比较模型 id 时用小写，去掉 `vendor/` 前缀、末尾的 `-latest` 和末尾的 `-YYYYMMDD` 日期（`anthropic/claude-3-5-haiku-20241022` 即 `claude-3-5-haiku`）。优先取 models.dev 中以该 Provider 自己名义列出的条目：键是 Provider 的 id 或其中一个词（`openai`、`my-openai`），或是其端点主机名中的一段（`api.deepseek.com` 即 `deepseek`），或其 API 就在该主机上。没有时，合并所有提供商对该模型的条目，每项限制（窗口、最大输出）取较小者，以及任何一个"是"，因为一个提供商可能发布的是另一个的限制。
+- **何时下载。** 在启动时，以及每当会话绑定到某个 Provider 时，与读取模型目录的时机相同（[模型](#model)），不论 `modelMetadata.discovery` 的值：下载成功后每天最多一次，失败后每 15 分钟最多一次。副本保存在 `model-metadata.json` 中，使用一周，所以 models.dev 无法访问或返回无法使用的内容时什么都不变，也不提示。`/model forget` 和 `providers forget` 会保留它；关闭 `modelsDev` 会丢弃它，以及会话从中取得的窗口。
+
+`/status`、`doctor --online` 和策略表单的占位文字把来自它的信息标为 `models.dev`。
 
 ## 重试与限制 [#limits]
 

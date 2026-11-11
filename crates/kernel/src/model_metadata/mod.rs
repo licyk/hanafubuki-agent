@@ -2,26 +2,29 @@
 //! endpoint and model id), fact by fact: its context window, largest
 //! output, reasoning and image input. A fact comes from the person's
 //! configuration, from a Provider's refusal (learned), from its listing
-//! (reported), from a third-party catalog (none yet) or from the built-in
-//! window table, and is resolved per fact in that order (`resolve`). The
-//! facts outlive the run through the [`ModelMetadataStore`] the kernel's
-//! owner injects.
+//! (reported), from models.dev's catalogue (`Catalog`, when the person
+//! turned it on) or from the built-in window table, and is resolved per
+//! fact in that order (`resolve`). The facts outlive the run through the
+//! [`ModelMetadataStore`] the kernel's owner injects.
 
 use std::sync::Arc;
 
 use hanafubuki_agent_model_api::{
     ModelCatalogEntry, ModelEndpointKey, ModelImageInputCapability, ModelMetadata,
-    ModelMetadataSource, ModelReasoningSupport, ModelRouteKey, Sourced,
+    ModelMetadataSource, ModelProviderNames, ModelReasoningSupport, ModelRouteKey,
+    ModelsDevCatalog, Sourced,
 };
 use parking_lot::Mutex;
 
 use crate::AgentConfiguredModelFacts;
 
 mod built_in;
+mod models_dev;
 mod resolve;
 mod state;
 mod store;
 
+use models_dev::ModelsDevCopy;
 use state::RegistryState;
 pub(crate) use store::NoopModelMetadataStore;
 pub use store::{ModelMetadataSnapshot, ModelMetadataStore};
@@ -140,6 +143,48 @@ impl ModelMetadataRegistry {
         forgotten
     }
 
+    /// Keeps `catalog`, models.dev's catalogue fetched at `now_ms`, in
+    /// place of the copy before.
+    pub(crate) fn record_models_dev(&self, catalog: ModelsDevCatalog, now_ms: u64) {
+        let copy = Arc::new(ModelsDevCopy {
+            fetched_at_ms: now_ms,
+            catalog,
+        });
+        self.change(|state| {
+            state.models_dev = Some(copy);
+            true
+        });
+    }
+
+    /// Drops the copy of models.dev; returns whether there was one.
+    pub(crate) fn forget_models_dev(&self) -> bool {
+        let mut forgotten = false;
+        self.change(|state| {
+            forgotten = state.models_dev.take().is_some();
+            forgotten
+        });
+        forgotten
+    }
+
+    /// When the copy of models.dev still used at `now_ms` was fetched.
+    pub(crate) fn models_dev_fetched_at_ms(&self, now_ms: u64) -> Option<u64> {
+        self.state
+            .lock()
+            .models_dev
+            .as_ref()
+            .filter(|copy| copy.live(now_ms))
+            .map(|copy| copy.fetched_at_ms)
+    }
+
+    /// Takes `names` for what the Provider at `endpoint` is called, which
+    /// picks its own entries in models.dev. Kept for the run only.
+    pub(crate) fn name_provider(&self, endpoint: ModelEndpointKey, names: ModelProviderNames) {
+        let mut state = self.state.lock();
+        if state.provider_names.get(&endpoint) != Some(&names) {
+            state.provider_names.insert(endpoint, names);
+        }
+    }
+
     /// What is known about `model`, at `route` when the transport names
     /// one, with what the person `configured`.
     pub(crate) fn resolve(
@@ -149,8 +194,19 @@ impl ModelMetadataRegistry {
         configured: ConfiguredModelFacts,
         now_ms: u64,
     ) -> ModelMetadata {
-        let facts = route.and_then(|route| self.state.lock().live_facts(route, now_ms));
-        resolve::resolve(facts.as_ref(), configured, built_in::context_window(model))
+        let (facts, catalog) = {
+            let state = self.state.lock();
+            (
+                route.and_then(|route| state.live_facts(route, now_ms)),
+                state.models_dev_facts(route, model, now_ms),
+            )
+        };
+        resolve::resolve(
+            facts.as_ref(),
+            &catalog,
+            configured,
+            built_in::context_window(model),
+        )
     }
 
     /// The context window a session on `model` is given, and its source.

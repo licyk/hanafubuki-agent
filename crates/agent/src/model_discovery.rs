@@ -16,15 +16,24 @@
 //! failure is logged without what the Provider said, and is never a turn's
 //! error. `modelMetadata.discovery = "off"` stops it all; the listings the
 //! person asks for still record.
+//!
+//! The same worker, at the same requests, downloads models.dev's catalogue
+//! when `modelMetadata.modelsDev` is on (off by default: a request to a
+//! third party), at most once a day after a download and every 15 minutes
+//! after a failed one, the day counted from the copy the model metadata
+//! keeps. A failure is silent (logged at debug, without what models.dev
+//! said): the copy kept is used until it is a week old. Turned off, the
+//! copy is dropped.
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use hanafubuki_agent_config::{AgentConfig, AgentModelDiscovery};
+use hanafubuki_agent_config::{AgentConfig, AgentModelDiscovery, AgentSettings};
 use hanafubuki_agent_foundation::background_worker::BackgroundWorkerGroup;
 use hanafubuki_agent_foundation::cancellation::CancellationToken;
-use hanafubuki_agent_kernel::{AgentService, ModelApiProtocol};
+use hanafubuki_agent_kernel::{fetch_models_dev, AgentService, ModelApiProtocol, MODELS_DEV_URL};
 
 use crate::model_api_protocol;
 use crate::service::{resolve_settings_provider, ResolvedAgentProvider};
@@ -33,16 +42,18 @@ use crate::service::{resolve_settings_provider, ResolvedAgentProvider};
 /// Agent is stopping.
 const POLL: Duration = Duration::from_millis(100);
 
-/// When the Agent lists a Provider by itself.
-#[derive(Clone, Copy, Debug)]
+/// When the Agent lists a Provider, or downloads models.dev, by itself.
+#[derive(Clone, Debug)]
 pub(crate) struct ModelDiscoveryPolicy {
     /// Whether the worker runs; when it does, `modelMetadata.discovery`
-    /// decides each listing.
+    /// decides each listing and `modelMetadata.modelsDev` each download.
     enabled: bool,
-    /// How long after a listing its Provider is not listed again.
+    /// How long after a listing (or download) it is not done again.
     after_success: Duration,
-    /// How long after a failed listing.
+    /// How long after a failed one.
     after_failure: Duration,
+    /// Where models.dev's catalogue is downloaded from.
+    models_dev_url: Cow<'static, str>,
 }
 
 impl ModelDiscoveryPolicy {
@@ -51,6 +62,7 @@ impl ModelDiscoveryPolicy {
         enabled: true,
         after_success: Duration::from_secs(24 * 60 * 60),
         after_failure: Duration::from_secs(15 * 60),
+        models_dev_url: Cow::Borrowed(MODELS_DEV_URL),
     };
 
     /// No discovery whatever the settings: the test Agents', so a test's
@@ -60,15 +72,27 @@ impl ModelDiscoveryPolicy {
         enabled: false,
         after_success: Duration::ZERO,
         after_failure: Duration::ZERO,
+        models_dev_url: Cow::Borrowed(""),
     };
 
-    /// Discovery with the periods a test gives.
+    /// Discovery with the periods a test gives, models.dev at an address
+    /// where nothing listens (never the network).
     #[cfg(test)]
     pub(crate) fn every(after_success: Duration, after_failure: Duration) -> Self {
         Self {
             enabled: true,
             after_success,
             after_failure,
+            models_dev_url: Cow::Borrowed("http://127.0.0.1:9/api.json"),
+        }
+    }
+
+    /// This policy, models.dev at `url`.
+    #[cfg(test)]
+    pub(crate) fn with_models_dev(self, url: String) -> Self {
+        Self {
+            models_dev_url: Cow::Owned(url),
+            ..self
         }
     }
 }
@@ -106,6 +130,7 @@ impl ModelDiscovery {
             core,
             config,
             attempts: HashMap::new(),
+            models_dev_attempt: None,
             #[cfg(test)]
             handled: discovery.handled.clone(),
         };
@@ -144,6 +169,7 @@ struct Worker {
     config: AgentConfig,
     /// By protocol and base URL.
     attempts: HashMap<(ModelApiProtocol, String), Attempt>,
+    models_dev_attempt: Option<Attempt>,
     #[cfg(test)]
     handled: std::sync::Arc<std::sync::atomic::AtomicU64>,
 }
@@ -165,8 +191,11 @@ impl Worker {
                 Err(RecvTimeoutError::Timeout) => continue,
                 Err(RecvTimeoutError::Disconnected) => return,
             };
-            if let Some(provider) = self.due_provider(provider_id) {
-                runtime.block_on(self.list(provider, cancellation));
+            if let Ok(settings) = self.config.settings() {
+                if let Some(provider) = self.due_provider(&settings, provider_id) {
+                    runtime.block_on(self.list(provider, cancellation));
+                }
+                runtime.block_on(self.refresh_models_dev(&settings, cancellation));
             }
             #[cfg(test)]
             self.handled
@@ -176,8 +205,11 @@ impl Worker {
 
     /// The Provider `provider_id` names (the default one with none), when
     /// discovery is on and its listing is due.
-    fn due_provider(&self, provider_id: Option<String>) -> Option<ResolvedAgentProvider> {
-        let settings = self.config.settings().ok()?;
+    fn due_provider(
+        &self,
+        settings: &AgentSettings,
+        provider_id: Option<String>,
+    ) -> Option<ResolvedAgentProvider> {
         if settings.model_metadata.discovery == AgentModelDiscovery::Off {
             return None;
         }
@@ -196,7 +228,7 @@ impl Worker {
         let recorded_at_ms = self.core.model_listing_recorded_at(key.0, &key.1);
         let attempt = self.attempts.get(&key);
         due(
-            self.policy,
+            &self.policy,
             attempt,
             recorded_at_ms,
             Instant::now(),
@@ -249,6 +281,51 @@ impl Worker {
             ),
         }
     }
+
+    /// Downloads models.dev's catalogue into the model metadata when it is
+    /// on and due; drops the copy kept when it is off.
+    async fn refresh_models_dev(
+        &mut self,
+        settings: &AgentSettings,
+        cancellation: &CancellationToken,
+    ) {
+        if !settings.model_metadata.models_dev {
+            if self.core.forget_models_dev_catalog() {
+                log::debug!("models.dev is turned off, so its copy is dropped");
+            }
+            return;
+        }
+        let fetched_at_ms = self.core.models_dev_fetched_at();
+        let attempt = self.models_dev_attempt.as_ref();
+        if !due(
+            &self.policy,
+            attempt,
+            fetched_at_ms,
+            Instant::now(),
+            now_ms(),
+        ) {
+            return;
+        }
+        self.models_dev_attempt = Some(Attempt {
+            at: Instant::now(),
+            succeeded: false,
+        });
+        match fetch_models_dev(&self.policy.models_dev_url, cancellation).await {
+            Ok(catalog) => {
+                log::debug!("models.dev: {} models fetched", catalog.model_count());
+                self.core.record_models_dev_catalog(catalog);
+                if let Some(attempt) = self.models_dev_attempt.as_mut() {
+                    attempt.succeeded = true;
+                }
+            }
+            Err(_) if cancellation.is_cancelled() => {}
+            // A fallback source: its failure is no one's error. The error
+            // names what failed, never what models.dev answered.
+            Err(error) => log::debug!(
+                "models.dev's catalogue was not fetched ({error}); the copy kept, if any, is used until it is a week old"
+            ),
+        }
+    }
 }
 
 /// The endpoint `provider` is listed at: its protocol and base URL.
@@ -265,7 +342,7 @@ fn endpoint(provider: &ResolvedAgentProvider) -> (ModelApiProtocol, String) {
 /// successful listing's period. A recorded time ahead of now (a clock set
 /// back) does not hold the listing off.
 fn due(
-    policy: ModelDiscoveryPolicy,
+    policy: &ModelDiscoveryPolicy,
     attempt: Option<&Attempt>,
     recorded_at_ms: Option<u64>,
     now: Instant,

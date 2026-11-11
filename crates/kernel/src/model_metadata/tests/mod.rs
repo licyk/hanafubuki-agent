@@ -12,6 +12,7 @@ use super::*;
 
 mod forget;
 mod listing;
+mod models_dev;
 mod persistence;
 mod precedence;
 
@@ -71,21 +72,6 @@ fn window(
     registry
         .context_window(configured, Some(route), route.model(), now_ms)
         .map(|fact| fact.value)
-}
-
-/// `route`'s facts from a third-party catalog, which nothing records yet.
-fn set_catalog(
-    registry: &ModelMetadataRegistry,
-    route: &ModelRouteKey,
-    catalog: hanafubuki_agent_model_api::ModelMetadata,
-) {
-    registry
-        .state
-        .lock()
-        .routes
-        .entry(route.clone())
-        .or_default()
-        .catalog = catalog;
 }
 
 fn sourced<T>(value: T, source: ModelMetadataSource, observed_at_ms: u64) -> Sourced<T> {

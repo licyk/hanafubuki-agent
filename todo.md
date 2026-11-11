@@ -2,7 +2,7 @@
 
 The plan is [docs/plan-model-metadata.md](docs/plan-model-metadata.md), after
 Hoshimi `83f7813`. Every §9 decision (D1–D7) was accepted as recommended
-(2026-11-11).
+(2026-11-11). All milestones (M1–M8) are done; the open items below stay.
 
 - M1 (done): the listing is tolerant per entry and reads the §3 fields, and
   the §4.1 types exist (unused until M2).
@@ -531,8 +531,116 @@ Hoshimi `83f7813`. Every §9 decision (D1–D7) was accepted as recommended
     activation is tested); `providers forget` persisting across CLI runs
     (the facade test covers it across runs). `kernel/tests/loop_contract/
     main.rs` is at 900 of 900.
+- M8 (done): models.dev (D2), optional and off by default.
+  - Config: `[modelMetadata] modelsDev = true | false` (default `false`),
+    `AgentModelMetadataSettings.models_dev`, read field by field (an
+    unusable value is a repair); `/config general` gains the toggle **Use
+    models.dev** beside discovery (its subtitle says it is a request to
+    models.dev from this machine); the coverage test lists the key. The
+    patch type stays strict, and `models_dev` is a required field of it, as
+    `discovery` is (host-visible: a patch's `modelMetadata` must carry it).
+  - model-api `models_dev.rs`: `ModelsDevCatalog::from_api_json` reads
+    `api.json` one provider at a time (a map visitor, so the document is
+    never one `Value`); a provider or model that does not read is left out,
+    a field not of its type is unknown, the count logged at debug; only a
+    body that is not an object or names no usable model fails. It keeps,
+    per provider, its `api` host and, per normalized id, `limit.context`
+    (within `PLAUSIBLE_CONTEXT_WINDOW`), `limit.output` (> 0), and a "yes"
+    to `reasoning` and to `"image"` in `modalities.input`; a "no" is not
+    kept (add-only). `fetch_models_dev(url, cancellation)`: its own reqwest
+    client (no Provider credential or header), User-Agent
+    `hanafubuki-agent/<version>`, connect 10 s, a minute in all, 32 MiB,
+    cancellation. `ModelEndpoint::host` is new.
+  - Matching: an id is lowercased, cut after its last `/`, stripped of a
+    trailing `-latest`, then of a trailing `-YYYYMMDD` (eight digits).
+    The Provider's own entry first (`ModelProviderNames`: a models.dev key
+    equal to the Provider's id or a word of it, or a label of the base
+    URL's host, or a provider whose `api` is at that host); else every
+    provider's entries for the id merged, the smaller limit and any "yes"
+    (deviation: the plan said "first provider wins" was not to be taken
+    and left the fallback open; the smallest is the safe direction, as
+    `built_in.rs` says, and deterministic). Two ids of one provider that
+    normalize alike merge the same way. A `reasoning` "yes" is
+    `Supported { efforts: [], default: None }`, which leaves the effort as
+    configured, so models.dev never changes the reasoning on the wire.
+  - Kernel: the copy is `ModelMetadataSnapshot.modelsDev`
+    (`{fetchedAtMs, catalog}`, an `Arc` shared by every snapshot, tolerant:
+    a copy that does not read is none), used for 7 days
+    (`MODELS_DEV_TTL_MS`, a fetch time ahead of the clock counted from
+    now), looked up per resolve by model id; the per-route `catalog`
+    bucket M2 kept (and nothing wrote) is removed, `resolve` takes the
+    looked-up facts in its place, so the §4.2 precedence is unchanged
+    (configured > learned > reported > models.dev > built-in). The
+    endpoint's names are this run's (`RegistryState.provider_names`, not
+    saved), taken wherever the kernel gets a Provider's id with its base
+    URL: `create_model_session`, `activate_model_session`,
+    `set_session_model_configuration`, `model_metadata` and
+    `model_context_window` (both gained `provider_id`, host-visible). A
+    session's window recorded from models.dev is dropped, like a
+    configured or learned one, once nothing knows it (models.dev turned
+    off, its copy expired). `forget_learned` keeps the copy. New kernel
+    API: `record_models_dev_catalog`, `forget_models_dev_catalog`,
+    `models_dev_fetched_at`; re-exports `fetch_models_dev`,
+    `ModelsDevCatalog`, `MODELS_DEV_URL`. `ModelMetadataSource::Catalog`
+    keeps its name and its wire value (`catalog`); `/status`, the
+    pickers' placeholders and `doctor --online` show it as `models.dev`.
+  - Facade: the discovery worker, at each request (start, a session
+    created, given a model or activated) and whatever `discovery` says,
+    then drops the copy when `modelsDev` is off, else downloads when the
+    copy is a day old (or missing) and this run's last try is a day old
+    after a success or 15 minutes after a failure (the discovery periods).
+    A failure is logged at debug (what failed, never what models.dev
+    answered) and the copy goes on being used. `ModelDiscoveryPolicy`
+    carries the URL (`Clone`, no longer `Copy`); the test policy points it
+    at a port where nothing listens, so no test reaches the network.
+    Deviation: the brief's "24 h cache" is the refresh age; the copy is
+    used for a week, so models.dev unreachable is silent and the copy keeps
+    answering (with a 24 h life a failed refresh would drop it at once).
+  - Tests: model-api `models_dev/tests.rs` (normalization, provider
+    names) and `tests/models_dev/` (a fixture in models.dev's shape with
+    entries that do not read: tolerance, refusals, own entry first, the
+    cautious merge, the kept form's round trip and damage, the fetch's
+    User-Agent and no credential, errors, cancellation); kernel
+    `model_metadata/tests/models_dev.rs` (reported beats models.dev,
+    models.dev beats built-in, learned and configured above it, a "no"
+    not kept, own entry first else the smallest, forgetting learned facts
+    keeps the copy, saved and expired after a week, a copy that does not
+    read, dropping it saves once); facade `tests/model_discovery.rs`
+    (off by default: no request to the test server; on with discovery
+    off: fetched once with the User-Agent, a session's window from it at
+    its next turn, the copy spares the next run a download (a second
+    answer waits, unasked), a Provider renamed to a models.dev key takes
+    its own entry over the other, in a session and in `model_metadata`;
+    unreachable:
+    silent, the copy kept; turned off: the copy and the session's window
+    dropped); config (`modelsDev` read, repaired, set); TUI (the toggle
+    saved, `models.dev` as a source). The precedence test that set the
+    removed per-route bucket by hand became the kernel's models.dev
+    suite. No request golden or history corpus changed.
+  - Docs: `providers-models` (new "models.dev" section; window order,
+    images, forgetting), `config-reference` (`modelMetadata.modelsDev`,
+    the third-party request), `data-directory`, `architecture` (the
+    sources, discovery, late resolution, images), `internals` (decoding,
+    the file), `terminal-interface`, `cli-reference`, `embedding`, both
+    languages. No page said models.dev was not yet available.
+  - Policies: no strict-decoding, module-size or notices change (the new
+    files are outside the derived directories; `AgentModelMetadataSettings`
+    was already listed).
+  - Unverified: the live `https://models.dev/api.json` (the fixture is
+    written in its shape, not recorded: no network here) and its current
+    size against the 32 MiB bound; Hoshimi's caution stands that a flat
+    id's limits are one provider's numbers, which is why the fallback
+    takes the smallest. A models.dev largest output is not sent: the
+    request's `max_output_tokens` (Anthropic's `max_tokens` and thinking
+    budget) skips that source, per §3's "a third-party flag must never
+    change a request on its own"; it still enters the compaction headroom.
+  - Residuals: the download takes no `[network]` proxy, as the Providers'
+    own model clients take none (only MCP and web search apply it); a copy
+    on disk with `modelsDev` turned off still answers until the worker's
+    first request at start; the failure backoff is per run, so short runs
+    (`exec`) with models.dev unreachable try once each.
 - Open: Chat Completions' `reasoning_content` sent back in tool loops
-  (DeepSeek's thinking mode requires it); M8 models.dev (optional).
+  (DeepSeek's thinking mode requires it).
 
 ## Plan: Codex's messages sent while the Agent works, in the terminal interface (2026-11-11)
 

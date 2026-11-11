@@ -11,7 +11,7 @@ pub(crate) fn source_name(source: ModelMetadataSource) -> &'static str {
         ModelMetadataSource::Configured => "configured",
         ModelMetadataSource::Learned => "learned",
         ModelMetadataSource::Reported => "reported",
-        ModelMetadataSource::Catalog => "catalog",
+        ModelMetadataSource::Catalog => "models.dev",
         ModelMetadataSource::BuiltIn => "built-in",
     }
 }

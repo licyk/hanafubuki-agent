@@ -1,0 +1,164 @@
+{
+  "openai": {
+    "id": "openai",
+    "env": ["OPENAI_API_KEY"],
+    "npm": "@ai-sdk/openai",
+    "name": "OpenAI",
+    "doc": "https://platform.openai.com/docs/models",
+    "models": {
+      "gpt-4o": {
+        "id": "gpt-4o",
+        "name": "GPT-4o",
+        "family": "gpt-4o",
+        "attachment": true,
+        "reasoning": false,
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "knowledge": "2023-09",
+        "release_date": "2024-05-13",
+        "last_updated": "2024-08-06",
+        "modalities": { "input": ["text", "image"], "output": ["text"] },
+        "open_weights": false,
+        "cost": { "input": 2.5, "output": 10, "cache_read": 1.25 },
+        "limit": { "context": 128000, "output": 16384 }
+      },
+      "o3": {
+        "id": "o3",
+        "name": "o3",
+        "attachment": true,
+        "reasoning": true,
+        "tool_call": true,
+        "temperature": false,
+        "knowledge": "2024-05",
+        "release_date": "2025-04-16",
+        "last_updated": "2025-04-16",
+        "modalities": { "input": ["text", "image"], "output": ["text"] },
+        "open_weights": false,
+        "cost": { "input": 2, "output": 8, "cache_read": 0.5 },
+        "limit": { "context": 200000, "output": 100000 }
+      }
+    }
+  },
+  "anthropic": {
+    "id": "anthropic",
+    "env": ["ANTHROPIC_API_KEY"],
+    "npm": "@ai-sdk/anthropic",
+    "name": "Anthropic",
+    "doc": "https://docs.anthropic.com/en/docs/about-claude/models",
+    "models": {
+      "claude-3-5-haiku-20241022": {
+        "id": "claude-3-5-haiku-20241022",
+        "name": "Claude Haiku 3.5",
+        "attachment": true,
+        "reasoning": false,
+        "tool_call": true,
+        "temperature": true,
+        "knowledge": "2024-07-31",
+        "release_date": "2024-10-22",
+        "last_updated": "2024-10-22",
+        "modalities": { "input": ["text", "image", "pdf"], "output": ["text"] },
+        "open_weights": false,
+        "cost": { "input": 0.8, "output": 4, "cache_read": 0.08, "cache_write": 1 },
+        "limit": { "context": 200000, "output": 8192 }
+      }
+    }
+  },
+  "deepseek": {
+    "id": "deepseek",
+    "env": ["DEEPSEEK_API_KEY"],
+    "npm": "@ai-sdk/openai-compatible",
+    "api": "https://api.deepseek.com",
+    "name": "DeepSeek",
+    "doc": "https://platform.deepseek.com/api-docs/pricing",
+    "models": {
+      "deepseek-reasoner": {
+        "id": "deepseek-reasoner",
+        "name": "DeepSeek Reasoner",
+        "attachment": false,
+        "reasoning": true,
+        "tool_call": true,
+        "temperature": true,
+        "knowledge": "2024-07",
+        "release_date": "2025-01-20",
+        "last_updated": "2025-05-29",
+        "modalities": { "input": ["text"], "output": ["text"] },
+        "open_weights": true,
+        "cost": { "input": 0.55, "output": 2.19, "cache_read": 0.14 },
+        "limit": { "context": 128000, "output": 64000 }
+      }
+    }
+  },
+  "github-copilot": {
+    "id": "github-copilot",
+    "env": ["GITHUB_TOKEN"],
+    "npm": "@ai-sdk/openai-compatible",
+    "api": "https://api.githubcopilot.com",
+    "name": "GitHub Copilot",
+    "doc": "https://docs.github.com/en/copilot",
+    "models": {
+      "gpt-4o": {
+        "id": "gpt-4o",
+        "name": "GPT-4o",
+        "attachment": true,
+        "reasoning": false,
+        "tool_call": true,
+        "temperature": true,
+        "knowledge": "2023-09",
+        "release_date": "2024-05-13",
+        "last_updated": "2024-05-13",
+        "modalities": { "input": ["text", "image"], "output": ["text"] },
+        "open_weights": false,
+        "cost": { "input": 0, "output": 0 },
+        "limit": { "context": 64000, "output": 16384 }
+      },
+      "unusable": "not a model",
+      "half-known": {
+        "id": "half-known",
+        "reasoning": "sometimes",
+        "modalities": { "input": "text" },
+        "limit": { "context": "large", "output": 4096 }
+      }
+    }
+  },
+  "openrouter": {
+    "id": "openrouter",
+    "env": ["OPENROUTER_API_KEY"],
+    "npm": "@openrouter/ai-sdk-provider",
+    "api": "https://openrouter.ai/api/v1",
+    "name": "OpenRouter",
+    "doc": "https://openrouter.ai/models",
+    "models": {
+      "deepseek/deepseek-reasoner": {
+        "id": "deepseek/deepseek-reasoner",
+        "name": "DeepSeek Reasoner",
+        "attachment": false,
+        "reasoning": true,
+        "tool_call": true,
+        "temperature": true,
+        "release_date": "2025-01-20",
+        "last_updated": "2025-01-20",
+        "modalities": { "input": ["text"], "output": ["text"] },
+        "open_weights": true,
+        "cost": { "input": 0.5, "output": 2 },
+        "limit": { "context": 163840, "output": 163840 }
+      },
+      "anthropic/claude-3.5-haiku-latest": {
+        "id": "anthropic/claude-3.5-haiku-latest",
+        "name": "Claude Haiku 3.5",
+        "attachment": true,
+        "reasoning": false,
+        "tool_call": true,
+        "temperature": true,
+        "release_date": "2024-10-22",
+        "last_updated": "2024-10-22",
+        "modalities": { "input": ["text", "image"], "output": ["text"] },
+        "open_weights": false,
+        "cost": { "input": 0.8, "output": 4 },
+        "limit": { "context": 200000, "output": 8192 }
+      }
+    }
+  },
+  "broken": { "id": "broken", "models": ["not", "a", "map"] },
+  "not-a-provider": 42
+}

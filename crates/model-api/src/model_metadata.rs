@@ -48,8 +48,8 @@ pub struct Sourced<T> {
 }
 
 /// Where a fact came from, in precedence order: the person's configuration,
-/// a Provider's refusal, its listing, a third-party catalog, the built-in
-/// table.
+/// a Provider's refusal, its listing, models.dev's catalogue (`Catalog`,
+/// shown as `models.dev`), the built-in table.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ModelMetadataSource {

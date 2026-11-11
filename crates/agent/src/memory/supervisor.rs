@@ -344,6 +344,7 @@ fn run_memory_pass(
         .core
         .model_context_window(
             configured_window,
+            &resolved.definition.id,
             model_api_protocol(resolved.definition.protocol),
             &resolved.definition.base_url,
             &extraction_model,

@@ -23,6 +23,7 @@ use super::ConfigSection;
 const SAVE: FieldId = "save";
 const PERMISSION: FieldId = "permission";
 const DISCOVERY: FieldId = "model_discovery";
+const MODELS_DEV: FieldId = "models_dev";
 const SANDBOX: FieldId = "sandbox";
 const WRITABLE_ROOTS: FieldId = "writable_roots";
 const NETWORK_ACCESS: FieldId = "network_access";
@@ -248,10 +249,15 @@ pub(super) fn section_form(section: ConfigSection, state: &ConfigState) -> FormV
                         .position(|discovery| *discovery == settings.model_metadata.discovery)
                         .unwrap_or_default(),
                 ),
+                FormItem::toggle(
+                    MODELS_DEV,
+                    "Use models.dev",
+                    settings.model_metadata.models_dev,
+                ),
                 FormItem::action(SAVE, "Save"),
             ],
         )
-        .with_subtitle("The plugins that are turned off are managed by /plugins. Model discovery lists the Providers' models in the background, at most once a day each."),
+        .with_subtitle("The plugins that are turned off are managed by /plugins. Model discovery lists the Providers' models in the background, at most once a day each. models.dev fills what they leave unknown; it is a request to models.dev from this machine, once a day."),
         ConfigSection::Sandbox => {
             let windows = settings.windows.sandbox;
             FormView::new(

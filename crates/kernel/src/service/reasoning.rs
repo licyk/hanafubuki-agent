@@ -2,7 +2,9 @@
 //! narrowed to what the route is known to take, with the route's largest
 //! output; and what a Provider's refusal of the parameter teaches.
 
-use hanafubuki_agent_model_api::{ModelReasoningConfig, ModelReasoningSupport};
+use hanafubuki_agent_model_api::{
+    ModelMetadataSource, ModelReasoningConfig, ModelReasoningSupport,
+};
 
 use super::model_facts::configured_facts;
 use super::*;
@@ -11,7 +13,7 @@ impl AgentService {
     /// The reasoning `record`'s next request carries
     /// (`request_reasoning_effort`, from the route's resolved reasoning
     /// fact; a transport that names no route has nothing known), with the
-    /// route's largest output. Logs once per session when the configured
+    /// route's largest output, unless only models.dev knows it. Logs once per session when the configured
     /// effort is narrowed to another, or dropped.
     pub(super) fn request_reasoning(
         &self,
@@ -51,7 +53,11 @@ impl AgentService {
         }
         Some(ModelReasoningConfig {
             effort: effort?,
-            max_output_tokens: facts.max_output_tokens.map(|fact| fact.value),
+            // A third party's number never changes a request on its own.
+            max_output_tokens: facts
+                .max_output_tokens
+                .filter(|fact| fact.source != ModelMetadataSource::Catalog)
+                .map(|fact| fact.value),
         })
     }
 

@@ -1,9 +1,11 @@
 //! What the person configured for a session's model, and what a host reads
 //! and clears of the model metadata: a model's resolved facts, a session's,
-//! and forgetting what the Provider's refusals taught.
+//! forgetting what the Provider's refusals taught, and the copy of
+//! models.dev's catalogue the host fetches.
 
 use hanafubuki_agent_model_api::{
-    ModelEndpoint, ModelEndpointKey, ModelImageInputPolicy, ModelMetadata, ModelRouteKey, Sourced,
+    ModelEndpoint, ModelEndpointKey, ModelImageInputPolicy, ModelMetadata, ModelProviderNames,
+    ModelRouteKey, ModelsDevCatalog, Sourced,
 };
 
 use super::*;
@@ -11,17 +13,20 @@ use crate::model_metadata::ConfiguredModelFacts;
 use crate::AgentConfiguredModelFacts;
 
 impl AgentService {
-    /// What is known of `model` at the Provider at `base_url`, with what
-    /// the person `configured` for it, each fact with its source: none
-    /// when `base_url` is not an endpoint.
+    /// What is known of `model` at the Provider `provider_id` at
+    /// `base_url`, with what the person `configured` for it, each fact with
+    /// its source: none when `base_url` is not an endpoint.
     pub fn model_metadata(
         &self,
+        provider_id: &str,
         protocol: ModelApiProtocol,
         base_url: &str,
         model: &str,
         configured: &AgentConfiguredModelFacts,
     ) -> Option<ModelMetadata> {
-        let route = ModelRouteKey::new(protocol, &ModelEndpoint::parse(base_url).ok()?, model);
+        let endpoint = ModelEndpoint::parse(base_url).ok()?;
+        self.name_model_provider(provider_id, protocol, &endpoint);
+        let route = ModelRouteKey::new(protocol, &endpoint, model);
         Some(self.inner.model_metadata.resolve(
             Some(&route),
             model,
@@ -77,6 +82,58 @@ impl AgentService {
             model,
             now_millis_u64(),
         ))
+    }
+
+    /// Keeps `catalog`, models.dev's catalogue just fetched, in place of
+    /// the copy before: what it says of a model fills what neither the
+    /// person, the Provider's refusals nor its listing say, for a week
+    /// unless a newer copy replaces it.
+    pub fn record_models_dev_catalog(&self, catalog: ModelsDevCatalog) {
+        self.inner
+            .model_metadata
+            .record_models_dev(catalog, now_millis_u64());
+    }
+
+    /// Drops the copy of models.dev's catalogue (the person turned it off);
+    /// returns whether there was one.
+    pub fn forget_models_dev_catalog(&self) -> bool {
+        self.inner.model_metadata.forget_models_dev()
+    }
+
+    /// When the copy of models.dev's catalogue still used was fetched, in
+    /// milliseconds since the Unix epoch; none without one.
+    pub fn models_dev_fetched_at(&self) -> Option<u64> {
+        self.inner
+            .model_metadata
+            .models_dev_fetched_at_ms(now_millis_u64())
+    }
+
+    /// Tells the model metadata that the Provider at `endpoint` over
+    /// `protocol` is `provider_id`, which picks its own entries in
+    /// models.dev.
+    pub(super) fn name_model_provider(
+        &self,
+        provider_id: &str,
+        protocol: ModelApiProtocol,
+        endpoint: &ModelEndpoint,
+    ) {
+        self.inner.model_metadata.name_provider(
+            ModelEndpointKey::new(protocol, endpoint),
+            ModelProviderNames::new(provider_id, endpoint),
+        );
+    }
+
+    /// `name_model_provider` from a base URL, which may not be an
+    /// endpoint (then nothing is named).
+    pub(super) fn name_model_provider_at(
+        &self,
+        provider_id: &str,
+        protocol: ModelApiProtocol,
+        base_url: &str,
+    ) {
+        if let Ok(endpoint) = ModelEndpoint::parse(base_url) {
+            self.name_model_provider(provider_id, protocol, &endpoint);
+        }
     }
 }
 

@@ -45,3 +45,13 @@ fn a_window_names_its_source() {
     };
     assert_eq!(sourced_window(&window), "1.05M, learned");
 }
+
+#[test]
+fn models_dev_is_named_as_such() {
+    let window = Sourced {
+        value: 128_000,
+        source: ModelMetadataSource::Catalog,
+        observed_at_ms: 0,
+    };
+    assert_eq!(sourced_window(&window), "128K, models.dev");
+}

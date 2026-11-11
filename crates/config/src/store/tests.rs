@@ -575,7 +575,7 @@ fn an_unreadable_windows_sandbox_is_dropped_which_turns_it_off() {
 }
 
 #[test]
-fn model_discovery_reads_tolerantly_and_is_set_by_its_key() {
+fn model_metadata_settings_read_tolerantly_and_are_set_by_their_keys() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join(AGENT_SETTINGS_FILE);
     let discovery = |config: &AgentConfig| config.settings().unwrap().model_metadata.discovery;
@@ -584,23 +584,29 @@ fn model_discovery_reads_tolerantly_and_is_set_by_its_key() {
         AgentModelDiscovery::Auto
     );
 
-    // A key a later version adds is ignored, and the one beside it read.
+    let models_dev = |config: &AgentConfig| config.settings().unwrap().model_metadata.models_dev;
+    assert!(!models_dev(&AgentConfig::new(directory.path())));
+
+    // A key a later version adds is ignored, and the ones beside it read.
     fs::write(
         &path,
-        "[modelMetadata]\ndiscovery = \"off\"\nmodelsDev = true\n",
+        "[modelMetadata]\ndiscovery = \"off\"\nmodelsDev = true\nlaterKey = 1\n",
     )
     .unwrap();
     let config = AgentConfig::new(directory.path());
     assert_eq!(discovery(&config), AgentModelDiscovery::Off);
+    assert!(models_dev(&config));
     assert!(config.recoveries().is_empty());
 
     for unusable in [
         "[modelMetadata]\ndiscovery = \"sometimes\"\n",
+        "[modelMetadata]\nmodelsDev = \"yes\"\n",
         "modelMetadata = 3\n",
     ] {
         fs::write(&path, unusable).unwrap();
         let config = AgentConfig::new(directory.path());
         assert_eq!(discovery(&config), AgentModelDiscovery::Auto, "{unusable}");
+        assert!(!models_dev(&config), "{unusable}");
         assert!(matches!(
             &config.recoveries()[0].problem,
             AgentConfigProblem::Repaired { repairs } if repairs.len() == 1
@@ -620,6 +626,11 @@ fn model_discovery_reads_tolerantly_and_is_set_by_its_key() {
         config.value("modelMetadata.discovery").unwrap(),
         Some(json!("off"))
     );
+    config
+        .set_user_value("modelMetadata.modelsDev", "true")
+        .unwrap();
+    assert!(models_dev(&config));
+    assert_eq!(discovery(&config), AgentModelDiscovery::Off);
 }
 
 /// Per-model overrides read field by field: a field that cannot be used is

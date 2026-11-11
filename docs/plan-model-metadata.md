@@ -1,8 +1,9 @@
 # Plan: model metadata from the Provider, with fallbacks
 
-Date: 2026-11-11. Status: accepted. Every §9 decision was accepted as
-recommended (2026-11-11); the milestones land one by one, and `todo.md` records
-what each did and how it deviated from this plan.
+Date: 2026-11-11. Status: implemented. Every §9 decision was accepted as
+recommended (2026-11-11), and every milestone, M1 to M8, has landed (2026-11-11).
+`todo.md` records what each did, how it deviated from this plan, and what is still
+open.
 
 The Agent should learn what the model a session samples with can do (its context
 window, whether and how it reasons, whether it reads images) from the Provider

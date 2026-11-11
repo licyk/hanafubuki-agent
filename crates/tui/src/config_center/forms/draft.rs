@@ -15,6 +15,7 @@ pub(crate) fn draft(
             permission_mode: Some(PERMISSIONS.get(form.choice(PERMISSION)).copied()?),
             model_metadata: Some(AgentModelMetadataSettings {
                 discovery: DISCOVERIES.get(form.choice(DISCOVERY)).copied()?,
+                models_dev: form.toggle(MODELS_DEV),
             }),
             ..AgentSettingsPatch::default()
         }),

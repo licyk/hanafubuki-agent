@@ -285,6 +285,39 @@ async fn a_model_listed_without_reasoning_is_sent_none() {
     assert_eq!(fixture.fell_back(session_id), 0);
 }
 
+/// models.dev's largest output is shown but never sent: a third party's
+/// number does not change a request on its own.
+#[tokio::test]
+async fn models_dev_largest_output_is_not_sent() {
+    let fixture = Fixture::new([]);
+    let document = format!(
+        r#"{{"provider": {{"models": {{"{MODEL}": {{"reasoning": true, "limit": {{"context": 128000, "output": 2000}}}}}}}}}}"#
+    );
+    fixture.service.record_models_dev_catalog(
+        hanafubuki_agent_model_api::ModelsDevCatalog::from_api_json(document.as_bytes()).unwrap(),
+    );
+    let known = fixture
+        .service
+        .inner
+        .model_metadata
+        .resolve(
+            Some(&endpoint().route(MODEL)),
+            MODEL,
+            ConfiguredModelFacts::default(),
+            super::now_millis_u64(),
+        )
+        .max_output_tokens
+        .map(|fact| (fact.value, fact.source));
+    assert_eq!(known, Some((2000, ModelMetadataSource::Catalog)));
+
+    let session_id = fixture.session(Some("high"));
+    fixture.turn(session_id).await.unwrap();
+
+    let reasoning = fixture.model.requests()[0].reasoning.clone().unwrap();
+    assert_eq!(reasoning.effort.to_string(), "high");
+    assert_eq!(reasoning.max_output_tokens, None);
+}
+
 /// The levels the person configured for the model (`reasoningEfforts`)
 /// replace the listed ones, an empty list sends none, and the largest
 /// output configured goes with the effort; a refusal under configured

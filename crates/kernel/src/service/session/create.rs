@@ -39,6 +39,7 @@ impl AgentService {
             request_retry_policy,
             compaction_capability,
         )?;
+        self.name_model_provider_at(&config.provider_id, protocol, base_url);
         config.adopt_configured_window();
         let window = self.session_context_window(
             config.configured_facts.context_window_tokens,

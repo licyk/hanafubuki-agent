@@ -191,18 +191,21 @@ impl AgentService {
         Ok(entries)
     }
 
-    /// The context window of `model` at `base_url` that a session would be
-    /// given, for work that samples outside a session.
+    /// The context window of `model` at the Provider `provider_id` at
+    /// `base_url` that a session would be given, for work that samples
+    /// outside a session.
     pub fn model_context_window(
         &self,
         configured: Option<u64>,
+        provider_id: &str,
         protocol: ModelApiProtocol,
         base_url: &str,
         model: &str,
     ) -> Option<u64> {
-        let route = ModelEndpoint::parse(base_url)
-            .ok()
-            .map(|endpoint| ModelRouteKey::new(protocol, &endpoint, model));
+        let route = ModelEndpoint::parse(base_url).ok().map(|endpoint| {
+            self.name_model_provider(provider_id, protocol, &endpoint);
+            ModelRouteKey::new(protocol, &endpoint, model)
+        });
         self.inner
             .model_metadata
             .context_window(configured, route.as_ref(), model, now_millis_u64())

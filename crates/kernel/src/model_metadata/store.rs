@@ -1,12 +1,15 @@
 //! Where the registry's facts are kept between runs, and their persisted
 //! form.
 
+use std::sync::Arc;
+
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 
 use hanafubuki_agent_model_api::{ModelEndpointKey, ModelRouteKey};
 
+use super::models_dev::{serialize_copy, tolerant_copy, ModelsDevCopy};
 use super::state::{ListingState, RouteFacts};
 
 /// Keeps the model metadata registry's facts between runs. The kernel
@@ -36,8 +39,8 @@ impl ModelMetadataStore for NoopModelMetadataStore {
 
 /// The registry's facts as a store keeps them. It is the Agent's own
 /// persisted data, so it is read tolerantly: an unknown field is ignored, a
-/// route or listing that does not read is left out, and a fact that does
-/// not read is unknown.
+/// route or listing that does not read is left out, a fact that does not
+/// read is unknown, and a copy of models.dev that does not read is none.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ModelMetadataSnapshot {
@@ -45,6 +48,14 @@ pub struct ModelMetadataSnapshot {
     pub(super) routes: Vec<RouteRecord>,
     #[serde(default, deserialize_with = "tolerant_entries")]
     pub(super) listings: Vec<ListingRecord>,
+    /// The copy of models.dev's catalogue, when one was fetched.
+    #[serde(
+        default,
+        deserialize_with = "tolerant_copy",
+        serialize_with = "serialize_copy",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub(super) models_dev: Option<Arc<ModelsDevCopy>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
