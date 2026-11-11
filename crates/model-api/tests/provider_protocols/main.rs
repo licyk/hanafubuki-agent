@@ -5,12 +5,11 @@ use std::time::Duration;
 
 use hanafubuki_agent_foundation::cancellation::CancellationToken;
 use hanafubuki_agent_model_api::{
-    AnthropicMessagesModelTransport, ChatCompletionsModelTransport, ModelApiProtocol,
-    ModelCatalogClient, ModelContextRole, ModelCredential, ModelEndpoint, ModelError, ModelEvent,
-    ModelHeader, ModelImageDetail, ModelInputItem, ModelJsonSchemaOutput, ModelMessagePhase,
-    ModelOutputFormat, ModelOutputItem, ModelPort, ModelProvider, ModelReasoningConfig,
-    ModelReasoningEffort, ModelRequest, ModelToolChoice, ModelToolSpec, ModelUsage,
-    ModelUserContent, ResponsesModelTransport,
+    AnthropicMessagesModelTransport, ChatCompletionsModelTransport, ModelContextRole,
+    ModelCredential, ModelEndpoint, ModelError, ModelEvent, ModelHeader, ModelImageDetail,
+    ModelInputItem, ModelJsonSchemaOutput, ModelMessagePhase, ModelOutputFormat, ModelOutputItem,
+    ModelPort, ModelProvider, ModelReasoningConfig, ModelReasoningEffort, ModelRequest,
+    ModelToolChoice, ModelToolSpec, ModelUsage, ModelUserContent, ResponsesModelTransport,
 };
 use hanafubuki_agent_tool_contracts::{
     FreeformToolFormat, FreeformToolSpec, FunctionToolSpec, HostedWebSearchSpec, NamespaceToolSpec,

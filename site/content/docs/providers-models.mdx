@@ -94,7 +94,7 @@ provider-2 DeepSeek  ChatCompletions  https://api.deepseek.com/v1  token: set
 | `-m 模型`                      | 本次运行中的新会话（以及恢复的会话），在默认 Provider 上运行 |
 | 终端界面的 `/model`            | 当前会话；从已启用 Provider 的模型目录中选择                 |
 
-`/model` 列出每个已启用 Provider 的模型目录（从 `models` 接口读取）。某个 Provider 的目录无法读取时，列表会显示原因。`doctor --online` 会检查默认 Provider 是否能列出模型。宿主可以在保存 Provider 之前读取它的模型目录，以测试地址、令牌和请求头（`test_provider_draft`，见[嵌入 Agent](/docs/embedding#configuration-in-a-host)）。
+`/model` 列出每个已启用 Provider 的模型目录（从 `models` 接口读取）。某个 Provider 的目录无法读取时，列表会显示原因。Agent 从目录中的每个模型读取它报告的上下文窗口（见[上下文窗口与压缩](#compaction)），也读取它的最大输出、是否读图、是否推理，但目前还不据此行事。没有可用 ID 的模型会被略去，无法读取的字段视为未报告，所以一个异常的模型不会让整个目录读取失败。`doctor --online` 会检查默认 Provider 是否能列出模型。宿主可以在保存 Provider 之前读取它的模型目录，以测试地址、令牌和请求头（`test_provider_draft`，见[嵌入 Agent](/docs/embedding#configuration-in-a-host)）。
 
 ## 推理强度与思考过程 [#reasoning]
 

@@ -4,10 +4,42 @@ The plan is [docs/plan-model-metadata.md](docs/plan-model-metadata.md), after
 Hoshimi `83f7813`. Every §9 decision (D1–D7) was accepted as recommended
 (2026-11-11).
 
-- Open: M1 tolerant, richer listing; M2 the metadata registry and
-  `model-metadata.json`; M3 background discovery and late resolution at turn
-  start; M4 learned context windows; M5 vision facts; M6 reasoning narrowing
-  and the refusal fallback; M7 showing it, and per-model overrides; M8
+- M1 (done): the listing is tolerant per entry and reads the §3 fields, and
+  the §4.1 types exist (unused until M2).
+  - `model_catalog.rs` became `model_catalog/`: `mod.rs` (the client and its
+    paging), `entry.rs` (one entry), `shapes.rs` (the field readers per
+    listing shape). `ModelCatalogClient::list` returns `ModelCatalogListing
+    { entries, skipped }`: an entry without a usable id is skipped and
+    counted (logged at warn, the count only); any other field it cannot read
+    is unknown, an effort that does not parse is left out, and efforts past
+    32 are cut. Only a page without a `data` array or over a bound fails; an
+    Anthropic page with `has_more` and no `last_id` now ends the listing.
+  - `ModelCatalogEntry` gained `max_output_tokens`, `image_input` and
+    `reasoning`. A capability is yes when any of its fields says yes, else no
+    when any says no, else unknown. The kernel still records windows only.
+  - `ModelMetadata`, `ModelReasoningSupport`, `Sourced<T>` and
+    `ModelMetadataSource` are in `model_metadata.rs`; a fact that does not
+    decode is unknown, and `Sourced`'s `value` and `source` have no default.
+  - Deviation: the fixtures are the providers' documented example responses
+    (no credentials to record real ones), cited in the suite, in
+    `crates/model-api/tests/model_listing/fixtures/`, since a `tests/fixtures/`
+    directory fails `check-source-layout`.
+  - Deviation: fields from Hoshimi that no documented example confirms are
+    decoded too, which §7.3 said to leave out: `contextWindow`,
+    `max_output_tokens`, `max_completion_tokens`, `maxTokens`,
+    `input_modalities`, `input`, `vision`, `capabilities.vision`, a boolean
+    `reasoning`, `capabilities.reasoning`. `max_model_len`, `context_window`
+    and Codex's reasoning levels were read before M1 and stay unconfirmed too.
+  - Deviation: Anthropic's `/v1/models` documents `max_input_tokens`,
+    `max_tokens` and `capabilities` (settling §3's "Unverified"), so
+    `max_tokens` (max output), `capabilities.image_input.supported` and
+    `capabilities.thinking.supported` are read beyond §3's table. Anthropic's
+    `capabilities.effort.<level>` and OpenRouter's `reasoning.supported_efforts`
+    and `default_effort` are documented but left for M6.
+- Open: M2 the metadata registry and `model-metadata.json`; M3 background
+  discovery and late resolution at turn start; M4 learned context windows; M5
+  vision facts; M6 reasoning narrowing and the refusal fallback (and the
+  documented effort lists above); M7 showing it, and per-model overrides; M8
   models.dev (optional).
 
 ## Plan: Codex's messages sent while the Agent works, in the terminal interface (2026-11-11)

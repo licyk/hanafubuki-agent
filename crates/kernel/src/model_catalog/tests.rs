@@ -7,6 +7,9 @@ fn entry(id: &str, context_window: Option<u64>) -> ModelCatalogEntry {
         default_reasoning_effort: None,
         supported_reasoning_efforts: Vec::new(),
         context_window,
+        max_output_tokens: None,
+        image_input: None,
+        reasoning: None,
     }
 }
 

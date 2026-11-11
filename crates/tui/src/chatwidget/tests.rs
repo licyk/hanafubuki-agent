@@ -261,6 +261,9 @@ fn a_model_picked_from_the_catalogs_is_set_on_the_session() {
         default_reasoning_effort: None,
         supported_reasoning_efforts: Vec::new(),
         context_window: None,
+        max_output_tokens: None,
+        image_input: None,
+        reasoning: None,
     };
     chat.handle_turn_update(TurnUpdate::ModelChoices(ModelChoices {
         provider_id: "provider-1".to_string(),

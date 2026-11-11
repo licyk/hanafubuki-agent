@@ -1,5 +1,8 @@
+//! A Provider's model listing (`GET {base}/models`), read tolerantly: an
+//! entry the Agent cannot use is left out and counted, a field it cannot
+//! read is unknown, and only a page without a `data` array fails.
+
 use std::collections::BTreeMap;
-use std::str::FromStr;
 use std::sync::Arc;
 
 use futures_util::StreamExt;
@@ -17,12 +20,15 @@ use crate::streaming::{
 };
 use crate::ModelReasoningEffort;
 
+mod entry;
+mod shapes;
+
 const MAX_CATALOG_BODY_BYTES: usize = 2 * 1024 * 1024;
 const MAX_CATALOG_ENTRIES: usize = 1_000;
 const MAX_ANTHROPIC_PAGES: usize = 10;
-const MAX_MODEL_ID_BYTES: usize = 512;
-const MAX_REASONING_EFFORTS_PER_MODEL: usize = 32;
 
+/// One model of a listing. Every field but the id is what the Provider
+/// reports, or unknown (`None`, empty) when it reports nothing usable.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ModelCatalogEntry {
@@ -30,9 +36,21 @@ pub struct ModelCatalogEntry {
     pub display_name: Option<String>,
     pub default_reasoning_effort: Option<ModelReasoningEffort>,
     pub supported_reasoning_efforts: Vec<ModelReasoningEffort>,
-    /// The context window the provider reports for the model, when it
-    /// reports one.
     pub context_window: Option<u64>,
+    pub max_output_tokens: Option<u64>,
+    /// Whether the model reads images.
+    pub image_input: Option<bool>,
+    /// Whether the model takes a reasoning parameter; reported levels mean
+    /// it does.
+    pub reasoning: Option<bool>,
+}
+
+/// A Provider's listing: its entries, sorted by name, and how many entries
+/// it sent that had no usable id.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ModelCatalogListing {
+    pub entries: Vec<ModelCatalogEntry>,
+    pub skipped: usize,
 }
 
 #[derive(Clone)]
@@ -54,7 +72,7 @@ impl ModelCatalogClient {
         &self,
         protocol: ModelApiProtocol,
         cancellation: CancellationToken,
-    ) -> ModelResult<Vec<ModelCatalogEntry>> {
+    ) -> ModelResult<ModelCatalogListing> {
         let authentication = match protocol {
             ModelApiProtocol::Responses | ModelApiProtocol::ChatCompletions => {
                 Authentication::Bearer
@@ -66,6 +84,7 @@ impl ModelCatalogClient {
             set_query_parameter(&mut endpoint, "limit", "100");
         }
         let mut entries = BTreeMap::<String, ModelCatalogEntry>::new();
+        let mut skipped = 0usize;
         let mut pages = 0usize;
         loop {
             pages += 1;
@@ -77,33 +96,11 @@ impl ModelCatalogClient {
                 .and_then(Value::as_array)
                 .ok_or_else(|| ModelError::Protocol("model catalog has no data array".into()))?;
             for item in data {
-                let id = item
-                    .get("id")
-                    .and_then(Value::as_str)
-                    .ok_or_else(|| ModelError::Protocol("model catalog entry has no id".into()))?;
-                if id.trim().is_empty() || id.len() > MAX_MODEL_ID_BYTES {
-                    return Err(ModelError::Protocol(
-                        "model catalog entry has an invalid id".into(),
-                    ));
-                }
-                let display_name = item
-                    .get("display_name")
-                    .and_then(Value::as_str)
-                    .filter(|value| !value.trim().is_empty())
-                    .map(|value| bounded_text(value, MAX_MODEL_ID_BYTES));
-                let default_reasoning_effort = parse_optional_reasoning_effort(
-                    item.get("default_reasoning_level"),
-                    "default reasoning effort",
-                )?;
-                let supported_reasoning_efforts =
-                    parse_supported_reasoning_efforts(item.get("supported_reasoning_levels"))?;
-                entries.entry(id.to_owned()).or_insert(ModelCatalogEntry {
-                    id: id.to_owned(),
-                    display_name,
-                    default_reasoning_effort,
-                    supported_reasoning_efforts,
-                    context_window: reported_context_window(item),
-                });
+                let Some(entry) = entry::decode_entry(item) else {
+                    skipped += 1;
+                    continue;
+                };
+                entries.entry(entry.id.clone()).or_insert(entry);
                 if entries.len() > MAX_CATALOG_ENTRIES {
                     return Err(ModelError::Protocol(format!(
                         "model catalog exceeded {MAX_CATALOG_ENTRIES} entries"
@@ -123,16 +120,18 @@ impl ModelCatalogClient {
                     "Anthropic model catalog exceeded the page limit".into(),
                 ));
             }
-            let after_id = value
+            // `last_id` is nullable: without it the listing is what was read.
+            let Some(after_id) = value
                 .get("last_id")
                 .and_then(Value::as_str)
                 .filter(|value| !value.is_empty())
-                .ok_or_else(|| {
-                    ModelError::Protocol(
-                        "Anthropic model catalog is missing its continuation id".into(),
-                    )
-                })?;
+            else {
+                break;
+            };
             set_query_parameter(&mut endpoint, "after_id", after_id);
+        }
+        if skipped > 0 {
+            log::warn!("model.catalog.entries_skipped count={skipped} reason=no_usable_id");
         }
         let mut entries = entries.into_values().collect::<Vec<_>>();
         entries.sort_by(|left, right| {
@@ -149,7 +148,7 @@ impl ModelCatalogClient {
                 )
                 .then_with(|| left.id.cmp(&right.id))
         });
-        Ok(entries)
+        Ok(ModelCatalogListing { entries, skipped })
     }
 
     async fn fetch_page(
@@ -273,66 +272,6 @@ impl ModelCatalogClient {
     }
 }
 
-/// The context window an entry reports under the field its provider uses:
-/// Anthropic's `max_input_tokens`, OpenRouter's `context_length`, vLLM's
-/// `max_model_len`, or `context_window`. Stock OpenAI reports none. A value
-/// that is not a positive integer is ignored.
-fn reported_context_window(item: &Value) -> Option<u64> {
-    [
-        "max_input_tokens",
-        "context_length",
-        "max_model_len",
-        "context_window",
-    ]
-    .into_iter()
-    .find_map(|field| item.get(field)?.as_u64().filter(|tokens| *tokens > 0))
-}
-
-fn parse_optional_reasoning_effort(
-    value: Option<&Value>,
-    field: &str,
-) -> ModelResult<Option<ModelReasoningEffort>> {
-    let Some(value) = value else {
-        return Ok(None);
-    };
-    let wire_value = value
-        .as_str()
-        .ok_or_else(|| ModelError::Protocol(format!("model catalog entry has invalid {field}")))?;
-    ModelReasoningEffort::from_str(wire_value)
-        .map(Some)
-        .map_err(|_| ModelError::Protocol(format!("model catalog entry has invalid {field}")))
-}
-
-fn parse_supported_reasoning_efforts(
-    value: Option<&Value>,
-) -> ModelResult<Vec<ModelReasoningEffort>> {
-    let Some(value) = value else {
-        return Ok(Vec::new());
-    };
-    let values = value.as_array().ok_or_else(|| {
-        ModelError::Protocol("model catalog entry has invalid supported reasoning efforts".into())
-    })?;
-    if values.len() > MAX_REASONING_EFFORTS_PER_MODEL {
-        return Err(ModelError::Protocol(format!(
-            "model catalog entry exceeded {MAX_REASONING_EFFORTS_PER_MODEL} reasoning efforts"
-        )));
-    }
-    let mut efforts = Vec::with_capacity(values.len());
-    for value in values {
-        let effort =
-            parse_optional_reasoning_effort(value.get("effort"), "supported reasoning effort")?
-                .ok_or_else(|| {
-                    ModelError::Protocol(
-                        "model catalog entry has invalid supported reasoning effort".into(),
-                    )
-                })?;
-        if !efforts.contains(&effort) {
-            efforts.push(effort);
-        }
-    }
-    Ok(efforts)
-}
-
 async fn read_bounded_body(
     response: reqwest::Response,
     provider: &ModelProvider,
@@ -366,17 +305,6 @@ async fn read_bounded_body(
             None => return Ok(body),
         }
     }
-}
-
-fn bounded_text(value: &str, maximum: usize) -> String {
-    if value.len() <= maximum {
-        return value.to_owned();
-    }
-    let mut boundary = maximum;
-    while !value.is_char_boundary(boundary) {
-        boundary -= 1;
-    }
-    value[..boundary].to_owned()
 }
 
 fn set_query_parameter(endpoint: &mut reqwest::Url, name: &str, value: &str) {

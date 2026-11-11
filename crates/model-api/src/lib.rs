@@ -10,6 +10,7 @@ mod chat_completions;
 mod image_input;
 pub mod model;
 mod model_catalog;
+mod model_metadata;
 pub mod port;
 pub mod protocol;
 pub mod provider;
@@ -44,7 +45,8 @@ pub use model::{
     FALLBACK_TOOL_SEARCH_NAME, MAX_MODEL_REASONING_EFFORT_BYTES, MAX_TOOL_ARGUMENT_PREVIEW_BYTES,
     NATIVE_TOOL_SEARCH_NAME,
 };
-pub use model_catalog::{ModelCatalogClient, ModelCatalogEntry};
+pub use model_catalog::{ModelCatalogClient, ModelCatalogEntry, ModelCatalogListing};
+pub use model_metadata::{ModelMetadata, ModelMetadataSource, ModelReasoningSupport, Sourced};
 pub use port::{
     ModelError, ModelEventStream, ModelFuture, ModelPort, ModelResult, ModelSession,
     ModelSessionFactory, ModelStream,

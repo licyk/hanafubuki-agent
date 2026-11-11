@@ -1,3 +1,5 @@
+#![allow(dead_code, reason = "each suite uses part of the fake server")]
+
 use std::collections::{BTreeMap, VecDeque};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;

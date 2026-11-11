@@ -1,0 +1,79 @@
+{
+  "data": [
+    {
+      "architecture": {
+        "input_modalities": ["text"],
+        "instruct_type": "chatml",
+        "modality": "text->text",
+        "output_modalities": ["text"],
+        "tokenizer": "GPT"
+      },
+      "canonical_slug": "openai/gpt-4",
+      "context_length": 8192,
+      "created": 1692901234,
+      "default_parameters": null,
+      "description": "GPT-4 is a large multimodal model that can solve difficult problems with greater accuracy.",
+      "endpoints": [
+        "/api/v1/chat/completions",
+        "/api/v1/completions",
+        "/api/v1/messages",
+        "/api/v1/responses"
+      ],
+      "expiration_date": null,
+      "id": "openai/gpt-4",
+      "knowledge_cutoff": null,
+      "links": { "details": "/api/v1/models/openai/gpt-4/endpoints" },
+      "name": "GPT-4",
+      "per_request_limits": null,
+      "pricing": {
+        "completion": "0.00006",
+        "image": "0",
+        "prompt": "0.00003",
+        "request": "0"
+      },
+      "supported_parameters": ["temperature", "top_p", "max_tokens"],
+      "supported_voices": null,
+      "top_provider": {
+        "context_length": 8192,
+        "is_moderated": true,
+        "max_completion_tokens": 4096
+      }
+    },
+    {
+      "architecture": {
+        "input_modalities": ["text", "image", "file"],
+        "instruct_type": null,
+        "modality": "text+image+file->text",
+        "output_modalities": ["text"],
+        "tokenizer": "Other"
+      },
+      "canonical_slug": "example/vision-reasoner",
+      "context_length": 400000,
+      "created": 1692901234,
+      "default_parameters": null,
+      "id": "example/vision-reasoner",
+      "links": { "details": "/api/v1/models/example/vision-reasoner/endpoints" },
+      "name": "Example: Vision Reasoner",
+      "per_request_limits": null,
+      "pricing": { "completion": "0.00001", "prompt": "0.000001" },
+      "reasoning": {
+        "default_effort": "medium",
+        "default_enabled": true,
+        "mandatory": false,
+        "supported_efforts": ["high", "medium", "low", "minimal"]
+      },
+      "supported_parameters": [
+        "include_reasoning",
+        "max_tokens",
+        "reasoning",
+        "tools"
+      ],
+      "supported_voices": null,
+      "top_provider": {
+        "context_length": 400000,
+        "is_moderated": false,
+        "max_completion_tokens": 128000
+      }
+    }
+  ]
+}

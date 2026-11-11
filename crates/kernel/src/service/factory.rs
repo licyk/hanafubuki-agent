@@ -170,7 +170,8 @@ impl AgentService {
         let entries = catalog
             .list(protocol, CancellationToken::default())
             .await
-            .map_err(|error| AgentError::Model(error.to_string()))?;
+            .map_err(|error| AgentError::Model(error.to_string()))?
+            .entries;
         self.inner.model_catalog.record_listing(base_url, &entries);
         Ok(entries)
     }
