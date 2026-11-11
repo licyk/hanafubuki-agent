@@ -141,6 +141,9 @@ pub(crate) enum TurnUpdate {
     CompressionFailed(String),
     /// An automatic compaction failed, with its error.
     CompactionFailed(String),
+    /// The Provider refused a request as too long, and the session's model
+    /// is taken to have a window of this many tokens from now on.
+    ContextWindowLearned(u64),
     StatusReport(Box<StatusReport>),
     Providers(ProviderReply),
     Mcp(McpReply),
@@ -535,6 +538,10 @@ impl AgentBridge {
             }
             AgentEventKind::ContextCompressionFailed { message } => {
                 TurnUpdate::CompressionFailed(message)
+            }
+            AgentEventKind::ModelContextWindowLearned { tokens, .. } => {
+                self.send_session_status();
+                TurnUpdate::ContextWindowLearned(tokens)
             }
             // The `compress` call's cell shows the fold, and the commit's
             // `HistoryCommitted` already refreshed the status line.

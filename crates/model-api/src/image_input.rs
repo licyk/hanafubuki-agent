@@ -107,7 +107,7 @@ pub fn classify_remote_model_error(
     message: String,
     request_id: Option<String>,
 ) -> ModelError {
-    if is_context_window_exceeded(status, code.as_deref(), &message) {
+    if crate::context_overflow::is_context_window_exceeded(status, code.as_deref(), &message) {
         ModelError::ContextWindowExceeded {
             status,
             code,
@@ -129,30 +129,6 @@ pub fn classify_remote_model_error(
             request_id,
         }
     }
-}
-
-fn is_context_window_exceeded(status: Option<u16>, code: Option<&str>, message: &str) -> bool {
-    if code.is_some_and(|code| {
-        matches!(
-            code.to_ascii_lowercase().as_str(),
-            "context_length_exceeded" | "context_window_exceeded" | "prompt_too_long"
-        )
-    }) {
-        return true;
-    }
-    if status.is_some_and(|status| !matches!(status, 400 | 413 | 422)) {
-        return false;
-    }
-    let diagnostic = message.to_ascii_lowercase();
-    [
-        "context window exceeded",
-        "maximum context length",
-        "input exceeds the context window",
-        "prompt is too long",
-        "too many tokens",
-    ]
-    .iter()
-    .any(|marker| diagnostic.contains(marker))
 }
 
 fn is_unsupported_image_input(status: Option<u16>, code: Option<&str>, message: &str) -> bool {

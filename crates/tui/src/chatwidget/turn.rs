@@ -50,6 +50,7 @@ impl ChatWidget {
                     | TurnUpdate::Compacted
                     | TurnUpdate::CompressionFailed(_)
                     | TurnUpdate::CompactionFailed(_)
+                    | TurnUpdate::ContextWindowLearned(_)
             )
     }
 
@@ -129,6 +130,12 @@ impl ChatWidget {
                 self.add_to_history(history_cell::new_warning_event(warning.clone()));
                 self.warnings
                     .push(Warning::new(WarningSource::Panics, warning));
+            }
+            TurnUpdate::ContextWindowLearned(tokens) => {
+                self.add_to_history(history_cell::new_info_event(
+                    format!("The Provider refused the request as too long; this model's window is taken as {tokens} from now on."),
+                    None,
+                ))
             }
             TurnUpdate::CompactionFailed(message) => {
                 let warning = format!("Context compaction failed: {message}");

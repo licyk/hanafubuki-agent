@@ -105,6 +105,7 @@ impl AgentService {
                             prompt: &plan.next_prompt,
                         },
                         context_limit_compaction,
+                        self.max_output_tokens(&staged),
                         self.inner.limits,
                     )?
                 }
@@ -118,6 +119,7 @@ impl AgentService {
                         prompt: rebase.prompt,
                     },
                     false,
+                    self.max_output_tokens(&staged),
                     self.inner.limits,
                 )?,
             };
@@ -372,6 +374,7 @@ fn estimate_next_request(
     staged: &SessionRecord,
     next: NextRequest<'_>,
     context_limit_compaction: bool,
+    max_output_tokens: Option<u64>,
     limits: AgentHardLimits,
 ) -> Result<u64, AgentError> {
     let next_request = step_model_request(
@@ -383,23 +386,18 @@ fn estimate_next_request(
     )?;
     let next_context_tokens = estimate_model_request_tokens(&next_request)?;
     let config = &staged.settings.config;
-    if context_limit_compaction
-        && AgentContextTokenStatus::calculate(
-            next_context_tokens,
-            config.context_window_tokens,
-            config.auto_compaction_enabled,
-            config.auto_compact_threshold_percent,
-        )
-        .token_limit_reached
-    {
+    let status = AgentContextTokenStatus::calculate(
+        next_context_tokens,
+        config.context_window_tokens,
+        max_output_tokens,
+        config.auto_compaction_enabled,
+        config.auto_compact_threshold_percent,
+    );
+    if context_limit_compaction && status.token_limit_reached {
         return Err(AgentError::ContextBudgetExceeded {
             consumed: next_context_tokens,
-            limit: config
-                .context_window_tokens
-                .map(|limit| {
-                    ((u128::from(limit) * u128::from(config.auto_compact_threshold_percent)) / 100)
-                        as u64
-                })
+            limit: status
+                .proactive_compaction_token_limit
                 .unwrap_or(next_context_tokens),
             source: AgentUsageSource::Estimated,
         });

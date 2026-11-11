@@ -7,6 +7,7 @@
 
 mod anthropic_messages;
 mod chat_completions;
+mod context_overflow;
 mod image_input;
 pub mod model;
 mod model_catalog;
@@ -27,6 +28,7 @@ pub mod test_support;
 
 pub use anthropic_messages::AnthropicMessagesModelTransport;
 pub use chat_completions::ChatCompletionsModelTransport;
+pub use context_overflow::{context_limit_in, PLAUSIBLE_CONTEXT_WINDOW};
 pub use hanafubuki_agent_foundation::trace_content::{
     bounded_trace_content, MAX_TRACE_CONTENT_BYTES,
 };

@@ -195,6 +195,32 @@ Provider 的流是外部输入（[模型 API](/docs/architecture#the-model-api)�
 - **文件**（`model-metadata.json`）的结构是 `{"version": 1, "routes": [...], "listings": [...]}`：每个路由有它的键（端点的协议和 `baseUrlSha256`，以及模型 ID）和它的 `reported`、`learned`、`catalog` 事实，每项事实有值、来源和 `observedAtMs`；每个列表有它的端点、`listedAtMs`、`models`，以及是否正在 `held` 一份缩水的列表。文件只在构建 Agent 时读取一次：未知字段被忽略，读不出的路由或列表被略去，读不出的事实视为未知，事实的来源取自它所在的分组，时间不会晚于当前时间。超过 16 MiB、不是 JSON 对象或版本不是 1 的文件会被隔离到 `.recovery/`，本次运行从一无所知开始。
 - **写入**不让任何调用方等待：注册表每次变化后把快照交给存储（在它的锁内，所以有序），存储再交给 Agent 工作线程组中的写入线程，它写入排队中最新的快照（先写临时文件再重命名覆盖），Agent 停止时写入最后一份。写入失败会以 warn 级别记录，不影响其他任何事情。没有记录任何内容的运行不写文件。
 
+## “请求过长”的拒绝 [#context-refusals]
+
+Provider 的错误是否以超出模型上下文窗口为由拒绝请求，由 `hanafubuki-agent-model-api` 判断（`context_overflow.rs`，源自 Hoshimi 的 `core/failure.py`），适用于每种协议的错误，无论是 HTTP 拒绝还是流中的错误（`classify_remote_model_error`，它先于图片拒绝询问这一判断）。依次读取：
+
+| 步骤                   | 规则                                                                                                                                                     |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 429                    | 无论代码或消息是什么，都不算                                                                                                                             |
+| 代码                   | `context_length_exceeded`、`context_window_exceeded`、`prompt_too_long`（不区分大小写）：算，无论状态码                                                  |
+| 状态码                 | 400、413、422 以外的都不算；流中的错误没有状态码，照常读取                                                                                               |
+| 限流或配额             | 消息或代码中有 `rate limit`、`rate_limit`、`ratelimit`、`quota`、`tokens per min`、`requests per min`、`too many requests`、`限流`、`限速`、`额度`：不算 |
+| 代码和消息（转为小写） | 任一含有下列措辞之一时算（`token_limit_exceeded` 是 OpenRouter 的代码）                                                                                  |
+
+这些措辞是：`context_length_exceeded`、`context_window_exceeded`、`context window exceeded`、`maximum context`、`input exceeds the context window`、`exceeds the context length`、`exceed`、`exceeds` 或 `exceeded` 后接 `context limit` 或 `the context limit`、`prompt is too long`、`input is too long`、`too many tokens`、`too many input tokens`、`token limit exceeded`、`token_limit_exceeded`、`input token count`、`exceeds the maximum number of tokens`、`maximum input length`、`maximum prompt length`、`上下文长度`、`上下文窗口`、`超出最大长度`、`超过最大长度`、`超过了最大`、`输入过长`、`超出` 之后至多六个字符内出现 `长度限制`，以及 `token` 后接 `数` 或 `数量` 再接 `超过` 或 `超出`（`token` 之后可有空格）。Hoshimi 中单独的 `context length` 和 `context window` 没有采用，因为关于别的事情的拒绝也可能提到窗口（`context length must be a positive integer`）；`request too large` 也没有采用，因为 OpenAI 也这样描述每分钟的限流，按字节计的大小限制也这样措辞。这类错误照旧是 `ModelError::Remote`。
+
+`context_limit_in(message)` 读取拒绝中写明的窗口。各模式依次尝试，每个只看第一处匹配；值不在 1024..=20,000,000（`PLAUSIBLE_CONTEXT_WINDOW`）之内时转到下一个模式；数字以一位数字开头，后面是数字和逗号，逗号忽略：
+
+| 模式                                                                                                                      | 示例                                                     |
+| ------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| `maximum context length is N`（或 `prompt`、`input length`）                                                              | `This model's maximum context length is 131072 tokens`   |
+| `context window`、`length` 或 `limit`，然后 `of` 或 `is`，然后 N                                                          | `exceeds the context window of 200,000 tokens`           |
+| `> N maximum`                                                                                                             | `prompt is too long: 210000 tokens > 200000 maximum`     |
+| `maximum number of tokens allowed`、`maximum allowed tokens`、`maximum input token(s)`，然后可有 `is`、`(` 或 `:`，然后 N | `exceeds the maximum number of tokens allowed (1048576)` |
+| `limit` 或 `最大`，之后至多十二个不含数字的字符，然后是至少四个字符的 N，然后 `tok`                                       | `输入超过最大长度限制 32768 tokens`                      |
+
+内核据此学习（[学到的窗口](/docs/architecture#model-metadata)，`service/context_window.rs`）：写明的窗口，否则被拒请求的估算，同样限定在这个范围内（不到 1024 token 的请求被当作过长拒绝，更可能是误读了拒绝）。注册表只在新窗口小于路由当前有效的学到的窗口时才保留它（`learn_context_window`；已过 7 天的不再计入，不更小的窗口不做更改也不保存）。被拒会话的提交改写它的窗口和用量的窗口；只有会话采用了学到的窗口时才记录事件 `model_context_window_learned`（[exec --json 事件](/docs/json-events#session)）：配置了窗口的会话、学到的窗口比报告的大、会话已是这个窗口，这些情况都不提示。学习过程不写日志。
+
 ## 崩溃循环标记 [#crash-loop-marker]
 
 `AgentStartMarker`（数据目录中的 `start-marker.json`，用 `write_atomic` 写入，带缩进格式）记录从未完成的启动次数：

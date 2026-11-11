@@ -73,6 +73,26 @@ impl ModelMetadataRegistry {
         });
     }
 
+    /// Learns that `route`'s context window is at most `tokens`, from a
+    /// refusal: kept while it is the smallest the route's live refusals
+    /// taught (an expired one no longer counts).
+    pub(crate) fn learn_context_window(&self, route: &ModelRouteKey, tokens: u64, now_ms: u64) {
+        self.change(|state| {
+            let smaller_known = state
+                .live_facts(route, now_ms)
+                .and_then(|facts| facts.learned.context_window)
+                .is_some_and(|known| known.value <= tokens);
+            !smaller_known
+                && state.learn(route, now_ms, |learned| {
+                    learned.context_window = Some(Sourced {
+                        value: tokens,
+                        source: ModelMetadataSource::Learned,
+                        observed_at_ms: now_ms,
+                    });
+                })
+        });
+    }
+
     /// What is known about `model`, at `route` when the transport names
     /// one, with what the person `configured`.
     pub(crate) fn resolve(
@@ -100,6 +120,18 @@ impl ModelMetadataRegistry {
         };
         self.resolve(route, model, configured, now_ms)
             .context_window
+    }
+
+    /// The largest output `model` at `route` is known to give.
+    pub(crate) fn max_output_tokens(
+        &self,
+        route: &ModelRouteKey,
+        model: &str,
+        now_ms: u64,
+    ) -> Option<u64> {
+        self.resolve(Some(route), model, ConfiguredModelFacts::default(), now_ms)
+            .max_output_tokens
+            .map(|fact| fact.value)
     }
 
     /// When `endpoint`'s latest listing was recorded, in milliseconds since

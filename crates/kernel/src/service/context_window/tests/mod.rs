@@ -45,7 +45,7 @@ impl ModelPort for RoutedModel {
                     request_id: None,
                 });
             }
-            Ok(Box::new(Answer(answer())) as ModelStream)
+            Ok(Box::new(Answer(answer("Done.", 1_000))) as ModelStream)
         })
     }
 }
@@ -59,7 +59,8 @@ impl ModelEventStream for Answer {
     }
 }
 
-fn answer() -> VecDeque<ModelResult<ModelEvent>> {
+/// A final answer of `text`, its request counted at `input_tokens`.
+fn answer(text: &str, input_tokens: u64) -> VecDeque<ModelResult<ModelEvent>> {
     let item = |text: &str| ModelOutputItem::AssistantMessage {
         item_id: "answer".to_string(),
         phase: Some(ModelMessagePhase::FinalAnswer),
@@ -71,13 +72,11 @@ fn answer() -> VecDeque<ModelResult<ModelEvent>> {
             metadata: ModelResponseMetadata::default(),
         }),
         Ok(ModelEvent::OutputItemAdded { item: item("") }),
-        Ok(ModelEvent::OutputItemCompleted {
-            item: item("Done."),
-        }),
+        Ok(ModelEvent::OutputItemCompleted { item: item(text) }),
         Ok(ModelEvent::ResponseCompleted {
             response_id: "response".to_string(),
             usage: Some(ModelUsage {
-                input_tokens: 1_000,
+                input_tokens,
                 output_tokens: 1,
             }),
             end_turn: Some(true),
@@ -375,3 +374,5 @@ fn creation_and_model_selection_record_the_windows_source() {
         (Some(64_000), Some(ModelMetadataSource::Configured), None)
     );
 }
+
+mod learned;

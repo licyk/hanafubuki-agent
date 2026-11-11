@@ -207,7 +207,8 @@ impl AgentActivityTracker {
             | AgentEventKind::SteeringConsumed { .. }
             | AgentEventKind::CompactionUpdated { .. }
             | AgentEventKind::ContextCompressed { .. }
-            | AgentEventKind::ContextCompressionFailed { .. } => None,
+            | AgentEventKind::ContextCompressionFailed { .. }
+            | AgentEventKind::ModelContextWindowLearned { .. } => None,
         }
     }
 

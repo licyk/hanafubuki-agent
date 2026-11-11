@@ -2,33 +2,64 @@ use super::*;
 
 #[test]
 fn token_status_percentage_is_saturating_and_boundary_exact() {
-    let maximum = hanafubuki_agent_kernel::AgentContextTokenStatus::calculate(
-        u64::MAX,
-        Some(u64::MAX),
-        true,
-        100,
+    use hanafubuki_agent_kernel::AgentContextTokenStatus;
+    // The share saturates, and the room for a reply still comes off it.
+    let maximum = AgentContextTokenStatus::calculate(u64::MAX, Some(u64::MAX), None, true, 100);
+    assert_eq!(
+        maximum.proactive_compaction_token_limit,
+        Some(u64::MAX - 32_768)
     );
-    assert_eq!(maximum.proactive_compaction_token_limit, Some(u64::MAX));
     assert_eq!(maximum.base_window_tokens_remaining, Some(0));
     assert!(maximum.token_limit_reached);
 
-    let boundary =
-        hanafubuki_agent_kernel::AgentContextTokenStatus::calculate(80, Some(100), true, 80);
-    assert_eq!(boundary.proactive_compaction_token_limit, Some(80));
+    let boundary = AgentContextTokenStatus::calculate(80_000, Some(100_000), None, true, 80);
+    assert_eq!(boundary.proactive_compaction_token_limit, Some(80_000));
     assert_eq!(boundary.base_window_tokens_remaining, Some(0));
     assert!(boundary.token_limit_reached);
+    assert!(
+        !AgentContextTokenStatus::calculate(79_999, Some(100_000), None, true, 80)
+            .token_limit_reached
+    );
 
-    let disabled =
-        hanafubuki_agent_kernel::AgentContextTokenStatus::calculate(100, Some(100), false, 80);
+    let disabled = AgentContextTokenStatus::calculate(100, Some(100), None, false, 80);
     assert_eq!(disabled.auto_compact_threshold_percent, None);
     assert_eq!(disabled.proactive_compaction_token_limit, None);
     assert!(!disabled.token_limit_reached);
 
-    let unknown_window =
-        hanafubuki_agent_kernel::AgentContextTokenStatus::calculate(100, None, true, 80);
+    let unknown_window = AgentContextTokenStatus::calculate(100, None, None, true, 80);
     assert_eq!(unknown_window.proactive_compaction_token_limit, None);
     assert_eq!(unknown_window.base_window_tokens_remaining, None);
     assert!(!unknown_window.token_limit_reached);
+}
+
+/// The proactive limit is the threshold's share of the window, or less when
+/// what is left could not hold a reply: the model's largest output (32768
+/// when unknown), at most a tenth of the window but at least 4096 tokens,
+/// and never more than half the window.
+#[test]
+fn the_proactive_limit_leaves_room_for_a_reply() {
+    let limit = |window, max_output, percent| {
+        hanafubuki_agent_kernel::AgentContextTokenStatus::calculate(
+            0,
+            Some(window),
+            max_output,
+            true,
+            percent,
+        )
+        .proactive_compaction_token_limit
+        .unwrap()
+    };
+    // Unknown largest output: a tenth of a large window, which the
+    // default threshold already leaves.
+    assert_eq!(limit(100_000, None, 80), 80_000);
+    assert_eq!(limit(100_000, None, 95), 90_000);
+    // A small window keeps 4096 tokens, or half of it.
+    assert_eq!(limit(15_000, None, 80), 10_904);
+    assert_eq!(limit(6_000, None, 80), 3_000);
+    // A known largest output under a tenth of the window is the room kept.
+    assert_eq!(limit(200_000, Some(8_192), 100), 191_808);
+    assert_eq!(limit(20_000, Some(1_000), 100), 19_000);
+    assert_eq!(limit(20_000, Some(1_000), 80), 16_000);
 }
 
 #[tokio::test]

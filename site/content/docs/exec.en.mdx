@@ -54,7 +54,7 @@ The final answer.
 | `plan:` and its text                           | A plan the model proposed (in [plan mode](/docs/plan-mode))                                                    |
 | Text without a prefix                          | The model's final answer                                                                                       |
 
-Each message is printed once it is complete. Standard error has the session's id (`session 3`), the model request's retries (`retrying the model request (1/3): reason`), how a turn that did not complete ended (`error: the turn failed (...)`, `the turn was cancelled (...)`), and a failure of the hierarchical compression (`warning: context compression failed; the turn goes on with the full history: ...`).
+Each message is printed once it is complete. Standard error has the session's id (`session 3`), the model request's retries (`retrying the model request (1/3): reason`), how a turn that did not complete ended (`error: the turn failed (...)`, `the turn was cancelled (...)`), a failure of the hierarchical compression (`warning: context compression failed; the turn goes on with the full history: ...`), and a context window learned from the Provider's refusal of a request as too long (`the Provider refused the request as too long; this model's window is taken as 131072 from now on`, see [The context window and compaction](/docs/providers-models#compaction)).
 
 Each time the model finishes thinking, standard error gets a line such as `· thought for 12s` (whole seconds, rounded down): the time only, not the thinking itself. A thinking cut short by the turn's end prints no line. The thinking's text is in the `--json` events ([Thinking](/docs/json-events#reasoning)).
 

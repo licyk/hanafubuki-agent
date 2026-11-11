@@ -196,21 +196,26 @@ pub struct AgentContextTokenStatus {
     pub token_limit_reached: bool,
 }
 
+/// The largest output assumed of a model whose own is unknown, as Hoshimi
+/// assumes (`context_window.py`).
+const FALLBACK_MAX_OUTPUT_TOKENS: u64 = 32_768;
+
 impl AgentContextTokenStatus {
+    /// The status of `active_context_tokens` in a window of
+    /// `full_context_window_limit` (none: unknown), for a model whose
+    /// largest output is `max_output_tokens` (none: unknown).
     pub fn calculate(
         active_context_tokens: u64,
         full_context_window_limit: Option<u64>,
+        max_output_tokens: Option<u64>,
         auto_compaction_enabled: bool,
         auto_compact_threshold_percent: u8,
     ) -> Self {
         let proactive_compaction_token_limit = auto_compaction_enabled
             .then_some(full_context_window_limit)
             .flatten()
-            .map(|limit| {
-                u64::try_from(
-                    (u128::from(limit) * u128::from(auto_compact_threshold_percent)) / 100,
-                )
-                .unwrap_or(u64::MAX)
+            .map(|window| {
+                proactive_limit(window, max_output_tokens, auto_compact_threshold_percent)
             });
         let base_window_tokens_remaining = [
             proactive_compaction_token_limit
@@ -234,6 +239,20 @@ impl AgentContextTokenStatus {
             token_limit_reached,
         }
     }
+}
+
+/// Where a session compacts by itself: at `percent` of `window`, or sooner
+/// when what is left could not hold a reply (Hoshimi's `budget`). The room
+/// kept for the reply is the model's largest output, but no more than a
+/// tenth of the window (a reply seldom fills a large ceiling), no less than
+/// 4096 tokens, and never more than half the window.
+fn proactive_limit(window: u64, max_output_tokens: Option<u64>, percent: u8) -> u64 {
+    let share = u64::try_from((u128::from(window) * u128::from(percent)) / 100).unwrap_or(u64::MAX);
+    let headroom = max_output_tokens
+        .unwrap_or(FALLBACK_MAX_OUTPUT_TOKENS)
+        .min((window / 10).max(4_096))
+        .min(window / 2);
+    share.min(window - headroom)
 }
 
 impl AgentContextWindowSnapshot {

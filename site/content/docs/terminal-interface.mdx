@@ -343,7 +343,7 @@ Fullscreen 下，对话会跟随最新输出，直到你向上滚动。向上滚
 
 Fullscreen 会捕获鼠标，所以使用终端自己的选择时通常需要按住 Shift 拖动。要用终端的选择复制，可以用 `/raw` 显示不带样式的对话。
 
-会话的上下文每压缩一次，对话就在发生的位置显示 `• Context compacted`：`/compact` 之后，回合压缩上下文时（达到阈值、模型请求新上下文、Provider 报告上下文窗口错误之后），以及回合安装一个[在后台](/docs/config-reference#compaction)运行的压缩时。恢复的会话以同样的方式显示之前的压缩。回合运行的压缩失败时，对话显示一条警告 `⚠ Context compaction failed: …`，带着错误，[`/warnings`](#warnings) 会保留它；`/compact` 失败时改由它的回复说明（`the conversation was not compacted: …`）。被取消的压缩不显示任何内容。
+会话的上下文每压缩一次，对话就在发生的位置显示 `• Context compacted`：`/compact` 之后，回合压缩上下文时（达到阈值、模型请求新上下文、Provider 报告上下文窗口错误之后），以及回合安装一个[在后台](/docs/config-reference#compaction)运行的压缩时。恢复的会话以同样的方式显示之前的压缩。回合运行的压缩失败时，对话显示一条警告 `⚠ Context compaction failed: …`，带着错误，[`/warnings`](#warnings) 会保留它；`/compact` 失败时改由它的回复说明（`the conversation was not compacted: …`）。被取消的压缩不显示任何内容。Provider 以请求过长为由拒绝、会话采用由此学到的窗口时（[上下文窗口与压缩](/docs/providers-models#compaction)），对话会在随后的压缩之前提示一次：`• The Provider refused the request as too long; this model's window is taken as 131072 from now on.`
 
 ## 分层压缩 [#compression]
 

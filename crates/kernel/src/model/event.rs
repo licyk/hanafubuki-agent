@@ -219,6 +219,15 @@ pub enum AgentEventKind {
     ContextCompressionFailed {
         message: String,
     },
+    /// The Provider refused the step's request as too long for the model's
+    /// context window, and the session now takes the window that taught:
+    /// `tokens`, the window the refusal named or the refused request's
+    /// estimated size, in place of `previous` (none: unknown). Later
+    /// sessions on the model take it too, for 7 days.
+    ModelContextWindowLearned {
+        tokens: u64,
+        previous: Option<u64>,
+    },
     TurnCompleted {
         final_answer_message_id: AgentMessageId,
     },

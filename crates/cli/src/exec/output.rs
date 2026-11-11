@@ -100,6 +100,9 @@ impl Output for Human {
             AgentEventKind::ContextCompressionFailed { message } => eprintln!(
                 "warning: context compression failed; the turn goes on with the full history: {message}"
             ),
+            AgentEventKind::ModelContextWindowLearned { tokens, .. } => eprintln!(
+                "the Provider refused the request as too long; this model's window is taken as {tokens} from now on"
+            ),
             AgentEventKind::ModelRetryScheduled {
                 current_retry,
                 maximum_retries,

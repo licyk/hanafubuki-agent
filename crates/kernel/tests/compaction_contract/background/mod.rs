@@ -17,10 +17,11 @@ use hanafubuki_agent_kernel::{
 use super::*;
 
 /// The context window, and the two thresholds over it: the background
-/// compaction starts at 5 000 tokens, the foreground one at 8 000.
+/// compaction starts at 5 000 tokens, the foreground one at 5 904 (80% would
+/// be 8 000, but a window this small keeps 4 096 tokens for a reply).
 const WINDOW: u64 = 10_000;
 const BACKGROUND_PERCENT: u8 = 50;
-const IN_BAND: u64 = 6_000;
+const IN_BAND: u64 = 5_500;
 const OVER_THRESHOLD: u64 = 9_000;
 /// How long a test waits for an outcome before it fails.
 const OUTCOME_DEADLINE: Duration = Duration::from_secs(60);

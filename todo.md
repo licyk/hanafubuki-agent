@@ -132,7 +132,77 @@ Hoshimi `83f7813`. Every §9 decision (D1–D7) was accepted as recommended
     `construct` fell to 186 code lines (the history store's opening moved
     to `open_history_store`); `kernel/tests/loop_contract/main.rs` is at
     899 of 900.
-- Open: M4 learned context windows; M5 vision facts (seeding sessions from
+- M4 (done): a refusal as too long teaches the route a window, which the
+  refused session takes at once; the threshold compaction keeps room for a
+  reply (D4).
+  - model-api `context_overflow.rs` (out of `image_input.rs`): the
+    classifier, widened with Hoshimi's wordings, English and Chinese, as
+    lowercase substrings (no regex), over the code and the message. A 429
+    never counts, now even with a code (it did before); the three codes
+    still count at any other status; the 400/413/422 gate stays, an in-band
+    error is read; a rate-limit or quota marker (`rate limit`, `quota`,
+    `tokens per min`, `限流`, …) never counts, even in the stream.
+    Deviation: left out as too broad, bare `context length` / `context
+    window` (the narrow `exceeds the context length` is in) and `request
+    too large` (OpenAI's TPM rate limit and byte-size limits word it so);
+    both stay `Remote`.
+    `context_limit_in(message)` reads Hoshimi's five patterns, each at its
+    first match, a value outside `PLAUSIBLE_CONTEXT_WINDOW` (1024..=20M,
+    exported) moving on to the next; deviation: the first also reads
+    `maximum prompt|input length is N` (xAI's wording).
+  - Learning (`kernel/src/service/context_window.rs`): in
+    `run_sampling_request`, on `ProviderContextWindowExceeded` and unless
+    the turn is cancelled, before the loop compacts and retries: the named
+    window, else the refused request's estimate within the same bounds
+    (deviation: the plan bounded only a named one; a refused request under
+    1024 tokens is taken for a misread refusal). The limit is parsed in the
+    kernel from the error's message, so `ModelError` is unchanged.
+    `ModelMetadataRegistry::learn_context_window` keeps the smallest live
+    learned window (an expired one no longer counts; no change, no save).
+    Learned whatever auto-compaction says, from a turn's requests only (a
+    compaction's own overflow is trimmed as before and teaches nothing).
+    Residual: a misread refusal, or a second one after the compaction (a
+    smaller estimate), teaches the route a small window for 7 days across
+    sessions and restarts; only `contextWindowTokens` overrides it, and
+    nothing clears it yet (M7's `/status` will show its source).
+  - Applied at once: its own commit under the session's lock, through M3's
+    `refresh_context_window` (now returning the window taken), so a
+    configured window stays and the usage window moves with it; the
+    session's `AgentEventKind::ModelContextWindowLearned { tokens, previous }`
+    only when what it took is the learned window. Behaviour change: the
+    reactive compaction now runs against the learned window, so on a window
+    unknown before it can fail as a known window's does
+    (`ContextBudgetExceeded`, its next request still over the threshold)
+    where it always retried. The TUI writes one info line before the
+    compaction cell, `exec`'s text mode one line on stderr; `exec --json`
+    carries the new kind (documented, per the stability rule).
+  - D4: `AgentContextTokenStatus::calculate` takes `max_output_tokens`
+    (host-visible): the limit is `min(window × percent / 100, window −
+    min(max_output or 32768, max(4096, window / 10), window / 2))`. The
+    largest output is resolved from the registry where the threshold is
+    checked (`AgentService::max_output_tokens`), threaded into the
+    background band and the post-install check, whose
+    `ContextBudgetExceeded.limit` is now the status's limit. No request
+    golden changed (window 100000 at 80% stays 80000). Deliberate test
+    changes: the background suite's window of 10000 now compacts in the
+    foreground at 5904, so its `IN_BAND` went from 6000 to 5500; the
+    token-status contract test (`recovery_fork.rs`) moved its boundary to
+    a window of 100000 and gained the headroom cases.
+  - Tests: model-api `context_overflow/tests.rs` (every wording at each
+    gating status, the codes, 429 and quota texts, what is left out, each
+    limit pattern, commas, Chinese, the bounds); kernel
+    `service/context_window/tests/learned.rs` (named and estimated windows,
+    the event and its order, proactive compaction by the learned window,
+    larger than reported unused, configured kept while the route learns,
+    auto-compaction off, recovery after the rewrite, the next run, the
+    route's largest output in the threshold) and the registry's smallest
+    window (`precedence.rs`); the TUI's notice (`app/tests/compaction.rs`,
+    a transcript check over an in-band `response.failed`).
+  - Module size: `kernel/src/activity.rs`'s exhaustive event dispatch took
+    the new kind's arm, so its exception's ceiling went from 646 to 647
+    (`architecture/module-size-policy.toml`), rather than a rewrite only to
+    fit the number.
+- Open: M5 vision facts (seeding sessions from
   the image fact; persisting the learned refusal is done); M6 reasoning
   narrowing and the refusal fallback (and the documented effort lists
   above); M7 showing it, the `/config` editor of `modelMetadata.discovery`

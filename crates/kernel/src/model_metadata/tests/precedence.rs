@@ -5,9 +5,7 @@ use hanafubuki_agent_model_api::ModelMetadata;
 const PROVIDER: &str = "https://provider.test/v1";
 
 fn learn_window(registry: &ModelMetadataRegistry, route: &ModelRouteKey, tokens: u64) {
-    registry.state.lock().learn(route, NOW, |learned| {
-        learned.context_window = Some(sourced(tokens, ModelMetadataSource::Learned, NOW));
-    });
+    registry.learn_context_window(route, tokens, NOW);
 }
 
 #[test]
@@ -113,6 +111,35 @@ fn a_learned_window_only_lowers_the_window() {
             .context_window,
         Some(sourced(272_000, ModelMetadataSource::BuiltIn, 0))
     );
+}
+
+/// A refusal teaches a window only under the one the route's live
+/// refusals taught, and teaching nothing saves nothing; once that window
+/// expired, a larger one is taken.
+#[test]
+fn a_route_keeps_the_smallest_window_its_refusals_taught() {
+    let store = Arc::new(RecordingStore::default());
+    let registry = ModelMetadataRegistry::open(store.clone(), NOW);
+    let refused = route(PROVIDER, "refused");
+    registry.learn_context_window(&refused, 100_000, NOW);
+    registry.learn_context_window(&refused, 120_000, NOW + 1);
+    registry.learn_context_window(&refused, 100_000, NOW + 2);
+    assert_eq!(window(&registry, None, &refused, NOW + 2), Some(100_000));
+    assert_eq!(store.saved.lock().len(), 1);
+
+    registry.learn_context_window(&refused, 80_000, NOW + 3);
+    assert_eq!(
+        registry
+            .resolve(Some(&refused), "refused", Default::default(), NOW + 3)
+            .context_window,
+        Some(sourced(80_000, ModelMetadataSource::Learned, NOW + 3))
+    );
+    assert_eq!(store.saved.lock().len(), 2);
+
+    let expired = NOW + 3 + LEARNED_TTL_MS + 1;
+    registry.learn_context_window(&refused, 120_000, expired);
+    assert_eq!(window(&registry, None, &refused, expired), Some(120_000));
+    assert_eq!(store.saved.lock().len(), 3);
 }
 
 #[test]

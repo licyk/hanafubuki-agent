@@ -367,6 +367,29 @@ impl AgentService {
                 Err(AgentError::ModelStreamInterrupted(message)) => {
                     return Err(AgentError::ModelStreamRetriesExhausted { retries, message });
                 }
+                Err(AgentError::ProviderContextWindowExceeded {
+                    status,
+                    code,
+                    message,
+                    request_id,
+                }) => {
+                    if !cancellation.is_cancelled() {
+                        self.learn_context_window(
+                            identity,
+                            model.as_ref(),
+                            &active_request,
+                            &message,
+                            event_sink,
+                        )
+                        .await?;
+                    }
+                    return Err(AgentError::ProviderContextWindowExceeded {
+                        status,
+                        code,
+                        message,
+                        request_id,
+                    });
+                }
                 result => return result,
             }
         }

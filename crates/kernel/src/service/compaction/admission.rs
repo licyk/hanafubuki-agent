@@ -151,6 +151,7 @@ impl AgentService {
                 AgentContextTokenStatus::calculate(
                     active,
                     config.context_window_tokens,
+                    self.max_output_tokens(&record),
                     config.auto_compaction_enabled,
                     config.auto_compact_threshold_percent,
                 )
@@ -307,6 +308,7 @@ impl AgentService {
         let status = AgentContextTokenStatus::calculate(
             active,
             record.settings.config.context_window_tokens,
+            self.max_output_tokens(record),
             record.settings.config.auto_compaction_enabled,
             record.settings.config.auto_compact_threshold_percent,
         );

@@ -34,10 +34,18 @@ impl AgentService {
         estimated: Option<u64>,
     ) -> Result<(), AgentError> {
         let cell = self.session(identity.session_id)?;
-        let accepting = || self.inner.accepting.load(Ordering::Acquire);
+        let launchable = |record: &SessionRecord| {
+            launch_attempt(
+                record,
+                identity,
+                estimated,
+                self.inner.accepting.load(Ordering::Acquire),
+                self.max_output_tokens(record),
+            )
+        };
         // Checked again under the lock below; this spares a session that
         // will not launch the load of its images.
-        if launch_attempt(&*cell.lock()?, identity, estimated, accepting())?.is_none() {
+        if launchable(&*cell.lock()?)?.is_none() {
             return Ok(());
         }
         let images = self.load_history_images(identity.session_id).await?;
@@ -49,7 +57,7 @@ impl AgentService {
         let (plan, run) = {
             let mut guard = cell.lock_after_persistence().await?;
             let record = &mut *guard;
-            let Some(attempt) = launch_attempt(record, identity, estimated, accepting())? else {
+            let Some(attempt) = launchable(record)? else {
                 return Ok(());
             };
             let source = compaction_source(
@@ -195,6 +203,7 @@ fn launch_attempt(
     identity: TurnIdentity,
     estimated: Option<u64>,
     accepting: bool,
+    max_output_tokens: Option<u64>,
 ) -> Result<Option<BackgroundAttempt>, AgentError> {
     let config = &record.settings.config;
     if !accepting
@@ -232,7 +241,7 @@ fn launch_attempt(
     let Some(active) = estimated.max(reported) else {
         return Ok(None);
     };
-    if !in_background_band(active, threshold.percent, config) {
+    if !in_background_band(active, threshold.percent, config, max_output_tokens) {
         return Ok(None);
     }
     let history = &record.conversation.history;
@@ -265,7 +274,12 @@ fn launch_attempt(
 }
 
 /// At or over the background threshold and under the foreground one.
-fn in_background_band(active: u64, threshold_percent: u8, config: &AgentSessionConfig) -> bool {
+fn in_background_band(
+    active: u64,
+    threshold_percent: u8,
+    config: &AgentSessionConfig,
+    max_output_tokens: Option<u64>,
+) -> bool {
     let Some(window) = config.context_window_tokens else {
         return false;
     };
@@ -274,6 +288,7 @@ fn in_background_band(active: u64, threshold_percent: u8, config: &AgentSessionC
         && !AgentContextTokenStatus::calculate(
             active,
             config.context_window_tokens,
+            max_output_tokens,
             config.auto_compaction_enabled,
             config.auto_compact_threshold_percent,
         )

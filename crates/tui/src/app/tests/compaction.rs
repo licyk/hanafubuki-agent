@@ -2,7 +2,9 @@
 //! one "Context compacted" cell, whether `/compact` asked for it or a turn
 //! took it from the background, and a resumed session replays it once;
 //! `/status` shows a compaction running in the background; a failed one
-//! shows a warning when a turn ran it, and `/compact`'s reply otherwise.
+//! shows a warning when a turn ran it, and `/compact`'s reply otherwise; a
+//! window learned from the Provider's refusal is said once, before the
+//! compaction it leads to.
 
 use std::time::Duration;
 
@@ -199,4 +201,34 @@ fn a_compaction_that_fails_in_a_turn_shows_a_warning_and_compacts_reply_shows_on
     harness.type_and_submit("/warnings");
     let list = harness.pump_until_screen_shows("1 compaction");
     assert!(list.contains(&format!("[compaction] {WARNING}")), "{list}");
+}
+
+/// The Provider refuses the second turn's request as too long, in its
+/// stream, naming the model's window: the conversation says once that the
+/// window is taken, then shows the compaction, and the turn goes on.
+#[test]
+fn a_window_learned_from_a_refusal_shows_once_before_the_compaction() {
+    const LEARNED: &str = "The Provider refused the request as too long; this model's window is taken as 50000 from now on.";
+    let refusal = concat!(
+        "data: {\"type\":\"response.failed\",\"response\":{\"id\":\"resp-refused\",",
+        "\"error\":{\"code\":\"context_length_exceeded\",",
+        "\"message\":\"This model's maximum context length is 50000 tokens.\"}}}\n\n"
+    );
+    let mut harness = Harness::start(vec![
+        assistant_events(&FIRST_ANSWER.repeat(100)),
+        refusal.as_bytes().to_vec(),
+        assistant_events("The user said hello."),
+        assistant_events("Still here."),
+    ]);
+    harness.exchange("Hello.", FIRST_ANSWER.trim_end());
+
+    harness.exchange("Are you there?", "Still here.");
+
+    let transcript = harness.transcript();
+    assert_eq!(transcript.matches(LEARNED).count(), 1, "{transcript}");
+    let learned = transcript.find(LEARNED).unwrap();
+    let compacted = transcript.find(COMPACTED).unwrap();
+    let answer = transcript.find("Still here.").unwrap();
+    assert!(learned < compacted && compacted < answer, "{transcript}");
+    assert_eq!(harness.server.requests().len(), 4);
 }
