@@ -10,11 +10,13 @@
 // are ported (the rest repeats a base prompt the Agent has its own of); the
 // guidelines open with what a sub-agent is here, its limits, and the rule
 // that only an explicit request authorizes spawning; they name the
-// `spawn_agent` and `wait_agent` tools; they are shown only to a
-// conversation that may spawn, as a prompt fragment.
+// `spawn_agent` and `wait_agent` tools; they end with the roles a
+// sub-agent may be given; they are shown only to a conversation that may
+// spawn, as a prompt fragment.
 
-//! The orchestrator guidance: how to coordinate sub-agents, shown to a
-//! conversation that may spawn them (a top-level session in Default mode).
+//! The orchestrator guidance: how to coordinate sub-agents and the roles
+//! they may be given, shown to a conversation that may spawn them (a
+//! top-level session in Default mode).
 
 use std::sync::Arc;
 
@@ -25,6 +27,12 @@ use hanafubuki_agent_contracts::{
 };
 
 use super::service::SubagentService;
+use crate::roles::AgentSpawnableRole;
+
+/// The most roles the guidance and `spawn_agent`'s spec list.
+const MAXIMUM_LISTED_ROLES: usize = 16;
+/// The longest role description they show, in characters.
+const MAXIMUM_ROLE_DESCRIPTION_CHARS: usize = 200;
 
 const SUBAGENT_GUIDANCE: ContextSectionKind = ContextSectionKind::fixed("subagent_guidance");
 
@@ -85,22 +93,52 @@ impl PromptContributor for SubagentGuidancePrompt {
         vec![PromptFragment {
             kind: SUBAGENT_GUIDANCE,
             version: None,
-            content: guidance(self.service.limits().maximum_running_agents),
+            content: guidance(
+                self.service.limits().maximum_running_agents,
+                &self.service.roles.spawnable(),
+            ),
         }]
     }
 }
 
-fn guidance(maximum_running_agents: usize) -> String {
+/// The spawnable `roles` (by name, as the catalog lists them), one line
+/// each: at most [`MAXIMUM_LISTED_ROLES`], each description on one line and
+/// cut at [`MAXIMUM_ROLE_DESCRIPTION_CHARS`].
+pub(super) fn role_list(roles: &[AgentSpawnableRole]) -> String {
+    roles
+        .iter()
+        .take(MAXIMUM_LISTED_ROLES)
+        .map(|role| format!("- `{}`: {}", role.name, one_line(&role.description)))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn one_line(description: &str) -> String {
+    let description = description.split_whitespace().collect::<Vec<_>>().join(" ");
+    match description
+        .char_indices()
+        .nth(MAXIMUM_ROLE_DESCRIPTION_CHARS)
+    {
+        Some((end, _)) => format!("{}…", &description[..end]),
+        None => description,
+    }
+}
+
+fn guidance(maximum_running_agents: usize, roles: &[AgentSpawnableRole]) -> String {
+    let roles = role_list(roles);
     format!(
         r#"<subagents>
 ## Sub-agents
-`spawn_agent` delegates a task to a sub-agent: a separate conversation that runs in the background with your model, your tools and your permission mode. At most {maximum_running_agents} sub-agents run at once, and a sub-agent cannot spawn sub-agents of its own.
+`spawn_agent` delegates a task to a sub-agent: a separate conversation that runs in the background with your permission mode, and with your model and your tools unless its role says otherwise. At most {maximum_running_agents} sub-agents run at once, and a sub-agent cannot spawn sub-agents of its own.
 
 - Do not spawn sub-agents unless the user or applicable AGENTS.md/skill instructions explicitly ask for sub-agents, delegation, or parallel agent work.
 - When they do, prefer multiple sub-agents to parallelize your work: time is a constraint, and parallelism resolves the task faster. When your plan has multiple steps, process them in parallel by spawning one agent per step when this is possible.
 - When you ask sub-agents to do the work for you, your only role becomes to coordinate them. Do not perform the actual work while they are working.
 - If sub-agents are running, **wait for them before yielding** (`wait_agent`), unless the user asks an explicit question.
   - If the user asks a question, answer it first, then continue coordinating sub-agents.
+
+`spawn_agent`'s `agent_type` gives a sub-agent one of these roles; without it, the sub-agent keeps your tools and instructions. A role can only take tools away, and may run another model.
+{roles}
 </subagents>"#
     )
 }

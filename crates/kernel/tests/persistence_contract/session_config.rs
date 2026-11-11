@@ -101,6 +101,7 @@ fn the_strategy_is_persisted_between_operations_without_a_revision() {
                 base: AgentChildSessionBase::Empty,
                 context: Vec::new(),
                 scope: Default::default(),
+                role_instructions: None,
             })
             .unwrap()
             .id

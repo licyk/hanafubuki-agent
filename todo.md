@@ -21,7 +21,8 @@ the deny-only combinations) unchanged and adds declarative layers above it:
 - linked development packages.
 
 **Status.** Every §9 decision (D1–D9) was accepted as recommended (2026-11-11), and
-the plan records them. M1, M2, M3 and M4 have landed; M5–M7 have not started.
+the plan records them. M1, M2, M3, M4 and M5 have landed; M6 and M7 have not
+started.
 
 **For each milestone,** record when it is done:
 
@@ -413,13 +414,129 @@ then M4, then M5; M6 after M3; M7 after M1.
         writes that this one cannot parse is dropped, which widens.
       - The configuration center does not offer role choice yet; the TUI's
         `/role` and the CLI's `--role` do.
-- [ ] M5: role-aware subagents.
+- [x] M5: role-aware subagents.
       - `spawn_agent { agent_type }` (D7).
       - `AgentRoleCatalogReader`; children take the role's instructions, model and
         narrowed scope.
       - The guidance lists spawnable roles (at most 16, sorted).
       - Model-visible: regenerate the goldens on purpose, here and in Hanafubuki.
-      Done: —. Open: —.
+      Done (2026-11-11):
+      - `crates/agent/src/roles/reader.rs`: `AgentRoleCatalogReader`, built by
+        the application over its `AgentRoles` (now loaded before the plugin
+        manifest) and passed to the `subagents` row beside the driver;
+        `spawnable()` (name and description, by name) and `spawn_role(name)`
+        (what the child takes, or the spawnable names), both reading the
+        catalog at each call. `AgentSessionRole` moved to `roles/mod.rs` with
+        `AgentResolvedRole::session_role` (`default` → nothing), which the
+        facade's `session_role` shares.
+      - `spawn_agent`: optional `agent_type` (absent or empty → `default`);
+        resolved before any check or creation; unknown, unusable or not
+        spawnable → `invalid tool argument agent_type: … use one of <the
+        spawnable roles>`, no child made. The child is created in one
+        commit with the role's scope (the kernel narrows the parent's) and
+        instructions; then, if the role sets a model or an effort,
+        `AgentSessionDriver::select_role_model`: the role's model of the
+        parent's Provider through the model selection, and the role's
+        effort, else the parent's (kept across the model change, which
+        would otherwise reset it to the Provider policy's). Origin
+        `Subagent`, title the task name, the parent's permission mode,
+        `maximumRunningAgents` (M1) bounding the running ones, as before.
+      - Kernel: `AgentChildSessionRequest.role_instructions`; a child takes
+        them in place of its parent's when `request.scope.role` names a
+        role, and keeps its parent's role instructions otherwise.
+        `create_child_session` now also runs `validate_session_config` on
+        the child's configuration, since those instructions do not come
+        from the (valid) parent.
+      - `AgentSessionDriver` is `session_driver/mod.rs` plus `model.rs`:
+        `select_model` (the facade's `set_session_model` now delegates to
+        it; the driver carries the base instructions) and
+        `select_role_model`.
+      - `list_agents` reports `agent_type` per agent (the session's role,
+        `default` when none); `ListedAgent` and the runs keep it.
+      - Guidance (`subagent_guidance`) and `agent_type`'s schema
+        description list the spawnable roles, a line each (the name in
+        backticks, then the description): at most 16, in name order,
+        each description's whitespace collapsed to one line and cut at 200
+        characters on a character boundary (`…`). The "your model, your tools" wording of the guidance and of
+        `spawn_agent`'s description now says the role may change them; the
+        dropped-`agent_type` note of `tools.rs`'s header is gone.
+      - Tests: `plugins/subagents/tests/roles.rs` (the suite moved to
+        `tests/mod.rs`): an unknown and a non-spawnable `agent_type` are
+        the same field-named error listing `default, explorer, lead`, with
+        no child and no request; a `lead` parent spawning `explorer` gets
+        the intersection of the two tool lists and no lead instructions,
+        while a default child keeps the lead's tools, instructions and role,
+        and `list_agents` names `explorer` and `lead`; a role's model and
+        effort, else the parent's (the effort kept across a model change),
+        and the role's instructions after the base ones past the model
+        change; a role written after start and `reload_packages` is
+        spawnable and in the next step's guidance; 20 roles written in reverse order plus a non-spawnable one: the
+        guidance and the schema list `default`, `explorer`, `r00`–`r13`,
+        each cut at 200 `é` and `…`, no second line, no hidden role.
+        Kernel `persistence_contract/children.rs`: a child whose role
+        instructions are over the bound is refused (`LimitExceeded`) and
+        not made.
+      - Goldens regenerated on purpose
+        (`HANAFUBUKI_AGENT_UPDATE_GOLDEN=1 cargo test -p hanafubuki-agent
+        --lib golden`): 14 request fixtures changed, every hunk one of the
+        new `subagent_guidance` text (role wording plus the `default` and
+        `explorer` list), `spawn_agent`'s new description wording, or its
+        new `agent_type` property; `plan_mode_request.json`,
+        `tool_round_trip_events.json`, the `recorded_*` transcripts and the
+        history corpora are byte-identical.
+      - Docs (both languages): roles (`#subagents`, the intro, the
+        `spawnable` key), sessions (`#children`, `#subagents`, the
+        running limit's option), tools (`#subagents`: `agent_type`, the
+        role in `list_agents`, the guidance), architecture (lineage, the
+        session driver, "Subagents"), plugin-rules (the feature calls'
+        ports, the `subagents` update rule, `#capability-scope`, the
+        `subagents` row of "The plugins today", a table prettier reflowed
+        in the Chinese page), internals (child sessions).
+      - Validation (Linux only): `cargo fmt --all --check`,
+        `RUSTFLAGS="-D warnings" cargo check --workspace --all-targets
+        --all-features`, `cargo clippy --workspace --all-targets
+        --all-features -- -D warnings`, `cargo xtask check`, `cargo test
+        --workspace --all-features`; the site's `bun install
+        --frozen-lockfile`, `format:site`, `format:check:site`,
+        `site:check`, `site:test`, `site:build` (every page prerendered,
+        the new `#subagents` section in both languages' bundles). No diff
+        under `crates/host`, `crates/foundation`, `crates/process` or
+        `architecture/`.
+      - Deviations from the plan: without `agent_type` (or with
+        `default`) a child keeps its parent's role, scope and role
+        instructions, not "base plus `default`'s" (none), so a lead's
+        default helper is still a lead; the role instructions reach the
+        child through a new kernel request field rather than a second
+        commit (`set_session_role` would assign the scope un-narrowed);
+        the model selection moved from the facade into the driver, which
+        both share; besides adding the list, the guidance's and
+        `spawn_agent`'s "your model, your tools" sentences were reworded;
+        `list_agents`' role field is named `agent_type`, as the argument;
+        the tools page was updated too.
+      - Hanafubuki at its next pin: its integration goldens change (the
+        guidance and `spawn_agent`'s spec); regenerate and review them.
+        Struct literals of `AgentChildSessionRequest` take
+        `role_instructions: None`.
+      Open:
+      - `spawn_agent`'s descriptor is fixed per registration, so the roles
+        its `agent_type` description lists are those of the plugin's start:
+        a role added or removed later is in the guidance (read per step)
+        and accepted or refused by a spawn (read per call), but the schema
+        catches up only when the plugin restarts. Restarting the plugin on
+        a catalog change would mean carrying the roles in its row
+        configuration; not done.
+      - A role's model selection that fails (its Provider gone or
+        disabled) fails the spawn after the child exists: the agent is
+        listed, idle, with its parent's model, and takes follow-up tasks.
+      - The `explorer` golden shows the guidance (with its role list)
+        though its scope leaves `spawn_agent` out: the guidance's
+        contributor belongs to `subagents`, which the scope does not turn
+        off. Unchanged from M4.
+      - With more than 16 spawnable roles, the rest are not listed but can
+        still be spawned by name.
+      - The 200-character cut leaves `explorer`'s "Rules:" (how to use
+        explorers) out of what the model reads; its description could be
+        reordered or shortened.
 - [ ] M6: roles from packages.
       - The `agents` component of our format.
       - Claude Code `agents/*.md`, with the tool-name table.

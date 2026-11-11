@@ -6,9 +6,11 @@
 // Copyright 2025 OpenAI. Licensed under the Apache License, Version 2.0
 // (http://www.apache.org/licenses/LICENSE-2.0).
 // Modified for hanafubuki-agent: plain tool names rather than a namespace;
-// no `agent_type`, `model` or `reasoning_effort` (an agent runs its
-// parent's model), no task paths (an agent is named by its task name or its
-// id among its parent's agents) and no `path_prefix`; `wait_agent` returns
+// `agent_type` names one of the Agent's spawnable roles, which sets the
+// agent's model and reasoning effort, so there is no `model` or
+// `reasoning_effort`; `list_agents` reports each agent's role; no task
+// paths (an agent is named by its task name or its id among its parent's
+// agents) and no `path_prefix`; `wait_agent` returns
 // the final answers instead of a mailbox summary, and returns at once when
 // no agent runs; `send_message` and `followup_task` say how the message was
 // delivered; the descriptions say what this Agent does.
@@ -35,14 +37,17 @@ use hanafubuki_agent_tool_contracts::{
 use serde_json::{json, Map, Value};
 
 use super::options::WaitBounds;
+use super::prompt::role_list;
 use super::service::{
     AgentRunStatus, Delivery, ListedAgent, SpawnRequest, SubagentService, WaitOutcome,
 };
+use crate::roles::{AgentRoleCatalogReader, AgentSpawnableRole, DEFAULT_ROLE};
 
 /// The longest message an agent is sent, as the kernel's steering bound.
 const MAXIMUM_MESSAGE_BYTES: usize = 64 * 1024;
 const MAXIMUM_TASK_NAME_CHARS: usize = 64;
 const MAXIMUM_TARGET_CHARS: usize = 256;
+const MAXIMUM_AGENT_TYPE_CHARS: usize = 256;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum SubagentToolKind {
@@ -94,7 +99,7 @@ impl SubagentTool {
         service: Arc<SubagentService>,
     ) -> Result<Self, ToolContractError> {
         let waits = service.limits().waits;
-        let (description, input_schema) = spec(kind, waits);
+        let (description, input_schema) = spec(kind, waits, &service.roles.spawnable());
         Ok(Self {
             kind,
             service,
@@ -162,7 +167,7 @@ impl AgentToolHandler for SubagentTool {
             let service = &self.service;
             match self.kind {
                 SubagentToolKind::SpawnAgent => {
-                    let request = spawn_arguments(arguments)?;
+                    let request = spawn_arguments(arguments, &service.roles)?;
                     let task_name = request.task_name.clone();
                     let id = service.spawn(parent, request).await.map_err(tool_error)?;
                     Ok(json!({ "task_name": task_name, "agent_id": id.to_string() }).into())
@@ -204,7 +209,11 @@ impl AgentToolHandler for SubagentTool {
                     let agents = service.agents(parent).await.map_err(tool_error)?;
                     let agents = agents
                         .iter()
-                        .map(|agent| listed(agent, json!(list_status(&agent.status))))
+                        .map(|agent| {
+                            let mut listed = listed(agent, json!(list_status(&agent.status)));
+                            listed["agent_type"] = json!(agent.role);
+                            listed
+                        })
                         .collect::<Vec<_>>();
                     Ok(json!({ "agents": agents }).into())
                 }
@@ -221,7 +230,10 @@ impl AgentToolHandler for SubagentTool {
     }
 }
 
-fn spawn_arguments(arguments: &Map<String, Value>) -> Result<SpawnRequest, AgentToolError> {
+fn spawn_arguments(
+    arguments: &Map<String, Value>,
+    roles: &AgentRoleCatalogReader,
+) -> Result<SpawnRequest, AgentToolError> {
     let task_name = required_text(arguments, "task_name", MAXIMUM_TASK_NAME_CHARS, false)?;
     if !task_name.chars().all(|character| {
         character.is_ascii_lowercase() || character.is_ascii_digit() || character == '_'
@@ -241,10 +253,26 @@ fn spawn_arguments(arguments: &Map<String, Value>) -> Result<SpawnRequest, Agent
             })?
         }
     };
+    let agent_type = nullable_bounded_string(arguments, "agent_type", MAXIMUM_AGENT_TYPE_CHARS)?;
+    let agent_type = agent_type
+        .as_deref()
+        .map(str::trim)
+        .filter(|agent_type| !agent_type.is_empty())
+        .unwrap_or(DEFAULT_ROLE);
+    let role = roles.spawn_role(agent_type).map_err(|spawnable| {
+        ToolCallValidationError::InvalidArgumentAt {
+            path: "agent_type".to_string(),
+            reason: format!(
+                "`{agent_type}` is not a role an agent can be spawned as; use one of {}",
+                spawnable.join(", ")
+            ),
+        }
+    })?;
     Ok(SpawnRequest {
         task_name,
         message: message_argument(arguments)?,
         fork,
+        role,
     })
 }
 
@@ -350,7 +378,7 @@ fn list_status(status: &AgentRunStatus) -> &'static str {
     }
 }
 
-const SPAWN_AGENT_DESCRIPTION: &str = r#"Spawns an agent to work on the specified task. The agent is a separate conversation that runs in the background with your model, your tools and your permission mode; it cannot spawn agents of its own. Refer to it by its task name, or by the agent id this returns, in the other agent tools.
+const SPAWN_AGENT_DESCRIPTION: &str = r#"Spawns an agent to work on the specified task. The agent is a separate conversation that runs in the background with your permission mode, and with your model and your tools unless its `agent_type` says otherwise; it cannot spawn agents of its own. Refer to it by its task name, or by the agent id this returns, in the other agent tools.
 Its final answer is provided to you by wait_agent when it finishes. You can send it messages and follow-up tasks meanwhile.
 
 Note that passing `fork_turns="none"` will not pass any surrounding context to the spawned agent, which may cause the agent to lack the context it needs to complete its task, whereas `fork_turns="all"` will provide the agent with this conversation up to your current turn. Either way the message is the only part of the current turn the agent reads, so make it self-contained."#;
@@ -358,8 +386,13 @@ Note that passing `fork_turns="none"` will not pass any surrounding context to t
 const WAIT_AGENT_DESCRIPTION: &str = "Wait until an agent you spawned finishes its turn. Returns the final status of every agent that finished since your previous wait: its final answer when it completed, or its error. Returns at once when such an update is pending or when no agent is running, and with `timed_out` when no agent finishes before the deadline.";
 
 /// The model-visible description and input schema of `kind`, with `waits`
-/// the bounds `wait_agent` states.
-fn spec(kind: SubagentToolKind, waits: WaitBounds) -> (String, Value) {
+/// the bounds `wait_agent` states and `roles` the roles `spawn_agent`
+/// lists.
+fn spec(
+    kind: SubagentToolKind,
+    waits: WaitBounds,
+    roles: &[AgentSpawnableRole],
+) -> (String, Value) {
     let target = |description: &str| json!({ "type": "string", "description": description });
     let (description, properties, required): (&str, Value, &[&str]) = match kind {
         SubagentToolKind::SpawnAgent => (
@@ -376,6 +409,13 @@ fn spec(kind: SubagentToolKind, waits: WaitBounds) -> (String, Value) {
                 "fork_turns": {
                     "type": "string",
                     "description": "Parent history to inherit. Defaults to `all`; use `none` to start without parent history. Only `all` and `none` are supported."
+                },
+                "agent_type": {
+                    "type": "string",
+                    "description": format!(
+                        "Role of the new agent. Defaults to `default`, which keeps your tools and instructions. A role can only take tools away, and may run another model. The roles:\n{}",
+                        role_list(roles)
+                    )
                 }
             }),
             &["task_name", "message"],

@@ -77,7 +77,7 @@ impl AgentApplicationService {
         mode: AgentSessionMode,
         settings: hanafubuki_agent_config::AgentSettings,
         resolved: ResolvedAgentProvider,
-        role: super::roles::AgentSessionRole,
+        role: crate::roles::AgentSessionRole,
     ) -> Result<AgentSessionRuntimeSnapshot, String> {
         let mut policy = resolved.policy;
         if let Some(model) = role.model {

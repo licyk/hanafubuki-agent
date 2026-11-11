@@ -6,6 +6,7 @@
 //! created or switched (`service/roles.rs`).
 
 mod builtin;
+mod reader;
 mod resolve;
 
 use std::collections::BTreeMap;
@@ -18,6 +19,7 @@ use hanafubuki_agent_kernel::AgentCapabilityScope;
 use parking_lot::{Mutex, RwLock};
 
 pub use builtin::{DEFAULT_ROLE, EXPLORER_ROLE};
+pub(crate) use reader::{AgentRoleCatalogReader, AgentSpawnableRole};
 
 /// The most roles a chain holds: the role itself and the roles it
 /// extends, one after the other.
@@ -70,6 +72,32 @@ pub struct AgentResolvedRole {
     /// For each field set by the chain (by its key, `tools.allow`), the
     /// roles of the chain whose definition decides it, nearest first.
     pub provenance: BTreeMap<&'static str, Vec<String>>,
+}
+
+impl AgentResolvedRole {
+    /// What a session takes of the role. `default` narrows nothing: the
+    /// empty scope, which a session's record leaves out.
+    pub(crate) fn session_role(&self) -> AgentSessionRole {
+        if self.name == DEFAULT_ROLE {
+            return AgentSessionRole::default();
+        }
+        AgentSessionRole {
+            scope: self.scope.clone(),
+            instructions: self.instructions.clone(),
+            model: self.model.clone(),
+            reasoning_effort: self.reasoning_effort.clone(),
+        }
+    }
+}
+
+/// What a session takes of a role: its scope and instructions, kept by the
+/// session, and the model and reasoning effort it selects.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub(crate) struct AgentSessionRole {
+    pub(crate) scope: AgentCapabilityScope,
+    pub(crate) instructions: Option<String>,
+    pub(crate) model: Option<String>,
+    pub(crate) reasoning_effort: Option<ModelReasoningEffort>,
 }
 
 /// A role no session can have, and why.

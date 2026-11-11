@@ -39,6 +39,7 @@ impl AgentApplicationService {
             base: AgentChildSessionBase::ParentHead,
             context: side_conversation_context(),
             scope: Default::default(),
+            role_instructions: None,
         })
     }
 

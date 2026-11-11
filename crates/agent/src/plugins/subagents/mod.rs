@@ -3,8 +3,10 @@
 //! `interrupt_agent`) over the session driver, and the orchestrator
 //! guidance for a conversation that may spawn. An agent is a durable child
 //! session of origin `Subagent`, named by its task name, running its turns
-//! in the background on the Agent runtime with its parent's model and
-//! permission mode. The plugin provides [`SubagentService`] under its name,
+//! in the background on the Agent runtime with its parent's permission
+//! mode, as the role `spawn_agent`'s `agent_type` names: its parent's scope
+//! narrowed by the role's, and the role's instructions and model (else its
+//! parent's). The plugin provides [`SubagentService`] under its name,
 //! which the facade's `subagents` and `interrupt_subagent` resolve per call;
 //! with the plugin off, the tools are gone and those calls are unavailable.
 //! Its options ([`SubagentsOptions`]) set how many agents run at once and
@@ -30,6 +32,7 @@ use self::prompt::{SubagentGuidancePrompt, SUBAGENT_GUIDANCE_RENDERER};
 use self::service::SubagentRuns;
 pub(crate) use self::service::SubagentService;
 use self::tools::{SubagentTool, SubagentToolKind};
+use crate::roles::AgentRoleCatalogReader;
 use crate::session_driver::AgentSessionDriver;
 
 /// The plugin's name, under which it provides its [`SubagentService`].
@@ -59,14 +62,20 @@ pub enum AgentSubagentState {
 }
 
 /// Registers the subagent tools and the orchestrator guidance over
-/// `driver`, and provides the [`SubagentService`]. The runs it tracks
-/// outlive a restart of the plugin. A change of the running-agent limit is
-/// taken in place; one of the wait bounds, which `wait_agent`'s spec
-/// states, restarts the plugin.
-pub(crate) fn subagents_plugin(driver: AgentSessionDriver) -> PluginDef {
+/// `driver`, with the roles `roles` reads, and provides the
+/// [`SubagentService`]. The runs it tracks outlive a restart of the plugin.
+/// A change of the running-agent limit is taken in place; one of the wait
+/// bounds, which `wait_agent`'s spec states, restarts the plugin.
+/// `spawn_agent`'s spec lists the spawnable roles as the plugin starts;
+/// the guidance and a spawn read them at each step and call.
+pub(crate) fn subagents_plugin(
+    driver: AgentSessionDriver,
+    roles: AgentRoleCatalogReader,
+) -> PluginDef {
     let runs = SubagentRuns::default();
     PluginDef::typed(move |ctx: Context, options: Arc<SubagentsOptions>| {
         let driver = driver.clone();
+        let roles = roles.clone();
         let runs = runs.clone();
         async move {
             let limits = SubagentLimits::of(&options);
@@ -74,6 +83,7 @@ pub(crate) fn subagents_plugin(driver: AgentSessionDriver) -> PluginDef {
                 driver,
                 runs,
                 blocking: ctx.get::<BlockingService>()?.arc().clone(),
+                roles,
                 limits: parking_lot::Mutex::new(limits),
             });
             let updated = service.clone();

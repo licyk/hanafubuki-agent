@@ -133,6 +133,7 @@ async fn the_configured_strategy_reaches_sessions_between_turns() {
                 base,
                 context: Vec::new(),
                 scope: Default::default(),
+                role_instructions: None,
             })
             .unwrap()
             .id

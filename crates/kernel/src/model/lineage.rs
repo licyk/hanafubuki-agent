@@ -48,6 +48,10 @@ pub struct AgentChildSessionRequest {
     /// is the parent's narrowed by it, so it is never wider. The default
     /// keeps the parent's.
     pub scope: crate::AgentCapabilityScope,
+    /// The instructions of the role `scope` names: when it names one, the
+    /// child's role instructions are these in place of its parent's;
+    /// otherwise the child keeps its parent's role and its instructions.
+    pub role_instructions: Option<String>,
 }
 
 /// Reads a persisted origin tolerantly: one this build does not know reads

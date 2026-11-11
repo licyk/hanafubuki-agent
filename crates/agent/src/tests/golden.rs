@@ -376,6 +376,7 @@ async fn record_lineage_history() {
             base: AgentChildSessionBase::ParentHead,
             context: Vec::new(),
             scope: Default::default(),
+            role_instructions: None,
         })
         .unwrap();
     driver

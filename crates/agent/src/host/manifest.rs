@@ -29,6 +29,7 @@ use crate::plugins::{
     review_plugin, skills_plugin, subagents_plugin, titles_plugin, view_image_plugin,
     workspace_context_plugin, SUBAGENTS_PLUGIN,
 };
+use crate::roles::AgentRoleCatalogReader;
 use crate::service::AgentMcpApplication;
 use crate::session_driver::AgentSessionDriver;
 use crate::skills::AgentSkillApplication;
@@ -57,6 +58,8 @@ pub(crate) struct AgentPluginInputs {
     pub(crate) goals: AgentGoalApplication,
     /// How the subagents are created and run.
     pub(crate) driver: AgentSessionDriver,
+    /// The roles a subagent is spawned as.
+    pub(crate) roles: AgentRoleCatalogReader,
     /// The worktrees, under the data directory, over the instance's
     /// executor.
     pub(crate) worktrees: WorktreeManager,
@@ -107,7 +110,7 @@ pub(crate) fn agent_plugin_manifest(
         AgentPluginRow::unconfigured(Capability, goal_plugin(inputs.goals)),
         AgentPluginRow::from_settings(
             Capability,
-            subagents_plugin(inputs.driver.clone()),
+            subagents_plugin(inputs.driver.clone(), inputs.roles),
             |settings| settings.options_value(SUBAGENTS_PLUGIN),
         ),
         AgentPluginRow::unconfigured(Capability, review_plugin(inputs.driver, inputs.git)),

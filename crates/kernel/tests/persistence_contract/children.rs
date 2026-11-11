@@ -41,6 +41,7 @@ fn child_request(
         base,
         context: vec![note("Only answer questions.")],
         scope: Default::default(),
+        role_instructions: None,
     }
 }
 
@@ -241,4 +242,38 @@ async fn lineage_fields_are_read_tolerantly() {
 
 fn outcome_revision(service: &AgentService, session_id: AgentSessionId) -> AgentRevision {
     service.snapshot(session_id).unwrap().revision
+}
+
+/// A child's role instructions come from its request, not from its valid
+/// parent, so they are bounded as a session's are: a child whose
+/// instructions are over the bound is refused, and none is made.
+#[tokio::test]
+async fn a_child_with_role_instructions_over_the_bound_is_refused() {
+    let store = Arc::new(EphemeralAgentHistoryStore::default());
+    let service =
+        AgentService::with_history_store(scripted(&[]), AgentKernelRegistries::default(), store);
+    let parent = service.create_session(text_session_config()).unwrap();
+    let request = AgentChildSessionRequest {
+        context: Vec::new(),
+        base: AgentChildSessionBase::Empty,
+        scope: hanafubuki_agent_kernel::AgentCapabilityScope {
+            role: Some("verbose".to_string()),
+            ..Default::default()
+        },
+        role_instructions: Some("x".repeat(service.limits().maximum_history_bytes + 1)),
+        ..child_request(
+            parent.id,
+            AgentSessionPersistence::Ephemeral,
+            AgentChildSessionBase::Empty,
+        )
+    };
+
+    assert_eq!(
+        service.create_child_session(request),
+        Err(AgentError::LimitExceeded {
+            resource: "instructions bytes",
+            limit: service.limits().maximum_history_bytes,
+        })
+    );
+    assert!(service.ephemeral_children(parent.id, None).is_empty());
 }

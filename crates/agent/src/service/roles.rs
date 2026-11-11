@@ -3,23 +3,11 @@
 
 use std::sync::Arc;
 
-use hanafubuki_agent_foundation::agent_settings::ModelReasoningEffort;
-use hanafubuki_agent_kernel::{
-    AgentCapabilityScope, AgentError, AgentSessionId, AgentSessionRuntimeSnapshot,
-};
+use hanafubuki_agent_kernel::{AgentError, AgentSessionId, AgentSessionRuntimeSnapshot};
 
 use super::AgentApplicationService;
-use crate::roles::{AgentRoleCatalog, DEFAULT_ROLE};
+use crate::roles::{AgentRoleCatalog, AgentSessionRole, DEFAULT_ROLE};
 use crate::{AgentSessionModelSelectionRequest, AgentSessionReasoningEffortRequest};
-
-/// What a session takes of a role: its scope and instructions, kept by the
-/// session, and the model and reasoning effort it selects.
-pub(super) struct AgentSessionRole {
-    pub(super) scope: AgentCapabilityScope,
-    pub(super) instructions: Option<String>,
-    pub(super) model: Option<String>,
-    pub(super) reasoning_effort: Option<ModelReasoningEffort>,
-}
 
 impl AgentApplicationService {
     /// The roles as the last settings or package publication left them:
@@ -101,22 +89,7 @@ impl AgentApplicationService {
                 "{why}; the usable roles are {usable}"
             )));
         };
-        // `default` narrows nothing: the empty scope, which a session's
-        // record leaves out.
-        if role.name == DEFAULT_ROLE {
-            return Ok(AgentSessionRole {
-                scope: AgentCapabilityScope::default(),
-                instructions: None,
-                model: None,
-                reasoning_effort: None,
-            });
-        }
-        Ok(AgentSessionRole {
-            scope: role.scope.clone(),
-            instructions: role.instructions.clone(),
-            model: role.model.clone(),
-            reasoning_effort: role.reasoning_effort.clone(),
-        })
+        Ok(role.session_role())
     }
 
     /// Reads the roles again on the blocking pool; a failure keeps the

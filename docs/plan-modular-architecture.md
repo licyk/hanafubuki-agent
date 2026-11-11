@@ -1,7 +1,8 @@
 # Plan: a more customizable modular architecture, after KohakuTerrarium
 
 Date: 2026-11-11. Status: accepted. Every §9 decision was accepted as recommended
-(2026-11-11). M1, M2, M3 and M4 have landed (2026-11-11); M5–M7 have not started.
+(2026-11-11). M1, M2, M3, M4 and M5 have landed (2026-11-11); M6 and M7 have not
+started.
 
 This plan compares the Agent's plugin composition with KohakuTerrarium's module
 architecture. It then specifies what to adopt, in which form and in which order.

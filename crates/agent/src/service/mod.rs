@@ -382,13 +382,16 @@ impl AgentApplicationService {
             history_store,
             memory_workers.clone(),
         )?;
+        let base_instructions: Arc<str> = agent_base_instructions(&host.instructions).into();
         let driver = AgentSessionDriver::new(
             core.clone(),
             config.clone(),
             registries.clone(),
             executions.clone(),
             blocking.clone(),
+            base_instructions.clone(),
         );
+        let roles = Arc::new(crate::roles::AgentRoles::load(&config));
         let plugin_host = Arc::new(AgentHost::new(
             registries,
             blocking.clone(),
@@ -413,6 +416,7 @@ impl AgentApplicationService {
                     ),
                     goals: crate::goals::AgentGoalApplication::new(core.clone()),
                     driver: driver.clone(),
+                    roles: crate::roles::AgentRoleCatalogReader::new(roles.clone()),
                     worktrees: hanafubuki_agent_worktree::WorktreeManager::new(
                         storage_paths.worktrees_root.clone(),
                         executor.clone(),
@@ -430,7 +434,6 @@ impl AgentApplicationService {
                 restart_policy: plugin_restarts,
             },
         )?);
-        let roles = Arc::new(crate::roles::AgentRoles::load(&config));
         unbuilt.built();
         Ok(Self {
             config,
@@ -450,7 +453,7 @@ impl AgentApplicationService {
             network: host.network,
             workspace,
             steering_context: host.steering_context,
-            base_instructions: agent_base_instructions(&host.instructions).into(),
+            base_instructions,
             host: plugin_host,
             packages,
             plugin_events: plugin_event_sink,

@@ -16,7 +16,8 @@
 // running turns since nothing is evicted), only a session without a parent
 // spawns (Codex's `agents.max_depth` default), and a wait lasts at most 5
 // minutes (the turn's own tool timeout and deadline bound it); the limits
-// and the wait bounds are the plugin's options.
+// and the wait bounds are the plugin's options; an agent's role
+// (`agent_type`) is one of the Agent's roles, which only narrow it.
 
 //! What the subagent tools and the facade's subagent calls do, over the
 //! session driver. The runs live in [`SubagentRuns`], which outlives the
@@ -39,6 +40,7 @@ use tokio::sync::Notify;
 
 use super::options::SubagentLimits;
 use super::{AgentSubagentState, AgentSubagentStatus};
+use crate::roles::{AgentRoleCatalogReader, AgentSessionRole, DEFAULT_ROLE};
 use crate::session_driver::AgentSessionDriver;
 
 /// The longest last answer the facade's status carries.
@@ -93,6 +95,8 @@ impl AgentRunStatus {
 pub(super) struct ListedAgent {
     pub(super) name: String,
     pub(super) id: AgentSessionId,
+    /// The role its session has, `default` when it narrows nothing.
+    pub(super) role: String,
     pub(super) status: AgentRunStatus,
 }
 
@@ -123,6 +127,8 @@ pub(super) struct SpawnRequest {
     pub(super) message: String,
     /// Whether the agent starts from the parent's history.
     pub(super) fork: bool,
+    /// What the agent takes of the role it is spawned as.
+    pub(super) role: AgentSessionRole,
 }
 
 /// The agents this Agent instance runs, kept across the plugin's restarts.
@@ -135,6 +141,7 @@ pub(crate) struct SubagentRuns {
 struct AgentRun {
     parent: AgentSessionId,
     name: String,
+    role: String,
     status: AgentRunStatus,
     /// Messages for its next turn.
     queued: Vec<String>,
@@ -185,6 +192,7 @@ impl SubagentRuns {
                 updates.push(ListedAgent {
                     name: run.name.clone(),
                     id: *id,
+                    role: run.role.clone(),
                     status: run.status.clone(),
                 });
             }
@@ -200,6 +208,8 @@ pub(crate) struct SubagentService {
     pub(super) driver: AgentSessionDriver,
     pub(super) runs: SubagentRuns,
     pub(super) blocking: Arc<BlockingService>,
+    /// The roles an agent is spawned as, read at each call.
+    pub(super) roles: AgentRoleCatalogReader,
     /// The plugin's options; the running-agent limit changes in place.
     pub(super) limits: Mutex<SubagentLimits>,
 }
@@ -209,8 +219,10 @@ impl SubagentService {
         *self.limits.lock()
     }
 
-    /// Creates `request.task_name` under `parent` and runs its first turn,
-    /// the message, in the background.
+    /// Creates `request.task_name` under `parent` as `request.role` (its
+    /// scope the parent's narrowed by the role's, the role's instructions
+    /// after the base ones, the role's model and reasoning effort over the
+    /// parent's) and runs its first turn, the message, in the background.
     pub(super) async fn spawn(
         &self,
         parent: AgentSessionId,
@@ -239,7 +251,8 @@ impl SubagentService {
             AgentChildSessionBase::Empty
         };
         let name = request.task_name.clone();
-        let child = self
+        let role = request.role;
+        let (child, child_role) = self
             .blocking(move |driver| {
                 let child = driver.create_child(AgentChildSessionRequest {
                     parent_session_id: parent,
@@ -247,14 +260,26 @@ impl SubagentService {
                     persistence: AgentSessionPersistence::Durable,
                     base,
                     context: Vec::new(),
-                    scope: Default::default(),
+                    scope: role.scope,
+                    role_instructions: role.instructions,
                 })?;
                 driver.rename(child.id, name)?;
-                Ok(child.id)
+                Ok((child.id, role_name(child.role)))
             })
             .await?;
-        self.start(parent, child, request.task_name, request.message)
-            .await?;
+        if role.model.is_some() || role.reasoning_effort.is_some() {
+            self.driver
+                .select_role_model(child, role.model, role.reasoning_effort)
+                .await
+                .map_err(AgentError::InvalidInput)?;
+        }
+        let agent = ListedAgent {
+            name: request.task_name,
+            id: child,
+            role: child_role,
+            status: AgentRunStatus::PendingInit,
+        };
+        self.start(parent, agent, request.message).await?;
         Ok(child)
     }
 
@@ -272,7 +297,7 @@ impl SubagentService {
         };
         let mut runs = self.runs.runs.lock();
         runs.entry(agent.id)
-            .or_insert_with(|| AgentRun::new(parent, agent.name, agent.status))
+            .or_insert_with(|| AgentRun::new(parent, agent))
             .queued
             .push(message);
         Ok(Delivery::Queued)
@@ -290,7 +315,7 @@ impl SubagentService {
         let Some(message) = self.steer(agent.id, message).await? else {
             return Ok(Delivery::Steered);
         };
-        self.start(parent, agent.id, agent.name, message).await?;
+        self.start(parent, agent, message).await?;
         Ok(Delivery::Started)
     }
 
@@ -418,15 +443,15 @@ impl SubagentService {
         Ok(())
     }
 
-    /// Runs a turn of `message` on `child` in the background, after the
+    /// Runs a turn of `message` on `agent` in the background, after the
     /// messages queued for it, with `parent`'s permission mode.
     async fn start(
         &self,
         parent: AgentSessionId,
-        child: AgentSessionId,
-        name: String,
+        agent: ListedAgent,
         message: String,
     ) -> Result<(), AgentError> {
+        let child = agent.id;
         self.driver.inherit_permission_mode(parent, child).await?;
         let maximum = self.limits().maximum_running_agents;
         let (text, turn) = {
@@ -440,7 +465,7 @@ impl SubagentService {
             }
             let run = runs
                 .entry(child)
-                .or_insert_with(|| AgentRun::new(parent, name, AgentRunStatus::PendingInit));
+                .or_insert_with(|| AgentRun::new(parent, agent));
             let mut parts = std::mem::take(&mut run.queued);
             parts.push(message);
             run.turn += 1;
@@ -496,6 +521,7 @@ impl SubagentService {
                 .map(|title| title.value)
                 .unwrap_or_else(|| child.session_id.to_string()),
             id: child.session_id,
+            role: role_name(child.role),
             status: self
                 .runs
                 .status(child.session_id)
@@ -516,16 +542,22 @@ impl SubagentService {
 }
 
 impl AgentRun {
-    fn new(parent: AgentSessionId, name: String, status: AgentRunStatus) -> Self {
+    fn new(parent: AgentSessionId, agent: ListedAgent) -> Self {
         Self {
             parent,
-            name,
-            status,
+            name: agent.name,
+            role: agent.role,
+            status: agent.status,
             queued: Vec::new(),
             unreported: false,
             turn: 0,
         }
     }
+}
+
+/// A session's role as an agent's listing names it.
+fn role_name(role: Option<String>) -> String {
+    role.unwrap_or_else(|| DEFAULT_ROLE.to_string())
 }
 
 fn capacity_refusal(maximum: usize) -> AgentError {

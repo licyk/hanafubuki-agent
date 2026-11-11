@@ -2,7 +2,10 @@
 //! agent spawned by the parent's model runs its task and `wait_agent`
 //! returns its answer; messages steer a running agent or wait for an idle
 //! one; an interrupt; the depth and running limits; the inherited
-//! permission mode; and the plugin turned off.
+//! permission mode; and the plugin turned off. Agents spawned as roles
+//! are `roles.rs`'s.
+
+mod roles;
 
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -75,6 +78,7 @@ fn spawn(task_name: &str, message: &str) -> SpawnRequest {
         task_name: task_name.to_string(),
         message: message.to_string(),
         fork: false,
+        role: Default::default(),
     }
 }
 
@@ -289,6 +293,7 @@ async fn messages_steer_a_running_agent_and_wait_for_an_idle_ones_next_turn() {
         WaitOutcome::Updates(vec![ListedAgent {
             name: "worker".to_string(),
             id: child,
+            role: "default".to_string(),
             status: AgentRunStatus::Completed(Some("Checked the tests.".to_string())),
         }])
     );

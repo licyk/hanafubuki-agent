@@ -525,6 +525,7 @@ async fn a_child_is_never_wider_than_its_parent() {
         base: AgentChildSessionBase::Empty,
         context: Vec::new(),
         scope,
+        role_instructions: None,
     };
 
     // A child asking for nothing narrower keeps its parent's scope whole.

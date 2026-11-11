@@ -110,7 +110,7 @@ Every session has a [role](/docs/roles#sessions): `default`, which narrows nothi
 
 ## Child sessions [#children]
 
-A session can be the child of another, made for it rather than started by you: a [side conversation](#side), a [sub-agent](#subagents) or a [review](#reviews). A child records its parent (`parentSessionId` in its summary) and why it was made (`origin`: `side`, `subagent` or `review`), and works in its parent's directory, with its parent's model and settings. It keeps its parent's [role](/docs/roles#sessions), and may only narrow it further: a child is never allowed more than its parent. A fork keeps its source's role.
+A session can be the child of another, made for it rather than started by you: a [side conversation](#side), a [sub-agent](#subagents) or a [review](#reviews). A child records its parent (`parentSessionId` in its summary) and why it was made (`origin`: `side`, `subagent` or `review`), and works in its parent's directory, with its parent's model and settings. It keeps its parent's [role](/docs/roles#sessions), and may only narrow it further: a child is never allowed more than its parent. A sub-agent may be given a narrower role of its own ([below](#subagents)). A fork keeps its source's role.
 
 Every session records, when it is created, the workspace's primary directory (`cwd`) and the Git branch checked out there (`branch`, read from the repository's `HEAD`; none for a detached `HEAD` or outside a repository). A child, or a fork, takes its source's. A session from before these fields existed has none.
 
@@ -129,9 +129,10 @@ A side conversation is a temporary conversation beside a session, for a question
 A sub-agent is a child the session's model spawns with `spawn_agent` to work on a task in the background ([Tools](/docs/tools#subagents)).
 
 - It is **durable**: written to the history like any session, with `origin` `subagent` and the task name as its title. Session lists leave it out like every child; it is listed with its parent's children.
-- It starts empty, or with its parent's conversation before the turn that spawned it, and runs with its parent's model and the permission mode its parent's next turn would have; its turns come from its parent's model, not from you.
+- It starts empty, or with its parent's conversation before the turn that spawned it, and runs with the permission mode its parent's next turn would have; its turns come from its parent's model, not from you.
+- It has the [role](/docs/roles#subagents) `spawn_agent`'s `agent_type` names, one of the spawnable roles: its tools are its parent's narrowed by the role's, its instructions the role's, its model and reasoning effort the role's, else its parent's. Without `agent_type` it keeps its parent's role, model and reasoning effort. `list_agents` names each one's role.
 - Archiving or deleting the parent archives or deletes its sub-agents with it.
-- Only a session without a parent spawns sub-agents, at most 3 running at once.
+- Only a session without a parent spawns sub-agents, at most 3 running at once by default (`maximumRunningAgents` in [`[pluginOptions.subagents]`](/docs/config-reference#plugin-options)).
 - **In the terminal interface**, `/subagents` lists them with their status and shows one in place of its parent, live while it runs; in Manual mode an approval a sub-agent waits on is shown in its parent, labelled with its title, and answered on it ([Terminal interface](/docs/terminal-interface#subagents)). `/agents` lists every session with its children, to open, fork, archive, delete or interrupt them ([Terminal interface](/docs/terminal-interface#agents)).
 
 ## Reviews [#reviews]

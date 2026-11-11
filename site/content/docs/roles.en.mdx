@@ -1,12 +1,12 @@
 ---
 title: Roles
-description: Named, inheritable definitions of how the Agent works, which only narrow it — role files, [agents] entries, where they come from, extends and the merge, the built-in roles, and roles in sessions.
+description: Named, inheritable definitions of how the Agent works, which only narrow it — role files, [agents] entries, where they come from, extends and the merge, the built-in roles, and roles in sessions and sub-agents.
 icon: UserCog
 ---
 
 A role is a named definition of how the Agent works: instructions, a model, a reasoning effort, a permission-mode cap, and the tools and plugins it may use. A role only ever **narrows** the Agent it runs in: it can take tools and plugins away and tighten the permission mode, never add or widen anything, so no role is more capable than the instance itself. Approval rules, your hooks and the sandbox are out of every role's reach.
 
-Roles are defined in TOML, by you, a profile or a trusted project, beside two built-in ones. The Agent reads, checks and lists them (`hanafubuki-agent roles`, `doctor`, `/warnings`), and a session runs with the one you choose ([Roles in sessions](#sessions)); choosing one for a sub-agent comes in a later version.
+Roles are defined in TOML, by you, a profile or a trusted project, beside two built-in ones. The Agent reads, checks and lists them (`hanafubuki-agent roles`, `doctor`, `/warnings`), and a session runs with the one you choose ([Roles in sessions](#sessions)), and a sub-agent with the one its parent's model gives it ([Roles for sub-agents](#subagents)).
 
 ## Defining a role [#define]
 
@@ -45,7 +45,7 @@ The role's name is the file's `name` key, else its file name without `.toml` (`r
 | `model`             | A model id                                                                     | the parent's, else the session's | The model the role runs                                                                                      |
 | `reasoningEffort`   | `minimal`, `low`, `medium`, `high`, `xhigh`, or another effort the model takes | the parent's                     | The reasoning effort                                                                                         |
 | `permissionModeCap` | `"manual"`, `"auto_review"` or `"full_access"`                                 | none                             | The widest permission mode the role runs in; it only tightens                                                |
-| `spawnable`         | `true` or `false`                                                              | the parent's, else `true`        | Whether a sub-agent may be given the role                                                                    |
+| `spawnable`         | `true` or `false`                                                              | the parent's, else `true`        | Whether a sub-agent may be given the role ([below](#subagents))                                              |
 | `tools.allow`       | An array of [tool patterns](#tool-patterns)                                    | everything the parent allows     | The only tools the role may use                                                                              |
 | `tools.deny`        | An array of tool patterns                                                      | none                             | Tools the role may not use, whatever `allow` says                                                            |
 | `plugins.off`       | An array of plugin names (`guest:<id>` for an installed plugin's code)         | none                             | Plugins whose tools and context the role's sessions do not get                                               |
@@ -140,6 +140,18 @@ What the session takes of its role:
   Approval rules, your hooks, the plugins' observers and the sandbox apply whatever the role says. Plan mode still keeps only the read-only tools among those the role keeps.
 
 The session keeps all this in its own record: editing or deleting the role file later changes no session that has it (a restart keeps it too), until you choose the role again. A [sub-agent or side conversation](/docs/sessions#children) is never wider than its parent's role, and a fork keeps its source's.
+
+## Roles for sub-agents [#subagents]
+
+The model gives a [sub-agent](/docs/sessions#subagents) a role with `spawn_agent`'s `agent_type` (Codex's name for it): one of the **spawnable** roles, those whose `spawnable` is `true` (both built-in roles are).
+
+- **What the model reads.** The guidance on sub-agents, and the description of `agent_type`, list the spawnable roles by name with their descriptions: at most 16 roles, in name order, each description on one line and cut at 200 characters. Write a role's `description` for that reader: when to choose it.
+- **Without `agent_type`**, or with `default`, the sub-agent keeps its parent's role: its narrowing and its instructions.
+- **With a role**, the sub-agent's instructions are the base instructions and that role's; its narrowing is its parent's narrowed further by the role's, so a sub-agent never has a tool its parent lacks; its model is the role's `model` (of the parent's Provider), else its parent's, and its reasoning effort the role's `reasoningEffort`, else its parent's. It always runs with its parent's permission mode, capped by the role's `permissionModeCap`.
+- A role that is unknown, cannot be used or is not spawnable is refused: the model reads an error naming `agent_type` and listing the spawnable roles, and no sub-agent is made.
+- `list_agents` names each sub-agent's role (`agent_type`).
+
+A spawn reads the roles as they are then, and so does the guidance at every step; the list in `agent_type`'s description is the one the `subagents` plugin started with, until the plugin restarts (a change of its wait options, turning it off and on again, or the Agent's next start).
 
 ## Codex role files [#codex]
 

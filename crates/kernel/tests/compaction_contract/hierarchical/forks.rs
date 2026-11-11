@@ -164,6 +164,7 @@ async fn a_child_with_the_parents_history_keeps_its_state() {
                 base,
                 context: Vec::new(),
                 scope: Default::default(),
+                role_instructions: None,
             })
             .unwrap()
             .id

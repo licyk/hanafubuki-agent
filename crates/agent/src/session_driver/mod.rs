@@ -7,6 +7,9 @@
 //! prepares every turn the facade admits
 //! (the session's Provider, its permission mode, the world state and the
 //! turn's extensions), so a turn a plugin runs is prepared like a user's.
+//! A session's model selection is its own (`model.rs`).
+
+mod model;
 
 use std::ops::ControlFlow;
 use std::sync::Arc;
@@ -39,6 +42,9 @@ pub(crate) struct AgentSessionDriver {
     registries: AgentKernelRegistries,
     executions: AgentExecutionService,
     blocking: Arc<dyn BlockingOperationPort>,
+    /// The base instructions with the host's additions, which a model
+    /// selection gives the session.
+    base_instructions: Arc<str>,
 }
 
 impl AgentSessionDriver {
@@ -48,6 +54,7 @@ impl AgentSessionDriver {
         registries: AgentKernelRegistries,
         executions: AgentExecutionService,
         blocking: Arc<dyn BlockingOperationPort>,
+        base_instructions: Arc<str>,
     ) -> Self {
         Self {
             core,
@@ -55,6 +62,7 @@ impl AgentSessionDriver {
             registries,
             executions,
             blocking,
+            base_instructions,
         }
     }
 

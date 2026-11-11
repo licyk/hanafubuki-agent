@@ -77,6 +77,7 @@ impl ReviewService {
                     base: AgentChildSessionBase::Empty,
                     context: Vec::new(),
                     scope: Default::default(),
+                    role_instructions: None,
                 })?;
                 driver.rename(child.id, title)?;
                 driver.set_mode(child.id, AgentSessionMode::Default)?;

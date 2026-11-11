@@ -23,7 +23,8 @@ struct ChildHistory {
 impl AgentService {
     /// Creates a child of the loaded session `request.parent_session_id`:
     /// its model, configuration and workspace are the parent's (its scope
-    /// the parent's narrowed by `request.scope`), its lineage
+    /// the parent's narrowed by `request.scope`, its role instructions
+    /// those of the role `request.scope` names, if any), its lineage
     /// names the parent and `request.origin`, and `request.context` is
     /// committed with its creation. An ephemeral child lives in memory only
     /// until [`Self::close_ephemeral_session`] or shutdown.
@@ -54,6 +55,8 @@ impl AgentService {
         let before_turn_id = base.before_turn_id;
         let mut record = child_record(session_id, &parent, &request, base);
         normalize_session_config(&mut record.settings.config);
+        // The role instructions come from the request, not the parent.
+        validate_session_config(&record.settings.config, self.inner.limits)?;
         validate_history_append(&record, &request.context, self.inner.limits)?;
         append_history(&mut record, &request.context);
         if ephemeral {
@@ -257,6 +260,10 @@ fn child_record(
                     parent.settings.config.compaction_strategy
                 },
                 scope: parent.settings.config.scope.narrow(&request.scope),
+                role_instructions: match request.scope.role {
+                    Some(_) => request.role_instructions.clone(),
+                    None => parent.settings.config.role_instructions.clone(),
+                },
                 ..parent.settings.config.clone()
             },
             memory_contribution: AgentMemoryContributionState::default(),
