@@ -461,6 +461,61 @@ fn an_unreadable_install_record_is_quarantined_and_packages_stay_installed() {
 }
 
 #[test]
+fn a_record_file_that_cannot_be_opened_is_never_written_over() {
+    let fixture = fixture();
+    let sample = id("sample-plugin", "debug");
+    let source = write_plugin(fixture.path(), "sample", "sample-plugin", None);
+    fs::create_dir_all(fixture.plugins().join("install.json")).unwrap();
+    fs::write(
+        fixture.plugins().join("install.json").join("keep"),
+        "user data",
+    )
+    .unwrap();
+
+    let error = fixture
+        .store
+        .install_directory(&source, &sample)
+        .unwrap_err();
+
+    assert!(
+        error.to_string().contains("nothing is written over it"),
+        "{error}"
+    );
+    assert_eq!(
+        fs::read_to_string(fixture.plugins().join("install.json").join("keep")).unwrap(),
+        "user data"
+    );
+}
+
+#[test]
+fn a_record_file_read_in_part_is_copied_before_it_is_written_over() {
+    let fixture = fixture();
+    let sample = id("sample-plugin", "debug");
+    let other = id("other-plugin", "debug");
+    let source = write_plugin(fixture.path(), "sample", "sample-plugin", None);
+    fixture.store.install_directory(&source, &sample).unwrap();
+    let original =
+        r#"{"packages": {"sample-plugin@debug": {"version": 3}, "not an id": {"x": 1}}}"#;
+    fs::write(fixture.plugins().join("install.json"), original).unwrap();
+    assert!(!fixture.plugins().join(".recovery").exists());
+
+    let source = write_plugin(fixture.path(), "other", "other-plugin", None);
+    fixture.store.install_directory(&source, &other).unwrap();
+
+    let copies: Vec<_> = fs::read_dir(fixture.plugins().join(".recovery"))
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .collect();
+    assert_eq!(copies.len(), 1, "{copies:?}");
+    assert!(copies[0].to_string_lossy().ends_with(".partial"));
+    assert_eq!(fs::read_to_string(&copies[0]).unwrap(), original);
+    let file: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(fixture.plugins().join("install.json")).unwrap())
+            .unwrap();
+    assert!(file["packages"]["other-plugin@debug"].is_object());
+}
+
+#[test]
 fn a_bad_record_field_or_entry_costs_only_itself() {
     let fixture = fixture();
     let sample = id("sample-plugin", "debug");

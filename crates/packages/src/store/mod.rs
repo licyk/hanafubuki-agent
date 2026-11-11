@@ -280,7 +280,8 @@ impl PackageStore {
         &self,
         change: impl FnOnce(&mut Records),
     ) -> Result<(), PackageError> {
-        let mut records = self.records();
+        let mut records = Records::read(&self.root);
+        records.prepare_write().map_err(PackageError::Io)?;
         change(&mut records);
         records.write(&self.root).map_err(PackageError::Io)
     }

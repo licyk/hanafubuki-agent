@@ -14,14 +14,19 @@
 //! (a source of a kind this build does not know is none), an entry whose
 //! key is not a plugin id, or a linked entry without a directory, is
 //! skipped, and a file that does not read at all is taken as empty; the
-//! store then quarantines it. Reading writes nothing. The packages
-//! themselves are the cache's directories; a package without an entry is
-//! still installed.
+//! store then quarantines it. Reading writes nothing. A write never loses
+//! what it could not read: a file that cannot be opened (other than a
+//! missing one) is not written over at all, a file that does not read is
+//! quarantined first (and the write refused if that fails), and a file
+//! that read with an entry or a field left out is copied to `.recovery`
+//! first. The packages themselves are the cache's directories; a package
+//! without an entry is still installed.
 
 use std::collections::BTreeMap;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use hanafubuki_agent_foundation::persistence::quarantine_file;
 use serde::Serialize;
@@ -31,6 +36,10 @@ use crate::{ManifestFormat, PackagePermissions, PackageSource, PluginId};
 
 const INSTALLED_FILE: &str = "install.json";
 const LINKED_FILE: &str = "linked.json";
+/// Where a file's copy is kept, beside the quarantined ones.
+const RECOVERY_DIR: &str = ".recovery";
+
+static NEXT_COPY: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -94,6 +103,10 @@ pub(crate) struct Records {
     pub(crate) linked: BTreeMap<PluginId, LinkedRecord>,
     /// The files that did not read at all, taken as empty.
     unreadable: Vec<PathBuf>,
+    /// The files that read with an entry or a field left out.
+    partial: Vec<PathBuf>,
+    /// Why a file that exists could not be opened.
+    failed: Vec<String>,
 }
 
 impl Records {
@@ -103,20 +116,27 @@ impl Records {
     /// id; the store's next write moves it there.
     pub(crate) fn read(root: &Path) -> Self {
         let mut records = Self::default();
-        let installed = records.entries(&root.join(INSTALLED_FILE));
-        let linked = records.entries(&root.join(LINKED_FILE));
+        let installed_file = root.join(INSTALLED_FILE);
+        let linked_file = root.join(LINKED_FILE);
+        let installed = records.entries(&installed_file);
+        let linked = records.entries(&linked_file);
+        let mut linked_lossy = false;
         records.linked = linked
             .into_iter()
-            .filter_map(|(id, entry)| match linked_of(&entry) {
-                Some(record) => Some((id, record)),
-                None => {
+            .filter_map(|(id, entry)| {
+                let (record, lossy) = linked_of(&entry);
+                linked_lossy |= lossy;
+                if record.is_none() {
                     log::warn!("the linked record's entry {id} names no directory and is ignored");
-                    None
                 }
+                Some((id, record?))
             })
             .collect();
+        records.note_partial(linked_lossy, &linked_file);
+        let mut installed_lossy = false;
         for (id, entry) in installed {
-            let record = entry_of(&entry);
+            let (record, lossy) = entry_of(&entry);
+            installed_lossy |= lossy;
             match record.linked() {
                 Some(path) => {
                     let linked = LinkedRecord {
@@ -132,6 +152,7 @@ impl Records {
                 }
             }
         }
+        records.note_partial(installed_lossy, &installed_file);
         records
     }
 
@@ -143,6 +164,37 @@ impl Records {
             if let Err(error) = quarantine_file(path) {
                 log::warn!("{} was not quarantined: {error}", path.display());
             }
+        }
+    }
+
+    /// Makes both files safe to write over, or says why they are not: a
+    /// file that could not be opened is refused, one that did not read is
+    /// quarantined and one that read in part is copied, each before
+    /// anything is written.
+    pub(crate) fn prepare_write(&self) -> Result<(), String> {
+        if !self.failed.is_empty() {
+            return Err(format!(
+                "{}; nothing is written over it",
+                self.failed.join("; ")
+            ));
+        }
+        for path in &self.unreadable {
+            quarantine_file(path).map_err(|error| {
+                format!(
+                    "{} does not read and was not quarantined: {error}",
+                    path.display()
+                )
+            })?;
+        }
+        for path in &self.partial {
+            keep_copy(path)?;
+        }
+        Ok(())
+    }
+
+    fn note_partial(&mut self, lossy: bool, path: &Path) {
+        if lossy && !self.partial.iter().any(|known| known == path) {
+            self.partial.push(path.to_path_buf());
         }
     }
 
@@ -165,57 +217,127 @@ impl Records {
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => return BTreeMap::new(),
             Err(error) => {
                 log::warn!("{} cannot be read: {error}", path.display());
+                self.failed
+                    .push(format!("{} cannot be read: {error}", path.display()));
                 return BTreeMap::new();
             }
         };
         let packages = match serde_json::from_slice::<Value>(&bytes) {
             Ok(Value::Object(mut file)) => match file.remove("packages") {
                 Some(Value::Object(packages)) => packages,
-                _ => Map::new(),
+                None => Map::new(),
+                Some(_) => {
+                    self.unreadable.push(path.to_path_buf());
+                    return BTreeMap::new();
+                }
             },
             _ => {
                 self.unreadable.push(path.to_path_buf());
                 return BTreeMap::new();
             }
         };
-        packages
+        let mut lossy = false;
+        let entries = packages
             .into_iter()
             .filter_map(|(key, entry)| match PluginId::parse(&key) {
                 Ok(id) => Some((id, entry)),
                 Err(error) => {
                     log::warn!("{}'s entry {key} is ignored: {error}", path.display());
+                    lossy = true;
                     None
                 }
             })
-            .collect()
+            .collect();
+        self.note_partial(lossy, path);
+        entries
     }
 }
 
-fn entry_of(value: &Value) -> InstallRecord {
-    InstallRecord {
-        version: string(value, "version"),
-        format: field(value, "format"),
-        source: field(value, "source"),
-        content_hash: string(value, "contentHash"),
-        granted_permissions: field(value, "grantedPermissions"),
+/// The record of an `install.json` entry, and whether a field of it was
+/// left out.
+fn entry_of(value: &Value) -> (InstallRecord, bool) {
+    let mut lossy = false;
+    let record = InstallRecord {
+        version: string(value, "version", &mut lossy),
+        format: field(value, "format", &mut lossy),
+        source: field(value, "source", &mut lossy),
+        content_hash: string(value, "contentHash", &mut lossy),
+        granted_permissions: field(value, "grantedPermissions", &mut lossy),
+    };
+    (record, lossy || !value.is_object())
+}
+
+/// The record of a `linked.json` entry, `None` without a directory, and
+/// whether something of it was left out.
+fn linked_of(value: &Value) -> (Option<LinkedRecord>, bool) {
+    let mut lossy = false;
+    let path = string(value, "path", &mut lossy).filter(|path| !path.is_empty());
+    let version = string(value, "version", &mut lossy);
+    let format = field(value, "format", &mut lossy);
+    let granted_permissions = field(value, "grantedPermissions", &mut lossy);
+    match path {
+        Some(path) => {
+            let record = LinkedRecord {
+                path: PathBuf::from(path),
+                version,
+                format,
+                granted_permissions,
+            };
+            (Some(record), lossy)
+        }
+        None => (None, true),
     }
 }
 
-fn linked_of(value: &Value) -> Option<LinkedRecord> {
-    Some(LinkedRecord {
-        path: PathBuf::from(string(value, "path").filter(|path| !path.is_empty())?),
-        version: string(value, "version"),
-        format: field(value, "format"),
-        granted_permissions: field(value, "grantedPermissions"),
-    })
+/// The text of `key`; a value there that is not text is left out, noted
+/// in `lossy`.
+fn string(value: &Value, key: &str, lossy: &mut bool) -> Option<String> {
+    match value.get(key)? {
+        Value::String(text) => Some(text.clone()),
+        Value::Null => None,
+        _ => {
+            *lossy = true;
+            None
+        }
+    }
 }
 
-fn string(value: &Value, key: &str) -> Option<String> {
-    value.get(key)?.as_str().map(str::to_string)
+/// `key` decoded; a value there that does not decode is left out, noted
+/// in `lossy`.
+fn field<T: serde::de::DeserializeOwned>(value: &Value, key: &str, lossy: &mut bool) -> Option<T> {
+    match value.get(key)? {
+        Value::Null => None,
+        present => serde_json::from_value(present.clone())
+            .map_err(|_| *lossy = true)
+            .ok(),
+    }
 }
 
-fn field<T: serde::de::DeserializeOwned>(value: &Value, key: &str) -> Option<T> {
-    serde_json::from_value(value.get(key)?.clone()).ok()
+/// Copies the file at `path` to `.recovery` beside it, before a write
+/// replaces what it could not read.
+fn keep_copy(path: &Path) -> Result<(), String> {
+    let parent = path
+        .parent()
+        .ok_or_else(|| format!("{} has no parent directory", path.display()))?;
+    let recovery = parent.join(RECOVERY_DIR);
+    let name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("records");
+    let target = recovery.join(format!(
+        "{name}.{}.{}.partial",
+        std::process::id(),
+        NEXT_COPY.fetch_add(1, Ordering::Relaxed)
+    ));
+    fs::create_dir_all(&recovery)
+        .and_then(|()| fs::copy(path, &target).map(drop))
+        .map_err(|error| {
+            format!(
+                "{} read in part and could not be copied to {}: {error}",
+                path.display(),
+                target.display()
+            )
+        })
 }
 
 #[derive(Serialize)]
