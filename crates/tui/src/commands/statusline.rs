@@ -11,6 +11,7 @@ use crate::appearance::items::{StatusLineItem, SurfaceItem};
 use crate::appearance::setup::status_line_setup;
 use crate::appearance::{known_ids, AppearanceEvent};
 use crate::history_cell;
+use crate::settings_center::{Attach, PageOverride};
 
 pub(super) static STATUSLINE: CommandSpec = CommandSpec {
     name: "statusline",
@@ -20,6 +21,13 @@ pub(super) static STATUSLINE: CommandSpec = CommandSpec {
     during_task: true,
     needs_session: false,
     dispatch,
+};
+
+/// The settings center's page of `/statusline`.
+pub(crate) static PAGE: PageOverride = PageOverride {
+    id: "statusline",
+    attach: Attach::Setting("tui.statusLine"),
+    command: &STATUSLINE,
 };
 
 fn dispatch(context: &mut CommandContext<'_>, args: &str) {

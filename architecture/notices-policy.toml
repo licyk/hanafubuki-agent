@@ -547,8 +547,8 @@ path = "crates/tui/src/commands/mcp/form/tests.rs"
 reason = "The MCP form's protocol and per-tool policy round trip."
 
 [[original]]
-path = "crates/tui/src/config_center/layers.rs"
-reason = "The configuration center's layers and warnings page, over the facade's layer sources."
+path = "crates/tui/src/app/tests/settings_center.rs"
+reason = "The settings center driven through the app over the standalone Agent."
 
 [[original]]
 path = "crates/tui/src/commands/providers/tests.rs"

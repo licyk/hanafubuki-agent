@@ -223,7 +223,7 @@ Agent 从 Provider 的拒绝中学到的信息（更小的窗口、模型不读�
 
 ## models.dev [#models-dev]
 
-[models.dev](https://models.dev) 是一个按提供商列出模型的公开目录。在 `config.toml` 中设置 `modelMetadata.modelsDev = true`（或在 `/config general` 中打开 **Use models.dev**）后，Agent 会下载它（`https://models.dev/api.json`），并从中取得其他更可靠的来源都没说的模型信息：窗口（`limit.context`）、最大输出（`limit.output`）、它会推理（`reasoning`）以及它读图（`modalities.input` 含 `"image"`）。它默认关闭：**打开后，本机会向第三方 models.dev 发送请求**，大约每天一次，经过 `network.proxy`（[网络与日志](/docs/network-logging#proxy-scope)），User-Agent 写明 Agent 及其版本，不带任何凭据或关于你的信息。
+[models.dev](https://models.dev) 是一个按提供商列出模型的公开目录。在 `config.toml` 中设置 `modelMetadata.modelsDev = true`（或在 `/config modelMetadata` 中打开 **Use models.dev**）后，Agent 会下载它（`https://models.dev/api.json`），并从中取得其他更可靠的来源都没说的模型信息：窗口（`limit.context`）、最大输出（`limit.output`）、它会推理（`reasoning`）以及它读图（`modalities.input` 含 `"image"`）。它默认关闭：**打开后，本机会向第三方 models.dev 发送请求**，大约每天一次，经过 `network.proxy`（[网络与日志](/docs/network-logging#proxy-scope)），User-Agent 写明 Agent 及其版本，不带任何凭据或关于你的信息。
 
 - **排在其他来源之后。** 模型自己的设置、策略、从拒绝中学到的信息和 Provider 目录报告的信息都优先；models.dev 只补上它们未知的部分，排在内置表之前。它只做加法：它从不说模型不读图或不推理；它说"会推理"时，你设置的推理强度保持不变（它不列出级别）。它的窗口和最大输出与目录报告的一样决定会话何时压缩，但从不改变请求：只有在 models.dev 之外的来源知道最大输出时，Anthropic 的思考预算才在其之内确定（[推理强度与思考过程](#reasoning)）。
 - **用哪一条。** 比较模型 id 时用小写，去掉 `vendor/` 前缀、末尾的 `-latest` 和末尾的 `-YYYYMMDD` 日期（`anthropic/claude-3-5-haiku-20241022` 即 `claude-3-5-haiku`）。优先取 models.dev 中以该 Provider 自己名义列出的条目：键是 Provider 的 id 或其中一个词（`openai`、`my-openai`），或是其端点主机名中的一段（`api.deepseek.com` 即 `deepseek`），或其 API 就在该主机上。没有时，合并所有提供商对该模型的条目，每项限制（窗口、最大输出）取较小者，以及任何一个"是"，因为一个提供商可能发布的是另一个的限制。

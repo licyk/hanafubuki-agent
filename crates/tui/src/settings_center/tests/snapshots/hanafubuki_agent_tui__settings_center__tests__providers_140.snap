@@ -1,0 +1,18 @@
+---
+source: crates/tui/src/settings_center/tests/mod.rs
+expression: "screen(&mut center, 140, 14)"
+---
+
+  Settings › Providers
+  Changes save automatically
+
+  › Main              default ›             responses · https://main.example.test/v1                                                      
+    Spare             ›                     responses · https://spare.example.test/v1
+    + Add a Provider
+
+
+
+
+
+
+  enter open · d delete · a add · esc back

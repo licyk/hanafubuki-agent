@@ -373,12 +373,146 @@ independent.
         read-only; `issues` on a collection are shown, not fatal. The MCP
         OAuth login and the credential values stay direct calls
         (`mcp_oauth_login`, `mcp_set_credential`).
-- [ ] S4: `settings_center/` replaces `config_center/`: Codex's tabs,
+- [x] S4: `settings_center/` replaces `config_center/`: Codex's tabs,
       label · value · description rows, search across tabs, saving at once,
       inline editors, reset, per-row hints, narrow fallback, mouse; a page
       stack with asynchronous writes; the `PageRegistry` hosting the theme,
       status line, title, keymap, presets, plugin browser and hook-trust
       pages.
+      Done (2026-11-12):
+      - `crates/tui/src/settings_center/`: `mod.rs` (the page stack, the
+        requests and replies, the notice), `main_page.rs` (the tabs:
+        `SettingsGroup`'s order, sections by `order`, a heading for a
+        section of more than one setting, `visible_if` evaluated, then the
+        group's collections and registry rows; `/` search over every tab's
+        settings, collections, records and pages, a result described
+        `Group · Section`), `collection.rs` (records with state and
+        summary, issues above them, `a` add, `d` delete, collection
+        actions), `form.rs` (a record's fields saved one at a time with
+        the collection's `revision`; a refused field stays `unsaved` and
+        goes with the next change; an add, or a commit group, is a draft
+        saved by its Add or Save; record actions, `confirm` ones asked
+        first; read-only without `save`), `editor.rs` (the row's one-line
+        editor checked with `SettingSpec::check` before it is sent and
+        kept with the reason when refused; Codex's child picker for a
+        choice, `(current)`, disabled values with their reasons, and for
+        confirmations; a list of texts edited item by item), `render.rs`
+        (the title, `Changes save automatically` or the last outcome:
+        `Saved`, `Saved · the project layer overrides it`, `Saved ·
+        applies at next launch`, `Could not save: …`; tabs with issue
+        counts, scrolled to the selected one; label · value · description
+        columns, `[x] On`, `••••`, `(unset)`, a dim `· profile NAME` /
+        `· project` / `· -c`; `›` on the selected row; the selected row's
+        hint; under 45 columns of description the selected row's
+        description below the list), `values.rs`, `registry.rs`.
+        Booleans save at once, choices on selection, texts on Enter; `r`
+        resets (`SettingWriteOp::Reset`); a singleton collection without
+        `add` (the model policy) opens as its form. Mouse: wheel, a click
+        on a tab, a click selects a row and a second click activates it.
+      - The `PageRegistry` (`registry.rs`): a page is a command's views,
+        declared beside the command (`commands::theme::PAGE`, …, listed in
+        `commands::SETTINGS_PAGES`), attached to a setting (`tui.theme`,
+        `tui.statusLine`, `tui.terminalTitle`: the row opens the page in
+        place of its editor) or a row of its own (Keymap and Presets in
+        Interface, Installed plugins in Plugins, Hook review in Tools).
+        The command runs as typed; its views stay in the bottom pane's
+        stack (so `send_step`'s next views and `CommandReply`s reach them
+        as before) and the center draws the command's top view in its body
+        and hands it the keys (Ctrl-C as Esc) and pastes. After each key a
+        `WorkspaceEvent::SettingsPageCheck` is queued behind any step the
+        key sent; when the command has no view left the page pops to the
+        row that opened it and the catalog is read again.
+      - Asynchronous: `agent_bridge/catalog.rs` runs each read, write
+        (`write_setting_values`) or action (`run_settings_action`) as a
+        task of the Agent's runtime that reads the catalog again after it
+        and answers with both (and `[tui]` re-read after a `tui.*` write)
+        as `WorkspaceEvent::Settings`, which reaches the center whatever
+        conversation has the focus. One change at a time ("Wait for the
+        last change to be saved."); a read answered after a later call is
+        ignored. `App::save` (the pages' `[tui]` writes, `/raw`, `/tui`)
+        is asynchronous too (`AgentBridge::save_tui_preferences` →
+        `AppCommand::PreferencesSaved`); `write_tui_preferences`, the
+        bridge's `config_state` and `write_{agent,standalone}_settings`,
+        `write_plugin_options` and `ConfigState` (all `block_on`) are gone.
+        After a `tui.*` write the app takes `[tui]` whole
+        (`adopt_tui_preferences`: keymap, raw output, theme, status line,
+        title, fullscreen preference).
+      - App: `/config [TARGET]` opens the center at a tab, a section id, a
+        collection id or a page id (`/config quick` unchanged); the center
+        takes the alternate screen with the mouse in both presentations;
+        `alt_screen_open` counts it (Scrollback's tail no longer draws
+        under it); keys, the pointer and pastes go to it first.
+      - Facade (additive): `SettingsAction.names_record` (`namesRecord`),
+        the label an `add` asks the new record's id by (MCP `Server id`,
+        profiles `Profile name`, projects `Project path`); `None` where the
+        owner names it (Providers, marketplaces).
+      - Removed: `config_center/` (and its two module-size exceptions),
+        `app/workspace/config.rs`. Moved: the plugin options form
+        (`options_form`, `changed_options` and their test) into
+        `commands/plugins/options.rs`, which `/plugins`' `o` uses.
+      - Deviations from the plan: pages are an enum on the stack, not
+        `trait SettingsPage` (the overrides are all one kind, a command's
+        views). Replies come through a workspace event, not
+        `CommandReply` (which reaches bottom-pane views by command name).
+        Page overrides attach in the TUI's registry (the catalog has no
+        `page` field). The layers page and the Session-role domain are
+        gone: each row names the layer that sets it, profiles and projects
+        are collections, `/warnings` keeps the layers' warnings and the
+        role is `/role`'s. Advanced settings are shown with the rest (no
+        advanced toggle).
+      - Tests: `settings_center/tests` (snapshots `memory_140`,
+        `memory_50`, `interface_140`, `providers_140`,
+        `provider_record_50`, `search_50`; every spec of `config_sections()`
+        has a row, a conditional one while its condition holds; an
+        untouched center writes nothing; a boolean written at once; an
+        edit checked first and kept when refused; reset; a record field at
+        the revision, a refused one sent with the next; a confirmed delete;
+        an add naming its record; a search opening another tab's choice; a
+        commit group saved together; clicks); `app/tests/settings_center.rs`
+        through `App` (a toggle saved and taken in Scrollback and
+        Fullscreen; a search across tabs and an edit refused then saved;
+        Esc from the theme and keymap pages back to their rows; a write a
+        profile overrides says so; a click on a tab and on a row). The old
+        `/config <section>` tests are gone; `/config modelPolicy` replaces
+        `/config providers` in `the_configuration_center_opens_the_model_policy_directly`;
+        the presets test waits for the asynchronous save's message.
+      - Docs (both languages, same ids): `terminal-interface#config`
+        rewritten for the center, the commands table's `/config` and the
+        role's `/config role` line; `architecture` (the settings center,
+        the catalog's `namesRecord`); `config-reference` and
+        `providers-models` (`/config modelMetadata`); `plugin-rules`.
+      - No golden changed (nothing model-visible). New snapshots only.
+      - Hanafubuki at its next pin: additive `SettingsAction.names_record`
+        (serialized `namesRecord`, `null` when the owner names the record);
+        nothing else (the TUI is not Hanafubuki's).
+      - Module size: the two `config_center/forms/mod.rs` exceptions
+        removed; none added or raised.
+      - Validation: `cargo fmt --all --check`; `RUSTFLAGS="-D warnings"
+        cargo check --workspace --all-targets --all-features`; `cargo clippy
+        --workspace --all-targets --all-features -- -D warnings`; `cargo
+        xtask check`; `cargo test --workspace --all-features`; `bun install
+        --frozen-lockfile`, `bun run format:check:site`, `bun run
+        site:check`, `bun run site:test`, `VITE_BASE_PATH=/hanafubuki-agent/
+        bun run site:build` (all 35 pages prerendered). CI on Linux, Windows
+        and macOS: https://github.com/licyk/hanafubuki-agent/actions/runs/43237517798
+        (Windows passed on a rerun of its job: the first attempt failed only
+        `tests::sessions::children::a_driven_child_runs_a_turn_answers_and_is_interrupted`
+        with `CancellationNotConfirmed`, a timing test this change does not
+        touch; the run is on the landed commit but for this line; Site:
+        .../runs/43237517782).
+      - For S5: `/config TARGET` takes the ids the commands map to
+        (`/mcp` = `/config mcp`, `/providers` = `/config providers`,
+        `/plugins` = `/config packages`, `/hooks` = `/config hooks` or
+        `hook-review`, `/theme` = `/config theme`, `/statusline`,
+        `/title`, `/keymap`, `/presets` likewise, `/memories` =
+        `/config memory`, `/tui` = `/config tui`). The page overrides are
+        still the commands' bottom-pane views, hosted (`/theme`, `/keymap`,
+        … run alone still open them over the composer); `/mcp`,
+        `/providers`, `/memories`, `/tui` and `/config quick` still have
+        their own views and writers (`SettingsCall::SetMemory`,
+        `SetCompactionStrategy`, `app/preferences.rs`' `shadowed`).
+        `[tui]`'s section is the config crate's (`tui`), already in the
+        catalog; keymap and presets have no spec (pages only).
 - [ ] S5: the separate editor views removed; `/mcp`, `/providers`,
       `/plugins`, `/hooks`, `/theme`, `/statusline`, `/title`, `/keymap`,
       `/presets`, `/tui`, `/memories` open the center at their page;

@@ -1,10 +1,12 @@
 // Modified from OpenAI Codex 57a808a392 (Apache-2.0).
 
-//! `/config` (Codex's `config_panel/` and `app/config_panel.rs`): the
-//! `[tui]` preferences and the compaction strategy in one panel, toggles
-//! and choices applied and saved at once, and entries that open the other
-//! editors (`/providers`, `/mcp`, `/memories`, `/theme`, `/statusline`,
-//! `/title`, `/keymap`, `/presets`, `/tui`).
+//! `/config [target]` opens the settings center (`settings_center`) at a
+//! tab, a section, a collection or a page. `/config quick` keeps the
+//! former panel (Codex's `config_panel/` and `app/config_panel.rs`): the
+//! `[tui]` preferences and the compaction strategy, toggles and choices
+//! applied and saved at once, and entries that open the other editors
+//! (`/providers`, `/mcp`, `/memories`, `/theme`, `/statusline`, `/title`,
+//! `/keymap`, `/presets`, `/tui`).
 
 use hanafubuki_agent::{AgentAlternateScreen, AgentCompactionStrategy, AgentTuiPreferencesPatch};
 use ratatui::crossterm::event::{KeyCode, KeyEvent};
@@ -15,7 +17,6 @@ use crate::app::WorkspaceEvent;
 use crate::app_event::{AgentCommand, AppCommand, AppEvent, AppEventSender, Op};
 use crate::appearance::AppearanceEvent;
 use crate::bottom_pane::{GenericDisplayRow, MenuKey, MenuModel, MenuView};
-use crate::config_center::ConfigSection;
 use crate::history_cell;
 
 pub(crate) static CONFIG: CommandSpec = CommandSpec {
@@ -60,21 +61,12 @@ const SCREENS: [AgentAlternateScreen; 3] = [
 ];
 
 fn dispatch(context: &mut CommandContext<'_>, args: &str) {
-    let section = args.trim().to_lowercase().replace('_', "-");
-    let direct = !section.is_empty();
-    if section == "quick" {
+    let target = args.trim();
+    if target.eq_ignore_ascii_case("quick") {
         return context.agent_command(AgentCommand::Settings(SettingsCall::Config));
     }
-    let Some(section) = ConfigSection::parse(&section) else {
-        return context.add_to_history(history_cell::new_error_event(format!(
-            "/config: unknown section `{args}`; use general, sandbox, memory, web, compaction, \
-             network, interface, providers, role, mcp, plugins, hooks or layers"
-        )));
-    };
-    context.send(AppEvent::Workspace(WorkspaceEvent::OpenConfig {
-        section,
-        direct,
-    }));
+    let target = (!target.is_empty()).then(|| target.to_string());
+    context.send(AppEvent::Workspace(WorkspaceEvent::OpenSettings(target)));
 }
 
 /// The compaction strategy read or saved: into the open panel, or a new

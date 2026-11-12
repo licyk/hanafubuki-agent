@@ -1,12 +1,10 @@
-//! `/keymap`, `/presets`, `/config`, `/warnings` (the roles' issues among
-//! them) and `/memories` end to end
+//! `/keymap`, `/presets`, `/config quick`, `/warnings` (the roles' issues
+//! among them) and `/memories` end to end
 //! over the standalone Agent: driven by keys, with what they saved read
 //! back from `config.toml` and what they changed seen on the screen.
 
 use hanafubuki_agent::test_support::assistant_events;
-use hanafubuki_agent::{
-    AgentModelDiscovery, AgentTuiPreferences, AgentTuiPreferencesPatch, AgentTuiPreset,
-};
+use hanafubuki_agent::{AgentTuiPreferences, AgentTuiPreferencesPatch, AgentTuiPreset};
 use ratatui::crossterm::event::{KeyCode, KeyModifiers};
 
 use super::Harness;
@@ -29,6 +27,19 @@ impl Harness {
     fn open(&mut self, command: &str, title: &str) -> String {
         self.type_and_submit(command);
         self.pump_until_screen_shows(title)
+    }
+
+    /// Writes `patch` as a setup step, outside the interface.
+    fn write_tui_preferences(
+        &self,
+        patch: AgentTuiPreferencesPatch,
+    ) -> Result<AgentTuiPreferences, String> {
+        let agent = self.runtime.slot().agent().unwrap();
+        let call = agent.clone();
+        agent
+            .runtime()
+            .block_on(async move { call.write_tui_preferences(patch).await })
+            .unwrap()
     }
 
     fn agent_memory(&self) -> hanafubuki_agent::AgentMemorySettings {
@@ -154,13 +165,17 @@ fn presets_are_written_run_edited_and_deleted() {
     harness.ctrl('u');
     harness.key(KeyCode::Tab);
     harness.key(KeyCode::Enter);
-    harness.pump_until("the label removed", |harness| {
-        harness.app.bridge.tui_preferences().presets["1"]
-            == AgentTuiPreset {
-                input: "/status".to_string(),
-                label: None,
-            }
+    // Saved off the loop: the second save said, the preset is taken.
+    harness.pump_until("the edit saved", |harness| {
+        harness.transcript().matches("Saved preset 1.").count() == 2
     });
+    assert_eq!(
+        harness.app.bridge.tui_preferences().presets["1"],
+        AgentTuiPreset {
+            input: "/status".to_string(),
+            label: None,
+        }
+    );
 
     // `d` asks, `y` deletes.
     harness.open("/presets", "1  /status");
@@ -175,8 +190,6 @@ fn presets_are_written_run_edited_and_deleted() {
 fn a_message_preset_is_sent_and_one_starts_from_the_current_settings() {
     let mut harness = Harness::start(vec![assistant_events("Preset answered.")]);
     harness
-        .app
-        .bridge
         .write_tui_preferences(AgentTuiPreferencesPatch {
             presets: [(
                 "3".to_string(),
@@ -220,154 +233,6 @@ fn a_message_preset_is_sent_and_one_starts_from_the_current_settings() {
         harness.app.bridge.tui_preferences().presets["1"].input,
         "/title activity session-title project-name"
     );
-}
-
-#[test]
-fn the_config_center_lists_searches_and_opens_the_quick_editor() {
-    let mut harness = Harness::start(Vec::new());
-    let screen = harness.open("/config", "Agent settings");
-    assert!(screen.contains("General & permissions"), "{screen}");
-    assert!(screen.contains("Compaction"), "{screen}");
-    assert!(screen.contains("1 layers · 0 warnings"), "{screen}");
-
-    harness.key(KeyCode::Char('/'));
-    harness.type_text("compact");
-    harness.pump_until("the search to filter the domains", |harness| {
-        let screen = harness.screen();
-        screen.contains("Compaction") && !screen.contains("General & permissions")
-    });
-    let screen = harness.screen();
-    assert!(screen.contains("Compaction"), "{screen}");
-    assert!(!screen.contains("General & permissions"), "{screen}");
-
-    harness.key(KeyCode::Enter);
-    harness.key(KeyCode::Enter);
-    let screen = harness.pump_until_screen_shows("Compaction");
-    assert!(screen.contains("Strategy"), "{screen}");
-    harness.key(KeyCode::Right);
-    for _ in 0..4 {
-        harness.key(KeyCode::Tab);
-    }
-    harness.key(KeyCode::Enter);
-    harness.pump_until_screen_shows("Saved.");
-    assert!(harness.config_file().contains("strategy = \"background\""));
-}
-
-#[test]
-fn the_general_form_saves_the_persisted_permission_mode_and_model_metadata() {
-    let mut harness = Harness::start(Vec::new());
-    harness.open("/config general", "General & permissions");
-    harness.pump_until_screen_shows("Use models.dev");
-    let discovery = harness.agent_settings().model_metadata.discovery;
-    assert!(!harness.agent_settings().model_metadata.models_dev);
-    harness.key(KeyCode::Right);
-    harness.key(KeyCode::Tab);
-    harness.key(KeyCode::Right);
-    harness.key(KeyCode::Tab);
-    harness.key(KeyCode::Char(' '));
-    harness.key(KeyCode::Tab);
-    harness.key(KeyCode::Enter);
-    harness.pump_until_screen_shows("Saved.");
-    let file = harness.config_file();
-    assert!(file.contains("permissionMode = \"auto_review\""), "{file}");
-    let toggled = match discovery {
-        AgentModelDiscovery::Auto => AgentModelDiscovery::Off,
-        AgentModelDiscovery::Off => AgentModelDiscovery::Auto,
-    };
-    assert_eq!(harness.agent_settings().model_metadata.discovery, toggled);
-    let written = match toggled {
-        AgentModelDiscovery::Auto => "discovery = \"auto\"",
-        AgentModelDiscovery::Off => "discovery = \"off\"",
-    };
-    assert!(file.contains(written), "{file}");
-    assert!(harness.agent_settings().model_metadata.models_dev);
-    assert!(file.contains("modelsDev = true"), "{file}");
-}
-
-#[test]
-fn the_memory_form_saves_whether_memory_is_enabled() {
-    let mut harness = Harness::start(Vec::new());
-    harness.open("/config memory", "Memory");
-    harness.key(KeyCode::Char(' '));
-    for _ in 0..5 {
-        harness.key(KeyCode::Tab);
-    }
-    harness.key(KeyCode::Enter);
-    harness.pump_until_screen_shows("Saved.");
-    assert!(harness.config_file().contains("[memory]"));
-    assert!(harness.config_file().contains("enabled = true"));
-    assert!(harness.agent_memory().enabled);
-}
-
-#[test]
-fn the_web_form_saves_the_search_provider_and_endpoint_together() {
-    let mut harness = Harness::start(Vec::new());
-    harness.open("/config web", "Web tools");
-    harness.key(KeyCode::Right);
-    harness.key(KeyCode::Right);
-    harness.key(KeyCode::Tab);
-    harness.type_text("https://search.example.test/");
-    // Past the two toggles to Save.
-    harness.key(KeyCode::Tab);
-    harness.key(KeyCode::Tab);
-    harness.key(KeyCode::Tab);
-    harness.key(KeyCode::Enter);
-    harness.pump_until_screen_shows("Saved.");
-    let file = harness.config_file();
-    assert!(file.contains("webSearchProvider = \"searxng\""), "{file}");
-    assert!(
-        file.contains("searxngBaseUrl = \"https://search.example.test\""),
-        "{file}"
-    );
-}
-
-#[test]
-fn the_network_form_saves_standalone_keys_and_keeps_the_proxy_secret() {
-    let mut harness = Harness::start(Vec::new());
-    let screen = harness.open("/config network", "Network & logging");
-    assert!(!screen.contains("user:password"), "{screen}");
-    harness.key(KeyCode::Tab);
-    harness.key(KeyCode::Right);
-    harness.key(KeyCode::Tab);
-    harness.key(KeyCode::Enter);
-    harness.pump_until_screen_shows("Saved.");
-    let file = harness.config_file();
-    assert!(file.contains("logLevel = \"debug\""), "{file}");
-    assert!(file.contains("proxy = \"system\""), "{file}");
-}
-
-#[test]
-fn the_interface_form_saves_and_applies_its_scalar_preferences() {
-    let mut harness = Harness::start(Vec::new());
-    harness.open("/config interface", "Interface");
-    harness.key(KeyCode::Char(' '));
-    for _ in 0..11 {
-        harness.key(KeyCode::Tab);
-    }
-    harness.key(KeyCode::Enter);
-    let screen = harness.pump_until_screen_shows("Saved.");
-    assert!(!screen.contains("higher layer"), "{screen}");
-    assert!(harness
-        .config_file()
-        .contains("fullscreenTranscript = false"));
-}
-
-#[test]
-fn the_configuration_center_shows_the_layers_and_opens_the_linked_editors() {
-    let mut harness = Harness::start(Vec::new());
-    let screen = harness.open("/config layers", "Layers & files");
-    assert!(screen.contains("config.toml"), "{screen}");
-    assert!(screen.contains("Warnings ("), "{screen}");
-    harness.key(KeyCode::Esc);
-    harness.pump_until_screen_shows("Agent settings");
-    harness.key(KeyCode::Esc);
-
-    harness.open("/config interface", "Interface");
-    for _ in 0..5 {
-        harness.key(KeyCode::Tab);
-    }
-    harness.key(KeyCode::Enter);
-    harness.pump_until_screen_shows("Select Syntax Theme");
 }
 
 #[test]
@@ -435,8 +300,6 @@ fn warnings_are_merged_counted_deduplicated_and_dismissed() {
     file.push_str("\nunknownSetting = 1\n");
     std::fs::write(harness.home.path().join("config.toml"), file).unwrap();
     harness
-        .app
-        .bridge
         .write_tui_preferences(AgentTuiPreferencesPatch::default())
         .unwrap();
     let config = harness.app.bridge.config_warnings();
@@ -570,8 +433,6 @@ fn a_rebound_key_takes_effect_in_owned_mode_and_the_old_one_types_nothing() {
         .chat_widget
         .add_info_message("before".to_string());
     let preferences = harness
-        .app
-        .bridge
         .write_tui_preferences(AgentTuiPreferencesPatch {
             keymap: [(
                 "global".to_string(),

@@ -82,6 +82,17 @@ impl Harness {
         mode: TranscriptMode,
         configure: impl FnOnce(&AgentConfig),
     ) -> Self {
+        Self::start_layered(responses, with_provider, mode, configure, None)
+    }
+
+    /// [`Self::start_configured`], under the profile `profile` (`-p`).
+    fn start_layered(
+        responses: Vec<(Vec<u8>, Duration)>,
+        with_provider: bool,
+        mode: TranscriptMode,
+        configure: impl FnOnce(&AgentConfig),
+        profile: Option<&str>,
+    ) -> Self {
         let model_runtime = tokio::runtime::Runtime::new().unwrap();
         let server = model_runtime.block_on(FakeServer::start(responses));
         let home = tempfile::tempdir().unwrap();
@@ -109,7 +120,7 @@ impl Harness {
                 bundled_skills: None,
                 cwd,
                 add_dirs: Vec::new(),
-                profile: None,
+                profile: profile.map(str::to_string),
                 overrides: ConfigOverrides::default(),
                 start: AgentStartOptions::default(),
             },
@@ -733,6 +744,7 @@ mod queue;
 mod scrollback;
 mod session_commands;
 mod settings;
+mod settings_center;
 mod side;
 mod subagents;
 mod thinking;

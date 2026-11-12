@@ -21,6 +21,8 @@ use super::{send_step, CommandContext, CommandSpec};
 use crate::app_event::{AppCommand, AppEvent, AppEventSender};
 use crate::bottom_pane::{GenericDisplayRow, MenuKey, MenuModel, MenuView};
 use crate::history_cell;
+use crate::settings_center::{Attach, PageOverride};
+use hanafubuki_agent::SettingsGroup;
 
 pub(crate) static PRESETS: CommandSpec = CommandSpec {
     name: "presets",
@@ -30,6 +32,17 @@ pub(crate) static PRESETS: CommandSpec = CommandSpec {
     during_task: true,
     needs_session: false,
     dispatch,
+};
+
+/// The settings center's page of `/presets`.
+pub(crate) static PAGE: PageOverride = PageOverride {
+    id: "presets",
+    attach: Attach::Row {
+        group: SettingsGroup::Interface,
+        label: "Presets",
+        summary: "Inputs kept in slots 0 to 9",
+    },
+    command: &PRESETS,
 };
 
 /// The slots in the menu's order: 1 to 9, then 0, as the keyboard has them.

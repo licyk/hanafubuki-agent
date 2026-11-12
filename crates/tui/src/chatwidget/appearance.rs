@@ -6,6 +6,8 @@
 
 use std::time::Instant;
 
+use hanafubuki_agent::AgentTuiPreferences;
+
 use super::ChatWidget;
 use crate::agent_bridge::SessionStatus;
 use crate::appearance::AppearanceEvent;
@@ -14,6 +16,12 @@ impl ChatWidget {
     /// A change of the theme, the status line or the title.
     pub(crate) fn apply_appearance(&mut self, event: AppearanceEvent) {
         self.appearance.apply(event);
+        self.sync_status_line();
+    }
+
+    /// The theme, the status line and the title `preferences` hold.
+    pub(crate) fn adopt_appearance(&mut self, preferences: &AgentTuiPreferences) {
+        self.appearance.adopt(preferences);
         self.sync_status_line();
     }
 

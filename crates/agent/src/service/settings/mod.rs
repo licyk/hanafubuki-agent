@@ -92,6 +92,10 @@ pub struct SettingsAction {
     pub scope: SettingsActionScope,
     /// Asks before it runs.
     pub confirm: bool,
+    /// For an `add` whose new record the user names (an MCP server, a
+    /// profile, a project), what the name is asked by; `None` when the
+    /// owner names it.
+    pub names_record: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
@@ -315,6 +319,7 @@ impl SettingsAction {
             label: label.to_string(),
             scope: SettingsActionScope::Record,
             confirm: false,
+            names_record: None,
         }
     }
 
@@ -328,6 +333,14 @@ impl SettingsAction {
     fn confirmed(self) -> Self {
         Self {
             confirm: true,
+            ..self
+        }
+    }
+
+    /// An `add` whose new record is named `label` by the user.
+    fn named(self, label: &str) -> Self {
+        Self {
+            names_record: Some(label.to_string()),
             ..self
         }
     }

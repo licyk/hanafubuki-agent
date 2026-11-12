@@ -38,7 +38,7 @@ fn fields() -> Vec<SettingSpec> {
 pub(super) async fn collection(service: &AgentApplicationService) -> SettingsCollection {
     let collection = SettingsCollection::new(ID, "Projects", SettingsGroup::Advanced, fields())
         .with_actions(vec![
-            SettingsAction::collection(ADD, "Trust a project"),
+            SettingsAction::collection(ADD, "Trust a project").named("Project path"),
             SettingsAction::record(TRUST, "Trust").confirmed(),
             SettingsAction::record(UNTRUST, "Stop trusting"),
         ]);

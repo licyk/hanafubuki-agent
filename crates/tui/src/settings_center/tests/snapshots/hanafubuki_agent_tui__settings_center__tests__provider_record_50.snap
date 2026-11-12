@@ -1,0 +1,28 @@
+---
+source: crates/tui/src/settings_center/tests/mod.rs
+expression: "screen(&mut center, 50, 24)"
+---
+
+  Settings › Providers › Main
+  Changes save automatically
+
+  responses · https://main.example.test/v1
+
+
+  › Name          Main                          
+    Enabled       [x] On
+    Base URL      https://main.example.test/v1
+    API token     ••••
+    Delete
+    Make default
+
+
+
+
+
+
+
+
+
+
+  enter edit · esc back

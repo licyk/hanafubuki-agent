@@ -13,6 +13,7 @@ use crate::agent_bridge::{
     setup_needed, ReviewEnd, ReviewReply, SettingsReply, TurnUpdate, Warning, WarningSource,
 };
 use crate::app_event::{AppEvent, Op};
+use crate::bottom_pane::BottomPaneView;
 use crate::commands::{self, CommandContext, CommandSpec, CommandStep};
 use crate::history_cell;
 
@@ -62,6 +63,16 @@ impl ChatWidget {
     /// A command's next view, which one of its views asked for.
     pub(crate) fn run_command_step(&mut self, step: CommandStep) {
         self.run_command(step.command, step.run);
+    }
+
+    /// `command`'s view, when it is the one open.
+    pub(crate) fn command_view(&self, command: &str) -> Option<&dyn BottomPaneView> {
+        self.bottom_pane.command_view(command)
+    }
+
+    /// Whether a view of `command` is open.
+    pub(crate) fn has_command_view(&self, command: &str) -> bool {
+        self.bottom_pane.has_command_view(command)
     }
 
     /// Opens the Provider setup, unless it is open (or `/providers` is off).

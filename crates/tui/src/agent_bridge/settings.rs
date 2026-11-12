@@ -1,6 +1,6 @@
 // Modified from OpenAI Codex 57a808a392 (Apache-2.0).
 
-//! `/warnings`, `/memories` and `/config` onto the facade's calls: the
+//! `/warnings`, `/memories` and `/config quick` onto the facade's calls: the
 //! warnings the Agent keeps (the configuration's recoveries and layers, the
 //! roles, the plugins, MCP, the hooks, the panics), memory's settings, status, the
 //! session's contribution and the reset, and the compaction strategy. What a
@@ -13,8 +13,7 @@ use hanafubuki_agent::panic::recorded_panics;
 use hanafubuki_agent::{
     AgentCompactionStrategy, AgentConfigProblem, AgentConfigRecovery, AgentHandle,
     AgentMemoryContributionMode, AgentMemorySettings, AgentMemoryStatus, AgentPluginState,
-    AgentSessionId, AgentSettingsPatch, AgentSettingsView, AgentStandaloneSettings,
-    AgentStandaloneSettingsPatch, ConfigLayerSource, GuestState,
+    AgentSessionId, AgentSettingsPatch, GuestState,
 };
 
 use super::{AgentBridge, AgentReply, TurnUpdate};
@@ -70,31 +69,6 @@ impl Warning {
     /// What dismissing it is remembered by.
     pub(crate) fn key(&self) -> String {
         format!("{}\n{}", self.source.name(), self.text)
-    }
-}
-
-/// Everything `/config`'s center shows: the Agent's settings and defaults,
-/// the standalone settings, the built-in plugins that have options, and the
-/// layers and warnings around them. The proxy is left out of `Debug`, since
-/// it may hold credentials.
-pub(crate) struct ConfigState {
-    pub(crate) agent: AgentSettingsView,
-    pub(crate) standalone: AgentStandaloneSettings,
-    pub(crate) plugins: Vec<hanafubuki_agent::AgentPluginStatus>,
-    /// The session's role (`None` for `default`, or with no session) and
-    /// how many roles are usable, which `/role` offers.
-    pub(crate) role: Option<String>,
-    pub(crate) roles: usize,
-    pub(crate) layers: Vec<ConfigLayerSource>,
-    pub(crate) warnings: Vec<String>,
-}
-
-impl std::fmt::Debug for ConfigState {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter
-            .debug_struct("ConfigState")
-            .field("agent", &self.agent)
-            .finish_non_exhaustive()
     }
 }
 
@@ -176,92 +150,6 @@ impl AgentBridge {
     /// interface shows at start.
     pub(crate) fn config_warnings(&self) -> Vec<Warning> {
         config_warnings(&self.agent)
-    }
-
-    /// The configuration center's whole first page, read from the running
-    /// Agent's own configuration.
-    pub(crate) fn config_state(&self) -> Result<ConfigState, String> {
-        let agent = self.config_state_agent();
-        let call = self.agent.clone();
-        let standalone = self
-            .agent
-            .runtime()
-            .block_on(async move { call.standalone_settings_view().await })
-            .map_err(|failure| failure.to_string())??;
-        Ok(ConfigState {
-            agent: agent?,
-            standalone: standalone.settings,
-            plugins: self.optioned_plugins(),
-            role: self.current().ok().and_then(|session| session.role),
-            roles: self.agent.roles().roles().count(),
-            layers: standalone.layers,
-            warnings: standalone.warnings,
-        })
-    }
-
-    /// The built-in plugins that have options, with them.
-    fn optioned_plugins(&self) -> Vec<hanafubuki_agent::AgentPluginStatus> {
-        let mut plugins = self.agent.plugin_status();
-        plugins.retain(|plugin| plugin.options.is_some());
-        plugins
-    }
-
-    /// Saves the options a plugin's form changed, applies them to the
-    /// plugins, and returns the center's refreshed state.
-    pub(crate) fn write_plugin_options(
-        &self,
-        row: String,
-        options: serde_json::Map<String, serde_json::Value>,
-    ) -> Result<ConfigState, String> {
-        let call = self.agent.clone();
-        self.agent
-            .runtime()
-            .block_on(async move { call.set_plugin_options(row, options).await })
-            .map_err(|failure| failure.to_string())??;
-        self.config_state()
-    }
-
-    fn config_state_agent(&self) -> Result<AgentSettingsView, String> {
-        let call = self.agent.clone();
-        self.agent
-            .runtime()
-            .block_on(async move { call.settings_view().await })
-            .map_err(|failure| failure.to_string())?
-    }
-
-    /// Saves an Agent settings patch and returns the center's refreshed
-    /// state.
-    pub(crate) fn write_agent_settings(
-        &self,
-        patch: AgentSettingsPatch,
-    ) -> Result<ConfigState, String> {
-        let call = self.agent.clone();
-        self.agent
-            .runtime()
-            .block_on(async move { call.write_settings(patch).await })
-            .map_err(|failure| failure.to_string())??;
-        self.config_state()
-    }
-
-    /// Saves standalone network/logging keys, brings the Agent's network
-    /// consumers up to date, and returns the center's refreshed state.
-    pub(crate) fn write_standalone_settings(
-        &self,
-        patch: AgentStandaloneSettingsPatch,
-    ) -> Result<ConfigState, String> {
-        let call = self.agent.clone();
-        let written = self
-            .agent
-            .runtime()
-            .block_on(async move { call.write_standalone_settings(patch).await })
-            .map_err(|failure| failure.to_string())??;
-        let state = self.config_state()?;
-        Ok(ConfigState {
-            standalone: written.settings,
-            layers: written.layers,
-            warnings: written.warnings,
-            ..state
-        })
     }
 }
 

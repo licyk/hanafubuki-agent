@@ -66,6 +66,7 @@ use crate::app_event::{AgentCommand, AppEvent, AppEventSender, Op};
 use crate::appearance::Appearance;
 use crate::bottom_pane::{BottomPane, BottomPaneView, SelectionViewParams};
 use crate::history_cell::{self, HistoryCell};
+use crate::settings_center::PageOverride;
 pub(crate) use config::CONFIG;
 pub(crate) use goal::GOAL;
 pub(crate) use hooks::HOOKS;
@@ -200,6 +201,18 @@ pub(crate) fn has_prefix(name: &str, disabled: &[&str]) -> bool {
             name.chars().all(|wanted| characters.any(|c| c == wanted))
         })
 }
+
+/// The settings center's pages that are commands' views, each declared
+/// beside its command.
+pub(crate) static SETTINGS_PAGES: [&PageOverride; 7] = [
+    &theme::PAGE,
+    &statusline::PAGE,
+    &title::PAGE,
+    &keymap::PAGE,
+    &presets::PAGE,
+    &plugins::PAGE,
+    &hooks::PAGE,
+];
 
 /// Sends `call` to the Agent, from a view's action.
 pub(crate) fn send_session_call(app_event_tx: &AppEventSender, call: SessionCall) {

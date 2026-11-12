@@ -27,9 +27,9 @@
 //! session has at most one side conversation.
 
 mod agents;
-mod config;
 mod keys;
 mod panes;
+mod settings;
 
 use std::io::{self, Write};
 use std::sync::Arc;
@@ -41,13 +41,13 @@ use ratatui::crossterm::event::{KeyEvent, KeyEventKind};
 use ratatui::text::Line;
 
 use super::{new_view, App};
-use crate::agent_bridge::{AgentBridge, AgentReply, OlderTranscript, OpenedSide};
+use crate::agent_bridge::{AgentBridge, AgentReply, CatalogReply, OlderTranscript, OpenedSide};
 use crate::agents_center::AgentsCenter;
 use crate::app_event::{AppEvent, AppEventSender};
 use crate::chatwidget::ChatWidget;
-use crate::config_center::{ConfigCenter, ConfigSection};
 use crate::history_cell::HistoryCell;
 use crate::keymap::{self, Action};
+use crate::settings_center::SettingsCenter;
 use crate::transcript_view::{TranscriptHistoryState, TranscriptView};
 use crate::tui::Tui;
 pub(crate) use keys::PaneAction;
@@ -72,11 +72,15 @@ pub(crate) enum WorkspaceEvent {
     FocusOther,
     /// `/agents`.
     OpenAgents,
-    /// `/config [section]`: the full-screen configuration center.
-    OpenConfig {
-        section: ConfigSection,
-        direct: bool,
-    },
+    /// `/config [target]`: the settings center, at the tab, section,
+    /// collection or page named.
+    OpenSettings(Option<String>),
+    /// What a call of the settings center found.
+    Settings(Box<CatalogReply>),
+    /// Whether the command whose views are the center's page still shows
+    /// one; sent after the keys it took, so that the step one of its views
+    /// asked for has shown its next view first.
+    SettingsPageCheck,
 }
 
 /// Which conversation: the main one, or the second.
@@ -147,7 +151,7 @@ pub(super) struct Workspace {
     /// The parked conversation whose event is being handled.
     handling: Option<Focus>,
     agents: Option<AgentsCenter>,
-    config: Option<ConfigCenter>,
+    settings: Option<SettingsCenter>,
 }
 
 impl Workspace {
@@ -159,6 +163,10 @@ impl Workspace {
 
     pub(super) fn agents_open(&self) -> bool {
         self.agents.is_some()
+    }
+
+    pub(super) fn settings_open(&self) -> bool {
+        self.settings.is_some()
     }
 
     /// An event of the parked conversation is being handled.
@@ -304,9 +312,9 @@ impl App {
                 }
             }
             WorkspaceEvent::OpenAgents => self.open_agents_center(tui),
-            WorkspaceEvent::OpenConfig { section, direct } => {
-                self.open_config_center(tui, section, direct)
-            }
+            WorkspaceEvent::OpenSettings(target) => self.open_settings_center(tui, target),
+            WorkspaceEvent::Settings(reply) => self.settings_reply(tui, *reply),
+            WorkspaceEvent::SettingsPageCheck => self.check_settings_page(),
         }
         self.schedule_frame(Instant::now());
     }

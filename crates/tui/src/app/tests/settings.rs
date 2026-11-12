@@ -369,8 +369,8 @@ fn the_reported_window_is_shown_in_the_policy_form_the_picker_and_status() {
 #[test]
 fn the_configuration_center_opens_the_model_policy_directly() {
     let mut harness = Harness::start(Vec::new());
-    harness.type_and_submit("/config providers");
-    harness.pump_until_screen_shows("Model policy");
+    harness.type_and_submit("/config modelPolicy");
+    harness.pump_until_screen_shows("Settings › Model policy");
 }
 
 #[test]

@@ -11,6 +11,7 @@ use crate::appearance::items::{SurfaceItem, TerminalTitleItem};
 use crate::appearance::setup::terminal_title_setup;
 use crate::appearance::{known_ids, AppearanceEvent};
 use crate::history_cell;
+use crate::settings_center::{Attach, PageOverride};
 
 pub(super) static TITLE: CommandSpec = CommandSpec {
     name: "title",
@@ -20,6 +21,13 @@ pub(super) static TITLE: CommandSpec = CommandSpec {
     during_task: true,
     needs_session: false,
     dispatch,
+};
+
+/// The settings center's page of `/title`.
+pub(crate) static PAGE: PageOverride = PageOverride {
+    id: "title",
+    attach: Attach::Setting("tui.terminalTitle"),
+    command: &TITLE,
 };
 
 fn dispatch(context: &mut CommandContext<'_>, args: &str) {

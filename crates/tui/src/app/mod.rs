@@ -203,7 +203,7 @@ impl App {
         match event {
             AppEvent::Key(key) => return self.handle_key_event(tui, key),
             AppEvent::Paste(text) => self.handle_paste(text),
-            AppEvent::Mouse(mouse) => self.handle_mouse(mouse),
+            AppEvent::Mouse(mouse) => self.handle_mouse(tui, mouse),
             AppEvent::Redraw => self.schedule_frame(Instant::now()),
             AppEvent::ScheduleFrame(at) => self.schedule_frame(at),
             AppEvent::Agent(event) => {
@@ -287,6 +287,9 @@ impl App {
         self.cancel_primed_backtrack();
         // Pasted text arrives with `\r` line endings in many terminals.
         let text = text.replace("\r\n", "\n").replace('\r', "\n");
+        if self.handle_settings_paste(&text) {
+            return;
+        }
         let to_search = match self.overlay.as_mut() {
             Some(Overlay::Transcript(transcript)) => transcript.handle_paste(&text),
             Some(Overlay::Static(_)) => false,
@@ -305,7 +308,14 @@ impl App {
         }
     }
 
-    fn handle_mouse(&mut self, mouse: MouseEvent) {
+    fn handle_mouse<B: Backend<Error = io::Error> + Write>(
+        &mut self,
+        tui: &mut Tui<B>,
+        mouse: MouseEvent,
+    ) {
+        if self.handle_settings_mouse(tui, mouse) {
+            return;
+        }
         if self.overlay.is_none() && self.handle_workspace_mouse(mouse) {
             return;
         }
@@ -359,7 +369,10 @@ impl App {
     }
 
     fn alt_screen_open(&self) -> bool {
-        self.overlay.is_some() || self.resume_picker.is_some() || self.workspace.agents_open()
+        self.overlay.is_some()
+            || self.resume_picker.is_some()
+            || self.workspace.agents_open()
+            || self.workspace.settings_open()
     }
 
     fn open_overlay<B: Backend<Error = io::Error> + Write>(
@@ -533,7 +546,7 @@ impl App {
         if self.draw_agents_center(tui)? {
             return Ok(());
         }
-        if self.draw_config_center(tui)? {
+        if self.draw_settings_center(tui)? {
             return Ok(());
         }
         if self.overlay.is_some() {

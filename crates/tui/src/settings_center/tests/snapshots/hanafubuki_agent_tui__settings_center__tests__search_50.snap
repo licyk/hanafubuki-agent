@@ -1,0 +1,24 @@
+---
+source: crates/tui/src/settings_center/tests/mod.rs
+expression: "screen(&mut center, 50, 20)"
+---
+
+  Settings
+  Changes save automatically
+
+
+
+  Search › model
+
+  › Sandbox mode          (unset) ›             
+    Model discovery       Automatic ›
+    models.dev catalogue  [ ] Off
+    Model                 gpt-test ›
+    Model policy          ›
+    Use memories          [x] On
+
+  General · Sandbox
+
+
+
+  type to search · enter results · esc clear

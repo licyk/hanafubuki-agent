@@ -18,22 +18,16 @@ use crate::appearance::{AppearanceEvent, SPINNER_INTERVAL};
 use crate::history_cell::HistoryRenderMode;
 use crate::keymap::{self, Keymap};
 use crate::pager_overlay::Overlay;
+use crate::render::highlight::{
+    resolve_theme_by_name, set_syntax_theme, themes_dir, DEFAULT_THEME,
+};
 use crate::tui::Tui;
 
 impl App {
     /// `/raw`: on, off, or (`None`) the other way.
     pub(super) fn set_raw_output(&mut self, raw: Option<bool>) {
         let raw = raw.unwrap_or(self.render_mode == HistoryRenderMode::Rich);
-        self.render_mode = if raw {
-            HistoryRenderMode::Raw
-        } else {
-            HistoryRenderMode::Rich
-        };
-        let view = &mut self.transcript_view;
-        view.set_presentation(view.is_detailed(), self.render_mode);
-        if let Some(Overlay::Transcript(transcript)) = self.overlay.as_mut() {
-            transcript.set_render_mode(self.render_mode);
-        }
+        self.show_raw_output(raw);
         let state = if raw { "on" } else { "off" };
         let message = if self.mode.is_owned() {
             format!("Raw output {state}.")
@@ -47,6 +41,20 @@ impl App {
             },
             message,
         );
+    }
+
+    /// The conversation shown raw, or rich.
+    fn show_raw_output(&mut self, raw: bool) {
+        self.render_mode = if raw {
+            HistoryRenderMode::Raw
+        } else {
+            HistoryRenderMode::Rich
+        };
+        let view = &mut self.transcript_view;
+        view.set_presentation(view.is_detailed(), self.render_mode);
+        if let Some(Overlay::Transcript(transcript)) = self.overlay.as_mut() {
+            transcript.set_render_mode(self.render_mode);
+        }
     }
 
     /// `/tui`: the transcript's mode from the next launch on.
@@ -136,10 +144,21 @@ impl App {
         let _ = self.terminal_title.restore(tui.terminal.backend_mut());
     }
 
-    /// Writes `patch` into `config.toml` and applies what it changed, then
-    /// says `message`, or why it was not saved.
-    pub(super) fn save(&mut self, patch: AgentTuiPreferencesPatch, mut message: String) {
-        match self.bridge.write_tui_preferences(patch.clone()) {
+    /// Writes `patch` into `config.toml` off the loop; what it changed is
+    /// applied when the write is done ([`Self::preferences_saved`]).
+    pub(super) fn save(&mut self, patch: AgentTuiPreferencesPatch, message: String) {
+        self.bridge.save_tui_preferences(patch, message);
+    }
+
+    /// A [`Self::save`] done: what it changed applied, then `message`, or
+    /// why it was not saved.
+    pub(super) fn preferences_saved(
+        &mut self,
+        patch: AgentTuiPreferencesPatch,
+        mut message: String,
+        saved: Result<AgentTuiPreferences, String>,
+    ) {
+        match saved {
             Ok(preferences) => {
                 if shadowed(&patch, &preferences) {
                     message.push_str(
@@ -156,6 +175,24 @@ impl App {
                 .chat_widget
                 .add_error_message(format!("{message} It was not saved: {error}")),
         }
+        self.schedule_frame(Instant::now());
+    }
+
+    /// `[tui]` as a write of the settings center left it, taken whole: the
+    /// keymap and the rest [`Self::apply_preferences`] applies, the raw
+    /// output, the theme, the status line and the terminal title.
+    pub(super) fn adopt_tui_preferences(&mut self, preferences: AgentTuiPreferences) {
+        if preferences.raw_output != (self.render_mode == HistoryRenderMode::Raw) {
+            self.show_raw_output(preferences.raw_output);
+        }
+        let theme = preferences.theme.as_deref().unwrap_or(DEFAULT_THEME);
+        if let Some(resolved) = resolve_theme_by_name(theme, themes_dir()) {
+            set_syntax_theme(resolved);
+        }
+        self.chat_widget.adopt_appearance(&preferences);
+        self.chat_widget
+            .set_fullscreen_preference(preferences.fullscreen_transcript);
+        self.apply_preferences(preferences);
     }
 
     /// Makes `preferences` the ones in force: the keymap they resolve to,
