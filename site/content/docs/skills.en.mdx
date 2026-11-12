@@ -42,7 +42,7 @@ Fields it does not know are ignored. A Skill directory may also have an `agents/
 The two built-in Skills:
 
 - `system:skill-creator`: writes or revises a Skill with you.
-- `system:skill-manager`: inspects the Skills, turns one on or off, installs one from a folder or a Git repository, and explains why a Skill is or is not in play for this turn.
+- `system:skill-manager`: inspects the Skills, turns one on or off, installs one from a folder or a Git repository (cloned by a command the model runs, so through [`network.proxy`](/docs/network-logging#child-processes)), and explains why a Skill is or is not in play for this turn.
 
 Put the Skills a team shares in the repository's `.agents/skills/`, and everyone working in it can use them.
 

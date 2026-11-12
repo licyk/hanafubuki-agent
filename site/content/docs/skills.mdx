@@ -42,7 +42,7 @@ description: 根据 git 历史为这个仓库撰写发布说明，按功能、�
 内置的两个 Skill：
 
 - `system:skill-creator`：帮你编写或修改 Skill。
-- `system:skill-manager`：查看 Skill、启用或停用某个 Skill、从目录或 Git 仓库安装 Skill，并解释某个 Skill 为什么在或不在本次回合中使用。
+- `system:skill-manager`：查看 Skill、启用或停用某个 Skill、从目录或 Git 仓库安装 Skill（仓库由模型运行的命令克隆，因此经过 [`network.proxy`](/docs/network-logging#child-processes)），并解释某个 Skill 为什么在或不在本次回合中使用。
 
 把团队共用的 Skill 放进仓库的 `.agents/skills/` 中，所有在这个仓库中工作的人都能使用。
 

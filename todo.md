@@ -741,7 +741,10 @@ Hoshimi `83f7813`. Every §9 decision (D1–D7) was accepted as recommended
   downloads are `git` through the instance's executor (inherited
   environment plus the overlay), so they take the proxy variables, the
   lower-case `http_proxy` curl needs for `http://` remotes among them since
-  the overlay names both cases; a test runs `git ls-remote` through it. A
+  the overlay names both cases; a test runs `git ls-remote` through it. Skills
+  install only from a folder; one from Git is the `skill-manager` Skill's
+  `git clone` through `exec_command`, a command, so it takes the same
+  variables. A
   user's git `http.proxy` still wins over the variables. No other crate
   makes HTTP requests (reqwest is only in model-api, web-search and mcp).
 
