@@ -298,6 +298,13 @@ impl BottomPane {
             .any(|view| view.command() == Some(command))
     }
 
+    /// `command`'s view, when it is the one open (the settings center
+    /// shows it as its page).
+    pub(crate) fn command_view(&self, command: &str) -> Option<&dyn BottomPaneView> {
+        self.active_view()
+            .filter(|view| view.command() == Some(command))
+    }
+
     /// Hands `reply` to `command`'s latest view; it comes back when no
     /// view of the command takes it.
     pub(crate) fn offer_command_reply(

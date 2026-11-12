@@ -21,7 +21,9 @@ use crate::app_event::{AppCommand, AppEvent, AppEventSender};
 use crate::bottom_pane::{SelectionItem, SelectionViewParams};
 use crate::history_cell::{self, PlainHistoryCell};
 use crate::keymap::{self, conflicts, Action, Binding, ACTIONS};
+use crate::settings_center::{Attach, PageOverride};
 use capture::{Capture, KeymapCapture};
+use hanafubuki_agent::SettingsGroup;
 
 pub(super) static KEYMAP: CommandSpec = CommandSpec {
     name: "keymap",
@@ -31,6 +33,17 @@ pub(super) static KEYMAP: CommandSpec = CommandSpec {
     during_task: true,
     needs_session: false,
     dispatch,
+};
+
+/// The settings center's page of `/keymap`.
+pub(crate) static PAGE: PageOverride = PageOverride {
+    id: "keymap",
+    attach: Attach::Row {
+        group: SettingsGroup::Interface,
+        label: "Keymap",
+        summary: "The keys of the interface's actions",
+    },
+    command: &KEYMAP,
 };
 
 fn dispatch(context: &mut CommandContext<'_>, args: &str) {

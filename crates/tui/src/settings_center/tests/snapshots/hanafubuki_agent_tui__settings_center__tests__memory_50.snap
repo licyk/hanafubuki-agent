@@ -1,0 +1,30 @@
+---
+source: crates/tui/src/settings_center/tests/mod.rs
+expression: "screen(&mut center, 50, 26)"
+---
+
+  Settings
+  Changes save automatically
+
+   General   Model   Tools   Memory (1) 
+
+  Memory
+  › Memory                   [ ] Off            
+    Use memories             [x] On
+    Generate memories        [x] On
+    Exclude external con...  [ ] Off
+    Extraction model         (unset)
+    Consolidation model      (unset)
+    Maximum source age (...  10
+    Minimum idle time (h...  6
+    Sessions per pass        2
+    Extractions consolid...  256
+    Maximum unused age (...  30
+
+
+
+  Whether memory is on
+
+
+
+  ←/→ tab · / search · enter toggle · esc close

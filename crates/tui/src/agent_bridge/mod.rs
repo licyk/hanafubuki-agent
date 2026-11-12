@@ -20,6 +20,7 @@
 //! [`AgentReply`].
 
 mod agents;
+mod catalog;
 mod commands;
 mod edit;
 mod goal;
@@ -54,6 +55,7 @@ use tokio::sync::oneshot;
 
 use crate::app_event::{AppEvent, AppEventSender, Op};
 use crate::history_cell::ToolResultView;
+pub(crate) use catalog::{CatalogCall, CatalogOutcome, CatalogReply};
 pub(crate) use commands::{setup_needed, with_model, ModelChoices, RoleChoices, StatusReport};
 pub(crate) use goal::{GoalCall, GoalReply};
 pub(crate) use hooks::{needing_review, HooksCall, HooksReply};
@@ -64,9 +66,7 @@ pub(crate) use providers::{ProviderCall, ProviderReply};
 pub(crate) use replay::{OlderTranscript, OpenedSession, ReplayedItem};
 pub(crate) use review::{ReviewCall, ReviewEnd, ReviewReply};
 pub(crate) use sessions::{ExportDestination, SessionCall, SessionReply};
-pub(crate) use settings::{
-    ConfigState, MemoriesState, SettingsCall, SettingsReply, Warning, WarningSource,
-};
+pub(crate) use settings::{MemoriesState, SettingsCall, SettingsReply, Warning, WarningSource};
 pub(crate) use side::OpenedSide;
 pub(crate) use status::{SessionStatus, UsageSummary};
 pub(crate) use steering::SteerOutcome;

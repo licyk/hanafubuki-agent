@@ -5,6 +5,7 @@
 
 use super::{CommandContext, CommandSpec};
 use crate::appearance::theme_picker::ThemePicker;
+use crate::settings_center::{Attach, PageOverride};
 
 pub(super) static THEME: CommandSpec = CommandSpec {
     name: "theme",
@@ -14,6 +15,13 @@ pub(super) static THEME: CommandSpec = CommandSpec {
     during_task: true,
     needs_session: false,
     dispatch,
+};
+
+/// The settings center's page of `/theme`.
+pub(crate) static PAGE: PageOverride = PageOverride {
+    id: "theme",
+    attach: Attach::Setting("tui.theme"),
+    command: &THEME,
 };
 
 fn dispatch(context: &mut CommandContext<'_>, _args: &str) {

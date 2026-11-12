@@ -102,6 +102,16 @@ impl Appearance {
         (appearance, warnings)
     }
 
+    /// The settings `preferences` hold in place of these; what the items
+    /// show is kept, and the unknown items were warned of at start.
+    pub(crate) fn adopt(&mut self, preferences: &AgentTuiPreferences) {
+        let (adopted, _) = Self::new(preferences, String::new());
+        *self = Self {
+            values: std::mem::take(&mut self.values),
+            ..adopted
+        };
+    }
+
     pub(crate) fn theme(&self) -> Option<&str> {
         self.theme.as_deref()
     }

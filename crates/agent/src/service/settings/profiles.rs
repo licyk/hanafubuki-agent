@@ -25,7 +25,7 @@ fn fields() -> Vec<SettingSpec> {
 pub(super) async fn collection(service: &AgentApplicationService) -> SettingsCollection {
     let collection = SettingsCollection::new(ID, "Profiles", SettingsGroup::Advanced, fields())
         .with_actions(vec![
-            SettingsAction::collection(ADD, "Add a profile"),
+            SettingsAction::collection(ADD, "Add a profile").named("Profile name"),
             SettingsAction::record(SAVE, "Save"),
         ]);
     let profiles = match user_table(service, PROFILES).await {

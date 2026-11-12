@@ -13,7 +13,7 @@ use hanafubuki_agent::{
 };
 use ratatui::crossterm::event::{KeyEvent, MouseEvent};
 
-use hanafubuki_agent::AgentTuiPreferencesPatch;
+use hanafubuki_agent::{AgentTuiPreferences, AgentTuiPreferencesPatch};
 
 use crate::agent_bridge::{
     AgentReply, GoalCall, HooksCall, McpCall, PluginsCall, ProviderCall, ReviewCall, SessionCall,
@@ -106,6 +106,13 @@ pub(crate) enum AppCommand {
     /// Saves the change into `[tui]` and applies it (the keymap, the
     /// presets), then says the message, or why it was not saved.
     SavePreferences(AgentTuiPreferencesPatch, String),
+    /// A [`Self::SavePreferences`] written: `[tui]` as the layers resolve
+    /// it after the write, or why it was not written.
+    PreferencesSaved {
+        patch: AgentTuiPreferencesPatch,
+        message: String,
+        saved: Result<AgentTuiPreferences, String>,
+    },
     /// Hides the warning with this key (`Warning::key`) for the run.
     DismissWarning(String),
     /// Ctrl-O: expands every thinking the conversation shows, or collapses

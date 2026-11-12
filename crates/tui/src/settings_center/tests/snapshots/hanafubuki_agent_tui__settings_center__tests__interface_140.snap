@@ -1,0 +1,24 @@
+---
+source: crates/tui/src/settings_center/tests/mod.rs
+expression: "screen(&mut center, 140, 20)"
+---
+
+  Settings
+  Changes save automatically
+
+   General   Model   Tools   Memory (1)   Context   Network   Interface   Plugins 
+
+  Terminal interface
+  › Fullscreen          [x] On                        The interface draws the conversation itself; off, it goes into the terminal's scr...
+    Alternate screen    Automatic ›                   Whether the interface may use the alternate screen; automatic does except over SSH
+    Scrollback mouse    While the tail has a cont...  Whether Scrollback captures the mouse while its tail shows a control
+    Raw output          [ ] Off                       The conversation shown as the plain text it was made from
+    Syntax theme        (unset) ›                     The syntax highlighting theme; unset, the default
+    Status line         model-with-reasoning, cur...  The status line's items, in order
+    Status line colors  [x] On                        Whether the status line's items take the theme's colors
+    Terminal title      activity, session-title, ...  The terminal title's items, in order; none leaves the title alone
+    Keymap              Open ›                        The keys of the interface's actions
+    Presets             Open ›                        Inputs kept in slots 0 to 9
+
+
+  ←/→ tab · / search · enter toggle · esc close

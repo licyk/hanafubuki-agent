@@ -368,7 +368,7 @@ kardia 的日志通过宿主安装在根上的 `LogExporter` 到达 `log` facade
   <Step>每个工具：带 `ToolName::parse` 名字、`additionalProperties: false` 的 JSON schema、暴露方式、执行类别、效果、活动动作和记忆效果的 `ToolDescriptor`；`permission` 对读取返回 `NotRequired`，对修改返回它的 `ApprovalAction`；`invoke` 校验参数、观察取消、重新检查修改的审批（`verify_tool_approval`），在 `BlockingService` 上运行阻塞工作。</Step>
   <Step>生产源码中没有 `.unwrap()`/`.expect(`；错误映射为 `kardia_core::Error`。</Step>
   <Step>接入：在根 `Cargo.toml` 的 `[workspace.dependencies]` 中加一项（同时带 `path` 和 `version`），在 `crates/agent/Cargo.toml` 中加依赖，在层表（`xtask/src/dependencies.rs`）中加一行，在 `crates/agent/src/host/manifest.rs` 中加一行（它适配的服务通过 `AgentPluginInputs` 的字段传入），并在 `crates/agent/src/host/descriptors.rs` 中加它的描述符，名字与它的 `PluginDef` 相同，带上摘要。`Cargo.lock` 随之更新。</Step>
-  <Step>选项，若它有可调项：模式写在描述符中，每个选项带默认值，并处在它代码作为硬上限保留的界限内；它的行用 `from_settings` 和 `|settings| settings.options_value("<name>")`，配置用 `PluginDef::typed`，能就地接受变化时用 `ctx.on_update`。配置中心的通用表单编辑它们，无需界面代码。</Step>
+  <Step>选项，若它有可调项：模式写在描述符中，每个选项带默认值，并处在它代码作为硬上限保留的界限内；它的行用 `from_settings` 和 `|settings| settings.options_value("<name>")`，配置用 `PluginDef::typed`，能就地接受变化时用 `ctx.on_update`。设置中心把它们作为各自分节的行来编辑，无需界面代码。</Step>
   <Step>按[测试插件](#testing-a-plugin)测试它；模型能看到这个变化时重新生成 golden。</Step>
   <Step>写文档：[架构](/docs/architecture#crates-and-layers)中的 crate 行和本页[当前的插件](#the-plugins-today)表与工具数量。</Step>
   <Step>在仓库根目录用 `cargo xtask check`、`cargo fmt --all --check`、`cargo test -p hanafubuki-agent-plugin-<name>` 和 `cargo test -p hanafubuki-agent --lib` 验证。</Step>

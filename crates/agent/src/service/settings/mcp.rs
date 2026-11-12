@@ -162,7 +162,7 @@ fn fields() -> Vec<SettingSpec> {
 pub(super) async fn collection(service: &AgentApplicationService) -> SettingsCollection {
     let collection = SettingsCollection::new(ID, "MCP servers", SettingsGroup::Tools, fields())
         .with_actions(vec![
-            SettingsAction::collection(ADD, "Add a server"),
+            SettingsAction::collection(ADD, "Add a server").named("Server id"),
             SettingsAction::record(SAVE, "Save"),
             SettingsAction::record(DELETE, "Delete").confirmed(),
             SettingsAction::record(CONNECT, "Connect"),

@@ -40,6 +40,11 @@ impl App {
             AppCommand::ResumeNamed(text) => self.resume_named(tui, text),
             AppCommand::Replay(text) => self.chat_widget.replay_input(text),
             AppCommand::SavePreferences(patch, message) => self.save(patch, message),
+            AppCommand::PreferencesSaved {
+                patch,
+                message,
+                saved,
+            } => self.preferences_saved(patch, message, saved),
             AppCommand::DismissWarning(key) => self.chat_widget.dismiss_warning(key),
             AppCommand::ToggleThinking => {
                 // Scrollback's view shows the tail; what was written stays.

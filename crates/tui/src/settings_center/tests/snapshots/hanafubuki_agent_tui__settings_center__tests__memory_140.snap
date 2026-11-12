@@ -1,0 +1,26 @@
+---
+source: crates/tui/src/settings_center/tests/mod.rs
+expression: "screen(&mut center, 140, 22)"
+---
+
+  Settings
+  Changes save automatically
+
+   General   Model   Tools   Memory (1)   Context   Network   Interface   Plugins 
+
+  Memory
+  › Memory                     [ ] Off               Whether memory is on                                                                 
+    Use memories               [x] On                Whether the model may use the memories
+    Generate memories          [x] On                Whether new memories are extracted from sessions
+    Exclude external context   [ ] Off               A session stops contributing once it has used a web or MCP tool's output
+    Extraction model           (unset)               The model that extracts memories; unset, the model policy's
+    Consolidation model        (unset)               The model that consolidates them; unset, the model policy's
+    Maximum source age (days)  10                    Only sessions of the last that many days are read
+    Minimum idle time (hours)  6                     A session is read once it has been idle that many hours
+    Sessions per pass          2                     At most that many sessions are read per pass
+    Extractions consolidated   256                   At most that many extractions are consolidated
+    Maximum unused age (days)  30                    ⚠ the project's value is not a number
+
+
+
+  ←/→ tab · / search · enter toggle · esc close

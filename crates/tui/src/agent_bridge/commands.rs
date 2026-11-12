@@ -18,7 +18,7 @@ use hanafubuki_agent::{
 use super::{
     replay, AgentBridge, AgentReply, OlderTranscript, OpenedSession, ReplayedItem, TurnUpdate,
 };
-use crate::app_event::{AgentCommand, AppEvent, Op};
+use crate::app_event::{AgentCommand, AppCommand, AppEvent, Op};
 
 /// How many of a reopened session's latest transcript items are replayed,
 /// and how many more each earlier page holds.
@@ -261,17 +261,20 @@ impl AgentBridge {
             .unwrap_or_default()
     }
 
-    /// Saves `patch` into the interface's preferences, and returns them as
-    /// the layers now resolve them.
-    pub(crate) fn write_tui_preferences(
-        &self,
-        patch: AgentTuiPreferencesPatch,
-    ) -> Result<AgentTuiPreferences, String> {
+    /// Saves `patch` into the interface's preferences off the loop; the
+    /// preferences as the layers then resolve them come back as
+    /// [`AppCommand::PreferencesSaved`] with `message`.
+    pub(crate) fn save_tui_preferences(&self, patch: AgentTuiPreferencesPatch, message: String) {
+        let app_event_tx = self.app_event_tx.clone();
         let agent = self.agent.clone();
-        self.agent
-            .runtime()
-            .block_on(async move { agent.write_tui_preferences(patch).await })
-            .map_err(|failure| failure.to_string())?
+        self.agent.runtime().handle().spawn(async move {
+            let saved = agent.write_tui_preferences(patch.clone()).await;
+            app_event_tx.send(AppEvent::Command(AppCommand::PreferencesSaved {
+                patch,
+                message,
+                saved,
+            }));
+        });
     }
 
     /// The workspace roots, the first the one relative paths are read

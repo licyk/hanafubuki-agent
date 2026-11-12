@@ -19,7 +19,9 @@ use super::{CommandContext, CommandReply, CommandSpec};
 use crate::agent_bridge::{PluginsCall, PluginsReply};
 use crate::app_event::AgentCommand;
 use crate::history_cell;
+use crate::settings_center::{Attach, PageOverride};
 use browser::PluginsBrowser;
+use hanafubuki_agent::SettingsGroup;
 
 pub(crate) static PLUGINS: CommandSpec = CommandSpec {
     name: "plugins",
@@ -32,6 +34,17 @@ pub(crate) static PLUGINS: CommandSpec = CommandSpec {
         context.show_view(Box::new(PluginsBrowser::new(context.app_event_tx())));
         context.agent_command(AgentCommand::Plugins(PluginsCall::Load));
     },
+};
+
+/// The settings center's page of `/plugins`.
+pub(crate) static PAGE: PageOverride = PageOverride {
+    id: "packages",
+    attach: Attach::Row {
+        group: SettingsGroup::Plugins,
+        label: "Installed plugins",
+        summary: "Install, update and uninstall plugins; a code plugin's settings",
+    },
+    command: &PLUGINS,
 };
 
 /// The answer goes to the open browser; a failure none takes goes into the

@@ -13,7 +13,9 @@ use super::{CommandContext, CommandReply, CommandSpec};
 use crate::agent_bridge::{HooksCall, HooksReply};
 use crate::app_event::AgentCommand;
 use crate::history_cell;
+use crate::settings_center::{Attach, PageOverride};
 use browser::HooksBrowser;
+use hanafubuki_agent::SettingsGroup;
 
 pub(crate) static HOOKS: CommandSpec = CommandSpec {
     name: "hooks",
@@ -26,6 +28,17 @@ pub(crate) static HOOKS: CommandSpec = CommandSpec {
         context.show_view(Box::new(HooksBrowser::new(context.app_event_tx())));
         context.agent_command(AgentCommand::Hooks(HooksCall::Load));
     },
+};
+
+/// The settings center's page of `/hooks`.
+pub(crate) static PAGE: PageOverride = PageOverride {
+    id: "hook-review",
+    attach: Attach::Row {
+        group: SettingsGroup::Tools,
+        label: "Hook review",
+        summary: "Each hook's command, to trust it",
+    },
+    command: &HOOKS,
 };
 
 /// The warning the chat keeps for hooks found waiting at start.
