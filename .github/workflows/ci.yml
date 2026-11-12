@@ -50,7 +50,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest]
+        os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
       - uses: actions/checkout@v7.0.1
       # keep in step with rust-toolchain.toml; the WASM example plugin is built for wasm32 in the tests
@@ -59,4 +59,10 @@ jobs:
           components: rustfmt, clippy
           targets: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2.9.3
-      - run: cargo test -p hanafubuki-agent-execution --all-features --test contracts windows_powershell --no-fail-fast -- --test-threads 4
+      - run: cargo fmt --all --check
+      - run: cargo check --workspace --all-targets --all-features
+        env:
+          RUSTFLAGS: -D warnings
+      - run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+      - run: cargo xtask check
+      - run: cargo test --workspace --all-features --no-fail-fast
