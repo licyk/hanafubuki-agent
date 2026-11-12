@@ -45,7 +45,7 @@ pub use layers::{ConfigLayerSource, ConfigLayers, SettingSource, PROJECT_CONFIG_
 pub use mcp::McpSettingsStore;
 pub use network::AgentProxy;
 pub use overrides::{parse_config_value, ConfigOverrides};
-pub use plugin_options::{PluginOptionKey, PluginOptionsSettings};
+pub use plugin_options::{PackageSettingKey, PluginOptionKey, PluginOptionsSettings};
 pub use providers::{
     validate_agent_model_policy, validate_agent_provider, validate_agent_provider_base_url,
     validate_agent_provider_credential, validate_agent_provider_registry, AgentImageInputPolicy,

@@ -4,7 +4,7 @@ description: config.toml、providers.toml 和 mcp.toml 中每个键的类型、�
 icon: ListTree
 ---
 
-所有键使用 camelCase。没有写出的键使用默认值，`mcp.toml` 的 MCP 服务器除外（[见下文](#servers)）；TOML 没有空值，要让可选键“未设置”，就不要写它。
+所有键使用 camelCase。没有写出的键使用默认值（`mcp.toml` 的 MCP 服务器取新服务器的值，[见下文](#servers)）；TOML 没有空值，要让可选键“未设置”，就不要写它。
 
 ## config.toml [#config-toml]
 
@@ -181,7 +181,7 @@ icon: ListTree
 | `plugins."插件@市场".mcpServers.名字.disabledTools` | 工具名数组        | 包的值 | 不提供该服务器的这些工具，代替包的列表                                                                               |
 | `plugins."插件@市场".settings`                      | 表                | 无     | 包的代码的设置，按其清单的 `configSchema` 描述：它的访客的配置（`plugins settings`、`/plugins`、它在设置中心的分节） |
 
-已安装的包默认启用，除非：它的市场被关闭（见下文），或它的条目写了 `enabled = false`，或它的条目没有说明而 `_default.enabled` 为 `false`。键不是插件 id 的条目保留在文件中，但和未知键一样被忽略。包的 MCP 服务器如何运行由包决定，`mcpServers` 只做限制（[插件的服务器](/docs/mcp#plugin-servers)）：它设置的键替换包的值（列表替换包的列表），两个列表都写了同一个工具的服务器会被略去，成为包的一个问题。Agent 写入的更改立即生效：它在每次写入设置之后重新加载包；手动编辑在下次启动时生效。`plugins add`（以及 `/plugins` 中的安装）写入 `enabled = true`，`plugins enable` 和 `disable` 只写 `enabled`，`plugins remove` 删除该条目（[plugins](/docs/cli-reference#plugins)）。`settings` 由 `set_package_settings`（`plugins settings --set`，以及 `/plugins` 中代码插件页面的 **Settings** 行）整体替换，它按清单的 `configSchema` 及其降低成的选项校验，并以新设置重启访客；不是表的值会被修复。这些选项本身也是设置，即 `plugins."ID".settings.选项`：`/plugins` 的选项表单（`o`）和设置中心 Plugins 标签页中该插件的分节把改动的键写在用户文件已有的设置之上，删除被重置的键，按同样的方式检查结果并重启访客；一次写入只包含一个插件的设置，不含其他内容；它们显示的每个值都来自用户的文件或默认值。`config set plugins."ID".settings.键` 写入该键时不按 `configSchema` 检查；访客收到的仍是如下所述检查过的设置。访客把它作为自己的配置和 `settings` 视图读取（[代码插件](/docs/plugin-rules#guest-host-calls)），读取包时按这些选项检查：不符合其选项的键取选项的默认值，模式没有给出默认值时则被省略，同时产生包的问题和一条日志警告；越界的整数或数字被截取到边界。文件不会因此被改写（[configSchema](/docs/writing-plugins#config-schema)）。
+已安装的包默认启用，除非：它的市场被关闭（见下文），或它的条目写了 `enabled = false`，或它的条目没有说明而 `_default.enabled` 为 `false`。键不是插件 id 的条目保留在文件中，但和未知键一样被忽略。包的 MCP 服务器如何运行由包决定，`mcpServers` 只做限制（[插件的服务器](/docs/mcp#plugin-servers)）：它设置的键替换包的值（列表替换包的列表），两个列表都写了同一个工具的服务器会被略去，成为包的一个问题。Agent 写入的更改立即生效：它在每次写入设置之后重新加载包；手动编辑在下次启动时生效。`plugins add`（以及 `/plugins` 中的安装）写入 `enabled = true`，`plugins enable` 和 `disable` 只写 `enabled`，`plugins remove` 删除该条目（[plugins](/docs/cli-reference#plugins)）。`settings` 由 `set_package_settings`（`plugins settings --set`，以及 `/plugins` 中代码插件页面的 **Settings** 行）整体替换，它按清单的 `configSchema` 及其降低成的选项校验，并以新设置重启访客；不是表的值会被修复。这些选项本身也是设置，即 `plugins."ID".settings.选项`：`/plugins` 的选项表单（`o`）和设置中心 Plugins 标签页中该插件的分节把改动的键写在用户文件已有的设置之上，删除被重置的键，按同样的方式检查结果并重启访客；一次写入只包含一个插件的设置，不含其他内容；它们显示的每个值都来自用户的文件或默认值。`config set plugins."ID".settings.选项` 以同样的方式写入一个选项（为此会启动 Agent），拒绝选项不接受的值，也拒绝 `settings` 下的其他键。访客把它作为自己的配置和 `settings` 视图读取（[代码插件](/docs/plugin-rules#guest-host-calls)），读取包时按这些选项检查：不符合其选项的键取选项的默认值，模式没有给出默认值时则被省略，同时产生包的问题和一条日志警告；越界的整数或数字被截取到边界。文件不会因此被改写（[configSchema](/docs/writing-plugins#config-schema)）。
 
 设置中心在 `[plugins]` 之上有两个集合：**Installed plugins**（Plugins 标签页，`/config packages`）从 `插件@市场` 或目录安装，启用或停用包（`enabled`），更新它，重新加载它，信任它的钩子，卸载它并保留或删除它的数据；**Plugins' MCP servers**（Tools 标签页，`/config pluginMcp`）为启用的包运行的每个服务器提供一条记录（`插件/服务器`），显示它的连接阶段和工具，并把它的 `enabled`、`enabledTools` 和 `disabledTools` 写在 `mcpServers.名字` 下；取消某个字段（`r`）会删除它的键，于是包的值重新生效。
 
@@ -345,21 +345,7 @@ revision = 3
 
 [[servers]]
 id = "github"
-enabled = true
-required = false
-protocolMode = "legacy"
-connectTimeoutSeconds = 15
-initializeTimeoutSeconds = 30
-listTimeoutSeconds = 30
-callTimeoutSeconds = 120
-shutdownTimeoutSeconds = 10
-maximumConcurrentCalls = 4
-enabledTools = []
-disabledTools = []
-toolMaximumConcurrentCalls = {}
-approvalPolicy = "ask"
-exposurePolicy = "deferred"
-toolExposurePolicies = {}
+callTimeoutSeconds = 300
 
 [servers.transport]
 type = "stdio"
@@ -384,9 +370,9 @@ generation = 1
 
 ### [[servers]] [#servers]
 
-最多 64 个。除 `protocolMode`（省略时为 `"legacy"`）和 stdio 传输的 `cwd` 外，每个键都必须写出：缺少某个键的服务器会被丢弃，记为一次修复（[配置恢复](/docs/recovery)）。最后一列是 `mcp add` 和设置中心为新服务器写入的值。
+最多 64 个。服务器没有写出的键取最后一列的值，即 `mcp add` 和设置中心为新服务器写入的值；Agent 写入服务器时会写出每个键。只有 `id`、`transport` 及其 `type`，以及 stdio 传输的 `program` 或 HTTP 传输的 `url` 没有默认值：缺少其中之一，或某个值不是该键的类型的服务器会被丢弃，记为一次修复（[配置恢复](/docs/recovery)）。
 
-| 键                           | 类型和取值                                                  | 新服务器     | 含义                                               |
+| 键                           | 类型和取值                                                  | 默认值       | 含义                                               |
 | ---------------------------- | ----------------------------------------------------------- | ------------ | -------------------------------------------------- |
 | `id`                         | 1–128 个字母、数字、`-`、`_`、`.`                           |              | 服务器 ID；ID 不符合要求的服务器会被丢弃           |
 | `enabled`                    | 布尔值                                                      | `true`       | 是否启用；启用的服务器在 Agent 启动时连接          |
@@ -411,22 +397,22 @@ generation = 1
 
 `transport` 的 `type = "stdio"`：
 
-| 键                      | 含义                                                |
-| ----------------------- | --------------------------------------------------- |
-| `program`               | 程序：绝对路径，或在 `PATH` 中查找的程序名          |
-| `argv`                  | 参数数组                                            |
-| `cwd`                   | 工作目录，可选                                      |
-| `publicEnvironment`     | 环境变量名到值的表                                  |
-| `credentialEnvironment` | 环境变量名到凭据键的表，值从 `[credentials]` 中读取 |
+| 键                      | 含义                                                            |
+| ----------------------- | --------------------------------------------------------------- |
+| `program`               | 程序，必需：绝对路径，或在 `PATH` 中查找的程序名                |
+| `argv`                  | 参数数组，省略时为空                                            |
+| `cwd`                   | 工作目录，可选                                                  |
+| `publicEnvironment`     | 环境变量名到值的表，省略时为空                                  |
+| `credentialEnvironment` | 环境变量名到凭据键的表，省略时为空，值从 `[credentials]` 中读取 |
 
 `transport` 的 `type = "streamable_http"`：
 
-| 键                  | 含义                                                                                            |
-| ------------------- | ----------------------------------------------------------------------------------------------- |
-| `url`               | `http` 或 `https` URL，不含凭据和片段                                                           |
-| `publicHeaders`     | 请求头名到值的表                                                                                |
-| `credentialHeaders` | 请求头名到凭据键的表，值从 `[credentials]` 中读取                                               |
-| `oauth`             | `"disabled"`（新服务器的值）、`"optional"`、`"required"`；不能和 `Authorization` 请求头同时使用 |
+| 键                  | 含义                                                                                      |
+| ------------------- | ----------------------------------------------------------------------------------------- |
+| `url`               | 必需：`http` 或 `https` URL，不含凭据和片段                                               |
+| `publicHeaders`     | 请求头名到值的表，省略时为空                                                              |
+| `credentialHeaders` | 请求头名到凭据键的表，省略时为空，值从 `[credentials]` 中读取                             |
+| `oauth`             | `"disabled"`（默认值）、`"optional"`、`"required"`；不能和 `Authorization` 请求头同时使用 |
 
 ### [credentials] [#credentials]
 

@@ -41,7 +41,8 @@ pub struct McpServerConfig {
 
 /// What a server the user adds starts with. The settings surface fills its
 /// form from this; the id, the transport's own fields and the per-tool maps
-/// start empty.
+/// start empty. A server in the settings file takes these for the keys it
+/// leaves out (`repair_settings`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct McpServerDefaults {

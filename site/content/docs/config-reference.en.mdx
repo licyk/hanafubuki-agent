@@ -4,7 +4,7 @@ description: Every key of config.toml, providers.toml and mcp.toml, with its typ
 icon: ListTree
 ---
 
-Every key is camelCase. A key that is not written takes its default, except in an MCP server of `mcp.toml` ([below](#servers)); TOML has no null, so to leave an optional key unset, leave it out.
+Every key is camelCase. A key that is not written takes its default (in an MCP server of `mcp.toml`, a new server's value: [below](#servers)); TOML has no null, so to leave an optional key unset, leave it out.
 
 ## config.toml [#config-toml]
 
@@ -181,7 +181,7 @@ Which [installed plugins](/docs/architecture#installed-plugins) are on, by plugi
 | `plugins."PLUGIN@MARKETPLACE".mcpServers.NAME.disabledTools` | An array of tool names | the package's | Tools of that server not offered, in place of the package's list                                                                                                                    |
 | `plugins."PLUGIN@MARKETPLACE".settings`                      | A table                | none          | The settings of the package's code, as its manifest's `configSchema` describes them: its guest's configuration (`plugins settings`, `/plugins`, its section in the settings center) |
 
-An installed package is on unless its marketplace is turned off (below), or its entry says `enabled = false`, or its entry does not say and `_default.enabled` is `false`. An entry whose key is not a plugin id is kept in the file and ignored, as an unknown key is. How a package's MCP servers run is the package's; `mcpServers` only restricts them ([Plugins' servers](/docs/mcp#plugin-servers)): a key it sets replaces the package's value (a list replaces the package's list), and a server whose two lists name one tool is left out, an issue of the package. A change the Agent writes applies at once: it reloads its packages after each settings write; a hand edit applies at the next start. `plugins add` (and an install in `/plugins`) writes `enabled = true`, `plugins enable` and `disable` write `enabled` alone, and `plugins remove` removes the entry ([plugins](/docs/cli-reference#plugins)). `settings` is replaced whole by `set_package_settings` (`plugins settings --set`, and the **Settings** row of a code plugin's page in `/plugins`), which checks it against the manifest's `configSchema` and the options it lowers to, and restarts the guest with it; a value that is not a table is a repair. The options are also settings of their own, `plugins."ID".settings.OPTION`: the options form of `/plugins` (`o`) and the plugin's section in the settings center's Plugins tab write the keys they change over the settings the user's file holds, remove the one they reset, check the result the same way and restart the guest; one write holds one plugin's settings and nothing else, and every value they show is the user's file's or the default. `config set plugins."ID".settings.KEY` writes the key without checking it against the `configSchema`; the guest still receives it checked, as below. The guest reads it as its configuration and as its `settings` view ([Code plugins](/docs/plugin-rules#guest-host-calls)), checked against those options when the package is read: a key that does not fit its option gets the option's default, or is left out when the schema gives none, with an issue of the package and a log warning; an integer or a number out of range is clamped. The file is never rewritten for it ([configSchema](/docs/writing-plugins#config-schema)).
+An installed package is on unless its marketplace is turned off (below), or its entry says `enabled = false`, or its entry does not say and `_default.enabled` is `false`. An entry whose key is not a plugin id is kept in the file and ignored, as an unknown key is. How a package's MCP servers run is the package's; `mcpServers` only restricts them ([Plugins' servers](/docs/mcp#plugin-servers)): a key it sets replaces the package's value (a list replaces the package's list), and a server whose two lists name one tool is left out, an issue of the package. A change the Agent writes applies at once: it reloads its packages after each settings write; a hand edit applies at the next start. `plugins add` (and an install in `/plugins`) writes `enabled = true`, `plugins enable` and `disable` write `enabled` alone, and `plugins remove` removes the entry ([plugins](/docs/cli-reference#plugins)). `settings` is replaced whole by `set_package_settings` (`plugins settings --set`, and the **Settings** row of a code plugin's page in `/plugins`), which checks it against the manifest's `configSchema` and the options it lowers to, and restarts the guest with it; a value that is not a table is a repair. The options are also settings of their own, `plugins."ID".settings.OPTION`: the options form of `/plugins` (`o`) and the plugin's section in the settings center's Plugins tab write the keys they change over the settings the user's file holds, remove the one they reset, check the result the same way and restart the guest; one write holds one plugin's settings and nothing else, and every value they show is the user's file's or the default. `config set plugins."ID".settings.OPTION` writes one the same way (the Agent starts for it), and refuses a value its option does not take, or any other key under `settings`. The guest reads it as its configuration and as its `settings` view ([Code plugins](/docs/plugin-rules#guest-host-calls)), checked against those options when the package is read: a key that does not fit its option gets the option's default, or is left out when the schema gives none, with an issue of the package and a log warning; an integer or a number out of range is clamped. The file is never rewritten for it ([configSchema](/docs/writing-plugins#config-schema)).
 
 The settings center has two collections over `[plugins]`: **Installed plugins** (Plugins tab, `/config packages`) installs from `PLUGIN@MARKETPLACE` or a directory, turns a package on or off (`enabled`), updates it, loads it again, trusts its hooks and uninstalls it, keeping or deleting its data; **Plugins' MCP servers** (Tools tab, `/config pluginMcp`) has a record per server an enabled package runs (`PLUGIN/SERVER`), with its connection phase and tools, and writes its `enabled`, `enabledTools` and `disabledTools` under `mcpServers.NAME`, a field unset (`r`) removing its key so that the package's value applies again.
 
@@ -345,21 +345,7 @@ revision = 3
 
 [[servers]]
 id = "github"
-enabled = true
-required = false
-protocolMode = "legacy"
-connectTimeoutSeconds = 15
-initializeTimeoutSeconds = 30
-listTimeoutSeconds = 30
-callTimeoutSeconds = 120
-shutdownTimeoutSeconds = 10
-maximumConcurrentCalls = 4
-enabledTools = []
-disabledTools = []
-toolMaximumConcurrentCalls = {}
-approvalPolicy = "ask"
-exposurePolicy = "deferred"
-toolExposurePolicies = {}
+callTimeoutSeconds = 300
 
 [servers.transport]
 type = "stdio"
@@ -384,9 +370,9 @@ generation = 1
 
 ### [[servers]] [#servers]
 
-At most 64. Every key must be written, but `protocolMode` (`"legacy"` when it is left out) and a stdio transport's `cwd`: a server without one is dropped, as a repair ([Configuration recovery](/docs/recovery)). The last column is what `mcp add` and the settings center write for a new server.
+At most 64. A key a server leaves out takes the value in the last column, what `mcp add` and the settings center write for a new server; the Agent writes every key when it writes the server. Only `id`, `transport` with its `type`, and a stdio transport's `program` or an HTTP transport's `url` have no default: a server without one, or with a value that is not of its key's type, is dropped, as a repair ([Configuration recovery](/docs/recovery)).
 
-| Key                          | Type and values                                             | New server   | Means                                                                |
+| Key                          | Type and values                                             | Default      | Means                                                                |
 | ---------------------------- | ----------------------------------------------------------- | ------------ | -------------------------------------------------------------------- |
 | `id`                         | 1–128 letters, digits, `-`, `_`, `.`                        |              | The server's id; a server with another id is dropped                 |
 | `enabled`                    | boolean                                                     | `true`       | Whether it is enabled; enabled servers connect when the Agent starts |
@@ -411,22 +397,22 @@ A number out of range is brought into it.
 
 `transport` with `type = "stdio"`:
 
-| Key                     | Means                                                                                   |
-| ----------------------- | --------------------------------------------------------------------------------------- |
-| `program`               | The program: an absolute path, or a name looked up on `PATH`                            |
-| `argv`                  | Its arguments                                                                           |
-| `cwd`                   | Its working directory, optional                                                         |
-| `publicEnvironment`     | A table of environment variable to value                                                |
-| `credentialEnvironment` | A table of environment variable to credential key; the value comes from `[credentials]` |
+| Key                     | Means                                                                                                        |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `program`               | The program, required: an absolute path, or a name looked up on `PATH`                                       |
+| `argv`                  | Its arguments, none when left out                                                                            |
+| `cwd`                   | Its working directory, optional                                                                              |
+| `publicEnvironment`     | A table of environment variable to value, empty when left out                                                |
+| `credentialEnvironment` | A table of environment variable to credential key, empty when left out; the value comes from `[credentials]` |
 
 `transport` with `type = "streamable_http"`:
 
-| Key                 | Means                                                                                         |
-| ------------------- | --------------------------------------------------------------------------------------------- |
-| `url`               | An `http` or `https` URL without credentials or fragment                                      |
-| `publicHeaders`     | A table of header to value                                                                    |
-| `credentialHeaders` | A table of header to credential key; the value comes from `[credentials]`                     |
-| `oauth`             | `"disabled"` (a new server's), `"optional"`, `"required"`; not with an `Authorization` header |
+| Key                 | Means                                                                                          |
+| ------------------- | ---------------------------------------------------------------------------------------------- |
+| `url`               | Required: an `http` or `https` URL without credentials or fragment                             |
+| `publicHeaders`     | A table of header to value, empty when left out                                                |
+| `credentialHeaders` | A table of header to credential key, empty when left out; the value comes from `[credentials]` |
+| `oauth`             | `"disabled"` (the default), `"optional"`, `"required"`; not with an `Authorization` header     |
 
 ### [credentials] [#credentials]
 

@@ -16,7 +16,7 @@ use hanafubuki_agent_packages::{PluginOptionSchema, ResolvedPluginOptions};
 use serde::{Serialize, Serializer};
 use serde_json::{Map, Value};
 
-use crate::keys::{parse_key, PLUGIN_OPTIONS};
+use crate::keys::{parse_key, PACKAGE_SETTINGS, PLUGINS, PLUGIN_OPTIONS};
 use crate::sections::SettingsRead;
 use crate::settings::is_plugin_name;
 
@@ -160,3 +160,26 @@ impl PluginOptionKey {
 
 #[cfg(test)]
 mod tests;
+
+/// A setting of an installed plugin's code named by a dotted key
+/// (`plugins."<id>".settings.<option>`), as `config set` names it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PackageSettingKey {
+    pub id: String,
+    pub option: String,
+}
+
+impl PackageSettingKey {
+    /// The setting `key` names; `None` when it names something else.
+    pub fn parse(key: &str) -> Result<Option<Self>, String> {
+        Ok(match parse_key(key)?.as_slice() {
+            [first, id, settings, option] if first == PLUGINS && settings == PACKAGE_SETTINGS => {
+                Some(Self {
+                    id: id.clone(),
+                    option: option.clone(),
+                })
+            }
+            _ => None,
+        })
+    }
+}

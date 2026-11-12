@@ -20,8 +20,8 @@ pub struct AgentPluginDescriptor {
     pub name: &'static str,
     /// What the plugin gives the model or the user, in one line.
     pub summary: &'static str,
-    /// The options it takes, which the configuration center's generic form
-    /// edits; `None` for a row without options.
+    /// The options it takes, a section of the settings catalog that the
+    /// settings center edits; `None` for a row without options.
     pub options: Option<PluginOptionSchema>,
 }
 
