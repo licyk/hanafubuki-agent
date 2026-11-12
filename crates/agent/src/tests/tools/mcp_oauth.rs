@@ -40,6 +40,52 @@ async fn an_oauth_login_completes_on_the_browsers_redirect() {
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }
 
+/// Every OAuth request goes through the proxy in use, the token refresh
+/// among them: the server is at a host that does not resolve, reached only
+/// through the fixture answering as a proxy (it serves every path, and
+/// builds its URLs from the `Host` the proxied request names). Through a
+/// proxy nothing answers, the refresh fails and the login is kept.
+#[tokio::test]
+async fn an_oauth_refresh_goes_through_the_proxy() {
+    const SERVER: &str = "http://oauth.invalid";
+    let (proxy, fixture) = start_oauth_fixture().await;
+    let paths = test_paths("mcp-oauth-refresh-proxy");
+    let application = mcp_application(&paths);
+    application
+        .apply_proxy_policy(&AgentProxy::Explicit(proxy.clone()))
+        .await
+        .unwrap();
+    let server = configure(&application, oauth_config(SERVER)).await;
+    let (login, authorization) = start_login(&application, &server, std::future::pending());
+    let authorization = authorization.await.unwrap();
+    let mut callback = url::Url::parse(&authorization["redirect_uri"]).unwrap();
+    callback
+        .query_pairs_mut()
+        .append_pair("code", "fixture-code")
+        .append_pair("state", &authorization["state"])
+        .append_pair("iss", SERVER);
+    browse(callback.as_str()).await;
+    login.await.unwrap().unwrap();
+
+    let refreshed = application
+        .mcp_oauth_refresh(server.id.clone())
+        .await
+        .unwrap();
+    assert_eq!(phase(&refreshed, &server), McpOAuthPhase::Authorized);
+
+    // Nothing listens on the discard port.
+    application
+        .apply_proxy_policy(&AgentProxy::Explicit("http://127.0.0.1:9".into()))
+        .await
+        .unwrap();
+    assert!(application
+        .mcp_oauth_refresh(server.id.clone())
+        .await
+        .is_err());
+    fixture.abort();
+    let _ = std::fs::remove_dir_all(paths.app_data_dir);
+}
+
 /// A refusal from the authorization server, or a cancellation, ends the login
 /// with its reason, cancels the flow and closes the loopback.
 #[tokio::test]

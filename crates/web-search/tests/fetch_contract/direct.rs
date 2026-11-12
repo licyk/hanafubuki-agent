@@ -80,3 +80,58 @@ async fn direct_fetch_uses_the_configured_global_proxy() {
     assert_eq!(proxy.requests.load(Ordering::SeqCst), 1);
     assert_eq!(target.requests.load(Ordering::SeqCst), 0);
 }
+
+/// A redirect is followed through the proxy too: each hop is a request the
+/// proxy receives, naming its whole URL, and the target is never reached.
+#[tokio::test]
+async fn direct_fetch_follows_redirects_through_the_proxy() {
+    let target = start_server(|_| TestResponse {
+        status: 200,
+        content_type: "text/plain",
+        headers: Vec::new(),
+        body: "target must not be reached directly".to_string(),
+    })
+    .await;
+    let first = format!("{}/first", target.base_url);
+    let second = format!("{}/second", target.base_url);
+    let (from, to) = (first.clone(), second.clone());
+    let proxy = start_server(move |request_target| {
+        if request_target == from {
+            TestResponse {
+                status: 302,
+                content_type: "text/plain",
+                headers: vec![("Location".to_string(), to.clone())],
+                body: String::new(),
+            }
+        } else {
+            assert_eq!(request_target, to);
+            TestResponse {
+                status: 200,
+                content_type: "text/plain",
+                headers: Vec::new(),
+                body: "redirected through the proxy".to_string(),
+            }
+        }
+    })
+    .await;
+    let mut config = fetch_config(&target.base_url);
+    config.proxy = WebSearchProxy::Explicit(proxy.base_url.clone());
+    let service = WebSearchService::new(config).unwrap();
+
+    let response = service
+        .fetch_page(
+            WebFetchRequest {
+                url: page_url(&first),
+                maximum_content_bytes: 1024,
+                from_offset: 0,
+                content_generation: None,
+            },
+            CancellationToken::default(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.content, "redirected through the proxy");
+    assert_eq!(proxy.requests.load(Ordering::SeqCst), 2);
+    assert_eq!(target.requests.load(Ordering::SeqCst), 0);
+}
