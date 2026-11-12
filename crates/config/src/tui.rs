@@ -10,16 +10,22 @@
 
 use std::collections::BTreeMap;
 
+use hanafubuki_agent_foundation::settings::{
+    SettingApply, SettingChoice, SettingKind, SettingSpec,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
-use crate::fields::{read_object, FieldRead, Fields};
+use crate::fields::{FieldRead, Fields};
+use crate::sections::{described, no_rule, SettingsRead, SettingsSection};
+
+const TUI: &str = "tui";
 
 /// The longest input a preset holds, in UTF-8 bytes (Codex's limit).
 pub const MAX_PRESET_INPUT_BYTES: usize = 8_000;
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
 pub struct AgentTuiPreferences {
     /// The interface owns the screen and draws the conversation itself
     /// (when the alternate screen is allowed); otherwise the conversation
@@ -205,64 +211,142 @@ impl AgentTuiPreferencesPatch {
     }
 }
 
-/// The `[tui]` table of `fields`, each key missing or invalid taking its
-/// value in `defaults`.
+pub(crate) fn section() -> SettingsSection {
+    let choice = |values: &[(&str, &str)]| SettingKind::Choice {
+        values: values
+            .iter()
+            .map(|(value, label)| SettingChoice::new(*value, *label))
+            .collect(),
+    };
+    let items = || SettingKind::TextList {
+        maximum_items: None,
+        maximum_item_chars: None,
+    };
+    let at_launch = |spec: SettingSpec| SettingSpec {
+        apply: SettingApply::NextLaunch,
+        ..spec
+    };
+    SettingsSection::new(
+        TUI,
+        "Terminal interface",
+        vec![
+            at_launch(described(
+                SettingSpec::new(
+                    "tui.fullscreenTranscript",
+                    "Fullscreen",
+                    SettingKind::Boolean,
+                ),
+                "The interface draws the conversation itself; off, it goes into the terminal's scrollback",
+            )),
+            at_launch(described(
+                SettingSpec::new(
+                    "tui.alternateScreen",
+                    "Alternate screen",
+                    choice(&[("auto", "Automatic"), ("always", "Always"), ("never", "Never")]),
+                ),
+                "Whether the interface may use the alternate screen; automatic does except over SSH",
+            )),
+            described(
+                SettingSpec::new(
+                    "tui.scrollbackMouse",
+                    "Scrollback mouse",
+                    choice(&[("tail", "While the tail has a control"), ("off", "Off")]),
+                ),
+                "Whether Scrollback captures the mouse while its tail shows a control",
+            ),
+            described(
+                SettingSpec::new("tui.rawOutput", "Raw output", SettingKind::Boolean),
+                "The conversation shown as the plain text it was made from",
+            ),
+            described(
+                SettingSpec::new(
+                    "tui.theme",
+                    "Syntax theme",
+                    SettingKind::Text {
+                        maximum_chars: None,
+                        secret: false,
+                        nullable: true,
+                    },
+                ),
+                "The syntax highlighting theme; unset, the default",
+            ),
+            described(
+                SettingSpec::new("tui.statusLine", "Status line", items()),
+                "The status line's items, in order",
+            ),
+            described(
+                SettingSpec::new(
+                    "tui.statusLineColors",
+                    "Status line colors",
+                    SettingKind::Boolean,
+                ),
+                "Whether the status line's items take the theme's colors",
+            ),
+            described(
+                SettingSpec::new("tui.terminalTitle", "Terminal title", items()),
+                "The terminal title's items, in order; none leaves the title alone",
+            ),
+        ],
+    )
+}
+
+/// The `[tui]` table, each setting read by its spec and each keymap entry
+/// and preset on its own, a missing or invalid one taking its value in
+/// `defaults`.
 pub(crate) fn read_tui(
-    fields: &mut Fields<'_>,
+    read: &mut SettingsRead<'_>,
     defaults: &AgentTuiPreferences,
 ) -> AgentTuiPreferences {
-    read_object(fields, "tui", defaults, |fields, tui| {
-        tui.fullscreen_transcript = fields.read("fullscreenTranscript", tui.fullscreen_transcript);
-        tui.alternate_screen = fields.read("alternateScreen", tui.alternate_screen);
-        tui.scrollback_mouse = fields.read("scrollbackMouse", tui.scrollback_mouse);
-        tui.raw_output = fields.read("rawOutput", tui.raw_output);
-        tui.theme = fields.read("theme", tui.theme.take());
-        tui.status_line = fields.read("statusLine", std::mem::take(&mut tui.status_line));
-        tui.status_line_colors = fields.read("statusLineColors", tui.status_line_colors);
-        tui.terminal_title = fields.read("terminalTitle", std::mem::take(&mut tui.terminal_title));
-        read_entries(
-            fields,
-            "keymap",
-            &mut tui.keymap,
-            |fields, context, keymap| {
-                let below = keymap.entry(context.to_string()).or_default();
-                read_entries(
-                    fields,
-                    context,
-                    below,
-                    |fields, action, actions| match fields.read_quiet::<KeySpec>(action, Ok) {
-                        FieldRead::Valid(keys) => {
-                            actions.insert(action.to_string(), keys.into_list());
-                        }
-                        FieldRead::Invalid => fields
-                            .invalid(action, Some("not a key or a list of keys; it is ignored")),
-                        FieldRead::Missing => {}
-                    },
-                );
-                keymap.retain(|_, actions| !actions.is_empty());
-            },
-        );
-        read_entries(
-            fields,
-            "presets",
-            &mut tui.presets,
-            |fields, slot, presets| {
-                let preset = fields.read_quiet::<AgentTuiPreset>(slot, |preset| {
-                    preset.validate().map(|()| preset)
-                });
-                match preset {
-                    FieldRead::Valid(preset) if AgentTuiPreset::is_slot(slot) => {
-                        presets.insert(slot.to_string(), preset);
+    let mut tui = read.read(TUI, defaults, no_rule);
+    let fields = read.fields();
+    let Some(table) = fields.raw(TUI).and_then(Value::as_object) else {
+        return tui;
+    };
+    let path = fields.path(TUI);
+    let mut fields = Fields::nested(table, path, fields.repairs());
+    read_entries(
+        &mut fields,
+        "keymap",
+        &mut tui.keymap,
+        |fields, context, keymap| {
+            let below = keymap.entry(context.to_string()).or_default();
+            read_entries(
+                fields,
+                context,
+                below,
+                |fields, action, actions| match fields.read_quiet::<KeySpec>(action, Ok) {
+                    FieldRead::Valid(keys) => {
+                        actions.insert(action.to_string(), keys.into_list());
+                    }
+                    FieldRead::Invalid => {
+                        fields.invalid(action, Some("not a key or a list of keys; it is ignored"))
                     }
                     FieldRead::Missing => {}
-                    _ => fields.invalid(
-                        slot,
-                        Some("not a preset (a slot 0 to 9 with a valid input); it is ignored"),
-                    ),
+                },
+            );
+            keymap.retain(|_, actions| !actions.is_empty());
+        },
+    );
+    read_entries(
+        &mut fields,
+        "presets",
+        &mut tui.presets,
+        |fields, slot, presets| {
+            let preset = fields
+                .read_quiet::<AgentTuiPreset>(slot, |preset| preset.validate().map(|()| preset));
+            match preset {
+                FieldRead::Valid(preset) if AgentTuiPreset::is_slot(slot) => {
+                    presets.insert(slot.to_string(), preset);
                 }
-            },
-        );
-    })
+                FieldRead::Missing => {}
+                _ => fields.invalid(
+                    slot,
+                    Some("not a preset (a slot 0 to 9 with a valid input); it is ignored"),
+                ),
+            }
+        },
+    );
+    tui
 }
 
 /// One key or a list of them, as `keymap` entries take either.

@@ -174,7 +174,8 @@ Run from the repository root, selecting scope by the change's impact:
   `#[allow]` names its `reason`)
 - `cargo xtask check` (every repository check: dependencies and layers,
   source layout, module size, strict decoding, model-api context sections,
-  path boundaries, locks, plugin panics, the third-party notices)
+  path boundaries, locks, plugin panics, the third-party notices, the
+  configuration reference)
 - `cargo test --workspace --all-features`
 
 These are the steps `.github/workflows/ci.yml` runs on Linux, Windows and

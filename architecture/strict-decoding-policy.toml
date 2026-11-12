@@ -77,46 +77,58 @@ category = "ipc-request"
 reason = "The argument of `agent_settings_write`."
 
 [[types]]
-path = "crates/config/src/settings/mod.rs"
+path = "crates/config/src/store/write.rs"
+type = "SettingsWrite"
+category = "ipc-request"
+reason = "A change of settings by key (`AgentConfig::write_values`), which a host's settings page sends; each value is then checked against its spec."
+
+[[types]]
+path = "crates/config/src/store/write.rs"
+type = "SettingChange"
+category = "ipc-request"
+reason = "One change inside `SettingsWrite`."
+
+[[types]]
+path = "crates/config/src/settings/memory.rs"
 type = "AgentMemorySettings"
 category = "ipc-request"
-reason = "The memory settings inside `AgentSettingsPatch` (`agent_settings_write`); persisted field by field, never through serde."
+reason = "The memory settings inside `AgentSettingsPatch` (`agent_settings_write`); read from the file setting by setting by its specs, never as the file's table."
 
 [[types]]
-path = "crates/config/src/settings/mod.rs"
+path = "crates/config/src/settings/sandbox.rs"
 type = "AgentSandboxWorkspaceWrite"
 category = "ipc-request"
-reason = "The workspace-write sandbox settings inside `AgentSettingsPatch` (`agent_settings_write`); persisted field by field, never through serde."
+reason = "The workspace-write sandbox settings inside `AgentSettingsPatch` (`agent_settings_write`); read from the file setting by setting by its specs, never as the file's table."
 
 [[types]]
-path = "crates/config/src/settings/mod.rs"
+path = "crates/config/src/settings/sandbox.rs"
 type = "AgentWindowsSettings"
 category = "ipc-request"
-reason = "The Windows sandbox settings inside `AgentSettingsPatch` (`agent_settings_write`); persisted field by field, never through serde."
+reason = "The Windows sandbox settings inside `AgentSettingsPatch` (`agent_settings_write`); read from the file setting by setting by its specs, never as the file's table."
 
 [[types]]
 path = "crates/config/src/settings/compaction.rs"
 type = "AgentCompactionSettings"
 category = "ipc-request"
-reason = "The compaction settings inside `AgentSettingsPatch` (`agent_settings_write`); persisted field by field, never through serde."
+reason = "The compaction settings inside `AgentSettingsPatch` (`agent_settings_write`); read from the file setting by setting by its specs, never as the file's table."
 
 [[types]]
 path = "crates/config/src/settings/compaction.rs"
 type = "AgentBackgroundCompactionSettings"
 category = "ipc-request"
-reason = "The background compaction settings inside `AgentSettingsPatch` (`agent_settings_write`); persisted field by field, never through serde."
+reason = "The background compaction settings inside `AgentSettingsPatch` (`agent_settings_write`); read from the file setting by setting by its specs, never as the file's table."
 
 [[types]]
 path = "crates/config/src/settings/compaction.rs"
 type = "AgentHierarchicalCompactionSettings"
 category = "ipc-request"
-reason = "The hierarchical compaction settings inside `AgentSettingsPatch` (`agent_settings_write`); persisted field by field, never through serde."
+reason = "The hierarchical compaction settings inside `AgentSettingsPatch` (`agent_settings_write`); read from the file setting by setting by its specs, never as the file's table."
 
 [[types]]
 path = "crates/config/src/settings/model_metadata.rs"
 type = "AgentModelMetadataSettings"
 category = "ipc-request"
-reason = "The model metadata settings inside `AgentSettingsPatch` (`agent_settings_write`); persisted field by field, never through serde."
+reason = "The model metadata settings inside `AgentSettingsPatch` (`agent_settings_write`); read from the file setting by setting by its specs, never as the file's table."
 
 [[types]]
 path = "crates/agent/src/attachments.rs"

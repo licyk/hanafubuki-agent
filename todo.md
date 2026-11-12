@@ -116,11 +116,112 @@ independent.
         (run on 6ef1205, which differs from the landed commit only in this
         line; Site: .../runs/43212925447).
       - Module size: no exception added or raised.
-- [ ] S2: a section beside each config domain, the decoders reading keys and
+- [x] S2: a section beside each config domain, the decoders reading keys and
       bounds from it; per-key provenance in `layers::resolve`;
       `AgentConfig::write_values` (set, reset, commit groups, outcomes) under
       the center and `config get/set`; the leaf-to-spec coverage test;
       `cargo xtask check-config-reference`.
+      Done (2026-11-12):
+      - Specs beside their structs: `settings/mod.rs` (`general`:
+        `permissionMode`, `disabledPlugins`), the new `settings/sandbox.rs`
+        (`sandboxMode`, `sandboxWorkspaceWrite.*`, `windows.sandbox`, with
+        `AgentSandboxWorkspaceWrite` and `AgentWindowsSettings`),
+        `settings/memory.rs` (with `AgentMemorySettings`), `settings/web.rs`
+        (with `AgentWebSearchProvider`; provider and URL in the commit group
+        `webSearch`), `settings/compaction.rs` (`visible_if` the strategy),
+        `settings/model_metadata.rs`, `standalone.rs` (`network`:
+        `network.proxy`, `logLevel`) and `tui.rs` (the eight `[tui]`
+        scalars). `hanafubuki-agent-config::sections` lists them
+        (`config_sections()`, `SettingsSection { id, title, settings }`),
+        each default filled from the serialized struct `Default`; no spec
+        states one. `apply`: `logLevel`, `tui.fullscreenTranscript` and
+        `tui.alternateScreen` are next launch, the rest live.
+      - The decoders read by the specs (`sections::SettingsRead`): each key
+        under a struct is read with `SettingSpec::read` (tolerant, as S1
+        asked), overlaid on the serialized layer below, deserialized and
+        checked by the section's rule on its own, so one bad key falls back
+        alone, as `read_member` did; a table on the way that is not one is
+        one repair. `read_member` calls and the per-field validators of
+        these domains are gone; the patch path checks the same specs
+        (`check_specs`). Every existing decode test passed with its
+        expectations unchanged (only `decode_settings`' report argument
+        changed in `settings/tests.rs`).
+      - Provenance: `layers::resolve` records per key the highest layer
+        whose value the settings use (`SettingSource::{Default, User,
+        Profile { name }, Project { path }, Override}`), so an unusable
+        value above does not claim a key; `AgentConfig::setting_sources()`.
+      - `AgentConfig::write_values(&SettingsWrite)`:
+        `SettingsWrite { changes: [{ key, op: {"set": value} | "reset" }] }`
+        (strict, `ipc-request` in the policy with `SettingChange`); each
+        value `SettingSpec::check`ed, then `check_changes` (the old
+        `check_setting` generalized to a batch, so a commit group is one
+        check) refuses any new repair, then one atomic in-place write
+        (comments and unknown keys kept; a reset removes the key); returns
+        `SettingsWriteOutcome { written, shadowed, apply }`. `config set` of
+        a key with a spec goes through it; a profile's key is checked
+        against its spec first; other keys (`plugins.*`, a table) keep the
+        re-decode path. `config get` is unchanged.
+      - `cargo xtask check-config-reference` (in `cargo xtask check`): every
+        `SettingSpec::new("key", …)` of `crates/config/src` (the key must be
+        a string literal; macro bodies are read) has a row in the
+        `## config.toml` tables of `config-reference` in both languages.
+      - Deviations: the decoder overlays the layer below rather than
+        `#[serde(default)]` (layers decode over the one below, not the
+        defaults), and an out-of-range value still falls back to the layer
+        below rather than to its clamp; the hand-written fallbacks stay
+        (`sandboxMode` → read-only, the SearXNG provider and URL pair and
+        URL normalization, `disabledPlugins` per name, absolute
+        `writableRoots`, non-blank model names of at most 256 bytes, the
+        summary-length pair); `SettingsSection` has only id, title and
+        settings (S3 adds group, order, file and values); the collections
+        `plugins`, `marketplaces`, `pluginOptions`, `tui.keymap` and
+        `tui.presets` have no spec and are a named exclusion of the
+        coverage test; `Set` carries raw JSON checked by the spec
+        (`SettingValue` has no `Deserialize`); the patches
+        (`AgentSettingsPatch`, the standalone and `[tui]` patches) are not
+        yet re-expressed on `write_values` (S3–S5 remove or move their
+        callers); keys are string literals because xtask may depend on no
+        workspace crate.
+      - Tests: `config/tests/settings` (every leaf of the defaults has
+        exactly one spec and every spec a leaf; every default is the
+        struct's and passes its spec; every choice value written and read
+        back; set and reset; refusals leave the file unchanged; a commit
+        group; provenance per layer and the shadowed outcome; a host's
+        configuration; `config set` and `write_values` write the same file;
+        `SettingsWrite` is strict); xtask's spec-key and row parsers.
+      - Docs (both languages): `configuration#write` (what `config set`
+        checks), `cli-reference#config`, `building-testing` (the new check);
+        AGENTS.md's check list. The rest is S7's.
+      - No golden changed (nothing model-visible); no TUI snapshot changed.
+      - Hanafubuki at its next pin: additive only. New in `hanafubuki_agent`:
+        `config_sections`, `SettingsSection`, `SettingSource`,
+        `SettingsWrite`, `SettingChange`, `SettingWriteOp`,
+        `SettingsWriteOutcome`, `AgentConfig::write_values` and
+        `setting_sources`; `AgentTuiPreferences` and `AgentNetworkSettings`
+        gain `Deserialize`. `agent_settings_write` refuses out-of-bounds
+        memory and compaction values with the spec's message
+        (`` `memory.maxSessionsPerPass` is between 1 and 64 ``) instead of
+        the former generic one.
+      - Validation: `cargo fmt --all --check`; `RUSTFLAGS="-D warnings"
+        cargo check --workspace --all-targets --all-features`; `cargo clippy
+        --workspace --all-targets --all-features -- -D warnings`; `cargo
+        xtask check`; `cargo test --workspace --all-features`; `bun install
+        --frozen-lockfile`, `bun run format:check:site`, `bun run
+        site:check`, `bun run site:test`, `VITE_BASE_PATH=/hanafubuki-agent/
+        bun run site:build` (all 35 pages prerendered). CI on Linux, Windows
+        and macOS: CI_URL
+      - Module size: no exception added or raised.
+      - For S3: build the catalog's sections from `config_sections()`, their
+        values from `resolved_document()` and `setting_sources()`; the
+        facade's `write_setting_values` is `write_values` then
+        `apply_settings_to_plugins`; `disabledPlugins` has a spec (general,
+        advanced) though the plugins collection also writes it; the model
+        policy is still decoded by hand (`read_member` remains for it);
+        `write_settings`, `set_plugin_disabled` and a repair still write the
+        whole settings object, after which every key's source is `User`
+        until reset; `check-config-reference` reads a macro body only when
+        it is comma-separated expressions, so keep specs directly in
+        `vec![…]`.
 - [ ] S3: the facade's `settings_catalog`, `write_setting_values`,
       `run_settings_action`; collections for Providers, the model policy,
       MCP, plugins, marketplaces, hooks, roles, profiles and project trust;

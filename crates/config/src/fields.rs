@@ -46,6 +46,11 @@ impl<'a> Fields<'a> {
         }
     }
 
+    /// The object being read.
+    pub(crate) fn object(&self) -> &'a Map<String, Value> {
+        self.object
+    }
+
     pub(crate) fn raw(&self, field: &str) -> Option<&'a Value> {
         self.object.get(field)
     }

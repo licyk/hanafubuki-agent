@@ -4,6 +4,7 @@
 
 use serde_json::{Map, Value};
 
+use crate::sections::LayerRead;
 use crate::settings::decode_settings;
 use crate::standalone::decode_standalone;
 use crate::store::object;
@@ -70,6 +71,14 @@ pub(crate) fn target<'a>(key: &str, path: &'a [String]) -> Result<KeyTarget<'a>,
     }
 }
 
+/// One key a write changes.
+pub(crate) struct KeyChange {
+    pub(crate) key: String,
+    pub(crate) path: Vec<String>,
+    /// `None` removes the key.
+    pub(crate) value: Option<Value>,
+}
+
 /// Checks `value` for `key` in `document`, a table of settings decoded over
 /// `below`: the key must be a setting's, and the value one the Agent can
 /// use (a value the document already could not use is not this write's).
@@ -80,7 +89,6 @@ pub(crate) fn check_setting(
     value: &Value,
     below: &AgentSettings,
 ) -> Result<(), String> {
-    let before = repairs(document, below);
     let mut changed = document.clone();
     insert(&mut changed, path, value.clone());
     // `[plugins]` and `[marketplaces]` are keyed by what the user installed
@@ -91,13 +99,40 @@ pub(crate) fn check_setting(
     {
         return Err(format!("`{key}` is not a setting of config.toml"));
     }
-    match repairs(&changed, below)
+    let change = KeyChange {
+        key: key.to_string(),
+        path: path.to_vec(),
+        value: Some(value.clone()),
+    };
+    check_changes(document, &[change], below)
+}
+
+/// Checks that `document` with `changes` made holds no value the Agent
+/// cannot use that it did not already hold, reading it as one: the
+/// changes of one write are checked together.
+pub(crate) fn check_changes(
+    document: &Map<String, Value>,
+    changes: &[KeyChange],
+    below: &AgentSettings,
+) -> Result<(), String> {
+    let before = repairs(document, below);
+    let mut changed = document.clone();
+    for change in changes {
+        match &change.value {
+            Some(value) => insert(&mut changed, &change.path, value.clone()),
+            None => remove(&mut changed, &change.path),
+        }
+    }
+    let Some(repair) = repairs(&changed, below)
         .into_iter()
         .find(|repair| !before.contains(repair))
-    {
-        Some(repair) => Err(format!("`{key}` cannot take this value: {repair}")),
-        None => Ok(()),
-    }
+    else {
+        return Ok(());
+    };
+    Err(match changes {
+        [change] => format!("`{}` cannot take this value: {repair}", change.key),
+        _ => format!("these values cannot be written together: {repair}"),
+    })
 }
 
 pub(crate) fn check_trust(key: &str, value: &Value) -> Result<(), String> {
@@ -147,15 +182,30 @@ pub(crate) fn insert(document: &mut Map<String, Value>, path: &[String], value: 
     table.insert(last.clone(), value);
 }
 
+/// Removes `path` from `document`, when it is there.
+fn remove(document: &mut Map<String, Value>, path: &[String]) {
+    let Some((last, parents)) = path.split_last() else {
+        return;
+    };
+    let mut table = document;
+    for key in parents {
+        let Some(Value::Object(next)) = table.get_mut(key) else {
+            return;
+        };
+        table = next;
+    }
+    table.remove(last);
+}
+
 fn decoded(document: &Map<String, Value>, below: &AgentSettings) -> AgentSettings {
-    decode_settings(document, below, "", &mut Vec::new())
+    decode_settings(document, below, "", &mut LayerRead::default())
 }
 
 fn repairs(document: &Map<String, Value>, below: &AgentSettings) -> Vec<String> {
-    let mut repairs = Vec::new();
-    decode_settings(document, below, "", &mut repairs);
-    decode_standalone(document, &AgentStandaloneSettings::default(), &mut repairs);
-    repairs
+    let mut read = LayerRead::default();
+    decode_settings(document, below, "", &mut read);
+    decode_standalone(document, &AgentStandaloneSettings::default(), &mut read);
+    read.repairs
 }
 
 #[cfg(test)]

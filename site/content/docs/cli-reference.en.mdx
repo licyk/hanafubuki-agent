@@ -65,12 +65,12 @@ See [exec](/docs/exec) and [exec --json events](/docs/json-events).
 
 ## config [#config]
 
-| Command                | Does                                                                                                                                                             |
-| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `config path`          | Prints where `config.toml`, `providers.toml`, `mcp.toml`, the data directory and the log file are                                                                |
-| `config get [KEY]`     | Prints a key's value with every layer applied (a string as it is, anything else as TOML); without a key, every setting. A proxy URL's credentials print as `***` |
-| `config set KEY VALUE` | Writes one key into the user's `config.toml`: any setting, `profiles.NAME.KEY`, `projects."PATH".trustLevel`. The value is TOML, or a string when it is not      |
-| `config edit`          | Opens the user's `config.toml` in `$VISUAL` or `$EDITOR`                                                                                                         |
+| Command                | Does                                                                                                                                                                                                                           |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `config path`          | Prints where `config.toml`, `providers.toml`, `mcp.toml`, the data directory and the log file are                                                                                                                              |
+| `config get [KEY]`     | Prints a key's value with every layer applied (a string as it is, anything else as TOML); without a key, every setting. A proxy URL's credentials print as `***`                                                               |
+| `config set KEY VALUE` | Writes one key into the user's `config.toml`: any setting, `profiles.NAME.KEY`, `projects."PATH".trustLevel`. The value is TOML, or a string when it is not; a setting's value is checked against its type, bounds and choices |
+| `config edit`          | Opens the user's `config.toml` in `$VISUAL` or `$EDITOR`                                                                                                                                                                       |
 
 See [Configuration](/docs/configuration).
 

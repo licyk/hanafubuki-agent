@@ -58,10 +58,11 @@ hanafubuki-agent config set "projects.'$PWD'.trustLevel" trusted
 - 项目的信任级别：`projects."路径".trustLevel`，值为 `trusted` 或 `untrusted`；
 - 插件的选项：`pluginOptions.名字.键`，按插件的选项检查（[插件选项](/docs/config-reference#plugin-options)）；`config get pluginOptions.名字.键` 打印它的值，没有设置时打印默认值。
 
-它会拒绝不认识的键和 Agent 无法使用的值，例如：
+它会拒绝不认识的键和 Agent 无法使用的值。设置的值先按该设置接受的内容（类型、范围、可选值）检查，再带着它重新读取文件，所以违反设置之间规则的值也会被拒绝（如 `webSearchProvider = "searxng"` 而没有 `searxngBaseUrl`），例如：
 
 ```text
 error: `nosuch` is not a setting of config.toml
+error: `memory.maxUnusedDays` cannot take this value: it is between 1 and 3650
 ```
 
 写入只修改这一个键，保留文件中的注释和其他内容。`config set` 不能删除一个键；要删除，请编辑文件。终端界面的 [`/config`](/docs/terminal-interface#config) 是可搜索的配置中心：它的类型化表单通过相同的补丁和原子写入器整域写入，并在配置档、项目文件或 `-c` 覆盖了它写入的值时说明；分层页面列出读取的文件和警告；插件域打开每个有选项的内置插件的选项表单，`/plugins` 中按 `o` 也能打开。专用编辑界面 [`/tui` 和 `/raw`](/docs/terminal-interface#modes)、[`/theme`](/docs/terminal-interface#highlighting)、[`/statusline` 和 `/title`](/docs/terminal-interface#status-line)、[`/keymap`](/docs/terminal-interface#keymap) 和 [`/presets`](/docs/terminal-interface#presets) 以同样的方式写入它们的 `[tui]` 键，`/memories` 写入 `memory` 下的键。自定义高亮主题不在配置目录中：它们是数据目录 `themes/` 下的 `.tmTheme` 文件。

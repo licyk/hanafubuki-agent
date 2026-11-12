@@ -49,6 +49,7 @@ cargo test --workspace --all-features
 | `check-locks`             | 生产代码不使用 `std::sync::Mutex` 或 `RwLock`（任何导入形式）；测试与测试支持可以                                                                                                                                                                         |
 | `check-plugin-panics`     | 插件 crate（`crates/plugin-*`）、门面自己的插件（`crates/agent/src/plugins`）和压缩 crate（`crates/compression`）的生产源码中没有 `.unwrap()` 和 `.expect(`                                                                                               |
 | `check-notices`           | 派生自第三方代码的文件带有它们的署名标记，NOTICE 列出它们（`architecture/notices-policy.toml`），见[许可证](/docs/contributing#licence)                                                                                                                   |
+| `check-config-reference`  | `crates/config/src` 声明的每个设置（`SettingSpec::new("键", …)`，键是字符串字面量）在[配置参考](/docs/config-reference#config-toml)的 `config.toml` 表格中都有一行，两种语言都有                                                                          |
 
 另外还有：
 

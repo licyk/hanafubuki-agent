@@ -58,10 +58,11 @@ hanafubuki-agent config set "projects.'$PWD'.trustLevel" trusted
 - a project's trust: `projects."PATH".trustLevel`, `trusted` or `untrusted`;
 - a plugin's option: `pluginOptions.NAME.KEY`, checked against the plugin's options ([Plugin options](/docs/config-reference#plugin-options)); `config get pluginOptions.NAME.KEY` prints its value, the default when nothing sets it.
 
-It refuses a key it does not know and a value the Agent could not use:
+It refuses a key it does not know and a value the Agent could not use. A setting's value is checked first against what the setting takes (its type, its bounds, its choices), then the file is read again with it, so a value that breaks a rule between settings is refused too (`webSearchProvider = "searxng"` without `searxngBaseUrl`):
 
 ```text
 error: `nosuch` is not a setting of config.toml
+error: `memory.maxUnusedDays` cannot take this value: it is between 1 and 3650
 ```
 
 A write changes that one key and keeps the file's comments and everything else. `config set` cannot remove a key; edit the file for that. The terminal interface's [`/config`](/docs/terminal-interface#config) is a searchable configuration center: its typed forms write whole domains through the same patches and atomic writers, and it says when a profile, the project's file or `-c` replaces what it wrote; its layers page lists the files read and their warnings; its plugins domain opens the options form of each built-in plugin that has options, which `/plugins` also opens (`o`). The specialized editors [`/tui` and `/raw`](/docs/terminal-interface#modes), [`/theme`](/docs/terminal-interface#highlighting), [`/statusline` and `/title`](/docs/terminal-interface#status-line), [`/keymap`](/docs/terminal-interface#keymap) and [`/presets`](/docs/terminal-interface#presets) write their `[tui]` keys the same way, and `/memories` its `memory` keys. Custom highlighting themes are not in the configuration directory: they are `.tmTheme` files in the data directory's `themes/`.

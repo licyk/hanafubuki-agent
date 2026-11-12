@@ -26,6 +26,7 @@ mod plugin_options;
 mod providers;
 mod recovery;
 mod roles;
+mod sections;
 mod settings;
 mod standalone;
 mod store;
@@ -40,7 +41,7 @@ pub use hanafubuki_agent_foundation::settings::{
 pub use hanafubuki_agent_packages::{
     PluginOptionSchema, ResolvedPluginOption, ResolvedPluginOptions, MAX_PLUGIN_OPTIONS,
 };
-pub use layers::{ConfigLayerSource, ConfigLayers, PROJECT_CONFIG_DIR};
+pub use layers::{ConfigLayerSource, ConfigLayers, SettingSource, PROJECT_CONFIG_DIR};
 pub use mcp::McpSettingsStore;
 pub use network::AgentProxy;
 pub use overrides::{parse_config_value, ConfigOverrides};
@@ -63,6 +64,7 @@ pub use roles::{
     is_role_name, read_role_files, InstructionsMode, RoleDefinition, RoleFiles, RoleLayer,
     RoleOrigin, RoleSource, MAX_ROLE_NAME_BYTES, ROLE_DIR,
 };
+pub use sections::{config_sections, SettingsSection};
 pub use settings::{
     agent_settings_fields, AgentBackgroundCompactionSettings, AgentCompactionSettings,
     AgentCompactionStrategy, AgentHierarchicalCompactionSettings, AgentMemorySettings,
@@ -75,8 +77,9 @@ pub use standalone::{
     AgentLogLevel, AgentNetworkSettings, AgentStandaloneSettings, AgentStandaloneSettingsPatch,
 };
 pub use store::{
-    read_mcp_document, read_providers_document, read_settings_document, AgentConfig,
-    AGENT_CREDENTIAL_FILES, AGENT_MCP_FILE, AGENT_PROVIDERS_FILE, AGENT_SETTINGS_FILE,
+    read_mcp_document, read_providers_document, read_settings_document, AgentConfig, SettingChange,
+    SettingWriteOp, SettingsWrite, SettingsWriteOutcome, AGENT_CREDENTIAL_FILES, AGENT_MCP_FILE,
+    AGENT_PROVIDERS_FILE, AGENT_SETTINGS_FILE,
 };
 pub use tui::{
     AgentAlternateScreen, AgentScrollbackMouse, AgentTuiPreferences, AgentTuiPreferencesPatch,

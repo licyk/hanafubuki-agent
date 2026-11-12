@@ -4,10 +4,13 @@
 //! ([`crate::AgentConfig::set_user_value`]), the terminal interface
 //! ([`crate::AgentConfig::write_tui_preferences`]) or a person does.
 
+use hanafubuki_agent_foundation::settings::{
+    SettingApply, SettingChoice, SettingKind, SettingSpec,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
-use crate::fields::{read_object, Fields};
+use crate::sections::{described, no_rule, LayerRead, SettingsRead, SettingsSection};
 use crate::tui::read_tui;
 use crate::{AgentProxy, AgentTuiPreferences};
 
@@ -58,7 +61,7 @@ impl Default for AgentStandaloneSettings {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentNetworkSettings {
     pub proxy: AgentProxy,
@@ -101,24 +104,69 @@ impl From<AgentLogLevel> for log::LevelFilter {
     }
 }
 
-/// The standalone settings `object` holds, each missing or invalid one
-/// taking its value in `defaults`.
+pub(crate) fn network_section() -> SettingsSection {
+    SettingsSection::new(
+        "network",
+        "Network and logging",
+        vec![
+            SettingSpec {
+                help: Some(
+                    "\"system\", \"disabled\", or a proxy URL (http, https, socks4, socks4a, socks5, socks5h)"
+                        .into(),
+                ),
+                keywords: vec!["proxy".into()],
+                ..described(
+                    SettingSpec::new(
+                        "network.proxy",
+                        "Proxy",
+                        SettingKind::Text {
+                            maximum_chars: None,
+                            secret: false,
+                            nullable: false,
+                        },
+                    ),
+                    "The proxy of the Providers, the web tools, MCP and the processes the Agent starts",
+                )
+            },
+            SettingSpec {
+                apply: SettingApply::NextLaunch,
+                keywords: vec!["log".into()],
+                ..described(
+                    SettingSpec::new(
+                        "logLevel",
+                        "Log level",
+                        SettingKind::Choice {
+                            values: [
+                                ("off", "Off"),
+                                ("error", "Error"),
+                                ("warn", "Warn"),
+                                ("info", "Info"),
+                                ("debug", "Debug"),
+                                ("trace", "Trace"),
+                            ]
+                            .into_iter()
+                            .map(|(value, label)| SettingChoice::new(value, label))
+                            .collect(),
+                        },
+                    ),
+                    "The log file's level; only trace records model and tool content",
+                )
+            },
+        ],
+    )
+}
+
+/// The standalone settings `object` holds, each read by its spec, a missing
+/// or invalid one taking its value in `defaults`.
 pub(crate) fn decode_standalone(
     object: &Map<String, Value>,
     defaults: &AgentStandaloneSettings,
-    repairs: &mut Vec<String>,
+    report: &mut LayerRead,
 ) -> AgentStandaloneSettings {
-    let mut fields = Fields::new(object, repairs);
-    let network = read_object(
-        &mut fields,
-        "network",
-        &defaults.network,
-        |fields, network| {
-            network.proxy = fields.read("proxy", network.proxy.clone());
-        },
-    );
-    let log_level = fields.read("logLevel", defaults.log_level);
-    let tui = read_tui(&mut fields, &defaults.tui);
+    let mut read = SettingsRead::new(object, report);
+    let network = read.read("network", &defaults.network, no_rule);
+    let log_level = read.read("logLevel", &defaults.log_level, no_rule);
+    let tui = read_tui(&mut read, &defaults.tui);
     AgentStandaloneSettings {
         network,
         log_level,
