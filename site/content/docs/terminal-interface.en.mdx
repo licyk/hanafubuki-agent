@@ -43,7 +43,7 @@ At the start (and after `/new` or a resume) a box shows the version, the model a
 
 An approval, a question, the `/model` and `/mode` lists and the screens of `/providers` and `/mcp` take the place of the status line and the composer while they are open. A screen stays open when a turn ends.
 
-In the conversation your messages start with `›`; a tool call is `• Running TOOL: SUBJECT` where it starts, and changes there in place into `• Called TOOL` or `• Failed TOOL`, with the first and last lines of its output; `apply_patch` shows the diff it made; a thinking is `• Thinking 3.4s`, then `• Thought · 20.7s` ([Thinking](#thinking)); the task plan is `• Updated Plan`; errors start with a red `■`. After a stretch of tool calls, a `─ Worked for 1m 05s ─` rule comes before the answer, `─ Worked for 1m 05s · thought for 20.7s ─` when the turn thought.
+In the conversation your messages start with `›`; a tool call is `• Running TOOL: SUBJECT` where it starts, and changes there in place into `• Called TOOL` or `• Failed TOOL`, with the first and last lines of its output; `apply_patch` shows the diff it made; a thinking is `• Thinking 3.4s`, then `• Thought · 20.7s` ([Thinking](#thinking)); the task plan is `• Updated Plan · 1/5 complete` with its steps; errors start with a red `■`. After a stretch of tool calls, a `─ Worked for 1m 05s ─` rule comes before the answer, `─ Worked for 1m 05s · thought for 20.7s ─` when the turn thought.
 
 ## Keys [#keys]
 
@@ -319,23 +319,26 @@ Only the path is sent; the model reads the file with its tools.
 
 In Fullscreen the conversation follows the latest output until you scroll. Scrolled up, it stays where you are while the turn goes on, and a `↓ Back to bottom · esc` control above the composer (`New activity · …` when something was added below) brings you back.
 
-| Key or gesture                         | Does                                                                                                                                                     |
-| -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Mouse wheel                            | Scrolls three lines                                                                                                                                      |
-| Page Up/Page Down                      | Scrolls one page                                                                                                                                         |
-| Ctrl-Home, Ctrl-End (Alt-`<`, Alt-`>`) | To the start of the session (loading its earlier messages) or to the latest output                                                                       |
-| Esc, a click on the control            | Back to the latest output                                                                                                                                |
-| Enter on an empty composer             | Back to the latest output                                                                                                                                |
-| Drag                                   | Selects; a double click selects a word, a triple click a line, Shift-click extends the selection                                                         |
-| Ctrl-Space                             | Starts a selection with the keyboard; arrows and Shift-arrows move it                                                                                    |
-| Ctrl-X `[`                             | Select mode: a cursor in the conversation, moved with the keys, to select and copy                                                                       |
-| Ctrl-C, Ctrl-Shift-C, Ctrl-Insert      | With a selection: copies it                                                                                                                              |
-| Enter                                  | With a selection: copies it and goes back to the latest output                                                                                           |
-| Right click                            | Copies the selection                                                                                                                                     |
-| Esc                                    | With a selection: clears it                                                                                                                              |
-| F3                                     | Finds text: type the query, Enter accepts the match, Ctrl-P/Ctrl-N go to the older or newer one, Esc cancels                                             |
-| F4                                     | Focuses the latest activity (a tool call, a thinking): Up/Down move between them, Enter or a click on its control shows or hides its details, Esc leaves |
-| Ctrl-T                                 | Shows the whole conversation in detail (every thinking's text, a tool call's whole output), in place; Ctrl-T or Esc goes back                            |
+| Key or gesture                         | Does                                                                                                                                                              |
+| -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Mouse wheel                            | Scrolls three lines                                                                                                                                               |
+| Page Up/Page Down                      | Scrolls one page                                                                                                                                                  |
+| Ctrl-Home, Ctrl-End (Alt-`<`, Alt-`>`) | To the start of the session (loading its earlier messages) or to the latest output                                                                                |
+| Esc, a click on the control            | Back to the latest output                                                                                                                                         |
+| Enter on an empty composer             | Back to the latest output                                                                                                                                         |
+| Drag                                   | Selects; a double click selects a word, a triple click a line, Shift-click extends the selection                                                                  |
+| Ctrl-Space                             | Starts a selection with the keyboard; arrows and Shift-arrows move it                                                                                             |
+| Ctrl-X `[`                             | Select mode: a cursor in the conversation, moved with the keys, to select and copy                                                                                |
+| Ctrl-C, Ctrl-Shift-C, Ctrl-Insert      | With a selection: copies it                                                                                                                                       |
+| Enter                                  | With a selection: copies it and goes back to the latest output                                                                                                    |
+| Right click                            | Copies the selection                                                                                                                                              |
+| Esc                                    | With a selection: clears it                                                                                                                                       |
+| F3                                     | Finds text: type the query, Enter accepts the match, Ctrl-P/Ctrl-N go to the older or newer one, Esc cancels                                                      |
+| Click on an entry's control or header  | Shows or hides its details: a press and a release on the same cell of the header, so a drag that starts there still selects (below)                               |
+| F4                                     | Focuses the latest activity (a tool call, a thinking, a plan, a long message): Up/Down move between them, Enter or a click shows or hides its details, Esc leaves |
+| Ctrl-T                                 | Shows the whole conversation in detail (every thinking's text, a tool call's whole output), in place; Ctrl-T or Esc goes back                                     |
+
+An entry with more to show has a control on its own row below it: a thinking (its text), a tool call whose output is longer than its first and last lines (`+ 12 lines`) or a folded `compress` call (`+ Show details`), a task plan with a note or more than three steps (collapsed to three steps: those in progress, then those pending, then those done), and a message of yours longer than 12 rows (its first 12, `+ 8 lines`). Expanded, the control reads `− Hide details` or `− Show less`. An entry with nothing more to show has no control. Its header is its first row of text (a message's first line): a click there toggles it too, and a quick second click toggles it back rather than select a word. Each entry expands on its own, and a running one keeps its state when it completes.
 
 The footer under the conversation shows the keys of a selection, a search or a focused activity while it lasts. A copy goes to the system clipboard; where there is none (over SSH, say) it is sent to the terminal (OSC 52), which most terminals put on their clipboard, and the interface says it is unconfirmed. A copy's result shows above the composer for a few seconds.
 
@@ -343,12 +346,12 @@ While an approval, a question or a list is open, the keys are its own; the mouse
 
 Fullscreen captures the mouse, so the terminal's own selection usually needs Shift held while you drag. To copy with the terminal's selection, `/raw` shows the conversation without its styles.
 
-In Scrollback the terminal holds the conversation: you scroll, select and copy it with the terminal. Its newest entries stay in the tail above the bottom area, laid out as in Fullscreen: a thinking or a tool call changes there in place, and a thinking's or a tool call's control (`+ 12 lines`, `+ Show details`) shows or hides its details.
+In Scrollback the terminal holds the conversation: you scroll, select and copy it with the terminal. Its newest entries stay in the tail above the bottom area, laid out as in Fullscreen: a thinking or a tool call changes there in place, and an entry's control (`+ 12 lines`, `+ Show details`) shows or hides its details.
 
 - When the tail would take more than 60% of the screen (at least 8 rows), its oldest completed entries are written into the scrollback as they are shown; one collapsed with more to show ends with `ctrl + t to expand`. An answer is written line by line as it passes the limit. A running entry is never written: one taller than the tail shows its first line and its latest ones.
 - When you send your next message, the tail is written first, whole, so a finished turn's entries stay expandable until then. A session opened in its place (`/new`, a resume), switching to the other conversation and resizing the terminal write it too, and quitting writes what is left.
 - During a turn the tail does not get shorter: collapsing an entry leaves blank rows until the next write.
-- A click on a control shows or hides the details, and so does F4 then Enter (Up/Down move between the tail's activities, Esc leaves).
+- A click on a control or on an entry's header shows or hides the details, and so does F4 then Enter (Up/Down move between the tail's activities, Esc leaves).
 - To take the click, the interface captures the mouse while the tail shows a control. The first turn of the wheel gives it back to the terminal, which scrolls from the next turn on, until your next key or the next entry. Shift-drag still selects with the terminal. With `tui.scrollbackMouse = "off"` the mouse is never captured; the keys and the [transcript](#transcript) still work.
 - Entries already written expand in the [transcript](#transcript) (Ctrl-T).
 
@@ -370,16 +373,17 @@ If the compression fails for a request (its algorithm panicked), the conversatio
 
 ## The transcript [#transcript]
 
-In Scrollback, Ctrl-T opens the whole session's transcript (`T R A N S C R I P T`) on the terminal's alternate screen, in the compact presentation, where an entry's control shows its details (a click, or F4 then Enter, as in [Reading the conversation](#reading)); a second Ctrl-T shows every entry in detail, and a third closes it. `/diff` shows its diff the same way. In Fullscreen, Ctrl-T shows the conversation in detail in place instead (above), and `/diff` covers the screen until you close it.
+In Scrollback, Ctrl-T opens the whole session's transcript (`T R A N S C R I P T`) on the terminal's alternate screen, in the compact presentation, where an entry's control shows its details (a click on the control or the header, or F4 then Enter, as in [Reading the conversation](#reading); Ctrl-O every thinking); a second Ctrl-T shows every entry in detail, and a third closes it. `/diff` shows its diff the same way. In Fullscreen, Ctrl-T shows the conversation in detail in place instead (above), and `/diff` covers the screen until you close it.
 
-| Key                                 | Does                    |
-| ----------------------------------- | ----------------------- |
-| Up/Down (`k`/`j`)                   | Scrolls one line        |
-| Page Up/Page Down (Space, Ctrl-B/F) | Scrolls one page        |
-| Ctrl-U/Ctrl-D                       | Scrolls half a page     |
-| Home/End                            | To the start or the end |
-| `q`, Esc, Ctrl-C                    | Closes it               |
-| Ctrl-T (the transcript)             | In detail, then closes  |
+| Key                                 | Does                                          |
+| ----------------------------------- | --------------------------------------------- |
+| Up/Down (`k`/`j`)                   | Scrolls one line                              |
+| Page Up/Page Down (Space, Ctrl-B/F) | Scrolls one page                              |
+| Ctrl-U/Ctrl-D                       | Scrolls half a page                           |
+| Home/End                            | To the start or the end                       |
+| `q`, Esc, Ctrl-C                    | Closes it                                     |
+| Ctrl-T (the transcript)             | In detail, then closes                        |
+| Ctrl-O                              | Expands every thinking, or collapses them all |
 
 In detail the transcript shows every thinking's text and a tool call's whole output, where the scrollback shows its first and last lines. Either way the thinking and tool calls still running are where they started, changing in place. Its selection, copying and search are the ones of [Reading the conversation](#reading) (drag, Ctrl-Space, F3).
 
@@ -409,7 +413,7 @@ Enter edits in a copy of the session: it is forked before the message's turn and
 
 Each stretch of the model's thinking (a reasoning item) is an entry of its own, in the conversation where it happened, in order with the answers and tool calls: a step that thinks, calls a tool, thinks again and answers shows four entries. While the model thinks it reads `• Thinking 3.4s`, counting up in tenths of a second; when the stretch ends it becomes `• Thought · 20.7s` in place (`1m 05s` past a minute).
 
-Each is collapsed to that line, with a `+ Show details` control once its text has arrived. A click on the control (in Fullscreen, and in Scrollback while the entry is in the tail), or F4 then Enter, shows the text below it as dim Markdown, streaming while the model still thinks, and `− Hide details` hides it again. Each entry expands on its own, and stays expanded when it completes. Ctrl-O expands every thinking in the conversation (in Scrollback, those in the tail) at once, or collapses them all when all are expanded; a later thinking still starts collapsed.
+Each is collapsed to that line, with a `+ Show details` control once its text has arrived. A click on the control or on the line itself (in Fullscreen, in Scrollback while the entry is in the tail, and in the transcript), or F4 then Enter, shows the text below it as dim Markdown, streaming while the model still thinks, and `− Hide details` hides it again. Each entry expands on its own, and stays expanded when it completes. Ctrl-O expands every thinking in the conversation (in Scrollback, those in the tail, or in the transcript while it is open) at once, or collapses them all when all are expanded; a later thinking still starts collapsed.
 
 A Provider that sends no text leaves only the line, with no control. If the turn ends before the thinking does (an error, an interrupt), the line is completed with the time so far. In Scrollback a thinking is written into the scrollback as it is shown when it leaves the tail, and cannot be changed afterwards; the transcript (Ctrl-T) still expands it, and a second Ctrl-T shows every thinking's text, as Ctrl-T's detailed conversation does in Fullscreen. A resumed session replays every stretch the same way, collapsed; a thinking whose text was cut at the Agent's bound says `• Thought · 20.7s (truncated)`.
 

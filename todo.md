@@ -381,8 +381,91 @@ independent.
       - Hanafubuki at its next pin: nothing (the TUI crate only).
       - Module size: no exception added or raised. `notices-policy.toml`
         lists `app/tests/thinking.rs` as original.
-- [ ] T3: an id and a control on every expandable entry, a click on its
+- [x] T3: an id and a control on every expandable entry, a click on its
       control or header, in Fullscreen and in Scrollback's tail.
+      Done (2026-11-12):
+      - Entries: a thinking and a tool call already had ids and controls
+        (`+ N lines` for a long output, `+ Show details` for a folded
+        `compress`). New: a task plan (`plan:{n}`) collapses to `• Updated
+        Plan · X/Y complete` and its steps without the note; past three
+        steps, three of them, in progress then pending then completed
+        (Codex 57a808a392's preview, wrapped rather than clipped; `plan.rs`
+        keeps its `rust-v0.93.0` marker, which the notices check accepts),
+        with `+ Show details` when it has a note or more than three steps;
+        a short plan without a note is shown as before, in order. Its
+        expanded form is today's checklist under the same header. A message
+        of yours (`user:{n}`) past 12 wrapped rows shows its first 12 and
+        `+ N lines`. Neither has an identity of its own, so
+        `history_cell::next_activity_id` numbers them per run (disclosure is
+        never persisted); every message has an id, a control only when long,
+        as a short tool call has an id without one.
+      - The header click (`transcript_view/disclosure.rs`): a header is the
+        entry's first row of text (`TextLayout::header_row`, past a
+        separator and a prompt's blank padding; F4's emphasis, F4's
+        "header visible" test and the tail's header row use it too). A
+        plain first left press there, on an entry with a control, is kept
+        with the entry's ids; the release toggles it when it is on the same
+        cell and that cell still shows the same entry's header. In
+        Fullscreen and the Ctrl-T transcript the press still starts a
+        selection: only a release that leaves no selected text toggles, so
+        a drag from a header selects. A press on a control still toggles at
+        once. A toggling release ends the multi-click count, so a quick
+        second click on a header toggles it back rather than select a word.
+        Scrollback's tail forwards `Up(Left)` as well as `Down(Left)`
+        (`press_tail`/`release_tail`, was `click_tail`). The whole header
+        row is the target, past its text too.
+      - Scrollback now writes a long message and a long plan as they are
+        shown, collapsed ones ending with `ctrl + t to expand`, as T1b
+        writes every entry with a control.
+      - The Ctrl-T transcript takes Ctrl-O (`chat.toggle_thinking`), which
+        T2 left out.
+      - Keyboard: F4, Up/Down, Enter, Left/Right reach the new entries as
+        before.
+      - Tests: `transcript_view/disclosure/tests.rs` (a header click toggles
+        one entry, past its text too, and a quick second click toggles it
+        back; a drag from a
+        header selects `Thought` without toggling; a release on another
+        entry, a header without a control and the detailed presentation
+        toggle nothing; a long message's first 12 rows, `+ 8 lines`, F4 and
+        Enter, its header click past the padding), `transcript_view/tail/
+        tests.rs` (a header click in the tail, a release elsewhere or
+        without a press), `history_cell/tests.rs` (a long plan's preview
+        and control, a short plan's none and its order kept, a message over
+        12 rows), and
+        `app/tests/thinking.rs` on vt100 (a click on `• Thought ·` in both
+        presentations; Ctrl-O and a header click in Scrollback's Ctrl-T
+        transcript).
+      - Snapshots: the two plan snapshots
+        (`plan_update_with_note_and_wrapping_snapshot`,
+        `plan_update_without_note_snapshot`) gain ` · 1/3 complete` / ` ·
+        0/2 complete` in the header, which is the same collapsed and
+        expanded. No golden changed (nothing model-visible).
+      - Deviations from §4.8: the exploration group does not exist until
+        T5, which gives it its members' ids. A plan's and a long message's
+        collapsed forms are new presentation, not T4/T5 tool formatting.
+        Plans wrap their preview steps instead of clipping them (no
+        clipping helper in the crate), so a wide step is no reason for a
+        control. Double-click word selection on a header is traded for the
+        quick second toggle (a drag still selects there).
+      - Docs (both languages): `terminal-interface#reading` (the click row,
+        F4's entries, which entries have a control, the header, the tail's
+        click), `#transcript` (the header click, Ctrl-O and its row),
+        `#layout` and `#thinking` (the plan's header, the line's click,
+        Ctrl-O in the transcript); `plan-mode` (the plan's header and
+        preview); `internals#tui-details` (a new Disclosure bullet).
+      - Validation: `cargo fmt --all --check`; `RUSTFLAGS="-D warnings"
+        cargo check --workspace --all-targets --all-features`; `cargo clippy
+        --workspace --all-targets --all-features -- -D warnings`; `cargo
+        xtask check`; `cargo test --workspace --all-features`; `bun install
+        --frozen-lockfile`, `bun run format:check:site`, `bun run
+        site:check`, `bun run site:test`, `VITE_BASE_PATH=/hanafubuki-agent/
+        bun run site:build` (all 35 pages prerendered). CI on Linux, Windows
+        and macOS: https://github.com/licyk/hanafubuki-agent/actions/runs/43207722205
+        (run on 361982d, which differs from the landed commit only in this
+        line; Site: .../runs/43207722487; Linux, Windows and macOS jobs all
+        `success`).
+      - Hanafubuki at its next pin: nothing (the TUI crate only).
+      - Module size: no exception added or raised.
 - [ ] T4: `AgentToolPresenter` and `ToolPresenterRegistry`; presenters for
       every built-in tool and a fallback; `subject` on `tool_started`,
       `callId` on `execution_progress`; `tool_display` fetched off the UI

@@ -3,10 +3,13 @@
 //! The disclosure of an activity's details in the compact presentation,
 //! keyed by the activities' stable identities and apart from selection.
 //! F4 focuses the latest visible activity; the list keys then move between
-//! activities and Enter shows or hides the focused one's details. A click
-//! on an activity's control row toggles it too, and Ctrl-O every thinking
-//! at once. Copying and search read the full text whatever is disclosed. A
-//! live entry keeps its disclosure as it changes, through its completion.
+//! activities and Enter shows or hides the focused one's details. A press
+//! on an activity's control row toggles it too, and so does a click on its
+//! header row: a press and a release on the same cell of the same header,
+//! so a drag that starts on a header still selects. Ctrl-O toggles every
+//! thinking at once. Copying and search read the full text whatever is
+//! disclosed. A live entry keeps its disclosure as it changes, through its
+//! completion.
 
 use std::collections::HashSet;
 
@@ -26,6 +29,14 @@ const PAGE_ACTIVITIES: usize = 5;
 pub(super) struct Disclosure {
     pub(super) expanded: HashSet<String>,
     pub(super) focused: Option<Vec<String>>,
+    /// A press on a header, which toggles its entry when released there.
+    pressed_header: Option<HeaderPress>,
+}
+
+struct HeaderPress {
+    column: u16,
+    row: u16,
+    activity_ids: Arc<[String]>,
 }
 
 impl Disclosure {
@@ -137,7 +148,7 @@ impl TranscriptView {
                     .bold()
                     .remove_modifier(Modifier::DIM),
             );
-        } else if row == usize::from(layout.separated) {
+        } else if layout.header_row() == Some(row) {
             buf.set_style(area, Style::default().underlined());
         }
     }
@@ -171,6 +182,64 @@ impl TranscriptView {
         };
         self.toggle_activity(cells, index);
         true
+    }
+
+    /// A left press that toggled no control: on the header row of an
+    /// entry with a control, it is kept until the release.
+    pub(super) fn press_header_at(&mut self, column: u16, row: u16) {
+        self.disclosure.pressed_header =
+            self.header_ids_at(column, row)
+                .map(|activity_ids| HeaderPress {
+                    column,
+                    row,
+                    activity_ids,
+                });
+    }
+
+    /// A left release: toggles the entry whose header was pressed on the
+    /// same cell, when that cell still shows its header; `false` otherwise.
+    pub(super) fn release_header_at(
+        &mut self,
+        cells: &[Arc<dyn HistoryCell>],
+        column: u16,
+        row: u16,
+    ) -> bool {
+        let Some(press) = self.disclosure.pressed_header.take() else {
+            return false;
+        };
+        let same_header = (press.column, press.row) == (column, row)
+            && self
+                .header_ids_at(column, row)
+                .is_some_and(|ids| ids == press.activity_ids);
+        let Some(index) = same_header
+            .then(|| self.canonical_activity_index(cells, &press.activity_ids))
+            .flatten()
+        else {
+            return false;
+        };
+        self.toggle_activity(cells, index);
+        true
+    }
+
+    pub(super) fn cancel_header_press(&mut self) {
+        self.disclosure.pressed_header = None;
+    }
+
+    /// The activities of the entry whose header row, with a control, is at
+    /// the cell.
+    fn header_ids_at(&self, column: u16, row: u16) -> Option<Arc<[String]>> {
+        if self.detailed || self.mode != HistoryRenderMode::Rich {
+            return None;
+        }
+        if !self
+            .area
+            .contains(ratatui::layout::Position::new(column, row))
+        {
+            return None;
+        }
+        let visible = self.visible.get(usize::from(row - self.area.y))?;
+        (visible.layout.disclosure && visible.layout.header_row() == Some(visible.row))
+            .then(|| Arc::clone(&visible.activity_ids))
     }
 
     pub(super) fn handle_disclosure_key(
@@ -310,7 +379,7 @@ impl TranscriptView {
         let header_visible = self.visible.iter().any(|row| {
             row.layout.disclosure
                 && row.activity_ids.iter().any(|id| ids.contains(id))
-                && row.row == usize::from(row.layout.separated)
+                && row.layout.header_row() == Some(row.row)
         });
         self.disclosure.focused = Some(ids);
         if !header_visible {

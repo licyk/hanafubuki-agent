@@ -31,6 +31,6 @@ The model is in the same session, and sees the plan.
 
 ## The task plan [#task-plan]
 
-In the default mode, the model can keep a checklist with `update_plan`: up to 20 steps, each pending, in progress or completed. The terminal interface shows it as `• Updated Plan` with checkboxes; `exec --json` has it as `task_plan_updated` events.
+In the default mode, the model can keep a checklist with `update_plan`: up to 20 steps, each pending, in progress or completed. The terminal interface shows it as `• Updated Plan · 1/5 complete` with checkboxes, three steps of a longer plan until you expand it ([Reading the conversation](/docs/terminal-interface#reading)); `exec --json` has it as `task_plan_updated` events.
 
 The task plan is the model's progress, for itself and for you; it changes nothing about what the model can do.

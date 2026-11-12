@@ -54,7 +54,7 @@ fn a_click_on_a_control_toggles_it_and_the_tail_stays_at_its_latest_rows() {
         .position(|line| line.contains("+ 10 lines"))
         .expect(&screen);
     let column = screen.lines().nth(row).unwrap().find('+').unwrap();
-    assert!(view.click_tail(
+    assert!(view.press_tail(
         &cells,
         u16::try_from(column).unwrap(),
         u16::try_from(row).unwrap()
@@ -68,7 +68,7 @@ fn a_click_on_a_control_toggles_it_and_the_tail_stays_at_its_latest_rows() {
     let screen = paint(&mut view, &cells, 40, 8, false);
     assert!(screen.trim_end().ends_with("after the toggle"), "{screen}");
     // A click elsewhere toggles nothing.
-    assert!(!view.click_tail(&cells, 0, 7));
+    assert!(!view.press_tail(&cells, 0, 7));
 }
 
 #[test]
@@ -85,4 +85,26 @@ fn f4_focuses_the_tails_activity_and_enter_expands_it_in_place() {
     assert!(view
         .handle_tail_key(key(KeyCode::Char('a')), &cells)
         .is_none());
+}
+
+#[test]
+fn a_click_on_a_header_toggles_its_entry_in_the_tail() {
+    let mut view = TranscriptView::default();
+    let cells = vec![cell("note"), tool_call("call-1", 20)];
+    let screen = paint(&mut view, &cells, 40, 30, false);
+    let row = screen
+        .lines()
+        .position(|line| line.contains("Called shell"))
+        .expect(&screen);
+    let row = u16::try_from(row).unwrap();
+    // The press waits for its release, which must be on the same cell.
+    assert!(!view.press_tail(&cells, 4, row));
+    assert!(!view.release_tail(&cells, 5, row));
+    assert!(!paint(&mut view, &cells, 40, 30, false).contains("out 10"));
+    assert!(!view.press_tail(&cells, 4, row));
+    assert!(view.release_tail(&cells, 4, row));
+    let screen = paint(&mut view, &cells, 40, 30, false);
+    assert!(screen.contains("out 10"), "{screen}");
+    // A release with no press toggles nothing.
+    assert!(!view.release_tail(&cells, 4, row));
 }

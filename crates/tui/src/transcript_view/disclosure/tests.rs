@@ -2,14 +2,14 @@
 
 //! Disclosing an activity's details from the keyboard and the pointer.
 
-use ratatui::crossterm::event::{KeyCode, MouseButton, MouseEventKind};
+use ratatui::crossterm::event::{KeyCode, MouseButton, MouseEvent, MouseEventKind};
 
 use hanafubuki_agent::AgentReasoningId;
 use ratatui::buffer::Buffer;
 
 use super::*;
 use crate::history_cell::{LiveCell, ThinkingCell};
-use crate::transcript_view::tests::fixtures::{cell, key, mouse, render, text, tool_call};
+use crate::transcript_view::tests::fixtures::{cell, key, mouse, prompt, render, text, tool_call};
 
 #[test]
 fn f4_focuses_the_latest_activity_and_enter_toggles_its_details() {
@@ -186,4 +186,104 @@ fn ctrl_o_keeps_the_entry_at_the_top_of_a_readers_view() {
         assert!(!view.is_following());
         assert_eq!(first_line(text(&render(&mut view, &cells, 30, 6))), top);
     }
+}
+
+fn left(kind: fn(MouseButton) -> MouseEventKind, column: u16, row: u16) -> MouseEvent {
+    mouse(kind(MouseButton::Left), column, row)
+}
+
+#[test]
+fn a_click_on_a_header_toggles_its_entry_alone() {
+    let cells = vec![thinking(1, "first plan"), thinking(2, "second plan")];
+    let mut view = TranscriptView::default();
+    let frame = render(&mut view, &cells, 30, 10);
+    let second = row_of(&frame, "• Thought", 1);
+    // The press starts a selection as anywhere; the release on the same
+    // cell makes it a click.
+    view.handle_mouse(left(MouseEventKind::Down, 12, second), &cells);
+    assert!(!text(&render(&mut view, &cells, 30, 10)).contains("second plan"));
+    view.handle_mouse(left(MouseEventKind::Up, 12, second), &cells);
+    let shown = text(&render(&mut view, &cells, 30, 10));
+    assert!(shown.contains("second plan"), "{shown}");
+    assert!(!shown.contains("first plan"), "{shown}");
+
+    // The whole row is the target, past the header's text too.
+    let frame = render(&mut view, &cells, 30, 10);
+    let first = row_of(&frame, "• Thought", 0);
+    view.handle_mouse(left(MouseEventKind::Down, 27, first), &cells);
+    view.handle_mouse(left(MouseEventKind::Up, 27, first), &cells);
+    assert!(text(&render(&mut view, &cells, 30, 10)).contains("first plan"));
+    view.handle_mouse(left(MouseEventKind::Down, 27, first), &cells);
+    view.handle_mouse(left(MouseEventKind::Up, 27, first), &cells);
+
+    // A quick second click on the same cell toggles it back, not a double
+    // click selecting a word.
+    let frame = render(&mut view, &cells, 30, 10);
+    let second = row_of(&frame, "• Thought", 1);
+    view.handle_mouse(left(MouseEventKind::Down, 12, second), &cells);
+    view.handle_mouse(left(MouseEventKind::Up, 12, second), &cells);
+    assert!(!text(&render(&mut view, &cells, 30, 10)).contains("second plan"));
+    assert_eq!(view.selected_text(&cells), None);
+}
+
+#[test]
+fn a_drag_from_a_header_selects_and_toggles_nothing() {
+    let cells = vec![thinking(1, "first plan"), cell("after")];
+    let mut view = TranscriptView::default();
+    let frame = render(&mut view, &cells, 30, 10);
+    let header = row_of(&frame, "• Thought", 0);
+    view.handle_mouse(left(MouseEventKind::Down, 2, header), &cells);
+    view.handle_mouse(left(MouseEventKind::Drag, 9, header), &cells);
+    view.handle_mouse(left(MouseEventKind::Up, 9, header), &cells);
+    assert_eq!(view.selected_text(&cells).as_deref(), Some("Thought"));
+    assert!(!view.disclosure.is_expanded(&["thinking:h1".to_string()]));
+}
+
+#[test]
+fn a_release_elsewhere_or_a_header_without_a_control_toggles_nothing() {
+    let cells = vec![thinking(1, "first plan"), tool_call("call-1", 3)];
+    let mut view = TranscriptView::default();
+    let frame = render(&mut view, &cells, 30, 10);
+    let header = row_of(&frame, "• Thought", 0);
+    let call = row_of(&frame, "Called shell", 0);
+    view.handle_mouse(left(MouseEventKind::Down, 4, header), &cells);
+    view.handle_mouse(left(MouseEventKind::Up, 4, call), &cells);
+    view.handle_mouse(left(MouseEventKind::Down, 4, call), &cells);
+    view.handle_mouse(left(MouseEventKind::Up, 4, call), &cells);
+    assert!(view.disclosure.expanded.is_empty());
+    // The detailed presentation has no controls to toggle.
+    view.set_presentation(true, HistoryRenderMode::Rich);
+    let frame = render(&mut view, &cells, 30, 10);
+    let header = row_of(&frame, "• Thought", 0);
+    view.handle_mouse(left(MouseEventKind::Down, 4, header), &cells);
+    view.handle_mouse(left(MouseEventKind::Up, 4, header), &cells);
+    assert!(view.disclosure.expanded.is_empty());
+}
+
+#[test]
+fn a_long_message_of_yours_shows_its_first_rows_and_a_control() {
+    let long: Vec<String> = (1..=20).map(|n| format!("line {n}")).collect();
+    let cells = vec![prompt(&long.join("\n")), prompt("short\nmessage")];
+    let mut view = TranscriptView::default();
+    let shown = text(&render(&mut view, &cells, 30, 40));
+    assert!(
+        shown.contains("line 12") && !shown.contains("line 13"),
+        "{shown}"
+    );
+    assert_eq!(shown.matches("+ 8 lines").count(), 1, "{shown}");
+    view.handle_key(key(KeyCode::F(4)), &cells);
+    assert!(view.is_activity_focused());
+    view.handle_key(key(KeyCode::Enter), &cells);
+    let shown = text(&render(&mut view, &cells, 30, 40));
+    assert!(
+        shown.contains("line 20") && shown.contains("− Show less"),
+        "{shown}"
+    );
+
+    // Its header is its first row of text, past the blank padding.
+    let frame = render(&mut view, &cells, 30, 40);
+    let header = row_of(&frame, "› line 1", 0);
+    view.handle_mouse(left(MouseEventKind::Down, 6, header), &cells);
+    view.handle_mouse(left(MouseEventKind::Up, 6, header), &cells);
+    assert!(!text(&render(&mut view, &cells, 30, 40)).contains("line 13"));
 }

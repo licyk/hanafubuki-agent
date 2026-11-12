@@ -31,6 +31,6 @@ icon: ClipboardList
 
 ## 任务计划 [#task-plan]
 
-默认模式下，模型可以用 `update_plan` 维护一个任务清单：最多 20 个步骤，每步是待办、进行中或已完成。终端界面中显示为 `• Updated Plan` 和带勾选框的步骤；`exec --json` 中是 `task_plan_updated` 事件。
+默认模式下，模型可以用 `update_plan` 维护一个任务清单：最多 20 个步骤，每步是待办、进行中或已完成。终端界面中显示为 `• Updated Plan · 1/5 complete` 和带勾选框的步骤，较长的计划在展开之前只显示三个步骤（[阅读对话](/docs/terminal-interface#reading)）；`exec --json` 中是 `task_plan_updated` 事件。
 
 任务计划只是模型给自己和你看的进度，不影响它能做什么。

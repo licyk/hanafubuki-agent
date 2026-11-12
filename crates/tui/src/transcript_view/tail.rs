@@ -3,8 +3,8 @@
 //! chat as Fullscreen lays them out, with their controls. The tail does not
 //! scroll: it is painted from its first row or, when taller than its area,
 //! as its last rows under the header of the entry they start in. Only the
-//! disclosure's keys (F4) and a click on a control reach it, and it stays at
-//! its latest rows whatever they do.
+//! disclosure's keys (F4) and a click on a control or a header reach it,
+//! and it stays at its latest rows whatever they do.
 //!
 //! The app decides what leaves the tail; this gives the lines it writes: an
 //! entry's rows as shown, its control replaced by the transcript key's hint
@@ -96,7 +96,8 @@ impl TranscriptView {
             if let Some((index, row)) = rows.first_mut() {
                 let header = self
                     .current_layout(cells, *index)
-                    .map_or(0, |layout| usize::from(layout.separated));
+                    .and_then(|layout| layout.header_row())
+                    .unwrap_or(0);
                 *row = (*row).min(header);
             }
         }
@@ -118,15 +119,32 @@ impl TranscriptView {
         }
     }
 
-    /// A click at a cell of the screen: `true` when it toggled the control
-    /// painted there.
-    pub(crate) fn click_tail(
+    /// A left press at a cell of the screen: `true` when it toggled the
+    /// control painted there. On a header, the release decides.
+    pub(crate) fn press_tail(
         &mut self,
         cells: &[Arc<dyn HistoryCell>],
         column: u16,
         row: u16,
     ) -> bool {
+        self.cancel_header_press();
         let toggled = self.toggle_disclosure_at(cells, column, row);
+        if !toggled {
+            self.press_header_at(column, row);
+        }
+        self.position = Position::Latest;
+        toggled
+    }
+
+    /// A left release: `true` when it ended a click on a header, which
+    /// toggled its entry.
+    pub(crate) fn release_tail(
+        &mut self,
+        cells: &[Arc<dyn HistoryCell>],
+        column: u16,
+        row: u16,
+    ) -> bool {
+        let toggled = self.release_header_at(cells, column, row);
         self.position = Position::Latest;
         toggled
     }

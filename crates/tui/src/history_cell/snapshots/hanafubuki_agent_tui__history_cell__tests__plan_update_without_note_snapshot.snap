@@ -2,6 +2,6 @@
 source: crates/tui/src/history_cell/tests.rs
 expression: "render_lines(&lines).join(\"\\n\")"
 ---
-• Updated Plan
+• Updated Plan · 0/2 complete
   └ □ Define error taxonomy
     □ Implement mapping to user messages

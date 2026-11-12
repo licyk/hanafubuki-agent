@@ -7,13 +7,19 @@ use ratatui::style::{Style, Styled, Stylize};
 use ratatui::text::Line;
 use unicode_width::UnicodeWidthStr;
 
-use super::{plain_lines, raw_lines_from_source, HistoryCell};
+use super::{
+    next_activity_id, plain_lines, raw_lines_from_source, ActivityDisclosure, HistoryCell,
+};
 use crate::render::line_utils::prefix_lines;
+
+/// The steps a collapsed checklist shows.
+const PLAN_PREVIEW_STEPS: usize = 3;
 
 /// The task checklist the model keeps with `update_plan`, as it stood at
 /// one update.
 pub(crate) fn new_plan_update(snapshot: &AgentTaskPlanSnapshot) -> PlanUpdateCell {
     PlanUpdateCell {
+        activity_id: next_activity_id("plan:"),
         explanation: snapshot.explanation.clone(),
         plan: snapshot.plan.clone(),
     }
@@ -51,72 +57,94 @@ impl HistoryCell for ProposedPlanStreamCell {
 
 #[derive(Debug)]
 pub(crate) struct PlanUpdateCell {
+    activity_id: String,
     explanation: Option<String>,
     plan: Vec<AgentTaskPlanStep>,
 }
 
+impl PlanUpdateCell {
+    /// `• Updated Plan · 1/3 complete`, the same collapsed and expanded.
+    fn header(&self) -> Line<'static> {
+        let completed = self
+            .plan
+            .iter()
+            .filter(|step| step.status == AgentTaskPlanStepStatus::Completed)
+            .count();
+        Line::from(vec![
+            "• ".dim(),
+            "Updated Plan".bold(),
+            format!(" · {completed}/{} complete", self.plan.len()).dim(),
+        ])
+    }
+
+    fn note(&self) -> Option<&str> {
+        self.explanation
+            .as_deref()
+            .map(str::trim)
+            .filter(|text| !text.is_empty())
+    }
+
+    /// The header with `body` under its `└`.
+    fn with_body(&self, mut body: Vec<Line<'static>>) -> Vec<Line<'static>> {
+        if self.plan.is_empty() {
+            body.push(Line::from("(no steps provided)".dim().italic()));
+        }
+        let mut lines = vec![self.header()];
+        lines.extend(prefix_lines(body, "  └ ".dim(), "    ".into()));
+        lines
+    }
+}
+
 impl HistoryCell for PlanUpdateCell {
     fn display_lines(&self, width: u16) -> Vec<Line<'static>> {
-        let render_note = |text: &str| -> Vec<Line<'static>> {
+        let mut body = Vec::new();
+        if let Some(note) = self.note() {
             let wrap_width = width.saturating_sub(4).max(1) as usize;
-            textwrap::wrap(text, wrap_width)
-                .into_iter()
-                .map(|s| s.to_string().dim().italic().into())
-                .collect()
-        };
-
-        let render_step = |status: &AgentTaskPlanStepStatus, text: &str| -> Vec<Line<'static>> {
-            let (box_str, step_style) = match status {
-                AgentTaskPlanStepStatus::Completed => ("✔ ", Style::default().crossed_out().dim()),
-                AgentTaskPlanStepStatus::InProgress => ("□ ", Style::default().cyan().bold()),
-                AgentTaskPlanStepStatus::Pending => ("□ ", Style::default().dim()),
-            };
-            let wrap_width = (width as usize)
-                .saturating_sub(4)
-                .saturating_sub(box_str.width())
-                .max(1);
-            let parts = textwrap::wrap(text, wrap_width);
-            let step_text = parts
-                .into_iter()
-                .map(|s| s.to_string().set_style(step_style).into())
-                .collect();
-            prefix_lines(step_text, box_str.into(), "  ".into())
-        };
-
-        let mut lines: Vec<Line<'static>> = vec![];
-        lines.push(vec!["• ".dim(), "Updated Plan".bold()].into());
-
-        let mut indented_lines = vec![];
-        let note = self
-            .explanation
-            .as_ref()
-            .map(|s| s.trim())
-            .filter(|t| !t.is_empty());
-        if let Some(expl) = note {
-            indented_lines.extend(render_note(expl));
-        };
-
-        if self.plan.is_empty() {
-            indented_lines.push(Line::from("(no steps provided)".dim().italic()));
-        } else {
-            for AgentTaskPlanStep { step, status } in self.plan.iter() {
-                indented_lines.extend(render_step(status, step));
-            }
+            body.extend(
+                textwrap::wrap(note, wrap_width)
+                    .into_iter()
+                    .map(|s| s.to_string().dim().italic().into()),
+            );
         }
-        lines.extend(prefix_lines(indented_lines, "  └ ".dim(), "    ".into()));
+        for AgentTaskPlanStep { step, status } in &self.plan {
+            body.extend(step_lines(status, step, width));
+        }
+        self.with_body(body)
+    }
 
-        lines
+    /// Without the note; past [`PLAN_PREVIEW_STEPS`], Codex's preview: the
+    /// steps in progress, then those pending, then those completed.
+    fn compact_lines(&self, width: u16) -> Vec<Line<'static>> {
+        let mut steps: Vec<&AgentTaskPlanStep> = self.plan.iter().collect();
+        if steps.len() > PLAN_PREVIEW_STEPS {
+            steps.sort_by_key(|step| match step.status {
+                AgentTaskPlanStepStatus::InProgress => 0,
+                AgentTaskPlanStepStatus::Pending => 1,
+                AgentTaskPlanStepStatus::Completed => 2,
+            });
+        }
+        let body = steps
+            .into_iter()
+            .take(PLAN_PREVIEW_STEPS)
+            .flat_map(|AgentTaskPlanStep { step, status }| step_lines(status, step, width))
+            .collect();
+        self.with_body(body)
+    }
+
+    fn activity_ids(&self) -> Vec<String> {
+        vec![self.activity_id.clone()]
+    }
+
+    /// The note, and the steps past the preview.
+    fn activity_disclosure(&self, _width: u16) -> Option<ActivityDisclosure> {
+        (self.note().is_some() || self.plan.len() > PLAN_PREVIEW_STEPS)
+            .then_some(ActivityDisclosure::Generic)
     }
 
     fn raw_lines(&self) -> Vec<Line<'static>> {
         let mut lines = vec![Line::from("Updated Plan")];
-        if let Some(explanation) = self
-            .explanation
-            .as_deref()
-            .map(str::trim)
-            .filter(|text| !text.is_empty())
-        {
-            lines.extend(raw_lines_from_source(explanation));
+        if let Some(note) = self.note() {
+            lines.extend(raw_lines_from_source(note));
         }
         if self.plan.is_empty() {
             lines.push(Line::from("(no steps provided)"));
@@ -131,4 +159,22 @@ impl HistoryCell for PlanUpdateCell {
         }
         lines
     }
+}
+
+/// A step's checkbox and text, wrapped under the `└` at `width`.
+fn step_lines(status: &AgentTaskPlanStepStatus, text: &str, width: u16) -> Vec<Line<'static>> {
+    let (box_str, step_style) = match status {
+        AgentTaskPlanStepStatus::Completed => ("✔ ", Style::default().crossed_out().dim()),
+        AgentTaskPlanStepStatus::InProgress => ("□ ", Style::default().cyan().bold()),
+        AgentTaskPlanStepStatus::Pending => ("□ ", Style::default().dim()),
+    };
+    let wrap_width = (width as usize)
+        .saturating_sub(4)
+        .saturating_sub(box_str.width())
+        .max(1);
+    let step_text = textwrap::wrap(text, wrap_width)
+        .into_iter()
+        .map(|s| s.to_string().set_style(step_style).into())
+        .collect();
+    prefix_lines(step_text, box_str.into(), "  ".into())
 }
