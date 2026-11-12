@@ -60,7 +60,7 @@ In a [review](/docs/sessions#reviews), only plain `git --no-pager` reads run; se
 
 ## The web [#web]
 
-`web_search` searches the web, and `fetch_web_page` reads a page's text. Neither needs an approval.
+`web_search` searches the web, and `fetch_web_page` reads a page's text. Neither needs an approval. `fetch_web_page` reads public pages only, and checks a page's address on this machine even through a proxy ([Web fetch and name resolution](/docs/network-logging#web-fetch-dns)).
 
 `webSearchProvider` picks the search service:
 

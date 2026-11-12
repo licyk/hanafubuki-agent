@@ -60,7 +60,7 @@ icon: Wrench
 
 ## 网页 [#web]
 
-`web_search` 搜索网页，`fetch_web_page` 读取一个网页的正文。两者都不需要审批。
+`web_search` 搜索网页，`fetch_web_page` 读取一个网页的正文。两者都不需要审批。`fetch_web_page` 只读取公网页面，即使通过代理，也会在本机检查页面的地址（[网页抓取与域名解析](/docs/network-logging#web-fetch-dns)）。
 
 `webSearchProvider` 决定使用哪个搜索服务：
 

@@ -754,7 +754,7 @@ Hoshimi `83f7813`. Every §9 decision (D1–D7) was accepted as recommended
   processes' `NO_PROXY` already said; web search keeps its proxy for every
   target, since it refuses loopback targets anyway. Left as is, and
   documented: the web fetch's public-target check resolves names here even
-  through a proxy (the SSRF guard); `"system"` is the OS settings for the
+  through a proxy (the SSRF guard; `network-logging#web-fetch-dns`); `"system"` is the OS settings for the
   HTTP clients on macOS and Windows but only the environment's variables
   for the processes; a git `http.proxy` wins for clones; a host keeps its
   own process overlay current.

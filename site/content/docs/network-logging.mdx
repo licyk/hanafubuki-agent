@@ -25,15 +25,15 @@ hanafubuki-agent config set network.proxy system
 
 ### 代理对什么生效 [#proxy-scope]
 
-| 对象                                             | 使用的代理                                                        |
-| ------------------------------------------------ | ----------------------------------------------------------------- |
-| 网页搜索和抓取（`web_search`、`fetch_web_page`） | `network.proxy`，包括每一次重定向和 Jina Reader 回退              |
-| MCP 的 Streamable HTTP 服务器和 OAuth            | `network.proxy`（包括登录和令牌刷新）；修改后会重新连接这些服务器 |
-| 模型运行的命令和终端                             | 由 `network.proxy` 决定的环境变量，见下文                         |
-| MCP 的 stdio 服务器                              | 同样的变量，覆盖它们自己的环境；修改后会重新启动它们              |
-| 插件包和市场的下载（`git`）                      | 同样的变量（你的 git 配置中的 `http.proxy` 优先于它们）           |
-| 模型 Provider 的请求及其模型列表                 | `network.proxy`；修改后各会话从下一轮起使用，见下文               |
-| models.dev 的下载（`modelMetadata.modelsDev`）   | `network.proxy`                                                   |
+| 对象                                             | 使用的代理                                                                                               |
+| ------------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
+| 网页搜索和抓取（`web_search`、`fetch_web_page`） | `network.proxy`，包括每一次重定向和 Jina Reader 回退；页面的域名仍在本机解析（[见下文](#web-fetch-dns)） |
+| MCP 的 Streamable HTTP 服务器和 OAuth            | `network.proxy`（包括登录和令牌刷新）；修改后会重新连接这些服务器                                        |
+| 模型运行的命令和终端                             | 由 `network.proxy` 决定的环境变量，见下文                                                                |
+| MCP 的 stdio 服务器                              | 同样的变量，覆盖它们自己的环境；修改后会重新启动它们                                                     |
+| 插件包和市场的下载（`git`）                      | 同样的变量（你的 git 配置中的 `http.proxy` 优先于它们）                                                  |
+| 模型 Provider 的请求及其模型列表                 | `network.proxy`；修改后各会话从下一轮起使用，见下文                                                      |
+| models.dev 的下载（`modelMetadata.modelsDev`）   | `network.proxy`                                                                                          |
 
 ### 命令的代理变量 [#child-processes]
 
@@ -59,6 +59,15 @@ HTTPS_PROXY=http://127.0.0.1:7890 hanafubuki-agent
 ```
 
 `"disabled"` 无论环境如何都直接连接；设为代理 URL 时，所有 Provider 都经过这个代理，不受 `NO_PROXY` 影响，但本机上的 Provider（`localhost`、`127.0.0.0/8`、`::1`，例如 Ollama 或 LM Studio）直接连接。MCP 的 Streamable HTTP 服务器和 OAuth 以及 models.dev 的下载同样如此。
+
+### 网页抓取与域名解析 [#web-fetch-dns]
+
+`fetch_web_page` 拒绝不在公网地址上的页面（私有地址、回环地址、链路本地地址）。为了判断这一点，它在每次请求前、跟随每次重定向前以及询问 Jina Reader 前，都会在本机解析页面的主机名；即使 `network.proxy` 指定了代理也是如此，代理随后还会自己再解析一次。因此，通过代理时：
+
+- 如果网络中只有代理能解析公网域名（本机的 DNS 不能），每次抓取都会失败，报错 `web page host could not be resolved safely`。`web_search` 不受影响。
+- 本机解析为私有地址的域名会被拒绝，报错 `web page target is not a public web address`，即使代理能访问到一个公网地址。
+
+没有跳过这项检查的设置：它防止抓取访问到本机或本机所在的网络。要通过这样的代理抓取网页，请让本机能够解析公网域名（使用本机自己的 DNS，或一个本机可以访问的解析服务）。
 
 ## 日志 [#logging]
 
