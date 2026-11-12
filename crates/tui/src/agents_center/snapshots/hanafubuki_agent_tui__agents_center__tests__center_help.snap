@@ -11,18 +11,18 @@ expression: "screen(&mut center, 100, 24)"
   page-up, page-down, home, end  Move a page, or to the first or last
   enter, right                   Open the session (restore it under Archived)
   tab, shift-tab, 1–6            Filter: All, Needs you, Working, Ready, Inactive, Archived
+  click, wheel                   Select a session, child or tab; on the one selected, open it
   esc, q                         Back
   n                              Start a new session
   w                              Start a new session in a new worktree
   f                              Fork the session
   r                              Rename the session
   x                              Interrupt the session's turn
+  p                              Pin the session, or unpin it
+  h                              Hide the session
+  c                              Select the session's subagents and reviews
   a                              Archive the session, or restore it under Archived
   backspace                      Delete the session
   f3, /                          Search the sessions' titles
   g                              Group by project, directory, status or model
-
-
-
-
   esc back

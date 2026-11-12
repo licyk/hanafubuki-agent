@@ -21,6 +21,7 @@ use crate::history_cell::HistoryRenderMode;
 use crate::render::highlight::configure_theme;
 use crate::transcript_mode::{is_ssh_session, TranscriptMode};
 use crate::tui::{self, FrameRequester, InputReader, Tui};
+use crate::tui_state::TuiState;
 
 /// The channel the interface is told on, made before the Agent is: the
 /// Agent's runtime takes its status sink ([`TuiEvents::status_sink`]).
@@ -126,12 +127,16 @@ pub fn run(
         model_override,
         appearance,
     });
+    let (tui_state, state_warning) =
+        TuiState::load(&runtime.storage_paths().root, events.sender.clone());
+    warnings.extend(state_warning);
     let mut app = App::new(
         chat_widget,
         bridge,
         events.sender.clone(),
         mode,
         render_mode,
+        tui_state,
     );
     if mode.is_owned() {
         app.enter_owned_screen(&mut tui)
@@ -151,6 +156,7 @@ pub fn run(
         app.open_resume_picker(&mut tui, true);
     }
     let result = app.run(&mut tui, &events.receiver);
+    app.save_state_on_exit();
     app.restore_terminal_title(&mut tui);
     drop(input);
     if mode.is_owned() {

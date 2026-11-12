@@ -21,6 +21,7 @@
 
 mod agents;
 mod catalog;
+mod center_reads;
 mod commands;
 mod edit;
 mod goal;
@@ -56,6 +57,9 @@ use tokio::sync::oneshot;
 use crate::app_event::{AppEvent, AppEventSender, Op};
 use crate::history_cell::ToolResultView;
 pub(crate) use catalog::{CatalogCall, CatalogOutcome, CatalogReply};
+pub(crate) use center_reads::{
+    CenterJob, CenterRead, CenterReader, Exchange, LiveSession, RootsRead, Waiting,
+};
 pub(crate) use commands::{setup_needed, with_model, ModelChoices, RoleChoices, StatusReport};
 pub(crate) use goal::{GoalCall, GoalReply};
 pub(crate) use hooks::{needing_review, HooksCall, HooksReply};

@@ -45,6 +45,7 @@ mod text_selection;
 mod transcript_mode;
 mod transcript_view;
 mod tui;
+mod tui_state;
 mod ui_consts;
 mod wrapping;
 

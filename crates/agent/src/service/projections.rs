@@ -1,6 +1,8 @@
 use super::AgentApplicationService;
 use hanafubuki_agent_foundation::background_worker::WorkerShutdownDiagnostic;
-use hanafubuki_agent_kernel::{AgentGeneration, AgentSessionId, AgentTurnId, AgentTurnPhase};
+use hanafubuki_agent_kernel::{
+    AgentGeneration, AgentSessionId, AgentSessionRuntimeSnapshot, AgentTurnId, AgentTurnPhase,
+};
 use std::sync::atomic::Ordering;
 use std::time::Instant;
 
@@ -18,6 +20,13 @@ pub struct AgentRunProjection {
 }
 
 impl AgentApplicationService {
+    /// Every session the Agent holds, as it is now, each read once its own
+    /// staged commit settled; a session only in the history store is not
+    /// among them. Off the async runtime only.
+    pub fn session_snapshots(&self) -> Vec<AgentSessionRuntimeSnapshot> {
+        self.core.list_snapshots()
+    }
+
     pub fn list_run_projections(&self) -> Vec<AgentRunProjection> {
         self.core
             .list_snapshots()

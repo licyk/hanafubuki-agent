@@ -1,10 +1,11 @@
 //! The command center's actions on a listed session, not the one shown:
 //! forking, renaming and deleting it (and its children), interrupting its
-//! turn; and whether its turn waits on an approval. Each reads the
-//! session's generation and revision as they are now.
+//! turn or a child's. Each reads the session's generation and revision as
+//! they are now.
 
 use hanafubuki_agent::{
-    AgentActivityPhase, AgentSessionId, AgentSessionRuntimeSnapshot, AgentSessionTitleRenameRequest,
+    AgentSessionId, AgentSessionOrigin, AgentSessionRuntimeSnapshot, AgentSessionSummary,
+    AgentSessionTitleRenameRequest,
 };
 
 use super::sessions::fork_at_head;
@@ -40,18 +41,6 @@ impl AgentBridge {
             .map_err(|error| format!("the session was not renamed: {error}"))
     }
 
-    /// Whether the turn `session_id` runs waits on an approval. Only a
-    /// session the Agent holds can; one it does not reads as waiting on
-    /// none.
-    pub(crate) fn waits_for_approval(&self, session_id: AgentSessionId) -> bool {
-        self.agent.snapshot(session_id).is_ok_and(|snapshot| {
-            snapshot
-                .active_activities
-                .iter()
-                .any(|activity| activity.phase == AgentActivityPhase::WaitingForApproval)
-        })
-    }
-
     /// Deletes `session_id` and its children.
     pub(crate) fn delete_listed(&self, session_id: AgentSessionId) -> Result<(), String> {
         let session = self.listed(session_id)?;
@@ -61,9 +50,25 @@ impl AgentBridge {
             .map_err(|error| format!("the session was not deleted: {error}"))
     }
 
-    /// Interrupts the turn `session_id` runs; a failure comes back as a
-    /// reply.
-    pub(crate) fn interrupt_listed(&self, session_id: AgentSessionId) -> Result<(), String> {
+    /// Interrupts the turn `session` runs: a subagent's through the
+    /// subagents' own call, which keeps it taking follow-up tasks. A
+    /// failure comes back as a reply.
+    pub(crate) fn stop_listed(&self, session: &AgentSessionSummary) -> Result<(), String> {
+        if session.origin != Some(AgentSessionOrigin::Subagent) {
+            return self.interrupt_listed(session.session_id);
+        }
+        let child = session.session_id;
+        self.spawn(move |agent| async move {
+            agent
+                .interrupt_subagent(child)
+                .await
+                .map(|()| None)
+                .map_err(|error| format!("the subagent was not interrupted: {error}"))
+        });
+        Ok(())
+    }
+
+    fn interrupt_listed(&self, session_id: AgentSessionId) -> Result<(), String> {
         let turn = self
             .listed(session_id)?
             .turn
