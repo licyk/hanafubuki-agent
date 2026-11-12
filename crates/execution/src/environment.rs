@@ -9,8 +9,10 @@ const UNIX_DEFAULT_PATH: &str = "/usr/local/bin:/usr/bin:/bin";
 
 /// Codex's unified exec defaults: a dumb terminal with no colour, no pager, and
 /// UTF-8 text, so a command neither waits on a pager for a keypress nor fills
-/// its output with escape sequences. A request's own environment overrides them.
-const NON_INTERACTIVE_ENVIRONMENT: [(&str, &str); 9] = [
+/// its output with escape sequences; and Python in UTF-8, which on Windows
+/// otherwise writes a pipe in the ANSI code page. A request's own environment
+/// overrides them.
+const NON_INTERACTIVE_ENVIRONMENT: [(&str, &str); 11] = [
     ("NO_COLOR", "1"),
     ("TERM", "dumb"),
     ("LANG", "C.UTF-8"),
@@ -20,6 +22,8 @@ const NON_INTERACTIVE_ENVIRONMENT: [(&str, &str); 9] = [
     ("PAGER", "cat"),
     ("GIT_PAGER", "cat"),
     ("GH_PAGER", "cat"),
+    ("PYTHONUTF8", "1"),
+    ("PYTHONIOENCODING", "utf-8"),
 ];
 
 /// Builds the complete environment for an Agent command without inheriting the
@@ -68,6 +72,8 @@ fn platform_default_path(environment: &BTreeMap<String, String>) -> String {
     format!(r"{root}\System32;{root}")
 }
 
+/// The system's variables, not the user's (D17): what Windows PowerShell's
+/// module autoload, git's global configuration and npm's cache read.
 #[cfg(windows)]
 fn platform_allowlist() -> &'static [&'static str] {
     &[
@@ -78,6 +84,19 @@ fn platform_allowlist() -> &'static [&'static str] {
         "COMSPEC",
         "TEMP",
         "TMP",
+        "USERPROFILE",
+        "APPDATA",
+        "LOCALAPPDATA",
+        "ProgramData",
+        "ProgramFiles",
+        "ProgramFiles(x86)",
+        "SystemDrive",
+        "HOMEDRIVE",
+        "HOMEPATH",
+        "PSModulePath",
+        "PROCESSOR_ARCHITECTURE",
+        "NUMBER_OF_PROCESSORS",
+        "OS",
     ]
 }
 

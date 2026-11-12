@@ -3,8 +3,9 @@
 //! command directly under a fresh PTY and never touches the user-facing
 //! interactive terminal.
 //!
-//! The reader answers terminal queries ([`DaFilter`]) and pushes whole UTF-8
-//! scalars. It holds the output buffer and the input queue, never the session,
+//! The reader answers terminal queries ([`DaFilter`]) and passes the rest to
+//! the output buffer, which keeps it as UTF-8 without a fallback code page: a
+//! PTY's output is UTF-8, ConPTY's too. It holds the output buffer and the input queue, never the session,
 //! so releasing the backend closes the PTY and lets the reader end.
 
 use std::collections::HashMap;
@@ -27,7 +28,6 @@ use portable_pty::PtySystem;
 
 use super::backend_common::StdinWriter;
 use super::model::{EnvironmentInheritance, ExecutorStartRequest, OutputStream};
-use super::output::Utf8Carry;
 use super::session::{ExecutorBackend, ExecutorSession};
 #[cfg(windows)]
 use super::windows_input::WindowsTtyInputNormalizer;
@@ -223,10 +223,6 @@ pub(crate) fn spawn(
             let mut buf = [0u8; READ_BUF];
             let mut filtered = Vec::with_capacity(READ_BUF);
             let mut queries = DaFilter::new();
-            let mut carry = Utf8Carry::default();
-            let mut push = |bytes: &[u8]| {
-                reader_output.lock().push(OutputStream::Merged, bytes)
-            };
             let mut interrupted_retries: u64 = 0;
             let mut would_block_retries: u64 = 0;
             let exit_reason: &str = loop {
@@ -241,7 +237,9 @@ pub(crate) fn spawn(
                                 );
                             }
                         });
-                        carry.push(&filtered, &mut push);
+                        reader_output
+                            .lock()
+                            .push_read(OutputStream::Merged, &filtered);
                     }
                     // Transient conditions: keep reading instead of ending the loop.
                     Err(ref err) if err.kind() == ErrorKind::Interrupted => {
@@ -259,7 +257,7 @@ pub(crate) fn spawn(
                     }
                 }
             };
-            carry.finish(&mut push);
+            reader_output.lock().finish_stream(OutputStream::Merged);
             log::debug!(
                 "executor pty reader ended id={reader_id} reason={exit_reason} interrupted_retries={interrupted_retries} would_block_retries={would_block_retries}"
             );

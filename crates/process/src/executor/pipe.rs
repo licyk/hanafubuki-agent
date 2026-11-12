@@ -16,7 +16,7 @@ use parking_lot::Mutex;
 use super::backend_common::StdinWriter;
 use super::manager::ProcessSupervision;
 use super::model::{EnvironmentInheritance, ExecutorStartRequest, OutputStream};
-use super::output::{OutputBuffer, Utf8Carry};
+use super::output::OutputBuffer;
 use super::session::{ExecutorBackend, ExecutorSession};
 use super::spawn_retry::{is_executable_busy, spawn_retrying_busy_executable};
 
@@ -282,16 +282,14 @@ fn spawn_reader<R: Read + Send + 'static>(
         format!("exec-read-{}", session.executor_id),
         move || {
             let mut buf = [0u8; READ_BUF];
-            let mut carry = Utf8Carry::default();
-            let mut push = |bytes: &[u8]| output.lock().push(stream, bytes);
             loop {
                 match reader.read(&mut buf) {
                     Ok(0) => break,
-                    Ok(n) => carry.push(&buf[..n], &mut push),
+                    Ok(n) => output.lock().push_read(stream, &buf[..n]),
                     Err(_) => break,
                 }
             }
-            carry.finish(&mut push);
+            output.lock().finish_stream(stream);
         },
     )
     .expect("spawn pipe reader thread")
