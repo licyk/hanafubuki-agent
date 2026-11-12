@@ -36,14 +36,14 @@ In Fullscreen the conversation fills the screen above the bottom area. In Scroll
 
 At the start (and after `/new` or a resume) a box shows the version, the model and the working directory. Before a session exists, the model is the one it will get: `-m`'s, else the configured one. The bottom area holds, from the top:
 
-1. **The status line**: during a turn, `• Working (12s • esc to interrupt)` with the elapsed time. While a model request is retried it reads `Reconnecting 1/3: reason`. The timer pauses while an approval or a question waits for you. It stays for the whole turn, also while the answer streams.
+1. **The status line**: during a turn, `• Working 25s • esc to interrupt` with the elapsed time; once the turn has thought, `• Working 25s (Thinking 20.7s) • esc to interrupt`, with the time the whole turn has thought so far, which runs on only while the model thinks ([Thinking](#thinking)). While a model request is retried it reads `Reconnecting 1/3: reason`. The working timer pauses while an approval or a question waits for you. It stays for the whole turn, also while the answer streams.
 2. **The messages waiting** for the turn, while there are any ([below](#composer)).
 3. **The composer**, starting with `›`.
 4. **The footer**: the [status line](#status-line), by default the model and its reasoning effort, the working directory and the session's title, while the composer is empty or holds a draft with no turn running; `? for shortcuts` when it shows no item. A draft written during a turn shows `tab to queue message` instead.
 
 An approval, a question, the `/model` and `/mode` lists and the screens of `/providers` and `/mcp` take the place of the status line and the composer while they are open. A screen stays open when a turn ends.
 
-In the conversation your messages start with `›`; a tool call is `• Running TOOL: SUBJECT` where it starts, and changes there in place into `• Called TOOL` or `• Failed TOOL`, with the first and last lines of its output; `apply_patch` shows the diff it made; the task plan is `• Updated Plan`; errors start with a red `■`. After a stretch of tool calls, a `─ Worked for 1m 05s ─` rule comes before the answer.
+In the conversation your messages start with `›`; a tool call is `• Running TOOL: SUBJECT` where it starts, and changes there in place into `• Called TOOL` or `• Failed TOOL`, with the first and last lines of its output; `apply_patch` shows the diff it made; a thinking is `• Thinking 3.4s`, then `• Thought · 20.7s` ([Thinking](#thinking)); the task plan is `• Updated Plan`; errors start with a red `■`. After a stretch of tool calls, a `─ Worked for 1m 05s ─` rule comes before the answer, `─ Worked for 1m 05s · thought for 20.7s ─` when the turn thought.
 
 ## Keys [#keys]
 
@@ -58,7 +58,7 @@ In the conversation your messages start with `›`; a tool call is `• Running 
 | Ctrl-C                     | In turn: denies an approval; clears a composer with text; interrupts a running turn; a second press within one second quits                                                                      |
 | Ctrl-D                     | On an empty composer, two presses within one second quit; with text, deletes the next character                                                                                                  |
 | Ctrl-T                     | Fullscreen: shows the conversation in detail, in place; Scrollback: opens the transcript (below)                                                                                                 |
-| Ctrl-O                     | Shows or hides the model's thinking (below)                                                                                                                                                      |
+| Ctrl-O                     | Expands every thinking in the conversation, or collapses them all when all are expanded ([below](#thinking))                                                                                     |
 | `?` on an empty composer   | Shows the shortcuts                                                                                                                                                                              |
 | Ctrl-X P                   | Opens the [presets](#presets)                                                                                                                                                                    |
 | Ctrl-X Left, Right, Tab, X | With a side conversation or a subagent open: the main conversation, the side one, the other one; closes it ([below](#side))                                                                      |
@@ -343,7 +343,7 @@ While an approval, a question or a list is open, the keys are its own; the mouse
 
 Fullscreen captures the mouse, so the terminal's own selection usually needs Shift held while you drag. To copy with the terminal's selection, `/raw` shows the conversation without its styles.
 
-In Scrollback the terminal holds the conversation: you scroll, select and copy it with the terminal. Its newest entries stay in the tail above the bottom area, laid out as in Fullscreen: a thinking or a tool call changes there in place, and a tool call's control (`+ 12 lines`, `+ Show details`) shows or hides its details.
+In Scrollback the terminal holds the conversation: you scroll, select and copy it with the terminal. Its newest entries stay in the tail above the bottom area, laid out as in Fullscreen: a thinking or a tool call changes there in place, and a thinking's or a tool call's control (`+ 12 lines`, `+ Show details`) shows or hides its details.
 
 - When the tail would take more than 60% of the screen (at least 8 rows), its oldest completed entries are written into the scrollback as they are shown; one collapsed with more to show ends with `ctrl + t to expand`. An answer is written line by line as it passes the limit. A running entry is never written: one taller than the tail shows its first line and its latest ones.
 - When you send your next message, the tail is written first, whole, so a finished turn's entries stay expandable until then. A session opened in its place (`/new`, a resume), switching to the other conversation and resizing the terminal write it too, and quitting writes what is left.
@@ -407,9 +407,13 @@ Enter edits in a copy of the session: it is forked before the message's turn and
 
 ## Thinking [#thinking]
 
-While the model thinks, the conversation shows a `• Thinking 5s` line that counts up, collapsed by default; the status line stays `Working`. Ctrl-O expands it to the thinking as the model streams it (dim Markdown) and collapses it again. The choice applies to the thinking shown now and to every later one until you press Ctrl-O again, for as long as the interface runs. While thinking is live, the footer says `ctrl + o to show thinking` (or `to hide thinking`).
+Each stretch of the model's thinking (a reasoning item) is an entry of its own, in the conversation where it happened, in order with the answers and tool calls: a step that thinks, calls a tool, thinks again and answers shows four entries. While the model thinks it reads `• Thinking 3.4s`, counting up in tenths of a second; when the stretch ends it becomes `• Thought · 20.7s` in place (`1m 05s` past a minute).
 
-The thinking is in the conversation from its start (in Scrollback, in the tail) and becomes `• Thought for 12s` there, in place: whole seconds, rounded down, with the text below when expanded. A Provider that sends no text leaves only the line. If the turn ends before the thinking does (an error, an interrupt), the line is completed with the time so far. In Scrollback it is written into the scrollback as it is shown when it leaves the tail, and cannot be changed afterwards; the transcript (Ctrl-T twice, in Fullscreen the detailed conversation) always shows every thinking's text. A resumed session replays its thinking the same way, collapsed unless Ctrl-O expanded thinking; a thinking whose text was cut at the Agent's bound says `• Thought for 12s (truncated)`.
+Each is collapsed to that line, with a `+ Show details` control once its text has arrived. A click on the control (in Fullscreen, and in Scrollback while the entry is in the tail), or F4 then Enter, shows the text below it as dim Markdown, streaming while the model still thinks, and `− Hide details` hides it again. Each entry expands on its own, and stays expanded when it completes. Ctrl-O expands every thinking in the conversation (in Scrollback, those in the tail) at once, or collapses them all when all are expanded; a later thinking still starts collapsed.
+
+A Provider that sends no text leaves only the line, with no control. If the turn ends before the thinking does (an error, an interrupt), the line is completed with the time so far. In Scrollback a thinking is written into the scrollback as it is shown when it leaves the tail, and cannot be changed afterwards; the transcript (Ctrl-T) still expands it, and a second Ctrl-T shows every thinking's text, as Ctrl-T's detailed conversation does in Fullscreen. A resumed session replays every stretch the same way, collapsed; a thinking whose text was cut at the Agent's bound says `• Thought · 20.7s (truncated)`.
+
+The [status line](#layout) adds the time the whole turn has thought, `(Thinking 20.7s)`, and the rule before the answer says `thought for 20.7s`.
 
 What you see depends on what the Provider sends: some send a summary of the thinking, some the raw thinking text, some nothing. See [Providers and models](/docs/providers-models#reasoning).
 
@@ -562,7 +566,7 @@ Popups, lists, forms, approvals and questions keep their own keys (arrows, Enter
 | `chat.interrupt_turn`             | `esc`                                                                 | Interrupt the running turn                                                       |
 | `chat.edit_previous`              | `esc`                                                                 | Twice on an empty composer: edit an earlier message                              |
 | `chat.edit_queued_message`        | `shift-left`, `alt-up`                                                | Put the last queued message back in the composer                                 |
-| `chat.toggle_thinking`            | `ctrl-o`                                                              | Show or hide the model's thinking                                                |
+| `chat.toggle_thinking`            | `ctrl-o`                                                              | Expand or collapse every thinking                                                |
 | `chat.open_presets`               | `leader p`                                                            | Open the presets                                                                 |
 | `composer.submit`                 | `enter`                                                               | Send the message                                                                 |
 | `composer.queue`                  | `tab`                                                                 | While a turn runs: queue the message for after it                                |

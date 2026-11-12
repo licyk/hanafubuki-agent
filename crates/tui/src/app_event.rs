@@ -108,6 +108,9 @@ pub(crate) enum AppCommand {
     SavePreferences(AgentTuiPreferencesPatch, String),
     /// Hides the warning with this key (`Warning::key`) for the run.
     DismissWarning(String),
+    /// Ctrl-O: expands every thinking the conversation shows, or collapses
+    /// them all when all are expanded.
+    ToggleThinking,
 }
 
 /// The widgets' requests of the Agent, which the bridge turns into calls.

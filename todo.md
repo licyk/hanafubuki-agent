@@ -284,10 +284,103 @@ independent.
         `section_form` (ceiling 207): the `/config interface` row took them
         just over; S4 replaces the module. `notices-policy.toml` lists the
         five new files as original.
-- [ ] T2: thinking entries (`Thinking 3.4s` → `Thought · 20.7s`), one per
+- [x] T2: thinking entries (`Thinking 3.4s` → `Thought · 20.7s`), one per
       reasoning item, in order, each expandable; Ctrl-O for all;
       `ReasoningUpdated` forwarded; `Working 25s (Thinking 20.7s)`. No
       history format change.
+      Done (2026-11-12):
+      - `history_cell/thinking.rs`: a `ThinkingCell` per reasoning item with
+        an activity id, `thinking:{reasoning id}` live and
+        `thinking:h{history item id}` replayed (`ReplayedItem::Reasoning`
+        carries the item's `AgentHistoryItemId`, unique in a session and its
+        forks, so two pages never share one). The frozen `expanded` flag is
+        gone: collapsed it is its header, expanded (`expanded_lines`) the
+        dim Markdown follows, so the transcript view's disclosure decides,
+        in both presentations, the Ctrl-T overlay too. Headers `• Thinking
+        3.4s` (shimmer, tenths, a 100 ms animation tick) and `• Thought ·
+        20.7s` (`1m 05s` past a minute, tenths cut, not rounded),
+        `(truncated)` kept. An entry has an id and a `+ Show details`
+        control only once text has arrived, so a Provider that sends none
+        leaves the header alone and Ctrl-O never gives it a `− Hide
+        details`. This fixes the reported bug: a click on a thinking's
+        control expands it in Fullscreen and in Scrollback's tail (F4/Enter
+        too), each entry alone, and a live one expanded stays expanded at
+        completion (same entry, same id).
+      - Ctrl-O: the chat sends `AppCommand::ToggleThinking` (so the keymap,
+        `captures_keys`, an open approval and the Ctrl-C quit arming behave
+        as before); the app has the conversation's transcript view expand
+        every `thinking:` id among the cells it shows (Fullscreen's
+        conversation, Scrollback's tail), or collapse them all when all are
+        expanded (`TranscriptView::toggle_thinking`). Not sticky: a later
+        thinking starts collapsed. A reader keeps the entry at the top of
+        the view (`disclosure_anchor`, now shared with `toggle_activity`);
+        following stays following. The footer's `ctrl + o to show/hide
+        thinking` (`ThinkingToggle`) and the chat's `THINKING_FRAME` (the
+        status row and the app's live tick already redraw) are gone;
+        `chat.toggle_thinking`'s description is "Expand or collapse every
+        thinking".
+      - Status row: the bridge forwards `ReasoningUpdated` as
+        `TurnUpdate::Reasoning(AgentReasoningSnapshot)`; the status widget
+        keeps a `ThinkingClock` (`turn_completed_millis`, and `active_since`
+        read once from epoch milliseconds onto `Instant`) and reads
+        `• Working 25s (Thinking 20.7s) • esc to interrupt` once the turn
+        has thought (shown on `turn_completed_millis > 0 ||
+        active_since`, never on `phase`, which each step resets), `• Working
+        25s • esc to interrupt` before. The working timer still pauses for
+        approvals; the thinking clock runs only while an item is open. The
+        separator before the answer: `─ Worked for 25s · thought for 20.7s
+        ─` when the turn thought (when it appears is unchanged).
+      - Tests: `history_cell/thinking/tests.rs` (tenths, `Thought ·`,
+        truncated and `1m 05s`, ids live/replayed and kept at completion, no
+        id or control without text, the 100 ms tick; live digits asserted by
+        prefix only), `status_indicator_widget/tests.rs` (tenths format,
+        the clock with a closed and an open stretch and a step's reset, the
+        row with the timer paused for an approval), `history_cell/tests.rs`
+        (the separator's `thought for`), `transcript_view/disclosure/
+        tests.rs` (each thought alone by a click, Ctrl-O over every thought
+        with text and back, a hand-collapsed one re-expanded, a text-less
+        one without a control, a live one staying expanded at completion,
+        a reader's top entry kept), `chatwidget/tests/entries.rs` (ids, the
+        command sent, no footer hint, the status row and separator, the new
+        headers), the new `app/tests/thinking.rs` on vt100 in both
+        presentations (a click on `+ Show details`/`− Hide details`, Ctrl-O
+        twice, Ctrl-O while an approval waits), and the resume test asserting
+        a `thinking:h…` id.
+      - Snapshots: the status row's (`status_indicator_widget` ×3,
+        `bottom_pane` ×3) now `• Working 0s • esc to interrupt`; the
+        thinking cell's (`Thought · 12.4s`, `Thought · 1m 15s (truncated)`,
+        the live expanded one now its body only, the text-less one renamed
+        `an_item_without_text_has_no_control_and_no_id`); the live collapsed
+        one and the two footer toggle snapshots removed with their code. No
+        golden changed (nothing model-visible; no kernel or facade change:
+        `ReasoningUpdated` already reached the TUI's sink, and the exec
+        `--json` stream is untouched).
+      - Deviations: the header click (§4.8) is left for T3, which owns it
+        for every entry: toggling on a press in Fullscreen would break a
+        drag that starts on a header, and press-and-release-on-the-same-cell
+        belongs with T3's other entries; the control click, F4/Enter and
+        Ctrl-O work in both presentations. The shimmer is redrawn at the
+        100 ms tick in the conversation (the status row keeps its 32 ms).
+        Ctrl-O does not reach the Ctrl-T overlay (its own view, pager keys).
+      - Docs (both languages): `terminal-interface#layout` (the status row,
+        the thinking entry, the separator), `#keys` and the keymap table
+        (Ctrl-O), `#reading` (a thinking's control in the tail),
+        `#thinking` (rewritten); `internals#tui-details` (ids, disclosure,
+        Ctrl-O, ticks, the status clock); `providers-models#reasoning`
+        (Ctrl-O's sentence).
+      - Validation: `cargo fmt --all --check`; `RUSTFLAGS="-D warnings"
+        cargo check --workspace --all-targets --all-features`; `cargo clippy
+        --workspace --all-targets --all-features -- -D warnings`; `cargo
+        xtask check`; `cargo test --workspace --all-features`; `bun install
+        --frozen-lockfile`, `bun run format:check:site`, `bun run
+        site:check`, `bun run site:test`, `VITE_BASE_PATH=/hanafubuki-agent/
+        bun run site:build` (all 35 pages prerendered). CI on Linux, Windows
+        and macOS: https://github.com/licyk/hanafubuki-agent/actions/runs/43200798717
+        (run on ac9be0b, which differs from the landed commit only in this
+        line; Site: .../runs/43200798790).
+      - Hanafubuki at its next pin: nothing (the TUI crate only).
+      - Module size: no exception added or raised. `notices-policy.toml`
+        lists `app/tests/thinking.rs` as original.
 - [ ] T3: an id and a control on every expandable entry, a click on its
       control or header, in Fullscreen and in Scrollback's tail.
 - [ ] T4: `AgentToolPresenter` and `ToolPresenterRegistry`; presenters for

@@ -268,10 +268,11 @@ fn ctrl_o_between_two_ctrl_c_does_not_quit() {
     chat.handle_key_event(ctrl('c'));
     chat.handle_key_event(ctrl('o'));
     chat.handle_key_event(ctrl('c'));
-    let exited =
-        std::iter::from_fn(|| events.try_recv().ok()).any(|event| matches!(event, AppEvent::Exit));
-    assert!(!exited);
-    assert!(chat.thinking_expanded);
+    let events: Vec<_> = std::iter::from_fn(|| events.try_recv().ok()).collect();
+    assert!(!events.iter().any(|event| matches!(event, AppEvent::Exit)));
+    assert!(events
+        .iter()
+        .any(|event| matches!(event, AppEvent::Command(AppCommand::ToggleThinking))));
 }
 
 // Each panic says whether it was raised in a contained region, where the

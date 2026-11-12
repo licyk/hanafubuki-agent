@@ -143,7 +143,7 @@ Provider 拒绝推理参数时（状态码 400 或 422，并指名该参数，�
 
 `max_tokens` 为预算加上留给回答的 16,384，但不超过模型的最大输出；最大输出未知时，它保持 16,384，并缩减预算，为回答留出其中的 4,096。保不住 1,024 个 token 的预算不会发送。强制调用某个工具的请求，以及回应的工具调用所在消息中没有可回传思考块的请求，也不会带上预算思考。使用自适应思考时，`max_tokens` 为 32,768，且不超过模型的最大输出；最大输出未知时为 16,384。
 
-模型的思考过程会显示出来，在终端界面中是一行可以用 Ctrl-O 展开的 `Thinking`（见[终端界面](/docs/terminal-interface#thinking)），在 `exec --json` 中是 `reasoning_*` 事件（见 [exec --json 事件](/docs/json-events#reasoning)）；`exec` 的普通输出和 `sessions show` 只显示思考了多久（`thought for 12s`）。能看到什么取决于 Provider：
+模型的思考过程会显示出来，在终端界面中每一段思考是一个 `Thinking` 条目，点击或 Ctrl-O 可以展开它的文本（见[终端界面](/docs/terminal-interface#thinking)），在 `exec --json` 中是 `reasoning_*` 事件（见 [exec --json 事件](/docs/json-events#reasoning)）；`exec` 的普通输出和 `sessions show` 只显示思考了多久（`thought for 12s`）。能看到什么取决于 Provider：
 
 | 协议               | 思考内容                                                                                         |
 | ------------------ | ------------------------------------------------------------------------------------------------ |

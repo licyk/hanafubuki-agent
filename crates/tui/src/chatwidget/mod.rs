@@ -32,11 +32,9 @@ use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::layout::Rect;
 
 use crate::agent_bridge::Warning;
-use crate::app_event::{AppEvent, AppEventSender, Op};
+use crate::app_event::{AppCommand, AppEvent, AppEventSender, Op};
 use crate::appearance::Appearance;
-use crate::bottom_pane::{
-    BottomPane, BottomPaneParams, CancellationEvent, InputResult, ThinkingToggle,
-};
+use crate::bottom_pane::{BottomPane, BottomPaneParams, CancellationEvent, InputResult};
 use crate::commands::PRESETS;
 use crate::file_search::FileMatch;
 use crate::history_cell::{self, HistoryCell, LiveCell, ThinkingCell, ToolCallCell};
@@ -49,8 +47,6 @@ use crate::tui::FrameRequester;
 
 /// How long a first Ctrl-C (or Ctrl-D) waits for the second that quits.
 const QUIT_SHORTCUT_TIMEOUT: Duration = Duration::from_secs(1);
-/// How often a live thinking cell is redrawn, for its shimmer and timer.
-const THINKING_FRAME: Duration = Duration::from_millis(32);
 
 pub(crate) struct ChatWidgetInit {
     pub(crate) app_event_tx: AppEventSender,
@@ -79,9 +75,6 @@ pub(crate) struct ChatWidget {
     /// The reasoning items the model is thinking in, in the order they
     /// started.
     live_thinking: Vec<(AgentReasoningId, Arc<LiveCell<ThinkingCell>>)>,
-    /// Whether thinking is shown expanded: Ctrl-O toggles it for the live
-    /// cells and every later one.
-    thinking_expanded: bool,
     stream_controller: Option<StreamController>,
     plan_stream_controller: Option<PlanStreamController>,
     last_rendered_width: Cell<Option<usize>>,
@@ -144,7 +137,6 @@ impl ChatWidget {
             bottom_pane,
             running_tools: Vec::new(),
             live_thinking: Vec::new(),
-            thinking_expanded: false,
             stream_controller: None,
             plan_stream_controller: None,
             last_rendered_width: Cell::new(None),
@@ -197,8 +189,10 @@ impl ChatWidget {
             self.quit_shortcut_key = None;
         }
         if !self.bottom_pane.captures_keys() {
+            // The entries' disclosure is the transcript view's.
             if keymap::matches(Action::ToggleThinking, &key_event) {
-                self.toggle_thinking();
+                self.app_event_tx
+                    .send(AppEvent::Command(AppCommand::ToggleThinking));
                 return;
             }
             if keymap::matches(Action::OpenPresets, &key_event)
@@ -345,25 +339,6 @@ impl ChatWidget {
         true
     }
 
-    fn toggle_thinking(&mut self) {
-        self.thinking_expanded = !self.thinking_expanded;
-        for (_, cell) in &self.live_thinking {
-            cell.update(|cell| cell.set_expanded(self.thinking_expanded));
-        }
-        self.sync_thinking_toggle();
-        self.request_redraw();
-    }
-
-    /// The footer offers the thinking toggle while a thinking cell is live.
-    fn sync_thinking_toggle(&mut self) {
-        let toggle = (!self.live_thinking.is_empty()).then_some(if self.thinking_expanded {
-            ThinkingToggle::Collapse
-        } else {
-            ThinkingToggle::Expand
-        });
-        self.bottom_pane.set_thinking_toggle(toggle);
-    }
-
     fn quit_shortcut_active_for(&self, key: KeyBinding) -> bool {
         self.quit_shortcut_key == Some(key)
             && self
@@ -445,9 +420,6 @@ impl ChatWidget {
 
 impl Renderable for ChatWidget {
     fn render(&self, area: Rect, buf: &mut Buffer) {
-        if !self.live_thinking.is_empty() {
-            self.frame_requester.schedule_frame_in(THINKING_FRAME);
-        }
         self.as_renderable().render(area, buf);
         self.last_rendered_width.set(Some(area.width as usize));
     }

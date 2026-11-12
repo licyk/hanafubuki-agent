@@ -313,7 +313,7 @@ pub(crate) static ACTIONS: [ActionSpec; 53] = [
         ToggleThinking,
         Chat,
         "toggle_thinking",
-        "Show or hide the model's thinking",
+        "Expand or collapse every thinking",
         ["ctrl-o"]
     ),
     action!(

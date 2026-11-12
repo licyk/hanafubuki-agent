@@ -108,3 +108,70 @@ fn details_overflow_adds_ellipsis() {
         "expected ellipsis in last line: {last:?}"
     );
 }
+
+#[test]
+fn fmt_elapsed_tenths_cuts_to_tenths_under_a_minute() {
+    let tenths = |millis| fmt_elapsed_tenths(Duration::from_millis(millis));
+    assert_eq!(tenths(0), "0.0s");
+    assert_eq!(tenths(3_449), "3.4s");
+    assert_eq!(tenths(20_790), "20.7s");
+    assert_eq!(tenths(59_960), "59.9s");
+    assert_eq!(tenths(65_000), "1m 05s");
+}
+
+#[test]
+fn the_thinking_clock_counts_what_completed_and_the_open_stretch() {
+    let now = Instant::now();
+    let epoch = 1_000_000;
+    let snapshot = |turn_completed_millis, active_since| AgentReasoningSnapshot {
+        sampling_step: 2,
+        turn_completed_millis,
+        active_since,
+        ..AgentReasoningSnapshot::default()
+    };
+    // Not thought yet, including a step's reset of a turn that has not.
+    assert_eq!(
+        ThinkingClock::from_snapshot(&snapshot(0, None), now, epoch).total_at(now),
+        None
+    );
+    // Closed stretches: the clock stands.
+    let closed = ThinkingClock::from_snapshot(&snapshot(20_790, None), now, epoch);
+    assert_eq!(
+        closed.total_at(now + Duration::from_secs(9)),
+        Some(Duration::from_millis(20_790))
+    );
+    // An open one, begun 3 s before the snapshot was read, runs on.
+    let open = ThinkingClock::from_snapshot(&snapshot(20_790, Some(epoch - 3_000)), now, epoch);
+    assert_eq!(
+        open.total_at(now + Duration::from_millis(500)),
+        Some(Duration::from_millis(24_290))
+    );
+}
+
+#[test]
+fn the_status_row_shows_the_turns_thinking_and_pauses_only_working() {
+    let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+    let tx = AppEventSender::new(tx_raw);
+    let mut w = StatusIndicatorWidget::new(tx, crate::tui::FrameRequester::test_dummy(), false);
+    // An approval waits: the turn's timer stops at 25 s, and the thinking
+    // that closed before it stands.
+    w.is_paused = true;
+    w.elapsed_running = Duration::from_secs(25);
+    w.thinking = ThinkingClock {
+        completed: Duration::from_millis(20_790),
+        active_since: None,
+    };
+    let mut terminal = Terminal::new(TestBackend::new(60, 1)).expect("terminal");
+    terminal
+        .draw(|f| w.render(f.area(), f.buffer_mut()))
+        .expect("draw");
+    let row: String = (0..60)
+        .map(|x| terminal.backend().buffer()[(x, 0)].symbol().to_string())
+        .collect();
+    assert_eq!(
+        row.trim_end(),
+        "• Working 25s (Thinking 20.7s) • esc to interrupt"
+    );
+    assert_eq!(w.elapsed_seconds(), 25);
+    assert_eq!(w.thinking_duration(), Some(Duration::from_millis(20_790)));
+}

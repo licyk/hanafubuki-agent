@@ -10,6 +10,7 @@ use super::ChatWidget;
 use crate::agent_bridge::{TurnEnd, TurnUpdate, Warning, WarningSource};
 use crate::app_event::AppEvent;
 use crate::history_cell::{self, LiveCell, ThinkingCell, ToolResultView};
+use crate::status_indicator_widget::StatusIndicatorWidget;
 use crate::streaming::controller::{PlanStreamController, StreamController};
 
 const WORKING: &str = "Working";
@@ -44,6 +45,7 @@ impl ChatWidget {
                 reasoning_id,
                 duration_millis,
             } => self.on_reasoning_completed(reasoning_id, duration_millis),
+            TurnUpdate::Reasoning(reasoning) => self.bottom_pane.update_reasoning(&reasoning),
             TurnUpdate::MessageDelta(delta) => self.on_message_delta(delta),
             TurnUpdate::MessageCompleted => self.finish_message(),
             TurnUpdate::PlanDelta(delta) => self.on_plan_delta(delta),
@@ -151,10 +153,9 @@ impl ChatWidget {
 
     fn on_reasoning_started(&mut self, reasoning_id: AgentReasoningId) {
         self.restore_retry_status_header();
-        let cell = LiveCell::new(ThinkingCell::live(self.thinking_expanded));
+        let cell = LiveCell::new(ThinkingCell::live(reasoning_id));
         self.insert_live_entry(cell.clone());
         self.live_thinking.push((reasoning_id, cell));
-        self.sync_thinking_toggle();
     }
 
     fn on_reasoning_completed(&mut self, reasoning_id: AgentReasoningId, duration_millis: u64) {
@@ -168,7 +169,6 @@ impl ChatWidget {
         let (_, cell) = self.live_thinking.remove(index);
         cell.update(|cell| cell.complete(Some(duration_millis)));
         self.complete_live_entry(cell);
-        self.sync_thinking_toggle();
     }
 
     fn on_message_delta(&mut self, delta: String) {
@@ -177,11 +177,12 @@ impl ChatWidget {
             // After the turn wrote something other than a streamed message
             // (tool calls, a plan), a separator comes before the next one.
             if self.needs_final_message_separator && self.had_work_activity {
-                let elapsed_seconds = self
-                    .bottom_pane
-                    .status_widget()
-                    .map(crate::status_indicator_widget::StatusIndicatorWidget::elapsed_seconds);
-                self.add_to_history(history_cell::FinalMessageSeparator::new(elapsed_seconds));
+                let status = self.bottom_pane.status_widget();
+                let separator = history_cell::FinalMessageSeparator::new(
+                    status.map(StatusIndicatorWidget::elapsed_seconds),
+                    status.and_then(StatusIndicatorWidget::thinking_duration),
+                );
+                self.add_to_history(separator);
                 self.had_work_activity = false;
             }
             self.needs_final_message_separator = false;
@@ -254,7 +255,6 @@ impl ChatWidget {
             cell.update(|cell| cell.complete(None));
             self.complete_live_entry(cell);
         }
-        self.sync_thinking_toggle();
         if let Some(cell) = self
             .plan_stream_controller
             .take()

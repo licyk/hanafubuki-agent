@@ -2,8 +2,8 @@
 
 //! What the slash commands ask of the app itself: a copy to the clipboard
 //! (`/copy`, `/export`), select mode in the owned transcript, the cleared
-//! screen of `/clear`, a message `/init` submits, and `/resume TEXT`'s
-//! lookup (Codex's `ClearUi`, `CopySelection` and
+//! screen of `/clear`, a message `/init` submits, Ctrl-O's thinking, and
+//! `/resume TEXT`'s lookup (Codex's `ClearUi`, `CopySelection` and
 //! `ResumeSessionByIdOrName` events).
 
 use std::io::{self, Write};
@@ -41,6 +41,17 @@ impl App {
             AppCommand::Replay(text) => self.chat_widget.replay_input(text),
             AppCommand::SavePreferences(patch, message) => self.save(patch, message),
             AppCommand::DismissWarning(key) => self.chat_widget.dismiss_warning(key),
+            AppCommand::ToggleThinking => {
+                // Scrollback's view shows the tail; what was written stays.
+                let cells = if self.mode.is_owned() {
+                    &self.transcript_cells
+                } else {
+                    self.tail.cells()
+                };
+                if self.transcript_view.toggle_thinking(cells) {
+                    self.schedule_frame(Instant::now());
+                }
+            }
         }
     }
 

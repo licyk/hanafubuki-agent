@@ -3,8 +3,9 @@
 //! A live status indicator that shows the *latest* log line emitted by the
 //! application while the agent is processing a long‑running task.
 
-use std::time::Duration;
-use std::time::Instant;
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+
+use hanafubuki_agent::AgentReasoningSnapshot;
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
@@ -37,6 +38,7 @@ pub(crate) struct StatusIndicatorWidget {
     elapsed_running: Duration,
     last_resume_at: Instant,
     is_paused: bool,
+    thinking: ThinkingClock,
     app_event_tx: AppEventSender,
     frame_requester: FrameRequester,
     animations_enabled: bool,
@@ -59,6 +61,49 @@ pub(crate) fn fmt_elapsed_compact(elapsed_secs: u64) -> String {
     format!("{hours}h {minutes:02}m {seconds:02}s")
 }
 
+/// A thinking's time: in tenths of a second, cut rather than rounded,
+/// under a minute (`20.7s`), as [`fmt_elapsed_compact`] above.
+pub(crate) fn fmt_elapsed_tenths(elapsed: Duration) -> String {
+    let millis = elapsed.as_millis();
+    if millis < 60_000 {
+        return format!("{}.{}s", millis / 1000, millis % 1000 / 100);
+    }
+    fmt_elapsed_compact(elapsed.as_secs())
+}
+
+/// The turn's thinking time: what its finished stretches took, and since
+/// when it thinks now.
+#[derive(Clone, Copy, Debug, Default)]
+struct ThinkingClock {
+    completed: Duration,
+    active_since: Option<Instant>,
+}
+
+impl ThinkingClock {
+    /// The kernel's snapshot, whose times are milliseconds since the Unix
+    /// epoch, read against `now` and the epoch's `epoch_millis`.
+    fn from_snapshot(reasoning: &AgentReasoningSnapshot, now: Instant, epoch_millis: u128) -> Self {
+        let millis =
+            |millis: u128| Duration::from_millis(u64::try_from(millis).unwrap_or(u64::MAX));
+        Self {
+            completed: millis(reasoning.turn_completed_millis),
+            active_since: reasoning.active_since.map(|since| {
+                now.checked_sub(millis(epoch_millis.saturating_sub(since)))
+                    .unwrap_or(now)
+            }),
+        }
+    }
+
+    /// `None` until the turn has thought.
+    fn total_at(&self, now: Instant) -> Option<Duration> {
+        let active = self
+            .active_since
+            .map(|since| now.saturating_duration_since(since));
+        (!self.completed.is_zero() || active.is_some())
+            .then(|| self.completed + active.unwrap_or_default())
+    }
+}
+
 impl StatusIndicatorWidget {
     pub(crate) fn new(
         app_event_tx: AppEventSender,
@@ -72,6 +117,7 @@ impl StatusIndicatorWidget {
             elapsed_running: Duration::ZERO,
             last_resume_at: Instant::now(),
             is_paused: false,
+            thinking: ThinkingClock::default(),
 
             app_event_tx,
             frame_requester,
@@ -97,6 +143,19 @@ impl StatusIndicatorWidget {
 
     pub(crate) fn set_interrupt_hint_visible(&mut self, visible: bool) {
         self.show_interrupt_hint = visible;
+    }
+
+    /// The turn's thinking as the kernel last reported it.
+    pub(crate) fn update_reasoning(&mut self, reasoning: &AgentReasoningSnapshot) {
+        let epoch_millis = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_or(0, |since| since.as_millis());
+        self.thinking = ThinkingClock::from_snapshot(reasoning, Instant::now(), epoch_millis);
+    }
+
+    /// How long the turn has thought, once it has.
+    pub(crate) fn thinking_duration(&self) -> Option<Duration> {
+        self.thinking.total_at(Instant::now())
     }
 
     pub(crate) fn pause_timer(&mut self) {
@@ -188,7 +247,7 @@ impl Renderable for StatusIndicatorWidget {
         let elapsed_duration = self.elapsed_duration_at(now);
         let pretty_elapsed = fmt_elapsed_compact(elapsed_duration.as_secs());
 
-        let mut spans = Vec::with_capacity(5);
+        let mut spans = Vec::with_capacity(8);
         spans.push(spinner(Some(self.last_resume_at), self.animations_enabled));
         spans.push(" ".into());
         if self.animations_enabled {
@@ -196,16 +255,13 @@ impl Renderable for StatusIndicatorWidget {
         } else if !self.header.is_empty() {
             spans.push(self.header.clone().into());
         }
-        spans.push(" ".into());
+        spans.push(format!(" {pretty_elapsed}").dim());
+        if let Some(thinking) = self.thinking.total_at(now) {
+            spans.push(format!(" (Thinking {})", fmt_elapsed_tenths(thinking)).dim());
+        }
         if let Some(key) = keymap::hint(Action::InterruptTurn).filter(|_| self.show_interrupt_hint)
         {
-            spans.extend(vec![
-                format!("({pretty_elapsed} • ").dim(),
-                key.into(),
-                " to interrupt)".dim(),
-            ]);
-        } else {
-            spans.push(format!("({pretty_elapsed})").dim());
+            spans.extend(vec![" • ".dim(), key.into(), " to interrupt".dim()]);
         }
 
         let mut lines = Vec::new();

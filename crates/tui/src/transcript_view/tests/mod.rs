@@ -348,10 +348,10 @@ fn the_detailed_presentation_keeps_its_own_reading_position() {
 
 #[test]
 fn the_detailed_presentation_shows_thinking_the_compact_one_collapses() {
-    let thinking: Arc<dyn HistoryCell> = Arc::new(crate::history_cell::ThinkingCell::completed(
+    let thinking: Arc<dyn HistoryCell> = Arc::new(crate::history_cell::ThinkingCell::replayed(
+        1,
         "the plan".to_string(),
         2000,
-        false,
         false,
     ));
     let cells = vec![prompt("hi"), thinking];
@@ -364,7 +364,7 @@ fn the_detailed_presentation_shows_thinking_the_compact_one_collapses() {
     insta::assert_snapshot!(text(&render(&mut view, &cells, 30, 6)), @r"
     hi
 
-    • Thought for 2s
+    • Thought · 2.0s
     the plan
     ");
 }

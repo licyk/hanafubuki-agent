@@ -1,5 +1,5 @@
 ---
 source: crates/tui/src/history_cell/thinking/tests.rs
-expression: render(&cell.display_lines(40))
+expression: "render(&replayed(THOUGHT, 12_400, false).display_lines(40))"
 ---
-• Thought for 12s
+• Thought · 12.4s
