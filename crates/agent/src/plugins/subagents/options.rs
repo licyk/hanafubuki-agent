@@ -4,9 +4,7 @@
 
 use std::time::Duration;
 
-use hanafubuki_agent_config::{
-    PluginOption, PluginOptionKind, PluginOptionSchema, PluginOptionValue,
-};
+use hanafubuki_agent_config::{PluginOptionSchema, SettingKind, SettingSpec, SettingValue};
 use serde::Deserialize;
 
 /// The most agents of one parent the option lets run at once.
@@ -77,34 +75,45 @@ impl SubagentLimits {
 
 /// The options' schema, which the row's descriptor carries.
 pub(crate) fn subagents_option_schema() -> PluginOptionSchema {
-    let integer = |key: &str, summary: &str, (minimum, maximum), default| PluginOption {
-        key: key.to_string(),
-        summary: summary.to_string(),
-        kind: PluginOptionKind::Integer { minimum, maximum },
-        default: Some(PluginOptionValue::Integer(default)),
-    };
+    let integer =
+        |key: &str, label: &str, summary: &str, (minimum, maximum), default| SettingSpec {
+            summary: summary.to_string(),
+            default: Some(SettingValue::Integer(default)),
+            ..SettingSpec::new(
+                key,
+                label,
+                SettingKind::Integer {
+                    minimum: Some(minimum),
+                    maximum: Some(maximum),
+                },
+            )
+        };
     PluginOptionSchema {
         options: vec![
             integer(
                 "maximumRunningAgents",
+                "Running sub-agents",
                 "How many sub-agents of one conversation run at once",
                 (1, MAXIMUM_RUNNING_AGENTS_LIMIT),
                 DEFAULT_RUNNING_AGENTS,
             ),
             integer(
                 "defaultWaitSeconds",
+                "Default wait",
                 "How long wait_agent waits when the model gives no timeout (seconds)",
                 WAIT_SECONDS_LIMITS,
                 DEFAULT_WAIT_SECONDS,
             ),
             integer(
                 "minimumWaitSeconds",
+                "Shortest wait",
                 "The shortest wait_agent timeout (seconds)",
                 WAIT_SECONDS_LIMITS,
                 WAIT_SECONDS_LIMITS.0,
             ),
             integer(
                 "maximumWaitSeconds",
+                "Longest wait",
                 "The longest wait_agent timeout (seconds)",
                 WAIT_SECONDS_LIMITS,
                 WAIT_SECONDS_LIMITS.1,

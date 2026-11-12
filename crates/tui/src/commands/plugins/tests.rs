@@ -142,8 +142,8 @@ fn a_code_plugins_page_offers_to_grant_what_it_asks_for_until_granted() {
 #[test]
 fn a_code_plugins_options_save_its_settings_whole() {
     use hanafubuki_agent::{
-        AgentPluginOptionsStatus, PluginOption, PluginOptionKind, PluginOptionSchema,
-        PluginOptionValue, ResolvedPluginOption,
+        AgentPluginOptionsStatus, PluginOptionSchema, ResolvedPluginOption, SettingKind,
+        SettingSpec, SettingValue,
     };
     use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
@@ -166,19 +166,22 @@ fn a_code_plugins_options_save_its_settings_whole() {
         config_schema: None,
         options: Some(AgentPluginOptionsStatus {
             schema: PluginOptionSchema {
-                options: vec![PluginOption {
-                    key: "level".to_string(),
+                options: vec![SettingSpec {
                     summary: "How loud".to_string(),
-                    kind: PluginOptionKind::Integer {
-                        minimum: 1,
-                        maximum: 5,
-                    },
-                    default: Some(PluginOptionValue::Integer(2)),
+                    default: Some(SettingValue::Integer(2)),
+                    ..SettingSpec::new(
+                        "level",
+                        "Level",
+                        SettingKind::Integer {
+                            minimum: Some(1),
+                            maximum: Some(5),
+                        },
+                    )
                 }],
             },
             values: vec![ResolvedPluginOption {
                 key: "level".to_string(),
-                value: Some(PluginOptionValue::Integer(2)),
+                value: Some(SettingValue::Integer(2)),
                 layer: None,
             }],
             issues: Vec::new(),

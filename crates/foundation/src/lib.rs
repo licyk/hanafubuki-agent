@@ -16,6 +16,7 @@ pub mod panic;
 pub mod paths;
 pub mod persistence;
 pub mod secrets;
+pub mod settings;
 pub mod terminal_text;
 pub mod trace_content;
 pub mod url_policy;

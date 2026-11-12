@@ -524,7 +524,7 @@ async fn an_option_write_is_taken_in_place_or_restarts_the_plugin() {
     let shown = status.options.unwrap();
     assert_eq!(
         shown.values[0].value,
-        Some(hanafubuki_agent_config::PluginOptionValue::Integer(5))
+        Some(hanafubuki_agent_config::SettingValue::Integer(5))
     );
     assert!(shown.values[0].layer.is_some() && shown.values[1].layer.is_none());
     let parent = service

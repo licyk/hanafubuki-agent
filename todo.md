@@ -36,11 +36,84 @@ independent.
 
 **Settings ([1], [2])**
 
-- [ ] S1: one vocabulary, `foundation::settings` (`SettingSpec`,
+- [x] S1: one vocabulary, `foundation::settings` (`SettingSpec`,
       `SettingKind`, choices with labels, aliases and disabled reasons,
       `apply`, `advanced`, `visible_if`, `commit_group`);
       `PluginOptionSchema` and the guest `configSchema` lowering on it. Not
       model-visible.
+      Done (2026-11-12):
+      - `hanafubuki-agent-foundation::settings`: `SettingSpec` (key, label,
+        summary, help, kind, default, apply, advanced, `visible_if`,
+        `commit_group`, keywords; `SettingSpec::new(key, label, kind)` with
+        the rest by struct update), `SettingKind` (Boolean, Integer and
+        Number with `Option` bounds, Text with `maximum_chars`, `secret`,
+        `nullable`, Path with `must_be_absolute`, Choice of
+        `SettingChoice { value, label, aliases, disabled }`, TextList),
+        `SettingValue` (with `Null`, a nullable text unset),
+        `SettingApply { Live, NextSession, NextLaunch }`,
+        `SettingCondition { key, equals }`. Two reads: `read`, tolerant (an
+        alias is its choice, a disabled choice is still read, a number out
+        of range is `SettingProblem::OutOfRange` with its clamped value),
+        and `check`, strict (refuses out of range, an alias, naming its
+        value, and a disabled choice with its reason). `Serialize` only,
+        camelCase, the kind tagged `type` with camelCase fields.
+      - `hanafubuki-agent-packages::options` keeps `PluginOptionSchema
+        { options: Vec<SettingSpec> }`, `ResolvedPluginOption(s)` (values
+        are `SettingValue`s), `resolve` and `check_settings` on
+        `SettingSpec::read`, `MAX_PLUGIN_OPTIONS` and the `configSchema`
+        lowering: the same keywords, labelled by key, each choice by its
+        value; an absent bound or length is `None`, no longer an
+        `i64::MIN`/`f64::MAX`/`usize::MAX` sentinel. A guest's settings set
+        to a former name reach it as the current value.
+      - `subagents`' four options gain labels; the TUI's options form shows
+        the same text as before (Choice rows show labels, select by value;
+        Path reads as a text).
+      - Deviations from §4.1: the key is a `String`, not a `SettingKey`
+        newtype; bounds are `minimum`/`maximum`, as before; the schema and
+        resolved types stay in packages (they are plugin-specific) and only
+        the vocabulary moved, so `PluginOptionSchema`'s path is unchanged
+        and its `options` field kept; `title`, labelled choices, aliases and
+        disabled reasons are not read from a `configSchema` (no standard
+        keyword for the last two; `title` is S6's, with package settings in
+        the center). `agent_settings_fields` stays until S3, as planned.
+        For S2: §4.3's tolerant decoder must call `SettingSpec::read`, not
+        `check`, or a stored alias or disabled choice is repaired away.
+      - Tests: `foundation/tests/settings.rs` (clamped read and strict
+        refusal, one-sided and absent bounds, an alias read but never
+        written, a disabled choice read but refused with its reason, `null`
+        only for a nullable text, an absolute path, the serialized shape);
+        `packages/tests/packages/options.rs` (an alias resolved and
+        delivered to the guest as its value, the lowering's `None` bound and
+        its choices).
+      - Docs (both languages): `plugin-rules#host-configuration-and-status` (Descriptors and
+        options: a list of `SettingSpec`s, the kinds, aliases and disabled
+        reasons), `architecture` (the crate table: foundation holds the
+        settings vocabulary), `contributing#twins-shared-with-hanafubuki`
+        (`settings` is Agent only).
+      - No golden changed (nothing model-visible); no TUI snapshot changed.
+      - Hanafubuki at its next pin: `PluginOption` → `SettingSpec` (new
+        `label`, `help`, `apply`, `advanced`, `visible_if`, `commit_group`,
+        `keywords`), `PluginOptionKind` → `SettingKind` (`Option` bounds and
+        lengths as `u32`, `Text.nullable`, new `Path`, `Choice.values` of
+        `SettingChoice`), `PluginOptionValue` → `SettingValue` (new `Null`),
+        all re-exported from `hanafubuki_agent` (also `SettingChoice`,
+        `SettingApply`, `SettingCondition`, `SettingProblem`);
+        `PluginOptionSchema.options` and `ResolvedPluginOption.value` take
+        the new types; `PluginOption::check` is `SettingSpec::check`. The
+        JSON of `AgentPluginStatus.options` and `AgentPackageGuest.options`
+        changes with them (kind fields camelCase, choices as objects, new
+        fields). Hanafubuki-dev `685e18b9` names none of these types and
+        its TypeScript `AgentPluginStatus` has no `options`, so nothing
+        breaks there.
+      - Validation: `cargo fmt --all --check`; `RUSTFLAGS="-D warnings"
+        cargo check --workspace --all-targets --all-features`; `cargo clippy
+        --workspace --all-targets --all-features -- -D warnings`; `cargo
+        xtask check`; `cargo test --workspace --all-features`; `bun install
+        --frozen-lockfile`, `bun run format:check:site`, `bun run
+        site:check`, `bun run site:test`, `VITE_BASE_PATH=/hanafubuki-agent/
+        bun run site:build` (all 35 pages prerendered). CI on Linux, Windows
+        and macOS: CI_PLACEHOLDER
+      - Module size: no exception added or raised.
 - [ ] S2: a section beside each config domain, the decoders reading keys and
       bounds from it; per-key provenance in `layers::resolve`;
       `AgentConfig::write_values` (set, reset, commit groups, outcomes) under

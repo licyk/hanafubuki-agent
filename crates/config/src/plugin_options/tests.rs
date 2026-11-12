@@ -1,21 +1,23 @@
 use std::fs;
 use std::path::PathBuf;
 
-use hanafubuki_agent_packages::{PluginOption, PluginOptionKind, PluginOptionValue};
+use hanafubuki_agent_foundation::settings::{SettingKind, SettingSpec, SettingValue};
 use serde_json::json;
 
 use super::*;
 use crate::{AgentConfig, ConfigLayers, ConfigOverrides, PROJECT_CONFIG_DIR};
 
 fn schema() -> PluginOptionSchema {
-    let integer = |key: &str, default| PluginOption {
-        key: key.to_string(),
-        summary: String::new(),
-        kind: PluginOptionKind::Integer {
-            minimum: 1,
-            maximum: 16,
-        },
-        default: Some(PluginOptionValue::Integer(default)),
+    let integer = |key: &str, default| SettingSpec {
+        default: Some(SettingValue::Integer(default)),
+        ..SettingSpec::new(
+            key,
+            key,
+            SettingKind::Integer {
+                minimum: Some(1),
+                maximum: Some(16),
+            },
+        )
     };
     PluginOptionSchema {
         options: vec![

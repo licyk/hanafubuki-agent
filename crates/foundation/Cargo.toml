@@ -1,6 +1,6 @@
 [package]
 name = "hanafubuki-agent-foundation"
-description = "Neutral mechanisms for hanafubuki-agent: paths, cancellation, panics, persistence and blocking work"
+description = "Neutral mechanisms for hanafubuki-agent: paths, cancellation, panics, persistence, blocking work and the settings vocabulary"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
