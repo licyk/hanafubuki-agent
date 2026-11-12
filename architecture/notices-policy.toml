@@ -611,6 +611,14 @@ path = "crates/tui/src/history_cell/tool/tests/exploration.rs"
 reason = "The run of exploring calls in one entry, written with it."
 
 [[original]]
+path = "crates/tui/src/history_cell/tool/tests/streamed.rs"
+reason = "A command's entry while its output streams and when its display takes over, written with it."
+
+[[original]]
+path = "crates/tui/src/history_cell/tool/live_output/tests.rs"
+reason = "The live buffer's redraws and bounds over the Agent's terminal text, written with it."
+
+[[original]]
 path = "crates/tui/src/history_cell/tool/file_read.rs"
 reason = "The view of a read_file display with its line numbers; Codex shows no file's text."
 

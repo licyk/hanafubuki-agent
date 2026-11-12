@@ -44,15 +44,25 @@ fn transcript(events: &Receiver<AppEvent>, entries: &mut Vec<Arc<dyn HistoryCell
     written
 }
 
-/// The entries' text, a live thinking's clock left out (it counts on).
+/// The entries' text, a live thinking's or command's clock left out (it
+/// counts on).
 fn texts(entries: &[Arc<dyn HistoryCell>]) -> Vec<String> {
     entries
         .iter()
         .map(|cell| {
             let text = cell_text(cell.as_ref());
-            match text.strip_prefix("• Thinking ") {
-                Some(_) => "• Thinking …".to_string(),
-                None => text,
+            if text.starts_with("• Thinking ") {
+                return "• Thinking …".to_string();
+            }
+            let (header, rows) = text.split_once('\n').unwrap_or((&text, ""));
+            match header.rsplit_once(" · ") {
+                Some((running, _)) if running.starts_with("• Running ") && rows.is_empty() => {
+                    running.to_string()
+                }
+                Some((running, _)) if running.starts_with("• Running ") => {
+                    format!("{running}\n{rows}")
+                }
+                _ => text,
             }
         })
         .collect()
@@ -117,6 +127,50 @@ fn a_tool_call_completes_where_it_started_in_both_presentations() {
             vec!["• Called exec_command: ls\n  └ Cargo.toml"]
         );
         assert!(entries[0].revision() > revision);
+    }
+}
+
+#[test]
+fn a_running_commands_output_streams_into_its_entry_and_stops_when_it_finishes() {
+    for owned in [true, false] {
+        let (mut chat, events) = chat_in(owned);
+        let mut entries = Vec::new();
+        chat.handle_turn_update(TurnUpdate::Started);
+        tool_started(&mut chat, "call-1", "exec_command", Some("make"));
+        transcript(&events, &mut entries);
+        let output = |chat: &mut ChatWidget, call_id: &str, text: &str| {
+            chat.handle_turn_update(TurnUpdate::ToolOutput {
+                call_id: call_id.to_string(),
+                text: text.to_string(),
+                truncated: false,
+            });
+        };
+        output(&mut chat, "call-1", "building\n");
+        output(&mut chat, "call-1", "linking");
+        // In place: no entry added, none completed.
+        assert!(!transcript(&events, &mut entries));
+        assert_eq!(
+            texts(&entries),
+            vec!["• Running make\n  └ building\n    linking"]
+        );
+        // Output for no call it runs is dropped.
+        let revision = entries[0].revision();
+        output(&mut chat, "call-9", "other\n");
+        assert_eq!(entries[0].revision(), revision);
+
+        chat.handle_turn_update(TurnUpdate::ToolCompleted {
+            call_id: "call-1".to_string(),
+            is_error: false,
+        });
+        // A process that goes on in the background after its call returned
+        // reports under the same call: its entry shows what it returned.
+        let revision = entries[0].revision();
+        output(&mut chat, "call-1", "\nserving\n");
+        assert_eq!(entries[0].revision(), revision);
+        assert_eq!(
+            texts(&entries),
+            vec!["• Ran make\n  └ building\n    linking"]
+        );
     }
 }
 

@@ -72,6 +72,11 @@ impl ChatWidget {
             TurnUpdate::ToolDisplayed { call_id, display } => {
                 self.on_tool_displayed(&call_id, display)
             }
+            TurnUpdate::ToolOutput {
+                call_id,
+                text,
+                truncated,
+            } => self.on_tool_output(&call_id, &text, truncated),
             TurnUpdate::ApprovalRequested(request) => {
                 self.bottom_pane.push_approval_request(request)
             }
@@ -240,6 +245,15 @@ impl ChatWidget {
             self.exploration = Some(cell.clone());
         }
         self.running_tools.push((call_id, cell));
+    }
+
+    /// What a running call's process printed goes to its entry, drawn at
+    /// the next frame. A call that finished shows what it returned: output
+    /// after that (a process going on in the background) is not added.
+    fn on_tool_output(&mut self, call_id: &str, text: &str, truncated: bool) {
+        if let Some((_, cell)) = self.running_tools.iter().find(|(id, _)| id == call_id) {
+            cell.update(|cell| cell.push_output(call_id, text, truncated));
+        }
     }
 
     /// The call keeps its place and shape, marked finished, until what it

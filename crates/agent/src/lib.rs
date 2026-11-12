@@ -91,6 +91,9 @@ pub use hanafubuki_agent_foundation::persistence::quarantine_file;
 pub use hanafubuki_agent_foundation::secrets::{
     SecretFuture, SecretKey, SecretStore, SecretStoreError,
 };
+/// Terminal output as the plain text it displayed, for an interface that
+/// shows `ExecutionProgress`'s output as it streams.
+pub use hanafubuki_agent_foundation::terminal_text::{complete_prefix_len, render_plain_text};
 /// What a hook in [`AgentHook`] is for, where it comes from and whether it
 /// is trusted.
 pub use hanafubuki_agent_hooks::{HookEventName, HookSource, HookTrust};
@@ -173,6 +176,9 @@ pub use startup::{
 pub use storage_paths::AgentStoragePaths;
 pub use workspace_roots::{agent_workspace_roots_from, AgentWorkspaceRoots, WorkspaceRootsPort};
 
+/// What a running tool reports (`AgentEventKind::ExecutionProgress`'s
+/// `update`): a process's start, output and status.
+pub use hanafubuki_agent_contracts::AgentToolProgressUpdate;
 /// What an interface shows of a tool call, from the tool's presenter
 /// (`AgentHandle::tool_display`, `present_tool_call`).
 pub use hanafubuki_agent_contracts::{

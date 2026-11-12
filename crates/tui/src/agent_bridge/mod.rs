@@ -48,9 +48,9 @@ use hanafubuki_agent::{
     AgentAvailability, AgentCompactionStatus, AgentCompactionTrigger, AgentEvent, AgentEventKind,
     AgentEventSink, AgentGoal, AgentHandle, AgentPermissionMode, AgentReasoningId,
     AgentReasoningSnapshot, AgentRuntime, AgentSessionId, AgentSessionMode, AgentSlot,
-    AgentStatusEventSink, AgentTaskPlanSnapshot, AgentToolCallDisplay, AgentTurnAccepted,
-    AgentTurnRequest, AgentTurnTerminalReason, AgentUserInputRequest, AgentUserInputRequestId,
-    ApprovalRequest, ApprovalRequestId, SkillCatalogSnapshot,
+    AgentStatusEventSink, AgentTaskPlanSnapshot, AgentToolCallDisplay, AgentToolProgressUpdate,
+    AgentTurnAccepted, AgentTurnRequest, AgentTurnTerminalReason, AgentUserInputRequest,
+    AgentUserInputRequestId, ApprovalRequest, ApprovalRequestId, SkillCatalogSnapshot,
 };
 use tokio::sync::oneshot;
 
@@ -110,6 +110,13 @@ pub(crate) enum TurnUpdate {
     ToolDisplayed {
         call_id: String,
         display: Option<AgentToolCallDisplay>,
+    },
+    /// Output of the process a call started, as it streams: terminal text
+    /// (a PTY's as its screen's rows), after a gap when `truncated`.
+    ToolOutput {
+        call_id: String,
+        text: String,
+        truncated: bool,
     },
     ApprovalRequested(ApprovalRequest),
     /// Answered, by the person or by a policy; its overlay closes.
@@ -525,6 +532,19 @@ impl AgentBridge {
                 self.read_tool_display(event.session_id, call_id.clone());
                 TurnUpdate::ToolCompleted { call_id, is_error }
             }
+            // Only output names its call; a process the Agent reports itself
+            // has none.
+            AgentEventKind::ExecutionProgress {
+                call_id: Some(call_id),
+                update:
+                    AgentToolProgressUpdate::ExecutionOutput {
+                        text, truncated, ..
+                    },
+            } => TurnUpdate::ToolOutput {
+                call_id,
+                text,
+                truncated,
+            },
             AgentEventKind::ApprovalRequested { request } => TurnUpdate::ApprovalRequested(request),
             AgentEventKind::ApprovalResolved { request_id, .. } => {
                 TurnUpdate::ApprovalResolved(request_id)

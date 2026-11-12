@@ -49,7 +49,7 @@ icon: Wrench
 - **工作目录**：命令在模型指定的目录中运行，相对路径从第一个工作区根目录算起；模型没有指定时，在第一个工作区根目录运行：工作目录（`-C`），或 Agent 运行时改到的那个目录。
 - **清理**：Agent 记录它启动的进程组，关闭时结束它们；崩溃后，下次启动时会清理遗留的进程。
 
-终端界面中，运行中的命令显示为 `• Running ...`；`exec --json` 中是 `execution_progress` 事件。
+终端界面中，运行中的命令显示为 `• Running ...`，并流式显示它的输出（[工具调用](/docs/terminal-interface#tools)）；`exec --json` 中是 `execution_progress` 事件。
 
 在[评审](/docs/sessions#reviews)中只运行普通的 `git --no-pager` 读取命令；见[权限](/docs/permissions#review)。
 

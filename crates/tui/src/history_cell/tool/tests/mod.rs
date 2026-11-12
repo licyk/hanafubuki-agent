@@ -2,6 +2,7 @@
 //! expanding adds, the frame while a call runs, and the exploration run.
 
 mod exploration;
+mod streamed;
 mod views;
 
 use hanafubuki_agent::{AgentToolCallDisplay, AgentToolDisplay};
@@ -69,8 +70,9 @@ fn a_running_call_shows_its_command_or_its_name_and_subject() {
         "exec_command".to_string(),
         Some("cargo test\u{1b}[2J".to_string()),
     );
+    // The command, then the time it has run.
     assert!(
-        render(&cell, 60).ends_with("Running cargo test"),
+        render(&cell, 60).contains("Running cargo test · "),
         "{}",
         render(&cell, 60)
     );

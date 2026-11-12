@@ -1815,8 +1815,108 @@ independent.
         (`running_tools` maps a call id to its entry). Rows are measured
         with tabs expanded (`expand_tabs`, the layout's stop of 4), so the
         collapsed preview's 3 rows hold; a live buffer's rows must be too.
-- [ ] T6: streamed command output: a bounded live buffer, the collapsed last
+- [x] T6: streamed command output: a bounded live buffer, the collapsed last
       3 lines, the expanded stream.
+      Done (2026-11-12):
+      - Bridge: an `ExecutionProgress` with `call_id: Some(_)` and an
+        `ExecutionOutput` becomes `TurnUpdate::ToolOutput { call_id, text,
+        truncated }`; every other progress is dropped (the application's own
+        reports, a background terminal stopped or recovery, have no call).
+      - Chat: the output goes to the call's entry only while the call is in
+        `running_tools`, so a background process's later output (its
+        `exec_command`'s `callId`, also while a `write_stdin` polls it) and
+        anything after `ToolCompleted` are ignored without raising the
+        revision. No timer or thread: the
+        `LiveCell` update raises the revision and the live entries' frame
+        tick (`LIVE_TICK`) draws it, so output is coalesced to frames.
+      - Buffer (`history_cell/tool/live_output.rs`, after Codex's
+        `LiveCommandOutput`, the kernel's `append_output` as reference): the
+        line still being written is kept raw and shown as its
+        `complete_prefix_len` prefix rendered by `render_plain_text`, so a
+        `\r` redraw, a CR LF or an escape split between updates, and the
+        monitor's `\r ESC[2K` before a PTY row sent again replace that line
+        rather than append; ended lines are rendered once, tabs expanded
+        (`expand_tabs`, so the 3-row preview bound holds). Bounds: the first
+        200 and the newest 200 lines with `… +N lines` between, a line cut at
+        1 KiB with `…`, the raw unfinished line collapsed to what it shows
+        past 16 KiB; `truncated` (output skipped) ends the line before it and
+        adds a `…` row. It receives decoded text (E2/E3) and only renders
+        it: nothing is decoded again on the way, so PowerShell 5.1 output
+        reaches it as the execution plugin left it.
+      - Views (`command.rs`, `mod.rs`): `command::streamed` lays the live
+        lines out with the same row builders as the finished view
+        (`last_rows`, `script_rows`, `output_rows`, `hidden`): collapsed the
+        last 3 lines (trailing blank lines trimmed, as `text_lines` does),
+        `+ N lines` past them; expanded `$ SUBJECT` and the lines kept. The
+        running header is `Running CMD · 3.4s` (§4.6's live seconds, tenths;
+        the entry's animation tick is 100 ms for a running `exec_command`,
+        600 ms for another tool). After `ToolCompleted` the entry keeps the
+        live rows under `Ran CMD` until the display arrives, then the
+        display's view takes over (the same last rows for the same output)
+        and the buffer is dropped; with no display (`None` reply) the live
+        rows stay. Both presentations through the existing live entry:
+        Scrollback's tail never writes it while it runs.
+      - Facade (additive): re-exports `AgentToolProgressUpdate`,
+        `render_plain_text` and `complete_prefix_len`.
+      - Deviations: §4.6's "everything up to 1 MiB, then the first and last
+        200 lines" became always the first and newest 200 lines (each at
+        most 1 KiB): every revision and clock tick lays the whole entry out
+        again on the UI thread, so an expanded 1 MiB stream would be wrapped
+        about ten times a second; the finished display (the model's bound,
+        64 KiB by default, 256 KiB at most) replaces it anyway. The live
+        rows stay through `awaiting_display` (T5 showed the header alone
+        there, which would flicker). The clock counts from `ToolStarted`, so
+        it includes an approval's wait. Known limits of the monitor's PTY
+        preview, not changed: it marks only the last row rewritten, so a
+        repaint of rows above it arrives again as new lines, and an
+        unfinished line that wrapped is replaced by its last screen row
+        until it ends (both also reach the kernel's activity preview).
+      - Tests: the buffer (`live_output/tests.rs`: lines committed and the
+        unfinished one, `\r` redraws and a split CR LF, a PTY row written
+        again, a split escape, tabs, the gap, the head/tail bound and its
+        count, a cut line, an endless progress bar and an endless line
+        bounded); the entry (`tool/tests/streamed.rs`: the last 3 lines and
+        `+ N lines`, the expanded stream, a redraw in place, the rows kept
+        through completion and replaced by the display's, kept without one,
+        another call's output ignored, the clock in tenths); the chat
+        (`chatwidget/tests/entries.rs`: output streams in place in both
+        presentations, nothing for an unknown call or after completion);
+        on vt100 (`app/tests/tools.rs`): a real command that prints, then
+        waits for a file the test creates (POSIX shell or PowerShell),
+        shows its first line under `Running` before it finished and both
+        lines under `Ran` after, in both presentations. Three Scrollback
+        tail tests used a running `exec_command` without output as a
+        fixture; they use `web_search` now, whose header has no clock.
+      - Goldens and snapshots: none changed (nothing model-visible; the
+        running header has no snapshot, its time being live).
+      - Docs (both languages): `terminal-interface#tools` (the row and a
+        paragraph on live output), `tools#commands`, `internals#tui-details`
+        (a Streamed output bullet), `embedding` (the re-exports).
+      - Validation: `cargo fmt --all --check`; `RUSTFLAGS="-D warnings"
+        cargo check --workspace --all-targets --all-features`; `cargo clippy
+        --workspace --all-targets --all-features -- -D warnings`; `cargo
+        xtask check`; `cargo test --workspace --all-features`; `bun install
+        --frozen-lockfile`, `bun run format:check:site`, `bun run
+        site:check`, `bun run site:test`. `VITE_BASE_PATH=/hanafubuki-agent/
+        bun run site:build` built but could not prerender locally (port 3000
+        held by another project's server); CI's Site run covers it.
+        CI on Linux, Windows and macOS: https://github.com/licyk/hanafubuki-agent/actions/runs/43331933917
+        (run on b8f284a, which differs from the landed commit only in this
+        line; Site: .../runs/43331933842, 214 pages prerendered, `#tools`
+        among them; Linux, Windows and macOS jobs all `success`).
+      - Hanafubuki at its next pin: nothing to change; the facade gains
+        three re-exports (`AgentToolProgressUpdate`, `render_plain_text`,
+        `complete_prefix_len`). The TUI crate only otherwise; no twin
+        touched.
+      - Module size: no exception added or raised.
+      - For T7: a running command's header now ends with its clock (`·
+        3.4s`, then `· 1m 02s`), which can change where a long header wraps
+        and so its row count while it runs. A running command has no rows
+        until its first output, then 1 to 3 (`ToolCall::view`'s header path
+        and `command::streamed`), where T7's reserved `(running…)` row goes;
+        at the display's takeover the same last rows stay and the finished
+        view adds `exit N`, `still running` or `(no output)`. The tick is
+        100 ms for a running `exec_command`.
 - [ ] T7: stability: running entries reserve their collapsed shape, the
       toggle keeps the entry's header row, Scrollback's live region keeps its
       height; frame-by-frame tests.
