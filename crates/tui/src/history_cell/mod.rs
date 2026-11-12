@@ -11,6 +11,7 @@ mod thinking;
 mod tool;
 
 use std::any::Any;
+use std::time::Duration;
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
@@ -21,6 +22,7 @@ use unicode_width::UnicodeWidthStr;
 
 use crate::render::line_utils::prefix_lines;
 use crate::render::renderable::Renderable;
+use crate::status_indicator_widget::{fmt_elapsed_compact, fmt_elapsed_tenths};
 use crate::style::user_message_style;
 use crate::ui_consts::LIVE_PREFIX_COLS;
 use crate::wrapping::{word_wrap_lines, RtOptions};
@@ -29,7 +31,7 @@ pub(crate) use live::LiveCell;
 pub(crate) use plan::{new_plan_update, new_proposed_plan_stream};
 pub(crate) use reports::{new_mcp_output, new_skills_output};
 pub(crate) use status::{format_tokens_compact, new_status_output, permission_mode_name};
-pub(crate) use thinking::ThinkingCell;
+pub(crate) use thinking::{ThinkingCell, THINKING_ACTIVITY};
 pub(crate) use tool::{new_tool_call, ToolCallCell, ToolResultView};
 
 /// How the transcript view shows the cells: styled, or as the plain text
@@ -393,26 +395,39 @@ pub(crate) fn new_warning_event(message: String) -> PlainHistoryCell {
 }
 
 /// A divider between the work of a turn and its final answer, with how
-/// long the turn worked.
+/// long the turn worked and, when it thought, how long it thought.
 #[derive(Debug)]
 pub(crate) struct FinalMessageSeparator {
     elapsed_seconds: Option<u64>,
+    thought: Option<Duration>,
 }
 
 impl FinalMessageSeparator {
-    pub(crate) fn new(elapsed_seconds: Option<u64>) -> Self {
-        Self { elapsed_seconds }
+    pub(crate) fn new(elapsed_seconds: Option<u64>, thought: Option<Duration>) -> Self {
+        Self {
+            elapsed_seconds,
+            thought,
+        }
+    }
+
+    /// `Worked for 25s · thought for 20.7s`.
+    fn label(&self) -> Option<String> {
+        let elapsed = fmt_elapsed_compact(self.elapsed_seconds?);
+        Some(match self.thought {
+            Some(thought) => format!(
+                "Worked for {elapsed} · thought for {}",
+                fmt_elapsed_tenths(thought)
+            ),
+            None => format!("Worked for {elapsed}"),
+        })
     }
 }
 
 impl HistoryCell for FinalMessageSeparator {
     fn display_lines(&self, width: u16) -> Vec<Line<'static>> {
-        match self
-            .elapsed_seconds
-            .map(crate::status_indicator_widget::fmt_elapsed_compact)
-        {
-            Some(elapsed) => {
-                let worked_for = format!("─ Worked for {elapsed} ─");
+        match self.label() {
+            Some(label) => {
+                let worked_for = format!("─ {label} ─");
                 let rest = (width as usize).saturating_sub(worked_for.width());
                 vec![Line::from_iter([worked_for, "─".repeat(rest)]).dim()]
             }
@@ -421,11 +436,8 @@ impl HistoryCell for FinalMessageSeparator {
     }
 
     fn raw_lines(&self) -> Vec<Line<'static>> {
-        self.elapsed_seconds
-            .map(|seconds| {
-                let elapsed = crate::status_indicator_widget::fmt_elapsed_compact(seconds);
-                vec![Line::from(format!("Worked for {elapsed}"))]
-            })
+        self.label()
+            .map(|label| vec![Line::from(label)])
             .unwrap_or_default()
     }
 }

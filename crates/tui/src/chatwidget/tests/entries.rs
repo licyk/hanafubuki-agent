@@ -4,7 +4,29 @@
 
 use std::sync::Arc;
 
+use hanafubuki_agent::AgentReasoningSnapshot;
+
 use super::*;
+use crate::app_event::AppCommand;
+
+/// A cell's lines, collapsed or expanded, as text.
+fn cell_lines(cell: &dyn HistoryCell, expanded: bool) -> String {
+    let lines = if expanded {
+        cell.expanded_lines(80)
+    } else {
+        cell.display_lines(80)
+    };
+    lines
+        .iter()
+        .map(|line| {
+            line.spans
+                .iter()
+                .map(|span| span.content.as_ref())
+                .collect::<String>()
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
 
 /// What the transcript holds: every cell the chat handed it, a live entry
 /// as it is now; `true` if the chat said one completed, as it does to
@@ -22,10 +44,17 @@ fn transcript(events: &Receiver<AppEvent>, entries: &mut Vec<Arc<dyn HistoryCell
     written
 }
 
+/// The entries' text, a live thinking's clock left out (it counts on).
 fn texts(entries: &[Arc<dyn HistoryCell>]) -> Vec<String> {
     entries
         .iter()
-        .map(|cell| cell_text(cell.as_ref()))
+        .map(|cell| {
+            let text = cell_text(cell.as_ref());
+            match text.strip_prefix("• Thinking ") {
+                Some(_) => "• Thinking …".to_string(),
+                None => text,
+            }
+        })
         .collect()
 }
 
@@ -90,7 +119,7 @@ fn an_interrupted_turn_says_so_and_completes_its_running_calls() {
 }
 
 #[test]
-fn thinking_changes_in_place_and_ctrl_o_expands_it_for_the_session() {
+fn thinking_changes_in_place_and_ctrl_o_is_left_to_the_transcript() {
     for owned in [true, false] {
         let (mut chat, events) = chat_in(owned);
         let mut entries = Vec::new();
@@ -104,42 +133,60 @@ fn thinking_changes_in_place_and_ctrl_o_expands_it_for_the_session() {
             delta: "Weighing the **options**.".to_string(),
         });
         transcript(&events, &mut entries);
-        assert_eq!(texts(&entries), vec!["• Thinking 0s"]);
-        let collapsed = screen(&chat, 60);
-        assert!(collapsed.contains("Working"), "{collapsed}");
-        assert!(
-            collapsed.contains("ctrl + o to show thinking"),
-            "{collapsed}"
-        );
+        assert_eq!(texts(&entries), vec!["• Thinking …"]);
+        assert_eq!(entries[0].activity_ids(), vec!["thinking:1".to_string()]);
+        // Its control is in the conversation; the footer has no hint.
+        assert!(!screen(&chat, 60).contains("ctrl + o"));
 
         let ctrl_o = KeyEvent::new(KeyCode::Char('o'), KeyModifiers::CONTROL);
         chat.handle_key_event(ctrl_o);
-        assert_eq!(
-            texts(&entries),
-            vec!["• Thinking 0s\n  Weighing the options."]
-        );
-        assert!(screen(&chat, 60).contains("ctrl + o to hide thinking"));
+        assert!(other_events(&events)
+            .iter()
+            .any(|event| matches!(event, AppEvent::Command(AppCommand::ToggleThinking))));
         chat.handle_turn_update(TurnUpdate::ReasoningCompleted {
             reasoning_id: first,
             duration_millis: 1_500,
         });
         assert_eq!(transcript(&events, &mut entries), !owned);
+        assert_eq!(texts(&entries), vec!["• Thought · 1.5s"]);
         assert_eq!(
-            texts(&entries),
-            vec!["• Thought for 1s\n  Weighing the options."]
+            cell_lines(entries[0].as_ref(), true),
+            "• Thought · 1.5s\n  Weighing the options."
         );
-        assert!(!screen(&chat, 60).contains("ctrl + o"));
-
-        // The next one opens expanded; toggling back collapses the one
-        // after.
-        think(&mut chat, 2, "Second thought.", 0);
-        transcript(&events, &mut entries);
-        assert_eq!(texts(&entries)[1], "• Thought for 0s\n  Second thought.");
-        chat.handle_key_event(ctrl_o);
-        think(&mut chat, 3, "Third thought.", 0);
-        transcript(&events, &mut entries);
-        assert_eq!(texts(&entries)[2], "• Thought for 0s");
+        assert_eq!(entries[0].activity_ids(), vec!["thinking:1".to_string()]);
     }
+}
+
+#[test]
+fn the_status_line_adds_the_turns_thinking_time_and_the_separator_keeps_it() {
+    let (mut chat, events) = chat();
+    chat.handle_turn_update(TurnUpdate::Started);
+    drain(&events);
+    let status = screen(&chat, 80);
+    assert!(status.contains("Working 0s • esc to interrupt"), "{status}");
+    assert!(!status.contains("Thinking"), "{status}");
+    // A step's reset keeps what the turn thought.
+    chat.handle_turn_update(TurnUpdate::Reasoning(AgentReasoningSnapshot {
+        sampling_step: 2,
+        turn_completed_millis: 20_790,
+        ..AgentReasoningSnapshot::default()
+    }));
+    let status = screen(&chat, 80);
+    assert!(
+        status.contains("Working 0s (Thinking 20.7s) • esc to interrupt"),
+        "{status}"
+    );
+    tool_started(&mut chat, "call-1", "exec_command", Some("ls"));
+    tool_completed(&mut chat, "call-1", "Cargo.toml");
+    chat.handle_turn_update(TurnUpdate::MessageDelta("Done.".to_string()));
+    chat.handle_turn_update(TurnUpdate::MessageCompleted);
+    let (cells, _) = drain(&events);
+    assert!(
+        cells
+            .iter()
+            .any(|cell| cell.starts_with("─ Worked for 0s · thought for 20.7s ──")),
+        "{cells:?}"
+    );
 }
 
 #[test]
@@ -154,7 +201,7 @@ fn thinking_completes_before_the_answer_of_its_step() {
     chat.handle_turn_update(TurnUpdate::Ended(TurnEnd::Completed));
     assert_eq!(
         drain(&events).0,
-        vec!["• Thought for 2s", "• Thought for 3s", "• The answer."]
+        vec!["• Thought · 2.0s", "• Thought · 3.0s", "• The answer."]
     );
 }
 
@@ -173,11 +220,10 @@ fn a_turn_that_ends_while_thinking_completes_the_thinking_so_far() {
         "the provider went away".to_string(),
     )));
     let (cells, _) = drain(&events);
-    assert_eq!(
-        cells,
-        vec!["• Thought for 0s", "■ the provider went away"],
-        "{cells:?}"
-    );
+    assert_eq!(cells.len(), 2, "{cells:?}");
+    // With the time so far.
+    assert!(cells[0].starts_with("• Thought · 0."), "{cells:?}");
+    assert_eq!(cells[1], "■ the provider went away");
     assert!(chat.live_thinking.is_empty());
     assert!(!screen(&chat, 60).contains("Thinking"));
 }
@@ -193,6 +239,7 @@ fn a_replayed_reasoning_item_is_a_completed_cell() {
         transcript: vec![
             ReplayedItem::User("Why?".to_string()),
             ReplayedItem::Reasoning {
+                item_id: 4,
                 text: "Because.".to_string(),
                 duration_millis: 12_000,
                 truncated: false,
@@ -203,7 +250,7 @@ fn a_replayed_reasoning_item_is_a_completed_cell() {
         setup_needed: false,
     }));
     let (cells, _) = drain(&events);
-    assert_eq!(cells[2], "• Thought for 12s", "{cells:?}");
+    assert_eq!(cells[2], "• Thought · 12.0s", "{cells:?}");
     assert_eq!(cells[3], "• Here is why.", "{cells:?}");
 }
 
@@ -221,7 +268,7 @@ fn an_entry_that_starts_while_a_message_streams_goes_in_its_place_at_once() {
         transcript(&events, &mut entries);
         assert_eq!(
             texts(&entries),
-            vec!["• Looking.", "• Thinking 0s", "• Running read_file"]
+            vec!["• Looking.", "• Thinking …", "• Running read_file"]
         );
         chat.handle_turn_update(TurnUpdate::ReasoningCompleted {
             reasoning_id: reasoning_id(1),
@@ -237,7 +284,7 @@ fn an_entry_that_starts_while_a_message_streams_goes_in_its_place_at_once() {
             texts[..3],
             [
                 "• Looking.",
-                "• Thought for 2s",
+                "• Thought · 2.0s",
                 "• Called read_file\n  └ fn main() {}"
             ]
         );
@@ -258,7 +305,7 @@ fn a_turn_that_ends_leaves_its_entries_where_they_are() {
         chat.handle_turn_update(TurnUpdate::Ended(TurnEnd::Interrupted));
         assert_eq!(transcript(&events, &mut entries), !owned);
         let texts = texts(&entries);
-        assert_eq!(texts[count - 2], "• Thought for 0s");
+        assert!(texts[count - 2].starts_with("• Thought · 0."), "{texts:?}");
         assert!(
             texts[count - 1].contains("Running exec_command: sleep 100"),
             "{texts:?}"

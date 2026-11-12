@@ -18,7 +18,6 @@ impl ChatWidget {
         self.sync_pending_input();
         self.running_tools.clear();
         self.live_thinking.clear();
-        self.sync_thinking_toggle();
         self.stream_controller = None;
         self.plan_stream_controller = None;
         self.bottom_pane.dismiss_all_requests();
@@ -70,14 +69,15 @@ impl ChatWidget {
                     cells.push(Box::new(history_cell::new_user_prompt(text)))
                 }
                 ReplayedItem::Reasoning {
+                    item_id,
                     text,
                     duration_millis,
                     truncated,
-                } => cells.push(Box::new(history_cell::ThinkingCell::completed(
+                } => cells.push(Box::new(history_cell::ThinkingCell::replayed(
+                    item_id,
                     text,
                     duration_millis,
                     truncated,
-                    self.thinking_expanded,
                 ))),
                 ReplayedItem::Assistant(text) => {
                     let mut controller = StreamController::new(width.map(|w| w.saturating_sub(2)));

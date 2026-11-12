@@ -23,7 +23,6 @@ fn props(mode: FooterMode) -> FooterProps<'static> {
         mode,
         use_shift_enter_hint: false,
         quit_shortcut_key: key_hint::ctrl(KeyCode::Char('c')),
-        thinking_toggle: None,
         status_line: None,
         task_running: false,
     }
@@ -84,23 +83,5 @@ fn shortcut_overlay_toggles_back_to_the_base_mode() {
     assert_eq!(
         reset_mode_after_activity(FooterMode::QuitShortcutReminder),
         FooterMode::ComposerEmpty
-    );
-}
-
-#[test]
-fn footer_offers_the_thinking_toggle_while_thinking_is_live() {
-    snapshot_footer(
-        "footer_thinking_toggle_expand",
-        FooterProps {
-            thinking_toggle: Some(ThinkingToggle::Expand),
-            ..props(FooterMode::ComposerEmpty)
-        },
-    );
-    snapshot_footer(
-        "footer_shortcuts_thinking_toggle_collapse",
-        FooterProps {
-            thinking_toggle: Some(ThinkingToggle::Collapse),
-            ..props(FooterMode::ShortcutOverlay)
-        },
     );
 }

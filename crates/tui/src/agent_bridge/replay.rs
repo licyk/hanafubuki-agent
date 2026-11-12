@@ -47,6 +47,8 @@ pub(crate) enum ReplayedItem {
     User(String),
     /// What the model thought, as Markdown, and for how long.
     Reasoning {
+        /// Its history item id, which names its entry.
+        item_id: u64,
         text: String,
         duration_millis: u64,
         truncated: bool,
@@ -65,11 +67,15 @@ pub(crate) enum ReplayedItem {
 }
 
 /// The transcript items a person reads, oldest first, from a page of
-/// `items` read latest first. A call's output fills in its call; an output
-/// whose call is older than the page is left out.
-pub(crate) fn transcript(agent: &AgentHandle, items: Vec<ConversationItem>) -> Vec<ReplayedItem> {
+/// `items` (with their history item ids) read latest first. A call's output
+/// fills in its call; an output whose call is older than the page is left
+/// out.
+pub(crate) fn transcript(
+    agent: &AgentHandle,
+    items: Vec<(u64, ConversationItem)>,
+) -> Vec<ReplayedItem> {
     let mut transcript = Vec::new();
-    for content in items.into_iter().rev() {
+    for (item_id, content) in items.into_iter().rev() {
         let call = call_id(&content).map(str::to_string);
         match content {
             ConversationItem::UserMessage { text, .. }
@@ -82,6 +88,7 @@ pub(crate) fn transcript(agent: &AgentHandle, items: Vec<ConversationItem>) -> V
                 truncated,
                 ..
             } => transcript.push(ReplayedItem::Reasoning {
+                item_id,
                 text,
                 duration_millis,
                 truncated,

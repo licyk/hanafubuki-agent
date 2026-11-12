@@ -40,7 +40,8 @@ mod textarea;
 use std::time::Duration;
 
 use hanafubuki_agent::{
-    AgentUserInputRequest, AgentUserInputRequestId, ApprovalRequest, ApprovalRequestId,
+    AgentReasoningSnapshot, AgentUserInputRequest, AgentUserInputRequestId, ApprovalRequest,
+    ApprovalRequestId,
 };
 use ratatui::buffer::Buffer;
 use ratatui::crossterm::event::KeyCode;
@@ -62,7 +63,6 @@ use crate::tui::FrameRequester;
 use approval_overlay::ApprovalOverlay;
 pub(crate) use bottom_pane_view::BottomPaneView;
 use chat_composer::ChatComposer;
-pub(crate) use footer::ThinkingToggle;
 pub(crate) use form::{FieldId, FormEvent, FormItem, FormView, RowValue, TextField};
 pub(crate) use list_selection_view::{ListSelectionView, SelectionItem, SelectionViewParams};
 pub(crate) use menu_view::{MenuKey, MenuModel, MenuView};
@@ -408,9 +408,12 @@ impl BottomPane {
         self.request_redraw();
     }
 
-    pub(crate) fn set_thinking_toggle(&mut self, toggle: Option<ThinkingToggle>) {
-        self.composer.set_thinking_toggle(toggle);
-        self.request_redraw();
+    /// The turn's thinking time, for the status line.
+    pub(crate) fn update_reasoning(&mut self, reasoning: &AgentReasoningSnapshot) {
+        if let Some(status) = self.status.as_mut() {
+            status.update_reasoning(reasoning);
+            self.request_redraw();
+        }
     }
 
     /// The status line under the composer; `None` for the shortcuts hint.

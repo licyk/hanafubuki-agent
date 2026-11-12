@@ -1,8 +1,7 @@
 ---
 source: crates/tui/src/history_cell/thinking/tests.rs
-expression: "render(&live(THOUGHT, true).display_lines(40))"
+expression: "render(&lines[1..])"
 ---
-• Thinking 5s
   Reading the manifest
   
   The crate needs serde and a tokio

@@ -41,34 +41,11 @@ pub(crate) struct FooterProps<'a> {
     ///
     /// This is rendered when `mode` is `FooterMode::QuitShortcutReminder`.
     pub(crate) quit_shortcut_key: KeyBinding,
-    /// What Ctrl-O does, while the model's thinking is live.
-    pub(crate) thinking_toggle: Option<ThinkingToggle>,
     /// The status line, when this mode shows it.
     pub(crate) status_line: Option<&'a Line<'static>>,
     /// A turn runs: a draft shows the key that queues it, and the
     /// shortcuts say that key queues.
     pub(crate) task_running: bool,
-}
-
-/// What the thinking toggle (Ctrl-O) does to the live thinking cells.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum ThinkingToggle {
-    Expand,
-    Collapse,
-}
-
-impl ThinkingToggle {
-    fn hint(self) -> Line<'static> {
-        let label = match self {
-            ThinkingToggle::Expand => " to show thinking",
-            ThinkingToggle::Collapse => " to hide thinking",
-        };
-        let mut line = Line::from(label.trim_start().to_string());
-        if let Some(key) = keymap::hint(Action::ToggleThinking) {
-            line = Line::from(vec![key.into(), label.into()]);
-        }
-        line
-    }
 }
 
 /// Selects which footer content is rendered.
@@ -142,16 +119,12 @@ fn footer_lines(props: FooterProps<'_>) -> Vec<Line<'static>> {
             vec![quit_shortcut_reminder_line(props.quit_shortcut_key)]
         }
         FooterMode::ComposerEmpty => {
-            let mut line = props.status_line.cloned().unwrap_or_else(|| {
+            let line = props.status_line.cloned().unwrap_or_else(|| {
                 Line::from(vec![
                     key_hint::plain(KeyCode::Char('?')).into(),
                     " for shortcuts".dim(),
                 ])
             });
-            if let Some(toggle) = props.thinking_toggle {
-                line.push_span("   ".dim());
-                line.extend(toggle.hint().dim().spans);
-            }
             vec![line]
         }
         FooterMode::ShortcutOverlay => shortcut_overlay_lines(props),
@@ -216,7 +189,6 @@ fn shortcut_overlay_lines(props: FooterProps<'_>) -> Vec<Line<'static>> {
     entries.push(entry(key_hint::ctrl(KeyCode::Char('c')), " to exit"));
     entries
         .extend(keymap::hint(Action::OpenTranscript).map(|key| entry(key, " to view transcript")));
-    entries.extend(props.thinking_toggle.map(ThinkingToggle::hint));
     build_columns(entries)
 }
 

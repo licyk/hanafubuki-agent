@@ -583,6 +583,10 @@ path = "crates/tui/src/app/tests/scrollback.rs"
 reason = "Scrollback's tail on an emulated terminal, written with it."
 
 [[original]]
+path = "crates/tui/src/app/tests/thinking.rs"
+reason = "Thinking entries on an emulated terminal in both presentations, written for the Agent's timeline."
+
+[[original]]
 path = "crates/tui/src/transcript_view/tail.rs"
 reason = "The transcript view's layout of Scrollback's tail, written for the Agent's timeline."
 

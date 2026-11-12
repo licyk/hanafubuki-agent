@@ -2,7 +2,7 @@
 source: crates/tui/src/bottom_pane/tests.rs
 expression: "render_snapshot(&pane, area)"
 ---
-• Working (0s • esc to interrupt)               
+• Working 0s • esc to interrupt                 
                                                 
                                                 
 › Ask Codex to do anything                      

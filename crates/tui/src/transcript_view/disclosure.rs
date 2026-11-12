@@ -4,9 +4,9 @@
 //! keyed by the activities' stable identities and apart from selection.
 //! F4 focuses the latest visible activity; the list keys then move between
 //! activities and Enter shows or hides the focused one's details. A click
-//! on an activity's control row toggles it too. Copying and search read
-//! the full text whatever is disclosed. A live entry keeps its disclosure
-//! as it changes, through its completion.
+//! on an activity's control row toggles it too, and Ctrl-O every thinking
+//! at once. Copying and search read the full text whatever is disclosed. A
+//! live entry keeps its disclosure as it changes, through its completion.
 
 use std::collections::HashSet;
 
@@ -14,6 +14,7 @@ use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::style::{Modifier, Style};
 
 use super::*;
+use crate::history_cell::THINKING_ACTIVITY;
 use crate::key_hint::normalize_key_parts;
 use crate::keymap::{self, Action};
 use crate::style::accent_color;
@@ -325,15 +326,7 @@ impl TranscriptView {
         }
         let key = self.entry_key(cells, index);
         let matched = self.is_search_expanded(key);
-        let previous_top = self.visible.first().map(|visible| {
-            let offset = visible.layout.position_at(visible.row, 0);
-            (
-                visible.key,
-                Arc::clone(&visible.activity_ids),
-                offset,
-                visible.layout.row_for_offset(offset) as isize - visible.row as isize,
-            )
-        });
+        let anchor = self.disclosure_anchor(cells, |top| top == index, index);
         self.end_selection(cells);
         if self.search.has_active_query() && !matched {
             if let Some(snapshot) = &mut self.held_reading {
@@ -342,28 +335,6 @@ impl TranscriptView {
         } else {
             self.release_live_reading();
         }
-        // Offsets hold only in an unchanged cell; an entry found by its
-        // activities is anchored at its first row.
-        let anchor = previous_top
-            .and_then(|(top_key, top_ids, offset, row_bias)| {
-                let unchanged = cells
-                    .iter()
-                    .position(|cell| EntryKey::cell(cell) == top_key);
-                let top = unchanged.or_else(|| self.canonical_activity_index(cells, &top_ids))?;
-                let preserve_offset = unchanged.is_some() && top != index;
-                Some(Anchor {
-                    key: cells.get(top).map_or(EntryKey::End, EntryKey::cell),
-                    index: top,
-                    offset: if preserve_offset { offset } else { 0 },
-                    row_bias: if preserve_offset { row_bias } else { 0 },
-                })
-            })
-            .unwrap_or(Anchor {
-                key: cells.get(index).map_or(EntryKey::End, EntryKey::cell),
-                index,
-                offset: 0,
-                row_bias: 0,
-            });
         if matched || self.disclosure.is_expanded(&ids) {
             self.disclosure.expanded.retain(|id| !ids.contains(id));
         } else {
@@ -375,6 +346,87 @@ impl TranscriptView {
         if matched {
             self.invalidate_held_search();
         }
+    }
+
+    /// Ctrl-O: expands every thinking among `cells`, or collapses them all
+    /// when all are expanded; `false` when there is none. A reader keeps
+    /// the entry at the top of the view; following stays following.
+    pub(crate) fn toggle_thinking(&mut self, cells: &[Arc<dyn HistoryCell>]) -> bool {
+        let thinking = |cell: &Arc<dyn HistoryCell>| {
+            cell.activity_ids()
+                .into_iter()
+                .filter(|id| id.starts_with(THINKING_ACTIVITY))
+                .collect::<Vec<_>>()
+        };
+        let ids: Vec<String> = cells.iter().flat_map(thinking).collect();
+        if ids.is_empty() {
+            return false;
+        }
+        let anchor = self.disclosure_anchor(
+            cells,
+            |top| {
+                cells
+                    .get(top)
+                    .is_some_and(|cell| !thinking(cell).is_empty())
+            },
+            0,
+        );
+        self.end_selection(cells);
+        self.release_live_reading();
+        if ids.iter().all(|id| self.disclosure.expanded.contains(id)) {
+            self.disclosure
+                .expanded
+                .retain(|id| !id.starts_with(THINKING_ACTIVITY));
+        } else {
+            self.disclosure.expanded.extend(ids);
+        }
+        if !self.is_following() {
+            self.position = Position::Reading(anchor);
+        }
+        self.cache.clear();
+        true
+    }
+
+    /// Where a reader stays across a change of disclosure: the entry at the
+    /// top of the view, at the same text unless the change `toggles` it
+    /// (then at its start, its offsets changing); else `fallback`'s start.
+    fn disclosure_anchor(
+        &self,
+        cells: &[Arc<dyn HistoryCell>],
+        toggles: impl Fn(usize) -> bool,
+        fallback: usize,
+    ) -> Anchor {
+        let previous_top = self.visible.first().map(|visible| {
+            let offset = visible.layout.position_at(visible.row, 0);
+            (
+                visible.key,
+                Arc::clone(&visible.activity_ids),
+                offset,
+                visible.layout.row_for_offset(offset) as isize - visible.row as isize,
+            )
+        });
+        // Offsets hold only in an unchanged cell; an entry found by its
+        // activities is anchored at its first row.
+        previous_top
+            .and_then(|(top_key, top_ids, offset, row_bias)| {
+                let unchanged = cells
+                    .iter()
+                    .position(|cell| EntryKey::cell(cell) == top_key);
+                let top = unchanged.or_else(|| self.canonical_activity_index(cells, &top_ids))?;
+                let preserve_offset = unchanged.is_some() && !toggles(top);
+                Some(Anchor {
+                    key: cells.get(top).map_or(EntryKey::End, EntryKey::cell),
+                    index: top,
+                    offset: if preserve_offset { offset } else { 0 },
+                    row_bias: if preserve_offset { row_bias } else { 0 },
+                })
+            })
+            .unwrap_or(Anchor {
+                key: cells.get(fallback).map_or(EntryKey::End, EntryKey::cell),
+                index: fallback,
+                offset: 0,
+                row_bias: 0,
+            })
     }
 }
 

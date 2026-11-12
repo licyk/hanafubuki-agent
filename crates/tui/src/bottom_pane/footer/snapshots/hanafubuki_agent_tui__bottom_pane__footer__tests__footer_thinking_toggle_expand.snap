@@ -1,5 +1,0 @@
----
-source: crates/tui/src/bottom_pane/footer/tests.rs
-expression: terminal.backend()
----
-"  ? for shortcuts   ctrl + o to show thinking                                   "

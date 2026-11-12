@@ -2,7 +2,7 @@
 source: crates/tui/src/bottom_pane/tests.rs
 expression: "render_snapshot(&pane, area)"
 ---
-• Working (0s • esc to interrupt)                           
+• Working 0s • esc to interrupt                             
                                                             
 • Messages to be submitted after next tool call (press esc  
   to interrupt and send immediately)                        

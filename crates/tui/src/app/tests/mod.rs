@@ -388,7 +388,7 @@ fn a_thinking_turn_writes_its_thought_before_the_answer_and_the_pager_shows_the_
     )]);
     harness.type_and_submit("What is the answer?");
     let screen = harness.pump_until_screen_shows("The answer is 42.");
-    let thought = screen.find("• Thought for").expect(&screen);
+    let thought = screen.find("• Thought ·").expect(&screen);
     assert!(
         thought < screen.find("The answer is 42.").unwrap(),
         "{screen}"
@@ -399,7 +399,7 @@ fn a_thinking_turn_writes_its_thought_before_the_answer_and_the_pager_shows_the_
     // The transcript opens compact; a second Ctrl-T shows the details.
     harness.key_with(KeyCode::Char('t'), KeyModifiers::CONTROL);
     let pager = harness.pump_until_screen_shows("T R A N S C R I P T");
-    assert!(pager.contains("• Thought for"), "{pager}");
+    assert!(pager.contains("• Thought ·"), "{pager}");
     assert!(!pager.contains("Weighing the question."), "{pager}");
     harness.key_with(KeyCode::Char('t'), KeyModifiers::CONTROL);
     harness.pump_until_screen_shows("Weighing the question.");
@@ -426,11 +426,21 @@ fn a_resumed_session_replays_its_thinking() {
         harness.transcript().contains("The answer is 42.")
     });
     let transcript = harness.transcript();
-    let thought = transcript.find("• Thought for").expect(&transcript);
+    let thought = transcript.find("• Thought ·").expect(&transcript);
     assert!(
         thought < transcript.find("The answer is 42.").unwrap(),
         "{transcript}"
     );
+    // Named by its history item, not by the run's reasoning id.
+    let ids: Vec<String> = harness
+        .app
+        .transcript_cells
+        .iter()
+        .flat_map(|cell| cell.activity_ids())
+        .filter(|id| id.starts_with("thinking:"))
+        .collect();
+    assert_eq!(ids.len(), 1, "{ids:?}");
+    assert!(ids[0].starts_with("thinking:h"), "{ids:?}");
 }
 
 #[test]
@@ -455,9 +465,9 @@ fn each_step_writes_its_thought_before_its_call_or_answer() {
         harness.pump_until_turn_ends();
         let transcript = harness.transcript();
         let order = [
-            "• Thought for",
+            "• Thought ·",
             "exec_command",
-            "• Thought for",
+            "• Thought ·",
             "The command ran.",
         ];
         let mut from = 0;
@@ -587,7 +597,7 @@ fn ctrl_t_shows_the_owned_transcript_in_detail_in_place() {
     harness.type_and_submit("What is the answer?");
     let compact = harness.pump_until_screen_shows("The answer is 42.");
     harness.pump_until_turn_ends();
-    assert!(compact.contains("• Thought for"), "{compact}");
+    assert!(compact.contains("• Thought ·"), "{compact}");
     assert!(!compact.contains("Weighing the question."), "{compact}");
 
     harness.key_with(KeyCode::Char('t'), KeyModifiers::CONTROL);
@@ -725,4 +735,5 @@ mod session_commands;
 mod settings;
 mod side;
 mod subagents;
+mod thinking;
 mod workspace_commands;

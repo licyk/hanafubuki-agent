@@ -80,6 +80,18 @@ fn session_header_names_the_model_and_the_directory() {
 
 #[test]
 fn the_separator_says_how_long_the_turn_worked() {
-    let lines = render_lines(&FinalMessageSeparator::new(Some(75)).display_lines(24));
+    let lines = render_lines(&FinalMessageSeparator::new(Some(75), None).display_lines(24));
     assert_eq!(lines, vec!["─ Worked for 1m 15s ────"]);
+}
+
+#[test]
+fn the_separator_says_how_long_the_turn_thought_when_it_did() {
+    let thought = Some(std::time::Duration::from_millis(20_790));
+    let separator = FinalMessageSeparator::new(Some(25), thought);
+    let lines = render_lines(&separator.display_lines(44));
+    assert_eq!(lines, vec!["─ Worked for 25s · thought for 20.7s ───────"]);
+    assert_eq!(
+        render_lines(&separator.raw_lines()),
+        vec!["Worked for 25s · thought for 20.7s"]
+    );
 }

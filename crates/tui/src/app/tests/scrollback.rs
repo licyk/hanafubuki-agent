@@ -29,7 +29,7 @@ impl Harness {
     }
 
     /// The screen's rows, each without its trailing blanks.
-    fn rows(&self) -> Vec<String> {
+    pub(super) fn rows(&self) -> Vec<String> {
         let screen = self.tui.terminal.backend().vt100().screen();
         screen
             .rows(0, screen.size().1)
@@ -38,7 +38,7 @@ impl Harness {
     }
 
     /// The row and column of `text` on the screen.
-    fn find(&self, text: &str) -> (u16, u16) {
+    pub(super) fn find(&self, text: &str) -> (u16, u16) {
         let rows = self.rows();
         let row = rows
             .iter()
@@ -48,7 +48,7 @@ impl Harness {
         (u16::try_from(row).unwrap(), u16::try_from(column).unwrap())
     }
 
-    fn click_on(&mut self, text: &str) {
+    pub(super) fn click_on(&mut self, text: &str) {
         let (row, column) = self.find(text);
         for kind in [
             MouseEventKind::Down(MouseButton::Left),

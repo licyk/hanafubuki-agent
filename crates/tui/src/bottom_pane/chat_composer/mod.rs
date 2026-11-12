@@ -64,7 +64,6 @@ use super::footer::reset_mode_after_activity;
 use super::footer::toggle_shortcut_mode;
 use super::footer::FooterMode;
 use super::footer::FooterProps;
-use super::footer::ThinkingToggle;
 use super::paste_burst::CharDecision;
 use super::paste_burst::FlushResult;
 use super::paste_burst::PasteBurst;
@@ -100,7 +99,6 @@ pub(crate) struct ChatComposer {
     has_focus: bool,
     placeholder_text: String,
     is_task_running: bool,
-    thinking_toggle: Option<ThinkingToggle>,
     /// The status line the footer shows (`/statusline`).
     status_line: Option<Line<'static>>,
     /// Non-bracketed paste burst tracker (see `bottom_pane/paste_burst.rs`).
@@ -145,7 +143,6 @@ impl ChatComposer {
             has_focus: has_input_focus,
             placeholder_text,
             is_task_running: false,
-            thinking_toggle: None,
             status_line: None,
             paste_burst: PasteBurst::default(),
             footer_mode: FooterMode::ComposerEmpty,
@@ -725,7 +722,6 @@ impl ChatComposer {
             mode,
             use_shift_enter_hint: self.use_shift_enter_hint,
             quit_shortcut_key: self.quit_shortcut_key,
-            thinking_toggle: self.thinking_toggle,
             status_line: self.status_line.as_ref().filter(|_| shows_status_line),
             task_running: self.is_task_running,
         }
@@ -757,10 +753,6 @@ impl ChatComposer {
 
     pub fn set_task_running(&mut self, running: bool) {
         self.is_task_running = running;
-    }
-
-    pub(crate) fn set_thinking_toggle(&mut self, toggle: Option<ThinkingToggle>) {
-        self.thinking_toggle = toggle;
     }
 
     pub(crate) fn set_status_line(&mut self, line: Option<Line<'static>>) {

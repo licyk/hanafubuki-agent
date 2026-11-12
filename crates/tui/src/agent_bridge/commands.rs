@@ -357,7 +357,7 @@ impl AgentBridge {
             .transcript
             .items
             .into_iter()
-            .map(|item| item.content)
+            .map(|item| (item.item_id.value(), item.content))
             .collect();
         let session = OpenedSession {
             session_id: Some(session_id),
@@ -393,7 +393,11 @@ impl AgentBridge {
                 through_revision: Some(older.through_revision),
             })
             .map_err(|error| format!("earlier messages were not read: {error}"))?;
-        let items = page.items.into_iter().map(|item| item.content).collect();
+        let items = page
+            .items
+            .into_iter()
+            .map(|item| (item.item_id.value(), item.content))
+            .collect();
         let next = page.older_cursor.map(|cursor| OlderTranscript {
             cursor,
             ..older.clone()

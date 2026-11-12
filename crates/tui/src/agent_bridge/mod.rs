@@ -45,10 +45,10 @@ use std::sync::Arc;
 use hanafubuki_agent::{
     AgentAvailability, AgentCompactionStatus, AgentCompactionTrigger, AgentEvent, AgentEventKind,
     AgentEventSink, AgentGoal, AgentHandle, AgentHistorySortDirection, AgentPermissionMode,
-    AgentReasoningId, AgentRuntime, AgentSessionId, AgentSessionMode, AgentSlot,
-    AgentStatusEventSink, AgentTaskPlanSnapshot, AgentTurnAccepted, AgentTurnPageRequest,
-    AgentTurnRequest, AgentTurnTerminalReason, AgentUserInputRequest, AgentUserInputRequestId,
-    ApprovalRequest, ApprovalRequestId, SkillCatalogSnapshot,
+    AgentReasoningId, AgentReasoningSnapshot, AgentRuntime, AgentSessionId, AgentSessionMode,
+    AgentSlot, AgentStatusEventSink, AgentTaskPlanSnapshot, AgentTurnAccepted,
+    AgentTurnPageRequest, AgentTurnRequest, AgentTurnTerminalReason, AgentUserInputRequest,
+    AgentUserInputRequestId, ApprovalRequest, ApprovalRequestId, SkillCatalogSnapshot,
 };
 use tokio::sync::oneshot;
 
@@ -89,6 +89,8 @@ pub(crate) enum TurnUpdate {
         reasoning_id: AgentReasoningId,
         duration_millis: u64,
     },
+    /// The turn's thinking time, for the status line.
+    Reasoning(AgentReasoningSnapshot),
     MessageDelta(String),
     MessageCompleted,
     PlanDelta(String),
@@ -483,6 +485,7 @@ impl AgentBridge {
                 reasoning_id,
                 duration_millis,
             },
+            AgentEventKind::ReasoningUpdated { reasoning } => TurnUpdate::Reasoning(reasoning),
             AgentEventKind::AssistantTextDelta { delta, .. } => TurnUpdate::MessageDelta(delta),
             AgentEventKind::AssistantMessageCompleted { .. } => TurnUpdate::MessageCompleted,
             AgentEventKind::ProposedPlanDelta { delta, .. } => TurnUpdate::PlanDelta(delta),
