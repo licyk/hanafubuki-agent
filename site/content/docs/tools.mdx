@@ -36,6 +36,13 @@ icon: Wrench
 - **沙箱**：命令在会话的[沙箱](/docs/permissions#sandbox)中运行：Linux 和 macOS 上默认只能写入工作区根目录和临时目录，不能使用网络；需要这台机器无法提供的沙箱的命令不会运行。
 - **在沙箱之外运行**：和 Codex 一样，模型可以请求在沙箱之外运行一条命令，参数是 `sandbox_permissions`（`"use_default"`，即默认值，或 `"require_escalated"`）和 `justification`（随审批显示的一个问题，最多 1024 字节；只能和 `"require_escalated"` 一起使用，否则是模型会读到的错误）。这样的命令需要单独的审批，完全访问模式永远不会给出；见[权限](/docs/permissions#escalation)。
 - **环境**：命令得到一个干净的环境，不继承你 Shell 中的变量，见[环境变量](/docs/environment#commands)。
+- **文本编码**：输出以 UTF-8 交给模型。
+  - PowerShell（5.1 和 7 都一样）开始时把控制台的输出和输入代码页，以及它通过管道传给程序的文本的编码（`$OutputEncoding`，5.1 中默认是 ASCII）设为不带字节顺序标记的 UTF-8，并关闭进度条（`$ProgressPreference = 'SilentlyContinue'`）。
+  - `cmd.exe` 先运行 `chcp 65001`，因此它启动的、遵循控制台代码页的程序写出 UTF-8。它自己的内置命令（`dir`、`echo`、`type`）写入管道时仍使用 `cmd.exe` 启动时的代码页，即控制台的（OEM）代码页；在伪终端中，或从 PowerShell 中以 `cmd /c …` 运行时，它们的输出完整无误。
+  - Python 写出 UTF-8（`PYTHONUTF8=1`、`PYTHONIOENCODING=utf-8`）。
+  - 程序仍然用其他编码写出的内容会分段解码，因此同一段输出中可以混有多种编码：ASCII 原样保留，其余字节的每一段若是 UTF-8 就保持不变，否则按 Windows 的 ANSI 代码页读取（中文 Windows 上是 936，即 GBK；西文 Windows 上是 1252）。Linux 和 macOS 没有这样的后备编码，因为命令得到 `LANG=C.UTF-8`：不是 UTF-8 的字节显示为 `�`。
+  - 后备编码是 ANSI 代码页，而不是控制台的（OEM）代码页。中文、日文和韩文 Windows 上两者相同（936、932、949、950），因此在那里 `cmd.exe` 的内置命令能被正确读取。其他 Windows 上两者不同（1252 和 437 或 850，1251 和 866，1253 和 737）：遵循控制台代码页的程序在 `chcp 65001` 或 PowerShell 的设置之后写出 UTF-8，但 `cmd.exe` 自己的内置命令写入管道的非 ASCII 文本会按错误的代码页读取。
+  - 在伪终端中，Windows 的控制台主机自己把程序写出的内容转换为 UTF-8，按控制台代码页（即 UTF-8）读取：在那里仍然写出 ANSI 代码页的程序，输出依然显示为 `�`。
 - **工作目录**：命令在模型指定的目录中运行，相对路径从第一个工作区根目录算起；模型没有指定时，在第一个工作区根目录运行：工作目录（`-C`），或 Agent 运行时改到的那个目录。
 - **清理**：Agent 记录它启动的进程组，关闭时结束它们；崩溃后，下次启动时会清理遗留的进程。
 

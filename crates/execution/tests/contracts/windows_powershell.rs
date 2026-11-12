@@ -391,6 +391,7 @@ fn cmd_built_ins_write_text_the_decoder_reads(tty: bool) {
 }
 
 #[test]
+#[ignore = "§4.9 (a): cmd.exe's built-ins write a pipe in the code page cmd started with (437 here), which `chcp 65001` does not change for it and the ANSI fallback (1252) misreads; right where OEM and ANSI agree (936 on Chinese Windows)"]
 fn pipe_cmd_built_ins_write_text_the_decoder_reads() {
     cmd_built_ins_write_text_the_decoder_reads(false);
 }

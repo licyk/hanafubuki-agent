@@ -27,8 +27,9 @@ pub const POWERSHELL_UTF8_OUTPUT_PREFIX: &str =
      $OutputEncoding = $__hbUtf8; [Console]::OutputEncoding = $__hbUtf8; \
      [Console]::InputEncoding = $__hbUtf8 } catch {}\n\
      $ProgressPreference = 'SilentlyContinue'\n";
-/// Prefixed to every `cmd.exe` script, so its built-ins and the console
-/// programs it runs write UTF-8 rather than the console's code page.
+/// Prefixed to every `cmd.exe` script, so the console programs it starts
+/// write UTF-8. Its own built-ins keep the code page `cmd.exe` started with
+/// (the OEM one) when they write to a pipe.
 const CMD_UTF8_PREFIX: &str = "chcp 65001 >NUL & ";
 
 pub(crate) struct PreparedExecCommand {
