@@ -6,12 +6,16 @@
 //! the command, the whole output as the result returned it, and how it
 //! ended. The output reaches the interface as plain text (the execution
 //! plugin renders the terminal's), so it has no colours to keep.
+//!
+//! While the command runs, and until its display arrives, the same rows show
+//! what its process printed so far (`streamed`).
 
 use std::time::Duration;
 
 use ratatui::style::Stylize;
 use ratatui::text::{Line, Span};
 
+use super::live_output::LiveOutput;
 use super::{clipped, text_lines, wrapped, Extent, ToolCall, View, EXEC_COMMAND, PREVIEW_LINES};
 use crate::history_cell::ActivityDisclosure;
 use crate::render::highlight::highlight_code_to_lines;
@@ -59,13 +63,7 @@ pub(super) fn view(call: &ToolCall, command: &Command, failed: bool, extent: Ext
     };
 
     let output = text_lines(command.output);
-    let mut preview = Vec::new();
-    let mut cut = false;
-    for line in &output[output.len().saturating_sub(PREVIEW_LINES)..] {
-        let (row, was_cut) = clipped(Line::from(line.clone()).dim(), extent.columns);
-        cut |= was_cut;
-        preview.push(row);
-    }
+    let (mut preview, cut) = last_rows(&output, extent);
     if output.is_empty() && !interaction {
         preview.push(Line::from("(no output)".dim()));
     }
@@ -81,31 +79,82 @@ pub(super) fn view(call: &ToolCall, command: &Command, failed: bool, extent: Ext
     let mut details = Vec::new();
     if extent.expanded {
         if !interaction {
-            for (index, line) in script_lines.iter().enumerate() {
-                let mut spans = vec![if index == 0 { "$ " } else { "  " }.dim()];
-                spans.extend(line.spans.iter().cloned());
-                details.extend(wrapped(Line::from(spans), extent.columns, "  "));
-            }
+            details = script_rows(&script_lines, extent);
         }
-        for line in output.iter().cloned() {
-            details.extend(wrapped(Line::from(line), extent.columns, ""));
-        }
+        details.extend(output_rows(&output, extent));
         details.push(ending(command));
     }
 
-    let hidden = if output.len() > PREVIEW_LINES {
-        Some(ActivityDisclosure::OutputLines(
-            output.len() - PREVIEW_LINES,
-        ))
-    } else {
-        (cut || title_cut || script_lines.len() > 1).then_some(ActivityDisclosure::Generic)
-    };
     View {
         failed,
         title,
         preview,
         details,
-        hidden,
+        hidden: hidden(output.len(), cut || title_cut || script_lines.len() > 1),
+    }
+}
+
+/// `header` with what the call's process printed so far under it: the last
+/// lines, as the finished command shows its output; expanded, the command
+/// as it started and the lines kept.
+pub(super) fn streamed(call: &ToolCall, header: View, live: &LiveOutput, extent: Extent) -> View {
+    let (output, count) = live.lines();
+    let (preview, cut) = last_rows(&output, extent);
+    let mut details = Vec::new();
+    if extent.expanded {
+        if call.name == EXEC_COMMAND {
+            if let Some(subject) = &call.subject {
+                let script = highlight_code_to_lines(&strip_terminal_controls(subject), "bash");
+                details = script_rows(&script, extent);
+            }
+        }
+        details.extend(output_rows(&output, extent));
+    }
+    View {
+        preview,
+        details,
+        hidden: hidden(count, cut),
+        ..header
+    }
+}
+
+/// The last of `output`'s lines, each cut to a row, and whether one was.
+fn last_rows(output: &[String], extent: Extent) -> (Vec<Line<'static>>, bool) {
+    let mut rows = Vec::new();
+    let mut cut = false;
+    for line in &output[output.len().saturating_sub(PREVIEW_LINES)..] {
+        let (row, was_cut) = clipped(Line::from(line.clone()).dim(), extent.columns);
+        cut |= was_cut;
+        rows.push(row);
+    }
+    (rows, cut)
+}
+
+/// `$` and the command, wrapped.
+fn script_rows(script_lines: &[Line<'static>], extent: Extent) -> Vec<Line<'static>> {
+    let mut rows = Vec::new();
+    for (index, line) in script_lines.iter().enumerate() {
+        let mut spans = vec![if index == 0 { "$ " } else { "  " }.dim()];
+        spans.extend(line.spans.iter().cloned());
+        rows.extend(wrapped(Line::from(spans), extent.columns, "  "));
+    }
+    rows
+}
+
+fn output_rows(output: &[String], extent: Extent) -> Vec<Line<'static>> {
+    output
+        .iter()
+        .flat_map(|line| wrapped(Line::from(line.clone()), extent.columns, ""))
+        .collect()
+}
+
+/// What expanding adds to `lines` lines of output, the last of them shown;
+/// `more` when expanding shows more of what is shown.
+fn hidden(lines: usize, more: bool) -> Option<ActivityDisclosure> {
+    if lines > PREVIEW_LINES {
+        Some(ActivityDisclosure::OutputLines(lines - PREVIEW_LINES))
+    } else {
+        more.then_some(ActivityDisclosure::Generic)
     }
 }
 

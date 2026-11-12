@@ -14,6 +14,7 @@ mod command;
 mod exploration;
 mod file_read;
 mod listing;
+mod live_output;
 mod mutation;
 mod patch;
 mod search;
@@ -26,6 +27,8 @@ use hanafubuki_agent::{AgentToolCallDisplay, AgentToolDisplay};
 use ratatui::style::Stylize;
 use ratatui::text::{Line, Span};
 use unicode_width::UnicodeWidthStr;
+
+use live_output::LiveOutput;
 
 use super::{plain_lines, ActivityDisclosure, HistoryCell};
 use crate::render::line_utils::{line_to_static, prefix_lines};
@@ -43,6 +46,8 @@ const COMPRESS: &str = "compress";
 const PREVIEW_LINES: usize = 3;
 /// The spinner's period while a call runs.
 const SPINNER_TICK_MILLIS: u128 = 600;
+/// A running command's clock's period, in tenths of a second.
+const CLOCK_TICK_MILLIS: u128 = 100;
 
 /// Whether consecutive calls of the tool share one entry. Decided by name:
 /// a call joins its entry when it starts, before any display.
@@ -63,6 +68,8 @@ struct ToolCall {
     subject: Option<String>,
     start_time: Instant,
     outcome: Option<Outcome>,
+    /// What its process printed while it ran, until its display arrives.
+    live: Option<LiveOutput>,
 }
 
 #[derive(Debug)]
@@ -85,6 +92,7 @@ pub(crate) fn new_tool_call(
             subject,
             start_time: Instant::now(),
             outcome: None,
+            live: None,
         }],
     }
 }
@@ -93,6 +101,16 @@ impl ToolCallCell {
     /// The calls of `other` after this entry's.
     pub(crate) fn join(&mut self, other: ToolCallCell) {
         self.calls.extend(other.calls);
+    }
+
+    /// Output the running call `call_id`'s process printed (see
+    /// [`LiveOutput::push`]).
+    pub(crate) fn push_output(&mut self, call_id: &str, text: &str, truncated: bool) {
+        if let Some(call) = self.call_mut(call_id) {
+            call.live
+                .get_or_insert_with(LiveOutput::default)
+                .push(text, truncated);
+        }
     }
 
     pub(crate) fn complete(&mut self, call_id: &str, is_error: bool) {
@@ -114,6 +132,9 @@ impl ToolCallCell {
             call.subject = shown.subject;
         }
         if let Some(outcome) = &mut call.outcome {
+            if shown.display.is_some() {
+                call.live = None;
+            }
             outcome.display = shown.display;
         }
     }
@@ -176,10 +197,15 @@ impl HistoryCell for ToolCallCell {
         }
     }
 
-    /// The spinner blinks while a call runs.
+    /// The spinner blinks while a call runs, and a command's clock counts.
     fn transcript_animation_tick(&self) -> Option<u64> {
         let call = self.calls.iter().find(|call| call.outcome.is_none())?;
-        let ticks = call.start_time.elapsed().as_millis() / SPINNER_TICK_MILLIS;
+        let period = if call.name == EXEC_COMMAND {
+            CLOCK_TICK_MILLIS
+        } else {
+            SPINNER_TICK_MILLIS
+        };
+        let ticks = call.start_time.elapsed().as_millis() / period;
         Some(u64::try_from(ticks).unwrap_or(u64::MAX))
     }
 }
@@ -236,16 +262,29 @@ impl View {
 
 impl ToolCall {
     fn view(&self, extent: Extent) -> View {
-        let Some(outcome) = &self.outcome else {
-            return text::running(self);
+        let failed = self
+            .outcome
+            .as_ref()
+            .is_some_and(|outcome| outcome.is_error);
+        if let Some(display) = self
+            .outcome
+            .as_ref()
+            .and_then(|outcome| outcome.display.as_ref())
+        {
+            let mut view = self.display_view(display, failed, extent);
+            view.failed |= failed;
+            return view;
+        }
+        // Until its display arrives, and when none does, a call keeps what
+        // its process printed under its header.
+        let header = match self.outcome {
+            None => text::running(self),
+            Some(_) => text::called(self, failed),
         };
-        let failed = outcome.is_error;
-        let Some(display) = &outcome.display else {
-            return text::called(self, failed);
-        };
-        let mut view = self.display_view(display, failed, extent);
-        view.failed |= failed;
-        view
+        match &self.live {
+            Some(live) => command::streamed(self, header, live, extent),
+            None => header,
+        }
     }
 
     fn display_view(&self, display: &AgentToolDisplay, failed: bool, extent: Extent) -> View {

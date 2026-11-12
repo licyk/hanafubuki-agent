@@ -1,12 +1,49 @@
 //! A tool call shows what its tool's presenter says, read off the app
 //! loop's thread once it finished, live and replayed, in both
 //! presentations: here `read_file`, its lines collapsed, its text numbered
-//! expanded.
+//! expanded; and a command's output as it streams, before it finished.
 
 use hanafubuki_agent::test_support::{assistant_events, tool_events};
+use ratatui::crossterm::event::KeyCode;
 
-use super::Harness;
+use super::{command_call, has_output_row, Harness};
 use crate::transcript_mode::TranscriptMode;
+
+#[test]
+fn a_running_commands_output_streams_into_its_entry_in_both_presentations() {
+    // The command prints, then waits for the test to create `gate`.
+    let command = if cfg!(windows) {
+        "echo live-first; [Console]::Out.Flush(); while (-not (Test-Path gate)) { Start-Sleep -Milliseconds 100 }; echo live-second"
+    } else {
+        "echo live-first; while [ ! -e gate ]; do sleep 0.1; done; echo live-second"
+    };
+    for mode in [TranscriptMode::Owned, TranscriptMode::Terminal] {
+        let mut harness = Harness::start_with(
+            vec![command_call(command), assistant_events("The command ran.")],
+            true,
+            mode,
+        );
+        harness.type_and_submit("Run the command.");
+        harness.pump_until_screen_shows("Yes, proceed");
+        harness.key(KeyCode::Char('y'));
+        harness.pump_until("the first line, streamed", |harness| {
+            has_output_row(&harness.screen(), "live-first")
+        });
+        let screen = harness.screen();
+        assert!(screen.contains("Running echo live-first"), "{screen}");
+        assert!(!has_output_row(&screen, "live-second"), "{screen}");
+
+        std::fs::write(harness.home.path().join("project").join("gate"), "").unwrap();
+        harness.pump_until("the answer", |harness| {
+            harness.screen().contains("The command ran.")
+        });
+        harness.pump_until("the finished command's output", |harness| {
+            let screen = harness.screen();
+            screen.contains("Ran echo live-first") && has_output_row(&screen, "live-second")
+        });
+        assert!(has_output_row(&harness.screen(), "live-first"));
+    }
+}
 
 #[test]
 fn a_read_shows_its_path_and_text_live_and_replayed() {
