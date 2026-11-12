@@ -85,3 +85,5 @@ mod cleanup;
 mod ownership;
 mod platform;
 mod unified;
+#[cfg(windows)]
+mod windows_powershell;
