@@ -27,7 +27,7 @@ hanafubuki-agent config set network.proxy system
 
 | 对象                                             | 使用的代理                                                        |
 | ------------------------------------------------ | ----------------------------------------------------------------- |
-| 网页搜索和抓取（`web_search`、`fetch_web_page`） | `network.proxy`，包括每一次重定向                                 |
+| 网页搜索和抓取（`web_search`、`fetch_web_page`） | `network.proxy`，包括每一次重定向和 Jina Reader 回退              |
 | MCP 的 Streamable HTTP 服务器和 OAuth            | `network.proxy`（包括登录和令牌刷新）；修改后会重新连接这些服务器 |
 | 模型运行的命令和终端                             | 由 `network.proxy` 决定的环境变量，见下文                         |
 | MCP 的 stdio 服务器                              | 同样的变量，覆盖它们自己的环境；修改后会重新启动它们              |

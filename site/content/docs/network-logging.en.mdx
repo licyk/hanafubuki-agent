@@ -27,7 +27,7 @@ hanafubuki-agent config set network.proxy system
 
 | What                                                  | Uses                                                                             |
 | ----------------------------------------------------- | -------------------------------------------------------------------------------- |
-| Web search and fetch (`web_search`, `fetch_web_page`) | `network.proxy`, each redirect too                                               |
+| Web search and fetch (`web_search`, `fetch_web_page`) | `network.proxy`, each redirect and the Jina Reader fallback too                  |
 | MCP Streamable HTTP servers and OAuth                 | `network.proxy` (login and token refresh too); a change reconnects those servers |
 | The commands and terminals the model runs             | The environment variables `network.proxy` decides (below)                        |
 | MCP stdio servers                                     | The same variables, over their own environment; a change restarts them           |

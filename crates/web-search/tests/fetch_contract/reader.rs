@@ -42,6 +42,64 @@ async fn optional_jina_reader_is_an_explicit_bounded_fallback() {
     assert!(response.content.contains("# Converted"));
 }
 
+/// The reader fallback goes through the proxy too: the reader is at a host
+/// that does not resolve, and the proxy answers both the page (refused, so
+/// the reader is asked) and the reader.
+#[tokio::test]
+async fn the_jina_reader_fallback_goes_through_the_proxy() {
+    const READER: &str = "http://reader.invalid/";
+    let target = start_server(|_| TestResponse {
+        status: 200,
+        content_type: "text/plain",
+        headers: Vec::new(),
+        body: "target must not be reached directly".to_string(),
+    })
+    .await;
+    let page = format!("{}/blocked", target.base_url);
+    let expected_page = page.clone();
+    let proxy = start_server(move |request_target| {
+        if request_target == expected_page {
+            TestResponse {
+                status: 403,
+                content_type: "text/plain",
+                headers: Vec::new(),
+                body: "blocked".to_string(),
+            }
+        } else {
+            assert_eq!(request_target, format!("{READER}{expected_page}"));
+            TestResponse {
+                status: 200,
+                content_type: "text/markdown",
+                headers: Vec::new(),
+                body: "Title: Proxied Reader\n\n# Through the proxy".to_string(),
+            }
+        }
+    })
+    .await;
+    let mut config = fetch_config(&target.base_url).with_test_jina_reader_url(READER);
+    config.jina_reader_enabled = true;
+    config.proxy = WebSearchProxy::Explicit(proxy.base_url.clone());
+    let service = WebSearchService::new(config).unwrap();
+
+    let response = service
+        .fetch_page(
+            WebFetchRequest {
+                url: page_url(&page),
+                maximum_content_bytes: 100_000,
+                from_offset: 0,
+                content_generation: None,
+            },
+            CancellationToken::default(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.backend, WebFetchBackend::JinaReader);
+    assert_eq!(response.title.as_deref(), Some("Proxied Reader"));
+    assert_eq!(proxy.requests.load(Ordering::SeqCst), 2);
+    assert_eq!(target.requests.load(Ordering::SeqCst), 0);
+}
+
 #[tokio::test]
 async fn direct_fetch_accepts_raw_pages_larger_than_two_mib() {
     let server = start_server(|_| TestResponse {

@@ -734,8 +734,9 @@ Hoshimi `83f7813`. Every §9 decision (D1–D7) was accepted as recommended
   `apply_saved_settings`.
 - Everything else that reaches the network, checked (2026-11-12): MCP
   OAuth (login, discovery, the token refresh: rmcp's `refresh_token` uses
-  the MCP OAuth client the proxy builds) and web fetch redirects (each hop
-  builds its client with the proxy) already took it; tests now prove both
+  the MCP OAuth client the proxy builds) web fetch redirects (each hop
+  builds its client with the proxy) and the Jina Reader fallback (its client
+  takes the proxy) already took it; tests now prove both
   with targets only the proxy reaches. Plugin package and marketplace
   downloads are `git` through the instance's executor (inherited
   environment plus the overlay), so they take the proxy variables, the
