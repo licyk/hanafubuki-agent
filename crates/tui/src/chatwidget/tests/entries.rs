@@ -97,9 +97,9 @@ fn a_tool_call_completes_where_it_started_in_both_presentations() {
         entries.clear();
         tool_started(&mut chat, "call-1", "exec_command", Some("ls"));
         assert!(!transcript(&events, &mut entries));
-        assert_eq!(texts(&entries), vec!["• Running exec_command: ls"]);
+        assert_eq!(texts(&entries), vec!["• Running ls"]);
         // The transcript (or the tail) shows it; the chat does not draw it.
-        assert!(!screen(&chat, 60).contains("exec_command"));
+        assert!(!screen(&chat, 60).contains("Running ls"));
         let revision = entries[0].revision();
         // Finished, it keeps its shape until what it shows arrives, and
         // Scrollback's tail may not write it yet.
@@ -108,7 +108,7 @@ fn a_tool_call_completes_where_it_started_in_both_presentations() {
             is_error: false,
         });
         assert!(!transcript(&events, &mut entries));
-        assert_eq!(texts(&entries), vec!["• Called exec_command: ls"]);
+        assert_eq!(texts(&entries), vec!["• Ran ls"]);
         assert!(!chat.has_live_entries());
         tool_displayed(&mut chat, "call-1", None, "Cargo.toml");
         assert_eq!(transcript(&events, &mut entries), !owned);
@@ -136,22 +136,21 @@ fn what_a_call_shows_arrives_after_its_turn_and_names_its_subject() {
         }
         chat.handle_turn_update(TurnUpdate::Ended(TurnEnd::Completed));
         transcript(&events, &mut entries);
-        entries.retain(|entry| cell_text(entry.as_ref()).contains("read_file"));
+        entries.retain(|entry| cell_text(entry.as_ref()).contains("Explored"));
 
+        // The two reads are one entry, complete once both show theirs.
         tool_displayed(&mut chat, "call-2", Some("b.rs"), "fn b() {}");
-        assert_eq!(transcript(&events, &mut entries), !owned);
-        // A read that failed completes the call as it stands.
+        assert!(!transcript(&events, &mut entries));
+        // A read that failed shows the call as it stands.
         chat.handle_turn_update(TurnUpdate::ToolDisplayed {
             call_id: "call-1".to_string(),
             display: None,
         });
         assert_eq!(transcript(&events, &mut entries), !owned);
+        assert_eq!(texts(&entries), vec!["• Explored\n  └ Read b.rs"]);
         assert_eq!(
-            texts(&entries),
-            vec![
-                "• Called read_file",
-                "• Called read_file: b.rs\n  └ fn b() {}",
-            ]
+            entries[0].activity_ids(),
+            vec!["tool:call-1".to_string(), "tool:call-2".to_string()]
         );
     }
 }
@@ -165,10 +164,7 @@ fn an_interrupted_turn_says_so_and_completes_its_running_calls() {
     chat.handle_turn_update(TurnUpdate::Ended(TurnEnd::Interrupted));
     let (cells, _) = drain(&events);
     assert_eq!(cells.len(), 2, "{cells:?}");
-    assert!(
-        cells[0].contains("Running exec_command: sleep 100"),
-        "{cells:?}"
-    );
+    assert!(cells[0].contains("Running sleep 100"), "{cells:?}");
     assert!(cells[1].contains("Conversation interrupted"), "{cells:?}");
 }
 
@@ -360,14 +356,80 @@ fn a_turn_that_ends_leaves_its_entries_where_they_are() {
         assert_eq!(transcript(&events, &mut entries), !owned);
         let texts = texts(&entries);
         assert!(texts[count - 2].starts_with("• Thought · 0."), "{texts:?}");
-        assert!(
-            texts[count - 1].contains("Running exec_command: sleep 100"),
-            "{texts:?}"
-        );
+        assert!(texts[count - 1].contains("Running sleep 100"), "{texts:?}");
         assert!(
             texts[count].contains("Conversation interrupted"),
             "{texts:?}"
         );
         assert!(!chat.has_live_entries());
     }
+}
+
+#[test]
+fn exploring_calls_in_a_row_share_an_entry_until_another_comes() {
+    for owned in [true, false] {
+        let (mut chat, events) = chat_in(owned);
+        let mut entries = Vec::new();
+        chat.handle_turn_update(TurnUpdate::Started);
+        transcript(&events, &mut entries);
+        entries.clear();
+        tool_started(&mut chat, "read-1", "read_file", Some("a.rs"));
+        tool_completed(&mut chat, "read-1", "fn a() {}");
+        tool_started(&mut chat, "list-1", "list_directory", Some("src"));
+        // The run is open: nothing is complete until another entry comes.
+        assert!(!transcript(&events, &mut entries));
+        tool_completed(&mut chat, "list-1", "lib.rs");
+        assert!(!transcript(&events, &mut entries));
+        tool_started(&mut chat, "exec-1", "exec_command", Some("ls"));
+        assert_eq!(transcript(&events, &mut entries), !owned);
+        // A thinking between two reads ends the run.
+        chat.handle_turn_update(TurnUpdate::ReasoningStarted(reasoning_id(1)));
+        tool_started(&mut chat, "read-2", "read_file", Some("b.rs"));
+        transcript(&events, &mut entries);
+        let texts = texts(&entries);
+        assert_eq!(
+            texts,
+            vec![
+                "• Explored\n  └ Read a.rs\n    List src",
+                "• Running ls",
+                "• Thinking …",
+                "• Running read_file: b.rs",
+            ]
+        );
+    }
+}
+
+#[test]
+fn a_replayed_run_of_exploring_calls_is_one_entry_as_it_was_live() {
+    let (mut chat, events) = chat();
+    drain(&events);
+    let tool = |call_id: &str, name: &str, subject: &str| ReplayedItem::Tool {
+        call_id: call_id.to_string(),
+        name: name.to_string(),
+        subject: Some(subject.to_string()),
+        is_error: false,
+        display: None,
+    };
+    chat.handle_turn_update(TurnUpdate::SessionOpened(OpenedSession {
+        session_id: Some(hanafubuki_agent::AgentSessionId::new(7)),
+        model: "fixture-model".to_string(),
+        mode: hanafubuki_agent::AgentSessionMode::Default,
+        transcript: vec![
+            tool("read-1", "read_file", "a.rs"),
+            tool("read-2", "read_file", "b.rs"),
+            tool("exec-1", "exec_command", "ls"),
+            tool("search-1", "search_text", "\"x\" in src"),
+        ],
+        older: None,
+        setup_needed: false,
+    }));
+    let (cells, _) = drain(&events);
+    assert_eq!(
+        cells[1..],
+        [
+            "• Explored\n  └ Read a.rs, b.rs",
+            "• Ran ls",
+            "• Called search_text: \"x\" in src",
+        ]
+    );
 }

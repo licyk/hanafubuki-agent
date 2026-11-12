@@ -1,0 +1,23 @@
+---
+source: crates/tui/src/history_cell/tool/tests/views.rs
+expression: "format!(\"{}\\n\\n{}\", both(&mcp, 60), both(&fields, 60))"
+---
+• Called mcp__docs__lookup: ratatui
+  └ result 1
+    result 2
+    result 3
+─── expanded (Some(OutputLines(2))) ───
+• Called mcp__docs__lookup: ratatui
+  └ result 1
+    result 2
+    result 3
+    result 4
+    result 5
+
+• Called goal_status
+  └ status: active
+    objective: ship
+─── expanded (None) ───
+• Called goal_status
+  └ status: active
+    objective: ship

@@ -1673,10 +1673,148 @@ independent.
         `callId`, but the bridge still drops it (T6): the exec_command's
         call id stays on a background execution's later output, so T6 must
         ignore output for an entry already completed.
-- [ ] T5: per-tool views (command, patch with line numbers, `read_file`
+- [x] T5: per-tool views (command, patch with line numbers, `read_file`
       with line numbers, listing, search, web, MCP, fallback), exploration
       grouping; `startLine` on `read_file` if D9 is accepted (goldens
       regenerate).
+      Done (2026-11-12):
+      - D9: `FileReadResult.start_line` (`startLine`, from 1), counted by
+        the reader: `lines_before` reads the file's first `offset` bytes
+        through the open handle in 64 KiB chunks (cancellable) in place of
+        the seek, so both identity checks stay. `Option`, `serde(default)`
+        and skipped when absent, so a read recorded before decodes; the
+        presenter takes it, else 1 for offset 0 (the old rule).
+      - TUI (`history_cell/tool/`, `tool.rs` moved to `tool/mod.rs`):
+        `ToolResultView` removed; a `ToolCallCell` holds its calls (one, or
+        a run of exploring calls), each with its outcome and its
+        `AgentToolDisplay`. A frame (bullet green/red/spinner, title,
+        rows under `└`) and a view per display, one module each:
+        `command` (`Ran CMD`, the last 3 output lines clipped, `(no
+        output)`, `exit 101 · 4.2s` / `still running · 4.2s`; expanded `$
+        CMD` highlighted as bash, the whole output, `✓ 4.2s` / `✗ exit N
+        · 4.2s` and ` · in CWD`; `write_stdin`: `Interacted with` /
+        `Waited for` and the subject), `patch` (`Edited/Added/Deleted path
+        (+A -R)` or `Edited N files` with a row per file, `Failed to
+        edit` when it did not apply; expanded the diff), `file_read`
+        (`Read path (lines a–b[, more follows])`; expanded the text behind
+        a right-aligned line-number gutter, highlighted by extension,
+        wrapped under the gutter), `listing` (`Listed path (N entries)`;
+        directories first, files with sizes), `search` (`Searched "q" in
+        path (N matches)`; `path:line: text`, the query bold where it
+        matched literally), `web` (`Searched the web for q`, `Fetched
+        URL`; results' titles and URLs, the page's title and first 40
+        lines), `mutation` (`Moved a → b`, `Deleted x`, no control),
+        `text` (running `Running CMD` / `Running TOOL: SUBJECT`; no
+        display `Called TOOL` (`Ran CMD` for a command); Text and Fields
+        `Called/Failed TOOL: SUBJECT` and the first 3 lines; `compress`
+        folded to 1 as before). The control: `+ N lines` for output lines
+        (command, read, listing, search, text), `+ Show details`
+        otherwise, none when the collapsed rows show it all. Details are
+        laid out only expanded (`Extent`), so a collapsed read is never
+        highlighted. `diff_render`: `patch_title`, `patch_summary_rows`,
+        `patch_diff_lines`, and `push_wrapped_diff_line` takes an optional
+        gutter (an added file's rows are numbered from 1).
+      - Exploration grouping (`exploration.rs`, Codex's exploration cell):
+        `read_file`, `list_directory` and `search_text` explore, decided by
+        name at `ToolStarted`. The chat keeps the open run; an exploring
+        call joins it, any other entry the chat inserts (message, thinking,
+        tool, note) closes it, as do the turn's end and a session opened.
+        `Exploring` while a call runs, then `Explored` (`· N failed`),
+        a row per call (`Read a, b` for reads in a row, `List src (24
+        entries)`, `Search "q" in src (7 matches)`); expanded, each call's
+        own view nested; ids are the calls' `tool:` ids, the control always
+        `+ Show details`. `running_tools`/`awaiting_display` are by call id
+        with their entry; an entry is completed for Scrollback's tail only
+        once closed and no call of it runs or waits for its display.
+        Replay groups a page's calls the same way.
+      - Deviations from §4.6:
+        - Grouping: a thinking or a message between two exploring calls
+          ends the run (Codex folds reasoning into it), so with a reasoning
+          model runs mostly form from the calls of one step. A single
+          exploring call shows its own view (`Read …`), a run of two or
+          more `Explored`; a run cut by a page boundary on replay is two
+          entries; shell `cat`/`rg` commands do not group (Codex parses
+          commands; the presenter contract gives no kind at start), so
+          membership, like the running header, is by tool name
+          (`exec_command`, the three exploring tools, `compress`).
+        - Line numbers in a patch only for a file it adds: the patch format
+          has no positions and the presenter has only the arguments and the
+          committed output (no channel the model does not see;
+          `structured_content` is lowered to the model), so an update's
+          rows are unnumbered. Numbering them would need the applier's
+          positions in the model-visible result (a decision not taken) or
+          the presenter reading files that may since have changed.
+        - A running command shows the spinner, not live seconds (its time
+          comes with its display, `exit 101 · 4.2s`); T6/T7 may add them.
+        - No tinted add/delete backgrounds (the colours the port already
+          had). Command output has no ANSI colours to keep: it reaches the
+          interface as the plain text E3's rendering returns. Search
+          highlights only literal matches (the TUI evaluates no regex).
+        - `exec_command`'s header before its display reads `Ran CMD`, not
+          `Called exec_command: CMD`, so it does not change twice; a
+          command line is cut at 200 columns in the header (a subject's
+          bound), the cut a detail.
+      - Tests: each view collapsed and expanded (`tool/tests/views.rs`
+        snapshots: a failed command, one still running, a patch, a patch
+        of three files that failed, a read from line 98, a listing, a
+        search, the web tools, text and fields), the run
+        (`tool/tests/exploration.rs` snapshot, ids, `Exploring` then
+        `Explored`), the frame (`tool/tests/mod.rs`: running, no display,
+        the command preview and its control, `write_stdin`, compress, a cut
+        row, a long command line cut, tabs measured as laid out, a failed
+        call's red bullet); `diff_render` (an added file numbered and
+        wrapped behind its gutter); chat (`chatwidget/tests/entries.rs`: a run shares an entry
+        until another comes and completes only then, two reads completed
+        after the turn's end, a replayed run is one entry); the reader
+        (`workspace-fs/tests/contracts.rs`: `startLine` at a line's start,
+        inside one, at the end, its JSON, an old read decoding); the
+        presenter (`startLine`, the offset-0 fallback); app tests on vt100
+        (`app/tests/tools.rs`: `Read notes.txt (lines 1–2)` live and
+        resumed, its text numbered expanded; the command tests wait for a
+        row that is the output alone, since the approval's line names the
+        command too).
+      - Goldens: no request golden changed, on purpose and checked
+        (`cargo test -p hanafubuki-agent --lib golden` without the update
+        variable): `startLine` is in `read_file`'s result, which no golden
+        request carries (the round trip calls `skills_list`), and
+        `read_file` declares no output schema; its description was left
+        alone. No history corpus changed.
+      - Snapshots: the two old tool snapshots removed (the first-and-last
+        excerpt, the diff under `Called apply_patch`); ten new under
+        `tool/tests/snapshots/`; `diff_render`'s two lose the `└ Edited`
+        header row, which moved to the entry's title, and their 4-column
+        indent (the frame adds it); the several-files one numbers the added
+        file's row.
+      - Docs (both languages): `terminal-interface` (a new `#tools` heading
+        with the table of views and the exploration run; `#layout`,
+        `#reading`'s controls, `#transcript`), `tools#files` (`startLine`,
+        `apply_patch`'s result), `architecture` (the diff's numbers),
+        `internals#tui-details` (a Tool calls bullet).
+      - Validation: `cargo fmt --all --check`; `RUSTFLAGS="-D warnings"
+        cargo check --workspace --all-targets --all-features`; `cargo clippy
+        --workspace --all-targets --all-features -- -D warnings`; `cargo
+        xtask check`; `cargo test --workspace --all-features`; `bun install
+        --frozen-lockfile`, `bun run format:check:site`, `bun run
+        site:check`, `bun run site:test`. `VITE_BASE_PATH=/hanafubuki-agent/
+        bun run site:build` built but could not prerender locally (port 3000
+        held by another project's server); CI's Site run covers it.
+        CI on Linux, Windows and macOS: https://github.com/licyk/hanafubuki-agent/actions/runs/43325557046
+        (run on 20a95b3, which differs from the landed commit only in this
+        line; Site: .../runs/43325557129, 213 pages prerendered, `#tools`
+        among them; Linux, Windows and macOS jobs all `success`).
+      - Hanafubuki at its next pin: `FileReadResult` gains `start_line:
+        Option<u64>` (a struct literal must add it; its JSON gains
+        `startLine`, which the model now reads in `read_file`'s result).
+        Nothing else (the TUI crate only); `AgentToolDisplay` unchanged.
+      - Module size: no exception added or raised.
+      - For T6/T7: the command view's preview is `output`'s last 3 lines
+        (`command.rs`), the place a live buffer feeds; a running call has
+        no rows yet (T7's reserved shape). An exploring run stays live
+        until another entry comes, so Scrollback's tail keeps it; a live
+        `ExecutionOutput` must reach the call by id inside its entry
+        (`running_tools` maps a call id to its entry). Rows are measured
+        with tabs expanded (`expand_tabs`, the layout's stop of 4), so the
+        collapsed preview's 3 rows hold; a live buffer's rows must be too.
 - [ ] T6: streamed command output: a bounded live buffer, the collapsed last
       3 lines, the expanded stream.
 - [ ] T7: stability: running entries reserve their collapsed shape, the

@@ -1,0 +1,13 @@
+---
+source: crates/tui/src/history_cell/tool/tests/views.rs
+expression: "both(&cell, 40)"
+---
+• Read notes.txt (lines 98–100, more
+    follows)
+─── expanded (Some(OutputLines(3))) ───
+• Read notes.txt (lines 98–100, more
+    follows)
+  └  98 ninety-eight
+     99 ninety-nine
+    100 one hundred, which is a line
+        long enough to wrap

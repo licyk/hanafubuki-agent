@@ -1,5 +1,5 @@
 use std::fs::{self, File};
-use std::io::{Read, Seek};
+use std::io::Read;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 

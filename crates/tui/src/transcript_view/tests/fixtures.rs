@@ -5,12 +5,13 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
+use hanafubuki_agent::AgentToolDisplay;
 use ratatui::buffer::Buffer;
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind};
 use ratatui::layout::Rect;
 use ratatui::text::Line;
 
-use crate::history_cell::{self, HistoryCell, LiveCell, ToolResultView};
+use crate::history_cell::{self, HistoryCell, LiveCell};
 use crate::transcript_view::TranscriptView;
 
 /// A cell of plain lines that counts how often it is laid out.
@@ -80,16 +81,12 @@ pub(crate) fn prompt(text: &str) -> Arc<dyn HistoryCell> {
 /// A finished tool call whose output is `lines` numbered lines.
 pub(crate) fn tool_call(call_id: &str, lines: usize) -> Arc<dyn HistoryCell> {
     let mut cell = history_cell::new_tool_call(call_id.to_string(), "shell".to_string(), None);
-    cell.complete(
-        false,
-        ToolResultView {
-            text: Some(
-                (1..=lines)
-                    .map(|line| format!("out {line}\n"))
-                    .collect::<String>(),
-            ),
-            exit_code: Some(0),
-            patch: None,
+    cell.finish(
+        call_id,
+        AgentToolDisplay::Text {
+            text: (1..=lines)
+                .map(|line| format!("out {line}\n"))
+                .collect::<String>(),
         },
     );
     Arc::new(cell)

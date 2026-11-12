@@ -1,0 +1,10 @@
+---
+source: crates/tui/src/history_cell/tool/tests/views.rs
+expression: "both(&cell, 60)"
+---
+• Listed src (3 entries)
+─── expanded (Some(OutputLines(3))) ───
+• Listed src (3 entries)
+  └ src/bin/
+    src/lib.rs  42 B
+    src/big.rs  3.4 KiB

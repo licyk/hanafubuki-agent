@@ -150,6 +150,7 @@ fn read_file_pages_utf8_content_from_the_returned_next_offset() {
     };
     assert_eq!(first.content, "abc");
     assert_eq!(first.offset, 0);
+    assert_eq!(first.start_line, Some(1));
     assert_eq!(first.next_offset, 3);
     assert!(first.truncated);
 
@@ -178,6 +179,40 @@ fn read_file_pages_utf8_content_from_the_returned_next_offset() {
     assert_eq!(third.offset, 7);
     assert_eq!(third.next_offset, 10);
     assert!(!third.truncated);
+}
+
+#[test]
+fn read_file_counts_the_line_its_page_starts_on() {
+    let temp = TempDir::new().unwrap();
+    fs::write(temp.path().join("lines.txt"), "one\ntwo\nthree\nfour\n").unwrap();
+    let service = WorkspaceFsService::new(policy(temp.path()));
+    let read = |offset| {
+        let request = WorkspaceFsRequest::ReadFile(ReadFileRequest {
+            path: "lines.txt".to_string(),
+            offset,
+            max_bytes: 64,
+        });
+        let WorkspaceFsResult::FileRead(page) = run(&service, &request).unwrap() else {
+            panic!("a page")
+        };
+        page
+    };
+
+    // At a line's start, inside a line, and at the end of the file.
+    assert_eq!(read(8).start_line, Some(3));
+    assert_eq!(read(8).content.lines().next(), Some("three"));
+    assert_eq!(read(10).start_line, Some(3));
+    assert_eq!(read(19).start_line, Some(5));
+    let encoded = serde_json::to_value(WorkspaceFsResult::FileRead(read(4))).unwrap();
+    assert_eq!(encoded["startLine"], 2);
+
+    // A read recorded before the reader counted lines still decodes.
+    let mut recorded = encoded;
+    recorded.as_object_mut().unwrap().remove("startLine");
+    let WorkspaceFsResult::FileRead(old) = serde_json::from_value(recorded).unwrap() else {
+        panic!("a page")
+    };
+    assert_eq!(old.start_line, None);
 }
 
 #[test]

@@ -10,14 +10,23 @@ fn output(value: Value) -> ToolOutput {
 }
 
 #[test]
-fn a_read_shows_its_text_numbered_from_the_start_only() {
+fn a_read_shows_its_text_numbered_from_the_line_it_starts_on() {
     let arguments = json!({ "path": "src/lib.rs", "offset": 0, "maxBytes": null });
-    let read = |offset: u64| {
-        output(json!({
+    let read = |offset: u64, start_line: Option<u64>| {
+        let mut read = json!({
             "type": "file_read", "path": "/w/src/lib.rs", "content": "fn a() {}\n",
             "sha256": "00", "offset": offset, "nextOffset": offset + 10, "bytes": 10,
             "totalBytes": 30, "truncated": true
-        }))
+        });
+        if let Some(start_line) = start_line {
+            read["startLine"] = json!(start_line);
+        }
+        output(read)
+    };
+    let start_line = |output: &ToolOutput| match FsPresenter.display(READ_FILE, &arguments, output)
+    {
+        Some(AgentToolDisplay::FileRead { start_line, .. }) => start_line,
+        other => panic!("a read shows as one: {other:?}"),
     };
 
     assert_eq!(
@@ -25,7 +34,7 @@ fn a_read_shows_its_text_numbered_from_the_start_only() {
         Some("src/lib.rs")
     );
     assert_eq!(
-        FsPresenter.display(READ_FILE, &arguments, &read(0)),
+        FsPresenter.display(READ_FILE, &arguments, &read(0, Some(1))),
         Some(AgentToolDisplay::FileRead {
             path: "/w/src/lib.rs".to_string(),
             start_line: Some(1),
@@ -33,12 +42,11 @@ fn a_read_shows_its_text_numbered_from_the_start_only() {
             truncated: true,
         })
     );
-    let Some(AgentToolDisplay::FileRead { start_line, .. }) =
-        FsPresenter.display(READ_FILE, &arguments, &read(10))
-    else {
-        panic!("a later page is a read");
-    };
-    assert_eq!(start_line, None);
+    assert_eq!(start_line(&read(10, Some(4))), Some(4));
+    // A read recorded before the reader counted lines: numbered only from
+    // the start.
+    assert_eq!(start_line(&read(0, None)), Some(1));
+    assert_eq!(start_line(&read(10, None)), None);
 }
 
 #[test]

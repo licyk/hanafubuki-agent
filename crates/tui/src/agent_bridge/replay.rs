@@ -7,12 +7,11 @@ use std::collections::HashMap;
 
 use hanafubuki_agent::{
     AgentHandle, AgentRevision, AgentSessionId, AgentSessionMode, AgentToolCallDisplay,
-    ConversationItem,
+    AgentToolDisplay, ConversationItem,
 };
 
 use super::{AgentBridge, AgentReply};
 use crate::app_event::{AppEvent, AppEventSender};
-use crate::history_cell::ToolResultView;
 
 /// What the interface shows from now on: a reopened session, or no
 /// session yet (at the start, after `/new`), which the next message creates.
@@ -62,7 +61,8 @@ pub(crate) enum ReplayedItem {
         name: String,
         subject: Option<String>,
         is_error: bool,
-        result: ToolResultView,
+        /// What its output shows; `None` without an output.
+        display: Option<AgentToolDisplay>,
     },
     Compacted,
 }
@@ -120,7 +120,7 @@ pub(crate) fn transcript(
                     name: name.clone(),
                     subject: shown.subject,
                     is_error: false,
-                    result: ToolResultView::default(),
+                    display: None,
                 });
                 calls.insert(call_id, (namespace, name, arguments));
             }
@@ -136,14 +136,14 @@ pub(crate) fn transcript(
                     ReplayedItem::Tool {
                         call_id: id,
                         is_error,
-                        result,
+                        display,
                         ..
-                    } if *id == call_id => Some((is_error, result)),
+                    } if *id == call_id => Some((is_error, display)),
                     _ => None,
                 });
-                if let (Some((is_error, result)), Some(display)) = (entry, shown.display) {
+                if let Some((is_error, display)) = entry {
                     *is_error = output.is_error;
-                    *result = display.into();
+                    *display = shown.display;
                 }
             }
             ConversationItem::CompactionSummary { .. } => transcript.push(ReplayedItem::Compacted),

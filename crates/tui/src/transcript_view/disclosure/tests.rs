@@ -20,7 +20,7 @@ fn f4_focuses_the_latest_activity_and_enter_toggles_its_details() {
     ];
     let mut view = TranscriptView::default();
     let compact = text(&render(&mut view, &cells, 30, 40));
-    assert!(compact.contains("+ 2 lines") && compact.contains("+ 20 lines"));
+    assert!(compact.contains("+ 9 lines") && compact.contains("+ 27 lines"));
     assert_eq!(
         view.handle_key(key(KeyCode::F(4)), &cells),
         Some(ViewAction::Changed)
@@ -50,7 +50,7 @@ fn a_click_on_the_control_toggles_and_the_detailed_view_has_none() {
             (0..30)
                 .map(|x| frame[(x, y)].symbol())
                 .collect::<String>()
-                .contains("+ 20 lines")
+                .contains("+ 27 lines")
         })
         .expect("control row");
     let click = mouse(MouseEventKind::Down(MouseButton::Left), 8, row);
@@ -123,7 +123,7 @@ fn ctrl_o_expands_every_thought_with_text_then_collapses_them() {
     assert!(shown.contains("first plan") && shown.contains("third plan"));
     // A thought without text gets no control, and a tool call stays.
     assert_eq!(shown.matches("− Hide details").count(), 2, "{shown}");
-    assert!(shown.contains("+ 20 lines"), "{shown}");
+    assert!(shown.contains("+ 27 lines"), "{shown}");
     assert!(view.is_following());
     // One collapsed by hand: the next Ctrl-O expands it again.
     let frame = render(&mut view, &cells, 30, 40);

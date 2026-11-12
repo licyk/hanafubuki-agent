@@ -130,6 +130,10 @@ pub struct FileReadResult {
     pub content: String,
     pub sha256: String,
     pub offset: usize,
+    /// The number of the line `offset` is on, counting from 1. Absent from
+    /// a read recorded before the reader counted it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub start_line: Option<u64>,
     pub next_offset: usize,
     pub bytes: usize,
     pub total_bytes: u64,

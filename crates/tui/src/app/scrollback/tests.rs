@@ -3,13 +3,13 @@
 
 use std::sync::Arc;
 
+use hanafubuki_agent::AgentToolDisplay;
 use ratatui::crossterm::event::{KeyCode, KeyEvent};
 use ratatui::text::Line;
 
 use super::*;
 use crate::history_cell::{
     new_info_event, new_tool_call, new_user_prompt, AgentMessageCell, LiveCell, ToolCallCell,
-    ToolResultView,
 };
 use crate::transcript_view::TranscriptView;
 
@@ -50,11 +50,10 @@ fn tool(call_id: &str, lines: usize) -> Arc<LiveCell<ToolCallCell>> {
     ));
     let output: Vec<String> = (1..=lines).map(|n| format!("out-{n:02}")).collect();
     tool.update(|cell| {
-        cell.complete(
-            false,
-            ToolResultView {
-                text: Some(output.join("\n")),
-                ..ToolResultView::default()
+        cell.finish(
+            call_id,
+            AgentToolDisplay::Text {
+                text: output.join("\n"),
             },
         )
     });
@@ -167,14 +166,15 @@ fn an_entry_with_a_control_leaves_whole_as_it_is_shown() {
     fixture.tail.push(tool("call-1", 20), false);
     let (written, entries) = fixture.take(Some(1));
     assert!(entries.is_empty(), "{entries:?}");
-    // Collapsed: the excerpt, then where to see the rest.
+    // Collapsed: the first lines, then where to see the rest.
     assert_eq!(written[2], "• Called exec_command");
-    assert!(written.iter().any(|line| line.contains("… +10 lines")));
+    assert!(written.iter().any(|line| line.contains("out-03")));
+    assert!(!written.iter().any(|line| line.contains("out-04")));
     assert_eq!(
         written.last().map(String::as_str),
         Some("    ctrl + t to expand")
     );
-    assert!(!written.iter().any(|line| line.contains("+ 10 lines")));
+    assert!(!written.iter().any(|line| line.contains("+ 17 lines")));
 }
 
 #[test]

@@ -1,12 +1,13 @@
 // Modified from OpenAI Codex 57a808a392 (Apache-2.0).
 
+use hanafubuki_agent::AgentToolDisplay;
 use insta::assert_snapshot;
 use ratatui::backend::TestBackend;
 use ratatui::crossterm::event::{KeyModifiers, MouseButton, MouseEventKind};
 use ratatui::Terminal;
 
 use super::*;
-use crate::history_cell::{new_tool_call, LiveCell, ToolResultView};
+use crate::history_cell::{new_tool_call, LiveCell};
 
 #[derive(Debug)]
 struct TestCell {
@@ -145,11 +146,10 @@ fn a_click_on_a_control_shows_an_entrys_details_in_the_compact_transcript() {
     ));
     let output = (1..=20).map(|n| format!("out-{n:02}")).collect::<Vec<_>>();
     tool.update(|cell| {
-        cell.complete(
-            false,
-            ToolResultView {
-                text: Some(output.join("\n")),
-                ..Default::default()
+        cell.finish(
+            "call-1",
+            AgentToolDisplay::Text {
+                text: output.join("\n"),
             },
         )
     });
@@ -159,7 +159,7 @@ fn a_click_on_a_control_shows_an_entrys_details_in_the_compact_transcript() {
     assert!(!screen.contains("out-10"), "{screen}");
     let row = screen
         .lines()
-        .position(|line| line.contains("+ 10 lines"))
+        .position(|line| line.contains("+ 17 lines"))
         .expect(&screen);
     // Each row is drawn quoted.
     let column = screen.lines().nth(row).unwrap().find('+').unwrap() - 1;

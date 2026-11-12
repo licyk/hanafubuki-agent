@@ -383,12 +383,10 @@ fn a_user_prompt_brings_its_own_spacing() {
 /// A shell call whose output is `lines` numbered lines.
 fn complete(call: &LiveCell<ToolCallCell>, lines: usize) {
     call.update(|cell| {
-        cell.complete(
-            false,
-            crate::history_cell::ToolResultView {
-                text: Some((1..=lines).map(|line| format!("out {line}\n")).collect()),
-                exit_code: Some(0),
-                ..Default::default()
+        cell.finish(
+            "call-1",
+            hanafubuki_agent::AgentToolDisplay::Text {
+                text: (1..=lines).map(|line| format!("out {line}\n")).collect(),
             },
         )
     });
@@ -403,8 +401,8 @@ fn a_tool_call_changes_in_place_and_keeps_its_disclosure_as_it_changes() {
     complete(&call, 30);
     let frame = text(&render(&mut view, &cells, 30, 16));
     assert!(frame.contains("Called shell"), "{frame}");
-    assert!(frame.contains("+ 20 lines"), "{frame}");
-    assert!(!frame.contains("out 6\n"));
+    assert!(frame.contains("+ 27 lines"), "{frame}");
+    assert!(!frame.contains("out 4\n"));
     view.handle_key(key(KeyCode::F(4)), &cells);
     view.handle_key(key(KeyCode::Enter), &cells);
     // A later revision of the entry keeps it expanded.

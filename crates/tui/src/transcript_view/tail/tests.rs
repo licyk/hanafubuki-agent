@@ -51,7 +51,7 @@ fn a_click_on_a_control_toggles_it_and_the_tail_stays_at_its_latest_rows() {
     assert!(!screen.contains("out 10"), "{screen}");
     let row = screen
         .lines()
-        .position(|line| line.contains("+ 10 lines"))
+        .position(|line| line.contains("+ 17 lines"))
         .expect(&screen);
     let column = screen.lines().nth(row).unwrap().find('+').unwrap();
     assert!(view.press_tail(

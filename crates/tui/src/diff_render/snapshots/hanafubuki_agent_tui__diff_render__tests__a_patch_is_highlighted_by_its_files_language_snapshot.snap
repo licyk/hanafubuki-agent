@@ -1,9 +1,8 @@
 ---
 source: crates/tui/src/diff_render/tests.rs
-expression: "styled(&create_diff_summary(&preview, 80))"
+expression: "styled(&patch_diff_lines(&preview, 80))"
 ---
-[  └ ]~[Edited][ ][src/lib.rs][ ][(][+1]{Green}[ ][-1]{Red}[)]
-[    ][ ][fn]{#B48EAD}[ ]{#C0C5CE}[answer]{#8FA1B3}[(]{#C0C5CE}[)]{#C0C5CE}[ ]{#C0C5CE}[->]{#C0C5CE}[ ]{#C0C5CE}[u32]{#B48EAD}[ ]{#C0C5CE}[{]{#C0C5CE}
-[    ][-]{Red}[    ]{#C0C5CE~}[41]{#D08770~}
-[    ][+]{Green}[    ]{#C0C5CE}[42]{#D08770}[ ]{#C0C5CE}[//]{#65737E}[ the answer]{#65737E}
-[    ][ ][}]{#C0C5CE}
+[ ][fn]{#B48EAD}[ ]{#C0C5CE}[answer]{#8FA1B3}[(]{#C0C5CE}[)]{#C0C5CE}[ ]{#C0C5CE}[->]{#C0C5CE}[ ]{#C0C5CE}[u32]{#B48EAD}[ ]{#C0C5CE}[{]{#C0C5CE}
+[-]{Red}[    ]{#C0C5CE~}[41]{#D08770~}
+[+]{Green}[    ]{#C0C5CE}[42]{#D08770}[ ]{#C0C5CE}[//]{#65737E}[ the answer]{#65737E}
+[ ][}]{#C0C5CE}

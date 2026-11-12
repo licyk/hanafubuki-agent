@@ -6,8 +6,11 @@ use ratatui::text::Line;
 use super::*;
 use crate::render::highlight::{resolve_theme_by_name, set_syntax_theme};
 
+/// The patch's title, then its diff.
 fn render(preview: &AgentPatchPreview, width: usize) -> String {
-    create_diff_summary(preview, width)
+    let mut lines = vec![RtLine::from(patch_title(preview, false))];
+    lines.extend(patch_diff_lines(preview, width));
+    lines
         .iter()
         .map(|line| {
             line.spans
@@ -43,8 +46,10 @@ fn an_unreadable_patch_says_why() {
     };
     assert_eq!(
         render(&preview, 60),
-        "  └ the patch could not be read: \n    missing *** Begin Patch"
+        "Could not read the patch\nmissing *** Begin Patch"
     );
+    assert_eq!(patch_summary_rows(&preview).len(), 1);
+    assert!(!patch_has_lines(&preview));
 }
 
 /// Each span as `text` with its foreground and its dimming.
@@ -90,7 +95,7 @@ fn a_patch_is_highlighted_by_its_files_language_snapshot() {
         "error": null
     }))
     .unwrap();
-    insta::assert_snapshot!(styled(&create_diff_summary(&preview, 80)));
+    insta::assert_snapshot!(styled(&patch_diff_lines(&preview, 80)));
 }
 
 #[test]
@@ -102,6 +107,7 @@ fn a_highlighted_row_wraps_with_the_sign_column_kept() {
         DiffLineKind::Added,
         &texts[0],
         highlighted.into_iter().next(),
+        None,
         12,
     );
     let text: Vec<String> = rows
@@ -112,10 +118,29 @@ fn a_highlighted_row_wraps_with_the_sign_column_kept() {
 }
 
 #[test]
+fn an_added_files_rows_are_numbered_and_wrap_behind_the_gutter() {
+    let preview: AgentPatchPreview = serde_json::from_value(serde_json::json!({
+        "files": [{"operation": "add", "path": "notes.unknown-extension", "movedTo": null,
+            "lines": (1..=10).map(|n| serde_json::json!({"kind": "added", "text": format!("line {n}")}))
+                .chain([serde_json::json!({"kind": "added", "text": "a long last line"})])
+                .collect::<Vec<_>>(),
+            "added": 11, "removed": 0, "omittedLines": 0}],
+        "error": null
+    }))
+    .unwrap();
+    let rendered = render(&preview, 14);
+    let rows: Vec<&str> = rendered.lines().collect();
+    assert_eq!(rows[0], "Added notes.unknown-extension (+11 -0)");
+    assert_eq!(rows[1], " 1 +line 1");
+    assert_eq!(rows[10], "10 +line 10");
+    assert_eq!(rows[11..], ["11 +a long las", "    t line"]);
+}
+
+#[test]
 fn a_file_of_no_known_language_keeps_the_diff_colours() {
     let texts = vec!["plain words".to_string()];
     assert!(highlight_lines("notes.unknown-extension", &texts).is_none());
-    let rows = push_wrapped_diff_line(DiffLineKind::Removed, &texts[0], None, 80);
+    let rows = push_wrapped_diff_line(DiffLineKind::Removed, &texts[0], None, None, 80);
     assert_eq!(rows.len(), 1);
     assert!(rows[0].spans.iter().all(|span| span.style == style_del()));
 }

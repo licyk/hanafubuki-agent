@@ -1,0 +1,19 @@
+---
+source: crates/tui/src/history_cell/tool/tests/views.rs
+expression: "both(&cell, 60)"
+---
+• Failed to edit 3 files (+3 -1)
+  └ notes.txt (+2 -0)
+    old.txt → new.txt (+1 -1)
+    gone.txt (+0 -0)
+─── expanded (Some(Generic)) ───
+• Failed to edit 3 files (+3 -1)
+  └ notes.txt (+2 -0)
+      1 +first
+      2 +second
+    
+    old.txt → new.txt (+1 -1)
+      -a
+      +b
+    
+    gone.txt (+0 -0)

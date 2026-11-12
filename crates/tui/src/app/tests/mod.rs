@@ -370,8 +370,10 @@ fn an_approved_command_runs_and_the_turn_completes() {
     harness.key(KeyCode::Char('y'));
     harness.pump_until_screen_shows("The command ran.");
     // What the call shows is read once it finished, off the app loop.
-    let screen = harness.pump_until_screen_shows("approved-output");
-    assert!(screen.contains("exec_command"), "{screen}");
+    harness.pump_until("the output", |harness| {
+        has_output_row(&harness.screen(), "approved-output")
+    });
+    assert!(harness.screen().contains("• Ran echo approved-output"));
 }
 
 #[test]
@@ -452,8 +454,14 @@ fn a_resumed_session_replays_its_tool_calls_with_their_output() {
         harness.transcript().contains("The command ran.")
     });
     let transcript = harness.transcript();
-    assert!(transcript.contains("exec_command"), "{transcript}");
-    assert!(transcript.contains("replayed-output"), "{transcript}");
+    assert!(
+        transcript.contains("• Ran echo replayed-output"),
+        "{transcript}"
+    );
+    assert!(
+        has_output_row(&transcript, "replayed-output"),
+        "{transcript}"
+    );
 }
 
 #[test]
@@ -542,7 +550,7 @@ fn each_step_writes_its_thought_before_its_call_or_answer() {
         let transcript = harness.transcript();
         let order = [
             "• Thought ·",
-            "exec_command",
+            "echo thought-output",
             "• Thought ·",
             "The command ran.",
         ];
@@ -565,30 +573,41 @@ fn in_fullscreen_a_tool_call_is_one_entry_in_every_frame_from_its_start() {
     harness.type_and_submit("Run the command.");
     harness.pump_until_screen_shows("Yes, proceed");
     harness.key(KeyCode::Char('y'));
+    // The approval's decision names the command too.
+    let shows_call = |text: &str| {
+        text.contains("Running echo in-place-output") || text.contains("Ran echo in-place-output")
+    };
     let calls = |harness: &Harness| {
         harness
             .app
             .transcript_cells
             .iter()
-            .filter(|cell| cell_text(cell.as_ref()).contains("exec_command"))
+            .filter(|cell| shows_call(&cell_text(cell.as_ref())))
             .count()
     };
     let started = std::cell::Cell::new(false);
     harness.pump_until("the answer", |harness| {
         let screen = harness.screen();
         if started.get() {
-            assert!(
-                screen.contains("exec_command"),
-                "a frame lost the call:\n{screen}"
-            );
+            assert!(shows_call(&screen), "a frame lost the call:\n{screen}");
         }
-        started.set(screen.contains("exec_command"));
+        started.set(shows_call(&screen));
         assert!(calls(harness) <= 1, "{}", harness.transcript());
         screen.contains("The command ran.")
     });
-    let screen = harness.pump_until_screen_shows("in-place-output");
-    assert!(!screen.contains("Running exec_command"), "{screen}");
+    harness.pump_until("the output", |harness| {
+        has_output_row(&harness.screen(), "in-place-output")
+    });
+    assert!(!harness.screen().contains("Running echo"));
     assert_eq!(calls(&harness), 1);
+}
+
+/// Whether a row of `screen` is `output` alone, as a call's output row
+/// is, under the header that names the command.
+fn has_output_row(screen: &str, output: &str) -> bool {
+    screen
+        .lines()
+        .any(|row| row.trim().trim_start_matches("└").trim() == output)
 }
 
 fn cell_text(cell: &dyn crate::history_cell::HistoryCell) -> String {

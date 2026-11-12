@@ -1,0 +1,9 @@
+---
+source: crates/tui/src/history_cell/tool/tests/views.rs
+expression: "both(&cell, 60)"
+---
+• Searched "todo" in src (2 matches, more not shown)
+─── expanded (Some(OutputLines(2))) ───
+• Searched "todo" in src (2 matches, more not shown)
+  └ src/lib.rs:3: // todo: one todo
+    src/main.rs:10: let todo = 1;

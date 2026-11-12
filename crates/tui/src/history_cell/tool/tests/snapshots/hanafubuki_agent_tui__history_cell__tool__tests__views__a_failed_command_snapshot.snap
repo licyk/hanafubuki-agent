@@ -1,0 +1,28 @@
+---
+source: crates/tui/src/history_cell/tool/tests/views.rs
+expression: "both(&cell, 60)"
+---
+• Ran cargo test -p foo …
+  └ line 12
+    line 13
+    line 14
+    exit 101 · 4.2s
+─── expanded (Some(OutputLines(11))) ───
+• Ran cargo test -p foo …
+  └ $ cargo test -p foo
+        --all-features
+    line 1
+    line 2
+    line 3
+    line 4
+    line 5
+    line 6
+    line 7
+    line 8
+    line 9
+    line 10
+    line 11
+    line 12
+    line 13
+    line 14
+    ✗ exit 101 · 4.2s
