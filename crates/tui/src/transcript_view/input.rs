@@ -3,7 +3,8 @@
 //! The view's keys and pointer. Typing and composer editing stay with the
 //! caller's own input path ([`TranscriptView::owns_interaction_key`] says
 //! which keys the view takes first). Dragging selects; Shift-click extends
-//! the selection by its unit; a copy hands the selected text back as a
+//! the selection by its unit; a click on an entry's control or header
+//! shows or hides its details; a copy hands the selected text back as a
 //! [`ViewAction`]. Codex's link activation, copy-on-select and X11 primary
 //! selection are not here.
 
@@ -237,6 +238,13 @@ impl TranscriptView {
                 self.end_drag();
                 if self.selected_text(cells).is_none() {
                     self.end_selection(cells);
+                    // A header is a button: a quick second click toggles
+                    // it again rather than select a word.
+                    if self.release_header_at(cells, event.column, event.row) {
+                        self.last_click = None;
+                    }
+                } else {
+                    self.cancel_header_press();
                 }
             }
             _ => return None,
@@ -300,10 +308,9 @@ impl TranscriptView {
         event: MouseEvent,
         cells: &[Arc<dyn HistoryCell>],
     ) -> Option<ViewAction> {
-        if !self.is_select_mode()
-            && event.modifiers.is_empty()
-            && self.toggle_disclosure_at(cells, event.column, event.row)
-        {
+        self.cancel_header_press();
+        let plain = !self.is_select_mode() && event.modifiers.is_empty();
+        if plain && self.toggle_disclosure_at(cells, event.column, event.row) {
             return Some(ViewAction::Changed);
         }
         self.disclosure.focused = None;
@@ -327,6 +334,9 @@ impl TranscriptView {
                 == visible.layout.position_at(visible.row, u16::MAX)
         {
             return None;
+        }
+        if plain && clicks == 1 {
+            self.press_header_at(event.column, event.row);
         }
         self.begin_selection(cells, event.column, event.row, clicks);
         Some(ViewAction::Changed)

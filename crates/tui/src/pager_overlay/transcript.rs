@@ -1,8 +1,9 @@
 // Modified from OpenAI Codex 57a808a392 (Apache-2.0).
 
 //! The terminal-mode transcript (`Ctrl+T`): the session's cells in the
-//! compact presentation, whose controls show an entry's details (a click,
-//! F4), the live ones changing in place among them, in a transcript view on
+//! compact presentation, whose controls show an entry's details (a click on
+//! the control or the header, F4, Ctrl-O for every thinking), the live ones
+//! changing in place among them, in a transcript view on
 //! the alternate screen; a second `Ctrl+T` shows them all in detail, a third
 //! closes it. The view does the scrolling, selection, search and copying;
 //! this adds the pager's chrome and keys. The app holds back the scrollback
@@ -200,6 +201,10 @@ impl TranscriptOverlay {
             }
             Some(Action::JumpBottom) => {
                 self.view.jump_to_latest();
+                return Some(ViewAction::Changed);
+            }
+            _ if keymap::matches(Action::ToggleThinking, &key) => {
+                self.view.toggle_thinking(&self.cells);
                 return Some(ViewAction::Changed);
             }
             _ => return self.view.handle_key(key, &self.cells),

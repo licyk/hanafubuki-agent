@@ -11,6 +11,7 @@ mod thinking;
 mod tool;
 
 use std::any::Any;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use ratatui::buffer::Buffer;
@@ -48,6 +49,17 @@ pub(crate) enum ActivityDisclosure {
     Generic,
     /// The output lines the compact presentation leaves out.
     OutputLines(usize),
+}
+
+/// The wrapped rows of a message of yours shown collapsed; a longer one has
+/// a control.
+const USER_MESSAGE_MAX_ROWS: usize = 12;
+
+/// A new activity id, `{prefix}{n}`, for an entry without an identity of
+/// its own: disclosure lasts a run and is never persisted.
+fn next_activity_id(prefix: &str) -> String {
+    static NEXT: AtomicU64 = AtomicU64::new(1);
+    format!("{prefix}{}", NEXT.fetch_add(1, Ordering::Relaxed))
 }
 
 /// The lines' text without its styles.
@@ -199,10 +211,12 @@ impl Renderable for Box<dyn HistoryCell> {
 #[derive(Debug)]
 pub(crate) struct UserHistoryCell {
     pub message: String,
+    activity_id: String,
 }
 
-impl HistoryCell for UserHistoryCell {
-    fn display_lines(&self, width: u16) -> Vec<Line<'static>> {
+impl UserHistoryCell {
+    /// The message wrapped at `width`, behind its `›`.
+    fn rows(&self, width: u16) -> Vec<Line<'static>> {
         let wrap_width = width
             .saturating_sub(
                 LIVE_PREFIX_COLS + 1, /* keep a one-column right margin for wrapping */
@@ -215,10 +229,29 @@ impl HistoryCell for UserHistoryCell {
             RtOptions::new(usize::from(wrap_width))
                 .wrap_algorithm(textwrap::WrapAlgorithm::FirstFit),
         );
+        prefix_lines(wrapped, "› ".bold().dim(), "  ".into())
+    }
+
+    /// `rows` between a blank row above and below, in the message's style.
+    fn framed(rows: Vec<Line<'static>>) -> Vec<Line<'static>> {
+        let style = user_message_style();
         let mut lines = vec![Line::from("").style(style)];
-        lines.extend(prefix_lines(wrapped, "› ".bold().dim(), "  ".into()));
+        lines.extend(rows);
         lines.push(Line::from("").style(style));
         lines
+    }
+}
+
+impl HistoryCell for UserHistoryCell {
+    fn display_lines(&self, width: u16) -> Vec<Line<'static>> {
+        Self::framed(self.rows(width))
+    }
+
+    /// A long message shows its first rows.
+    fn compact_lines(&self, width: u16) -> Vec<Line<'static>> {
+        let mut rows = self.rows(width);
+        rows.truncate(USER_MESSAGE_MAX_ROWS);
+        Self::framed(rows)
     }
 
     fn raw_lines(&self) -> Vec<Line<'static>> {
@@ -228,10 +261,23 @@ impl HistoryCell for UserHistoryCell {
     fn copy_source(&self) -> Option<String> {
         Some(self.message.clone())
     }
+
+    fn activity_ids(&self) -> Vec<String> {
+        vec![self.activity_id.clone()]
+    }
+
+    fn activity_disclosure(&self, width: u16) -> Option<ActivityDisclosure> {
+        let rows = self.rows(width).len();
+        (rows > USER_MESSAGE_MAX_ROWS)
+            .then(|| ActivityDisclosure::OutputLines(rows - USER_MESSAGE_MAX_ROWS))
+    }
 }
 
 pub(crate) fn new_user_prompt(message: String) -> UserHistoryCell {
-    UserHistoryCell { message }
+    UserHistoryCell {
+        message,
+        activity_id: next_activity_id("user:"),
+    }
 }
 
 #[derive(Debug)]

@@ -1,6 +1,7 @@
 //! Thinking entries on an emulated terminal, in both presentations: each
-//! collapsed under its control, a click on it showing or hiding its text,
-//! and Ctrl-O every thinking at once, an approval open or not.
+//! collapsed under its control, a click on it or on its header showing or
+//! hiding its text, and Ctrl-O every thinking at once, an approval open or
+//! not, and in Scrollback's transcript.
 
 use hanafubuki_agent::test_support::{reasoning_answer_events, reasoning_tool_events};
 
@@ -40,6 +41,37 @@ fn a_click_on_a_thoughts_control_shows_and_hides_its_text() {
         assert!(!screen.contains("Weighing the question."), "{screen}");
         assert!(screen.contains("+ Show details"), "{screen}");
     }
+}
+
+#[test]
+fn a_click_on_a_thoughts_header_shows_and_hides_its_text() {
+    for mode in MODES {
+        let mut harness = thought(mode);
+        harness.click_on("• Thought · ");
+        harness.pump_until_screen_shows("Weighing the question.");
+        harness.click_on("• Thought · ");
+        harness.app.draw(&mut harness.tui).unwrap();
+        let screen = harness.screen();
+        assert!(
+            !screen.contains("Weighing the question."),
+            "{mode:?}:\n{screen}"
+        );
+    }
+}
+
+#[test]
+fn the_transcript_takes_ctrl_o_and_a_click_on_a_header() {
+    let mut harness = thought(TranscriptMode::Terminal);
+    harness.key_with(KeyCode::Char('t'), KeyModifiers::CONTROL);
+    let pager = harness.pump_until_screen_shows("T R A N S C R I P T");
+    assert!(!pager.contains("Weighing the question."), "{pager}");
+    harness.key_with(KeyCode::Char('o'), KeyModifiers::CONTROL);
+    harness.pump_until_screen_shows("Weighing the question.");
+    harness.click_on("• Thought · ");
+    harness.pump_until("the thought hidden", |harness| {
+        !harness.screen().contains("Weighing the question.")
+    });
+    assert!(harness.screen().contains("T R A N S C R I P T"));
 }
 
 #[test]

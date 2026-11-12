@@ -172,6 +172,12 @@ impl TextLayout {
         line
     }
 
+    /// The entry's first row with text: its header, past a separator and a
+    /// prompt's blank padding.
+    pub(super) fn header_row(&self) -> Option<usize> {
+        self.rows.iter().position(|row| !row.source.is_empty())
+    }
+
     pub(super) fn disclosure_row(&self) -> Option<usize> {
         self.disclosure_control.as_ref().map(|control| control.row)
     }

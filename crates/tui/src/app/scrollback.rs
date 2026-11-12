@@ -229,7 +229,8 @@ impl App {
         Ok(())
     }
 
-    /// The wheel lets the mouse go; a click toggles the control under it.
+    /// The wheel lets the mouse go; a click toggles the control or the
+    /// header under it.
     pub(super) fn handle_tail_mouse(&mut self, mouse: MouseEvent) {
         let changed = match mouse.kind {
             MouseEventKind::ScrollUp | MouseEventKind::ScrollDown => {
@@ -238,7 +239,11 @@ impl App {
             }
             MouseEventKind::Down(MouseButton::Left) => {
                 self.transcript_view
-                    .click_tail(self.tail.cells(), mouse.column, mouse.row)
+                    .press_tail(self.tail.cells(), mouse.column, mouse.row)
+            }
+            MouseEventKind::Up(MouseButton::Left) => {
+                self.transcript_view
+                    .release_tail(self.tail.cells(), mouse.column, mouse.row)
             }
             _ => false,
         };
