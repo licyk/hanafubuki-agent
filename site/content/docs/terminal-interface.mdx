@@ -39,7 +39,7 @@ Fullscreen 下，对话占满底部区域上方的屏幕。Scrollback 下，界�
 1. **状态行**：回合进行中显示 `• Working 25s • esc to interrupt`，包括已用时间；回合思考过之后显示 `• Working 25s (Thinking 20.7s) • esc to interrupt`，括号中是整个回合到目前为止的思考时间，只在模型思考时增长（[思考过程](#thinking)）。模型请求重试时改为 `Reconnecting 1/3: 原因`。等待审批或回答问题时，工作计时暂停。状态行在整个回合中保持显示，模型输出回答时也是。
 2. **等待中的消息**：有消息在等待回合时显示（[见下文](#composer)）。
 3. **输入框**：以 `›` 开头。
-4. **底栏**：输入框为空，或有草稿但没有回合在运行时，显示[状态栏](#status-line)，默认是模型及其推理强度、工作目录和会话标题；状态栏没有可显示的项目时显示 `? for shortcuts`。回合进行中写的草稿改为显示 `tab to queue message`。
+4. **底栏**：输入框为空，或有草稿但没有回合在运行时，显示[状态栏](#status-line)，默认是模型及其推理强度、工作目录和会话标题；状态栏没有可显示的项目时显示 `? for shortcuts`。输入框为空且 Left 可以打开[指挥中心](#agents)时，后面接着显示 `← for agents`。回合进行中写的草稿改为显示 `tab to queue message`。
 
 审批、提问以及 `/model` 和 `/mode` 的选择列表打开时，会暂时替换状态行和输入框。回合结束时，选择列表保持打开。各项设置（包括 `/providers` 和 `/mcp`）都在全屏的[设置中心](#config)中。
 
@@ -59,13 +59,14 @@ Fullscreen 下，对话占满底部区域上方的屏幕。Scrollback 下，界�
 | Ctrl-D                     | 输入框为空时，1 秒内按两次退出；输入框有内容时向后删除一个字符                                                                       |
 | Ctrl-T                     | Fullscreen：就地显示对话的详细内容；Scrollback：打开对话记录（见下文）                                                               |
 | Ctrl-O                     | 展开对话中的每一次思考；全部已展开时，全部折叠（[见下文](#thinking)）                                                                |
+| Left（输入框为空时）       | 打开[指挥中心](#agents)                                                                                                              |
 | `?`（输入框为空时）        | 显示快捷键说明                                                                                                                       |
 | Ctrl-X P                   | 打开[预设](#presets)                                                                                                                 |
 | Ctrl-X Left、Right、Tab、X | 打开了旁路对话或子代理时：主对话、旁路对话、另一个对话；关闭它（[见下文](#side)）                                                    |
 
 Fullscreen 下还有阅读对话的按键：Page Up/Page Down、F3、F4、Ctrl-Space 等，见[阅读对话](#reading)；Scrollback 下，F4 聚焦尾部的活动。
 
-以上是默认按键。[按键映射](#keymap)可以修改其中各个动作的按键（Enter、Tab 排队、Shift+Left 编辑排队的消息、历史、Esc 中断、Ctrl-T、Ctrl-O、编辑键、对话和分页器的按键）；Ctrl-C、Ctrl-D、`?` 以及弹出列表和列表自己的按键（包括 Tab 的补全）保持不变。
+以上是默认按键。[按键映射](#keymap)可以修改其中各个动作的按键（Enter、Tab 排队、Shift+Left 编辑排队的消息、历史、Esc 中断、Ctrl-T、Ctrl-O、编辑键、对话和分页器的按键、指挥中心的会话操作）；Ctrl-C、Ctrl-D、`?` 以及弹出列表和列表自己的按键（包括 Tab 的补全）保持不变。
 
 输入框支持常见的 Emacs 风格编辑键：Ctrl-A/E 到行首/行尾，Ctrl-W 删除前一个词，Ctrl-U/K 删除到行首/行尾，Alt-B/F 按词移动等。
 
@@ -112,7 +113,7 @@ Fullscreen 下还有阅读对话的按键：Page Up/Page Down、F3、F4、Ctrl-S
 | `/review [instructions]`  | 在只读的子会话中评审仓库的改动，并把发现报告到对话中：打开目标选择器，或按你的要求评审（[见下文](#review)）                                                                                                                                                                                                                                                                                                                                                 | 不可用                         |
 | `/side [message]`、`/btw` | 打开会话的旁路对话，或再次显示它，并把消息发到那里；`/side close` 关闭它（[见下文](#side)）                                                                                                                                                                                                                                                                                                                                                                 | 可用                           |
 | `/subagents`              | 列出会话的子代理及其状态，并用其中一个代替会话显示（[见下文](#subagents)）                                                                                                                                                                                                                                                                                                                                                                                  | 可用                           |
-| `/agents`                 | 指挥中心：会话及其子会话，可以打开、新建、分叉、归档、删除或中断（[见下文](#agents)）                                                                                                                                                                                                                                                                                                                                                                       | 可用                           |
+| `/agents`                 | 指挥中心：会话及其状态，按标题分组，可以打开、新建（也可以在新工作树中）、分叉、重命名、停止、归档或删除（[见下文](#agents)）                                                                                                                                                                                                                                                                                                                               | 可用                           |
 | `/goal [objective]`       | 显示会话的目标及可做的操作，或设置目标；`clear`、`pause`、`resume`、`edit`（[见下文](#goal)）                                                                                                                                                                                                                                                                                                                                                               | 可用                           |
 | `/copy`                   | 复制最后一个回答，或其中的某个代码块或引用；Fullscreen 下还可以在对话中选择任意部分                                                                                                                                                                                                                                                                                                                                                                         | 可用                           |
 | `/export [path]`          | 把对话以 Markdown 复制到剪贴板，或保存到文件（[见下文](#session-commands)）                                                                                                                                                                                                                                                                                                                                                                                 | 不可用                         |
@@ -290,21 +291,39 @@ Esc 返回上一页，在标签页上回到设置中心。用 `--safe-mode` 启�
 
 ## 指挥中心 [#agents]
 
-`/agents` 在整个屏幕上打开指挥中心（Scrollback 中使用备用屏幕）：会话按最近的在前排列，和恢复会话选择器列出的一样，每个会话下面是它的子会话（子代理和评审，标为 `subagent` 或 `review`），并显示它们的状态以及多久之前有变化。正在显示的会话标有 `(shown)`。向下滚动时会读取更多会话。
+`/agents`、在空输入框上按 Left（此时底栏显示 `← for agents`）或 `global.open_agents`（没有默认按键）会在整个屏幕上打开指挥中心（Scrollback 中使用备用屏幕）。只有在输入框获得按键且为空、没有打开弹出列表、这个对话中可以运行 `/agents`，并且 Left 仍是 `editor.move_left` 的按键时，Left 才会打开它；否则 Left 和以前一样移动光标。
 
-| 按键                                    | 作用                                                                                                                       |
-| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| Up、Down、Page Up、Page Down、Home、End | 移动选择                                                                                                                   |
-| Tab、Shift-Tab、Left、Right、`1`–`5`    | 筛选：All、Running、Idle、Failed、Archived。Running、Idle 和 Failed 列出符合的会话，或有子会话符合的会话，以及符合的子会话 |
-| Enter                                   | 用这个会话代替正在显示的会话；子会话显示在它的父会话旁边，和 `/subagents` 一样。在 Archived 中恢复这个会话                 |
-| `n`                                     | 离开正在显示的会话：下一条消息开始新会话                                                                                   |
-| `f`                                     | 在会话的最新位置分叉，并在副本中继续                                                                                       |
-| `a`                                     | 归档会话及其子会话；在 Archived 中恢复它                                                                                   |
-| `d`                                     | 先询问，再删除会话及其子会话：`y` 删除，其他键保留                                                                         |
-| `i`                                     | 中断会话正在运行的回合；子代理通过子代理自己的中断操作                                                                     |
-| Esc、`q`                                | 关闭指挥中心                                                                                                               |
+它列出没有父会话的会话，和恢复会话选择器一样；每个会话的状态是它自己和它的子会话（子代理和评审）中最紧急的那个：
 
-打开、新建和分叉会改变主对话，所以在它的回合运行期间会被拒绝。正在显示的会话用 `/archive` 和 `/delete` 归档和删除，不在这里操作。归档和删除在界面的线程上进行，和恢复会话选择器一样。
+- **Needs input**（红色 `●`）：会话或它的某个子会话在等待[审批](#approvals)或[提问](#questions)的回答。
+- **Error**（红色 `!`）：它自己的最近一个回合失败了。
+- **Working**（绿色 `●`）：有回合在运行。
+- **Ready**（青色 `○`）：最近一个回合已完成。
+- **Inactive**（暗色 `○`）：最近一个回合被中断或取消。回合失败的子会话算作 Inactive：它的失败不需要你处理。
+
+会话按标题分组，标题后是数量（筛选隐藏了一部分时显示为 `2 of 5`）：按项目、目录、状态或模型分组，由 `tui.agentsGrouping` 决定。项目是会话目录在仓库主检出中对应的目录，所以仓库某个工作树中的会话归入创建这个工作树的检出。同一标题下最近的会话在前。正在显示的会话标有 `(shown)`，打开指挥中心时选中它。向下滚动时会读取更多会话。
+
+| 按键                          | 作用                                                                                                |
+| ----------------------------- | --------------------------------------------------------------------------------------------------- |
+| Up、Down（`k`、`j`）          | 移动选择；越过一端时到另一端                                                                        |
+| Page Up、Page Down、Home、End | 移动一页，或到第一个、最后一个会话                                                                  |
+| Enter、Right                  | 用这个会话代替正在显示的会话。在 Archived 中恢复它                                                  |
+| Tab、Shift-Tab、`1`–`6`       | 筛选：All、Needs you、Working、Ready、Inactive、Archived，除 Archived 外都显示数量                  |
+| `/`、F3                       | 搜索标题：输入的文字会缩小列表，Enter 打开选中的会话，Esc 结束搜索                                  |
+| `n`                           | 离开正在显示的会话：下一条消息开始新会话                                                            |
+| `w`                           | 进入新的工作树，和 `/worktree` 的“开始新对话”一样：下一条消息在那里开始会话（[工作树](#worktrees)） |
+| `f`                           | 在会话的最新位置分叉，并在副本中继续                                                                |
+| `r`                           | 重命名会话：就地编辑标题，Enter 保存，Esc 取消                                                      |
+| `x`                           | 中断会话的回合                                                                                      |
+| `a`                           | 先确认，再归档会话及其子会话；在 Archived 中恢复它                                                  |
+| Backspace                     | 先确认，再删除会话及其子会话                                                                        |
+| `g`                           | 切换到下一种分组：项目、目录、状态、模型，并保存到 `tui.agentsGrouping`                             |
+| `?`                           | 显示按键说明                                                                                        |
+| Esc、`q`                      | 关闭指挥中心                                                                                        |
+
+确认框默认选中 Cancel：Up 或 Down 选择，Enter 确认，Esc 取消。会话操作的按键（`/`、F3、`n`、`w`、`f`、`r`、`x`、`a`、Backspace 和 `g`）属于按键映射的 `agents` 上下文（[见下文](#keymap)）；其他按键保持不变。
+
+打开、新建（包括在工作树中新建）和分叉会改变主对话，所以在它的回合运行期间会被拒绝。正在显示的会话用 `/archive` 和 `/delete` 归档和删除，不在这里操作。指挥中心在打开时、滚动时和每次操作后，在界面的线程上读取会话、它们的子会话以及运行中的会话是否在等待审批，和恢复会话选择器一样；在这之间不会跟随它们的变化。
 
 ## @ 文件提及 [#mentions]
 
@@ -541,7 +560,7 @@ yank = []
 
 - **按键**写作修饰键加按键，用 `-` 连接：`ctrl-t`、`alt-<`、`shift-enter`、`page-down`、`f3`、`space`、`minus`；大写字母等于 `shift-` 加这个字母。
 - **组合键**是用空格分开的两个按键（`ctrl-g o`）：第一个键等待第二个键一秒钟。`leader K` 是前导键（`global.leader`，默认 Ctrl-X）再按 `K`；前导键会一直等到下一个键。没有完成任何组合的按键，或 Esc，会把两个键都丢弃。如果配置的某个按键正是默认前导键，它优先：除非 `global.leader` 另行设置，前导键就没有绑定。
-- **上下文**是读取按键的地方：`global` 处处有效，`chat` 和 `composer` 在输入框获得按键时有效，`editor` 在所有文本输入框中有效，`transcript` 在 Fullscreen 的对话中（与输入框同时）有效，`pager` 在对话记录和 `/diff` 中有效。在输入框旁边，不能绑定会输入文字的按键（不带 Ctrl 或 Alt 的字母），也不能绑定以它开头的组合键。
+- **上下文**是读取按键的地方：`global` 处处有效，`chat` 和 `composer` 在输入框获得按键时有效，`editor` 在所有文本输入框中有效，`transcript` 在 Fullscreen 的对话中（与输入框同时）有效，`pager` 在对话记录和 `/diff` 中有效，`agents` 在[指挥中心](#agents)中有效。在输入框旁边，不能绑定会输入文字的按键（不带 Ctrl 或 Alt 的字母），也不能绑定以它开头的组合键。
 - **冲突**：同一个按键（或组合键）不能触发同时读取的两个动作，不能是另一个动作的组合键的开头，也不能是界面保留的 Ctrl-C（以及 Ctrl-D，编辑框和分页器中除外）。默认就共用按键的动作仍然允许：`chat.interrupt_turn` 和 `chat.edit_previous`（Esc）、`composer.submit` 和 `editor.insert_newline`（Enter）、历史和编辑框的 Up、Down、`global.open_transcript` 和 `pager.close_transcript`。
 - 无法使用的设置（不认识的上下文或动作、不是按键的字符串、冲突）会让这个动作保留默认按键，并产生一条[警告](#warnings)。
 
@@ -564,6 +583,7 @@ yank = []
 | `global.equalize_pane_widths`     | `leader =`                                                            | 让两个窗格等宽（Fullscreen）                                 |
 | `global.toggle_pane_zoom`         | `leader z`                                                            | 只显示获得焦点的窗格，或恢复两个窗格（Fullscreen）           |
 | `global.hide_pane`                | `leader x`                                                            | 关闭旁路对话，或离开正在显示的子代理                         |
+| `global.open_agents`              | 无                                                                    | 打开指挥中心（在空输入框上按 Left 也会打开）                 |
 | `chat.interrupt_turn`             | `esc`                                                                 | 中断正在运行的回合                                           |
 | `chat.edit_previous`              | `esc`                                                                 | 在空输入框上按两次：编辑之前的消息                           |
 | `chat.edit_queued_message`        | `shift-left`、`alt-up`                                                | 把最后一条排队的消息放回输入框                               |
@@ -604,6 +624,15 @@ yank = []
 | `pager.jump_bottom`               | `end`                                                                 | 到结尾                                                       |
 | `pager.close`                     | `q`、`esc`                                                            | 关闭分页器                                                   |
 | `pager.close_transcript`          | `ctrl-t`                                                              | 显示对话记录的详细内容，再关闭它                             |
+| `agents.search`                   | `f3`、`/`                                                             | 搜索会话标题                                                 |
+| `agents.new_task`                 | `n`                                                                   | 开始新会话                                                   |
+| `agents.new_worktree`             | `w`                                                                   | 在新工作树中开始新会话                                       |
+| `agents.fork`                     | `f`                                                                   | 分叉会话                                                     |
+| `agents.rename`                   | `r`                                                                   | 重命名会话                                                   |
+| `agents.stop`                     | `x`                                                                   | 中断会话的回合                                               |
+| `agents.archive`                  | `a`                                                                   | 归档会话，或在 Archived 中恢复它                             |
+| `agents.delete`                   | `backspace`                                                           | 删除会话                                                     |
+| `agents.toggle_grouping`          | `g`                                                                   | 按项目、目录、状态或模型分组                                 |
 
 ## 预设 [#presets]
 

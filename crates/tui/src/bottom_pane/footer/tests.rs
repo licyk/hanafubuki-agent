@@ -25,12 +25,30 @@ fn props(mode: FooterMode) -> FooterProps<'static> {
         quit_shortcut_key: key_hint::ctrl(KeyCode::Char('c')),
         status_line: None,
         task_running: false,
+        agents_hint: false,
     }
 }
 
 #[test]
 fn footer_snapshots() {
     snapshot_footer("footer_shortcuts_default", props(FooterMode::ComposerEmpty));
+
+    snapshot_footer(
+        "footer_agents_and_shortcuts",
+        FooterProps {
+            agents_hint: true,
+            ..props(FooterMode::ComposerEmpty)
+        },
+    );
+    let status = Line::from("model · ~/project");
+    snapshot_footer(
+        "footer_status_line_and_agents",
+        FooterProps {
+            agents_hint: true,
+            status_line: Some(&status),
+            ..props(FooterMode::ComposerEmpty)
+        },
+    );
 
     snapshot_footer(
         "footer_shortcuts_shift_and_esc",

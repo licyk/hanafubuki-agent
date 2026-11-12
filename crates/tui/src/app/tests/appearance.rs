@@ -16,7 +16,9 @@ fn statusline_arguments_apply_to_the_run_and_the_setup_saves() {
     harness.type_and_submit("/statusline model --no-colors");
     harness.pump_until_screen_shows("Updated for this session; it is not saved.");
     let bottom = harness.bottom_rows(1);
-    assert_eq!(bottom.trim(), "fixture-model", "{bottom}");
+    // Left opens the command center from the empty composer, which the
+    // footer says after the status line.
+    assert_eq!(bottom.trim(), "fixture-model · ← for agents", "{bottom}");
     assert!(!harness.config_file().contains("statusLine"));
 
     harness.type_and_submit("/statusline nonsense");
@@ -40,7 +42,7 @@ fn statusline_arguments_apply_to_the_run_and_the_setup_saves() {
         "{config}"
     );
     assert!(config.contains("statusLineColors = false"), "{config}");
-    assert_eq!(harness.bottom_rows(1).trim(), "/project");
+    assert_eq!(harness.bottom_rows(1).trim(), "/project · ← for agents");
 }
 
 #[test]

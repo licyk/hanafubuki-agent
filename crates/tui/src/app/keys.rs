@@ -2,8 +2,10 @@
 // Modified from OpenAI Codex 57a808a392 (Apache-2.0).
 
 //! Where a key goes: the resume picker and the command center take them
-//! all while open; then a chord's first key waits for its second
-//! (`keymap::chords`), and a completed chord goes on as its action's token;
+//! all while open (the center's chords read in its own context, none while
+//! a search or a rename is typed); then a chord's first key waits for its
+//! second (`keymap::chords`), and a completed chord goes on as its action's
+//! token;
 //! then the panes' keys (`workspace`), editing an earlier message, an
 //! overlay, the owned transcript's keys and the app's own
 //! actions (Ctrl+T, select mode), and the chat last. A view that captures
@@ -31,6 +33,7 @@ const MAIN: [Context; 5] = [
     Context::Transcript,
 ];
 const PAGER: [Context; 2] = [Context::Global, Context::Pager];
+const AGENTS: [Context; 1] = [Context::Agents];
 
 impl App {
     /// `false` when the app should exit.
@@ -43,8 +46,16 @@ impl App {
         if self.resume_picker.is_some() {
             return self.handle_picker_key(tui, key);
         }
-        if self.handle_agents_key(tui, key) {
-            return true;
+        if let Some(takes_text) = self
+            .workspace
+            .agents_mut()
+            .map(|center| center.takes_text())
+        {
+            let contexts: &[Context] = if takes_text { &[] } else { &AGENTS };
+            return match self.feed_chord(key, contexts) {
+                Some(key) => self.handle_agents_key(tui, key),
+                None => true,
+            };
         }
         if self.handle_settings_key(tui, key) {
             return true;
@@ -56,22 +67,30 @@ impl App {
         } else {
             &MAIN
         };
-        let key = match self
-            .chords
-            .feed(&keymap::current(), &key, contexts, Instant::now())
-        {
-            ChordStep::Pass => key,
-            ChordStep::Complete(token) => token,
-            ChordStep::Wait | ChordStep::Cancelled => {
-                self.schedule_frame(Instant::now());
-                return true;
-            }
+        let Some(key) = self.feed_chord(key, contexts) else {
+            return true;
         };
         if contexts.is_empty() {
             self.chat_widget.handle_key_event(key);
             return true;
         }
         self.dispatch_key(tui, key)
+    }
+
+    /// `key` through the chords read in `contexts`: the key, a completed
+    /// chord's token, or `None` while a chord waits or was dropped.
+    fn feed_chord(&mut self, key: KeyEvent, contexts: &[Context]) -> Option<KeyEvent> {
+        match self
+            .chords
+            .feed(&keymap::current(), &key, contexts, Instant::now())
+        {
+            ChordStep::Pass => Some(key),
+            ChordStep::Complete(token) => Some(token),
+            ChordStep::Wait | ChordStep::Cancelled => {
+                self.schedule_frame(Instant::now());
+                None
+            }
+        }
     }
 
     fn handle_picker_key<B: Backend<Error = io::Error> + Write>(

@@ -293,7 +293,11 @@ impl App {
         let to_search = match self.overlay.as_mut() {
             Some(Overlay::Transcript(transcript)) => transcript.handle_paste(&text),
             Some(Overlay::Static(_)) => false,
-            None if self.resume_picker.is_some() || self.workspace.agents_open() => false,
+            None if self.workspace.agents_open() => self
+                .workspace
+                .agents_mut()
+                .is_some_and(|center| center.paste(&text)),
+            None if self.resume_picker.is_some() => false,
             None if self.mode.is_owned() && self.transcript_view.is_search_editing() => {
                 self.transcript_view.paste_search(&text)
             }

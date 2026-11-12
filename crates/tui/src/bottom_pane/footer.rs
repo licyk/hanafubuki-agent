@@ -46,6 +46,8 @@ pub(crate) struct FooterProps<'a> {
     /// A turn runs: a draft shows the key that queues it, and the
     /// shortcuts say that key queues.
     pub(crate) task_running: bool,
+    /// Left opens the command center: the empty composer's row says so.
+    pub(crate) agents_hint: bool,
 }
 
 /// Selects which footer content is rendered.
@@ -118,15 +120,7 @@ fn footer_lines(props: FooterProps<'_>) -> Vec<Line<'static>> {
         FooterMode::QuitShortcutReminder => {
             vec![quit_shortcut_reminder_line(props.quit_shortcut_key)]
         }
-        FooterMode::ComposerEmpty => {
-            let line = props.status_line.cloned().unwrap_or_else(|| {
-                Line::from(vec![
-                    key_hint::plain(KeyCode::Char('?')).into(),
-                    " for shortcuts".dim(),
-                ])
-            });
-            vec![line]
-        }
+        FooterMode::ComposerEmpty => vec![composer_empty_line(props)],
         FooterMode::ShortcutOverlay => shortcut_overlay_lines(props),
         FooterMode::ComposerHasDraft => vec![match keymap::hint(Action::Queue) {
             Some(key) if props.task_running => {
@@ -141,6 +135,33 @@ fn footer_lines(props: FooterProps<'_>) -> Vec<Line<'static>> {
             " again to edit a previous message".into(),
         ])
         .dim()],
+    }
+}
+
+/// The status line, else `? for shortcuts`; with `← for agents` after the
+/// status line, or before the shortcuts (Codex's `passive_footer_suffix`
+/// and `left_side_line`).
+fn composer_empty_line(props: FooterProps<'_>) -> Line<'static> {
+    let agents = [key_hint::plain(KeyCode::Left).into(), " for agents".dim()];
+    let shortcuts = [
+        key_hint::plain(KeyCode::Char('?')).into(),
+        " for shortcuts".dim(),
+    ];
+    match (props.status_line, props.agents_hint) {
+        (Some(status), false) => status.clone(),
+        (Some(status), true) => {
+            let mut line = status.clone();
+            line.push_span(" · ".dim());
+            line.spans.extend(agents);
+            line
+        }
+        (None, false) => Line::from(shortcuts.to_vec()),
+        (None, true) => {
+            let mut spans = agents.to_vec();
+            spans.push(" · ".dim());
+            spans.extend(shortcuts);
+            Line::from(spans)
+        }
     }
 }
 

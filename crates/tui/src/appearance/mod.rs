@@ -337,7 +337,7 @@ fn context_percent_used(usage: Option<&UsageSummary>) -> Option<u64> {
 }
 
 /// The directory with the home directory written `~`.
-fn display_directory(directory: &str) -> String {
+pub(crate) fn display_directory(directory: &str) -> String {
     let home = std::env::home_dir().map(|home| home.display().to_string());
     match home
         .as_deref()

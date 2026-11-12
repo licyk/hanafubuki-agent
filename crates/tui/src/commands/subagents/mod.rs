@@ -50,10 +50,6 @@ pub(crate) fn on_reply(context: &mut CommandContext<'_>, reply: SubagentsReply) 
         SubagentsReply::Changed(statuses) => {
             context.offer_reply(CommandReply::Subagents(statuses));
         }
-        SubagentsReply::Interrupted => context.add_to_history(history_cell::new_info_event(
-            "The subagent was interrupted.".to_string(),
-            None,
-        )),
         SubagentsReply::Failed(error) => context.add_to_history(history_cell::new_error_event(
             format!("/subagents: {error}"),
         )),

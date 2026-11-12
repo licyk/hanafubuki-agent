@@ -1,0 +1,20 @@
+---
+source: crates/tui/src/agents_center/tests.rs
+expression: "screen(&mut center, 100, 16)"
+---
+  Agent command center  Group: Status  g
+   All 3    Needs you 1    Working 1    Ready 0    Inactive 1    Archived
+  ────────────────────────────────────────────────────────────────────────────────────────────────
+      Sessions    ┌──────────────────────────────────────────────────────────────┐us       Updated
+  Needs input  1  │Permanently delete “Fix the login form”?                      │
+  › ● Fix the logi│Its history and its children's are deleted. This cannot be    │s input  42m ago
+                  │undone.                                                       │
+  Working  1      │                                                              │
+    ● Port the com│› Cancel                                                      │ing       3m ago
+                  │  Delete the session and its children                         │
+  Inactive  1     │                                                              │
+    ○ Explain the └──────────────────────────────────────────────────────────────┘tive      3h ago
+
+
+
+  enter choose  esc cancel

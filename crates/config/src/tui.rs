@@ -35,6 +35,9 @@ pub struct AgentTuiPreferences {
     /// Whether Scrollback takes the mouse while its tail shows an entry
     /// with a control, so a click reaches it.
     pub scrollback_mouse: AgentScrollbackMouse,
+    /// How the command center (`/agents`) groups its sessions; `g` there
+    /// changes it.
+    pub agents_grouping: AgentAgentsGrouping,
     /// The conversation shown as the plain text it was made from.
     pub raw_output: bool,
     /// The syntax highlighting theme: a bundled theme's name, or a custom
@@ -99,6 +102,7 @@ impl Default for AgentTuiPreferences {
             fullscreen_transcript: true,
             alternate_screen: AgentAlternateScreen::Auto,
             scrollback_mouse: AgentScrollbackMouse::Tail,
+            agents_grouping: AgentAgentsGrouping::Project,
             raw_output: false,
             theme: None,
             status_line: DEFAULT_STATUS_LINE.map(String::from).to_vec(),
@@ -136,6 +140,20 @@ pub enum AgentScrollbackMouse {
     Tail,
     /// Never: the keyboard and the transcript only.
     Off,
+}
+
+/// The headings the command center groups its sessions under (Codex's
+/// `agents_overview_grouping`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentAgentsGrouping {
+    /// The repository a session ran in, its worktrees with it, and the
+    /// directory within it; outside a repository, the directory.
+    #[default]
+    Project,
+    Directory,
+    Status,
+    Model,
 }
 
 /// A change to `[tui]`'s keymap and presets, which have no spec: each
@@ -224,6 +242,19 @@ pub(crate) fn section() -> SettingsSection {
                     choice(&[("tail", "While the tail has a control"), ("off", "Off")]),
                 ),
                 "Whether Scrollback captures the mouse while its tail shows a control",
+            ),
+            described(
+                SettingSpec::new(
+                    "tui.agentsGrouping",
+                    "Command center grouping",
+                    choice(&[
+                        ("project", "Project"),
+                        ("directory", "Directory"),
+                        ("status", "Status"),
+                        ("model", "Model"),
+                    ]),
+                ),
+                "How the command center (/agents) groups its sessions; g there changes it",
             ),
             described(
                 SettingSpec::new("tui.rawOutput", "Raw output", SettingKind::Boolean),

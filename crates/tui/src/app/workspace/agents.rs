@@ -1,25 +1,28 @@
 // Modified from OpenAI Codex 57a808a392 (Apache-2.0).
 
-//! `/agents`' command center in the app: open over the whole screen (the
-//! alternate screen in scrollback mode), its pages read as it asks, and
-//! its actions carried out on the main conversation (`app/agents_overview_
-//! actions.rs`). Opening, starting or forking a session moves the main
-//! conversation, so they wait while its turn runs; a subagent opens beside
-//! its parent, as `/subagents` shows it.
+//! The command center in the app: open over the whole screen (the
+//! alternate screen in scrollback mode), its pages, children and approvals
+//! read as it asks, and its actions carried out on the main conversation
+//! (`app/agents_overview_actions.rs`). Opening, starting or forking a
+//! session moves the main conversation, so they wait while its turn runs;
+//! a child opens beside its parent, as `/subagents` shows it. The grouping
+//! chosen is written to `tui.agentsGrouping`, quietly.
 
 use std::io::{self, Write};
-use std::time::Instant;
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
-use hanafubuki_agent::{AgentSessionId, AgentSessionOrigin, AgentSessionSummary};
+use hanafubuki_agent::{AgentAgentsGrouping, AgentSessionId, AgentSessionSummary};
 use ratatui::backend::Backend;
 use ratatui::crossterm::event::KeyEvent;
+use serde_json::json;
 
 use super::{Focus, SecondKind};
-use crate::agent_bridge::SubagentsCall;
+use crate::agent_bridge::SessionCall;
 use crate::agents_center::{AgentsCenter, CenterAction};
 use crate::app::App;
 use crate::app_event::{AgentCommand, Op};
 use crate::resume_picker::ArchiveRequest;
+use crate::text_formatting::capitalize_first;
 use crate::tui::Tui;
 
 const MAIN_BUSY: &str = "A turn runs in the main conversation; interrupt it or wait for it first.";
@@ -33,7 +36,8 @@ impl App {
             return;
         }
         self.enter_alt_screen(tui, false);
-        self.workspace.agents = Some(AgentsCenter::new(self.main_session_id()));
+        let grouping = self.chat_widget.preferences().agents_grouping;
+        self.workspace.agents = Some(AgentsCenter::new(self.main_session_id(), grouping));
         self.load_center_pages();
     }
 
@@ -63,9 +67,12 @@ impl App {
         let Some(center) = self.workspace.agents.as_mut() else {
             return Ok(false);
         };
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_or(0, |elapsed| elapsed.as_millis());
         tui.draw(u16::MAX, |frame| {
             let area = frame.area();
-            center.render(area, frame.buffer_mut());
+            center.render(area, frame.buffer_mut(), now);
         })?;
         // The list's height is known once it is drawn.
         if center.page_request().is_some() {
@@ -85,6 +92,9 @@ impl App {
         for (parent, request) in center.children_wanted() {
             center.ingest_children(parent, self.bridge.list_sessions(request));
         }
+        for session_id in center.approvals_wanted() {
+            center.ingest_approval(session_id, self.bridge.waits_for_approval(session_id));
+        }
     }
 
     fn run_center_action<B: Backend<Error = io::Error> + Write>(
@@ -97,7 +107,7 @@ impl App {
                 self.close_agents_center(tui);
                 return;
             }
-            CenterAction::Open(summary) => match self.open_listed(tui, summary) {
+            CenterAction::Open(summary) => match self.open_listed(tui, *summary) {
                 Ok(()) => return,
                 Err(error) => Err(error),
             },
@@ -108,13 +118,31 @@ impl App {
                 }
                 Err(error) => Err(error),
             },
+            CenterAction::NewWorktree => match self.new_worktree(tui) {
+                Ok(()) => return,
+                Err(error) => Err(error),
+            },
             CenterAction::Fork(session_id) => self.fork_listed(tui, session_id),
+            CenterAction::Rename { session_id, title } => self
+                .bridge
+                .rename_listed(session_id, title)
+                .map(|()| "Session renamed".to_string()),
             CenterAction::SetArchived {
                 session_id,
                 archive,
             } => self.archive_listed(session_id, archive),
-            CenterAction::Delete(session_id) => self.delete_listed(session_id),
-            CenterAction::Interrupt(summary) => self.interrupt_listed(&summary),
+            CenterAction::Delete(session_id) => self
+                .bridge
+                .delete_listed(session_id)
+                .map(|()| "Session deleted".to_string()),
+            CenterAction::Stop(session_id) => self
+                .bridge
+                .interrupt_listed(session_id)
+                .map(|()| "Interrupting…".to_string()),
+            CenterAction::Grouping(grouping) => {
+                self.save_agents_grouping(grouping);
+                return;
+            }
         };
         let current = self.main_session_id();
         if let Some(center) = self.workspace.agents.as_mut() {
@@ -203,9 +231,6 @@ impl App {
         session_id: AgentSessionId,
         archive: bool,
     ) -> Result<String, String> {
-        if archive && Some(session_id) == self.main_session_id() {
-            return Err("Use /archive for the session shown.".to_string());
-        }
         self.bridge
             .set_archived(ArchiveRequest {
                 session_id,
@@ -221,22 +246,29 @@ impl App {
             .map_err(|error| format!("The session was not changed: {error}"))
     }
 
-    fn delete_listed(&mut self, session_id: AgentSessionId) -> Result<String, String> {
-        if Some(session_id) == self.main_session_id() {
-            return Err("Use /delete for the session shown.".to_string());
+    /// `w`: a new session in a new worktree, as `/worktree` starts one;
+    /// where none can be made, the center says why.
+    fn new_worktree<B: Backend<Error = io::Error> + Write>(
+        &mut self,
+        tui: &mut Tui<B>,
+    ) -> Result<(), String> {
+        if let Some(reason) = self.bridge.worktrees_unavailable() {
+            return Err(capitalize_first(&reason));
         }
-        self.bridge
-            .delete_listed(session_id)
-            .map(|()| "Session deleted".to_string())
+        self.main_moves(tui, None)?;
+        self.close_agents_center(tui);
+        let call = SessionCall::EnterWorktree {
+            continued: false,
+            name: None,
+        };
+        self.submit_main(Op::Command(AgentCommand::Session(call)));
+        Ok(())
     }
 
-    fn interrupt_listed(&mut self, summary: &AgentSessionSummary) -> Result<String, String> {
-        if summary.origin == Some(AgentSessionOrigin::Subagent) {
-            let call = AgentCommand::Subagents(SubagentsCall::Interrupt(summary.session_id));
-            self.submit_main(Op::Command(call));
-        } else {
-            self.bridge.interrupt_listed(summary.session_id)?;
-        }
-        Ok("Interrupting…".to_string())
+    /// `g`: the grouping written to `tui.agentsGrouping` with no message;
+    /// a failure is said in the center.
+    fn save_agents_grouping(&mut self, grouping: AgentAgentsGrouping) {
+        let value = json!(grouping);
+        self.write_tui_settings(vec![("tui.agentsGrouping", value)], String::new());
     }
 }

@@ -1,8 +1,11 @@
 //! The command center's actions on a listed session, not the one shown:
-//! forking it, deleting it (and its children), interrupting its turn. Each
-//! reads the session's generation and revision as they are now.
+//! forking, renaming and deleting it (and its children), interrupting its
+//! turn; and whether its turn waits on an approval. Each reads the
+//! session's generation and revision as they are now.
 
-use hanafubuki_agent::{AgentSessionId, AgentSessionRuntimeSnapshot};
+use hanafubuki_agent::{
+    AgentActivityPhase, AgentSessionId, AgentSessionRuntimeSnapshot, AgentSessionTitleRenameRequest,
+};
 
 use super::sessions::fork_at_head;
 use super::AgentBridge;
@@ -13,6 +16,40 @@ impl AgentBridge {
         let session = self.listed(session_id)?;
         let sink = self.sink();
         fork_at_head(&self.agent, &*sink, &session, None).map(|(fork, _)| fork)
+    }
+
+    /// Names `session_id` `title`.
+    pub(crate) fn rename_listed(
+        &self,
+        session_id: AgentSessionId,
+        title: String,
+    ) -> Result<(), String> {
+        let session = self.listed(session_id)?;
+        let sink = self.sink();
+        self.agent
+            .rename_session(
+                AgentSessionTitleRenameRequest {
+                    session_id: session.id,
+                    generation: session.generation,
+                    revision: session.revision,
+                    title,
+                },
+                &*sink,
+            )
+            .map(drop)
+            .map_err(|error| format!("the session was not renamed: {error}"))
+    }
+
+    /// Whether the turn `session_id` runs waits on an approval. Only a
+    /// session the Agent holds can; one it does not reads as waiting on
+    /// none.
+    pub(crate) fn waits_for_approval(&self, session_id: AgentSessionId) -> bool {
+        self.agent.snapshot(session_id).is_ok_and(|snapshot| {
+            snapshot
+                .active_activities
+                .iter()
+                .any(|activity| activity.phase == AgentActivityPhase::WaitingForApproval)
+        })
     }
 
     /// Deletes `session_id` and its children.

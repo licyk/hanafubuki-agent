@@ -36,13 +36,11 @@ const FOLLOW_INTERVAL: Duration = Duration::from_millis(150);
 /// The tools whose call may start a subagent's turn.
 const STARTING_TOOLS: [&str; 3] = ["spawn_agent", "send_message", "followup_task"];
 
-/// What `/subagents` and `/agents` ask of the Agent.
+/// What `/subagents` asks of the Agent.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum SubagentsCall {
-    /// The session's subagents, for `/subagents`.
+    /// The session's subagents.
     List,
-    /// Interrupts the turn the subagent runs.
-    Interrupt(AgentSessionId),
 }
 
 /// What the Agent answered about the session's subagents.
@@ -52,7 +50,6 @@ pub(crate) enum SubagentsReply {
     Listed(Vec<AgentSubagentStatus>),
     /// The watch read them again and they changed.
     Changed(Vec<AgentSubagentStatus>),
-    Interrupted,
     Failed(String),
 }
 
@@ -114,13 +111,6 @@ impl AgentBridge {
                     Ok(Some(AgentReply::Update(Box::new(reply(listed)))))
                 });
             }
-            SubagentsCall::Interrupt(child) => self.spawn(move |agent| async move {
-                let done = match agent.interrupt_subagent(child).await {
-                    Ok(()) => SubagentsReply::Interrupted,
-                    Err(error) => SubagentsReply::Failed(subagents_error(error)),
-                };
-                Ok(Some(AgentReply::Update(Box::new(reply(done)))))
-            }),
         }
         None
     }

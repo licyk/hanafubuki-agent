@@ -46,7 +46,7 @@ impl AgentBridge {
     /// Why no worktree can be made here, if none can: the working
     /// directory is in no Git repository, or the `worktree` row does not
     /// run.
-    pub(super) fn worktrees_unavailable(&self) -> Option<String> {
+    pub(crate) fn worktrees_unavailable(&self) -> Option<String> {
         let root = self.workspace_roots().into_iter().next();
         match &root {
             Some(root) if in_git_repository(root) => {}

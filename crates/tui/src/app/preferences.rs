@@ -124,8 +124,9 @@ impl App {
     }
 
     /// Writes `[tui]` settings by key off the loop; what they changed is
-    /// applied when the write is done ([`Self::tui_settings_written`]).
-    fn write_tui_settings(&mut self, changes: Vec<(&str, Value)>, message: String) {
+    /// applied when the write is done ([`Self::tui_settings_written`]). An
+    /// empty `message` writes quietly: only a failure is said.
+    pub(super) fn write_tui_settings(&mut self, changes: Vec<(&str, Value)>, message: String) {
         let write = SettingsWrite {
             changes: changes
                 .into_iter()
@@ -146,6 +147,9 @@ impl App {
         written: Result<AgentTuiPreferences, String>,
         shadowed: bool,
     ) {
+        if message.is_empty() {
+            return self.tui_settings_written_quietly(written);
+        }
         let reported = match written {
             Ok(preferences) => {
                 if shadowed {
@@ -162,6 +166,23 @@ impl App {
             }
         };
         self.report_to_settings(reported);
+        self.schedule_frame(Instant::now());
+    }
+
+    /// A quiet write done: taken as it resolves, or its failure said in the
+    /// command center while it is open (its grouping's), else in the
+    /// conversation.
+    fn tui_settings_written_quietly(&mut self, written: Result<AgentTuiPreferences, String>) {
+        match written {
+            Ok(preferences) => self.adopt_tui_preferences(preferences),
+            Err(error) => {
+                let error = format!("The setting was not saved: {error}");
+                match self.workspace.agents_mut() {
+                    Some(center) => center.set_notice(error),
+                    None => self.chat_widget.add_error_message(error),
+                }
+            }
+        }
         self.schedule_frame(Instant::now());
     }
 

@@ -133,7 +133,7 @@ hanafubuki-agent sessions delete 2
 - 它具有 `spawn_agent` 的 `agent_type` 指定的[角色](/docs/roles#subagents)，必须是可派生的角色：它的工具是父会话的工具再按角色收窄，指令是角色的，模型和推理强度是角色的，否则是父会话的。不带 `agent_type` 时，它保留父会话的角色、模型和推理强度。`list_agents` 给出每个子代理的角色。
 - 归档或删除父会话时，它的子代理随之归档或删除。
 - 只有没有父会话的会话能创建子代理，默认同时最多运行 3 个（[`[pluginOptions.subagents]`](/docs/config-reference#plugin-options) 的 `maximumRunningAgents`）。
-- **在终端界面中**，`/subagents` 列出子代理及其状态，并用其中一个代替它的父会话显示，运行时实时更新；在 Manual 模式下，子代理等待的审批显示在它的父会话中，标有子代理的标题，回答发给子代理（[终端界面](/docs/terminal-interface#subagents)）。`/agents` 列出所有会话及其子会话，可以打开、分叉、归档、删除或中断它们（[终端界面](/docs/terminal-interface#agents)）。
+- **在终端界面中**，`/subagents` 列出子代理及其状态，并用其中一个代替它的父会话显示，运行时实时更新；在 Manual 模式下，子代理等待的审批显示在它的父会话中，标有子代理的标题，回答发给子代理（[终端界面](/docs/terminal-interface#subagents)）。`/agents`（或在空输入框上按 Left）列出所有没有父会话的会话，每个会话的状态汇总了它的子会话的状态（等待审批的子代理会让父会话显示为 Needs input），可以打开、分叉、重命名、停止、归档或删除它们（[终端界面](/docs/terminal-interface#agents)）。
 
 ## 评审 [#reviews]
 

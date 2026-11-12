@@ -4,9 +4,9 @@ use std::fs;
 use serde_json::json;
 
 use crate::{
-    AgentAlternateScreen, AgentConfig, AgentScrollbackMouse, AgentTuiPreferences,
-    AgentTuiPreferencesPatch, AgentTuiPreset, ConfigLayers, AGENT_SETTINGS_FILE,
-    PROJECT_CONFIG_DIR,
+    AgentAgentsGrouping, AgentAlternateScreen, AgentConfig, AgentScrollbackMouse,
+    AgentTuiPreferences, AgentTuiPreferencesPatch, AgentTuiPreset, ConfigLayers,
+    AGENT_SETTINGS_FILE, PROJECT_CONFIG_DIR,
 };
 
 fn config_with(user: &str) -> (tempfile::TempDir, AgentConfig) {
@@ -25,6 +25,7 @@ fn missing_preferences_are_the_defaults() {
             fullscreen_transcript: true,
             alternate_screen: AgentAlternateScreen::Auto,
             scrollback_mouse: AgentScrollbackMouse::Tail,
+            agents_grouping: AgentAgentsGrouping::Project,
             raw_output: false,
             theme: None,
             status_line: vec![
@@ -48,7 +49,7 @@ fn missing_preferences_are_the_defaults() {
 fn each_key_decodes_on_its_own_and_unknown_keys_are_ignored() {
     let (root, config) = config_with(
         "[tui]\nfullscreenTranscript = false\nalternateScreen = \"sometimes\"\n\
-         scrollbackMouse = \"off\"\nrawOutput = true\nkeymap = \"later\"\ntheme = \"nord\"\n\
+         scrollbackMouse = \"off\"\nagentsGrouping = \"model\"\nrawOutput = true\nkeymap = \"later\"\ntheme = \"nord\"\n\
          statusLine = [\"model\", 3]\nstatusLineColors = false\n\
          terminalTitle = [\"app-name\", \"unknown-item\"]\n",
     );
@@ -58,6 +59,7 @@ fn each_key_decodes_on_its_own_and_unknown_keys_are_ignored() {
             fullscreen_transcript: false,
             alternate_screen: AgentAlternateScreen::Auto,
             scrollback_mouse: AgentScrollbackMouse::Off,
+            agents_grouping: AgentAgentsGrouping::Model,
             raw_output: true,
             theme: Some("nord".to_string()),
             // Not a list of ids: the default.
