@@ -639,8 +639,72 @@ Hoshimi `83f7813`. Every §9 decision (D1–D7) was accepted as recommended
     on disk with `modelsDev` turned off still answers until the worker's
     first request at start; the failure backoff is per run, so short runs
     (`exec`) with models.dev unreachable try once each.
-- Open: Chat Completions' `reasoning_content` sent back in tool loops
-  (DeepSeek's thinking mode requires it).
+- Follow-up (2026-11-12, done): Chat Completions' `reasoning_content` is
+  sent back (DeepSeek's thinking mode refuses a request with tools whose
+  earlier assistant messages, of any turn, lack it; guides read
+  2026-11-12).
+  - Type: `ModelReasoningReplay::ReasoningContent { text }` (≤ 1 MiB,
+    Debug redacted), with `outlives_its_turn()` (true for it only) and
+    `text_len()`. Decoder: a stretch whose every delta came as
+    `reasoning_content` keeps it (`reasoning_delta` says the field); a
+    stretch with a `reasoning` delta (OpenRouter's) keeps none. No model-id
+    sniffing.
+  - Encoder: the three assistant `json!` sites of `encode_chat_request`
+    moved to the new `chat_completions/assistant.rs`, which joins the
+    `reasoning_content` of the reasoning before a message's text or first
+    tool call (no separator: the whole text a response not streamed
+    carries) onto that message, in both shapes (`content: null` for calls
+    alone); not gated on `request.reasoning`; reasoning no message follows
+    is dropped; a reasoning item between the text and the calls no longer
+    splits the message. `encode_chat_request` is 185 lines, so its
+    module-size exception was removed (the check asked for it). Anthropic:
+    `assistant_message`, `continues_without_thinking` and
+    `is_assistant_item` match the variants, so the text is left out and is
+    no thinking block for manual thinking's guard.
+  - Kernel scope: `ConversationItem::reasoning_input(in_current_turn)`
+    places a block that outlives its turn from every turn of the projected
+    history, Anthropic's after the last `TurnStart` only; the compaction
+    request (which carries the tools) places the former too.
+    `hierarchical`'s `apply_view` keeps reasoning with the message after
+    it (after the summaries before it, dropped with a folded one); before,
+    a summary anchored before an answer separated them.
+  - Persistence: `replay` is written only for this variant
+    (`"replay": {"type": "reasoning_content", "text": "…"}`, skipped
+    otherwise), and read tolerantly (any other shape, kind, or one over
+    the bound → none). Anthropic's stay memory-only. A transcript page
+    (`AgentTranscriptPage`, `sessions show --json`) leaves it out, as
+    `modelText`; forks and children copy it (they continue the
+    conversation). Not counted in `retained_bytes` / `maximum_history_bytes`
+    (as Anthropic's were not), so a DeepSeek item can persist its text
+    twice (shown ≤ 256 KiB, sent back ≤ 1 MiB). Corpora and goldens
+    unchanged.
+  - Fixed on the way: reload validation required a completed turn's final
+    answer to have the `final_answer` phase, which Chat and Anthropic
+    messages never have, so such a session failed its first turn after a
+    restart (`dangling final answer message id`); it now takes `None` too,
+    as `finish_completed` does.
+  - Token accounting: the request estimate serializes the request, so the
+    text already counted; `estimate_conversation_items_tokens` now counts
+    the bytes of reasoning that outlives its turn (Anthropic's and the
+    shown text still not).
+  - Classifier: a refusal whose message names `reasoning_content` is never
+    `UnsupportedReasoning` (it is about the history, not the reasoning
+    parameter), so DeepSeek's "Missing `reasoning_content`…" or a server's
+    "Unrecognized … reasoning_content" stays `Remote`.
+  - Tests: model-api decoder/encoder units, `provider_protocols/thinking.rs`
+    (Chat send-back, Anthropic leaves it out), classifier; kernel
+    persistence codec, transcript, `apply_view`; facade
+    `tests/model_reasoning.rs` against a fake that refuses a `deepseek-`
+    request with tools and an assistant message without the field (tool
+    loop, second turn, a turn without a call, a reopened runtime,
+    compaction and the turn after it, `reasoning` not sent back). The main test fails with the
+    attach disabled, and its restart half with persistence disabled.
+  - Residuals: a session from before this (or a message whose thinking
+    passed 1 MiB) has assistant messages with no text to send, which go
+    without the field; DeepSeek with tools may refuse every request of it,
+    compaction's too, while they are in the window: start a new session.
+    The refusal wordings in the tests are illustrative, not recorded from
+    the live API.
 
 ## Plan: Codex's messages sent while the Agent works, in the terminal interface (2026-11-11)
 

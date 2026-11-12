@@ -22,7 +22,7 @@
 use serde_json::{json, Value};
 
 use super::DEFAULT_MAX_OUTPUT_TOKENS;
-use crate::model::{ModelInputItem, ModelRequest, ModelToolChoice};
+use crate::model::{ModelInputItem, ModelReasoningReplay, ModelRequest, ModelToolChoice};
 use crate::ModelReasoningEffort;
 
 /// The room a manual request keeps for its answer after the thinking
@@ -174,15 +174,26 @@ fn continues_without_thinking(input: &[ModelInputItem]) -> bool {
         .iter()
         .rposition(|item| !is_assistant_item(item))
         .map_or(0, |index| index + 1);
-    !matches!(input[start], ModelInputItem::Reasoning { .. })
+    !is_thinking_block(&input[start])
 }
 
+/// An item of an assistant message as Anthropic reads it: another
+/// protocol's reasoning is none, since the request leaves it out.
 fn is_assistant_item(item: &ModelInputItem) -> bool {
+    is_thinking_block(item)
+        || matches!(
+            item,
+            ModelInputItem::AssistantMessage { .. } | ModelInputItem::ToolCall { .. }
+        )
+}
+
+fn is_thinking_block(item: &ModelInputItem) -> bool {
     matches!(
         item,
-        ModelInputItem::Reasoning { .. }
-            | ModelInputItem::AssistantMessage { .. }
-            | ModelInputItem::ToolCall { .. }
+        ModelInputItem::Reasoning {
+            replay: ModelReasoningReplay::Thinking { .. }
+                | ModelReasoningReplay::RedactedThinking { .. }
+        }
     )
 }
 

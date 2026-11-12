@@ -110,8 +110,8 @@ pub enum ModelOutputItem {
     },
     /// A reasoning item with its summary parts and its raw reasoning text
     /// parts (`content`), either of which a provider may leave empty, and
-    /// the block the provider asks to have sent back with the turn, if any,
-    /// which is never serialized.
+    /// the block the provider asks to have sent back, if any, which is
+    /// never serialized here.
     Reasoning {
         item_id: String,
         summary: Vec<String>,

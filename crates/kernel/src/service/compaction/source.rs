@@ -211,6 +211,9 @@ fn build_compaction_input(
         if matches!(item, ConversationItem::TurnStart { .. }) && !input.is_empty() {
             trim_prefix_ends.push(input.len());
         }
+        // A compaction's request sends back only the reasoning that
+        // outlives its turn: it continues no turn.
+        input.extend(item.reasoning_input(false));
         if let Some(model) = item.as_model_input_resolved(|image| images.bytes(image))? {
             input.push(model);
         }

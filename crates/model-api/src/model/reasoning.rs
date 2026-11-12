@@ -17,14 +17,26 @@ pub struct ModelReasoningConfig {
 /// block is not sent back.
 pub const MAX_MODEL_REASONING_REPLAY_BYTES: usize = 1024 * 1024;
 
-/// A reasoning block a Provider asks to have sent back, unchanged, with the
-/// turn that produced it: Anthropic's `thinking` (its whole text and its
-/// signature) and `redacted_thinking`. Its `Debug` shows neither.
+/// A reasoning block a Provider asks to have sent back, unchanged: Anthropic's
+/// `thinking` (its whole text and its signature) and `redacted_thinking`,
+/// sent back within the turn that produced them, and Chat Completions'
+/// `reasoning_content` (DeepSeek's thinking mode), sent back from every turn.
+/// Its `Debug` shows none of them.
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ModelReasoningReplay {
-    Thinking { thinking: String, signature: String },
-    RedactedThinking { data: String },
+    Thinking {
+        thinking: String,
+        signature: String,
+    },
+    RedactedThinking {
+        data: String,
+    },
+    /// The reasoning text of a Chat Completions response, which goes back as
+    /// the `reasoning_content` of the assistant message it preceded.
+    ReasoningContent {
+        text: String,
+    },
 }
 
 impl ModelReasoningReplay {
@@ -45,6 +57,34 @@ impl ModelReasoningReplay {
         (!data.is_empty() && data.len() <= MAX_MODEL_REASONING_REPLAY_BYTES)
             .then_some(Self::RedactedThinking { data })
     }
+
+    /// Chat Completions' `reasoning_content` text, when it has any and fits
+    /// the bound.
+    pub fn reasoning_content(text: String) -> Option<Self> {
+        (!text.is_empty() && text.len() <= MAX_MODEL_REASONING_REPLAY_BYTES)
+            .then_some(Self::ReasoningContent { text })
+    }
+
+    /// Whether the Provider takes this block back with every later request
+    /// that still holds the message it preceded, not only within its own
+    /// turn: `reasoning_content`. Such a block is kept with the history,
+    /// since a resumed session still sends it; a turn's block (Anthropic's)
+    /// is kept in memory only.
+    pub fn outlives_its_turn(&self) -> bool {
+        matches!(self, Self::ReasoningContent { .. })
+    }
+
+    /// The bytes of text the block sends back.
+    pub fn text_len(&self) -> usize {
+        match self {
+            Self::Thinking {
+                thinking,
+                signature,
+            } => thinking.len().saturating_add(signature.len()),
+            Self::RedactedThinking { data } => data.len(),
+            Self::ReasoningContent { text } => text.len(),
+        }
+    }
 }
 
 impl std::fmt::Debug for ModelReasoningReplay {
@@ -52,6 +92,7 @@ impl std::fmt::Debug for ModelReasoningReplay {
         formatter.write_str(match self {
             Self::Thinking { .. } => "ModelReasoningReplay::Thinking([redacted])",
             Self::RedactedThinking { .. } => "ModelReasoningReplay::RedactedThinking([redacted])",
+            Self::ReasoningContent { .. } => "ModelReasoningReplay::ReasoningContent([redacted])",
         })
     }
 }

@@ -1,10 +1,13 @@
 //! A scripted model provider in the test process: a loopback HTTP server
 //! that answers each request with the next event stream it was given
-//! (Responses, or Anthropic Messages for a provider of that protocol), and
-//! keeps every request it received. An Anthropic Messages request with
-//! tool blocks and no tools is answered with an error instead, taking no
-//! answer, so a request that leaves out the tools its history used is
-//! caught (whether the live API refuses it was not checked). A server
+//! (Responses, Anthropic Messages or Chat Completions, for a provider of
+//! that protocol), and keeps every request it received. An Anthropic
+//! Messages request with tool blocks and no tools is answered with an error
+//! instead, taking no answer, so a request that leaves out the tools its
+//! history used is caught (whether the live API refuses it was not
+//! checked); so is a Chat Completions request for a `deepseek-` model that
+//! declares tools and holds an assistant message without its
+//! `reasoning_content`, as DeepSeek's thinking mode refuses it. A server
 //! given model listings ([`FakeServer::with_listings`]) answers `GET
 //! …/models` with them instead, apart from the event streams.
 
@@ -102,7 +105,7 @@ impl FakeServer {
                     }
                     continue;
                 }
-                let refusal = anthropic_refusal(&request);
+                let refusal = anthropic_refusal(&request).or_else(|| deepseek_refusal(&request));
                 captured.lock().unwrap().push(request);
                 if let Some(error) = refusal {
                     let response = format!(
@@ -264,6 +267,34 @@ fn manual_thinking_refusal(body: &serde_json::Value) -> Option<&'static str> {
     )
 }
 
+/// DeepSeek's refusal, in thinking mode, of a request with tools whose
+/// assistant message lacks the `reasoning_content` it came with ("If your
+/// code does not correctly pass back `reasoning_content`, the API will
+/// return a 400 error"; the wording here is illustrative). The fake takes
+/// every assistant message to have thought, as DeepSeek's models do.
+fn deepseek_refusal(request: &CapturedRequest) -> Option<String> {
+    if !request.path.ends_with("/chat/completions") {
+        return None;
+    }
+    let body: serde_json::Value = serde_json::from_slice(&request.body).ok()?;
+    let thinking = body["model"]
+        .as_str()
+        .is_some_and(|model| model.starts_with("deepseek-"));
+    let declares_tools = body["tools"]
+        .as_array()
+        .is_some_and(|tools| !tools.is_empty());
+    let missing = body["messages"].as_array()?.iter().position(|message| {
+        message["role"] == "assistant" && !message["reasoning_content"].is_string()
+    })?;
+    (thinking && declares_tools).then(|| {
+        serde_json::json!({"error": {
+            "message": format!("Missing `reasoning_content` field in the assistant message at message index {missing}."),
+            "type": "invalid_request_error",
+        }})
+        .to_string()
+    })
+}
+
 fn anthropic_error(message: &str) -> String {
     serde_json::json!({
         "type": "error",
@@ -304,6 +335,52 @@ pub fn anthropic_thinking_tool_events(thinking: &str, signature: &str, name: &st
         name = name,
     )
     .into_bytes()
+}
+
+/// A Chat Completions stream that thinks (`reasoning` under `field`) and
+/// then calls `name` with no arguments as `call_id`.
+pub fn chat_reasoning_tool_events(
+    field: &str,
+    reasoning: &str,
+    call_id: &str,
+    name: &str,
+) -> Vec<u8> {
+    chat_events(
+        &[
+            serde_json::json!({"role": "assistant", field: reasoning}),
+            serde_json::json!({"tool_calls": [{
+                "index": 0, "id": call_id, "type": "function",
+                "function": {"name": name, "arguments": "{}"}
+            }]}),
+        ],
+        "tool_calls",
+    )
+}
+
+/// A Chat Completions stream that thinks (`reasoning` under `field`) and
+/// then answers `text`, ending the turn.
+pub fn chat_reasoning_answer_events(field: &str, reasoning: &str, text: &str) -> Vec<u8> {
+    chat_events(
+        &[
+            serde_json::json!({"role": "assistant", field: reasoning}),
+            serde_json::json!({"content": text}),
+        ],
+        "stop",
+    )
+}
+
+fn chat_events(deltas: &[serde_json::Value], finish_reason: &str) -> Vec<u8> {
+    let mut events = String::new();
+    for (index, delta) in deltas.iter().enumerate() {
+        let finish = (index + 1 == deltas.len()).then_some(finish_reason);
+        let chunk = serde_json::json!({
+            "id": "chat-1",
+            "choices": [{"index": 0, "delta": delta, "finish_reason": finish}],
+        });
+        events.push_str(&format!("data: {chunk}\n\n"));
+    }
+    events.push_str("data: {\"id\":\"chat-1\",\"choices\":[],\"usage\":{\"prompt_tokens\":10,\"completion_tokens\":5}}\n\ndata: [DONE]\n\n");
+    events.into_bytes()
 }
 
 /// An Anthropic Messages stream: one text answer that ends the turn.

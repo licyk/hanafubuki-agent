@@ -28,9 +28,15 @@ const WORDINGS: [&str; 11] = [
     "unexpected keyword",
 ];
 
+/// A field of an assistant message, not a reasoning parameter: a refusal
+/// that names it (DeepSeek's, of a message sent without it) is about the
+/// history, and sending no reasoning parameter would not change it.
+const REASONING_CONTENT: &str = "reasoning_content";
+
 /// Whether an error refuses the request's reasoning parameter: a status of
 /// 400 or 422 (an in-band error, without one, never counts), and a message
-/// that names a reasoning parameter with a refusal code or wording.
+/// that names a reasoning parameter with a refusal code or wording, and not
+/// `reasoning_content`.
 pub(crate) fn is_unsupported_reasoning(
     status: Option<u16>,
     code: Option<&str>,
@@ -40,9 +46,10 @@ pub(crate) fn is_unsupported_reasoning(
         return false;
     }
     let message = message.to_ascii_lowercase();
-    if !PARAMETERS
-        .iter()
-        .any(|parameter| message.contains(parameter))
+    if message.contains(REASONING_CONTENT)
+        || !PARAMETERS
+            .iter()
+            .any(|parameter| message.contains(parameter))
     {
         return false;
     }

@@ -351,8 +351,10 @@ impl Serialize for AgentTranscriptPage {
             .iter()
             .cloned()
             .map(|mut item| {
-                if let ConversationItem::AssistantMessage { model_text, .. } = &mut item.content {
-                    *model_text = None;
+                match &mut item.content {
+                    ConversationItem::AssistantMessage { model_text, .. } => *model_text = None,
+                    ConversationItem::Reasoning { replay, .. } => *replay = None,
+                    _ => {}
                 }
                 item
             })

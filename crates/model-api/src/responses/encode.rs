@@ -279,8 +279,8 @@ fn responses_tool_supports_required_name(
     }
 }
 
-/// The Responses item of `item`; none for a reasoning block only Anthropic
-/// Messages sends back.
+/// The Responses item of `item`; none for a reasoning block, which only
+/// Anthropic Messages and Chat Completions send back.
 fn encode_input_item(item: &ModelInputItem) -> ModelResult<Option<Value>> {
     Ok(Some(match item {
         ModelInputItem::Reasoning { .. } => return Ok(None),

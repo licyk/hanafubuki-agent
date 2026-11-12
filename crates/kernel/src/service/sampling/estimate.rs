@@ -105,20 +105,29 @@ fn add_estimated_image_tokens(
     Ok(())
 }
 
-/// The tokens `items` are estimated at, by their retained bytes. Reasoning
-/// is never model input, so it is no context.
+/// The tokens `items` are estimated at, by their retained bytes. A
+/// reasoning item's text is never model input, so it is no context; only
+/// the reasoning sent back from every turn (`reasoning_content`) counts, by
+/// the bytes it sends back.
 pub(in crate::service) fn estimate_conversation_items_tokens<'a>(
     items: impl IntoIterator<Item = &'a ConversationItem>,
 ) -> Result<u64, AgentError> {
-    let mut context = items
-        .into_iter()
-        .filter(|item| !matches!(item, ConversationItem::Reasoning { .. }));
-    let bytes = context.try_fold(0usize, |total, item| {
+    let bytes = items.into_iter().try_fold(0usize, |total, item| {
         total
-            .checked_add(item.retained_bytes())
+            .checked_add(context_bytes(item))
             .ok_or(AgentError::UsageOverflow {
                 field: "estimated conversation bytes",
             })
     })?;
     Ok(estimate_tokens(bytes))
+}
+
+fn context_bytes(item: &ConversationItem) -> usize {
+    match item {
+        ConversationItem::Reasoning { replay, .. } => replay
+            .as_ref()
+            .filter(|replay| replay.outlives_its_turn())
+            .map_or(0, |replay| replay.text_len()),
+        item => item.retained_bytes(),
+    }
 }

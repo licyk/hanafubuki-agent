@@ -210,22 +210,15 @@ fn regular_model_request(
         })
         .flatten()
         .collect::<BTreeMap<_, _>>();
-    // The current turn's reasoning blocks go back with it; the provider
-    // needs no earlier turn's.
+    // A turn's reasoning blocks go back within it (after its `TurnStart`);
+    // those that outlive their turn go back from every turn.
     let turn_start = normalized_history
         .iter()
         .rposition(|item| matches!(item, ConversationItem::TurnStart { .. }));
     for (index, item) in normalized_history.iter().enumerate() {
-        if let ConversationItem::Reasoning {
-            replay: Some(replay),
-            ..
-        } = item
-        {
-            if turn_start.is_some_and(|start| index > start) {
-                placed.push(PlacedInput::Item(ModelInputItem::Reasoning {
-                    replay: replay.clone(),
-                }));
-            }
+        if let ConversationItem::Reasoning { .. } = item {
+            let in_current_turn = turn_start.is_some_and(|start| index > start);
+            placed.extend(item.reasoning_input(in_current_turn).map(PlacedInput::Item));
             continue;
         }
         if let ConversationItem::WorldStateUpdate { updates } = item {

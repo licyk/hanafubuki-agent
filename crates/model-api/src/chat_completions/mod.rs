@@ -1,3 +1,4 @@
+mod assistant;
 mod encode;
 mod reasoning;
 
@@ -9,7 +10,8 @@ use hanafubuki_agent_foundation::cancellation::CancellationToken;
 use serde_json::Value;
 
 use crate::model::{
-    ModelEvent, ModelOutputItem, ModelReasoningTextKind, ModelRequest, ModelToolCall, ModelUsage,
+    ModelEvent, ModelOutputItem, ModelReasoningReplay, ModelReasoningTextKind, ModelRequest,
+    ModelToolCall, ModelUsage,
 };
 use crate::port::{ModelError, ModelEventStream, ModelFuture, ModelPort, ModelResult, ModelStream};
 use crate::provider::ModelProvider;
@@ -91,6 +93,9 @@ struct PartialToolCall {
 struct OpenReasoning {
     item_id: String,
     text: String,
+    /// Whether every delta came as `reasoning_content`, which the server
+    /// takes back in that field; `reasoning` (OpenRouter's) is not sent back.
+    sent_back: bool,
 }
 
 struct ChatDecoder {
@@ -183,8 +188,8 @@ impl ChatDecoder {
             let Some(delta) = choice.get("delta").and_then(Value::as_object) else {
                 continue;
             };
-            if let Some(reasoning) = reasoning_delta(delta) {
-                self.push_reasoning(reasoning, &mut events)?;
+            if let Some((field, reasoning)) = reasoning_delta(delta) {
+                self.push_reasoning(reasoning, field == REASONING_CONTENT, &mut events)?;
             }
             if let Some(content) = delta.get("content").and_then(Value::as_str) {
                 if !content.is_empty() {
@@ -202,7 +207,12 @@ impl ChatDecoder {
         Ok(events)
     }
 
-    fn push_reasoning(&mut self, delta: &str, events: &mut Vec<ModelEvent>) -> ModelResult<()> {
+    fn push_reasoning(
+        &mut self,
+        delta: &str,
+        sent_back: bool,
+        events: &mut Vec<ModelEvent>,
+    ) -> ModelResult<()> {
         if self.reasoning.is_none() {
             let response_id = self.response_id.as_deref().ok_or_else(|| {
                 ModelError::Protocol("Chat Completions reasoning arrived before response id".into())
@@ -220,9 +230,11 @@ impl ChatDecoder {
             self.reasoning = Some(OpenReasoning {
                 item_id,
                 text: String::new(),
+                sent_back: true,
             });
         }
         let reasoning = self.reasoning.as_mut().expect("reasoning opened above");
+        reasoning.sent_back &= sent_back;
         crate::streaming::trace_reasoning("chat_completions", "delta", &reasoning.item_id, delta);
         reasoning.text.push_str(delta);
         events.push(ModelEvent::ReasoningDelta {
@@ -236,12 +248,16 @@ impl ChatDecoder {
 
     fn close_reasoning(&mut self, events: &mut Vec<ModelEvent>) {
         if let Some(reasoning) = self.reasoning.take() {
+            let replay = reasoning
+                .sent_back
+                .then(|| ModelReasoningReplay::reasoning_content(reasoning.text.clone()))
+                .flatten();
             events.push(ModelEvent::OutputItemCompleted {
                 item: ModelOutputItem::Reasoning {
                     item_id: reasoning.item_id,
                     summary: Vec::new(),
                     content: vec![reasoning.text],
-                    replay: None,
+                    replay,
                 },
             });
         }
@@ -418,14 +434,17 @@ impl ChatDecoder {
     }
 }
 
-/// A delta's reasoning text: `reasoning_content` (DeepSeek, Qwen, vLLM) or
-/// `reasoning` (OpenRouter, newer vLLM). A server that sends both, during
-/// that rename, sends the same text in each, so only the first is read.
-fn reasoning_delta(delta: &serde_json::Map<String, Value>) -> Option<&str> {
-    ["reasoning_content", "reasoning"]
+const REASONING_CONTENT: &str = "reasoning_content";
+
+/// A delta's reasoning text and the field it came in: `reasoning_content`
+/// (DeepSeek, Qwen, vLLM) or `reasoning` (OpenRouter, newer vLLM). A server
+/// that sends both, during that rename, sends the same text in each, so only
+/// the first is read.
+fn reasoning_delta(delta: &serde_json::Map<String, Value>) -> Option<(&'static str, &str)> {
+    [REASONING_CONTENT, "reasoning"]
         .into_iter()
-        .filter_map(|field| delta.get(field).and_then(Value::as_str))
-        .find(|text| !text.is_empty())
+        .filter_map(|field| Some((field, delta.get(field).and_then(Value::as_str)?)))
+        .find(|(_, text)| !text.is_empty())
 }
 
 struct ChatEventStream {

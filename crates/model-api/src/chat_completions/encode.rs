@@ -75,46 +75,13 @@ pub(super) fn encode_chat_request(request: &ModelRequest) -> ModelResult<Vec<u8>
                 messages.push(json!({"role": "user", "content": content}));
                 index += 1;
             }
-            ModelInputItem::AssistantMessage { text, .. } => {
-                let mut tool_calls = Vec::new();
-                index += 1;
-                while let Some(ModelInputItem::ToolCall {
-                    call_id,
-                    namespace,
-                    name,
-                    arguments,
-                }) = request.input.get(index)
-                {
-                    tool_calls.push(encode_chat_tool_call(call_id, namespace, name, arguments)?);
-                    index += 1;
-                }
-                if tool_calls.is_empty() {
-                    messages.push(json!({"role": "assistant", "content": text}));
-                } else {
-                    messages.push(json!({
-                        "role": "assistant",
-                        "content": text,
-                        "tool_calls": tool_calls
-                    }));
-                }
-            }
-            ModelInputItem::ToolCall { .. } => {
-                let mut tool_calls = Vec::new();
-                while let Some(ModelInputItem::ToolCall {
-                    call_id,
-                    namespace,
-                    name,
-                    arguments,
-                }) = request.input.get(index)
-                {
-                    tool_calls.push(encode_chat_tool_call(call_id, namespace, name, arguments)?);
-                    index += 1;
-                }
-                messages.push(json!({
-                    "role": "assistant",
-                    "content": null,
-                    "tool_calls": tool_calls
-                }));
+            ModelInputItem::Reasoning { .. }
+            | ModelInputItem::AssistantMessage { .. }
+            | ModelInputItem::ToolCall { .. } => {
+                messages.extend(super::assistant::assistant_message(
+                    &request.input,
+                    &mut index,
+                )?);
             }
             ModelInputItem::ToolOutput { call_id, output } => {
                 let lowered = crate::tool_output_lowering::chat_output(output)?;
@@ -171,8 +138,6 @@ pub(super) fn encode_chat_request(request: &ModelRequest) -> ModelResult<Vec<u8>
                 }));
                 index += 1;
             }
-            // Only Anthropic Messages sends a reasoning block back.
-            ModelInputItem::Reasoning { .. } => index += 1,
             ModelInputItem::CompactionTrigger | ModelInputItem::Compaction { .. } => {
                 return Err(ModelError::InvalidRequest(
                     "Chat Completions cannot replay a Responses compaction item".to_string(),
@@ -260,7 +225,7 @@ fn flush_chat_tool_images(messages: &mut Vec<Value>, pending_tool_images: &mut V
     }));
 }
 
-fn encode_chat_tool_call(
+pub(super) fn encode_chat_tool_call(
     call_id: &str,
     namespace: &Option<String>,
     name: &str,

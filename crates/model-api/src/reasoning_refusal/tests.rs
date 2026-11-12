@@ -155,3 +155,29 @@ fn context_overflows_and_image_refusals_stay_theirs() {
         ModelError::Remote { .. }
     ));
 }
+
+/// DeepSeek refuses, in thinking mode with tools, an assistant message sent
+/// without its `reasoning_content`; leaving the reasoning parameter out
+/// would not change that. The first two wordings are illustrative of the
+/// refusal its guide describes, not recorded ones; the others are servers
+/// that do not take the field, also illustrative.
+#[test]
+fn refusals_of_reasoning_content_stay_remote() {
+    let refusals = [
+        "Missing `reasoning_content` field in the assistant message at message index 2. For more information, please refer to https://api-docs.deepseek.com/guides/thinking_mode",
+        "The `reasoning_content` in the thinking mode must be passed back to the API.",
+        "Unrecognized request argument supplied: reasoning_content",
+        "reasoning_content is not supported when thinking mode is disabled",
+    ];
+    for message in refusals {
+        for code in [None, Some("invalid_request_error")] {
+            assert!(
+                matches!(
+                    classify(Some(400), code, message),
+                    ModelError::Remote { .. }
+                ),
+                "{code:?} {message}"
+            );
+        }
+    }
+}

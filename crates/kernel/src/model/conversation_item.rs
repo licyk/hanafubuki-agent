@@ -140,7 +140,8 @@ pub enum ConversationItem {
     },
     /// The text one reasoning item of the model showed while it thought, at
     /// most the reasoning text bound (`truncated` when it was cut). The text
-    /// is presentation only: never model input, never context.
+    /// is presentation only: never model input, never context; what goes
+    /// back to the model is `replay`.
     Reasoning {
         text: String,
         #[serde(default)]
@@ -148,12 +149,20 @@ pub enum ConversationItem {
         sampling_step: u32,
         #[serde(default)]
         truncated: bool,
-        /// The block the provider asks to have sent back with the rest of
-        /// the turn (Anthropic's signed thinking), which the turn's later
-        /// requests carry as it came. Kept in memory only: never
-        /// persisted, never in a snapshot; a turn recovered without it
-        /// sends its next request without thinking.
-        #[serde(skip)]
+        /// The block the provider asks to have sent back, as it came.
+        /// Anthropic's signed thinking goes back with the rest of its turn
+        /// and is kept in memory only: never persisted, never in a
+        /// transcript; a turn recovered without it sends its next request
+        /// without thinking. Chat Completions' `reasoning_content` goes back
+        /// from every turn and is persisted with the item (absent when
+        /// there is none), so a resumed session still sends it; it is left
+        /// out of a transcript too.
+        #[serde(
+            default,
+            skip_serializing_if = "replay_not_persisted",
+            serialize_with = "serialize_replay",
+            deserialize_with = "deserialize_replay"
+        )]
         replay: Option<hanafubuki_agent_model_api::ModelReasoningReplay>,
     },
     SteeringMessage {
@@ -472,6 +481,27 @@ impl ConversationItem {
         }
     }
 
+    /// The reasoning block this item sends back, as model input: one the
+    /// Provider takes back from every turn always, one it takes back within
+    /// its turn only when the item is `in_current_turn`.
+    pub(crate) fn reasoning_input(
+        &self,
+        in_current_turn: bool,
+    ) -> Option<hanafubuki_agent_model_api::ModelInputItem> {
+        let Self::Reasoning {
+            replay: Some(replay),
+            ..
+        } = self
+        else {
+            return None;
+        };
+        (in_current_turn || replay.outlives_its_turn()).then(|| {
+            hanafubuki_agent_model_api::ModelInputItem::Reasoning {
+                replay: replay.clone(),
+            }
+        })
+    }
+
     /// The attachments `as_model_input_resolved` asks bytes for, in order.
     pub(crate) fn image_attachments(&self) -> &[AgentImageAttachmentRef] {
         match self {
@@ -488,6 +518,37 @@ impl ConversationItem {
 
 #[cfg(test)]
 mod tests;
+
+fn replay_not_persisted(replay: &Option<hanafubuki_agent_model_api::ModelReasoningReplay>) -> bool {
+    !replay
+        .as_ref()
+        .is_some_and(hanafubuki_agent_model_api::ModelReasoningReplay::outlives_its_turn)
+}
+
+fn serialize_replay<S: serde::Serializer>(
+    replay: &Option<hanafubuki_agent_model_api::ModelReasoningReplay>,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    replay
+        .as_ref()
+        .filter(|replay| replay.outlives_its_turn())
+        .serialize(serializer)
+}
+
+/// A persisted `replay`: a block that outlives its turn, within the bound;
+/// anything else (another shape, a turn's block, an oversized text) reads
+/// as none rather than failing the item.
+fn deserialize_replay<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<hanafubuki_agent_model_api::ModelReasoningReplay>, D::Error> {
+    use hanafubuki_agent_model_api::{ModelReasoningReplay, MAX_MODEL_REASONING_REPLAY_BYTES};
+    let value = Value::deserialize(deserializer)?;
+    Ok(ModelReasoningReplay::deserialize(value)
+        .ok()
+        .filter(|replay| {
+            replay.outlives_its_turn() && replay.text_len() <= MAX_MODEL_REASONING_REPLAY_BYTES
+        }))
+}
 
 fn json_bytes<T: Serialize>(value: &T) -> usize {
     serde_json::to_vec(value).map_or(usize::MAX, |encoded| encoded.len())

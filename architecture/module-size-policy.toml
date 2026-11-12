@@ -24,12 +24,6 @@ ceiling = 257
 reason = "Over the limit when the limit was introduced; not yet reviewed for shortening."
 
 [[exceptions]]
-path = "crates/model-api/src/chat_completions/encode.rs"
-function = "encode_chat_request"
-ceiling = 227
-reason = "Over the limit when the limit was introduced; not yet reviewed for shortening."
-
-[[exceptions]]
 path = "crates/workspace-fs/src/resolver/prepare.rs"
 function = "prepare_operation"
 ceiling = 272

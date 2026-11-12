@@ -293,12 +293,14 @@ pub(in crate::service) fn validate_persisted_message_state(
                         session_id
                     ))
                 })?;
+            // A protocol without phases (Chat Completions, Anthropic
+            // Messages) answers with no phase, as a turn completes on.
             if !history[turn_start..].iter().any(|item| {
                 matches!(
                     item,
                     ConversationItem::AssistantMessage {
                         message_id,
-                        phase: Some(AgentMessagePhase::FinalAnswer),
+                        phase: None | Some(AgentMessagePhase::FinalAnswer),
                         ..
                     } if *message_id == final_id
                 )

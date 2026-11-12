@@ -1,6 +1,7 @@
 //! Reasoning on Chat Completions and Anthropic Messages: the fields each
-//! sends, Anthropic's thinking forms and `max_tokens`, and its thinking
-//! blocks sent back through a tool loop.
+//! sends, Anthropic's thinking forms and `max_tokens`, and the reasoning
+//! each sends back through a tool loop (Anthropic's thinking blocks, Chat's
+//! `reasoning_content`).
 
 use super::*;
 use hanafubuki_agent_model_api::ModelReasoningReplay;
@@ -64,6 +65,16 @@ fn anthropic_thinking_tool_call() -> PlannedResponse {
         "event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":2}\n\n",
         "event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\"}}\n\n",
         "event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n"
+    ))])
+}
+
+/// A Chat response that thinks in `reasoning_content` and calls a tool.
+fn chat_reasoning_tool_call() -> PlannedResponse {
+    PlannedResponse::sse(vec![ResponseFragment::immediate(concat!(
+        "data: {\"id\":\"c-r\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"reasoning_content\":\"List them \"}}]}\n\n",
+        "data: {\"id\":\"c-r\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\"first.\"}}]}\n\n",
+        "data: {\"id\":\"c-r\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call-1\",\"type\":\"function\",\"function\":{\"name\":\"list_instances\",\"arguments\":\"{}\"}}]},\"finish_reason\":\"tool_calls\"}]}\n\n",
+        "data: [DONE]\n\n"
     ))])
 }
 
@@ -289,4 +300,73 @@ fn reasoning_blocks_never_show_in_debug_output() {
         !shown.contains("private") && !shown.contains("sig\""),
         "{shown}"
     );
+    let text = ModelReasoningReplay::ReasoningContent {
+        text: "private".into(),
+    };
+    assert!(!format!("{text:?}").contains("private"));
+}
+
+#[tokio::test]
+async fn chat_completions_sends_reasoning_content_back_on_the_message_it_preceded() {
+    let server = FakeHttpServer::start(vec![chat_reasoning_tool_call(), chat_done()]).await;
+    let transport = ChatCompletionsModelTransport::new(provider(&server)).unwrap();
+    let first = opening_request("deepseek-v4-pro", None);
+    let events = collect_request(&transport, first.clone()).await;
+    collect_request(&transport, continuation(first, &events)).await;
+    let second: Value = serde_json::from_slice(&server.requests()[1].body).unwrap();
+    assert!(
+        second.get("reasoning_effort").is_none(),
+        "sent back without an effort"
+    );
+    let messages = second["messages"].as_array().unwrap();
+    assert_eq!(
+        messages[messages.len() - 2],
+        json!({
+            "role": "assistant",
+            "content": null,
+            "reasoning_content": "List them first.",
+            "tool_calls": [{
+                "id": "call-1",
+                "type": "function",
+                "function": {"name": "list_instances", "arguments": "{}"}
+            }]
+        })
+    );
+}
+
+/// Chat's `reasoning_content` in an Anthropic request (a session moved to
+/// Claude mid-turn) is left out, and is no thinking block: the
+/// continuation of its tool call is sent without thinking.
+#[tokio::test]
+async fn anthropic_leaves_reasoning_content_out() {
+    let server = FakeHttpServer::start(vec![anthropic_done()]).await;
+    let transport = AnthropicMessagesModelTransport::new(provider(&server)).unwrap();
+    let mut request = opening_request("claude-sonnet-4-5", Some("low"));
+    request.input.extend([
+        ModelInputItem::Reasoning {
+            replay: ModelReasoningReplay::ReasoningContent {
+                text: "Chat's thought.".into(),
+            },
+        },
+        ModelInputItem::ToolCall {
+            call_id: "call-1".into(),
+            namespace: None,
+            name: "list_instances".into(),
+            arguments: json!({}),
+        },
+        ModelInputItem::ToolOutput {
+            call_id: "call-1".into(),
+            output: json!({"instances": []}).into(),
+        },
+    ]);
+    let body = sent_body(&transport, &server, request).await;
+    assert!(body.get("thinking").is_none());
+    let messages = body["messages"].as_array().unwrap();
+    assert_eq!(
+        messages[messages.len() - 2],
+        json!({"role": "assistant", "content": [
+            {"type": "tool_use", "id": "call-1", "name": "list_instances", "input": {}},
+        ]})
+    );
+    assert!(!body.to_string().contains("Chat's thought."));
 }

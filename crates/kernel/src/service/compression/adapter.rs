@@ -65,7 +65,10 @@ impl<'a> MessageLog<'a> {
 
     /// The items `view` keeps, in history order, with its texts (ref tags,
     /// compacted `compress` arguments, clipped outputs) written into them and
-    /// each summary it rendered at its place, as a summary item.
+    /// each summary it rendered at its place, as a summary item. Reasoning
+    /// stays with the message after it: before it, after the summaries
+    /// placed before it, and out of the view with it, since it is sent back
+    /// on that message.
     pub(super) fn apply_view(&self, view: &[Message]) -> Vec<ConversationItem> {
         let position: HashMap<&str, usize> = view
             .iter()
@@ -78,19 +81,27 @@ impl<'a> MessageLog<'a> {
             .map(|message| (message.id.as_str(), message))
             .collect();
         let mut projected = Vec::with_capacity(self.items.len());
+        let mut reasoning = Vec::new();
         let mut next = 0;
         for (item, id) in self.items.iter().zip(&self.ids) {
             let Some(id) = id else {
-                projected.push(item.content.clone());
+                if matches!(item.content, ConversationItem::Reasoning { .. }) {
+                    reasoning.push(item.content.clone());
+                } else {
+                    projected.append(&mut reasoning);
+                    projected.push(item.content.clone());
+                }
                 continue;
             };
             let Some(&at) = position.get(id.as_str()) else {
+                reasoning.clear();
                 continue;
             };
             if at >= next {
                 projected.extend(view[next..at].iter().filter_map(summary_item));
                 next = at + 1;
             }
+            projected.append(&mut reasoning);
             let shown = &view[at];
             projected.push(match originals.get(id.as_str()) {
                 Some(original) if original.text != shown.text => {
@@ -99,6 +110,7 @@ impl<'a> MessageLog<'a> {
                 _ => item.content.clone(),
             });
         }
+        projected.append(&mut reasoning);
         projected.extend(view[next.min(view.len())..].iter().filter_map(summary_item));
         projected
     }
@@ -233,3 +245,6 @@ fn summary_item(message: &Message) -> Option<ConversationItem> {
         compacted_item_count: 0,
     })
 }
+
+#[cfg(test)]
+mod tests;

@@ -91,9 +91,10 @@ pub enum ModelInputItem {
         phase: Option<ModelMessagePhase>,
         text: String,
     },
-    /// A reasoning block of the current turn that the provider asks to have
-    /// sent back with the assistant message after it; only Anthropic
-    /// Messages sends it, and only with manual thinking.
+    /// A reasoning block the provider asks to have sent back with the
+    /// assistant message after it: Anthropic Messages sends its own blocks
+    /// (with manual thinking only), Chat Completions its `reasoning_content`;
+    /// each protocol leaves out the others'.
     Reasoning {
         replay: super::ModelReasoningReplay,
     },

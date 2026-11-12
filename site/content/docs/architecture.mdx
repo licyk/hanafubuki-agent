@@ -213,13 +213,14 @@ Agent 对它访问的每个模型所知道的内容，是内核的 `ModelMetadat
 
 ## 思考 [#thinking]
 
-模型流式输出的思考作为类型化事件传给使用者，并作为对话条目保存，其文本**从不**作为模型输入回放；Anthropic 签名的思考块按其协议的要求在本轮内回传（见下文）。
+模型流式输出的思考作为类型化事件传给使用者，并作为对话条目保存，其文本**从不**作为模型输入回放；Anthropic 签名的思考块在本轮内回传，Chat Completions 的 `reasoning_content` 从每一轮回传，都是各自协议的要求（见下文）。
 
 - **模型 API。** 思考是 `ModelEvent::ReasoningDelta { item_id, kind, index, delta }`（`kind` 为 `Summary` 或 `Raw`），位于推理条目的开始与完成之间。Responses：`reasoning_summary_text.delta` 与 `reasoning_text.delta`，请求在设置了推理强度时发送 `reasoning: {effort, summary: "auto"}`（否则 OpenAI 不发送摘要）。Chat Completions：`delta.reasoning_content` 或 `delta.reasoning`，每段连续的思考一个条目。Anthropic Messages：`thinking` 块与 `thinking_delta`，以 `display: "summarized"` 的自适应思考（Claude 4.6 及以后）或思考预算请求（[Provider 与模型](/docs/providers-models#reasoning)）。
 - **内核。** 每个推理条目得到内核自己的 ID（`AgentReasoningId`，提供者的 ID 从不离开流），依次发布 `ReasoningStarted { reasoning_id, sampling_step }`、`ReasoningDelta { reasoning_id, delta }`（Markdown）和 `ReasoningCompleted { reasoning_id, duration_millis }`。保留的文本是条目的摘要（有的话），否则是原始文本。
 - **单独的上限。** 思考不计入 `maximum_model_output_bytes`：每个条目在 `maximum_reasoning_text_bytes`（256 KiB）处按字符边界截断，其余的既不显示也不保存。否则一个有 30 KB 思考的轮次会开始失败。
-- **历史。** 步骤把每个条目作为 `ConversationItem::Reasoning { text, duration_millis, sampling_step, truncated, replay }` 与其他条目一起按模型产生的顺序提交。它的文本只用于展示：`as_model_input` 跳过它，token 估算不计它，压缩丢弃它，权限审查和记忆从不读取它。提前停止的响应用已经流出的内容完成打开的条目。
+- **历史。** 步骤把每个条目作为 `ConversationItem::Reasoning { text, duration_millis, sampling_step, truncated, replay }` 与其他条目一起按模型产生的顺序提交。它的文本只用于展示：`as_model_input` 跳过它，token 估算不计它（只计 `replay` 从每一轮回传的内容），压缩丢弃它，权限审查和记忆从不读取它。提前停止的响应用已经流出的内容完成打开的条目。
 - **回传 Anthropic 的思考块。** 手动思考（带预算的 `type: "enabled"`）会拒绝这样的工具结果：它回应的助手消息不以思考块开头；也会拒绝任何被改动的思考块。所以解码器把每个 `thinking` 块连同 `signature`（`signature_delta`）完整保存，`redacted_thinking` 块保存其 `data`，作为条目的 `replay`（`ModelReasoningReplay`，每块最多 1 MiB，`Debug` 不显示内容）。它从不序列化：不进历史、不进快照、不进事件。步骤的请求把本轮（最后一个 `TurnStart` 之后）的思考块作为 `ModelInputItem::Reasoning` 放在它们之前的助手条目前面，Anthropic 编码器只在手动思考时发送它们；Responses 和 Chat Completions 略去它们。手动思考的请求若要接续的工具调用所在消息没有可回传的思考块（重启后恢复的轮次、轮次中途的压缩、没有思考的第一步），就不带思考发送，Anthropic 接受这样的请求。自适应思考不回传任何思考块：Anthropic 允许全部省略，而它 5.1 及以后的模型在系统提示、工具或思考块之前的任何消息变化后会拒绝该块，Agent 的请求在步骤之间恰恰会变化（任务计划跟在历史之后；世界状态段移到最后变化的位置；`tool_search` 会添加工具）。
+- **回传 Chat 的 `reasoning_content`。** DeepSeek 的思考模式会拒绝（400）这样的带工具请求：其中某条之前的助手消息（任何一轮的）没有带上它产生时的 `reasoning_content`；不带工具时它忽略这个字段。所以 Chat 解码器把每个增量都以 `reasoning_content` 到达的一段思考完整保存为 `ModelReasoningReplay::ReasoningContent { text }`（最多 1 MiB；超过的，或以 `reasoning`（OpenRouter 的字段）到达的，不保存）。发送这个字段的服务器也接受它回传，所以不读取模型 id。这个变体超出它的轮次（`ModelReasoningReplay::outlives_its_turn`）：请求从投影后历史的每一轮放入它，压缩的请求也一样；它随条目持久化，这一点与 Anthropic 的思考块不同，但不出现在转录页中。Chat 编码器（`chat_completions/assistant.rs`）把助手消息的文本或第一个工具调用之前那些推理的 `reasoning_content` 按到达顺序直接拼接（中间不加分隔，即非流式响应完整携带的文本），设在这条消息上，只有工具调用时 `content` 为 `null`，与 `request.reasoning` 无关；请求中后面没有消息的推理被略去，Anthropic 的思考块也被略去。`hierarchical` 投影让推理跟着它后面的消息：放在该消息之前的摘要之后，消息被折叠时随之丢弃。没有内容可回传的助手消息（此前的会话、超过上限的思考）不带这个字段发送；只要它还在窗口中，DeepSeek 就可能拒绝该会话的请求，包括压缩的请求，因为那个请求也带着工具。DeepSeek 的拒绝提到 `reasoning_content`，而它不是推理参数：它仍是远端错误（`reasoning_refusal.rs`），从不让路由学到“不支持推理”。Anthropic 编码器略去这个变体，手动思考的检查也不把它当作思考块；Responses 略去所有思考块。
 
 ## 存储 [#storage]
 

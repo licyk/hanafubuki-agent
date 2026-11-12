@@ -10,8 +10,9 @@ use crate::model::{ModelInputItem, ModelReasoningReplay};
 /// after it. It holds the reasoning blocks before its text or first tool
 /// call (when `replay`; otherwise they are left out), then that text, then
 /// the tool calls that follow; another reasoning block or text after those
-/// starts the next message. `None` when it holds nothing to send: reasoning
-/// blocks left out.
+/// starts the next message. Another protocol's reasoning (Chat
+/// Completions' `reasoning_content`) is left out wherever it is. `None` when
+/// it holds nothing to send: reasoning blocks left out.
 pub(super) fn assistant_message(
     input: &[ModelInputItem],
     index: &mut usize,
@@ -21,11 +22,12 @@ pub(super) fn assistant_message(
     let mut spoke = false;
     while let Some(item) = input.get(*index) {
         match item {
-            ModelInputItem::Reasoning { replay: block } if !spoke => {
-                if replay {
-                    content.push(thinking_block(block));
-                }
-            }
+            ModelInputItem::Reasoning { replay: block } => match thinking_block(block) {
+                None => {}
+                Some(_) if spoke => break,
+                Some(block) if replay => content.push(block),
+                Some(_) => {}
+            },
             ModelInputItem::AssistantMessage { text, .. } if !spoke => {
                 content.push(json!({"type": "text", "text": text}));
                 spoke = true;
@@ -51,14 +53,16 @@ pub(super) fn assistant_message(
     (!content.is_empty()).then(|| json!({"role": "assistant", "content": content}))
 }
 
-fn thinking_block(block: &ModelReasoningReplay) -> Value {
+/// Anthropic's block of `block`; `None` for another protocol's reasoning.
+fn thinking_block(block: &ModelReasoningReplay) -> Option<Value> {
     match block {
         ModelReasoningReplay::Thinking {
             thinking,
             signature,
-        } => json!({"type": "thinking", "thinking": thinking, "signature": signature}),
+        } => Some(json!({"type": "thinking", "thinking": thinking, "signature": signature})),
         ModelReasoningReplay::RedactedThinking { data } => {
-            json!({"type": "redacted_thinking", "data": data})
+            Some(json!({"type": "redacted_thinking", "data": data}))
         }
+        ModelReasoningReplay::ReasoningContent { .. } => None,
     }
 }
