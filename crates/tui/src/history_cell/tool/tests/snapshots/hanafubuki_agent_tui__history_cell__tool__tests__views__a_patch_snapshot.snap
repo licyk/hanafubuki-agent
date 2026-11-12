@@ -1,0 +1,13 @@
+---
+source: crates/tui/src/history_cell/tool/tests/views.rs
+expression: "both(&cell, 40)"
+---
+• Edited src/lib.rs (+2 -1)
+─── expanded (Some(Generic)) ───
+• Edited src/lib.rs (+2 -1)
+  └  fn main() {
+    -    println!("old");
+    +    println!("new");
+    ⋮
+    +// a line long enough to wrap at th
+     e narrow width of this test

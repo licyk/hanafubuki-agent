@@ -70,11 +70,16 @@ pub(crate) struct ChatWidget {
     app_event_tx: AppEventSender,
     frame_requester: FrameRequester,
     bottom_pane: BottomPane,
-    /// The tool calls that run, in the order they started.
-    running_tools: Vec<Arc<LiveCell<ToolCallCell>>>,
+    /// The tool calls that run, in the order they started, by call id with
+    /// their entries.
+    running_tools: Vec<(String, Arc<LiveCell<ToolCallCell>>)>,
     /// The calls that finished and wait for what they show
-    /// (`TurnUpdate::ToolDisplayed`), live until it arrives.
-    awaiting_display: Vec<Arc<LiveCell<ToolCallCell>>>,
+    /// (`TurnUpdate::ToolDisplayed`); their entries stay live until it
+    /// arrives.
+    awaiting_display: Vec<(String, Arc<LiveCell<ToolCallCell>>)>,
+    /// The entry of the exploring calls in a row, which the next exploring
+    /// call joins until another entry comes.
+    exploration: Option<Arc<LiveCell<ToolCallCell>>>,
     /// The reasoning items the model is thinking in, in the order they
     /// started.
     live_thinking: Vec<(AgentReasoningId, Arc<LiveCell<ThinkingCell>>)>,
@@ -140,6 +145,7 @@ impl ChatWidget {
             bottom_pane,
             running_tools: Vec::new(),
             awaiting_display: Vec::new(),
+            exploration: None,
             live_thinking: Vec::new(),
             stream_controller: None,
             plan_stream_controller: None,
@@ -394,6 +400,7 @@ impl ChatWidget {
     }
 
     fn add_boxed_history(&mut self, cell: Box<dyn HistoryCell>) {
+        self.close_exploration();
         if !cell.display_lines(u16::MAX).is_empty() {
             self.needs_final_message_separator = true;
         }
@@ -402,6 +409,7 @@ impl ChatWidget {
 
     /// Hands the transcript an entry that changes in place from its start.
     fn insert_live_entry(&mut self, entry: Arc<dyn HistoryCell>) {
+        self.close_exploration();
         self.needs_final_message_separator = true;
         self.app_event_tx.send(AppEvent::InsertLiveEntry(entry));
     }

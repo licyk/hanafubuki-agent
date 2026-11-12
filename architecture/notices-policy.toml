@@ -599,8 +599,36 @@ path = "crates/tui/src/diff_render/tests.rs"
 reason = "The diff of the Agent's PatchPreview."
 
 [[original]]
-path = "crates/tui/src/history_cell/tool/tests.rs"
-reason = "The tool call cell over the Agent's tool results."
+path = "crates/tui/src/history_cell/tool/tests/mod.rs"
+reason = "The tool call entry over the Agent's tool displays, written with it."
+
+[[original]]
+path = "crates/tui/src/history_cell/tool/tests/views.rs"
+reason = "Each tool display's view, collapsed and expanded, written with them."
+
+[[original]]
+path = "crates/tui/src/history_cell/tool/tests/exploration.rs"
+reason = "The run of exploring calls in one entry, written with it."
+
+[[original]]
+path = "crates/tui/src/history_cell/tool/file_read.rs"
+reason = "The view of a read_file display with its line numbers; Codex shows no file's text."
+
+[[original]]
+path = "crates/tui/src/history_cell/tool/listing.rs"
+reason = "The view of a list_directory display, written for the Agent's tool."
+
+[[original]]
+path = "crates/tui/src/history_cell/tool/search.rs"
+reason = "The view of a search_text display, written for the Agent's tool."
+
+[[original]]
+path = "crates/tui/src/history_cell/tool/web.rs"
+reason = "The views of the web tools' displays, written for the Agent's tools."
+
+[[original]]
+path = "crates/tui/src/history_cell/tool/mutation.rs"
+reason = "The view of a move or delete display, written for the Agent's tools."
 
 [[original]]
 path = "crates/tui/src/history_cell/live.rs"

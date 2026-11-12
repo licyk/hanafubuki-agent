@@ -21,9 +21,7 @@ impl WorkspaceFsService {
         if handle_identity != file.identity {
             return Err(WorkspaceFsError::PathChanged);
         }
-        handle
-            .seek(std::io::SeekFrom::Start(offset as u64))
-            .map_err(|error| WorkspaceFsError::Io(format!("seek file: {error}")))?;
+        let start_line = lines_before(&mut handle, offset, cancellation)? + 1;
         let mut bytes = Vec::with_capacity(max_bytes.min(file.identity.size as usize));
         let mut chunk = vec![0u8; IO_CHUNK_BYTES.min(max_bytes.saturating_add(1))];
         while bytes.len() <= max_bytes {
@@ -64,10 +62,36 @@ impl WorkspaceFsService {
             content,
             sha256: content_sha256,
             offset,
+            start_line: Some(start_line),
             next_offset,
             bytes: content_bytes,
             total_bytes: file.identity.size,
             truncated,
         }))
     }
+}
+
+/// The line breaks in the file's first `offset` bytes, read through
+/// `handle`, which is left at `offset`.
+fn lines_before(
+    handle: &mut File,
+    offset: usize,
+    cancellation: &CancellationToken,
+) -> Result<u64, WorkspaceFsError> {
+    let mut chunk = vec![0u8; IO_CHUNK_BYTES.min(offset)];
+    let mut remaining = offset;
+    let mut lines = 0u64;
+    while remaining > 0 {
+        check_cancel(cancellation)?;
+        let read_len = chunk.len().min(remaining);
+        let read = handle
+            .read(&mut chunk[..read_len])
+            .map_err(|error| WorkspaceFsError::Io(format!("read file: {error}")))?;
+        if read == 0 {
+            break;
+        }
+        lines += chunk[..read].iter().filter(|byte| **byte == b'\n').count() as u64;
+        remaining -= read;
+    }
+    Ok(lines)
 }

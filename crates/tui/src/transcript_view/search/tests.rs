@@ -293,7 +293,7 @@ fn find_reveals_a_collapsed_activity_only_while_it_is_the_match() {
     let cells = vec![tool_call("call-1", 30), cell("latest")];
     let mut view = TranscriptView::default();
     let compact = text(&render(&mut view, &cells, 30, 12));
-    assert!(compact.contains("+ 20 lines"));
+    assert!(compact.contains("+ 27 lines"));
     view.begin_search();
     view.paste_search("out 15");
     finish_scan(&mut view, &cells);

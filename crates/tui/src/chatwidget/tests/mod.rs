@@ -11,9 +11,8 @@ use crate::app::WorkspaceEvent;
 use crate::app_event::AgentCommand;
 use crate::bottom_pane::{SelectionItem, SelectionViewParams};
 use crate::commands::{self, CommandSpec};
-use crate::history_cell::ToolResultView;
 use hanafubuki_agent::panic::is_panic_contained;
-use hanafubuki_agent::{AgentRevision, AgentSessionId};
+use hanafubuki_agent::{AgentRevision, AgentSessionId, AgentToolDisplay};
 
 mod entries;
 
@@ -174,10 +173,9 @@ fn an_opened_session_replays_its_transcript_after_its_header() {
                 name: "exec_command".to_string(),
                 subject: Some("git diff --stat".to_string()),
                 is_error: false,
-                result: ToolResultView {
-                    text: Some("two files".to_string()),
-                    ..ToolResultView::default()
-                },
+                display: Some(AgentToolDisplay::Text {
+                    text: "two files".to_string(),
+                }),
             },
             ReplayedItem::Assistant("Two files **changed**.".to_string()),
         ],

@@ -66,7 +66,8 @@ In a [review](/docs/sessions#reviews), only plain `git --no-pager` reads run; se
 
 - A relative path is taken from the first workspace root.
 - Reading is not limited to the workspace roots. A write, move or delete anywhere needs an approval; one that touches a path outside the workspace roots is critical, and its summary names those paths.
-- In the terminal interface, `apply_patch`'s approval and result show the diff it makes.
+- `read_file` pages by bytes: `offset` is where its page starts and `nextOffset` where the next one does. Its result also counts the line the page starts on, `startLine` (from 1), so the lines it read can be numbered.
+- In the terminal interface, `apply_patch`'s approval shows the diff it makes, and its result the files it changed, with the diff expanded ([Tool calls](/docs/terminal-interface#tools)).
 
 ## The web [#web]
 

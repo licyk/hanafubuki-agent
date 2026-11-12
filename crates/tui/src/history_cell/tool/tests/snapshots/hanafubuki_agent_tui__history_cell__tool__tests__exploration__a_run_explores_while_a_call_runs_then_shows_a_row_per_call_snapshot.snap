@@ -1,0 +1,20 @@
+---
+source: crates/tui/src/history_cell/tool/tests/exploration.rs
+expression: "both(&run, 60)"
+---
+• Explored · 1 failed
+  └ Read src/lib.rs, src/main.rs
+    List src (1 entry)
+    Read src/lib.rs
+    Search "todo" in src (failed)
+─── expanded (Some(Generic)) ───
+• Explored · 1 failed
+  └ Read src/lib.rs (line 1)
+      1 fn a() {}
+    Read src/main.rs (line 1)
+      1 fn main() {}
+    Listed src (1 entry)
+      src/lib.rs  9 B
+    Read src/lib.rs (line 1)
+      1 fn a() {}
+    Failed search_text: "todo" in src

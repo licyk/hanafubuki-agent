@@ -1,0 +1,12 @@
+---
+source: crates/tui/src/history_cell/tool/tests/views.rs
+expression: "both(&cell, 60)"
+---
+• Ran npm run dev
+  └ ready on :3000
+    still running · 10.0s · in web
+─── expanded (None) ───
+• Ran npm run dev
+  └ $ npm run dev
+    ready on :3000
+    still running · 10.0s · in web

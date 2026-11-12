@@ -4,10 +4,12 @@
 //! what it said so far; and the cells of an older page of its transcript,
 //! which the owned transcript loads as the reader nears its start.
 
+use hanafubuki_agent::AgentToolCallDisplay;
+
 use super::ChatWidget;
 use crate::agent_bridge::{HooksCall, OpenedSession, ReplayedItem};
 use crate::app_event::{AgentCommand, AppEvent, Op};
-use crate::history_cell::{self, HistoryCell};
+use crate::history_cell::{self, explores, HistoryCell, ToolCallCell};
 use crate::streaming::controller::{PlanStreamController, StreamController};
 
 impl ChatWidget {
@@ -18,6 +20,7 @@ impl ChatWidget {
         self.sync_pending_input();
         self.running_tools.clear();
         self.awaiting_display.clear();
+        self.exploration = None;
         self.live_thinking.clear();
         self.stream_controller = None;
         self.plan_stream_controller = None;
@@ -60,11 +63,19 @@ impl ChatWidget {
         }
     }
 
-    /// The cells of replayed transcript items, oldest first.
+    /// The cells of replayed transcript items, oldest first. Consecutive
+    /// exploring calls share one, as they did live.
     pub(crate) fn replayed_cells(&self, items: Vec<ReplayedItem>) -> Vec<Box<dyn HistoryCell>> {
         let width = self.last_rendered_width.get();
         let mut cells: Vec<Box<dyn HistoryCell>> = Vec::new();
+        let mut exploration: Option<ToolCallCell> = None;
         for item in items {
+            let explores = matches!(&item, ReplayedItem::Tool { name, .. } if explores(name));
+            if !explores {
+                if let Some(cell) = exploration.take() {
+                    cells.push(Box::new(cell));
+                }
+            }
             match item {
                 ReplayedItem::User(text) => {
                     cells.push(Box::new(history_cell::new_user_prompt(text)))
@@ -96,17 +107,31 @@ impl ChatWidget {
                     name,
                     subject,
                     is_error,
-                    result,
+                    display,
                 } => {
-                    let mut cell = history_cell::new_tool_call(call_id, name, subject);
-                    cell.complete(is_error, result);
-                    cells.push(Box::new(cell));
+                    let mut cell = history_cell::new_tool_call(call_id.clone(), name, subject);
+                    cell.complete(&call_id, is_error);
+                    cell.show(
+                        &call_id,
+                        AgentToolCallDisplay {
+                            subject: None,
+                            display,
+                        },
+                    );
+                    match exploration.as_mut() {
+                        Some(run) if explores => run.join(cell),
+                        _ if explores => exploration = Some(cell),
+                        _ => cells.push(Box::new(cell)),
+                    }
                 }
                 ReplayedItem::Compacted => cells.push(Box::new(history_cell::new_info_event(
                     "Context compacted".to_string(),
                     None,
                 ))),
             }
+        }
+        if let Some(cell) = exploration {
+            cells.push(Box::new(cell));
         }
         cells
     }

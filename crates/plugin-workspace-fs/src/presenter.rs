@@ -74,8 +74,9 @@ impl AgentToolPresenter for FsPresenter {
         Some(match result {
             WorkspaceFsResult::FileRead(read) => AgentToolDisplay::FileRead {
                 path: read.path,
-                // Only a read from the start knows its first line's number.
-                start_line: (read.offset == 0).then_some(1),
+                // A read recorded before the reader counted lines knows its
+                // first line's number only from the start.
+                start_line: read.start_line.or((read.offset == 0).then_some(1)),
                 text: read.content,
                 truncated: read.truncated,
             },

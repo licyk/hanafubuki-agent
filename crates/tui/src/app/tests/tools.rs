@@ -1,7 +1,7 @@
 //! A tool call shows what its tool's presenter says, read off the app
 //! loop's thread once it finished, live and replayed, in both
-//! presentations: here `read_file`, whose structured output showed only
-//! its header before.
+//! presentations: here `read_file`, its lines collapsed, its text numbered
+//! expanded.
 
 use hanafubuki_agent::test_support::{assistant_events, tool_events};
 
@@ -27,15 +27,12 @@ fn a_read_shows_its_path_and_text_live_and_replayed() {
         .unwrap();
 
         let session_id = harness.exchange("Read the notes.", "Read them.");
-        harness.pump_until("the read's text", |harness| {
-            harness.transcript().contains("└ first line")
+        harness.pump_until("the read's lines", |harness| {
+            harness
+                .transcript()
+                .contains("• Read notes.txt (lines 1–2)")
         });
-        let transcript = harness.transcript();
-        assert!(
-            transcript.contains("Called read_file: notes.txt"),
-            "{transcript}"
-        );
-        assert!(transcript.contains("second line"), "{transcript}");
+        assert_numbered(&harness);
 
         harness.type_and_submit("/new");
         harness.pump_until("no session", |harness| {
@@ -47,9 +44,30 @@ fn a_read_shows_its_path_and_text_live_and_replayed() {
         });
         let transcript = harness.transcript();
         assert!(
-            transcript.contains("Called read_file: notes.txt"),
+            transcript.contains("• Read notes.txt (lines 1–2)"),
             "{transcript}"
         );
-        assert!(transcript.contains("└ first line"), "{transcript}");
+        assert_numbered(&harness);
     }
+}
+
+/// The read's text, numbered, is what its entry shows expanded.
+fn assert_numbered(harness: &Harness) {
+    let expanded: Vec<String> = harness
+        .app
+        .transcript_cells
+        .iter()
+        .flat_map(|cell| cell.expanded_lines(super::WIDTH))
+        .map(|line| {
+            line.spans
+                .iter()
+                .map(|span| span.content.as_ref())
+                .collect()
+        })
+        .collect();
+    let at = expanded
+        .iter()
+        .position(|line| line.contains("1 first line"))
+        .unwrap_or_else(|| panic!("{expanded:#?}"));
+    assert_eq!(expanded[at + 1].trim(), "2 second line");
 }

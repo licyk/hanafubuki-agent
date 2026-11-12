@@ -208,7 +208,7 @@ pub(crate) fn preview_lines(width: u16) -> Vec<Line<'static>> {
     PREVIEW_ROWS
         .iter()
         .filter_map(|(kind, text)| {
-            push_wrapped_diff_line(*kind, text, highlighted.next(), usize::from(width))
+            push_wrapped_diff_line(*kind, text, highlighted.next(), None, usize::from(width))
                 .into_iter()
                 .next()
         })

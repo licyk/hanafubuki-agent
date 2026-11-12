@@ -6,7 +6,7 @@
 use std::sync::Arc;
 
 use hanafubuki_agent::test_support::assistant_events;
-use hanafubuki_agent::AgentScrollbackMouse;
+use hanafubuki_agent::{AgentScrollbackMouse, AgentToolDisplay};
 use ratatui::crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 use ratatui::text::Line;
 
@@ -14,7 +14,6 @@ use super::*;
 use crate::agent_bridge::{TurnEnd, TurnUpdate};
 use crate::history_cell::{
     new_info_event, new_tool_call, new_user_prompt, AgentMessageCell, LiveCell, ToolCallCell,
-    ToolResultView,
 };
 
 impl Harness {
@@ -68,15 +67,19 @@ impl Harness {
     }
 }
 
-/// A call that ran `exec_command`, with `lines` lines of output.
-fn completed(tool: &LiveCell<ToolCallCell>, lines: usize) {
+/// The call ran `ls`, with `lines` lines of output.
+fn completed(tool: &LiveCell<ToolCallCell>, call_id: &str, lines: usize) {
     let output: Vec<String> = (1..=lines).map(|n| format!("out-{n:02}")).collect();
     tool.update(|cell| {
-        cell.complete(
-            false,
-            ToolResultView {
-                text: Some(output.join("\n")),
-                ..ToolResultView::default()
+        cell.finish(
+            call_id,
+            AgentToolDisplay::Command {
+                command: "ls".to_string(),
+                cwd: None,
+                output: output.join("\n"),
+                exit_code: Some(0),
+                duration_millis: Some(10),
+                truncated: false,
             },
         )
     });
@@ -100,19 +103,20 @@ fn a_call_changes_in_place_in_the_tail_where_a_click_or_f4_expands_it() {
         .handle_turn_update(TurnUpdate::Started);
     let tool = running("call-1");
     harness.send(AppEvent::InsertLiveEntry(tool.clone()));
-    harness.find("Running exec_command: ls");
-    completed(&tool, 20);
+    harness.find("Running ls");
+    completed(&tool, "call-1", 20);
     harness.send(AppEvent::LiveEntryCompleted(tool.clone()));
     let screen = harness.screen();
-    assert_eq!(screen.matches("exec_command").count(), 1, "{screen}");
+    assert_eq!(screen.matches("Ran ls").count(), 1, "{screen}");
     assert!(!screen.contains("Running"), "{screen}");
+    assert!(screen.contains("out-20"), "{screen}");
     assert!(!screen.contains("out-10"), "{screen}");
     assert!(harness.tui.captures_inline_mouse());
 
     // The viewport grows with it, from the bottom of the screen.
-    harness.click_on("+ 10 lines");
+    harness.click_on("+ 17 lines");
     harness.pump_until_screen_shows("out-10");
-    let (expanded, _) = harness.find("Called exec_command: ls");
+    let (expanded, _) = harness.find("Ran ls");
 
     // A click focuses the call: Esc leaves it, F4 focuses it again and
     // Enter collapses it. The viewport does not shrink during the turn, so
@@ -123,7 +127,7 @@ fn a_call_changes_in_place_in_the_tail_where_a_click_or_f4_expands_it() {
     harness.key(KeyCode::Enter);
     harness.app.draw(&mut harness.tui).unwrap();
     assert!(!harness.screen().contains("out-10"));
-    assert_eq!(harness.find("Called exec_command: ls").0, expanded);
+    assert_eq!(harness.find("Ran ls").0, expanded);
 }
 
 #[test]
@@ -135,10 +139,10 @@ fn the_viewport_keeps_its_height_during_a_turn() {
         .chat_widget
         .handle_turn_update(TurnUpdate::Started);
     let tool = running("call-1");
-    completed(&tool, 14);
+    completed(&tool, "call-1", 14);
     harness.send(AppEvent::InsertLiveEntry(tool.clone()));
     harness.send(AppEvent::LiveEntryCompleted(tool));
-    harness.click_on("+ 4 lines");
+    harness.click_on("+ 11 lines");
     harness.pump_until_screen_shows("out-07");
     let expanded = harness.viewport();
     harness.click_on("− Show less");
@@ -161,7 +165,7 @@ fn the_mouse_is_let_go_at_the_wheel_and_taken_again_at_the_next_key() {
     harness.note("no control here");
     assert!(!harness.tui.captures_inline_mouse());
     let tool = running("call-1");
-    completed(&tool, 20);
+    completed(&tool, "call-1", 20);
     harness.send(AppEvent::InsertLiveEntry(tool.clone()));
     harness.send(AppEvent::LiveEntryCompleted(tool));
     assert!(harness.tui.captures_inline_mouse());
@@ -263,7 +267,7 @@ fn at_exit_the_tail_is_written_whole_running_calls_too() {
     harness.app.write_tail_at_exit(&mut harness.tui).unwrap();
     assert!(harness.app.tail.cells().is_empty());
     let viewport = harness.viewport().y;
-    assert!(harness.find("Running exec_command").0 < viewport);
+    assert!(harness.find("Running ls").0 < viewport);
     assert!(harness.find("last words").0 < viewport);
 }
 

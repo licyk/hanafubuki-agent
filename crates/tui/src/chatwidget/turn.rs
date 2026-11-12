@@ -3,13 +3,15 @@
 //! What the chat does with each update of the turn: Codex's
 //! `dispatch_event_msg` and its `on_*` handlers, over [`TurnUpdate`].
 
+use std::sync::Arc;
+
 use hanafubuki_agent::{AgentReasoningId, AgentTaskPlanSnapshot, AgentToolCallDisplay};
 
 use super::input_queue::Ending;
 use super::ChatWidget;
 use crate::agent_bridge::{TurnEnd, TurnUpdate, Warning, WarningSource};
 use crate::app_event::AppEvent;
-use crate::history_cell::{self, LiveCell, ThinkingCell, ToolResultView};
+use crate::history_cell::{self, explores, LiveCell, ThinkingCell, ToolCallCell};
 
 use crate::status_indicator_widget::StatusIndicatorWidget;
 use crate::streaming::controller::{PlanStreamController, StreamController};
@@ -221,25 +223,34 @@ impl ChatWidget {
         }
     }
 
+    /// An exploring call joins the exploring calls just before it;
+    /// another call is an entry of its own.
     fn on_tool_started(&mut self, call_id: String, name: String, subject: Option<String>) {
         self.had_work_activity = true;
-        let cell = LiveCell::new(history_cell::new_tool_call(call_id, name, subject));
+        let explores = explores(&name);
+        let call = history_cell::new_tool_call(call_id.clone(), name, subject);
+        if let Some(run) = self.exploration.clone().filter(|_| explores) {
+            run.update(|cell| cell.join(call));
+            self.running_tools.push((call_id, run));
+            return;
+        }
+        let cell = LiveCell::new(call);
         self.insert_live_entry(cell.clone());
-        self.running_tools.push(cell);
+        if explores {
+            self.exploration = Some(cell.clone());
+        }
+        self.running_tools.push((call_id, cell));
     }
 
     /// The call keeps its place and shape, marked finished, until what it
     /// shows arrives.
     fn on_tool_completed(&mut self, call_id: String, is_error: bool) {
-        let index = self
-            .running_tools
-            .iter()
-            .position(|cell| cell.cell().call_id() == call_id);
+        let index = self.running_tools.iter().position(|(id, _)| *id == call_id);
         let cell = match index {
-            Some(index) => self.running_tools.remove(index),
+            Some(index) => self.running_tools.remove(index).1,
             None => {
                 let cell = LiveCell::new(history_cell::new_tool_call(
-                    call_id,
+                    call_id.clone(),
                     "tool".to_string(),
                     None,
                 ));
@@ -247,25 +258,43 @@ impl ChatWidget {
                 cell
             }
         };
-        cell.update(|cell| cell.complete(is_error, ToolResultView::default()));
-        self.awaiting_display.push(cell);
+        cell.update(|cell| cell.complete(&call_id, is_error));
+        self.awaiting_display.push((call_id, cell));
     }
 
-    /// What a finished call shows is its last revision; Scrollback's tail
-    /// may write it from then on.
+    /// What a finished call shows is its last revision.
     fn on_tool_displayed(&mut self, call_id: &str, display: Option<AgentToolCallDisplay>) {
         let index = self
             .awaiting_display
             .iter()
-            .position(|cell| cell.cell().call_id() == call_id);
+            .position(|(id, _)| id == call_id);
         let Some(index) = index else {
             return;
         };
-        let cell = self.awaiting_display.remove(index);
+        let (_, cell) = self.awaiting_display.remove(index);
         if let Some(display) = display {
-            cell.update(|cell| cell.show(display));
+            cell.update(|cell| cell.show(call_id, display));
         }
-        self.complete_live_entry(cell);
+        self.complete_settled_tool(cell);
+    }
+
+    /// No exploring call joins the run of them from now on.
+    pub(super) fn close_exploration(&mut self) {
+        if let Some(run) = self.exploration.take() {
+            self.complete_settled_tool(run);
+        }
+    }
+
+    /// A tool entry no call runs or waits in, and no call may join, is
+    /// complete: Scrollback's tail may write it from then on.
+    fn complete_settled_tool(&self, cell: Arc<LiveCell<ToolCallCell>>) {
+        let same = |other: &Arc<LiveCell<ToolCallCell>>| Arc::ptr_eq(other, &cell);
+        let unsettled = self.exploration.as_ref().is_some_and(same)
+            || self.running_tools.iter().any(|(_, other)| same(other))
+            || self.awaiting_display.iter().any(|(_, other)| same(other));
+        if !unsettled {
+            self.complete_live_entry(cell);
+        }
     }
 
     fn on_plan_update(&mut self, plan: &AgentTaskPlanSnapshot) {
@@ -289,8 +318,15 @@ impl ChatWidget {
             self.add_boxed_history(cell);
         }
         // A call the turn's end overtook is written as it stood.
-        for cell in std::mem::take(&mut self.running_tools) {
-            self.complete_live_entry(cell);
+        let mut ended: Vec<Arc<LiveCell<ToolCallCell>>> =
+            self.exploration.take().into_iter().collect();
+        for (_, cell) in std::mem::take(&mut self.running_tools) {
+            if !ended.iter().any(|other| Arc::ptr_eq(other, &cell)) {
+                ended.push(cell);
+            }
+        }
+        for cell in ended {
+            self.complete_settled_tool(cell);
         }
         self.bottom_pane.dismiss_all_requests();
         self.bottom_pane.set_task_running(false);
