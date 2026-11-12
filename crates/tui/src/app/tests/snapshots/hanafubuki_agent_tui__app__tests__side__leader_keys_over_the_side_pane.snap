@@ -1,5 +1,6 @@
 ---
 source: crates/tui/src/app/tests/side.rs
+assertion_line: 165
 expression: harness.redacted_screen()
 ---
  Main conversation                                             │ Side · Esc returns · /side close
@@ -41,4 +42,4 @@ expression: harness.redacted_screen()
                                                                │
 › Ask the Agent to do anything                                 │› Ask the Agent to do anything
                                                                │
-  fixture-model · /project · Hello.                            │  fixture-model · /project · Hello.
+  fixture-model · /project · Hello. · ← for agents             │  fixture-model · /project · Hello.

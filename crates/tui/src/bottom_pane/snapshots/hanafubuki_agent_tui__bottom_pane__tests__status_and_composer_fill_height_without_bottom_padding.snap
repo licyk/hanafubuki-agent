@@ -1,5 +1,6 @@
 ---
 source: crates/tui/src/bottom_pane/tests.rs
+assertion_line: 207
 expression: "render_snapshot(&pane, area)"
 ---
 • Working 0s • esc to interrup
@@ -7,4 +8,4 @@ expression: "render_snapshot(&pane, area)"
                               
 › Ask Codex to do anything    
                               
-  ? for shortcuts
+  ← for agents · ? for shortcu

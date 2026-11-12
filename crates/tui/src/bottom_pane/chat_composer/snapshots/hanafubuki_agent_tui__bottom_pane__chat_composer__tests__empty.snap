@@ -1,5 +1,6 @@
 ---
 source: crates/tui/src/bottom_pane/chat_composer/tests.rs
+assertion_line: 659
 expression: terminal.backend()
 ---
 "                                                                                                    "
@@ -11,4 +12,4 @@ expression: terminal.backend()
 "                                                                                                    "
 "                                                                                                    "
 "                                                                                                    "
-"  ? for shortcuts                                                                                   "
+"  ← for agents · ? for shortcuts                                                                    "

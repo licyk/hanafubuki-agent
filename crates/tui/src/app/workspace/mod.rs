@@ -193,6 +193,10 @@ impl Workspace {
         self.agents.is_some()
     }
 
+    pub(super) fn agents_mut(&mut self) -> Option<&mut AgentsCenter> {
+        self.agents.as_mut()
+    }
+
     pub(super) fn settings_open(&self) -> bool {
         self.settings.is_some()
     }
@@ -588,6 +592,10 @@ impl App {
         }
         if let Some(action) = PaneAction::of(&key) {
             self.pane_action(tui, action);
+            return true;
+        }
+        if keymap::matches(Action::OpenAgents, &key) {
+            self.open_agents_center(tui);
             return true;
         }
         let returns = self.workspace.second_focused()

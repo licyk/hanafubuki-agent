@@ -919,12 +919,101 @@ independent.
 
 **Command center ([3])**
 
-- [ ] A1: Left on an empty composer under Codex's conditions,
+- [x] A1: Left on an empty composer under Codex's conditions,
       `Action::OpenAgents`, `← for agents`; root rows with child rollup;
       Needs you / Working / Ready / Inactive / Error; grouping
       (`tui.agentsGrouping`); Codex's keys (Tab filters, Right opens, `x`
       stops, `r` renames, Backspace deletes), confirmations, search,
       worktree, `?` help.
+      Done (2026-11-12):
+      - Entry: plain Left on an empty composer
+        (`chat_composer/agents_navigation.rs`) while it has the keys, no
+        popup or paste burst, `/agents` runs in that conversation (the
+        command scope, a disabled command) and Left is still
+        `editor.move_left`'s; the footer's empty row says `← for agents`
+        (after the status line, or before `? for shortcuts`). The keymap's
+        `global.open_agents` (no default) opens it too, in
+        `handle_workspace_key`. Both presentations (the center keeps the
+        alternate screen).
+      - Model (`agents_center/`: `mod.rs` loading and rows, `status.rs`,
+        `grouping.rs`, `input.rs`, `render.rs`): the sessions without a
+        parent; each root's status is the most urgent of its own and its
+        children's (`Status::of`): Needs you (a question, or an approval
+        read from `snapshot(id).active_activities` for running sessions
+        only, `AgentBridge::waits_for_approval`), Working, Ready, Inactive,
+        and Error for a root whose own turn failed. Filters All, Needs you,
+        Working, Ready, Inactive (with counts) and Archived; Tab,
+        Shift-Tab, `1`–`6`. Headings with counts (`2 of 5`) by project,
+        directory, status or model; `g` cycles and writes
+        `tui.agentsGrouping` quietly (a failure is the center's notice). A
+        project is the directory within the main checkout: a worktree's
+        `.git` file and its Git directory's `commondir` are read once per
+        directory, compared with `PathKey`. Selection kept by session id,
+        wrapping at the ends; Enter or Right opens (restores under
+        Archived); `/` or F3 searches titles through
+        `AgentSessionListRequest.search` (children never searched); `r`
+        renames inline (`rename_listed`); `x` stops a running session;
+        `a` and Backspace ask in a modal starting on Cancel; `n`, `w` (the
+        `/worktree` "start a new conversation" call, or why none can be
+        made), `f`; `?` lists every key; pastes reach a search or a rename.
+      - Keys: a new keymap context, `agents` (its own input path, letters
+        allowed), with `search`, `new_task`, `new_worktree`, `fork`,
+        `rename`, `stop`, `archive`, `delete`, `toggle_grouping`; the
+        center's chords are read in it, none while text is typed.
+      - Config: `tui.agentsGrouping` (`AgentAgentsGrouping`: project,
+        directory, status, model; spec in `[tui]`, a row in both
+        `config-reference`s).
+      - Removed: child rows in the center, `d`/`i`, Left/Right as
+        filters, `SubagentsCall::Interrupt` (only the center used it).
+      - Deviations from the plan, the smallest change meeting its intent:
+        - Six tabs and `1`–`6` (All, the four groups, Archived), not `1`–`5`.
+        - Ready is a last turn completed, Inactive one interrupted or
+          cancelled (or a child's failed); Codex's loaded-and-idle vs not
+          loaded has no backend here.
+        - `n` and `w` start in the current working directory, not the
+          selected row's (a new worktree is made from its repository).
+        - The search matches titles only (the store's search); Codex also
+          matches the preview and the directory. Search and rename are
+          line edits with no cursor movement, as the resume picker's.
+        - All four groupings persist (Codex keeps Directory view-local for
+          older clients).
+        - The Left check is `move_left` holding Left: the keymap already
+          refuses a key or chord prefix another action beside the composer
+          would share, so Codex's further scan cannot fire.
+        - The session shown is refused before the archive or delete
+          confirmation (the check moved from the app into the center).
+      - Docs (both languages): `terminal-interface` (Layout's footer, the
+        Keys table, the `/agents` row, `#agents` rewritten for what ships,
+        the keymap's contexts and its `global.open_agents` and `agents.*`
+        rows), `config-reference#tui`, `sessions` (subagents).
+      - Snapshots: new `agents_center` (wide, narrow, help, confirm) and
+        footer (`← for agents` with and without a status line); changed
+        for the footer hint: the composer's `empty`, `status_only`,
+        `status_and_composer_fill_height…`, the owned transcript's scrolled
+        view, the side pane's two; the settings center's `interface_140`
+        (the new row). Not model-visible; no golden changed.
+      - Validation: `cargo fmt --all --check`, `RUSTFLAGS="-D warnings"
+        cargo check --workspace --all-targets --all-features`, `cargo
+        clippy --workspace --all-targets --all-features -- -D warnings`,
+        `cargo xtask check`, `cargo test --workspace --all-features`;
+        `bun install --frozen-lockfile`, `bun run format:check:site`,
+        `bun run site:check`, `bun run site:test`. The local
+        `site:build` could not prerender: another project's dev server
+        holds port 3000, which nitro's preview takes for prerendering
+        whatever the config says; CI's `site.yml` built it (below).
+      - Hanafubuki at its next pin: the facade exports
+        `AgentAgentsGrouping`, `AgentActivityPhase`, `PathKey`,
+        `normalize_path` and `relative_below`; `AgentTuiPreferences` gains
+        `agents_grouping`. Nothing to change.
+      - Module size: no exception added or raised.
+      - Notes for A2: children are not openable from the center until the
+        details pane lists them (`open_listed` still opens a child beside
+        its parent); stopping a child needs `interrupt_subagent` again;
+        the approval read (`waits_for_approval`) and the children pages
+        are synchronous on the UI thread, at open, on a key and after an
+        action; the main pane shows `← for agents` while a side pane has
+        the focus (its composer keeps `has_focus`).
+      - CI: CI_URL_PLACEHOLDER
 - [ ] A2: the details pane; a live session watch with background re-reads;
       pin, hide and unread in a new `tui-state.json` (D11); mouse. Docs:
       `terminal-interface#agents`, `data-directory`.

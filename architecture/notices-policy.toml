@@ -700,7 +700,7 @@ reason = "The subagents' calls, the watch over their statuses and approvals, and
 
 [[original]]
 path = "crates/tui/src/agent_bridge/agents.rs"
-reason = "The command center's fork, delete and interrupt of a listed session over the facade's calls."
+reason = "The command center's fork, rename, delete and interrupt of a listed session, and its approval check, over the facade's calls."
 
 [[original]]
 path = "crates/tui/src/chatwidget/second.rs"
@@ -720,7 +720,7 @@ reason = "/subagents and a subagent's approval end to end over the standalone Ag
 
 [[original]]
 path = "crates/tui/src/app/tests/agents.rs"
-reason = "/agents end to end over the standalone Agent."
+reason = "The command center end to end over the standalone Agent."
 
 [[original]]
 path = "crates/compression/src/ids.rs"

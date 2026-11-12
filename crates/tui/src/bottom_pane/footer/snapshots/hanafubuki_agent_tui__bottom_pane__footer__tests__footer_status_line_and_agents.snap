@@ -1,0 +1,5 @@
+---
+source: crates/tui/src/bottom_pane/footer/tests.rs
+expression: terminal.backend()
+---
+"  model · ~/project · ← for agents                                              "

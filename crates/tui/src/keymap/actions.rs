@@ -6,7 +6,8 @@
 //! read: `global` anywhere, `chat` and `composer` while the composer has the
 //! keys, `editor` in every text field, `transcript` in the Fullscreen
 //! conversation beside the composer, `pager` in the transcript overlay and
-//! the `/diff` pager.
+//! the `/diff` pager, `agents` in the command center (Codex's
+//! `KeymapContext::Agents`).
 
 /// Where an action's keys are read.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -17,16 +18,18 @@ pub(crate) enum Context {
     Editor,
     Transcript,
     Pager,
+    Agents,
 }
 
 impl Context {
-    pub(crate) const ALL: [Context; 6] = [
+    pub(crate) const ALL: [Context; 7] = [
         Context::Global,
         Context::Chat,
         Context::Composer,
         Context::Editor,
         Context::Transcript,
         Context::Pager,
+        Context::Agents,
     ];
 
     /// The name `tui.keymap.<context>` uses.
@@ -38,6 +41,7 @@ impl Context {
             Context::Editor => "editor",
             Context::Transcript => "transcript",
             Context::Pager => "pager",
+            Context::Agents => "agents",
         }
     }
 
@@ -48,7 +52,7 @@ impl Context {
     /// Whether its keys are read beside the composer, where a key that
     /// types text must stay text.
     pub(crate) fn beside_text(self) -> bool {
-        self != Context::Pager
+        !matches!(self, Context::Pager | Context::Agents)
     }
 }
 
@@ -69,6 +73,7 @@ pub(crate) enum Action {
     EqualizePaneWidths,
     TogglePaneZoom,
     HidePane,
+    OpenAgents,
     InterruptTurn,
     EditPrevious,
     EditQueuedMessage,
@@ -109,6 +114,15 @@ pub(crate) enum Action {
     JumpBottom,
     Close,
     CloseTranscript,
+    AgentsSearch,
+    AgentsNewTask,
+    AgentsNewWorktree,
+    AgentsFork,
+    AgentsRename,
+    AgentsStop,
+    AgentsArchive,
+    AgentsDelete,
+    AgentsToggleGrouping,
 }
 
 pub(crate) struct ActionSpec {
@@ -154,8 +168,9 @@ pub(crate) const SHARED_KEYS: [(Action, Action); 5] = [
 ];
 
 /// The contexts whose keys are read together, on one path of the input:
-/// beside the composer, and in a pager.
-pub(crate) const PATHS: [&[Context]; 2] = [
+/// beside the composer, in a pager, and in the command center, which takes
+/// every key while it is open.
+pub(crate) const PATHS: [&[Context]; 3] = [
     &[
         Context::Global,
         Context::Chat,
@@ -164,6 +179,7 @@ pub(crate) const PATHS: [&[Context]; 2] = [
         Context::Transcript,
     ],
     &[Context::Global, Context::Pager],
+    &[Context::Agents],
 ];
 
 /// Keys the interface keeps for itself, with the contexts they shadow:
@@ -196,7 +212,7 @@ macro_rules! action {
 }
 
 /// Every action, in [`Action`]'s order.
-pub(crate) static ACTIONS: [ActionSpec; 53] = [
+pub(crate) static ACTIONS: [ActionSpec; 63] = [
     action!(
         Leader,
         Global,
@@ -287,6 +303,13 @@ pub(crate) static ACTIONS: [ActionSpec; 53] = [
         "hide_pane",
         "Close the side conversation, or leave the subagent shown",
         ["leader x"]
+    ),
+    action!(
+        OpenAgents,
+        Global,
+        "open_agents",
+        "Open the command center (Left on an empty composer opens it too)",
+        []
     ),
     action!(
         InterruptTurn,
@@ -544,5 +567,56 @@ pub(crate) static ACTIONS: [ActionSpec; 53] = [
         "close_transcript",
         "Show the transcript in detail, then close it",
         ["ctrl-t"]
+    ),
+    action!(
+        AgentsSearch,
+        Agents,
+        "search",
+        "Search the sessions' titles",
+        ["f3", "/"]
+    ),
+    action!(
+        AgentsNewTask,
+        Agents,
+        "new_task",
+        "Start a new session",
+        ["n"]
+    ),
+    action!(
+        AgentsNewWorktree,
+        Agents,
+        "new_worktree",
+        "Start a new session in a new worktree",
+        ["w"]
+    ),
+    action!(AgentsFork, Agents, "fork", "Fork the session", ["f"]),
+    action!(AgentsRename, Agents, "rename", "Rename the session", ["r"]),
+    action!(
+        AgentsStop,
+        Agents,
+        "stop",
+        "Interrupt the session's turn",
+        ["x"]
+    ),
+    action!(
+        AgentsArchive,
+        Agents,
+        "archive",
+        "Archive the session, or restore it under Archived",
+        ["a"]
+    ),
+    action!(
+        AgentsDelete,
+        Agents,
+        "delete",
+        "Delete the session",
+        ["backspace"]
+    ),
+    action!(
+        AgentsToggleGrouping,
+        Agents,
+        "toggle_grouping",
+        "Group by project, directory, status or model",
+        ["g"]
     ),
 ];

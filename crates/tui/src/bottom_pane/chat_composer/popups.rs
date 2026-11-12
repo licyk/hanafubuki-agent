@@ -39,6 +39,11 @@ impl ChatComposer {
         self.disabled_commands.contains(&name)
     }
 
+    /// Whether `/name` runs here: it is not turned off, and the scope has it.
+    pub(crate) fn command_allowed(&self, name: &str) -> bool {
+        !self.command_disabled(name) && self.command_scope.is_none_or(|scope| scope.contains(&name))
+    }
+
     /// Limits the commands to `scope` (`None`: every command): the popup
     /// lists only those, and typing another says it is unavailable here.
     pub(crate) fn set_command_scope(&mut self, scope: Option<&'static [&'static str]>) {

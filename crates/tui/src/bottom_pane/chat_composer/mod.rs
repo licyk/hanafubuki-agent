@@ -53,6 +53,7 @@ use ratatui::widgets::Block;
 use ratatui::widgets::StatefulWidget;
 use ratatui::widgets::Widget;
 
+mod agents_navigation;
 mod popups;
 
 use super::chat_composer_history::ChatComposerHistory;
@@ -328,6 +329,9 @@ impl ChatComposer {
     fn handle_key_event_without_popup(&mut self, key_event: KeyEvent) -> (InputResult, bool) {
         if self.handle_shortcut_overlay_key(&key_event) {
             return (InputResult::None, true);
+        }
+        if self.handle_agents_navigation(&key_event) {
+            return (InputResult::None, false);
         }
         self.footer_mode = reset_mode_after_activity(self.footer_mode);
         match key_event {
@@ -724,6 +728,7 @@ impl ChatComposer {
             quit_shortcut_key: self.quit_shortcut_key,
             status_line: self.status_line.as_ref().filter(|_| shows_status_line),
             task_running: self.is_task_running,
+            agents_hint: self.agents_navigation_available(),
         }
     }
 

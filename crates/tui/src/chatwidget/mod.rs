@@ -253,6 +253,11 @@ impl ChatWidget {
         self.bottom_pane.no_modal_or_popup_active()
     }
 
+    /// `[tui]` as the configuration resolves it.
+    pub(crate) fn preferences(&self) -> &AgentTuiPreferences {
+        &self.preferences
+    }
+
     /// `[tui]` as the configuration resolves it after a change.
     pub(crate) fn set_preferences(&mut self, preferences: AgentTuiPreferences) {
         self.preferences = preferences;

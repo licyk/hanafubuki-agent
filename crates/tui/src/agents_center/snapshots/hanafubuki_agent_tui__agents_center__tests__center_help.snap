@@ -1,0 +1,28 @@
+---
+source: crates/tui/src/agents_center/tests.rs
+expression: "screen(&mut center, 100, 24)"
+---
+  Agent command center  Group: Status  g
+   All 3    Needs you 1    Working 1    Ready 0    Inactive 1    Archived
+  ────────────────────────────────────────────────────────────────────────────────────────────────
+  Keys
+
+  up, down, k, j                 Move; past an end, to the other end
+  page-up, page-down, home, end  Move a page, or to the first or last
+  enter, right                   Open the session (restore it under Archived)
+  tab, shift-tab, 1–6            Filter: All, Needs you, Working, Ready, Inactive, Archived
+  esc, q                         Back
+  n                              Start a new session
+  w                              Start a new session in a new worktree
+  f                              Fork the session
+  r                              Rename the session
+  x                              Interrupt the session's turn
+  a                              Archive the session, or restore it under Archived
+  backspace                      Delete the session
+  f3, /                          Search the sessions' titles
+  g                              Group by project, directory, status or model
+
+
+
+
+  esc back

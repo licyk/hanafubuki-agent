@@ -81,6 +81,6 @@ pub use store::{
     AGENT_MCP_FILE, AGENT_PROVIDERS_FILE, AGENT_SETTINGS_FILE,
 };
 pub use tui::{
-    AgentAlternateScreen, AgentScrollbackMouse, AgentTuiPreferences, AgentTuiPreferencesPatch,
-    AgentTuiPreset, MAX_PRESET_INPUT_BYTES,
+    AgentAgentsGrouping, AgentAlternateScreen, AgentScrollbackMouse, AgentTuiPreferences,
+    AgentTuiPreferencesPatch, AgentTuiPreset, MAX_PRESET_INPUT_BYTES,
 };
