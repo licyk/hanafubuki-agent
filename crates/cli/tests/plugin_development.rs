@@ -485,6 +485,34 @@ fn grant_and_settings_change_an_installed_plugins_code() {
     assert_eq!(shown["settings"], json!({ "greeting": "Hi" }));
     assert_eq!(shown["configSchema"]["type"], "object");
     assert!(home.file("config.toml").contains("greeting = \"Hi\""));
+    // `config set` checks a setting of the plugin as the settings center does.
+    let key = r#"plugins."lookup@local".settings.greeting"#;
+    let refused = home.run(&["config", "set", key, "7"]).expect(1);
+    assert!(
+        refused
+            .stderr()
+            .contains(&format!("`{key}` cannot take this value")),
+        "{}",
+        refused.stderr()
+    );
+    let refused = home
+        .run(&["config", "set", &format!("{key}.inner"), "Hi"])
+        .expect(1);
+    assert!(
+        refused
+            .stderr()
+            .contains("checked against its configSchema"),
+        "{}",
+        refused.stderr()
+    );
+    home.run(&[
+        "config",
+        "set",
+        "plugins.'lookup@local'.settings.greeting",
+        "Hello",
+    ])
+    .expect(0);
+    assert!(home.file("config.toml").contains("greeting = \"Hello\""));
     home.run(&["plugins", "settings", "lookup@local", "--set", "null"])
         .expect(0);
     let shown = home

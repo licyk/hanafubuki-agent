@@ -21,6 +21,10 @@ pub(crate) const DISABLED_PLUGINS: &str = "disabledPlugins";
 /// Checked against the plugin's schema, which the caller has
 /// ([`crate::AgentConfig::set_plugin_options`]).
 pub(crate) const PLUGIN_OPTIONS: &str = "pluginOptions";
+/// The installed plugins' entries; an entry's `settings` are checked against
+/// the plugin's `configSchema`, which the Agent has.
+pub(crate) const PLUGINS: &str = "plugins";
+pub(crate) const PACKAGE_SETTINGS: &str = "settings";
 /// The values of a project's `trustLevel`; only the first trusts it.
 const TRUST_LEVELS: [&str; 2] = ["trusted", "untrusted"];
 
@@ -41,7 +45,8 @@ pub(crate) fn parse_key(key: &str) -> Result<Vec<String>, String> {
 }
 
 /// Refuses a write of a plugin option the generic path cannot check: one
-/// is written with its plugin's schema ([`crate::AgentConfig::set_plugin_options`]).
+/// is written with its plugin's schema ([`crate::AgentConfig::set_plugin_options`]),
+/// an installed plugin's settings by the Agent, which has its `configSchema`.
 pub(crate) fn refuse_plugin_option(key: &str, path: &[String]) -> Result<(), String> {
     let options = |path: &[String]| path.first().is_some_and(|first| first == PLUGIN_OPTIONS);
     match path {
@@ -49,6 +54,12 @@ pub(crate) fn refuse_plugin_option(key: &str, path: &[String]) -> Result<(), Str
             "`{key}` is a plugin option, checked against the plugin's options: write \
              {PLUGIN_OPTIONS}.<plugin>.<option>"
         )),
+        [first, _, settings, ..] if first == PLUGINS && settings == PACKAGE_SETTINGS => {
+            Err(format!(
+                "`{key}` is a plugin's settings, checked against its configSchema: write \
+                 {PLUGINS}.\"<id>\".{PACKAGE_SETTINGS}.<option>"
+            ))
+        }
         [first, _, rest @ ..] if first == PROFILES && options(rest) => Err(format!(
             "`{key}` is a profile's plugin option, which is written in the file by hand"
         )),

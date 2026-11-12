@@ -261,3 +261,111 @@ fn settings_repair_clamps_numbers_and_reports_every_dropped_entry() {
     let encoded = serde_json::to_string(&repairs).unwrap();
     assert!(!encoded.contains("secret-value") && !encoded.contains("password"));
 }
+
+/// A key a server leaves out takes what a server the user adds starts with,
+/// and the server is kept without a repair.
+#[test]
+fn a_server_missing_a_key_takes_a_new_servers_value() {
+    let defaults = serde_json::to_value(McpServerDefaults::default()).unwrap();
+    let http = json!({
+        "type": "streamable_http",
+        "url": "https://example.test/mcp",
+        "publicHeaders": {"x-team": "agents"},
+        "credentialHeaders": {"x-key": "mcp-local-token"},
+        "oauth": "optional"
+    });
+    let mut cases = defaults
+        .as_object()
+        .unwrap()
+        .iter()
+        .filter(|(key, _)| *key != "oauth")
+        .map(|(key, value)| (None, key.as_str(), value.clone()))
+        .collect::<Vec<_>>();
+    cases.extend([
+        (None, "enabledTools", json!([])),
+        (None, "disabledTools", json!([])),
+        (None, "toolMaximumConcurrentCalls", json!({})),
+        (None, "toolApprovalPolicies", json!({})),
+        (None, "toolExposurePolicies", json!({})),
+        (Some("stdio"), "argv", json!([])),
+        (Some("stdio"), "cwd", json!(null)),
+        (Some("stdio"), "publicEnvironment", json!({})),
+        (Some("stdio"), "credentialEnvironment", json!({})),
+        (Some("streamable_http"), "publicHeaders", json!({})),
+        (Some("streamable_http"), "credentialHeaders", json!({})),
+        (Some("streamable_http"), "oauth", defaults["oauth"].clone()),
+    ]);
+    for (transport, key, expected) in cases {
+        let mut server = named_server("partial");
+        server["toolExposurePolicies"] = json!({"search": "direct"});
+        if transport == Some("streamable_http") {
+            server["transport"] = http.clone();
+        }
+        let table = match transport {
+            Some(_) => &mut server["transport"],
+            None => &mut server,
+        };
+        assert!(
+            table.as_object_mut().unwrap().remove(key).is_some(),
+            "{key}"
+        );
+        let (settings, repairs) = repair_settings(json!({"revision": 1, "servers": [server]}));
+
+        assert!(repairs.is_empty(), "{key}: {repairs:?}");
+        assert_eq!(settings.servers.len(), 1, "{key}");
+        let read = serde_json::to_value(&settings.servers[0]).unwrap();
+        let table = match transport {
+            Some(_) => &read["transport"],
+            None => &read,
+        };
+        assert_eq!(table[key], expected, "{key}");
+    }
+}
+
+/// A server without what it runs or reaches, or without an id, is still
+/// dropped alone.
+#[test]
+fn a_server_without_its_id_transport_program_or_url_is_dropped() {
+    let mut no_program = named_server("no-program");
+    no_program["transport"]
+        .as_object_mut()
+        .unwrap()
+        .remove("program");
+    let mut no_url = named_server("no-url");
+    no_url["transport"] = json!({"type": "streamable_http"});
+    let mut no_type = named_server("no-type");
+    no_type["transport"].as_object_mut().unwrap().remove("type");
+    let mut no_transport = named_server("no-transport");
+    no_transport.as_object_mut().unwrap().remove("transport");
+    let mut no_id = named_server("no-id");
+    no_id.as_object_mut().unwrap().remove("id");
+    let (settings, repairs) = repair_settings(json!({
+        "revision": 1,
+        "servers": [no_program, named_server("kept"), no_url, no_type, no_transport, no_id]
+    }));
+
+    let ids = settings
+        .servers
+        .iter()
+        .map(|server| server.id.as_str())
+        .collect::<Vec<_>>();
+    assert_eq!(ids, ["kept"]);
+    assert!(repairs.iter().all(|repair| {
+        repair.kind == McpSettingsRepairKind::ServerDropped
+            && repair.detail == "the entry is not a readable MCP server"
+    }));
+    let dropped = repairs
+        .iter()
+        .map(|repair| repair.subject.as_deref())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        dropped,
+        [
+            Some("no-program"),
+            Some("no-url"),
+            Some("no-type"),
+            Some("no-transport"),
+            None
+        ]
+    );
+}

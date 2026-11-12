@@ -121,7 +121,7 @@ icon: Microscope
 | 第 64 个之后的服务器，无法解码的服务器，没有通过 `McpServerConfig::validate` 的服务器（带凭据或片段的 URL、公开与凭据的请求头或变量重叠、stdio 程序、参数与环境变量规则、过滤器与策略上限），同一 ID 的第二个服务器 | 只去掉那台服务器（`server_dropped`）                      |
 | 键无效、无法解码或值不可用的凭据                                                                                                                                                                                    | 只去掉那条凭据（`credential_dropped`）                    |
 
-该是数字的地方不是数字时，留给解码器处理，解码器会去掉整个条目。未知的键记入日志并保留在文件中。写入修复后的值之前，原文件先保存在 `.recovery/` 中（[配置恢复](/docs/recovery#backup)）。写入保持严格：用户添加或编辑的服务器要通过校验，从不被调整。
+服务器没有写出的键取下文 `serverDefaults` 中的值（按工具的设置、参数、环境变量和请求头取空列表或空表），不算修复；ID、传输方式及其 `type`、程序或 URL 没有默认值。该是数字的地方不是数字时，留给解码器处理，解码器会去掉整个条目。未知的键记入日志并保留在文件中。写入修复后的值之前，原文件先保存在 `.recovery/` 中（[配置恢复](/docs/recovery#backup)）。写入保持严格：用户添加或编辑的服务器要通过校验，从不被调整。
 
 每项修复是一个 `McpSettingsRepair`：类型、对象（条目带有有效 ID 时为服务器 ID 或凭据键）、调整改动的字段，以及原因，从不包含文件中的值。下一次读取看到的已是干净的文件，所以存储在打开它的 Agent 运行期间保留这些修复（最多 256 项，`MAX_RETAINED_REPAIRS`）。它们以 `McpApplicationSnapshot.settingsRepairs` 交给宿主（Hanafubuki 的 MCP 设置面板显示它们，直到用户关闭），独立二进制的 `doctor` 把它们列在配置的恢复记录中。快照中的 `serverDefaults`（`McpServerDefaults::default()`：启用、非必需、旧版协议、超时 15/30/30/120/10 秒、4 个并发调用、`ask`、`deferred`、OAuth `disabled`）是宿主新建服务器表单的初始值，所以默认值不属于任何前端。
 

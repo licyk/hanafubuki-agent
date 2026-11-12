@@ -1,9 +1,11 @@
 //! Per-entry repair of the persisted MCP settings document.
 //!
 //! The file is our own data, so it is read tolerantly: unknown fields are
-//! dropped, a number outside its range is moved to the nearest bound, and an
-//! entry that still cannot be used is dropped alone while every other entry is
-//! kept. Each repair is reported without any value from the file; the caller
+//! dropped, a key a server leaves out takes what a server the user adds
+//! starts with ([`McpServerDefaults`]), a number outside its range is moved
+//! to the nearest bound, and an entry that still cannot be used (without an
+//! id, a transport, its program or its URL) is dropped alone while every
+//! other entry is kept. Each repair is reported without any value from the file; the caller
 //! keeps the original before it writes the repaired document. The
 //! security checks of `McpServerConfig::validate` (a URL without credentials,
 //! no header or environment overlap, the stdio program, argument and
@@ -12,11 +14,12 @@
 use std::collections::{BTreeMap, HashSet};
 
 use serde::Serialize;
-use serde_json::{Map, Value};
+use serde_json::{json, Map, Value};
 
 use crate::{
     validate_credential_value, McpCredentialKey, McpCredentialSettings, McpServerConfig,
-    McpServerId, McpSettings, MAX_MCP_CONCURRENT_CALLS, MAX_MCP_SERVERS, MAX_MCP_TIMEOUT_SECONDS,
+    McpServerDefaults, McpServerId, McpSettings, MAX_MCP_CONCURRENT_CALLS, MAX_MCP_SERVERS,
+    MAX_MCP_TIMEOUT_SECONDS,
 };
 use hanafubuki_agent_foundation::json_normalization::{
     normalize_current_json, JsonField, JsonShape, JsonVariant, OPAQUE_JSON_SHAPE,
@@ -210,6 +213,7 @@ fn repair_servers(
             )));
             continue;
         }
+        fill_server_defaults(&mut value);
         clamp_server_numbers(&mut value, &subject, repairs);
         let Ok(server) = serde_json::from_value::<McpServerConfig>(value) else {
             repairs.push(dropped(
@@ -284,6 +288,53 @@ fn server_subject(value: &Value) -> Option<String> {
         .and_then(Value::as_str)
         .and_then(|id| McpServerId::parse(id).ok())
         .map(|id| id.as_str().to_string())
+}
+
+/// Gives a server the keys it leaves out, those of a server the user adds:
+/// [`McpServerDefaults`], and empty lists and tables. Its id, its transport,
+/// the transport's `type` and its program or URL have no default.
+fn fill_server_defaults(value: &mut Value) {
+    let Some(server) = value.as_object_mut() else {
+        return;
+    };
+    let Ok(Value::Object(mut defaults)) = serde_json::to_value(McpServerDefaults::default()) else {
+        return;
+    };
+    let oauth = defaults.remove("oauth").unwrap_or(Value::Null);
+    for key in ["enabledTools", "disabledTools"] {
+        defaults.insert(key.to_string(), json!([]));
+    }
+    for key in [
+        "toolMaximumConcurrentCalls",
+        "toolApprovalPolicies",
+        "toolExposurePolicies",
+    ] {
+        defaults.insert(key.to_string(), json!({}));
+    }
+    for (key, value) in defaults {
+        server.entry(key).or_insert(value);
+    }
+    let Some(Value::Object(transport)) = server.get_mut("transport") else {
+        return;
+    };
+    let defaults = match transport.get("type").and_then(Value::as_str) {
+        Some("stdio") => json!({
+            "argv": [],
+            "publicEnvironment": {},
+            "credentialEnvironment": {},
+        }),
+        Some("streamable_http") => json!({
+            "publicHeaders": {},
+            "credentialHeaders": {},
+            "oauth": oauth,
+        }),
+        _ => return,
+    };
+    if let Value::Object(defaults) = defaults {
+        for (key, value) in defaults {
+            transport.entry(key).or_insert(value);
+        }
+    }
 }
 
 fn clamp_server_numbers(

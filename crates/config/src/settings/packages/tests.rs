@@ -286,6 +286,9 @@ fn config_get_and_set_name_package_and_marketplace_keys() {
         ("plugins.bad.enabled", "true"),
         (r#"plugins."demo@my-mkt".typo"#, "true"),
         (r#"plugins."demo@my-mkt".enabled"#, "\"yes\""),
+        // The Agent writes a plugin's settings, checked against its schema.
+        (r#"plugins."demo@my-mkt".settings.level"#, "1"),
+        (r#"plugins."demo@my-mkt".settings"#, "{ level = 1 }"),
         ("marketplaces.unknown.enabled", "false"),
         ("marketplaces.my-mkt.sourceType", "svn"),
     ] {

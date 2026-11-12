@@ -900,6 +900,22 @@ independent.
         text); `cargo xtask check`. No code
         changed, so no Rust build or test; no golden or snapshot changed.
       - Hanafubuki at its next pin: nothing (documentation only).
+      - [x] The code findings fixed (2026-11-12): an `mcp.toml` server that
+        leaves out a key takes a new server's value (`McpServerDefaults`,
+        empty lists and tables) in `repair_settings`, without a repair; only
+        an id, a transport, its `type` and its program or URL have none.
+        `config set plugins."ID".settings.OPTION` (`PackageSettingKey`)
+        writes through `write_setting_values` on the started Agent, checked
+        as the settings center checks it; the generic writer refuses any
+        other key under a plugin's `settings`. The descriptor comment names
+        the settings catalog. Docs: `config-reference`, `internals`.
+        Validation: fmt, check, clippy, `cargo xtask check`, `cargo test
+        --workspace --all-features`, the site steps (35 pages); CI
+        https://github.com/licyk/hanafubuki-agent/actions/runs/43281775547
+        (Windows rerun once for the known subagents/review flakes).
+        Hanafubuki at its next pin: servers missing keys now load; the new
+        `PackageSettingKey` export; `set_user_value`/`set_user_json` refuse
+        `plugins."ID".settings…` keys.
 
 **Command center ([3])**
 

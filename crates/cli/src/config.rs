@@ -1,17 +1,20 @@
 //! `config path|get|set|edit`: the user's `config.toml`, read with every
 //! layer applied and written through the configuration's own writer. A
 //! plugin option (`pluginOptions.<plugin>.<option>`) is read and checked
-//! against its plugin's descriptor.
+//! against its plugin's descriptor; a setting of an installed plugin's code
+//! (`plugins."<id>".settings.<option>`) is written by the started Agent, as
+//! the settings center writes it.
 
 use std::process::Command;
 
 use hanafubuki_agent::{
-    agent_plugin_descriptors, parse_config_value, AgentConfig, AgentRuntimeHost, PluginOptionKey,
-    PluginOptionSchema, AGENT_MCP_FILE, AGENT_PROVIDERS_FILE, AGENT_SETTINGS_FILE,
+    agent_plugin_descriptors, package_setting_key, parse_config_value, AgentConfig,
+    AgentRuntimeHost, PackageSettingKey, PluginOptionKey, PluginOptionSchema, SettingChange,
+    SettingWriteOp, SettingsWrite, AGENT_MCP_FILE, AGENT_PROVIDERS_FILE, AGENT_SETTINGS_FILE,
 };
 use serde_json::{Map, Value};
 
-use crate::agent::Standalone;
+use crate::agent::{block_on, Standalone};
 use crate::cli::{ConfigCommand, GlobalArgs};
 use crate::exit::Failure;
 
@@ -23,7 +26,7 @@ pub(crate) fn run(global: &GlobalArgs, command: ConfigCommand) -> Result<(), Fai
             Ok(())
         }
         ConfigCommand::Get { key } => get(standalone.runtime.config(), key.as_deref()),
-        ConfigCommand::Set { key, value } => set(standalone.runtime.config(), &key, &value),
+        ConfigCommand::Set { key, value } => set(&standalone, &key, &value),
         ConfigCommand::Edit => edit(&standalone),
     };
     standalone.shutdown();
@@ -72,7 +75,11 @@ fn get(config: &AgentConfig, key: Option<&str>) -> Result<(), Failure> {
     Ok(())
 }
 
-fn set(config: &AgentConfig, key: &str, raw: &str) -> Result<(), Failure> {
+fn set(standalone: &Standalone, key: &str, raw: &str) -> Result<(), Failure> {
+    if let Some(setting) = PackageSettingKey::parse(key).map_err(Failure::new)? {
+        return set_package_setting(standalone, &setting, raw);
+    }
+    let config = standalone.runtime.config();
     let Some(option) = plugin_option(key)? else {
         return config.set_user_value(key, raw).map_err(Failure::new);
     };
@@ -83,6 +90,28 @@ fn set(config: &AgentConfig, key: &str, raw: &str) -> Result<(), Failure> {
         .set_plugin_options(&option.row, &schema, &patch)
         .map(drop)
         .map_err(Failure::new)
+}
+
+/// Writes a setting of an installed plugin's code as the settings center
+/// does, checked against the plugin's `configSchema`: the Agent must run to
+/// have its installed plugins.
+fn set_package_setting(
+    standalone: &Standalone,
+    setting: &PackageSettingKey,
+    raw: &str,
+) -> Result<(), Failure> {
+    let value = parse_config_value(raw).map_err(Failure::new)?;
+    let write = SettingsWrite {
+        changes: vec![SettingChange {
+            key: package_setting_key(&setting.id, &setting.option),
+            op: SettingWriteOp::Set(value),
+        }],
+    };
+    let agent = standalone.start()?;
+    block_on(&agent, move |agent| async move {
+        agent.write_setting_values(write).await
+    })
+    .map(drop)
 }
 
 fn plugin_option(key: &str) -> Result<Option<PluginOptionKey>, Failure> {
