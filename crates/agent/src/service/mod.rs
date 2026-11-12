@@ -398,7 +398,13 @@ impl AgentApplicationService {
             kernel_faults.clone(),
             model_metadata,
         );
-        let discovery = ModelDiscovery::start(discovery, core.clone(), config.clone(), &workers)?;
+        let discovery = ModelDiscovery::start(
+            discovery,
+            core.clone(),
+            config.clone(),
+            host.network.clone(),
+            &workers,
+        )?;
         let memory = AgentMemoryApplication::new(
             config.clone(),
             core.clone(),

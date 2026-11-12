@@ -4,7 +4,7 @@
 //! its next turn, and the listing is rate-limited, turned off by
 //! `modelMetadata.discovery = "off"` and cancelled at shutdown. The same
 //! worker fetches models.dev's catalogue when `modelMetadata.modelsDev` is
-//! on, from a fake server too.
+//! on, from a fake server too, through the host's proxy.
 
 use hanafubuki_agent_kernel::{
     AgentSessionId, AgentSessionMode, ModelApiProtocol, ModelMetadataSource,
@@ -23,9 +23,20 @@ fn open(
     config: &AgentConfig,
     policy: ModelDiscoveryPolicy,
 ) -> AgentApplicationService {
+    open_with(paths, config, policy, test_host(paths))
+}
+
+/// The Agent over `paths` and `config` with `host`, discovering under
+/// `policy`.
+fn open_with(
+    paths: &TestPaths,
+    config: &AgentConfig,
+    policy: ModelDiscoveryPolicy,
+    host: AgentHostPorts,
+) -> AgentApplicationService {
     AgentApplicationService::new_with_host_discovering(
         config.clone(),
-        test_host(paths),
+        host,
         AgentStoragePaths::under(paths.data_dir.join("agent-test")),
         SkillRoots {
             system: paths.data_dir.join("agent-test/skills-bundled"),
@@ -371,6 +382,40 @@ async fn models_dev_is_never_asked_by_default() {
     assert!(models_dev.listing_requests().is_empty());
     assert!(service.core.models_dev_fetched_at().is_none());
     assert_eq!(session_window(&service, session.id), None);
+    stop(&service);
+    let _ = std::fs::remove_dir_all(paths.app_data_dir);
+}
+
+/// The download goes through the host's proxy: the request reaches the
+/// proxy naming models.dev's whole URL, at a host that does not resolve.
+#[tokio::test]
+async fn models_dev_is_fetched_through_the_hosts_proxy() {
+    let proxy = FakeServer::with_listings(Vec::new(), vec![FakeListing::ok(MODELS_DEV)]).await;
+    let server = FakeServer::start(Vec::new()).await;
+    let paths = test_paths("models-dev-proxy");
+    let config = AgentConfig::new(&paths.config_dir);
+    configure_test_provider(&config, &server.base_url, None);
+    config
+        .set_user_value("modelMetadata.modelsDev", "true")
+        .unwrap();
+    let url = "http://models-dev.invalid/models";
+    let origin = proxy
+        .base_url
+        .splitn(4, '/')
+        .take(3)
+        .collect::<Vec<_>>()
+        .join("/");
+    let mut host = test_host(&paths);
+    host.network = Arc::new(FixedProxy(AgentProxy::Explicit(origin)));
+    let policy = ModelDiscoveryPolicy::every(HOUR, HOUR).with_models_dev(url.to_string());
+    let service = open_with(&paths, &config, policy, host);
+    wait_until("models.dev fetched", || {
+        service.core.models_dev_fetched_at().is_some()
+    })
+    .await;
+
+    let [request] = proxy.listing_requests().try_into().ok().unwrap();
+    assert_eq!(request.path, url);
     stop(&service);
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }

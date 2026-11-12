@@ -53,7 +53,9 @@ pub use model::{
 };
 pub use model_catalog::{ModelCatalogClient, ModelCatalogEntry, ModelCatalogListing};
 pub use model_metadata::{ModelMetadata, ModelMetadataSource, ModelReasoningSupport, Sourced};
-pub use models_dev::{fetch_models_dev, ModelProviderNames, ModelsDevCatalog, MODELS_DEV_URL};
+pub use models_dev::{
+    fetch_models_dev, ModelProviderNames, ModelsDevCatalog, ModelsDevProxy, MODELS_DEV_URL,
+};
 pub use port::{
     ModelError, ModelEventStream, ModelFuture, ModelPort, ModelResult, ModelSession,
     ModelSessionFactory, ModelStream,

@@ -30,6 +30,7 @@ hanafubuki-agent config set network.proxy system
 | 网页搜索和抓取（`web_search`、`fetch_web_page`） | `network.proxy`                             |
 | MCP 的 Streamable HTTP 服务器和 OAuth            | `network.proxy`；修改后会重新连接这些服务器 |
 | 模型运行的命令和终端                             | 由 `network.proxy` 决定的环境变量，见下文   |
+| models.dev 的下载（`modelMetadata.modelsDev`）   | `network.proxy`                             |
 | 模型 Provider 的请求                             | **不使用** `network.proxy`，见下文          |
 
 ### 命令的代理变量 [#child-processes]

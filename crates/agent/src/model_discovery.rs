@@ -33,10 +33,12 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use hanafubuki_agent_config::{AgentConfig, AgentModelDiscovery, AgentSettings};
 use hanafubuki_agent_foundation::background_worker::BackgroundWorkerGroup;
 use hanafubuki_agent_foundation::cancellation::CancellationToken;
-use hanafubuki_agent_kernel::{fetch_models_dev, AgentService, ModelApiProtocol, MODELS_DEV_URL};
+use hanafubuki_agent_kernel::{
+    fetch_models_dev, AgentService, ModelApiProtocol, ModelsDevProxy, MODELS_DEV_URL,
+};
 
-use crate::model_api_protocol;
 use crate::service::{resolve_settings_provider, ResolvedAgentProvider};
+use crate::{model_api_protocol, AgentProxy, NetworkSettingsPort};
 
 /// How long the worker waits for a request before it looks whether the
 /// Agent is stopping.
@@ -114,6 +116,7 @@ impl ModelDiscovery {
         policy: ModelDiscoveryPolicy,
         core: AgentService,
         config: AgentConfig,
+        network: std::sync::Arc<dyn NetworkSettingsPort>,
         workers: &BackgroundWorkerGroup,
     ) -> Result<Self, String> {
         if !policy.enabled {
@@ -129,6 +132,7 @@ impl ModelDiscovery {
             policy,
             core,
             config,
+            network,
             attempts: HashMap::new(),
             models_dev_attempt: None,
             #[cfg(test)]
@@ -167,6 +171,8 @@ struct Worker {
     policy: ModelDiscoveryPolicy,
     core: AgentService,
     config: AgentConfig,
+    /// The proxy the models.dev download goes through, read at each one.
+    network: std::sync::Arc<dyn NetworkSettingsPort>,
     /// By protocol and base URL.
     attempts: HashMap<(ModelApiProtocol, String), Attempt>,
     models_dev_attempt: Option<Attempt>,
@@ -310,7 +316,18 @@ impl Worker {
             at: Instant::now(),
             succeeded: false,
         });
-        match fetch_models_dev(&self.policy.models_dev_url, cancellation).await {
+        // Without the host's proxy, no download: going direct could pass a
+        // proxy the person relies on.
+        let proxy = match self.network.proxy() {
+            Ok(proxy) => models_dev_proxy(proxy),
+            Err(error) => {
+                log::warn!(
+                    "models.dev's catalogue was not fetched: the proxy is not known ({error})"
+                );
+                return;
+            }
+        };
+        match fetch_models_dev(&self.policy.models_dev_url, &proxy, cancellation).await {
             Ok(catalog) => {
                 log::debug!("models.dev: {} models fetched", catalog.model_count());
                 self.core.record_models_dev_catalog(catalog);
@@ -329,6 +346,14 @@ impl Worker {
 }
 
 /// The endpoint `provider` is listed at: its protocol and base URL.
+fn models_dev_proxy(proxy: AgentProxy) -> ModelsDevProxy {
+    match proxy {
+        AgentProxy::System => ModelsDevProxy::System,
+        AgentProxy::Disabled => ModelsDevProxy::Disabled,
+        AgentProxy::Explicit(address) => ModelsDevProxy::Explicit(address),
+    }
+}
+
 fn endpoint(provider: &ResolvedAgentProvider) -> (ModelApiProtocol, String) {
     (
         model_api_protocol(provider.definition.protocol),

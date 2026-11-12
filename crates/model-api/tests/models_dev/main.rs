@@ -1,6 +1,6 @@
 //! models.dev's catalogue: decoded tolerantly from its own form, looked up
 //! by normalized id under the Provider's own entry first, and fetched with
-//! the Agent's User-Agent from a local server.
+//! the Agent's User-Agent from a local server, directly or through a proxy.
 //!
 //! `fixtures/api.json` is in the shape `https://models.dev/api.json`
 //! publishes (a provider object with `api`, `models`, and per model
@@ -13,7 +13,7 @@ mod support;
 use hanafubuki_agent_foundation::cancellation::CancellationToken;
 use hanafubuki_agent_model_api::{
     fetch_models_dev, ModelEndpoint, ModelError, ModelMetadata, ModelMetadataSource,
-    ModelProviderNames, ModelReasoningSupport, ModelsDevCatalog, Sourced,
+    ModelProviderNames, ModelReasoningSupport, ModelsDevCatalog, ModelsDevProxy, Sourced,
 };
 use support::{FakeHttpServer, PlannedResponse};
 
@@ -166,9 +166,13 @@ async fn the_catalogue_is_fetched_with_the_agents_user_agent_and_no_credential()
     let server = FakeHttpServer::start(vec![PlannedResponse::status(200, FIXTURE)]).await;
     let url = format!("{}/api.json", server.base_url());
 
-    let fetched = fetch_models_dev(&url, &CancellationToken::default())
-        .await
-        .unwrap();
+    let fetched = fetch_models_dev(
+        &url,
+        &ModelsDevProxy::Disabled,
+        &CancellationToken::default(),
+    )
+    .await
+    .unwrap();
 
     assert_eq!(fetched, catalog());
     let [request] = server.requests().try_into().unwrap();
@@ -183,6 +187,37 @@ async fn the_catalogue_is_fetched_with_the_agents_user_agent_and_no_credential()
     assert!(!request.headers.contains_key("authorization"));
 }
 
+/// The download goes through the proxy it is given: the request reaches
+/// the proxy, naming models.dev's whole URL, though that host does not
+/// resolve; a proxy URL that is not usable fails the download.
+#[tokio::test]
+async fn the_catalogue_is_fetched_through_the_proxy() {
+    let proxy = FakeHttpServer::start(vec![PlannedResponse::status(200, FIXTURE)]).await;
+    let address = proxy.base_url().trim_end_matches("/v1").to_string();
+    let url = "http://models-dev.invalid/api.json";
+
+    let fetched = fetch_models_dev(
+        url,
+        &ModelsDevProxy::Explicit(address),
+        &CancellationToken::default(),
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(fetched, catalog());
+    let [request] = proxy.requests().try_into().unwrap();
+    assert_eq!(request.path, url);
+    assert!(matches!(
+        fetch_models_dev(
+            url,
+            &ModelsDevProxy::Explicit("not a proxy".to_string()),
+            &CancellationToken::default(),
+        )
+        .await,
+        Err(ModelError::InvalidRequest(_))
+    ));
+}
+
 #[tokio::test]
 async fn a_refusal_bad_data_or_no_server_is_an_error() {
     let server = FakeHttpServer::start(vec![
@@ -192,16 +227,22 @@ async fn a_refusal_bad_data_or_no_server_is_an_error() {
     .await;
     let url = format!("{}/api.json", server.base_url());
     for _ in 0..2 {
-        assert!(fetch_models_dev(&url, &CancellationToken::default())
-            .await
-            .is_err());
+        assert!(fetch_models_dev(
+            &url,
+            &ModelsDevProxy::Disabled,
+            &CancellationToken::default()
+        )
+        .await
+        .is_err());
     }
     // Nothing listens on the discard port.
-    assert!(
-        fetch_models_dev("http://127.0.0.1:9/api.json", &CancellationToken::default())
-            .await
-            .is_err()
-    );
+    assert!(fetch_models_dev(
+        "http://127.0.0.1:9/api.json",
+        &ModelsDevProxy::Disabled,
+        &CancellationToken::default(),
+    )
+    .await
+    .is_err());
 }
 
 #[tokio::test]
@@ -220,7 +261,7 @@ async fn a_fetch_is_cancelled() {
     });
     let started = std::time::Instant::now();
     assert!(matches!(
-        fetch_models_dev(&url, &cancellation).await,
+        fetch_models_dev(&url, &ModelsDevProxy::Disabled, &cancellation).await,
         Err(ModelError::Cancelled)
     ));
     assert!(started.elapsed() < std::time::Duration::from_secs(10));

@@ -67,7 +67,7 @@ pub use hanafubuki_agent_model_api::{
     ModelMetadataSource, ModelOutputFormat, ModelOutputItem, ModelReasoningConfig,
     ModelReasoningEffort, ModelReasoningReplay, ModelReasoningSupport, ModelRequest,
     ModelRetryPolicy, ModelSession, ModelStructuredOutputCapability, ModelToolChoice,
-    ModelToolSpec, ModelsDevCatalog, Sourced, MODELS_DEV_URL,
+    ModelToolSpec, ModelsDevCatalog, ModelsDevProxy, Sourced, MODELS_DEV_URL,
 };
 pub use hanafubuki_agent_skills::{SkillId, SkillScope};
 pub use hanafubuki_agent_tool_contracts::{

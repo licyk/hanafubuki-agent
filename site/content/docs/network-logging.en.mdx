@@ -30,6 +30,7 @@ hanafubuki-agent config set network.proxy system
 | Web search and fetch (`web_search`, `fetch_web_page`) | `network.proxy`                                           |
 | MCP Streamable HTTP servers and OAuth                 | `network.proxy`; a change reconnects those servers        |
 | The commands and terminals the model runs             | The environment variables `network.proxy` decides (below) |
+| The models.dev download (`modelMetadata.modelsDev`)   | `network.proxy`                                           |
 | Requests to model Providers                           | **Not** `network.proxy` (below)                           |
 
 ### The commands' proxy variables [#child-processes]

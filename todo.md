@@ -634,8 +634,7 @@ Hoshimi `83f7813`. Every §9 decision (D1–D7) was accepted as recommended
     request's `max_output_tokens` (Anthropic's `max_tokens` and thinking
     budget) skips that source, per §3's "a third-party flag must never
     change a request on its own"; it still enters the compaction headroom.
-  - Residuals: the download takes no `[network]` proxy, as the Providers'
-    own model clients take none (only MCP and web search apply it); a copy
+  - Residuals: a copy
     on disk with `modelsDev` turned off still answers until the worker's
     first request at start; the failure backoff is per run, so short runs
     (`exec`) with models.dev unreachable try once each.
@@ -705,6 +704,17 @@ Hoshimi `83f7813`. Every §9 decision (D1–D7) was accepted as recommended
     compaction's too, while they are in the window: start a new session.
     The refusal wordings in the tests are illustrative, not recorded from
     the live API.
+- models.dev through the proxy (done, 2026-11-12): the download goes
+  through `[network] proxy` (the host's `NetworkSettingsPort`, read at each
+  download, so a change applies to the next one): `fetch_models_dev` takes
+  a `ModelsDevProxy` (system, disabled or a URL; model-api's reqwest gains
+  `socks` and `system-proxy`, which the binary already unified in through
+  web-search). A proxy the host cannot say skips the download rather than
+  going direct; a proxy URL reqwest cannot use fails it without naming the
+  URL (it may hold credentials). The Providers' own requests still take no
+  `[network] proxy`.
+- Open: Chat Completions' `reasoning_content` sent back in tool loops
+  (DeepSeek's thinking mode requires it).
 
 ## Plan: Codex's messages sent while the Agent works, in the terminal interface (2026-11-11)
 

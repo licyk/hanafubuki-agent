@@ -33,6 +33,18 @@ use crate::{
 /// Where the catalogue is published.
 pub const MODELS_DEV_URL: &str = "https://models.dev/api.json";
 
+/// The proxy the models.dev download goes through.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ModelsDevProxy {
+    /// The operating system's proxy settings (and the proxy environment
+    /// variables).
+    System,
+    /// No proxy.
+    Disabled,
+    /// This proxy URL.
+    Explicit(String),
+}
+
 /// The Agent and its version, and nothing of the person.
 const USER_AGENT: &str = concat!("hanafubuki-agent/", env!("CARGO_PKG_VERSION"));
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
@@ -227,19 +239,31 @@ impl ModelsDevModel {
 /// size bound; cancelled with `cancellation`.
 pub async fn fetch_models_dev(
     url: &str,
+    proxy: &ModelsDevProxy,
     cancellation: &CancellationToken,
 ) -> ModelResult<ModelsDevCatalog> {
     let fetched = tokio::select! {
-        fetched = tokio::time::timeout(REQUEST_TIMEOUT, fetch(url)) => fetched,
+        fetched = tokio::time::timeout(REQUEST_TIMEOUT, fetch(url, proxy)) => fetched,
         _ = wait_cancelled(cancellation) => return Err(ModelError::Cancelled),
     };
     fetched.map_err(|_| ModelError::Protocol("models.dev did not answer in time".into()))?
 }
 
-async fn fetch(url: &str) -> ModelResult<ModelsDevCatalog> {
-    let client = reqwest::Client::builder()
+async fn fetch(url: &str, proxy: &ModelsDevProxy) -> ModelResult<ModelsDevCatalog> {
+    let builder = reqwest::Client::builder()
         .connect_timeout(CONNECT_TIMEOUT)
-        .user_agent(USER_AGENT)
+        .user_agent(USER_AGENT);
+    let builder = match proxy {
+        ModelsDevProxy::System => builder,
+        ModelsDevProxy::Disabled => builder.no_proxy(),
+        // The URL may hold the proxy's credentials, so it is not named.
+        ModelsDevProxy::Explicit(address) => {
+            builder.proxy(reqwest::Proxy::all(address).map_err(|_| {
+                ModelError::InvalidRequest("the proxy for models.dev is not usable".into())
+            })?)
+        }
+    };
+    let client = builder
         .build()
         .map_err(|_| ModelError::InvalidRequest("failed to build the models.dev client".into()))?;
     let unreachable = |_| ModelError::Protocol("models.dev could not be reached".into());

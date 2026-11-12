@@ -17,7 +17,7 @@ base64.workspace = true
 bytes = "1"
 futures-util.workspace = true
 log.workspace = true
-reqwest = { workspace = true, features = ["json", "rustls", "stream"] }
+reqwest = { workspace = true, features = ["json", "rustls", "socks", "stream", "system-proxy"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 sha2.workspace = true
