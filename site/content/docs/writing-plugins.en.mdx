@@ -272,7 +272,7 @@ A linked plugin is trusted exactly as an installed one: its code runs under the 
 
 ### configSchema [#config-schema]
 
-The `configSchema` is enforced. When the package is read, each property of its `properties` is lowered to an option, which the options form in `/plugins` (`o` on the plugin) shows and the settings are checked against. The keywords it reads:
+The `configSchema` is enforced. When the package is read, each property of its `properties` is lowered to an option, which the options form in `/plugins` (`o` on the plugin) and the plugin's section of the [settings center](/docs/terminal-interface#config)'s Plugins tab show, and the settings are checked against. The keywords it reads:
 
 | Keyword                                        | Becomes                                                                     |
 | ---------------------------------------------- | --------------------------------------------------------------------------- |
@@ -282,7 +282,8 @@ The `configSchema` is enforced. When the package is read, each property of its `
 | `enum` of strings                              | a choice among them (with `type: "string"` or no `type`)                    |
 | `type: "array"`, `items: { "type": "string" }` | a list of texts, at most `maxItems` items of at most the items' `maxLength` |
 | `default`                                      | the option's default, when it fits the option                               |
-| `description`                                  | the form's label, its first line                                            |
+| `title`                                        | the option's label (its key when there is none)                             |
+| `description`                                  | the option's description, its first line                                    |
 
 Another keyword constrains nothing here, as for a tool's schema; `required` and `additionalProperties: false` are still checked when the settings are written. A property that is none of these (an object, a list of anything but strings, a union of types, a non-string `enum`) is not an option: it is an issue of the package (`plugins validate` lists it), and its value reaches the guest unchecked. At most 64 properties are options.
 

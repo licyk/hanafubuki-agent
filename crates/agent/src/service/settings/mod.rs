@@ -17,9 +17,13 @@ mod marketplaces;
 mod mcp;
 mod mcp_secrets;
 mod model_policy;
+mod package_settings;
+mod packages;
+mod plugin_mcp;
 mod plugins;
 mod profiles;
 mod projects;
+mod provider_models;
 mod providers;
 mod record;
 mod roles;
@@ -35,6 +39,7 @@ use serde_json::{Map, Value};
 
 use super::AgentApplicationService;
 use crate::host::AgentPluginStatus;
+pub use package_settings::package_setting_key;
 
 /// Every setting, as a settings page shows it.
 #[derive(Clone, Debug, PartialEq, Serialize)]
@@ -45,7 +50,8 @@ pub struct SettingsCatalog {
 }
 
 /// A list of records edited one at a time (the Providers, the MCP
-/// servers), each record's fields described by `record`.
+/// servers), each record's fields described by `record`, their defaults
+/// what an `add` writes when a field is left out.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SettingsCollection {
@@ -76,6 +82,9 @@ pub struct SettingsRecord {
     pub state: Option<String>,
     /// What is wrong with it now, when something is.
     pub issue: Option<String>,
+    /// Why its fields are shown and not written here (a role defined in a
+    /// file), when they are not; its actions still run.
+    pub read_only: Option<String>,
     /// Its fields' values by key; a secret is never among them.
     pub values: BTreeMap<String, SettingValue>,
     /// The keys of its secret fields that hold a value.
@@ -166,15 +175,21 @@ impl AgentApplicationService {
         .await??;
         let statuses = self.plugin_status();
         sections.extend(self.plugin_option_sections(&statuses).await?);
+        if let Ok(packages) = self.packages().await {
+            sections.extend(package_settings::sections(&packages));
+        }
         let mut collections = vec![
             providers::collection(self).await,
+            provider_models::collection(self).await,
             model_policy::collection(self).await,
             mcp::collection(self).await,
             mcp_secrets::collection(self).await,
+            plugin_mcp::collection(self).await,
             plugins::collection(&statuses),
+            packages::collection(self).await,
             marketplaces::collection(self).await,
             hooks::collection(self).await,
-            roles::collection(&self.roles()),
+            roles::collection(self).await,
         ];
         if self.config.is_layered() {
             collections.push(profiles::collection(self).await);
@@ -190,11 +205,17 @@ impl AgentApplicationService {
     /// `config.toml` or a plugin's option (`pluginOptions.<plugin>.<key>`),
     /// each checked against its spec
     /// ([`hanafubuki_agent_config::AgentConfig::write_values`]). The
-    /// plugins then take the settings, and a memory scan is signalled.
+    /// plugins then take the settings, and a memory scan is signalled. A
+    /// code plugin's settings (`plugins."<id>".settings.<key>`) are written
+    /// on their own, one plugin's at a time, through
+    /// [`Self::set_package_settings`].
     pub async fn write_setting_values(
         &self,
         write: SettingsWrite,
     ) -> Result<SettingsWriteOutcome, String> {
+        if let Some(outcome) = package_settings::write(self, &write).await {
+            return outcome;
+        }
         let config = self.config.clone();
         let options = self.host.option_schemas();
         let outcome = hanafubuki_agent_foundation::blocking::run_blocking_operation(
@@ -216,13 +237,16 @@ impl AgentApplicationService {
     ) -> Result<SettingsActionOutcome, String> {
         match request.collection.as_str() {
             providers::ID => providers::run(self, request).await,
+            provider_models::ID => provider_models::run(self, request).await,
             model_policy::ID => model_policy::run(self, request).await,
             mcp::ID => mcp::run(self, request).await,
             mcp_secrets::ID => mcp_secrets::run(self, request).await,
+            plugin_mcp::ID => plugin_mcp::run(self, request).await,
             plugins::ID => plugins::run(self, request).await,
+            packages::ID => packages::run(self, request).await,
             marketplaces::ID => marketplaces::run(self, request).await,
             hooks::ID => hooks::run(self, request).await,
-            roles::ID => request.unknown_action(),
+            roles::ID => roles::run(self, request).await,
             profiles::ID if self.config.is_layered() => profiles::run(self, request).await,
             projects::ID if self.config.is_layered() => projects::run(self, request).await,
             other => Err(format!("there is no settings collection `{other}`")),

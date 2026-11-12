@@ -1,9 +1,11 @@
-//! `/hooks` onto the facade's hook calls: the configured hooks, read again
-//! after every change (turning one on or off, trusting some), so the
-//! browser never shows a list older than its own change; and the check at
-//! start for hooks that wait to be trusted.
+//! `/hooks` onto the facade: the configured hooks, read again after every
+//! change, so the browser never shows a list older than its own change;
+//! the changes (turning one on or off, trusting some) are the settings
+//! catalog's `hooks` actions; and the check at start for hooks that wait to
+//! be trusted.
 
-use hanafubuki_agent::{AgentError, AgentHooks, HookTrust};
+use hanafubuki_agent::{AgentError, AgentHandle, AgentHooks, HookTrust, SettingsActionRequest};
+use serde_json::{json, Map, Value};
 
 use super::{AgentBridge, AgentReply, TurnUpdate};
 
@@ -37,13 +39,23 @@ impl AgentBridge {
             let written = match call {
                 HooksCall::Load | HooksCall::Check => Ok(()),
                 HooksCall::SetEnabled { key, enabled } => {
-                    agent.set_hook_enabled(key, enabled).await
+                    let values = json!({ "enabled": enabled });
+                    hooks_action(&agent, key, "save", values).await
                 }
-                HooksCall::Trust(keys) => agent.trust_hooks(keys).await,
+                HooksCall::Trust(keys) => {
+                    let mut trusted = Ok(());
+                    for key in keys {
+                        trusted = hooks_action(&agent, key, "trust", json!({})).await;
+                        if trusted.is_err() {
+                            break;
+                        }
+                    }
+                    trusted
+                }
             };
             let listed = match written {
                 Ok(()) => agent.hooks_list().await,
-                Err(error) => Err(error),
+                Err(error) => Err(AgentError::InvalidInput(error)),
             };
             let reply = match listed {
                 Ok(hooks) if check => match needing_review(&hooks) {
@@ -70,4 +82,25 @@ pub(crate) fn needing_review(hooks: &AgentHooks) -> usize {
         .iter()
         .filter(|hook| hook.trust != HookTrust::Trusted)
         .count()
+}
+
+/// Runs `action` of the settings catalog's `hooks` collection on the hook
+/// `key`.
+async fn hooks_action(
+    agent: &AgentHandle,
+    key: String,
+    action: &str,
+    values: Value,
+) -> Result<(), String> {
+    let request = SettingsActionRequest {
+        collection: "hooks".to_string(),
+        record: Some(key),
+        action: action.to_string(),
+        expected_revision: None,
+        values: match values {
+            Value::Object(values) => values,
+            _ => Map::new(),
+        },
+    };
+    agent.run_settings_action(request).await.map(drop)
 }

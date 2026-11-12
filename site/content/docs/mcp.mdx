@@ -58,6 +58,7 @@ MCP（Model Context Protocol）服务器可以把本地程序或远程服务的�
 - **服务器**：传输方式（stdio：程序、以列表填写的参数、工作目录和环境变量；Streamable HTTP：URL、OAuth `Off`、`Optional` 或 `Required`，以及请求头）、是否启用、是否必需、协议模式（`legacy` 或 `v20260728`）、默认审批和暴露策略、只允许和不允许的工具、按工具的列表：单次调用上限（`TOOL=数字`，1 到 64）、审批（`TOOL=allow|ask|deny`）和暴露（`TOOL=direct|direct_model_only|deferred|hidden`），以及各项超时和并发调用数。环境变量和请求头是 `NAME=VALUE` 形式的条目。下方是 **Delete**、**Connect**、**Disconnect**、**Refresh**、**Log out** 和 **Log in**（[OAuth 登录](#oauth)）。
 - **MCP secrets**：值需要保密的环境变量或请求头各自是一条记录 `SERVER/NAME`。它的值保存为服务器通过 `credentialEnvironment` 或 `credentialHeaders` 引用的[凭据](#credentials)，以服务器和变量命名（`github-GITHUB_TOKEN`），从不显示：`••••` 表示已设置，输入新值会替换它。删除机密、删除服务器或服务器换掉传输方式时，没有其他服务器使用的凭据会被删除。
 - 每次写入都会带上设置中心读取时 `mcp.toml` 的版本；如果设置在此期间被修改，写入会被拒绝，服务器会重新读取，改动保留，可以再次保存。
+- **插件的 MCP 服务器**（Tools 标签页中的 Plugins' MCP servers）：已开启的已安装插件运行的每个服务器一条记录（`PLUGIN/SERVER`），显示连接阶段、工具和最近的错误。它如何运行仍由插件决定；你可以开启或关闭它、收窄它的工具（只用这些、不用这些），写在 `config.toml` 的 `[plugins."<plugin>".mcpServers.<server>]` 下（[配置参考](/docs/config-reference#plugins)），`r` 让某个键回到插件自己的值。每次改动后插件会重新加载。
 - `/mcp verbose` 把服务器和它们的工具（包括已安装插件的）写入对话，`/mcp login ID` 在设置中心中该服务器的记录上打开它的登录。
 
 ## 凭据 [#credentials]

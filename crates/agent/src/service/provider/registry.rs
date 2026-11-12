@@ -7,8 +7,8 @@ use crate::{
     ResolvedAgentProvider,
 };
 use hanafubuki_agent_config::{
-    validate_agent_model_policy, AgentModelPolicySettings, AgentProviderRegistrySettings,
-    AgentProviderSettings, AgentSettings, MAX_AGENT_PROVIDERS,
+    validate_agent_model_policy, AgentModelOverrideSettings, AgentModelPolicySettings,
+    AgentProviderRegistrySettings, AgentProviderSettings, AgentSettings, MAX_AGENT_PROVIDERS,
 };
 use hanafubuki_agent_kernel::{AgentError, AgentSessionId, ModelCatalogEntry, ModelMetadata};
 use std::collections::{BTreeMap, BTreeSet};
@@ -299,6 +299,35 @@ impl AgentApplicationService {
             }
             registry.default_provider_id = request.default_provider_id;
             registry.model_policy = request.policy;
+            Ok(())
+        })
+        .await
+    }
+
+    /// Sets the override of `model` of the Provider `provider_id`
+    /// (`models."<model>"`), or removes it (`None`), at the revision read:
+    /// the settings page's per-model record.
+    pub(in crate::service) async fn write_provider_model(
+        &self,
+        expected_revision: u64,
+        provider_id: String,
+        model: String,
+        overrides: Option<AgentModelOverrideSettings>,
+    ) -> Result<AgentProviderRegistrySnapshot, String> {
+        self.mutate_provider_registry(expected_revision, move |registry| {
+            let provider = registry
+                .providers
+                .iter_mut()
+                .find(|provider| provider.id == provider_id)
+                .ok_or_else(|| "Agent Provider does not exist".to_string())?;
+            match overrides {
+                Some(overrides) => {
+                    provider.models.insert(model, overrides);
+                }
+                None => {
+                    provider.models.remove(&model);
+                }
+            }
             Ok(())
         })
         .await

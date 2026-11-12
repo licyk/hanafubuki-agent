@@ -42,9 +42,24 @@ pub(super) fn record_of<T: Serialize>(
         summary: String::new(),
         state: None,
         issue: None,
+        read_only: None,
         values,
         secrets_set,
     }
+}
+
+/// `fields` with their defaults the values of `template`, the record an
+/// `add` writes its values over: an add form starts from what it would
+/// write.
+pub(super) fn with_defaults<T: Serialize>(
+    mut fields: Vec<SettingSpec>,
+    template: &T,
+) -> Vec<SettingSpec> {
+    let mut defaults = record_of("", "", template, &fields).values;
+    for spec in &mut fields {
+        spec.default = defaults.remove(&spec.key);
+    }
+    fields
 }
 
 /// `record` with `values` written over it, each checked against its field's

@@ -36,11 +36,11 @@ pub(crate) static PLUGINS: CommandSpec = CommandSpec {
 
 /// The settings center's page of `/plugins`.
 pub(crate) static PAGE: PageOverride = PageOverride {
-    id: "packages",
+    id: "plugin-browser",
     attach: Attach::Row {
         group: SettingsGroup::Plugins,
-        label: "Installed plugins",
-        summary: "Install, update and uninstall plugins; a code plugin's settings",
+        label: "Plugin browser",
+        summary: "The marketplaces' plugins; a code plugin's grant and settings",
     },
     command: &PLUGINS,
     open: |context, _| {

@@ -152,18 +152,20 @@ impl FormPage {
         }
     }
 
-    /// The value of the field `key`: unsaved, else as it was read.
+    /// The value of the field `key`: unsaved, else as it was read; a
+    /// record being added starts from what its add writes (the defaults).
     pub(super) fn value(&self, catalog: &SettingsCatalog, key: &str) -> Option<SettingValue> {
-        if let Some(draft) = self.drafts.get(key) {
-            let spec = self
-                .fields(catalog)
+        let spec = || {
+            self.fields(catalog)
                 .into_iter()
-                .find(|spec| spec.key == key)?;
-            return spec.read(draft).ok();
+                .find(|spec| spec.key == key)
+        };
+        if let Some(draft) = self.drafts.get(key) {
+            return spec()?.read(draft).ok();
         }
         match &self.target {
             FormTarget::Record { .. } => self.stored(catalog)?.values.get(key).cloned(),
-            FormTarget::Add { .. } => None,
+            FormTarget::Add { .. } => spec()?.default.clone(),
             FormTarget::Group { .. } => self
                 .section(catalog)?
                 .values
@@ -175,10 +177,15 @@ impl FormPage {
     }
 
     /// Whether the fields can be changed: a record of a collection that
-    /// saves none is shown only.
+    /// saves none, or one the owner writes elsewhere, is shown only.
     fn editable(&self, catalog: &SettingsCatalog) -> bool {
         match &self.target {
-            FormTarget::Record { .. } => self.collection(catalog).is_some_and(collection::writable),
+            FormTarget::Record { .. } => {
+                self.collection(catalog).is_some_and(collection::writable)
+                    && self
+                        .stored(catalog)
+                        .is_some_and(|record| record.read_only.is_none())
+            }
             FormTarget::Add { .. } | FormTarget::Group { .. } => true,
         }
     }
@@ -291,7 +298,7 @@ impl FormPage {
                 _ => Effect::None,
             },
             KeyCode::Char('r') if key.modifiers == KeyModifiers::NONE => match selected {
-                Some(Line::Field(index)) => self.reset(fields[index], at),
+                Some(Line::Field(index)) => self.reset(fields[index], at, catalog),
                 _ => Effect::None,
             },
             _ => {
@@ -403,13 +410,15 @@ impl FormPage {
         }
     }
 
-    /// `r`: a draft forgotten; a record's optional text unset.
-    fn reset(&mut self, spec: &SettingSpec, at: usize) -> Effect {
+    /// `r`: a draft forgotten; a record's field unset (a profile's key
+    /// removed, a filter back to its owner's), which the owner refuses for
+    /// a field that is always set.
+    fn reset(&mut self, spec: &SettingSpec, at: usize, catalog: &SettingsCatalog) -> Effect {
         if self.drafts.remove(&spec.key).is_some() {
             return Effect::None;
         }
-        match (&self.target, &spec.kind) {
-            (FormTarget::Record { .. }, SettingKind::Text { nullable: true, .. }) => Effect::Edit {
+        match &self.target {
+            FormTarget::Record { .. } if self.editable(catalog) => Effect::Edit {
                 key: spec.key.clone(),
                 value: Value::Null,
                 at: Some(at),
@@ -448,9 +457,10 @@ impl FormPage {
 
     pub(super) fn subtitle(&self, catalog: &SettingsCatalog) -> String {
         match &self.target {
-            FormTarget::Record { .. } if !self.editable(catalog) => {
-                "Shown only; it is not written here.".to_string()
-            }
+            FormTarget::Record { .. } if !self.editable(catalog) => self
+                .stored(catalog)
+                .and_then(|record| record.read_only.clone())
+                .unwrap_or_else(|| "Shown only; it is not written here.".to_string()),
             FormTarget::Record { .. } => match self.stored(catalog) {
                 Some(SettingsRecord {
                     issue: Some(issue), ..

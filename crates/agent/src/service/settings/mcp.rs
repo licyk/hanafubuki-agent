@@ -16,7 +16,7 @@ use hanafubuki_agent_mcp::{
 use serde_json::{json, Map, Value};
 
 use super::mcp_secrets::{credential_names, drop_unreferenced};
-use super::record::{lists_as_maps, maps_as_lists, merged, record_of, PairValue};
+use super::record::{lists_as_maps, maps_as_lists, merged, record_of, with_defaults, PairValue};
 use super::{
     name_of, SettingsAction, SettingsActionOutcome, SettingsActionRequest, SettingsCollection, ADD,
     DELETE, SAVE,
@@ -205,6 +205,11 @@ pub(super) async fn collection(service: &AgentApplicationService) -> SettingsCol
         Err(error) => return collection.unavailable(error),
     };
     let fields = fields();
+    let mut template = with_both_transports(
+        new_server("", &snapshot.server_defaults),
+        &snapshot.server_defaults,
+    );
+    maps_as_lists(&mut template, &MAPS);
     let records = snapshot
         .settings
         .servers
@@ -235,6 +240,7 @@ pub(super) async fn collection(service: &AgentApplicationService) -> SettingsCol
         })
         .collect();
     SettingsCollection {
+        record: with_defaults(fields, &template),
         records,
         revision: Some(snapshot.settings.revision),
         ..collection
@@ -255,7 +261,7 @@ pub(super) async fn run(
                 .iter()
                 .find(|server| server.id == id);
             let record = match (request.action.as_str(), current) {
-                (ADD, None) => new_server(&id, &snapshot.server_defaults),
+                (ADD, None) => new_server(id.as_str(), &snapshot.server_defaults),
                 (ADD, Some(_)) => return Err(format!("the MCP server `{}` exists", id.as_str())),
                 (_, Some(server)) => serde_json::to_value(server)
                     .map_err(|_| "the MCP server cannot be encoded".to_string())?,
@@ -326,14 +332,14 @@ fn target(server: &McpServerConfig) -> String {
 
 /// A server the user adds, as `mcp add` starts one: the defaults, a stdio
 /// transport with no program yet, no per-tool settings.
-fn new_server(id: &McpServerId, defaults: &hanafubuki_agent_mcp::McpServerDefaults) -> Value {
+fn new_server(id: &str, defaults: &hanafubuki_agent_mcp::McpServerDefaults) -> Value {
     let mut server = match serde_json::to_value(defaults) {
         Ok(Value::Object(server)) => server,
         _ => Map::new(),
     };
     server.remove("oauth");
     server.extend([
-        ("id".to_string(), json!(id.as_str())),
+        ("id".to_string(), json!(id)),
         ("transport".to_string(), json!({ "type": STDIO })),
         ("toolMaximumConcurrentCalls".to_string(), json!({})),
         ("enabledTools".to_string(), json!([])),

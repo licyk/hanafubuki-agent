@@ -82,7 +82,7 @@ provider-2 DeepSeek  ChatCompletions  https://api.deepseek.com/v1  token: set
 - **Provider**：名称、是否启用、协议（`responses`、`chat_completions` 或 `anthropic_messages`）、基础 URL、API 令牌和请求头，每个字段改动时即保存。已设置的令牌显示为 `••••`，从不返回：输入新值会替换它，`r` 删除它。请求头是 `NAME=VALUE` 形式的条目，只按名称列出：它们的值从不显示，只写名称的条目保留原来的值。
 - **Make default** 把它设为默认 Provider，**List models** 测试它（显示 Provider 列出的模型数量和前几个，或 Provider 返回的错误），**Delete** 确认后删除它。
 - **Choose the model** 列出它的模型，每个模型旁显示目录报告的信息：窗口（`200K`）、`vision` 和 `reasoning`（`/model` 也一样）。选中的模型（Provider 没有列出时，用 **Enter a model id…** 手动输入）成为新会话使用的模型，这个 Provider 成为默认 Provider。按 Esc 则保持原来的模型。`/model` 仍然只修改当前会话的模型。
-- **模型策略**（`/providers policy`，或 Model 标签页中的 Model policy）：默认 Provider 和模型、推理强度（旁边写出该模型已知的档位，来自其目录或其[单独设置](#per-model)）、图片输入、上下文窗口（未设置时，旁边写出该模型已知的窗口及其来源）、自动压缩及其阈值、远程压缩，以及 **Custom turn budget**：关闭时回合使用 Agent 的上限；打开时是它的十一个字段，从这些上限开始。模型的单独设置不在其中：它们写在 `providers.toml` 中（[按模型的设置](#per-model)）。
+- **模型策略**（`/providers policy`，或 Model 标签页中的 Model policy）：默认 Provider 和模型、推理强度（旁边写出该模型已知的档位，来自其目录或其[单独设置](#per-model)）、图片输入、上下文窗口（未设置时，旁边写出该模型已知的窗口及其来源）、自动压缩及其阈值、远程压缩，以及 **Custom turn budget**：关闭时回合使用 Agent 的上限；打开时是它的十一个字段，从这些上限开始。模型的单独设置不在其中：它们是 Model 标签页中它旁边的 **Model overrides**（[按模型的设置](#per-model)）。
 - 每次写入都会带上设置中心读取时 `providers.toml` 的版本。如果期间文件被其他地方修改（例如另一个终端中的 `providers` 命令），写入会被拒绝：设置中心重新读取 Provider，保留改动并给出提示，再保存一次即可。
 - 没有默认 Provider 或没有模型时，界面启动时会自动在 Provider 处打开设置中心，见[首次设置](/docs/terminal-interface#setup)。
 
@@ -209,7 +209,7 @@ imageInput = "supported"
 | `imageInput`          | `"auto"`（默认）、`"supported"`、`"unsupported"` | `"auto"` 按已知的信息（[图片](#images)）；`"supported"` 不论目录怎么说、拒绝教了什么都发送图片：拒绝仍会让那次请求回退，下一次请求再次发送；`"unsupported"` 从不发送 |
 | `reasoningEfforts`    | 推理强度的列表，或 `[]`                          | 模型接受的档位，取代目录列出的档位，发送的推理强度按它收窄、策略表单也提供它们；`[]`：不接受推理参数，不发送推理强度                                                 |
 
-每个键都可省略，省略的键交给其他来源。会话在下一个轮次开始时采用它们（新会话、恢复的会话以及已打开的会话都一样），所以退出 Agent、编辑文件，然后继续即可。无法使用的值会被略去，文件会被[修复](/docs/recovery)，Provider 及其其他设置都保留。它们只能手动编写：`/providers` 界面和 `providers` 命令会原样保留它们。
+每个键都可省略，省略的键交给其他来源。会话在下一个轮次开始时采用它们（新会话、恢复的会话以及已打开的会话都一样），所以退出 Agent、编辑文件，然后继续即可。无法使用的值会被略去，文件会被[修复](/docs/recovery)，Provider 及其其他设置都保留。它们也可以在[设置中心](/docs/terminal-interface#config)的 Model 标签页中的 **Model overrides** 编辑：每个 Provider 和模型一条记录（`a` 添加一条，以 `PROVIDER/MODEL` 命名，第一个 `/` 之后都是模型 ID），每个键改动时即保存，`r` 取消设置它，每次写入都带上设置中心读取时 `providers.toml` 的版本。Provider 自己的保存和 `providers` 命令会原样保留它们。
 
 ## 遗忘学到的信息 [#forget]
 

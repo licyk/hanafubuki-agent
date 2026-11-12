@@ -1,11 +1,17 @@
-//! `/plugins` onto the facade's calls on the installed plugins, their
-//! marketplaces and the built-in rows: each change, then everything read
-//! again, so the browser never shows a list older than its own change.
+//! `/plugins` onto the facade: each change, then everything read again, so
+//! the browser never shows a list older than its own change. The changes
+//! are the settings catalog's (the `packages`, `marketplaces`, `plugins`
+//! and `hooks` collections' actions, and the options' writes by key), but
+//! two the catalog does not hold: the grant of what a code plugin asks for,
+//! a consent given for what the browser showed, and the raw JSON settings
+//! of a code plugin whose manifest does not describe them.
 
 use hanafubuki_agent::{
-    AgentHandle, AgentMarketplace, AgentPackageInstall, AgentPackageSource, AgentPackageStatus,
-    AgentPluginStatus, MarketplaceAddRequest, PackagePermissions,
+    package_setting_key, AgentHandle, AgentMarketplace, AgentPackageStatus, AgentPluginStatus,
+    PackagePermissions, SettingChange, SettingWriteOp, SettingsActionOutcome,
+    SettingsActionRequest, SettingsWrite,
 };
+use serde_json::{json, Map, Value};
 
 use super::{AgentBridge, AgentReply, TurnUpdate};
 
@@ -13,7 +19,9 @@ use super::{AgentBridge, AgentReply, TurnUpdate};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum PluginsCall {
     Load,
-    Install(AgentPackageSource),
+    /// What to install, as the catalog names it: `PLUGIN@MARKETPLACE` of
+    /// an added marketplace, or a directory.
+    Install(String),
     Uninstall {
         id: String,
         purge_data: bool,
@@ -30,10 +38,17 @@ pub(crate) enum PluginsCall {
         id: String,
         permissions: PackagePermissions,
     },
-    /// A code package's settings, an object, or `null` to remove them.
+    /// A code package's settings, an object, or `null` to remove them,
+    /// for a package whose manifest does not describe them.
     SetSettings {
         id: String,
         settings: serde_json::Value,
+    },
+    /// The settings a code package's options form changed, each `null` to
+    /// return to its default.
+    SetPackageOptions {
+        id: String,
+        options: serde_json::Map<String, serde_json::Value>,
     },
     AddMarketplace(String),
     UpgradeMarketplace(String),
@@ -66,8 +81,12 @@ pub(crate) struct PluginsState {
 #[derive(Debug)]
 pub(crate) enum PluginsDone {
     Notice(String),
-    /// An install or an update, with the hooks it brought to trust.
-    Installed(Box<AgentPackageInstall>),
+    /// An install or an update: the package, and the hooks it brought to
+    /// trust (key and command).
+    Installed {
+        package: Box<AgentPackageStatus>,
+        hooks: Vec<(String, String)>,
+    },
 }
 
 /// What the Agent answered `/plugins`.
@@ -114,37 +133,39 @@ async fn run(agent: &AgentHandle, call: PluginsCall) -> Result<Option<PluginsDon
     match call {
         PluginsCall::Load => Ok(None),
         PluginsCall::Install(source) => {
-            let install = agent.install_package(source).await?;
-            Ok(Some(PluginsDone::Installed(Box::new(install))))
+            let outcome = action(agent, "packages", Some(source), "add", json!({})).await?;
+            installed(agent, outcome.record.unwrap_or_default()).await
         }
         PluginsCall::Update(id) => {
-            let install = agent.update_package(&id).await?;
-            Ok(Some(PluginsDone::Installed(Box::new(install))))
+            action(agent, "packages", Some(id.clone()), "update", json!({})).await?;
+            installed(agent, id).await
         }
         PluginsCall::Uninstall { id, purge_data } => {
-            let removed = agent.uninstall_package(&id, purge_data).await?;
-            match removed.purged_data {
-                Some(_) => notice(format!("Uninstalled {id} and deleted its data.")),
-                None => notice(format!("Uninstalled {id}.")),
+            let verb = if purge_data { "purge" } else { "delete" };
+            action(agent, "packages", Some(id.clone()), verb, json!({})).await?;
+            if purge_data {
+                notice(format!("Uninstalled {id} and deleted its data."))
+            } else {
+                notice(format!("Uninstalled {id}."))
             }
         }
         PluginsCall::SetEnabled { id, enabled } => {
-            agent.set_package_enabled(&id, enabled).await?;
+            let values = json!({ "enabled": enabled });
+            action(agent, "packages", Some(id.clone()), "save", values).await?;
             notice(format!("{id} is {}.", on_or_off(enabled)))
         }
         PluginsCall::Retry(id) => {
-            let package = agent.retry_package(&id).await?;
-            match package.issues.len() {
-                0 => notice(format!("{id} was loaded again.")),
-                count => notice(format!("{id} was loaded again, with {count} issue(s).")),
-            }
+            let outcome = action(agent, "packages", Some(id.clone()), "retry", json!({})).await?;
+            notice(format!(
+                "{id} was {}.",
+                outcome.message.as_deref().unwrap_or("loaded again")
+            ))
         }
         PluginsCall::TrustHooks(keys) => {
             let count = keys.len();
-            agent
-                .trust_hooks(keys)
-                .await
-                .map_err(|error| error.to_string())?;
+            for key in keys {
+                action(agent, "hooks", Some(key), "trust", json!({})).await?;
+            }
             notice(format!("Trusted {count} hook(s)."))
         }
         PluginsCall::GrantPermissions { id, permissions } => {
@@ -155,47 +176,135 @@ async fn run(agent: &AgentHandle, call: PluginsCall) -> Result<Option<PluginsDon
             agent.set_package_settings(&id, settings).await?;
             notice(format!("Saved the settings of {id}."))
         }
-        PluginsCall::AddMarketplace(source) => {
-            let added = agent
-                .add_marketplace(MarketplaceAddRequest {
-                    source,
-                    ..MarketplaceAddRequest::default()
-                })
+        PluginsCall::SetPackageOptions { id, options } => {
+            let changes = changes(options, |key| package_setting_key(&id, key));
+            agent
+                .write_setting_values(SettingsWrite { changes })
                 .await?;
-            if added.already_added {
-                notice(format!("Marketplace {} is already added.", added.name))
+            notice(format!("Saved the settings of {id}."))
+        }
+        PluginsCall::AddMarketplace(source) => {
+            let values = json!({ "source": source });
+            let outcome = action(agent, "marketplaces", None, "add", values).await?;
+            let name = outcome.record.unwrap_or_default();
+            if outcome.message.is_some() {
+                notice(format!("Marketplace {name} is already added."))
             } else {
-                notice(format!("Added marketplace {}.", added.name))
+                notice(format!("Added marketplace {name}."))
             }
         }
         PluginsCall::UpgradeMarketplace(name) => {
-            let upgrades = agent.upgrade_marketplace(Some(name.clone())).await?;
-            if upgrades.iter().any(|upgrade| upgrade.upgraded) {
+            let outcome = action(
+                agent,
+                "marketplaces",
+                Some(name.clone()),
+                "upgrade",
+                json!({}),
+            )
+            .await?;
+            if outcome.message.as_deref() == Some("upgraded") {
                 notice(format!("Upgraded marketplace {name}."))
             } else {
                 notice(format!("Marketplace {name} is up to date."))
             }
         }
         PluginsCall::RemoveMarketplace(name) => {
-            agent.remove_marketplace(&name).await?;
+            action(
+                agent,
+                "marketplaces",
+                Some(name.clone()),
+                "delete",
+                json!({}),
+            )
+            .await?;
             notice(format!("Removed marketplace {name}."))
         }
         PluginsCall::SetBuiltinEnabled { name, enabled } => {
-            agent.set_plugin_enabled(name.clone(), enabled).await?;
+            let values = json!({ "enabled": enabled });
+            action(agent, "plugins", Some(name.clone()), "save", values).await?;
             notice(format!(
                 "The built-in plugin {name} is {}.",
                 on_or_off(enabled)
             ))
         }
         PluginsCall::SetBuiltinOptions { name, options } => {
-            agent.set_plugin_options(name.clone(), options).await?;
+            let changes = changes(options, |key| format!("pluginOptions.{name}.{key}"));
+            agent
+                .write_setting_values(SettingsWrite { changes })
+                .await?;
             notice(format!("Saved the options of the built-in plugin {name}."))
         }
         PluginsCall::RetryBuiltin(name) => {
-            agent.retry_plugin(&name).await?;
+            action(agent, "plugins", Some(name.clone()), "retry", json!({})).await?;
             notice(format!("The built-in plugin {name} was started again."))
         }
     }
+}
+
+/// Runs `action` of the catalog's collection `collection`, on `record`.
+async fn action(
+    agent: &AgentHandle,
+    collection: &str,
+    record: Option<String>,
+    action: &str,
+    values: Value,
+) -> Result<SettingsActionOutcome, String> {
+    let request = SettingsActionRequest {
+        collection: collection.to_string(),
+        record,
+        action: action.to_string(),
+        expected_revision: None,
+        values: match values {
+            Value::Object(values) => values,
+            _ => Map::new(),
+        },
+    };
+    agent.run_settings_action(request).await
+}
+
+/// The options a form changed as a write by key: a value set, `null` back
+/// to its default.
+fn changes(options: Map<String, Value>, key: impl Fn(&str) -> String) -> Vec<SettingChange> {
+    options
+        .into_iter()
+        .map(|(option, value)| SettingChange {
+            key: key(&option),
+            op: match value {
+                Value::Null => SettingWriteOp::Reset,
+                value => SettingWriteOp::Set(value),
+            },
+        })
+        .collect()
+}
+
+/// The package `id` installed or updated, with its hooks that wait to be
+/// trusted and what each runs (its key, when the hooks cannot be read).
+async fn installed(agent: &AgentHandle, id: String) -> Result<Option<PluginsDone>, String> {
+    let package = agent
+        .package(&id)
+        .await?
+        .ok_or_else(|| format!("plugin `{id}` is not installed"))?;
+    let listed = agent.hooks_list().await.map(|hooks| hooks.hooks);
+    let hooks = package
+        .hooks_to_trust
+        .iter()
+        .map(|key| {
+            let command = listed
+                .iter()
+                .flatten()
+                .find(|hook| hook.key == *key)
+                .map(|hook| {
+                    let hanafubuki_agent::AgentHookHandler::Command { command, .. } = &hook.handler;
+                    command.clone()
+                })
+                .unwrap_or_else(|| key.clone());
+            (key.clone(), command)
+        })
+        .collect();
+    Ok(Some(PluginsDone::Installed {
+        package: Box::new(package),
+        hooks,
+    }))
 }
 
 async fn load(agent: &AgentHandle, safe_mode: bool) -> Result<PluginsState, String> {

@@ -59,6 +59,9 @@ fn keymap_rebinds_ctrl_t_with_a_captured_key_and_refuses_a_conflict() {
     harness.ctrl('y');
     harness.pump_until_screen_shows("and editor.yank");
     harness.ctrl('g');
+    // The center says what its page saved: the transcript is behind it.
+    harness.pump_until_screen_shows("global.open_transcript: ctrl-g.");
+    assert!(harness.app.workspace.settings().is_some());
     harness.leave_settings();
     harness.pump_until_screen_shows("global.open_transcript: ctrl-g.");
     let file = harness.config_file();

@@ -191,6 +191,17 @@ impl SettingsCenter {
         check == self.page_checks
     }
 
+    /// What a page that is a command's views saved itself (the keymap,
+    /// the presets, the theme), said under the title as the center's own
+    /// writes are: the transcript it also goes into is hidden while the
+    /// center is open.
+    pub(crate) fn report(&mut self, outcome: Result<String, String>) {
+        self.notice = match outcome {
+            Ok(message) => Notice::Done(message),
+            Err(error) => Notice::Failed(error),
+        };
+    }
+
     /// The command's views closed: back to the row that opened them, and
     /// the values they may have saved read again.
     pub(crate) fn hosted_closed(&mut self) {

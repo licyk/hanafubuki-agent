@@ -34,6 +34,8 @@ hanafubuki-agent -p offline exec "整理这个目录下的笔记"
 
 选择文件中不存在的配置档会报错。配置档中的列表（如 `disabledPlugins`）会**替换**下一层的列表，而不是合并。
 
+终端界面的[设置中心](/docs/terminal-interface#config)编辑配置档（Advanced 标签页中的 Profiles）：`a` 添加一个，每个键改动时即保存，`r` 把它从配置档中删除，Delete 删除整个配置档，但 Agent 当前使用的那个除外。
+
 ## 项目配置 [#projects]
 
 项目是工作目录（`-C`，默认为当前目录）所在的 Git 仓库根目录；不在仓库中时就是工作目录本身。项目可以有自己的配置文件 `<项目>/.hanafubuki-agent/config.toml`，内容与用户文件的设置相同。

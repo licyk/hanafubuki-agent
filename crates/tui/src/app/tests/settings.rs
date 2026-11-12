@@ -289,9 +289,9 @@ fn an_mcp_server_is_added_with_a_secret_and_deleted_in_the_center() {
     harness.key(KeyCode::Char('a'));
     harness.pump_until_screen_shows("MCP servers › Add a server");
     harness.edit_setting("Server id", "tools");
-    // Off, so nothing is started: unset is the default, on, then off.
+    // Off, so nothing is started: it starts on, as an add writes it.
     harness.select_setting("Enabled");
-    harness.key(KeyCode::Enter);
+    harness.pump_until_screen_shows("[x] On");
     harness.key(KeyCode::Enter);
     harness.select_setting("Transport");
     harness.key(KeyCode::Enter);

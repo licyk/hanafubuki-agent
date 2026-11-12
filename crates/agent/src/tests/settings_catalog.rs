@@ -79,10 +79,13 @@ async fn the_catalog_reads_every_owner_and_returns_no_secret() {
         collections,
         [
             "providers",
+            "providerModels",
             "modelPolicy",
             "mcp",
             "mcpSecrets",
+            "pluginMcp",
             "plugins",
+            "packages",
             "marketplaces",
             "hooks",
             "roles"

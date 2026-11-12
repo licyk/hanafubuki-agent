@@ -694,9 +694,144 @@ independent.
         made by hosted pages (theme, keymap, presets) report in the
         transcript, hidden while the center is open. Plugin MCP servers are
         only in `/mcp verbose`.
-- [ ] S6: the settings missing today: profiles, project trust, roles, hook
+- [x] S6: the settings missing today: profiles, project trust, roles, hook
       definitions, per-model overrides, plugin MCP server and tool filters,
       package settings from `configSchema`, marketplaces.
+      Done (2026-11-12):
+      - Per item (§4.4's list):
+        - Profiles: done now. They were a collection (S3); a save's `null`
+          now removes a key from the profile and a confirmed `delete`
+          removes the profile, refused for the one the Agent runs with
+          (`-p`). A profile's fields carry no defaults (a new profile sets
+          nothing).
+        - Project trust: already done (S3: `projects`, add/trust/untrust).
+        - Roles: done now. The `roles` collection adds, edits (key by key,
+          `null` removing one) and deletes the user's `[agents.<name>]`
+          entries of `config.toml`: `description`, `instructions`,
+          `instructionsMode`, `model`, `reasoningEffort` (checked as a
+          level), `spawnable`; the catalog is rebuilt after each write. A
+          role of a role file (or an entry with `configFile`), a profile, a
+          project, a plugin or a built-in one is shown with
+          `SettingsRecord.read_only` (why and where it is written) and a
+          save or delete of it is refused with that reason.
+        - Hook definitions: done now, shown. A hook's record summary is its
+          whole definition (command, timeout, status message, the file or
+          plugin it is in) beside its trust (state) and `enabled`.
+        - Per-model overrides: done now. New collection `providerModels`
+          (Model group): a record per `PROVIDER/MODEL` (split at the first
+          `/`), fields `contextWindowTokens`, `maxOutputTokens`,
+          `imageInput`, `reasoningEfforts`, add/save/delete at the
+          `providers.toml` revision through a new crate-private
+          `write_provider_model` (the registry's mutation; the model id
+          checked as the reader takes it: 1 to 256 bytes, not blank).
+        - Plugin MCP servers and tool filters: done now. New collection
+          `pluginMcp` (Tools group): a record per server an enabled
+          installed plugin runs (`PLUGIN/SERVER`, from
+          `mcp_snapshot().plugin_servers`), its connection phase, tools and
+          last error; `save` writes `enabled`, `enabledTools`,
+          `disabledTools` as leaf keys under `[plugins."<id>".mcpServers.
+          <server>]` (`null` removes one, back to the plugin's), the server
+          with them `validate()`d first, then the packages reload.
+        - Package settings from `configSchema`: done now. A section per
+          installed code plugin whose schema lowers to options
+          (`plugins."<id>".settings`, Plugins group, after the rows'
+          option sections), its keys `plugins."<id>".settings.<option>`
+          (`package_setting_key`, public); `write_setting_values` writes
+          them through `set_package_settings` (options and JSON Schema
+          checked, guest restarted): the user file's settings with the
+          changes made, a reset removing the key. The lowering now labels
+          an option by its `title` (S1's leftover).
+        - Marketplaces: already done (S3: `marketplaces`, add/upgrade/
+          remove).
+      - S5's leftovers: an add form starts from the record specs' defaults
+        (filled in the facade from the template the add writes over:
+        Provider `enabled`/`protocol`, MCP `new_server(server_defaults)`
+        with both transports, the model override's default), so a new MCP
+        server shows its stdio fields and Enabled shows `[x] On`; only
+        changed fields are sent. A hosted page's save (keymap, presets,
+        theme, status line, title, `/raw`) is said under the center's title
+        too (`SettingsCenter::report`). Plugin MCP servers are the
+        `pluginMcp` collection. The browsers write through the catalog:
+        hooks (`save`, `trust`), the plugin browser (new `packages`
+        collection: `add` = install from `PLUGIN@MARKETPLACE` or a
+        directory, `save` (enabled), `update`, `retry`, `trust` (its hooks),
+        `delete`, `purge`; `marketplaces`; `plugins`; built-in and package
+        options as writes by key).
+      - Catalog vocabulary: `SettingsRecord.read_only` (`readOnly`);
+        record specs carry `default`; `r` on a record's field sends `null`
+        for any field (the owner refuses where a field is always set).
+        Config: `UserEntry { Profile, Role, PluginMcpServer }`,
+        `AgentConfig::write_entry_values` and `remove_entry` (leaf writes,
+        `null` removes, comments kept).
+      - Deviations: hook definitions are shown, not written (they live in
+        `hooks.json`/`[hooks]` arrays of several files and plugins; editing
+        them is not in §4.4's "only the latter is editable" scope); roles
+        edit only the user's `config.toml` entries and not role files, and
+        "open the file" is the record's read-only reason naming the path
+        (the TUI has no editor launcher); the narrowing role keys are not
+        fields. The grant of a code plugin's permissions stays a direct
+        call (`grant_package_permissions`, a consent for what the browser
+        showed, as the OAuth login), and so do the raw JSON settings of a
+        code plugin without a `configSchema` (no spec; the plan's carve-out).
+        Package settings carry no per-layer provenance (`[plugins]` is not
+        read key by key): set is `User`, else `Default`; a write of them is
+        one plugin's alone ("written on their own"), not mixed with other
+        keys. Installing a linked directory is not an action (the CLI's
+        `plugins link`). The plugin browser's page is now `plugin-browser`
+        ("Plugin browser"; `/plugins` opens it), since `packages` is the
+        collection's id. `SettingsActionOutcome` carries no
+        `AgentPackageInstall`: the bridge reads the package and its hooks to
+        trust after an install or update.
+      - Tests: facade `tests/settings_collections.rs` (an add's defaults
+        equal what it writes; a profile's key and a profile removed, the
+        selected one refused; the user's roles added, saved, unset and
+        deleted, a built-in role's read-only reason, a `none` effort
+        refused; a model's overrides added, stale revision and zero window
+        refused, unset, deleted; a hook's whole definition; an installed
+        plugin installed, turned off and uninstalled; a code plugin's
+        settings section, written, refused out of range, refused mixed,
+        reset), `tests/packages/mcp.rs` (unix: a plugin's server
+        restricted and returned to the plugin's through its record),
+        `tests/settings_catalog.rs` (the collection list); packages
+        `options.rs` (`title` as label); TUI `settings_center/tests/
+        interaction.rs` (an add starting from its defaults with a
+        conditional field shown, a read-only record, `r` unsetting a record
+        field), `app/tests/preferences.rs` (the keymap page's save said in
+        the center), `app/tests/settings.rs` (a new MCP server starts on),
+        `commands/plugins/tests.rs` (a code plugin's options saved by key).
+      - Snapshots and goldens: no `.snap` changed, no golden changed
+        (nothing model-visible).
+      - Docs (both languages, same ids): `architecture#settings-catalog`,
+        `terminal-interface#config`, `#plugins`, `#hooks`, `internals`
+        (bridge calls), `embedding` (`write_setting_values`), `mcp#interface`,
+        `providers-models#per-model` and `#interface`, `roles#inline`,
+        `config-layers#profiles`, `writing-plugins#config-schema`.
+      - Hanafubuki at its next pin: additive: collections `providerModels`
+        (after `providers`), `pluginMcp` (after `mcpSecrets`), `packages`
+        (after `plugins`); package settings sections
+        (`plugins."<id>".settings`) and `package_setting_key`;
+        `SettingsRecord.read_only` (`readOnly`); record specs' `default`;
+        `roles` gains `add`/`save`/`delete` and fields `instructions`,
+        `instructionsMode`; `profiles` gains `delete`; hooks' summary is
+        the definition; `UserEntry`, `AgentConfig::write_entry_values`,
+        `remove_entry`; a lowered `configSchema` option's `label` is its
+        `title`. A struct literal of `SettingsRecord` needs `read_only`.
+      - Module size: no exception added or raised.
+      - Validation: `cargo fmt --all --check`; `RUSTFLAGS="-D warnings"
+        cargo check --workspace --all-targets --all-features`; `cargo clippy
+        --workspace --all-targets --all-features -- -D warnings`; `cargo
+        xtask check`; `cargo test --workspace --all-features`; `bun install
+        --frozen-lockfile`, `bun run format:check:site`, `bun run
+        site:check`, `bun run site:test`, `VITE_BASE_PATH=/hanafubuki-agent/
+        bun run site:build` (all 35 pages prerendered). CI on Linux, Windows
+        and macOS: https://github.com/licyk/hanafubuki-agent/actions/runs/43272937692
+        (run on 53687a8, which differs from the landed commit only in this
+        line; Site: .../runs/43272937763).
+      - For S7: the pages above say what S6 changed; the full pass still
+        owes `configuration`, `config-reference` (the new collections and
+        the plugin MCP/package settings keys under `#plugins`),
+        `plugin-rules`, `host-plugins` and `writing-plugins` (declaring
+        settings), and `plugins.en.mdx` (the `/hooks` line).
 - [ ] S7: documentation in both languages: `terminal-interface`,
       `configuration`, `config-reference`, `architecture`, `embedding`,
       `plugin-rules`, `writing-plugins`, `host-plugins`.

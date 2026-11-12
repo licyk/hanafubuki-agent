@@ -224,3 +224,75 @@ async fn the_users_settings_restrict_a_plugins_server() {
     );
     finish(service, paths).await;
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_plugins_server_is_restricted_through_its_settings_record() {
+    let mcp = ScriptedMcpServers::start(BTreeMap::from([(
+        "files",
+        vec![
+            scripted_tool("lookup", "Look up a record."),
+            scripted_tool("echo", "Echo the value."),
+        ],
+    )]))
+    .await;
+    let (service, paths, config) = service_with_config("packages-mcp-record", |_, _| {});
+    let source = claude_plugin(
+        &paths,
+        "demo",
+        json!({ "files": http_server(&mcp, "files") }),
+        None,
+    );
+    install(&paths, &source, "demo@local");
+    set_enabled(&config, "demo@local", true);
+    service.reload_packages().await.unwrap();
+
+    let catalog = service.settings_catalog().await.unwrap();
+    let servers = catalog
+        .collections
+        .iter()
+        .find(|collection| collection.id == "pluginMcp")
+        .unwrap();
+    let [record] = servers.records.as_slice() else {
+        panic!("one plugin server: {:?}", servers.records);
+    };
+    assert_eq!(record.id, "demo@local/files");
+    assert_eq!(record.state.as_deref(), Some("ready"));
+    assert!(record.summary.contains("2 tools"), "{}", record.summary);
+    let save = |values: serde_json::Value| {
+        serde_json::from_value::<SettingsActionRequest>(json!({
+            "collection": "pluginMcp",
+            "record": "demo@local/files",
+            "action": "save",
+            "values": values,
+        }))
+        .unwrap()
+    };
+    service
+        .run_settings_action(save(json!({ "disabledTools": ["lookup"] })))
+        .await
+        .unwrap();
+    let tools = |snapshot: &crate::McpApplicationSnapshot| {
+        snapshot
+            .tools
+            .iter()
+            .map(|tool| tool.remote_name.clone())
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(tools(&service.mcp_snapshot().await.unwrap()), ["echo"]);
+    let entry = &config.settings().unwrap().plugins.packages["demo@local"];
+    assert_eq!(entry.enabled, Some(true), "the plugin's other keys stay");
+    assert_eq!(
+        entry.mcp_servers["files"].disabled_tools,
+        Some(vec!["lookup".to_string()])
+    );
+    service
+        .run_settings_action(save(json!({ "disabledTools": null })))
+        .await
+        .unwrap();
+    assert_eq!(
+        config.settings().unwrap().plugins.packages["demo@local"].mcp_servers["files"],
+        PluginMcpServerSettings::default(),
+        "null returns it to the plugin's"
+    );
+    finish(service, paths).await;
+}
