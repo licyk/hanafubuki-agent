@@ -418,7 +418,8 @@ fn a_monitor_that_skips_ahead_never_starts_inside_an_escape_sequence() {
         text.ends_with(&format!("{}\n", "y".repeat(8184))),
         "{text:?}"
     );
-    assert!(!text.contains("31m"), "{:?}", &text[..16]);
+    // Only the rest of the cut sequence can leave an `m`.
+    assert!(!text.contains('m'), "{:?}", &text[..16]);
 }
 
 #[test]
@@ -434,5 +435,6 @@ fn bounding_an_update_never_starts_it_inside_an_escape_sequence() {
         text.ends_with(&format!("{}\n", "y".repeat(8184))),
         "{text:?}"
     );
-    assert!(!text.contains("31m"), "{:?}", &text[..16]);
+    // Only the rest of the cut sequence can leave an `m`.
+    assert!(!text.contains('m'), "{:?}", &text[..16]);
 }

@@ -254,3 +254,30 @@ fn a_report_on_a_runtime_that_has_shut_down_frees_the_consumer_slot() {
     assert!(resumed, "the flush did not resume the stopped consumer");
     assert_eq!(committed, vec![started(1), disposed(1)]);
 }
+
+#[tokio::test]
+#[ignore = "reproduces §4.9 step 6, a read inside a sequence; fixed in E3"]
+async fn a_coalesced_output_never_starts_inside_an_escape_sequence() {
+    use hanafubuki_agent_foundation::terminal_text::render_plain_text;
+
+    let queue = ExecutionProgressQueue::default();
+    for line in 0..EXECUTION_PROGRESS_QUEUE_CAPACITY as u64 {
+        assert!(queue.report(output(2, "x", line + 1), idle_consumer));
+    }
+    // The front trim goes to 16392 - 16384 = 8, inside `ESC [ 3 1 m`.
+    let newer = format!("\x1b[31mred\n{}\n", "y".repeat(16_377));
+    assert_eq!(
+        "first".len() + newer.len(),
+        MAXIMUM_COALESCED_OUTPUT_BYTES + 8
+    );
+    assert!(queue.report(output(1, "first", 1), idle_consumer));
+    assert!(queue.report(output(1, &newer, 2), idle_consumer));
+    let drained = drain(&queue);
+    let Some(AgentToolProgressUpdate::ExecutionOutput { text, .. }) = drained.last() else {
+        panic!("the last update is not an output");
+    };
+    let text = render_plain_text(text.as_bytes());
+    assert!(text.ends_with(&format!("{}\n", "y".repeat(16_377))));
+    // Only the rest of the cut sequence can leave an `m`.
+    assert!(!text.contains('m'), "{:?}", &text[..16]);
+}

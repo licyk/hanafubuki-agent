@@ -241,7 +241,8 @@ fn a_read_after_trimming_never_starts_inside_an_escape_sequence() {
         .collect::<Vec<_>>();
     let rendered = render_plain_text(&bytes);
     assert!(rendered.ends_with("next\n"), "{rendered:?}");
-    assert!(!rendered.contains("31m"), "{rendered:?}");
+    // Only the rest of the cut sequence can leave an `m`.
+    assert!(!rendered.contains('m'), "{rendered:?}");
 }
 
 /// Decodes one stream's `reads`, in order, as its output is decoded today:

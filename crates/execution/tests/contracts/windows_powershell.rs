@@ -56,14 +56,25 @@ fn request(shell: PlatformShell, script: &str, tty: bool) -> ExecCommandRequest 
 struct Ran {
     output: String,
     truncated: bool,
-    elapsed: Duration,
 }
 
 /// Runs `request` to its end, polling as the model does, and returns all it
 /// printed.
 fn run_request(request: ExecCommandRequest) -> Ran {
     let started = Instant::now();
+    let max_output_bytes = request.max_output_bytes;
     let (service, first) = start(request);
+    finish(&service, first, None, max_output_bytes, started)
+}
+
+/// Polls a session from `first` on, writing `chars` first, until it ends.
+fn finish(
+    service: &AgentExecutionService,
+    first: UnifiedExecResult,
+    mut chars: Option<&str>,
+    max_output_bytes: Option<usize>,
+    started: Instant,
+) -> Ran {
     let mut output = first.output;
     let mut truncated = first.truncated;
     let mut session_id = first.session_id;
@@ -74,9 +85,9 @@ fn run_request(request: ExecCommandRequest) -> Ran {
                 &scope(),
                 WriteStdinRequest {
                     session_id: AgentExecutionId::from_untrusted(id).unwrap(),
-                    chars: String::new(),
+                    chars: chars.take().unwrap_or_default().to_string(),
                     yield_time_ms: YIELD_MS,
-                    max_output_bytes: None,
+                    max_output_bytes,
                 },
                 &CancellationToken::default(),
             )
@@ -85,11 +96,7 @@ fn run_request(request: ExecCommandRequest) -> Ran {
         truncated |= polled.truncated;
         session_id = polled.session_id;
     }
-    Ran {
-        output,
-        truncated,
-        elapsed: started.elapsed(),
-    }
+    Ran { output, truncated }
 }
 
 fn run(script: &str, tty: bool) -> String {
@@ -140,30 +147,16 @@ fn scope() -> AgentExecutionScope {
 /// Answers a prompt with non-ASCII text through `write_stdin`, as the model
 /// does in a PTY session.
 fn answer(script: &str) -> String {
+    let started = Instant::now();
     let mut request = request(PlatformShell::PowerShell, script, true);
     request.yield_time_ms = 5_000;
     let (service, yielded) = start(request);
-    let Some(session_id) = yielded.session_id else {
-        panic!("finished before its input: {:?}", yielded.output);
-    };
-    let completed = service
-        .write_stdin(
-            &scope(),
-            WriteStdinRequest {
-                session_id: AgentExecutionId::from_untrusted(session_id).unwrap(),
-                chars: "中文 ü\r".to_string(),
-                yield_time_ms: YIELD_MS,
-                max_output_bytes: None,
-            },
-            &CancellationToken::default(),
-        )
-        .unwrap();
-    assert_eq!(
-        completed.session_id, None,
-        "still running: {:?}",
-        completed.output
+    assert!(
+        yielded.session_id.is_some(),
+        "finished before its input: {:?}",
+        yielded.output
     );
-    format!("{}{}", yielded.output, completed.output)
+    finish(&service, yielded, Some("中文 ü\r"), None, started).output
 }
 
 /// Writes `text` to standard output in the ANSI code page, through the raw
@@ -460,50 +453,17 @@ fn pty_a_listing_over_the_output_bound_says_what_it_left_out() {
     a_listing_over_the_output_bound_says_what_it_left_out(true);
 }
 
-/// Temporary, for the reproduction run only: how long a cmdlet takes in
-/// the clean environment and with D17's variables, and what the console
-/// reports.
+/// As reported from `dir`: the head arrives before the first poll, the rest
+/// after it, more than `max_output_bytes`, which also bounds the buffer.
 #[test]
-fn probe_environment() {
-    let cmdlet = "$t = [Diagnostics.Stopwatch]::StartNew(); Write-Output 'x' | Out-Null; \
-                  \"cmdlet_ms=$($t.ElapsedMilliseconds)\"; \
-                  \"out=$([Console]::OutputEncoding.CodePage) in=$([Console]::InputEncoding.CodePage) \
-                  oe=$($OutputEncoding.CodePage) acp=$([Text.Encoding]::Default.CodePage) \
-                  psmp=$env:PSModulePath\"";
-    let mut report = String::new();
-    for (label, variables) in [
-        ("clean", &[][..]),
-        (
-            "d17",
-            &[
-                "USERPROFILE",
-                "APPDATA",
-                "LOCALAPPDATA",
-                "ProgramData",
-                "ProgramFiles",
-                "ProgramFiles(x86)",
-                "SystemDrive",
-                "HOMEDRIVE",
-                "HOMEPATH",
-                "PROCESSOR_ARCHITECTURE",
-                "NUMBER_OF_PROCESSORS",
-                "OS",
-            ][..],
-        ),
-    ] {
-        for tty in [false, true] {
-            let mut request = request(PlatformShell::PowerShell, cmdlet, tty);
-            for variable in variables {
-                if let Ok(value) = std::env::var(variable) {
-                    request.environment.insert(variable.to_string(), value);
-                }
-            }
-            let ran = run_request(request);
-            report.push_str(&format!(
-                "{label} tty={tty} elapsed={:?}: {:?}\n",
-                ran.elapsed, ran.output
-            ));
-        }
-    }
-    panic!("{report}");
+fn pipe_a_slow_listing_over_the_output_bound_says_what_it_left_out() {
+    let mut request = request(
+        PlatformShell::Cmd,
+        "echo line 1 of the listing& ping -n 4 127.0.0.1 >NUL & \
+         for /L %i in (2,1,300) do @echo line %i of the listing",
+        false,
+    );
+    request.yield_time_ms = 1_000;
+    request.max_output_bytes = Some(4096);
+    assert_every_line_or_a_marker(&run_request(request), 300);
 }
