@@ -72,11 +72,12 @@ icon: ListTree
 
 ### 网页工具 [#web]
 
-| 键                      | 类型和取值                                                  | 默认值   | 含义                                               |
-| ----------------------- | ----------------------------------------------------------- | -------- | -------------------------------------------------- |
-| `webSearchProvider`     | `"auto"`、`"duckduckgo"`、`"searxng"`                       | `"auto"` | 网页搜索使用的服务，见[工具](/docs/tools#web)      |
-| `searxngBaseUrl`        | `http` 或 `https` URL，不含凭据、查询和片段，最多 2048 字节 | 未设置   | SearXNG 实例的地址；`"searxng"` 需要它             |
-| `webFetchUseJinaReader` | 布尔值                                                      | `false`  | 直接抓取网页失败时，改用 `https://r.jina.ai/` 读取 |
+| 键                            | 类型和取值                                                  | 默认值   | 含义                                                                                                                                 |
+| ----------------------------- | ----------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `webSearchProvider`           | `"auto"`、`"duckduckgo"`、`"searxng"`                       | `"auto"` | 网页搜索使用的服务，见[工具](/docs/tools#web)                                                                                        |
+| `searxngBaseUrl`              | `http` 或 `https` URL，不含凭据、查询和片段，最多 2048 字节 | 未设置   | SearXNG 实例的地址；`"searxng"` 需要它                                                                                               |
+| `webFetchUseJinaReader`       | 布尔值                                                      | `false`  | 直接抓取网页失败时，改用 `https://r.jina.ai/` 读取                                                                                   |
+| `webFetchResolveThroughProxy` | 布尔值                                                      | `false`  | 设置了代理 URL 时，本机无法解析的页面域名交给代理解析，而不是让抓取失败；见[网页抓取与域名解析](/docs/network-logging#web-fetch-dns) |
 
 ### 压缩 [#compaction]
 
@@ -213,7 +214,7 @@ maximumRunningAgents = 4
 defaultWaitSeconds = 60
 ```
 
-这个表按插件和键跨层合并，就像 `[plugins]` 按条目合并：某层设置的键替换下层的，其余键保留。每个键单独读取：类型不对的值，或不合适的文本，取选项的默认值；越界的整数被截取到边界；两者都会产生一条警告，指明层、插件和键（`/warnings`，以及 `/plugins` 中该插件的选项）。插件不接受的键保留在文件中但被忽略，并有一条警告；插件没有选项的表没有意义，就像 `disabledPlugins` 中的未知名字。写入是严格的：`config set pluginOptions.名字.键 值`、选项表单和 `set_plugin_options` 按插件的选项检查每个值，在写入任何内容之前带着原因拒绝不合适的值；`config get pluginOptions.名字.键` 打印各层解析出的值，没有设置时打印默认值。配置档或项目的 `pluginOptions` 需要手动编写。Agent 写入的更改立即生效：`subagents` 就地接受新的运行中代理上限，对新的等待界限则重新启动，它运行的子代理继续运行。`web` 插件的设置仍是上面的 `webSearchProvider`、`searxngBaseUrl` 和 `webFetchUseJinaReader`，网络表单也使用它们。
+这个表按插件和键跨层合并，就像 `[plugins]` 按条目合并：某层设置的键替换下层的，其余键保留。每个键单独读取：类型不对的值，或不合适的文本，取选项的默认值；越界的整数被截取到边界；两者都会产生一条警告，指明层、插件和键（`/warnings`，以及 `/plugins` 中该插件的选项）。插件不接受的键保留在文件中但被忽略，并有一条警告；插件没有选项的表没有意义，就像 `disabledPlugins` 中的未知名字。写入是严格的：`config set pluginOptions.名字.键 值`、选项表单和 `set_plugin_options` 按插件的选项检查每个值，在写入任何内容之前带着原因拒绝不合适的值；`config get pluginOptions.名字.键` 打印各层解析出的值，没有设置时打印默认值。配置档或项目的 `pluginOptions` 需要手动编写。Agent 写入的更改立即生效：`subagents` 就地接受新的运行中代理上限，对新的等待界限则重新启动，它运行的子代理继续运行。`web` 插件的设置仍是上面的 `webSearchProvider`、`searxngBaseUrl`、`webFetchUseJinaReader` 和 `webFetchResolveThroughProxy`，网络表单也使用它们。
 
 ### 角色 [#agents]
 

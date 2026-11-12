@@ -122,6 +122,10 @@ pub struct WebSearchConfig {
     pub jina_reader_timeout: Duration,
     pub page_fetch_total_timeout: Duration,
     pub jina_reader_enabled: bool,
+    /// Through a proxy URL, a page's name this machine cannot resolve is
+    /// left to the proxy instead of failing the fetch: the Agent cannot
+    /// check where it points. Names that resolve here are still checked.
+    pub resolve_through_proxy: bool,
     pub(crate) duckduckgo_search_url: String,
     pub(crate) jina_reader_base_url: String,
     pub(crate) test_allowed_private_origins: Vec<String>,
@@ -142,6 +146,7 @@ impl Default for WebSearchConfig {
             jina_reader_timeout: Duration::from_secs(20),
             page_fetch_total_timeout: Duration::from_secs(45),
             jina_reader_enabled: false,
+            resolve_through_proxy: false,
             duckduckgo_search_url: "https://html.duckduckgo.com/html/".to_string(),
             jina_reader_base_url: "https://r.jina.ai/".to_string(),
             test_allowed_private_origins: Vec::new(),

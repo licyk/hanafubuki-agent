@@ -31,6 +31,7 @@ const WINDOWS_SANDBOX: FieldId = "windows_sandbox";
 const PROVIDER: FieldId = "provider";
 const SEARXNG_URL: FieldId = "searxng_url";
 const JINA_READER: FieldId = "jina_reader";
+const RESOLVE_THROUGH_PROXY: FieldId = "resolve_through_proxy";
 const STRATEGY: FieldId = "strategy";
 const PROXY_MODE: FieldId = "proxy_mode";
 const PROXY_URL: FieldId = "proxy_url";
@@ -165,6 +166,11 @@ impl ConfigChange {
                 }
                 if let Some(value) = patch.web_fetch_use_jina_reader {
                     if settings.web_fetch_use_jina_reader != value {
+                        return true;
+                    }
+                }
+                if let Some(value) = patch.web_fetch_resolve_through_proxy {
+                    if settings.web_fetch_resolve_through_proxy != value {
                         return true;
                     }
                 }
@@ -337,6 +343,11 @@ pub(super) fn section_form(section: ConfigSection, state: &ConfigState) -> FormV
                     JINA_READER,
                     "Fetch through Jina Reader after a direct failure",
                     settings.web_fetch_use_jina_reader,
+                ),
+                FormItem::toggle(
+                    RESOLVE_THROUGH_PROXY,
+                    "Leave names this machine cannot resolve to the proxy",
+                    settings.web_fetch_resolve_through_proxy,
                 ),
                 FormItem::action(SAVE, "Save"),
             ],

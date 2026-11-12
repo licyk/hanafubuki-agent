@@ -25,15 +25,15 @@ hanafubuki-agent config set network.proxy system
 
 ### What it applies to [#proxy-scope]
 
-| What                                                  | Uses                                                                                                                              |
-| ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| Web search and fetch (`web_search`, `fetch_web_page`) | `network.proxy`, each redirect and the Jina Reader fallback too; the page's name is still resolved here ([below](#web-fetch-dns)) |
-| MCP Streamable HTTP servers and OAuth                 | `network.proxy` (login and token refresh too); a change reconnects those servers                                                  |
-| The commands and terminals the model runs             | The environment variables `network.proxy` decides (below)                                                                         |
-| MCP stdio servers                                     | The same variables, over their own environment; a change restarts them                                                            |
-| Plugin package and marketplace downloads (`git`)      | The same variables (a `http.proxy` in your git configuration wins over them)                                                      |
-| Requests to model Providers and their model lists     | `network.proxy`; a change reaches each session's next turn (below)                                                                |
-| The models.dev download (`modelMetadata.modelsDev`)   | `network.proxy`                                                                                                                   |
+| What                                                  | Uses                                                                                                                                                 |
+| ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Web search and fetch (`web_search`, `fetch_web_page`) | `network.proxy`, each redirect and the Jina Reader fallback too; the page's name is still resolved here unless you opt out ([below](#web-fetch-dns)) |
+| MCP Streamable HTTP servers and OAuth                 | `network.proxy` (login and token refresh too); a change reconnects those servers                                                                     |
+| The commands and terminals the model runs             | The environment variables `network.proxy` decides (below)                                                                                            |
+| MCP stdio servers                                     | The same variables, over their own environment; a change restarts them                                                                               |
+| Plugin package and marketplace downloads (`git`)      | The same variables (a `http.proxy` in your git configuration wins over them)                                                                         |
+| Requests to model Providers and their model lists     | `network.proxy`; a change reaches each session's next turn (below)                                                                                   |
+| The models.dev download (`modelMetadata.modelsDev`)   | `network.proxy`                                                                                                                                      |
 
 ### The commands' proxy variables [#child-processes]
 
@@ -67,7 +67,13 @@ HTTPS_PROXY=http://127.0.0.1:7890 hanafubuki-agent
 - On a network where only the proxy can resolve public names (this machine's DNS cannot), every fetch fails with `web page host could not be resolved safely`. `web_search` is not affected.
 - A name this machine resolves to a private address is refused with `web page target is not a public web address`, even if the proxy would reach a public one.
 
-There is no setting to skip the check: it keeps a fetch from reaching this machine or its network. Let this machine resolve public names (its own DNS, or a resolver it can reach) to fetch pages through such a proxy.
+The check keeps a fetch, which needs no approval, from reaching this machine or its network. To fetch through a proxy that alone resolves names, either let this machine resolve public names (its own DNS, or a resolver it can reach), or turn on `webFetchResolveThroughProxy` (`/config`, Web tools):
+
+```sh
+hanafubuki-agent config set webFetchResolveThroughProxy true
+```
+
+With it on and `network.proxy` a proxy URL, a name this machine cannot resolve is left to the proxy instead of failing the fetch. A name that resolves here is still checked, and a private address or a name such as `localhost` is still refused. What the proxy reaches for a name the Agent could not check is not checked: a page could lead the model to an internal name only the proxy resolves, an intranet behind a company proxy among them. With a `socks5://` proxy the name is resolved here anyway; use `socks5h://` for the proxy to resolve it. The setting does nothing with `"system"` or `"disabled"`.
 
 ## Logging [#logging]
 

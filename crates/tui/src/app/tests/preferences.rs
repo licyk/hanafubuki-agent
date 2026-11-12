@@ -307,6 +307,8 @@ fn the_web_form_saves_the_search_provider_and_endpoint_together() {
     harness.key(KeyCode::Right);
     harness.key(KeyCode::Tab);
     harness.type_text("https://search.example.test/");
+    // Past the two toggles to Save.
+    harness.key(KeyCode::Tab);
     harness.key(KeyCode::Tab);
     harness.key(KeyCode::Tab);
     harness.key(KeyCode::Enter);

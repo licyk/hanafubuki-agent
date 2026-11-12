@@ -40,11 +40,14 @@ impl WebPageFetcher {
         Err(WebFetchError::TooManyRedirects)
     }
 
+    /// The public address `url`'s host resolves to here, or `None` when it
+    /// does not resolve here and is left to the proxy
+    /// ([`WebSearchConfig::resolve_through_proxy`] with a proxy URL).
     pub(super) async fn resolve_public_target(
         &self,
         url: &Url,
         cancellation: &CancellationToken,
-    ) -> Result<SocketAddr, WebFetchError> {
+    ) -> Result<Option<SocketAddr>, WebFetchError> {
         let host = url.host_str().ok_or(WebFetchError::BlockedTarget)?;
         let port = url
             .port_or_known_default()
@@ -63,21 +66,29 @@ impl WebPageFetcher {
             if !test_allowed && !is_public_ip(ip) {
                 return Err(WebFetchError::BlockedTarget);
             }
-            return Ok(SocketAddr::new(ip, port));
+            return Ok(Some(SocketAddr::new(ip, port)));
         }
         let addresses = tokio::select! {
             result = lookup_host((host, port)) => result,
             _ = wait_cancelled(cancellation) => return Err(WebFetchError::Cancelled),
         }
-        .map_err(|_| WebFetchError::DnsResolutionFailed)?
-        .collect::<Vec<_>>();
+        .map(|addresses| addresses.collect::<Vec<_>>())
+        .unwrap_or_default();
         if addresses.is_empty() {
-            return Err(WebFetchError::DnsResolutionFailed);
+            return if self.leaves_names_to_the_proxy() {
+                Ok(None)
+            } else {
+                Err(WebFetchError::DnsResolutionFailed)
+            };
         }
         if !test_allowed && addresses.iter().any(|address| !is_public_ip(address.ip())) {
             return Err(WebFetchError::BlockedTarget);
         }
-        Ok(addresses[0])
+        Ok(Some(addresses[0]))
+    }
+
+    fn leaves_names_to_the_proxy(&self) -> bool {
+        self.resolve_through_proxy && matches!(self.proxy, WebSearchProxy::Explicit(_))
     }
 
     pub(super) async fn wait_for_rate_limit(

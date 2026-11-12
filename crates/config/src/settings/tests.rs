@@ -10,12 +10,17 @@ fn a_patch_replaces_only_what_it_names() {
         searxng_base_url: Some("https://search.example.test".into()),
         ..AgentSettings::default()
     };
-    patch(serde_json::json!({"permissionMode": "full_access", "webFetchUseJinaReader": true}))
-        .unwrap()
-        .apply(&mut settings)
-        .unwrap();
+    patch(serde_json::json!({
+        "permissionMode": "full_access",
+        "webFetchUseJinaReader": true,
+        "webFetchResolveThroughProxy": true
+    }))
+    .unwrap()
+    .apply(&mut settings)
+    .unwrap();
     assert_eq!(settings.permission_mode, AgentPermissionMode::FullAccess);
     assert!(settings.web_fetch_use_jina_reader);
+    assert!(settings.web_fetch_resolve_through_proxy);
     assert_eq!(
         settings.searxng_base_url.as_deref(),
         Some("https://search.example.test")

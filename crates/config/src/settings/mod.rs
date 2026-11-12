@@ -48,6 +48,10 @@ pub struct AgentSettings {
     pub web_search_provider: AgentWebSearchProvider,
     pub searxng_base_url: Option<String>,
     pub web_fetch_use_jina_reader: bool,
+    /// Whether a web fetch through a proxy URL leaves a page's name this
+    /// machine cannot resolve to the proxy, instead of failing. Off by
+    /// default: the Agent cannot check where such a name points.
+    pub web_fetch_resolve_through_proxy: bool,
     pub compaction: AgentCompactionSettings,
     /// `[modelMetadata]`: whether the Agent lists the Providers' models by
     /// itself, and whether it downloads models.dev's catalogue. Read where
@@ -89,6 +93,7 @@ impl Default for AgentSettings {
             web_search_provider: AgentWebSearchProvider::Auto,
             searxng_base_url: None,
             web_fetch_use_jina_reader: false,
+            web_fetch_resolve_through_proxy: false,
             compaction: AgentCompactionSettings::default(),
             model_metadata: AgentModelMetadataSettings::default(),
             plugins: PluginsSettings::default(),
@@ -193,6 +198,7 @@ pub struct AgentSettingsPatch {
     #[serde(default, deserialize_with = "present")]
     pub searxng_base_url: Option<Option<String>>,
     pub web_fetch_use_jina_reader: Option<bool>,
+    pub web_fetch_resolve_through_proxy: Option<bool>,
     pub compaction: Option<AgentCompactionSettings>,
     pub model_metadata: Option<AgentModelMetadataSettings>,
 }
@@ -237,6 +243,9 @@ impl AgentSettingsPatch {
         }
         if let Some(enabled) = self.web_fetch_use_jina_reader {
             settings.web_fetch_use_jina_reader = enabled;
+        }
+        if let Some(enabled) = self.web_fetch_resolve_through_proxy {
+            settings.web_fetch_resolve_through_proxy = enabled;
         }
         if let Some(compaction) = self.compaction {
             compaction::validate_compaction(&compaction)?;

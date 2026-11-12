@@ -26,6 +26,9 @@ pub fn agent_settings_fields() -> Value {
          "disabledReasonKey": "settings.fields.searxngBaseUrl.duckduckgoOnly"},
         {"key": "webFetchUseJinaReader", "labelKey": "settings.fields.webFetchUseJinaReader.label", "type": "boolean",
          "commit": "change",
-         "helpKey": "settings.fields.webFetchUseJinaReader.help"}
+         "helpKey": "settings.fields.webFetchUseJinaReader.help"},
+        {"key": "webFetchResolveThroughProxy", "labelKey": "settings.fields.webFetchResolveThroughProxy.label", "type": "boolean",
+         "commit": "change",
+         "helpKey": "settings.fields.webFetchResolveThroughProxy.help"}
     ])
 }

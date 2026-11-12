@@ -10,6 +10,9 @@ pub struct WebPluginConfig {
     pub searxng_base_url: Option<String>,
     pub proxy: WebProxySetting,
     pub jina_reader_enabled: bool,
+    /// Through a proxy URL, a page's name this machine cannot resolve is
+    /// left to the proxy.
+    pub resolve_through_proxy: bool,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -45,6 +48,7 @@ impl WebPluginConfig {
             WebProxySetting::Explicit(address) => WebSearchProxy::Explicit(address.clone()),
         };
         config.jina_reader_enabled = self.jina_reader_enabled;
+        config.resolve_through_proxy = self.resolve_through_proxy;
         config
     }
 }

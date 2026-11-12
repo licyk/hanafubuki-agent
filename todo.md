@@ -758,6 +758,16 @@ Hoshimi `83f7813`. Every §9 decision (D1–D7) was accepted as recommended
   HTTP clients on macOS and Windows but only the environment's variables
   for the processes; a git `http.proxy` wins for clones; a host keeps its
   own process overlay current.
+- Web fetch names through the proxy, opt-in (2026-11-12, the user chose
+  the opt-in over an automatic fallback or always): `webFetchResolveThroughProxy`
+  (default `false`; `/config` Web tools, the settings patch, the host's
+  form schema with `settings.fields.webFetchResolveThroughProxy.*`, which
+  Hanafubuki's frontend must label). With it and a proxy URL, a name that
+  does not resolve here is left to the proxy (no address is pinned); one
+  that resolves here is still checked, and literal private addresses and
+  the blocked names still fail. Residual, documented: what the proxy
+  reaches for an unchecked name (an intranet behind a company proxy);
+  `socks5://` still resolves here (use `socks5h://`).
 
 ## Plan: Codex's messages sent while the Agent works, in the terminal interface (2026-11-11)
 

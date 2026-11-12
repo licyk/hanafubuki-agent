@@ -74,6 +74,7 @@ pub(crate) fn draft(
                 web_search_provider: Some(provider),
                 searxng_base_url: Some(url),
                 web_fetch_use_jina_reader: Some(form.toggle(JINA_READER)),
+                web_fetch_resolve_through_proxy: Some(form.toggle(RESOLVE_THROUGH_PROXY)),
                 ..AgentSettingsPatch::default()
             })
         }

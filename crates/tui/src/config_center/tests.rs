@@ -9,7 +9,7 @@ use serde_json::Value;
 
 /// Keys the center's own forms edit. Specialized editors own the removed
 /// dynamic tables below, not the generic settings patch.
-const FORM_KEYS: [&str; 45] = [
+const FORM_KEYS: [&str; 46] = [
     "permissionMode",
     "modelMetadata.discovery",
     "modelMetadata.modelsDev",
@@ -30,6 +30,7 @@ const FORM_KEYS: [&str; 45] = [
     "memory.maxUnusedDays",
     "webSearchProvider",
     "searxngBaseUrl",
+    "webFetchResolveThroughProxy",
     "webFetchUseJinaReader",
     "compaction.strategy",
     "compaction.background.thresholdPercent",

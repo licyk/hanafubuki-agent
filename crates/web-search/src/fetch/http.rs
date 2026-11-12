@@ -22,7 +22,7 @@ pub(super) fn reader_client(
 
 pub(super) fn direct_client(
     url: &Url,
-    address: SocketAddr,
+    address: Option<SocketAddr>,
     timeout: Duration,
     proxy: &WebSearchProxy,
 ) -> Result<Client, WebFetchError> {
@@ -46,10 +46,11 @@ pub(super) fn direct_client(
         .no_deflate();
     let mut builder = apply_proxy(builder, proxy)
         .map_err(|_| WebFetchError::InvalidConfiguration("proxy URL is invalid"))?;
-    if url
-        .host_str()
-        .is_some_and(|host| host.parse::<IpAddr>().is_err())
-    {
+    // Pinned to the address checked, unless the proxy resolves the name.
+    if let Some(address) = address.filter(|_| {
+        url.host_str()
+            .is_some_and(|host| host.parse::<IpAddr>().is_err())
+    }) {
         builder = builder.resolve(url.host_str().unwrap_or_default(), address);
     }
     builder

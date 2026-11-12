@@ -40,6 +40,8 @@ pub(crate) struct WebPageFetcher {
     jina_reader_base: Url,
     jina_client: Client,
     proxy: WebSearchProxy,
+    /// [`WebSearchConfig::resolve_through_proxy`].
+    resolve_through_proxy: bool,
     next_request_at: Arc<AsyncMutex<Instant>>,
     test_allowed_private_origins: Vec<String>,
     document_cache_ttl: Duration,
@@ -124,6 +126,7 @@ impl WebPageFetcher {
             jina_reader_base,
             jina_client,
             proxy: config.proxy.clone(),
+            resolve_through_proxy: config.resolve_through_proxy,
             next_request_at: Arc::new(AsyncMutex::new(Instant::now())),
             test_allowed_private_origins,
             document_cache_ttl: config.cache_ttl,

@@ -25,15 +25,15 @@ hanafubuki-agent config set network.proxy system
 
 ### 代理对什么生效 [#proxy-scope]
 
-| 对象                                             | 使用的代理                                                                                               |
-| ------------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
-| 网页搜索和抓取（`web_search`、`fetch_web_page`） | `network.proxy`，包括每一次重定向和 Jina Reader 回退；页面的域名仍在本机解析（[见下文](#web-fetch-dns)） |
-| MCP 的 Streamable HTTP 服务器和 OAuth            | `network.proxy`（包括登录和令牌刷新）；修改后会重新连接这些服务器                                        |
-| 模型运行的命令和终端                             | 由 `network.proxy` 决定的环境变量，见下文                                                                |
-| MCP 的 stdio 服务器                              | 同样的变量，覆盖它们自己的环境；修改后会重新启动它们                                                     |
-| 插件包和市场的下载（`git`）                      | 同样的变量（你的 git 配置中的 `http.proxy` 优先于它们）                                                  |
-| 模型 Provider 的请求及其模型列表                 | `network.proxy`；修改后各会话从下一轮起使用，见下文                                                      |
-| models.dev 的下载（`modelMetadata.modelsDev`）   | `network.proxy`                                                                                          |
+| 对象                                             | 使用的代理                                                                                                               |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
+| 网页搜索和抓取（`web_search`、`fetch_web_page`） | `network.proxy`，包括每一次重定向和 Jina Reader 回退；页面的域名仍在本机解析，除非你另行设置（[见下文](#web-fetch-dns)） |
+| MCP 的 Streamable HTTP 服务器和 OAuth            | `network.proxy`（包括登录和令牌刷新）；修改后会重新连接这些服务器                                                        |
+| 模型运行的命令和终端                             | 由 `network.proxy` 决定的环境变量，见下文                                                                                |
+| MCP 的 stdio 服务器                              | 同样的变量，覆盖它们自己的环境；修改后会重新启动它们                                                                     |
+| 插件包和市场的下载（`git`）                      | 同样的变量（你的 git 配置中的 `http.proxy` 优先于它们）                                                                  |
+| 模型 Provider 的请求及其模型列表                 | `network.proxy`；修改后各会话从下一轮起使用，见下文                                                                      |
+| models.dev 的下载（`modelMetadata.modelsDev`）   | `network.proxy`                                                                                                          |
 
 ### 命令的代理变量 [#child-processes]
 
@@ -67,7 +67,13 @@ HTTPS_PROXY=http://127.0.0.1:7890 hanafubuki-agent
 - 如果网络中只有代理能解析公网域名（本机的 DNS 不能），每次抓取都会失败，报错 `web page host could not be resolved safely`。`web_search` 不受影响。
 - 本机解析为私有地址的域名会被拒绝，报错 `web page target is not a public web address`，即使代理能访问到一个公网地址。
 
-没有跳过这项检查的设置：它防止抓取访问到本机或本机所在的网络。要通过这样的代理抓取网页，请让本机能够解析公网域名（使用本机自己的 DNS，或一个本机可以访问的解析服务）。
+这项检查防止不需要审批的网页抓取访问到本机或本机所在的网络。要通过只有代理能解析域名的代理抓取网页，可以让本机能够解析公网域名（使用本机自己的 DNS，或一个本机可以访问的解析服务），也可以打开 `webFetchResolveThroughProxy`（`/config` 的网页工具）：
+
+```sh
+hanafubuki-agent config set webFetchResolveThroughProxy true
+```
+
+打开后且 `network.proxy` 是代理 URL 时，本机无法解析的域名交给代理解析，而不是让抓取失败。本机能解析的域名仍会检查，私有地址和 `localhost` 这类名称仍会被拒绝。代理为 Agent 无法检查的域名访问到什么，不再检查：页面可能引导模型访问只有代理能解析的内部域名，例如公司代理后面的内网。使用 `socks5://` 代理时域名仍在本机解析；要让代理解析，请使用 `socks5h://`。设为 `"system"` 或 `"disabled"` 时，这项设置不起作用。
 
 ## 日志 [#logging]
 

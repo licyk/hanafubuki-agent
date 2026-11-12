@@ -135,3 +135,58 @@ async fn direct_fetch_follows_redirects_through_the_proxy() {
     assert_eq!(proxy.requests.load(Ordering::SeqCst), 2);
     assert_eq!(target.requests.load(Ordering::SeqCst), 0);
 }
+
+/// A name this machine cannot resolve fails the fetch by default, even
+/// through a proxy, and the proxy is never asked; with
+/// `resolve_through_proxy` it is left to the proxy, which fetches it. A
+/// private address is refused either way.
+#[tokio::test]
+async fn an_unresolvable_name_is_left_to_the_proxy_only_when_opted_in() {
+    const PAGE: &str = "http://page.invalid/news";
+    let proxy = start_server(|request_target| {
+        assert_eq!(request_target, PAGE);
+        TestResponse {
+            status: 200,
+            content_type: "text/plain",
+            headers: Vec::new(),
+            body: "resolved by the proxy".to_string(),
+        }
+    })
+    .await;
+    let fetch = |resolve_through_proxy: bool, url: &str| {
+        let mut config = WebSearchConfig::default();
+        config.proxy = WebSearchProxy::Explicit(proxy.base_url.clone());
+        config.resolve_through_proxy = resolve_through_proxy;
+        let service = WebSearchService::new(config).unwrap();
+        let url = page_url(url);
+        async move {
+            service
+                .fetch_page(
+                    WebFetchRequest {
+                        url,
+                        maximum_content_bytes: 1024,
+                        from_offset: 0,
+                        content_generation: None,
+                    },
+                    CancellationToken::default(),
+                )
+                .await
+        }
+    };
+
+    assert!(matches!(
+        fetch(false, PAGE).await,
+        Err(WebFetchError::DnsResolutionFailed)
+    ));
+    assert_eq!(proxy.requests.load(Ordering::SeqCst), 0);
+
+    let response = fetch(true, PAGE).await.unwrap();
+    assert_eq!(response.content, "resolved by the proxy");
+    assert_eq!(proxy.requests.load(Ordering::SeqCst), 1);
+
+    assert!(matches!(
+        fetch(true, "http://10.0.0.1/").await,
+        Err(WebFetchError::BlockedTarget)
+    ));
+    assert_eq!(proxy.requests.load(Ordering::SeqCst), 1);
+}

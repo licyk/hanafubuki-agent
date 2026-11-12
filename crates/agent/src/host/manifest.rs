@@ -156,5 +156,6 @@ fn web_config(settings: &AgentPluginSettings) -> Result<WebPluginConfig, String>
             AgentProxy::Explicit(address) => WebProxySetting::Explicit(address),
         },
         jina_reader_enabled: agent.web_fetch_use_jina_reader,
+        resolve_through_proxy: agent.web_fetch_resolve_through_proxy,
     })
 }

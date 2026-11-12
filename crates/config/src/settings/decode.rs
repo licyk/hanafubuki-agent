@@ -47,6 +47,10 @@ pub(crate) fn decode_settings(
     );
     let web_fetch_use_jina_reader =
         fields.read("webFetchUseJinaReader", defaults.web_fetch_use_jina_reader);
+    let web_fetch_resolve_through_proxy = fields.read(
+        "webFetchResolveThroughProxy",
+        defaults.web_fetch_resolve_through_proxy,
+    );
     let compaction = read_object(
         &mut fields,
         "compaction",
@@ -72,6 +76,7 @@ pub(crate) fn decode_settings(
         web_search_provider,
         searxng_base_url,
         web_fetch_use_jina_reader,
+        web_fetch_resolve_through_proxy,
         compaction,
         model_metadata,
         plugins,
