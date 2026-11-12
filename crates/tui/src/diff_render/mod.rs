@@ -4,8 +4,9 @@
 //! A patch as the transcript shows it: a header with the files and their
 //! line counts, then each file's lines with a sign column. Codex reads a
 //! unified diff of the changed file and numbers its lines; the Agent's
-//! reading of a patch (`PatchPreview`, the parser that applies it) has no
-//! line numbers, so this has no gutter, and a chunk header is a `⋮` row.
+//! reading of a patch (`AgentPatchPreview`, from the parser that applies
+//! it) has no line numbers, so this has no gutter, and a chunk header is a
+//! `⋮` row.
 //!
 //! A file whose language its name tells is highlighted with the syntax
 //! theme: its lines are read as one piece of code, the sign keeps the
@@ -17,7 +18,7 @@ mod git_diff;
 pub(crate) use git_diff::git_diff_lines;
 
 use hanafubuki_agent::{
-    PatchPreview, PatchPreviewFile, PatchPreviewLineKind, PatchPreviewOperation,
+    AgentPatchFile, AgentPatchLineKind, AgentPatchOperation, AgentPatchPreview,
 };
 use std::path::Path;
 
@@ -29,7 +30,7 @@ use crate::render::line_utils::prefix_lines;
 use crate::text_formatting::strip_terminal_controls;
 
 pub(crate) fn create_diff_summary(
-    preview: &PatchPreview,
+    preview: &AgentPatchPreview,
     wrap_cols: usize,
 ) -> Vec<RtLine<'static>> {
     if let Some(error) = &preview.error {
@@ -45,9 +46,9 @@ pub(crate) fn create_diff_summary(
     let mut header: Vec<RtSpan<'static>> = vec!["  └ ".dim()];
     if let [file] = &files[..] {
         let verb = match file.operation {
-            PatchPreviewOperation::Add => "Added",
-            PatchPreviewOperation::Delete => "Deleted",
-            PatchPreviewOperation::Update => "Edited",
+            AgentPatchOperation::Add => "Added",
+            AgentPatchOperation::Delete => "Deleted",
+            AgentPatchOperation::Update => "Edited",
         };
         header.push(verb.bold());
         header.push(" ".into());
@@ -80,7 +81,7 @@ pub(crate) fn create_diff_summary(
     out
 }
 
-fn render_path(file: &PatchPreviewFile) -> Vec<RtSpan<'static>> {
+fn render_path(file: &AgentPatchFile) -> Vec<RtSpan<'static>> {
     let mut spans = vec![RtSpan::from(strip_terminal_controls(&file.path))];
     if let Some(moved_to) = &file.moved_to {
         spans.push(format!(" → {}", strip_terminal_controls(moved_to)).into());
@@ -98,7 +99,7 @@ fn render_line_count_summary(added: usize, removed: usize) -> Vec<RtSpan<'static
     ]
 }
 
-fn render_file(file: &PatchPreviewFile, out: &mut Vec<RtLine<'static>>, width: usize) {
+fn render_file(file: &AgentPatchFile, out: &mut Vec<RtLine<'static>>, width: usize) {
     let path = file.moved_to.as_deref().unwrap_or(&file.path);
     let texts: Vec<String> = file
         .lines
@@ -111,16 +112,16 @@ fn render_file(file: &PatchPreviewFile, out: &mut Vec<RtLine<'static>>, width: u
     let mut seen_content = false;
     for line in &file.lines {
         let kind = match line.kind {
-            PatchPreviewLineKind::Added => DiffLineKind::Added,
-            PatchPreviewLineKind::Removed => DiffLineKind::Removed,
-            PatchPreviewLineKind::Context => DiffLineKind::Context,
+            AgentPatchLineKind::Added => DiffLineKind::Added,
+            AgentPatchLineKind::Removed => DiffLineKind::Removed,
+            AgentPatchLineKind::Context => DiffLineKind::Context,
             // The first chunk needs no separator from what is above it.
-            PatchPreviewLineKind::Hunk if !seen_content => continue,
-            PatchPreviewLineKind::Hunk => {
+            AgentPatchLineKind::Hunk if !seen_content => continue,
+            AgentPatchLineKind::Hunk => {
                 out.push(RtLine::from("⋮".dim()));
                 continue;
             }
-            PatchPreviewLineKind::Marker => {
+            AgentPatchLineKind::Marker => {
                 seen_content = true;
                 out.push(RtLine::from(strip_terminal_controls(&line.text)).dim());
                 continue;
@@ -140,10 +141,10 @@ fn render_file(file: &PatchPreviewFile, out: &mut Vec<RtLine<'static>>, width: u
     }
 }
 
-fn is_code(kind: PatchPreviewLineKind) -> bool {
+fn is_code(kind: AgentPatchLineKind) -> bool {
     matches!(
         kind,
-        PatchPreviewLineKind::Added | PatchPreviewLineKind::Removed | PatchPreviewLineKind::Context
+        AgentPatchLineKind::Added | AgentPatchLineKind::Removed | AgentPatchLineKind::Context
     )
 }
 

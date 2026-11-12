@@ -18,8 +18,9 @@ use hanafubuki_agent_contracts::{
     AgentContinuationContext, AgentContinuationHook, AgentContinuationHookDecision,
     AgentContinuationHookError, AgentContinuationHookFailurePolicy, AgentContinuationHookFuture,
     AgentContinuationHookGeneration, AgentContinuationHookId, AgentContinuationHookProviderId,
-    AgentContinuationHookRegistration, BlockingService, CancellationToken, ContextRegistry,
-    ContextRendererRegistry, ContinuationHookRegistry, Register, ToolRegistry,
+    AgentContinuationHookRegistration, ArgumentSubjects, BlockingService, CancellationToken,
+    ContextRegistry, ContextRendererRegistry, ContinuationHookRegistry, Register,
+    ToolPresenterRegistry, ToolRegistry,
 };
 use hanafubuki_agent_kernel::{AgentError, AgentGoal, AgentGoalOrigin, AgentSessionId};
 use kardia_core::{Context, Inject, PluginDef, Service};
@@ -51,6 +52,11 @@ pub(crate) fn goal_plugin(goals: AgentGoalApplication) -> PluginDef {
             for tool in tools::goal_tools(runtime.clone()).map_err(kardia_core::Error::new)? {
                 registry.register(Arc::new(tool))?;
             }
+            ctx.get::<ToolPresenterRegistry>()?
+                .register(Arc::new(ArgumentSubjects::new(&[
+                    ("create_goal", "objective"),
+                    ("update_goal", "status"),
+                ])))?;
             ctx.get::<ContextRegistry>()?
                 .register(Arc::new(GoalContext(runtime.clone())))?;
             ctx.get::<ContextRendererRegistry>()?
@@ -79,6 +85,7 @@ pub(crate) fn goal_plugin(goals: AgentGoalApplication) -> PluginDef {
         Inject::new()
             .with(BlockingService::NAME)
             .with(ToolRegistry::NAME)
+            .with(ToolPresenterRegistry::NAME)
             .with(ContextRegistry::NAME)
             .with(ContextRendererRegistry::NAME)
             .with(ContinuationHookRegistry::NAME),

@@ -52,7 +52,7 @@ mod fixtures {
     /// Everything queued, in the order a consumer takes it.
     pub(super) fn drain(queue: &ExecutionProgressQueue) -> Vec<AgentToolProgressUpdate> {
         let id = queue.state.lock().consumer.as_ref().unwrap().0;
-        std::iter::from_fn(|| queue.take(id).map(|(_, update)| update)).collect()
+        std::iter::from_fn(|| queue.take(id).map(|queued| queued.update)).collect()
     }
 }
 
@@ -61,16 +61,20 @@ use fixtures::{disposed, drain, exited, idle_consumer, output, started};
 #[tokio::test]
 async fn a_full_queue_coalesces_outputs_and_keeps_every_other_update_in_order() {
     let queue = ExecutionProgressQueue::default();
-    assert!(queue.report(started(1), idle_consumer));
+    assert!(queue.report(None, started(1), idle_consumer));
     for line in 0..100u64 {
-        assert!(queue.report(output(1, &format!("o{line}\n"), line + 1), idle_consumer));
+        assert!(queue.report(
+            None,
+            output(1, &format!("o{line}\n"), line + 1),
+            idle_consumer
+        ));
     }
-    assert!(queue.report(started(2), idle_consumer));
+    assert!(queue.report(None, started(2), idle_consumer));
     // After its status, an execution's output is queued, not moved before it.
-    assert!(queue.report(exited(1), idle_consumer));
-    assert!(queue.report(output(1, "late\n", 101), idle_consumer));
-    assert!(queue.report(output(1, "later\n", 102), idle_consumer));
-    assert!(queue.report(disposed(1), idle_consumer));
+    assert!(queue.report(None, exited(1), idle_consumer));
+    assert!(queue.report(None, output(1, "late\n", 101), idle_consumer));
+    assert!(queue.report(None, output(1, "later\n", 102), idle_consumer));
+    assert!(queue.report(None, disposed(1), idle_consumer));
 
     let drained = drain(&queue);
 
@@ -94,11 +98,11 @@ async fn a_full_queue_coalesces_outputs_and_keeps_every_other_update_in_order() 
 async fn a_coalesced_output_keeps_its_newest_bytes_and_a_gap_replaces_it() {
     let queue = ExecutionProgressQueue::default();
     for line in 0..EXECUTION_PROGRESS_QUEUE_CAPACITY as u64 {
-        assert!(queue.report(output(2, "x", line + 1), idle_consumer));
+        assert!(queue.report(None, output(2, "x", line + 1), idle_consumer));
     }
     let long = "界".repeat(MAXIMUM_COALESCED_OUTPUT_BYTES / 3 + 1);
-    assert!(queue.report(output(1, "first", 1), idle_consumer));
-    assert!(queue.report(output(1, &long, 2), idle_consumer));
+    assert!(queue.report(None, output(1, "first", 1), idle_consumer));
+    assert!(queue.report(None, output(1, &long, 2), idle_consumer));
     let drained = drain(&queue);
     let AgentToolProgressUpdate::ExecutionOutput {
         text,
@@ -115,14 +119,14 @@ async fn a_coalesced_output_keeps_its_newest_bytes_and_a_gap_replaces_it() {
     assert_eq!(*next_offset, 2);
 
     for line in 0..EXECUTION_PROGRESS_QUEUE_CAPACITY as u64 {
-        assert!(queue.report(output(2, "x", line + 1), idle_consumer));
+        assert!(queue.report(None, output(2, "x", line + 1), idle_consumer));
     }
-    assert!(queue.report(output(1, "skipped", 1), idle_consumer));
+    assert!(queue.report(None, output(1, "skipped", 1), idle_consumer));
     let mut gap = output(1, "after the gap", 9);
     if let AgentToolProgressUpdate::ExecutionOutput { truncated, .. } = &mut gap {
         *truncated = true;
     }
-    assert!(queue.report(gap.clone(), idle_consumer));
+    assert!(queue.report(None, gap.clone(), idle_consumer));
     assert_eq!(drain(&queue).last(), Some(&gap));
 }
 
@@ -131,7 +135,7 @@ async fn closing_refuses_reports_stops_the_consumer_and_releases_flushes() {
     let queue = Arc::new(ExecutionProgressQueue::default());
     let consumer = tokio::spawn(std::future::pending::<()>());
     let abort = consumer.abort_handle();
-    assert!(queue.report(started(1), move |_| abort));
+    assert!(queue.report(None, started(1), move |_| abort));
     let flushed = tokio::spawn({
         let queue = queue.clone();
         async move { queue.flushed().await }
@@ -143,7 +147,7 @@ async fn closing_refuses_reports_stops_the_consumer_and_releases_flushes() {
 
     flushed.await.unwrap();
     assert!(consumer.await.unwrap_err().is_cancelled());
-    assert!(!queue.report(started(2), idle_consumer));
+    assert!(!queue.report(None, started(2), idle_consumer));
     assert!(queue.flushed_blocking(Instant::now()));
 }
 
@@ -155,16 +159,16 @@ async fn a_consumer_stopped_early_lets_the_next_report_start_another() {
         started_consumers.fetch_add(1, Ordering::SeqCst);
         idle_consumer(0)
     };
-    assert!(queue.report(started(1), spawn));
-    assert!(queue.report(disposed(1), spawn));
+    assert!(queue.report(None, started(1), spawn));
+    assert!(queue.report(None, disposed(1), spawn));
     assert_eq!(started_consumers.load(Ordering::SeqCst), 1);
-    let (sequence, _) = queue.take(0).unwrap();
+    let sequence = queue.take(0).unwrap().sequence;
 
     queue.consumer_stopped(0);
 
     // The update it took settles on its own; a flush does not wait for it.
     assert_eq!(queue.state.lock().applied, sequence);
-    assert!(queue.report(exited(2), spawn));
+    assert!(queue.report(None, exited(2), spawn));
     assert_eq!(started_consumers.load(Ordering::SeqCst), 2);
 }
 
@@ -216,7 +220,7 @@ fn a_report_on_a_runtime_that_has_shut_down_frees_the_consumer_slot() {
             .unwrap();
         let handle = stopped.handle().clone();
         drop(stopped);
-        service.queue_execution_progress(session_id, started(1), &handle);
+        service.queue_execution_progress(session_id, None, started(1), &handle);
         let cell = service.inner.sessions.get(session_id).unwrap();
         let freed = cell.progress().state.lock().consumer.is_none();
         let live = tokio::runtime::Builder::new_current_thread()
@@ -228,6 +232,7 @@ fn a_report_on_a_runtime_that_has_shut_down_frees_the_consumer_slot() {
             let resumed = service.events_since(session_id, None).unwrap().events.len() == 1;
             service.queue_execution_progress(
                 session_id,
+                None,
                 disposed(1),
                 &tokio::runtime::Handle::current(),
             );
@@ -240,7 +245,7 @@ fn a_report_on_a_runtime_that_has_shut_down_frees_the_consumer_slot() {
             .events
             .into_iter()
             .filter_map(|event| match event.kind {
-                AgentEventKind::ExecutionProgress { update } => Some(update),
+                AgentEventKind::ExecutionProgress { update, .. } => Some(update),
                 _ => None,
             })
             .collect::<Vec<_>>();
@@ -261,7 +266,7 @@ async fn a_coalesced_output_never_starts_inside_an_escape_sequence() {
 
     let queue = ExecutionProgressQueue::default();
     for line in 0..EXECUTION_PROGRESS_QUEUE_CAPACITY as u64 {
-        assert!(queue.report(output(2, "x", line + 1), idle_consumer));
+        assert!(queue.report(None, output(2, "x", line + 1), idle_consumer));
     }
     // The front trim goes to 16392 - 16384 = 8, inside `ESC [ 3 1 m`.
     let newer = format!("\x1b[31mred\n{}\n", "y".repeat(16_377));
@@ -269,8 +274,8 @@ async fn a_coalesced_output_never_starts_inside_an_escape_sequence() {
         "first".len() + newer.len(),
         MAXIMUM_COALESCED_OUTPUT_BYTES + 8
     );
-    assert!(queue.report(output(1, "first", 1), idle_consumer));
-    assert!(queue.report(output(1, &newer, 2), idle_consumer));
+    assert!(queue.report(None, output(1, "first", 1), idle_consumer));
+    assert!(queue.report(None, output(1, &newer, 2), idle_consumer));
     let drained = drain(&queue);
     let Some(AgentToolProgressUpdate::ExecutionOutput { text, .. }) = drained.last() else {
         panic!("the last update is not an output");
@@ -279,4 +284,33 @@ async fn a_coalesced_output_never_starts_inside_an_escape_sequence() {
     assert!(text.ends_with(&format!("{}\n", "y".repeat(16_377))));
     // Only the rest of the cut sequence can leave an `m`.
     assert!(!text.contains('m'), "{:?}", &text[..16]);
+}
+
+#[tokio::test]
+async fn an_update_keeps_the_call_that_reported_it_when_coalesced() {
+    let queue = ExecutionProgressQueue::default();
+    for line in 0..EXECUTION_PROGRESS_QUEUE_CAPACITY as u64 {
+        assert!(queue.report(
+            Some("other".into()),
+            output(2, "x", line + 1),
+            idle_consumer
+        ));
+    }
+    assert!(queue.report(Some("call-1".into()), output(1, "first ", 1), idle_consumer));
+    assert!(queue.report(Some("call-1".into()), output(1, "second", 2), idle_consumer));
+    assert!(queue.report(None, disposed(1), idle_consumer));
+
+    let id = queue.state.lock().consumer.as_ref().unwrap().0;
+    let last: Vec<_> = std::iter::from_fn(|| queue.take(id))
+        .skip(EXECUTION_PROGRESS_QUEUE_CAPACITY)
+        .map(|queued| (queued.call_id, queued.update))
+        .collect();
+
+    assert_eq!(
+        last,
+        vec![
+            (Some("call-1".to_string()), output(1, "first second", 2)),
+            (None, disposed(1)),
+        ]
+    );
 }

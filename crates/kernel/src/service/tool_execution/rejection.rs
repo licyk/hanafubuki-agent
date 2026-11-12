@@ -6,7 +6,7 @@
 use crate::tool_catalog::{AgentPlannedTool, AgentToolPlan};
 use crate::tool_runtime::AgentToolOutput;
 use crate::{AgentToolGeneration, AgentToolId, AgentToolPresentation, AgentToolProviderId};
-use hanafubuki_agent_contracts::AgentActivityAction;
+use hanafubuki_agent_contracts::{AgentActivityAction, ToolPresenterRegistry};
 use hanafubuki_agent_model_api::{ModelToolArgumentError, ModelToolCall};
 use serde_json::json;
 
@@ -69,15 +69,28 @@ impl CallDisposition {
         }
     }
 
-    /// The presentation the shell shows for the call; a generic tool for a
-    /// name the step does not offer.
-    pub(in crate::service) fn presentation(&self) -> AgentToolPresentation {
+    /// The presentation the shell shows for the call: its subject from the
+    /// tool's presenter, read from the arguments the tool receives, else
+    /// the planned tool's own; a generic tool for a name the step does not
+    /// offer.
+    pub(in crate::service) fn presentation(
+        &self,
+        presenters: &ToolPresenterRegistry,
+        call: &ModelToolCall,
+    ) -> AgentToolPresentation {
         match self {
             Self::Run(registration)
             | Self::Reject {
                 registration: Some(registration),
                 ..
-            } => registration.presentation.clone(),
+            } => {
+                let arguments = super::scheduler::normalized_call(call, registration).arguments;
+                let subject = presenters.subject(&registration.model_spec.name, &arguments);
+                AgentToolPresentation {
+                    action: registration.presentation.action.clone(),
+                    subject: subject.or_else(|| registration.presentation.subject.clone()),
+                }
+            }
             Self::Reject {
                 registration: None, ..
             } => AgentToolPresentation {

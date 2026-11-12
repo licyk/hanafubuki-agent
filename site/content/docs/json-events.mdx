@@ -95,12 +95,27 @@ icon: Braces
 }
 ```
 
-| `kind.type`               | 字段                             | 说明                                                                                              |
-| ------------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `tool_started`            | `callId`、`name`、`presentation` | 一次工具调用开始。`presentation` 有 `action`（标识符）和 `subject`（命令、路径等，可能为 `null`） |
-| `tool_execution_finished` | `callId`、`isError`              | 工具执行结束                                                                                      |
-| `tool_completed`          | `callId`、`isError`              | 工具的结果已经记入历史                                                                            |
-| `execution_progress`      | `update`                         | 进程的实时进展，`turnId` 为 `null`                                                                |
+```json
+{
+  "type": "execution_progress",
+  "callId": "call_1",
+  "update": {
+    "type": "execution_output",
+    "executionId": 4,
+    "generation": 1,
+    "text": "running 12 tests\n",
+    "nextOffset": 17,
+    "truncated": false
+  }
+}
+```
+
+| `kind.type`               | 字段                             | 说明                                                                                                                                                                                                                  |
+| ------------------------- | -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tool_started`            | `callId`、`name`、`presentation` | 一次工具调用开始。`presentation` 有 `action`（标识符）和 `subject`：调用作用的对象，由工具的[呈现器](/docs/plugin-rules#tool-presenters)从参数中读出（命令行、路径、查询；取第一行，最多 200 个字符），或为 `null`    |
+| `tool_execution_finished` | `callId`、`isError`              | 工具执行结束                                                                                                                                                                                                          |
+| `tool_completed`          | `callId`、`isError`              | 工具的结果已经记入历史                                                                                                                                                                                                |
+| `execution_progress`      | `callId`、`update`               | 进程的实时进展，`turnId` 为 `null`。`callId` 是报告它的工具调用：启动该进程的 `exec_command`，包括该调用已经返回、进程在后台继续运行之后；Agent 自己报告的（在轮次之外停止的后台进程、上一次运行留下的进程）为 `null` |
 
 `execution_progress` 的 `update.type` 取值：
 
@@ -113,6 +128,8 @@ icon: Braces
 | `execution_cleanup_failed` | `executionId`、`generation`                                          |
 
 `status` 是 `starting`、`running`、`exited`、`failed`、`cancelled` 或 `timed_out`；`exitCode` 是整数或 `null`。
+
+调用结束后显示的内容（界面排版后的输出）不在事件流中：模型读到的输出在会话的历史里，宿主向门面询问显示内容（[工具呈现器](/docs/plugin-rules#tool-presenters)）。
 
 `text` 是终端文本，应按顺序渲染：管道的输出是进程写出的原样，包括转义序列；伪终端的输出是它屏幕上显示的样子，各行以换行结束，上一条更新留下的未完成的一行在 `\r` 和 `ESC [2K` 之后重新写出。
 

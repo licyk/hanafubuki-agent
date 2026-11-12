@@ -10,9 +10,9 @@ mod tools;
 use std::sync::Arc;
 
 use hanafubuki_agent_contracts::{
-    AgentToolError, AgentToolSource, ContextRendererRegistry, ObserverRegistry,
-    PromptContributorRegistry, Register, ToolFuture, ToolSourceContribution, ToolSourceRegistry,
-    ToolSourceStep,
+    AgentToolError, AgentToolSource, ArgumentSubjects, ContextRendererRegistry, ObserverRegistry,
+    PromptContributorRegistry, Register, ToolFuture, ToolPresenterRegistry, ToolSourceContribution,
+    ToolSourceRegistry, ToolSourceStep,
 };
 use kardia_core::{Context, Inject, PluginDef, Service};
 
@@ -23,7 +23,7 @@ pub(crate) use self::tools::memory_tools;
 use crate::AgentMemoryApplication;
 
 /// Registers the memory prompt contributor and its renderer, the memory tool
-/// source and the memory observer over `memory`.
+/// source and its tools' presenter, and the memory observer over `memory`.
 pub(crate) fn memory_plugin(memory: AgentMemoryApplication) -> PluginDef {
     PluginDef::new(move |ctx: Context, _| {
         let memory = memory.clone();
@@ -38,6 +38,12 @@ pub(crate) fn memory_plugin(memory: AgentMemoryApplication) -> PluginDef {
             sources.register(Arc::new(MemoryToolSource {
                 memory: memory.clone(),
             }))?;
+            ctx.get::<ToolPresenterRegistry>()?
+                .register(Arc::new(ArgumentSubjects::new(&[
+                    ("search_agent_memories", "query"),
+                    ("read_agent_memory", "resourceId"),
+                    ("append_agent_memory_note", "operation"),
+                ])))?;
             let observers = ctx.get::<ObserverRegistry>()?;
             observers.register(Arc::new(MemoryObserver { memory }))?;
             Ok(())
@@ -49,6 +55,7 @@ pub(crate) fn memory_plugin(memory: AgentMemoryApplication) -> PluginDef {
             .with(PromptContributorRegistry::NAME)
             .with(ContextRendererRegistry::NAME)
             .with(ToolSourceRegistry::NAME)
+            .with(ToolPresenterRegistry::NAME)
             .with(ObserverRegistry::NAME),
     )
 }

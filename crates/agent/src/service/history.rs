@@ -1,8 +1,8 @@
 use super::AgentApplicationService;
 use hanafubuki_agent_kernel::{
     AgentError, AgentEventBatch, AgentEventSequence, AgentSessionId, AgentSessionListRequest,
-    AgentSessionOpenResult, AgentSessionPage, AgentSessionRuntimeSnapshot, AgentTranscriptPage,
-    AgentTranscriptPageRequest, AgentTurnPageRequest,
+    AgentSessionOpenResult, AgentSessionPage, AgentSessionRuntimeSnapshot, AgentToolCallDisplay,
+    AgentTranscriptPage, AgentTranscriptPageRequest, AgentTurnPageRequest,
 };
 
 impl AgentApplicationService {
@@ -63,5 +63,30 @@ impl AgentApplicationService {
         request: AgentTurnPageRequest,
     ) -> Result<AgentTranscriptPage, AgentError> {
         self.core.read_turn_page(request)
+    }
+
+    /// How the call `call_id` of the session's history is shown, from its
+    /// tool's presenter; `None` when the history has no such call. It reads
+    /// the history: call it off an interface's thread.
+    pub fn tool_display(
+        &self,
+        session_id: AgentSessionId,
+        call_id: &str,
+    ) -> Result<Option<AgentToolCallDisplay>, AgentError> {
+        self.core.tool_display(session_id, call_id)
+    }
+
+    /// How a call, named as history records it (`namespace`, `name`), with
+    /// the model's `arguments` and its committed `output` is shown, for a
+    /// transcript read already.
+    pub fn present_tool_call(
+        &self,
+        namespace: Option<&str>,
+        name: &str,
+        arguments: &serde_json::Value,
+        output: Option<&hanafubuki_agent_tool_contracts::ToolOutput>,
+    ) -> AgentToolCallDisplay {
+        self.core
+            .present_tool_call(namespace, name, arguments, output)
     }
 }

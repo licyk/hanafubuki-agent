@@ -138,7 +138,7 @@ pub use permission::{
     PermissionReviewOmission, PERMISSION_REVIEW_TIMEOUT,
 };
 pub use plugin::{kernel_plugin, AgentKernelRegistries};
-pub use service::AgentService;
+pub use service::{AgentService, AgentToolCallDisplay};
 pub use tool_catalog::{
     validate_dynamic_tool_arguments, AgentMemoryContextEffect, AgentPlannedTool,
     AgentPlannedToolBinding, AgentToolCatalogContext, AgentToolCatalogError,

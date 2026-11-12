@@ -67,6 +67,10 @@ impl Harness {
 fn a_fold_shows_one_folded_cell_live_and_replayed() {
     let mut harness = Harness::hierarchical(Vec::new());
     harness.fold();
+    // What the call shows is read once it finished, off the app loop.
+    harness.pump_until("the receipt", |harness| {
+        harness.transcript().contains(RECEIPT)
+    });
 
     let transcript = harness.transcript();
     assert_eq!(transcript.matches(RECEIPT).count(), 1, "{transcript}");

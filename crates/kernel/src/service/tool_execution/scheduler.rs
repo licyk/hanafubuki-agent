@@ -53,7 +53,8 @@ impl AgentService {
                 AgentEventKind::ToolStarted {
                     call_id: call.call_id.clone(),
                     name: disposition.tool_name(&call).to_string(),
-                    presentation: disposition.presentation(),
+                    presentation: disposition
+                        .presentation(&self.inner.registries.tool_presenters, &call),
                 },
                 event_sink,
             )
@@ -259,7 +260,10 @@ impl AgentService {
 /// The call as the tool receives it: its arguments through the kernel's
 /// schema-guided pass (`1.0` and numeric strings to numbers, a null optional
 /// to absent). History keeps the model's own arguments.
-fn normalized_call(call: &ModelToolCall, registration: &crate::AgentPlannedTool) -> ModelToolCall {
+pub(super) fn normalized_call(
+    call: &ModelToolCall,
+    registration: &crate::AgentPlannedTool,
+) -> ModelToolCall {
     let mut call = call.clone();
     if call.arguments.is_object() {
         call.arguments = crate::tool_catalog::normalize_tool_arguments(

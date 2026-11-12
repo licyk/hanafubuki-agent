@@ -65,17 +65,18 @@ PluginDef::new(apply)      apply：取得注入的服务，注册条目，生成
 
 插件可以注册的扩展点：
 
-| 注册表                      | 注册的条目                          | 内核何时读取             |
-| --------------------------- | ----------------------------------- | ------------------------ |
-| `ToolRegistry`              | `AgentToolHandler`（工具）          | 每个采样步骤，随工具计划 |
-| `ToolSourceRegistry`        | `AgentToolSource`（按步骤提供工具） | 每个采样步骤             |
-| `ContextRegistry`           | `ContextContributor`（世界状态段）  | 轮次准入时               |
-| `ContextRendererRegistry`   | `ContextRenderer`（段的呈现方式）   | 每个模型请求取一次快照   |
-| `TurnAdmissionRegistry`     | `TurnAdmissionContributor`          | 轮次准入时               |
-| `PromptContributorRegistry` | `PromptContributor`（每请求的片段） | 每个采样步骤准备一次     |
-| `ApprovalRuleRegistry`      | `ApprovalRule`（只能收紧审批）      | 随每个步骤的工具计划冻结 |
-| `ContinuationHookRegistry`  | 继续钩子                            | 每个采样步骤             |
-| `ObserverRegistry`          | `AgentObserver`（已提交内容的通知） | 每次持久提交之后         |
+| 注册表                      | 注册的条目                               | 内核何时读取             |
+| --------------------------- | ---------------------------------------- | ------------------------ |
+| `ToolRegistry`              | `AgentToolHandler`（工具）               | 每个采样步骤，随工具计划 |
+| `ToolSourceRegistry`        | `AgentToolSource`（按步骤提供工具）      | 每个采样步骤             |
+| `ContextRegistry`           | `ContextContributor`（世界状态段）       | 轮次准入时               |
+| `ContextRendererRegistry`   | `ContextRenderer`（段的呈现方式）        | 每个模型请求取一次快照   |
+| `TurnAdmissionRegistry`     | `TurnAdmissionContributor`               | 轮次准入时               |
+| `PromptContributorRegistry` | `PromptContributor`（每请求的片段）      | 每个采样步骤准备一次     |
+| `ApprovalRuleRegistry`      | `ApprovalRule`（只能收紧审批）           | 随每个步骤的工具计划冻结 |
+| `ContinuationHookRegistry`  | 继续钩子                                 | 每个采样步骤             |
+| `ToolPresenterRegistry`     | `AgentToolPresenter`（工具调用如何显示） | 界面询问时               |
+| `ObserverRegistry`          | `AgentObserver`（已提交内容的通知）      | 每次持久提交之后         |
 
 各扩展点的唯一性、组合方式和规则见[插件规则](/docs/plugin-rules#extension-points)。宿主插件最常用的是工具和上下文段，下面分别举例。
 

@@ -4,8 +4,8 @@
 use std::sync::Arc;
 
 use hanafubuki_agent_contracts::{
-    AgentActivityAction, AgentMemoryContextEffect, RegistryService, ToolEffect, ToolRegistry,
-    ToolSourceRegistry,
+    AgentActivityAction, AgentMemoryContextEffect, RegistryService, ToolEffect,
+    ToolPresenterRegistry, ToolRegistry, ToolSourceRegistry,
 };
 use hanafubuki_agent_foundation::background_worker::BackgroundWorkerGroup;
 use hanafubuki_agent_mcp::McpManager;
@@ -25,11 +25,16 @@ async fn root_with_registries() -> (Context, Arc<ToolRegistry>, Arc<ToolSourceRe
         async move {
             ctx.provide_arc(tools)?;
             ctx.provide_arc(sources)?;
+            ctx.provide(ToolPresenterRegistry::default())?;
             Ok(())
         }
     })
     .name("registries")
-    .provides([ToolRegistry::NAME, ToolSourceRegistry::NAME]);
+    .provides([
+        ToolRegistry::NAME,
+        ToolSourceRegistry::NAME,
+        ToolPresenterRegistry::NAME,
+    ]);
     root.plugin_def(&registries, Value::Null)
         .unwrap()
         .settled()

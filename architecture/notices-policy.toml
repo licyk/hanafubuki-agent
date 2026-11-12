@@ -575,6 +575,14 @@ path = "crates/tui/src/app/tests/thinking.rs"
 reason = "Thinking entries on an emulated terminal in both presentations, written for the Agent's timeline."
 
 [[original]]
+path = "crates/tui/src/agent_bridge/replay/tests.rs"
+reason = "The tool display reply's guarantee, written for the Agent's timeline."
+
+[[original]]
+path = "crates/tui/src/app/tests/tools.rs"
+reason = "Tool calls shown from their presenters on an emulated terminal in both presentations, written for the Agent's timeline."
+
+[[original]]
 path = "crates/tui/src/transcript_view/tail.rs"
 reason = "The transcript view's layout of Scrollback's tail, written for the Agent's timeline."
 

@@ -4,9 +4,9 @@ use hanafubuki_agent_approval::{ApprovalAction, AuthorizedAction, PermissionRequ
 use hanafubuki_agent_contracts::tools::arguments::required_bounded_string;
 use hanafubuki_agent_contracts::{
     object_arguments, AgentActivityAction, AgentMemoryContextEffect, AgentToolError,
-    AgentToolHandler, BlockingService, Register, ToolAvailability, ToolCallValidationError,
-    ToolDescriptor, ToolEffect, ToolFuture, ToolInvocation, ToolPlanContext, ToolRegistry,
-    ToolResult,
+    AgentToolHandler, ArgumentSubjects, BlockingService, Register, ToolAvailability,
+    ToolCallValidationError, ToolDescriptor, ToolEffect, ToolFuture, ToolInvocation,
+    ToolPlanContext, ToolPresenterRegistry, ToolRegistry, ToolResult,
 };
 use hanafubuki_agent_tool_contracts::{
     ToolContractError, ToolExecutionClass, ToolExposure, ToolName,
@@ -27,6 +27,8 @@ pub(crate) fn view_image_plugin(files: WorkspaceFsService) -> PluginDef {
             let blocking = ctx.get::<BlockingService>()?.arc().clone();
             let tool = ViewImageTool::new(files, blocking).map_err(kardia_core::Error::new)?;
             tools.register(Arc::new(tool))?;
+            ctx.get::<ToolPresenterRegistry>()?
+                .register(Arc::new(ArgumentSubjects::new(&[("view_image", "path")])))?;
             Ok(())
         }
     })
@@ -34,6 +36,7 @@ pub(crate) fn view_image_plugin(files: WorkspaceFsService) -> PluginDef {
     .inject(
         Inject::new()
             .with(ToolRegistry::NAME)
+            .with(ToolPresenterRegistry::NAME)
             .with(BlockingService::NAME),
     )
 }

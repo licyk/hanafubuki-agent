@@ -5,6 +5,7 @@
 
 mod arguments;
 mod compression_spec;
+mod presenter;
 mod specs;
 
 #[cfg(test)]
@@ -16,6 +17,7 @@ use serde::{Deserialize, Serialize};
 use crate::{AgentActivityAction, AgentSessionMode};
 
 pub(crate) use arguments::{CoreToolCall, RequestUserInputTool, UpdateTaskPlanTool};
+pub(crate) use presenter::CoreToolPresenter;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]

@@ -173,6 +173,15 @@ pub use startup::{
 pub use storage_paths::AgentStoragePaths;
 pub use workspace_roots::{agent_workspace_roots_from, AgentWorkspaceRoots, WorkspaceRootsPort};
 
+/// What an interface shows of a tool call, from the tool's presenter
+/// (`AgentHandle::tool_display`, `present_tool_call`).
+pub use hanafubuki_agent_contracts::{
+    AgentListingEntry, AgentListingEntryKind, AgentMutationKind, AgentPatchFile, AgentPatchLine,
+    AgentPatchLineKind, AgentPatchOperation, AgentPatchPreview, AgentSearchMatch, AgentToolDisplay,
+    AgentWebResult,
+};
+pub use hanafubuki_agent_kernel::AgentToolCallDisplay;
+
 /// The interface renders the backend's reading of a patch, so the shape of that
 /// reading crosses the application boundary with it.
 pub use hanafubuki_agent_workspace_fs::{

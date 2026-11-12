@@ -6,8 +6,8 @@
 //! `permissions`, `workspace`; `/review`, `/goal`, `/hooks` and
 //! `/subagents` in modules of their own, the side conversation in `side`),
 //! the steering of a running turn (`steering`), the reading of a session's
-//! transcript into what the chat replays (`replay`), and the editing of an
-//! earlier message (`edit`). What the person sends while the Agent works
+//! transcript into what the chat replays and of a finished call's display
+//! (`replay`), and the editing of an earlier message (`edit`). What the person sends while the Agent works
 //! is queued by the chat; the bridge only starts and steers turns.
 //!
 //! The interface starts with no session: the first message creates it, or
@@ -46,16 +46,15 @@ use std::sync::Arc;
 
 use hanafubuki_agent::{
     AgentAvailability, AgentCompactionStatus, AgentCompactionTrigger, AgentEvent, AgentEventKind,
-    AgentEventSink, AgentGoal, AgentHandle, AgentHistorySortDirection, AgentPermissionMode,
-    AgentReasoningId, AgentReasoningSnapshot, AgentRuntime, AgentSessionId, AgentSessionMode,
-    AgentSlot, AgentStatusEventSink, AgentTaskPlanSnapshot, AgentTurnAccepted,
-    AgentTurnPageRequest, AgentTurnRequest, AgentTurnTerminalReason, AgentUserInputRequest,
-    AgentUserInputRequestId, ApprovalRequest, ApprovalRequestId, SkillCatalogSnapshot,
+    AgentEventSink, AgentGoal, AgentHandle, AgentPermissionMode, AgentReasoningId,
+    AgentReasoningSnapshot, AgentRuntime, AgentSessionId, AgentSessionMode, AgentSlot,
+    AgentStatusEventSink, AgentTaskPlanSnapshot, AgentToolCallDisplay, AgentTurnAccepted,
+    AgentTurnRequest, AgentTurnTerminalReason, AgentUserInputRequest, AgentUserInputRequestId,
+    ApprovalRequest, ApprovalRequestId, SkillCatalogSnapshot,
 };
 use tokio::sync::oneshot;
 
 use crate::app_event::{AppEvent, AppEventSender, Op};
-use crate::history_cell::ToolResultView;
 pub(crate) use catalog::{CatalogCall, CatalogOutcome, CatalogReply};
 pub(crate) use center_reads::{
     CenterJob, CenterRead, CenterReader, Exchange, LiveSession, RootsRead, Waiting,
@@ -75,9 +74,6 @@ pub(crate) use side::OpenedSide;
 pub(crate) use status::{SessionStatus, UsageSummary};
 pub(crate) use steering::SteerOutcome;
 pub(crate) use subagents::{ChildApproval, SubagentsCall, SubagentsReply};
-
-/// How many of the turn's latest items are read for a finished call.
-const TOOL_ITEMS_PAGE: usize = 64;
 
 /// What the chat widget is told: the turn's progress, and what the
 /// commands it asked for found.
@@ -104,10 +100,16 @@ pub(crate) enum TurnUpdate {
         name: String,
         subject: Option<String>,
     },
+    /// The call finished; what it shows follows as `ToolDisplayed`.
     ToolCompleted {
         call_id: String,
         is_error: bool,
-        result: ToolResultView,
+    },
+    /// What a finished call shows, read off the interface's thread; `None`
+    /// when it could not be read.
+    ToolDisplayed {
+        call_id: String,
+        display: Option<AgentToolCallDisplay>,
     },
     ApprovalRequested(ApprovalRequest),
     /// Answered, by the person or by a policy; its overlay closes.
@@ -201,6 +203,12 @@ pub(crate) enum AgentReply {
     ReviewEnded(ReviewEnd),
     /// The working directory moved into a new worktree (`/worktree`).
     EnteredWorktree(workspace::EnteredWorktree),
+    /// What a finished call of `session_id` shows.
+    ToolDisplayed {
+        session_id: AgentSessionId,
+        call_id: String,
+        display: Option<AgentToolCallDisplay>,
+    },
     /// A subagent of `parent` waits on an approval.
     ChildApproval(Box<ChildApproval>),
     /// It was answered, or its turn ended.
@@ -447,6 +455,13 @@ impl AgentBridge {
                 goal,
             } => self.status_loaded(session_id, permission_mode, goal),
             AgentReply::ReviewEnded(end) => self.review_ended(end),
+            // The interface has moved to another session since.
+            AgentReply::ToolDisplayed { session_id, .. } if Some(session_id) != self.session_id => {
+                None
+            }
+            AgentReply::ToolDisplayed {
+                call_id, display, ..
+            } => Some(TurnUpdate::ToolDisplayed { call_id, display }),
             AgentReply::EnteredWorktree(entered) => self.entered_worktree(entered),
             AgentReply::ChildApproval(approval) => self.child_approval(*approval),
             AgentReply::ChildApprovalResolved { parent, request_id } => {
@@ -507,15 +522,8 @@ impl AgentBridge {
                 }
             }
             AgentEventKind::ToolCompleted { call_id, is_error } => {
-                let result = event
-                    .turn_id
-                    .map(|turn_id| self.tool_result(event.session_id, turn_id, &call_id))
-                    .unwrap_or_default();
-                TurnUpdate::ToolCompleted {
-                    call_id,
-                    is_error,
-                    result,
-                }
+                self.read_tool_display(event.session_id, call_id.clone());
+                TurnUpdate::ToolCompleted { call_id, is_error }
             }
             AgentEventKind::ApprovalRequested { request } => TurnUpdate::ApprovalRequested(request),
             AgentEventKind::ApprovalResolved { request_id, .. } => {
@@ -662,31 +670,6 @@ impl AgentBridge {
             Some(_) => Arc::new(DiscardSink),
             None => Arc::new(EventSink(self.app_event_tx.clone())),
         }
-    }
-
-    /// What a finished call left in the turn's history: its output, and for
-    /// a patch the patch read as a diff. Tool events carry neither.
-    fn tool_result(
-        &self,
-        session_id: AgentSessionId,
-        turn_id: hanafubuki_agent::AgentTurnId,
-        call_id: &str,
-    ) -> ToolResultView {
-        let page = self.agent.read_turn_page(AgentTurnPageRequest {
-            session_id,
-            turn_id,
-            page_size: TOOL_ITEMS_PAGE,
-            cursor: None,
-            direction: AgentHistorySortDirection::Descending,
-            through_revision: None,
-        });
-        let mut view = ToolResultView::default();
-        for item in page.map(|page| page.items).unwrap_or_default() {
-            if replay::call_id(&item.content) == Some(call_id) {
-                replay::read_into(&self.agent, item.content, &mut view);
-            }
-        }
-        view
     }
 }
 

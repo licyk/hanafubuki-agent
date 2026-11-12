@@ -176,7 +176,7 @@ impl AgentActivityTracker {
                 Some(*current_retry),
                 now,
             ),
-            AgentEventKind::ExecutionProgress { update } => self.observe_execution(update, now),
+            AgentEventKind::ExecutionProgress { update, .. } => self.observe_execution(update, now),
             AgentEventKind::TurnCompleted { .. } => {
                 self.finish_turn_activities(AgentActivityPhase::Succeeded, now);
                 None

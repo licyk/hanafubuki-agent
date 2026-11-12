@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use hanafubuki_agent::AgentReasoningSnapshot;
+use hanafubuki_agent::{AgentReasoningSnapshot, AgentToolCallDisplay, AgentToolDisplay};
 
 use super::*;
 use crate::app_event::AppCommand;
@@ -66,14 +66,24 @@ fn tool_started(chat: &mut ChatWidget, call_id: &str, name: &str, subject: Optio
     });
 }
 
+/// The call finishes, and what it shows arrives after.
 fn tool_completed(chat: &mut ChatWidget, call_id: &str, output: &str) {
     chat.handle_turn_update(TurnUpdate::ToolCompleted {
         call_id: call_id.to_string(),
         is_error: false,
-        result: ToolResultView {
-            text: Some(output.to_string()),
-            ..ToolResultView::default()
-        },
+    });
+    tool_displayed(chat, call_id, None, output);
+}
+
+fn tool_displayed(chat: &mut ChatWidget, call_id: &str, subject: Option<&str>, output: &str) {
+    chat.handle_turn_update(TurnUpdate::ToolDisplayed {
+        call_id: call_id.to_string(),
+        display: Some(AgentToolCallDisplay {
+            subject: subject.map(str::to_string),
+            display: Some(AgentToolDisplay::Text {
+                text: output.to_string(),
+            }),
+        }),
     });
 }
 
@@ -91,14 +101,58 @@ fn a_tool_call_completes_where_it_started_in_both_presentations() {
         // The transcript (or the tail) shows it; the chat does not draw it.
         assert!(!screen(&chat, 60).contains("exec_command"));
         let revision = entries[0].revision();
-        tool_completed(&mut chat, "call-1", "Cargo.toml");
+        // Finished, it keeps its shape until what it shows arrives, and
+        // Scrollback's tail may not write it yet.
+        chat.handle_turn_update(TurnUpdate::ToolCompleted {
+            call_id: "call-1".to_string(),
+            is_error: false,
+        });
+        assert!(!transcript(&events, &mut entries));
+        assert_eq!(texts(&entries), vec!["• Called exec_command: ls"]);
+        assert!(!chat.has_live_entries());
+        tool_displayed(&mut chat, "call-1", None, "Cargo.toml");
         assert_eq!(transcript(&events, &mut entries), !owned);
         assert_eq!(
             texts(&entries),
             vec!["• Called exec_command: ls\n  └ Cargo.toml"]
         );
         assert!(entries[0].revision() > revision);
-        assert!(!chat.has_live_entries());
+    }
+}
+
+#[test]
+fn what_a_call_shows_arrives_after_its_turn_and_names_its_subject() {
+    for owned in [true, false] {
+        let (mut chat, events) = chat_in(owned);
+        let mut entries = Vec::new();
+        chat.handle_turn_update(TurnUpdate::Started);
+        tool_started(&mut chat, "call-1", "read_file", None);
+        tool_started(&mut chat, "call-2", "read_file", None);
+        for call_id in ["call-1", "call-2"] {
+            chat.handle_turn_update(TurnUpdate::ToolCompleted {
+                call_id: call_id.to_string(),
+                is_error: false,
+            });
+        }
+        chat.handle_turn_update(TurnUpdate::Ended(TurnEnd::Completed));
+        transcript(&events, &mut entries);
+        entries.retain(|entry| cell_text(entry.as_ref()).contains("read_file"));
+
+        tool_displayed(&mut chat, "call-2", Some("b.rs"), "fn b() {}");
+        assert_eq!(transcript(&events, &mut entries), !owned);
+        // A read that failed completes the call as it stands.
+        chat.handle_turn_update(TurnUpdate::ToolDisplayed {
+            call_id: "call-1".to_string(),
+            display: None,
+        });
+        assert_eq!(transcript(&events, &mut entries), !owned);
+        assert_eq!(
+            texts(&entries),
+            vec![
+                "• Called read_file",
+                "• Called read_file: b.rs\n  └ fn b() {}",
+            ]
+        );
     }
 }
 

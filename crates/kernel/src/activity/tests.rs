@@ -180,6 +180,7 @@ fn execution_outlives_turn_and_waits_for_confirmed_disposal() {
     tracker.observe(
         AgentEventSequence::new(1),
         &AgentEventKind::ExecutionProgress {
+            call_id: None,
             update: AgentToolProgressUpdate::ExecutionStarted {
                 execution_id: 7,
                 generation: 2,
@@ -201,6 +202,7 @@ fn execution_outlives_turn_and_waits_for_confirmed_disposal() {
     tracker.observe(
         AgentEventSequence::new(3),
         &AgentEventKind::ExecutionProgress {
+            call_id: None,
             update: AgentToolProgressUpdate::ExecutionStatus {
                 execution_id: 7,
                 generation: 2,
@@ -219,6 +221,7 @@ fn execution_outlives_turn_and_waits_for_confirmed_disposal() {
     tracker.observe(
         AgentEventSequence::new(4),
         &AgentEventKind::ExecutionProgress {
+            call_id: None,
             update: AgentToolProgressUpdate::ExecutionDisposed {
                 execution_id: 7,
                 generation: 2,
@@ -239,6 +242,7 @@ fn execution_output_is_head_tail_bounded_and_late_updates_do_not_revive_it() {
     tracker.observe(
         AgentEventSequence::new(1),
         &AgentEventKind::ExecutionProgress {
+            call_id: None,
             update: AgentToolProgressUpdate::ExecutionStarted {
                 execution_id: 8,
                 generation: 1,
@@ -255,6 +259,7 @@ fn execution_output_is_head_tail_bounded_and_late_updates_do_not_revive_it() {
     tracker.observe(
         AgentEventSequence::new(2),
         &AgentEventKind::ExecutionProgress {
+            call_id: None,
             update: AgentToolProgressUpdate::ExecutionOutput {
                 execution_id: 8,
                 generation: 1,
@@ -275,6 +280,7 @@ fn execution_output_is_head_tail_bounded_and_late_updates_do_not_revive_it() {
     tracker.observe(
         AgentEventSequence::new(3),
         &AgentEventKind::ExecutionProgress {
+            call_id: None,
             update: AgentToolProgressUpdate::ExecutionDisposed {
                 execution_id: 8,
                 generation: 1,
@@ -285,6 +291,7 @@ fn execution_output_is_head_tail_bounded_and_late_updates_do_not_revive_it() {
     tracker.observe(
         AgentEventSequence::new(4),
         &AgentEventKind::ExecutionProgress {
+            call_id: None,
             update: AgentToolProgressUpdate::ExecutionOutput {
                 execution_id: 8,
                 generation: 1,
@@ -315,6 +322,7 @@ fn execution_updates_are_isolated_by_generation_across_turns() {
         tracker.observe(
             AgentEventSequence::new(sequence),
             &AgentEventKind::ExecutionProgress {
+                call_id: None,
                 update: AgentToolProgressUpdate::ExecutionStarted {
                     execution_id: 8,
                     generation,
@@ -328,6 +336,7 @@ fn execution_updates_are_isolated_by_generation_across_turns() {
     tracker.observe(
         AgentEventSequence::new(3),
         &AgentEventKind::ExecutionProgress {
+            call_id: None,
             update: AgentToolProgressUpdate::ExecutionStatus {
                 execution_id: 8,
                 generation: 1,
@@ -355,7 +364,10 @@ fn execution_update(
     tracker
         .observe(
             AgentEventSequence::new(sequence),
-            &AgentEventKind::ExecutionProgress { update },
+            &AgentEventKind::ExecutionProgress {
+                call_id: None,
+                update,
+            },
             sequence as u128,
         )
         .and_then(|snapshot| snapshot.output)

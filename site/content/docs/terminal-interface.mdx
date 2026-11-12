@@ -43,7 +43,7 @@ Fullscreen 下，对话占满底部区域上方的屏幕。Scrollback 下，界�
 
 审批、提问以及 `/model` 和 `/mode` 的选择列表打开时，会暂时替换状态行和输入框。回合结束时，选择列表保持打开。各项设置（包括 `/providers` 和 `/mcp`）都在全屏的[设置中心](#config)中。
 
-对话记录中，你的消息以 `›` 开头；工具调用在开始的位置显示为 `• Running 工具名: 对象`，并在原处就地变为 `• Called 工具名` 或 `• Failed 工具名`，输出只保留首尾各几行；`apply_patch` 会显示修改的差异；思考显示为 `• Thinking 3.4s`，之后变为 `• Thought · 20.7s`（[思考过程](#thinking)）；任务计划显示为 `• Updated Plan · 1/5 complete` 和它的步骤；错误以红色的 `■` 开头。一段工具调用之后，回答之前会有一条 `─ Worked for 1m 05s ─` 分隔线，回合思考过时为 `─ Worked for 1m 05s · thought for 20.7s ─`。
+对话记录中，你的消息以 `›` 开头；工具调用在开始的位置显示为 `• Running 工具名: 对象`（对象是它作用的东西：命令行、路径、查询），并在原处就地变为 `• Called 工具名` 或 `• Failed 工具名`，它返回的内容（命令的输出、文件的文本、目录列表、匹配结果、结构化结果的字段）只保留首尾各几行；`apply_patch` 会显示修改的差异；思考显示为 `• Thinking 3.4s`，之后变为 `• Thought · 20.7s`（[思考过程](#thinking)）；任务计划显示为 `• Updated Plan · 1/5 complete` 和它的步骤；错误以红色的 `■` 开头。一段工具调用之后，回答之前会有一条 `─ Worked for 1m 05s ─` 分隔线，回合思考过时为 `─ Worked for 1m 05s · thought for 20.7s ─`。
 
 ## 按键 [#keys]
 

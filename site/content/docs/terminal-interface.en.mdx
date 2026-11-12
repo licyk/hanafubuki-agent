@@ -43,7 +43,7 @@ At the start (and after `/new` or a resume) a box shows the version, the model a
 
 An approval, a question and the `/model` and `/mode` lists take the place of the status line and the composer while they are open. A list stays open when a turn ends. The settings, `/providers` and `/mcp` among them, are the [settings center](#config)'s, over the whole screen.
 
-In the conversation your messages start with `›`; a tool call is `• Running TOOL: SUBJECT` where it starts, and changes there in place into `• Called TOOL` or `• Failed TOOL`, with the first and last lines of its output; `apply_patch` shows the diff it made; a thinking is `• Thinking 3.4s`, then `• Thought · 20.7s` ([Thinking](#thinking)); the task plan is `• Updated Plan · 1/5 complete` with its steps; errors start with a red `■`. After a stretch of tool calls, a `─ Worked for 1m 05s ─` rule comes before the answer, `─ Worked for 1m 05s · thought for 20.7s ─` when the turn thought.
+In the conversation your messages start with `›`; a tool call is `• Running TOOL: SUBJECT` where it starts (the subject is what it acts on: the command line, the path, the query), and changes there in place into `• Called TOOL` or `• Failed TOOL`, with the first and last lines of what it returned (a command's output, a file's text, a listing, the matches, a structured result's fields); `apply_patch` shows the diff it made; a thinking is `• Thinking 3.4s`, then `• Thought · 20.7s` ([Thinking](#thinking)); the task plan is `• Updated Plan · 1/5 complete` with its steps; errors start with a red `■`. After a stretch of tool calls, a `─ Worked for 1m 05s ─` rule comes before the answer, `─ Worked for 1m 05s · thought for 20.7s ─` when the turn thought.
 
 ## Keys [#keys]
 

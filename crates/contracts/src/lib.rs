@@ -84,12 +84,16 @@ pub use tool_lifecycle::{
     ToolLifecycleHookRegistry, ToolLifecyclePhase, MAXIMUM_TOOL_LIFECYCLE_HOOKS,
 };
 pub use tools::{
-    decode_arguments, object_arguments, verify_tool_approval, AgentMemoryContextEffect,
-    AgentToolError, AgentToolHandler, AgentToolOmission, AgentToolSource, SourcedTool,
+    decode_arguments, object_arguments, output_text, structured_output, verify_tool_approval,
+    AgentListingEntry, AgentListingEntryKind, AgentMemoryContextEffect, AgentMutationKind,
+    AgentPatchFile, AgentPatchLine, AgentPatchLineKind, AgentPatchOperation, AgentPatchPreview,
+    AgentSearchMatch, AgentToolDisplay, AgentToolError, AgentToolHandler, AgentToolOmission,
+    AgentToolPresenter, AgentToolSource, AgentWebResult, ArgumentSubjects, SourcedTool,
     ToolAvailability, ToolCallContext, ToolCallValidationError, ToolContextFragment,
     ToolDescriptor, ToolEffect, ToolFuture, ToolInvocation, ToolPlanContext, ToolPlanLease,
-    ToolRegistry, ToolResult, ToolSourceContribution, ToolSourceRegistry, ToolSourceStep,
-    ToolSourceTrust, TurnExtensions, MAX_AGENT_TOOL_OMISSIONS, RESERVED_TOOL_NAMES,
+    ToolPresenterRegistry, ToolRegistry, ToolResult, ToolSourceContribution, ToolSourceRegistry,
+    ToolSourceStep, ToolSourceTrust, TurnExtensions, MAX_AGENT_TOOL_OMISSIONS,
+    MAX_TOOL_SUBJECT_CHARS, RESERVED_TOOL_NAMES,
 };
 
 /// Helpers for other crates' tests.

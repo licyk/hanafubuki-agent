@@ -36,6 +36,7 @@ impl AgentService {
             progress: Arc::new(super::super::progress::SessionToolProgressSink {
                 service: self.clone(),
                 session_id: identity.session_id,
+                call_id: Some(call.call_id.clone()),
                 runtime,
             }),
         })
