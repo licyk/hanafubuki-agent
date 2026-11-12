@@ -123,3 +123,21 @@ fn complete_prefix_holds_back_an_unfinished_sequence() {
     let long = format!("\u{1b}]0;{}", "x".repeat(MAX_HELD_SEQUENCE_BYTES));
     assert_eq!(complete_prefix_len(&long), long.len());
 }
+
+// A wide character takes two cells, so a column a terminal moves to after CJK
+// text is not its count of characters.
+
+#[test]
+#[ignore = "reproduces §4.9 (e), one cell per char; fixed in E3"]
+fn an_absolute_column_after_cjk_text_counts_two_cells_per_wide_character() {
+    assert_eq!(render_plain_text("中文\x1b[5Gx\n".as_bytes()), "中文x\n");
+}
+
+#[test]
+#[ignore = "reproduces §4.9 (e), one cell per char; fixed in E3"]
+fn a_carriage_return_redraw_over_cjk_text_moves_by_cells() {
+    assert_eq!(
+        render_plain_text("中文abc\r\x1b[5CX\n".as_bytes()),
+        "中文aXc\n"
+    );
+}

@@ -554,3 +554,27 @@ fn pipe_output_reads_in_slices_without_splitting_characters() {
     assert_eq!(offset, 9000);
     assert_eq!(text, "中".repeat(3000));
 }
+
+#[test]
+#[ignore = "reproduces §4.9 step 8, DaFilter holds an escape at end of file; fixed in E3"]
+fn pty_output_ending_inside_an_escape_sequence_reaches_the_buffer() {
+    // `DaFilter` holds `ESC [` and what follows until a final byte that never
+    // comes: the bytes must still arrive once the PTY reaches end of file.
+    let manager = ExecutorManager::default();
+    let mut request = req(&["sh", "-c", "printf 'end\\033[ 99%%'"]);
+    request.io_mode = ExecutorIoMode::Pty;
+    request.timeout_ms = Some(5_000);
+    let info = start_executor(&manager, request).unwrap();
+    let out = wait_terminal(&manager, &info.executor_id);
+    assert_eq!(out.status, ExecutorStatus::Exited);
+    let bytes = out
+        .chunks
+        .iter()
+        .flat_map(|chunk| chunk.data.clone())
+        .collect::<Vec<_>>();
+    assert!(
+        bytes.ends_with(b"end\x1b[ 99%"),
+        "{:?}",
+        String::from_utf8_lossy(&bytes)
+    );
+}

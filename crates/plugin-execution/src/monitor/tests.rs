@@ -333,3 +333,106 @@ fn execution_output_progress_preserves_content_is_bounded_and_capability_free() 
         assert!(!serialized.contains(forbidden));
     }
 }
+
+#[test]
+#[ignore = "reproduces §4.9 step 6, a read inside a sequence; fixed in E3"]
+fn a_monitor_that_skips_ahead_never_starts_inside_an_escape_sequence() {
+    use hanafubuki_agent_approval::test_support::ManualApprovalClock;
+    use hanafubuki_agent_approval::{
+        ApprovalContext, ApprovalDecisionSource, ApprovalOrigin, ApprovalService,
+    };
+    use hanafubuki_agent_execution::test_support::FakeAgentExecutionProcessPort;
+    use hanafubuki_agent_execution::ExecCommandRequest;
+    use hanafubuki_agent_foundation::terminal_text::render_plain_text;
+    use std::collections::BTreeMap;
+
+    // The plugin may not depend on the process crate, so the finished
+    // command's output is the fake port's. The skip goes to 8195 - 8192 = 3,
+    // inside `ESC [ 3 1 m`.
+    let process = FakeAgentExecutionProcessPort::shared();
+    let executions = AgentExecutionService::with_process_port(process.clone());
+    let scope = AgentExecutionScope::for_agent_session(1).unwrap();
+    let request = ExecCommandRequest {
+        cmd: "coloured-output".to_string(),
+        shell: None,
+        login: true,
+        tty: false,
+        yield_time_ms: 5_000,
+        max_output_bytes: Some(32 * 1024),
+        workdir: Some(std::env::current_dir().unwrap()),
+        environment: BTreeMap::new(),
+        origin: ApprovalOrigin::Model,
+        sandbox: hanafubuki_agent_sandbox::SandboxSettings::full_access(),
+        sandbox_escalation: None,
+    };
+    let action = executions.prepare_exec_command_action(&request).unwrap();
+    let approval_context =
+        ApprovalContext::from_canonical_bytes("call-1".to_string(), b"scope-1").unwrap();
+    let approval = ApprovalService::new(Arc::new(ManualApprovalClock::new(1)))
+        .authorize(
+            action,
+            &approval_context,
+            Duration::from_secs(1),
+            ApprovalDecisionSource::FullAccess,
+        )
+        .unwrap();
+    let snapshot = executions
+        .start_exec_command(
+            scope.clone(),
+            request,
+            Some(&approval),
+            &CancellationToken::default(),
+        )
+        .unwrap();
+    let output = format!("A\x1b[31mred\n{}\n", "y".repeat(8184));
+    assert_eq!(output.len(), 8195);
+    process.finish(output, 0);
+    executions
+        .attach_observer(&scope, snapshot.execution_id, snapshot.generation)
+        .unwrap();
+
+    let sink = RecordingProgressSink::default();
+    monitor_execution(
+        &executions,
+        &scope,
+        snapshot.execution_id,
+        snapshot.generation,
+        &sink,
+        CancellationToken::default(),
+    );
+
+    let updates = sink.updates.lock().unwrap();
+    let text = updates
+        .iter()
+        .find_map(|update| match update {
+            AgentToolProgressUpdate::ExecutionOutput {
+                text, truncated, ..
+            } => {
+                assert!(*truncated);
+                Some(render_plain_text(text.as_bytes()))
+            }
+            _ => None,
+        })
+        .expect("the output is reported");
+    assert!(
+        text.ends_with(&format!("{}\n", "y".repeat(8184))),
+        "{text:?}"
+    );
+    assert!(!text.contains("31m"), "{:?}", &text[..16]);
+}
+
+#[test]
+#[ignore = "reproduces §4.9 step 6, a read inside a sequence; fixed in E3"]
+fn bounding_an_update_never_starts_it_inside_an_escape_sequence() {
+    use hanafubuki_agent_foundation::terminal_text::render_plain_text;
+
+    // The front trim goes to 8194 - 8192 = 2, inside `ESC [ 3 1 m`.
+    let value = format!("\x1b[31mred\n{}\n", "y".repeat(8184));
+    assert_eq!(value.len(), 8194);
+    let text = render_plain_text(bound_execution_output(&value).as_bytes());
+    assert!(
+        text.ends_with(&format!("{}\n", "y".repeat(8184))),
+        "{text:?}"
+    );
+    assert!(!text.contains("31m"), "{:?}", &text[..16]);
+}

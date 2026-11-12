@@ -1,13 +1,17 @@
-//! Windows PowerShell 5.1 (`powershell.exe`, never `pwsh`) run as
-//! `exec_command` runs it, through the real executor in pipe and PTY mode:
-//! the garbling of the plan's §4.9, (a) to (g).
+//! Windows PowerShell 5.1 (`powershell.exe`, never `pwsh`) and `cmd.exe` run
+//! as `exec_command` runs them, through the real executor in pipe and PTY
+//! mode: the garbling of the plan's §4.9, (a) to (g), and output lost in the
+//! middle of a long listing.
 //!
 //! The runner's code pages are 1252 (ANSI) and 437 (OEM), so text a native
 //! program writes in the ANSI code page is encoded with
-//! `[Text.Encoding]::Default`, never spelled as GBK; the code page 936 cases
+//! `[Text.Encoding]::Default`, never spelled as GBK, and `cmd.exe`'s console
+//! code page shows with `é` (0x82 in code page 437); the code page 936 cases
 //! are the decoder's unit tests in `hanafubuki-agent-process`.
 
 use super::*;
+
+use std::time::{Duration, Instant};
 
 use hanafubuki_agent_approval::PermissionActionDetails;
 use hanafubuki_agent_execution::{
@@ -17,47 +21,98 @@ use hanafubuki_agent_process::executor::ExecutorManager;
 use hanafubuki_agent_sandbox::SandboxSettings;
 
 const YIELD_MS: u64 = 30_000;
+/// How long a command may take in all, over several polls.
+const DEADLINE: Duration = Duration::from_secs(240);
 
 /// Text the runner's ANSI code page (1252) can encode.
 const ANSI_TEXT: &str = "café ü";
 
-/// The script as `exec_command` runs it under Windows PowerShell: with
-/// PowerShell 7 off the PATH, the shell resolves to 5.1.
-fn request(script: &str, tty: bool) -> ExecCommandRequest {
+/// The script as `exec_command` runs it. Under PowerShell, with PowerShell 7
+/// off the PATH, the shell resolves to Windows PowerShell 5.1.
+fn request(shell: PlatformShell, script: &str, tty: bool) -> ExecCommandRequest {
     let root = std::env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".to_string());
-    ExecCommandRequest {
-        cmd: script.to_string(),
-        shell: Some(PlatformShell::PowerShell),
-        login: false,
-        tty,
-        yield_time_ms: YIELD_MS,
-        max_output_bytes: Some(64 * 1024),
-        workdir: Some(std::env::current_dir().unwrap()),
-        environment: BTreeMap::from([(
+    let environment = match shell {
+        PlatformShell::PowerShell => BTreeMap::from([(
             "PATH".to_string(),
             format!(r"{root}\System32\WindowsPowerShell\v1.0;{root}\System32;{root}"),
         )]),
+        _ => BTreeMap::new(),
+    };
+    ExecCommandRequest {
+        cmd: script.to_string(),
+        shell: Some(shell),
+        login: false,
+        tty,
+        yield_time_ms: YIELD_MS,
+        max_output_bytes: None,
+        workdir: Some(std::env::current_dir().unwrap()),
+        environment,
         origin: ApprovalOrigin::Model,
         sandbox: SandboxSettings::full_access(),
         sandbox_escalation: None,
     }
 }
 
-fn start(script: &str, tty: bool, yield_ms: u64) -> (AgentExecutionService, UnifiedExecResult) {
+struct Ran {
+    output: String,
+    truncated: bool,
+    elapsed: Duration,
+}
+
+/// Runs `request` to its end, polling as the model does, and returns all it
+/// printed.
+fn run_request(request: ExecCommandRequest) -> Ran {
+    let started = Instant::now();
+    let (service, first) = start(request);
+    let mut output = first.output;
+    let mut truncated = first.truncated;
+    let mut session_id = first.session_id;
+    while let Some(id) = session_id {
+        assert!(started.elapsed() < DEADLINE, "still running: {output:?}");
+        let polled = service
+            .write_stdin(
+                &scope(),
+                WriteStdinRequest {
+                    session_id: AgentExecutionId::from_untrusted(id).unwrap(),
+                    chars: String::new(),
+                    yield_time_ms: YIELD_MS,
+                    max_output_bytes: None,
+                },
+                &CancellationToken::default(),
+            )
+            .unwrap();
+        output.push_str(&polled.output);
+        truncated |= polled.truncated;
+        session_id = polled.session_id;
+    }
+    Ran {
+        output,
+        truncated,
+        elapsed: started.elapsed(),
+    }
+}
+
+fn run(script: &str, tty: bool) -> String {
+    run_request(request(PlatformShell::PowerShell, script, tty)).output
+}
+
+fn start(request: ExecCommandRequest) -> (AgentExecutionService, UnifiedExecResult) {
     let service = AgentExecutionService::new(ExecutorManager::default());
     let scope = scope();
-    let mut request = request(script, tty);
-    request.yield_time_ms = yield_ms;
     let action = service.prepare_exec_command_action(&request).unwrap();
-    let Some(PermissionActionDetails::Command { program, .. }) = action.details() else {
-        panic!("a shell action names its program");
-    };
-    assert!(
-        program
-            .to_ascii_lowercase()
-            .ends_with(r"\windowspowershell\v1.0\powershell.exe"),
-        "{program}"
-    );
+    if request.shell == Some(PlatformShell::PowerShell) {
+        let Some(PermissionActionDetails::Command { program, .. }) = action.details() else {
+            panic!("a shell action names its program");
+        };
+        assert!(
+            program
+                .to_ascii_lowercase()
+                .ends_with(r"\windowspowershell\v1.0\powershell.exe"),
+            "{program}"
+        );
+    }
+    let yield_ms = request.yield_time_ms;
+    let max_output_bytes = request.max_output_bytes;
     let started = service
         .start_exec_command(
             scope.clone(),
@@ -71,7 +126,7 @@ fn start(script: &str, tty: bool, yield_ms: u64) -> (AgentExecutionService, Unif
             &scope,
             started.execution_id,
             yield_ms,
-            Some(64 * 1024),
+            max_output_bytes,
             &CancellationToken::default(),
         )
         .unwrap();
@@ -82,17 +137,12 @@ fn scope() -> AgentExecutionScope {
     AgentExecutionScope::for_agent_session(51).unwrap()
 }
 
-/// The command's whole output, once it has finished.
-fn run(script: &str, tty: bool) -> String {
-    let (_service, result) = start(script, tty, YIELD_MS);
-    assert_eq!(result.session_id, None, "still running: {:?}", result.output);
-    result.output
-}
-
 /// Answers a prompt with non-ASCII text through `write_stdin`, as the model
 /// does in a PTY session.
 fn answer(script: &str) -> String {
-    let (service, yielded) = start(script, true, 3_000);
+    let mut request = request(PlatformShell::PowerShell, script, true);
+    request.yield_time_ms = 5_000;
+    let (service, yielded) = start(request);
     let Some(session_id) = yielded.session_id else {
         panic!("finished before its input: {:?}", yielded.output);
     };
@@ -103,7 +153,7 @@ fn answer(script: &str) -> String {
                 session_id: AgentExecutionId::from_untrusted(session_id).unwrap(),
                 chars: "中文 ü\r".to_string(),
                 yield_time_ms: YIELD_MS,
-                max_output_bytes: Some(64 * 1024),
+                max_output_bytes: None,
             },
             &CancellationToken::default(),
         )
@@ -130,24 +180,42 @@ fn assert_contains(output: &str, expected: &str) {
     assert!(output.contains(expected), "{expected:?} in {output:?}");
 }
 
+/// Every numbered line arrived whole, or the output says what it left out.
+fn assert_every_line_or_a_marker(ran: &Ran, lines: usize) {
+    let missing = (1..=lines)
+        .filter(|number| {
+            let line = format!("line {number} of the listing");
+            !ran.output.lines().any(|shown| shown.trim_end() == line)
+        })
+        .collect::<Vec<_>>();
+    assert!(
+        missing.is_empty() || (ran.truncated && ran.output.contains("omitted")),
+        "missing {missing:?} (truncated: {}) in {:?}",
+        ran.truncated,
+        ran.output
+    );
+}
+
 #[test]
 fn the_shell_resolved_is_windows_powershell_5_1() {
     let output = run("$PSVersionTable.PSVersion.Major", false);
     assert_eq!(output.trim(), "5", "{output:?}");
 }
 
-fn the_prefix_sets_the_console_code_page_to_utf8(tty: bool) {
+/// `chcp` shows the console's input code page, which the prefix leaves as
+/// it is (the output code page it sets: `cmd /c echo` below).
+fn the_prefix_sets_the_console_input_code_page_to_utf8(tty: bool) {
     assert_contains(&run("chcp.com", tty), "65001");
 }
 
 #[test]
-fn pipe_the_prefix_sets_the_console_code_page_to_utf8() {
-    the_prefix_sets_the_console_code_page_to_utf8(false);
+fn pipe_the_prefix_sets_the_console_input_code_page_to_utf8() {
+    the_prefix_sets_the_console_input_code_page_to_utf8(false);
 }
 
 #[test]
-fn pty_the_prefix_sets_the_console_code_page_to_utf8() {
-    the_prefix_sets_the_console_code_page_to_utf8(true);
+fn pty_the_prefix_sets_the_console_input_code_page_to_utf8() {
+    the_prefix_sets_the_console_input_code_page_to_utf8(true);
 }
 
 fn write_output_keeps_cjk_and_accents(tty: bool) {
@@ -183,7 +251,10 @@ fn pty_ansi_code_page_output_of_a_native_program_is_decoded() {
 /// stream.
 fn utf8_and_ansi_code_page_output_mix_in_one_stream(tty: bool) {
     let output = run(
-        &format!("Write-Output '中文 ü'; {}", ansi_write(ANSI_TEXT)),
+        &format!(
+            "[Console]::Out.WriteLine('中文 ü'); {}",
+            ansi_write(ANSI_TEXT)
+        ),
         tty,
     );
     assert_contains(&output, "中文 ü");
@@ -200,7 +271,7 @@ fn pty_utf8_and_ansi_code_page_output_mix_in_one_stream() {
     utf8_and_ansi_code_page_output_mix_in_one_stream(true);
 }
 
-/// (a): a program that follows the console's code page.
+/// (a): a program that follows the console's output code page.
 fn cmd_echo_keeps_cjk(tty: bool) {
     assert_contains(&run("cmd /c echo 中文", tty), "中文");
 }
@@ -318,13 +389,121 @@ fn pty_read_host_receives_non_ascii_text() {
     assert_contains(&answer("$line = Read-Host; \"got:$line\""), "got:中文 ü");
 }
 
-/// Temporary, for the reproduction run only: what the console reports.
+/// (a), as reported: the Cmd shell's built-ins write the console's code page.
+fn cmd_built_ins_write_text_the_decoder_reads(tty: bool) {
+    let directory = tempfile::tempdir().unwrap();
+    std::fs::write(directory.path().join("café.txt"), b"x").unwrap();
+    let mut request = request(PlatformShell::Cmd, "echo café & dir /b", tty);
+    request.workdir = Some(directory.path().to_path_buf());
+    let output = run_request(request).output;
+    assert!(!output.contains('\u{fffd}'), "{output:?}");
+    assert_eq!(output.matches("café").count(), 2, "{output:?}");
+}
+
 #[test]
-fn probe_code_pages() {
-    let script = "\"out=$([Console]::OutputEncoding.CodePage) in=$([Console]::InputEncoding.CodePage) \
+fn pipe_cmd_built_ins_write_text_the_decoder_reads() {
+    cmd_built_ins_write_text_the_decoder_reads(false);
+}
+
+#[test]
+fn pty_cmd_built_ins_write_text_the_decoder_reads() {
+    cmd_built_ins_write_text_the_decoder_reads(true);
+}
+
+/// As reported: a long `dir` lost its middle without a marker.
+fn a_long_listing_arrives_whole(shell: PlatformShell, tty: bool) {
+    let script = match shell {
+        PlatformShell::Cmd => "for /L %i in (1,1,300) do @echo line %i of the listing",
+        _ => "foreach ($i in 1..300) { \"line $i of the listing\" }",
+    };
+    assert_every_line_or_a_marker(&run_request(request(shell, script, tty)), 300);
+}
+
+#[test]
+fn pipe_a_long_cmd_listing_arrives_whole() {
+    a_long_listing_arrives_whole(PlatformShell::Cmd, false);
+}
+
+#[test]
+fn pty_a_long_cmd_listing_arrives_whole() {
+    a_long_listing_arrives_whole(PlatformShell::Cmd, true);
+}
+
+#[test]
+fn pipe_a_long_powershell_listing_arrives_whole() {
+    a_long_listing_arrives_whole(PlatformShell::PowerShell, false);
+}
+
+#[test]
+fn pty_a_long_powershell_listing_arrives_whole() {
+    a_long_listing_arrives_whole(PlatformShell::PowerShell, true);
+}
+
+/// A listing longer than the model's `max_output_bytes` says so.
+fn a_listing_over_the_output_bound_says_what_it_left_out(tty: bool) {
+    let mut request = request(
+        PlatformShell::Cmd,
+        "for /L %i in (1,1,300) do @echo line %i of the listing",
+        tty,
+    );
+    request.max_output_bytes = Some(4096);
+    assert_every_line_or_a_marker(&run_request(request), 300);
+}
+
+#[test]
+fn pipe_a_listing_over_the_output_bound_says_what_it_left_out() {
+    a_listing_over_the_output_bound_says_what_it_left_out(false);
+}
+
+#[test]
+fn pty_a_listing_over_the_output_bound_says_what_it_left_out() {
+    a_listing_over_the_output_bound_says_what_it_left_out(true);
+}
+
+/// Temporary, for the reproduction run only: how long a cmdlet takes in
+/// the clean environment and with D17's variables, and what the console
+/// reports.
+#[test]
+fn probe_environment() {
+    let cmdlet = "$t = [Diagnostics.Stopwatch]::StartNew(); Write-Output 'x' | Out-Null; \
+                  \"cmdlet_ms=$($t.ElapsedMilliseconds)\"; \
+                  \"out=$([Console]::OutputEncoding.CodePage) in=$([Console]::InputEncoding.CodePage) \
                   oe=$($OutputEncoding.CodePage) acp=$([Text.Encoding]::Default.CodePage) \
-                  pre=$([Console]::OutputEncoding.GetPreamble().Length)\"; chcp.com";
-    let pipe = run(script, false);
-    let pty = run(script, true);
-    panic!("pipe: {pipe:?}\npty: {pty:?}");
+                  psmp=$env:PSModulePath\"";
+    let mut report = String::new();
+    for (label, variables) in [
+        ("clean", &[][..]),
+        (
+            "d17",
+            &[
+                "USERPROFILE",
+                "APPDATA",
+                "LOCALAPPDATA",
+                "ProgramData",
+                "ProgramFiles",
+                "ProgramFiles(x86)",
+                "SystemDrive",
+                "HOMEDRIVE",
+                "HOMEPATH",
+                "PROCESSOR_ARCHITECTURE",
+                "NUMBER_OF_PROCESSORS",
+                "OS",
+            ][..],
+        ),
+    ] {
+        for tty in [false, true] {
+            let mut request = request(PlatformShell::PowerShell, cmdlet, tty);
+            for variable in variables {
+                if let Ok(value) = std::env::var(variable) {
+                    request.environment.insert(variable.to_string(), value);
+                }
+            }
+            let ran = run_request(request);
+            report.push_str(&format!(
+                "{label} tty={tty} elapsed={:?}: {:?}\n",
+                ran.elapsed, ran.output
+            ));
+        }
+    }
+    panic!("{report}");
 }
