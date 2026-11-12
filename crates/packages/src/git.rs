@@ -237,3 +237,6 @@ fn wait(executor: &ExecutorManager, receipt: &ReservedExecutorReceipt) -> Result
         thread::sleep(POLL);
     }
 }
+
+#[cfg(test)]
+mod tests;

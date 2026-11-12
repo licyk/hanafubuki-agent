@@ -31,6 +31,7 @@ hanafubuki-agent config set network.proxy system
 | MCP 的 Streamable HTTP 服务器和 OAuth            | `network.proxy`（包括登录和令牌刷新）；修改后会重新连接这些服务器 |
 | 模型运行的命令和终端                             | 由 `network.proxy` 决定的环境变量，见下文                         |
 | MCP 的 stdio 服务器                              | 同样的变量，覆盖它们自己的环境；修改后会重新启动它们              |
+| 插件包和市场的下载（`git`）                      | 同样的变量（你的 git 配置中的 `http.proxy` 优先于它们）           |
 | 模型 Provider 的请求及其模型列表                 | `network.proxy`；修改后各会话从下一轮起使用，见下文               |
 | models.dev 的下载（`modelMetadata.modelsDev`）   | `network.proxy`                                                   |
 

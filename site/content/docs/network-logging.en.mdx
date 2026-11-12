@@ -31,6 +31,7 @@ hanafubuki-agent config set network.proxy system
 | MCP Streamable HTTP servers and OAuth                 | `network.proxy` (login and token refresh too); a change reconnects those servers |
 | The commands and terminals the model runs             | The environment variables `network.proxy` decides (below)                        |
 | MCP stdio servers                                     | The same variables, over their own environment; a change restarts them           |
+| Plugin package and marketplace downloads (`git`)      | The same variables (a `http.proxy` in your git configuration wins over them)     |
 | Requests to model Providers and their model lists     | `network.proxy`; a change reaches each session's next turn (below)               |
 | The models.dev download (`modelMetadata.modelsDev`)   | `network.proxy`                                                                  |
 

@@ -732,6 +732,17 @@ Hoshimi `83f7813`. Every §9 decision (D1–D7) was accepted as recommended
   every enabled MCP server, the stdio ones started anew, not only the
   Streamable HTTP ones. A host keeps its own overlay current before
   `apply_saved_settings`.
+- Everything else that reaches the network, checked (2026-11-12): MCP
+  OAuth (login, discovery, the token refresh: rmcp's `refresh_token` uses
+  the MCP OAuth client the proxy builds) and web fetch redirects (each hop
+  builds its client with the proxy) already took it; tests now prove both
+  with targets only the proxy reaches. Plugin package and marketplace
+  downloads are `git` through the instance's executor (inherited
+  environment plus the overlay), so they take the proxy variables, the
+  lower-case `http_proxy` curl needs for `http://` remotes among them since
+  the overlay names both cases; a test runs `git ls-remote` through it. A
+  user's git `http.proxy` still wins over the variables. No other crate
+  makes HTTP requests (reqwest is only in model-api, web-search and mcp).
 
 ## Plan: Codex's messages sent while the Agent works, in the terminal interface (2026-11-11)
 
