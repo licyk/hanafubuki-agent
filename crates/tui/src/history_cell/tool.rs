@@ -1,6 +1,6 @@
 // Modified from OpenAI Codex rust-v0.93.0 (Apache-2.0).
 
-//! A tool call: the active cell while it runs (with a spinner), then its
+//! A tool call: a live entry while it runs (with a spinner), then its
 //! outcome and an excerpt of its output, or the diff of the patch it
 //! applied. Codex's exec and MCP cells, for every tool the Agent has. A
 //! `compress` call is folded: its ranges and topics in the header, the

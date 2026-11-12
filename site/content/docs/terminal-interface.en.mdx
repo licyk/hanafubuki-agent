@@ -36,8 +36,8 @@ In Fullscreen the conversation fills the screen above the bottom area. In Scroll
 
 At the start (and after `/new` or a resume) a box shows the version, the model and the working directory. Before a session exists, the model is the one it will get: `-m`'s, else the configured one. The bottom area holds, from the top:
 
-1. **The running tool calls**: `• Running TOOL: SUBJECT`. In Fullscreen they are the end of the conversation instead.
-2. **The status line**: during a turn, `• Working (12s • esc to interrupt)` with the elapsed time. While a model request is retried it reads `Reconnecting 1/3: reason`. The timer pauses while an approval or a question waits for you. Once the model's answer starts streaming, the status line is hidden.
+1. **The running tool calls**: `• Running TOOL: SUBJECT`. In Fullscreen they are in the conversation instead, where they started, and change there in place when they complete.
+2. **The status line**: during a turn, `• Working (12s • esc to interrupt)` with the elapsed time. While a model request is retried it reads `Reconnecting 1/3: reason`. The timer pauses while an approval or a question waits for you. It stays for the whole turn, also while the answer streams.
 3. **The messages waiting** for the turn, while there are any ([below](#composer)).
 4. **The composer**, starting with `›`.
 5. **The footer**: the [status line](#status-line), by default the model and its reasoning effort, the working directory and the session's title, while the composer is empty or holds a draft with no turn running; `? for shortcuts` when it shows no item. A draft written during a turn shows `tab to queue message` instead.
@@ -71,9 +71,9 @@ These are the default keys. [The keymap](#keymap) changes the keys of its action
 The composer has the usual Emacs-style editing keys: Ctrl-A/E for the start and end of the line, Ctrl-W to delete the previous word, Ctrl-U/K to delete to the start or end of the line, Alt-B/F to move by word, and so on.
 
 <Callout>
-  Esc interrupts the turn whatever it is doing, also while the answer streams and the status line is
-  hidden. It never sends the draft in the composer: with steering messages waiting it sends them as
-  the next turn, otherwise what waited goes back into the composer (below).
+  Esc interrupts the turn whatever it is doing, also while the answer streams. It never sends the
+  draft in the composer: with steering messages waiting it sends them as the next turn, otherwise
+  what waited goes back into the composer (below).
 </Callout>
 
 ## The composer [#composer]
@@ -372,7 +372,7 @@ In Scrollback, Ctrl-T opens the whole session's transcript (`T R A N S C R I P T
 | Home/End                                         | To the start or the end |
 | `q`, Esc, Ctrl-C; for the transcript also Ctrl-T | Closes it               |
 
-The transcript shows every thinking's text and a tool call's whole output, where the scrollback shows its first and last lines, and the tool calls still running after what has completed. Its selection, copying and search are the ones of [Reading the conversation](#reading) (drag, Ctrl-Space, F3).
+The transcript shows every thinking's text and a tool call's whole output, where the scrollback shows its first and last lines, and the thinking and tool calls still running where they started, changing in place. Its selection, copying and search are the ones of [Reading the conversation](#reading) (drag, Ctrl-Space, F3).
 
 The turn goes on while a pager is open, and what it writes meanwhile appears in the transcript at once and in the scrollback once you close it.
 
@@ -400,7 +400,7 @@ Enter edits in a copy of the session: it is forked before the message's turn and
 
 While the model thinks, the conversation shows a `• Thinking 5s` line that counts up, collapsed by default; the status line stays `Working`. Ctrl-O expands it to the thinking as the model streams it (dim Markdown) and collapses it again. The choice applies to the thinking shown now and to every later one until you press Ctrl-O again, for as long as the interface runs. While thinking is live, the footer says `ctrl + o to show thinking` (or `to hide thinking`).
 
-When the thinking ends, it is written into the scrollback as it is shown at that moment: `• Thought for 12s` (whole seconds, rounded down) when collapsed, or that line and the text when expanded. A Provider that sends no text leaves only the line. Thinking that ends while an answer streams is written after that answer, so the scrollback keeps the model's order. If the turn ends before the thinking does (an error, an interrupt), the line is completed with the time so far. Scrollback cannot be changed afterwards, but the transcript (Ctrl-T, in Fullscreen the detailed conversation) always shows every thinking's text. A resumed session replays its thinking the same way, collapsed unless Ctrl-O expanded thinking; a thinking whose text was cut at the Agent's bound says `• Thought for 12s (truncated)`.
+In Fullscreen the thinking is in the conversation from its start and becomes `• Thought for 12s` there, in place. In Scrollback, when the thinking ends, it is written into the scrollback as it is shown at that moment: `• Thought for 12s` (whole seconds, rounded down) when collapsed, or that line and the text when expanded. A Provider that sends no text leaves only the line. Thinking that ends while an answer streams is written after that answer, so the scrollback keeps the model's order. If the turn ends before the thinking does (an error, an interrupt), the line is completed with the time so far. Scrollback cannot be changed afterwards, but the transcript (Ctrl-T, in Fullscreen the detailed conversation) always shows every thinking's text. A resumed session replays its thinking the same way, collapsed unless Ctrl-O expanded thinking; a thinking whose text was cut at the Agent's bound says `• Thought for 12s (truncated)`.
 
 What you see depends on what the Provider sends: some send a summary of the thinking, some the raw thinking text, some nothing. See [Providers and models](/docs/providers-models#reasoning).
 

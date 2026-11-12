@@ -238,6 +238,8 @@ impl App {
             | AppEvent::AgentReply(_)
             | AppEvent::Op(_)
             | AppEvent::InsertHistoryCell(_)
+            | AppEvent::InsertLiveEntry(_)
+            | AppEvent::WriteLiveEntry(_)
             | AppEvent::CommandStep(_)
             | AppEvent::Command(_)
                 if focus.is_some_and(|focus| focus != owner) =>

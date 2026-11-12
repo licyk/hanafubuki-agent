@@ -9,31 +9,37 @@ use super::input_queue::Ending;
 use super::ChatWidget;
 use crate::agent_bridge::{TurnEnd, TurnUpdate, Warning, WarningSource};
 use crate::app_event::AppEvent;
-use crate::history_cell::{self, ThinkingCell, ToolResultView};
+use crate::history_cell::{self, LiveCell, ThinkingCell, ToolResultView};
 use crate::streaming::controller::{PlanStreamController, StreamController};
 
 const WORKING: &str = "Working";
 
 impl ChatWidget {
     pub(crate) fn handle_turn_update(&mut self, update: TurnUpdate) {
-        self.live_revision += 1;
         let Some(update) = self.handle_command_update(update) else {
             self.request_redraw();
             return;
         };
-        if self.defers(&update) {
+        if self.owned_transcript {
+            // An entry goes in its place at once, after the message so far,
+            // whose lines still to be committed are committed first.
+            if self.stream_controller.is_some() && adds_entry(&update) {
+                self.finish_message();
+            }
+        } else if self.defers(&update) {
             self.deferred.push_back(update);
-        } else {
-            self.handle_now(update);
+            self.request_redraw();
+            return;
         }
+        self.handle_now(update);
         self.request_redraw();
     }
 
-    /// While a message streams, what would be written below it waits for
-    /// the stream to finish; once anything waits, everything after it
-    /// waits too, so the order holds. A thinking cell written on its
-    /// completion would otherwise land above the message's lines still to
-    /// be committed.
+    /// Scrollback: while a message streams, what would be written below it
+    /// waits for the stream to finish; once anything waits, everything
+    /// after it waits too, so the order holds. A thinking cell written on
+    /// its completion would otherwise land above the message's lines still
+    /// to be committed.
     fn defers(&self, update: &TurnUpdate) -> bool {
         let streaming = self.stream_controller.is_some() || !self.deferred.is_empty();
         streaming
@@ -64,10 +70,10 @@ impl ChatWidget {
             } => {
                 if let Some((_, cell)) = self
                     .live_thinking
-                    .iter_mut()
+                    .iter()
                     .find(|(id, _)| *id == reasoning_id)
                 {
-                    cell.push(&delta);
+                    cell.update(|cell| cell.push(&delta));
                 }
             }
             TurnUpdate::ReasoningCompleted {
@@ -184,8 +190,9 @@ impl ChatWidget {
 
     fn on_reasoning_started(&mut self, reasoning_id: AgentReasoningId) {
         self.restore_retry_status_header();
-        self.live_thinking
-            .push((reasoning_id, ThinkingCell::live(self.thinking_expanded)));
+        let cell = LiveCell::new(ThinkingCell::live(self.thinking_expanded));
+        self.insert_live_entry(cell.clone());
+        self.live_thinking.push((reasoning_id, cell));
         self.sync_thinking_toggle();
     }
 
@@ -197,9 +204,9 @@ impl ChatWidget {
         else {
             return;
         };
-        let (_, mut cell) = self.live_thinking.remove(index);
-        cell.complete(Some(duration_millis));
-        self.add_to_history(cell);
+        let (_, cell) = self.live_thinking.remove(index);
+        cell.update(|cell| cell.complete(Some(duration_millis)));
+        self.write_live_entry(cell);
         self.sync_thinking_toggle();
     }
 
@@ -229,6 +236,12 @@ impl ChatWidget {
     }
 
     fn on_message_completed(&mut self) {
+        self.finish_message();
+        self.flush_deferred();
+    }
+
+    /// Commits what is left of the streaming message at once.
+    fn finish_message(&mut self) {
         if let Some(cell) = self
             .stream_controller
             .take()
@@ -236,7 +249,6 @@ impl ChatWidget {
         {
             self.add_boxed_history(cell);
         }
-        self.flush_deferred();
     }
 
     fn on_plan_delta(&mut self, delta: String) {
@@ -252,21 +264,25 @@ impl ChatWidget {
 
     fn on_tool_started(&mut self, call_id: String, name: String, subject: Option<String>) {
         self.had_work_activity = true;
-        self.running_tools
-            .push(history_cell::new_tool_call(call_id, name, subject));
+        let cell = LiveCell::new(history_cell::new_tool_call(call_id, name, subject));
+        self.insert_live_entry(cell.clone());
+        self.running_tools.push(cell);
     }
 
     fn on_tool_completed(&mut self, call_id: String, is_error: bool, result: ToolResultView) {
         let index = self
             .running_tools
             .iter()
-            .position(|cell| cell.call_id() == call_id);
-        let mut cell = match index {
-            Some(index) => self.running_tools.remove(index),
-            None => history_cell::new_tool_call(call_id, "tool".to_string(), None),
+            .position(|cell| cell.cell().call_id() == call_id);
+        let Some(index) = index else {
+            let mut cell = history_cell::new_tool_call(call_id, "tool".to_string(), None);
+            cell.complete(is_error, result);
+            self.add_to_history(cell);
+            return;
         };
-        cell.complete(is_error, result);
-        self.add_to_history(cell);
+        let cell = self.running_tools.remove(index);
+        cell.update(|cell| cell.complete(is_error, result));
+        self.write_live_entry(cell);
     }
 
     fn on_plan_update(&mut self, plan: &AgentTaskPlanSnapshot) {
@@ -278,9 +294,9 @@ impl ChatWidget {
         self.on_message_completed();
         // A turn that failed mid-stream sends no completion: its thinking
         // ends with the time so far.
-        for (_, mut cell) in std::mem::take(&mut self.live_thinking) {
-            cell.complete(None);
-            self.add_to_history(cell);
+        for (_, cell) in std::mem::take(&mut self.live_thinking) {
+            cell.update(|cell| cell.complete(None));
+            self.write_live_entry(cell);
         }
         self.sync_thinking_toggle();
         if let Some(cell) = self
@@ -292,7 +308,7 @@ impl ChatWidget {
         }
         // A call the turn's end overtook is written as it stood.
         for cell in std::mem::take(&mut self.running_tools) {
-            self.add_to_history(cell);
+            self.write_live_entry(cell);
         }
         self.bottom_pane.dismiss_all_requests();
         self.bottom_pane.set_task_running(false);
@@ -332,4 +348,19 @@ impl ChatWidget {
             self.bottom_pane.update_status(WORKING.to_string(), None);
         }
     }
+}
+
+/// Whether `update` adds an entry to the conversation, rather than change
+/// one in place or touch only the bottom pane.
+fn adds_entry(update: &TurnUpdate) -> bool {
+    matches!(
+        update,
+        TurnUpdate::ReasoningStarted(_)
+            | TurnUpdate::ToolStarted { .. }
+            | TurnUpdate::SteeringConsumed(_)
+            | TurnUpdate::Compacted
+            | TurnUpdate::CompressionFailed(_)
+            | TurnUpdate::CompactionFailed(_)
+            | TurnUpdate::ContextWindowLearned(_)
+    )
 }

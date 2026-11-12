@@ -1,7 +1,7 @@
 // Modified from OpenAI Codex 57a808a392 (Apache-2.0).
 
 //! The displayed revisions a selection or a reader keeps while the cells
-//! and the live tail move on. Pinned layouts keep manual disclosures;
+//! move on and live ones change. Pinned layouts keep manual disclosures;
 //! search's expansion of its match is applied only when painting.
 
 use std::collections::HashMap;
@@ -13,8 +13,6 @@ pub(super) struct ViewSnapshot {
     pub(super) cells: Arc<[Arc<dyn HistoryCell>]>,
     pub(super) pinned: HashMap<EntryKey, Arc<TextLayout>>,
     pub(super) activities: HashMap<EntryKey, Arc<[String]>>,
-    /// The live tail's full text, which its compact display cannot rebuild.
-    pub(super) search_live: Option<Arc<TextLayout>>,
 }
 
 impl TranscriptView {
@@ -58,12 +56,17 @@ impl TranscriptView {
                 .iter()
                 .map(|visible| (visible.key, Arc::clone(&visible.activity_ids))),
         );
-        if let Some(live) = self.base_layout(&cells, cells.len()) {
-            pinned.insert(EntryKey::Live, live);
-            activities.insert(
-                EntryKey::Live,
-                self.displayed_activity_ids(&cells, cells.len()),
-            );
+        // A live entry out of view is kept as it is now too, so a
+        // selection extended into it reads the revision it shows.
+        for (index, cell) in cells.iter().enumerate() {
+            let key = EntryKey::cell(cell);
+            if cell.transcript_animation_tick().is_none() || pinned.contains_key(&key) {
+                continue;
+            }
+            if let Some(layout) = self.base_layout(&cells, index) {
+                pinned.insert(key, layout);
+                activities.insert(key, self.displayed_activity_ids(&cells, index));
+            }
         }
         // `visible` may hold the expanded match: its underlying revision is
         // pinned even when the match is off screen, so a selection never
@@ -79,10 +82,6 @@ impl TranscriptView {
             cells,
             pinned,
             activities,
-            search_live: self
-                .snapshot()
-                .and_then(|snapshot| snapshot.search_live.clone())
-                .or_else(|| self.search.live.clone()),
         }
     }
 
@@ -101,12 +100,10 @@ impl TranscriptView {
             self.release_live_reading();
             return;
         };
-        let mutable_cell = cells.get(anchor.index).is_some_and(|cell| {
-            EntryKey::cell(cell) == anchor.key
-                && (!cell.has_stable_transcript_height()
-                    || cell.transcript_animation_tick().is_some())
+        let live_cell = cells.get(anchor.index).is_some_and(|cell| {
+            EntryKey::cell(cell) == anchor.key && cell.transcript_animation_tick().is_some()
         });
-        if anchor.key == EntryKey::Live || mutable_cell {
+        if live_cell {
             let already_held = self
                 .held_reading
                 .as_ref()
@@ -141,9 +138,6 @@ impl TranscriptView {
     pub(super) fn rewrap_snapshot(&mut self, width: u16) {
         if let Some(snapshot) = self.snapshot_mut() {
             for layout in snapshot.pinned.values_mut() {
-                *layout = Arc::new(layout.rewrap(width));
-            }
-            if let Some(layout) = &mut snapshot.search_live {
                 *layout = Arc::new(layout.rewrap(width));
             }
         }

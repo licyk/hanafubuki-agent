@@ -1,11 +1,10 @@
 // Modified from OpenAI Codex 57a808a392 (Apache-2.0).
 
-//! The terminal-mode transcript (`Ctrl+T`): the session's committed cells
-//! in their detailed presentation, with the live cells after them, in a
+//! The terminal-mode transcript (`Ctrl+T`): the session's cells in their
+//! detailed presentation, the live ones changing in place among them, in a
 //! transcript view on the alternate screen. The view does the scrolling,
 //! selection, search and copying; this adds the pager's chrome and keys.
-//! The app syncs the live tail each frame and holds back the scrollback
-//! until the overlay closes.
+//! The app holds back the scrollback until the overlay closes.
 //!
 //! While the app browses the prompts to edit an earlier message
 //! (`app::backtrack`), it takes the overlay's browsing keys, highlights the
@@ -17,7 +16,6 @@ use std::sync::Arc;
 use ratatui::crossterm::event::{KeyEventKind, MouseEvent};
 
 use super::*;
-use crate::chatwidget::ActiveCellTranscriptKey;
 use crate::history_cell::{HistoryCell, HistoryRenderMode};
 use crate::transcript_view::{TranscriptView, ViewAction};
 
@@ -88,17 +86,6 @@ impl TranscriptOverlay {
 
     pub(crate) fn set_browsing_footer(&mut self, footer: Line<'static>) {
         self.browsing_footer = Some(footer);
-    }
-
-    /// Lays out the live cells after the committed ones at `width`; `true`
-    /// when they changed.
-    pub(crate) fn sync_live_tail(
-        &mut self,
-        width: u16,
-        key: Option<ActiveCellTranscriptKey>,
-        active: &[&dyn HistoryCell],
-    ) -> bool {
-        self.view.sync_live_cells(&self.cells, width, key, active)
     }
 
     /// Advances the view's search and an edge-scrolling drag; `true` when

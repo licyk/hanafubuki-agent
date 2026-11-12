@@ -431,33 +431,82 @@ fn a_resumed_session_replays_its_thinking() {
 
 #[test]
 fn each_step_writes_its_thought_before_its_call_or_answer() {
-    let mut harness = Harness::start(vec![
-        reasoning_tool_events(
-            "Run it first.",
+    for mode in [TranscriptMode::Terminal, TranscriptMode::Owned] {
+        let mut harness = Harness::start_with(
+            vec![
+                reasoning_tool_events(
+                    "Run it first.",
+                    "exec_command",
+                    &command_arguments("echo thought-output"),
+                ),
+                reasoning_answer_events("It ran.", "The command ran."),
+            ],
+            true,
+            mode,
+        );
+        harness.type_and_submit("Run the command.");
+        harness.pump_until_screen_shows("Yes, proceed");
+        harness.key(KeyCode::Char('y'));
+        harness.pump_until_screen_shows("The command ran.");
+        harness.pump_until_turn_ends();
+        let transcript = harness.transcript();
+        let order = [
+            "• Thought for",
             "exec_command",
-            &command_arguments("echo thought-output"),
-        ),
-        reasoning_answer_events("It ran.", "The command ran."),
+            "• Thought for",
+            "The command ran.",
+        ];
+        let mut from = 0;
+        for text in order {
+            let at = transcript[from..]
+                .find(text)
+                .unwrap_or_else(|| panic!("{text:?} not in order:\n{transcript}"));
+            from += at + text.len();
+        }
+    }
+}
+
+#[test]
+fn in_fullscreen_a_tool_call_is_one_entry_in_every_frame_from_its_start() {
+    let mut harness = Harness::owned(vec![
+        command_call("echo in-place-output"),
+        assistant_events("The command ran."),
     ]);
     harness.type_and_submit("Run the command.");
     harness.pump_until_screen_shows("Yes, proceed");
     harness.key(KeyCode::Char('y'));
-    harness.pump_until_screen_shows("The command ran.");
-    harness.pump_until_turn_ends();
-    let transcript = harness.transcript();
-    let order = [
-        "• Thought for",
-        "exec_command",
-        "• Thought for",
-        "The command ran.",
-    ];
-    let mut from = 0;
-    for text in order {
-        let at = transcript[from..]
-            .find(text)
-            .unwrap_or_else(|| panic!("{text:?} not in order:\n{transcript}"));
-        from += at + text.len();
-    }
+    let calls = |harness: &Harness| {
+        harness
+            .app
+            .transcript_cells
+            .iter()
+            .filter(|cell| cell_text(cell.as_ref()).contains("exec_command"))
+            .count()
+    };
+    let started = std::cell::Cell::new(false);
+    harness.pump_until("the answer", |harness| {
+        let screen = harness.screen();
+        if started.get() {
+            assert!(
+                screen.contains("exec_command"),
+                "a frame lost the call:\n{screen}"
+            );
+        }
+        started.set(screen.contains("exec_command"));
+        assert!(calls(harness) <= 1, "{}", harness.transcript());
+        screen.contains("The command ran.")
+    });
+    let screen = harness.screen();
+    assert!(screen.contains("in-place-output"), "{screen}");
+    assert!(!screen.contains("Running exec_command"), "{screen}");
+    assert_eq!(calls(&harness), 1);
+}
+
+fn cell_text(cell: &dyn crate::history_cell::HistoryCell) -> String {
+    cell.display_lines(WIDTH)
+        .iter()
+        .flat_map(|line| line.spans.iter().map(|span| span.content.as_ref()))
+        .collect()
 }
 
 impl Harness {

@@ -35,22 +35,24 @@ impl TranscriptHistoryState {
 }
 
 impl TranscriptView {
-    /// Notes output appended below a reader, before the footer is measured
-    /// or the view painted.
+    /// Notes output below a reader, appended or a change of the last
+    /// entry, before the footer is measured or the view painted.
     pub(crate) fn sync_history_tail(&mut self, cells: &[Arc<dyn HistoryCell>]) {
-        let tail = cells.last().map(EntryKey::cell);
+        let tail = last_entry(cells);
         if !self.is_following() && self.last_tail.is_some() && self.last_tail != tail {
             let previous = cells
                 .iter()
-                .rposition(|cell| Some(EntryKey::cell(cell)) == self.last_tail);
-            let appended_rows = match previous {
+                .rposition(|cell| Some(EntryKey::cell(cell)) == self.last_tail.map(|(key, _)| key));
+            let new_rows = match previous {
                 None => true,
+                // The same last entry changed in place.
+                Some(index) if index + 1 == cells.len() => true,
                 Some(index) => (index + 1..cells.len()).any(|index| {
                     self.current_layout(cells, index)
                         .is_some_and(|layout| layout.row_count() > 0)
                 }),
             };
-            self.unseen_activity |= appended_rows;
+            self.unseen_activity |= new_rows;
         }
         self.last_tail = tail;
         if self.is_following() {
@@ -72,13 +74,12 @@ impl TranscriptView {
         cells: &[Arc<dyn HistoryCell>],
         inserted: Range<usize>,
     ) {
-        // With only a header and the live tail, the first page extends the
-        // tail.
+        // With only a header, the first page extends the tail.
         if !inserted.is_empty()
             && inserted.end == cells.len()
-            && self.last_tail == cells[..inserted.start].last().map(EntryKey::cell)
+            && self.last_tail == last_entry(&cells[..inserted.start])
         {
-            self.last_tail = cells.last().map(EntryKey::cell);
+            self.last_tail = last_entry(cells);
         }
         let inserted = self.prepend_snapshot_history(cells, inserted);
         if let Position::Reading(anchor) = self.position {
@@ -135,4 +136,10 @@ impl TranscriptView {
         snapshot.cells = extended.into();
         retained
     }
+}
+
+fn last_entry(cells: &[Arc<dyn HistoryCell>]) -> Option<(EntryKey, u64)> {
+    cells
+        .last()
+        .map(|cell| (EntryKey::cell(cell), cell.revision()))
 }

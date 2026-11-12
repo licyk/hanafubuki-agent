@@ -5,7 +5,8 @@
 //! F4 focuses the latest visible activity; the list keys then move between
 //! activities and Enter shows or hides the focused one's details. A click
 //! on an activity's control row toggles it too. Copying and search read
-//! the full text whatever is disclosed.
+//! the full text whatever is disclosed. A live entry keeps its disclosure
+//! as it changes, through its completion.
 
 use std::collections::HashSet;
 
@@ -24,9 +25,6 @@ const PAGE_ACTIVITIES: usize = 5;
 pub(super) struct Disclosure {
     pub(super) expanded: HashSet<String>,
     pub(super) focused: Option<Vec<String>>,
-    /// The live tail's activities, which keep their disclosure when they
-    /// are committed.
-    pub(super) live_ids: Vec<String>,
 }
 
 impl Disclosure {
@@ -85,55 +83,21 @@ impl TranscriptView {
         self.disclosure.focused = None;
     }
 
-    /// Records the live tail's activities; whether they are expanded.
-    pub(super) fn sync_live_activity(
-        &mut self,
-        cells: &[Arc<dyn HistoryCell>],
-        ids: Vec<String>,
-    ) -> bool {
-        // A reader inside the live tail follows its activity into history
-        // rather than an unrelated next tail.
-        if self.snapshot().is_none() {
-            if let Position::Reading(anchor) = self.position {
-                let committed = self
-                    .canonical_activity_index(cells, &self.disclosure.live_ids)
-                    .and_then(|index| Some((index, cells.get(index)?)));
-                if let (EntryKey::Live, Some((index, cell))) = (anchor.key, committed) {
-                    self.position = Position::Reading(Anchor {
-                        key: EntryKey::cell(cell),
-                        index,
-                        offset: 0,
-                        row_bias: 0,
-                    });
-                }
-            }
-        }
-        if self.disclosure.live_ids != ids {
-            self.live_key = None;
-        }
-        let expanded = self.disclosure.is_expanded(&ids);
-        if expanded {
-            self.disclosure.expanded.extend(ids.iter().cloned());
-        }
-        self.disclosure.live_ids = ids;
-        expanded
-    }
-
     fn activity_ids(&self, cells: &[Arc<dyn HistoryCell>], index: usize) -> Vec<String> {
-        cells.get(index).map_or_else(
-            || self.disclosure.live_ids.clone(),
-            |cell| cell.activity_ids(),
-        )
+        cells
+            .get(index)
+            .map(|cell| cell.activity_ids())
+            .unwrap_or_default()
     }
 
-    /// The identities of the revision on display, which a retired live
-    /// entry keeps.
+    /// The identities of the revision on display, which a pinned revision
+    /// keeps.
     pub(super) fn displayed_activity_ids(
         &self,
         cells: &[Arc<dyn HistoryCell>],
         index: usize,
     ) -> Arc<[String]> {
-        let key = cells.get(index).map_or(EntryKey::Live, EntryKey::cell);
+        let key = cells.get(index).map_or(EntryKey::End, EntryKey::cell);
         self.snapshot()
             .and_then(|snapshot| snapshot.activities.get(&key))
             .cloned()
@@ -262,7 +226,7 @@ impl TranscriptView {
             .iter()
             .rev()
             .find_map(|row| self.canonical_activity_index(cells, &row.activity_ids));
-        for index in visible.into_iter().chain((0..=cells.len()).rev()) {
+        for index in visible.into_iter().chain((0..cells.len()).rev()) {
             if !self.activity_ids(cells, index).is_empty() && self.focus_activity(cells, index) {
                 break;
             }
@@ -278,10 +242,10 @@ impl TranscriptView {
         let (mut range, backwards, steps) = match action {
             ListAction::MoveUp => (0..focused, true, 1),
             ListAction::PageUp => (0..focused, true, PAGE_ACTIVITIES),
-            ListAction::JumpTop => (0..cells.len() + 1, false, 1),
-            ListAction::MoveDown => (focused + 1..cells.len() + 1, false, 1),
-            ListAction::PageDown => (focused + 1..cells.len() + 1, false, PAGE_ACTIVITIES),
-            _ => (0..cells.len() + 1, true, 1),
+            ListAction::JumpTop => (0..cells.len(), false, 1),
+            ListAction::MoveDown => (focused + 1..cells.len(), false, 1),
+            ListAction::PageDown => (focused + 1..cells.len(), false, PAGE_ACTIVITIES),
+            _ => (0..cells.len(), true, 1),
         };
         let mut next = focused;
         for _ in 0..steps {
@@ -325,14 +289,13 @@ impl TranscriptView {
                 .any(|id| ids.contains(id))
         };
         if let Some(row) = self.visible.iter().find(|row| {
-            row.index <= cells.len()
-                && row.activity_ids.iter().any(|id| ids.contains(id))
-                && cells.get(row.index).map_or(EntryKey::Live, EntryKey::cell) == row.key
+            row.activity_ids.iter().any(|id| ids.contains(id))
+                && cells.get(row.index).map(EntryKey::cell) == Some(row.key)
                 && shares_id(row.index)
         }) {
             return Some(row.index);
         }
-        (0..=cells.len()).find(|index| shares_id(*index))
+        (0..cells.len()).find(|index| shares_id(*index))
     }
 
     fn focus_activity(&mut self, cells: &[Arc<dyn HistoryCell>], index: usize) -> bool {
@@ -379,8 +342,8 @@ impl TranscriptView {
         } else {
             self.release_live_reading();
         }
-        // Offsets hold only in an unchanged cell; a retired live entry is
-        // found by its activities and anchored at its first row.
+        // Offsets hold only in an unchanged cell; an entry found by its
+        // activities is anchored at its first row.
         let anchor = previous_top
             .and_then(|(top_key, top_ids, offset, row_bias)| {
                 let unchanged = cells
@@ -389,14 +352,14 @@ impl TranscriptView {
                 let top = unchanged.or_else(|| self.canonical_activity_index(cells, &top_ids))?;
                 let preserve_offset = unchanged.is_some() && top != index;
                 Some(Anchor {
-                    key: cells.get(top).map_or(EntryKey::Live, EntryKey::cell),
+                    key: cells.get(top).map_or(EntryKey::End, EntryKey::cell),
                     index: top,
                     offset: if preserve_offset { offset } else { 0 },
                     row_bias: if preserve_offset { row_bias } else { 0 },
                 })
             })
             .unwrap_or(Anchor {
-                key: cells.get(index).map_or(EntryKey::Live, EntryKey::cell),
+                key: cells.get(index).map_or(EntryKey::End, EntryKey::cell),
                 index,
                 offset: 0,
                 row_bias: 0,
@@ -409,8 +372,6 @@ impl TranscriptView {
         self.disclosure.focused = Some(ids);
         self.position = Position::Reading(anchor);
         self.cache.clear();
-        self.live_key = None;
-        self.live_separated = None;
         if matched {
             self.invalidate_held_search();
         }

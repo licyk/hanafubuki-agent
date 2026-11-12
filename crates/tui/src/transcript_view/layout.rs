@@ -2,9 +2,10 @@
 
 //! Width-specific layouts, kept only for recently displayed entries.
 //!
-//! A cell whose height is not stable is laid out again each frame and
-//! shares that layout between measuring and painting; a stable one is laid
-//! out again when its animation tick changes.
+//! A layout is kept for an entry's revision, width and presentation: an
+//! entry that changes in place is laid out again at its next revision, and
+//! one that animates (a spinner, a timer) when its tick changes, at most
+//! once a frame, so measuring and painting share it.
 
 use std::sync::Weak;
 
@@ -84,6 +85,7 @@ pub(super) struct LayoutCache {
 
 struct CachedLayout {
     source: Weak<dyn HistoryCell>,
+    revision: u64,
     width: u16,
     presentation: CellPresentation,
     layout: Arc<TextLayout>,
@@ -121,7 +123,7 @@ impl TranscriptView {
     }
 
     /// The layout an entry is shown with: search's match, a pinned
-    /// revision, or the current one. Index `cells.len()` is the live tail.
+    /// revision, or the current one.
     pub(super) fn layout(
         &mut self,
         cells: &[Arc<dyn HistoryCell>],
@@ -129,7 +131,7 @@ impl TranscriptView {
     ) -> Option<Arc<TextLayout>> {
         let snapshot = self.snapshot_cells();
         let cells = snapshot.as_deref().unwrap_or(cells);
-        if index > cells.len() {
+        if index >= cells.len() {
             return None;
         }
         let key = self.entry_key(cells, index);
@@ -153,9 +155,6 @@ impl TranscriptView {
         {
             return Some(Arc::clone(layout));
         }
-        if index == cells.len() && self.snapshot().is_some() {
-            return None;
-        }
         self.current_layout(cells, index)
     }
 
@@ -175,18 +174,7 @@ impl TranscriptView {
         full_content: bool,
     ) -> Option<Arc<TextLayout>> {
         let width = self.area.width.max(1);
-        let Some(cell) = cells.get(index) else {
-            if index != cells.len() {
-                return None;
-            }
-            let live = self.live.as_ref()?;
-            if cells.is_empty() || self.live_continuation {
-                return Some(Arc::clone(live));
-            }
-            return Some(Arc::clone(self.live_separated.get_or_insert_with(|| {
-                Arc::new(live.rewrap(width).with_leading_separator())
-            })));
-        };
+        let cell = cells.get(index)?;
         let mode = self.mode;
         let mut presentation = self.content_presentation(cell.as_ref(), full_content, mode);
         presentation.separated = index > 0
@@ -211,15 +199,15 @@ impl LayoutCache {
         render: impl FnOnce() -> TextLayout,
     ) -> Arc<TextLayout> {
         let source = Arc::downgrade(cell);
+        let revision = cell.revision();
         let animation_tick = cell.transcript_animation_tick();
         let frame = self.frame;
         let cached = self.entries.iter().position(|entry| {
             entry.width == width
                 && entry.presentation == presentation
                 && entry.source.ptr_eq(&source)
-                && (entry.rendered_frame == frame
-                    || (cell.has_stable_transcript_height()
-                        && entry.animation_tick == animation_tick))
+                && entry.revision == revision
+                && (entry.rendered_frame == frame || entry.animation_tick == animation_tick)
         });
         if let Some(index) = cached {
             let layout = Arc::clone(&self.entries[index].layout);
@@ -238,6 +226,7 @@ impl LayoutCache {
         self.entries.retain(|entry| !entry.source.ptr_eq(&source));
         self.entries.push(CachedLayout {
             source,
+            revision,
             width,
             presentation,
             layout: Arc::clone(&layout),

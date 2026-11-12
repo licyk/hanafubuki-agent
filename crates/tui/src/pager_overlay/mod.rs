@@ -4,9 +4,9 @@
 //! Overlay UIs rendered in an alternate screen.
 //!
 //! The terminal-mode transcript (`Ctrl+T`, [`transcript`]): Codex's
-//! `TranscriptOverlay`, a transcript view over the committed cells with
-//! the live tail after them. And the static overlay `/diff` shows its
-//! output in, a pager over fixed lines.
+//! `TranscriptOverlay`, a transcript view over the session's cells, the
+//! live ones changing in place among them. And the static overlay `/diff`
+//! shows its output in, a pager over fixed lines.
 
 mod transcript;
 

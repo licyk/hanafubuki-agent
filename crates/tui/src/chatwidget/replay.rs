@@ -18,7 +18,6 @@ impl ChatWidget {
         self.sync_pending_input();
         self.running_tools.clear();
         self.live_thinking.clear();
-        self.live_revision += 1;
         self.sync_thinking_toggle();
         self.stream_controller = None;
         self.plan_stream_controller = None;

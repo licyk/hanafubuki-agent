@@ -1,10 +1,11 @@
 // Modified from OpenAI Codex 57a808a392 (Apache-2.0).
 
 //! The owned transcript (Codex's `app/owned_transcript.rs`): the session's
-//! cells and the live tail in a transcript view filling the screen above
-//! the chat (the bottom pane), and the view's share of the keys.
+//! cells, the live ones changing in place among them, in a transcript view
+//! filling the screen above the chat (the bottom pane), and the view's
+//! share of the keys.
 //!
-//! Each frame syncs the live cells into the view, paints the view, then the
+//! Each frame syncs the view with the cells, paints the view, then the
 //! view's footer and the chat below it, and puts the follow-latest control
 //! (or, for a few seconds, the last copy's notice) in the blank row above
 //! the composer.
@@ -118,21 +119,16 @@ impl App {
         let chat_widget = &self.chat_widget;
         let cells = &self.transcript_cells;
         let view = &mut self.transcript_view;
-        let live_key = chat_widget.active_cell_transcript_key();
-        let (scanning, measured_footer) =
-            prepare_pane(view, cells, chat_widget, width, browsing.is_some());
+        let (scanning, measured_footer) = prepare_pane(view, cells, width, browsing.is_some());
         let mut passive = layout.passive.zip(self.workspace.parked_mut());
         let passive_animating = passive.as_mut().is_some_and(|(area, parked)| {
-            let live = parked.chat_widget.active_cell_transcript_key();
             prepare_pane(
                 &mut parked.transcript_view,
                 &parked.transcript_cells,
-                &parked.chat_widget,
                 area.width,
                 false,
             );
-            parked.transcript_view.is_following()
-                && live.is_some_and(|key| key.animation_tick.is_some())
+            parked.transcript_view.is_following() && parked.chat_widget.has_live_entries()
         });
         let mut footer_rows = 0;
         tui.draw(u16::MAX, |frame| {
@@ -172,8 +168,7 @@ impl App {
         self.workspace.remember_layout(layout);
         let view = &mut self.transcript_view;
         let dragging = view.tick_selection(&self.transcript_cells);
-        let animating =
-            view.is_following() && live_key.is_some_and(|key| key.animation_tick.is_some());
+        let animating = view.is_following() && self.chat_widget.has_live_entries();
         if footer_rows != measured_footer {
             self.schedule_frame(Instant::now());
         }
@@ -209,20 +204,17 @@ struct Painted {
     footer_rows: usize,
 }
 
-/// Syncs a pane's view with its cells and the chat's live ones at `width`:
-/// whether its search still scans, and the footer rows it will need.
+/// Syncs a pane's view with its cells at `width`: whether its search still
+/// scans, and the footer rows it will need.
 fn prepare_pane(
     view: &mut TranscriptView,
     cells: &[Arc<dyn HistoryCell>],
-    chat_widget: &ChatWidget,
     width: u16,
     browsing: bool,
 ) -> (bool, usize) {
     view.sync_history_tail(cells);
     view.prepare_width(width);
     let scanning = view.advance_search(cells);
-    let live_key = chat_widget.active_cell_transcript_key();
-    view.sync_live_cells(cells, width, live_key, &chat_widget.active_cells());
     let measured = view
         .footer(width)
         .map_or(usize::from(browsing), |footer| footer.lines.len());

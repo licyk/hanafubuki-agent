@@ -4,6 +4,7 @@
 //! and the actions the widgets ask of the app or of the Agent.
 
 use std::sync::mpsc::Sender;
+use std::sync::Arc;
 use std::time::Instant;
 
 use hanafubuki_agent::{
@@ -42,6 +43,11 @@ pub(crate) enum AppEvent {
     /// Something for the Agent to do.
     Op(Op),
     InsertHistoryCell(Box<dyn HistoryCell>),
+    /// An entry that changes in place, at its start: the transcript shows
+    /// it from now on, and Scrollback writes it once it completes.
+    InsertLiveEntry(Arc<dyn HistoryCell>),
+    /// A live entry that completed: Scrollback writes it as it is shown.
+    WriteLiveEntry(Arc<dyn HistoryCell>),
     /// The `@` token being typed changed; an empty query ends the search.
     StartFileSearch(String),
     /// The best files for `query` so far.

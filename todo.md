@@ -82,9 +82,96 @@ independent.
 
 **Timeline ([4], [5], [6], [8], [9])**
 
-- [ ] T1: entries that change in place (shared state and revisions), a
+- [x] T1: entries that change in place (shared state and revisions), a
       per-entry layout cache, the joined live tail and Fullscreen's deferral
       removed, the status row kept for the whole turn.
+      Done (2026-11-12):
+      - `history_cell::LiveCell<C>`: a thinking or a tool call is one `Arc`
+        from its start, its cell behind a `parking_lot::RwLock` with a
+        revision raised by every `update` (raised first, so a change a panic
+        leaves halfway is laid out anew). The chat widget keeps the typed
+        handle; the app's cells hold the same `Arc`, so its `EntryKey`,
+        activity ids, a reader's anchor and a pinned revision survive
+        completion. `HistoryCell::revision()` replaces
+        `has_stable_transcript_height`; `copy_source` returns an owned
+        `String` (it cannot borrow through the lock).
+      - Two app events: `InsertLiveEntry` (the transcript takes the entry
+        at its start, in both presentations, and the Ctrl-T overlay with
+        it) and `WriteLiveEntry` (Scrollback writes it as shown when it
+        completes; Fullscreen sends none). Both are routed to a parked
+        conversation like `InsertHistoryCell`.
+      - The transcript view's layout cache is keyed by (entry, revision,
+        width, presentation with `expanded`), an animation tick refreshing
+        it at most once a frame. The joined live tail is gone:
+        `ActiveCellTranscriptKey`, `chatwidget/live_tail.rs`,
+        `sync_live_cells`/`sync_live_tail`, `EntryKey::Live` (now `End`,
+        past the last entry), the combined disclosure, `live_ids`, search's
+        live layout and the snapshot's `search_live`. A scan whose entry
+        changes in place restarts, as a live-tail scan did; a change of the
+        last entry below a reader counts as unseen activity; a selection's
+        or a reader's snapshot pins every live entry, in view or not, as it
+        pinned the live tail.
+      - Fullscreen no longer defers: an update applies at once in its place,
+        and one that adds an entry while a message streams (`adds_entry`:
+        reasoning or tool start, a consumed steer, the compaction cells)
+        first commits the message's lines so far. Scrollback keeps its
+        deferral until T1b.
+      - The status row stays for the whole turn: the commit ticks no longer
+        hide it.
+      - Tests: the view's live-tail tests rewritten against a `LiveCell` in
+        the cells (a reader keeps its revision through completion; a held
+        revision released by scrolling; the beginning-jump held; a scan
+        restarting; disclosure kept across revisions; unseen activity on an
+        in-place change); the cache by revision; the overlay with an entry
+        changing among its cells; `chatwidget/tests/entries.rs` (the
+        Scrollback tests moved from `tests.rs`, now `tests/mod.rs`, plus
+        Fullscreen twins: an entry from its start completing in place,
+        Ctrl-O in place, message → thinking → tool → message order without
+        deferral, a turn's end leaving entries in place); the app on a
+        vt100 screen: a tool call in every Fullscreen frame from its first
+        and one cell only, and each step's thought before its call or
+        answer in both presentations; a selection extended into a live entry
+        that changed out of view reads the revision it showed.
+      - Snapshots: no `.snap` file changed. Inline snapshots: the two in
+        the rewritten view tests (`empty_entries_add_…`, the in-place
+        cell's `version 2` rows) kept identical content;
+        `a_reader_in_a_live_entry_…` ends on `new entry` where the
+        live-tail test ended on `new tail` (the fixture's text: there is no
+        tail). `esc_interrupts_while_the_answer_streams` now asserts the
+        status row is still there.
+      - Deviations: animation ticks re-lay out only the entry that animates,
+        not only its header row (a `TextLayout` cannot splice a row; the
+        per-entry cache already bounds the work to one entry). The tick
+        rates (32 ms shimmer, 600 ms spinner) stay for T2. The pending-input
+        preview's reserved row (§4.7) is a visible change and is left for
+        T7. A `LiveCell` in Scrollback's viewport shows its latest rows when
+        taller than the space, the thinking cell's behavior, for tool calls
+        too. Visible beyond stability: in Fullscreen a message an entry
+        interrupts (rare: a later reasoning item or a compaction cell
+        within one response) goes on under a new `•` bullet after it; and
+        since the status row now lives all turn, every later step's
+        `─ Worked for … ─` separator carries the time, where it fell back
+        to a plain rule once the first answer had hidden the status.
+      - Docs (both languages): `terminal-interface#layout` (Fullscreen's
+        entries in place, the status line for the whole turn, the Esc
+        callout), `#thinking` (in place in Fullscreen, written on
+        completion in Scrollback), `#transcript` (running entries where they
+        started), `internals#tui-details` (thinking and compactions).
+      - Validation: `cargo fmt --all --check`; `RUSTFLAGS="-D warnings"
+        cargo check --workspace --all-targets --all-features`; `cargo clippy
+        --workspace --all-targets --all-features -- -D warnings`; `cargo
+        xtask check`; `cargo test --workspace --all-features`; `bun install
+        --frozen-lockfile`, `bun run format:check:site`, `bun run
+        site:check`, `bun run site:test`, `VITE_BASE_PATH=/hanafubuki-agent/
+        bun run site:build` (all 35 pages prerendered). CI on Linux, Windows
+        and macOS: https://github.com/licyk/hanafubuki-agent/actions/runs/43184542093
+        (run on b385659, which differs from the landed commit only in this
+        line; Site: .../runs/43184542135).
+      - No golden changed (nothing model-visible). Nothing for Hanafubuki
+        (the TUI crate only). No module-size exception added or raised;
+        `notices-policy.toml` lists `chatwidget/tests/mod.rs`,
+        `chatwidget/tests/entries.rs` and `history_cell/live.rs` as
+        original.
 - [ ] T1b: Scrollback's tail: the recent entries repainted in place above
       the composer, the oldest completed ones written to scrollback at the
       tail's limit (answers line by line), the whole tail written on the
