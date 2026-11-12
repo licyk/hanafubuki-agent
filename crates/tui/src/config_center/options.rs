@@ -6,7 +6,7 @@
 //! checked as the write will check it.
 
 use hanafubuki_agent::{
-    PluginOption, PluginOptionKind, PluginOptionSchema, PluginOptionValue, ResolvedPluginOption,
+    PluginOptionSchema, ResolvedPluginOption, SettingKind, SettingSpec, SettingValue,
     MAX_PLUGIN_OPTIONS,
 };
 use serde_json::{Map, Value};
@@ -138,7 +138,7 @@ pub(crate) fn changed_options(
         };
         match option.check(&raw) {
             Ok(value) => {
-                if before.map(PluginOptionValue::to_json) != Some(value.to_json()) {
+                if before.map(SettingValue::to_json) != Some(value.to_json()) {
                     changed.insert(option.key.clone(), value.to_json());
                 }
             }
@@ -219,14 +219,14 @@ pub(super) fn is_shadowed(state: &ConfigState, row: &str, written: &Map<String, 
             .iter()
             .find(|option| option.key == *key)
             .and_then(|option| option.value.as_ref())
-            .map(PluginOptionValue::to_json);
+            .map(SettingValue::to_json);
         !value.is_null() && effective.as_ref() != Some(value)
     })
 }
 
 /// What an option is labelled: its summary, and its key, which the file
 /// names it by.
-fn label(option: &PluginOption) -> String {
+fn label(option: &SettingSpec) -> String {
     if option.summary.is_empty() {
         option.key.clone()
     } else {
@@ -235,9 +235,9 @@ fn label(option: &PluginOption) -> String {
 }
 
 fn current<'a>(
-    option: &PluginOption,
+    option: &SettingSpec,
     values: &'a [ResolvedPluginOption],
-) -> Option<&'a PluginOptionValue> {
+) -> Option<&'a SettingValue> {
     values
         .iter()
         .find(|value| value.key == option.key)?
@@ -245,26 +245,28 @@ fn current<'a>(
         .as_ref()
 }
 
-fn option_item(id: FieldId, option: &PluginOption, value: Option<&PluginOptionValue>) -> FormItem {
+fn option_item(id: FieldId, option: &SettingSpec, value: Option<&SettingValue>) -> FormItem {
     let label = label(option);
-    let text = |value: Option<&PluginOptionValue>| match value {
-        Some(PluginOptionValue::Integer(value)) => value.to_string(),
-        Some(PluginOptionValue::Number(value)) => value.to_string(),
-        Some(PluginOptionValue::Text(value)) => value.clone(),
-        Some(PluginOptionValue::TextList(values)) => values.join(", "),
-        Some(PluginOptionValue::Boolean(value)) => value.to_string(),
-        None => String::new(),
+    let text = |value: Option<&SettingValue>| match value {
+        Some(SettingValue::Integer(value)) => value.to_string(),
+        Some(SettingValue::Number(value)) => value.to_string(),
+        Some(SettingValue::Text(value)) => value.clone(),
+        Some(SettingValue::TextList(values)) => values.join(", "),
+        Some(SettingValue::Boolean(value)) => value.to_string(),
+        Some(SettingValue::Null) | None => String::new(),
     };
     match &option.kind {
-        PluginOptionKind::Boolean => match value {
-            Some(PluginOptionValue::Boolean(on)) => FormItem::toggle(id, &label, *on),
+        SettingKind::Boolean => match value {
+            Some(SettingValue::Boolean(on)) => FormItem::toggle(id, &label, *on),
             _ => FormItem::choice(id, &label, &[UNSET, "on", "off"], 0),
         },
-        PluginOptionKind::Integer { minimum, maximum } => FormItem::text(id, &label, &text(value))
-            .placeholder(&bounds(*minimum as f64, *maximum as f64, i64::MAX as f64)),
-        PluginOptionKind::Number { minimum, maximum } => FormItem::text(id, &label, &text(value))
-            .placeholder(&bounds(*minimum, *maximum, f64::MAX)),
-        PluginOptionKind::Text { secret, .. } => {
+        SettingKind::Integer { minimum, maximum } => {
+            FormItem::text(id, &label, &text(value)).placeholder(&bounds(*minimum, *maximum))
+        }
+        SettingKind::Number { minimum, maximum } => {
+            FormItem::text(id, &label, &text(value)).placeholder(&bounds(*minimum, *maximum))
+        }
+        SettingKind::Text { secret, .. } => {
             let item = FormItem::text(id, &label, &text(value));
             if *secret {
                 item.secret()
@@ -272,12 +274,15 @@ fn option_item(id: FieldId, option: &PluginOption, value: Option<&PluginOptionVa
                 item
             }
         }
-        PluginOptionKind::Choice { values } => {
-            let mut choices = values.iter().map(String::as_str).collect::<Vec<_>>();
+        SettingKind::Choice { values } => {
+            let mut choices = values
+                .iter()
+                .map(|choice| choice.label.as_str())
+                .collect::<Vec<_>>();
             let selected = match value {
-                Some(PluginOptionValue::Text(chosen)) => choices
+                Some(SettingValue::Text(chosen)) => values
                     .iter()
-                    .position(|choice| choice == chosen)
+                    .position(|choice| choice.value == *chosen)
                     .unwrap_or(0),
                 _ => {
                     choices.insert(0, UNSET);
@@ -286,19 +291,20 @@ fn option_item(id: FieldId, option: &PluginOption, value: Option<&PluginOptionVa
             };
             FormItem::choice(id, &label, &choices, selected)
         }
-        PluginOptionKind::TextList { .. } => {
+        SettingKind::Path { .. } => FormItem::text(id, &label, &text(value)),
+        SettingKind::TextList { .. } => {
             FormItem::text(id, &label, &text(value)).placeholder("one, two, three")
         }
     }
 }
 
-/// `minimum to maximum`, without the bound that is none (`limit`).
-fn bounds(minimum: f64, maximum: f64, limit: f64) -> String {
-    match (minimum > -limit, maximum < limit) {
-        (true, true) => format!("{minimum} to {maximum}"),
-        (true, false) => format!("at least {minimum}"),
-        (false, true) => format!("at most {maximum}"),
-        (false, false) => String::new(),
+/// `minimum to maximum`, without the bound that is none.
+fn bounds<T: std::fmt::Display>(minimum: Option<T>, maximum: Option<T>) -> String {
+    match (minimum, maximum) {
+        (Some(minimum), Some(maximum)) => format!("{minimum} to {maximum}"),
+        (Some(minimum), None) => format!("at least {minimum}"),
+        (None, Some(maximum)) => format!("at most {maximum}"),
+        (None, None) => String::new(),
     }
 }
 
@@ -308,7 +314,7 @@ fn bounds(minimum: f64, maximum: f64, limit: f64) -> String {
 fn read(
     form: &FormView,
     id: FieldId,
-    option: &PluginOption,
+    option: &SettingSpec,
     unset: bool,
 ) -> Option<Result<Value, String>> {
     let text = form.text(id).trim();
@@ -318,31 +324,34 @@ fn read(
         (false, index) => Some(index),
     };
     match &option.kind {
-        PluginOptionKind::Boolean if !unset => Some(Ok(Value::Bool(form.toggle(id)))),
-        PluginOptionKind::Boolean => chosen(2).map(|index| Ok(Value::Bool(index == 0))),
-        PluginOptionKind::Integer { .. }
-        | PluginOptionKind::Number { .. }
-        | PluginOptionKind::Text { .. }
+        SettingKind::Boolean if !unset => Some(Ok(Value::Bool(form.toggle(id)))),
+        SettingKind::Boolean => chosen(2).map(|index| Ok(Value::Bool(index == 0))),
+        SettingKind::Integer { .. }
+        | SettingKind::Number { .. }
+        | SettingKind::Text { .. }
+        | SettingKind::Path { .. }
             if text.is_empty() =>
         {
             None
         }
-        PluginOptionKind::Integer { .. } => Some(
+        SettingKind::Integer { .. } => Some(
             text.parse::<i64>()
                 .map(Value::from)
                 .map_err(|_| "Type an integer.".to_string()),
         ),
-        PluginOptionKind::Number { .. } => Some(
+        SettingKind::Number { .. } => Some(
             text.parse::<f64>()
                 .map(Value::from)
                 .map_err(|_| "Type a number.".to_string()),
         ),
-        PluginOptionKind::Text { .. } => Some(Ok(Value::String(form.text(id).to_string()))),
-        PluginOptionKind::Choice { values } => chosen(values.len())
+        SettingKind::Text { .. } | SettingKind::Path { .. } => {
+            Some(Ok(Value::String(form.text(id).to_string())))
+        }
+        SettingKind::Choice { values } => chosen(values.len())
             .and_then(|index| values.get(index))
-            .map(|value| Ok(Value::String(value.clone()))),
-        PluginOptionKind::TextList { .. } if text.is_empty() && unset => None,
-        PluginOptionKind::TextList { .. } => Some(Ok(Value::from(
+            .map(|choice| Ok(Value::String(choice.value.clone()))),
+        SettingKind::TextList { .. } if text.is_empty() && unset => None,
+        SettingKind::TextList { .. } => Some(Ok(Value::from(
             text.split(',')
                 .map(str::trim)
                 .filter(|item| !item.is_empty())

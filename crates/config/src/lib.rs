@@ -33,9 +33,12 @@ mod tui;
 
 pub use dirs::{AgentDirs, AGENT_HOME_ENV};
 pub use file::{write_atomic, FileAccess};
+pub use hanafubuki_agent_foundation::settings::{
+    SettingApply, SettingChoice, SettingCondition, SettingKind, SettingProblem, SettingSpec,
+    SettingValue,
+};
 pub use hanafubuki_agent_packages::{
-    PluginOption, PluginOptionKind, PluginOptionSchema, PluginOptionValue, ResolvedPluginOption,
-    ResolvedPluginOptions, MAX_PLUGIN_OPTIONS,
+    PluginOptionSchema, ResolvedPluginOption, ResolvedPluginOptions, MAX_PLUGIN_OPTIONS,
 };
 pub use layers::{ConfigLayerSource, ConfigLayers, PROJECT_CONFIG_DIR};
 pub use mcp::McpSettingsStore;

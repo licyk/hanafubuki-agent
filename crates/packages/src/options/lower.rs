@@ -3,15 +3,17 @@
 //!
 //! Each property of the schema's `properties` becomes an option from its
 //! `type`, `minimum` and `maximum`, `maxLength`, `enum`, `items` (with
-//! `maxItems`), `default` and `description`. A keyword not among them
+//! `maxItems`), `default` and `description`, labelled by its key, each
+//! choice by its value. A keyword not among them
 //! constrains nothing, as in the kernel's check of a dynamic tool's
 //! arguments. A property that is none of the kinds (an object, a list of
 //! anything but strings, a union of types) is left out with an issue, and
 //! its value reaches the guest unchecked.
 
+use hanafubuki_agent_foundation::settings::{SettingChoice, SettingKind, SettingSpec};
 use serde_json::{Map, Value};
 
-use super::{PluginOption, PluginOptionKind, PluginOptionSchema, MAX_PLUGIN_OPTIONS};
+use super::{PluginOptionSchema, MAX_PLUGIN_OPTIONS};
 
 /// The options `schema` describes, in its properties' order, and what it
 /// describes that cannot be one.
@@ -45,20 +47,18 @@ pub fn lower_config_schema(schema: &Map<String, Value>) -> (PluginOptionSchema, 
 
 /// The option of one property, and an issue when its `default` does not
 /// fit it.
-fn lower_property(key: &str, property: &Value) -> Result<(PluginOption, Option<String>), String> {
+fn lower_property(key: &str, property: &Value) -> Result<(SettingSpec, Option<String>), String> {
     let property = property
         .as_object()
         .ok_or_else(|| "is not a schema".to_string())?;
-    let mut option = PluginOption {
-        key: key.to_string(),
+    let mut option = SettingSpec {
         summary: property
             .get("description")
             .and_then(Value::as_str)
             .and_then(|text| text.lines().next())
             .unwrap_or_default()
             .to_string(),
-        kind: kind(property)?,
-        default: None,
+        ..SettingSpec::new(key, key, kind(property)?)
     };
     let mut issue = None;
     if let Some(default) = property.get("default") {
@@ -74,7 +74,7 @@ fn lower_property(key: &str, property: &Value) -> Result<(PluginOption, Option<S
     Ok((option, issue))
 }
 
-fn kind(property: &Map<String, Value>) -> Result<PluginOptionKind, String> {
+fn kind(property: &Map<String, Value>) -> Result<SettingKind, String> {
     let choices = property.get("enum").map(strings).transpose()?;
     let kind = match property.get("type") {
         None => None,
@@ -89,20 +89,23 @@ fn kind(property: &Map<String, Value>) -> Result<PluginOptionKind, String> {
         return Err("has a minimum above its maximum".to_string());
     }
     match (kind, choices) {
-        (None | Some("string"), Some(values)) => Ok(PluginOptionKind::Choice { values }),
+        (None | Some("string"), Some(values)) => Ok(SettingKind::Choice {
+            values: values
+                .into_iter()
+                .map(|value| SettingChoice::new(value.clone(), value))
+                .collect(),
+        }),
         (Some(_), Some(_)) => Err("has an enum of a type other than string".to_string()),
-        (Some("boolean"), None) => Ok(PluginOptionKind::Boolean),
-        (Some("integer"), None) => Ok(PluginOptionKind::Integer {
-            minimum: minimum.map_or(i64::MIN, |value| value.ceil() as i64),
-            maximum: maximum.map_or(i64::MAX, |value| value.floor() as i64),
+        (Some("boolean"), None) => Ok(SettingKind::Boolean),
+        (Some("integer"), None) => Ok(SettingKind::Integer {
+            minimum: minimum.map(|value| value.ceil() as i64),
+            maximum: maximum.map(|value| value.floor() as i64),
         }),
-        (Some("number"), None) => Ok(PluginOptionKind::Number {
-            minimum: minimum.unwrap_or(f64::MIN),
-            maximum: maximum.unwrap_or(f64::MAX),
-        }),
-        (Some("string"), None) => Ok(PluginOptionKind::Text {
+        (Some("number"), None) => Ok(SettingKind::Number { minimum, maximum }),
+        (Some("string"), None) => Ok(SettingKind::Text {
             maximum_chars: count(property, "maxLength"),
             secret: false,
+            nullable: false,
         }),
         (Some("array"), None) => {
             let items = property
@@ -110,7 +113,7 @@ fn kind(property: &Map<String, Value>) -> Result<PluginOptionKind, String> {
                 .and_then(Value::as_object)
                 .filter(|items| items.get("type").and_then(Value::as_str) == Some("string"))
                 .ok_or_else(|| "is a list of something other than strings".to_string())?;
-            Ok(PluginOptionKind::TextList {
+            Ok(SettingKind::TextList {
                 maximum_items: count(property, "maxItems"),
                 maximum_item_chars: count(items, "maxLength"),
             })
@@ -138,12 +141,8 @@ fn bound(property: &Map<String, Value>, keyword: &str) -> Option<f64> {
     property.get(keyword)?.as_f64()
 }
 
-/// A length bound; unbounded without one.
-fn count(property: &Map<String, Value>, keyword: &str) -> usize {
-    property
-        .get(keyword)
-        .and_then(Value::as_u64)
-        .map_or(usize::MAX, |value| {
-            usize::try_from(value).unwrap_or(usize::MAX)
-        })
+/// A length bound; unbounded without one, or past what a `u32` counts.
+fn count(property: &Map<String, Value>, keyword: &str) -> Option<u32> {
+    let value = property.get(keyword)?.as_u64()?;
+    u32::try_from(value).ok()
 }

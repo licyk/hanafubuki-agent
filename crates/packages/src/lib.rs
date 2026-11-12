@@ -56,8 +56,8 @@ pub use marketplace::{
     MarketplacePlugin, MarketplaceUpgrade, PackageSource,
 };
 pub use options::{
-    lower_config_schema, PluginOption, PluginOptionKind, PluginOptionSchema, PluginOptionValue,
-    ResolvedPluginOption, ResolvedPluginOptions, MAX_PLUGIN_OPTIONS,
+    lower_config_schema, PluginOptionSchema, ResolvedPluginOption, ResolvedPluginOptions,
+    MAX_PLUGIN_OPTIONS,
 };
 pub use settings::{
     is_package_enabled, MarketplaceRecord, MarketplaceSourceType, PluginDefaults,
