@@ -82,6 +82,10 @@ fn exec_request(tty: bool) -> ExecCommandRequest {
 
 mod cleanup;
 #[cfg(unix)]
+mod output;
+#[cfg(unix)]
 mod ownership;
 mod platform;
 mod unified;
+#[cfg(windows)]
+mod windows_powershell;

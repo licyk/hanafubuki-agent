@@ -115,7 +115,7 @@ independent.
 
 **`exec_command` ([7])**
 
-- [ ] E1: failing tests, no fix: Windows PowerShell 5.1 (`powershell.exe`
+- [x] E1: failing tests, no fix: Windows PowerShell 5.1 (`powershell.exe`
       named explicitly) on `windows-latest`, in pipe and PTY mode: UTF-8
       and ANSI-code-page output mixed in one stream, `cmd /c echo` captured
       and not, `'中文' | findstr .`, `Write-Progress` under ConPTY, stderr
@@ -123,16 +123,116 @@ independent.
       936 decoder cases; CJK with cursor moves, a read inside an escape, the
       U+FFFD hold-back, `DaFilter` at end of file, silent loss past 64 KiB.
       Record which of the plan's (a)–(g) reproduce.
+      Done (2026-11-12):
+      - Windows (`execution/tests/contracts/windows_powershell.rs`,
+        `#[cfg(windows)]`): `exec_command`'s real path (`start_exec_command`,
+        `wait_unified_execution`, `write_stdin`) over the real
+        `ExecutorManager`, with the request's `PATH` limited to System32 and
+        `WindowsPowerShell\v1.0` so the shell resolves to 5.1 (asserted, and
+        `$PSVersionTable` prints 5). Reproduced on `windows-latest`, twice
+        (https://github.com/licyk/hanafubuki-agent/actions/runs/43160853306,
+        https://github.com/licyk/hanafubuki-agent/actions/runs/43161569893),
+        and landed `#[ignore]`d:
+        - (a) ANSI-code-page bytes written to the raw handle become U+FFFD,
+          alone and after PowerShell's UTF-8 in one stream, in pipe and PTY
+          mode; the Cmd shell's built-ins (`echo café & dir /b`) in pipe mode
+          too (code page 437 here, 936 in the reported `dir`).
+        - (c) `'中文' | findstr .` prints `??` (`$OutputEncoding` is 20127,
+          ASCII), pipe and PTY.
+        - (d) `[Console]::ReadLine()` answered with `中文 ü` through
+          `write_stdin` reads `?? ü` (`[Console]::InputEncoding` 437), and
+          `chcp` shows 437: the prefix leaves the console's input code page.
+        - (e) `Write-Progress` under ConPTY leaves `Copying 0% [ ]` and every
+          later frame in the output; in pipe mode it leaves nothing.
+      - Did not reproduce on the runner, and stay un-ignored to pin it:
+        - The prefix does set the console's *output* code page: `cmd /c echo
+          中文` keeps 中文 in pipe and PTY mode, which the plan's §4.9 step 2
+          assumed; so does (b), `$x = cmd /c echo 中文; $x`.
+        - (f) no BOM, although `[Console]::OutputEncoding` has a 3-byte
+          preamble; (g) no CLIXML, neither for a failing cmdlet's stderr nor
+          for progress in pipe mode.
+        - `Write-Output '中文 ü'` is whole in both modes; the Cmd shell's
+          built-ins under ConPTY are whole; 300 numbered lines arrive whole
+          from cmd and PowerShell, pipe and PTY, with the default bounds.
+      - Platform-independent, all reproduced and `#[ignore]`d for E3: CJK
+        with CSI G and with CR + CSI C (`foundation/src/terminal_text/
+        tests.rs`); a read starting inside `ESC[31m` at ring trimming
+        (`process/src/executor/output/tests.rs`), the monitor's skip and
+        `bound_execution_output` (`plugin-execution/src/monitor/tests.rs`;
+        the skip through the fake port, since the plugin may not depend on
+        the process crate) and the kernel's merge
+        (`kernel/src/service/progress/tests.rs`); a title (OSC) holding
+        `\xff` cut by a poll, whose rest printed `tle` on the next one, and
+        100 KiB after the offset returning 64 KiB with `truncated: false`
+        (`execution/tests/contracts/output.rs`, Unix, real processes);
+        `DaFilter` dropping a final `ESC[ 99%` at end of file
+        (`process/src/executor/tests.rs`, Unix PTY).
+      - Decoder cases for E2 (`process/src/executor/output/tests.rs`),
+        through a test helper `decode_stream(reads, code_page)` that runs
+        today's `Utf8Carry` and lossy UTF-8 and that E2 makes its decoder:
+        GBK `中文`, UTF-8 and GBK in one stream, trail bytes in the ASCII
+        range across reads (`錯誤`, `乗`), CP866 `Привет`, and the reported
+        `dir` listing's bytes (`驱动器 D 中的卷没有标签。`, `屏幕截图 …`,
+        `270 个文件 … 字节`), which today decode exactly to the garbling
+        reported. UTF-8 staying UTF-8 under any fallback passes and pins it.
+      - The reported mid-listing loss (`dir` of 270 files showing ~45 lines,
+        `..` followed by a fragment of a later line) reproduces in
+        `unified.rs`'s offsets, not in the TUI: the buffer's cap is the
+        model's `max_output_bytes` (`shell.rs`: `output_bytes_cap =
+        max_output_bytes.unwrap_or(256 KiB)`). The head arrives before the
+        first poll's yield, the rest of a slow listing after it, and by the
+        next poll the buffer has dropped the bytes after the offset; that
+        read starts at the oldest retained byte, mid-line, with `truncated`
+        set but no marker in `output`. Reproduced on Linux and on
+        `windows-latest` (cmd, pipe); also a finished command over
+        `max_output_bytes` returns only its tail, unmarked.
+      - Not reproducible as asked: `Read-Host` under `-NonInteractive`
+        (which `exec_command` passes) is refused ("Windows PowerShell is in
+        NonInteractive mode"), so (d) is tested with `[Console]::ReadLine()`
+        and the `Read-Host` test was dropped.
+      - Seen on the runner: the first cmdlet of a 5.1 command (module
+        autoload) took ~40 s in the clean environment and ~23 s with D17's
+        variables; 5.1 reads the machine `PSModulePath` (here with Az)
+        whatever the environment says.
+      - No production change and no test seam. No golden changed. Nothing
+        for Hanafubuki. No module-size exception
+        (`execution/tests/contracts/windows_powershell.rs` is the largest
+        new file, under 900).
+      - Validation (Linux): `cargo fmt --all --check`, `RUSTFLAGS="-D
+        warnings" cargo check --workspace --all-targets --all-features`,
+        `cargo clippy --workspace --all-targets --all-features -- -D
+        warnings`, `cargo xtask check`, `cargo test --workspace
+        --all-features`; every ignored test run with `--include-ignored` and
+        seen failing for its named cause; `cargo clippy --target
+        x86_64-pc-windows-gnu -p hanafubuki-agent-execution --all-features
+        --tests`. The final tree ran the whole CI workflow on Linux, Windows
+        and macOS, green
+        (https://github.com/licyk/hanafubuki-agent/actions/runs/43162060854).
 - [ ] E2: the complete PowerShell prefix (UTF-8 without BOM for
       `[Console]::OutputEncoding`, `InputEncoding` and `$OutputEncoding`;
       `$ProgressPreference = 'SilentlyContinue'`) and `-OutputFormat Text`
       (`agent-shell-v5`); decoding by run of non-ASCII bytes, the ANSI code
       page as fallback (D15), before the ring buffer; `chcp 65001` for
       `cmd.exe`; `PYTHONUTF8` / `PYTHONIOENCODING`; D17's environment.
+      E1's findings for E2: the prefix already sets the console's output
+      code page (step 2's assumption holds), so its new parts are
+      `InputEncoding` (chcp 437 today), `$OutputEncoding` (ASCII today) and
+      `$ProgressPreference`. Raw ANSI-code-page bytes under ConPTY are
+      decoded by conhost before the PTY, so the run decoder does not reach
+      them (that PTY test stays ignored). D15's premise that ANSI and OEM
+      pages differ only for Western accents does not hold for Cyrillic (1251
+      against 866) or Greek (1253 against 737): a console-page program there
+      relies on `chcp 65001`. The first cmdlet's module autoload is slow in
+      the clean environment (~40 s on the runner, ~23 s with D17's list).
 - [ ] E3: PTY output through a `vt100` screen model; width-aware pipe
       rendering; sequence-aligned read starts, the hold-back always,
       `DaFilter::finish`, head and tail with a marker (model-visible:
       goldens regenerate on purpose).
+      E1's findings for E3: step 9's marker must also cover a poll whose
+      offset the buffer has already dropped (the reported `dir`): that read
+      starts mid-line at the oldest byte with no marker, because the buffer's
+      cap is the model's `max_output_bytes`; and a finished command over
+      `max_output_bytes` returns its tail alone.
 
 ## Plan: model metadata from the Provider, with fallbacks (2026-11-11)
 
