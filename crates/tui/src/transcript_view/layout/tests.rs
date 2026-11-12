@@ -1,8 +1,9 @@
 // Modified from OpenAI Codex 57a808a392 (Apache-2.0).
 
-//! Cache reuse, bounded lifetime, and invalidation across frames.
+//! Cache reuse, bounded lifetime, and invalidation by revision, width and
+//! animation.
 
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 
 use super::*;
 
@@ -10,7 +11,7 @@ use super::*;
 struct Cell {
     renders: AtomicUsize,
     tick: AtomicUsize,
-    mutable: bool,
+    revision: AtomicU64,
 }
 
 impl HistoryCell for Cell {
@@ -23,8 +24,8 @@ impl HistoryCell for Cell {
         Vec::new()
     }
 
-    fn has_stable_transcript_height(&self) -> bool {
-        !self.mutable
+    fn revision(&self) -> u64 {
+        self.revision.load(Ordering::Relaxed)
     }
 
     fn transcript_animation_tick(&self) -> Option<u64> {
@@ -46,33 +47,29 @@ fn get(cache: &mut LayoutCache, cell: &Arc<dyn HistoryCell>, width: u16) -> Arc<
 }
 
 #[test]
-fn layouts_refresh_for_width_animation_and_mutable_frames() {
-    for mutable in [false, true] {
-        let cell = Arc::new(Cell {
-            mutable,
-            ..Cell::default()
-        });
-        let history = cell.clone() as Arc<dyn HistoryCell>;
-        let mut cache = LayoutCache::default();
-        cache.begin_frame();
-        get(&mut cache, &history, 20);
-        get(&mut cache, &history, 20);
-        assert_eq!(cell.renders.load(Ordering::Relaxed), 1);
-        cache.begin_frame();
-        get(&mut cache, &history, 20);
-        assert_eq!(
-            cell.renders.load(Ordering::Relaxed),
-            1 + usize::from(mutable)
-        );
-        cell.tick.store(2, Ordering::Relaxed);
-        cache.begin_frame();
-        assert_eq!(get(&mut cache, &history, 20).text(), "tick 2");
-        get(&mut cache, &history, 10);
-        assert_eq!(
-            cell.renders.load(Ordering::Relaxed),
-            3 + usize::from(mutable)
-        );
-    }
+fn layouts_refresh_for_width_revision_and_animation() {
+    let cell = Arc::new(Cell::default());
+    let history = cell.clone() as Arc<dyn HistoryCell>;
+    let renders = || cell.renders.load(Ordering::Relaxed);
+    let mut cache = LayoutCache::default();
+    cache.begin_frame();
+    get(&mut cache, &history, 20);
+    get(&mut cache, &history, 20);
+    cache.begin_frame();
+    get(&mut cache, &history, 20);
+    assert_eq!(renders(), 1);
+    // A change in place is laid out at once, within the frame.
+    cell.revision.store(1, Ordering::Relaxed);
+    get(&mut cache, &history, 20);
+    assert_eq!(renders(), 2);
+    // A tick at most once a frame, so measuring and painting agree.
+    cell.tick.store(2, Ordering::Relaxed);
+    get(&mut cache, &history, 20);
+    assert_eq!(renders(), 2);
+    cache.begin_frame();
+    assert_eq!(get(&mut cache, &history, 20).text(), "tick 2");
+    get(&mut cache, &history, 10);
+    assert_eq!(renders(), 4);
 }
 
 #[test]

@@ -1,14 +1,15 @@
 // Modified from OpenAI Codex 57a808a392 (Apache-2.0).
 
-//! A viewport over the app's retained cells and the live tail after them:
-//! scrolling, following the latest output, mouse and keyboard selection,
-//! search, and the disclosure of an activity's details, in a compact or a
-//! detailed presentation.
+//! A viewport over the app's retained cells: scrolling, following the
+//! latest output, mouse and keyboard selection, search, and the disclosure
+//! of an activity's details, in a compact or a detailed presentation.
 //!
 //! The app owns the cells and loads older history; the view owns only its
 //! reading and selection state and bounded layout caches. Positions are
 //! anchors inside entries ([`position`]), so prepending history never moves
-//! the reading position and rewrapping keeps the same text in view.
+//! the reading position and rewrapping keeps the same text in view. A live
+//! entry changes in place under a new revision, which its layout is cached
+//! by; a reader inside it keeps the revision it reads.
 //!
 //! The app may highlight one entry (the prompt chosen while browsing to
 //! edit an earlier message) and keep a reading position to return to
@@ -39,11 +40,10 @@ use ratatui::layout::Rect;
 use ratatui::text::Line;
 use ratatui::widgets::{Clear, Widget};
 
-use crate::chatwidget::ActiveCellTranscriptKey;
 use crate::history_cell::{
     transcript_entry_lines, ActivityDisclosure, HistoryCell, HistoryRenderMode,
 };
-use layout::{ActivityTranscriptLines, LayoutCache};
+use layout::LayoutCache;
 use position::{Anchor, EntryKey, Position};
 use search::Search;
 use select_mode::SelectMode;
@@ -73,10 +73,6 @@ pub(crate) struct TranscriptView {
     position: Position,
     follow_control: follow_control::FollowControl,
     cache: LayoutCache,
-    live: Option<Arc<TextLayout>>,
-    live_separated: Option<Arc<TextLayout>>,
-    live_key: Option<(u16, ActiveCellTranscriptKey)>,
-    live_continuation: bool,
     area: Rect,
     visible: Vec<VisibleRow>,
     selection: Option<Selection>,
@@ -90,7 +86,8 @@ pub(crate) struct TranscriptView {
     saved_position: Option<Position>,
     unseen_activity: bool,
     tail_visible: bool,
-    last_tail: Option<EntryKey>,
+    /// The last entry and its revision when last synced.
+    last_tail: Option<(EntryKey, u64)>,
     last_click: Option<(Instant, u16, u16, u8)>,
     disclosure: disclosure::Disclosure,
     /// The entry drawn reversed, unless a selection or a search shows.
@@ -103,10 +100,6 @@ impl Default for TranscriptView {
             position: Position::Latest,
             follow_control: follow_control::FollowControl::default(),
             cache: LayoutCache::default(),
-            live: None,
-            live_separated: None,
-            live_key: None,
-            live_continuation: false,
             area: Rect::default(),
             visible: Vec::new(),
             selection: None,
@@ -205,103 +198,6 @@ impl TranscriptView {
         self.render_search(buf);
     }
 
-    /// Lays out the live cells after `cells` in the view's presentation:
-    /// their transcript when detailed, otherwise their compact lines with
-    /// the disclosure of their activities. `key` identifies their content
-    /// (`None` lays them out again); `true` when the tail changed.
-    pub(crate) fn sync_live_cells(
-        &mut self,
-        cells: &[Arc<dyn HistoryCell>],
-        width: u16,
-        key: Option<ActiveCellTranscriptKey>,
-        active: &[&dyn HistoryCell],
-    ) -> bool {
-        let ids: Vec<String> = active.iter().flat_map(|cell| cell.activity_ids()).collect();
-        let disclose = !ids.is_empty() && self.mode == HistoryRenderMode::Rich;
-        let expanded = self.sync_live_activity(cells, ids);
-        let (detailed, mode) = (self.detailed, self.mode);
-        let transcript = |width: u16| joined_lines(active, |cell| cell.transcript_lines(width));
-        self.sync_search_live_tail(width, key, transcript);
-        if detailed {
-            return self.sync_live_tail(width, key, transcript);
-        }
-        self.sync_live_activity_tail(width, key, expanded && disclose, |width| {
-            let activity = joined_lines(active, |cell| {
-                if disclose && expanded {
-                    cell.expanded_lines(width)
-                } else {
-                    transcript_entry_lines(cell, width, false, mode)
-                }
-            })?;
-            let disclosure = if disclose {
-                active
-                    .iter()
-                    .filter(|cell| !cell.activity_ids().is_empty())
-                    .map(|cell| cell.activity_disclosure(width))
-                    .fold(None, combine_disclosures)
-            } else {
-                None
-            };
-            Some(ActivityTranscriptLines {
-                activity,
-                disclosure,
-            })
-        })
-    }
-
-    /// Lays out the live tail from its lines; `true` when it changed.
-    pub(crate) fn sync_live_tail(
-        &mut self,
-        width: u16,
-        key: Option<ActiveCellTranscriptKey>,
-        lines: impl FnOnce(u16) -> Option<Vec<Line<'static>>>,
-    ) -> bool {
-        self.sync_live_layout(width, key, |width| {
-            lines(width).map(|lines| TextLayout::new(lines, width))
-        })
-    }
-
-    fn sync_live_activity_tail(
-        &mut self,
-        width: u16,
-        key: Option<ActiveCellTranscriptKey>,
-        expanded: bool,
-        lines: impl FnOnce(u16) -> Option<ActivityTranscriptLines>,
-    ) -> bool {
-        self.sync_live_layout(width, key, |width| {
-            lines(width).map(|lines| layout::activity_layout(lines, width, expanded))
-        })
-    }
-
-    fn sync_live_layout(
-        &mut self,
-        width: u16,
-        key: Option<ActiveCellTranscriptKey>,
-        layout: impl FnOnce(u16) -> Option<TextLayout>,
-    ) -> bool {
-        let next = key.map(|key| (width, key));
-        if key.is_some_and(|key| key.cacheable) && self.live_key == next {
-            return false;
-        }
-        let revision_changed = self.live_key.is_none()
-            || self.live_key.map(|(_, key)| key.revision) != next.map(|(_, key)| key.revision);
-        self.live_key = next;
-        self.live_separated = None;
-        self.live_continuation = key.is_some_and(|key| key.is_stream_continuation);
-        let live = layout(width).map(Arc::new);
-        if self.live.as_ref().map(|layout| layout.text())
-            != live.as_ref().map(|layout| layout.text())
-        {
-            if !self.is_following() && revision_changed && live.is_some() {
-                self.unseen_activity = true;
-            }
-            self.invalidate_live_search();
-        }
-        let changed = self.live.is_some() || live.is_some();
-        self.live = live;
-        changed
-    }
-
     /// Switches between the compact and the detailed presentation (Ctrl+T)
     /// or the rich and the raw one; each presentation keeps its own
     /// reading position.
@@ -313,7 +209,6 @@ impl TranscriptView {
         self.select_mode = None;
         self.release_live_reading();
         self.cache.clear();
-        self.live_key = None;
         // Search keeps its own origin, apart from either presentation's.
         if self.detailed != detailed && !self.search.is_active() {
             let previous = self.position;
@@ -471,37 +366,6 @@ impl TranscriptView {
     pub(crate) fn needs_history(&mut self, cells: &[Arc<dyn HistoryCell>]) -> bool {
         self.search.needs_history(self.history)
             || (self.search.allows_viewport_paging() && self.near_start(cells))
-    }
-}
-
-/// The cells' lines, a blank line between two cells; `None` when they
-/// have none.
-fn joined_lines(
-    cells: &[&dyn HistoryCell],
-    mut lines: impl FnMut(&dyn HistoryCell) -> Vec<Line<'static>>,
-) -> Option<Vec<Line<'static>>> {
-    let mut joined = Vec::new();
-    for cell in cells {
-        let cell_lines = lines(*cell);
-        if !joined.is_empty() && !cell_lines.is_empty() {
-            joined.push(Line::default());
-        }
-        joined.extend(cell_lines);
-    }
-    (!joined.is_empty()).then_some(joined)
-}
-
-/// What several live activities' details add together.
-fn combine_disclosures(
-    combined: Option<ActivityDisclosure>,
-    next: Option<ActivityDisclosure>,
-) -> Option<ActivityDisclosure> {
-    match (combined, next) {
-        (None, other) | (other, None) => other,
-        (Some(ActivityDisclosure::OutputLines(a)), Some(ActivityDisclosure::OutputLines(b))) => {
-            Some(ActivityDisclosure::OutputLines(a + b))
-        }
-        _ => Some(ActivityDisclosure::Generic),
     }
 }
 

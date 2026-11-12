@@ -79,12 +79,11 @@ pub(super) struct Search {
     current: Option<Match>,
     saved_select: Option<SavedSelectSearch>,
     pub(super) progress: Progress,
-    scanning_layout: Option<(EntryKey, Arc<TextLayout>)>,
+    /// The entry being scanned, at the revision the scan read.
+    scanning_layout: Option<(EntryKey, u64, Arc<TextLayout>)>,
     /// The first entry of the page last loaded, where an older scan waits.
     page_start: Option<EntryKey>,
     pub(super) query_truncated: bool,
-    pub(super) live: Option<Arc<TextLayout>>,
-    live_key: Option<(u16, ActiveCellTranscriptKey)>,
 }
 
 impl Default for Search {
@@ -102,8 +101,6 @@ impl Default for Search {
             scanning_layout: None,
             page_start: None,
             query_truncated: false,
-            live: None,
-            live_key: None,
         }
     }
 }
@@ -282,8 +279,6 @@ impl TranscriptView {
         self.search.query_changed();
         self.search.progress = Progress::Idle;
         self.search.saved_select = None;
-        self.search.live = None;
-        self.search.live_key = None;
     }
 
     pub(super) fn accept_search_into_select_mode(&mut self, cells: &[Arc<dyn HistoryCell>]) {
@@ -431,24 +426,6 @@ impl TranscriptView {
             if self.search.is_reading() {
                 self.search.progress = Progress::Idle;
             }
-        }
-    }
-
-    /// Drops a scan of the live tail when its text changes; a match being
-    /// read has its own snapshot.
-    pub(super) fn invalidate_live_search(&mut self) {
-        let scanning_live = matches!(
-            self.search.progress,
-            Progress::Scanning(Cursor {
-                anchor: Anchor {
-                    key: EntryKey::Live,
-                    ..
-                },
-                ..
-            })
-        );
-        if self.held_reading.is_none() && scanning_live {
-            self.restart_search();
         }
     }
 

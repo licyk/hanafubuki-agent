@@ -45,6 +45,11 @@ impl TranscriptView {
                 return false;
             };
             cursor.anchor.index = self.resolve(cells, cursor.anchor);
+            if self.scanned_entry_changed(cells, cursor.anchor) {
+                // Its offsets belong to the revision the scan began in.
+                self.restart_search();
+                return matches!(self.search.progress, Progress::Restart);
+            }
             let Some(layout) = self.search_layout(cells, cursor.anchor) else {
                 self.advance_search_cursor(cells, cursor, 0..0, 0);
                 return false;
@@ -140,32 +145,6 @@ impl TranscriptView {
             .is_some_and(|anchor| anchor.key == key)
     }
 
-    /// Lays out the live tail's full text while searching, apart from its
-    /// compact display.
-    pub(in crate::transcript_view) fn sync_search_live_tail(
-        &mut self,
-        width: u16,
-        key: Option<ActiveCellTranscriptKey>,
-        lines: impl FnOnce(u16) -> Option<Vec<Line<'static>>>,
-    ) -> bool {
-        if !self.search.is_active() || self.detailed {
-            return false;
-        }
-        let next = key.map(|key| (width, key));
-        if key.is_some_and(|key| key.cacheable) && self.search.live_key == next {
-            return false;
-        }
-        self.search.live_key = next;
-        let live = lines(width).map(|lines| Arc::new(TextLayout::new(lines, width)));
-        let changed = self.search.live.as_ref().map(|layout| layout.text())
-            != live.as_ref().map(|layout| layout.text());
-        if changed {
-            self.invalidate_live_search();
-        }
-        self.search.live = live;
-        changed
-    }
-
     /// From a match: on to the next one either way. Confirming a match
     /// does not reverse the first scan through older history.
     pub(super) fn next_search_match(
@@ -203,34 +182,25 @@ impl TranscriptView {
         }
     }
 
-    /// Searching on from a match in a held revision continues through the
-    /// output committed since, or in the cell that is still there; `None`
-    /// when the cell is gone and the search starts over.
+    /// Searching on from a match in a held revision continues in the cell
+    /// as it is now; `None` when the cell is gone and the search starts
+    /// over.
     fn rejoin_from_held_match(
         &mut self,
         cells: &[Arc<dyn HistoryCell>],
         anchor: Anchor,
     ) -> Option<Anchor> {
-        let snapshot = self.held_reading.take()?;
+        self.held_reading.take()?;
         let previous = self.search.current.take()?;
-        let index = if anchor.key == EntryKey::Live {
-            snapshot
-                .cells
-                .iter()
-                .rev()
-                .find_map(|previous| cells.iter().rposition(|cell| Arc::ptr_eq(cell, previous)))
-                .map_or(0, |index| index + 1)
-        } else if let Some(index) = cells
+        let Some(index) = cells
             .iter()
             .position(|cell| EntryKey::cell(cell) == anchor.key)
-        {
-            index
-        } else {
+        else {
             self.restart_search();
             self.visible.clear();
             return None;
         };
-        let key = cells.get(index).map_or(EntryKey::Live, EntryKey::cell);
+        let key = anchor.key;
         let layout = self.search_layout(
             cells,
             Anchor {
@@ -277,7 +247,7 @@ impl TranscriptView {
 
     fn start_search_scan(&mut self, cells: &[Arc<dyn HistoryCell>], direction: Direction) {
         self.search.page_start = None;
-        let count = cells.len() + usize::from(self.live.is_some() || self.search.live.is_some());
+        let count = cells.len();
         let index = if self.search.is_reading() {
             // Without a match, from the visible entry, not an end.
             self.start(cells).0
@@ -328,7 +298,7 @@ impl TranscriptView {
             return;
         }
         self.search.scanning_layout = None;
-        let count = cells.len() + usize::from(self.live.is_some() || self.search.live.is_some());
+        let count = cells.len();
         let next = match cursor.direction {
             Direction::Older if self.search.page_start == Some(cursor.anchor.key) => None,
             Direction::Older => cursor.anchor.index.checked_sub(1),
@@ -415,25 +385,13 @@ impl TranscriptView {
         cells: &[Arc<dyn HistoryCell>],
         anchor: Anchor,
     ) -> Option<Arc<TextLayout>> {
-        if let Some((key, layout)) = &self.search.scanning_layout {
+        if let Some((key, _, layout)) = &self.search.scanning_layout {
             if *key == anchor.key {
                 return Some(Arc::clone(layout));
             }
         }
         let layout = if let Some(layout) = self.search.match_layout(anchor.key) {
             layout
-        } else if anchor.key == EntryKey::Live && !self.detailed {
-            let live = self
-                .snapshot()
-                .and_then(|snapshot| snapshot.search_live.clone())
-                .or_else(|| self.search.live.clone());
-            match live {
-                Some(live) if !cells.is_empty() && !self.live_continuation => {
-                    Arc::new(live.rewrap(self.area.width).with_leading_separator())
-                }
-                Some(live) => live,
-                None => self.layout(cells, anchor.index)?,
-            }
         } else if self.detailed {
             self.layout(cells, anchor.index)?
         } else {
@@ -444,8 +402,25 @@ impl TranscriptView {
             self.search.current = current;
             layout?
         };
-        self.search.scanning_layout = Some((anchor.key, Arc::clone(&layout)));
+        let revision = cells.get(anchor.index).map_or(0, |cell| cell.revision());
+        self.search.scanning_layout = Some((anchor.key, revision, Arc::clone(&layout)));
         Some(layout)
+    }
+
+    /// Whether the entry being scanned changed in place since the scan
+    /// read it; a reader's retained revision does not.
+    fn scanned_entry_changed(&self, cells: &[Arc<dyn HistoryCell>], anchor: Anchor) -> bool {
+        self.held_reading.is_none()
+            && self
+                .search
+                .scanning_layout
+                .as_ref()
+                .is_some_and(|(key, revision, _)| {
+                    *key == anchor.key
+                        && cells
+                            .get(anchor.index)
+                            .is_some_and(|cell| cell.revision() != *revision)
+                })
     }
 }
 

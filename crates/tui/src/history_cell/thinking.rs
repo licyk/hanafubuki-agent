@@ -1,7 +1,7 @@
-//! The model's thinking: while it streams, a cell in the viewport that
-//! counts up (`• Thinking 5s`) and shows the streamed Markdown when
-//! expanded; once complete, `• Thought for 12s` with the text below it when
-//! expanded. The scrollback keeps the cell as it was shown when it
+//! The model's thinking: while it streams, a live entry that counts up
+//! (`• Thinking 5s`) and shows the streamed Markdown when expanded; once
+//! complete, `• Thought for 12s` with the text below it when expanded.
+//! Scrollback's scrollback keeps the cell as it was shown when it
 //! completed, and the transcript pager always shows its text.
 
 use std::time::Instant;
@@ -148,8 +148,8 @@ impl HistoryCell for ThinkingCell {
         lines
     }
 
-    fn copy_source(&self) -> Option<&str> {
-        Some(self.text.as_str()).filter(|text| !text.trim().is_empty())
+    fn copy_source(&self) -> Option<String> {
+        Some(self.text.clone()).filter(|text| !text.trim().is_empty())
     }
 
     /// The shimmer moves every frame while the cell is live.

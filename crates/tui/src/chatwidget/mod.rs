@@ -1,8 +1,11 @@
 // Modified from OpenAI Codex rust-v0.93.0 (Apache-2.0).
 
-//! The chat: the running tool calls above the bottom pane (the composer,
-//! the status line and the approval and question overlays), and the
-//! transcript it hands the app to write into the scrollback.
+//! The chat: the bottom pane (the composer, the status line and the
+//! approval and question overlays), and the entries it hands the app's
+//! transcript. A thinking or a tool call is a live entry the chat changes
+//! in place: Fullscreen shows it in the conversation from its start;
+//! Scrollback draws it above the bottom pane and writes it when it
+//! completes.
 //!
 //! What the turn does arrives as [`TurnUpdate`]s (`turn`); what the person
 //! types goes to the bottom pane, and what it submits leaves as an
@@ -13,16 +16,14 @@ mod appearance;
 mod commands;
 mod input_flow;
 mod input_queue;
-mod live_tail;
 mod replay;
 mod second;
 mod turn;
 mod warnings;
 
-pub(crate) use live_tail::ActiveCellTranscriptKey;
-
 use std::cell::Cell;
 use std::collections::{HashSet, VecDeque};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use hanafubuki_agent::{AgentReasoningId, AgentSessionMode, AgentTuiPreferences};
@@ -38,7 +39,7 @@ use crate::bottom_pane::{
 };
 use crate::commands::PRESETS;
 use crate::file_search::FileMatch;
-use crate::history_cell::{self, HistoryCell, ThinkingCell, ToolCallCell};
+use crate::history_cell::{self, HistoryCell, LiveCell, ThinkingCell, ToolCallCell};
 use crate::key_hint::{self, KeyBinding};
 use crate::keymap::{self, Action};
 use crate::render::renderable::{
@@ -59,8 +60,8 @@ pub(crate) struct ChatWidgetInit {
     pub(crate) enhanced_keys_supported: bool,
     /// The working directory, as the session header shows it.
     pub(crate) directory: String,
-    /// The app draws the live cells in its transcript view (owned mode),
-    /// so the chat does not.
+    /// The app's transcript view shows the live entries (owned mode), so
+    /// the chat does not draw them.
     pub(crate) owned_transcript: bool,
     /// The saved `tui.fullscreenTranscript`, which `/tui` marks.
     pub(crate) fullscreen_preference: bool,
@@ -76,17 +77,18 @@ pub(crate) struct ChatWidget {
     frame_requester: FrameRequester,
     bottom_pane: BottomPane,
     /// The tool calls that run, in the order they started.
-    running_tools: Vec<ToolCallCell>,
+    running_tools: Vec<Arc<LiveCell<ToolCallCell>>>,
     /// The reasoning items the model is thinking in, in the order they
     /// started.
-    live_thinking: Vec<(AgentReasoningId, ThinkingCell)>,
+    live_thinking: Vec<(AgentReasoningId, Arc<LiveCell<ThinkingCell>>)>,
     /// Whether thinking is shown expanded: Ctrl-O toggles it for the live
     /// cells and every later one.
     thinking_expanded: bool,
     stream_controller: Option<StreamController>,
     plan_stream_controller: Option<PlanStreamController>,
-    /// Updates held back while a message streams, so what the model said
-    /// before a call is written before the call (Codex's interrupt queue).
+    /// Scrollback: updates held back while a message streams, so what the
+    /// model said before a call is written before the call (Codex's
+    /// interrupt queue).
     deferred: VecDeque<TurnUpdate>,
     last_rendered_width: Cell<Option<usize>>,
     /// Something was written since the last streamed message; the next one
@@ -105,9 +107,6 @@ pub(crate) struct ChatWidget {
     /// command turned off after it panicked, for `/warnings`.
     warnings: Vec<Warning>,
     appearance: Appearance,
-    /// Advanced by every change to the live cells, so a cached layout of
-    /// the live tail is refreshed.
-    live_revision: u64,
     owned_transcript: bool,
     /// `[tui]` as the configuration resolves it (the saved
     /// `tui.fullscreenTranscript`, which `/tui` marks, among them).
@@ -165,7 +164,6 @@ impl ChatWidget {
             mode: AgentSessionMode::Default,
             warnings: Vec::new(),
             appearance,
-            live_revision: 0,
             owned_transcript,
             preferences: AgentTuiPreferences {
                 fullscreen_transcript: fullscreen_preference,
@@ -355,10 +353,9 @@ impl ChatWidget {
     }
 
     fn toggle_thinking(&mut self) {
-        self.live_revision += 1;
         self.thinking_expanded = !self.thinking_expanded;
-        for (_, cell) in &mut self.live_thinking {
-            cell.set_expanded(self.thinking_expanded);
+        for (_, cell) in &self.live_thinking {
+            cell.update(|cell| cell.set_expanded(self.thinking_expanded));
         }
         self.sync_thinking_toggle();
         self.request_redraw();
@@ -397,7 +394,6 @@ impl ChatWidget {
             has_controller = true;
             let (cell, is_idle) = controller.on_commit_tick();
             if let Some(cell) = cell {
-                self.bottom_pane.hide_status_indicator();
                 self.add_boxed_history(cell);
             }
             all_idle &= is_idle;
@@ -406,7 +402,6 @@ impl ChatWidget {
             has_controller = true;
             let (cell, is_idle) = controller.on_commit_tick();
             if let Some(cell) = cell {
-                self.bottom_pane.hide_status_indicator();
                 self.add_boxed_history(cell);
             }
             all_idle &= is_idle;
@@ -427,6 +422,25 @@ impl ChatWidget {
         self.app_event_tx.send(AppEvent::InsertHistoryCell(cell));
     }
 
+    /// Hands the transcript an entry that changes in place from its start.
+    fn insert_live_entry(&mut self, entry: Arc<dyn HistoryCell>) {
+        self.needs_final_message_separator = true;
+        self.app_event_tx.send(AppEvent::InsertLiveEntry(entry));
+    }
+
+    /// A live entry completed: Scrollback writes it as it is shown.
+    fn write_live_entry(&self, entry: Arc<dyn HistoryCell>) {
+        if !self.owned_transcript {
+            self.app_event_tx.send(AppEvent::WriteLiveEntry(entry));
+        }
+    }
+
+    /// Whether a thinking or a tool call is still live, so its timer and
+    /// spinner are drawn again.
+    pub(crate) fn has_live_entries(&self) -> bool {
+        !self.live_thinking.is_empty() || !self.running_tools.is_empty()
+    }
+
     fn request_redraw(&self) {
         self.frame_requester.schedule_frame();
     }
@@ -434,15 +448,13 @@ impl ChatWidget {
     fn as_renderable(&self) -> RenderableItem<'_> {
         let mut tools = ColumnRenderable::new();
         for (_, cell) in &self.live_thinking {
-            tools.push_ref(cell);
+            tools.push_ref(cell.as_ref());
         }
         for cell in &self.running_tools {
-            tools.push_ref(cell);
+            tools.push_ref(cell.as_ref());
         }
         let mut flex = FlexRenderable::new();
-        if !self.owned_transcript
-            && (!self.running_tools.is_empty() || !self.live_thinking.is_empty())
-        {
+        if !self.owned_transcript && self.has_live_entries() {
             flex.push(
                 1,
                 RenderableItem::Owned(Box::new(tools)).inset(Insets::tlbr(1, 0, 0, 0)),
@@ -456,22 +468,10 @@ impl ChatWidget {
     }
 }
 
-/// A running tool call is drawn in the viewport, as Codex draws its active
-/// cell, until it is written to the transcript.
-impl Renderable for ToolCallCell {
-    fn render(&self, area: Rect, buf: &mut Buffer) {
-        use ratatui::widgets::{Paragraph, Widget};
-        Paragraph::new(self.display_lines(area.width)).render(area, buf);
-    }
-
-    fn desired_height(&self, width: u16) -> u16 {
-        HistoryCell::desired_height(self, width)
-    }
-}
-
-/// A live thinking cell taller than the viewport leaves shows its latest
-/// lines.
-impl Renderable for ThinkingCell {
+/// In Scrollback a live entry is drawn in the viewport, as Codex draws its
+/// active cell, until it is written; one taller than the viewport leaves
+/// shows its latest lines.
+impl<C: HistoryCell> Renderable for LiveCell<C> {
     fn render(&self, area: Rect, buf: &mut Buffer) {
         use ratatui::widgets::{Paragraph, Widget};
         let lines = self.display_lines(area.width);

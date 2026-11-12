@@ -7,7 +7,7 @@ use ratatui::style::Modifier;
 
 use super::scan::{find_literal, SCAN_BYTES};
 use super::*;
-use crate::transcript_view::tests::fixtures::{cell, ctrl, key, render, text, tool_call};
+use crate::transcript_view::tests::fixtures::{cell, ctrl, key, live, render, text, tool_call};
 
 fn finish_scan(view: &mut TranscriptView, cells: &[Arc<dyn HistoryCell>]) {
     for _ in 0..512 {
@@ -340,16 +340,16 @@ fn search_keeps_both_presentations_positions() {
 }
 
 #[test]
-fn a_live_scan_restarts_when_its_source_changes() {
+fn a_scan_restarts_when_its_entry_changes_in_place() {
+    let entry = live(&format!("needle{}", "z".repeat(SCAN_BYTES * 2)));
+    let cells: Vec<Arc<dyn HistoryCell>> = vec![entry.clone()];
     let mut view = TranscriptView::default();
-    render(&mut view, &[], 80, 4);
+    render(&mut view, &cells, 80, 4);
     view.begin_search();
-    let retired = format!("needle{}", "z".repeat(SCAN_BYTES * 2));
-    view.sync_live_tail(80, None, |_| Some(vec![Line::from(retired)]));
     view.paste_search("needle");
-    assert!(view.advance_search(&[]));
-    view.sync_live_tail(80, None, |_| Some(vec![Line::from("new needle")]));
-    finish_scan(&mut view, &[]);
+    assert!(view.advance_search(&cells));
+    entry.update(|activity| activity.text = "new needle".to_owned());
+    finish_scan(&mut view, &cells);
     let found = view.search.current.as_ref().expect("live match");
     assert_eq!(found.anchor.offset..found.end, 4..10);
 }

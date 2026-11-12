@@ -6,6 +6,7 @@ use ratatui::crossterm::event::KeyModifiers;
 use ratatui::Terminal;
 
 use super::*;
+use crate::history_cell::LiveCell;
 
 #[derive(Debug)]
 struct TestCell {
@@ -101,28 +102,22 @@ fn paging_down_and_up_round_trips() {
 }
 
 #[test]
-fn the_live_tail_follows_the_committed_cells() {
+fn a_live_entry_changes_in_place_among_the_cells() {
     let mut overlay = numbered(2);
     let mut terminal = Terminal::new(TestBackend::new(40, 12)).unwrap();
-    let live = TestCell {
+    let live = LiveCell::new(TestCell {
         lines: vec![Line::from("still running")],
-    };
-    let key = ActiveCellTranscriptKey {
-        cacheable: true,
-        revision: 1,
-        is_stream_continuation: false,
-        animation_tick: None,
-    };
-    assert!(overlay.sync_live_tail(40, Some(key), &[&live]));
+    });
+    overlay.insert_cell(live.clone());
+    overlay.insert_cell(cell("after"));
     let screen = draw(&mut overlay, &mut terminal);
-    let committed = screen.find("line-01").unwrap();
-    assert!(
-        screen.find("still running").unwrap() > committed,
-        "{screen}"
-    );
-    // Once it is committed, it is gone from the tail.
-    assert!(overlay.sync_live_tail(40, None, &[]));
-    assert!(!draw(&mut overlay, &mut terminal).contains("still running"));
+    let running = screen.find("still running").unwrap();
+    assert!(screen.find("line-01").unwrap() < running, "{screen}");
+    assert!(running < screen.find("after").unwrap(), "{screen}");
+    live.update(|cell| cell.lines = vec![Line::from("finished")]);
+    let screen = draw(&mut overlay, &mut terminal);
+    assert!(!screen.contains("still running"), "{screen}");
+    assert_eq!(screen.find("finished"), Some(running), "{screen}");
 }
 
 #[test]

@@ -1,9 +1,9 @@
 // Modified from OpenAI Codex rust-v0.93.0 (Apache-2.0).
 
-//! Transcript cells: the unit the chat widget shows, both the entries it
-//! has committed to the terminal's scrollback and, transiently, the active
-//! cell a running tool call keeps updating in place.
+//! Transcript cells: the unit the chat widget shows. Most are written once;
+//! a thinking or a tool call is a [`LiveCell`] that changes in place.
 
+mod live;
 mod plan;
 mod reports;
 mod status;
@@ -25,6 +25,7 @@ use crate::style::user_message_style;
 use crate::ui_consts::LIVE_PREFIX_COLS;
 use crate::wrapping::{word_wrap_lines, RtOptions};
 
+pub(crate) use live::LiveCell;
 pub(crate) use plan::{new_plan_update, new_proposed_plan_stream};
 pub(crate) use reports::{new_mcp_output, new_skills_output};
 pub(crate) use status::{format_tokens_compact, new_status_output, permission_mode_name};
@@ -114,8 +115,8 @@ pub(crate) trait HistoryCell: std::fmt::Debug + Send + Sync + Any {
     }
 
     /// Stable identities of the activities the cell shows, which keep a
-    /// disclosure across the cell's move from the live tail into history.
-    /// Empty for a cell with no details to disclose.
+    /// disclosure while the cell changes. Empty for a cell with no details
+    /// to disclose.
     fn activity_ids(&self) -> Vec<String> {
         Vec::new()
     }
@@ -128,14 +129,14 @@ pub(crate) trait HistoryCell: std::fmt::Debug + Send + Sync + Any {
 
     /// The source text the cell was rendered from, for copying it whole.
     #[allow(dead_code, reason = "`/copy` (P4) copies a cell's source")]
-    fn copy_source(&self) -> Option<&str> {
+    fn copy_source(&self) -> Option<String> {
         None
     }
 
-    /// Whether a layout of the cell stays valid across frames; a cell
-    /// backed by changing state is laid out again each frame.
-    fn has_stable_transcript_height(&self) -> bool {
-        true
+    /// Raised by every change of a cell that changes in place, so a layout
+    /// of an earlier revision is not reused.
+    fn revision(&self) -> u64 {
+        0
     }
 
     /// A tick that changes while the cell's lines change with time (a
@@ -222,8 +223,8 @@ impl HistoryCell for UserHistoryCell {
         raw_lines_from_source(&self.message)
     }
 
-    fn copy_source(&self) -> Option<&str> {
-        Some(&self.message)
+    fn copy_source(&self) -> Option<String> {
+        Some(self.message.clone())
     }
 }
 

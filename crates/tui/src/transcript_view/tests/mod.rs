@@ -1,7 +1,7 @@
 // Modified from OpenAI Codex 57a808a392 (Apache-2.0).
 
 //! The viewport across scrolling, new output, prepended history, resizes,
-//! the live tail and the two presentations.
+//! entries that change in place and the two presentations.
 
 pub(crate) mod fixtures;
 
@@ -10,7 +10,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use ratatui::crossterm::event::{KeyCode, MouseButton, MouseEventKind};
 
 use super::*;
-use fixtures::{cell, ctrl, find, key, mouse, prompt, render, text, tool_call, TestCell};
+use crate::history_cell::{new_tool_call, LiveCell, ToolCallCell};
+use fixtures::{cell, ctrl, find, key, live, mouse, prompt, render, text, TestCell};
 
 #[test]
 fn following_shows_the_latest_rows_with_a_blank_row_between_entries() {
@@ -54,9 +55,15 @@ fn page_keys_scroll_a_page_less_one_row_and_return() {
 
 #[test]
 fn empty_entries_add_no_separator_but_visible_ones_do() {
-    let cells = vec![cell(""), cell(""), cell("First"), cell(""), cell("Second")];
+    let cells = vec![
+        cell(""),
+        cell(""),
+        cell("First"),
+        cell(""),
+        cell("Second"),
+        live("Live"),
+    ];
     let mut view = TranscriptView::default();
-    view.sync_live_tail(20, None, |_| Some(vec![Line::from("Live")]));
     let frame = render(&mut view, &cells, 20, 5);
     insta::assert_snapshot!(text(&frame), @r"
     First
@@ -112,20 +119,18 @@ fn a_loaded_page_moves_the_reading_anchor_before_the_next_frame() {
 
 #[test]
 fn the_beginning_waits_for_older_pages_with_the_view_held() {
-    let mut cells = vec![cell("previous answer")];
+    let running = live("live zero\nlive one");
+    let mut cells = vec![cell("previous answer"), running.clone()];
     let mut view = TranscriptView {
         history: TranscriptHistoryState::Partial,
         ..TranscriptView::default()
     };
-    view.sync_live_tail(20, None, |_| {
-        Some(vec![Line::from("live zero"), Line::from("live one")])
-    });
     let before = render(&mut view, &cells, 20, 2);
     view.jump_to_beginning(&cells);
     assert_eq!(view.history, TranscriptHistoryState::LoadingBeginning);
     cells.insert(0, cell("older page"));
     view.history_loaded(&cells, 0..1);
-    view.sync_live_tail(20, None, |_| Some(vec![Line::from("new output")]));
+    running.update(|activity| activity.text = "new output".to_owned());
     assert_eq!(render(&mut view, &cells, 20, 2), before);
     // A navigation of the reader's own supersedes the jump.
     view.scroll(&cells, -1);
@@ -197,41 +202,37 @@ fn a_zero_sized_viewport_is_safe_and_empty_history_accepts_navigation() {
 }
 
 #[derive(Debug)]
-struct MutableHistoryCell {
-    version: Arc<AtomicUsize>,
+struct VersionedCell {
+    version: usize,
     renders: Arc<AtomicUsize>,
 }
 
-impl HistoryCell for MutableHistoryCell {
+impl HistoryCell for VersionedCell {
     fn display_lines(&self, _width: u16) -> Vec<Line<'static>> {
         self.renders.fetch_add(1, Ordering::Relaxed);
-        let version = self.version.load(Ordering::Relaxed);
         (0..8)
-            .map(|row| Line::from(format!("version {version} row {row}")))
+            .map(|row| Line::from(format!("version {} row {row}", self.version)))
             .collect()
     }
 
     fn raw_lines(&self) -> Vec<Line<'static>> {
         self.display_lines(80)
     }
-
-    fn has_stable_transcript_height(&self) -> bool {
-        false
-    }
 }
 
 #[test]
-fn a_mutable_cell_is_laid_out_once_per_frame_and_refreshed_the_next() {
-    let version = Arc::new(AtomicUsize::new(1));
+fn an_entry_that_changes_in_place_is_laid_out_again_only_at_a_new_revision() {
     let renders = Arc::new(AtomicUsize::new(0));
-    let cells: Vec<Arc<dyn HistoryCell>> = vec![Arc::new(MutableHistoryCell {
-        version: Arc::clone(&version),
+    let entry = LiveCell::new(VersionedCell {
+        version: 1,
         renders: Arc::clone(&renders),
-    })];
+    });
+    let cells: Vec<Arc<dyn HistoryCell>> = vec![cell("before"), entry.clone()];
     let mut view = TranscriptView::default();
     let first = render(&mut view, &cells, 24, 5);
+    render(&mut view, &cells, 24, 5);
     assert_eq!(renders.load(Ordering::Relaxed), 1);
-    version.store(2, Ordering::Relaxed);
+    entry.update(|cell| cell.version = 2);
     let second = render(&mut view, &cells, 24, 5);
     assert_eq!(renders.load(Ordering::Relaxed), 2);
     assert!(text(&first).contains("version 1 row 3"));
@@ -245,24 +246,25 @@ fn a_mutable_cell_is_laid_out_once_per_frame_and_refreshed_the_next() {
     find(&mut view, &cells, "version 2");
     let matched = text(&render(&mut view, &cells, 24, 5));
     // The match is read in the revision it was found in.
-    version.store(3, Ordering::Relaxed);
+    entry.update(|cell| cell.version = 3);
     assert_eq!(text(&render(&mut view, &cells, 24, 5)), matched);
 }
 
 #[test]
-fn a_reader_in_the_live_tail_keeps_it_through_its_commit_and_rejoins_latest() {
-    let mut cells = vec![cell("before")];
-    let live = cell("live zero\nlive one\nlive two\nlive three\nlive four\nlive five");
+fn a_reader_in_a_live_entry_keeps_its_revision_through_completion_and_rejoins_latest() {
+    let running = live("live zero\nlive one\nlive two\nlive three\nlive four\nlive five");
+    let mut cells = vec![cell("before"), running.clone()];
     let mut view = TranscriptView::default();
-    view.sync_live_tail(20, None, |width| Some(live.display_lines(width)));
     render(&mut view, &cells, 20, 2);
     view.scroll(&cells, -2);
     let before = text(&render(&mut view, &cells, 20, 2));
     let reading = view.position;
-    cells.push(Arc::clone(&live));
-    view.sync_live_tail(20, None, |_| None);
+    running.update(|activity| {
+        activity.text.push_str("\nlive six");
+        activity.done = true;
+    });
     assert_eq!(text(&render(&mut view, &cells, 20, 2)), before);
-    view.sync_live_tail(20, None, |_| Some(vec![Line::from("new tail")]));
+    cells.push(live("new entry"));
     assert_eq!(text(&render(&mut view, &cells, 20, 2)), before);
     render(&mut view, &cells, 9, 2);
     assert_eq!(view.position, reading);
@@ -275,26 +277,41 @@ fn a_reader_in_the_live_tail_keeps_it_through_its_commit_and_rejoins_latest() {
     assert!(view.snapshot().is_none());
     insta::assert_snapshot!(text(&render(&mut view, &cells, 20, 2)), @r"
 
-    new tail
+    new entry
     ");
 }
 
 #[test]
-fn scrolling_out_of_held_live_content_releases_its_revision() {
-    let mut cells = vec![cell("before")];
-    let live = cell("zero\none\ntwo\nthree\nfour\nfive");
+fn scrolling_out_of_a_held_live_entry_releases_its_revision() {
+    let running = live("zero\none\ntwo\nthree\nfour\nfive");
+    let cells = vec![cell("before"), running.clone()];
     let mut view = TranscriptView::default();
-    view.sync_live_tail(20, None, |width| Some(live.display_lines(width)));
     render(&mut view, &cells, 20, 2);
     view.scroll(&cells, -2);
     assert!(view.held_reading.is_some());
-    cells.push(Arc::clone(&live));
-    view.sync_live_tail(20, None, |_| None);
+    running.update(|activity| {
+        activity.text.push_str("\nsix");
+        activity.done = true;
+    });
     view.scroll(&cells, -100);
     assert!(view.held_reading.is_none());
     view.scroll(&cells, 100);
     assert!(view.is_following());
-    assert!(text(&render(&mut view, &cells, 20, 2)).contains("five"));
+    assert!(text(&render(&mut view, &cells, 20, 2)).contains("six"));
+}
+
+#[test]
+fn a_change_of_the_last_entry_below_a_reader_is_unseen_activity() {
+    let running = live("running");
+    let cells = vec![cell("one\ntwo\nthree"), running.clone()];
+    let mut view = TranscriptView::default();
+    render(&mut view, &cells, 20, 2);
+    view.scroll(&cells, -3);
+    render(&mut view, &cells, 20, 2);
+    assert!(!view.unseen_activity);
+    running.update(|activity| activity.done = true);
+    render(&mut view, &cells, 20, 2);
+    assert!(view.unseen_activity);
 }
 
 #[test]
@@ -363,22 +380,39 @@ fn a_user_prompt_brings_its_own_spacing() {
     ");
 }
 
+/// A shell call whose output is `lines` numbered lines.
+fn complete(call: &LiveCell<ToolCallCell>, lines: usize) {
+    call.update(|cell| {
+        cell.complete(
+            false,
+            crate::history_cell::ToolResultView {
+                text: Some((1..=lines).map(|line| format!("out {line}\n")).collect()),
+                exit_code: Some(0),
+                ..Default::default()
+            },
+        )
+    });
+}
+
 #[test]
-fn the_live_tail_of_running_activities_has_a_disclosure_control() {
-    let cells = vec![cell("before")];
-    let running = tool_call("call-1", 30);
+fn a_tool_call_changes_in_place_and_keeps_its_disclosure_as_it_changes() {
+    let call = LiveCell::new(new_tool_call("call-1".into(), "shell".into(), None));
+    let cells = vec![cell("before"), call.clone()];
     let mut view = TranscriptView::default();
-    assert!(view.sync_live_cells(&cells, 30, None, &[running.as_ref()]));
+    assert!(text(&render(&mut view, &cells, 30, 16)).contains("Running shell"));
+    complete(&call, 30);
     let frame = text(&render(&mut view, &cells, 30, 16));
+    assert!(frame.contains("Called shell"), "{frame}");
     assert!(frame.contains("+ 20 lines"), "{frame}");
     assert!(!frame.contains("out 6\n"));
-    // The disclosure stays with the activity when it is committed.
     view.handle_key(key(KeyCode::F(4)), &cells);
     view.handle_key(key(KeyCode::Enter), &cells);
-    let committed = vec![cell("before"), Arc::clone(&running)];
-    view.sync_live_cells(&committed, 30, None, &[]);
+    // A later revision of the entry keeps it expanded.
+    complete(&call, 31);
     view.jump_to_latest();
-    assert!(text(&render(&mut view, &committed, 30, 40)).contains("− Show less"));
+    let frame = text(&render(&mut view, &cells, 30, 40));
+    assert!(frame.contains("− Show less"), "{frame}");
+    assert!(frame.contains("out 31"), "{frame}");
 }
 
 #[test]
@@ -401,4 +435,24 @@ fn the_wheel_scrolls_three_rows() {
         view.handle_mouse(mouse(MouseEventKind::Down(MouseButton::Left), 0, 9), &cells),
         None
     );
+}
+
+#[test]
+fn a_selection_keeps_a_live_entry_below_the_view_as_it_was() {
+    let running = live("live one\nlive two");
+    let cells = vec![cell("a\nb\nc\nd"), running.clone()];
+    let mut view = TranscriptView::default();
+    render(&mut view, &cells, 20, 2);
+    view.scroll(&cells, -100);
+    assert!(text(&render(&mut view, &cells, 20, 2)).starts_with('a'));
+    view.begin_selection(&cells, 0, 0, 1);
+    running.update(|activity| {
+        activity.text = "done".to_owned();
+        activity.done = true;
+    });
+    view.scroll(&cells, 100);
+    render(&mut view, &cells, 20, 2);
+    view.extend_selection(19, 1);
+    let selected = view.selected_text(&cells).unwrap_or_default();
+    assert!(selected.ends_with("live two"), "{selected:?}");
 }

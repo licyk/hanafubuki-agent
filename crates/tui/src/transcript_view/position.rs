@@ -10,7 +10,8 @@ use super::*;
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub(super) enum EntryKey {
     Cell(usize),
-    Live,
+    /// Past the last entry, where there is none.
+    End,
 }
 
 impl EntryKey {
@@ -64,11 +65,7 @@ impl TranscriptView {
     pub(super) fn bottom_start(&mut self, cells: &[Arc<dyn HistoryCell>]) -> (usize, usize) {
         let snapshot = self.snapshot_cells();
         let cells = snapshot.as_deref().unwrap_or(cells);
-        let has_live = self.snapshot().map_or(self.live.is_some(), |snapshot| {
-            snapshot.pinned.contains_key(&EntryKey::Live)
-        });
-        let count = cells.len() + usize::from(has_live);
-        let Some(last) = count.checked_sub(1) else {
+        let Some(last) = cells.len().checked_sub(1) else {
             return (0, 0);
         };
         let height = self.layout(cells, last).map_or(0, |l| l.row_count());
@@ -90,7 +87,7 @@ impl TranscriptView {
                 row = self.layout(cells, index).map_or(0, |l| l.row_count());
             }
             // At the beginning, hidden entries are not content before it: the
-            // first visible entry stays where it is, live or committed.
+            // first visible entry stays where it is.
             if index == 0 && remaining >= row {
                 if let Some(first) = self.next_nonempty(cells, index) {
                     if let Some(layout) = self.layout(cells, first) {
@@ -130,9 +127,6 @@ impl TranscriptView {
     pub(super) fn resolve(&self, cells: &[Arc<dyn HistoryCell>], anchor: Anchor) -> usize {
         let snapshot = self.snapshot_cells();
         let cells = snapshot.as_deref().unwrap_or(cells);
-        if anchor.key == EntryKey::Live {
-            return cells.len();
-        }
         if cells
             .get(anchor.index)
             .is_some_and(|cell| EntryKey::cell(cell) == anchor.key)
@@ -148,7 +142,7 @@ impl TranscriptView {
     pub(super) fn entry_key(&self, cells: &[Arc<dyn HistoryCell>], index: usize) -> EntryKey {
         let snapshot = self.snapshot_cells();
         let cells = snapshot.as_deref().unwrap_or(cells);
-        cells.get(index).map_or(EntryKey::Live, EntryKey::cell)
+        cells.get(index).map_or(EntryKey::End, EntryKey::cell)
     }
 
     /// Whether the view is within a screen of the oldest loaded entry, so
@@ -177,15 +171,15 @@ impl TranscriptView {
 
     /// Whether the last row of the transcript as it is now is painted.
     pub(super) fn current_tail_is_visible(&mut self, cells: &[Arc<dyn HistoryCell>]) -> bool {
-        // An empty live tail does not hide the actual last row.
-        for index in (0..=cells.len()).rev() {
+        // An empty entry does not hide the actual last row.
+        for index in (0..cells.len()).rev() {
             let Some(layout) = self.current_layout(cells, index) else {
                 continue;
             };
             if layout.row_count() == 0 {
                 continue;
             }
-            let key = cells.get(index).map_or(EntryKey::Live, EntryKey::cell);
+            let key = EntryKey::cell(&cells[index]);
             return self.visible.last().is_some_and(|visible| {
                 visible.key == key
                     && visible.layout.text() == layout.text()

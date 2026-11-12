@@ -10,7 +10,7 @@ use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseEvent, Mou
 use ratatui::layout::Rect;
 use ratatui::text::Line;
 
-use crate::history_cell::{self, HistoryCell, ToolResultView};
+use crate::history_cell::{self, HistoryCell, LiveCell, ToolResultView};
 use crate::transcript_view::TranscriptView;
 
 /// A cell of plain lines that counts how often it is laid out.
@@ -38,6 +38,38 @@ pub(crate) fn cell(text: impl Into<String>) -> Arc<dyn HistoryCell> {
     Arc::new(TestCell {
         text: text.into(),
         renders: Arc::default(),
+    })
+}
+
+/// An activity's lines, running (its spinner turns) until it is done.
+#[derive(Debug)]
+pub(crate) struct Activity {
+    pub(crate) text: String,
+    pub(crate) done: bool,
+}
+
+impl HistoryCell for Activity {
+    fn display_lines(&self, _width: u16) -> Vec<Line<'static>> {
+        self.text
+            .lines()
+            .map(|line| line.to_owned().into())
+            .collect()
+    }
+
+    fn raw_lines(&self) -> Vec<Line<'static>> {
+        self.display_lines(80)
+    }
+
+    fn transcript_animation_tick(&self) -> Option<u64> {
+        (!self.done).then_some(0)
+    }
+}
+
+/// A running activity that changes in place.
+pub(crate) fn live(text: &str) -> Arc<LiveCell<Activity>> {
+    LiveCell::new(Activity {
+        text: text.to_owned(),
+        done: false,
     })
 }
 

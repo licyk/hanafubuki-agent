@@ -65,7 +65,7 @@ const MIN_FRAME_INTERVAL: Duration = Duration::from_millis(8);
 /// How often a transcript view is drawn while it scans a search or
 /// scrolls a drag past its edge.
 const VIEW_TICK: Duration = Duration::from_millis(16);
-/// How often a transcript view's live tail is drawn while it changes with
+/// How often a transcript view is drawn while a live entry changes with
 /// time (a timer, a spinner).
 const LIVE_TICK: Duration = Duration::from_millis(50);
 
@@ -222,7 +222,13 @@ impl App {
                     self.show_update(update);
                 }
             }
-            AppEvent::InsertHistoryCell(cell) => self.insert_history_cell(tui, cell.into()),
+            AppEvent::InsertHistoryCell(cell) => {
+                let cell: Arc<dyn HistoryCell> = cell.into();
+                self.insert_history_cell(cell.clone());
+                self.write_history_cell(tui, &cell);
+            }
+            AppEvent::InsertLiveEntry(cell) => self.insert_history_cell(cell),
+            AppEvent::WriteLiveEntry(cell) => self.write_history_cell(tui, &cell),
             AppEvent::StartFileSearch(query) => self.file_search.on_user_query(query),
             AppEvent::FileSearchResult { query, matches } => {
                 self.chat_widget.apply_file_search_result(query, matches)
@@ -442,18 +448,24 @@ impl App {
         });
     }
 
-    fn insert_history_cell<B: Backend<Error = io::Error> + Write>(
-        &mut self,
-        tui: &mut Tui<B>,
-        cell: Arc<dyn HistoryCell>,
-    ) {
+    /// Adds `cell` to the transcript, where a live one goes on changing.
+    fn insert_history_cell(&mut self, cell: Arc<dyn HistoryCell>) {
         // The transcript overlay shows the focused conversation.
         if let (Some(Overlay::Transcript(transcript)), false) =
             (&mut self.overlay, self.workspace.handling_parked())
         {
             transcript.insert_cell(cell.clone());
         }
-        self.transcript_cells.push(cell.clone());
+        self.transcript_cells.push(cell);
+        self.schedule_frame(Instant::now());
+    }
+
+    /// Writes `cell` into the scrollback as it is shown now (Scrollback).
+    fn write_history_cell<B: Backend<Error = io::Error> + Write>(
+        &mut self,
+        tui: &mut Tui<B>,
+        cell: &Arc<dyn HistoryCell>,
+    ) {
         if self.mode.is_owned() {
             self.schedule_frame(Instant::now());
             return;
@@ -560,7 +572,7 @@ impl App {
         Ok(())
     }
 
-    /// Draws the open overlay; the transcript first takes the live tail.
+    /// Draws the open overlay.
     fn draw_overlay<B: Backend<Error = io::Error> + Write>(
         &mut self,
         tui: &mut Tui<B>,
@@ -571,13 +583,11 @@ impl App {
         let mut ticking = false;
         if let Overlay::Transcript(transcript) = overlay {
             let width = tui.terminal.size()?.width;
-            let key = self.chat_widget.active_cell_transcript_key();
-            transcript.sync_live_tail(width, key, &self.chat_widget.active_cells());
             if self.backtrack.is_browsing() {
                 transcript.set_browsing_footer(backtrack::browsing_footer(width));
             }
             ticking = transcript.tick(width);
-            if key.is_some_and(|key| key.animation_tick.is_some()) {
+            if self.chat_widget.has_live_entries() {
                 self.next_frame = Some(Instant::now() + LIVE_TICK);
             }
         }

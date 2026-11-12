@@ -563,8 +563,12 @@ path = "crates/tui/src/tui/tests.rs"
 reason = "The inline viewport on an emulated terminal, written for the port."
 
 [[original]]
-path = "crates/tui/src/chatwidget/tests.rs"
+path = "crates/tui/src/chatwidget/tests/mod.rs"
 reason = "The chat's handling of the bridge's turn updates."
+
+[[original]]
+path = "crates/tui/src/chatwidget/tests/entries.rs"
+reason = "The chat's thinking and tool calls as entries, in both presentations."
 
 [[original]]
 path = "crates/tui/src/bottom_pane/request_user_input/tests.rs"
@@ -577,6 +581,10 @@ reason = "The diff of the Agent's PatchPreview."
 [[original]]
 path = "crates/tui/src/history_cell/tool/tests.rs"
 reason = "The tool call cell over the Agent's tool results."
+
+[[original]]
+path = "crates/tui/src/history_cell/live.rs"
+reason = "The entry shared between the chat and the transcript that changes in place, written for the Agent."
 
 [[original]]
 path = "crates/tui/src/history_cell/thinking.rs"
