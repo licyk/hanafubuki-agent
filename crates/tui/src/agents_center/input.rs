@@ -2,11 +2,14 @@
 
 //! The center's keys (Codex's `agents_overview_view.rs` `handle_key_event`
 //! and `agent_center/input.rs`): the session actions are the keymap's
-//! `agents` context (`n`, `w`, `f`, `r`, `x`, `a`, Backspace, `g`, `/` and
-//! F3 by default); Tab and Shift-Tab, or `1`–`6`, change the filter; the
-//! arrows move, wrapping at the ends, and Enter or Right opens; `?` shows
-//! the keys. A search or a rename takes the typed text, a confirmation its
-//! choice, until Enter or Esc.
+//! `agents` context (`n`, `w`, `f`, `r`, `x`, `p`, `h`, `a`, Backspace, `g`,
+//! `c`, `/` and F3 by default); Tab and Shift-Tab, or `1`–`6`, change the
+//! filter; the arrows move, wrapping at the ends, and Enter or Right opens;
+//! `?` shows the keys. A search or a rename takes the typed text, a
+//! confirmation its choice, until Enter or Esc. `c` moves the keys to the
+//! selected session's children in the details pane, where the arrows move,
+//! Enter or Right opens one beside its parent, the stop key stops it, and
+//! Esc, Left or `c` returns.
 
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
@@ -14,6 +17,7 @@ use super::grouping;
 use super::status::Filter;
 use super::{runs, AgentsCenter, CenterAction, Confirm, Mode};
 use crate::keymap::{self, Action};
+use crate::tui_state::AgentsMarks;
 
 impl AgentsCenter {
     pub(crate) fn handle_key(&mut self, key: KeyEvent) -> Option<CenterAction> {
@@ -21,7 +25,11 @@ impl AgentsCenter {
             return None;
         }
         self.notice = None;
+        if self.child_selected.is_some() && self.selected_child().is_none() {
+            self.child_selected = None;
+        }
         match self.mode {
+            Mode::Browse if self.child_selected.is_some() => self.child_key(key),
             Mode::Help => {
                 if matches!(key.code, KeyCode::Esc | KeyCode::Char('?' | 'q')) || ctrl_c(&key) {
                     self.mode = Mode::Browse;
@@ -103,10 +111,37 @@ impl AgentsCenter {
                 None
             }
             (Action::AgentsStop, Some(session)) if runs(&session) => {
-                Some(CenterAction::Stop(session.session_id))
+                Some(CenterAction::Stop(Box::new(session)))
             }
             (Action::AgentsStop, Some(_)) => {
                 self.notice = Some("Nothing runs there.".to_string());
+                None
+            }
+            (Action::AgentsPin, Some(session)) => {
+                let id = session.session_id;
+                let mut marks = self.marks.clone();
+                if !marks.pinned.remove(&id) {
+                    marks.pinned.insert(id);
+                }
+                Some(CenterAction::Marks(marks))
+            }
+            (Action::AgentsHide, Some(session)) => {
+                let id = session.session_id;
+                let mut marks = self.marks.clone();
+                if !marks.hidden.remove(&id) {
+                    marks.hidden.insert(id);
+                    self.notice = Some(hidden_notice(&marks));
+                }
+                Some(CenterAction::Marks(marks))
+            }
+            (Action::AgentsChildren, Some(session)) => {
+                self.child_selected = self
+                    .children_of(session.session_id)
+                    .first()
+                    .map(|child| child.session_id);
+                if self.child_selected.is_none() {
+                    self.notice = Some("It has no subagents or reviews.".to_string());
+                }
                 None
             }
             (Action::AgentsArchive, Some(session)) if self.filter == Filter::Archived => {
@@ -135,6 +170,54 @@ impl AgentsCenter {
             _ => None,
         };
         Some(done)
+    }
+
+    /// A key while the details pane's children have the keys.
+    fn child_key(&mut self, key: KeyEvent) -> Option<CenterAction> {
+        let child = self.selected_child()?.clone();
+        if keymap::matches(Action::AgentsStop, &key) {
+            if runs(&child) {
+                return Some(CenterAction::Stop(Box::new(child)));
+            }
+            self.notice = Some("Nothing runs there.".to_string());
+            return None;
+        }
+        if keymap::matches(Action::AgentsChildren, &key) {
+            self.child_selected = None;
+            return None;
+        }
+        match key.code {
+            KeyCode::Enter | KeyCode::Right => return Some(CenterAction::Open(Box::new(child))),
+            KeyCode::Esc | KeyCode::Left | KeyCode::Char('q') => self.child_selected = None,
+            _ if ctrl_c(&key) => self.child_selected = None,
+            _ => self.navigate_children(&key),
+        }
+        None
+    }
+
+    /// The child selection moved by an arrow or to an end; the arrows wrap.
+    fn navigate_children(&mut self, key: &KeyEvent) {
+        let Some(root) = self.selected_row().map(|row| row.summary.session_id) else {
+            return;
+        };
+        let children = self.children_of(root);
+        let Some(index) = children
+            .iter()
+            .position(|child| Some(child.session_id) == self.child_selected)
+        else {
+            return;
+        };
+        let last = children.len() - 1;
+        let next = match key.code {
+            KeyCode::Up | KeyCode::Char('k') if index == 0 => last,
+            KeyCode::Up | KeyCode::Char('k') => index - 1,
+            KeyCode::Down | KeyCode::Char('j') if index == last => 0,
+            KeyCode::Down | KeyCode::Char('j') => index + 1,
+            KeyCode::Home => 0,
+            KeyCode::End => last,
+            _ => return,
+        };
+        self.child_selected = Some(children[next].session_id);
     }
 
     fn search_key(&mut self, key: KeyEvent) -> Option<CenterAction> {
@@ -260,7 +343,7 @@ impl AgentsCenter {
     }
 
     /// Enter or Right: the session opened, or restored under Archived.
-    fn open_selected(&self) -> Option<CenterAction> {
+    pub(super) fn open_selected(&self) -> Option<CenterAction> {
         let session = self.selected_row()?.summary;
         Some(if self.filter == Filter::Archived {
             CenterAction::SetArchived {
@@ -272,15 +355,16 @@ impl AgentsCenter {
         })
     }
 
-    fn set_filter(&mut self, filter: Filter) {
+    pub(super) fn set_filter(&mut self, filter: Filter) {
         if filter == self.filter {
             return;
         }
         let refetch = filter.lifecycle() != self.filter.lifecycle();
         self.filter = filter;
         self.scroll_top = 0;
+        self.child_selected = None;
         if refetch {
-            self.reload(self.current);
+            self.reload();
         }
     }
 
@@ -288,30 +372,40 @@ impl AgentsCenter {
     fn searched(&mut self) {
         self.scroll_top = 0;
         self.selected = None;
-        self.reload(self.current);
+        self.reload();
     }
 
     fn leave_search(&mut self) {
         let searched = self.query().is_some();
         self.mode = Mode::Browse;
         if searched {
-            self.reload(self.current);
+            self.reload();
         }
     }
 }
 
 /// The session actions of the keymap's `agents` context, as `?` lists them.
-pub(super) const SESSION_ACTIONS: [Action; 9] = [
+pub(super) const SESSION_ACTIONS: [Action; 12] = [
     Action::AgentsNewTask,
     Action::AgentsNewWorktree,
     Action::AgentsFork,
     Action::AgentsRename,
     Action::AgentsStop,
+    Action::AgentsPin,
+    Action::AgentsHide,
+    Action::AgentsChildren,
     Action::AgentsArchive,
     Action::AgentsDelete,
     Action::AgentsSearch,
     Action::AgentsToggleGrouping,
 ];
+
+/// What hiding a session says: how to see it again.
+fn hidden_notice(marks: &AgentsMarks) -> String {
+    let search = keymap::current().label(Action::AgentsSearch);
+    let count = marks.hidden.len();
+    format!("Hidden ({count} in all). A search ({search}) lists them; opening one shows it again.")
+}
 
 fn ctrl_c(key: &KeyEvent) -> bool {
     key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL)

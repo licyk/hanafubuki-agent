@@ -42,4 +42,4 @@ expression: harness.redacted_screen()
                                                                │
 › Ask the Agent to do anything                                 │› Ask the Agent to do anything
                                                                │
-  fixture-model · /project · Hello. · ← for agents             │  fixture-model · /project · Hello.
+  fixture-model · /project · Hello.                            │  fixture-model · /project · Hello.

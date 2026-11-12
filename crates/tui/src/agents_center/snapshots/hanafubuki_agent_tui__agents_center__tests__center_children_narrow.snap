@@ -1,0 +1,44 @@
+---
+source: crates/tui/src/agents_center/tests.rs
+expression: "screen(&mut center, 60, 40)"
+---
+  Agent command center  Group: Status  g
+   All 3    Needs you 1    Working 0    Ready 2    Inactiv
+  ────────────────────────────────────────────────────────
+  Session details
+
+  Port the command center
+  ● Needs input
+
+  Model: gpt-test
+  Reasoning: default
+  Branch: agents-center
+  Tokens: 45K in · 3.2K out
+
+  Directory
+  /work/app
+
+  Subagents and reviews  2
+  › ● child 11  Needs input
+    ○ child 12  Ready
+
+  Needs you
+  Subagent: child 11
+  Waiting for approval: cargo test
+  Open it to answer.
+
+  Latest activity
+  Run command: cargo test
+
+  Last message
+  The details pane lists the children; each opens beside
+  its parent.
+
+  Prompt
+  Port Codex's Agent Center, opened by the Left arrow.
+
+
+
+
+
+  enter open  x stop  esc back to the sessions

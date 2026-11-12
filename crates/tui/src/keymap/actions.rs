@@ -120,6 +120,9 @@ pub(crate) enum Action {
     AgentsFork,
     AgentsRename,
     AgentsStop,
+    AgentsPin,
+    AgentsHide,
+    AgentsChildren,
     AgentsArchive,
     AgentsDelete,
     AgentsToggleGrouping,
@@ -212,7 +215,7 @@ macro_rules! action {
 }
 
 /// Every action, in [`Action`]'s order.
-pub(crate) static ACTIONS: [ActionSpec; 63] = [
+pub(crate) static ACTIONS: [ActionSpec; 66] = [
     action!(
         Leader,
         Global,
@@ -597,6 +600,21 @@ pub(crate) static ACTIONS: [ActionSpec; 63] = [
         "stop",
         "Interrupt the session's turn",
         ["x"]
+    ),
+    action!(
+        AgentsPin,
+        Agents,
+        "toggle_pin",
+        "Pin the session, or unpin it",
+        ["p"]
+    ),
+    action!(AgentsHide, Agents, "hide", "Hide the session", ["h"]),
+    action!(
+        AgentsChildren,
+        Agents,
+        "children",
+        "Select the session's subagents and reviews",
+        ["c"]
     ),
     action!(
         AgentsArchive,

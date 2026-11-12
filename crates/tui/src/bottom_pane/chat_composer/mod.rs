@@ -265,6 +265,10 @@ impl ChatComposer {
     /// The owner (`BottomPane`/`ChatWidget`) is responsible for scheduling a
     /// redraw after [`super::QUIT_SHORTCUT_TIMEOUT`] so the hint can disappear
     /// even when the UI is otherwise idle.
+    pub(crate) fn set_has_focus(&mut self, has_focus: bool) {
+        self.has_focus = has_focus;
+    }
+
     pub fn show_quit_shortcut_hint(&mut self, key: KeyBinding, has_focus: bool) {
         self.quit_shortcut_expires_at = Instant::now()
             .checked_add(super::QUIT_SHORTCUT_TIMEOUT)

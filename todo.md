@@ -1017,9 +1017,115 @@ independent.
       - CI: https://github.com/licyk/hanafubuki-agent/actions/runs/43295489283
         (Linux, macOS, Windows, all green on the first run) and the site's
         https://github.com/licyk/hanafubuki-agent/actions/runs/43295489407.
-- [ ] A2: the details pane; a live session watch with background re-reads;
+- [x] A2: the details pane; a live session watch with background re-reads;
       pin, hide and unread in a new `tui-state.json` (D11); mouse. Docs:
       `terminal-interface#agents`, `data-directory`.
+      Done (2026-11-12):
+      - Reads off the loop (`agent_bridge/center_reads.rs`): while the
+        center is open a thread of its own answers its `CenterJob`s (the
+        list from the first page until the sessions wanted are read; a
+        session's children; the selected
+        session's latest prompt and answer from its last 64 items) and,
+        between jobs, watches the sessions the Agent holds every 250 ms
+        (`AgentApplicationService::session_snapshots`, new): each one's
+        revision, an approval or a question it waits on, its latest
+        activity, sent as `CenterRead::Live` only when it changed. The
+        center (`agents_center/loading.rs`) asks for one read of each kind
+        at a time, drops answers of an older epoch (a search or a filter),
+        and from the watch reads again only what changed: the list for a
+        session without a parent, the parent's children for a child, the
+        exchange when the selected session's revision moved. A read again
+        replaces the rows in place (no `Loading…`); an action refreshes
+        instead of reloading. Nothing reads on the UI thread any more
+        (`waits_for_approval` and the synchronous page loop are gone).
+      - Details pane (`agents_center/details.rs`, Codex's 38 columns from a
+        body of 90): title, status, model, reasoning, branch, tokens,
+        directory; the children with their status; Needs you (an approval's
+        subject or the question, `Subagent:` when a child's) and the latest
+        activity of the most urgent of the root and its children; `Last
+        message` and `Prompt` (two lines). `c` (`agents.children`) gives the
+        keys to the children: arrows, Enter or Right opens one beside its
+        parent (`open_listed`), `x` stops it (`stop_listed`: a subagent's
+        through `interrupt_subagent`, else the turn's cancel), Esc, Left or
+        `c` returns. Below 90 columns the details take the list's place while
+        a child has the keys.
+      - `tui-state.json` (`tui_state.rs`, in the data directory beside
+        `themes/`): `agents.pinned`, `agents.hidden`, `agents.seen` (session
+        id → milliseconds). Unknown keys are kept as they were; an entry not
+        understood is left out and the file moved into `.recovery/`
+        (`quarantine_file`) before the next write; a file that is not a JSON
+        object is moved there at once; one that exists but cannot be read is
+        never written over (its saves say so). Writes run on a thread, the
+        latest last; the exit writes synchronously. At most 2000 showings.
+      - Pin (`p`, `agents.toggle_pin`): pinned rows first under `Pinned`
+        (`HeadingKey::Pinned`) in every grouping. Hide (`h`, `agents.hide`):
+        out of every tab and count; a search lists it marked `(hidden)`, and
+        opening it un-hides it. Unread: a root whose `updated_at`, or a
+        child's, passed its last showing has a bold title and, when Ready or
+        Inactive, a blue `●`; a session never shown is not unread, the
+        session shown never is. A showing is stamped when the main
+        conversation's session changes (`App::note_shown`, from
+        `show_update`), when the center opens, after the center's own rename
+        or restore, and at exit.
+      - Mouse (both presentations; the center now captures it in
+        Scrollback): a click on a tab filters, on a row or a child selects,
+        on the selected one opens; the wheel moves three rows and stops at
+        the ends; nothing while searching, renaming, confirming or in help.
+      - The side pane's focus fix: the parked conversation's composer loses
+        `has_focus` on a swap, so `← for agents` shows in the focused pane
+        only.
+      - Deviations from the plan, the smallest change meeting its intent:
+        - The facade has no event stream for every session, so "subscribes
+          to the facade's session events" is a 4 Hz watch over
+          `session_snapshots()` (in memory, no store reads), as the
+          subagents' watch polls; the list's reads go to the store only
+          when something changed.
+        - A click on the selected row opens (as the settings center), not a
+          double click.
+        - Pinned rows come first among the sessions read; Codex lists its
+          pinned threads with a read of their own, which the history store
+          has no counterpart for (a read by id), and chasing them page by
+          page would re-read pages on every change for a pin that is
+          archived or gone.
+        - Pinned rows are under `Pinned` in the status grouping too (Codex
+          keeps them under their status with a pin glyph).
+        - Hidden sessions come back by a search and opening one (a search
+          takes every letter, so `h` there types); Codex's hide is not
+          persisted, ours is (D11).
+        - The prompt is the selected session's latest message, read with its
+          latest answer; Codex shows the thread's first prompt (its
+          preview).
+        - Usage is tokens in and out; Codex's credits are dropped.
+      - Docs (both languages, heading ids unchanged): `terminal-interface`
+        (`#agents`: pinned, unread, hidden, the details pane and `c`, the
+        mouse row and `p`/`h`/`c` rows, the reads and watch replacing "on
+        the interface's thread"; the `/agents` row; the keymap's
+        `agents.toggle_pin`, `agents.hide`, `agents.children`),
+        `data-directory#contents` (`tui-state.json`). `architecture` and
+        `internals` say nothing of the center's reads; unchanged.
+      - Snapshots: new `agents_center` `center_details` (with the pane, a
+        pinned and an unread row, children, an approval, activity, last
+        message and prompt) and `center_children_narrow`; changed
+        `center_wide` and `center_confirm` (the details pane at 100
+        columns, so the list drops its status columns as Codex's does),
+        `center_help` (`p`, `h`, `c`, the mouse); the side pane's two
+        (`side_pane_beside_the_transcript`, `leader_keys_over_the_side_pane`)
+        lose the main pane's `← for agents`. Not model-visible; no golden
+        changed.
+      - Validation: `cargo fmt --all --check`, `RUSTFLAGS="-D warnings"
+        cargo check --workspace --all-targets --all-features`, `cargo
+        clippy --workspace --all-targets --all-features -- -D warnings`,
+        `cargo xtask check`, `cargo test --workspace --all-features`;
+        `bun install --frozen-lockfile`, `bun run format:check:site`,
+        `bun run site:check`, `bun run site:test`. The local `site:build`
+        built but could not prerender (another project's dev server holds
+        port 3000); CI's `site.yml` built and prerendered it.
+      - Hanafubuki at its next pin: the facade gains
+        `AgentApplicationService::session_snapshots()` and re-exports
+        `quarantine_file`, `write_atomic` and `FileAccess`. Nothing to
+        change.
+      - Module size: no exception added or raised.
+      - CI: CI_URL_PLACEHOLDER
 
 **Timeline ([4], [5], [6], [8], [9])**
 

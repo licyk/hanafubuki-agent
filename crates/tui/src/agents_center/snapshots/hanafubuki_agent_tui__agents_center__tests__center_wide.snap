@@ -5,16 +5,16 @@ expression: "screen(&mut center, 100, 16)"
   Agent command center  Group: Status  g
    All 3    Needs you 1    Working 1    Ready 0    Inactive 1    Archived
   ────────────────────────────────────────────────────────────────────────────────────────────────
-      Sessions                                                                Status       Updated
-  Needs input  1
-  › ● Fix the login form                                                      Needs input  42m ago
-
-  Working  1
-    ● Port the command center                                                 Working       3m ago
-
-  Inactive  1
-    ○ Explain the codebase                                                    Inactive      3h ago
-
-
-
+      Sessions                                            │ Session details
+  Needs input  1                                          │
+  › ● Fix the login form                                  │ Fix the login form
+                                                          │ ● Needs input
+  Working  1                                              │
+    ● Port the command center                             │ Model: gpt-test
+                                                          │ Reasoning: default
+  Inactive  1                                             │
+    ○ Explain the codebase                                │ Directory
+                                                          │ /work/app
+                                                          │
+                                                          │ Subagents and reviews  1
   ? help  esc back  enter open  tab filter  n new

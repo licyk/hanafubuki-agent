@@ -388,6 +388,13 @@ impl BottomPane {
         }
     }
 
+    /// Whether this pane's conversation has the keys (the other of two
+    /// panes does not).
+    pub(crate) fn set_input_focus(&mut self, focused: bool) {
+        self.has_input_focus = focused;
+        self.composer.set_has_focus(focused);
+    }
+
     pub(crate) fn show_quit_shortcut_hint(&mut self, key: KeyBinding) {
         self.composer
             .show_quit_shortcut_hint(key, self.has_input_focus);

@@ -41,7 +41,9 @@ use ratatui::crossterm::event::{KeyEvent, KeyEventKind};
 use ratatui::text::Line;
 
 use super::{new_view, App};
-use crate::agent_bridge::{AgentBridge, AgentReply, CatalogReply, OlderTranscript, OpenedSide};
+use crate::agent_bridge::{
+    AgentBridge, AgentReply, CatalogReply, CenterRead, CenterReader, OlderTranscript, OpenedSide,
+};
 use crate::agents_center::AgentsCenter;
 use crate::app_event::{AppEvent, AppEventSender};
 use crate::chatwidget::ChatWidget;
@@ -82,6 +84,10 @@ pub(crate) enum WorkspaceEvent {
     SettingsAction(SettingsPageAction),
     /// What a call of the settings center found.
     Settings(Box<CatalogReply>),
+    /// What a read of the command center found, or its watch saw.
+    AgentsCenter(Box<CenterRead>),
+    /// `tui-state.json` was not written.
+    TuiStateNotSaved(String),
     /// Whether the command whose views are the center's page still shows
     /// one; sent after the keys it took, so that the step one of its views
     /// asked for has shown its next view first. Only the latest check
@@ -167,6 +173,10 @@ pub(super) struct Workspace {
     /// The parked conversation whose event is being handled.
     handling: Option<Focus>,
     agents: Option<AgentsCenter>,
+    /// The command center's reads, while it is open.
+    agents_reads: Option<CenterReader>,
+    /// The session the main conversation showed, as last noted.
+    shown: Option<AgentSessionId>,
     settings: Option<SettingsCenter>,
 }
 
@@ -313,6 +323,9 @@ impl App {
         std::mem::swap(&mut self.transcript_view, &mut parked.transcript_view);
         std::mem::swap(&mut self.tail, &mut parked.tail);
         std::mem::swap(&mut self.older_transcript, &mut parked.older_transcript);
+        // Only the focused composer offers `← for agents`.
+        parked.chat_widget.set_input_focus(false);
+        self.chat_widget.set_input_focus(true);
         second.focus = second.focus.other();
     }
 
@@ -350,6 +363,8 @@ impl App {
             WorkspaceEvent::SettingsAction(action) => self.run_settings_action(tui, action),
             WorkspaceEvent::Settings(reply) => self.settings_reply(tui, *reply),
             WorkspaceEvent::SettingsPageCheck(check) => self.check_settings_page(check),
+            WorkspaceEvent::AgentsCenter(read) => self.center_read(*read),
+            WorkspaceEvent::TuiStateNotSaved(error) => self.tui_state_not_saved(error),
         }
         self.schedule_frame(Instant::now());
     }

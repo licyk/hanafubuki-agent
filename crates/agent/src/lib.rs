@@ -85,6 +85,9 @@ pub use hanafubuki_agent_foundation::blocking::{run_blocking_operation, Blocking
 /// Path identity and lexical normalization, for a host that compares the
 /// paths the Agent reports (a session's `cwd`).
 pub use hanafubuki_agent_foundation::paths::{normalize_path, relative_below, PathKey};
+/// Moves a state file that cannot be read aside, into `.recovery/` beside
+/// it, for a host keeping state of its own in the data directory.
+pub use hanafubuki_agent_foundation::persistence::quarantine_file;
 pub use hanafubuki_agent_foundation::secrets::{
     SecretFuture, SecretKey, SecretStore, SecretStoreError,
 };
@@ -182,7 +185,7 @@ use std::path::Path;
 /// The Agent's configuration, which the host opens in the directory it names
 /// and the standalone Agent layers.
 pub use hanafubuki_agent_config::{
-    config_sections, parse_config_value, AgentAgentsGrouping, AgentAlternateScreen,
+    config_sections, parse_config_value, write_atomic, AgentAgentsGrouping, AgentAlternateScreen,
     AgentBackgroundCompactionSettings, AgentCompactionSettings, AgentCompactionStrategy,
     AgentConfig, AgentConfigProblem, AgentConfigRecovery, AgentDirs,
     AgentHierarchicalCompactionSettings, AgentImageInputPolicy, AgentInputCapabilitiesSettings,
@@ -193,12 +196,12 @@ pub use hanafubuki_agent_config::{
     AgentScrollbackMouse, AgentSettings, AgentSettingsPatch, AgentStandaloneSettings,
     AgentStandaloneSettingsPatch, AgentTuiPreferences, AgentTuiPreferencesPatch, AgentTuiPreset,
     AgentTurnBudgetSettings, AgentWebSearchProvider, AgentWindowsSandbox, AgentWindowsSettings,
-    ConfigLayerSource, ConfigLayers, ConfigOverrides, InstructionsMode, PackageSettingKey,
-    PluginOptionKey, PluginOptionSchema, PluginOptionsSettings, ResolvedPluginOption,
-    ResolvedPluginOptions, RoleLayer, RoleOrigin, SettingApply, SettingChange, SettingChoice,
-    SettingCondition, SettingKind, SettingProblem, SettingSource, SettingSpec, SettingState,
-    SettingValue, SettingWriteOp, SettingsGroup, SettingsSection, SettingsWrite,
-    SettingsWriteOutcome, AGENT_CREDENTIAL_FILES, AGENT_HOME_ENV, AGENT_MCP_FILE,
+    ConfigLayerSource, ConfigLayers, ConfigOverrides, FileAccess, InstructionsMode,
+    PackageSettingKey, PluginOptionKey, PluginOptionSchema, PluginOptionsSettings,
+    ResolvedPluginOption, ResolvedPluginOptions, RoleLayer, RoleOrigin, SettingApply,
+    SettingChange, SettingChoice, SettingCondition, SettingKind, SettingProblem, SettingSource,
+    SettingSpec, SettingState, SettingValue, SettingWriteOp, SettingsGroup, SettingsSection,
+    SettingsWrite, SettingsWriteOutcome, AGENT_CREDENTIAL_FILES, AGENT_HOME_ENV, AGENT_MCP_FILE,
     AGENT_PROVIDERS_FILE, AGENT_SETTINGS_FILE, MAX_AGENT_CONSECUTIVE_STALLED_STEPS,
     MAX_AGENT_CUMULATIVE_MODEL_INPUT_TOKENS, MAX_AGENT_CUMULATIVE_MODEL_OUTPUT_TOKENS,
     MAX_AGENT_HOOK_FRAGMENT_BYTES, MAX_AGENT_IDLE_TIMEOUT_SECONDS, MAX_AGENT_IN_FLIGHT_TOOLS,

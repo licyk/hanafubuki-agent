@@ -4,8 +4,11 @@
 //! `rows.rs` and `hints.rs`): its title and grouping, the filter tabs with
 //! their counts, the search or rename being typed, the sessions under their
 //! headings in the title, status and updated columns (the last two from 56
-//! columns), and the keys or the last notice; `?` shows every key in place
-//! of the list, and a confirmation is drawn over it.
+//! columns), the details pane beside them from 90 columns, and the keys or
+//! the last notice; `?` shows every key in place of the list, and a
+//! confirmation is drawn over it. A pinned session is under `Pinned`, an
+//! unread one has a blue dot, and a hidden one (listed only by a search)
+//! says so. Where the tabs and rows are drawn is kept for the mouse.
 
 use std::collections::HashMap;
 
@@ -13,10 +16,11 @@ use hanafubuki_agent::AgentSessionSummary;
 use ratatui::buffer::Buffer;
 use ratatui::crossterm::event::KeyCode;
 use ratatui::layout::{Constraint, Layout, Margin, Rect};
-use ratatui::style::{Style, Stylize};
+use ratatui::style::{Color, Style, Stylize};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Clear, Paragraph, Widget, Wrap};
 
+use super::details::{DETAILS_FROM, DETAILS_WIDTH};
 use super::grouping::{self, HeadingKey};
 use super::input::SESSION_ACTIONS;
 use super::status::{Filter, Group, Status};
@@ -43,6 +47,7 @@ impl AgentsCenter {
     /// Draws the center over `area`; `now` (milliseconds) dates the rows.
     pub(crate) fn render(&mut self, area: Rect, buf: &mut Buffer, now: u128) {
         Clear.render(area, buf);
+        self.layout = super::ScreenLayout::default();
         let area = area.inner(Margin::new(2, 0));
         let editing = u16::from(self.takes_text());
         let [title, tabs, rule, edit, body, footer] = Layout::vertical([
@@ -55,7 +60,7 @@ impl AgentsCenter {
         ])
         .areas(area);
         self.title_line().render(title, buf);
-        self.tabs_line().render(tabs, buf);
+        self.render_tabs(tabs, buf);
         Line::from("─".repeat(usize::from(rule.width)).dim()).render(rule, buf);
         self.edit_line().render(edit, buf);
         self.footer_line().render(footer, buf);
@@ -63,7 +68,25 @@ impl AgentsCenter {
             Paragraph::new(help_lines()).render(body, buf);
             return;
         }
-        self.render_list(body, buf, now);
+        if body.width >= DETAILS_FROM {
+            let [list, gap, details] = Layout::horizontal([
+                Constraint::Min(46),
+                Constraint::Length(3),
+                Constraint::Length(DETAILS_WIDTH),
+            ])
+            .areas(body);
+            self.render_list(list, buf, now);
+            for y in gap.y..gap.bottom() {
+                buf[(gap.x + 1, y)]
+                    .set_symbol("│")
+                    .set_style(Style::new().dim());
+            }
+            self.render_details(details, buf);
+        } else if self.child_selected.is_some() {
+            self.render_details(body, buf);
+        } else {
+            self.render_list(body, buf, now);
+        }
         if let Mode::Confirm(confirm) = &self.mode {
             render_confirm(confirm, area, buf);
         }
@@ -77,11 +100,14 @@ impl AgentsCenter {
         ])
     }
 
-    fn tabs_line(&self) -> Line<'static> {
+    /// The filters with their counts; where each is drawn is kept.
+    fn render_tabs(&mut self, area: Rect, buf: &mut Buffer) {
         let mut spans = Vec::new();
+        let mut x = area.x;
         for filter in Filter::ALL {
             if !spans.is_empty() {
                 spans.push("  ".into());
+                x = x.saturating_add(2);
             }
             let count = match filter {
                 Filter::All => Some(self.count(None)),
@@ -93,13 +119,19 @@ impl AgentsCenter {
                 Some(count) => format!(" {} {count} ", filter.label()),
                 None => format!(" {} ", filter.label()),
             };
+            let width = u16::try_from(label.chars().count()).unwrap_or(u16::MAX);
+            let cell = Rect::new(x, area.y, width, 1).intersection(area);
+            if !cell.is_empty() {
+                self.layout.tabs.push((cell, filter));
+            }
+            x = x.saturating_add(width);
             spans.push(if filter == self.filter {
                 label.bold().reversed()
             } else {
                 label.dim()
             });
         }
-        Line::from(spans)
+        Line::from(spans).render(area, buf);
     }
 
     fn edit_line(&self) -> Line<'static> {
@@ -121,6 +153,12 @@ impl AgentsCenter {
         let enter = key_hint::plain(KeyCode::Enter);
         let esc = key_hint::plain(KeyCode::Esc);
         let hints: Vec<(KeyBinding, &str)> = match &self.mode {
+            Mode::Browse if self.child_selected.is_some() => {
+                let mut hints = vec![(enter, "open")];
+                hints.extend(keymap::hint(Action::AgentsStop).map(|key| (key, "stop")));
+                hints.push((esc, "back to the sessions"));
+                hints
+            }
             Mode::Browse => {
                 let mut hints = vec![
                     (key_hint::plain(KeyCode::Char('?')), "help"),
@@ -150,7 +188,7 @@ impl AgentsCenter {
     fn render_list(&mut self, area: Rect, buf: &mut Buffer, now: u128) {
         let rows = self.rows();
         if rows.is_empty() {
-            let empty = if !self.loaded && self.error.is_none() {
+            let empty = if !self.reads.loaded && self.error.is_none() {
                 "Loading…"
             } else if self.error.is_some() {
                 "The sessions were not read."
@@ -207,7 +245,9 @@ impl AgentsCenter {
                 Entry::Row(index) => {
                     let row = &rows[*index];
                     let shown = Some(row.summary.session_id) == self.current;
-                    render_row(row, *index == selected, shown, now, line, buf);
+                    let marked = *index == selected && self.child_selected.is_none();
+                    render_row(row, marked, shown, now, line, buf);
+                    self.layout.rows.push((line, row.summary.session_id));
                 }
             }
         }
@@ -305,15 +345,23 @@ fn column_areas(line: Rect) -> (Rect, Rect, Rect) {
 fn render_row(row: &Row, selected: bool, shown: bool, now: u128, line: Rect, buf: &mut Buffer) {
     let (title_area, status_area, updated_area) = column_areas(line);
     let marker = if selected { "›".bold() } else { " ".into() };
-    let (label, dot, style) = status_look(row.status);
+    let (label, mut dot, style) = status_look(row.status);
+    // Codex's unread marker, on a session that asks nothing of you.
+    if row.unread && matches!(row.status.group, Group::Ready | Group::Inactive) {
+        dot = Span::styled("●", Style::new().fg(Color::Blue));
+    }
     Line::from(vec![marker, " ".into(), dot, " ".into()]).render(line, buf);
-    let shown_label = if shown { " (shown)" } else { "" };
-    let room = usize::from(title_area.width).saturating_sub(shown_label.len());
+    let suffix = match (shown, row.hidden) {
+        (true, _) => " (shown)",
+        (false, true) => " (hidden)",
+        (false, false) => "",
+    };
+    let room = usize::from(title_area.width).saturating_sub(suffix.len());
     let mut title: Span<'static> = truncate_text(&title_of(&row.summary), room).into();
-    if selected {
+    if selected || row.unread {
         title = title.bold();
     }
-    Line::from(vec![title, shown_label.magenta()]).render(title_area, buf);
+    Line::from(vec![title, suffix.magenta()]).render(title_area, buf);
     Line::from(Span::styled(label, style)).render(status_area, buf);
     Line::from(ago(now, row.summary.updated_at).dim())
         .right_aligned()
@@ -321,7 +369,7 @@ fn render_row(row: &Row, selected: bool, shown: bool, now: u128, line: Rect, buf
 }
 
 /// A status's label, its dot and its style.
-fn status_look(status: Status) -> (&'static str, Span<'static>, Style) {
+pub(super) fn status_look(status: Status) -> (&'static str, Span<'static>, Style) {
     let style = match status.group {
         Group::NeedsYou => Style::new().red(),
         Group::Working => Style::new().green(),
@@ -400,6 +448,10 @@ fn help_lines() -> Vec<Line<'static>> {
         (
             "tab, shift-tab, 1–6".to_string(),
             "Filter: All, Needs you, Working, Ready, Inactive, Archived",
+        ),
+        (
+            "click, wheel".to_string(),
+            "Select a session, child or tab; on the one selected, open it",
         ),
         ("esc, q".to_string(), "Back"),
     ];

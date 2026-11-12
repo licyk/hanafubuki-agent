@@ -56,6 +56,8 @@ impl Place {
 /// What a heading is told apart by; its order is the headings' order.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub(crate) enum HeadingKey {
+    /// The pinned sessions, first whatever the grouping.
+    Pinned,
     Status(Group),
     Path(PathKey),
     Model(String),
@@ -70,6 +72,13 @@ pub(crate) struct Heading {
 }
 
 impl Heading {
+    pub(crate) fn pinned() -> Self {
+        Self {
+            key: HeadingKey::Pinned,
+            label: "Pinned".to_string(),
+        }
+    }
+
     /// The heading `summary` (with `status`) falls under; `place` is its
     /// directory's.
     pub(crate) fn of(

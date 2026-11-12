@@ -1,0 +1,44 @@
+---
+source: crates/tui/src/agents_center/tests.rs
+expression: "screen(&mut center, 130, 40)"
+---
+  Agent command center  Group: Status  g
+   All 3    Needs you 1    Working 0    Ready 2    Inactive 0    Archived
+  ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+      Sessions                                                     Status       Updated │ Session details
+  Pinned  1                                                                             │
+    ○ Fix the login form                                           Ready        42m ago │ Port the command center
+                                                                                        │ ● Needs input
+  Needs input  1                                                                        │
+  › ● Port the command center                                      Needs input   3m ago │ Model: gpt-test
+                                                                                        │ Reasoning: default
+  Ready  1                                                                              │ Branch: agents-center
+    ● Explain the codebase                                         Ready         3m ago │ Tokens: 45K in · 3.2K out
+                                                                                        │
+                                                                                        │ Directory
+                                                                                        │ /work/app
+                                                                                        │
+                                                                                        │ Subagents and reviews  2
+                                                                                        │   ● child 11  Needs input
+                                                                                        │   ○ child 12  Ready
+                                                                                        │
+                                                                                        │ Needs you
+                                                                                        │ Subagent: child 11
+                                                                                        │ Waiting for approval: cargo test
+                                                                                        │ Open it to answer.
+                                                                                        │
+                                                                                        │ Latest activity
+                                                                                        │ Run command: cargo test
+                                                                                        │
+                                                                                        │ Last message
+                                                                                        │ The details pane lists the children;
+                                                                                        │ each opens beside its parent.
+                                                                                        │
+                                                                                        │ Prompt
+                                                                                        │ Port Codex's Agent Center, opened by
+                                                                                        │ the Left arrow.
+                                                                                        │
+                                                                                        │
+                                                                                        │
+                                                                                        │
+  ? help  esc back  enter open  tab filter  n new

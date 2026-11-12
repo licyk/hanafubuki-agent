@@ -270,6 +270,11 @@ impl ChatWidget {
     }
 
     /// Adds a dim note to the transcript.
+    /// Whether this conversation has the keys, of two panes.
+    pub(crate) fn set_input_focus(&mut self, focused: bool) {
+        self.bottom_pane.set_input_focus(focused);
+    }
+
     pub(crate) fn add_info_message(&mut self, message: String) {
         self.add_to_history(history_cell::new_info_event(message, None));
         self.request_redraw();

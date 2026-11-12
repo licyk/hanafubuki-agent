@@ -56,6 +56,7 @@ use crate::resume_picker::ResumePicker;
 use crate::transcript_mode::TranscriptMode;
 use crate::transcript_view::{TranscriptHistoryState, TranscriptView, ViewAction};
 use crate::tui::Tui;
+use crate::tui_state::TuiState;
 
 /// The commit animation's step: one streamed line per tick.
 const COMMIT_TICK: Duration = Duration::from_millis(50);
@@ -107,6 +108,9 @@ pub(crate) struct App {
     chords: ChordState,
     /// The second conversation, the panes and the command center.
     workspace: workspace::Workspace,
+    /// `tui-state.json`: the command center's pins, hidden sessions and
+    /// when each session was last shown.
+    tui_state: TuiState,
 }
 
 impl App {
@@ -117,6 +121,7 @@ impl App {
         app_event_tx: AppEventSender,
         mode: TranscriptMode,
         render_mode: HistoryRenderMode,
+        tui_state: TuiState,
     ) -> Self {
         let roots = bridge.workspace_roots();
         Self {
@@ -144,6 +149,7 @@ impl App {
             terminal_title: TerminalTitle::new(TitleEncoding::detect()),
             chords: ChordState::default(),
             workspace: workspace::Workspace::default(),
+            tui_state,
         }
     }
 
@@ -279,6 +285,7 @@ impl App {
             }
         }
         self.chat_widget.handle_turn_update(update);
+        self.note_shown();
     }
 
     /// Pasted text goes to the composer, or to a transcript search being
@@ -317,7 +324,7 @@ impl App {
         tui: &mut Tui<B>,
         mouse: MouseEvent,
     ) {
-        if self.handle_settings_mouse(tui, mouse) {
+        if self.handle_settings_mouse(tui, mouse) || self.handle_agents_mouse(tui, mouse) {
             return;
         }
         if self.overlay.is_none() && self.handle_workspace_mouse(mouse) {

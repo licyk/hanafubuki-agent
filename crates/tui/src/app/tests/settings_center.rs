@@ -13,7 +13,7 @@ use crate::transcript_mode::TranscriptMode;
 
 impl Harness {
     /// A left press on the cell at `column` and `row`.
-    fn press_at(&mut self, column: u16, row: u16) {
+    pub(super) fn press_at(&mut self, column: u16, row: u16) {
         let event = AppEvent::Mouse(MouseEvent {
             kind: MouseEventKind::Down(MouseButton::Left),
             column,

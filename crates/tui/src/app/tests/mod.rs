@@ -28,6 +28,7 @@ use crate::test_support::VT100Backend;
 use crate::transcript_mode::TranscriptMode;
 use crate::transcript_view::TranscriptHistoryState;
 use crate::tui::{FrameRequester, Tui};
+use crate::tui_state::TuiState;
 
 const WIDTH: u16 = 100;
 const HEIGHT: u16 = 40;
@@ -146,7 +147,15 @@ impl Harness {
             model_override: false,
             appearance: Appearance::new(&AgentTuiPreferences::default(), "/project".to_string()).0,
         });
-        let mut app = App::new(chat_widget, bridge, sender, mode, HistoryRenderMode::Rich);
+        let (state, _) = TuiState::load(&home.path().join("data"), sender.clone());
+        let mut app = App::new(
+            chat_widget,
+            bridge,
+            sender,
+            mode,
+            HistoryRenderMode::Rich,
+            state,
+        );
         let mut terminal = Terminal::with_options(VT100Backend::new(WIDTH, HEIGHT)).unwrap();
         terminal.set_viewport_area(ratatui::layout::Rect::new(0, HEIGHT - 1, WIDTH, 1));
         let mut tui = Tui::new(terminal);

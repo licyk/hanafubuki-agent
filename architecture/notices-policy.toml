@@ -700,7 +700,7 @@ reason = "The subagents' calls, the watch over their statuses and approvals, and
 
 [[original]]
 path = "crates/tui/src/agent_bridge/agents.rs"
-reason = "The command center's fork, rename, delete and interrupt of a listed session, and its approval check, over the facade's calls."
+reason = "The command center's fork, rename, delete and interrupt of a listed session or one of its children, over the facade's calls."
 
 [[original]]
 path = "crates/tui/src/chatwidget/second.rs"
@@ -717,6 +717,26 @@ reason = "/side end to end over the standalone Agent: refusals, the switch in sc
 [[original]]
 path = "crates/tui/src/app/tests/subagents.rs"
 reason = "/subagents and a subagent's approval end to end over the standalone Agent."
+
+[[original]]
+path = "crates/tui/src/agent_bridge/center_reads.rs"
+reason = "The command center's reads off the interface's loop, and its watch over the sessions the Agent holds, over the facade's calls."
+
+[[original]]
+path = "crates/tui/src/agents_center/loading.rs"
+reason = "When the command center reads its sessions, children and exchanges, and what the watch's changes read again."
+
+[[original]]
+path = "crates/tui/src/agents_center/mouse.rs"
+reason = "The command center's pointer, as the settings center takes it; Codex's center has none."
+
+[[original]]
+path = "crates/tui/src/tui_state.rs"
+reason = "tui-state.json: the command center's pins, hidden sessions and last showings, read tolerantly."
+
+[[original]]
+path = "crates/tui/src/tui_state/tests.rs"
+reason = "tui-state.json's reads, writes, kept keys and quarantine."
 
 [[original]]
 path = "crates/tui/src/app/tests/agents.rs"
