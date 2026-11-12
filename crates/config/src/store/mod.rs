@@ -15,11 +15,11 @@ use crate::fields::unknown_keys;
 use crate::file::{ConfigFile, FileAccess, FileRead};
 use crate::keys::{self, KeyTarget, AGENTS, PLUGIN_OPTIONS};
 use crate::layers::Resolved;
-use crate::overrides::parse_value;
 use crate::plugin_options::checked_patch;
 use crate::providers::{decode_registry, validate_agent_provider_registry};
 use crate::recovery::{AgentConfigProblem, AgentConfigRecovery};
 use crate::roles::{read_role_sources, RoleSource};
+use crate::sections::LayerRead;
 use crate::settings::{decode_settings, validate_disabled_plugins};
 use crate::{
     AgentProviderRegistrySettings, AgentSettings, AgentSettingsPatch, AgentStandaloneSettings,
@@ -312,45 +312,6 @@ impl AgentConfig {
         Ok(Some(value).filter(|value| !value.is_null()))
     }
 
-    /// Sets `key` (a dotted TOML key, as [`Self::value`] reads) in the
-    /// user's `config.toml` to `raw`, TOML or, when it is not, a string as
-    /// for `-c`. The key must be a setting, a profile's setting or a
-    /// project's `trustLevel`, and the value one the Agent can use; the rest
-    /// of the file stays as written.
-    pub fn set_user_value(&self, key: &str, raw: &str) -> Result<(), String> {
-        let path = keys::parse_key(key)?;
-        keys::refuse_plugin_option(key, &path)?;
-        let value = serde_json::to_value(parse_value(raw))
-            .map_err(|error| format!("`{key}` cannot take this value: {error}"))?;
-        let mut cached = self.inner.settings.lock();
-        let user = self.load_user_settings()?;
-        match keys::target(key, &path)? {
-            KeyTarget::Setting(setting) => keys::check_setting(
-                key,
-                setting,
-                &user.document,
-                &value,
-                &AgentSettings::default(),
-            )?,
-            KeyTarget::Profile { name, key: setting } => {
-                let profile = keys::lookup(&user.document, &path[..2])
-                    .and_then(Value::as_object)
-                    .cloned()
-                    .unwrap_or_default();
-                keys::check_setting(key, setting, &profile, &value, &user.value)
-                    .map_err(|error| format!("{error} (profile `{name}`)"))?
-            }
-            KeyTarget::ProjectTrust => keys::check_trust(key, &value)?,
-        }
-        // Only the key is written: the write keeps every other key as the
-        // file has it.
-        let mut change = Map::new();
-        keys::insert(&mut change, &path, value);
-        self.inner.settings_file.write(&change)?;
-        *cached = None;
-        Ok(())
-    }
-
     /// The roles the configuration defines, read now from each source,
     /// lowest first: the user's `agents/` and `[agents]`, the profile's
     /// `[agents]`, and a trusted project's `agents/` and `[agents]`
@@ -440,11 +401,12 @@ impl AgentConfig {
             .write(mcp)
             .map_err(|error| error.to_string())?;
         self.inner.settings_file.write(settings)?;
-        *self.inner.settings.lock() = self
-            .inner
-            .layers
-            .is_none()
-            .then(|| Resolved::unlayered(settings.clone()));
+        let mut cached = self.inner.settings.lock();
+        *cached = match self.inner.layers {
+            None => Some(self.load_resolved()?),
+            Some(_) => None,
+        };
+        drop(cached);
         *self.inner.providers.lock() = Some(providers.clone());
         Ok(())
     }
@@ -459,10 +421,7 @@ impl AgentConfig {
         let mut settings = self.load_user_settings()?.value;
         update(&mut settings)?;
         self.inner.settings_file.write(&settings)?;
-        let resolved = match &self.inner.layers {
-            None => Resolved::unlayered(settings),
-            Some(_) => self.load_resolved()?,
-        };
+        let resolved = self.load_resolved()?;
         *cached = Some(resolved.clone());
         Ok(resolved.settings)
     }
@@ -475,11 +434,10 @@ impl AgentConfig {
             &self.inner.settings_file,
             AgentSettings::default,
             |document| {
-                let mut repairs = Vec::new();
-                (
-                    decode_settings(document, &AgentSettings::default(), &layer, &mut repairs),
-                    repairs,
-                )
+                let mut read = LayerRead::default();
+                let settings =
+                    decode_settings(document, &AgentSettings::default(), &layer, &mut read);
+                (settings, read.repairs)
             },
             // A layered configuration reports them with its layers.
             self.inner.layers.is_none().then_some(&[AGENTS][..]),
@@ -489,7 +447,7 @@ impl AgentConfig {
     fn load_resolved(&self) -> Result<Resolved, String> {
         let user = self.load_user_settings()?;
         match &self.inner.layers {
-            None => Ok(Resolved::unlayered(user.value)),
+            None => Ok(Resolved::unlayered(user.value, &user.document)),
             Some(layers) => {
                 layers.resolve(self.inner.settings_file.path(), user.value, &user.document)
             }
@@ -514,16 +472,14 @@ impl AgentConfig {
 /// what a configuration written by another version holds (the host's import
 /// of its own settings files reads them with this).
 pub fn read_settings_document(document: &Map<String, Value>) -> (AgentSettings, Vec<String>) {
-    let mut repairs = Vec::new();
-    (
-        decode_settings(
-            document,
-            &AgentSettings::default(),
-            AGENT_SETTINGS_FILE,
-            &mut repairs,
-        ),
-        repairs,
-    )
+    let mut read = LayerRead::default();
+    let settings = decode_settings(
+        document,
+        &AgentSettings::default(),
+        AGENT_SETTINGS_FILE,
+        &mut read,
+    );
+    (settings, read.repairs)
 }
 
 /// The Provider registry a document holds, as [`read_settings_document`].
@@ -650,3 +606,6 @@ pub(crate) fn object<T: Serialize>(value: &T) -> Result<Map<String, Value>, Stri
 
 #[cfg(test)]
 mod tests;
+mod write;
+
+pub use write::{SettingChange, SettingWriteOp, SettingsWrite, SettingsWriteOutcome};

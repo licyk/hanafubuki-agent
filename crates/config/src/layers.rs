@@ -8,14 +8,17 @@
 //! below. Only the user's file is ever written, and only by the Agent's
 //! settings writes; the layers above it are read.
 
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use hanafubuki_agent_foundation::paths::ResolvedPath;
+use serde::Serialize;
 use serde_json::{Map, Value};
 
 use crate::fields::unknown_keys;
 use crate::file::{ConfigFile, FileAccess, FileRead};
 use crate::keys::{AGENTS, HOOKS, PROFILES, PROJECTS, TRUST_LEVEL};
+use crate::sections::LayerRead;
 use crate::settings::decode_settings;
 use crate::standalone::decode_standalone;
 use crate::store::object;
@@ -51,6 +54,27 @@ pub enum ConfigLayerSource {
     Overrides,
 }
 
+/// The layer a setting's value comes from: the highest whose document sets
+/// it to a value the settings use.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    tag = "type"
+)]
+pub enum SettingSource {
+    /// No layer sets it.
+    Default,
+    /// The user's `config.toml`.
+    User,
+    /// The profile `-p` selects.
+    Profile { name: String },
+    /// A trusted project's file.
+    Project { path: PathBuf },
+    /// A `-c` override.
+    Override,
+}
+
 /// The settings with every layer applied.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct Resolved {
@@ -59,16 +83,30 @@ pub(crate) struct Resolved {
     /// What the layers hold that the settings cannot use: unknown keys and
     /// values replaced by the layer below, each naming its layer.
     pub(crate) warnings: Vec<String>,
+    /// The layer of each setting a layer sets, by key; the others are
+    /// [`SettingSource::Default`].
+    pub(crate) sources: BTreeMap<String, SettingSource>,
 }
 
 impl Resolved {
-    pub(crate) fn unlayered(settings: AgentSettings) -> Self {
+    /// A host's settings, the user's file alone (`document`), whose
+    /// standalone settings are the defaults.
+    pub(crate) fn unlayered(settings: AgentSettings, document: &Map<String, Value>) -> Self {
+        let mut read = LayerRead::default();
+        decode_settings(document, &AgentSettings::default(), "", &mut read);
         Self {
             settings,
             standalone: AgentStandaloneSettings::default(),
             warnings: Vec::new(),
+            sources: sources(&read.set, &SettingSource::User),
         }
     }
+}
+
+fn sources(set: &BTreeSet<String>, source: &SettingSource) -> BTreeMap<String, SettingSource> {
+    set.iter()
+        .map(|key| (key.clone(), source.clone()))
+        .collect()
 }
 
 impl ConfigLayers {
@@ -86,21 +124,21 @@ impl ConfigLayers {
         user: AgentSettings,
         document: &Map<String, Value>,
     ) -> Result<Resolved, String> {
-        let mut repairs = Vec::new();
+        let mut read = LayerRead::default();
         let standalone =
-            decode_standalone(document, &AgentStandaloneSettings::default(), &mut repairs);
-        let mut resolved = Resolved {
-            settings: user,
-            standalone,
-            warnings: Vec::new(),
-        };
+            decode_standalone(document, &AgentStandaloneSettings::default(), &mut read);
+        let mut resolved = Resolved::unlayered(user, document);
+        resolved.standalone = standalone;
+        resolved
+            .sources
+            .extend(sources(&read.set, &SettingSource::User));
         let user_source = user_path.display().to_string();
         report(
             &user_source,
             document,
             &mut resolved,
             &[PROFILES, PROJECTS, HOOKS, AGENTS],
-            repairs,
+            read.repairs,
         )?;
         if let Some(name) = &self.profile {
             let profile = profile(document, name).ok_or_else(|| {
@@ -108,6 +146,7 @@ impl ConfigLayers {
             })?;
             apply(
                 &format!("profile `{name}`"),
+                SettingSource::Profile { name: name.clone() },
                 profile,
                 &mut resolved,
                 &[HOOKS, AGENTS],
@@ -116,6 +155,7 @@ impl ConfigLayers {
         if let Some((path, project)) = self.project_document(document) {
             apply(
                 &path.display().to_string(),
+                SettingSource::Project { path: path.clone() },
                 &project,
                 &mut resolved,
                 &[HOOKS, AGENTS],
@@ -127,7 +167,13 @@ impl ConfigLayers {
                 _ => return Err("the -c overrides cannot be read as settings".to_string()),
             };
             // Roles are read from files, so `-c agents.…` is an unknown key.
-            apply("-c", &overrides, &mut resolved, &[HOOKS])?;
+            apply(
+                "-c",
+                SettingSource::Override,
+                &overrides,
+                &mut resolved,
+                &[HOOKS],
+            )?;
         }
         Ok(resolved)
     }
@@ -204,19 +250,23 @@ pub(crate) fn is_trusted(user: &Map<String, Value>, project: &Path) -> bool {
     })
 }
 
-/// Decodes `layer` over `resolved`; the keys of `tables` are read by others.
+/// Decodes `layer` (`source` as a warning names it, `setting_source` as
+/// provenance does) over `resolved`; the keys of `tables` are read by
+/// others.
 fn apply(
     source: &str,
+    setting_source: SettingSource,
     layer: &Map<String, Value>,
     resolved: &mut Resolved,
     tables: &[&str],
 ) -> Result<(), String> {
-    let mut repairs = Vec::new();
-    let settings = decode_settings(layer, &resolved.settings, source, &mut repairs);
-    let standalone = decode_standalone(layer, &resolved.standalone, &mut repairs);
+    let mut read = LayerRead::default();
+    let settings = decode_settings(layer, &resolved.settings, source, &mut read);
+    let standalone = decode_standalone(layer, &resolved.standalone, &mut read);
     resolved.settings = settings;
     resolved.standalone = standalone;
-    report(source, layer, resolved, tables, repairs)
+    resolved.sources.extend(sources(&read.set, &setting_source));
+    report(source, layer, resolved, tables, read.repairs)
 }
 
 /// Logs, and keeps in `resolved` for the interface's `/warnings`, the keys

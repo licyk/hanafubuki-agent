@@ -1,9 +1,10 @@
 //! `[modelMetadata]`: how the Agent learns what the models it reaches can
 //! do.
 
+use hanafubuki_agent_foundation::settings::{SettingChoice, SettingKind, SettingSpec};
 use serde::{Deserialize, Serialize};
 
-use crate::fields::Fields;
+use crate::sections::{described, SettingsSection};
 
 /// Whether the Agent lists a Provider's models by itself.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -20,7 +21,7 @@ pub enum AgentModelDiscovery {
 }
 
 /// Strict as the settings patch that carries it (`agent_settings_write`);
-/// the file is read field by field (`decode_model_metadata`).
+/// the file is read setting by setting, by the specs of [`section`].
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct AgentModelMetadataSettings {
@@ -31,11 +32,35 @@ pub struct AgentModelMetadataSettings {
     pub models_dev: bool,
 }
 
-/// Each setting falls back on its own.
-pub(crate) fn decode_model_metadata(
-    fields: &mut Fields<'_>,
-    settings: &mut AgentModelMetadataSettings,
-) {
-    settings.discovery = fields.read("discovery", settings.discovery);
-    settings.models_dev = fields.read("modelsDev", settings.models_dev);
+pub(crate) fn section() -> SettingsSection {
+    SettingsSection::new(
+        "modelMetadata",
+        "Model metadata",
+        vec![
+            described(
+                SettingSpec::new(
+                    "modelMetadata.discovery",
+                    "Model discovery",
+                    SettingKind::Choice {
+                        values: vec![
+                            SettingChoice::new("auto", "Automatic"),
+                            SettingChoice::new("off", "Off"),
+                        ],
+                    },
+                ),
+                "Whether the Agent lists its Providers' models by itself, in the background",
+            ),
+            SettingSpec {
+                keywords: vec!["catalogue".into(), "catalog".into()],
+                ..described(
+                    SettingSpec::new(
+                        "modelMetadata.modelsDev",
+                        "models.dev catalogue",
+                        SettingKind::Boolean,
+                    ),
+                    "Whether the Agent downloads models.dev's public catalogue, about once a day",
+                )
+            },
+        ],
+    )
 }

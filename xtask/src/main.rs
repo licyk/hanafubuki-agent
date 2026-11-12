@@ -1,5 +1,6 @@
 //! Repository tasks: `cargo xtask <command>`.
 
+mod config_reference;
 mod dependencies;
 mod git;
 mod locks;
@@ -30,6 +31,7 @@ Commands:
   check-locks                          Check that production code uses no std Mutex or RwLock
   check-plugin-panics                  Check that plugin production code does not unwrap or expect
   check-notices                        Check the third-party attribution of derived files and NOTICE
+  check-config-reference               Check that every setting has its row in the configuration reference
   module-size-report [--top N]         Print the largest files and functions
   version <patch|minor|major>          Bump the workspace version everywhere it is named
           [--dry-run]
@@ -60,7 +62,8 @@ fn run(root: &Path, args: &[String]) -> Result<(), String> {
             path_boundaries::run(root)?;
             locks::run(root)?;
             plugin_panics::run(root)?;
-            notices::run(root)
+            notices::run(root)?;
+            config_reference::run(root)
         }
         "check-dependencies" => {
             no_arguments(rest)?;
@@ -97,6 +100,10 @@ fn run(root: &Path, args: &[String]) -> Result<(), String> {
         "check-notices" => {
             no_arguments(rest)?;
             notices::run(root)
+        }
+        "check-config-reference" => {
+            no_arguments(rest)?;
+            config_reference::run(root)
         }
         "module-size-report" => {
             print!("{}", module_size::report(root, top_option(rest)?));

@@ -65,12 +65,12 @@ hanafubuki-agent exec [选项] [提示词|-]
 
 ## config [#config]
 
-| 命令               | 作用                                                                                                                         |
-| ------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
-| `config path`      | 打印 `config.toml`、`providers.toml`、`mcp.toml`、数据目录和日志文件的位置                                                   |
-| `config get [键]`  | 打印应用所有分层后的值：字符串原样输出，其他值输出为 TOML；不给键时输出全部设置。代理 URL 中的凭据显示为 `***`               |
-| `config set 键 值` | 把一个键写入用户的 `config.toml`：任何设置、`profiles.名字.键`、`projects."路径".trustLevel`。值按 TOML 解析，否则作为字符串 |
-| `config edit`      | 用 `$VISUAL` 或 `$EDITOR` 打开用户的 `config.toml`                                                                           |
+| 命令               | 作用                                                                                                                                                               |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `config path`      | 打印 `config.toml`、`providers.toml`、`mcp.toml`、数据目录和日志文件的位置                                                                                         |
+| `config get [键]`  | 打印应用所有分层后的值：字符串原样输出，其他值输出为 TOML；不给键时输出全部设置。代理 URL 中的凭据显示为 `***`                                                     |
+| `config set 键 值` | 把一个键写入用户的 `config.toml`：任何设置、`profiles.名字.键`、`projects."路径".trustLevel`。值按 TOML 解析，否则作为字符串；设置的值按它的类型、范围和可选值检查 |
+| `config edit`      | 用 `$VISUAL` 或 `$EDITOR` 打开用户的 `config.toml`                                                                                                                 |
 
 见[配置](/docs/configuration)。
 

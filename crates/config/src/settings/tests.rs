@@ -1,4 +1,5 @@
 use super::*;
+use crate::sections::LayerRead;
 
 fn patch(value: serde_json::Value) -> Result<AgentSettingsPatch, serde_json::Error> {
     serde_json::from_value(value)
@@ -87,13 +88,14 @@ fn compaction_fields_fall_back_one_by_one() {
             }
         }
     });
-    let mut repairs = Vec::new();
+    let mut read = LayerRead::default();
     let settings = decode_settings(
         object.as_object().unwrap(),
         &AgentSettings::default(),
         "config.toml",
-        &mut repairs,
+        &mut read,
     );
+    let repairs = read.repairs;
     let compaction = settings.compaction;
     assert_eq!(compaction.strategy, AgentCompactionStrategy::Hierarchical);
     assert_eq!(compaction.background.threshold_percent, 65);
@@ -120,13 +122,14 @@ fn compaction_fields_fall_back_one_by_one() {
             "hierarchical": {"minSummaryLength": 500, "maxSummaryLength": 100}
         }
     });
-    let mut repairs = Vec::new();
+    let mut read = LayerRead::default();
     let settings = decode_settings(
         object.as_object().unwrap(),
         &AgentSettings::default(),
         "config.toml",
-        &mut repairs,
+        &mut read,
     );
+    let repairs = read.repairs;
     assert_eq!(settings.compaction, AgentCompactionSettings::default());
     assert_eq!(repairs.len(), 2, "{repairs:?}");
     assert!(repairs[1].contains("minSummaryLength is above maxSummaryLength"));

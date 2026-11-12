@@ -3,30 +3,36 @@
 //! and how it reduces a session's context.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::PathBuf;
 
 pub use hanafubuki_agent_foundation::agent_settings::{
     AgentPermissionMode, AgentSandboxMode, AgentWindowsSandbox,
 };
-use hanafubuki_agent_foundation::url_policy::{UrlPolicy, MAX_URL_BYTES};
+use hanafubuki_agent_foundation::settings::{SettingChoice, SettingKind, SettingSpec};
 use hanafubuki_agent_packages::{is_package_enabled, MarketplaceRecord, PluginId, PluginsSettings};
 use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::plugin_options::PluginOptionsSettings;
+use crate::sections::{check_specs, described, SettingsSection};
 
-mod compaction;
+pub(crate) mod compaction;
 mod decode;
-mod model_metadata;
+pub(crate) mod memory;
+pub(crate) mod model_metadata;
 mod packages;
+pub(crate) mod sandbox;
 mod schema;
+pub(crate) mod web;
 
 pub use compaction::{
     AgentBackgroundCompactionSettings, AgentCompactionSettings, AgentCompactionStrategy,
     AgentHierarchicalCompactionSettings,
 };
 pub(crate) use decode::decode_settings;
+pub use memory::AgentMemorySettings;
 pub use model_metadata::{AgentModelDiscovery, AgentModelMetadataSettings};
+pub use sandbox::{AgentSandboxWorkspaceWrite, AgentWindowsSettings};
 pub use schema::agent_settings_fields;
+pub use web::AgentWebSearchProvider;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -103,79 +109,6 @@ impl Default for AgentSettings {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum AgentWebSearchProvider {
-    Auto,
-    Duckduckgo,
-    Searxng,
-}
-
-impl AgentWebSearchProvider {
-    pub const ALL: &'static [Self] = &[Self::Auto, Self::Duckduckgo, Self::Searxng];
-
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Auto => "auto",
-            Self::Duckduckgo => "duckduckgo",
-            Self::Searxng => "searxng",
-        }
-    }
-}
-
-/// Codex's `[sandbox_workspace_write]`: what workspace-write allows beside
-/// the workspace roots and the temporary directories.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct AgentSandboxWorkspaceWrite {
-    /// More directories commands may write in, each absolute.
-    pub writable_roots: Vec<PathBuf>,
-    /// Whether commands may use the network.
-    pub network_access: bool,
-}
-
-/// Codex's `[windows]`: the Windows sandbox `sandboxMode` runs in. Unset,
-/// a mode other than full access cannot be given on Windows.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct AgentWindowsSettings {
-    pub sandbox: Option<AgentWindowsSandbox>,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct AgentMemorySettings {
-    pub enabled: bool,
-    pub use_memories: bool,
-    pub generate_memories: bool,
-    pub exclude_external_context: bool,
-    pub extraction_model: Option<String>,
-    pub consolidation_model: Option<String>,
-    pub max_source_age_days: u32,
-    pub minimum_idle_hours: u32,
-    pub max_sessions_per_pass: usize,
-    pub max_stage1_outputs: usize,
-    pub max_unused_days: u32,
-}
-
-impl Default for AgentMemorySettings {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            use_memories: true,
-            generate_memories: true,
-            exclude_external_context: false,
-            extraction_model: None,
-            consolidation_model: None,
-            max_source_age_days: 10,
-            minimum_idle_hours: 6,
-            max_sessions_per_pass: 2,
-            max_stage1_outputs: 256,
-            max_unused_days: 30,
-        }
-    }
-}
-
 /// At most this many names in `disabledPlugins`.
 pub const MAX_AGENT_DISABLED_PLUGINS: usize = 64;
 /// The longest Agent plugin name `disabledPlugins` holds.
@@ -218,14 +151,15 @@ impl AgentSettingsPatch {
             settings.sandbox_mode = mode;
         }
         if let Some(workspace_write) = self.sandbox_workspace_write {
-            validate_sandbox_workspace_write(&workspace_write)?;
+            sandbox::validate_sandbox_workspace_write(&workspace_write)?;
             settings.sandbox_workspace_write = workspace_write;
         }
         if let Some(windows) = self.windows {
             settings.windows = windows;
         }
         if let Some(memory) = self.memory {
-            validate_memory(&memory)?;
+            check_specs("memory", &memory)?;
+            memory::validate_memory(&memory)?;
             settings.memory = memory;
         }
         if let Some(provider) = self.web_search_provider {
@@ -237,7 +171,7 @@ impl AgentSettingsPatch {
                     if url.trim().is_empty() {
                         return Err("searxngBaseUrl cannot be empty or whitespace-only; use null to clear it".to_string());
                     }
-                    normalize_search_endpoint(&url).map_err(|error| format!("searxngBaseUrl {error}"))
+                    web::normalize_search_endpoint(&url).map_err(|error| format!("searxngBaseUrl {error}"))
                 })
                 .transpose()?;
         }
@@ -254,55 +188,8 @@ impl AgentSettingsPatch {
         if let Some(model_metadata) = self.model_metadata {
             settings.model_metadata = model_metadata;
         }
-        validate_search_pair(settings)
+        web::validate_search_pair(settings)
     }
-}
-
-pub(crate) fn validate_sandbox_workspace_write(
-    settings: &AgentSandboxWorkspaceWrite,
-) -> Result<(), String> {
-    if settings
-        .writable_roots
-        .iter()
-        .any(|root| !root.is_absolute())
-    {
-        return Err("sandboxWorkspaceWrite.writableRoots must hold absolute paths".to_string());
-    }
-    Ok(())
-}
-
-pub(crate) fn validate_memory(settings: &AgentMemorySettings) -> Result<(), String> {
-    if !(1..=3650).contains(&settings.max_source_age_days)
-        || settings.minimum_idle_hours > 8760
-        || !(1..=64).contains(&settings.max_sessions_per_pass)
-        || !(1..=4096).contains(&settings.max_stage1_outputs)
-        || !(1..=3650).contains(&settings.max_unused_days)
-    {
-        return Err("memory numeric settings are outside their supported bounds".into());
-    }
-    for (field, value) in [
-        ("extractionModel", settings.extraction_model.as_deref()),
-        (
-            "consolidationModel",
-            settings.consolidation_model.as_deref(),
-        ),
-    ] {
-        if value.is_some_and(|value| value.trim().is_empty() || value.len() > 256) {
-            return Err(format!(
-                "memory.{field} must contain 1 to 256 bytes or be null"
-            ));
-        }
-    }
-    Ok(())
-}
-
-pub(crate) fn validate_search_pair(settings: &AgentSettings) -> Result<(), String> {
-    if settings.web_search_provider == AgentWebSearchProvider::Searxng
-        && settings.searxng_base_url.is_none()
-    {
-        return Err("searxngBaseUrl is required when webSearchProvider is searxng".to_string());
-    }
-    Ok(())
 }
 
 /// A plugin name `disabledPlugins` can hold: 1 to
@@ -329,20 +216,46 @@ pub(crate) fn validate_disabled_plugins(names: &BTreeSet<String>) -> Result<(), 
     Ok(())
 }
 
-/// The SearXNG endpoint: an endpoint URL (no credentials, query or fragment)
-/// within the URL bound, without a trailing `/`. This is the address's one
-/// check: web search takes it as valid. The error completes a sentence that
-/// starts with the field's name.
-pub(crate) fn normalize_search_endpoint(raw: &str) -> Result<String, String> {
-    let raw = raw.trim();
-    if raw.is_empty() {
-        return Err("cannot be empty".to_string());
-    }
-    UrlPolicy::ENDPOINT
-        .within(MAX_URL_BYTES)
-        .parse(raw)
-        .map_err(|rejection| rejection.to_string())?;
-    Ok(raw.trim_end_matches('/').to_string())
+/// `permissionMode` and `disabledPlugins`. `logLevel` is the standalone
+/// Agent's ([`crate::standalone`]).
+pub(crate) fn general_section() -> SettingsSection {
+    SettingsSection::new(
+        "general",
+        "General",
+        vec![
+            SettingSpec {
+                keywords: vec!["approval".into(), "permissions".into()],
+                ..described(
+                    SettingSpec::new(
+                        "permissionMode",
+                        "Permission mode",
+                        SettingKind::Choice {
+                            values: vec![
+                                SettingChoice::new("manual", "Manual"),
+                                SettingChoice::new("auto_review", "Auto review"),
+                                SettingChoice::new("full_access", "Full access"),
+                            ],
+                        },
+                    ),
+                    "Which tool calls need an approval",
+                )
+            },
+            SettingSpec {
+                advanced: true,
+                ..described(
+                    SettingSpec::new(
+                        "disabledPlugins",
+                        "Disabled plugins",
+                        SettingKind::TextList {
+                            maximum_items: Some(MAX_AGENT_DISABLED_PLUGINS as u32),
+                            maximum_item_chars: Some(MAX_AGENT_PLUGIN_NAME_BYTES as u32),
+                        },
+                    ),
+                    "The Agent plugins turned off",
+                )
+            },
+        ],
+    )
 }
 
 #[cfg(test)]

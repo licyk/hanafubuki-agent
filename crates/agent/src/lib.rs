@@ -177,7 +177,7 @@ use std::path::Path;
 /// The Agent's configuration, which the host opens in the directory it names
 /// and the standalone Agent layers.
 pub use hanafubuki_agent_config::{
-    parse_config_value, AgentAlternateScreen, AgentBackgroundCompactionSettings,
+    config_sections, parse_config_value, AgentAlternateScreen, AgentBackgroundCompactionSettings,
     AgentCompactionSettings, AgentCompactionStrategy, AgentConfig, AgentConfigProblem,
     AgentConfigRecovery, AgentDirs, AgentHierarchicalCompactionSettings, AgentImageInputPolicy,
     AgentInputCapabilitiesSettings, AgentLogLevel, AgentMemorySettings, AgentModelDiscovery,
@@ -190,9 +190,10 @@ pub use hanafubuki_agent_config::{
     AgentWindowsSandbox, AgentWindowsSettings, ConfigLayerSource, ConfigLayers, ConfigOverrides,
     InstructionsMode, PluginOptionKey, PluginOptionSchema, PluginOptionsSettings,
     ResolvedPluginOption, ResolvedPluginOptions, RoleLayer, RoleOrigin, SettingApply,
-    SettingChoice, SettingCondition, SettingKind, SettingProblem, SettingSpec, SettingValue,
-    AGENT_CREDENTIAL_FILES, AGENT_HOME_ENV, AGENT_MCP_FILE, AGENT_PROVIDERS_FILE,
-    AGENT_SETTINGS_FILE, MAX_AGENT_CONSECUTIVE_STALLED_STEPS,
+    SettingChange, SettingChoice, SettingCondition, SettingKind, SettingProblem, SettingSource,
+    SettingSpec, SettingValue, SettingWriteOp, SettingsSection, SettingsWrite,
+    SettingsWriteOutcome, AGENT_CREDENTIAL_FILES, AGENT_HOME_ENV, AGENT_MCP_FILE,
+    AGENT_PROVIDERS_FILE, AGENT_SETTINGS_FILE, MAX_AGENT_CONSECUTIVE_STALLED_STEPS,
     MAX_AGENT_CUMULATIVE_MODEL_INPUT_TOKENS, MAX_AGENT_CUMULATIVE_MODEL_OUTPUT_TOKENS,
     MAX_AGENT_HOOK_FRAGMENT_BYTES, MAX_AGENT_IDLE_TIMEOUT_SECONDS, MAX_AGENT_IN_FLIGHT_TOOLS,
     MAX_AGENT_PENDING_INPUT_ITEMS, MAX_AGENT_TOOL_INVOCATIONS, MAX_AGENT_TOOL_OUTPUT_BYTES,
