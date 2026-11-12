@@ -302,7 +302,7 @@ independent.
         bun run site:build` (all 35 pages prerendered). The final tree ran
         the whole CI workflow on Linux, Windows and macOS, green
         (https://github.com/licyk/hanafubuki-agent/actions/runs/43168232034).
-- [ ] E3: PTY output through a `vt100` screen model; width-aware pipe
+- [x] E3: PTY output through a `vt100` screen model; width-aware pipe
       rendering; sequence-aligned read starts, the hold-back always,
       `DaFilter::finish`, head and tail with a marker (model-visible:
       goldens regenerate on purpose).
@@ -311,6 +311,102 @@ independent.
       starts mid-line at the oldest byte with no marker, because the buffer's
       cap is the model's `max_output_bytes`; and a finished command over
       `max_output_bytes` returns its tail alone.
+      Done (2026-11-12):
+      - The reported loss (`dir` of 270 files, ~45 lines, two glued): an
+        `exec_command` session's buffer keeps a fixed 4 MiB
+        (`EXEC_RETAINED_OUTPUT_BYTES`, `resolver.rs`), no longer the model's
+        `max_output_bytes`. A poll reads everything it has not read
+        (`execution/src/output_window.rs`): within the bound it returns it;
+        past it (running or finished) the head and the tail, each cut at a
+        line break (`end_point`, `aligned_start`; a character or sequence
+        boundary when none is within 1 KiB), with `[… N bytes omitted …]`
+        on a line between them, `truncated`, and the offset moved to the
+        end; a poll whose start the buffer dropped gets the marker (N counts
+        from its offset) and the newest output. Decision: one rule for
+        running and finished polls, so a chatty process never leaves the
+        model megabytes behind. The shell plan's `output_bytes_cap` (hashed
+        in the approval) is now that constant; `agent-shell-v5` is
+        unreleased, so the version stays.
+      - PTY output through a `TerminalScreen` (`execution/src/
+        terminal_screen.rs`, `vt100` 0.16 now a production dependency of
+        the execution crate), one per PTY execution for the polls (in its
+        record) and one in the monitor for the preview, fed at the PTY's
+        sizes (`AgentExecutionOutput` now carries `terminal_size` and
+        `resizes`). A take returns the rows scrolled off since the last,
+        then the screen's rows from the first that changed; a row left
+        unfinished is returned again whole (`rewrites_last_line`, which the
+        monitor turns into `\r ESC[2K` for the preview). `vt100` drops
+        scrollback past its bound silently, so output goes in 128-byte
+        slices, new scrollback rows are collected after each, and at 256 rows
+        the screen's state is replayed into a fresh parser, only between
+        sequences; an unfinished trailing sequence is held for the next push.
+        A resize unwraps rows (vt100 does not reflow), as a terminal does.
+        Known limits, as on a terminal: rows scrolled inside a scroll region
+        a program set never reach the scrollback; a wide character that finds
+        one column left moves to the next row without marking the row
+        wrapped (vt100 follows tmux), so that line gains a break (rejoining
+        it by heuristic could glue genuine lines). The scrollback is not
+        emptied while the alternate screen is up.
+      - `exec --json`'s `execution_output` `text` for a PTY is the screen's
+        rows (documented in `json-events`, both languages). Not changed:
+        a background terminal's recent lines (`recent_output_lines`) still
+        render PTY output with `render_plain_text`; the plan names only the
+        model and the preview.
+      - `render_plain_text` is width-aware (`unicode-width`, now a
+        foundation dependency): a wide character takes two cells,
+        overwriting half of one blanks the other, zero-width characters stay
+        with the one before. `complete_prefix_len` works on bytes, so the
+        pipe hold-back in `unified.rs` no longer depends on the tail being
+        free of U+FFFD. `aligned_start` / `resume_point` (foundation) align
+        the ring's read after trimming (`read_from`, only when `from` predates
+        the window), the monitor's skip, `bound_execution_output` and the
+        kernel's merge; skipped bytes count in `truncated`.
+        `DaFilter::finish` passes held bytes on at end of file, before the
+        decoder's, for every exit reason of the PTY reader.
+      - Un-ignored: both CJK `terminal_text` cases, the ring, monitor (2) and
+        kernel sequence starts, `DaFilter` at end of file, the four
+        `contracts/output.rs` cases, and the three Windows marker cases
+        (`pipe_`/`pty_a_listing_over_the_output_bound_…`,
+        `pipe_a_slow_listing_…`). New: strict listings (every line a whole
+        numbered line or the marker, numbers jumping only across it: slow
+        and fast, pipe and PTY, over the bound and within the default), a
+        poll more than 4 MiB behind whose marker counts exactly the bytes
+        missed, a PTY prompt and its answer across two polls, the monitor's
+        PTY preview of a repaint, window and screen unit tests, `DaFilter`,
+        alignment and width cases. Still ignored, not E3's: the two
+        `pty_…ansi…` cases and `pipe_cmd_built_ins_write_text_the_decoder_
+        reads` (E2's findings). The fake PTY test feeds CR LF now, as a PTY
+        (`onlcr`) does: a bare LF moves down without returning, on a screen.
+      - Goldens: none changed. They hold `exec_command`'s schema and
+        description, not its output, and neither changed; the TUI snapshots
+        pass unchanged.
+      - Found on CI: macOS `seq` prints `1e+06`; the 4 MiB test generates
+        with `awk`. The Windows listings now use the strict check (no line
+        glued, repeated or left out without the marker).
+      - Hanafubuki: twins to port by hand: `terminal_text` (width,
+        `complete_prefix_len(&[u8])`, `aligned_start`, `resume_point`,
+        `end_point`, `unicode-width`), `da_filter` (`finish`),
+        `terminal_size` (`TerminalResize: Deserialize`), `executor` (the
+        PTY reader's flush, `read_from`'s aligned start).
+        `AgentExecutionOutput` gained two fields; an exec approval it stored
+        is asked again (the hashed `output_bytes_cap` changed). No
+        module-size exception.
+      - Validation (Linux): `cargo fmt --all --check`, `RUSTFLAGS="-D
+        warnings" cargo check --workspace --all-targets --all-features`,
+        `cargo clippy --workspace --all-targets --all-features -- -D
+        warnings`, `cargo xtask check`, `cargo test --workspace
+        --all-features`; `cargo clippy --target x86_64-pc-windows-gnu -p
+        hanafubuki-agent-foundation -p hanafubuki-agent-process -p
+        hanafubuki-agent-execution -p hanafubuki-agent-plugin-execution -p
+        hanafubuki-agent-kernel --all-features --tests -- -D warnings`; the
+        site's `bun install --frozen-lockfile`, `bun run format:check:site`,
+        `bun run site:check`, `bun run site:test`,
+        `VITE_BASE_PATH=/hanafubuki-agent/ bun run site:build` (all 35 pages
+        prerendered). The final tree ran the whole CI workflow on Linux,
+        Windows and macOS, green
+        (https://github.com/licyk/hanafubuki-agent/actions/runs/43176826154);
+        the first probe failed on macOS only, on `seq`'s format
+        (https://github.com/licyk/hanafubuki-agent/actions/runs/43175255432).
 
 ## Plan: model metadata from the Provider, with fallbacks (2026-11-11)
 

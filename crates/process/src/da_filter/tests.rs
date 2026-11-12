@@ -58,3 +58,14 @@ fn split_da_sequence_is_answered() {
     assert!(replies1.is_empty() && replies2.is_empty());
     assert_eq!(replies3, vec![DA1_REPLY.to_vec()]);
 }
+
+#[test]
+fn bytes_held_for_an_unfinished_sequence_are_passed_on_at_the_end() {
+    let mut filter = DaFilter::new();
+    let (out, replies) = run(&mut filter, b"end\x1b[ 99%");
+    assert_eq!(out, b"end");
+    assert!(replies.is_empty());
+    let mut rest = Vec::new();
+    filter.finish(&mut rest);
+    assert_eq!(rest, b"\x1b[ 99%");
+}

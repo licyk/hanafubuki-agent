@@ -334,29 +334,26 @@ fn execution_output_progress_preserves_content_is_bounded_and_capability_free() 
     }
 }
 
-#[test]
-#[ignore = "reproduces §4.9 step 6, a read inside a sequence; fixed in E3"]
-fn a_monitor_that_skips_ahead_never_starts_inside_an_escape_sequence() {
+/// The text and `truncated` of each output update a monitor reports for a
+/// command that finished with `output`, through the fake port (the plugin may
+/// not depend on the process crate).
+fn monitored_output(tty: bool, output: &str) -> Vec<(String, bool)> {
     use hanafubuki_agent_approval::test_support::ManualApprovalClock;
     use hanafubuki_agent_approval::{
         ApprovalContext, ApprovalDecisionSource, ApprovalOrigin, ApprovalService,
     };
     use hanafubuki_agent_execution::test_support::FakeAgentExecutionProcessPort;
     use hanafubuki_agent_execution::ExecCommandRequest;
-    use hanafubuki_agent_foundation::terminal_text::render_plain_text;
     use std::collections::BTreeMap;
 
-    // The plugin may not depend on the process crate, so the finished
-    // command's output is the fake port's. The skip goes to 8195 - 8192 = 3,
-    // inside `ESC [ 3 1 m`.
     let process = FakeAgentExecutionProcessPort::shared();
     let executions = AgentExecutionService::with_process_port(process.clone());
     let scope = AgentExecutionScope::for_agent_session(1).unwrap();
     let request = ExecCommandRequest {
-        cmd: "coloured-output".to_string(),
+        cmd: "some-output".to_string(),
         shell: None,
         login: true,
-        tty: false,
+        tty,
         yield_time_ms: 5_000,
         max_output_bytes: Some(32 * 1024),
         workdir: Some(std::env::current_dir().unwrap()),
@@ -384,9 +381,7 @@ fn a_monitor_that_skips_ahead_never_starts_inside_an_escape_sequence() {
             &CancellationToken::default(),
         )
         .unwrap();
-    let output = format!("A\x1b[31mred\n{}\n", "y".repeat(8184));
-    assert_eq!(output.len(), 8195);
-    process.finish(output, 0);
+    process.finish(output.to_string(), 0);
     executions
         .attach_observer(&scope, snapshot.execution_id, snapshot.generation)
         .unwrap();
@@ -400,20 +395,31 @@ fn a_monitor_that_skips_ahead_never_starts_inside_an_escape_sequence() {
         &sink,
         CancellationToken::default(),
     );
-
     let updates = sink.updates.lock().unwrap();
-    let text = updates
+    updates
         .iter()
-        .find_map(|update| match update {
+        .filter_map(|update| match update {
             AgentToolProgressUpdate::ExecutionOutput {
                 text, truncated, ..
-            } => {
-                assert!(*truncated);
-                Some(render_plain_text(text.as_bytes()))
-            }
+            } => Some((text.clone(), *truncated)),
             _ => None,
         })
-        .expect("the output is reported");
+        .collect()
+}
+
+#[test]
+fn a_monitor_that_skips_ahead_never_starts_inside_an_escape_sequence() {
+    use hanafubuki_agent_foundation::terminal_text::render_plain_text;
+
+    // The skip goes to 8195 - 8192 = 3, inside `ESC [ 3 1 m`.
+    let output = format!("A\x1b[31mred\n{}\n", "y".repeat(8184));
+    assert_eq!(output.len(), 8195);
+    let updates = monitored_output(false, &output);
+    let [(text, truncated)] = updates.as_slice() else {
+        panic!("{updates:?}");
+    };
+    assert!(*truncated);
+    let text = render_plain_text(text.as_bytes());
     assert!(
         text.ends_with(&format!("{}\n", "y".repeat(8184))),
         "{text:?}"
@@ -423,7 +429,17 @@ fn a_monitor_that_skips_ahead_never_starts_inside_an_escape_sequence() {
 }
 
 #[test]
-#[ignore = "reproduces §4.9 step 6, a read inside a sequence; fixed in E3"]
+fn a_pty_preview_shows_the_screen_a_terminal_would() {
+    // ConPTY-style: clear, draw two rows, then repaint the first. Rendered in
+    // order, the repaint would land after `second`.
+    let updates = monitored_output(
+        true,
+        "\x1b[2J\x1b[Hfirst\r\nsecond\x1b[1;1H\x1b[Kreplaced\x1b[3;1H",
+    );
+    assert_eq!(updates, [("replaced\nsecond\n".to_string(), false)]);
+}
+
+#[test]
 fn bounding_an_update_never_starts_it_inside_an_escape_sequence() {
     use hanafubuki_agent_foundation::terminal_text::render_plain_text;
 

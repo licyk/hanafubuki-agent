@@ -128,6 +128,13 @@ impl DaFilter {
             self.saw_output = true;
         }
     }
+
+    /// Pass on the bytes held for a sequence the output ended inside, at end
+    /// of file.
+    pub fn finish(&mut self, out: &mut Vec<u8>) {
+        out.append(&mut self.hold);
+        self.state = State::Idle;
+    }
 }
 
 #[cfg(test)]

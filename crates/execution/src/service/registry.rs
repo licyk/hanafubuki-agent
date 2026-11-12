@@ -20,6 +20,9 @@ pub(super) struct ExecutionRecord {
     pub(super) io_mode: ExecutorIoMode,
     pub(super) interactive: bool,
     pub(super) unified_output_offset: u64,
+    /// A PTY execution's screen, as `exec_command` and `write_stdin` polls
+    /// last read it.
+    pub(super) screen: Option<TerminalScreen>,
     /// A progress reporter is streaming this execution's output.
     pub(super) observed: bool,
     /// One caller is disposing this execution; to every other caller it is
@@ -66,6 +69,7 @@ impl AgentExecutionService {
                 io_mode: ExecutorIoMode::Pipe,
                 interactive,
                 unified_output_offset: 0,
+                screen: None,
                 observed: false,
                 disposing: false,
             },

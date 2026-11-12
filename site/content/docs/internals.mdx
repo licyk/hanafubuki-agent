@@ -25,7 +25,7 @@ icon: Microscope
 工具通过 `AgentToolProgressSink::report` 报告进度（进程的启动、输出、状态、释放），这个调用保持同步：它从轮次异步工作线程上的工具调用中被调用，也可能来自比调用活得更久的监视线程。因此 `report` 只把更新排入会话单元的队列（`service/progress.rs`）：
 
 - **每个会话一个消费者。** 报告时如果没有消费者在运行，就在创建这个 sink 的轮次的运行时上启动一个；它按顺序应用并提交排队的更新，逐个等待追加，队列空了就结束。队列未空就停止的消费者（被中止，或它的运行时已关闭）让它已取出的那条更新自行结算；下一次报告，或在自身运行时上的一次刷新，会启动新的消费者。
-- **上限。** 队列容纳 64 条更新（`EXECUTION_PROGRESS_QUEUE_CAPACITY`）。超过之后，如果同一执行在队列中没有排在后面的更新，新的输出更新就合并进该执行已排队的输出：文本追加上去，只保留最新的 16 KiB（`MAXIMUM_COALESCED_OUTPUT_BYTES`）。其他更新（执行的启动、状态、释放、清理失败）即使这时也照常排队，所以队列最多是容量加上这些更新，再加每条之后的一条输出。
+- **上限。** 队列容纳 64 条更新（`EXECUTION_PROGRESS_QUEUE_CAPACITY`）。超过之后，如果同一执行在队列中没有排在后面的更新，新的输出更新就合并进该执行已排队的输出：文本追加上去，只保留最新的 16 KiB（`MAXIMUM_COALESCED_OUTPUT_BYTES`），并从它们第一次能像原始输出那样渲染的位置开始：第一个换行之后，否则第一个完整的转义序列之后（`terminal_text::aligned_start`），所以保留的文本从不从序列中间开始。其他更新（执行的启动、状态、释放、清理失败）即使这时也照常排队，所以队列最多是容量加上这些更新，再加每条之后的一条输出。
 - **与轮次的顺序。** 轮次在终态提交之前等待之前排入的所有更新（`flush_execution_progress`），所以它的调用报告的内容先提交。被丢弃的轮次无法等待，这时仍在排队的更新在它的取消之后提交，顺序不变。
 - **应用自己的报告**（后台终端的停止、启动时的恢复）经过 `report_session_execution_progress`，它最多等待 5 秒，让排在它之前的更新先完成，然后在调用线程上提交。
 - **关闭。** 会话被移除和 `shutdown_history` 会关闭它的队列并中止消费者；此后 `report` 返回 `false`。`stop_operations` 先在关闭期限内刷新此前排入的内容。
@@ -458,7 +458,7 @@ Provider 的错误是否拒绝了请求的推理参数，由 `hanafubuki-agent-m
 
 ### 执行与文件 [#execution-files]
 
-- `exec_command` 通过预留的 Executor 进程运行；`execution` 插件的活动监视器作为执行的观察者挂上，释放已结束的执行时会有界地等待，直到监视器报告了最终的输出和状态。活动预览只提交以换行结尾的行，未完成的行临时显示。结果是纯文本（`render_plain_text`）。通用的 argv `start` 只在 `test-support` 下存在。
+- `exec_command` 通过预留的 Executor 进程运行；`execution` 插件的活动监视器作为执行的观察者挂上，释放已结束的执行时会有界地等待，直到监视器报告了最终的输出和状态。活动预览只提交以换行结尾的行，未完成的行临时显示。结果是纯文本：管道的输出经过 `render_plain_text`，PTY 的输出经过每个执行各自的 `TerminalScreen`（`vt100`），轮询一个、监视器一个；它分片喂入输出，并在回滚缓冲可能丢掉一行之前把屏幕状态重放到一个新的解析器中。一次轮询读取它尚未读取的全部输出（`output_window`）：在上限之内就全部返回，否则返回在换行处截断的开头和结尾，中间是 `[… N bytes omitted …]`；一个会话保留 4 MiB（`EXEC_RETAINED_OUTPUT_BYTES`），从缓冲已不再保留的位置开始的读取会从它保留的第一个换行之后开始（`resume_point`），跳过的字节计入标记。通用的 argv `start` 只在 `test-support` 下存在。
 - 一个执行只由一个调用方释放：`dispose` 先认领它，对其他所有调用方而言，已被认领或已释放的执行就是不存在（`NotFound`），即使它们之前已取得其回执。因此被后台终端的停止抢先的模型等待以 `NotFound` 结束，或在等待先看到时以停止造成的终止结果结束，而不会是进程错误或清理错误。释放失败会放弃认领并保留该执行（仍欠清理），以便重试。
 - `WorkspaceFsService` 把每个请求解析为策略根目录内不可变的计划，在 I/O 之前重新校验，并原子地写入；`preview_patch` 是纯函数。`WorkspaceRootsPort::protected_roots` 指定的目录是策略的受保护根目录：每个文件工具，包括读取，都拒绝其下的路径（"direct filesystem tools cannot access application-owned path …"，`ProtectedPath`）。
 

@@ -33,7 +33,7 @@ impl TerminalSize {
 
 /// A size change at an exact output offset: bytes from `offset` on were
 /// produced at `size`.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TerminalResize {
     pub offset: u64,

@@ -8,6 +8,7 @@ use hanafubuki_agent_process::executor::{
 use hanafubuki_agent_process::ownership::{
     OwnedReleaseStatus, ProcessOwnerId, ProcessReceipt, ProcessReservation,
 };
+use hanafubuki_agent_process::terminal_size::TerminalSize;
 
 use crate::AgentExecutionProcessPort;
 
@@ -222,7 +223,7 @@ impl AgentExecutionProcessPort for FakeAgentExecutionProcessPort {
             start_offset: start as u64,
             next_offset: end as u64,
             truncated: requested < oldest,
-            terminal_size: None,
+            terminal_size: session.io_mode.uses_pty().then_some(TerminalSize::DEFAULT),
             resizes: Vec::new(),
         })
     }

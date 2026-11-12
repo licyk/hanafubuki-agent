@@ -256,7 +256,6 @@ fn a_report_on_a_runtime_that_has_shut_down_frees_the_consumer_slot() {
 }
 
 #[tokio::test]
-#[ignore = "reproduces §4.9 step 6, a read inside a sequence; fixed in E3"]
 async fn a_coalesced_output_never_starts_inside_an_escape_sequence() {
     use hanafubuki_agent_foundation::terminal_text::render_plain_text;
 

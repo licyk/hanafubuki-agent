@@ -232,7 +232,6 @@ fn reads_never_start_inside_a_character() {
 }
 
 #[test]
-#[ignore = "reproduces §4.9 step 6, a read inside a sequence; fixed in E3"]
 fn a_read_after_trimming_never_starts_inside_an_escape_sequence() {
     let mut buf = OutputBuffer::new(13, None, None);
     buf.push(OutputStream::Merged, b"ab\x1b[31m");

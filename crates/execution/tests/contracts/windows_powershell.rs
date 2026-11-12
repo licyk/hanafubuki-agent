@@ -173,20 +173,40 @@ fn assert_contains(output: &str, expected: &str) {
     assert!(output.contains(expected), "{expected:?} in {output:?}");
 }
 
-/// Every numbered line arrived whole, or the output says what it left out.
-fn assert_every_line_or_a_marker(ran: &Ran, lines: usize) {
-    let missing = (1..=lines)
-        .filter(|number| {
-            let line = format!("line {number} of the listing");
-            !ran.output.lines().any(|shown| shown.trim_end() == line)
-        })
-        .collect::<Vec<_>>();
-    assert!(
-        missing.is_empty() || (ran.truncated && ran.output.contains("omitted")),
-        "missing {missing:?} (truncated: {}) in {:?}",
-        ran.truncated,
-        ran.output
-    );
+/// Every line is a whole numbered line or a marker, and the numbers count up
+/// by one except across a marker: no line is glued to another, repeated, or
+/// left out without saying so. Blank lines and trailing blanks are ignored.
+fn assert_lines_whole_and_gaps_marked(ran: &Ran, lines: usize) {
+    let mut expected = 1;
+    let mut after_marker = false;
+    for line in ran.output.lines().map(str::trim_end) {
+        if line.is_empty() {
+            continue;
+        }
+        if line.starts_with("[… ") && line.ends_with(" bytes omitted …]") {
+            assert!(
+                ran.truncated,
+                "a marker without truncated: {:?}",
+                ran.output
+            );
+            after_marker = true;
+            continue;
+        }
+        let number = line
+            .strip_prefix("line ")
+            .and_then(|rest| rest.strip_suffix(" of the listing"))
+            .and_then(|number| number.parse::<usize>().ok())
+            .unwrap_or_else(|| panic!("not a whole line: {line:?} in {:?}", ran.output));
+        assert!(
+            number == expected || (after_marker && number > expected),
+            "line {number} after {} in {:?}",
+            expected - 1,
+            ran.output
+        );
+        expected = number + 1;
+        after_marker = false;
+    }
+    assert_eq!(expected, lines + 1, "{:?}", ran.output);
 }
 
 #[test]
@@ -440,7 +460,7 @@ fn a_long_listing_arrives_whole(shell: PlatformShell, tty: bool) {
         PlatformShell::Cmd => "for /L %i in (1,1,300) do @echo line %i of the listing",
         _ => "foreach ($i in 1..300) { \"line $i of the listing\" }",
     };
-    assert_every_line_or_a_marker(&run_request(request(shell, script, tty)), 300);
+    assert_lines_whole_and_gaps_marked(&run_request(request(shell, script, tty)), 300);
 }
 
 #[test]
@@ -471,25 +491,22 @@ fn a_listing_over_the_output_bound_says_what_it_left_out(tty: bool) {
         tty,
     );
     request.max_output_bytes = Some(4096);
-    assert_every_line_or_a_marker(&run_request(request), 300);
+    assert_lines_whole_and_gaps_marked(&run_request(request), 300);
 }
 
 #[test]
-#[ignore = "reproduces §4.9 step 9, no marker past max_output_bytes; fixed in E3"]
 fn pipe_a_listing_over_the_output_bound_says_what_it_left_out() {
     a_listing_over_the_output_bound_says_what_it_left_out(false);
 }
 
 #[test]
-#[ignore = "reproduces §4.9 step 9, no marker past max_output_bytes; fixed in E3"]
 fn pty_a_listing_over_the_output_bound_says_what_it_left_out() {
     a_listing_over_the_output_bound_says_what_it_left_out(true);
 }
 
 /// As reported from `dir`: the head arrives before the first poll, the rest
-/// after it, more than `max_output_bytes`, which also bounds the buffer.
+/// after it, more than `max_output_bytes`, which used to bound the buffer too.
 #[test]
-#[ignore = "reproduces the reported mid-listing loss, a poll past trimmed output has no marker; fixed in E3"]
 fn pipe_a_slow_listing_over_the_output_bound_says_what_it_left_out() {
     let mut request = request(
         PlatformShell::Cmd,
@@ -499,5 +516,5 @@ fn pipe_a_slow_listing_over_the_output_bound_says_what_it_left_out() {
     );
     request.yield_time_ms = 1_000;
     request.max_output_bytes = Some(4096);
-    assert_every_line_or_a_marker(&run_request(request), 300);
+    assert_lines_whole_and_gaps_marked(&run_request(request), 300);
 }

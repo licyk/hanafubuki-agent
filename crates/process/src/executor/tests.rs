@@ -556,7 +556,6 @@ fn pipe_output_reads_in_slices_without_splitting_characters() {
 }
 
 #[test]
-#[ignore = "reproduces §4.9 step 8, DaFilter holds an escape at end of file; fixed in E3"]
 fn pty_output_ending_inside_an_escape_sequence_reaches_the_buffer() {
     // `DaFilter` holds `ESC [` and what follows until a final byte that never
     // comes: the bytes must still arrive once the PTY reaches end of file.

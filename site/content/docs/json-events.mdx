@@ -114,6 +114,8 @@ icon: Braces
 
 `status` 是 `starting`、`running`、`exited`、`failed`、`cancelled` 或 `timed_out`；`exitCode` 是整数或 `null`。
 
+`text` 是终端文本，应按顺序渲染：管道的输出是进程写出的原样，包括转义序列；伪终端的输出是它屏幕上显示的样子，各行以换行结束，上一条更新留下的未完成的一行在 `\r` 和 `ESC [2K` 之后重新写出。
+
 ### 审批 [#approvals]
 
 | `kind.type`                   | 字段                                                                                      | 说明                             |
