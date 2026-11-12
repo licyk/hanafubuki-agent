@@ -8,10 +8,9 @@ use super::packages::{decode_marketplaces, decode_plugins};
 use super::sandbox::{decode_sandbox_mode, validate_sandbox_workspace_write};
 use super::web::{decode_search_provider, decode_searxng_base_url};
 use super::{is_plugin_name, AgentSettings, MAX_AGENT_DISABLED_PLUGINS};
+use crate::keys::DISABLED_PLUGINS;
 use crate::plugin_options::decode_plugin_options;
 use crate::sections::{no_rule, LayerRead, SettingsRead};
-
-const DISABLED_PLUGINS: &str = "disabledPlugins";
 
 /// The settings `object` holds, each read by its spec; a missing or invalid
 /// one takes its value in `defaults` (the defaults, or the layer below in a
@@ -55,7 +54,7 @@ pub(crate) fn decode_settings(
     let fields = read.fields();
     let plugins = decode_plugins(fields, &defaults.plugins);
     let marketplaces = decode_marketplaces(fields, &defaults.marketplaces);
-    let plugin_options = decode_plugin_options(fields, &defaults.plugin_options, layer);
+    let plugin_options = decode_plugin_options(&mut read, &defaults.plugin_options, layer);
     AgentSettings {
         permission_mode,
         sandbox_mode,

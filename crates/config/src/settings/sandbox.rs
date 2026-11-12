@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use super::AgentSandboxMode;
 use crate::fields::FieldRead;
-use crate::sections::{described, SettingsRead, SettingsSection};
+use crate::sections::{described, SettingsGroup, SettingsRead, SettingsSection};
 
 const SANDBOX_MODE: &str = "sandboxMode";
 
@@ -41,6 +41,8 @@ pub(crate) fn section() -> SettingsSection {
     SettingsSection::new(
         "sandbox",
         "Sandbox",
+        SettingsGroup::General,
+        20,
         vec![
             described(
                 SettingSpec::new(

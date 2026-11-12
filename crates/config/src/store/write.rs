@@ -5,6 +5,7 @@
 use std::collections::BTreeMap;
 
 use hanafubuki_agent_foundation::settings::{SettingApply, SettingSpec};
+use hanafubuki_agent_packages::PluginOptionSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
@@ -13,7 +14,7 @@ use crate::keys::{self, KeyChange, KeyTarget};
 use crate::layers::SettingSource;
 use crate::overrides::parse_value;
 use crate::sections::{setting_spec, specs};
-use crate::AgentSettings;
+use crate::{AgentSettings, PluginOptionKey};
 
 /// A change of settings by key, as a settings page or `config set` makes
 /// it: every value is checked, and the change is written as a whole or not
@@ -67,11 +68,24 @@ impl AgentConfig {
     /// write, a commit group's among them, are checked together. A refused
     /// write changes nothing.
     pub fn write_values(&self, write: &SettingsWrite) -> Result<SettingsWriteOutcome, String> {
-        let changes = write
+        self.write_values_with_options(write, &BTreeMap::new())
+    }
+
+    /// [`Self::write_values`], where a key may also be a plugin option
+    /// (`pluginOptions.<plugin>.<option>`) of a plugin `options` holds the
+    /// schema of, by name, checked against its spec there.
+    pub fn write_values_with_options(
+        &self,
+        write: &SettingsWrite,
+        options: &BTreeMap<String, PluginOptionSchema>,
+    ) -> Result<SettingsWriteOutcome, String> {
+        let (changes, applies): (Vec<_>, Vec<_>) = write
             .changes
             .iter()
-            .map(checked_change)
-            .collect::<Result<Vec<_>, _>>()?;
+            .map(|change| checked_change(change, options))
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
+            .unzip();
         let mut cached = self.inner.settings.lock();
         let user = self.load_user_settings()?;
         keys::check_changes(&user.document, &changes, &AgentSettings::default())?;
@@ -84,7 +98,7 @@ impl AgentConfig {
         *cached = None;
         let resolved = self.load_resolved()?;
         *cached = Some(resolved.clone());
-        Ok(outcome(&changes, &resolved.sources))
+        Ok(outcome(&changes, &applies, &resolved.sources))
     }
 
     /// The layer each setting's value comes from, by key; a setting no
@@ -100,10 +114,15 @@ impl AgentConfig {
     /// project's `trustLevel`, and the value one the Agent can use; the rest
     /// of the file stays as written.
     pub fn set_user_value(&self, key: &str, raw: &str) -> Result<(), String> {
-        let path = keys::parse_key(key)?;
-        keys::refuse_plugin_option(key, &path)?;
         let value = serde_json::to_value(parse_value(raw))
             .map_err(|error| format!("`{key}` cannot take this value: {error}"))?;
+        self.set_user_json(key, value)
+    }
+
+    /// [`Self::set_user_value`] with the value already read.
+    pub fn set_user_json(&self, key: &str, value: Value) -> Result<(), String> {
+        let path = keys::parse_key(key)?;
+        keys::refuse_plugin_option(key, &path)?;
         let target = keys::target(key, &path)?;
         if let KeyTarget::Setting(setting) = target {
             if let Some(spec) = spec_at(setting) {
@@ -137,7 +156,7 @@ impl AgentConfig {
                     Some(spec) => spec
                         .check(&value)
                         .map(drop)
-                        .map_err(|error| refused(spec, error)),
+                        .map_err(|error| refused(&spec.key, error)),
                     None => Ok(()),
                 };
                 checked
@@ -157,24 +176,34 @@ impl AgentConfig {
 }
 
 /// The change as a key path and the value it writes (`None` removes it),
-/// once the spec takes it.
-fn checked_change(change: &SettingChange) -> Result<KeyChange, String> {
-    let spec = setting_spec(&change.key)
-        .ok_or_else(|| format!("`{}` is not a setting of config.toml", change.key))?;
+/// once the spec takes it, and when it applies.
+fn checked_change(
+    change: &SettingChange,
+    options: &BTreeMap<String, PluginOptionSchema>,
+) -> Result<(KeyChange, SettingApply), String> {
+    let spec = match PluginOptionKey::parse(&change.key)? {
+        Some(option) => options
+            .get(&option.row)
+            .and_then(|schema| schema.option(&option.key))
+            .ok_or_else(|| format!("the plugin {} has no option `{}`", option.row, option.key))?,
+        None => setting_spec(&change.key)
+            .ok_or_else(|| format!("`{}` is not a setting of config.toml", change.key))?,
+    };
     let value = match &change.op {
         SettingWriteOp::Set(raw) => Some(
             spec.check(raw)
-                .map_err(|error| refused(spec, error))?
+                .map_err(|error| refused(&change.key, error))?
                 .to_json(),
         ),
         SettingWriteOp::Reset => None,
     };
-    Ok(KeyChange {
-        key: spec.key.clone(),
-        path: spec.key.split('.').map(str::to_string).collect(),
+    let change = KeyChange {
+        key: change.key.clone(),
+        path: keys::parse_key(&change.key)?,
         // A TOML file has no null: a nullable text set to null is removed.
         value: value.filter(|value| !value.is_null()),
-    })
+    };
+    Ok((change, spec.apply))
 }
 
 /// The spec whose key is the key path `path`.
@@ -184,10 +213,14 @@ fn spec_at(path: &[String]) -> Option<&'static SettingSpec> {
         .find(|spec| spec.key.split('.').eq(path.iter().map(String::as_str)))
 }
 
-/// A spec's refusal ("`key` is between 1 and 16") as a write's.
-fn refused(spec: &SettingSpec, error: String) -> String {
-    let key = &spec.key;
-    match error.strip_prefix(&format!("`{key}` ")) {
+/// A spec's refusal ("`key` is between 1 and 16") as a write's; a plugin
+/// option's spec names its key in its table.
+fn refused(key: &str, error: String) -> String {
+    let relative = key.rsplit('.').next().unwrap_or(key);
+    match [key, relative]
+        .iter()
+        .find_map(|name| error.strip_prefix(&format!("`{name}` ")))
+    {
         Some(reason) => format!("`{key}` cannot take this value: it {reason}"),
         None => error,
     }
@@ -195,6 +228,7 @@ fn refused(spec: &SettingSpec, error: String) -> String {
 
 fn outcome(
     changes: &[KeyChange],
+    applies: &[SettingApply],
     sources: &BTreeMap<String, SettingSource>,
 ) -> SettingsWriteOutcome {
     let written = changes
@@ -210,7 +244,8 @@ fn outcome(
         .collect();
     let apply = written
         .iter()
-        .filter_map(|key| Some((key.clone(), setting_spec(key)?.apply)))
+        .cloned()
+        .zip(applies.iter().copied())
         .collect();
     SettingsWriteOutcome {
         written,

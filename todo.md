@@ -224,11 +224,153 @@ independent.
         until reset; `check-config-reference` reads a macro body only when
         it is comma-separated expressions, so keep specs directly in
         `vec![…]`.
-- [ ] S3: the facade's `settings_catalog`, `write_setting_values`,
+- [x] S3: the facade's `settings_catalog`, `write_setting_values`,
       `run_settings_action`; collections for Providers, the model policy,
       MCP, plugins, marketplaces, hooks, roles, profiles and project trust;
       `agent_settings_fields` / `web_search_fields` removed (Hanafubuki:
       its settings page reads the `web` section).
+      Done (2026-11-12):
+      - Config: `SettingsSection` gains `group` (`SettingsGroup`: General,
+        Model, Tools, Memory, Context, Network, Interface, Plugins,
+        Advanced), `order` and `values` (`SettingState { key, value, source,
+        issue }`); `AgentConfig::settings_sections()` fills them from
+        `resolved_document()` and `setting_sources()`, the issue being the
+        first layer warning about the key (`Resolved.issues`, recorded in
+        `layers::report` from the repair's key); a host's configuration
+        leaves out `network` and `tui`. `write_values_with_options(write,
+        schemas)` also writes `pluginOptions.<row>.<key>` against the row's
+        schema in the same atomic write (`write_values` is it with none).
+        Plugin option keys now have provenance (`setting_sources()` lists
+        `pluginOptions.<row>.<key>` with the layer that set it).
+        `set_plugin_disabled` writes `disabledPlugins` alone, so a toggle no
+        longer makes every key's source `User`. New readers/writers for the
+        facade: `user_document()`, `is_layered()`, `set_user_json(key,
+        value)` (`set_user_value` without the TOML parse).
+        `agent_settings_fields` and `settings/schema.rs` are gone.
+      - Facade (`crates/agent/src/service/settings/`, one module per
+        collection): `settings_catalog()` → `SettingsCatalog { sections,
+        collections }`: the config's sections, then a Plugins-group section
+        per row whose descriptor has options (`pluginOptions.<row>`, full
+        keys, values from the row's resolved options); collections
+        `providers`, `modelPolicy`, `mcp`, `plugins`, `marketplaces`,
+        `hooks`, `roles`, and standalone `profiles`, `projects`
+        (`SettingsCollection { id, title, group, record: Vec<SettingSpec>,
+        records: Vec<SettingsRecord>, actions: Vec<SettingsAction>,
+        revision, issues }`; `SettingsRecord { id, label, summary, state,
+        issue, values, secrets_set }`; `SettingsAction { id, label, scope:
+        Collection | Record, confirm }`). An owner that cannot be read
+        (hooks while the row is off) gives an empty collection with the
+        reason. `write_setting_values(SettingsWrite)` =
+        `write_values_with_options` with the host's option schemas, then
+        `apply_settings_to_plugins` and a memory scan signal.
+        `run_settings_action(SettingsActionRequest { collection, record,
+        action, expectedRevision, values })` (strict, `ipc-request` in the
+        policy; `Debug` shows the value keys only) → `SettingsActionOutcome
+        { record, message }`, dispatched to the owner's calls: Providers
+        `add`/`save`/`delete`/`set_default`/`list_models`
+        (`write_provider` etc.); model policy `save` (`write_model_policy`,
+        one record `policy` with `defaultProviderId`, whose choices are the
+        Providers, a disabled one with why); MCP `add` (record = new id)
+        /`save`/`delete`/`connect`/`disconnect`/`refresh`/`logout`; plugins
+        `save` (`enabled` → `set_plugin_enabled`)/`retry`; marketplaces
+        `add`/`upgrade`/`delete`; hooks `save` (`enabled`)/`trust`; profiles
+        `add`/`save` (`set_user_json` per key); projects `add`/`trust`/
+        `untrust`; roles none. A save merges its values over the stored
+        record by the specs (`record.rs`), so what no spec names is kept; a
+        secret (`apiToken`) is never returned (`secrets_set` lists it) and a
+        save without it keeps it; `null` unsets an optional field.
+      - `AgentSettingsView.web_search_fields` removed. The TUI never read it:
+        its configuration center is unchanged (S4 replaces it).
+      - Deviations from the plan: the calls are on `AgentApplicationService`
+        (reached through `AgentHandle`, as Hanafubuki and the TUI reach the
+        service), not `AgentRuntime`. No contracts registry for settings:
+        plugin rows contribute through their descriptors, as §4.2 says
+        (no global registry), so a stopped or failed row's options stay
+        editable. `SettingsSection` has no `file`: every section is
+        `config.toml`, and the model policy is a revision-gated collection
+        record rather than a `providers.toml` section. Record writes go
+        through `run_settings_action` (`add`/`save`/`delete` with `values`
+        and `expectedRevision`), the plan naming no record write. Record
+        specs (Provider, policy, MCP server, …) live beside their collection
+        in the facade, not in the config crate, so `check-config-reference`
+        (config.toml's keys) does not scan them and `specs()` stays
+        config.toml's. Not fields, kept as they are on save: a Provider's
+        `requestHeaders` and `models`, the policy's `turnBudget`, an MCP
+        server's environment, headers, credential maps and per-tool maps.
+        Not actions: MCP OAuth login (`mcp_oauth_login` takes closures and
+        waits for the browser), removing a profile's key or a profile,
+        editing a role (S6). Installed packages are not a collection (the
+        plugin browser page, S4/S6). `SettingState.issue` covers values a
+        layer above the user's file could not use; the user's own file is
+        repaired at load (a recovery, not an issue).
+      - Tests: `config/tests/settings/catalog.rs` (values, layers and an
+        issue per key; a host has no standalone sections; plugin options
+        written with their schema, refused out of range or unknown, reset;
+        a plugin toggle writes `disabledPlugins` alone);
+        `agent/src/tests/settings_catalog.rs` (every owner read and no
+        secret in the serialized catalog; settings and plugin options in one
+        write, a refusal writing nothing; a Provider's add, stale and
+        missing revision, unknown field, save keeping its token, delete;
+        the model policy's save, `null` unset and refusal; an MCP server's
+        add, transport switch and delete; a plugin toggle; profiles and
+        projects in a layered configuration; the strict request).
+      - Docs (both languages, same ids): `architecture#settings-catalog`
+        (new), `embedding#configuration-in-a-host` (the three calls),
+        `internals` (the settings API).
+      - No golden changed (nothing model-visible); no TUI snapshot changed.
+      - Hanafubuki at its next pin:
+        - `AgentSettingsView.web_search_fields` and
+          `hanafubuki_agent_config::agent_settings_fields` are gone.
+          `src-tauri/crates/hanafubuki-agent-integration/src/settings_form.rs`
+          (`AgentSettingsPage::from`, `agent_form_fields`, `AgentFormField`)
+          builds `web_search_fields` from the `web` section instead:
+          `hanafubuki_agent::config_sections()` (static, no running Agent)
+          or `settings_catalog().await?.sections`, id `"web"`. Mapping:
+          `SettingKind::Choice` → `FieldKind::Select` (options' `value` and
+          `label`), `Text { nullable }` → `FieldKind::Text` with
+          `nullable`, `Boolean` → `FieldKind::Boolean`; `label`, `summary`
+          and `help` are plain English text, not i18n keys (the
+          `settings.fields.webSearchProvider.*` keys go unused);
+          `commit_group` (`"webSearch"`) → `patch_group`; the commit mode is
+          no longer sent (change for a choice or a boolean, blur for a
+          text); `searxngBaseUrl` has no `disabledWhen` (no `visible_if` in
+          the spec). The keys are unchanged, so `AgentSettingsPatch` writes
+          as before. `settings_form/tests.rs` (which calls
+          `agent_settings_fields()`) and `docs/backend-spec.md` (§ settings,
+          which names it) follow; the frontend's `webSearchFields` is
+          unchanged if the integration crate keeps producing it.
+        - Additive: `settings_catalog`, `write_setting_values`,
+          `run_settings_action` and their types (`SettingsCatalog`,
+          `SettingsCollection`, `SettingsRecord`, `SettingsAction`,
+          `SettingsActionScope`, `SettingsActionRequest`,
+          `SettingsActionOutcome`, `SettingsGroup`, `SettingState`);
+          `SettingsSection` gains `group`, `order`, `values`;
+          `AgentConfig::settings_sections`, `write_values_with_options`,
+          `user_document`, `is_layered`, `set_user_json`.
+        - Behaviour: `set_plugin_enabled` writes `disabledPlugins` alone
+          (other keys keep their provenance).
+      - Validation: `cargo fmt --all --check`; `RUSTFLAGS="-D warnings"
+        cargo check --workspace --all-targets --all-features`; `cargo clippy
+        --workspace --all-targets --all-features -- -D warnings`; `cargo
+        xtask check`; `cargo test --workspace --all-features`; `bun install
+        --frozen-lockfile`, `bun run format:check:site`, `bun run
+        site:check`, `bun run site:test`, `VITE_BASE_PATH=/hanafubuki-agent/
+        bun run site:build` (all 35 pages prerendered). CI on Linux, Windows
+        and macOS: CI_URL_PLACEHOLDER
+      - Module size: no exception added or raised.
+      - For S4: render `SettingsCatalog` generically: `SettingsGroup`'s
+        order is the tabs'; sections by `order` within a group; a
+        section's keys are full keys for `write_setting_values` (plugin
+        options included); a collection's `record` specs are keys relative
+        to the record (`transport.url`, with `visible_if` on
+        `transport.type`), `save` merges only the values sent (send one
+        field to save it at once) and a revision-gated collection's write
+        names `revision` (a stale one is refused: read the catalog again
+        and keep the edit); `confirm` actions ask first; `secrets_set` says
+        which secrets show as `••••`; a collection without `save` is
+        read-only; `issues` on a collection are shown, not fatal. The MCP
+        OAuth login and the credential values stay direct calls
+        (`mcp_oauth_login`, `mcp_set_credential`).
 - [ ] S4: `settings_center/` replaces `config_center/`: Codex's tabs,
       label · value · description rows, search across tabs, saving at once,
       inline editors, reset, per-row hints, narrow fallback, mouse; a page

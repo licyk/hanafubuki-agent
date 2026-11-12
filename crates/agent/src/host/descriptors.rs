@@ -154,6 +154,13 @@ impl AgentPluginDescriptors {
         self.get(name)?.options.as_ref()
     }
 
+    /// The schema of every row that has options, by its name.
+    pub(crate) fn schemas(&self) -> BTreeMap<String, PluginOptionSchema> {
+        self.with_options()
+            .map(|(name, schema)| (name.to_string(), schema.clone()))
+            .collect()
+    }
+
     /// What the rows' tables set that cannot be used, as configuration
     /// warnings.
     pub(crate) fn issues(&self, options: &PluginOptionsSettings) -> Vec<String> {

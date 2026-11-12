@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use super::AgentSettings;
 use crate::fields::FieldRead;
-use crate::sections::{described, SettingsRead, SettingsSection};
+use crate::sections::{described, SettingsGroup, SettingsRead, SettingsSection};
 
 const WEB_SEARCH_PROVIDER: &str = "webSearchProvider";
 const SEARXNG_BASE_URL: &str = "searxngBaseUrl";
@@ -50,6 +50,8 @@ pub(crate) fn section() -> SettingsSection {
     SettingsSection::new(
         "web",
         "Web tools",
+        SettingsGroup::Tools,
+        10,
         vec![
             search(described(
                 SettingSpec::new(

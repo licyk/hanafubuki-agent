@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
 use crate::fields::{FieldRead, Fields};
-use crate::sections::{described, no_rule, SettingsRead, SettingsSection};
+use crate::sections::{described, no_rule, SettingsGroup, SettingsRead, SettingsSection};
 
 const TUI: &str = "tui";
 
@@ -229,6 +229,8 @@ pub(crate) fn section() -> SettingsSection {
     SettingsSection::new(
         TUI,
         "Terminal interface",
+        SettingsGroup::Interface,
+        10,
         vec![
             at_launch(described(
                 SettingSpec::new(

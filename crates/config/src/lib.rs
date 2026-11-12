@@ -64,14 +64,13 @@ pub use roles::{
     is_role_name, read_role_files, InstructionsMode, RoleDefinition, RoleFiles, RoleLayer,
     RoleOrigin, RoleSource, MAX_ROLE_NAME_BYTES, ROLE_DIR,
 };
-pub use sections::{config_sections, SettingsSection};
+pub use sections::{config_sections, SettingState, SettingsGroup, SettingsSection};
 pub use settings::{
-    agent_settings_fields, AgentBackgroundCompactionSettings, AgentCompactionSettings,
-    AgentCompactionStrategy, AgentHierarchicalCompactionSettings, AgentMemorySettings,
-    AgentModelDiscovery, AgentModelMetadataSettings, AgentPermissionMode, AgentSandboxMode,
-    AgentSandboxWorkspaceWrite, AgentSettings, AgentSettingsPatch, AgentWebSearchProvider,
-    AgentWindowsSandbox, AgentWindowsSettings, MAX_AGENT_DISABLED_PLUGINS,
-    MAX_AGENT_PLUGIN_NAME_BYTES,
+    AgentBackgroundCompactionSettings, AgentCompactionSettings, AgentCompactionStrategy,
+    AgentHierarchicalCompactionSettings, AgentMemorySettings, AgentModelDiscovery,
+    AgentModelMetadataSettings, AgentPermissionMode, AgentSandboxMode, AgentSandboxWorkspaceWrite,
+    AgentSettings, AgentSettingsPatch, AgentWebSearchProvider, AgentWindowsSandbox,
+    AgentWindowsSettings, MAX_AGENT_DISABLED_PLUGINS, MAX_AGENT_PLUGIN_NAME_BYTES,
 };
 pub use standalone::{
     AgentLogLevel, AgentNetworkSettings, AgentStandaloneSettings, AgentStandaloneSettingsPatch,

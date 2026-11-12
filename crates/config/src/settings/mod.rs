@@ -12,7 +12,7 @@ use hanafubuki_agent_packages::{is_package_enabled, MarketplaceRecord, PluginId,
 use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::plugin_options::PluginOptionsSettings;
-use crate::sections::{check_specs, described, SettingsSection};
+use crate::sections::{check_specs, described, SettingsGroup, SettingsSection};
 
 pub(crate) mod compaction;
 mod decode;
@@ -20,7 +20,6 @@ pub(crate) mod memory;
 pub(crate) mod model_metadata;
 mod packages;
 pub(crate) mod sandbox;
-mod schema;
 pub(crate) mod web;
 
 pub use compaction::{
@@ -31,7 +30,6 @@ pub(crate) use decode::decode_settings;
 pub use memory::AgentMemorySettings;
 pub use model_metadata::{AgentModelDiscovery, AgentModelMetadataSettings};
 pub use sandbox::{AgentSandboxWorkspaceWrite, AgentWindowsSettings};
-pub use schema::agent_settings_fields;
 pub use web::AgentWebSearchProvider;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -222,6 +220,8 @@ pub(crate) fn general_section() -> SettingsSection {
     SettingsSection::new(
         "general",
         "General",
+        SettingsGroup::General,
+        10,
         vec![
             SettingSpec {
                 keywords: vec!["approval".into(), "permissions".into()],

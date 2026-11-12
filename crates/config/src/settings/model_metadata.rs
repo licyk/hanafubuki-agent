@@ -4,7 +4,7 @@
 use hanafubuki_agent_foundation::settings::{SettingChoice, SettingKind, SettingSpec};
 use serde::{Deserialize, Serialize};
 
-use crate::sections::{described, SettingsSection};
+use crate::sections::{described, SettingsGroup, SettingsSection};
 
 /// Whether the Agent lists a Provider's models by itself.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -36,6 +36,8 @@ pub(crate) fn section() -> SettingsSection {
     SettingsSection::new(
         "modelMetadata",
         "Model metadata",
+        SettingsGroup::Model,
+        10,
         vec![
             described(
                 SettingSpec::new(

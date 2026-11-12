@@ -10,7 +10,9 @@ use hanafubuki_agent_foundation::settings::{
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
-use crate::sections::{described, no_rule, LayerRead, SettingsRead, SettingsSection};
+use crate::sections::{
+    described, no_rule, LayerRead, SettingsGroup, SettingsRead, SettingsSection,
+};
 use crate::tui::read_tui;
 use crate::{AgentProxy, AgentTuiPreferences};
 
@@ -108,6 +110,8 @@ pub(crate) fn network_section() -> SettingsSection {
     SettingsSection::new(
         "network",
         "Network and logging",
+        SettingsGroup::Network,
+        10,
         vec![
             SettingSpec {
                 help: Some(

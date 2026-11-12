@@ -1,6 +1,7 @@
 //! The settings of `config.toml` by key: their specs against the structs
 //! that hold them, and the writes and provenance built on them.
 
+mod catalog;
 mod sections;
 mod write;
 

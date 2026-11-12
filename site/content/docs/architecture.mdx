@@ -233,6 +233,15 @@ Agent 对它访问的每个模型所知道的内容，是内核的 `ModelMetadat
 - **数据目录锁**：`<data_dir>/.lock`，因为历史索引、记忆存储和进程组台账都假定只有一个写进程。
 - **持久化格式是不稳定的。** 规则是读取方容错解码，隔离它不能使用的东西，从不删除用户数据。
 
+### 设置目录 [#settings-catalog]
+
+每项设置由它的所有者用 `hanafubuki-agent-foundation::settings` 的词汇描述一次（`SettingSpec`：键、标签、摘要、类型、默认值、改动何时生效、`visible_if`、`commit_group`），设置页按描述渲染，不必为每项设置写代码。门面的 `settings_catalog()` 每次读取时构建它（`SettingsCatalog { sections, collections }`），自己不设注册表：每个所有者通过它已经公开的东西提供内容。
+
+- **节**（`SettingsSection`：id、标题、分组、顺序、spec 和值）来自配置（`AgentConfig::settings_sections`，spec 声明在各设置结构体旁边；宿主的配置没有 `network` 和 `tui` 节），以及每个描述符带选项的插件行一节（`pluginOptions.<row>`，属于 Plugins 分组，键为 `pluginOptions.<row>.<option>`）。每个值（`SettingState`）注明它来自哪一层（`SettingSource`），以及某一层的值为何无法使用。
+- **集合**（`SettingsCollection`）是逐条编辑的记录列表：Provider 和模型策略（`providers.toml`）、MCP 服务器（`mcp.toml`）、插件行、市场、钩子、角色，以及独立模式下的 profile 和项目信任。集合以 spec 给出一条记录的字段，列出它的记录（`SettingsRecord`：id、标签、摘要、状态、问题、值）和动作（`SettingsAction`：`add`、`save`、`delete` 以及所有者自己的动作，如 `set_default`、`list_models`、`connect`、`trust`）；没有 `save` 的集合只显示、不写入（角色）。机密从不返回：记录只列出哪些已设置，省略机密的保存会保留它。受修订号约束的文件，其记录带上文件的修订号，写入时要带上它。
+- **写入。** `write_setting_values` 按键把设置和插件选项一次写入用户的文件，每个值按它的 spec 检查，然后把设置应用到插件。`run_settings_action` 通过所有者的调用执行集合的动作（`write_provider`、`write_model_policy`、`mcp_write_server`、`set_plugin_enabled`、`trust_hooks`、市场的调用、`AgentConfig::set_user_json`）；保存把值合并到已保存的记录上，因此没有 spec 的字段（请求头、按工具的表、按模型的覆盖）保持不变。
+- **失败。** 无法读取的所有者（`hooks` 行被关闭）让它的集合为空并说明原因；目录的其余部分照常。
+
 ## 已安装的插件 [#installed-plugins]
 
 已安装的插件是一个**包**：一个带清单的目录，从目录或市场安装，名字是 `<插件>@<市场>`。它不是插件宿主的一行。包存储（`hanafubuki-agent-packages`，移植自 Codex 的插件存储）把它们放在数据目录的 `plugins/` 中（[数据目录](/docs/data-directory#contents)）；配置中的 `[plugins]` 和 `[marketplaces]` 决定哪些启用（[插件](/docs/config-reference#plugins)）。

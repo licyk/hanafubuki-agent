@@ -45,6 +45,7 @@ mod plugin_host;
 mod quarantine;
 mod restart;
 mod sessions;
+mod settings_catalog;
 mod shutdown;
 mod standalone;
 mod startup;

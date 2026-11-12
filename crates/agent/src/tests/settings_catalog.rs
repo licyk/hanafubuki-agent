@@ -1,0 +1,468 @@
+//! The settings catalog: what it reads from each owner, the writes by key
+//! and the collections' actions, each dispatched to its owner.
+
+use hanafubuki_agent_config::{ConfigLayers, SettingChange, SettingWriteOp};
+
+use super::*;
+
+fn done(service: AgentApplicationService, paths: TestPaths) {
+    let _ = service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE);
+    let _ = std::fs::remove_dir_all(paths.app_data_dir);
+}
+
+fn action(
+    collection: &str,
+    record: Option<&str>,
+    action: &str,
+    revision: Option<u64>,
+    values: serde_json::Value,
+) -> SettingsActionRequest {
+    serde_json::from_value(json!({
+        "collection": collection,
+        "record": record,
+        "action": action,
+        "expectedRevision": revision,
+        "values": values,
+    }))
+    .unwrap()
+}
+
+fn collection<'a>(catalog: &'a SettingsCatalog, id: &str) -> &'a SettingsCollection {
+    catalog
+        .collections
+        .iter()
+        .find(|collection| collection.id == id)
+        .unwrap_or_else(|| panic!("no collection {id}"))
+}
+
+fn with_token(_: &TestPaths, config: &AgentConfig) {
+    configure_test_provider(config, "http://127.0.0.1:9", None);
+    config
+        .mutate_providers(1, |registry| {
+            registry.providers[0].api_token = Some("sk-catalog-secret".into());
+            Ok(())
+        })
+        .unwrap();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_catalog_reads_every_owner_and_returns_no_secret() {
+    let (service, paths, _) = service_with_config("settings-catalog", with_token);
+    let catalog = service.settings_catalog().await.unwrap();
+
+    let ids = catalog
+        .sections
+        .iter()
+        .map(|section| section.id.as_str())
+        .collect::<Vec<_>>();
+    assert!(ids.contains(&"web"), "{ids:?}");
+    assert!(!ids.contains(&"tui"), "a host's configuration: {ids:?}");
+    let options = catalog
+        .sections
+        .iter()
+        .find(|section| section.id == "pluginOptions.subagents")
+        .unwrap();
+    assert_eq!(options.group, SettingsGroup::Plugins);
+    assert_eq!(options.values.len(), options.settings.len());
+    assert!(options
+        .settings
+        .iter()
+        .all(|spec| spec.key.starts_with("pluginOptions.subagents.")));
+
+    let collections = catalog
+        .collections
+        .iter()
+        .map(|collection| collection.id.as_str())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        collections,
+        [
+            "providers",
+            "modelPolicy",
+            "mcp",
+            "plugins",
+            "marketplaces",
+            "hooks",
+            "roles"
+        ],
+        "a host's configuration has no profiles or projects"
+    );
+    let providers = collection(&catalog, "providers");
+    assert_eq!(providers.revision, Some(2));
+    let provider = &providers.records[0];
+    assert_eq!(provider.state.as_deref(), Some("default"));
+    assert!(!provider.values.contains_key("apiToken"));
+    assert_eq!(provider.secrets_set, ["apiToken"]);
+    let policy = &collection(&catalog, "modelPolicy").records[0];
+    assert_eq!(
+        policy.values["model"],
+        SettingValue::Text("fixture-model".into())
+    );
+    let roles = collection(&catalog, "roles");
+    assert!(roles.records.iter().any(|role| role.id == DEFAULT_ROLE));
+    let text = serde_json::to_string(&catalog).unwrap();
+    assert!(
+        !text.contains("sk-catalog-secret"),
+        "a secret is never returned"
+    );
+    done(service, paths);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_write_by_key_takes_settings_and_plugin_options_together() {
+    let (service, paths, config) = service_with_config("settings-catalog-write", |_, _| {});
+    let set = |key: &str, value: serde_json::Value| SettingChange {
+        key: key.to_string(),
+        op: SettingWriteOp::Set(value),
+    };
+    let outcome = service
+        .write_setting_values(SettingsWrite {
+            changes: vec![
+                set("webFetchUseJinaReader", json!(false)),
+                set("pluginOptions.subagents.maximumRunningAgents", json!(2)),
+            ],
+        })
+        .await
+        .unwrap();
+    assert_eq!(outcome.written.len(), 2);
+    assert!(!config.settings().unwrap().web_fetch_use_jina_reader);
+    let catalog = service.settings_catalog().await.unwrap();
+    let state = catalog
+        .sections
+        .iter()
+        .flat_map(|section| &section.values)
+        .find(|state| state.key == "pluginOptions.subagents.maximumRunningAgents")
+        .unwrap();
+    assert_eq!(state.value, Some(SettingValue::Integer(2)));
+    assert_eq!(state.source, SettingSource::User);
+
+    let refused = service
+        .write_setting_values(SettingsWrite {
+            changes: vec![
+                set("webFetchUseJinaReader", json!(true)),
+                set("pluginOptions.subagents.maximumRunningAgents", json!(0)),
+            ],
+        })
+        .await
+        .unwrap_err();
+    assert!(refused.contains("maximumRunningAgents"), "{refused}");
+    assert!(
+        !config.settings().unwrap().web_fetch_use_jina_reader,
+        "a refused write writes nothing"
+    );
+    done(service, paths);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_providers_records_round_trip_and_keep_their_secret() {
+    let (service, paths, config) = service_with_config("settings-catalog-providers", with_token);
+    let added = service
+        .run_settings_action(action(
+            "providers",
+            None,
+            "add",
+            Some(2),
+            json!({
+                "displayName": "Second",
+                "baseUrl": "https://example.invalid/v1",
+                "protocol": "chat_completions",
+                "apiToken": "sk-second",
+            }),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(added.record.as_deref(), Some("provider-2"));
+
+    let stale = service
+        .run_settings_action(action(
+            "providers",
+            Some("provider-1"),
+            "save",
+            Some(2),
+            json!({"displayName": "Renamed"}),
+        ))
+        .await
+        .unwrap_err();
+    assert!(stale.contains("stale"), "{stale}");
+    let unnamed = service
+        .run_settings_action(action(
+            "providers",
+            Some("provider-1"),
+            "save",
+            None,
+            json!({"displayName": "Renamed"}),
+        ))
+        .await
+        .unwrap_err();
+    assert!(unnamed.contains("revision"), "{unnamed}");
+    let unknown = service
+        .run_settings_action(action(
+            "providers",
+            Some("provider-1"),
+            "save",
+            Some(3),
+            json!({"models": {}}),
+        ))
+        .await
+        .unwrap_err();
+    assert!(unknown.contains("not a field"), "{unknown}");
+
+    service
+        .run_settings_action(action(
+            "providers",
+            Some("provider-1"),
+            "save",
+            Some(3),
+            json!({"displayName": "Renamed", "enabled": false}),
+        ))
+        .await
+        .unwrap();
+    let registry = config.providers().unwrap();
+    let first = &registry.providers[0];
+    assert_eq!(first.display_name, "Renamed");
+    assert_eq!(
+        first.api_token.as_deref(),
+        Some("sk-catalog-secret"),
+        "a save that leaves the secret out keeps it"
+    );
+    assert_eq!(
+        registry.default_provider_id.as_deref(),
+        Some("provider-2"),
+        "the disabled default gave way"
+    );
+
+    service
+        .run_settings_action(action(
+            "providers",
+            Some("provider-2"),
+            "delete",
+            Some(registry.revision),
+            json!({}),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(config.providers().unwrap().providers.len(), 1);
+    done(service, paths);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_model_policy_is_one_record() {
+    let (service, paths, config) = service_with_config("settings-catalog-policy", with_token);
+    service
+        .run_settings_action(action(
+            "modelPolicy",
+            Some("policy"),
+            "save",
+            Some(2),
+            json!({"model": "other-model", "contextWindowTokens": 4096}),
+        ))
+        .await
+        .unwrap();
+    let policy = config.providers().unwrap().model_policy;
+    assert_eq!(policy.model, "other-model");
+    assert_eq!(policy.context_window_tokens, Some(4096));
+    service
+        .run_settings_action(action(
+            "modelPolicy",
+            Some("policy"),
+            "save",
+            Some(3),
+            json!({"contextWindowTokens": null}),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(
+        config
+            .providers()
+            .unwrap()
+            .model_policy
+            .context_window_tokens,
+        None
+    );
+    let refused = service
+        .run_settings_action(action(
+            "modelPolicy",
+            Some("policy"),
+            "save",
+            Some(4),
+            json!({"autoCompactThresholdPercent": 0}),
+        ))
+        .await
+        .unwrap_err();
+    assert!(refused.contains("autoCompactThresholdPercent"), "{refused}");
+    done(service, paths);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn an_mcp_server_is_added_saved_and_deleted() {
+    let (service, paths, config) = service_with_config("settings-catalog-mcp", |_, _| {});
+    let revision = |config: &AgentConfig| config.mcp().load().unwrap().revision;
+    service
+        .run_settings_action(action(
+            "mcp",
+            Some("demo"),
+            "add",
+            Some(revision(&config)),
+            json!({"enabled": false, "transport.program": "demo-server", "transport.argv": ["serve"]}),
+        ))
+        .await
+        .unwrap();
+    service
+        .run_settings_action(action(
+            "mcp",
+            Some("demo"),
+            "save",
+            Some(revision(&config)),
+            json!({"transport.type": "streamable_http", "transport.url": "https://example.invalid/mcp"}),
+        ))
+        .await
+        .unwrap();
+    let catalog = service.settings_catalog().await.unwrap();
+    let record = &collection(&catalog, "mcp").records[0];
+    assert_eq!(record.id, "demo");
+    assert_eq!(record.summary, "https://example.invalid/mcp");
+    assert_eq!(
+        record.values["transport.type"],
+        SettingValue::Text("streamable_http".into())
+    );
+    assert_eq!(record.values["enabled"], SettingValue::Boolean(false));
+    service
+        .run_settings_action(action(
+            "mcp",
+            Some("demo"),
+            "delete",
+            Some(revision(&config)),
+            json!({}),
+        ))
+        .await
+        .unwrap();
+    assert!(config.mcp().load().unwrap().servers.is_empty());
+    done(service, paths);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_plugin_is_turned_off_through_its_record() {
+    let (service, paths, config) = service_with_config("settings-catalog-plugins", |_, _| {});
+    service
+        .run_settings_action(action(
+            "plugins",
+            Some("recap"),
+            "save",
+            None,
+            json!({"enabled": false}),
+        ))
+        .await
+        .unwrap();
+    assert!(config
+        .settings()
+        .unwrap()
+        .disabled_plugins
+        .contains("recap"));
+    let sources = config.setting_sources().unwrap();
+    assert!(
+        !sources.contains_key("permissionMode"),
+        "only disabledPlugins is written"
+    );
+    let unknown = service
+        .run_settings_action(action("plugins", Some("recap"), "explode", None, json!({})))
+        .await
+        .unwrap_err();
+    assert!(unknown.contains("no action `explode`"), "{unknown}");
+    done(service, paths);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_standalone_configuration_has_its_profiles_and_projects() {
+    let paths = test_paths("settings-catalog-layered");
+    let config = AgentConfig::layered(&paths.config_dir, ConfigLayers::default());
+    let service = AgentApplicationService::new_with_host(
+        config.clone(),
+        test_host(&paths),
+        AgentStoragePaths::under(paths.data_dir.join("agent-test")),
+        SkillRoots {
+            system: paths.data_dir.join("agent-test/skills-bundled"),
+            user: paths.data_dir.join("agent-test/skills-user"),
+            install_bundled_system_skills: false,
+            state_file: paths.data_dir.join("agent-test/skills-state.json"),
+        },
+        hanafubuki_agent_process::executor::ExecutorManager::default(),
+    )
+    .unwrap();
+    service
+        .run_settings_action(action(
+            "profiles",
+            Some("ci"),
+            "add",
+            None,
+            json!({"permissionMode": "full_access", "memory.enabled": true}),
+        ))
+        .await
+        .unwrap();
+    let project = paths.data_dir.join("some project");
+    let project = project.display().to_string();
+    service
+        .run_settings_action(action("projects", Some(&project), "add", None, json!({})))
+        .await
+        .unwrap();
+    let catalog = service.settings_catalog().await.unwrap();
+    assert!(catalog.sections.iter().any(|section| section.id == "tui"));
+    let profile = &collection(&catalog, "profiles").records[0];
+    assert_eq!(profile.id, "ci");
+    assert_eq!(
+        profile.values["permissionMode"],
+        SettingValue::Text("full_access".into())
+    );
+    assert_eq!(
+        profile.values["memory.enabled"],
+        SettingValue::Boolean(true)
+    );
+    let trusted = &collection(&catalog, "projects").records[0];
+    assert_eq!(trusted.id, project);
+    assert_eq!(trusted.state.as_deref(), Some("trusted"));
+    service
+        .run_settings_action(action(
+            "projects",
+            Some(&project),
+            "untrust",
+            None,
+            json!({}),
+        ))
+        .await
+        .unwrap();
+    let value = config
+        .value(&format!("projects.{}.trustLevel", json!(project)))
+        .unwrap();
+    assert_eq!(value, Some(json!("untrusted")));
+    let refused = service
+        .run_settings_action(action(
+            "profiles",
+            Some("ci"),
+            "save",
+            None,
+            json!({"memory.maxSourceAgeDays": 0}),
+        ))
+        .await
+        .unwrap_err();
+    assert!(refused.contains("maxSourceAgeDays"), "{refused}");
+    done(service, paths);
+}
+
+#[test]
+fn an_action_request_is_strict_and_hides_its_values() {
+    let refused = serde_json::from_value::<SettingsActionRequest>(json!({
+        "collection": "providers",
+        "action": "save",
+        "surprise": true,
+    }));
+    assert!(refused.is_err());
+    let request = action(
+        "providers",
+        Some("provider-1"),
+        "save",
+        Some(1),
+        json!({"apiToken": "sk-hidden"}),
+    );
+    let debug = format!("{request:?}");
+    assert!(debug.contains("apiToken"), "{debug}");
+    assert!(!debug.contains("sk-hidden"), "{debug}");
+}

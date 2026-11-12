@@ -13,7 +13,7 @@ use serde_json::{Map, Value};
 
 use crate::fields::unknown_keys;
 use crate::file::{ConfigFile, FileAccess, FileRead};
-use crate::keys::{self, KeyTarget, AGENTS, PLUGIN_OPTIONS};
+use crate::keys::{self, KeyTarget, AGENTS, DISABLED_PLUGINS, PLUGIN_OPTIONS};
 use crate::layers::Resolved;
 use crate::plugin_options::checked_patch;
 use crate::providers::{decode_registry, validate_agent_provider_registry};
@@ -158,6 +158,18 @@ impl AgentConfig {
         self.standalone_settings()
     }
 
+    /// Whether profiles, a project's file and `-c` overrides are layered
+    /// over the user's file: the standalone Agent's configuration.
+    pub fn is_layered(&self) -> bool {
+        self.inner.layers.is_some()
+    }
+
+    /// The user's `config.toml` as it holds it, unknown keys and the tables
+    /// the settings do not read (`profiles`, `projects`) included.
+    pub fn user_document(&self) -> Result<Map<String, Value>, String> {
+        self.load_user_settings().map(|user| user.document)
+    }
+
     /// The settings read so far, without reading the file: `None` before
     /// the first [`Self::settings`].
     pub fn settings_snapshot(&self) -> Option<AgentSettings> {
@@ -168,7 +180,7 @@ impl AgentConfig {
             .map(|resolved| resolved.settings.clone())
     }
 
-    fn resolved(&self) -> Result<Resolved, String> {
+    pub(crate) fn resolved(&self) -> Result<Resolved, String> {
         let mut cached = self.inner.settings.lock();
         if let Some(resolved) = cached.as_ref() {
             return Ok(resolved.clone());
@@ -183,16 +195,24 @@ impl AgentConfig {
         self.update_settings(|settings| patch.apply(settings))
     }
 
-    /// Turns the plugin `name` off (`disabled`) or on again.
+    /// Turns the plugin `name` off (`disabled`) or on again in the user's
+    /// `disabledPlugins`, writing that key alone.
     pub fn set_plugin_disabled(&self, name: &str, disabled: bool) -> Result<AgentSettings, String> {
-        self.update_settings(|settings| {
+        {
+            let mut cached = self.inner.settings.lock();
+            let mut names = self.load_user_settings()?.value.disabled_plugins;
             if disabled {
-                settings.disabled_plugins.insert(name.to_string());
+                names.insert(name.to_string());
             } else {
-                settings.disabled_plugins.remove(name);
+                names.remove(name);
             }
-            validate_disabled_plugins(&settings.disabled_plugins)
-        })
+            validate_disabled_plugins(&names)?;
+            let mut change = Map::new();
+            change.insert(DISABLED_PLUGINS.to_string(), Value::from_iter(names));
+            self.inner.settings_file.write(&change)?;
+            *cached = None;
+        }
+        self.settings()
     }
 
     /// Writes the `[plugins]` entry of `id`, or removes it (`None`), in the

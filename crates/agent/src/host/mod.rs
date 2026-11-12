@@ -248,6 +248,13 @@ impl AgentHost {
             })
     }
 
+    /// The options of every row that has some, by its name.
+    pub(crate) fn option_schemas(
+        &self,
+    ) -> std::collections::BTreeMap<String, hanafubuki_agent_config::PluginOptionSchema> {
+        self.descriptors.schemas()
+    }
+
     /// What the rows' options set that cannot be used, as configuration
     /// warnings.
     pub(crate) fn option_issues(&self, settings: &AgentSettings) -> Vec<String> {

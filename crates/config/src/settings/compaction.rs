@@ -6,7 +6,9 @@ use hanafubuki_agent_foundation::settings::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::sections::{check_specs, described, no_rule, SettingsRead, SettingsSection};
+use crate::sections::{
+    check_specs, described, no_rule, SettingsGroup, SettingsRead, SettingsSection,
+};
 
 const COMPACTION: &str = "compaction";
 const MIN_SUMMARY_LENGTH: &str = "compaction.hierarchical.minSummaryLength";
@@ -147,6 +149,8 @@ pub(crate) fn section() -> SettingsSection {
     SettingsSection::new(
         COMPACTION,
         "Compaction",
+        SettingsGroup::Context,
+        10,
         vec![
             described(
                 SettingSpec::new(
