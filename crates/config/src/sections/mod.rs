@@ -19,14 +19,15 @@ mod read;
 
 use std::sync::LazyLock;
 
-use hanafubuki_agent_foundation::settings::SettingSpec;
+use hanafubuki_agent_foundation::settings::{SettingSpec, SettingValue};
 use serde::Serialize;
+use serde_json::{Map, Value};
 
 pub(crate) use read::{check_specs, no_rule, LayerRead, SettingsRead};
 
 use crate::keys::{known_settings, lookup};
 use crate::settings::{compaction, memory, model_metadata, sandbox, web};
-use crate::{settings, standalone, tui};
+use crate::{settings, standalone, tui, AgentConfig, SettingSource};
 
 /// One heading of settings, in the order a settings page lists them.
 #[derive(Clone, Debug, PartialEq, Serialize)]
@@ -34,15 +35,59 @@ use crate::{settings, standalone, tui};
 pub struct SettingsSection {
     pub id: String,
     pub title: String,
+    /// The tab it is shown under.
+    pub group: SettingsGroup,
+    /// Its place among the sections of its group, lowest first.
+    pub order: u16,
     pub settings: Vec<SettingSpec>,
+    /// Each setting's value as the configuration resolves it, in the order
+    /// of `settings`; empty in [`config_sections`], which reads none.
+    pub values: Vec<SettingState>,
+}
+
+/// The tabs of a settings page, in their order.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum SettingsGroup {
+    General,
+    Model,
+    Tools,
+    Memory,
+    Context,
+    Network,
+    Interface,
+    Plugins,
+    Advanced,
+}
+
+/// One setting's value as the configuration resolves it.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SettingState {
+    pub key: String,
+    /// `None` when nothing sets it and it has no default.
+    pub value: Option<SettingValue>,
+    /// The layer the value comes from.
+    pub source: SettingSource,
+    /// Why a layer's value of it could not be used, when one could not.
+    pub issue: Option<String>,
 }
 
 impl SettingsSection {
-    pub(crate) fn new(id: &str, title: &str, settings: Vec<SettingSpec>) -> Self {
+    pub(crate) fn new(
+        id: &str,
+        title: &str,
+        group: SettingsGroup,
+        order: u16,
+        settings: Vec<SettingSpec>,
+    ) -> Self {
         Self {
             id: id.to_string(),
             title: title.to_string(),
+            group,
+            order,
             settings,
+            values: Vec::new(),
         }
     }
 }
@@ -89,6 +134,13 @@ pub(crate) fn specs() -> &'static [SettingSpec] {
 }
 
 fn sections() -> Vec<SettingsSection> {
+    let mut sections = agent_sections();
+    sections.extend(standalone_sections());
+    sections
+}
+
+/// The sections every configuration reads.
+fn agent_sections() -> Vec<SettingsSection> {
     vec![
         settings::general_section(),
         sandbox::section(),
@@ -96,7 +148,58 @@ fn sections() -> Vec<SettingsSection> {
         web::section(),
         compaction::section(),
         model_metadata::section(),
-        standalone::network_section(),
-        tui::section(),
     ]
+}
+
+/// The sections only the standalone Agent reads: a host supplies its proxy,
+/// its logger and its interface.
+fn standalone_sections() -> Vec<SettingsSection> {
+    vec![standalone::network_section(), tui::section()]
+}
+
+impl AgentConfig {
+    /// The sections this configuration reads, each setting with its value
+    /// as the layers resolve it, the layer it comes from and why a layer's
+    /// value could not be used; a host's configuration leaves out the
+    /// standalone sections ([`config_sections`] has them all).
+    pub fn settings_sections(&self) -> Result<Vec<SettingsSection>, String> {
+        let document = self.resolved_document()?;
+        let resolved = self.resolved()?;
+        let ids = self
+            .is_layered()
+            .then(standalone_sections)
+            .into_iter()
+            .flatten()
+            .chain(agent_sections())
+            .map(|section| section.id)
+            .collect::<Vec<_>>();
+        let mut sections = config_sections();
+        sections.retain(|section| ids.contains(&section.id));
+        for section in &mut sections {
+            section.values = section
+                .settings
+                .iter()
+                .map(|spec| SettingState {
+                    key: spec.key.clone(),
+                    value: value_of(&document, spec),
+                    source: resolved
+                        .sources
+                        .get(&spec.key)
+                        .cloned()
+                        .unwrap_or(SettingSource::Default),
+                    issue: resolved.issues.get(&spec.key).cloned(),
+                })
+                .collect();
+        }
+        Ok(sections)
+    }
+}
+
+/// The value of `spec` in the resolved `document`, as its spec reads it.
+fn value_of(document: &Map<String, Value>, spec: &SettingSpec) -> Option<SettingValue> {
+    let path = spec.key.split('.').map(str::to_string).collect::<Vec<_>>();
+    match lookup(document, &path)? {
+        Value::Null => None,
+        value => spec.read(value).ok(),
+    }
 }

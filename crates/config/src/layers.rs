@@ -86,6 +86,9 @@ pub(crate) struct Resolved {
     /// The layer of each setting a layer sets, by key; the others are
     /// [`SettingSource::Default`].
     pub(crate) sources: BTreeMap<String, SettingSource>,
+    /// The first warning about each setting whose value a layer set and
+    /// the settings could not use, by key.
+    pub(crate) issues: BTreeMap<String, String>,
 }
 
 impl Resolved {
@@ -99,6 +102,7 @@ impl Resolved {
             standalone: AgentStandaloneSettings::default(),
             warnings: Vec::new(),
             sources: sources(&read.set, &SettingSource::User),
+            issues: BTreeMap::new(),
         }
     }
 }
@@ -287,9 +291,18 @@ fn report(
         .map(|key| {
             format!("Agent configuration {source} has the unknown key {key}; it is ignored")
         });
-    let unusable = repairs.into_iter().map(|repair| {
-        format!("Agent configuration {source} has a value that cannot be used, so the one below it is: {repair}")
-    });
+    let mut unusable = Vec::new();
+    for repair in repairs {
+        let warning = format!("Agent configuration {source} has a value that cannot be used, so the one below it is: {repair}");
+        // A repair names its key first (`memory.maxSourceAgeDays: …`).
+        if let Some((key, _)) = repair.split_once(": ") {
+            resolved
+                .issues
+                .entry(key.to_string())
+                .or_insert_with(|| warning.clone());
+        }
+        unusable.push(warning);
+    }
     for warning in unknown.chain(unusable) {
         log::warn!("{warning}");
         resolved.warnings.push(warning);

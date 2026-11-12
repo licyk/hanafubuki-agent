@@ -4,7 +4,7 @@
 use hanafubuki_agent_foundation::settings::{SettingKind, SettingSpec};
 use serde::{Deserialize, Serialize};
 
-use crate::sections::{described, SettingsSection};
+use crate::sections::{described, SettingsGroup, SettingsSection};
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -61,6 +61,8 @@ pub(crate) fn section() -> SettingsSection {
     SettingsSection::new(
         "memory",
         "Memory",
+        SettingsGroup::Memory,
+        10,
         vec![
             SettingSpec {
                 keywords: vec!["memories".into(), "remember".into()],

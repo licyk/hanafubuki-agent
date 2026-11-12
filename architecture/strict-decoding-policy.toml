@@ -89,6 +89,12 @@ category = "ipc-request"
 reason = "One change inside `SettingsWrite`."
 
 [[types]]
+path = "crates/agent/src/service/settings/mod.rs"
+type = "SettingsActionRequest"
+category = "ipc-request"
+reason = "An action on a collection of the settings catalog (`run_settings_action`), which a host's settings page sends; its values are then checked against the record's specs."
+
+[[types]]
 path = "crates/config/src/settings/memory.rs"
 type = "AgentMemorySettings"
 category = "ipc-request"

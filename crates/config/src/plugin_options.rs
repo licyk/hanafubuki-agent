@@ -16,8 +16,8 @@ use hanafubuki_agent_packages::{PluginOptionSchema, ResolvedPluginOptions};
 use serde::{Serialize, Serializer};
 use serde_json::{Map, Value};
 
-use crate::fields::Fields;
 use crate::keys::{parse_key, PLUGIN_OPTIONS};
+use crate::sections::SettingsRead;
 use crate::settings::is_plugin_name;
 
 /// The `[pluginOptions]` table as the layers set it.
@@ -79,11 +79,12 @@ impl PluginOptionsSettings {
 /// whose name cannot be a plugin's, is left out and reported as an unknown
 /// key, so the file keeps it as written.
 pub(crate) fn decode_plugin_options(
-    fields: &mut Fields<'_>,
+    read: &mut SettingsRead<'_>,
     below: &PluginOptionsSettings,
     layer: &str,
 ) -> PluginOptionsSettings {
     let mut options = below.clone();
+    let fields = read.fields();
     let Some(raw) = fields.raw(PLUGIN_OPTIONS) else {
         return options;
     };
@@ -104,6 +105,8 @@ pub(crate) fn decode_plugin_options(
                     layer: layer.to_string(),
                 },
             );
+            // Whether the plugin can use it is its schema's to say.
+            read.mark(&format!("{PLUGIN_OPTIONS}.{row}.{key}"));
         }
     }
     options

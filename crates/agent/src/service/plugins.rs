@@ -5,14 +5,13 @@ use hanafubuki_agent_config::AgentSettings;
 
 use super::AgentApplicationService;
 
-/// The Agent's settings as the settings page shows them.
+/// The Agent's settings, with their defaults. A settings page reads their
+/// descriptions from the catalog ([`AgentApplicationService::settings_catalog`]).
 #[derive(Clone, Debug, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentSettingsView {
     pub settings: AgentSettings,
     pub defaults: AgentSettings,
-    /// The web tools' form fields, in the settings schema's field shape.
-    pub web_search_fields: serde_json::Value,
 }
 
 impl AgentSettingsView {
@@ -20,7 +19,6 @@ impl AgentSettingsView {
         Self {
             settings,
             defaults: AgentSettings::default(),
-            web_search_fields: hanafubuki_agent_config::agent_settings_fields(),
         }
     }
 }
@@ -120,8 +118,7 @@ impl AgentApplicationService {
         Ok(settings)
     }
 
-    /// The Agent's settings, with their defaults and the settings page's
-    /// form for the web tools.
+    /// The Agent's settings, with their defaults.
     pub async fn settings_view(&self) -> Result<AgentSettingsView, String> {
         Ok(AgentSettingsView::of(self.load_agent_settings().await?))
     }

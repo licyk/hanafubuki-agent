@@ -134,7 +134,9 @@ pub use service::{
     McpCredentialsWriteRequest, McpLocalPolicySummary, McpLocalServerStatus,
     McpLocalStatusSnapshot, McpOAuthCallbackRequest, McpOAuthCancelRequest, McpOAuthLoginRequest,
     McpPluginServer, McpPluginServerSnapshot, McpServerDeleteRequest, McpServerWriteRequest,
-    McpToolSnapshot, SkillMcpDependencyStatus,
+    McpToolSnapshot, SettingsAction, SettingsActionOutcome, SettingsActionRequest,
+    SettingsActionScope, SettingsCatalog, SettingsCollection, SettingsRecord,
+    SkillMcpDependencyStatus,
 };
 pub(crate) use service::{ResolvedAgentProvider, ResolvedModelPolicy};
 pub(crate) use shutdown::shutdown_agent;
@@ -191,8 +193,8 @@ pub use hanafubuki_agent_config::{
     InstructionsMode, PluginOptionKey, PluginOptionSchema, PluginOptionsSettings,
     ResolvedPluginOption, ResolvedPluginOptions, RoleLayer, RoleOrigin, SettingApply,
     SettingChange, SettingChoice, SettingCondition, SettingKind, SettingProblem, SettingSource,
-    SettingSpec, SettingValue, SettingWriteOp, SettingsSection, SettingsWrite,
-    SettingsWriteOutcome, AGENT_CREDENTIAL_FILES, AGENT_HOME_ENV, AGENT_MCP_FILE,
+    SettingSpec, SettingState, SettingValue, SettingWriteOp, SettingsGroup, SettingsSection,
+    SettingsWrite, SettingsWriteOutcome, AGENT_CREDENTIAL_FILES, AGENT_HOME_ENV, AGENT_MCP_FILE,
     AGENT_PROVIDERS_FILE, AGENT_SETTINGS_FILE, MAX_AGENT_CONSECUTIVE_STALLED_STEPS,
     MAX_AGENT_CUMULATIVE_MODEL_INPUT_TOKENS, MAX_AGENT_CUMULATIVE_MODEL_OUTPUT_TOKENS,
     MAX_AGENT_HOOK_FRAGMENT_BYTES, MAX_AGENT_IDLE_TIMEOUT_SECONDS, MAX_AGENT_IN_FLIGHT_TOOLS,
