@@ -7,9 +7,11 @@
 mod command;
 mod environment;
 mod model;
+mod output_window;
 mod resolver;
 mod service;
 mod shell;
+mod terminal_screen;
 
 #[cfg(any(test, feature = "test-support"))]
 pub mod test_support;
@@ -28,3 +30,4 @@ pub use model::{
 };
 pub use service::{AgentExecutionProcessPort, AgentExecutionService, ExecutorAgentExecutionPort};
 pub use shell::POWERSHELL_UTF8_OUTPUT_PREFIX;
+pub use terminal_screen::{ScreenText, TerminalScreen};

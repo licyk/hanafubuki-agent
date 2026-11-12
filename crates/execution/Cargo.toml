@@ -21,6 +21,7 @@ parking_lot.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 sha2.workspace = true
+vt100.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

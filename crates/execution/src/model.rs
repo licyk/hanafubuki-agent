@@ -4,6 +4,7 @@ use std::path::PathBuf;
 
 use hanafubuki_agent_approval::{ApprovalOrigin, SandboxEscalation};
 use hanafubuki_agent_process::executor::{ExecutorIoMode, ExecutorStatus, OutputStream};
+use hanafubuki_agent_process::terminal_size::{TerminalResize, TerminalSize};
 use hanafubuki_agent_sandbox::{SandboxError, SandboxSettings};
 use serde::{Deserialize, Serialize};
 
@@ -267,6 +268,12 @@ pub struct AgentExecutionOutput {
     pub start_offset: u64,
     pub next_offset: u64,
     pub truncated: bool,
+    /// The PTY's size at `start_offset`; `None` for pipes.
+    #[serde(default)]
+    pub terminal_size: Option<TerminalSize>,
+    /// The PTY's size changes inside the output, in offset order.
+    #[serde(default)]
+    pub resizes: Vec<TerminalResize>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

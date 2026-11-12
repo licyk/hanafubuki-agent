@@ -475,21 +475,18 @@ fn a_listing_over_the_output_bound_says_what_it_left_out(tty: bool) {
 }
 
 #[test]
-#[ignore = "reproduces §4.9 step 9, no marker past max_output_bytes; fixed in E3"]
 fn pipe_a_listing_over_the_output_bound_says_what_it_left_out() {
     a_listing_over_the_output_bound_says_what_it_left_out(false);
 }
 
 #[test]
-#[ignore = "reproduces §4.9 step 9, no marker past max_output_bytes; fixed in E3"]
 fn pty_a_listing_over_the_output_bound_says_what_it_left_out() {
     a_listing_over_the_output_bound_says_what_it_left_out(true);
 }
 
 /// As reported from `dir`: the head arrives before the first poll, the rest
-/// after it, more than `max_output_bytes`, which also bounds the buffer.
+/// after it, more than `max_output_bytes`, which used to bound the buffer too.
 #[test]
-#[ignore = "reproduces the reported mid-listing loss, a poll past trimmed output has no marker; fixed in E3"]
 fn pipe_a_slow_listing_over_the_output_bound_says_what_it_left_out() {
     let mut request = request(
         PlatformShell::Cmd,

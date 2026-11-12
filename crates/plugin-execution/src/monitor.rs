@@ -6,10 +6,12 @@ use hanafubuki_agent_contracts::{
 };
 use hanafubuki_agent_execution::{
     AgentExecutionError, AgentExecutionGeneration, AgentExecutionId, AgentExecutionOutput,
-    AgentExecutionScope, AgentExecutionService, AgentExecutionSnapshot, AgentExecutionStatus,
+    AgentExecutionOutputChunk, AgentExecutionOutputStream, AgentExecutionScope,
+    AgentExecutionService, AgentExecutionSnapshot, AgentExecutionStatus, TerminalScreen,
 };
 use hanafubuki_agent_foundation::background_worker::BackgroundWorkerGroup;
 use hanafubuki_agent_foundation::cancellation::CancellationToken;
+use hanafubuki_agent_foundation::terminal_text::{aligned_start, resume_point, ALIGN_SEARCH_BYTES};
 use std::time::Duration;
 
 /// The activity an execution reports into: its session (for worker names)
@@ -221,6 +223,8 @@ pub(crate) fn monitor_execution(
 
     let mut offset = 0;
     let mut last_status = None;
+    // A PTY's output as its screen shows it, from the last skip on.
+    let mut screen: Option<TerminalScreen> = None;
     while !cancellation.is_cancelled() {
         if executions
             .ensure_generation(scope, execution_id, generation)
@@ -244,7 +248,17 @@ pub(crate) fn monitor_execution(
                 Some(offset.max(skip_to)),
                 Some(MONITOR_READ_BYTES),
             ) {
-                output.truncated |= skipped;
+                if skipped {
+                    output.truncated = true;
+                    skip_to_aligned_start(&mut output);
+                    screen = None;
+                }
+                if screen.is_none() {
+                    screen = TerminalScreen::for_output(&output);
+                }
+                if let Some(screen) = screen.as_mut() {
+                    render_screen(screen, &mut output);
+                }
                 report_execution_output_to(progress, generation, &output);
                 offset = output.next_offset;
             }
@@ -265,6 +279,44 @@ pub(crate) fn monitor_execution(
             return;
         }
     }
+}
+
+/// Replace a PTY's `output` with what its `screen` shows of it, as terminal
+/// text the preview renders: a row the previous update left unfinished is
+/// cleared and written again.
+fn render_screen(screen: &mut TerminalScreen, output: &mut AgentExecutionOutput) {
+    screen.push_output(output);
+    let taken = screen.take();
+    let text = if taken.rewrites_last_line {
+        format!("\r\x1b[2K{}", taken.text)
+    } else {
+        taken.text
+    };
+    output.chunks = vec![AgentExecutionOutputChunk {
+        stream: AgentExecutionOutputStream::Merged,
+        text,
+    }];
+}
+
+/// Drop what precedes the first place `output`, read from a skipped-to
+/// offset, renders from (see [`resume_point`]).
+fn skip_to_aligned_start(output: &mut AgentExecutionOutput) {
+    let mut skip = {
+        let start = output
+            .chunks
+            .iter()
+            .flat_map(|chunk| chunk.text.as_bytes())
+            .take(ALIGN_SEARCH_BYTES)
+            .copied()
+            .collect::<Vec<_>>();
+        resume_point(&start)
+    };
+    for chunk in &mut output.chunks {
+        let drop = skip.min(chunk.text.len());
+        chunk.text.drain(..drop);
+        skip -= drop;
+    }
+    output.chunks.retain(|chunk| !chunk.text.is_empty());
 }
 
 pub(crate) fn report_execution_output_to(
@@ -330,10 +382,7 @@ pub(crate) fn bound_execution_output(value: &str) -> String {
     if value.len() <= MAX_BYTES {
         return value.to_owned();
     }
-    let mut start = value.len() - MAX_BYTES;
-    while !value.is_char_boundary(start) {
-        start += 1;
-    }
+    let start = aligned_start(value.as_bytes(), value.len() - MAX_BYTES);
     value[start..].to_owned()
 }
 

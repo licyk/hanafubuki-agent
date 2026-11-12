@@ -20,6 +20,7 @@ use std::collections::VecDeque;
 use std::time::Instant;
 
 use encoding_rs::Encoding;
+use hanafubuki_agent_foundation::terminal_text::{resume_point, ALIGN_SEARCH_BYTES};
 
 use self::decode::{utf8_complete_len, RunDecoder};
 use super::model::{OutputDelta, OutputStream};
@@ -214,10 +215,27 @@ impl OutputBuffer {
             .unwrap_or(self.next_offset)
     }
 
+    /// Up to `max` retained bytes from `start`, across chunks.
+    fn bytes_from(&self, start: u64, max: usize) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        for chunk in &self.chunks {
+            if bytes.len() >= max || chunk.end <= start {
+                continue;
+            }
+            let from = (start.max(chunk.start) - chunk.start) as usize;
+            let take = (chunk.bytes.len() - from).min(max - bytes.len());
+            bytes.extend_from_slice(&chunk.bytes[from..from + take]);
+        }
+        bytes
+    }
+
     /// Read output from `from` (default 0), capped at `max_bytes` total returned.
     /// Returns `(deltas, start_offset, next_offset, truncated)` where
-    /// `start_offset` is where the returned data actually begins (clamped to the
-    /// retained window) and `truncated` is true when `from` predated it.
+    /// `start_offset` is where the returned data actually begins and
+    /// `truncated` is true when `from` predated the retained window. Such a
+    /// read starts where the retained output first renders as it would have
+    /// (see [`resume_point`]), so never inside an escape sequence; the bytes it
+    /// skips lie between `from` and `start_offset`.
     pub fn read_from(
         &self,
         from: u64,
@@ -226,6 +244,9 @@ impl OutputBuffer {
         let oldest = self.oldest_offset();
         let truncated = from < oldest;
         let mut start = from.max(oldest);
+        if truncated {
+            start += resume_point(&self.bytes_from(oldest, ALIGN_SEARCH_BYTES)) as u64;
+        }
         // A read that starts inside a scalar begins after it instead.
         if let Some(chunk) = self
             .chunks

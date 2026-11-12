@@ -638,12 +638,12 @@ fn append_output(
             commit_output_line(output, rendered);
         }
     }
-    let complete = complete_prefix_len(&line.raw);
+    let complete = complete_prefix_len(line.raw.as_bytes());
     if line.raw.len() > MAX_PENDING_LINE_BYTES {
         let collapsed = render_plain_text(&line.raw.as_bytes()[..complete]);
         line.raw.replace_range(..complete, &collapsed);
     }
-    let shown = render_plain_text(&line.raw.as_bytes()[..complete_prefix_len(&line.raw)]);
+    let shown = render_plain_text(&line.raw.as_bytes()[..complete_prefix_len(line.raw.as_bytes())]);
     if !shown.is_empty() {
         line.evicted = commit_output_line(output, &shown);
         line.shown = true;

@@ -19,6 +19,7 @@ use hanafubuki_agent_process::executor::{
 use hanafubuki_agent_process::ownership::{
     OwnedReleaseStatus, ProcessOwnerId, ProcessReceipt, ProcessReservation,
 };
+use hanafubuki_agent_process::terminal_size::TerminalSize;
 use hanafubuki_agent_sandbox::{Sandbox, SandboxPolicy};
 use parking_lot::{Condvar, Mutex, RwLock};
 
@@ -30,8 +31,10 @@ use crate::model::{
     ConfirmedAgentExecutionDisposal, ExecCommandRequest, InteractiveResizeAccepted,
     ResolvedCommandPlan, UnifiedExecResult, WriteStdinRequest,
 };
-use crate::resolver::{MAX_OUTPUT_READ_BYTES, MAX_WAIT_MS};
+use crate::output_window::{omission_marker, output_window, WindowPart};
+use crate::resolver::{DEFAULT_READ_BYTES, MAX_OUTPUT_READ_BYTES, MAX_WAIT_MS};
 use crate::shell::prepare_exec_command;
+use crate::terminal_screen::TerminalScreen;
 
 const WAIT_POLL: Duration = Duration::from_millis(20);
 const BACKGROUND_OUTPUT_BYTES: usize = 8 * 1024;
@@ -55,7 +58,7 @@ mod shutdown;
 mod start;
 mod unified;
 
-use output::{bound_utf8, recent_output_lines};
+use output::{bound_utf8, read_bound, recent_output_lines};
 use process_port::executor_request;
 use registry::{now_millis, ExecutionRegistry};
 

@@ -11,7 +11,7 @@ use crate::environment::build_clean_command_environment;
 use crate::model::{AgentExecutionError, ExecCommandRequest, PlatformShell, ResolvedCommandPlan};
 use crate::resolver::{
     canonical_directory, resolve_executable, utf8_path, validate_execution_origin,
-    DEFAULT_COMMAND_OUTPUT_BYTES, DEFAULT_COMMAND_TIMEOUT_MS, MAX_WAIT_MS,
+    DEFAULT_COMMAND_TIMEOUT_MS, EXEC_RETAINED_OUTPUT_BYTES, MAX_WAIT_MS,
 };
 use sha2::{Digest, Sha256};
 
@@ -105,9 +105,7 @@ pub(crate) fn prepare_exec_command(
         cwd,
         environment,
         timeout_ms: DEFAULT_COMMAND_TIMEOUT_MS,
-        output_bytes_cap: request
-            .max_output_bytes
-            .unwrap_or(DEFAULT_COMMAND_OUTPUT_BYTES),
+        output_bytes_cap: EXEC_RETAINED_OUTPUT_BYTES,
         io_mode,
         cols,
         rows,

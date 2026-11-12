@@ -257,7 +257,12 @@ pub(crate) fn spawn(
                     }
                 }
             };
-            reader_output.lock().finish_stream(OutputStream::Merged);
+            filtered.clear();
+            queries.finish(&mut filtered);
+            let mut output = reader_output.lock();
+            output.push_read(OutputStream::Merged, &filtered);
+            output.finish_stream(OutputStream::Merged);
+            drop(output);
             log::debug!(
                 "executor pty reader ended id={reader_id} reason={exit_reason} interrupted_retries={interrupted_retries} would_block_retries={would_block_retries}"
             );

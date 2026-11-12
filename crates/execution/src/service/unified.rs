@@ -72,34 +72,71 @@ impl AgentExecutionService {
         max_output_bytes: Option<usize>,
         started: Instant,
     ) -> Result<UnifiedExecResult, AgentExecutionError> {
-        let from_offset = {
-            let registry = self.inner.registry.lock();
+        let bound = read_bound(max_output_bytes)?;
+        let (receipt, from_offset, io_mode, screen) = {
+            let mut registry = self.inner.registry.lock();
             let record = registry
                 .records
-                .get(&execution_id)
+                .get_mut(&execution_id)
+                .filter(|record| !record.disposing)
                 .ok_or(AgentExecutionError::NotFound)?;
             if &record.scope != scope {
                 return Err(AgentExecutionError::CrossScope);
             }
-            record.unified_output_offset
+            let receipt = record
+                .receipt
+                .clone()
+                .ok_or(AgentExecutionError::NotFound)?;
+            record.updated_at_ms = now_millis();
+            (
+                receipt,
+                record.unified_output_offset,
+                record.io_mode,
+                record.screen.take(),
+            )
         };
-        let output = self.read_output(scope, execution_id, Some(from_offset), max_output_bytes)?;
-        let mut text = output
+        // Everything not read yet, so the bound can keep its head and tail.
+        let output = self
+            .inner
+            .process
+            .read(&receipt, Some(from_offset), None)
+            .map_err(|error| self.port_error(execution_id, error))?;
+        let bytes = output
             .chunks
             .iter()
-            .map(|chunk| chunk.text.as_str())
-            .collect::<String>();
-        let mut next_offset = output.next_offset;
-        // A running command's next poll re-reads an unfinished trailing escape
-        // sequence with the rest of it rather than printing it as text. The
-        // held text is the exact bytes read when it decoded cleanly.
-        if !completed {
-            let complete = complete_prefix_len(&text);
-            if !text[complete..].contains(char::REPLACEMENT_CHARACTER) {
-                next_offset -= (text.len() - complete) as u64;
-                text.truncate(complete);
-            }
-        }
+            .flat_map(|chunk| chunk.data.iter().copied())
+            .collect::<Vec<_>>();
+        let (text, next_offset, omitted, screen) = if io_mode.uses_pty() {
+            let mut screen = screen.unwrap_or_else(|| {
+                TerminalScreen::new(output.terminal_size.unwrap_or(TerminalSize::DEFAULT))
+            });
+            let (text, omitted) = render_window(
+                &output_window(&bytes, from_offset, output.start_offset, bound),
+                |bytes, offset, after_gap| {
+                    if after_gap {
+                        screen = TerminalScreen::new(TerminalSize::DEFAULT);
+                    }
+                    screen.push_sized(bytes, offset, output.terminal_size, &output.resizes);
+                    screen.take().text
+                },
+            );
+            (text, output.next_offset, omitted, Some(screen))
+        } else {
+            // A running command's next poll re-reads an unfinished trailing
+            // escape sequence with the rest of it rather than printing it as
+            // text.
+            let complete = if completed {
+                bytes.len()
+            } else {
+                complete_prefix_len(&bytes)
+            };
+            let (text, omitted) = render_window(
+                &output_window(&bytes[..complete], from_offset, output.start_offset, bound),
+                |bytes, _, _| render_plain_text(bytes),
+            );
+            let held = (bytes.len() - complete) as u64;
+            (text, output.next_offset - held, omitted, None)
+        };
         {
             let mut registry = self.inner.registry.lock();
             let record = registry
@@ -110,9 +147,10 @@ impl AgentExecutionService {
                 return Err(AgentExecutionError::CrossScope);
             }
             record.unified_output_offset = next_offset;
+            record.screen = screen;
         }
         let exit_code = output.exit_code;
-        let truncated = output.truncated;
+        let truncated = output.truncated || omitted;
         if completed {
             self.await_observer_release(execution_id);
             if let Err(error) = self.dispose(scope, execution_id) {
@@ -134,11 +172,42 @@ impl AgentExecutionService {
             started.elapsed().as_millis()
         );
         Ok(UnifiedExecResult {
-            output: render_plain_text(text.as_bytes()),
+            output: text,
             exit_code: completed.then_some(exit_code).flatten(),
             session_id: (!completed).then_some(execution_id.value()),
             wall_time_ms: started.elapsed().as_millis() as u64,
             truncated,
         })
     }
+}
+
+/// Render each text part of a poll's `window` with `render` (given the part's
+/// bytes, its offset, and whether a gap precedes it), and each gap as its
+/// marker on a line of its own; returns the text and whether it has a gap.
+fn render_window(
+    window: &[WindowPart<'_>],
+    mut render: impl FnMut(&[u8], u64, bool) -> String,
+) -> (String, bool) {
+    let mut text = String::new();
+    let mut after_gap = false;
+    for part in window {
+        match part {
+            WindowPart::Text { bytes, offset } => {
+                text.push_str(&render(bytes, *offset, after_gap));
+                after_gap = false;
+            }
+            WindowPart::Omitted(omitted) => {
+                if !text.is_empty() && !text.ends_with('\n') {
+                    text.push('\n');
+                }
+                text.push_str(&omission_marker(*omitted));
+                text.push('\n');
+                after_gap = true;
+            }
+        }
+    }
+    let omitted = window
+        .iter()
+        .any(|part| matches!(part, WindowPart::Omitted(_)));
+    (text, omitted)
 }

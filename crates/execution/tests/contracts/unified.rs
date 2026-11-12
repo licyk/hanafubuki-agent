@@ -582,7 +582,8 @@ fn unified_output_is_plain_text_and_an_unfinished_sequence_waits_for_the_next_po
     let started = start_unified(&service, &scope, &request);
     let process_id = format!("agent-command-{}", started.execution_id.value());
 
-    let first = b"\x1b[31mred\x1b[0m\r\n50%\r60%\n\x1b[3".to_vec();
+    // A PTY ends lines with CR LF (`onlcr`).
+    let first = b"\x1b[31mred\x1b[0m\r\n50%\r60%\r\n\x1b[3".to_vec();
     process.set_output(&process_id, first.clone());
     let yielded = service
         .wait_unified_execution(

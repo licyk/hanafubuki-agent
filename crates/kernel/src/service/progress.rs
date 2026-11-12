@@ -25,6 +25,7 @@
 //! synchronous reports (`report_session_execution_progress`) wait for the
 //! queued updates before them and commit on the calling thread.
 
+use hanafubuki_agent_foundation::terminal_text::aligned_start;
 use parking_lot::{Condvar, Mutex};
 use tokio::sync::watch;
 
@@ -290,10 +291,8 @@ fn coalesce_output(
         text.push_str(&newer_text);
     }
     if text.len() > MAXIMUM_COALESCED_OUTPUT_BYTES {
-        let mut start = text.len() - MAXIMUM_COALESCED_OUTPUT_BYTES;
-        while !text.is_char_boundary(start) {
-            start += 1;
-        }
+        let cut = text.len() - MAXIMUM_COALESCED_OUTPUT_BYTES;
+        let start = aligned_start(text.as_bytes(), cut);
         text.drain(..start);
         *truncated = true;
     }

@@ -22,12 +22,7 @@ impl AgentExecutionService {
         from_offset: Option<u64>,
         max_bytes: Option<usize>,
     ) -> Result<AgentExecutionOutput, AgentExecutionError> {
-        let max_bytes = max_bytes.unwrap_or(64 * 1024);
-        if max_bytes == 0 || max_bytes > MAX_OUTPUT_READ_BYTES {
-            return Err(AgentExecutionError::InvalidRequest(format!(
-                "read size must be between 1 and {MAX_OUTPUT_READ_BYTES} bytes"
-            )));
-        }
+        let max_bytes = read_bound(max_bytes)?;
         let receipt = self.receipt_for_scope(scope, execution_id)?;
         let output = self
             .inner
@@ -53,6 +48,8 @@ impl AgentExecutionService {
             start_offset: output.start_offset,
             next_offset: output.next_offset,
             truncated: output.truncated,
+            terminal_size: output.terminal_size,
+            resizes: output.resizes,
         })
     }
 
@@ -141,4 +138,15 @@ pub(super) fn bound_utf8(value: &str, max_bytes: usize) -> String {
         end -= 1;
     }
     value[..end].to_string()
+}
+
+/// A read's bound in bytes: `max_bytes`, by default 64 KiB.
+pub(super) fn read_bound(max_bytes: Option<usize>) -> Result<usize, AgentExecutionError> {
+    let max_bytes = max_bytes.unwrap_or(DEFAULT_READ_BYTES);
+    if max_bytes == 0 || max_bytes > MAX_OUTPUT_READ_BYTES {
+        return Err(AgentExecutionError::InvalidRequest(format!(
+            "read size must be between 1 and {MAX_OUTPUT_READ_BYTES} bytes"
+        )));
+    }
+    Ok(max_bytes)
 }

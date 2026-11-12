@@ -10,6 +10,11 @@ use crate::model::AgentExecutionError;
 pub(crate) const DEFAULT_COMMAND_TIMEOUT_MS: u64 = 10 * 60 * 1_000;
 pub(crate) const DEFAULT_COMMAND_OUTPUT_BYTES: usize = 256 * 1024;
 pub(crate) const MAX_OUTPUT_READ_BYTES: usize = 256 * 1024;
+/// What one read returns when its caller names no bound.
+pub(crate) const DEFAULT_READ_BYTES: usize = 64 * 1024;
+/// Output an `exec_command` session keeps for its polls, whatever their read
+/// bound: a poll further behind is told how much it missed.
+pub(crate) const EXEC_RETAINED_OUTPUT_BYTES: usize = 4 * 1024 * 1024;
 pub(crate) const MAX_WAIT_MS: u64 = 30_000;
 
 pub(crate) fn validate_execution_origin(
