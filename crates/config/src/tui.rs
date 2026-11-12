@@ -26,6 +26,9 @@ pub struct AgentTuiPreferences {
     /// goes into the terminal's scrollback. Read at launch.
     pub fullscreen_transcript: bool,
     pub alternate_screen: AgentAlternateScreen,
+    /// Whether Scrollback takes the mouse while its tail shows an entry
+    /// with a control, so a click reaches it.
+    pub scrollback_mouse: AgentScrollbackMouse,
     /// The conversation shown as the plain text it was made from.
     pub raw_output: bool,
     /// The syntax highlighting theme: a bundled theme's name, or a custom
@@ -89,6 +92,7 @@ impl Default for AgentTuiPreferences {
         Self {
             fullscreen_transcript: true,
             alternate_screen: AgentAlternateScreen::Auto,
+            scrollback_mouse: AgentScrollbackMouse::Tail,
             raw_output: false,
             theme: None,
             status_line: DEFAULT_STATUS_LINE.map(String::from).to_vec(),
@@ -115,12 +119,26 @@ pub enum AgentAlternateScreen {
     Never,
 }
 
+/// When Scrollback takes the mouse, which also takes the wheel from the
+/// terminal's own scrolling.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentScrollbackMouse {
+    /// While the tail shows an entry with a control, until the first turn
+    /// of the wheel; taken again at the next key or entry.
+    #[default]
+    Tail,
+    /// Never: the keyboard and the transcript only.
+    Off,
+}
+
 /// A change to `[tui]`: each field present is written, the others keep
 /// what the file holds.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct AgentTuiPreferencesPatch {
     pub fullscreen_transcript: Option<bool>,
     pub alternate_screen: Option<AgentAlternateScreen>,
+    pub scrollback_mouse: Option<AgentScrollbackMouse>,
     pub raw_output: Option<bool>,
     pub theme: Option<String>,
     pub status_line: Option<Vec<String>>,
@@ -142,6 +160,9 @@ impl AgentTuiPreferencesPatch {
         }
         if let Some(mode) = self.alternate_screen {
             table.insert("alternateScreen".into(), serde_json::json!(mode));
+        }
+        if let Some(mouse) = self.scrollback_mouse {
+            table.insert("scrollbackMouse".into(), serde_json::json!(mouse));
         }
         if let Some(enabled) = self.raw_output {
             table.insert("rawOutput".into(), Value::Bool(enabled));
@@ -193,6 +214,7 @@ pub(crate) fn read_tui(
     read_object(fields, "tui", defaults, |fields, tui| {
         tui.fullscreen_transcript = fields.read("fullscreenTranscript", tui.fullscreen_transcript);
         tui.alternate_screen = fields.read("alternateScreen", tui.alternate_screen);
+        tui.scrollback_mouse = fields.read("scrollbackMouse", tui.scrollback_mouse);
         tui.raw_output = fields.read("rawOutput", tui.raw_output);
         tui.theme = fields.read("theme", tui.theme.take());
         tui.status_line = fields.read("statusLine", std::mem::take(&mut tui.status_line));

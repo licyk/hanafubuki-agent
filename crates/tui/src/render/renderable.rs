@@ -185,10 +185,6 @@ impl Renderable for ColumnRenderable<'_> {
 }
 
 impl<'a> ColumnRenderable<'a> {
-    pub fn new() -> Self {
-        Self { children: vec![] }
-    }
-
     pub fn with<I, T>(children: I) -> Self
     where
         I: IntoIterator<Item = T>,

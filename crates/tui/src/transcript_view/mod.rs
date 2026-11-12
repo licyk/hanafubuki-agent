@@ -30,6 +30,7 @@ mod search;
 mod select_mode;
 mod selection;
 mod snapshot;
+mod tail;
 mod text;
 
 use std::sync::Arc;
@@ -53,6 +54,7 @@ use text::TextLayout;
 
 pub(crate) use history::TranscriptHistoryState;
 pub(crate) use input::ViewAction;
+pub(crate) use tail::TailEntry;
 
 /// A painted row of the view: which entry, which of its rows.
 struct VisibleRow {
@@ -92,6 +94,9 @@ pub(crate) struct TranscriptView {
     disclosure: disclosure::Disclosure,
     /// The entry drawn reversed, unless a selection or a search shows.
     highlight: Option<usize>,
+    /// The first entry is separated from what is above the view too: the
+    /// lines Scrollback wrote above its tail.
+    leading_separator: bool,
 }
 
 impl Default for TranscriptView {
@@ -116,6 +121,7 @@ impl Default for TranscriptView {
             last_click: None,
             disclosure: disclosure::Disclosure::default(),
             highlight: None,
+            leading_separator: false,
         }
     }
 }
@@ -229,6 +235,10 @@ impl TranscriptView {
 
     pub(crate) fn is_detailed(&self) -> bool {
         self.detailed
+    }
+
+    pub(crate) fn mode(&self) -> HistoryRenderMode {
+        self.mode
     }
 
     pub(crate) fn is_following(&self) -> bool {

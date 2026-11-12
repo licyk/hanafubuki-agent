@@ -76,6 +76,6 @@ pub use store::{
     AGENT_CREDENTIAL_FILES, AGENT_MCP_FILE, AGENT_PROVIDERS_FILE, AGENT_SETTINGS_FILE,
 };
 pub use tui::{
-    AgentAlternateScreen, AgentTuiPreferences, AgentTuiPreferencesPatch, AgentTuiPreset,
-    MAX_PRESET_INPUT_BYTES,
+    AgentAlternateScreen, AgentScrollbackMouse, AgentTuiPreferences, AgentTuiPreferencesPatch,
+    AgentTuiPreset, MAX_PRESET_INPUT_BYTES,
 };

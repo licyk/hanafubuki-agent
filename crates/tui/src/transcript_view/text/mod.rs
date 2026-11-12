@@ -160,6 +160,18 @@ impl TextLayout {
         self.rows.len()
     }
 
+    /// A display row as a line of its own, its indent included.
+    pub(super) fn row_line(&self, row: usize) -> Line<'static> {
+        let Some(row) = self.rows.get(row) else {
+            return Line::default();
+        };
+        let mut line = row.line.clone();
+        if row.first_column > 0 {
+            line.spans.insert(0, " ".repeat(row.first_column).into());
+        }
+        line
+    }
+
     pub(super) fn disclosure_row(&self) -> Option<usize> {
         self.disclosure_control.as_ref().map(|control| control.row)
     }

@@ -6,10 +6,11 @@
 //! the finished cells and draws when a frame is due.
 //!
 //! The transcript's mode is fixed at launch ([`TranscriptMode`]). In
-//! terminal mode the finished cells are written into the scrollback above
-//! an inline viewport; while an overlay (the transcript, `/diff`, the
+//! terminal mode the newest cells stay in a tail at the top of an inline
+//! viewport and are written into the scrollback above it as they leave the
+//! tail (`scrollback`); while an overlay (the transcript, `/diff`, the
 //! resume picker) holds the alternate screen, it takes the keys and the
-//! scrollback waits. In owned mode the app holds the alternate screen for
+//! tail waits. In owned mode the app holds the alternate screen for
 //! the whole run and draws the cells itself (`owned`), the overlays over
 //! it. Esc twice on an empty composer browses the prompts to edit an
 //! earlier one (`backtrack`).
@@ -20,6 +21,7 @@ mod keys;
 mod owned;
 mod preferences;
 mod requests;
+mod scrollback;
 mod workspace;
 
 pub(crate) use workspace::WorkspaceEvent;
@@ -50,7 +52,6 @@ use crate::get_git_diff::get_git_diff;
 use crate::history_cell::{HistoryCell, HistoryRenderMode};
 use crate::keymap::ChordState;
 use crate::pager_overlay::Overlay;
-use crate::render::renderable::Renderable;
 use crate::resume_picker::ResumePicker;
 use crate::transcript_mode::TranscriptMode;
 use crate::transcript_view::{TranscriptHistoryState, TranscriptView, ViewAction};
@@ -80,8 +81,11 @@ pub(crate) struct App {
     /// or what the terminal-mode transcript overlay opens on.
     transcript_cells: Vec<Arc<dyn HistoryCell>>,
     mode: TranscriptMode,
-    /// The owned transcript's viewport; unused in terminal mode.
+    /// The owned transcript's viewport; in terminal mode, its tail's.
     transcript_view: TranscriptView,
+    /// Terminal mode: the entries not written into the scrollback yet.
+    tail: scrollback::Tail,
+    tail_mouse: scrollback::TailMouse,
     render_mode: HistoryRenderMode,
     /// Where the session's unread earlier transcript begins, which the
     /// owned transcript loads as the reader nears its start.
@@ -95,7 +99,6 @@ pub(crate) struct App {
     /// scrollback when it closes.
     deferred_history_lines: Vec<Line<'static>>,
     commit_anim_running: Arc<AtomicBool>,
-    has_emitted_history_lines: bool,
     next_frame: Option<Instant>,
     last_frame: Option<Instant>,
     backtrack: backtrack::Backtrack,
@@ -125,6 +128,8 @@ impl App {
             transcript_cells: Vec::new(),
             mode,
             transcript_view: new_view(render_mode, TranscriptHistoryState::Complete),
+            tail: scrollback::Tail::default(),
+            tail_mouse: scrollback::TailMouse::default(),
             render_mode,
             older_transcript: None,
             clipboard: Clipboard::default(),
@@ -133,7 +138,6 @@ impl App {
             resume_picker: None,
             deferred_history_lines: Vec::new(),
             commit_anim_running: Arc::new(AtomicBool::new(false)),
-            has_emitted_history_lines: false,
             next_frame: Some(Instant::now()),
             last_frame: None,
             backtrack: backtrack::Backtrack::default(),
@@ -168,7 +172,7 @@ impl App {
             }
         }
         self.commit_anim_running.store(false, Ordering::Release);
-        Ok(())
+        self.write_tail_at_exit(tui)
     }
 
     /// `false` when the app should exit.
@@ -222,13 +226,12 @@ impl App {
                     self.show_update(update);
                 }
             }
-            AppEvent::InsertHistoryCell(cell) => {
-                let cell: Arc<dyn HistoryCell> = cell.into();
-                self.insert_history_cell(cell.clone());
-                self.write_history_cell(tui, &cell);
+            AppEvent::InsertHistoryCell(cell) => self.insert_history_cell(cell.into(), false),
+            AppEvent::InsertLiveEntry(cell) => self.insert_history_cell(cell, true),
+            AppEvent::LiveEntryCompleted(cell) => {
+                self.tail.complete(&cell);
+                self.schedule_frame(Instant::now());
             }
-            AppEvent::InsertLiveEntry(cell) => self.insert_history_cell(cell),
-            AppEvent::WriteLiveEntry(cell) => self.write_history_cell(tui, &cell),
             AppEvent::StartFileSearch(query) => self.file_search.on_user_query(query),
             AppEvent::FileSearchResult { query, matches } => {
                 self.chat_widget.apply_file_search_result(query, matches)
@@ -268,7 +271,12 @@ impl App {
             } else {
                 TranscriptHistoryState::Complete
             };
-            self.transcript_view = new_view(self.render_mode, history);
+            if self.mode.is_owned() {
+                self.transcript_view = new_view(self.render_mode, history);
+            } else {
+                // The tail's view writes the entries as they were shown.
+                self.tail.finish();
+            }
         }
         self.chat_widget.handle_turn_update(update);
     }
@@ -300,6 +308,9 @@ impl App {
     fn handle_mouse(&mut self, mouse: MouseEvent) {
         if self.overlay.is_none() && self.handle_workspace_mouse(mouse) {
             return;
+        }
+        if !self.mode.is_owned() && !self.alt_screen_open() {
+            return self.handle_tail_mouse(mouse);
         }
         let action = match self.overlay.as_mut() {
             Some(Overlay::Transcript(transcript)) => transcript.handle_mouse(mouse),
@@ -448,49 +459,24 @@ impl App {
         });
     }
 
-    /// Adds `cell` to the transcript, where a live one goes on changing.
-    fn insert_history_cell(&mut self, cell: Arc<dyn HistoryCell>) {
+    /// Adds `cell` to the transcript, where a `live` one goes on changing;
+    /// in terminal mode, to the tail too.
+    fn insert_history_cell(&mut self, cell: Arc<dyn HistoryCell>, live: bool) {
         // The transcript overlay shows the focused conversation.
         if let (Some(Overlay::Transcript(transcript)), false) =
             (&mut self.overlay, self.workspace.handling_parked())
         {
             transcript.insert_cell(cell.clone());
         }
-        self.transcript_cells.push(cell);
-        self.schedule_frame(Instant::now());
-    }
-
-    /// Writes `cell` into the scrollback as it is shown now (Scrollback).
-    fn write_history_cell<B: Backend<Error = io::Error> + Write>(
-        &mut self,
-        tui: &mut Tui<B>,
-        cell: &Arc<dyn HistoryCell>,
-    ) {
-        if self.mode.is_owned() {
-            self.schedule_frame(Instant::now());
-            return;
-        }
-        let width = tui.terminal.last_known_screen_size.width;
-        let mut display = cell.display_lines_for_mode(width, self.render_mode);
-        if display.is_empty() {
-            return;
-        }
-        // Cells are separated by a blank line, a streamed message's chunks
-        // are not.
-        if !cell.is_stream_continuation() {
-            if self.has_emitted_history_lines {
-                display.insert(0, Line::from(""));
-            } else {
-                self.has_emitted_history_lines = true;
+        if !self.mode.is_owned() {
+            // An answer's next lines are not a new entry: the wheel stays
+            // the terminal's while it streams.
+            if !cell.is_stream_continuation() {
+                self.tail_mouse.released = false;
             }
+            self.tail.push(cell.clone(), live);
         }
-        if let Some(held) = self.workspace.held_lines() {
-            held.extend(display);
-        } else if self.alt_screen_open() {
-            self.deferred_history_lines.extend(display);
-        } else {
-            tui.insert_history_lines(display);
-        }
+        self.transcript_cells.push(cell);
         self.schedule_frame(Instant::now());
     }
 
@@ -556,20 +542,7 @@ impl App {
         if self.mode.is_owned() {
             return self.draw_owned(tui);
         }
-        let width = tui.terminal.size()?.width;
-        let height = self.chat_widget.desired_height(width);
-        let chat_widget = &self.chat_widget;
-        tui.draw(height, |frame| {
-            let area = frame.area();
-            chat_widget.render(area, frame.buffer_mut());
-            if let Some((x, y)) = chat_widget.cursor_pos(area) {
-                frame.set_cursor_position((x, y));
-            }
-        })?;
-        // A command's view that panicked while drawn is gone from the next
-        // frame, which its error cell schedules.
-        self.chat_widget.reap_failed_views();
-        Ok(())
+        self.draw_scrollback(tui)
     }
 
     /// Draws the open overlay.

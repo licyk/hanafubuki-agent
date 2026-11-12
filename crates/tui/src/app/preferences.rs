@@ -165,6 +165,7 @@ impl App {
         let (keymap, warnings) = Keymap::resolve(&preferences.keymap);
         keymap::install(keymap);
         self.chords.clear();
+        self.tail_mouse.setting = preferences.scrollback_mouse;
         self.chat_widget.set_preferences(preferences);
         warnings
     }
@@ -182,6 +183,9 @@ pub(super) fn shadowed(
         || patch
             .alternate_screen
             .is_some_and(|value| preferences.alternate_screen != value)
+        || patch
+            .scrollback_mouse
+            .is_some_and(|value| preferences.scrollback_mouse != value)
         || patch
             .raw_output
             .is_some_and(|value| preferences.raw_output != value)

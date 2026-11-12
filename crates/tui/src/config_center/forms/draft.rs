@@ -135,6 +135,11 @@ pub(crate) fn draft(
         ConfigSection::Interface => ConfigChange::Tui(AgentTuiPreferencesPatch {
             fullscreen_transcript: Some(form.toggle(FULLSCREEN)),
             alternate_screen: Some(SCREENS.get(form.choice(ALTERNATE_SCREEN)).copied()?),
+            scrollback_mouse: Some(
+                SCROLLBACK_MICE
+                    .get(form.choice(SCROLLBACK_MOUSE))
+                    .copied()?,
+            ),
             raw_output: Some(form.toggle(RAW_OUTPUT)),
             status_line_colors: Some(form.toggle(STATUS_COLORS)),
             ..AgentTuiPreferencesPatch::default()

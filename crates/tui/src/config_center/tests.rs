@@ -9,7 +9,7 @@ use serde_json::Value;
 
 /// Keys the center's own forms edit. Specialized editors own the removed
 /// dynamic tables below, not the generic settings patch.
-const FORM_KEYS: [&str; 46] = [
+const FORM_KEYS: [&str; 47] = [
     "permissionMode",
     "modelMetadata.discovery",
     "modelMetadata.modelsDev",
@@ -54,6 +54,7 @@ const FORM_KEYS: [&str; 46] = [
     "logLevel",
     "tui.fullscreenTranscript",
     "tui.alternateScreen",
+    "tui.scrollbackMouse",
     "tui.rawOutput",
     "tui.statusLineColors",
 ];

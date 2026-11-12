@@ -59,7 +59,7 @@ impl App {
     fn clear_screen<B: Backend<Error = io::Error> + Write>(&mut self, tui: &mut Tui<B>) {
         self.transcript_cells.clear();
         self.deferred_history_lines.clear();
-        self.has_emitted_history_lines = false;
+        self.tail.clear();
         if self.mode.is_owned() {
             self.transcript_view = new_view(self.render_mode, TranscriptHistoryState::Complete);
         } else if let Err(error) = tui.clear_scrollback() {

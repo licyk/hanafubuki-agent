@@ -571,6 +571,26 @@ path = "crates/tui/src/chatwidget/tests/entries.rs"
 reason = "The chat's thinking and tool calls as entries, in both presentations."
 
 [[original]]
+path = "crates/tui/src/app/scrollback.rs"
+reason = "Scrollback's tail of entries that change in place above the chat, written for the Agent's timeline."
+
+[[original]]
+path = "crates/tui/src/app/scrollback/tests.rs"
+reason = "What leaves Scrollback's tail and when, written with it."
+
+[[original]]
+path = "crates/tui/src/app/tests/scrollback.rs"
+reason = "Scrollback's tail on an emulated terminal, written with it."
+
+[[original]]
+path = "crates/tui/src/transcript_view/tail.rs"
+reason = "The transcript view's layout of Scrollback's tail, written for the Agent's timeline."
+
+[[original]]
+path = "crates/tui/src/transcript_view/tail/tests.rs"
+reason = "The tail as the view paints it, written with it."
+
+[[original]]
 path = "crates/tui/src/bottom_pane/request_user_input/tests.rs"
 reason = "The question overlay over the Agent's option-only answers."
 

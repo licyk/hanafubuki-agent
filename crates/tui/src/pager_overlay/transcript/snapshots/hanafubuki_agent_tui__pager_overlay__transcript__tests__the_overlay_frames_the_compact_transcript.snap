@@ -1,0 +1,14 @@
+---
+source: crates/tui/src/pager_overlay/transcript/tests.rs
+expression: terminal.backend()
+---
+"/ T R A N S C R I P T / / / / / / / / / / / / / / / / / / / / / / / / / / / / / "
+"alpha                                                                           "
+"                                                                                "
+"beta                                                                            "
+"                                                                                "
+"gamma                                                                           "
+"                                                                                "
+"                                                                                "
+"ctrl + space select · F3 find                                                   "
+" ↑/↓ scroll   pgup/pgdn page   home/end jump   ctrl + t details   q/esc close   "

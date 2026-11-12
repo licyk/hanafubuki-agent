@@ -39,6 +39,7 @@ impl App {
         tui: &mut Tui<B>,
         key: KeyEvent,
     ) -> bool {
+        self.tail_mouse.released = false;
         if self.resume_picker.is_some() {
             return self.handle_picker_key(tui, key);
         }
@@ -148,6 +149,14 @@ impl App {
         } else if is_transcript_key(key) {
             let overlay = TranscriptOverlay::new(self.transcript_cells.clone(), self.render_mode);
             self.open_overlay(tui, Overlay::Transcript(overlay));
+            return true;
+        } else if self.chat_widget.no_modal_or_popup_active()
+            && self
+                .transcript_view
+                .handle_tail_key(key, self.tail.cells())
+                .is_some()
+        {
+            self.schedule_frame(Instant::now());
             return true;
         }
         self.chat_widget.handle_key_event(key);

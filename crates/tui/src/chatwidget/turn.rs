@@ -20,47 +20,11 @@ impl ChatWidget {
             self.request_redraw();
             return;
         };
-        if self.owned_transcript {
-            // An entry goes in its place at once, after the message so far,
-            // whose lines still to be committed are committed first.
-            if self.stream_controller.is_some() && adds_entry(&update) {
-                self.finish_message();
-            }
-        } else if self.defers(&update) {
-            self.deferred.push_back(update);
-            self.request_redraw();
-            return;
+        // An entry goes in its place at once, after the message so far, whose
+        // lines still to be committed are committed first.
+        if self.stream_controller.is_some() && adds_entry(&update) {
+            self.finish_message();
         }
-        self.handle_now(update);
-        self.request_redraw();
-    }
-
-    /// Scrollback: while a message streams, what would be written below it
-    /// waits for the stream to finish; once anything waits, everything
-    /// after it waits too, so the order holds. A thinking cell written on
-    /// its completion would otherwise land above the message's lines still
-    /// to be committed.
-    fn defers(&self, update: &TurnUpdate) -> bool {
-        let streaming = self.stream_controller.is_some() || !self.deferred.is_empty();
-        streaming
-            && matches!(
-                update,
-                TurnUpdate::ReasoningStarted(_)
-                    | TurnUpdate::ReasoningDelta { .. }
-                    | TurnUpdate::ReasoningCompleted { .. }
-                    | TurnUpdate::ToolStarted { .. }
-                    | TurnUpdate::ToolCompleted { .. }
-                    | TurnUpdate::SteeringConsumed(_)
-                    | TurnUpdate::ApprovalRequested(_)
-                    | TurnUpdate::UserInputRequested(_)
-                    | TurnUpdate::Compacted
-                    | TurnUpdate::CompressionFailed(_)
-                    | TurnUpdate::CompactionFailed(_)
-                    | TurnUpdate::ContextWindowLearned(_)
-            )
-    }
-
-    fn handle_now(&mut self, update: TurnUpdate) {
         match update {
             TurnUpdate::Started => self.on_task_started(),
             TurnUpdate::ReasoningStarted(reasoning_id) => self.on_reasoning_started(reasoning_id),
@@ -81,7 +45,7 @@ impl ChatWidget {
                 duration_millis,
             } => self.on_reasoning_completed(reasoning_id, duration_millis),
             TurnUpdate::MessageDelta(delta) => self.on_message_delta(delta),
-            TurnUpdate::MessageCompleted => self.on_message_completed(),
+            TurnUpdate::MessageCompleted => self.finish_message(),
             TurnUpdate::PlanDelta(delta) => self.on_plan_delta(delta),
             TurnUpdate::PlanCompleted => {
                 if let Some(cell) = self
@@ -106,9 +70,6 @@ impl ChatWidget {
                 self.bottom_pane.push_approval_request(request)
             }
             TurnUpdate::ApprovalResolved(request_id) => {
-                self.deferred.retain(|update| {
-                    !matches!(update, TurnUpdate::ApprovalRequested(request) if request.request_id == request_id)
-                });
                 self.bottom_pane.dismiss_approval(request_id)
             }
             TurnUpdate::UserInputRequested(request) => {
@@ -153,7 +114,7 @@ impl ChatWidget {
             TurnUpdate::Error(message) => {
                 self.add_to_history(history_cell::new_error_event(message))
             }
-            // The commands' updates are handled before an update is deferred.
+            // The commands' updates are handled before.
             TurnUpdate::SessionOpened(_)
             | TurnUpdate::ModelChoices(_)
             | TurnUpdate::ModelChanged(_)
@@ -206,7 +167,7 @@ impl ChatWidget {
         };
         let (_, cell) = self.live_thinking.remove(index);
         cell.update(|cell| cell.complete(Some(duration_millis)));
-        self.write_live_entry(cell);
+        self.complete_live_entry(cell);
         self.sync_thinking_toggle();
     }
 
@@ -233,11 +194,6 @@ impl ChatWidget {
                 self.app_event_tx.send(AppEvent::StartCommitAnimation);
             }
         }
-    }
-
-    fn on_message_completed(&mut self) {
-        self.finish_message();
-        self.flush_deferred();
     }
 
     /// Commits what is left of the streaming message at once.
@@ -282,7 +238,7 @@ impl ChatWidget {
         };
         let cell = self.running_tools.remove(index);
         cell.update(|cell| cell.complete(is_error, result));
-        self.write_live_entry(cell);
+        self.complete_live_entry(cell);
     }
 
     fn on_plan_update(&mut self, plan: &AgentTaskPlanSnapshot) {
@@ -291,12 +247,12 @@ impl ChatWidget {
     }
 
     fn on_turn_ended(&mut self, end: TurnEnd) {
-        self.on_message_completed();
+        self.finish_message();
         // A turn that failed mid-stream sends no completion: its thinking
         // ends with the time so far.
         for (_, cell) in std::mem::take(&mut self.live_thinking) {
             cell.update(|cell| cell.complete(None));
-            self.write_live_entry(cell);
+            self.complete_live_entry(cell);
         }
         self.sync_thinking_toggle();
         if let Some(cell) = self
@@ -308,7 +264,7 @@ impl ChatWidget {
         }
         // A call the turn's end overtook is written as it stood.
         for cell in std::mem::take(&mut self.running_tools) {
-            self.write_live_entry(cell);
+            self.complete_live_entry(cell);
         }
         self.bottom_pane.dismiss_all_requests();
         self.bottom_pane.set_task_running(false);
@@ -335,12 +291,6 @@ impl ChatWidget {
         };
         self.input_queue.turn_ended(ending);
         self.advance_input_queue();
-    }
-
-    fn flush_deferred(&mut self) {
-        while let Some(update) = self.deferred.pop_front() {
-            self.handle_now(update);
-        }
     }
 
     fn restore_retry_status_header(&mut self) {
