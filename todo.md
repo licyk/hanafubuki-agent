@@ -704,15 +704,6 @@ Hoshimi `83f7813`. Every §9 decision (D1–D7) was accepted as recommended
     compaction's too, while they are in the window: start a new session.
     The refusal wordings in the tests are illustrative, not recorded from
     the live API.
-- models.dev through the proxy (done, 2026-11-12): the download goes
-  through `[network] proxy` (the host's `NetworkSettingsPort`, read at each
-  download, so a change applies to the next one): `fetch_models_dev` takes
-  a `ModelsDevProxy` (system, disabled or a URL; model-api's reqwest gains
-  `socks` and `system-proxy`, which the binary already unified in through
-  web-search). A proxy the host cannot say skips the download rather than
-  going direct; a proxy URL reqwest cannot use fails it without naming the
-  URL (it may hold credentials). The Providers' own requests still take no
-  `[network] proxy`.
 - Model Providers and models.dev through the proxy (done, 2026-11-12):
   `[network] proxy` (the host's `NetworkSettingsPort`) reaches every model
   API client. model-api's `ModelHttpProxy` (system, disabled or a URL;
@@ -729,8 +720,18 @@ Hoshimi `83f7813`. Every §9 decision (D1–D7) was accepted as recommended
   `"system"` is reqwest's default (proxy variables, then the OS settings),
   so it is the old behaviour. An unusable proxy URL fails the client's
   construction without naming the URL.
-- Open: Chat Completions' `reasoning_content` sent back in tool loops
-  (DeepSeek's thinking mode requires it).
+- MCP stdio servers through the proxy (done, 2026-11-12): they already
+  took the proxy variables of the executor's overlay, but the standalone
+  Agent set the overlay only at start, so a change reached no process (the
+  commands neither). Its `ConfiguredNetwork` now puts the proxy in the
+  overlay at each read (start and each settings change, before what the
+  proxy reaches is restarted); the overlay names every proxy variable in
+  upper and lower case (`ALL_PROXY` added; upper case only on Windows), so
+  a stdio server, which inherits the Agent's environment, keeps no
+  lower-case one the setting overrides. A proxy policy change reconnects
+  every enabled MCP server, the stdio ones started anew, not only the
+  Streamable HTTP ones. A host keeps its own overlay current before
+  `apply_saved_settings`.
 
 ## Plan: Codex's messages sent while the Agent works, in the terminal interface (2026-11-11)
 

@@ -27,16 +27,16 @@ The commands the model runs through its tools do not inherit the Agent process's
 
 So a variable you set in your shell (an API token, a proxy) does not reach the commands the model runs.
 
-stdio MCP servers differ: they inherit the Agent process's whole environment, plus the variables `mcp.toml` gives them.
+stdio MCP servers differ: they inherit the Agent process's whole environment, plus the variables `mcp.toml` gives them, and then the proxy variables `network.proxy` decides, which win over both. A proxy change starts them anew under the new proxy.
 
 ## Proxy variables [#proxy]
 
 `network.proxy` decides the proxy variables of the processes the Agent starts:
 
-| `network.proxy`      | What commands and terminals get                                                       |
-| -------------------- | ------------------------------------------------------------------------------------- |
-| `"system"` (default) | No proxy variable                                                                     |
-| A proxy URL          | `HTTP_PROXY` and `HTTPS_PROXY` set to the URL, and `NO_PROXY=localhost,127.0.0.1,::1` |
-| `"disabled"`         | `HTTP_PROXY` and `HTTPS_PROXY` removed, and `NO_PROXY=localhost,127.0.0.1,::1`        |
+| `network.proxy`      | What commands, terminals and stdio MCP servers get                                                 |
+| -------------------- | -------------------------------------------------------------------------------------------------- |
+| `"system"` (default) | No proxy variable (a stdio MCP server keeps those of the Agent's environment)                      |
+| A proxy URL          | `HTTP_PROXY`, `HTTPS_PROXY` and `ALL_PROXY` set to the URL, and `NO_PROXY=localhost,127.0.0.1,::1` |
+| `"disabled"`         | `HTTP_PROXY`, `HTTPS_PROXY` and `ALL_PROXY` removed, and `NO_PROXY=localhost,127.0.0.1,::1`        |
 
-Only the upper-case names are set or removed. See [Network and logging](/docs/network-logging).
+Each name is set or removed in upper and lower case (`https_proxy`, `no_proxy` and so on), except on Windows, where names are not case-sensitive. A change applies to the processes started after it. See [Network and logging](/docs/network-logging).

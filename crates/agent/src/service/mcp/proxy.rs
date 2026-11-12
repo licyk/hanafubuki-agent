@@ -15,8 +15,10 @@ pub(crate) fn mcp_proxy_policy(proxy: &AgentProxy) -> McpHttpProxyPolicy {
 impl AgentMcpApplication {
     /// Applies the host's latest proxy settings: when their policy
     /// differs from the one in use, later MCP HTTP and OAuth requests use a
-    /// new client and the enabled Streamable HTTP servers reconnect through
-    /// it, concurrently. Returns whether the policy changed.
+    /// new client, and every enabled server reconnects, concurrently: the
+    /// Streamable HTTP ones through the new client, the stdio ones started
+    /// anew in the environment the host's processes now get (its proxy
+    /// variables). Returns whether the policy changed.
     ///
     /// The settings are read under the MCP configuration gate, so of two
     /// calls the one that runs last applies the latest settings whatever
@@ -46,13 +48,7 @@ impl AgentMcpApplication {
         let servers = mcp_settings
             .servers
             .iter()
-            .filter(|server| {
-                server.enabled
-                    && matches!(
-                        server.transport,
-                        hanafubuki_agent_mcp::McpTransportConfig::StreamableHttp(_)
-                    )
-            })
+            .filter(|server| server.enabled)
             .cloned()
             .collect();
         for (server, outcome) in self.connect_concurrently(servers, mcp_settings).await {

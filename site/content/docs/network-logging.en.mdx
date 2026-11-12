@@ -25,24 +25,27 @@ hanafubuki-agent config set network.proxy system
 
 ### What it applies to [#proxy-scope]
 
-| What                                                  | Uses                                                               |
-| ----------------------------------------------------- | ------------------------------------------------------------------ |
-| Web search and fetch (`web_search`, `fetch_web_page`) | `network.proxy`                                                    |
-| MCP Streamable HTTP servers and OAuth                 | `network.proxy`; a change reconnects those servers                 |
-| The commands and terminals the model runs             | The environment variables `network.proxy` decides (below)          |
-| Requests to model Providers and their model lists     | `network.proxy`; a change reaches each session's next turn (below) |
-| The models.dev download (`modelMetadata.modelsDev`)   | `network.proxy`                                                    |
+| What                                                  | Uses                                                                   |
+| ----------------------------------------------------- | ---------------------------------------------------------------------- |
+| Web search and fetch (`web_search`, `fetch_web_page`) | `network.proxy`                                                        |
+| MCP Streamable HTTP servers and OAuth                 | `network.proxy`; a change reconnects those servers                     |
+| The commands and terminals the model runs             | The environment variables `network.proxy` decides (below)              |
+| MCP stdio servers                                     | The same variables, over their own environment; a change restarts them |
+| Requests to model Providers and their model lists     | `network.proxy`; a change reaches each session's next turn (below)     |
+| The models.dev download (`modelMetadata.modelsDev`)   | `network.proxy`                                                        |
 
 ### The commands' proxy variables [#child-processes]
 
 The commands the model runs get a clean environment (see [Environment](/docs/environment#commands)), whose proxy variables `network.proxy` decides:
 
-- a proxy URL: `HTTP_PROXY` and `HTTPS_PROXY` set to it;
-- `"disabled"`: `HTTP_PROXY` and `HTTPS_PROXY` removed;
+- a proxy URL: `HTTP_PROXY`, `HTTPS_PROXY` and `ALL_PROXY` set to it;
+- `"disabled"`: `HTTP_PROXY`, `HTTPS_PROXY` and `ALL_PROXY` removed;
 - both of these also set `NO_PROXY=localhost,127.0.0.1,::1`;
 - `"system"`: no proxy variable at all. Since the commands' environment is clean, your shell's proxy variables do not reach them either: to have commands use a proxy, set a proxy URL.
 
-Only the upper-case names are handled, not `http_proxy` or `ALL_PROXY`.
+Each name is set or removed in upper and lower case (`https_proxy`, `no_proxy` and so on), except on Windows, where names are not case-sensitive. A change applies to the commands started after it.
+
+MCP stdio servers get the same variables over the Agent's environment and their own variables from `mcp.toml`, so `network.proxy` wins over a proxy variable either gives them (with `"system"`, they keep those). A proxy change starts the enabled ones anew under it, as it reconnects the Streamable HTTP ones.
 
 ### The model Providers' proxy [#provider-proxy]
 

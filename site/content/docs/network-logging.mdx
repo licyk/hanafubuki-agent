@@ -25,24 +25,27 @@ hanafubuki-agent config set network.proxy system
 
 ### 代理对什么生效 [#proxy-scope]
 
-| 对象                                             | 使用的代理                                          |
-| ------------------------------------------------ | --------------------------------------------------- |
-| 网页搜索和抓取（`web_search`、`fetch_web_page`） | `network.proxy`                                     |
-| MCP 的 Streamable HTTP 服务器和 OAuth            | `network.proxy`；修改后会重新连接这些服务器         |
-| 模型运行的命令和终端                             | 由 `network.proxy` 决定的环境变量，见下文           |
-| 模型 Provider 的请求及其模型列表                 | `network.proxy`；修改后各会话从下一轮起使用，见下文 |
-| models.dev 的下载（`modelMetadata.modelsDev`）   | `network.proxy`                                     |
+| 对象                                             | 使用的代理                                           |
+| ------------------------------------------------ | ---------------------------------------------------- |
+| 网页搜索和抓取（`web_search`、`fetch_web_page`） | `network.proxy`                                      |
+| MCP 的 Streamable HTTP 服务器和 OAuth            | `network.proxy`；修改后会重新连接这些服务器          |
+| 模型运行的命令和终端                             | 由 `network.proxy` 决定的环境变量，见下文            |
+| MCP 的 stdio 服务器                              | 同样的变量，覆盖它们自己的环境；修改后会重新启动它们 |
+| 模型 Provider 的请求及其模型列表                 | `network.proxy`；修改后各会话从下一轮起使用，见下文  |
+| models.dev 的下载（`modelMetadata.modelsDev`）   | `network.proxy`                                      |
 
 ### 命令的代理变量 [#child-processes]
 
 模型运行的命令得到的是一个干净的环境（见[环境变量](/docs/environment#commands)），其中的代理变量由 `network.proxy` 决定：
 
-- 代理 URL：`HTTP_PROXY` 和 `HTTPS_PROXY` 设为这个 URL；
-- `"disabled"`：去掉 `HTTP_PROXY` 和 `HTTPS_PROXY`；
+- 代理 URL：`HTTP_PROXY`、`HTTPS_PROXY` 和 `ALL_PROXY` 设为这个 URL；
+- `"disabled"`：去掉 `HTTP_PROXY`、`HTTPS_PROXY` 和 `ALL_PROXY`；
 - 以上两种都会设置 `NO_PROXY=localhost,127.0.0.1,::1`；
 - `"system"`：不设置任何代理变量。由于命令的环境是干净的，你 Shell 中的代理变量也不会传给它们。需要让命令走代理时，请设置一个代理 URL。
 
-只处理大写的变量名，不处理 `http_proxy` 和 `ALL_PROXY`。
+每个变量名都同时处理大写和小写（`https_proxy`、`no_proxy` 等），Windows 除外，因为 Windows 的变量名不区分大小写。修改只影响之后启动的命令。
+
+MCP 的 stdio 服务器在 Agent 的环境和 `mcp.toml` 中它们自己的变量之上得到同样的变量，所以 `network.proxy` 优先于这两处给出的代理变量（设为 `"system"` 时保留它们）。修改代理后，已启用的 stdio 服务器会在新代理下重新启动，就像 Streamable HTTP 服务器会重新连接一样。
 
 ### 模型 Provider 的代理 [#provider-proxy]
 

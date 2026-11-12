@@ -20,6 +20,7 @@ use std::time::{Duration, Instant};
 
 use hanafubuki_agent_config::{AgentDirs, ConfigLayers, ConfigOverrides};
 use hanafubuki_agent_foundation::background_worker::WorkerShutdownDiagnostic;
+use hanafubuki_agent_foundation::environment::ChildProcessEnvironment;
 use hanafubuki_agent_foundation::secrets::SecretStore;
 use hanafubuki_agent_mcp::{McpEventSink, NoopMcpEventSink};
 use parking_lot::Mutex;
@@ -120,9 +121,12 @@ impl AgentRuntime {
         // run's unfinished starts never keep it off.
         let slot = AgentSlot::new(None, host.status).starting_with(options.start);
         let agent = DesktopAgent::new(slot, marker, HashMap::new())?;
-        agent.replace_child_environment(proxy_environment(
-            &config.standalone_settings()?.network.proxy,
-        ))?;
+        let processes = agent.child_environment();
+        ConfiguredNetwork {
+            config: config.clone(),
+            processes: processes.clone(),
+        }
+        .proxy()?;
         let storage_paths = storage.clone();
         let (secrets, plugin_events, mcp_events) =
             (host.secrets, host.plugin_events, host.mcp_events);
@@ -145,7 +149,10 @@ impl AgentRuntime {
                     workspace: roots.clone(),
                     steering_context: Arc::new(NoHostContext),
                     instructions: AgentHostInstructions::default(),
-                    network: Arc::new(ConfiguredNetwork(config)),
+                    network: Arc::new(ConfiguredNetwork {
+                        config,
+                        processes: processes.clone(),
+                    }),
                     secrets,
                 },
                 instance,
@@ -226,6 +233,29 @@ impl AgentRuntime {
     }
 }
 
+/// The proxy variables a process reads, upper and lower case: a process
+/// that inherits this process's environment (an MCP stdio server) must not
+/// keep a lower-case one the configured proxy overrides. Windows names are
+/// not case-sensitive.
+const PROXY_VARIABLES: &[&str] = if cfg!(windows) {
+    &["HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY"]
+} else {
+    &[
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "ALL_PROXY",
+        "http_proxy",
+        "https_proxy",
+        "all_proxy",
+    ]
+};
+
+const NO_PROXY_VARIABLES: &[&str] = if cfg!(windows) {
+    &["NO_PROXY"]
+} else {
+    &["NO_PROXY", "no_proxy"]
+};
+
 /// The configured proxy in the environment of the Agent's processes, as a
 /// host's overlay puts its own there; the system's proxy is what this
 /// process's environment already holds.
@@ -235,21 +265,33 @@ fn proxy_environment(proxy: &AgentProxy) -> HashMap<String, Option<String>> {
         AgentProxy::Disabled => None,
         AgentProxy::Explicit(url) => Some(url.clone()),
     };
-    HashMap::from([
-        ("HTTP_PROXY".to_string(), address.clone()),
-        ("HTTPS_PROXY".to_string(), address),
-        (
-            "NO_PROXY".to_string(),
-            Some("localhost,127.0.0.1,::1".to_string()),
-        ),
-    ])
+    let local = Some("localhost,127.0.0.1,::1".to_string());
+    PROXY_VARIABLES
+        .iter()
+        .map(|name| (name.to_string(), address.clone()))
+        .chain(
+            NO_PROXY_VARIABLES
+                .iter()
+                .map(|name| (name.to_string(), local.clone())),
+        )
+        .collect()
 }
 
-/// The proxy of the configuration's `[network]` section.
-struct ConfiguredNetwork(AgentConfig);
+/// The proxy of the configuration's `[network]` section. Each read also
+/// puts it in the environment of the processes the Agent starts from then
+/// on, as a host keeps its own overlay current: the Agent reads it at start
+/// and at each settings change, before it restarts what the proxy reaches.
+struct ConfiguredNetwork {
+    config: AgentConfig,
+    processes: ChildProcessEnvironment,
+}
 
 impl NetworkSettingsPort for ConfiguredNetwork {
     fn proxy(&self) -> Result<AgentProxy, String> {
-        Ok(self.0.standalone_settings()?.network.proxy)
+        let proxy = self.config.standalone_settings()?.network.proxy;
+        self.processes
+            .replace(proxy_environment(&proxy))
+            .map_err(|error| format!("invalid Agent child process environment: {error}"))?;
+        Ok(proxy)
     }
 }

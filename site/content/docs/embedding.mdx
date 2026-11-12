@@ -336,7 +336,7 @@ impl SecretStore for MemorySecrets {
 }
 ```
 
-- `NetworkSettingsPort::proxy()` 在 Agent 启动时读取，宿主调用 `AgentSlot::apply_saved_settings` 时再次读取；它必须从内存回答，不能阻塞。模型 Provider 在各会话的下一轮使用修改后的代理。`AgentProxy` 是 `System`、`Disabled` 或 `Explicit(url)`。
+- `NetworkSettingsPort::proxy()` 在 Agent 启动时读取，宿主调用 `AgentSlot::apply_saved_settings` 时再次读取；它必须从内存回答，不能阻塞。模型 Provider 在各会话的下一轮使用修改后的代理；代理变化时，MCP 的 stdio 服务器会重新启动，并在宿主进程此时得到的环境（它的覆盖层）中运行，Streamable HTTP 服务器会重新连接。`AgentProxy` 是 `System`、`Disabled` 或 `Explicit(url)`。
 - `SecretStore` 的调用可能阻塞（钥匙串），宿主应把它们放到 Agent 的阻塞池上（`ContainedRuntime::blocking_port`，配合 `run_blocking_operation`），Hanafubuki 的 `KeyringSecretStore` 就是这样做的。
 - 锁使用 `parking_lot`：Agent 的 panic 会在被隔离的线程上展开，std 的锁会因此中毒。
 

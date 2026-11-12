@@ -53,6 +53,11 @@ impl DesktopAgent {
             .map_err(|error| format!("invalid Agent child process environment: {error}"))
     }
 
+    /// The overlay itself, for a host port that keeps it current.
+    pub(crate) fn child_environment(&self) -> ChildProcessEnvironment {
+        self.child_environment.clone()
+    }
+
     #[cfg(test)]
     pub(crate) fn child_environment_for_test(&self) -> HashMap<String, Option<String>> {
         self.child_environment.snapshot()

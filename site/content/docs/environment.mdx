@@ -27,16 +27,16 @@ Agent 本身不读取 `RUST_LOG` 或 `NO_COLOR`：日志级别由 `logLevel` 和
 
 因此，你在 Shell 中设置的变量（例如 API 令牌或代理）不会自动传给模型运行的命令。
 
-stdio MCP 服务器不同：它们继承 Agent 进程的完整环境，再加上 `mcp.toml` 中为它们配置的变量。
+stdio MCP 服务器不同：它们继承 Agent 进程的完整环境，再加上 `mcp.toml` 中为它们配置的变量，最后是由 `network.proxy` 决定的代理变量，后者优先于前两者。修改代理后，它们会在新代理下重新启动。
 
 ## 代理变量 [#proxy]
 
 `network.proxy` 决定 Agent 为它启动的进程设置哪些代理变量：
 
-| `network.proxy`    | 命令和终端得到的变量                                                         |
-| ------------------ | ---------------------------------------------------------------------------- |
-| `"system"`（默认） | 不设置代理变量                                                               |
-| 一个代理 URL       | `HTTP_PROXY` 和 `HTTPS_PROXY` 为这个 URL，`NO_PROXY=localhost,127.0.0.1,::1` |
-| `"disabled"`       | 去掉 `HTTP_PROXY` 和 `HTTPS_PROXY`，`NO_PROXY=localhost,127.0.0.1,::1`       |
+| `network.proxy`    | 命令、终端和 stdio MCP 服务器得到的变量                                                   |
+| ------------------ | ----------------------------------------------------------------------------------------- |
+| `"system"`（默认） | 不设置代理变量（stdio MCP 服务器保留 Agent 环境中的代理变量）                             |
+| 一个代理 URL       | `HTTP_PROXY`、`HTTPS_PROXY` 和 `ALL_PROXY` 为这个 URL，`NO_PROXY=localhost,127.0.0.1,::1` |
+| `"disabled"`       | 去掉 `HTTP_PROXY`、`HTTPS_PROXY` 和 `ALL_PROXY`，`NO_PROXY=localhost,127.0.0.1,::1`       |
 
-只处理大写的变量名。详见[网络与日志](/docs/network-logging)。
+每个变量名都同时处理大写和小写（`https_proxy`、`no_proxy` 等），Windows 除外，因为 Windows 的变量名不区分大小写。修改只影响之后启动的进程。详见[网络与日志](/docs/network-logging)。

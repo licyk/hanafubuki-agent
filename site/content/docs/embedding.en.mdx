@@ -336,7 +336,7 @@ impl SecretStore for MemorySecrets {
 }
 ```
 
-- `NetworkSettingsPort::proxy()` is read when the Agent starts and again whenever the host calls `AgentSlot::apply_saved_settings`; it answers from memory and must not block. The model Providers take a change at each session's next turn. `AgentProxy` is `System`, `Disabled` or `Explicit(url)`.
+- `NetworkSettingsPort::proxy()` is read when the Agent starts and again whenever the host calls `AgentSlot::apply_saved_settings`; it answers from memory and must not block. The model Providers take a change at each session's next turn; a changed proxy restarts the MCP stdio servers, which start in the environment the host's processes then get (its overlay), and reconnects the Streamable HTTP ones. `AgentProxy` is `System`, `Disabled` or `Explicit(url)`.
 - `SecretStore` calls may block (a keyring), so a host runs them on the Agent's blocking pool (`ContainedRuntime::blocking_port` with `run_blocking_operation`), as Hanafubuki's `KeyringSecretStore` does.
 - Locks are `parking_lot`'s: an Agent panic unwinds on a contained thread, which would poison a std lock.
 

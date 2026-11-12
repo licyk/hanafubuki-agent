@@ -291,15 +291,32 @@ fn the_configured_proxy_reaches_the_agents_processes() {
         .unwrap()
         .child_environment_for_test()
     };
+    // Upper and lower case outside Windows, whose names are not
+    // case-sensitive.
+    let names: &[&str] = if cfg!(windows) {
+        &["HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY"]
+    } else {
+        &[
+            "HTTP_PROXY",
+            "HTTPS_PROXY",
+            "ALL_PROXY",
+            "http_proxy",
+            "https_proxy",
+            "all_proxy",
+        ]
+    };
     let explicit = runtime("\"http://127.0.0.1:7890\"");
     let proxy = Some("http://127.0.0.1:7890".to_string());
-    assert_eq!(explicit.get("HTTP_PROXY"), Some(&proxy));
-    assert_eq!(explicit.get("HTTPS_PROXY"), Some(&proxy));
+    for name in names {
+        assert_eq!(explicit.get(*name), Some(&proxy), "{name}");
+    }
     assert!(explicit.contains_key("NO_PROXY"));
+    assert_eq!(explicit.contains_key("no_proxy"), !cfg!(windows));
     // Disabled removes what this process's environment would pass on.
     let disabled = runtime("disabled");
-    assert_eq!(disabled.get("HTTP_PROXY"), Some(&None));
-    assert_eq!(disabled.get("HTTPS_PROXY"), Some(&None));
+    for name in names {
+        assert_eq!(disabled.get(*name), Some(&None), "{name}");
+    }
     // The system's proxy is this process's environment, left as it is.
     let system = runtime("system");
     assert!(!system.contains_key("HTTP_PROXY"));
@@ -331,6 +348,11 @@ fn the_standalone_settings_are_read_and_written_through_the_running_agent() {
         .unwrap();
     assert_eq!(before.settings.network.proxy, AgentProxy::System);
     assert_eq!(written.settings.network.proxy, AgentProxy::Disabled);
+    // The processes the Agent starts from now on take the new proxy.
+    assert_eq!(
+        runtime.child_environment_for_test().get("HTTPS_PROXY"),
+        Some(&None)
+    );
     assert_eq!(written.settings.log_level, AgentLogLevel::Debug);
     let file = std::fs::read_to_string(fixture.home.join("config.toml")).unwrap();
     assert!(file.contains("proxy = \"disabled\""), "{file}");

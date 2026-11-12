@@ -2,8 +2,8 @@
 //!
 //! The Agent's start connects every enabled server in the background
 //! ([`AgentMcpApplication::spawn_start`]), so the Agent runs without waiting
-//! for them; a proxy change reconnects the Streamable HTTP servers the same
-//! way. Servers connect concurrently, at most [`MCP_CONNECT_CONCURRENCY`] at
+//! for them; a proxy change reconnects them all the same way (the stdio
+//! ones started anew, in the proxy's environment). Servers connect concurrently, at most [`MCP_CONNECT_CONCURRENCY`] at
 //! once, each bounded by its own connect and initialize timeouts, and each
 //! server's MCP status says how its connection went. Every connect the
 //! application makes observes the MCP lifetime token, which shutdown cancels
