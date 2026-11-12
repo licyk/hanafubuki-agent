@@ -176,6 +176,7 @@ impl AgentService {
             headers,
             request_retry_policy,
             compaction_capability,
+            self.model_proxy(),
         )?;
         self.ensure_session_loaded(session_id, model.clone())?;
         let cell = self.session(session_id)?;

@@ -93,7 +93,8 @@ impl AgentConversationReader {
                     .to_string(),
             ));
         }
-        AgentSessionModel::resolve(&self.config, &snapshot).map_err(AgentError::Model)
+        AgentSessionModel::resolve(&self.config, &snapshot, self.core.model_proxy())
+            .map_err(AgentError::Model)
     }
 }
 
@@ -103,6 +104,7 @@ pub(crate) struct AgentSessionModel {
     pub(crate) model: String,
     protocol: ModelApiProtocol,
     provider: ResolvedAgentProvider,
+    proxy: hanafubuki_agent_kernel::ModelHttpProxy,
 }
 
 impl AgentSessionModel {
@@ -111,6 +113,7 @@ impl AgentSessionModel {
     pub(crate) fn resolve(
         config: &AgentConfig,
         session: &AgentSessionRuntimeSnapshot,
+        proxy: hanafubuki_agent_kernel::ModelHttpProxy,
     ) -> Result<Self, String> {
         let registry = config.providers()?;
         let provider = resolve_settings_provider(&registry, &session.provider_id)?;
@@ -124,6 +127,7 @@ impl AgentSessionModel {
             model: session.model.clone(),
             protocol: session.provider_protocol,
             provider,
+            proxy,
         })
     }
 
@@ -136,6 +140,7 @@ impl AgentSessionModel {
             self.provider.credential.clone(),
             self.provider.headers.clone(),
             hanafubuki_agent_kernel::ModelRetryPolicy::default(),
+            self.proxy.clone(),
         )
         .map_err(|error| error.to_string())
     }

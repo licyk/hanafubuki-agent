@@ -8,6 +8,7 @@
 mod anthropic_messages;
 mod chat_completions;
 mod context_overflow;
+mod http_proxy;
 mod image_input;
 pub mod model;
 mod model_catalog;
@@ -36,6 +37,7 @@ pub use hanafubuki_agent_foundation::trace_content::{
     bounded_trace_content, MAX_TRACE_CONTENT_BYTES,
 };
 pub use hanafubuki_agent_tool_contracts::{ToolProviderCapabilities, ToolSpec};
+pub use http_proxy::ModelHttpProxy;
 pub use image_input::{
     classify_remote_model_error, request_contains_images, sanitize_images_for_unsupported_input,
     ImageSanitizationReport, IMAGE_INPUT_OMITTED_PLACEHOLDER,
@@ -53,9 +55,7 @@ pub use model::{
 };
 pub use model_catalog::{ModelCatalogClient, ModelCatalogEntry, ModelCatalogListing};
 pub use model_metadata::{ModelMetadata, ModelMetadataSource, ModelReasoningSupport, Sourced};
-pub use models_dev::{
-    fetch_models_dev, ModelProviderNames, ModelsDevCatalog, ModelsDevProxy, MODELS_DEV_URL,
-};
+pub use models_dev::{fetch_models_dev, ModelProviderNames, ModelsDevCatalog, MODELS_DEV_URL};
 pub use port::{
     ModelError, ModelEventStream, ModelFuture, ModelPort, ModelResult, ModelSession,
     ModelSessionFactory, ModelStream,

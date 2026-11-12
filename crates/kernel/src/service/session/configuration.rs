@@ -239,6 +239,7 @@ impl AgentService {
             headers,
             request_retry_policy,
             update.compaction_capability,
+            self.model_proxy(),
         )?;
         let cell = self.session(session_id)?;
         let mut guard = cell.lock_after_persistence_blocking()?;

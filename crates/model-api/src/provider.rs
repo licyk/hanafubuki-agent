@@ -8,7 +8,7 @@ use hanafubuki_agent_foundation::agent_settings::{
     parse_model_request_header, validate_model_secret_value,
 };
 
-use crate::ModelError;
+use crate::{ModelError, ModelHttpProxy};
 
 const MAX_DIAGNOSTIC_BYTES: usize = 4 * 1024;
 const MAX_REQUEST_ATTEMPTS: u32 = 10;
@@ -230,6 +230,7 @@ pub struct ModelProvider {
     headers: Vec<ModelHeader>,
     retry_policy: ModelRetryPolicy,
     timeouts: ModelTimeouts,
+    proxy: ModelHttpProxy,
 }
 
 impl ModelProvider {
@@ -240,7 +241,18 @@ impl ModelProvider {
             headers: Vec::new(),
             retry_policy: ModelRetryPolicy::default(),
             timeouts: ModelTimeouts::default(),
+            proxy: ModelHttpProxy::default(),
         }
+    }
+
+    /// The proxy its requests go through (the system's by default).
+    pub fn with_proxy(mut self, proxy: ModelHttpProxy) -> Self {
+        self.proxy = proxy;
+        self
+    }
+
+    pub fn proxy(&self) -> &ModelHttpProxy {
+        &self.proxy
     }
 
     pub fn with_header(mut self, header: ModelHeader) -> Self {

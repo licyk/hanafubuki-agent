@@ -38,6 +38,7 @@ impl AgentService {
             headers,
             request_retry_policy,
             compaction_capability,
+            self.model_proxy(),
         )?;
         self.name_model_provider_at(&config.provider_id, protocol, base_url);
         config.adopt_configured_window();

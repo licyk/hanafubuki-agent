@@ -25,6 +25,7 @@ use serde_json::Value;
 
 use crate::port::{ModelError, ModelResult};
 use crate::streaming::wait_cancelled;
+use crate::ModelHttpProxy;
 use crate::{
     ModelEndpoint, ModelMetadata, ModelMetadataSource, ModelReasoningSupport, Sourced,
     PLAUSIBLE_CONTEXT_WINDOW,
@@ -32,18 +33,6 @@ use crate::{
 
 /// Where the catalogue is published.
 pub const MODELS_DEV_URL: &str = "https://models.dev/api.json";
-
-/// The proxy the models.dev download goes through.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum ModelsDevProxy {
-    /// The operating system's proxy settings (and the proxy environment
-    /// variables).
-    System,
-    /// No proxy.
-    Disabled,
-    /// This proxy URL.
-    Explicit(String),
-}
 
 /// The Agent and its version, and nothing of the person.
 const USER_AGENT: &str = concat!("hanafubuki-agent/", env!("CARGO_PKG_VERSION"));
@@ -239,7 +228,7 @@ impl ModelsDevModel {
 /// size bound; cancelled with `cancellation`.
 pub async fn fetch_models_dev(
     url: &str,
-    proxy: &ModelsDevProxy,
+    proxy: &ModelHttpProxy,
     cancellation: &CancellationToken,
 ) -> ModelResult<ModelsDevCatalog> {
     let fetched = tokio::select! {
@@ -249,21 +238,12 @@ pub async fn fetch_models_dev(
     fetched.map_err(|_| ModelError::Protocol("models.dev did not answer in time".into()))?
 }
 
-async fn fetch(url: &str, proxy: &ModelsDevProxy) -> ModelResult<ModelsDevCatalog> {
+async fn fetch(url: &str, proxy: &ModelHttpProxy) -> ModelResult<ModelsDevCatalog> {
     let builder = reqwest::Client::builder()
         .connect_timeout(CONNECT_TIMEOUT)
         .user_agent(USER_AGENT);
-    let builder = match proxy {
-        ModelsDevProxy::System => builder,
-        ModelsDevProxy::Disabled => builder.no_proxy(),
-        // The URL may hold the proxy's credentials, so it is not named.
-        ModelsDevProxy::Explicit(address) => {
-            builder.proxy(reqwest::Proxy::all(address).map_err(|_| {
-                ModelError::InvalidRequest("the proxy for models.dev is not usable".into())
-            })?)
-        }
-    };
-    let client = builder
+    let client = proxy
+        .apply(builder)?
         .build()
         .map_err(|_| ModelError::InvalidRequest("failed to build the models.dev client".into()))?;
     let unreachable = |_| ModelError::Protocol("models.dev could not be reached".into());

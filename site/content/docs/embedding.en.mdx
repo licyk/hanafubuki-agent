@@ -245,7 +245,7 @@ A host adds to the Agent only through `AgentHostPorts`. The interface takes plai
 | `workspace`        | `Arc<dyn WorkspaceRootsPort>`                  | the workspace roots, the protected roots, the directory instruction discovery selects, file-search roots | the working directory, its Git root, the `--add-dir`s |
 | `steering_context` | `Arc<dyn HostContextPort>`                     | the host context a steering message carries                                                              | `NoHostContext`                                       |
 | `instructions`     | `AgentHostInstructions`                        | identity, application name, and what the host adds to the base instructions                              | `AgentHostInstructions::default()`                    |
-| `network`          | `Arc<dyn NetworkSettingsPort>`                 | the proxy the web tools, MCP and OAuth use                                                               | the configuration's `[network] proxy`                 |
+| `network`          | `Arc<dyn NetworkSettingsPort>`                 | the proxy the web tools, MCP, OAuth, the model Providers and models.dev use                              | the configuration's `[network] proxy`                 |
 | `secrets`          | `Arc<dyn SecretStore>`                         | where MCP OAuth tokens are kept                                                                          | the OS keyring                                        |
 
 ### Plugin rows [#plugin-rows]
@@ -336,7 +336,7 @@ impl SecretStore for MemorySecrets {
 }
 ```
 
-- `NetworkSettingsPort::proxy()` is read when the Agent starts and again whenever the host calls `AgentSlot::apply_saved_settings`; it answers from memory and must not block. `AgentProxy` is `System`, `Disabled` or `Explicit(url)`.
+- `NetworkSettingsPort::proxy()` is read when the Agent starts and again whenever the host calls `AgentSlot::apply_saved_settings`; it answers from memory and must not block. The model Providers take a change at each session's next turn. `AgentProxy` is `System`, `Disabled` or `Explicit(url)`.
 - `SecretStore` calls may block (a keyring), so a host runs them on the Agent's blocking pool (`ContainedRuntime::blocking_port` with `run_blocking_operation`), as Hanafubuki's `KeyringSecretStore` does.
 - Locks are `parking_lot`'s: an Agent panic unwinds on a contained thread, which would poison a std lock.
 

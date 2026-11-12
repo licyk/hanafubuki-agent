@@ -68,7 +68,7 @@ impl AgentTitleApplication {
             .map_err(|error| error.to_string())?;
         Ok(Some(AgentTitleRequest {
             prompt,
-            model: AgentSessionModel::resolve(&self.config, &session)?,
+            model: AgentSessionModel::resolve(&self.config, &session, self.core.model_proxy())?,
         }))
     }
 

@@ -36,6 +36,7 @@ mod memory;
 mod model_discovery;
 mod model_reasoning;
 mod model_vision;
+mod network_proxy;
 mod packages;
 #[cfg(unix)]
 mod pipeline;

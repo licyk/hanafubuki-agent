@@ -11,3 +11,13 @@ pub trait NetworkSettingsPort: Send + Sync {
     /// The proxy as the host's settings say now, or why they cannot say.
     fn proxy(&self) -> Result<AgentProxy, String>;
 }
+
+/// The proxy the model API's clients take for `proxy`.
+pub(crate) fn model_http_proxy(proxy: AgentProxy) -> hanafubuki_agent_kernel::ModelHttpProxy {
+    use hanafubuki_agent_kernel::ModelHttpProxy;
+    match proxy {
+        AgentProxy::System => ModelHttpProxy::System,
+        AgentProxy::Disabled => ModelHttpProxy::Disabled,
+        AgentProxy::Explicit(address) => ModelHttpProxy::Explicit(address),
+    }
+}

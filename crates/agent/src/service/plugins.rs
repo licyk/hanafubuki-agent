@@ -52,6 +52,14 @@ impl AgentApplicationService {
             tokio::spawn(report_reconfigured(name, settle));
         }
         self.spawn_package_reload();
+        match self.network.proxy() {
+            Ok(proxy) => self
+                .core
+                .set_model_proxy(crate::network::model_http_proxy(proxy)),
+            Err(error) => log::warn!(
+                "the model Providers keep their proxy: the host's proxy is not known ({error})"
+            ),
+        }
         let mcp = self.mcp_application.clone();
         let network = self.network.clone();
         crate::kernel_tasks::spawn_kernel_task(&self.kernel_faults, "settings", async move {

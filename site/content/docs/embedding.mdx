@@ -245,7 +245,7 @@ fn main() -> Result<(), String> {
 | `workspace`        | `Arc<dyn WorkspaceRootsPort>`                  | 工作区根目录、受保护的目录、指令查找的选中目录、文件搜索根目录 | 工作目录、它的 Git 根目录、`--add-dir` |
 | `steering_context` | `Arc<dyn HostContextPort>`                     | steering 消息携带的宿主上下文                                  | `NoHostContext`                        |
 | `instructions`     | `AgentHostInstructions`                        | 身份、应用名，以及宿主加入基础指令的段落                       | `AgentHostInstructions::default()`     |
-| `network`          | `Arc<dyn NetworkSettingsPort>`                 | Web 工具、MCP 与 OAuth 使用的代理                              | 配置文件的 `[network] proxy`           |
+| `network`          | `Arc<dyn NetworkSettingsPort>`                 | Web 工具、MCP、OAuth、模型 Provider 与 models.dev 使用的代理   | 配置文件的 `[network] proxy`           |
 | `secrets`          | `Arc<dyn SecretStore>`                         | MCP OAuth 令牌的存放处                                         | 操作系统钥匙串                         |
 
 ### 插件行 [#plugin-rows]
@@ -336,7 +336,7 @@ impl SecretStore for MemorySecrets {
 }
 ```
 
-- `NetworkSettingsPort::proxy()` 在 Agent 启动时读取，宿主调用 `AgentSlot::apply_saved_settings` 时再次读取；它必须从内存回答，不能阻塞。`AgentProxy` 是 `System`、`Disabled` 或 `Explicit(url)`。
+- `NetworkSettingsPort::proxy()` 在 Agent 启动时读取，宿主调用 `AgentSlot::apply_saved_settings` 时再次读取；它必须从内存回答，不能阻塞。模型 Provider 在各会话的下一轮使用修改后的代理。`AgentProxy` 是 `System`、`Disabled` 或 `Explicit(url)`。
 - `SecretStore` 的调用可能阻塞（钥匙串），宿主应把它们放到 Agent 的阻塞池上（`ContainedRuntime::blocking_port`，配合 `run_blocking_operation`），Hanafubuki 的 `KeyringSecretStore` 就是这样做的。
 - 锁使用 `parking_lot`：Agent 的 panic 会在被隔离的线程上展开，std 的锁会因此中毒。
 

@@ -47,10 +47,11 @@ pub struct ResponsesModelTransport {
 
 impl ResponsesModelTransport {
     pub fn new(provider: ModelProvider) -> Result<Self, ModelError> {
-        let client = reqwest::Client::builder()
-            .connect_timeout(provider.timeouts().connect)
-            .build()
-            .map_err(|_| ModelError::InvalidRequest("failed to build model HTTP client".into()))?;
+        let builder = reqwest::Client::builder().connect_timeout(provider.timeouts().connect);
+        let client =
+            provider.proxy().apply(builder)?.build().map_err(|_| {
+                ModelError::InvalidRequest("failed to build model HTTP client".into())
+            })?;
         Ok(Self {
             provider: Arc::new(provider),
             client,

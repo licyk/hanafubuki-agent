@@ -351,8 +351,9 @@ impl AgentApplicationService {
         let memory_workers = BackgroundWorkerGroup::contained_with_panic_handler(on_panic);
         // A step below that fails stops what the steps before it started.
         let unbuilt = StopWorkersUnlessBuilt::new([memory_workers.clone(), workers.clone()]);
+        let proxy = host.network.proxy()?;
         let mcp_application = AgentMcpApplication::open(
-            &host.network.proxy()?,
+            &proxy,
             &executor,
             workers.clone(),
             mcp_event_sink,
@@ -398,13 +399,8 @@ impl AgentApplicationService {
             kernel_faults.clone(),
             model_metadata,
         );
-        let discovery = ModelDiscovery::start(
-            discovery,
-            core.clone(),
-            config.clone(),
-            host.network.clone(),
-            &workers,
-        )?;
+        core.set_model_proxy(crate::network::model_http_proxy(proxy));
+        let discovery = ModelDiscovery::start(discovery, core.clone(), config.clone(), &workers)?;
         let memory = AgentMemoryApplication::new(
             config.clone(),
             core.clone(),

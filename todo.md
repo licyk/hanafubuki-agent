@@ -713,6 +713,22 @@ Hoshimi `83f7813`. Every §9 decision (D1–D7) was accepted as recommended
   going direct; a proxy URL reqwest cannot use fails it without naming the
   URL (it may hold credentials). The Providers' own requests still take no
   `[network] proxy`.
+- Model Providers and models.dev through the proxy (done, 2026-11-12):
+  `[network] proxy` (the host's `NetworkSettingsPort`) reaches every model
+  API client. model-api's `ModelHttpProxy` (system, disabled or a URL;
+  reqwest gains `socks` and `system-proxy`, which the binary already
+  unified in through web-search; its `Debug` hides a URL, which may hold
+  credentials) is on `ModelProvider::with_proxy`, applied by every
+  transport and the listing, and taken by `fetch_models_dev`. The kernel
+  keeps one (`set_model_proxy`/`model_proxy`) for each model it builds:
+  sessions (created, reconfigured, activated for a turn), listings and
+  private sessions (titles, recaps, memory extraction). The facade sets it
+  at start and at each settings change (`apply_settings_to_plugins`, with
+  MCP's), keeping the last one when the host cannot say. A request already
+  streaming keeps its client; a session takes a change at its next turn.
+  `"system"` is reqwest's default (proxy variables, then the OS settings),
+  so it is the old behaviour. An unusable proxy URL fails the client's
+  construction without naming the URL.
 - Open: Chat Completions' `reasoning_content` sent back in tool loops
   (DeepSeek's thinking mode requires it).
 
@@ -4316,7 +4332,8 @@ The next release with it is 0.2.0 (the headline event is removed).
     - `skills/src/service/mutations.rs`: `source_folder_name`'s comment
       prefers the frontmatter name, the code the source folder's name.
     - Provider requests ignore `[network] proxy`: they read the process's
-      proxy variables.
+      proxy variables. (Done 2026-11-12: they take it; see "Model Providers
+      through the proxy".)
     - An unusable `config.toml` rewritten with defaults drops profiles,
       projects, `logLevel` and `[network]` from the live file (they are
       kept only in `.recovery/`).

@@ -12,8 +12,8 @@ mod support;
 
 use hanafubuki_agent_foundation::cancellation::CancellationToken;
 use hanafubuki_agent_model_api::{
-    fetch_models_dev, ModelEndpoint, ModelError, ModelMetadata, ModelMetadataSource,
-    ModelProviderNames, ModelReasoningSupport, ModelsDevCatalog, ModelsDevProxy, Sourced,
+    fetch_models_dev, ModelEndpoint, ModelError, ModelHttpProxy, ModelMetadata,
+    ModelMetadataSource, ModelProviderNames, ModelReasoningSupport, ModelsDevCatalog, Sourced,
 };
 use support::{FakeHttpServer, PlannedResponse};
 
@@ -168,7 +168,7 @@ async fn the_catalogue_is_fetched_with_the_agents_user_agent_and_no_credential()
 
     let fetched = fetch_models_dev(
         &url,
-        &ModelsDevProxy::Disabled,
+        &ModelHttpProxy::Disabled,
         &CancellationToken::default(),
     )
     .await
@@ -198,7 +198,7 @@ async fn the_catalogue_is_fetched_through_the_proxy() {
 
     let fetched = fetch_models_dev(
         url,
-        &ModelsDevProxy::Explicit(address),
+        &ModelHttpProxy::Explicit(address),
         &CancellationToken::default(),
     )
     .await
@@ -210,7 +210,7 @@ async fn the_catalogue_is_fetched_through_the_proxy() {
     assert!(matches!(
         fetch_models_dev(
             url,
-            &ModelsDevProxy::Explicit("not a proxy".to_string()),
+            &ModelHttpProxy::Explicit("not a proxy".to_string()),
             &CancellationToken::default(),
         )
         .await,
@@ -229,7 +229,7 @@ async fn a_refusal_bad_data_or_no_server_is_an_error() {
     for _ in 0..2 {
         assert!(fetch_models_dev(
             &url,
-            &ModelsDevProxy::Disabled,
+            &ModelHttpProxy::Disabled,
             &CancellationToken::default()
         )
         .await
@@ -238,7 +238,7 @@ async fn a_refusal_bad_data_or_no_server_is_an_error() {
     // Nothing listens on the discard port.
     assert!(fetch_models_dev(
         "http://127.0.0.1:9/api.json",
-        &ModelsDevProxy::Disabled,
+        &ModelHttpProxy::Disabled,
         &CancellationToken::default(),
     )
     .await
@@ -261,7 +261,7 @@ async fn a_fetch_is_cancelled() {
     });
     let started = std::time::Instant::now();
     assert!(matches!(
-        fetch_models_dev(&url, &ModelsDevProxy::Disabled, &cancellation).await,
+        fetch_models_dev(&url, &ModelHttpProxy::Disabled, &cancellation).await,
         Err(ModelError::Cancelled)
     ));
     assert!(started.elapsed() < std::time::Duration::from_secs(10));

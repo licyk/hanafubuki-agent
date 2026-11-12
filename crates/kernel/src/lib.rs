@@ -62,12 +62,12 @@ pub use hanafubuki_agent_approval::{
 pub use hanafubuki_agent_model_api::{
     fetch_models_dev, flattened_tool_call_name, request_reasoning_effort, ModelApiProtocol,
     ModelCatalogEntry, ModelCompactionCapability, ModelCredential, ModelEvent, ModelHeader,
-    ModelImageInputCapability, ModelImageInputPolicy, ModelInputCapabilities,
+    ModelHttpProxy, ModelImageInputCapability, ModelImageInputPolicy, ModelInputCapabilities,
     ModelInputCapabilityPolicy, ModelInputItem, ModelJsonSchemaOutput, ModelMetadata,
     ModelMetadataSource, ModelOutputFormat, ModelOutputItem, ModelReasoningConfig,
     ModelReasoningEffort, ModelReasoningReplay, ModelReasoningSupport, ModelRequest,
     ModelRetryPolicy, ModelSession, ModelStructuredOutputCapability, ModelToolChoice,
-    ModelToolSpec, ModelsDevCatalog, ModelsDevProxy, Sourced, MODELS_DEV_URL,
+    ModelToolSpec, ModelsDevCatalog, Sourced, MODELS_DEV_URL,
 };
 pub use hanafubuki_agent_skills::{SkillId, SkillScope};
 pub use hanafubuki_agent_tool_contracts::{

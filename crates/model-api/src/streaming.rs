@@ -75,8 +75,10 @@ pub(crate) struct StreamingRequestSpec {
 }
 
 pub(crate) fn build_client(provider: &ModelProvider) -> ModelResult<reqwest::Client> {
-    reqwest::Client::builder()
-        .connect_timeout(provider.timeouts().connect)
+    let builder = reqwest::Client::builder().connect_timeout(provider.timeouts().connect);
+    provider
+        .proxy()
+        .apply(builder)?
         .build()
         .map_err(|_| ModelError::InvalidRequest("failed to build model HTTP client".into()))
 }

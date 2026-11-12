@@ -360,6 +360,7 @@ fn run_memory_pass(
         resolved.credential,
         resolved.headers,
         hanafubuki_agent_kernel::ModelRetryPolicy::default(),
+        application.core.model_proxy(),
     )
     .map_err(|error| error.to_string())?;
     let mut sources = SourceClaims::new(

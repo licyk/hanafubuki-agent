@@ -90,6 +90,8 @@ struct AgentServiceInner {
     /// What is known about each model route, kept through the owner's
     /// store.
     model_metadata: crate::model_metadata::ModelMetadataRegistry,
+    /// The proxy every Provider's model is built with from now on.
+    model_proxy: parking_lot::RwLock<hanafubuki_agent_model_api::ModelHttpProxy>,
     approvals: ApprovalService,
     pending_approvals: Mutex<HashMap<ApprovalRequestId, PendingApprovalRoute>>,
     pending_user_inputs: Mutex<HashMap<AgentUserInputRequestId, PendingUserInputRoute>>,

@@ -3,12 +3,15 @@ use crate::model_metadata::{ModelMetadataRegistry, ModelMetadataStore, NoopModel
 use crate::{AgentKernelFaultSink, NoopAgentKernelFaultSink};
 
 impl AgentService {
+    /// A model session outside any session's conversation, through
+    /// `proxy` (the kernel's [`Self::model_proxy`] when one is at hand).
     pub fn create_private_model_session(
         protocol: ModelApiProtocol,
         base_url: &str,
         credential: Option<String>,
         headers: Vec<hanafubuki_agent_model_api::ModelHeader>,
         retry_policy: ModelRetryPolicy,
+        proxy: hanafubuki_agent_model_api::ModelHttpProxy,
     ) -> Result<Arc<dyn ModelSession>, AgentError> {
         Ok(configured_model(
             protocol,
@@ -17,8 +20,19 @@ impl AgentService {
             headers,
             retry_policy,
             hanafubuki_agent_model_api::ModelCompactionCapability::LocalSummary,
+            proxy,
         )?
         .create_model_session())
+    }
+
+    /// The proxy the Providers' models are built with: a session's next
+    /// turn, each listing and each private request take it.
+    pub fn set_model_proxy(&self, proxy: hanafubuki_agent_model_api::ModelHttpProxy) {
+        *self.inner.model_proxy.write() = proxy;
+    }
+
+    pub fn model_proxy(&self) -> hanafubuki_agent_model_api::ModelHttpProxy {
+        self.inner.model_proxy.read().clone()
     }
 
     pub fn new(model: Arc<dyn ModelPort>, registries: AgentKernelRegistries) -> Self {
@@ -138,6 +152,7 @@ impl AgentService {
                 next_turn_id: AtomicU64::new(1),
                 next_compaction_id: AtomicU64::new(1),
                 model_metadata: ModelMetadataRegistry::open(model_metadata, now_millis_u64()),
+                model_proxy: Default::default(),
                 approvals,
                 pending_approvals: Mutex::new(HashMap::new()),
                 pending_user_inputs: Mutex::new(HashMap::new()),
@@ -175,7 +190,7 @@ impl AgentService {
             .transpose()
             .map_err(|error| AgentError::InvalidInput(error.to_string()))?;
         let provider = headers.into_iter().fold(
-            ModelProvider::new(endpoint, credential),
+            ModelProvider::new(endpoint, credential).with_proxy(self.model_proxy()),
             |provider, header| provider.with_header(header),
         );
         let catalog = ModelCatalogClient::new(provider)
@@ -250,6 +265,7 @@ pub(super) fn configured_model(
     headers: Vec<hanafubuki_agent_model_api::ModelHeader>,
     retry_policy: ModelRetryPolicy,
     compaction_capability: hanafubuki_agent_model_api::ModelCompactionCapability,
+    proxy: hanafubuki_agent_model_api::ModelHttpProxy,
 ) -> Result<Arc<dyn ModelPort>, AgentError> {
     let endpoint = ModelEndpoint::parse(base_url)
         .map_err(|error| AgentError::InvalidInput(error.to_string()))?;
@@ -263,7 +279,8 @@ pub(super) fn configured_model(
             ModelProvider::new(endpoint, credential),
             |provider, header| provider.with_header(header),
         )
-        .with_retry_policy(retry_policy);
+        .with_retry_policy(retry_policy)
+        .with_proxy(proxy);
     match protocol {
         ModelApiProtocol::Responses => ResponsesModelTransport::new(provider).map(|transport| {
             Arc::new(transport.with_compaction_capability(compaction_capability))

@@ -25,13 +25,13 @@ hanafubuki-agent config set network.proxy system
 
 ### 代理对什么生效 [#proxy-scope]
 
-| 对象                                             | 使用的代理                                  |
-| ------------------------------------------------ | ------------------------------------------- |
-| 网页搜索和抓取（`web_search`、`fetch_web_page`） | `network.proxy`                             |
-| MCP 的 Streamable HTTP 服务器和 OAuth            | `network.proxy`；修改后会重新连接这些服务器 |
-| 模型运行的命令和终端                             | 由 `network.proxy` 决定的环境变量，见下文   |
-| models.dev 的下载（`modelMetadata.modelsDev`）   | `network.proxy`                             |
-| 模型 Provider 的请求                             | **不使用** `network.proxy`，见下文          |
+| 对象                                             | 使用的代理                                          |
+| ------------------------------------------------ | --------------------------------------------------- |
+| 网页搜索和抓取（`web_search`、`fetch_web_page`） | `network.proxy`                                     |
+| MCP 的 Streamable HTTP 服务器和 OAuth            | `network.proxy`；修改后会重新连接这些服务器         |
+| 模型运行的命令和终端                             | 由 `network.proxy` 决定的环境变量，见下文           |
+| 模型 Provider 的请求及其模型列表                 | `network.proxy`；修改后各会话从下一轮起使用，见下文 |
+| models.dev 的下载（`modelMetadata.modelsDev`）   | `network.proxy`                                     |
 
 ### 命令的代理变量 [#child-processes]
 
@@ -46,11 +46,15 @@ hanafubuki-agent config set network.proxy system
 
 ### 模型 Provider 的代理 [#provider-proxy]
 
-访问模型 Provider 的请求不使用 `network.proxy`，而是读取 Agent 进程自己的环境变量 `HTTPS_PROXY`、`HTTP_PROXY`、`ALL_PROXY` 和 `NO_PROXY`（大小写均可）。需要通过代理访问 Provider 时，在启动 Agent 前设置它们：
+访问模型 Provider 的请求（对话轮次、压缩、标题、回顾、记忆提取以及各 Provider 的模型列表）使用 `network.proxy`。修改只影响之后建立的请求：会话从下一轮起使用新代理，已经在流式传输的请求在原来的连接上完成。
+
+设为 `"system"` 时，它们遵循 Agent 进程环境和操作系统的设置：启动 Agent 前设置的 `HTTPS_PROXY`、`HTTP_PROXY`、`ALL_PROXY` 和 `NO_PROXY`（大小写均可），未设置时在 macOS 和 Windows 上使用系统代理设置：
 
 ```sh
 HTTPS_PROXY=http://127.0.0.1:7890 hanafubuki-agent
 ```
+
+`"disabled"` 无论环境如何都直接连接；设为代理 URL 时，所有 Provider 都经过这个代理，不受 `NO_PROXY` 影响。
 
 ## 日志 [#logging]
 

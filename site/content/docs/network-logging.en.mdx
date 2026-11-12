@@ -25,13 +25,13 @@ hanafubuki-agent config set network.proxy system
 
 ### What it applies to [#proxy-scope]
 
-| What                                                  | Uses                                                      |
-| ----------------------------------------------------- | --------------------------------------------------------- |
-| Web search and fetch (`web_search`, `fetch_web_page`) | `network.proxy`                                           |
-| MCP Streamable HTTP servers and OAuth                 | `network.proxy`; a change reconnects those servers        |
-| The commands and terminals the model runs             | The environment variables `network.proxy` decides (below) |
-| The models.dev download (`modelMetadata.modelsDev`)   | `network.proxy`                                           |
-| Requests to model Providers                           | **Not** `network.proxy` (below)                           |
+| What                                                  | Uses                                                               |
+| ----------------------------------------------------- | ------------------------------------------------------------------ |
+| Web search and fetch (`web_search`, `fetch_web_page`) | `network.proxy`                                                    |
+| MCP Streamable HTTP servers and OAuth                 | `network.proxy`; a change reconnects those servers                 |
+| The commands and terminals the model runs             | The environment variables `network.proxy` decides (below)          |
+| Requests to model Providers and their model lists     | `network.proxy`; a change reaches each session's next turn (below) |
+| The models.dev download (`modelMetadata.modelsDev`)   | `network.proxy`                                                    |
 
 ### The commands' proxy variables [#child-processes]
 
@@ -46,11 +46,15 @@ Only the upper-case names are handled, not `http_proxy` or `ALL_PROXY`.
 
 ### The model Providers' proxy [#provider-proxy]
 
-Requests to model Providers do not use `network.proxy`: they read the Agent process's own `HTTPS_PROXY`, `HTTP_PROXY`, `ALL_PROXY` and `NO_PROXY` (in either case). To reach a Provider through a proxy, set them before you start the Agent:
+Requests to model Providers (turns, compaction, titles, recaps, memory extraction and each Provider's model list) use `network.proxy`. A change applies to what is built after it: a session takes it at its next turn, and a request already streaming finishes where it started.
+
+With `"system"`, they follow what the Agent process's environment and the operating system say: `HTTPS_PROXY`, `HTTP_PROXY`, `ALL_PROXY` and `NO_PROXY` (in either case) set before the Agent starts, else the system's proxy settings on macOS and Windows:
 
 ```sh
 HTTPS_PROXY=http://127.0.0.1:7890 hanafubuki-agent
 ```
+
+`"disabled"` goes direct whatever the environment says; a proxy URL is used for every Provider, `NO_PROXY` notwithstanding.
 
 ## Logging [#logging]
 
