@@ -14,8 +14,17 @@ pub enum ModelHttpProxy {
     System,
     /// No proxy.
     Disabled,
-    /// This proxy URL.
+    /// This proxy URL, for every host but this machine's loopback
+    /// addresses (`localhost`, `127.0.0.0/8`, `::1`), reached directly.
     Explicit(String),
+}
+
+/// The addresses a proxy URL never takes: a local Provider (Ollama, LM
+/// Studio) is reached directly, as the processes' `NO_PROXY` says.
+const LOOPBACK: &str = "localhost,127.0.0.0/8,::1";
+
+fn loopback() -> Option<reqwest::NoProxy> {
+    reqwest::NoProxy::from_string(LOOPBACK)
 }
 
 /// The proxy URL is not shown: it may hold credentials.
@@ -37,7 +46,7 @@ impl ModelHttpProxy {
             Self::Disabled => Ok(builder.no_proxy()),
             // The URL may hold the proxy's credentials, so it is not named.
             Self::Explicit(address) => reqwest::Proxy::all(address)
-                .map(|proxy| builder.proxy(proxy))
+                .map(|proxy| builder.proxy(proxy.no_proxy(loopback())))
                 .map_err(|_| ModelError::InvalidRequest("the proxy is not usable".into())),
         }
     }

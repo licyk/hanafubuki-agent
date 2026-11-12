@@ -58,7 +58,7 @@ With `"system"`, they follow what the Agent process's environment and the operat
 HTTPS_PROXY=http://127.0.0.1:7890 hanafubuki-agent
 ```
 
-`"disabled"` goes direct whatever the environment says; a proxy URL is used for every Provider, `NO_PROXY` notwithstanding.
+`"disabled"` goes direct whatever the environment says; a proxy URL is used for every Provider, `NO_PROXY` notwithstanding, except one on this machine (`localhost`, `127.0.0.0/8`, `::1`, such as Ollama or LM Studio), which is reached directly. The same holds for MCP's Streamable HTTP servers and OAuth, and for the models.dev download.
 
 ## Logging [#logging]
 

@@ -10,6 +10,41 @@ fn project_http_client_rejects_invalid_explicit_proxy_configuration() {
     ));
 }
 
+/// An explicit proxy leaves this machine's servers alone: a server on the
+/// loopback is reached directly though nothing answers at the proxy.
+#[tokio::test]
+async fn an_explicit_proxy_reaches_loopback_servers_directly() {
+    use axum::routing::get;
+    use axum::Router;
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = tokio::spawn(async move {
+        axum::serve(
+            listener,
+            Router::new().route("/mcp", get(|| async { "direct" })),
+        )
+        .await
+        .unwrap();
+    });
+    // Nothing listens on the discard port.
+    let client =
+        build_mcp_http_client(McpHttpProxyPolicy::Explicit("http://127.0.0.1:9".into())).unwrap();
+
+    for host in ["127.0.0.1".to_string(), "localhost".to_string()] {
+        let body = client
+            .get(format!("http://{host}:{}/mcp", address.port()))
+            .send()
+            .await
+            .unwrap()
+            .text()
+            .await
+            .unwrap();
+        assert_eq!(body, "direct", "{host}");
+    }
+    server.abort();
+}
+
 #[tokio::test]
 async fn oauth_http_client_follows_only_bounded_same_origin_redirects_and_rejects_cycles() {
     use axum::response::Redirect;

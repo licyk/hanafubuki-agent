@@ -21,9 +21,12 @@ pub fn build_mcp_http_client(policy: McpHttpProxyPolicy) -> Result<reqwest::Clie
     builder = match policy {
         McpHttpProxyPolicy::System => builder,
         McpHttpProxyPolicy::Disabled => builder.no_proxy(),
+        // A server on this machine is reached directly, as the processes'
+        // `NO_PROXY` says.
         McpHttpProxyPolicy::Explicit(address) => builder.proxy(
             reqwest::Proxy::all(&address)
-                .map_err(|_| McpError::InvalidConfig("MCP proxy URL is invalid".into()))?,
+                .map_err(|_| McpError::InvalidConfig("MCP proxy URL is invalid".into()))?
+                .no_proxy(reqwest::NoProxy::from_string("localhost,127.0.0.0/8,::1")),
         ),
     };
     builder

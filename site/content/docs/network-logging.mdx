@@ -58,7 +58,7 @@ MCP 的 stdio 服务器在 Agent 的环境和 `mcp.toml` 中它们自己的变�
 HTTPS_PROXY=http://127.0.0.1:7890 hanafubuki-agent
 ```
 
-`"disabled"` 无论环境如何都直接连接；设为代理 URL 时，所有 Provider 都经过这个代理，不受 `NO_PROXY` 影响。
+`"disabled"` 无论环境如何都直接连接；设为代理 URL 时，所有 Provider 都经过这个代理，不受 `NO_PROXY` 影响，但本机上的 Provider（`localhost`、`127.0.0.0/8`、`::1`，例如 Ollama 或 LM Studio）直接连接。MCP 的 Streamable HTTP 服务器和 OAuth 以及 models.dev 的下载同样如此。
 
 ## 日志 [#logging]
 

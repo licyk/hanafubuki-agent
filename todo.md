@@ -747,6 +747,17 @@ Hoshimi `83f7813`. Every §9 decision (D1–D7) was accepted as recommended
   variables. A
   user's git `http.proxy` still wins over the variables. No other crate
   makes HTTP requests (reqwest is only in model-api, web-search and mcp).
+- Loopback around a proxy URL (2026-11-12): an explicit proxy no longer
+  takes this machine's loopback (`localhost`, `127.0.0.0/8`, `::1`) in
+  the model API's clients (a local Ollama or LM Studio Provider, the
+  listing) and MCP's HTTP client (Streamable HTTP servers, OAuth), as the
+  processes' `NO_PROXY` already said; web search keeps its proxy for every
+  target, since it refuses loopback targets anyway. Left as is, and
+  documented: the web fetch's public-target check resolves names here even
+  through a proxy (the SSRF guard); `"system"` is the OS settings for the
+  HTTP clients on macOS and Windows but only the environment's variables
+  for the processes; a git `http.proxy` wins for clones; a host keeps its
+  own process overlay current.
 
 ## Plan: Codex's messages sent while the Agent works, in the terminal interface (2026-11-11)
 

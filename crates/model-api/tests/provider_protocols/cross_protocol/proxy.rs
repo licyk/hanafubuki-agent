@@ -1,6 +1,7 @@
 //! Every protocol's requests, and the model listing, go through the
 //! Provider's proxy: the request reaches the proxy naming the Provider's
-//! whole URL, at a host that does not resolve.
+//! whole URL, at a host that does not resolve; one on this machine is
+//! reached directly.
 
 use hanafubuki_agent_model_api::{ModelApiProtocol, ModelCatalogClient, ModelHttpProxy};
 
@@ -65,6 +66,29 @@ async fn every_protocol_and_the_listing_go_through_the_proxy() {
             request.path
         );
     }
+}
+
+/// A Provider on this machine (Ollama, LM Studio) is reached directly
+/// though a proxy URL is set: nothing answers at the proxy, and the
+/// loopback server gets the request.
+#[tokio::test]
+async fn a_loopback_provider_is_reached_around_the_proxy() {
+    let refusal = br#"{"error":{"code":"context_length_exceeded","message":"maximum context length exceeded"}}"#;
+    let local = FakeHttpServer::start(vec![PlannedResponse::status(400, refusal.to_vec())]).await;
+    // Nothing listens on the discard port.
+    let transport = ChatCompletionsModelTransport::new(
+        provider(&local).with_proxy(ModelHttpProxy::Explicit("http://127.0.0.1:9".into())),
+    )
+    .unwrap();
+
+    assert!(matches!(
+        transport
+            .stream(fixture_request(), CancellationToken::default())
+            .await,
+        Err(ModelError::ContextWindowExceeded { .. })
+    ));
+    let [request] = local.requests().try_into().unwrap();
+    assert_eq!(request.path, "/v1/chat/completions");
 }
 
 /// A proxy URL that cannot be used fails the transport's construction
