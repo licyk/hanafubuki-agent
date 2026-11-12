@@ -1,12 +1,12 @@
 // Modified from OpenAI Codex 57a808a392 (Apache-2.0).
 
-//! `/memories` (Codex's `bottom_pane/memories_settings_view.rs`): whether
-//! the model uses the memories and whether sessions are read for new ones
-//! (`memory.useMemories`, `memory.generateMemories`), whether this session
-//! contributes, the memory's status, and Reset after a confirmation. With
-//! memory off (`memory.enabled`), the panel offers to turn it on.
+//! `/memories` (Codex's `bottom_pane/memories_settings_view.rs`): the
+//! settings center's Memory tab, whose settings (`memory.enabled`,
+//! `memory.useMemories`, `memory.generateMemories`, …) are rows like any
+//! other. Its Memory store page is the rest: the memory's status, whether
+//! this session contributes, and Reset after a confirmation.
 
-use hanafubuki_agent::{AgentMemoryContributionMode, AgentMemoryStatus};
+use hanafubuki_agent::{AgentMemoryContributionMode, AgentMemoryStatus, SettingsGroup};
 use ratatui::crossterm::event::{KeyCode, KeyEvent};
 use ratatui::style::Stylize;
 use ratatui::text::Line;
@@ -15,6 +15,7 @@ use super::{CommandContext, CommandReply, CommandSpec};
 use crate::agent_bridge::{MemoriesState, SettingsCall, SettingsReply};
 use crate::app_event::{AgentCommand, AppEvent, AppEventSender, Op};
 use crate::bottom_pane::{GenericDisplayRow, MenuKey, MenuModel, MenuView};
+use crate::settings_center::{Attach, PageOverride};
 
 pub(crate) static MEMORIES: CommandSpec = CommandSpec {
     name: "memories",
@@ -23,25 +24,36 @@ pub(crate) static MEMORIES: CommandSpec = CommandSpec {
     inline_args: false,
     during_task: true,
     needs_session: false,
-    dispatch,
+    dispatch: |context, _args| super::open_settings(context, "memory"),
 };
 
-fn dispatch(context: &mut CommandContext<'_>, _args: &str) {
-    context.agent_command(AgentCommand::Settings(SettingsCall::Memories));
-}
-
-/// The state read: into the open panel, or a new one.
-pub(super) fn on_reply(context: &mut CommandContext<'_>, state: MemoriesState) {
-    let reply = CommandReply::Settings(SettingsReply::Memories(Box::new(state)));
-    if let Some(CommandReply::Settings(SettingsReply::Memories(state))) = context.offer_reply(reply)
-    {
-        let view = MenuView::new(MemoriesPanel::new(*state), context.app_event_tx());
+/// The settings center's page of the memory store.
+pub(crate) static PAGE: PageOverride = PageOverride {
+    id: "memory-store",
+    attach: Attach::Row {
+        group: SettingsGroup::Memory,
+        label: "Memory store",
+        summary: "Its status, this session's contribution, and a reset",
+    },
+    command: &MEMORIES,
+    open: |context, _| {
+        let view = MenuView::new(MemoriesPanel::default(), context.app_event_tx());
         context.show_view(Box::new(view));
-    }
+        context.agent_command(AgentCommand::Settings(SettingsCall::Memories));
+    },
+};
+
+/// The state read, into the open page; with none open, it is dropped.
+pub(super) fn on_reply(context: &mut CommandContext<'_>, state: MemoriesState) {
+    let _ = context.offer_reply(CommandReply::Settings(SettingsReply::Memories(Box::new(
+        state,
+    ))));
 }
 
+#[derive(Default)]
 pub(super) struct MemoriesPanel {
-    state: MemoriesState,
+    /// `None` until it is read.
+    state: Option<MemoriesState>,
     /// Reset was chosen: the panel asks first.
     confirming_reset: bool,
     /// A change was sent: the panel waits for what was saved, so a change
@@ -54,9 +66,6 @@ pub(super) struct MemoriesPanel {
 /// What a row does.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Row {
-    TurnOn,
-    Use,
-    Generate,
     Contribution,
     Reset,
     KeepMemories,
@@ -64,41 +73,22 @@ enum Row {
 }
 
 impl MemoriesPanel {
-    fn new(state: MemoriesState) -> Self {
-        Self {
-            state,
-            confirming_reset: false,
-            saving: false,
-            error: None,
-        }
-    }
-
     fn row_kinds(&self) -> Vec<Row> {
-        if self.confirming_reset {
+        if self.state.is_none() {
+            Vec::new()
+        } else if self.confirming_reset {
             vec![Row::KeepMemories, Row::ConfirmReset]
-        } else if !self.state.settings.enabled {
-            vec![Row::TurnOn]
         } else {
-            vec![Row::Use, Row::Generate, Row::Contribution, Row::Reset]
+            vec![Row::Contribution, Row::Reset]
         }
     }
 
     fn activate(&mut self, row: Row, tx: &AppEventSender) {
-        let mut settings = self.state.settings.clone();
+        let Some(state) = &self.state else {
+            return;
+        };
         let call = match row {
-            Row::TurnOn => {
-                settings.enabled = true;
-                SettingsCall::SetMemory(settings)
-            }
-            Row::Use => {
-                settings.use_memories = !settings.use_memories;
-                SettingsCall::SetMemory(settings)
-            }
-            Row::Generate => {
-                settings.generate_memories = !settings.generate_memories;
-                SettingsCall::SetMemory(settings)
-            }
-            Row::Contribution => match self.state.contribution {
+            Row::Contribution => match state.contribution {
                 Some((mode, revision)) if mode != AgentMemoryContributionMode::Polluted => {
                     SettingsCall::SetContribution {
                         enabled: !mode.contributes(),
@@ -108,7 +98,7 @@ impl MemoriesPanel {
                 _ => return,
             },
             Row::Reset => {
-                self.confirming_reset = self.state.status.is_ok();
+                self.confirming_reset = state.status.is_ok();
                 return;
             }
             Row::KeepMemories => {
@@ -117,7 +107,7 @@ impl MemoriesPanel {
             }
             Row::ConfirmReset => {
                 self.confirming_reset = false;
-                let Ok(status) = &self.state.status else {
+                let Ok(status) = &state.status else {
                     return;
                 };
                 SettingsCall::ResetMemory {
@@ -136,7 +126,7 @@ impl MenuModel for MemoriesPanel {
         if self.confirming_reset {
             "Reset memory?".to_string()
         } else {
-            "Memories".to_string()
+            "Memory store".to_string()
         }
     }
 
@@ -149,21 +139,27 @@ impl MenuModel for MemoriesPanel {
             ));
             return lines;
         }
-        if !self.state.settings.enabled {
-            lines.push(Line::from("Memory is off (memory.enabled).".dim()));
+        let Some(state) = &self.state else {
+            lines.push(Line::from("Reading the memory…".dim()));
+            return lines;
+        };
+        if !state.enabled {
+            lines.push(Line::from(
+                "Memory is off: turn on memory.enabled in the Memory tab.".dim(),
+            ));
         }
-        match &self.state.status {
+        match &state.status {
             Ok(status) => lines.push(Line::from(status_line(status).dim())),
             Err(error) => lines.push(Line::from(format!("Status: {error}").red())),
         }
         if let Ok(AgentMemoryStatus {
             last_error: Some(error),
             ..
-        }) = &self.state.status
+        }) = &state.status
         {
             lines.push(Line::from(format!("Latest error: {error}").red()));
         }
-        lines.extend(self.state.note.clone().map(|note| Line::from(note.green())));
+        lines.extend(state.note.clone().map(|note| Line::from(note.green())));
         lines.extend(self.error.clone().map(|error| Line::from(error.red())));
         if self.saving {
             lines.push(Line::from("Saving…".dim()));
@@ -177,26 +173,11 @@ impl MenuModel for MemoriesPanel {
             description: Some(description),
             ..Default::default()
         };
-        let settings = &self.state.settings;
+        let contribution = self.state.as_ref().and_then(|state| state.contribution);
         self.row_kinds()
             .into_iter()
             .map(|row| match row {
-                Row::TurnOn => GenericDisplayRow {
-                    name: "Turn memory on".to_string(),
-                    description: Some("memory.enabled = true".to_string()),
-                    ..Default::default()
-                },
-                Row::Use => toggle(
-                    settings.use_memories,
-                    "Use memories",
-                    "the model sees the memories (memory.useMemories)".to_string(),
-                ),
-                Row::Generate => toggle(
-                    settings.generate_memories,
-                    "Generate memories",
-                    "sessions are read for new memories (memory.generateMemories)".to_string(),
-                ),
-                Row::Contribution => match self.state.contribution {
+                Row::Contribution => match contribution {
                     Some((AgentMemoryContributionMode::Polluted, _)) => GenericDisplayRow {
                         name: "[ ] This session contributes".to_string(),
                         is_disabled: true,
@@ -238,6 +219,10 @@ impl MenuModel for MemoriesPanel {
         "space or enter change · esc close".to_string()
     }
 
+    fn empty_message(&self) -> &'static str {
+        "…"
+    }
+
     fn on_key(&mut self, key: KeyEvent, selected: Option<usize>, tx: &AppEventSender) -> MenuKey {
         if self.saving || !matches!(key.code, KeyCode::Enter | KeyCode::Char(' ')) {
             return MenuKey::Ignored;
@@ -252,7 +237,7 @@ impl MenuModel for MemoriesPanel {
     fn on_reply(&mut self, reply: CommandReply) -> Option<CommandReply> {
         match reply {
             CommandReply::Settings(SettingsReply::Memories(state)) => {
-                self.state = *state;
+                self.state = Some(*state);
                 self.saving = false;
                 None
             }

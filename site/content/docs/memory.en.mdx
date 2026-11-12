@@ -28,7 +28,7 @@ running jobs: 0
   turned the memory on are not.
 </Callout>
 
-In the [terminal interface](/docs/terminal-interface), `/memories` offers to turn it on.
+In the [terminal interface](/docs/terminal-interface), `/memories` opens the settings center's Memory tab, where **Memory** turns it on.
 
 The memory needs an enabled default Provider. Extraction and consolidation run the model policy's model by default; `memory.extractionModel` and `memory.consolidationModel` name others (a cheaper model, say).
 
@@ -80,12 +80,11 @@ hanafubuki-agent memory reset
 - `memory status`: whether it is on, the sessions read, the memories extracted, the jobs running and the latest error.
 - `memory reset`: deletes the extractions and the consolidated memory, and marks every session as not yet read. The sessions that qualify are then read again; to avoid that, turn the memory off before you reset it.
 
-In the terminal interface, `/memories` shows the status (the sessions read, the memories, the latest pass and error) with:
+In the terminal interface, `/memories` opens the [settings center](/docs/terminal-interface#config)'s Memory tab: the memory's settings (**Memory**, **Use memories**, **Generate memories**, …), each saved at once, and the **Memory store** page, which shows the status (the sessions read, the memories, the latest pass and error) with:
 
-- **Use memories** and **Generate memories**: `memory.useMemories` and `memory.generateMemories`, saved at once;
-- **This session contributes**: whether the session shown is read for memories (`/memories` with no session yet leaves it off; a session that used outside content with `memory.excludeExternalContext` never contributes again);
+- **This session contributes**: whether the session shown is read for memories (with no session yet it cannot change; a session that used outside content with `memory.excludeExternalContext` never contributes again);
 - **Reset memory…**: `memory reset`, after a confirmation.
 
-With the memory off it offers **Turn memory on** (`memory.enabled`).
+With the memory off the page says so; **Memory** in the tab turns it on.
 
 The memory is kept in `memory/` in the data directory. With the `memory` plugin turned off (`disabledPlugins`), the model sees no memories and has no memory tools.

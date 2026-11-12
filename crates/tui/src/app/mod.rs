@@ -24,7 +24,7 @@ mod requests;
 mod scrollback;
 mod workspace;
 
-pub(crate) use workspace::WorkspaceEvent;
+pub(crate) use workspace::{SettingsPageAction, WorkspaceEvent};
 
 use keys::is_transcript_key;
 
@@ -220,6 +220,7 @@ impl App {
                 if let Some(update) = self.bridge.reply(reply) {
                     self.show_update(update);
                 }
+                self.queue_settings_page_check();
             }
             AppEvent::Op(op) => {
                 if let Some(update) = self.bridge.submit(op) {
@@ -250,7 +251,6 @@ impl App {
             }
             AppEvent::CommitTick => self.chat_widget.on_commit_tick(),
             AppEvent::SetRawOutput(raw) => self.set_raw_output(raw),
-            AppEvent::SetFullscreenTranscript(enabled) => self.save_fullscreen_transcript(enabled),
             AppEvent::Command(command) => self.run_app_command(tui, command),
             AppEvent::Appearance(event) => self.apply_appearance(event),
             AppEvent::CommandStep(step) => self.chat_widget.run_command_step(step),

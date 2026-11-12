@@ -7,8 +7,8 @@
 //! whichever conversation has the focus.
 
 use hanafubuki_agent::{
-    AgentHandle, AgentTuiPreferences, SettingsActionOutcome, SettingsActionRequest,
-    SettingsCatalog, SettingsWrite, SettingsWriteOutcome,
+    AgentHandle, AgentProviderRegistrySnapshot, AgentTuiPreferences, SettingsActionOutcome,
+    SettingsActionRequest, SettingsCatalog, SettingsWrite, SettingsWriteOutcome,
 };
 
 use super::AgentBridge;
@@ -33,6 +33,9 @@ pub(crate) struct CatalogReply {
     /// `[tui]` as the layers resolve it after a write of one of its keys,
     /// for the interface to take.
     pub(crate) preferences: Option<AgentTuiPreferences>,
+    /// The Providers after an action on them or on the model policy, for
+    /// the interface to know whether a first message can run.
+    pub(crate) registry: Option<AgentProviderRegistrySnapshot>,
 }
 
 #[derive(Debug)]
@@ -59,6 +62,7 @@ impl AgentBridge {
 
 async fn run(agent: &AgentHandle, request: u64, call: CatalogCall) -> CatalogReply {
     let mut tui_written = false;
+    let mut providers_written = false;
     let outcome = match call {
         CatalogCall::Read => Ok(CatalogOutcome::Read),
         CatalogCall::Write(write) => {
@@ -71,13 +75,20 @@ async fn run(agent: &AgentHandle, request: u64, call: CatalogCall) -> CatalogRep
                 .await
                 .map(CatalogOutcome::Written)
         }
-        CatalogCall::Action(action) => agent
-            .run_settings_action(action)
-            .await
-            .map(CatalogOutcome::Acted),
+        CatalogCall::Action(action) => {
+            providers_written = matches!(action.collection.as_str(), "providers" | "modelPolicy");
+            agent
+                .run_settings_action(action)
+                .await
+                .map(CatalogOutcome::Acted)
+        }
     };
     let preferences = match tui_written && outcome.is_ok() {
         true => agent.tui_preferences().await.ok(),
+        false => None,
+    };
+    let registry = match providers_written && outcome.is_ok() {
+        true => agent.provider_registry_snapshot().await.ok(),
         false => None,
     };
     CatalogReply {
@@ -85,5 +96,6 @@ async fn run(agent: &AgentHandle, request: u64, call: CatalogCall) -> CatalogRep
         outcome,
         catalog: agent.settings_catalog().await,
         preferences,
+        registry,
     }
 }

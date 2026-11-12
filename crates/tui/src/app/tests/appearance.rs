@@ -1,6 +1,7 @@
 //! `/theme`, `/statusline` and `/title` end to end over the standalone
-//! Agent: what a command's arguments change for the run, what a setup view
-//! saves into `config.toml`, and the title the app writes.
+//! Agent: what a command's arguments change for the run, what a setup
+//! view, a page of the settings center, saves into `config.toml`, and the
+//! title the app writes.
 
 use hanafubuki_agent::test_support::assistant_events;
 use ratatui::crossterm::event::KeyCode;
@@ -31,6 +32,7 @@ fn statusline_arguments_apply_to_the_run_and_the_setup_saves() {
     }
     harness.key(KeyCode::Char(' '));
     harness.key(KeyCode::Enter);
+    harness.leave_settings();
     harness.pump_until_screen_shows("Status line updated.");
     let config = harness.config_file();
     assert!(
@@ -80,6 +82,7 @@ fn title_sets_the_terminal_title_for_the_run_and_clear_gives_it_back() {
     harness.pump_until_screen_shows("Configure Terminal Title");
     harness.key(KeyCode::Char(' '));
     harness.key(KeyCode::Enter);
+    harness.leave_settings();
     harness.pump_until_screen_shows("Terminal title updated.");
     assert!(harness
         .config_file()
@@ -100,6 +103,7 @@ fn theme_saves_the_theme_picked() {
         harness.key(KeyCode::Char(character));
     }
     harness.key(KeyCode::Enter);
+    harness.leave_settings();
     harness.pump_until_screen_shows("Theme set to nord.");
     assert!(harness.config_file().contains("theme = \"nord\""));
 }

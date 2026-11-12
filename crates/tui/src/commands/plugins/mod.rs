@@ -1,7 +1,8 @@
 // Modified from OpenAI Codex 57a808a392 (Apache-2.0).
 
 //! `/plugins` (Codex's plugin catalog, `chatwidget/plugins.rs` and
-//! `chatwidget/plugin_catalog.rs`): the installed plugins, the
+//! `chatwidget/plugin_catalog.rs`): the settings center at the plugin
+//! browser's page: the installed plugins, the
 //! marketplaces and their plugins, and the built-in plugins, on three tabs.
 //! It installs (from a marketplace or a directory), turns on and off,
 //! updates, retries and uninstalls plugins, trusts an installed plugin's
@@ -30,10 +31,7 @@ pub(crate) static PLUGINS: CommandSpec = CommandSpec {
     inline_args: false,
     during_task: true,
     needs_session: false,
-    dispatch: |context, _args| {
-        context.show_view(Box::new(PluginsBrowser::new(context.app_event_tx())));
-        context.agent_command(AgentCommand::Plugins(PluginsCall::Load));
-    },
+    dispatch: |context, _args| super::open_settings(context, PAGE.id),
 };
 
 /// The settings center's page of `/plugins`.
@@ -45,6 +43,10 @@ pub(crate) static PAGE: PageOverride = PageOverride {
         summary: "Install, update and uninstall plugins; a code plugin's settings",
     },
     command: &PLUGINS,
+    open: |context, _| {
+        context.show_view(Box::new(PluginsBrowser::new(context.app_event_tx())));
+        context.agent_command(AgentCommand::Plugins(PluginsCall::Load));
+    },
 };
 
 /// The answer goes to the open browser; a failure none takes goes into the

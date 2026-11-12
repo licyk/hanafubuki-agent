@@ -1,5 +1,5 @@
-//! `/keymap`, `/presets`, `/config quick`, `/warnings` (the roles' issues
-//! among them) and `/memories` end to end
+//! `/keymap`, `/presets`, `/raw`, `/warnings` (the roles' issues among
+//! them) and the memory store end to end
 //! over the standalone Agent: driven by keys, with what they saved read
 //! back from `config.toml` and what they changed seen on the screen.
 
@@ -9,7 +9,6 @@ use ratatui::crossterm::event::{KeyCode, KeyModifiers};
 
 use super::Harness;
 use crate::app::preferences::shadowed;
-use crate::history_cell::HistoryRenderMode;
 use crate::transcript_mode::TranscriptMode;
 
 impl Harness {
@@ -41,21 +40,6 @@ impl Harness {
             .block_on(async move { call.write_tui_preferences(patch).await })
             .unwrap()
     }
-
-    fn agent_memory(&self) -> hanafubuki_agent::AgentMemorySettings {
-        self.agent_settings().memory
-    }
-
-    fn agent_settings(&self) -> hanafubuki_agent::AgentSettings {
-        let agent = self.runtime.slot().agent().unwrap();
-        let call = agent.clone();
-        agent
-            .runtime()
-            .block_on(async move { call.settings_view().await })
-            .unwrap()
-            .unwrap()
-            .settings
-    }
 }
 
 #[test]
@@ -75,6 +59,7 @@ fn keymap_rebinds_ctrl_t_with_a_captured_key_and_refuses_a_conflict() {
     harness.ctrl('y');
     harness.pump_until_screen_shows("and editor.yank");
     harness.ctrl('g');
+    harness.leave_settings();
     harness.pump_until_screen_shows("global.open_transcript: ctrl-g.");
     let file = harness.config_file();
     assert!(file.contains("open_transcript = \"ctrl-g\""), "{file}");
@@ -120,6 +105,7 @@ fn the_leader_chord_starts_select_mode_and_a_chord_can_be_captured() {
     harness.ctrl('g');
     harness.pump_until_screen_shows("First key: ctrl-g");
     harness.key(KeyCode::Char('o'));
+    harness.leave_settings();
     harness.pump_until_screen_shows("chat.toggle_thinking: ctrl-g o.");
     assert!(harness
         .config_file()
@@ -146,15 +132,17 @@ fn presets_are_written_run_edited_and_deleted() {
     harness.key(KeyCode::Tab);
     harness.key(KeyCode::Tab);
     harness.key(KeyCode::Enter);
+    harness.leave_settings();
     harness.pump_until_screen_shows("Saved preset 1.");
     let file = harness.config_file();
     assert!(file.contains("[tui.presets.1]"), "{file}");
     assert!(file.contains("input = \"/status\""), "{file}");
 
-    // A digit runs it through the slash commands.
+    // A digit runs it through the slash commands, the center closed.
     harness.open("/presets", "1  Status");
     harness.key(KeyCode::Char('1'));
     harness.pump_until_screen_shows("Permissions:");
+    assert!(harness.app.workspace.settings().is_none());
 
     // `e` edits the selected slot; the label emptied is removed.
     harness.open("/presets", "1  Status");
@@ -166,6 +154,7 @@ fn presets_are_written_run_edited_and_deleted() {
     harness.key(KeyCode::Tab);
     harness.key(KeyCode::Enter);
     // Saved off the loop: the second save said, the preset is taken.
+    harness.leave_settings();
     harness.pump_until("the edit saved", |harness| {
         harness.transcript().matches("Saved preset 1.").count() == 2
     });
@@ -182,7 +171,9 @@ fn presets_are_written_run_edited_and_deleted() {
     harness.key(KeyCode::Char('d'));
     harness.pump_until_screen_shows("Delete preset 1?");
     harness.key(KeyCode::Char('y'));
-    harness.pump_until_screen_shows("Deleted preset 1.");
+    harness.pump_until("the deletion saved", |harness| {
+        harness.transcript().contains("Deleted preset 1.")
+    });
     assert!(harness.app.bridge.tui_preferences().presets.is_empty());
 }
 
@@ -228,6 +219,7 @@ fn a_message_preset_is_sent_and_one_starts_from_the_current_settings() {
     // Its slot is the first free one; Save.
     harness.key(KeyCode::BackTab);
     harness.key(KeyCode::Enter);
+    harness.leave_settings();
     harness.pump_until_screen_shows("Saved preset 1.");
     assert_eq!(
         harness.app.bridge.tui_preferences().presets["1"].input,
@@ -236,60 +228,25 @@ fn a_message_preset_is_sent_and_one_starts_from_the_current_settings() {
 }
 
 #[test]
-fn a_scalar_preference_a_higher_layer_replaces_is_shadowed() {
-    let preferences = AgentTuiPreferences::default();
+fn a_preset_a_higher_layer_replaces_is_shadowed() {
+    let preset = |input: &str| AgentTuiPreset {
+        input: input.to_string(),
+        label: None,
+    };
+    let preferences = AgentTuiPreferences {
+        presets: [("1".to_string(), preset("/status"))].into(),
+        ..AgentTuiPreferences::default()
+    };
     let same = AgentTuiPreferencesPatch {
-        raw_output: Some(preferences.raw_output),
+        presets: [("1".to_string(), Some(preset("/status")))].into(),
         ..AgentTuiPreferencesPatch::default()
     };
     assert!(!shadowed(&same, &preferences));
-
     let replaced = AgentTuiPreferencesPatch {
-        raw_output: Some(!preferences.raw_output),
+        presets: [("1".to_string(), Some(preset("/diff")))].into(),
         ..AgentTuiPreferencesPatch::default()
     };
     assert!(shadowed(&replaced, &preferences));
-}
-
-#[test]
-fn config_toggles_and_choices_write_the_settings_and_its_entries_open_the_editors() {
-    let mut harness = Harness::start(Vec::new());
-    harness.open("/config quick", "Settings");
-    // Raw output, at once and saved.
-    harness.key(KeyCode::Char(' '));
-    harness.pump_until_screen_shows("Raw output on");
-    assert_eq!(harness.app.render_mode, HistoryRenderMode::Raw);
-    // The alternate screen, a choice.
-    for _ in 0..3 {
-        harness.key(KeyCode::Down);
-    }
-    harness.key(KeyCode::Right);
-    harness.pump_until_screen_shows("Saved the alternate screen: always");
-    let file = harness.config_file();
-    assert!(file.contains("rawOutput = true"), "{file}");
-    assert!(file.contains("alternateScreen = \"always\""), "{file}");
-    // Fullscreen, for the next launch.
-    harness.key(KeyCode::Up);
-    harness.key(KeyCode::Enter);
-    harness.pump_until_screen_shows("Saved the interface mode: Scrollback");
-    assert!(harness
-        .config_file()
-        .contains("fullscreenTranscript = false"));
-    // The compaction strategy, a choice saved into the Agent's settings.
-    for _ in 0..2 {
-        harness.key(KeyCode::Down);
-    }
-    harness.key(KeyCode::Right);
-    harness.pump_until_screen_shows("Saved the compaction strategy: background");
-    assert!(harness.config_file().contains("strategy = \"background\""));
-    harness.key(KeyCode::Left);
-    harness.pump_until_screen_shows("Saved the compaction strategy: standard");
-    // Theme ›, the fourth entry.
-    for _ in 0..4 {
-        harness.key(KeyCode::Down);
-    }
-    harness.key(KeyCode::Enter);
-    harness.pump_until_screen_shows("Select Syntax Theme");
 }
 
 #[test]
@@ -373,33 +330,24 @@ fn warnings_list_the_issues_of_the_roles() {
 }
 
 #[test]
-fn memories_turns_memory_on_toggles_its_settings_and_resets_after_asking() {
+fn memories_opens_the_memory_tab_whose_store_resets_after_asking() {
     let mut harness = Harness::start(Vec::new());
-    harness.open("/memories", "Turn memory on");
-    harness.key(KeyCode::Enter);
-    harness.pump_until_screen_shows("[x] Use memories");
-    assert!(harness.agent_memory().enabled);
+    let tab = harness.open("/memories", "Memory store");
+    assert!(tab.contains("Use memories"), "{tab}");
+    harness.app.close_settings_center(&mut harness.tui);
+
+    harness.open("/config memory-store", "Reset memory");
     // Without a session, its contribution cannot change.
     assert!(harness.screen().contains("no session yet"));
-
-    harness.key(KeyCode::Char(' '));
-    harness.pump_until_screen_shows("[ ] Use memories");
-    assert!(!harness.agent_memory().use_memories);
     harness.key(KeyCode::Down);
-    harness.key(KeyCode::Char(' '));
-    harness.pump_until_screen_shows("[ ] Generate memories");
-    assert!(!harness.agent_memory().generate_memories);
-    let file = harness.config_file();
-    assert!(file.contains("useMemories = false"), "{file}");
-
-    for _ in 0..2 {
-        harness.key(KeyCode::Down);
-    }
     harness.key(KeyCode::Enter);
-    harness.pump_until_screen_shows("Reset memory?");
-    harness.key(KeyCode::Down);
+    let asked = harness.pump_until_screen_shows("Reset memory?");
+    assert!(asked.contains("› Yes, reset memory"), "{asked}");
     harness.key(KeyCode::Enter);
     harness.pump_until_screen_shows("Memory was reset");
+    // Esc goes back to the tab, whose row opened the page.
+    harness.key(KeyCode::Esc);
+    harness.pump_until_screen_shows("Use memories");
 }
 
 #[test]
@@ -408,17 +356,12 @@ fn the_contribution_follows_the_session() {
     harness.type_and_submit("Hi");
     harness.pump_until_screen_shows("Hello.");
     harness.pump_until_turn_ends();
-    harness.open("/memories", "Turn memory on");
-    harness.key(KeyCode::Enter);
-    harness.pump_until_screen_shows("This session contributes");
+    harness.open("/config memory-store", "This session contributes");
     let screen = harness.screen();
     assert!(!screen.contains("no session yet"), "{screen}");
     let session = harness.app.bridge.session_id().unwrap();
     let agent = harness.runtime.slot().agent().unwrap();
     let (before, _) = agent.memory_session_contribution(session).unwrap();
-    for _ in 0..2 {
-        harness.key(KeyCode::Down);
-    }
     harness.key(KeyCode::Char(' '));
     harness.pump_until("the contribution to change", |_| {
         agent.memory_session_contribution(session).unwrap().0 != before

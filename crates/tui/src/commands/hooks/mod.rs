@@ -1,6 +1,7 @@
 // Modified from OpenAI Codex 57a808a392 (Apache-2.0).
 
-//! `/hooks`: the browser of the configured hooks (Codex's hooks browser):
+//! `/hooks`: the settings center at the browser of the configured hooks
+//! (Codex's hooks browser):
 //! by event, each hook with its matcher, command, source, trust and
 //! whether it is on; it turns hooks on and off, trusts one or every one
 //! waiting, and lists what in the configuration was skipped. At start,
@@ -24,10 +25,7 @@ pub(crate) static HOOKS: CommandSpec = CommandSpec {
     inline_args: false,
     during_task: true,
     needs_session: false,
-    dispatch: |context, _args| {
-        context.show_view(Box::new(HooksBrowser::new(context.app_event_tx())));
-        context.agent_command(AgentCommand::Hooks(HooksCall::Load));
-    },
+    dispatch: |context, _args| super::open_settings(context, PAGE.id),
 };
 
 /// The settings center's page of `/hooks`.
@@ -39,6 +37,10 @@ pub(crate) static PAGE: PageOverride = PageOverride {
         summary: "Each hook's command, to trust it",
     },
     command: &HOOKS,
+    open: |context, _| {
+        context.show_view(Box::new(HooksBrowser::new(context.app_event_tx())));
+        context.agent_command(AgentCommand::Hooks(HooksCall::Load));
+    },
 };
 
 /// The warning the chat keeps for hooks found waiting at start.

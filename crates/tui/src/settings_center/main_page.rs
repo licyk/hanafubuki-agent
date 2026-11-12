@@ -197,7 +197,7 @@ impl MainPage {
                 let section = &catalog.sections[section];
                 let spec = &section.settings[index];
                 if let Some(page) = registry::page_of_setting(&spec.key) {
-                    return Effect::Open(page);
+                    return Effect::Open(page, None);
                 }
                 if let Some(group) = spec.commit_group.as_deref() {
                     return Effect::Push(Box::new(Page::Form(FormPage::group(section, group))));
@@ -231,7 +231,7 @@ impl MainPage {
                     &collection.records[record],
                 ))))
             }
-            Some(MainRow::Page(page)) => Effect::Open(page),
+            Some(MainRow::Page(page)) => Effect::Open(page, None),
             Some(MainRow::Heading(_)) | None => Effect::None,
         }
     }
@@ -306,7 +306,7 @@ impl MainPage {
                     })
                 })?;
                 self.tab = tab;
-                return Some(Effect::Open(page));
+                return Some(Effect::Open(page, None));
             }
             (None, None) => return None,
         };
@@ -393,7 +393,7 @@ fn search_rows(catalog: &SettingsCatalog, needle: &str) -> Vec<MainRow> {
                 MainRow::Collection(index) => matches(&[&catalog.collections[*index].title]),
                 MainRow::Page(page) => match page.attach {
                     Attach::Row { label, summary, .. } => matches(&[label, summary, page.id]),
-                    Attach::Setting(_) => false,
+                    Attach::Setting(_) | Attach::Record { .. } => false,
                 },
             };
             if found {

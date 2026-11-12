@@ -15,6 +15,7 @@ use serde_json::{Map, Value};
 
 use super::collection::{self, request};
 use super::editor::{ChoicePage, LineEditor, ListPage, ListState};
+use super::registry::{self, Attach, PageOverride};
 use super::render::{Row, RowStyle};
 use super::values;
 use super::{Effect, Page};
@@ -54,6 +55,8 @@ enum Line {
     Field(usize),
     /// A record's action, by its place in the collection's actions.
     Action(usize),
+    /// A page that is an action of the record ([`registry::record_pages`]).
+    Page(&'static PageOverride),
     /// The draft's Add or Save.
     Submit,
 }
@@ -198,16 +201,19 @@ impl FormPage {
                 .map(|(index, _)| Line::Field(index)),
         );
         match &self.target {
-            FormTarget::Record { .. } => lines.extend(
-                collection
-                    .into_iter()
-                    .flat_map(|collection| collection.actions.iter().enumerate())
-                    .filter(|(_, action)| {
-                        action.scope == hanafubuki_agent::SettingsActionScope::Record
-                            && action.id != SAVE
-                    })
-                    .map(|(index, _)| Line::Action(index)),
-            ),
+            FormTarget::Record { collection: id, .. } => {
+                lines.extend(
+                    collection
+                        .into_iter()
+                        .flat_map(|collection| collection.actions.iter().enumerate())
+                        .filter(|(_, action)| {
+                            action.scope == hanafubuki_agent::SettingsActionScope::Record
+                                && action.id != SAVE
+                        })
+                        .map(|(index, _)| Line::Action(index)),
+                );
+                lines.extend(registry::record_pages(id).map(Line::Page));
+            }
             FormTarget::Add { .. } | FormTarget::Group { .. } => lines.push(Line::Submit),
         }
         lines
@@ -359,6 +365,10 @@ impl FormPage {
                     pop: false,
                 }
             }
+            Some(Line::Page(page)) => match &self.target {
+                FormTarget::Record { record, .. } => Effect::Open(page, Some(record.clone())),
+                _ => Effect::None,
+            },
             Some(Line::Submit) => self.submit(collection),
             Some(Line::Field(_)) | None => Effect::None,
         }
@@ -501,6 +511,15 @@ impl FormPage {
                             .map_or("", |collection| collection.actions[action].label.as_str());
                         let mut row = Row::open(label, "", "");
                         row.hint = "enter run".to_string();
+                        row
+                    }
+                    Line::Page(page) => {
+                        let label = match page.attach {
+                            Attach::Record { label, .. } => label,
+                            _ => page.id,
+                        };
+                        let mut row = Row::open(label, "›", "");
+                        row.hint = "enter open".to_string();
                         row
                     }
                     Line::Submit => {

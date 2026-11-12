@@ -1,10 +1,10 @@
-//! `/mcp`: the manager of the MCP servers (a list with each server's
-//! state, the form, connecting and logging in); `/mcp verbose` writes the
-//! servers and their tools into the transcript; `/mcp login ID` opens the
-//! manager on that server's OAuth login.
+//! `/mcp`: the settings center's MCP servers, where each is added, edited,
+//! connected and deleted, its secrets beside it (MCP secrets); `/mcp
+//! verbose` writes the servers and their tools into the transcript; `/mcp
+//! login ID` opens that server's OAuth login, a page of its record in the
+//! center.
 
-mod form;
-mod screen;
+mod login;
 
 use hanafubuki_agent::McpServerId;
 use ratatui::style::Stylize;
@@ -12,9 +12,11 @@ use ratatui::text::Line;
 
 use super::{CommandContext, CommandReply, CommandSpec};
 use crate::agent_bridge::{McpCall, McpReply};
-use crate::app_event::AgentCommand;
+use crate::app::WorkspaceEvent;
+use crate::app_event::{AgentCommand, AppEvent};
 use crate::history_cell::{self, PlainHistoryCell};
-use screen::McpScreen;
+use crate::settings_center::{Attach, PageOverride};
+use login::LoginView;
 
 const USAGE: &str = "Usage: /mcp [verbose | login ID]";
 
@@ -28,13 +30,36 @@ pub(crate) static MCP: CommandSpec = CommandSpec {
     dispatch,
 };
 
+/// The settings center's page of an MCP server's OAuth login.
+pub(crate) static LOGIN_PAGE: PageOverride = PageOverride {
+    id: "mcp-login",
+    attach: Attach::Record {
+        collection: "mcp",
+        label: "Log in",
+    },
+    command: &MCP,
+    open: |context, record| {
+        let Some(server_id) = record.and_then(|id| McpServerId::parse(id).ok()) else {
+            return;
+        };
+        context.show_view(Box::new(LoginView::new(
+            server_id.clone(),
+            context.app_event_tx(),
+        )));
+        context.agent_command(AgentCommand::Mcp(McpCall::Login(server_id)));
+    },
+};
+
 fn dispatch(context: &mut CommandContext<'_>, args: &str) {
     let words: Vec<&str> = args.split_whitespace().collect();
     match words.as_slice() {
-        [] => open(context, None),
+        [] => super::open_settings(context, "mcp"),
         ["verbose"] => context.agent_command(AgentCommand::Mcp(McpCall::Report)),
         ["login", id] => match McpServerId::parse(*id) {
-            Ok(server_id) => open(context, Some(server_id)),
+            Ok(server_id) => context.send(AppEvent::Workspace(WorkspaceEvent::OpenSettings {
+                target: Some(LOGIN_PAGE.id.to_string()),
+                record: Some(server_id.as_str().to_string()),
+            })),
             Err(_) => context.add_to_history(history_cell::new_error_event(format!(
                 "`{id}` is not an MCP server id (letters, digits, `-`, `_` and `.`)"
             ))),
@@ -43,17 +68,9 @@ fn dispatch(context: &mut CommandContext<'_>, args: &str) {
     }
 }
 
-/// Opens the manager on the servers as they are read, and starts the
-/// login of `login` once they are.
-fn open(context: &mut CommandContext<'_>, login: Option<McpServerId>) {
-    let screen = McpScreen::new(context.app_event_tx(), login);
-    context.show_view(Box::new(screen));
-    context.agent_command(AgentCommand::Mcp(McpCall::Load));
-}
-
 /// The report goes into the transcript, and so do the login's address and
-/// its end; the rest goes to the open manager, and a failure none takes
-/// into the transcript.
+/// its end; the rest goes to the open login, and a failure none takes into
+/// the transcript.
 pub(crate) fn on_reply(context: &mut CommandContext<'_>, reply: McpReply) {
     match &reply {
         McpReply::Report(snapshot) => {
@@ -73,16 +90,14 @@ pub(crate) fn on_reply(context: &mut CommandContext<'_>, reply: McpReply) {
                 Line::from(url.clone().cyan()),
             ]))
         }
-        McpReply::LoggedIn { server_id, .. } => context.add_to_history(
-            history_cell::new_info_event(format!("{}: logged in", server_id.as_str()), None),
-        ),
-        _ => {}
+        McpReply::LoggedIn(server_id) => context.add_to_history(history_cell::new_info_event(
+            format!("{}: logged in", server_id.as_str()),
+            None,
+        )),
+        McpReply::Failed(_) => {}
     }
     let left = context.offer_reply(CommandReply::Mcp(reply));
-    if let Some(CommandReply::Mcp(McpReply::Failed { error, .. })) = left {
+    if let Some(CommandReply::Mcp(McpReply::Failed(error))) = left {
         context.add_to_history(history_cell::new_error_event(format!("/mcp: {error}")));
     }
 }
-
-#[cfg(test)]
-mod tests;

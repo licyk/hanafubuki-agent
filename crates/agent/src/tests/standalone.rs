@@ -374,7 +374,13 @@ fn the_interface_preferences_are_read_and_written_through_the_running_agent() {
             let before = call.tui_preferences().await.unwrap();
             let written = call
                 .write_tui_preferences(AgentTuiPreferencesPatch {
-                    raw_output: Some(true),
+                    presets: BTreeMap::from([(
+                        "1".to_string(),
+                        Some(AgentTuiPreset {
+                            input: "/status".to_string(),
+                            label: None,
+                        }),
+                    )]),
                     ..AgentTuiPreferencesPatch::default()
                 })
                 .await
@@ -383,9 +389,12 @@ fn the_interface_preferences_are_read_and_written_through_the_running_agent() {
         })
         .unwrap();
     assert_eq!(before, AgentTuiPreferences::default());
-    assert!(written.raw_output && written.fullscreen_transcript);
+    assert!(written.presets.contains_key("1") && written.fullscreen_transcript);
     let file = std::fs::read_to_string(fixture.home.join("config.toml")).unwrap();
-    assert!(file.contains("[tui]\nrawOutput = true"), "{file}");
+    assert!(
+        file.contains("[tui.presets.1]\ninput = \"/status\""),
+        "{file}"
+    );
     assert!(file.contains("[profiles.ci]"), "{file}");
     runtime.shutdown(AGENT_SHUTDOWN_BUDGET);
 }

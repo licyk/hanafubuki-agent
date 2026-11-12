@@ -6,16 +6,19 @@
 //! picker and the reports.
 
 use hanafubuki_agent::panic::catch_panic;
+use hanafubuki_agent::AgentProviderRegistrySnapshot;
 
 use super::input_queue::Ending;
 use super::ChatWidget;
 use crate::agent_bridge::{
     setup_needed, ReviewEnd, ReviewReply, SettingsReply, TurnUpdate, Warning, WarningSource,
 };
+use crate::app::WorkspaceEvent;
 use crate::app_event::{AppEvent, Op};
 use crate::bottom_pane::BottomPaneView;
 use crate::commands::{self, CommandContext, CommandSpec, CommandStep};
 use crate::history_cell;
+use crate::settings_center::PageOverride;
 
 impl ChatWidget {
     pub(crate) fn dispatch_command(&mut self, command: &'static CommandSpec, args: String) {
@@ -60,6 +63,17 @@ impl ChatWidget {
         self.request_redraw();
     }
 
+    /// Shows the views of a page of the settings center, as its command's.
+    pub(crate) fn open_settings_page(
+        &mut self,
+        page: &'static PageOverride,
+        record: Option<String>,
+    ) {
+        self.run_command(page.command, |context| {
+            (page.open)(context, record.as_deref())
+        });
+    }
+
     /// A command's next view, which one of its views asked for.
     pub(crate) fn run_command_step(&mut self, step: CommandStep) {
         self.run_command(step.command, step.run);
@@ -75,12 +89,21 @@ impl ChatWidget {
         self.bottom_pane.has_command_view(command)
     }
 
-    /// Opens the Provider setup, unless it is open (or `/providers` is off).
+    /// Opens the settings center at the Providers, to set one up and choose
+    /// the model.
     pub(super) fn open_setup(&mut self) {
-        if !self.bottom_pane.has_command_view(commands::PROVIDERS.name) {
-            self.run_command(&commands::PROVIDERS, |context| {
-                commands::providers::open(context, true)
-            });
+        self.app_event_tx
+            .send(AppEvent::Workspace(WorkspaceEvent::OpenSettings {
+                target: Some(commands::PROVIDERS.name.to_string()),
+                record: None,
+            }));
+    }
+
+    /// The Providers as the settings center left them: whether a first
+    /// message still needs one set up.
+    pub(crate) fn provider_registry_changed(&mut self, registry: &AgentProviderRegistrySnapshot) {
+        if !self.session_open {
+            self.setup_needed = setup_needed(registry, self.model_override);
         }
     }
 
@@ -168,12 +191,9 @@ impl ChatWidget {
             TurnUpdate::StatusReport(report) => {
                 self.add_to_history(history_cell::new_status_output(&report))
             }
-            TurnUpdate::Providers(reply) => {
-                if let Some(registry) = reply.registry().filter(|_| !self.session_open) {
-                    self.setup_needed = setup_needed(registry, self.model_override);
-                }
+            TurnUpdate::ProviderModels(models) => {
                 self.run_command(&commands::PROVIDERS, |context| {
-                    commands::providers::on_reply(context, reply)
+                    commands::providers::on_models(context, models)
                 })
             }
             TurnUpdate::Mcp(reply) => self.run_command(&commands::MCP, |context| {
@@ -183,18 +203,9 @@ impl ChatWidget {
                 self.add_to_history(history_cell::new_skills_output(&catalog))
             }
             TurnUpdate::Settings(SettingsReply::Warnings(warnings)) => self.show_warnings(warnings),
-            TurnUpdate::Settings(reply) => {
-                let command = match &reply {
-                    SettingsReply::Config { .. }
-                    | SettingsReply::Failed {
-                        command: "config", ..
-                    } => &commands::CONFIG,
-                    _ => &commands::MEMORIES,
-                };
-                self.run_command(command, |context| {
-                    commands::on_settings_reply(context, reply)
-                })
-            }
+            TurnUpdate::Settings(reply) => self.run_command(&commands::MEMORIES, |context| {
+                commands::on_settings_reply(context, reply)
+            }),
             TurnUpdate::Session(reply) => {
                 // `/cd` and `/worktree` moved: the next session's header
                 // names the new directory.

@@ -5,8 +5,9 @@
 //! each run as if it were typed and sent, a message or a slash command.
 //! The menu lists the slots; a digit runs its slot, `n` writes a new one,
 //! `s` starts one from the current settings, `e` edits the selected one and
-//! `d` deletes it after a confirmation. The keymap's `chat.open_presets`
-//! (Ctrl-X P) opens the menu.
+//! `d` deletes it after a confirmation. The menu is a page of the settings
+//! center, which `/presets` and the keymap's `chat.open_presets` (Ctrl-X P)
+//! open; a preset run closes the center first.
 
 mod editor;
 
@@ -43,12 +44,17 @@ pub(crate) static PAGE: PageOverride = PageOverride {
         summary: "Inputs kept in slots 0 to 9",
     },
     command: &PRESETS,
+    open: |context, _| open_menu(context),
 };
 
 /// The slots in the menu's order: 1 to 9, then 0, as the keyboard has them.
 const SLOTS: [char; 10] = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'];
 
 fn dispatch(context: &mut CommandContext<'_>, _args: &str) {
+    super::open_settings(context, PAGE.id);
+}
+
+fn open_menu(context: &mut CommandContext<'_>) {
     let menu = PresetsMenu {
         presets: context.preferences().presets.clone(),
         deleting: None,

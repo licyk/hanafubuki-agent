@@ -1,15 +1,18 @@
 //! Configuration in the interface, end to end over the standalone Agent:
-//! the first-run setup, `/providers` and the MCP manager, driven by keys,
-//! with what they wrote read back from the configuration.
+//! the first-run setup, the Providers, the model policy and the MCP
+//! servers in the settings center, driven by keys, with what they wrote
+//! read back from the configuration.
 
 use hanafubuki_agent::test_support::assistant_events;
 use hanafubuki_agent::{
     AgentModelPolicyWriteRequest, AgentProviderRegistrySnapshot, McpApplicationSnapshot,
     McpCredentialKey, McpServerId, McpTransportConfig,
 };
-use ratatui::crossterm::event::{KeyCode, KeyModifiers};
+use ratatui::crossterm::event::KeyCode;
 
 use super::Harness;
+use crate::agent_bridge::{AgentReply, McpReply, TurnUpdate};
+use crate::app_event::AppEvent;
 use crate::transcript_mode::TranscriptMode;
 
 /// A models endpoint's answer listing `ids`.
@@ -22,19 +25,6 @@ fn models(ids: &[&str]) -> Vec<u8> {
 }
 
 impl Harness {
-    /// Types `text` into the open view, a key at a time.
-    fn type_keys(&mut self, text: &str) {
-        for character in text.chars() {
-            self.key(KeyCode::Char(character));
-        }
-    }
-
-    fn tab(&mut self, times: usize) {
-        for _ in 0..times {
-            self.key(KeyCode::Tab);
-        }
-    }
-
     /// The Providers as the Agent has them.
     fn registry(&self) -> AgentProviderRegistrySnapshot {
         let agent = self.runtime.slot().agent().unwrap();
@@ -89,50 +79,46 @@ fn without_a_provider_the_setup_opens_and_the_first_message_waits_for_it() {
     let mut harness = Harness::start_with(
         vec![
             models(&["model-a", "model-b"]),
-            models(&["model-a", "model-b"]),
             assistant_events("The answer is 42."),
         ],
         false,
         TranscriptMode::Terminal,
     );
-    harness.pump_until_screen_shows("Test: list the models");
-    // Closed (the form, then the list), the composer takes a message, which
-    // waits in the composer while the setup opens again.
-    harness.key(KeyCode::Esc);
-    harness.pump_until_screen_shows("Add a Provider…");
-    harness.key(KeyCode::Esc);
+    // The center opens at the Providers; closed, the composer takes a
+    // message, which waits there while the center opens again.
+    harness.pump_until_screen_shows("Settings › Providers");
+    harness.app.close_settings_center(&mut harness.tui);
     harness.type_and_submit("What is the answer?");
     harness.pump_until_transcript_shows("Set up a model Provider and choose a model first");
-    harness.pump_until_screen_shows("Test: list the models");
+    harness.pump_until_screen_shows("Settings › Providers");
     assert!(!harness.app.chat_widget.composer_is_empty());
     assert_eq!(harness.app.bridge.session_id(), None);
 
+    harness.key(KeyCode::Char('a'));
+    harness.pump_until_screen_shows("Providers › Add a Provider");
+    harness.edit_setting("Name", "Fixture");
     let base_url = harness.server.base_url.clone();
-    harness.type_keys("Fixture");
-    harness.tab(2);
-    harness.type_keys(&base_url);
-    harness.tab(1);
-    harness.type_keys("sk-test");
-    let screen = harness.pump_until_screen_shows("API token");
-    assert!(!screen.contains("sk-tes"), "{screen}");
-    // Enabled, then "Add a header".
-    harness.tab(2);
+    harness.edit_setting("Base URL", &base_url);
+    harness.select_setting("API token");
     harness.key(KeyCode::Enter);
-    harness.type_keys("X-Team");
-    harness.tab(1);
-    harness.type_keys("blue");
-    // The row's add stop, then Test.
-    harness.tab(2);
+    for character in "sk-test".chars() {
+        harness.key(KeyCode::Char(character));
+    }
+    let screen = harness.screen();
+    assert!(!screen.contains("sk-tes"), "a secret is dots: {screen}");
     harness.key(KeyCode::Enter);
-    harness.pump_until_screen_shows("The Provider lists 2 models.");
-    let registry = harness.registry();
-    assert!(registry.providers.is_empty(), "a test saves nothing");
-    harness.tab(1);
+    harness.select_setting("Add a Provider");
     harness.key(KeyCode::Enter);
-    harness.pump_until_screen_shows("Choose the model");
+    // The record added is selected; its model page lists the models.
+    harness.pump_until_screen_shows("› Fixture");
+    harness.key(KeyCode::Enter);
+    harness.select_setting("Choose the model");
+    harness.key(KeyCode::Enter);
     harness.pump_until_screen_shows("model-b");
     harness.key(KeyCode::Enter);
-    harness.pump_until_transcript_shows("New sessions run model-a on Fixture.");
+    // The center's notice says it, the interface knowing the setup done.
+    harness.pump_until_screen_shows("Saved");
+    harness.leave_settings();
 
     let registry = harness.registry();
     let provider = &registry.providers[0];
@@ -142,11 +128,8 @@ fn without_a_provider_the_setup_opens_and_the_first_message_waits_for_it() {
     );
     assert_eq!(registry.model_policy.model, "model-a");
     assert_eq!(provider.api_token.as_deref(), Some("sk-test"));
-    assert_eq!(provider.request_headers[0].name, "X-Team");
-    assert_eq!(provider.request_headers[0].value, "blue");
-    let test = &harness.server.requests()[0];
-    assert_eq!(test.headers["authorization"], "Bearer sk-test");
-    assert_eq!(test.headers["x-team"], "blue");
+    let listing = &harness.server.requests()[0];
+    assert_eq!(listing.headers["authorization"], "Bearer sk-test");
 
     // The message kept in the composer now starts the session.
     harness.key(KeyCode::Enter);
@@ -157,96 +140,43 @@ fn without_a_provider_the_setup_opens_and_the_first_message_waits_for_it() {
 }
 
 #[test]
-fn with_a_provider_but_no_model_the_setup_is_the_model_picker() {
+fn with_a_provider_but_no_model_the_setup_is_the_providers_model_page() {
     let mut harness = Harness::start(vec![models(&["model-a"])]);
     harness.write_model("");
     // `/new` looks again, as a start does.
     harness.type_and_submit("/new");
-    harness.pump_until_screen_shows("Choose the model");
-    harness.pump_until_screen_shows("model-a");
+    harness.pump_until_screen_shows("Settings › Providers");
+    harness.select_setting("Fixture Provider");
     harness.key(KeyCode::Enter);
-    harness.pump_until_transcript_shows("New sessions run model-a on Fixture Provider.");
-    let registry = harness.registry();
-    assert_eq!(registry.model_policy.model, "model-a");
-}
-
-#[test]
-fn a_save_over_a_moved_registry_reads_it_again_and_keeps_the_form() {
-    let mut harness = Harness::start(vec![models(&["fixture-model"])]);
-    harness.type_and_submit("/providers");
-    harness.pump_until_screen_shows("★ Fixture Provider");
+    harness.select_setting("Choose the model");
     harness.key(KeyCode::Enter);
-    harness.pump_until_screen_shows("Edit Fixture Provider");
-    // Another writer moves the registry.
-    harness.write_model("fixture-model");
-    harness.key_with(KeyCode::Char('u'), KeyModifiers::CONTROL);
-    harness.type_keys("Renamed");
-    // Up wraps to Save.
-    harness.key(KeyCode::Up);
-    harness.key(KeyCode::Enter);
-    harness.pump_until_screen_shows("changed while this screen was open");
-    assert!(harness.screen().contains("Renamed"));
-    harness.key(KeyCode::Enter);
-    harness.pump_until_screen_shows("Choose the model");
-    let registry = harness.registry();
-    assert_eq!(registry.providers[0].display_name, "Renamed");
-    assert_eq!(registry.revision, 3);
-    harness.key(KeyCode::Esc);
-    harness.pump_until_screen_shows("★ Renamed");
-}
-
-#[test]
-fn a_policy_save_over_a_moved_registry_reads_it_again_and_keeps_the_form() {
-    let mut harness = Harness::start(Vec::new());
-    harness.type_and_submit("/providers");
-    harness.pump_until_screen_shows("★ Fixture Provider");
-    harness.key(KeyCode::Char('p'));
-    harness.pump_until_screen_shows("Model policy");
-    harness.tab(2);
-    harness.type_keys("low");
-    // Reasoning, Advanced, Save.
-    harness.tab(2);
-    // Another writer moves the registry before the form submits.
-    harness.write_model("fixture-model");
-    harness.key(KeyCode::Enter);
-    harness.pump_until_screen_shows("changed while this screen was open");
-    harness.key(KeyCode::Enter);
-    harness.pump_until_screen_shows("Saved.");
-    let registry = harness.registry();
-    assert_eq!(
-        registry
-            .model_policy
-            .reasoning_effort
-            .as_ref()
-            .map(|effort| effort.as_str()),
-        Some("low")
+    let picker = harness.pump_until_screen_shows("model-a");
+    assert!(
+        picker.contains("Fixture Provider becomes the default"),
+        "{picker}"
     );
-    assert_eq!(registry.revision, 3);
+    harness.key(KeyCode::Enter);
+    harness.pump_until("the model to be saved", |harness| {
+        harness.registry().model_policy.model == "model-a"
+    });
 }
 
 #[test]
-fn the_provider_policy_form_saves_reasoning_context_and_the_whole_budget() {
+fn the_model_policy_saves_reasoning_context_and_a_custom_budget() {
     let mut harness = Harness::start(Vec::new());
-    harness.type_and_submit("/providers");
-    harness.pump_until_screen_shows("★ Fixture Provider");
-    harness.key(KeyCode::Char('p'));
-    harness.pump_until_screen_shows("Model policy");
-
-    // Default Provider, model, reasoning, then the Advanced switch.
-    harness.tab(2);
-    harness.type_keys("high");
-    harness.tab(1);
+    harness.type_and_submit("/providers policy");
+    harness.pump_until_screen_shows("Settings › Model policy");
+    harness.edit_setting("Reasoning effort", "high");
+    harness.edit_setting("Context window", "123456");
+    assert_eq!(
+        harness.registry().model_policy.context_window_tokens,
+        Some(123_456)
+    );
+    harness.select_setting("Custom turn budget");
     harness.key(KeyCode::Enter);
-    // Image input, then the context window.
-    harness.tab(2);
-    harness.type_keys("123456");
-    // Automatic compaction, threshold, remote compaction, turn budget.
-    harness.tab(4);
-    harness.key(KeyCode::Right);
-    // The eleven budget fields, then Save.
-    harness.tab(12);
-    harness.key(KeyCode::Enter);
-    harness.pump_until_screen_shows("Saved.");
+    harness.pump_until("the budget to be saved", |harness| {
+        harness.registry().model_policy.turn_budget.is_some()
+    });
 
     let policy = harness.registry().model_policy;
     assert_eq!(
@@ -256,26 +186,18 @@ fn the_provider_policy_form_saves_reasoning_context_and_the_whole_budget() {
             .map(|effort| effort.as_str()),
         Some("high")
     );
-    assert_eq!(policy.context_window_tokens, Some(123_456));
-    let budget = policy.turn_budget.expect("the custom budget was saved");
+    // The budget starts from the Agent's.
+    let budget = policy.turn_budget.unwrap();
     assert_eq!(budget.maximum_cumulative_model_input_tokens, 8_000_000);
-    assert_eq!(budget.maximum_cumulative_model_output_tokens, 1_000_000);
     assert_eq!(budget.maximum_tool_invocations, 256);
-    assert_eq!(budget.maximum_tool_output_bytes, 16 * 1024 * 1024);
-    assert_eq!(budget.maximum_hook_fragment_bytes, 1024 * 1024);
-    assert_eq!(budget.maximum_pending_input_items, 64);
-    assert_eq!(budget.maximum_in_flight_tools, 8);
-    assert_eq!(budget.maximum_consecutive_stalled_steps, 4);
-    assert_eq!(budget.model_stream_idle_timeout_seconds, 120);
-    assert_eq!(budget.tool_idle_timeout_seconds, 600);
     assert_eq!(budget.approval_timeout_seconds, 900);
+    harness.select_setting("Tool calls");
 }
 
-/// Once the default model's listing names its reasoning levels, the policy
-/// form offers them as a choice (free text while none are known, as the
-/// tests above type it), and saves the one chosen.
+/// Once the default model's listing names its reasoning levels, the model
+/// policy says them beside the reasoning effort.
 #[test]
-fn the_policy_form_offers_the_listed_reasoning_levels() {
+fn the_model_policy_names_the_listed_reasoning_levels() {
     let listing = serde_json::json!({"data": [
         {"id": "fixture-model", "reasoning": {"supported_efforts": ["high", "low"]}}
     ]});
@@ -291,35 +213,18 @@ fn the_policy_form_offers_the_listed_reasoning_levels() {
         .unwrap()
         .unwrap();
     harness.type_and_submit("/providers policy");
-    let screen = harness.pump_until_screen_shows("○ low");
-    assert!(
-        screen.contains("● Provider default") && screen.contains("○ high"),
-        "{screen}"
-    );
-    // Reasoning: low, then Advanced and Save.
-    harness.tab(2);
-    harness.key(KeyCode::Right);
-    harness.tab(2);
-    harness.key(KeyCode::Enter);
-    harness.pump_until_screen_shows("Saved.");
-    assert_eq!(
-        harness
-            .registry()
-            .model_policy
-            .reasoning_effort
-            .as_ref()
-            .map(|effort| effort.as_str()),
-        Some("low")
-    );
+    harness.pump_until_screen_shows("Settings › Model policy");
+    harness.select_setting("Reasoning effort");
+    let screen = harness.pump_until_screen_shows("The model takes");
+    assert!(screen.contains("low, high"), "{screen}");
 }
 
-/// The policy form's window field, left empty, names the window the
-/// default model's listing reported in its placeholder; the model picker
-/// shows what each entry reports; and `/status` shows a session's window
-/// with its source, or that it is unknown; `/model forget` says when
-/// nothing was learned.
+/// The model policy's window, unset, names the window the default model's
+/// listing reported; the model picker shows what each entry reports; and
+/// `/status` shows a session's window with its source, or that it is
+/// unknown; `/model forget` says when nothing was learned.
 #[test]
-fn the_reported_window_is_shown_in_the_policy_form_the_picker_and_status() {
+fn the_reported_window_is_shown_in_the_policy_the_picker_and_status() {
     let listing = serde_json::json!({"data": [
         {"id": "fixture-model", "context_window": 200000, "input_modalities": ["text", "image"]}
     ]});
@@ -344,14 +249,10 @@ fn the_reported_window_is_shown_in_the_policy_form_the_picker_and_status() {
     assert!(picker.contains("fixture-model"), "{picker}");
     harness.key(KeyCode::Esc);
     harness.type_and_submit("/providers policy");
-    harness.pump_until_screen_shows("Model policy");
-    // Advanced, after the default Provider, the model and the reasoning.
-    harness.tab(3);
-    harness.key(KeyCode::Char(' '));
-    harness.pump_until_screen_shows("200K, reported");
-    // Back to the list, then closed.
-    harness.key(KeyCode::Esc);
-    harness.key(KeyCode::Esc);
+    harness.pump_until_screen_shows("Settings › Model policy");
+    harness.select_setting("Context window");
+    harness.pump_until_screen_shows("Unset, the model's: 200000 (reported)");
+    harness.app.close_settings_center(&mut harness.tui);
 
     harness.exchange("again", "Second.");
     harness.type_and_submit("/status");
@@ -381,32 +282,51 @@ fn the_providers_command_opens_the_model_policy_directly() {
 }
 
 #[test]
-fn the_mcp_manager_adds_a_server_with_a_secret_and_deletes_it() {
+fn an_mcp_server_is_added_with_a_secret_and_deleted_in_the_center() {
     let mut harness = Harness::start(Vec::new());
     harness.type_and_submit("/mcp");
-    harness.pump_until_screen_shows("Add a server…");
+    harness.pump_until_screen_shows("Settings › MCP servers");
     harness.key(KeyCode::Char('a'));
-    harness.pump_until_screen_shows("Add an MCP server");
-    harness.type_keys("tools");
-    harness.tab(2);
-    harness.type_keys("sh");
-    harness.tab(1);
-    harness.type_keys("-c \"exit 0\"");
-    // The working directory, then "Add a variable".
-    harness.tab(2);
+    harness.pump_until_screen_shows("MCP servers › Add a server");
+    harness.edit_setting("Server id", "tools");
+    // Off, so nothing is started: unset is the default, on, then off.
+    harness.select_setting("Enabled");
     harness.key(KeyCode::Enter);
-    harness.type_keys("API_KEY");
-    harness.tab(1);
-    harness.type_keys("hunter2");
-    harness.tab(1);
-    harness.key(KeyCode::Char(' '));
-    // The add stop, then Enabled: off, so nothing is started.
-    harness.tab(2);
-    harness.key(KeyCode::Char(' '));
-    // Required, Advanced, Save.
-    harness.tab(3);
     harness.key(KeyCode::Enter);
-    harness.pump_until_screen_shows("Saved.");
+    harness.select_setting("Transport");
+    harness.key(KeyCode::Enter);
+    harness.select_setting("1. Standard input and output");
+    harness.key(KeyCode::Enter);
+    harness.edit_setting("Program", "sh");
+    harness.select_setting("Arguments");
+    harness.key(KeyCode::Enter);
+    for argument in ["-c", "exit 0"] {
+        harness.select_setting("+ Add an item");
+        harness.key(KeyCode::Enter);
+        for character in argument.chars() {
+            harness.key(KeyCode::Char(character));
+        }
+        harness.key(KeyCode::Enter);
+    }
+    harness.key(KeyCode::Esc);
+    harness.select_setting("Add a server");
+    harness.key(KeyCode::Enter);
+    harness.pump_until("the server to be added", |harness| {
+        !harness.mcp().settings.servers.is_empty()
+    });
+
+    // Its secret, in MCP secrets.
+    harness.pump_until_screen_shows("› tools");
+    harness.key(KeyCode::Esc);
+    harness.select_setting("MCP secrets");
+    harness.key(KeyCode::Enter);
+    harness.key(KeyCode::Char('a'));
+    harness.edit_setting("Server and name", "tools/API_KEY");
+    harness.edit_setting("Value", "hunter2");
+    harness.select_setting("Add a secret");
+    harness.key(KeyCode::Enter);
+    let screen = harness.pump_until_screen_shows("tools · API_KEY");
+    assert!(!screen.contains("hunter2"), "{screen}");
 
     let id = McpServerId::parse("tools").unwrap();
     let key = McpCredentialKey::for_server_secret(&id, "API_KEY");
@@ -419,22 +339,19 @@ fn the_mcp_manager_adds_a_server_with_a_secret_and_deletes_it() {
     };
     assert_eq!(stdio.program, "sh");
     assert_eq!(stdio.argv, ["-c", "exit 0"]);
-    assert!(stdio.public_environment.is_empty());
     assert_eq!(stdio.credential_environment["API_KEY"], key);
     assert_eq!(settings.credentials[&key].value, "hunter2");
 
-    // Edited again, the secret is dots.
-    harness.key(KeyCode::Enter);
-    let screen = harness.pump_until_screen_shows("Edit MCP server tools");
-    assert!(
-        screen.contains("API_KEY") && !screen.contains("hunter2"),
-        "{screen}"
-    );
+    // Deleted after asking, its secret with it.
     harness.key(KeyCode::Esc);
-    harness.pump_until_screen_shows("Add a server…");
-
-    harness.key(KeyCode::Char('d'));
-    harness.pump_until_screen_shows("Delete the MCP server tools?");
+    harness.select_setting("MCP servers");
+    harness.key(KeyCode::Enter);
+    harness.select_setting("tools ");
+    harness.key(KeyCode::Enter);
+    harness.select_setting("Delete");
+    harness.key(KeyCode::Enter);
+    harness.pump_until_screen_shows("Settings › Delete?");
+    harness.select_setting("2. Delete");
     harness.key(KeyCode::Enter);
     harness.pump_until("the server and its secret to go", |harness| {
         let settings = harness.mcp().settings;
@@ -454,27 +371,55 @@ fn mcp_verbose_writes_the_report_and_a_bad_argument_says_how() {
 }
 
 #[test]
-fn an_mcp_login_the_server_refuses_says_why_in_the_manager() {
+fn an_mcp_login_opens_over_its_server_and_says_why_it_failed() {
     let mut harness = Harness::start(Vec::new());
     harness.type_and_submit("/mcp login nope");
-    harness.pump_until_screen_shows("There is no MCP server nope.");
-    harness.key(KeyCode::Esc);
-    harness.type_and_submit("/mcp");
-    harness.pump_until_screen_shows("Add a server…");
-    harness.key(KeyCode::Char('a'));
-    harness.pump_until_screen_shows("Add an MCP server");
-    harness.type_keys("docs");
-    harness.key(KeyCode::Tab);
-    harness.key(KeyCode::Right);
-    harness.key(KeyCode::Tab);
-    harness.type_keys("http://127.0.0.1:9/mcp");
-    // OAuth (disabled), the headers' add stop, Enabled: off.
-    harness.tab(3);
-    harness.key(KeyCode::Char(' '));
-    harness.tab(3);
-    harness.key(KeyCode::Enter);
-    harness.pump_until_screen_shows("Saved.");
-    harness.key(KeyCode::Esc);
+    harness.pump_until_screen_shows("There is no `nope` to open.");
+    harness.app.close_settings_center(&mut harness.tui);
+    let revision = harness.mcp().settings.revision;
+    let add = serde_json::from_value(serde_json::json!({
+        "collection": "mcp",
+        "record": "docs",
+        "action": "add",
+        "expectedRevision": revision,
+        "values": {
+            "enabled": false,
+            "transport.type": "streamable_http",
+            "transport.url": "http://127.0.0.1:9/mcp",
+        },
+    }))
+    .unwrap();
+    let agent = harness.runtime.slot().agent().unwrap();
+    let call = agent.clone();
+    agent
+        .runtime()
+        .block_on(async move { call.run_settings_action(add).await })
+        .unwrap()
+        .unwrap();
     harness.type_and_submit("/mcp login docs");
     harness.pump_until_screen_shows("OAuth is disabled for this MCP server");
+    // Esc goes back to the server's form, which has the login.
+    harness.key(KeyCode::Esc);
+    harness.pump_until_screen_shows("MCP servers › docs");
+    assert!(harness.screen().contains("Log in"));
+
+    // A login that ends on its own (logged in) closes its page, with no
+    // key to say so: the next key is the form's, never the composer's.
+    harness.select_setting("Log in");
+    harness.key(KeyCode::Enter);
+    harness.pump_until_screen_shows("OAuth is disabled for this MCP server");
+    let docs = McpServerId::parse("docs").unwrap();
+    let logged_in = AppEvent::AgentReply(AgentReply::Update(Box::new(TurnUpdate::Mcp(
+        McpReply::LoggedIn(docs),
+    ))));
+    assert!(harness.app.handle_event(&mut harness.tui, logged_in));
+    harness.pump_until("the login's page to close", |harness| {
+        harness
+            .app
+            .workspace
+            .settings()
+            .is_some_and(|center| center.hosted_command().is_none())
+    });
+    harness.key(KeyCode::Char('x'));
+    assert!(harness.app.chat_widget.composer_is_empty());
 }

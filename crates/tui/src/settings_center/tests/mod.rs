@@ -149,7 +149,7 @@ fn policy() -> SettingsCollection {
 
 /// The center once `catalog` is read.
 fn center_with(catalog: SettingsCatalog, target: Option<&str>) -> SettingsCenter {
-    let mut center = SettingsCenter::new(target.map(str::to_string));
+    let mut center = SettingsCenter::new(target.map(str::to_string), None);
     let read = calls(&mut center);
     assert!(matches!(read.as_slice(), [(_, CatalogCall::Read)]));
     reply(&mut center, read[0].0, Ok(CatalogOutcome::Read), catalog);
@@ -167,6 +167,7 @@ fn reply(
         outcome,
         catalog: Ok(catalog),
         preferences: None,
+        registry: None,
     });
 }
 

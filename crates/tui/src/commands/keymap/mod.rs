@@ -1,7 +1,7 @@
 // Modified from OpenAI Codex 57a808a392 (Apache-2.0).
 
-//! `/keymap [debug]` (Codex's `keymap_setup.rs` and `keymap_setup/`): pick
-//! an action, then replace its keys, add one, remove one, unbind it or put
+//! `/keymap [debug]` (Codex's `keymap_setup.rs` and `keymap_setup/`): the
+//! settings center at the keymap's page, where you pick an action, then replace its keys, add one, remove one, unbind it or put
 //! its defaults back; a new key or chord is captured as it is pressed. A
 //! change that would conflict with another action's keys, or with a key
 //! the interface keeps, is refused with the reason; the others are saved
@@ -44,11 +44,12 @@ pub(crate) static PAGE: PageOverride = PageOverride {
         summary: "The keys of the interface's actions",
     },
     command: &KEYMAP,
+    open: |context, _| open_picker(context),
 };
 
 fn dispatch(context: &mut CommandContext<'_>, args: &str) {
     match args.trim() {
-        "" => open_picker(context),
+        "" => super::open_settings(context, PAGE.id),
         "debug" => context.add_to_history(PlainHistoryCell::new(debug_lines())),
         _ => context.add_to_history(history_cell::new_error_event(
             "Usage: /keymap [debug]".to_string(),

@@ -20,7 +20,7 @@ expression: "screen(&mut center, 50, 26)"
     Sessions per pass        2
     Extractions consolid...  256
     Maximum unused age (...  30
-
+    Memory store             Open ›
 
 
   Whether memory is on

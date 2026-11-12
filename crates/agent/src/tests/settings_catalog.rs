@@ -2,6 +2,7 @@
 //! and the collections' actions, each dispatched to its owner.
 
 use hanafubuki_agent_config::{ConfigLayers, SettingChange, SettingWriteOp};
+use hanafubuki_agent_mcp::{McpApprovalPolicy, McpTransportConfig};
 
 use super::*;
 
@@ -80,6 +81,7 @@ async fn the_catalog_reads_every_owner_and_returns_no_secret() {
             "providers",
             "modelPolicy",
             "mcp",
+            "mcpSecrets",
             "plugins",
             "marketplaces",
             "hooks",
@@ -207,19 +209,61 @@ async fn a_providers_records_round_trip_and_keep_their_secret() {
         .unwrap_err();
     assert!(unknown.contains("not a field"), "{unknown}");
 
+    let malformed = service
+        .run_settings_action(action(
+            "providers",
+            Some("provider-1"),
+            "save",
+            Some(3),
+            json!({"requestHeaders": ["X-Unknown"]}),
+        ))
+        .await
+        .unwrap_err();
+    assert!(malformed.contains("NAME=VALUE"), "{malformed}");
     service
         .run_settings_action(action(
             "providers",
             Some("provider-1"),
             "save",
             Some(3),
-            json!({"displayName": "Renamed", "enabled": false}),
+            json!({"displayName": "Renamed", "enabled": false, "requestHeaders": ["X-Team = blue=green"]}),
         ))
         .await
         .unwrap();
     let registry = config.providers().unwrap();
     let first = &registry.providers[0];
     assert_eq!(first.display_name, "Renamed");
+    assert_eq!(
+        (
+            first.request_headers[0].name.as_str(),
+            first.request_headers[0].value.as_str()
+        ),
+        ("X-Team", "blue=green")
+    );
+    // A header's value is never returned, and a name alone keeps it.
+    let catalog = service.settings_catalog().await.unwrap();
+    assert_eq!(
+        collection(&catalog, "providers").records[0].values["requestHeaders"],
+        SettingValue::TextList(vec!["X-Team".into()])
+    );
+    assert!(!serde_json::to_string(&catalog)
+        .unwrap()
+        .contains("blue=green"));
+    service
+        .run_settings_action(action(
+            "providers",
+            Some("provider-1"),
+            "save",
+            Some(config.providers().unwrap().revision),
+            json!({"requestHeaders": ["X-Team", "X-Other=1"]}),
+        ))
+        .await
+        .unwrap();
+    let headers = &config.providers().unwrap().providers[0].request_headers;
+    assert_eq!(
+        (headers[0].value.as_str(), headers[1].value.as_str()),
+        ("blue=green", "1")
+    );
     assert_eq!(
         first.api_token.as_deref(),
         Some("sk-catalog-secret"),
@@ -236,7 +280,7 @@ async fn a_providers_records_round_trip_and_keep_their_secret() {
             "providers",
             Some("provider-2"),
             "delete",
-            Some(registry.revision),
+            Some(config.providers().unwrap().revision),
             json!({}),
         ))
         .await
@@ -290,6 +334,47 @@ async fn the_model_policy_is_one_record() {
         .await
         .unwrap_err();
     assert!(refused.contains("autoCompactThresholdPercent"), "{refused}");
+
+    let catalog = service.settings_catalog().await.unwrap();
+    let record = &collection(&catalog, "modelPolicy").records[0];
+    assert_eq!(
+        record.values["customTurnBudget"],
+        SettingValue::Boolean(false)
+    );
+    assert_eq!(
+        record.values["turnBudget.maximumToolInvocations"],
+        SettingValue::Integer(256),
+        "the Agent's budget, to start from"
+    );
+    service
+        .run_settings_action(action(
+            "modelPolicy",
+            Some("policy"),
+            "save",
+            Some(4),
+            json!({"customTurnBudget": true, "turnBudget.maximumToolInvocations": 32}),
+        ))
+        .await
+        .unwrap();
+    let budget = config
+        .providers()
+        .unwrap()
+        .model_policy
+        .turn_budget
+        .unwrap();
+    assert_eq!(budget.maximum_tool_invocations, 32);
+    assert_eq!(budget.maximum_in_flight_tools, 8);
+    service
+        .run_settings_action(action(
+            "modelPolicy",
+            Some("policy"),
+            "save",
+            Some(5),
+            json!({"customTurnBudget": false}),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(config.providers().unwrap().model_policy.turn_budget, None);
     done(service, paths);
 }
 
@@ -303,10 +388,118 @@ async fn an_mcp_server_is_added_saved_and_deleted() {
             Some("demo"),
             "add",
             Some(revision(&config)),
-            json!({"enabled": false, "transport.program": "demo-server", "transport.argv": ["serve"]}),
+            json!({
+                "enabled": false,
+                "transport.program": "demo-server",
+                "transport.argv": ["serve"],
+                "transport.publicEnvironment": ["MODE=fast"],
+                "toolApprovalPolicies": ["search=ask"],
+                "toolMaximumConcurrentCalls": ["search=2"],
+            }),
         ))
         .await
         .unwrap();
+    let server = config.mcp().load().unwrap().servers.remove(0);
+    let McpTransportConfig::Stdio(stdio) = &server.transport else {
+        panic!("a stdio server");
+    };
+    assert_eq!(stdio.public_environment["MODE"], "fast");
+    assert_eq!(
+        server.tool_approval_policies["search"],
+        McpApprovalPolicy::Ask
+    );
+    assert_eq!(server.tool_maximum_concurrent_calls["search"], 2);
+    for (values, refusal) in [
+        (
+            json!({"toolMaximumConcurrentCalls": ["search=many"]}),
+            "whole number",
+        ),
+        (json!({"toolApprovalPolicies": ["search"]}), "NAME=VALUE"),
+        (
+            json!({"transport.publicEnvironment": ["A=1", "A=2"]}),
+            "twice",
+        ),
+    ] {
+        let refused = service
+            .run_settings_action(action(
+                "mcp",
+                Some("demo"),
+                "save",
+                Some(revision(&config)),
+                values,
+            ))
+            .await
+            .unwrap_err();
+        assert!(refused.contains(refusal), "{refused}");
+    }
+
+    service
+        .run_settings_action(action(
+            "mcpSecrets",
+            Some("demo/API_KEY"),
+            "add",
+            Some(revision(&config)),
+            json!({"value": "sk-mcp-secret"}),
+        ))
+        .await
+        .unwrap();
+    let catalog = service.settings_catalog().await.unwrap();
+    let secret = &collection(&catalog, "mcpSecrets").records[0];
+    assert_eq!(secret.id, "demo/API_KEY");
+    assert_eq!(secret.secrets_set, ["value"]);
+    assert!(!serde_json::to_string(&catalog)
+        .unwrap()
+        .contains("sk-mcp-secret"));
+    let settings = config.mcp().load().unwrap();
+    let McpTransportConfig::Stdio(stdio) = &settings.servers[0].transport else {
+        panic!("a stdio server");
+    };
+    let key = stdio.credential_environment["API_KEY"].clone();
+    assert_eq!(settings.credentials[&key].value, "sk-mcp-secret");
+    service
+        .run_settings_action(action(
+            "mcpSecrets",
+            Some("demo/API_KEY"),
+            "save",
+            Some(revision(&config)),
+            json!({"value": "sk-mcp-other"}),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(
+        config.mcp().load().unwrap().credentials[&key].value,
+        "sk-mcp-other"
+    );
+    for (name, verb) in [("demo/OTHER", "add"), ("demo/OTHER", "delete")] {
+        service
+            .run_settings_action(action(
+                "mcpSecrets",
+                Some(name),
+                verb,
+                Some(revision(&config)),
+                json!({"value": "sk-other"}),
+            ))
+            .await
+            .unwrap();
+    }
+    let settings = config.mcp().load().unwrap();
+    assert_eq!(
+        settings.credentials.len(),
+        1,
+        "a deleted secret's credential goes"
+    );
+    let public = service
+        .run_settings_action(action(
+            "mcpSecrets",
+            Some("demo/MODE"),
+            "add",
+            Some(revision(&config)),
+            json!({"value": "x"}),
+        ))
+        .await
+        .unwrap_err();
+    assert!(public.contains("public"), "{public}");
+
     service
         .run_settings_action(action(
             "mcp",
@@ -326,6 +519,10 @@ async fn an_mcp_server_is_added_saved_and_deleted() {
         SettingValue::Text("streamable_http".into())
     );
     assert_eq!(record.values["enabled"], SettingValue::Boolean(false));
+    assert!(
+        config.mcp().load().unwrap().credentials.is_empty(),
+        "the stdio transport's secret went with it"
+    );
     service
         .run_settings_action(action(
             "mcp",

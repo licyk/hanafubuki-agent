@@ -12,19 +12,6 @@ use crate::history_cell::HistoryRenderMode;
 use crate::transcript_mode::TranscriptMode;
 
 impl Harness {
-    /// Down until the selected row is `label`.
-    fn select_setting(&mut self, label: &str) {
-        let selected = format!("› {label}");
-        for _ in 0..80 {
-            self.app.draw(&mut self.tui).unwrap();
-            if self.screen().contains(&selected) {
-                return;
-            }
-            self.key(KeyCode::Down);
-        }
-        panic!("no row {label}:\n{}", self.screen());
-    }
-
     /// A left press on the cell at `column` and `row`.
     fn press_at(&mut self, column: u16, row: u16) {
         let event = AppEvent::Mouse(MouseEvent {

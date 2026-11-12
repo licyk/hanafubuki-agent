@@ -91,6 +91,7 @@ fn availability_follows_the_spec() {
     assert_eq!(
         during_task,
         [
+            "providers",
             "permissions",
             "approve",
             "setup-default-sandbox",

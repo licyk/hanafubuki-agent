@@ -1,9 +1,9 @@
 // Modified from OpenAI Codex 57a808a392 (Apache-2.0).
 
 //! `/statusline [items] [--colors|--no-colors]`: with no argument, the
-//! setup view, which saves `tui.statusLine` and `tui.statusLineColors`;
-//! with arguments, the status line of this run only (Codex's
-//! `chatwidget/status_surface_commands.rs`).
+//! settings center at the status line's page, the setup view, which saves
+//! `tui.statusLine` and `tui.statusLineColors`; with arguments, the status
+//! line of this run only (Codex's `chatwidget/status_surface_commands.rs`).
 
 use super::{CommandContext, CommandSpec};
 use crate::app_event::AppEvent;
@@ -28,18 +28,22 @@ pub(crate) static PAGE: PageOverride = PageOverride {
     id: "statusline",
     attach: Attach::Setting("tui.statusLine"),
     command: &STATUSLINE,
+    open,
 };
 
 fn dispatch(context: &mut CommandContext<'_>, args: &str) {
     if args.trim().is_empty() {
-        let view = status_line_setup(context.appearance(), context.app_event_tx());
-        context.show_view(Box::new(view));
-        return;
+        return super::open_settings(context, PAGE.id);
     }
     match parse(args) {
         Ok(event) => context.send(AppEvent::Appearance(event)),
         Err(message) => context.add_to_history(history_cell::new_error_event(message)),
     }
+}
+
+fn open(context: &mut CommandContext<'_>, _record: Option<&str>) {
+    let view = status_line_setup(context.appearance(), context.app_event_tx());
+    context.show_view(Box::new(view));
 }
 
 /// The items named, in order, and the colours switch, for this run.

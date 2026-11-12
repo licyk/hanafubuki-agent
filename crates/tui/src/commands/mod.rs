@@ -60,14 +60,14 @@ use std::fmt;
 use hanafubuki_agent::{AgentSessionMode, AgentSubagentStatus, AgentTuiPreferences};
 
 use crate::agent_bridge::{
-    HooksReply, McpReply, PluginsReply, ProviderReply, SessionCall, SessionReply, SettingsReply,
+    HooksReply, McpReply, PluginsReply, ProviderModels, SessionCall, SessionReply, SettingsReply,
 };
+use crate::app::WorkspaceEvent;
 use crate::app_event::{AgentCommand, AppEvent, AppEventSender, Op};
 use crate::appearance::Appearance;
 use crate::bottom_pane::{BottomPane, BottomPaneView, SelectionViewParams};
 use crate::history_cell::{self, HistoryCell};
 use crate::settings_center::PageOverride;
-pub(crate) use config::CONFIG;
 pub(crate) use goal::GOAL;
 pub(crate) use hooks::HOOKS;
 pub(crate) use mcp::MCP;
@@ -204,7 +204,7 @@ pub(crate) fn has_prefix(name: &str, disabled: &[&str]) -> bool {
 
 /// The settings center's pages that are commands' views, each declared
 /// beside its command.
-pub(crate) static SETTINGS_PAGES: [&PageOverride; 7] = [
+pub(crate) static SETTINGS_PAGES: [&PageOverride; 10] = [
     &theme::PAGE,
     &statusline::PAGE,
     &title::PAGE,
@@ -212,7 +212,19 @@ pub(crate) static SETTINGS_PAGES: [&PageOverride; 7] = [
     &presets::PAGE,
     &plugins::PAGE,
     &hooks::PAGE,
+    &memories::PAGE,
+    &providers::MODEL_PAGE,
+    &mcp::LOGIN_PAGE,
 ];
+
+/// Opens the settings center at `target` (a tab, a section, a collection
+/// or a page): what a command that only changes settings does.
+pub(crate) fn open_settings(context: &CommandContext<'_>, target: &str) {
+    context.send(AppEvent::Workspace(WorkspaceEvent::OpenSettings {
+        target: Some(target.to_string()),
+        record: None,
+    }));
+}
 
 /// Sends `call` to the Agent, from a view's action.
 pub(crate) fn send_session_call(app_event_tx: &AppEventSender, call: SessionCall) {
@@ -242,7 +254,7 @@ pub(crate) fn send_step(
 /// What the Agent answered a command's call, for the command's view.
 #[derive(Debug)]
 pub(crate) enum CommandReply {
-    Providers(ProviderReply),
+    ProviderModels(ProviderModels),
     Mcp(McpReply),
     Session(SessionReply),
     Hooks(HooksReply),
@@ -252,7 +264,7 @@ pub(crate) enum CommandReply {
     Subagents(Vec<AgentSubagentStatus>),
 }
 
-/// What `/memories` or `/config` asked; `/warnings`' answer goes through
+/// What the memory store's page asked; `/warnings`' answer goes through
 /// the chat, which adds its own warnings.
 pub(crate) fn on_settings_reply(context: &mut CommandContext<'_>, reply: SettingsReply) {
     match reply {
@@ -267,10 +279,6 @@ pub(crate) fn on_settings_reply(context: &mut CommandContext<'_>, reply: Setting
             }
         }
         SettingsReply::Memories(state) => memories::on_reply(context, *state),
-        SettingsReply::Config {
-            compaction_strategy,
-            saved,
-        } => config::on_reply(context, compaction_strategy, saved),
         SettingsReply::Warnings(_) => {}
     }
 }
@@ -406,11 +414,6 @@ impl<'a> CommandContext<'a> {
     /// The session's mode.
     pub(crate) fn mode(&self) -> AgentSessionMode {
         self.mode
-    }
-
-    /// The saved `tui.fullscreenTranscript`.
-    pub(crate) fn fullscreen_preference(&self) -> bool {
-        self.preferences.fullscreen_transcript
     }
 
     /// A turn, or the work of a command that shows as one, runs.

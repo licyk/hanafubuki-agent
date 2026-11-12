@@ -62,7 +62,7 @@ pub(crate) use hooks::{needing_review, HooksCall, HooksReply};
 pub(crate) use mcp::{McpCall, McpReply};
 pub(crate) use permissions::DeniedAction;
 pub(crate) use plugins::{PluginsCall, PluginsDone, PluginsReply, PluginsState};
-pub(crate) use providers::{ProviderCall, ProviderReply};
+pub(crate) use providers::ProviderModels;
 pub(crate) use replay::{OlderTranscript, OpenedSession, ReplayedItem};
 pub(crate) use review::{ReviewCall, ReviewEnd, ReviewReply};
 pub(crate) use sessions::{ExportDestination, SessionCall, SessionReply};
@@ -153,7 +153,7 @@ pub(crate) enum TurnUpdate {
         forgotten: bool,
     },
     StatusReport(Box<StatusReport>),
-    Providers(ProviderReply),
+    ProviderModels(ProviderModels),
     Mcp(McpReply),
     Skills(SkillCatalogSnapshot),
     Session(SessionReply),

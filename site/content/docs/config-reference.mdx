@@ -231,7 +231,7 @@ defaultWaitSeconds = 60
 
 ## providers.toml [#providers-toml]
 
-`providers.toml` 没有分层，只有自己可读。通常用 `providers` 命令修改；终端界面的 `/providers` 可以编辑 Provider，按 `p` 或 `/providers policy` 可以编辑共享的模型策略；也可以直接编辑文件。修改时请先退出正在运行的 Agent。
+`providers.toml` 没有分层，只有自己可读。通常用 `providers` 命令修改；终端界面的 `/providers`（设置中心的 Provider）可以编辑 Provider，`/providers policy` 可以编辑共享的模型策略；也可以直接编辑文件。修改时请先退出正在运行的 Agent。
 
 ```toml
 revision = 2
@@ -335,7 +335,7 @@ reasoningEfforts = []
 
 ## mcp.toml [#mcp-toml]
 
-`mcp.toml` 没有分层，只有自己可读。`mcp add` 写入新服务器的默认值；终端界面的 `/mcp` 可以编辑服务器、凭据、协议模式和按工具的策略，也可以直接编辑文件。
+`mcp.toml` 没有分层，只有自己可读。`mcp add` 写入新服务器的默认值；终端界面的 `/mcp`（设置中心的 MCP servers 和 MCP secrets）可以编辑服务器、凭据、协议模式和按工具的策略，也可以直接编辑文件。
 
 ```toml
 revision = 3

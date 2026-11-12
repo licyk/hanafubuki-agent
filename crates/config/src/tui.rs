@@ -138,18 +138,11 @@ pub enum AgentScrollbackMouse {
     Off,
 }
 
-/// A change to `[tui]`: each field present is written, the others keep
-/// what the file holds.
+/// A change to `[tui]`'s keymap and presets, which have no spec: each
+/// entry present is written, the others keep what the file holds. The
+/// other `[tui]` keys are written by key (`AgentConfig::write_values`).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct AgentTuiPreferencesPatch {
-    pub fullscreen_transcript: Option<bool>,
-    pub alternate_screen: Option<AgentAlternateScreen>,
-    pub scrollback_mouse: Option<AgentScrollbackMouse>,
-    pub raw_output: Option<bool>,
-    pub theme: Option<String>,
-    pub status_line: Option<Vec<String>>,
-    pub status_line_colors: Option<bool>,
-    pub terminal_title: Option<Vec<String>>,
     /// Keymap entries to write: `None` removes the entry (the default
     /// applies again), an empty list unbinds the action.
     pub keymap: BTreeMap<String, BTreeMap<String, Option<Vec<String>>>>,
@@ -161,30 +154,6 @@ impl AgentTuiPreferencesPatch {
     /// The keys it changes, as the `[tui]` table of `config.toml`.
     pub(crate) fn document(&self) -> Map<String, Value> {
         let mut table = Map::new();
-        if let Some(enabled) = self.fullscreen_transcript {
-            table.insert("fullscreenTranscript".into(), Value::Bool(enabled));
-        }
-        if let Some(mode) = self.alternate_screen {
-            table.insert("alternateScreen".into(), serde_json::json!(mode));
-        }
-        if let Some(mouse) = self.scrollback_mouse {
-            table.insert("scrollbackMouse".into(), serde_json::json!(mouse));
-        }
-        if let Some(enabled) = self.raw_output {
-            table.insert("rawOutput".into(), Value::Bool(enabled));
-        }
-        if let Some(theme) = &self.theme {
-            table.insert("theme".into(), Value::String(theme.clone()));
-        }
-        if let Some(items) = &self.status_line {
-            table.insert("statusLine".into(), serde_json::json!(items));
-        }
-        if let Some(enabled) = self.status_line_colors {
-            table.insert("statusLineColors".into(), Value::Bool(enabled));
-        }
-        if let Some(items) = &self.terminal_title {
-            table.insert("terminalTitle".into(), serde_json::json!(items));
-        }
         if !self.keymap.is_empty() {
             let contexts = self.keymap.iter().map(|(context, actions)| {
                 let actions = actions

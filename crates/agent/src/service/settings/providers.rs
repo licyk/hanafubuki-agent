@@ -1,6 +1,9 @@
 //! The Providers of `providers.toml`: the registry's records, written
 //! through its revision-gated calls. The API token is a secret: the catalog
-//! says only whether it is set, and a save that leaves it out keeps it.
+//! says only whether it is set, and a save that leaves it out keeps it. The
+//! request headers, whose values the registry checks as credentials, are
+//! listed by name only and written as `NAME=VALUE` texts, a name alone
+//! keeping the value it has.
 
 use std::collections::BTreeMap;
 
@@ -8,6 +11,7 @@ use hanafubuki_agent_config::{
     AgentModelProtocol, AgentProviderSettings, SettingChoice, SettingKind, SettingSpec,
     SettingsGroup,
 };
+use serde_json::{json, Value};
 
 use super::record::{merged, record_of};
 use super::{
@@ -23,6 +27,7 @@ use crate::{
 pub(super) const ID: &str = "providers";
 const SET_DEFAULT: &str = "set_default";
 const LIST_MODELS: &str = "list_models";
+const HEADERS: &str = "requestHeaders";
 /// The models a listing names in its message; the rest are counted.
 const LISTED_MODELS: usize = 10;
 
@@ -53,6 +58,17 @@ fn fields() -> Vec<SettingSpec> {
             ..SettingSpec::new("baseUrl", "Base URL", text(None, false, false))
         },
         SettingSpec::new("apiToken", "API token", text(None, true, true)),
+        SettingSpec {
+            summary: "Each NAME=VALUE, sent with every request; listed by name, a name alone keeps its value".into(),
+            ..SettingSpec::new(
+                HEADERS,
+                "Request headers",
+                SettingKind::TextList {
+                    maximum_items: None,
+                    maximum_item_chars: None,
+                },
+            )
+        },
     ]
 }
 
@@ -75,7 +91,12 @@ pub(super) async fn collection(service: &AgentApplicationService) -> SettingsCol
         .providers
         .iter()
         .map(|provider| {
-            let mut record = record_of(&provider.id, &provider.display_name, provider, &fields);
+            let mut record = record_of(
+                &provider.id,
+                &provider.display_name,
+                &with_header_list(provider),
+                &fields,
+            );
             record.summary = format!("{} · {}", name_of(&provider.protocol), provider.base_url);
             record.state = if default == Some(provider.id.as_str()) {
                 Some("default".into())
@@ -106,7 +127,7 @@ pub(super) async fn run(
                 .iter()
                 .find(|provider| provider.id == id)
                 .ok_or_else(|| format!("there is no Provider `{id}`"))?;
-            let provider: AgentProviderSettings = merged(current, &fields(), &request.values)?;
+            let provider = written(current, &request)?;
             write(service, &request, Some(id.to_string()), provider).await?;
             Ok(SettingsActionOutcome::default())
         }
@@ -151,7 +172,7 @@ async fn add(
         request_headers: Vec::new(),
         models: BTreeMap::new(),
     };
-    let provider: AgentProviderSettings = merged(&template, &fields(), &request.values)?;
+    let provider = written(&template, request)?;
     let before = service.provider_registry_snapshot().await?;
     let after = write(service, request, None, provider).await?;
     let added = after
@@ -163,6 +184,50 @@ async fn add(
         record: added,
         message: None,
     })
+}
+
+/// `provider` with the request's values over it.
+fn written(
+    provider: &AgentProviderSettings,
+    request: &SettingsActionRequest,
+) -> Result<AgentProviderSettings, String> {
+    let mut record: Value = merged(&with_header_list(provider), &fields(), &request.values)?;
+    let stored = |name: &str| {
+        provider
+            .request_headers
+            .iter()
+            .find(|header| header.name == name)
+            .map(|header| header.value.clone())
+    };
+    let headers = match record.get(HEADERS) {
+        Some(Value::Array(items)) => items
+            .iter()
+            .map(|item| {
+                let text = item.as_str().unwrap_or_default();
+                let (name, value) = match text.split_once('=') {
+                    Some((name, value)) => (name.trim(), Some(value.trim().to_string())),
+                    None => (text.trim(), stored(text.trim())),
+                };
+                let value = value.ok_or_else(|| format!("`{text}` is not NAME=VALUE"))?;
+                Ok(json!({ "name": name, "value": value }))
+            })
+            .collect::<Result<Vec<_>, String>>()?,
+        _ => Vec::new(),
+    };
+    record[HEADERS] = Value::Array(headers);
+    serde_json::from_value(record).map_err(|error| format!("the record cannot be written: {error}"))
+}
+
+/// `provider` serialized, its request headers by name only.
+fn with_header_list(provider: &AgentProviderSettings) -> Value {
+    let mut record = serde_json::to_value(provider).unwrap_or(Value::Null);
+    let headers = provider
+        .request_headers
+        .iter()
+        .map(|header| Value::String(header.name.clone()))
+        .collect();
+    record[HEADERS] = Value::Array(headers);
+    record
 }
 
 async fn write(

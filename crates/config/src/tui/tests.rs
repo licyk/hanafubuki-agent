@@ -5,7 +5,7 @@ use serde_json::json;
 
 use crate::{
     AgentAlternateScreen, AgentConfig, AgentScrollbackMouse, AgentTuiPreferences,
-    AgentTuiPreferencesPatch, AgentTuiPreset, ConfigLayers, ConfigOverrides, AGENT_SETTINGS_FILE,
+    AgentTuiPreferencesPatch, AgentTuiPreset, ConfigLayers, AGENT_SETTINGS_FILE,
     PROJECT_CONFIG_DIR,
 };
 
@@ -90,50 +90,23 @@ fn a_write_changes_only_the_keys_named_and_reads_back() {
     let (root, config) = config_with(
         "# mine\nlogLevel = \"debug\"\n\n[tui]\nalternateScreen = \"never\"\nlater = 1\n",
     );
+    let preset = AgentTuiPreset {
+        input: "/status".to_string(),
+        label: None,
+    };
     let written = config
         .write_tui_preferences(AgentTuiPreferencesPatch {
-            raw_output: Some(true),
+            presets: BTreeMap::from([("1".to_string(), Some(preset.clone()))]),
             ..AgentTuiPreferencesPatch::default()
         })
         .unwrap();
-    assert_eq!(
-        written,
-        AgentTuiPreferences {
-            fullscreen_transcript: true,
-            alternate_screen: AgentAlternateScreen::Never,
-            raw_output: true,
-            ..AgentTuiPreferences::default()
-        }
-    );
+    assert_eq!(written.alternate_screen, AgentAlternateScreen::Never);
+    assert_eq!(written.presets["1"], preset);
     let file = fs::read_to_string(root.path().join(AGENT_SETTINGS_FILE)).unwrap();
-    for kept in [
-        "# mine",
-        "logLevel = \"debug\"",
-        "later = 1",
-        "rawOutput = true",
-    ] {
+    for kept in ["# mine", "logLevel = \"debug\"", "later = 1", "/status"] {
         assert!(file.contains(kept), "{kept}: {file}");
     }
     assert!(!file.contains("fullscreenTranscript"), "{file}");
-}
-
-#[test]
-fn the_layers_apply_over_the_written_preferences() {
-    let root = tempfile::tempdir().unwrap();
-    let config = AgentConfig::layered(
-        root.path(),
-        ConfigLayers {
-            overrides: ConfigOverrides::parse(&["tui.fullscreenTranscript=false"]).unwrap(),
-            ..ConfigLayers::default()
-        },
-    );
-    let written = config
-        .write_tui_preferences(AgentTuiPreferencesPatch {
-            fullscreen_transcript: Some(true),
-            ..AgentTuiPreferencesPatch::default()
-        })
-        .unwrap();
-    assert!(!written.fullscreen_transcript);
 }
 
 #[test]
@@ -161,33 +134,6 @@ fn config_set_reaches_the_tui_keys_and_checks_their_values() {
     assert!(error.contains("cannot take this value"), "{error}");
     let error = config.set_user_value("tui.nothing", "true").unwrap_err();
     assert!(error.contains("is not a setting"), "{error}");
-}
-
-#[test]
-fn the_theme_and_the_status_surfaces_are_written_and_read_back() {
-    let (root, config) = config_with("");
-    let written = config
-        .write_tui_preferences(AgentTuiPreferencesPatch {
-            theme: Some("dracula".to_string()),
-            status_line: Some(vec!["git-branch".to_string(), "model".to_string()]),
-            status_line_colors: Some(false),
-            terminal_title: Some(Vec::new()),
-            ..AgentTuiPreferencesPatch::default()
-        })
-        .unwrap();
-    assert_eq!(written.theme.as_deref(), Some("dracula"));
-    assert_eq!(written.status_line, ["git-branch", "model"]);
-    assert!(!written.status_line_colors);
-    assert!(written.terminal_title.is_empty());
-    let file = fs::read_to_string(root.path().join(AGENT_SETTINGS_FILE)).unwrap();
-    for kept in [
-        "theme = \"dracula\"",
-        "statusLine = [\"git-branch\", \"model\"]",
-        "statusLineColors = false",
-        "terminalTitle = []",
-    ] {
-        assert!(file.contains(kept), "{kept}: {file}");
-    }
 }
 
 #[test]
@@ -279,7 +225,6 @@ fn keymap_entries_and_presets_are_written_and_removed() {
                 ("1".to_string(), Some(preset("/status", Some("Status")))),
                 ("4".to_string(), Some(preset("/diff", None))),
             ]),
-            ..AgentTuiPreferencesPatch::default()
         })
         .unwrap();
     let global = &written.keymap["global"];
