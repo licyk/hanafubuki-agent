@@ -208,7 +208,7 @@ independent.
         --tests`. The final tree ran the whole CI workflow on Linux, Windows
         and macOS, green
         (https://github.com/licyk/hanafubuki-agent/actions/runs/43162060854).
-- [ ] E2: the complete PowerShell prefix (UTF-8 without BOM for
+- [x] E2: the complete PowerShell prefix (UTF-8 without BOM for
       `[Console]::OutputEncoding`, `InputEncoding` and `$OutputEncoding`;
       `$ProgressPreference = 'SilentlyContinue'`) and `-OutputFormat Text`
       (`agent-shell-v5`); decoding by run of non-ASCII bytes, the ANSI code
@@ -224,6 +224,84 @@ independent.
       against 866) or Greek (1253 against 737): a console-page program there
       relies on `chcp 65001`. The first cmdlet's module autoload is slow in
       the clean environment (~40 s on the runner, ~23 s with D17's list).
+      Done (2026-11-12):
+      - The PowerShell prefix (`execution/src/shell.rs`,
+        `POWERSHELL_UTF8_OUTPUT_PREFIX`): `UTF8Encoding($false)` for
+        `$OutputEncoding` (first, so a console setter that throws cannot
+        skip it), `[Console]::OutputEncoding` and `InputEncoding`, then
+        `$ProgressPreference = 'SilentlyContinue'`; `agent-shell-v5`, so a
+        remembered v4 approval is asked again once. `-OutputFormat Text` was
+        not added: E1 found no CLIXML, and the review's read-only matcher
+        (`agent/src/plugins/review/read_only.rs`) pins the argv's shape.
+      - Cmd scripts start with `chcp 65001 >NUL & `; `PYTHONUTF8=1` and
+        `PYTHONIOENCODING=utf-8` joined `NON_INTERACTIVE_ENVIRONMENT`; D17's
+        thirteen system variables joined the Windows allowlist.
+      - Decoding by run (`process/src/executor/output/decode.rs`,
+        `RunDecoder`, replacing `Utf8Carry`; `output.rs` became
+        `output/mod.rs`): ASCII passes, a maximal non-ASCII run that is
+        UTF-8 stays, any other is decoded with the fallback (`encoding_rs`,
+        a code-page table for 866, 874, 932, 936, 949, 950, 1250–1258),
+        taking the ASCII byte after it when that byte completes its last
+        character (a GBK trail) and never when it would be swallowed. A run
+        at a read's end is held; the decoders live in the `OutputBuffer`,
+        under its lock, so a run no read continued for 100 ms is stored
+        when the offset is next observed (`read_executor_output`,
+        `ExecutorSession::info`), since the reader thread is blocked in
+        `read`. The fallback is `GetACP` for pipes on Windows (D15); PTY
+        output and every platform but Windows get none, which keeps
+        today's behaviour exactly (an unfinished scalar held, malformed
+        bytes passed), as ConPTY writes UTF-8. `encoding_rs` is declared in
+        the process crate, its only user, as the root manifest keeps
+        third-party crates more than one member uses.
+      - Un-ignored, green on `windows-latest`: the two `chcp` input code page
+        tests, `pipe_ansi_code_page_output_…`,
+        `pipe_utf8_and_ansi_code_page_output_mix_…`, both
+        `…_input_piped_to_a_native_program_keeps_cjk`,
+        `pty_progress_leaves_no_trace` (the preference alone fixes it),
+        `pty_console_input_receives_non_ascii_text`; and the five decoder
+        cases (GBK, mixed, ASCII trail bytes, CP866, the reported `dir`
+        listing). New: the Cmd shell runs in 65001 (pipe, PTY), the system
+        and Python variables reach a command, a UTF-8 run keeps the ASCII
+        byte after it, an unfinished GB18030 sequence keeps it too, a held
+        run is stored after the hold, one decoder per stream.
+      - Still ignored: both `pty_…ansi…` cases (conhost decodes raw bytes
+        with the console's code page, UTF-8, before ConPTY: no decoder of
+        ours sees them); E3's cases, unchanged.
+      - Found on the runner, re-ignored and open:
+        `pipe_cmd_built_ins_write_text_the_decoder_reads`. `cmd.exe` keeps
+        the code page it started with (OEM, 437 there) for its own
+        built-ins' pipe output; `chcp 65001` changes it only for the
+        programs it starts afterwards (probe:
+        https://github.com/licyk/hanafubuki-agent/actions/runs/43167771554,
+        `echo café` after `chcp` in one line, in `( )`, `call`, `if` and
+        `for` all wrote `caf\x82`; only a nested `cmd /c` wrote UTF-8; failing
+        run https://github.com/licyk/hanafubuki-agent/actions/runs/43165837630).
+        The reported case is fixed regardless: on Chinese Windows OEM and
+        ANSI are both 936, and the decoder reads the listing (its unit test).
+        Elsewhere (437/850 against 1252, 866 against 1251) a built-in's
+        non-ASCII text on a pipe is misread. Two fixes, each needing a
+        decision: run the script in a second `cmd.exe` started after `chcp`
+        (passing it through a variable and delayed expansion, so the outer
+        parser never splits it; changes how every Cmd command is parsed and
+        quoted, and adds a variable to its environment), or read Cmd pipes
+        with the OEM code page (`GetOEMCP`) instead of D15's ANSI one, which
+        needs the shell passed to the executor.
+      - Goldens: none changed (the prefix and the environment are not
+        model-visible). Hanafubuki: `POWERSHELL_UTF8_OUTPUT_PREFIX`, which it
+        can read, changed value; an approval it stored for a v4 command is
+        asked again. No module-size exception.
+      - Validation (Linux): `cargo fmt --all --check`, `RUSTFLAGS="-D
+        warnings" cargo check --workspace --all-targets --all-features`,
+        `cargo clippy --workspace --all-targets --all-features -- -D
+        warnings`, `cargo xtask check`, `cargo test --workspace
+        --all-features`; `cargo clippy --target x86_64-pc-windows-gnu -p
+        hanafubuki-agent-process -p hanafubuki-agent-execution
+        --all-features --tests -- -D warnings`; the site's `bun install
+        --frozen-lockfile`, `bun run format:check:site`, `bun run
+        site:check`, `bun run site:test`, `VITE_BASE_PATH=/hanafubuki-agent/
+        bun run site:build` (all 35 pages prerendered). The final tree ran
+        the whole CI workflow on Linux, Windows and macOS, green
+        (https://github.com/licyk/hanafubuki-agent/actions/runs/43168232034).
 - [ ] E3: PTY output through a `vt100` screen model; width-aware pipe
       rendering; sequence-aligned read starts, the hold-back always,
       `DaFilter::finish`, head and tail with a marker (model-visible:

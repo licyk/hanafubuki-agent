@@ -2257,6 +2257,7 @@ name = "hanafubuki-agent-process"
 version = "0.2.0"
 dependencies = [
  "anyhow",
+ "encoding_rs",
  "filedescriptor",
  "hanafubuki-agent-foundation",
  "lazy_static",

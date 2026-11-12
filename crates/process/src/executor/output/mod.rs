@@ -9,15 +9,25 @@
 //! A PTY session's buffer also keeps its [`TerminalSizeTimeline`], trimmed with
 //! the bytes, so every read can say which sizes its bytes were produced at.
 //!
-//! Readers push only whole UTF-8 scalars ([`Utf8Carry`]), trimming never keeps
-//! the tail of a scalar it cut, a read never starts inside a scalar, and a read
-//! capped by `max_bytes` ends on a scalar boundary, so a reader that decodes each read as text never sees a
+//! Each stream's reads are decoded before they are stored ([`RunDecoder`]),
+//! so the buffer holds UTF-8 and offsets count decoded bytes. Only whole
+//! scalars are stored, trimming never keeps the tail of a scalar it cut, a
+//! read never starts inside a scalar, and a read capped by `max_bytes` ends on
+//! a scalar boundary, so a reader that decodes each read as text never sees a
 //! character split between two reads.
 
 use std::collections::VecDeque;
+use std::time::Instant;
 
+use encoding_rs::Encoding;
+
+use self::decode::{utf8_complete_len, RunDecoder};
 use super::model::{OutputDelta, OutputStream};
 use crate::terminal_size::{TerminalResize, TerminalSize, TerminalSizeTimeline};
+
+mod decode;
+
+pub(crate) use self::decode::pipe_fallback;
 
 pub const DEFAULT_OUTPUT_CAP: usize = 4 * 1024 * 1024;
 
@@ -38,10 +48,19 @@ pub struct OutputBuffer {
     truncated_any: bool,
     /// Present for PTY output only: pipes have no grid.
     sizes: Option<TerminalSizeTimeline>,
+    fallback: Option<&'static Encoding>,
+    /// One per stream that has been read, in the order first read.
+    decoders: Vec<(OutputStream, RunDecoder)>,
 }
 
 impl OutputBuffer {
-    pub fn new(cap: usize, terminal_size: Option<TerminalSize>) -> Self {
+    /// `fallback` decodes a stream's runs of non-ASCII bytes that are not
+    /// UTF-8; without one they are kept as they are.
+    pub fn new(
+        cap: usize,
+        terminal_size: Option<TerminalSize>,
+        fallback: Option<&'static Encoding>,
+    ) -> Self {
         Self {
             chunks: VecDeque::new(),
             retained: 0,
@@ -49,7 +68,55 @@ impl OutputBuffer {
             next_offset: 0,
             truncated_any: false,
             sizes: terminal_size.map(TerminalSizeTimeline::new),
+            fallback,
+            decoders: Vec::new(),
         }
+    }
+
+    /// Decode a read from `stream` and store what is ready of it.
+    pub fn push_read(&mut self, stream: OutputStream, bytes: &[u8]) {
+        let mut decoded = Vec::with_capacity(bytes.len());
+        self.decoder(stream)
+            .push(bytes, Instant::now(), &mut decoded);
+        self.push(stream, &decoded);
+    }
+
+    /// Store what `stream`'s decoder still holds once the stream has ended.
+    pub fn finish_stream(&mut self, stream: OutputStream) {
+        let Some(index) = self.decoders.iter().position(|(of, _)| *of == stream) else {
+            return;
+        };
+        let (_, decoder) = self.decoders.remove(index);
+        let mut decoded = Vec::new();
+        decoder.finish(&mut decoded);
+        self.push(stream, &decoded);
+    }
+
+    /// Store the runs held at the end of a read that no read has continued
+    /// for [`decode::HOLD`] at `now`. Called before the offset is observed, as
+    /// no reader thread can wake while it waits for its next read.
+    pub fn release_held(&mut self, now: Instant) {
+        for index in 0..self.decoders.len() {
+            let (stream, decoder) = &mut self.decoders[index];
+            if !decoder.is_due(now) {
+                continue;
+            }
+            let stream = *stream;
+            let mut decoded = Vec::new();
+            decoder.release(&mut decoded);
+            self.push(stream, &decoded);
+        }
+    }
+
+    fn decoder(&mut self, stream: OutputStream) -> &mut RunDecoder {
+        let index = match self.decoders.iter().position(|(of, _)| *of == stream) {
+            Some(index) => index,
+            None => {
+                self.decoders.push((stream, RunDecoder::new(self.fallback)));
+                self.decoders.len() - 1
+            }
+        };
+        &mut self.decoders[index].1
     }
 
     /// The PTY's current size, or `None` for pipe output.
@@ -218,56 +285,6 @@ impl OutputBuffer {
         let next = start + produced as u64;
         (deltas, start, next, truncated)
     }
-}
-
-/// Holds back an unfinished UTF-8 scalar at the end of each read, so every
-/// chunk a reader pushes ends on a character boundary. Malformed bytes pass
-/// through unchanged; only a valid but incomplete scalar (at most three bytes)
-/// waits for the next read.
-#[derive(Default)]
-pub(crate) struct Utf8Carry {
-    pending: Vec<u8>,
-}
-
-impl Utf8Carry {
-    /// Pass the complete prefix of everything read so far to `sink`.
-    pub(crate) fn push(&mut self, bytes: &[u8], mut sink: impl FnMut(&[u8])) {
-        if self.pending.is_empty() {
-            let complete = utf8_complete_len(bytes);
-            sink(&bytes[..complete]);
-            self.pending.extend_from_slice(&bytes[complete..]);
-            return;
-        }
-        self.pending.extend_from_slice(bytes);
-        let complete = utf8_complete_len(&self.pending);
-        let ready: Vec<u8> = self.pending.drain(..complete).collect();
-        sink(&ready);
-    }
-
-    /// Pass whatever is still held back once the stream has ended.
-    pub(crate) fn finish(self, mut sink: impl FnMut(&[u8])) {
-        sink(&self.pending);
-    }
-}
-
-/// Length of the longest prefix of `bytes` that does not end inside a UTF-8
-/// scalar. Malformed bytes count as complete, so at most three bytes of a
-/// valid but unfinished scalar are excluded.
-pub(crate) fn utf8_complete_len(bytes: &[u8]) -> usize {
-    let mut boundary = bytes.len().saturating_sub(char::MAX.len_utf8() - 1);
-    while boundary < bytes.len() {
-        match std::str::from_utf8(&bytes[boundary..]) {
-            Ok(text) => return boundary + text.len(),
-            Err(error) => {
-                boundary += error.valid_up_to();
-                match error.error_len() {
-                    Some(invalid) => boundary += invalid,
-                    None => return boundary,
-                }
-            }
-        }
-    }
-    bytes.len()
 }
 
 /// Move a trim point past the continuation bytes of a scalar it cut (at most

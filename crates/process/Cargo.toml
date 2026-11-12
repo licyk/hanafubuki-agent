@@ -12,6 +12,7 @@ default = []
 test-support = []
 
 [dependencies]
+encoding_rs = "0.8"
 hanafubuki-agent-foundation.workspace = true
 log.workspace = true
 parking_lot.workspace = true

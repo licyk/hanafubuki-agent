@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 use parking_lot::{Condvar, Mutex};
 
 use super::model::{ExecutorInfo, ExecutorIoMode, ExecutorStatus};
-use super::output::OutputBuffer;
+use super::output::{pipe_fallback, OutputBuffer};
 use crate::process_groups::{ProcessGroupRecord, ProcessOwnerGroup};
 use crate::terminal_size::TerminalSize;
 
@@ -77,7 +77,14 @@ impl ExecutorSession {
             executor_id,
             io_mode,
             command,
-            output: Arc::new(Mutex::new(OutputBuffer::new(cap, terminal_size))),
+            output: Arc::new(Mutex::new(OutputBuffer::new(
+                cap,
+                terminal_size,
+                match io_mode {
+                    ExecutorIoMode::Pipe => pipe_fallback(),
+                    ExecutorIoMode::Pty => None,
+                },
+            ))),
             inner: Mutex::new(SessionInner {
                 status: ExecutorStatus::Starting,
                 exit_code: None,
@@ -127,7 +134,11 @@ impl ExecutorSession {
             command: self.command.clone(),
             exit_code: inner.exit_code,
             error: inner.error.clone(),
-            output_offset: self.output.lock().next_offset(),
+            output_offset: {
+                let mut output = self.output.lock();
+                output.release_held(Instant::now());
+                output.next_offset()
+            },
         }
     }
 

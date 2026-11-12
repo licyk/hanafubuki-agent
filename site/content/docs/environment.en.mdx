@@ -21,8 +21,9 @@ The Agent itself reads neither `RUST_LOG` nor `NO_COLOR`: the log level is `logL
 
 The commands the model runs through its tools do not inherit the Agent process's environment. They get a clean one:
 
-- Of the Agent's environment, only `PATH` and `TMPDIR` (on Windows `PATH`, `PATHEXT`, `SYSTEMROOT`, `WINDIR`, `COMSPEC`, `TEMP`, `TMP`).
+- Of the Agent's environment, only `PATH` and `TMPDIR`. On Windows, the system's variables, not the user's: `PATH`, `PATHEXT`, `SYSTEMROOT`, `WINDIR`, `COMSPEC`, `TEMP`, `TMP`, `USERPROFILE`, `APPDATA`, `LOCALAPPDATA`, `ProgramData`, `ProgramFiles`, `ProgramFiles(x86)`, `SystemDrive`, `HOMEDRIVE`, `HOMEPATH`, `PSModulePath`, `PROCESSOR_ARCHITECTURE`, `NUMBER_OF_PROCESSORS` and `OS`, which Windows PowerShell's modules, git's global configuration and npm's cache need.
 - So that a command neither waits on a pager nor fills its output with escape sequences: `NO_COLOR=1`, `TERM=dumb`, `LANG`, `LC_CTYPE` and `LC_ALL` set to `C.UTF-8`, `COLORTERM` empty, and `PAGER`, `GIT_PAGER` and `GH_PAGER` set to `cat`.
+- So that Python writes UTF-8, on Windows too: `PYTHONUTF8=1` and `PYTHONIOENCODING=utf-8`. How the other shells' output is kept UTF-8 is in [Tools](/docs/tools#commands).
 - The proxy variables `network.proxy` decides.
 
 So a variable you set in your shell (an API token, a proxy) does not reach the commands the model runs.

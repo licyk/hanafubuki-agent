@@ -21,8 +21,9 @@ Agent 本身不读取 `RUST_LOG` 或 `NO_COLOR`：日志级别由 `logLevel` 和
 
 模型通过工具运行的命令不会继承 Agent 进程的全部环境。它们只得到一个干净的环境：
 
-- 从 Agent 的环境中只保留 `PATH` 和 `TMPDIR`（Windows 上是 `PATH`、`PATHEXT`、`SYSTEMROOT`、`WINDIR`、`COMSPEC`、`TEMP`、`TMP`）。
+- 从 Agent 的环境中只保留 `PATH` 和 `TMPDIR`。Windows 上保留系统的变量，而不是用户的变量：`PATH`、`PATHEXT`、`SYSTEMROOT`、`WINDIR`、`COMSPEC`、`TEMP`、`TMP`、`USERPROFILE`、`APPDATA`、`LOCALAPPDATA`、`ProgramData`、`ProgramFiles`、`ProgramFiles(x86)`、`SystemDrive`、`HOMEDRIVE`、`HOMEPATH`、`PSModulePath`、`PROCESSOR_ARCHITECTURE`、`NUMBER_OF_PROCESSORS` 和 `OS`，Windows PowerShell 的模块、git 的全局配置和 npm 的缓存需要它们。
 - 为了不让命令等待分页器或输出控制字符，固定设置 `NO_COLOR=1`、`TERM=dumb`、`LANG`、`LC_CTYPE`、`LC_ALL` 为 `C.UTF-8`、`COLORTERM` 为空，以及 `PAGER`、`GIT_PAGER`、`GH_PAGER` 为 `cat`。
+- 为了让 Python 写出 UTF-8（Windows 上也是）：`PYTHONUTF8=1` 和 `PYTHONIOENCODING=utf-8`。其他 Shell 的输出如何保持 UTF-8，见[工具](/docs/tools#commands)。
 - 再加上由 `network.proxy` 决定的代理变量。
 
 因此，你在 Shell 中设置的变量（例如 API 令牌或代理）不会自动传给模型运行的命令。

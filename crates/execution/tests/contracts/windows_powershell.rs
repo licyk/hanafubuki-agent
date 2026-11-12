@@ -195,20 +195,18 @@ fn the_shell_resolved_is_windows_powershell_5_1() {
     assert_eq!(output.trim(), "5", "{output:?}");
 }
 
-/// `chcp` shows the console's input code page, which the prefix leaves as
-/// it is (the output code page it sets: `cmd /c echo` below).
+/// `chcp` shows the console's input code page, which the prefix sets with
+/// `[Console]::InputEncoding` (the output code page: `cmd /c echo` below).
 fn the_prefix_sets_the_console_input_code_page_to_utf8(tty: bool) {
     assert_contains(&run("chcp.com", tty), "65001");
 }
 
 #[test]
-#[ignore = "reproduces §4.9 (d), the console's input code page stays 437; fixed in E2"]
 fn pipe_the_prefix_sets_the_console_input_code_page_to_utf8() {
     the_prefix_sets_the_console_input_code_page_to_utf8(false);
 }
 
 #[test]
-#[ignore = "reproduces §4.9 (d), the console's input code page stays 437; fixed in E2"]
 fn pty_the_prefix_sets_the_console_input_code_page_to_utf8() {
     the_prefix_sets_the_console_input_code_page_to_utf8(true);
 }
@@ -233,13 +231,12 @@ fn ansi_code_page_output_of_a_native_program_is_decoded(tty: bool) {
 }
 
 #[test]
-#[ignore = "reproduces §4.9 (a), ANSI code page bytes; fixed in E2"]
 fn pipe_ansi_code_page_output_of_a_native_program_is_decoded() {
     ansi_code_page_output_of_a_native_program_is_decoded(false);
 }
 
 #[test]
-#[ignore = "reproduces §4.9 (a) under ConPTY, where conhost decodes the bytes itself; not fixed by E2's decoder"]
+#[ignore = "§4.9 (a) under ConPTY: conhost decodes the raw bytes with the console's code page (UTF-8) before the PTY, so no decoder of ours sees them"]
 fn pty_ansi_code_page_output_of_a_native_program_is_decoded() {
     ansi_code_page_output_of_a_native_program_is_decoded(true);
 }
@@ -259,13 +256,12 @@ fn utf8_and_ansi_code_page_output_mix_in_one_stream(tty: bool) {
 }
 
 #[test]
-#[ignore = "reproduces §4.9 (a), mixed encodings; fixed in E2"]
 fn pipe_utf8_and_ansi_code_page_output_mix_in_one_stream() {
     utf8_and_ansi_code_page_output_mix_in_one_stream(false);
 }
 
 #[test]
-#[ignore = "reproduces §4.9 (a) under ConPTY, where conhost decodes the bytes itself; not fixed by E2's decoder"]
+#[ignore = "§4.9 (a) under ConPTY: conhost decodes the raw bytes with the console's code page (UTF-8) before the PTY, so no decoder of ours sees them"]
 fn pty_utf8_and_ansi_code_page_output_mix_in_one_stream() {
     utf8_and_ansi_code_page_output_mix_in_one_stream(true);
 }
@@ -306,13 +302,11 @@ fn input_piped_to_a_native_program_keeps_cjk(tty: bool) {
 }
 
 #[test]
-#[ignore = "reproduces §4.9 (c), $OutputEncoding is ASCII; fixed in E2"]
 fn pipe_input_piped_to_a_native_program_keeps_cjk() {
     input_piped_to_a_native_program_keeps_cjk(false);
 }
 
 #[test]
-#[ignore = "reproduces §4.9 (c), $OutputEncoding is ASCII; fixed in E2"]
 fn pty_input_piped_to_a_native_program_keeps_cjk() {
     input_piped_to_a_native_program_keeps_cjk(true);
 }
@@ -337,7 +331,6 @@ fn pipe_progress_leaves_no_trace() {
 }
 
 #[test]
-#[ignore = "reproduces §4.9 (e), progress drawn under ConPTY; fixed in E2 and E3"]
 fn pty_progress_leaves_no_trace() {
     progress_leaves_no_trace(true);
 }
@@ -379,7 +372,6 @@ fn pty_output_starts_without_a_byte_order_mark() {
 
 /// (d): `write_stdin` reaches the program as the text the model wrote.
 #[test]
-#[ignore = "reproduces §4.9 (d), [Console]::InputEncoding is code page 437; fixed in E2"]
 fn pty_console_input_receives_non_ascii_text() {
     assert_contains(
         &answer("$line = [Console]::ReadLine(); \"got:$line\""),
@@ -399,7 +391,7 @@ fn cmd_built_ins_write_text_the_decoder_reads(tty: bool) {
 }
 
 #[test]
-#[ignore = "reproduces §4.9 (a), cmd.exe writes the console code page; fixed in E2"]
+#[ignore = "§4.9 (a): cmd.exe's built-ins write a pipe in the code page cmd started with (437 here), which `chcp 65001` does not change for it and the ANSI fallback (1252) misreads; right where OEM and ANSI agree (936 on Chinese Windows)"]
 fn pipe_cmd_built_ins_write_text_the_decoder_reads() {
     cmd_built_ins_write_text_the_decoder_reads(false);
 }
@@ -407,6 +399,39 @@ fn pipe_cmd_built_ins_write_text_the_decoder_reads() {
 #[test]
 fn pty_cmd_built_ins_write_text_the_decoder_reads() {
     cmd_built_ins_write_text_the_decoder_reads(true);
+}
+
+/// The Cmd shell runs its script in code page 65001.
+fn cmd_runs_in_utf8(tty: bool) {
+    let output = run_request(request(PlatformShell::Cmd, "chcp", tty)).output;
+    assert_contains(&output, "65001");
+}
+
+#[test]
+fn pipe_cmd_runs_in_utf8() {
+    cmd_runs_in_utf8(false);
+}
+
+#[test]
+fn pty_cmd_runs_in_utf8() {
+    cmd_runs_in_utf8(true);
+}
+
+/// D17: the system's variables reach a command, beside Python's UTF-8 ones.
+#[test]
+fn a_command_gets_the_system_variables() {
+    let output = run(
+        "foreach ($name in 'USERPROFILE', 'APPDATA', 'LOCALAPPDATA', 'ProgramData', \
+           'ProgramFiles', 'SystemDrive', 'PSModulePath', 'NUMBER_OF_PROCESSORS', 'OS', \
+           'PYTHONUTF8', 'PYTHONIOENCODING') { \
+           \"$name=$([Environment]::GetEnvironmentVariable($name))\" }",
+        false,
+    );
+    for line in output.lines() {
+        assert!(!line.trim_end().ends_with('='), "{line:?} in {output:?}");
+    }
+    assert_contains(&output, "PYTHONUTF8=1");
+    assert_contains(&output, "PYTHONIOENCODING=utf-8");
 }
 
 /// As reported: a long `dir` lost its middle without a marker.

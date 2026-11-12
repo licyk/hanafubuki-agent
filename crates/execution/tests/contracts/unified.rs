@@ -563,6 +563,8 @@ fn unified_exec_environment_is_non_interactive_unless_the_request_overrides_it()
         ("TERM", "dumb"),
         ("GIT_PAGER", "cat"),
         ("LC_ALL", "C.UTF-8"),
+        ("PYTHONUTF8", "1"),
+        ("PYTHONIOENCODING", "utf-8"),
         ("PAGER", "less"),
     ] {
         assert_eq!(env[key].as_deref(), Some(value), "{key}");

@@ -16,10 +16,21 @@ use crate::resolver::{
 use sha2::{Digest, Sha256};
 
 const MAX_SHELL_SCRIPT_BYTES: usize = 48 * 1024;
-/// Prefixed to every PowerShell script so its console output is UTF-8 rather
-/// than the system code page (Codex parity).
+/// Prefixed to every PowerShell script, 5.1 and 7 alike: UTF-8 without a
+/// byte-order mark for the console's output and input code pages (which the
+/// native programs it runs follow) and for text piped to them
+/// (`$OutputEncoding`, ASCII in 5.1), and no progress bars.
+/// `$OutputEncoding` comes first, as the console's setters throw where there
+/// is no console.
 pub const POWERSHELL_UTF8_OUTPUT_PREFIX: &str =
-    "try { [Console]::OutputEncoding=[System.Text.Encoding]::UTF8 } catch {}\n";
+    "try { $__hbUtf8 = New-Object System.Text.UTF8Encoding $false; \
+     $OutputEncoding = $__hbUtf8; [Console]::OutputEncoding = $__hbUtf8; \
+     [Console]::InputEncoding = $__hbUtf8 } catch {}\n\
+     $ProgressPreference = 'SilentlyContinue'\n";
+/// Prefixed to every `cmd.exe` script, so the console programs it starts
+/// write UTF-8. Its own built-ins keep the code page `cmd.exe` started with
+/// (the OEM one) when they write to a pipe.
+const CMD_UTF8_PREFIX: &str = "chcp 65001 >NUL & ";
 
 pub(crate) struct PreparedExecCommand {
     pub(crate) plan: ResolvedCommandPlan,
@@ -234,7 +245,7 @@ fn exec_shell_command(
             "/D".to_string(),
             "/S".to_string(),
             "/C".to_string(),
-            command_text.to_string(),
+            format!("{CMD_UTF8_PREFIX}{command_text}"),
         ]),
     }
     command
@@ -249,7 +260,7 @@ fn shell_action(
     unsandboxed: bool,
 ) -> Result<ApprovalAction, AgentExecutionError> {
     let canonical = serde_json::to_vec(&CanonicalShellAction {
-        version: "agent-shell-v4",
+        version: "agent-shell-v5",
         shell,
         program: &plan.command[0],
         argv: &plan.command,

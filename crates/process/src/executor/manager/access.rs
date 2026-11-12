@@ -2,7 +2,7 @@
 
 use std::process::ExitStatus;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use super::{ExecutorManager, ReservedExecutorReceipt};
 use crate::executor::model::{ExecutorInfo, ExecutorOutput};
@@ -90,7 +90,8 @@ pub fn read_executor_output(
         let inner = session.inner.lock();
         (inner.status, inner.exit_code)
     };
-    let output = session.output.lock();
+    let mut output = session.output.lock();
+    output.release_held(Instant::now());
     let (chunks, start_offset, next_offset, truncated) =
         output.read_from(from_offset.unwrap_or(0), max_bytes);
     let (terminal_size, resizes) = output.terminal_sizes(start_offset, next_offset);
