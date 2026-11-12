@@ -1,0 +1,26 @@
+name: E2 probe
+on:
+  push:
+    branches: [e2-encodings]
+    paths: [".github/workflows/e2-probe.yml"]
+jobs:
+  probe:
+    runs-on: windows-latest
+    steps:
+      - shell: python
+        run: |
+          import subprocess
+          variants = [
+              'chcp 65001 >NUL & echo café',
+              'chcp 65001 >NUL & call echo café',
+              'chcp 65001 >NUL & (echo café)',
+              'chcp 65001 >NUL & call ver >NUL & echo café',
+              'chcp 65001 >NUL & if 1==1 echo café',
+              'chcp 65001 >NUL & for %a in (1) do @echo café',
+              'chcp 65001 >NUL & cmd /D /C echo café',
+              'chcp 65001 >NUL & chcp',
+          ]
+          for flags in (0x08000000, 0):
+              for v in variants:
+                  out = subprocess.run(['cmd.exe', '/D', '/S', '/C', v], capture_output=True, creationflags=flags).stdout
+                  print(hex(flags), repr(v), out)
