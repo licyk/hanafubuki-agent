@@ -542,7 +542,7 @@ pub(crate) static ACTIONS: [ActionSpec; 53] = [
         CloseTranscript,
         Pager,
         "close_transcript",
-        "Close the transcript",
+        "Show the transcript in detail, then close it",
         ["ctrl-t"]
     ),
 ];

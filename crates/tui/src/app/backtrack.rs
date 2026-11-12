@@ -134,9 +134,9 @@ impl App {
             && self.chat_widget.composer_is_empty()
             && !self.chat_widget.is_task_running()
             && !self.chat_widget.has_pending_input()
-            && !(self.mode.is_owned()
-                && (self.transcript_view.has_active_interaction()
-                    || self.transcript_view.is_detailed()))
+            // Scrollback's tail keeps Esc while an activity is focused.
+            && !self.transcript_view.has_active_interaction()
+            && !(self.mode.is_owned() && self.transcript_view.is_detailed())
     }
 
     fn prime(&mut self) {
@@ -160,9 +160,7 @@ impl App {
         self.chat_widget.clear_esc_backtrack_hint();
         self.backtrack.browsing = Some(0);
         if !self.mode.is_owned() {
-            let mut overlay =
-                TranscriptOverlay::new(self.transcript_cells.clone(), self.render_mode);
-            overlay.set_presentation(false, self.render_mode);
+            let overlay = TranscriptOverlay::new(self.transcript_cells.clone(), self.render_mode);
             self.open_overlay(tui, Overlay::Transcript(overlay));
         }
         self.show_browsing_choice(false);

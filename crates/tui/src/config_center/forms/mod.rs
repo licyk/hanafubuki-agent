@@ -11,8 +11,8 @@ use hanafubuki_agent::{
     AgentCompactionStrategy, AgentHierarchicalCompactionSettings, AgentLogLevel,
     AgentMemorySettings, AgentModelDiscovery, AgentModelMetadataSettings, AgentNetworkSettings,
     AgentPermissionMode, AgentProxy, AgentSandboxMode, AgentSandboxWorkspaceWrite,
-    AgentSettingsPatch, AgentStandaloneSettingsPatch, AgentTuiPreferencesPatch,
-    AgentWebSearchProvider, AgentWindowsSandbox, AgentWindowsSettings,
+    AgentScrollbackMouse, AgentSettingsPatch, AgentStandaloneSettingsPatch,
+    AgentTuiPreferencesPatch, AgentWebSearchProvider, AgentWindowsSandbox, AgentWindowsSettings,
 };
 
 use crate::agent_bridge::ConfigState;
@@ -38,6 +38,7 @@ const PROXY_URL: FieldId = "proxy_url";
 const LOG_LEVEL: FieldId = "log_level";
 const FULLSCREEN: FieldId = "fullscreen";
 const ALTERNATE_SCREEN: FieldId = "alternate_screen";
+const SCROLLBACK_MOUSE: FieldId = "scrollback_mouse";
 const RAW_OUTPUT: FieldId = "raw_output";
 const STATUS_COLORS: FieldId = "status_colors";
 const OPEN_THEME: FieldId = "open_theme";
@@ -87,6 +88,8 @@ const SCREENS: [AgentAlternateScreen; 3] = [
     AgentAlternateScreen::Always,
     AgentAlternateScreen::Never,
 ];
+const SCROLLBACK_MICE: [AgentScrollbackMouse; 2] =
+    [AgentScrollbackMouse::Tail, AgentScrollbackMouse::Off];
 
 /// The command a linked editor action opens.
 pub(super) fn action_command(action: FieldId) -> Option<&'static str> {
@@ -205,6 +208,9 @@ impl ConfigChange {
                     || patch
                         .alternate_screen
                         .is_some_and(|value| preferences.alternate_screen != value)
+                    || patch
+                        .scrollback_mouse
+                        .is_some_and(|value| preferences.scrollback_mouse != value)
                     || patch
                         .raw_output
                         .is_some_and(|value| preferences.raw_output != value)
@@ -401,6 +407,15 @@ pub(super) fn section_form(section: ConfigSection, state: &ConfigState) -> FormV
                     SCREENS
                         .iter()
                         .position(|screen| *screen == state.standalone.tui.alternate_screen)
+                        .unwrap_or_default(),
+                ),
+                FormItem::choice(
+                    SCROLLBACK_MOUSE,
+                    "Scrollback mouse",
+                    &["tail", "off"],
+                    SCROLLBACK_MICE
+                        .iter()
+                        .position(|mouse| *mouse == state.standalone.tui.scrollback_mouse)
                         .unwrap_or_default(),
                 ),
                 FormItem::toggle(RAW_OUTPUT, "Raw output", state.standalone.tui.raw_output),

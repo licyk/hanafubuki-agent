@@ -2,11 +2,11 @@
 
 use insta::assert_snapshot;
 use ratatui::backend::TestBackend;
-use ratatui::crossterm::event::KeyModifiers;
+use ratatui::crossterm::event::{KeyModifiers, MouseButton, MouseEventKind};
 use ratatui::Terminal;
 
 use super::*;
-use crate::history_cell::LiveCell;
+use crate::history_cell::{new_tool_call, LiveCell, ToolResultView};
 
 #[derive(Debug)]
 struct TestCell {
@@ -50,12 +50,12 @@ fn key(code: KeyCode) -> KeyEvent {
 }
 
 #[test]
-fn the_overlay_frames_the_detailed_transcript() {
+fn the_overlay_frames_the_compact_transcript() {
     let mut overlay = TranscriptOverlay::new(
         vec![cell("alpha"), cell("beta"), cell("gamma")],
         HistoryRenderMode::Rich,
     );
-    let mut terminal = Terminal::new(TestBackend::new(60, 10)).unwrap();
+    let mut terminal = Terminal::new(TestBackend::new(80, 10)).unwrap();
     draw(&mut overlay, &mut terminal);
     assert_snapshot!(terminal.backend());
 }
@@ -127,7 +127,53 @@ fn the_closing_keys_close_it() {
         overlay.handle_key(key(code));
         assert!(overlay.is_done());
     }
+    // Ctrl-T shows the details first, then closes it.
     let mut overlay = numbered(3);
-    overlay.handle_key(KeyEvent::new(KeyCode::Char('t'), KeyModifiers::CONTROL));
+    let ctrl_t = KeyEvent::new(KeyCode::Char('t'), KeyModifiers::CONTROL);
+    overlay.handle_key(ctrl_t);
+    assert!(overlay.is_detailed() && !overlay.is_done());
+    overlay.handle_key(ctrl_t);
     assert!(overlay.is_done());
+}
+
+#[test]
+fn a_click_on_a_control_shows_an_entrys_details_in_the_compact_transcript() {
+    let tool = LiveCell::new(new_tool_call(
+        "call-1".to_string(),
+        "exec_command".to_string(),
+        None,
+    ));
+    let output = (1..=20).map(|n| format!("out-{n:02}")).collect::<Vec<_>>();
+    tool.update(|cell| {
+        cell.complete(
+            false,
+            ToolResultView {
+                text: Some(output.join("\n")),
+                ..Default::default()
+            },
+        )
+    });
+    let mut overlay = TranscriptOverlay::new(vec![cell("alpha"), tool], HistoryRenderMode::Rich);
+    let mut terminal = Terminal::new(TestBackend::new(60, 30)).unwrap();
+    let screen = draw(&mut overlay, &mut terminal);
+    assert!(!screen.contains("out-10"), "{screen}");
+    let row = screen
+        .lines()
+        .position(|line| line.contains("+ 10 lines"))
+        .expect(&screen);
+    // Each row is drawn quoted.
+    let column = screen.lines().nth(row).unwrap().find('+').unwrap() - 1;
+    for kind in [
+        MouseEventKind::Down(MouseButton::Left),
+        MouseEventKind::Up(MouseButton::Left),
+    ] {
+        overlay.handle_mouse(MouseEvent {
+            kind,
+            column: u16::try_from(column).unwrap(),
+            row: u16::try_from(row).unwrap(),
+            modifiers: KeyModifiers::NONE,
+        });
+    }
+    let screen = draw(&mut overlay, &mut terminal);
+    assert!(screen.contains("out-10"), "{screen}");
 }

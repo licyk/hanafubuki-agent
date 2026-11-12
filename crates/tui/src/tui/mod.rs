@@ -103,6 +103,8 @@ pub(crate) struct Tui<B: Backend<Error = io::Error> + Write = CrosstermBackend<S
     pending_history_lines: Vec<Line<'static>>,
     /// The inline viewport, kept while an overlay holds the alternate screen.
     alt_saved_viewport: Option<Rect>,
+    /// Scrollback's tail has the mouse (off the alternate screen).
+    inline_mouse_capture: bool,
 }
 
 impl<B: Backend<Error = io::Error> + Write> Tui<B> {
@@ -111,6 +113,7 @@ impl<B: Backend<Error = io::Error> + Write> Tui<B> {
             terminal,
             pending_history_lines: Vec::new(),
             alt_saved_viewport: None,
+            inline_mouse_capture: false,
         }
     }
 
@@ -119,6 +122,9 @@ impl<B: Backend<Error = io::Error> + Write> Tui<B> {
     /// the pointer is reported to the app (a transcript view); without it
     /// the terminal turns the wheel into arrow keys.
     pub(crate) fn enter_alt_screen(&mut self, capture_mouse: bool) -> Result<()> {
+        // The alternate screen sets the mouse its own way, and leaving it
+        // turns it off.
+        self.inline_mouse_capture = false;
         let entered = ALTERNATE_SCREEN.enter(self.terminal.backend_mut(), capture_mouse);
         if let Ok(size) = self.terminal.size() {
             self.alt_saved_viewport = Some(self.terminal.viewport_area);
@@ -145,6 +151,26 @@ impl<B: Backend<Error = io::Error> + Write> Tui<B> {
             return Ok(());
         }
         ALTERNATE_SCREEN.configure_input(self.terminal.backend_mut(), capture)
+    }
+
+    /// Takes the mouse for Scrollback's tail, or gives it back to the
+    /// terminal; nothing while the alternate screen is entered.
+    pub(crate) fn set_inline_mouse_capture(&mut self, capture: bool) -> Result<()> {
+        if self.alt_saved_viewport.is_some() || self.inline_mouse_capture == capture {
+            return Ok(());
+        }
+        self.inline_mouse_capture = capture;
+        let backend = self.terminal.backend_mut();
+        if capture {
+            ALTERNATE_SCREEN.capture_clicks(backend)
+        } else {
+            ALTERNATE_SCREEN.disable_mouse(backend)
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn captures_inline_mouse(&self) -> bool {
+        self.inline_mouse_capture
     }
 
     pub(crate) fn insert_history_lines(&mut self, lines: Vec<Line<'static>>) {

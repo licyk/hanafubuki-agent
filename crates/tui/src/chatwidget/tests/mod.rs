@@ -5,7 +5,7 @@ use std::sync::mpsc::{channel, Receiver};
 use super::*;
 use crate::agent_bridge::{
     HooksCall, HooksReply, McpCall, ModelChoices, OlderTranscript, OpenedSession, ReplayedItem,
-    SteerOutcome, TurnEnd,
+    SteerOutcome, TurnEnd, TurnUpdate,
 };
 use crate::app_event::AgentCommand;
 use crate::bottom_pane::{SelectionItem, SelectionViewParams};
@@ -38,16 +38,16 @@ fn chat_in(owned_transcript: bool) -> (ChatWidget, Receiver<AppEvent>) {
     (chat, events)
 }
 
-/// The text of the cells the chat had written into Scrollback's
-/// scrollback so far, one string per cell, and the ops it asked of the
-/// Agent.
+/// The text of the cells the chat handed the transcript once complete
+/// (a live entry when it completed), one string per cell, and the ops it
+/// asked of the Agent.
 fn drain(events: &Receiver<AppEvent>) -> (Vec<String>, Vec<Op>) {
     let mut cells = Vec::new();
     let mut ops = Vec::new();
     while let Ok(event) = events.try_recv() {
         match event {
             AppEvent::InsertHistoryCell(cell) => cells.push(cell_text(cell.as_ref())),
-            AppEvent::WriteLiveEntry(cell) => cells.push(cell_text(cell.as_ref())),
+            AppEvent::LiveEntryCompleted(cell) => cells.push(cell_text(cell.as_ref())),
             AppEvent::Op(op) => ops.push(op),
             _ => {}
         }

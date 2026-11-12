@@ -29,3 +29,14 @@ function = "prepare_operation"
 ceiling = 272
 reason = "Over the limit when the limit was introduced; not yet reviewed for shortening."
 
+
+[[exceptions]]
+path = "crates/tui/src/config_center/forms/mod.rs"
+ceiling = 601
+reason = "One form per section of the configuration center, which settings_center/ replaces (S4 of docs/plan-settings-and-timeline.md); tui.scrollbackMouse's row (T1b) took it over the limit, and the exception goes with the module."
+
+[[exceptions]]
+path = "crates/tui/src/config_center/forms/mod.rs"
+function = "section_form"
+ceiling = 207
+reason = "An exhaustive dispatch over the configuration center's sections, one form each, which settings_center/ replaces (S4); tui.scrollbackMouse's row (T1b) took it over the limit, and the exception goes with the module."

@@ -3,9 +3,9 @@
 //! The chat: the bottom pane (the composer, the status line and the
 //! approval and question overlays), and the entries it hands the app's
 //! transcript. A thinking or a tool call is a live entry the chat changes
-//! in place: Fullscreen shows it in the conversation from its start;
-//! Scrollback draws it above the bottom pane and writes it when it
-//! completes.
+//! in place, shown from its start in the conversation (Fullscreen) or in
+//! the tail above the bottom pane (Scrollback), which writes it only once
+//! it completes.
 //!
 //! What the turn does arrives as [`TurnUpdate`]s (`turn`); what the person
 //! types goes to the bottom pane, and what it submits leaves as an
@@ -22,7 +22,7 @@ mod turn;
 mod warnings;
 
 use std::cell::Cell;
-use std::collections::{HashSet, VecDeque};
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -31,7 +31,7 @@ use ratatui::buffer::Buffer;
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::layout::Rect;
 
-use crate::agent_bridge::{TurnUpdate, Warning};
+use crate::agent_bridge::Warning;
 use crate::app_event::{AppEvent, AppEventSender, Op};
 use crate::appearance::Appearance;
 use crate::bottom_pane::{
@@ -42,9 +42,7 @@ use crate::file_search::FileMatch;
 use crate::history_cell::{self, HistoryCell, LiveCell, ThinkingCell, ToolCallCell};
 use crate::key_hint::{self, KeyBinding};
 use crate::keymap::{self, Action};
-use crate::render::renderable::{
-    ColumnRenderable, FlexRenderable, Renderable, RenderableExt, RenderableItem,
-};
+use crate::render::renderable::{Renderable, RenderableExt, RenderableItem};
 use crate::render::Insets;
 use crate::streaming::controller::{PlanStreamController, StreamController};
 use crate::tui::FrameRequester;
@@ -60,8 +58,8 @@ pub(crate) struct ChatWidgetInit {
     pub(crate) enhanced_keys_supported: bool,
     /// The working directory, as the session header shows it.
     pub(crate) directory: String,
-    /// The app's transcript view shows the live entries (owned mode), so
-    /// the chat does not draw them.
+    /// The app's transcript view owns the screen (Fullscreen); otherwise
+    /// Scrollback's tail is told when a live entry completes.
     pub(crate) owned_transcript: bool,
     /// The saved `tui.fullscreenTranscript`, which `/tui` marks.
     pub(crate) fullscreen_preference: bool,
@@ -86,10 +84,6 @@ pub(crate) struct ChatWidget {
     thinking_expanded: bool,
     stream_controller: Option<StreamController>,
     plan_stream_controller: Option<PlanStreamController>,
-    /// Scrollback: updates held back while a message streams, so what the
-    /// model said before a call is written before the call (Codex's
-    /// interrupt queue).
-    deferred: VecDeque<TurnUpdate>,
     last_rendered_width: Cell<Option<usize>>,
     /// Something was written since the last streamed message; the next one
     /// gets a separator, with the time worked when there was work.
@@ -153,7 +147,6 @@ impl ChatWidget {
             thinking_expanded: false,
             stream_controller: None,
             plan_stream_controller: None,
-            deferred: VecDeque::new(),
             last_rendered_width: Cell::new(None),
             needs_final_message_separator: false,
             had_work_activity: false,
@@ -428,10 +421,10 @@ impl ChatWidget {
         self.app_event_tx.send(AppEvent::InsertLiveEntry(entry));
     }
 
-    /// A live entry completed: Scrollback writes it as it is shown.
-    fn write_live_entry(&self, entry: Arc<dyn HistoryCell>) {
+    /// A live entry completed: Scrollback's tail may write it.
+    fn complete_live_entry(&self, entry: Arc<dyn HistoryCell>) {
         if !self.owned_transcript {
-            self.app_event_tx.send(AppEvent::WriteLiveEntry(entry));
+            self.app_event_tx.send(AppEvent::LiveEntryCompleted(entry));
         }
     }
 
@@ -446,43 +439,7 @@ impl ChatWidget {
     }
 
     fn as_renderable(&self) -> RenderableItem<'_> {
-        let mut tools = ColumnRenderable::new();
-        for (_, cell) in &self.live_thinking {
-            tools.push_ref(cell.as_ref());
-        }
-        for cell in &self.running_tools {
-            tools.push_ref(cell.as_ref());
-        }
-        let mut flex = FlexRenderable::new();
-        if !self.owned_transcript && self.has_live_entries() {
-            flex.push(
-                1,
-                RenderableItem::Owned(Box::new(tools)).inset(Insets::tlbr(1, 0, 0, 0)),
-            );
-        }
-        flex.push(
-            0,
-            RenderableItem::Borrowed(&self.bottom_pane).inset(Insets::tlbr(1, 0, 0, 0)),
-        );
-        RenderableItem::Owned(Box::new(flex))
-    }
-}
-
-/// In Scrollback a live entry is drawn in the viewport, as Codex draws its
-/// active cell, until it is written; one taller than the viewport leaves
-/// shows its latest lines.
-impl<C: HistoryCell> Renderable for LiveCell<C> {
-    fn render(&self, area: Rect, buf: &mut Buffer) {
-        use ratatui::widgets::{Paragraph, Widget};
-        let lines = self.display_lines(area.width);
-        let overflow = lines.len().saturating_sub(usize::from(area.height));
-        Paragraph::new(lines)
-            .scroll((u16::try_from(overflow).unwrap_or(u16::MAX), 0))
-            .render(area, buf);
-    }
-
-    fn desired_height(&self, width: u16) -> u16 {
-        HistoryCell::desired_height(self, width)
+        RenderableItem::Borrowed(&self.bottom_pane).inset(Insets::tlbr(1, 0, 0, 0))
     }
 }
 

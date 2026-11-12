@@ -93,13 +93,6 @@ impl Focus {
             Self::Second => Self::Main,
         }
     }
-
-    fn index(self) -> usize {
-        match self {
-            Self::Main => 0,
-            Self::Second => 1,
-        }
-    }
 }
 
 /// What the second conversation is.
@@ -124,6 +117,7 @@ pub(super) struct Parked {
     pub(super) app_event_tx: AppEventSender,
     pub(super) transcript_cells: Vec<Arc<dyn HistoryCell>>,
     pub(super) transcript_view: TranscriptView,
+    pub(super) tail: super::scrollback::Tail,
     pub(super) older_transcript: Option<OlderTranscript>,
 }
 
@@ -134,8 +128,6 @@ pub(super) struct Second {
     pub(super) parked: Parked,
     /// Which conversation the app's fields hold.
     pub(super) focus: Focus,
-    /// Scrollback mode: what each conversation committed while hidden.
-    held: [Vec<Line<'static>>; 2],
 }
 
 #[derive(Default)]
@@ -172,13 +164,6 @@ impl Workspace {
     /// An event of the parked conversation is being handled.
     pub(super) fn handling_parked(&self) -> bool {
         self.handling.is_some()
-    }
-
-    /// Scrollback mode: where a parked conversation's committed lines
-    /// wait, while one of its events is handled.
-    pub(super) fn held_lines(&mut self) -> Option<&mut Vec<Line<'static>>> {
-        let who = self.handling?;
-        Some(&mut self.second.as_mut()?.held[who.index()])
     }
 
     pub(super) fn parked_mut(&mut self) -> Option<&mut Parked> {
@@ -239,7 +224,7 @@ impl App {
             | AppEvent::Op(_)
             | AppEvent::InsertHistoryCell(_)
             | AppEvent::InsertLiveEntry(_)
-            | AppEvent::WriteLiveEntry(_)
+            | AppEvent::LiveEntryCompleted(_)
             | AppEvent::CommandStep(_)
             | AppEvent::Command(_)
                 if focus.is_some_and(|focus| focus != owner) =>
@@ -286,6 +271,7 @@ impl App {
         std::mem::swap(&mut self.app_event_tx, &mut parked.app_event_tx);
         std::mem::swap(&mut self.transcript_cells, &mut parked.transcript_cells);
         std::mem::swap(&mut self.transcript_view, &mut parked.transcript_view);
+        std::mem::swap(&mut self.tail, &mut parked.tail);
         std::mem::swap(&mut self.older_transcript, &mut parked.older_transcript);
         second.focus = second.focus.other();
     }
@@ -446,6 +432,7 @@ impl App {
             app_event_tx,
             transcript_cells: Vec::new(),
             transcript_view: new_view(self.render_mode, TranscriptHistoryState::Complete),
+            tail: super::scrollback::Tail::default(),
             older_transcript: None,
         };
         self.workspace.zoomed = false;
@@ -454,13 +441,13 @@ impl App {
             kind,
             parked,
             focus: Focus::Main,
-            held: Default::default(),
         });
         self.set_focus(tui, Focus::Second);
     }
 
     /// Gives `focus` the keys: in scrollback mode the interface switches to
-    /// it, with what it committed meanwhile.
+    /// it, under its banner, the tail of the one it leaves written as far as
+    /// it has completed.
     pub(super) fn set_focus<B: Backend<Error = io::Error> + Write>(
         &mut self,
         tui: &mut Tui<B>,
@@ -475,17 +462,16 @@ impl App {
             return;
         }
         self.reset_backtrack();
+        let mut lines = Vec::new();
+        if !self.mode.is_owned() {
+            self.tail.flush_all();
+            let width = tui.terminal.last_known_screen_size.width;
+            let limit = Some(u16::MAX);
+            lines = self.tail.take(&mut self.transcript_view, width, limit).0;
+        }
         self.swap_conversations();
         if !self.mode.is_owned() {
-            let banner = self.workspace.banner(focus);
-            let held = self
-                .workspace
-                .second
-                .as_mut()
-                .map(|second| std::mem::take(&mut second.held[focus.index()]))
-                .unwrap_or_default();
-            let mut lines = vec![Line::from(""), banner];
-            lines.extend(held);
+            lines.extend([Line::from(""), self.workspace.banner(focus)]);
             if self.alt_screen_open() {
                 self.deferred_history_lines.extend(lines);
             } else {

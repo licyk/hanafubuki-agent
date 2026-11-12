@@ -104,7 +104,14 @@ impl AlternateScreen {
         }
     }
 
-    fn disable_mouse(&self, writer: &mut impl Write) -> Result<()> {
+    /// Off the alternate screen: reports clicks and the wheel, which the
+    /// cleanup turns off as it does a transcript view's capture.
+    pub(super) fn capture_clicks(&self, writer: &mut impl Write) -> Result<()> {
+        self.mouse_active.store(true, Ordering::Relaxed);
+        execute!(writer, EnableClickCapture)
+    }
+
+    pub(super) fn disable_mouse(&self, writer: &mut impl Write) -> Result<()> {
         if !self.mouse_active.load(Ordering::Relaxed) {
             return Ok(());
         }
@@ -129,6 +136,28 @@ struct EnablePointerCapture;
 impl Command for EnablePointerCapture {
     fn write_ansi(&self, f: &mut impl fmt::Write) -> fmt::Result {
         f.write_str("\x1b[?1000h\x1b[?1002h\x1b[?1003h\x1b[?1006h")
+    }
+
+    #[cfg(windows)]
+    fn execute_winapi(&self) -> Result<()> {
+        ratatui::crossterm::event::EnableMouseCapture.execute_winapi()
+    }
+
+    #[cfg(windows)]
+    fn is_ansi_code_supported(&self) -> bool {
+        false
+    }
+}
+
+/// Presses, releases and the wheel, without motion, so a drag with Shift
+/// still selects in terminals that pass it through. On Windows the console
+/// mode crossterm sets for the mouse also turns Quick Edit off while held.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct EnableClickCapture;
+
+impl Command for EnableClickCapture {
+    fn write_ansi(&self, f: &mut impl fmt::Write) -> fmt::Result {
+        f.write_str("\x1b[?1000h\x1b[?1006h")
     }
 
     #[cfg(windows)]

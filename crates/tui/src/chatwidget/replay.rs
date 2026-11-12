@@ -21,7 +21,6 @@ impl ChatWidget {
         self.sync_thinking_toggle();
         self.stream_controller = None;
         self.plan_stream_controller = None;
-        self.deferred.clear();
         self.bottom_pane.dismiss_all_requests();
         self.bottom_pane.set_task_running(false);
         self.retry_status_header = None;

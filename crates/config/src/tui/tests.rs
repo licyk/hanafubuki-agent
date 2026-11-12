@@ -4,8 +4,9 @@ use std::fs;
 use serde_json::json;
 
 use crate::{
-    AgentAlternateScreen, AgentConfig, AgentTuiPreferences, AgentTuiPreferencesPatch,
-    AgentTuiPreset, ConfigLayers, ConfigOverrides, AGENT_SETTINGS_FILE, PROJECT_CONFIG_DIR,
+    AgentAlternateScreen, AgentConfig, AgentScrollbackMouse, AgentTuiPreferences,
+    AgentTuiPreferencesPatch, AgentTuiPreset, ConfigLayers, ConfigOverrides, AGENT_SETTINGS_FILE,
+    PROJECT_CONFIG_DIR,
 };
 
 fn config_with(user: &str) -> (tempfile::TempDir, AgentConfig) {
@@ -23,6 +24,7 @@ fn missing_preferences_are_the_defaults() {
         AgentTuiPreferences {
             fullscreen_transcript: true,
             alternate_screen: AgentAlternateScreen::Auto,
+            scrollback_mouse: AgentScrollbackMouse::Tail,
             raw_output: false,
             theme: None,
             status_line: vec![
@@ -46,7 +48,7 @@ fn missing_preferences_are_the_defaults() {
 fn each_key_decodes_on_its_own_and_unknown_keys_are_ignored() {
     let (root, config) = config_with(
         "[tui]\nfullscreenTranscript = false\nalternateScreen = \"sometimes\"\n\
-         rawOutput = true\nkeymap = \"later\"\ntheme = \"nord\"\n\
+         scrollbackMouse = \"off\"\nrawOutput = true\nkeymap = \"later\"\ntheme = \"nord\"\n\
          statusLine = [\"model\", 3]\nstatusLineColors = false\n\
          terminalTitle = [\"app-name\", \"unknown-item\"]\n",
     );
@@ -55,6 +57,7 @@ fn each_key_decodes_on_its_own_and_unknown_keys_are_ignored() {
         AgentTuiPreferences {
             fullscreen_transcript: false,
             alternate_screen: AgentAlternateScreen::Auto,
+            scrollback_mouse: AgentScrollbackMouse::Off,
             raw_output: true,
             theme: Some("nord".to_string()),
             // Not a list of ids: the default.
@@ -146,6 +149,11 @@ fn config_set_reaches_the_tui_keys_and_checks_their_values() {
     assert_eq!(
         config.tui_preferences().unwrap().alternate_screen,
         AgentAlternateScreen::Always
+    );
+    config.set_user_value("tui.scrollbackMouse", "off").unwrap();
+    assert_eq!(
+        config.tui_preferences().unwrap().scrollback_mouse,
+        AgentScrollbackMouse::Off
     );
     let error = config
         .set_user_value("tui.rawOutput", "\"yes\"")

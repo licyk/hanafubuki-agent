@@ -396,9 +396,13 @@ fn a_thinking_turn_writes_its_thought_before_the_answer_and_the_pager_shows_the_
     assert!(!screen.contains("Weighing the question."), "{screen}");
     harness.pump_until_turn_ends();
 
+    // The transcript opens compact; a second Ctrl-T shows the details.
     harness.key_with(KeyCode::Char('t'), KeyModifiers::CONTROL);
     let pager = harness.pump_until_screen_shows("T R A N S C R I P T");
-    assert!(pager.contains("Weighing the question."), "{pager}");
+    assert!(pager.contains("• Thought for"), "{pager}");
+    assert!(!pager.contains("Weighing the question."), "{pager}");
+    harness.key_with(KeyCode::Char('t'), KeyModifiers::CONTROL);
+    harness.pump_until_screen_shows("Weighing the question.");
 }
 
 #[test]
@@ -605,7 +609,7 @@ fn ctrl_t_shows_the_owned_transcript_in_detail_in_place() {
 }
 
 #[test]
-fn the_terminal_transcript_overlay_holds_the_scrollback_until_it_closes() {
+fn the_terminal_transcript_overlay_holds_the_tail_until_it_closes() {
     let mut harness = Harness::start(Vec::new());
     harness.pump_until_screen_shows("fixture-model");
     harness.key_with(KeyCode::Char('t'), KeyModifiers::CONTROL);
@@ -615,11 +619,19 @@ fn the_terminal_transcript_overlay_holds_the_scrollback_until_it_closes() {
         .chat_widget
         .add_info_message("written while open".to_string());
     harness.pump_until_screen_shows("written while open");
-    assert!(!harness.app.deferred_history_lines.is_empty());
+    let in_tail = |harness: &Harness| {
+        harness
+            .app
+            .tail
+            .cells()
+            .iter()
+            .any(|cell| cell_text(cell.as_ref()).contains("written while open"))
+    };
+    assert!(in_tail(&harness));
 
     harness.key(KeyCode::Char('q'));
     harness.app.draw(&mut harness.tui).unwrap();
-    assert!(harness.app.deferred_history_lines.is_empty());
+    assert!(in_tail(&harness));
     let screen = harness.screen();
     assert!(!screen.contains("T R A N S C R I P T"), "{screen}");
     assert!(screen.contains("written while open"), "{screen}");
@@ -708,6 +720,7 @@ mod features;
 mod plugins;
 mod preferences;
 mod queue;
+mod scrollback;
 mod session_commands;
 mod settings;
 mod side;

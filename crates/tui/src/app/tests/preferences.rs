@@ -341,7 +341,7 @@ fn the_interface_form_saves_and_applies_its_scalar_preferences() {
     let mut harness = Harness::start(Vec::new());
     harness.open("/config interface", "Interface");
     harness.key(KeyCode::Char(' '));
-    for _ in 0..10 {
+    for _ in 0..11 {
         harness.key(KeyCode::Tab);
     }
     harness.key(KeyCode::Enter);
@@ -363,7 +363,7 @@ fn the_configuration_center_shows_the_layers_and_opens_the_linked_editors() {
     harness.key(KeyCode::Esc);
 
     harness.open("/config interface", "Interface");
-    for _ in 0..4 {
+    for _ in 0..5 {
         harness.key(KeyCode::Tab);
     }
     harness.key(KeyCode::Enter);

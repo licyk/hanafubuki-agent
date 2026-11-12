@@ -1,10 +1,12 @@
 // Modified from OpenAI Codex 57a808a392 (Apache-2.0).
 
-//! The terminal-mode transcript (`Ctrl+T`): the session's cells in their
-//! detailed presentation, the live ones changing in place among them, in a
-//! transcript view on the alternate screen. The view does the scrolling,
-//! selection, search and copying; this adds the pager's chrome and keys.
-//! The app holds back the scrollback until the overlay closes.
+//! The terminal-mode transcript (`Ctrl+T`): the session's cells in the
+//! compact presentation, whose controls show an entry's details (a click,
+//! F4), the live ones changing in place among them, in a transcript view on
+//! the alternate screen; a second `Ctrl+T` shows them all in detail, a third
+//! closes it. The view does the scrolling, selection, search and copying;
+//! this adds the pager's chrome and keys. The app holds back the scrollback
+//! until the overlay closes.
 //!
 //! While the app browses the prompts to edit an earlier message
 //! (`app::backtrack`), it takes the overlay's browsing keys, highlights the
@@ -38,7 +40,7 @@ pub(crate) struct TranscriptOverlay {
 impl TranscriptOverlay {
     pub(crate) fn new(cells: Vec<Arc<dyn HistoryCell>>, mode: HistoryRenderMode) -> Self {
         let mut view = Box::<TranscriptView>::default();
-        view.set_presentation(true, mode);
+        view.set_presentation(false, mode);
         Self {
             view,
             cells,
@@ -54,7 +56,7 @@ impl TranscriptOverlay {
     }
 
     pub(crate) fn set_render_mode(&mut self, mode: HistoryRenderMode) {
-        self.view.set_presentation(true, mode);
+        self.view.set_presentation(self.view.is_detailed(), mode);
     }
 
     pub(crate) fn set_presentation(&mut self, detailed: bool, mode: HistoryRenderMode) {
@@ -148,16 +150,16 @@ impl TranscriptOverlay {
             .clone()
             .unwrap_or_else(|| "ctrl + space select · F3 find".to_string());
         Line::from(status_line).dim().render(status, buf);
-        render_key_hints(
-            hints,
-            buf,
-            &[
-                (&[Action::ScrollUp, Action::ScrollDown], "scroll"),
-                (&[Action::PageUp, Action::PageDown], "page"),
-                (&[Action::JumpTop, Action::JumpBottom], "jump"),
-                (&[Action::Close], "close"),
-            ],
-        );
+        let mut keys: Vec<(&[Action], &str)> = vec![
+            (&[Action::ScrollUp, Action::ScrollDown], "scroll"),
+            (&[Action::PageUp, Action::PageDown], "page"),
+            (&[Action::JumpTop, Action::JumpBottom], "jump"),
+        ];
+        if !self.view.is_detailed() {
+            keys.push((&[Action::CloseTranscript], "details"));
+        }
+        keys.push((&[Action::Close], "close"));
+        render_key_hints(hints, buf, &keys);
         None
     }
 
@@ -177,6 +179,11 @@ impl TranscriptOverlay {
             return Some(ViewAction::Changed);
         }
         let rows = match pager_action(&key) {
+            Some(Action::CloseTranscript) if !self.view.is_detailed() => {
+                let mode = self.view.mode();
+                self.view.set_presentation(true, mode);
+                return Some(ViewAction::Changed);
+            }
             Some(Action::Close | Action::CloseTranscript) => {
                 self.is_done = true;
                 return Some(ViewAction::Changed);

@@ -172,12 +172,115 @@ independent.
         `notices-policy.toml` lists `chatwidget/tests/mod.rs`,
         `chatwidget/tests/entries.rs` and `history_cell/live.rs` as
         original.
-- [ ] T1b: Scrollback's tail: the recent entries repainted in place above
+- [x] T1b: Scrollback's tail: the recent entries repainted in place above
       the composer, the oldest completed ones written to scrollback at the
       tail's limit (answers line by line), the whole tail written on the
       next message; its height kept during a turn; mouse capture per D16
       (`tui.scrollbackMouse`); Ctrl-T with controls for written entries.
       Every later T milestone covers both presentations.
+      Done (2026-11-12):
+      - `app/scrollback.rs`: each conversation's `Tail` (swapped with it
+        like its cells and view) keeps the entries not written yet; the
+        conversation's transcript view, unused in Scrollback until now,
+        lays them out and paints them at the top of the inline viewport
+        (`transcript_view/tail.rs`: `measure_tail`, `tail_lines`,
+        `render_tail`, `click_tail`, `handle_tail_key`), with the same
+        cells, ids, controls and per-entry cache as Fullscreen. All writes
+        happen in the frame (`draw_scrollback`), so no frame shows an entry
+        in neither place or both: past the limit (60% of the screen, at
+        least 8 rows, always one row left above the viewport) the oldest
+        completed entries leave as shown, a collapsed one with more to show
+        ending with a dim `ctrl + t to expand` (the transcript key's hint)
+        in place of its control, an expanded one without it; an entry
+        without a control (an answer's lines) leaves in part, as far as
+        needed, the rest kept as a continuation `Remainder` cell; a live
+        entry never leaves (`LiveEntryCompleted`, renamed from
+        `WriteLiveEntry`, tells the tail it may). A tail taller than its
+        area shows its last rows under the header row of the entry they
+        start in. A message of yours entering the tail writes what was
+        before it whole; so do a session opened in its place (`/new`,
+        resume: what was live is completed), switching to the other
+        conversation (what has completed; its banner after it) and a resize
+        (what has completed; the height floor restarts); the exit
+        writes everything, live or not, and draws once before `leave()`.
+        `/clear` empties it. The workspace's `held` lines are gone.
+      - The viewport's height does not go below its height so far in a
+        turn (reset when no turn runs), so `Tui::draw` clears it only when
+        it grows.
+      - No deferral: the chat's `deferred`/`defers`/`flush_deferred` are
+        gone; an update that adds an entry while a message streams first
+        commits the message so far in both presentations, as Fullscreen did
+        in T1. The chat no longer draws live entries itself (the
+        `LiveCell` `Renderable` and the live column are gone).
+      - Mouse (D16): `tui.scrollbackMouse = "tail" | "off"` (new
+        `AgentScrollbackMouse` in the config crate, re-exported by the
+        facade; the patch, `/config interface`'s row and the shadow check
+        know it). With `tail`, Scrollback captures presses, releases and
+        the wheel (`?1000h ?1006h`, no motion; on Windows crossterm's
+        console mouse mode, which turns Quick Edit off while held) while
+        the tail shows a control; the first wheel event lets it go until
+        the next key or entry (an answer's next lines are not an entry). `Tui::set_inline_mouse_capture` keeps the
+        state per `Tui` (not the global), and entering the alternate
+        screen resets it. A click on a control toggles it; F4, the list
+        keys and Enter work in the tail, and Esc leaves the focus before
+        it primes editing an earlier message.
+      - Ctrl-T: the Scrollback transcript opens compact with controls
+        (click, F4); a second Ctrl-T shows the detailed presentation, a
+        third closes it (`pager.close_transcript`'s description says so).
+      - Tests: `app/scrollback/tests.rs` (what leaves at the limit and in
+        order, a live entry holding back what follows, an answer line by
+        line, a control's entry whole with its hint, an expanded one
+        without its control, the next message, a session opened in its
+        place, the exit, the limit's arithmetic); `transcript_view/tail/
+        tests.rs` (painted from its first row, separated from what was
+        written, the last rows under a header, a click and F4 with the
+        tail staying at its latest rows and an entry added after a toggle
+        showing); `app/tests/scrollback.rs` on vt100 (a call in place in
+        the tail, expanded by a click and by F4/Enter; the viewport's
+        height kept during a turn and shrinking after it; the mouse let go
+        at the wheel and taken again at a key or entry, never with `off`;
+        the oldest entries written above the tail in order on a 15-row
+        screen with a row left above the viewport, the rest at the next
+        message; a 20-line answer written in order after the question; the
+        exit; a resize). `chatwidget/tests/entries.rs`: the in-place tests
+        now run in both presentations, the two deferral tests gone; the
+        transcript overlay's tests (Ctrl-T twice, a click on a control).
+      - Snapshots: `the_overlay_frames_the_detailed_transcript.snap`
+        replaced by `the_overlay_frames_the_compact_transcript.snap` (the
+        overlay opens compact, 80 columns so the new `ctrl + t details`
+        hint fits). No golden changed (nothing model-visible).
+      - Deviations from §4.11: any completed entry without a control may
+        leave in part, not only an answer (nothing can be expanded in it,
+        the plan's reason). A resize writes the tail as far as it has
+        completed (a live entry stays, as everywhere), not whole. The
+        tail's thinking has no control until T2 (no activity id yet), so
+        completed thinking in the tail is not expandable; Ctrl-O still
+        changes live thinking there.
+      - Docs (both languages): `terminal-interface#modes`, `#reading` (the
+        tail, its writes, its controls and the mouse), `#layout` (no
+        separate running-calls row), `#thinking`, `#transcript`,
+        `#terminal`, the keymap table; `config-reference#tui`
+        (`tui.scrollbackMouse`); `#keys` (F4 in the tail);
+        `internals#tui-details` (no deferral, the tail, overlays).
+      - Validation: `cargo fmt --all --check`; `RUSTFLAGS="-D warnings"
+        cargo check --workspace --all-targets --all-features`; `cargo clippy
+        --workspace --all-targets --all-features -- -D warnings`; `cargo
+        xtask check`; `cargo test --workspace --all-features`; `bun install
+        --frozen-lockfile`, `bun run format:check:site`, `bun run
+        site:check`, `bun run site:test`, `VITE_BASE_PATH=/hanafubuki-agent/
+        bun run site:build` (all 35 pages prerendered). CI on Linux, Windows
+        and macOS: CI_URL. Not tried by hand on Windows Terminal or conhost:
+        CI proves the build and the tests on `windows-latest`, which use
+        vt100, not a console.
+      - Hanafubuki at its next pin: `AgentTuiPreferences` and
+        `AgentTuiPreferencesPatch` gain `scrollback_mouse`, and the facade
+        exports `AgentScrollbackMouse`; a struct literal without `..`
+        must add the field. Nothing else (the TUI crate).
+      - Module size: exceptions added for
+        `config_center/forms/mod.rs` (file, ceiling 601) and its
+        `section_form` (ceiling 207): the `/config interface` row took them
+        just over; S4 replaces the module. `notices-policy.toml` lists the
+        five new files as original.
 - [ ] T2: thinking entries (`Thinking 3.4s` → `Thought · 20.7s`), one per
       reasoning item, in order, each expandable; Ctrl-O for all;
       `ReasoningUpdated` forwarded; `Working 25s (Thinking 20.7s)`. No

@@ -177,7 +177,7 @@ impl TranscriptView {
         let cell = cells.get(index)?;
         let mode = self.mode;
         let mut presentation = self.content_presentation(cell.as_ref(), full_content, mode);
-        presentation.separated = index > 0
+        presentation.separated = (index > 0 || self.leading_separator)
             && !cell.is_stream_continuation()
             && !is_rich_user_prompt(cell.as_ref(), mode);
         Some(self.cache.get(cell, width, presentation, || {
