@@ -1,3 +1,139 @@
+## Plan: a registry-driven settings center, the command center, and the conversation timeline (2026-11-12)
+
+The plan is [docs/plan-settings-and-timeline.md](docs/plan-settings-and-timeline.md),
+read from Codex `57a808a392`, KohakuTerrarium `c1d17b45` and main `6d61cc8`.
+It supersedes the hand-written forms of the configuration-center plan (below)
+and the thinking presentation of the 2026-11-09 plan (one write into
+scrollback, a sticky Ctrl-O, `Working` alone in the status line); their other
+results stay.
+
+Findings that changed the request's premises (the plan's §1):
+
+- Codex's `/config` is a hard-coded list of 19 `[tui]` rows without MCP or
+  a mouse: its presentation is ported, its data model is not.
+- KohakuTerrarium's schemas cover module options only, and neither
+  reference has a collection editor (Providers, MCP): ours is designed.
+- Codex has no `Thought · Ns` entry on any ref: the thinking timeline is new.
+- Codex's `exec_command` decodes with lossy UTF-8 only, and sends Windows
+  PowerShell exactly our prefix; porting it would not fix garbling. The
+  reported case is Windows PowerShell 5.1 (D10): mixed encodings in one
+  stream, 5.1's own decoding and `$OutputEncoding`, progress bars under
+  ConPTY. Ours is fixed in place, after reproducing it on `windows-latest`.
+- Scrollback must work as Fullscreen does (D13): recent entries stay in a
+  repainted tail where they change and expand in place (the plan's §4.11).
+- Our TUI drops `ExecutionProgress`, so no tool output streams today, and
+  `read_file` and the other structured tools show only their header.
+
+Each milestone records, when done: what landed, the validation commands that
+ran, whether goldens changed, what Hanafubuki must change at its next pin,
+and any module-size exception. Order: S1 → … → S7; A1 → A2 after S1; T1 →
+T1b → T2, T3 → T4 → T5 → T6, T7 alongside T1, T1b and T5; E1 → E2 → E3,
+independent.
+
+- [x] Decisions: D1–D17 of the plan's §8 answered. Done (2026-11-12): all
+      accepted as recommended. D10: Windows PowerShell 5.1; D7 and D13:
+      Scrollback must work as Fullscreen does.
+
+**Settings ([1], [2])**
+
+- [ ] S1: one vocabulary, `foundation::settings` (`SettingSpec`,
+      `SettingKind`, choices with labels, aliases and disabled reasons,
+      `apply`, `advanced`, `visible_if`, `commit_group`);
+      `PluginOptionSchema` and the guest `configSchema` lowering on it. Not
+      model-visible.
+- [ ] S2: a section beside each config domain, the decoders reading keys and
+      bounds from it; per-key provenance in `layers::resolve`;
+      `AgentConfig::write_values` (set, reset, commit groups, outcomes) under
+      the center and `config get/set`; the leaf-to-spec coverage test;
+      `cargo xtask check-config-reference`.
+- [ ] S3: the facade's `settings_catalog`, `write_setting_values`,
+      `run_settings_action`; collections for Providers, the model policy,
+      MCP, plugins, marketplaces, hooks, roles, profiles and project trust;
+      `agent_settings_fields` / `web_search_fields` removed (Hanafubuki:
+      its settings page reads the `web` section).
+- [ ] S4: `settings_center/` replaces `config_center/`: Codex's tabs,
+      label · value · description rows, search across tabs, saving at once,
+      inline editors, reset, per-row hints, narrow fallback, mouse; a page
+      stack with asynchronous writes; the `PageRegistry` hosting the theme,
+      status line, title, keymap, presets, plugin browser and hook-trust
+      pages.
+- [ ] S5: the separate editor views removed; `/mcp`, `/providers`,
+      `/plugins`, `/hooks`, `/theme`, `/statusline`, `/title`, `/keymap`,
+      `/presets`, `/tui`, `/memories` open the center at their page;
+      `/config quick` and the second memory and compaction writers removed.
+- [ ] S6: the settings missing today: profiles, project trust, roles, hook
+      definitions, per-model overrides, plugin MCP server and tool filters,
+      package settings from `configSchema`, marketplaces.
+- [ ] S7: documentation in both languages: `terminal-interface`,
+      `configuration`, `config-reference`, `architecture`, `embedding`,
+      `plugin-rules`, `writing-plugins`, `host-plugins`.
+
+**Command center ([3])**
+
+- [ ] A1: Left on an empty composer under Codex's conditions,
+      `Action::OpenAgents`, `← for agents`; root rows with child rollup;
+      Needs you / Working / Ready / Inactive / Error; grouping
+      (`tui.agentsGrouping`); Codex's keys (Tab filters, Right opens, `x`
+      stops, `r` renames, Backspace deletes), confirmations, search,
+      worktree, `?` help.
+- [ ] A2: the details pane; a live session watch with background re-reads;
+      pin, hide and unread in a new `tui-state.json` (D11); mouse. Docs:
+      `terminal-interface#agents`, `data-directory`.
+
+**Timeline ([4], [5], [6], [8], [9])**
+
+- [ ] T1: entries that change in place (shared state and revisions), a
+      per-entry layout cache, the joined live tail and Fullscreen's deferral
+      removed, the status row kept for the whole turn.
+- [ ] T1b: Scrollback's tail: the recent entries repainted in place above
+      the composer, the oldest completed ones written to scrollback at the
+      tail's limit (answers line by line), the whole tail written on the
+      next message; its height kept during a turn; mouse capture per D16
+      (`tui.scrollbackMouse`); Ctrl-T with controls for written entries.
+      Every later T milestone covers both presentations.
+- [ ] T2: thinking entries (`Thinking 3.4s` → `Thought · 20.7s`), one per
+      reasoning item, in order, each expandable; Ctrl-O for all;
+      `ReasoningUpdated` forwarded; `Working 25s (Thinking 20.7s)`. No
+      history format change.
+- [ ] T3: an id and a control on every expandable entry, a click on its
+      control or header, in Fullscreen and in Scrollback's tail.
+- [ ] T4: `AgentToolPresenter` and `ToolPresenterRegistry`; presenters for
+      every built-in tool and a fallback; `subject` on `tool_started`,
+      `callId` on `execution_progress`; `tool_display` fetched off the UI
+      thread at completion and for replay (not an event); the UI-thread
+      history read removed. Docs:
+      `json-events`, `plugin-rules`, `writing-plugins`.
+- [ ] T5: per-tool views (command, patch with line numbers, `read_file`
+      with line numbers, listing, search, web, MCP, fallback), exploration
+      grouping; `startLine` on `read_file` if D9 is accepted (goldens
+      regenerate).
+- [ ] T6: streamed command output: a bounded live buffer, the collapsed last
+      3 lines, the expanded stream.
+- [ ] T7: stability: running entries reserve their collapsed shape, the
+      toggle keeps the entry's header row, Scrollback's live region keeps its
+      height; frame-by-frame tests.
+
+**`exec_command` ([7])**
+
+- [ ] E1: failing tests, no fix: Windows PowerShell 5.1 (`powershell.exe`
+      named explicitly) on `windows-latest`, in pipe and PTY mode: UTF-8
+      and ANSI-code-page output mixed in one stream, `cmd /c echo` captured
+      and not, `'中文' | findstr .`, `Write-Progress` under ConPTY, stderr
+      without CLIXML, no BOM, `Read-Host` through `write_stdin`; the code page
+      936 decoder cases; CJK with cursor moves, a read inside an escape, the
+      U+FFFD hold-back, `DaFilter` at end of file, silent loss past 64 KiB.
+      Record which of the plan's (a)–(g) reproduce.
+- [ ] E2: the complete PowerShell prefix (UTF-8 without BOM for
+      `[Console]::OutputEncoding`, `InputEncoding` and `$OutputEncoding`;
+      `$ProgressPreference = 'SilentlyContinue'`) and `-OutputFormat Text`
+      (`agent-shell-v5`); decoding by run of non-ASCII bytes, the ANSI code
+      page as fallback (D15), before the ring buffer; `chcp 65001` for
+      `cmd.exe`; `PYTHONUTF8` / `PYTHONIOENCODING`; D17's environment.
+- [ ] E3: PTY output through a `vt100` screen model; width-aware pipe
+      rendering; sequence-aligned read starts, the hold-back always,
+      `DaFilter::finish`, head and tail with a marker (model-visible:
+      goldens regenerate on purpose).
+
 ## Plan: model metadata from the Provider, with fallbacks (2026-11-11)
 
 The plan is [docs/plan-model-metadata.md](docs/plan-model-metadata.md), after
@@ -1825,8 +1961,10 @@ then M4, then M5; M6 after M3; M7 after M1.
 The plan is [docs/plan-configuration-center.md](docs/plan-configuration-center.md);
 the implementation handoff is recorded in
 [docs/plan-configuration-center-handoff.md](docs/plan-configuration-center-handoff.md).
-Each phase is implemented and validated separately; C1–C3 are committed and
-pushed, while C4–C6 remain in the working tree pending authorization. The work
+Each phase was implemented and validated separately; C1–C6 are committed
+(`e4dbb98`, C6's documentation, is the last). Superseded (2026-11-12) by
+[docs/plan-settings-and-timeline.md](docs/plan-settings-and-timeline.md),
+whose S1–S7 replace these hand-written forms with a settings catalog. The work
 turns `/config` into a searchable configuration center over the typed Agent,
 standalone, Provider, MCP, plugin and interface settings while preserving the
 existing layered configuration and atomic writers.
@@ -1868,7 +2006,7 @@ existing layered configuration and atomic writers.
       terminal-interface, MCP and Provider pages describe the configuration
       center in both languages and keep matching heading ids; the full Rust
       and site matrices passed locally on Windows; all 34 documentation
-      pages prerendered. The changes are in the working tree, not committed.
+      pages prerendered. Committed (`e4dbb98`).
 
 # Follow-ups
 
