@@ -16,8 +16,8 @@ use ratatui::crossterm::event::{KeyEvent, MouseEvent};
 use hanafubuki_agent::{AgentTuiPreferences, AgentTuiPreferencesPatch};
 
 use crate::agent_bridge::{
-    AgentReply, GoalCall, HooksCall, McpCall, PluginsCall, ProviderCall, ReviewCall, SessionCall,
-    SettingsCall, SubagentsCall,
+    AgentReply, GoalCall, HooksCall, McpCall, PluginsCall, ReviewCall, SessionCall, SettingsCall,
+    SubagentsCall,
 };
 use crate::app::WorkspaceEvent;
 use crate::appearance::AppearanceEvent;
@@ -63,8 +63,6 @@ pub(crate) enum AppEvent {
     OpenResumePicker,
     /// `/raw`: on, off, or (`None`) toggled.
     SetRawOutput(Option<bool>),
-    /// `/tui`: the transcript's mode at the next launch.
-    SetFullscreenTranscript(bool),
     /// What a slash command asks of the app itself.
     Command(AppCommand),
     /// `/theme`, `/statusline`, `/title`: a change, for this run or saved.
@@ -101,10 +99,10 @@ pub(crate) enum AppCommand {
     /// this title, else the picker searching for it.
     ResumeNamed(String),
     /// Runs the text as if it were typed and sent: a command, or a message
-    /// (`/presets`, `/config`'s entries).
+    /// (a preset). The settings center closes first.
     Replay(String),
-    /// Saves the change into `[tui]` and applies it (the keymap, the
-    /// presets), then says the message, or why it was not saved.
+    /// Saves the keymap's or the presets' change into `[tui]` and applies
+    /// it, then says the message, or why it was not saved.
     SavePreferences(AgentTuiPreferencesPatch, String),
     /// A [`Self::SavePreferences`] written: `[tui]` as the layers resolve
     /// it after the write, or why it was not written.
@@ -112,6 +110,15 @@ pub(crate) enum AppCommand {
         patch: AgentTuiPreferencesPatch,
         message: String,
         saved: Result<AgentTuiPreferences, String>,
+    },
+    /// A write of `[tui]` settings by key (`/raw`, the theme, the status
+    /// line, the title) done: `[tui]` as the layers then resolve it, or why
+    /// it was not written; `shadowed` when a layer above the user's file
+    /// keeps another value.
+    TuiSettingsWritten {
+        message: String,
+        written: Result<AgentTuiPreferences, String>,
+        shadowed: bool,
     },
     /// Hides the warning with this key (`Warning::key`) for the run.
     DismissWarning(String),
@@ -166,7 +173,8 @@ pub(crate) enum AgentCommand {
     ListRoles,
     SetRole(String),
     Status,
-    Providers(ProviderCall),
+    /// The models of the Provider with this id.
+    ProviderModels(String),
     Mcp(McpCall),
     Skills,
     Session(SessionCall),

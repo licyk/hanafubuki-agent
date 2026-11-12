@@ -513,10 +513,183 @@ independent.
         `SetCompactionStrategy`, `app/preferences.rs`' `shadowed`).
         `[tui]`'s section is the config crate's (`tui`), already in the
         catalog; keymap and presets have no spec (pages only).
-- [ ] S5: the separate editor views removed; `/mcp`, `/providers`,
+- [x] S5: the separate editor views removed; `/mcp`, `/providers`,
       `/plugins`, `/hooks`, `/theme`, `/statusline`, `/title`, `/keymap`,
       `/presets`, `/tui`, `/memories` open the center at their page;
       `/config quick` and the second memory and compaction writers removed.
+      Done (2026-11-12):
+      - Commands: `/mcp` → `/config mcp`, `/providers` → `providers`
+        (`policy` → `modelPolicy`), `/plugins` → `packages`, `/hooks` →
+        `hook-review`, `/memories` → `memory` (the tab), `/tui` → `tui`,
+        `/theme`, `/statusline`, `/title`, `/keymap`, `/presets` → their
+        page (`commands::open_settings`); `/mcp login ID` opens the center
+        at `mcp-login` on that record (`WorkspaceEvent::OpenSettings {
+        target, record }`). Kept as they were (not settings interfaces):
+        `/mcp verbose`, `/statusline ITEMS`, `/title ITEMS|--clear`,
+        `/keymap debug`, `/raw`. `/config quick` is gone (`ConfigPanel`).
+        `/providers` runs during a turn now, as `/config` does.
+      - Pages: `PageOverride` gains `open: fn(&mut CommandContext,
+        Option<&str>)`, the views a page shows, apart from the command's
+        `dispatch` (which now opens the center); `Attach::Record {
+        collection, label }` is a page that is an action of each record of
+        a collection (listed in the record's form after its actions). New
+        pages: `memory-store` (row in Memory), `provider-model` (record of
+        `providers`: Choose the model), `mcp-login` (record of `mcp`: Log
+        in). A page asks the center to run a collection action as its own
+        (`WorkspaceEvent::SettingsAction`, the center filling the revision).
+        Page checks are numbered: a check queued by an earlier key came
+        before a later key's step and closed the page under it (the
+        keymap's and presets' multi-step views); only the latest counts.
+        A preset run (`AppCommand::Replay`) closes the center first.
+      - One writer for settings: the center, `/raw` and the theme, status
+        line and title pages write through `write_setting_values` /
+        `run_settings_action` only. Removed:
+        `SettingsCall::{Config, SetCompactionStrategy, SetMemory}`,
+        `SettingsReply::Config`, the `/providers` screen and every
+        `ProviderCall` (`agent_bridge/providers.rs` keeps only the model
+        listing for the model page), the `/mcp` manager and `McpCall::{Load,
+        Write, Delete, Connect, Refresh, Logout}` (kept: `Report`, `Login`,
+        `CancelLogin`), `AppEvent::SetFullscreenTranscript`. `/raw` and the
+        theme, status line and title pages write by key
+        (`AgentBridge::write_tui_settings` → `AppCommand::TuiSettingsWritten`,
+        the shadow notice from `SettingsWriteOutcome.shadowed`).
+        `AgentTuiPreferencesPatch` keeps only `keymap` and `presets` (no
+        spec, a named exclusion since S2), and `app/preferences.rs`'
+        `shadowed` compares only those.
+      - Facade (catalog), so the center has what the views had: MCP
+        record fields `transport.publicEnvironment`/`publicHeaders` and
+        `toolApprovalPolicies`/`toolExposurePolicies`/
+        `toolMaximumConcurrentCalls` as `NAME=VALUE` text lists
+        (`record::{maps_as_lists, lists_as_maps}`, an item that is not one
+        or a name given twice refused); MCP record summary `· N tools`
+        when connected; a save that drops a credential reference and a
+        delete remove the credentials no server references. New collection
+        `mcpSecrets` (`service/settings/mcp_secrets.rs`): a record per
+        credential-backed variable or header, `SERVER/NAME`, its `value` a
+        secret spec (masked while typed, never returned); add writes the
+        reference at the revision then `mcp_set_credential`, save sets the
+        credential, delete drops the reference and the unreferenced
+        credential. Provider `requestHeaders` (written `NAME=VALUE`, listed
+        by name only since the registry checks their values as
+        credentials, a name alone keeping its value). Model
+        policy `customTurnBudget` + the eleven `turnBudget.*` fields
+        (starting from the kernel's `AgentTurnBudgetPolicy::default()`;
+        off writes `turnBudget = null`), and the default model's known
+        reasoning levels and window said in the summaries of
+        `reasoningEffort` and `contextWindowTokens`.
+      - Removed view → center (feature by feature):
+        - `/mcp` list → MCP servers collection (state = phase, issue = last
+          error, `· N tools`); `a` add, `d`/Delete with confirmation, Enter
+          edit; `e` enable → Enabled field; `c` connect/reconnect →
+          Connect / Refresh; `o` → Log out; `l` / `/mcp login ID` → Log in
+          page (address shown, `c` copies it, the transcript keeps it, Esc
+          and Ctrl-C cancel, a failure shown until Esc). Form: transport,
+          program, argv (a list now, not a quoted line), cwd, URL, OAuth,
+          enabled, required, protocol, approval, exposure, enabled/disabled
+          tools, timeouts, calls → fields (S3); environment/headers public
+          rows → `NAME=VALUE` lists; secret rows → MCP secrets; per-tool
+          limits/approval/exposure → lists. Plugin servers (read-only rows)
+          → `/mcp verbose` (S6 brings plugin MCP servers as settings).
+        - `/providers` list → Providers collection (`default`/`off`
+          states); `a`, `d`, Enter; `e` → Enabled; `*` → Make default; `p`
+          → `/providers policy`/Model policy. Form: name, protocol, base
+          URL, token (masked), enabled → fields; header rows →
+          `requestHeaders`; Test (a draft) → List models on the record once
+          added (an add is one write); model picker and manual id → Choose
+          the model page (one modelPolicy save of default Provider + model).
+          Policy form: every field (S3) plus the turn budget → custom
+          budget; reasoning levels as a choice → listed in the summary
+          (free text); known window placeholder → summary. First-run setup
+          → the center at Providers (`open_setup`); `setup_needed` is
+          recomputed from the registry the bridge reads after an action on
+          `providers`/`modelPolicy` (`CatalogReply.registry`).
+        - `/memories` → Memory tab (Memory, Use memories, Generate memories
+          … as settings; Turn memory on → Memory) + Memory store page
+          (status, latest error, this session contributes, Reset with
+          confirmation).
+        - `/config quick` → rows of the center: Raw output, Status line
+          colors, Fullscreen, Alternate screen (Interface), Compaction
+          strategy (Context); its editor entries → the commands/pages.
+        - `/tui` → Fullscreen row; `/theme`, `/statusline`, `/title`,
+          `/keymap`, `/presets`, `/plugins`, `/hooks` → their unchanged
+          views, now only as pages of the center.
+      - `[tui]` section: already registered (the config crate's `tui`
+        section, S1/S2; checked here); keymap and presets stay pages
+        without specs.
+      - Form widget (`bottom_pane/form`): rows, the secret column,
+        Advanced and conditional items removed (no user left); `FormView`
+        keeps text, choice, toggle and action. `model_facts::sourced_window`
+        removed.
+      - Deviations: the plan's "maps are collections" holds for the MCP
+        secrets (masked values need a secret spec); a record's other maps
+        are `NAME=VALUE` lists, since the catalog has no nested collection
+        and these are fields of one record. The browsers that are pages
+        keep their owners' calls, as S4 made them: the plugin browser
+        (install, on/off, options, settings: `PluginsCall`, the `plugins`
+        collection's calls), the hooks browser (`set_hook_enabled`,
+        `trust_hooks`: the `hooks` collection's), the memory store
+        (session contribution and reset, no settings); keymap and presets
+        through the `[tui]` patch (no spec). Routing the two browsers'
+        writes through `run_settings_action` is left to S6, which reworks
+        package settings and hooks. A Provider's model chosen while
+        another change is still being saved is refused with the center's
+        "Wait for the last change to be saved." and has to be chosen
+        again. A page whose last view ends on a reply (a login done) is
+        checked after each reply as after each key. Test-before-save became List
+        models after the add. Reasoning levels are a summary, not a choice
+        (the spec is the field's for every model). The center's notice says
+        `Added`/`Deleted`/`Saved` for those actions.
+      - Tests: facade `settings_catalog` (MCP maps round trip and refusals,
+        MCP secrets add/save/delete and credential cleanup on a transport
+        change, Provider headers (values never returned, kept by name), custom
+        turn budget); config `tui` tests
+        on the presets patch; TUI: every settings command opens the center
+        at its page (chat), hooks browser as a page, `app/tests/settings.rs`
+        rewritten through the center (first-run setup to a session, model
+        page, model policy with budget, the listed levels and the reported
+        window, an MCP server with a secret added and deleted, `/mcp login`
+        over its record, a login ended by its reply closing its page), keymap/presets/appearance/memory tests through
+        the hosted pages (`Harness::leave_settings`, `select_setting`,
+        `edit_setting` shared). Removed: the MCP form/argument tests, the
+        Provider draft test, the `/config quick` test, the form rows test.
+      - Snapshots (why): `memory_140`, `memory_50` (the Memory store
+        row), `provider_record_50` (the Choose the model row widens the
+        label column). No golden changed (nothing model-visible).
+      - Docs (both languages, same ids): `terminal-interface` (modes,
+        layout, commands table, `#setup`, `#forms`, `#providers`,
+        `#plugins`, `#mcp`, `#hooks`, highlighting, status line, keymap,
+        presets, `#config`), `mcp#interface`/credentials/oauth,
+        `providers-models#interface`, `memory`, `config-reference`,
+        `troubleshooting`, `quick-start`, `architecture` (catalog, center),
+        `internals` (bridge calls).
+      - Hanafubuki at its next pin: the catalog gains collection
+        `mcpSecrets` (after `mcp`), MCP fields (`transport.publicEnvironment`,
+        `transport.publicHeaders`, `toolApprovalPolicies`,
+        `toolExposurePolicies`, `toolMaximumConcurrentCalls`), Provider
+        `requestHeaders` (names only, values never returned; a name alone
+        keeps its value), model policy `customTurnBudget` and
+        `turnBudget.*`, additive; MCP save/delete now also remove
+        unreferenced credentials. Breaking: `AgentTuiPreferencesPatch` has
+        only `keymap` and `presets` (the `[tui]` scalars are written by key
+        with `write_setting_values`).
+      - Module size: no exception added or raised.
+      - Validation: `cargo fmt --all --check`; `RUSTFLAGS="-D warnings"
+        cargo check --workspace --all-targets --all-features`; `cargo clippy
+        --workspace --all-targets --all-features -- -D warnings`; `cargo
+        xtask check`; `cargo test --workspace --all-features`; `bun install
+        --frozen-lockfile`, `bun run format:check:site`, `bun run
+        site:check`, `bun run site:test`, `VITE_BASE_PATH=/hanafubuki-agent/
+        bun run site:build` (all 35 pages prerendered). One full run failed
+        `app::tests::queue::esc_returns_a_scrolled_conversation_to_the_bottom_before_it_interrupts`
+        (a 60 s wait under load); it passes alone, on this change and on
+        a0cc070, and in the next full run. CI on Linux, Windows and macOS:
+        CI_URL_PLACEHOLDER
+      - For S6: the add form of a collection shows `(unset)` for every
+        field (a new MCP server shows no transport until one is chosen, an
+        unset boolean toggles to on); record specs carry no defaults. Saves
+        made by hosted pages (theme, keymap, presets) report in the
+        transcript, hidden while the center is open. Plugin MCP servers are
+        only in `/mcp verbose`.
 - [ ] S6: the settings missing today: profiles, project trust, roles, hook
       definitions, per-model overrides, plugin MCP server and tool filters,
       package settings from `configSchema`, marketplaces.

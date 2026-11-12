@@ -63,7 +63,7 @@ use crate::tui::FrameRequester;
 use approval_overlay::ApprovalOverlay;
 pub(crate) use bottom_pane_view::BottomPaneView;
 use chat_composer::ChatComposer;
-pub(crate) use form::{FieldId, FormEvent, FormItem, FormView, RowValue, TextField};
+pub(crate) use form::{FieldId, FormEvent, FormItem, FormView, TextField};
 pub(crate) use list_selection_view::{ListSelectionView, SelectionItem, SelectionViewParams};
 pub(crate) use menu_view::{MenuKey, MenuModel, MenuView};
 pub(crate) use module_view::ViewFailure;

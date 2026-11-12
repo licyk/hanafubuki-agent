@@ -1,8 +1,9 @@
 //! The MCP servers of `mcp.toml`, written through its revision-gated
-//! calls, and their connections' actions. The transport's environment,
-//! headers and credentials and the per-tool maps are kept as they are; the
-//! credentials are written with `mcp_set_credential`, and an OAuth login
-//! (which waits for the browser) with `mcp_oauth_login`.
+//! calls, and their connections' actions. The transport's public
+//! environment or headers and the per-tool maps are lists of `NAME=VALUE`
+//! texts; the secret ones are the `mcpSecrets` collection
+//! ([`super::mcp_secrets`]). An OAuth login, which waits for the browser,
+//! is not an action: the host calls `mcp_oauth_login`.
 
 use hanafubuki_agent_config::{
     SettingChoice, SettingCondition, SettingKind, SettingSpec, SettingValue, SettingsGroup,
@@ -14,7 +15,8 @@ use hanafubuki_agent_mcp::{
 };
 use serde_json::{json, Map, Value};
 
-use super::record::{merged, record_of};
+use super::mcp_secrets::{credential_names, drop_unreferenced};
+use super::record::{lists_as_maps, maps_as_lists, merged, record_of, PairValue};
 use super::{
     name_of, SettingsAction, SettingsActionOutcome, SettingsActionRequest, SettingsCollection, ADD,
     DELETE, SAVE,
@@ -29,6 +31,14 @@ const REFRESH: &str = "refresh";
 const LOGOUT: &str = "logout";
 const STDIO: &str = "stdio";
 const STREAMABLE_HTTP: &str = "streamable_http";
+/// The maps of a server, as lists of `NAME=VALUE` texts.
+const MAPS: [(&str, PairValue); 5] = [
+    ("transport.publicEnvironment", PairValue::Text),
+    ("transport.publicHeaders", PairValue::Text),
+    ("toolMaximumConcurrentCalls", PairValue::Integer),
+    ("toolApprovalPolicies", PairValue::Text),
+    ("toolExposurePolicies", PairValue::Text),
+];
 
 fn fields() -> Vec<SettingSpec> {
     let choice = |values: Vec<(String, &str)>| SettingKind::Choice {
@@ -90,6 +100,11 @@ fn fields() -> Vec<SettingSpec> {
             ..SettingSpec::new("transport.cwd", "Working directory", text(true))
         },
         SettingSpec {
+            visible_if: on(STDIO),
+            summary: "Each NAME=VALUE; a secret one is in MCP secrets".into(),
+            ..SettingSpec::new("transport.publicEnvironment", "Environment", list.clone())
+        },
+        SettingSpec {
             visible_if: on(STREAMABLE_HTTP),
             ..SettingSpec::new("transport.url", "URL", text(false))
         },
@@ -139,7 +154,22 @@ fn fields() -> Vec<SettingSpec> {
             ]),
         ),
         SettingSpec::new("enabledTools", "Only these tools", list.clone()),
-        SettingSpec::new("disabledTools", "Not these tools", list),
+        SettingSpec::new("disabledTools", "Not these tools", list.clone()),
+        SettingSpec {
+            advanced: true,
+            summary: "Each TOOL=allow, ask or deny".into(),
+            ..SettingSpec::new("toolApprovalPolicies", "Approval per tool", list.clone())
+        },
+        SettingSpec {
+            advanced: true,
+            summary: "Each TOOL=direct, direct_model_only, deferred or hidden".into(),
+            ..SettingSpec::new("toolExposurePolicies", "Exposure per tool", list.clone())
+        },
+        SettingSpec {
+            advanced: true,
+            summary: "Each TOOL=NUMBER".into(),
+            ..SettingSpec::new("toolMaximumConcurrentCalls", "Calls at once per tool", list)
+        },
         SettingSpec {
             advanced: true,
             ..SettingSpec::new(
@@ -181,12 +211,22 @@ pub(super) async fn collection(service: &AgentApplicationService) -> SettingsCol
         .iter()
         .map(|server| {
             let id = server.id.as_str();
-            let mut record = record_of(id, id, server, &fields);
+            let mut record = record_of(id, id, &with_lists(server), &fields);
             let status = snapshot
                 .servers
                 .iter()
                 .find(|status| status.server_id == server.id);
-            record.summary = target(server);
+            record.summary = match status {
+                Some(status)
+                    if matches!(
+                        status.phase,
+                        McpConnectionPhase::Ready | McpConnectionPhase::Refreshing
+                    ) =>
+                {
+                    format!("{} · {} tools", target(server), status.tool_count)
+                }
+                _ => target(server),
+            };
             record.state = status.map(|status| name_of(&status.phase));
             record.issue = status
                 .filter(|status| status.phase == McpConnectionPhase::Failed)
@@ -221,26 +261,41 @@ pub(super) async fn run(
                     .map_err(|_| "the MCP server cannot be encoded".to_string())?,
                 (_, None) => return Err(format!("there is no MCP server `{}`", id.as_str())),
             };
-            let record = with_both_transports(record, &snapshot.server_defaults);
-            let server: McpServerConfig = merged(&record, &fields(), &request.values)?;
-            service
+            let mut record = with_both_transports(record, &snapshot.server_defaults);
+            maps_as_lists(&mut record, &MAPS);
+            let mut record: Value = merged(&record, &fields(), &request.values)?;
+            lists_as_maps(&mut record, &MAPS)?;
+            let server: McpServerConfig = serde_json::from_value(record)
+                .map_err(|error| format!("the record cannot be written: {error}"))?;
+            let before = current.map(credential_names).unwrap_or_default();
+            let written = service
                 .mcp_write_server(McpServerWriteRequest {
                     expected_revision: request.revision()?,
                     server,
                 })
                 .await?;
+            drop_unreferenced(service, &written, before.into_values()).await;
             Ok(SettingsActionOutcome {
                 record: (request.action == ADD).then(|| id.as_str().to_string()),
                 message: None,
             })
         }
         DELETE => {
-            service
+            let snapshot = service.mcp_snapshot().await?;
+            let before = snapshot
+                .settings
+                .servers
+                .iter()
+                .find(|server| server.id == id)
+                .map(credential_names)
+                .unwrap_or_default();
+            let written = service
                 .mcp_delete_server(McpServerDeleteRequest {
                     expected_revision: request.revision()?,
                     server_id: id,
                 })
                 .await?;
+            drop_unreferenced(service, &written, before.into_values()).await;
             Ok(SettingsActionOutcome::default())
         }
         CONNECT => service.mcp_connect(id).await.map(|_| Default::default()),
@@ -252,6 +307,13 @@ pub(super) async fn run(
             .map(|_| Default::default()),
         _ => request.unknown_action(),
     }
+}
+
+/// `server` serialized, its maps as lists of `NAME=VALUE` texts.
+fn with_lists(server: &McpServerConfig) -> Value {
+    let mut record = serde_json::to_value(server).unwrap_or(Value::Null);
+    maps_as_lists(&mut record, &MAPS);
+    record
 }
 
 /// What the server runs or reaches.

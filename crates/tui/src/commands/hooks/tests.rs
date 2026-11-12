@@ -2,6 +2,7 @@
 //! of the Agent, a failure, and the line at start.
 
 use std::path::PathBuf;
+use std::sync::mpsc::Receiver;
 
 use hanafubuki_agent::{
     AgentHook, AgentHookHandler, AgentHooks, HookEventName, HookSource, HookTrust,
@@ -12,7 +13,14 @@ use super::*;
 use crate::agent_bridge::TurnUpdate;
 use crate::app_event::{AppEvent, Op};
 use crate::chatwidget::ChatWidget;
-use crate::commands::tests::session::{chat, key, run, screen, sent, Sent};
+use crate::commands::tests::session::{chat, key, screen, sent, Sent};
+
+/// The browser, as the settings center's page opens it.
+fn open(chat: &mut ChatWidget, events: &Receiver<AppEvent>) -> Vec<Sent> {
+    sent(events);
+    chat.open_settings_page(&PAGE, None);
+    sent(events)
+}
 
 fn hooks_call(call: HooksCall) -> Sent {
     Sent::Op(Op::Command(AgentCommand::Hooks(call)))
@@ -71,18 +79,15 @@ fn listed() -> AgentHooks {
     }
 }
 
-fn open(chat: &mut ChatWidget, events: &std::sync::mpsc::Receiver<AppEvent>) {
-    assert_eq!(run(chat, events, "hooks"), [hooks_call(HooksCall::Load)]);
+fn open_loaded(chat: &mut ChatWidget, events: &Receiver<AppEvent>) {
+    assert_eq!(open(chat, events), [hooks_call(HooksCall::Load)]);
     chat.handle_turn_update(TurnUpdate::Hooks(HooksReply::Loaded(listed())));
 }
 
 #[test]
 fn the_browser_lists_the_events_and_an_events_hooks() {
     let (mut chat, events) = chat(false);
-    assert_eq!(
-        run(&mut chat, &events, "hooks"),
-        [hooks_call(HooksCall::Load)]
-    );
+    assert_eq!(open(&mut chat, &events), [hooks_call(HooksCall::Load)]);
     assert!(screen(&chat, 80).contains("Reading the hooks…"));
     chat.handle_turn_update(TurnUpdate::Hooks(HooksReply::Loaded(listed())));
     insta::assert_snapshot!("events", screen(&chat, 80));
@@ -101,7 +106,7 @@ fn the_browser_lists_the_events_and_an_events_hooks() {
 #[test]
 fn keys_turn_a_hook_on_or_off_and_trust_it_and_the_list_is_read_again() {
     let (mut chat, events) = chat(false);
-    open(&mut chat, &events);
+    open_loaded(&mut chat, &events);
     key(&mut chat, KeyCode::Enter);
 
     key(&mut chat, KeyCode::Char(' '));
@@ -144,7 +149,7 @@ fn keys_turn_a_hook_on_or_off_and_trust_it_and_the_list_is_read_again() {
 #[test]
 fn trusting_every_waiting_hook_asks_first() {
     let (mut chat, events) = chat(false);
-    open(&mut chat, &events);
+    open_loaded(&mut chat, &events);
     key(&mut chat, KeyCode::Char('t'));
     let question = screen(&chat, 80);
     assert!(question.contains("Trust 2 hooks?"), "{question}");
@@ -168,7 +173,7 @@ fn trusting_every_waiting_hook_asks_first() {
 #[test]
 fn a_failure_shows_in_the_open_browser_else_in_the_transcript() {
     let (mut chat, events) = chat(false);
-    run(&mut chat, &events, "hooks");
+    open(&mut chat, &events);
     chat.handle_turn_update(TurnUpdate::Hooks(HooksReply::Failed(
         "hooks are unavailable: the hooks plugin is off".to_string(),
     )));

@@ -9,13 +9,13 @@ expression: "screen(&mut center, 50, 24)"
   responses · https://main.example.test/v1
 
 
-  › Name          Main                          
-    Enabled       [x] On
-    Base URL      https://main.example.test/v1
-    API token     ••••
+  › Name              Main                      
+    Enabled           [x] On
+    Base URL          https://main.example.te...
+    API token         ••••
     Delete
     Make default
-
+    Choose the model  ›
 
 
 

@@ -125,7 +125,7 @@ impl ChatWidget {
             | TurnUpdate::RoleChanged(_)
             | TurnUpdate::ModeChanged(_)
             | TurnUpdate::StatusReport(_)
-            | TurnUpdate::Providers(_)
+            | TurnUpdate::ProviderModels(_)
             | TurnUpdate::Mcp(_)
             | TurnUpdate::Skills(_)
             | TurnUpdate::Session(_)

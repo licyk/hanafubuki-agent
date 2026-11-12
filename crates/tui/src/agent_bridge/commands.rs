@@ -12,7 +12,7 @@ use hanafubuki_agent::{
     AgentProviderModelCatalogResult, AgentProviderRegistrySnapshot, AgentSessionId,
     AgentSessionListRequest, AgentSessionMode, AgentSessionModelSelectionRequest, AgentSessionPage,
     AgentSessionRuntimeSnapshot, AgentSessionTitleRenameRequest, AgentTranscriptPageRequest,
-    AgentTuiPreferences, AgentTuiPreferencesPatch, ModelMetadata,
+    AgentTuiPreferences, AgentTuiPreferencesPatch, ModelMetadata, SettingsWrite,
 };
 
 use super::{
@@ -219,7 +219,7 @@ impl AgentBridge {
                     ))))
                 })
             }
-            AgentCommand::Providers(call) => self.provider_call(call),
+            AgentCommand::ProviderModels(provider_id) => self.list_provider_models(provider_id),
             AgentCommand::Mcp(call) => self.mcp_call(call),
             AgentCommand::Session(call) => return Ok(self.session_call(call)),
             AgentCommand::Review(call) => return Ok(self.review_call(call)),
@@ -273,6 +273,25 @@ impl AgentBridge {
                 patch,
                 message,
                 saved,
+            }));
+        });
+    }
+
+    /// Writes `[tui]` settings by key off the loop, each checked by its
+    /// spec; `[tui]` as the layers then resolve it comes back as
+    /// [`AppCommand::TuiSettingsWritten`] with `message`.
+    pub(crate) fn write_tui_settings(&self, write: SettingsWrite, message: String) {
+        let app_event_tx = self.app_event_tx.clone();
+        let agent = self.agent.clone();
+        self.agent.runtime().handle().spawn(async move {
+            let (written, shadowed) = match agent.write_setting_values(write).await {
+                Ok(outcome) => (agent.tui_preferences().await, !outcome.shadowed.is_empty()),
+                Err(error) => (Err(error), false),
+            };
+            app_event_tx.send(AppEvent::Command(AppCommand::TuiSettingsWritten {
+                message,
+                written,
+                shadowed,
             }));
         });
     }

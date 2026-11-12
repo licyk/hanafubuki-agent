@@ -38,13 +38,23 @@ impl App {
             AppCommand::ClearScreen => self.clear_screen(tui),
             AppCommand::Submit(text) => self.chat_widget.submit_user_message(text),
             AppCommand::ResumeNamed(text) => self.resume_named(tui, text),
-            AppCommand::Replay(text) => self.chat_widget.replay_input(text),
+            AppCommand::Replay(text) => {
+                // A preset run from the center's page runs in the
+                // conversation, which the center would hide.
+                self.close_settings_center(tui);
+                self.chat_widget.replay_input(text)
+            }
             AppCommand::SavePreferences(patch, message) => self.save(patch, message),
             AppCommand::PreferencesSaved {
                 patch,
                 message,
                 saved,
             } => self.preferences_saved(patch, message, saved),
+            AppCommand::TuiSettingsWritten {
+                message,
+                written,
+                shadowed,
+            } => self.tui_settings_written(message, written, shadowed),
             AppCommand::DismissWarning(key) => self.chat_widget.dismiss_warning(key),
             AppCommand::ToggleThinking => {
                 // Scrollback's view shows the tail; what was written stays.

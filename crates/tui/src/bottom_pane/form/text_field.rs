@@ -51,10 +51,6 @@ impl TextField {
         self.secret = secret;
     }
 
-    pub(crate) fn is_secret(&self) -> bool {
-        self.secret
-    }
-
     pub(crate) fn display(&self, focused: bool) -> FieldDisplay {
         match (focused, self.secret) {
             (true, false) => FieldDisplay::Focused,

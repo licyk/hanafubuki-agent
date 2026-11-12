@@ -7,6 +7,7 @@ use crate::agent_bridge::{
     HooksCall, HooksReply, McpCall, ModelChoices, OlderTranscript, OpenedSession, ReplayedItem,
     SteerOutcome, TurnEnd, TurnUpdate,
 };
+use crate::app::WorkspaceEvent;
 use crate::app_event::AgentCommand;
 use crate::bottom_pane::{SelectionItem, SelectionViewParams};
 use crate::commands::{self, CommandSpec};
@@ -457,22 +458,48 @@ fn raw_takes_on_off_or_nothing_and_says_how_it_is_used() {
 }
 
 #[test]
-fn tui_offers_the_two_modes_with_the_saved_one_marked() {
+fn the_settings_commands_open_the_center_at_their_page() {
     let (mut chat, events) = chat();
     drain(&events);
-    chat.dispatch_command(command("tui"), String::new());
-    let shown = screen(&chat, 80);
-    assert!(
-        shown.contains("Interface mode for the next launch"),
-        "{shown}"
-    );
-    assert!(shown.contains("Scrollback"), "{shown}");
-    assert!(shown.contains("Fullscreen (current)"), "{shown}");
-    chat.handle_key_event(KeyEvent::new(KeyCode::Char('1'), KeyModifiers::NONE));
+    for (name, args, target) in [
+        ("tui", "", "tui"),
+        ("mcp", "", "mcp"),
+        ("providers", "", "providers"),
+        ("providers", "policy", "modelPolicy"),
+        ("memories", "", "memory"),
+        ("theme", "", "theme"),
+        ("statusline", "", "statusline"),
+        ("title", "", "title"),
+        ("keymap", "", "keymap"),
+        ("presets", "", "presets"),
+        ("plugins", "", "packages"),
+        ("hooks", "", "hook-review"),
+    ] {
+        chat.dispatch_command(command(name), args.to_string());
+        let sent = other_events(&events);
+        assert!(
+            matches!(
+                sent.as_slice(),
+                [AppEvent::Workspace(WorkspaceEvent::OpenSettings { target: Some(opened), record: None })]
+                    if opened == target
+            ),
+            "/{name} {args}: {} events",
+            sent.len()
+        );
+        assert!(
+            !chat.has_command_view(name),
+            "/{name} shows no view over the composer"
+        );
+    }
+    chat.dispatch_command(command("mcp"), "login demo".to_string());
     let sent = other_events(&events);
     assert!(
-        matches!(sent.as_slice(), [AppEvent::SetFullscreenTranscript(false)]),
-        "{}",
+        matches!(
+            sent.as_slice(),
+            [AppEvent::Workspace(WorkspaceEvent::OpenSettings { target: Some(target), record: Some(record) })]
+                if target == "mcp-login" && record == "demo"
+        ),
+        "{} events",
         sent.len()
     );
 }

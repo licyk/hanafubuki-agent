@@ -196,6 +196,61 @@ impl Harness {
         self.screen()
     }
 
+    /// Down in the settings center until the selected row is `label`, then
+    /// up when it is above.
+    fn select_setting(&mut self, label: &str) {
+        let selected = format!("› {label}");
+        for step in 0..160 {
+            self.app.draw(&mut self.tui).unwrap();
+            let screen = self.screen();
+            if screen
+                .lines()
+                .any(|line| line.trim_start().starts_with(&selected))
+            {
+                return;
+            }
+            self.key(if step < 80 {
+                KeyCode::Down
+            } else {
+                KeyCode::Up
+            });
+        }
+        panic!("no row {label}:\n{}", self.screen());
+    }
+
+    /// The text row `label` of the settings center edited to `text`, and
+    /// saved when it saves at once.
+    fn edit_setting(&mut self, label: &str, text: &str) {
+        self.select_setting(label);
+        self.key(KeyCode::Enter);
+        for character in text.chars() {
+            self.key(KeyCode::Char(character));
+        }
+        self.key(KeyCode::Enter);
+        self.pump_until("the change to be saved", |harness| {
+            !harness.screen().contains("Saving…")
+        });
+    }
+
+    /// Waits for the settings center's page to close (its views done), then
+    /// closes the center, a page at a time.
+    fn leave_settings(&mut self) {
+        self.pump_until("the page to close", |harness| {
+            harness
+                .app
+                .workspace
+                .settings()
+                .is_some_and(|center| center.hosted_command().is_none())
+        });
+        for _ in 0..8 {
+            if self.app.workspace.settings().is_none() {
+                return;
+            }
+            self.key(KeyCode::Esc);
+        }
+        panic!("the center stays open:\n{}", self.screen());
+    }
+
     /// Runs the app loop's steps until `done` holds.
     fn pump_until(&mut self, what: &str, done: impl Fn(&Self) -> bool) {
         let deadline = Instant::now() + DEADLINE;
@@ -670,10 +725,11 @@ fn raw_and_tui_save_the_interface_preferences() {
     harness.pump_until_screen_shows("Raw output off.");
     assert_eq!(harness.app.render_mode, HistoryRenderMode::Rich);
 
+    // `/tui` is the center's section, at its first row.
     harness.type_and_submit("/tui");
-    harness.pump_until_screen_shows("Interface mode for the next launch");
-    harness.key(KeyCode::Char('1'));
-    harness.pump_until_screen_shows("Saved the interface mode: Scrollback");
+    harness.pump_until_screen_shows("› Fullscreen");
+    harness.key(KeyCode::Enter);
+    harness.pump_until_screen_shows("Saved · applies at next launch");
     let config = harness.config_file();
     assert!(config.contains("fullscreenTranscript = false"), "{config}");
     assert!(config.contains("rawOutput = false"), "{config}");

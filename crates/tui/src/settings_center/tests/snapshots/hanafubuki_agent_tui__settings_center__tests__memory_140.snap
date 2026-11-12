@@ -20,7 +20,7 @@ expression: "screen(&mut center, 140, 22)"
     Sessions per pass          2                     At most that many sessions are read per pass
     Extractions consolidated   256                   At most that many extractions are consolidated
     Maximum unused age (days)  30                    ⚠ the project's value is not a number
-
+    Memory store               Open ›                Its status, this session's contribution, and a reset
 
 
   ←/→ tab · / search · enter toggle · esc close

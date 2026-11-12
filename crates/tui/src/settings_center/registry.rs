@@ -2,22 +2,32 @@
 
 //! The pages a generic row cannot be (Codex's sub-pages: the theme with its
 //! preview, the status line, the title, the keymap's capture, the presets,
-//! the plugin browser, the hook review): each is a command's views, shown
-//! in the center while they are open. A page is declared beside its
-//! command (`commands::theme::PAGE`), and the center asks the registry
+//! the plugin browser, the hook review, the memory store, a Provider's
+//! model, an MCP server's login): each is a command's views, shown in the
+//! center while they are open and nowhere else. A page is declared beside
+//! its command (`commands::theme::PAGE`), and the center asks the registry
 //! for the one a row has, falling back to the generic row.
 
 use hanafubuki_agent::SettingsGroup;
 
-use crate::commands::{CommandSpec, SETTINGS_PAGES};
+use crate::commands::{CommandContext, CommandSpec, SETTINGS_PAGES};
 
 /// A page that is a command's views.
 pub(crate) struct PageOverride {
     /// What `/config` opens it by.
     pub(crate) id: &'static str,
     pub(crate) attach: Attach,
-    /// The command run, with no argument, to open it.
+    /// The command whose views they are: their replies and next steps
+    /// reach them as its.
     pub(crate) command: &'static CommandSpec,
+    /// Shows the views; a record's page is given its record.
+    pub(crate) open: fn(&mut CommandContext<'_>, Option<&str>),
+}
+
+impl std::fmt::Debug for PageOverride {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(formatter, "page {}", self.id)
+    }
 }
 
 /// Where a page is in the center.
@@ -29,6 +39,11 @@ pub(crate) enum Attach {
         group: SettingsGroup,
         label: &'static str,
         summary: &'static str,
+    },
+    /// An action of each record of the collection `collection`.
+    Record {
+        collection: &'static str,
+        label: &'static str,
     },
 }
 
@@ -44,6 +59,13 @@ pub(super) fn row_pages(group: SettingsGroup) -> impl Iterator<Item = &'static P
     SETTINGS_PAGES.into_iter().filter(
         move |page| matches!(page.attach, Attach::Row { group: attached, .. } if attached == group),
     )
+}
+
+/// The pages that are actions of the records of `collection`.
+pub(super) fn record_pages(collection: &str) -> impl Iterator<Item = &'static PageOverride> + '_ {
+    SETTINGS_PAGES.into_iter().filter(move |page| {
+        matches!(page.attach, Attach::Record { collection: attached, .. } if attached == collection)
+    })
 }
 
 /// The page `/config` names by `id`.

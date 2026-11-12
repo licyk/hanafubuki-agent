@@ -12,7 +12,7 @@ use std::time::Instant;
 use ratatui::backend::Backend;
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseEvent};
 
-use super::WorkspaceEvent;
+use super::{SettingsPageAction, WorkspaceEvent};
 use crate::agent_bridge::CatalogReply;
 use crate::app::App;
 use crate::app_event::AppEvent;
@@ -24,13 +24,31 @@ impl App {
         &mut self,
         tui: &mut Tui<B>,
         target: Option<String>,
+        record: Option<String>,
     ) {
         if self.workspace.settings.is_some() {
             return;
         }
         self.enter_alt_screen(tui, true);
-        self.workspace.settings = Some(SettingsCenter::new(target));
+        self.workspace.settings = Some(SettingsCenter::new(target, record));
         self.run_settings_requests(tui);
+    }
+
+    /// The action a page of the center asked for, run as the center's.
+    pub(super) fn run_settings_action<B: Backend<Error = io::Error> + Write>(
+        &mut self,
+        tui: &mut Tui<B>,
+        action: SettingsPageAction,
+    ) {
+        if let Some(center) = self.workspace.settings.as_mut() {
+            center.run_action(
+                &action.collection,
+                action.record.as_deref(),
+                &action.action,
+                action.values,
+            );
+            self.run_settings_requests(tui);
+        }
     }
 
     /// The center's key, while it is open: `false` when it is not. A page
@@ -54,9 +72,7 @@ impl App {
                     key
                 };
                 self.chat_widget.handle_key_event(key);
-                self.app_event_tx
-                    .untagged()
-                    .send(AppEvent::Workspace(WorkspaceEvent::SettingsPageCheck));
+                self.queue_settings_page_check();
             }
             None => center.handle_key(key),
         }
@@ -130,6 +146,9 @@ impl App {
         reply: CatalogReply,
     ) {
         let preferences = reply.preferences.clone();
+        if let Some(registry) = &reply.registry {
+            self.chat_widget.provider_registry_changed(registry);
+        }
         if let Some(center) = self.workspace.settings.as_mut() {
             center.on_reply(reply);
             self.run_settings_requests(tui);
@@ -139,16 +158,47 @@ impl App {
         }
     }
 
-    /// The page that is a command's views closes with its last view.
-    pub(super) fn check_settings_page(&mut self) {
+    /// Asks, behind what is queued, whether the page that is a command's
+    /// views still shows one: after a key it took, after it opened, and
+    /// after a reply, which may end its last view (a login done).
+    pub(crate) fn queue_settings_page_check(&mut self) {
         let Some(center) = self.workspace.settings.as_mut() else {
             return;
         };
+        if center.hosted_command().is_none() {
+            return;
+        }
+        let check = center.next_page_check();
+        self.app_event_tx
+            .untagged()
+            .send(AppEvent::Workspace(WorkspaceEvent::SettingsPageCheck(
+                check,
+            )));
+    }
+
+    /// The page that is a command's views closes with its last view.
+    pub(super) fn check_settings_page(&mut self, check: u64) {
+        let Some(center) = self.workspace.settings.as_mut() else {
+            return;
+        };
+        if !center.is_latest_page_check(check) {
+            return;
+        }
         if let Some(command) = center.hosted_command() {
             if !self.chat_widget.has_command_view(command) {
                 center.hosted_closed();
                 self.run_settings_requests_quietly();
             }
+        }
+    }
+
+    /// Closes the center, when it is open.
+    pub(crate) fn close_settings_center<B: Backend<Error = io::Error> + Write>(
+        &mut self,
+        tui: &mut Tui<B>,
+    ) {
+        if self.workspace.settings.take().is_some() {
+            self.leave_alt_screen(tui);
         }
     }
 
@@ -159,11 +209,7 @@ impl App {
         };
         for request in center.take_requests() {
             match request {
-                CenterRequest::Close => {
-                    self.workspace.settings = None;
-                    self.leave_alt_screen(tui);
-                    return;
-                }
+                CenterRequest::Close => return self.close_settings_center(tui),
                 request => self.run_settings_request(request),
             }
         }
@@ -186,11 +232,9 @@ impl App {
     fn run_settings_request(&mut self, request: CenterRequest) {
         match request {
             CenterRequest::Call(id, call) => self.bridge.catalog_call(id, call),
-            CenterRequest::OpenCommand(command) => {
-                self.chat_widget.dispatch_command(command, String::new());
-                self.app_event_tx
-                    .untagged()
-                    .send(AppEvent::Workspace(WorkspaceEvent::SettingsPageCheck));
+            CenterRequest::OpenPage(page, record) => {
+                self.chat_widget.open_settings_page(page, record);
+                self.queue_settings_page_check();
             }
             CenterRequest::Close => {}
         }

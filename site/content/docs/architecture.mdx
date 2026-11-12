@@ -238,7 +238,7 @@ Agent 对它访问的每个模型所知道的内容，是内核的 `ModelMetadat
 每项设置由它的所有者用 `hanafubuki-agent-foundation::settings` 的词汇描述一次（`SettingSpec`：键、标签、摘要、类型、默认值、改动何时生效、`visible_if`、`commit_group`），设置页按描述渲染，不必为每项设置写代码。门面的 `settings_catalog()` 每次读取时构建它（`SettingsCatalog { sections, collections }`），自己不设注册表：每个所有者通过它已经公开的东西提供内容。
 
 - **节**（`SettingsSection`：id、标题、分组、顺序、spec 和值）来自配置（`AgentConfig::settings_sections`，spec 声明在各设置结构体旁边；宿主的配置没有 `network` 和 `tui` 节），以及每个描述符带选项的插件行一节（`pluginOptions.<row>`，属于 Plugins 分组，键为 `pluginOptions.<row>.<option>`）。每个值（`SettingState`）注明它来自哪一层（`SettingSource`），以及某一层的值为何无法使用。
-- **集合**（`SettingsCollection`）是逐条编辑的记录列表：Provider 和模型策略（`providers.toml`）、MCP 服务器（`mcp.toml`）、插件行、市场、钩子、角色，以及独立模式下的 profile 和项目信任。集合以 spec 给出一条记录的字段，列出它的记录（`SettingsRecord`：id、标签、摘要、状态、问题、值）和动作（`SettingsAction`：`add`、`save`、`delete` 以及所有者自己的动作，如 `set_default`、`list_models`、`connect`、`trust`；每个动作说明是否先询问，由用户命名新记录的 `add` 说明以什么命名，即 `namesRecord`）；没有 `save` 的集合只显示、不写入（角色）。机密从不返回：记录只列出哪些已设置，省略机密的保存会保留它。受修订号约束的文件，其记录带上文件的修订号，写入时要带上它。
+- **集合**（`SettingsCollection`）是逐条编辑的记录列表：Provider 和模型策略（`providers.toml`）、MCP 服务器及其保密的环境变量和请求头（`mcp.toml`，保密的值在它的凭据中）、插件行、市场、钩子、角色，以及独立模式下的 profile 和项目信任。集合以 spec 给出一条记录的字段，列出它的记录（`SettingsRecord`：id、标签、摘要、状态、问题、值）和动作（`SettingsAction`：`add`、`save`、`delete` 以及所有者自己的动作，如 `set_default`、`list_models`、`connect`、`trust`；每个动作说明是否先询问，由用户命名新记录的 `add` 说明以什么命名，即 `namesRecord`）；没有 `save` 的集合只显示、不写入（角色）。机密从不返回：记录只列出哪些已设置，省略机密的保存会保留它。记录中的映射（MCP 服务器公开的环境变量和请求头及其按工具的策略、Provider 的请求头）是 `NAME=VALUE` 文本列表，所有者把它读回映射，某一项不是这种形式或同一名称出现两次时拒绝；Provider 的请求头按凭据检查，只按名称列出，只写名称的条目保留原来的值。模型策略的回合预算使用 Agent 的上限，除非打开 `customTurnBudget`，它的字段从 Agent 的上限开始；推理强度和窗口旁边，策略会写出默认模型已知的信息。受修订号约束的文件，其记录带上文件的修订号，写入时要带上它。
 - **写入。** `write_setting_values` 按键把设置和插件选项一次写入用户的文件，每个值按它的 spec 检查，然后把设置应用到插件。`run_settings_action` 通过所有者的调用执行集合的动作（`write_provider`、`write_model_policy`、`mcp_write_server`、`set_plugin_enabled`、`trust_hooks`、市场的调用、`AgentConfig::set_user_json`）；保存把值合并到已保存的记录上，因此没有 spec 的字段（请求头、按工具的表、按模型的覆盖）保持不变。
 - **失败。** 无法读取的所有者（`hooks` 行被关闭）让它的集合为空并说明原因；目录的其余部分照常。
 
@@ -271,7 +271,7 @@ Agent 对它访问的每个模型所知道的内容，是内核的 `ModelMetadat
 - **市场**（`marketplaces`、`add_marketplace`、`upgrade_marketplace`、`remove_marketplace`）只包括用户添加的那些（`[marketplaces]`）：不会从主目录或仓库中发现市场。每个调用写入它的记录并重新加载。
 - **`package_changed`**：对包的每个生命周期调用都会在重新加载之后告诉插件事件接收器（`AgentPluginEventSink::package_changed`）发生了什么：`installed`、`removed`、`enabled`、`disabled`、`updated`，或 `failed` 以及原因。它不在 `exec --json` 的事件流中，那里的事件属于会话；`exec` 回合期间没有任何东西改变这些包。
 
-`plugins` 命令和 `/plugins`（[终端界面](/docs/terminal-interface#plugins)）是这些调用的界面；`mcp list` 和 `/mcp` 显示包的服务器并标明所属包，`/warnings` 显示包的问题和失败的访客。使用方法见[插件](/docs/plugins)。
+`plugins` 命令和 `/plugins`（[终端界面](/docs/terminal-interface#plugins)）是这些调用的界面；`mcp list` 和 `/mcp verbose` 显示包的服务器并标明所属包，`/warnings` 显示包的问题和失败的访客。使用方法见[插件](/docs/plugins)。
 
 ### 代码插件：访客宿主 [#code-plugins]
 
@@ -319,7 +319,7 @@ Agent 对它访问的每个模型所知道的内容，是内核的 `ModelMetadat
 - **`@` 文件提及**来自 Codex 的 `file-search` crate，作为界面的 `file_search` 模块而不是单独的 crate 移植，因为只有界面使用它。crates.io 上的 `nucleo` 0.5 没有 Codex 固定的 git 版本读取的匹配分数访问器，所以匹配不带分数（没有地方显示它们）；匹配器在带期限的 std 通道上等待，而 Codex 在 `crossbeam` 通道上 select；锁是 `parking_lot` 的。
 - **终端的恢复。** 每次返回（一个 drop guard）和结束进程的 panic 都会恢复终端：界面的 hook 先恢复终端，再运行 Agent 的 hook。被隔离的 panic 让界面继续运行。
 - **斜杠命令是隔离的模块。** Codex 中平铺的 `SlashCommand` match 变成一张表（`commands`）：每个命令的规格（名字、别名、说明、是否接受行内参数、回合中能否运行、是否需要会话）和它的分派，命令列表、`/名字 参数` 的查找和分派都来自这张表。每次分派，以及命令推入的每个视图（按键处理和绘制），都在 `hanafubuki_agent::panic::catch_panic` 中运行：panic 的命令失去它的视图，在本次运行的剩余时间内关闭，对话中显示一条错误，会话、输入框和其他命令照常工作。聊天本身（输入框、转录、流式输出）不是模块，那里的 panic 仍会结束进程。
-- **设置中心。** `/config` 全屏打开[设置目录](#settings-catalog)，按 Codex 的 `/config` 呈现设置的方式（标签页、标签 · 值 · 说明的行、跨标签页搜索、改动即保存），不为任何一项设置单独写代码：它是一个页面栈，包括标签页、集合的记录、以表单打开的记录或一起保存的一组设置、选项、列表，以及通用行无法表达的页面（主题、状态栏、标题、键位、预设、插件浏览器、钩子审查），这些页面都是某个命令的界面，显示在设置中心内。它的写入和动作在界面的事件循环之外进行，一次一个，每次的回复都带回重新读取的目录；写入被 profile、项目文件或 `-c` 覆盖时会说明。
+- **设置中心。** `/config` 全屏打开[设置目录](#settings-catalog)，按 Codex 的 `/config` 呈现设置的方式（标签页、标签 · 值 · 说明的行、跨标签页搜索、改动即保存），不为任何一项设置单独写代码：它是一个页面栈，包括标签页、集合的记录、以表单打开的记录或一起保存的一组设置、选项、列表，以及通用行无法表达的页面（主题、状态栏、标题、键位、预设、插件浏览器、钩子审查、记忆存储，以及记录的页面：Provider 的模型、MCP 服务器的登录），这些页面都是某个命令的界面，只显示在设置中心内：`/theme`、`/mcp`、`/providers` 等设置命令在设置中心打开它们。它的写入和动作在界面的事件循环之外进行，一次一个，每次的回复都带回重新读取的目录；写入被 profile、项目文件或 `-c` 覆盖时会说明。
 - **Agent 工作时发送的消息。** Codex 的输入队列（Enter 引导回合、Tab 排队、Esc 中断并发送等待中的补充消息、Shift+Left 编辑最后一条排队的消息）放在聊天中，每个对话一个，建立在内核的 steering 之上：聊天一次只发送一条补充消息，让回合按顺序接收；每条消息的文本一直保留，直到回合的 `SteeringConsumed` 覆盖它被接受时的序号；回合结束后，要等每条补充消息都得到答复才处理队列，因为内核会丢弃被取消或失败的回合还没读到的内容，并拒收晚到的补充消息。用 Tab 输入的命令立即执行而不排队，Shift+Left 把消息放在草稿之前，而不是覆盖草稿。
 - **需要时才有会话。** Codex 启动时就开始一个线程；这里的桥在第一条消息或需要会话的命令创建会话之前不持有会话（期间提出的请求等它创建好），`/new` 回到没有会话的状态。创建失败（没有默认 Provider）是对话中的一条错误，而不是退出。
 - **语法高亮和状态显示。** `render/highlight` 保留 Codex 的 syntect 和 two-face 组合（Oniguruma 语法、32 个内置主题、自定义 `.tmTheme` 文件），但没有 Codex 自己的以模型命名的主题；由于不查询终端调色板，默认主题是 two-face 的 `ansi`，它用终端的调色板着色，取代 Codex 根据查询到的背景在 Catppuccin Mocha 和 Latte 之间的选择。主题选择器在列表旁边或下方的示例差异上预览。状态栏和标题去掉了 Codex 的账号、速率限制、费用和版本项目，增加了权限模式和目标；会话的值在事件改变它们时从门面的会话快照读取，Git 分支从 `.git/HEAD` 读取，而不是启动 `git` 进程。Codex 不恢复它最后设置的终端标题；这里把标题压入终端的标题栈，退出时弹出。

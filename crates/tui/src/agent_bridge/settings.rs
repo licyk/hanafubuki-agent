@@ -1,19 +1,18 @@
 // Modified from OpenAI Codex 57a808a392 (Apache-2.0).
 
-//! `/warnings`, `/memories` and `/config quick` onto the facade's calls: the
+//! `/warnings` and the memory store's page onto the facade's calls: the
 //! warnings the Agent keeps (the configuration's recoveries and layers, the
-//! roles, the plugins, MCP, the hooks, the panics), memory's settings, status, the
-//! session's contribution and the reset, and the compaction strategy. What a
-//! call found comes back as a [`SettingsReply`]; a failure names the
-//! command.
+//! roles, the plugins, MCP, the hooks, the panics), and the memory's
+//! status, the session's contribution and the reset. Memory's settings are
+//! the settings center's. What a call found comes back as a
+//! [`SettingsReply`]; a failure names the command.
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use hanafubuki_agent::panic::recorded_panics;
 use hanafubuki_agent::{
-    AgentCompactionStrategy, AgentConfigProblem, AgentConfigRecovery, AgentHandle,
-    AgentMemoryContributionMode, AgentMemorySettings, AgentMemoryStatus, AgentPluginState,
-    AgentSessionId, AgentSettingsPatch, GuestState,
+    AgentConfigProblem, AgentConfigRecovery, AgentHandle, AgentMemoryContributionMode,
+    AgentMemoryStatus, AgentPluginState, AgentSessionId, GuestState,
 };
 
 use super::{AgentBridge, AgentReply, TurnUpdate};
@@ -72,10 +71,11 @@ impl Warning {
     }
 }
 
-/// Memory as `/memories` shows it.
+/// Memory as its page shows it.
 #[derive(Clone, Debug)]
 pub(crate) struct MemoriesState {
-    pub(crate) settings: AgentMemorySettings,
+    /// `memory.enabled`.
+    pub(crate) enabled: bool,
     /// The store's status, or why it could not be read.
     pub(crate) status: Result<AgentMemoryStatus, String>,
     /// The session's contribution and its revision; `None` with no session.
@@ -84,17 +84,11 @@ pub(crate) struct MemoriesState {
     pub(crate) note: Option<String>,
 }
 
-/// What `/warnings`, `/memories` and `/config` ask of the Agent.
+/// What `/warnings` and the memory store's page ask of the Agent.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum SettingsCall {
     Warnings,
     Memories,
-    /// The settings `/config` shows beside the interface's own.
-    Config,
-    /// Saves `compaction.strategy`.
-    SetCompactionStrategy(AgentCompactionStrategy),
-    /// Saves memory's settings (`memory.*`).
-    SetMemory(AgentMemorySettings),
     /// Turns the session's contribution on or off, at the revision read.
     SetContribution {
         enabled: bool,
@@ -110,7 +104,6 @@ impl SettingsCall {
     fn command(&self) -> &'static str {
         match self {
             Self::Warnings => "warnings",
-            Self::Config | Self::SetCompactionStrategy(_) => "config",
             _ => "memories",
         }
     }
@@ -121,11 +114,6 @@ pub(crate) enum SettingsReply {
     /// The Agent's warnings, for the interface to add its own to.
     Warnings(Vec<Warning>),
     Memories(Box<MemoriesState>),
-    /// The compaction strategy as saved; `saved` when this call saved it.
-    Config {
-        compaction_strategy: AgentCompactionStrategy,
-        saved: bool,
-    },
     Failed {
         command: &'static str,
         error: String,
@@ -160,36 +148,7 @@ async fn run(
 ) -> Result<SettingsReply, String> {
     let note = match call {
         SettingsCall::Warnings => return Ok(SettingsReply::Warnings(agent_warnings(agent).await)),
-        SettingsCall::Config => {
-            return Ok(SettingsReply::Config {
-                compaction_strategy: agent.settings_view().await?.settings.compaction.strategy,
-                saved: false,
-            })
-        }
-        SettingsCall::SetCompactionStrategy(strategy) => {
-            let mut compaction = agent.settings_view().await?.settings.compaction;
-            compaction.strategy = strategy;
-            let saved = agent
-                .write_settings(AgentSettingsPatch {
-                    compaction: Some(compaction),
-                    ..AgentSettingsPatch::default()
-                })
-                .await?;
-            return Ok(SettingsReply::Config {
-                compaction_strategy: saved.settings.compaction.strategy,
-                saved: true,
-            });
-        }
         SettingsCall::Memories => None,
-        SettingsCall::SetMemory(memory) => {
-            agent
-                .write_settings(AgentSettingsPatch {
-                    memory: Some(memory),
-                    ..AgentSettingsPatch::default()
-                })
-                .await?;
-            None
-        }
         SettingsCall::SetContribution { enabled, revision } => {
             let session = session.ok_or("there is no session yet")?;
             agent.set_memory_session_contribution(session, revision, enabled)?;
@@ -200,13 +159,13 @@ async fn run(
             Some("Memory was reset: the memories and their sources are gone.".to_string())
         }
     };
-    let settings = agent.settings_view().await?.settings.memory;
+    let enabled = agent.settings_view().await?.settings.memory.enabled;
     let contribution = match session {
         Some(session) => Some(agent.memory_session_contribution(session)?),
         None => None,
     };
     Ok(SettingsReply::Memories(Box::new(MemoriesState {
-        settings,
+        enabled,
         status: agent.memory_status(),
         contribution,
         note,

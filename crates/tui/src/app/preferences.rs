@@ -1,16 +1,20 @@
 // Modified from OpenAI Codex 57a808a392 (Apache-2.0).
 
-//! What `/raw` and `/tui` change: the presentation of the transcript now
-//! (raw), and the transcript's mode at the next launch (Codex's
-//! `app/tui_mode_picker.rs`); each is saved in `[tui]`. And what `/theme`,
-//! `/statusline` and `/title` change, saved when their views say so, and
-//! the terminal's title, written when it changes and given back at exit.
+//! What `/raw` changes: the presentation of the transcript now, saved in
+//! `tui.rawOutput`. What the theme, status line and title pages change,
+//! saved when their views say so; each of these is written by key, as the
+//! settings center writes (`write_setting_values`). The keymap and the
+//! presets, which have no spec, are written as a patch of `[tui]`. And the
+//! terminal's title, written when it changes and given back at exit.
 
 use std::io::{self, Write};
 use std::time::Instant;
 
-use hanafubuki_agent::{AgentTuiPreferences, AgentTuiPreferencesPatch};
+use hanafubuki_agent::{
+    AgentTuiPreferences, AgentTuiPreferencesPatch, SettingChange, SettingWriteOp, SettingsWrite,
+};
 use ratatui::backend::Backend;
+use serde_json::{json, Value};
 
 use super::App;
 use crate::appearance::items::ids;
@@ -34,13 +38,7 @@ impl App {
         } else {
             format!("Raw output {state} for what follows; the scrollback keeps what it shows.")
         };
-        self.save(
-            AgentTuiPreferencesPatch {
-                raw_output: Some(raw),
-                ..AgentTuiPreferencesPatch::default()
-            },
-            message,
-        );
+        self.write_tui_settings(vec![("tui.rawOutput", json!(raw))], message);
     }
 
     /// The conversation shown raw, or rich.
@@ -57,49 +55,30 @@ impl App {
         }
     }
 
-    /// `/tui`: the transcript's mode from the next launch on.
-    pub(super) fn save_fullscreen_transcript(&mut self, enabled: bool) {
-        let mode = if enabled { "Fullscreen" } else { "Scrollback" };
-        self.chat_widget.set_fullscreen_preference(enabled);
-        self.save(
-            AgentTuiPreferencesPatch {
-                fullscreen_transcript: Some(enabled),
-                ..AgentTuiPreferencesPatch::default()
-            },
-            format!(
-                "Saved the interface mode: {mode}. It applies at the next launch; \
-                 --no-alt-screen and tui.alternateScreen still apply."
-            ),
-        );
-    }
-
-    /// `/theme`, `/statusline`, `/title`: applied, and saved when asked.
+    /// The theme, status line and title pages, and `/statusline` or
+    /// `/title` with items: applied, and saved when asked.
     pub(super) fn apply_appearance(&mut self, event: AppearanceEvent) {
         let save = match &event {
             AppearanceEvent::ThemeSaved(name) => Some((
-                AgentTuiPreferencesPatch {
-                    theme: Some(name.clone()),
-                    ..AgentTuiPreferencesPatch::default()
-                },
+                vec![("tui.theme", json!(name))],
                 format!("Theme set to {name}."),
             )),
             AppearanceEvent::StatusLine {
                 items,
                 colors,
                 save: true,
-            } => Some((
-                AgentTuiPreferencesPatch {
-                    status_line: items.as_deref().map(ids),
-                    status_line_colors: *colors,
-                    ..AgentTuiPreferencesPatch::default()
-                },
-                "Status line updated.".to_string(),
-            )),
+            } => {
+                let items = items
+                    .as_deref()
+                    .map(|items| ("tui.statusLine", json!(ids(items))));
+                let colors = colors.map(|colors| ("tui.statusLineColors", json!(colors)));
+                Some((
+                    items.into_iter().chain(colors).collect(),
+                    "Status line updated.".to_string(),
+                ))
+            }
             AppearanceEvent::TerminalTitle { items, save: true } => Some((
-                AgentTuiPreferencesPatch {
-                    terminal_title: Some(ids(items)),
-                    ..AgentTuiPreferencesPatch::default()
-                },
+                vec![("tui.terminalTitle", json!(ids(items)))],
                 "Terminal title updated.".to_string(),
             )),
             AppearanceEvent::StatusLine { save: false, .. }
@@ -113,7 +92,7 @@ impl App {
         );
         self.chat_widget.apply_appearance(event);
         match save {
-            Some((patch, message)) => self.save(patch, message),
+            Some((changes, message)) => self.write_tui_settings(changes, message),
             None if session_only => self
                 .chat_widget
                 .add_info_message("Updated for this session; it is not saved.".to_string()),
@@ -144,8 +123,47 @@ impl App {
         let _ = self.terminal_title.restore(tui.terminal.backend_mut());
     }
 
-    /// Writes `patch` into `config.toml` off the loop; what it changed is
-    /// applied when the write is done ([`Self::preferences_saved`]).
+    /// Writes `[tui]` settings by key off the loop; what they changed is
+    /// applied when the write is done ([`Self::tui_settings_written`]).
+    fn write_tui_settings(&mut self, changes: Vec<(&str, Value)>, message: String) {
+        let write = SettingsWrite {
+            changes: changes
+                .into_iter()
+                .map(|(key, value)| SettingChange {
+                    key: key.to_string(),
+                    op: SettingWriteOp::Set(value),
+                })
+                .collect(),
+        };
+        self.bridge.write_tui_settings(write, message);
+    }
+
+    /// A [`Self::write_tui_settings`] done: `[tui]` taken as it now
+    /// resolves, then `message`, or why it was not written.
+    pub(super) fn tui_settings_written(
+        &mut self,
+        mut message: String,
+        written: Result<AgentTuiPreferences, String>,
+        shadowed: bool,
+    ) {
+        match written {
+            Ok(preferences) => {
+                if shadowed {
+                    message.push_str(SHADOWED);
+                }
+                self.adopt_tui_preferences(preferences);
+                self.chat_widget.add_info_message(message);
+            }
+            Err(error) => self
+                .chat_widget
+                .add_error_message(format!("{message} It was not saved: {error}")),
+        }
+        self.schedule_frame(Instant::now());
+    }
+
+    /// Writes the keymap's or the presets' `patch` into `config.toml` off
+    /// the loop; what it changed is applied when the write is done
+    /// ([`Self::preferences_saved`]).
     pub(super) fn save(&mut self, patch: AgentTuiPreferencesPatch, message: String) {
         self.bridge.save_tui_preferences(patch, message);
     }
@@ -161,10 +179,7 @@ impl App {
         match saved {
             Ok(preferences) => {
                 if shadowed(&patch, &preferences) {
-                    message.push_str(
-                        " A profile, the project's configuration or -c sets it too, and that \
-                         one applies.",
-                    );
+                    message.push_str(SHADOWED);
                 }
                 // What the keymap cannot use was kept for `/warnings` at
                 // start, and `/keymap` refuses what it would add.
@@ -190,8 +205,6 @@ impl App {
             set_syntax_theme(resolved);
         }
         self.chat_widget.adopt_appearance(&preferences);
-        self.chat_widget
-            .set_fullscreen_preference(preferences.fullscreen_transcript);
         self.apply_preferences(preferences);
     }
 
@@ -208,42 +221,17 @@ impl App {
     }
 }
 
+/// What a saved message adds when a layer above the user's file keeps
+/// another value.
+const SHADOWED: &str =
+    " A profile, the project's configuration or -c sets it too, and that one applies.";
+
 /// Whether a keymap entry or a preset `patch` wrote resolves to something
 /// else: a layer above the user's file sets it.
 pub(super) fn shadowed(
     patch: &AgentTuiPreferencesPatch,
     preferences: &AgentTuiPreferences,
 ) -> bool {
-    let scalars = patch
-        .fullscreen_transcript
-        .is_some_and(|value| preferences.fullscreen_transcript != value)
-        || patch
-            .alternate_screen
-            .is_some_and(|value| preferences.alternate_screen != value)
-        || patch
-            .scrollback_mouse
-            .is_some_and(|value| preferences.scrollback_mouse != value)
-        || patch
-            .raw_output
-            .is_some_and(|value| preferences.raw_output != value)
-        || patch
-            .status_line_colors
-            .is_some_and(|value| preferences.status_line_colors != value)
-        || patch
-            .theme
-            .as_ref()
-            .is_some_and(|value| preferences.theme.as_ref() != Some(value))
-        || patch
-            .status_line
-            .as_ref()
-            .is_some_and(|value| preferences.status_line != *value)
-        || patch
-            .terminal_title
-            .as_ref()
-            .is_some_and(|value| preferences.terminal_title != *value);
-    if scalars {
-        return true;
-    }
     let keymap = patch.keymap.iter().any(|(context, actions)| {
         actions.iter().any(|(action, keys)| {
             let resolved = preferences

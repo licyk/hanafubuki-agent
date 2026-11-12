@@ -12,7 +12,6 @@ use super::input_queue::{EscAction, Settled, Submission};
 use super::ChatWidget;
 use crate::agent_bridge::SteerOutcome;
 use crate::app_event::{AppEvent, Op};
-use crate::commands::PROVIDERS;
 use crate::history_cell;
 
 const REVIEW_HOLDS_MESSAGES: &str = "Messages sent during /review wait for it to end. \
@@ -35,10 +34,7 @@ impl ChatWidget {
         if text.trim().is_empty() {
             return;
         }
-        if self.setup_needed
-            && !self.session_open
-            && !self.bottom_pane.command_disabled(PROVIDERS.name)
-        {
+        if self.setup_needed && !self.session_open {
             self.bottom_pane.set_composer_text(text);
             self.add_info_message(
                 "Set up a model Provider and choose a model first; your message is kept."

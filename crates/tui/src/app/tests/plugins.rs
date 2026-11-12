@@ -1,7 +1,7 @@
 //! `/plugins` and `/mcp` end to end over the standalone Agent: a plugin
 //! installed from a marketplace, its hook trusted, turned off and on and
 //! uninstalled with its data; a built-in plugin turned off, refused a
-//! retry, and on again; a plugin's MCP server in `/mcp`, read-only; a
+//! retry, and on again; a plugin's MCP server in `/mcp verbose`; a
 //! plugin whose code failed in `/warnings`.
 
 use std::path::Path;
@@ -162,7 +162,7 @@ fn a_built_in_plugin_is_turned_off_refused_a_retry_and_turned_on() {
 }
 
 #[test]
-fn mcp_lists_a_plugins_server_read_only() {
+fn mcp_verbose_lists_a_plugins_server() {
     let mut harness = Harness::start(Vec::new());
     harness.add_marketplace();
     harness.on_agent(|agent| async move {
@@ -174,13 +174,12 @@ fn mcp_lists_a_plugins_server_read_only() {
             .await
     });
 
-    harness.type_and_submit("/mcp");
-    harness.pump_until_screen_shows("records (plugin demo@demo-market)");
-    // The row cannot be chosen: Enter on the last row opens the form to
-    // add a server, never one to edit the plugin's.
-    harness.keys(KeyCode::Down, 3);
-    harness.key(KeyCode::Enter);
-    harness.pump_until_screen_shows("Add an MCP server");
+    harness.type_and_submit("/mcp verbose");
+    harness.pump_until("the report", |harness| {
+        harness
+            .transcript()
+            .contains("records (plugin demo@demo-market)")
+    });
 }
 
 #[test]

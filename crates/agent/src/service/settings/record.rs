@@ -1,8 +1,10 @@
 //! A record's fields, read from and written into its serialized form by
 //! their specs: the collections whose records are typed structs (a
 //! Provider, the model policy, an MCP server) share these, so a field the
-//! specs do not name (request headers, per-tool maps, per-model overrides)
-//! is kept as it is.
+//! specs do not name (per-model overrides) is kept as it is. A map of the
+//! record (an MCP server's environment, its per-tool policies) is a list of
+//! `NAME=VALUE` texts while it is read and written ([`maps_as_lists`],
+//! [`lists_as_maps`]).
 
 use std::collections::BTreeMap;
 
@@ -92,4 +94,61 @@ fn set_at(value: &mut Value, key: &str, new: Value) {
         target = object.entry(segment).or_insert(Value::Null);
     }
     *target = new;
+}
+
+/// How a map's values are written from a `NAME=VALUE` text.
+#[derive(Clone, Copy)]
+pub(super) enum PairValue {
+    Text,
+    /// A whole number.
+    Integer,
+}
+
+/// `record` with the maps at `keys` as lists of `NAME=VALUE` texts, which
+/// a `TextList` field reads.
+pub(super) fn maps_as_lists(record: &mut Value, keys: &[(&str, PairValue)]) {
+    for (key, _) in keys {
+        let Some(Value::Object(map)) = at(record, key) else {
+            continue;
+        };
+        let items = map
+            .iter()
+            .map(|(name, value)| match value {
+                Value::String(text) => Value::String(format!("{name}={text}")),
+                other => Value::String(format!("{name}={other}")),
+            })
+            .collect();
+        set_at(record, key, Value::Array(items));
+    }
+}
+
+/// The lists of `NAME=VALUE` texts at `keys` back into maps; an item that is
+/// not one, or a name given twice, is refused.
+pub(super) fn lists_as_maps(record: &mut Value, keys: &[(&str, PairValue)]) -> Result<(), String> {
+    for (key, kind) in keys {
+        let Some(Value::Array(items)) = at(record, key) else {
+            continue;
+        };
+        let mut map = Map::new();
+        for item in items {
+            let text = item.as_str().unwrap_or_default();
+            let (name, value) = text
+                .split_once('=')
+                .map(|(name, value)| (name.trim(), value.trim()))
+                .filter(|(name, _)| !name.is_empty())
+                .ok_or_else(|| format!("`{text}` is not NAME=VALUE"))?;
+            let value = match kind {
+                PairValue::Text => Value::String(value.to_string()),
+                PairValue::Integer => value
+                    .parse::<u64>()
+                    .map(Value::from)
+                    .map_err(|_| format!("`{text}`: the value is not a whole number"))?,
+            };
+            if map.insert(name.to_string(), value).is_some() {
+                return Err(format!("`{name}` is given twice"));
+            }
+        }
+        set_at(record, key, Value::Object(map));
+    }
+    Ok(())
 }

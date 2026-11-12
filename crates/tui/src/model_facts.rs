@@ -1,7 +1,7 @@
-//! How the interface names what is known of a model: a window with where
-//! it came from, and what a model list's entry reports.
+//! How the interface names what is known of a model: where a fact came
+//! from, and what a model list's entry reports.
 
-use hanafubuki_agent::{ModelCatalogEntry, ModelMetadataSource, Sourced};
+use hanafubuki_agent::{ModelCatalogEntry, ModelMetadataSource};
 
 use crate::history_cell::format_tokens_compact;
 
@@ -14,15 +14,6 @@ pub(crate) fn source_name(source: ModelMetadataSource) -> &'static str {
         ModelMetadataSource::Catalog => "models.dev",
         ModelMetadataSource::BuiltIn => "built-in",
     }
-}
-
-/// A window with its source: `200K, reported`.
-pub(crate) fn sourced_window(window: &Sourced<u64>) -> String {
-    format!(
-        "{}, {}",
-        format_tokens_compact(window.value),
-        source_name(window.source)
-    )
 }
 
 /// What a listing's entry reports, for a model list: its window, and

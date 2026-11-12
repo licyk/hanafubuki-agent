@@ -34,7 +34,6 @@ use ratatui::layout::Position;
 use serde_json::Value;
 
 use crate::agent_bridge::{CatalogCall, CatalogOutcome, CatalogReply};
-use crate::commands::CommandSpec;
 use collection::CollectionPage;
 use editor::{ChoicePage, ListPage, ListState};
 use form::{FormPage, FormTarget};
@@ -51,8 +50,8 @@ pub(crate) enum CenterRequest {
     /// Runs the call off the loop; its reply comes back to
     /// [`SettingsCenter::on_reply`].
     Call(u64, CatalogCall),
-    /// Runs the command whose views are the page now on top.
-    OpenCommand(&'static CommandSpec),
+    /// Shows the views of the page now on top, on its record.
+    OpenPage(&'static PageOverride, Option<String>),
     Close,
 }
 
@@ -69,8 +68,11 @@ pub(crate) struct SettingsCenter {
     /// The latest call whose answer came.
     answered: u64,
     requests: Vec<CenterRequest>,
-    /// What `/config` named, opened once the catalog is read.
-    target: Option<String>,
+    /// The number of the latest check of a page that is a command's views.
+    page_checks: u64,
+    /// What `/config` named, opened once the catalog is read, and the
+    /// record a record's page is opened on.
+    target: Option<(String, Option<String>)>,
     /// Where the last frame put the tabs and the rows, for the pointer.
     layout: Layout,
 }
@@ -105,7 +107,8 @@ enum Effect {
     Push(Box<Page>),
     Pop,
     Close,
-    Open(&'static PageOverride),
+    /// A page, on a record when it is a record's.
+    Open(&'static PageOverride, Option<String>),
     /// A field of the page `at` (the page itself when `None`) takes `value`;
     /// `pop` closes the page that chose it.
     Edit {
@@ -144,8 +147,8 @@ enum Notice {
 
 impl SettingsCenter {
     /// The center reading the catalog, opening `target` (a tab, a section,
-    /// a collection or a page) once it is read.
-    pub(crate) fn new(target: Option<String>) -> Self {
+    /// a collection or a page; a record's page on `record`) once it is read.
+    pub(crate) fn new(target: Option<String>, record: Option<String>) -> Self {
         let mut center = Self {
             catalog: None,
             read_error: None,
@@ -155,7 +158,8 @@ impl SettingsCenter {
             next_request: 0,
             answered: 0,
             requests: Vec::new(),
-            target,
+            page_checks: 0,
+            target: target.map(|target| (target, record)),
             layout: Layout::default(),
         };
         center.call(Pending::Read, CatalogCall::Read);
@@ -173,6 +177,18 @@ impl SettingsCenter {
             Some(Page::Hosted(page)) => Some(page.command.name),
             _ => None,
         }
+    }
+
+    /// The number of a new check of the page that is a command's views.
+    pub(crate) fn next_page_check(&mut self) -> u64 {
+        self.page_checks += 1;
+        self.page_checks
+    }
+
+    /// Whether `check` is the latest: an earlier one was sent before a
+    /// key whose step has not shown its view yet.
+    pub(crate) fn is_latest_page_check(&self, check: u64) -> bool {
+        check == self.page_checks
     }
 
     /// The command's views closed: back to the row that opened them, and
@@ -319,8 +335,8 @@ impl SettingsCenter {
         }
         self.prune();
         if self.catalog.is_some() {
-            if let Some(target) = self.target.take() {
-                self.open_target(&target);
+            if let Some((target, record)) = self.target.take() {
+                self.open_target(&target, record);
             }
         }
     }
@@ -335,7 +351,7 @@ impl SettingsCenter {
                 }
             }
             Effect::Close => self.requests.push(CenterRequest::Close),
-            Effect::Open(page) => self.open_page(page),
+            Effect::Open(page, record) => self.open_page(page, record),
             Effect::Edit {
                 key,
                 value,
@@ -451,7 +467,12 @@ impl SettingsCenter {
                 }
                 self.notice = Notice::Done(match message {
                     Some(message) => message,
-                    None => format!("Done: {action}"),
+                    None => match action.as_str() {
+                        "save" => "Saved".to_string(),
+                        "add" => "Added".to_string(),
+                        "delete" => "Deleted".to_string(),
+                        _ => format!("Done: {action}"),
+                    },
                 });
             }
             (Pending::Action(..), _) => {}
@@ -487,25 +508,82 @@ impl SettingsCenter {
         }
     }
 
-    fn open_page(&mut self, page: &'static PageOverride) {
+    fn open_page(&mut self, page: &'static PageOverride, record: Option<String>) {
         self.pages.push(Page::Hosted(page));
-        self.requests.push(CenterRequest::OpenCommand(page.command));
+        self.requests.push(CenterRequest::OpenPage(page, record));
     }
 
-    /// `/config TARGET`: a tab, a section, a collection or a page.
-    fn open_target(&mut self, target: &str) {
+    /// Runs the action of a collection a page asked for (a Provider's
+    /// model chosen), at the revision the center read, as its own.
+    pub(crate) fn run_action(
+        &mut self,
+        collection: &str,
+        record: Option<&str>,
+        action: &str,
+        values: serde_json::Map<String, Value>,
+    ) {
+        let Some(found) = self.catalog.as_ref().and_then(|catalog| {
+            catalog
+                .collections
+                .iter()
+                .find(|candidate| candidate.id == collection)
+        }) else {
+            return;
+        };
+        let mut request = collection::request(found, record, action);
+        request.values = values;
+        let at = self.pages.len() - 1;
+        self.send(
+            Pending::Action(at, action.to_string()),
+            CatalogCall::Action(request),
+        );
+    }
+
+    /// `/config TARGET`: a tab, a section, a collection or a page; a
+    /// record's page opens over its record's form.
+    fn open_target(&mut self, target: &str, record: Option<String>) {
         let Some(catalog) = self.catalog.as_ref() else {
             return;
         };
         let Some(Page::Main(main)) = self.pages.first_mut() else {
             return;
         };
-        match main.open_target(catalog, target) {
-            Some(effect) => self.apply(effect),
+        let page = registry::page(target);
+        let effect = match page.map(|page| &page.attach) {
+            Some(Attach::Record { collection, .. }) => main.open_target(catalog, collection),
+            _ => main.open_target(catalog, target),
+        };
+        let Some(effect) = effect else {
+            self.notice = Notice::Failed(format!(
+                "There is no settings page `{target}`: a tab, a section, a collection or a page names one."
+            ));
+            return;
+        };
+        self.apply(effect);
+        let (Some(page), Some(record)) = (page, record) else {
+            return;
+        };
+        let Some(Page::Collection(list)) = self.pages.last_mut() else {
+            return;
+        };
+        let catalog = self.catalog.as_ref();
+        list.select_record(catalog, &record);
+        let form = catalog
+            .and_then(|catalog| list.collection(catalog))
+            .and_then(|collection| {
+                let stored = collection
+                    .records
+                    .iter()
+                    .find(|stored| stored.id == record)?;
+                Some(FormPage::record(collection, stored))
+            });
+        match form {
+            Some(form) => {
+                self.pages.push(Page::Form(form));
+                self.open_page(page, Some(record));
+            }
             None => {
-                self.notice = Notice::Failed(format!(
-                    "There is no settings page `{target}`: a tab, a section, a collection or a page names one."
-                ))
+                self.notice = Notice::Failed(format!("There is no `{record}` to open."));
             }
         }
     }

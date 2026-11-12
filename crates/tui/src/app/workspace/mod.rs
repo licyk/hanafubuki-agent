@@ -73,14 +73,30 @@ pub(crate) enum WorkspaceEvent {
     /// `/agents`.
     OpenAgents,
     /// `/config [target]`: the settings center, at the tab, section,
-    /// collection or page named.
-    OpenSettings(Option<String>),
+    /// collection or page named; a record's page on `record`.
+    OpenSettings {
+        target: Option<String>,
+        record: Option<String>,
+    },
+    /// What a page of the center asks of a collection.
+    SettingsAction(SettingsPageAction),
     /// What a call of the settings center found.
     Settings(Box<CatalogReply>),
     /// Whether the command whose views are the center's page still shows
     /// one; sent after the keys it took, so that the step one of its views
-    /// asked for has shown its next view first.
-    SettingsPageCheck,
+    /// asked for has shown its next view first. Only the latest check
+    /// counts: one sent before a later key comes before that key's step.
+    SettingsPageCheck(u64),
+}
+
+/// An action of a collection a page of the settings center runs (a
+/// Provider's model chosen), at the revision the center read.
+#[derive(Debug)]
+pub(crate) struct SettingsPageAction {
+    pub(crate) collection: String,
+    pub(crate) record: Option<String>,
+    pub(crate) action: String,
+    pub(crate) values: serde_json::Map<String, serde_json::Value>,
 }
 
 /// Which conversation: the main one, or the second.
@@ -155,6 +171,12 @@ pub(super) struct Workspace {
 }
 
 impl Workspace {
+    /// The settings center, when it is open.
+    #[cfg(test)]
+    pub(crate) fn settings(&self) -> Option<&SettingsCenter> {
+        self.settings.as_ref()
+    }
+
     pub(super) fn second_focused(&self) -> bool {
         self.second
             .as_ref()
@@ -312,9 +334,12 @@ impl App {
                 }
             }
             WorkspaceEvent::OpenAgents => self.open_agents_center(tui),
-            WorkspaceEvent::OpenSettings(target) => self.open_settings_center(tui, target),
+            WorkspaceEvent::OpenSettings { target, record } => {
+                self.open_settings_center(tui, target, record)
+            }
+            WorkspaceEvent::SettingsAction(action) => self.run_settings_action(tui, action),
             WorkspaceEvent::Settings(reply) => self.settings_reply(tui, *reply),
-            WorkspaceEvent::SettingsPageCheck => self.check_settings_page(),
+            WorkspaceEvent::SettingsPageCheck(check) => self.check_settings_page(check),
         }
         self.schedule_frame(Instant::now());
     }

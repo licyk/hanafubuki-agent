@@ -92,7 +92,7 @@ fn text_killed_in_a_secret_cannot_be_yanked_in_another_field() {
 }
 
 #[test]
-fn tab_shift_tab_and_the_arrows_move_between_the_stops_and_wrap() {
+fn tab_shift_tab_and_the_arrows_move_between_the_fields_and_wrap() {
     let mut form = provider_like();
     assert!(line_with(&form, "Name").starts_with("› "));
     form.handle_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT));
@@ -134,104 +134,21 @@ fn an_error_is_shown_under_its_field_which_takes_the_focus() {
         "Server",
         vec![
             FormItem::text("id", "Id", ""),
-            FormItem::text("timeout", "Timeout", "x").advanced(),
+            FormItem::text("timeout", "Timeout", "x"),
             FormItem::action("save", "Save"),
         ],
     );
-    assert!(!screen(&form).join("\n").contains("Timeout"));
     form.set_error("timeout", "Enter a whole number.");
     assert_eq!(form.error("timeout"), Some("Enter a whole number."));
     let lines = screen(&form);
     let at = lines
         .iter()
         .position(|line| line.contains("Timeout"))
-        .expect("the advanced part opens");
+        .expect("the field is shown");
     assert!(lines[at].starts_with("› "), "{lines:?}");
     assert!(lines[at + 1].contains("Enter a whole number."), "{lines:?}");
     form.clear_errors();
     assert_eq!(form.error("timeout"), None);
-}
-
-#[test]
-fn a_field_shown_for_one_choice_leaves_the_stops_for_another() {
-    let mut form = FormView::new(
-        "Server",
-        vec![
-            FormItem::choice("transport", "Transport", &["stdio", "http"], 0),
-            FormItem::text("program", "Program", "").shown_if("transport", 0),
-            FormItem::text("url", "URL", "").shown_if("transport", 1),
-        ],
-    );
-    let shown = screen(&form).join("\n");
-    assert!(
-        shown.contains("Program") && !shown.contains("URL"),
-        "{shown}"
-    );
-    form.handle_key(key(KeyCode::Right));
-    let shown = screen(&form).join("\n");
-    assert!(
-        !shown.contains("Program") && shown.contains("URL"),
-        "{shown}"
-    );
-    form.handle_key(key(KeyCode::Tab));
-    type_text(&mut form, "https://example.com");
-    assert_eq!(form.text("url"), "https://example.com");
-    assert_eq!(form.text("program"), "");
-}
-
-#[test]
-fn rows_are_added_marked_secret_and_read_without_the_nameless_ones() {
-    let mut form = FormView::new(
-        "Server",
-        vec![
-            FormItem::rows(
-                "env",
-                "Environment",
-                vec![RowValue {
-                    name: "MODE".into(),
-                    value: "fast".into(),
-                    secret: false,
-                }],
-                "Add a variable",
-            )
-            .with_secret_column(),
-            FormItem::action("save", "Save"),
-        ],
-    );
-    // name, value, secret switch, then "Add a variable".
-    for _ in 0..3 {
-        form.handle_key(key(KeyCode::Tab));
-    }
-    form.handle_key(key(KeyCode::Enter));
-    type_text(&mut form, "API_KEY");
-    form.handle_key(key(KeyCode::Tab));
-    type_text(&mut form, "hunter2");
-    form.handle_key(key(KeyCode::Tab));
-    form.handle_key(key(KeyCode::Char(' ')));
-    let row = line_with(&form, "API_KEY");
-    assert!(
-        row.contains("•••••••") && row.ends_with("[secret]"),
-        "{row}"
-    );
-    // A row whose name is cleared is dropped.
-    form.handle_key(key(KeyCode::Tab));
-    form.handle_key(key(KeyCode::Enter));
-    type_text(&mut form, "  ");
-    assert_eq!(
-        form.rows("env"),
-        vec![
-            RowValue {
-                name: "MODE".into(),
-                value: "fast".into(),
-                secret: false,
-            },
-            RowValue {
-                name: "API_KEY".into(),
-                value: "hunter2".into(),
-                secret: true,
-            },
-        ]
-    );
 }
 
 #[test]
