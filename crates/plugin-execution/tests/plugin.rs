@@ -1,5 +1,5 @@
-//! The execution plugin registers its tools and its approval rule while it
-//! runs and removes them, and stops its output monitors, when it stops.
+//! The execution plugin registers its tools, their presenter and its
+//! approval rule while it runs and removes them, and stops its output monitors, when it stops.
 
 use std::sync::Arc;
 
@@ -8,7 +8,7 @@ use hanafubuki_agent_approval::{
 };
 use hanafubuki_agent_contracts::{
     ApprovalRuleRegistry, ApprovalRuleVerdict, BlockingService, RegistryService, ToolEffect,
-    ToolRegistry,
+    ToolPresenterRegistry, ToolRegistry,
 };
 use hanafubuki_agent_execution::test_support::FakeAgentExecutionProcessPort;
 use hanafubuki_agent_execution::AgentExecutionService;
@@ -21,18 +21,21 @@ struct Mounted {
     root: Context,
     fiber: Fiber,
     tools: Arc<ToolRegistry>,
+    presenters: Arc<ToolPresenterRegistry>,
     rules: Arc<ApprovalRuleRegistry>,
 }
 
 async fn mount() -> Mounted {
     let tools = Arc::new(ToolRegistry::default());
+    let presenters = Arc::new(ToolPresenterRegistry::default());
     let rules = Arc::new(ApprovalRuleRegistry::default());
-    let provided = (tools.clone(), rules.clone());
+    let provided = (tools.clone(), presenters.clone(), rules.clone());
     let root = Context::new();
     let host = PluginDef::new(move |ctx: Context, _| {
-        let (tools, rules) = provided.clone();
+        let (tools, presenters, rules) = provided.clone();
         async move {
             ctx.provide_arc(tools)?;
+            ctx.provide_arc(presenters)?;
             ctx.provide_arc(rules)?;
             ctx.provide(BlockingService::new(Arc::new(InlineBlockingOperationPort)))?;
             Ok(())
@@ -40,6 +43,7 @@ async fn mount() -> Mounted {
     })
     .provides([
         ToolRegistry::NAME,
+        ToolPresenterRegistry::NAME,
         ApprovalRuleRegistry::NAME,
         BlockingService::NAME,
     ]);
@@ -60,6 +64,7 @@ async fn mount() -> Mounted {
         root,
         fiber,
         tools,
+        presenters,
         rules,
     }
 }
@@ -97,9 +102,18 @@ async fn registers_the_execution_tools_and_removes_them_when_stopped() {
         .collect::<Vec<_>>();
     names.sort();
     assert_eq!(names, ["exec_command", "resize_execution", "write_stdin"]);
+    let command = serde_json::json!({ "cmd": "cargo test" });
+    assert_eq!(
+        mounted
+            .presenters
+            .subject("exec_command", &command)
+            .as_deref(),
+        Some("cargo test")
+    );
 
     mounted.fiber.dispose().await.unwrap();
     assert!(mounted.tools.registry().snapshot().is_empty());
+    assert!(mounted.presenters.registry().snapshot().is_empty());
     assert!(mounted.rules.registry().snapshot().is_empty());
     mounted.root.fiber().dispose().await.unwrap();
 }

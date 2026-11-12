@@ -3,13 +3,14 @@
 //! What the chat does with each update of the turn: Codex's
 //! `dispatch_event_msg` and its `on_*` handlers, over [`TurnUpdate`].
 
-use hanafubuki_agent::{AgentReasoningId, AgentTaskPlanSnapshot};
+use hanafubuki_agent::{AgentReasoningId, AgentTaskPlanSnapshot, AgentToolCallDisplay};
 
 use super::input_queue::Ending;
 use super::ChatWidget;
 use crate::agent_bridge::{TurnEnd, TurnUpdate, Warning, WarningSource};
 use crate::app_event::AppEvent;
 use crate::history_cell::{self, LiveCell, ThinkingCell, ToolResultView};
+
 use crate::status_indicator_widget::StatusIndicatorWidget;
 use crate::streaming::controller::{PlanStreamController, StreamController};
 
@@ -63,11 +64,12 @@ impl ChatWidget {
                 name,
                 subject,
             } => self.on_tool_started(call_id, name, subject),
-            TurnUpdate::ToolCompleted {
-                call_id,
-                is_error,
-                result,
-            } => self.on_tool_completed(call_id, is_error, result),
+            TurnUpdate::ToolCompleted { call_id, is_error } => {
+                self.on_tool_completed(call_id, is_error)
+            }
+            TurnUpdate::ToolDisplayed { call_id, display } => {
+                self.on_tool_displayed(&call_id, display)
+            }
             TurnUpdate::ApprovalRequested(request) => {
                 self.bottom_pane.push_approval_request(request)
             }
@@ -226,19 +228,43 @@ impl ChatWidget {
         self.running_tools.push(cell);
     }
 
-    fn on_tool_completed(&mut self, call_id: String, is_error: bool, result: ToolResultView) {
+    /// The call keeps its place and shape, marked finished, until what it
+    /// shows arrives.
+    fn on_tool_completed(&mut self, call_id: String, is_error: bool) {
         let index = self
             .running_tools
             .iter()
             .position(|cell| cell.cell().call_id() == call_id);
+        let cell = match index {
+            Some(index) => self.running_tools.remove(index),
+            None => {
+                let cell = LiveCell::new(history_cell::new_tool_call(
+                    call_id,
+                    "tool".to_string(),
+                    None,
+                ));
+                self.insert_live_entry(cell.clone());
+                cell
+            }
+        };
+        cell.update(|cell| cell.complete(is_error, ToolResultView::default()));
+        self.awaiting_display.push(cell);
+    }
+
+    /// What a finished call shows is its last revision; Scrollback's tail
+    /// may write it from then on.
+    fn on_tool_displayed(&mut self, call_id: &str, display: Option<AgentToolCallDisplay>) {
+        let index = self
+            .awaiting_display
+            .iter()
+            .position(|cell| cell.cell().call_id() == call_id);
         let Some(index) = index else {
-            let mut cell = history_cell::new_tool_call(call_id, "tool".to_string(), None);
-            cell.complete(is_error, result);
-            self.add_to_history(cell);
             return;
         };
-        let cell = self.running_tools.remove(index);
-        cell.update(|cell| cell.complete(is_error, result));
+        let cell = self.awaiting_display.remove(index);
+        if let Some(display) = display {
+            cell.update(|cell| cell.show(display));
+        }
         self.complete_live_entry(cell);
     }
 

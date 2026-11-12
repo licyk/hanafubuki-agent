@@ -57,10 +57,52 @@ fn committed_progress(
         .events
         .into_iter()
         .filter_map(|event| match event.kind {
-            AgentEventKind::ExecutionProgress { update } => Some(update),
+            AgentEventKind::ExecutionProgress { update, .. } => Some(update),
             _ => None,
         })
         .collect()
+}
+
+/// A tool call's sink stamps its progress with the call, as the event
+/// stream carries it; the application's own reports name none.
+#[tokio::test]
+async fn a_calls_progress_names_the_call_and_the_applications_names_none() {
+    let store = Arc::new(RecordingHistoryStore::default());
+    let (service, session_id) = service_over(store);
+
+    service
+        .execution_progress_sink(session_id, Some("call-1".to_string()))
+        .report(started(3));
+    service
+        .flush_session_execution_progress(session_id)
+        .await
+        .unwrap();
+    let application = service.clone();
+    tokio::task::spawn_blocking(move || {
+        application
+            .report_session_execution_progress(session_id, disposed(3))
+            .unwrap()
+    })
+    .await
+    .unwrap();
+
+    let calls: Vec<_> = service
+        .events_since(session_id, None)
+        .unwrap()
+        .events
+        .into_iter()
+        .filter_map(|event| match event.kind {
+            AgentEventKind::ExecutionProgress { call_id, update } => Some((call_id, update)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        calls,
+        vec![
+            (Some("call-1".to_string()), started(3)),
+            (None, disposed(3)),
+        ]
+    );
 }
 
 #[tokio::test]
@@ -104,7 +146,7 @@ fn a_burst_of_reports_never_waits_and_keeps_every_other_update_and_the_newest_ou
     let (burst_returned_while_parked, committed, snapshot) = on_a_current_thread_runtime({
         let service = service.clone();
         move || async move {
-            let sink = service.execution_progress_sink(session_id);
+            let sink = service.execution_progress_sink(session_id, None);
             sink.report(started(1));
             // The consumer commits the start and its acknowledgement parks.
             meet(|gate| &gate.started, &gate).await;
@@ -170,7 +212,7 @@ fn the_progress_a_turn_reports_is_committed_before_its_end() {
             _cancellation: CancellationToken,
         ) -> ModelFuture<'_, ModelResult<ModelStream>> {
             let (service, session_id) = self.session.get().unwrap();
-            let sink = service.execution_progress_sink(*session_id);
+            let sink = service.execution_progress_sink(*session_id, None);
             sink.report(started(5));
             sink.report(disposed(5));
             let events = final_answer_events("Done.");
@@ -219,7 +261,7 @@ fn the_progress_a_turn_reports_is_committed_before_its_end() {
     let position =
         |wanted: &dyn Fn(&AgentEventKind) -> bool| kinds.iter().position(wanted).unwrap();
     let disposed_at = position(
-        &|kind| matches!(kind, AgentEventKind::ExecutionProgress { update } if *update == disposed(5)),
+        &|kind| matches!(kind, AgentEventKind::ExecutionProgress { update, .. } if *update == disposed(5)),
     );
     let completed_at = position(&|kind| matches!(kind, AgentEventKind::TurnCompleted { .. }));
     assert!(
@@ -244,7 +286,7 @@ fn a_synchronous_report_follows_the_progress_queued_before_it() {
     let (waited, committed, snapshot) = on_a_current_thread_runtime({
         let service = service.clone();
         move || async move {
-            let sink = service.execution_progress_sink(session_id);
+            let sink = service.execution_progress_sink(session_id, None);
             sink.report(started(3));
             sink.report(output(3, "tail\n", 5));
             meet(|gate| &gate.started, &gate).await;

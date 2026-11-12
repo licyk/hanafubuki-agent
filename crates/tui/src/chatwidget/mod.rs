@@ -72,6 +72,9 @@ pub(crate) struct ChatWidget {
     bottom_pane: BottomPane,
     /// The tool calls that run, in the order they started.
     running_tools: Vec<Arc<LiveCell<ToolCallCell>>>,
+    /// The calls that finished and wait for what they show
+    /// (`TurnUpdate::ToolDisplayed`), live until it arrives.
+    awaiting_display: Vec<Arc<LiveCell<ToolCallCell>>>,
     /// The reasoning items the model is thinking in, in the order they
     /// started.
     live_thinking: Vec<(AgentReasoningId, Arc<LiveCell<ThinkingCell>>)>,
@@ -136,6 +139,7 @@ impl ChatWidget {
             frame_requester,
             bottom_pane,
             running_tools: Vec::new(),
+            awaiting_display: Vec::new(),
             live_thinking: Vec::new(),
             stream_controller: None,
             plan_stream_controller: None,

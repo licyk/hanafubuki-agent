@@ -307,9 +307,12 @@ mod sampling;
 mod session;
 mod state;
 mod stores;
+mod tool_display;
 mod tool_execution;
 mod turn;
 mod validation;
+
+pub use tool_display::AgentToolCallDisplay;
 
 use diagnostics::{trace_tool_call, trace_tool_result};
 use durable::StagedPersistence;

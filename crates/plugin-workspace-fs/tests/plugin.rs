@@ -1,9 +1,11 @@
-//! The workspace-fs plugin registers its six tools while it runs and removes
-//! them when it stops.
+//! The workspace-fs plugin registers its six tools and their presenter while
+//! it runs and removes them when it stops.
 
 use std::sync::Arc;
 
-use hanafubuki_agent_contracts::{BlockingService, RegistryService, ToolEffect, ToolRegistry};
+use hanafubuki_agent_contracts::{
+    BlockingService, RegistryService, ToolEffect, ToolPresenterRegistry, ToolRegistry,
+};
 use hanafubuki_agent_foundation::blocking::InlineBlockingOperationPort;
 use hanafubuki_agent_plugin_workspace_fs::workspace_fs_plugin;
 use hanafubuki_agent_tool_contracts::ToolExecutionClass;
@@ -11,25 +13,31 @@ use hanafubuki_agent_workspace_fs::{WorkspaceFsPolicy, WorkspaceFsService};
 use kardia_core::{Context, FiberState, PluginDef, Service};
 use serde_json::Value;
 
-async fn root_with_host_services() -> (Context, Arc<ToolRegistry>) {
+async fn root_with_host_services() -> (Context, Arc<ToolRegistry>, Arc<ToolPresenterRegistry>) {
     let tools = Arc::new(ToolRegistry::default());
-    let provided = tools.clone();
+    let presenters = Arc::new(ToolPresenterRegistry::default());
+    let provided = (tools.clone(), presenters.clone());
     let root = Context::new();
     let host = PluginDef::new(move |ctx: Context, _| {
-        let tools = provided.clone();
+        let (tools, presenters) = provided.clone();
         async move {
             ctx.provide_arc(tools)?;
+            ctx.provide_arc(presenters)?;
             ctx.provide(BlockingService::new(Arc::new(InlineBlockingOperationPort)))?;
             Ok(())
         }
     })
-    .provides([ToolRegistry::NAME, BlockingService::NAME]);
+    .provides([
+        ToolRegistry::NAME,
+        ToolPresenterRegistry::NAME,
+        BlockingService::NAME,
+    ]);
     root.plugin_def(&host, Value::Null)
         .unwrap()
         .settled()
         .await
         .unwrap();
-    (root, tools)
+    (root, tools, presenters)
 }
 
 #[tokio::test]
@@ -39,7 +47,7 @@ async fn registers_the_filesystem_tools_and_removes_them_when_stopped() {
         WorkspaceFsPolicy::rooted_at(workspace.path(), std::iter::empty::<std::path::PathBuf>())
             .unwrap(),
     );
-    let (root, tools) = root_with_host_services().await;
+    let (root, tools, presenters) = root_with_host_services().await;
     let fiber = root
         .plugin_def(&workspace_fs_plugin(files), Value::Null)
         .unwrap();
@@ -70,7 +78,14 @@ async fn registers_the_filesystem_tools_and_removes_them_when_stopped() {
         .items()
         .all(|tool| tool.descriptor().execution_class == ToolExecutionClass::Exclusive));
 
+    let read = serde_json::json!({ "path": "src/lib.rs" });
+    assert_eq!(
+        presenters.subject("read_file", &read).as_deref(),
+        Some("src/lib.rs")
+    );
+
     fiber.dispose().await.unwrap();
     assert!(tools.registry().snapshot().is_empty());
+    assert!(presenters.registry().snapshot().is_empty());
     root.fiber().dispose().await.unwrap();
 }

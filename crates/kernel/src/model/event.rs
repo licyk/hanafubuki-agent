@@ -124,7 +124,11 @@ pub enum AgentEventKind {
         call_id: String,
         is_error: bool,
     },
+    /// A process's live progress. `call_id` is the call whose sink reported
+    /// it (the `exec_command` that started the execution, while it runs and
+    /// after it returned); `None` for the application's own reports.
     ExecutionProgress {
+        call_id: Option<String>,
         update: AgentToolProgressUpdate,
     },
     ApprovalRequested {

@@ -3,7 +3,8 @@ use std::sync::Arc;
 use hanafubuki_agent_contracts::{
     ApprovalRuleRegistry, ContextRegistry, ContextRendererRegistry, ContinuationHookRegistry,
     ObserverRegistry, PluginFaults, PromptContributorRegistry, RegistryService,
-    ToolLifecycleHookRegistry, ToolRegistry, ToolSourceRegistry, TurnAdmissionRegistry,
+    ToolLifecycleHookRegistry, ToolPresenterRegistry, ToolRegistry, ToolSourceRegistry,
+    TurnAdmissionRegistry,
 };
 use kardia_core::{Context, PluginDef, Service};
 
@@ -34,6 +35,9 @@ pub struct AgentKernelRegistries {
     /// The hooks asked around each tool call, frozen with each sampling
     /// step's tool plan.
     pub tool_lifecycle_hooks: Arc<ToolLifecycleHookRegistry>,
+    /// How an interface shows each tool's calls. It holds the presenter of
+    /// the kernel's own tools from the start.
+    pub tool_presenters: Arc<ToolPresenterRegistry>,
     /// Told what the kernel committed, after the commit is durable.
     pub observers: Arc<ObserverRegistry>,
     /// Where every registry's entries, and plugins' scoped workers, report a
@@ -43,7 +47,7 @@ pub struct AgentKernelRegistries {
 
 impl Default for AgentKernelRegistries {
     /// Registries sharing one [`PluginFaults`], empty but for the kernel's
-    /// own renderers.
+    /// own renderers and tool presenter.
     fn default() -> Self {
         let faults = Arc::new(PluginFaults::default());
         let context_renderers = Arc::new(ContextRendererRegistry::with_faults(faults.clone()));
@@ -53,6 +57,15 @@ impl Default for AgentKernelRegistries {
                 .register_permanent("agent-kernel", renderer, ContextRendererRegistry::admit)
                 .expect("the kernel's renderers are distinct kinds");
         }
+        let tool_presenters = Arc::new(ToolPresenterRegistry::with_faults(faults.clone()));
+        tool_presenters
+            .registry()
+            .register_permanent(
+                "agent-kernel",
+                Arc::new(crate::core_tools::CoreToolPresenter),
+                ToolPresenterRegistry::admit,
+            )
+            .expect("the registry is empty");
         Self {
             tools: Arc::new(ToolRegistry::with_faults(faults.clone())),
             tool_sources: Arc::new(ToolSourceRegistry::with_faults(faults.clone())),
@@ -63,6 +76,7 @@ impl Default for AgentKernelRegistries {
             approval_rules: Arc::new(ApprovalRuleRegistry::with_faults(faults.clone())),
             continuation_hooks: Arc::new(ContinuationHookRegistry::with_faults(faults.clone())),
             tool_lifecycle_hooks: Arc::new(ToolLifecycleHookRegistry::with_faults(faults.clone())),
+            tool_presenters,
             observers: Arc::new(ObserverRegistry::with_faults(faults.clone())),
             faults,
         }
@@ -84,6 +98,7 @@ pub fn kernel_plugin(registries: AgentKernelRegistries) -> PluginDef {
             ctx.provide_arc(registries.approval_rules)?;
             ctx.provide_arc(registries.continuation_hooks)?;
             ctx.provide_arc(registries.tool_lifecycle_hooks)?;
+            ctx.provide_arc(registries.tool_presenters)?;
             ctx.provide_arc(registries.observers)?;
             ctx.provide_arc(registries.faults)?;
             Ok(())
@@ -100,6 +115,7 @@ pub fn kernel_plugin(registries: AgentKernelRegistries) -> PluginDef {
         ApprovalRuleRegistry::NAME,
         ContinuationHookRegistry::NAME,
         ToolLifecycleHookRegistry::NAME,
+        ToolPresenterRegistry::NAME,
         ObserverRegistry::NAME,
         PluginFaults::NAME,
     ])

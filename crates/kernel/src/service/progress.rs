@@ -67,6 +67,8 @@ struct QueueState {
 
 struct QueuedProgress {
     sequence: u64,
+    /// The call whose sink reported it.
+    call_id: Option<String>,
     update: AgentToolProgressUpdate,
 }
 
@@ -98,6 +100,7 @@ impl ExecutionProgressQueue {
     /// starts a consumer with `spawn` when none runs. `false` once closed.
     pub(in crate::service) fn report(
         &self,
+        call_id: Option<String>,
         update: AgentToolProgressUpdate,
         spawn: impl FnOnce(u64) -> tokio::task::AbortHandle,
     ) -> bool {
@@ -114,7 +117,11 @@ impl ExecutionProgressQueue {
             if let Some(update) = update {
                 state.queued += 1;
                 let sequence = state.queued;
-                state.pending.push_back(QueuedProgress { sequence, update });
+                state.pending.push_back(QueuedProgress {
+                    sequence,
+                    call_id,
+                    update,
+                });
             }
             state.reserve_consumer()
         };
@@ -157,12 +164,12 @@ impl ExecutionProgressQueue {
 
     /// The next update for consumer `id`, or `None` once the queue is empty,
     /// which ends the consumer.
-    fn take(&self, id: u64) -> Option<(u64, AgentToolProgressUpdate)> {
+    fn take(&self, id: u64) -> Option<QueuedProgress> {
         let mut state = self.state.lock();
         match state.pending.pop_front() {
-            Some(QueuedProgress { sequence, update }) => {
-                state.taken = sequence;
-                Some((sequence, update))
+            Some(queued) => {
+                state.taken = queued.sequence;
+                Some(queued)
             }
             None => {
                 if state
@@ -244,7 +251,8 @@ impl ExecutionProgressQueue {
 
 /// Folds `update`, when it is an output, into the queued output of its
 /// execution, if that is the last entry of the execution queued; otherwise
-/// hands it back to be queued.
+/// hands it back to be queued. One execution reports through one call's
+/// sink, so the queued entry's call is the update's.
 fn coalesce_output(
     pending: &mut VecDeque<QueuedProgress>,
     update: AgentToolProgressUpdate,
@@ -346,18 +354,24 @@ impl Drop for ProgressConsumer {
     }
 }
 
-/// The progress sink of one tool call: it queues on the call's session.
+/// The progress sink of one tool call: it queues on the call's session,
+/// stamped with the call.
 pub(super) struct SessionToolProgressSink {
     pub(super) service: AgentService,
     pub(super) session_id: AgentSessionId,
+    pub(super) call_id: Option<String>,
     /// The runtime of the call's turn, which runs the session's consumer.
     pub(super) runtime: tokio::runtime::Handle,
 }
 
 impl crate::AgentToolProgressSink for SessionToolProgressSink {
     fn report(&self, update: AgentToolProgressUpdate) {
-        self.service
-            .queue_execution_progress(self.session_id, update, &self.runtime);
+        self.service.queue_execution_progress(
+            self.session_id,
+            self.call_id.clone(),
+            update,
+            &self.runtime,
+        );
     }
 }
 
@@ -366,11 +380,12 @@ impl AgentService {
     pub(super) fn queue_execution_progress(
         &self,
         session_id: AgentSessionId,
+        call_id: Option<String>,
         update: AgentToolProgressUpdate,
         runtime: &tokio::runtime::Handle,
     ) {
         let queued = self.inner.sessions.find(session_id).is_some_and(|cell| {
-            cell.progress().report(update, |id| {
+            cell.progress().report(call_id, update, |id| {
                 self.spawn_progress_consumer(&cell, id, runtime)
             })
         });
@@ -401,15 +416,18 @@ impl AgentService {
     /// empty.
     async fn drain_execution_progress(self, mut consumer: ProgressConsumer) {
         let cell = consumer.cell.clone();
-        while let Some((sequence, update)) = cell.progress().take(consumer.id) {
-            if let Err(error) = self.commit_execution_progress(&cell, update).await {
+        while let Some(queued) = cell.progress().take(consumer.id) {
+            if let Err(error) = self
+                .commit_execution_progress(&cell, queued.call_id, queued.update)
+                .await
+            {
                 log::warn!(
                     "agent_diag stage=execution.progress.persist session_id={} outcome=error error={}",
                     cell.session_id(),
                     bounded_diagnostic(error.to_string())
                 );
             }
-            cell.progress().applied(sequence);
+            cell.progress().applied(queued.sequence);
         }
         consumer.drained = true;
     }
@@ -419,11 +437,12 @@ impl AgentService {
     async fn commit_execution_progress(
         &self,
         cell: &Arc<SessionCell>,
+        call_id: Option<String>,
         update: AgentToolProgressUpdate,
     ) -> Result<(), AgentError> {
         let staged = {
             let mut record = cell.lock_after_persistence().await?;
-            self.stage_execution_progress(cell, &mut record, update)
+            self.stage_execution_progress(cell, &mut record, call_id, update)
         };
         let Some((staged, event)) = staged else {
             return Ok(());
@@ -454,7 +473,7 @@ impl AgentService {
         }
         let staged = {
             let mut record = cell.lock_after_persistence_blocking()?;
-            self.stage_execution_progress(&cell, &mut record, update)
+            self.stage_execution_progress(&cell, &mut record, None, update)
         };
         let Some((staged, event)) = staged else {
             return Ok(());
@@ -470,6 +489,7 @@ impl AgentService {
         &self,
         cell: &Arc<SessionCell>,
         record: &mut SessionRecord,
+        call_id: Option<String>,
         update: AgentToolProgressUpdate,
     ) -> Option<(StagedPersistence, AgentEvent)> {
         if record.status.disposing {
@@ -487,7 +507,7 @@ impl AgentService {
         let previous = record.rollback_state();
         let event = record_session_event(
             record,
-            AgentEventKind::ExecutionProgress { update },
+            AgentEventKind::ExecutionProgress { call_id, update },
             self.inner.limits,
         );
         let staged = if checkpoint {
@@ -523,15 +543,17 @@ impl AgentService {
 
 #[cfg(any(test, feature = "test-support"))]
 impl AgentService {
-    /// The progress sink a tool call of `session_id` reports into, on the
-    /// current runtime (test support).
+    /// The progress sink the tool call `call_id` of `session_id` reports
+    /// into, on the current runtime (test support).
     pub fn execution_progress_sink(
         &self,
         session_id: AgentSessionId,
+        call_id: Option<String>,
     ) -> Arc<dyn crate::AgentToolProgressSink> {
         Arc::new(SessionToolProgressSink {
             service: self.clone(),
             session_id,
+            call_id,
             runtime: tokio::runtime::Handle::current(),
         })
     }

@@ -65,17 +65,18 @@ PluginDef::new(apply)      apply: get the injected services, register entries, s
 
 The extension points a plugin registers in:
 
-| Registry                    | What is registered                          | When the kernel reads it                |
-| --------------------------- | ------------------------------------------- | --------------------------------------- |
-| `ToolRegistry`              | `AgentToolHandler` (a tool)                 | every sampling step, with the tool plan |
-| `ToolSourceRegistry`        | `AgentToolSource` (tools per step)          | every sampling step                     |
-| `ContextRegistry`           | `ContextContributor` (world-state sections) | at turn admission                       |
-| `ContextRendererRegistry`   | `ContextRenderer` (how a section is shown)  | a snapshot per model request            |
-| `TurnAdmissionRegistry`     | `TurnAdmissionContributor`                  | at turn admission                       |
-| `PromptContributorRegistry` | `PromptContributor` (fragments per request) | prepared once per sampling step         |
-| `ApprovalRuleRegistry`      | `ApprovalRule` (tightens approval only)     | frozen with each step's tool plan       |
-| `ContinuationHookRegistry`  | continuation hooks                          | every sampling step                     |
-| `ObserverRegistry`          | `AgentObserver` (what was committed)        | after each durable commit               |
+| Registry                    | What is registered                                    | When the kernel reads it                |
+| --------------------------- | ----------------------------------------------------- | --------------------------------------- |
+| `ToolRegistry`              | `AgentToolHandler` (a tool)                           | every sampling step, with the tool plan |
+| `ToolSourceRegistry`        | `AgentToolSource` (tools per step)                    | every sampling step                     |
+| `ContextRegistry`           | `ContextContributor` (world-state sections)           | at turn admission                       |
+| `ContextRendererRegistry`   | `ContextRenderer` (how a section is shown)            | a snapshot per model request            |
+| `TurnAdmissionRegistry`     | `TurnAdmissionContributor`                            | at turn admission                       |
+| `PromptContributorRegistry` | `PromptContributor` (fragments per request)           | prepared once per sampling step         |
+| `ApprovalRuleRegistry`      | `ApprovalRule` (tightens approval only)               | frozen with each step's tool plan       |
+| `ContinuationHookRegistry`  | continuation hooks                                    | every sampling step                     |
+| `ToolPresenterRegistry`     | `AgentToolPresenter` (how its tools' calls are shown) | when an interface asks                  |
+| `ObserverRegistry`          | `AgentObserver` (what was committed)                  | after each durable commit               |
 
 Uniqueness, combination and the rules of each are in [Plugin rules](/docs/plugin-rules#extension-points). Host plugins mostly contribute tools and context sections; an example of each follows.
 

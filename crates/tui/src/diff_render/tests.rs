@@ -1,12 +1,12 @@
 // Modified from OpenAI Codex 57a808a392 (Apache-2.0).
 
-use hanafubuki_agent::PatchPreview;
+use hanafubuki_agent::AgentPatchPreview;
 use ratatui::text::Line;
 
 use super::*;
 use crate::render::highlight::{resolve_theme_by_name, set_syntax_theme};
 
-fn render(preview: &PatchPreview, width: usize) -> String {
+fn render(preview: &AgentPatchPreview, width: usize) -> String {
     create_diff_summary(preview, width)
         .iter()
         .map(|line| {
@@ -21,7 +21,7 @@ fn render(preview: &PatchPreview, width: usize) -> String {
 
 #[test]
 fn several_files_each_get_a_header_snapshot() {
-    let preview: PatchPreview = serde_json::from_value(serde_json::json!({
+    let preview: AgentPatchPreview = serde_json::from_value(serde_json::json!({
         "files": [
             {"operation": "add", "path": "new.txt", "movedTo": null,
              "lines": [{"kind": "added", "text": "hello"}], "added": 1, "removed": 0, "omittedLines": 0},
@@ -37,7 +37,7 @@ fn several_files_each_get_a_header_snapshot() {
 
 #[test]
 fn an_unreadable_patch_says_why() {
-    let preview = PatchPreview {
+    let preview = AgentPatchPreview {
         files: Vec::new(),
         error: Some("missing *** Begin Patch".to_string()),
     };
@@ -75,7 +75,7 @@ fn styled(lines: &[Line<'static>]) -> String {
 #[test]
 fn a_patch_is_highlighted_by_its_files_language_snapshot() {
     set_syntax_theme(resolve_theme_by_name("base16-ocean-dark", None).unwrap());
-    let preview: PatchPreview = serde_json::from_value(serde_json::json!({
+    let preview: AgentPatchPreview = serde_json::from_value(serde_json::json!({
         "files": [
             {"operation": "update", "path": "src/lib.rs", "movedTo": null,
              "lines": [

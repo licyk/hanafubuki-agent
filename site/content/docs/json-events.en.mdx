@@ -95,12 +95,27 @@ The thinking is the summary or the raw thinking text the Provider sends; when it
 }
 ```
 
-| `kind.type`               | Fields                           | Means                                                                                                         |
-| ------------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `tool_started`            | `callId`, `name`, `presentation` | A tool call started. `presentation` has `action` (an identifier) and `subject` (a command, a path, or `null`) |
-| `tool_execution_finished` | `callId`, `isError`              | The tool finished running                                                                                     |
-| `tool_completed`          | `callId`, `isError`              | The tool's result is in the history                                                                           |
-| `execution_progress`      | `update`                         | A process's live progress; `turnId` is `null`                                                                 |
+```json
+{
+  "type": "execution_progress",
+  "callId": "call_1",
+  "update": {
+    "type": "execution_output",
+    "executionId": 4,
+    "generation": 1,
+    "text": "running 12 tests\n",
+    "nextOffset": 17,
+    "truncated": false
+  }
+}
+```
+
+| `kind.type`               | Fields                           | Means                                                                                                                                                                                                                                                                                                                                          |
+| ------------------------- | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tool_started`            | `callId`, `name`, `presentation` | A tool call started. `presentation` has `action` (an identifier) and `subject`: what the call acts on, read from its arguments by its tool's [presenter](/docs/plugin-rules#tool-presenters) (the command line, the path, the query; the first line, at most 200 characters), or `null`                                                        |
+| `tool_execution_finished` | `callId`, `isError`              | The tool finished running                                                                                                                                                                                                                                                                                                                      |
+| `tool_completed`          | `callId`, `isError`              | The tool's result is in the history                                                                                                                                                                                                                                                                                                            |
+| `execution_progress`      | `callId`, `update`               | A process's live progress; `turnId` is `null`. `callId` is the tool call that reported it: the `exec_command` that started the process, also once that call returned and the process runs on in the background; `null` for what the Agent reports itself (a background process stopped from outside a turn, the processes a previous run left) |
 
 The `update.type` of `execution_progress`:
 
@@ -113,6 +128,8 @@ The `update.type` of `execution_progress`:
 | `execution_cleanup_failed` | `executionId`, `generation`                                          |
 
 `status` is `starting`, `running`, `exited`, `failed`, `cancelled` or `timed_out`; `exitCode` is an integer or `null`.
+
+What a finished call shows (its output as an interface lays it out) is not in the stream: the output the model read is in the session's history, and a host asks the facade for the display ([Tool presenters](/docs/plugin-rules#tool-presenters)).
 
 `text` is terminal text, to be rendered in order: a pipe's output as the process wrote it, escape sequences included; a pseudo-terminal's as its screen shows it, rows ended by line breaks, a row the previous update left unfinished written again after `\r` and `ESC [2K`.
 

@@ -2,14 +2,18 @@
 
 //! A tool call: a live entry while it runs (with a spinner), then its
 //! outcome and an excerpt of its output, or the diff of the patch it
-//! applied. Codex's exec and MCP cells, for every tool the Agent has. A
+//! applied. Codex's exec and MCP cells, for every tool the Agent has. What
+//! it shows comes from the tool's presenter (`AgentToolCallDisplay`): the
+//! header's subject, and the finished call's display, read as text. A
 //! `compress` call is folded: its ranges and topics in the header, the
 //! first line of its receipt below; the detailed transcript adds the rest
 //! of the receipt and the summaries.
 
 use std::time::Instant;
 
-use hanafubuki_agent::{AgentCompressRange, PatchPreview};
+use hanafubuki_agent::{
+    AgentListingEntryKind, AgentPatchPreview, AgentToolCallDisplay, AgentToolDisplay,
+};
 use ratatui::style::{Modifier, Stylize};
 use ratatui::text::{Line, Span};
 
@@ -21,6 +25,8 @@ use crate::wrapping::{word_wrap_line, RtOptions};
 
 /// The lines of output shown from each end of a long output.
 const TOOL_CALL_MAX_LINES: usize = 5;
+/// The tool whose cell is folded.
+const COMPRESS: &str = "compress";
 
 /// What a finished call left to show.
 #[derive(Debug, Default)]
@@ -29,9 +35,65 @@ pub(crate) struct ToolResultView {
     pub(crate) text: Option<String>,
     pub(crate) exit_code: Option<i32>,
     /// The patch an `apply_patch` call applied (or tried to).
-    pub(crate) patch: Option<PatchPreview>,
-    /// The ranges a `compress` call asked to fold.
-    pub(crate) compress: Option<Vec<AgentCompressRange>>,
+    pub(crate) patch: Option<AgentPatchPreview>,
+}
+
+impl From<AgentToolDisplay> for ToolResultView {
+    /// The display read as text, until each display has a view of its own.
+    fn from(display: AgentToolDisplay) -> Self {
+        let lines = |lines: Vec<String>| Some(lines.join("\n"));
+        let text = match display {
+            AgentToolDisplay::Patch { preview } => {
+                return Self {
+                    patch: Some(preview),
+                    ..Self::default()
+                }
+            }
+            AgentToolDisplay::Command {
+                output, exit_code, ..
+            } => {
+                return Self {
+                    text: Some(output),
+                    exit_code,
+                    patch: None,
+                }
+            }
+            AgentToolDisplay::FileRead { text, .. }
+            | AgentToolDisplay::WebPage { text, .. }
+            | AgentToolDisplay::Text { text } => Some(text),
+            AgentToolDisplay::Listing { entries, .. } => lines(
+                entries
+                    .into_iter()
+                    .map(|entry| match entry.kind {
+                        AgentListingEntryKind::Directory => format!("{}/", entry.path),
+                        AgentListingEntryKind::File => entry.path,
+                    })
+                    .collect(),
+            ),
+            AgentToolDisplay::Search { matches, .. } => lines(
+                matches
+                    .into_iter()
+                    .map(|found| format!("{}:{}: {}", found.path, found.line, found.text))
+                    .collect(),
+            ),
+            AgentToolDisplay::WebSearch { results, .. } => lines(
+                results
+                    .into_iter()
+                    .map(|result| format!("{} — {}", result.title, result.url))
+                    .collect(),
+            ),
+            AgentToolDisplay::Fields { rows } => lines(
+                rows.into_iter()
+                    .map(|(key, value)| format!("{key}: {value}"))
+                    .collect(),
+            ),
+            AgentToolDisplay::Mutation { .. } => None,
+        };
+        Self {
+            text: text.filter(|text| !text.trim().is_empty()),
+            ..Self::default()
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -72,6 +134,17 @@ impl ToolCallCell {
         self.outcome = Some(Outcome { is_error, result });
     }
 
+    /// What the call's presenter shows: its subject, when it gives one,
+    /// and the finished call's display.
+    pub(crate) fn show(&mut self, shown: AgentToolCallDisplay) {
+        if shown.subject.is_some() {
+            self.subject = shown.subject;
+        }
+        if let (Some(outcome), Some(display)) = (&mut self.outcome, shown.display) {
+            outcome.result = display.into();
+        }
+    }
+
     fn header(&self) -> Line<'static> {
         let (bullet, verb) = match &self.outcome {
             None => (spinner(Some(self.start_time), true), "Running".bold()),
@@ -85,13 +158,7 @@ impl ToolCallCell {
             " ".into(),
             self.name.clone().cyan(),
         ];
-        let ranges = self
-            .outcome
-            .as_ref()
-            .and_then(|outcome| outcome.result.compress.as_deref())
-            .filter(|ranges| !ranges.is_empty())
-            .map(compress_subject);
-        if let Some(subject) = ranges.as_ref().or(self.subject.as_ref()) {
+        if let Some(subject) = &self.subject {
             spans.push(": ".dim());
             spans.push(Span::from(strip_terminal_controls(subject)));
         }
@@ -102,21 +169,10 @@ impl ToolCallCell {
     /// shows in the scrollback.
     fn folded(&self) -> Option<&str> {
         let result = &self.outcome.as_ref()?.result;
-        result.compress.as_ref()?;
-        result.text.as_deref()
+        (self.name == COMPRESS)
+            .then_some(result.text.as_deref())
+            .flatten()
     }
-}
-
-/// `m00002–m00005 Setup, m00009–m00012`: the ranges with their topics.
-fn compress_subject(ranges: &[AgentCompressRange]) -> String {
-    ranges
-        .iter()
-        .map(|range| match &range.topic {
-            Some(topic) => format!("{}–{} {topic}", range.start_ref, range.end_ref),
-            None => format!("{}–{}", range.start_ref, range.end_ref),
-        })
-        .collect::<Vec<_>>()
-        .join(", ")
 }
 
 impl HistoryCell for ToolCallCell {
@@ -148,7 +204,6 @@ impl HistoryCell for ToolCallCell {
         if let Some(code) = result.exit_code.filter(|code| *code != 0) {
             lines.push(Line::from(format!("exit code {code}")));
         }
-        lines.extend(plain_lines(summary_lines(result)));
         lines
     }
 
@@ -178,22 +233,6 @@ impl HistoryCell for ToolCallCell {
             .is_none()
             .then(|| u64::try_from(self.start_time.elapsed().as_millis() / 600).unwrap_or(u64::MAX))
     }
-}
-
-/// A `compress` call's summaries, each under its range, for the detailed
-/// transcript.
-fn summary_lines(result: &ToolResultView) -> Vec<Line<'static>> {
-    let mut lines = Vec::new();
-    for range in result.compress.iter().flatten() {
-        lines.push(Line::from(compress_subject(std::slice::from_ref(range))).bold());
-        lines.extend(
-            strip_terminal_controls(&range.summary)
-                .trim_end()
-                .lines()
-                .map(|line| Line::from(line.to_string()).add_modifier(Modifier::DIM)),
-        );
-    }
-    lines
 }
 
 /// How much of a call's output its lines show.
@@ -233,9 +272,6 @@ impl ToolCallCell {
         };
         if let Some(code) = result.exit_code.filter(|code| *code != 0) {
             body.push(Line::from(format!("exit code {code}")).red());
-        }
-        if extent == OutputExtent::Full {
-            body.extend(summary_lines(result));
         }
         for (index, line) in body.into_iter().enumerate() {
             let prefix = if index == 0 { "  └ " } else { "    " };

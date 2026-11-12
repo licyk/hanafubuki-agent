@@ -25,9 +25,10 @@ use std::sync::Arc;
 use hanafubuki_agent_approval::{ApprovalAction, AuthorizedAction, PermissionRequirement};
 use hanafubuki_agent_contracts::{
     AgentActivityAction, AgentMemoryContextEffect, AgentSessionMode, AgentToolError,
-    AgentToolHandler, ApprovalRuleRegistry, BlockingService, ContextRendererRegistry,
-    PromptContributorRegistry, Register, ToolDescriptor, ToolEffect, ToolFuture, ToolInvocation,
-    ToolRegistry, ToolResult, TurnAdmissionRegistry,
+    AgentToolHandler, ApprovalRuleRegistry, ArgumentSubjects, BlockingService,
+    ContextRendererRegistry, PromptContributorRegistry, Register, ToolDescriptor, ToolEffect,
+    ToolFuture, ToolInvocation, ToolPresenterRegistry, ToolRegistry, ToolResult,
+    TurnAdmissionRegistry,
 };
 use hanafubuki_agent_skills::SkillTurnCatalog;
 use hanafubuki_agent_tool_contracts::{
@@ -77,6 +78,12 @@ pub(crate) fn skills_plugin(skills: AgentSkillApplication, mcp: AgentMcpApplicat
                     .map_err(kardia_core::Error::new)?;
                 tools.register(Arc::new(tool))?;
             }
+            ctx.get::<ToolPresenterRegistry>()?
+                .register(Arc::new(ArgumentSubjects::new(&[
+                    ("skills_read", "skill"),
+                    ("enable_skill", "skill"),
+                    ("disable_skill", "skill"),
+                ])))?;
             rules.register(Arc::new(SkillManagementRequiresUser))?;
             Ok(())
         }
@@ -88,6 +95,7 @@ pub(crate) fn skills_plugin(skills: AgentSkillApplication, mcp: AgentMcpApplicat
             .with(PromptContributorRegistry::NAME)
             .with(ContextRendererRegistry::NAME)
             .with(ToolRegistry::NAME)
+            .with(ToolPresenterRegistry::NAME)
             .with(ApprovalRuleRegistry::NAME)
             .with(BlockingService::NAME),
     )

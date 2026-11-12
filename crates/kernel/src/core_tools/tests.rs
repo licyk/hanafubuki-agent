@@ -155,3 +155,34 @@ fn new_context_takes_no_arguments() {
     );
     assert!(parse(AgentCoreTool::NewContext, json!([])).is_err());
 }
+
+#[test]
+fn a_compress_call_names_its_ranges_and_shows_its_receipt_then_each_summary() {
+    use hanafubuki_agent_contracts::{AgentToolDisplay, AgentToolPresenter};
+    use hanafubuki_agent_tool_contracts::{ToolOutput, ToolOutputContent};
+
+    let arguments = json!({ "content": [
+        { "startId": "m00002", "endId": "m00004", "summary": "The setup ran.", "topic": "Setup" },
+        { "startId": "m00006", "endId": "m00007", "summary": "Read the logs.\n" }
+    ] });
+    let receipt = ToolOutput {
+        content: vec![ToolOutputContent::Text {
+            text: "[Compressed m00002–m00004 → 1 block(s).]\n".to_string(),
+        }],
+        structured_content: None,
+        is_error: false,
+    };
+
+    let presenter = super::CoreToolPresenter;
+    assert_eq!(
+        presenter.subject("compress", &arguments).as_deref(),
+        Some("m00002–m00004 Setup, m00006–m00007")
+    );
+    assert_eq!(
+        presenter.display("compress", &arguments, &receipt),
+        Some(AgentToolDisplay::Text {
+            text: "[Compressed m00002–m00004 → 1 block(s).]\nm00002–m00004 Setup\nThe setup ran.\nm00006–m00007\nRead the logs.".to_string()
+        })
+    );
+    assert_eq!(presenter.subject("compress", &json!({})), None);
+}

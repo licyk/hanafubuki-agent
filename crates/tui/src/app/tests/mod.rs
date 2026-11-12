@@ -368,8 +368,9 @@ fn an_approved_command_runs_and_the_turn_completes() {
     harness.type_and_submit("Run the command.");
     harness.pump_until_screen_shows("Yes, proceed");
     harness.key(KeyCode::Char('y'));
-    let screen = harness.pump_until_screen_shows("The command ran.");
-    assert!(screen.contains("approved-output"), "{screen}");
+    harness.pump_until_screen_shows("The command ran.");
+    // What the call shows is read once it finished, off the app loop.
+    let screen = harness.pump_until_screen_shows("approved-output");
     assert!(screen.contains("exec_command"), "{screen}");
 }
 
@@ -585,8 +586,7 @@ fn in_fullscreen_a_tool_call_is_one_entry_in_every_frame_from_its_start() {
         assert!(calls(harness) <= 1, "{}", harness.transcript());
         screen.contains("The command ran.")
     });
-    let screen = harness.screen();
-    assert!(screen.contains("in-place-output"), "{screen}");
+    let screen = harness.pump_until_screen_shows("in-place-output");
     assert!(!screen.contains("Running exec_command"), "{screen}");
     assert_eq!(calls(&harness), 1);
 }
@@ -813,4 +813,5 @@ mod settings_center;
 mod side;
 mod subagents;
 mod thinking;
+mod tools;
 mod workspace_commands;

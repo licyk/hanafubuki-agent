@@ -17,6 +17,7 @@ impl ChatWidget {
         self.input_queue = super::input_queue::InputQueue::default();
         self.sync_pending_input();
         self.running_tools.clear();
+        self.awaiting_display.clear();
         self.live_thinking.clear();
         self.stream_controller = None;
         self.plan_stream_controller = None;
@@ -93,10 +94,11 @@ impl ChatWidget {
                 ReplayedItem::Tool {
                     call_id,
                     name,
+                    subject,
                     is_error,
                     result,
                 } => {
-                    let mut cell = history_cell::new_tool_call(call_id, name, None);
+                    let mut cell = history_cell::new_tool_call(call_id, name, subject);
                     cell.complete(is_error, result);
                     cells.push(Box::new(cell));
                 }

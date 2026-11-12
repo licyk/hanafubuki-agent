@@ -1,12 +1,15 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use hanafubuki_agent_contracts::{ApprovalRuleRegistry, BlockingService, Register, ToolRegistry};
+use hanafubuki_agent_contracts::{
+    ApprovalRuleRegistry, BlockingService, Register, ToolPresenterRegistry, ToolRegistry,
+};
 use hanafubuki_agent_execution::AgentExecutionService;
 use hanafubuki_agent_foundation::background_worker::BackgroundWorkerGroup;
 use kardia_core::{Context, Disposer, Inject, PluginDef, Service};
 
 use crate::approval::GitCloneRequiresUser;
+use crate::presenter::ExecPresenter;
 use crate::tool::{ExecServices, ExecTool, ExecToolKind};
 
 /// How long a stopping plugin waits for its output monitors and cleanup
@@ -15,12 +18,14 @@ const MONITOR_STOP_BOUND: Duration = Duration::from_secs(3);
 
 /// Registers the execution tools over `executions`, which the host owns: it
 /// also serves background terminals and is shut down after the plugins. Also
-/// registers the approval rule of the commands they run.
+/// registers their presenter and the approval rule of the commands they
+/// run.
 pub fn execution_plugin(executions: AgentExecutionService) -> PluginDef {
     PluginDef::new(move |ctx: Context, _| {
         let executions = executions.clone();
         async move {
             let tools = ctx.get::<ToolRegistry>()?;
+            let presenters = ctx.get::<ToolPresenterRegistry>()?;
             let rules = ctx.get::<ApprovalRuleRegistry>()?;
             let blocking = ctx.get::<BlockingService>()?.arc().clone();
             // Agent threads: a panicking monitor ends only itself.
@@ -57,6 +62,7 @@ pub fn execution_plugin(executions: AgentExecutionService) -> PluginDef {
                     ExecTool::new(kind, services.clone()).map_err(kardia_core::Error::new)?;
                 tools.register(Arc::new(tool))?;
             }
+            presenters.register(Arc::new(ExecPresenter))?;
             rules.register(Arc::new(GitCloneRequiresUser))?;
             Ok(())
         }
@@ -65,6 +71,7 @@ pub fn execution_plugin(executions: AgentExecutionService) -> PluginDef {
     .inject(
         Inject::new()
             .with(ToolRegistry::NAME)
+            .with(ToolPresenterRegistry::NAME)
             .with(ApprovalRuleRegistry::NAME)
             .with(BlockingService::NAME),
     )

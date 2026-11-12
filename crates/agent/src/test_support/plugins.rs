@@ -7,7 +7,8 @@ use std::sync::Arc;
 use hanafubuki_agent_contracts::{
     ApprovalRuleRegistry, BlockingService, ContextRegistry, ContextRendererRegistry,
     ObserverRegistry, PromptContributorRegistry, RegistryService, ToolCallContext, ToolInvocation,
-    ToolRegistry, ToolResult, ToolSourceRegistry, TurnAdmissionRegistry, TurnExtensions,
+    ToolPresenterRegistry, ToolRegistry, ToolResult, ToolSourceRegistry, TurnAdmissionRegistry,
+    TurnExtensions,
 };
 use hanafubuki_agent_foundation::blocking::{BlockingOperationPort, InlineBlockingOperationPort};
 use hanafubuki_agent_foundation::cancellation::CancellationToken;
@@ -57,12 +58,14 @@ pub async fn mount_tool_plugin(
             ctx.provide(TurnAdmissionRegistry::default())?;
             ctx.provide(PromptContributorRegistry::default())?;
             ctx.provide(ContextRendererRegistry::default())?;
+            ctx.provide(ToolPresenterRegistry::default())?;
             ctx.provide(BlockingService::new(blocking))?;
             Ok(())
         }
     })
     .provides([
         ToolRegistry::NAME,
+        ToolPresenterRegistry::NAME,
         ApprovalRuleRegistry::NAME,
         TurnAdmissionRegistry::NAME,
         PromptContributorRegistry::NAME,
@@ -146,6 +149,7 @@ pub struct MountedPlugin {
     pub prompt: Arc<PromptContributorRegistry>,
     pub rules: Arc<ApprovalRuleRegistry>,
     pub observers: Arc<ObserverRegistry>,
+    pub presenters: Arc<ToolPresenterRegistry>,
 }
 
 pub async fn mount(plugin: PluginDef) -> MountedPlugin {
@@ -157,18 +161,25 @@ pub async fn mount(plugin: PluginDef) -> MountedPlugin {
     let prompt = Arc::new(PromptContributorRegistry::default());
     let rules = Arc::new(ApprovalRuleRegistry::default());
     let observers = Arc::new(ObserverRegistry::default());
+    let presenters = Arc::new(ToolPresenterRegistry::default());
     let provided = (
         tools.clone(),
         sources.clone(),
         (context.clone(), renderers.clone()),
         (admission.clone(), prompt.clone()),
         rules.clone(),
-        observers.clone(),
+        (observers.clone(), presenters.clone()),
     );
     let root = Context::new();
     let host = PluginDef::new(move |ctx: Context, _| {
-        let (tools, sources, (context, renderers), (admission, prompt), rules, observers) =
-            provided.clone();
+        let (
+            tools,
+            sources,
+            (context, renderers),
+            (admission, prompt),
+            rules,
+            (observers, presenters),
+        ) = provided.clone();
         async move {
             ctx.provide_arc(tools)?;
             ctx.provide_arc(sources)?;
@@ -178,6 +189,7 @@ pub async fn mount(plugin: PluginDef) -> MountedPlugin {
             ctx.provide_arc(prompt)?;
             ctx.provide_arc(rules)?;
             ctx.provide_arc(observers)?;
+            ctx.provide_arc(presenters)?;
             ctx.provide(BlockingService::new(Arc::new(InlineBlockingOperationPort)))?;
             ctx.provide(hanafubuki_agent_contracts::PluginFaults::default())?;
             Ok(())
@@ -193,6 +205,7 @@ pub async fn mount(plugin: PluginDef) -> MountedPlugin {
         PromptContributorRegistry::NAME,
         ApprovalRuleRegistry::NAME,
         ObserverRegistry::NAME,
+        ToolPresenterRegistry::NAME,
         BlockingService::NAME,
     ]);
     root.plugin_def(&host, Value::Null)
@@ -214,5 +227,6 @@ pub async fn mount(plugin: PluginDef) -> MountedPlugin {
         prompt,
         rules,
         observers,
+        presenters,
     }
 }

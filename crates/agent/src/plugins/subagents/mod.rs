@@ -20,7 +20,8 @@ mod tools;
 use std::sync::Arc;
 
 use hanafubuki_agent_contracts::{
-    BlockingService, ContextRendererRegistry, PromptContributorRegistry, Register, ToolRegistry,
+    ArgumentSubjects, BlockingService, ContextRendererRegistry, PromptContributorRegistry,
+    Register, ToolPresenterRegistry, ToolRegistry,
 };
 use hanafubuki_agent_kernel::AgentSessionId;
 use kardia_core::{Context, Inject, PluginDef, Service};
@@ -102,6 +103,13 @@ pub(crate) fn subagents_plugin(
                     SubagentTool::new(kind, service.clone()).map_err(kardia_core::Error::new)?;
                 tools.register(Arc::new(tool))?;
             }
+            ctx.get::<ToolPresenterRegistry>()?
+                .register(Arc::new(ArgumentSubjects::new(&[
+                    ("spawn_agent", "task_name"),
+                    ("send_message", "target"),
+                    ("followup_task", "target"),
+                    ("interrupt_agent", "target"),
+                ])))?;
             ctx.get::<PromptContributorRegistry>()?
                 .register(Arc::new(SubagentGuidancePrompt {
                     service: service.clone(),
@@ -117,6 +125,7 @@ pub(crate) fn subagents_plugin(
     .inject(
         Inject::new()
             .with(ToolRegistry::NAME)
+            .with(ToolPresenterRegistry::NAME)
             .with(PromptContributorRegistry::NAME)
             .with(ContextRendererRegistry::NAME)
             .with(BlockingService::NAME),

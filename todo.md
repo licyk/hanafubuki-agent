@@ -1515,12 +1515,161 @@ independent.
         `success`).
       - Hanafubuki at its next pin: nothing (the TUI crate only).
       - Module size: no exception added or raised.
-- [ ] T4: `AgentToolPresenter` and `ToolPresenterRegistry`; presenters for
+- [x] T4: `AgentToolPresenter` and `ToolPresenterRegistry`; presenters for
       every built-in tool and a fallback; `subject` on `tool_started`,
       `callId` on `execution_progress`; `tool_display` fetched off the UI
       thread at completion and for replay (not an event); the UI-thread
       history read removed. Docs:
       `json-events`, `plugin-rules`, `writing-plugins`.
+      Done (2026-11-12):
+      - Contracts (`tools/display.rs`, `tools/presenter.rs`):
+        `AgentToolPresenter { tools(), subject(tool, arguments),
+        display(tool, arguments, output) -> Option<AgentToolDisplay> }`
+        (both default to `None`); `ToolPresenterRegistry` (one presenter
+        per tool name, a second a `RegistrationError`; `subject` bounded to
+        its first line and 200 chars, `MAX_TOOL_SUBJECT_CHARS`; `display`
+        falls back), both guarded at the new `ExtensionPoint::ToolPresenter`
+        (a panic: no subject, the fallback); `AgentToolDisplay` (`Command`,
+        `Patch` with `AgentPatchPreview`/`AgentPatchFile`/`AgentPatchLine`,
+        `FileRead`, `Listing`, `Search`, `WebSearch`, `WebPage`, `Mutation`
+        with `AgentMutationKind`, `Text`, `Fields`; serde tagged `type`,
+        camelCase); `AgentToolDisplay::fallback` (a structured output's
+        top-level keys, a nested value summarized, else its text items),
+        `structured_output` (the structured value before the argument
+        notes), `output_text`; `ArgumentSubjects` (a subject-only presenter:
+        one string argument per tool).
+      - Presenters: execution (`exec_command`: `cmd`, `Command` from
+        `UnifiedExecResult` with `workdir`, exit code, wall time;
+        `write_stdin`: `session N ← <typed, escaped>` / `session N`,
+        `Command` whose `command` is what was typed; `resize_execution`:
+        subject only); workspace-fs (`read_file` `FileRead` with
+        `start_line: Some(1)` for a read from offset 0 only, `list_directory`
+        `Listing`, `search_text` `"q" in path` and `Search`, `apply_patch`
+        `Patch` from `preview_patch` for a freeform string or `{patch}`, its
+        subject the first path `and N more`, `move_path`/`delete_path`
+        `Mutation`); web (`web_search` `WebSearch`, `fetch_web_page`
+        `WebPage`); the kernel's `compress` (`CoreToolPresenter`, registered
+        permanently with the registries: the ranges and topics as subject,
+        the receipt then each range's label and summary as `Text`);
+        `ArgumentSubjects` in view-image, memory, skills, goal, subagents and
+        mcp (resources). The other kernel tools, MCP server tools and guest
+        tools take the fallback. Each plugin injects the registry; the
+        plugin and facade test harnesses provide it.
+      - Kernel: `AgentKernelRegistries::tool_presenters` (provided by the
+        kernel plugin). `tool_started`'s existing `presentation.subject` is
+        the presenter's subject from the normalized arguments (computed in
+        `CallDisposition::presentation`, never in the registration, whose
+        presentation feeds the tool generation hash), else the planned
+        tool's own (a sourced tool's, `tool discovery`).
+        `AgentEventKind::ExecutionProgress { call_id: Option<String>, update
+        }`: `SessionToolProgressSink` carries the invocation's call id, the
+        queue carries it through coalescing, the application's own
+        `report_session_execution_progress` stamps `None`.
+        `AgentService::tool_display(session, call_id)` pages the session's
+        transcript latest first until it finds the call (and its output),
+        then `present_tool_call(namespace, name, arguments, output) ->
+        AgentToolCallDisplay { subject, display }`, the arguments normalized
+        against the schema of the tool registered under that name now, raw
+        otherwise. The facade delegates both and re-exports the display
+        types.
+      - TUI: `TurnUpdate::ToolCompleted { call_id, is_error }` no longer
+        reads history on the UI thread (`tool_result`, `read_into` and
+        `TOOL_ITEMS_PAGE` gone); the bridge reads `tool_display` on a
+        blocking thread of the Agent's runtime (`replay::read_tool_display`)
+        and replies `ToolDisplayed`, always: a drop guard sends `None` when
+        the read failed, panicked or never ran (a runtime that shut down),
+        and a reply for a session the interface has left is dropped. The
+        chat marks the entry completed and keeps it live in
+        `awaiting_display` until the reply (also across the turn's end), so
+        Scrollback's tail never writes it without its output; a session
+        opened in its place clears it. The cell takes the display's subject
+        (if any) and reads the display as text (`ToolResultView::from`:
+        listing rows, `path:line: text`, `title — url`, `key: value`) until
+        T5's views; `compress` folds by name. Replay presents each call with
+        its output through `present_tool_call` from the page it read, with
+        its subject. `diff_render` takes `AgentPatchPreview`.
+      - Deviations: no second top-level `subject` on `tool_started`: the
+        existing `presentation.subject` (documented as "a command, a path")
+        is filled, so `exec --json` gains one field, `callId`. `display`
+        returns `Option` (`None` is the fallback). `Web` is two variants,
+        `WebSearch` and `WebPage`; `Mutation` has a typed `kind`, not a
+        verb string. `AgentPatchPreview` is a copy of workspace-fs's
+        `PatchPreview` in the contracts, converted in plugin-workspace-fs
+        (contracts may not depend on workspace-fs; no layer or twin change).
+        `present_tool_call` takes `namespace` and `name` as history records
+        them. Memory, Skills, goal, subagents, view_image and MCP resources
+        present subjects only (their outputs take the fallback's `Fields`),
+        MCP server and guest tools the fallback. T4 also shows the text of
+        every structured result (read, listing, search, web, fields), which
+        showed only a header before.
+      - Tests: `contracts/tests/presenters.rs` (registration lifetime, a
+        duplicate refused, a panic's fault and fallback, the bounded
+        subject, the fallback's keys before notes); each presenter on
+        recorded arguments and outputs (`plugin-execution`,
+        `plugin-workspace-fs`, `plugin-web` `presenter/tests.rs`,
+        `kernel/src/core_tools/tests.rs` for `compress`); the plugin tests
+        assert the presenter registered and removed; kernel: a coalesced
+        output keeps its call, a sink's progress names its call and the
+        application's none (`persistence_contract/progress.rs`); facade
+        (`tests/tools/filesystem.rs`): `tool_started`'s subject,
+        `tool_display` of a read, an unknown call, the normalization rule,
+        an unknown tool's `Fields`; TUI: the entry live between
+        `ToolCompleted` and `ToolDisplayed` in both presentations, a display
+        arriving after the turn's end, a `None` reply, the display read as
+        text, the compress fold, the reply that always comes (a
+        `DisplayReply` dropped unread, read, and while unwinding,
+        `agent_bridge/replay/tests.rs`), and `app/tests/tools.rs` on vt100 (a
+        `read_file` shows `Called read_file: notes.txt` and its text, live
+        and resumed, in both presentations).
+      - Goldens and snapshots: no request golden changed (nothing
+        model-visible; `tool_round_trip_events.json` pins kinds only); no
+        history corpus changed; no `.snap` changed.
+      - Docs (both languages): `plugin-rules` (a registry row, a new
+        `#tool-presenters` heading, the panic and bounds tables, the
+        capability scope, the plugins table, the checklist, the guests'
+        tools row), `json-events#tools` (`presentation.subject`, `callId`
+        with an example, the display not in the stream), `writing-plugins`
+        (a guest's tools take the fallback), `embedding` (the facade
+        calls), `architecture` (the bridge no longer reads `read_turn_page`),
+        `terminal-interface#layout` (the subject, what a call shows),
+        `host-plugins` (the registry row), `internals#plugin-host-details`
+        (the registry guards its entries). The app tests that assert a
+        command's output now wait for it (it may arrive after the turn's
+        answer).
+      - Validation: `cargo fmt --all --check`; `RUSTFLAGS="-D warnings"
+        cargo check --workspace --all-targets --all-features`; `cargo clippy
+        --workspace --all-targets --all-features -- -D warnings`; `cargo
+        xtask check`; `cargo test --workspace --all-features`; `bun install
+        --frozen-lockfile`, `bun run format:check:site`, `bun run
+        site:check`, `bun run site:test`. `VITE_BASE_PATH=/hanafubuki-agent/
+        bun run site:build` built but could not prerender locally (port 3000
+        held by another project's server); CI's Site run covers it.
+        CI on Linux, Windows and macOS: CI_URL_PLACEHOLDER
+      - Hanafubuki at its next pin: `AgentEventKind::ExecutionProgress`
+        gains `call_id` (a pattern without `..` or a constructor must add
+        it; its JSON gains `callId`); `ExtensionPoint` gains
+        `ToolPresenter`; `AgentKernelRegistries` gains `tool_presenters`
+        (and the kernel plugin provides `ToolPresenterRegistry`; a host's
+        own test harness that mounts a presenting plugin provides it);
+        `test_support::MountedPlugin` gains `presenters`. `tool_started`'s
+        and the activity's `presentation.subject` now carry a command line or
+        path for built-in tools where they were `null`. New:
+        `AgentHandle::tool_display`, `present_tool_call`,
+        `AgentToolCallDisplay`, `AgentToolDisplay` and its parts; a host
+        plugin may register presenters. `compress_call_ranges`,
+        `AgentCompressRange`, `preview_patch` and `PatchPreview` stay on the
+        facade (the TUI no longer uses them).
+      - Module size: no exception added or raised. `notices-policy.toml`
+        lists `app/tests/tools.rs` and `agent_bridge/replay/tests.rs` as
+        original.
+      - For T5/T6: the TUI reads displays as text in
+        `ToolResultView::from` (`history_cell/tool.rs`); T5 replaces it with
+        a view per display. `FileRead.start_line` is `Some(1)` only from
+        offset 0 (D9 would set it always). `write_stdin`'s `Command.command`
+        is what was typed (empty for a poll). `execution_progress` carries
+        `callId`, but the bridge still drops it (T6): the exec_command's
+        call id stays on a background execution's later output, so T6 must
+        ignore output for an entry already completed.
 - [ ] T5: per-tool views (command, patch with line numbers, `read_file`
       with line numbers, listing, search, web, MCP, fallback), exploration
       grouping; `startLine` on `read_file` if D9 is accepted (goldens

@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use hanafubuki_agent_contracts::{
     AgentMemoryContextEffect, RegistryService, ToolAvailability, ToolEffect, ToolPlanContext,
-    ToolRegistry,
+    ToolPresenterRegistry, ToolRegistry,
 };
 use hanafubuki_agent_plugin_web::{
     web_plugin, WebPluginConfig, WebProviderSetting, WebProxySetting,
@@ -21,11 +21,12 @@ async fn root_with_tools() -> (Context, Arc<ToolRegistry>) {
         let tools = provided.clone();
         async move {
             ctx.provide_arc(tools)?;
+            ctx.provide(ToolPresenterRegistry::default())?;
             Ok(())
         }
     })
     .name("tools")
-    .provides([ToolRegistry::NAME]);
+    .provides([ToolRegistry::NAME, ToolPresenterRegistry::NAME]);
     root.plugin_def(&registry, Value::Null)
         .unwrap()
         .settled()

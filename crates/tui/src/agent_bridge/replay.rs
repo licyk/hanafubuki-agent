@@ -1,18 +1,18 @@
 //! A session's committed history as the chat shows it: the transcript a
-//! reopened session replays, and the output of a tool call that just
-//! finished (tool events carry neither its output nor its arguments).
+//! reopened session replays, and what a call that just finished shows (tool
+//! events carry neither its output nor its arguments). A call is shown as
+//! its tool's presenter says (`AgentToolCallDisplay`).
+
+use std::collections::HashMap;
 
 use hanafubuki_agent::{
-    compress_call_ranges, AgentHandle, AgentRevision, AgentSessionId, AgentSessionMode,
-    ConversationItem, ToolOutputContent,
+    AgentHandle, AgentRevision, AgentSessionId, AgentSessionMode, AgentToolCallDisplay,
+    ConversationItem,
 };
 
+use super::{AgentBridge, AgentReply};
+use crate::app_event::{AppEvent, AppEventSender};
 use crate::history_cell::ToolResultView;
-
-/// The tool whose arguments are a patch the transcript shows as a diff.
-const APPLY_PATCH: &str = "apply_patch";
-/// The tool whose ranges and summaries the transcript shows folded.
-const COMPRESS: &str = "compress";
 
 /// What the interface shows from now on: a reopened session, or no
 /// session yet (at the start, after `/new`), which the next message creates.
@@ -60,6 +60,7 @@ pub(crate) enum ReplayedItem {
     Tool {
         call_id: String,
         name: String,
+        subject: Option<String>,
         is_error: bool,
         result: ToolResultView,
     },
@@ -75,8 +76,9 @@ pub(crate) fn transcript(
     items: Vec<(u64, ConversationItem)>,
 ) -> Vec<ReplayedItem> {
     let mut transcript = Vec::new();
+    // Each call's name and arguments, which its output is shown with.
+    let mut calls = HashMap::new();
     for (item_id, content) in items.into_iter().rev() {
-        let call = call_id(&content).map(str::to_string);
         match content {
             ConversationItem::UserMessage { text, .. }
             | ConversationItem::SteeringMessage { text, .. } => {
@@ -105,31 +107,43 @@ pub(crate) fn transcript(
                     transcript.push(ReplayedItem::Plan(plan.text));
                 }
             }
-            ConversationItem::ToolCall { ref name, .. } => {
-                let mut result = ToolResultView::default();
-                let name = name.clone();
-                read_into(agent, content, &mut result);
+            ConversationItem::ToolCall {
+                call_id,
+                namespace,
+                name,
+                arguments,
+                ..
+            } => {
+                let shown = agent.present_tool_call(namespace.as_deref(), &name, &arguments, None);
                 transcript.push(ReplayedItem::Tool {
-                    call_id: call.unwrap_or_default(),
-                    name,
+                    call_id: call_id.clone(),
+                    name: name.clone(),
+                    subject: shown.subject,
                     is_error: false,
-                    result,
+                    result: ToolResultView::default(),
                 });
+                calls.insert(call_id, (namespace, name, arguments));
             }
-            ConversationItem::ToolOutput { ref output, .. } => {
-                let failed = output.is_error;
-                let call_entry = transcript.iter_mut().rev().find_map(|entry| match entry {
+            ConversationItem::ToolOutput {
+                call_id, output, ..
+            } => {
+                let Some((namespace, name, arguments)) = calls.get(&call_id) else {
+                    continue;
+                };
+                let shown =
+                    agent.present_tool_call(namespace.as_deref(), name, arguments, Some(&output));
+                let entry = transcript.iter_mut().rev().find_map(|entry| match entry {
                     ReplayedItem::Tool {
-                        call_id,
+                        call_id: id,
                         is_error,
                         result,
                         ..
-                    } if Some(call_id.as_str()) == call.as_deref() => Some((is_error, result)),
+                    } if *id == call_id => Some((is_error, result)),
                     _ => None,
                 });
-                if let Some((is_error, result)) = call_entry {
-                    *is_error = failed;
-                    read_into(agent, content, result);
+                if let (Some((is_error, result)), Some(display)) = (entry, shown.display) {
+                    *is_error = output.is_error;
+                    *result = display.into();
                 }
             }
             ConversationItem::CompactionSummary { .. } => transcript.push(ReplayedItem::Compacted),
@@ -139,49 +153,52 @@ pub(crate) fn transcript(
     transcript
 }
 
-/// The tool call an item belongs to.
-pub(super) fn call_id(item: &ConversationItem) -> Option<&str> {
-    match item {
-        ConversationItem::ToolCall { call_id, .. }
-        | ConversationItem::ToolOutput { call_id, .. } => Some(call_id),
-        _ => None,
+impl AgentBridge {
+    /// Reads what the finished call `call_id` shows on a blocking thread
+    /// of the Agent's runtime, and replies with it. A reply always comes,
+    /// with no display when the read failed or never ran, so the call's
+    /// entry is never left waiting.
+    pub(super) fn read_tool_display(&self, session_id: AgentSessionId, call_id: String) {
+        let agent = self.agent.clone();
+        let mut reply = DisplayReply {
+            app_event_tx: self.app_event_tx.clone(),
+            session_id,
+            call_id,
+            display: None,
+        };
+        // A runtime that has shut down drops the closure, and the reply
+        // with it.
+        drop(self.agent.runtime().handle().spawn_blocking(move || {
+            let display = agent.tool_display(reply.session_id, &reply.call_id);
+            reply.shows(display.ok().flatten());
+        }));
     }
 }
 
-/// What a call's item says of its result: an `apply_patch` call's patch,
-/// read as a diff, a `compress` call's ranges, and an output's text and
-/// exit code.
-pub(super) fn read_into(agent: &AgentHandle, item: ConversationItem, view: &mut ToolResultView) {
-    match item {
-        ConversationItem::ToolCall {
-            name, arguments, ..
-        } if name == COMPRESS => view.compress = Some(compress_call_ranges(&arguments)),
-        ConversationItem::ToolCall {
-            name, arguments, ..
-        } if name == APPLY_PATCH => {
-            let patch = match &arguments {
-                serde_json::Value::String(patch) => Some(patch.as_str()),
-                value => value.get("patch").and_then(serde_json::Value::as_str),
-            };
-            view.patch = patch.map(|patch| agent.preview_patch(patch));
-        }
-        ConversationItem::ToolOutput { output, .. } => {
-            for content in output.content {
-                match content {
-                    ToolOutputContent::Text { text } => view.text = Some(text),
-                    ToolOutputContent::Structured { value } => {
-                        if let Some(output) = value.get("output").and_then(|v| v.as_str()) {
-                            view.text = Some(output.to_string());
-                        }
-                        view.exit_code = value
-                            .get("exitCode")
-                            .and_then(serde_json::Value::as_i64)
-                            .and_then(|code| i32::try_from(code).ok());
-                    }
-                    _ => {}
-                }
-            }
-        }
-        _ => {}
+/// Sent when dropped: after the read, or in place of one.
+struct DisplayReply {
+    app_event_tx: AppEventSender,
+    session_id: AgentSessionId,
+    call_id: String,
+    display: Option<AgentToolCallDisplay>,
+}
+
+impl DisplayReply {
+    fn shows(&mut self, display: Option<AgentToolCallDisplay>) {
+        self.display = display;
     }
 }
+
+impl Drop for DisplayReply {
+    fn drop(&mut self) {
+        self.app_event_tx
+            .send(AppEvent::AgentReply(AgentReply::ToolDisplayed {
+                session_id: self.session_id,
+                call_id: std::mem::take(&mut self.call_id),
+                display: self.display.take(),
+            }));
+    }
+}
+
+#[cfg(test)]
+mod tests;

@@ -116,7 +116,9 @@ async fn report_progress(
     session_id: AgentSessionId,
     update: AgentToolProgressUpdate,
 ) {
-    service.execution_progress_sink(session_id).report(update);
+    service
+        .execution_progress_sink(session_id, None)
+        .report(update);
     service
         .flush_session_execution_progress(session_id)
         .await

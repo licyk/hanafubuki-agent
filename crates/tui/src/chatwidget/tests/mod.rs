@@ -172,6 +172,7 @@ fn an_opened_session_replays_its_transcript_after_its_header() {
             ReplayedItem::Tool {
                 call_id: "call-1".to_string(),
                 name: "exec_command".to_string(),
+                subject: Some("git diff --stat".to_string()),
                 is_error: false,
                 result: ToolResultView {
                     text: Some("two files".to_string()),
@@ -195,7 +196,10 @@ fn an_opened_session_replays_its_transcript_after_its_header() {
         "{cells:?}"
     );
     assert!(cells[2].contains("› What changed?"), "{cells:?}");
-    assert!(cells[3].contains("exec_command") && cells[3].contains("two files"));
+    assert!(
+        cells[3].contains("exec_command: git diff --stat") && cells[3].contains("two files"),
+        "{cells:?}"
+    );
     assert_eq!(cells[4], "• Two files changed.");
     assert_eq!(chat.mode, hanafubuki_agent::AgentSessionMode::Plan);
 }

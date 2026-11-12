@@ -1,16 +1,17 @@
 use std::sync::Arc;
 
-use hanafubuki_agent_contracts::{Register, ToolRegistry};
+use hanafubuki_agent_contracts::{Register, ToolPresenterRegistry, ToolRegistry};
 use hanafubuki_agent_web_search::{
     WebSearchConfig, WebSearchError, WebSearchProviderPreference, WebSearchService,
 };
 use kardia_core::{Context, Inject, PluginDef, Service};
 
+use crate::presenter::WebPresenter;
 use crate::tools::{FetchWebPageTool, WebSearchTool};
 use crate::WebPluginConfig;
 
 /// Registers `web_search` and `fetch_web_page` over one `WebSearchService`
-/// built from the plugin's configuration.
+/// built from the plugin's configuration, and their presenter.
 ///
 /// Search endpoints that cannot be used (SearXNG selected without an
 /// address, an address that does not parse) cost only `web_search`:
@@ -20,6 +21,7 @@ use crate::WebPluginConfig;
 pub fn web_plugin() -> PluginDef {
     PluginDef::typed(|ctx: Context, config: Arc<WebPluginConfig>| async move {
         let tools = ctx.get::<ToolRegistry>()?;
+        let presenters = ctx.get::<ToolPresenterRegistry>()?;
         let (service_config, search_unavailable) = without_unusable_search(config.service_config());
         if let Some(reason) = &search_unavailable {
             log::warn!("{reason}; web_search is unavailable and fetch_web_page still works");
@@ -33,10 +35,15 @@ pub fn web_plugin() -> PluginDef {
         tools.register(Arc::new(
             FetchWebPageTool::new(service).map_err(kardia_core::Error::new)?,
         ))?;
+        presenters.register(Arc::new(WebPresenter))?;
         Ok(())
     })
     .name("web")
-    .inject(Inject::new().with(ToolRegistry::NAME))
+    .inject(
+        Inject::new()
+            .with(ToolRegistry::NAME)
+            .with(ToolPresenterRegistry::NAME),
+    )
 }
 
 /// The configuration with search endpoints that cannot be used removed, and

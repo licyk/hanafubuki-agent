@@ -1,4 +1,7 @@
-use hanafubuki_agent::{AgentCompressRange, PatchPreview};
+use hanafubuki_agent::{
+    AgentListingEntry, AgentListingEntryKind, AgentPatchPreview, AgentToolCallDisplay,
+    AgentToolDisplay,
+};
 
 use super::*;
 
@@ -50,7 +53,6 @@ fn a_long_output_keeps_its_ends_snapshot() {
             text: Some(text),
             exit_code: Some(1),
             patch: None,
-            compress: None,
         },
         true,
     );
@@ -59,7 +61,7 @@ fn a_long_output_keeps_its_ends_snapshot() {
 
 #[test]
 fn a_patch_shows_its_diff_snapshot() {
-    let preview: PatchPreview = serde_json::from_value(serde_json::json!({
+    let preview: AgentPatchPreview = serde_json::from_value(serde_json::json!({
         "files": [{
             "operation": "update",
             "path": "src/lib.rs",
@@ -86,7 +88,6 @@ fn a_patch_shows_its_diff_snapshot() {
             text: Some("Done".to_string()),
             exit_code: None,
             patch: Some(preview),
-            compress: None,
         },
     );
     insta::assert_snapshot!(render(&cell, 40));
@@ -98,7 +99,6 @@ fn only_an_outputs_left_out_lines_are_details_to_disclose() {
         text: Some((1..=30).map(|line| format!("line {line}\n")).collect()),
         exit_code: Some(0),
         patch: None,
-        compress: None,
     };
     let mut call = new_tool_call("call-1".to_string(), "shell".to_string(), None);
     assert_eq!(call.activity_disclosure(80), None);
@@ -115,7 +115,7 @@ fn only_an_outputs_left_out_lines_are_details_to_disclose() {
     patched.complete(
         false,
         ToolResultView {
-            patch: Some(PatchPreview {
+            patch: Some(AgentPatchPreview {
                 files: Vec::new(),
                 error: None,
             }),
@@ -128,31 +128,16 @@ fn only_an_outputs_left_out_lines_are_details_to_disclose() {
 #[test]
 fn a_compress_call_folds_its_summaries_and_receipt() {
     let mut cell = new_tool_call("fold-1".to_string(), "compress".to_string(), None);
-    cell.complete(
-        false,
-        ToolResultView {
-            text: Some(
-                "[Compressed m00002–m00004 → 1 block(s), ~8000 tokens saved.]\n · b1 full summary 120ch · head \"The setup\" … tail \"done.\"\nFingerprints show head/tail only."
-                    .to_string(),
-            ),
-            exit_code: None,
-            patch: None,
-            compress: Some(vec![
-                AgentCompressRange {
-                    start_ref: "m00002".to_string(),
-                    end_ref: "m00004".to_string(),
-                    topic: Some("Setup".to_string()),
-                    summary: "The setup ran.\nEverything passed.".to_string(),
-                },
-                AgentCompressRange {
-                    start_ref: "m00006".to_string(),
-                    end_ref: "m00007".to_string(),
-                    topic: None,
-                    summary: "Read the logs.".to_string(),
-                },
-            ]),
-        },
-    );
+    cell.complete(false, ToolResultView::default());
+    // The kernel's presenter: the ranges in the subject, the receipt then
+    // each range's summary in the text.
+    cell.show(AgentToolCallDisplay {
+        subject: Some("m00002–m00004 Setup, m00006–m00007".to_string()),
+        display: Some(AgentToolDisplay::Text {
+            text: "[Compressed m00002–m00004 → 1 block(s), ~8000 tokens saved.]\n · b1 full summary 120ch · head \"The setup\" … tail \"done.\"\nFingerprints show head/tail only.\nm00002–m00004 Setup\nThe setup ran.\nEverything passed.\nm00006–m00007\nRead the logs."
+                .to_string(),
+        }),
+    });
 
     assert_eq!(
         render(&cell, 100).replace('\u{2022}', "*"),
@@ -183,4 +168,58 @@ fn a_compress_call_folds_its_summaries_and_receipt() {
         ]
     );
     assert!(detailed.iter().any(|line| line.contains("Fingerprints")));
+}
+
+#[test]
+fn a_display_is_read_as_text_until_it_has_a_view() {
+    let listing: ToolResultView = AgentToolDisplay::Listing {
+        path: "src".to_string(),
+        entries: vec![
+            AgentListingEntry {
+                path: "src/bin".to_string(),
+                kind: AgentListingEntryKind::Directory,
+                size: None,
+            },
+            AgentListingEntry {
+                path: "src/lib.rs".to_string(),
+                kind: AgentListingEntryKind::File,
+                size: Some(3),
+            },
+        ],
+        truncated: false,
+    }
+    .into();
+    assert_eq!(listing.text.as_deref(), Some("src/bin/\nsrc/lib.rs"));
+    let command: ToolResultView = AgentToolDisplay::Command {
+        command: "false".to_string(),
+        cwd: None,
+        output: String::new(),
+        exit_code: Some(1),
+        duration_millis: Some(3),
+        truncated: false,
+    }
+    .into();
+    assert_eq!(
+        (command.text.as_deref(), command.exit_code),
+        (Some(""), Some(1))
+    );
+    let fields: ToolResultView = AgentToolDisplay::Fields {
+        rows: vec![("status".to_string(), "ok".to_string())],
+    }
+    .into();
+    assert_eq!(fields.text.as_deref(), Some("status: ok"));
+
+    // A finished call shows its presenter's subject; a display without one
+    // keeps the subject it started with.
+    let mut cell = finished(ToolResultView::default(), false);
+    cell.show(AgentToolCallDisplay {
+        subject: None,
+        display: Some(AgentToolDisplay::Text {
+            text: "ok".to_string(),
+        }),
+    });
+    assert_eq!(
+        render(&cell, 60),
+        "• Called exec_command: cargo test\n  └ ok"
+    );
 }
