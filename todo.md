@@ -1805,6 +1805,20 @@ then M4, then M5; M6 after M3; M7 after M1.
         still a release candidate), or re-creating the OS watch on a timer
         (on notify 8 each re-creation blocks the worker in `stop()` while
         the purge call fails, and on inotify re-walks the whole tree).
+      - Windows (2026-11-12): the guests harness's linked test failed twice
+        in a row on Windows CI at its last step ("no signal within 60s;
+        watched {demo@local}, changes counted 2"): a change in a directory
+        replaced by another (removed, a copy moved in) was never seen. The
+        watch noticed a replacement only by a `Remove` event naming the
+        root or the path not being a directory at a poll; Windows' watch
+        follows the directory it opened, reports the old files' removal
+        but not its own, and the path is a directory again within the same
+        poll, so the watch stayed armed on the removed directory. Fixed: an
+        armed directory records its identity (device and inode on Unix,
+        creation time elsewhere) and is disarmed, then re-armed, when the
+        path's identity differs (`linked/tests.rs` reproduces it on any OS
+        with a watcher that reports as Windows' does). Whether this is
+        also the macOS case above is not known; its skip stays.
 
 ## Plan: a configuration center for every Agent setting (2026-11-11)
 

@@ -7,9 +7,12 @@
 //! through the new entry name, restarts the guest. Reading a file is not a
 //! change, and neither is a change in a directory's `.git`.
 //!
-//! A linked directory that does not exist, or is removed (an export that
-//! replaces it), is watched again once it is a directory, and that counts
-//! as its change. The watch runs on a thread of the instance's contained
+//! A linked directory that does not exist, or is removed or replaced (an
+//! export that replaces it), is watched again once it is a directory, and
+//! that counts as its change. A replacement is told by the directory's
+//! identity ([`directory_identity`]), not by an event: Windows' watch
+//! follows the directory it opened, so it reports the old files' removal
+//! but not its own, and the path is a directory again by the next poll. The watch runs on a thread of the instance's contained
 //! worker group; the group's shutdown, or the guest host's own stop, ends
 //! it within [`POLL`].
 //!
@@ -81,6 +84,29 @@ struct Watched {
 struct Armed {
     directory: ResolvedPath,
     git: PathKey,
+    /// The directory's identity when it was armed.
+    identity: Option<DirectoryIdentity>,
+}
+
+/// What tells a directory from another later made at its path: its device
+/// and inode on Unix, its creation time elsewhere (Windows, where a moved
+/// directory keeps it and a copy gets its own).
+#[cfg(unix)]
+type DirectoryIdentity = (u64, u64);
+#[cfg(not(unix))]
+type DirectoryIdentity = std::time::SystemTime;
+
+fn directory_identity(path: &std::path::Path) -> Option<DirectoryIdentity> {
+    let metadata = std::fs::metadata(path).ok()?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        Some((metadata.dev(), metadata.ino()))
+    }
+    #[cfg(not(unix))]
+    {
+        metadata.created().ok()
+    }
 }
 
 impl LinkedWatch {
@@ -243,15 +269,16 @@ impl Watched {
         }
         self.armed = Some(Armed {
             git: PathKey::of(&directory.system().join(".git")),
+            identity: directory_identity(directory.system()),
             directory,
         });
         self.watching.lock().insert(self.id.clone());
         true
     }
 
-    /// Stops watching its directory, which `event` removed or which is gone:
-    /// the OS watch went with it, and the directory made again is watched
-    /// anew.
+    /// Stops watching its directory, which `event` removed, which is gone
+    /// or which another replaced: the OS watch went with it (or follows the
+    /// old one), and the directory made again is watched anew.
     fn disarm_if_gone(&mut self, watcher: &mut impl Watcher, event: Option<&notify::Event>) {
         let Some(armed) = &self.armed else {
             return;
@@ -263,7 +290,8 @@ impl Watched {
                     .iter()
                     .any(|path| PathKey::of(path) == *armed.directory.key())
         });
-        if removed || !armed.directory.system().is_dir() {
+        let system = armed.directory.system();
+        if removed || !system.is_dir() || directory_identity(system) != armed.identity {
             let _ = watcher.unwatch(armed.directory.system());
             self.armed = None;
             self.watching.lock().remove(&self.id);
@@ -370,3 +398,6 @@ impl Revisions {
         self.changes.send_modify(|revision| *revision += 1);
     }
 }
+
+#[cfg(test)]
+mod tests;
