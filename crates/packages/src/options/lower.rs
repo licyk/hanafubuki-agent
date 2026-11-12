@@ -3,8 +3,8 @@
 //!
 //! Each property of the schema's `properties` becomes an option from its
 //! `type`, `minimum` and `maximum`, `maxLength`, `enum`, `items` (with
-//! `maxItems`), `default` and `description`, labelled by its key, each
-//! choice by its value. A keyword not among them
+//! `maxItems`), `default` and `description`, labelled by its `title` (else
+//! its key), each choice by its value. A keyword not among them
 //! constrains nothing, as in the kernel's check of a dynamic tool's
 //! arguments. A property that is none of the kinds (an object, a list of
 //! anything but strings, a union of types) is left out with an issue, and
@@ -51,6 +51,12 @@ fn lower_property(key: &str, property: &Value) -> Result<(SettingSpec, Option<St
     let property = property
         .as_object()
         .ok_or_else(|| "is not a schema".to_string())?;
+    let label = property
+        .get("title")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|title| !title.is_empty())
+        .unwrap_or(key);
     let mut option = SettingSpec {
         summary: property
             .get("description")
@@ -58,7 +64,7 @@ fn lower_property(key: &str, property: &Value) -> Result<(SettingSpec, Option<St
             .and_then(|text| text.lines().next())
             .unwrap_or_default()
             .to_string(),
-        ..SettingSpec::new(key, key, kind(property)?)
+        ..SettingSpec::new(key, label, kind(property)?)
     };
     let mut issue = None;
     if let Some(default) = property.get("default") {

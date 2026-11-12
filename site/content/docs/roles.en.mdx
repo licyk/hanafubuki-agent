@@ -93,7 +93,7 @@ model = "gpt-5.4"
 
 `configFile` (Codex's `config_file`) names a role file, relative to the folder of the `config.toml` that names it: the entry's keys are read over the file's, and the entry's key is the name. That file is the entry's, so the directory does not read it a second time. A `configFile` that cannot be read makes the role unusable.
 
-`[agents]` is not a setting: `config get` and `config set` do not reach it, and a `-c agents.…` override is an unknown key.
+`[agents]` is not a setting: `config get` and `config set` do not reach it, and a `-c agents.…` override is an unknown key. The terminal interface's [settings center](/docs/terminal-interface#config) edits the user's own entries (Roles, in the Model tab): `a` adds one, its `description`, `instructions`, `instructionsMode`, `model`, `reasoningEffort` and `spawnable` are saved as they are changed (`r` removes a key), Delete removes the entry, and the roles are read again after each change. A role of a role file, a profile, a project, a plugin or the Agent itself is shown there with where it is written; the keys that narrow a role (`extends`, `permissionModeCap`, `tools`, `plugins`) are written in the file.
 
 ## extends and the merge [#extends]
 

@@ -1,20 +1,23 @@
 //! Writing settings by key: [`AgentConfig::write_values`] writes the
 //! settings of `config.toml` that have a spec, and `config set`
-//! ([`AgentConfig::set_user_value`]) writes through it.
+//! ([`AgentConfig::set_user_value`]) writes through it;
+//! [`AgentConfig::write_entry_values`] writes the keys of one entry of a
+//! table the settings do not read (a profile, a role, a plugin's MCP
+//! server), which its caller checks.
 
 use std::collections::BTreeMap;
 
 use hanafubuki_agent_foundation::settings::{SettingApply, SettingSpec};
-use hanafubuki_agent_packages::PluginOptionSchema;
+use hanafubuki_agent_packages::{PluginId, PluginOptionSchema};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
 use super::AgentConfig;
-use crate::keys::{self, KeyChange, KeyTarget};
+use crate::keys::{self, KeyChange, KeyTarget, AGENTS, PROFILES};
 use crate::layers::SettingSource;
 use crate::overrides::parse_value;
 use crate::sections::{setting_spec, specs};
-use crate::{AgentSettings, PluginOptionKey};
+use crate::{is_role_name, AgentSettings, PluginOptionKey};
 
 /// A change of settings by key, as a settings page or `config set` makes
 /// it: every value is checked, and the change is written as a whole or not
@@ -59,7 +62,78 @@ pub struct SettingsWriteOutcome {
     pub apply: Vec<(String, SettingApply)>,
 }
 
+/// An entry of a table of the user's `config.toml` that a settings page
+/// edits key by key, its keys checked by the caller.
+#[derive(Clone, Copy, Debug)]
+pub enum UserEntry<'a> {
+    /// `[profiles.<name>]`.
+    Profile(&'a str),
+    /// `[agents.<name>]`, a role.
+    Role(&'a str),
+    /// `[plugins."<plugin>".mcpServers.<server>]`, how the user restricts a
+    /// plugin's MCP server.
+    PluginMcpServer {
+        plugin: &'a PluginId,
+        server: &'a str,
+    },
+}
+
+impl UserEntry<'_> {
+    fn path(self) -> Result<Vec<String>, String> {
+        let named = |table: &str, name: &str| {
+            if name.trim().is_empty() {
+                Err(format!("an entry of `{table}` has a name"))
+            } else {
+                Ok(vec![table.to_string(), name.to_string()])
+            }
+        };
+        match self {
+            Self::Profile(name) => named(PROFILES, name),
+            Self::Role(name) if is_role_name(name) => named(AGENTS, name),
+            Self::Role(name) => Err(format!("`{name}` cannot be a role's name")),
+            Self::PluginMcpServer { plugin, server } => {
+                let mut path = named("plugins", &plugin.key())?;
+                path.extend(named("mcpServers", server)?);
+                Ok(path)
+            }
+        }
+    }
+}
+
 impl AgentConfig {
+    /// Writes `values` into `entry` of the user's `config.toml`, each key
+    /// dotted relative to it (`tools.allow`) and `null` removing it, keeping
+    /// the rest of the file as written. The caller checks the values.
+    pub fn write_entry_values(
+        &self,
+        entry: UserEntry<'_>,
+        values: &Map<String, Value>,
+    ) -> Result<(), String> {
+        let prefix = entry.path()?;
+        let mut change = Map::new();
+        for (key, value) in values {
+            let mut path = prefix.clone();
+            path.extend(key.split('.').map(str::to_string));
+            keys::insert(&mut change, &path, value.clone());
+        }
+        self.write_user_change(&change)
+    }
+
+    /// Removes `entry` from the user's `config.toml`.
+    pub fn remove_entry(&self, entry: UserEntry<'_>) -> Result<(), String> {
+        let mut change = Map::new();
+        keys::insert(&mut change, &entry.path()?, Value::Null);
+        self.write_user_change(&change)
+    }
+
+    fn write_user_change(&self, change: &Map<String, Value>) -> Result<(), String> {
+        let mut cached = self.inner.settings.lock();
+        self.load_user_settings()?;
+        self.inner.settings_file.write(change)?;
+        *cached = None;
+        Ok(())
+    }
+
     /// Writes `write` into the user's `config.toml`, keeping comments and
     /// the keys it does not name as written. Each value is checked against
     /// its setting's spec first, then the changed file is read again, and

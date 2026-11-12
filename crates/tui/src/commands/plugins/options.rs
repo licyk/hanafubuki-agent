@@ -54,16 +54,10 @@ pub(super) fn save(
             name: name.clone(),
             options: changed,
         },
-        // A code plugin's settings are written whole: the keys its options
-        // do not describe stay.
-        OptionsOf::Package(id) => {
-            let mut settings = package(state, id)?.guest.as_ref()?.settings.clone();
-            settings.extend(changed);
-            PluginsCall::SetSettings {
-                id: id.clone(),
-                settings: Value::Object(settings),
-            }
-        }
+        OptionsOf::Package(id) => PluginsCall::SetPackageOptions {
+            id: id.clone(),
+            options: changed,
+        },
     })
 }
 

@@ -138,10 +138,10 @@ fn a_code_plugins_page_offers_to_grant_what_it_asks_for_until_granted() {
 }
 
 /// `o` opens a code plugin's options when its `configSchema` lowers to
-/// some; saving writes its settings whole, the keys the options do not
-/// describe kept.
+/// some; saving writes what changed by key, so the keys the options do not
+/// describe stay as they are.
 #[test]
-fn a_code_plugins_options_save_its_settings_whole() {
+fn a_code_plugins_options_save_what_changed_by_key() {
     use hanafubuki_agent::{
         AgentPluginOptionsStatus, PluginOptionSchema, ResolvedPluginOption, SettingKind,
         SettingSpec, SettingValue,
@@ -199,9 +199,9 @@ fn a_code_plugins_options_save_its_settings_whole() {
     form.handle_key(key(KeyCode::Char('4')));
     assert_eq!(
         super::options::save(&mut form, &state, &target),
-        Some(PluginsCall::SetSettings {
+        Some(PluginsCall::SetPackageOptions {
             id: "demo@market".to_string(),
-            settings: serde_json::json!({ "nested": {}, "level": 4 }),
+            options: serde_json::Map::from_iter([("level".to_string(), serde_json::json!(4))]),
         })
     );
 }

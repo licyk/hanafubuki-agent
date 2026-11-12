@@ -177,6 +177,12 @@ impl Workspace {
         self.settings.as_ref()
     }
 
+    /// The settings center, when it is open, to tell it what a page it
+    /// hosts saved.
+    pub(crate) fn settings_mut(&mut self) -> Option<&mut SettingsCenter> {
+        self.settings.as_mut()
+    }
+
     pub(super) fn second_focused(&self) -> bool {
         self.second
             .as_ref()

@@ -46,6 +46,7 @@ mod quarantine;
 mod restart;
 mod sessions;
 mod settings_catalog;
+mod settings_collections;
 mod shutdown;
 mod standalone;
 mod startup;

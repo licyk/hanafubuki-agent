@@ -30,6 +30,7 @@ pub(super) fn collection(statuses: &[AgentPluginStatus]) -> SettingsCollection {
             summary: status.summary.clone(),
             state: Some(name_of(&status.state)),
             issue: status.error.clone().or_else(|| status.warning.clone()),
+            read_only: None,
             values: BTreeMap::from([(ENABLED.to_string(), SettingValue::Boolean(status.enabled))]),
             secrets_set: Vec::new(),
         })

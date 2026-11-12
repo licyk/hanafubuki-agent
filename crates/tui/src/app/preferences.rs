@@ -146,18 +146,22 @@ impl App {
         written: Result<AgentTuiPreferences, String>,
         shadowed: bool,
     ) {
-        match written {
+        let reported = match written {
             Ok(preferences) => {
                 if shadowed {
                     message.push_str(SHADOWED);
                 }
                 self.adopt_tui_preferences(preferences);
-                self.chat_widget.add_info_message(message);
+                self.chat_widget.add_info_message(message.clone());
+                Ok(message)
             }
-            Err(error) => self
-                .chat_widget
-                .add_error_message(format!("{message} It was not saved: {error}")),
-        }
+            Err(error) => {
+                let error = format!("{message} It was not saved: {error}");
+                self.chat_widget.add_error_message(error.clone());
+                Err(error)
+            }
+        };
+        self.report_to_settings(reported);
         self.schedule_frame(Instant::now());
     }
 
@@ -176,7 +180,7 @@ impl App {
         mut message: String,
         saved: Result<AgentTuiPreferences, String>,
     ) {
-        match saved {
+        let reported = match saved {
             Ok(preferences) => {
                 if shadowed(&patch, &preferences) {
                     message.push_str(SHADOWED);
@@ -184,13 +188,25 @@ impl App {
                 // What the keymap cannot use was kept for `/warnings` at
                 // start, and `/keymap` refuses what it would add.
                 self.apply_preferences(preferences);
-                self.chat_widget.add_info_message(message);
+                self.chat_widget.add_info_message(message.clone());
+                Ok(message)
             }
-            Err(error) => self
-                .chat_widget
-                .add_error_message(format!("{message} It was not saved: {error}")),
-        }
+            Err(error) => {
+                let error = format!("{message} It was not saved: {error}");
+                self.chat_widget.add_error_message(error.clone());
+                Err(error)
+            }
+        };
+        self.report_to_settings(reported);
         self.schedule_frame(Instant::now());
+    }
+
+    /// What a page of the settings center saved, said in the center too
+    /// while it is open over the transcript.
+    fn report_to_settings(&mut self, outcome: Result<String, String>) {
+        if let Some(center) = self.workspace.settings_mut() {
+            center.report(outcome);
+        }
     }
 
     /// `[tui]` as a write of the settings center left it, taken whole: the

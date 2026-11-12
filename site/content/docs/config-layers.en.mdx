@@ -34,6 +34,8 @@ hanafubuki-agent -p offline exec "Tidy up the notes in this directory"
 
 Selecting a profile the file does not have is an error. A list in a profile (such as `disabledPlugins`) **replaces** the list below it; the two are not merged.
 
+The terminal interface's [settings center](/docs/terminal-interface#config) edits the profiles (Profiles, in the Advanced tab): `a` adds one, each key is saved as it is changed and `r` removes it from the profile, and Delete removes the whole profile, except the one the Agent runs with.
+
 ## The project's file [#projects]
 
 The project is the Git root of the working directory (`-C`, or the current directory), or the working directory itself outside a repository. A project may have its own file, `<project>/.hanafubuki-agent/config.toml`, with the same settings as the user's.

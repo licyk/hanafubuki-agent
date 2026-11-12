@@ -2,10 +2,14 @@
 
 //! What the center's keys and clicks ask of the Agent: a toggle written at
 //! once, an edit checked first and kept when refused, a record's field
-//! saved at the collection's revision, a confirmation before a delete, the
-//! search opening a setting of another tab, and the pointer.
+//! saved at the collection's revision, a confirmation before a delete, an
+//! add starting from its defaults, a record shown only, the search opening
+//! a setting of another tab, and the pointer.
 
-use hanafubuki_agent::{SettingWriteOp, SettingsActionOutcome, SettingsWriteOutcome};
+use hanafubuki_agent::{
+    SettingChoice, SettingCondition, SettingKind, SettingSpec, SettingValue, SettingWriteOp,
+    SettingsActionOutcome, SettingsWriteOutcome,
+};
 use ratatui::crossterm::event::{KeyCode, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use serde_json::json;
 
@@ -301,4 +305,97 @@ fn a_commit_group_is_a_form_saved_together() {
     assert_eq!(keys, ["searxngBaseUrl", "webSearchProvider"]);
     reply(&mut center, *id, Ok(written()), catalog());
     assert!(!screen(&mut center, 140, 20).contains("Web tools ›"));
+}
+
+#[test]
+fn an_add_starts_from_its_defaults() {
+    let mut catalog = catalog();
+    let record = &mut catalog.collections[0].record;
+    for spec in record.iter_mut() {
+        if spec.key == "enabled" {
+            spec.default = Some(SettingValue::Boolean(true));
+        }
+    }
+    record.push(SettingSpec {
+        default: Some(SettingValue::Text("stdio".into())),
+        ..SettingSpec::new(
+            "transport.type",
+            "Transport",
+            SettingKind::Choice {
+                values: vec![
+                    SettingChoice::new("stdio", "Standard input and output"),
+                    SettingChoice::new("http", "HTTP"),
+                ],
+            },
+        )
+    });
+    record.push(SettingSpec {
+        visible_if: Some(SettingCondition {
+            key: "transport.type".into(),
+            equals: SettingValue::Text("stdio".into()),
+        }),
+        ..SettingSpec::new(
+            "transport.program",
+            "Program",
+            SettingKind::Text {
+                maximum_chars: None,
+                secret: false,
+                nullable: false,
+            },
+        )
+    });
+    let mut center = center_with(catalog, Some("providers"));
+    press(&mut center, KeyCode::Char('a'));
+    let shown = screen(&mut center, 140, 20);
+    assert!(shown.contains("[x] On"), "{shown}");
+    assert!(shown.contains("Standard input and output"), "{shown}");
+    assert!(
+        shown.contains("Program"),
+        "its transport's fields show: {shown}"
+    );
+    select(&mut center, "Enabled");
+    press(&mut center, KeyCode::Enter);
+    assert!(screen(&mut center, 140, 20).contains("[ ] Off"));
+    select(&mut center, "Add a Provider");
+    press(&mut center, KeyCode::Enter);
+    let sent = calls(&mut center);
+    let [(_, CatalogCall::Action(request))] = sent.as_slice() else {
+        panic!("{sent:?}");
+    };
+    assert_eq!(
+        request.values,
+        json!({ "enabled": false }).as_object().unwrap().clone(),
+        "only what was changed is sent; the rest is what the add writes"
+    );
+}
+
+#[test]
+fn a_record_written_elsewhere_is_shown_with_why() {
+    let mut catalog = catalog();
+    catalog.collections[0].records[0].read_only = Some("Written in its role file".to_string());
+    let mut center = center_with(catalog, Some("providers"));
+    press(&mut center, KeyCode::Enter);
+    let shown = screen(&mut center, 140, 20);
+    assert!(shown.contains("Written in its role file"), "{shown}");
+    select(&mut center, "Enabled");
+    press(&mut center, KeyCode::Enter);
+    press(&mut center, KeyCode::Char('r'));
+    assert!(calls(&mut center).is_empty());
+}
+
+#[test]
+fn reset_unsets_a_records_field() {
+    let mut center = center_with(catalog(), Some("providers"));
+    press(&mut center, KeyCode::Enter);
+    select(&mut center, "Base URL");
+    press(&mut center, KeyCode::Char('r'));
+    let sent = calls(&mut center);
+    let [(_, CatalogCall::Action(request))] = sent.as_slice() else {
+        panic!("{sent:?}");
+    };
+    assert_eq!(request.action, "save");
+    assert_eq!(
+        request.values,
+        json!({ "baseUrl": null }).as_object().unwrap().clone()
+    );
 }

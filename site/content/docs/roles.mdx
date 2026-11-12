@@ -93,7 +93,7 @@ model = "gpt-5.4"
 
 `configFile`（Codex 的 `config_file`）指向一个角色文件，路径相对于写着它的 `config.toml` 所在的文件夹：条目的键覆盖在文件的键之上读取，条目的键名就是角色名。这个文件归这个条目所有，目录不会再读一遍。读不了的 `configFile` 会让角色不可用。
 
-`[agents]` 不是设置：`config get` 和 `config set` 不处理它，`-c agents.…` 覆盖是未知的键。
+`[agents]` 不是设置：`config get` 和 `config set` 不处理它，`-c agents.…` 覆盖是未知的键。终端界面的[设置中心](/docs/terminal-interface#config)编辑用户自己的条目（Model 标签页中的 Roles）：`a` 添加一个，它的 `description`、`instructions`、`instructionsMode`、`model`、`reasoningEffort` 和 `spawnable` 改动时即保存（`r` 删除一个键），Delete 删除整个条目，每次改动后角色会重新读取。角色文件、profile、项目、插件或 Agent 自带的角色在那里只显示，并说明写在哪里；收窄角色的键（`extends`、`permissionModeCap`、`tools`、`plugins`）写在文件中。
 
 ## extends 与合并 [#extends]
 

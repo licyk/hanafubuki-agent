@@ -77,8 +77,8 @@ pub use standalone::{
 };
 pub use store::{
     read_mcp_document, read_providers_document, read_settings_document, AgentConfig, SettingChange,
-    SettingWriteOp, SettingsWrite, SettingsWriteOutcome, AGENT_CREDENTIAL_FILES, AGENT_MCP_FILE,
-    AGENT_PROVIDERS_FILE, AGENT_SETTINGS_FILE,
+    SettingWriteOp, SettingsWrite, SettingsWriteOutcome, UserEntry, AGENT_CREDENTIAL_FILES,
+    AGENT_MCP_FILE, AGENT_PROVIDERS_FILE, AGENT_SETTINGS_FILE,
 };
 pub use tui::{
     AgentAlternateScreen, AgentScrollbackMouse, AgentTuiPreferences, AgentTuiPreferencesPatch,

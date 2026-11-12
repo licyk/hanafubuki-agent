@@ -23,7 +23,7 @@ use crate::bottom_pane::{
 };
 use crate::commands::CommandReply;
 use crate::render::renderable::Renderable;
-use hanafubuki_agent::{AgentPackageSource, AgentPackageStatus};
+use hanafubuki_agent::AgentPackageStatus;
 
 const SOURCE: &str = "source";
 const SUBMIT: &str = "submit";
@@ -253,13 +253,7 @@ impl PluginsBrowser {
                 }
                 let (call, busy) = match prompt {
                     Prompt::AddMarketplace => (PluginsCall::AddMarketplace(source), "Adding…"),
-                    Prompt::InstallDirectory => (
-                        PluginsCall::Install(AgentPackageSource::Directory {
-                            path: source.into(),
-                            marketplace: None,
-                        }),
-                        "Installing…",
-                    ),
+                    Prompt::InstallDirectory => (PluginsCall::Install(source), "Installing…"),
                     Prompt::Settings => return,
                 };
                 form.set_status(vec![busy.dim().into()]);
@@ -319,21 +313,11 @@ impl PluginsBrowser {
                     Some(PluginsDone::Notice(text)) => {
                         self.notice = Some(Line::from(text.green()));
                     }
-                    Some(PluginsDone::Installed(install)) => {
-                        let id = install.package.id.clone();
+                    Some(PluginsDone::Installed { package, hooks }) => {
+                        let id = package.id.clone();
                         self.notice = Some(Line::from(
-                            format!("{id} is installed (version {}).", install.package.version)
-                                .green(),
+                            format!("{id} is installed (version {}).", package.version).green(),
                         ));
-                        let hooks = install
-                            .hooks_to_trust
-                            .iter()
-                            .map(|hook| {
-                                let hanafubuki_agent::AgentHookHandler::Command { command, .. } =
-                                    &hook.handler;
-                                (hook.key.clone(), command.clone())
-                            })
-                            .collect::<Vec<_>>();
                         self.back = vec![(Page::Tab(Tab::Installed), None)];
                         let page = if hooks.is_empty() {
                             Page::Package(id)

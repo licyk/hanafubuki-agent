@@ -628,4 +628,4 @@ pub(crate) fn object<T: Serialize>(value: &T) -> Result<Map<String, Value>, Stri
 mod tests;
 mod write;
 
-pub use write::{SettingChange, SettingWriteOp, SettingsWrite, SettingsWriteOutcome};
+pub use write::{SettingChange, SettingWriteOp, SettingsWrite, SettingsWriteOutcome, UserEntry};

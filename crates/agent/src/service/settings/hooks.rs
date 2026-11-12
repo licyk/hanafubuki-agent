@@ -1,6 +1,8 @@
-//! The hooks of the user's and a trusted project's configuration: each one
-//! turned on or off, and trusted as it is defined now. Their definitions
-//! are written in the files. Read through the `hooks` row, so while it is
+//! The hooks of the user's and a trusted project's configuration and of
+//! the installed plugins: each one turned on or off, and trusted as it is
+//! defined now. Its definition (event, matcher, command, timeout, status
+//! message, where it is written) is its label and summary: it is written
+//! in its file, never here. Read through the `hooks` row, so while it is
 //! not running the collection says why and lists none.
 
 use std::collections::BTreeMap;
@@ -11,7 +13,8 @@ use super::{
     name_of, SettingsAction, SettingsActionOutcome, SettingsActionRequest, SettingsCollection,
     SettingsRecord, SAVE,
 };
-use crate::service::{AgentApplicationService, AgentHookHandler};
+use crate::service::{AgentApplicationService, AgentHook, AgentHookHandler};
+use hanafubuki_agent_hooks::HookSource;
 
 pub(super) const ID: &str = "hooks";
 const TRUST: &str = "trust";
@@ -35,7 +38,6 @@ pub(super) async fn collection(service: &AgentApplicationService) -> SettingsCol
         .hooks
         .iter()
         .map(|hook| {
-            let AgentHookHandler::Command { command, .. } = &hook.handler;
             let event = name_of(&hook.event);
             SettingsRecord {
                 id: hook.key.clone(),
@@ -43,9 +45,10 @@ pub(super) async fn collection(service: &AgentApplicationService) -> SettingsCol
                     Some(matcher) => format!("{event} · {matcher}"),
                     None => event,
                 },
-                summary: command.clone(),
+                summary: definition(hook),
                 state: Some(name_of(&hook.trust)),
                 issue: None,
+                read_only: None,
                 values: BTreeMap::from([(
                     ENABLED.to_string(),
                     SettingValue::Boolean(hook.enabled),
@@ -90,4 +93,25 @@ pub(super) async fn run(
         }
         _ => request.unknown_action(),
     }
+}
+
+/// What the hook runs, how long it may take, what it shows while it runs
+/// and where it is written.
+fn definition(hook: &AgentHook) -> String {
+    let AgentHookHandler::Command {
+        command,
+        timeout_sec,
+        status_message,
+    } = &hook.handler;
+    let mut parts = vec![command.clone(), format!("times out after {timeout_sec}s")];
+    if let Some(message) = status_message {
+        parts.push(format!("shows \"{message}\""));
+    }
+    parts.push(match &hook.source {
+        HookSource::Plugin { id, .. } => format!("plugin {id}"),
+        HookSource::User | HookSource::Project => {
+            format!("{} {}", name_of(&hook.source), hook.source_path.display())
+        }
+    });
+    parts.join(" · ")
 }

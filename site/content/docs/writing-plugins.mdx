@@ -272,7 +272,7 @@ kardia-guest 和 pykardia 的访客 SDK（`pykardia/guest/` 以及导出时一�
 
 ### configSchema [#config-schema]
 
-`configSchema` 会被强制执行。读取包时，它的 `properties` 中的每个属性被降低为一个选项，`/plugins` 中的选项表单（在插件上按 `o`）显示这些选项，设置也按它们检查。它读取的关键字：
+`configSchema` 会被强制执行。读取包时，它的 `properties` 中的每个属性被降低为一个选项，`/plugins` 中的选项表单（在插件上按 `o`）和[设置中心](/docs/terminal-interface#config) Plugins 标签页中该插件的分节显示这些选项，设置也按它们检查。它读取的关键字：
 
 | 关键字                                         | 变成                                                          |
 | ---------------------------------------------- | ------------------------------------------------------------- |
@@ -282,7 +282,8 @@ kardia-guest 和 pykardia 的访客 SDK（`pykardia/guest/` 以及导出时一�
 | 字符串的 `enum`                                | 在它们之中选择（带 `type: "string"` 或不带 `type`）           |
 | `type: "array"`、`items: { "type": "string" }` | 文本列表，最多 `maxItems` 项，每项最多为 items 的 `maxLength` |
 | `default`                                      | 选项的默认值，前提是它符合该选项                              |
-| `description`                                  | 表单的标签，取它的第一行                                      |
+| `title`                                        | 选项的标签（没有时用它的键）                                  |
+| `description`                                  | 选项的说明，取它的第一行                                      |
 
 其他关键字在这里不做任何约束，与工具的 schema 一样；写入设置时仍会检查 `required` 和 `additionalProperties: false`。不属于以上任何一种的属性（对象、非字符串的列表、多种类型的联合、非字符串的 `enum`）不是选项：它是包的一个问题（`plugins validate` 会列出它），它的值不经检查地到达访客。最多 64 个属性成为选项。
 

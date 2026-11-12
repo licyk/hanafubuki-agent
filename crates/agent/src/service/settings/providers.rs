@@ -13,7 +13,7 @@ use hanafubuki_agent_config::{
 };
 use serde_json::{json, Value};
 
-use super::record::{merged, record_of};
+use super::record::{merged, record_of, with_defaults};
 use super::{
     name_of, SettingsAction, SettingsActionOutcome, SettingsActionRequest, SettingsCollection, ADD,
     DELETE, SAVE,
@@ -73,7 +73,8 @@ fn fields() -> Vec<SettingSpec> {
 }
 
 pub(super) async fn collection(service: &AgentApplicationService) -> SettingsCollection {
-    let collection = SettingsCollection::new(ID, "Providers", SettingsGroup::Model, fields())
+    let record = with_defaults(fields(), &with_header_list(&template()));
+    let collection = SettingsCollection::new(ID, "Providers", SettingsGroup::Model, record)
         .with_actions(vec![
             SettingsAction::collection(ADD, "Add a Provider"),
             SettingsAction::record(SAVE, "Save"),
@@ -156,23 +157,13 @@ pub(super) async fn run(
     }
 }
 
-/// A new Provider from `request.values` over an empty, enabled one; the
-/// registry names it.
+/// A new Provider from `request.values` over [`template`]; the registry
+/// names it.
 async fn add(
     service: &AgentApplicationService,
     request: &SettingsActionRequest,
 ) -> Result<SettingsActionOutcome, String> {
-    let template = AgentProviderSettings {
-        id: String::new(),
-        display_name: String::new(),
-        enabled: true,
-        protocol: AgentModelProtocol::Responses,
-        base_url: String::new(),
-        api_token: None,
-        request_headers: Vec::new(),
-        models: BTreeMap::new(),
-    };
-    let provider = written(&template, request)?;
+    let provider = written(&template(), request)?;
     let before = service.provider_registry_snapshot().await?;
     let after = write(service, request, None, provider).await?;
     let added = after
@@ -184,6 +175,20 @@ async fn add(
         record: added,
         message: None,
     })
+}
+
+/// The Provider an `add` writes its values over: enabled, empty.
+fn template() -> AgentProviderSettings {
+    AgentProviderSettings {
+        id: String::new(),
+        display_name: String::new(),
+        enabled: true,
+        protocol: AgentModelProtocol::Responses,
+        base_url: String::new(),
+        api_token: None,
+        request_headers: Vec::new(),
+        models: BTreeMap::new(),
+    }
 }
 
 /// `provider` with the request's values over it.

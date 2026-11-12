@@ -472,7 +472,7 @@ fn the_settings_commands_open_the_center_at_their_page() {
         ("title", "", "title"),
         ("keymap", "", "keymap"),
         ("presets", "", "presets"),
-        ("plugins", "", "packages"),
+        ("plugins", "", "plugin-browser"),
         ("hooks", "", "hook-review"),
     ] {
         chat.dispatch_command(command(name), args.to_string());

@@ -62,8 +62,8 @@ mod sessions;
 pub use sessions::AgentEditFromTurn;
 mod settings;
 pub use settings::{
-    SettingsAction, SettingsActionOutcome, SettingsActionRequest, SettingsActionScope,
-    SettingsCatalog, SettingsCollection, SettingsRecord,
+    package_setting_key, SettingsAction, SettingsActionOutcome, SettingsActionRequest,
+    SettingsActionScope, SettingsCatalog, SettingsCollection, SettingsRecord,
 };
 mod skill_operations;
 pub use skill_operations::{AgentSkillSessionState, LocalSkillInstallRequest};

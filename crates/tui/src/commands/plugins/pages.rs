@@ -7,8 +7,8 @@
 //! choosing it does; a row that only informs does nothing.
 
 use hanafubuki_agent::{
-    AgentMarketplace, AgentMarketplacePlugin, AgentPackageSource, AgentPackageStatus,
-    MarketplaceSourceType, PackageSource,
+    AgentMarketplace, AgentMarketplacePlugin, AgentPackageStatus, MarketplaceSourceType,
+    PackageSource,
 };
 use ratatui::style::Stylize;
 use ratatui::text::{Line, Span};
@@ -417,10 +417,7 @@ pub(super) fn offered_page(
     ];
     let install = plugin.installable.then(|| {
         call(
-            PluginsCall::Install(AgentPackageSource::Marketplace {
-                marketplace: marketplace.name.clone(),
-                plugin: plugin.name.clone(),
-            }),
+            PluginsCall::Install(format!("{}@{}", plugin.name, marketplace.name)),
             "Installing…",
             After::Stay,
         )

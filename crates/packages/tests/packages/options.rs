@@ -161,7 +161,7 @@ fn a_config_schema_is_lowered_with_its_supported_keywords() {
     let (lowered, issues) = lower_config_schema(&object(json!({
         "type": "object",
         "properties": {
-            "greeting": { "type": "string", "maxLength": 20, "description": "What it says\nmore", "default": "hi" },
+            "greeting": { "type": "string", "title": "Greeting", "maxLength": 20, "description": "What it says\nmore", "default": "hi" },
             "level": { "type": "integer", "minimum": 1, "maximum": 5 },
             "limit": { "type": "integer", "minimum": 0 },
             "style": { "enum": ["plain", "fancy"] },
@@ -189,6 +189,7 @@ fn a_config_schema_is_lowered_with_its_supported_keywords() {
     );
     let greeting = lowered.option("greeting").unwrap();
     assert_eq!(greeting.summary, "What it says");
+    assert_eq!(greeting.label, "Greeting", "labelled by its title");
     assert_eq!(
         greeting.kind,
         SettingKind::Text {

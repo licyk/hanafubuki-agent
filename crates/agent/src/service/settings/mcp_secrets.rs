@@ -65,6 +65,7 @@ pub(super) async fn collection(service: &AgentApplicationService) -> SettingsCol
                     summary: format!("{kind} · credential {}", key.as_str()),
                     state: None,
                     issue: (!credentials.contains_key(&key)).then(|| "it has no value".into()),
+                    read_only: None,
                     values: BTreeMap::new(),
                     secrets_set: credentials
                         .contains_key(&key)

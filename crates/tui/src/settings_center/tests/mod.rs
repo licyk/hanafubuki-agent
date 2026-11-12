@@ -70,6 +70,7 @@ fn providers() -> SettingsCollection {
         summary: format!("responses · https://{id}.example.test/v1"),
         state: state.map(str::to_string),
         issue: None,
+        read_only: None,
         values: BTreeMap::from([
             (
                 "displayName".to_string(),
@@ -135,6 +136,7 @@ fn policy() -> SettingsCollection {
             summary: "gpt-test".to_string(),
             state: None,
             issue: None,
+            read_only: None,
             values: BTreeMap::from([(
                 "model".to_string(),
                 SettingValue::Text("gpt-test".to_string()),
