@@ -114,6 +114,8 @@ The `update.type` of `execution_progress`:
 
 `status` is `starting`, `running`, `exited`, `failed`, `cancelled` or `timed_out`; `exitCode` is an integer or `null`.
 
+`text` is terminal text, to be rendered in order: a pipe's output as the process wrote it, escape sequences included; a pseudo-terminal's as its screen shows it, rows ended by line breaks, a row the previous update left unfinished written again after `\r` and `ESC [2K`.
+
 ### Approvals [#approvals]
 
 | `kind.type`                   | Fields                                                                                    | Means                                              |

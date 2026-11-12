@@ -140,7 +140,10 @@ impl TerminalScreen {
             self.parser.process(&data[fed..end]);
             fed = end;
             self.collect_scrolled();
-            if self.collected >= EMPTY_AT_ROWS && between_sequences(&data, fed) {
+            if self.collected >= EMPTY_AT_ROWS
+                && !self.parser.screen().alternate_screen()
+                && between_sequences(&data, fed)
+            {
                 self.empty_scrollback();
             }
         }

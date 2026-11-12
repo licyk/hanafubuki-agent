@@ -129,3 +129,35 @@ fn output_is_replayed_at_the_sizes_it_was_produced_at() {
     );
     assert_eq!(screen.parser.screen().size(), (24, 80));
 }
+
+#[test]
+fn wide_wrapped_and_full_width_lines_survive_the_scrollback_being_emptied() {
+    // Enough rows to empty the scrollback several times, with characters cut
+    // between slices, rows that wrap, and rows exactly as wide as the screen.
+    // A wide character that finds one column left moves to the next row
+    // without marking the row wrapped (vt100 does as tmux does), so the wide
+    // rows here fill each row exactly.
+    let mut screen = screen(40, 5);
+    let lines = (1..=600)
+        .map(|line| match line % 4 {
+            0 => format!("{line} 中文的行"),
+            1 => format!("{line:03} {}", "长".repeat(50)),
+            2 => format!("{line:0>40}"),
+            _ => format!("{line} {}", "x".repeat(130)),
+        })
+        .collect::<Vec<_>>();
+    let output: String = lines.iter().map(|line| format!("{line}\r\n")).collect();
+    let expected: String = lines.iter().map(|line| format!("{line}\n")).collect();
+    assert_eq!(text(&mut screen, output.as_bytes()), expected);
+}
+
+#[test]
+fn the_alternate_screen_leaves_the_main_one_as_it_was() {
+    let mut screen = screen(40, 5);
+    let mut output = String::from("before\r\n\x1b[?1049h");
+    for line in 1..=600 {
+        output.push_str(&format!("full-screen {line}\r\n"));
+    }
+    output.push_str("\x1b[?1049lafter\r\n");
+    assert_eq!(text(&mut screen, output.as_bytes()), "before\nafter\n");
+}

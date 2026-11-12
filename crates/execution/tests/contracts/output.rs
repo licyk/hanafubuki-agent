@@ -202,7 +202,11 @@ fn a_poll_behind_the_retained_output_says_exactly_what_it_missed() {
     // More than the 4 MiB a session keeps arrives between two polls, the
     // second once the command has finished.
     let results = polls_then(
-        request("printf 'first\\n'; sleep 2; seq 1 1000000", false, None),
+        request(
+            "printf 'first\\n'; sleep 2; awk 'BEGIN { for (i = 1; i <= 1000000; i++) print i }'",
+            false,
+            None,
+        ),
         1_000,
         30_000,
     );
