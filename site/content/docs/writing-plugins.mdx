@@ -268,26 +268,28 @@ kardia-guest 和 pykardia 的访客 SDK（`pykardia/guest/` 以及导出时一�
 
 - **权限**由用户授予，插件自己永远不能授予：权限未被授予的程序处于 `blocked` 状态。`plugins grant ID` 授予清单请求的权限，`/plugins` 中插件页面的 **Grant its permissions** 也一样。请求更多权限的更新要等待新的授权。WebAssembly 模块什么也不请求，从不处于 `blocked`。
 - **沙箱的插件配置**限制程序：它能读系统目录和它的包，只能写它的数据目录，按授予的权限访问工作区，只有被授予时才能访问网络；启动时环境为空，只有被授予的 `env`、`PLUGIN_ROOT` 和 `PLUGIN_DATA`。Linux 和 macOS 强制执行读取限制；Windows 无法禁止读取，所以那里不强制 `workspace: "none"`。没有沙箱的地方，访客不会启动。
-- **设置**是 `config.toml` 中的 `[plugins."ID"].settings`：`plugins settings ID --set '{"greeting": "Hi"}'` 替换它们（按 `configSchema` 检查），`--set null` 删除它们，`plugins settings ID` 打印它们和 schema；`/plugins` 也能编辑它们。它们是 `apply` 收到的配置，也是访客的 `settings` 视图；修改后访客会带着新设置重新启动。
+- **设置**是 `config.toml` 中的 `[plugins."ID"].settings`：`plugins settings ID --set '{"greeting": "Hi"}'` 替换它们（按 `configSchema` 检查），`--set null` 删除它们，`plugins settings ID` 打印它们和 schema；`/plugins` 和设置中心也能编辑它们（[configSchema](#config-schema)）。它们是 `apply` 收到的配置，也是访客的 `settings` 视图；修改后访客会带着新设置重新启动。
 
 ### configSchema [#config-schema]
 
 `configSchema` 会被强制执行。读取包时，它的 `properties` 中的每个属性被降低为一个选项，`/plugins` 中的选项表单（在插件上按 `o`）和[设置中心](/docs/terminal-interface#config) Plugins 标签页中该插件的分节显示这些选项，设置也按它们检查。它读取的关键字：
 
-| 关键字                                         | 变成                                                          |
-| ---------------------------------------------- | ------------------------------------------------------------- |
-| `type: "boolean"`                              | 开关                                                          |
-| `type: "integer"`、`"number"`                  | 数字，给出 `minimum` 和 `maximum` 时在它们之间                |
-| `type: "string"`                               | 文本，给出 `maxLength` 时最多这么多个字符                     |
-| 字符串的 `enum`                                | 在它们之中选择（带 `type: "string"` 或不带 `type`）           |
-| `type: "array"`、`items: { "type": "string" }` | 文本列表，最多 `maxItems` 项，每项最多为 items 的 `maxLength` |
-| `default`                                      | 选项的默认值，前提是它符合该选项                              |
-| `title`                                        | 选项的标签（没有时用它的键）                                  |
-| `description`                                  | 选项的说明，取它的第一行                                      |
+| 关键字                                         | 变成                                                                      |
+| ---------------------------------------------- | ------------------------------------------------------------------------- |
+| `type: "boolean"`                              | 开关                                                                      |
+| `type: "integer"`、`"number"`                  | 数字，给出 `minimum` 和 `maximum` 时在它们之间                            |
+| `type: "string"`                               | 文本，给出 `maxLength` 时最多这么多个字符                                 |
+| 字符串的 `enum`                                | 在它们之中选择，每个值以它自身为标签（带 `type: "string"` 或不带 `type`） |
+| `type: "array"`、`items: { "type": "string" }` | 文本列表，最多 `maxItems` 项，每项最多为 items 的 `maxLength`             |
+| `default`                                      | 选项的默认值，前提是它符合该选项                                          |
+| `title`                                        | 选项的标签（没有时用它的键）                                              |
+| `description`                                  | 选项的说明，取它的第一行                                                  |
 
-其他关键字在这里不做任何约束，与工具的 schema 一样；写入设置时仍会检查 `required` 和 `additionalProperties: false`。不属于以上任何一种的属性（对象、非字符串的列表、多种类型的联合、非字符串的 `enum`）不是选项：它是包的一个问题（`plugins validate` 会列出它），它的值不经检查地到达访客。最多 64 个属性成为选项。
+其他关键字在这里不做任何约束，与工具的 schema 一样；写入设置时仍会检查 `required` 和 `additionalProperties: false`。不符合其选项的 `default` 是包的一个问题，该选项没有默认值。没有关键字能让选项成为机密。不属于以上任何一种的属性（对象、非字符串的列表、多种类型的联合、非字符串或为空的 `enum`、`minimum` 大于 `maximum`）不是选项：它是包的一个问题（`plugins validate` 会列出它），它的值不经检查地到达访客。最多 64 个属性成为选项。
 
 访客收到的设置按选项检查过：不符合其选项的值取选项的 `default`，模式没有给出默认值时则被省略，越界的整数或数字被截取到边界；每一项都是包的一个问题和日志中的一条警告，`config.toml` 保留原来写的内容。设置中省略的键仍然省略（访客自己的默认值生效），没有选项描述的键原样到达访客。写入是严格的：`plugins settings --set`、`set_package_settings` 和表单会带着原因拒绝不符合的设置，什么也不写。
+
+所以插件只用 `configSchema` 声明它的设置，不需要设置页面：这些选项是 Agent 的[设置目录](/docs/architecture#settings-catalog)中的设置，每个插件一节（`plugins."ID".settings`，在 Plugins 组中），键为 `plugins."ID".settings.选项`。设置中心把它们显示为行（`/config plugins."ID".settings`），宿主的设置页面像显示 Agent 自己的设置一样显示它们；写入它们（`write_setting_values`，键由 `package_setting_key` 拼出）时，把改动的键写在用户 `config.toml` 已有的设置之上，删除被重置的键，按 `set_package_settings` 的方式检查，并重启访客。一次写入只包含一个插件的设置，不含其他内容。值显示为由用户设置或为默认值；不会为它标出其他层。
 
 ## 出错时 [#failures]
 

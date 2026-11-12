@@ -268,26 +268,28 @@ A linked plugin is trusted exactly as an installed one: its code runs under the 
 
 - **Permissions** are granted by the user, never by the plugin: a program whose permissions are not granted is `blocked`. `plugins grant ID` grants what the manifest asks for, as does **Grant its permissions** on the plugin's page in `/plugins`. An update that asks for more waits for a new grant. A WebAssembly module asks for nothing and is never `blocked`.
 - **The sandbox's plugin profile** confines a program: it reads the system's directories and its package, writes only its data directory, reaches the workspace as granted and the network only if granted, and starts with an empty environment but its granted `env`, `PLUGIN_ROOT` and `PLUGIN_DATA`. Linux and macOS enforce the reads; Windows cannot deny them, so there `workspace: "none"` is not enforced. Where there is no sandbox, a guest does not start.
-- **Settings** are `[plugins."ID"].settings` in `config.toml`: `plugins settings ID --set '{"greeting": "Hi"}'` replaces them (checked against `configSchema`), `--set null` removes them, `plugins settings ID` prints them with the schema; `/plugins` edits them too. They are the configuration `apply` receives and the guest's `settings` view, and a change starts the guest again with them.
+- **Settings** are `[plugins."ID"].settings` in `config.toml`: `plugins settings ID --set '{"greeting": "Hi"}'` replaces them (checked against `configSchema`), `--set null` removes them, `plugins settings ID` prints them with the schema; `/plugins` and the settings center edit them too ([configSchema](#config-schema)). They are the configuration `apply` receives and the guest's `settings` view, and a change starts the guest again with them.
 
 ### configSchema [#config-schema]
 
 The `configSchema` is enforced. When the package is read, each property of its `properties` is lowered to an option, which the options form in `/plugins` (`o` on the plugin) and the plugin's section of the [settings center](/docs/terminal-interface#config)'s Plugins tab show, and the settings are checked against. The keywords it reads:
 
-| Keyword                                        | Becomes                                                                     |
-| ---------------------------------------------- | --------------------------------------------------------------------------- |
-| `type: "boolean"`                              | a toggle                                                                    |
-| `type: "integer"`, `"number"`                  | a number, within `minimum` and `maximum` when they are given                |
-| `type: "string"`                               | a text, at most `maxLength` characters when it is given                     |
-| `enum` of strings                              | a choice among them (with `type: "string"` or no `type`)                    |
-| `type: "array"`, `items: { "type": "string" }` | a list of texts, at most `maxItems` items of at most the items' `maxLength` |
-| `default`                                      | the option's default, when it fits the option                               |
-| `title`                                        | the option's label (its key when there is none)                             |
-| `description`                                  | the option's description, its first line                                    |
+| Keyword                                        | Becomes                                                                              |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `type: "boolean"`                              | a toggle                                                                             |
+| `type: "integer"`, `"number"`                  | a number, within `minimum` and `maximum` when they are given                         |
+| `type: "string"`                               | a text, at most `maxLength` characters when it is given                              |
+| `enum` of strings                              | a choice among them, each labelled by its value (with `type: "string"` or no `type`) |
+| `type: "array"`, `items: { "type": "string" }` | a list of texts, at most `maxItems` items of at most the items' `maxLength`          |
+| `default`                                      | the option's default, when it fits the option                                        |
+| `title`                                        | the option's label (its key when there is none)                                      |
+| `description`                                  | the option's description, its first line                                             |
 
-Another keyword constrains nothing here, as for a tool's schema; `required` and `additionalProperties: false` are still checked when the settings are written. A property that is none of these (an object, a list of anything but strings, a union of types, a non-string `enum`) is not an option: it is an issue of the package (`plugins validate` lists it), and its value reaches the guest unchecked. At most 64 properties are options.
+Another keyword constrains nothing here, as for a tool's schema; `required` and `additionalProperties: false` are still checked when the settings are written. A `default` that does not fit its option is an issue of the package, and the option has none. Nothing makes an option secret. A property that is none of these (an object, a list of anything but strings, a union of types, a non-string or empty `enum`, a `minimum` above its `maximum`) is not an option: it is an issue of the package (`plugins validate` lists it), and its value reaches the guest unchecked. At most 64 properties are options.
 
 The guest receives its settings checked against the options: a value that does not fit its option gets the option's `default`, or is left out when the schema gives none, and an integer or a number out of range is clamped; each is an issue of the package and a warning in the log, and `config.toml` keeps what was written. A key the settings leave out stays out (the guest's own default applies), and a key no option describes reaches the guest as it is. A write is strict: `plugins settings --set`, `set_package_settings` and the forms refuse settings that do not fit, with the reason, and write nothing.
+
+So a plugin declares its settings with its `configSchema` alone, and needs no settings page: the options are settings of the Agent's [settings catalog](/docs/architecture#settings-catalog), a section per plugin (`plugins."ID".settings`, in the Plugins group) whose keys are `plugins."ID".settings.OPTION`. The settings center shows them as rows (`/config plugins."ID".settings`), and a host's settings page as it shows the Agent's; a write of them (`write_setting_values`, the key spelled by `package_setting_key`) puts the changed keys over the settings in the user's `config.toml`, removes a key it resets, is checked as `set_package_settings` checks, and restarts the guest. It holds one plugin's settings and nothing else. A value is shown as set by the user or as the default; no other layer is named for it.
 
 ## When it fails [#failures]
 

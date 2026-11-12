@@ -16,7 +16,7 @@ An install turns the plugin on, and its Skills, MCP servers, hooks and roles joi
 
 ## What it may do [#consent]
 
-- **Its hooks** run only once you trust them: an install lists them and asks, and `/hooks` or the plugin's page trusts them later. Once the package's files change, they wait to be trusted again.
+- **Its hooks** run only once you trust them: an install lists them and asks, and later `/hooks` (the settings center's hook review), a hook's record in the center's Hooks collection or the plugin's page trusts them. Once the package's files change, they wait to be trusted again.
 - **Its code** starts only once you grant what its manifest asks for: the network, the workspace (`none`, `read` or `write`) and environment variables (`plugins grant ID`, or **Grant its permissions** in `/plugins`). A program runs in a process of its own under the sandbox's plugin profile: it reads the system's directories and its package, and writes only its own data directory. A WebAssembly module needs no grant and reaches nothing. Code whose package changed after the install does not start until it is installed again.
 - **Its tools** are approved as an MCP tool that asks is: by you in `manual`, by the reviewer in `auto-review`, by no one in `full-access` ([Permissions](/docs/permissions#modes)).
 

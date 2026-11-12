@@ -14,9 +14,40 @@ A host plugin lives in the host's own crate (Hanafubuki: `hanafubuki-agent-integ
 AgentPluginRow::unconfigured(AgentPluginGroup::Capability, app_info_plugin())
 ```
 
-Each row is paired with its descriptor in `AgentHostPorts::plugins`, `(row, AgentPluginDescriptor::new("app-info", "What My App is"))`: its name, as the `PluginDef` names it, and a summary of what it gives the model or the user. A row with tunables can take options as the Agent's own plugins do ([Plugin rows](/docs/embedding#plugin-rows)).
+Each row is paired with its descriptor in `AgentHostPorts::plugins`, `(row, AgentPluginDescriptor::new("app-info", "What My App is"))`: its name, as the `PluginDef` names it, and a summary of what it gives the model or the user. A row with tunables declares them as options ([Settings](#settings)).
 
 The `Capability` group holds tools, tool sources and their approval rules; the `Context` group holds world-state sections. A host's rows mount after the Agent's capability plugins and before its context plugins, one after another, each once the previous one settled or timed out (20 s). The dependencies are in [Embedding the Agent](/docs/embedding#adding-the-crates).
+
+## Settings [#settings]
+
+A host plugin declares its tunables as options in its descriptor, and the Agent's settings carry them: the host writes no settings page, form or reader for them.
+
+```rust
+use hanafubuki_agent::{PluginOptionSchema, SettingKind, SettingSpec, SettingValue};
+
+let options = PluginOptionSchema {
+    options: vec![SettingSpec {
+        summary: "How many records a search returns".to_string(),
+        default: Some(SettingValue::Integer(20)),
+        ..SettingSpec::new(
+            "maximumResults",
+            "Maximum results",
+            SettingKind::Integer { minimum: Some(1), maximum: Some(100) },
+        )
+    }],
+};
+let plugin = (
+    AgentPluginRow::from_settings(AgentPluginGroup::Capability, app_search_plugin(), |settings| {
+        settings.options_value("app-search")
+    }),
+    AgentPluginDescriptor::new("app-search", "Searches My App's records").with_options(options),
+);
+```
+
+- Each option is a `SettingSpec`: its key in the row's table, a label, a one-line summary, a kind (a boolean, an integer or a number within bounds, a text, a path, a choice, a list of texts) and always a default, within the bounds the plugin's code keeps as hard limits; `apply` says when a change takes effect (`Live` unless set).
+- The options are `[pluginOptions.app-search]` of the Agent's `config.toml`, read key by key: a value that does not fit takes its default, and an integer or a number out of range is clamped, each with a warning (`AgentPluginStatus::options`).
+- The [settings catalog](/docs/architecture#settings-catalog) has them as a section of the Plugins group (`pluginOptions.app-search`, its key `pluginOptions.app-search.maximumResults`), so the host's settings page shows them with the Agent's own settings and writes them with `write_setting_values`, each value checked against its spec ([Configuration in a host](/docs/embedding#configuration-in-a-host)).
+- After a write the row is reconfigured: `PluginDef::typed` decodes what the closure derives (the options as one object), and the plugin starts again with it, unless it takes the change in place with `ctx.on_update`.
 
 ## The shape of a plugin [#the-shape-of-a-plugin]
 

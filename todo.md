@@ -832,9 +832,74 @@ independent.
         the plugin MCP/package settings keys under `#plugins`),
         `plugin-rules`, `host-plugins` and `writing-plugins` (declaring
         settings), and `plugins.en.mdx` (the `/hooks` line).
-- [ ] S7: documentation in both languages: `terminal-interface`,
+- [x] S7: documentation in both languages: `terminal-interface`,
       `configuration`, `config-reference`, `architecture`, `embedding`,
       `plugin-rules`, `writing-plugins`, `host-plugins`.
+      Done (2026-11-12), every page checked against the code, both
+      languages, same `[#id]`s:
+      - `terminal-interface`: the commands table (`/compression` had no
+        "during a turn" cell; `/config [target]`, `/providers [policy]`),
+        the commands that take arguments (`/compression`, `/config`,
+        `/providers` were missing) and their usage lines; `#mcp` (the
+        plugins' MCP servers are the `pluginMcp` collection, not "not
+        settings"); `#plugins` (where the options form writes, the same
+        options as the plugin's section); `#config` (`(empty)`, `(none)`,
+        `· applies from the next session`, the profile and `-c` layers in a
+        save's note, an unknown target); the front matter.
+      - `configuration#write`: the configuration center's typed forms,
+        layers page and plugins domain replaced by the settings center;
+        `r` removes a key where `config set` cannot.
+      - `config-reference`: rows checked by hand against the specs, the
+        structs' defaults, the decoders and validators (all `config.toml`,
+        `providers.toml` and `mcp.toml` tables). Fixed: `disabledPlugins`
+        lacked `hooks`; `minSummaryLength > maxSummaryLength` takes the
+        layer below, not the defaults; `reasoningEffort`'s identifier
+        characters; `baseUrl` refuses a query; an MCP HTTP `url` refuses
+        credentials and a fragment; the `mcpServers` keys default to the
+        package's and replace its lists; `mcp.toml`'s `revision`; an MCP
+        server's keys are required (below). Added the collections that
+        show or edit each table (`#profiles-projects`, `#hooks`,
+        `#plugins`: `packages`, `pluginMcp` and the package settings keys
+        `plugins."ID".settings.OPTION`; `#marketplaces`; `#plugin-options`
+        and its writers, the dead "network form"; `#agents`: `roles`;
+        `#providers-toml` and `#provider-models`: `providerModels`). No row
+        named a key that no longer exists.
+      - `architecture#settings-catalog`: the owners' calls
+        (`write_provider_model`, `set_hook_enabled`, `remove_entry`).
+      - `embedding`: the `settings_catalog()` row (every collection, the
+        package settings sections, `readOnly`, `namesRecord`, `issues`,
+        defaults), `#plugin-rows` (options as a catalog section, written
+        with `write_setting_values` or `set_plugin_options`).
+      - `plugin-rules`: options as settings, both writers, a guest's
+        `configSchema` options as a catalog section; the dead "network
+        form".
+      - `writing-plugins`: declaring settings with `configSchema` alone (the
+        catalog section, its keys, how a write of them goes), the lowering's
+        rules the page left out (empty `enum`, `minimum` above `maximum`, a
+        default that does not fit, no secret, choices labelled by value).
+      - `host-plugins`: new `#settings`: a row's options declared in its
+        descriptor, with an example, read, shown and written as settings.
+      - `plugins`: the `/hooks` line (the hook review, or a hook's record).
+      - Code found: an MCP server in `mcp.toml` without any of its keys but
+        `protocolMode` and a stdio `cwd` (`toolMaximumConcurrentCalls`,
+        `toolExposurePolicies`, a timeout…) is dropped whole by
+        `repair_settings` (`McpServerConfig` has no serde defaults, and
+        `normalize_current_json` supplies none), which conflicts with
+        AGENTS.md's rule that our persisted data falls back per field;
+        documented as it is, for the owner to rule on. `config set
+        plugins."ID".settings.KEY` takes the generic path and writes the
+        value unchecked against the `configSchema` (the guest still reads it
+        checked); documented. A stale doc comment:
+        `AgentPluginDescriptor::options` still says "the configuration
+        center's generic form".
+      - Validation: `bun install --frozen-lockfile`, `bun run
+        format:check:site`, `bun run site:check`, `bun run site:test`,
+        `VITE_BASE_PATH=/hanafubuki-agent/ bun run site:build` (all 35 pages
+        prerendered as HTML (the zh-CN paths); the English pages are client
+        bundles (`*.en.mdx` assets) and the search index, which hold the new
+        text); `cargo xtask check`. No code
+        changed, so no Rust build or test; no golden or snapshot changed.
+      - Hanafubuki at its next pin: nothing (documentation only).
 
 **Command center ([3])**
 

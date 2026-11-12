@@ -14,9 +14,40 @@ icon: Plug
 AgentPluginRow::unconfigured(AgentPluginGroup::Capability, app_info_plugin())
 ```
 
-每一行在 `AgentHostPorts::plugins` 中与它的描述符配对，`(row, AgentPluginDescriptor::new("app-info", "What My App is"))`：它的名字（即 `PluginDef` 的名字），以及它给模型或用户提供什么的摘要。有可调项的行可以像 Agent 自己的插件一样接受选项（[插件行](/docs/embedding#plugin-rows)）。
+每一行在 `AgentHostPorts::plugins` 中与它的描述符配对，`(row, AgentPluginDescriptor::new("app-info", "What My App is"))`：它的名字（即 `PluginDef` 的名字），以及它给模型或用户提供什么的摘要。有可调项的行把它们声明为选项（[设置](#settings)）。
 
 `Capability` 组放工具、工具源和它们的审批规则，`Context` 组放世界状态段。宿主行挂载在 Agent 的能力插件之后、上下文插件之前，各行依次挂载，前一行就绪或超时（20 秒）后才挂载下一行。依赖见[嵌入 Agent](/docs/embedding#adding-the-crates)。
+
+## 设置 [#settings]
+
+宿主插件在描述符中把可调项声明为选项，由 Agent 的设置承载：宿主不需要为它们编写设置页面、表单或读取代码。
+
+```rust
+use hanafubuki_agent::{PluginOptionSchema, SettingKind, SettingSpec, SettingValue};
+
+let options = PluginOptionSchema {
+    options: vec![SettingSpec {
+        summary: "How many records a search returns".to_string(),
+        default: Some(SettingValue::Integer(20)),
+        ..SettingSpec::new(
+            "maximumResults",
+            "Maximum results",
+            SettingKind::Integer { minimum: Some(1), maximum: Some(100) },
+        )
+    }],
+};
+let plugin = (
+    AgentPluginRow::from_settings(AgentPluginGroup::Capability, app_search_plugin(), |settings| {
+        settings.options_value("app-search")
+    }),
+    AgentPluginDescriptor::new("app-search", "Searches My App's records").with_options(options),
+);
+```
+
+- 每个选项是一个 `SettingSpec`：它在行的表中的键、标签、一行摘要、种类（布尔值、有界的整数或数字、文本、路径、选择、文本列表），以及总要有的默认值，在插件代码作为硬限制保留的界限之内；`apply` 说明改动何时生效（未设置时为 `Live`）。
+- 这些选项就是 Agent 的 `config.toml` 中的 `[pluginOptions.app-search]`，逐键读取：不合适的值取默认值，越界的整数或数字被截取到边界，每种情况都有一条警告（`AgentPluginStatus::options`）。
+- [设置目录](/docs/architecture#settings-catalog)把它们作为 Plugins 组中的一节（`pluginOptions.app-search`，键为 `pluginOptions.app-search.maximumResults`），所以宿主的设置页面会把它们和 Agent 自己的设置一起显示，并用 `write_setting_values` 写入，每个值按它的 spec 检查（[宿主中的配置](/docs/embedding#configuration-in-a-host)）。
+- 写入后这一行会被重新配置：`PluginDef::typed` 解码闭包派生出的内容（作为一个对象的选项），插件带着它重新启动，除非它用 `ctx.on_update` 就地接受改动。
 
 ## 插件的形状 [#the-shape-of-a-plugin]
 
