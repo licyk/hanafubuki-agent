@@ -1039,7 +1039,17 @@ and any module-size exception.
         interface's (no facade, contract or format change).
       - Module size: no exception added or raised. `agent_bridge/mod.rs`
         is now at the 600-line limit (one `TurnUpdate` variant).
-      - CI on Linux, Windows and macOS: pending (added once the run ends).
+      - CI on Linux, Windows and macOS: https://github.com/licyk/hanafubuki-agent/actions/runs/43425879541
+        (run on b652100, which differs from the landed tree in this line
+        and the docs fix below; all three passed at once). Site on
+        b652100: .../runs/43425879329, failed: its build (MDX) read the
+        keymap sentence's bare `Alt+<` as the start of a tag in both
+        languages (`681:370: Unexpected character ','`), which the local
+        checks (`format:check`, `site:check`, `site:test`) do not parse
+        and the local build was not run. Fixed in 1cc7f7f (`Alt+<` as
+        code; both pages then compiled with the store's `@mdx-js/mdx`,
+        which reproduced the error on b652100's page); its Site run,
+        .../runs/43428280881, passed, its build and prerender included.
 - [ ] K2: `!command` — a no-model turn running the planned `exec_command`
       handler, approved by the person, in the sandbox, recorded as a
       `UserShellCommand` item the model reads (D14, D15). Goldens
