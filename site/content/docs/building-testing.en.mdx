@@ -129,4 +129,6 @@ bun run format:check:site
 | `site.yml`    | a push to `main` or a pull request touching `site/`, `patches/`, the root Bun files or the workflow                               | `bun install --frozen-lockfile`, `format:check:site`, `site:check`, `site:test`, `site:build`, keeping the build as an artifact                                                  |
 | `release.yml` | a `v*` tag, or by hand                                                                                                            | publishes the crates, builds the binaries and creates the GitHub release: [Releasing](/docs/releasing)                                                                           |
 
+On Windows the tests run with `TEMP` and `TMP` in a directory of the job's own under `runner.temp`, on the runner's local disk (`D:`), writable to the user itself as a profile's temporary directory is (the sandbox's unelevated token has no Administrators, through which `D:` grants it): on the system disk a flush of the Agent's durable writes takes up to seconds, which held turns, cancellations and the tests' waits past their deadlines.
+
 CI covers only the platforms and commands it runs; do not claim CI equivalence locally without reproducing the current workflow.

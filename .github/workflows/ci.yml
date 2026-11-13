@@ -65,4 +65,14 @@ jobs:
           RUSTFLAGS: -D warnings
       - run: cargo clippy --workspace --all-targets --all-features -- -D warnings
       - run: cargo xtask check
+      # The tests' temporary directories on Windows go to the runner's local disk (D:): on the system disk (C:) each
+      # flush of the Agent's durable writes takes up to seconds, which held turns, cancellations and the tests' waits past
+      # their deadlines. Writable to the user itself, as a profile's temporary directory is: D: grants it only through
+      # Administrators, which the Windows sandbox's unelevated token lacks.
+      - if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $temp = New-Item -ItemType Directory -Force -Path (Join-Path $env:RUNNER_TEMP tests)
+          icacls $temp /grant "${env:USERNAME}:(OI)(CI)F" | Out-Null
+          "TEMP=$temp", "TMP=$temp" | Add-Content -Path $env:GITHUB_ENV
       - run: cargo test --workspace --all-features --no-fail-fast
