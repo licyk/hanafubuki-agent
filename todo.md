@@ -712,7 +712,17 @@ and any module-size exception.
         `hanafubuki-agent-compression`, `bar` is new public API with a
         width; in the kernel, `AgentToolPlan::model_spec_providers`.
       - Module size: no exception added or raised.
-      - CI on Linux, Windows and macOS: pending (filled in by the follow-up commit).
+      - CI on Linux, Windows and macOS: https://github.com/licyk/hanafubuki-agent/actions/runs/43395635357
+        (run on 2be309d, which differs from the landed tree only in this
+        line). Linux and macOS passed at once. Windows failed its first
+        attempt on an unrelated timing test, `agent`
+        `memory::supervisor::tests::operation_heartbeats_until_completion`
+        (`crates\agent\src\memory\supervisor\tests.rs:51`: "assertion
+        failed: renewals.load(Ordering::SeqCst) >= 2"; it expects two 10 ms
+        heartbeats within a 45 ms operation, which Windows' timer
+        granularity can miss), with every `/context` test passing there;
+        its job run again passed (attempt 2). Site: .../runs/43395635400,
+        success, its prerender included.
 
 **Effort ([5])**
 
