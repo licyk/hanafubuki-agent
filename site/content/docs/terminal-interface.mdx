@@ -677,7 +677,7 @@ open_presets = "ctrl-b 1"
 yank = []
 ```
 
-- **按键**写作修饰键加按键，用 `-` 连接：`ctrl-t`、`alt-<`、`shift-enter`、`page-down`、`f3`、`space`、`minus`；大写字母等于 `shift-` 加这个字母。符号带不带 Shift 都匹配，因为各终端的报告方式不同；但在带 Ctrl 或 Alt 时，不需要 Shift 的符号（美式键盘上的 `,`、`.`、`/` 等）加上 Shift 就是另一个键：`alt-shift-,` 是 Alt+<，不是 `alt-,`。
+- **按键**写作修饰键加按键，用 `-` 连接：`ctrl-t`、`alt-<`、`shift-enter`、`page-down`、`f3`、`space`、`minus`；大写字母等于 `shift-` 加这个字母。符号带不带 Shift 都匹配，因为各终端的报告方式不同；但在带 Ctrl 或 Alt 时，不需要 Shift 的符号（美式键盘上的 `,`、`.`、`/` 等）加上 Shift 就是另一个键：`alt-shift-,` 是 Alt+`<`，不是 `alt-,`。
 - **组合键**是用空格分开的两个按键（`ctrl-g o`）：第一个键等待第二个键一秒钟。`leader K` 是前导键（`global.leader`，默认 Ctrl-X）再按 `K`；前导键会一直等到下一个键。没有完成任何组合的按键，或 Esc，会把两个键都丢弃。如果配置的某个按键正是默认前导键，它优先：除非 `global.leader` 另行设置，前导键就没有绑定。
 - **上下文**是读取按键的地方：`global` 处处有效，`chat` 和 `composer` 在输入框获得按键时有效，`editor` 在所有文本输入框中有效，`transcript` 在 Fullscreen 的对话中（与输入框同时）有效，`pager` 在对话记录和 `/diff` 中有效，`agents` 在[指挥中心](#agents)中有效。在输入框旁边，不能绑定会输入文字的按键（不带 Ctrl 或 Alt 的字母），也不能绑定以它开头的组合键；只在输入框为空时读取的动作（`composer.show_shortcuts`、`composer.previous_agent`、`composer.next_agent`）可以绑定这样的按键，但仍不能绑定以它开头的组合键。
 - **冲突**：同一个按键（或组合键）不能触发同时读取的两个动作，不能是另一个动作的组合键的开头，也不能是界面保留的 Ctrl-C（以及 Ctrl-D，编辑框和分页器中除外）。默认就共用按键的动作仍然允许：`chat.interrupt_turn` 和 `chat.edit_previous`（Esc）、`composer.submit` 和 `editor.insert_newline`（Enter）、历史和编辑框的 Up、Down、`global.open_transcript` 和 `pager.close_transcript`、`composer.previous_agent` 和 `editor.move_word_left`（Alt+Left）、`composer.next_agent` 和 `editor.move_word_right`（Alt+Right）。
