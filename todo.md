@@ -47,6 +47,15 @@
         around; documented (tools, permissions); the user's call.
       - docs: `tools#commands`, `environment#commands`, `permissions` (the
         sandbox limitation), both languages.
+      - CI on 981765d: https://github.com/licyk/hanafubuki-agent/actions/runs/43449543844
+        (Rust on Linux, Windows and macOS green; the Windows log shows both
+        flavours, `C:\Program Files\Git\usr\bin\bash.exe` and
+        `C:\msys64\usr\bin\bash.exe`, running the six `windows_posix` checks,
+        pipe and PTY, and the sandbox check reported ignored) and Site
+        .../runs/43449543923 green. Evidence from scratch runs on branches
+        since deleted: the runner's inventory and which variable each
+        outcome needs (43444183178), the length limit (43445539086), the
+        sandbox failure on both flavours, pipe and PTY (43447300320).
 
 ## Flaky Windows tests (2026-11-13)
 
