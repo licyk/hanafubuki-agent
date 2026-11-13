@@ -159,6 +159,31 @@ fn esc_with_steers_waiting_sends_them_at_once_and_keeps_the_queue() {
 }
 
 #[test]
+fn a_steer_the_interrupt_refuses_before_the_turns_end_is_sent_with_the_others() {
+    let mut queue = running();
+    assert_eq!(queue.submit("a".to_string(), true), steer(0, "a"));
+    assert_eq!(queue.submit("b".to_string(), true), Submission::Waits);
+    assert_eq!(queue.esc(), EscAction::Interrupt);
+    assert_eq!(queue.steered(0, SteerOutcome::Accepted(1)), None);
+    // The turn being interrupted is sent nothing more.
+    assert_eq!(queue.next_steer(), None);
+    assert_eq!(queue.submit("c".to_string(), true), Submission::Waits);
+    queue.turn_ended(Ending::Interrupted);
+    assert_eq!(queue.settle(), Some(Settled::Start("a\nb\nc".to_string())));
+
+    let mut queue = running();
+    assert_eq!(queue.submit("a".to_string(), true), steer(0, "a"));
+    assert_eq!(queue.steered(0, SteerOutcome::Accepted(1)), None);
+    assert_eq!(queue.submit("b".to_string(), true), steer(1, "b"));
+    assert_eq!(queue.esc(), EscAction::Interrupt);
+    // The cancelled turn refuses "b" before its end arrives.
+    assert_eq!(queue.steered(1, SteerOutcome::NotDelivered), None);
+    assert!(queue.preview().held.is_empty());
+    queue.turn_ended(Ending::Interrupted);
+    assert_eq!(queue.settle(), Some(Settled::Start("a\nb".to_string())));
+}
+
+#[test]
 fn esc_with_no_steer_waiting_puts_the_queue_back() {
     let mut queue = running();
     assert_eq!(queue.queue("queued".to_string(), true), Submission::Waits);
