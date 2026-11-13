@@ -49,6 +49,10 @@ impl AgentService {
         event_sink: &dyn AgentEventSink,
     ) -> Result<Option<(Option<bool>, Option<hanafubuki_agent_model_api::ModelUsage>)>, AgentError>
     {
+        if ends_reasoning(&event) {
+            self.close_open_reasoning(identity, response, event_sink)
+                .await?;
+        }
         match event {
             ModelEvent::ResponseStarted { response_id, .. } => {
                 if response
@@ -93,7 +97,14 @@ impl AgentService {
                         ));
                     }
                 };
-                if let Some(delta) = reasoning.push(kind, index, &delta, limit) {
+                let shown = reasoning.push(kind, index, &delta, limit);
+                if reasoning.is_closed() {
+                    // Its entry has ended: the text is kept, not shown.
+                    log::debug!(
+                        "agent_diag stage=model.stream.reasoning_delta_after_close bytes={}",
+                        delta.len()
+                    );
+                } else if let Some(delta) = shown {
                     let reasoning_id = reasoning.reasoning_id;
                     self.emit(
                         identity,
@@ -417,15 +428,21 @@ impl AgentService {
                     .pending_items
                     .get_mut(&item_id)
                 {
-                    Some(PendingModelItem::Reasoning(reasoning)) if !reasoning.is_completed() => {
-                        let (tail, duration_millis) =
-                            reasoning.complete(summary, content, replay, limit);
-                        (reasoning.reasoning_id, tail, duration_millis)
-                    }
-                    Some(PendingModelItem::Reasoning(_)) => {
+                    Some(PendingModelItem::Reasoning(reasoning)) if reasoning.is_completed() => {
                         return Err(AgentError::Protocol(
                             "model completed a reasoning item more than once".to_string(),
                         ));
+                    }
+                    // Its thinking ended when other output started: this
+                    // completes only what is kept.
+                    Some(PendingModelItem::Reasoning(reasoning)) if reasoning.is_closed() => {
+                        reasoning.complete(summary, content, replay, limit);
+                        return Ok(());
+                    }
+                    Some(PendingModelItem::Reasoning(reasoning)) => {
+                        let (tail, duration_millis) =
+                            reasoning.complete(summary, content, replay, limit);
+                        (reasoning.reasoning_id, tail, duration_millis)
                     }
                     _ => {
                         return Err(AgentError::Protocol(
@@ -451,6 +468,19 @@ impl AgentService {
             }
         }
         Ok(())
+    }
+}
+
+/// Whether `event` is output other than reasoning: the start or completion
+/// of another item (a tool call is first seen at its completion), or
+/// answer text.
+fn ends_reasoning(event: &ModelEvent) -> bool {
+    match event {
+        ModelEvent::OutputItemAdded { item } | ModelEvent::OutputItemCompleted { item } => {
+            !matches!(item, ModelOutputItem::Reasoning { .. })
+        }
+        ModelEvent::AssistantTextDelta { .. } => true,
+        _ => false,
     }
 }
 

@@ -440,13 +440,13 @@ Enter edits in a copy of the session: it is forked before the message's turn and
 
 ## Thinking [#thinking]
 
-Each stretch of the model's thinking (a reasoning item) is an entry of its own, in the conversation where it happened, in order with the answers and tool calls: a step that thinks, calls a tool, thinks again and answers shows four entries. While the model thinks it reads `• Thinking 3.4s`, counting up in tenths of a second; when the stretch ends it becomes `• Thought · 20.7s` in place (`1m 05s` past a minute).
+Each stretch of the model's thinking (a reasoning item) is an entry of its own, in the conversation where it happened, in order with the answers and tool calls: a step that thinks, calls a tool, thinks again and answers shows four entries. While the model thinks it reads `• Thinking 3.4s`, counting up in tenths of a second; when the stretch ends it becomes `• Thought · 20.7s` in place (`1m 05s` past a minute). A stretch ends at the latest when the model starts its answer or a tool call, also when the Provider reports the thinking done only later (the Responses API may); what the Provider sends of it after that is not shown here, but is kept, and a resumed session shows it.
 
 Each is collapsed to that line, with a `+ Show details` control once its text has arrived. A click on the control or on the line itself (in Fullscreen, in Scrollback while the entry is in the tail, and in the transcript), or F4 then Enter, shows the text below it as dim Markdown, streaming while the model still thinks, and `− Hide details` hides it again. Each entry expands on its own, and stays expanded when it completes. Ctrl-O expands every thinking in the conversation (in Scrollback, those in the tail, or in the transcript while it is open) at once, or collapses them all when all are expanded; a later thinking still starts collapsed.
 
 A Provider that sends no text leaves only the line, with no control. If the turn ends before the thinking does (an error, an interrupt), the line is completed with the time so far. In Scrollback a thinking is written into the scrollback as it is shown when it leaves the tail, and cannot be changed afterwards; the transcript (Ctrl-T) still expands it, and a second Ctrl-T shows every thinking's text, as Ctrl-T's detailed conversation does in Fullscreen. A resumed session replays every stretch the same way, collapsed; a thinking whose text was cut at the Agent's bound says `• Thought · 20.7s (truncated)`.
 
-The [status line](#layout) adds the time the whole turn has thought, `(Thinking 20.7s)`, and the rule before the answer says `thought for 20.7s`.
+The [status line](#layout) adds the time the whole turn has thought, `(Thinking 20.7s)`, and the rule before the answer says `thought for 20.7s`; both stop where the stretches stop, so neither runs on while the answer streams.
 
 What you see depends on what the Provider sends: some send a summary of the thinking, some the raw thinking text, some nothing. See [Providers and models](/docs/providers-models#reasoning).
 

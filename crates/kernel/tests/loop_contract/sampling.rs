@@ -134,6 +134,7 @@ fn direct_image_turn(
     }
 }
 
+mod late_reasoning;
 mod reasoning;
 mod retry;
 mod terminal;

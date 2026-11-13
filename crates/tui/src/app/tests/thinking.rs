@@ -3,7 +3,9 @@
 //! hiding its text, and Ctrl-O every thinking at once, an approval open or
 //! not, and in Scrollback's transcript.
 
-use hanafubuki_agent::test_support::{reasoning_answer_events, reasoning_tool_events};
+use hanafubuki_agent::test_support::{
+    late_reasoning_answer_events, reasoning_answer_events, reasoning_tool_events,
+};
 
 use super::*;
 
@@ -113,4 +115,59 @@ fn ctrl_o_reaches_the_thought_while_an_approval_waits() {
         harness.pump_until_screen_shows("The command ran.");
         harness.pump_until_turn_ends();
     }
+}
+
+/// The model thinks, starts its answer and only then completes the thought,
+/// as the Responses API may: once the answer starts the entry has thought,
+/// and the turn's thinking time, on the status line and the rule before the
+/// answer, stops.
+#[test]
+fn the_thought_ends_when_the_answer_starts_before_its_late_completion() {
+    for mode in MODES {
+        // A streaming answer shows its complete lines.
+        let mut harness = Harness::start_with(
+            vec![
+                tool_events("skills_list", "{}"),
+                late_reasoning_answer_events(
+                    "Weighing the question.",
+                    "The answer is 42.\nThat is all.",
+                ),
+            ],
+            true,
+            mode,
+        );
+        harness.type_and_submit("What is the answer?");
+        harness.pump_until_screen_shows("• Thinking");
+        std::thread::sleep(Duration::from_millis(300));
+        harness.server.hold.notify_one();
+
+        let screen = harness.pump_until_screen_shows("The answer is 42.");
+        assert!(screen.contains("• Thought · "), "{mode:?}:\n{screen}");
+        assert!(!screen.contains("• Thinking"), "{mode:?}:\n{screen}");
+        let thought = thinking_total(&screen);
+        let transcript = harness.transcript();
+        assert!(
+            transcript.contains(&format!("· thought for {thought} ─")),
+            "{mode:?}: {thought}\n{transcript}"
+        );
+        std::thread::sleep(Duration::from_millis(300));
+        harness.app.draw(&mut harness.tui).unwrap();
+        assert_eq!(thinking_total(&harness.screen()), thought, "{mode:?}");
+
+        harness.server.hold.notify_one();
+        harness.pump_until_turn_ends();
+        let transcript = harness.transcript();
+        assert_eq!(
+            transcript.matches("• Thought · ").count(),
+            1,
+            "{mode:?}:\n{transcript}"
+        );
+    }
+}
+
+/// The time of the status line's `(Thinking 0.3s)`.
+fn thinking_total(screen: &str) -> String {
+    let start = screen.find("(Thinking ").expect(screen) + "(Thinking ".len();
+    let length = screen[start..].find(')').expect(screen);
+    screen[start..start + length].to_string()
 }

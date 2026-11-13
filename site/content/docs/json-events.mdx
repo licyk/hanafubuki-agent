@@ -204,7 +204,7 @@ icon: Braces
 
 - 回合以 `turn_started` 开始，接着是记录你的消息的 `history_committed`，新会话随后是 `session_title_updated`。
 - 每次请求模型：`sampling_started`、`reasoning_updated`、`response_started`，然后是模型的输出。
-- 一段思考是 `reasoning_started`、零个或多个 `reasoning_delta`、`reasoning_completed`，都在这一步的 `history_committed` 之前。回合在响应流中途失败时，不会有 `reasoning_completed`。
+- 一段思考是 `reasoning_started`、零个或多个 `reasoning_delta`、`reasoning_completed`，都在这一步的 `history_committed` 之前。它的 `reasoning_completed` 最迟出现在它之后的输出（回答的 `assistant_message_started` 或文本、工具调用）的第一个事件之前，之后不再有它的 `reasoning_delta`。回合在响应流中途失败时，不会有 `reasoning_completed`。
 - 一条消息是 `assistant_message_started`、若干 `assistant_text_delta`，然后是这一步的 `history_committed`，最后是 `assistant_message_completed`。
 - 一步中的工具调用：先按调用顺序为每个调用发出 `tool_started`；每个调用执行中可能有它的钩子的 `hook_started` 与 `hook_completed`（调用运行之前和之后）、审批、提问或计划事件，结束时有 `tool_execution_finished`（按完成顺序）；之后按调用顺序是 `history_committed` 和 `tool_completed`（折叠成功的 `compress` 调用在两者之间还有 `context_compressed`）；最后，如果钩子在调用之后添加了上下文，是它的 `history_committed`。
 - `execution_progress` 可能穿插在任何位置。需要严格顺序时，按 `sequence` 排序。

@@ -426,6 +426,7 @@ Provider 的错误是否拒绝了请求的推理参数，由 `hanafubuki-agent-m
 
 - 内核的 `AgentReasoningId` 取自会话的消息计数器（`service/sampling/stream/reasoning.rs`）。
 - 新的摘要部分随分隔它的空行一起到达。保留的文本是已完成条目的摘要（有的话），否则是原始文本，两者都优先取已完成条目中携带的内容，没有则取流出的内容；已完成条目比已显示内容多出的文本，在完成之前显示出来。
+- 响应转向其他输出时（另一种条目开始或完成，工具调用在完成时才第一次出现，或回答文本到达）仍未结束的条目，就在那里关闭（`close_open_reasoning`，`service/sampling/stream/reasoning.rs`）：它的时长被固定，`ReasoningCompleted` 和回合思考区间的结束（`reasoning_item_completed`）只发布一次，在那个输出自己的事件之前。Responses API 单独发送推理条目的 `output_item.done`，可能在回答文本或工具调用开始之后；其他适配器都先完成推理。迟到的 done 以固定的时长完成条目（它的摘要、内容和 `replay`），不发布任何事件；已关闭条目的推理增量保存进它的文本，不显示，并在 debug 级别记录（只记录大小）。所以提交的文本可能比显示的更多，恢复会话时可以看到。响应始终没有完成的已关闭条目，以流出的文本提交；响应结束时既未关闭也未完成的条目仍是协议错误。
 - 只有推理的响应仍然不提交任何东西。
 - 要回传的推理块作为 `replay` 附在它的 `ConversationItem::Reasoning` 上，不计入历史的字节数。Anthropic 的思考块（`Thinking`、`RedactedThinking`）只在内存中：从不持久化，不出现在快照中。步骤的请求把本轮（最后一个 `TurnStart` 之后）的思考块作为 `ModelInputItem::Reasoning` 放入，只有使用思考预算的 Anthropic Messages 会发送它们；压缩的请求不带它们。
 - Chat Completions 的 `reasoning_content`（`ReasoningContent`）超出它的轮次（`ModelReasoningReplay::outlives_its_turn`，由 `ConversationItem::reasoning_input` 读取）：每个请求都从投影后历史的每一轮放入它，压缩的请求也一样；只有 Chat Completions 发送它，Responses 两种都略去。它随条目持久化，形如 `"replay": {"type": "reasoning_content", "text": "…"}`，没有时不写这个字段；无法解码、属于其他种类或超过 1 MiB 的 `replay` 读作没有，从不让条目失败。转录页（`AgentTranscriptPage`，`sessions show --json` 输出的就是它）略去它，就像略去 `modelText`。分叉或子会话复制条目，文本也随之复制，因为它们延续这段对话。条目的 token 估算（`estimate_conversation_items_tokens`：流的输出估算、压缩的计数、`hierarchical` 的后备）计入它的字节；请求的估算本来就计入，因为它序列化整个请求。

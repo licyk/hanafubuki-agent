@@ -156,13 +156,19 @@ impl AgentService {
                 }
                 PendingModelItem::Reasoning(reasoning) => {
                     // A response that stopped early completed its open
-                    // reasoning items when it stopped.
-                    let item = reasoning.into_item(sampling_step).ok_or_else(|| {
-                        AgentError::Protocol(
-                            "model response completed with an unfinished reasoning item"
-                                .to_string(),
+                    // reasoning items when it stopped; one that went on to
+                    // other output closed them.
+                    let item = reasoning
+                        .into_item(
+                            sampling_step,
+                            self.inner.limits.maximum_reasoning_text_bytes,
                         )
-                    })?;
+                        .ok_or_else(|| {
+                            AgentError::Protocol(
+                                "model response completed with an unfinished reasoning item"
+                                    .to_string(),
+                            )
+                        })?;
                     draft.push(item);
                 }
                 PendingModelItem::Ignored {

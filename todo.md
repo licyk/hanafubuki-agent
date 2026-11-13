@@ -367,10 +367,92 @@ and any module-size exception.
         (run on f488307, which differs from the landed tree only in this
         line; all three passed at once); Site: .../runs/43377613201,
         success, its prerender included.
-- [ ] B3: thinking stops when the answer starts — the kernel closes an
+- [x] B3: thinking stops when the answer starts — the kernel closes an
       open reasoning item at the first non-reasoning item, with a frozen
       duration; the late `output_item.done` persists its payload without a
       second completion. No TUI guard. Failing test first.
+      Done (2026-11-13):
+      - Cause confirmed: the Responses decoder forwards each
+        `output_item.done` as it comes, and the kernel ended a reasoning
+        item (its `ReasoningCompleted` and the turn's thinking interval)
+        only at that done or at the response's end, so a done sent after
+        the answer's text or a tool call kept the entry's and the status
+        line's clocks running. In Scrollback the answer's lines also waited
+        behind the live thinking entry in the tail.
+      - kernel (`service/sampling/stream/`): `PendingReasoning`
+        (`reasoning.rs`) gains `closed: Option<u64>`; `close_open_reasoning`
+        closes every open item, freezing its duration, emitting
+        `ReasoningCompleted` (no tail) and calling `reasoning_item_completed`
+        once. `apply_model_event` (`events.rs`) calls it first for every
+        `OutputItemAdded` or `OutputItemCompleted` of a non-reasoning item
+        and every `AssistantTextDelta` (`ends_reasoning`), so the
+        completion precedes that output's events. A done for a closed item
+        completes it (summary, content, replay) with the frozen duration
+        and emits nothing; a second done is still a protocol error. A
+        reasoning delta for a closed item is kept in its text, not shown,
+        and logged at debug with its byte count only.
+        `complete_unfinished_reasoning` skips closed items; `into_item`
+        (`finalize.rs` passes the reasoning bound) completes a closed item
+        with no done from its streamed text; an item neither closed nor
+        completed still fails as "unfinished reasoning item". The doc of
+        `AgentEventKind::ReasoningCompleted` says when it comes.
+      - agent (test support only): `FakeServer` holds an event stream at
+        each `HOLD` (an SSE comment) until `FakeServer::hold` is notified;
+        `late_reasoning_answer_events` is a Responses stream whose
+        reasoning done follows the answer's text, held after the summary
+        and after the text.
+      - Tests (failing first; all six failed with the kernel change
+        reverted): `kernel/tests/loop_contract/sampling/late_reasoning.rs`,
+        with a model that pauses 300 ms before the late done: the answer
+        case (one `ReasoningCompleted`, before `AssistantMessageStarted`
+        and the first text, as is the `ReasoningUpdated` Completed; the
+        shown text stops at what streamed; the persisted item carries the
+        done's summary and replay and the event's duration; one Completed
+        update, and `turn_completed_millis` equals its `last_completed_at`
+        minus the Thinking update's `active_since` and is under the pause);
+        the same for a tool call seen only at its completion (before
+        `ToolStarted`) and for reasoning started after the answer item
+        (closed by the text delta); a closed item with no done commits its
+        streamed text with the event's duration (before: "unfinished
+        reasoning item"); a late delta is kept, not shown. TUI
+        (`app/tests/thinking.rs`), both presentations, on the fake server:
+        a tool call, then the late-done stream held after the answer's
+        first line; while held the entry reads `• Thought · ` with no
+        `• Thinking` left, the status line's `(Thinking X)` equals the
+        rule's `thought for X` and is unchanged 300 ms later, and the
+        finished turn has one thought. Before the fix it showed
+        `• Thinking 0.7s` with the status line still counting.
+      - Deviations: (1) The TUI test asserts strings, not an insta
+        snapshot: its durations are measured, so a snapshot would differ
+        between runs. (2) Closing happens in one place, `apply_model_event`,
+        before the event is applied, rather than in each handler; the
+        unannounced-item path re-entering `output_item_added` finds nothing
+        open. (3) The plan's "OutputItemAdded for any other item" includes
+        `Other` items (a hosted call): they end the thinking too.
+      - Goldens: none changed.
+      - Docs (both languages): `terminal-interface#thinking` (a stretch
+        ends at the answer or a tool call at the latest; what comes after is
+        kept, shown on resume; the status line and the rule stop there);
+        `internals#thinking-details` (closing, the late done and deltas);
+        `architecture#thinking` (the kernel bullet); `json-events` (the
+        order guarantee of `reasoning_completed`).
+      - Validation: `cargo fmt --all --check`; `RUSTFLAGS="-D warnings"
+        cargo check --workspace --all-targets --all-features`; `cargo clippy
+        --workspace --all-targets --all-features -- -D warnings`; `cargo
+        xtask check`; `cargo test --workspace --all-features`; `bun install
+        --frozen-lockfile`, `bun run format:check:site`, `bun run
+        site:check`, `bun run site:test`; `VITE_BASE_PATH=/hanafubuki-agent/
+        bun run site:build` built but could not prerender locally (port
+        3000 held by another project's server); CI's Site run covers it.
+      - Hanafubuki at its next pin: no API change. Behaviour: a reasoning
+        item's `ReasoningCompleted` (and the `ReasoningUpdated` that ends
+        the turn's thinking) can now come before the provider's done, at
+        the first answer text, answer item or tool call; no
+        `ReasoningDelta` of that item follows it; text the late done adds
+        (a summary that arrives whole) is only in the committed
+        `ConversationItem::Reasoning`, so a live view shows less than a
+        replay.
+      - Module size: no exception added or raised.
 
 **Context and cache ([6])**
 

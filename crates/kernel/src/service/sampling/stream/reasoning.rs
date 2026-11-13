@@ -16,6 +16,9 @@ pub(in crate::service) struct PendingReasoning {
     raw: StreamedText,
     /// The bytes the item's `ReasoningDelta` events carried.
     shown_bytes: usize,
+    /// The item's duration, frozen when other output ended its thinking
+    /// before the provider completed it.
+    closed: Option<u64>,
     completed: Option<CompletedReasoning>,
 }
 
@@ -44,12 +47,28 @@ impl PendingReasoning {
             summary: StreamedText::default(),
             raw: StreamedText::default(),
             shown_bytes: 0,
+            closed: None,
             completed: None,
         }
     }
 
     pub(in crate::service) fn is_completed(&self) -> bool {
         self.completed.is_some()
+    }
+
+    pub(in crate::service) fn is_closed(&self) -> bool {
+        self.closed.is_some()
+    }
+
+    /// Ends the item's thinking before its completion, and returns its
+    /// duration, or `None` when it had already ended.
+    fn close(&mut self) -> Option<u64> {
+        if self.closed.is_some() || self.completed.is_some() {
+            return None;
+        }
+        let duration_millis = elapsed_millis(self.started);
+        self.closed = Some(duration_millis);
+        Some(duration_millis)
     }
 
     /// Adds a streamed fragment and returns what of it to show, if anything.
@@ -87,7 +106,8 @@ impl PendingReasoning {
     /// each from the completed item when it carries any, else as streamed.
     /// When the kept text continues what was shown, the rest is shown; when
     /// it does not (an item that streamed both kinds), the commit replaces
-    /// what was shown.
+    /// what was shown. A closed item keeps the duration it froze, and its
+    /// caller shows nothing more of it.
     pub(in crate::service) fn complete(
         &mut self,
         summary: Vec<String>,
@@ -119,7 +139,7 @@ impl PendingReasoning {
             .map(|tail| bounded_prefix(tail, limit.saturating_sub(self.shown_bytes)))
             .filter(|tail| !tail.is_empty())
             .map(str::to_string);
-        let duration_millis = u64::try_from(self.started.elapsed().as_millis()).unwrap_or(u64::MAX);
+        let duration_millis = self.closed.unwrap_or_else(|| elapsed_millis(self.started));
         self.completed = Some(CompletedReasoning {
             text,
             truncated,
@@ -129,8 +149,16 @@ impl PendingReasoning {
         (tail, duration_millis)
     }
 
-    /// The conversation item of a completed reasoning item.
-    pub(in crate::service) fn into_item(self, sampling_step: u32) -> Option<ConversationItem> {
+    /// The conversation item of a completed reasoning item, or of a closed
+    /// one the provider never completed, with its text as streamed.
+    pub(in crate::service) fn into_item(
+        mut self,
+        sampling_step: u32,
+        limit: usize,
+    ) -> Option<ConversationItem> {
+        if self.completed.is_none() && self.closed.is_some() {
+            self.complete(Vec::new(), Vec::new(), None, limit);
+        }
         let completed = self.completed?;
         Some(ConversationItem::Reasoning {
             text: completed.text,
@@ -175,6 +203,32 @@ impl AgentService {
         self.reasoning_item_completed(identity, event_sink).await
     }
 
+    /// Ends the thinking of every reasoning item still open: the response
+    /// has gone on to other output. The Responses API may complete an item
+    /// only after its answer or tool call has started, and the thinking
+    /// stops here, not then.
+    pub(super) async fn close_open_reasoning(
+        &self,
+        identity: TurnIdentity,
+        response: &mut StreamedResponse,
+        event_sink: &dyn AgentEventSink,
+    ) -> Result<(), AgentError> {
+        for item_id in &response.item_order {
+            let Some(PendingModelItem::Reasoning(reasoning)) =
+                response.pending_items.get_mut(item_id)
+            else {
+                continue;
+            };
+            let Some(duration_millis) = reasoning.close() else {
+                continue;
+            };
+            let reasoning_id = reasoning.reasoning_id;
+            self.reasoning_completed(identity, reasoning_id, None, duration_millis, event_sink)
+                .await?;
+        }
+        Ok(())
+    }
+
     /// Ends the reasoning items a response that stopped early left open,
     /// keeping their text as streamed.
     pub(super) async fn complete_unfinished_reasoning(
@@ -190,7 +244,8 @@ impl AgentService {
             else {
                 continue;
             };
-            if reasoning.is_completed() {
+            // A closed item has ended; the commit keeps its text as streamed.
+            if reasoning.is_completed() || reasoning.is_closed() {
                 continue;
             }
             let (tail, duration_millis) = reasoning.complete(Vec::new(), Vec::new(), None, limit);
@@ -216,6 +271,10 @@ fn joined_parts(parts: &[String], limit: usize) -> Option<(String, bool)> {
     }
     let kept = bounded_prefix(&joined, limit);
     Some((kept.to_string(), kept.len() < joined.len()))
+}
+
+fn elapsed_millis(started: Instant) -> u64 {
+    u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX)
 }
 
 /// The longest prefix of `text` of at most `limit` bytes that ends on a

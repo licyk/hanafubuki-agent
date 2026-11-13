@@ -11,7 +11,9 @@
 //! given model listings ([`FakeServer::with_listings`]) answers `GET
 //! …/models` with them instead, apart from the event streams. A server that
 //! plays a stateless gateway ([`FakeServer::refusing`]) refuses native
-//! structured output, and a forced tool when asked to, the same way.
+//! structured output, and a forced tool when asked to, the same way. An
+//! event stream holds at each [`HOLD`] in it until [`FakeServer::hold`] is
+//! notified, so a test can look at what the stream so far shows.
 
 use std::collections::{BTreeMap, VecDeque};
 use std::sync::{Arc, Mutex};
@@ -19,6 +21,10 @@ use std::time::Duration;
 
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
+
+/// An SSE comment that holds the rest of an event stream until
+/// [`FakeServer::hold`] is notified, once per hold.
+pub const HOLD: &str = ": hold\n\n";
 
 #[derive(Clone)]
 pub struct CapturedRequest {
@@ -82,6 +88,8 @@ pub struct FakeServer {
     pub requests: Arc<Mutex<Vec<CapturedRequest>>>,
     /// The `GET …/models` requests a server with listings answered.
     pub listing_requests: Arc<Mutex<Vec<CapturedRequest>>>,
+    /// Releases an event stream held at a [`HOLD`], one per notification.
+    pub hold: Arc<tokio::sync::Notify>,
     pub task: tokio::task::JoinHandle<()>,
 }
 
@@ -118,6 +126,8 @@ impl FakeServer {
         let listing_requests = Arc::new(Mutex::new(Vec::new()));
         let captured = requests.clone();
         let listed = listing_requests.clone();
+        let hold = Arc::new(tokio::sync::Notify::new());
+        let held = hold.clone();
         let task = tokio::spawn(async move {
             let mut responses = VecDeque::from(responses);
             let mut listings = VecDeque::from(listings);
@@ -161,8 +171,7 @@ impl FakeServer {
                 if !delay.is_zero() {
                     tokio::time::sleep(delay).await;
                 }
-                let _ = stream.write_all(&body).await;
-                let _ = stream.flush().await;
+                write_holding(&mut stream, &body, &held).await;
                 let _ = stream.shutdown().await;
             }
         });
@@ -170,6 +179,7 @@ impl FakeServer {
             base_url: format!("http://{address}/v1"),
             requests,
             listing_requests,
+            hold,
             task,
         }
     }
@@ -181,6 +191,23 @@ impl FakeServer {
     pub fn listing_requests(&self) -> Vec<CapturedRequest> {
         self.listing_requests.lock().unwrap().clone()
     }
+}
+
+/// Writes `body`, waiting for `hold` after each [`HOLD`] in it.
+async fn write_holding(stream: &mut TcpStream, body: &[u8], hold: &tokio::sync::Notify) {
+    let mut rest = body;
+    while let Some(at) = rest
+        .windows(HOLD.len())
+        .position(|window| window == HOLD.as_bytes())
+    {
+        let (part, after) = rest.split_at(at + HOLD.len());
+        let _ = stream.write_all(part).await;
+        let _ = stream.flush().await;
+        hold.notified().await;
+        rest = after;
+    }
+    let _ = stream.write_all(rest).await;
+    let _ = stream.flush().await;
 }
 
 async fn answer_listing(mut stream: TcpStream, listing: FakeListing) {
@@ -541,6 +568,31 @@ pub fn reasoning_answer_events(summary: &str, text: &str) -> Vec<u8> {
         ),
         summary = summary,
         text = text,
+    )
+    .into_bytes()
+}
+
+/// A reasoning item whose summary streams, then the final answer, as the
+/// Responses API may send them: the reasoning item's done after the
+/// answer's text started. The stream holds ([`HOLD`]) after the summary and
+/// after the answer's text.
+pub fn late_reasoning_answer_events(summary: &str, text: &str) -> Vec<u8> {
+    format!(
+        concat!(
+            "data: {{\"type\":\"response.created\",\"response\":{{\"id\":\"resp-late-reasoning\"}}}}\n\n",
+            "data: {{\"type\":\"response.output_item.added\",\"item\":{{\"type\":\"reasoning\",\"id\":\"reason-late\",\"summary\":[]}}}}\n\n",
+            "data: {{\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"reason-late\",\"summary_index\":0,\"delta\":{summary:?}}}\n\n",
+            "{hold}",
+            "data: {{\"type\":\"response.output_item.added\",\"item\":{{\"type\":\"message\",\"id\":\"message\",\"phase\":\"final_answer\"}}}}\n\n",
+            "data: {{\"type\":\"response.output_text.delta\",\"item_id\":\"message\",\"delta\":{text:?}}}\n\n",
+            "{hold}",
+            "data: {{\"type\":\"response.output_item.done\",\"item\":{{\"type\":\"reasoning\",\"id\":\"reason-late\",\"summary\":[{{\"type\":\"summary_text\",\"text\":{summary:?}}}]}}}}\n\n",
+            "data: {{\"type\":\"response.output_item.done\",\"item\":{{\"type\":\"message\",\"id\":\"message\",\"phase\":\"final_answer\",\"content\":[{{\"type\":\"output_text\",\"text\":{text:?}}}]}}}}\n\n",
+            "data: {{\"type\":\"response.completed\",\"response\":{{\"id\":\"resp-late-reasoning\",\"end_turn\":true}}}}\n\n"
+        ),
+        summary = summary,
+        text = text,
+        hold = HOLD,
     )
     .into_bytes()
 }

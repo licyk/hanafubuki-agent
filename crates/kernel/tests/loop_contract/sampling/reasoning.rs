@@ -326,7 +326,9 @@ fn with_reasoning(
 
 /// The reasoning events of a session, as `(id, started step, text, duration)`
 /// per reasoning item in the order they started.
-fn reasoning_blocks(events: &[AgentEvent]) -> Vec<(AgentReasoningId, u32, String, Option<u64>)> {
+pub(super) fn reasoning_blocks(
+    events: &[AgentEvent],
+) -> Vec<(AgentReasoningId, u32, String, Option<u64>)> {
     let mut blocks = Vec::<(AgentReasoningId, u32, String, Option<u64>)>::new();
     for event in events {
         match &event.kind {
@@ -356,7 +358,7 @@ fn reasoning_blocks(events: &[AgentEvent]) -> Vec<(AgentReasoningId, u32, String
     blocks
 }
 
-fn reasoning_items(items: &[ConversationItem]) -> Vec<(String, u64, u32, bool)> {
+pub(super) fn reasoning_items(items: &[ConversationItem]) -> Vec<(String, u64, u32, bool)> {
     items
         .iter()
         .filter_map(|item| match item {

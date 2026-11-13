@@ -204,7 +204,7 @@ The stream carries no session object and no event when a session's [role](/docs/
 
 - A turn starts with `turn_started`, then the `history_committed` of your message, and in a new session `session_title_updated`.
 - Each time the model is asked: `sampling_started`, `reasoning_updated`, `response_started`, then the model's output.
-- A stretch of thinking is `reasoning_started`, any number of `reasoning_delta`s and `reasoning_completed`, all before the step's `history_committed`. A turn that fails in the middle of a response sends no `reasoning_completed`.
+- A stretch of thinking is `reasoning_started`, any number of `reasoning_delta`s and `reasoning_completed`, all before the step's `history_committed`. Its `reasoning_completed` comes at the latest before the first event of the output after it (an answer's `assistant_message_started` or text, a tool call), and no `reasoning_delta` of it follows. A turn that fails in the middle of a response sends no `reasoning_completed`.
 - A message is `assistant_message_started`, its `assistant_text_delta`s, then the step's `history_committed`, and last `assistant_message_completed`.
 - A step's tool calls: first a `tool_started` for every call, in call order; while each runs, its hooks' `hook_started` and `hook_completed` (before the call runs and after it), its approval, question or plan events, and when it ends its `tool_execution_finished` (in the order they finish); then, in call order, `history_committed` and `tool_completed` (with `context_compressed` between them for a `compress` call that folded); last, the `history_committed` of the context the hooks added after the calls, if any.
 - `execution_progress` may come anywhere in between. When you need a strict order, sort by `sequence`.

@@ -77,8 +77,11 @@ pub enum AgentEventKind {
         reasoning_id: AgentReasoningId,
         delta: String,
     },
-    /// The reasoning item ended after `duration_millis`. The step's commit
-    /// then carries it as `ConversationItem::Reasoning`.
+    /// The reasoning item ended after `duration_millis`: at its completion,
+    /// or when the response went on to other output (an answer, a tool
+    /// call) first, after which nothing more of it is shown. The step's
+    /// commit then carries it as `ConversationItem::Reasoning`, with the text
+    /// of its completion.
     ReasoningCompleted {
         reasoning_id: AgentReasoningId,
         duration_millis: u64,
