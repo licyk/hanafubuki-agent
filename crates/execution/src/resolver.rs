@@ -95,7 +95,7 @@ pub(crate) fn resolve_executable(
 /// `argv[0]` is both a Win32 argument and a string the model reads back, so it
 /// must be the native spelling; a verbatim `argv[0]` is not reliably accepted by
 /// the programs being invoked.
-fn canonical_executable(path: &Path) -> Result<PathBuf, AgentExecutionError> {
+pub(crate) fn canonical_executable(path: &Path) -> Result<PathBuf, AgentExecutionError> {
     let resolved = ResolvedPath::resolve(path)
         .map_err(|error| AgentExecutionError::Resolution(format!("executable: {error}")))?;
     let canonical = resolved.native().to_path_buf();
@@ -154,7 +154,10 @@ fn executable_candidates(base: &Path, _environment: &BTreeMap<String, String>) -
     vec![base.to_path_buf()]
 }
 
-fn environment_value<'a>(environment: &'a BTreeMap<String, String>, name: &str) -> Option<&'a str> {
+pub(crate) fn environment_value<'a>(
+    environment: &'a BTreeMap<String, String>,
+    name: &str,
+) -> Option<&'a str> {
     environment
         .iter()
         .find(|(key, _)| {

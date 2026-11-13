@@ -24,10 +24,21 @@ icon: Wrench
 
 `exec_command` 在 Shell 中运行一条命令：
 
-| 系统         | Shell                                                               |
-| ------------ | ------------------------------------------------------------------- |
-| Linux、macOS | `/bin/bash`（没有时用 `/bin/sh`），默认以登录 Shell 运行（`-lc`）   |
-| Windows      | `pwsh`（没有时用 `powershell`），输出为 UTF-8；也可以选择 `cmd.exe` |
+| 系统         | Shell                                                                                                  |
+| ------------ | ------------------------------------------------------------------------------------------------------ |
+| Linux、macOS | `/bin/bash`（没有时用 `/bin/sh`），默认以登录 Shell 运行（`-lc`）                                      |
+| Windows      | `pwsh`（没有时用 `powershell`），输出为 UTF-8；也可以选择 `cmd.exe`，或 Git for Windows、MSYS2 的 bash |
+
+- **Windows 上的 POSIX Shell**：模型要求时（`shell: "posix"`），命令在 Git for Windows 或 MSYS2 的 bash（没有时用 `sh`）中运行，默认以登录 Shell 运行（`-lc`），与 Linux 上相同；默认的 Shell 仍是 PowerShell。按以下顺序查找，每一步都先找 bash 再找 `sh`：
+  1. Agent 本身运行在 MSYS2 或 Git Bash 的 Shell 中（设置了 `MSYSTEM`）时，通过 Agent 的 `PATH` 找那个环境的 Shell。
+  2. 命令的 `PATH` 中，跳过 `System32`（以及 `SysWOW64`、`Sysnative`）和 `WindowsApps` 目录中的 `bash.exe`：它们启动的是 WSL，而不是本机的 Shell。
+  3. `%ProgramFiles%\Git`、`%ProgramFiles(x86)%\Git`、`%LOCALAPPDATA%\Programs\Git` 和 `%SystemDrive%\msys64` 下的 `usr\bin`。
+
+  Git for Windows 的 `bin\bash.exe` 只是把它的 `usr\bin\bash.exe` 作为自己的子进程启动，因此改为直接运行后者：停止命令时结束的就是 Shell 本身。找不到 Shell 时命令不会运行，模型会得知查找过的位置，以及可以改用 `power_shell`。这种 Shell 得到的环境变量见[环境变量](/docs/environment#commands)。
+  - 基于 MSYS 运行时的程序自己拆分命令行，方式与其他 Windows 程序不同，因此命令行中的脚本按它的规则书写：没有空格或制表符的脚本前面加一个空格，不在 `"` 前面的每一串反斜杠加倍。审批显示的是原样的脚本；审批绑定的命令行是改写后的那一个。
+  - 该运行时会把超过 8186 个字符的命令行参数不加提示地截断（在 Git for Windows 和 MSYS2 的运行时上、用基本多文种平面内的文本测得），因此超过 8000 个 UTF-16 单元（对大多数文本来说即字符）的脚本会被拒绝：模型会被告知把脚本写入文件再运行，或改用 `power_shell`。
+  - 它无法在 Windows [沙箱](/docs/permissions#sandbox)中启动：在沙箱的受限令牌下，MSYS 运行时会以 `couldn't create signal pipe, Win32 error 5` 退出。
+  - 超过 247 字节的工作目录以 verbatim 形式（`\\?\`）交给 Windows；MSYS 运行时如何处理这种路径尚未测试。
 
 - **长时间运行的命令**：命令默认最多等待 10 秒（模型可以要求最多 30 秒）。到时还没结束的命令继续在后台运行，模型用 `write_stdin` 读取后续输出或向它输入。
 - **交互式终端**：模型可以要求在伪终端（PTY）中运行，此时可以输入任意内容，并用 `resize_execution` 调整大小；普通模式下只能发送 Ctrl-C。

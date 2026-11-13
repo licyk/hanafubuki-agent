@@ -7,6 +7,8 @@
 mod command;
 mod environment;
 mod model;
+#[cfg(any(windows, test))]
+mod msys;
 mod output_window;
 mod resolver;
 mod service;

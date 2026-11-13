@@ -24,10 +24,21 @@ A few tools are always there: `update_plan` (the task plan), `request_user_input
 
 `exec_command` runs a command in a shell:
 
-| System       | Shell                                                                        |
-| ------------ | ---------------------------------------------------------------------------- |
-| Linux, macOS | `/bin/bash` (or `/bin/sh` without it), as a login shell (`-lc`) by default   |
-| Windows      | `pwsh` (or `powershell` without it), with UTF-8 output; `cmd.exe` on request |
+| System       | Shell                                                                                                                 |
+| ------------ | --------------------------------------------------------------------------------------------------------------------- |
+| Linux, macOS | `/bin/bash` (or `/bin/sh` without it), as a login shell (`-lc`) by default                                            |
+| Windows      | `pwsh` (or `powershell` without it), with UTF-8 output; on request `cmd.exe`, or the bash of Git for Windows or MSYS2 |
+
+- **A POSIX shell on Windows**: when the model asks for one (`shell: "posix"`), the command runs in the bash (or, without it, the `sh`) of Git for Windows or MSYS2, as a login shell (`-lc`) by default, like on Linux; the default stays PowerShell. The shell is looked for in this order, bash before `sh` at each step:
+  1. When the Agent itself runs in an MSYS2 or Git Bash shell (`MSYSTEM` is set), that environment's, through the Agent's `PATH`.
+  2. On the command's `PATH`, leaving out the `bash.exe` in `System32` (and `SysWOW64`, `Sysnative`) and in a `WindowsApps` directory: those start WSL, not a shell of this machine.
+  3. In `usr\bin` of `%ProgramFiles%\Git`, `%ProgramFiles(x86)%\Git`, `%LOCALAPPDATA%\Programs\Git` and `%SystemDrive%\msys64`.
+
+  Git for Windows' `bin\bash.exe` only starts its `usr\bin\bash.exe` as a child of its own, so that one runs instead: a stop then ends the shell itself. Without a shell, the command is not run, and the model is told where it was looked for and that `power_shell` is there. The variables such a shell gets are in [Environment](/docs/environment#commands).
+  - A program built on the MSYS runtime splits its command line itself, not as other Windows programs do, so the script is spelled for it there: a space in front of a script without a space or tab, and each run of backslashes not before a `"` doubled. The approval shows the script as written; the command line it binds is the spelled one.
+  - The runtime cuts a command-line argument longer than 8186 characters short without a word (measured with Git for Windows' and MSYS2's runtimes, on text of the Basic Multilingual Plane), so a script of more than 8000 UTF-16 units (characters, for most text) is refused: the model is told to write it to a file and run that, or to use `power_shell`.
+  - It does not start in the Windows [sandbox](/docs/permissions#sandbox): under its restricted token the MSYS runtime stops with `couldn't create signal pipe, Win32 error 5`.
+  - A working directory longer than 247 bytes is handed to Windows in its verbatim form (`\\?\`); how the MSYS runtime takes one is untested.
 
 - **Long-running commands**: a command is waited for up to 10 seconds by default (the model may ask for up to 30). One still running then goes on in the background, and the model reads its later output, or writes to it, with `write_stdin`.
 - **Interactive terminals**: the model can ask for a pseudo-terminal (PTY), which takes any input and can be resized with `resize_execution`; otherwise only Ctrl-C can be sent.

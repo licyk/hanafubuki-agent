@@ -29,3 +29,10 @@ tempfile.workspace = true
 [[test]]
 name = "contracts"
 required-features = ["test-support"]
+
+# Its own binary, without a harness: it serves as the sandbox helper of the
+# commands it confines, as the Agent's binary does.
+[[test]]
+name = "windows_sandbox"
+harness = false
+required-features = ["test-support"]

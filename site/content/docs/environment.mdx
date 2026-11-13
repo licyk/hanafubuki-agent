@@ -25,6 +25,7 @@ Agent 本身不读取 `RUST_LOG` 或 `NO_COLOR`：日志级别由 `logLevel` 和
 - 为了不让命令等待分页器或输出控制字符，固定设置 `NO_COLOR=1`、`TERM=dumb`、`LANG`、`LC_CTYPE`、`LC_ALL` 为 `C.UTF-8`、`COLORTERM` 为空，以及 `PAGER`、`GIT_PAGER`、`GH_PAGER` 为 `cat`。
 - 为了让 Python 写出 UTF-8（Windows 上也是）：`PYTHONUTF8=1` 和 `PYTHONIOENCODING=utf-8`。其他 Shell 的输出如何保持 UTF-8，见[工具](/docs/tools#commands)。
 - 再加上由 `network.proxy` 决定的代理变量。
+- 对于 [Windows 上的 POSIX Shell](/docs/tools#commands)（Git for Windows 或 MSYS2 的 bash），加上它像 POSIX Shell 一样运行所需的变量：把 Shell 所在目录（`usr\bin`，`ls` 等 MSYS 程序所在的目录）放在 `PATH` 的最前面，因为非登录 Shell 原样使用得到的 `PATH`；`CHERE_INVOKING=1`，否则 MSYS2 的登录 Shell 会切换到 `$HOME`；`MSYS2_PATH_TYPE=inherit`，否则 MSYS2 的登录 Shell 只保留 Windows `PATH` 中的系统目录（Git for Windows 默认保留全部）；以及 Agent 本身运行在 MSYS2 或 Git Bash 的 Shell 中时，它的 `MSYSTEM`。命令已有的变量保持不变。
 
 因此，你在 Shell 中设置的变量（例如 API 令牌或代理）不会自动传给模型运行的命令。
 

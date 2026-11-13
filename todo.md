@@ -1,3 +1,53 @@
+## W1: a POSIX shell for `exec_command` on Windows (2026-11-13)
+
+- [x] W1: `shell: "posix"` on Windows runs the bash (else sh) of Git for
+      Windows or MSYS2 when one is installed, instead of failing with
+      `POSIX shell is unavailable on this platform`; the default shell and
+      every other platform and shell unchanged. Goldens regenerated on
+      purpose (one sentence in `exec_command`'s description).
+      Done (2026-11-13):
+      - execution: `msys.rs` (Windows, and tests everywhere).
+        `PosixShellSearch` looks, bash before sh at each step, (1) when the
+        Agent's own process has `MSYSTEM`, on the Agent's `PATH`; (2) on the
+        command's `PATH`, skipping hits under `%SYSTEMROOT%\System32`,
+        `SysWOW64`, `Sysnative` and any `WindowsApps` directory (WSL's
+        launchers), compared by `PathKey`; (3) in `usr\bin` of
+        `%ProgramFiles%\Git`, `%ProgramFiles(x86)%\Git`,
+        `%LOCALAPPDATA%\Programs\Git`, `%SystemDrive%\msys64`. A hit in a
+        `bin` directory with a sibling `usr\bin\<name>` (Git for Windows'
+        launcher) is replaced by that shell: the launcher starts the shell as
+        its child, and pipe mode puts a command in its Job Object only after
+        the spawn. Not found: the error names what was searched and
+        `"power_shell"`. `add_posix_shell_environment`: the shell's directory
+        first on `PATH` (the clean map's own spelling of the key), and, unless
+        the command has them, `CHERE_INVOKING=1`, `MSYS2_PATH_TYPE=inherit`
+        and the Agent's `MSYSTEM`. `command_line_script`: the MSYS runtime
+        parses its command line itself (`dcrt0.cc` `build_argv`/`globify`:
+        splits at `\n` outside quotes, globs `*`, takes `'` as a quote, reads
+        `\\` as `\` inside quotes), so argv[2] is the script with a space in
+        front when it has no space or tab and each backslash run not before a
+        `"` doubled; the approval's `script` stays as written. Scripts over
+        8000 UTF-16 units are refused (`InvalidRequest`): the runtime cuts an
+        argument past 8186 short silently (measured on both flavours).
+        `exec_shell_command` returns a `Result`. Unix, PowerShell and cmd
+        unchanged (`unified.rs`, `windows_powershell.rs` untouched).
+      - plugin-execution: the sentence in the description; a Windows test
+        that `shell: "posix"` through `parse` reaches `usr\bin\bash.exe` and
+        an omitted shell PowerShell.
+      - tests: `msys/tests.rs` (fakes: WSL launchers skipped, order, the Git
+        launcher, the message, the environment, the spelling, the limit);
+        `tests/contracts/windows_posix.rs` (both flavours, pipe and PTY:
+        workdir with `login` true and false, `uname`/`ls` and `cargo`,
+        quoting with and without a space, the longest script and the refusal
+        past it, exit codes, Ctrl+C and stop leave neither bash nor its
+        `sleep` running); `tests/windows_sandbox.rs` (no harness, the helper
+        dispatched first), **ignored**: under the sandbox's restricted token
+        both flavours' bash exit `0xC0000142` with `*** fatal error -
+        couldn't create signal pipe, Win32 error 5`, pipe and PTY. Not worked
+        around; documented (tools, permissions); the user's call.
+      - docs: `tools#commands`, `environment#commands`, `permissions` (the
+        sandbox limitation), both languages.
+
 ## Flaky Windows tests (2026-11-13)
 
 From CI's failed jobs over the last 60 runs; each passed on a re-run.

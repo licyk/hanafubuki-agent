@@ -89,8 +89,17 @@ pub(crate) fn prepare_exec_command(
         request.workdir.as_deref(),
         working_directory,
     )?)?;
-    let environment = build_clean_command_environment(&request.environment)?;
+    #[cfg_attr(not(windows), allow(unused_mut, reason = "only Windows adds to it"))]
+    let mut environment = build_clean_command_environment(&request.environment)?;
     let program = resolve_shell(shell, &cwd, &environment)?;
+    #[cfg(windows)]
+    if shell == PlatformShell::Posix {
+        crate::msys::add_posix_shell_environment(
+            &mut environment,
+            &program,
+            std::env::var("MSYSTEM").ok(),
+        );
+    }
     let (io_mode, cols, rows) = if request.tty {
         (
             ExecutorIoMode::Pty,
@@ -101,7 +110,7 @@ pub(crate) fn prepare_exec_command(
         (ExecutorIoMode::Pipe, None, None)
     };
     let plan = ResolvedCommandPlan {
-        command: exec_shell_command(shell, program, &request.cmd, request.login),
+        command: exec_shell_command(shell, program, &request.cmd, request.login)?,
         cwd,
         environment,
         timeout_ms: DEFAULT_COMMAND_TIMEOUT_MS,
@@ -188,7 +197,11 @@ fn resolve_shell(
                     "no supported POSIX shell was found".to_string(),
                 ))
             }
-            #[cfg(not(unix))]
+            #[cfg(windows)]
+            {
+                crate::msys::PosixShellSearch::of(environment).find()
+            }
+            #[cfg(not(any(unix, windows)))]
             {
                 Err(AgentExecutionError::Resolution(
                     "POSIX shell is unavailable on this platform".to_string(),
@@ -225,11 +238,14 @@ fn exec_shell_command(
     program: PathBuf,
     command_text: &str,
     login: bool,
-) -> Vec<String> {
+) -> Result<Vec<String>, AgentExecutionError> {
     let mut command = vec![program.to_string_lossy().into_owned()];
     match shell {
         PlatformShell::Posix => {
             command.push(if login { "-lc" } else { "-c" }.to_string());
+            #[cfg(windows)]
+            command.push(crate::msys::command_line_script(command_text)?);
+            #[cfg(not(windows))]
             command.push(command_text.to_string());
         }
         PlatformShell::PowerShell => command.extend([
@@ -246,7 +262,7 @@ fn exec_shell_command(
             format!("{CMD_UTF8_PREFIX}{command_text}"),
         ]),
     }
-    command
+    Ok(command)
 }
 
 fn shell_action(

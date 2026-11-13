@@ -107,6 +107,7 @@ Run Posix command outside the sandbox in /home/me/project: npm install (reason: 
 - 在 macOS 上，命令启动时尚不存在的 `.git`、`.agents` 或 `.hanafubuki-agent` 不受保护：命令可以创建它。
 - 没有网络访问时，在 Linux 上除 Unix 套接字外的所有套接字都会被拒绝，连接任何套接字也会被拒绝，包括 Unix 套接字（SSH agent、Docker 的套接字）；有网络访问时，只有虚拟机套接字仍被拒绝；两种情况下，可以绕过过滤器打开套接字的 `io_uring` 都会被拒绝。在 macOS 上，没有网络访问时任何套接字都无法连接，包括 Unix 套接字；有网络访问时都可以。
 - 在 Windows 上，受限令牌只限制写入：登录会话或 Everyone 可写的位置仍然可写，网络仍可访问（见[平台](#sandbox-platforms)；模型会被告知这一点，见[模型被告知的内容](#sandbox-context)），命令留在后台的进程会随它一起结束。
+- 在 Windows 上，[POSIX Shell](/docs/tools#commands)（Git for Windows 或 MSYS2 的 bash）无法在沙箱中启动：在受限令牌下，MSYS 运行时会立即以 `couldn't create signal pipe, Win32 error 5` 退出。这类命令请在完全访问模式下或沙箱外运行，或改用 PowerShell。
 - 在 Linux 的终端（PTY）命令中，`/dev/stdout` 和 `/dev/stderr` 指向终端的 `/dev/pts` 设备，它不可写：请直接写到输出，或写到可写的 `/dev/tty`（命令自己的终端）。
 - 在早于 6.2 的 Linux 内核上，截断可写根目录之外的文件不受限制（Landlock 第 3 版之前的 ABI 做不到）。
 

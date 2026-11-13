@@ -218,3 +218,50 @@ fn sandbox_permissions_asks_to_leave_the_sandbox_with_a_justification() {
         ))
     ));
 }
+
+/// On Windows, `shell: "posix"` reaches the bash of Git for Windows or
+/// MSYS2 when one is installed, and an omitted shell is still PowerShell.
+#[cfg(windows)]
+#[test]
+fn on_windows_posix_is_an_msys_bash_and_the_default_stays_powershell() {
+    use hanafubuki_agent_approval::PermissionActionDetails;
+    use hanafubuki_agent_execution::test_support::FakeAgentExecutionProcessPort;
+    use hanafubuki_agent_execution::AgentExecutionService;
+
+    let service = AgentExecutionService::with_process_port(FakeAgentExecutionProcessPort::shared());
+    service.set_workspace_roots(vec![std::env::current_dir().unwrap()]);
+    let program = |shell: Value| {
+        let (ExecCall::ExecCommand(request), _) = parse(
+            ExecToolKind::ExecCommand,
+            &json!({ "cmd": "echo hi", "shell": shell }),
+        )
+        .unwrap() else {
+            panic!("exec_command parses to a command");
+        };
+        service
+            .prepare_exec_command_action(&request)
+            .map(|action| match action.details() {
+                Some(PermissionActionDetails::Command { program, .. }) => {
+                    program.to_ascii_lowercase()
+                }
+                _ => panic!("a shell action names its program"),
+            })
+    };
+    let default = program(Value::Null).unwrap();
+    assert!(
+        default.ends_with(r"\pwsh.exe") || default.ends_with(r"\powershell.exe"),
+        "{default}"
+    );
+    let git =
+        std::path::Path::new(&std::env::var("ProgramFiles").unwrap()).join(r"Git\usr\bin\bash.exe");
+    match program(json!("posix")) {
+        Ok(posix) => assert!(
+            posix.ends_with(r"\usr\bin\bash.exe") || posix.ends_with(r"\usr\bin\sh.exe"),
+            "{posix}"
+        ),
+        Err(error) => {
+            assert!(!git.exists(), "{error}");
+            assert!(error.to_string().contains("\"power_shell\""), "{error}");
+        }
+    }
+}

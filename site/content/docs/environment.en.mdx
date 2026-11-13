@@ -25,6 +25,7 @@ The commands the model runs through its tools do not inherit the Agent process's
 - So that a command neither waits on a pager nor fills its output with escape sequences: `NO_COLOR=1`, `TERM=dumb`, `LANG`, `LC_CTYPE` and `LC_ALL` set to `C.UTF-8`, `COLORTERM` empty, and `PAGER`, `GIT_PAGER` and `GH_PAGER` set to `cat`.
 - So that Python writes UTF-8, on Windows too: `PYTHONUTF8=1` and `PYTHONIOENCODING=utf-8`. How the other shells' output is kept UTF-8 is in [Tools](/docs/tools#commands).
 - The proxy variables `network.proxy` decides.
+- For a [POSIX shell on Windows](/docs/tools#commands) (Git for Windows' or MSYS2's bash), what it needs to run like one: the shell's directory (`usr\bin`, where `ls` and the other MSYS programs are) first on `PATH`, since a shell that is not a login shell keeps the `PATH` it is given; `CHERE_INVOKING=1`, without which MSYS2's login shell changes to `$HOME`; `MSYS2_PATH_TYPE=inherit`, without which MSYS2's login shell keeps only the system directories of the Windows `PATH` (Git for Windows' keeps it all by default); and, when the Agent itself runs in an MSYS2 or Git Bash shell, its `MSYSTEM`. A variable the command already has is left as it is.
 
 So a variable you set in your shell (an API token, a proxy) does not reach the commands the model runs.
 
