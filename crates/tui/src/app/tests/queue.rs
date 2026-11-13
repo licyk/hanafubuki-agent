@@ -36,6 +36,13 @@ fn now(events: Vec<u8>) -> (Vec<u8>, Duration) {
     (events, Duration::ZERO)
 }
 
+/// An answer that comes only after the test has interrupted or outlived
+/// its turn, so the turn runs however long a loaded runner takes over the
+/// test's steps. The server answers nothing else meanwhile.
+fn never(events: Vec<u8>) -> (Vec<u8>, Duration) {
+    (events, Duration::from_secs(60))
+}
+
 impl Harness {
     fn timed(responses: Vec<(Vec<u8>, Duration)>) -> Self {
         Self::start_timed(responses, true, TranscriptMode::Terminal)
@@ -168,6 +175,8 @@ fn a_steer_racing_the_turns_end_becomes_the_next_turn() {
 #[test]
 fn esc_interrupts_and_sends_the_waiting_steers_as_one_turn_which_can_be_edited() {
     let mut harness = Harness::timed(vec![
+        // The server answers one request at a time: "Resent." waits for
+        // this one.
         slow(assistant_events("Too slow."), 3),
         now(assistant_events("Resent.")),
     ]);
@@ -252,7 +261,7 @@ fn a_failed_turn_goes_on_with_the_queue() {
 
 #[test]
 fn an_interrupt_puts_the_queue_back_in_the_composer_and_sends_nothing() {
-    let mut harness = Harness::timed(vec![slow(assistant_events("Too slow."), 3)]);
+    let mut harness = Harness::timed(vec![never(assistant_events("Too slow."))]);
     harness.type_and_submit("Start.");
     harness.pump_until_running();
     harness.type_and_queue("Queued.");
@@ -273,7 +282,7 @@ fn an_interrupt_puts_the_queue_back_in_the_composer_and_sends_nothing() {
 #[test]
 fn shift_left_edits_the_last_queued_message_but_a_selection_keeps_its_keys() {
     let mut harness = Harness::start_timed(
-        vec![slow(assistant_events("Done."), 3)],
+        vec![never(assistant_events("Done."))],
         true,
         TranscriptMode::Owned,
     );
@@ -336,7 +345,7 @@ fn a_parked_conversations_queue_drains_while_the_side_one_has_the_focus() {
 #[test]
 fn esc_returns_a_scrolled_conversation_to_the_bottom_before_it_interrupts() {
     let mut harness = Harness::start_timed(
-        vec![slow(assistant_events("Too slow."), 3)],
+        vec![never(assistant_events("Too slow."))],
         true,
         TranscriptMode::Owned,
     );
@@ -367,7 +376,7 @@ fn esc_returns_a_scrolled_conversation_to_the_bottom_before_it_interrupts() {
 fn esc_interrupts_a_side_conversations_turn_without_leaving_it() {
     let mut harness = Harness::timed(vec![
         now(assistant_events("Hi.")),
-        slow(assistant_events("Too slow."), 3),
+        never(assistant_events("Too slow.")),
     ]);
     harness.answered("Hello.", "Hi.");
     harness.type_and_submit("/btw What is 2 + 2?");
@@ -383,7 +392,7 @@ fn esc_interrupts_a_side_conversations_turn_without_leaving_it() {
 
 #[test]
 fn the_leaders_tab_is_the_chords_and_queues_nothing() {
-    let mut harness = Harness::timed(vec![slow(assistant_events("Done."), 3)]);
+    let mut harness = Harness::timed(vec![never(assistant_events("Done."))]);
     harness.type_and_submit("Start.");
     harness.pump_until_running();
     harness.type_draft("draft");
