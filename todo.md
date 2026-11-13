@@ -264,11 +264,105 @@ and any module-size exception.
           3000 held by another project's server); CI's Site run covers it.
         - Goldens: none changed. Hanafubuki: no API change. Module size: no
           exception added or raised.
-- [ ] B2: the context window the metadata knows — bound sessions refreshed
+        - CI on Linux, Windows and macOS (99699e5): https://github.com/licyk/hanafubuki-agent/actions/runs/43375640417
+          (all three passed at once); Site: .../runs/43375640618, success,
+          its prerender included.
+- [x] B2: the context window the metadata knows — bound sessions refreshed
       at a listing and at each response commit, `usage` in sync,
       `session_model_metadata` no longer hiding a resolved window, four
       more listing fields. `/status` and the compaction threshold tested
       with a listing after creation and during the first turn.
+      Done (2026-11-13):
+      - kernel: `list_provider_models` (`service/factory.rs`), after
+        `record_listing`, calls `take_listed_context_windows`
+        (`service/context_window.rs`): each loaded session whose route is
+        on the listed endpoint runs `refresh_context_window` and, when its
+        window changed, commits it on its own (revision raised, persisted;
+        usage measured against it in the same commit). A failure of one
+        session (removed, its commit refused) is logged at debug and the
+        others go on. `commit_sampling_response` (`service/sampling/commit.rs`)
+        refreshes first too, after its fallible steps, and the response's
+        usage takes the window refreshed, so `usage.context_window_tokens`
+        always equals the config's. `session_model_metadata`
+        (`service/model_facts.rs`) keeps the session's window when it has
+        one and otherwise returns the resolved one.
+      - model-api: `CONTEXT_WINDOW_FIELDS` (`model_catalog/shapes.rs`)
+        gains `inputTokenLimit`, `max_context_length`,
+        `model_info.context_window` and `model_spec.availableContextTokens`,
+        after the present ones (cited from Hoshimi `83f7813` in the module
+        doc).
+      - agent: comments only (`model_discovery.rs`, the facade's
+        `forget_learned_model_facts`).
+      - Deviations: (1) The sweep takes the session's plain lock and skips
+        a session with a staged commit (`lock_after_persistence` would wait
+        for it, not skip it); that session's next response commit or turn
+        takes the window. (2) The sweep raises the revision but not
+        `updated_at`: a listing is not activity, and the session list is
+        ordered by `updated_at`, so idle sessions are not reordered by a
+        background listing (`learn_context_window` keeps bumping it). (3)
+        Mistral's documented example of `GET /v1/models`
+        (`docs.mistral.ai/openapi.yaml`, `userExample`) shows the cards as
+        a bare array; the fixture (`model_listing/fixtures/mistral.json`)
+        puts the documented card in the `ModelList` envelope the same
+        schema names, since the listing reader needs a `data` array. (4)
+        The compaction threshold is asserted as the window compaction reads
+        (the session's `config.context_window_tokens`, in memory and
+        persisted) before any turn, not by a compaction running: before a
+        turn nothing measures against it, and a turn's admission refreshes
+        it anyway. (5) The mid-turn test records the listing in the
+        registry from inside the model port's answer (the case the sweep
+        skips), so the sweep's staged-commit skip itself has no test.
+      - Finding: the listing reader reads only a `data` array, so Gemini's
+        native listing (`models`) and Alibaba Cloud's (`output.models`)
+        never reach their fields; Mistral's and Venice's (`data`) do. The
+        fields are harmless there and cover OpenAI-compatible relays that
+        forward them.
+      - Tests (failing first): `agent/src/tests/model_discovery.rs`, on the
+        fake server through the real discovery and `list_provider_models`:
+        a listing landing after creation and before any turn (the
+        session's revision advances with no model request, `/status`'s
+        window is the listed one, and the next run has it with
+        `model-metadata.json` deleted); the existing late-listing test now
+        takes the window (usage included) as the listing lands, before the
+        second turn. Both timed out on 99699e5 (their first form, waiting
+        on the window). Kernel
+        (`service/context_window/tests/listed.rs`): the sweep before any
+        turn (status window, config window, persisted, revision +1,
+        `updated_at` kept; a configured session and an unlisted model not
+        committed); a session with usage kept in step and recovered; a
+        listing landing during the first turn taken at the response commit
+        (config, usage and persisted usage equal, recovered without
+        quarantine); a session with no route showing the resolved
+        (built-in) window. The last two failed with the commit and
+        `session_model_metadata` changes reverted. `model-api`: each new
+        field and its order (`shapes/tests.rs`), Mistral's documented
+        listing (`model_listing`). `selecting_another_providers_model_lists_that_provider`
+        re-reads the snapshot before selecting a model: the listing may
+        have raised the revision since creation. The discovery suite ran 20
+        times in a row without a failure.
+      - Goldens: none changed.
+      - Docs (both languages): `providers-models#compaction` (when a
+        session takes a window: at a listing, a turn's start and after each
+        answer), `#forget`; `config-reference` (discovery: the window at
+        once); `architecture` (the context window, model metadata, late
+        resolution, the known limit); `internals#model-metadata` (the four
+        fields).
+      - Validation: `cargo fmt --all --check`; `RUSTFLAGS="-D warnings"
+        cargo check --workspace --all-targets --all-features`; `cargo clippy
+        --workspace --all-targets --all-features -- -D warnings`; `cargo
+        xtask check`; `cargo test --workspace --all-features`; `bun install
+        --frozen-lockfile`, `bun run format:check:site`, `bun run
+        site:check`, `bun run site:test`; `VITE_BASE_PATH=/hanafubuki-agent/
+        bun run site:build` built but could not prerender locally (port
+        3000 held by another project's server); CI's Site run covers it.
+      - Hanafubuki at its next pin: no API change. Behaviour: a session's
+        revision can advance with no event when a listing of its Provider
+        is recorded (a host that caches a revision must re-read the
+        snapshot before a mutation, as `StaleRevision` asks); a response's
+        commit can change the session's window; `session_model_metadata`
+        can return a window the session's config does not have (a session
+        with none).
+      - Module size: no exception added or raised.
 - [ ] B3: thinking stops when the answer starts — the kernel closes an
       open reasoning item at the first non-reasoning item, with a frozen
       duration; the late `output_item.done` persists its payload without a

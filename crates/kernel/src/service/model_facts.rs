@@ -41,7 +41,7 @@ impl AgentService {
     /// What the session `session_id` knows of its model: its route's facts
     /// with what the person configured (none but those while it is not
     /// bound to its Provider), and the window the session has, with its
-    /// source.
+    /// source; the resolved window while the session has none.
     pub fn session_model_metadata(
         &self,
         session_id: AgentSessionId,
@@ -56,22 +56,24 @@ impl AgentService {
             configured_facts(config),
             now_millis_u64(),
         );
-        metadata.context_window = config
+        if let Some((value, source)) = config
             .context_window_tokens
             .zip(config.context_window_origin())
-            .map(|(value, source)| Sourced {
+        {
+            metadata.context_window = Some(Sourced {
                 value,
                 source,
                 observed_at_ms: 0,
             });
+        }
         Ok(metadata)
     }
 
     /// Forgets what the Provider at `base_url` taught by its refusals of
     /// `model`, or of every model there when none is named: learned
     /// windows, a learned "no" to images or to reasoning, and a learned
-    /// structured-output rung. A session takes it at its next turn. Returns how many models had something to
-    /// forget.
+    /// structured-output rung. A session takes it at its next turn or
+    /// response. Returns how many models had something to forget.
     pub fn forget_learned_model_facts(
         &self,
         protocol: ModelApiProtocol,

@@ -26,6 +26,22 @@ fn a_window_is_the_first_field_with_a_positive_integer() {
             json!({"context_length": 4096, "top_provider": {"context_length": 8192}}),
             Some(4096),
         ),
+        // Gemini, Mistral, Alibaba Cloud and Venice, as Hoshimi reads them,
+        // after the fields above.
+        (json!({"inputTokenLimit": 1_048_576}), Some(1_048_576)),
+        (json!({"max_context_length": 32_768}), Some(32_768)),
+        (
+            json!({"model_info": {"context_window": 131_072}}),
+            Some(131_072),
+        ),
+        (
+            json!({"model_spec": {"availableContextTokens": 65_536}}),
+            Some(65_536),
+        ),
+        (
+            json!({"max_context_length": 32_768, "context_length": 8192}),
+            Some(8192),
+        ),
         (json!({"context_length": -1, "context_window": 1.5e5}), None),
         (json!({"context_length": null, "top_provider": 8192}), None),
         (json!({}), None),

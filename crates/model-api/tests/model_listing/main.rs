@@ -5,6 +5,10 @@
 //! - `openai.json`: <https://developers.openai.com/api/reference/resources/models/methods/list>
 //! - `openrouter.json`: <https://openrouter.ai/docs/api/api-reference/models/list-all-models-and-their-properties>
 //! - `anthropic.json`: <https://platform.claude.com/docs/en/api/models/list>
+//! - `mistral.json`: <https://docs.mistral.ai/api/endpoint/models>, the
+//!   example of `GET /v1/models` (`openapi.yaml`, `userExample`), which
+//!   shows the cards bare; here in the `ModelList` envelope
+//!   (`{"object": "list", "data": [...]}`) the same schema names.
 //!
 //! The first OpenRouter and Anthropic entries are the documented ones; each
 //! second entry (`example/…`, `claude-example-…`) is illustrative, in the
@@ -107,6 +111,26 @@ async fn the_documented_anthropic_listing_reports_limits_and_capabilities() {
             reasoning: Some(false),
             ..unknown_entry("claude-example-text")
         }
+    );
+}
+
+#[tokio::test]
+async fn the_documented_mistral_listing_reports_its_window() {
+    let listing = list_one_page(
+        ModelApiProtocol::ChatCompletions,
+        include_str!("fixtures/mistral.json"),
+    )
+    .await
+    .unwrap();
+    assert_eq!(listing.skipped, 0);
+    assert_eq!(
+        listing.entries,
+        [ModelCatalogEntry {
+            // `max_context_length`; `capabilities.vision`.
+            context_window: Some(32_768),
+            image_input: Some(false),
+            ..unknown_entry("<model_id>")
+        }]
     );
 }
 

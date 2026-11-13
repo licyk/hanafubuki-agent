@@ -1,22 +1,69 @@
-//! A session's context window, resolved again as each turn starts: the
-//! model metadata may know its model's window better than when the session
-//! was created (a listing that landed later), and the session takes it. A
-//! Provider's refusal of a request as too long teaches the route a window,
-//! which the session that was refused takes at once.
+//! A session's context window, resolved again when a listing of its
+//! Provider is recorded, as each turn starts and at each response's
+//! commit: the model metadata may know its model's window better than when
+//! the session was created (a listing that landed later), and the session
+//! takes it. A Provider's refusal of a request as too long teaches the
+//! route a window, which the session that was refused takes at once.
 
 use hanafubuki_agent_model_api::{
-    context_limit_in, ModelMetadataSource, Sourced, PLAUSIBLE_CONTEXT_WINDOW,
+    context_limit_in, ModelEndpointKey, ModelMetadataSource, Sourced, PLAUSIBLE_CONTEXT_WINDOW,
 };
 
 use super::model_facts::configured_facts;
 use super::*;
 
 impl AgentService {
+    /// Gives every loaded session on `endpoint` the window its route
+    /// resolves to now that a listing of `endpoint` was recorded, each in a
+    /// commit of its own. A session with a staged commit is skipped: its
+    /// next response's commit or turn takes it. A session that cannot take
+    /// it (removed meanwhile, its commit refused) keeps what it had, and the
+    /// others still take theirs.
+    pub(super) async fn take_listed_context_windows(&self, endpoint: &ModelEndpointKey) {
+        for cell in self.inner.sessions.cells() {
+            if let Err(error) = self.take_listed_context_window(&cell, endpoint).await {
+                log::debug!("a session did not take its listed context window: {error}");
+            }
+        }
+    }
+
+    async fn take_listed_context_window(
+        &self,
+        cell: &Arc<SessionCell>,
+        endpoint: &ModelEndpointKey,
+    ) -> Result<(), AgentError> {
+        let staged = {
+            let mut guard = cell.lock()?;
+            let record = &mut *guard;
+            let listed = record
+                .settings
+                .model
+                .route_key(&record.settings.config.model)
+                .is_some_and(|route| route.endpoint() == endpoint);
+            if !listed || ensure_no_staged_commit(record).is_err() {
+                return Ok(());
+            }
+            let rollback = record.rollback_state();
+            if self.refresh_context_window(record).is_none() {
+                return Ok(());
+            }
+            // Not `updated_at`: a listing is not activity, and the session
+            // list is ordered by it.
+            record.status.revision = record
+                .status
+                .revision
+                .checked_add(1)
+                .expect("agent snapshot revision exhausted");
+            StagedPersistence::commit(cell, record, rollback)
+        };
+        self.persist_staged(staged).await
+    }
+
     /// Gives `record`'s session the window its route resolves to now, and
     /// measures its usage against it too, since recovery refuses usage
     /// measured against another window. Called under the session's lock,
-    /// in a commit: the one that admits a turn, or the one after a refusal
-    /// taught a window. A configured window wins; a window no longer known
+    /// in a commit: the one that admits a turn, records a response, takes a
+    /// listing, or follows a refusal that taught a window. A configured window wins; a window no longer known
     /// is kept, unless it was recorded as configured, learned or from
     /// models.dev (the configuration, the learned fact or the copy of
     /// models.dev is gone), and then the session's window is unknown.

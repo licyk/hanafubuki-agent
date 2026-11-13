@@ -171,7 +171,7 @@ schema 遵循同样的按协议规则：支持 `strict_json_schema` 的协议（
 
 ### 上下文窗口与 token 估算 [#the-context-window-and-the-token-estimate]
 
-会话的 `context_window_tokens` 在创建会话或选择模型时解析，每个轮次开始时再解析一次：配置的窗口，否则[模型元数据](#model-metadata)对该模型所知的窗口（从拒绝中学到的窗口，仅在它更小时；Provider 的模型列表报告的窗口；打开 models.dev 时它给出的窗口；否则一张已知模型系列的小表）；都没有就不做自动压缩。整个 Agent 只有一种 token 估算（`hanafubuki_agent_contracts::tokens`，字节数 / 4）。计数之所以一致，是因为它们数的是同一个请求：准入检查、步骤的请求和自动压缩对下一个请求的检查都用 `step_model_request` 构建请求，用 `estimate_model_request_tokens` 计数，工具和记忆都包括在内。
+会话的 `context_window_tokens` 在创建会话或选择模型时、记录它的 Provider 的列表时、每个轮次开始时以及每个回答提交时解析：配置的窗口，否则[模型元数据](#model-metadata)对该模型所知的窗口（从拒绝中学到的窗口，仅在它更小时；Provider 的模型列表报告的窗口；打开 models.dev 时它给出的窗口；否则一张已知模型系列的小表）；都没有就不做自动压缩。整个 Agent 只有一种 token 估算（`hanafubuki_agent_contracts::tokens`，字节数 / 4）。计数之所以一致，是因为它们数的是同一个请求：准入检查、步骤的请求和自动压缩对下一个请求的检查都用 `step_model_request` 构建请求，用 `estimate_model_request_tokens` 计数，工具和记忆都包括在内。
 
 ### 模型元数据 [#model-metadata]
 
@@ -183,11 +183,11 @@ Agent 对它访问的每个模型所知道的内容，是内核的 `ModelMetadat
 4. **目录**：models.dev 的目录，在 `modelMetadata.modelsDev` 打开时使用，显示为 `models.dev`。它只补充其他来源都没说的事实，并且只做加法：它的“不支持”从不保留。模型 ID 先规范化（小写，去掉 `vendor/` 前缀、`-latest` 和 `-YYYYMMDD` 日期），优先在该 Provider 自己的条目下查找：`ModelProviderNames`（Provider 的 id 和其端点的主机名），内核在每次拿到 Provider 的 id 及其 base URL 时（创建会话、选择模型或激活会话；`model_metadata`；`model_context_window`）按端点记下它，只在本次运行中保留。没有自己的条目时，合并所有提供商对该 ID 的条目：取最小的限制和任何一个“是”（`hanafubuki-agent-model-api` 的 `models_dev.rs`）。
 5. **内置**：窗口表。
 
-目前据此行事的有：窗口，在创建会话、选择模型和每个轮次开始时（见下文）；从“请求过长”的拒绝中学到的窗口（见下文）；最大输出，用于阈值压缩为回复留出的空间（[压缩](#compaction)），以及 Anthropic 带思考时的 `max_tokens`；图片输入和推理（都见下文）。内核从不访问数据目录：它的所有者注入一个 `ModelMetadataStore`，注册表启动时加载一次，每次变化后把快照交给它。facade 的存储是 `model-metadata.json`（[数据目录](/docs/data-directory#contents)）；内核的其他构造方式只在本次运行中保留这些事实。列表的合并、过期和文件格式见[内部细节](/docs/internals#model-metadata)。
+目前据此行事的有：窗口，在创建会话、选择模型、列表、每个轮次开始和每个回答提交时（见下文）；从“请求过长”的拒绝中学到的窗口（见下文）；最大输出，用于阈值压缩为回复留出的空间（[压缩](#compaction)），以及 Anthropic 带思考时的 `max_tokens`；图片输入和推理（都见下文）。内核从不访问数据目录：它的所有者注入一个 `ModelMetadataStore`，注册表启动时加载一次，每次变化后把快照交给它。facade 的存储是 `model-metadata.json`（[数据目录](/docs/data-directory#contents)）；内核的其他构造方式只在本次运行中保留这些事实。列表的合并、过期和文件格式见[内部细节](/docs/internals#model-metadata)。
 
 **模型发现。** facade 自己列出各 Provider 的模型，所以在任何人打开模型列表之前，列表报告的事实就已知道（`model_discovery.rs`）。Agent 的 worker 组里有一个 worker，带自己的运行时，从通道接收请求，一次列出一个 Provider，经由内核的 `list_provider_models`：用该 Provider 的端点、令牌和请求头，与它的请求相同，列表也像其他列表一样被记录。构建服务时请求一次（默认 Provider）；此后每当会话绑定到某个 Provider 时都请求：在它上面创建会话，选用它的模型（`/model`、角色的模型），或为一个轮次激活会话，这也覆盖了在另一个 Provider 上恢复的会话。请求只是往通道发送一条消息，所以从不延迟会话的创建、模型选择或轮次。一个端点只有在它最近一次记录的列表已满一天，并且在本次运行中距它上次列出已满一天、或距上次失败的列出已满 15 分钟时，才会再次列出。这一天从模型元数据保存的列出时间（`listedAtMs`）算起，所以新的运行（包括每次 `exec`）不会再列一次，用户自己请求的列表也计算在内；失败只在本次运行中记住。失败以 warn 级别记录 Provider 的 id，从不记录它的回答（那是它的内容，可能回显凭据），也从不让轮次失败。关闭时 worker 组会取消进行中的列出；被取消的列出不记录任何东西。`modelMetadata.discovery = "off"`（[配置参考](/docs/config-reference#model-metadata)）让所有请求都不被执行；用户自己请求的列表（模型列表、Provider 的测试、`doctor --online`）仍会记录。同一个 worker 在同样的请求下、不论 `discovery` 的值，在 `modelMetadata.modelsDev` 打开时下载 models.dev 的目录（`fetch_models_dev`：独立的客户端，经过 Provider 的代理（内核的 `model_proxy`，facade 在启动和每次设置变化时从宿主的 `NetworkSettingsPort` 设置它），User-Agent 为 `hanafubuki-agent/<version>`，不带任何 Provider 的凭据或请求头，最多一分钟、32 MiB，关闭时取消），并记入注册表（`record_models_dev_catalog`）：副本满一天后再下载，失败后满 15 分钟再试。副本存入快照，使用一周；失败以 debug 级别记录失败的环节，从不记录 models.dev 的回答，副本继续使用。关闭时 worker 丢弃副本（`forget_models_dev_catalog`）。facade 的测试构造方式无论设置如何都不运行模型发现，测试用 Provider（`test_support::configure_test_provider`）也会关掉它，所以脚本化的模型服务器只看到测试自己的请求。
 
-**延后解析。** 会话以创建时已知的信息创建，从不等待列表。每个轮次被接纳时，内核在会话的锁内、在接纳该轮次的同一次提交中，再次解析会话的路由（`service/context_window.rs`）：值或来源不同的窗口会替换 `context_window_tokens`，会话记录的用量也在同一次提交中改用这个窗口计量，所以恢复时“用量与窗口一致”的检查仍然成立。会话记住窗口的来源（`AgentSessionConfig.context_window_source`，未知时省略，所以之前写入的会话保持不变）。配置的窗口是 `configured_facts` 中的窗口，它优先；没有来源的窗口（宿主给的，或在记录来源之前写入的会话）视为配置的，会话创建或加载时被纳入 `configured_facts`；没有窗口的会话采用已知的窗口。路由完全解析不出窗口时（报告它的列表已过期，也没有其他来源知道这个模型），会话保留已有的窗口，除非它被记录为配置的、学到的或来自 models.dev 的（没有来源的窗口会保留）：配置不再写明窗口、学到的窗口被遗忘、models.dev 被关闭或其副本过期时，会话的窗口变为未知。尚未绑定到 Provider 的会话没有路由，不会被解析，所以内置表不会单独替换 Provider 报告的窗口。
+**延后解析。** 会话以创建时已知的信息创建，从不等待列表。内核在会话的锁内、在一次提交中再次解析会话的路由（`service/context_window.rs`）：`list_provider_models` 记录列表之后，对该端点上每个已加载的会话各做一次提交，提高修订号但不改 `updated_at`（列表不是活动，而会话列表按它排序），有暂存提交的会话跳过；每个轮次被接纳时，在接纳它的提交中；以及每个回答的提交中，所以暂存提交期间到达的列表会在下一步的压缩检查之前被采用。值或来源不同的窗口会替换 `context_window_tokens`，会话记录的用量（以及该回答的用量）也在同一次提交中改用这个窗口计量，所以恢复时“用量与窗口一致”的检查仍然成立。`session_model_metadata`（`/status`）显示会话的窗口，会话还没有窗口时（未绑定到 Provider 的会话）显示解析出的窗口。会话记住窗口的来源（`AgentSessionConfig.context_window_source`，未知时省略，所以之前写入的会话保持不变）。配置的窗口是 `configured_facts` 中的窗口，它优先；没有来源的窗口（宿主给的，或在记录来源之前写入的会话）视为配置的，会话创建或加载时被纳入 `configured_facts`；没有窗口的会话采用已知的窗口。路由完全解析不出窗口时（报告它的列表已过期，也没有其他来源知道这个模型），会话保留已有的窗口，除非它被记录为配置的、学到的或来自 models.dev 的（没有来源的窗口会保留）：配置不再写明窗口、学到的窗口被遗忘、models.dev 被关闭或其副本过期时，会话的窗口变为未知。尚未绑定到 Provider 的会话没有路由，不会被解析，所以内置表不会单独替换 Provider 报告的窗口。
 
 **学到的窗口。** Provider 以超出窗口为由拒绝某一步的请求时（`ProviderContextWindowExceeded`，在 `hanafubuki-agent-model-api` 中分类：[内部细节](/docs/internals#context-refusals)），路由会学到一个窗口，这发生在 `run_sampling_request` 中、轮次循环压缩并重试之前：拒绝中写明的窗口（`context_limit_in`），否则被拒请求自己的估算（`estimate_model_request_tokens`），作为上界；两者都只在 1024 到 20,000,000 token 之间才采用（`PLAUSIBLE_CONTEXT_WINDOW`）。路由在学到的窗口有效期内（7 天）保留其中最小的一个，解析时只在它小于其他来源给出的窗口时采用。被拒的会话立即采用它：在会话的锁内单独提交一次，与延后解析走同一个改写（`refresh_context_window`，所以配置的窗口不变，用量随窗口一起改），并在它采用的是学到的窗口时记录 `ModelContextWindowLearned { tokens, previous }`；于是拒绝之后的压缩、重试以及之后的每一步都按它压缩。此后该路由上的每个会话都从它开始，本次运行和下次运行都一样（`model-metadata.json`）。无论自动压缩是否开启都会学习；只从轮次的请求中学习（压缩自己的请求过长时照旧被裁剪，不学习），轮次被取消后也不再学习。
 
@@ -362,7 +362,7 @@ Agent 对它访问的每个模型所知道的内容，是内核的 `ModelMetadat
 ## 已知的限制 [#known-limits]
 
 - 文件工具的策略根目录在构建 Agent 时固定；只有 Skill 根目录和上下文段按每次读取跟随工作区。
-- 会话的窗口只在轮次开始时重新解析：轮次运行期间得知的窗口在会话的下一个轮次才采用，模型元数据完全不再知道的报告的窗口会一直保留，直到再次选择会话的模型。
+- 会话的窗口只在列表、轮次开始和回答提交时重新解析：模型元数据完全不再知道的报告的窗口会一直保留，直到再次选择会话的模型。
 - MCP 重连复用打开连接时的密钥，所以过期的 OAuth 令牌会让重连失败，直到用户手动连接。
 - Skill 监视器只监视启动时存在的根目录；之后出现的根目录（包括之后启用的包的根目录）依靠读取时的标记。
 - 手动编辑 `[plugins]` 在下次启动或重新加载时生效；Agent 只在它自己写入设置之后重新加载包。

@@ -34,6 +34,14 @@ impl AgentService {
                     )
                     .map_err(map_budget_error)?;
             }
+            // A listing recorded while a commit was staged is taken here,
+            // before the next step's compaction check, and the usage is
+            // measured against the window taken.
+            self.refresh_context_window(record);
+            let usage_update = usage_update.map(|usage| AgentModelUsage {
+                context_window_tokens: record.settings.config.context_window_tokens,
+                ..usage
+            });
             if let Some(usage) = usage_update {
                 if record.runtime.context_window.prefill_input_tokens.is_none() {
                     record.runtime.context_window.prefill_input_tokens =

@@ -4,7 +4,8 @@
 //! group lists one Provider at a time, through the kernel's
 //! `list_provider_models` (the Provider's own endpoint, token and headers,
 //! as its requests), which records the listing in the model metadata and
-//! so in `model-metadata.json`.
+//! so in `model-metadata.json`, and gives the loaded sessions on that
+//! Provider the windows it reported.
 //!
 //! A listing is asked for at start (the default Provider) and whenever a
 //! session is bound to a Provider: created on it, given one of its models

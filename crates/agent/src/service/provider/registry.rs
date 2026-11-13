@@ -207,8 +207,8 @@ impl AgentApplicationService {
     /// Forgets what the Provider `provider_id`'s refusals taught of
     /// `model`, or of each of its models when none is named: a learned
     /// window, a learned "no" to images or to reasoning, and a learned
-    /// structured-output rung. A session takes it at its next turn. Returns how many models had something to
-    /// forget.
+    /// structured-output rung. A session takes it at its next turn or
+    /// response. Returns how many models had something to forget.
     pub async fn forget_learned_model_facts(
         &self,
         provider_id: &str,

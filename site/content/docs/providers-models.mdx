@@ -157,7 +157,7 @@ Provider 拒绝推理参数时（状态码 400 或 422，并指名该参数，�
 
 ## 上下文窗口与压缩 [#compaction]
 
-模型的上下文窗口依次取自：模型自己的 `contextWindowTokens`（[按模型的设置](#per-model)）、`[modelPolicy]` 中的 `contextWindowTokens`、Agent 从 Provider 的拒绝中学到的窗口（见下文，仅在它更小时）、Provider 模型目录最近一次报告的值、你打开 [models.dev](#models-dev) 时它给出的值、内置的常见模型表（如 GPT-5 系列、Claude、Gemini 2.5）。都没有时不会自动压缩。会话在创建或选择模型时取得窗口，并在它的每个轮次开始时再取一次，所以在读取模型目录之前创建的会话会在下一个轮次得到窗口，你在 `providers.toml` 中设置或修改的窗口也在下一个轮次生效。你设置的窗口优先。当没有任何来源再知道模型的窗口时，会话保留它已有的窗口，除非那是设置的、学到的或来自 models.dev 的、而现在已不存在（被删除、被[遗忘](#forget)，或关闭了 models.dev）：这时它的窗口重新变为未知。`/status` 显示窗口及其来源：`200K (reported)`、`128K (models.dev)`，或 `unknown (compacts on the Provider's error)`。
+模型的上下文窗口依次取自：模型自己的 `contextWindowTokens`（[按模型的设置](#per-model)）、`[modelPolicy]` 中的 `contextWindowTokens`、Agent 从 Provider 的拒绝中学到的窗口（见下文，仅在它更小时）、Provider 模型目录最近一次报告的值、你打开 [models.dev](#models-dev) 时它给出的值、内置的常见模型表（如 GPT-5 系列、Claude、Gemini 2.5）。都没有时不会自动压缩。会话在创建或选择模型时、读取它的 Provider 的模型目录时（在后台，或由 `/model`、`/providers` 或测试读取）、它的每个轮次开始时以及模型每次回答之后取得窗口。所以在读取模型目录之前创建的会话一读到目录就得到窗口，不必等到轮次（此时正在回答的会话在那次回答之后得到），你在 `providers.toml` 中设置或修改的窗口在下一个轮次生效。你设置的窗口优先。当没有任何来源再知道模型的窗口时，会话保留它已有的窗口，除非那是设置的、学到的或来自 models.dev 的、而现在已不存在（被删除、被[遗忘](#forget)，或关闭了 models.dev）：这时它的窗口重新变为未知。`/status` 显示窗口及其来源：`200K (reported)`、`128K (models.dev)`，或 `unknown (compacts on the Provider's error)`。
 
 上下文用到窗口的 `autoCompactThresholdPercent`（默认 80%）时，Agent 会在回合开始前或回合中自动压缩：把较早的对话总结成摘要，保留最近的消息。如果窗口剩下的部分已容不下一次回复，它会更早压缩：为模型的最大输出留出空间（模型目录没有报告时按 32,768 token 计），但最多为窗口的十分之一、至少 4,096 token，且不超过窗口的一半。所以在默认的 80% 下，窗口在 20,480 token 及以上时由阈值决定，而在 10,000 的窗口上 Agent 在 5,904 时压缩。
 
@@ -218,7 +218,7 @@ Agent 从 Provider 的拒绝中学到的信息（更小的窗口、模型不读�
 - 终端界面中的 `/model forget`，针对会话的模型；
 - `hanafubuki-agent providers forget ID [--model MODEL]`，针对该 Provider 的一个模型或它的全部模型（[命令行参考](/docs/cli-reference#providers)）。
 
-目录报告的信息、[models.dev](#models-dev) 的副本和按模型的设置都保留。会话在下一个轮次采用这一变化：它的窗口变为其他来源所知道的窗口，什么都不知道时则为未知。
+目录报告的信息、[models.dev](#models-dev) 的副本和按模型的设置都保留。会话在下一个轮次或模型的下一次回答之后采用这一变化：它的窗口变为其他来源所知道的窗口，什么都不知道时则为未知。
 
 标题、回顾、记忆提取和自动权限审查都会向模型要一个小的 JSON 回答。Agent 用协议自己的结构化输出（Responses 和 Chat Completions）或强制调用一个工具（Anthropic）来要它；Provider 或网关以状态码 400 或 422 拒绝时，立即改为强制调用工具再要一次，再不行就以纯文本要，模型记住行得通的方式 7 天，所以一周只有第一个请求会被拒绝（[内部实现](/docs/internals#structured-output-rungs)）。遗忘后会重新尝试协议自己的方式。
 

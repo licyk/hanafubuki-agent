@@ -120,7 +120,7 @@ icon: ListTree
 | `modelMetadata.discovery` | `"auto"`、`"off"` | `"auto"` | Agent 是否自己在后台列出各 Provider 的模型，以得知每个模型报告的信息（它的上下文窗口）                                                                                                              |
 | `modelMetadata.modelsDev` | `true`、`false`   | `false`  | Agent 是否下载 [models.dev](https://models.dev) 的公开目录，以补上其他来源都没说的模型信息（[models.dev](/docs/providers-models#models-dev)）。打开后，本机大约每天向第三方 models.dev 发送一次请求 |
 
-为 `"auto"` 时，Agent 启动时列出默认 Provider 的模型；此后每当在某个 Provider 上创建会话、选用它的模型或在它上面运行轮次时，列出该 Provider 的模型：每个 Provider 每天最多一次，列出失败后每 15 分钟最多一次。会话在下一个轮次采用得知的信息（[上下文窗口与压缩](/docs/providers-models#compaction)）。没有什么会等待列表；失败的列出只是稍后再试。`"off"` 时 Agent 不自己列出；`/model` 和 `/providers` 的模型列表、Provider 的测试和 `doctor --online` 仍会列出，它们报告的信息也仍会保存。嵌入 Agent 的应用用同样的方式关闭它，写在它的 Agent 配置的 `config.toml` 里。
+为 `"auto"` 时，Agent 启动时列出默认 Provider 的模型；此后每当在某个 Provider 上创建会话、选用它的模型或在它上面运行轮次时，列出该 Provider 的模型：每个 Provider 每天最多一次，列出失败后每 15 分钟最多一次。会话在列表记录下来时立即采用它报告的窗口，其余得知的信息在下一个轮次采用（[上下文窗口与压缩](/docs/providers-models#compaction)）。没有什么会等待列表；失败的列出只是稍后再试。`"off"` 时 Agent 不自己列出；`/model` 和 `/providers` 的模型列表、Provider 的测试和 `doctor --online` 仍会列出，它们报告的信息也仍会保存。嵌入 Agent 的应用用同样的方式关闭它，写在它的 Agent 配置的 `config.toml` 里。
 
 `modelsDev` 默认关闭，除非你打开它。打开后，Agent 在后台下载 `https://models.dev/api.json`（在启动时，以及会话绑定到某个 Provider 时，与模型发现相同，不论 `discovery` 的值），User-Agent 写明 Agent 及其版本，不含任何关于你的信息；下载成功后每天最多一次，失败后每 15 分钟最多一次。副本保存在数据目录的 `model-metadata.json` 中，使用一周；models.dev 无法访问或返回无法使用的内容时不提示，继续使用已保存的副本。关闭后，副本被丢弃。终端界面中的 `/config modelMetadata` 可以编辑这两个键。
 

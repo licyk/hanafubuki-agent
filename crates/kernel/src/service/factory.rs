@@ -175,9 +175,10 @@ impl AgentService {
         }
     }
 
-    /// Lists the models of the Provider at `base_url`, and records the
-    /// listing in the model metadata. Cancelled through `cancellation`, it
-    /// records nothing.
+    /// Lists the models of the Provider at `base_url`, records the listing
+    /// in the model metadata, and gives the loaded sessions on that
+    /// Provider the windows it reported. Cancelled through `cancellation`,
+    /// it records nothing.
     pub async fn list_provider_models(
         &self,
         protocol: ModelApiProtocol,
@@ -210,6 +211,7 @@ impl AgentService {
         self.inner
             .model_metadata
             .record_listing(&endpoint_key, &entries, now_millis_u64());
+        self.take_listed_context_windows(&endpoint_key).await;
         Ok(entries)
     }
 

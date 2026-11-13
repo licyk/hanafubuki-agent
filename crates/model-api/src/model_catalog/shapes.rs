@@ -1,6 +1,10 @@
 //! The fields a listing entry reports its model's limits and capabilities
 //! under, across the listing shapes: OpenAI-compatible servers, OpenRouter,
-//! Anthropic, vLLM and Codex.
+//! Anthropic, vLLM and Codex; and the windows Hoshimi reads (`83f7813`) of
+//! Gemini (`inputTokenLimit`, `core/providers/cloud.py`), Mistral
+//! (`max_context_length`, `catalog_profiles.py`), Alibaba Cloud
+//! (`model_info.context_window`, `catalog_profiles.py`) and Venice
+//! (`model_spec.availableContextTokens`, `station_catalogs.py`).
 //!
 //! Reasoning efforts are the first list of these that names any: Codex's
 //! `supported_reasoning_levels[].effort`, OpenRouter's
@@ -26,6 +30,10 @@ const CONTEXT_WINDOW_FIELDS: &[&[&str]] = &[
     &["context_window"],
     &["contextWindow"],
     &["top_provider", "context_length"],
+    &["inputTokenLimit"],
+    &["max_context_length"],
+    &["model_info", "context_window"],
+    &["model_spec", "availableContextTokens"],
 ];
 
 /// Anthropic's `max_tokens` is the largest output it accepts.

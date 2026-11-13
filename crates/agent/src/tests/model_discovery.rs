@@ -1,7 +1,7 @@
 //! Model discovery against a fake Provider that answers `GET /models` apart
 //! from the turns' event streams: the Agent lists the default Provider at
-//! start, in the background, a session takes what the listing reported at
-//! its next turn, and the listing is rate-limited, turned off by
+//! start, in the background, a session takes what the listing reported as
+//! soon as it is recorded, and the listing is rate-limited, turned off by
 //! `modelMetadata.discovery = "off"` and cancelled at shutdown. The same
 //! worker fetches models.dev's catalogue when `modelMetadata.modelsDev` is
 //! on, from a fake server too, through the host's proxy.
@@ -93,10 +93,11 @@ fn stop(service: &AgentApplicationService) {
 
 /// The start lists the default Provider in the background: a session is
 /// created and runs a turn while the listing's answer is held, and takes
-/// the reported window at its next turn, its usage measured against it.
-/// The next run recovers the session as it was rewritten.
+/// the reported window when the listing is recorded, before any other
+/// turn, its usage measured against it. The next run recovers the session
+/// as it was rewritten.
 #[tokio::test]
-async fn a_session_created_before_the_listing_lands_takes_its_window_at_its_next_turn() {
+async fn a_session_created_before_the_listing_lands_takes_its_window_when_it_lands() {
     let release = Arc::new(tokio::sync::Notify::new());
     let server = FakeServer::with_listings(
         vec![
@@ -138,7 +139,15 @@ async fn a_session_created_before_the_listing_lands_takes_its_window_at_its_next
     assert_eq!(window(&service), None, "the listing had not landed");
 
     release.notify_one();
-    wait_until("the listing recorded", || recorded(&service, &server)).await;
+    wait_until("the listed window taken", || {
+        window(&service) == Some(123_456)
+    })
+    .await;
+    assert_eq!(
+        session_window(&service, session.id),
+        Some((123_456, ModelMetadataSource::Reported))
+    );
+    assert_eq!(server.requests().len(), 1, "no turn took it");
     service
         .start_turn(session.id, "second".into())
         .await
@@ -152,6 +161,62 @@ async fn a_session_created_before_the_listing_lands_takes_its_window_at_its_next
     let reopened = open(&paths, &config, ModelDiscoveryPolicy::OFF);
     reopened.core.activate_session(session.id).unwrap();
     assert_eq!(window(&reopened), Some(123_456));
+    stop(&reopened);
+    let _ = std::fs::remove_dir_all(paths.app_data_dir);
+}
+
+/// A listing that lands after a session's creation, before it runs any
+/// turn: `/status`'s window and the window its compaction measures against
+/// are the listed one at once, persisted, with no request of the model.
+#[tokio::test]
+async fn a_listing_after_a_sessions_creation_reaches_it_before_any_turn() {
+    let release = Arc::new(tokio::sync::Notify::new());
+    let server = FakeServer::with_listings(
+        Vec::new(),
+        vec![FakeListing::ok(LISTING).held(release.clone())],
+    )
+    .await;
+    let (paths, config) = configured("model-discovery-before-a-turn", &server.base_url);
+    let service = open(&paths, &config, ModelDiscoveryPolicy::every(HOUR, HOUR));
+    wait_until("the listing at start", || {
+        server.listing_requests().len() == 1
+    })
+    .await;
+    let session = service
+        .create_session(AgentSessionMode::Default, None)
+        .await
+        .unwrap();
+    assert_eq!(session_window(&service, session.id), None);
+
+    release.notify_one();
+    // The session's own commit, not only the model metadata.
+    let revision =
+        |service: &AgentApplicationService| service.snapshot(session.id).unwrap().revision;
+    wait_until("the listed window taken", || {
+        revision(&service) > session.revision
+    })
+    .await;
+
+    assert_eq!(
+        session_window(&service, session.id),
+        Some((123_456, ModelMetadataSource::Reported))
+    );
+    assert!(server.requests().is_empty());
+    let taken = revision(&service);
+    stop(&service);
+    // The window compaction measures against is the session's own,
+    // persisted: without the model metadata the next run still has it.
+    std::fs::remove_file(
+        AgentStoragePaths::under(paths.data_dir.join("agent-test")).model_metadata_file,
+    )
+    .unwrap();
+    let reopened = open(&paths, &config, ModelDiscoveryPolicy::OFF);
+    reopened.core.activate_session(session.id).unwrap();
+    assert_eq!(revision(&reopened), taken);
+    assert_eq!(
+        session_window(&reopened, session.id),
+        Some((123_456, ModelMetadataSource::Reported))
+    );
     stop(&reopened);
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }
@@ -255,6 +320,8 @@ async fn selecting_another_providers_model_lists_that_provider() {
     assert_eq!(server.listing_requests().len(), 1);
     assert!(other.listing_requests().is_empty());
 
+    // The listing may have given the session its window since.
+    let session = service.snapshot(session.id).unwrap();
     service
         .set_session_model(AgentSessionModelSelectionRequest {
             session_id: session.id,
