@@ -37,6 +37,7 @@ mod scroll_state;
 mod selection_popup_common;
 mod textarea;
 
+use std::cell::Cell;
 use std::time::Duration;
 
 use hanafubuki_agent::{
@@ -71,6 +72,7 @@ use module_view::{ModuleView, ViewFailures};
 pub(crate) use multi_select_picker::{MultiSelectItem, MultiSelectPicker};
 use paste_burst::PasteBurst;
 pub(crate) use pending_input_preview::PendingInput;
+use pending_input_preview::ReservedPendingInput;
 use request_user_input::RequestUserInputOverlay;
 pub(crate) use selection_popup_common::{render_menu_surface, GenericDisplayRow};
 pub(crate) use textarea::{TextArea, TextAreaState};
@@ -121,6 +123,9 @@ pub(crate) struct BottomPane {
     status: Option<StatusIndicatorWidget>,
     /// The messages waiting for the turn, shown above the composer.
     pending_input: PendingInput,
+    /// The rows the waiting messages reached during the turn, and the
+    /// width they were laid out at ([`ReservedPendingInput`]).
+    pending_rows: Cell<(u16, u16)>,
 
     /// What the commands' views reported when they panicked.
     view_failures: ViewFailures,
@@ -157,6 +162,7 @@ impl BottomPane {
             is_task_running: false,
             status: None,
             pending_input: PendingInput::default(),
+            pending_rows: Cell::default(),
             view_failures: ViewFailures::default(),
         }
     }
@@ -452,6 +458,7 @@ impl BottomPane {
         } else {
             // Hide the status indicator when a task completes, but keep other modal views.
             self.hide_status_indicator();
+            self.pending_rows.take();
         }
     }
 
@@ -611,7 +618,15 @@ impl BottomPane {
                 flex.push(0, RenderableItem::Borrowed(status));
                 flex.push(0, RenderableItem::Owned("".into()));
             }
-            if !self.pending_input.is_empty() {
+            if self.is_task_running {
+                flex.push(
+                    0,
+                    RenderableItem::Owned(Box::new(ReservedPendingInput {
+                        input: &self.pending_input,
+                        reached: &self.pending_rows,
+                    })),
+                );
+            } else if !self.pending_input.is_empty() {
                 flex.push(0, RenderableItem::Borrowed(&self.pending_input));
                 flex.push(0, RenderableItem::Owned("".into()));
             }

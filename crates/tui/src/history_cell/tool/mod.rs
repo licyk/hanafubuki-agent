@@ -7,6 +7,12 @@
 //! with a body by display, each in its own module, its rows under `└`.
 //! Expanded (the control, Ctrl-T's transcript) shows the display whole.
 //!
+//! A call keeps its shape while it changes: from its start until what it
+//! shows arrives, a dim row stands under its header (`(running…)` for a
+//! command, `…` otherwise) where its first rows will be, and a command's
+//! clock goes after its header only where its widest fits, so the header
+//! wraps the same as the clock counts and as it will once finished.
+//!
 //! Consecutive read, list and search calls share one entry, Codex's
 //! exploration cell (`exploration`): its activity ids are its calls'.
 
@@ -33,6 +39,7 @@ use live_output::LiveOutput;
 use super::{plain_lines, ActivityDisclosure, HistoryCell};
 use crate::render::line_utils::{line_to_static, prefix_lines};
 use crate::shimmer::spinner;
+use crate::status_indicator_widget::fmt_elapsed_tenths;
 use crate::text_formatting::strip_terminal_controls;
 use crate::wrapping::{word_wrap_line, RtOptions};
 
@@ -48,6 +55,9 @@ const PREVIEW_LINES: usize = 3;
 const SPINNER_TICK_MILLIS: u128 = 600;
 /// A running command's clock's period, in tenths of a second.
 const CLOCK_TICK_MILLIS: u128 = 100;
+/// The columns kept for a running command's clock at the end of its
+/// header: its widest, ` · 99h 59m 59s`.
+const CLOCK_COLUMNS: usize = 14;
 
 /// Whether consecutive calls of the tool share one entry. Decided by name:
 /// a call joins its entry when it starts, before any display.
@@ -78,6 +88,8 @@ struct Outcome {
     /// What it shows; `None` until its display arrives, and when there is
     /// none.
     display: Option<AgentToolDisplay>,
+    /// Its display arrived, or it will have none.
+    shown: bool,
 }
 
 pub(crate) fn new_tool_call(
@@ -120,6 +132,7 @@ impl ToolCallCell {
             call.outcome.get_or_insert(Outcome {
                 is_error: true,
                 display: None,
+                shown: true,
             });
         }
     }
@@ -129,12 +142,13 @@ impl ToolCallCell {
             call.outcome = Some(Outcome {
                 is_error,
                 display: None,
+                shown: false,
             });
         }
     }
 
     /// What the call's presenter shows: its subject, when it gives one,
-    /// and the finished call's display.
+    /// and the finished call's display, `None` when it has none.
     pub(crate) fn show(&mut self, call_id: &str, shown: AgentToolCallDisplay) {
         let Some(call) = self.call_mut(call_id) else {
             return;
@@ -147,6 +161,15 @@ impl ToolCallCell {
                 call.live = None;
             }
             outcome.display = shown.display;
+            outcome.shown = true;
+        }
+    }
+
+    /// The call `call_id` started `ago`.
+    #[cfg(test)]
+    pub(crate) fn started_ago(&mut self, call_id: &str, ago: std::time::Duration) {
+        if let Some(call) = self.call_mut(call_id) {
+            call.start_time = Instant::now() - ago;
         }
     }
 
@@ -172,7 +195,8 @@ impl ToolCallCell {
             [call] => {
                 let view = call.view(Extent::new(width, expanded));
                 let body = if expanded { view.details } else { view.preview };
-                frame(call.bullet(view.failed), view.title, body, width)
+                let bullet = call.bullet(view.failed);
+                frame(bullet, view.title, call.clock(), body, width)
             }
             calls => exploration::lines(calls, width, expanded),
         }
@@ -292,10 +316,37 @@ impl ToolCall {
             None => text::running(self),
             Some(_) => text::called(self, failed),
         };
-        match &self.live {
+        let mut view = match &self.live {
             Some(live) => command::streamed(self, header, live, extent),
             None => header,
+        };
+        if self.outcome.as_ref().is_none_or(|outcome| !outcome.shown) {
+            for rows in [&mut view.preview, &mut view.details] {
+                if rows.is_empty() {
+                    rows.push(self.placeholder());
+                }
+            }
         }
+        view
+    }
+
+    /// The row a call shows under its header until its first rows come.
+    fn placeholder(&self) -> Line<'static> {
+        let running_command = self.outcome.is_none() && self.name == EXEC_COMMAND;
+        Line::from(
+            if running_command {
+                "(running…)"
+            } else {
+                "…"
+            }
+            .dim(),
+        )
+    }
+
+    /// The time a running command has run so far, ` · 3.4s`.
+    fn clock(&self) -> Option<Span<'static>> {
+        (self.outcome.is_none() && self.name == EXEC_COMMAND)
+            .then(|| format!(" · {}", fmt_elapsed_tenths(self.start_time.elapsed())).dim())
     }
 
     fn display_view(&self, display: &AgentToolDisplay, failed: bool, extent: Extent) -> View {
@@ -370,17 +421,27 @@ impl ToolCall {
     }
 }
 
-/// The header (`bullet` and `title`, wrapped under itself), then `body`
-/// under `└`.
+/// The header (`bullet` and `title`, wrapped under itself, then `clock`),
+/// then `body` under `└`. The clock follows the header's last row when its
+/// widest fits there and is left out otherwise: it never adds a row, and
+/// whether it shows never depends on the time it reads.
 fn frame(
     bullet: Span<'static>,
     title: Vec<Span<'static>>,
+    clock: Option<Span<'static>>,
     body: Vec<Line<'static>>,
     width: u16,
 ) -> Vec<Line<'static>> {
+    let columns = usize::from(width).max(1);
     let mut spans = vec![bullet, " ".into()];
     spans.extend(title);
-    let mut lines = wrapped(Line::from(spans), usize::from(width).max(1), "    ");
+    let mut lines = wrapped(Line::from(spans), columns, "    ");
+    if let Some(last) = lines
+        .last_mut()
+        .filter(|last| last.width() + CLOCK_COLUMNS <= columns)
+    {
+        last.spans.extend(clock);
+    }
     lines.extend(prefix_lines(body, "  └ ".dim(), "    ".into()));
     lines
 }

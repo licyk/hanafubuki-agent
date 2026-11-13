@@ -25,7 +25,7 @@ fn rows(rendered: &str) -> Vec<&str> {
 #[test]
 fn a_running_command_shows_the_last_lines_it_printed_and_expands_to_the_stream() {
     let mut cell = running("cargo test");
-    assert_eq!(render(&cell, 60).lines().count(), 1);
+    assert_eq!(rows(&render(&cell, 60)), ["  └ (running…)"]);
     cell.push_output("call-1", &numbered(5), false);
     cell.push_output("call-1", "compiling\tfoo", false);
     let collapsed = render(&cell, 60);
@@ -102,7 +102,7 @@ fn a_finished_command_keeps_its_rows_until_its_display_takes_over() {
 fn output_for_another_call_changes_nothing() {
     let mut cell = running("sleep 1");
     cell.push_output("call-2", "other\n", false);
-    assert_eq!(render(&cell, 60).lines().count(), 1);
+    assert_eq!(rows(&render(&cell, 60)), ["  └ (running…)"]);
 }
 
 #[test]

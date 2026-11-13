@@ -107,7 +107,7 @@ fn a_tool_call_completes_where_it_started_in_both_presentations() {
         entries.clear();
         tool_started(&mut chat, "call-1", "exec_command", Some("ls"));
         assert!(!transcript(&events, &mut entries));
-        assert_eq!(texts(&entries), vec!["• Running ls"]);
+        assert_eq!(texts(&entries), vec!["• Running ls\n  └ (running…)"]);
         // The transcript (or the tail) shows it; the chat does not draw it.
         assert!(!screen(&chat, 60).contains("Running ls"));
         let revision = entries[0].revision();
@@ -118,7 +118,7 @@ fn a_tool_call_completes_where_it_started_in_both_presentations() {
             is_error: false,
         });
         assert!(!transcript(&events, &mut entries));
-        assert_eq!(texts(&entries), vec!["• Ran ls"]);
+        assert_eq!(texts(&entries), vec!["• Ran ls\n  └ …"]);
         assert!(!chat.has_live_entries());
         tool_displayed(&mut chat, "call-1", None, "Cargo.toml");
         assert_eq!(transcript(&events, &mut entries), !owned);
@@ -373,7 +373,7 @@ fn an_entry_that_starts_while_a_message_streams_goes_in_its_place_at_once() {
         transcript(&events, &mut entries);
         assert_eq!(
             texts(&entries),
-            vec!["• Looking.", "• Thinking …", "• Running read_file"]
+            vec!["• Looking.", "• Thinking …", "• Running read_file\n  └ …"]
         );
         chat.handle_turn_update(TurnUpdate::ReasoningCompleted {
             reasoning_id: reasoning_id(1),
@@ -446,9 +446,9 @@ fn exploring_calls_in_a_row_share_an_entry_until_another_comes() {
             texts,
             vec![
                 "• Explored\n  └ Read a.rs\n    List src",
-                "• Running ls",
+                "• Running ls\n  └ (running…)",
                 "• Thinking …",
-                "• Running read_file: b.rs",
+                "• Running read_file: b.rs\n  └ …",
             ]
         );
     }

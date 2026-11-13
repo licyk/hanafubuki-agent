@@ -575,6 +575,10 @@ path = "crates/tui/src/app/tests/thinking.rs"
 reason = "Thinking entries on an emulated terminal in both presentations, written for the Agent's timeline."
 
 [[original]]
+path = "crates/tui/src/app/tests/stability.rs"
+reason = "A tool call's entry frame by frame on an emulated terminal in both presentations, written for the timeline's stable layout."
+
+[[original]]
 path = "crates/tui/src/agent_bridge/replay/tests.rs"
 reason = "The tool display reply's guarantee, written for the Agent's timeline."
 
@@ -613,6 +617,10 @@ reason = "The run of exploring calls in one entry, written with it."
 [[original]]
 path = "crates/tui/src/history_cell/tool/tests/streamed.rs"
 reason = "A command's entry while its output streams and when its display takes over, written with it."
+
+[[original]]
+path = "crates/tui/src/history_cell/tool/tests/shape.rs"
+reason = "A call's reserved row and its clock's place in the header, written for the timeline's stable layout."
 
 [[original]]
 path = "crates/tui/src/history_cell/tool/live_output/tests.rs"

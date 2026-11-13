@@ -830,6 +830,7 @@ mod session_commands;
 mod settings;
 mod settings_center;
 mod side;
+mod stability;
 mod subagents;
 mod thinking;
 mod tools;

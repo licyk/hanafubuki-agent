@@ -310,6 +310,33 @@ fn waiting_messages_show_between_the_status_and_the_composer() {
 }
 
 #[test]
+fn waiting_messages_keep_their_rows_until_the_turn_ends() {
+    let (mut pane, _rx) = pane();
+    pane.set_task_running(true);
+    let width = 60;
+    let idle = pane.desired_height(width);
+    let steer = |text: &str| PendingInput {
+        steers: vec![text.to_string()],
+        held: Vec::new(),
+        queued: Vec::new(),
+    };
+    pane.set_pending_input(steer("Check the tests first."));
+    let waiting = pane.desired_height(width);
+    assert!(waiting > idle);
+    // The turn reads it: its rows stay, blank, and the next message's
+    // take their place.
+    pane.set_pending_input(PendingInput::default());
+    assert_eq!(pane.desired_height(width), waiting);
+    let area = Rect::new(0, 0, width, waiting);
+    assert!(!render_snapshot(&pane, area).contains("Check the tests"));
+    pane.set_pending_input(steer("Then the docs."));
+    assert_eq!(pane.desired_height(width), waiting);
+    pane.set_pending_input(PendingInput::default());
+    pane.set_task_running(false);
+    assert!(pane.desired_height(width) < idle);
+}
+
+#[test]
 fn tabs_within_a_paste_burst_are_the_pastes_and_send_nothing() {
     for running in [false, true] {
         let (mut pane, rx) = pane();

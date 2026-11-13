@@ -2,7 +2,7 @@
 
 use hanafubuki_agent::{AgentListingEntry, AgentListingEntryKind, AgentToolDisplay};
 
-use super::{both, render};
+use super::{both, no_display, render};
 use crate::history_cell::tool::{explores, new_tool_call, ToolCallCell};
 use crate::history_cell::{ActivityDisclosure, HistoryCell};
 
@@ -68,6 +68,7 @@ fn a_run_explores_while_a_call_runs_then_shows_a_row_per_call_snapshot() {
     );
     run.finish("read-3", read("fn a() {}\n"));
     run.complete("search-1", true);
+    run.show("search-1", no_display());
     assert_eq!(run.transcript_animation_tick(), None);
     insta::assert_snapshot!(both(&run, 60));
 }

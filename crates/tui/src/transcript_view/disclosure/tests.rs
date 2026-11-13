@@ -287,3 +287,28 @@ fn a_long_message_of_yours_shows_its_first_rows_and_a_control() {
     view.handle_mouse(left(MouseEventKind::Up, 6, header), &cells);
     assert!(!text(&render(&mut view, &cells, 30, 40)).contains("line 13"));
 }
+
+#[test]
+fn a_toggle_keeps_the_entrys_header_on_its_row() {
+    let cells: Vec<Arc<dyn HistoryCell>> = (1..=4)
+        .map(|n| tool_call(&format!("call-{n}"), 12))
+        .collect();
+    // An entry is a blank row, its header, three rows and its control: at
+    // 18 rows the top row is the second entry's blank row, at 17 its header.
+    for (height, nth) in [(18, 0), (17, 0), (17, 1)] {
+        let mut view = TranscriptView::default();
+        let frame = render(&mut view, &cells, 30, height);
+        let header = row_of(&frame, "• Called shell", nth);
+        for _ in 0..2 {
+            view.handle_mouse(left(MouseEventKind::Down, 20, header), &cells);
+            view.handle_mouse(left(MouseEventKind::Up, 20, header), &cells);
+            let frame = render(&mut view, &cells, 30, height);
+            assert_eq!(
+                row_of(&frame, "• Called shell", nth),
+                header,
+                "{}",
+                text(&frame)
+            );
+        }
+    }
+}

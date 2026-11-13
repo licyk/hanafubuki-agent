@@ -8,6 +8,12 @@
 //! the messages queued with Tab, with the key that puts the last one back
 //! in the composer. A message shows its first three lines. Codex's links
 //! and the questions sharing the group are not ported.
+//!
+//! While a turn runs, the preview keeps the rows it reached
+//! ([`ReservedPendingInput`]): a message the turn reads leaves blank rows
+//! until the turn ends, so the conversation above does not move each time.
+
+use std::cell::Cell;
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
@@ -123,6 +129,33 @@ impl Renderable for PendingInput {
 
     fn desired_height(&self, width: u16) -> u16 {
         u16::try_from(self.lines(width).len()).unwrap_or(u16::MAX)
+    }
+}
+
+/// The preview while a turn runs, with the blank row after it: never fewer
+/// rows than it reached at this width during the turn.
+pub(super) struct ReservedPendingInput<'a> {
+    pub(super) input: &'a PendingInput,
+    /// The width and the rows reached at it.
+    pub(super) reached: &'a Cell<(u16, u16)>,
+}
+
+impl Renderable for ReservedPendingInput<'_> {
+    fn render(&self, area: Rect, buf: &mut Buffer) {
+        self.input.render(area, buf);
+    }
+
+    fn desired_height(&self, width: u16) -> u16 {
+        let rows = match self.input.desired_height(width) {
+            0 => 0,
+            rows => rows.saturating_add(1),
+        };
+        let rows = match self.reached.get() {
+            (at, reached) if at == width => rows.max(reached),
+            _ => rows,
+        };
+        self.reached.set((width, rows));
+        rows
     }
 }
 

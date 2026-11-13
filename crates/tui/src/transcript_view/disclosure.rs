@@ -458,7 +458,9 @@ impl TranscriptView {
 
     /// Where a reader stays across a change of disclosure: the entry at the
     /// top of the view, at the same text unless the change `toggles` it
-    /// (then at its start, its offsets changing); else `fallback`'s start.
+    /// past its header (then at its start, its offsets changing); else
+    /// `fallback`'s start. So an entry toggled with its header in view
+    /// keeps the header on its row.
     fn disclosure_anchor(
         &self,
         cells: &[Arc<dyn HistoryCell>],
@@ -472,17 +474,22 @@ impl TranscriptView {
                 Arc::clone(&visible.activity_ids),
                 offset,
                 visible.layout.row_for_offset(offset) as isize - visible.row as isize,
+                visible
+                    .layout
+                    .header_row()
+                    .is_some_and(|header| visible.row <= header),
             )
         });
-        // Offsets hold only in an unchanged cell; an entry found by its
+        // Offsets hold only in an unchanged cell, and in a toggled one up
+        // to its header, which both its forms share; an entry found by its
         // activities is anchored at its first row.
         previous_top
-            .and_then(|(top_key, top_ids, offset, row_bias)| {
+            .and_then(|(top_key, top_ids, offset, row_bias, above_header)| {
                 let unchanged = cells
                     .iter()
                     .position(|cell| EntryKey::cell(cell) == top_key);
                 let top = unchanged.or_else(|| self.canonical_activity_index(cells, &top_ids))?;
-                let preserve_offset = unchanged.is_some() && !toggles(top);
+                let preserve_offset = unchanged.is_some() && (above_header || !toggles(top));
                 Some(Anchor {
                     key: cells.get(top).map_or(EntryKey::End, EntryKey::cell),
                     index: top,

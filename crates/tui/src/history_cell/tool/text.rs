@@ -12,19 +12,15 @@ use ratatui::text::{Line, Span};
 
 use super::{clipped, wrapped, Extent, ToolCall, View, COMPRESS, EXEC_COMMAND, PREVIEW_LINES};
 use crate::history_cell::ActivityDisclosure;
-use crate::status_indicator_widget::fmt_elapsed_tenths;
 
-/// `Running` and the command with the time so far, or the tool and its
-/// subject.
+/// `Running` and the command (its clock follows, see `frame`), or the
+/// tool and its subject.
 pub(super) fn running(call: &ToolCall) -> View {
     let mut title = vec!["Running".bold(), " ".into()];
     if call.name == EXEC_COMMAND && call.subject.is_some() {
         title.push(call.subject_or("").into());
     } else {
         title.extend(named(call));
-    }
-    if call.name == EXEC_COMMAND {
-        title.push(format!(" · {}", fmt_elapsed_tenths(call.start_time.elapsed())).dim());
     }
     View::title(title, false)
 }
