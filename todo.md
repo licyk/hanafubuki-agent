@@ -113,6 +113,54 @@ and any module-size exception.
 - [ ] M8: JSON pretty-printing, MCP content summaries, the diff
       improvements.
 
+## Plan: a sub-agent's model, Provider and reasoning effort, chosen at each spawn (2026-11-13)
+
+The plan is [docs/plan-subagent-model-overrides.md](docs/plan-subagent-model-overrides.md),
+read from main `be56861` and Codex `57a808a392`.
+
+Findings that changed the request's premises (the plan's §1):
+
+- `select_role_model` skips the model selection when the model id equals
+  the parent's, so a `provider` with the parent's model id would keep the
+  parent's Provider: the pair is compared instead.
+- The child is created and renamed before its model is selected, so a
+  failed selection leaves an idle child holding the task name: everything
+  is checked before `create_child`.
+- A model change applies the **global** model policy (effort, input
+  capabilities, compaction, turn budget); there is no per-Provider policy.
+  The window and the image capability are refreshed inside
+  `set_session_model_configuration`, so the spawn is covered whenever it
+  selects a model.
+- The kernel keeps each Provider's recorded listing but exposes no read of
+  its ids: a new `listed_models`.
+- `exec --json` reports no sub-agent; nothing changes there.
+- Codex lets a role override the requested model, and gives an explicit
+  model its own default effort; ours keeps explicit > role > parent and the
+  parent's effort (D2, flagged).
+
+Each milestone is one commit on main with green CI, strictly in order,
+after M8 above: O1 → O2 → O3. Each records, when done: what landed and any
+deviation, the validation commands that ran and those skipped, the CI
+run's URL (no Windows or macOS claim from a Linux run), whether goldens
+changed, what Hanafubuki must change at its next pin, and any module-size
+exception.
+
+- [ ] Decisions: D2 (flagged), D7–D19 of the plan's §4 answered, and the
+      open questions Q1–Q6 of §5 (D1, D3–D6 came with the request).
+- [ ] O1: `spawn_agent`'s `model`, `reasoning_effort` and `provider`, with
+      or without `agent_type`. Precedence explicit > role > parent per
+      field, the pair compared. Field-named checks before the child
+      exists: an enabled Provider (id or name); a model against the
+      recorded listing ∪ `models."<id>"` (passed through with no listing);
+      an effort against the known levels (`ModelMetadata::known_reasoning`,
+      E1's rule, shared). One commit for pair and effort. Spawn's result
+      names them. The 13 goldens with the spec regenerated on purpose.
+- [ ] O2: the guidance lists the enabled Providers with their known models
+      and levels, bounded (8 × 8), stable for the prompt cache, built in
+      `prepare`. The 11 goldens with the guidance regenerated on purpose.
+- [ ] O3: a child's Provider, model and effort in `list_agents`,
+      `AgentSubagentStatus` and `/subagents` (status cell and picker).
+
 ## Plan: a registry-driven settings center, the command center, and the conversation timeline (2026-11-12)
 
 **Complete (2026-11-13):** every item below is done; T7 was the last.
