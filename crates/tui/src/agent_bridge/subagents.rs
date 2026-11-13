@@ -1,5 +1,6 @@
-//! The session's subagents onto the facade: `/subagents`' list, the
-//! interrupt `/agents` asks for, and a watch over them while they run.
+//! The session's subagents onto the facade: `/subagents`' list, the one
+//! Alt+Left and Alt+Right step through, the interrupt `/agents` asks for,
+//! and a watch over them while they run.
 //!
 //! A subagent's turns are run by the `subagents` plugin, not by the
 //! interface, so their events reach no sink of the interface's: they land
@@ -27,6 +28,7 @@ use hanafubuki_agent::{
 };
 
 use super::{AgentBridge, AgentReply, TurnUpdate};
+use crate::app::WorkspaceEvent;
 use crate::app_event::{AppEvent, AppEventSender};
 
 /// How often the watch reads the subagents while they run.
@@ -113,6 +115,30 @@ impl AgentBridge {
             }
         }
         None
+    }
+
+    /// The subagents of `parent`, read off the interface's thread, for
+    /// Alt+Left or Alt+Right (`forward`) to step through.
+    pub(crate) fn list_subagents_to_step(&self, parent: AgentSessionId, forward: bool) {
+        let agent = self.agent.clone();
+        let app_event_tx = self.app_event_tx.clone();
+        self.agent.runtime().handle().spawn(async move {
+            let listed = agent
+                .subagents(parent)
+                .await
+                .map(|statuses| {
+                    statuses
+                        .into_iter()
+                        .map(|status| status.session_id)
+                        .collect()
+                })
+                .map_err(subagents_error);
+            app_event_tx.send(AppEvent::Workspace(WorkspaceEvent::StepAgentListed {
+                parent,
+                forward,
+                listed,
+            }));
+        });
     }
 
     /// What the bridge makes of `/subagents`' list: it starts the watch

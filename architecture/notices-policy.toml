@@ -477,12 +477,8 @@ path = "crates/tui/src/agent_bridge/status/tests.rs"
 reason = "The Git branch read from HEAD, in a repository and a worktree."
 
 [[original]]
-path = "crates/tui/src/model_facts.rs"
-reason = "How the interface names what the Agent's model metadata knows of a model (a window and its source, a listing entry's badges, the reasoning efforts offered), which Codex does not have."
-
-[[original]]
 path = "crates/tui/src/model_facts/tests.rs"
-reason = "The tests of the model metadata's names in the interface."
+reason = "The tests of the model metadata's names in the interface, the efforts offered and their steps."
 
 [[original]]
 path = "crates/tui/src/tui/input.rs"
@@ -541,8 +537,12 @@ path = "crates/tui/src/app/tests/context.rs"
 reason = "/context end to end over the standalone Agent, in both presentations."
 
 [[original]]
+path = "crates/tui/src/app/tests/shortcuts.rs"
+reason = "The keys the shortcut overlay lists (the mode, the effort steps, the step through the subagents) end to end over the standalone Agent."
+
+[[original]]
 path = "crates/tui/src/agent_bridge/effort.rs"
-reason = "/effort's calls onto the facade: the session's model metadata and its reasoning effort set."
+reason = "/effort's calls onto the facade, and its keys': the session's model metadata, and its reasoning effort set or stepped a level."
 
 [[original]]
 path = "crates/tui/src/commands/effort/tests.rs"

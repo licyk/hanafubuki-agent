@@ -22,20 +22,29 @@ use crate::settings_center::PageOverride;
 
 impl ChatWidget {
     pub(crate) fn dispatch_command(&mut self, command: &'static CommandSpec, args: String) {
-        if !command.during_task && (self.bottom_pane.is_task_running() || self.has_pending_input())
-        {
-            let message = format!(
-                "'/{}' is disabled while a task is in progress.",
-                command.name
-            );
-            self.add_to_history(history_cell::new_error_event(message));
-            self.request_redraw();
+        if self.refuses_during_task(command) {
             return;
         }
         if command.needs_session && !self.bottom_pane.command_disabled(command.name) {
             self.app_event_tx.send(AppEvent::Op(Op::EnsureSession));
         }
         self.run_command(command, |context| (command.dispatch)(context, &args));
+    }
+
+    /// Whether `command` waits for the task (or the messages waiting) to
+    /// end, which the transcript is told.
+    pub(super) fn refuses_during_task(&mut self, command: &CommandSpec) -> bool {
+        let refused = !command.during_task
+            && (self.bottom_pane.is_task_running() || self.has_pending_input());
+        if refused {
+            let message = format!(
+                "'/{}' is disabled while a task is in progress.",
+                command.name
+            );
+            self.add_to_history(history_cell::new_error_event(message));
+            self.request_redraw();
+        }
+        refused
     }
 
     /// Runs `call` as `command`'s: a panic in it turns the command off
@@ -173,6 +182,9 @@ impl ChatWidget {
                 },
                 None,
             )),
+            TurnUpdate::EffortUnchanged(why) => {
+                self.add_to_history(history_cell::new_info_event(why, None))
+            }
             TurnUpdate::LearnedModelFactsForgotten { model, forgotten } => {
                 self.add_to_history(history_cell::new_info_event(
                     if forgotten {

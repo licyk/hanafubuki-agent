@@ -5,12 +5,14 @@
 //! else `tui.keymap.global.<name>` when that is no global action's, else its
 //! defaults. What cannot be used is left out with a warning: an unknown
 //! context or action, a key that is not one, a key that types text beside
-//! the composer, and a binding that conflicts with another action's or
-//! with a key the interface keeps; the action keeps its defaults then.
+//! the composer (but for an action read only on an empty composer), and a
+//! binding that conflicts with another action's or with a key the
+//! interface keeps; the action keeps its defaults then.
 
 use std::collections::BTreeMap;
 
-use super::actions::{Action, Context, ACTIONS, PATHS, RESERVED, SHARED_KEYS};
+use super::actions::{Action, Context, PATHS, RESERVED, SHARED_KEYS};
+use super::catalogue::ACTIONS;
 use super::spec::{Binding, KeyStroke};
 
 /// Each action's bindings, by `Action as usize`.
@@ -151,7 +153,10 @@ fn check_binding(action: Action, binding: Binding) -> Result<(), String> {
             _ => Err(format!("the leader is one key, not `{spec}`")),
         };
     }
-    if context.beside_text() && prefix(&binding).is_some_and(|key| key.is_text()) {
+    // An action read only on an empty composer may take a text key, but
+    // no chord that starts with one: the chord would swallow the text.
+    let text_allowed = action.spec().empty_composer_only && matches!(binding, Binding::Key(_));
+    if context.beside_text() && !text_allowed && prefix(&binding).is_some_and(|key| key.is_text()) {
         return Err(format!(
             "`{spec}` types text beside the composer; use a key with ctrl or alt, or one \
              that types none"

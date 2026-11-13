@@ -8,7 +8,7 @@ use super::{CommandContext, CommandSpec};
 use crate::app_event::{AgentCommand, AppEvent, Op};
 use crate::bottom_pane::{SelectionItem, SelectionViewParams};
 
-pub(super) static MODE: CommandSpec = CommandSpec {
+pub(crate) static MODE: CommandSpec = CommandSpec {
     name: "mode",
     aliases: &[],
     description: "switch between default and plan mode",

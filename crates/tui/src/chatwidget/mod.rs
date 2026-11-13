@@ -18,6 +18,7 @@ mod input_flow;
 mod input_queue;
 mod replay;
 mod second;
+mod shortcuts;
 mod turn;
 mod warnings;
 
@@ -209,6 +210,10 @@ impl ChatWidget {
                 && self.bottom_pane.no_modal_or_popup_active()
             {
                 self.dispatch_command(&PRESETS, String::new());
+                return;
+            }
+            if self.handle_session_key(&key_event) {
+                self.request_redraw();
                 return;
             }
             if key_event.kind == KeyEventKind::Press

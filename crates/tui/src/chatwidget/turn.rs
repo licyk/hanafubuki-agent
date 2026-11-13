@@ -131,6 +131,7 @@ impl ChatWidget {
             | TurnUpdate::ModelChanged(_)
             | TurnUpdate::EffortChoices(_)
             | TurnUpdate::EffortChanged(_)
+            | TurnUpdate::EffortUnchanged(_)
             | TurnUpdate::LearnedModelFactsForgotten { .. }
             | TurnUpdate::RoleChoices(_)
             | TurnUpdate::RoleChanged(_)

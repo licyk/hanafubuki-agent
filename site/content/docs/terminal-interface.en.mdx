@@ -47,26 +47,29 @@ In the conversation your messages start with `›`; a tool call is `• Running 
 
 ## Keys [#keys]
 
-| Key                        | Does                                                                                                                                                                                             |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Enter                      | Sends the message: a new turn, or, while one runs, a message that steers it at its next step ([below](#composer)). In a popup, picks its entry                                                   |
-| Tab                        | While a turn runs, queues the message for after it; with nothing running, sends it as Enter does. In the command popup, completes the command; in the file popup, the path                       |
-| Shift+Left, Alt+Up         | Puts the last queued message back in the composer to edit it                                                                                                                                     |
-| Shift+Enter, Ctrl+J        | A new line. Shift+Enter needs a terminal with the enhanced keyboard protocol; otherwise use Ctrl+J                                                                                               |
-| Up, Down (Ctrl-P, Ctrl-N)  | On an empty composer, the messages sent in this run; in a popup, its entries                                                                                                                     |
-| Esc                        | Closes a popup; otherwise interrupts the running turn, sending at once the steering messages it has not read. With no turn running, twice on an empty composer: edits an earlier message (below) |
-| Ctrl-C                     | In turn: denies an approval; clears a composer with text; interrupts a running turn; a second press within one second quits                                                                      |
-| Ctrl-D                     | On an empty composer, two presses within one second quit; with text, deletes the next character                                                                                                  |
-| Ctrl-T                     | Fullscreen: shows the conversation in detail, in place; Scrollback: opens the transcript (below)                                                                                                 |
-| Ctrl-O                     | Expands every thinking in the conversation, or collapses them all when all are expanded ([below](#thinking))                                                                                     |
-| Left on an empty composer  | Opens the [command center](#agents)                                                                                                                                                              |
-| `?` on an empty composer   | Shows the shortcuts                                                                                                                                                                              |
-| Ctrl-X P                   | Opens the [presets](#presets)                                                                                                                                                                    |
-| Ctrl-X Left, Right, Tab, X | With a side conversation or a subagent open: the main conversation, the side one, the other one; closes it ([below](#side))                                                                      |
+| Key                                         | Does                                                                                                                                                                                             |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Enter                                       | Sends the message: a new turn, or, while one runs, a message that steers it at its next step ([below](#composer)). In a popup, picks its entry                                                   |
+| Tab                                         | While a turn runs, queues the message for after it; with nothing running, sends it as Enter does. In the command popup, completes the command; in the file popup, the path                       |
+| Shift+Left, Alt+Up                          | Puts the last queued message back in the composer to edit it                                                                                                                                     |
+| Shift+Enter, Ctrl+J                         | A new line. Shift+Enter needs a terminal with the enhanced keyboard protocol; otherwise use Ctrl+J                                                                                               |
+| Up, Down (Ctrl-P, Ctrl-N)                   | On an empty composer, the messages sent in this run; in a popup, its entries                                                                                                                     |
+| Esc                                         | Closes a popup; otherwise interrupts the running turn, sending at once the steering messages it has not read. With no turn running, twice on an empty composer: edits an earlier message (below) |
+| Ctrl-C                                      | In turn: denies an approval; clears a composer with text; interrupts a running turn; a second press within one second quits                                                                      |
+| Ctrl-D                                      | On an empty composer, two presses within one second quit; with text, deletes the next character                                                                                                  |
+| Ctrl-T                                      | Fullscreen: shows the conversation in detail, in place; Scrollback: opens the transcript (below)                                                                                                 |
+| Ctrl-O                                      | Expands every thinking in the conversation, or collapses them all when all are expanded ([below](#thinking))                                                                                     |
+| Left on an empty composer                   | Opens the [command center](#agents)                                                                                                                                                              |
+| `?` on an empty composer                    | Shows the shortcuts, or hides them ([below](#shortcuts))                                                                                                                                         |
+| Shift+Tab                                   | Switches the session between the default and the plan mode, as `/mode` does; not during a turn                                                                                                   |
+| Alt+, and Alt+.                             | Lower or raise the [reasoning effort](#effort) a level                                                                                                                                           |
+| Alt+Left and Alt+Right on an empty composer | Show the previous or the next of the session and its [subagents](#subagents); with text, they move by word                                                                                       |
+| Ctrl-X P                                    | Opens the [presets](#presets)                                                                                                                                                                    |
+| Ctrl-X Left, Right, Tab, X                  | With a side conversation or a subagent open: the main conversation, the side one, the other one; closes it ([below](#side))                                                                      |
 
 Fullscreen has the conversation's keys too: Page Up/Page Down, F3, F4, Ctrl-Space and the others in [Reading the conversation](#reading); in Scrollback, F4 reaches the tail's activities.
 
-These are the default keys. [The keymap](#keymap) changes the keys of its actions (Enter, Tab to queue, Shift+Left to edit a queued message, the history, Esc to interrupt, Ctrl-T, Ctrl-O, the editing keys, the conversation's and the pagers' keys, the command center's session actions); Ctrl-C, Ctrl-D, `?` and the keys of popups and lists (Tab's completion among them) stay as they are.
+These are the default keys. [The keymap](#keymap) changes the keys of its actions (Enter, Tab to queue, Shift+Left to edit a queued message, the history, Esc to interrupt, Ctrl-T, Ctrl-O, `?`, Shift+Tab, Alt+, and Alt+., Alt+Left and Alt+Right, the editing keys, the conversation's and the pagers' keys, the command center's session actions); Ctrl-C, Ctrl-D and the keys of popups and lists (Tab's completion among them) stay as they are.
 
 The composer has the usual Emacs-style editing keys: Ctrl-A/E for the start and end of the line, Ctrl-W to delete the previous word, Ctrl-U/K to delete to the start or end of the line, Alt-B/F to move by word, and so on.
 
@@ -75,6 +78,31 @@ The composer has the usual Emacs-style editing keys: Ctrl-A/E for the start and 
   draft in the composer: with steering messages waiting it sends them as the next turn, otherwise
   what waited goes back into the composer (below).
 </Callout>
+
+### The shortcuts [#shortcuts]
+
+`?` on an empty composer shows the keys under it in three groups, side by side when the window is wide enough, else in two columns or one; `?` again hides them, and so does a key the composer takes (typing, Enter, the arrows). Each key is the one [the keymap](#keymap) gives its action now: a key you rebind shows as rebound, and an action you unbind (or bind only to a chord) is left out.
+
+```text
+  Keyboard shortcuts
+
+  Compose                        Session                                        Transcript (open first)
+  /         Commands             tab                Send message                ctrl + t                           Open transcript
+  @         Mention files        shift + tab        Change mode                 f3                                 Find text
+  ctrl + j  New line             alt + ,            Less reasoning              pgup / pgdn                        Scroll
+  esc esc   Edit last message    alt + .            More reasoning              ctrl + space                       Start selection
+                                 ←                  Agents (empty prompt)       ctrl + home / ctrl + end           Top / latest
+                                 alt + ← / alt + →  Subagents (empty prompt)    shift + alt + , / shift + alt + .  Top / latest
+                                 f4                 Inspect activity
+                                 ctrl + c           Quit
+
+  /keymap customize
+```
+
+- **Compose**: the new line is Shift+Enter where the terminal reports it. **Session**: Tab says `Queue message` and Ctrl+C `Interrupt` while a turn runs. **Transcript**: the conversation's keys ([Reading the conversation](#reading)), in Fullscreen beside the composer, in Scrollback once Ctrl+T has opened the transcript.
+- In a [side conversation](#side) or a [subagent](#subagents) shown, the mode, the effort and editing an earlier message are the main conversation's, and are left out.
+- When the screen is too short for them all, the list is cut and says `… more: /keymap`; `/keymap` lists every action.
+- Shift+Tab is refused during a turn, as `/mode` is. Alt+, and Alt+. step through the levels `/effort` offers ([below](#effort)). Alt+Left and Alt+Right go round the session and its subagents ([below](#subagents)).
 
 ## The composer [#composer]
 
@@ -190,6 +218,7 @@ A session's [role](/docs/roles#sessions) narrows what it may use: its tools, the
 - **Default** unsets it: the Provider's default applies. **Custom** opens a one-line prompt, filled with the current effort when it is a custom one; Enter checks it first, and one that is refused (`none`, say) stays in the field with why. A current effort the list does not have shows as `Custom: max (current)`.
 - **`/effort LEVEL`** sets any effort at once (narrowed to the model's levels when sent), **`/effort default`** unsets it.
 - It is not available during a turn: it says `Change the effort after this turn, or interrupt it.` Without a session, `/effort` creates one first.
+- **Alt+, and Alt+.** lower or raise the effort a level among the levels above, under the same conditions. An unset effort, or one off the levels, starts from the model's default, else the first level; past an end it stays and says `Reasoning is already at the highest level (High).` With no level known they say `No reasoning levels are known for this model; use /effort to type one.`
 - The effort shows in `/status`, and in the status line's `model-with-reasoning` item (shown by default). The model policy's reasoning effort row in the settings center offers the same options, for the effort new sessions take ([Settings](#config)).
 
 ## Permissions [#permissions]
@@ -310,6 +339,7 @@ In Fullscreen, while the leader waits for its second key with a second conversat
 `/subagents` writes the session's [subagents](/docs/sessions#subagents) into the conversation, each with its status (`running`, `idle` or `failed`) and the start of its latest answer, then opens a list of them; while one runs, the list follows their statuses. Enter shows the one selected in place of the session, under `Subagent NAME · from PARENT · Esc or ctrl-x left returns`: its transcript as `/resume` shows it and, while it runs, its turn as it goes on (its answer streams, its tool calls show, an approval it waits on is asked there, including one it asked for before it was shown, and Esc interrupts it). A message you send there goes to the subagent.
 
 - Esc on an empty composer with nothing running, `leader left` or `leader x` returns to the session, whose own turn went on meanwhile.
+- **Alt+Right and Alt+Left** on an empty composer step through the session and its subagents, in this list's order and round: from the session to its first subagent, from the last back to the session. With none they say `This session has no subagents.`; while a side conversation is open they say to close it first.
 - In Fullscreen the subagent fills the screen; in Scrollback the interface switches to it, as to a [side conversation](#side). Its commands are a side conversation's. While a side conversation is open, a subagent is not shown: close it first.
 - **A subagent's approvals**: a subagent runs in its parent's permission mode, so in Manual mode its tool calls wait for you. While the session's subagents run (or its turn does), the interface reads them about every 0.4 seconds and shows an approval a subagent waits on as an ordinary [approval](#approvals) whose summary starts `Subagent NAME:`; your answer goes to the subagent. It stays open when the session's own turn ends, and closes once it is answered elsewhere (in the subagent shown) or the subagent's turn ends. While a side conversation has the focus, it waits in the main conversation: in Fullscreen its pane shows it, in Scrollback you see it when you return.
 
@@ -648,10 +678,10 @@ open_presets = "ctrl-b 1"
 yank = []
 ```
 
-- **Keys** are modifiers then a key, joined with `-`: `ctrl-t`, `alt-<`, `shift-enter`, `page-down`, `f3`, `space`, `minus`; an upper-case letter is `shift-` and the letter.
+- **Keys** are modifiers then a key, joined with `-`: `ctrl-t`, `alt-<`, `shift-enter`, `page-down`, `f3`, `space`, `minus`; an upper-case letter is `shift-` and the letter. A sign matches with or without Shift, as terminals differ; but with Ctrl or Alt, Shift on an unshifted one (`,`, `.`, `/` and the like, on a US keyboard) makes another key: `alt-shift-,` is Alt+<, not `alt-,`.
 - **Chords** are two keys separated by a space (`ctrl-g o`): the first waits a second for the second. `leader K` is the leader key (`global.leader`, Ctrl-X by default) then `K`; the leader waits until the next key. A key that completes no chord, or Esc, drops both. A configured key that is the default leader's takes it: the leader is then unbound unless `global.leader` sets one.
-- **Contexts** are where the keys are read: `global` everywhere, `chat` and `composer` while the composer has the keys, `editor` in every text field, `transcript` in the Fullscreen conversation beside the composer, `pager` in the transcript and `/diff`, `agents` in the [command center](#agents). Beside the composer, a key that types text (a letter without Ctrl or Alt) cannot be bound, and neither can a chord that starts with one.
-- **Conflicts**: one key (or chord) cannot trigger two actions read together, nor start another action's chord, nor be Ctrl-C (or Ctrl-D but in the editor and the pagers), which the interface keeps. The pairs that share keys by default stay allowed: `chat.interrupt_turn` and `chat.edit_previous` (Esc), `composer.submit` and `editor.insert_newline` (Enter), the history and the editor's Up and Down, `global.open_transcript` and `pager.close_transcript`.
+- **Contexts** are where the keys are read: `global` everywhere, `chat` and `composer` while the composer has the keys, `editor` in every text field, `transcript` in the Fullscreen conversation beside the composer, `pager` in the transcript and `/diff`, `agents` in the [command center](#agents). Beside the composer, a key that types text (a letter without Ctrl or Alt) cannot be bound, and neither can a chord that starts with one; the actions read only on an empty composer (`composer.show_shortcuts`, `composer.previous_agent`, `composer.next_agent`) may take such a key, but no chord that starts with one.
+- **Conflicts**: one key (or chord) cannot trigger two actions read together, nor start another action's chord, nor be Ctrl-C (or Ctrl-D but in the editor and the pagers), which the interface keeps. The pairs that share keys by default stay allowed: `chat.interrupt_turn` and `chat.edit_previous` (Esc), `composer.submit` and `editor.insert_newline` (Enter), the history and the editor's Up and Down, `global.open_transcript` and `pager.close_transcript`, `composer.previous_agent` and `editor.move_word_left` (Alt+Left), `composer.next_agent` and `editor.move_word_right` (Alt+Right).
 - What cannot be used (an unknown context or action, a key that is not one, a conflict) leaves the action its default keys, with a [warning](#warnings).
 
 `/keymap` opens the [settings center](#config) at the keymap's page, which lists the actions with their keys (type to search). Picking one offers to replace its keys or add one (a key, two keys, or the leader and a key), to remove one, to unbind it, and to put its defaults back. A new key is captured as it is pressed (Esc cancels); one that conflicts is refused with the reason, and another can be tried. A change is saved into `tui.keymap` and applies at once. `/keymap debug` lists every action's keys, each marked `default` or `configured`.
@@ -679,10 +709,16 @@ Popups, lists, forms, approvals and questions keep their own keys (arrows, Enter
 | `chat.edit_queued_message`        | `shift-left`, `alt-up`                                                | Put the last queued message back in the composer                                 |
 | `chat.toggle_thinking`            | `ctrl-o`                                                              | Expand or collapse every thinking                                                |
 | `chat.open_presets`               | `leader p`                                                            | Open the presets                                                                 |
+| `chat.cycle_mode`                 | `shift-tab`                                                           | Switch between the default and the plan mode                                     |
+| `chat.reasoning_down`             | `alt-,`                                                               | Lower the reasoning effort by a level                                            |
+| `chat.reasoning_up`               | `alt-.`                                                               | Raise the reasoning effort by a level                                            |
 | `composer.submit`                 | `enter`                                                               | Send the message                                                                 |
 | `composer.queue`                  | `tab`                                                                 | While a turn runs: queue the message for after it                                |
 | `composer.history_previous`       | `up`, `ctrl-p`                                                        | The previous message sent                                                        |
 | `composer.history_next`           | `down`, `ctrl-n`                                                      | The next message sent                                                            |
+| `composer.show_shortcuts`         | `?`                                                                   | On an empty composer: show or hide the shortcuts                                 |
+| `composer.previous_agent`         | `alt-left`                                                            | On an empty composer: show the previous of the session and its subagents         |
+| `composer.next_agent`             | `alt-right`                                                           | On an empty composer: show the next of the session and its subagents             |
 | `editor.insert_newline`           | `ctrl-j`, `ctrl-m`, `enter`, `shift-enter`, `alt-enter`, `ctrl-enter` | A new line                                                                       |
 | `editor.move_left`                | `left`, `ctrl-b`                                                      | Move left                                                                        |
 | `editor.move_right`               | `right`, `ctrl-f`                                                     | Move right                                                                       |
@@ -701,7 +737,7 @@ Popups, lists, forms, approvals and questions keep their own keys (arrows, Enter
 | `editor.yank`                     | `ctrl-y`                                                              | Put back what was deleted last                                                   |
 | `transcript.page_up`              | `page-up`                                                             | Scroll the conversation up a page                                                |
 | `transcript.page_down`            | `page-down`                                                           | Scroll the conversation down a page                                              |
-| `transcript.jump_top`             | `ctrl-home`, `alt-<`, `alt-shift-`, ``                                | Go to the conversation's start                                                   |
+| `transcript.jump_top`             | `ctrl-home`, `alt-<`, `alt-shift-,`                                   | Go to the conversation's start                                                   |
 | `transcript.jump_bottom`          | `ctrl-end`, `alt->`, `alt-shift-.`                                    | Go to the latest output                                                          |
 | `transcript.start_selection`      | `ctrl-space`                                                          | Start selecting at the view's first row                                          |
 | `pager.scroll_up`                 | `up`, `k`                                                             | Scroll up a line                                                                 |

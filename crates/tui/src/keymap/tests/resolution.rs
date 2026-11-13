@@ -43,6 +43,66 @@ fn the_catalogue_is_in_action_order_and_its_defaults_parse_without_conflict() {
 }
 
 #[test]
+fn the_shortcut_actions_have_their_defaults_and_no_voice_key() {
+    let keymap = Keymap::default();
+    for (action, path, keys) in [
+        (Action::ShowShortcuts, "composer.show_shortcuts", "?"),
+        (Action::CycleMode, "chat.cycle_mode", "backtab"),
+        (Action::ReasoningDown, "chat.reasoning_down", "alt-,"),
+        (Action::ReasoningUp, "chat.reasoning_up", "alt-."),
+        (Action::PreviousAgent, "composer.previous_agent", "alt-left"),
+        (Action::NextAgent, "composer.next_agent", "alt-right"),
+    ] {
+        assert_eq!(action.path(), path);
+        assert_eq!(keymap.label(action), keys, "{path}");
+    }
+    let only_empty: Vec<&str> = ACTIONS
+        .iter()
+        .filter(|spec| spec.empty_composer_only)
+        .map(|spec| spec.name)
+        .collect();
+    assert_eq!(
+        only_empty,
+        ["show_shortcuts", "previous_agent", "next_agent"]
+    );
+    // Alt+Left and Alt+Right are word motion as well, on a draft.
+    let alt_left = KeyEvent::new(KeyCode::Left, KeyModifiers::ALT);
+    assert!(keymap.matches(Action::PreviousAgent, &alt_left));
+    assert!(keymap.matches(Action::MoveWordLeft, &alt_left));
+    // Codex's voice key is not ported.
+    for spec in &ACTIONS {
+        assert!(!spec.name.contains("voice"), "{}", spec.name);
+        assert!(!spec.defaults.contains(&"f8"), "{}", spec.name);
+    }
+}
+
+#[test]
+fn only_an_action_read_on_an_empty_composer_takes_a_text_key() {
+    let (keymap, warnings) = Keymap::resolve(&config(&[
+        ("composer", "show_shortcuts", &["h"]),
+        ("composer", "next_agent", &["]"]),
+    ]));
+    assert!(warnings.is_empty(), "{warnings:#?}");
+    assert_eq!(keymap.label(Action::ShowShortcuts), "h");
+    assert_eq!(keymap.label(Action::NextAgent), "]");
+    let (keymap, warnings) = Keymap::resolve(&config(&[
+        ("composer", "show_shortcuts", &["? x"]),
+        ("chat", "cycle_mode", &["m"]),
+    ]));
+    let joined = warnings.join("\n");
+    assert!(
+        joined.contains("tui.keymap.composer.show_shortcuts: `? x` types text"),
+        "{joined}"
+    );
+    assert!(
+        joined.contains("tui.keymap.chat.cycle_mode: `m` types text"),
+        "{joined}"
+    );
+    assert_eq!(keymap.label(Action::ShowShortcuts), "?");
+    assert_eq!(keymap.label(Action::CycleMode), "backtab");
+}
+
+#[test]
 fn a_context_entry_comes_before_the_global_one_and_both_before_the_defaults() {
     let (keymap, warnings) = Keymap::resolve(&config(&[
         ("global", "page_up", &["ctrl-up"]),

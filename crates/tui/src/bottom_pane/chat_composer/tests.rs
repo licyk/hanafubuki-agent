@@ -79,7 +79,7 @@ fn snapshot_composer_state_with_width<F>(
     );
     setup(&mut composer);
     let footer_props = composer.footer_props();
-    let footer_lines = footer_height(footer_props);
+    let footer_lines = footer_height(footer_props, width);
     let height = footer_lines + 8;
     let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
     terminal

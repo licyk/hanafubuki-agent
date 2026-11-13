@@ -1,6 +1,6 @@
-use hanafubuki_agent::{ModelCatalogEntry, SettingChoice};
+use hanafubuki_agent::{KnownReasoning, ModelCatalogEntry, ModelReasoningEffort, SettingChoice};
 
-use super::{effort_options, entry_badges, EffortValue};
+use super::{effort_options, entry_badges, step_effort, EffortStep, EffortValue};
 
 fn entry() -> ModelCatalogEntry {
     ModelCatalogEntry {
@@ -98,4 +98,61 @@ fn a_current_effort_off_the_levels_is_the_custom_one() {
     assert_eq!(offered[2].value, EffortValue::Custom);
     assert_eq!(offered[0].value, EffortValue::Level("high".to_string()));
     assert_eq!(offered[1].value, EffortValue::Default);
+}
+
+fn levels(efforts: &[&str], default: Option<&str>) -> KnownReasoning {
+    let effort = |name: &str| ModelReasoningEffort::parse(name).unwrap();
+    KnownReasoning::Levels {
+        efforts: efforts.iter().map(|name| effort(name)).collect(),
+        default: default.map(effort),
+    }
+}
+
+fn to(effort: &str) -> EffortStep {
+    EffortStep::To(ModelReasoningEffort::parse(effort).unwrap())
+}
+
+#[test]
+fn a_step_moves_one_level_from_the_effort_set() {
+    let known = levels(&["low", "medium", "high"], Some("medium"));
+    assert_eq!(step_effort(&known, Some("low"), true), to("medium"));
+    assert_eq!(step_effort(&known, Some("high"), false), to("medium"));
+}
+
+#[test]
+fn an_unset_effort_steps_from_the_model_default_else_the_first_level() {
+    let known = levels(&["low", "medium", "high"], Some("medium"));
+    assert_eq!(step_effort(&known, None, true), to("high"));
+    assert_eq!(step_effort(&known, None, false), to("low"));
+    // An effort off the levels counts as the default too.
+    assert_eq!(step_effort(&known, Some("max"), true), to("high"));
+    let no_default = levels(&["low", "high"], None);
+    assert_eq!(step_effort(&no_default, None, true), to("high"));
+}
+
+#[test]
+fn a_step_stops_at_the_ends() {
+    let known = levels(&["low", "high"], None);
+    assert_eq!(
+        step_effort(&known, Some("high"), true),
+        EffortStep::Stays("Reasoning is already at the highest level (High).".to_string())
+    );
+    assert_eq!(
+        step_effort(&known, None, false),
+        EffortStep::Stays("Reasoning is already at the lowest level (Low).".to_string())
+    );
+}
+
+#[test]
+fn with_no_levels_a_step_says_to_type_one() {
+    let wanted = EffortStep::Stays(
+        "No reasoning levels are known for this model; use /effort to type one.".to_string(),
+    );
+    for known in [
+        KnownReasoning::Unknown,
+        KnownReasoning::Unsupported { learned: true },
+        levels(&[], None),
+    ] {
+        assert_eq!(step_effort(&known, Some("high"), true), wanted);
+    }
 }

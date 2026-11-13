@@ -882,11 +882,164 @@ and any module-size exception.
 
 **Keys ([1])**
 
-- [ ] K1: Codex's three-group `?` overlay from the keymap's hints (3/2/1
+- [x] K1: Codex's three-group `?` overlay from the keymap's hints (3/2/1
       columns, `/keymap customize`), and the actions `show_shortcuts`,
       `cycle_mode` (Shift+Tab), `reasoning_down`/`reasoning_up` (Alt+,/.),
       `previous_agent`/`next_agent` (Alt+←/→ on an empty composer), all
       rebindable (`empty_composer_only`, D18).
+      Done (2026-11-13):
+      - keymap: 66 → 72 actions. `chat.cycle_mode` (`shift-tab`),
+        `chat.reasoning_down`/`reasoning_up` (`alt-,`/`alt-.`),
+        `composer.show_shortcuts` (`?`), `composer.previous_agent`/
+        `next_agent` (`alt-left`/`alt-right`). `ActionSpec` gains
+        `empty_composer_only` (the last three): `check_binding`'s text-key
+        rule lets such an action take one key that types text, never a
+        chord starting with one. `SHARED_KEYS` gains `(previous_agent,
+        move_word_left)` and `(next_agent, move_word_right)`. The table
+        moved to `keymap/catalogue.rs` (the specs), `actions.rs` keeping
+        the vocabulary and the rules on keys: `actions.rs` was at 594 of
+        600 code lines. `KeyStroke::matches` no longer folds Shift away
+        for unshifted punctuation (US layout: `` `-=[]\;',./ ``) in a
+        binding with Ctrl or Alt (a bare `/` still matches `/` with
+        Shift, as a layout typing it with Shift needs): before,
+        `alt-,` matched `(',', ALT|SHIFT)`, which is `alt-shift-,`
+        (`transcript.jump_top`) from a terminal that reports no shifted
+        key; `alt-<` still matches `('<', ALT|SHIFT)`. No voice action,
+        no `f8` (pinned by a test).
+      - The overlay: `shortcut_help.rs` (Codex's) and
+        `bottom_pane/footer/shortcut_overlay.rs` (Codex's
+        `bottom_pane/shortcut_overlay.rs`); `footer.rs` is now
+        `footer/mod.rs`, its old two-column list gone. Compose (`/`, `@`,
+        the new line, `esc esc` Edit last message), Session (Tab
+        Send/Queue message, Shift+Tab Change mode, Alt+, Less / Alt+. More
+        reasoning, ← Agents (empty prompt), Alt+← / Alt+→ Subagents (empty
+        prompt), F4 Inspect activity, Ctrl+C Quit/Interrupt), Transcript
+        (open first) (Ctrl+T, F3, `pgup / pgdn`, Ctrl+Space, Ctrl+Home /
+        Ctrl+End, Shift+Alt+, / Shift+Alt+. when both are bound); then
+        `/keymap customize`. Keys from `keymap::hint`: rebound shows the
+        new key, unbound or chord-only is left out. `footer_height` takes
+        the width; cut to the rows there are, the list keeps its footer
+        and says `… more: /keymap`. A second conversation leaves out the
+        mode, the effort and Edit last message (`FooterProps::
+        second_conversation`). The empty composer's `? for shortcuts`
+        names `show_shortcuts`' key. `key_hint` says Shift+Tab (`BackTab`)
+        as `shift + tab`.
+      - The actions: `?` toggles through the keymap
+        (`handle_shortcut_overlay_key`). Alt+←/→
+        (`chat_composer/agents_navigation.rs`, on an empty, focused
+        composer with no popup or paste burst, in a second conversation
+        too) send `WorkspaceEvent::StepAgent`; the app lists the main
+        session's subagents off the UI thread through the main
+        conversation's bridge (`list_subagents_to_step`) and, once listed
+        (`StepAgentListed`, dropped if the main session changed), shows
+        the next or previous of the session then its subagents in
+        `/subagents`' order, round (`app/workspace/keys.rs`,
+        `step_target`): a subagent through `open_child`, the session
+        through `return_to_main`; none: `This session has no subagents.`
+        Shift+Tab and Alt+,/. (`chatwidget/shortcuts.rs`, while no popup
+        or view is open and their command runs in this conversation):
+        Shift+Tab sends `SetMode` with the other mode after `/mode`'s
+        guard (`refuses_during_task`, factored out of `dispatch_command`)
+        and `EnsureSession`; Alt+,/. say `effort::DURING_TASK` during a
+        turn, else `EnsureSession` then `EffortCall::Step { raise }`. The
+        bridge (`agent_bridge/effort.rs`) reads `session_model_metadata`
+        and steps with `model_facts::step_effort`, which walks the `Level`
+        rows of `effort_options(reasoning_effort_choices(known))` (E1's one
+        list): the current effort, else the model's default, else the
+        first level, one up or down; past an end `Reasoning is already at
+        the highest level (High).` (`TurnUpdate::EffortUnchanged`), with no
+        level `No reasoning levels are known for this model; use /effort
+        to type one.` A step sets the effort as `/effort` does (`Reasoning
+        effort set to LEVEL`, the status line refreshed). E1's acceptance
+        (Alt+,/. offer the same options as `/effort` and the settings row)
+        is met with this.
+      - Tests: keymap `spec/tests.rs`
+        `shift_on_unshifted_punctuation_is_another_key` (`alt-,`, `alt-<`,
+        `alt-shift-,` against crossterm's four reports of Alt+, and
+        Alt+Shift+,; seen failing first: `alt-,` took `(',', ALT|SHIFT)`;
+        `?` and a bare `/` with or without Shift);
+        `tests/resolution.rs` (the six actions' defaults and paths, the
+        `empty_composer_only` set, Alt+Left both agent and word motion, no
+        voice/`f8`; a text key taken by `show_shortcuts`/`next_agent`, a
+        text chord and `chat.cycle_mode = "m"` refused); the existing
+        catalogue test covers `ACTIONS`' order and no conflict among the
+        defaults. `footer/tests.rs`: insta snapshots at 140 (three
+        columns), 90 (two) and 50 (one) columns and while a turn runs; the
+        cut list at 8 rows; `cycle_mode` rebound to `f6` shows `f6`,
+        `reasoning_up` and `previous_agent` unbound are absent; no Voice,
+        `f8`, Shell command, Paste image, External editor or Search
+        history; a second conversation's list. `agents_navigation/tests.rs`:
+        the composer at 50×12 keeps its input row with the list cut;
+        Alt+←/→ step on an empty composer, move by word in a draft, step
+        in a second conversation, not without focus; `?` toggles and,
+        rebound to `h`, `h` does (`?` in a draft types `?`:
+        `question_mark_only_toggles_on_first_char`). `model_facts/tests.rs`
+        (seen failing first against a stub): a step from a set effort,
+        from unset (the default, else the first level) and from one off
+        the list, both ends, no level (unknown, unsupported, empty). App,
+        end to end (`app/tests/shortcuts.rs`): `?` then Shift+Tab and
+        Shift+Tab-as-`Tab+SHIFT` switch the mode in Scrollback and
+        Fullscreen; Alt+./, through a reported listing's `low`/`high` and
+        both ends; two Alt+. before the first is set take two levels;
+        Alt+. with no level, and Alt+, during a turn (`DURING_TASK`,
+        nothing changed); Alt+→/→/←/← through a parent and its subagent
+        and back, round, and Alt+← in a draft moving by word, in Scrollback
+        and Fullscreen; `This session has no subagents.` before a session and in
+        one without. The keymap, overlay and app tests were written with
+        the code (the actions did not exist before).
+      - Deviations: (1) `!` Shell command is left out with Ctrl+V, Ctrl+G
+        and Ctrl+R: §2.7 lists `!` as a fixed key, but the acceptance asks
+        every listed key to work and `!command` is K2's; K2 adds the row.
+        (2) The "remapped `history_search`" test uses `cycle_mode` (and
+        unbound `reasoning_up`, `previous_agent`): `history_search` is
+        K3's. (3) Shift+Tab, Alt+,/. and Edit last message are left out of
+        a second conversation's list (its commands have no `/mode` or
+        `/effort`, and Esc returns from it), so the list says only what
+        works there. (4) The overlay stays in the footer under the
+        composer (as ours was), not above it as Codex's now is; there is
+        no close-hint row: `?` or a key the composer takes closes it (the
+        session and agent keys, taken before the composer, leave it open).
+        (5) Codex's
+        macOS fallback (Option+b/f as agent steps on an empty composer) is
+        not ported; `alt-left`/`alt-right` only, as the plan's table. (6)
+        `pgup / pgdn` stays fixed as §2.7 says (not read from
+        `transcript.page_up`). (7) A chord-only binding is left out, as
+        `keymap::hint` gives keys only. (8) Effort levels are labelled with
+        a capital (`(High)`) as the plan's message. (9) `model_facts.rs`
+        now carries the Codex marker (the step is ported from
+        `reasoning_shortcuts.rs`); its `[[original]]` entry is gone, its
+        tests' and the bridge's reasons say the step. (10) The doc table's
+        mangled `alt-shift-,` cell (`` `alt-shift-`, `` ``) is fixed in
+        both languages. (11) A step reads the session when it runs, and one
+        refused (another step set the effort first: two quick presses, a
+        held key) steps again from the new effort, up to 8 times; seen
+        failing first with `stale agent session revision`. Two quick
+        Shift+Tab presses both ask for the other mode than the one the chat
+        last heard of (harmless: the same mode twice).
+      - Goldens: none changed.
+      - Docs (both languages): `terminal-interface#keys` (three rows, the
+        rebindable list gains `?`, Shift+Tab, Alt+,/. and Alt+←/→, so
+        only Ctrl-C, Ctrl-D and the lists' keys stay as they are; a new
+        `### The shortcuts [#shortcuts]` with the overlay), `#effort` (the
+        steps), `#subagents` (the round), `#keymap` (shifted and unshifted
+        punctuation, the empty-composer exception, the two shared pairs,
+        six table rows).
+      - Validation: `cargo fmt --all --check`; `RUSTFLAGS="-D warnings"
+        cargo check --workspace --all-targets --all-features`; `cargo clippy
+        --workspace --all-targets --all-features -- -D warnings`; `cargo
+        xtask check` (its notices check first failed on the new
+        `app/tests/shortcuts.rs`, now an `[[original]]`); `cargo test
+        --workspace --all-features --no-fail-fast` (all passed, no flake
+        seen); `bun install --frozen-lockfile`, `bun run format:site`, `bun
+        run format:check:site`, `bun run site:check`, `bun run site:test`;
+        `VITE_BASE_PATH=/hanafubuki-agent/ bun run site:build` not run
+        locally (port 3000 held by another project's server); CI's Site
+        run covers it.
+      - Hanafubuki at its next pin: nothing; the change is the terminal
+        interface's (no facade, contract or format change).
+      - Module size: no exception added or raised. `agent_bridge/mod.rs`
+        is now at the 600-line limit (one `TurnUpdate` variant).
+      - CI on Linux, Windows and macOS: pending (added once the run ends).
 - [ ] K2: `!command` — a no-model turn running the planned `exec_command`
       handler, approved by the person, in the sandbox, recorded as a
       `UserShellCommand` item the model reads (D14, D15). Goldens

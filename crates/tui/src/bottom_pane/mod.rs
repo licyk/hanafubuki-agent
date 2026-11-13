@@ -358,6 +358,11 @@ impl BottomPane {
         self.composer.command_disabled(name)
     }
 
+    /// Whether `/name` runs in this conversation.
+    pub(crate) fn command_allowed(&self, name: &str) -> bool {
+        self.composer.command_allowed(name)
+    }
+
     /// Limits the commands the composer runs to `scope`.
     pub(crate) fn set_command_scope(&mut self, scope: Option<&'static [&'static str]>) {
         self.composer.set_command_scope(scope);

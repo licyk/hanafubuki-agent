@@ -4,10 +4,97 @@
 //! is a keymap action (`global.focus_pane_left` and the rest), bound by
 //! default to the leader, Ctrl+X, then a key; the keymap's chords read
 //! them, so `tui.keymap` and `/keymap` rebind them.
+//!
+//! And the step through the agents (Codex's Alt+Left and Alt+Right,
+//! `previous_agent` and `next_agent` on an empty composer): the main
+//! session, then its subagents in `/subagents`' order, round. A subagent is
+//! shown as `/subagents` shows it, the main session as `focus_pane_left`
+//! returns to it.
 
+use std::io::{self, Write};
+
+use hanafubuki_agent::AgentSessionId;
+use ratatui::backend::Backend;
 use ratatui::crossterm::event::KeyEvent;
 
+use super::{Focus, SecondKind};
+use crate::app::App;
 use crate::keymap::{self, Action};
+use crate::tui::Tui;
+
+const NO_SUBAGENTS: &str = "This session has no subagents.";
+
+impl App {
+    /// Lists the main session's subagents for a step; what is shown moves
+    /// once they are listed.
+    pub(super) fn list_agents_to_step(&mut self, forward: bool) {
+        let Some(parent) = self.main_session_id() else {
+            return self.chat_widget.add_info_message(NO_SUBAGENTS.to_string());
+        };
+        // The main conversation's bridge, parked while a second one is shown.
+        let bridge = match self.workspace.second.as_ref() {
+            Some(second) if second.focus == Focus::Second => &second.parked.bridge,
+            _ => &self.bridge,
+        };
+        bridge.list_subagents_to_step(parent, forward);
+    }
+
+    /// Shows the agent after (or before) the one shown, among `parent` and
+    /// its subagents `listed`, unless the main conversation moved meanwhile.
+    pub(super) fn step_agent<B: Backend<Error = io::Error> + Write>(
+        &mut self,
+        tui: &mut Tui<B>,
+        parent: AgentSessionId,
+        forward: bool,
+        listed: Result<Vec<AgentSessionId>, String>,
+    ) {
+        if self.main_session_id() != Some(parent) {
+            return;
+        }
+        let children = match listed {
+            Ok(children) => children,
+            Err(error) => {
+                return self
+                    .chat_widget
+                    .add_error_message(format!("The subagents were not listed: {error}"))
+            }
+        };
+        let shown = match self.workspace.second.as_ref() {
+            Some(second) if second.focus == Focus::Second => match second.kind {
+                SecondKind::Child { session, .. } => session,
+                SecondKind::Side { .. } => parent,
+            },
+            _ => parent,
+        };
+        match step_target(parent, &children, shown, forward) {
+            None => self.chat_widget.add_info_message(NO_SUBAGENTS.to_string()),
+            Some(target) if target == parent => self.return_to_main(tui),
+            Some(target) => self.open_child(tui, target),
+        }
+    }
+}
+
+/// Among `main` then its `children`, the one after (`forward`) or before
+/// `shown`, round; `None` with no child.
+pub(super) fn step_target(
+    main: AgentSessionId,
+    children: &[AgentSessionId],
+    shown: AgentSessionId,
+    forward: bool,
+) -> Option<AgentSessionId> {
+    if children.is_empty() {
+        return None;
+    }
+    let order: Vec<AgentSessionId> = std::iter::once(main)
+        .chain(children.iter().copied())
+        .collect();
+    let at = order
+        .iter()
+        .position(|session| *session == shown)
+        .unwrap_or(0);
+    let step = if forward { 1 } else { order.len() - 1 };
+    Some(order[(at + step) % order.len()])
+}
 
 /// What the panes' keys do.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

@@ -151,6 +151,8 @@ pub(crate) enum TurnUpdate {
     /// The session's reasoning effort is now this one (`None`: the
     /// Provider's default).
     EffortChanged(Option<ModelReasoningEffort>),
+    /// A step of the effort left it as it was, for this reason.
+    EffortUnchanged(String),
     /// What `/role` offers.
     RoleChoices(RoleChoices),
     /// The session's role is now this one (`None` for `default`).

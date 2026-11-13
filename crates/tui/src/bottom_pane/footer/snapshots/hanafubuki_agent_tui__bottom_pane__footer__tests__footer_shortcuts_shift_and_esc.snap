@@ -1,8 +1,0 @@
----
-source: crates/tui/src/bottom_pane/footer/tests.rs
-expression: terminal.backend()
----
-"  / for commands          shift + enter for newline                             "
-"  @ for file paths        tab to send message                                   "
-"  esc to interrupt        ↑ for previous message                                "
-"  ctrl + c to exit        ctrl + t to view transcript                           "

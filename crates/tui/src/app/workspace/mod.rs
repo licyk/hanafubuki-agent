@@ -70,6 +70,17 @@ pub(crate) enum WorkspaceEvent {
     SideClosed(Result<(), String>),
     /// Shows a subagent in place of the main conversation.
     OpenChild(AgentSessionId),
+    /// Alt+Right (`forward`) or Alt+Left on an empty composer: the next or
+    /// previous of the main session and its subagents.
+    StepAgent {
+        forward: bool,
+    },
+    /// The subagents of `parent` were listed for a step.
+    StepAgentListed {
+        parent: AgentSessionId,
+        forward: bool,
+        listed: Result<Vec<AgentSessionId>, String>,
+    },
     /// The focus moves to the other pane (a click in it).
     FocusOther,
     /// `/agents`.
@@ -351,6 +362,12 @@ impl App {
                 Err(error) => self.chat_widget.add_error_message(error),
             },
             WorkspaceEvent::OpenChild(child) => self.open_child(tui, child),
+            WorkspaceEvent::StepAgent { forward } => self.list_agents_to_step(forward),
+            WorkspaceEvent::StepAgentListed {
+                parent,
+                forward,
+                listed,
+            } => self.step_agent(tui, parent, forward, listed),
             WorkspaceEvent::FocusOther => {
                 if let Some(focus) = self.workspace.second.as_ref().map(|second| second.focus) {
                     self.set_focus(tui, focus.other());

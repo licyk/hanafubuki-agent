@@ -1,8 +1,13 @@
+// Modified from OpenAI Codex 57a808a392 (Apache-2.0).
+
 //! How the interface names what is known of a model: where a fact came
 //! from, what a model list's entry reports, and the reasoning efforts
-//! offered for it.
+//! offered for it, which Alt+, and Alt+. step through.
 
-use hanafubuki_agent::{ModelCatalogEntry, ModelMetadataSource, SettingChoice};
+use hanafubuki_agent::{
+    reasoning_effort_choices, KnownReasoning, ModelCatalogEntry, ModelMetadataSource,
+    ModelReasoningEffort, SettingChoice,
+};
 
 use crate::history_cell::format_tokens_compact;
 
@@ -85,6 +90,69 @@ pub(crate) fn effort_options(levels: &[SettingChoice], current: Option<&str>) ->
             },
         ])
         .collect()
+}
+
+/// What a step of the effort (Alt+, and Alt+.) does.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum EffortStep {
+    /// The session's effort becomes this level.
+    To(ModelReasoningEffort),
+    /// It stays, and the person is told why.
+    Stays(String),
+}
+
+/// The level after (`raise`) or before the `current` effort among the
+/// levels [`effort_options`] offers (Codex's `reasoning_shortcuts.rs`): an
+/// unset effort, or one off the levels, counts as the model's default,
+/// else the first level; a step past an end stays there.
+pub(crate) fn step_effort(
+    known: &KnownReasoning,
+    current: Option<&str>,
+    raise: bool,
+) -> EffortStep {
+    let levels: Vec<String> = effort_options(&reasoning_effort_choices(known), current)
+        .into_iter()
+        .filter_map(|option| match option.value {
+            EffortValue::Level(level) => Some(level),
+            EffortValue::Default | EffortValue::Custom => None,
+        })
+        .collect();
+    if levels.is_empty() {
+        return EffortStep::Stays(
+            "No reasoning levels are known for this model; use /effort to type one.".to_string(),
+        );
+    }
+    let default = match known {
+        KnownReasoning::Levels { default, .. } => {
+            default.as_ref().map(ModelReasoningEffort::as_str)
+        }
+        _ => None,
+    };
+    let index = |effort: Option<&str>| {
+        effort.and_then(|effort| levels.iter().position(|level| level == effort))
+    };
+    let at = index(current).or_else(|| index(default)).unwrap_or(0);
+    let next = if raise {
+        Some(at + 1).filter(|next| *next < levels.len())
+    } else {
+        at.checked_sub(1)
+    };
+    match next.and_then(|next| ModelReasoningEffort::parse(&levels[next]).ok()) {
+        Some(effort) => EffortStep::To(effort),
+        None => EffortStep::Stays(format!(
+            "Reasoning is already at the {} level ({}).",
+            if raise { "highest" } else { "lowest" },
+            capitalized(&levels[at])
+        )),
+    }
+}
+
+fn capitalized(text: &str) -> String {
+    let mut chars = text.chars();
+    chars
+        .next()
+        .map(|first| first.to_uppercase().chain(chars).collect())
+        .unwrap_or_default()
 }
 
 #[cfg(test)]

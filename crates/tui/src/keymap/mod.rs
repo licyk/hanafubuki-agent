@@ -1,7 +1,7 @@
 // Modified from OpenAI Codex 57a808a392 (Apache-2.0).
 
 //! The keymap (Codex's `keymap.rs` and `keymap/`): which keys trigger each
-//! of the interface's actions ([`actions`]), resolved from `tui.keymap`
+//! of the interface's actions ([`actions`], [`catalogue`]), resolved from `tui.keymap`
 //! over the defaults ([`resolve`]), with chords and the leader key
 //! ([`chords`]).
 //!
@@ -15,6 +15,7 @@
 //! read a chord's action as they read a key's.
 
 mod actions;
+mod catalogue;
 mod chords;
 mod resolve;
 mod spec;
@@ -25,7 +26,8 @@ use std::rc::Rc;
 
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-pub(crate) use actions::{Action, Context, ACTIONS};
+pub(crate) use actions::{Action, Context};
+pub(crate) use catalogue::ACTIONS;
 pub(crate) use chords::{ChordState, ChordStep};
 pub(crate) use resolve::{conflicts, parse_keys};
 pub(crate) use spec::{Binding, KeyStroke};

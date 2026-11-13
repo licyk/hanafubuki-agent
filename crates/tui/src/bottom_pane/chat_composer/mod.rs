@@ -165,7 +165,7 @@ impl ChatComposer {
     /// The rows under the text: the active popup's, or the footer's.
     fn popup_or_footer_height(&self, width: u16) -> u16 {
         match &self.active_popup {
-            ActivePopup::None => footer_height(self.footer_props()),
+            ActivePopup::None => footer_height(self.footer_props(), width),
             ActivePopup::Command(popup) => popup.calculate_required_height(width),
             ActivePopup::File(popup) => popup.calculate_required_height(),
         }
@@ -702,8 +702,7 @@ impl ChatComposer {
             return false;
         }
 
-        let toggles = matches!(key_event.code, KeyCode::Char('?'))
-            && !has_ctrl_or_alt(key_event.modifiers)
+        let toggles = keymap::matches(Action::ShowShortcuts, key_event)
             && self.is_empty()
             && !self.is_in_paste_burst();
 
@@ -733,6 +732,7 @@ impl ChatComposer {
             status_line: self.status_line.as_ref().filter(|_| shows_status_line),
             task_running: self.is_task_running,
             agents_hint: self.agents_navigation_available(),
+            second_conversation: self.command_scope.is_some(),
         }
     }
 

@@ -46,6 +46,10 @@ const NAMED: [(&str, KeyCode); 15] = [
     ("page-down", KeyCode::PageDown),
 ];
 
+/// The punctuation a US keyboard types without Shift, as the default keys
+/// (`alt-shift-,` for Alt+<) assume.
+const UNSHIFTED_PUNCTUATION: &str = "`-=[]\\;',./";
+
 const MODIFIERS: [(&str, KeyModifiers); 4] = [
     ("ctrl", KeyModifiers::CONTROL),
     ("alt", KeyModifiers::ALT),
@@ -93,8 +97,11 @@ impl KeyStroke {
         KeyModifiers::from_bits_truncate(self.modifiers)
     }
 
-    /// Whether `event` is this key pressed (or repeated). Shifted
-    /// punctuation matches with or without Shift: terminals differ.
+    /// Whether `event` is this key pressed (or repeated). Punctuation
+    /// matches with or without Shift: terminals differ. But with Ctrl or
+    /// Alt, unshifted punctuation reported with Shift is the shifted key (a
+    /// terminal reporting no shifted key sends Alt+< as `alt-shift-,`), so
+    /// it is not `alt-,`.
     pub(crate) fn matches(&self, event: &KeyEvent) -> bool {
         let Some(pressed) = Self::of(event) else {
             return false;
@@ -102,7 +109,11 @@ impl KeyStroke {
         if pressed == *self {
             return true;
         }
-        let lenient = matches!(self.code, KeyCodeOrd::Char(c) if c.is_ascii_punctuation())
+        let chorded = self
+            .modifiers()
+            .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT);
+        let lenient = matches!(self.code, KeyCodeOrd::Char(c)
+                if c.is_ascii_punctuation() && !(chorded && UNSHIFTED_PUNCTUATION.contains(c)))
             && !self.modifiers().contains(KeyModifiers::SHIFT);
         lenient
             && pressed.code == self.code

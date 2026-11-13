@@ -69,3 +69,38 @@ fn a_key_matches_the_forms_terminals_report() {
     let space = KeyStroke::parse("space").unwrap();
     assert!(!space.matches(&key(KeyCode::Char(' '), KeyModifiers::SHIFT)));
 }
+
+/// Alt+, and Alt+Shift+, (Alt+<) as crossterm reports them: `ESC ,` and
+/// `ESC <` without the enhanced protocol; `CSI 44;3u` and `CSI 44:60;4u`
+/// (the shifted key reported) with it; `CSI 44;4u` from a terminal that
+/// reports no shifted key.
+#[test]
+fn shift_on_unshifted_punctuation_is_another_key() {
+    let less = KeyStroke::parse("alt-,").unwrap();
+    let top = KeyStroke::parse("alt-<").unwrap();
+    let top_shifted = KeyStroke::parse("alt-shift-,").unwrap();
+    let alt_shift = KeyModifiers::ALT | KeyModifiers::SHIFT;
+    for (event, wanted) in [
+        (
+            key(KeyCode::Char(','), KeyModifiers::ALT),
+            [true, false, false],
+        ),
+        (
+            key(KeyCode::Char('<'), KeyModifiers::ALT),
+            [false, true, false],
+        ),
+        (key(KeyCode::Char('<'), alt_shift), [false, true, false]),
+        (key(KeyCode::Char(','), alt_shift), [false, false, true]),
+    ] {
+        let got = [&less, &top, &top_shifted].map(|stroke| stroke.matches(&event));
+        assert_eq!(got, wanted, "{event:?}");
+    }
+    // `?` is shifted on its own: with or without Shift.
+    let help = KeyStroke::parse("?").unwrap();
+    assert!(help.matches(&key(KeyCode::Char('?'), KeyModifiers::NONE)));
+    assert!(help.matches(&key(KeyCode::Char('?'), KeyModifiers::SHIFT)));
+    // Without Ctrl or Alt there is no `shift-/` to tell apart: a layout
+    // that types `/` with Shift still matches `/`.
+    let slash = KeyStroke::parse("/").unwrap();
+    assert!(slash.matches(&key(KeyCode::Char('/'), KeyModifiers::SHIFT)));
+}
