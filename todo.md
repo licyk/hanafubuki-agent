@@ -363,6 +363,10 @@ and any module-size exception.
         can return a window the session's config does not have (a session
         with none).
       - Module size: no exception added or raised.
+      - CI on Linux, Windows and macOS: https://github.com/licyk/hanafubuki-agent/actions/runs/43377613175
+        (run on f488307, which differs from the landed tree only in this
+        line; all three passed at once); Site: .../runs/43377613201,
+        success, its prerender included.
 - [ ] B3: thinking stops when the answer starts — the kernel closes an
       open reasoning item at the first non-reasoning item, with a frozen
       duration; the late `output_item.done` persists its payload without a
