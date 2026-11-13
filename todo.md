@@ -1539,7 +1539,9 @@ and any module-size exception.
         two-line text is the draft, the footer row gone, the screen
         (alternate in Fullscreen only), bracketed paste and Fullscreen's
         pointer back, and Enter sends it to the model; no editor, a missing
-        one and one exiting 3 each say why and keep the draft. Mutations:
+        one and one exiting 3 each say why and keep the draft. The pointer
+        is checked off Windows only (4ba431a): there crossterm sets it
+        through the console's mode, which vt100 never sees. Mutations:
         without `reclaim` three app tests fail (screen and modes); without
         the burst flush the editor gets an empty draft.
       - Not verified without a real terminal: raw mode, the keyboard
@@ -1575,6 +1577,18 @@ and any module-size exception.
       - Hanafubuki at its next pin: nothing (the terminal interface only;
         no facade, contract or format change).
       - Module size: no exception added or raised.
+      - CI on 9406703 (the feature):
+        https://github.com/licyk/hanafubuki-agent/actions/runs/43470112620,
+        Linux and macOS passed, Windows failed on three pointer assertions
+        alone (`tui::handoff::tests::{scrollback_…, fullscreen_…}`,
+        `app::tests::external_editor::ctrl_g_edits_the_draft_in_the_editor_in_fullscreen`:
+        `left: None`, `right: PressRelease`/`AnyMotion`); its `.cmd` editor
+        round trips, `which`'s `.cmd` lookup and `winsplit`'s paths passed.
+        Site on 9406703: .../runs/43470112493, passed, its build and
+        prerender included. CI on 4ba431a (the tests' fix):
+        https://github.com/licyk/hanafubuki-agent/actions/runs/43474467831,
+        all three passed at once, the 19 editor and handoff tests among
+        Windows' passes.
 
 **Images ([2])**
 
