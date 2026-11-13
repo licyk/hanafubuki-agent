@@ -1,3 +1,118 @@
+## Plan: Codex's shortcuts, image paste and rendering; titles, /effort and /context; three fixes (2026-11-13)
+
+The plan is [docs/plan-shortcuts-rendering-and-context.md](docs/plan-shortcuts-rendering-and-context.md),
+read from main `e2981f4`, Codex `57a808a392`, billion-context `4be21b08e`
+and Hoshimi `83f7813`.
+
+Findings that changed the request's premises (the plan's §1):
+
+- `/recap`'s 400 is not tool-name normalisation: the structured-output rung
+  is chosen per protocol, never per route, with no fallback. Titles fail the
+  same way, silently, which is why the first message stays the title.
+- The approval reviewer has two rungs (native, text), not three, and keeps
+  its strict reading.
+- A clipboard image file outside the workspace is readable through
+  `prepare_and_stage_images` (only protected roots are refused, and the
+  standalone workspace has none): no bytes variant is needed.
+- Codex's Scrollback does re-render on resize (it clears and rewrites the
+  terminal's scrollback under a row cap): D19 proposes porting it.
+- Command output reaches the model, history and presenters as plain text
+  from the execution service, so colour needs a display-only styled copy
+  there (M7, D21).
+- Only four of Hoshimi's window fields are listing-entry fields; Ollama's
+  and LM Studio's need other requests (D8). The `max_input_tokens`
+  avoidance is Qoder-specific.
+- billion-context's panel is already ported (`crates/compression/src/report/panel.rs`);
+  no per-request cache usage is recorded anywhere yet.
+
+Each milestone is one commit on main with green CI, strictly in order: B1 →
+B2 → B3 → C1 → C2 → E1 → K1 → K2 → K3 → K4 → I1 → M1 → … → M8. Each records,
+when done: what landed and any deviation, the validation commands that ran
+and those skipped, the CI run's URL (no Windows or macOS claim from a Linux
+run), whether goldens changed, what Hanafubuki must change at its next pin,
+and any module-size exception.
+
+- [ ] Decisions: D3, D4, D6, D8, D10, D14–D22 of the plan's §4 answered
+      (D1, D2, D5, D7, D9, D11–D13, D23, D24 came with the request).
+
+**Fixes ([9], [3], [8], [7])**
+
+- [ ] B1: structured output on any gateway — a learned per-route rung
+      (native → required tool → text, 7-day TTL), the narrow refusal
+      classifier, one shared chain for recap, titles, memory and the
+      reviewer (two rungs, strict); titles normalised like Codex and
+      retried while provisional. Failing test first (the recap's 400).
+- [ ] B2: the context window the metadata knows — bound sessions refreshed
+      at a listing and at each response commit, `usage` in sync,
+      `session_model_metadata` no longer hiding a resolved window, four
+      more listing fields. `/status` and the compaction threshold tested
+      with a listing after creation and during the first turn.
+- [ ] B3: thinking stops when the answer starts — the kernel closes an
+      open reasoning item at the first non-reasoning item, with a frozen
+      duration; the late `output_item.done` persists its payload without a
+      second completion. No TUI guard. Failing test first.
+
+**Context and cache ([6])**
+
+- [ ] C1: cache usage — `ModelUsage` and `AgentModelUsage` gain cache
+      read/write, last and cumulative; prompt total = uncached + read +
+      write; `cached: 0` replaced. Context consumed becomes the prompt
+      total: **the figure rises for Anthropic and its automatic compaction
+      starts earlier** (a change of meaning in `history_committed.usage`).
+      Goals count the prompt total (D10).
+- [ ] C2: `/context` — the last request's composition captured at build
+      time (or an estimate of the next), grouped by instructions, tools,
+      context sections, conversation, summaries, images and free space,
+      with billion-context's bars, then cached, uncached and the hit rate
+      (last and session).
+
+**Effort ([5])**
+
+- [ ] E1: `/effort` and `SettingKind::ChoiceOrText` — options from the
+      reported or configured levels only, else Default and Custom; refused
+      mid-turn; the Settings Center's `reasoningEffort` row on the new
+      kind, every match site and the configuration reference updated.
+
+**Keys ([1])**
+
+- [ ] K1: Codex's three-group `?` overlay from the keymap's hints (3/2/1
+      columns, `/keymap customize`), and the actions `show_shortcuts`,
+      `cycle_mode` (Shift+Tab), `reasoning_down`/`reasoning_up` (Alt+,/.),
+      `previous_agent`/`next_agent` (Alt+←/→ on an empty composer), all
+      rebindable (`empty_composer_only`, D18).
+- [ ] K2: `!command` — a no-model turn running the planned `exec_command`
+      handler, approved by the person, in the sandbox, recorded as a
+      `UserShellCommand` item the model reads (D14, D15). Goldens
+      regenerated on purpose.
+- [ ] K3: Ctrl+R history search over this run's messages and the history
+      store's user messages (D16).
+- [ ] K4: Ctrl+G external editor (`VISUAL`/`EDITOR`), a foreground child
+      as `/diff`'s `git` (D17).
+
+**Images ([2])**
+
+- [ ] I1: image paste — Ctrl+V and empty-paste clipboard images (WSL
+      fallback), pasted image paths, `[Image #N]` placeholders with
+      renumbering, image-only messages, steers, backtrack restore, the
+      capability gate. Windows, macOS and WSL clipboards covered by unit
+      tests of the non-clipboard logic only.
+
+**Rendering ([4]; every Codex format in the plan's §2.12 table)**
+
+- [ ] M1: the Markdown renderer — tables (key/value fallback, ```md
+      unwrap, literal tables), task lists, list spacing, web and local
+      links, `tui.rendering.*`; pulldown-cmark 0.13 adaptations.
+- [ ] M2: source-backed answer cells and reflow on resize, in Fullscreen
+      and in Scrollback (D19).
+- [ ] M3: streaming — incremental blocks, stable/tail regions, chunking,
+      table holdback, open-fence highlighting, prose previews.
+- [ ] M4: OSC 8 hyperlinks and URL-aware wrapping.
+- [ ] M5: math (D20).
+- [ ] M6: mermaid, as `crates/tui/src/mermaid/` (D22).
+- [ ] M7: SGR colour in command output, live and on replay (D21).
+- [ ] M8: JSON pretty-printing, MCP content summaries, the diff
+      improvements.
+
 ## Plan: a registry-driven settings center, the command center, and the conversation timeline (2026-11-12)
 
 **Complete (2026-11-13):** every item below is done; T7 was the last.
