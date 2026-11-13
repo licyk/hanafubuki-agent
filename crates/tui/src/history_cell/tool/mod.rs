@@ -113,6 +113,17 @@ impl ToolCallCell {
         }
     }
 
+    /// The turn ended before the calls still running finished: they end
+    /// as they stood, failed, so no spinner or clock runs on.
+    pub(crate) fn end_running(&mut self) {
+        for call in &mut self.calls {
+            call.outcome.get_or_insert(Outcome {
+                is_error: true,
+                display: None,
+            });
+        }
+    }
+
     pub(crate) fn complete(&mut self, call_id: &str, is_error: bool) {
         if let Some(call) = self.call_mut(call_id) {
             call.outcome = Some(Outcome {

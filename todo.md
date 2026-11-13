@@ -1855,7 +1855,11 @@ independent.
         display's view takes over (the same last rows for the same output)
         and the buffer is dropped; with no display (`None` reply) the live
         rows stay. Both presentations through the existing live entry:
-        Scrollback's tail never writes it while it runs.
+        Scrollback's tail never writes it while it runs. A call the turn's
+        end overtakes (interrupted, failed) is marked failed
+        (`ToolCallCell::end_running`): `Ran CMD`, a red bullet, its live
+        rows, no tick; it was left `Running` with its spinner going, which
+        the clock would have made a growing time.
       - Facade (additive): re-exports `AgentToolProgressUpdate`,
         `render_plain_text` and `complete_prefix_len`.
       - Deviations: §4.6's "everything up to 1 MiB, then the first and last
@@ -1880,7 +1884,10 @@ independent.
         through completion and replaced by the display's, kept without one,
         another call's output ignored, the clock in tenths); the chat
         (`chatwidget/tests/entries.rs`: output streams in place in both
-        presentations, nothing for an unknown call or after completion);
+        presentations, nothing for an unknown call or after completion, a
+        command the turn's end overtakes stops its clock and keeps its
+        output; two tests that pinned `Running` after an interrupt now read
+        `Ran`);
         on vt100 (`app/tests/tools.rs`): a real command that prints, then
         waits for a file the test creates (POSIX shell or PowerShell),
         shows its first line under `Running` before it finished and both
@@ -1900,10 +1907,15 @@ independent.
         site:check`, `bun run site:test`. `VITE_BASE_PATH=/hanafubuki-agent/
         bun run site:build` built but could not prerender locally (port 3000
         held by another project's server); CI's Site run covers it.
-        CI on Linux, Windows and macOS: https://github.com/licyk/hanafubuki-agent/actions/runs/43331933917
-        (run on b8f284a, which differs from the landed commit only in this
-        line; Site: .../runs/43331933842, 214 pages prerendered, `#tools`
-        among them; Linux, Windows and macOS jobs all `success`).
+        CI on Linux, Windows and macOS: https://github.com/licyk/hanafubuki-agent/actions/runs/43335634496
+        (run on 79aaf1f, which differs from the landed tree only in this
+        line; Site: .../runs/43335634512, 214 pages prerendered; Linux,
+        Windows and macOS jobs all `success`). The feature without the
+        turn-end fix ran green before too
+        (https://github.com/licyk/hanafubuki-agent/actions/runs/43331933917).
+        Windows ran the streaming app test under the shell `resolve_shell`
+        picks on `windows-latest` (`pwsh` first); no T6 test runs Windows
+        PowerShell 5.1 itself.
       - Hanafubuki at its next pin: nothing to change; the facade gains
         three re-exports (`AgentToolProgressUpdate`, `render_plain_text`,
         `complete_prefix_len`). The TUI crate only otherwise; no twin

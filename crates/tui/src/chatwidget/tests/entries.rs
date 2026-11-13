@@ -218,7 +218,8 @@ fn an_interrupted_turn_says_so_and_completes_its_running_calls() {
     chat.handle_turn_update(TurnUpdate::Ended(TurnEnd::Interrupted));
     let (cells, _) = drain(&events);
     assert_eq!(cells.len(), 2, "{cells:?}");
-    assert!(cells[0].contains("Running sleep 100"), "{cells:?}");
+    // Ended as it stood, failed: no spinner or clock runs on.
+    assert!(cells[0].contains("Ran sleep 100"), "{cells:?}");
     assert!(cells[1].contains("Conversation interrupted"), "{cells:?}");
 }
 
@@ -410,7 +411,7 @@ fn a_turn_that_ends_leaves_its_entries_where_they_are() {
         assert_eq!(transcript(&events, &mut entries), !owned);
         let texts = texts(&entries);
         assert!(texts[count - 2].starts_with("• Thought · 0."), "{texts:?}");
-        assert!(texts[count - 1].contains("Running sleep 100"), "{texts:?}");
+        assert!(texts[count - 1].contains("Ran sleep 100"), "{texts:?}");
         assert!(
             texts[count].contains("Conversation interrupted"),
             "{texts:?}"
@@ -486,4 +487,27 @@ fn a_replayed_run_of_exploring_calls_is_one_entry_as_it_was_live() {
             "• Called search_text: \"x\" in src",
         ]
     );
+}
+
+#[test]
+fn a_command_the_turns_end_overtakes_stops_its_clock_and_keeps_its_output() {
+    for owned in [true, false] {
+        let (mut chat, events) = chat_in(owned);
+        let mut entries = Vec::new();
+        chat.handle_turn_update(TurnUpdate::Started);
+        tool_started(&mut chat, "call-1", "exec_command", Some("sleep 9"));
+        chat.handle_turn_update(TurnUpdate::ToolOutput {
+            call_id: "call-1".to_string(),
+            text: "waiting\n".to_string(),
+            truncated: false,
+        });
+        transcript(&events, &mut entries);
+        chat.handle_turn_update(TurnUpdate::Ended(TurnEnd::Interrupted));
+        assert_eq!(transcript(&events, &mut entries), !owned);
+        // Ended as it stood: no clock or spinner runs on, what it printed stays.
+        assert_eq!(entries[0].transcript_animation_tick(), None);
+        assert_eq!(texts(&entries)[0], "• Ran sleep 9\n  └ waiting");
+        let header = entries[0].display_lines(80).remove(0);
+        assert_eq!(header.spans[0].style.fg, Some(ratatui::style::Color::Red));
+    }
 }
