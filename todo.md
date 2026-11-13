@@ -573,6 +573,10 @@ and any module-size exception.
         prompt total, so its context share and compaction rise and come
         earlier.
       - Module size: no exception added or raised.
+      - CI on Linux, Windows and macOS: https://github.com/licyk/hanafubuki-agent/actions/runs/43386494898
+        (run on fe37c60, which differs from the landed tree only in this
+        line; all three passed at once); Site: .../runs/43386495361,
+        success, its prerender included.
 - [ ] C2: `/context` — the last request's composition captured at build
       time (or an estimate of the next), grouped by instructions, tools,
       context sections, conversation, summaries, images and free space,
