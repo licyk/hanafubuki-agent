@@ -1411,6 +1411,9 @@ and any module-size exception.
         and `RECENT_USER_MESSAGES_MAX` for its own prompt history.
       - Module size: no exception added or raised. `chat_composer/mod.rs`
         494 (the drawing moved to `render.rs`), `agent_bridge/mod.rs` 597.
+      - CI on Linux, Windows and macOS: https://github.com/licyk/hanafubuki-agent/actions/runs/43460170435
+        (run on ed2828f; all three passed at once). Site on ed2828f:
+        .../runs/43460170282, passed, its build and prerender included.
 - [ ] K4: Ctrl+G external editor (`VISUAL`/`EDITOR`), a foreground child
       as `/diff`'s `git` (D17).
 
