@@ -223,7 +223,7 @@ fn the_oldest_entries_are_written_above_the_tail_in_order_and_the_rest_on_the_ne
     assert!(in_tail < 12 + 2, "{in_tail}");
 
     // Your next message writes the tail before it.
-    let prompt = new_user_prompt("next".to_string());
+    let prompt = new_user_prompt(&"next".into());
     harness.send(AppEvent::InsertHistoryCell(Box::new(prompt)));
     assert_eq!(harness.app.tail.cells().len(), 1);
     let rows = harness.rows();

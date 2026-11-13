@@ -209,7 +209,7 @@ fn a_message_of_yours_writes_the_tail_before_it_whole() {
     assert!(fixture.take(Some(40)).0.is_empty());
     fixture
         .tail
-        .push(Arc::new(new_user_prompt("again".to_string())), false);
+        .push(Arc::new(new_user_prompt(&"again".into())), false);
     let (written, entries) = fixture.take(Some(40));
     assert_eq!(written[0], "• note");
     assert_eq!(

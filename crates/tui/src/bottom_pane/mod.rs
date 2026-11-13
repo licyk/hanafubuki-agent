@@ -61,6 +61,7 @@ use crate::render::renderable::Renderable;
 use crate::render::renderable::RenderableItem;
 use crate::status_indicator_widget::StatusIndicatorWidget;
 use crate::tui::FrameRequester;
+use crate::user_message::{MessageImage, UserMessage};
 use approval_overlay::ApprovalOverlay;
 pub(crate) use bottom_pane_view::BottomPaneView;
 use chat_composer::ChatComposer;
@@ -89,10 +90,11 @@ pub(crate) const QUIT_SHORTCUT_TIMEOUT: Duration = Duration::from_secs(1);
 /// What a key the composer handled amounts to.
 #[derive(Debug, PartialEq)]
 pub(crate) enum InputResult {
-    /// The message the person sent, trimmed, with large pastes put back.
-    Submitted(String),
+    /// The message the person sent, trimmed, with large pastes put back,
+    /// and its images.
+    Submitted(UserMessage),
     /// The message the person queued (Tab) while a turn runs.
-    Queued(String),
+    Queued(UserMessage),
     /// A command, with the text after its name when it takes any.
     Command(&'static CommandSpec, String),
     None,
@@ -396,17 +398,39 @@ impl BottomPane {
         self.composer.enhanced_keys_supported()
     }
 
-    pub(crate) fn set_composer_text(&mut self, text: String) {
+    /// The draft becomes `message`, with its images.
+    pub(crate) fn set_composer_message(&mut self, message: UserMessage) {
         // A message to edit replaces the draft a search would give back.
         self.composer.cancel_history_search();
-        self.composer.set_text_content(text);
+        self.composer.set_message(message);
         self.request_redraw();
+    }
+
+    #[cfg(test)]
+    pub(crate) fn set_composer_text(&mut self, text: String) {
+        self.set_composer_message(UserMessage::from_text(text));
     }
 
     /// Puts messages that did not reach the turn back in the composer,
     /// before the draft.
-    pub(crate) fn restore_draft(&mut self, text: String) {
-        self.composer.restore_draft(text);
+    pub(crate) fn restore_draft(&mut self, message: UserMessage) {
+        self.composer.restore_draft(message);
+        self.request_redraw();
+    }
+
+    /// Whether the clipboard's image would go into the composer's draft:
+    /// no view is open, and the composer has the keys with no popup.
+    pub(crate) fn composer_takes_images(&self) -> bool {
+        self.view_stack.is_empty() && self.composer.takes_images()
+    }
+
+    /// Why no image can be attached to the draft now; `Ok` when one can.
+    pub(crate) fn image_attachable(&self) -> Result<(), String> {
+        self.composer.image_attachable()
+    }
+
+    pub(crate) fn attach_image(&mut self, image: MessageImage) {
+        self.composer.attach_image(image);
         self.request_redraw();
     }
 

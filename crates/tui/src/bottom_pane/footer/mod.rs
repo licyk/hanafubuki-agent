@@ -55,6 +55,9 @@ pub(crate) struct FooterProps<'a> {
     pub(crate) second_conversation: bool,
     /// The draft starts with `!`: it is a shell command.
     pub(crate) shell_command: bool,
+    /// Under WSL, whose terminal pastes text with Ctrl+V: the shortcuts
+    /// show Ctrl+Alt+V for pasting an image.
+    pub(crate) wsl: bool,
 }
 
 /// Selects which footer content is rendered.

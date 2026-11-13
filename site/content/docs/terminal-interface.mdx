@@ -55,6 +55,7 @@ Fullscreen 下，对话占满底部区域上方的屏幕。Scrollback 下，界�
 | Shift+Enter、Ctrl+J                   | 换行。Shift+Enter 需要终端支持增强键盘协议，否则请用 Ctrl+J                                                                          |
 | Up、Down（Ctrl-P、Ctrl-N）            | 输入框为空时，翻看本次运行中发送过的消息；在弹出列表中移动                                                                           |
 | Ctrl-R                                | 搜索发送过的消息，包括本次运行和之前的会话中的（[见下文](#composer)）                                                                |
+| Ctrl-V（WSL 下为 Ctrl-Alt-V）         | 把剪贴板中的图片作为 `[Image #1]` 附加到消息；剪贴板中只有文本时，粘贴文本（[见下文](#composer)）                                    |
 | Ctrl-G                                | 在你的编辑器（`VISUAL` 或 `EDITOR`）中编辑草稿（[见下文](#composer)）                                                                |
 | Esc                                   | 关闭弹出列表；否则中断正在运行的回合，并立即发送回合还没读到的补充消息。没有回合运行时，在空输入框上按两次：编辑之前的消息（见下文） |
 | Ctrl-C                                | 依次：在审批中拒绝；清空有内容的输入框；中断正在运行的回合；1 秒内再按一次则退出                                                     |
@@ -71,7 +72,7 @@ Fullscreen 下，对话占满底部区域上方的屏幕。Scrollback 下，界�
 
 Fullscreen 下还有阅读对话的按键：Page Up/Page Down、F3、F4、Ctrl-Space 等，见[阅读对话](#reading)；Scrollback 下，F4 聚焦尾部的活动。
 
-以上是默认按键。[按键映射](#keymap)可以修改其中各个动作的按键（Enter、Tab 排队、Shift+Left 编辑排队的消息、历史及其搜索、外部编辑器、Esc 中断、Ctrl-T、Ctrl-O、`?`、Shift+Tab、Alt+, 和 Alt+.、Alt+Left 和 Alt+Right、编辑键、对话和分页器的按键、指挥中心的会话操作）；Ctrl-C、Ctrl-D 以及弹出列表和列表自己的按键（包括 Tab 的补全）保持不变。
+以上是默认按键。[按键映射](#keymap)可以修改其中各个动作的按键（Enter、Tab 排队、Shift+Left 编辑排队的消息、历史及其搜索、粘贴图片、外部编辑器、Esc 中断、Ctrl-T、Ctrl-O、`?`、Shift+Tab、Alt+, 和 Alt+.、Alt+Left 和 Alt+Right、编辑键、对话和分页器的按键、指挥中心的会话操作）；Ctrl-C、Ctrl-D 以及弹出列表和列表自己的按键（包括 Tab 的补全）保持不变。
 
 输入框支持常见的 Emacs 风格编辑键：Ctrl-A/E 到行首/行尾，Ctrl-W 删除前一个词，Ctrl-U/K 删除到行首/行尾，Alt-B/F 按词移动等。
 
@@ -92,15 +93,15 @@ Fullscreen 下还有阅读对话的按键：Page Up/Page Down、F3、F4、Ctrl-S
   @         Mention files        shift + tab        Change mode                 f3                                 Find text
   !         Shell command        alt + ,            Less reasoning              pgup / pgdn                        Scroll
   ctrl + j  New line             alt + .            More reasoning              ctrl + space                       Start selection
-  ctrl + g  External editor      ←                  Agents (empty prompt)       ctrl + home / ctrl + end           Top / latest
-  ctrl + r  Search history       alt + ← / alt + →  Subagents (empty prompt)    shift + alt + , / shift + alt + .  Top / latest
-  esc esc   Edit last message    f4                 Inspect activity
-                                 ctrl + c           Quit
+  ctrl + v  Paste image          ←                  Agents (empty prompt)       ctrl + home / ctrl + end           Top / latest
+  ctrl + g  External editor      alt + ← / alt + →  Subagents (empty prompt)    shift + alt + , / shift + alt + .  Top / latest
+  ctrl + r  Search history       f4                 Inspect activity
+  esc esc   Edit last message    ctrl + c           Quit
 
   /keymap customize
 ```
 
-- **Compose**：`!` 运行 shell 命令，Ctrl+G 在你的编辑器中编辑草稿，Ctrl+R 搜索发送过的消息（[见下文](#composer)）；终端能区分 Shift+Enter 时，换行键显示为 Shift+Enter。**Session**：回合进行中，Tab 显示为 `Queue message`，Ctrl+C 显示为 `Interrupt`。**Transcript**：阅读对话的按键（[阅读对话](#reading)），Fullscreen 下在输入框旁边就能用，Scrollback 下在 Ctrl+T 打开对话记录之后使用。
+- **Compose**：`!` 运行 shell 命令，Ctrl+V 附加剪贴板中的图片（WSL 下显示为 `ctrl + alt + v`，那里的终端用 Ctrl+V 粘贴文本），Ctrl+G 在你的编辑器中编辑草稿，Ctrl+R 搜索发送过的消息（[见下文](#composer)）；终端能区分 Shift+Enter 时，换行键显示为 Shift+Enter。**Session**：回合进行中，Tab 显示为 `Queue message`，Ctrl+C 显示为 `Interrupt`。**Transcript**：阅读对话的按键（[阅读对话](#reading)），Fullscreen 下在输入框旁边就能用，Scrollback 下在 Ctrl+T 打开对话记录之后使用。
 - 在[旁路对话](#side)或正在显示的[子代理](#subagents)中，模式、推理强度和编辑之前的消息属于主对话，不显示。
 - 屏幕高度不够全部显示时，列表被截断，并提示 `… more: /keymap`；`/keymap` 列出所有动作。
 - Shift+Tab 在回合进行中不可用，和 `/mode` 一样。Alt+, 和 Alt+. 在 `/effort` 提供的档位之间切换（[见下文](#effort)）。Alt+Left 和 Alt+Right 在会话及其子代理之间循环切换（[见下文](#subagents)）。
@@ -108,6 +109,7 @@ Fullscreen 下还有阅读对话的按键：Page Up/Page Down、F3、F4、Ctrl-S
 ## 输入框 [#composer]
 
 - **粘贴**：超过 1000 个字符的粘贴内容在输入框中显示为 `[Pasted Content 1234 chars]` 占位符，发送时展开；删除占位符就删除了这段粘贴。
+- **图片**（与 Codex 相同）：按 Ctrl-V 把剪贴板中的图片附加到消息中光标所在处，显示为 `[Image #1]`，之后依次是 `[Image #2]` 等；WSL 下改用 Ctrl-Alt-V，因为那里 Ctrl-V 是终端的粘贴。在文件管理器中复制的图片文件按原位置附加；图片本身（截图、在浏览器中复制的图片）保存为 PNG，即 `clipboard-1.png` 等，放在界面在系统临时目录中创建的一个目录里。WSL 下 Linux 看到的剪贴板不是 Windows 的，因此会通过 PowerShell（先 `powershell.exe`，再 `pwsh`）取得 Windows 剪贴板中的图片。粘贴的内容如果正好是一个图片文件的路径（带引号、空格转义、`file://` URL，或者 Windows 路径，WSL 下读作对应的 `/mnt/c/…` 路径），同样附加该文件，后面跟一个空格；指向其他内容的路径保持为文本。消息可以只有图片。占位符是一个整体：Backspace 会整个删除它，同时去掉它的图片（并删除它的 PNG），后面的图片重新编号。模型读到的消息在你放置的位置保留这些标签，图片按顺序跟在消息之后，所以 `compare [Image #1] with [Image #2]` 能指明它们；对话中显示这条消息，并为每张图片显示一行 `[Image #1: clipboard-1.png]`。Agent 在消息发送时读取每张图片并保存自己的副本：回合开始后，或者对补充消息而言，模型读到它之后，PNG 就被删除；界面退出时，目录连同其中剩下的文件一起删除。只能附加 PNG、JPEG、GIF 和 WebP 图片，每张不超过 20 MiB 和 4000 万像素，每条消息最多 8 张；超出的会立即被拒绝并说明原因（`photo.bmp is not a PNG, JPEG, GIF or WebP image, the formats a model is sent.`、`… is too large to attach: …`、`A message carries at most 8 images; remove one first.`），路径则保留为文本。剪贴板中只有文本、没有图片时，像终端的粘贴一样粘贴文本；两者都没有时，Ctrl-V 提示 `There is no image on the clipboard.`；没有可读的剪贴板时（没有显示服务，或者通过 SSH 使用的终端，其剪贴板属于另一台机器），提示 `The clipboard cannot be read (…); save the image to a file and paste its path instead.`。有些终端在剪贴板中是图片时发送一次空的粘贴，这同样会附加剪贴板中的图片，没有图片时什么也不提示。弹出列表或历史搜索打开时，Ctrl-V 不起作用；`!` 命令不带图片（``A `!` command takes no images.``）。已知会话的模型不读图时，带图片的消息留在输入框中（`This model does not read images (reported); remove the image or switch with /model.`，见[图片](/docs/providers-models#images)）；没有任何来源说明时照常发送。Up、Down 和 Ctrl-R 取回本次运行的消息时连同其图片一起取回，PNG 已被删除的图片连同标签一起略去；更早会话中的消息取回时不带标签，因为它的图片不会被读回。放回输入框的消息，或者合并为一条发送的消息，都保留各自的图片，并按顺序重新编号。Ctrl-G 把标签原样交给编辑器：标签留在原处或被移动，都保留其图片；标签被删除则去掉其图片，其余的重新编号。[按键映射](#keymap)中的 `composer.paste_image` 可以改绑 Ctrl-V 和 Ctrl-Alt-V；在 Windows 上 Ctrl-Alt-V 是 AltGr，不会粘贴图片。
 - **历史**：Up/Down 翻看的是本次运行中发送过的消息（包括被 Ctrl-C 清空的草稿），不包括恢复的会话中的旧消息；Ctrl-R 的搜索包括这些旧消息。
 - **搜索历史**：按 Ctrl-R，输入框下方一行变为 `reverse-i-search:`（与 Codex 相同）。输入或粘贴要找的内容，不区分大小写；输入框会在草稿的位置显示包含它的最新一条消息，并高亮找到的文字。搜索先查本次运行中发送过的消息，再查你在 Agent 各个会话中发送过的内容，从最新的开始：消息、补充消息和按输入原样记录的 `!` 命令，最多最近 1,000 条，相同的文字只出现一次；子代理的会话不包括在内。这些内容只在第一次按 Ctrl-R 时读取一次，读到之前这一行显示 `searching`。Ctrl-R 或 Up 显示更早的匹配，Ctrl-S 或 Down 显示更新的匹配，到头时保持当前的匹配。Enter 把匹配放进输入框供你修改，并不发送；Esc 或 Ctrl-C 关闭搜索，把草稿原样放回，回合进行中也一样，回合会继续运行。找不到时这一行显示 `no match`，并显示你的草稿。Backspace 删除搜索内容的一个字符，Ctrl-U 删除全部。搜索期间交还给输入框的消息（被中断的回合中等待的消息）放进 Esc 放回的草稿中。[按键映射](#keymap)中的 `composer.history_search` 可以改绑 Ctrl-R；搜索中的其他按键保持不变。
 - **在编辑器中编辑**：按 Ctrl-G，在你的编辑器中打开草稿（与 Codex 相同）：使用 `VISUAL` 中的命令，没有则用 `EDITOR` 中的，取界面启动时的值；设为空的变量视为未设置。命令可以带参数和引号，例如 `code --wait`：在 Windows 上按 Windows 命令行的规则解析，反斜杠是路径的一部分，并且程序会结合扩展名在 `PATH` 中查找，所以 `code` 能找到 `code.cmd`。草稿（其中的大段粘贴已展开）写入一个临时 `.md` 文件，界面把终端交给编辑器并等待它退出：期间离开 Fullscreen 的屏幕并交还终端的各种模式，之后再收回。输入框下方一行显示 `Save and close external editor to continue.`，在 Scrollback 下，编辑器在另一个窗口中打开草稿时可以看到；这种编辑器必须等窗口关闭后才退出（`code --wait`）。编辑器成功退出后，它保存的内容成为草稿，末尾的空行被去掉；原样带回的大段粘贴重新显示为占位符（改过的则保留为文本）。没有设置编辑器时，界面提示 `Set VISUAL or EDITOR to edit the message in an editor.`；找不到编辑器、无法启动、以错误退出，或文件不再是文本时，对话中会说明原因，草稿保持不变。弹出列表或历史搜索打开时，Ctrl-G 不起作用。回合进行中也可以使用：回合继续运行，编辑器关闭后对话再显示它做了什么。编辑器在另一个窗口中打开草稿时，终端处于普通模式：此时在终端中按 Ctrl-C 会停止界面，就像停止 shell 运行的任何程序一样。[按键映射](#keymap)中的 `composer.external_editor` 可以改绑 Ctrl-G。
@@ -521,7 +523,7 @@ Scrollback 下，Ctrl-T 在终端的备用屏幕上打开整个会话的对话�
 
 Fullscreen 下，对话的其他按键（Page Up/Page Down、Home/End、F3）照常可用，按其他任意键则结束浏览；Scrollback 下对话记录的按键照常可用，`q` 关闭它。
 
-Enter 在会话的副本中编辑：会话在这条消息所在回合之前分叉，界面切换到分叉出的会话，它的对话停在这条消息之前，这条消息回到输入框中，供你修改后发送。原会话被完整归档：`hanafubuki-agent sessions list --archived` 可以找到它（见[会话](/docs/sessions#edit)）。Agent 修改过的文件不会恢复，本次运行中第一次编辑时会提示这一点。消息附带的图片不会放回，因为输入框无法附加图片；会有一行说明有几张。
+Enter 在会话的副本中编辑：会话在这条消息所在回合之前分叉，界面切换到分叉出的会话，它的对话停在这条消息之前，这条消息回到输入框中，供你修改后发送。原会话被完整归档：`hanafubuki-agent sessions list --archived` 可以找到它（见[会话](/docs/sessions#edit)）。Agent 修改过的文件不会恢复，本次运行中第一次编辑时会提示这一点。消息附带的图片随消息一起回到输入框，显示为 `[Image #1]` 等，使用的是会话保存的副本。
 
 - 回合进行中发送的消息（补充消息）不是一个独立回合的开始，不能单独编辑：请编辑开始那个回合的消息。
 - 回合运行时，Esc 和以前一样中断回合；在没有回合运行、也没有消息等待之前，编辑会被拒绝。
@@ -720,6 +722,7 @@ yank = []
 | `composer.queue`                  | `tab`                                                                 | 回合进行中：把消息排入队列，等回合结束后发送                 |
 | `composer.history_previous`       | `up`、`ctrl-p`                                                        | 上一条发送过的消息                                           |
 | `composer.history_next`           | `down`、`ctrl-n`                                                      | 下一条发送过的消息                                           |
+| `composer.paste_image`            | `ctrl-v`、`ctrl-alt-v`                                                | 把剪贴板中的图片附加到消息（Ctrl-Alt-V 用于 WSL）            |
 | `composer.external_editor`        | `ctrl-g`                                                              | 在外部编辑器（`VISUAL`，没有则 `EDITOR`）中编辑草稿          |
 | `composer.history_search`         | `ctrl-r`                                                              | 搜索发送过的消息，包括本次运行和之前的会话中的               |
 | `composer.show_shortcuts`         | `?`                                                                   | 输入框为空时：显示或隐藏快捷键说明                           |

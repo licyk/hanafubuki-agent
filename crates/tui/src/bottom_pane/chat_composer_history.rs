@@ -7,14 +7,17 @@
 //! in the Agent's sessions, read once from the history store on the first
 //! search. Codex fetches its history file entry by entry; here the stored
 //! messages come in one bounded read, so a search waits only while that
-//! read runs.
+//! read runs. An entry is a message with its images (`UserMessage`); a
+//! stored one keeps its text only.
 
 use std::collections::HashSet;
+
+use crate::user_message::UserMessage;
 
 /// The navigation state, kept apart from the widget so it is tested alone.
 pub(crate) struct ChatComposerHistory {
     /// Messages submitted by the user *during this UI session* (newest at END).
-    local_history: Vec<String>,
+    local_history: Vec<UserMessage>,
 
     /// What the person sent in the Agent's sessions, newest first.
     stored: StoredHistory,
@@ -45,8 +48,8 @@ impl ChatComposerHistory {
 
     /// Record a message submitted by the user in the current session so it can
     /// be recalled later.
-    pub fn record_local_submission(&mut self, text: String) {
-        if text.is_empty() {
+    pub fn record_local_submission(&mut self, message: UserMessage) {
+        if message.text.is_empty() {
             return;
         }
 
@@ -55,11 +58,11 @@ impl ChatComposerHistory {
         self.search = None;
 
         // Avoid inserting a duplicate if identical to the previous entry.
-        if self.local_history.last() == Some(&text) {
+        if self.local_history.last() == Some(&message) {
             return;
         }
 
-        self.local_history.push(text);
+        self.local_history.push(message);
     }
 
     /// Reset navigation tracking so the next Up key resumes from the latest entry.
@@ -90,7 +93,7 @@ impl ChatComposerHistory {
     }
 
     /// Handle <Up>: the entry to show, if the cursor moved.
-    pub fn navigate_up(&mut self) -> Option<String> {
+    pub fn navigate_up(&mut self) -> Option<UserMessage> {
         let total_entries = self.local_history.len();
         if total_entries == 0 {
             return None;
@@ -107,7 +110,7 @@ impl ChatComposerHistory {
     }
 
     /// Handle <Down>.
-    pub fn navigate_down(&mut self) -> Option<String> {
+    pub fn navigate_down(&mut self) -> Option<UserMessage> {
         let total_entries = self.local_history.len();
         if total_entries == 0 {
             return None;
@@ -128,14 +131,16 @@ impl ChatComposerHistory {
                 // Past newest – clear and exit browsing mode.
                 self.history_cursor = None;
                 self.last_history_text = None;
-                Some(String::new())
+                Some(UserMessage::default())
             }
         }
     }
 
-    fn populate_history_at_index(&mut self, idx: usize) -> Option<String> {
-        let entry = self.local_history.get(idx).cloned()?;
-        self.last_history_text = Some(entry.clone());
+    /// The entry at `idx` as the composer shows it, without the images
+    /// that are gone.
+    fn populate_history_at_index(&mut self, idx: usize) -> Option<UserMessage> {
+        let entry = self.local_history.get(idx).cloned()?.available();
+        self.last_history_text = Some(entry.text.clone());
         Some(entry)
     }
 
@@ -200,20 +205,23 @@ impl ChatComposerHistory {
 
     /// Every entry holding `query` (ignoring case), each text once: this
     /// run's newest first, then the stored ones.
-    fn matches(&self, query: &str) -> Vec<String> {
+    fn matches(&self, query: &str) -> Vec<UserMessage> {
         let query = query.to_lowercase();
         let stored = match &self.stored {
             StoredHistory::Read(entries) => entries.as_slice(),
             StoredHistory::Unread | StoredHistory::Reading => &[],
         };
         let mut seen = HashSet::new();
-        self.local_history
+        let local = self
+            .local_history
             .iter()
             .rev()
-            .chain(stored)
-            .filter(|entry| entry.to_lowercase().contains(&query))
-            .filter(|entry| seen.insert(entry.as_str()))
-            .cloned()
+            .map(|entry| (&entry.text, Some(entry)));
+        local
+            .chain(stored.iter().map(|text| (text, None)))
+            .filter(|(text, _)| text.to_lowercase().contains(&query))
+            .filter(|(text, _)| seen.insert(text.as_str()))
+            .map(|(text, local)| local.cloned().unwrap_or_else(|| UserMessage::stored(text)))
             .collect()
     }
 }
@@ -235,7 +243,7 @@ pub(crate) enum HistorySearchDirection {
 /// shown stays; `Pending`: none yet, the stored messages are still read.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum HistorySearchResult {
-    Found(String),
+    Found(UserMessage),
     Pending,
     AtBoundary,
     NotFound,
@@ -244,7 +252,7 @@ pub(crate) enum HistorySearchResult {
 /// One query's matches, newest first, and the one shown.
 struct HistorySearchState {
     query: String,
-    matches: Vec<String>,
+    matches: Vec<UserMessage>,
     selected: Option<usize>,
     /// A step older waits for the stored messages.
     waiting: bool,

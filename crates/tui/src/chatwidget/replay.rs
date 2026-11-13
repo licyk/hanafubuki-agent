@@ -11,6 +11,7 @@ use crate::agent_bridge::{HooksCall, OpenedSession, ReplayedItem};
 use crate::app_event::{AgentCommand, AppEvent, Op};
 use crate::history_cell::{self, explores, HistoryCell, ToolCallCell};
 use crate::streaming::controller::{PlanStreamController, StreamController};
+use crate::user_message::image_rows;
 
 impl ChatWidget {
     /// Shows the session from its start. What the previous session left
@@ -89,9 +90,9 @@ impl ChatWidget {
                 }
             }
             match item {
-                ReplayedItem::User(text) => {
-                    cells.push(Box::new(history_cell::new_user_prompt(text)))
-                }
+                ReplayedItem::User { text, images } => cells.push(Box::new(
+                    history_cell::user_prompt(text, image_rows(images.iter().map(String::as_str))),
+                )),
                 ReplayedItem::Reasoning {
                     item_id,
                     text,

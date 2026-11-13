@@ -12,13 +12,20 @@ base64.workspace = true
 chrono = "0.4"
 hanafubuki-agent.workspace = true
 ignore.workspace = true
+# A clipboard image encoded to PNG, and a pasted image's format and size
+# read from its header: the formats the Agent sends.
+image = { workspace = true, features = ["gif", "jpeg", "png", "webp"] }
 nucleo = "0.5"
 parking_lot.workspace = true
 pulldown-cmark = { version = "0.13", default-features = false }
 # Without the default features, which pull crossterm 0.28 in beside 0.29.
 ratatui = { version = "0.30", default-features = false, features = ["crossterm_0_29", "scrolling-regions", "unstable-rendered-line-info"] }
 serde_json.workspace = true
-# The external editor's temporary file (Ctrl+G).
+# A pasted path's shell quoting undone (Codex's normalisation), and the
+# external editor's command split into a shell's words on Unix.
+shlex = "2"
+# The external editor's temporary file (Ctrl+G), and the run's directory of
+# pasted clipboard images.
 tempfile.workspace = true
 # Codex's feature set: the grammars and themes two-face bundles, read with
 # Oniguruma, which some of its grammars need.
@@ -28,20 +35,18 @@ textwrap = "0.16"
 two-face = { version = "0.5", default-features = false, features = ["syntect-onig"] }
 unicode-segmentation = "1.12"
 unicode-width.workspace = true
+# A pasted `file://` URL read as a path.
+url.workspace = true
 
-# The native clipboard; Android has none (OSC 52 still copies there). The
-# default `image-data` feature is left out: only text is copied.
+# The native clipboard; Android has none (OSC 52 still copies there).
+# `image-data` reads a copied image (Ctrl+V).
 [target.'cfg(not(target_os = "android"))'.dependencies]
-arboard = { version = "3", default-features = false, features = ["wayland-data-control"] }
+arboard = { version = "3", default-features = false, features = ["image-data", "wayland-data-control"] }
 
-# How the external editor's command is split, as in Codex: into a shell's
-# words on Unix, by the Windows command line's rules on Windows (where a
-# backslash in a path is no escape); and, on Windows, the program looked up
-# on PATH with PATHEXT, which finds a shim such as `code.cmd` that a spawn by
-# name does not.
-[target.'cfg(not(windows))'.dependencies]
-shlex = "2"
-
+# How the external editor's command is split on Windows, as in Codex: by the
+# Windows command line's rules (where a backslash in a path is no escape);
+# and the program looked up on PATH with PATHEXT, which finds a shim such as
+# `code.cmd` that a spawn by name does not.
 [target.'cfg(windows)'.dependencies]
 which = "8"
 winsplit = "0.1"

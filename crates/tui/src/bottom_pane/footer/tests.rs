@@ -63,6 +63,7 @@ fn props(mode: FooterMode) -> FooterProps<'static> {
         agents_hint: false,
         second_conversation: false,
         shell_command: false,
+        wsl: false,
     }
 }
 
@@ -174,11 +175,13 @@ fn the_shortcuts_show_the_keys_in_force() {
         ("composer", "previous_agent", &[]),
         ("composer", "history_search", &["f7"]),
         ("composer", "external_editor", &["f9"]),
+        ("composer", "paste_image", &["f10"]),
     ]);
     let text = overlay_text(overlay(), 140);
     install(&[
         ("composer", "history_search", &[]),
         ("composer", "external_editor", &[]),
+        ("composer", "paste_image", &[]),
     ]);
     let unbound = overlay_text(overlay(), 140);
     keymap::install(Keymap::default());
@@ -188,8 +191,26 @@ fn the_shortcuts_show_the_keys_in_force() {
     assert!(!text.contains("Subagents"), "{text}");
     assert!(text.contains("f7 Search history"), "{text}");
     assert!(text.contains("f9 External editor"), "{text}");
+    assert!(text.contains("f10 Paste image"), "{text}");
     assert!(!unbound.contains("Search history"), "{unbound}");
     assert!(!unbound.contains("External editor"), "{unbound}");
+    assert!(!unbound.contains("Paste image"), "{unbound}");
+}
+
+#[test]
+fn paste_image_shows_ctrl_alt_v_under_wsl() {
+    let wsl = FooterProps {
+        wsl: true,
+        ..overlay()
+    };
+    let text = overlay_text(wsl, 140);
+    assert!(text.contains("ctrl + ⌥ + v Paste image"), "{text}");
+    assert!(!text.contains("ctrl + v Paste image"), "{text}");
+    // Under WSL with Ctrl+Alt+V unbound, the key in force.
+    install(&[("composer", "paste_image", &["ctrl-v"])]);
+    let text = overlay_text(wsl, 140);
+    keymap::install(Keymap::default());
+    assert!(text.contains("ctrl + v Paste image"), "{text}");
 }
 
 #[test]
@@ -208,13 +229,14 @@ fn the_shortcuts_list_what_works_here() {
         "shift + ⌥ + , / shift + ⌥ + .",
         "/keymap customize",
         "! Shell command",
+        "ctrl + v Paste image",
         "ctrl + g External editor",
         "ctrl + r Search history",
     ] {
         assert!(text.contains(wanted), "{wanted}:\n{text}");
     }
-    // No voice; and no Ctrl+V until its action exists.
-    for absent in ["Voice", "f8", "Paste image"] {
+    // No voice.
+    for absent in ["Voice", "f8", "⌥ + v"] {
         assert!(!text.contains(absent), "{absent}:\n{text}");
     }
     // A second conversation's mode, effort and earlier messages are the

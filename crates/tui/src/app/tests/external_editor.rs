@@ -32,7 +32,7 @@ impl Harness {
         self.key_with(KeyCode::Char('g'), KeyModifiers::CONTROL);
     }
 
-    fn composer_text(&self) -> String {
+    pub(super) fn composer_text(&self) -> String {
         self.app.chat_widget.composer_text()
     }
 }

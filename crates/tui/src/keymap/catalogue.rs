@@ -26,7 +26,7 @@ macro_rules! action {
 }
 
 /// Every action, in [`Action`]'s order.
-pub(crate) static ACTIONS: [ActionSpec; 74] = [
+pub(crate) static ACTIONS: [ActionSpec; 75] = [
     action!(
         Leader,
         Global,
@@ -202,6 +202,13 @@ pub(crate) static ACTIONS: [ActionSpec; 74] = [
         "history_next",
         "The next message sent",
         ["down", "ctrl-n"]
+    ),
+    action!(
+        PasteImage,
+        Composer,
+        "paste_image",
+        "Attach the clipboard's image to the message (Ctrl+Alt+V for WSL, whose terminal pastes text with Ctrl+V)",
+        ["ctrl-v", "ctrl-alt-v"]
     ),
     action!(
         ExternalEditor,

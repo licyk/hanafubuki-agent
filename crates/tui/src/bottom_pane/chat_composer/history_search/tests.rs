@@ -32,7 +32,7 @@ fn composer_with(local: &[&str]) -> (ChatComposer, Receiver<AppEvent>) {
         "Ask Codex to do anything".to_string(),
     );
     for entry in local {
-        composer.history.record_local_submission(entry.to_string());
+        composer.history.record_local_submission((*entry).into());
     }
     (composer, rx)
 }
@@ -273,14 +273,14 @@ fn a_message_given_back_during_the_search_goes_into_the_draft() {
     composer.set_text_content("draft".to_string());
     open(&mut composer, &[]);
     type_query(&mut composer, "git");
-    composer.restore_draft("waiting message".to_string());
+    composer.restore_draft("waiting message".into());
     assert_eq!(text(&composer), "git status");
     press(&mut composer, key(KeyCode::Esc));
     assert_eq!(text(&composer), "waiting message\ndraft");
 
     // With no match shown, the draft shows, and changes in place.
     open(&mut composer, &[]);
-    composer.restore_draft("another".to_string());
+    composer.restore_draft("another".into());
     assert_eq!(text(&composer), "another\nwaiting message\ndraft");
     press(&mut composer, key(KeyCode::Esc));
     assert_eq!(text(&composer), "another\nwaiting message\ndraft");

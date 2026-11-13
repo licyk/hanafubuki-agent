@@ -154,13 +154,10 @@ fn clear_for_ctrl_c_records_cleared_draft() {
     );
 
     composer.set_text_content("draft text".to_string());
-    assert_eq!(composer.clear_for_ctrl_c(), Some("draft text".to_string()));
+    composer.clear_for_ctrl_c();
     assert!(composer.is_empty());
 
-    assert_eq!(
-        composer.history.navigate_up(),
-        Some("draft text".to_string())
-    );
+    assert_eq!(composer.history.navigate_up(), Some("draft text".into()));
 }
 
 /// Behavior: `?` toggles the shortcut overlay only when the composer is otherwise empty. After
@@ -278,7 +275,7 @@ fn ascii_prefix_survives_non_ascii_followup() {
 
     let (result, _) = composer.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     match result {
-        InputResult::Submitted(text) => assert_eq!(text, "1あ"),
+        InputResult::Submitted(message) => assert_eq!(message.text, "1あ"),
         _ => panic!("expected Submitted"),
     }
 }
@@ -520,7 +517,7 @@ fn handle_paste_small_inserts_text() {
 
     let (result, _) = composer.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     match result {
-        InputResult::Submitted(text) => assert_eq!(text, "hello"),
+        InputResult::Submitted(message) => assert_eq!(message.text, "hello"),
         _ => panic!("expected Submitted"),
     }
 }
@@ -576,7 +573,7 @@ fn handle_paste_large_uses_placeholder_and_replaces_on_submit() {
 
     let (result, _) = composer.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     match result {
-        InputResult::Submitted(text) => assert_eq!(text, large),
+        InputResult::Submitted(message) => assert_eq!(message.text, large),
         _ => panic!("expected Submitted"),
     }
     assert!(composer.pending_pastes.is_empty());
@@ -750,8 +747,11 @@ fn test_multiple_pastes_submission() {
 
     // Submit and verify final expansion
     let (result, _) = composer.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-    if let InputResult::Submitted(text) = result {
-        assert_eq!(text, format!("{} and {}", test_cases[0].0, test_cases[2].0));
+    if let InputResult::Submitted(message) = result {
+        assert_eq!(
+            message.text,
+            format!("{} and {}", test_cases[0].0, test_cases[2].0)
+        );
     } else {
         panic!("expected Submitted");
     }

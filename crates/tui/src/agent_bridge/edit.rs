@@ -1,7 +1,8 @@
 //! Editing an earlier message: the prompt chosen in the transcript is
 //! found among the session's saved turns, and the facade forks the session
 //! before that turn and archives the original (`edit_from_turn`); the
-//! interface then shows the fork, with the prompt back in the composer.
+//! interface then shows the fork, with the prompt back in the composer,
+//! its images with it (the fork's attachments).
 //!
 //! The transcript shows the latest items (older ones may not be loaded),
 //! so a prompt is counted from the latest: the first one is the session's
@@ -19,14 +20,13 @@ use hanafubuki_agent::{
 };
 
 use super::{AgentBridge, OpenedSession};
+use crate::user_message::{ImageSource, MessageImage, UserMessage};
 
 /// The interface after an edit: the fork, and the message to edit.
 #[derive(Debug)]
 pub(crate) struct EditedPrompt {
     pub(crate) opened: OpenedSession,
-    pub(crate) prompt: String,
-    /// The images the message had, which the composer cannot attach.
-    pub(crate) images: usize,
+    pub(crate) prompt: UserMessage,
 }
 
 impl AgentBridge {
@@ -39,10 +39,20 @@ impl AgentBridge {
         let turn_id = self.prompt_turn(session_id, prompts)?;
         let edited = self.agent.edit_from_turn(session_id, turn_id)?;
         let opened = self.open(edited.session.id)?;
+        let images = edited
+            .restored_images
+            .into_iter()
+            .map(|attachment| MessageImage {
+                name: attachment.display_name.clone(),
+                source: ImageSource::Attachment(attachment),
+            })
+            .collect();
         Ok(EditedPrompt {
             opened,
-            prompt: edited.restored_prompt,
-            images: edited.restored_images.len(),
+            prompt: UserMessage {
+                text: edited.restored_prompt,
+                images,
+            },
         })
     }
 

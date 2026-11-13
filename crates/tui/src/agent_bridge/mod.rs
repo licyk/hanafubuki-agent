@@ -139,7 +139,7 @@ pub(crate) enum TurnUpdate {
     SteeringConsumed(u64),
     /// A message that was to start a turn reached none: it goes back to
     /// the composer.
-    Undelivered(String),
+    Undelivered(crate::user_message::UserMessage),
     Retry(String),
     Ended(TurnEnd),
     /// A call into the Agent failed.
@@ -331,17 +331,17 @@ impl AgentBridge {
             return None;
         }
         match op {
-            Op::UserInput(text) => match (self.session_id, self.turn_running) {
+            Op::UserInput(message) => match (self.session_id, self.turn_running) {
                 (None, _) => {
-                    self.create_session(vec![Op::UserInput(text)]);
+                    self.create_session(vec![Op::UserInput(message)]);
                     None
                 }
                 (Some(session_id), false) => {
-                    self.start_turn(session_id, Start::Message(text));
+                    self.start_turn(session_id, Start::Message(message));
                     None
                 }
                 // A subagent's turn the chat has not heard of yet.
-                (Some(_), true) => self.steer(None, text),
+                (Some(_), true) => self.steer(None, message),
             },
             Op::UserShellCommand(command) => match (self.session_id, self.turn_running) {
                 (None, _) => {
@@ -352,9 +352,9 @@ impl AgentBridge {
                     self.start_turn(session_id, Start::ShellCommand(command));
                     None
                 }
-                (Some(_), true) => Some(TurnUpdate::Undelivered(format!("!{command}"))),
+                (Some(_), true) => Some(start::undelivered_command(&command)),
             },
-            Op::Steer { id, text } => self.steer(Some(id), text),
+            Op::Steer { id, message } => self.steer(Some(id), message),
             Op::EnsureSession => {
                 if self.session_id.is_none() {
                     self.create_session(Vec::new());

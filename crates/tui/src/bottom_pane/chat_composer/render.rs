@@ -64,6 +64,7 @@ impl ChatComposer {
             agents_hint: self.agents_navigation_available(),
             second_conversation: self.command_scope.is_some(),
             shell_command: self.textarea.text().starts_with('!'),
+            wsl: self.wsl,
         }
     }
 

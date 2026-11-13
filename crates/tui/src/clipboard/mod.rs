@@ -11,6 +11,13 @@
 //!
 //! Codex's copy worker, its tmux, GNU screen, Herdr and WSL routes and its
 //! Markdown-to-HTML copies are not ported.
+//!
+//! Pasting an image (Ctrl+V) reads the clipboard (`paste`), with a WSL
+//! route; a pasted image is checked and a clipboard image kept as a file
+//! (`image_file`).
+
+pub(crate) mod image_file;
+pub(crate) mod paste;
 
 use std::io::Write;
 

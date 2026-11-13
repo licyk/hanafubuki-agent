@@ -20,6 +20,7 @@ mod external_editor;
 mod history_pages;
 mod keys;
 mod owned;
+mod paste_image;
 mod preferences;
 mod requests;
 mod scrollback;
@@ -115,6 +116,8 @@ pub(crate) struct App {
     tui_state: TuiState,
     /// Where Ctrl+G's editor is read from.
     editor: EditorVariables,
+    /// Ctrl+V's clipboard read and the run's clipboard images.
+    image_paste: paste_image::ImagePaste,
 }
 
 impl App {
@@ -155,6 +158,7 @@ impl App {
             workspace: workspace::Workspace::default(),
             tui_state,
             editor: EditorVariables::from_env(),
+            image_paste: Default::default(),
         }
     }
 
@@ -253,6 +257,7 @@ impl App {
                 self.chat_widget.apply_recent_messages(messages)
             }
             AppEvent::ExternalEditor => self.edit_in_external_editor(tui),
+            AppEvent::PasteImage => self.paste_image(paste_image::PasteTrigger::Key),
             AppEvent::Diff => self.start_diff(),
             AppEvent::DiffResult(text) => {
                 self.open_overlay(
@@ -320,6 +325,9 @@ impl App {
             }
             None => {
                 self.transcript_view.clear_activity_focus();
+                if text.is_empty() {
+                    return self.paste_image(paste_image::PasteTrigger::EmptyPaste);
+                }
                 self.chat_widget.handle_paste(text);
                 return;
             }

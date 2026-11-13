@@ -320,6 +320,26 @@ impl TextArea {
         self.set_cursor(end);
     }
 
+    /// Makes `range` of the text an element.
+    pub(crate) fn mark_element(&mut self, range: Range<usize>) {
+        self.add_element(range);
+    }
+
+    /// Gives the element showing `old` the text `new`; `false` with none.
+    pub(crate) fn replace_element_payload(&mut self, old: &str, new: &str) -> bool {
+        let Some(range) = self
+            .elements
+            .iter()
+            .map(|element| element.range.clone())
+            .find(|range| self.text.get(range.clone()) == Some(old))
+        else {
+            return false;
+        };
+        self.replace_range_raw(range.clone(), new);
+        self.add_element(range.start..range.start + new.len());
+        true
+    }
+
     fn add_element(&mut self, range: Range<usize>) {
         let elem = TextElement { range };
         self.elements.push(elem);

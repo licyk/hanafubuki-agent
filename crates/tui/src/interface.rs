@@ -22,6 +22,7 @@ use crate::render::highlight::configure_theme;
 use crate::transcript_mode::{is_ssh_session, TranscriptMode};
 use crate::tui::{self, FrameRequester, InputReader, Tui};
 use crate::tui_state::TuiState;
+use crate::user_message::UserMessage;
 
 /// The channel the interface is told on, made before the Agent is: the
 /// Agent's runtime takes its status sink ([`TuiEvents::status_sink`]).
@@ -152,7 +153,8 @@ pub fn run(
     app.chat_widget
         .add_startup_warnings(warnings, config_warnings);
     if let Some(prompt) = options.prompt {
-        app.chat_widget.submit_user_message(prompt);
+        app.chat_widget
+            .submit_user_message(UserMessage::from_text(prompt));
     }
     if options.resume == Some(TuiResume::Picker) {
         app.open_resume_picker(&mut tui, true);

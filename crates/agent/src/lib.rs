@@ -260,7 +260,7 @@ pub use hanafubuki_agent_kernel::{
     AgentUsageSource, AgentUserInputAccepted, AgentUserInputAnswer, AgentUserInputRequest,
     AgentUserInputRequestId, ApprovalRequest, ApprovalRequestId, ApprovalUserDecision,
     ConfirmedAgentSessionDeletion, ConversationItem, ModelCatalogEntry, MAXIMUM_HOST_CONTEXT_BYTES,
-    RECENT_USER_MESSAGES_MAX,
+    MAXIMUM_USER_IMAGES_PER_MESSAGE, RECENT_USER_MESSAGES_MAX,
 };
 /// What is known of a model, fact by fact with its source, and what the
 /// person configured for it.

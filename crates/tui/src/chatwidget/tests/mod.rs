@@ -15,6 +15,7 @@ use hanafubuki_agent::panic::is_panic_contained;
 use hanafubuki_agent::{AgentRevision, AgentSessionId, AgentToolDisplay};
 
 mod entries;
+mod images;
 
 /// The chat in Scrollback.
 fn chat() -> (ChatWidget, Receiver<AppEvent>) {
@@ -122,10 +123,10 @@ fn a_streamed_message_is_written_when_it_completes() {
 fn a_submitted_message_is_written_and_sent_and_quit_exits() {
     let (mut chat, events) = chat();
     drain(&events);
-    chat.submit_user_message("Do it".to_string());
+    chat.submit_user_message("Do it".into());
     let (cells, ops) = drain(&events);
     assert!(cells[0].contains("› Do it"), "{cells:?}");
-    assert_eq!(ops, vec![Op::UserInput("Do it".to_string())]);
+    assert_eq!(ops, vec![Op::UserInput("Do it".into())]);
     chat.dispatch_command(command("quit"), String::new());
     assert!(matches!(events.try_recv(), Ok(AppEvent::Exit)));
 }
@@ -167,7 +168,10 @@ fn an_opened_session_replays_its_transcript_after_its_header() {
         model: "fixture-model".to_string(),
         mode: hanafubuki_agent::AgentSessionMode::Plan,
         transcript: vec![
-            ReplayedItem::User("What changed?".to_string()),
+            ReplayedItem::User {
+                text: "What changed?".to_string(),
+                images: Vec::new(),
+            },
             ReplayedItem::Tool {
                 call_id: "call-1".to_string(),
                 name: "exec_command".to_string(),
@@ -376,11 +380,8 @@ fn a_command_that_panics_is_turned_off_and_the_others_still_run() {
     assert_eq!(drain(&events), (Vec::new(), Vec::new()));
     chat.dispatch_command(command("skills"), String::new());
     assert_eq!(drain(&events).1, vec![Op::Command(AgentCommand::Skills)]);
-    chat.submit_user_message("Still here".to_string());
-    assert_eq!(
-        drain(&events).1,
-        vec![Op::UserInput("Still here".to_string())]
-    );
+    chat.submit_user_message("Still here".into());
+    assert_eq!(drain(&events).1, vec![Op::UserInput("Still here".into())]);
 }
 
 #[test]
@@ -546,7 +547,7 @@ fn trimmed(cells: Vec<String>) -> Vec<String> {
 fn steer_op(id: u64, text: &str) -> Op {
     Op::Steer {
         id,
-        text: text.to_string(),
+        message: text.into(),
     }
 }
 
@@ -555,8 +556,8 @@ fn enter_during_a_turn_steers_it_one_message_at_a_time_and_writes_it_once_read()
     let (mut chat, events) = chat();
     chat.handle_turn_update(TurnUpdate::Started);
     drain(&events);
-    chat.submit_user_message("Look at the tests.".to_string());
-    chat.submit_user_message("And the docs.".to_string());
+    chat.submit_user_message("Look at the tests.".into());
+    chat.submit_user_message("And the docs.".into());
     // Only the first is sent; neither is written yet.
     assert_eq!(
         drain(&events),
@@ -590,12 +591,12 @@ fn enter_during_a_turn_steers_it_one_message_at_a_time_and_writes_it_once_read()
 fn esc_with_steers_waiting_interrupts_and_sends_them_as_one_turn_keeping_the_draft() {
     let (mut chat, events) = chat();
     chat.handle_turn_update(TurnUpdate::Started);
-    chat.submit_user_message("First.".to_string());
+    chat.submit_user_message("First.".into());
     chat.handle_turn_update(TurnUpdate::Steered {
         id: 0,
         outcome: SteerOutcome::Accepted(1),
     });
-    chat.submit_user_message("Second.".to_string());
+    chat.submit_user_message("Second.".into());
     chat.handle_turn_update(TurnUpdate::Steered {
         id: 1,
         outcome: SteerOutcome::Accepted(2),
@@ -612,7 +613,7 @@ fn esc_with_steers_waiting_interrupts_and_sends_them_as_one_turn_keeping_the_dra
         "{cells:?}"
     );
     assert_eq!(cells[1].trim(), "› First.\n  Second.");
-    assert_eq!(ops, vec![Op::UserInput("First.\nSecond.".to_string())]);
+    assert_eq!(ops, vec![Op::UserInput("First.\nSecond.".into())]);
     assert_eq!(chat.bottom_pane.composer_text(), "draft");
 }
 
@@ -620,12 +621,12 @@ fn esc_with_steers_waiting_interrupts_and_sends_them_as_one_turn_keeping_the_dra
 fn an_interrupt_puts_the_waiting_messages_back_before_the_draft() {
     let (mut chat, events) = chat();
     chat.handle_turn_update(TurnUpdate::Started);
-    chat.submit_user_message("Steer.".to_string());
+    chat.submit_user_message("Steer.".into());
     chat.handle_turn_update(TurnUpdate::Steered {
         id: 0,
         outcome: SteerOutcome::Accepted(1),
     });
-    chat.queue_user_message("Queued.".to_string());
+    chat.queue_user_message("Queued.".into());
     chat.set_composer_text("draft".to_string());
     drain(&events);
     // Ctrl-C (no Esc): nothing is sent.
@@ -642,7 +643,7 @@ fn tab_queues_while_a_turn_runs_and_sends_at_once_with_nothing_running() {
     let (mut chat, events) = chat();
     chat.set_composer_text("now".to_string());
     chat.handle_key_event(key(KeyCode::Tab));
-    assert_eq!(drain(&events).1, vec![Op::UserInput("now".to_string())]);
+    assert_eq!(drain(&events).1, vec![Op::UserInput("now".into())]);
 
     chat.handle_turn_update(TurnUpdate::Started);
     chat.set_composer_text("later".to_string());
@@ -657,15 +658,15 @@ fn tab_queues_while_a_turn_runs_and_sends_at_once_with_nothing_running() {
     chat.handle_turn_update(TurnUpdate::Ended(TurnEnd::Failed("boom".to_string())));
     let (cells, ops) = drain(&events);
     assert_eq!(trimmed(cells), vec!["■ boom", "› later"]);
-    assert_eq!(ops, vec![Op::UserInput("later".to_string())]);
+    assert_eq!(ops, vec![Op::UserInput("later".into())]);
 }
 
 #[test]
 fn shift_left_and_alt_up_put_the_last_queued_message_back_before_the_draft() {
     let (mut chat, events) = chat();
     chat.handle_turn_update(TurnUpdate::Started);
-    chat.queue_user_message("one".to_string());
-    chat.queue_user_message("two".to_string());
+    chat.queue_user_message("one".into());
+    chat.queue_user_message("two".into());
     chat.set_composer_text("draft".to_string());
     chat.handle_key_event(KeyEvent::new(KeyCode::Left, KeyModifiers::SHIFT));
     assert_eq!(chat.bottom_pane.composer_text(), "two\ndraft");
@@ -716,7 +717,7 @@ fn esc_interrupts_while_the_answer_streams() {
 fn a_session_opened_drops_what_waited_for_the_previous_one() {
     let (mut chat, events) = chat();
     chat.handle_turn_update(TurnUpdate::Started);
-    chat.queue_user_message("for the old session".to_string());
+    chat.queue_user_message("for the old session".into());
     chat.handle_turn_update(TurnUpdate::SessionOpened(OpenedSession {
         session_id: None,
         model: "fixture-model".to_string(),
@@ -728,8 +729,8 @@ fn a_session_opened_drops_what_waited_for_the_previous_one() {
     assert!(!chat.has_pending_input());
     assert!(!screen(&chat, 80).contains("Queued follow-up inputs"));
     drain(&events);
-    chat.submit_user_message("fresh".to_string());
-    assert_eq!(drain(&events).1, vec![Op::UserInput("fresh".to_string())]);
+    chat.submit_user_message("fresh".into());
+    assert_eq!(drain(&events).1, vec![Op::UserInput("fresh".into())]);
 }
 
 #[test]
@@ -757,7 +758,7 @@ fn a_message_that_reached_no_turn_goes_back_to_the_composer() {
     let (mut chat, events) = chat();
     chat.set_composer_text("draft".to_string());
     drain(&events);
-    chat.handle_turn_update(TurnUpdate::Undelivered("Lost?".to_string()));
+    chat.handle_turn_update(TurnUpdate::Undelivered("Lost?".into()));
     let (cells, _) = drain(&events);
     assert!(cells[0].contains("did not reach the turn"), "{cells:?}");
     assert_eq!(chat.bottom_pane.composer_text(), "Lost?\ndraft");
@@ -766,11 +767,11 @@ fn a_message_that_reached_no_turn_goes_back_to_the_composer() {
 #[test]
 fn enter_before_the_turn_starts_queues_and_a_start_that_failed_releases_it() {
     let (mut chat, events) = chat();
-    chat.submit_user_message("First.".to_string());
+    chat.submit_user_message("First.".into());
     // The turn has not started (the session may still be created): a turn
     // of its own, after.
-    chat.submit_user_message("Second.".to_string());
-    assert_eq!(drain(&events).1, vec![Op::UserInput("First.".to_string())]);
+    chat.submit_user_message("Second.".into());
+    assert_eq!(drain(&events).1, vec![Op::UserInput("First.".into())]);
     assert!(chat.has_pending_input());
     // The session was not created, or the turn refused at its start.
     chat.handle_turn_update(TurnUpdate::Ended(TurnEnd::Failed(
@@ -778,7 +779,7 @@ fn enter_before_the_turn_starts_queues_and_a_start_that_failed_releases_it() {
     )));
     let (cells, ops) = drain(&events);
     assert_eq!(trimmed(cells), vec!["■ no Provider", "› Second."]);
-    assert_eq!(ops, vec![Op::UserInput("Second.".to_string())]);
+    assert_eq!(ops, vec![Op::UserInput("Second.".into())]);
     chat.handle_turn_update(TurnUpdate::Started);
     chat.handle_turn_update(TurnUpdate::Ended(TurnEnd::Completed));
     assert!(!chat.has_pending_input());

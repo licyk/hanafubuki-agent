@@ -1592,11 +1592,228 @@ and any module-size exception.
 
 **Images ([2])**
 
-- [ ] I1: image paste — Ctrl+V and empty-paste clipboard images (WSL
+- [x] I1: image paste — Ctrl+V and empty-paste clipboard images (WSL
       fallback), pasted image paths, `[Image #N]` placeholders with
       renumbering, image-only messages, steers, backtrack restore, the
       capability gate. Windows, macOS and WSL clipboards covered by unit
       tests of the non-clipboard logic only.
+      Done (2026-11-13):
+      - TUI: keymap 74 → 75 actions, `composer.paste_image` (`ctrl-v`,
+        `ctrl-alt-v`), before `external_editor`. A message is a
+        `UserMessage` (`user_message.rs`): its text, whose `[Image #N]`
+        labels stand for its images in order (only a label's first
+        appearance, within the images, is one), and its images, each a
+        file of the person's (`File`, never removed), a clipboard image's
+        PNG copy (`Pasted`) or a session attachment (`Attachment`, an
+        edited message's). It goes from the composer through `InputResult`,
+        the input queue, `Op::UserInput`/`Op::Steer`, `TurnUpdate::Undelivered`
+        and the history to `AgentTurnRequest.images` /
+        `AgentSteeringRequest.images` (`path`, `display_name`, detail
+        `auto`), which `prepare_and_stage_images` reads. Messages joined
+        (steers sent as one turn, held ones, ones put back) are a line each,
+        their images renumbered in order. The clipboard (`clipboard/`, was
+        `clipboard.rs`): `paste.rs` reads it (Codex's order: image files
+        copied in a file manager, then pixels, then text; on WSL, with no
+        image natively, Codex's PowerShell `Get-Clipboard -Format Image`
+        through `powershell.exe`, `pwsh`, `powershell`, its PNG read and
+        removed) behind `ReadClipboard`, a `fn` the tests replace;
+        `normalize_pasted_path` (quoted, shell-escaped, `file://`, Windows
+        and UNC paths, a drive's mapped to `/mnt/<d>` under WSL; the WSL
+        flag passed in); `image_file.rs`: what an image must be to attach
+        (the content's format PNG, JPEG, GIF or WebP; at most
+        `MAXIMUM_SOURCE_IMAGE_BYTES`, 20 MiB, and `MAXIMUM_IMAGE_PIXELS`, 40
+        million; 8 a message, `MAXIMUM_USER_IMAGES_PER_MESSAGE`), PNG
+        encoding, and the run's directory (`ImageDirectory`: a `tempfile`
+        directory `hanafubuki-agent-images-*` in the system's temporary
+        directory, made at the first clipboard image, files
+        `clipboard-N.png`, removed whole when the interface exits). The
+        composer (`chat_composer/attachments.rs`, Codex's
+        `attachment_state.rs`): Ctrl+V asks the app (`AppEvent::PasteImage`)
+        while it has the keys with no popup or history search, a burst
+        flushed first; an attached image is an element `[Image #N]` at the
+        cursor; a deleted one drops its image (its PNG removed) and the rest
+        are renumbered (`TextArea::replace_element_payload`); a paste of one
+        image file's path attaches it with a space after (Codex), one that
+        is no image stays text, one that cannot be attached says why and
+        stays text, and a `!` draft's paths stay text. The app
+        (`app/paste_image.rs`): Codex's 250 ms window after a read; pixels
+        encoded and saved, an image file attached where it is, text pasted
+        through the composer's paste, failures said in the conversation; an
+        empty bracketed paste reads the clipboard too and says nothing
+        without an image; the event is dropped when another conversation
+        than its own has the focus. A clipboard image's PNG is removed once
+        its turn is accepted (`agent_bridge/start.rs`; a subagent's turn met
+        instead, once steered) or, for a steer, once the turn read it (the
+        chat, `write_steer`), and with its placeholder. The gate
+        (`chatwidget/images.rs`): `SessionStatus.images_refused` is the
+        snapshot's `input_capabilities.image_input` (the kernel's own gate)
+        with why (the image fact's source from `session_model_metadata`,
+        else `turned off in the settings`); a message with images it
+        refuses goes back to the composer with `This model does not read
+        images (reported); remove the image or switch with /model.`, before
+        any queue; with no status yet it is sent. The transcript's user
+        entry keeps the text as sent (edit's `PromptScan` matches it) and
+        adds a row `[Image #N: name]` per image, live and replayed
+        (`ReplayedItem::User { text, images }`). Edit-earlier-message puts
+        the restored attachments back as `[Image #N]` (`EditedPrompt.prompt`
+        a `UserMessage`); the "not restored" note is gone. The `?` overlay
+        gains `ctrl + v  Paste image` under Compose after New line (Codex's
+        order), `ctrl + alt + v` under WSL where that key is bound
+        (`FooterProps.wsl`; `⌥` in the tests and on macOS).
+      - Facade: `MAXIMUM_USER_IMAGES_PER_MESSAGE` re-exported (additive).
+      - Interactions: Up/Down and Ctrl+R's this-run matches restore the
+        images, a `Pasted` one whose PNG is gone (sent, or its placeholder
+        deleted) left out with its label (`UserMessage::available`); an
+        earlier session's message (text only from the store) comes back
+        with its labels dropped. The Ctrl+R preview shows the match's
+        images, Esc gives the draft's back (`SavedDraft` holds them). A
+        message put back (interrupt, undelivered, Shift+Left, a refused
+        `!`) goes before the draft, its images first, the draft's
+        renumbered after. Ctrl+G (K4's `apply_external_edit`, generalised):
+        each placeholder is looked for anywhere in the edited text, apart
+        from the others; an image label left or moved keeps its image, a
+        deleted one drops it (PNG removed), a second copy of a label is
+        text, and the kept images are renumbered in their order. A `!`
+        command with images is refused (`A `!` command takes no images;
+        remove them first.`) and Ctrl+V on a `!` draft says `A `!` command
+        takes no images.`
+      - Failures said: `There is no image on the clipboard.`; `The clipboard
+        cannot be read (<arboard's reason>); save the image to a file and
+        paste its path instead.`; `<name> is not a PNG, JPEG, GIF or WebP
+        image, the formats a model is sent.`; `<name> is too large to
+        attach: 21.0 MiB, at most 20.0 MiB.` / `… W×H pixels, at most 40
+        million.` (`The clipboard's image is …` for pixels); `<name> cannot
+        be read as an image: …`; `A message carries at most 8 images;
+        remove one first.`; `The clipboard's image could not be saved to a
+        temporary file: …`.
+      - Deviations: (0) Recall, the trade-off of the plan's cleanup: a
+        clipboard image's PNG is removed once its message reached the
+        conversation, so Up/Down and Ctrl+R never bring a sent clipboard
+        image back (its label is dropped); a file of the person's and an
+        unsent message's images do come back. Codex keeps its temporary
+        PNGs for good, so its recall restores them. Keeping the PNGs for the
+        run (removed at exit) would restore them, against the plan's "removed
+        once the submission is accepted". (1) Empty paste: Codex added it (18b737910c) and
+        reverted it (749b58366c); at 57a808a392 it does not read the
+        clipboard on an empty paste. Implemented as the plan says, quiet
+        when there is no image or no clipboard. (2) "Falls through to the
+        terminal's paste": once the key reaches the interface the terminal
+        does not paste, so it is Codex's `text_fallback` (the clipboard's
+        text through the composer's paste), on every platform (Codex: on
+        Windows only). (3) Temporary files: no "run's temp directory"
+        existed; it is the `ImageDirectory` above, the exit-time backstop:
+        a PNG is removed at acceptance (turn) or once read (steer), not at
+        a steer's acceptance, since a steer accepted but never read comes
+        back to the composer or starts the next turn; a draft replaced
+        (Ctrl+C, Up/Down, a Ctrl+R match taken) lets its images go without
+        removing them, the history holding them. A crash or a kill leaves
+        the directory in the system's temporary directory. (4) Recall:
+        Codex keeps its temporary PNGs, so its recall brings them back;
+        see (0). (5) An image file copied in a file manager is
+        attached where it is (Codex re-encodes it into a temporary PNG).
+        (6) Checks at the paste with the facade's limits (Codex leaves them
+        to the request); the Codex warning at paste for a model without
+        images is a refusal at send instead (the plan's gate). (7) The WSL
+        PowerShell's PNG in Windows' temporary directory is removed after
+        reading (Codex leaves it); PowerShell is a foreground child waited
+        for, as `/diff`'s `git` (D17), not under `ExecutorManager`. (8)
+        Ctrl+Alt+V is never Paste image on Windows, where Ctrl+Alt is AltGr
+        and types (`@` on a Hungarian keyboard); Codex takes it there too.
+        (9) Codex's `paste_image` is a fixed key; here a rebindable action
+        with both defaults, as the plan has it. (10) Not handled: a message
+        joined past 8 images is refused by the Agent at its start (`at most
+        8 images may be submitted`, the turn fails); a queued message whose
+        PNG was removed meanwhile (recalled with Up and its placeholder
+        deleted) fails its turn with the Agent's read error; a placeholder
+        cut with Ctrl-K/Ctrl-U and yanked back with Ctrl-Y comes back as
+        plain text, its image gone; on WSL, a Ctrl+Alt+V that finds no image
+        natively (text, or nothing) and an empty paste run up to three
+        PowerShell programs, one after another, on the interface's thread.
+      - Tests (written with the code; seen failing by mutation): unit
+        `user_message/tests.rs` (labels, join renumbering, `available`,
+        `stored`, the request's inputs, a person's file never removed);
+        `clipboard/paste/tests.rs` (Codex's pasted-path tests with the WSL
+        flag passed in; the WSL mapping; the PowerShell script on Linux);
+        `clipboard/image_file/tests.rs` (the four formats by content, a
+        `.png` that is text, a directory, a BMP refused, a 21 MiB file, a
+        cut PNG, the pixel limit, PNG encoding round trip, the run's
+        directory saved into and removed on drop, a relative path made
+        absolute); `chat_composer/attachments/tests.rs` (Ctrl+V and
+        Ctrl+Alt+V ask, not with a popup, the search or without the keys,
+        Ctrl+Alt+V not on Windows; a rebound `f9`; numbering, Backspace on
+        a placeholder renumbering and removing its PNG; a person's file
+        untouched; an image-only message; a pasted path quoted, `'…'`,
+        escaped and `file://`; a text file and a BMP pasted as text, the
+        BMP said why; a `!` draft's path; the eighth and ninth image; a
+        message put back before a draft with images; an image its text does
+        not name; Up/Down with images and a gone PNG; Ctrl+R preview, Esc
+        and accept, a stored match's labels; Ctrl+G unchanged, moved,
+        deleted and duplicated labels; a typed `[Image #1]` stays text);
+        `chatwidget/tests/images.rs` (a steer's images sent, its PNG kept
+        until read then removed, its entry's row; two steers put back by an
+        interrupt and sent as one, renumbered; the gate's message with the
+        draft kept; a `!` command with images); footer (the overlay
+        snapshots at 140, 90 and 50 columns, during a turn and the
+        composer's, now with `ctrl + v  Paste image`; a remapped `f10` and
+        an unbound `paste_image`; `ctrl + ⌥ + v` under WSL and `ctrl + v`
+        there when only it is bound); keymap (the defaults). App, end to end
+        (`app/tests/paste_image.rs`, a stand-in clipboard): Scrollback and
+        Fullscreen: Ctrl+V gives `[Image #1]`, the PNG is in the system's
+        temporary directory outside the workspace, the model's request
+        carries one `data:image/png;base64,` with the text and its label,
+        the transcript shows `[Image #1: clipboard-1.png]`, the PNG is
+        removed after acceptance; a steer with an image during a running
+        turn, the next request carrying it and its PNG removed once read; each clipboard's message (none, no
+        display, text pasted, a `!` draft) in both; an empty paste quiet
+        then attaching; a copied JPEG file attached where it is, sent and
+        kept; an edited message back with its image and sent again from
+        the fork with it; a resumed session's entry with its row.
+        Mutations: without the renumbering the composer's test fails;
+        without the PNG's removal at acceptance the end-to-end test waits
+        in vain; a steer sent without its images fails the steer's
+        end-to-end test.
+      - Not verified without a real clipboard and terminal: arboard's
+        reads (X11, Wayland, macOS, Windows), the file-list route, the WSL
+        PowerShell route, what each terminal sends for Ctrl+V and Ctrl+Alt+V
+        and for an image paste (an empty bracketed paste or nothing),
+        Windows' and macOS' behaviour beyond CI's runs of the tests above.
+      - Goldens: none changed (a user message's images were lowered
+        already; the request with an image is pinned end to end above).
+      - Dependencies: the TUI takes `image` (the workspace's, `gif`, `jpeg`,
+        `png`, `webp`, as the facade already does), `url` (the
+        workspace's), `shlex` on every platform (it was Unix's only), and
+        `arboard`'s `image-data`. New in the lock, on macOS only (arboard's
+        `tiff`): `tiff` 0.11.3 (MIT), `fax` 0.2.7 (MIT), `half` 2.7.1 (MIT
+        OR Apache-2.0), `crunchy` 0.2.4 (MIT); `about.toml` accepts them
+        (no change). Linux needs no new system library (`x11rb`,
+        `wl-clipboard-rs`); no workflow changed.
+      - Docs (both languages): `terminal-interface#keys` (the Ctrl-V row,
+        the rebindable list), `#shortcuts` (the overlay with Paste image,
+        WSL's key), `#composer` (Images), `#edit` (images come back),
+        `#keymap` (the row); `providers-models#images` (the interface's
+        refusal before sending).
+      - Validation: `cargo fmt --all --check`; `RUSTFLAGS="-D warnings"
+        cargo check --workspace --all-targets --all-features`; `cargo clippy
+        --workspace --all-targets --all-features -- -D warnings`; `cargo
+        xtask check` (its notices check first failed on the new files: four
+        original test files listed, `image_file.rs` marked as Codex's);
+        `cargo test --workspace --all-features --no-fail-fast` (4210 passed,
+        none failed, no flake seen; then the steer's end-to-end test added
+        and the TUI's 992 run again); `cargo clippy -p hanafubuki-agent-tui
+        --target x86_64-pc-windows-gnu --all-targets --all-features` clean
+        for the TUI (the execution crate's `DEFAULT_COMMAND_OUTPUT_BYTES`
+        dead-code warning on that target is not this change's); `bun install
+        --frozen-lockfile`, `bun run format:site`, `bun run
+        format:check:site`, `bun run site:check`, `bun run site:test` (28
+        passed), and the four changed pages compiled with the store's
+        `@mdx-js/mdx` 3.1.1; `VITE_BASE_PATH=/hanafubuki-agent/ bun run
+        site:build` not run locally (port 3000 held by another project's
+        server); CI's Site run covers it.
+      - Hanafubuki at its next pin: nothing to change
+        (`MAXIMUM_USER_IMAGES_PER_MESSAGE` is a new re-export it may use).
+      - Module size: no exception added or raised. `agent_bridge/mod.rs`
+        597, `chat_composer/mod.rs` 509, `app/mod.rs` 524,
+        `bottom_pane/mod.rs` 547.
 
 **Rendering ([4]; every Codex format in the plan's §2.12 table)**
 

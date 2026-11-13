@@ -52,6 +52,7 @@ use crate::keymap::{self, Action};
 use crate::settings_center::SettingsCenter;
 use crate::transcript_view::{TranscriptHistoryState, TranscriptView};
 use crate::tui::Tui;
+use crate::user_message::UserMessage;
 pub(crate) use keys::PaneAction;
 pub(super) use panes::{paint_chrome, PaneLayout};
 
@@ -293,8 +294,13 @@ impl App {
             {
                 Route::Parked(event)
             }
-            // The editor edits the focused composer's draft.
-            AppEvent::ExternalEditor if focus.is_some_and(|focus| focus != owner) => Route::Dropped,
+            // The editor edits, and an image goes into, the focused
+            // composer's draft.
+            AppEvent::ExternalEditor | AppEvent::PasteImage
+                if focus.is_some_and(|focus| focus != owner) =>
+            {
+                Route::Dropped
+            }
             event => Route::Here(event),
         }
     }
@@ -406,7 +412,8 @@ impl App {
             Some(SecondKind::Side { .. }) => {
                 self.set_focus(tui, Focus::Second);
                 if let Some(message) = message {
-                    self.chat_widget.submit_user_message(message);
+                    self.chat_widget
+                        .submit_user_message(UserMessage::from_text(message));
                 }
                 return;
             }
@@ -451,7 +458,8 @@ impl App {
             self.show_update(update);
         }
         if let Some(message) = message {
-            self.chat_widget.submit_user_message(message);
+            self.chat_widget
+                .submit_user_message(UserMessage::from_text(message));
         }
     }
 

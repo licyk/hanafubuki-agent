@@ -276,7 +276,7 @@ fn submitted_text_comes_back_from_the_composer() {
     pane.set_composer_text("hello".to_string());
     assert_eq!(
         pane.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
-        InputResult::Submitted("hello".to_string())
+        InputResult::Submitted("hello".into())
     );
     assert!(pane.composer_is_empty());
 }

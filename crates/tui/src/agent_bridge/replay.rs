@@ -43,7 +43,11 @@ pub(crate) struct OlderTranscript {
 /// One entry of a reopened session's transcript.
 #[derive(Debug)]
 pub(crate) enum ReplayedItem {
-    User(String),
+    /// A message the person sent, with its images' names.
+    User {
+        text: String,
+        images: Vec<String>,
+    },
     /// What the model thought, as Markdown, and for how long.
     Reasoning {
         /// Its history item id, which names its entry.
@@ -85,9 +89,12 @@ pub(crate) fn transcript(
     let mut calls = HashMap::new();
     for (item_id, content) in items.into_iter().rev() {
         match content {
-            ConversationItem::UserMessage { text, .. }
-            | ConversationItem::SteeringMessage { text, .. } => {
-                transcript.push(ReplayedItem::User(text))
+            ConversationItem::UserMessage { text, images }
+            | ConversationItem::SteeringMessage { text, images, .. } => {
+                transcript.push(ReplayedItem::User {
+                    text,
+                    images: images.into_iter().map(|image| image.display_name).collect(),
+                })
             }
             ConversationItem::Reasoning {
                 text,

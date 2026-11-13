@@ -2,7 +2,8 @@
 //! ([`SessionStatus`]): read from its snapshot when something it shows
 //! changes (a commit's usage, a new title or plan, a compaction, the end
 //! of a turn, a model or role change), with the configured permission mode and the
-//! goal, which are read once when the session opens and kept.
+//! goal, which are read once when the session opens and kept. The chat also
+//! reads there whether the session's model is known not to read images.
 
 use std::path::{Path, PathBuf};
 
@@ -13,6 +14,7 @@ use hanafubuki_agent::{
 
 use super::{AgentBridge, AgentReply, TurnUpdate};
 use crate::app_event::AppEvent;
+use crate::model_facts;
 
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct SessionStatus {
@@ -32,6 +34,9 @@ pub(crate) struct SessionStatus {
     pub(crate) compression: Option<AgentCompressionSummary>,
     /// The session's role; none for `default`.
     pub(crate) role: Option<String>,
+    /// Why the session sends its model no image (the kernel refuses a
+    /// message with one); `None` when it sends them, or nothing says.
+    pub(crate) images_refused: Option<String>,
 }
 
 /// The session's tokens so far, and its context when the window is known.
@@ -94,7 +99,21 @@ impl AgentBridge {
             git_branch: root.as_deref().and_then(git_branch),
             compression: snapshot.compression,
             role: snapshot.role,
+            images_refused: (!snapshot.input_capabilities.image_input)
+                .then(|| self.images_refused_because(session_id)),
         })))
+    }
+
+    /// Why the session's model reads no image: where that is known from,
+    /// else that the settings turn images off.
+    fn images_refused_because(&self, session_id: AgentSessionId) -> String {
+        self.agent
+            .session_model_metadata(session_id)
+            .ok()
+            .and_then(|metadata| metadata.image_input)
+            .filter(|known| !known.value)
+            .map(|known| model_facts::source_name(known.source).to_string())
+            .unwrap_or_else(|| "turned off in the settings".to_string())
     }
 
     /// Sends the session's status to the chat, beside the update being

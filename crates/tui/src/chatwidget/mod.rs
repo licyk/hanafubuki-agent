@@ -14,6 +14,7 @@
 
 mod appearance;
 mod commands;
+mod images;
 mod input_flow;
 mod input_queue;
 mod replay;
@@ -46,6 +47,7 @@ use crate::render::renderable::{Renderable, RenderableExt, RenderableItem};
 use crate::render::Insets;
 use crate::streaming::controller::{PlanStreamController, StreamController};
 use crate::tui::FrameRequester;
+use crate::user_message::UserMessage;
 
 /// How long a first Ctrl-C (or Ctrl-D) waits for the second that quits.
 const QUIT_SHORTCUT_TIMEOUT: Duration = Duration::from_secs(1);
@@ -317,9 +319,14 @@ impl ChatWidget {
         self.bottom_pane.clear_esc_backtrack_hint();
     }
 
-    /// Puts `text` in the composer, for the person to edit and send.
+    /// Puts `message` in the composer, for the person to edit and send.
+    pub(crate) fn set_composer_message(&mut self, message: UserMessage) {
+        self.bottom_pane.set_composer_message(message);
+    }
+
+    #[cfg(test)]
     pub(crate) fn set_composer_text(&mut self, text: String) {
-        self.bottom_pane.set_composer_text(text);
+        self.set_composer_message(UserMessage::from_text(text));
     }
 
     /// Matches for the `@` token being typed, from the file search.

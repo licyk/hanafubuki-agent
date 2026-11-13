@@ -3,11 +3,13 @@
 //! sequence the turn took it under or that it did not reach the turn; the
 //! turn's `SteeringConsumed` events then say which sequences it read. The
 //! chat keeps each message until then, since the Agent drops the steering
-//! a cancelled or failed turn had not read.
+//! a cancelled or failed turn had not read; it removes a steer's clipboard
+//! images only once the turn read it.
 
 use hanafubuki_agent::AgentSteeringRequest;
 
 use super::{AgentBridge, AgentReply, TurnUpdate};
+use crate::user_message::UserMessage;
 
 /// What became of a steering message.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -20,27 +22,27 @@ pub(crate) enum SteerOutcome {
 }
 
 impl AgentBridge {
-    /// Steers the running turn with `text`. With an `id` the chat hears
+    /// Steers the running turn with `message`. With an `id` the chat hears
     /// back either way; without one (a message that was to start a turn,
     /// sent before the chat heard of a subagent's turn) only a failure is
-    /// said, with the text, which goes back to the composer.
-    pub(super) fn steer(&self, id: Option<u64>, text: String) -> Option<TurnUpdate> {
-        let not_delivered = |text| match id {
+    /// said, with the message, which goes back to the composer.
+    pub(super) fn steer(&self, id: Option<u64>, message: UserMessage) -> Option<TurnUpdate> {
+        let not_delivered = |message| match id {
             Some(id) => TurnUpdate::Steered {
                 id,
                 outcome: SteerOutcome::NotDelivered,
             },
-            None => TurnUpdate::Undelivered(text),
+            None => TurnUpdate::Undelivered(message),
         };
         let Some(turn) = self.turn.filter(|_| self.turn_running) else {
-            return Some(not_delivered(text));
+            return Some(not_delivered(message));
         };
-        let unsent = id.is_none().then(|| text.clone());
+        let unsent = id.is_none().then(|| message.clone());
         let sink = self.sink();
         self.spawn(move |agent| async move {
             let request = AgentSteeringRequest {
-                text,
-                images: Vec::new(),
+                images: message.request_images(),
+                text: message.text,
                 host: Default::default(),
             };
             let accepted = agent
@@ -59,7 +61,13 @@ impl AgentBridge {
                         SteerOutcome::Accepted(accepted.sequence.value())
                     }),
                 },
-                (None, Ok(_)) => return Ok(None),
+                // Written into the conversation as it was sent.
+                (None, Ok(_)) => {
+                    if let Some(message) = &unsent {
+                        message.remove_pasted_files();
+                    }
+                    return Ok(None);
+                }
                 (None, Err(_)) => TurnUpdate::Undelivered(unsent.unwrap_or_default()),
             };
             Ok(Some(AgentReply::Update(Box::new(update))))

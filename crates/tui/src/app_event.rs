@@ -13,6 +13,8 @@ use hanafubuki_agent::{
 };
 use ratatui::crossterm::event::{KeyEvent, MouseEvent};
 
+use crate::user_message::UserMessage;
+
 use hanafubuki_agent::{AgentTuiPreferences, AgentTuiPreferencesPatch};
 
 use crate::agent_bridge::{
@@ -62,6 +64,8 @@ pub(crate) enum AppEvent {
     RecentMessagesRead(Vec<String>),
     /// Ctrl+G: edit the composer's draft in the external editor.
     ExternalEditor,
+    /// Ctrl+V: attach the clipboard's image to the composer's draft.
+    PasteImage,
     /// `/diff`: run `git diff` in the workspace.
     Diff,
     /// Its output, for the pager.
@@ -138,7 +142,7 @@ pub(crate) enum AppCommand {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Op {
     /// A message from the person that starts a turn.
-    UserInput(String),
+    UserInput(UserMessage),
     /// A command the person typed after `!`, which runs as a turn of its
     /// own with no model.
     UserShellCommand(String),
@@ -146,7 +150,7 @@ pub(crate) enum Op {
     /// (`TurnUpdate::Steered`).
     Steer {
         id: u64,
-        text: String,
+        message: UserMessage,
     },
     Interrupt,
     Approval {

@@ -517,6 +517,22 @@ path = "crates/tui/src/app/tests/external_editor.rs"
 reason = "Ctrl+G end to end over the standalone Agent in both presentations, with an editor that is a script: the draft edited and sent, the terminal's screen and modes back, each failure keeping the draft."
 
 [[original]]
+path = "crates/tui/src/app/tests/paste_image.rs"
+reason = "Pasting an image end to end over the standalone Agent in both presentations, with a stand-in clipboard: the image in the model's request, its copy removed, each failure said, an edited message's images back."
+
+[[original]]
+path = "crates/tui/src/chatwidget/tests/images.rs"
+reason = "A message's images through the chat's queue: steers with images, their copies removed once read, renumbered when sent together, refused for a model that reads none."
+
+[[original]]
+path = "crates/tui/src/clipboard/image_file/tests.rs"
+reason = "The checks a pasted image passes against the Agent's own image limits, and the run's directory of clipboard images."
+
+[[original]]
+path = "crates/tui/src/user_message/tests.rs"
+reason = "A message's image labels: found, renumbered when messages are joined, dropped with an image that is gone."
+
+[[original]]
 path = "crates/tui/src/tui/handoff/tests.rs"
 reason = "The terminal's modes, as a vt100 screen reads them, released for another program and taken back in each presentation."
 

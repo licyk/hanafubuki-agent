@@ -47,6 +47,11 @@ fn the_shortcut_actions_have_their_defaults_and_no_voice_key() {
     let keymap = Keymap::default();
     for (action, path, keys) in [
         (Action::ShowShortcuts, "composer.show_shortcuts", "?"),
+        (
+            Action::PasteImage,
+            "composer.paste_image",
+            "ctrl-v, ctrl-alt-v",
+        ),
         (Action::ExternalEditor, "composer.external_editor", "ctrl-g"),
         (Action::HistorySearch, "composer.history_search", "ctrl-r"),
         (Action::CycleMode, "chat.cycle_mode", "backtab"),

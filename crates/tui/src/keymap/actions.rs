@@ -91,6 +91,7 @@ pub(crate) enum Action {
     Queue,
     HistoryPrevious,
     HistoryNext,
+    PasteImage,
     ExternalEditor,
     HistorySearch,
     ShowShortcuts,

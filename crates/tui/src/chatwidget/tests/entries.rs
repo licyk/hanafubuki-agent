@@ -342,7 +342,10 @@ fn a_replayed_reasoning_item_is_a_completed_cell() {
         model: "fixture-model".to_string(),
         mode: hanafubuki_agent::AgentSessionMode::Default,
         transcript: vec![
-            ReplayedItem::User("Why?".to_string()),
+            ReplayedItem::User {
+                text: "Why?".to_string(),
+                images: Vec::new(),
+            },
             ReplayedItem::Reasoning {
                 item_id: 4,
                 text: "Because.".to_string(),

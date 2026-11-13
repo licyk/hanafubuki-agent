@@ -5,9 +5,8 @@
 //! (`shortcut_help`), then `/keymap customize`. Each key is the keymap's
 //! in force, so a remapped action shows its new key and an unbound one, or
 //! one with only a chord, is left out; `/`, `@`, `!`, Ctrl+C and PgUp/PgDn
-//! are fixed. Codex's voice key is not ported, and the keys of actions this
-//! interface does not have yet are left out with them. A cut list ends
-//! with a note naming `/keymap`.
+//! are fixed. Paste image shows Ctrl+Alt+V under WSL, as Codex does. Codex's
+//! voice key is not ported. A cut list ends with a note naming `/keymap`.
 
 use ratatui::buffer::Buffer;
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
@@ -33,6 +32,7 @@ pub(super) fn lines(props: &FooterProps<'_>, width: u16) -> Vec<Line<'static>> {
         ],
     };
     compose.push(newline_key(props), "New line");
+    compose.push(paste_image_key(props), "Paste image");
     compose.push(keymap::hint(Action::ExternalEditor), "External editor");
     compose.push(keymap::hint(Action::HistorySearch), "Search history");
     if !props.second_conversation {
@@ -162,6 +162,28 @@ fn newline_key(props: &FooterProps<'_>) -> Option<KeyBinding> {
         Some(shift_enter)
     } else {
         keys.into_iter().find(|key| *key != shift_enter)
+    }
+}
+
+/// The key that pastes an image: Ctrl+Alt+V under WSL where it is bound,
+/// else the first.
+fn paste_image_key(props: &FooterProps<'_>) -> Option<KeyBinding> {
+    let wsl_key = KeyBinding::new(
+        KeyCode::Char('v'),
+        KeyModifiers::CONTROL | KeyModifiers::ALT,
+    );
+    let keys: Vec<KeyBinding> = keymap::current()
+        .bindings(Action::PasteImage)
+        .iter()
+        .filter_map(|binding| match binding {
+            Binding::Key(key) => Some(key.hint()),
+            _ => None,
+        })
+        .collect();
+    if props.wsl && keys.contains(&wsl_key) {
+        Some(wsl_key)
+    } else {
+        keys.into_iter().next()
     }
 }
 

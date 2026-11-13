@@ -27,6 +27,7 @@ use crate::render::renderable::Renderable;
 use crate::status_indicator_widget::{fmt_elapsed_compact, fmt_elapsed_tenths};
 use crate::style::user_message_style;
 use crate::ui_consts::LIVE_PREFIX_COLS;
+use crate::user_message::UserMessage;
 use crate::wrapping::{word_wrap_lines, RtOptions};
 
 pub(crate) use context::new_context_output;
@@ -212,12 +213,16 @@ impl Renderable for Box<dyn HistoryCell> {
 
 #[derive(Debug)]
 pub(crate) struct UserHistoryCell {
+    /// The text as sent, image labels and all.
     pub message: String,
+    /// `[Image #N: name]` for each of its images.
+    images: Vec<String>,
     activity_id: String,
 }
 
 impl UserHistoryCell {
-    /// The message wrapped at `width`, behind its `›`.
+    /// The message wrapped at `width`, behind its `›`, then a row for each
+    /// image.
     fn rows(&self, width: u16) -> Vec<Line<'static>> {
         let wrap_width = width
             .saturating_sub(
@@ -231,7 +236,13 @@ impl UserHistoryCell {
             RtOptions::new(usize::from(wrap_width))
                 .wrap_algorithm(textwrap::WrapAlgorithm::FirstFit),
         );
-        prefix_lines(wrapped, "› ".bold().dim(), "  ".into())
+        let mut rows = prefix_lines(wrapped, "› ".bold().dim(), "  ".into());
+        rows.extend(
+            self.images
+                .iter()
+                .map(|image| Line::from(vec!["  ".into(), image.clone().cyan()]).style(style)),
+        );
+        rows
     }
 
     /// `rows` between a blank row above and below, in the message's style.
@@ -275,9 +286,15 @@ impl HistoryCell for UserHistoryCell {
     }
 }
 
-pub(crate) fn new_user_prompt(message: String) -> UserHistoryCell {
+pub(crate) fn new_user_prompt(message: &UserMessage) -> UserHistoryCell {
+    user_prompt(message.text.clone(), message.image_rows())
+}
+
+/// A message as sent, `images` its images' rows.
+pub(crate) fn user_prompt(message: String, images: Vec<String>) -> UserHistoryCell {
     UserHistoryCell {
         message,
+        images,
         activity_id: next_activity_id("user:"),
     }
 }

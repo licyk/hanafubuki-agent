@@ -6,7 +6,7 @@
 //! It is responsible for:
 //!
 //! - Editing the input buffer (a [`TextArea`]), including the placeholder "elements" that stand
-//!   for large pastes.
+//!   for large pastes and for images (`attachments`: Ctrl+V, pasted image paths).
 //! - Handling submit vs newline on Enter, and queueing on Tab while a turn runs.
 //! - Shell-style history navigation (↑/↓) over this run's messages ([`ChatComposerHistory`]),
 //!   and Ctrl+R's search through them and earlier sessions' (`history_search`).
@@ -15,8 +15,8 @@
 //! - Turning raw key streams into explicit paste operations on platforms where terminals
 //!   don't provide reliable bracketed paste (notably Windows).
 //!
-//! Codex's composer also offers Skill and app mentions, attaches images and expands custom
-//! prompts; none of those are ported.
+//! Codex's composer also offers Skill and app mentions, remote image rows and custom prompts;
+//! none of those are ported.
 //!
 //! # Non-bracketed Paste Bursts
 //!
@@ -47,6 +47,7 @@ use ratatui::crossterm::event::KeyModifiers;
 use ratatui::text::Line;
 
 mod agents_navigation;
+mod attachments;
 mod external_editor;
 mod history_search;
 mod popups;
@@ -69,6 +70,7 @@ use crate::key_hint;
 use crate::key_hint::has_ctrl_or_alt;
 use crate::key_hint::KeyBinding;
 use crate::keymap::{self, Action};
+use crate::user_message::{MessageImage, UserMessage};
 use history_search::HistorySearchSession;
 
 /// If the pasted content exceeds this number of characters, replace it with a
@@ -85,6 +87,8 @@ pub(crate) struct ChatComposer {
     quit_shortcut_key: KeyBinding,
     use_shift_enter_hint: bool,
     pending_pastes: Vec<(String, String)>,
+    /// The draft's images, `[Image #N]` each in the text (`attachments`).
+    images: Vec<MessageImage>,
     large_paste_counters: HashMap<usize, usize>,
     has_focus: bool,
     placeholder_text: String,
@@ -107,6 +111,9 @@ pub(crate) struct ChatComposer {
     history_search: Option<HistorySearchSession>,
     /// Ctrl+G's editor has the draft.
     external_editor_open: bool,
+    /// Under WSL: a pasted Windows path is read as WSL's, and the shortcuts
+    /// show Ctrl+Alt+V for pasting an image.
+    wsl: bool,
 }
 
 /// Popup state – at most one can be visible at any time.
@@ -133,6 +140,7 @@ impl ChatComposer {
             quit_shortcut_key: key_hint::ctrl(KeyCode::Char('c')),
             use_shift_enter_hint: enhanced_keys_supported,
             pending_pastes: Vec::new(),
+            images: Vec::new(),
             large_paste_counters: HashMap::new(),
             has_focus: has_input_focus,
             placeholder_text,
@@ -146,6 +154,7 @@ impl ChatComposer {
             command_scope: None,
             history_search: None,
             external_editor_open: false,
+            wsl: crate::clipboard::paste::is_probably_wsl(),
         }
     }
 
@@ -163,8 +172,9 @@ impl ChatComposer {
     ///   and later flushes here.
     ///
     /// If the paste is larger than `LARGE_PASTE_CHAR_THRESHOLD` chars, inserts a placeholder
-    /// element (expanded on submit) and stores the full text in `pending_pastes`; otherwise
-    /// inserts the pasted text directly into the textarea.
+    /// element (expanded on submit) and stores the full text in `pending_pastes`; a paste that
+    /// names one image file attaches it (`attachments`); otherwise inserts the pasted text
+    /// directly into the textarea.
     ///
     /// In all cases, clears any paste-burst Enter suppression state so a real paste cannot affect
     /// the next user Enter key.
@@ -178,7 +188,7 @@ impl ChatComposer {
             let placeholder = self.next_large_paste_placeholder(char_count);
             self.textarea.insert_element(&placeholder);
             self.pending_pastes.push((placeholder, pasted));
-        } else {
+        } else if char_count <= 1 || !self.paste_image_path(&pasted) {
             self.textarea.insert_str(&pasted);
         }
         // Explicit paste events should not trigger Enter suppression.
@@ -187,38 +197,35 @@ impl ChatComposer {
         true
     }
 
-    /// Replace the composer content, dropping pending pastes, with the cursor
+    /// Replace the composer content, dropping pending pastes and images, with the cursor
     /// at the end.
     pub(crate) fn set_text_content(&mut self, text: String) {
-        self.textarea.set_text_clearing_elements(&text);
-        self.pending_pastes.clear();
-        self.textarea.set_cursor(self.textarea.text().len());
-        self.sync_popups();
+        self.set_message(UserMessage::from_text(text));
     }
 
-    /// Puts `text` on lines of its own before the draft, whose pastes stay,
-    /// with the cursor at the end; behind a history search's match, into
-    /// the draft the search gives back.
-    pub(crate) fn restore_draft(&mut self, text: String) {
+    /// Puts `message` on lines of its own before the draft, whose pastes
+    /// and images stay, with the cursor at the end; behind a history
+    /// search's match, into the draft the search gives back.
+    pub(crate) fn restore_draft(&mut self, message: UserMessage) {
         self.edit_draft(|composer| {
             if composer.is_empty() {
-                return composer.set_text_content(text);
+                return composer.set_message(message);
             }
-            composer.textarea.insert_str_at(0, &format!("{text}\n"));
+            composer.prepend_message(message);
             composer.textarea.set_cursor(composer.textarea.text().len());
             composer.sync_popups();
         });
     }
 
-    pub(crate) fn clear_for_ctrl_c(&mut self) -> Option<String> {
+    /// Ctrl+C: the draft goes, into the history.
+    pub(crate) fn clear_for_ctrl_c(&mut self) {
         if self.is_empty() {
-            return None;
+            return;
         }
-        let previous = self.current_text_with_pending();
+        let previous = self.draft_message();
         self.set_text_content(String::new());
         self.history.reset_navigation();
-        self.history.record_local_submission(previous.clone());
-        Some(previous)
+        self.history.record_local_submission(previous);
     }
 
     /// The composer's text with the large pastes it stands for put back.
@@ -303,7 +310,7 @@ impl ChatComposer {
 
     /// Handle a key event coming from the main UI.
     pub fn handle_key_event(&mut self, key_event: KeyEvent) -> (InputResult, bool) {
-        if self.handle_external_editor_key(&key_event) {
+        if self.handle_external_editor_key(&key_event) || self.handle_paste_image_key(&key_event) {
             return (InputResult::None, true);
         }
         let result = match &self.active_popup {
@@ -351,7 +358,7 @@ impl ChatComposer {
                         self.history.navigate_down()
                     };
                     if let Some(entry) = replace_entry {
-                        self.set_text_content(entry);
+                        self.set_message(entry);
                         self.textarea.set_cursor(0);
                         return (InputResult::None, true);
                     }
@@ -425,10 +432,7 @@ impl ChatComposer {
         if let Some(pasted) = self.paste_burst.flush_before_modified_input() {
             self.handle_paste(pasted);
         }
-        self.textarea.input(input);
-        let text_after = self.textarea.text();
-        self.pending_pastes
-            .retain(|(placeholder, _)| text_after.contains(placeholder));
+        self.input_keeping_elements(input);
         (InputResult::None, true)
     }
 
@@ -454,17 +458,22 @@ impl ChatComposer {
         true
     }
 
-    /// The trimmed message with its pastes put back, recorded in the history;
-    /// `None` when it is empty, or names no command although it looks like one.
-    fn prepare_submission_text(&mut self) -> Option<String> {
+    /// The trimmed message with its pastes put back and its images,
+    /// recorded in the history; `None` when it is empty, or names no
+    /// command although it looks like one.
+    fn prepare_submission(&mut self) -> Option<UserMessage> {
         let text = self.current_text_with_pending().trim().to_string();
         if text.is_empty() || self.reject_unrecognized_command() {
             return None;
         }
         self.textarea.set_text_clearing_elements("");
         self.pending_pastes.clear();
-        self.history.record_local_submission(text.clone());
-        Some(text)
+        let message = UserMessage {
+            text,
+            images: std::mem::take(&mut self.images),
+        };
+        self.history.record_local_submission(message.clone());
+        Some(message)
     }
 
     fn handle_submission(&mut self, now: Instant) -> (InputResult, bool) {
@@ -503,8 +512,8 @@ impl ChatComposer {
             return (InputResult::None, true);
         }
 
-        match self.prepare_submission_text() {
-            Some(text) => (InputResult::Submitted(text), true),
+        match self.prepare_submission() {
+            Some(message) => (InputResult::Submitted(message), true),
             None => (InputResult::None, true),
         }
     }
@@ -530,8 +539,8 @@ impl ChatComposer {
         if let Some(result) = self.try_dispatch_slash_command() {
             return (result, true);
         }
-        match self.prepare_submission_text() {
-            Some(text) => (InputResult::Queued(text), true),
+        match self.prepare_submission() {
+            Some(message) => (InputResult::Queued(message), true),
             None => (InputResult::None, true),
         }
     }
@@ -646,16 +655,7 @@ impl ChatComposer {
                 self.handle_paste(pasted);
             }
         }
-        // Placeholders are atomic elements: when one is deleted its element disappears, and so
-        // does the paste it stands for.
-        let elements_before =
-            (!self.pending_pastes.is_empty()).then(|| self.textarea.element_payloads());
-
-        self.textarea.input(input);
-
-        if let Some(elements_before) = elements_before {
-            self.reconcile_deleted_elements(elements_before);
-        }
+        self.input_keeping_elements(input);
 
         // Update paste-burst heuristic for plain Char (no Ctrl/Alt) events.
         match input.code {
@@ -676,14 +676,29 @@ impl ChatComposer {
         (InputResult::None, true)
     }
 
+    /// Applies `input` to the text. Placeholders are atomic elements: when
+    /// one is deleted its element disappears, and so does the paste or the
+    /// image it stands for.
+    fn input_keeping_elements(&mut self, input: KeyEvent) {
+        let elements_before = (!self.pending_pastes.is_empty() || !self.images.is_empty())
+            .then(|| self.textarea.element_payloads());
+        self.textarea.input(input);
+        if let Some(elements_before) = elements_before {
+            self.reconcile_deleted_elements(elements_before);
+        }
+    }
+
     fn reconcile_deleted_elements(&mut self, elements_before: Vec<String>) {
         let elements_after: HashSet<String> =
             self.textarea.element_payloads().into_iter().collect();
-        for removed in elements_before
+        let removed: Vec<String> = elements_before
             .into_iter()
             .filter(|payload| !elements_after.contains(payload))
-        {
-            self.pending_pastes.retain(|(ph, _)| ph != &removed);
+            .collect();
+        self.pending_pastes
+            .retain(|(placeholder, _)| !removed.contains(placeholder));
+        if !removed.is_empty() && !self.images.is_empty() {
+            self.drop_deleted_images(&removed);
         }
     }
 

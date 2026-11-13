@@ -16,7 +16,7 @@ impl Harness {
         self.key_with(KeyCode::Char(letter), KeyModifiers::CONTROL);
     }
 
-    fn type_text(&mut self, text: &str) {
+    pub(super) fn type_text(&mut self, text: &str) {
         for character in text.chars() {
             self.key(KeyCode::Char(character));
         }

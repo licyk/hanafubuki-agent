@@ -50,6 +50,7 @@ fn status() -> SessionStatus {
             tokens_compressed: 42_000,
         }),
         role: Some("explorer".to_string()),
+        images_refused: None,
     }
 }
 

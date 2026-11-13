@@ -331,7 +331,7 @@ fn slash_path_input_submits_without_command_error() {
 
     assert_eq!(
         enter(&mut composer),
-        InputResult::Submitted("/Users/example/project/src/main.rs".to_string())
+        InputResult::Submitted("/Users/example/project/src/main.rs".into())
     );
     assert!(composer.textarea.is_empty());
     assert!(rx.try_recv().is_err(), "unexpected event");
@@ -347,7 +347,7 @@ fn slash_with_leading_space_submits_as_text() {
 
     assert_eq!(
         enter(&mut composer),
-        InputResult::Submitted("/this-looks-like-a-command".to_string())
+        InputResult::Submitted("/this-looks-like-a-command".into())
     );
     assert!(composer.textarea.is_empty());
     assert!(rx.try_recv().is_err(), "unexpected event");
@@ -512,7 +512,7 @@ fn text_after_a_command_that_takes_none_is_sent_as_a_message() {
     type_chars_humanlike(&mut composer, &['/', 'n', 'e', 'w', ' ', 'x']);
     assert_eq!(
         enter(&mut composer),
-        InputResult::Submitted("/new x".to_string())
+        InputResult::Submitted("/new x".into())
     );
 }
 

@@ -191,6 +191,8 @@ With `imageInput` of `[modelPolicy.inputCapabilities]` set to `"auto"` (the defa
 - **It reads images**, as its Provider's model catalog (or, when nothing else says, [models.dev](#models-dev)) says, or **nothing says**: images are sent, and `view_image` is offered. When the model refuses an image anyway, the Agent retries once without it, and from then on, for 7 days and across restarts, takes the model for one that reads none.
 - **It reads none**, as its catalog says or a refusal taught: no image reaches it, so no request is refused first. The images already in the conversation are replaced by a note that they were left out, `view_image` is not offered, and a message with an image is refused (`the configured model does not support image input`).
 
+The terminal interface knows this before sending: a message with an image ([pasted](/docs/terminal-interface#composer)) to a model known to read none stays in the composer with why, so it can be removed or the model switched.
+
 A refusal outweighs the catalog: a model listed as reading images that refused one is sent none for those 7 days, until [forgotten](#forget). A conversation takes what is known when it starts, is given a model or is resumed, and again before each request, so a catalog read later applies from the next request. A model's own `imageInput` ([Per-model settings](#per-model)) outweighs both: `"supported"` sends it images whatever its catalog says or a refusal taught, `"unsupported"` never. `"disabled"` in the policy never sends images, whatever the model and its own setting.
 
 ## Per-model settings [#per-model]

@@ -17,6 +17,7 @@ use crate::history_cell;
 use crate::resume_picker::{find_session, ResumePicker};
 use crate::transcript_view::TranscriptHistoryState;
 use crate::tui::Tui;
+use crate::user_message::UserMessage;
 
 impl App {
     pub(super) fn run_app_command<B: Backend<Error = io::Error> + Write>(
@@ -36,7 +37,9 @@ impl App {
                 self.schedule_frame(Instant::now());
             }
             AppCommand::ClearScreen => self.clear_screen(tui),
-            AppCommand::Submit(text) => self.chat_widget.submit_user_message(text),
+            AppCommand::Submit(text) => self
+                .chat_widget
+                .submit_user_message(UserMessage::from_text(text)),
             AppCommand::ResumeNamed(text) => self.resume_named(tui, text),
             AppCommand::Replay(text) => {
                 // A preset run from the center's page runs in the

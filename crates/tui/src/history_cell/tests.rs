@@ -33,7 +33,7 @@ fn plan(explanation: Option<&str>, steps: &[(&str, &str)]) -> AgentTaskPlanSnaps
 
 #[test]
 fn user_history_cell_wraps_and_prefixes_each_line_snapshot() {
-    let cell = new_user_prompt("one two three four five six seven".to_string());
+    let cell = new_user_prompt(&"one two three four five six seven".into());
     // Small width to force wrapping more clearly.
     let lines = cell.display_lines(12);
     insta::assert_snapshot!(render_lines(&lines).join("\n"));
@@ -149,7 +149,7 @@ fn a_short_plan_without_a_note_has_nothing_more_to_show() {
 #[test]
 fn a_message_of_yours_over_twelve_rows_has_a_control() {
     let long: Vec<String> = (1..=14).map(|n| format!("line {n}")).collect();
-    let cell = new_user_prompt(long.join("\n"));
+    let cell = new_user_prompt(&UserMessage::from_text(long.join("\n")));
     let compact = render_lines(&cell.compact_lines(40));
     // The blank padding, twelve rows, the blank padding.
     assert_eq!(compact.len(), 14, "{compact:?}");
@@ -159,7 +159,7 @@ fn a_message_of_yours_over_twelve_rows_has_a_control() {
         Some(ActivityDisclosure::OutputLines(2))
     );
     assert_eq!(cell.display_lines(40).len(), 16);
-    let short = new_user_prompt("one\ntwo".to_string());
+    let short = new_user_prompt(&"one\ntwo".into());
     assert_eq!(short.activity_disclosure(40), None);
     assert_ne!(cell.activity_ids(), short.activity_ids());
 }

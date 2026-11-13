@@ -11,6 +11,7 @@ use super::ChatWidget;
 use crate::agent_bridge::{Warning, WarningSource};
 use crate::commands::{self, parse_input, ParsedInput};
 use crate::history_cell;
+use crate::user_message::UserMessage;
 
 impl ChatWidget {
     /// What the interface could not apply at start (`interface`), with the
@@ -74,7 +75,7 @@ impl ChatWidget {
                 );
                 self.add_to_history(history_cell::new_info_event(message, None));
             }
-            ParsedInput::Message => self.submit_user_message(text.trim().to_string()),
+            ParsedInput::Message => self.submit_user_message(UserMessage::from_text(text.trim())),
         }
         self.request_redraw();
     }

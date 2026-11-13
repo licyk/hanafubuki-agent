@@ -17,8 +17,8 @@
 //!   facade forks the session before it and archives the original
 //!   (`edit_from_turn`); the interface switches to the fork, whose
 //!   transcript ends before that prompt, and the prompt is back in the
-//!   composer. Files are not restored, which the first edit of the run
-//!   says.
+//!   composer with its images. Files are not restored, which the first
+//!   edit of the run says.
 //!
 //! The chosen prompt is kept as a count from the latest, never as a cell
 //! index, so cells that arrive (or earlier pages spliced in) while browsing
@@ -331,16 +331,10 @@ impl App {
         if let Some(update) = self.bridge.reply(AgentReply::SessionOpened(edited.opened)) {
             self.show_update(update);
         }
-        self.chat_widget.set_composer_text(edited.prompt);
+        self.chat_widget.set_composer_message(edited.prompt);
         let mut note = "The conversation goes on from a copy made before this message; the \
                         original is archived."
             .to_string();
-        if edited.images > 0 {
-            note.push_str(&format!(
-                " Its {} image(s) are not restored: the composer cannot attach images.",
-                edited.images
-            ));
-        }
         if !self.backtrack.files_noted {
             self.backtrack.files_noted = true;
             note.push_str(" Files are not restored.");

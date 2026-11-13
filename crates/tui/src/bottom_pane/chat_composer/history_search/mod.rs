@@ -224,7 +224,7 @@ impl ChatComposer {
         };
         let status = match result {
             HistorySearchResult::Found(entry) => {
-                self.show_match(&entry, match_ranges(&entry, &query));
+                self.show_match(&entry, &query);
                 HistorySearchStatus::Match
             }
             HistorySearchResult::Pending => HistorySearchStatus::Searching,

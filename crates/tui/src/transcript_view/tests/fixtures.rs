@@ -75,7 +75,7 @@ pub(crate) fn live(text: &str) -> Arc<LiveCell<Activity>> {
 }
 
 pub(crate) fn prompt(text: &str) -> Arc<dyn HistoryCell> {
-    Arc::new(history_cell::new_user_prompt(text.to_string()))
+    Arc::new(history_cell::new_user_prompt(&text.into()))
 }
 
 /// A finished tool call whose output is `lines` numbered lines.

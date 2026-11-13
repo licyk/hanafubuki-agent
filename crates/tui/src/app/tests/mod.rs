@@ -838,6 +838,7 @@ mod context;
 mod external_editor;
 mod features;
 mod history_search;
+mod paste_image;
 mod plugins;
 mod preferences;
 mod queue;
