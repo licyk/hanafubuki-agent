@@ -24,16 +24,17 @@ pub use registry::ObserverRegistry;
 pub enum AgentNotification {
     /// A turn was admitted: its start and its user message are committed,
     /// and its admission events are emitted. A failed admission is not
-    /// notified. `origin` is who asked for the turn; `provisional_title` is
-    /// the automatic title the admission committed because the session had
-    /// none (`None` when the session already had a title or the turn brought
-    /// none).
+    /// notified. `origin` is who asked for the turn; `automatic_title` is
+    /// the session's title after the admission when the Agent gave it (the
+    /// provisional title the admission committed because the session had
+    /// none, or one committed before); `None` when the session has a title
+    /// the user gave it, or none.
     TurnAdmitted {
         session_id: AgentSessionId,
         turn_id: AgentTurnId,
         generation: AgentGeneration,
         origin: AgentTurnOrigin,
-        provisional_title: Option<String>,
+        automatic_title: Option<String>,
     },
     /// A turn ended (completed, cancelled or failed) and its terminal state
     /// is committed. Turns interrupted by a restart are settled during

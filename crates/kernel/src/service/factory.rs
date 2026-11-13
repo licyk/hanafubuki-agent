@@ -4,8 +4,11 @@ use crate::{AgentKernelFaultSink, NoopAgentKernelFaultSink};
 
 impl AgentService {
     /// A model session outside any session's conversation, through
-    /// `proxy` (the kernel's [`Self::model_proxy`] when one is at hand).
+    /// `proxy` (the kernel's [`Self::model_proxy`] when one is at hand). A
+    /// structured request on it starts at the rung the route still takes
+    /// and teaches the model metadata a rung the route refuses.
     pub fn create_private_model_session(
+        &self,
         protocol: ModelApiProtocol,
         base_url: &str,
         credential: Option<String>,
@@ -13,7 +16,7 @@ impl AgentService {
         retry_policy: ModelRetryPolicy,
         proxy: hanafubuki_agent_model_api::ModelHttpProxy,
     ) -> Result<Arc<dyn ModelSession>, AgentError> {
-        Ok(configured_model(
+        let session = configured_model(
             protocol,
             base_url,
             credential,
@@ -22,7 +25,8 @@ impl AgentService {
             hanafubuki_agent_model_api::ModelCompactionCapability::LocalSummary,
             proxy,
         )?
-        .create_model_session())
+        .create_model_session();
+        Ok(self.learning_model_session(session))
     }
 
     /// The proxy the Providers' models are built with: a session's next
@@ -151,7 +155,10 @@ impl AgentService {
                 sessions: SessionTable::default(),
                 next_turn_id: AtomicU64::new(1),
                 next_compaction_id: AtomicU64::new(1),
-                model_metadata: ModelMetadataRegistry::open(model_metadata, now_millis_u64()),
+                model_metadata: Arc::new(ModelMetadataRegistry::open(
+                    model_metadata,
+                    now_millis_u64(),
+                )),
                 model_proxy: Default::default(),
                 approvals,
                 pending_approvals: Mutex::new(HashMap::new()),

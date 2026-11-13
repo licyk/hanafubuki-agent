@@ -15,6 +15,7 @@ mod listing;
 mod models_dev;
 mod persistence;
 mod precedence;
+mod structured_output;
 
 const NOW: u64 = 1_000_000_000;
 

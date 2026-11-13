@@ -239,6 +239,22 @@ Provider 的错误是否拒绝了请求的推理参数，由 `hanafubuki-agent-m
 
 内核（`run_sampling_request`）只在轮次请求携带了推理参数且轮次未被取消时，去掉推理参数重试一次，发出 `ModelRetryScheduled { stage: ReasoningFallback }`，注册表把该路由的推理学为 `Unsupported`（`learn_reasoning_unsupported`，学到的“否”优先于报告的“是”，保留 7 天）。第二次拒绝，或对不带推理参数的请求的拒绝，会让轮次以 `AgentError::UnsupportedReasoning` 失败。压缩自己的请求不重试。传输层给不出路由时什么也学不到，所以它的每个请求都会被拒绝一次。
 
+## 结构化请求的阶梯 [#structured-output-rungs]
+
+标题、标题建议、回顾、记忆提取和自动权限审查都在对话之外向模型要一个 JSON 对象，经由 `request_json_object`（`model-api/src/structured_request.rs`）。要它的方式有三种，即三级（`ModelStructuredOutputCapability`），由好到差：
+
+| 级别               | 请求                                                                                                                                                        |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NativeJsonSchema` | 协议的 JSON schema 输出（Responses 的 `text.format`、Chat Completions 的 `response_format`），不带工具                                                      |
+| `RequiredTool`     | 一个输入 schema 即该对象 schema 的工具，用 `tool_choice` 强制调用；调用方不提供工具或会话不能强制工具时跳过                                                 |
+| `Text`             | 不带工具也不带输出格式；指令多一句话，要求只回答一个符合该 schema 的 JSON 对象，并附上 schema（`schema_in_text`），审查者的指令除外，它本已要求只回答该对象 |
+
+- **从哪一级开始。** 从协议的那一级（Responses 和 Chat Completions 为原生，Anthropic Messages 为强制工具，什么都没说的传输层为文本）开始，再按路由学到的级别（`ModelMetadata::structured_output`）降低。从注册表回答它的会话是 `create_private_model_session` 给出的会话（标题、建议、回顾、提取）和审查者的会话（`learning_model_session`）；给不出路由的传输层什么也学不到。
+- **拒绝。** `classify_remote_model_error` 严格地（`structured_output_refusal.rs`）把状态码为 400 或 422、小写后的消息指名 `text.format`、`response_format`、`json_schema`、`structured output` 或 `structured_output` 并带有拒绝（代码 `unsupported_parameter` 或 `unsupported_value`，或[推理参数被拒](#reasoning-refusals)的某个措辞）的错误判为 `UnsupportedStructuredOutput`，紧跟在上下文溢出之后、图片拒绝之前判断（图片拒绝会接收任何说模型只支持文本的 400）。指名 `tool_choice` 或 `tools` 并带有拒绝的错误是 `UnsupportedToolChoice`，最后判断，在图片和推理拒绝之后，所以同时提到工具的轮次拒绝仍保留它的回退（Anthropic 的 `tool_choice: type "tool" and "any" are not supported for this model.` 就是一例）。网关报告的 ``Structured output (`text.format`) is not supported by this stateless gateway.`` 计入；Provider 认为无效的 schema（`Invalid schema for response_format …`）指名了参数却没有拒绝它，仍是远程错误，5xx 也是。在轮次自己的采样中，两者都是普通的模型错误。
+- **阶梯。** 原生输出被拒时，路由学到下一级（强制工具，跳过时为文本），请求立即再发一次；强制工具被拒时学到文本。强制工具却得到文本回答（忽略 `tool_choice` 的网关）时，按文本级的回答读取，什么也不学。其他任何失败都结束阶梯，包括文本级的拒绝。调用方的时限覆盖整条阶梯：标题 30 秒，回顾 60 秒，提取 120 秒，审查 90 秒。每次重试以 debug 级别记录所用的级别，从不记录内容。
+- **学到的级别**是一项学到的事实（[模型元数据](#model-metadata)）：以 `structuredOutput` 存入 `model-metadata.json`，保留 7 天，除非被遗忘，并且只会降低，所以同时学习的两个请求保留较低的那个。两级都拒绝的网关每周付出两次被拒绝的请求，而不是每个标题都付出。
+- **读取。** 工具的参数就是该对象。审查者严格读取消息（`parse_assessment_text`：无论来源如何，审批都保持严格），只有原生和文本两级。标题、建议、回顾和提取宽容地读取（`json_object_text`）：以 `{` 开头的文本从那里读（字符串中的围栏属于内容），否则围栏代码块的内容，否则第一个配平的 `{…}`，否则整段文本；然后各自照旧解码字段。
+
 ## 崩溃循环标记 [#crash-loop-marker]
 
 `AgentStartMarker`（数据目录中的 `start-marker.json`，用 `write_atomic` 写入，带缩进格式）记录从未完成的启动次数：
@@ -399,7 +415,7 @@ Provider 的错误是否拒绝了请求的推理参数，由 `hanafubuki-agent-m
 - **变基安装**（`InstallMode::Rebase`）代替比较并交换：没有压缩在运行，窗口是快照的窗口，历史以快照的条目 ID（启动时的全部历史）开头。安装的历史是：未压缩部分开始处的世界状态（边界之前历史的 `full_world_state_checkpoint`：之后的更新，包括删除，仍按顺序适用；计划把这个边界 `source_boundary` 与压缩读到的条目分开保存，因为有活动压缩块的会话读到的是投影后的历史，条目更少），替换内容，然后是从启动时当前轮次的 `TurnStart` 开始的历史，保留原来的 ID，就像轮次前安装保留当前轮次一样（在同样的检查点之后：该轮次开始处的世界状态）。检查点的截止点仍是展示摘要的 ID，所以每个替换 ID 都不大于它，恢复和分叉像对待任何压缩一样重放它；因此在它之后条目 ID 不再按历史顺序排列。安装记录阶段为 `background` 的 `Completed` 快照（触发 `automatic`，原因 `context_limit`，启动轮次的代号）及其事件，不计入任何轮次的预算，并用采用它的步骤的工具计划和提示估算下一个请求：在这里仍超过阈值不是错误，调用方会再在线压缩。没有减少上下文的结果和其他压缩一样被拒绝。
 - **上下文窗口。** 再次选择模型会重新解析它的窗口，并把已记录的用量移到新窗口上。
 - **继续钩子。** 因插件停止而被取消的钩子以 `IgnoredFailure` 完成。
-- **观察者。** `TurnAdmitted` 带有轮次的来源（`User` 或 `Programmatic`）和准入时提交的临时标题；`MemoryContributionChanged` 带有原因（`Initial`、`User` 或 `Polluted`）。`start_turn` 和计划实施是 `Programmatic` 的。
+- **观察者。** `TurnAdmitted` 带有轮次的来源（`User` 或 `Programmatic`），以及准入后由 Agent 给出的会话标题（`automatic_title`：准入提交的临时标题，或此前提交的标题）；`MemoryContributionChanged` 带有原因（`Initial`、`User` 或 `Polluted`）。`start_turn` 和计划实施是 `Programmatic` 的。
 - **子会话**（`service/session/child.rs`）。子会话沿用父会话的模型、配置、预算策略和工作区，它的范围再按请求的范围收窄；请求指定了角色时，它的角色指令是请求中的（它们不来自父会话，所以按会话的界限检查）；从父会话头部开始的子会话还沿用它的标题，所以 `titles` 插件不会给它起标题；它的记忆贡献从默认值开始。持久子会话作为头部分叉（`create_fork_at_head`）或运行中轮次之前的分叉（`create_fork`）持久化，空的子会话作为新会话持久化。历史以轮次开始，所以上下文只能跟在继承来的历史之后：会以空历史开始却带有上下文的子会话会被拒绝（`InvalidInput`），不是继续上下文的上下文也一样。临时会话的临时子会话从最近的持久祖先读取图片。持久子会话像分叉一样初始化记忆贡献，临时子会话从不初始化。
 - **临时会话。** `close_ephemeral_session` 取消会话的轮次或压缩，中止它待处理的审批，最多等待 5 秒让它结算，然后移除单元、它的事件接收器和内存中的历史；到时仍未结算的轮次会因会话不存在而失败。归档或恢复临时会话会被拒绝（`InvalidInput`）。内存存储像持久存储一样对记录分页（降序时最新的在前，游标是下标），并按轮次 ID 过滤轮次页，但不保留修订号：一页总是会话最新的状态。
 - **旁路对话的条目**是两个 `ContinuationContext` 条目，provider 为 `agent`，钩子分别是 `side-conversation`（策略，包在 `<side_conversation>` 标记中）和 `side-conversation-boundary`（边界），代次为 1（`crates/agent/src/side_conversation.rs`，移植自 Codex 的 `context-fragments/src/side_conversation.rs`）。外观层在一道闸门下从内核存活的临时子会话（`ephemeral_children`）中找父会话的旁路对话，所以同时打开两次也只会得到一个。
@@ -418,8 +434,9 @@ Provider 的错误是否拒绝了请求的推理参数，由 `hanafubuki-agent-m
 ### 标题 [#titles]
 
 - 门面的提交把轮次标为 `User`，对没有标题的会话，把提交的文本折成一行、截到 36 个字符，作为内核的 `AgentTurnInput::provisional_title` 传入。如果会话仍然没有标题，准入就把它随轮次一起提交（`session_title_updated` 在 `turn_started` 和 `history_committed` 之后）。来源和临时标题都不随轮次持久化。
-- `titles` 插件的观察者把每个提交了临时标题的 `User` 轮次的 `TurnAdmitted` 排入有界队列（`try_send`）。它的工作线程（`spawn_scoped_worker`，一次处理一个标题，随插件停止）通过 `BlockingService` 上的 `AgentTitleApplication` 读取轮次的用户消息（`AgentService::turn_user_message`）和当前设置中该会话的 Provider，让一个私有的模型会话生成标题（提示截到 960 字节，30 秒），并用 `replace_automatic_session_title_if_expected` 提交，这是对临时标题的比较并交换，所以期间的重命名优先。插件关闭时临时标题保留。
-- 这个请求是共用的结构化请求（`plugins/structured_request.rs`）：提供者支持时用 JSON schema 输出（`ModelStructuredOutputCapability::NativeJsonSchema`），否则强制调用一个以该对象为参数的工具；有时间上限，随插件停止而取消。概要和标题建议也使用它。
+- `titles` 插件的观察者把会话标题由 Agent 给出（`automatic_title`）的每个 `User` 轮次的 `TurnAdmitted` 排入有界队列（`try_send`）。它的工作线程（`spawn_scoped_worker`，一次处理一个标题，随插件停止）通过 `BlockingService` 上的 `AgentTitleApplication`，从记录中读取会话的第一条用户消息（`AgentConversationReader::first_user_message`，压缩不会改动记录），只在标题仍是这条消息的临时标题时继续（`provisional_agent_title`；没有自己的标题来源）；再读取当前设置中该会话的 Provider。它让一个私有的模型会话根据第一条消息生成标题（提示截到 960 字节，30 秒），并用 `replace_automatic_session_title_if_expected` 提交，这是对临时标题的比较并交换，所以期间的重命名优先。生成失败时临时标题保留，由下一个用户轮次再试；模型或用户给出的标题从不被替换。本次运行中模型已给出标题的会话不再请求，即使该标题等于临时标题（第一条消息很短）：重启后会再试一次。已查明标题不是临时标题的会话也不再请求。插件关闭时临时标题保留。
+- 生成的标题按 Codex 的 `parse_thread_title` 规范化：去掉两端的引号、反引号和弯引号，去掉控制字符，合并空白，去掉末尾的 `.`、`?` 或 `!`，截到 36 个字符；只有什么都不剩的标题才被拒绝。
+- 这个请求是共用的结构化请求（`plugins/structured_request.rs`，使用全部三级[阶梯](#structured-output-rungs)，宽容地读取消息），有时间上限，随插件停止而取消。概要和标题建议也使用它。
 - 标题建议（`suggest_session_title`）通过 `AgentConversationReader` 读取会话最近 8 条用户和助手消息（从记录中由新到旧），每条截到 960 字节的平均份额，不提交任何东西。
 - 概要（`recap_session`，`recap` 插件）以同样的方式读取最近 8 次有回答的往来（引导并入它的请求，保留一个更新的未回答请求，不含工具输出和推理），提示在估算 8192 个 token 以内（先省略最旧的往来，再把每段文本摘录为保留首尾），返回 `AgentRecap { summary, next_action }`（60 秒）。回答被宽容地读取：忽略未知字段，缺少 `next_action` 即为空，超过 700 个字符的摘要或超过 200 个字符的下一步会被截断。
 

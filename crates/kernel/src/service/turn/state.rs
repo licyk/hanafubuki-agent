@@ -107,7 +107,7 @@ impl AgentService {
                 turn_id: admitted.identity.turn_id,
                 generation: admitted.identity.generation,
                 origin: admitted.origin,
-                provisional_title: admitted.provisional_title,
+                automatic_title: admitted.automatic_title,
             });
     }
 
@@ -272,22 +272,26 @@ impl AgentService {
                     None
                 }
             });
-        let title_event = provisional_title.as_ref().map(|title| {
+        let title_event = provisional_title.map(|title| {
             record.settings.title = Some(title.clone());
             record_session_event(
                 record,
-                AgentEventKind::SessionTitleUpdated {
-                    title: title.clone(),
-                },
+                AgentEventKind::SessionTitleUpdated { title },
                 self.inner.limits,
             )
         });
+        let automatic_title = record
+            .settings
+            .title
+            .as_ref()
+            .filter(|title| title.source == AgentSessionTitleSource::Automatic)
+            .map(|title| title.value.clone());
         Ok(StagedAdmission {
             staged: StagedPersistence::commit(cell, record, previous),
             admitted: AdmittedTurn {
                 identity,
                 origin,
-                provisional_title: provisional_title.map(|title| title.value),
+                automatic_title,
             },
             started_event,
             history_event,
@@ -310,8 +314,8 @@ struct StagedAdmission {
 pub(super) struct AdmittedTurn {
     pub(super) identity: TurnIdentity,
     origin: hanafubuki_agent_contracts::AgentTurnOrigin,
-    /// The provisional title committed with the admission.
-    provisional_title: Option<String>,
+    /// The session's title after the admission, when the Agent gave it.
+    automatic_title: Option<String>,
 }
 
 /// A turn's input holds text or an image.

@@ -3,8 +3,8 @@ use std::time::Duration;
 
 use hanafubuki_agent_foundation::cancellation::CancellationToken;
 use hanafubuki_agent_model_api::{
-    ModelEvent, ModelInputItem, ModelJsonSchemaOutput, ModelOutputFormat, ModelOutputItem,
-    ModelRequest, ModelSession, ModelStructuredOutputCapability, ModelToolChoice, ModelToolSpec,
+    json_object_text, request_json_object, ModelJsonObjectError, ModelJsonObjectRequest,
+    ModelJsonObjectTool, ModelSession,
 };
 use serde::Deserialize;
 use serde_json::json;
@@ -104,26 +104,44 @@ async fn generate_stage_one_inner(
     cancellation: CancellationToken,
 ) -> Result<AgentMemoryModelResult<Option<StageOneResult>>, AgentMemoryGenerationError> {
     let input = bounded_generation_input(input)?;
-    let (arguments, usage) = match model_session.structured_output_capability() {
-        ModelStructuredOutputCapability::NativeJsonSchema => {
-            let request = native_phase_one_request(model, input)?;
-            run_private_json(model_session, request, cancellation).await?
-        }
-        ModelStructuredOutputCapability::TextOnly => {
-            validate_capabilities(model_session.as_ref())?;
-            let request = private_request(
-                model,
-                PHASE_ONE_INSTRUCTIONS,
-                input,
-                phase_one_tool_spec(),
-                PHASE_ONE_TOOL_NAME,
-            )?;
-            run_private_tool(model_session, request, PHASE_ONE_TOOL_NAME, cancellation).await?
-        }
-    };
-    let wire: PhaseOneWire = serde_json::from_value(arguments).map_err(|_| {
-        AgentMemoryGenerationError::Failed("extraction result is not an extraction object".into())
+    let answer = request_json_object(
+        model_session.as_ref(),
+        ModelJsonObjectRequest {
+            subject: "extraction",
+            model,
+            instructions: PHASE_ONE_INSTRUCTIONS.to_string(),
+            input,
+            schema: phase_one_schema(),
+            output_name: "agent_memory_extraction",
+            output_description: "Durable memory extraction result",
+            tool: Some(ModelJsonObjectTool {
+                name: PHASE_ONE_TOOL_NAME,
+                description: "Submit the only structured extraction result.",
+            }),
+            schema_in_text: true,
+            timeout: MEMORY_GENERATION_TIMEOUT,
+        },
+        cancellation,
+    )
+    .await
+    .map_err(|error| match error {
+        ModelJsonObjectError::Cancelled => AgentMemoryGenerationError::Cancelled,
+        ModelJsonObjectError::TimedOut => AgentMemoryGenerationError::TimedOut,
+        ModelJsonObjectError::Failed(message) => AgentMemoryGenerationError::Failed(message),
     })?;
+    let wire: PhaseOneWire =
+        serde_json::from_str(json_object_text(&answer.text)).map_err(|_| {
+            AgentMemoryGenerationError::Failed(
+                "extraction result is not an extraction object".into(),
+            )
+        })?;
+    let usage = answer
+        .usage
+        .map(|usage| AgentMemoryModelUsage {
+            input_tokens: usage.input_tokens,
+            output_tokens: usage.output_tokens,
+        })
+        .unwrap_or_default();
     Ok(AgentMemoryModelResult {
         value: usable_extraction(wire, exact_secrets),
         usage,
@@ -197,231 +215,6 @@ fn phase_one_schema() -> serde_json::Value {
     })
 }
 
-fn native_phase_one_request(
-    model: String,
-    input: String,
-) -> Result<ModelRequest, AgentMemoryGenerationError> {
-    let output = ModelJsonSchemaOutput {
-        name: "agent_memory_extraction".to_string(),
-        description: Some("Durable memory extraction result".to_string()),
-        schema: phase_one_schema(),
-        strict: true,
-    };
-    output
-        .validate()
-        .map_err(AgentMemoryGenerationError::Failed)?;
-    Ok(ModelRequest {
-        model,
-        instructions: PHASE_ONE_INSTRUCTIONS.to_string(),
-        input: vec![ModelInputItem::user_text(input)],
-        tools: Vec::new(),
-        tool_choice: ModelToolChoice::None,
-        parallel_tool_calls: false,
-        reasoning: None,
-        output_format: Some(ModelOutputFormat::JsonSchema(output)),
-    })
-}
-
-fn validate_capabilities(model: &dyn ModelSession) -> Result<(), AgentMemoryGenerationError> {
-    let capabilities = model.tool_capabilities();
-    if !capabilities.function_tools || !capabilities.required_named_tool_choice {
-        return Err(AgentMemoryGenerationError::Unsupported(
-            "provider must support function tools and required named tool choice".into(),
-        ));
-    }
-    Ok(())
-}
-
-fn private_request(
-    model: String,
-    instructions: &str,
-    input: String,
-    tool: ModelToolSpec,
-    tool_name: &str,
-) -> Result<ModelRequest, AgentMemoryGenerationError> {
-    let tool = tool.try_into().map_err(
-        |error: hanafubuki_agent_tool_contracts::ToolContractError| {
-            AgentMemoryGenerationError::Failed(error.to_string())
-        },
-    )?;
-    Ok(ModelRequest {
-        model,
-        instructions: instructions.to_string(),
-        input: vec![ModelInputItem::user_text(input)],
-        tools: vec![tool],
-        tool_choice: ModelToolChoice::Required {
-            name: tool_name.to_string(),
-        },
-        parallel_tool_calls: false,
-        reasoning: None,
-        output_format: None,
-    })
-}
-
-async fn run_private_tool(
-    model_session: Arc<dyn ModelSession>,
-    request: ModelRequest,
-    expected_tool: &str,
-    cancellation: CancellationToken,
-) -> Result<(serde_json::Value, AgentMemoryModelUsage), AgentMemoryGenerationError> {
-    if cancellation.is_cancelled() {
-        return Err(AgentMemoryGenerationError::Cancelled);
-    }
-    let monitor = cancellation.clone();
-    let sampling = async {
-        let mut stream = model_session
-            .stream(request, cancellation.clone())
-            .await
-            .map_err(|error| map_model_error(error.to_string(), &cancellation))?;
-        let mut result = None;
-        let mut usage = AgentMemoryModelUsage::default();
-        let mut completed = false;
-        while let Some(event) = stream.next().await {
-            let event = event.map_err(|error| map_model_error(error.to_string(), &cancellation))?;
-            match event {
-                ModelEvent::OutputItemCompleted {
-                    item: ModelOutputItem::ToolCall { call },
-                } => {
-                    if call.name != expected_tool || result.is_some() {
-                        return Err(AgentMemoryGenerationError::Failed(
-                            "model returned an unexpected or duplicate private tool call".into(),
-                        ));
-                    }
-                    result = Some(call.arguments);
-                }
-                ModelEvent::OutputItemCompleted {
-                    item: ModelOutputItem::AssistantMessage { text, .. },
-                } if !text.trim().is_empty() => {
-                    return Err(AgentMemoryGenerationError::Failed(
-                        "model returned text instead of the required private tool call".into(),
-                    ));
-                }
-                ModelEvent::AssistantTextDelta { delta, .. } if !delta.trim().is_empty() => {
-                    return Err(AgentMemoryGenerationError::Failed(
-                        "model streamed text instead of the required private tool call".into(),
-                    ));
-                }
-                ModelEvent::ResponseCompleted { usage: value, .. } => {
-                    completed = true;
-                    if let Some(value) = value {
-                        usage = AgentMemoryModelUsage {
-                            input_tokens: value.input_tokens,
-                            output_tokens: value.output_tokens,
-                        };
-                    }
-                }
-                _ => {}
-            }
-        }
-        if cancellation.is_cancelled() {
-            return Err(AgentMemoryGenerationError::Cancelled);
-        }
-        if !completed {
-            return Err(AgentMemoryGenerationError::Failed(
-                "model stream ended before response completion".into(),
-            ));
-        }
-        result.map(|result| (result, usage)).ok_or_else(|| {
-            AgentMemoryGenerationError::Failed("model did not submit a result".into())
-        })
-    };
-    tokio::pin!(sampling);
-    tokio::select! {
-        result = &mut sampling => result,
-        _ = tokio::time::sleep(MEMORY_GENERATION_TIMEOUT) => Err(AgentMemoryGenerationError::TimedOut),
-        _ = wait_for_cancellation(monitor) => Err(AgentMemoryGenerationError::Cancelled),
-    }
-}
-
-async fn run_private_json(
-    model_session: Arc<dyn ModelSession>,
-    request: ModelRequest,
-    cancellation: CancellationToken,
-) -> Result<(serde_json::Value, AgentMemoryModelUsage), AgentMemoryGenerationError> {
-    if cancellation.is_cancelled() {
-        return Err(AgentMemoryGenerationError::Cancelled);
-    }
-    let monitor = cancellation.clone();
-    let sampling = async {
-        let mut stream = model_session
-            .stream(request, cancellation.clone())
-            .await
-            .map_err(|error| map_model_error(error.to_string(), &cancellation))?;
-        let mut text = None;
-        let mut usage = AgentMemoryModelUsage::default();
-        let mut completed = false;
-        while let Some(event) = stream.next().await {
-            match event.map_err(|error| map_model_error(error.to_string(), &cancellation))? {
-                ModelEvent::OutputItemCompleted {
-                    item: ModelOutputItem::AssistantMessage { text: value, .. },
-                } => {
-                    if text.replace(value).is_some() {
-                        return Err(AgentMemoryGenerationError::Failed(
-                            "model returned duplicate structured output messages".into(),
-                        ));
-                    }
-                }
-                ModelEvent::OutputItemCompleted {
-                    item: ModelOutputItem::ToolCall { .. },
-                } => {
-                    return Err(AgentMemoryGenerationError::Failed(
-                        "model returned a tool call for native structured output".into(),
-                    ));
-                }
-                ModelEvent::ResponseCompleted { usage: value, .. } => {
-                    completed = true;
-                    if let Some(value) = value {
-                        usage = AgentMemoryModelUsage {
-                            input_tokens: value.input_tokens,
-                            output_tokens: value.output_tokens,
-                        };
-                    }
-                }
-                _ => {}
-            }
-        }
-        if !completed {
-            return Err(AgentMemoryGenerationError::Failed(
-                "model stream ended before response completion".into(),
-            ));
-        }
-        let text = text.ok_or_else(|| {
-            AgentMemoryGenerationError::Failed("model did not return structured output".into())
-        })?;
-        let value = serde_json::from_str(&text).map_err(|_| {
-            AgentMemoryGenerationError::Failed("model returned invalid structured JSON".into())
-        })?;
-        Ok((value, usage))
-    };
-    tokio::pin!(sampling);
-    tokio::select! {
-        result = &mut sampling => result,
-        _ = tokio::time::sleep(MEMORY_GENERATION_TIMEOUT) => Err(AgentMemoryGenerationError::TimedOut),
-        _ = wait_for_cancellation(monitor) => Err(AgentMemoryGenerationError::Cancelled),
-    }
-}
-
-async fn wait_for_cancellation(cancellation: CancellationToken) {
-    let mut interval = tokio::time::interval(Duration::from_millis(25));
-    loop {
-        interval.tick().await;
-        if cancellation.is_cancelled() {
-            return;
-        }
-    }
-}
-
-fn map_model_error(
-    message: String,
-    cancellation: &CancellationToken,
-) -> AgentMemoryGenerationError {
-    if cancellation.is_cancelled() {
-        AgentMemoryGenerationError::Cancelled
-    } else {
-        AgentMemoryGenerationError::Failed(message)
-    }
-}
-
 fn bounded_generation_input(input: String) -> Result<String, AgentMemoryGenerationError> {
     if input.len() > MAXIMUM_GENERATION_INPUT_BYTES {
         Err(AgentMemoryGenerationError::Failed(
@@ -429,15 +222,6 @@ fn bounded_generation_input(input: String) -> Result<String, AgentMemoryGenerati
         ))
     } else {
         Ok(input)
-    }
-}
-
-fn phase_one_tool_spec() -> ModelToolSpec {
-    ModelToolSpec {
-        name: PHASE_ONE_TOOL_NAME.into(),
-        description: "Submit the only structured extraction result.".into(),
-        strict: true,
-        input_schema: phase_one_schema(),
     }
 }
 

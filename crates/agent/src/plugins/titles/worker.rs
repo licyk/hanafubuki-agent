@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use hanafubuki_agent_contracts::BlockingService;
@@ -10,12 +11,16 @@ use crate::plugins::structured_request::wait_for_cancellation;
 use crate::titles::AgentTitleApplication;
 
 /// Generates the queued titles one after another until the plugin stops.
+/// A session settled in this run is not looked at again: the model gave it
+/// a title, even one equal to the provisional title (a short first
+/// message), or its title is no longer the provisional one.
 pub(super) async fn run_title_worker(
     titles: AgentTitleApplication,
     blocking: Arc<BlockingService>,
     mut receiver: mpsc::Receiver<TitleWork>,
     cancellation: CancellationToken,
 ) {
+    let mut settled = HashSet::new();
     loop {
         let work = tokio::select! {
             work = receiver.recv() => match work {
@@ -24,29 +29,39 @@ pub(super) async fn run_title_worker(
             },
             () = wait_for_cancellation(cancellation.clone()) => return,
         };
-        title_turn(&titles, &blocking, work, &cancellation).await;
+        if settled.contains(&work.session_id) {
+            continue;
+        }
+        let session_id = work.session_id;
+        if title_turn(&titles, &blocking, work, &cancellation).await {
+            settled.insert(session_id);
+        }
     }
 }
 
-/// Reads the turn's prompt and the session's Provider, asks the model for a
-/// title and commits it if the session still has the provisional one.
-/// Every failure leaves the provisional title in place.
+/// Reads the session's first message and its Provider, asks the model for
+/// a title while the session's title is that message's provisional one, and
+/// commits it if the session still has it. Returns whether the session is
+/// settled: the model gave a title, or the title is not provisional. Every
+/// failure leaves the provisional title in place, for the next user turn
+/// to try again.
 async fn title_turn(
     titles: &AgentTitleApplication,
     blocking: &BlockingService,
     work: TitleWork,
     cancellation: &CancellationToken,
-) {
+) -> bool {
     let TitleWork {
         session_id,
         turn_id,
         generation,
-        provisional_title,
+        title: provisional_title,
     } = work;
     let reader = titles.clone();
+    let expected = provisional_title.clone();
     let request = match blocking
         .run("agent title request", move || {
-            reader.title_request(session_id, turn_id)
+            reader.title_request(session_id, &expected)
         })
         .await
         .map_err(|error| error.to_string())
@@ -55,15 +70,15 @@ async fn title_turn(
         Ok(Some(request)) => request,
         Ok(None) => {
             log::debug!(
-                "Agent automatic title skipped: the turn's message is gone session={session_id} turn={turn_id} generation={generation}"
+                "Agent automatic title skipped: the title is not provisional session={session_id} turn={turn_id} generation={generation}"
             );
-            return;
+            return true;
         }
         Err(error) => {
             log::debug!(
                 "Agent automatic title Provider resolution failed session={session_id}: {error}"
             );
-            return;
+            return false;
         }
     };
     let model_session = match request.model.model_session() {
@@ -72,7 +87,7 @@ async fn title_turn(
             log::debug!(
                 "Agent automatic title transport preparation failed session={session_id}: {error}"
             );
-            return;
+            return false;
         }
     };
     let title = match generate_title(
@@ -91,12 +106,12 @@ async fn title_turn(
                     "Agent automatic title generation failed session={session_id}: {error}"
                 );
             }
-            return;
+            return false;
         }
     };
     // A plugin turned off while the model answered commits nothing.
     if cancellation.is_cancelled() {
-        return;
+        return false;
     }
     let writer = titles.clone();
     let committed = blocking
@@ -115,4 +130,5 @@ async fn title_turn(
             log::debug!("Agent automatic title commit failed session={session_id}: {error}")
         }
     }
+    true
 }

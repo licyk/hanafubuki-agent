@@ -1,7 +1,8 @@
 //! What is known about each model the Agent reaches (its route: protocol,
 //! endpoint and model id), fact by fact: its context window, largest
-//! output, reasoning and image input. A fact comes from the person's
-//! configuration, from a Provider's refusal (learned), from its listing
+//! output, reasoning, image input and the structured-output rung it takes.
+//! A fact comes from the person's configuration, from a Provider's refusal
+//! (learned), from its listing
 //! (reported), from models.dev's catalogue (`Catalog`, when the person
 //! turned it on) or from the built-in window table, and is resolved per
 //! fact in that order (`resolve`). The facts outlive the run through the
@@ -12,7 +13,7 @@ use std::sync::Arc;
 use hanafubuki_agent_model_api::{
     ModelCatalogEntry, ModelEndpointKey, ModelImageInputCapability, ModelMetadata,
     ModelMetadataSource, ModelProviderNames, ModelReasoningSupport, ModelRouteKey,
-    ModelsDevCatalog, Sourced,
+    ModelStructuredOutputCapability, ModelsDevCatalog, Sourced,
 };
 use parking_lot::Mutex;
 
@@ -125,10 +126,57 @@ impl ModelMetadataRegistry {
         });
     }
 
+    /// Learns that `route` takes no structured-output rung above `rung`:
+    /// kept while no live refusal taught a lower one, so two requests that
+    /// learn at once never raise it back.
+    pub(crate) fn learn_structured_output(
+        &self,
+        route: &ModelRouteKey,
+        rung: ModelStructuredOutputCapability,
+        now_ms: u64,
+    ) {
+        self.change(|state| {
+            let lower_known = self
+                .structured_output_in(state, route, now_ms)
+                .is_some_and(|known| known >= rung);
+            !lower_known
+                && state.learn(route, now_ms, |learned| {
+                    learned.structured_output = Some(Sourced {
+                        value: rung,
+                        source: ModelMetadataSource::Learned,
+                        observed_at_ms: now_ms,
+                    });
+                })
+        });
+    }
+
+    /// The best structured-output rung `route`'s live refusals left it,
+    /// when they taught one.
+    pub(crate) fn structured_output(
+        &self,
+        route: &ModelRouteKey,
+        now_ms: u64,
+    ) -> Option<ModelStructuredOutputCapability> {
+        self.structured_output_in(&self.state.lock(), route, now_ms)
+    }
+
+    fn structured_output_in(
+        &self,
+        state: &RegistryState,
+        route: &ModelRouteKey,
+        now_ms: u64,
+    ) -> Option<ModelStructuredOutputCapability> {
+        state
+            .live_facts(route, now_ms)
+            .and_then(|facts| facts.learned.structured_output)
+            .map(|fact| fact.value)
+    }
+
     /// Forgets what the Provider's refusals taught of `endpoint`'s model
-    /// `model`, or of every model of the endpoint: learned windows, and a
-    /// learned "no" to images or to reasoning. Returns how many models had
-    /// something to forget.
+    /// `model`, or of every model of the endpoint: learned windows, a
+    /// learned "no" to images or to reasoning, and a learned
+    /// structured-output rung. Returns how many models had something to
+    /// forget.
     pub(crate) fn forget_learned(
         &self,
         endpoint: &ModelEndpointKey,

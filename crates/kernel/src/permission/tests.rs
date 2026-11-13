@@ -2,8 +2,9 @@ use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 
 use hanafubuki_agent_model_api::{
-    ModelError, ModelEventStream, ModelFuture, ModelMessagePhase, ModelResponseMetadata,
-    ModelResult, ModelStream,
+    ModelError, ModelEvent, ModelEventStream, ModelFuture, ModelInputItem, ModelMessagePhase,
+    ModelOutputFormat, ModelOutputItem, ModelRequest, ModelResponseMetadata, ModelResult,
+    ModelStream, ModelStructuredOutputCapability, ModelToolChoice,
 };
 
 use super::*;
@@ -12,6 +13,9 @@ struct TestSession {
     events: Mutex<VecDeque<ModelResult<ModelEvent>>>,
     requests: Mutex<Vec<ModelRequest>>,
     capability: ModelStructuredOutputCapability,
+    /// Refuses native structured output, as a gateway without it does.
+    refuses_native: bool,
+    learned: Mutex<Vec<ModelStructuredOutputCapability>>,
 }
 
 impl TestSession {
@@ -23,6 +27,18 @@ impl TestSession {
             events: Mutex::new(events.into()),
             requests: Mutex::new(Vec::new()),
             capability,
+            refuses_native: false,
+            learned: Mutex::new(Vec::new()),
+        })
+    }
+
+    fn refusing_native(events: Vec<ModelResult<ModelEvent>>) -> Arc<Self> {
+        Arc::new(Self {
+            events: Mutex::new(events.into()),
+            requests: Mutex::new(Vec::new()),
+            capability: ModelStructuredOutputCapability::NativeJsonSchema,
+            refuses_native: true,
+            learned: Mutex::new(Vec::new()),
         })
     }
 }
@@ -63,12 +79,27 @@ impl ModelSession for TestSession {
         self.capability
     }
 
+    fn learn_structured_output(&self, _model: &str, rung: ModelStructuredOutputCapability) {
+        self.learned.lock().unwrap().push(rung);
+    }
+
     fn stream(
         &self,
         request: ModelRequest,
         _cancellation: CancellationToken,
     ) -> ModelFuture<'_, Result<ModelStream, ModelError>> {
+        let refused = self.refuses_native && request.output_format.is_some();
         self.requests.lock().unwrap().push(request);
+        if refused {
+            return Box::pin(async {
+                Err(ModelError::UnsupportedStructuredOutput {
+                    status: Some(400),
+                    code: Some("invalid_input".to_string()),
+                    message: "Structured output (`text.format`) is not supported by this stateless gateway.".to_string(),
+                    request_id: None,
+                })
+            });
+        }
         let events = std::mem::take(&mut *self.events.lock().unwrap());
         Box::pin(async move { Ok(Box::new(TestStream { events }) as ModelStream) })
     }
@@ -212,7 +243,7 @@ async fn text_only_route_uses_no_tool_json_fallback() {
         assistant_events(
             r#"{"riskLevel":"medium","userAuthorization":"implicit","outcome":"deny","rationale":"The exact action is not sufficiently authorized."}"#,
         ),
-        ModelStructuredOutputCapability::TextOnly,
+        ModelStructuredOutputCapability::Text,
     );
     let assessment = review_permission(
         session.clone(),
@@ -228,6 +259,54 @@ async fn text_only_route_uses_no_tool_json_fallback() {
     .unwrap();
     assert_eq!(assessment.outcome, PermissionAssessmentOutcome::Deny);
     assert!(session.requests.lock().unwrap()[0].output_format.is_none());
+}
+
+/// A refused native output falls to plain text at once, never to a forced
+/// tool, the route learns it, and the text is still read exactly.
+#[tokio::test]
+async fn a_refused_native_output_falls_to_text_and_stays_strict() {
+    let allowed = r#"{"riskLevel":"low","userAuthorization":"explicit","outcome":"allow","rationale":"Asked for."}"#;
+    let session = TestSession::refusing_native(assistant_events(allowed));
+    let assessment = review_permission(
+        session.clone(),
+        "fixture".to_string(),
+        Vec::new(),
+        &action(),
+        CancellationToken::default(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(assessment.outcome, PermissionAssessmentOutcome::Allow);
+    assert_eq!(
+        *session.learned.lock().unwrap(),
+        [ModelStructuredOutputCapability::Text]
+    );
+    let requests = session.requests.lock().unwrap().clone();
+    assert_eq!(requests.len(), 2);
+    assert!(requests[0].output_format.is_some());
+    assert!(requests[1].output_format.is_none() && requests[1].tools.is_empty());
+    assert_eq!(requests[1].tool_choice, ModelToolChoice::None);
+    assert_eq!(requests[1].instructions, REVIEW_INSTRUCTIONS);
+
+    // What the text rung keeps out of a tolerant reading: a fence, words
+    // around the object.
+    for text in [
+        format!("```json\n{allowed}\n```"),
+        format!("Here it is: {allowed}"),
+    ] {
+        let session = TestSession::refusing_native(assistant_events(&text));
+        assert!(matches!(
+            review_permission(
+                session,
+                "fixture".to_string(),
+                Vec::new(),
+                &action(),
+                CancellationToken::default(),
+            )
+            .await,
+            Err(PermissionReviewError::Failed(_))
+        ));
+    }
 }
 
 #[test]
@@ -316,7 +395,7 @@ async fn malformed_wrapped_multiple_and_tool_responses_fail_closed() {
         let result = review_permission(
             TestSession::new(
                 assistant_events(text),
-                ModelStructuredOutputCapability::TextOnly,
+                ModelStructuredOutputCapability::Text,
             ),
             "fixture".to_string(),
             Vec::new(),
@@ -347,7 +426,7 @@ async fn malformed_wrapped_multiple_and_tool_responses_fail_closed() {
                 end_turn: Some(true),
             }),
         ],
-        ModelStructuredOutputCapability::TextOnly,
+        ModelStructuredOutputCapability::Text,
     );
     assert!(matches!(
         review_permission(
@@ -367,7 +446,7 @@ async fn malformed_wrapped_multiple_and_tool_responses_fail_closed() {
             usage: None,
             end_turn: Some(true),
         })],
-        ModelStructuredOutputCapability::TextOnly,
+        ModelStructuredOutputCapability::Text,
     );
     assert!(matches!(
         review_permission(
@@ -393,7 +472,7 @@ async fn malformed_wrapped_multiple_and_tool_responses_fail_closed() {
         review_permission(
             TestSession::new(
                 assistant_events(&oversized),
-                ModelStructuredOutputCapability::TextOnly,
+                ModelStructuredOutputCapability::Text,
             ),
             "fixture".to_string(),
             Vec::new(),
@@ -414,7 +493,7 @@ async fn remote_failure_fails_closed() {
             message: "review unavailable".to_string(),
             request_id: None,
         })],
-        ModelStructuredOutputCapability::TextOnly,
+        ModelStructuredOutputCapability::Text,
     );
     assert!(matches!(
         review_permission(

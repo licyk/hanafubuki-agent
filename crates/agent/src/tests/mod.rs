@@ -50,6 +50,7 @@ mod settings_collections;
 mod shutdown;
 mod standalone;
 mod startup;
+mod structured_output;
 mod titles;
 mod tools;
 mod workspace;

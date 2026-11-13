@@ -23,6 +23,8 @@ mod responses;
 mod route;
 mod sse;
 mod streaming;
+mod structured_output_refusal;
+mod structured_request;
 mod tolerant_decode;
 mod tool_lowering;
 mod tool_output_lowering;
@@ -67,4 +69,8 @@ pub use provider::{
 pub use reasoning_effort::{reasoning_effort_rank, request_reasoning_effort};
 pub use responses::ResponsesModelTransport;
 pub use route::{ModelEndpointKey, ModelRouteKey};
+pub use structured_request::{
+    json_object_text, request_json_object, ModelJsonObjectAnswer, ModelJsonObjectError,
+    ModelJsonObjectRequest, ModelJsonObjectTool,
+};
 pub use tool_lowering::flattened_tool_call_name;

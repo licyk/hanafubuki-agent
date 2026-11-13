@@ -213,12 +213,14 @@ imageInput = "supported"
 
 ## 遗忘学到的信息 [#forget]
 
-Agent 从 Provider 的拒绝中学到的信息（更小的窗口、模型不读图、不接受推理参数）保持 7 天。要在此之前再试这个模型，就遗忘它：
+Agent 从 Provider 的拒绝中学到的信息（更小的窗口、模型不读图、不接受推理参数、不支持结构化输出或强制工具）保持 7 天。要在此之前再试这个模型，就遗忘它：
 
 - 终端界面中的 `/model forget`，针对会话的模型；
 - `hanafubuki-agent providers forget ID [--model MODEL]`，针对该 Provider 的一个模型或它的全部模型（[命令行参考](/docs/cli-reference#providers)）。
 
 目录报告的信息、[models.dev](#models-dev) 的副本和按模型的设置都保留。会话在下一个轮次采用这一变化：它的窗口变为其他来源所知道的窗口，什么都不知道时则为未知。
+
+标题、回顾、记忆提取和自动权限审查都会向模型要一个小的 JSON 回答。Agent 用协议自己的结构化输出（Responses 和 Chat Completions）或强制调用一个工具（Anthropic）来要它；Provider 或网关以状态码 400 或 422 拒绝时，立即改为强制调用工具再要一次，再不行就以纯文本要，模型记住行得通的方式 7 天，所以一周只有第一个请求会被拒绝（[内部实现](/docs/internals#structured-output-rungs)）。遗忘后会重新尝试协议自己的方式。
 
 ## models.dev [#models-dev]
 

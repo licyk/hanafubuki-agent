@@ -15,6 +15,7 @@ pub use model_server::{
     assistant_events, chat_reasoning_answer_events, chat_reasoning_tool_events, http_error,
     namespace_tool_events, reasoning_answer_events, reasoning_tool_events, tool_calls_events,
     tool_events, tool_search_events, with_input_tokens, CapturedRequest, FakeListing, FakeServer,
+    GatewayRefusals,
 };
 pub use plugins::{mount, mount_tool_plugin, test_tool_context, MountedPlugin, MountedToolPlugin};
 pub use service::{

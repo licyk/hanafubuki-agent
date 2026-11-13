@@ -17,7 +17,7 @@ impl AgentService {
             let record = &*guard;
             exact_turn(record, identity.turn_id, identity.generation)?;
             (
-                record.settings.model.create_model_session(),
+                self.learning_model_session(record.settings.model.create_model_session()),
                 record.settings.config.model.clone(),
                 history_contents(&record.conversation.history),
             )

@@ -249,3 +249,124 @@ async fn a_rename_during_generation_wins_over_the_generated_title() {
     assert!(!sink.titles().iter().any(|title| title == "Generated title"));
     finish(service, paths);
 }
+
+/// An answer that serves a turn but is no title: the title request that
+/// takes it fails, and the provisional title stays.
+const NO_TITLE: &str = "Not a title";
+
+fn title_requests(server: &FakeServer) -> Vec<String> {
+    server
+        .requests()
+        .iter()
+        .map(|request| String::from_utf8_lossy(&request.body).to_string())
+        .filter(|body| body.contains("Create a concise title"))
+        .collect()
+}
+
+/// A first title that fails is asked again at the next user turn, from the
+/// first message, while the title is still the provisional one; once the
+/// model gave one, a later turn asks nothing.
+// The managed turn's task must finish while `shutdown` blocks this thread.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_failed_title_is_retried_at_the_next_user_turn() {
+    let server = FakeServer::start(vec![
+        (assistant_events(NO_TITLE), Duration::ZERO),
+        (assistant_events(NO_TITLE), Duration::ZERO),
+        (assistant_events(GENERATED), Duration::ZERO),
+        (assistant_events(GENERATED), Duration::ZERO),
+        (assistant_events("Third answer"), Duration::ZERO),
+    ])
+    .await;
+    let (service, paths, session) = titled_service("titles-retried", &server, true).await;
+    let sink = Arc::new(RecordingSink::default());
+
+    service
+        .submit_turn_with_sink(session.id, user_turn(PROMPT), sink.clone())
+        .await
+        .unwrap();
+    wait_until("the first title request is answered", || {
+        server.requests().len() == 2
+    })
+    .await;
+    wait_for_turn_end(&service, session.id).await;
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    assert_eq!(title_of(&service, session.id).value, PROVISIONAL);
+
+    service
+        .submit_turn_with_sink(session.id, user_turn("And the history store"), sink.clone())
+        .await
+        .unwrap();
+    wait_until("the retried title lands", || {
+        title_of(&service, session.id).value == "Generated title"
+    })
+    .await;
+    wait_for_turn_end(&service, session.id).await;
+    let retried = title_requests(&server);
+    assert_eq!(retried.len(), 2);
+    assert!(retried[1].contains("Explain   the task"), "{}", retried[1]);
+    assert!(!retried[1].contains("history store"), "{}", retried[1]);
+    assert_eq!(
+        title_of(&service, session.id).source,
+        AgentSessionTitleSource::Automatic
+    );
+
+    service
+        .submit_turn_with_sink(session.id, user_turn("One more"), sink.clone())
+        .await
+        .unwrap();
+    wait_for_turn_end(&service, session.id).await;
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    assert_eq!(server.requests().len(), 5, "no title asked again");
+    assert_eq!(sink.titles(), [PROVISIONAL, "Generated title"]);
+    finish(service, paths);
+}
+
+/// A title the user gave stops the retries.
+// The managed turn's task must finish while `shutdown` blocks this thread.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_rename_stops_the_retries() {
+    let server = FakeServer::start(vec![
+        (assistant_events(NO_TITLE), Duration::ZERO),
+        (assistant_events(NO_TITLE), Duration::ZERO),
+        (assistant_events("Second answer"), Duration::ZERO),
+        (assistant_events(GENERATED), Duration::ZERO),
+    ])
+    .await;
+    let (service, paths, session) = titled_service("titles-retry-renamed", &server, true).await;
+    let sink = Arc::new(RecordingSink::default());
+
+    service
+        .submit_turn_with_sink(session.id, user_turn(PROMPT), sink.clone())
+        .await
+        .unwrap();
+    wait_until("the first title request is answered", || {
+        server.requests().len() == 2
+    })
+    .await;
+    wait_for_turn_end(&service, session.id).await;
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    let current = service.snapshot(session.id).unwrap();
+    service
+        .rename_session(
+            AgentSessionTitleRenameRequest {
+                session_id: session.id,
+                generation: current.generation,
+                revision: current.revision,
+                title: "My own title".to_string(),
+            },
+            sink.as_ref(),
+        )
+        .unwrap();
+
+    service
+        .submit_turn_with_sink(session.id, user_turn("And the history store"), sink.clone())
+        .await
+        .unwrap();
+    wait_for_turn_end(&service, session.id).await;
+    tokio::time::sleep(Duration::from_millis(300)).await;
+
+    assert_eq!(server.requests().len(), 3, "the second turn alone");
+    assert_eq!(title_requests(&server).len(), 1);
+    assert_eq!(title_of(&service, session.id).value, "My own title");
+    finish(service, paths);
+}

@@ -64,6 +64,21 @@ pub enum ModelError {
         message: String,
         request_id: Option<String>,
     },
+    /// The Provider refused the request's native structured output
+    /// (`text.format`, `response_format`).
+    UnsupportedStructuredOutput {
+        status: Option<u16>,
+        code: Option<String>,
+        message: String,
+        request_id: Option<String>,
+    },
+    /// The Provider refused the request's forced tool (`tool_choice`).
+    UnsupportedToolChoice {
+        status: Option<u16>,
+        code: Option<String>,
+        message: String,
+        request_id: Option<String>,
+    },
 }
 
 impl fmt::Display for ModelError {
@@ -128,6 +143,24 @@ impl fmt::Display for ModelError {
                 formatter,
                 "model endpoint does not support the reasoning parameter status={status:?} code={code:?} request_id={request_id:?}: {message}"
             ),
+            Self::UnsupportedStructuredOutput {
+                status,
+                code,
+                message,
+                request_id,
+            } => write!(
+                formatter,
+                "model endpoint does not support structured output status={status:?} code={code:?} request_id={request_id:?}: {message}"
+            ),
+            Self::UnsupportedToolChoice {
+                status,
+                code,
+                message,
+                request_id,
+            } => write!(
+                formatter,
+                "model endpoint does not support a forced tool status={status:?} code={code:?} request_id={request_id:?}: {message}"
+            ),
         }
     }
 }
@@ -155,8 +188,9 @@ pub trait ModelPort: Send + Sync {
         conservative_tool_capabilities()
     }
 
+    /// The best rung the protocol offers for a JSON object.
     fn structured_output_capability(&self) -> ModelStructuredOutputCapability {
-        ModelStructuredOutputCapability::TextOnly
+        ModelStructuredOutputCapability::Text
     }
 
     fn route_key(&self, _model: &str) -> Option<ModelRouteKey> {
@@ -191,9 +225,19 @@ pub trait ModelSession: Send + Sync {
         conservative_tool_capabilities()
     }
 
+    /// The best rung the protocol offers for a JSON object.
     fn structured_output_capability(&self) -> ModelStructuredOutputCapability {
-        ModelStructuredOutputCapability::TextOnly
+        ModelStructuredOutputCapability::Text
     }
+
+    /// The best rung `model`'s route still takes: the protocol's, or the
+    /// lower one its refusals taught.
+    fn structured_output_capability_for(&self, _model: &str) -> ModelStructuredOutputCapability {
+        self.structured_output_capability()
+    }
+
+    /// Records that `model`'s route takes no rung above `rung`.
+    fn learn_structured_output(&self, _model: &str, _rung: ModelStructuredOutputCapability) {}
 
     fn route_key(&self, _model: &str) -> Option<ModelRouteKey> {
         None

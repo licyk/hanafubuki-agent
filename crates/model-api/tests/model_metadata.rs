@@ -2,7 +2,8 @@
 //! keeps every fact it can use.
 
 use hanafubuki_agent_model_api::{
-    ModelMetadata, ModelMetadataSource, ModelReasoningEffort, ModelReasoningSupport, Sourced,
+    ModelMetadata, ModelMetadataSource, ModelReasoningEffort, ModelReasoningSupport,
+    ModelStructuredOutputCapability, Sourced,
 };
 use serde_json::json;
 
@@ -28,6 +29,11 @@ fn metadata_round_trips_with_each_fact_and_its_source() {
             source: ModelMetadataSource::Learned,
             observed_at_ms: 2,
         }),
+        structured_output: Some(Sourced {
+            value: ModelStructuredOutputCapability::RequiredTool,
+            source: ModelMetadataSource::Learned,
+            observed_at_ms: 3,
+        }),
     };
     let encoded = serde_json::to_value(&metadata).unwrap();
     assert_eq!(
@@ -41,6 +47,7 @@ fn metadata_round_trips_with_each_fact_and_its_source() {
                 "observedAtMs": 1,
             },
             "imageInput": {"value": false, "source": "learned", "observedAtMs": 2},
+            "structuredOutput": {"value": "required_tool", "source": "learned", "observedAtMs": 3},
         })
     );
     assert_eq!(
@@ -60,6 +67,7 @@ fn a_fact_that_does_not_decode_is_unknown_and_the_others_are_kept() {
             "note": "an unknown field",
         },
         "imageInput": {"value": true, "source": "catalog"},
+        "structuredOutput": {"value": "a_future_rung", "source": "learned"},
         "toolCalls": {"value": true, "source": "reported"},
     }))
     .unwrap();
@@ -81,6 +89,7 @@ fn a_fact_that_does_not_decode_is_unknown_and_the_others_are_kept() {
                 source: ModelMetadataSource::Catalog,
                 observed_at_ms: 0,
             }),
+            structured_output: None,
         }
     );
     assert_eq!(

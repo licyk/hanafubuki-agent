@@ -22,13 +22,13 @@ fn titles() -> AgentTitleApplication {
     )
 }
 
-fn admitted(origin: AgentTurnOrigin, provisional_title: Option<&str>) -> AgentNotification {
+fn admitted(origin: AgentTurnOrigin, automatic_title: Option<&str>) -> AgentNotification {
     AgentNotification::TurnAdmitted {
         session_id: AgentSessionId::new(1),
         turn_id: AgentTurnId::new(1),
         generation: AgentGeneration::new(1),
         origin,
-        provisional_title: provisional_title.map(str::to_string),
+        automatic_title: automatic_title.map(str::to_string),
     }
 }
 
@@ -59,9 +59,9 @@ async fn the_titles_plugin_registers_its_observer_until_it_stops() {
     mounted.root.fiber().dispose().await.unwrap();
 }
 
-/// Only a user's turn that gave its session a provisional title is queued.
+/// Only a user's turn of a session whose title the Agent gave is queued.
 #[test]
-fn only_a_user_turn_with_a_provisional_title_is_queued() {
+fn only_a_user_turn_with_an_automatic_title_is_queued() {
     let (sender, mut receiver) = mpsc::channel(TITLE_QUEUE_CAPACITY);
     let observer = TitleObserver { sender };
 
@@ -71,13 +71,13 @@ fn only_a_user_turn_with_a_provisional_title_is_queued() {
 
     observer.observe(&admitted(AgentTurnOrigin::User, Some("Title")));
     let work = receiver.try_recv().unwrap();
-    assert_eq!(work.provisional_title, "Title");
+    assert_eq!(work.title, "Title");
     assert_eq!(work.turn_id, AgentTurnId::new(1));
     assert!(receiver.try_recv().is_err());
 }
 
-/// A full queue drops the work instead of waiting: the turn keeps its
-/// provisional title.
+/// A full queue drops the work instead of waiting: the next user turn
+/// tries again.
 #[test]
 fn a_full_queue_drops_the_title_instead_of_waiting() {
     let (sender, mut receiver) = mpsc::channel(1);
@@ -86,6 +86,6 @@ fn a_full_queue_drops_the_title_instead_of_waiting() {
     observer.observe(&admitted(AgentTurnOrigin::User, Some("First")));
     observer.observe(&admitted(AgentTurnOrigin::User, Some("Second")));
 
-    assert_eq!(receiver.try_recv().unwrap().provisional_title, "First");
+    assert_eq!(receiver.try_recv().unwrap().title, "First");
     assert!(receiver.try_recv().is_err());
 }

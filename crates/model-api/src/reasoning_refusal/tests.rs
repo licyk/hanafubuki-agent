@@ -109,7 +109,6 @@ fn other_statuses_and_in_band_errors_never_count() {
 fn unrelated_refusals_stay_remote() {
     let unrelated = [
         "Unsupported parameter: 'max_tokens' is not supported with this model.",
-        "tool_choice: type \"tool\" and \"any\" are not supported for this model.",
         // Name a reasoning parameter, but refuse something else.
         "Thinking may not be enabled when tool_choice forces tool use.",
         "`max_tokens` must be greater than `thinking.budget_tokens`.",
@@ -126,6 +125,15 @@ fn unrelated_refusals_stay_remote() {
             "{message}"
         );
     }
+    // A refused forced tool, not a refused reasoning parameter.
+    assert!(matches!(
+        classify(
+            Some(400),
+            Some("invalid_request_error"),
+            "tool_choice: type \"tool\" and \"any\" are not supported for this model."
+        ),
+        ModelError::UnsupportedToolChoice { .. }
+    ));
 }
 
 #[test]

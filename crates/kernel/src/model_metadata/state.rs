@@ -338,6 +338,7 @@ fn reported_facts(entry: &ModelCatalogEntry, now_ms: u64) -> ModelMetadata {
         max_output_tokens: entry.max_output_tokens.map(|value| reported(value, now_ms)),
         reasoning: reasoning.map(|value| reported(value, now_ms)),
         image_input: entry.image_input.map(|value| reported(value, now_ms)),
+        structured_output: None,
     }
 }
 
@@ -363,6 +364,7 @@ fn expire(metadata: &mut ModelMetadata, now_ms: u64, ttl_ms: u64) {
     expire_fact(&mut metadata.max_output_tokens, now_ms, ttl_ms);
     expire_fact(&mut metadata.reasoning, now_ms, ttl_ms);
     expire_fact(&mut metadata.image_input, now_ms, ttl_ms);
+    expire_fact(&mut metadata.structured_output, now_ms, ttl_ms);
 }
 
 /// `metadata` with every fact's source `source`, and observed no later than
@@ -385,6 +387,7 @@ fn stamped(metadata: ModelMetadata, source: ModelMetadataSource, now_ms: u64) ->
         max_output_tokens: stamp(metadata.max_output_tokens, source, now_ms),
         reasoning: stamp(metadata.reasoning, source, now_ms),
         image_input: stamp(metadata.image_input, source, now_ms),
+        structured_output: stamp(metadata.structured_output, source, now_ms),
     }
 }
 
@@ -401,6 +404,10 @@ fn observed_times(metadata: &ModelMetadata) -> impl Iterator<Item = u64> {
         metadata.reasoning.as_ref().map(|fact| fact.observed_at_ms),
         metadata
             .image_input
+            .as_ref()
+            .map(|fact| fact.observed_at_ms),
+        metadata
+            .structured_output
             .as_ref()
             .map(|fact| fact.observed_at_ms),
     ]

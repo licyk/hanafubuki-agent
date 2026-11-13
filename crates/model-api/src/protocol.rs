@@ -81,7 +81,7 @@ impl ModelApiProtocol {
             Self::Responses | Self::ChatCompletions => {
                 ModelStructuredOutputCapability::NativeJsonSchema
             }
-            Self::AnthropicMessages => ModelStructuredOutputCapability::TextOnly,
+            Self::AnthropicMessages => ModelStructuredOutputCapability::RequiredTool,
         }
     }
 

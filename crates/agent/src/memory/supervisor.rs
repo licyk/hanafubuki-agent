@@ -354,15 +354,17 @@ fn run_memory_pass(
         .saturating_div(100)
         .min(120_000) as usize;
     let exact_secrets = resolved.credential.clone().into_iter().collect::<Vec<_>>();
-    let model_session = AgentService::create_private_model_session(
-        model_api_protocol(resolved.definition.protocol),
-        &resolved.definition.base_url,
-        resolved.credential,
-        resolved.headers,
-        hanafubuki_agent_kernel::ModelRetryPolicy::default(),
-        application.core.model_proxy(),
-    )
-    .map_err(|error| error.to_string())?;
+    let model_session = application
+        .core
+        .create_private_model_session(
+            model_api_protocol(resolved.definition.protocol),
+            &resolved.definition.base_url,
+            resolved.credential,
+            resolved.headers,
+            hanafubuki_agent_kernel::ModelRetryPolicy::default(),
+            application.core.model_proxy(),
+        )
+        .map_err(|error| error.to_string())?;
     let mut sources = SourceClaims::new(
         history,
         &application.repository,

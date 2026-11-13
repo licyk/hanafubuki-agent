@@ -219,6 +219,7 @@ impl ModelsDevModel {
                 source: ModelMetadataSource::Catalog,
                 observed_at_ms,
             }),
+            structured_output: None,
         }
     }
 }

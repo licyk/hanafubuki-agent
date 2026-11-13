@@ -114,6 +114,17 @@ pub fn classify_remote_model_error(
             message,
             request_id,
         }
+    } else if crate::structured_output_refusal::is_unsupported_structured_output(
+        status,
+        code.as_deref(),
+        &message,
+    ) {
+        ModelError::UnsupportedStructuredOutput {
+            status,
+            code,
+            message,
+            request_id,
+        }
     } else if is_unsupported_image_input(status, code.as_deref(), &message) {
         ModelError::UnsupportedImageInput {
             status,
@@ -124,6 +135,19 @@ pub fn classify_remote_model_error(
     } else if crate::reasoning_refusal::is_unsupported_reasoning(status, code.as_deref(), &message)
     {
         ModelError::UnsupportedReasoning {
+            status,
+            code,
+            message,
+            request_id,
+        }
+    } else if crate::structured_output_refusal::is_unsupported_tool_choice(
+        status,
+        code.as_deref(),
+        &message,
+    ) {
+        // Last, so a turn's refusal that also names its tools keeps its
+        // image or reasoning fallback.
+        ModelError::UnsupportedToolChoice {
             status,
             code,
             message,

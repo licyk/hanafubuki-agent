@@ -60,13 +60,14 @@ pub use hanafubuki_agent_approval::{
     PermissionRequirement, SandboxEscalation,
 };
 pub use hanafubuki_agent_model_api::{
-    fetch_models_dev, flattened_tool_call_name, request_reasoning_effort, ModelApiProtocol,
-    ModelCatalogEntry, ModelCompactionCapability, ModelCredential, ModelEvent, ModelHeader,
-    ModelHttpProxy, ModelImageInputCapability, ModelImageInputPolicy, ModelInputCapabilities,
-    ModelInputCapabilityPolicy, ModelInputItem, ModelJsonSchemaOutput, ModelMetadata,
-    ModelMetadataSource, ModelOutputFormat, ModelOutputItem, ModelReasoningConfig,
-    ModelReasoningEffort, ModelReasoningReplay, ModelReasoningSupport, ModelRequest,
-    ModelRetryPolicy, ModelSession, ModelStructuredOutputCapability, ModelToolChoice,
+    fetch_models_dev, flattened_tool_call_name, json_object_text, request_json_object,
+    request_reasoning_effort, ModelApiProtocol, ModelCatalogEntry, ModelCompactionCapability,
+    ModelCredential, ModelEvent, ModelHeader, ModelHttpProxy, ModelImageInputCapability,
+    ModelImageInputPolicy, ModelInputCapabilities, ModelInputCapabilityPolicy, ModelInputItem,
+    ModelJsonObjectAnswer, ModelJsonObjectError, ModelJsonObjectRequest, ModelJsonObjectTool,
+    ModelJsonSchemaOutput, ModelMetadata, ModelMetadataSource, ModelOutputFormat, ModelOutputItem,
+    ModelReasoningConfig, ModelReasoningEffort, ModelReasoningReplay, ModelReasoningSupport,
+    ModelRequest, ModelRetryPolicy, ModelSession, ModelStructuredOutputCapability, ModelToolChoice,
     ModelToolSpec, ModelsDevCatalog, Sourced, MODELS_DEV_URL,
 };
 pub use hanafubuki_agent_skills::{SkillId, SkillScope};

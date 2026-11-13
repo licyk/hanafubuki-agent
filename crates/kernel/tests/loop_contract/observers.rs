@@ -79,7 +79,7 @@ async fn observers_are_told_what_the_kernel_committed_after_it_is_durable() {
                 turn_id: outcome.turn_id,
                 generation: outcome.generation,
                 origin: AgentTurnOrigin::Programmatic,
-                provisional_title: None,
+                automatic_title: None,
             },
             AgentNotification::SamplingCommitted {
                 session_id: session.id,
@@ -293,12 +293,13 @@ fn user_turn(text: &str, provisional_title: &str) -> AgentTurnInput {
     input
 }
 
-/// `TurnAdmitted` carries who asked for the turn and the provisional title
-/// its admission committed: the first user turn of an untitled session
-/// gives it one, a later turn finds the title taken. It is told before
-/// anything the turn commits.
+/// `TurnAdmitted` carries who asked for the turn and the session's
+/// automatic title after the admission: the first user turn of an untitled
+/// session gives it its provisional one, a later turn finds it kept (its
+/// own provisional title is not taken). It is told before anything the
+/// turn commits.
 #[tokio::test]
-async fn an_admitted_turn_is_told_with_its_origin_and_provisional_title() {
+async fn an_admitted_turn_is_told_with_its_origin_and_automatic_title() {
     let model = FakeModelTransport::new([
         answering("first", "one"),
         FakeModelExchange::new(
@@ -350,14 +351,15 @@ async fn an_admitted_turn_is_told_with_its_origin_and_provisional_title() {
                 turn_id: first.turn_id,
                 generation: first.generation,
                 origin: AgentTurnOrigin::User,
-                provisional_title: Some("First title".to_string()),
+                automatic_title: Some("First title".to_string()),
             },
+            // The session keeps the title the Agent gave it.
             AgentNotification::TurnAdmitted {
                 session_id: session.id,
                 turn_id: second.turn_id,
                 generation: second.generation,
                 origin: AgentTurnOrigin::User,
-                provisional_title: None,
+                automatic_title: Some("First title".to_string()),
             },
         ]
     );
@@ -368,13 +370,6 @@ async fn an_admitted_turn_is_told_with_its_origin_and_provisional_title() {
     assert_eq!(
         service.snapshot(session.id).unwrap().title.unwrap().value,
         "First title"
-    );
-    assert_eq!(
-        service
-            .turn_user_message(session.id, first.turn_id)
-            .unwrap()
-            .as_deref(),
-        Some("first")
     );
 }
 

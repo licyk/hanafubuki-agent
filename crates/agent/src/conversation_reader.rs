@@ -80,6 +80,39 @@ impl AgentConversationReader {
         }
     }
 
+    /// The text of the session's first user message, read from its
+    /// transcript (which a compaction leaves whole); `None` when it has
+    /// none.
+    pub(crate) fn first_user_message(
+        &self,
+        session_id: AgentSessionId,
+    ) -> Result<Option<String>, AgentError> {
+        self.core.activate_session(session_id)?;
+        let mut cursor = None;
+        let mut through_revision = None;
+        loop {
+            let page = self.core.read_transcript_page(AgentTranscriptPageRequest {
+                session_id,
+                page_size: AGENT_TRANSCRIPT_PAGE_SIZE_MAX,
+                cursor,
+                direction: AgentHistorySortDirection::Ascending,
+                through_revision,
+            })?;
+            let first = page.items.into_iter().find_map(|item| match item.content {
+                ConversationItem::UserMessage { text, .. } => Some(text),
+                _ => None,
+            });
+            if first.is_some() {
+                return Ok(first);
+            }
+            let Some(newer) = page.newer_cursor else {
+                return Ok(None);
+            };
+            cursor = Some(newer);
+            through_revision = Some(page.through_revision);
+        }
+    }
+
     /// The session's model on its Provider as the settings now describe it.
     pub(crate) fn session_model(
         &self,
@@ -93,8 +126,7 @@ impl AgentConversationReader {
                     .to_string(),
             ));
         }
-        AgentSessionModel::resolve(&self.config, &snapshot, self.core.model_proxy())
-            .map_err(AgentError::Model)
+        AgentSessionModel::resolve(&self.config, &snapshot, &self.core).map_err(AgentError::Model)
     }
 }
 
@@ -104,7 +136,8 @@ pub(crate) struct AgentSessionModel {
     pub(crate) model: String,
     protocol: ModelApiProtocol,
     provider: ResolvedAgentProvider,
-    proxy: hanafubuki_agent_kernel::ModelHttpProxy,
+    /// The kernel whose model metadata a structured request learns from.
+    core: AgentService,
 }
 
 impl AgentSessionModel {
@@ -113,7 +146,7 @@ impl AgentSessionModel {
     pub(crate) fn resolve(
         config: &AgentConfig,
         session: &AgentSessionRuntimeSnapshot,
-        proxy: hanafubuki_agent_kernel::ModelHttpProxy,
+        core: &AgentService,
     ) -> Result<Self, String> {
         let registry = config.providers()?;
         let provider = resolve_settings_provider(&registry, &session.provider_id)?;
@@ -127,21 +160,22 @@ impl AgentSessionModel {
             model: session.model.clone(),
             protocol: session.provider_protocol,
             provider,
-            proxy,
+            core: core.clone(),
         })
     }
 
     /// A private model session on the session's Provider, outside the
     /// session's own conversation.
     pub(crate) fn model_session(&self) -> Result<Arc<dyn ModelSession>, String> {
-        AgentService::create_private_model_session(
-            self.protocol,
-            &self.provider.definition.base_url,
-            self.provider.credential.clone(),
-            self.provider.headers.clone(),
-            hanafubuki_agent_kernel::ModelRetryPolicy::default(),
-            self.proxy.clone(),
-        )
-        .map_err(|error| error.to_string())
+        self.core
+            .create_private_model_session(
+                self.protocol,
+                &self.provider.definition.base_url,
+                self.provider.credential.clone(),
+                self.provider.headers.clone(),
+                hanafubuki_agent_kernel::ModelRetryPolicy::default(),
+                self.core.model_proxy(),
+            )
+            .map_err(|error| error.to_string())
     }
 }

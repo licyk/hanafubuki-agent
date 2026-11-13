@@ -4,8 +4,7 @@ use std::time::Duration;
 
 use hanafubuki_agent_foundation::cancellation::CancellationToken;
 use hanafubuki_agent_model_api::{
-    ModelEvent, ModelInputItem, ModelJsonSchemaOutput, ModelOutputFormat, ModelOutputItem,
-    ModelRequest, ModelSession, ModelStructuredOutputCapability, ModelToolChoice,
+    request_json_object, ModelJsonObjectError, ModelJsonObjectRequest, ModelSession,
 };
 use hanafubuki_agent_tool_contracts::ToolOutputContent;
 use serde::Deserialize;
@@ -294,98 +293,37 @@ async fn review_permission_with_timeout(
     }
     let evidence = build_permission_review_evidence(&transcript);
     let prompt = build_review_prompt(&evidence, action)?;
-    let input = vec![ModelInputItem::user_text(prompt)];
-    validate_reviewer_input(&input)?;
-    let output_format = match model_session.structured_output_capability() {
-        ModelStructuredOutputCapability::NativeJsonSchema => Some(review_output_format()),
-        ModelStructuredOutputCapability::TextOnly => None,
-    };
-    let request = ModelRequest {
-        model,
-        instructions: REVIEW_INSTRUCTIONS.to_string(),
-        input,
-        tools: Vec::new(),
-        tool_choice: ModelToolChoice::None,
-        parallel_tool_calls: false,
-        reasoning: None,
-        output_format,
-    };
-    let cancellation_monitor = cancellation.clone();
-    let review = async {
-        let mut stream = model_session
-            .stream(request, cancellation.clone())
-            .await
-            .map_err(|error| map_model_error(error, &cancellation))?;
-        let mut answer = None::<String>;
-        let mut completed = false;
-        while let Some(event) = stream.next().await {
-            let event = event.map_err(|error| map_model_error(error, &cancellation))?;
-            match event {
-                ModelEvent::OutputItemCompleted {
-                    item: ModelOutputItem::AssistantMessage { text, .. },
-                } if !text.trim().is_empty() => {
-                    if answer.is_some() {
-                        return Err(PermissionReviewError::Failed(
-                            "reviewer returned multiple assessment messages".into(),
-                        ));
-                    }
-                    if text.len() > MAX_RATIONALE_BYTES.saturating_mul(4) {
-                        return Err(PermissionReviewError::Failed(
-                            "reviewer assessment response exceeds its limit".into(),
-                        ));
-                    }
-                    answer = Some(text);
-                }
-                ModelEvent::OutputItemCompleted {
-                    item: ModelOutputItem::ToolCall { .. },
-                } => {
-                    return Err(PermissionReviewError::Failed(
-                        "reviewer returned an unexpected tool call".into(),
-                    ));
-                }
-                ModelEvent::ResponseCompleted { .. } => completed = true,
-                _ => {}
-            }
-        }
-        if cancellation.is_cancelled() {
-            return Err(PermissionReviewError::Cancelled);
-        }
-        if !completed {
-            return Err(PermissionReviewError::Failed(
-                "reviewer stream ended before response completion".into(),
-            ));
-        }
-        parse_assessment_text(answer.as_deref().ok_or_else(|| {
-            PermissionReviewError::Failed("reviewer did not return an assessment".into())
-        })?)
-    };
-    tokio::pin!(review);
-    tokio::select! {
-        result = &mut review => result,
-        _ = tokio::time::sleep(total_timeout) => Err(PermissionReviewError::TimedOut),
-        _ = wait_for_cancellation(cancellation_monitor) => Err(PermissionReviewError::Cancelled),
+    // Native output, else plain text, read exactly: no forced tool, and
+    // nothing around the object is taken out of it.
+    let answer = request_json_object(
+        model_session.as_ref(),
+        ModelJsonObjectRequest {
+            subject: "assessment",
+            model,
+            instructions: REVIEW_INSTRUCTIONS.to_string(),
+            input: prompt,
+            schema: review_schema(),
+            output_name: "permission_assessment",
+            output_description: "Final assessment of the exact proposed action.",
+            tool: None,
+            // Its instructions already ask for exactly the object.
+            schema_in_text: false,
+            timeout: total_timeout,
+        },
+        cancellation,
+    )
+    .await
+    .map_err(|error| match error {
+        ModelJsonObjectError::Cancelled => PermissionReviewError::Cancelled,
+        ModelJsonObjectError::TimedOut => PermissionReviewError::TimedOut,
+        ModelJsonObjectError::Failed(message) => PermissionReviewError::Failed(message),
+    })?;
+    if answer.text.len() > MAX_RATIONALE_BYTES.saturating_mul(4) {
+        return Err(PermissionReviewError::Failed(
+            "reviewer assessment response exceeds its limit".into(),
+        ));
     }
-}
-
-fn map_model_error(
-    error: hanafubuki_agent_model_api::ModelError,
-    cancellation: &CancellationToken,
-) -> PermissionReviewError {
-    if cancellation.is_cancelled() {
-        PermissionReviewError::Cancelled
-    } else {
-        PermissionReviewError::Failed(error.to_string())
-    }
-}
-
-async fn wait_for_cancellation(cancellation: CancellationToken) {
-    let mut interval = tokio::time::interval(Duration::from_millis(25));
-    loop {
-        interval.tick().await;
-        if cancellation.is_cancelled() {
-            return;
-        }
-    }
+    parse_assessment_text(&answer.text)
 }
 
 fn non_empty_evidence(
@@ -512,19 +450,6 @@ fn build_review_prompt(
     Ok(prompt)
 }
 
-fn validate_reviewer_input(input: &[ModelInputItem]) -> Result<(), PermissionReviewError> {
-    if input
-        .iter()
-        .all(|item| matches!(item, ModelInputItem::UserMessage { .. }))
-    {
-        Ok(())
-    } else {
-        Err(PermissionReviewError::Failed(
-            "reviewer input contained a forbidden protocol history item".into(),
-        ))
-    }
-}
-
 fn parse_assessment_text(text: &str) -> Result<PermissionAssessment, PermissionReviewError> {
     let value: Value = serde_json::from_str(text.trim()).map_err(|_| {
         PermissionReviewError::Failed("reviewer assessment was not exact JSON".into())
@@ -549,31 +474,26 @@ fn parse_assessment(value: Value) -> Result<PermissionAssessment, PermissionRevi
     })
 }
 
-fn review_output_format() -> ModelOutputFormat {
-    ModelOutputFormat::JsonSchema(ModelJsonSchemaOutput {
-        name: "permission_assessment".to_string(),
-        description: Some("Final assessment of the exact proposed action.".to_string()),
-        schema: json!({
-            "type": "object",
-            "properties": {
-                "riskLevel": {
-                    "type": "string",
-                    "enum": ["low", "medium", "high", "critical"]
-                },
-                "userAuthorization": {
-                    "type": "string",
-                    "enum": ["explicit", "implicit", "absent", "conflicting"]
-                },
-                "outcome": {
-                    "type": "string",
-                    "enum": ["allow", "deny"]
-                },
-                "rationale": {"type": "string"}
+fn review_schema() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "riskLevel": {
+                "type": "string",
+                "enum": ["low", "medium", "high", "critical"]
             },
-            "required": ["riskLevel", "userAuthorization", "outcome", "rationale"],
-            "additionalProperties": false
-        }),
-        strict: true,
+            "userAuthorization": {
+                "type": "string",
+                "enum": ["explicit", "implicit", "absent", "conflicting"]
+            },
+            "outcome": {
+                "type": "string",
+                "enum": ["allow", "deny"]
+            },
+            "rationale": {"type": "string"}
+        },
+        "required": ["riskLevel", "userAuthorization", "outcome", "rationale"],
+        "additionalProperties": false
     })
 }
 

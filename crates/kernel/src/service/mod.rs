@@ -89,7 +89,7 @@ struct AgentServiceInner {
     next_compaction_id: AtomicU64,
     /// What is known about each model route, kept through the owner's
     /// store.
-    model_metadata: crate::model_metadata::ModelMetadataRegistry,
+    model_metadata: Arc<crate::model_metadata::ModelMetadataRegistry>,
     /// The proxy every Provider's model is built with from now on.
     model_proxy: parking_lot::RwLock<hanafubuki_agent_model_api::ModelHttpProxy>,
     approvals: ApprovalService,

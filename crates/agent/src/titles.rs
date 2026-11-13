@@ -4,7 +4,7 @@
 //! generate a better one and commits it.
 
 use hanafubuki_agent_config::AgentConfig;
-use hanafubuki_agent_kernel::{AgentService, AgentSessionId, AgentTurnId};
+use hanafubuki_agent_kernel::{AgentService, AgentSessionId};
 
 use crate::conversation_reader::{AgentConversationReader, AgentSessionModel};
 
@@ -26,8 +26,8 @@ pub(super) fn provisional_agent_title(prompt: &str) -> Option<String> {
     )
 }
 
-/// What the `titles` plugin reads and writes: a turn's prompt and the
-/// session's Provider, the conversation a suggestion reads, and the
+/// What the `titles` plugin reads and writes: the session's first message
+/// and its Provider, the conversation a suggestion reads, and the
 /// compare-and-swap that commits a generated title. Every method blocks;
 /// the plugin calls them on the `BlockingService`.
 #[derive(Clone)]
@@ -38,6 +38,7 @@ pub(crate) struct AgentTitleApplication {
 
 /// Everything one title generation needs.
 pub(crate) struct AgentTitleRequest {
+    /// The session's first user message, which the title is made from.
     pub(crate) prompt: String,
     pub(crate) model: AgentSessionModel,
 }
@@ -47,18 +48,20 @@ impl AgentTitleApplication {
         Self { core, config }
     }
 
-    /// The user message that started `turn_id` and the session's model on
-    /// its Provider as the settings now describe it. `None` when the turn's
-    /// message is no longer in the session's history.
+    /// The session's first user message and its model on its Provider as
+    /// the settings now describe it, while `title` is still that message's
+    /// provisional title; `None` once it is not (a title generated earlier
+    /// whose commit was lost, a session titled otherwise).
     pub(crate) fn title_request(
         &self,
         session_id: AgentSessionId,
-        turn_id: AgentTurnId,
+        title: &str,
     ) -> Result<Option<AgentTitleRequest>, String> {
         let Some(prompt) = self
-            .core
-            .turn_user_message(session_id, turn_id)
+            .conversations()
+            .first_user_message(session_id)
             .map_err(|error| error.to_string())?
+            .filter(|prompt| provisional_agent_title(prompt).as_deref() == Some(title))
         else {
             return Ok(None);
         };
@@ -68,7 +71,7 @@ impl AgentTitleApplication {
             .map_err(|error| error.to_string())?;
         Ok(Some(AgentTitleRequest {
             prompt,
-            model: AgentSessionModel::resolve(&self.config, &session, self.core.model_proxy())?,
+            model: AgentSessionModel::resolve(&self.config, &session, &self.core)?,
         }))
     }
 

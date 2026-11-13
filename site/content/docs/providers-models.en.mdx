@@ -213,12 +213,14 @@ Each key is optional, and a key left out leaves the others to say. A session tak
 
 ## Forgetting what was learned [#forget]
 
-What the Agent learned from a Provider's refusals (a smaller window, that a model reads no images, that it takes no reasoning) holds for 7 days. To try the model again before that, forget it:
+What the Agent learned from a Provider's refusals (a smaller window, that a model reads no images, that it takes no reasoning, that it takes no structured output or no forced tool) holds for 7 days. To try the model again before that, forget it:
 
 - `/model forget` in the terminal interface, for the session's model;
 - `hanafubuki-agent providers forget ID [--model MODEL]`, for one model of the Provider or all of its models ([Command-line reference](/docs/cli-reference#providers)).
 
 What the catalog reported, the copy of [models.dev](#models-dev) and the per-model settings stay. A session takes the change at its next turn: its window becomes what else is known, or unknown when nothing is.
+
+A title, a recap, a memory extraction and an automatic permission review each ask the model for a small JSON answer. The Agent asks for it in the protocol's own structured output (Responses and Chat Completions) or by forcing a tool (Anthropic); a Provider or gateway that refuses that with status 400 or 422 is asked again at once by forcing a tool, then as plain text, and the model keeps the way that worked for 7 days, so only the first request of the week is refused ([Internals](/docs/internals#structured-output-rungs)). Forgetting tries the protocol's own way again.
 
 ## models.dev [#models-dev]
 

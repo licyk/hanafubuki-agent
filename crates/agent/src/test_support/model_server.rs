@@ -9,7 +9,9 @@
 //! declares tools and holds an assistant message without its
 //! `reasoning_content`, as DeepSeek's thinking mode refuses it. A server
 //! given model listings ([`FakeServer::with_listings`]) answers `GET
-//! …/models` with them instead, apart from the event streams.
+//! …/models` with them instead, apart from the event streams. A server that
+//! plays a stateless gateway ([`FakeServer::refusing`]) refuses native
+//! structured output, and a forced tool when asked to, the same way.
 
 use std::collections::{BTreeMap, VecDeque};
 use std::sync::{Arc, Mutex};
@@ -64,6 +66,17 @@ impl FakeListing {
     }
 }
 
+/// What a gateway refuses ([`FakeServer::refusing`]), with a 400 that
+/// takes no answer: native structured output (Responses' `text.format`,
+/// Chat Completions' `response_format`) in the words a Responses-compatible
+/// gateway was reported to use, and a forced tool (`tool_choice` naming
+/// one) in illustrative ones.
+#[derive(Clone, Copy, Default)]
+pub struct GatewayRefusals {
+    pub structured_output: bool,
+    pub tool_choice: bool,
+}
+
 pub struct FakeServer {
     pub base_url: String,
     pub requests: Arc<Mutex<Vec<CapturedRequest>>>,
@@ -77,6 +90,12 @@ impl FakeServer {
         Self::with_listings(responses, Vec::new()).await
     }
 
+    /// A server that refuses what `refusals` names and answers every other
+    /// request with the next of `responses`.
+    pub async fn refusing(responses: Vec<(Vec<u8>, Duration)>, refusals: GatewayRefusals) -> Self {
+        Self::serve(responses, Vec::new(), refusals).await
+    }
+
     /// A server that answers `GET …/models` with `listings`, in order, each
     /// on a task of its own (so one held does not hold the event streams),
     /// and every other request with the next of `responses`. Without
@@ -84,6 +103,14 @@ impl FakeServer {
     pub async fn with_listings(
         responses: Vec<(Vec<u8>, Duration)>,
         listings: Vec<FakeListing>,
+    ) -> Self {
+        Self::serve(responses, listings, GatewayRefusals::default()).await
+    }
+
+    async fn serve(
+        responses: Vec<(Vec<u8>, Duration)>,
+        listings: Vec<FakeListing>,
+        refusals: GatewayRefusals,
     ) -> Self {
         let listener = TcpListener::bind(("127.0.0.1", 0)).await.unwrap();
         let address = listener.local_addr().unwrap();
@@ -105,7 +132,9 @@ impl FakeServer {
                     }
                     continue;
                 }
-                let refusal = anthropic_refusal(&request).or_else(|| deepseek_refusal(&request));
+                let refusal = anthropic_refusal(&request)
+                    .or_else(|| deepseek_refusal(&request))
+                    .or_else(|| gateway_refusal(&request, refusals));
                 captured.lock().unwrap().push(request);
                 if let Some(error) = refusal {
                     let response = format!(
@@ -292,6 +321,23 @@ fn deepseek_refusal(request: &CapturedRequest) -> Option<String> {
             "type": "invalid_request_error",
         }})
         .to_string()
+    })
+}
+
+fn gateway_refusal(request: &CapturedRequest, refusals: GatewayRefusals) -> Option<String> {
+    let body: serde_json::Value = serde_json::from_slice(&request.body).ok()?;
+    let error = |message: &str| {
+        serde_json::json!({"error": {"message": message, "code": "invalid_input"}}).to_string()
+    };
+    if refusals.structured_output
+        && (body["text"]["format"].is_object() || body["response_format"].is_object())
+    {
+        return Some(error(
+            "Structured output (`text.format`) is not supported by this stateless gateway.",
+        ));
+    }
+    (refusals.tool_choice && body["tool_choice"].is_object()).then(|| {
+        error("Forced tool calls (`tool_choice`) are not supported by this stateless gateway.")
     })
 }
 

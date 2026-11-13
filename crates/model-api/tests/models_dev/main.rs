@@ -93,6 +93,7 @@ fn the_providers_own_entry_comes_first() {
             max_output_tokens: models_dev(16_384),
             reasoning: None,
             image_input: models_dev(true),
+            structured_output: None,
         },
         "a no to reasoning is not kept"
     );

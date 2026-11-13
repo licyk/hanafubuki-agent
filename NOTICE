@@ -37,6 +37,11 @@ Third-party notices
     `codex-rs/tui/src/app/recap.rs` and
     `codex-rs/tui/src/app/recap_history.rs` (commit `57a808a392`); each
     says so in its first lines;
+  - the normalization of a generated title
+    (`crates/agent/src/plugins/titles/generation.rs`) and its tests are
+    derived from Codex's `parse_thread_title` in
+    `codex-rs/tui/src/app/thread_title.rs` and its tests (commit
+    `57a808a392`), as their first lines say;
   - the Git worktrees, `crates/worktree` (`src/git.rs`, `src/manager.rs`
     and `src/owner.rs`), are derived from Codex's `codex-rs/worktree`
     (`src/git.rs`, `src/lib.rs`, `src/paths.rs` and `src/metadata.rs`,

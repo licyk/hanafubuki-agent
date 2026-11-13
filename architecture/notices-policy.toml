@@ -40,6 +40,16 @@ markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
 notice = "crates/agent/src/plugins/recap"
 
 [[derived]]
+path = "crates/agent/src/plugins/titles/generation.rs"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
+notice = "crates/agent/src/plugins/titles/generation.rs"
+
+[[derived]]
+path = "crates/agent/src/plugins/titles/generation/tests.rs"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex), the tests"]
+notice = "crates/agent/src/plugins/titles/generation.rs"
+
+[[derived]]
 path = "crates/agent/src/service/export.rs"
 markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
 notice = "crates/agent/src/service/export.rs"

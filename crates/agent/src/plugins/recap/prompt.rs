@@ -15,11 +15,12 @@
 use std::time::Duration;
 
 use hanafubuki_agent_contracts::token_budget_bytes;
+use hanafubuki_agent_kernel::{ModelJsonObjectRequest, ModelJsonObjectTool};
 use serde::Deserialize;
 use serde_json::json;
 
 use super::AgentRecap;
-use crate::plugins::structured_request::{bounded_text, StructuredRequest};
+use crate::plugins::structured_request::bounded_text;
 
 const RECAP_INSTRUCTIONS: &str = r#"Write a brief catch-up for a user returning to this task. Return JSON with summary and nullable next_action.
 
@@ -46,8 +47,8 @@ pub(super) fn history_max_bytes() -> usize {
 }
 
 /// The request for a recap of `history` from `model`.
-pub(super) fn recap_request(model: String, history: &str) -> StructuredRequest {
-    StructuredRequest {
+pub(super) fn recap_request(model: String, history: &str) -> ModelJsonObjectRequest {
+    ModelJsonObjectRequest {
         subject: "recap",
         model,
         instructions: RECAP_INSTRUCTIONS.to_string(),
@@ -58,8 +59,11 @@ pub(super) fn recap_request(model: String, history: &str) -> StructuredRequest {
         schema: recap_schema(),
         output_name: "agent_conversation_recap",
         output_description: "A brief catch-up on the conversation",
-        tool_name: "submit_agent_conversation_recap",
-        tool_description: "Submit the brief catch-up on the conversation",
+        tool: Some(ModelJsonObjectTool {
+            name: "submit_agent_conversation_recap",
+            description: "Submit the brief catch-up on the conversation",
+        }),
+        schema_in_text: true,
         timeout: RECAP_TIMEOUT,
     }
 }

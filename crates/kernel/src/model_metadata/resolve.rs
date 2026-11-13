@@ -49,6 +49,9 @@ pub(super) fn resolve(
             &catalog.image_input,
             |reads_images| *reads_images,
         ),
+        // Only a refusal teaches the rung, and only ever a lower one than
+        // the protocol's, which the session applies.
+        structured_output: learned.structured_output.clone(),
     }
 }
 

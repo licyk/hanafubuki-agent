@@ -1,9 +1,10 @@
 //! The `titles` plugin: a session's first user turn gets a provisional
 //! title at admission (from the submit command); this plugin replaces it
-//! with one the session's model generates. Its observer queues the work and
-//! its worker runs it, one title at a time, until the plugin stops. It also
-//! provides the title suggestions a rename offers ([`TitleService`]) under
-//! its name.
+//! with one the session's model generates from the first message, and
+//! tries again at each later user turn while the title is still the
+//! provisional one. Its observer queues the work and its worker runs it,
+//! one title at a time, until the plugin stops. It also provides the title
+//! suggestions a rename offers ([`TitleService`]) under its name.
 
 mod generation;
 mod suggestion;
@@ -26,8 +27,8 @@ use crate::titles::AgentTitleApplication;
 /// The plugin's name, under which it provides its [`TitleService`].
 pub(crate) const TITLES_PLUGIN: &str = "titles";
 
-/// Titles waiting for the worker. A turn whose work does not fit keeps its
-/// provisional title.
+/// Titles waiting for the worker. A turn whose work does not fit leaves
+/// the title to the next user turn.
 const TITLE_QUEUE_CAPACITY: usize = 32;
 
 /// Registers the title observer, runs the title worker over `titles` and
@@ -70,18 +71,19 @@ pub(crate) fn titles_plugin(titles: AgentTitleApplication) -> PluginDef {
     )
 }
 
-/// One turn whose session took a provisional title at admission.
+/// One user turn whose session has an automatic title, which may still be
+/// the provisional one.
 struct TitleWork {
     session_id: AgentSessionId,
     turn_id: AgentTurnId,
     generation: AgentGeneration,
     /// The automatic title the generated one may replace.
-    provisional_title: String,
+    title: String,
 }
 
-/// Queues a title for every user turn that gave its session a provisional
-/// title. A programmatic turn, or a session that already had a title, is
-/// left alone.
+/// Queues a title for every user turn of a session whose title the Agent
+/// gave; the worker decides whether it is still provisional. A
+/// programmatic turn, or a session the user titled, is left alone.
 struct TitleObserver {
     sender: mpsc::Sender<TitleWork>,
 }
@@ -97,7 +99,7 @@ impl AgentObserver for TitleObserver {
             turn_id,
             generation,
             origin: AgentTurnOrigin::User,
-            provisional_title: Some(provisional_title),
+            automatic_title: Some(title),
         } = notification
         else {
             return;
@@ -106,7 +108,7 @@ impl AgentObserver for TitleObserver {
             session_id: *session_id,
             turn_id: *turn_id,
             generation: *generation,
-            provisional_title: provisional_title.clone(),
+            title: title.clone(),
         }) {
             log::debug!("Agent automatic title queue rejected work session={session_id}: {error}");
         }

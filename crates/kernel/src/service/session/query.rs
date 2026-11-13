@@ -14,30 +14,6 @@ impl AgentService {
         Ok(snapshot(session_id, &record))
     }
 
-    /// The text of the user message that started `turn_id`, read from the
-    /// session's loaded history. `None` when the history no longer holds
-    /// that turn's start (a compaction replaced it).
-    pub fn turn_user_message(
-        &self,
-        session_id: AgentSessionId,
-        turn_id: AgentTurnId,
-    ) -> Result<Option<String>, AgentError> {
-        let cell = self.session(session_id)?;
-        let record = cell.lock()?;
-        let history = &record.conversation.history;
-        let Some(start) = history.iter().rposition(|item| {
-            matches!(&item.content, ConversationItem::TurnStart { turn_id: id } if *id == turn_id)
-        }) else {
-            return Ok(None);
-        };
-        Ok(history[start..]
-            .iter()
-            .find_map(|item| match &item.content {
-                ConversationItem::UserMessage { text, .. } => Some(text.clone()),
-                _ => None,
-            }))
-    }
-
     #[cfg(any(test, feature = "test-support"))]
     pub fn test_model_context(
         &self,

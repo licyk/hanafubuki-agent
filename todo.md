@@ -32,16 +32,148 @@ and those skipped, the CI run's URL (no Windows or macOS claim from a Linux
 run), whether goldens changed, what Hanafubuki must change at its next pin,
 and any module-size exception.
 
-- [ ] Decisions: D3, D4, D6, D8, D10, D14–D22 of the plan's §4 answered
+- [x] Decisions: D3, D4, D6, D8, D10, D14–D22 of the plan's §4 answered
       (D1, D2, D5, D7, D9, D11–D13, D23, D24 came with the request).
+      Done (2026-11-13): all confirmed as written, those marked "To
+      confirm" included.
 
 **Fixes ([9], [3], [8], [7])**
 
-- [ ] B1: structured output on any gateway — a learned per-route rung
+- [x] B1: structured output on any gateway — a learned per-route rung
       (native → required tool → text, 7-day TTL), the narrow refusal
       classifier, one shared chain for recap, titles, memory and the
       reviewer (two rungs, strict); titles normalised like Codex and
       retried while provisional. Failing test first (the recap's 400).
+      Done (2026-11-13):
+      - model-api: `ModelStructuredOutputCapability` is `NativeJsonSchema`,
+        `RequiredTool`, `Text` (ordered best first; `TextOnly` is gone, the
+        default and an unknown port's answer is `Text`); Anthropic answers
+        `RequiredTool`. `ModelMetadata.structured_output` (tolerant, only
+        `Learned`). `ModelError::{UnsupportedStructuredOutput,
+        UnsupportedToolChoice}` from `structured_output_refusal.rs`: 400 or
+        422, a name (`text.format`, `response_format`, `json_schema`,
+        `structured output`, `structured_output`; `tool_choice` or `tools`)
+        and a refusal code or wording. `ModelSession` gains
+        `structured_output_capability_for` and `learn_structured_output`
+        (no-op defaults). `structured_request.rs`: `request_json_object`
+        (the chain under one bound, a refusal of the current rung learns
+        the next and retries at once, a forced tool answered with text read
+        as text and learning nothing, the text rung's instructions gaining
+        one sentence with the schema unless `schema_in_text` is false), and
+        `json_object_text` (a text starting with `{` read from there, else
+        a fence, else the first balanced `{…}`, else the text) kept apart
+        so the reviewer never reads tolerantly.
+      - kernel: the registry learns the rung (`learn_structured_output`,
+        only ever lowered while live) and answers it
+        (`structured_output`); it expires, persists and is forgotten as the
+        other learned facts. The registry is an `Arc` in the service, and
+        `learning_model_session` (`service/model_facts.rs`) wraps a session
+        so it answers and learns from it, holding the registry, not the
+        service. `create_private_model_session` takes `&self` and returns
+        the wrapped session. The reviewer (`permission.rs`) runs on
+        `request_json_object` with no tool (native, then text), reads the
+        message exactly with `parse_assessment_text` and keeps its length
+        bound; `validate_reviewer_input` went (one user text by
+        construction). `turn_user_message` went (no caller left).
+      - memory: `generation.rs` uses the chain with all three rungs and
+        the tolerant reading; its own native and tool loops are gone.
+      - contracts: `AgentNotification::TurnAdmitted.provisional_title`
+        became `automatic_title`: the session's title after the admission
+        when its source is `Automatic`.
+      - agent: `plugins/structured_request.rs` is a thin wrapper (all three
+        rungs, tolerant reading) for titles, suggestions and recaps;
+        `AgentSessionModel` holds the `AgentService` and asks it for the
+        private session. Titles: `normalize_generated_title` ports Codex's
+        `parse_thread_title` (quotes, backticks, curly quotes, whitespace,
+        trailing `.?!`, cut to 36 instead of refused; control characters
+        dropped; NOTICE and `notices-policy.toml` list it and its tests).
+        The observer queues every user turn with an `automatic_title`; the
+        worker reads the session's first user message from the transcript
+        (`AgentConversationReader::first_user_message`, ascending pages:
+        a compaction does not lose it), goes on only while the title equals
+        its `provisional_agent_title`, generates from the first message and
+        commits with the same compare-and-swap; a set of the sessions
+        settled in this run (the model titled them, or their title is no
+        longer provisional) stops their retries and reads (D6).
+      - Deviations: (1) the classifier checks the forced tool's refusal
+        last, after the image and reasoning refusals (the plan put both
+        before the image one), so a turn's refusal naming its tools never
+        loses its image or reasoning fallback; Anthropic's `tool_choice:
+        type "tool" and "any" are not supported…`, an "unrelated" case of
+        the reasoning suite, is now `UnsupportedToolChoice`. (2) No
+        `AgentError` variants: in a turn the new errors fall to
+        `AgentError::Model` through `map_model_error`'s default, as the plan
+        wants them ordinary. (3) The wrapper is applied where sessions are
+        handed out for structured requests (`create_private_model_session`,
+        `auto_review.rs`) rather than inside `session/create.rs`'s
+        `create_model_session`: it covers a model set after creation too.
+        (4) `ModelJsonObjectRequest.schema_in_text` lets the reviewer keep
+        its instructions on the text rung (they already ask for exactly the
+        object), so its prompt is unchanged. (5) Memory's refusals are tested on a fixture session in
+        `hanafubuki-agent-memory`, not the fake server: no end-to-end
+        memory pass runs on the fake server. (6) The retry prompts from the
+        first user message (it used to be the admitted turn's, the same
+        message on the first turn).
+      - Tests (failing first): `agent/src/tests/structured_output.rs` on
+        the fake server's new `GatewayRefusals` predicate (`FakeServer::
+        refusing`, a 400 with `code: invalid_input` and the reported
+        message, taking no response): a recap through the forced tool and
+        the next recap at the learned rung (one request); a recap through
+        text (fenced) with the schema sentence, the next at text, and after
+        `forget_learned_model_facts` native again. Run on be56861 with only
+        the fake server and these tests copied in, both failed with
+        `model remote error status=Some(400) code=Some("invalid_input")
+        request_id=None: Structured output (`text.format`) is not supported
+        by this stateless gateway.`. `model-api`: the classifier (the
+        reported message, illustrative wordings, near misses: an invalid
+        schema, a 5xx, no status; structured output over the image
+        refusal; reasoning and image refusals naming tools kept), the chain
+        on a scripted session (each fall, the starting rung, skipping the
+        tool rung, text from a forced tool, failures that end it), and
+        `json_object_text`. `kernel`: the registry's rung (lowered only,
+        expiry after 7 days, saved and reopened, forgotten); the reviewer
+        on a native refusal (text, learned, no tool; a fence or words around
+        the object still fail). `memory`: extraction through the tool and
+        through text. `agent`: titles normalised as Codex's cases; a failed
+        first title retried at the second turn from the first message, then
+        no request at the third; a rename stops the retries. Updated: the
+        observer contract (`automatic_title` kept at the second turn), the
+        titles observer tests, `model_metadata` round trip, the protocol
+        capabilities.
+      - Not covered by a test: the reviewer's and memory's chains run on
+        fixture sessions, so `auto_review.rs`'s wrapped session is not
+        exercised through the registry (the registry and the wrapper are,
+        through `create_private_model_session` in the recap tests);
+        `first_user_message` over more than one transcript page.
+      - Goldens: none changed (no golden pins these requests).
+      - Docs (both languages): `internals#structured-output-rungs` (new),
+        `#titles`, the observers bullet; `architecture#model-metadata` (the
+        fact, a **Structured output** paragraph); `providers-models#forget`;
+        `sessions` (titles generated, retried, first message as fallback);
+        `terminal-interface` (`/recap`); `plugin-rules` (`TurnAdmitted`,
+        the `titles` row); `cli-reference` and `data-directory` (what is
+        forgotten); the CLI's `providers forget` help.
+      - Validation: `cargo fmt --all --check`; `RUSTFLAGS="-D warnings"
+        cargo check --workspace --all-targets --all-features`; `cargo clippy
+        --workspace --all-targets --all-features -- -D warnings`; `cargo
+        xtask check`; `cargo test --workspace --all-features`; `bun install
+        --frozen-lockfile`, `bun run format:check:site`, `bun run
+        site:check`, `bun run site:test`. `VITE_BASE_PATH=/hanafubuki-agent/
+        bun run site:build` built but could not prerender locally (port 3000
+        held by another project's server); CI's Site run covers it.
+        CI on Linux, Windows and macOS: CI_PENDING
+      - Not known without a live probe: which rung the reported gateway
+        takes. The tests prove the chain against the fake's wording; a
+        gateway that refuses `tool_choice` in words the classifier misses
+        stops the chain at the forced tool.
+      - Hanafubuki at its next pin: `ModelStructuredOutputCapability`
+        gains `RequiredTool` (`TextOnly` → `Text`); `ModelMetadata` gains
+        `structured_output`; `create_private_model_session` takes `&self`;
+        `ModelError` gains two variants; `ModelSession` gains two defaulted
+        methods; `TurnAdmitted.provisional_title` → `automatic_title`;
+        `AgentService::turn_user_message` is gone.
+      - Module size: no exception added or raised (`run_memory_pass` grew
+        from 252 to 254, under its ceiling of 257).
 - [ ] B2: the context window the metadata knows — bound sessions refreshed
       at a listing and at each response commit, `usage` in sync,
       `session_model_metadata` no longer hiding a resolved window, four

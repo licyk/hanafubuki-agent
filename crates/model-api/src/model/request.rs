@@ -46,12 +46,21 @@ pub enum ModelToolChoice {
     },
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+/// One way of asking a model for a JSON object (a rung), best first: the
+/// greater of two is the further down the fallback chain.
+#[derive(
+    Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum ModelStructuredOutputCapability {
+    /// The protocol's own JSON-schema output (`text.format`,
+    /// `response_format`).
     NativeJsonSchema,
+    /// A forced call of one tool whose arguments are the object.
+    RequiredTool,
+    /// Plain text, parsed afterwards.
     #[default]
-    TextOnly,
+    Text,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

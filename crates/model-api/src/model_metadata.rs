@@ -4,7 +4,7 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 
-use crate::ModelReasoningEffort;
+use crate::{ModelReasoningEffort, ModelStructuredOutputCapability};
 
 /// What is known about a route; every fact may be unknown. A fact that does
 /// not decode is unknown, so one bad fact never loses the others.
@@ -19,6 +19,10 @@ pub struct ModelMetadata {
     pub reasoning: Option<Sourced<ModelReasoningSupport>>,
     #[serde(default, deserialize_with = "tolerant")]
     pub image_input: Option<Sourced<bool>>,
+    /// The best rung of a structured request the route still takes; only
+    /// a refusal teaches it (`Learned`), and it only lowers the protocol's.
+    #[serde(default, deserialize_with = "tolerant")]
+    pub structured_output: Option<Sourced<ModelStructuredOutputCapability>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

@@ -369,7 +369,7 @@ pub async fn a_guest_contributes_what_its_manifest_declares() {
         turn_id: AgentTurnId::new(2),
         generation: AgentGeneration::new(1),
         origin: AgentTurnOrigin::User,
-        provisional_title: None,
+        automatic_title: None,
     });
     observers[0].observe(&AgentNotification::TurnFinished {
         session_id: AgentSessionId::new(1),

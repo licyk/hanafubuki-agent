@@ -47,6 +47,6 @@ fn protocol_capabilities_are_explicit_and_only_responses_has_extended_tools() {
     );
     assert_eq!(
         ModelApiProtocol::AnthropicMessages.structured_output_capability(),
-        crate::ModelStructuredOutputCapability::TextOnly
+        crate::ModelStructuredOutputCapability::RequiredTool
     );
 }

@@ -1,15 +1,18 @@
 //! What the person configured for a session's model, and what a host reads
 //! and clears of the model metadata: a model's resolved facts, a session's,
 //! forgetting what the Provider's refusals taught, and the copy of
-//! models.dev's catalogue the host fetches.
+//! models.dev's catalogue the host fetches. Also the model session a
+//! structured request samples, which answers and learns its routes'
+//! structured-output rung from the model metadata.
 
 use hanafubuki_agent_model_api::{
-    ModelEndpoint, ModelEndpointKey, ModelImageInputPolicy, ModelMetadata, ModelProviderNames,
-    ModelRouteKey, ModelsDevCatalog, Sourced,
+    ModelCompactionResult, ModelEndpoint, ModelEndpointKey, ModelFuture, ModelImageInputPolicy,
+    ModelMetadata, ModelProviderNames, ModelResult, ModelRouteKey, ModelStream,
+    ModelStructuredOutputCapability, ModelsDevCatalog, Sourced, ToolProviderCapabilities,
 };
 
 use super::*;
-use crate::model_metadata::ConfiguredModelFacts;
+use crate::model_metadata::{ConfiguredModelFacts, ModelMetadataRegistry};
 use crate::AgentConfiguredModelFacts;
 
 impl AgentService {
@@ -66,8 +69,8 @@ impl AgentService {
 
     /// Forgets what the Provider at `base_url` taught by its refusals of
     /// `model`, or of every model there when none is named: learned
-    /// windows, and a learned "no" to images or to reasoning. A session
-    /// takes it at its next turn. Returns how many models had something to
+    /// windows, a learned "no" to images or to reasoning, and a learned
+    /// structured-output rung. A session takes it at its next turn. Returns how many models had something to
     /// forget.
     pub fn forget_learned_model_facts(
         &self,
@@ -123,6 +126,18 @@ impl AgentService {
         );
     }
 
+    /// `session`, answering the structured-output rung of each route from
+    /// the model metadata and teaching it what the route refused.
+    pub(super) fn learning_model_session(
+        &self,
+        session: Arc<dyn ModelSession>,
+    ) -> Arc<dyn ModelSession> {
+        Arc::new(LearningModelSession {
+            session,
+            metadata: self.inner.model_metadata.clone(),
+        })
+    }
+
     /// `name_model_provider` from a base URL, which may not be an
     /// endpoint (then nothing is named).
     pub(super) fn name_model_provider_at(
@@ -154,4 +169,61 @@ pub(super) fn configured_image_input(config: &AgentSessionConfig) -> Option<bool
         return Some(false);
     }
     config.configured_facts.image_input
+}
+
+/// A model session whose routes' structured-output rung is the protocol's,
+/// lowered by what their refusals taught. It holds the registry, not the
+/// service, so a session kept by its owner keeps no service alive.
+struct LearningModelSession {
+    session: Arc<dyn ModelSession>,
+    metadata: Arc<ModelMetadataRegistry>,
+}
+
+impl ModelSession for LearningModelSession {
+    fn compaction_capability(&self) -> hanafubuki_agent_model_api::ModelCompactionCapability {
+        self.session.compaction_capability()
+    }
+
+    fn tool_capabilities(&self) -> ToolProviderCapabilities {
+        self.session.tool_capabilities()
+    }
+
+    fn structured_output_capability(&self) -> ModelStructuredOutputCapability {
+        self.session.structured_output_capability()
+    }
+
+    fn structured_output_capability_for(&self, model: &str) -> ModelStructuredOutputCapability {
+        let protocol = self.session.structured_output_capability_for(model);
+        self.session
+            .route_key(model)
+            .and_then(|route| self.metadata.structured_output(&route, now_millis_u64()))
+            .map_or(protocol, |learned| protocol.max(learned))
+    }
+
+    fn learn_structured_output(&self, model: &str, rung: ModelStructuredOutputCapability) {
+        if let Some(route) = self.session.route_key(model) {
+            self.metadata
+                .learn_structured_output(&route, rung, now_millis_u64());
+        }
+    }
+
+    fn route_key(&self, model: &str) -> Option<ModelRouteKey> {
+        self.session.route_key(model)
+    }
+
+    fn stream(
+        &self,
+        request: ModelRequest,
+        cancellation: CancellationToken,
+    ) -> ModelFuture<'_, ModelResult<ModelStream>> {
+        self.session.stream(request, cancellation)
+    }
+
+    fn compact(
+        &self,
+        request: ModelRequest,
+        cancellation: CancellationToken,
+    ) -> ModelFuture<'_, ModelResult<ModelCompactionResult>> {
+        self.session.compact(request, cancellation)
+    }
 }

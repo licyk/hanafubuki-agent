@@ -17,7 +17,7 @@ hanafubuki-agent sessions list
 1  2026-11-08 21:12  gpt-5.1  Fix the lint errors
 ```
 
-Each line has the id, the last update (local time), the model and the title, the latest first. The title is made from the first message; a session without one shows `(untitled)`.
+Each line has the id, the last update (local time), the model and the title, the latest first. The title is made from the first message: at once the message itself, cut to 36 characters, then one the model writes from it. When that fails the first message stays the title, and the model is asked again at your next message, until it gives one or you rename the session. A session without a title shows `(untitled)`.
 
 - `--archived` lists the archived sessions instead.
 - `--json` prints one session summary per line as a JSON object (the id, model, Provider, mode, title, token use, creation and update times, the directory and Git branch it was created in as `cwd` and `branch`, its [role](/docs/roles#sessions) as `role` when it has one other than `default`, and more), for scripts.
