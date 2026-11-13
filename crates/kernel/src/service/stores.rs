@@ -271,6 +271,14 @@ impl AgentHistoryStore for SessionStores {
         self.durable.list_sessions_page(request)
     }
 
+    fn recent_user_messages(
+        &self,
+        limit: usize,
+        before: Option<u128>,
+    ) -> Result<Vec<String>, AgentHistoryStoreError> {
+        self.durable.recent_user_messages(limit, before)
+    }
+
     fn list_items_page(
         &self,
         request: AgentTranscriptPageRequest,

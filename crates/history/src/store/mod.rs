@@ -472,6 +472,14 @@ impl AgentHistoryStore for FileAgentHistoryStore {
         self.list_sessions_page_inner(request)
     }
 
+    fn recent_user_messages(
+        &self,
+        limit: usize,
+        before: Option<u128>,
+    ) -> Result<Vec<String>, AgentHistoryStoreError> {
+        self.recent_user_messages_inner(limit, before)
+    }
+
     fn list_items_page(
         &self,
         request: AgentTranscriptPageRequest,

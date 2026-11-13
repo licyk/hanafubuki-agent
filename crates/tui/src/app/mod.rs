@@ -243,6 +243,10 @@ impl App {
             AppEvent::FileSearchResult { query, matches } => {
                 self.chat_widget.apply_file_search_result(query, matches)
             }
+            AppEvent::ReadRecentMessages => self.bridge.read_recent_messages(),
+            AppEvent::RecentMessagesRead(messages) => {
+                self.chat_widget.apply_recent_messages(messages)
+            }
             AppEvent::Diff => self.start_diff(),
             AppEvent::DiffResult(text) => {
                 self.open_overlay(

@@ -1,6 +1,10 @@
 // Modified from OpenAI Codex rust-v0.93.0 (Apache-2.0).
 
 use super::*;
+use crate::bottom_pane::footer::footer_height;
+use crate::render::renderable::Renderable;
+use ratatui::buffer::Buffer;
+use ratatui::layout::Rect;
 use std::time::Duration;
 
 /// A sender nothing listens to: the composer's events are dropped.

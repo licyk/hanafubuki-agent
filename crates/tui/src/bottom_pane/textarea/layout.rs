@@ -9,6 +9,7 @@ use std::ops::Range;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::Color;
+use ratatui::style::Modifier;
 use ratatui::style::Style;
 use ratatui::widgets::StatefulWidget;
 use ratatui::widgets::Widget;
@@ -313,6 +314,19 @@ impl TextArea {
                 let x_off = self.text[line_range.start..overlap_start].width() as u16;
                 let style = Style::default().fg(Color::Cyan);
                 buf.set_string(area.x + x_off, y, styled, style);
+            }
+            for range in &self.highlights {
+                let start = range.start.max(line_range.start);
+                let end = range.end.min(line_range.end);
+                if start >= end {
+                    continue;
+                }
+                let x_off = self.text[line_range.start..start].width() as u16;
+                let width = self.text[start..end].width() as u16;
+                buf.set_style(
+                    Rect::new(area.x + x_off, y, width, 1).intersection(area),
+                    Style::default().add_modifier(Modifier::REVERSED | Modifier::BOLD),
+                );
             }
         }
     }

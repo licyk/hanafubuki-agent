@@ -23,9 +23,9 @@ use crate::file_search::FileMatch;
 use crate::history_cell;
 
 impl ChatComposer {
-    /// Return true if either the slash-command popup or the file-search popup is active.
+    /// Whether a popup or the history search takes the keys.
     pub(crate) fn popup_active(&self) -> bool {
-        !matches!(self.active_popup, ActivePopup::None)
+        !matches!(self.active_popup, ActivePopup::None) || self.history_search_active()
     }
 
     /// Turns `/name` off: the popup leaves it out, and typing it says so.
@@ -283,9 +283,10 @@ impl ChatComposer {
         let browsing_history = self
             .history
             .should_handle_navigation(self.textarea.text(), self.textarea.cursor());
-        // When browsing input history (shell-style Up/Down recall), skip all popup
-        // synchronization so nothing steals focus from continued history navigation.
-        if browsing_history {
+        // When browsing input history (shell-style Up/Down recall), or while a
+        // history search previews a match, skip all popup synchronization so
+        // nothing steals focus from continued history navigation.
+        if browsing_history || self.history_search_active() {
             self.end_file_search();
             self.active_popup = ActivePopup::None;
             return;

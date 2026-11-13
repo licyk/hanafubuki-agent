@@ -1,0 +1,11 @@
+---
+source: crates/tui/src/bottom_pane/chat_composer/history_search/tests.rs
+expression: "render(&composer, width)"
+---
+"                              "
+"› draft                       "
+"                              "
+"                              "
+"  reverse-i-search: zzz  no ma"
+
+Cursor: Some((23, 4))

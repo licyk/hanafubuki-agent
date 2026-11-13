@@ -54,6 +54,7 @@ Fullscreen 下，对话占满底部区域上方的屏幕。Scrollback 下，界�
 | Shift+Left、Alt+Up                    | 把最后一条排队的消息放回输入框，供你修改                                                                                             |
 | Shift+Enter、Ctrl+J                   | 换行。Shift+Enter 需要终端支持增强键盘协议，否则请用 Ctrl+J                                                                          |
 | Up、Down（Ctrl-P、Ctrl-N）            | 输入框为空时，翻看本次运行中发送过的消息；在弹出列表中移动                                                                           |
+| Ctrl-R                                | 搜索发送过的消息，包括本次运行和之前的会话中的（[见下文](#composer)）                                                                |
 | Esc                                   | 关闭弹出列表；否则中断正在运行的回合，并立即发送回合还没读到的补充消息。没有回合运行时，在空输入框上按两次：编辑之前的消息（见下文） |
 | Ctrl-C                                | 依次：在审批中拒绝；清空有内容的输入框；中断正在运行的回合；1 秒内再按一次则退出                                                     |
 | Ctrl-D                                | 输入框为空时，1 秒内按两次退出；输入框有内容时向后删除一个字符                                                                       |
@@ -69,7 +70,7 @@ Fullscreen 下，对话占满底部区域上方的屏幕。Scrollback 下，界�
 
 Fullscreen 下还有阅读对话的按键：Page Up/Page Down、F3、F4、Ctrl-Space 等，见[阅读对话](#reading)；Scrollback 下，F4 聚焦尾部的活动。
 
-以上是默认按键。[按键映射](#keymap)可以修改其中各个动作的按键（Enter、Tab 排队、Shift+Left 编辑排队的消息、历史、Esc 中断、Ctrl-T、Ctrl-O、`?`、Shift+Tab、Alt+, 和 Alt+.、Alt+Left 和 Alt+Right、编辑键、对话和分页器的按键、指挥中心的会话操作）；Ctrl-C、Ctrl-D 以及弹出列表和列表自己的按键（包括 Tab 的补全）保持不变。
+以上是默认按键。[按键映射](#keymap)可以修改其中各个动作的按键（Enter、Tab 排队、Shift+Left 编辑排队的消息、历史及其搜索、Esc 中断、Ctrl-T、Ctrl-O、`?`、Shift+Tab、Alt+, 和 Alt+.、Alt+Left 和 Alt+Right、编辑键、对话和分页器的按键、指挥中心的会话操作）；Ctrl-C、Ctrl-D 以及弹出列表和列表自己的按键（包括 Tab 的补全）保持不变。
 
 输入框支持常见的 Emacs 风格编辑键：Ctrl-A/E 到行首/行尾，Ctrl-W 删除前一个词，Ctrl-U/K 删除到行首/行尾，Alt-B/F 按词移动等。
 
@@ -90,15 +91,15 @@ Fullscreen 下还有阅读对话的按键：Page Up/Page Down、F3、F4、Ctrl-S
   @         Mention files        shift + tab        Change mode                 f3                                 Find text
   !         Shell command        alt + ,            Less reasoning              pgup / pgdn                        Scroll
   ctrl + j  New line             alt + .            More reasoning              ctrl + space                       Start selection
-  esc esc   Edit last message    ←                  Agents (empty prompt)       ctrl + home / ctrl + end           Top / latest
-                                 alt + ← / alt + →  Subagents (empty prompt)    shift + alt + , / shift + alt + .  Top / latest
+  ctrl + r  Search history       ←                  Agents (empty prompt)       ctrl + home / ctrl + end           Top / latest
+  esc esc   Edit last message    alt + ← / alt + →  Subagents (empty prompt)    shift + alt + , / shift + alt + .  Top / latest
                                  f4                 Inspect activity
                                  ctrl + c           Quit
 
   /keymap customize
 ```
 
-- **Compose**：`!` 运行 shell 命令（[见下文](#composer)）；终端能区分 Shift+Enter 时，换行键显示为 Shift+Enter。**Session**：回合进行中，Tab 显示为 `Queue message`，Ctrl+C 显示为 `Interrupt`。**Transcript**：阅读对话的按键（[阅读对话](#reading)），Fullscreen 下在输入框旁边就能用，Scrollback 下在 Ctrl+T 打开对话记录之后使用。
+- **Compose**：`!` 运行 shell 命令，Ctrl+R 搜索发送过的消息（[见下文](#composer)）；终端能区分 Shift+Enter 时，换行键显示为 Shift+Enter。**Session**：回合进行中，Tab 显示为 `Queue message`，Ctrl+C 显示为 `Interrupt`。**Transcript**：阅读对话的按键（[阅读对话](#reading)），Fullscreen 下在输入框旁边就能用，Scrollback 下在 Ctrl+T 打开对话记录之后使用。
 - 在[旁路对话](#side)或正在显示的[子代理](#subagents)中，模式、推理强度和编辑之前的消息属于主对话，不显示。
 - 屏幕高度不够全部显示时，列表被截断，并提示 `… more: /keymap`；`/keymap` 列出所有动作。
 - Shift+Tab 在回合进行中不可用，和 `/mode` 一样。Alt+, 和 Alt+. 在 `/effort` 提供的档位之间切换（[见下文](#effort)）。Alt+Left 和 Alt+Right 在会话及其子代理之间循环切换（[见下文](#subagents)）。
@@ -106,12 +107,13 @@ Fullscreen 下还有阅读对话的按键：Page Up/Page Down、F3、F4、Ctrl-S
 ## 输入框 [#composer]
 
 - **粘贴**：超过 1000 个字符的粘贴内容在输入框中显示为 `[Pasted Content 1234 chars]` 占位符，发送时展开；删除占位符就删除了这段粘贴。
-- **历史**：Up/Down 翻看的是本次运行中发送过的消息（包括被 Ctrl-C 清空的草稿），不包括恢复的会话中的旧消息。
+- **历史**：Up/Down 翻看的是本次运行中发送过的消息（包括被 Ctrl-C 清空的草稿），不包括恢复的会话中的旧消息；Ctrl-R 的搜索包括这些旧消息。
+- **搜索历史**：按 Ctrl-R，输入框下方一行变为 `reverse-i-search:`（与 Codex 相同）。输入或粘贴要找的内容，不区分大小写；输入框会在草稿的位置显示包含它的最新一条消息，并高亮找到的文字。搜索先查本次运行中发送过的消息，再查你在 Agent 各个会话中发送过的内容，从最新的开始：消息、补充消息和按输入原样记录的 `!` 命令，最多最近 1,000 条，相同的文字只出现一次；子代理的会话不包括在内。这些内容只在第一次按 Ctrl-R 时读取一次，读到之前这一行显示 `searching`。Ctrl-R 或 Up 显示更早的匹配，Ctrl-S 或 Down 显示更新的匹配，到头时保持当前的匹配。Enter 把匹配放进输入框供你修改，并不发送；Esc 或 Ctrl-C 关闭搜索，把草稿原样放回，回合进行中也一样，回合会继续运行。找不到时这一行显示 `no match`，并显示你的草稿。Backspace 删除搜索内容的一个字符，Ctrl-U 删除全部。搜索期间交还给输入框的消息（被中断的回合中等待的消息）放进 Esc 放回的草稿中。[按键映射](#keymap)中的 `composer.history_search` 可以改绑 Ctrl-R；搜索中的其他按键保持不变。
 - **引导正在运行的回合**：回合进行中按 Enter 发送的消息交给正在运行的回合，模型在下一步读到它：正在进行的工具调用完成之后，或者给出回答之后，回合会接着进行。在此之前，它显示在输入框上方的 `Messages to be submitted after next tool call (press esc to interrupt and send immediately)` 之下；模型读到之后，它才写入对话。多条消息按顺序发送。回合还没开始时按 Enter，消息会排入队列（见下文）。
 - **排队消息**：回合进行中按 Tab，消息排入 `Queued follow-up inputs`；没有回合运行时，Tab 和 Enter 一样直接发送。用 Tab 输入的命令和 Enter 一样立即执行。回合结束后，排队的消息从最早的一条开始，每条各开始一个回合，依次进行，回合失败后也一样。Shift+Left（或 Alt+Up）把最后一条排队的消息放回输入框，放在草稿之前，供你修改。
 - **不会丢失消息**：回合没有读到的补充消息（回合先结束了、失败了，或 Agent 拒收了这条消息）会在回合结束时发送，等待期间显示在 `Messages to be submitted at end of turn` 之下；多条会合并成一条消息，先于排队的消息发送。
 - **中断**：有补充消息在等待时按 Esc，会中断回合并立即把它们合并成一条，作为下一个回合发送（`Model interrupted to submit steer instructions.`）；队列和你的草稿保持不变。Ctrl-C，或没有补充消息等待时按 Esc，只中断、不发送：等待中的消息（补充消息、等待回合结束的消息和排队的消息）回到输入框，每条一行，放在草稿之前。
-- **Shell 命令**：以 `!` 开头的消息把其余部分作为 shell 命令运行，单独占一个回合，不询问模型（与 Codex 相同）。它通过 `exec_command` 工具在会话的[沙箱](/docs/permissions#sandbox)和工作目录中运行，直到退出，最长为工具超时（未配置时为 10 分钟）；按 Esc 会停止它，终止它的进程。草稿以 `!` 开头时，输入框下方一行显示 `! shell command · runs in the session's sandbox`。输入命令本身就是批准，所以无论权限模式如何都不会弹出询问；插件中总是要求由人决定的审批规则仍会询问。`git clone` 的规则（[哪些操作需要审批](/docs/permissions#what-asks)）读取的是命令的程序和参数，而不是 shell 脚本，所以 `!git clone …` 不会询问就运行。它显示为 `• You ran ls` 加上它的输出（[工具调用](#tools)）。没有模型可以请求越出沙箱，所以被沙箱阻止的命令（断网时的安装、写入可写根目录之外）直接失败；失败的命令会多一行，说明 `!` 命令在会话的沙箱中运行（`/permissions`）。从你的下一条消息起，模型就能读到它：命令、退出码、耗时和输出。只输入 `!` 会显示用法（`Prefix a command with ! to run it locally`）。回合进行中，命令会被拒绝（`A turn is running; wait for it or interrupt it first.`）并留在输入框中；Plan 模式下也会被拒绝。命令运行时发送的消息会等它结束，和按 Tab 排队一样。Up 和 Down 会按输入时的样子调出它。
+- **Shell 命令**：以 `!` 开头的消息把其余部分作为 shell 命令运行，单独占一个回合，不询问模型（与 Codex 相同）。它通过 `exec_command` 工具在会话的[沙箱](/docs/permissions#sandbox)和工作目录中运行，直到退出，最长为工具超时（未配置时为 10 分钟）；按 Esc 会停止它，终止它的进程。草稿以 `!` 开头时，输入框下方一行显示 `! shell command · runs in the session's sandbox`。输入命令本身就是批准，所以无论权限模式如何都不会弹出询问；插件中总是要求由人决定的审批规则仍会询问。`git clone` 的规则（[哪些操作需要审批](/docs/permissions#what-asks)）读取的是命令的程序和参数，而不是 shell 脚本，所以 `!git clone …` 不会询问就运行。它显示为 `• You ran ls` 加上它的输出（[工具调用](#tools)）。没有模型可以请求越出沙箱，所以被沙箱阻止的命令（断网时的安装、写入可写根目录之外）直接失败；失败的命令会多一行，说明 `!` 命令在会话的沙箱中运行（`/permissions`）。从你的下一条消息起，模型就能读到它：命令、退出码、耗时和输出。只输入 `!` 会显示用法（`Prefix a command with ! to run it locally`）。回合进行中，命令会被拒绝（`A turn is running; wait for it or interrupt it first.`）并留在输入框中；Plan 模式下也会被拒绝。命令运行时发送的消息会等它结束，和按 Tab 排队一样。Up 和 Down 会按输入时的样子调出它，Ctrl-R 也能找到它，之后的运行中也一样。
 - **每个对话各有一个队列**：主对话、[旁路对话](#side)和正在显示的[子代理](#subagents)各自排队，在后台的对话也会继续处理它的队列。旁路对话关闭或离开子代理时，它等待中的消息随之丢弃。有回合运行或有消息等待时，不能把对话切换到另一个会话（`/new`、`/resume`、编辑之前的消息）。
 
 ## 斜杠命令 [#commands]
@@ -686,7 +688,7 @@ yank = []
 
 `/keymap` 在[设置中心](#config)打开按键映射页面，列出所有动作及其按键（输入文字可以搜索）。选中一个动作后，可以替换它的按键或增加一个（一个按键、两个按键，或前导键加一个按键）、删除其中一个、取消绑定，或恢复默认按键。新的按键在按下时捕获（Esc 取消）；冲突的按键会被拒绝并说明原因，可以再换一个。修改保存到 `tui.keymap`，立即生效。`/keymap debug` 列出每个动作的按键，并标明 `default`（默认）或 `configured`（已配置）。
 
-弹出列表、列表、表单、审批和提问保留它们自己的按键（方向键、Enter、Esc、Tab），对话中的选择、搜索和选择模式，以及浏览之前的消息也一样。
+弹出列表、列表、表单、审批和提问保留它们自己的按键（方向键、Enter、Esc、Tab），对话中的选择、搜索和选择模式、浏览之前的消息，以及历史搜索（Up、Down、Ctrl-S、Enter、Esc）也一样。
 
 | 动作                              | 默认按键                                                              | 作用                                                         |
 | --------------------------------- | --------------------------------------------------------------------- | ------------------------------------------------------------ |
@@ -716,6 +718,7 @@ yank = []
 | `composer.queue`                  | `tab`                                                                 | 回合进行中：把消息排入队列，等回合结束后发送                 |
 | `composer.history_previous`       | `up`、`ctrl-p`                                                        | 上一条发送过的消息                                           |
 | `composer.history_next`           | `down`、`ctrl-n`                                                      | 下一条发送过的消息                                           |
+| `composer.history_search`         | `ctrl-r`                                                              | 搜索发送过的消息，包括本次运行和之前的会话中的               |
 | `composer.show_shortcuts`         | `?`                                                                   | 输入框为空时：显示或隐藏快捷键说明                           |
 | `composer.previous_agent`         | `alt-left`                                                            | 输入框为空时：显示会话及其子代理中的上一个                   |
 | `composer.next_agent`             | `alt-right`                                                           | 输入框为空时：显示会话及其子代理中的下一个                   |

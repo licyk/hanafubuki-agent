@@ -234,6 +234,9 @@ impl BottomPane {
                 self.request_redraw();
             }
             event
+        } else if self.composer.cancel_history_search() {
+            self.request_redraw();
+            CancellationEvent::Handled
         } else if self.composer_is_empty() {
             CancellationEvent::NotHandled
         } else {
@@ -264,6 +267,11 @@ impl BottomPane {
 
     pub(crate) fn on_file_search_result(&mut self, query: String, matches: Vec<FileMatch>) {
         self.composer.on_file_search_result(query, matches);
+        self.request_redraw();
+    }
+
+    pub(crate) fn on_recent_messages(&mut self, messages: Vec<String>) {
+        self.composer.on_recent_messages(messages);
         self.request_redraw();
     }
 
@@ -373,6 +381,8 @@ impl BottomPane {
     }
 
     pub(crate) fn set_composer_text(&mut self, text: String) {
+        // A message to edit replaces the draft a search would give back.
+        self.composer.cancel_history_search();
         self.composer.set_text_content(text);
         self.request_redraw();
     }

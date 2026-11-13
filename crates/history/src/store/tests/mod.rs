@@ -167,3 +167,4 @@ mod paging;
 mod projection;
 mod quarantine;
 mod queued;
+mod recent_messages;

@@ -136,6 +136,17 @@ pub(crate) fn render_footer(area: Rect, buf: &mut Buffer, props: FooterProps<'_>
     .render(area, buf);
 }
 
+/// Renders one line chosen by the composer (the history search's) in
+/// place of the footer, indented as the footer is.
+pub(crate) fn render_footer_line(area: Rect, buf: &mut Buffer, line: Line<'static>) {
+    Paragraph::new(prefix_lines(
+        vec![line],
+        " ".repeat(FOOTER_INDENT_COLS).into(),
+        " ".repeat(FOOTER_INDENT_COLS).into(),
+    ))
+    .render(area, buf);
+}
+
 /// The canonical FooterMode-to-text mapping.
 fn footer_lines(props: FooterProps<'_>) -> Vec<Line<'static>> {
     match props.mode {

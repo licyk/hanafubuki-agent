@@ -51,6 +51,21 @@ impl AgentApplicationService {
         self.driver.activate_provider_session(session_id).await
     }
 
+    /// What the person sent in the top-level sessions, newest first, each
+    /// text once, at most `limit` (and at most
+    /// [`RECENT_USER_MESSAGES_MAX`](crate::RECENT_USER_MESSAGES_MAX)):
+    /// their messages, steers included, and the `!` commands they ran, as
+    /// typed (`!` then the command). With `before` (Unix milliseconds),
+    /// only what was recorded before it. It reads the history store: call
+    /// it off an interface's thread.
+    pub fn recent_user_messages(
+        &self,
+        limit: usize,
+        before: Option<u128>,
+    ) -> Result<Vec<String>, AgentError> {
+        self.core.recent_user_messages(limit, before)
+    }
+
     pub fn read_transcript_page(
         &self,
         request: AgentTranscriptPageRequest,

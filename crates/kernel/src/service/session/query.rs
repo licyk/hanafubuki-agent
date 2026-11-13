@@ -98,6 +98,19 @@ impl AgentService {
             .map_err(history_store_error)
     }
 
+    /// The person's latest messages and `!` commands across the
+    /// top-level sessions (`AgentHistoryStore::recent_user_messages`).
+    pub fn recent_user_messages(
+        &self,
+        limit: usize,
+        before: Option<u128>,
+    ) -> Result<Vec<String>, AgentError> {
+        self.inner
+            .history_store
+            .recent_user_messages(limit, before)
+            .map_err(history_store_error)
+    }
+
     pub fn read_transcript_page(
         &self,
         request: AgentTranscriptPageRequest,

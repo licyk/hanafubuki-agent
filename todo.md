@@ -1286,8 +1286,131 @@ and any module-size exception.
       - CI on Linux, Windows and macOS: https://github.com/licyk/hanafubuki-agent/actions/runs/43439254210
         (run on c930bcc; all three passed at once). Site on c930bcc:
         .../runs/43439254219, passed, its build and prerender included.
-- [ ] K3: Ctrl+R history search over this run's messages and the history
+- [x] K3: Ctrl+R history search over this run's messages and the history
       store's user messages (D16).
+      Done (2026-11-13):
+      - history store (kernel trait, file store, router): a new
+        `AgentHistoryStore::recent_user_messages(limit, before)` with a
+        default that returns none (a host's store compiles unchanged; the
+        ephemeral store keeps it); the file store's
+        (`store/query/recent_messages.rs`) reads the items of the top-level
+        sessions (`parent_session_id IS NULL`: a subagent's messages are
+        its parent model's) of the types `user_message`,
+        `steering_message` and `user_shell_command` (as `!` then the
+        command), newest first (`created_at`, then session and item order),
+        each text once, an image-only message and an item that does not
+        decode skipped, at most `limit` and `RECENT_USER_MESSAGES_MAX`
+        (1,000, new in the kernel and the facade); `before` (Unix
+        milliseconds) keeps what was recorded earlier. No index or schema
+        change: the type filter cannot use the `user_message` partial
+        index, so the read scans the items table and sorts what matches,
+        holding the store's database gate, once per composer's first
+        Ctrl+R, off the interface's thread (an additive index can come if
+        a measurement asks for it). Kernel `AgentService::recent_user_messages`, facade
+        `AgentApplicationService::recent_user_messages` (`service/history.rs`).
+      - TUI: keymap 72 → 73 actions, `composer.history_search` (`ctrl-r`).
+        `ChatComposerHistory` gains the search (Codex's unique-match
+        traversal, newest first, staying at an end: `AtBoundary`) over
+        this run's messages then the stored ones, read once on a
+        composer's first Ctrl+R (`AppEvent::ReadRecentMessages` → the
+        bridge's `read_recent_messages`, a blocking task of the Agent's
+        runtime whose reply, `RecentMessagesRead`, always comes, empty on
+        failure, routed to its conversation like a reply); a step past this
+        run's matches before the read lands is `Pending` (`searching`) and
+        goes on when it lands. `chat_composer/history_search/` (Codex's
+        `history_search.rs` and `history_search_draft.rs`): the footer row
+        becomes `reverse-i-search: QUERY` with `searching`, `enter accept ·
+        esc cancel` or `no match`, the cursor at the query's end; the
+        match previews in the draft's place, its matched text reversed and
+        bold (`TextArea::set_highlights`, Codex's case-insensitive ranges);
+        the draft (text area with cursor and placeholders, and its pending
+        pastes) is put aside whole and put back on Esc, Ctrl+C (through
+        `BottomPane::on_ctrl_c`, no quit hint) or raw `\u{3}`; Enter takes
+        the match as a draft (cursor at the end, not sent); typing or a
+        paste edits the query (`↵`/`⇥` shown for a line break and a tab),
+        Backspace/Ctrl+H and Ctrl+U delete; the search's key and Up older,
+        Ctrl+S and Down newer. The search counts as a popup
+        (`popup_active`), so Esc does not interrupt a running turn nor
+        prime editing an earlier message, Up/Down stay with it, and
+        `sync_popups` opens no popup over a previewed `/command` or `@file`.
+        A message given back meanwhile (`restore_draft`, an interrupted
+        turn's) goes into the draft put aside (`edit_draft`, Codex's
+        `edit_stored_draft`); `set_composer_text` (editing an earlier
+        message) closes the search first. The `?` overlay gains `ctrl + r
+        Search history` under Compose, after New line, in a second
+        conversation too. `chat_composer/render.rs`: the composer's drawing
+        (layout, footer props and mode, `Renderable`) moved out of
+        `chat_composer/mod.rs` (591 → 494 code lines), which had no room
+        for the search's hooks.
+      - Tests: history store `tests/recent_messages.rs` (order across
+        sessions, dedupe, the three types, a child session and an
+        image-only message left out, `limit`, the cap, `before`, a row that
+        does not decode skipped); facade `user_shell.rs`
+        `the_persons_recent_messages_include_commands_newest_first`;
+        keymap resolution (`composer.history_search` = `ctrl-r`);
+        `chat_composer_history/tests.rs` (traversal, dedupe with the stored
+        ones, the ends, waiting for the read and going on, a newer step
+        before any match waiting too (a review found it ended on `no match`
+        though the read then held one; fixed), no match after it, a sent
+        message resetting the search);
+        `chat_composer/history_search/tests.rs`, Codex's ported (opens
+        without a preview and reads once; accept; the ends; this run's then
+        stored matches and `!ec` finding `!echo …`; waiting; Esc restoring
+        the draft and its cursor and resetting Up; Ctrl+C; no match keeping
+        the search open; a pending first char flushed first; a draft with a
+        large paste surviving a match and Esc and still expanding; a paste
+        into the query; a message given back during the search; no popup
+        over a preview; highlights until accepted; the match ranges; a
+        remapped key (`f2`) opening and stepping while Ctrl+R does not) and
+        insta snapshots of searching, a match and no match at 70 and 30
+        columns; footer: the overlay snapshots (140/90/50 and during a turn)
+        now with `ctrl + r  Search history`, K1's deferred test (a remapped
+        `history_search` shows `f7`, unbound it is absent). App, end to end
+        (`app/tests/history_search.rs`, Scrollback and Fullscreen): a run
+        over an earlier run's home finds its message (`PARSERS`) and its
+        `!echo` and takes it with Enter; Esc and Ctrl+C close the search
+        during a turn, which goes on, with no quit hint and the draft back.
+        Written with the code; seen failing by mutation: with the read's
+        reply emptied, the earlier run's message is not found, and with the
+        search not counted as a popup, Esc and Ctrl+C reach the turn.
+      - Deviations: (1) the store read includes steering messages and `!`
+        commands besides user messages (Codex's history file holds `!cmd`
+        as typed, and a steer is what the person typed), and leaves out
+        subagent sessions. (2) One action as the plan's table says, not
+        Codex's two (`history_search_previous`/`_next`): Ctrl+S, Up, Down,
+        Enter, Esc, Backspace, Ctrl+U inside the search are fixed, as a
+        popup's keys are. (3) Codex fetches its history entry by entry; here
+        one bounded read on a composer's first Ctrl+R (each conversation's
+        composer reads its own), so `Unavailable` and Codex's offset
+        machinery are not ported: a failed read is an empty one. (4) Codex's
+        Vim states, sparkles and frozen fallback preview are not ported; a
+        draft change during an idle search shows at once. (5) `before` is
+        implemented as the plan names it; the interface passes none.
+      - Goldens: none changed.
+      - Docs (both languages): `terminal-interface#keys` (Ctrl-R row, the
+        rebindable list), `#shortcuts` (the overlay with Search history),
+        `#composer` (the search described; `!` commands found by it),
+        `#keymap` (the row, the search's fixed keys); `embedding#events-and-history`
+        (`recent_user_messages`, the trait's default).
+      - Validation: `cargo fmt --all --check`; `RUSTFLAGS="-D warnings"
+        cargo check --workspace --all-targets --all-features`; `cargo clippy
+        --workspace --all-targets --all-features -- -D warnings`; `cargo
+        xtask check` (its notices check first failed on the two new
+        original files, now listed); `cargo test --workspace --all-features
+        --no-fail-fast` (4149 passed, none failed, on the final tree; no
+        flake seen); `bun install --frozen-lockfile`,
+        `bun run format:site`, `bun run format:check:site`, `bun run
+        site:check`, `bun run site:test`, and the four changed pages
+        compiled with the store's `@mdx-js/mdx` 3.1.1;
+        `VITE_BASE_PATH=/hanafubuki-agent/ bun run site:build` not run
+        locally (port 3000 held by another project's server); CI's Site run
+        covers it.
+      - Hanafubuki at its next pin: `AgentHistoryStore::recent_user_messages`
+        (a default method: nothing to change unless its store has an index
+        to answer from); optionally `AgentApplicationService::recent_user_messages`
+        and `RECENT_USER_MESSAGES_MAX` for its own prompt history.
+      - Module size: no exception added or raised. `chat_composer/mod.rs`
+        494 (the drawing moved to `render.rs`), `agent_bridge/mod.rs` 597.
 - [ ] K4: Ctrl+G external editor (`VISUAL`/`EDITOR`), a foreground child
       as `/diff`'s `git` (D17).
 

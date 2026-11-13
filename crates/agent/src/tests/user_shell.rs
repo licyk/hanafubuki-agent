@@ -557,3 +557,44 @@ async fn editing_a_message_after_a_command_keeps_the_command() {
         .is_empty());
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }
+
+/// What the person sent, for an interface's history search: newest first,
+/// each text once, the commands as typed, bounded.
+#[tokio::test]
+async fn the_persons_recent_messages_include_commands_newest_first() {
+    let server = FakeServer::start(vec![
+        (assistant_events("One."), Duration::ZERO),
+        (assistant_events("Two."), Duration::ZERO),
+        (assistant_events("Three."), Duration::ZERO),
+    ])
+    .await;
+    let (service, paths) = configured_service("user-shell-recent", &server.base_url);
+    let session = service
+        .create_session(AgentSessionMode::Default, None)
+        .await
+        .unwrap();
+    for text in ["First message.", "Second message."] {
+        service
+            .start_turn(session.id, text.to_string().into())
+            .await
+            .unwrap();
+    }
+    run(&service, session.id, "echo recent-marker").await;
+    service
+        .start_turn(session.id, "First message.".to_string().into())
+        .await
+        .unwrap();
+
+    assert_eq!(
+        service.recent_user_messages(10, None).unwrap(),
+        ["First message.", "!echo recent-marker", "Second message."]
+    );
+    assert_eq!(
+        service.recent_user_messages(1, None).unwrap(),
+        ["First message."]
+    );
+    assert!(service
+        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
+        .is_empty());
+    let _ = std::fs::remove_dir_all(paths.app_data_dir);
+}

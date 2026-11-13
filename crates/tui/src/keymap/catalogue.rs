@@ -26,7 +26,7 @@ macro_rules! action {
 }
 
 /// Every action, in [`Action`]'s order.
-pub(crate) static ACTIONS: [ActionSpec; 72] = [
+pub(crate) static ACTIONS: [ActionSpec; 73] = [
     action!(
         Leader,
         Global,
@@ -202,6 +202,13 @@ pub(crate) static ACTIONS: [ActionSpec; 72] = [
         "history_next",
         "The next message sent",
         ["down", "ctrl-n"]
+    ),
+    action!(
+        HistorySearch,
+        Composer,
+        "history_search",
+        "Search the messages sent, this run's and earlier sessions'",
+        ["ctrl-r"]
     ),
     action!(
         ShowShortcuts,

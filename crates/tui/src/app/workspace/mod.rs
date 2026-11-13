@@ -288,6 +288,7 @@ impl App {
             | AppEvent::LiveEntryCompleted(_)
             | AppEvent::CommandStep(_)
             | AppEvent::Command(_)
+            | AppEvent::RecentMessagesRead(_)
                 if focus.is_some_and(|focus| focus != owner) =>
             {
                 Route::Parked(event)

@@ -1,0 +1,11 @@
+---
+source: crates/tui/src/bottom_pane/chat_composer/history_search/tests.rs
+expression: "render(&composer, width)"
+---
+"                              "
+"› an earlier message          "
+"                              "
+"                              "
+"  reverse-i-search: earlier  e"
+
+Cursor: Some((27, 4))

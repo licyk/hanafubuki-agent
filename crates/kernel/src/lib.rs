@@ -60,6 +60,7 @@ pub use conversation::{
     AgentTranscriptPageRequest, AgentTurnPageRequest, AgentTurnRecovery,
     EphemeralAgentHistoryStore, PersistedAgentRuntimeState, PersistedAgentTurn,
     AGENT_HISTORY_FORMAT_VERSION, AGENT_SESSION_PAGE_SIZE_MAX, AGENT_TRANSCRIPT_PAGE_SIZE_MAX,
+    RECENT_USER_MESSAGES_MAX,
 };
 pub use core_tools::AgentCoreTool;
 pub use hanafubuki_agent_approval::{

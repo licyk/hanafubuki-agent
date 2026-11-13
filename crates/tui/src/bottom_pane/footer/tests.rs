@@ -172,13 +172,18 @@ fn the_shortcuts_show_the_keys_in_force() {
         ("chat", "cycle_mode", &["f6"]),
         ("chat", "reasoning_up", &[]),
         ("composer", "previous_agent", &[]),
+        ("composer", "history_search", &["f7"]),
     ]);
     let text = overlay_text(overlay(), 140);
+    install(&[("composer", "history_search", &[])]);
+    let unbound = overlay_text(overlay(), 140);
     keymap::install(Keymap::default());
     assert!(text.contains("f6 Change mode"), "{text}");
     assert!(text.contains("Less reasoning"), "{text}");
     assert!(!text.contains("More reasoning"), "{text}");
     assert!(!text.contains("Subagents"), "{text}");
+    assert!(text.contains("f7 Search history"), "{text}");
+    assert!(!unbound.contains("Search history"), "{unbound}");
 }
 
 #[test]
@@ -197,17 +202,12 @@ fn the_shortcuts_list_what_works_here() {
         "shift + ⌥ + , / shift + ⌥ + .",
         "/keymap customize",
         "! Shell command",
+        "ctrl + r Search history",
     ] {
         assert!(text.contains(wanted), "{wanted}:\n{text}");
     }
-    // No voice; and no Ctrl+V, Ctrl+G or Ctrl+R until their actions exist.
-    for absent in [
-        "Voice",
-        "f8",
-        "Paste image",
-        "External editor",
-        "Search history",
-    ] {
+    // No voice; and no Ctrl+V or Ctrl+G until their actions exist.
+    for absent in ["Voice", "f8", "Paste image", "External editor"] {
         assert!(!text.contains(absent), "{absent}:\n{text}");
     }
     // A second conversation's mode, effort and earlier messages are the

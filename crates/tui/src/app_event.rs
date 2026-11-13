@@ -55,6 +55,11 @@ pub(crate) enum AppEvent {
         query: String,
         matches: Vec<FileMatch>,
     },
+    /// The composer's first Ctrl+R: read what the person sent in the
+    /// Agent's sessions.
+    ReadRecentMessages,
+    /// What was read, newest first (none when the read failed).
+    RecentMessagesRead(Vec<String>),
     /// `/diff`: run `git diff` in the workspace.
     Diff,
     /// Its output, for the pager.

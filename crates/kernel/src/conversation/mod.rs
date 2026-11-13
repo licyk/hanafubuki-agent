@@ -20,6 +20,8 @@ use crate::{
 pub const AGENT_HISTORY_FORMAT_VERSION: u32 = 5;
 pub const AGENT_SESSION_PAGE_SIZE_MAX: usize = 100;
 pub const AGENT_TRANSCRIPT_PAGE_SIZE_MAX: usize = 200;
+/// The most messages [`AgentHistoryStore::recent_user_messages`] returns.
+pub const RECENT_USER_MESSAGES_MAX: usize = 1_000;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(
@@ -641,6 +643,21 @@ pub trait AgentHistoryStore: Send + Sync {
         &self,
         request: AgentSessionListRequest,
     ) -> Result<AgentSessionPage, AgentHistoryStoreError>;
+    /// What the person sent in the top-level sessions, newest first, each
+    /// text once, at most `limit` (and at most
+    /// [`RECENT_USER_MESSAGES_MAX`]): their messages, the steers among
+    /// them, and the `!` commands they ran, as typed (`!` then the
+    /// command). With `before` (Unix milliseconds), only what was recorded
+    /// before it. An item that does not decode is left out. This default,
+    /// for stores that keep no index, has none.
+    fn recent_user_messages(
+        &self,
+        limit: usize,
+        before: Option<u128>,
+    ) -> Result<Vec<String>, AgentHistoryStoreError> {
+        let _ = (limit, before);
+        Ok(Vec::new())
+    }
     fn list_items_page(
         &self,
         request: AgentTranscriptPageRequest,

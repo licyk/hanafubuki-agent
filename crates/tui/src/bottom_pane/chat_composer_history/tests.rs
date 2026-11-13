@@ -67,3 +67,90 @@ fn editing_a_recalled_entry_stops_navigation() {
     assert!(!history.should_handle_navigation("recalled!", 0));
     assert!(!history.should_handle_navigation("recalled", 3));
 }
+
+use HistorySearchDirection::{Newer, Older};
+use HistorySearchResult::{AtBoundary, Found, NotFound, Pending};
+
+fn found(text: &str) -> HistorySearchResult {
+    Found(text.to_string())
+}
+
+/// A history of this run's `local` (oldest first) whose stored messages
+/// (newest first) are read.
+fn searchable(local: &[&str], stored: &[&str]) -> ChatComposerHistory {
+    let mut history = ChatComposerHistory::new();
+    for entry in local {
+        history.record_local_submission(entry.to_string());
+    }
+    assert!(history.begin_search());
+    assert_eq!(
+        history.on_stored_read(stored.iter().map(|entry| entry.to_string()).collect()),
+        None
+    );
+    history
+}
+
+#[test]
+fn the_search_walks_unique_matches_newest_first_and_stays_at_the_ends() {
+    let mut history = searchable(
+        &["git status", "cargo test", "git log", "git status"],
+        &["git log", "GIT push", "ls"],
+    );
+    assert_eq!(history.search("git", Older, true), found("git status"));
+    assert_eq!(history.search("git", Older, false), found("git log"));
+    // The stored `git log` is a duplicate; a stored match comes after this
+    // run's, and case does not matter.
+    assert_eq!(history.search("git", Older, false), found("GIT push"));
+    assert_eq!(history.search("git", Older, false), AtBoundary);
+    assert_eq!(history.search("git", Newer, false), found("git log"));
+    assert_eq!(history.search("git", Newer, false), found("git status"));
+    assert_eq!(history.search("git", Newer, false), AtBoundary);
+    // A new query starts again from the newest.
+    assert_eq!(history.search("cargo", Older, false), found("cargo test"));
+    assert_eq!(history.search("missing", Older, false), NotFound);
+    assert_eq!(history.search("missing", Newer, false), NotFound);
+}
+
+#[test]
+fn a_search_past_this_runs_matches_waits_for_the_stored_ones() {
+    let mut history = ChatComposerHistory::new();
+    history.record_local_submission("echo local".to_string());
+    assert!(history.begin_search());
+    // The stored messages are read once.
+    assert!(!history.begin_search());
+
+    assert_eq!(history.search("echo", Older, true), found("echo local"));
+    assert_eq!(history.search("echo", Older, false), Pending);
+    assert_eq!(
+        history.on_stored_read(vec!["!echo stored".to_string(), "echo local".to_string()]),
+        Some(found("!echo stored"))
+    );
+    assert_eq!(history.search("echo", Older, false), AtBoundary);
+    assert_eq!(history.search("echo", Newer, false), found("echo local"));
+}
+
+#[test]
+fn a_search_with_no_match_yet_waits_and_ends_with_none() {
+    let mut history = ChatComposerHistory::new();
+    assert!(history.begin_search());
+    assert_eq!(history.search("nothing", Older, true), Pending);
+    assert_eq!(history.on_stored_read(Vec::new()), Some(NotFound));
+
+    let mut history = ChatComposerHistory::new();
+    assert!(history.begin_search());
+    assert_eq!(history.search("earlier", Older, true), Pending);
+    // A newer step before any match waits as well.
+    assert_eq!(history.search("earlier", Newer, false), Pending);
+    assert_eq!(
+        history.on_stored_read(vec!["an earlier message".to_string()]),
+        Some(found("an earlier message"))
+    );
+}
+
+#[test]
+fn a_sent_message_ends_the_search() {
+    let mut history = searchable(&["first"], &[]);
+    assert_eq!(history.search("first", Older, true), found("first"));
+    history.record_local_submission("first again".to_string());
+    assert_eq!(history.search("first", Older, false), found("first again"));
+}

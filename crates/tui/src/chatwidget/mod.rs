@@ -327,6 +327,12 @@ impl ChatWidget {
         self.bottom_pane.on_file_search_result(query, matches);
     }
 
+    /// What the person sent in the Agent's sessions, for the composer's
+    /// history search.
+    pub(crate) fn apply_recent_messages(&mut self, messages: Vec<String>) {
+        self.bottom_pane.on_recent_messages(messages);
+    }
+
     fn on_ctrl_c(&mut self) {
         let key = key_hint::ctrl(KeyCode::Char('c'));
         let modal_or_popup_active = !self.bottom_pane.no_modal_or_popup_active();

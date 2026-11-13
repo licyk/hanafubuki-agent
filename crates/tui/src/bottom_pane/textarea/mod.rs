@@ -1,7 +1,8 @@
 // Modified from OpenAI Codex rust-v0.93.0 (Apache-2.0).
 
 //! The composer's text buffer: the text, the cursor, atomic elements (a
-//! large paste's placeholder) and the kill buffer.
+//! large paste's placeholder), the kill buffer, and the ranges a history
+//! search's match highlights.
 
 mod keys;
 mod layout;
@@ -31,6 +32,8 @@ pub(crate) struct TextArea {
     kill_buffer: String,
     /// Line breaks typed or pasted are dropped (a form's field).
     single_line: bool,
+    /// Byte ranges shown reversed and bold: what a history search matched.
+    highlights: Vec<Range<usize>>,
 }
 
 #[derive(Debug, Clone)]
@@ -55,6 +58,7 @@ impl TextArea {
             elements: Vec::new(),
             kill_buffer: String::new(),
             single_line: false,
+            highlights: Vec::new(),
         }
     }
 
@@ -66,6 +70,12 @@ impl TextArea {
         self.wrap_cache.replace(None);
         self.preferred_col = None;
         self.kill_buffer.clear();
+        self.highlights.clear();
+    }
+
+    /// Highlights `ranges` of the text until they are set again.
+    pub(crate) fn set_highlights(&mut self, ranges: Vec<Range<usize>>) {
+        self.highlights = ranges;
     }
 
     pub fn text(&self) -> &str {

@@ -461,6 +461,10 @@ path = "crates/tui/src/agent_bridge/start.rs"
 reason = "The bridge's start of a turn, with a message or a `!command`, onto the facade's calls; moved out of the bridge's module."
 
 [[original]]
+path = "crates/tui/src/agent_bridge/recent_messages.rs"
+reason = "The bridge's read of what the person sent in the Agent's sessions, for the composer's history search, onto the facade's call; Codex reads its history file instead."
+
+[[original]]
 path = "crates/tui/src/agent_bridge/steering.rs"
 reason = "The bridge's steering of the running turn for the chat's queue, onto the facade's calls and the kernel's consumption events."
 
@@ -503,6 +507,10 @@ reason = "/theme, /statusline and /title end to end over the standalone Agent: r
 [[original]]
 path = "crates/tui/src/app/tests/shell.rs"
 reason = "`!command`s end to end over the standalone Agent and its scripted model: run, carried to the next request, replayed, refused during a turn, stopped by Esc."
+
+[[original]]
+path = "crates/tui/src/app/tests/history_search.rs"
+reason = "Ctrl+R end to end over the standalone Agent: what an earlier run sent found through the history store, and the search closed while a turn runs."
 
 [[original]]
 path = "crates/tui/src/app/tests/queue.rs"

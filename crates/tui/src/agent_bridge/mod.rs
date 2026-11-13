@@ -31,6 +31,7 @@ mod mcp;
 mod permissions;
 mod plugins;
 mod providers;
+mod recent_messages;
 mod replay;
 mod review;
 mod sessions;

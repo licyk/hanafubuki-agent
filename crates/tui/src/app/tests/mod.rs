@@ -94,9 +94,22 @@ impl Harness {
         configure: impl FnOnce(&AgentConfig),
         profile: Option<&str>,
     ) -> Self {
+        let home = tempfile::tempdir().unwrap();
+        Self::start_in(home, responses, with_provider, mode, configure, profile)
+    }
+
+    /// [`Self::start_layered`] over `home`, which an earlier run may have
+    /// used.
+    fn start_in(
+        home: tempfile::TempDir,
+        responses: Vec<(Vec<u8>, Duration)>,
+        with_provider: bool,
+        mode: TranscriptMode,
+        configure: impl FnOnce(&AgentConfig),
+        profile: Option<&str>,
+    ) -> Self {
         let model_runtime = tokio::runtime::Runtime::new().unwrap();
         let server = model_runtime.block_on(FakeServer::start(responses));
-        let home = tempfile::tempdir().unwrap();
         let cwd = home.path().join("project");
         std::fs::create_dir_all(cwd.join(".git")).unwrap();
         std::fs::write(
@@ -823,6 +836,7 @@ mod compaction;
 mod compression;
 mod context;
 mod features;
+mod history_search;
 mod plugins;
 mod preferences;
 mod queue;
