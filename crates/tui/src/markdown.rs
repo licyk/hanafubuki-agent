@@ -16,6 +16,7 @@ use std::ops::Range;
 
 use ratatui::text::Line;
 
+use crate::markdown_render::ListSpacing;
 use crate::table_detect;
 
 /// `markdown_source` rendered and wrapped to `width`, local file links
@@ -26,12 +27,12 @@ pub(crate) fn append_markdown(
     cwd: Option<&str>,
     lines: &mut Vec<Line<'static>>,
 ) {
-    let rendered = crate::markdown_render::render_markdown_text_with_width_and_cwd(
+    lines.extend(render_markdown_with_list_spacing(
         markdown_source,
         width,
         cwd,
-    );
-    crate::render::line_utils::push_owned_lines(&rendered.lines, lines);
+        ListSpacing::AfterMultiline,
+    ));
 }
 
 /// A model's answer: [`append_markdown`] after the table fences are
@@ -42,12 +43,43 @@ pub(crate) fn append_markdown_agent(
     cwd: Option<&str>,
     lines: &mut Vec<Line<'static>>,
 ) {
+    lines.extend(render_markdown_agent_with_list_spacing(
+        markdown_source,
+        width,
+        cwd,
+        ListSpacing::AfterMultiline,
+    ));
+}
+
+/// [`append_markdown`]'s lines, lists spaced by `list_spacing`.
+pub(crate) fn render_markdown_with_list_spacing(
+    markdown_source: &str,
+    width: Option<usize>,
+    cwd: Option<&str>,
+    list_spacing: ListSpacing,
+) -> Vec<Line<'static>> {
+    crate::markdown_render::render_markdown_text_with_spacing(
+        markdown_source,
+        width,
+        cwd,
+        list_spacing,
+    )
+    .lines
+}
+
+/// [`append_markdown_agent`]'s lines, lists spaced by `list_spacing`.
+pub(crate) fn render_markdown_agent_with_list_spacing(
+    markdown_source: &str,
+    width: Option<usize>,
+    cwd: Option<&str>,
+    list_spacing: ListSpacing,
+) -> Vec<Line<'static>> {
     let normalized = if crate::markdown_render::preferences::current().tables {
         unwrap_markdown_fences(markdown_source)
     } else {
         Cow::Borrowed(markdown_source)
     };
-    append_markdown(&normalized, width, cwd, lines);
+    render_markdown_with_list_spacing(&normalized, width, cwd, list_spacing)
 }
 
 /// `markdown_source` with each ```` ```md ````/```` ```markdown ```` fence

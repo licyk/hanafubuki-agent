@@ -843,6 +843,7 @@ mod plugins;
 mod preferences;
 mod queue;
 mod rendering;
+mod resize;
 mod scrollback;
 mod session_commands;
 mod settings;

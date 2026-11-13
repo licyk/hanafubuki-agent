@@ -26,6 +26,7 @@ use crate::appearance::AppearanceEvent;
 use crate::commands::CommandStep;
 use crate::file_search::FileMatch;
 use crate::history_cell::HistoryCell;
+use crate::streaming::controller::Consolidation;
 
 pub(crate) enum AppEvent {
     Key(KeyEvent),
@@ -50,6 +51,8 @@ pub(crate) enum AppEvent {
     InsertLiveEntry(Arc<dyn HistoryCell>),
     /// A live entry completed: Scrollback's tail may write it.
     LiveEntryCompleted(Arc<dyn HistoryCell>),
+    /// A stream ended: its cells give way to the one of its Markdown.
+    ConsolidateStream(Consolidation),
     /// The `@` token being typed changed; an empty query ends the search.
     StartFileSearch(String),
     /// The best files for `query` so far.

@@ -36,6 +36,7 @@ impl TranscriptView {
         separated: bool,
     ) -> Vec<TailEntry> {
         self.cache.begin_frame();
+        self.scrollback_tail = true;
         self.prepare_width(width);
         self.leading_separator = separated;
         (0..cells.len())
@@ -54,6 +55,7 @@ impl TranscriptView {
         index: usize,
         separated: bool,
     ) -> Vec<Line<'static>> {
+        self.scrollback_tail = true;
         self.leading_separator = separated;
         let Some(layout) = self.current_layout(cells, index) else {
             return Vec::new();

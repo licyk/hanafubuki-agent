@@ -1989,8 +1989,171 @@ and any module-size exception.
         queued without a runner (no step ran), and its re-run passed.
         Site on e08b030: .../runs/43503049237, passed, its build and
         prerender included.
-- [ ] M2: source-backed answer cells and reflow on resize, in Fullscreen
+- [x] M2: source-backed answer cells and reflow on resize, in Fullscreen
       and in Scrollback (D19).
+      Done (2026-11-13):
+      - Cells (`history_cell/messages.rs`, the message cells moved out of
+        `mod.rs`; `markdown_cache.rs`; `plan.rs`): an answer streams as
+        `AgentMessageCell`s and a plan as `ProposedPlanStreamCell`s, both
+        now carrying their stream's `StreamId`; the stream's end
+        (`StreamController`/`PlanStreamController::finalize`, which returns
+        `Finalized` with the source the collector kept) hands the app a
+        `Consolidation` (`AppEvent::ConsolidateStream`, routed to a parked
+        conversation like `InsertHistoryCell`): an `AgentMarkdownCell` or a
+        `ProposedPlanCell` of the Markdown and the session's directory,
+        which renders for the width it is asked at (`word_wrap_lines` with
+        the stream's indents, so at the stream's width its rows are the
+        stream's), caching its last render per width and list spacing
+        behind a `parking_lot::Mutex` (Codex's std lock). Replay builds
+        these cells directly (no more `StreamController` at a
+        `last_rendered_width` that may be `None` before the first frame).
+      - Consolidation (`app/message_consolidation.rs`): the stream's cells,
+        from its first to its last (a cell inserted among them, a `/status`
+        mid-stream, follows the new cell), are replaced in the transcript,
+        the Ctrl+T overlay (`TranscriptOverlay::consolidate`) and
+        Fullscreen's view (`TranscriptView::replace_entries`, Codex's
+        `replace_group`: a reader inside them gets a held snapshot, as for a
+        live entry, so its rows do not move; otherwise a search restarts).
+        Scrollback's tail keeps the stream's unwritten rows (the same at
+        that width).
+      - Resize (`app/resize_reflow.rs`, `transcript_view/rewrite.rs`):
+        Fullscreen lays its view out per frame, as before, now from source.
+        Scrollback: `Tail::note_size` replaces the resize's `flush_all`; any
+        size change schedules a rewrite 75 ms later (Codex's
+        `TRANSCRIPT_REFLOW_DEBOUNCE`; a later change pushes it out, a frame
+        is scheduled at the deadline and 75 ms after the rewrite to catch a
+        late final size); the rewrite takes the transcript before the tail
+        (`Tail::first_unwritten`: a `Remainder` now keeps its origin cell and
+        counts whole; a consolidated stream's rows are skipped), lays it out
+        from the last entry back through the view as the tail writes entries
+        (disclosure kept: expanded stays expanded, collapsed ends with the
+        hint) up to the row cap, clears the terminal (`Tui::clear_scrollback`,
+        which now also homes `last_known_cursor_pos`) and writes it; the tail
+        restarts with the rest (`Tail::restart`: live set kept, a pending
+        flush kept as "what precedes your last message", the viewport floor
+        dropped). Codex's notice heads a capped rewrite: `Earlier messages are
+        available — press ctrl + t to view the full transcript`. Row cap:
+        Codex's per terminal (1,000; Windows Terminal 9,001; WezTerm 3,500;
+        Alacritty 10,000) read from the environment in its detection's order.
+        A resize or a rewrite while a stream's rows are in the transcript
+        marks one repair, which the consolidation runs at the next frame
+        (Codex's two stream flags, as one). Nothing runs while the alternate
+        screen is open (Scrollback's frame is not drawn); its first frame
+        after notices the size.
+      - List spacing (`markdown_render/list_spacing.rs`): `ListSpacing::Uniform`
+        with its caller, Codex's retained presentation
+        (`HistoryCell::retained_lines`; `CellPresentation.retained`, off in
+        Scrollback's tail): in Fullscreen and the transcript overlay a
+        finished answer's or plan's list with a multi-row item separates
+        every sibling; the scrollback keeps `AfterMultiline`. A code block
+        that starts an item follows its marker without a blank line then.
+      - What the user sees on a resize: Fullscreen (and the Ctrl+T overlay)
+        at once, every answer laid out for the new width (a table switches
+        between grid and key/value records). Scrollback: frames during the
+        75 ms show the terminal's own handling of the old rows; then the
+        terminal's scrollback and screen are cleared and the conversation is
+        written again for the new width, the latest rows up to the cap.
+        The clear takes everything above the viewport: the shell's output
+        from before the interface, an earlier session's rows (the transcript
+        restarts at `SessionOpened`), the other conversation's rows and the
+        focus banners. A terminal or multiplexer that ignores `CSI 3 J`
+        keeps the old copy above the new one, one more per resize; whether
+        the Windows console and tmux honour it is not verified (no real
+        terminal here). A stream that a resize overtakes keeps its start
+        width until it ends (its rows rewrapped meanwhile), then is laid out
+        again, in Scrollback by one more rewrite.
+      - Deviations: (1) no row-cap setting (Codex's
+        `terminal_resize_reflow.max_rows`), and a resumed session's first
+        write is not capped (Codex's initial replay buffer): neither is in
+        the plan. (2) Codex's `ScrollbackStrategy` (another insertion mode
+        for Windows Terminal and Zellij) is not ported: the rewrite pushes up
+        to 9,001 rows through the scroll-region path there.
+        `insert_history.rs`, which the plan names, is unchanged. (3) Stream
+        ids instead of Codex's trailing run of stream cells, which a cell
+        inserted mid-stream would have cut (the full source then replacing
+        only the run after it). (4) Rendering preferences are read when a
+        cell is laid out again, as in Codex: an answer shown before
+        `tui.rendering.*` changed takes the new look at the next resize;
+        the generated config-reference wording ("for what is shown from then
+        on") is unchanged. (5) The plan cell renders our stream's block (no
+        Codex `(empty)` row) with `append_markdown`'s renderer, as it
+        streamed. (6) `/raw`: an ended answer or plan shows its Markdown
+        source (Codex's `raw_lines`), where it showed its rendered rows
+        unstyled; while streaming, the rows. (7) A selection, a held reading
+        position and a search match keep the layout they were made on,
+        rewrapped (`prepare_width`), until they end: M1's "rewrapped, not
+        laid out again" remains only there. (8) Equality tests on the vt100
+        screen rather than stored snapshots. (9) T7: a followed Fullscreen
+        answer whose list has a multi-row item gains rows at its stream's
+        end (uniform spacing), as Codex's.
+      - Tests (fail-first by mutation, each confirmed failing then
+        restored): `app/tests/resize.rs` on vt100 in both presentations —
+        a conversation (CJK, a table grid at 100 and key/value records at
+        40, lists, code) resized 100→40, 40→100 and 100→24 equals the same
+        conversation run at the new width; a resize mid-stream equals it
+        once the stream ends; a drag through three widths rewrites once;
+        a resize under the Ctrl+T overlay rewrites after it closes; an
+        expanded and a collapsed call keep their disclosure through the
+        rewrite; the find bar and a selection (with a consolidation under
+        it and a second resize) do not panic and the view is the new
+        width's once they end; a reader inside a streaming answer keeps its
+        rows at consolidation. Mutations: consolidation removed (6 of the
+        resize tests fail), the rewrite removed (5), the stream repair
+        removed (the mid-stream test), the held reading removed (the reader
+        test), uniform spacing removed (2 cell tests); the floor reset was
+        seen failing (mid-stream) before it was added. Unit tests: the
+        consolidated cell equals the stream's rows at its width and a fresh
+        stream's at others (`streaming/controller/tests.rs`, plan too);
+        Codex's render-cache tests, grid ↔ records, every width 0–120 within
+        bounds, uniform spacing, the stream span
+        (`history_cell/messages/tests.rs`); Codex's uniform list-spacing
+        snapshot (its `Uniform` stages; the long URL split until M4's
+        wrapping) and the links test adapted to `AfterMultiline`; Codex's
+        cap and notice tests on `scrollback_lines`
+        (`transcript_view/rewrite/tests.rs`) and its cap-by-terminal tests
+        over the environment (`app/resize_reflow/tests.rs`); a replayed
+        answer and plan are source-backed and a stream cut by an entry
+        consolidates as two (`chatwidget/tests/entries.rs`). Not mutated:
+        the cap/notice and replay tests. Removed: `a_resize_writes_the_tail`
+        (the behaviour it pinned is gone). `VT100Backend::resize` clears the
+        screen before `set_size` (vt100 panics on a wide character cut at
+        the new edge); the vt100 screen keeps no scrollback and ignores
+        `CSI 3 J`, so the purge and the cap are tested on the rows written.
+        Not covered: a resize under an approval (the bottom pane is sized
+        per frame, untested), a real terminal's reflow.
+      - Snapshots: no existing one changed; new: the uniform list-spacing
+        snapshot and two inline notice snapshots.
+      - Goldens: none changed. Dependencies: none added.
+      - Docs (both languages): `terminal-interface` (`#modes` a resize lays
+        the conversation out again; `#reading` the Scrollback rewrite, its
+        cap, notice, what the clear takes, the terminals that keep their
+        scrollback, a stream through a resize; `/raw`; `#rendering` answers
+        and plans laid out per width, uniform spacing in Fullscreen, what a
+        selection keeps), `architecture` (a bullet on the port),
+        `internals#tui-details` (source-backed messages and the resize; the
+        overlays defer the rewrite).
+      - Hanafubuki at its next pin: nothing (the TUI crate only, no facade
+        change, no twin touched).
+      - Module size: no exception added or raised (`app/workspace/mod.rs`
+        542 and `app/mod.rs` 529 code lines, the largest touched).
+      - Validation: `cargo fmt --all --check`; `RUSTFLAGS="-D warnings"
+        cargo check --workspace --all-targets --all-features`; `cargo
+        clippy --workspace --all-targets --all-features -- -D warnings`;
+        `cargo xtask check` (the notices check first failed on the new
+        end-to-end test, listed as original); `cargo test --workspace
+        --all-features --no-fail-fast` (4358 passed, none failed, no flake
+        seen); `bun install --frozen-lockfile`, `bun run
+        format:check:site`, `bun run site:check`, `bun run site:test` (28
+        passed), and the six changed pages compiled with the store's
+        `@mdx-js/mdx` 3.1.1; `VITE_BASE_PATH=/hanafubuki-agent/ bun run
+        site:build` not run locally (port 3000 held by another project's
+        server); CI's Site run covers it.
+      - For M3: the stream's width is fixed at its start (a resize mid-stream
+        is repaired only at its end); `StreamState::finalize` and the
+        consolidation are where M3's controller ends a stream; `ListSpacing`
+        has no `Compact` yet; the commit-tick thread gets no
+        `StopCommitAnimation` when `finalize` takes the controller with
+        lines still queued (before M2).
 - [ ] M3: streaming — incremental blocks, stable/tail regions, chunking,
       table holdback, open-fence highlighting, prose previews.
 - [ ] M4: OSC 8 hyperlinks and URL-aware wrapping.

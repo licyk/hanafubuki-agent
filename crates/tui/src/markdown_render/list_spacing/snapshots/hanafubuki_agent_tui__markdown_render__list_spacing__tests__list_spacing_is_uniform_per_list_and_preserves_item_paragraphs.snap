@@ -1,0 +1,58 @@
+---
+source: crates/tui/src/markdown_render/list_spacing/tests.rs
+expression: "stages.join(\"\\n\\n---\\n\\n\")"
+---
+1. One
+
+2. This item has enough
+   words to wrap
+
+3. Three
+
+4. Four
+
+---
+
+• Parent
+    • Short
+    • Small
+
+• Other
+
+> • Quote
+>
+> • This quoted item has
+>   enough words to wrap
+>
+> • End
+
+---
+
+• First paragraph
+
+  Second paragraph
+
+• Next
+
+• Last
+
+---
+
+• One
+
+•
+  code
+
+• Three
+
+  after paragraph
+
+---
+
+• https://example.com/a-
+  very-long-path-with-
+  many-segments
+
+• Short
+
+• End

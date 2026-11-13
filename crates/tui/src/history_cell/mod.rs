@@ -1,10 +1,15 @@
 // Modified from OpenAI Codex rust-v0.93.0 (Apache-2.0).
 
 //! Transcript cells: the unit the chat widget shows. Most are written once;
-//! a thinking or a tool call is a [`LiveCell`] that changes in place.
+//! a thinking or a tool call is a [`LiveCell`] that changes in place. A cell
+//! renders for the width it is shown at; an answer's or a plan's streamed
+//! rows give way to a cell of its Markdown when its stream ends
+//! (`messages`).
 
 mod context;
 mod live;
+mod markdown_cache;
+mod messages;
 mod plan;
 mod reports;
 mod status;
@@ -22,17 +27,16 @@ use ratatui::text::{Line, Span, Text};
 use ratatui::widgets::{Paragraph, Widget, Wrap};
 use unicode_width::UnicodeWidthStr;
 
-use crate::render::line_utils::prefix_lines;
 use crate::render::renderable::Renderable;
 use crate::status_indicator_widget::{fmt_elapsed_compact, fmt_elapsed_tenths};
-use crate::style::user_message_style;
-use crate::ui_consts::LIVE_PREFIX_COLS;
-use crate::user_message::UserMessage;
-use crate::wrapping::{word_wrap_lines, RtOptions};
 
 pub(crate) use context::new_context_output;
 pub(crate) use live::LiveCell;
-pub(crate) use plan::{new_plan_update, new_proposed_plan_stream};
+pub(crate) use messages::{
+    new_user_prompt, splice_stream, stream_span, user_prompt, AgentMarkdownCell, AgentMessageCell,
+    StreamId, UserHistoryCell,
+};
+pub(crate) use plan::{new_plan_update, new_proposed_plan_stream, ProposedPlanCell};
 pub(crate) use reports::{new_mcp_output, new_skills_output};
 pub(crate) use status::{format_tokens_compact, new_status_output, permission_mode_name};
 pub(crate) use thinking::{ThinkingCell, THINKING_ACTIVITY};
@@ -53,10 +57,6 @@ pub(crate) enum ActivityDisclosure {
     /// The output lines the compact presentation leaves out.
     OutputLines(usize),
 }
-
-/// The wrapped rows of a message of yours shown collapsed; a longer one has
-/// a control.
-const USER_MESSAGE_MAX_ROWS: usize = 12;
 
 /// A new activity id, `{prefix}{n}`, for an entry without an identity of
 /// its own: disclosure lasts a run and is never persisted.
@@ -126,6 +126,17 @@ pub(crate) trait HistoryCell: std::fmt::Debug + Send + Sync + Any {
         self.display_lines(width)
     }
 
+    /// The rich presentation in a view that lays its entries out again
+    /// (Fullscreen, the transcript overlay), rather than writing them into
+    /// the terminal's scrollback.
+    fn retained_lines(&self, width: u16, detailed: bool) -> Vec<Line<'static>> {
+        if detailed {
+            self.transcript_lines(width)
+        } else {
+            self.compact_lines(width)
+        }
+    }
+
     /// An activity's details, revealed in the compact presentation.
     fn expanded_lines(&self, width: u16) -> Vec<Line<'static>> {
         self.transcript_lines(width)
@@ -167,17 +178,27 @@ pub(crate) trait HistoryCell: std::fmt::Debug + Send + Sync + Any {
     fn is_stream_continuation(&self) -> bool {
         false
     }
+
+    /// The stream whose rows the cell holds, until the stream ends and its
+    /// cells are replaced by one rendered from its source.
+    fn stream_id(&self) -> Option<StreamId> {
+        None
+    }
 }
 
 /// The lines of an entry of the transcript view: the full transcript when
-/// `detailed`, otherwise the compact or the raw presentation.
+/// `detailed`, otherwise the compact or the raw presentation; `retained`
+/// in a view that lays its entries out again.
 pub(crate) fn transcript_entry_lines(
     cell: &dyn HistoryCell,
     width: u16,
     detailed: bool,
     mode: HistoryRenderMode,
+    retained: bool,
 ) -> Vec<Line<'static>> {
-    if detailed {
+    if retained && (detailed || mode == HistoryRenderMode::Rich) {
+        cell.retained_lines(width, detailed)
+    } else if detailed {
         cell.transcript_lines(width)
     } else if mode == HistoryRenderMode::Rich {
         cell.compact_lines(width)
@@ -208,132 +229,6 @@ impl Renderable for Box<dyn HistoryCell> {
 
     fn desired_height(&self, width: u16) -> u16 {
         HistoryCell::desired_height(self.as_ref(), width)
-    }
-}
-
-#[derive(Debug)]
-pub(crate) struct UserHistoryCell {
-    /// The text as sent, image labels and all.
-    pub message: String,
-    /// `[Image #N: name]` for each of its images.
-    images: Vec<String>,
-    activity_id: String,
-}
-
-impl UserHistoryCell {
-    /// The message wrapped at `width`, behind its `›`, then a row for each
-    /// image.
-    fn rows(&self, width: u16) -> Vec<Line<'static>> {
-        let wrap_width = width
-            .saturating_sub(
-                LIVE_PREFIX_COLS + 1, /* keep a one-column right margin for wrapping */
-            )
-            .max(1);
-        let style = user_message_style();
-        let wrapped = word_wrap_lines(
-            self.message.split('\n').map(|l| Line::from(l).style(style)),
-            // Wrap algorithm matches textarea.rs.
-            RtOptions::new(usize::from(wrap_width))
-                .wrap_algorithm(textwrap::WrapAlgorithm::FirstFit),
-        );
-        let mut rows = prefix_lines(wrapped, "› ".bold().dim(), "  ".into());
-        rows.extend(
-            self.images
-                .iter()
-                .map(|image| Line::from(vec!["  ".into(), image.clone().cyan()]).style(style)),
-        );
-        rows
-    }
-
-    /// `rows` between a blank row above and below, in the message's style.
-    fn framed(rows: Vec<Line<'static>>) -> Vec<Line<'static>> {
-        let style = user_message_style();
-        let mut lines = vec![Line::from("").style(style)];
-        lines.extend(rows);
-        lines.push(Line::from("").style(style));
-        lines
-    }
-}
-
-impl HistoryCell for UserHistoryCell {
-    fn display_lines(&self, width: u16) -> Vec<Line<'static>> {
-        Self::framed(self.rows(width))
-    }
-
-    /// A long message shows its first rows.
-    fn compact_lines(&self, width: u16) -> Vec<Line<'static>> {
-        let mut rows = self.rows(width);
-        rows.truncate(USER_MESSAGE_MAX_ROWS);
-        Self::framed(rows)
-    }
-
-    fn raw_lines(&self) -> Vec<Line<'static>> {
-        raw_lines_from_source(&self.message)
-    }
-
-    fn copy_source(&self) -> Option<String> {
-        Some(self.message.clone())
-    }
-
-    fn activity_ids(&self) -> Vec<String> {
-        vec![self.activity_id.clone()]
-    }
-
-    fn activity_disclosure(&self, width: u16) -> Option<ActivityDisclosure> {
-        let rows = self.rows(width).len();
-        (rows > USER_MESSAGE_MAX_ROWS)
-            .then(|| ActivityDisclosure::OutputLines(rows - USER_MESSAGE_MAX_ROWS))
-    }
-}
-
-pub(crate) fn new_user_prompt(message: &UserMessage) -> UserHistoryCell {
-    user_prompt(message.text.clone(), message.image_rows())
-}
-
-/// A message as sent, `images` its images' rows.
-pub(crate) fn user_prompt(message: String, images: Vec<String>) -> UserHistoryCell {
-    UserHistoryCell {
-        message,
-        images,
-        activity_id: next_activity_id("user:"),
-    }
-}
-
-#[derive(Debug)]
-pub(crate) struct AgentMessageCell {
-    lines: Vec<Line<'static>>,
-    is_first_line: bool,
-}
-
-impl AgentMessageCell {
-    pub(crate) fn new(lines: Vec<Line<'static>>, is_first_line: bool) -> Self {
-        Self {
-            lines,
-            is_first_line,
-        }
-    }
-}
-
-impl HistoryCell for AgentMessageCell {
-    fn display_lines(&self, width: u16) -> Vec<Line<'static>> {
-        word_wrap_lines(
-            &self.lines,
-            RtOptions::new(width as usize)
-                .initial_indent(if self.is_first_line {
-                    "• ".dim().into()
-                } else {
-                    "  ".into()
-                })
-                .subsequent_indent("  ".into()),
-        )
-    }
-
-    fn raw_lines(&self) -> Vec<Line<'static>> {
-        plain_lines(self.lines.clone())
-    }
-
-    fn is_stream_continuation(&self) -> bool {
-        !self.is_first_line
     }
 }
 

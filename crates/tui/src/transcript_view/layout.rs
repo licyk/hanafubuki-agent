@@ -66,7 +66,13 @@ fn cell_content_layout(
         )
     } else {
         TextLayout::new(
-            transcript_entry_lines(cell, width, presentation.detailed, mode),
+            transcript_entry_lines(
+                cell,
+                width,
+                presentation.detailed,
+                mode,
+                presentation.retained,
+            ),
             width,
         )
     }
@@ -99,6 +105,8 @@ pub(super) struct CellPresentation {
     expanded: bool,
     disclosure: bool,
     detailed: bool,
+    /// Laid out to be laid out again, not written into the scrollback.
+    retained: bool,
 }
 
 impl TranscriptView {
@@ -119,6 +127,7 @@ impl TranscriptView {
             expanded: disclosure && (full_content || manually_expanded),
             disclosure,
             detailed: full_content,
+            retained: !self.scrollback_tail,
         }
     }
 

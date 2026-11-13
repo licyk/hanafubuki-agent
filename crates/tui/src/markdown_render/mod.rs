@@ -19,6 +19,7 @@
 
 mod blocks;
 mod links;
+mod list_spacing;
 mod lists;
 mod local_links;
 mod output;
@@ -32,7 +33,10 @@ use pulldown_cmark::{CodeBlockKind, Event, Options, Parser, Tag, TagEnd};
 use ratatui::style::Style;
 use ratatui::text::{Line, Span, Text};
 
+pub(crate) use list_spacing::ListSpacing;
+
 use links::LinkState;
+use list_spacing::UniformList;
 use tables::TableState;
 
 struct MarkdownStyles {
@@ -100,14 +104,25 @@ pub(crate) fn render_markdown_text_with_width(input: &str, width: Option<usize>)
     render_markdown_text_with_width_and_cwd(input, width, None)
 }
 
-/// `input` rendered, wrapped to `width` when there is one (`None` keeps
-/// each line, and each table, at its natural width). `cwd`, the session's
-/// directory as it is shown, shortens the targets of local file links under
-/// it; without one an absolute target stays absolute.
+#[cfg(test)]
 pub(crate) fn render_markdown_text_with_width_and_cwd(
     input: &str,
     width: Option<usize>,
     cwd: Option<&str>,
+) -> Text<'static> {
+    render_markdown_text_with_spacing(input, width, cwd, ListSpacing::AfterMultiline)
+}
+
+/// `input` rendered, wrapped to `width` when there is one (`None` keeps
+/// each line, and each table, at its natural width), its lists spaced by
+/// `list_spacing`. `cwd`, the session's directory as it is shown, shortens
+/// the targets of local file links under it; without one an absolute
+/// target stays absolute.
+pub(crate) fn render_markdown_text_with_spacing(
+    input: &str,
+    width: Option<usize>,
+    cwd: Option<&str>,
+    list_spacing: ListSpacing,
 ) -> Text<'static> {
     let mut options = Options::empty();
     options.insert(Options::ENABLE_STRIKETHROUGH);
@@ -116,6 +131,7 @@ pub(crate) fn render_markdown_text_with_width_and_cwd(
     let mut events =
         source_tables::preserve(input, Parser::new_ext(input, options).into_offset_iter());
     let mut writer = Writer::new(input, width, cwd);
+    writer.list_spacing = list_spacing;
     writer.run(&mut events);
     writer.text
 }
@@ -133,6 +149,9 @@ struct Writer<'a> {
     list_needs_blank_before_next_item: Vec<bool>,
     /// Per open item: the rows written before it started.
     list_item_start_line_counts: Vec<usize>,
+    list_spacing: ListSpacing,
+    /// Per open list, under [`ListSpacing::Uniform`].
+    uniform_lists: Vec<UniformList>,
     link: Option<LinkState>,
     needs_newline: bool,
     pending_marker_line: bool,
@@ -166,6 +185,8 @@ impl<'a> Writer<'a> {
             list_indices: Vec::new(),
             list_needs_blank_before_next_item: Vec::new(),
             list_item_start_line_counts: Vec::new(),
+            list_spacing: ListSpacing::default(),
+            uniform_lists: Vec::new(),
             link: None,
             needs_newline: false,
             pending_marker_line: false,

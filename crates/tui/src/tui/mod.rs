@@ -288,6 +288,9 @@ impl<B: Backend<Error = io::Error> + Write> Tui<B> {
         let backend = self.terminal.backend_mut();
         backend.write_all(b"\x1b[r\x1b[0m\x1b[H\x1b[2J\x1b[3J\x1b[H")?;
         Write::flush(backend)?;
+        // The cursor is home: a resize's move of the viewport is measured
+        // from there.
+        self.terminal.last_known_cursor_pos = ratatui::layout::Position::new(0, 0);
         let mut area = self.terminal.viewport_area;
         area.y = 0;
         self.terminal.set_viewport_area(area);

@@ -60,6 +60,40 @@ impl TranscriptView {
         }
     }
 
+    /// The entries `range` of `cells` are about to give way to
+    /// `replacement` (a stream's cells to the one of its Markdown, whose
+    /// rows may differ). A reader inside them keeps the revision it reads,
+    /// as for a live entry, until scrolling reaches an entry still there;
+    /// otherwise a search starts again, its offsets stale.
+    pub(crate) fn replace_entries(
+        &mut self,
+        cells: &[Arc<dyn HistoryCell>],
+        range: Range<usize>,
+        replacement: &Arc<dyn HistoryCell>,
+    ) {
+        if range.is_empty() {
+            return;
+        }
+        if range.end == cells.len() && self.last_tail == last_entry(cells) {
+            self.last_tail = Some((EntryKey::cell(replacement), replacement.revision()));
+        }
+        // A selection or a held reading keeps the cells it showed.
+        if self.snapshot().is_some() {
+            return;
+        }
+        let reading_inside = match self.position {
+            Position::Reading(anchor) => cells[range]
+                .iter()
+                .any(|cell| EntryKey::cell(cell) == anchor.key),
+            Position::Latest => false,
+        };
+        if reading_inside {
+            self.held_reading = Some(self.capture_snapshot(cells));
+        } else {
+            self.restart_search();
+        }
+    }
+
     pub(crate) fn cancel_beginning(&mut self) {
         if self.history == TranscriptHistoryState::LoadingBeginning {
             // The page in flight still arrives; the reader's new navigation

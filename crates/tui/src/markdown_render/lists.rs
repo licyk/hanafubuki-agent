@@ -6,7 +6,8 @@
 //! - An unordered item's marker is `•` (`-` with `tui.rendering.lists`
 //!   off); an ordered one keeps its number.
 //! - After an item that took more than one row (wrapped, several
-//!   paragraphs, a nested list), its next sibling comes after a blank line.
+//!   paragraphs, a nested list), its next sibling comes after a blank line;
+//!   under [`ListSpacing::Uniform`], every sibling of such a list does.
 //! - A task's `☐`/`☑` replaces the bullet, or follows the number; the
 //!   hanging indent follows the task's text.
 
@@ -16,7 +17,7 @@ use pulldown_cmark::{Event, Tag, TagEnd};
 use ratatui::text::{Line, Span};
 
 use super::output::spans_display_width;
-use super::{preferences, IndentContext, Writer};
+use super::{preferences, IndentContext, ListSpacing, UniformList, Writer};
 
 impl<'a> Writer<'a> {
     pub(super) fn start_list(&mut self, index: Option<u64>) {
@@ -25,10 +26,16 @@ impl<'a> Writer<'a> {
         }
         self.list_indices.push(index);
         self.list_needs_blank_before_next_item.push(false);
+        if self.list_spacing == ListSpacing::Uniform {
+            self.uniform_lists.push(UniformList::default());
+        }
     }
 
     pub(super) fn end_list(&mut self) {
         self.flush_current_line();
+        if let Some(list) = self.uniform_lists.pop() {
+            list.finish(&mut self.text.lines);
+        }
         self.list_indices.pop();
         self.list_needs_blank_before_next_item.pop();
         self.needs_newline = true;
@@ -83,8 +90,21 @@ impl<'a> Writer<'a> {
             .map(std::mem::take)
             .unwrap_or(false);
         self.flush_current_line();
-        if after_multiline {
+        let separate = match self.list_spacing {
+            ListSpacing::AfterMultiline => after_multiline,
+            ListSpacing::Uniform => self.uniform_lists.last().is_some_and(|list| list.has_item),
+        };
+        if separate {
+            let index = self.text.lines.len();
             self.push_blank_line();
+            if self.text.lines.len() > index {
+                if let Some(list) = self.uniform_lists.last_mut() {
+                    list.separators.push(index);
+                }
+            }
+        }
+        if let Some(list) = self.uniform_lists.last_mut() {
+            list.has_item = true;
         }
         self.list_item_start_line_counts.push(self.text.lines.len());
         self.pending_marker_line = true;
@@ -133,6 +153,12 @@ impl<'a> Writer<'a> {
         }
         self.flush_current_line();
         let start_line_count = self.list_item_start_line_counts.pop().unwrap_or_default();
+        if let Some(list) = self.uniform_lists.last_mut() {
+            let rows = &self.text.lines[start_line_count..];
+            list.multiline |= rows.len() > 1
+                || (rows.len() == 1
+                    && self.wrap_width.is_some_and(|width| rows[0].width() > width));
+        }
         if self.text.lines.len().saturating_sub(start_line_count) > 1 {
             if let Some(needs_blank) = self.list_needs_blank_before_next_item.last_mut() {
                 *needs_blank = true;

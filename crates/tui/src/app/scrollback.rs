@@ -7,11 +7,14 @@
 //! - the oldest completed entries, once the tail would grow past its limit
 //!   (60% of the screen, at least 8 rows). An entry without a control (an
 //!   answer's lines) leaves in part, as far as needed; a live one never;
-//! - the whole tail as it was, once a message of yours enters it, when a
-//!   session is opened in its place or the other conversation is shown, and
-//!   when the terminal is resized, which reflows what the viewport drew
+//! - the whole tail as it was, once a message of yours enters it, and when
+//!   a session is opened in its place or the other conversation is shown
 //!   (what has completed, then the rest as it completes);
 //! - everything, live or not, when the interface quits.
+//!
+//! A resize does not write the tail: once the size holds, the scrollback is
+//! cleared and what was written is written again for the new width
+//! (`resize_reflow`), the tail staying as it is.
 //!
 //! During a turn the viewport does not get shorter, so the terminal is not
 //! cleared for a shorter one: a collapsed entry leaves blank rows. The mouse
@@ -90,6 +93,53 @@ impl Tail {
         *self = Self::default();
     }
 
+    /// Notes the screen's size at a frame: `true` when it changed since the
+    /// last one, which lets the viewport's height go down again.
+    pub(super) fn note_size(&mut self, size: Size) -> bool {
+        let resized = self.size.replace(size).is_some_and(|last| last != size);
+        if resized {
+            self.floor = 0;
+        }
+        resized
+    }
+
+    /// Where in `cells`, the transcript, the tail begins: its first entry,
+    /// or the one its first entry is the rest of. An entry the transcript
+    /// no longer holds (a stream's rows it consolidated, a session's before
+    /// another was opened) is not counted.
+    pub(super) fn first_unwritten(&self, cells: &[Arc<dyn HistoryCell>]) -> usize {
+        self.cells
+            .iter()
+            .filter_map(|cell| {
+                let origin = cell
+                    .as_any()
+                    .downcast_ref::<Remainder>()
+                    .map_or(cell, |rest| &rest.origin);
+                cells.iter().rposition(|other| Arc::ptr_eq(other, origin))
+            })
+            .min()
+            .unwrap_or(cells.len())
+    }
+
+    /// The tail again as `cells`, after the screen was cleared and the
+    /// scrollback written anew (`written`: with rows), what it showed in
+    /// part shown whole, its viewport free to be as short as it needs. What
+    /// was to leave whatever the limit still does: what precedes your last
+    /// message.
+    pub(super) fn restart(&mut self, cells: &[Arc<dyn HistoryCell>], written: bool) {
+        if self.flush > 0 {
+            self.flush = cells
+                .iter()
+                .rposition(|cell| cell.as_any().is::<UserHistoryCell>())
+                .unwrap_or(cells.len());
+        }
+        self.live
+            .retain(|live| cells.iter().any(|cell| Arc::ptr_eq(cell, live)));
+        self.cells = cells.to_vec();
+        self.written = written;
+        self.floor = 0;
+    }
+
     pub(super) fn cells(&self) -> &[Arc<dyn HistoryCell>] {
         &self.cells
     }
@@ -117,7 +167,11 @@ impl Tail {
             if !flushing && !first.control && excess < first.rows {
                 let rest = written.split_off(excess);
                 lines.extend(written);
-                self.cells[0] = Arc::new(Remainder(rest));
+                let origin = match self.cells[0].as_any().downcast_ref::<Remainder>() {
+                    Some(remainder) => Arc::clone(&remainder.origin),
+                    None => Arc::clone(&self.cells[0]),
+                };
+                self.cells[0] = Arc::new(Remainder { rows: rest, origin });
                 entries[0].rows -= excess;
                 break;
             }
@@ -139,17 +193,20 @@ impl Tail {
 }
 
 /// The rows of an entry the tail wrote in part that it still shows, laid
-/// out as they were.
+/// out as they were, and the entry, which a rewrite shows whole again.
 #[derive(Debug)]
-struct Remainder(Vec<Line<'static>>);
+struct Remainder {
+    rows: Vec<Line<'static>>,
+    origin: Arc<dyn HistoryCell>,
+}
 
 impl HistoryCell for Remainder {
     fn display_lines(&self, _width: u16) -> Vec<Line<'static>> {
-        self.0.clone()
+        self.rows.clone()
     }
 
     fn raw_lines(&self) -> Vec<Line<'static>> {
-        plain_lines(self.0.clone())
+        plain_lines(self.rows.clone())
     }
 
     fn is_stream_continuation(&self) -> bool {
@@ -173,15 +230,7 @@ impl App {
         tui: &mut Tui<B>,
     ) -> io::Result<()> {
         let size = tui.terminal.size()?;
-        if self
-            .tail
-            .size
-            .replace(size)
-            .is_some_and(|last| last != size)
-        {
-            self.tail.flush_all();
-            self.tail.floor = 0;
-        }
+        self.reflow_scrollback_if_due(tui, size)?;
         let chat_height = self.chat_widget.desired_height(size.width);
         let limit = tail_limit(size.height, chat_height);
         let (lines, entries) = self

@@ -26,6 +26,7 @@ mod history;
 mod input;
 mod layout;
 mod position;
+mod rewrite;
 mod search;
 mod select_mode;
 mod selection;
@@ -97,6 +98,10 @@ pub(crate) struct TranscriptView {
     /// The first entry is separated from what is above the view too: the
     /// lines Scrollback wrote above its tail.
     leading_separator: bool,
+    /// The view lays out Scrollback's tail, whose rows are written into the
+    /// terminal's scrollback as they are shown, rather than entries it
+    /// lays out again.
+    scrollback_tail: bool,
 }
 
 impl Default for TranscriptView {
@@ -122,6 +127,7 @@ impl Default for TranscriptView {
             disclosure: disclosure::Disclosure::default(),
             highlight: None,
             leading_separator: false,
+            scrollback_tail: false,
         }
     }
 }

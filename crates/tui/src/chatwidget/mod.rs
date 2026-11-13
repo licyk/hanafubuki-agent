@@ -455,6 +455,11 @@ impl ChatWidget {
         }
     }
 
+    /// Whether an answer or a plan is streaming.
+    pub(crate) fn has_active_stream(&self) -> bool {
+        self.stream_controller.is_some() || self.plan_stream_controller.is_some()
+    }
+
     /// Whether a thinking or a tool call is still live, so its timer and
     /// spinner are drawn again.
     pub(crate) fn has_live_entries(&self) -> bool {

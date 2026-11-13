@@ -40,6 +40,16 @@ impl VT100Backend {
     pub fn vt100(&self) -> &vt100::Parser {
         self.crossterm_backend.writer()
     }
+
+    /// The window resized, its screen cleared (the cursor left where it
+    /// is): vt100 cuts a wide character at the new edge and then panics on
+    /// it, where a real terminal reflows or cuts its rows. What the app
+    /// draws after a resize is tested, not the terminal's own reflow.
+    pub fn resize(&mut self, width: u16, height: u16) {
+        let parser = self.crossterm_backend.writer_mut();
+        parser.process(b"\x1b[2J");
+        parser.screen_mut().set_size(height, width);
+    }
 }
 
 impl Write for VT100Backend {

@@ -10,19 +10,23 @@
 //! viewport and are written into the scrollback above it as they leave the
 //! tail (`scrollback`); while an overlay (the transcript, `/diff`, the
 //! resume picker) holds the alternate screen, it takes the keys and the
-//! tail waits. In owned mode the app holds the alternate screen for
-//! the whole run and draws the cells itself (`owned`), the overlays over
-//! it. Esc twice on an empty composer browses the prompts to edit an
+//! tail waits; after a resize, what was written is written again for the
+//! new width (`resize_reflow`). In owned mode the app holds the alternate
+//! screen for the whole run and draws the cells itself (`owned`), the
+//! overlays over it. A stream's rows give way to the cell of its Markdown
+//! when it ends (`message_consolidation`). Esc twice on an empty composer browses the prompts to edit an
 //! earlier one (`backtrack`).
 
 mod backtrack;
 mod external_editor;
 mod history_pages;
 mod keys;
+mod message_consolidation;
 mod owned;
 mod paste_image;
 mod preferences;
 mod requests;
+mod resize_reflow;
 mod scrollback;
 mod workspace;
 
@@ -89,6 +93,8 @@ pub(crate) struct App {
     transcript_view: TranscriptView,
     /// Terminal mode: the entries not written into the scrollback yet.
     tail: scrollback::Tail,
+    /// Terminal mode: the scrollback's rewrite after a resize.
+    reflow: resize_reflow::TranscriptReflow,
     tail_mouse: scrollback::TailMouse,
     render_mode: HistoryRenderMode,
     /// Where the session's unread earlier transcript begins, which the
@@ -141,6 +147,7 @@ impl App {
             mode,
             transcript_view: new_view(render_mode, TranscriptHistoryState::Complete),
             tail: scrollback::Tail::default(),
+            reflow: resize_reflow::TranscriptReflow::default(),
             tail_mouse: scrollback::TailMouse::default(),
             render_mode,
             older_transcript: None,
@@ -248,6 +255,7 @@ impl App {
                 self.tail.complete(&cell);
                 self.schedule_frame(Instant::now());
             }
+            AppEvent::ConsolidateStream(consolidation) => self.consolidate_stream(consolidation),
             AppEvent::StartFileSearch(query) => self.file_search.on_user_query(query),
             AppEvent::FileSearchResult { query, matches } => {
                 self.chat_widget.apply_file_search_result(query, matches)

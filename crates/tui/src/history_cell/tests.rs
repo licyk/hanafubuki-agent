@@ -3,6 +3,7 @@
 use hanafubuki_agent::AgentTaskPlanSnapshot;
 
 use super::*;
+use crate::user_message::UserMessage;
 
 fn render_lines(lines: &[Line<'static>]) -> Vec<String> {
     lines

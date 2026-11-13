@@ -13,7 +13,8 @@ use ratatui::text::Line;
 use super::*;
 use crate::agent_bridge::{TurnEnd, TurnUpdate};
 use crate::history_cell::{
-    new_info_event, new_tool_call, new_user_prompt, AgentMessageCell, LiveCell, ToolCallCell,
+    new_info_event, new_tool_call, new_user_prompt, AgentMessageCell, LiveCell, StreamId,
+    ToolCallCell,
 };
 
 impl Harness {
@@ -179,7 +180,11 @@ fn the_mouse_is_let_go_at_the_wheel_and_taken_again_at_the_next_key() {
     harness.send(AppEvent::Mouse(wheel));
     assert!(!harness.tui.captures_inline_mouse());
     // An answer's next lines are not a new entry.
-    let chunk = AgentMessageCell::new(vec![Line::from("more of the answer")], false);
+    let chunk = AgentMessageCell::new(
+        vec![Line::from("more of the answer")],
+        false,
+        StreamId::next(),
+    );
     harness.send(AppEvent::InsertHistoryCell(Box::new(chunk)));
     assert!(!harness.tui.captures_inline_mouse());
     harness.key(KeyCode::Right);
@@ -269,22 +274,4 @@ fn at_exit_the_tail_is_written_whole_running_calls_too() {
     let viewport = harness.viewport().y;
     assert!(harness.find("Running ls").0 < viewport);
     assert!(harness.find("last words").0 < viewport);
-}
-
-#[test]
-fn a_resize_writes_the_tail() {
-    let mut harness = Harness::start(Vec::new());
-    harness.pump_until_screen_shows("fixture-model");
-    harness
-        .app
-        .chat_widget
-        .handle_turn_update(TurnUpdate::Started);
-    harness.note("before the resize");
-    assert!(!harness.app.tail.cells().is_empty());
-    let mut terminal = Terminal::with_options(VT100Backend::new(WIDTH - 20, HEIGHT)).unwrap();
-    terminal.set_viewport_area(ratatui::layout::Rect::new(0, HEIGHT - 1, WIDTH - 20, 1));
-    harness.tui = Tui::new(terminal);
-    harness.app.draw(&mut harness.tui).unwrap();
-    assert!(harness.app.tail.cells().is_empty());
-    assert!(harness.find("before the resize").0 < harness.viewport().y);
 }

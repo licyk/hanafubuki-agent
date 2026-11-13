@@ -514,3 +514,58 @@ fn a_command_the_turns_end_overtakes_stops_its_clock_and_keeps_its_output() {
         assert_eq!(header.spans[0].style.fg, Some(ratatui::style::Color::Red));
     }
 }
+
+/// A replayed answer and plan are the cells a live stream ends with: their
+/// Markdown, laid out for the width they are shown at.
+#[test]
+fn a_replayed_answer_and_plan_keep_their_markdown() {
+    let (chat, _events) = chat();
+    let cells = chat.replayed_cells(vec![
+        ReplayedItem::Assistant("Two files **changed**.".to_string()),
+        ReplayedItem::Plan("1. Read\n2. Write".to_string()),
+        ReplayedItem::Assistant("  \n".to_string()),
+    ]);
+    assert_eq!(cells.len(), 2);
+    let answer = cells[0].as_ref() as &dyn HistoryCell;
+    assert!(answer.as_any().is::<history_cell::AgentMarkdownCell>());
+    assert_eq!(
+        answer.copy_source().as_deref(),
+        Some("Two files **changed**.")
+    );
+    let plan = cells[1].as_ref() as &dyn HistoryCell;
+    assert!(plan.as_any().is::<history_cell::ProposedPlanCell>());
+    assert_eq!(cell_lines(answer, false), "• Two files changed.");
+}
+
+/// A streamed answer's cells, and then the cell of its Markdown, which the
+/// app puts in their place; an answer cut by an entry is two.
+#[test]
+fn a_finished_stream_hands_over_the_cell_of_its_markdown() {
+    let (mut chat, events) = chat();
+    chat.handle_turn_update(TurnUpdate::Started);
+    chat.handle_turn_update(TurnUpdate::MessageDelta("First **part**.\n".to_string()));
+    tool_started(&mut chat, "call-1", "read_file", None);
+    chat.handle_turn_update(TurnUpdate::MessageDelta("Second part.".to_string()));
+    chat.handle_turn_update(TurnUpdate::MessageCompleted);
+    let mut streams = Vec::new();
+    let mut consolidated = Vec::new();
+    while let Ok(event) = events.try_recv() {
+        match event {
+            AppEvent::InsertHistoryCell(cell) => streams.extend(cell.stream_id()),
+            AppEvent::ConsolidateStream(consolidation) => consolidated.push((
+                consolidation.stream,
+                consolidation.cell.copy_source().unwrap_or_default(),
+            )),
+            _ => {}
+        }
+    }
+    streams.dedup();
+    assert_eq!(streams.len(), 2);
+    assert_eq!(
+        consolidated,
+        vec![
+            (streams[0], "First **part**.\n".to_string()),
+            (streams[1], "Second part.".to_string()),
+        ]
+    );
+}

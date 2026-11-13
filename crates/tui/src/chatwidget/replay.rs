@@ -10,7 +10,6 @@ use super::ChatWidget;
 use crate::agent_bridge::{HooksCall, OpenedSession, ReplayedItem};
 use crate::app_event::{AgentCommand, AppEvent, Op};
 use crate::history_cell::{self, explores, HistoryCell, ToolCallCell};
-use crate::streaming::controller::{PlanStreamController, StreamController};
 use crate::user_message::image_rows;
 
 impl ChatWidget {
@@ -79,7 +78,6 @@ impl ChatWidget {
     /// The cells of replayed transcript items, oldest first. Consecutive
     /// exploring calls share one, as they did live.
     pub(crate) fn replayed_cells(&self, items: Vec<ReplayedItem>) -> Vec<Box<dyn HistoryCell>> {
-        let width = self.last_rendered_width.get();
         let mut cells: Vec<Box<dyn HistoryCell>> = Vec::new();
         let mut exploration: Option<ToolCallCell> = None;
         for item in items {
@@ -104,22 +102,18 @@ impl ChatWidget {
                     duration_millis,
                     truncated,
                 ))),
+                // An answer and a plan as they are once their stream ended.
                 ReplayedItem::Assistant(text) => {
-                    let mut controller = StreamController::new(
-                        width.map(|w| w.saturating_sub(2)),
-                        Some(self.directory.clone()),
-                    );
-                    controller.push(&text);
-                    cells.extend(controller.finalize());
+                    if !text.trim().is_empty() {
+                        cells.push(Box::new(history_cell::AgentMarkdownCell::new(
+                            text,
+                            self.directory.clone(),
+                        )));
+                    }
                 }
-                ReplayedItem::Plan(text) => {
-                    let mut controller = PlanStreamController::new(
-                        width.map(|w| w.saturating_sub(4)),
-                        Some(self.directory.clone()),
-                    );
-                    controller.push(&text);
-                    cells.extend(controller.finalize());
-                }
+                ReplayedItem::Plan(text) => cells.push(Box::new(
+                    history_cell::ProposedPlanCell::new(text, self.directory.clone()),
+                )),
                 ReplayedItem::Tool {
                     call_id,
                     name,

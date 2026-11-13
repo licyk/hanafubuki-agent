@@ -38,6 +38,7 @@ const PLAIN: CellPresentation = CellPresentation {
     expanded: false,
     disclosure: false,
     detailed: false,
+    retained: false,
 };
 
 fn get(cache: &mut LayoutCache, cell: &Arc<dyn HistoryCell>, width: u16) -> Arc<TextLayout> {

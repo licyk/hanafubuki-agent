@@ -38,4 +38,31 @@ impl StreamState {
     pub(crate) fn enqueue(&mut self, lines: Vec<Line<'static>>) {
         self.queued_lines.extend(lines);
     }
+
+    /// Pushes a delta; when it holds a newline, the lines it completed are
+    /// queued. `true` when there are new lines to commit.
+    pub(crate) fn push(&mut self, delta: &str) -> bool {
+        if !delta.is_empty() {
+            self.has_seen_delta = true;
+        }
+        self.collector.push_delta(delta);
+        if delta.contains('\n') {
+            let newly_completed = self.collector.commit_complete_lines();
+            if !newly_completed.is_empty() {
+                self.enqueue(newly_completed);
+                return true;
+            }
+        }
+        false
+    }
+
+    /// The stream's end: every row not committed yet, queued or not; the
+    /// state is cleared for the next stream.
+    pub(crate) fn finalize(&mut self) -> Vec<Line<'static>> {
+        let remaining = self.collector.finalize_and_drain();
+        self.enqueue(remaining);
+        let lines = self.drain_all();
+        self.clear();
+        lines
+    }
 }

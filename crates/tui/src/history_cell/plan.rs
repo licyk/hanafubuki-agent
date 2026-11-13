@@ -1,16 +1,21 @@
 // Modified from OpenAI Codex rust-v0.93.0 (Apache-2.0).
+// Modified from OpenAI Codex 57a808a392 (Apache-2.0).
 
-//! The cells of plan mode's proposed plan and of the task checklist.
+//! The cells of plan mode's proposed plan (its streamed rows, then its
+//! Markdown) and of the task checklist.
 
 use hanafubuki_agent::{AgentTaskPlanSnapshot, AgentTaskPlanStep, AgentTaskPlanStepStatus};
 use ratatui::style::{Style, Styled, Stylize};
 use ratatui::text::Line;
 use unicode_width::UnicodeWidthStr;
 
+use super::markdown_cache::MarkdownRenderCache;
 use super::{
-    next_activity_id, plain_lines, raw_lines_from_source, ActivityDisclosure, HistoryCell,
+    next_activity_id, plain_lines, raw_lines_from_source, ActivityDisclosure, HistoryCell, StreamId,
 };
+use crate::markdown_render::ListSpacing;
 use crate::render::line_utils::prefix_lines;
+use crate::style::proposed_plan_style;
 
 /// The steps a collapsed checklist shows.
 const PLAN_PREVIEW_STEPS: usize = 3;
@@ -28,17 +33,22 @@ pub(crate) fn new_plan_update(snapshot: &AgentTaskPlanSnapshot) -> PlanUpdateCel
 pub(crate) fn new_proposed_plan_stream(
     lines: Vec<Line<'static>>,
     is_stream_continuation: bool,
+    stream: StreamId,
 ) -> ProposedPlanStreamCell {
     ProposedPlanStreamCell {
         lines,
         is_stream_continuation,
+        stream,
     }
 }
 
+/// Rows of a streaming proposed plan, rendered at the width its stream
+/// started at.
 #[derive(Debug)]
 pub(crate) struct ProposedPlanStreamCell {
     lines: Vec<Line<'static>>,
     is_stream_continuation: bool,
+    stream: StreamId,
 }
 
 impl HistoryCell for ProposedPlanStreamCell {
@@ -52,6 +62,71 @@ impl HistoryCell for ProposedPlanStreamCell {
 
     fn is_stream_continuation(&self) -> bool {
         self.is_stream_continuation
+    }
+
+    fn stream_id(&self) -> Option<StreamId> {
+        Some(self.stream)
+    }
+}
+
+/// A finished proposed plan: its Markdown, rendered for the width it is
+/// shown at, in the plan's block as it streamed.
+#[derive(Debug)]
+pub(crate) struct ProposedPlanCell {
+    source: String,
+    cwd: String,
+    rendered: MarkdownRenderCache,
+}
+
+impl ProposedPlanCell {
+    pub(crate) fn new(source: String, cwd: String) -> Self {
+        Self {
+            source,
+            cwd,
+            rendered: MarkdownRenderCache::default(),
+        }
+    }
+
+    fn render(&self, width: u16, list_spacing: ListSpacing) -> Vec<Line<'static>> {
+        self.rendered.render(width, list_spacing, || {
+            let mut body = vec![Line::from(" ")];
+            body.extend(crate::markdown::render_markdown_with_list_spacing(
+                &self.source,
+                Some(usize::from(width.saturating_sub(4)).max(1)),
+                Some(&self.cwd),
+                list_spacing,
+            ));
+            body.push(Line::from(" "));
+            let style = proposed_plan_style();
+            let mut lines = vec![
+                Line::from(vec!["• ".dim(), "Proposed Plan".bold()]),
+                Line::from(" "),
+            ];
+            lines.extend(
+                prefix_lines(body, "  ".into(), "  ".into())
+                    .into_iter()
+                    .map(|line| line.style(style)),
+            );
+            lines
+        })
+    }
+}
+
+impl HistoryCell for ProposedPlanCell {
+    fn display_lines(&self, width: u16) -> Vec<Line<'static>> {
+        self.render(width, ListSpacing::AfterMultiline)
+    }
+
+    fn retained_lines(&self, width: u16, _detailed: bool) -> Vec<Line<'static>> {
+        self.render(width, ListSpacing::Uniform)
+    }
+
+    fn raw_lines(&self) -> Vec<Line<'static>> {
+        raw_lines_from_source(&self.source)
+    }
+
+    fn copy_source(&self) -> Option<String> {
+        Some(self.source.clone())
     }
 }
 

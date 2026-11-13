@@ -19,7 +19,7 @@ use std::sync::Arc;
 use ratatui::crossterm::event::{KeyEventKind, MouseEvent};
 
 use super::*;
-use crate::history_cell::{HistoryCell, HistoryRenderMode};
+use crate::history_cell::{splice_stream, stream_span, HistoryCell, HistoryRenderMode, StreamId};
 use crate::transcript_view::{TranscriptView, ViewAction};
 
 const TITLE: &str = "/ T R A N S C R I P T";
@@ -54,6 +54,14 @@ impl TranscriptOverlay {
 
     pub(crate) fn insert_cell(&mut self, cell: Arc<dyn HistoryCell>) {
         self.cells.push(cell);
+    }
+
+    /// `stream`'s cells give way to `cell`, the one of its Markdown.
+    pub(crate) fn consolidate(&mut self, stream: StreamId, cell: Arc<dyn HistoryCell>) {
+        if let Some(span) = stream_span(&self.cells, stream) {
+            self.view.replace_entries(&self.cells, span.clone(), &cell);
+            splice_stream(&mut self.cells, span, stream, cell);
+        }
     }
 
     pub(crate) fn set_render_mode(&mut self, mode: HistoryRenderMode) {

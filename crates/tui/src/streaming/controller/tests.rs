@@ -18,7 +18,7 @@ fn lines_to_plain_strings(lines: &[ratatui::text::Line<'_>]) -> Vec<String> {
 
 #[test]
 fn controller_loose_vs_tight_with_commit_ticks_matches_full() {
-    let mut ctrl = StreamController::new(None, None);
+    let mut ctrl = StreamController::new(None, String::new());
     let mut lines = Vec::new();
 
     // Exact deltas from the session log (section: Loose vs. tight list items)
@@ -103,7 +103,7 @@ fn controller_loose_vs_tight_with_commit_ticks_matches_full() {
         }
     }
     // Finalize and flush remaining lines now.
-    if let Some(cell) = ctrl.finalize() {
+    if let Some(cell) = ctrl.finalize().cell {
         lines.extend(cell.display_lines(u16::MAX));
     }
 
@@ -139,4 +139,65 @@ fn controller_loose_vs_tight_with_commit_ticks_matches_full() {
         streamed, expected,
         "expected exact rendered lines for loose/tight section"
     );
+}
+
+/// The rows a stream at `width` commits, its cells shown at `width`, and
+/// what its end gives.
+fn stream_at(source: &str, width: u16, plan: bool) -> (Vec<String>, Finalized) {
+    let mut lines = Vec::new();
+    let finalized = if plan {
+        let mut ctrl =
+            PlanStreamController::new(Some(usize::from(width) - 4), "/project".to_string());
+        for chunk in source.split_inclusive('\n') {
+            ctrl.push(chunk);
+            while let (Some(cell), _) = ctrl.on_commit_tick() {
+                lines.extend(cell.display_lines(width));
+            }
+        }
+        ctrl.finalize()
+    } else {
+        let mut ctrl = StreamController::new(Some(usize::from(width) - 2), "/project".to_string());
+        for chunk in source.split_inclusive('\n') {
+            ctrl.push(chunk);
+            while let (Some(cell), _) = ctrl.on_commit_tick() {
+                lines.extend(cell.display_lines(width));
+            }
+        }
+        ctrl.finalize()
+    };
+    if let Some(cell) = &finalized.cell {
+        lines.extend(cell.display_lines(width));
+    }
+    (lines_to_plain_strings(&lines), finalized)
+}
+
+const TABLE: &str = "Results:\n\n| Case | Result | Notes |\n|---|---|---|\n| first | passed | the parser reads the whole input |\n| second | failed | a long note that wraps in a narrow column |\n\n- [x] Built\n- [ ] Released\n";
+
+/// The consolidated cell shows the stream's rows at the width the stream
+/// ran at, so nothing moves when it takes their place; at another width it
+/// is laid out for that width, as a stream at that width would have been.
+#[test]
+fn a_consolidated_stream_keeps_its_rows_and_lays_out_again_at_another_width() {
+    for plan in [false, true] {
+        for width in [100, 40, 24] {
+            let (streamed, finalized) = stream_at(TABLE, width, plan);
+            let consolidation = finalized.consolidation.expect("a consolidation");
+            let consolidated = lines_to_plain_strings(&consolidation.cell.display_lines(width));
+            assert_eq!(consolidated, streamed, "plan {plan}, width {width}");
+            for other in [100, 40, 24] {
+                let (fresh, _) = stream_at(TABLE, other, plan);
+                let relaid = lines_to_plain_strings(&consolidation.cell.display_lines(other));
+                assert_eq!(relaid, fresh, "plan {plan}, {width} -> {other}");
+            }
+        }
+    }
+}
+
+#[test]
+fn an_answer_that_committed_nothing_is_not_consolidated() {
+    let mut ctrl = StreamController::new(Some(78), "/project".to_string());
+    ctrl.push("");
+    let finalized = ctrl.finalize();
+    assert!(finalized.cell.is_none());
+    assert!(finalized.consolidation.is_none());
 }

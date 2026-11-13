@@ -2,8 +2,9 @@
 
 //! `tui.rendering`, read by every Markdown render: one process-wide value,
 //! set at launch and when the settings change. What was rendered before a
-//! change keeps its look. Tests read a value of their own thread, so
-//! parallel tests do not change each other's rendering.
+//! change keeps its look until it is laid out for another width (an answer
+//! or a plan after a resize), as in Codex. Tests read a value of their own
+//! thread, so parallel tests do not change each other's rendering.
 
 use hanafubuki_agent::AgentTuiRendering;
 

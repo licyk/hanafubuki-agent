@@ -653,6 +653,10 @@ path = "crates/tui/src/app/tests/scrollback.rs"
 reason = "Scrollback's tail on an emulated terminal, written with it."
 
 [[original]]
+path = "crates/tui/src/app/tests/resize.rs"
+reason = "A resize on an emulated terminal in both presentations, compared with the same conversation at the new width, written for the reflow."
+
+[[original]]
 path = "crates/tui/src/app/tests/thinking.rs"
 reason = "Thinking entries on an emulated terminal in both presentations, written for the Agent's timeline."
 

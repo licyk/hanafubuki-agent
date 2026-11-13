@@ -287,6 +287,7 @@ impl App {
             | AppEvent::InsertHistoryCell(_)
             | AppEvent::InsertLiveEntry(_)
             | AppEvent::LiveEntryCompleted(_)
+            | AppEvent::ConsolidateStream(_)
             | AppEvent::CommandStep(_)
             | AppEvent::Command(_)
             | AppEvent::RecentMessagesRead(_)

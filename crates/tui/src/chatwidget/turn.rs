@@ -14,7 +14,7 @@ use crate::app_event::AppEvent;
 use crate::history_cell::{self, explores, LiveCell, ThinkingCell, ToolCallCell};
 
 use crate::status_indicator_widget::StatusIndicatorWidget;
-use crate::streaming::controller::{PlanStreamController, StreamController};
+use crate::streaming::controller::{Finalized, PlanStreamController, StreamController};
 
 const WORKING: &str = "Working";
 
@@ -52,15 +52,7 @@ impl ChatWidget {
             TurnUpdate::MessageDelta(delta) => self.on_message_delta(delta),
             TurnUpdate::MessageCompleted => self.finish_message(),
             TurnUpdate::PlanDelta(delta) => self.on_plan_delta(delta),
-            TurnUpdate::PlanCompleted => {
-                if let Some(cell) = self
-                    .plan_stream_controller
-                    .take()
-                    .and_then(|mut controller| controller.finalize())
-                {
-                    self.add_boxed_history(cell);
-                }
-            }
+            TurnUpdate::PlanCompleted => self.finish_plan(),
             TurnUpdate::ToolStarted {
                 call_id,
                 name,
@@ -201,7 +193,7 @@ impl ChatWidget {
             self.needs_final_message_separator = false;
             self.stream_controller = Some(StreamController::new(
                 self.last_rendered_width.get().map(|w| w.saturating_sub(2)),
-                Some(self.directory.clone()),
+                self.directory.clone(),
             ));
         }
         if let Some(controller) = self.stream_controller.as_mut() {
@@ -211,14 +203,28 @@ impl ChatWidget {
         }
     }
 
-    /// Commits what is left of the streaming message at once.
+    /// Commits what is left of the streaming message at once; its cells
+    /// then give way to the one of its Markdown.
     fn finish_message(&mut self) {
-        if let Some(cell) = self
-            .stream_controller
-            .take()
-            .and_then(|mut controller| controller.finalize())
-        {
+        if let Some(mut controller) = self.stream_controller.take() {
+            self.add_finalized(controller.finalize());
+        }
+    }
+
+    /// [`Self::finish_message`] for the proposed plan.
+    fn finish_plan(&mut self) {
+        if let Some(mut controller) = self.plan_stream_controller.take() {
+            self.add_finalized(controller.finalize());
+        }
+    }
+
+    fn add_finalized(&mut self, finalized: Finalized) {
+        if let Some(cell) = finalized.cell {
             self.add_boxed_history(cell);
+        }
+        if let Some(consolidation) = finalized.consolidation {
+            self.app_event_tx
+                .send(AppEvent::ConsolidateStream(consolidation));
         }
     }
 
@@ -228,7 +234,7 @@ impl ChatWidget {
         let directory = &self.directory;
         let controller = self
             .plan_stream_controller
-            .get_or_insert_with(|| PlanStreamController::new(width, Some(directory.clone())));
+            .get_or_insert_with(|| PlanStreamController::new(width, directory.clone()));
         if controller.push(&delta) {
             self.app_event_tx.send(AppEvent::StartCommitAnimation);
         }
@@ -336,13 +342,7 @@ impl ChatWidget {
             cell.update(|cell| cell.complete(None));
             self.complete_live_entry(cell);
         }
-        if let Some(cell) = self
-            .plan_stream_controller
-            .take()
-            .and_then(|mut controller| controller.finalize())
-        {
-            self.add_boxed_history(cell);
-        }
+        self.finish_plan();
         // A call the turn's end overtook is written as it stood.
         let mut ended: Vec<Arc<LiveCell<ToolCallCell>>> =
             self.exploration.take().into_iter().collect();

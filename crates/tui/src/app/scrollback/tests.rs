@@ -9,7 +9,8 @@ use ratatui::text::Line;
 
 use super::*;
 use crate::history_cell::{
-    new_info_event, new_tool_call, new_user_prompt, AgentMessageCell, LiveCell, ToolCallCell,
+    new_info_event, new_tool_call, new_user_prompt, AgentMessageCell, LiveCell, StreamId,
+    ToolCallCell,
 };
 use crate::transcript_view::TranscriptView;
 
@@ -38,6 +39,7 @@ fn answer(lines: impl IntoIterator<Item = String>, first: bool) -> Arc<dyn Histo
     Arc::new(AgentMessageCell::new(
         lines.into_iter().map(Line::from).collect(),
         first,
+        StreamId::next(),
     ))
 }
 

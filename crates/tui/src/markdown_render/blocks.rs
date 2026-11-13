@@ -7,7 +7,7 @@
 use pulldown_cmark::{CowStr, HeadingLevel};
 use ratatui::text::{Line, Span};
 
-use super::{IndentContext, Writer};
+use super::{IndentContext, ListSpacing, Writer};
 use crate::render::highlight::highlight_code_to_lines;
 
 impl Writer<'_> {
@@ -221,7 +221,16 @@ impl Writer<'_> {
 
     pub(super) fn start_codeblock(&mut self, lang: Option<String>, indent: Option<Span<'static>>) {
         self.flush_current_line();
-        if !self.text.lines.is_empty() {
+        // Under uniform spacing, a code block that starts an item follows
+        // its marker without a blank line.
+        let first_item_block = self.pending_marker_line
+            && self
+                .indent_stack
+                .last()
+                .is_some_and(|context| context.is_list);
+        if !self.text.lines.is_empty()
+            && (self.list_spacing == ListSpacing::AfterMultiline || !first_item_block)
+        {
             self.push_blank_line();
         }
         self.in_code_block = true;
