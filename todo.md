@@ -2148,6 +2148,11 @@ and any module-size exception.
         `@mdx-js/mdx` 3.1.1; `VITE_BASE_PATH=/hanafubuki-agent/ bun run
         site:build` not run locally (port 3000 held by another project's
         server); CI's Site run covers it.
+      - CI on cb7d321:
+        https://github.com/licyk/hanafubuki-agent/actions/runs/43516948750,
+        Linux, Windows and macOS passed at the first attempt. Site on
+        cb7d321: .../runs/43516948501, passed, its build and deploy
+        included.
       - For M3: the stream's width is fixed at its start (a resize mid-stream
         is repaired only at its end); `StreamState::finalize` and the
         consolidation are where M3's controller ends a stream; `ListSpacing`
