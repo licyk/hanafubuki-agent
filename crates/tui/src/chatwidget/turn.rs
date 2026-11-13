@@ -201,6 +201,7 @@ impl ChatWidget {
             self.needs_final_message_separator = false;
             self.stream_controller = Some(StreamController::new(
                 self.last_rendered_width.get().map(|w| w.saturating_sub(2)),
+                Some(self.directory.clone()),
             ));
         }
         if let Some(controller) = self.stream_controller.as_mut() {
@@ -224,9 +225,10 @@ impl ChatWidget {
     fn on_plan_delta(&mut self, delta: String) {
         self.restore_retry_status_header();
         let width = self.last_rendered_width.get().map(|w| w.saturating_sub(4));
+        let directory = &self.directory;
         let controller = self
             .plan_stream_controller
-            .get_or_insert_with(|| PlanStreamController::new(width));
+            .get_or_insert_with(|| PlanStreamController::new(width, Some(directory.clone())));
         if controller.push(&delta) {
             self.app_event_tx.send(AppEvent::StartCommitAnimation);
         }

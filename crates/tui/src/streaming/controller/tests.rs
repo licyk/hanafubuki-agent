@@ -1,4 +1,5 @@
 // Modified from OpenAI Codex rust-v0.93.0 (Apache-2.0).
+// Modified from OpenAI Codex 57a808a392 (Apache-2.0).
 
 use super::*;
 
@@ -17,7 +18,7 @@ fn lines_to_plain_strings(lines: &[ratatui::text::Line<'_>]) -> Vec<String> {
 
 #[test]
 fn controller_loose_vs_tight_with_commit_ticks_matches_full() {
-    let mut ctrl = StreamController::new(None);
+    let mut ctrl = StreamController::new(None, None);
     let mut lines = Vec::new();
 
     // Exact deltas from the session log (section: Loose vs. tight list items)
@@ -115,7 +116,7 @@ fn controller_loose_vs_tight_with_commit_ticks_matches_full() {
     // Full render of the same source
     let source: String = deltas.iter().copied().collect();
     let mut rendered: Vec<ratatui::text::Line<'static>> = Vec::new();
-    crate::markdown::append_markdown(&source, None, &mut rendered);
+    crate::markdown::append_markdown_agent(&source, None, None, &mut rendered);
     let rendered_strs = lines_to_plain_strings(&rendered);
 
     assert_eq!(streamed, rendered_strs);
@@ -129,9 +130,10 @@ fn controller_loose_vs_tight_with_commit_ticks_matches_full() {
         "3. Loose item with its own paragraph.".to_string(),
         "".to_string(),
         "   This paragraph belongs to the same list item.".to_string(),
+        "".to_string(),
         "4. Second loose item with a nested list after a blank line.".to_string(),
-        "    - Nested bullet under a loose item".to_string(),
-        "    - Another nested bullet".to_string(),
+        "    • Nested bullet under a loose item".to_string(),
+        "    • Another nested bullet".to_string(),
     ];
     assert_eq!(
         streamed, expected,

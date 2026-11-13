@@ -12,7 +12,24 @@ use insta::assert_snapshot;
 use crate::markdown_render::render_markdown_text_with_width;
 
 mod blockquotes;
+mod links;
 mod lists;
+mod preferences;
+mod tables;
+mod task_lists;
+
+/// Each line's text, styles left out.
+fn plain_lines(text: &Text<'_>) -> Vec<String> {
+    text.lines
+        .iter()
+        .map(|line| {
+            line.spans
+                .iter()
+                .map(|span| span.content.as_ref())
+                .collect::<String>()
+        })
+        .collect()
+}
 
 #[test]
 fn empty() {
@@ -108,7 +125,7 @@ fn strong_emphasis() {
 fn link() {
     let text = render_markdown_text("[Link](https://example.com)");
     let expected = Text::from(Line::from_iter([
-        "Link".into(),
+        "Link".cyan().underlined(),
         " (".into(),
         "https://example.com".cyan().underlined(),
         ")".into(),
@@ -343,7 +360,7 @@ fn html_continuation_paragraph_in_unordered_item_indented() {
     let md = "- Item\n\n  <em>continued</em>\n";
     let text = render_markdown_text(md);
     let expected = Text::from_iter([
-        Line::from_iter(["- ", "Item"]),
+        Line::from_iter(["• ", "Item"]),
         Line::default(),
         Line::from_iter(["  ", "<em>", "continued", "</em>"]),
     ]);
@@ -384,7 +401,7 @@ fn wraps_list_items_preserving_indent() {
     let lines = lines_to_strings(&rendered);
     assert_eq!(
         lines,
-        vec!["- first second".to_string(), "  third fourth".to_string(),]
+        vec!["• first second".to_string(), "  third fourth".to_string(),]
     );
 }
 
@@ -397,10 +414,10 @@ fn wraps_nested_lists() {
     assert_eq!(
         lines,
         vec![
-            "- outer item with".to_string(),
+            "• outer item with".to_string(),
             "  several words to".to_string(),
             "  wrap".to_string(),
-            "    - inner item".to_string(),
+            "    • inner item".to_string(),
             "      that also".to_string(),
             "      needs wrapping".to_string(),
         ]
@@ -446,7 +463,7 @@ fn wraps_blockquotes_inside_lists() {
     assert_eq!(
         lines,
         vec![
-            "- list item".to_string(),
+            "• list item".to_string(),
             "  > block quote inside".to_string(),
             "  > list that wraps".to_string(),
         ]

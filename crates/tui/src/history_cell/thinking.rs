@@ -122,6 +122,7 @@ impl ThinkingCell {
         crate::markdown::append_markdown(
             &self.text,
             Some(usize::from(width.saturating_sub(2)).max(1)),
+            None,
             &mut lines,
         );
         let dim = Style::default().dim();

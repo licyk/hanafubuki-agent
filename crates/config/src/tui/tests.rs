@@ -5,7 +5,7 @@ use serde_json::json;
 
 use crate::{
     AgentAgentsGrouping, AgentAlternateScreen, AgentConfig, AgentScrollbackMouse,
-    AgentTuiPreferences, AgentTuiPreferencesPatch, AgentTuiPreset, ConfigLayers,
+    AgentTuiPreferences, AgentTuiPreferencesPatch, AgentTuiPreset, AgentTuiRendering, ConfigLayers,
     AGENT_SETTINGS_FILE, PROJECT_CONFIG_DIR,
 };
 
@@ -39,6 +39,10 @@ fn missing_preferences_are_the_defaults() {
                 "session-title".to_string(),
                 "project-name".to_string(),
             ],
+            rendering: AgentTuiRendering {
+                tables: true,
+                lists: true,
+            },
             keymap: BTreeMap::new(),
             presets: BTreeMap::new(),
         }
@@ -51,7 +55,8 @@ fn each_key_decodes_on_its_own_and_unknown_keys_are_ignored() {
         "[tui]\nfullscreenTranscript = false\nalternateScreen = \"sometimes\"\n\
          scrollbackMouse = \"off\"\nagentsGrouping = \"model\"\nrawOutput = true\nkeymap = \"later\"\ntheme = \"nord\"\n\
          statusLine = [\"model\", 3]\nstatusLineColors = false\n\
-         terminalTitle = [\"app-name\", \"unknown-item\"]\n",
+         terminalTitle = [\"app-name\", \"unknown-item\"]\n\
+         [tui.rendering]\ntables = false\nlists = \"no\"\nmath = false\n",
     );
     assert_eq!(
         config.tui_preferences().unwrap(),
@@ -67,6 +72,11 @@ fn each_key_decodes_on_its_own_and_unknown_keys_are_ignored() {
             status_line_colors: false,
             // The interface leaves out the ids it does not know.
             terminal_title: vec!["app-name".to_string(), "unknown-item".to_string()],
+            // Not a boolean: the default; `math` is not a setting here.
+            rendering: AgentTuiRendering {
+                tables: false,
+                lists: true,
+            },
             // Not a table: none.
             keymap: BTreeMap::new(),
             presets: BTreeMap::new(),

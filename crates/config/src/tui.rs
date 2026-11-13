@@ -52,6 +52,8 @@ pub struct AgentTuiPreferences {
     /// The items of the terminal's title, in order; empty to leave the
     /// title alone.
     pub terminal_title: Vec<String>,
+    /// How the conversation's Markdown is drawn.
+    pub rendering: AgentTuiRendering,
     /// `keymap.<context>.<action>`: the keys of an action, as the
     /// interface writes them (`ctrl-t`, `ctrl-x [`, `leader p`); empty
     /// unbinds it. A layer's entry replaces the one below it.
@@ -108,8 +110,30 @@ impl Default for AgentTuiPreferences {
             status_line: DEFAULT_STATUS_LINE.map(String::from).to_vec(),
             status_line_colors: true,
             terminal_title: DEFAULT_TERMINAL_TITLE.map(String::from).to_vec(),
+            rendering: AgentTuiRendering::default(),
             keymap: BTreeMap::new(),
             presets: BTreeMap::new(),
+        }
+    }
+}
+
+/// `[tui.rendering]`: the Markdown constructs drawn as the terminal shows
+/// them; one turned off is shown as the model wrote it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct AgentTuiRendering {
+    /// Pipe tables laid out in columns (or as key/value records when too
+    /// wide), tables in a ```` ```md ```` fence included.
+    pub tables: bool,
+    /// `•` bullets and `☐`/`☑` task-list boxes, for `-` and `[ ]`/`[x]`.
+    pub lists: bool,
+}
+
+impl Default for AgentTuiRendering {
+    fn default() -> Self {
+        Self {
+            tables: true,
+            lists: true,
         }
     }
 }
@@ -287,6 +311,14 @@ pub(crate) fn section() -> SettingsSection {
             described(
                 SettingSpec::new("tui.terminalTitle", "Terminal title", items()),
                 "The terminal title's items, in order; none leaves the title alone",
+            ),
+            described(
+                SettingSpec::new("tui.rendering.tables", "Tables", SettingKind::Boolean),
+                "Pipe tables laid out in columns; off, shown as written",
+            ),
+            described(
+                SettingSpec::new("tui.rendering.lists", "List markers", SettingKind::Boolean),
+                "• bullets and ☐/☑ task boxes; off, - and [ ]/[x] as written",
             ),
         ],
     )

@@ -1,5 +1,6 @@
 ---
 source: crates/tui/src/history_cell/thinking/tests.rs
+assertion_line: 57
 expression: "render(&replayed(THOUGHT, 75_000, true).expanded_lines(40))"
 ---
 • Thought · 1m 15s (truncated)
@@ -8,5 +9,5 @@ expression: "render(&replayed(THOUGHT, 75_000, true).expanded_lines(40))"
   The crate needs serde and a tokio
   runtime:
   
-  - check the features
-  - then the lockfile
+  • check the features
+  • then the lockfile

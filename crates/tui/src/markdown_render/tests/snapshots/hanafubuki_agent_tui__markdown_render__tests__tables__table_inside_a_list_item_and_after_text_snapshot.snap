@@ -1,0 +1,21 @@
+---
+source: crates/tui/src/markdown_render/tests/tables.rs
+assertion_line: 298
+expression: "plain_lines(&text).join(\"\\n\")"
+---
+1. Results:
+
+    Case      Result
+   ━━━━━━━━  ━━━━━━━━━━━━━━━━━━━━━━━
+    first     passed
+   ────────  ───────────────────────
+    second    failed with a long
+              explanation
+
+2. Next item
+
+Intro line
+
+ A      B
+━━━━━  ━━━━━
+ 1      2

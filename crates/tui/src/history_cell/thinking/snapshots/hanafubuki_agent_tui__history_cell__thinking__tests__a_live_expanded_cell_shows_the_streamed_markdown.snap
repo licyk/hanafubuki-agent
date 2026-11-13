@@ -1,5 +1,6 @@
 ---
 source: crates/tui/src/history_cell/thinking/tests.rs
+assertion_line: 47
 expression: "render(&lines[1..])"
 ---
   Reading the manifest
@@ -7,5 +8,5 @@ expression: "render(&lines[1..])"
   The crate needs serde and a tokio
   runtime:
   
-  - check the features
-  - then the lockfile
+  • check the features
+  • then the lockfile

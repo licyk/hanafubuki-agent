@@ -100,6 +100,7 @@ pub fn run(
         None => bridge.no_session()?,
     };
     let preferences = bridge.tui_preferences();
+    crate::markdown_render::preferences::set(preferences.rendering);
     let theme_warning = configure_theme(
         preferences.theme.as_deref(),
         Some(runtime.storage_paths().root.join("themes")),

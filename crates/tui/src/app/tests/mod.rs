@@ -842,6 +842,7 @@ mod paste_image;
 mod plugins;
 mod preferences;
 mod queue;
+mod rendering;
 mod scrollback;
 mod session_commands;
 mod settings;

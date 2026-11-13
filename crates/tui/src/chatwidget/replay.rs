@@ -105,13 +105,18 @@ impl ChatWidget {
                     truncated,
                 ))),
                 ReplayedItem::Assistant(text) => {
-                    let mut controller = StreamController::new(width.map(|w| w.saturating_sub(2)));
+                    let mut controller = StreamController::new(
+                        width.map(|w| w.saturating_sub(2)),
+                        Some(self.directory.clone()),
+                    );
                     controller.push(&text);
                     cells.extend(controller.finalize());
                 }
                 ReplayedItem::Plan(text) => {
-                    let mut controller =
-                        PlanStreamController::new(width.map(|w| w.saturating_sub(4)));
+                    let mut controller = PlanStreamController::new(
+                        width.map(|w| w.saturating_sub(4)),
+                        Some(self.directory.clone()),
+                    );
                     controller.push(&text);
                     cells.extend(controller.finalize());
                 }

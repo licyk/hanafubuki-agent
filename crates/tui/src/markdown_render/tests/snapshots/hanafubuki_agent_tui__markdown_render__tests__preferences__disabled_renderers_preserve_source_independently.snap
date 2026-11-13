@@ -1,0 +1,16 @@
+---
+source: crates/tui/src/markdown_render/tests/preferences.rs
+assertion_line: 49
+expression: "snapshot.join(\"\\n\\n---\\n\\n\")"
+---
+AgentTuiRendering { tables: false, lists: true }
+| **Name** | Value |
+|---|---|
+| `a` | path\_1 &amp; \* |
+
+---
+
+AgentTuiRendering { tables: true, lists: false }
+- [ ] Pending
+- [x] Done
+- Ordinary

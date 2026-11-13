@@ -1,4 +1,5 @@
 // Modified from OpenAI Codex rust-v0.93.0 (Apache-2.0).
+// Modified from OpenAI Codex 57a808a392 (Apache-2.0).
 
 use ratatui::style::Stylize;
 use ratatui::text::Line;
@@ -79,8 +80,8 @@ fn blockquote_with_list_items() {
     let md = "> - item 1\n> - item 2\n";
     let text = render_markdown_text(md);
     let expected = Text::from_iter([
-        Line::from_iter(["> ", "- ", "item 1"]).green(),
-        Line::from_iter(["> ", "- ", "item 2"]).green(),
+        Line::from_iter(["> ", "• ", "item 1"]).green(),
+        Line::from_iter(["> ", "• ", "item 2"]).green(),
     ]);
     assert_eq!(text, expected);
 }
@@ -111,7 +112,7 @@ fn blockquote_list_then_nested_blockquote() {
     let md = "> - parent\n>   > child\n";
     let text = render_markdown_text(md);
     let expected = Text::from_iter([
-        Line::from_iter(["> ", "- ", "parent"]).green(),
+        Line::from_iter(["> ", "• ", "parent"]).green(),
         Line::from_iter(["> ", "  ", "> ", "child"]).green(),
     ]);
     assert_eq!(text, expected);
@@ -189,7 +190,7 @@ fn blockquote_in_unordered_list_on_next_line() {
                 .collect::<String>()
         })
         .collect();
-    assert_eq!(lines, vec!["- > quoted".to_string()]);
+    assert_eq!(lines, vec!["• > quoted".to_string()]);
 }
 
 #[test]
@@ -232,7 +233,7 @@ fn blockquote_inside_nested_list() {
                 .collect::<String>()
         })
         .collect();
-    assert_eq!(lines, vec!["1. A", "    - B", "      > inner"]);
+    assert_eq!(lines, vec!["1. A", "    • B", "      > inner"]);
 }
 
 #[test]

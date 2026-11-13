@@ -1828,9 +1828,161 @@ and any module-size exception.
 
 **Rendering ([4]; every Codex format in the plan's §2.12 table)**
 
-- [ ] M1: the Markdown renderer — tables (key/value fallback, ```md
+- [x] M1: the Markdown renderer — tables (key/value fallback, ```md
       unwrap, literal tables), task lists, list spacing, web and local
       links, `tui.rendering.*`; pulldown-cmark 0.13 adaptations.
+      Done (2026-11-13):
+      - TUI: `markdown_render.rs` is `markdown_render/` (`mod.rs` the
+        writer and its dispatch, `blocks.rs`, `output.rs` the rows and
+        prefixes, `lists.rs` markers, spacing and task boxes, `links.rs`,
+        `local_links.rs`, `source_tables.rs`, `preferences.rs`,
+        `tables/{mod,layout,key_value,spillover}.rs`), ported from Codex
+        57a808a392 onto plain `Line`s. Tables: Codex's pipeline (spillover
+        rows put after the table as prose, rows padded or cut to the
+        columns, widths by kind — token-heavy, narrative, compact — with
+        the bisecting shrink and the 16-column readable floor, the grid
+        with a bold header in the theme's type color, `━` under it and `─`
+        between rows, dimmed, alignment from the delimiter row, cells
+        wrapped with their styles; the key/value records, aligned or
+        stacked, when values fragment or prose starves, or when not three
+        columns each fit; a header-only table too wide as its pipe
+        source). Wide characters measured by display width (halfwidth
+        sound marks a column each, as ratatui). Task lists: `☐`/`☑` for
+        the bullet or after the number, the hanging indent under the
+        text, Codex's recovery of a marker before block content. Lists:
+        `•` bullets; Codex's `AfterMultiline` spacing (a blank line before
+        the next sibling of an item that took more than one row).
+        Links: a web link's label in the link style, then ` (url)`; a
+        local file link (`file://`, absolute, `~/`, `./`, `../`, drive,
+        UNC) shows its label and its target relative to the session's
+        directory, the location as `:line:col` (`#L12C3`, ranges), purely
+        on the text (Codex's two regular expressions and percent decoding
+        written out, no new dependency). `markdown.rs`: `append_markdown`
+        takes the directory; `append_markdown_agent` (answers only)
+        unwraps a ```` ```md ````/```` ```markdown ```` fence holding a
+        header and a delimiter row, as Codex. `table_detect.rs` (Codex's).
+        `tui.rendering.tables` off gives a table, and a Markdown fence
+        holding one, as a literal block of its source (`source_tables.rs`,
+        Codex's `Either` replaced by an array of options);
+        `tui.rendering.lists` off gives `-` and no task boxes
+        (`ENABLE_TASKLISTS` off). The preferences are one
+        `parking_lot::RwLock` (a thread's own in tests), set at launch and
+        whenever `[tui]` is adopted (a settings-center write); what is
+        already shown keeps its look. Streaming (`markdown_stream.rs`): a
+        stopgap holdback M3 replaces — rows are committed only up to the
+        start of an open table (until a blank line), of a last line that
+        may be a header, of a last line that is a list marker alone (its
+        text may land on the marker's row), or of a ```` ```md ```` fence
+        (until a blank line after it closes; a long document in such a
+        fence shows nothing until then), so a streamed answer's rows equal
+        its full render; the collector takes its renderer (answer or plan) and the
+        directory; `StreamController`/`PlanStreamController` take the
+        chat's directory, live and on replay; reasoning renders with none.
+      - Config: `[tui.rendering]` (`AgentTuiRendering { tables, lists }`,
+        both `true`; each key read on its own, an unknown one ignored),
+        specs `tui.rendering.tables` and `tui.rendering.lists` (Boolean,
+        live) in the Interface tab; re-exported by the facade.
+      - pulldown-cmark 0.13 adaptations: `BlockQuote(kind)`, the
+        definition-list, super/subscript and math tags ignored; a short
+        body row's padding cells (empty, past the row's text) are left
+        out, so a line without pipes after a table is spillover as with
+        0.10. Differences left in place, from the parser: `- [ ]` alone is
+        a task (0.10: `• [ ]`), `- [x] ---` is a task with text `---`
+        (0.10: a rule), `- [x] <div>` has one space after the box.
+      - Deviations: (1) `tui.rendering.mermaid` and `.math` are not added
+        yet: a setting that does nothing until M5/M6 would mislead; they
+        come with their renderers. (2) A web link keeps ` (url)`: Codex
+        shows the label alone only on terminals it knows open OSC 8
+        links, and nothing emits OSC 8 before M4, which adds the hidden
+        destination policy and the terminal detection with it. Bare URLs
+        are not styled (Codex's `style_bare_web_urls` needs M4's URL
+        annotation). (3) `ListSpacing::{Compact, Uniform}` are left to
+        M2/M3, whose callers use them; M1 has the default policy only.
+        (4) Codex's soft-break-before-`:` join after a local link (and
+        its two tests) is left to M3: with line-gated commits a joined line would lose the text
+        already committed. (5) Prose styles stay the fixed ones (Codex
+        derives them from the syntax theme), so only M1's constructs
+        change look; the table header takes the theme's type color as in
+        Codex, the rules are dimmed (Codex's style without a terminal
+        colour query). (6) Wrapping is this crate's `wrapping.rs`
+        (textwrap) until M4 ports Codex's: in Codex's halfwidth snapshot
+        `Final ｶﾞﾊﾟ row.` wraps as `Final ｶﾞﾊﾟ` / `row.` here (Codex:
+        `Final ｶﾞ` / `ﾊﾟ row.`), one column wider than its column (the
+        last, so within the width) as textwrap measures the sound marks
+        otherwise than ratatui; and a URL in a narrow
+        cell splits where textwrap splits it. (7) Copy sources, inline
+        directives, math and mermaid parts of Codex's writer are not
+        ported (later milestones or not ported, §2.12). Codex tests not
+        ported, by owner: hyperlink columns, bare-URL styling and the
+        label-only presentation (M4, which also adds the hidden-destination
+        hook dropped here); `Compact`/`Uniform` spacing (M2/M3);
+        theme-derived prose styles (not planned); math, mermaid, file
+        citations and follow-ups (M5, M6, not ported). (8) Until M2, a
+        table laid out at one width is re-wrapped, not laid out again,
+        after a resize.
+      - Existing snapshots and tests changed, each for an M1 construct:
+        unordered bullets `-` → `•` (lists, blockquotes, the complex
+        snapshot, the stream tests, two thinking-cell snapshots); a blank
+        line before the next sibling after a multi-row item (five list
+        tests, the two loose/tight stream tests); a web link's label in
+        the link style (`link`); the complex snapshot (now Codex's
+        byte for byte: the table, `☐`/`☑`, the spillover after the
+        table); the settings center's Interface tab at 140 columns (two
+        rows more; the test's height 20 → 22 so Keymap and Presets still
+        show).
+      - Tests (written first; 38 of the ported renderer tests failed on
+        the old renderer, and the end-to-end and stream tests by
+        mutation): Codex's renderer tests and snapshots ported, their
+        `.snap` files copied as the oracle (`markdown_render/tests/`:
+        `tables.rs`, `links.rs`, `task_lists.rs`, `preferences.rs`, the
+        spacing tests in `lists.rs`; `tables/tests.rs`: classification,
+        floors, the bulk shrink against one-at-a-time, spillover, cell
+        wrapping, blank continuations; `local_links/tests.rs`;
+        `table_detect/tests.rs`; `markdown/tests.rs`: the fence unwrap);
+        new: a width sweep snapshot at 120/80/40/20 with CJK, emoji, an
+        empty cell, code, emphasis and a link in cells, alignment; every
+        line within the width from 20 columns up, and no panic and at
+        most 4 columns over from 0 to 19 (a stacked record's indents and
+        a quote's marker); malformed tables (short and long rows, header
+        only, spillover, two-dash delimiter, mismatched delimiter, empty
+        cells); a table in a list item and after text; local links in a
+        cell; streamed line by line at four widths equal to the full
+        render (tables, a pipe in prose, ```` ```md ```` fences with and
+        without a table, a code fence with pipes, quoted and listed
+        tables, links, CJK, items whose marker is alone on its line, and
+        Codex's task-list samples) — fails with the holdback, its fence
+        part or its bare-marker part taken away (the last found in review:
+        `2.` then `   Loose` lost `Loose`); the width check from 20 columns
+        fails with the quote and list prefixes left out of a table's
+        width; app end to end (`app/tests/rendering.rs`, both
+        presentations: the grid, `☑ Built`, `☐ Released`, `See the docs
+        (https://example.com/docs) and the parser (src/parse.rs:12:3).`;
+        Tables turned off in the settings center, the next answer's
+        table as written — fails with the adoption mutated away).
+      - Goldens: none changed.
+      - Dependencies: none added.
+      - Docs (both languages): `terminal-interface#rendering` (new),
+        `config-reference#tui` (the two keys), `architecture` (the port's
+        Markdown bullet).
+      - Hanafubuki at its next pin: `AgentTuiPreferences` gains
+        `rendering: AgentTuiRendering` (re-exported); a struct literal
+        needs it or `..Default::default()`. The settings catalog has two
+        more Boolean specs.
+      - Module size: no exception added or raised (`tables/mod.rs` 513
+        lines with comments, the largest).
+      - Validation: `cargo fmt --all --check`; `RUSTFLAGS="-D warnings"
+        cargo check --workspace --all-targets --all-features`; `cargo
+        clippy --workspace --all-targets --all-features -- -D warnings`;
+        `cargo xtask check` (the config-reference check first failed on
+        the two keys; the new end-to-end test is listed as original in
+        the notices policy); `cargo test --workspace --all-features
+        --no-fail-fast` (4329 passed, none failed, no flake seen); `bun
+        install --frozen-lockfile`, `bun run format:site`, `bun run
+        format:check:site`, `bun run site:check`, `bun run site:test` (28
+        passed), and the six changed pages compiled with the store's
+        `@mdx-js/mdx` 3.1.1; `VITE_BASE_PATH=/hanafubuki-agent/ bun run
+        site:build` not run locally (port 3000 held by another project's
+        server); CI's Site run covers it.
 - [ ] M2: source-backed answer cells and reflow on resize, in Fullscreen
       and in Scrollback (D19).
 - [ ] M3: streaming — incremental blocks, stable/tail regions, chunking,

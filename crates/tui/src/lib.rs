@@ -40,6 +40,7 @@ mod shortcut_help;
 mod status_indicator_widget;
 mod streaming;
 mod style;
+mod table_detect;
 #[cfg(test)]
 mod test_support;
 mod text_formatting;

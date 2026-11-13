@@ -521,6 +521,10 @@ path = "crates/tui/src/app/tests/paste_image.rs"
 reason = "Pasting an image end to end over the standalone Agent in both presentations, with a stand-in clipboard: the image in the model's request, its copy removed, each failure said, an edited message's images back."
 
 [[original]]
+path = "crates/tui/src/app/tests/rendering.rs"
+reason = "A model's answer with a table, a task list and links end to end over the standalone Agent in both presentations, and tables turned off in the settings center."
+
+[[original]]
 path = "crates/tui/src/chatwidget/tests/images.rs"
 reason = "A message's images through the chat's queue: steers with images, their copies removed once read, renumbered when sent together, refused for a model that reads none."
 

@@ -1,4 +1,5 @@
 // Modified from OpenAI Codex rust-v0.93.0 (Apache-2.0).
+// Modified from OpenAI Codex 57a808a392 (Apache-2.0).
 
 //! The fixed theme's block styles. Codex tints the user's messages and the
 //! proposed plan from the terminal's queried background; the terminal is not
@@ -24,4 +25,10 @@ pub(crate) fn selection_style() -> Style {
 /// Emphasis for the transcript's controls.
 pub(crate) fn accent_color() -> Color {
     Color::Cyan
+}
+
+/// A table's rules. Codex blends them from the queried foreground and
+/// background; without the query it dims them.
+pub(crate) fn table_separator_style() -> Style {
+    Style::default().add_modifier(Modifier::DIM)
 }

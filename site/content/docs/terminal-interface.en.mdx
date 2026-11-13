@@ -615,6 +615,27 @@ Type `/quit` or `/exit`, or press Ctrl-C twice within one second (or Ctrl-D twic
 
 The exit code is 0; 1 when the Agent could not start, the session to resume could not be opened or given the `-m` model, or the terminal could not be used; 2 without a terminal.
 
+## Rendering [#rendering]
+
+Answers, plans and thinking show their Markdown as Codex does:
+
+- **Lists.** An unordered item's marker is `•`; an ordered one keeps its number. After an item that took more than one row (wrapped, several paragraphs, a nested list), a blank line comes before the next item of its list.
+- **Task lists.** `- [ ]` and `- [x]` show `☐` and `☑` in place of the bullet, or after the number of an ordered item; the item's further rows are indented under its text.
+- **Tables.** A pipe table is laid out in columns: the header in bold over a heavy rule, a light rule between rows, each column aligned as its delimiter row says (`:---`, `:---:`, `---:`). A cell keeps its emphasis, code and links and wraps within its column; a wide character (CJK, an emoji) counts two columns. When the table is wider than the conversation, columns of long tokens (paths, URLs) give up width first, then columns of prose, then short values.
+- **Tables too narrow to read.** When a short value would be split, prose would stand in a tall strip, or the columns do not fit at three each, every row is shown as a record instead: a `header  value` line per cell, the records apart by a rule; on a very narrow terminal each header has a line of its own and its value comes under it. A table with a header and no row keeps its pipe source then.
+- **Text after a table.** A line without pipes right after a table, which the Markdown parser takes as one more row, is shown after the table as text.
+- **Tables in a fence.** In an answer, a ` ```md ` or ` ```markdown ` fence that holds a table is shown as the Markdown it holds, not as code. Other fences stay code, and so does a Markdown fence without a table.
+- **Links.** A web link shows its text in the link style and its address after it: `docs (https://example.com/docs)`. A link to a local file shows its text and the file's path, relative to the session's working directory when the file is under it, its location as `:line:column`: `the parser (src/parse.rs:12:3)`; with no text, the path alone. Any other link shows its text and its destination.
+
+While an answer streams, a table appears once it has ended (at a blank line, or at the end of the answer), and a ` ```md ` fence once it has closed and the blank line after it has come: each row that arrives lays the whole table out again.
+
+A table is laid out at the conversation's width when it is shown; after a resize its rows are wrapped again, not laid out anew.
+
+Two settings turn these off, for what is shown from then on (the [settings center](#config)'s Interface tab, or `config set`):
+
+- `tui.rendering.tables = false` shows a table, and a ` ```md ` fence that holds one, as its source.
+- `tui.rendering.lists = false` shows `-` and `[ ]`/`[x]` as written.
+
 ## Syntax highlighting [#highlighting]
 
 Fenced code in an answer (` ```rust `) is highlighted by its language: a name, an alias or a file extension. A block with no language, or in one the interface does not know, keeps its plain text. A diff (a patch's, `/diff`'s) is highlighted by each file's extension; the `+` and `-` keep their colors and a removed line is dimmed. Code over 512 KiB or 10,000 lines, or with a line over 4 KiB, is not highlighted.

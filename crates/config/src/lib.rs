@@ -82,5 +82,5 @@ pub use store::{
 };
 pub use tui::{
     AgentAgentsGrouping, AgentAlternateScreen, AgentScrollbackMouse, AgentTuiPreferences,
-    AgentTuiPreferencesPatch, AgentTuiPreset, MAX_PRESET_INPUT_BYTES,
+    AgentTuiPreferencesPatch, AgentTuiPreset, AgentTuiRendering, MAX_PRESET_INPUT_BYTES,
 };

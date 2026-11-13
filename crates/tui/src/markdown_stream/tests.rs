@@ -1,11 +1,13 @@
 // Modified from OpenAI Codex rust-v0.93.0 (Apache-2.0).
+// Modified from OpenAI Codex 57a808a392 (Apache-2.0).
 
 use super::*;
 use ratatui::style::Color;
 
 #[test]
 fn no_commit_until_newline() {
-    let mut c = super::MarkdownStreamCollector::new(None);
+    let mut c =
+        super::MarkdownStreamCollector::new(None, None, crate::markdown::append_markdown_agent);
     c.push_delta("Hello, world");
     let out = c.commit_complete_lines();
     assert!(out.is_empty(), "should not commit without newline");
@@ -16,7 +18,8 @@ fn no_commit_until_newline() {
 
 #[test]
 fn finalize_commits_partial_line() {
-    let mut c = super::MarkdownStreamCollector::new(None);
+    let mut c =
+        super::MarkdownStreamCollector::new(None, None, crate::markdown::append_markdown_agent);
     c.push_delta("Line without newline");
     let out = c.finalize_and_drain();
     assert_eq!(out.len(), 1);
@@ -135,7 +138,8 @@ fn e2e_stream_blockquote_wrap_preserves_green_style() {
 fn heading_starts_on_new_line_when_following_paragraph() {
     // Stream a paragraph line, then a heading on the next line.
     // Expect two distinct rendered lines: "Hello." and "Heading".
-    let mut c = super::MarkdownStreamCollector::new(None);
+    let mut c =
+        super::MarkdownStreamCollector::new(None, None, crate::markdown::append_markdown_agent);
     c.push_delta("Hello.\n");
     let out1 = c.commit_complete_lines();
     let s1: Vec<String> = out1
@@ -191,7 +195,8 @@ fn heading_not_inlined_when_split_across_chunks() {
     // Paragraph without trailing newline, then a chunk that starts with the newline
     // and the heading text, then a final newline. The collector should first commit
     // only the paragraph line, and later commit the heading as its own line.
-    let mut c = super::MarkdownStreamCollector::new(None);
+    let mut c =
+        super::MarkdownStreamCollector::new(None, None, crate::markdown::append_markdown_agent);
     c.push_delta("Sounds good!");
     // No commit yet
     assert!(c.commit_complete_lines().is_empty());
@@ -236,7 +241,7 @@ fn heading_not_inlined_when_split_across_chunks() {
 
     // Sanity check raw markdown rendering for a simple line does not produce spurious extras.
     let mut rendered: Vec<ratatui::text::Line<'static>> = Vec::new();
-    crate::markdown::append_markdown("Hello.\n", None, &mut rendered);
+    crate::markdown::append_markdown_agent("Hello.\n", None, None, &mut rendered);
     let rendered_strings: Vec<String> = rendered
         .iter()
         .map(|l| {
@@ -296,7 +301,7 @@ fn utf8_boundary_safety_and_wide_chars() {
     let streamed_str = lines_to_plain_strings(&streamed);
 
     let mut rendered_all: Vec<ratatui::text::Line<'static>> = Vec::new();
-    crate::markdown::append_markdown(input, None, &mut rendered_all);
+    crate::markdown::append_markdown_agent(input, None, None, &mut rendered_all);
     let rendered_all_str = lines_to_plain_strings(&rendered_all);
 
     assert_eq!(
@@ -402,7 +407,7 @@ fn loose_list_with_split_dashes_matches_full_render() {
 
     let full: String = deltas.iter().copied().collect();
     let mut rendered_all: Vec<ratatui::text::Line<'static>> = Vec::new();
-    crate::markdown::append_markdown(&full, None, &mut rendered_all);
+    crate::markdown::append_markdown_agent(&full, None, None, &mut rendered_all);
     let rendered_all_strs = lines_to_plain_strings(&rendered_all);
 
     assert_eq!(
@@ -490,7 +495,7 @@ fn loose_vs_tight_list_items_streaming_matches_full() {
     // Compute a full render for diagnostics only.
     let full: String = deltas.iter().copied().collect();
     let mut rendered_all: Vec<ratatui::text::Line<'static>> = Vec::new();
-    crate::markdown::append_markdown(&full, None, &mut rendered_all);
+    crate::markdown::append_markdown_agent(&full, None, None, &mut rendered_all);
 
     // Also assert exact expected plain strings for clarity.
     let expected = vec![
@@ -501,9 +506,10 @@ fn loose_vs_tight_list_items_streaming_matches_full() {
         "3. Loose item with its own paragraph.".to_string(),
         "".to_string(),
         "   This paragraph belongs to the same list item.".to_string(),
+        "".to_string(),
         "4. Second loose item with a nested list after a blank line.".to_string(),
-        "    - Nested bullet under a loose item".to_string(),
-        "    - Another nested bullet".to_string(),
+        "    • Nested bullet under a loose item".to_string(),
+        "    • Another nested bullet".to_string(),
     ];
     assert_eq!(
         streamed_strs, expected,
@@ -517,7 +523,7 @@ fn assert_streamed_equals_full(deltas: &[&str]) {
     let streamed_strs = lines_to_plain_strings(&streamed);
     let full: String = deltas.iter().copied().collect();
     let mut rendered: Vec<ratatui::text::Line<'static>> = Vec::new();
-    crate::markdown::append_markdown(&full, None, &mut rendered);
+    crate::markdown::append_markdown_agent(&full, None, None, &mut rendered);
     let rendered_strs = lines_to_plain_strings(&rendered);
     assert_eq!(streamed_strs, rendered_strs, "full:\n---\n{full}\n---");
 }
@@ -538,4 +544,84 @@ fn fuzz_class_bullet_duplication_variant_2() {
 #[test]
 fn streaming_html_block_then_text_matches_full() {
     assert_streamed_equals_full(&["HTML block:\n", "<div>inline block</div>\n", "more stuff\n"])
+}
+
+/// What M1's constructs stream to, line by line at a width, is what the
+/// whole answer renders to: a table's rows wait until it has ended, a
+/// ```md fence until it is unwrapped or not.
+#[test]
+fn tables_task_lists_and_links_stream_as_they_render() {
+    let samples = [
+        "Intro\n\n| A | B |\n|---|---|\n| 1 | 2 |\n| a longer cell that wraps | x |\n\nAfter the table.\n",
+        "Intro line\n| Key | Notes |\n| --- | --- |\n| firstlongid | A readable explanatory sentence for this row. |\n| secondlongid | Another readable explanatory sentence. |\n",
+        "| A | B |\n|---|---|\n| 1 | 2 |\nTrailing prose line\n\nNext paragraph\n",
+        "Text with a | pipe that is no table.\nMore text.\n",
+        "```md\n| A | B |\n|---|---|\n| 1 | 2 |\n```\n\nAfter the fence.\n",
+        "```md\n**Summary**\n\n| A | B |\n|---|---|\n| 1 | 2 |\n```\nAfter the fence.\n",
+        "```markdown\n**not a table**\n```\nText right after.\n",
+        "```rust\nlet x = a | b;\nlet y = c | d;\n```\n",
+        "1. Results:\n\n   | Case | Result |\n   |---|---|\n   | first | passed |\n\n2. Next item\n",
+        "> | A | B |\n> |---|---|\n> | 1 | 2 |\n>\n> quoted after\n",
+        "- [ ] Unchecked task with enough words to wrap\n- [x] Checked\n  - [ ] Nested\n- Ordinary\n",
+        "See [docs](https://example.com/docs) and [lib](/repo/src/lib.rs:12).\n- [binary](/repo/README.md:93): core\n",
+        "| 名前 | Notes |\n|:---|---:|\n| 東京タワー | 中文的说明文字，需要换行才能放得下 |\n| 🍣 |  |\n",
+        // An item whose marker is alone on its line, its text on the next.
+        "1. Tight\n\n2.\n   Loose\n",
+        "-\n  text\n",
+        "> -\n>   quoted text\n",
+        // Codex's task-list samples.
+        "- [ ] Unchecked\n- [x] Checked\n- [X] Uppercase\n- Ordinary\n",
+        "- [ ] Parent task with enough words to wrap\n  - [x] Nested task\n  - Ordinary child\n- [x] Done\n",
+        "9. [ ] Numbered task with enough words to wrap\n10. [x] Done\n11. Ordinary\n",
+        "> - [ ] Quoted task with enough words to wrap\n> - [x] Done\n",
+        "- [ ] First paragraph\n\n  Second paragraph\n\n- [x] Next task\n",
+        "- [ ]\n- [x]\n",
+        "- [x] **Bold**, *italic*, and `code`\n\n`- [x] inline`\n\n```text\n- [x] fenced\n```\n\n[ ] Plain text\n\n- \\[x] Escaped\n",
+        "- [ ] \n  - child\n\n- [x] # title\n\n- [x] > quote\n\n- [x] ---\n",
+        "-     [x] code, not a task\n",
+        "- [x] <b>done</b>\n\n- Parent\n  - [x] \n\n  Continued paragraph\n",
+        "- [x] <div>done</div>\n",
+        "- [x] \n  <div>done</div>\n",
+        "> - Parent\n>   - [x] \n>\n>   Continued paragraph\n",
+    ];
+    for source in samples {
+        for width in [None, Some(80), Some(40), Some(20)] {
+            let mut collector = MarkdownStreamCollector::new(
+                width,
+                Some("/repo".to_string()),
+                crate::markdown::append_markdown_agent,
+            );
+            let mut streamed = Vec::new();
+            for line in source.split_inclusive('\n') {
+                collector.push_delta(line);
+                streamed.extend(collector.commit_complete_lines());
+            }
+            streamed.extend(collector.finalize_and_drain());
+            let mut rendered = Vec::new();
+            crate::markdown::append_markdown_agent(source, width, Some("/repo"), &mut rendered);
+            assert_eq!(
+                lines_to_plain_strings(&streamed),
+                lines_to_plain_strings(&rendered),
+                "at {width:?}:\n{source}"
+            );
+        }
+    }
+}
+
+#[test]
+fn a_table_is_held_until_a_blank_line_ends_it() {
+    let mut collector =
+        MarkdownStreamCollector::new(None, None, crate::markdown::append_markdown_agent);
+    collector.push_delta("Intro\n\n| A | B |\n");
+    assert_eq!(
+        lines_to_plain_strings(&collector.commit_complete_lines()),
+        vec!["Intro"]
+    );
+    collector.push_delta("|---|---|\n| 1 | 2 |\n");
+    assert!(collector.commit_complete_lines().is_empty());
+    collector.push_delta("\nAfter\n");
+    assert_eq!(
+        lines_to_plain_strings(&collector.commit_complete_lines()),
+        vec!["", " A      B", "━━━━━  ━━━━━", " 1      2", "", "After"]
+    );
 }

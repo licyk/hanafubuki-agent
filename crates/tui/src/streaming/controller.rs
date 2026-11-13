@@ -18,9 +18,11 @@ pub(crate) struct StreamController {
 }
 
 impl StreamController {
-    pub(crate) fn new(width: Option<usize>) -> Self {
+    /// An answer's stream, wrapped to `width`, local file links relative to
+    /// `cwd`.
+    pub(crate) fn new(width: Option<usize>, cwd: Option<String>) -> Self {
         Self {
-            state: StreamState::new(width),
+            state: StreamState::new(width, cwd, crate::markdown::append_markdown_agent),
             finishing_after_drain: false,
             header_emitted: false,
         }
@@ -93,9 +95,9 @@ pub(crate) struct PlanStreamController {
 }
 
 impl PlanStreamController {
-    pub(crate) fn new(width: Option<usize>) -> Self {
+    pub(crate) fn new(width: Option<usize>, cwd: Option<String>) -> Self {
         Self {
-            state: StreamState::new(width),
+            state: StreamState::new(width, cwd, crate::markdown::append_markdown),
             header_emitted: false,
             top_padding_emitted: false,
         }

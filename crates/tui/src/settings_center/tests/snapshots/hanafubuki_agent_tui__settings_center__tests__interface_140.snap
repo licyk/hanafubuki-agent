@@ -1,7 +1,7 @@
 ---
 source: crates/tui/src/settings_center/tests/mod.rs
 assertion_line: 246
-expression: "screen(&mut center, 140, 20)"
+expression: "screen(&mut center, 140, 22)"
 ---
 
   Settings
@@ -19,6 +19,8 @@ expression: "screen(&mut center, 140, 20)"
     Status line              model-with-reasoning, cur...  The status line's items, in order
     Status line colors       [x] On                        Whether the status line's items take the theme's colors
     Terminal title           activity, session-title, ...  The terminal title's items, in order; none leaves the title alone
+    Tables                   [x] On                        Pipe tables laid out in columns; off, shown as written
+    List markers             [x] On                        • bullets and ☐/☑ task boxes; off, - and [ ]/[x] as written
     Keymap                   Open ›                        The keys of the interface's actions
     Presets                  Open ›                        Inputs kept in slots 0 to 9
 

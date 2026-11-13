@@ -237,6 +237,7 @@ impl App {
         if preferences.raw_output != (self.render_mode == HistoryRenderMode::Raw) {
             self.show_raw_output(preferences.raw_output);
         }
+        crate::markdown_render::preferences::set(preferences.rendering);
         let theme = preferences.theme.as_deref().unwrap_or(DEFAULT_THEME);
         if let Some(resolved) = resolve_theme_by_name(theme, themes_dir()) {
             set_syntax_theme(resolved);

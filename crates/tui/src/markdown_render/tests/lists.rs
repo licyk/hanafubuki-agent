@@ -1,4 +1,5 @@
 // Modified from OpenAI Codex rust-v0.93.0 (Apache-2.0).
+// Modified from OpenAI Codex 57a808a392 (Apache-2.0).
 
 use ratatui::style::Stylize;
 use ratatui::text::Line;
@@ -9,7 +10,7 @@ use crate::markdown_render::render_markdown_text;
 #[test]
 fn list_unordered_single() {
     let text = render_markdown_text("- List item 1\n");
-    let expected = Text::from_iter([Line::from_iter(["- ", "List item 1"])]);
+    let expected = Text::from_iter([Line::from_iter(["• ", "List item 1"])]);
     assert_eq!(text, expected);
 }
 
@@ -17,8 +18,8 @@ fn list_unordered_single() {
 fn list_unordered_multiple() {
     let text = render_markdown_text("- List item 1\n- List item 2\n");
     let expected = Text::from_iter([
-        Line::from_iter(["- ", "List item 1"]),
-        Line::from_iter(["- ", "List item 2"]),
+        Line::from_iter(["• ", "List item 1"]),
+        Line::from_iter(["• ", "List item 2"]),
     ]);
     assert_eq!(text, expected);
 }
@@ -37,8 +38,8 @@ fn list_ordered() {
 fn list_nested() {
     let text = render_markdown_text("- List item 1\n  - Nested list item 1\n");
     let expected = Text::from_iter([
-        Line::from_iter(["- ", "List item 1"]),
-        Line::from_iter(["    - ", "Nested list item 1"]),
+        Line::from_iter(["• ", "List item 1"]),
+        Line::from_iter(["    • ", "Nested list item 1"]),
     ]);
     assert_eq!(text, expected);
 }
@@ -59,8 +60,9 @@ fn nested_unordered_in_ordered() {
     let text = render_markdown_text(md);
     let expected = Text::from_iter([
         Line::from_iter(["1. ".light_blue(), "Outer".into()]),
-        Line::from_iter(["    - ", "Inner A"]),
-        Line::from_iter(["    - ", "Inner B"]),
+        Line::from_iter(["    • ", "Inner A"]),
+        Line::from_iter(["    • ", "Inner B"]),
+        Line::default(),
         Line::from_iter(["2. ".light_blue(), "Next".into()]),
     ]);
     assert_eq!(text, expected);
@@ -71,10 +73,11 @@ fn nested_ordered_in_unordered() {
     let md = "- Outer\n    1. One\n    2. Two\n- Last\n";
     let text = render_markdown_text(md);
     let expected = Text::from_iter([
-        Line::from_iter(["- ", "Outer"]),
+        Line::from_iter(["• ", "Outer"]),
         Line::from_iter(["    1. ".light_blue(), "One".into()]),
         Line::from_iter(["    2. ".light_blue(), "Two".into()]),
-        Line::from_iter(["- ", "Last"]),
+        Line::default(),
+        Line::from_iter(["• ", "Last"]),
     ]);
     assert_eq!(text, expected);
 }
@@ -87,6 +90,7 @@ fn loose_list_item_multiple_paragraphs() {
         Line::from_iter(["1. ".light_blue(), "First paragraph".into()]),
         Line::default(),
         Line::from_iter(["   ", "Second paragraph of same item"]),
+        Line::default(),
         Line::from_iter(["2. ".light_blue(), "Next item".into()]),
     ]);
     assert_eq!(text, expected);
@@ -97,7 +101,7 @@ fn tight_item_with_soft_break() {
     let md = "- item line1\n  item line2\n";
     let text = render_markdown_text(md);
     let expected = Text::from_iter([
-        Line::from_iter(["- ", "item line1"]),
+        Line::from_iter(["• ", "item line1"]),
         Line::from_iter(["  ", "item line2"]),
     ]);
     assert_eq!(text, expected);
@@ -109,8 +113,9 @@ fn deeply_nested_mixed_three_levels() {
     let text = render_markdown_text(md);
     let expected = Text::from_iter([
         Line::from_iter(["1. ".light_blue(), "A".into()]),
-        Line::from_iter(["    - ", "B"]),
+        Line::from_iter(["    • ", "B"]),
         Line::from_iter(["        1. ".light_blue(), "C".into()]),
+        Line::default(),
         Line::from_iter(["2. ".light_blue(), "D".into()]),
     ]);
     assert_eq!(text, expected);
@@ -163,7 +168,7 @@ fn code_block_inside_unordered_list_item_is_indented() {
                 .collect::<String>()
         })
         .collect();
-    assert_eq!(lines, vec!["- Item", "", "  code line"]);
+    assert_eq!(lines, vec!["• Item", "", "  code line"]);
 }
 
 #[test]
@@ -180,7 +185,7 @@ fn code_block_multiple_lines_inside_unordered_list() {
                 .collect::<String>()
         })
         .collect();
-    assert_eq!(lines, vec!["- Item", "", "  first", "  second"]);
+    assert_eq!(lines, vec!["• Item", "", "  first", "  second"]);
 }
 
 #[test]
@@ -197,7 +202,7 @@ fn code_block_inside_unordered_list_item_multiple_lines() {
                 .collect::<String>()
         })
         .collect();
-    assert_eq!(lines, vec!["- Item", "", "  first", "  second"]);
+    assert_eq!(lines, vec!["• Item", "", "  first", "  second"]);
 }
 
 #[test]
@@ -221,7 +226,7 @@ fn ordered_item_with_code_block_and_nested_bullet() {
             "2. item 2".to_string(),
             String::new(),
             "   code".to_string(),
-            "    - PROCESS_START (a OnceLock<Instant>) keeps the start time for the entire process.".to_string(),
+            "    • PROCESS_START (a OnceLock<Instant>) keeps the start time for the entire process.".to_string(),
         ]
     );
 }
@@ -232,11 +237,11 @@ fn nested_five_levels_mixed_lists() {
     let text = render_markdown_text(md);
     let expected = Text::from_iter([
         Line::from_iter(["1. ".light_blue(), "First".into()]),
-        Line::from_iter(["    - ", "Second level"]),
+        Line::from_iter(["    • ", "Second level"]),
         Line::from_iter(["        1. ".light_blue(), "Third level (ordered)".into()]),
-        Line::from_iter(["            - ", "Fourth level (bullet)"]),
+        Line::from_iter(["            • ", "Fourth level (bullet)"]),
         Line::from_iter([
-            "                - ",
+            "                • ",
             "Fifth level to test indent consistency",
         ]),
     ]);
@@ -260,7 +265,7 @@ fn unordered_item_continuation_paragraph_is_indented() {
     assert_eq!(
         lines,
         vec![
-            "- Intro".to_string(),
+            "• Intro".to_string(),
             String::new(),
             "  Continuation paragraph line 1".to_string(),
             "  Continuation paragraph line 2".to_string(),
@@ -286,10 +291,92 @@ fn nested_item_continuation_paragraph_is_indented() {
     let text = render_markdown_text(md);
     let expected = Text::from_iter([
         Line::from_iter(["1. ".light_blue(), "A".into()]),
-        Line::from_iter(["    - ", "B"]),
+        Line::from_iter(["    • ", "B"]),
         Line::default(),
         Line::from_iter(["      ", "Continuation for B"]),
+        Line::default(),
         Line::from_iter(["2. ".light_blue(), "C".into()]),
     ]);
     assert_eq!(text, expected);
+}
+
+// Codex 57a808a392's spacing: a blank line before the next sibling once an
+// item took more than one row.
+
+#[test]
+fn empty_list_items_keep_their_markers() {
+    let rendered = ["8.", "-\n  -", "> -\n>   -"]
+        .map(|source| super::plain_lines(&render_markdown_text(source)));
+    insta::assert_debug_snapshot!("empty_list_items", rendered);
+}
+
+#[test]
+fn list_item_after_code_block_keeps_blank_separator() {
+    let md = "1. First:\n\n   ```rust\n   fn first() {}\n   ```\n\n2. Second:\n";
+    let lines = super::plain_lines(&render_markdown_text(md));
+    assert_eq!(
+        lines,
+        vec!["1. First:", "", "   fn first() {}", "", "2. Second:"]
+    );
+}
+
+#[test]
+fn outer_list_item_after_nested_code_block_keeps_blank_separator() {
+    let md =
+        "1. First:\n   - Nested:\n\n     ```rust\n     fn first() {}\n     ```\n\n2. Second:\n";
+    let lines = super::plain_lines(&render_markdown_text(md));
+    assert_eq!(
+        lines,
+        vec![
+            "1. First:",
+            "    • Nested:",
+            "",
+            "      fn first() {}",
+            "",
+            "2. Second:",
+        ]
+    );
+}
+
+#[test]
+fn list_item_after_simple_item_stays_compact() {
+    let md = "1. First\n\n2. Second\n";
+    let lines = super::plain_lines(&render_markdown_text(md));
+    assert_eq!(lines, vec!["1. First", "2. Second"]);
+}
+
+#[test]
+fn multiline_finding_items_are_separated_snapshot() {
+    let md = r#"**Findings**
+
+1. **Correctness issue: server tool-search completions are always rejected.**
+
+   In `next_prompt_suggestion.rs`, the output is ignored, suppressing suggestions after completed searches.
+
+   Minimal correction: count matching outputs and suppress only missing ones.
+
+2. **High-confidence simplification: remove the unused error channel.**
+
+   The implementation resolves failures to `None`, so its contract can be narrower.
+
+3. **High-confidence churn reduction: consolidate table-driven filter tests.**
+"#;
+    let lines = super::plain_lines(&render_markdown_text(md));
+    insta::assert_snapshot!(lines.join("\n"));
+}
+
+#[test]
+fn wrapped_list_item_is_separated_from_next_sibling() {
+    let md = "1. This item wraps onto another visible rendered line\n2. Next item\n";
+    let text = crate::markdown_render::render_markdown_text_with_width(md, Some(24));
+    assert_eq!(
+        super::plain_lines(&text),
+        vec![
+            "1. This item wraps onto",
+            "   another visible",
+            "   rendered line",
+            "",
+            "2. Next item",
+        ]
+    );
 }

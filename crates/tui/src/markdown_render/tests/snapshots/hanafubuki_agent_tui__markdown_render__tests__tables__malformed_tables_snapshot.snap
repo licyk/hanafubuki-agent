@@ -1,0 +1,29 @@
+---
+source: crates/tui/src/markdown_render/tests/tables.rs
+assertion_line: 291
+expression: rendered
+---
+ A      B      C
+━━━━━  ━━━━━  ━━━━━
+ 1
+─────  ─────  ─────
+ 1      2      3
+---
+ A      B
+━━━━━  ━━━━━
+---
+ A      B
+━━━━━  ━━━━━
+ 1      2
+Trailing prose line
+---
+ A      B
+━━━━━  ━━━━━
+ 1      2
+---
+| A | B |
+|---|
+| 1 | 2 |
+---
+
+━━━━━  ━━━━━

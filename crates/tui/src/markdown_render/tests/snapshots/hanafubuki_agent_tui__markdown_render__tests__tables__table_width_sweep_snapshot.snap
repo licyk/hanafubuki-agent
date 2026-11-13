@@ -1,0 +1,66 @@
+---
+source: crates/tui/src/markdown_render/tests/tables.rs
+assertion_line: 208
+expression: stages
+---
+width 120:
+ 名前          Status                                                             Notes
+━━━━━━━━━━━━  ━━━━━━━━━  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ 東京タワー    ✅ done    The tower is 333 m tall, see docs (https://example.com/tower)
+────────────  ─────────  ───────────────────────────────────────────────────────────────
+ 🍣 sushi                                                            empty status above
+────────────  ─────────  ───────────────────────────────────────────────────────────────
+ plain         🚧 wip                                中文的说明文字，需要换行才能放得下
+
+width 80:
+ 名前          Status                                                     Notes
+━━━━━━━━━━━━  ━━━━━━━━━  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ 東京タワー    ✅ done              The tower is 333 m tall, see docs (https://
+                                                             example.com/tower)
+────────────  ─────────  ───────────────────────────────────────────────────────
+ 🍣 sushi                                                    empty status above
+────────────  ─────────  ───────────────────────────────────────────────────────
+ plain         🚧 wip                        中文的说明文字，需要换行才能放得下
+
+width 40:
+ 名前          Status             Notes
+━━━━━━━━━━━━  ━━━━━━━━  ━━━━━━━━━━━━━━━━
+ 東京タワー      ✅        The tower is
+                done        333 m tall,
+                               see docs
+                              (https://
+                           example.com/
+                                 tower)
+────────────  ────────  ────────────────
+ 🍣 sushi                  empty status
+                                  above
+────────────  ────────  ────────────────
+ plain         🚧 wip      中文的说明文
+                         字，需要换行才
+                               能放得下
+
+width 20:
+ 名前
+  東京タワー
+ Status
+  ✅ done
+ Notes
+  The tower is 333 m
+  tall, see docs
+  (https://
+  example.com/tower)
+────────────────────
+ 名前
+  🍣 sushi
+ Status
+  
+ Notes
+  empty status above
+────────────────────
+ 名前
+  plain
+ Status
+  🚧 wip
+ Notes
+  中文的说明文字，需
+  要换行才能放得下

@@ -4,7 +4,7 @@ use std::collections::VecDeque;
 
 use ratatui::text::Line;
 
-use crate::markdown_stream::MarkdownStreamCollector;
+use crate::markdown_stream::{MarkdownStreamCollector, RenderMarkdown};
 pub(crate) mod controller;
 
 pub(crate) struct StreamState {
@@ -14,9 +14,9 @@ pub(crate) struct StreamState {
 }
 
 impl StreamState {
-    pub(crate) fn new(width: Option<usize>) -> Self {
+    pub(crate) fn new(width: Option<usize>, cwd: Option<String>, render: RenderMarkdown) -> Self {
         Self {
-            collector: MarkdownStreamCollector::new(width),
+            collector: MarkdownStreamCollector::new(width, cwd, render),
             queued_lines: VecDeque::new(),
             has_seen_delta: false,
         }
