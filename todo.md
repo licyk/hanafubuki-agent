@@ -875,6 +875,10 @@ and any module-size exception.
         `reasoning_effort_choices`. The row's summary no longer lists
         models.dev levels.
       - Module size: no exception added or raised.
+      - CI on Linux, Windows and macOS: https://github.com/licyk/hanafubuki-agent/actions/runs/43405239912
+        (run on fa006c8, which differs from the landed tree only in this
+        line; all three passed at once); Site: .../runs/43405239916,
+        success, its prerender included.
 
 **Keys ([1])**
 
