@@ -1224,6 +1224,9 @@ and any module-size exception.
         event of its own: a reader re-reads it at `ToolCompleted`.
       - Module size: no exception added or raised. `agent_bridge/mod.rs`
         596, `chat_composer/mod.rs` 591, `stage_turn_admission` 196 lines.
+      - CI on Linux, Windows and macOS: https://github.com/licyk/hanafubuki-agent/actions/runs/43439254210
+        (run on c930bcc; all three passed at once). Site on c930bcc:
+        .../runs/43439254219, passed, its build and prerender included.
 - [ ] K3: Ctrl+R history search over this run's messages and the history
       store's user messages (D16).
 - [ ] K4: Ctrl+G external editor (`VISUAL`/`EDITOR`), a foreground child
