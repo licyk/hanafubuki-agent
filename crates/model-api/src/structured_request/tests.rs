@@ -310,13 +310,8 @@ async fn other_failures_end_the_chain() {
             Err(refusal_of_structured_output()),
         ),
         (
-            ModelStructuredOutputCapability::NativeJsonSchema,
-            Err(ModelError::Remote {
-                status: Some(400),
-                code: None,
-                message: "Invalid schema for response_format".into(),
-                request_id: None,
-            }),
+            ModelStructuredOutputCapability::Text,
+            Err(rejection(400, "Invalid request")),
         ),
         (
             ModelStructuredOutputCapability::NativeJsonSchema,
@@ -330,6 +325,171 @@ async fn other_failures_end_the_chain() {
         ));
         assert_eq!(session.requests().len(), 1);
         assert!(session.learned().is_empty());
+    }
+}
+
+fn rejection(status: u16, message: &str) -> ModelError {
+    ModelError::Remote {
+        status: Some(status),
+        code: Some("invalid_request_error".into()),
+        message: message.into(),
+        request_id: None,
+    }
+}
+
+#[tokio::test]
+async fn a_native_output_rejected_in_other_words_falls_to_the_forced_tool_learned_on_its_answer() {
+    let session = ScriptedSession::new(
+        ModelStructuredOutputCapability::NativeJsonSchema,
+        vec![
+            Err(rejection(
+                400,
+                "Unrecognized request argument supplied: text",
+            )),
+            Ok(call(
+                "submit_agent_conversation_title",
+                json!({"title": "Task center"}),
+            )),
+        ],
+    );
+
+    let answer = ask(&session, true).await.unwrap();
+
+    assert_eq!(answer.rung, ModelStructuredOutputCapability::RequiredTool);
+    assert_eq!(
+        session.learned(),
+        [ModelStructuredOutputCapability::RequiredTool]
+    );
+    assert_eq!(session.requests()[1].tools.len(), 1);
+}
+
+#[tokio::test]
+async fn a_native_output_and_a_forced_tool_rejected_in_other_words_fall_to_text() {
+    let session = ScriptedSession::new(
+        ModelStructuredOutputCapability::NativeJsonSchema,
+        vec![
+            Err(rejection(422, "Invalid parameter: text")),
+            Err(rejection(400, "Function calling is disabled on this route")),
+            Ok(message(r#"{"title":"Task center"}"#)),
+        ],
+    );
+
+    let answer = ask(&session, true).await.unwrap();
+
+    assert_eq!(answer.rung, ModelStructuredOutputCapability::Text);
+    assert_eq!(session.learned(), [ModelStructuredOutputCapability::Text]);
+    let requests = session.requests();
+    assert!(requests[1].output_format.is_none() && requests[1].tools.len() == 1);
+    assert!(requests[2].output_format.is_none() && requests[2].tools.is_empty());
+}
+
+#[tokio::test]
+async fn a_forced_tool_rejected_in_other_words_falls_to_text_after_a_learned_refusal() {
+    // Native refused in words the classifier knows (learned at once), the
+    // forced tool rejected in others (learned once text answers).
+    let session = ScriptedSession::new(
+        ModelStructuredOutputCapability::NativeJsonSchema,
+        vec![
+            Err(refusal_of_structured_output()),
+            Err(rejection(400, "Bad request")),
+            Ok(message(r#"{"title":"Task center"}"#)),
+        ],
+    );
+
+    let answer = ask(&session, true).await.unwrap();
+
+    assert_eq!(answer.rung, ModelStructuredOutputCapability::Text);
+    assert_eq!(
+        session.learned(),
+        [
+            ModelStructuredOutputCapability::RequiredTool,
+            ModelStructuredOutputCapability::Text
+        ]
+    );
+}
+
+#[tokio::test]
+async fn rejections_no_rung_answers_teach_nothing() {
+    let session = ScriptedSession::new(
+        ModelStructuredOutputCapability::NativeJsonSchema,
+        vec![
+            Err(rejection(400, "Bad request")),
+            Err(rejection(400, "Bad request")),
+            Err(rejection(400, "Bad request")),
+        ],
+    );
+
+    assert!(matches!(
+        ask(&session, true).await,
+        Err(ModelJsonObjectError::Failed(_))
+    ));
+    assert_eq!(session.requests().len(), 3);
+    assert!(session.learned().is_empty());
+
+    // A rejection at the forced tool, then a failure unrelated to the
+    // request at text: nothing learned either.
+    let session = ScriptedSession::new(
+        ModelStructuredOutputCapability::RequiredTool,
+        vec![
+            Err(rejection(400, "Bad request")),
+            Err(ModelError::IdleTimeout {
+                timeout: Duration::from_secs(1),
+            }),
+        ],
+    );
+    assert!(ask(&session, true).await.is_err());
+    assert_eq!(session.requests().len(), 2);
+    assert!(session.learned().is_empty());
+}
+
+#[tokio::test]
+async fn failures_that_are_not_about_the_request_do_not_step_down() {
+    let failures = [
+        rejection(401, "Invalid API key"),
+        rejection(403, "Forbidden"),
+        rejection(404, "No such model"),
+        rejection(429, "Rate limited"),
+        ModelError::RequestRetriesExhausted {
+            attempts: 3,
+            status: Some(503),
+            code: None,
+            message: "Service unavailable".into(),
+            request_id: None,
+        },
+        rejection(500, "Internal error"),
+        ModelError::ContextWindowExceeded {
+            status: Some(400),
+            code: Some("context_length_exceeded".into()),
+            message: "This model's maximum context length is 8192 tokens".into(),
+            request_id: None,
+        },
+        ModelError::IdleTimeout {
+            timeout: Duration::from_secs(1),
+        },
+        ModelError::Remote {
+            status: None,
+            code: None,
+            message: "stream error".into(),
+            request_id: None,
+        },
+    ];
+    for start in [
+        ModelStructuredOutputCapability::NativeJsonSchema,
+        ModelStructuredOutputCapability::RequiredTool,
+    ] {
+        for failure in failures.iter().cloned() {
+            let message = failure.to_string();
+            let session = ScriptedSession::new(start, vec![Err(failure)]);
+            assert!(
+                matches!(
+                    ask(&session, true).await,
+                    Err(ModelJsonObjectError::Failed(_))
+                ),
+                "{message}"
+            );
+            assert_eq!(session.requests().len(), 1, "{message}");
+            assert!(session.learned().is_empty(), "{message}");
+        }
     }
 }
 

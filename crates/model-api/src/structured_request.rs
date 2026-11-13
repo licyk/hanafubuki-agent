@@ -6,7 +6,10 @@
 //! ([`ModelSession::structured_output_capability_for`]); a refusal of a
 //! rung teaches the route the next one
 //! ([`ModelSession::learn_structured_output`]) and the request is sent
-//! again there at once, so later requests pay no refused request. The whole
+//! again there at once, so later requests pay no refused request. A rung
+//! rejected as a bad request (400 or 422) in words no refusal names is
+//! tried at the next rung too, and the rung that answers is learned only
+//! then, so a rejection unrelated to the rung teaches nothing. The whole
 //! chain is bounded in time and ends when its cancellation is cancelled.
 
 use std::time::Duration;
@@ -126,23 +129,35 @@ async fn walk_rungs(
         session,
         request,
     );
+    // A rung rejected in words no refusal names: the rung that answers is
+    // learned, once one does.
+    let mut learn_on_answer = false;
     loop {
-        match ask(session, request, rung, cancellation).await {
-            Err(Attempt::Refused(error)) => {
-                let Some(lower) = lower_rung(rung).map(|lower| usable(lower, session, request))
-                else {
-                    return Err(ModelJsonObjectError::Failed(error.to_string()));
-                };
-                log::debug!(
-                    "structured {} request: the route refused the {rung:?} rung; retrying at {lower:?}",
-                    request.subject
-                );
-                session.learn_structured_output(&request.model, lower);
-                rung = lower;
+        let (error, recognised) = match ask(session, request, rung, cancellation).await {
+            Ok(answer) => {
+                if learn_on_answer {
+                    session.learn_structured_output(&request.model, answer.rung);
+                }
+                return Ok(answer);
             }
             Err(Attempt::Failed(error)) => return Err(error),
-            Ok(answer) => return Ok(answer),
+            Err(Attempt::Refused(error)) => (error, true),
+            Err(Attempt::Rejected(error)) => (error, false),
+        };
+        let Some(lower) = lower_rung(rung).map(|lower| usable(lower, session, request)) else {
+            return Err(ModelJsonObjectError::Failed(error.to_string()));
+        };
+        log::debug!(
+            "structured {} request: the route {} the {rung:?} rung; retrying at {lower:?}",
+            request.subject,
+            if recognised { "refused" } else { "rejected" }
+        );
+        if recognised {
+            session.learn_structured_output(&request.model, lower);
+        } else {
+            learn_on_answer = true;
         }
+        rung = lower;
     }
 }
 
@@ -150,6 +165,10 @@ async fn walk_rungs(
 enum Attempt {
     /// The Provider refused the rung: the next one may answer.
     Refused(ModelError),
+    /// The Provider rejected the request (400, 422) without saying it was
+    /// the rung: the next one may answer, and only an answer says the rung
+    /// was the cause.
+    Rejected(ModelError),
     Failed(ModelJsonObjectError),
 }
 
@@ -327,8 +346,26 @@ fn attempt_error(
             ModelStructuredOutputCapability::RequiredTool,
             ModelError::UnsupportedToolChoice { .. },
         ) => Attempt::Refused(error),
+        _ if rung != ModelStructuredOutputCapability::Text && rejects_the_request(&error) => {
+            Attempt::Rejected(error)
+        }
         _ => failed(error.to_string()),
     }
+}
+
+/// A 400 or 422 that may be about the request's shape: not an overflow,
+/// whatever else it was taken for (an image or reasoning refusal is a
+/// misreading here, since a structured request sends neither).
+fn rejects_the_request(error: &ModelError) -> bool {
+    let status = match error {
+        ModelError::Remote { status, .. }
+        | ModelError::UnsupportedImageInput { status, .. }
+        | ModelError::UnsupportedReasoning { status, .. }
+        | ModelError::UnsupportedStructuredOutput { status, .. }
+        | ModelError::UnsupportedToolChoice { status, .. } => *status,
+        _ => None,
+    };
+    matches!(status, Some(400 | 422))
 }
 
 fn failed(message: impl Into<String>) -> Attempt {

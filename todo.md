@@ -224,6 +224,46 @@ and any module-size exception.
         `AgentService::turn_user_message` is gone.
       - Module size: no exception added or raised (`run_memory_pass` grew
         from 252 to 254, under its ceiling of 257).
+      - Follow-up (2026-11-13): the chain no longer stops at a rung
+        rejected in words the classifier misses (the gap the live-probe
+        note above names). A rung above text failing with a 400 or 422
+        (`Remote`, or a misread image, reasoning, structured-output or
+        tool-choice refusal; never `ContextWindowExceeded`) is tried at the
+        next rung (`Attempt::Rejected`), and the rung that then answers is
+        learned only on that answer, so a rejection every rung gets teaches
+        nothing; the classifier's refusals still learn at once. 401, 403,
+        404, 429, a 5xx (retried, then `RequestRetriesExhausted`), an
+        overflow, a timeout and a cancellation end the chain as before.
+        `classify_remote_model_error` is unchanged, so a turn's sampling is
+        too. The reviewer keeps its two rungs and strict reading (it steps
+        native → text the same way). An invalid schema (a 400 naming
+        `response_format` without refusing it) now tries the next rungs
+        too, rather than ending at once.
+        - Tests (`model-api`, `structured_request/tests.rs`, failing first:
+          4 of the 5 new tests failed on c9bb1b0's chain): an unrecognised
+          400 at native reaching the forced tool, learned on its answer; an
+          unrecognised 422 at native and 400 at the forced tool reaching
+          text, only `Text` learned; a recognised native refusal then an
+          unrecognised forced-tool 400 (both learned); rejections at every
+          rung, and a rejection followed by a timeout, learning nothing;
+          401, 403, 404, 429, 500, a 503 retried out, an overflow, a
+          timeout and a status-less error at native and at the forced tool
+          ending the chain after one request. `other_failures_end_the_chain`
+          lost its invalid-schema case (it now steps down) and gained a
+          400 at the text rung.
+        - Docs (both languages): `internals#structured-output-rungs` (the
+          chain, the refusal's note), `architecture#model-metadata` (what
+          the fact is learned from).
+        - Validation: `cargo fmt --all --check`; `RUSTFLAGS="-D warnings"
+          cargo check --workspace --all-targets --all-features`; `cargo
+          clippy --workspace --all-targets --all-features -- -D warnings`;
+          `cargo xtask check`; `cargo test --workspace --all-features`; `bun
+          install --frozen-lockfile`, `bun run format:check:site`, `bun run
+          site:check`, `bun run site:test`; `VITE_BASE_PATH=/hanafubuki-agent/
+          bun run site:build` built but could not prerender locally (port
+          3000 held by another project's server); CI's Site run covers it.
+        - Goldens: none changed. Hanafubuki: no API change. Module size: no
+          exception added or raised.
 - [ ] B2: the context window the metadata knows — bound sessions refreshed
       at a listing and at each response commit, `usage` in sync,
       `session_model_metadata` no longer hiding a resolved window, four
