@@ -1507,7 +1507,8 @@ Findings that changed the request's premises (the plan's §1 and §1.1):
   approval by reading journals every 400 ms. Two levels and `exec` need a
   forwarding sink (`Child` events).
 - "Every background terminal wakes its owner" makes a development server
-  wake it at the 10-minute timeout, and holds `exec` open that long (Q4).
+  wake it at the command timeout, and holds `exec` open that long. The
+  timeout becomes a setting (Q4, R4b), 10 minutes by default.
 - Counting running turns against the cap would let woken turns exceed it:
   the cap counts live agents across the tree instead.
 - `stage_turn_admission` is at 196 of 200 lines and `agent_bridge/mod.rs`
@@ -1515,15 +1516,19 @@ Findings that changed the request's premises (the plan's §1 and §1.1):
   takes nothing.
 
 Each milestone is one commit on main with green CI, strictly in order,
-after O3 (and after K4, I1, M7 and W1, whose files R5 and R8 share): R1 →
-R2 → R3 → R4 → R5 → R6 → R7 → R8. Each records, when done: what landed and
-any deviation, the validation commands that ran and those skipped, the CI
-run's URL (no Windows or macOS claim from a Linux run), whether goldens
-changed, what Hanafubuki must change at its next pin, and any module-size
-exception.
+after O3 (and after K4, I1 and M7, whose files R5 and R8 share; W1, which
+R4b follows in `crates/execution/src/shell.rs`, is on main): R1 → R2 → R3
+→ R4 → R4b → R5 → R6 → R7 → R8. R4b is its own small milestone before R5:
+the setting needs no wake, and R5's fragment states its value. Each
+records, when done: what landed and any deviation, the validation commands
+that ran and those skipped, the CI run's URL (no Windows or macOS claim
+from a Linux run), whether goldens changed, what Hanafubuki must change at
+its next pin, and any module-size exception.
 
-- [ ] Decisions: D1–D20 of the plan's §2, and the open questions Q1–Q12
-      of §5, answered.
+- [x] Decisions: D1–D20 of the plan's §2, and the questions Q1–Q12 of
+      §5, decided by the user on 2026-11-13: each as recommended, except
+      Q4, where the command timeout becomes the setting
+      `pluginOptions.execution.commandTimeoutMinutes` (D12, §3.13, R4b).
 - [ ] R1: the kernel's durable wake queue (`AgentWakeEvent`, keyed per
       sub-agent and terminal, bounded), `ConversationItem::WakeEvents`
       rendered as `<background_events>`, drained at every admission and
@@ -1547,12 +1552,20 @@ exception.
       never refused. A child's completion is held until its subtree is
       quiet. Adds the `Waiting` and `Closed` states, and splits
       `subagents/service.rs` by responsibility. Goldens regenerated.
+- [ ] R4b: the command timeout becomes a setting,
+      `pluginOptions.execution.commandTimeoutMinutes` (1–1440, default
+      10). The `execution` row takes options and a change in place,
+      without a restart; every `exec_command` execution, a `!command`'s
+      included, runs with the value at its call
+      (`ExecCommandRequest.timeout_ms`, in its plan and its approval's
+      canonical bytes); running commands keep theirs. No goldens; the
+      `config-reference` row is hand-written in both languages.
 - [ ] R5: background terminals wake their owner. The kernel queues the
       end on a terminal status of a call not in flight and withdraws it on
       disposal; `!command` and `Cancelled` are excluded. Adds the execution
-      plugin's `background_terminals` fragment and `exec` waiting for
-      terminals; Q4's timeout option if chosen. The 14 `exec_command`
-      goldens are regenerated.
+      plugin's `background_terminals` fragment, which states the
+      configured timeout, and `exec` waiting for terminals. The 14
+      `exec_command` goldens are regenerated.
 - [ ] R6: `close_subagent` (cascade), `close_background_terminal`, and
       `/stop` as the person's close. Each wakes the owner; archive, delete
       and side close do not.

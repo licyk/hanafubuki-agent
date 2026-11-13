@@ -10,6 +10,11 @@ Repositories, read from source on 2026-11-13:
   running background terminals and an exit watcher, but nothing that resumes
   a conversation; Hoshimi has neither. Neither is a model for the wake.
 
+The user answered the questions of §5 on 2026-11-13. Q4's answer (the
+command timeout becomes a setting) was worked in against main `ed2828f`,
+after W1 (`981765d`): the references D12 and R4b add are at that commit,
+and are marked so.
+
 The request has five parts. Numbers in brackets refer to them throughout:
 
 - [1] **The main agent's "Hook" mechanism**: after delegating, the main
@@ -37,7 +42,8 @@ is called **wake** everywhere in code, configuration and documentation:
 here.
 
 The `todo.md` section "Plan: wake events, nested sub-agents and the
-background task manager" tracks the milestones R1–R8 (§6).
+background task manager" tracks the milestones R1–R4, R4b and R5–R8
+(§6).
 
 A path this plan names that does not exist yet is a file its milestone
 creates; it is marked "(new)".
@@ -82,11 +88,11 @@ the code says otherwise, the design follows the code.
 | A `!command` item is the precedent for a typed, user-role history item | Correct. `ConversationItem::UserShellCommand` (`model/conversation_item.rs:239`) is lowered to the user-role `<user_shell_command>` fragment (`model/user_shell_command.rs`, `conversation_item.rs:458`). c930bcc shows every site a new item touches: the history store (`store/mod.rs:577`, `store/memory.rs:301`), the reviewer (`permission.rs:173`), compression (`compression/adapter.rs:186`), `/context` (`sampling/composition.rs`), validation (`validation/persistence.rs`, `tool_pairs.rs`), export (`service/export.rs:113`), `cli/src/sessions.rs:136`, TUI replay (`agent_bridge/replay.rs:155`). | `ConversationItem::WakeEvents` follows it (§3.2), with one new golden. |
 | A terminal exit while the session is idle reaches no sink | **Not quite.** `emit_session_event` (`kernel/src/service/progress.rs:522-531`) sends session events to the sink of the session's **latest managed turn**, which `spawn_managed_turn` retains (`turn/admission.rs:168-171`) until the session is removed. A child (no managed turn) has none. | The model is never told, and a UI is told only if it kept its last turn's sink. Terminal wakes are produced in the kernel (D11). |
 | `exec_command` yields after at most 30 s and completion is seen only on a poll | Correct: `MAX_WAIT_MS` (`crates/execution/src/resolver.rs:18`), the model's default yield is 10 s (`plugin-execution/src/arguments.rs:67-74`), and a `write_stdin` poll defaults to 5 s. An exit is reported only when a call returns it. The tool then reports `ExecutionDisposed` (`tool.rs:255-262`, `:294-300`). | Unchanged. The wake is added beside it (D11). |
-| Every command is killed after 10 minutes | Correct: `DEFAULT_COMMAND_TIMEOUT_MS` (`resolver.rs:10`) is the plan's timeout for every `exec_command` (`shell.rs:107`). | A long command times out as today, and the wake says so (D12, Q4). |
+| Every command is killed after 10 minutes | Correct: `DEFAULT_COMMAND_TIMEOUT_MS` (`resolver.rs:10`) is the plan's timeout for every `exec_command` (`shell.rs:107`). | The timeout becomes the setting `pluginOptions.execution.commandTimeoutMinutes`, 10 minutes by default (D12, R4b). A timeout is a wake event. |
 | Terminals survive turn end and are stopped only on archive, delete, side close or shutdown | Correct. `/stop`, archive (`service/sessions.rs:329`) and side close (`service/children.rs:107`) all go through `stop_background_terminals_confirmed` (`service/background_terminals.rs:23`, via `quiesce_background_terminals`, `:108`). | The person's stop and the Agent's teardown must split, so that only the person's wakes the owner (D13). |
 | `SubagentStart`/`SubagentStop` hooks are "unsupported: the Agent has no subagents" | The text is stale (`crates/hooks/src/event.rs:78`). | The text is fixed in R2. The events stay unsupported (Q10). |
 | Module sizes | Code lines (`cargo xtask module-size-report`): `subagents/service.rs` about 459 (585 physical lines), `agent_bridge/mod.rs` 596, `stage_turn_admission` 196 of 200 (`turn/state.rs:116`), `conversation_item.rs` 545, `kernel/src/conversation/mod.rs` 578, `agent/src/service/mod.rs` 556 (its `construct` 188), `session_driver/mod.rs` 518, `kernel/src/activity.rs` at its 647 exception ceiling. | Splits are planned per milestone (§6, "Module size"). Nothing is added to `activity.rs`. |
-| W1 (a POSIX shell on Windows) is in progress | It is not in `todo.md` at `147fdaa`. Its scope, as the coordinator described it, is `crates/execution`'s shell resolution. | R5 touches `crates/execution` only if Q4 makes the timeout an option (`shell.rs:107`). It lands after W1. |
+| W1 (a POSIX shell on Windows) is in progress | It is not in `todo.md` at `147fdaa`. Its scope, as the coordinator described it, is `crates/execution`'s shell resolution. | W1 landed (`981765d`) before the questions were answered. R4b, which makes the timeout a setting, edits `shell.rs` after it. |
 
 ### 1.1 Corrections to the direction given
 
@@ -101,12 +107,14 @@ The coordinator's direction is followed except where marked here.
   for "off" would leave two stores of the same fact.
 - **"Every background terminal wakes, no new argument."** This is kept, with
   one consequence spelled out. A command meant to run indefinitely (a
-  development server) is killed at the 10-minute timeout today. The wake
-  then resumes its owner to say so: a woken turn nobody asked for, at most
-  once per such terminal. In `exec`, which waits for the tree (D18), such
-  a terminal holds the run open until the timeout. Q4 asks whether to make
-  the timeout an option; the guidance tells the model to stop terminals it
-  no longer needs.
+  development server) is killed at the command timeout, 10 minutes unless
+  the person sets `pluginOptions.execution.commandTimeoutMinutes` (D12).
+  The wake then resumes its owner to say so: a woken turn nobody asked
+  for, at most once per such terminal. In `exec`, which waits for the tree
+  (D18), such a terminal holds the run open until its timeout. A longer
+  setting lets a server or a build outlive 10 minutes, and makes both
+  waits that much longer, up to 24 hours; the guidance tells the model to
+  stop terminals it no longer needs.
 - **"A dispatcher starts the woken turn using the session's sink."** The
   Agent does not start a root's woken turn by itself. It tells the host
   (`AgentBackgroundEvent::Woken`), and the host submits it (D4). A host's
@@ -122,8 +130,9 @@ The coordinator's direction is followed except where marked here.
 ## 2. Decisions
 
 Each decision gives what is decided, why, and the alternative rejected.
-Those marked **Q** are also open questions for the user (§5). Until
-answered, the plan assumes the decision as written.
+Those marked **Q** were also questions for the user, who answered them on
+2026-11-13 (§5): each as recommended, except Q4, which made the command
+timeout a setting. D12 records that answer.
 
 | # | Decision | Why | Rejected |
 | --- | --- | --- | --- |
@@ -138,7 +147,7 @@ answered, the plan assumes the decision as written.
 | **D9** | **Nesting.** A session's depth is its count of `Subagent` ancestors up to the root (`parent_session_id`). A session spawns when it is a root, or a `Subagent` at depth 1. Depth 2 is refused, and so are side conversations and reviews (§3.5 has the texts). Wake events go to the **direct** parent only. `list_agents`, `interrupt_agent`, `send_message`, `followup_task` and `wait_agent` address direct children, as today. | This is the request's two levels. Each agent coordinates what it spawned. | One flat namespace per tree: a depth-1 agent's children would leak into the root's tools. |
 | **D10 · Q2/Q3** | **`maximumRunningAgents`: default 8, range 1..16, counting live agents in the root's tree.** `spawn_agent` and a `followup_task` that would make an idle agent live are refused at the cap. A woken turn never is: a woken agent is already live, or becomes live only through an event about its own work. | Eight agents of the whole tree work at once. A suspended agent holds no turn but is not done, and counting it keeps the bound strict without refusing wakes. | Running turns per parent: 8 at the root and 8 under each child allow 72. Running turns across the tree: wakes past the cap would have to be refused or allowed to exceed it. |
 | **D11** | **Terminal wakes.** Every background terminal of a **model's** `exec_command` (never a `!command`'s, which its own turn waits for) queues an event on its owner when it ends: exited, failed or timed out, with no call having reported that end. The kernel produces it as it applies the terminal `ExecutionStatus` in the session's progress queue (`stage_execution_progress`, `progress.rs:488`), when the call the update belongs to (`call_id`) is not in flight in the session's turn. It is **withdrawn** when that execution's `ExecutionDisposed` is applied: a model's poll reported the end, or the Agent disposed of it. A `Cancelled` status (only the Agent's own stops produce it) queues nothing. No argument is added. | The monitor already orders a terminal status after its output and before disposal (`monitor_execution`, `plugin-execution/src/monitor.rs:197`; internals "Execution progress"). The kernel knows the session, the call and the turn. The withdrawal covers a `write_stdin` poll that saw the end, since its call id is not the execution's. | Producing it in the execution plugin: it would need per-execution state shared between calls and the monitor, and its own ordering against disposal. An opt-in `notify_on_exit` argument: a schema change in every golden, and a model that forgets it is never resumed. |
-| **D12 · Q4** | **The command timeout stays 10 minutes** unless Q4 says otherwise. A timeout is a wake event that names the limit. | The request asks for the wake, not a longer life. A longer default changes how a hung command fails for every session. | A silent change of the default. |
+| **D12 · Q4** | **The command timeout becomes a setting: `pluginOptions.execution.commandTimeoutMinutes`**, an integer from 1 to 1440, default 10 (today's limit). It bounds every `exec_command` execution, the model's and a `!command`'s, from its start. A change applies to the commands started after it, never to a running one, and restarts nothing. A timeout is a wake event that says how long the command ran (§3.13). | The user's answer to Q4. With terminals waking their owner, a command that outlives its limit is news rather than a poll, and a person who runs long builds or development servers can let them live. The default stays 10 minutes, so a hung command fails, and holds a waiting owner or `exec`, no longer than today unless the person chooses. | Keeping 10 minutes fixed: §1.1's development server would always be killed at 10 minutes. A longer default: every hung command would hold a sub-agent's completion and `exec` that much longer. A `timeout` argument of `exec_command`: a schema change in every golden, and the model, not the person, would choose how long a process lives. |
 | **D13 · Q9** | **Manual close.** *Closing a sub-agent* closes its live sub-agents first (depth 2), then interrupts its turn and waits for confirmation, stops its terminals, marks it `Closed`, and queues "closed by the user" on its parent, which wakes. The session stays, so a follow-up task can reuse it. *Closing a terminal* is `stop_confirmed` plus the stop's progress, then "stopped by the user" queued on its owner. `/stop` closes every terminal of the session this way. Archive, delete, side close and shutdown stop terminals and children **without** queuing anything, through the internal path (`quiesce_background_terminals`, split from the facade's `stop_background_terminals_confirmed`). | This is request [4]. The person's close is news for the agent; the Agent's own teardown is not, and its owner is going away. | Archiving a closed sub-agent: closing should not take its history out of the parent's view. Cascading `interrupt_agent`: the model's own interrupt redirects one agent and leaves the rest to it. |
 | **D14** | **The host contract** (§3.7). `AgentBackgroundEventSink`, installed at launch, receives `Woken`, `Changed { root }` and `Child { root, session_id, event }`. `Child` forwards a child turn's approval, question and terminal events: child turns get a forwarding sink. The snapshot is `background_tasks(root)`. The calls are `submit_wake_turn_with_sink`, `close_subagent` and `close_background_terminal`. | Polling child journals every 400 ms is how the TUI finds a child's approval today; it does not scale to two levels or to `exec`. | Forwarding every child event (streamed deltas included): a shown sub-agent's transcript is followed from its journal, as today. |
 | **D15 · Q6** | **Restart.** The queue is durable. Work that a stop of the Agent ends is reported as *lost* to its owner, by one function run at two moments. At a **clean shutdown**, it runs first in the stage that cancels turns, while history is open. A turn cancelled there is recorded `UserInterrupted` (`TerminalTransition::cancelled`, `turn/terminal.rs:13-21`), like a person's Esc, so it cannot be recognized afterwards. At **start**, after recovery, it covers a crash: turns settled as `ApplicationRestarted` (`recovery/repair.rs:142`) and the terminals `reconcile_recovered_execution_activities` disposes (`background_terminals.rs:117`). Each lost sub-agent is reported to its parent, and each lost terminal to its owner, unless that owner is itself reported lost. Keyed replacement makes the two runs idempotent. Nothing is woken at start: the events are delivered with the session's next turn. | The model is told the truth. The parent's queue is not lost with the process. No turn starts behind the person's back after a crash, which could also feed the crash-loop marker. | Waking at start. No wake events after restart at all: a parent suspended on a child would never learn the child is gone. |
@@ -296,7 +305,7 @@ Its last output (poll session 12 for the rest):
 …
 </output>
 
-Terminal session 13 timed out after 10 minutes and was stopped:
+Terminal session 13 timed out after 600 seconds and was stopped:
 <command>
 npm run dev
 </command>
@@ -316,6 +325,11 @@ make bench
 - An answer cut at 32 KiB ends `… (cut; the rest is in the sub-agent's
   conversation)`. A failed terminal reads `failed to run` in place of
   `exited with code N`. A terminal without output omits the output block.
+- A timed-out terminal says how long it ran, from the event's
+  `duration_millis`, as an exit does, and never names the setting: the
+  kernel does not read a plugin's options, and the command ran under the
+  timeout it started with, which a later change of the setting does not
+  alter (D12).
 - The item opens a woken turn the way a user message opens a turn, so a
   provider sees a user-role message first.
 - **Everywhere else the item goes**, by c930bcc's list (§1):
@@ -378,12 +392,15 @@ and the turn's `TurnWake` is on:
 ```text
 <background_terminals>
 ## Background terminals
-A command still running when `exec_command` or `write_stdin` returns keeps running as a background terminal under its `session_id`. You do not have to poll it: when nothing is left for you to do until it ends, end your turn, and you are resumed in a new turn, with a `<background_events>` update, when it exits, times out (after 10 minutes) or is stopped by the user. Poll it with `write_stdin` only when you need its output now. Stop the ones you no longer need (Ctrl+C with `write_stdin`): a terminal left running wakes you when it ends.
+A command still running when `exec_command` or `write_stdin` returns keeps running as a background terminal under its `session_id`. You do not have to poll it: when nothing is left for you to do until it ends, end your turn, and you are resumed in a new turn, with a `<background_events>` update, when it exits, times out (after {M} minutes) or is stopped by the user. Poll it with `write_stdin` only when you need its output now. Stop the ones you no longer need (Ctrl+C with `write_stdin`): a terminal left running wakes you when it ends.
 </background_terminals>
 ```
 
-The "10 minutes" is the timeout Q4 settles, written from its constant or
-option.
+`{M}` is `commandTimeoutMinutes` as the execution plugin holds it at that
+step (§3.13), 10 in the goldens. The fragment is contributed per step, so
+it follows a change of the setting at the next step. A command started
+before the change keeps the timeout it started with, and its wake event
+states how long it ran (§3.2), not either value.
 
 **Tool descriptions** (`tools.rs`). They are true in both modes:
 
@@ -409,8 +426,9 @@ option.
   terminals work) and `closed`.
 
 **Goldens.** R2 changes the 12 that carry `## Sub-agents` and the 14 that
-carry `spawn_agent`'s spec. R4 changes the same again (depth). R5 changes
-the 14 that offer `exec_command` (the fragment). Each regeneration is on
+carry `spawn_agent`'s spec. R4 changes the same again (depth). R4b
+changes none: no tool description states the command timeout (§3.13).
+R5 changes the 14 that offer `exec_command` (the fragment). Each regeneration is on
 purpose and reviewed (`HANAFUBUKI_AGENT_UPDATE_GOLDEN=1 cargo test -p
 hanafubuki-agent --lib golden`).
 
@@ -480,8 +498,8 @@ turn drains everything queued by its admission.
   (`TurnCancelled` with `UserInterrupted`, seen by the dispatcher through
   `TurnFinished` and the snapshot's terminal reason).
 - `woken_since_person` counts the woken turns of every session in the tree
-  since the root's last `User` turn; past 100 (`MAXIMUM_WOKEN_TURNS`, Q5)
-  the root is paused.
+  since the root's last `User` turn; past 100 (`MAXIMUM_WOKEN_TURNS`, a
+  constant, as Q5 decided) the root is paused.
 - A `TurnAdmitted { origin: User }` of the root clears both. The
   facade's `background_tasks(root)` reports `wake: On | Paused { reason }
   | Off`.
@@ -817,6 +835,91 @@ line and the dispatch arm: R3 first moves the session-creation part of its
 following of a sub-agent shown beside the session (`run_follow`,
 `:416`, 150 ms) stays.
 
+### 3.13 The command timeout [3]
+
+D12, as the user decided Q4. The references in this section are at
+`ed2828f`.
+
+**Today.** `DEFAULT_COMMAND_TIMEOUT_MS` (`crates/execution/src/resolver.rs:10`,
+10 minutes) is the plan's `timeout_ms` for every `exec_command`
+(`prepare_exec_command`, `crates/execution/src/shell.rs:116`), and the
+approval's canonical bytes carry it (`CanonicalShellAction.timeout_ms`,
+`shell_action`, version `agent-shell-v5`). `MAX_COMMAND_TIMEOUT_MS`
+(30 minutes, `crates/execution/src/command.rs:28`) bounds only the argv
+harness of the crate's contract tests (`StartCommandRequest`; `mod
+command` is compiled for tests and `test-support` only), which is the
+default's other user. The harness keeps both. The
+executor enforces any `timeout_ms` with no ceiling of its own
+(`spawn_timeout`, `crates/process/src/executor/backend_common.rs:89`).
+The `execution` row has no options (`AgentPluginRow::unconfigured`,
+`crates/agent/src/host/manifest.rs:102`).
+
+**The option**, the first of `[pluginOptions.execution]`:
+
+| Key | Kind | Default | Label and summary |
+| --- | --- | --- | --- |
+| `commandTimeoutMinutes` | An integer, 1 to 1440 | `10` | "Command timeout": "How long a command may run before it is stopped (minutes)" |
+
+- **Where it is declared.** A `PluginOptionSchema` is
+  `hanafubuki-agent-packages`', which the execution plugin's crate may not
+  depend on (its row in `xtask/src/dependencies.rs`). The schema is built
+  in the agent crate instead: `execution_option_schema()` (new) in
+  `crates/agent/src/host/descriptors.rs`, whose `execution` row takes
+  `.with_options(…)`, as `subagents` takes `subagents_option_schema()`.
+  Its bounds and default are constants `hanafubuki-agent-plugin-execution`
+  exports (`COMMAND_TIMEOUT_MINUTES_LIMITS`, `DEFAULT_COMMAND_TIMEOUT_MINUTES`),
+  so the schema's default and the plugin's are one value.
+- **How it reaches the plugin.** The manifest row becomes
+  `AgentPluginRow::from_settings(Capability, execution_plugin(…), |settings|
+  settings.options_value("execution"))`, and `execution_plugin` becomes
+  `PluginDef::typed` over `ExecutionOptions { command_timeout_minutes }`
+  (`Deserialize`, camelCase, `default`; the crate gains `serde` with
+  `derive`). The value arrives in range: the settings boundary clamps a
+  file's value with a warning and refuses a write out of range
+  (`config-reference#plugin-options`), so the plugin checks nothing again.
+- **A change is taken in place.** `ctx.on_update` stores the new value in
+  `ExecServices` (an `AtomicU64` of milliseconds) and returns `true`. The
+  plugin never restarts for it: a restart would stop the output monitors
+  of running terminals (its `execution monitors` disposer), and no tool
+  spec states the limit (`crates/plugin-execution/src/specs.rs`).
+- **How it reaches a command.** `ExecCommandRequest` gains
+  `timeout_ms: u64`. `parse` (`crates/plugin-execution/src/arguments.rs`,
+  where the request is built) takes the value `parse_call`
+  (`crates/plugin-execution/src/tool.rs`) reads from `ExecServices`, and
+  `prepare_exec_command` puts `request.timeout_ms` in the plan in place of
+  `DEFAULT_COMMAND_TIMEOUT_MS`. With no production user left, that
+  constant moves from `resolver.rs` into `command.rs`, beside the argv
+  harness that still uses it.
+  The canonical bytes keep their shape and `agent-shell-v5`: an approval
+  is of the command with its timeout. `AllowForSession` allows a tool,
+  not a digest, so a change does not undo it.
+- **A change between a call's approval and its start.** `permission` and
+  `invoke` each parse the call, and the start prepares it again and checks
+  the exact approval (`start_exec_command`,
+  `crates/execution/src/service/start.rs`). A change of the setting in
+  between fails that one call's check, and the model reads the error and
+  calls again. It fails closed, it needs the person to change the setting
+  while the call waits, and it gets no code of its own (AGENTS.md on
+  unlikely races).
+- **Scope.** Every `exec_command` execution: a model's call and the
+  background terminal it leaves, a sub-agent's, and a `!command`, which
+  runs through the same tool (`run_user_shell_command`,
+  `crates/kernel/src/service/tool_execution/user_shell.rs`). A `!command`
+  holds its tool call until it exits (`run_to_exit`), so the turn's tool
+  timeout (`[modelPolicy.turnBudget].toolIdleTimeoutSeconds`, 600 by
+  default, `crates/kernel/src/service/tool_execution/handler.rs:147`) and
+  the turn's 30-minute deadline (`drive_turn`,
+  `crates/kernel/src/service/turn/worker.rs`, which covers a `!command`'s
+  turn too) still stop it first when they are shorter: the
+  setting never lengthens a `!command` past them. Hooks' commands, MCP
+  servers and Git queries keep their own limits.
+- **Running commands** keep the timeout their plan had at their start
+  (the executor's timer). A change applies from the next `exec_command`.
+- **What the model reads.** Nothing changes in R4b: no tool description
+  names the limit, and a timed-out call's result is as today. From R5, the
+  `background_terminals` fragment states the current value (§3.3), and a
+  timed-out terminal's wake event states how long it ran (§3.2).
+
 ## 4. Edge cases
 
 | Case | What happens |
@@ -836,10 +939,11 @@ following of a sub-agent shown beside the session (`run_follow`,
 | Parent in Manual mode, the terminal interface on another session | The root is not woken (the interface submits only for what it shows). Its row in `/agents` shows `N updates`. Opening it shows the waiting state; the next message delivers them. |
 | Parent in Manual mode under `exec` | Woken turns run with `exec`'s answers (§3.11). |
 | Parent in a host | The host decides on `Woken`. Not submitting leaves the events for the next turn. |
-| `exec` and a terminal that never exits | `exec` waits until the command timeout (10 minutes, Q4), then the woken turn sees `timed out`, and `exec` ends if nothing else is live. The guidance says to stop terminals no longer needed (§1.1). |
+| `exec` and a terminal that never exits | `exec` waits until the command timeout (`commandTimeoutMinutes`: 10 minutes by default, at most 24 hours; D12), then the woken turn sees `timed out`, and `exec` ends if nothing else is live. The guidance says to stop terminals no longer needed (§1.1). |
 | `exec` Ctrl-C | Cancels, closes the tree's work, exits 130 (§3.11). |
 | Wake option turned off with events queued | Nothing more is queued from terminals or messages, and no session is woken. Nothing is dropped and nothing is delivered by a turn: `wait_agent` takes the sub-agents' final statuses as today, and messages and terminal ends wait until the option is on again. |
-| A sub-agent ends its turn with a terminal still running | Its `Completed` is held until the terminal ends: at most the command timeout (10 minutes, Q4). Today its parent would hear at once. The guidance tells it to stop terminals it no longer needs. |
+| A sub-agent ends its turn with a terminal still running | Its `Completed` is held until the terminal ends: at most the command timeout (`commandTimeoutMinutes`: 10 minutes by default, at most 24 hours; D12). Today its parent would hear at once. The guidance tells it to stop terminals it no longer needs. |
+| The person changes `commandTimeoutMinutes` while terminals run | They keep the timeout they started with; commands started afterwards take the new one, and the fragment states it from the next step (§3.13). Nothing restarts. |
 | Wake option turned on while sub-agents work | From the next activation of each session. A sub-agent's final status already queued is delivered at the parent's next step or wake. |
 | A child finishes while its parent is in `wait_agent` | `wait_agent` takes its status from the queue. It is never delivered twice. |
 | The model polls a terminal whose end is queued but not delivered | The poll's disposal withdraws the event (§3.8). |
@@ -855,57 +959,74 @@ following of a sub-agent shown beside the session (`run_follow`,
 | A host's per-turn sink is closed when `Woken` comes | Nothing uses it: the host submits the wake turn with a sink of its choice. |
 | The Agent restarts automatically after a kernel fault | Same as a restart: nothing is woken while starting. The new instance's dispatcher starts with no pause state. |
 
-## 5. Open questions for the user
+## 5. The questions, answered
 
-Each has the recommendation the plan assumes until answered.
+The user answered every question on 2026-11-13: each as recommended,
+except Q4, where the user chose the alternative. Each entry keeps the
+question and records the decision; none is open.
 
-- **Q1 — the option.** Key `wakeOnBackgroundTasks` (General, boolean,
-  default `true`), one switch for sub-agents and terminals, also in a
-  host's `config.toml` and the settings center's General section.
-  *Recommended as written.* The alternative is two keys
-  (`wakeOnSubagents`, `wakeOnTerminals`); nothing in the request asks for
-  them.
-- **Q2 — what the cap counts.** *Recommended: live agents across the
-  tree* (running or waiting on their own work), so 8 means at most 8
-  sub-agents with unfinished work under one conversation, and woken turns
-  never exceed it. The alternative, running turns across the tree, frees a
-  slot while an agent is suspended, but a woken turn then has to exceed
-  the cap.
-- **Q3 — the range.** *Recommended: 1..16 unchanged*, default 8.
-- **Q4 — the command timeout.** *Recommended: keep 10 minutes for this
-  plan* (D12) and decide separately. If you want long commands to outlive
-  it, the smallest change is an option `pluginOptions.execution.commandTimeoutMinutes`
-  (1–1440, default 10). The execution plugin gains an option schema, the
-  fragment and the `TimedOut` text read it, and `prepare_exec_command`
-  (`shell.rs:107`) takes it: about 60 lines, after W1. A longer default
-  makes a hung command hold `exec` that much longer.
-- **Q5 — runaway bound.** *Recommended: pause after 100 woken turns in a
-  tree since the person's last message, constant.* Alternatives: no bound,
-  or an option.
-- **Q6 — restart.** *Recommended: a durable queue, `Lost` events for work a
-  restart stopped, and no wake at start* (D15). Alternative: no durable
-  queue and no restart events: about 150 fewer lines, but a parent
-  suspended on a child never learns it is gone.
-- **Q7 — messages from a child.** *Recommended: `send_message` with
-  `target` `parent`, at most 16 unread.* Alternative: a `message_parent`
-  tool.
-- **Q8 — `exec`.** *Recommended: wait for the tree (agents, terminals,
-  queued events), answer the tree's approvals by `--approve`, exit with
-  the last root turn's outcome.* Alternative: wait for agents only and
-  stop terminals at the end, which drops a model's `cargo test` it left to
-  wake it.
-- **Q9 — what closing a sub-agent does.** *Recommended: stop its subtree's
-  turns and terminals, keep its session (it takes follow-up tasks), tell
-  its parent.* Alternative: archive it as well.
-- **Q10 — `SubagentStart` and `SubagentStop` user hooks.** *Recommended:
-  still unsupported, with a correct reason* ("the Agent runs no hook when
-  a sub-agent starts or stops"). Supporting them is a separate request.
-- **Q11 — names in the terminal interface.** *Recommended: `/tasks`, the
-  `background-tasks` status item (on by default, omitted at zero),
-  `leader t`.* Alternatives: `/background`, or `/ps` opening the manager.
-- **Q12 — order.** *Recommended: after O3* (§6, "Order"). Alternative:
-  before M1, which moves O1–O3 after R8 and has O's plan re-read for the
-  split `service/` module and the new guidance.
+- **Q1 — the option.** One key, `wakeOnBackgroundTasks` (General,
+  boolean, default `true`), for sub-agents and terminals, also in a
+  host's `config.toml` and the settings center's General section; or two
+  keys (`wakeOnSubagents`, `wakeOnTerminals`)? **Decided by the user on
+  2026-11-13, as recommended: the one key** (D5). Nothing in the request
+  asks for two.
+- **Q2 — what the cap counts.** Live agents across the tree (running or
+  waiting on their own work); or running turns across the tree, which
+  frees a slot while an agent is suspended but makes a woken turn exceed
+  the cap? **Decided by the user on 2026-11-13, as recommended: live
+  agents across the tree** (D10). 8 means at most 8 sub-agents with
+  unfinished work under one conversation, and woken turns never exceed
+  it.
+- **Q3 — the range.** **Decided by the user on 2026-11-13, as
+  recommended: 1..16 unchanged**, default 8 (D10).
+- **Q4 — the command timeout.** Keep 10 minutes for this plan, as the
+  plan recommended; or make it an option,
+  `pluginOptions.execution.commandTimeoutMinutes` (1–1440, default 10)?
+  **Decided by the user on 2026-11-13: the option** (D12, designed in
+  §3.13, landed by R4b). Its default stays 10 minutes. It bounds every
+  `exec_command` execution, a `!command`'s included, and a change applies
+  to the commands started after it, never to running ones. A longer
+  setting lets a development server or a long build outlive 10 minutes,
+  and holds `exec` and a waiting owner that much longer (§1.1).
+- **Q5 — runaway bound.** Pause after 100 woken turns in a tree since the
+  person's last message; or no bound; or an option? **Decided by the user
+  on 2026-11-13, as recommended: 100 woken turns per tree, a constant**
+  (D16, `MAXIMUM_WOKEN_TURNS`).
+- **Q6 — restart.** A durable queue, `Lost` events for work a restart
+  stopped, and no wake at start; or no durable queue and no restart
+  events (about 150 fewer lines, but a parent suspended on a child never
+  learns it is gone)? **Decided by the user on 2026-11-13, as
+  recommended: the durable queue, `Lost` events and no wake at start**
+  (D15).
+- **Q7 — messages from a child.** `send_message` with `target` `parent`,
+  at most 16 unread; or a `message_parent` tool? **Decided by the user on
+  2026-11-13, as recommended: `send_message` to `parent`, at most 16
+  unread** (D7).
+- **Q8 — `exec`.** Wait for the tree (agents, terminals, queued events),
+  answer the tree's approvals by `--approve`, and exit with the last root
+  turn's outcome; or wait for agents only and stop terminals at the end,
+  which drops a model's `cargo test` it left to wake it? **Decided by the
+  user on 2026-11-13, as recommended: `exec` waits for the tree and
+  answers its approvals and questions with `--approve`** (D18, §3.11).
+- **Q9 — what closing a sub-agent does.** Stop its subtree's turns and
+  terminals, keep its session (it takes follow-up tasks) and tell its
+  parent; or archive it as well? **Decided by the user on 2026-11-13, as
+  recommended: stop, keep the session, tell the parent** (D13).
+- **Q10 — `SubagentStart` and `SubagentStop` user hooks.** Support them,
+  or keep them unsupported? **Decided by the user on 2026-11-13, as
+  recommended: still unsupported, with a correct reason** ("the Agent
+  runs no hook when a sub-agent starts or stops"). Supporting them is a
+  separate request (§8).
+- **Q11 — names in the terminal interface.** `/tasks`, the
+  `background-tasks` status item (on by default, omitted at zero) and
+  `leader t`; or `/background`; or `/ps` opening the manager? **Decided
+  by the user on 2026-11-13, as recommended: `/tasks`,
+  `background-tasks` and `leader t`** (D20).
+- **Q12 — order.** After O3; or before M1, which moves O1–O3 after R8 and
+  has O's plan re-read for the split `service/` module and the new
+  guidance? **Decided by the user on 2026-11-13, as recommended: after
+  O3** (§6, "Order").
 
 ## 6. Milestones
 
@@ -915,7 +1036,7 @@ Strictly sequential. Each milestone is one commit on main, pushed, with
 green CI, before the next starts:
 
 **(shortcuts plan: K3 → K4 → I1 → M1 … M8) → (O1 → O2 → O3) → R1 → R2 →
-R3 → R4 → R5 → R6 → R7 → R8**
+R3 → R4 → R4b → R5 → R6 → R7 → R8**
 
 - **After O3** (Q12). O1–O3 edit the same files as R2–R4:
   - `subagents/{tools,service,mod}.rs` (`spawn`, `SpawnRequest`,
@@ -935,8 +1056,12 @@ R3 → R4 → R5 → R6 → R7 → R8**
   its tail of output must stay the plain text. Whether M7 also edits
   `kernel/src/service/progress.rs` is to be confirmed when M7 lands; the
   order avoids the question.
-- **After W1**: only if Q4 adds the timeout option (`crates/execution`'s
-  `shell.rs`, where W1 works).
+- **R4b, its own milestone right before R5** (Q4). The setting does not
+  depend on the wake, and changes nothing the model reads, so it lands
+  as a small commit with no golden of its own. R5's fragment then states
+  its value, and R5 stays about terminal wakes. Its label keeps R1–R8's
+  numbers, as T1b did in the settings plan. W1, which also edits
+  `crates/execution/src/shell.rs`, is on main already (`981765d`).
 
 Each milestone records in `todo.md`, when done:
 
@@ -1171,20 +1296,94 @@ deadline of 20 s or more, never a fixed sleep.
   - Hanafubuki: `AgentSubagentState::{Waiting, Closed}`,
     `AgentSubagentStatus.{parent_session_id, depth}`; goldens.
 
+- **R4b — the command timeout becomes a setting** ([3]; D12, §3.13).
+  The user's answer to Q4. Nothing in it reads or queues a wake event.
+  - Scope:
+    - `pluginOptions.execution.commandTimeoutMinutes` (1–1440, default
+      10) in the `execution` row's descriptor, so the settings catalog,
+      `config get`/`config set`, `/plugins`' options form and a host's
+      settings page have it;
+    - the `execution` row derives from its options and takes a change in
+      place, without a restart;
+    - every `exec_command` execution, a `!command`'s included, runs with
+      the value at its call (`ExecCommandRequest.timeout_ms`), in its plan
+      and its approval's canonical bytes.
+  - Files (at `ed2828f`): `crates/execution/src/model.rs`
+    (`ExecCommandRequest.timeout_ms`), `crates/execution/src/shell.rs`
+    (`prepare_exec_command` takes it), `crates/execution/src/resolver.rs`
+    and `crates/execution/src/command.rs` (`DEFAULT_COMMAND_TIMEOUT_MS`
+    moves to the argv harness, its only user);
+    `crates/plugin-execution/Cargo.toml` (`serde`),
+    `crates/plugin-execution/src/plugin.rs` (`PluginDef::typed`,
+    `on_update`), `crates/plugin-execution/src/options.rs` (new:
+    `ExecutionOptions` and the exported bounds and default),
+    `crates/plugin-execution/src/tool.rs` (`ExecServices` holds the
+    value; `parse_call` passes it), `crates/plugin-execution/src/arguments.rs`
+    (`parse` puts it in the request it builds),
+    `crates/plugin-execution/src/lib.rs`;
+    `crates/agent/src/host/descriptors.rs` (`execution_option_schema()`,
+    the row's `.with_options`), `crates/agent/src/host/manifest.rs`
+    (`from_settings`). Every test that builds an `ExecCommandRequest` or
+    calls `parse` sets the field: `crates/execution/tests/contracts/`
+    (`main.rs`, `output.rs`, `windows_posix.rs`, `windows_powershell.rs`),
+    `crates/execution/tests/windows_sandbox.rs`,
+    `crates/plugin-execution/src/monitor/tests.rs`,
+    `crates/plugin-execution/src/arguments/tests.rs` and
+    `crates/agent/src/tests/sessions/mod.rs`.
+  - Tests:
+    - execution contract (`crates/execution/tests/contracts/unified.rs`):
+      the plan and the action carry the request's `timeout_ms`; two
+      requests differing only in it have different action digests; a
+      request with a timeout of 1 s (the request is in milliseconds; only
+      the option counts minutes) ends a sleeping command `TimedOut`, POSIX
+      and PowerShell;
+    - plugin (`crates/plugin-execution`): a call's request takes the
+      plugin's value in milliseconds; an update changes the next call's
+      and leaves the plugin running, and a command already started keeps
+      its timeout; a `!command` (`ToolCallOrigin::User`) takes it too;
+    - agent: the settings catalog's `pluginOptions.execution` section with
+      the key, its label, default 10 and bounds 1..1440
+      (`crates/agent/src/tests/settings_catalog.rs`); a write of 0 or 1441
+      refused; a file's 2000 clamped to 1440 with a warning; a write
+      reaches the running plugin with no restart (`/plugins`' status).
+    No test waits on the option: its minimum is 1 minute.
+  - Goldens: none. No tool description or fragment states the limit until
+    R5.
+  - Module size: nothing near a limit (the largest file it edits,
+    `crates/execution/src/model.rs`, has 365 physical lines).
+  - Docs (both languages): `config-reference#plugin-options` (the row,
+    written by hand: `cargo xtask check-config-reference` reads only the
+    specs under `crates/config/src`, so it does not cover plugin options;
+    and "A change the Agent writes applies at once" gains `execution`,
+    which takes a new timeout in place for the commands started after
+    it); `tools#commands` ("Time limits": every process is stopped after
+    the command timeout, 10 minutes unless set); `terminal-interface#composer`
+    (a `!command` runs at most the command timeout or the tool timeout,
+    the shorter); `plugin-rules#host-configuration-and-status` ("The
+    options of `subagents` are the first" gains `execution`) and
+    `#the-plugins-today` (the `execution` row's option).
+  - Acceptance: a person sets the command timeout in the settings center,
+    `config set` or `config.toml`, and every command started afterwards
+    runs up to it, while the running ones keep theirs and nothing
+    restarts; with the default, nothing the model or the person sees
+    changes.
+  - Hanafubuki: the `pluginOptions.execution` section reaches its
+    settings page from the catalog; `ExecCommandRequest.timeout_ms` if it
+    builds the request itself.
+
 - **R5 — terminals wake their owner** ([3]; D11, D12, §3.8).
   - Scope:
     - kernel production and withdrawal of terminal events;
     - the in-flight call set if it is missing;
-    - the execution plugin's `background_terminals` fragment;
+    - the execution plugin's `background_terminals` fragment, which
+      states R4b's current `commandTimeoutMinutes`;
     - `!command` excluded;
-    - `exec` also waits for terminals;
-    - Q4's timeout option if the answer asks for it.
+    - `exec` also waits for terminals.
   - Files: `kernel/src/service/progress.rs` (`stage_execution_progress`),
     `service/wake/terminal.rs` (new: the check and the event),
     `service/mod.rs` (`TurnRecord`'s in-flight calls, if needed),
-    `plugin-execution/src/{plugin,prompt}.rs` (`prompt.rs` new),
-    `cli/src/exec/mod.rs`; with Q4, `plugin-execution` options and
-    `execution/src/shell.rs`.
+    `plugin-execution/src/{plugin,prompt}.rs` (`prompt.rs` new; it reads
+    the value `ExecServices` holds), `cli/src/exec/mod.rs`.
   - Tests (`crates/agent/src/tests/executions.rs` and
     `tests/background_terminals.rs` (new); POSIX and PowerShell):
     - a command still running at yield, the turn ends, its exit wakes the
@@ -1192,11 +1391,17 @@ deadline of 20 s or more, never a fixed sleep.
     - a command that ends within its call queues nothing;
     - a `write_stdin` poll that sees the end withdraws the event, so no
       woken turn and no duplicate at the next step;
-    - a timeout (a test-only short timeout) queues `timed out`;
+    - a timeout queues `timed out` with how long the command ran. The
+      option's minimum is 1 minute, so this test does not run a real
+      timeout: a kernel contract test reports a terminal `TimedOut`
+      `ExecutionStatus` through a tool's progress sink, the boundary where
+      §3.8 produces the event. The executor's own timeout is R4b's
+      contract test, with a request timeout in milliseconds;
     - a `!command`'s end queues nothing;
     - the policy off queues nothing;
     - the fragment shown with `exec_command` offered and the policy on,
-      and absent otherwise;
+      and absent otherwise; it states the configured minutes, and a
+      change of the setting at the next step;
     - `exec` waits for a background terminal and exits after the woken
       turn.
   - Goldens: the 14 offering `exec_command` (the fragment), regenerated on
@@ -1205,8 +1410,10 @@ deadline of 20 s or more, never a fixed sleep.
     `wake/terminal.rs`.
   - Docs: `tools#commands` (background terminals wake their session);
     `internals#execution-progress` (the wake and the withdrawal) and
-    `#wake-events`; `exec` (waits for terminals); `plugin-rules` (the
-    `execution` row's fragment); with Q4, `config-reference`.
+    `#wake-events`; `exec` (waits for terminals, at most the command
+    timeout); `plugin-rules` (the `execution` row's fragment);
+    `config-reference#plugin-options` (`commandTimeoutMinutes` also
+    bounds how long a terminal holds its owner and `exec`).
   - Acceptance: a model that starts a long command and ends its turn is
     resumed when it ends, and never told twice.
   - Hanafubuki: goldens; nothing else.
@@ -1307,7 +1514,8 @@ deadline of 20 s or more, never a fixed sleep.
 - **Unprompted turns cost money.** Every wake is a model call nobody typed.
   The pause, the runaway bound and the held child completion (D8) keep
   the count to "one per unit of finished work", but a tree of 8 agents
-  each with terminals can still wake often. Q5 sets the bound.
+  each with terminals can still wake often. The bound is 100 woken turns
+  per tree, a constant (Q5).
 - **Terminal end detection** relies on the "call in flight" test and on the
   monitor ordering a status before the disposal (§3.8). A third ordering
   this plan missed would show up as a duplicate update or a missed wake.
@@ -1318,8 +1526,10 @@ deadline of 20 s or more, never a fixed sleep.
   and the host's own submit race by design. Every path ends in "drain if
   not empty and idle", which is idempotent. A test hammers it with
   concurrent events.
-- **The 10-minute timeout** makes a development server a guaranteed wake,
-  and holds `exec` (§1.1, Q4).
+- **The command timeout** (10 minutes by default) makes a development
+  server a guaranteed wake, and holds `exec` and a sub-agent's completion
+  until it. A person who raises `commandTimeoutMinutes` lengthens both,
+  up to 24 hours (§1.1, D12).
 - **The forwarding sink** puts child events on the host's thread. It
   forwards a handful of kinds only, and `emit` must not block (as every
   sink).
