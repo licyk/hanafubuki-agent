@@ -1304,6 +1304,83 @@ exception.
 - [ ] O3: a child's Provider, model and effort in `list_agents`,
       `AgentSubagentStatus` and `/subagents` (status cell and picker).
 
+## Plan: wake events, nested sub-agents and the background task manager (2026-11-13)
+
+The plan is [docs/plan-agent-wake-and-background-tasks.md](docs/plan-agent-wake-and-background-tasks.md),
+read from main `147fdaa`. What the request calls the "Hook" mechanism is
+called **wake** everywhere: user-configured hooks already exist.
+
+Findings that changed the request's premises (the plan's §1 and §1.1):
+
+- A parent hears of a child only through `wait_agent`: an in-memory
+  `unreported` flag that a restart loses. The kernel queue replaces it, so
+  even with the option off, final statuses become durable.
+- Session events of an idle session reach the sink of its last managed
+  turn, not nowhere. Even so, a root's woken turn is submitted by its host
+  (`AgentBackgroundEvent::Woken`), never started on a retained sink.
+- Child turns have no sink: the terminal interface finds a child's
+  approval by reading journals every 400 ms. Two levels and `exec` need a
+  forwarding sink (`Child` events).
+- "Every background terminal wakes its owner" makes a development server
+  wake it at the 10-minute timeout, and holds `exec` open that long (Q4).
+- Counting running turns against the cap would let woken turns exceed it:
+  the cap counts live agents across the tree instead.
+- `stage_turn_admission` is at 196 of 200 lines and `agent_bridge/mod.rs`
+  at 596 of 600: both are split first. `activity.rs` is at its ceiling and
+  takes nothing.
+
+Each milestone is one commit on main with green CI, strictly in order,
+after O3 (and after K4, I1, M7 and W1, whose files R5 and R8 share): R1 →
+R2 → R3 → R4 → R5 → R6 → R7 → R8. Each records, when done: what landed and
+any deviation, the validation commands that ran and those skipped, the CI
+run's URL (no Windows or macOS claim from a Linux run), whether goldens
+changed, what Hanafubuki must change at its next pin, and any module-size
+exception.
+
+- [ ] Decisions: D1–D20 of the plan's §2, and the open questions Q1–Q12
+      of §5, answered.
+- [ ] R1: the kernel's durable wake queue (`AgentWakeEvent`, keyed per
+      sub-agent and terminal, bounded), `ConversationItem::WakeEvents`
+      rendered as `<background_events>`, drained at every admission and
+      every step, `TurnAdmission::Wake` and `submit_wake_turn_with_sink`.
+      Inert: only test support queues events. New golden
+      `wake_events_request.json`.
+- [ ] R2: the main agent suspends and wakes on its sub-agents. Adds
+      `wakeOnBackgroundTasks` (default on), the dispatcher, the person's
+      pause and the 100-turn runaway bound. `wait_agent` reads the queue
+      (`unreported` goes). Adds `send_message` to `parent`, the guidance
+      ("end your turn; you are resumed"), Goal's pass while background
+      work runs, the host's `Woken`, the TUI's submit and waiting line, and
+      `exec` waiting for the tree. The 12 guidance and 14 spec goldens are
+      regenerated.
+- [ ] R3: the background feed: `background_tasks(root)`, `Changed`, and
+      `Child` events from a forwarding sink on child turns. The TUI's
+      400 ms watch goes, and `exec` answers children's approvals.
+- [ ] R4: two levels of sub-agents (depth from lineage; depth 2, side
+      conversations and reviews refused) and `maximumRunningAgents`
+      default 8, counting live agents across the tree; woken turns are
+      never refused. A child's completion is held until its subtree is
+      quiet. Adds the `Waiting` and `Closed` states, and splits
+      `subagents/service.rs` by responsibility. Goldens regenerated.
+- [ ] R5: background terminals wake their owner. The kernel queues the
+      end on a terminal status of a call not in flight and withdraws it on
+      disposal; `!command` and `Cancelled` are excluded. Adds the execution
+      plugin's `background_terminals` fragment and `exec` waiting for
+      terminals; Q4's timeout option if chosen. The 14 `exec_command`
+      goldens are regenerated.
+- [ ] R6: `close_subagent` (cascade), `close_background_terminal`, and
+      `/stop` as the person's close. Each wakes the owner; archive, delete
+      and side close do not.
+- [ ] R7: restart. Work a stop of the Agent ended is reported as `Lost`
+      to its owner (transitively), at a clean shutdown before turns are
+      cancelled and at start for a crash. It is idempotent by key, and
+      nothing is woken while starting.
+- [ ] R8: the terminal interface. `/tasks` (the manager: a tree of agents,
+      the terminals, inspect, close, resume), the `background-tasks`
+      status item in the default status line, the waiting and paused
+      lines, `open_tasks` on `leader t` with its `?` row, and the `/ps`
+      and `/subagents` hints.
+
 ## Plan: a registry-driven settings center, the command center, and the conversation timeline (2026-11-12)
 
 **Complete (2026-11-13):** every item below is done; T7 was the last.
