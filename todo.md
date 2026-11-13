@@ -1,3 +1,50 @@
+## Flaky Windows tests (2026-11-13)
+
+From CI's failed jobs over the last 60 runs; each passed on a re-run.
+
+- **Durable writes on the runner's system disk** (Windows): `plugins::subagents::tests::messages_steer_…` 2×,
+  `…the_depth_and_running_limits_…` 1×, `…roles::a_child_is_its_parent_narrowed_by_its_role` 1×,
+  `…roles::a_child_takes_its_roles_model_and_effort_else_its_parents` 1× (history writers past the 10 s shutdown),
+  `tests::sessions::children::a_driven_child_runs_a_turn_answers_and_is_interrupted` 1×. Every test's Agent keeps its
+  data under `TEMP`, on C:, where a history append (each flushed to disk) took 200 ms at the median and up to 12.4 s
+  once four tests wrote at once (the appends' `agent_diag` log, 12 runs of the agent's unit tests right after a full
+  build). Turns, a cancellation's durable `Cancelled` (`CONFIRMATION_DEADLINE`, 5 s → `CancellationNotConfirmed`) and
+  the tests' 10 s and 20 s waits ran past their deadlines. Fix (`ci.yml`): on Windows `TEMP`/`TMP` are a directory the
+  job creates under `runner.temp` (D:, the local disk), with the user's own inheritable full control as a profile's
+  temporary directory has (D: grants it only through Administrators, which the sandbox's unelevated token lacks: without
+  it `sandbox::windows` could not write a temporary file the test had made). Appends then took 7-110 ms at the median,
+  at most 433 ms; the agent's unit tests 55-106 s instead of 178-271 s (47.5 s in CI, from 294.7 s). The 5 s
+  confirmation stays as documented (internals, "Cancellation"): on a disk this slow an interrupt is still carried out,
+  but reported as not confirmed.
+- **PowerShell silent for a whole 30 s yield** (Windows): `plugins::review::tests::a_review_reads_only_and_its_findings_reach_the_parent`
+  4× (its `git --no-pager log`), and on the verification PR, with `TEMP` on D:,
+  `tests::executions::unified_exec_completes_only_after_manual_exact_approval` 1×. Partly the disk: the first PowerShell
+  of a run took 15-21 s with `TEMP` on C:, 1.4-3.2 s on D:, later ones under 0.7 s. **Open**: the D: occurrence is not
+  explained; four runs replicating CI (with a 2 s process sampler, and cold launches timed at 300-430 ms) showed none,
+  every PowerShell finishing within 634 ms. The exec test's assertions now print the tool's result, so the next one
+  says what it returned.
+- **`app::tests::queue::esc_interrupts_and_sends_the_waiting_steers_as_one_turn_which_can_be_edited`** (TUI, Windows 1×):
+  a product race. A steer in flight when Esc interrupted could reach the Agent after the cancellation, which refuses it;
+  when the refusal arrived before the turn's end, the input queue held it for a later turn, and the turn the interrupt
+  started lost it. Fix (`chatwidget/input_queue.rs`): after such an Esc no steer goes to the turn being interrupted, and a
+  refused one waits with the others, in order; a unit test pins the interleaving.
+- **`app::tests::queue::esc_returns_a_scrolled_conversation_to_the_bottom_before_it_interrupts`** (Linux, locally) and
+  four more queue tests: their "running turn" was an answer sent after 3 s, which a loaded machine outlived before the
+  test's Esc. Fix: the answers those tests interrupt or outlive come after 60 s. On one CPU under load: 7 of 8 runs failed
+  before, 0 of 25 after.
+- **`plugin_crashes`, `a_plugins_failing_hooks_have_no_effect`** (macOS, on the verification PR): every hook had a 1 s
+  timeout, meant for its `sleep 30`; the hooks touching a marker had the same second for the login shell (`$SHELL -lc`,
+  which reads the runner's profile) and missed it. Fix: those have 30 s, the hanging one keeps 1 s.
+- Already fixed, not recurring: `bottom_pane::tests::tabs_within_a_paste_burst_are_the_pastes_and_send_nothing` (6e36de1),
+  `crates/plugin-packages/tests/guests/linked.rs:124` (6d61cc8), and the macOS
+  `output::a_poll_behind_the_retained_output_says_exactly_what_it_missed` (BSD `seq` printing `1e+06`, replaced by `awk`
+  in 7ada3f2; not a race). The `'checks'` panic at `service/plugins.rs:159/162` in every log is a plugin-fault test's own.
+
+CI on the fixes: [run 43368738460](https://github.com/licyk/hanafubuki-agent/actions/runs/43368738460), attempts 1-3, every job green
+with no job re-run (draft PR #23, closed). Before it on the PR: 43356255093 and 43358328046 (the sandbox and D:'s
+ACL), 43360809312 (the macOS hooks check), 43362999766 (green, then the open PowerShell silence on attempt 2).
+Diagnosis: 43350869210, 43353037350, 43360449754, 43360678802, 43366854195.
+
 ## Plan: Codex's shortcuts, image paste and rendering; titles, /effort and /context; three fixes (2026-11-13)
 
 The plan is [docs/plan-shortcuts-rendering-and-context.md](docs/plan-shortcuts-rendering-and-context.md),
