@@ -129,4 +129,6 @@ bun run format:check:site
 | `site.yml`    | 推送到 `main` 或拉取请求，且改动了 `site/`、`patches/`、根目录的 Bun 文件或这个工作流    | `bun install --frozen-lockfile`、`format:check:site`、`site:check`、`site:test`、`site:build`，构建结果作为制品保留                      |
 | `release.yml` | `v*` 标签，或手动运行                                                                    | 发布 crate、构建二进制、创建 GitHub release，见[发布](/docs/releasing)                                                                   |
 
+在 Windows 上，测试运行时 `TEMP` 和 `TMP` 指向作业自己在 `runner.temp` 下创建的目录，位于运行器的本地磁盘（`D:`）上，并像用户配置文件中的临时目录一样直接授予用户本身写权限（`D:` 只通过 Administrators 授予写权限，而沙箱的非提升令牌没有 Administrators）：在系统盘上，Agent 的持久化写入每次刷盘最多要几秒，使轮次、取消和测试的等待超出了各自的期限。
+
 CI 的验证只覆盖它实际运行的平台和命令；本地不要声称与 CI 等价，除非按当前的工作流复现了它。
