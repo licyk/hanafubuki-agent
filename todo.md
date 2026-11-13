@@ -1814,6 +1814,17 @@ and any module-size exception.
       - Module size: no exception added or raised. `agent_bridge/mod.rs`
         597, `chat_composer/mod.rs` 509, `app/mod.rs` 524,
         `bottom_pane/mod.rs` 547.
+      - CI on 240809c (the feature):
+        https://github.com/licyk/hanafubuki-agent/actions/runs/43486853660,
+        Linux and macOS passed, Windows failed on one test alone
+        (`chat_composer::attachments::tests::ctrl_v_and_ctrl_alt_v_ask_for_the_clipboards_image`:
+        `left: "a draftv"`, `right: "a draft"`): Ctrl+Alt+V, AltGr there,
+        typed a `v` that the paste burst held into the next assertion; the
+        code ignored the key as meant. Site on 240809c: .../runs/43486853764,
+        passed, its build and prerender included. CI on 0fa3979 (the test's
+        fix, the Windows check in a composer of its own):
+        https://github.com/licyk/hanafubuki-agent/actions/runs/43489804254,
+        all three passed.
 
 **Rendering ([4]; every Codex format in the plan's §2.12 table)**
 
