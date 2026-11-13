@@ -2,8 +2,9 @@
 
 //! The editors: a row's one-line editor for a text, a number or a path;
 //! Codex's child picker for a choice (`(current)`, disabled values with
-//! their reasons) and for a confirmation; and a list of texts, each item
-//! a row, added, edited and removed one at a time.
+//! their reasons), for a choice-or-text (its values, Default, and Custom,
+//! which types one in the row's editor) and for a confirmation; and a
+//! list of texts, each item a row, added, edited and removed one at a time.
 
 use hanafubuki_agent::{SettingKind, SettingSpec, SettingValue, SettingsActionRequest};
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
@@ -13,6 +14,7 @@ use super::render::{Row, RowStyle};
 use super::values::editable_text;
 use super::Effect;
 use crate::bottom_pane::TextField;
+use crate::model_facts::{effort_options, EffortValue};
 
 /// The selected row of a list, and the first one shown.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -170,7 +172,12 @@ fn typed(spec: &SettingSpec, text: &str) -> Result<Value, String> {
             .parse::<f64>()
             .map(Value::from)
             .map_err(|_| "Type a number.".to_string()),
-        SettingKind::Text { nullable: true, .. } if text.is_empty() => Ok(Value::Null),
+        SettingKind::Text { nullable: true, .. }
+        | SettingKind::ChoiceOrText { nullable: true, .. }
+            if text.is_empty() =>
+        {
+            Ok(Value::Null)
+        }
         _ => Ok(Value::String(text.to_string())),
     }
 }
@@ -186,9 +193,11 @@ pub(super) struct ChoicePage {
 
 pub(super) struct ChoiceOption {
     pub(super) label: String,
-    pub(super) value: Value,
-    /// Why it cannot be chosen.
+    /// The value it sets; `None` for a value typed in the field's row.
+    pub(super) value: Option<Value>,
+    /// Why it cannot be chosen, or what it is.
     pub(super) disabled: Option<String>,
+    pub(super) description: Option<String>,
     pub(super) current: bool,
 }
 
@@ -201,24 +210,43 @@ enum Purpose {
 
 impl ChoicePage {
     /// The values of `spec`, the current one selected, for the field of
-    /// the page at `at`.
+    /// the page at `at`: a choice's, or the efforts a choice-or-text
+    /// offers (`effort_options`).
     pub(super) fn edit(spec: &SettingSpec, value: Option<&SettingValue>, at: usize) -> Self {
-        let SettingKind::Choice { values } = &spec.kind else {
-            unreachable!("a choice page is opened for a choice");
-        };
         let current = match value {
             Some(SettingValue::Text(text)) => Some(text.as_str()),
             _ => None,
         };
-        let options: Vec<ChoiceOption> = values
-            .iter()
-            .map(|choice| ChoiceOption {
-                label: choice.label.clone(),
-                value: Value::String(choice.value.clone()),
-                disabled: choice.disabled.clone(),
-                current: current == Some(choice.value.as_str()),
-            })
-            .collect();
+        let options: Vec<ChoiceOption> = match &spec.kind {
+            SettingKind::Choice { values } => values
+                .iter()
+                .map(|choice| ChoiceOption {
+                    label: choice.label.clone(),
+                    value: Some(Value::String(choice.value.clone())),
+                    disabled: choice.disabled.clone(),
+                    description: None,
+                    current: current == Some(choice.value.as_str()),
+                })
+                .collect(),
+            SettingKind::ChoiceOrText {
+                values, nullable, ..
+            } => effort_options(values, current)
+                .into_iter()
+                .filter(|option| *nullable || option.value != EffortValue::Default)
+                .map(|option| ChoiceOption {
+                    value: match option.value {
+                        EffortValue::Level(level) => Some(Value::String(level)),
+                        EffortValue::Default => Some(Value::Null),
+                        EffortValue::Custom => None,
+                    },
+                    label: option.label,
+                    disabled: None,
+                    description: option.description.map(str::to_string),
+                    current: option.current,
+                })
+                .collect(),
+            _ => unreachable!("a choice page is opened for a choice"),
+        };
         let selected = options
             .iter()
             .position(|option| option.current)
@@ -240,8 +268,9 @@ impl ChoicePage {
     pub(super) fn confirm(label: &str, subject: &str, request: SettingsActionRequest) -> Self {
         let option = |label: &str| ChoiceOption {
             label: label.to_string(),
-            value: Value::Null,
+            value: Some(Value::Null),
             disabled: None,
+            description: None,
             current: false,
         };
         Self {
@@ -281,15 +310,16 @@ impl ChoicePage {
         if option.disabled.is_some() {
             return Effect::None;
         }
-        match &self.purpose {
-            Purpose::Edit { key, at } => Effect::Edit {
+        match (&self.purpose, &option.value) {
+            (Purpose::Edit { key, at }, Some(value)) => Effect::Edit {
                 key: key.clone(),
-                value: option.value.clone(),
+                value: value.clone(),
                 at: Some(*at),
                 pop: true,
             },
-            Purpose::Confirm(_) if self.list.selected == 0 => Effect::Pop,
-            Purpose::Confirm(request) => Effect::Run {
+            (Purpose::Edit { at, .. }, None) => Effect::Type(*at),
+            (Purpose::Confirm(_), _) if self.list.selected == 0 => Effect::Pop,
+            (Purpose::Confirm(request), _) => Effect::Run {
                 request: (**request).clone(),
                 pop: true,
             },
@@ -305,8 +335,14 @@ impl ChoicePage {
                 if option.current {
                     label.push_str(" (current)");
                 }
-                let mut row = Row::open(&label, "", option.disabled.as_deref().unwrap_or(""));
-                row.hint = "enter select".to_string();
+                let description = option.disabled.as_ref().or(option.description.as_ref());
+                let mut row = Row::open(&label, "", description.map_or("", String::as_str));
+                row.hint = if option.value.is_some() {
+                    "enter select"
+                } else {
+                    "enter type"
+                }
+                .to_string();
                 if option.disabled.is_some() {
                     row.style = RowStyle::Disabled;
                 }

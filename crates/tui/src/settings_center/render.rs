@@ -89,14 +89,16 @@ impl<'a> Row<'a> {
         let hint = match &spec.kind {
             _ if opens => "enter open",
             SettingKind::Boolean => "enter toggle",
-            SettingKind::Choice { .. } => "enter choose",
+            SettingKind::Choice { .. } | SettingKind::ChoiceOrText { .. } => "enter choose",
             SettingKind::TextList { .. } => "enter edit the list",
             _ => "enter edit",
         };
         if opens
             || matches!(
                 spec.kind,
-                SettingKind::Choice { .. } | SettingKind::TextList { .. }
+                SettingKind::Choice { .. }
+                    | SettingKind::ChoiceOrText { .. }
+                    | SettingKind::TextList { .. }
             )
         {
             text.push_str(" ›");

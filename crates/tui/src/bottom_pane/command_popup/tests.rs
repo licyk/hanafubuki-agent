@@ -69,6 +69,7 @@ fn quit_hidden_in_empty_filter_but_shown_for_prefix() {
 fn the_unfiltered_list_is_the_registry_in_order() {
     let mut expected = vec![
         "model",
+        "effort",
         "providers",
         "mode",
         "role",

@@ -1,7 +1,7 @@
 //! The slash commands that ask something of the Agent, each onto the
 //! facade's calls: no session (`/new`) or a reopened one, compaction, the
-//! model and the mode of the session, and what `/status`, `/context`, `/mcp`
-//! and `/skills` report; and the creation of the session the interface drives.
+//! model (and through `effort.rs` its reasoning effort) and the mode of the
+//! session, and what `/status`, `/context`, `/mcp` and `/skills` report; and the creation of the session the interface drives.
 //! A call that waits runs on the Agent's runtime; one that does not runs
 //! here.
 
@@ -232,6 +232,7 @@ impl AgentBridge {
                 })
             }
             AgentCommand::ProviderModels(provider_id) => self.list_provider_models(provider_id),
+            AgentCommand::Effort(call) => self.effort_call(call)?,
             AgentCommand::Mcp(call) => self.mcp_call(call),
             AgentCommand::Session(call) => return Ok(self.session_call(call)),
             AgentCommand::Review(call) => return Ok(self.review_call(call)),

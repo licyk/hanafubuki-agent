@@ -16,8 +16,8 @@ use ratatui::crossterm::event::{KeyEvent, MouseEvent};
 use hanafubuki_agent::{AgentTuiPreferences, AgentTuiPreferencesPatch};
 
 use crate::agent_bridge::{
-    AgentReply, GoalCall, HooksCall, McpCall, PluginsCall, ReviewCall, SessionCall, SettingsCall,
-    SubagentsCall,
+    AgentReply, EffortCall, GoalCall, HooksCall, McpCall, PluginsCall, ReviewCall, SessionCall,
+    SettingsCall, SubagentsCall,
 };
 use crate::app::WorkspaceEvent;
 use crate::appearance::AppearanceEvent;
@@ -168,6 +168,8 @@ pub(crate) enum AgentCommand {
     /// `/model forget`: what the Provider's refusals taught of the
     /// session's model is forgotten.
     ForgetLearnedModelFacts,
+    /// The session's reasoning effort: what `/effort` offers, or set.
+    Effort(EffortCall),
     SetMode(AgentSessionMode),
     /// The roles `/role` offers.
     ListRoles,

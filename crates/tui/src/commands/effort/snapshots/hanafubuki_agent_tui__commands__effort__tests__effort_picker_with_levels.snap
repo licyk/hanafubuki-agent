@@ -1,0 +1,14 @@
+---
+source: crates/tui/src/commands/effort/tests.rs
+expression: "screen(&chat, 80)"
+---
+                                                                                
+                                                                                
+  Select Reasoning Effort                                                       
+  The reasoning effort of gpt-5 in this session.                                
+                                                                                
+  1. low                                                                        
+  2. medium (model default)                                                     
+› 3. high (current)                                                             
+  4. Default                 unset: the Provider's default                      
+  5. Custom…                 type an effort

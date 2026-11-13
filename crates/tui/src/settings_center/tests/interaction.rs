@@ -8,7 +8,7 @@
 
 use hanafubuki_agent::{
     SettingChoice, SettingCondition, SettingKind, SettingSpec, SettingValue, SettingWriteOp,
-    SettingsActionOutcome, SettingsWriteOutcome,
+    SettingsActionOutcome, SettingsCatalog, SettingsWriteOutcome,
 };
 use ratatui::crossterm::event::{KeyCode, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use serde_json::json;
@@ -381,6 +381,125 @@ fn a_record_written_elsewhere_is_shown_with_why() {
     press(&mut center, KeyCode::Enter);
     press(&mut center, KeyCode::Char('r'));
     assert!(calls(&mut center).is_empty());
+}
+
+/// The center at the policy's effort, which offers `levels` and is
+/// `effort`.
+fn with_effort(levels: Vec<SettingChoice>, effort: Option<&str>) -> SettingsCenter {
+    let mut center = center_with(effort_catalog(levels, effort), Some("modelPolicy"));
+    select(&mut center, "Reasoning effort");
+    center
+}
+
+fn effort_catalog(levels: Vec<SettingChoice>, effort: Option<&str>) -> SettingsCatalog {
+    let mut catalog = catalog();
+    let policy = catalog
+        .collections
+        .iter_mut()
+        .find(|collection| collection.id == "modelPolicy")
+        .unwrap();
+    policy.record.push(SettingSpec::new(
+        "reasoningEffort",
+        "Reasoning effort",
+        SettingKind::ChoiceOrText {
+            values: levels,
+            maximum_chars: Some(64),
+            nullable: true,
+        },
+    ));
+    if let Some(effort) = effort {
+        policy.records[0].values.insert(
+            "reasoningEffort".to_string(),
+            SettingValue::Text(effort.to_string()),
+        );
+    }
+    catalog
+}
+
+fn saved_values(center: &mut SettingsCenter) -> (u64, serde_json::Value) {
+    let sent = calls(center);
+    let [(id, CatalogCall::Action(request))] = sent.as_slice() else {
+        panic!("{sent:?}");
+    };
+    assert_eq!(request.action, "save");
+    (*id, serde_json::Value::Object(request.values.clone()))
+}
+
+#[test]
+fn an_effort_offers_what_effort_offers_and_a_level_is_saved() {
+    let levels = vec![
+        SettingChoice::new("low", "low"),
+        SettingChoice::new("high", "high (model default)"),
+    ];
+    let mut center = with_effort(levels.clone(), Some("max"));
+    let shown = screen(&mut center, 140, 20);
+    assert!(shown.contains("Reasoning effort  max ›"), "{shown}");
+    press(&mut center, KeyCode::Enter);
+    let shown = screen(&mut center, 140, 20);
+    let offered = crate::model_facts::effort_options(&levels, Some("max"));
+    let mut lines = shown.lines();
+    for (index, option) in offered.iter().enumerate() {
+        let current = if option.current { " (current)" } else { "" };
+        let row = format!("{}. {}{current}", index + 1, option.label);
+        assert!(lines.any(|line| line.contains(&row)), "{row}:\n{shown}");
+    }
+    assert!(shown.contains("4. Custom: max (current)"), "{shown}");
+    press(&mut center, KeyCode::Char('2'));
+    assert_eq!(
+        saved_values(&mut center).1,
+        json!({ "reasoningEffort": "high" })
+    );
+}
+
+#[test]
+fn with_no_levels_an_effort_offers_default_and_custom_and_default_unsets_it() {
+    let mut center = with_effort(Vec::new(), Some("high"));
+    press(&mut center, KeyCode::Enter);
+    let shown = screen(&mut center, 140, 20);
+    assert!(shown.contains("1. Default"), "{shown}");
+    assert!(shown.contains("2. Custom: high (current)"), "{shown}");
+    assert!(!shown.contains("3. "), "{shown}");
+    press(&mut center, KeyCode::Char('1'));
+    assert_eq!(
+        saved_values(&mut center).1,
+        json!({ "reasoningEffort": null })
+    );
+}
+
+#[test]
+fn a_custom_effort_is_typed_in_its_row_and_a_refused_one_stays_with_why() {
+    let levels = vec![SettingChoice::new("low", "low")];
+    let mut center = with_effort(levels.clone(), None);
+    press(&mut center, KeyCode::Enter);
+    press(&mut center, KeyCode::Char('3'));
+    assert!(
+        calls(&mut center).is_empty(),
+        "Custom opens the row's editor"
+    );
+    type_text(&mut center, "none");
+    press(&mut center, KeyCode::Enter);
+    let (id, values) = saved_values(&mut center);
+    assert_eq!(values, json!({ "reasoningEffort": "none" }));
+    reply(
+        &mut center,
+        id,
+        Err("reasoning effort 'none' is not supported".to_string()),
+        effort_catalog(levels, None),
+    );
+    let shown = screen(&mut center, 140, 20);
+    assert!(
+        shown.contains("reasoning effort 'none' is not supported"),
+        "{shown}"
+    );
+    for _ in 0.."none".len() {
+        press(&mut center, KeyCode::Backspace);
+    }
+    type_text(&mut center, "max");
+    press(&mut center, KeyCode::Enter);
+    assert_eq!(
+        saved_values(&mut center).1,
+        json!({ "reasoningEffort": "max" })
+    );
 }
 
 #[test]

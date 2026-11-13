@@ -96,6 +96,14 @@ pub enum SettingKind {
     Choice {
         values: Vec<SettingChoice>,
     },
+    /// Its choices, a text typed in their place, and (`nullable`) unset.
+    /// It is read as a text: the values are what is offered, not all it
+    /// takes, and the setting's owner checks a typed one when it writes.
+    ChoiceOrText {
+        values: Vec<SettingChoice>,
+        maximum_chars: Option<u32>,
+        nullable: bool,
+    },
     TextList {
         maximum_items: Option<u32>,
         maximum_item_chars: Option<u32>,

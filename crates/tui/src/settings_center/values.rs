@@ -50,7 +50,10 @@ pub(super) fn value_text(
     match (&spec.kind, value) {
         (_, SettingValue::Boolean(true)) => "[x] On".to_string(),
         (_, SettingValue::Boolean(false)) => "[ ] Off".to_string(),
-        (SettingKind::Choice { values }, SettingValue::Text(chosen)) => values
+        (
+            SettingKind::Choice { values } | SettingKind::ChoiceOrText { values, .. },
+            SettingValue::Text(chosen),
+        ) => values
             .iter()
             .find(|choice| choice.value == *chosen)
             .map_or_else(|| chosen.clone(), |choice| choice.label.clone()),

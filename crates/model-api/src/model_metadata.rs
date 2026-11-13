@@ -25,6 +25,52 @@ pub struct ModelMetadata {
     pub structured_output: Option<Sourced<ModelStructuredOutputCapability>>,
 }
 
+impl ModelMetadata {
+    /// The reasoning efforts the model may be given, as the person or the
+    /// Provider named them. Only a configured or reported fact names
+    /// levels, and only a configured, reported or learned one says the
+    /// model takes none: models.dev's catalogue and the built-in table are
+    /// guesses, so what they say is unknown here.
+    pub fn known_reasoning(&self) -> KnownReasoning {
+        let Some(fact) = &self.reasoning else {
+            return KnownReasoning::Unknown;
+        };
+        match (&fact.value, fact.source) {
+            (
+                ModelReasoningSupport::Supported { efforts, default },
+                ModelMetadataSource::Configured | ModelMetadataSource::Reported,
+            ) if !efforts.is_empty() => KnownReasoning::Levels {
+                efforts: efforts.clone(),
+                default: default.clone(),
+            },
+            (
+                ModelReasoningSupport::Unsupported,
+                ModelMetadataSource::Configured
+                | ModelMetadataSource::Reported
+                | ModelMetadataSource::Learned,
+            ) => KnownReasoning::Unsupported {
+                learned: fact.source == ModelMetadataSource::Learned,
+            },
+            _ => KnownReasoning::Unknown,
+        }
+    }
+}
+
+/// The reasoning efforts known for a model ([`ModelMetadata::known_reasoning`]).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum KnownReasoning {
+    /// It takes these, with this default.
+    Levels {
+        efforts: Vec<ModelReasoningEffort>,
+        default: Option<ModelReasoningEffort>,
+    },
+    /// It takes none; `learned`: a refusal of the Provider taught it.
+    Unsupported {
+        learned: bool,
+    },
+    Unknown,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ModelReasoningSupport {

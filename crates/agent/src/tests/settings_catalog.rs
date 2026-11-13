@@ -382,6 +382,110 @@ async fn the_model_policy_is_one_record() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn the_policys_effort_offers_the_models_known_levels_and_takes_a_typed_one() {
+    let (service, paths, config) = service_with_config("settings-catalog-effort", with_token);
+    let effort_kind = |catalog: &SettingsCatalog| {
+        collection(catalog, "modelPolicy")
+            .record
+            .iter()
+            .find(|spec| spec.key == "reasoningEffort")
+            .unwrap()
+            .kind
+            .clone()
+    };
+    let offered = |values: Vec<SettingChoice>| SettingKind::ChoiceOrText {
+        values,
+        maximum_chars: Some(64),
+        nullable: true,
+    };
+    let catalog = service.settings_catalog().await.unwrap();
+    assert_eq!(effort_kind(&catalog), offered(Vec::new()), "no level known");
+
+    config
+        .mutate_providers(2, |registry| {
+            registry.providers[0].models.insert(
+                "fixture-model".into(),
+                AgentModelOverrideSettings {
+                    reasoning_efforts: Some(vec![
+                        ModelReasoningEffort::Low,
+                        ModelReasoningEffort::High,
+                    ]),
+                    ..AgentModelOverrideSettings::default()
+                },
+            );
+            Ok(())
+        })
+        .unwrap();
+    let catalog = service.settings_catalog().await.unwrap();
+    assert_eq!(
+        effort_kind(&catalog),
+        offered(vec![
+            SettingChoice::new("low", "low"),
+            SettingChoice::new("high", "high"),
+        ])
+    );
+
+    let revision = |config: &AgentConfig| config.providers().unwrap().revision;
+    let save = |effort: serde_json::Value| {
+        action(
+            "modelPolicy",
+            Some("policy"),
+            "save",
+            Some(revision(&config)),
+            json!({ "reasoningEffort": effort }),
+        )
+    };
+    service
+        .run_settings_action(save(json!("max")))
+        .await
+        .unwrap();
+    assert_eq!(
+        config.providers().unwrap().model_policy.reasoning_effort,
+        Some(ModelReasoningEffort::parse("max").unwrap())
+    );
+    let catalog = service.settings_catalog().await.unwrap();
+    assert_eq!(
+        collection(&catalog, "modelPolicy").records[0].values["reasoningEffort"],
+        SettingValue::Text("max".into())
+    );
+    let refused = service
+        .run_settings_action(save(json!("none")))
+        .await
+        .unwrap_err();
+    assert!(refused.contains("reasoning effort 'none'"), "{refused}");
+    service
+        .run_settings_action(save(json!(null)))
+        .await
+        .unwrap();
+    assert_eq!(
+        config.providers().unwrap().model_policy.reasoning_effort,
+        None
+    );
+    done(service, paths);
+}
+
+#[test]
+fn the_effort_choices_mark_the_models_default_and_are_none_without_levels() {
+    let known = KnownReasoning::Levels {
+        efforts: vec![ModelReasoningEffort::Low, ModelReasoningEffort::Medium],
+        default: Some(ModelReasoningEffort::Medium),
+    };
+    assert_eq!(
+        crate::reasoning_effort_choices(&known),
+        [
+            SettingChoice::new("low", "low"),
+            SettingChoice::new("medium", "medium (model default)"),
+        ]
+    );
+    for known in [
+        KnownReasoning::Unknown,
+        KnownReasoning::Unsupported { learned: true },
+    ] {
+        assert!(crate::reasoning_effort_choices(&known).is_empty());
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn an_mcp_server_is_added_saved_and_deleted() {
     let (service, paths, config) = service_with_config("settings-catalog-mcp", |_, _| {});
     let revision = |config: &AgentConfig| config.mcp().load().unwrap().revision;

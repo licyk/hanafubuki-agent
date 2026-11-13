@@ -71,6 +71,11 @@ impl SettingSpec {
                 maximum_chars,
                 nullable,
                 ..
+            }
+            | SettingKind::ChoiceOrText {
+                maximum_chars,
+                nullable,
+                ..
             } => match raw {
                 Value::Null if *nullable => Ok(SettingValue::Null),
                 Value::String(text) if fits(text, *maximum_chars) => {

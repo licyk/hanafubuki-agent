@@ -39,6 +39,7 @@ use serde_json::{Map, Value};
 
 use super::AgentApplicationService;
 use crate::host::AgentPluginStatus;
+pub use model_policy::reasoning_effort_choices;
 pub use package_settings::package_setting_key;
 
 /// Every setting, as a settings page shows it.

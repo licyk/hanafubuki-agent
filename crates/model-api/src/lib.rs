@@ -56,7 +56,9 @@ pub use model::{
     MAX_MODEL_REASONING_REPLAY_BYTES, MAX_TOOL_ARGUMENT_PREVIEW_BYTES, NATIVE_TOOL_SEARCH_NAME,
 };
 pub use model_catalog::{ModelCatalogClient, ModelCatalogEntry, ModelCatalogListing};
-pub use model_metadata::{ModelMetadata, ModelMetadataSource, ModelReasoningSupport, Sourced};
+pub use model_metadata::{
+    KnownReasoning, ModelMetadata, ModelMetadataSource, ModelReasoningSupport, Sourced,
+};
 pub use models_dev::{fetch_models_dev, ModelProviderNames, ModelsDevCatalog, MODELS_DEV_URL};
 pub use port::{
     ModelError, ModelEventStream, ModelFuture, ModelPort, ModelResult, ModelSession,

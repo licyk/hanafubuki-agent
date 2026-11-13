@@ -17,6 +17,7 @@ mod config;
 mod confirm;
 mod context;
 mod copy;
+mod effort;
 mod exit;
 mod export;
 mod fork;
@@ -69,6 +70,7 @@ use crate::appearance::Appearance;
 use crate::bottom_pane::{BottomPane, BottomPaneView, SelectionViewParams};
 use crate::history_cell::{self, HistoryCell};
 use crate::settings_center::PageOverride;
+pub(crate) use effort::{show_effort_choices, EFFORT};
 pub(crate) use goal::GOAL;
 pub(crate) use hooks::HOOKS;
 pub(crate) use mcp::MCP;
@@ -86,8 +88,9 @@ pub(crate) use subagents::SUBAGENTS;
 pub(crate) use warnings::{show_warnings, WARNINGS};
 
 /// Every command, in presentation order: the most used first.
-pub(crate) static COMMANDS: [&CommandSpec; 49] = [
+pub(crate) static COMMANDS: [&CommandSpec; 50] = [
     &model::MODEL,
+    &effort::EFFORT,
     &providers::PROVIDERS,
     &mode::MODE,
     &role::ROLE,

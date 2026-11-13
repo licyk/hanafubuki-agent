@@ -283,7 +283,10 @@ fn option_item(id: FieldId, option: &SettingSpec, value: Option<&SettingValue>) 
             };
             FormItem::choice(id, &label, &choices, selected)
         }
-        SettingKind::Path { .. } => FormItem::text(id, &label, &text(value)),
+        // Its choices are not offered here: what it takes is typed.
+        SettingKind::Path { .. } | SettingKind::ChoiceOrText { .. } => {
+            FormItem::text(id, &label, &text(value))
+        }
         SettingKind::TextList { .. } => {
             FormItem::text(id, &label, &text(value)).placeholder("one, two, three")
         }
@@ -321,6 +324,7 @@ fn read(
         SettingKind::Integer { .. }
         | SettingKind::Number { .. }
         | SettingKind::Text { .. }
+        | SettingKind::ChoiceOrText { .. }
         | SettingKind::Path { .. }
             if text.is_empty() =>
         {
@@ -336,7 +340,7 @@ fn read(
                 .map(Value::from)
                 .map_err(|_| "Type a number.".to_string()),
         ),
-        SettingKind::Text { .. } | SettingKind::Path { .. } => {
+        SettingKind::Text { .. } | SettingKind::ChoiceOrText { .. } | SettingKind::Path { .. } => {
             Some(Ok(Value::String(form.text(id).to_string())))
         }
         SettingKind::Choice { values } => chosen(values.len())

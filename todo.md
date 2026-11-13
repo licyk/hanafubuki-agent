@@ -726,10 +726,155 @@ and any module-size exception.
 
 **Effort ([5])**
 
-- [ ] E1: `/effort` and `SettingKind::ChoiceOrText` — options from the
+- [x] E1: `/effort` and `SettingKind::ChoiceOrText` — options from the
       reported or configured levels only, else Default and Custom; refused
       mid-turn; the Settings Center's `reasoningEffort` row on the new
       kind, every match site and the configuration reference updated.
+      Done (2026-11-13):
+      - foundation: `SettingKind::ChoiceOrText { values, maximum_chars,
+        nullable }` (`"type": "choiceOrText"`); `read` and `check` take any
+        text within the bound (and `null` when nullable), like `Text`: the
+        values are what is offered, the owner checks a typed one at its
+        write.
+      - model-api: `ModelMetadata::known_reasoning() -> KnownReasoning
+        { Levels { efforts, default }, Unsupported { learned }, Unknown }`,
+        the rule in one place (the O1 plan's D9 accessor, taken now):
+        levels only from a `Configured` or `Reported` fact with levels;
+        "no reasoning" from `Configured`, `Reported` or `Learned`;
+        models.dev, the built-in table and levels not reported are
+        `Unknown`. Configured `reasoningEfforts` replace the reported
+        levels (the resolved fact is one winner); nothing unites them.
+        Re-exported by the kernel and the facade.
+      - agent: `reasoning_effort_choices(&KnownReasoning) ->
+        Vec<SettingChoice>` (facade export), the levels with the model's
+        default labelled `LEVEL (model default)`. The model policy's
+        `reasoningEffort` row is `ChoiceOrText` (64 characters, nullable),
+        its values filled in `describe_known` from the default model's
+        metadata; its summary follows `known_reasoning` (a learned refusal
+        says `The Provider refused the reasoning parameter`; models.dev
+        levels are no longer listed there). The write still refuses what
+        `ModelReasoningEffort::parse` refuses (`none`).
+      - tui:
+        - `model_facts::effort_options(levels, current)`: the levels, then
+          `Default` (`unset: the Provider's default`) and `Custom…`
+          (`type an effort`); a current effort off the levels is
+          `Custom: VALUE`, marked current. `/effort` and the settings
+          center's row both build their lists with it from the same
+          `reasoning_effort_choices`.
+        - `/effort` (`commands/effort.rs`, after `/model`): bare, the
+          picker (`Select Reasoning Effort`, a subtitle for levels, none
+          known, no reasoning or a learned refusal); `/effort LEVEL` and
+          `/effort default` set at once; an unparsable value says the
+          parse error. Custom opens the review picker's `PromptView`,
+          which gained `with_check`: a refused value stays in the field
+          with its reason in red. `AgentCommand::Effort(EffortCall::{List,
+          Set})` → `agent_bridge/effort.rs` (`session_model_metadata`,
+          `set_session_reasoning_effort`) → `TurnUpdate::{EffortChoices,
+          EffortChanged}`; a change refreshes the status line and says
+          `Reasoning effort set to LEVEL` (or `to the Provider's default`).
+        - The settings center: a `ChoiceOrText` row (`enter choose ›`)
+          opens the choice page with `effort_options`' rows; Custom closes
+          it and types the value in the row's own editor
+          (`Effect::Type`, `type_selected` on the main page and a form),
+          so the write's refusal stays there with why, as a text's does.
+          `value_text` shows a value's label. `typed` takes an empty
+          nullable `ChoiceOrText` as `null`.
+        - Plugin options (`commands/plugins/options.rs`): a
+          `ChoiceOrText` is a text field (a guest schema never lowers to
+          it).
+      - Tests: model-api `tests/model_metadata.rs` (reported and
+        configured levels with their default; models.dev, built-in, not
+        reported and none are unknown; no reasoning configured, reported
+        or learned, not from models.dev); foundation `tests/settings.rs`
+        (a typed text, a choice and null taken, the bound refused; the
+        serialized shape); tui `model_facts/tests.rs` (levels then Default
+        and Custom, current marked; none known → Default and Custom only;
+        a current effort off the list is `Custom: max`) — these three were
+        written before their code; the foundation one was seen failing
+        (`no variant named ChoiceOrText`), the other two first ran after it. `commands/effort/tests.rs`
+        (written before the command): dispatch (list, typed, default,
+        `none` refused), refused during a turn with the hint and no call,
+        picker snapshots with reported levels and with none, models.dev
+        levels and a learned refusal offer none, Custom typed with `none`
+        kept in the field with its reason then `ultra` sent, the change
+        said. Agent `tests/settings_catalog.rs`: the row's kind with no
+        level and with configured levels, `max` typed round-trips, `none`
+        refused, `null` unsets; `reasoning_effort_choices` marks the
+        default. Settings center `tests/interaction.rs`: the page lists
+        exactly `effort_options`' rows (`Custom: max (current)`), a level
+        saved; with no level Default and Custom only, Default saves
+        `null`; Custom typed in the row, the write's refusal kept with
+        why, then saved. App, end to end (`app/tests/settings.rs`):
+        `/effort` over the standalone Agent (Default and Custom, `max`
+        typed, `/effort default`); the policy's row with no level (Default
+        and Custom, `high` typed — this existing test failed with the new
+        kind until it chose Custom) and with a reported listing (`1. low`,
+        `2. high`, Default, Custom). The pinned command lists (table
+        order, `during_task`, `needs_session`, `inline_args`, the popup)
+        gained `effort`.
+      - Deviations: (1) `/effort` is `during_task: true` and refuses in its
+        dispatch (as `/review` does), since the generic refusal is printed
+        before a command's dispatch runs; it says `'/effort' is disabled
+        while a task is in progress. Change the effort after this turn, or
+        interrupt it.` (`effort::DURING_TASK`, for K1's stepping too).
+        (2) The rule is the model-api accessor `known_reasoning` (the O1
+        plan's D9 shape), not code in `model_facts.rs`, because the agent's
+        settings row needs it too; `model_facts::effort_options` builds the
+        list from it. (3) Alt+,/. are K1's: the acceptance's third surface
+        lands there, on `effort_options`. (4) `packages/src/options/lower.rs`
+        and `config/src/settings/*` needed no arm (they build kinds, never
+        match them). (5) The bridge's calls are `agent_bridge/effort.rs`
+        (`AgentCommand::Effort(EffortCall)`) so `run_command` stays under
+        the 200-line function limit. (6) `/effort` is not a side
+        conversation's command. (7) `/effort`'s own refusal checks a
+        running task only, not the queued input the generic guard also
+        checks; the kernel refuses a change during a turn regardless
+        (`TurnAlreadyRunning`), and `/effort` during a turn still sends
+        `EnsureSession` first, which does nothing with a session. (8) The
+        choice page of a `ChoiceOrText` uses `effort_options`' wording
+        (`the Provider's default`, `type an effort`): the effort is the
+        kind's only setting. (9) The settings center's Custom types in the
+        row's editor, which starts from the current value even when it is
+        a listed level; `/effort`'s Custom prompt starts from a custom
+        current value only. (10) The effort stepping (Alt+,/.) is K1's
+        (plan §2.7), not E1's.
+      - Existing tests that failed with the change and were updated: the
+        command table's pinned order and availability lists, the command
+        popup's unfiltered list, and the end-to-end
+        `the_model_policy_saves_reasoning_context_and_a_custom_budget`
+        (the row now opens a choice page).
+      - Goldens: none changed.
+      - Docs (both languages): `terminal-interface` (the commands table, the commands that need a session,
+        the bullets, a new `#effort` section with the picker, the settings
+        center's choice-or-text row), `providers-models#reasoning` (the
+        options and where they come from, `#interface`'s policy bullet,
+        `reasoningEfforts`' row), `config-reference` (`reasoningEffort`'s
+        row), `embedding` (`known_reasoning`, `reasoning_effort_choices`,
+        `ChoiceOrText`), `architecture#model-metadata` (what may be
+        chosen). `architecture/notices-policy.toml`: two `[[original]]`
+        entries (`agent_bridge/effort.rs`, `commands/effort/tests.rs`) and
+        `model_facts.rs`' reason.
+      - Validation: `cargo fmt --all --check`; `RUSTFLAGS="-D warnings"
+        cargo check --workspace --all-targets --all-features`; `cargo clippy
+        --workspace --all-targets --all-features -- -D warnings`; `cargo
+        xtask check` (its module-size check first failed on
+        `AgentBridge::run_command` at 213 lines with the effort arms in
+        it, hence `agent_bridge/effort.rs`); `cargo test --workspace
+        --all-features --no-fail-fast` (all passed, no flake seen); `bun
+        install --frozen-lockfile`, `bun run format:check:site`, `bun run
+        site:check`, `bun run site:test`; `VITE_BASE_PATH=/hanafubuki-agent/
+        bun run site:build` not run locally (port 3000 held by another
+        project's server); CI's Site run covers it.
+      - Hanafubuki at its next pin: `SettingKind::ChoiceOrText { values,
+        maximumChars, nullable }` in the catalog's JSON (`type:
+        "choiceOrText"`): the model policy's `reasoningEffort` row is one
+        (its values the known levels; any text up to 64 characters, or
+        `null`), so a frontend offers its values, a typed text and unset,
+        and a Rust match on `SettingKind` needs the arm. New facade API:
+        `KnownReasoning`, `ModelMetadata::known_reasoning`,
+        `reasoning_effort_choices`. The row's summary no longer lists
+        models.dev levels.
+      - Module size: no exception added or raised.
 
 **Keys ([1])**
 

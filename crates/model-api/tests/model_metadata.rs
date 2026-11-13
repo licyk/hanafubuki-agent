@@ -2,8 +2,8 @@
 //! keeps every fact it can use.
 
 use hanafubuki_agent_model_api::{
-    ModelMetadata, ModelMetadataSource, ModelReasoningEffort, ModelReasoningSupport,
-    ModelStructuredOutputCapability, Sourced,
+    KnownReasoning, ModelMetadata, ModelMetadataSource, ModelReasoningEffort,
+    ModelReasoningSupport, ModelStructuredOutputCapability, Sourced,
 };
 use serde_json::json;
 
@@ -95,5 +95,84 @@ fn a_fact_that_does_not_decode_is_unknown_and_the_others_are_kept() {
     assert_eq!(
         serde_json::from_value::<ModelMetadata>(json!({})).unwrap(),
         ModelMetadata::default()
+    );
+}
+
+fn reasoning(value: ModelReasoningSupport, source: ModelMetadataSource) -> ModelMetadata {
+    ModelMetadata {
+        reasoning: Some(Sourced {
+            value,
+            source,
+            observed_at_ms: 0,
+        }),
+        ..ModelMetadata::default()
+    }
+}
+
+fn levels(efforts: &[ModelReasoningEffort]) -> ModelReasoningSupport {
+    ModelReasoningSupport::Supported {
+        efforts: efforts.to_vec(),
+        default: Some(ModelReasoningEffort::Medium),
+    }
+}
+
+#[test]
+fn the_known_levels_are_the_configured_or_reported_ones_with_their_default() {
+    let efforts = [ModelReasoningEffort::Low, ModelReasoningEffort::Medium];
+    for source in [
+        ModelMetadataSource::Configured,
+        ModelMetadataSource::Reported,
+    ] {
+        assert_eq!(
+            reasoning(levels(&efforts), source).known_reasoning(),
+            KnownReasoning::Levels {
+                efforts: efforts.to_vec(),
+                default: Some(ModelReasoningEffort::Medium),
+            },
+            "{source:?}"
+        );
+    }
+}
+
+#[test]
+fn levels_from_models_dev_or_the_built_in_table_or_not_reported_are_unknown() {
+    let efforts = [ModelReasoningEffort::High];
+    for source in [ModelMetadataSource::Catalog, ModelMetadataSource::BuiltIn] {
+        assert_eq!(
+            reasoning(levels(&efforts), source).known_reasoning(),
+            KnownReasoning::Unknown,
+            "{source:?}"
+        );
+    }
+    assert_eq!(
+        reasoning(levels(&[]), ModelMetadataSource::Reported).known_reasoning(),
+        KnownReasoning::Unknown
+    );
+    assert_eq!(
+        ModelMetadata::default().known_reasoning(),
+        KnownReasoning::Unknown
+    );
+}
+
+#[test]
+fn no_reasoning_is_known_when_configured_reported_or_learned() {
+    for (source, learned) in [
+        (ModelMetadataSource::Configured, false),
+        (ModelMetadataSource::Reported, false),
+        (ModelMetadataSource::Learned, true),
+    ] {
+        assert_eq!(
+            reasoning(ModelReasoningSupport::Unsupported, source).known_reasoning(),
+            KnownReasoning::Unsupported { learned },
+            "{source:?}"
+        );
+    }
+    assert_eq!(
+        reasoning(
+            ModelReasoningSupport::Unsupported,
+            ModelMetadataSource::Catalog
+        )
+        .known_reasoning(),
+        KnownReasoning::Unknown
     );
 }

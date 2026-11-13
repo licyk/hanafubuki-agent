@@ -189,3 +189,57 @@ fn a_spec_serializes_its_kind_tagged_and_camel_case() {
     assert_eq!(json["apply"], json!("live"));
     assert_eq!(json["visibleIf"], json!(null));
 }
+
+fn effort() -> SettingSpec {
+    SettingSpec::new(
+        "effort",
+        "Effort",
+        SettingKind::ChoiceOrText {
+            values: vec![
+                SettingChoice::new("low", "low"),
+                SettingChoice::new("high", "high"),
+            ],
+            maximum_chars: Some(8),
+            nullable: true,
+        },
+    )
+}
+
+#[test]
+fn a_choice_or_text_takes_its_choices_a_typed_text_and_null() {
+    let effort = effort();
+    assert_eq!(
+        effort.check(&json!("high")),
+        Ok(SettingValue::Text("high".into()))
+    );
+    assert_eq!(
+        effort.check(&json!("max")),
+        Ok(SettingValue::Text("max".into()))
+    );
+    assert_eq!(effort.check(&json!(null)), Ok(SettingValue::Null));
+    assert!(effort
+        .check(&json!("very-high!"))
+        .unwrap_err()
+        .contains("longer than 8 characters"));
+    assert_eq!(
+        effort.read(&json!(3)),
+        Err(SettingProblem::Unusable("is not a string".into()))
+    );
+}
+
+#[test]
+fn a_choice_or_text_serializes_its_values_and_bounds() {
+    let json = serde_json::to_value(effort()).unwrap();
+    assert_eq!(
+        json["kind"],
+        json!({
+            "type": "choiceOrText",
+            "values": [
+                { "value": "low", "label": "low", "aliases": [], "disabled": null },
+                { "value": "high", "label": "high", "aliases": [], "disabled": null },
+            ],
+            "maximumChars": 8,
+            "nullable": true,
+        })
+    );
+}

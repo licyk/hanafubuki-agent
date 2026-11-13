@@ -478,7 +478,7 @@ reason = "The Git branch read from HEAD, in a repository and a worktree."
 
 [[original]]
 path = "crates/tui/src/model_facts.rs"
-reason = "How the interface names what the Agent's model metadata knows of a model (a window and its source, a listing entry's badges), which Codex does not have."
+reason = "How the interface names what the Agent's model metadata knows of a model (a window and its source, a listing entry's badges, the reasoning efforts offered), which Codex does not have."
 
 [[original]]
 path = "crates/tui/src/model_facts/tests.rs"
@@ -539,6 +539,14 @@ reason = "The /context card's snapshots, written with it."
 [[original]]
 path = "crates/tui/src/app/tests/context.rs"
 reason = "/context end to end over the standalone Agent, in both presentations."
+
+[[original]]
+path = "crates/tui/src/agent_bridge/effort.rs"
+reason = "/effort's calls onto the facade: the session's model metadata and its reasoning effort set."
+
+[[original]]
+path = "crates/tui/src/commands/effort/tests.rs"
+reason = "The tests of /effort: its dispatch, its refusal during a turn, its picker's snapshots and a custom effort typed."
 
 [[original]]
 path = "crates/tui/src/agent_bridge/providers.rs"

@@ -30,6 +30,7 @@ fn the_table_keeps_the_presentation_order() {
         names,
         [
             "model",
+            "effort",
             "providers",
             "mode",
             "role",
@@ -92,6 +93,8 @@ fn availability_follows_the_spec() {
     assert_eq!(
         during_task,
         [
+            // Refused during a turn by its dispatch, with a hint.
+            "effort",
             "providers",
             "permissions",
             "approve",
@@ -136,6 +139,7 @@ fn availability_follows_the_spec() {
         needs_session,
         [
             "model",
+            "effort",
             "mode",
             "role",
             "permissions",
@@ -155,6 +159,7 @@ fn availability_follows_the_spec() {
         inline_args,
         [
             "model",
+            "effort",
             "providers",
             "role",
             "permissions",

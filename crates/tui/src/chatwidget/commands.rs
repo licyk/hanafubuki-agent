@@ -163,6 +163,16 @@ impl ChatWidget {
                     None,
                 ))
             }
+            TurnUpdate::EffortChoices(choices) => self.run_command(&commands::EFFORT, |context| {
+                commands::show_effort_choices(context, choices)
+            }),
+            TurnUpdate::EffortChanged(effort) => self.add_to_history(history_cell::new_info_event(
+                match effort {
+                    Some(effort) => format!("Reasoning effort set to {effort}"),
+                    None => "Reasoning effort set to the Provider's default".to_string(),
+                },
+                None,
+            )),
             TurnUpdate::LearnedModelFactsForgotten { model, forgotten } => {
                 self.add_to_history(history_cell::new_info_event(
                     if forgotten {

@@ -262,6 +262,15 @@ impl FormPage {
         }
     }
 
+    /// The selected field typed in its row, whatever its kind offers.
+    pub(super) fn type_selected(&mut self, catalog: &SettingsCatalog) {
+        if let Some(Line::Field(index)) = self.lines(catalog).get(self.list.selected).copied() {
+            let spec = self.fields(catalog)[index];
+            let value = self.value(catalog, &spec.key);
+            self.editor = Some(LineEditor::new(spec, value.as_ref()));
+        }
+    }
+
     /// `at` is the page's place in the stack, which its choices and lists
     /// change.
     pub(super) fn handle_key(
@@ -337,9 +346,9 @@ impl FormPage {
                         at: Some(at),
                         pop: false,
                     },
-                    SettingKind::Choice { .. } => Effect::Push(Box::new(Page::Choice(
-                        ChoicePage::edit(spec, value.as_ref(), at),
-                    ))),
+                    SettingKind::Choice { .. } | SettingKind::ChoiceOrText { .. } => Effect::Push(
+                        Box::new(Page::Choice(ChoicePage::edit(spec, value.as_ref(), at))),
+                    ),
                     SettingKind::TextList { .. } => {
                         Effect::Push(Box::new(Page::List(ListPage::new(spec.clone(), at))))
                     }

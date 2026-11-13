@@ -141,14 +141,15 @@ pub use roles::{
     AgentUnusableRole, DEFAULT_ROLE, EXPLORER_ROLE, MAX_ROLE_CHAIN,
 };
 pub use service::{
-    package_setting_key, AgentApplicationService, AgentEditFromTurn, AgentHook, AgentHookHandler,
-    AgentHooks, AgentHostPorts, AgentModelPolicyWriteRequest, AgentProviderDeleteRequest,
-    AgentProviderDraft, AgentProviderEnabledRequest, AgentProviderModelCatalogRequest,
-    AgentProviderModelCatalogResult, AgentProviderRegistrySnapshot, AgentProviderWriteRequest,
-    AgentRunProjection, AgentServiceInputs, AgentSessionModelSelectionRequest,
-    AgentSessionReasoningEffortRequest, AgentSettingsView, AgentSkillSessionState,
-    AgentStandaloneSettingsView, AgentWorktree, LocalSkillInstallRequest, McpApplicationSnapshot,
-    McpCredentialPresence, McpCredentialsWriteRequest, McpLocalPolicySummary, McpLocalServerStatus,
+    package_setting_key, reasoning_effort_choices, AgentApplicationService, AgentEditFromTurn,
+    AgentHook, AgentHookHandler, AgentHooks, AgentHostPorts, AgentModelPolicyWriteRequest,
+    AgentProviderDeleteRequest, AgentProviderDraft, AgentProviderEnabledRequest,
+    AgentProviderModelCatalogRequest, AgentProviderModelCatalogResult,
+    AgentProviderRegistrySnapshot, AgentProviderWriteRequest, AgentRunProjection,
+    AgentServiceInputs, AgentSessionModelSelectionRequest, AgentSessionReasoningEffortRequest,
+    AgentSettingsView, AgentSkillSessionState, AgentStandaloneSettingsView, AgentWorktree,
+    LocalSkillInstallRequest, McpApplicationSnapshot, McpCredentialPresence,
+    McpCredentialsWriteRequest, McpLocalPolicySummary, McpLocalServerStatus,
     McpLocalStatusSnapshot, McpOAuthCallbackRequest, McpOAuthCancelRequest, McpOAuthLoginRequest,
     McpPluginServer, McpPluginServerSnapshot, McpServerDeleteRequest, McpServerWriteRequest,
     McpToolSnapshot, SettingsAction, SettingsActionOutcome, SettingsActionRequest,
@@ -263,8 +264,8 @@ pub use hanafubuki_agent_kernel::{
 /// What is known of a model, fact by fact with its source, and what the
 /// person configured for it.
 pub use hanafubuki_agent_kernel::{
-    request_reasoning_effort, AgentConfiguredModelFacts, ModelMetadata, ModelMetadataSource,
-    ModelReasoningSupport, Sourced,
+    request_reasoning_effort, AgentConfiguredModelFacts, KnownReasoning, ModelMetadata,
+    ModelMetadataSource, ModelReasoningSupport, Sourced,
 };
 /// What a role narrows (`AgentResolvedRole::scope`), and what a session's
 /// snapshot shows of it.

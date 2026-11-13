@@ -117,6 +117,9 @@ enum Effect {
         at: Option<usize>,
         pop: bool,
     },
+    /// The page that chose closes, and the selected field of the page at
+    /// this index is typed in its row (a choice-or-text's Custom).
+    Type(usize),
     /// The setting `key` is removed from the user's file.
     Reset(String),
     /// Writes settings together (a commit group).
@@ -374,6 +377,17 @@ impl SettingsCenter {
                     self.pages.pop();
                 }
                 self.edit(at, key, value);
+            }
+            Effect::Type(at) => {
+                self.pages.pop();
+                let Some(catalog) = self.catalog.as_ref() else {
+                    return;
+                };
+                match self.pages.get_mut(at) {
+                    Some(Page::Main(page)) => page.type_selected(catalog),
+                    Some(Page::Form(page)) => page.type_selected(catalog),
+                    _ => {}
+                }
             }
             Effect::Reset(key) => self.write(
                 0,

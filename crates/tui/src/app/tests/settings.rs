@@ -166,7 +166,21 @@ fn the_model_policy_saves_reasoning_context_and_a_custom_budget() {
     let mut harness = Harness::start(Vec::new());
     harness.type_and_submit("/providers policy");
     harness.pump_until_screen_shows("Settings › Model policy");
-    harness.edit_setting("Reasoning effort", "high");
+    // No level is known: the effort is the Provider's or typed.
+    harness.select_setting("Reasoning effort");
+    harness.key(KeyCode::Enter);
+    let offered = harness.pump_until_screen_shows("2. Custom…");
+    assert!(offered.contains("1. Default (current)"), "{offered}");
+    assert!(!offered.contains("3. "), "{offered}");
+    // Custom types it in the row.
+    harness.key(KeyCode::Char('2'));
+    for character in "high".chars() {
+        harness.key(KeyCode::Char(character));
+    }
+    harness.key(KeyCode::Enter);
+    harness.pump_until("the effort to be saved", |harness| {
+        !harness.screen().contains("Saving…")
+    });
     harness.edit_setting("Context window", "123456");
     assert_eq!(
         harness.registry().model_policy.context_window_tokens,
@@ -217,6 +231,43 @@ fn the_model_policy_names_the_listed_reasoning_levels() {
     harness.select_setting("Reasoning effort");
     let screen = harness.pump_until_screen_shows("The model takes");
     assert!(screen.contains("low, high"), "{screen}");
+    // And offers them, as `/effort` does.
+    harness.key(KeyCode::Enter);
+    let offered = harness.pump_until_screen_shows("4. Custom…");
+    for row in ["1. low", "2. high", "3. Default (current)"] {
+        assert!(offered.contains(row), "{row}:\n{offered}");
+    }
+}
+
+/// `/effort` sets the session's effort: picked from what it offers (Default
+/// and Custom when no level is known), typed in Custom, or given inline.
+#[test]
+fn effort_sets_the_sessions_reasoning_effort() {
+    let mut harness = Harness::start(Vec::new());
+    let effort = |harness: &mut Harness| {
+        let agent = harness.runtime.slot().agent().unwrap();
+        agent
+            .snapshot(harness.app.bridge.session_id().unwrap())
+            .unwrap()
+            .reasoning_effort
+            .map(|effort| effort.to_string())
+    };
+    harness.type_and_submit("/effort");
+    let offered = harness.pump_until_screen_shows("Select Reasoning Effort");
+    assert!(offered.contains("1. Default (current)"), "{offered}");
+    assert!(offered.contains("2. Custom…"), "{offered}");
+    harness.key(KeyCode::Char('2'));
+    harness.pump_until_screen_shows("Custom reasoning effort");
+    for character in "max".chars() {
+        harness.key(KeyCode::Char(character));
+    }
+    harness.key(KeyCode::Enter);
+    harness.pump_until_screen_shows("Reasoning effort set to max");
+    assert_eq!(effort(&mut harness).as_deref(), Some("max"));
+
+    harness.type_and_submit("/effort default");
+    harness.pump_until_screen_shows("Reasoning effort set to the Provider's default");
+    assert_eq!(effort(&mut harness), None);
 }
 
 /// The model policy's window, unset, names the window the default model's

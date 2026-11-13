@@ -205,7 +205,7 @@ impl MainPage {
                 let value = setting_value(catalog, &spec.key);
                 match &spec.kind {
                     SettingKind::Boolean => toggle(spec, value),
-                    SettingKind::Choice { .. } => {
+                    SettingKind::Choice { .. } | SettingKind::ChoiceOrText { .. } => {
                         Effect::Push(Box::new(Page::Choice(ChoicePage::edit(spec, value, 0))))
                     }
                     SettingKind::TextList { .. } => {
@@ -233,6 +233,13 @@ impl MainPage {
             }
             Some(MainRow::Page(page)) => Effect::Open(page, None),
             Some(MainRow::Heading(_)) | None => Effect::None,
+        }
+    }
+
+    /// The selected setting typed in its row, whatever its kind offers.
+    pub(super) fn type_selected(&mut self, catalog: &SettingsCatalog) {
+        if let Some(spec) = selected_spec(catalog, &self.rows(catalog), self.list.selected) {
+            self.editor = Some(LineEditor::new(spec, setting_value(catalog, &spec.key)));
         }
     }
 

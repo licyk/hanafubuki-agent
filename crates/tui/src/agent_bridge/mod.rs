@@ -24,6 +24,7 @@ mod catalog;
 mod center_reads;
 mod commands;
 mod edit;
+mod effort;
 mod goal;
 mod hooks;
 mod mcp;
@@ -51,7 +52,7 @@ use hanafubuki_agent::{
     AgentSlot, AgentStatusEventSink, AgentTaskPlanSnapshot, AgentToolCallDisplay,
     AgentToolProgressUpdate, AgentTurnAccepted, AgentTurnRequest, AgentTurnTerminalReason,
     AgentUserInputRequest, AgentUserInputRequestId, ApprovalRequest, ApprovalRequestId,
-    SkillCatalogSnapshot,
+    ModelReasoningEffort, SkillCatalogSnapshot,
 };
 use tokio::sync::oneshot;
 
@@ -61,6 +62,7 @@ pub(crate) use center_reads::{
     CenterJob, CenterRead, CenterReader, Exchange, LiveSession, RootsRead, Waiting,
 };
 pub(crate) use commands::{setup_needed, with_model, ModelChoices, RoleChoices, StatusReport};
+pub(crate) use effort::{EffortCall, EffortChoices};
 pub(crate) use goal::{GoalCall, GoalReply};
 pub(crate) use hooks::{needing_review, HooksCall, HooksReply};
 pub(crate) use mcp::{McpCall, McpReply};
@@ -144,6 +146,11 @@ pub(crate) enum TurnUpdate {
     SessionOpened(OpenedSession),
     ModelChoices(ModelChoices),
     ModelChanged(String),
+    /// What `/effort` offers.
+    EffortChoices(EffortChoices),
+    /// The session's reasoning effort is now this one (`None`: the
+    /// Provider's default).
+    EffortChanged(Option<ModelReasoningEffort>),
     /// What `/role` offers.
     RoleChoices(RoleChoices),
     /// The session's role is now this one (`None` for `default`).
@@ -445,6 +452,10 @@ impl AgentBridge {
                 TurnUpdate::RoleChanged(role) => {
                     self.send_session_status();
                     Some(TurnUpdate::RoleChanged(role))
+                }
+                TurnUpdate::EffortChanged(effort) => {
+                    self.send_session_status();
+                    Some(TurnUpdate::EffortChanged(effort))
                 }
                 TurnUpdate::Goal(reply) => self.goal_reply(reply),
                 TurnUpdate::Subagents(SubagentsReply::Listed(statuses)) => {

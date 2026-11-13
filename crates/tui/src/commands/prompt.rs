@@ -2,7 +2,8 @@
 
 //! A one-line prompt over the composer (Codex's `CustomPromptView`, one
 //! line instead of several): a title, the field, a note under it, and a
-//! suggestion Tab takes. Enter submits what is typed, Esc cancels. The
+//! suggestion Tab takes. Enter submits what is typed, unless the command's
+//! check refuses it (then the reason replaces the note), Esc cancels. The
 //! command that shows it may hand it its replies (`/rename`'s title and
 //! suggestion).
 
@@ -26,6 +27,9 @@ pub(crate) type PromptSubmitted = Box<dyn Fn(&AppEventSender, String)>;
 /// back when it is not its.
 pub(crate) type PromptReplies = fn(&mut PromptView, CommandReply) -> Option<CommandReply>;
 
+/// Why the trimmed text cannot be submitted, if it cannot.
+pub(crate) type PromptCheck = fn(&str) -> Result<(), String>;
+
 /// The field's indent under the title.
 const INDENT: u16 = 2;
 
@@ -38,6 +42,9 @@ pub(crate) struct PromptView {
     app_event_tx: AppEventSender,
     on_submit: PromptSubmitted,
     on_reply: Option<PromptReplies>,
+    check: Option<PromptCheck>,
+    /// Why Enter did not submit what is typed; the next edit clears it.
+    error: Option<String>,
     done: bool,
 }
 
@@ -57,12 +64,21 @@ impl PromptView {
             app_event_tx,
             on_submit,
             on_reply: None,
+            check: None,
+            error: None,
             done: false,
         }
     }
 
     pub(crate) fn with_replies(mut self, on_reply: PromptReplies) -> Self {
         self.on_reply = Some(on_reply);
+        self
+    }
+
+    /// Enter submits only what `check` takes; a refusal stays in the field
+    /// with its reason.
+    pub(crate) fn with_check(mut self, check: PromptCheck) -> Self {
+        self.check = Some(check);
         self
     }
 
@@ -95,16 +111,17 @@ impl PromptView {
         let mut field_line = Line::from("  ");
         field_line.spans.extend(field.spans);
         lines.push(field_line);
-        match (&self.suggestion, &self.note) {
-            (Some(suggestion), _) => lines.push(Line::from(vec![
+        match (&self.error, &self.suggestion, &self.note) {
+            (Some(error), _, _) => lines.push(Line::from(format!("  {error}").red())),
+            (None, Some(suggestion), _) => lines.push(Line::from(vec![
                 "  Suggested: ".dim(),
                 suggestion.clone().cyan(),
                 "  ".into(),
                 key_hint::plain(KeyCode::Tab).into(),
                 " to use it".dim(),
             ])),
-            (None, Some(note)) => lines.push(Line::from(format!("  {note}").dim())),
-            (None, None) => {}
+            (None, None, Some(note)) => lines.push(Line::from(format!("  {note}").dim())),
+            (None, None, None) => {}
         }
         lines.push(Line::from(vec![
             "  ".into(),
@@ -126,17 +143,25 @@ impl BottomPaneView for PromptView {
             KeyCode::Esc => self.done = true,
             KeyCode::Enter if key.modifiers == KeyModifiers::NONE => {
                 let text = self.field.text().trim().to_string();
-                if !text.is_empty() {
-                    (self.on_submit)(&self.app_event_tx, text);
-                    self.done = true;
+                if text.is_empty() {
+                    return;
                 }
+                if let Some(Err(error)) = self.check.map(|check| check(&text)) {
+                    self.error = Some(error);
+                    return;
+                }
+                (self.on_submit)(&self.app_event_tx, text);
+                self.done = true;
             }
             KeyCode::Tab => {
                 if let Some(suggestion) = self.suggestion.take() {
                     self.set_text(&suggestion);
                 }
             }
-            _ => self.field.input(key),
+            _ => {
+                self.field.input(key);
+                self.error = None;
+            }
         }
     }
 
@@ -146,6 +171,7 @@ impl BottomPaneView for PromptView {
 
     fn handle_paste(&mut self, pasted: String) -> bool {
         self.field.paste(&pasted);
+        self.error = None;
         true
     }
 

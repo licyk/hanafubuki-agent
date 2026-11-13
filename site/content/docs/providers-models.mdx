@@ -82,7 +82,7 @@ provider-2 DeepSeek  ChatCompletions  https://api.deepseek.com/v1  token: set
 - **Provider**：名称、是否启用、协议（`responses`、`chat_completions` 或 `anthropic_messages`）、基础 URL、API 令牌和请求头，每个字段改动时即保存。已设置的令牌显示为 `••••`，从不返回：输入新值会替换它，`r` 删除它。请求头是 `NAME=VALUE` 形式的条目，只按名称列出：它们的值从不显示，只写名称的条目保留原来的值。
 - **Make default** 把它设为默认 Provider，**List models** 测试它（显示 Provider 列出的模型数量和前几个，或 Provider 返回的错误），**Delete** 确认后删除它。
 - **Choose the model** 列出它的模型，每个模型旁显示目录报告的信息：窗口（`200K`）、`vision` 和 `reasoning`（`/model` 也一样）。选中的模型（Provider 没有列出时，用 **Enter a model id…** 手动输入）成为新会话使用的模型，这个 Provider 成为默认 Provider。按 Esc 则保持原来的模型。`/model` 仍然只修改当前会话的模型。
-- **模型策略**（`/providers policy`，或 Model 标签页中的 Model policy）：默认 Provider 和模型、推理强度（旁边写出该模型已知的档位，来自其目录或其[单独设置](#per-model)）、图片输入、上下文窗口（未设置时，旁边写出该模型已知的窗口及其来源）、自动压缩及其阈值、远程压缩，以及 **Custom turn budget**：关闭时回合使用 Agent 的上限；打开时是它的十一个字段，从这些上限开始。模型的单独设置不在其中：它们是 Model 标签页中它旁边的 **Model overrides**（[按模型的设置](#per-model)）。
+- **模型策略**（`/providers policy`，或 Model 标签页中的 Model policy）：默认 Provider 和模型、推理强度（旁边写出该模型已知的档位，来自其目录或其[单独设置](#per-model)；按 Enter 时提供的选项与 `/effort` 相同，见[推理强度与思考过程](#reasoning)）、图片输入、上下文窗口（未设置时，旁边写出该模型已知的窗口及其来源）、自动压缩及其阈值、远程压缩，以及 **Custom turn budget**：关闭时回合使用 Agent 的上限；打开时是它的十一个字段，从这些上限开始。模型的单独设置不在其中：它们是 Model 标签页中它旁边的 **Model overrides**（[按模型的设置](#per-model)）。
 - 每次写入都会带上设置中心读取时 `providers.toml` 的版本。如果期间文件被其他地方修改（例如另一个终端中的 `providers` 命令），写入会被拒绝：设置中心重新读取 Provider，保留改动并给出提示，再保存一次即可。
 - 没有默认 Provider 或没有模型时，界面启动时会自动在 Provider 处打开设置中心，见[首次设置](/docs/terminal-interface#setup)。
 
@@ -125,7 +125,15 @@ reasoningEffort = "medium"   # minimal、low、medium、high、xhigh
 | 会推理，目录未列出档位 | 设置的推理强度                                                                                                                                                                                                                                  |
 | 不接受推理参数         | 不发送，无论设置了什么                                                                                                                                                                                                                          |
 
-目录用 `supported_reasoning_levels`（Codex）、`reasoning.supported_efforts`（OpenRouter）或 `capabilities.effort`（Anthropic）列出档位；`none` 不会作为档位，因为推理强度不接受 `none`：不设置推理强度，或模型不接受推理参数，才是请求不带推理的方式。模型自己的 `reasoningEfforts`（[按模型的设置](#per-model)）会取代目录列出的档位，或声明它不接受推理参数。模型策略中的模型有已知档位时，策略表单会以选项而不是文本框提供它们。
+目录用 `supported_reasoning_levels`（Codex）、`reasoning.supported_efforts`（OpenRouter）或 `capabilities.effort`（Anthropic）列出档位；`none` 不会作为档位，因为推理强度不接受 `none`：不设置推理强度，或模型不接受推理参数，才是请求不带推理的方式。模型自己的 `reasoningEfforts`（[按模型的设置](#per-model)）会取代目录列出的档位，或声明它不接受推理参数。
+
+[终端界面](/docs/terminal-interface#effort)的 `/effort` 修改当前会话的推理强度，设置中心的推理强度一行（模型策略）修改新会话使用的推理强度。对同一个模型，两者提供相同的选项：
+
+- **已知档位**：模型自己的 `reasoningEfforts` 列出的档位，否则是其 Provider 目录列出的档位，模型的默认档位标为 `(model default)`。配置的档位取代目录的档位，从不与之合并。来自 [models.dev](#models-dev) 或内置表的档位不会提供；已知不接受推理参数的模型不提供任何档位。
+- **Default**：不设置推理强度，使用 Provider 的默认值。
+- **Custom**：手动输入的推理强度，可以是除 `none` 以外任意 1 到 64 个 ASCII 字母、数字、`-`、`_` 或 `.`；按输入原样发送，并按上文收窄。列表中没有的值显示为 `Custom: max`。
+
+没有已知档位时，只提供 Default 和 Custom。`/effort high` 和 `/effort default` 直接设置会话的推理强度。只能在回合之间修改：回合进行中 `/effort` 会提示 `Change the effort after this turn, or interrupt it.`
 
 Provider 拒绝推理参数时（状态码 400 或 422，并指名该参数，见[内部实现](/docs/internals#reasoning-refusals)），请求会去掉它重发一次（`exec --json` 报告 `model_retry_scheduled`，阶段为 `reasoning_fallback`），之后 7 天内无论目录怎么说，都认为该模型不接受推理参数，这一点保存在 `model-metadata.json` 中，直到被[遗忘](#forget)。在模型自己的 `reasoningEfforts` 下，请求仍会去掉推理参数重发，但下一次请求会再次携带推理强度。
 
@@ -209,7 +217,7 @@ imageInput = "supported"
 | `contextWindowTokens` | 正整数                                           | 模型的窗口，优先于 `[modelPolicy]` 的 `contextWindowTokens`、学到的窗口和目录报告的窗口                                                                              |
 | `maxOutputTokens`     | 正整数                                           | 模型的最大输出，阈值为它留出空间，Anthropic 的思考预算也按它计算（[上下文窗口与压缩](#compaction)、[推理强度与思考过程](#reasoning)）                                |
 | `imageInput`          | `"auto"`（默认）、`"supported"`、`"unsupported"` | `"auto"` 按已知的信息（[图片](#images)）；`"supported"` 不论目录怎么说、拒绝教了什么都发送图片：拒绝仍会让那次请求回退，下一次请求再次发送；`"unsupported"` 从不发送 |
-| `reasoningEfforts`    | 推理强度的列表，或 `[]`                          | 模型接受的档位，取代目录列出的档位，发送的推理强度按它收窄、策略表单也提供它们；`[]`：不接受推理参数，不发送推理强度                                                 |
+| `reasoningEfforts`    | 推理强度的列表，或 `[]`                          | 模型接受的档位，取代目录列出的档位，发送的推理强度按它收窄，`/effort` 和策略的推理强度一行也提供它们；`[]`：不接受推理参数，不发送推理强度                           |
 
 每个键都可省略，省略的键交给其他来源。会话在下一个轮次开始时采用它们（新会话、恢复的会话以及已打开的会话都一样），所以退出 Agent、编辑文件，然后继续即可。无法使用的值会被略去，文件会被[修复](/docs/recovery)，Provider 及其其他设置都保留。它们也可以在[设置中心](/docs/terminal-interface#config)的 Model 标签页中的 **Model overrides** 编辑：每个 Provider 和模型一条记录（`a` 添加一条，以 `PROVIDER/MODEL` 命名，第一个 `/` 之后都是模型 ID），每个键改动时即保存，`r` 取消设置它，每次写入都带上设置中心读取时 `providers.toml` 的版本。Provider 自己的保存和 `providers` 命令会原样保留它们。
 

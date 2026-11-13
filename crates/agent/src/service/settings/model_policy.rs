@@ -12,6 +12,7 @@ use hanafubuki_agent_config::{
     MAX_AGENT_HOOK_FRAGMENT_BYTES, MAX_AGENT_IDLE_TIMEOUT_SECONDS, MAX_AGENT_IN_FLIGHT_TOOLS,
     MAX_AGENT_PENDING_INPUT_ITEMS, MAX_AGENT_TOOL_INVOCATIONS, MAX_AGENT_TOOL_OUTPUT_BYTES,
 };
+use hanafubuki_agent_foundation::agent_settings::MAX_MODEL_REASONING_EFFORT_BYTES;
 use serde::{Deserialize, Serialize};
 
 use super::record::{merged, record_of};
@@ -19,7 +20,7 @@ use super::{
     name_of, SettingsAction, SettingsActionOutcome, SettingsActionRequest, SettingsCollection, SAVE,
 };
 use crate::service::AgentApplicationService;
-use crate::{AgentModelPolicyWriteRequest, ModelMetadata, ModelReasoningSupport};
+use crate::{AgentModelPolicyWriteRequest, KnownReasoning, ModelMetadata};
 
 pub(super) const ID: &str = "modelPolicy";
 /// The one record.
@@ -134,11 +135,7 @@ fn fields(registry: &AgentProviderRegistrySettings) -> Vec<SettingSpec> {
         SettingSpec::new(
             "reasoningEffort",
             "Reasoning effort",
-            SettingKind::Text {
-                maximum_chars: Some(64),
-                secret: false,
-                nullable: true,
-            },
+            effort_kind(Vec::new()),
         ),
         SettingSpec::new(
             "inputCapabilities.imageInput",
@@ -256,15 +253,15 @@ pub(super) async fn run(
 }
 
 /// What is known of the model, said beside the fields it informs: the
-/// efforts it reasons at, and the window it has when none is set.
+/// efforts it reasons at, offered as the effort's choices, and the window
+/// it has when none is set.
 fn describe_known(fields: &mut [SettingSpec], metadata: &ModelMetadata) {
     for spec in fields {
         match spec.key.as_str() {
             "reasoningEffort" => {
-                spec.summary = match metadata.reasoning.as_ref().map(|fact| &fact.value) {
-                    Some(ModelReasoningSupport::Supported { efforts, .. })
-                        if !efforts.is_empty() =>
-                    {
+                let known = metadata.known_reasoning();
+                spec.summary = match &known {
+                    KnownReasoning::Levels { efforts, .. } => {
                         let efforts = efforts
                             .iter()
                             .map(|effort| effort.as_str())
@@ -272,11 +269,15 @@ fn describe_known(fields: &mut [SettingSpec], metadata: &ModelMetadata) {
                             .join(", ");
                         format!("The model takes {efforts}; unset, the Provider's default")
                     }
-                    Some(ModelReasoningSupport::Unsupported) => {
+                    KnownReasoning::Unsupported { learned: true } => {
+                        "The Provider refused the reasoning parameter".into()
+                    }
+                    KnownReasoning::Unsupported { learned: false } => {
                         "The model takes no reasoning effort".into()
                     }
-                    _ => "Unset, the Provider's default".into(),
-                }
+                    KnownReasoning::Unknown => "Unset, the Provider's default".into(),
+                };
+                spec.kind = effort_kind(reasoning_effort_choices(&known));
             }
             "contextWindowTokens" => {
                 spec.summary = match &metadata.context_window {
@@ -290,6 +291,36 @@ fn describe_known(fields: &mut [SettingSpec], metadata: &ModelMetadata) {
             }
             _ => {}
         }
+    }
+}
+
+/// The levels an effort is chosen from, the model's default marked: those
+/// `known` names, none when it names none. `/effort` and the settings
+/// center's row offer them, beside the Provider's default and a typed one.
+pub fn reasoning_effort_choices(known: &KnownReasoning) -> Vec<SettingChoice> {
+    let KnownReasoning::Levels { efforts, default } = known else {
+        return Vec::new();
+    };
+    efforts
+        .iter()
+        .map(|effort| {
+            let label = if Some(effort) == default.as_ref() {
+                format!("{effort} (model default)")
+            } else {
+                effort.to_string()
+            };
+            SettingChoice::new(effort.as_str(), label)
+        })
+        .collect()
+}
+
+/// An effort: one of `values`, one typed (checked as an effort when the
+/// record is written), or unset.
+fn effort_kind(values: Vec<SettingChoice>) -> SettingKind {
+    SettingKind::ChoiceOrText {
+        values,
+        maximum_chars: Some(MAX_MODEL_REASONING_EFFORT_BYTES as u32),
+        nullable: true,
     }
 }
 
