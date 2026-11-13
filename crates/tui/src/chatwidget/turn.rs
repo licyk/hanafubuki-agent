@@ -340,6 +340,7 @@ impl ChatWidget {
             }
         }
         for cell in ended {
+            cell.update(ToolCallCell::end_running);
             self.complete_settled_tool(cell);
         }
         self.bottom_pane.dismiss_all_requests();
