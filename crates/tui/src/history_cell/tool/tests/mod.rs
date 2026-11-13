@@ -2,6 +2,7 @@
 //! expanding adds, the frame while a call runs, and the exploration run.
 
 mod exploration;
+mod shape;
 mod streamed;
 mod views;
 
@@ -59,6 +60,14 @@ fn command(command: &str, output: &str, exit_code: Option<i32>) -> AgentToolDisp
     }
 }
 
+/// What the presenter shows of a call without a display.
+fn no_display() -> AgentToolCallDisplay {
+    AgentToolCallDisplay {
+        subject: None,
+        display: None,
+    }
+}
+
 fn numbered(lines: usize) -> String {
     (1..=lines).map(|n| format!("line {n}\n")).collect()
 }
@@ -83,7 +92,7 @@ fn a_running_call_shows_its_command_or_its_name_and_subject() {
         "web_search".to_string(),
         Some("rust".to_string()),
     );
-    assert!(render(&cell, 60).ends_with("Running web_search: rust"));
+    assert!(render(&cell, 60).ends_with("Running web_search: rust\n  └ …"));
 }
 
 #[test]
@@ -94,6 +103,9 @@ fn a_finished_call_without_a_display_shows_its_name() {
         Some("rust".to_string()),
     );
     cell.complete("call-1", true);
+    // Its row stays until it is known there is no display.
+    assert_eq!(render(&cell, 60), "• Failed web_search: rust\n  └ …");
+    cell.show("call-1", no_display());
     assert_eq!(render(&cell, 60), "• Failed web_search: rust");
     // A command keeps its header from when it ran.
     let mut cell = new_tool_call(
@@ -102,6 +114,7 @@ fn a_finished_call_without_a_display_shows_its_name() {
         Some("cargo test".to_string()),
     );
     cell.complete("call-1", true);
+    cell.show("call-1", no_display());
     assert_eq!(render(&cell, 60), "• Ran cargo test");
     assert_eq!(cell.activity_disclosure(60), None);
     assert_eq!(cell.transcript_animation_tick(), None);

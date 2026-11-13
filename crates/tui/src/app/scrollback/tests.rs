@@ -233,7 +233,7 @@ fn a_session_opened_in_its_place_writes_everything_even_what_ran() {
     fixture.tail.finish();
     fixture.tail.push(info("new session"), false);
     let (written, entries) = fixture.take(Some(40));
-    assert_eq!(written, ["• Running web_search", "", "• note"]);
+    assert_eq!(written, ["• Running web_search", "  └ …", "", "• note"]);
     assert_eq!(entries.len(), 1);
 }
 
@@ -248,7 +248,7 @@ fn at_exit_everything_leaves_live_or_not() {
     fixture.tail.push(running, true);
     fixture.tail.push(info("note"), false);
     let (written, entries) = fixture.take(None);
-    assert_eq!(written, ["• Running web_search", "", "• note"]);
+    assert_eq!(written, ["• Running web_search", "  └ …", "", "• note"]);
     assert!(entries.is_empty());
 }
 

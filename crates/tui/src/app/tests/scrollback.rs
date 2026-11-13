@@ -17,12 +17,12 @@ use crate::history_cell::{
 };
 
 impl Harness {
-    fn send(&mut self, event: AppEvent) {
+    pub(super) fn send(&mut self, event: AppEvent) {
         assert!(self.app.handle_event(&mut self.tui, event));
         self.app.draw(&mut self.tui).unwrap();
     }
 
-    fn note(&mut self, text: &str) {
+    pub(super) fn note(&mut self, text: &str) {
         let cell = new_info_event(text.to_string(), None);
         self.send(AppEvent::InsertHistoryCell(Box::new(cell)));
     }

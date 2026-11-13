@@ -38,7 +38,7 @@ pub(super) fn lines(calls: &[ToolCall], width: u16, expanded: bool) -> Vec<Line<
     } else {
         rows(calls, extent.columns)
     };
-    frame(bullet, title, body, width)
+    frame(bullet, title, None, body, width)
 }
 
 fn failed(call: &ToolCall) -> bool {

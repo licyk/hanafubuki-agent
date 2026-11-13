@@ -1,5 +1,7 @@
 ## Plan: a registry-driven settings center, the command center, and the conversation timeline (2026-11-12)
 
+**Complete (2026-11-13):** every item below is done; T7 was the last.
+
 The plan is [docs/plan-settings-and-timeline.md](docs/plan-settings-and-timeline.md),
 read from Codex `57a808a392`, KohakuTerrarium `c1d17b45` and main `6d61cc8`.
 It supersedes the hand-written forms of the configuration-center plan (below)
@@ -1929,9 +1931,123 @@ independent.
         at the display's takeover the same last rows stay and the finished
         view adds `exit N`, `still running` or `(no output)`. The tick is
         100 ms for a running `exec_command`.
-- [ ] T7: stability: running entries reserve their collapsed shape, the
+- [x] T7: stability: running entries reserve their collapsed shape, the
       toggle keeps the entry's header row, Scrollback's live region keeps its
       height; frame-by-frame tests.
+      Done (2026-11-13):
+      - Reserved row (`history_cell/tool/mod.rs`, `ToolCall::view`): from
+        its start until what it shows arrives, a call whose view has no
+        rows gets a dim placeholder under its header, `(running…)` while an
+        `exec_command` runs, `…` otherwise (another tool, and a finished
+        call waiting for its display), in the collapsed and the expanded
+        rows. The first output (`command::streamed`) or the display takes
+        its place. `Outcome` gains `shown` (its display arrived, or there
+        will be none): `show` sets it, the chat now calls `show` with an
+        empty display for a `None` reply, `end_running` sets it for what it
+        ends, and a session opened in place settles the calls still waiting
+        for a display (`on_session_opened`), so no `…` stays for good.
+      - The clock (`frame`): a running command's ` · 3.4s` is no longer
+        part of the wrapped title; it follows the header's last row only
+        when its widest (`CLOCK_COLUMNS` = 14, ` · 99h 59m 59s`) fits there
+        and is left out otherwise, so whether and where it shows never
+        depends on the time (`ToolCall::clock`; `text::running` lost it).
+      - Toggle anchor (`transcript_view/disclosure.rs`,
+        `disclosure_anchor`): when the top row of the view belongs to the
+        toggled entry and is at or above its header (a separator, a
+        prompt's padding, the header), the top row's text is kept, since
+        both forms share the rows up to the header; it used to restart the
+        entry at its header, so its header jumped a row. An entry below the
+        top already kept its header (the top anchor), so Fullscreen, the
+        Ctrl-T transcript and Ctrl-O now keep a visible header on its row.
+      - Pending-input preview (`bottom_pane/pending_input_preview.rs`,
+        `ReservedPendingInput`): while a turn runs it keeps the rows (its
+        blank row included) it reached at the current width, blank once the
+        turn has read the messages, reset at the turn's end
+        (`BottomPane::pending_rows`).
+      - Scrollback: no new mechanism; T1b's floor keeps the viewport's
+        height, and with the reserved shape a call no longer grows it
+        between its start, its clock, its completion and its display when
+        its rows stay the same (asserted: the viewport area is unchanged).
+      - Deviations from §4.7: the pending preview keeps the rows it
+        reached in the turn rather than "one reserved row" (one row cannot
+        hold a header, a message and the blank after them; what remains is
+        growth past the most it reached). A clock without room is left out
+        rather than moved to a row of its own, which would have been a row
+        the finished header drops. Remaining jumps, bounded and recorded:
+        `Running` becoming `Ran` takes a row off a header whose `Running`
+        form overflows its last row by at most four columns, which its
+        `Ran` form fits (measured: a 61-column `Running` header at widths
+        58–61); a display with no collapsed rows (a read, a listing, a
+        search, the web tools, a move, a delete, `write_stdin` without
+        output) drops the placeholder's row; a display with more adds the
+        rest of its rows and its control: two and the control for most
+        (§6's bound), three for a failed or backgrounded command whose
+        output did not stream (its exit row too), a row per file for a
+        patch of several files; a single exploring call joined by a second
+        becomes `Exploring` (the run's own shape, not reserved). In
+        Scrollback an expansion past the floor grows the viewport upward,
+        so the entry's header moves up by the rows gained (the inline
+        viewport cannot grow downward); collapsing keeps it (T1b).
+      - Not covered by a test: §6's "Scrollback's viewport not cleared
+        when a second tool starts" (no second-tool test; the viewport's
+        area is asserted unchanged across one call's frames), and the
+        Scrollback expansion that moves the header up.
+      - Tests: `history_cell/tool/tests/shape.rs` (a command's
+        `(running…)` → `…` → `(no output)`, its first line in the reserved
+        row; another tool's `…` replaced by its result, header alone without
+        a display, `end_running`; the clock never changing the header's
+        rows or their width at 20–90 columns across 0.9s, 9.95s, 10.05s,
+        59.95s, 62s and 125s; no clock without room);
+        `transcript_view/disclosure/tests.rs` (a toggle keeps the header on
+        its row, with the separator as the top row: failed before the
+        fix); `bottom_pane/tests.rs` (a read steer's rows kept, the next
+        message in them, given back at the turn's end); the new
+        `app/tests/stability.rs` on vt100 in both presentations: a running
+        command whose header fills 93 of 100 columns through 9.95s, 10.05s,
+        61s, its output, completion, display and `LiveEntryCompleted`: in
+        every frame the entry and the status row are there, its header row
+        and row count are the same, no row above it moves, and Scrollback's
+        viewport area is unchanged (fails at 10.05s with the old clock);
+        a command (3 lines, 2 more, completion, display) and an MCP tool
+        (completion, a 5-line display) grow by at most the control and two
+        rows per step, the rows above moving by exactly that while
+        following, and not at all while reading (Fullscreen, scrolled up).
+        Updated: the tests that read a running or waiting call's rows
+        (`chatwidget/tests/entries.rs` ×3, `app/scrollback/tests.rs` ×2: a
+        running call written at a session's opening or the exit now ends
+        with `└ …`), and three that completed a call without its display
+        now show none (`tool/tests/mod.rs`, `exploration.rs`).
+      - Snapshots and goldens: none changed (the exploration snapshot's
+        test now settles its failed call with `show`, so its content is
+        the same). Nothing model-visible.
+      - Docs (both languages): `terminal-interface#layout` (the waiting
+        messages' rows), `#reading` (a toggle keeps a visible header; the
+        tail's expansion past its blank rows), `#tools` (the reserved row,
+        the clock left out without room); `internals#tui-details` (a new
+        "A stable layout" bullet).
+      - Validation: `cargo fmt --all --check`; `RUSTFLAGS="-D warnings"
+        cargo check --workspace --all-targets --all-features`; `cargo clippy
+        --workspace --all-targets --all-features -- -D warnings`; `cargo
+        xtask check`; `cargo test --workspace --all-features`; `bun install
+        --frozen-lockfile`, `bun run format:check:site`, `bun run
+        site:check`, `bun run site:test`. `VITE_BASE_PATH=/hanafubuki-agent/
+        bun run site:build` built but could not prerender locally (port 3000
+        held by another project's server); CI's Site run covers it.
+        CI on Linux, Windows and macOS: https://github.com/licyk/hanafubuki-agent/actions/runs/43343045698
+        (run on f8f8ec2, which differs from the landed tree only in this
+        entry and in the reworded remaining-jumps sentences of
+        `terminal-interface#tools` and `internals#tui-details`, both
+        languages; Site: .../runs/43343045815, success). The first Windows
+        attempt failed only in the known timing flakes
+        (`plugins::subagents::tests::the_depth_and_running_limits_…`,
+        `plugins::review::tests::a_review_reads_only_…`); its failed job was
+        rerun; Linux and macOS passed at once, the new `shape` and
+        `stability` tests among them on every platform.
+      - Hanafubuki at its next pin: nothing (the TUI crate only; no facade
+        change, no twin touched).
+      - Module size: no exception added or raised. `notices-policy.toml`
+        lists `history_cell/tool/tests/shape.rs` and
+        `app/tests/stability.rs` as original.
 
 **`exec_command` ([7])**
 

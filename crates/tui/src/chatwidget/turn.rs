@@ -286,9 +286,11 @@ impl ChatWidget {
             return;
         };
         let (_, cell) = self.awaiting_display.remove(index);
-        if let Some(display) = display {
-            cell.update(|cell| cell.show(call_id, display));
-        }
+        let display = display.unwrap_or(AgentToolCallDisplay {
+            subject: None,
+            display: None,
+        });
+        cell.update(|cell| cell.show(call_id, display));
         self.complete_settled_tool(cell);
     }
 
