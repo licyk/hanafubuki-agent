@@ -161,7 +161,10 @@ and any module-size exception.
         site:check`, `bun run site:test`. `VITE_BASE_PATH=/hanafubuki-agent/
         bun run site:build` built but could not prerender locally (port 3000
         held by another project's server); CI's Site run covers it.
-        CI on Linux, Windows and macOS: CI_PENDING
+        CI on Linux, Windows and macOS: https://github.com/licyk/hanafubuki-agent/actions/runs/43371846978
+        (run on fd544aa, which differs from the landed tree only in this
+        line; all three passed at once; Site: .../runs/43371846973, success,
+        its prerender included).
       - Not known without a live probe: which rung the reported gateway
         takes. The tests prove the chain against the fake's wording; a
         gateway that refuses `tool_choice` in words the classifier misses
