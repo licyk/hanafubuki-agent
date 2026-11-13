@@ -1983,6 +1983,12 @@ and any module-size exception.
         `@mdx-js/mdx` 3.1.1; `VITE_BASE_PATH=/hanafubuki-agent/ bun run
         site:build` not run locally (port 3000 held by another project's
         server); CI's Site run covers it.
+      - CI on e08b030:
+        https://github.com/licyk/hanafubuki-agent/actions/runs/43503049158,
+        Linux and Windows passed; macOS was cancelled after 15 minutes
+        queued without a runner (no step ran), and its re-run passed.
+        Site on e08b030: .../runs/43503049237, passed, its build and
+        prerender included.
 - [ ] M2: source-backed answer cells and reflow on resize, in Fullscreen
       and in Scrollback (D19).
 - [ ] M3: streaming — incremental blocks, stable/tail regions, chunking,
