@@ -229,6 +229,27 @@ pub enum ConversationItem {
     ProviderCompaction {
         payload: hanafubuki_agent_model_api::ModelOpaqueCompactionPayload,
     },
+    /// A command the person typed (`!command`), run in a turn of its own
+    /// that sampled no model. The model reads it from the next request on
+    /// as the person's context (`<user_shell_command>`, as Codex). `output`
+    /// is the plain text the command printed, bounded like a tool output;
+    /// `exit_code` is absent when it did not run to an exit, and `output`
+    /// then says why. `call_id` is the kernel's (`user-shell-<turn>`), which
+    /// names its live output and its display.
+    UserShellCommand {
+        call_id: String,
+        command: String,
+        #[serde(default)]
+        cwd: Option<String>,
+        #[serde(default)]
+        exit_code: Option<i32>,
+        #[serde(default)]
+        duration_millis: u64,
+        #[serde(default)]
+        output: String,
+        #[serde(default)]
+        truncated: bool,
+    },
 }
 
 impl ConversationItem {
@@ -297,6 +318,17 @@ impl ConversationItem {
                 .saturating_add(content.len()),
             Self::CompactionSummary { summary, .. } => summary.len(),
             Self::ProviderCompaction { payload } => payload.as_str().len(),
+            Self::UserShellCommand {
+                call_id,
+                command,
+                cwd,
+                output,
+                ..
+            } => call_id
+                .len()
+                .saturating_add(command.len())
+                .saturating_add(cwd.as_ref().map_or(0, String::len))
+                .saturating_add(output.len()),
         }
     }
 
@@ -423,6 +455,22 @@ impl ConversationItem {
                     payload: payload.clone(),
                 }
             }
+            Self::UserShellCommand {
+                command,
+                exit_code,
+                duration_millis,
+                output,
+                ..
+            } => hanafubuki_agent_model_api::ModelInputItem::ContextFragment {
+                role: hanafubuki_agent_model_api::ModelContextRole::User,
+                kind: super::USER_SHELL_COMMAND_FRAGMENT.to_string(),
+                content: super::user_shell_command::user_shell_command_record(
+                    command,
+                    *exit_code,
+                    *duration_millis,
+                    output,
+                ),
+            },
         })
     }
 

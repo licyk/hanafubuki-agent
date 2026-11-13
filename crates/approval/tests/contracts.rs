@@ -275,6 +275,7 @@ fn auto_reviewer_and_full_access_preserve_their_source_and_exact_binding() {
         ApprovalDecisionSource::AutoReviewer,
         ApprovalDecisionSource::FullAccess,
         ApprovalDecisionSource::SessionAllowance,
+        ApprovalDecisionSource::UserCommand,
     ] {
         let service = ApprovalService::new(Arc::new(ManualApprovalClock::new(1)));
         let action = action(format!("{source:?}").as_bytes());

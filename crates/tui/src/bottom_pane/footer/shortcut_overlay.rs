@@ -4,8 +4,8 @@
 //! Compose, Session and Transcript, in three, two or one column by width
 //! (`shortcut_help`), then `/keymap customize`. Each key is the keymap's
 //! in force, so a remapped action shows its new key and an unbound one, or
-//! one with only a chord, is left out; `/`, `@`, Ctrl+C and PgUp/PgDn are
-//! fixed. Codex's voice key is not ported, and the keys of actions this
+//! one with only a chord, is left out; `/`, `@`, `!`, Ctrl+C and PgUp/PgDn
+//! are fixed. Codex's voice key is not ported, and the keys of actions this
 //! interface does not have yet are left out with them. A cut list ends
 //! with a note naming `/keymap`.
 
@@ -29,6 +29,7 @@ pub(super) fn lines(props: &FooterProps<'_>, width: u16) -> Vec<Line<'static>> {
         entries: vec![
             Shortcut::new(key_hint::plain(KeyCode::Char('/')), "Commands"),
             Shortcut::new(key_hint::plain(KeyCode::Char('@')), "Mention files"),
+            Shortcut::new(key_hint::plain(KeyCode::Char('!')), "Shell command"),
         ],
     };
     compose.push(newline_key(props), "New line");

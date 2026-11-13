@@ -146,6 +146,7 @@ Run Posix command outside the sandbox in /home/me/project: npm install (reason: 
 - 没有“安全命令”白名单：即使是 `ls` 或 `git status` 也需要审批。
 - 读取文件不受工作区目录限制，模型可以读取你的用户能读取的任何文件。
 - **总是询问你**的操作（启用或停用 Skill、`git clone`）即使在自动审查和完全访问模式下也会询问，并且只能允许一次。
+- 你在[终端界面](/docs/terminal-interface#composer)中 `!` 之后亲自输入的命令，在任何模式下都以你的输入作为批准：它在会话的沙箱中运行，不会弹出询问，除非有总是要求由人决定的批准规则适用。
 
 ## 回答审批 [#answering]
 

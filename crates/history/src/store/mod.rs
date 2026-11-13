@@ -574,6 +574,7 @@ fn conversation_item_type(item: &ConversationItem) -> &'static str {
         ConversationItem::ContinuationContext { .. } => "continuation_context",
         ConversationItem::CompactionSummary { .. } => "compaction_summary",
         ConversationItem::ProviderCompaction { .. } => "provider_compaction",
+        ConversationItem::UserShellCommand { .. } => "user_shell_command",
     }
 }
 

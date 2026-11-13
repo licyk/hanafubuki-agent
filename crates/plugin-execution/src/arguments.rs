@@ -34,7 +34,7 @@ pub(crate) enum ExecCall {
 /// The bounds the schemas in `specs.rs` state. A wait or an output cap out of
 /// range is clamped into them (never past them) with a note; a terminal size
 /// likewise.
-const MAX_YIELD_TIME_MS: u64 = 30_000;
+pub(crate) const MAX_YIELD_TIME_MS: u64 = 30_000;
 const MAX_OUTPUT_BYTES: usize = 256 * 1024;
 const MAX_TERMINAL_CELLS: u64 = 500;
 const MAX_JUSTIFICATION_BYTES: usize = 1024;

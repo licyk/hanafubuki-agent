@@ -100,6 +100,7 @@ fn invocation(arguments: Value) -> ToolInvocation {
             session_revision: AgentRevision::new(1),
             call_id: "call-1".to_string(),
             image_input: false,
+            origin: Default::default(),
         },
         arguments,
         cancellation: CancellationToken::default(),

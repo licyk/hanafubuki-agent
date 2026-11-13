@@ -132,6 +132,9 @@ pub(crate) enum AppCommand {
 pub(crate) enum Op {
     /// A message from the person that starts a turn.
     UserInput(String),
+    /// A command the person typed after `!`, which runs as a turn of its
+    /// own with no model.
+    UserShellCommand(String),
     /// A message that steers the running turn; `id` names it in the answer
     /// (`TurnUpdate::Steered`).
     Steer {

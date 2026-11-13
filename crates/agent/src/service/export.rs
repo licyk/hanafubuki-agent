@@ -106,8 +106,23 @@ pub(super) fn render_markdown(items: &[ConversationItem]) -> Option<String> {
                     if output.is_error {
                         body.push_str(" · failed");
                     }
-                    body.push_str(&output_excerpt(&output.content));
+                    body.push_str(&output_excerpt(&output_text(&output.content)));
                 }
+                section(&mut markdown, "Activity", &body, true);
+            }
+            ConversationItem::UserShellCommand {
+                command,
+                exit_code,
+                output,
+                ..
+            } => {
+                let mut body = format!("!{}", summarize_arguments(&Value::from(command.as_str())));
+                match exit_code {
+                    Some(0) => {}
+                    Some(code) => body.push_str(&format!(" · exit {code}")),
+                    None => body.push_str(" · failed"),
+                }
+                body.push_str(&output_excerpt(output));
                 section(&mut markdown, "Activity", &body, true);
             }
             ConversationItem::CompactionSummary { .. } => {
@@ -150,10 +165,9 @@ fn summarize_arguments(arguments: &Value) -> String {
     format!("{cut}…")
 }
 
-/// The first [`OUTPUT_LINES`] lines of a call's text output, each on a line
-/// of its own after the summary, and how many were left out.
-fn output_excerpt(content: &[ToolOutputContent]) -> String {
-    let text = content
+/// A call's text output: its text parts and a structured part's `output`.
+fn output_text(content: &[ToolOutputContent]) -> String {
+    content
         .iter()
         .filter_map(|content| match content {
             ToolOutputContent::Text { text } => Some(text.as_str()),
@@ -161,7 +175,12 @@ fn output_excerpt(content: &[ToolOutputContent]) -> String {
             _ => None,
         })
         .collect::<Vec<_>>()
-        .join("\n");
+        .join("\n")
+}
+
+/// The first [`OUTPUT_LINES`] lines of `text`, each on a line of its own
+/// after the summary, and how many were left out.
+fn output_excerpt(text: &str) -> String {
     let lines: Vec<&str> = text.lines().collect();
     let mut excerpt = String::new();
     for line in lines.iter().take(OUTPUT_LINES) {

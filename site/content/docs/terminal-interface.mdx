@@ -88,9 +88,9 @@ Fullscreen 下还有阅读对话的按键：Page Up/Page Down、F3、F4、Ctrl-S
   Compose                        Session                                        Transcript (open first)
   /         Commands             tab                Send message                ctrl + t                           Open transcript
   @         Mention files        shift + tab        Change mode                 f3                                 Find text
-  ctrl + j  New line             alt + ,            Less reasoning              pgup / pgdn                        Scroll
-  esc esc   Edit last message    alt + .            More reasoning              ctrl + space                       Start selection
-                                 ←                  Agents (empty prompt)       ctrl + home / ctrl + end           Top / latest
+  !         Shell command        alt + ,            Less reasoning              pgup / pgdn                        Scroll
+  ctrl + j  New line             alt + .            More reasoning              ctrl + space                       Start selection
+  esc esc   Edit last message    ←                  Agents (empty prompt)       ctrl + home / ctrl + end           Top / latest
                                  alt + ← / alt + →  Subagents (empty prompt)    shift + alt + , / shift + alt + .  Top / latest
                                  f4                 Inspect activity
                                  ctrl + c           Quit
@@ -98,7 +98,7 @@ Fullscreen 下还有阅读对话的按键：Page Up/Page Down、F3、F4、Ctrl-S
   /keymap customize
 ```
 
-- **Compose**：终端能区分 Shift+Enter 时，换行键显示为 Shift+Enter。**Session**：回合进行中，Tab 显示为 `Queue message`，Ctrl+C 显示为 `Interrupt`。**Transcript**：阅读对话的按键（[阅读对话](#reading)），Fullscreen 下在输入框旁边就能用，Scrollback 下在 Ctrl+T 打开对话记录之后使用。
+- **Compose**：`!` 运行 shell 命令（[见下文](#composer)）；终端能区分 Shift+Enter 时，换行键显示为 Shift+Enter。**Session**：回合进行中，Tab 显示为 `Queue message`，Ctrl+C 显示为 `Interrupt`。**Transcript**：阅读对话的按键（[阅读对话](#reading)），Fullscreen 下在输入框旁边就能用，Scrollback 下在 Ctrl+T 打开对话记录之后使用。
 - 在[旁路对话](#side)或正在显示的[子代理](#subagents)中，模式、推理强度和编辑之前的消息属于主对话，不显示。
 - 屏幕高度不够全部显示时，列表被截断，并提示 `… more: /keymap`；`/keymap` 列出所有动作。
 - Shift+Tab 在回合进行中不可用，和 `/mode` 一样。Alt+, 和 Alt+. 在 `/effort` 提供的档位之间切换（[见下文](#effort)）。Alt+Left 和 Alt+Right 在会话及其子代理之间循环切换（[见下文](#subagents)）。
@@ -111,6 +111,7 @@ Fullscreen 下还有阅读对话的按键：Page Up/Page Down、F3、F4、Ctrl-S
 - **排队消息**：回合进行中按 Tab，消息排入 `Queued follow-up inputs`；没有回合运行时，Tab 和 Enter 一样直接发送。用 Tab 输入的命令和 Enter 一样立即执行。回合结束后，排队的消息从最早的一条开始，每条各开始一个回合，依次进行，回合失败后也一样。Shift+Left（或 Alt+Up）把最后一条排队的消息放回输入框，放在草稿之前，供你修改。
 - **不会丢失消息**：回合没有读到的补充消息（回合先结束了、失败了，或 Agent 拒收了这条消息）会在回合结束时发送，等待期间显示在 `Messages to be submitted at end of turn` 之下；多条会合并成一条消息，先于排队的消息发送。
 - **中断**：有补充消息在等待时按 Esc，会中断回合并立即把它们合并成一条，作为下一个回合发送（`Model interrupted to submit steer instructions.`）；队列和你的草稿保持不变。Ctrl-C，或没有补充消息等待时按 Esc，只中断、不发送：等待中的消息（补充消息、等待回合结束的消息和排队的消息）回到输入框，每条一行，放在草稿之前。
+- **Shell 命令**：以 `!` 开头的消息把其余部分作为 shell 命令运行，单独占一个回合，不询问模型（与 Codex 相同）。它通过 `exec_command` 工具在会话的[沙箱](/docs/permissions#sandbox)和工作目录中运行，直到退出，最长为工具超时（未配置时为 10 分钟）；按 Esc 会停止它，终止它的进程。草稿以 `!` 开头时，输入框下方一行显示 `! shell command · runs in the session's sandbox`。输入命令本身就是批准，所以无论权限模式如何都不会弹出询问；插件中总是要求由人决定的审批规则仍会询问。`git clone` 的规则（[哪些操作需要审批](/docs/permissions#what-asks)）读取的是命令的程序和参数，而不是 shell 脚本，所以 `!git clone …` 不会询问就运行。它显示为 `• You ran ls` 加上它的输出（[工具调用](#tools)）。没有模型可以请求越出沙箱，所以被沙箱阻止的命令（断网时的安装、写入可写根目录之外）直接失败；失败的命令会多一行，说明 `!` 命令在会话的沙箱中运行（`/permissions`）。从你的下一条消息起，模型就能读到它：命令、退出码、耗时和输出。只输入 `!` 会显示用法（`Prefix a command with ! to run it locally`）。回合进行中，命令会被拒绝（`A turn is running; wait for it or interrupt it first.`）并留在输入框中；Plan 模式下也会被拒绝。命令运行时发送的消息会等它结束，和按 Tab 排队一样。Up 和 Down 会按输入时的样子调出它。
 - **每个对话各有一个队列**：主对话、[旁路对话](#side)和正在显示的[子代理](#subagents)各自排队，在后台的对话也会继续处理它的队列。旁路对话关闭或离开子代理时，它等待中的消息随之丢弃。有回合运行或有消息等待时，不能把对话切换到另一个会话（`/new`、`/resume`、编辑之前的消息）。
 
 ## 斜杠命令 [#commands]
@@ -538,17 +539,17 @@ Provider 没有发送文本时只有这一行，没有控件。如果回合在�
 
 无论是哪个工具，一次工具调用都是一个条目，起初是折叠的。标题行说明它做了什么，圆点为绿色，失败时为红色，运行时是旋转指示；下方 `└` 之后最多只有几行。它的控件（剩下的是输出行时为 `+ 12 lines`，否则为 `+ Show details`）在原处展开它，与[阅读对话](#reading)相同；[对话记录](#transcript)的详细视图和 `/raw` 中每个调用都是展开的。折叠时已显示全部内容的调用没有控件。
 
-| 工具                                 | 折叠时                                                                                                                                                                            | 展开后                                                                                                              |
-| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `exec_command`                       | `• Ran cargo test`、输出的最后 3 行（没有输出时为 `(no output)`），失败时加 `exit 101 · 4.2s`，在后台继续运行时加 `still running · 4.2s`；运行时为到目前为止的最后 3 行（见下文） | `$ cargo test`、工具返回的完整输出，然后是 `✓ 4.2s` 或 `✗ exit 101 · 4.2s` 以及运行的目录；运行时为到目前为止的输出 |
-| `write_stdin`                        | `• Interacted with session 3 ← ls`（或 `• Waited for session 3`）和输出的最后几行                                                                                                 | 完整输出                                                                                                            |
-| `apply_patch`                        | `• Edited src/lib.rs (+12 -3)`（`Added`、`Deleted`），或 `• Edited 3 files (+20 -5)` 并每个文件一行；没有应用时为 `Failed to edit`                                                | 差异：符号列、文件语言的配色、块之间的 `⋮`，补丁新增的文件带行号                                                    |
-| `read_file`                          | `• Read src/lib.rs (lines 1–120)`                                                                                                                                                 | 文本，前面是行号，按文件的语言高亮                                                                                  |
-| `list_directory`                     | `• Listed src (24 entries)`                                                                                                                                                       | 各条目，目录在前，文件带大小                                                                                        |
-| `search_text`                        | `• Searched "foo" in src (7 matches)`                                                                                                                                             | 每个匹配一行 `路径:行: 文本`，查询按原样匹配之处加粗                                                                |
-| `web_search`、`fetch_web_page`       | `• Searched the web for 查询`、`• Fetched 地址`                                                                                                                                   | 各结果的标题和地址；页面的标题和前 40 行                                                                            |
-| `move_path`、`delete_path`           | `• Moved a → b`、`• Deleted x`                                                                                                                                                    | （没有更多内容）                                                                                                    |
-| 其他工具（MCP、插件、Skill、记忆……） | `• Called 工具名: 对象`（或 `• Failed`）和它返回内容的前 3 行：文本，或结构化结果的字段                                                                                           | 全部内容                                                                                                            |
+| 工具                                 | 折叠时                                                                                                                                                                                                                      | 展开后                                                                                                              |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `exec_command`                       | `• Ran cargo test`（[`!` 命令](#composer)为 `• You ran ls`）、输出的最后 3 行（没有输出时为 `(no output)`），失败时加 `exit 101 · 4.2s`，在后台继续运行时加 `still running · 4.2s`；运行时为到目前为止的最后 3 行（见下文） | `$ cargo test`、工具返回的完整输出，然后是 `✓ 4.2s` 或 `✗ exit 101 · 4.2s` 以及运行的目录；运行时为到目前为止的输出 |
+| `write_stdin`                        | `• Interacted with session 3 ← ls`（或 `• Waited for session 3`）和输出的最后几行                                                                                                                                           | 完整输出                                                                                                            |
+| `apply_patch`                        | `• Edited src/lib.rs (+12 -3)`（`Added`、`Deleted`），或 `• Edited 3 files (+20 -5)` 并每个文件一行；没有应用时为 `Failed to edit`                                                                                          | 差异：符号列、文件语言的配色、块之间的 `⋮`，补丁新增的文件带行号                                                    |
+| `read_file`                          | `• Read src/lib.rs (lines 1–120)`                                                                                                                                                                                           | 文本，前面是行号，按文件的语言高亮                                                                                  |
+| `list_directory`                     | `• Listed src (24 entries)`                                                                                                                                                                                                 | 各条目，目录在前，文件带大小                                                                                        |
+| `search_text`                        | `• Searched "foo" in src (7 matches)`                                                                                                                                                                                       | 每个匹配一行 `路径:行: 文本`，查询按原样匹配之处加粗                                                                |
+| `web_search`、`fetch_web_page`       | `• Searched the web for 查询`、`• Fetched 地址`                                                                                                                                                                             | 各结果的标题和地址；页面的标题和前 40 行                                                                            |
+| `move_path`、`delete_path`           | `• Moved a → b`、`• Deleted x`                                                                                                                                                                                              | （没有更多内容）                                                                                                    |
+| 其他工具（MCP、插件、Skill、记忆……） | `• Called 工具名: 对象`（或 `• Failed`）和它返回内容的前 3 行：文本，或结构化结果的字段                                                                                                                                     | 全部内容                                                                                                            |
 
 连续的读取、列出和搜索调用共用一个条目，与 Codex 相同：有调用在运行时为 `• Exploring`，之后为 `• Explored`，每个调用一行（连续的读取合为 `Read a.rs, b.rs`，`List src (24 entries)`，`Search "foo" in src (7 matches)`），有调用失败时标题加 `· 1 failed`。展开后，每个调用按上表显示。它们之间出现任何其他条目（思考、消息、其他工具）都会开始一个新条目；单独一个调用按它自己的方式显示。`compress` 调用折叠显示（[分层压缩](#compression)）。
 

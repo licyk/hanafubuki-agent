@@ -1,0 +1,5 @@
+---
+source: crates/tui/src/bottom_pane/footer/tests.rs
+expression: "draw(props, width, height).backend()"
+---
+"  ! shell command · runs in the session's sandbox                               "

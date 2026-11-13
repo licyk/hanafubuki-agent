@@ -9,6 +9,9 @@
 //!
 //! While the command runs, and until its display arrives, the same rows show
 //! what its process printed so far (`streamed`).
+//!
+//! A command the person typed (`!command`) says `You ran`, as Codex's; one
+//! that failed adds where it ran, since the sandbox may be why.
 
 use std::time::Duration;
 
@@ -24,6 +27,8 @@ use crate::text_formatting::strip_terminal_controls;
 
 /// The columns of a command line in the header, a subject's bound.
 const TITLE_COLUMNS: usize = 200;
+/// Under a failed `!command`: the sandbox may have refused what it did.
+const SANDBOX_HINT: &str = "`!` commands run in the session's sandbox (/permissions)";
 
 pub(super) struct Command<'a> {
     pub(super) command: &'a str,
@@ -48,7 +53,8 @@ pub(super) fn view(call: &ToolCall, command: &Command, failed: bool, extent: Ext
         };
         vec![verb.bold(), " ".into(), call.subject_or(&call.name).into()]
     } else {
-        let mut title = vec!["Ran".bold(), " ".into()];
+        let verb = if call.by_user { "You ran" } else { "Ran" };
+        let mut title = vec![verb.bold(), " ".into()];
         // A long command line is cut in the header, as a subject is.
         let (first, was_cut) = clipped(
             script_lines.first().cloned().unwrap_or_default(),
@@ -83,6 +89,12 @@ pub(super) fn view(call: &ToolCall, command: &Command, failed: bool, extent: Ext
         }
         details.extend(output_rows(&output, extent));
         details.push(ending(command));
+    }
+    if call.by_user && failed {
+        preview.push(Line::from(SANDBOX_HINT.dim()));
+        if extent.expanded {
+            details.push(Line::from(SANDBOX_HINT.dim()));
+        }
     }
 
     View {

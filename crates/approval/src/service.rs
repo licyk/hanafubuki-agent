@@ -245,6 +245,7 @@ impl ApprovalService {
                 ApprovalDecisionSource::AutoReviewer
                     | ApprovalDecisionSource::FullAccess
                     | ApprovalDecisionSource::SessionAllowance
+                    | ApprovalDecisionSource::UserCommand
             )
         {
             return Err(ApprovalError::InvalidDecisionSource);

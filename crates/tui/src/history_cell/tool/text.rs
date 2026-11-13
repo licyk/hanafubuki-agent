@@ -26,11 +26,12 @@ pub(super) fn running(call: &ToolCall) -> View {
 }
 
 /// `Called` (or `Failed`) and the tool, with nothing more to show; a
-/// command `Ran` and its command line, as it ran.
+/// command `Ran` (the person's, `You ran`) and its command line, as it ran.
 pub(super) fn called(call: &ToolCall, failed: bool) -> View {
     if call.name == EXEC_COMMAND && call.subject.is_some() {
+        let verb = if call.by_user { "You ran" } else { "Ran" };
         return View::title(
-            vec!["Ran".bold(), " ".into(), call.subject_or("").into()],
+            vec![verb.bold(), " ".into(), call.subject_or("").into()],
             failed,
         );
     }

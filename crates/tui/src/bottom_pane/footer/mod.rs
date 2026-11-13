@@ -53,6 +53,8 @@ pub(crate) struct FooterProps<'a> {
     /// A second conversation (a side conversation, a subagent shown): the
     /// mode, the effort and the earlier messages are the main one's.
     pub(crate) second_conversation: bool,
+    /// The draft starts with `!`: it is a shell command.
+    pub(crate) shell_command: bool,
 }
 
 /// Selects which footer content is rendered.
@@ -142,6 +144,10 @@ fn footer_lines(props: FooterProps<'_>) -> Vec<Line<'static>> {
         }
         FooterMode::ComposerEmpty => vec![composer_empty_line(props)],
         FooterMode::ShortcutOverlay => shortcut_overlay::lines(&props, u16::MAX),
+        FooterMode::ComposerHasDraft if props.shell_command => vec![Line::from(vec![
+            "!".red().bold(),
+            " shell command · runs in the session's sandbox".dim(),
+        ])],
         FooterMode::ComposerHasDraft => vec![match keymap::hint(Action::Queue) {
             Some(key) if props.task_running => {
                 Line::from(vec![key.into(), " to queue message".dim()])

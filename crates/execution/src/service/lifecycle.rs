@@ -30,6 +30,19 @@ impl AgentExecutionService {
         result
     }
 
+    /// Terminates the execution unless it has ended, then disposes of it:
+    /// it is forgotten only once its process manager confirms the end.
+    pub fn stop_confirmed(
+        &self,
+        scope: &AgentExecutionScope,
+        execution_id: AgentExecutionId,
+    ) -> Result<ConfirmedAgentExecutionDisposal, AgentExecutionError> {
+        if !self.snapshot(scope, execution_id)?.status.is_terminal() {
+            self.terminate(scope, execution_id)?;
+        }
+        self.dispose(scope, execution_id)
+    }
+
     pub fn dispose(
         &self,
         scope: &AgentExecutionScope,

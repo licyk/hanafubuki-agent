@@ -1,0 +1,14 @@
+---
+source: crates/tui/src/history_cell/tool/tests/user_shell.rs
+expression: "both(&cell, 60)"
+---
+• You ran npm install
+  └ npm ERR! network request failed
+    exit 1 · 4.2s
+    `!` commands run in the session's sandbox (/permissions)
+─── expanded (None) ───
+• You ran npm install
+  └ $ npm install
+    npm ERR! network request failed
+    ✗ exit 1 · 4.2s
+    `!` commands run in the session's sandbox (/permissions)

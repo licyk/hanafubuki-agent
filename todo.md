@@ -1050,10 +1050,180 @@ and any module-size exception.
         code; both pages then compiled with the store's `@mdx-js/mdx`,
         which reproduced the error on b652100's page); its Site run,
         .../runs/43428280881, passed, its build and prerender included.
-- [ ] K2: `!command` — a no-model turn running the planned `exec_command`
+- [x] K2: `!command` — a no-model turn running the planned `exec_command`
       handler, approved by the person, in the sandbox, recorded as a
       `UserShellCommand` item the model reads (D14, D15). Goldens
       regenerated on purpose.
+      Done (2026-11-13):
+      - kernel: `ConversationItem::UserShellCommand { call_id, command,
+        cwd, exit_code, duration_millis, output, truncated }` (optional
+        fields default on read), lowered as a user-role context fragment
+        (`user_shell_command`) with Codex's text
+        (`model/user_shell_command.rs`: `<user_shell_command>`, command,
+        `Exit code: N` (`none` without an exit), `Duration: S.ssss
+        seconds`, output). `AgentService::submit_user_shell_command_with_sink`
+        admits a turn of `TurnKind::UserShellCommand` (on the turn record,
+        through `TurnAdmission::UserShellCommand`): refused while a turn
+        runs and in Plan mode; its admission commits `TurnStart` and the
+        item saying `The command did not finish.` (it opens the turn as a
+        user message does: the boundary validation takes it); the turn
+        samples no model (`run_turn` → `run_user_shell_command`,
+        `service/tool_execution/user_shell.rs`): it plans the session's
+        tools as a step does (`tool_catalog_context`, factored out of
+        `prepare_sampling_step`), emits `ToolStarted` for `exec_command`
+        with call id `user-shell-<turn>`, runs the planned handler through
+        `execute_handler_tool_call` (no `ToolCall`/`ToolOutput` pair, no
+        tool-lifecycle hooks), then `ToolExecutionFinished`, the item
+        completed in place from the presenter's `AgentToolDisplay::Command`
+        (an item snapshot, as a permission review's; an error output gives
+        no exit code and the error as output), `ToolCompleted`, and
+        `TurnCompleted { final_answer_message_id: None }` (now an
+        `Option`; `finish_completed` takes an optional answer and
+        `execute_admitted_turn` returns `Option<AgentTurnOutcome>`). The
+        turn reads no steering (`InvalidInput`). `ToolCallContext` gains
+        `origin: ToolCallOrigin { Model, User }`, set from the turn (also on
+        `AgentToolInvocationContext`); `route_approval` authorizes a
+        `User` call with no rule verdict at once as the new
+        `ApprovalDecisionSource::UserCommand`, in every mode, while
+        `Deny`/`RequireUser` verdicts stay as they are. `tool_display`
+        answers the call id from the item. Matches: the reviewer's evidence
+        (a tool result named `user_shell_command`), hierarchical compression
+        (left whole), `/context` (the fragment counts with the calls and
+        outputs), history validation (bounded call id; the turn's opener),
+        tool pairs.
+      - execution and plugin-execution: `AgentExecutionService::stop_confirmed`
+        (terminate unless ended, then dispose once the end is confirmed;
+        `stop_background_terminals_confirmed` uses it). A `User` call of
+        `exec_command` is recorded as `ApprovalOrigin::User`, runs until
+        its command exits (`run_to_exit`: waits of 30 s, then one read of
+        everything it printed, its wall time the whole run), not the
+        model's yield; cancelled (Esc, the tool timeout) it is stopped
+        through `stop_confirmed` and reported disposed, never left as a
+        background terminal.
+      - approval: `ApprovalDecisionSource::UserCommand`, accepted by
+        `authorize` (the contract test lists it with the other direct
+        sources); `User` still cannot bypass the prompt.
+      - facade: `AgentApplicationService::submit_user_shell_command_with_sink
+        (session_id, command, sink)` (trims; refuses an empty command): the
+        session activated, its turn permission mode and turn extensions (the
+        sandbox) as for a message, the working directory
+        (`ResolvedPath::native_text` of the execution service's) as
+        `workdir`. History store (item type `user_shell_command`, memory
+        evidence as a call of that name), export (`!COMMAND`, `· exit N` or
+        `· failed`, the output's first lines), `sessions show` (`user ran:
+        COMMAND`), `exec`'s final message with no answer id.
+      - TUI: `Op::UserShellCommand`; the chat (`chatwidget/shell.rs`,
+        Codex's `submit_shell_command`): a sent message starting with `!`
+        runs the rest; `!` alone shows Codex's help cell; refused with
+        `A turn is running; wait for it or interrupt it first.` while a turn
+        runs or a message waits (the draft stays); a message sent while a
+        `!` command runs is queued (it reads no steering). The bridge starts
+        both kinds in `agent_bridge/start.rs` (`start_turn` moved there:
+        `mod.rs` 600 → 596). The footer shows `! shell command · runs in the
+        session's sandbox` while the draft starts with `!`
+        (`FooterProps::shell_command`). The entry says `You ran` (live: the
+        chat knows its `!` turn runs; replayed: `ReplayedItem::UserShellCommand`
+        → `new_user_shell_command`), a failed one adds `` `!` commands run
+        in the session's sandbox (/permissions) ``; an interrupted one ends
+        as it stood with no "tell the model" line. The `?` overlay gains
+        `!  Shell command` under Compose (K1 left it out).
+      - Tests (written after the code; their first run failed on two bugs
+        it then fixed: a turn committing no item could not reach its
+        terminal commit, which needs a durable item of the turn, so the
+        item moved to the admission; and `authorize` refused `User`):
+        agent `tests/user_shell.rs`: no model request, no approval under
+        Manual, the events, `[TurnStart, UserShellCommand]` with exit 0, the
+        output and the cwd, `tool_display`, and the next request carrying
+        the fragment; `exit 3` recorded; refused during a model turn and in
+        Plan mode, no steering, Esc terminating `sleep 30` with no
+        background terminal left and the item saying it did not finish
+        (seen failing with the stop removed: a background terminal was
+        left); a test plugin's rule requiring a person asks for `!echo
+        needs-a-person`, denied → no exit code (and with the person's
+        approval removed, the plain command waited for an approval: seen
+        failing). Golden `user_shell_command_request` (new). Kernel: the
+        record's text (Codex's two cases and no exit), the item's tolerant
+        decoding and lowering. Export test. TUI: `app/tests/shell.rs` end to
+        end (the hint, `You ran`, the output, no model request, Up recalls
+        `!echo …`, the next request carries it, `/resume` replays it; `!`
+        alone; refused during a turn with the draft kept; a message waiting
+        for `!sleep 2`; Esc stopping `!sleep 30`); the entry
+        (`history_cell/tool/tests/user_shell.rs`: finished and failed
+        snapshots, running, interrupted, replayed); agent: a session of a
+        finished and a stopped command reopened by a new Agent over its
+        storage, both items as committed and the next request carrying
+        both; editing the message after a command forks with the command
+        kept; footer snapshots (the
+        overlay at 140/90/50 columns and during a turn now with `!`, the
+        new shell hint) and the K1 test's absent list without "Shell
+        command".
+      - Deviations: (1) the approval is `ApprovalDecisionSource::UserCommand`,
+        not `User`: the approval crate pins that `authorize` refuses `User`
+        and `System` (`user_and_system_sources_cannot_bypass_manual_review`),
+        and the prompt's answer keeps `User`. (2) The plan's "the
+        `execution.git-clone` rule still asks" does not hold for `!`: that
+        rule reads a command's program and argv, never a shell script (its
+        own test pins `bash -c "git clone …"` as no verdict), and
+        `exec_command` always runs a shell; so the test proves that the
+        rules still judge a `!` command with a test rule requiring a person
+        instead. The model's `exec_command git clone` is not matched either
+        (before K2 too). (3) No public `AgentTurnKind`: the kind is the
+        kernel's turn record's. (4) The item has a `call_id` the plan did
+        not list, which names its live entry and its display. (5) The item
+        is committed at admission and completed in place: a turn's terminal
+        commit and the restart repair settle working time on a durable item
+        of the turn, and a turn boundary needs its opener in the admission;
+        an interrupted, failed or restarted command leaves `The command did
+        not finish.` (6) Runs to its exit as Codex's, bounded by the tool
+        timeout (10 minutes unless configured) rather than Codex's hour;
+        a login shell as Codex's (so a profile's messages show in the
+        output; the golden redacts them). (7) Refused in Plan mode, whose
+        tools only read. (8) The sandbox hint shows on any failed `!`
+        command: the chat does not know the sandbox mode. (9) The shell-mode
+        hint is a footer row; Codex's red `!` prompt and its bash mode
+        (the `!` taken out of the draft) are not ported. (10) A message sent
+        during a `!` command is queued, as Codex queues it, since the turn
+        reads no steering. (11) `TurnCompleted`'s id is optional (a
+        contract change, documented in `json-events`). (12) The user's
+        PreToolUse/PostToolUse hooks do not run for a `!` command (no model
+        call). (13) A compaction keeps the person's messages, not `!`
+        items: an older command is summarized with the rest. (14) A running
+        `!` command holds one blocking thread until it exits (a model's call
+        holds one up to its 30 s yield); one runs per session at most.
+      - Goldens: one new, `user_shell_command_request.json` (the request
+        after `!printf user-shell-golden` and a message; the duration and
+        the login shell's own output redacted); every other golden
+        unchanged.
+      - Docs (both languages): `terminal-interface#composer` (shell
+        commands), `#shortcuts` (the overlay with `!`), `#tools` (`You
+        ran`); `permissions#what-asks` (a typed command is the person's
+        approval); `sessions#show` and `#export`; `json-events#turn`
+        (`finalAnswerMessageId` `null`); `internals#turn-details` (the
+        turn); `embedding#events-and-history` (the facade call);
+        `plugin-rules#tools` (`ToolCallContext.origin`).
+      - Validation: `cargo fmt --all --check`; `RUSTFLAGS="-D warnings"
+        cargo check --workspace --all-targets --all-features`; `cargo clippy
+        --workspace --all-targets --all-features -- -D warnings`; `cargo
+        xtask check` (its notices check first failed on the three new
+        original files, now listed); `cargo test --workspace --all-features
+        --no-fail-fast` (4115 passed, none failed; no flake seen); `bun install --frozen-lockfile`, `bun
+        run format:site`, `bun run format:check:site`, `bun run
+        site:check`, `bun run site:test`, and each changed page compiled
+        with the store's `@mdx-js/mdx` 3.1.1 (all 14 compiled);
+        `VITE_BASE_PATH=/hanafubuki-agent/ bun run site:build` not run
+        locally (port 3000 held by another project's server); CI's Site run
+        covers it.
+      - Hanafubuki at its next pin: the new `ConversationItem::UserShellCommand`
+        (its transcript and history readers); `AgentEventKind::TurnCompleted`'s
+        `final_answer_message_id: Option<AgentMessageId>`;
+        `ToolCallContext::origin` (a field to fill where it builds one, e.g.
+        tests: `ToolCallOrigin::Model`); `AgentToolInvocationContext::origin`;
+        `ApprovalDecisionSource::UserCommand`; optionally
+        `submit_user_shell_command_with_sink` for its own `!`. The item is
+        committed at the turn's admission and completed in place with no
+        event of its own: a reader re-reads it at `ToolCompleted`.
+      - Module size: no exception added or raised. `agent_bridge/mod.rs`
+        596, `chat_composer/mod.rs` 591, `stage_turn_admission` 196 lines.
 - [ ] K3: Ctrl+R history search over this run's messages and the history
       store's user messages (D16).
 - [ ] K4: Ctrl+G external editor (`VISUAL`/`EDITOR`), a foreground child

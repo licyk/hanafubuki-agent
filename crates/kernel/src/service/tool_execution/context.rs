@@ -19,6 +19,10 @@ impl AgentService {
         })?;
         let cell = self.session(identity.session_id)?;
         let record = cell.lock()?;
+        let origin = match exact_turn(&record, identity.turn_id, identity.generation)?.kind {
+            TurnKind::UserShellCommand(_) => hanafubuki_agent_contracts::ToolCallOrigin::User,
+            TurnKind::Regular => hanafubuki_agent_contracts::ToolCallOrigin::Model,
+        };
         Ok(AgentToolInvocationContext {
             session_id: identity.session_id,
             turn_id: identity.turn_id,
@@ -31,6 +35,7 @@ impl AgentService {
             provider_id: registration.provider_id.clone(),
             tool_id: registration.tool_id.clone(),
             tool_generation: registration.generation,
+            origin,
             tool_plan_leases: tool_plan.leases().to_vec(),
             approval_rules: tool_plan.approval_rules().cloned(),
             progress: Arc::new(super::super::progress::SessionToolProgressSink {

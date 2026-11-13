@@ -6,6 +6,7 @@ use hanafubuki_agent_contracts::{AgentToolDisplay, RegistryService};
 use hanafubuki_agent_tool_contracts::ToolOutput;
 use serde_json::Value;
 
+use super::tool_execution::user_shell_command_display;
 use super::*;
 
 /// The history items a [`AgentService::tool_display`] read takes at once.
@@ -41,6 +42,9 @@ impl AgentService {
         loop {
             let page = self.read_transcript_page(request.clone())?;
             for item in page.items {
+                if let Some(display) = user_shell_command_display(&item.content, call_id) {
+                    return Ok(Some(display));
+                }
                 match item.content {
                     ConversationItem::ToolOutput {
                         call_id: id,

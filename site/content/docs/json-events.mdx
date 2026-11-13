@@ -41,7 +41,7 @@ icon: Braces
 | `turn_started`     | `role`                 | 回合开始，在会话的[角色](/docs/roles#sessions)中：角色名，`default` 时为 `null` |
 | `sampling_started` | `step`                 | 第 `step` 次请求模型（一个回合可能多次请求：每次工具调用后再请求一次）          |
 | `response_started` | `responseId`           | Provider 开始返回响应，`responseId` 是 Provider 的响应 ID（字符串）             |
-| `turn_completed`   | `finalAnswerMessageId` | 回合完成；最终回答的消息 ID                                                     |
+| `turn_completed`   | `finalAnswerMessageId` | 回合完成；最终回答的消息 ID，没有询问模型的回合为 `null`                        |
 | `turn_cancelled`   | `reason`               | 回合被取消，`reason` 是 `user_interrupted`                                      |
 | `turn_failed`      | `reason`、`message`    | 回合失败，`message` 是给人看的说明                                              |
 

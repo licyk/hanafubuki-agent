@@ -80,6 +80,8 @@ struct ToolCall {
     outcome: Option<Outcome>,
     /// What its process printed while it ran, until its display arrives.
     live: Option<LiveOutput>,
+    /// The person typed it (`!command`).
+    by_user: bool,
 }
 
 #[derive(Debug)]
@@ -105,11 +107,34 @@ pub(crate) fn new_tool_call(
             start_time: Instant::now(),
             outcome: None,
             live: None,
+            by_user: false,
         }],
     }
 }
 
+/// The finished entry of a command the person typed (`!command`), as its
+/// history item shows it.
+pub(crate) fn new_user_shell_command(call_id: String, shown: AgentToolCallDisplay) -> ToolCallCell {
+    let mut cell = new_tool_call(
+        call_id.clone(),
+        EXEC_COMMAND.to_string(),
+        shown.subject.clone(),
+    )
+    .typed_by_user();
+    cell.complete(&call_id, false);
+    cell.show(&call_id, shown);
+    cell
+}
+
 impl ToolCallCell {
+    /// The entry of a command the person typed (`!command`).
+    pub(crate) fn typed_by_user(mut self) -> Self {
+        for call in &mut self.calls {
+            call.by_user = true;
+        }
+        self
+    }
+
     /// The calls of `other` after this entry's.
     pub(crate) fn join(&mut self, other: ToolCallCell) {
         self.calls.extend(other.calls);

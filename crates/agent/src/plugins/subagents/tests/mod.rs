@@ -105,6 +105,7 @@ async fn call(
                     session_revision: context.session_revision,
                     call_id: context.call_id,
                     image_input: false,
+                    origin: Default::default(),
                 },
                 arguments,
                 cancellation: CancellationToken::default(),

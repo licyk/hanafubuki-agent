@@ -11,6 +11,7 @@ mod reasoning;
 mod scope;
 mod session;
 mod turn;
+mod user_shell_command;
 mod world_state;
 
 pub use activity::{
@@ -70,9 +71,9 @@ pub use session::{
     AgentSessionTitle, AgentSessionTitleRenameRequest, AgentSessionTitleSource, AgentSkillRef,
     AgentTaskPlanSnapshot, AgentTaskPlanStep, AgentTaskPlanStepStatus, AgentTurnInput,
     AgentUserInputAccepted, AgentUserInputAnswer, AgentUserInputOption, AgentUserInputQuestion,
-    AgentUserInputRequest, AgentUserInputResolution, ConfirmedAgentSessionDeletion,
-    PreparedAgentSessionDeletion, AGENT_SESSION_TITLE_MAX_CHARS, MAXIMUM_HOST_CONTEXT_BYTES,
-    MAXIMUM_USER_IMAGES_PER_MESSAGE,
+    AgentUserInputRequest, AgentUserInputResolution, AgentUserShellCommand,
+    ConfirmedAgentSessionDeletion, PreparedAgentSessionDeletion, AGENT_SESSION_TITLE_MAX_CHARS,
+    MAXIMUM_HOST_CONTEXT_BYTES, MAXIMUM_USER_IMAGES_PER_MESSAGE,
 };
 pub use turn::{
     AgentCompactionImplementation, AgentCompactionOutcome, AgentCompactionPhase,
@@ -84,6 +85,7 @@ pub use turn::{
     AgentTurnTerminalReason, AgentUsageSource, PermissionAssessment, PermissionAssessmentOutcome,
     PermissionReviewStatus, PermissionRiskLevel, PermissionUserAuthorization,
 };
+pub(crate) use user_shell_command::{user_shell_command_record, USER_SHELL_COMMAND_FRAGMENT};
 pub(crate) use world_state::{
     effective_world_state, full_world_state_checkpoint, kernel_context_renderers,
     remove_world_state_section, replace_world_state_section, world_state_diff,

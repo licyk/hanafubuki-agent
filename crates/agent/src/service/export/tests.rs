@@ -132,3 +132,38 @@ fn images_are_labelled_and_a_conversation_without_content_has_none() {
     assert_eq!(render_markdown(&[]), None);
     assert_eq!(render_markdown(&[user("   ")]), None);
 }
+
+#[test]
+fn a_user_shell_command_is_an_activity_with_its_exit() {
+    let shell =
+        |command: &str, exit_code: Option<i32>, output: &str| ConversationItem::UserShellCommand {
+            call_id: "user-shell-1".to_string(),
+            command: command.to_string(),
+            cwd: None,
+            exit_code,
+            duration_millis: 12,
+            output: output.to_string(),
+            truncated: false,
+        };
+    let items = [
+        shell("ls", Some(0), "a.txt\nb.txt"),
+        shell("false", Some(1), ""),
+        shell("sleep 30", None, "the command was stopped"),
+    ];
+
+    assert_eq!(
+        render_markdown(&items).unwrap(),
+        concat!(
+            "# Hanafubuki Agent conversation\n",
+            "\n## Activity\n\n",
+            "    !ls\n",
+            "    a.txt\n",
+            "    b.txt\n",
+            "\n## Activity\n\n",
+            "    !false · exit 1\n",
+            "\n## Activity\n\n",
+            "    !sleep 30 · failed\n",
+            "    the command was stopped\n",
+        )
+    );
+}

@@ -418,6 +418,9 @@ pub enum ApprovalDecisionSource {
     /// The user's earlier `AllowForSession` of the same tool.
     SessionAllowance,
     System,
+    /// The person typed the command themselves (a `!command`): typing it
+    /// is the approval, issued without a prompt.
+    UserCommand,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

@@ -67,6 +67,18 @@ pub struct ToolCallContext {
     pub call_id: String,
     /// Whether the session's model accepts image input right now.
     pub image_input: bool,
+    pub origin: ToolCallOrigin,
+}
+
+/// Who made a call. The kernel sets it; no argument can.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ToolCallOrigin {
+    /// The model asked for it.
+    #[default]
+    Model,
+    /// The person typed it (a `!command`), which approves it: the kernel
+    /// asks no one further unless an approval rule requires a person.
+    User,
 }
 
 /// What a sampling step's model and provider can take, for tools whose

@@ -18,6 +18,7 @@ impl ChatWidget {
     /// waiting for its display will have none.
     pub(super) fn on_session_opened(&mut self, opened: OpenedSession) {
         self.input_queue = super::input_queue::InputQueue::default();
+        self.user_shell = false;
         self.sync_pending_input();
         self.running_tools.clear();
         for (call_id, cell) in std::mem::take(&mut self.awaiting_display) {
@@ -135,6 +136,9 @@ impl ChatWidget {
                         _ => cells.push(Box::new(cell)),
                     }
                 }
+                ReplayedItem::UserShellCommand { call_id, display } => cells.push(Box::new(
+                    history_cell::new_user_shell_command(call_id, display),
+                )),
                 ReplayedItem::Compacted => cells.push(Box::new(history_cell::new_info_event(
                     "Context compacted".to_string(),
                     None,

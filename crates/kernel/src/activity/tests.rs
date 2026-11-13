@@ -193,7 +193,7 @@ fn execution_outlives_turn_and_waits_for_confirmed_disposal() {
     tracker.observe(
         AgentEventSequence::new(2),
         &AgentEventKind::TurnCompleted {
-            final_answer_message_id: crate::AgentMessageId::new(1),
+            final_answer_message_id: Some(crate::AgentMessageId::new(1)),
         },
         20,
     );

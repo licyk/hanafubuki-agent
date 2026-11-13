@@ -104,6 +104,7 @@ async fn the_memory_note_tool_is_bound_to_the_turn_that_planned_it() {
             session_revision,
             call_id: "memory-note-call".to_string(),
             image_input: false,
+            origin: Default::default(),
         },
         arguments: json!({"operation":"remember","content":"Prefer narrow tests."}),
         cancellation: CancellationToken::default(),

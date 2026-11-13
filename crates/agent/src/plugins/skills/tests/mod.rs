@@ -56,6 +56,7 @@ fn reference_context(reference: &Value) -> ToolCallContext {
         session_revision: serde_json::from_value(json!(1)).unwrap(),
         call_id: context["callId"].as_str().unwrap().to_string(),
         image_input: false,
+        origin: Default::default(),
     }
 }
 

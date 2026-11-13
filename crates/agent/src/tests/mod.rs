@@ -54,6 +54,7 @@ mod startup;
 mod structured_output;
 mod titles;
 mod tools;
+mod user_shell;
 mod workspace;
 mod worktrees;
 mod world_state;

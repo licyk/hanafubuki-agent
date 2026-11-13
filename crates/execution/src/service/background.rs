@@ -77,14 +77,9 @@ impl AgentExecutionService {
             retained: Vec::new(),
         };
         for (execution_id, generation) in identities {
-            let result = (|| {
-                self.ensure_generation(scope, execution_id, generation)?;
-                let snapshot = self.snapshot(scope, execution_id)?;
-                if !snapshot.status.is_terminal() {
-                    self.terminate(scope, execution_id)?;
-                }
-                self.dispose(scope, execution_id)
-            })();
+            let result = self
+                .ensure_generation(scope, execution_id, generation)
+                .and_then(|()| self.stop_confirmed(scope, execution_id));
             match result {
                 Ok(disposed) => outcome.disposed.push(disposed),
                 Err(AgentExecutionError::NotFound) => {

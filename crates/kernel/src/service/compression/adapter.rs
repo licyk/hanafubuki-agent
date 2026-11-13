@@ -181,7 +181,9 @@ fn item_message(item: &AgentHistoryItem, tool_names: &HashMap<&str, &str>) -> Op
         | ConversationItem::Reasoning { .. }
         | ConversationItem::ToolSelection { .. }
         | ConversationItem::PermissionReview { .. }
-        | ConversationItem::ContinuationContext { .. } => return None,
+        | ConversationItem::ContinuationContext { .. }
+        // What the person ran stays as it is, as the person's messages do.
+        | ConversationItem::UserShellCommand { .. } => return None,
     })
 }
 

@@ -457,6 +457,10 @@ path = "crates/tui/src/agent_bridge/mod.rs"
 reason = "The adapter between the facade and the interface, written for the Agent; it stands where Codex has its ConversationManager."
 
 [[original]]
+path = "crates/tui/src/agent_bridge/start.rs"
+reason = "The bridge's start of a turn, with a message or a `!command`, onto the facade's calls; moved out of the bridge's module."
+
+[[original]]
 path = "crates/tui/src/agent_bridge/steering.rs"
 reason = "The bridge's steering of the running turn for the chat's queue, onto the facade's calls and the kernel's consumption events."
 
@@ -495,6 +499,10 @@ reason = "The first-run setup, /providers and the MCP manager end to end over th
 [[original]]
 path = "crates/tui/src/app/tests/appearance.rs"
 reason = "/theme, /statusline and /title end to end over the standalone Agent: run-only arguments, saved setups and the title written."
+
+[[original]]
+path = "crates/tui/src/app/tests/shell.rs"
+reason = "`!command`s end to end over the standalone Agent and its scripted model: run, carried to the next request, replayed, refused during a turn, stopped by Esc."
 
 [[original]]
 path = "crates/tui/src/app/tests/queue.rs"
@@ -655,6 +663,10 @@ reason = "The run of exploring calls in one entry, written with it."
 [[original]]
 path = "crates/tui/src/history_cell/tool/tests/streamed.rs"
 reason = "A command's entry while its output streams and when its display takes over, written with it."
+
+[[original]]
+path = "crates/tui/src/history_cell/tool/tests/user_shell.rs"
+reason = "The entry of a command the person typed, written with it."
 
 [[original]]
 path = "crates/tui/src/history_cell/tool/tests/shape.rs"

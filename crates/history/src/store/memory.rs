@@ -296,6 +296,20 @@ fn memory_evidence_text(item: &ConversationItem) -> Option<EvidenceText> {
                 Some(call_id.clone()),
             )
         }),
+        // The command the person ran, as a call of a tool of that name, and
+        // what it printed as its output.
+        ConversationItem::UserShellCommand {
+            call_id,
+            command,
+            output,
+            ..
+        } => Some((
+            AgentMemoryEvidenceRole::Tool,
+            output.clone(),
+            Some("user_shell_command".to_string()),
+            Some(serde_json::json!({ "cmd": command })),
+            Some(call_id.clone()),
+        )),
         ConversationItem::CanonicalInitialContext { .. }
         | ConversationItem::Reasoning { .. }
         | ConversationItem::TurnStart { .. }

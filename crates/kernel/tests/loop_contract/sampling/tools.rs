@@ -319,7 +319,7 @@ async fn fake_model_and_tools_complete_a_deterministic_two_sampling_loop() {
         events.events.last().map(|event| &event.kind),
         Some(AgentEventKind::TurnCompleted {
             final_answer_message_id: event_final_answer_message_id,
-        }) if *event_final_answer_message_id == final_answer_message_id
+        }) if *event_final_answer_message_id == Some(final_answer_message_id)
     ));
 }
 

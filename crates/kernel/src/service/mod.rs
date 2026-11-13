@@ -150,6 +150,7 @@ fn replace_history(record: &mut SessionRecord, history: Vec<AgentHistoryItem>) {
 
 #[derive(Clone)]
 struct TurnRecord {
+    kind: TurnKind,
     id: AgentTurnId,
     generation: AgentGeneration,
     phase: AgentTurnPhase,
@@ -285,6 +286,17 @@ const PLAN_IMPLEMENTATION_MESSAGE: &str = "Implement the plan.";
 enum TurnAdmission {
     Regular,
     ImplementPlan(crate::AgentPlanImplementationRequest),
+    UserShellCommand(crate::AgentUserShellCommand),
+}
+
+/// What an admitted turn runs.
+#[derive(Clone)]
+enum TurnKind {
+    /// The model's sampling loop, until its final answer.
+    Regular,
+    /// The command the person typed, through the `exec_command` tool, with
+    /// no model sampled. It takes no steering.
+    UserShellCommand(crate::AgentUserShellCommand),
 }
 
 mod compaction;

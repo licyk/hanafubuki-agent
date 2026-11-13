@@ -105,6 +105,8 @@ pub struct AgentToolInvocationContext {
     pub provider_id: AgentToolProviderId,
     pub tool_id: AgentToolId,
     pub tool_generation: AgentToolGeneration,
+    /// The person's for a `!command`'s call, from its turn.
+    pub origin: hanafubuki_agent_contracts::ToolCallOrigin,
     /// The opaque leases the tool sources froze into the exact sampling-step
     /// Tool Plan. The Agent only retains and forwards them; a source's tools
     /// downcast their own lease type and must reject a missing binding.

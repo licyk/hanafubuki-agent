@@ -42,13 +42,14 @@ struct TerminalCommit {
 }
 
 impl AgentService {
+    /// Commits the turn's completion with its final answer, which a turn
+    /// that sampled no model (a `!command`'s) does not have.
     pub(super) async fn finish_completed(
         &self,
         identity: TurnIdentity,
-        final_answer_message_id: AgentMessageId,
-        message: String,
+        answer: Option<(AgentMessageId, String)>,
         event_sink: &dyn AgentEventSink,
-    ) -> Result<AgentTurnOutcome, AgentError> {
+    ) -> Result<Option<AgentTurnOutcome>, AgentError> {
         let cell = self.session(identity.session_id)?;
         // What the turn's calls reported is committed before its end.
         self.flush_execution_progress(&cell).await;
@@ -60,24 +61,27 @@ impl AgentService {
             if !turn.pending_steering.is_empty() {
                 return Err(AgentError::SteeringPending);
             }
-            if !record.conversation.history.iter().any(|item| {
-                matches!(
-                    &item.content,
-                    ConversationItem::AssistantMessage {
-                        message_id,
-                        phase: None | Some(AgentMessagePhase::FinalAnswer),
-                        text,
-                        ..
-                    } if *message_id == final_answer_message_id && text == &message
-                )
-            }) {
-                return Err(AgentError::Protocol(
-                    "final answer message is not present in committed history".to_string(),
-                ));
+            let final_answer_message_id = answer.as_ref().map(|(message_id, _)| *message_id);
+            if let Some((final_answer_message_id, message)) = &answer {
+                if !record.conversation.history.iter().any(|item| {
+                    matches!(
+                        &item.content,
+                        ConversationItem::AssistantMessage {
+                            message_id,
+                            phase: None | Some(AgentMessagePhase::FinalAnswer),
+                            text,
+                            ..
+                        } if message_id == final_answer_message_id && text == message
+                    )
+                }) {
+                    return Err(AgentError::Protocol(
+                        "final answer message is not present in committed history".to_string(),
+                    ));
+                }
             }
             let turn = exact_turn_mut(record, identity)?;
             turn.phase = AgentTurnPhase::Completed;
-            turn.final_answer_message_id = Some(final_answer_message_id);
+            turn.final_answer_message_id = final_answer_message_id;
             turn.terminal_reason = None;
             record.runtime.context_window.new_context_requested = false;
             let reasoning_event =
@@ -104,13 +108,15 @@ impl AgentService {
         }
         event_sink.emit(event);
         self.notify_turn_finished(identity);
-        Ok(AgentTurnOutcome {
-            session_id: identity.session_id,
-            turn_id: identity.turn_id,
-            generation: identity.generation,
-            final_answer_message_id,
-            final_answer: message,
-        })
+        Ok(
+            answer.map(|(final_answer_message_id, final_answer)| AgentTurnOutcome {
+                session_id: identity.session_id,
+                turn_id: identity.turn_id,
+                generation: identity.generation,
+                final_answer_message_id,
+                final_answer,
+            }),
+        )
     }
 
     pub(super) async fn finish_cancelled(

@@ -3,12 +3,14 @@ use crate::titles::provisional_agent_title;
 use crate::{prepare_and_stage_images, AgentSteeringRequest, AgentTurnInput, AgentTurnRequest};
 use hanafubuki_agent_config::AgentSandboxMode;
 use hanafubuki_agent_contracts::TurnExtensions;
+use hanafubuki_agent_foundation::paths::ResolvedPath;
 use hanafubuki_agent_kernel::{
     AgentCompactionGeneration, AgentCompactionId, AgentCompactionOutcome, AgentError,
     AgentEventSink, AgentGeneration, AgentPermissionMode, AgentPlanImplementationRequest,
     AgentRevision, AgentSessionId, AgentSessionMode, AgentSteeringAccepted, AgentTurnAccepted,
     AgentTurnCancellationOutcome, AgentTurnId, AgentTurnOutcome, AgentUserInputAccepted,
-    AgentUserInputAnswer, AgentUserInputRequestId, ApprovalRequestId, ApprovalUserDecision,
+    AgentUserInputAnswer, AgentUserInputRequestId, AgentUserShellCommand, ApprovalRequestId,
+    ApprovalUserDecision,
 };
 use std::sync::Arc;
 
@@ -159,6 +161,52 @@ impl AgentApplicationService {
                     permission_mode,
                     turn,
                     world_state,
+                    event_sink,
+                )
+                .map_err(|error| error.to_string())
+            },
+        )
+        .await?
+    }
+
+    /// Runs `command`, which the person typed after `!`, as a turn of its
+    /// own that samples no model: through the `exec_command` tool, in the
+    /// session's sandbox and permission mode, approved by the person who
+    /// typed it (an approval rule, such as `git clone`'s, still asks). It
+    /// runs in the working directory, until it exits or the turn is
+    /// cancelled, and the model reads what it did from its next request on.
+    pub async fn submit_user_shell_command_with_sink(
+        &self,
+        session_id: AgentSessionId,
+        command: String,
+        event_sink: Arc<dyn AgentEventSink>,
+    ) -> Result<AgentTurnAccepted, String> {
+        let command = command.trim().to_string();
+        if command.is_empty() {
+            return Err("a `!` command needs a command after the `!`".to_string());
+        }
+        let session = self.activate_provider_session(session_id).await?;
+        let permission_mode = self.driver.turn_permission_mode(session_id, None).await?;
+        let turn = self
+            .driver
+            .collect_turn_extensions(session_id, session.mode)
+            .await
+            .map_err(|error| error.to_string())?;
+        let workdir = self
+            .executions
+            .working_directory()
+            .and_then(|directory| ResolvedPath::resolve(directory).ok())
+            .map(|directory| directory.native_text().to_string());
+        let core = self.core.clone();
+        hanafubuki_agent_foundation::blocking::run_blocking_operation(
+            self.blocking.as_ref(),
+            "agent shell command admission worker",
+            move || {
+                core.submit_user_shell_command_with_sink(
+                    session_id,
+                    AgentUserShellCommand { command, workdir },
+                    permission_mode,
+                    turn,
                     event_sink,
                 )
                 .map_err(|error| error.to_string())

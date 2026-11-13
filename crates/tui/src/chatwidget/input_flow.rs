@@ -43,9 +43,13 @@ impl ChatWidget {
             self.open_setup();
             return;
         }
+        if self.submit_shell_command(&text) {
+            return;
+        }
         self.session_open = true;
         let running = self.bottom_pane.is_task_running();
-        let submission = if queue {
+        // A `!command` reads no messages: they wait for it.
+        let submission = if queue || self.user_shell {
             self.input_queue.queue(text, running)
         } else {
             self.input_queue.submit(text, running)
@@ -84,6 +88,8 @@ impl ChatWidget {
     /// A message sent to start a turn met a turn the chat had not heard of
     /// (a subagent's), and did not reach it.
     pub(super) fn on_undelivered(&mut self, text: String) {
+        // A `!command` that met such a turn did not start either.
+        self.user_shell = false;
         self.add_error_message(
             "The message did not reach the turn; it is back in the composer.".to_string(),
         );

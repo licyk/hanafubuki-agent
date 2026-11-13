@@ -89,10 +89,10 @@ pub use tools::{
     AgentPatchFile, AgentPatchLine, AgentPatchLineKind, AgentPatchOperation, AgentPatchPreview,
     AgentSearchMatch, AgentToolDisplay, AgentToolError, AgentToolHandler, AgentToolOmission,
     AgentToolPresenter, AgentToolSource, AgentWebResult, ArgumentSubjects, SourcedTool,
-    ToolAvailability, ToolCallContext, ToolCallValidationError, ToolContextFragment,
-    ToolDescriptor, ToolEffect, ToolFuture, ToolInvocation, ToolPlanContext, ToolPlanLease,
-    ToolPresenterRegistry, ToolRegistry, ToolResult, ToolSourceContribution, ToolSourceRegistry,
-    ToolSourceStep, ToolSourceTrust, TurnExtensions, MAX_AGENT_TOOL_OMISSIONS,
+    ToolAvailability, ToolCallContext, ToolCallOrigin, ToolCallValidationError,
+    ToolContextFragment, ToolDescriptor, ToolEffect, ToolFuture, ToolInvocation, ToolPlanContext,
+    ToolPlanLease, ToolPresenterRegistry, ToolRegistry, ToolResult, ToolSourceContribution,
+    ToolSourceRegistry, ToolSourceStep, ToolSourceTrust, TurnExtensions, MAX_AGENT_TOOL_OMISSIONS,
     MAX_TOOL_SUBJECT_CHARS, RESERVED_TOOL_NAMES,
 };
 

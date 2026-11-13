@@ -64,6 +64,11 @@ pub(crate) enum ReplayedItem {
         /// What its output shows; `None` without an output.
         display: Option<AgentToolDisplay>,
     },
+    /// A command the person typed (`!command`) and what it did.
+    UserShellCommand {
+        call_id: String,
+        display: AgentToolCallDisplay,
+    },
     Compacted,
 }
 
@@ -147,6 +152,28 @@ pub(crate) fn transcript(
                 }
             }
             ConversationItem::CompactionSummary { .. } => transcript.push(ReplayedItem::Compacted),
+            ConversationItem::UserShellCommand {
+                call_id,
+                command,
+                cwd,
+                exit_code,
+                duration_millis,
+                output,
+                truncated,
+            } => transcript.push(ReplayedItem::UserShellCommand {
+                call_id,
+                display: AgentToolCallDisplay {
+                    subject: Some(command.clone()),
+                    display: Some(AgentToolDisplay::Command {
+                        command,
+                        cwd,
+                        output,
+                        exit_code,
+                        duration_millis: Some(duration_millis),
+                        truncated,
+                    }),
+                },
+            }),
             _ => {}
         }
     }

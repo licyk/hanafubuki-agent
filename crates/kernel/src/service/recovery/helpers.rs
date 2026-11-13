@@ -55,7 +55,10 @@ impl AgentService {
         });
         let effective_input_capabilities =
             self.session_input_capabilities(model.as_ref(), &runtime.config);
+        // A turn is never resumed after a restart (it is ended as
+        // interrupted), so what it ran is not kept.
         let turn = runtime.turn.map(|turn| TurnRecord {
+            kind: TurnKind::Regular,
             id: turn.id,
             generation: turn.generation,
             phase: turn.phase,

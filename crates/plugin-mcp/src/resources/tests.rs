@@ -29,6 +29,7 @@ fn invocation(arguments: Value, plan_leases: Vec<Arc<dyn ToolPlanLease>>) -> Too
             session_revision: serde_json::from_value(json!(1)).unwrap(),
             call_id: "mcp-resource-call".to_string(),
             image_input: false,
+            origin: Default::default(),
         },
         arguments,
         cancellation: CancellationToken::default(),

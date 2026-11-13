@@ -109,8 +109,9 @@ impl AgentService {
     }
 
     /// Decides how `action` is approved: the rules of the plugins that own
-    /// it first, then the session's allowance of the tool, then the turn's
-    /// permission mode. Nothing here waits.
+    /// it first, then, for a call the person typed, the person, then the
+    /// session's allowance of the tool, then the turn's permission mode.
+    /// Nothing here waits.
     pub(in crate::service) fn route_approval(
         &self,
         tool_context: &AgentToolInvocationContext,
@@ -190,6 +191,10 @@ impl AgentService {
                     offers_allow_for_session: false,
                 };
                 return Ok(ApprovalRoute::Waiting(Box::new(pending)));
+            }
+            // The person typed the command: that is the approval.
+            None if tool_context.origin == hanafubuki_agent_contracts::ToolCallOrigin::User => {
+                ApprovalDecisionSource::UserCommand
             }
             None if allowed_for_session => ApprovalDecisionSource::SessionAllowance,
             None => match turn_mode {

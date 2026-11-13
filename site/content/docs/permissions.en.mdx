@@ -146,6 +146,7 @@ Where this machine has no sandbox, the presets that need one cannot be chosen.
 - There is no list of safe commands: even `ls` or `git status` asks.
 - Reading is not limited to the workspace roots: the model can read any file your user can.
 - The operations that **always ask you** (turning a Skill on or off, `git clone`) ask in automatic review and full access too, and can only be allowed once.
+- A command you type yourself after `!` in the [terminal interface](/docs/terminal-interface#composer) is approved by your typing it, in every mode: it runs in the session's sandbox and no prompt asks, unless an approval rule that always wants a person applies.
 
 ## Answering an approval [#answering]
 

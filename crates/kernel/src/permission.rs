@@ -168,6 +168,25 @@ pub fn build_permission_review_evidence(
                 },
                 render_tool_output_evidence(output),
             ),
+            // What the person ran and what it printed: the output is data
+            // like any tool's, never the person's words.
+            ConversationItem::UserShellCommand {
+                command,
+                exit_code,
+                duration_millis,
+                output,
+                ..
+            } => non_empty_evidence(
+                PermissionReviewEvidenceRole::ToolResult {
+                    name: Some("user_shell_command".to_string()),
+                },
+                crate::model::user_shell_command_record(
+                    command,
+                    *exit_code,
+                    *duration_millis,
+                    output,
+                ),
+            ),
             ConversationItem::ContinuationContext { .. } => approved_action_note_text(item)
                 .and_then(|text| {
                     non_empty_evidence(PermissionReviewEvidenceRole::UserApproval, text.to_string())

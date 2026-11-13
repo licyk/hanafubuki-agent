@@ -1,15 +1,19 @@
 use std::sync::Arc;
 
-use hanafubuki_agent_approval::{ApprovalAction, AuthorizedAction, PermissionRequirement};
+use std::time::Instant;
+
+use hanafubuki_agent_approval::{
+    ApprovalAction, ApprovalOrigin, AuthorizedAction, PermissionRequirement,
+};
 use hanafubuki_agent_contracts::tools::arguments::ArgumentNotes;
 use hanafubuki_agent_contracts::{
     AgentActivityAction, AgentMemoryContextEffect, AgentToolError, AgentToolHandler,
-    AgentToolProgressUpdate, BlockingService, ToolDescriptor, ToolEffect, ToolFuture,
-    ToolInvocation, ToolResult,
+    AgentToolProgressUpdate, BlockingService, ToolCallOrigin, ToolDescriptor, ToolEffect,
+    ToolFuture, ToolInvocation, ToolResult,
 };
 use hanafubuki_agent_execution::{
     AgentExecutionError, AgentExecutionId, AgentExecutionScope, AgentExecutionService,
-    WriteStdinRequest,
+    UnifiedExecResult, WriteStdinRequest,
 };
 use hanafubuki_agent_foundation::background_worker::BackgroundWorkerGroup;
 use hanafubuki_agent_foundation::cancellation::CancellationToken;
@@ -19,7 +23,7 @@ use hanafubuki_agent_tool_contracts::{
 };
 use serde_json::Value;
 
-use crate::arguments::{parse, ExecCall};
+use crate::arguments::{parse, ExecCall, MAX_YIELD_TIME_MS};
 use crate::monitor::{
     schedule_execution_cleanup_retry, start_execution_activity, ExecutionActivity,
 };
@@ -148,13 +152,17 @@ impl AgentToolHandler for ExecTool {
 
 /// The call `invocation` makes, its command confined by the sandbox its
 /// turn froze. A turn without one (restored after a restart, which keeps no
-/// turn data) runs no command, rather than one unconfined.
+/// turn data) runs no command, rather than one unconfined. A command the
+/// person typed is the person's (`ApprovalOrigin::User`).
 fn parse_call(
     kind: ExecToolKind,
     invocation: &ToolInvocation,
 ) -> Result<(ExecCall, ArgumentNotes), AgentToolError> {
     let (mut call, notes) = parse(kind, &invocation.arguments)?;
     if let ExecCall::ExecCommand(request) = &mut call {
+        if invocation.context.origin == ToolCallOrigin::User {
+            request.origin = ApprovalOrigin::User;
+        }
         request.sandbox = invocation
             .turn
             .get::<SandboxSettings>()
@@ -210,20 +218,40 @@ fn execute(
                 AgentActivityAction::fixed("exec_command"),
             )
             .map_err(|error| error.to_string())?;
-            let result = executions
-                .wait_unified_execution(
+            let typed_by_user = request.origin == ApprovalOrigin::User;
+            let waited = if typed_by_user {
+                run_to_exit(
+                    executions,
+                    &scope,
+                    snapshot.execution_id,
+                    request.max_output_bytes,
+                    cancellation,
+                )
+            } else {
+                executions.wait_unified_execution(
                     &scope,
                     snapshot.execution_id,
                     request.yield_time_ms,
                     request.max_output_bytes,
                     cancellation,
                 )
-                .map_err(|error| {
-                    if matches!(error, AgentExecutionError::CleanupRetained { .. }) {
-                        retain_cleanup(snapshot.execution_id, false);
-                    }
-                    error.to_string()
-                })?;
+            };
+            // A model's command lives on as a background terminal; the
+            // person's was stopped and is gone.
+            if typed_by_user && matches!(waited, Err(AgentExecutionError::Cancelled)) {
+                activity
+                    .progress
+                    .report(AgentToolProgressUpdate::ExecutionDisposed {
+                        execution_id: snapshot.execution_id.value(),
+                        generation: snapshot.generation.value(),
+                    });
+            }
+            let result = waited.map_err(|error| {
+                if matches!(error, AgentExecutionError::CleanupRetained { .. }) {
+                    retain_cleanup(snapshot.execution_id, false);
+                }
+                error.to_string()
+            })?;
             if result.session_id.is_none() {
                 activity
                     .progress
@@ -292,4 +320,39 @@ fn execute(
             .map_err(|error| error.to_string())
         }
     }
+}
+
+/// A command the person typed runs until it exits (Codex's user shell
+/// command), within the call's timeout, rather than yielding to a
+/// background terminal no one would poll. Stopped first (an interrupt, the
+/// timeout), it is terminated and forgotten once its end is confirmed.
+fn run_to_exit(
+    executions: &AgentExecutionService,
+    scope: &AgentExecutionScope,
+    execution_id: AgentExecutionId,
+    max_output_bytes: Option<usize>,
+    cancellation: &CancellationToken,
+) -> Result<UnifiedExecResult, AgentExecutionError> {
+    let started = Instant::now();
+    loop {
+        match executions.wait(scope, execution_id, MAX_YIELD_TIME_MS, cancellation) {
+            Ok(waited) if waited.completed => break,
+            Ok(_) => {}
+            Err(AgentExecutionError::Cancelled) => {
+                executions.stop_confirmed(scope, execution_id)?;
+                return Err(AgentExecutionError::Cancelled);
+            }
+            Err(error) => return Err(error),
+        }
+    }
+    // It has ended: the read returns at once, with everything it printed.
+    let mut result = executions.wait_unified_execution(
+        scope,
+        execution_id,
+        1,
+        max_output_bytes,
+        &CancellationToken::default(),
+    )?;
+    result.wall_time_ms = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
+    Ok(result)
 }

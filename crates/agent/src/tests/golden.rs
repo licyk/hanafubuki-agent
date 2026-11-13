@@ -138,6 +138,69 @@ async fn tool_round_trip_matches_golden() {
     assert_golden("tool_round_trip_events", &kinds);
 }
 
+/// The request after a `!command`: the person's command and what it did as
+/// a `<user_shell_command>` fragment, then the next message. The command
+/// asked no model. Its duration is redacted, and so is what the machine's
+/// login shell printed before the command (a profile's warnings).
+#[tokio::test]
+async fn user_shell_command_request_matches_golden() {
+    struct Discard;
+    impl hanafubuki_agent_kernel::AgentEventSink for Discard {
+        fn emit(&self, _event: hanafubuki_agent_kernel::AgentEvent) {}
+    }
+    let server = FakeServer::start(vec![(assistant_events("Done."), Duration::ZERO)]).await;
+    let (service, paths) = configured_service("golden-user-shell", &server.base_url);
+    let session = service
+        .create_session(AgentSessionMode::Default, None)
+        .await
+        .unwrap();
+    service
+        .submit_user_shell_command_with_sink(
+            session.id,
+            "printf user-shell-golden".to_string(),
+            Arc::new(Discard),
+        )
+        .await
+        .unwrap();
+    let deadline = Instant::now() + TEST_WAIT;
+    while !service
+        .events_since(session.id, None)
+        .unwrap()
+        .events
+        .iter()
+        .any(|event| matches!(event.kind, AgentEventKind::TurnCompleted { .. }))
+    {
+        assert!(Instant::now() < deadline, "the command's turn did not end");
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+    assert!(server.requests().is_empty());
+    service
+        .start_turn(session.id, "What did it print?".to_string().into())
+        .await
+        .unwrap();
+    let requests = server.requests();
+    let body: Value = serde_json::from_slice(&requests[0].body).unwrap();
+    assert!(service
+        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
+        .is_empty());
+    let normalized = normalize(&body, &paths.app_data_dir).to_string();
+    let duration = normalized.find("Duration: ").expect("a duration") + "Duration: ".len();
+    let seconds = normalized[duration..].find(" seconds").unwrap();
+    let output = normalized.find("Output:\\n").unwrap() + "Output:\\n".len();
+    let printed = output + normalized[output..].find("user-shell-golden").unwrap();
+    let normalized = format!(
+        "{}<SECONDS>{}{}",
+        &normalized[..duration],
+        &normalized[duration + seconds..output],
+        &normalized[printed..]
+    );
+    assert_golden(
+        "user_shell_command_request",
+        &serde_json::from_str(&normalized).unwrap(),
+    );
+    let _ = std::fs::remove_dir_all(paths.app_data_dir);
+}
+
 const SKILLS_ANSWER: &str = "No Skills are installed.";
 
 /// Runs one `skills_list` round trip over the two model `responses` (the call,

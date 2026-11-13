@@ -1,4 +1,5 @@
 use super::*;
+use crate::service::tool_execution::unfinished_user_shell_command;
 
 impl AgentService {
     pub(super) fn begin_turn(
@@ -163,12 +164,20 @@ impl AgentService {
         {
             return Err(AgentError::CompactionAlreadyRunning);
         }
-        let implementing_plan = match admission {
+        let (implementing_plan, kind) = match admission {
             TurnAdmission::ImplementPlan(request) => {
                 validate_plan_implementation(record, session_id, &request)?;
-                true
+                (true, TurnKind::Regular)
             }
-            TurnAdmission::Regular => false,
+            TurnAdmission::Regular => (false, TurnKind::Regular),
+            TurnAdmission::UserShellCommand(command) => {
+                if record.settings.config.mode == crate::AgentSessionMode::Plan {
+                    return Err(AgentError::InvalidInput(
+                        "`!` commands do not run in Plan mode, whose tools only read".to_string(),
+                    ));
+                }
+                (false, TurnKind::UserShellCommand(command))
+            }
         };
         if !input.images.is_empty() && !record.settings.effective_input_capabilities.image_input {
             return Err(AgentError::InvalidInput(
@@ -176,7 +185,13 @@ impl AgentService {
             ));
         }
         let extensions = input.turn.clone();
-        let turn_items = resolve_turn_items(turn_id, &record.conversation.history, input)?;
+        let turn_items = match &kind {
+            TurnKind::Regular => resolve_turn_items(turn_id, &record.conversation.history, input)?,
+            TurnKind::UserShellCommand(command) => vec![
+                ConversationItem::TurnStart { turn_id },
+                unfinished_user_shell_command(turn_id, command),
+            ],
+        };
         let selected_skill_count = turn_items
             .iter()
             .filter(|item| matches!(item, ConversationItem::SkillContext { .. }))
@@ -214,6 +229,7 @@ impl AgentService {
             generation,
         };
         record.runtime.turn = Some(TurnRecord {
+            kind,
             id: turn_id,
             generation,
             phase: AgentTurnPhase::Sampling,

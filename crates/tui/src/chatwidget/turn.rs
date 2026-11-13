@@ -237,7 +237,11 @@ impl ChatWidget {
     fn on_tool_started(&mut self, call_id: String, name: String, subject: Option<String>) {
         self.had_work_activity = true;
         let explores = explores(&name);
-        let call = history_cell::new_tool_call(call_id.clone(), name, subject);
+        let mut call = history_cell::new_tool_call(call_id.clone(), name, subject);
+        // A `!command`'s turn runs one call: the person's command.
+        if self.user_shell {
+            call = call.typed_by_user();
+        }
         if let Some(run) = self.exploration.clone().filter(|_| explores) {
             run.update(|cell| cell.join(call));
             self.running_tools.push((call_id, run));
@@ -353,8 +357,12 @@ impl ChatWidget {
         self.bottom_pane.set_task_running(false);
         self.retry_status_header = None;
         self.had_work_activity = false;
+        let user_shell = std::mem::take(&mut self.user_shell);
         let ending = match end {
             TurnEnd::Completed => Ending::Finished,
+            // The command's entry shows it was stopped; there is no model
+            // to tell.
+            TurnEnd::Interrupted if user_shell => Ending::Interrupted,
             TurnEnd::Interrupted if self.input_queue.sends_steers_after_interrupt() => {
                 self.add_info_message(
                     "Model interrupted to submit steer instructions.".to_string(),

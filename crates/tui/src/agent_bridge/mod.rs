@@ -36,6 +36,7 @@ mod review;
 mod sessions;
 mod settings;
 mod side;
+mod start;
 mod status;
 mod steering;
 mod subagents;
@@ -50,9 +51,9 @@ use hanafubuki_agent::{
     AgentEventSink, AgentGoal, AgentHandle, AgentPermissionMode, AgentReasoningId,
     AgentReasoningSnapshot, AgentRuntime, AgentSessionContext, AgentSessionId, AgentSessionMode,
     AgentSlot, AgentStatusEventSink, AgentTaskPlanSnapshot, AgentToolCallDisplay,
-    AgentToolProgressUpdate, AgentTurnAccepted, AgentTurnRequest, AgentTurnTerminalReason,
-    AgentUserInputRequest, AgentUserInputRequestId, ApprovalRequest, ApprovalRequestId,
-    ModelReasoningEffort, SkillCatalogSnapshot,
+    AgentToolProgressUpdate, AgentTurnAccepted, AgentTurnTerminalReason, AgentUserInputRequest,
+    AgentUserInputRequestId, ApprovalRequest, ApprovalRequestId, ModelReasoningEffort,
+    SkillCatalogSnapshot,
 };
 use tokio::sync::oneshot;
 
@@ -74,6 +75,7 @@ pub(crate) use review::{ReviewCall, ReviewEnd, ReviewReply};
 pub(crate) use sessions::{ExportDestination, SessionCall, SessionReply};
 pub(crate) use settings::{MemoriesState, SettingsCall, SettingsReply, Warning, WarningSource};
 pub(crate) use side::OpenedSide;
+use start::Start;
 pub(crate) use status::{SessionStatus, UsageSummary};
 pub(crate) use steering::SteerOutcome;
 pub(crate) use subagents::{ChildApproval, SubagentsCall, SubagentsReply};
@@ -334,11 +336,22 @@ impl AgentBridge {
                     None
                 }
                 (Some(session_id), false) => {
-                    self.start_turn(session_id, text);
+                    self.start_turn(session_id, Start::Message(text));
                     None
                 }
                 // A subagent's turn the chat has not heard of yet.
                 (Some(_), true) => self.steer(None, text),
+            },
+            Op::UserShellCommand(command) => match (self.session_id, self.turn_running) {
+                (None, _) => {
+                    self.create_session(vec![Op::UserShellCommand(command)]);
+                    None
+                }
+                (Some(session_id), false) => {
+                    self.start_turn(session_id, Start::ShellCommand(command));
+                    None
+                }
+                (Some(_), true) => Some(TurnUpdate::Undelivered(format!("!{command}"))),
             },
             Op::Steer { id, text } => self.steer(Some(id), text),
             Op::EnsureSession => {
@@ -425,7 +438,11 @@ impl AgentBridge {
             }
             // A message waiting for the session started no turn.
             AgentReply::SessionNotCreated(message) => match self.creating.take() {
-                Some(waiting) if waiting.iter().any(|op| matches!(op, Op::UserInput(_))) => {
+                Some(waiting)
+                    if waiting
+                        .iter()
+                        .any(|op| matches!(op, Op::UserInput(_) | Op::UserShellCommand(_))) =>
+                {
                     Some(TurnUpdate::Ended(TurnEnd::Failed(message)))
                 }
                 _ => Some(TurnUpdate::Error(message)),
@@ -654,28 +671,6 @@ impl AgentBridge {
         self.send_session_status();
         self.reshow_child_approvals();
         TurnUpdate::Ended(end)
-    }
-
-    fn start_turn(&mut self, session_id: AgentSessionId, text: String) {
-        self.turn_running = true;
-        let sink = self.sink();
-        let app_event_tx = self.app_event_tx.clone();
-        self.agent.runtime().handle().spawn({
-            let agent = self.agent.clone();
-            async move {
-                let request = AgentTurnRequest {
-                    text,
-                    images: Vec::new(),
-                    skills: Vec::new(),
-                    host: Default::default(),
-                };
-                let reply = match agent.submit_turn_with_sink(session_id, request, sink).await {
-                    Ok(turn) => AgentReply::TurnAccepted(turn),
-                    Err(error) => AgentReply::TurnRejected(error),
-                };
-                app_event_tx.send(AppEvent::AgentReply(reply));
-            }
-        });
     }
 
     /// Runs a call on the Agent's runtime; its failure comes back as a

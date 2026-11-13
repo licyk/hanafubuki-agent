@@ -36,7 +36,10 @@ impl Messages {
             }
             AgentEventKind::TurnCompleted {
                 final_answer_message_id,
-            } => self.final_message = self.text.get(final_answer_message_id).cloned(),
+            } => {
+                self.final_message = final_answer_message_id
+                    .and_then(|message_id| self.text.get(&message_id).cloned())
+            }
             _ => {}
         }
     }

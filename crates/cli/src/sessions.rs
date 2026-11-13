@@ -133,6 +133,13 @@ fn transcript_line(item: &ConversationItem) -> Option<String> {
             }
             .to_string(),
         ),
+        ConversationItem::UserShellCommand {
+            command, exit_code, ..
+        } => Some(match exit_code {
+            Some(0) => format!("user ran: {command}"),
+            Some(code) => format!("user ran: {command}  (exit {code})"),
+            None => format!("user ran: {command}  (failed)"),
+        }),
         _ => None,
     }
 }

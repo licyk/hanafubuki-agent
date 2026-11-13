@@ -390,6 +390,16 @@ pub struct AgentPlanImplementationRequest {
     pub message_id: AgentMessageId,
 }
 
+/// A command the person typed after `!`, run as a turn of its own that
+/// samples no model (`AgentService::submit_user_shell_command_with_sink`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AgentUserShellCommand {
+    pub command: String,
+    /// The directory it runs in, as a person reads it; `None` runs it where
+    /// the execution tool runs a command without one.
+    pub workdir: Option<String>,
+}
+
 impl From<String> for AgentTurnInput {
     fn from(text: String) -> Self {
         Self {

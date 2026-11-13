@@ -1,0 +1,13 @@
+---
+source: crates/tui/src/history_cell/tool/tests/user_shell.rs
+expression: "both(&cell, 60)"
+---
+• You ran ls
+  └ a.txt
+    b.txt
+─── expanded (None) ───
+• You ran ls
+  └ $ ls
+    a.txt
+    b.txt
+    ✓ 4.2s

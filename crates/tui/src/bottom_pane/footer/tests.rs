@@ -62,6 +62,7 @@ fn props(mode: FooterMode) -> FooterProps<'static> {
         task_running: false,
         agents_hint: false,
         second_conversation: false,
+        shell_command: false,
     }
 }
 
@@ -128,6 +129,14 @@ fn footer_snapshots() {
             ..props(FooterMode::ComposerHasDraft)
         },
     );
+
+    snapshot_footer(
+        "footer_composer_shell_command",
+        FooterProps {
+            shell_command: true,
+            ..props(FooterMode::ComposerHasDraft)
+        },
+    );
 }
 
 /// Three columns, two (Compose beside the other two), then one.
@@ -187,15 +196,14 @@ fn the_shortcuts_list_what_works_here() {
         "ctrl + home / ctrl + end",
         "shift + ⌥ + , / shift + ⌥ + .",
         "/keymap customize",
+        "! Shell command",
     ] {
         assert!(text.contains(wanted), "{wanted}:\n{text}");
     }
-    // No voice; and no `!`, Ctrl+V, Ctrl+G or Ctrl+R until their actions
-    // exist.
+    // No voice; and no Ctrl+V, Ctrl+G or Ctrl+R until their actions exist.
     for absent in [
         "Voice",
         "f8",
-        "Shell command",
         "Paste image",
         "External editor",
         "Search history",

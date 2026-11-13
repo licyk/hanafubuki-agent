@@ -165,6 +165,12 @@ struct InputBytes {
 impl InputBytes {
     fn add(&mut self, item: &ModelInputItem, bytes: usize) {
         let group = match item {
+            // What the person ran counts with the calls and their outputs.
+            ModelInputItem::ContextFragment { kind, .. }
+                if kind == crate::model::USER_SHELL_COMMAND_FRAGMENT =>
+            {
+                &mut self.tool_calls
+            }
             ModelInputItem::ContextFragment { kind, .. } => {
                 match self.sections.iter_mut().find(|(known, _)| known == kind) {
                     Some((_, total)) => *total = total.saturating_add(bytes),

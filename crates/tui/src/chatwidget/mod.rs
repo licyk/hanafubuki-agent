@@ -18,6 +18,7 @@ mod input_flow;
 mod input_queue;
 mod replay;
 mod second;
+mod shell;
 mod shortcuts;
 mod turn;
 mod warnings;
@@ -119,6 +120,8 @@ pub(crate) struct ChatWidget {
     hooks_checked: bool,
     /// What the person sent that the conversation has not taken yet.
     input_queue: input_queue::InputQueue,
+    /// A `!command` was sent and its turn has not ended.
+    user_shell: bool,
 }
 
 impl ChatWidget {
@@ -171,6 +174,7 @@ impl ChatWidget {
             model_override,
             hooks_checked: false,
             input_queue: input_queue::InputQueue::default(),
+            user_shell: false,
         }
     }
 

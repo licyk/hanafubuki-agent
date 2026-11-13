@@ -185,3 +185,38 @@ fn a_transcript_leaves_the_reasoning_sent_back_out() {
     assert!(encoded["items"][0]["content"].get("replay").is_none());
     assert_eq!(encoded["items"][0]["content"]["text"], "Shown thought.");
 }
+
+/// A `!command`'s item is the person's context for the model, and reads
+/// back with its optional fields defaulted.
+#[test]
+fn a_user_shell_command_is_user_context_and_decodes_tolerantly() {
+    let item: ConversationItem = serde_json::from_value(serde_json::json!({
+        "type": "user_shell_command",
+        "callId": "user-shell-3",
+        "command": "ls",
+        "unknownField": true
+    }))
+    .unwrap();
+    assert_eq!(
+        item,
+        ConversationItem::UserShellCommand {
+            call_id: "user-shell-3".to_string(),
+            command: "ls".to_string(),
+            cwd: None,
+            exit_code: None,
+            duration_millis: 0,
+            output: String::new(),
+            truncated: false,
+        }
+    );
+    let Some(hanafubuki_agent_model_api::ModelInputItem::ContextFragment {
+        role: hanafubuki_agent_model_api::ModelContextRole::User,
+        kind,
+        content,
+    }) = item.as_model_input()
+    else {
+        panic!("not user context");
+    };
+    assert_eq!(kind, "user_shell_command");
+    assert!(content.starts_with("<user_shell_command>\n<command>\nls\n</command>"));
+}

@@ -14,6 +14,31 @@ pub(in crate::service) struct SamplingStep {
     pub(in crate::service) memory: crate::memory::StepMemoryPolicy,
 }
 
+/// What plans the tools of the turn's step `sampling_step`, as the session
+/// stands.
+pub(in crate::service) fn tool_catalog_context(
+    record: &SessionRecord,
+    identity: TurnIdentity,
+    sampling_step: u32,
+) -> Result<AgentToolCatalogContext, AgentError> {
+    let turn = exact_turn_identity(record, identity)?;
+    Ok(AgentToolCatalogContext {
+        session_id: identity.session_id,
+        turn_id: identity.turn_id,
+        generation: identity.generation,
+        session_revision: crate::AgentRevision::new(record.status.revision),
+        sampling_step,
+        mode: record.settings.config.mode,
+        input_capabilities: record.settings.effective_input_capabilities,
+        provider_capabilities: turn.model_session.tool_capabilities(),
+        selected_deferred_tools: selected_deferred_tools(&record.conversation.history),
+        memory_contribution_enabled: record.settings.memory_contribution.mode
+            == crate::AgentMemoryContributionMode::Enabled,
+        compression_tools: super::super::compression::planned_tools(record),
+        scope: record.settings.config.scope.clone(),
+    })
+}
+
 impl AgentService {
     /// Prepares the turn's next sampling step: the tool plan, and the prompt
     /// the contributors prepared and rendered with no lock held. The turn is
@@ -29,11 +54,6 @@ impl AgentService {
             let cell = self.session(identity.session_id)?;
             let guard = cell.lock_after_persistence().await?;
             let record = &*guard;
-            let mode = record.settings.config.mode;
-            let input_capabilities = record.settings.effective_input_capabilities;
-            let session_revision = crate::AgentRevision::new(record.status.revision);
-            let memory_contribution_enabled = record.settings.memory_contribution.mode
-                == crate::AgentMemoryContributionMode::Enabled;
             let context_window_tokens = record.settings.config.context_window_tokens;
             let turn = exact_turn_identity(record, identity)?;
             if turn.cancellation.is_cancelled() {
@@ -56,20 +76,7 @@ impl AgentService {
             }
             let model = turn.model_session.clone();
             (
-                AgentToolCatalogContext {
-                    session_id: identity.session_id,
-                    turn_id: identity.turn_id,
-                    generation: identity.generation,
-                    session_revision,
-                    sampling_step: step,
-                    mode,
-                    input_capabilities,
-                    provider_capabilities: model.tool_capabilities(),
-                    selected_deferred_tools: selected_deferred_tools(&record.conversation.history),
-                    memory_contribution_enabled,
-                    compression_tools: super::super::compression::planned_tools(record),
-                    scope: record.settings.config.scope.clone(),
-                },
+                tool_catalog_context(record, identity, step)?,
                 turn.cancellation.clone(),
                 model,
                 (Some(turn.extensions.clone()), context_window_tokens),

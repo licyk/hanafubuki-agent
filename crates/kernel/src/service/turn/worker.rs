@@ -1,16 +1,19 @@
 use crate::loop_control::{sampling_progress_digest, AgentFollowUpReason};
+use crate::model::AgentMessageId;
 use crate::model::{AgentError, AgentEventSink, AgentTurnOutcome};
-use crate::service::{exact_turn, AgentService, TurnExecutionGuard, TurnIdentity};
+use crate::service::{exact_turn, AgentService, TurnExecutionGuard, TurnIdentity, TurnKind};
 use hanafubuki_agent_foundation::panic::catch_panic_async;
 use std::sync::Arc;
 use std::time::Instant;
 
 impl AgentService {
+    /// Runs an admitted turn to its terminal commit; its outcome is `None`
+    /// for a turn that ends with no answer (a `!command`'s).
     pub(super) async fn execute_admitted_turn(
         &self,
         identity: TurnIdentity,
         event_sink: Arc<dyn AgentEventSink>,
-    ) -> Result<AgentTurnOutcome, AgentError> {
+    ) -> Result<Option<AgentTurnOutcome>, AgentError> {
         let mut guard = TurnExecutionGuard {
             service: self.clone(),
             identity,
@@ -63,21 +66,22 @@ impl AgentService {
         result
     }
 
-    /// Runs the turn's sampling loop to its terminal commit. At the turn's
-    /// deadline the turn is cancelled as a user's cancel would, and its end
-    /// is committed as a failure that names the limit.
+    /// Runs the turn's sampling loop (or its `!command`) to its terminal
+    /// commit. At the turn's deadline the turn is cancelled as a user's
+    /// cancel would, and its end is committed as a failure that names the
+    /// limit.
     async fn drive_turn(
         &self,
         identity: TurnIdentity,
         event_sink: &dyn AgentEventSink,
-    ) -> Result<AgentTurnOutcome, AgentError> {
+    ) -> Result<Option<AgentTurnOutcome>, AgentError> {
         let deadline = tokio::time::sleep(self.inner.limits.turn_deadline);
         tokio::pin!(deadline);
         let mut deadline_passed = false;
         let mut deadline_cancelled = false;
         loop {
             let loop_result = {
-                let run = self.run_loop(identity, event_sink);
+                let run = self.run_turn(identity, event_sink);
                 tokio::pin!(run);
                 loop {
                     tokio::select! {
@@ -90,23 +94,18 @@ impl AgentService {
                 }
             };
             match loop_result {
-                Ok((message_id, message)) => {
-                    match self
-                        .finish_completed(identity, message_id, message, event_sink)
-                        .await
-                    {
-                        Err(AgentError::SteeringPending) => {
-                            self.consume_pending_steering(identity, event_sink).await?;
-                            let reasons = std::collections::BTreeSet::from([
-                                AgentFollowUpReason::PendingUserInput,
-                            ]);
-                            let digest = sampling_progress_digest(&[], &[], &reasons);
-                            self.observe_follow_up_progress(identity, digest).await?;
-                            continue;
-                        }
-                        result => return result,
+                Ok(answer) => match self.finish_completed(identity, answer, event_sink).await {
+                    Err(AgentError::SteeringPending) => {
+                        self.consume_pending_steering(identity, event_sink).await?;
+                        let reasons = std::collections::BTreeSet::from([
+                            AgentFollowUpReason::PendingUserInput,
+                        ]);
+                        let digest = sampling_progress_digest(&[], &[], &reasons);
+                        self.observe_follow_up_progress(identity, digest).await?;
+                        continue;
                     }
-                }
+                    result => return result,
+                },
                 Err(AgentError::Cancelled) if deadline_cancelled => {
                     let error = AgentError::TurnDeadlineExceeded {
                         deadline: self.inner.limits.turn_deadline,
@@ -123,6 +122,29 @@ impl AgentService {
                     return Err(error);
                 }
             }
+        }
+    }
+
+    /// What the turn runs: the sampling loop, to its final answer, or the
+    /// person's command, to no answer.
+    async fn run_turn(
+        &self,
+        identity: TurnIdentity,
+        event_sink: &dyn AgentEventSink,
+    ) -> Result<Option<(AgentMessageId, String)>, AgentError> {
+        let kind = {
+            let cell = self.session(identity.session_id)?;
+            let record = cell.lock()?;
+            exact_turn(&record, identity.turn_id, identity.generation)?
+                .kind
+                .clone()
+        };
+        match kind {
+            TurnKind::Regular => self.run_loop(identity, event_sink).await.map(Some),
+            TurnKind::UserShellCommand(command) => self
+                .run_user_shell_command(identity, command, event_sink)
+                .await
+                .map(|()| None),
         }
     }
 

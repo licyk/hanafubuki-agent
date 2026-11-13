@@ -4,6 +4,7 @@
 mod exploration;
 mod shape;
 mod streamed;
+mod user_shell;
 mod views;
 
 use hanafubuki_agent::{AgentToolCallDisplay, AgentToolDisplay};

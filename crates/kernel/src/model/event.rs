@@ -235,8 +235,10 @@ pub enum AgentEventKind {
         tokens: u64,
         previous: Option<u64>,
     },
+    /// The turn ended with its final answer; a turn that sampled no model
+    /// (a `!command`) has none.
     TurnCompleted {
-        final_answer_message_id: AgentMessageId,
+        final_answer_message_id: Option<AgentMessageId>,
     },
     TurnCancelled {
         reason: AgentTurnTerminalReason,

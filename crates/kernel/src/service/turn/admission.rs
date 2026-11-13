@@ -45,7 +45,9 @@ impl AgentService {
             identity.generation,
             admission_started.elapsed().as_millis()
         );
-        self.execute_admitted_turn(identity, event_sink).await
+        self.execute_admitted_turn(identity, event_sink)
+            .await?
+            .ok_or_else(|| AgentError::Protocol("the turn ended without an answer".to_string()))
     }
 
     /// Durably admits a turn, schedules the complete loop on the current async
@@ -63,6 +65,36 @@ impl AgentService {
             AgentError::InvalidInput("Agent turn submission requires an async runtime".to_string())
         })?;
         let admitted = self.begin_turn(session_id, input.into(), event_sink.as_ref())?;
+        self.spawn_managed_turn(admitted, event_sink, runtime)
+    }
+
+    /// Admits a turn that runs `command`, which the person typed after `!`,
+    /// through the planned `exec_command` tool as the person's own call, and
+    /// schedules it as `submit_turn_with_sink` does. It samples no model:
+    /// the next turn's request carries what the command did.
+    pub fn submit_user_shell_command_with_sink(
+        &self,
+        session_id: AgentSessionId,
+        command: crate::AgentUserShellCommand,
+        permission_mode: hanafubuki_agent_approval::AgentPermissionMode,
+        turn: hanafubuki_agent_contracts::TurnExtensions,
+        event_sink: Arc<dyn AgentEventSink>,
+    ) -> Result<AgentTurnAccepted, AgentError> {
+        if !self.inner.accepting.load(Ordering::Acquire) {
+            return Err(AgentError::ShuttingDown);
+        }
+        let runtime = tokio::runtime::Handle::try_current().map_err(|_| {
+            AgentError::InvalidInput("Agent turn submission requires an async runtime".to_string())
+        })?;
+        let mut input = crate::AgentTurnInput::from(command.command.clone());
+        input.permission_mode = permission_mode;
+        input.turn = turn;
+        let admitted = self.begin_turn_with_admission(
+            session_id,
+            input,
+            TurnAdmission::UserShellCommand(command),
+            event_sink.as_ref(),
+        )?;
         self.spawn_managed_turn(admitted, event_sink, runtime)
     }
 
@@ -236,6 +268,11 @@ impl AgentService {
         let turn = exact_turn_mut(record, identity)?;
         if turn.phase.is_terminal() || turn.cancellation.is_cancelled() {
             return Err(AgentError::TurnNotRunning);
+        }
+        if matches!(turn.kind, TurnKind::UserShellCommand(_)) {
+            return Err(AgentError::InvalidInput(
+                "a `!` command's turn reads no messages; send it once the command ends".to_string(),
+            ));
         }
         let sequence = AgentSteeringSequence::new(turn.next_steering_sequence);
         let next_sequence =

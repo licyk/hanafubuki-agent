@@ -13,7 +13,7 @@ pub(super) use estimate::{estimate_conversation_items_tokens, estimate_model_req
 pub(super) use images::{referenced_images, LoadedImages};
 pub(super) use prompt::RequestContext;
 use prompt::{ordered_input, prepare_prompt_step, request_context, PlacedInput};
-pub(super) use request::SamplingStep;
+pub(super) use request::{tool_catalog_context, SamplingStep};
 pub(super) use stream::PendingReasoning;
 
 const PLAN_MODE_INSTRUCTIONS: &str = include_str!("../../prompts/plan.md");

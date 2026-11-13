@@ -830,6 +830,7 @@ mod scrollback;
 mod session_commands;
 mod settings;
 mod settings_center;
+mod shell;
 mod shortcuts;
 mod side;
 mod stability;

@@ -41,7 +41,7 @@ The examples below show the `kind` object only.
 | `turn_started`     | `role`                 | The turn started, in the session's [role](/docs/roles#sessions): its name, `null` for `default` |
 | `sampling_started` | `step`                 | The model is asked for the `step`th time (once more after each round of tool calls)             |
 | `response_started` | `responseId`           | The Provider started its response; `responseId` is the Provider's (a string)                    |
-| `turn_completed`   | `finalAnswerMessageId` | The turn completed; the final answer's message id                                               |
+| `turn_completed`   | `finalAnswerMessageId` | The turn completed; the final answer's message id, `null` for a turn that asked no model        |
 | `turn_cancelled`   | `reason`               | The turn was cancelled; `reason` is `user_interrupted`                                          |
 | `turn_failed`      | `reason`, `message`    | The turn failed; `message` explains it for a person                                             |
 

@@ -75,6 +75,7 @@ impl AgentService {
                 session_revision: context.session_revision,
                 call_id: context.call_id.clone(),
                 image_input: context.input_capabilities.image_input,
+                origin: context.origin,
             },
             arguments: call.arguments.clone(),
             cancellation: call_cancellation.clone(),

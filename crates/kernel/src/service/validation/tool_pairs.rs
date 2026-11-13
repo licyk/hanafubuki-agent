@@ -141,7 +141,8 @@ pub(in crate::service) fn interrupted_tool_outputs(
             | ConversationItem::PermissionReview { .. }
             | ConversationItem::ContinuationContext { .. }
             | ConversationItem::CompactionSummary { .. }
-            | ConversationItem::ProviderCompaction { .. } => {}
+            | ConversationItem::ProviderCompaction { .. }
+            | ConversationItem::UserShellCommand { .. } => {}
         }
     }
     Ok(calls

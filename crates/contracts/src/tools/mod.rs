@@ -24,7 +24,7 @@ pub use display::{
 pub use error::{decode_arguments, object_arguments, AgentToolError, ToolCallValidationError};
 pub use extensions::TurnExtensions;
 pub use handler::{
-    AgentMemoryContextEffect, AgentToolHandler, ToolAvailability, ToolCallContext,
+    AgentMemoryContextEffect, AgentToolHandler, ToolAvailability, ToolCallContext, ToolCallOrigin,
     ToolContextFragment, ToolDescriptor, ToolEffect, ToolFuture, ToolInvocation, ToolPlanContext,
     ToolResult,
 };

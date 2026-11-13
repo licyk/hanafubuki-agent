@@ -119,6 +119,9 @@ pub(in crate::service) fn validate_persisted_history(
                 enforce_size("permission review summary", action_summary.len(), 2 * 1024)?;
                 validate_permission_review_state(*status, assessment.as_ref(), *completed_at)?;
             }
+            ConversationItem::UserShellCommand { call_id, .. } => {
+                validate_bounded_identifier(call_id)?;
+            }
             ConversationItem::TurnStart { .. }
             | ConversationItem::WorldStateUpdate { .. }
             | ConversationItem::SkillContext { .. }
@@ -400,13 +403,17 @@ fn validate_turn_boundary_refs(history: &[&ConversationItem]) -> Result<(), Agen
             ConversationItem::SkillContext { .. } if has_turn && awaiting_user => {}
             ConversationItem::SkillContext { .. }
                 if has_turn && skill_context_follows_tool_output(history, index) => {}
-            ConversationItem::UserMessage { .. } if has_turn && awaiting_user => {
+            // A `!command`'s turn opens with what the person ran.
+            ConversationItem::UserMessage { .. } | ConversationItem::UserShellCommand { .. }
+                if has_turn && awaiting_user =>
+            {
                 awaiting_user = false;
             }
             ConversationItem::CompactionSummary { .. }
             | ConversationItem::ProviderCompaction { .. }
             | ConversationItem::SkillContext { .. }
-            | ConversationItem::UserMessage { .. } => {
+            | ConversationItem::UserMessage { .. }
+            | ConversationItem::UserShellCommand { .. } => {
                 return Err(AgentError::Persistence(
                     "Agent history contains an item outside its turn boundary".to_string(),
                 ));
