@@ -26,7 +26,7 @@ use crate::appearance::AppearanceEvent;
 use crate::commands::CommandStep;
 use crate::file_search::FileMatch;
 use crate::history_cell::HistoryCell;
-use crate::streaming::controller::Consolidation;
+use crate::streaming::controller::{Consolidation, StreamUpdate};
 
 pub(crate) enum AppEvent {
     Key(KeyEvent),
@@ -51,6 +51,8 @@ pub(crate) enum AppEvent {
     InsertLiveEntry(Arc<dyn HistoryCell>),
     /// A live entry completed: Scrollback's tail may write it.
     LiveEntryCompleted(Arc<dyn HistoryCell>),
+    /// A stream committed rows, or its tail changed (`streaming`).
+    StreamUpdate(StreamUpdate),
     /// A stream ended: its cells give way to the one of its Markdown.
     ConsolidateStream(Consolidation),
     /// The `@` token being typed changed; an empty query ends the search.
@@ -90,8 +92,9 @@ pub(crate) enum AppEvent {
     /// `/side`, `/subagents`, `/agents` and the panes: what the app does
     /// with its conversations.
     Workspace(WorkspaceEvent),
+    /// A stream queued rows: the commit ticks run until no conversation
+    /// has a row queued.
     StartCommitAnimation,
-    StopCommitAnimation,
     CommitTick,
     Exit,
 }

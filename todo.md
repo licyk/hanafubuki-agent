@@ -2159,8 +2159,179 @@ and any module-size exception.
         has no `Compact` yet; the commit-tick thread gets no
         `StopCommitAnimation` when `finalize` takes the controller with
         lines still queued (before M2).
-- [ ] M3: streaming — incremental blocks, stable/tail regions, chunking,
+- [x] M3: streaming — incremental blocks, stable/tail regions, chunking,
       table holdback, open-fence highlighting, prose previews.
+      Done (2026-11-13):
+      - Streaming (`streaming/`, Codex 57a808a392's pipeline): `render.rs`
+        (incremental render: the top-level blocks before the last kept, the
+        last rendered again at each newline, a reference definition renders
+        all again), `code_fence.rs` with `render/highlight/streaming.rs` (an
+        open top-level fence that names its language highlighted a complete
+        line at a time, syntect's state kept, under the ordinary limits and
+        the theme's new revision counter), `table_holdback.rs` (incremental
+        scan, a table released once its top-level block is complete),
+        `prose_preview.rs` (the unterminated line, outside tables and fences,
+        its last 8 KiB, a link's destination withheld until its `)`),
+        `chunking.rs` and `commit_tick.rs` (Codex's adaptive policy and
+        thresholds: one row a tick, the whole backlog in catch-up),
+        `controller/` (`StreamCore` split into `state`, `commit` and
+        `preview`; `mod.rs` the answer's and the plan's controllers).
+        `markdown_stream.rs` is Codex's source-only collector;
+        `markdown_render/streaming.rs` gives the writer's pass its block
+        metadata (`render_streaming_markdown`; `markdown.rs`'s
+        `render_streaming_markdown_agent` maps it back through unwrapped
+        fences). M1's stopgap holdback is gone: the mutable tail starts at
+        the earliest of a table's header, a ```` ```md ```` fence in the last
+        block, a marker alone, and a last line ending with a local link.
+      - The tail on screen: a live entry of the conversation,
+        `StreamTailCell` in a `LiveCell` (which now forwards `stream_id`),
+        that shows the tail's rows as the cell they would be committed in.
+        Each change is one `AppEvent::StreamUpdate` (the rows committed and
+        the tail's rows now), applied at once by the app
+        (`app/message_consolidation.rs`): the first inserts the tail entry,
+        committed rows go before it (`insert_before`; the transcript,
+        Scrollback's `Tail::insert_before`, the Ctrl+T overlay), the last
+        empties and completes it; the consolidation then takes it away with
+        the stream's cells. The chat's stream handling moved to
+        `chatwidget/streaming.rs`.
+      - Ticks: the commit tick is a frame (`MIN_FRAME_INTERVAL`, 8 ms;
+        was 50 ms), Codex's pacing; a delta that queues rows runs a
+        catch-up-only tick at once, in the same update as the tail.
+        `StopCommitAnimation` is gone: the app stops the tick thread after a
+        tick that leaves neither conversation with a row queued — this fixes
+        M2's reported bug (a stream finalized with rows queued left the
+        thread ticking until the next stream) and a stop from one
+        conversation no longer strands the other's queue.
+      - Resize mid-stream (Codex's `set_width`): after a frame drawn at
+        another width (`ChatWidget::sync_stream_width`, both presentations),
+        the stream renders again at the new width, the committed count kept
+        across the rows before the tail's start, and the queue rebuilt; the
+        rows committed at the old width stay until the end's repair. A stream
+        created before the first frame (no width) takes it at that frame.
+      - The end: the source rendered whole once more; the rows past the
+        committed ones are the last; when the committed rows are not the
+        render's first ones (a setext underline, a late reference
+        definition, a resize) `Consolidation.repair` asks Scrollback's
+        rewrite (Codex's `needs_scrollback_reflow`, decided here by the rows
+        themselves).
+      - Lists: `ListSpacing::Compact` (no separators) while streaming in
+        Fullscreen, as Codex; `AfterMultiline` in Scrollback. M2's question:
+        the Fullscreen row gain at a stream's end is kept, and larger
+        (compact → uniform), as in Codex.
+      - The local link's soft break before `:` (Codex's join, left by M1)
+        is ported with its two tests; a held last line keeps it from losing
+        text mid-stream.
+      - What the user sees while it streams: a completed line's rows appear
+        a row per frame (all at once past 8 queued or 120 ms). A table
+        appears with its header and delimiter, laid out again as each row
+        completes (a partial row waits for its newline), in the tail: in
+        Scrollback in the viewport, not written into the scrollback until a
+        block follows it; in Fullscreen in the view. A code fence's rows are
+        committed a line at a time, highlighted; a ```` ```md ```` fence shows
+        as code in the tail until it closes, then as what it holds. A list
+        item's marker alone waits on its row; the line still arriving shows
+        as it grows. Reasoning is unchanged: a thinking entry renders its
+        whole text again at each frame (Codex streams no reasoning through a
+        controller either).
+      - Deviations: (1) a ```` ```md ```` fence stays mutable with tables on
+        too, until it closes (Codex only with tables off): a document in one
+        is never committed as code and then unwrapped. (2) The tail is a live
+        entry, not Codex's active-cell slot, and its changes travel with the
+        committed rows in one event. (3) The repair is decided by comparing
+        rows, not by a live tail at the end (tail rows were never written).
+        (4) Not ported: the raw-mode stream and `set_render_mode` (raw is a
+        view's presentation here), the replay tick scope (replay builds
+        source cells), math previews (M5), mermaid (M6), inline
+        visualizations and follow-up directives; a preview shows a link as
+        `[label]` until its destination closes, as Codex. (5) The finalized
+        source is kept as it arrived (Codex appends a newline). (6) The plan
+        names `render/highlight_streaming.rs`; it is
+        `render/highlight/streaming.rs` (the highlighter is a directory
+        module). (7) A parked pane's stream follows its width when it is
+        focused and drawn.
+      - Tests: Codex's ported — chunking (9), table holdback (7), code fence
+        (3) and its render tests (5), incremental render (7, the inline
+        visualization, math and raw ones left out), the streaming
+        highlighter (4), the controller (a dozen, the set-width ones, the
+        preview ones minus follow-ups); M1's stream tests now run on the
+        controller (`markdown_stream/tests.rs`). New: every M1 sample and M3's
+        (a long ```` ```md ```` document, a code block, a `:` join, a setext
+        heading, a late definition) streamed by line, by character, in two
+        arbitrary chunkings and whole, at None/80/40/20 columns, equal the
+        full render with no repair (or ask for one); the same by line and by
+        character with tables, lists or both off; the compact spacing
+        equals its full render; what shows mid-stream (a table half arrived,
+        a long ```` ```md ```` document, a marker alone, a code fence, a
+        preview with a link and CJK, the `:` join); the pacing at explicit
+        instants (`commit_tick/tests.rs`); the end-to-end
+        `app/tests/streaming.rs` on vt100 in both presentations — an answer
+        with a table and a code block streamed a few bytes a tick: the table
+        shows while it arrives, Scrollback writes the answer's rows once, in
+        order, with no repair (the plan's frame-by-frame test), Fullscreen
+        shows them all; committed rows come before the line still arriving;
+        a burst caught up at once; a resize lays the table arriving out at
+        the new width; an interrupt mid-table commits what arrived and lets
+        later entries reach the scrollback; the animation stops after a
+        stream ended with rows queued. Fail-first by mutation, each seen
+        failing then restored: no stop after the tick (the animation test),
+        Codex's tables-off-only Markdown fence (4 tests), committed rows
+        pushed after the tail (the order test), the tail never completed,
+        no catch-up at a delta, no width sync, no local-link holdback, no
+        bare-marker holdback, `LiveCell` not forwarding `stream_id`, no
+        table holdback (8), no preview (8), no repair on divergence (4), no
+        soft-break join (Codex's two link tests). Not mutated: the
+        pacing tests at explicit instants, the tables-off and lists-off
+        sweep. Not covered: `Tail::insert_before`'s adjustment of what
+        leaves whatever the limit (a message of yours sent while an answer
+        streams), and committed rows going before the tail in the Ctrl+T
+        overlay (`insert_cell_before`).
+      - Existing tests changed: the chat's test transcript applies
+        `StreamUpdate`s; `pump_until_turn_ends` also takes what the turn's
+        end sent (the preview shows an answer's last line before its end,
+        which a test pumping until the screen showed it relied on); the
+        M2 consolidation test reads the stream from the updates; Codex's
+        expectations kept, the table widths as this renderer lays them out.
+      - Snapshots: none changed. Goldens: none changed. Dependencies: none
+        added.
+      - Docs (both languages): `terminal-interface` (`#rendering` what
+        shows while an answer streams, a resize mid-stream; `#reading`
+        Scrollback writes committed rows only, a stream through a resize),
+        `architecture` (a Streaming bullet; Codex's incremental highlighter
+        no longer "not ported"), `internals#tui-details` (the streaming
+        mechanics).
+      - Hanafubuki at its next pin: nothing (the TUI crate only).
+      - Module size: no exception added or raised.
+      - Validation: `cargo fmt --all --check`; `RUSTFLAGS="-D warnings"
+        cargo check --workspace --all-targets --all-features`; `cargo
+        clippy --workspace --all-targets --all-features -- -D warnings`;
+        `cargo xtask check` (the notices check first failed on the new
+        end-to-end test, listed as original); `cargo test --workspace
+        --all-features --no-fail-fast` (4455 passed, none failed, no flake
+        seen); `bun install --frozen-lockfile`, `bun run
+        format:check:site`, `bun run site:check`, `bun run site:test` (28
+        passed), and the six changed pages compiled with the store's
+        `@mdx-js/mdx` 3.1.1; `VITE_BASE_PATH=/hanafubuki-agent/ bun run
+        site:build` not run locally (port 3000 held by another project's
+        server); CI's Site run covers it. `app::tests` run twelve times more
+        (eight in parallel, two with one thread, two with every core kept
+        busy): no failure. Not verified
+        without a real terminal: the pacing as seen at a frame's tick, and
+        how a terminal shows the tail changing in place.
+      - Known, as in Codex: when a line's newline arrives in smooth mode,
+        its preview gives way to its rows, which are queued, not shown,
+        until the next tick (8 ms) commits them, so the line is gone for
+        a frame (seen on the vt100 screen: a frame drawn between the
+        newline and the tick lacks the line). A list of local file links moves the tail's start at each
+        line, so the rows before it are rendered again at each line (the
+        prefix cache misses); fine at an answer's size.
+      - For M4–M8: the stream's rows are plain `Line`s, rewrapped by the
+        cells, and the preview withholds a link's destination: M4's
+        hyperlinks must ride in the `StreamUpdate` cells and in the
+        committed-rows comparison of `finalize_remaining`. M5 adds the math
+        start to `active_tail_source_start` (`controller/commit.rs`) and a
+        math mode to `prose_preview.rs`. M6 adds mermaid to the tracker's
+        mutable fences (`markdown_render/streaming.rs`) and leaves it out of
+        `OpenCodeFence::detect`.
 - [ ] M4: OSC 8 hyperlinks and URL-aware wrapping.
 - [ ] M5: math (D20).
 - [ ] M6: mermaid, as `crates/tui/src/mermaid/` (D22).
@@ -3738,7 +3909,38 @@ independent.
         (run on ac9be0b, which differs from the landed commit only in this
         line; Site: .../runs/43200798790).
       - Hanafubuki at its next pin: nothing (the TUI crate only).
-      - Module size: no exception added or raised. `notices-policy.toml`
+      - Module size: no exception added or raised.
+      - Validation: `cargo fmt --all --check`; `RUSTFLAGS="-D warnings"
+        cargo check --workspace --all-targets --all-features`; `cargo
+        clippy --workspace --all-targets --all-features -- -D warnings`;
+        `cargo xtask check` (the notices check first failed on the new
+        end-to-end test, listed as original); `cargo test --workspace
+        --all-features --no-fail-fast` (4455 passed, none failed, no flake
+        seen); `bun install --frozen-lockfile`, `bun run
+        format:check:site`, `bun run site:check`, `bun run site:test` (28
+        passed), and the six changed pages compiled with the store's
+        `@mdx-js/mdx` 3.1.1; `VITE_BASE_PATH=/hanafubuki-agent/ bun run
+        site:build` not run locally (port 3000 held by another project's
+        server); CI's Site run covers it. `app::tests` run twelve times more
+        (eight in parallel, two with one thread, two with every core kept
+        busy): no failure. Not verified
+        without a real terminal: the pacing as seen at a frame's tick, and
+        how a terminal shows the tail changing in place.
+      - Known, as in Codex: when a line's newline arrives in smooth mode,
+        its preview gives way to its rows, which are queued, not shown,
+        until the next tick (8 ms) commits them, so the line is gone for
+        a frame (seen on the vt100 screen: a frame drawn between the
+        newline and the tick lacks the line). A list of local file links moves the tail's start at each
+        line, so the rows before it are rendered again at each line (the
+        prefix cache misses); fine at an answer's size.
+      - For M4–M8: the stream's rows are plain `Line`s, rewrapped by the
+        cells, and the preview withholds a link's destination: M4's
+        hyperlinks must ride in the `StreamUpdate` cells and in the
+        committed-rows comparison of `finalize_remaining`. M5 adds the math
+        start to `active_tail_source_start` (`controller/commit.rs`) and a
+        math mode to `prose_preview.rs`. M6 adds mermaid to the tracker's
+        mutable fences (`markdown_render/streaming.rs`) and leaves it out of
+        `OpenCodeFence::detect`. `notices-policy.toml`
         lists `app/tests/thinking.rs` as original.
 - [x] T3: an id and a control on every expandable entry, a click on its
       control or header, in Fullscreen and in Scrollback's tail.
@@ -3825,6 +4027,37 @@ independent.
         `success`).
       - Hanafubuki at its next pin: nothing (the TUI crate only).
       - Module size: no exception added or raised.
+      - Validation: `cargo fmt --all --check`; `RUSTFLAGS="-D warnings"
+        cargo check --workspace --all-targets --all-features`; `cargo
+        clippy --workspace --all-targets --all-features -- -D warnings`;
+        `cargo xtask check` (the notices check first failed on the new
+        end-to-end test, listed as original); `cargo test --workspace
+        --all-features --no-fail-fast` (4455 passed, none failed, no flake
+        seen); `bun install --frozen-lockfile`, `bun run
+        format:check:site`, `bun run site:check`, `bun run site:test` (28
+        passed), and the six changed pages compiled with the store's
+        `@mdx-js/mdx` 3.1.1; `VITE_BASE_PATH=/hanafubuki-agent/ bun run
+        site:build` not run locally (port 3000 held by another project's
+        server); CI's Site run covers it. `app::tests` run twelve times more
+        (eight in parallel, two with one thread, two with every core kept
+        busy): no failure. Not verified
+        without a real terminal: the pacing as seen at a frame's tick, and
+        how a terminal shows the tail changing in place.
+      - Known, as in Codex: when a line's newline arrives in smooth mode,
+        its preview gives way to its rows, which are queued, not shown,
+        until the next tick (8 ms) commits them, so the line is gone for
+        a frame (seen on the vt100 screen: a frame drawn between the
+        newline and the tick lacks the line). A list of local file links moves the tail's start at each
+        line, so the rows before it are rendered again at each line (the
+        prefix cache misses); fine at an answer's size.
+      - For M4–M8: the stream's rows are plain `Line`s, rewrapped by the
+        cells, and the preview withholds a link's destination: M4's
+        hyperlinks must ride in the `StreamUpdate` cells and in the
+        committed-rows comparison of `finalize_remaining`. M5 adds the math
+        start to `active_tail_source_start` (`controller/commit.rs`) and a
+        math mode to `prose_preview.rs`. M6 adds mermaid to the tracker's
+        mutable fences (`markdown_render/streaming.rs`) and leaves it out of
+        `OpenCodeFence::detect`.
 - [x] T4: `AgentToolPresenter` and `ToolPresenterRegistry`; presenters for
       every built-in tool and a fallback; `subject` on `tool_started`,
       `callId` on `execution_progress`; `tool_display` fetched off the UI

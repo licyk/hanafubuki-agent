@@ -49,6 +49,10 @@ fn drain(events: &Receiver<AppEvent>) -> (Vec<String>, Vec<Op>) {
         match event {
             AppEvent::InsertHistoryCell(cell) => cells.push(cell_text(cell.as_ref())),
             AppEvent::LiveEntryCompleted(cell) => cells.push(cell_text(cell.as_ref())),
+            // A stream's committed rows; its tail is not complete.
+            AppEvent::StreamUpdate(update) => {
+                cells.extend(update.committed.map(|cell| cell_text(cell.as_ref())))
+            }
             AppEvent::Op(op) => ops.push(op),
             _ => {}
         }

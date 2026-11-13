@@ -34,6 +34,8 @@ impl Writer<'_> {
             self.current_initial_indent.clear();
             self.current_subsequent_indent.clear();
             self.current_line_in_code_block = false;
+            self.trailing_local_link = self.line_ends_with_local_link_target;
+            self.line_ends_with_local_link_target = false;
         }
     }
 
@@ -72,6 +74,7 @@ impl Writer<'_> {
         self.current_line_style = style;
         self.current_line_content = Some(line);
         self.current_line_in_code_block = self.in_code_block;
+        self.line_ends_with_local_link_target = false;
 
         self.pending_marker_line = false;
     }

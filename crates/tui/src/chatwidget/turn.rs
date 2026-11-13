@@ -10,11 +10,7 @@ use hanafubuki_agent::{AgentReasoningId, AgentTaskPlanSnapshot, AgentToolCallDis
 use super::input_queue::Ending;
 use super::ChatWidget;
 use crate::agent_bridge::{TurnEnd, TurnUpdate, Warning, WarningSource};
-use crate::app_event::AppEvent;
 use crate::history_cell::{self, explores, LiveCell, ThinkingCell, ToolCallCell};
-
-use crate::status_indicator_widget::StatusIndicatorWidget;
-use crate::streaming::controller::{Finalized, PlanStreamController, StreamController};
 
 const WORKING: &str = "Working";
 
@@ -151,7 +147,7 @@ impl ChatWidget {
         self.bottom_pane.set_task_running(true);
         self.bottom_pane.set_interrupt_hint_visible(true);
         self.retry_status_header = None;
-        self.plan_stream_controller = None;
+        self.finish_plan();
         self.bottom_pane.update_status(WORKING.to_string(), None);
         self.input_queue.turn_started();
     }
@@ -174,70 +170,6 @@ impl ChatWidget {
         let (_, cell) = self.live_thinking.remove(index);
         cell.update(|cell| cell.complete(Some(duration_millis)));
         self.complete_live_entry(cell);
-    }
-
-    fn on_message_delta(&mut self, delta: String) {
-        self.restore_retry_status_header();
-        if self.stream_controller.is_none() {
-            // After the turn wrote something other than a streamed message
-            // (tool calls, a plan), a separator comes before the next one.
-            if self.needs_final_message_separator && self.had_work_activity {
-                let status = self.bottom_pane.status_widget();
-                let separator = history_cell::FinalMessageSeparator::new(
-                    status.map(StatusIndicatorWidget::elapsed_seconds),
-                    status.and_then(StatusIndicatorWidget::thinking_duration),
-                );
-                self.add_to_history(separator);
-                self.had_work_activity = false;
-            }
-            self.needs_final_message_separator = false;
-            self.stream_controller = Some(StreamController::new(
-                self.last_rendered_width.get().map(|w| w.saturating_sub(2)),
-                self.directory.clone(),
-            ));
-        }
-        if let Some(controller) = self.stream_controller.as_mut() {
-            if controller.push(&delta) {
-                self.app_event_tx.send(AppEvent::StartCommitAnimation);
-            }
-        }
-    }
-
-    /// Commits what is left of the streaming message at once; its cells
-    /// then give way to the one of its Markdown.
-    fn finish_message(&mut self) {
-        if let Some(mut controller) = self.stream_controller.take() {
-            self.add_finalized(controller.finalize());
-        }
-    }
-
-    /// [`Self::finish_message`] for the proposed plan.
-    fn finish_plan(&mut self) {
-        if let Some(mut controller) = self.plan_stream_controller.take() {
-            self.add_finalized(controller.finalize());
-        }
-    }
-
-    fn add_finalized(&mut self, finalized: Finalized) {
-        if let Some(cell) = finalized.cell {
-            self.add_boxed_history(cell);
-        }
-        if let Some(consolidation) = finalized.consolidation {
-            self.app_event_tx
-                .send(AppEvent::ConsolidateStream(consolidation));
-        }
-    }
-
-    fn on_plan_delta(&mut self, delta: String) {
-        self.restore_retry_status_header();
-        let width = self.last_rendered_width.get().map(|w| w.saturating_sub(4));
-        let directory = &self.directory;
-        let controller = self
-            .plan_stream_controller
-            .get_or_insert_with(|| PlanStreamController::new(width, directory.clone()));
-        if controller.push(&delta) {
-            self.app_event_tx.send(AppEvent::StartCommitAnimation);
-        }
     }
 
     /// An exploring call joins the exploring calls just before it;
@@ -386,7 +318,7 @@ impl ChatWidget {
         self.advance_input_queue();
     }
 
-    fn restore_retry_status_header(&mut self) {
+    pub(super) fn restore_retry_status_header(&mut self) {
         if self.retry_status_header.take().is_some() {
             self.bottom_pane.update_status(WORKING.to_string(), None);
         }

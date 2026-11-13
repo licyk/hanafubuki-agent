@@ -19,7 +19,9 @@ use std::sync::Arc;
 use ratatui::crossterm::event::{KeyEventKind, MouseEvent};
 
 use super::*;
-use crate::history_cell::{splice_stream, stream_span, HistoryCell, HistoryRenderMode, StreamId};
+use crate::history_cell::{
+    insert_before, splice_stream, stream_span, HistoryCell, HistoryRenderMode, StreamId,
+};
 use crate::transcript_view::{TranscriptView, ViewAction};
 
 const TITLE: &str = "/ T R A N S C R I P T";
@@ -54,6 +56,15 @@ impl TranscriptOverlay {
 
     pub(crate) fn insert_cell(&mut self, cell: Arc<dyn HistoryCell>) {
         self.cells.push(cell);
+    }
+
+    /// A stream's committed rows, before its tail entry.
+    pub(crate) fn insert_cell_before(
+        &mut self,
+        cell: Arc<dyn HistoryCell>,
+        tail: &Arc<dyn HistoryCell>,
+    ) {
+        insert_before(&mut self.cells, cell, tail);
     }
 
     /// `stream`'s cells give way to `cell`, the one of its Markdown.

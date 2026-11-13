@@ -25,15 +25,17 @@ mod local_links;
 mod output;
 pub(crate) mod preferences;
 mod source_tables;
+mod streaming;
 mod tables;
 
 use std::ops::Range;
 
-use pulldown_cmark::{CodeBlockKind, Event, Options, Parser, Tag, TagEnd};
+use pulldown_cmark::{CodeBlockKind, Event, Tag, TagEnd};
 use ratatui::style::Style;
 use ratatui::text::{Line, Span, Text};
 
 pub(crate) use list_spacing::ListSpacing;
+pub(crate) use streaming::{render_streaming_markdown, StreamingMarkdownRender};
 
 use links::LinkState;
 use list_spacing::UniformList;
@@ -124,16 +126,7 @@ pub(crate) fn render_markdown_text_with_spacing(
     cwd: Option<&str>,
     list_spacing: ListSpacing,
 ) -> Text<'static> {
-    let mut options = Options::empty();
-    options.insert(Options::ENABLE_STRIKETHROUGH);
-    options.insert(Options::ENABLE_TABLES);
-    options.set(Options::ENABLE_TASKLISTS, preferences::current().lists);
-    let mut events =
-        source_tables::preserve(input, Parser::new_ext(input, options).into_offset_iter());
-    let mut writer = Writer::new(input, width, cwd);
-    writer.list_spacing = list_spacing;
-    writer.run(&mut events);
-    writer.text
+    Text::from(render_streaming_markdown(input, width, cwd, list_spacing).lines)
 }
 
 /// The pulldown-cmark event consumer: inline styles, the indentation of
@@ -172,6 +165,13 @@ struct Writer<'a> {
     current_line_style: Style,
     current_line_in_code_block: bool,
     table_state: Option<TableState>,
+    /// The line being built ends with a local file link's target.
+    line_ends_with_local_link_target: bool,
+    /// A soft break after a local file link, decided by what follows.
+    pending_local_link_soft_break: bool,
+    /// The last row written ended with a local file link's target: a
+    /// stream's next line may still join it.
+    trailing_local_link: bool,
 }
 
 impl<'a> Writer<'a> {
@@ -203,6 +203,9 @@ impl<'a> Writer<'a> {
             current_line_style: Style::default(),
             current_line_in_code_block: false,
             table_state: None,
+            line_ends_with_local_link_target: false,
+            pending_local_link_soft_break: false,
+            trailing_local_link: false,
         }
     }
 
@@ -220,6 +223,7 @@ impl<'a> Writer<'a> {
     where
         I: Iterator<Item = (Event<'a>, Range<usize>)>,
     {
+        self.prepare_for_event(&event);
         match event {
             Event::Start(tag) => self.start_tag(tag, range, iter),
             Event::End(tag) => self.end_tag(tag),

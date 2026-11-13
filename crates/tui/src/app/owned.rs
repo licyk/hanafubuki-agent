@@ -182,6 +182,8 @@ impl App {
             self.schedule_frame(until);
         }
         self.chat_widget.reap_failed_views();
+        // A stream lays out what it has not committed at the width drawn.
+        self.chat_widget.sync_stream_width();
         Ok(())
     }
 }

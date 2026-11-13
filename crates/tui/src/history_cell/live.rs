@@ -8,7 +8,7 @@ use std::sync::Arc;
 use parking_lot::{MappedRwLockReadGuard, RwLock, RwLockReadGuard};
 use ratatui::text::Line;
 
-use super::{ActivityDisclosure, HistoryCell, HistoryRenderMode};
+use super::{ActivityDisclosure, HistoryCell, HistoryRenderMode, StreamId};
 
 #[derive(Debug)]
 pub(crate) struct LiveCell<C> {
@@ -92,5 +92,9 @@ impl<C: HistoryCell> HistoryCell for LiveCell<C> {
 
     fn is_stream_continuation(&self) -> bool {
         self.cell().is_stream_continuation()
+    }
+
+    fn stream_id(&self) -> Option<StreamId> {
+        self.cell().stream_id()
     }
 }

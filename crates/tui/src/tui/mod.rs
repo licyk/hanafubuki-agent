@@ -104,6 +104,9 @@ pub(crate) fn enhanced_keys_supported() -> bool {
 pub(crate) struct Tui<B: Backend<Error = io::Error> + Write = CrosstermBackend<Stdout>> {
     pub(crate) terminal: CustomTerminal<B>,
     pending_history_lines: Vec<Line<'static>>,
+    /// Every line written into the scrollback since it was last cleared.
+    #[cfg(test)]
+    pub(crate) written_history_lines: Vec<Line<'static>>,
     /// The inline viewport, kept while an overlay holds the alternate screen.
     alt_saved_viewport: Option<Rect>,
     /// Scrollback's tail has the mouse (off the alternate screen).
@@ -120,6 +123,8 @@ impl<B: Backend<Error = io::Error> + Write> Tui<B> {
         Self {
             terminal,
             pending_history_lines: Vec::new(),
+            #[cfg(test)]
+            written_history_lines: Vec::new(),
             alt_saved_viewport: None,
             inline_mouse_capture: false,
             alt_mouse_capture: false,
@@ -242,6 +247,9 @@ impl<B: Backend<Error = io::Error> + Write> Tui<B> {
             }
 
             if !self.pending_history_lines.is_empty() {
+                #[cfg(test)]
+                self.written_history_lines
+                    .extend(self.pending_history_lines.iter().cloned());
                 crate::insert_history::insert_history_lines(
                     terminal,
                     std::mem::take(&mut self.pending_history_lines),
@@ -285,6 +293,8 @@ impl<B: Backend<Error = io::Error> + Write> Tui<B> {
     /// scrollback when the purge and the clear come separately.
     pub(crate) fn clear_scrollback(&mut self) -> Result<()> {
         self.pending_history_lines.clear();
+        #[cfg(test)]
+        self.written_history_lines.clear();
         let backend = self.terminal.backend_mut();
         backend.write_all(b"\x1b[r\x1b[0m\x1b[H\x1b[2J\x1b[3J\x1b[H")?;
         Write::flush(backend)?;

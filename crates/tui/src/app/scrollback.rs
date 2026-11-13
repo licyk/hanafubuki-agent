@@ -70,6 +70,24 @@ impl Tail {
         self.cells.push(cell);
     }
 
+    /// A stream's committed rows, before its tail entry, which never left
+    /// before it: they leave first.
+    pub(super) fn insert_before(
+        &mut self,
+        cell: Arc<dyn HistoryCell>,
+        tail: &Arc<dyn HistoryCell>,
+    ) {
+        match self.cells.iter().position(|other| Arc::ptr_eq(other, tail)) {
+            Some(index) => {
+                if index < self.flush {
+                    self.flush += 1;
+                }
+                self.cells.insert(index, cell);
+            }
+            None => self.push(cell, false),
+        }
+    }
+
     /// `cell` completed: it may leave.
     pub(super) fn complete(&mut self, cell: &Arc<dyn HistoryCell>) {
         self.live.retain(|live| !Arc::ptr_eq(live, cell));
@@ -275,6 +293,8 @@ impl App {
         // A command's view that panicked while drawn is gone from the next
         // frame, which its error cell schedules.
         self.chat_widget.reap_failed_views();
+        // A stream lays out what it has not committed at the width drawn.
+        self.chat_widget.sync_stream_width();
         Ok(())
     }
 

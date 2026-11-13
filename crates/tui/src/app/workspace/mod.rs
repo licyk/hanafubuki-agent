@@ -223,6 +223,14 @@ impl Workspace {
         self.settings.is_some()
     }
 
+    /// Whether the conversation not in the app's fields has no streamed
+    /// row queued.
+    pub(super) fn parked_streams_idle(&self) -> bool {
+        self.second
+            .as_ref()
+            .is_none_or(|second| second.parked.chat_widget.stream_queues_idle())
+    }
+
     /// An event of the parked conversation is being handled.
     pub(super) fn handling_parked(&self) -> bool {
         self.handling.is_some()
@@ -287,6 +295,7 @@ impl App {
             | AppEvent::InsertHistoryCell(_)
             | AppEvent::InsertLiveEntry(_)
             | AppEvent::LiveEntryCompleted(_)
+            | AppEvent::StreamUpdate(_)
             | AppEvent::ConsolidateStream(_)
             | AppEvent::CommandStep(_)
             | AppEvent::Command(_)

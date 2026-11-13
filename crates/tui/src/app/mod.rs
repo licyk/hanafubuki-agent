@@ -65,12 +65,13 @@ use crate::transcript_view::{TranscriptHistoryState, TranscriptView, ViewAction}
 use crate::tui::Tui;
 use crate::tui_state::TuiState;
 
-/// The commit animation's step: one streamed line per tick.
-const COMMIT_TICK: Duration = Duration::from_millis(50);
 /// The longest the loop sleeps without a frame due.
 const IDLE_WAIT: Duration = Duration::from_secs(3600);
 /// At most one frame per this, however often frames are asked for.
 const MIN_FRAME_INTERVAL: Duration = Duration::from_millis(8);
+/// The commit animation's step, a frame's (Codex's): one streamed row per
+/// tick, or the whole backlog while it catches up (`streaming::chunking`).
+const COMMIT_TICK: Duration = MIN_FRAME_INTERVAL;
 /// How often a transcript view is drawn while it scans a search or
 /// scrolls a drag past its edge.
 const VIEW_TICK: Duration = Duration::from_millis(16);
@@ -255,6 +256,7 @@ impl App {
                 self.tail.complete(&cell);
                 self.schedule_frame(Instant::now());
             }
+            AppEvent::StreamUpdate(update) => self.apply_stream_update(update),
             AppEvent::ConsolidateStream(consolidation) => self.consolidate_stream(consolidation),
             AppEvent::StartFileSearch(query) => self.file_search.on_user_query(query),
             AppEvent::FileSearchResult { query, matches } => {
@@ -275,10 +277,14 @@ impl App {
             }
             AppEvent::OpenResumePicker => self.open_resume_picker(tui, false),
             AppEvent::StartCommitAnimation => self.start_commit_animation(),
-            AppEvent::StopCommitAnimation => {
-                self.commit_anim_running.store(false, Ordering::Release)
+            AppEvent::CommitTick => {
+                self.chat_widget.on_commit_tick();
+                // One thread ticks both conversations: it stops once
+                // neither has a row to commit.
+                if self.chat_widget.stream_queues_idle() && self.workspace.parked_streams_idle() {
+                    self.commit_anim_running.store(false, Ordering::Release);
+                }
             }
-            AppEvent::CommitTick => self.chat_widget.on_commit_tick(),
             AppEvent::SetRawOutput(raw) => self.set_raw_output(raw),
             AppEvent::Command(command) => self.run_app_command(tui, command),
             AppEvent::Appearance(event) => self.apply_appearance(event),

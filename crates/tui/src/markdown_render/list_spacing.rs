@@ -4,7 +4,8 @@
 //! (Scrollback's rows, a streamed answer) separates the next sibling of an
 //! item that took more than one row; a view that lays its entries out
 //! again (Fullscreen, the transcript overlay) separates every sibling of a
-//! list once any of its items takes more than one row.
+//! list once any of its items takes more than one row, and streams its
+//! lists without separators until the answer is consolidated.
 
 use ratatui::text::Line;
 
@@ -13,6 +14,9 @@ pub(crate) enum ListSpacing {
     /// A blank line before the next sibling of an item of several rows.
     #[default]
     AfterMultiline,
+    /// No blank line between siblings: a stream in a view that lays the
+    /// finished answer out again.
+    Compact,
     /// A blank line between every two siblings when any item of the list
     /// takes more than one row.
     Uniform,

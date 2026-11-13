@@ -1,68 +1,101 @@
 // Modified from OpenAI Codex rust-v0.93.0 (Apache-2.0).
+// Modified from OpenAI Codex 57a808a392 (Apache-2.0).
+
+//! A streamed answer or plan, rendered as it arrives (Codex's streaming
+//! pipeline):
+//!
+//! - `render`: the committed source (complete lines) rendered incrementally,
+//!   the blocks before the last one kept; `code_fence` extends an open
+//!   code fence a line at a time;
+//! - `controller`: the rendered rows split into the stable ones, queued to
+//!   be committed, and the mutable tail (a table arriving, a ```` ```md ````
+//!   fence, a list marker alone), shown live after them; `table_holdback`
+//!   finds a table's start; `prose_preview` shows the line still arriving;
+//! - `chunking` and `commit_tick`: how many queued rows each tick commits.
+//!
+//! [`StreamState`] holds the source and the queue of rows to commit, in
+//! order: rows are drained from its front only, each with the time it was
+//! queued, which the pacing reads.
 
 use std::collections::VecDeque;
+use std::time::{Duration, Instant};
 
 use ratatui::text::Line;
 
-use crate::markdown_stream::{MarkdownStreamCollector, RenderMarkdown};
-pub(crate) mod controller;
+use crate::markdown_stream::MarkdownStreamCollector;
 
+pub(crate) mod chunking;
+mod code_fence;
+pub(crate) mod commit_tick;
+pub(crate) mod controller;
+mod prose_preview;
+mod render;
+mod table_holdback;
+
+struct QueuedLine {
+    line: Line<'static>,
+    enqueued_at: Instant,
+}
+
+/// A stream's source and its rows queued to be committed.
 pub(crate) struct StreamState {
     pub(crate) collector: MarkdownStreamCollector,
-    queued_lines: VecDeque<Line<'static>>,
-    pub(crate) has_seen_delta: bool,
+    queued_lines: VecDeque<QueuedLine>,
 }
 
 impl StreamState {
-    pub(crate) fn new(width: Option<usize>, cwd: Option<String>, render: RenderMarkdown) -> Self {
+    pub(crate) fn new() -> Self {
         Self {
-            collector: MarkdownStreamCollector::new(width, cwd, render),
+            collector: MarkdownStreamCollector::new(),
             queued_lines: VecDeque::new(),
-            has_seen_delta: false,
         }
     }
-    pub(crate) fn clear(&mut self) {
-        self.collector.clear();
-        self.queued_lines.clear();
-        self.has_seen_delta = false;
-    }
+
+    /// The first queued row.
     pub(crate) fn step(&mut self) -> Vec<Line<'static>> {
-        self.queued_lines.pop_front().into_iter().collect()
+        self.queued_lines
+            .pop_front()
+            .map(|queued| queued.line)
+            .into_iter()
+            .collect()
     }
-    pub(crate) fn drain_all(&mut self) -> Vec<Line<'static>> {
-        self.queued_lines.drain(..).collect()
+
+    /// Up to `max_lines` queued rows from the front.
+    pub(crate) fn drain_n(&mut self, max_lines: usize) -> Vec<Line<'static>> {
+        let end = max_lines.min(self.queued_lines.len());
+        self.queued_lines
+            .drain(..end)
+            .map(|queued| queued.line)
+            .collect()
     }
+
+    pub(crate) fn clear_queue(&mut self) {
+        self.queued_lines.clear();
+    }
+
     pub(crate) fn is_idle(&self) -> bool {
         self.queued_lines.is_empty()
     }
-    pub(crate) fn enqueue(&mut self, lines: Vec<Line<'static>>) {
-        self.queued_lines.extend(lines);
+
+    pub(crate) fn queued_len(&self) -> usize {
+        self.queued_lines.len()
     }
 
-    /// Pushes a delta; when it holds a newline, the lines it completed are
-    /// queued. `true` when there are new lines to commit.
-    pub(crate) fn push(&mut self, delta: &str) -> bool {
-        if !delta.is_empty() {
-            self.has_seen_delta = true;
-        }
-        self.collector.push_delta(delta);
-        if delta.contains('\n') {
-            let newly_completed = self.collector.commit_complete_lines();
-            if !newly_completed.is_empty() {
-                self.enqueue(newly_completed);
-                return true;
-            }
-        }
-        false
+    pub(crate) fn oldest_queued_age(&self, now: Instant) -> Option<Duration> {
+        self.queued_lines
+            .front()
+            .map(|queued| now.saturating_duration_since(queued.enqueued_at))
     }
 
-    /// The stream's end: every row not committed yet, queued or not; the
-    /// state is cleared for the next stream.
-    pub(crate) fn finalize(&mut self) -> Vec<Line<'static>> {
-        let remaining = self.collector.finalize_and_drain();
-        self.enqueue(remaining);
-        let lines = self.drain_all();
-        self.clear();
-        lines
+    /// Queues `lines`, all at `now`.
+    pub(crate) fn enqueue(&mut self, lines: Vec<Line<'static>>, now: Instant) {
+        self.queued_lines
+            .extend(lines.into_iter().map(|line| QueuedLine {
+                line,
+                enqueued_at: now,
+            }));
     }
 }
+
+#[cfg(test)]
+mod tests;

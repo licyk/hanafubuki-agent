@@ -4,7 +4,7 @@
 //! Paragraphs, headings, quotes, code blocks and the inline events: each
 //! goes to the table cell being read when there is one.
 
-use pulldown_cmark::{CowStr, HeadingLevel};
+use pulldown_cmark::{CowStr, Event, HeadingLevel};
 use ratatui::text::{Line, Span};
 
 use super::{IndentContext, ListSpacing, Writer};
@@ -93,6 +93,7 @@ impl Writer<'_> {
             }
             return;
         }
+        self.line_ends_with_local_link_target = false;
         if self.in_table_cell() {
             self.push_text_to_table_cell(&text);
             return;
@@ -143,6 +144,7 @@ impl Writer<'_> {
             self.push_local_link_label_span(span);
             return;
         }
+        self.line_ends_with_local_link_target = false;
         if self.in_table_cell() {
             self.push_span_to_table_cell(span);
             return;
@@ -168,6 +170,7 @@ impl Writer<'_> {
             }
             return;
         }
+        self.line_ends_with_local_link_target = false;
         if self.in_table_cell() {
             for (index, line) in html.lines().enumerate() {
                 if index > 0 {
@@ -199,6 +202,7 @@ impl Writer<'_> {
             self.push_local_link_label_break();
             return;
         }
+        self.line_ends_with_local_link_target = false;
         if self.in_table_cell() {
             self.push_table_cell_hard_break();
             return;
@@ -216,7 +220,26 @@ impl Writer<'_> {
             self.push_span_to_table_cell(span);
             return;
         }
+        // A local file link shows its target where the link ends, so a
+        // soft break before a `: description` keeps it on the link's row.
+        if self.line_ends_with_local_link_target {
+            self.pending_local_link_soft_break = true;
+            self.line_ends_with_local_link_target = false;
+            return;
+        }
         self.push_line(Line::default());
+    }
+
+    /// The soft break held after a local link: none before `:`, a new
+    /// row before anything else.
+    pub(super) fn prepare_for_event(&mut self, event: &Event<'_>) {
+        if !self.pending_local_link_soft_break {
+            return;
+        }
+        self.pending_local_link_soft_break = false;
+        if !matches!(event, Event::Text(text) if text.trim_start().starts_with(':')) {
+            self.push_line(Line::default());
+        }
     }
 
     pub(super) fn start_codeblock(&mut self, lang: Option<String>, indent: Option<Span<'static>>) {

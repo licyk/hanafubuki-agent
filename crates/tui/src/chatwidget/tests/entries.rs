@@ -8,6 +8,8 @@ use hanafubuki_agent::{AgentReasoningSnapshot, AgentToolCallDisplay, AgentToolDi
 
 use super::*;
 use crate::app_event::AppCommand;
+use crate::history_cell::insert_before;
+use crate::streaming::controller::{StreamUpdate, TailRows};
 
 /// A cell's lines, collapsed or expanded, as text.
 fn cell_lines(cell: &dyn HistoryCell, expanded: bool) -> String {
@@ -38,10 +40,30 @@ fn transcript(events: &Receiver<AppEvent>, entries: &mut Vec<Arc<dyn HistoryCell
             AppEvent::InsertHistoryCell(cell) => entries.push(cell.into()),
             AppEvent::InsertLiveEntry(cell) => entries.push(cell),
             AppEvent::LiveEntryCompleted(_) => written = true,
+            AppEvent::StreamUpdate(update) => apply_stream_update(entries, update),
             _ => {}
         }
     }
     written
+}
+
+/// A stream's update as the app applies it: its committed rows before its
+/// tail entry, which the first update inserts; the last empties it, and
+/// the consolidation that follows takes it away.
+fn apply_stream_update(entries: &mut Vec<Arc<dyn HistoryCell>>, update: StreamUpdate) {
+    let tail: Arc<dyn HistoryCell> = update.tail.clone();
+    let present = entries.iter().any(|entry| Arc::ptr_eq(entry, &tail));
+    if let Some(cell) = update.committed {
+        insert_before(entries, cell.into(), &tail);
+    }
+    if let Some(TailRows(rows)) = update.shown {
+        update.tail.update(|cell| cell.show(rows));
+    }
+    if update.ended {
+        entries.retain(|entry| !Arc::ptr_eq(entry, &tail));
+    } else if !present {
+        entries.push(tail);
+    }
 }
 
 /// The entries' text, a live thinking's or command's clock left out (it
@@ -551,7 +573,7 @@ fn a_finished_stream_hands_over_the_cell_of_its_markdown() {
     let mut consolidated = Vec::new();
     while let Ok(event) = events.try_recv() {
         match event {
-            AppEvent::InsertHistoryCell(cell) => streams.extend(cell.stream_id()),
+            AppEvent::StreamUpdate(update) => streams.extend(update.tail.stream_id()),
             AppEvent::ConsolidateStream(consolidation) => consolidated.push((
                 consolidation.stream,
                 consolidation.cell.copy_source().unwrap_or_default(),

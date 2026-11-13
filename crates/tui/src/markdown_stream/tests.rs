@@ -1,33 +1,74 @@
 // Modified from OpenAI Codex rust-v0.93.0 (Apache-2.0).
 // Modified from OpenAI Codex 57a808a392 (Apache-2.0).
 
-use super::*;
 use ratatui::style::Color;
+use ratatui::text::Line;
+
+use super::MarkdownStreamCollector;
+use crate::streaming::controller::TestStream;
+
+/// What a stream of `deltas` commits, all it queued after each delta, and
+/// the rest at its end when `finalize`.
+fn simulate_stream_markdown_for_tests(deltas: &[&str], finalize: bool) -> Vec<Line<'static>> {
+    let mut stream = TestStream::new(None, "");
+    let mut out = Vec::new();
+    for delta in deltas {
+        stream.push(delta);
+        out.extend(stream.commit());
+    }
+    if finalize {
+        out.extend(stream.finalize());
+    }
+    out
+}
+
+#[test]
+fn the_source_is_committed_a_complete_line_at_a_time() {
+    let mut collector = MarkdownStreamCollector::new();
+    collector.push_delta("Hello, wor");
+    assert_eq!(collector.commit_complete_source(), None);
+    collector.push_delta(
+        "ld
+Next",
+    );
+    assert_eq!(collector.commit_complete_source(), Some(0..13));
+    assert_eq!(collector.committed_source(), "Hello, world\n");
+    assert_eq!(collector.pending_source(), "Next");
+    assert_eq!(collector.commit_complete_source(), None);
+    assert_eq!(collector.finalize_and_take_source(), "Hello, world\nNext");
+    assert_eq!(collector.committed_source(), "");
+}
+
+#[test]
+fn finalizing_empty_collector_returns_empty_source() {
+    assert_eq!(
+        MarkdownStreamCollector::new().finalize_and_take_source(),
+        ""
+    );
+}
 
 #[test]
 fn no_commit_until_newline() {
-    let mut c =
-        super::MarkdownStreamCollector::new(None, None, crate::markdown::append_markdown_agent);
-    c.push_delta("Hello, world");
-    let out = c.commit_complete_lines();
+    let mut c = TestStream::new(None, "");
+    c.push("Hello, world");
+    let out = c.commit();
     assert!(out.is_empty(), "should not commit without newline");
-    c.push_delta("!\n");
-    let out2 = c.commit_complete_lines();
+    c.push("!\n");
+    let out2 = c.commit();
     assert_eq!(out2.len(), 1, "one completed line after newline");
 }
 
 #[test]
 fn finalize_commits_partial_line() {
-    let mut c =
-        super::MarkdownStreamCollector::new(None, None, crate::markdown::append_markdown_agent);
-    c.push_delta("Line without newline");
-    let out = c.finalize_and_drain();
+    let mut c = TestStream::new(None, "");
+    c.push("Line without newline");
+    let out = c.finalize();
     assert_eq!(out.len(), 1);
 }
 
 #[test]
 fn e2e_stream_blockquote_simple_is_green() {
-    let out = super::simulate_stream_markdown_for_tests(&["> Hello\n"], true);
+    let out = simulate_stream_markdown_for_tests(&["> Hello\n"], true);
     assert_eq!(out.len(), 1);
     let l = &out[0];
     assert_eq!(
@@ -40,7 +81,7 @@ fn e2e_stream_blockquote_simple_is_green() {
 
 #[test]
 fn e2e_stream_blockquote_nested_is_green() {
-    let out = super::simulate_stream_markdown_for_tests(&["> Level 1\n>> Level 2\n"], true);
+    let out = simulate_stream_markdown_for_tests(&["> Level 1\n>> Level 2\n"], true);
     // Filter out any blank lines that may be inserted at paragraph starts.
     let non_blank: Vec<_> = out
         .into_iter()
@@ -63,7 +104,7 @@ fn e2e_stream_blockquote_nested_is_green() {
 
 #[test]
 fn e2e_stream_blockquote_with_list_items_is_green() {
-    let out = super::simulate_stream_markdown_for_tests(&["> - item 1\n> - item 2\n"], true);
+    let out = simulate_stream_markdown_for_tests(&["> - item 1\n> - item 2\n"], true);
     assert_eq!(out.len(), 2);
     assert_eq!(out[0].style.fg, Some(Color::Green));
     assert_eq!(out[1].style.fg, Some(Color::Green));
@@ -78,7 +119,7 @@ fn e2e_stream_nested_mixed_lists_ordered_marker_is_light_blue() {
         "        - Fourth level (bullet)\n",
         "          - Fifth level to test indent consistency\n",
     ];
-    let out = super::simulate_stream_markdown_for_tests(&md, true);
+    let out = simulate_stream_markdown_for_tests(&md, true);
     // Find the line that contains the third-level ordered text
     let find_idx = out.iter().position(|l| {
         l.spans
@@ -103,7 +144,7 @@ fn e2e_stream_nested_mixed_lists_ordered_marker_is_light_blue() {
 #[test]
 fn e2e_stream_blockquote_wrap_preserves_green_style() {
     let long = "> This is a very long quoted line that should wrap across multiple columns to verify style preservation.";
-    let out = super::simulate_stream_markdown_for_tests(&[long, "\n"], true);
+    let out = simulate_stream_markdown_for_tests(&[long, "\n"], true);
     // Wrap to a narrow width to force multiple output lines.
     let wrapped = crate::wrapping::word_wrap_lines(out.iter(), crate::wrapping::RtOptions::new(24));
     // Filter out purely blank lines
@@ -138,10 +179,9 @@ fn e2e_stream_blockquote_wrap_preserves_green_style() {
 fn heading_starts_on_new_line_when_following_paragraph() {
     // Stream a paragraph line, then a heading on the next line.
     // Expect two distinct rendered lines: "Hello." and "Heading".
-    let mut c =
-        super::MarkdownStreamCollector::new(None, None, crate::markdown::append_markdown_agent);
-    c.push_delta("Hello.\n");
-    let out1 = c.commit_complete_lines();
+    let mut c = TestStream::new(None, "");
+    c.push("Hello.\n");
+    let out1 = c.commit();
     let s1: Vec<String> = out1
         .iter()
         .map(|l| {
@@ -160,8 +200,8 @@ fn heading_starts_on_new_line_when_following_paragraph() {
         s1
     );
 
-    c.push_delta("## Heading\n");
-    let out2 = c.commit_complete_lines();
+    c.push("## Heading\n");
+    let out2 = c.commit();
     let s2: Vec<String> = out2
         .iter()
         .map(|l| {
@@ -195,15 +235,14 @@ fn heading_not_inlined_when_split_across_chunks() {
     // Paragraph without trailing newline, then a chunk that starts with the newline
     // and the heading text, then a final newline. The collector should first commit
     // only the paragraph line, and later commit the heading as its own line.
-    let mut c =
-        super::MarkdownStreamCollector::new(None, None, crate::markdown::append_markdown_agent);
-    c.push_delta("Sounds good!");
+    let mut c = TestStream::new(None, "");
+    c.push("Sounds good!");
     // No commit yet
-    assert!(c.commit_complete_lines().is_empty());
+    assert!(c.commit().is_empty());
 
     // Introduce the newline that completes the paragraph and the start of the heading.
-    c.push_delta("\n## Adding Bird subcommand");
-    let out1 = c.commit_complete_lines();
+    c.push("\n## Adding Bird subcommand");
+    let out1 = c.commit();
     let s1: Vec<String> = out1
         .iter()
         .map(|l| {
@@ -221,8 +260,8 @@ fn heading_not_inlined_when_split_across_chunks() {
     );
 
     // Now finish the heading line with the trailing newline.
-    c.push_delta("\n");
-    let out2 = c.commit_complete_lines();
+    c.push("\n");
+    let out2 = c.commit();
     let s2: Vec<String> = out2
         .iter()
         .map(|l| {
@@ -313,7 +352,7 @@ fn utf8_boundary_safety_and_wide_chars() {
 #[test]
 fn e2e_stream_deep_nested_third_level_marker_is_light_blue() {
     let md = "1. First\n   - Second level\n     1. Third level (ordered)\n        - Fourth level (bullet)\n          - Fifth level to test indent consistency\n";
-    let streamed = super::simulate_stream_markdown_for_tests(&[md], true);
+    let streamed = simulate_stream_markdown_for_tests(&[md], true);
     let streamed_strs = lines_to_plain_strings(&streamed);
 
     // Locate the third-level line in the streamed output; avoid relying on exact indent.
@@ -586,17 +625,13 @@ fn tables_task_lists_and_links_stream_as_they_render() {
     ];
     for source in samples {
         for width in [None, Some(80), Some(40), Some(20)] {
-            let mut collector = MarkdownStreamCollector::new(
-                width,
-                Some("/repo".to_string()),
-                crate::markdown::append_markdown_agent,
-            );
+            let mut collector = TestStream::new(width, "/repo");
             let mut streamed = Vec::new();
             for line in source.split_inclusive('\n') {
-                collector.push_delta(line);
-                streamed.extend(collector.commit_complete_lines());
+                collector.push(line);
+                streamed.extend(collector.commit());
             }
-            streamed.extend(collector.finalize_and_drain());
+            streamed.extend(collector.finalize());
             let mut rendered = Vec::new();
             crate::markdown::append_markdown_agent(source, width, Some("/repo"), &mut rendered);
             assert_eq!(
@@ -610,18 +645,14 @@ fn tables_task_lists_and_links_stream_as_they_render() {
 
 #[test]
 fn a_table_is_held_until_a_blank_line_ends_it() {
-    let mut collector =
-        MarkdownStreamCollector::new(None, None, crate::markdown::append_markdown_agent);
-    collector.push_delta("Intro\n\n| A | B |\n");
+    let mut collector = TestStream::new(None, "");
+    collector.push("Intro\n\n| A | B |\n");
+    assert_eq!(lines_to_plain_strings(&collector.commit()), vec!["Intro"]);
+    collector.push("|---|---|\n| 1 | 2 |\n");
+    assert!(collector.commit().is_empty());
+    collector.push("\nAfter\n");
     assert_eq!(
-        lines_to_plain_strings(&collector.commit_complete_lines()),
-        vec!["Intro"]
-    );
-    collector.push_delta("|---|---|\n| 1 | 2 |\n");
-    assert!(collector.commit_complete_lines().is_empty());
-    collector.push_delta("\nAfter\n");
-    assert_eq!(
-        lines_to_plain_strings(&collector.commit_complete_lines()),
+        lines_to_plain_strings(&collector.commit()),
         vec!["", " A      B", "━━━━━  ━━━━━", " 1      2", "", "After"]
     );
 }

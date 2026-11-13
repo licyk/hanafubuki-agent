@@ -310,6 +310,47 @@ fn unordered_list_local_file_link_stays_inline_with_following_text() {
     );
 }
 
+#[test]
+fn unordered_list_local_file_link_soft_break_before_colon_stays_inline() {
+    let text = render_markdown_text_with_width_and_cwd(
+        "- [binary](/Users/example/code/codex/codex-rs/README.md:93)\n  : core is the agent/business logic.",
+        Some(72),
+        Some("/Users/example/code/codex"),
+    );
+    assert_eq!(
+        plain_lines(&text),
+        vec!["• binary (codex-rs/README.md:93): core is the agent/business logic."]
+    );
+}
+
+#[test]
+fn consecutive_unordered_list_local_file_links_do_not_detach_paths() {
+    let text = render_markdown_text_with_width_and_cwd(
+        "- [binary](/Users/example/code/codex/codex-rs/README.md:93)\n  : cli is the top-level multitool binary.\n- [expectations](/Users/example/code/codex/codex-rs/core/README.md:1)\n  : codex-core owns the real runtime behavior.",
+        Some(72),
+        Some("/Users/example/code/codex"),
+    );
+    assert_eq!(
+        plain_lines(&text),
+        vec![
+            "• binary (codex-rs/README.md:93): cli is the top-level multitool binary.",
+            "• expectations (codex-rs/core/README.md:1): codex-core owns the real",
+            "  runtime behavior.",
+        ]
+    );
+}
+
+/// Anything but a `:` after a local link's soft break starts a new row.
+#[test]
+fn a_local_link_soft_break_before_other_text_keeps_its_row() {
+    let text = render_markdown_text_with_width_and_cwd(
+        "[lib](/repo/src/lib.rs)\nnext line",
+        None,
+        Some("/repo"),
+    );
+    assert_eq!(plain_lines(&text), vec!["lib (src/lib.rs)", "next line"]);
+}
+
 /// Without a working directory an absolute target stays absolute.
 #[test]
 fn file_link_without_a_directory_keeps_the_absolute_target() {

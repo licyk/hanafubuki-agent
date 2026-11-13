@@ -92,6 +92,7 @@ impl<'a> Writer<'a> {
         self.flush_current_line();
         let separate = match self.list_spacing {
             ListSpacing::AfterMultiline => after_multiline,
+            ListSpacing::Compact => false,
             ListSpacing::Uniform => self.uniform_lists.last().is_some_and(|list| list.has_item),
         };
         if separate {

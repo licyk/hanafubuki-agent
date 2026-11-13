@@ -21,6 +21,7 @@ mod replay;
 mod second;
 mod shell;
 mod shortcuts;
+mod streaming;
 mod turn;
 mod warnings;
 
@@ -45,6 +46,7 @@ use crate::key_hint::{self, KeyBinding};
 use crate::keymap::{self, Action};
 use crate::render::renderable::{Renderable, RenderableExt, RenderableItem};
 use crate::render::Insets;
+use crate::streaming::chunking::AdaptiveChunkingPolicy;
 use crate::streaming::controller::{PlanStreamController, StreamController};
 use crate::tui::FrameRequester;
 use crate::user_message::UserMessage;
@@ -89,6 +91,8 @@ pub(crate) struct ChatWidget {
     live_thinking: Vec<(AgentReasoningId, Arc<LiveCell<ThinkingCell>>)>,
     stream_controller: Option<StreamController>,
     plan_stream_controller: Option<PlanStreamController>,
+    /// How many queued rows the commit ticks commit.
+    adaptive_chunking: AdaptiveChunkingPolicy,
     last_rendered_width: Cell<Option<usize>>,
     /// Something was written since the last streamed message; the next one
     /// gets a separator, with the time worked when there was work.
@@ -155,6 +159,7 @@ impl ChatWidget {
             live_thinking: Vec::new(),
             stream_controller: None,
             plan_stream_controller: None,
+            adaptive_chunking: AdaptiveChunkingPolicy::default(),
             last_rendered_width: Cell::new(None),
             needs_final_message_separator: false,
             had_work_activity: false,
@@ -402,31 +407,6 @@ impl ChatWidget {
         self.bottom_pane.show_quit_shortcut_hint(key);
         self.frame_requester
             .schedule_frame_in(QUIT_SHORTCUT_TIMEOUT);
-    }
-
-    /// One step of the streamed messages' commit animation.
-    pub(crate) fn on_commit_tick(&mut self) {
-        let mut has_controller = false;
-        let mut all_idle = true;
-        if let Some(controller) = self.stream_controller.as_mut() {
-            has_controller = true;
-            let (cell, is_idle) = controller.on_commit_tick();
-            if let Some(cell) = cell {
-                self.add_boxed_history(cell);
-            }
-            all_idle &= is_idle;
-        }
-        if let Some(controller) = self.plan_stream_controller.as_mut() {
-            has_controller = true;
-            let (cell, is_idle) = controller.on_commit_tick();
-            if let Some(cell) = cell {
-                self.add_boxed_history(cell);
-            }
-            all_idle &= is_idle;
-        }
-        if has_controller && all_idle {
-            self.app_event_tx.send(AppEvent::StopCommitAnimation);
-        }
     }
 
     fn add_to_history(&mut self, cell: impl HistoryCell + 'static) {

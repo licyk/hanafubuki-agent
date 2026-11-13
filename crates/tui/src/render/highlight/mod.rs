@@ -12,9 +12,15 @@
 //!
 //! Inputs over 512 KiB, 10,000 lines, or with a line over 4 KiB are not
 //! highlighted: they come back as plain text.
+//!
+//! A theme's revision counts the swaps, so a stream's open code fence
+//! (`streaming`) knows its retained parser state is of another theme.
 
+mod streaming;
 mod themes;
 
+#[cfg(not(test))]
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::OnceLock;
 
 use parking_lot::RwLock;
@@ -27,6 +33,7 @@ use syntect::highlighting::{
 use syntect::parsing::{Scope, SyntaxReference, SyntaxSet};
 use syntect::util::LinesWithEndings;
 
+pub(crate) use streaming::StreamingCodeHighlighter;
 pub(crate) use themes::{
     configure_theme, list_available_themes, resolve_theme_by_name, themes_dir, DEFAULT_THEME,
 };
@@ -34,11 +41,14 @@ pub(crate) use themes::{
 static SYNTAX_SET: OnceLock<SyntaxSet> = OnceLock::new();
 #[cfg(not(test))]
 static THEME: OnceLock<RwLock<Theme>> = OnceLock::new();
+#[cfg(not(test))]
+static THEME_REVISION: AtomicU64 = AtomicU64::new(0);
 
 #[cfg(test)]
 thread_local! {
     static TEST_THEME: std::cell::OnceCell<std::sync::Arc<RwLock<Theme>>> =
         const { std::cell::OnceCell::new() };
+    static TEST_THEME_REVISION: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
 }
 
 // bat's `ansi`, `base16` and `base16-256` themes say in the alpha channel
@@ -49,7 +59,7 @@ const ANSI_ALPHA_DEFAULT: u8 = 0x01;
 
 const MAX_HIGHLIGHT_BYTES: usize = 512 * 1024;
 const MAX_HIGHLIGHT_LINES: usize = 10_000;
-const MAX_HIGHLIGHT_LINE_BYTES: usize = 4 * 1024;
+pub(crate) const MAX_HIGHLIGHT_LINE_BYTES: usize = 4 * 1024;
 
 fn syntax_set() -> &'static SyntaxSet {
     SYNTAX_SET.get_or_init(two_face::syntax::extra_newlines)
@@ -71,6 +81,20 @@ fn theme_lock() -> impl std::ops::Deref<Target = RwLock<Theme>> {
 /// Makes `theme` the one everything is highlighted with from now on.
 pub(crate) fn set_syntax_theme(theme: Theme) {
     *theme_lock().write() = theme;
+    #[cfg(not(test))]
+    THEME_REVISION.fetch_add(1, Ordering::Release);
+    #[cfg(test)]
+    TEST_THEME_REVISION.with(|revision| revision.set(revision.get().wrapping_add(1)));
+}
+
+/// How many times the theme was swapped, for what keeps highlighting state.
+pub(crate) fn syntax_theme_revision() -> u64 {
+    #[cfg(not(test))]
+    {
+        THEME_REVISION.load(Ordering::Acquire)
+    }
+    #[cfg(test)]
+    TEST_THEME_REVISION.with(std::cell::Cell::get)
 }
 
 /// The active theme, to put back after a preview.

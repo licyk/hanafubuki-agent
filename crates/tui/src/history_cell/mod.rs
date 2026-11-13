@@ -33,8 +33,8 @@ use crate::status_indicator_widget::{fmt_elapsed_compact, fmt_elapsed_tenths};
 pub(crate) use context::new_context_output;
 pub(crate) use live::LiveCell;
 pub(crate) use messages::{
-    new_user_prompt, splice_stream, stream_span, user_prompt, AgentMarkdownCell, AgentMessageCell,
-    StreamId, UserHistoryCell,
+    insert_before, new_user_prompt, splice_stream, stream_span, user_prompt, AgentMarkdownCell,
+    AgentMessageCell, StreamId, StreamTailCell, UserHistoryCell,
 };
 pub(crate) use plan::{new_plan_update, new_proposed_plan_stream, ProposedPlanCell};
 pub(crate) use reports::{new_mcp_output, new_skills_output};

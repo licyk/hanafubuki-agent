@@ -176,6 +176,54 @@ impl HistoryCell for AgentMessageCell {
     }
 }
 
+/// A stream's mutable tail: the rows it does not commit yet (a table
+/// arriving, a ```` ```md ```` fence, the line still arriving), shown after
+/// its committed rows as they would be committed now. A live entry, which
+/// the stream's end empties and its consolidation takes away.
+#[derive(Debug)]
+pub(crate) struct StreamTailCell {
+    shown: Option<Box<dyn HistoryCell>>,
+    stream: StreamId,
+}
+
+impl StreamTailCell {
+    pub(crate) fn new(stream: StreamId) -> Self {
+        Self {
+            shown: None,
+            stream,
+        }
+    }
+
+    /// From now on the tail shows `shown`'s rows, or nothing.
+    pub(crate) fn show(&mut self, shown: Option<Box<dyn HistoryCell>>) {
+        self.shown = shown;
+    }
+}
+
+impl HistoryCell for StreamTailCell {
+    fn display_lines(&self, width: u16) -> Vec<Line<'static>> {
+        self.shown
+            .as_ref()
+            .map_or_else(Vec::new, |shown| shown.display_lines(width))
+    }
+
+    fn raw_lines(&self) -> Vec<Line<'static>> {
+        self.shown
+            .as_ref()
+            .map_or_else(Vec::new, |shown| shown.raw_lines())
+    }
+
+    fn is_stream_continuation(&self) -> bool {
+        self.shown
+            .as_ref()
+            .is_some_and(|shown| shown.is_stream_continuation())
+    }
+
+    fn stream_id(&self) -> Option<StreamId> {
+        Some(self.stream)
+    }
+}
+
 /// A finished answer: its Markdown, rendered for the width it is shown at.
 /// Scrollback writes it with Codex's spacing of the terminal's scrollback;
 /// a view that lays entries out again spaces its lists uniformly.
@@ -253,6 +301,19 @@ pub(crate) fn stream_span(
         .iter()
         .rposition(|cell| cell.stream_id() == Some(stream))?;
     Some(first..last + 1)
+}
+
+/// `cell` before `before` (a stream's tail entry), or last when `cells` no
+/// longer holds it.
+pub(crate) fn insert_before(
+    cells: &mut Vec<Arc<dyn HistoryCell>>,
+    cell: Arc<dyn HistoryCell>,
+    before: &Arc<dyn HistoryCell>,
+) {
+    match cells.iter().rposition(|other| Arc::ptr_eq(other, before)) {
+        Some(index) => cells.insert(index, cell),
+        None => cells.push(cell),
+    }
 }
 
 /// `stream`'s cells in `span` replaced by `consolidated`; a cell inserted

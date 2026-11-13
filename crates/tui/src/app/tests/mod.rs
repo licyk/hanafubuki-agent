@@ -303,6 +303,12 @@ impl Harness {
         self.pump_until("the turn to end", |harness| {
             !harness.app.chat_widget.is_task_running()
         });
+        // What the turn's end sent (its answer's last rows and their
+        // consolidation) is taken too, as the loop would before a key.
+        while let Ok(event) = self.events.try_recv() {
+            assert!(self.app.handle_event(&mut self.tui, event));
+        }
+        self.app.draw(&mut self.tui).unwrap();
     }
 
     fn screen(&self) -> String {
@@ -852,6 +858,7 @@ mod shell;
 mod shortcuts;
 mod side;
 mod stability;
+mod streaming;
 mod subagents;
 mod thinking;
 mod tools;

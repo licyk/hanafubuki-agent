@@ -70,6 +70,9 @@ impl Writer<'_> {
         if show_label {
             self.push_link_part(")".into());
         }
+        if !self.in_table_cell() {
+            self.line_ends_with_local_link_target = true;
+        }
     }
 
     /// A span written after the link closed, to the cell being read or to

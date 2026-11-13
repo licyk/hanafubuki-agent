@@ -16,7 +16,7 @@ use std::ops::Range;
 
 use ratatui::text::Line;
 
-use crate::markdown_render::ListSpacing;
+use crate::markdown_render::{ListSpacing, StreamingMarkdownRender};
 use crate::table_detect;
 
 /// `markdown_source` rendered and wrapped to `width`, local file links
@@ -37,6 +37,7 @@ pub(crate) fn append_markdown(
 
 /// A model's answer: [`append_markdown`] after the table fences are
 /// unwrapped, when tables are on.
+#[cfg(test)]
 pub(crate) fn append_markdown_agent(
     markdown_source: &str,
     width: Option<usize>,
@@ -80,6 +81,39 @@ pub(crate) fn render_markdown_agent_with_list_spacing(
         Cow::Borrowed(markdown_source)
     };
     render_markdown_with_list_spacing(&normalized, width, cwd, list_spacing)
+}
+
+/// [`render_markdown_agent_with_list_spacing`] with what a stream needs of
+/// its blocks. The offsets are the source's: after a fence was unwrapped, a
+/// boundary is kept when the rest from it is the source's own end (it
+/// comes after the lines taken out); otherwise the block stays the
+/// stream's to change.
+pub(crate) fn render_streaming_markdown_agent(
+    markdown_source: &str,
+    width: Option<usize>,
+    cwd: Option<&str>,
+    list_spacing: ListSpacing,
+) -> StreamingMarkdownRender {
+    let normalized = if crate::markdown_render::preferences::current().tables {
+        unwrap_markdown_fences(markdown_source)
+    } else {
+        Cow::Borrowed(markdown_source)
+    };
+    let mut rendered =
+        crate::markdown_render::render_streaming_markdown(&normalized, width, cwd, list_spacing);
+    if normalized != markdown_source {
+        let in_source = |boundary: usize| {
+            markdown_source
+                .strip_suffix(&normalized[boundary..])
+                .map(str::len)
+        };
+        rendered.last_top_level_block_start =
+            rendered.last_top_level_block_start.and_then(in_source);
+        rendered.mutable_fence_start = rendered
+            .mutable_fence_start
+            .map(|boundary| in_source(boundary).unwrap_or(0));
+    }
+    rendered
 }
 
 /// `markdown_source` with each ```` ```md ````/```` ```markdown ```` fence
