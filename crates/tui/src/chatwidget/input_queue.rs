@@ -17,7 +17,8 @@
 //!   answer. Completed or failed: the steers it did not read and the held
 //!   messages are sent together as the next turn, else the oldest queued
 //!   message is; one turn at a time. Interrupted by Esc with steers
-//!   waiting: those steers are sent at once, as one turn. Interrupted
+//!   waiting: those steers are sent at once, as one turn, and none goes to
+//!   the turn being interrupted, which refuses them. Interrupted
 //!   otherwise (Ctrl-C, Esc with no steer waiting): everything waiting goes
 //!   back into the composer, before the draft.
 //!
@@ -45,7 +46,7 @@ pub(super) struct InputQueue {
     /// Queued with Tab: each starts a turn of its own.
     queued: VecDeque<String>,
     /// Esc with steers waiting: once the turn is interrupted, they are
-    /// sent at once.
+    /// sent at once; until then none is sent to it.
     send_steers_after_interrupt: bool,
     /// The running turn read its steering through this sequence.
     consumed_through: Option<u64>,
@@ -145,6 +146,7 @@ impl InputQueue {
     /// and the turn still runs.
     pub(super) fn next_steer(&mut self) -> Option<(u64, String)> {
         if self.ended.is_some()
+            || self.send_steers_after_interrupt
             || self
                 .steers
                 .iter()
@@ -176,8 +178,12 @@ impl InputQueue {
                 self.steers[index].state = SteerState::Accepted(sequence);
                 None
             }
-            // Once the turn ended, it is one of the steers it did not read.
-            SteerOutcome::NotDelivered if self.ended.is_some() => {
+            // Once the turn ended, or Esc is interrupting it (which can
+            // refuse the steer before its end arrives), it is one of the
+            // steers it did not read.
+            SteerOutcome::NotDelivered
+                if self.ended.is_some() || self.send_steers_after_interrupt =>
+            {
                 self.steers[index].state = SteerState::Waiting;
                 None
             }
