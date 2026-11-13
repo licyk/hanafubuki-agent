@@ -111,8 +111,11 @@ async fn unified_exec_completes_only_after_manual_exact_approval() {
         .find(|item| item["type"] == "function_call_output" && item["call_id"] == "call-tool")
         .expect("command tool output");
     let encoded_output = command_output.to_string();
-    assert!(encoded_output.contains("exitCode"));
-    assert!(encoded_output.contains("approved-agent-command"));
+    assert!(encoded_output.contains("exitCode"), "{encoded_output}");
+    assert!(
+        encoded_output.contains("approved-agent-command"),
+        "{encoded_output}"
+    );
     assert!(!encoded_output.contains("executorId"));
     assert!(!encoded_output.contains("receipt"));
     assert!(service
