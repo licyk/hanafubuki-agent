@@ -213,17 +213,19 @@ pub async fn a_plugins_failing_hooks_have_no_effect() {
     let post = markers.join("post");
     let source = agent.source("hooky");
     content_plugin(&source, "hooky");
-    let command = |text: String| json!({ "type": "command", "command": text, "timeout": 1 });
+    // Only the hook that hangs times out; one that touches its marker has
+    // the time a loaded runner takes to start its shell.
+    let command = |text: String, timeout: u64| json!({ "type": "command", "command": text, "timeout": timeout });
     write(
         &source.join("hooks/hooks.json"),
         &json!({ "hooks": {
             "PreToolUse": [{ "matcher": "skills_list", "hooks": [
-                command(format!("cat >/dev/null; touch '{}'; exit 1", pre.display())),
-                command("hanafubuki-no-such-hook-program".to_string()),
-                command("sleep 30".to_string()),
+                command(format!("cat >/dev/null; touch '{}'; exit 1", pre.display()), 30),
+                command("hanafubuki-no-such-hook-program".to_string(), 30),
+                command("sleep 30".to_string(), 1),
             ]}],
             "PostToolUse": [{ "matcher": "skills_list", "hooks": [
-                command(format!("cat >/dev/null; touch '{}'; echo 'not JSON {{'", post.display())),
+                command(format!("cat >/dev/null; touch '{}'; echo 'not JSON {{'", post.display()), 30),
             ]}],
         }})
         .to_string(),
