@@ -191,6 +191,9 @@ impl ChatWidget {
             TurnUpdate::StatusReport(report) => {
                 self.add_to_history(history_cell::new_status_output(&report))
             }
+            TurnUpdate::ContextReport(context) => {
+                self.add_to_history(history_cell::new_context_output(&context))
+            }
             TurnUpdate::ProviderModels(models) => {
                 self.run_command(&commands::PROVIDERS, |context| {
                     commands::providers::on_models(context, models)

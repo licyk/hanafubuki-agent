@@ -227,8 +227,18 @@ impl AgentToolPlan {
     }
 
     pub fn model_specs(&self) -> Vec<ToolSpec> {
-        let mut specifications = self
-            .registrations
+        self.model_spec_providers()
+            .map(|(_, specification)| specification.clone())
+            .collect()
+    }
+
+    /// [`Self::model_specs`], each with the provider that planned it:
+    /// `None` for one no provider planned (the tool search a provider runs
+    /// itself).
+    pub fn model_spec_providers(
+        &self,
+    ) -> impl Iterator<Item = (Option<&AgentToolProviderId>, &ToolSpec)> {
+        self.registrations
             .iter()
             .filter(|registration| {
                 matches!(
@@ -236,10 +246,12 @@ impl AgentToolPlan {
                     ToolExposure::Direct | ToolExposure::DirectModelOnly
                 )
             })
-            .map(|registration| registration.provider_spec.clone())
-            .collect::<Vec<_>>();
-        specifications.extend(self.additional_model_specs.clone());
-        specifications
+            .map(|registration| (Some(&registration.provider_id), &registration.provider_spec))
+            .chain(
+                self.additional_model_specs
+                    .iter()
+                    .map(|specification| (None, specification)),
+            )
     }
 
     /// The tool a wire name resolves to, by lookup in the request's names:

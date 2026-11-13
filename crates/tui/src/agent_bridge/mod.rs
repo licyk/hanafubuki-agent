@@ -47,10 +47,11 @@ use std::sync::Arc;
 use hanafubuki_agent::{
     AgentAvailability, AgentCompactionStatus, AgentCompactionTrigger, AgentEvent, AgentEventKind,
     AgentEventSink, AgentGoal, AgentHandle, AgentPermissionMode, AgentReasoningId,
-    AgentReasoningSnapshot, AgentRuntime, AgentSessionId, AgentSessionMode, AgentSlot,
-    AgentStatusEventSink, AgentTaskPlanSnapshot, AgentToolCallDisplay, AgentToolProgressUpdate,
-    AgentTurnAccepted, AgentTurnRequest, AgentTurnTerminalReason, AgentUserInputRequest,
-    AgentUserInputRequestId, ApprovalRequest, ApprovalRequestId, SkillCatalogSnapshot,
+    AgentReasoningSnapshot, AgentRuntime, AgentSessionContext, AgentSessionId, AgentSessionMode,
+    AgentSlot, AgentStatusEventSink, AgentTaskPlanSnapshot, AgentToolCallDisplay,
+    AgentToolProgressUpdate, AgentTurnAccepted, AgentTurnRequest, AgentTurnTerminalReason,
+    AgentUserInputRequest, AgentUserInputRequestId, ApprovalRequest, ApprovalRequestId,
+    SkillCatalogSnapshot,
 };
 use tokio::sync::oneshot;
 
@@ -166,6 +167,7 @@ pub(crate) enum TurnUpdate {
         forgotten: bool,
     },
     StatusReport(Box<StatusReport>),
+    ContextReport(Box<AgentSessionContext>),
     ProviderModels(ProviderModels),
     Mcp(McpReply),
     Skills(SkillCatalogSnapshot),

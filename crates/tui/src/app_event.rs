@@ -173,6 +173,8 @@ pub(crate) enum AgentCommand {
     ListRoles,
     SetRole(String),
     Status,
+    /// What `/context` shows: the session's last request, group by group.
+    Context,
     /// The models of the Provider with this id.
     ProviderModels(String),
     Mcp(McpCall),

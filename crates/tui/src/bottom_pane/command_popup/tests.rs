@@ -97,6 +97,7 @@ fn the_unfiltered_list_is_the_registry_in_order() {
         "diff",
         "mention",
         "status",
+        "context",
         "pwd",
         "cd",
         "plugins",

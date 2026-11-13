@@ -17,6 +17,9 @@ impl AgentService {
             let previous = record.rollback_state();
             exact_turn_mut(record, identity)?;
             validate_history_append(record, items, self.inner.limits)?;
+            if let Some(reported) = &reported_usage {
+                record_reported_prompt(record, reported);
+            }
             let usage_update = next_model_usage(
                 record,
                 reported_usage,

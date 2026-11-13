@@ -1,0 +1,28 @@
+---
+source: crates/tui/src/history_cell/context/tests.rs
+expression: "render(&new_context_output(&sent(true)), 100)"
+---
+/context
+
+  Last request: about 75k tokens (estimated: about 4 bytes a token) · the Provider counted 74k
+  Context window: 200k
+
+  Instructions                 █░░░░░░░░░░░░░░░░░░░   3%   6.2k
+  Tools (15)                   █░░░░░░░░░░░░░░░░░░░   5%    10k
+  MCP/plugin tools (3)         ░░░░░░░░░░░░░░░░░░░░   1%   2.1k
+  Context sections             ░░░░░░░░░░░░░░░░░░░░   2%   4.3k
+    environment_context        ░░░░░░░░░░░░░░░░░░░░   0%    450
+    workspace_instructions_of… ░░░░░░░░░░░░░░░░░░░░   2%   3.9k
+  User messages                ░░░░░░░░░░░░░░░░░░░░   2%   4.1k
+  Assistant messages           █░░░░░░░░░░░░░░░░░░░   6%    13k
+  Reasoning                    ░░░░░░░░░░░░░░░░░░░░   1%   2.3k
+  Tool calls and outputs       ███░░░░░░░░░░░░░░░░░  16%    31k
+  Continuation context         ░░░░░░░░░░░░░░░░░░░░   0%    120
+  Compaction summaries         ░░░░░░░░░░░░░░░░░░░░   1%   1.8k
+  Images (2)                   ░░░░░░░░░░░░░░░░░░░░   0%    850
+  Other request fields         ░░░░░░░░░░░░░░░░░░░░   0%     60
+  Free                         ████████████░░░░░░░░  62%   125k
+
+  Cached tokens: last 61k · session 300k
+  Uncached tokens: last 13k · session 110k
+  Cache hit rate: last 82.4% · session 73.2% — 300k of 410k prompt tokens from cache (6 requests)

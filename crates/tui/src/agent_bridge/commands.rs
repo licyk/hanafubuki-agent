@@ -1,7 +1,7 @@
 //! The slash commands that ask something of the Agent, each onto the
 //! facade's calls: no session (`/new`) or a reopened one, compaction, the
-//! model and the mode of the session, and what `/status`, `/mcp` and
-//! `/skills` report; and the creation of the session the interface drives.
+//! model and the mode of the session, and what `/status`, `/context`, `/mcp`
+//! and `/skills` report; and the creation of the session the interface drives.
 //! A call that waits runs on the Agent's runtime; one that does not runs
 //! here.
 
@@ -216,6 +216,18 @@ impl AgentBridge {
                             roots,
                             metadata,
                         })),
+                    ))))
+                })
+            }
+            AgentCommand::Context => {
+                let session = self.current()?;
+                self.spawn(move |agent| async move {
+                    let context = agent
+                        .session_context(session.id)
+                        .await
+                        .map_err(|error| format!("the context was not read: {error}"))?;
+                    Ok(Some(AgentReply::Update(Box::new(
+                        TurnUpdate::ContextReport(Box::new(context)),
                     ))))
                 })
             }

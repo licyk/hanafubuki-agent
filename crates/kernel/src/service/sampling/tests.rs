@@ -209,3 +209,187 @@ fn every_run_of_sections_is_ordered_by_slot_order_and_kind_and_items_keep_their_
         ]
     );
 }
+
+/// A request's composition: each group is the estimate of its own
+/// serialized part (images by their own rule), the tools are split by the
+/// provider that planned them, the sections by kind in the order the
+/// request shows them, and the groups add up to the request's estimate.
+#[test]
+fn a_request_is_composed_of_its_groups_and_they_add_up_to_its_estimate() {
+    use hanafubuki_agent_contracts::estimate_tokens;
+    use hanafubuki_agent_model_api::{ModelImageDetail, ModelUserContent};
+
+    let tool = |provider: &str, core: crate::AgentCoreTool| {
+        crate::tool_catalog::AgentPlannedTool::fixed(
+            crate::AgentToolProviderId::parse(provider.to_string()).unwrap(),
+            core.model_spec(),
+            crate::AgentToolExecutionClass::Exclusive,
+        )
+        .unwrap()
+    };
+    let plan = AgentToolPlan::build(vec![
+        tool("builtin", crate::AgentCoreTool::UpdatePlan),
+        tool("builtin", crate::AgentCoreTool::NewContext),
+        tool("mcp.fixture", crate::AgentCoreTool::RequestUserInput),
+    ])
+    .unwrap();
+    let section = |kind: &str, content: &str| ModelInputItem::ContextFragment {
+        role: ModelContextRole::Developer,
+        kind: kind.to_string(),
+        content: content.to_string(),
+    };
+    let user = ModelInputItem::UserMessage {
+        content: vec![
+            ModelUserContent::InputText {
+                text: "Look at this.".to_string(),
+            },
+            ModelUserContent::InputImage {
+                mime_type: "image/png".to_string(),
+                data: vec![1u8; 300 * 1024],
+                detail: ModelImageDetail::High,
+            },
+        ],
+    };
+    let input = vec![
+        section("environment", &"cwd ".repeat(40)),
+        section("workspace_instructions", &"Be brief. ".repeat(30)),
+        user,
+        ModelInputItem::Reasoning {
+            replay: hanafubuki_agent_model_api::ModelReasoningReplay::ReasoningContent {
+                text: "Thinking it over.".to_string(),
+            },
+        },
+        ModelInputItem::AssistantMessage {
+            phase: None,
+            text: "Here it is.".repeat(20),
+        },
+        ModelInputItem::ToolCall {
+            call_id: "call-1".to_string(),
+            namespace: None,
+            name: "update_plan".to_string(),
+            arguments: serde_json::json!({"plan": []}),
+        },
+        ModelInputItem::ToolOutput {
+            call_id: "call-1".to_string(),
+            output: hanafubuki_agent_tool_contracts::ToolOutput::json(
+                serde_json::json!({"updated": true}),
+                false,
+            )
+            .unwrap(),
+        },
+        ModelInputItem::ContinuationContext {
+            provider_id: "goals".to_string(),
+            hook_id: "continue".to_string(),
+            generation: [0; 32],
+            content: "Keep going.".to_string(),
+        },
+        ModelInputItem::CompactionSummary {
+            summary: "Earlier, the user asked for a plan.".repeat(5),
+            source_revision: 3,
+            compacted_item_count: 7,
+        },
+        section("environment", "a later change"),
+        ModelInputItem::user_text("Next?"),
+    ];
+    let request = ModelRequest {
+        model: "fixture".to_string(),
+        instructions: "You are the fixture. ".repeat(50),
+        input,
+        tools: plan.model_specs(),
+        tool_choice: hanafubuki_agent_model_api::ModelToolChoice::Auto,
+        parallel_tool_calls: true,
+        reasoning: None,
+        output_format: None,
+    };
+
+    let composition = compose_request(&request, &plan).unwrap();
+
+    let (stripped, _) = estimate::without_media(&request).unwrap();
+    let items = |indexes: &[usize]| {
+        estimate_tokens(
+            indexes
+                .iter()
+                .map(|index| estimate::serialized_len(&stripped.input[*index]).unwrap())
+                .sum(),
+        )
+    };
+    // The plan lists its tools by name: new_context, request_user_input,
+    // update_plan.
+    let tools = |names: &[&str]| {
+        estimate_tokens(
+            request
+                .tools
+                .iter()
+                .filter(|spec| names.contains(&spec.name().unwrap().flattened_alias().as_str()))
+                .map(|spec| estimate::serialized_len(spec).unwrap())
+                .sum(),
+        )
+    };
+    assert_eq!(
+        composition.instructions_tokens,
+        estimate_tokens(estimate::serialized_len(&request.instructions).unwrap())
+    );
+    assert_eq!(
+        composition.tools,
+        vec![
+            crate::AgentContextTools {
+                provider_id: Some("builtin".to_string()),
+                count: 2,
+                tokens: tools(&["new_context", "update_plan"]),
+            },
+            crate::AgentContextTools {
+                provider_id: Some("mcp.fixture".to_string()),
+                count: 1,
+                tokens: tools(&["request_user_input"]),
+            },
+        ]
+    );
+    assert_eq!(
+        composition.sections,
+        vec![
+            crate::AgentContextSection {
+                kind: "environment".to_string(),
+                tokens: items(&[0, 9]),
+            },
+            crate::AgentContextSection {
+                kind: "workspace_instructions".to_string(),
+                tokens: items(&[1]),
+            },
+        ]
+    );
+    assert_eq!(composition.user_messages_tokens, items(&[2, 10]));
+    assert_eq!(composition.reasoning_tokens, items(&[3]));
+    assert_eq!(composition.assistant_messages_tokens, items(&[4]));
+    assert_eq!(composition.tool_calls_tokens, items(&[5, 6]));
+    assert_eq!(composition.continuation_tokens, items(&[7]));
+    assert_eq!(composition.compaction_summaries_tokens, items(&[8]));
+    // A 300 KiB image is two tiles at high detail.
+    assert_eq!(
+        (composition.images, composition.image_tokens),
+        (1, 85 + 2 * 170)
+    );
+    assert!(composition.other_tokens > 0);
+
+    let estimate = estimate_model_request_tokens(&request).unwrap();
+    assert_eq!(composition.total_tokens, estimate);
+    let sum = composition.instructions_tokens
+        + composition
+            .tools
+            .iter()
+            .map(|tools| tools.tokens)
+            .sum::<u64>()
+        + composition
+            .sections
+            .iter()
+            .map(|section| section.tokens)
+            .sum::<u64>()
+        + composition.user_messages_tokens
+        + composition.assistant_messages_tokens
+        + composition.reasoning_tokens
+        + composition.tool_calls_tokens
+        + composition.continuation_tokens
+        + composition.compaction_summaries_tokens
+        + composition.image_tokens
+        + composition.other_tokens;
+    assert_eq!(sum, estimate);
+}

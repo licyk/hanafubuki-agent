@@ -1,0 +1,19 @@
+---
+source: crates/tui/src/history_cell/context/tests.rs
+expression: "render(&new_context_output(&context), 80)"
+---
+/context
+
+  No request sent yet. The next: about 16k tokens (estimated: about 4 bytes a
+    token)
+  Built outside a sampling step, it leaves out what plugins prepare for one, and
+    outside a turn the context sections.
+  Context window: unknown; each share is of the request
+
+  Instructions         ████████░░░░░░░░░░░░  39%   6.2k
+  Tools (14)           ████████████░░░░░░░░  61%   9.8k
+  Other request fields ░░░░░░░░░░░░░░░░░░░░   0%     40
+
+  Cached tokens: last (no request yet) · session not reported
+  Uncached tokens: last (no request yet) · session not reported
+  Cache hit rate: last (no request yet) · session not reported

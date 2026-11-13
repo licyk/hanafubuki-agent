@@ -58,6 +58,7 @@ fn the_table_keeps_the_presentation_order() {
             "diff",
             "mention",
             "status",
+            "context",
             "pwd",
             "cd",
             "plugins",
@@ -106,6 +107,7 @@ fn availability_follows_the_spec() {
             "diff",
             "mention",
             "status",
+            "context",
             "pwd",
             "plugins",
             "mcp",
@@ -140,7 +142,8 @@ fn availability_follows_the_spec() {
             "rename",
             "compact",
             "goal",
-            "status"
+            "status",
+            "context"
         ]
     );
     let inline_args: Vec<&str> = COMMANDS

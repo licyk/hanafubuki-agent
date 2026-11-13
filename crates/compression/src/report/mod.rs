@@ -21,8 +21,8 @@ pub use cache::{
     FOLD_CLAIM_WARM_HIT_PCT,
 };
 pub use panel::{
-    build_status_panel, cache_hit_stats, format_compact_tokens, format_hit_rate, topic_fallback,
-    CacheHitSummary, CacheUsageSample, StatusPanelInput,
+    bar, build_status_panel, cache_hit_stats, format_compact_tokens, format_hit_rate,
+    topic_fallback, CacheHitSummary, CacheUsageSample, StatusPanelInput,
 };
 
 use crate::model::{Block, Config, Message, Role, State};

@@ -11,8 +11,28 @@ use super::*;
 pub(in crate::service) fn estimate_model_request_tokens(
     request: &ModelRequest,
 ) -> Result<u64, AgentError> {
+    let (request_without_media_bytes, images) = without_media(request)?;
+    estimate_tokens(serialized_len(&request_without_media_bytes)?)
+        .checked_add(images.tokens)
+        .ok_or(AgentError::UsageOverflow {
+            field: "estimated model request tokens",
+        })
+}
+
+/// The images a request carries, and their estimate.
+#[derive(Default)]
+pub(super) struct ImageEstimate {
+    pub(super) count: u64,
+    pub(super) tokens: u64,
+}
+
+/// `request` with its media payloads cleared, which the bytes estimate
+/// leaves to the images' own, and that estimate.
+pub(super) fn without_media(
+    request: &ModelRequest,
+) -> Result<(ModelRequest, ImageEstimate), AgentError> {
     let mut request_without_media_bytes = request.clone();
-    let mut image_tokens = 0u64;
+    let mut images = ImageEstimate::default();
     for item in &mut request_without_media_bytes.input {
         match item {
             ModelInputItem::UserMessage { content } => {
@@ -26,7 +46,7 @@ pub(in crate::service) fn estimate_model_request_tokens(
                         continue;
                     };
                     add_estimated_image_tokens(
-                        &mut image_tokens,
+                        &mut images,
                         data.len(),
                         matches!(detail, hanafubuki_agent_model_api::ModelImageDetail::Low),
                     )?;
@@ -43,7 +63,7 @@ pub(in crate::service) fn estimate_model_request_tokens(
                             ..
                         } => {
                             add_estimated_image_tokens(
-                                &mut image_tokens,
+                                &mut images,
                                 base64::decoded_len_estimate(data.len()),
                                 matches!(
                                     detail,
@@ -60,7 +80,7 @@ pub(in crate::service) fn estimate_model_request_tokens(
                             ..
                         } if mime_type.starts_with("image/") => {
                             add_estimated_image_tokens(
-                                &mut image_tokens,
+                                &mut images,
                                 base64::decoded_len_estimate(data.len()),
                                 false,
                             )?;
@@ -73,18 +93,18 @@ pub(in crate::service) fn estimate_model_request_tokens(
             _ => {}
         }
     }
-    let bytes = serde_json::to_vec(&request_without_media_bytes)
-        .map_err(|error| AgentError::Protocol(format!("estimate model request: {error}")))?
-        .len();
-    estimate_tokens(bytes)
-        .checked_add(image_tokens)
-        .ok_or(AgentError::UsageOverflow {
-            field: "estimated model request tokens",
-        })
+    Ok((request_without_media_bytes, images))
+}
+
+/// The bytes of `value` serialized, which the estimate counts.
+pub(super) fn serialized_len(value: &impl serde::Serialize) -> Result<usize, AgentError> {
+    serde_json::to_vec(value)
+        .map(|encoded| encoded.len())
+        .map_err(|error| AgentError::Protocol(format!("estimate model request: {error}")))
 }
 
 fn add_estimated_image_tokens(
-    total: &mut u64,
+    images: &mut ImageEstimate,
     byte_length: usize,
     low_detail: bool,
 ) -> Result<(), AgentError> {
@@ -99,9 +119,13 @@ fn add_estimated_image_tokens(
     } else {
         85u64.saturating_add(170u64.saturating_mul(tiles.max(1)))
     };
-    *total = total.checked_add(tokens).ok_or(AgentError::UsageOverflow {
-        field: "image input tokens",
-    })?;
+    images.tokens = images
+        .tokens
+        .checked_add(tokens)
+        .ok_or(AgentError::UsageOverflow {
+            field: "image input tokens",
+        })?;
+    images.count = images.count.saturating_add(1);
     Ok(())
 }
 

@@ -3,6 +3,7 @@
 //! Transcript cells: the unit the chat widget shows. Most are written once;
 //! a thinking or a tool call is a [`LiveCell`] that changes in place.
 
+mod context;
 mod live;
 mod plan;
 mod reports;
@@ -28,6 +29,7 @@ use crate::style::user_message_style;
 use crate::ui_consts::LIVE_PREFIX_COLS;
 use crate::wrapping::{word_wrap_lines, RtOptions};
 
+pub(crate) use context::new_context_output;
 pub(crate) use live::LiveCell;
 pub(crate) use plan::{new_plan_update, new_proposed_plan_stream};
 pub(crate) use reports::{new_mcp_output, new_skills_output};

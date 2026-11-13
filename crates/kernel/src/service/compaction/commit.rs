@@ -282,6 +282,9 @@ fn stage_compacted_history(
         total.saturating_add(item.retained_bytes())
     });
     replace_history(staged, replacement.clone());
+    // The last request sent no longer shows the context; `/context`
+    // estimates the next until one is sent.
+    staged.runtime.sent_request = None;
     staged.runtime.context_window = plan.target_window;
     staged.runtime.context_window.prefill_input_tokens = Some(installed_tokens);
     staged.runtime.context_window.new_context_requested = false;

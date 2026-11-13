@@ -58,7 +58,10 @@ impl AgentService {
             identity.turn_id,
             identity.generation
         );
-        let estimated_input_tokens = estimate_model_request_tokens(&request)?;
+        let composition = compose_request(&request, &tool_plan)?;
+        let estimated_input_tokens = composition.total_tokens;
+        self.capture_sent_request(identity.session_id, composition)
+            .await?;
         let mut stream = model
             .stream(request.clone(), cancellation.clone())
             .await

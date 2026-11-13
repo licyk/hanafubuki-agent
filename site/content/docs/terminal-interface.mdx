@@ -11,7 +11,7 @@ hanafubuki-agent
 hanafubuki-agent "找出这个项目里没有测试覆盖的模块"
 ```
 
-界面启动时没有会话：发送第一条消息时才创建会话，需要会话的命令（`/model`、`/mode`、`/compact`、`/status`）也会先创建一个。只是启动再退出不会留下空会话。没有默认 Provider 或没有选择模型时，界面会打开[首次设置](#setup)，而不是让第一条消息失败。因其他原因无法创建会话时，对话中会用红色说明原因，界面保持打开，下一条消息会再试一次。
+界面启动时没有会话：发送第一条消息时才创建会话，需要会话的命令（`/model`、`/mode`、`/compact`、`/status`、`/context`）也会先创建一个。只是启动再退出不会留下空会话。没有默认 Provider 或没有选择模型时，界面会打开[首次设置](#setup)，而不是让第一条消息失败。因其他原因无法创建会话时，对话中会用红色说明原因，界面保持打开，下一条消息会再试一次。
 
 终端界面需要标准输入和标准输出都是终端；在管道或重定向中运行时，它会提示改用 [exec](/docs/exec) 并以退出码 2 退出。`-m`、`-C`、`--add-dir`、`--permission-mode` 等[全局选项](/docs/cli-reference#global-flags)同样适用。
 
@@ -120,6 +120,7 @@ Fullscreen 下还有阅读对话的按键：Page Up/Page Down、F3、F4、Ctrl-S
 | `/diff`                   | 在分页器中显示第一个工作区目录的 `git diff`，包括未跟踪的文件                                                                                                                                                                                                                                                                                                                                                                                               | 可用                           |
 | `/mention`                | 插入 `@`，打开文件列表                                                                                                                                                                                                                                                                                                                                                                                                                                      | 可用                           |
 | `/status`                 | 显示模型和推理强度、Provider、工作区目录、生效的权限模式（会话自己的，否则是配置的）、会话模式、角色（不是 `default` 时，连同它收窄了什么）、会话 ID、token 用量、上下文窗口的剩余比例连同窗口大小及其来源（`configured`、`learned`、`reported`、`models.dev` 或 `built-in`），或窗口未知（`unknown (compacts on the Provider's error)`）、对模型已知的信息改变推理强度时实际发送的值，以及后台的压缩（`compacting in the background`，或已就绪、等待安装） | 可用                           |
+| `/context`                | 会话上下文里有什么：最近一次请求按组相对窗口的占用，然后是提示缓存（[见下文](#context)）                                                                                                                                                                                                                                                                                                                                                                    | 是                             |
 | `/pwd`、`/cwd`            | 显示工作目录（第一个工作区目录）和其他工作区目录                                                                                                                                                                                                                                                                                                                                                                                                            | 可用                           |
 | `/cd [path]`              | 切换工作目录；不带路径时切换到主目录（[见下文](#worktrees)）                                                                                                                                                                                                                                                                                                                                                                                                | 不可用                         |
 | `/plugins`                | 打开插件浏览器（[设置中心](#config)的一个页面）：已安装插件、市场和内置插件；安装、启用、停用、更新和卸载插件，添加市场（[见下文](#plugins)）                                                                                                                                                                                                                                                                                                               | 可用                           |
@@ -398,6 +399,38 @@ Scrollback 下，对话由终端保存：用终端滚动、选择和复制。最
 [状态栏](#status-line)的 `compression` 项显示活动块数和折叠掉的 token 数。
 
 如果压缩在某次请求中失败（其算法发生 panic），对话会显示一条警告 `⚠ Context compression failed; this turn goes on with the full history: …`，回合余下部分按 `standard` 运行；[`/warnings`](#warnings) 会保留这条警告。
+
+## 上下文 [#context]
+
+`/context` 显示会话最近一次请求包含了什么，既不改变会话，也不询问模型。它读取的是快照，所以回合进行中也能用，此时显示该回合最近发送的请求。例如（略去了部分行）：
+
+```
+/context
+
+  Last request: about 75k tokens (estimated: about 4 bytes a token) · the Provider counted 74k
+  Context window: 200k
+
+  Instructions                 █░░░░░░░░░░░░░░░░░░░   3%   6.2k
+  Tools (15)                   █░░░░░░░░░░░░░░░░░░░   5%    10k
+  MCP/plugin tools (3)         ░░░░░░░░░░░░░░░░░░░░   1%   2.1k
+  Context sections             ░░░░░░░░░░░░░░░░░░░░   2%   4.3k
+    environment                ░░░░░░░░░░░░░░░░░░░░   0%    450
+    skill_catalog              ░░░░░░░░░░░░░░░░░░░░   2%   3.9k
+  User messages                ░░░░░░░░░░░░░░░░░░░░   2%   4.1k
+  Assistant messages           █░░░░░░░░░░░░░░░░░░░   6%    13k
+  Tool calls and outputs       ███░░░░░░░░░░░░░░░░░  16%    31k
+  Free                         ████████████░░░░░░░░  62%   125k
+
+  Cached tokens: last 61k · session 300k
+  Uncached tokens: last 13k · session 110k
+  Cache hit rate: last 82.4% · session 73.2% — 300k of 410k prompt tokens from cache (6 requests)
+```
+
+- **各组**按 billion-context 面板列出其明细的方式排列：每组一行，带一条表示它占窗口份额的条形、百分比和 token 数。依次是：指令；工具，`Tools (N)` 是 Agent 及其内置插件的，`MCP/plugin tools (N)` 是 MCP 服务器和已安装插件的；上下文分段，在它们的合计之下按类型各占一行；用户消息、助手消息、回传的推理、工具调用及其输出、续接上下文和压缩摘要；图片及其数量；请求的其余部分（`Other request fields`：模型、各项设置、请求本身的框架）；以及 `Free`，即窗口减去请求。没有内容的组不显示。窗口未知时，各份额都相对于请求本身，也没有 `Free` 行。
+- **这些数字是估算**：Agent 自己的估算，按请求序列化后的内容约每 4 字节一个 token、图片按其自身规则计算，也就是每次检查请求是否超出窗口时用的估算。各组相加等于请求的估算。标题行会注明这一点，响应返回后旁边是 Provider 统计的提示 token 数（在此之前，或者 Provider 没有报告时，显示 `no count from the Provider`）。
+- **本次运行还没有发送请求时**，或者压缩替换了历史之后，它显示对下一次请求的估算，构建方式与压缩检查下一次请求时相同：不运行工具，也不调用模型。由于它在采样步骤之外构建，不包含插件为采样步骤准备的内容，在回合之外也不包含上下文分段；标题行会说明这一点。如果连这也无法构建，它会说明原因。
+- **提示缓存**：`Cached tokens`（从 Provider 缓存读取的部分）、`Uncached tokens`（提示的其余部分）和 `Cache hit rate`，各自分为最近一次请求和整个会话，然后是会话的提示 token 中有多少来自缓存，以及统计了多少次报告了缓存数字的请求。会话的命中率按其全部提示 token 计算，包括没有报告缓存数字的响应。不报告任何缓存数字的 Provider 显示 `not reported`，从不显示 0%。
+- 宽度较窄时条形会变短，过长的标签用 `…` 截断；Fullscreen 与 Scrollback 中的显示相同。
 
 ## 对话记录 [#transcript]
 

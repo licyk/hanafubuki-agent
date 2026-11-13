@@ -577,11 +577,142 @@ and any module-size exception.
         (run on fe37c60, which differs from the landed tree only in this
         line; all three passed at once); Site: .../runs/43386495361,
         success, its prerender included.
-- [ ] C2: `/context` — the last request's composition captured at build
+- [x] C2: `/context` — the last request's composition captured at build
       time (or an estimate of the next), grouped by instructions, tools,
       context sections, conversation, summaries, images and free space,
       with billion-context's bars, then cached, uncached and the hit rate
       (last and session).
+      Done (2026-11-13):
+      - compression: `bar(value, total, width)` is public (re-exported at
+        the crate root) and takes billion-context's `width` again (the TS
+        has it, default 20; the port had fixed 20), so a narrow card can
+        shrink it; the status panel passes 20.
+      - kernel: `model/context_composition.rs` — `AgentContextComposition`
+        (instructions; tools per provider id, `AgentContextTools`; sections
+        per kind in prompt order, `AgentContextSection`; user and assistant
+        messages, reasoning, tool calls and outputs, continuation context,
+        compaction summaries; image count and tokens; `other_tokens`, the
+        rest; `total_tokens`), `AgentSessionContext { request, window,
+        usage }`, `AgentContextRequest::{Sent(AgentSentRequest), Next,
+        Unavailable(reason)}`, `AgentReportedPrompt`. `sampling/composition.rs`
+        (new): `compose_request(request, tool_plan)` groups the request's
+        serialized parts (each group's bytes summed, its estimate rounded
+        once, images by `estimate.rs`'s rule, the rest what no group holds,
+        so the groups add up to `estimate_model_request_tokens`);
+        `estimate.rs` shares `without_media` and `serialized_len` with it.
+        `run_sampling_request_once` composes the request it is about to
+        stream (its estimate replaces that call's own) and keeps it in
+        `SessionRuntime::sent_request` (`Option<Arc<_>>`, never persisted,
+        `None` at every construction); `commit_sampling_response` records
+        the response's reported prompt and cache read/write beside it; a
+        compaction's install drops it. `AgentService::session_context`
+        returns it, or builds the next request as a standalone compaction's
+        check does (`prepare_compaction_transport`, now `pub(in
+        crate::service)`, `load_history_images`, `step_model_request`), or
+        says why not; the window is `/status`'s (the session's, else the
+        one `session_model_metadata` resolves). A Provider that sends no
+        usage leaves `reported` `None`, which the card shows as "no count
+        from the Provider". `AgentToolPlan::model_spec_providers` (new, public)
+        pairs `model_specs` with each spec's provider. `kernel::panel`
+        re-exports `bar`, `cache_hit_stats`, `format_compact_tokens`,
+        `format_hit_rate`, `CacheHitSummary`, `CacheUsageSample`.
+      - agent (facade): `session_context(session_id)` (async; starts the
+        plugin host, activates the session, reads); `hanafubuki_agent::panel`
+        re-exports the kernel's; the new types, `AgentModelUsage` and
+        `AgentUsageSource` are re-exported.
+      - tui: `/context` (`commands/context.rs`, after `/status`; during a
+        task, needs a session) → `AgentCommand::Context` →
+        `TurnUpdate::ContextReport` → `history_cell/context.rs`: the heading
+        (the estimate's label with the Provider's count beside it, or the
+        next request's label and what it leaves out, or why there is none),
+        the window, a row per non-empty group (label, bar, percent of the
+        window, tokens; sections indented under their total), `Free`, then
+        `Cached tokens`, `Uncached tokens` and `Cache hit rate` for the
+        last request and the session. At a narrow width labels are cut to
+        22 columns first, then the bar narrows, then labels are cut further;
+        a bar under 4 cells is dropped. With no window, shares are of the
+        request and there is no `Free` row.
+      - Tests: kernel `sampling/tests.rs`
+        `a_request_is_composed_of_its_groups_and_they_add_up_to_its_estimate`
+        (every input kind, two providers' tools, a section kind twice, an
+        image: each group equals the estimator on its part, the sum equals
+        `estimate_model_request_tokens`). Agent `tests/context.rs`: a real
+        session on the fake server — before any request `Next` with no
+        sections, tools, no message, the sum exact and no model request;
+        while the response is held `Sent` with sections and the message and
+        no Provider count; after it the same composition with `{1200, read
+        900, write none}` and the session's cumulative read. TUI
+        `history_cell/context/tests.rs`: insta snapshots at 100 and 50
+        columns with and without cache reporting, before any request with
+        no window, plus the response pending, a reported zero read (0%,
+        not "not reported"), no estimate possible and a 28-column card with
+        no bars; every line within the width. `app/tests/context.rs`: in
+        Scrollback and Fullscreen, `/context` before any request, during
+        the held turn and after it (`Cache hit rate: last 75.0% · session
+        75.0% — 900 of 1.2k prompt tokens from cache (1 request)`).
+        `commands/tests/mod.rs`: the pinned order, `during_task` and
+        `needs_session` lists. The kernel and TUI tests were written with the
+        change (the types and the command did not exist before).
+      - Deviations: (1) Captured when the request is streamed
+        (`stream/mod.rs`), not in `request.rs` at build: the composition is
+        then the request actually sent, after an image or reasoning
+        fallback. (2) The plan's sum "equals the request's estimate" holds
+        through an explicit rest (`Other request fields`: the model, the
+        settings, the JSON framing); with very many small groups their
+        rounding could exceed it, and it is then 0 (documented on the
+        field). (3) The Provider's count and the last request's cache
+        figures are kept with the captured request at its response's
+        commit, not read from `runtime.usage` (a later step or a
+        compaction overwrites that); the session's come from
+        `AgentModelUsage`'s cumulative figures. (4) C1 keeps no per-request
+        samples, so `cache_hit_stats` is called on one sample (the last
+        request's, or the session's cumulative), and a reported zero read
+        is shown as 0.0% where its statistics would skip it; the session's
+        rate is over all its prompt tokens (responses that reported no
+        cache figure included), with `cache_reporting_responses` as the
+        request count. (5) The kernel splits tools per provider id; the TUI
+        folds the `mcp.` and `plugin.` providers into `MCP/plugin tools` and
+        the rest (the kernel, built-in plugins, memory's source, the native
+        tool search) into `Tools`, so the kernel learns no plugin naming.
+        (6) Outside a turn the next-request estimate has no sections at all
+        (not merely unprepared ones); the card says so. The facade starts
+        the plugin host but does not bind the Provider for it
+        (`activate_provider_session` would start a discovery). (7) The
+        cache lines read label first (`last X · session Y`), so `not
+        reported` and `(no request yet)` read; groups with nothing are left
+        out, as billion-context's panel leaves them. (8) `/context` is not
+        among a side conversation's commands (Codex's list).
+      - Goldens: none changed.
+      - Docs (both languages): `terminal-interface` (the commands table, a
+        command that needs a session, the new `#context` section with an
+        example), `embedding` (the facade read, `panel`),
+        `architecture#the-context-window-and-the-token-estimate` (the
+        capture).
+      - Validation: `cargo fmt --all --check`; `RUSTFLAGS="-D warnings"
+        cargo check --workspace --all-targets --all-features`; `cargo clippy
+        --workspace --all-targets --all-features -- -D warnings`; `cargo
+        xtask check`; `cargo test --workspace --all-features
+        --no-fail-fast` (two failures: the command popup's pinned list,
+        which `/context` changed, fixed; and the known flake
+        `plugin-packages` `guests`
+        `a_linked_guest_starts_anew_once_its_directory_changes`,
+        `linked.rs:33` "signalled after 259.308769ms", which passed alone;
+        the whole matrix then ran again on the final tree);
+        `bun install --frozen-lockfile`, `bun run
+        format:check:site`, `bun run site:check`, `bun run site:test`;
+        `VITE_BASE_PATH=/hanafubuki-agent/ bun run site:build` not run
+        locally (port 3000 held by another project's server, so the
+        prerender cannot run); CI's Site run covers it.
+      - Hanafubuki at its next pin: additive only. New facade call
+        `session_context` and types `AgentSessionContext`,
+        `AgentContextRequest`, `AgentSentRequest`, `AgentReportedPrompt`,
+        `AgentContextComposition`, `AgentContextTools`,
+        `AgentContextSection`; the facade now also re-exports
+        `AgentModelUsage` and `AgentUsageSource`, and `panel`. In
+        `hanafubuki-agent-compression`, `bar` is new public API with a
+        width; in the kernel, `AgentToolPlan::model_spec_providers`.
+      - Module size: no exception added or raised.
+      - CI on Linux, Windows and macOS: pending (filled in by the follow-up commit).
 
 **Effort ([5])**
 

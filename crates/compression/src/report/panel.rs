@@ -101,17 +101,15 @@ pub struct StatusPanelInput<'a> {
     pub cache_usages: Option<&'a [CacheUsageSample]>,
 }
 
-fn bar(value: u64, total: u64) -> String {
-    const WIDTH: u64 = 20;
+/// `value`'s share of `total` as a bar of `width` cells, `█` filled and `░`
+/// empty (the panel's are 20); empty when `total` is 0.
+pub fn bar(value: u64, total: u64, width: usize) -> String {
     if total == 0 {
         return String::new();
     }
-    let filled = (js_round(value as f64 / total as f64 * WIDTH as f64) as u64).min(WIDTH);
-    format!(
-        "{}{}",
-        "█".repeat(filled as usize),
-        "░".repeat((WIDTH - filled) as usize)
-    )
+    let filled =
+        (js_round(value as f64 / total as f64 * width as f64).max(0.0) as usize).min(width);
+    format!("{}{}", "█".repeat(filled), "░".repeat(width - filled))
 }
 
 /// The status panel. Its three token numbers each say their scale and are
@@ -195,7 +193,7 @@ pub fn build_status_panel(input: &StatusPanelInput<'_>) -> String {
             };
             lines.push(format!(
                 "  {label:<10} {} {pct:>3}%  {}",
-                bar(value, sent),
+                bar(value, sent, 20),
                 fmt(value)
             ));
         }

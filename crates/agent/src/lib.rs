@@ -36,6 +36,14 @@ pub mod panic {
     };
 }
 mod plugins;
+/// billion-context's panel helpers, with which an interface draws what
+/// `session_context` reads as `/context` does.
+pub mod panel {
+    pub use hanafubuki_agent_kernel::panel::{
+        bar, cache_hit_stats, format_compact_tokens, format_hit_rate, CacheHitSummary,
+        CacheUsageSample,
+    };
+}
 mod roles;
 /// The sandbox of the commands the model runs. A program that starts the
 /// Agent calls [`sandbox::helper_dispatch`] first in its `main`, before any
@@ -234,11 +242,13 @@ pub use hanafubuki_agent_kernel::{
     AgentBackgroundCompactionState, AgentCompactionGeneration, AgentCompactionId,
     AgentCompactionOutcome, AgentCompactionStatus, AgentCompactionTrigger, AgentCompressRange,
     AgentCompressionStats, AgentCompressionStatus, AgentCompressionSummary, AgentContentStoreStats,
+    AgentContextComposition, AgentContextRequest, AgentContextSection, AgentContextTools,
     AgentEvent, AgentEventBatch, AgentEventKind, AgentEventSequence, AgentEventSink,
     AgentGeneration, AgentGoal, AgentGoalOrigin, AgentGoalStatus, AgentHistorySortDirection,
-    AgentHostContext, AgentImageAttachmentRef, AgentMessageId, AgentMessagePhase,
+    AgentHostContext, AgentImageAttachmentRef, AgentMessageId, AgentMessagePhase, AgentModelUsage,
     AgentPermissionMode, AgentPlanImplementationRequest, AgentReasoningId, AgentReasoningPhase,
-    AgentReasoningSnapshot, AgentRevision, AgentSessionForkOutcome, AgentSessionForkRequest,
+    AgentReasoningSnapshot, AgentReportedPrompt, AgentRevision, AgentSentRequest,
+    AgentSessionContext, AgentSessionForkOutcome, AgentSessionForkRequest,
     AgentSessionHeadForkOutcome, AgentSessionHeadForkRequest, AgentSessionId,
     AgentSessionLifecycle, AgentSessionListRequest, AgentSessionMode, AgentSessionOpenResult,
     AgentSessionOrigin, AgentSessionPage, AgentSessionParentFilter, AgentSessionRuntimeSnapshot,
@@ -246,9 +256,9 @@ pub use hanafubuki_agent_kernel::{
     AgentSessionTitleSource, AgentSkillRef, AgentSteeringAccepted, AgentTranscriptPage,
     AgentTranscriptPageRequest, AgentTurnAccepted, AgentTurnCancellationOutcome, AgentTurnId,
     AgentTurnOutcome, AgentTurnPageRequest, AgentTurnPhase, AgentTurnTerminalReason,
-    AgentUserInputAccepted, AgentUserInputAnswer, AgentUserInputRequest, AgentUserInputRequestId,
-    ApprovalRequest, ApprovalRequestId, ApprovalUserDecision, ConfirmedAgentSessionDeletion,
-    ConversationItem, ModelCatalogEntry, MAXIMUM_HOST_CONTEXT_BYTES,
+    AgentUsageSource, AgentUserInputAccepted, AgentUserInputAnswer, AgentUserInputRequest,
+    AgentUserInputRequestId, ApprovalRequest, ApprovalRequestId, ApprovalUserDecision,
+    ConfirmedAgentSessionDeletion, ConversationItem, ModelCatalogEntry, MAXIMUM_HOST_CONTEXT_BYTES,
 };
 /// What is known of a model, fact by fact with its source, and what the
 /// person configured for it.

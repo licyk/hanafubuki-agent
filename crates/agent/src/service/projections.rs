@@ -1,7 +1,8 @@
 use super::AgentApplicationService;
 use hanafubuki_agent_foundation::background_worker::WorkerShutdownDiagnostic;
 use hanafubuki_agent_kernel::{
-    AgentGeneration, AgentSessionId, AgentSessionRuntimeSnapshot, AgentTurnId, AgentTurnPhase,
+    AgentError, AgentGeneration, AgentSessionContext, AgentSessionId, AgentSessionRuntimeSnapshot,
+    AgentTurnId, AgentTurnPhase,
 };
 use std::sync::atomic::Ordering;
 use std::time::Instant;
@@ -25,6 +26,22 @@ impl AgentApplicationService {
     /// among them. Off the async runtime only.
     pub fn session_snapshots(&self) -> Vec<AgentSessionRuntimeSnapshot> {
         self.core.list_snapshots()
+    }
+
+    /// What `session_id`'s context holds, as `/context` shows it: the last
+    /// request a sampling step of this run sent, group by group, with what
+    /// the Provider reported of it; before one, an estimate of the next
+    /// (no tool runs and no model is called); the window and the usage,
+    /// whose cache figures give the session's hit rate. During a turn it
+    /// reads the request the turn sent last.
+    pub async fn session_context(
+        &self,
+        session_id: AgentSessionId,
+    ) -> Result<AgentSessionContext, AgentError> {
+        // The estimate plans the next request's tools from the plugins.
+        self.host.ensure_started().await;
+        self.activate_session(session_id)?;
+        self.core.session_context(session_id).await
     }
 
     pub fn list_run_projections(&self) -> Vec<AgentRunProjection> {

@@ -143,6 +143,7 @@ impl AgentService {
                 compression_search: Default::default(),
                 compression_runtime: Default::default(),
                 reasoning_narrowing_logged: false,
+                sent_request: None,
             },
         };
         // A state that was lost (it could not be read) is rebuilt from the

@@ -15,6 +15,7 @@ mod clear;
 mod compression;
 mod config;
 mod confirm;
+mod context;
 mod copy;
 mod exit;
 mod export;
@@ -85,7 +86,7 @@ pub(crate) use subagents::SUBAGENTS;
 pub(crate) use warnings::{show_warnings, WARNINGS};
 
 /// Every command, in presentation order: the most used first.
-pub(crate) static COMMANDS: [&CommandSpec; 48] = [
+pub(crate) static COMMANDS: [&CommandSpec; 49] = [
     &model::MODEL,
     &providers::PROVIDERS,
     &mode::MODE,
@@ -115,6 +116,7 @@ pub(crate) static COMMANDS: [&CommandSpec; 48] = [
     &workspace::DIFF,
     &workspace::MENTION,
     &reports::STATUS,
+    &context::CONTEXT,
     &pwd::PWD,
     &cd::CD,
     &plugins::PLUGINS,

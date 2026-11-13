@@ -1,12 +1,14 @@
 use super::*;
 
 mod commit;
+mod composition;
 mod estimate;
 mod images;
 mod prompt;
 mod request;
 mod stream;
 
+use composition::{compose_request, record_reported_prompt};
 pub(super) use estimate::{estimate_conversation_items_tokens, estimate_model_request_tokens};
 pub(super) use images::{referenced_images, LoadedImages};
 pub(super) use prompt::RequestContext;

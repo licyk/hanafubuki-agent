@@ -171,7 +171,7 @@ schema 遵循同样的按协议规则：支持 `strict_json_schema` 的协议（
 
 ### 上下文窗口与 token 估算 [#the-context-window-and-the-token-estimate]
 
-会话的 `context_window_tokens` 在创建会话或选择模型时、记录它的 Provider 的列表时、每个轮次开始时以及每个回答提交时解析：配置的窗口，否则[模型元数据](#model-metadata)对该模型所知的窗口（从拒绝中学到的窗口，仅在它更小时；Provider 的模型列表报告的窗口；打开 models.dev 时它给出的窗口；否则一张已知模型系列的小表）；都没有就不做自动压缩。整个 Agent 只有一种 token 估算（`hanafubuki_agent_contracts::tokens`，字节数 / 4）。计数之所以一致，是因为它们数的是同一个请求：准入检查、步骤的请求和自动压缩对下一个请求的检查都用 `step_model_request` 构建请求，用 `estimate_model_request_tokens` 计数，工具和记忆都包括在内。
+会话的 `context_window_tokens` 在创建会话或选择模型时、记录它的 Provider 的列表时、每个轮次开始时以及每个回答提交时解析：配置的窗口，否则[模型元数据](#model-metadata)对该模型所知的窗口（从拒绝中学到的窗口，仅在它更小时；Provider 的模型列表报告的窗口；打开 models.dev 时它给出的窗口；否则一张已知模型系列的小表）；都没有就不做自动压缩。整个 Agent 只有一种 token 估算（`hanafubuki_agent_contracts::tokens`，字节数 / 4）。计数之所以一致，是因为它们数的是同一个请求：准入检查、步骤的请求和自动压缩对下一个请求的检查都用 `step_model_request` 构建请求，用 `estimate_model_request_tokens` 计数，工具和记忆都包括在内。步骤的计数按组得出（`compose_request`：每组是其自身序列化部分的估算，其余部分是不属于任何组的内容，合起来就是请求的估算），会话保留它（从不持久化），并在响应提交时记下 Provider 对该请求的报告，供 `/context`（`session_context`）使用；压缩安装时丢弃它，在下一个请求发送之前，`/context` 按压缩检查时的方式估算那个请求。
 
 ### 模型元数据 [#model-metadata]
 

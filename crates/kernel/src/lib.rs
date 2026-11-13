@@ -20,6 +20,15 @@ mod memory;
 pub mod model;
 mod model_metadata;
 pub mod parallel_tool_runtime;
+/// billion-context's panel helpers (`hanafubuki-agent-compression`), with
+/// which an interface draws a request's groups and its prompt cache as
+/// `/compression`'s panel does.
+pub mod panel {
+    pub use hanafubuki_agent_compression::{
+        bar, cache_hit_stats, format_compact_tokens, format_hit_rate, CacheHitSummary,
+        CacheUsageSample,
+    };
+}
 pub mod permission;
 pub mod plugin;
 pub mod service;
@@ -92,7 +101,8 @@ pub use model::{
     AgentCompactionStatus, AgentCompactionStrategy, AgentCompactionTrigger, AgentCompactionUsage,
     AgentCompressRange, AgentCompressionChain, AgentCompressionDelta, AgentCompressionState,
     AgentCompressionStats, AgentCompressionStatus, AgentCompressionSummary, AgentCompressionUpdate,
-    AgentConfiguredModelFacts, AgentContentStore, AgentContentStoreStats, AgentContextTokenStatus,
+    AgentConfiguredModelFacts, AgentContentStore, AgentContentStoreStats, AgentContextComposition,
+    AgentContextRequest, AgentContextSection, AgentContextTokenStatus, AgentContextTools,
     AgentContextWindowId, AgentContextWindowSnapshot, AgentContinuationHookGeneration,
     AgentContinuationHookId, AgentContinuationHookOutcome, AgentContinuationHookProviderId,
     AgentError, AgentEvent, AgentEventBatch, AgentEventKind, AgentEventSequence, AgentEventSink,
@@ -103,9 +113,10 @@ pub use model::{
     AgentMemoryContributionState, AgentMessageId, AgentMessagePhase, AgentModelRetryStage,
     AgentModelSessionGeneration, AgentModelUsage, AgentPlanBlock, AgentPlanImplementationRequest,
     AgentReasoningCheckpoint, AgentReasoningId, AgentReasoningPhase, AgentReasoningSnapshot,
-    AgentRevision, AgentSamplingRetryPolicy, AgentSessionConfig, AgentSessionForkOutcome,
-    AgentSessionForkRequest, AgentSessionHeadForkOutcome, AgentSessionHeadForkRequest,
-    AgentSessionId, AgentSessionLifecycle, AgentSessionMode, AgentSessionModelConfigurationUpdate,
+    AgentReportedPrompt, AgentRevision, AgentSamplingRetryPolicy, AgentSentRequest,
+    AgentSessionConfig, AgentSessionContext, AgentSessionForkOutcome, AgentSessionForkRequest,
+    AgentSessionHeadForkOutcome, AgentSessionHeadForkRequest, AgentSessionId,
+    AgentSessionLifecycle, AgentSessionMode, AgentSessionModelConfigurationUpdate,
     AgentSessionOrigin, AgentSessionPersistence, AgentSessionRuntimeSnapshot, AgentSessionSummary,
     AgentSessionTitle, AgentSessionTitleRenameRequest, AgentSessionTitleSource,
     AgentSessionWorkspace, AgentShutdownDiagnostic, AgentSkillRef, AgentSteeringAccepted,

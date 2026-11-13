@@ -821,6 +821,7 @@ mod appearance;
 mod backtrack;
 mod compaction;
 mod compression;
+mod context;
 mod features;
 mod plugins;
 mod preferences;

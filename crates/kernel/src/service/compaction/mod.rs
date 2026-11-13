@@ -35,10 +35,10 @@ struct CompactionExecutionGuard {
 /// What a compaction sends with and checks the next request against: the
 /// model, and the tool plan and prompt of the step it compacts for (a
 /// standalone compaction's own).
-struct CompactionTransport {
+pub(in crate::service) struct CompactionTransport {
     model: Arc<dyn ModelSession>,
-    tool_plan: AgentToolPlan,
-    prompt: RequestContext,
+    pub(in crate::service) tool_plan: AgentToolPlan,
+    pub(in crate::service) prompt: RequestContext,
 }
 
 /// A reserved compaction and everything it read from the session when it

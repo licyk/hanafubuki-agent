@@ -525,6 +525,22 @@ path = "crates/tui/src/commands/compression/tests.rs"
 reason = "The /compression report cells."
 
 [[original]]
+path = "crates/tui/src/commands/context.rs"
+reason = "/context, the Agent's own command onto the facade's session_context."
+
+[[original]]
+path = "crates/tui/src/history_cell/context.rs"
+reason = "/context's card, written for the Agent: its bars, token counts and hit rates are the compression crate's ported panel helpers, called, not copied."
+
+[[original]]
+path = "crates/tui/src/history_cell/context/tests.rs"
+reason = "The /context card's snapshots, written with it."
+
+[[original]]
+path = "crates/tui/src/app/tests/context.rs"
+reason = "/context end to end over the standalone Agent, in both presentations."
+
+[[original]]
 path = "crates/tui/src/agent_bridge/providers.rs"
 reason = "The Provider screen's calls onto the facade's Provider API."
 

@@ -11,7 +11,7 @@ hanafubuki-agent
 hanafubuki-agent "Find the modules in this project that no test covers"
 ```
 
-The interface starts with no session: your first message creates it, as does a command that needs one (`/model`, `/mode`, `/compact`, `/status`). Starting and quitting leaves no empty session behind. With no default Provider or no model chosen, the interface opens the [setup](#setup) instead of letting the first message fail. When the session cannot be created for another reason, the conversation says why in red and the interface stays open; the next message tries again.
+The interface starts with no session: your first message creates it, as does a command that needs one (`/model`, `/mode`, `/compact`, `/status`, `/context`). Starting and quitting leaves no empty session behind. With no default Provider or no model chosen, the interface opens the [setup](#setup) instead of letting the first message fail. When the session cannot be created for another reason, the conversation says why in red and the interface stays open; the next message tries again.
 
 The interface needs a terminal on both standard input and standard output; in a pipe or a redirection it points you to [exec](/docs/exec) and exits with code 2. `-m`, `-C`, `--add-dir`, `--permission-mode` and the other [global flags](/docs/cli-reference#global-flags) apply as usual.
 
@@ -121,6 +121,7 @@ A message that starts with `/` is a command. Typing `/` opens a popup of them, n
 | `/diff`                   | Shows `git diff` of the first workspace root, untracked files included, in a pager                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | Yes           |
 | `/mention`                | Inserts `@`, which opens the file popup                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | Yes           |
 | `/status`                 | Shows the model and its reasoning effort, the Provider, the workspace roots, the permission mode in effect (the session's, else the configured one), the session's mode, its role (when it has one other than `default`, with what it narrows), its id, its token use, how much of its context window is left with the window's size and where it came from (`configured`, `learned`, `reported`, `models.dev` or `built-in`), or that it is unknown (`unknown (compacts on the Provider's error)`), the effort a request sends when what is known of the model changes it, and a compaction in the background (`compacting in the background`, or ready to be installed) | Yes           |
+| `/context`                | What the session's context holds: the last request, group by group, against the window, then the prompt cache ([below](#context))                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | Yes           |
 | `/pwd`, `/cwd`            | Shows the working directory (the first workspace root) and the other roots                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Yes           |
 | `/cd [path]`              | Changes the working directory; without a path, to your home directory ([below](#worktrees))                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | No            |
 | `/plugins`                | Opens the plugin browser, a page of the [settings center](#config): the installed plugins, the marketplaces and the built-in plugins; installs, turns on and off, updates and uninstalls plugins, adds marketplaces ([below](#plugins))                                                                                                                                                                                                                                                                                                                                                                                                                                   | Yes           |
@@ -399,6 +400,38 @@ Under the `hierarchical` [compaction strategy](/docs/configuration#compaction) t
 The [status line](#status-line)'s `compression` item shows the active blocks and the tokens folded away.
 
 If the compression fails for a request (its algorithm panicked), the conversation shows a warning, `⚠ Context compression failed; this turn goes on with the full history: …`, and the rest of the turn runs as `standard`; [`/warnings`](#warnings) keeps it.
+
+## The context [#context]
+
+`/context` shows what the session's last request held, without changing the session or asking the model. It reads a snapshot, so it works during a turn too, where it shows the request the turn sent last. For example, with some rows left out:
+
+```
+/context
+
+  Last request: about 75k tokens (estimated: about 4 bytes a token) · the Provider counted 74k
+  Context window: 200k
+
+  Instructions                 █░░░░░░░░░░░░░░░░░░░   3%   6.2k
+  Tools (15)                   █░░░░░░░░░░░░░░░░░░░   5%    10k
+  MCP/plugin tools (3)         ░░░░░░░░░░░░░░░░░░░░   1%   2.1k
+  Context sections             ░░░░░░░░░░░░░░░░░░░░   2%   4.3k
+    environment                ░░░░░░░░░░░░░░░░░░░░   0%    450
+    skill_catalog              ░░░░░░░░░░░░░░░░░░░░   2%   3.9k
+  User messages                ░░░░░░░░░░░░░░░░░░░░   2%   4.1k
+  Assistant messages           █░░░░░░░░░░░░░░░░░░░   6%    13k
+  Tool calls and outputs       ███░░░░░░░░░░░░░░░░░  16%    31k
+  Free                         ████████████░░░░░░░░  62%   125k
+
+  Cached tokens: last 61k · session 300k
+  Uncached tokens: last 13k · session 110k
+  Cache hit rate: last 82.4% · session 73.2% — 300k of 410k prompt tokens from cache (6 requests)
+```
+
+- **The groups**, laid out as billion-context's panel lays out its breakdown: a row each, with a bar of its share of the window, the percent and the tokens. They are the instructions; the tools, `Tools (N)` for the Agent's and its built-in plugins' and `MCP/plugin tools (N)` for MCP servers' and installed plugins'; the context sections, each by its kind under their total; user messages, assistant messages, the reasoning sent back, tool calls and outputs, continuation context and compaction summaries; images, with their count; the rest of the request (`Other request fields`: the model, the settings, the request's own framing); and `Free`, the window less the request. A group that holds nothing is left out. With no window known, each share is of the request and there is no `Free` row.
+- **The figures are estimates**: the Agent's own, about four bytes a token of the request as it is serialized and an image by its own rule, the estimate every check of a request against the window counts with. The groups add up to the request's. The heading says so, with the prompt the Provider counted beside it once the response is back (`no count from the Provider` before then, or when it reports none).
+- **Before any request** of this run, or after a compaction replaced the history, it shows an estimate of the next request, built as a compaction checks it: no tool runs and no model is called. Built outside a sampling step, it leaves out what plugins prepare for one, and outside a turn the context sections; the heading says so. When even that cannot be built, it says why.
+- **The prompt cache**: `Cached tokens`, read from the Provider's cache, `Uncached tokens`, the rest of the prompt, and `Cache hit rate`, each for the last request and for the session, then how many of the session's prompt tokens came from the cache and over how many requests that reported a cache figure. The session's rate is over all of its prompt tokens, a response that reported none included. A Provider that reports no cache figure shows `not reported`, never 0%.
+- At a narrow width the bars narrow and long labels are cut with `…`; it shows the same in Fullscreen and Scrollback.
 
 ## The transcript [#transcript]
 

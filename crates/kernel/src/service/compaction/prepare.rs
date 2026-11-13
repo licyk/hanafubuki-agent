@@ -83,7 +83,7 @@ impl AgentService {
     /// The transport of a standalone compaction: the session's model, and
     /// the tool plan and prompt its next request would have, outside any
     /// sampling step (no memory, nothing prepared).
-    pub(super) async fn prepare_compaction_transport(
+    pub(in crate::service) async fn prepare_compaction_transport(
         &self,
         session_id: AgentSessionId,
     ) -> Result<CompactionTransport, AgentError> {

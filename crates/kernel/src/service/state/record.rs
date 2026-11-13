@@ -118,6 +118,9 @@ pub(in crate::service) struct SessionRuntime {
     /// effort was narrowed (`AgentService::request_reasoning`), which it
     /// logs once.
     pub(in crate::service) reasoning_narrowing_logged: bool,
+    /// The last request a sampling step sent, for `/context`; never
+    /// persisted, and dropped when a compaction replaces the history.
+    pub(in crate::service) sent_request: Option<Arc<crate::model::AgentSentRequest>>,
 }
 
 /// Bounded rollback state for one staged durable mutation: every group but
@@ -195,6 +198,7 @@ impl SessionRuntime {
             compression_search: Default::default(),
             compression_runtime: Default::default(),
             reasoning_narrowing_logged: false,
+            sent_request: None,
         }
     }
 }
