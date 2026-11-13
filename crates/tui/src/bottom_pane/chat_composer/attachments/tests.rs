@@ -87,16 +87,16 @@ fn ctrl_v_and_ctrl_alt_v_ask_for_the_clipboards_image() {
     composer.set_text_content("a draft".to_string());
     composer.handle_key_event(ctrl('v'));
     assert!(asked(&events));
-    composer.handle_key_event(KeyEvent::new(
+    assert_eq!(composer.textarea.text(), "a draft");
+
+    // Ctrl+Alt+V too, but on Windows, where Ctrl+Alt is AltGr: there it is
+    // the composer's to type, and asks for nothing.
+    let (mut typed, typed_events) = new_composer();
+    typed.handle_key_event(KeyEvent::new(
         KeyCode::Char('v'),
         KeyModifiers::CONTROL | KeyModifiers::ALT,
     ));
-    // On Windows Ctrl+Alt is AltGr, which types.
-    assert_eq!(asked(&events), cfg!(not(windows)));
-    composer.set_text_content("a draft".to_string());
-    composer.handle_key_event(ctrl('v'));
-    assert!(asked(&events));
-    assert_eq!(composer.textarea.text(), "a draft");
+    assert_eq!(asked(&typed_events), cfg!(not(windows)));
 
     // Not with a popup or the history search open, nor without the keys.
     composer.set_text_content("/mo".to_string());
