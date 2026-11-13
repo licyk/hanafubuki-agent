@@ -55,7 +55,9 @@ fn the_draft_is_edited_and_sent(mode: TranscriptMode) {
     let terminal = harness.tui.terminal.backend().vt100().screen();
     assert_eq!(terminal.alternate_screen(), mode.is_owned());
     assert!(terminal.bracketed_paste());
-    if mode.is_owned() {
+    // On Windows the pointer is the console's mode, which vt100 does not
+    // see.
+    if mode.is_owned() && cfg!(not(windows)) {
         assert_eq!(terminal.mouse_protocol_mode(), MouseProtocolMode::AnyMotion);
     }
 

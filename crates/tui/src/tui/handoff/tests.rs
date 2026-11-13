@@ -31,12 +31,21 @@ fn draw(tui: &mut Tui<VT100Backend>, text: &'static str) {
     .unwrap();
 }
 
+/// On Windows crossterm turns the pointer on and off through the
+/// console's mode, with no escape sequence the emulated terminal could
+/// read; there the pointer is not checked.
+fn assert_pointer(tui: &Tui<VT100Backend>, mode: MouseProtocolMode) {
+    if cfg!(not(windows)) {
+        assert_eq!(screen(tui).mouse_protocol_mode(), mode);
+    }
+}
+
 fn assert_released(tui: &Tui<VT100Backend>) {
     let screen = screen(tui);
     assert!(!screen.alternate_screen());
     assert!(!screen.bracketed_paste());
-    assert_eq!(screen.mouse_protocol_mode(), MouseProtocolMode::None);
     assert!(!screen.hide_cursor());
+    assert_pointer(tui, MouseProtocolMode::None);
 }
 
 #[test]
@@ -44,10 +53,7 @@ fn scrollback_gives_the_terminal_back_as_the_shell_left_it_and_takes_it_again() 
     let mut tui = started();
     tui.set_inline_mouse_capture(true).unwrap();
     draw(&mut tui, "composer");
-    assert_eq!(
-        screen(&tui).mouse_protocol_mode(),
-        MouseProtocolMode::PressRelease
-    );
+    assert_pointer(&tui, MouseProtocolMode::PressRelease);
 
     let released = tui.release();
     assert_released(&tui);
@@ -56,10 +62,7 @@ fn scrollback_gives_the_terminal_back_as_the_shell_left_it_and_takes_it_again() 
     let screen_now = screen(&tui);
     assert!(!screen_now.alternate_screen());
     assert!(screen_now.bracketed_paste());
-    assert_eq!(
-        screen_now.mouse_protocol_mode(),
-        MouseProtocolMode::PressRelease
-    );
+    assert_pointer(&tui, MouseProtocolMode::PressRelease);
     assert!(tui.captures_inline_mouse());
     // The viewport was cleared: the next frame draws it whole.
     assert_eq!(screen_now.contents_between(5, 0, 5, 30).trim(), "");
@@ -75,10 +78,7 @@ fn fullscreen_leaves_the_alternate_screen_and_enters_it_again_with_its_pointer()
     let mut tui = started();
     tui.enter_alt_screen(true).unwrap();
     assert!(screen(&tui).alternate_screen());
-    assert_eq!(
-        screen(&tui).mouse_protocol_mode(),
-        MouseProtocolMode::AnyMotion
-    );
+    assert_pointer(&tui, MouseProtocolMode::AnyMotion);
 
     let released = tui.release();
     assert_released(&tui);
@@ -87,10 +87,7 @@ fn fullscreen_leaves_the_alternate_screen_and_enters_it_again_with_its_pointer()
     let screen_now = screen(&tui);
     assert!(screen_now.alternate_screen());
     assert!(screen_now.bracketed_paste());
-    assert_eq!(
-        screen_now.mouse_protocol_mode(),
-        MouseProtocolMode::AnyMotion
-    );
+    assert_pointer(&tui, MouseProtocolMode::AnyMotion);
     // The whole screen is the viewport again.
     assert_eq!(tui.terminal.viewport_area, Rect::new(0, 0, 30, 6));
 }
@@ -105,5 +102,5 @@ fn an_alternate_screen_without_the_pointer_comes_back_without_it() {
 
     tui.reclaim(released).unwrap();
     assert!(screen(&tui).alternate_screen());
-    assert_eq!(screen(&tui).mouse_protocol_mode(), MouseProtocolMode::None);
+    assert_pointer(&tui, MouseProtocolMode::None);
 }
