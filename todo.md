@@ -453,15 +453,126 @@ and any module-size exception.
         `ConversationItem::Reasoning`, so a live view shows less than a
         replay.
       - Module size: no exception added or raised.
+      - CI on Linux, Windows and macOS: https://github.com/licyk/hanafubuki-agent/actions/runs/43382410935
+        (run on 1e69139; all three passed at once); Site:
+        .../runs/43382410976, success, its prerender included.
 
 **Context and cache ([6])**
 
-- [ ] C1: cache usage — `ModelUsage` and `AgentModelUsage` gain cache
+- [x] C1: cache usage — `ModelUsage` and `AgentModelUsage` gain cache
       read/write, last and cumulative; prompt total = uncached + read +
       write; `cached: 0` replaced. Context consumed becomes the prompt
       total: **the figure rises for Anthropic and its automatic compaction
       starts earlier** (a change of meaning in `history_committed.usage`).
       Goals count the prompt total (D10).
+      Done (2026-11-13):
+      - **Change of meaning, Anthropic only.** `lastResponseInputTokens`,
+        `cumulativeInputTokens` and `contextConsumedTokens` now count
+        `input_tokens + cache_read_input_tokens +
+        cache_creation_input_tokens`, where they counted `input_tokens`
+        (the uncached part) alone. A session on Anthropic that the cache
+        mostly serves therefore shows a higher context share and **compacts
+        automatically earlier than it did** (at the threshold of its real
+        prompt, as the other protocols always did); its turn input-token
+        budget (`maximumCumulativeModelInputTokens`) and a goal's token
+        budget fill faster. Responses and Chat Completions are unchanged:
+        their input counts already included the cached part. Per the
+        json-events stability rule the next release must be a new minor
+        version (0.3); the docs say "before 0.3".
+      - model-api: `ModelUsage` gains `cache_read_tokens` and
+        `cache_write_tokens` (`Option<u64>`, `None` not reported,
+        `#[serde(default)]`); `input_tokens` is documented as the prompt
+        total. `tolerant_decode.rs`: `token_usage` takes a `UsageFields`
+        (input, output, cache-read JSON pointers, the first that decodes
+        winning) and `cache_token_count` reads one cache count, `None`
+        (logged at debug) when it does not decode, never failing the usage.
+        Responses reads `input_tokens_details.cached_tokens`; Chat
+        Completions `prompt_tokens_details.cached_tokens`, else DeepSeek's
+        `prompt_cache_hit_tokens`; neither reports a write. Anthropic's
+        decoder keeps the uncached input and both cache counts per field
+        (a later count replaces, an absent or null one keeps, a malformed
+        one is `None` without `usage_invalid`) and sums them once in
+        `finish`, so a `message_delta` repeating the input side does not
+        double count.
+      - kernel: `AgentModelUsage` gains `last_response_cache_read_tokens`
+        and `last_response_cache_write_tokens` (`Option<u64>`),
+        `cumulative_cache_read_tokens`, `cumulative_cache_write_tokens` and
+        `cache_reporting_responses` (`u64`), each `#[serde(default,
+        deserialize_with = "tolerant")]` (a figure that does not decode is
+        its default alone, as persisted data falls back per field).
+        `next_model_usage` fills them with the same source-filtered,
+        checked accumulation as input and output; `validate_persisted_usage`
+        adds "cumulative ≥ last" for read and write. `cache_report` uses the
+        last response's cache read as `cached` (a write is not a hit).
+        Context consumed needed no code change: it is the reported
+        `input_tokens`, now the prompt total. Nothing subtracts an estimate
+        from the reported input; the budget ledger, `prefill_input_tokens`
+        and memory's `AgentMemoryModelUsage` take the prompt total too.
+      - No code change in `agent/src/goals.rs` or
+        `tui/src/agent_bridge/status.rs` (in the plan's file list): goals
+        count `cumulative_input_tokens` and the status line
+        `context_consumed_tokens`, both now the prompt total (D10).
+      - Tests: model-api — `tolerant_decode/tests.rs` (the first decodable
+        cache pointer wins, null details fall through, a malformed count is
+        `None` with the counts kept); Anthropic (`anthropic_messages/tests.rs`:
+        the prompt total adds read and write once, with `message_delta`
+        repeating or nulling the input side; no cache fields; a malformed
+        read with the write kept); Chat Completions (`chat_completions/tests.rs`:
+        `cached_tokens`, DeepSeek's field with null details, a non-integer,
+        none); Responses (`http_contract/streaming.rs`: cached tokens kept
+        in, not added to, the input; a malformed one). Kernel —
+        `loop_contract/sampling/usage.rs`: three responses (read and write,
+        read only, none) give the per-response, cumulative and counting
+        figures, context consumed the prompt total; `service/validation/tests.rs`:
+        usage persisted without the cache fields decodes with none and
+        passes recovery, a malformed figure falls back alone, a cumulative
+        read under the last fails; `service/compression/tools/tests.rs`:
+        `cache_report` counts the reads as hits (1500 of 2000, 75%), none
+        when unreported. Agent — `tests/sessions/compaction.rs`: an
+        Anthropic session over the fake server whose answer reports 1,000
+        uncached + 79,000 read + 500 written of a 100,000 window has 80,500
+        consumed and compacts before its next turn (failed with the
+        decoder's sum removed: 1,500 consumed). The decoder tests were
+        written with the change (they assert fields the old type lacked).
+      - Deviations: (1) The plan's "Anthropic's threshold test moves
+        accordingly": no existing threshold test is per protocol (the
+        kernel sees none), so the Anthropic case is the new agent test
+        above. (2) The plan says `#[serde(default)]` for the new
+        `AgentModelUsage` fields; they also take a per-field tolerant
+        reader (AGENTS.md, persisted data). (3) The new
+        `compression/tools/tests.rs` is listed as `[[original]]` in
+        `architecture/notices-policy.toml` (its directory is derived from
+        billion-context; the test is the Agent's own).
+      - Goldens: none changed.
+      - Docs (both languages): `json-events` (`usage`'s new fields; input
+        tokens and `contextConsumedTokens` the prompt total, Anthropic's
+        before 0.3); `providers-models#compaction` (what counts as the
+        context, Anthropic compacting earlier, the budgets);
+        `sessions#goals` (the prompt total); `internals` (the tolerant
+        decoding table: the cache counts, Anthropic's sum; `acp_cache`);
+        `terminal-interface#compression` (`/compression cache`).
+      - Validation: `cargo fmt --all --check`; `RUSTFLAGS="-D warnings"
+        cargo check --workspace --all-targets --all-features`; `cargo clippy
+        --workspace --all-targets --all-features -- -D warnings`; `cargo
+        xtask check`; `cargo test --workspace --all-features` (passed with
+        `--no-fail-fast` on the second run; the first stopped at an
+        unrelated flake, `plugin-packages` `guests`
+        `a_linked_guest_starts_anew_once_its_directory_changes`:
+        "signalled after 25.38µs" against its 400 ms minimum, likely the
+        first change's signal arriving just after a retry's write under
+        load; it passed alone); `bun install
+        --frozen-lockfile`, `bun run format:check:site`, `bun run
+        site:check`, `bun run site:test`; `VITE_BASE_PATH=/hanafubuki-agent/
+        bun run site:build` not run locally (port 3000 held by another
+        project's server, so the prerender cannot run); CI's Site run
+        covers it.
+      - Hanafubuki at its next pin: `ModelUsage` gains `cache_read_tokens`
+        and `cache_write_tokens`, `AgentModelUsage` gains five fields
+        (struct literals must name them or use `..`). Behaviour: on
+        Anthropic the usage's input figures and context consumed are the
+        prompt total, so its context share and compaction rise and come
+        earlier.
+      - Module size: no exception added or raised.
 - [ ] C2: `/context` — the last request's composition captured at build
       time (or an estimate of the next), grouped by instructions, tools,
       context sections, conversation, summaries, images and free space,

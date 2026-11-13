@@ -78,6 +78,7 @@ fn answer(text: &str, input_tokens: u64) -> VecDeque<ModelResult<ModelEvent>> {
             usage: Some(ModelUsage {
                 input_tokens,
                 output_tokens: 1,
+                ..Default::default()
             }),
             end_turn: Some(true),
         }),

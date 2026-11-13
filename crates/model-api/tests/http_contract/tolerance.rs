@@ -80,6 +80,7 @@ async fn an_incomplete_response_keeps_its_completed_items_and_ends_the_stream() 
             usage: Some(ModelUsage {
                 input_tokens: 5,
                 output_tokens: 9,
+                ..Default::default()
             }),
             reason: "max_output_tokens".into(),
         })

@@ -53,6 +53,7 @@ async fn fake_server_completes_fragmented_stream_and_records_exact_request() {
                 usage: Some(ModelUsage {
                     input_tokens: 7,
                     output_tokens: 3,
+                    ..Default::default()
                 }),
                 end_turn: Some(true),
             },
@@ -361,6 +362,7 @@ async fn provider_usage_keeps_given_counts_and_never_fails_the_response() {
             Some(ModelUsage {
                 input_tokens: 7,
                 output_tokens: 0,
+                ..Default::default()
             }),
         ),
         (
@@ -368,6 +370,27 @@ async fn provider_usage_keeps_given_counts_and_never_fails_the_response() {
             Some(ModelUsage {
                 input_tokens: 7,
                 output_tokens: 0,
+                ..Default::default()
+            }),
+        ),
+        // The cached part is already in `input_tokens`.
+        (
+            r#"{"input_tokens":70,"output_tokens":3,"input_tokens_details":{"cached_tokens":64}}"#,
+            Some(ModelUsage {
+                input_tokens: 70,
+                output_tokens: 3,
+                cache_read_tokens: Some(64),
+                cache_write_tokens: None,
+            }),
+        ),
+        // A cache count that does not decode is not reported, alone.
+        (
+            r#"{"input_tokens":70,"output_tokens":3,"input_tokens_details":{"cached_tokens":"64"}}"#,
+            Some(ModelUsage {
+                input_tokens: 70,
+                output_tokens: 3,
+                cache_read_tokens: None,
+                cache_write_tokens: None,
             }),
         ),
         // A count that is present but invalid is not trusted as zero: the

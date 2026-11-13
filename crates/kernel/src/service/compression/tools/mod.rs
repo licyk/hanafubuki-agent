@@ -14,6 +14,8 @@ mod decompress;
 mod export;
 mod opt_in;
 mod search;
+#[cfg(test)]
+mod tests;
 
 use hanafubuki_agent_compression::{
     apply_compression, build_cache_report, build_status_report, format_cache_report,
@@ -286,10 +288,10 @@ fn acp_cache(
     )
 }
 
-/// The cache report from what the Agent records: the last response's input
-/// and output (the model API reports no cached tokens, so none count as
-/// cached) and the folds of the session's blocks, its times of day in the
-/// local offset.
+/// The cache report from what the Agent records: the last response's prompt
+/// total, its cache reads (none when the provider reported none) and output,
+/// and the folds of the session's blocks, its times of day in the local
+/// offset. A cache write is not a hit.
 pub(super) fn cache_report(
     usage: Option<AgentModelUsage>,
     state: &AgentCompressionState,
@@ -302,7 +304,7 @@ pub(super) fn cache_report(
         .map(|usage| CacheSample {
             at: now_ms,
             input: usage.last_response_input_tokens,
-            cached: 0,
+            cached: usage.last_response_cache_read_tokens.unwrap_or(0),
             output: Some(usage.last_response_output_tokens),
         })
         .into_iter()

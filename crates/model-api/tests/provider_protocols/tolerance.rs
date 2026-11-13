@@ -46,6 +46,7 @@ async fn chat_end_of_body_without_done_after_content_completes_the_response() {
             usage: Some(ModelUsage {
                 input_tokens: 3,
                 output_tokens: 1,
+                ..Default::default()
             }),
             end_turn: None,
         })

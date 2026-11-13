@@ -155,6 +155,7 @@ pub fn deterministic_assistant_events(text: impl Into<String>) -> Vec<ModelResul
             usage: Some(ModelUsage {
                 input_tokens: 3,
                 output_tokens: 2,
+                ..Default::default()
             }),
             end_turn: Some(true),
         }),
@@ -196,6 +197,7 @@ pub fn deterministic_tool_call_events() -> Vec<ModelResult<ModelEvent>> {
             usage: Some(ModelUsage {
                 input_tokens: 4,
                 output_tokens: 1,
+                ..Default::default()
             }),
             end_turn: Some(false),
         }),

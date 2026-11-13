@@ -77,12 +77,12 @@ pub(crate) fn token_count(
 /// Usage is diagnostic and never fails a response. No usage, a null usage,
 /// a usage that is not an object, a usage with an invalid count, and a usage
 /// with neither count are all no usage (`None`); a usage with one count has
-/// the missing one as 0.
+/// the missing one as 0. A cache count that does not decode is `None` on its
+/// own.
 pub(crate) fn token_usage(
     protocol: &'static str,
     usage: Option<&Value>,
-    input_field: &str,
-    output_field: &str,
+    fields: &UsageFields,
 ) -> Option<ModelUsage> {
     let usage = match usage? {
         Value::Null => return None,
@@ -92,15 +92,45 @@ pub(crate) fn token_usage(
             return None;
         }
     };
-    let input = token_count(protocol, usage, input_field).ok()?;
-    let output = token_count(protocol, usage, output_field).ok()?;
+    let input = token_count(protocol, usage, fields.input).ok()?;
+    let output = token_count(protocol, usage, fields.output).ok()?;
     if input.is_none() && output.is_none() {
         return None;
     }
     Some(ModelUsage {
         input_tokens: input.unwrap_or(0),
         output_tokens: output.unwrap_or(0),
+        cache_read_tokens: fields
+            .cache_read
+            .iter()
+            .find_map(|pointer| cache_token_count(protocol, usage, pointer)),
+        cache_write_tokens: None,
     })
+}
+
+/// Where a protocol's usage object keeps its counts.
+pub(crate) struct UsageFields {
+    pub(crate) input: &'static str,
+    pub(crate) output: &'static str,
+    /// JSON pointers to the cache-read count, the first that decodes
+    /// winning. The input count already includes it.
+    pub(crate) cache_read: &'static [&'static str],
+}
+
+/// The cache count at `pointer` of a usage object: `None` when absent, null
+/// or not an unsigned integer (logged at debug).
+pub(crate) fn cache_token_count(
+    protocol: &'static str,
+    usage: &Value,
+    pointer: &str,
+) -> Option<u64> {
+    match usage.pointer(pointer) {
+        None | Some(Value::Null) => None,
+        Some(value) => value.as_u64().or_else(|| {
+            log::debug!("model.usage.ignored protocol={protocol} field={pointer} reason=invalid");
+            None
+        }),
+    }
 }
 
 #[cfg(test)]

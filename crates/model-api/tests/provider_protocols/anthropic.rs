@@ -179,6 +179,7 @@ async fn anthropic_messages_stream_maps_tools_usage_and_authentication() {
             usage: Some(ModelUsage {
                 input_tokens: 12,
                 output_tokens: 18,
+                ..Default::default()
             }),
             end_turn: Some(false),
         })

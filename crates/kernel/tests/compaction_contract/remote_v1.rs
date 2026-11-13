@@ -31,6 +31,7 @@ async fn responses_compact_v1_filters_execution_items_and_keeps_typed_opaque_rep
             usage: Some(ModelUsage {
                 input_tokens: 10,
                 output_tokens: 1,
+                ..Default::default()
             }),
         })],
     );

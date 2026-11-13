@@ -436,6 +436,10 @@ path = "crates/kernel/src/core_tools/compression_spec.rs"
 markers = ["Derived from billion-context (https://github.com/ranxianglei/billion-context),"]
 notice = "crates/kernel/src/core_tools/compression_spec.rs"
 
+[[original]]
+path = "crates/kernel/src/service/compression/tools/tests.rs"
+reason = "The cache report from the usage the Agent records: the provider's cache reads as hits."
+
 [[mit]]
 path = "crates/tui/src/custom_terminal.rs"
 holder = "Copyright (c) 2016-2022 Florian Dehau"

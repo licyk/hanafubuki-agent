@@ -88,6 +88,8 @@ fn held(gate: &Gate, answer: Answer) -> ScriptedCompaction {
 const COMPACTION_USAGE: ModelUsage = ModelUsage {
     input_tokens: 700,
     output_tokens: 30,
+    cache_read_tokens: None,
+    cache_write_tokens: None,
 };
 
 struct ScriptedTurnResponse {

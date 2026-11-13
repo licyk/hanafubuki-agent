@@ -89,6 +89,7 @@ fn a_usage_only_chunk_without_choices_records_usage() {
             usage: Some(ModelUsage {
                 input_tokens: 4,
                 output_tokens: 1,
+                ..Default::default()
             }),
             end_turn: Some(true),
         })
@@ -108,10 +109,50 @@ fn usage_with_a_missing_count_keeps_the_other_and_unusable_usage_is_ignored() {
             usage: Some(ModelUsage {
                 input_tokens: 4,
                 output_tokens: 0,
+                cache_read_tokens: None,
+                cache_write_tokens: None,
             }),
             ..
         })
     ));
+}
+
+#[test]
+fn cache_reads_are_part_of_the_prompt_tokens_from_either_field() {
+    for (usage, cached) in [
+        (
+            json!({"prompt_tokens": 40, "completion_tokens": 1, "prompt_tokens_details": {"cached_tokens": 32}}),
+            Some(32),
+        ),
+        (
+            json!({"prompt_tokens": 40, "completion_tokens": 1, "prompt_tokens_details": null, "prompt_cache_hit_tokens": 24, "prompt_cache_miss_tokens": 16}),
+            Some(24),
+        ),
+        (
+            json!({"prompt_tokens": 40, "completion_tokens": 1, "prompt_tokens_details": {"cached_tokens": 1.5}}),
+            None,
+        ),
+        (json!({"prompt_tokens": 40, "completion_tokens": 1}), None),
+    ] {
+        let (mut decoder, _) = decode_all(&[
+            json!({"id": "chat", "choices": [{"index": 0, "delta": {"content": "hi"}}]}),
+            json!({"id": "chat", "choices": [], "usage": usage}),
+        ]);
+        assert_eq!(
+            done(&mut decoder).last(),
+            Some(&ModelEvent::ResponseCompleted {
+                response_id: "chat".into(),
+                usage: Some(ModelUsage {
+                    input_tokens: 40,
+                    output_tokens: 1,
+                    cache_read_tokens: cached,
+                    cache_write_tokens: None,
+                }),
+                end_turn: None,
+            }),
+            "{usage}"
+        );
+    }
 }
 
 #[test]

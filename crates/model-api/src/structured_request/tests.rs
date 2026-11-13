@@ -134,6 +134,7 @@ fn completed() -> ModelEvent {
         usage: Some(ModelUsage {
             input_tokens: 10,
             output_tokens: 2,
+            ..Default::default()
         }),
         end_turn: Some(true),
     }

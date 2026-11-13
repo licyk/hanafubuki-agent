@@ -231,8 +231,11 @@ fn response_usage(value: &Value) -> Option<ModelUsage> {
     crate::tolerant_decode::token_usage(
         PROTOCOL,
         value.pointer("/response/usage"),
-        "input_tokens",
-        "output_tokens",
+        &crate::tolerant_decode::UsageFields {
+            input: "input_tokens",
+            output: "output_tokens",
+            cache_read: &["/input_tokens_details/cached_tokens"],
+        },
     )
 }
 

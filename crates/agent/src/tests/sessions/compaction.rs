@@ -256,3 +256,72 @@ async fn an_anthropic_local_summary_declares_the_turns_tools_and_calls_none() {
     assert_eq!(summary["tool_choice"], serde_json::json!({"type": "none"}));
     finish(service, paths);
 }
+
+/// Anthropic counts its prompt cache apart from `input_tokens`; the context
+/// consumed is the prompt total, so a request mostly read from the cache
+/// still reaches the threshold (80% of 100,000) and the next turn compacts
+/// first.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_anthropic_cache_read_counts_toward_the_compaction_threshold() {
+    // Long, so that the summary is smaller than what it replaces.
+    let answer = "The answer is long. ".repeat(100);
+    let cached_answer = String::from_utf8(anthropic_assistant_events(&answer))
+        .unwrap()
+        .replace(
+            "\"input_tokens\":10,",
+            "\"input_tokens\":1000,\"cache_read_input_tokens\":79000,\"cache_creation_input_tokens\":500,",
+        )
+        .into_bytes();
+    let server = FakeServer::start(vec![
+        (cached_answer, Duration::ZERO),
+        (
+            anthropic_assistant_events("The user asked to read."),
+            Duration::ZERO,
+        ),
+        (anthropic_assistant_events("Still here."), Duration::ZERO),
+    ])
+    .await;
+    let (service, paths) = service_with("anthropic-cache-threshold", |_, config| {
+        configure_test_provider(config, &server.base_url, None);
+        config
+            .mutate_providers(1, |registry| {
+                registry.providers[0].protocol = AgentModelProtocol::AnthropicMessages;
+                registry.model_policy.context_window_tokens = Some(100_000);
+                Ok(())
+            })
+            .unwrap();
+    });
+    let session = service
+        .create_session(AgentSessionMode::Default, None)
+        .await
+        .unwrap();
+    service
+        .start_turn(session.id, "Read it.".to_string().into())
+        .await
+        .unwrap();
+    let usage = service.snapshot(session.id).unwrap().usage.unwrap();
+    assert_eq!(usage.last_response_input_tokens, 80_500);
+    assert_eq!(usage.context_consumed_tokens, Some(80_500));
+    assert_eq!(usage.last_response_cache_read_tokens, Some(79_000));
+    assert_eq!(usage.last_response_cache_write_tokens, Some(500));
+    assert_eq!(usage.cache_reporting_responses, 1);
+
+    service
+        .start_turn(session.id, "Are you there?".to_string().into())
+        .await
+        .unwrap();
+    let requests = server.requests();
+    assert_eq!(requests.len(), 3);
+    let summary: Value = serde_json::from_slice(&requests[1].body).unwrap();
+    assert!(summary.to_string().contains("Read it."));
+    assert_eq!(
+        service
+            .snapshot(session.id)
+            .unwrap()
+            .compaction
+            .unwrap()
+            .status,
+        AgentCompactionStatus::Completed
+    );
+    finish(service, paths);
+}

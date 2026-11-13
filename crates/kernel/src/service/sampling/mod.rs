@@ -22,12 +22,8 @@ pub(super) fn next_model_usage(
     estimated_input_tokens: u64,
     estimated_output_tokens: u64,
 ) -> Result<Option<AgentModelUsage>, AgentError> {
-    let (input_tokens, output_tokens, source) = match reported {
-        Some(usage) => (
-            usage.input_tokens,
-            usage.output_tokens,
-            AgentUsageSource::ProviderReported,
-        ),
+    let (usage, source) = match reported {
+        Some(usage) => (usage, AgentUsageSource::ProviderReported),
         None if record
             .runtime
             .usage
@@ -36,36 +32,56 @@ pub(super) fn next_model_usage(
             return Ok(None)
         }
         None => (
-            estimated_input_tokens,
-            estimated_output_tokens,
+            hanafubuki_agent_model_api::ModelUsage {
+                input_tokens: estimated_input_tokens,
+                output_tokens: estimated_output_tokens,
+                ..Default::default()
+            },
             AgentUsageSource::Estimated,
         ),
     };
     let previous = record.runtime.usage.filter(|usage| usage.source == source);
-    let cumulative_input_tokens = previous.map_or(Ok(input_tokens), |usage| {
-        usage
-            .cumulative_input_tokens
-            .checked_add(input_tokens)
-            .ok_or(AgentError::UsageOverflow {
-                field: "cumulative input tokens",
-            })
-    })?;
-    let cumulative_output_tokens = previous.map_or(Ok(output_tokens), |usage| {
-        usage
-            .cumulative_output_tokens
-            .checked_add(output_tokens)
-            .ok_or(AgentError::UsageOverflow {
-                field: "cumulative output tokens",
-            })
-    })?;
+    let add = |field, cumulative: fn(&AgentModelUsage) -> u64, value: u64| {
+        previous
+            .as_ref()
+            .map_or(0, cumulative)
+            .checked_add(value)
+            .ok_or(AgentError::UsageOverflow { field })
+    };
+    let reports_cache = usage.cache_read_tokens.is_some() || usage.cache_write_tokens.is_some();
     Ok(Some(AgentModelUsage {
-        last_response_input_tokens: input_tokens,
-        last_response_output_tokens: output_tokens,
-        cumulative_input_tokens,
-        cumulative_output_tokens,
+        last_response_input_tokens: usage.input_tokens,
+        last_response_output_tokens: usage.output_tokens,
+        cumulative_input_tokens: add(
+            "cumulative input tokens",
+            |usage| usage.cumulative_input_tokens,
+            usage.input_tokens,
+        )?,
+        cumulative_output_tokens: add(
+            "cumulative output tokens",
+            |usage| usage.cumulative_output_tokens,
+            usage.output_tokens,
+        )?,
         context_window_tokens: record.settings.config.context_window_tokens,
-        context_consumed_tokens: Some(input_tokens),
+        context_consumed_tokens: Some(usage.input_tokens),
         source,
+        last_response_cache_read_tokens: usage.cache_read_tokens,
+        last_response_cache_write_tokens: usage.cache_write_tokens,
+        cumulative_cache_read_tokens: add(
+            "cumulative cache read tokens",
+            |usage| usage.cumulative_cache_read_tokens,
+            usage.cache_read_tokens.unwrap_or(0),
+        )?,
+        cumulative_cache_write_tokens: add(
+            "cumulative cache write tokens",
+            |usage| usage.cumulative_cache_write_tokens,
+            usage.cache_write_tokens.unwrap_or(0),
+        )?,
+        cache_reporting_responses: add(
+            "cache reporting responses",
+            |usage| usage.cache_reporting_responses,
+            u64::from(reports_cache),
+        )?,
     }))
 }
 

@@ -178,6 +178,7 @@ async fn chat_completions_stream_maps_text_usage_and_exact_request() {
             usage: Some(ModelUsage {
                 input_tokens: 9,
                 output_tokens: 2,
+                ..Default::default()
             }),
             end_turn: Some(true),
         })

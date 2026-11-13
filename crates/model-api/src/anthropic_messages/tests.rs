@@ -109,8 +109,91 @@ fn usage_with_a_missing_count_keeps_the_other() {
             usage: Some(ModelUsage {
                 input_tokens: 3,
                 output_tokens: 0,
+                ..Default::default()
             }),
             end_turn: Some(true),
+        })
+    );
+}
+
+fn completed_usage(frames: &[Value]) -> Option<ModelUsage> {
+    match decode_all(frames).last() {
+        Some(ModelEvent::ResponseCompleted { usage, .. }) => *usage,
+        other => panic!("not a completed response: {other:?}"),
+    }
+}
+
+#[test]
+fn the_prompt_total_adds_the_cache_to_the_uncached_input_once() {
+    let start = message_start(json!({
+        "input_tokens": 3,
+        "cache_read_input_tokens": 1000,
+        "cache_creation_input_tokens": 200,
+        "output_tokens": 1
+    }));
+    let stop = json!({"type": "message_stop"});
+    let expected = Some(ModelUsage {
+        input_tokens: 1203,
+        output_tokens: 9,
+        cache_read_tokens: Some(1000),
+        cache_write_tokens: Some(200),
+    });
+    // `message_delta` may repeat the input side; its counts replace, never
+    // add to, the start's.
+    for delta_usage in [
+        json!({"output_tokens": 9}),
+        json!({
+            "input_tokens": 3,
+            "cache_read_input_tokens": 1000,
+            "cache_creation_input_tokens": 200,
+            "output_tokens": 9
+        }),
+        json!({"cache_read_input_tokens": null, "output_tokens": 9}),
+    ] {
+        let delta = json!({"type": "message_delta", "delta": {}, "usage": delta_usage});
+        assert_eq!(
+            completed_usage(&[start.clone(), delta, stop.clone()]),
+            expected,
+            "{delta_usage}"
+        );
+    }
+}
+
+#[test]
+fn usage_without_cache_counts_reports_no_cache() {
+    let usage = completed_usage(&[
+        message_start(json!({"input_tokens": 3, "output_tokens": 1})),
+        json!({"type": "message_stop"}),
+    ]);
+    assert_eq!(
+        usage,
+        Some(ModelUsage {
+            input_tokens: 3,
+            output_tokens: 1,
+            cache_read_tokens: None,
+            cache_write_tokens: None,
+        })
+    );
+}
+
+#[test]
+fn a_malformed_cache_count_is_left_out_and_the_rest_kept() {
+    let usage = completed_usage(&[
+        message_start(json!({
+            "input_tokens": 3,
+            "cache_read_input_tokens": "1000",
+            "cache_creation_input_tokens": 200,
+            "output_tokens": 1
+        })),
+        json!({"type": "message_stop"}),
+    ]);
+    assert_eq!(
+        usage,
+        Some(ModelUsage {
+            input_tokens: 203,
+            output_tokens: 1,
+            cache_read_tokens: None,
+            cache_write_tokens: Some(200),
         })
     );
 }

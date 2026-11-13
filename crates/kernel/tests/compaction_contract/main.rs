@@ -199,6 +199,7 @@ fn response(id: &str, text: &str, input_tokens: u64) -> ScriptedResponse {
             usage: Some(ModelUsage {
                 input_tokens,
                 output_tokens: 2,
+                ..Default::default()
             }),
             end_turn: Some(true),
         }),
@@ -267,6 +268,7 @@ fn tool_response_with_usage_and_commentary(
             usage: Some(ModelUsage {
                 input_tokens,
                 output_tokens: 1,
+                ..Default::default()
             }),
             end_turn: Some(false),
         }),
@@ -309,6 +311,7 @@ fn new_context_tool_response() -> ScriptedResponse {
             usage: Some(ModelUsage {
                 input_tokens: 10,
                 output_tokens: 1,
+                ..Default::default()
             }),
             end_turn: Some(false),
         }),
@@ -342,6 +345,7 @@ fn v2_compaction_response(payloads: &[&str], assistant_text: Option<&str>) -> Sc
         usage: Some(ModelUsage {
             input_tokens: 40,
             output_tokens: 2,
+            ..Default::default()
         }),
         end_turn: Some(true),
     }));

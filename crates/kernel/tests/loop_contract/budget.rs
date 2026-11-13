@@ -24,6 +24,7 @@ async fn cumulative_model_budget_rejects_response_commit_atomically() {
             tool_call_events_with_usage(ModelUsage {
                 input_tokens: 9,
                 output_tokens: 1,
+                ..Default::default()
             }),
         ),
         FakeModelExchange::new(
@@ -33,6 +34,7 @@ async fn cumulative_model_budget_rejects_response_commit_atomically() {
                 Some(ModelUsage {
                     input_tokens: 2,
                     output_tokens: 1,
+                    ..Default::default()
                 }),
             ),
         ),

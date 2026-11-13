@@ -393,7 +393,7 @@ Under the `hierarchical` [compaction strategy](/docs/configuration#compaction) t
 `/compression` reads the session's compression without changing it or asking the model:
 
 - **The panel** (billion-context's): the context against the window, what is sent after compression and how it splits, the reminder to fold and the ranges it offers, and each active block with its tier, the tokens it replaced, its summary's size and its topic. Below it come the counters (the `compress` calls applied, the tokens compressed and absorbed, the tool results stored and retrieved) and, while `contentStore` is on, the content store's size.
-- **`/compression cache`** shows the cache report: the last request's tokens and each fold, with what the folds saved. The Providers' streams report no cached tokens to the Agent, so none count as cached.
+- **`/compression cache`** shows the cache report: the last request's tokens and each fold, with what the folds saved. The cached tokens are the cache reads the Provider reported; one that reports none shows none cached.
 - A session that never ran the strategy says it is not using hierarchical compression.
 
 The [status line](#status-line)'s `compression` item shows the active blocks and the tokens folded away.

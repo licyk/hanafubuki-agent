@@ -392,7 +392,7 @@ Scrollback 下，对话由终端保存：用终端滚动、选择和复制。最
 `/compression` 读取会话的压缩情况，既不改变会话，也不询问模型：
 
 - **面板**（来自 billion-context）：上下文相对窗口的占用、压缩之后发送的内容及其构成、折叠提醒及其给出的范围，以及每个活动块的层级、它替换的 token 数、摘要的大小和主题。下面是计数（已应用的 `compress` 调用、压缩和吸收的 token、存储和取回的工具结果），`contentStore` 开启时还有内容存储的大小。
-- **`/compression cache`** 显示缓存报告：最近一次请求的 token 和每次折叠，以及折叠节省的量。Provider 的响应流不向 Agent 报告缓存命中的 token，所以都不计为缓存。
+- **`/compression cache`** 显示缓存报告：最近一次请求的 token 和每次折叠，以及折叠节省的量。缓存的 token 是 Provider 报告的缓存读取；未报告的 Provider 显示为没有缓存。
 - 从未运行过该策略的会话会说明它没有使用分层压缩。
 
 [状态栏](#status-line)的 `compression` 项显示活动块数和折叠掉的 token 数。

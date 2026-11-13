@@ -12,13 +12,44 @@ pub enum AgentUsageSource {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentModelUsage {
+    /// The prompt total: uncached input + cache read + cache write
+    /// (`ModelUsage::input_tokens`).
     pub last_response_input_tokens: u64,
     pub last_response_output_tokens: u64,
     pub cumulative_input_tokens: u64,
     pub cumulative_output_tokens: u64,
     pub context_window_tokens: Option<u64>,
+    /// The last response's prompt total, or after a compaction the
+    /// estimate of the next request.
     pub context_consumed_tokens: Option<u64>,
     pub source: AgentUsageSource,
+    /// The part of the last response's input read from the provider's
+    /// cache; `None` when it reported none.
+    #[serde(default, deserialize_with = "tolerant")]
+    pub last_response_cache_read_tokens: Option<u64>,
+    /// The part of the last response's input written to the provider's
+    /// cache; `None` when it reported none.
+    #[serde(default, deserialize_with = "tolerant")]
+    pub last_response_cache_write_tokens: Option<u64>,
+    #[serde(default, deserialize_with = "tolerant")]
+    pub cumulative_cache_read_tokens: u64,
+    #[serde(default, deserialize_with = "tolerant")]
+    pub cumulative_cache_write_tokens: u64,
+    /// The responses counted in the cumulative figures that reported a
+    /// cache read or write.
+    #[serde(default, deserialize_with = "tolerant")]
+    pub cache_reporting_responses: u64,
+}
+
+/// A cache figure of a persisted usage that does not decode is its default
+/// alone (the cache fields came later than the rest).
+fn tolerant<'de, D, T>(deserializer: D) -> Result<T, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: serde::de::DeserializeOwned + Default,
+{
+    let value = serde_json::Value::deserialize(deserializer)?;
+    Ok(serde_json::from_value(value).unwrap_or_default())
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]

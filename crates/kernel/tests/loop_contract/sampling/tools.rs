@@ -228,6 +228,11 @@ async fn fake_model_and_tools_complete_a_deterministic_two_sampling_loop() {
             context_window_tokens: None,
             context_consumed_tokens: Some(3),
             source: AgentUsageSource::ProviderReported,
+            last_response_cache_read_tokens: None,
+            last_response_cache_write_tokens: None,
+            cumulative_cache_read_tokens: 0,
+            cumulative_cache_write_tokens: 0,
+            cache_reporting_responses: 0,
         })
     );
     let final_answer_message_id = snapshot

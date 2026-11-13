@@ -479,3 +479,52 @@ fn a_context_window_source_reads_tolerantly_and_goes_with_its_window() {
         (None, None)
     );
 }
+
+/// Usage persisted before the cache figures decodes with none, and passes
+/// recovery; a cache figure that does not decode is none alone; a
+/// cumulative figure below the last response's fails recovery.
+#[test]
+fn persisted_usage_without_cache_figures_decodes_and_recovers() {
+    let config = responses_only_config(hanafubuki_agent_model_api::ModelApiProtocol::Responses);
+    let old = serde_json::json!({
+        "lastResponseInputTokens": 1200,
+        "lastResponseOutputTokens": 80,
+        "cumulativeInputTokens": 45_000,
+        "cumulativeOutputTokens": 3_000,
+        "contextWindowTokens": 128_000,
+        "contextConsumedTokens": 1200,
+        "source": "provider_reported"
+    });
+    let usage: AgentModelUsage = serde_json::from_value(old.clone()).unwrap();
+    assert_eq!(
+        (
+            usage.last_response_cache_read_tokens,
+            usage.last_response_cache_write_tokens,
+            usage.cumulative_cache_read_tokens,
+            usage.cumulative_cache_write_tokens,
+            usage.cache_reporting_responses,
+        ),
+        (None, None, 0, 0, 0)
+    );
+    validate_persisted_usage(Some(usage), &config).unwrap();
+
+    let mut value = old;
+    value["lastResponseCacheReadTokens"] = serde_json::json!("900");
+    value["cumulativeCacheReadTokens"] = serde_json::json!(-1);
+    value["lastResponseCacheWriteTokens"] = serde_json::json!(100);
+    value["cumulativeCacheWriteTokens"] = serde_json::json!(400);
+    value["cacheReportingResponses"] = serde_json::json!(2);
+    let usage: AgentModelUsage = serde_json::from_value(value).unwrap();
+    assert_eq!(usage.last_response_cache_read_tokens, None);
+    assert_eq!(usage.cumulative_cache_read_tokens, 0);
+    assert_eq!(usage.last_response_cache_write_tokens, Some(100));
+    assert_eq!(usage.cache_reporting_responses, 2);
+    validate_persisted_usage(Some(usage), &config).unwrap();
+
+    let regressed = AgentModelUsage {
+        last_response_cache_read_tokens: Some(900),
+        cumulative_cache_read_tokens: 800,
+        ..usage
+    };
+    assert!(validate_persisted_usage(Some(regressed), &config).is_err());
+}

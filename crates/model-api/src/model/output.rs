@@ -129,9 +129,23 @@ pub enum ModelOutputItem {
     },
 }
 
+/// What a response's provider reported it used.
+///
+/// `input_tokens` is the prompt total, every input token the request was
+/// billed for, cached or not: uncached input + cache read + cache write,
+/// whatever the protocol (Anthropic reports the cache apart; the decoder
+/// adds it back).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ModelUsage {
     pub input_tokens: u64,
     pub output_tokens: u64,
+    /// The part of `input_tokens` read from the provider's prompt cache;
+    /// `None` when the provider reported none.
+    #[serde(default)]
+    pub cache_read_tokens: Option<u64>,
+    /// The part of `input_tokens` written to the provider's prompt cache;
+    /// `None` when the provider reported none.
+    #[serde(default)]
+    pub cache_write_tokens: Option<u64>,
 }

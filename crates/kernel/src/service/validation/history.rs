@@ -146,6 +146,8 @@ pub(in crate::service) fn validate_persisted_usage(
     }
     if usage.cumulative_input_tokens < usage.last_response_input_tokens
         || usage.cumulative_output_tokens < usage.last_response_output_tokens
+        || usage.cumulative_cache_read_tokens < usage.last_response_cache_read_tokens.unwrap_or(0)
+        || usage.cumulative_cache_write_tokens < usage.last_response_cache_write_tokens.unwrap_or(0)
     {
         return Err(AgentError::Persistence(
             "Agent cumulative usage is smaller than the last response usage".to_string(),

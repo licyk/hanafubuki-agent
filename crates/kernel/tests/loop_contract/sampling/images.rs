@@ -62,6 +62,7 @@ async fn large_view_image_output_does_not_trigger_compaction_from_base64_size() 
             usage: Some(ModelUsage {
                 input_tokens: 5_607,
                 output_tokens: 109,
+                ..Default::default()
             }),
             end_turn: Some(false),
         }),
@@ -75,6 +76,7 @@ async fn large_view_image_output_does_not_trigger_compaction_from_base64_size() 
                 Some(ModelUsage {
                     input_tokens: 6_000,
                     output_tokens: 20,
+                    ..Default::default()
                 }),
             ),
         ),

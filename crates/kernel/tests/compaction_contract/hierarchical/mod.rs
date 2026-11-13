@@ -81,6 +81,7 @@ fn call(name: &str, call_id: &str, arguments: serde_json::Value) -> ScriptedResp
             usage: Some(ModelUsage {
                 input_tokens: 2_000,
                 output_tokens: 1,
+                ..Default::default()
             }),
             end_turn: Some(false),
         }),

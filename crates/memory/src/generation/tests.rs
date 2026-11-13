@@ -148,6 +148,7 @@ fn private_tool_events(name: &str, arguments: serde_json::Value) -> Vec<ModelRes
             usage: Some(ModelUsage {
                 input_tokens: 12,
                 output_tokens: 5,
+                ..Default::default()
             }),
             end_turn: Some(false),
         }),

@@ -161,6 +161,8 @@ Provider 拒绝推理参数时（状态码 400 或 422，并指名该参数，�
 
 上下文用到窗口的 `autoCompactThresholdPercent`（默认 80%）时，Agent 会在回合开始前或回合中自动压缩：把较早的对话总结成摘要，保留最近的消息。如果窗口剩下的部分已容不下一次回复，它会更早压缩：为模型的最大输出留出空间（模型目录没有报告时按 32,768 token 计），但最多为窗口的十分之一、至少 4,096 token，且不超过窗口的一半。所以在默认的 80% 下，窗口在 20,480 token 及以上时由阈值决定，而在 10,000 的窗口上 Agent 在 5,904 时压缩。
 
+上下文是 Provider 报告的上一次请求的提示总量：每个输入 token，无论是否从提示缓存读取，以及写入缓存的 token。Responses 和 Chat Completions 协议报告的就是这个总量；Anthropic 把缓存分开报告，Agent 把它加回去。所以在 Anthropic 上，主要由缓存提供的对话与其他协议在同样的大小达到阈值；0.3 之前只计它未缓存的输入，压缩得比应有的晚。`/status`、状态栏、回合的输入 token 预算和[目标](/docs/sessions#goals)的 token 预算计的都是同一个总量。
+
 Provider 以超出模型窗口为由拒绝请求时，Agent 会压缩一次并重试；再次被拒时回合失败（`context_window_exceeded`）。它还会从拒绝中学习：拒绝中写明的窗口（`maximum context length is 131072 tokens`），或在没有写明时，被拒请求的大小（窗口一定比它小）。会话立即采用这个窗口，于是重试和之后的轮次会在窗口填满前压缩，对话中也会提示（`The Provider refused the request as too long; this model's window is taken as 131072 from now on.`）。此后同一 Provider 上同一模型的每个会话都从这个窗口开始，重启后也一样，为期 7 天；在此之前只有更小的窗口才会替换它，[遗忘](#forget)则会丢弃它。即使关闭了自动压缩也会学习，且从不替换你设置的 `contextWindowTokens`。
 
 | 设置                          | 默认值       | 作用                                                                                       |

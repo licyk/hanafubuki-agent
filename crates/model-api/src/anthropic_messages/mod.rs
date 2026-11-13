@@ -109,8 +109,11 @@ enum ContentBlock {
 
 struct AnthropicDecoder {
     response_id: Option<String>,
+    /// The uncached input: Anthropic's `input_tokens` excludes the cache.
     input_tokens: Option<u64>,
     output_tokens: Option<u64>,
+    cache_read_tokens: Option<u64>,
+    cache_write_tokens: Option<u64>,
     /// A token count arrived that is not an unsigned integer; the response
     /// then reports no usage rather than a count it cannot trust.
     usage_invalid: bool,
@@ -127,6 +130,8 @@ impl AnthropicDecoder {
             response_id: None,
             input_tokens: None,
             output_tokens: None,
+            cache_read_tokens: None,
+            cache_write_tokens: None,
             usage_invalid: false,
             stop_reason: None,
             blocks: BTreeMap::new(),
@@ -199,9 +204,10 @@ impl AnthropicDecoder {
 
     /// Records the counts a usage object carries. `message_start` and
     /// `message_delta` each carry some; a later count replaces an earlier
-    /// one, and an absent count keeps it.
+    /// one, and an absent count keeps it. A cache count that does not decode
+    /// is dropped on its own.
     fn record_usage(&mut self, usage: &Value) {
-        use crate::tolerant_decode::token_count;
+        use crate::tolerant_decode::{cache_token_count, token_count};
         match token_count(PROTOCOL, usage, "input_tokens") {
             Ok(Some(input)) => self.input_tokens = Some(input),
             Ok(None) => {}
@@ -211,6 +217,14 @@ impl AnthropicDecoder {
             Ok(Some(output)) => self.output_tokens = Some(output),
             Ok(None) => {}
             Err(_) => self.usage_invalid = true,
+        }
+        for (pointer, count) in [
+            ("/cache_read_input_tokens", &mut self.cache_read_tokens),
+            ("/cache_creation_input_tokens", &mut self.cache_write_tokens),
+        ] {
+            if !usage.pointer(pointer).is_none_or(Value::is_null) {
+                *count = cache_token_count(PROTOCOL, usage, pointer);
+            }
         }
     }
 
@@ -452,8 +466,13 @@ impl AnthropicDecoder {
         let usage = match (self.usage_invalid, self.input_tokens, self.output_tokens) {
             (true, _, _) | (false, None, None) => None,
             (false, input_tokens, output_tokens) => Some(ModelUsage {
-                input_tokens: input_tokens.unwrap_or(0),
+                input_tokens: input_tokens
+                    .unwrap_or(0)
+                    .saturating_add(self.cache_read_tokens.unwrap_or(0))
+                    .saturating_add(self.cache_write_tokens.unwrap_or(0)),
                 output_tokens: output_tokens.unwrap_or(0),
+                cache_read_tokens: self.cache_read_tokens,
+                cache_write_tokens: self.cache_write_tokens,
             }),
         };
         Ok(vec![ModelEvent::ResponseCompleted {

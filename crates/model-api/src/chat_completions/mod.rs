@@ -166,8 +166,15 @@ impl ChatDecoder {
         if let Some(usage) = crate::tolerant_decode::token_usage(
             "chat_completions",
             value.get("usage"),
-            "prompt_tokens",
-            "completion_tokens",
+            &crate::tolerant_decode::UsageFields {
+                input: "prompt_tokens",
+                output: "completion_tokens",
+                // DeepSeek reports its cache hits beside the counts.
+                cache_read: &[
+                    "/prompt_tokens_details/cached_tokens",
+                    "/prompt_cache_hit_tokens",
+                ],
+            },
         ) {
             self.usage = Some(usage);
         }
