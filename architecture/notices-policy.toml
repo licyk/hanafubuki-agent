@@ -490,7 +490,7 @@ reason = "The tests of the model metadata's names in the interface, the efforts 
 
 [[original]]
 path = "crates/tui/src/tui/input.rs"
-reason = "The thread that reads the terminal, written in place of Codex's event-stream broker."
+reason = "The thread that reads the terminal, stopped while another program has it, written in place of Codex's event-stream broker."
 
 [[original]]
 path = "crates/tui/src/app/tests/mod.rs"
@@ -511,6 +511,14 @@ reason = "`!command`s end to end over the standalone Agent and its scripted mode
 [[original]]
 path = "crates/tui/src/app/tests/history_search.rs"
 reason = "Ctrl+R end to end over the standalone Agent: what an earlier run sent found through the history store, and the search closed while a turn runs."
+
+[[original]]
+path = "crates/tui/src/app/tests/external_editor.rs"
+reason = "Ctrl+G end to end over the standalone Agent in both presentations, with an editor that is a script: the draft edited and sent, the terminal's screen and modes back, each failure keeping the draft."
+
+[[original]]
+path = "crates/tui/src/tui/handoff/tests.rs"
+reason = "The terminal's modes, as a vt100 screen reads them, released for another program and taken back in each presentation."
 
 [[original]]
 path = "crates/tui/src/app/tests/queue.rs"

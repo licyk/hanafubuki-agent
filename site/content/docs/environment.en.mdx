@@ -6,14 +6,14 @@ icon: Variable
 
 ## What the Agent reads [#read]
 
-| Variable                                             | Does                                                                                                                                                                    |
-| ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `HANAFUBUKI_AGENT_HOME`                              | One directory in place of both the configuration and the data directory. A relative path is taken from the current directory (not `-C`); an empty value counts as unset |
-| `XDG_CONFIG_HOME`, `XDG_DATA_HOME`                   | On Linux, where the configuration and data directories are based; `~/.config` and `~/.local/share` by default                                                           |
-| `VISUAL`, `EDITOR`                                   | The editor `config edit` opens, `VISUAL` first. It may have arguments, such as `code --wait`                                                                            |
-| The variable `--api-key-env` names                   | `providers add` reads the API token from it, once, when the Provider is added                                                                                           |
-| `PATH` (and `PATHEXT` on Windows)                    | Finding a stdio MCP server's program                                                                                                                                    |
-| `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, `NO_PROXY` | The proxy of the requests to model Providers; see [Network and logging](/docs/network-logging#provider-proxy)                                                           |
+| Variable                                             | Does                                                                                                                                                                                 |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `HANAFUBUKI_AGENT_HOME`                              | One directory in place of both the configuration and the data directory. A relative path is taken from the current directory (not `-C`); an empty value counts as unset              |
+| `XDG_CONFIG_HOME`, `XDG_DATA_HOME`                   | On Linux, where the configuration and data directories are based; `~/.config` and `~/.local/share` by default                                                                        |
+| `VISUAL`, `EDITOR`                                   | The editor `config edit` opens and Ctrl-G edits the draft in ([Terminal interface](/docs/terminal-interface#composer)), `VISUAL` first. It may have arguments, such as `code --wait` |
+| The variable `--api-key-env` names                   | `providers add` reads the API token from it, once, when the Provider is added                                                                                                        |
+| `PATH` (and `PATHEXT` on Windows)                    | Finding a stdio MCP server's program                                                                                                                                                 |
+| `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, `NO_PROXY` | The proxy of the requests to model Providers; see [Network and logging](/docs/network-logging#provider-proxy)                                                                        |
 
 The Agent itself reads neither `RUST_LOG` nor `NO_COLOR`: the log level is `logLevel` and `--log-level`; see [Network and logging](/docs/network-logging#logging).
 

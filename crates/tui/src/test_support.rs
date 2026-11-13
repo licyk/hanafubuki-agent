@@ -1,10 +1,12 @@
 // Modified from OpenAI Codex rust-v0.93.0 (Apache-2.0).
 
-//! A terminal for tests: crossterm's backend writing into a vt100 screen.
+//! A terminal for tests: crossterm's backend writing into a vt100 screen;
+//! and an external editor that edits no file interactively.
 
 use std::fmt::{self};
 use std::io::Write;
 use std::io::{self};
+use std::path::PathBuf;
 
 use ratatui::backend::CrosstermBackend;
 
@@ -127,5 +129,56 @@ impl Backend for VT100Backend {
         scroll_by: u16,
     ) -> io::Result<()> {
         self.crossterm_backend.scroll_region_down(region, scroll_by)
+    }
+}
+
+/// An "editor" for Ctrl+G's tests: a script that keeps the file it was
+/// given as `seen.md`, replaces it with `result.md` and exits with its
+/// code; `sh` runs it on Unix, and it is a `.cmd` on Windows.
+pub(crate) struct FakeEditor {
+    dir: tempfile::TempDir,
+}
+
+impl FakeEditor {
+    pub(crate) fn new(result: &[u8], code: i32) -> Self {
+        let dir = tempfile::tempdir().unwrap();
+        let seen = dir.path().join("seen.md");
+        let result_path = dir.path().join("result.md");
+        std::fs::write(&result_path, result).unwrap();
+        let script = if cfg!(windows) {
+            format!(
+                "@echo off\r\ncopy /y \"%~1\" \"{}\" >nul\r\ncopy /y \"{}\" \"%~1\" >nul\r\nexit /b {code}\r\n",
+                seen.display(),
+                result_path.display()
+            )
+        } else {
+            format!(
+                "cp \"$1\" '{}'\ncp '{}' \"$1\"\nexit {code}\n",
+                seen.display(),
+                result_path.display()
+            )
+        };
+        let editor = Self { dir };
+        std::fs::write(editor.script(), script).unwrap();
+        editor
+    }
+
+    /// The command line `VISUAL` would hold.
+    pub(crate) fn command_line(&self) -> String {
+        if cfg!(windows) {
+            format!("\"{}\"", self.script().display())
+        } else {
+            format!("sh '{}'", self.script().display())
+        }
+    }
+
+    /// What the editor was given; `None` before it ran.
+    pub(crate) fn seen(&self) -> Option<String> {
+        std::fs::read_to_string(self.dir.path().join("seen.md")).ok()
+    }
+
+    fn script(&self) -> PathBuf {
+        let name = if cfg!(windows) { "edit.cmd" } else { "edit.sh" };
+        self.dir.path().join(name)
     }
 }

@@ -10,6 +10,7 @@
 //! - Handling submit vs newline on Enter, and queueing on Tab while a turn runs.
 //! - Shell-style history navigation (↑/↓) over this run's messages ([`ChatComposerHistory`]),
 //!   and Ctrl+R's search through them and earlier sessions' (`history_search`).
+//! - Ctrl+G's edit of the draft in an external editor (`external_editor`).
 //! - Routing keys to the active popup (`popups`): the slash commands and the `@` file search.
 //! - Turning raw key streams into explicit paste operations on platforms where terminals
 //!   don't provide reliable bracketed paste (notably Windows).
@@ -46,6 +47,7 @@ use ratatui::crossterm::event::KeyModifiers;
 use ratatui::text::Line;
 
 mod agents_navigation;
+mod external_editor;
 mod history_search;
 mod popups;
 mod render;
@@ -103,6 +105,8 @@ pub(crate) struct ChatComposer {
     command_scope: Option<&'static [&'static str]>,
     /// Ctrl+R's search, while it is open.
     history_search: Option<HistorySearchSession>,
+    /// Ctrl+G's editor has the draft.
+    external_editor_open: bool,
 }
 
 /// Popup state – at most one can be visible at any time.
@@ -141,6 +145,7 @@ impl ChatComposer {
             disabled_commands: Vec::new(),
             command_scope: None,
             history_search: None,
+            external_editor_open: false,
         }
     }
 
@@ -298,6 +303,9 @@ impl ChatComposer {
 
     /// Handle a key event coming from the main UI.
     pub fn handle_key_event(&mut self, key_event: KeyEvent) -> (InputResult, bool) {
+        if self.handle_external_editor_key(&key_event) {
+            return (InputResult::None, true);
+        }
         let result = match &self.active_popup {
             _ if self.takes_history_search_key(&key_event) => {
                 self.handle_history_search_key(key_event)

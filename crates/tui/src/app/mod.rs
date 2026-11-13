@@ -16,6 +16,7 @@
 //! earlier one (`backtrack`).
 
 mod backtrack;
+mod external_editor;
 mod history_pages;
 mod keys;
 mod owned;
@@ -47,6 +48,7 @@ use crate::appearance::terminal_title::{TerminalTitle, TitleEncoding};
 use crate::chatwidget::ChatWidget;
 use crate::clipboard::Clipboard;
 use crate::diff_render::git_diff_lines;
+use crate::external_editor::EditorVariables;
 use crate::file_search::FileSearchManager;
 use crate::get_git_diff::get_git_diff;
 use crate::history_cell::{HistoryCell, HistoryRenderMode};
@@ -111,6 +113,8 @@ pub(crate) struct App {
     /// `tui-state.json`: the command center's pins, hidden sessions and
     /// when each session was last shown.
     tui_state: TuiState,
+    /// Where Ctrl+G's editor is read from.
+    editor: EditorVariables,
 }
 
 impl App {
@@ -150,6 +154,7 @@ impl App {
             chords: ChordState::default(),
             workspace: workspace::Workspace::default(),
             tui_state,
+            editor: EditorVariables::from_env(),
         }
     }
 
@@ -247,6 +252,7 @@ impl App {
             AppEvent::RecentMessagesRead(messages) => {
                 self.chat_widget.apply_recent_messages(messages)
             }
+            AppEvent::ExternalEditor => self.edit_in_external_editor(tui),
             AppEvent::Diff => self.start_diff(),
             AppEvent::DiffResult(text) => {
                 self.open_overlay(

@@ -1,8 +1,8 @@
 // Modified from OpenAI Codex rust-v0.93.0 (Apache-2.0).
 
 //! How the composer is drawn: the text under its `›` prompt, and under it
-//! the active popup, the history search's line, or the footer with the
-//! mode the composer's state selects.
+//! the active popup, the history search's line, the external editor's, or
+//! the footer with the mode the composer's state selects.
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Constraint;
@@ -40,7 +40,7 @@ impl ChatComposer {
     /// The rows under the text: the history search's line, the active
     /// popup's, or the footer's.
     fn popup_or_footer_height(&self, width: u16) -> u16 {
-        if self.history_search_active() {
+        if self.history_search_active() || self.external_editor_open {
             return 1;
         }
         match &self.active_popup {
@@ -118,7 +118,10 @@ impl Renderable for ChatComposer {
         match &self.active_popup {
             ActivePopup::Command(popup) => popup.render(popup_rect, buf),
             ActivePopup::File(popup) => popup.render(popup_rect, buf),
-            ActivePopup::None => match self.history_search_line() {
+            ActivePopup::None => match self
+                .history_search_line()
+                .or_else(|| self.external_editor_line())
+            {
                 Some(line) => render_footer_line(popup_rect, buf, line),
                 None => {
                     // The footer hides while a paste burst buffers, so a pasted `?` does

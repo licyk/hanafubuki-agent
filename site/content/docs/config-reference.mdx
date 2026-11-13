@@ -146,7 +146,7 @@ icon: ListTree
 | `tui.keymap.上下文.动作`   | 按键字符串或其数组                                | 各动作的默认按键                                           | 界面某个动作的按键（[按键映射](/docs/terminal-interface#keymap)）：`"ctrl-t"`、`"ctrl-x ctrl-s"`、`"leader p"`；`[]` 取消绑定。`/keymap` 会设置它               |
 | `tui.presets.N`            | 表：`input`（字符串）、`label`（字符串，可选）    | 无                                                         | `N` 号位置（`"0"` 到 `"9"`）的[预设](/docs/terminal-interface#presets)：像输入一样运行的内容，不能为空，最多 8000 字节，不能以 `!` 开头。`/presets` 会设置它    |
 
-`[tui]` 下的其他键保留在文件中，但会被忽略；`statusLine` 和 `terminalTitle` 中的项目，以及按键映射的上下文、动作和按键，界面不认识或无法使用的也会被忽略，每个都产生一条[警告](/docs/terminal-interface#warnings)。配置档、项目配置或 `-c` 中的按键映射项或预设只替换用户文件中同一个动作或位置的设置，其他的保持不变。`config set` 只能以表的形式写入 `tui.keymap` 和 `tui.presets`，并与文件合并（`config set tui.keymap '{ global = { open_transcript = "ctrl-g" } }'`），不能写入它们下面的某个键。
+`[tui]` 下的其他键保留在文件中，但会被忽略；`statusLine` 和 `terminalTitle` 中的项目，以及按键映射的上下文、动作和按键，界面不认识或无法使用的也会被忽略，每个都产生一条[警告](/docs/terminal-interface#warnings)。配置档、项目配置或 `-c` 中的按键映射项或预设只替换用户文件中同一个动作或位置的设置，其他的保持不变。`config set` 只能以表的形式写入 `tui.keymap` 和 `tui.presets`，并与文件合并（`config set tui.keymap '{ global = { open_transcript = "ctrl-q" } }'`），不能写入它们下面的某个键。
 
 `logLevel`、`network.proxy` 和 `[tui]` 只对独立运行的 Agent 有效；嵌入 Agent 的应用提供自己的日志、代理和界面。
 

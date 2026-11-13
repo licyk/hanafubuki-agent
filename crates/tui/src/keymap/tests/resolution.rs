@@ -47,6 +47,7 @@ fn the_shortcut_actions_have_their_defaults_and_no_voice_key() {
     let keymap = Keymap::default();
     for (action, path, keys) in [
         (Action::ShowShortcuts, "composer.show_shortcuts", "?"),
+        (Action::ExternalEditor, "composer.external_editor", "ctrl-g"),
         (Action::HistorySearch, "composer.history_search", "ctrl-r"),
         (Action::CycleMode, "chat.cycle_mode", "backtab"),
         (Action::ReasoningDown, "chat.reasoning_down", "alt-,"),
@@ -181,16 +182,16 @@ fn a_conflict_keeps_the_defaults_of_the_action_that_caused_it() {
 #[test]
 fn a_key_that_starts_a_chord_conflicts_with_it() {
     let (keymap, warnings) = Keymap::resolve(&config(&[
-        ("chat", "open_presets", &["ctrl-g p"]),
-        ("global", "focus_activity", &["ctrl-g"]),
+        ("chat", "open_presets", &["ctrl-q p"]),
+        ("global", "focus_activity", &["ctrl-q"]),
     ]));
     assert_eq!(warnings.len(), 1, "{warnings:#?}");
     assert!(
-        warnings[0].starts_with("tui.keymap.chat.open_presets: `ctrl-g` (global.focus_activity) starts chat.open_presets's chord `ctrl-g p`"),
+        warnings[0].starts_with("tui.keymap.chat.open_presets: `ctrl-q` (global.focus_activity) starts chat.open_presets's chord `ctrl-q p`"),
         "{warnings:#?}"
     );
     assert_eq!(keymap.label(Action::OpenPresets), "leader p");
-    assert_eq!(keymap.label(Action::FocusActivity), "ctrl-g");
+    assert_eq!(keymap.label(Action::FocusActivity), "ctrl-q");
 }
 
 #[test]
@@ -201,7 +202,7 @@ fn the_default_leader_yields_to_a_key_bound_to_it() {
     assert_eq!(keymap.label(Action::Leader), "unbound");
     assert_eq!(keymap.chords_in(&Context::ALL).count(), 0);
     // A leader set apart moves every leader chord.
-    let (keymap, warnings) = Keymap::resolve(&config(&[("global", "leader", &["ctrl-g"])]));
+    let (keymap, warnings) = Keymap::resolve(&config(&[("global", "leader", &["ctrl-q"])]));
     assert!(warnings.is_empty(), "{warnings:#?}");
     let chords: Vec<String> = keymap
         .chords_in(&Context::ALL)
@@ -217,16 +218,16 @@ fn the_default_leader_yields_to_a_key_bound_to_it() {
     assert_eq!(
         chords,
         [
-            "ctrl-g [ SelectTranscript",
-            "ctrl-g left FocusPaneLeft",
-            "ctrl-g right FocusPaneRight",
-            "ctrl-g tab ToggleSideConversation",
-            "ctrl-g < MoveDividerLeft",
-            "ctrl-g > MoveDividerRight",
-            "ctrl-g = EqualizePaneWidths",
-            "ctrl-g z TogglePaneZoom",
-            "ctrl-g x HidePane",
-            "ctrl-g p OpenPresets"
+            "ctrl-q [ SelectTranscript",
+            "ctrl-q left FocusPaneLeft",
+            "ctrl-q right FocusPaneRight",
+            "ctrl-q tab ToggleSideConversation",
+            "ctrl-q < MoveDividerLeft",
+            "ctrl-q > MoveDividerRight",
+            "ctrl-q = EqualizePaneWidths",
+            "ctrl-q z TogglePaneZoom",
+            "ctrl-q x HidePane",
+            "ctrl-q p OpenPresets"
         ]
     );
 }

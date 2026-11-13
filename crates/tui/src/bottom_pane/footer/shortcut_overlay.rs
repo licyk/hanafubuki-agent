@@ -33,6 +33,7 @@ pub(super) fn lines(props: &FooterProps<'_>, width: u16) -> Vec<Line<'static>> {
         ],
     };
     compose.push(newline_key(props), "New line");
+    compose.push(keymap::hint(Action::ExternalEditor), "External editor");
     compose.push(keymap::hint(Action::HistorySearch), "Search history");
     if !props.second_conversation {
         if let Some(key) = keymap::hint(Action::EditPrevious) {

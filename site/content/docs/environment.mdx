@@ -6,14 +6,14 @@ icon: Variable
 
 ## Agent 读取的变量 [#read]
 
-| 变量                                                 | 作用                                                                                                |
-| ---------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| `HANAFUBUKI_AGENT_HOME`                              | 用一个目录同时代替配置目录和数据目录。相对路径相对于当前目录解析（不是 `-C`）；设为空值等于没有设置 |
-| `XDG_CONFIG_HOME`、`XDG_DATA_HOME`                   | Linux 上配置目录和数据目录的基准位置，默认分别是 `~/.config` 和 `~/.local/share`                    |
-| `VISUAL`、`EDITOR`                                   | `config edit` 使用的编辑器，先看 `VISUAL`。可以带参数，例如 `code --wait`                           |
-| `--api-key-env` 指定的变量                           | `providers add` 从中读取 API 令牌，只在添加时读取一次                                               |
-| `PATH`（Windows 上还有 `PATHEXT`）                   | 查找 stdio MCP 服务器的程序                                                                         |
-| `HTTP_PROXY`、`HTTPS_PROXY`、`ALL_PROXY`、`NO_PROXY` | 访问模型 Provider 时使用的代理，见[网络与日志](/docs/network-logging#provider-proxy)                |
+| 变量                                                 | 作用                                                                                                                                                         |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `HANAFUBUKI_AGENT_HOME`                              | 用一个目录同时代替配置目录和数据目录。相对路径相对于当前目录解析（不是 `-C`）；设为空值等于没有设置                                                          |
+| `XDG_CONFIG_HOME`、`XDG_DATA_HOME`                   | Linux 上配置目录和数据目录的基准位置，默认分别是 `~/.config` 和 `~/.local/share`                                                                             |
+| `VISUAL`、`EDITOR`                                   | `config edit` 打开的编辑器，以及 Ctrl-G 编辑草稿所用的编辑器（[终端界面](/docs/terminal-interface#composer)），先看 `VISUAL`。可以带参数，例如 `code --wait` |
+| `--api-key-env` 指定的变量                           | `providers add` 从中读取 API 令牌，只在添加时读取一次                                                                                                        |
+| `PATH`（Windows 上还有 `PATHEXT`）                   | 查找 stdio MCP 服务器的程序                                                                                                                                  |
+| `HTTP_PROXY`、`HTTPS_PROXY`、`ALL_PROXY`、`NO_PROXY` | 访问模型 Provider 时使用的代理，见[网络与日志](/docs/network-logging#provider-proxy)                                                                         |
 
 Agent 本身不读取 `RUST_LOG` 或 `NO_COLOR`：日志级别由 `logLevel` 和 `--log-level` 决定，见[网络与日志](/docs/network-logging#logging)。
 

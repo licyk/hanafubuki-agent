@@ -55,6 +55,7 @@ Fullscreen 下，对话占满底部区域上方的屏幕。Scrollback 下，界�
 | Shift+Enter、Ctrl+J                   | 换行。Shift+Enter 需要终端支持增强键盘协议，否则请用 Ctrl+J                                                                          |
 | Up、Down（Ctrl-P、Ctrl-N）            | 输入框为空时，翻看本次运行中发送过的消息；在弹出列表中移动                                                                           |
 | Ctrl-R                                | 搜索发送过的消息，包括本次运行和之前的会话中的（[见下文](#composer)）                                                                |
+| Ctrl-G                                | 在你的编辑器（`VISUAL` 或 `EDITOR`）中编辑草稿（[见下文](#composer)）                                                                |
 | Esc                                   | 关闭弹出列表；否则中断正在运行的回合，并立即发送回合还没读到的补充消息。没有回合运行时，在空输入框上按两次：编辑之前的消息（见下文） |
 | Ctrl-C                                | 依次：在审批中拒绝；清空有内容的输入框；中断正在运行的回合；1 秒内再按一次则退出                                                     |
 | Ctrl-D                                | 输入框为空时，1 秒内按两次退出；输入框有内容时向后删除一个字符                                                                       |
@@ -70,7 +71,7 @@ Fullscreen 下，对话占满底部区域上方的屏幕。Scrollback 下，界�
 
 Fullscreen 下还有阅读对话的按键：Page Up/Page Down、F3、F4、Ctrl-Space 等，见[阅读对话](#reading)；Scrollback 下，F4 聚焦尾部的活动。
 
-以上是默认按键。[按键映射](#keymap)可以修改其中各个动作的按键（Enter、Tab 排队、Shift+Left 编辑排队的消息、历史及其搜索、Esc 中断、Ctrl-T、Ctrl-O、`?`、Shift+Tab、Alt+, 和 Alt+.、Alt+Left 和 Alt+Right、编辑键、对话和分页器的按键、指挥中心的会话操作）；Ctrl-C、Ctrl-D 以及弹出列表和列表自己的按键（包括 Tab 的补全）保持不变。
+以上是默认按键。[按键映射](#keymap)可以修改其中各个动作的按键（Enter、Tab 排队、Shift+Left 编辑排队的消息、历史及其搜索、外部编辑器、Esc 中断、Ctrl-T、Ctrl-O、`?`、Shift+Tab、Alt+, 和 Alt+.、Alt+Left 和 Alt+Right、编辑键、对话和分页器的按键、指挥中心的会话操作）；Ctrl-C、Ctrl-D 以及弹出列表和列表自己的按键（包括 Tab 的补全）保持不变。
 
 输入框支持常见的 Emacs 风格编辑键：Ctrl-A/E 到行首/行尾，Ctrl-W 删除前一个词，Ctrl-U/K 删除到行首/行尾，Alt-B/F 按词移动等。
 
@@ -91,15 +92,15 @@ Fullscreen 下还有阅读对话的按键：Page Up/Page Down、F3、F4、Ctrl-S
   @         Mention files        shift + tab        Change mode                 f3                                 Find text
   !         Shell command        alt + ,            Less reasoning              pgup / pgdn                        Scroll
   ctrl + j  New line             alt + .            More reasoning              ctrl + space                       Start selection
-  ctrl + r  Search history       ←                  Agents (empty prompt)       ctrl + home / ctrl + end           Top / latest
-  esc esc   Edit last message    alt + ← / alt + →  Subagents (empty prompt)    shift + alt + , / shift + alt + .  Top / latest
-                                 f4                 Inspect activity
+  ctrl + g  External editor      ←                  Agents (empty prompt)       ctrl + home / ctrl + end           Top / latest
+  ctrl + r  Search history       alt + ← / alt + →  Subagents (empty prompt)    shift + alt + , / shift + alt + .  Top / latest
+  esc esc   Edit last message    f4                 Inspect activity
                                  ctrl + c           Quit
 
   /keymap customize
 ```
 
-- **Compose**：`!` 运行 shell 命令，Ctrl+R 搜索发送过的消息（[见下文](#composer)）；终端能区分 Shift+Enter 时，换行键显示为 Shift+Enter。**Session**：回合进行中，Tab 显示为 `Queue message`，Ctrl+C 显示为 `Interrupt`。**Transcript**：阅读对话的按键（[阅读对话](#reading)），Fullscreen 下在输入框旁边就能用，Scrollback 下在 Ctrl+T 打开对话记录之后使用。
+- **Compose**：`!` 运行 shell 命令，Ctrl+G 在你的编辑器中编辑草稿，Ctrl+R 搜索发送过的消息（[见下文](#composer)）；终端能区分 Shift+Enter 时，换行键显示为 Shift+Enter。**Session**：回合进行中，Tab 显示为 `Queue message`，Ctrl+C 显示为 `Interrupt`。**Transcript**：阅读对话的按键（[阅读对话](#reading)），Fullscreen 下在输入框旁边就能用，Scrollback 下在 Ctrl+T 打开对话记录之后使用。
 - 在[旁路对话](#side)或正在显示的[子代理](#subagents)中，模式、推理强度和编辑之前的消息属于主对话，不显示。
 - 屏幕高度不够全部显示时，列表被截断，并提示 `… more: /keymap`；`/keymap` 列出所有动作。
 - Shift+Tab 在回合进行中不可用，和 `/mode` 一样。Alt+, 和 Alt+. 在 `/effort` 提供的档位之间切换（[见下文](#effort)）。Alt+Left 和 Alt+Right 在会话及其子代理之间循环切换（[见下文](#subagents)）。
@@ -109,6 +110,7 @@ Fullscreen 下还有阅读对话的按键：Page Up/Page Down、F3、F4、Ctrl-S
 - **粘贴**：超过 1000 个字符的粘贴内容在输入框中显示为 `[Pasted Content 1234 chars]` 占位符，发送时展开；删除占位符就删除了这段粘贴。
 - **历史**：Up/Down 翻看的是本次运行中发送过的消息（包括被 Ctrl-C 清空的草稿），不包括恢复的会话中的旧消息；Ctrl-R 的搜索包括这些旧消息。
 - **搜索历史**：按 Ctrl-R，输入框下方一行变为 `reverse-i-search:`（与 Codex 相同）。输入或粘贴要找的内容，不区分大小写；输入框会在草稿的位置显示包含它的最新一条消息，并高亮找到的文字。搜索先查本次运行中发送过的消息，再查你在 Agent 各个会话中发送过的内容，从最新的开始：消息、补充消息和按输入原样记录的 `!` 命令，最多最近 1,000 条，相同的文字只出现一次；子代理的会话不包括在内。这些内容只在第一次按 Ctrl-R 时读取一次，读到之前这一行显示 `searching`。Ctrl-R 或 Up 显示更早的匹配，Ctrl-S 或 Down 显示更新的匹配，到头时保持当前的匹配。Enter 把匹配放进输入框供你修改，并不发送；Esc 或 Ctrl-C 关闭搜索，把草稿原样放回，回合进行中也一样，回合会继续运行。找不到时这一行显示 `no match`，并显示你的草稿。Backspace 删除搜索内容的一个字符，Ctrl-U 删除全部。搜索期间交还给输入框的消息（被中断的回合中等待的消息）放进 Esc 放回的草稿中。[按键映射](#keymap)中的 `composer.history_search` 可以改绑 Ctrl-R；搜索中的其他按键保持不变。
+- **在编辑器中编辑**：按 Ctrl-G，在你的编辑器中打开草稿（与 Codex 相同）：使用 `VISUAL` 中的命令，没有则用 `EDITOR` 中的，取界面启动时的值；设为空的变量视为未设置。命令可以带参数和引号，例如 `code --wait`：在 Windows 上按 Windows 命令行的规则解析，反斜杠是路径的一部分，并且程序会结合扩展名在 `PATH` 中查找，所以 `code` 能找到 `code.cmd`。草稿（其中的大段粘贴已展开）写入一个临时 `.md` 文件，界面把终端交给编辑器并等待它退出：期间离开 Fullscreen 的屏幕并交还终端的各种模式，之后再收回。输入框下方一行显示 `Save and close external editor to continue.`，在 Scrollback 下，编辑器在另一个窗口中打开草稿时可以看到；这种编辑器必须等窗口关闭后才退出（`code --wait`）。编辑器成功退出后，它保存的内容成为草稿，末尾的空行被去掉；原样带回的大段粘贴重新显示为占位符（改过的则保留为文本）。没有设置编辑器时，界面提示 `Set VISUAL or EDITOR to edit the message in an editor.`；找不到编辑器、无法启动、以错误退出，或文件不再是文本时，对话中会说明原因，草稿保持不变。弹出列表或历史搜索打开时，Ctrl-G 不起作用。回合进行中也可以使用：回合继续运行，编辑器关闭后对话再显示它做了什么。编辑器在另一个窗口中打开草稿时，终端处于普通模式：此时在终端中按 Ctrl-C 会停止界面，就像停止 shell 运行的任何程序一样。[按键映射](#keymap)中的 `composer.external_editor` 可以改绑 Ctrl-G。
 - **引导正在运行的回合**：回合进行中按 Enter 发送的消息交给正在运行的回合，模型在下一步读到它：正在进行的工具调用完成之后，或者给出回答之后，回合会接着进行。在此之前，它显示在输入框上方的 `Messages to be submitted after next tool call (press esc to interrupt and send immediately)` 之下；模型读到之后，它才写入对话。多条消息按顺序发送。回合还没开始时按 Enter，消息会排入队列（见下文）。
 - **排队消息**：回合进行中按 Tab，消息排入 `Queued follow-up inputs`；没有回合运行时，Tab 和 Enter 一样直接发送。用 Tab 输入的命令和 Enter 一样立即执行。回合结束后，排队的消息从最早的一条开始，每条各开始一个回合，依次进行，回合失败后也一样。Shift+Left（或 Alt+Up）把最后一条排队的消息放回输入框，放在草稿之前，供你修改。
 - **不会丢失消息**：回合没有读到的补充消息（回合先结束了、失败了，或 Agent 拒收了这条消息）会在回合结束时发送，等待期间显示在 `Messages to be submitted at end of turn` 之下；多条会合并成一条消息，先于排队的消息发送。
@@ -669,7 +671,7 @@ hanafubuki-agent resume 12 "继续" # 恢复后发送一条消息
 
 ```toml
 [tui.keymap.global]
-open_transcript = "ctrl-g"
+open_transcript = "ctrl-q"
 leader = "ctrl-b"
 
 [tui.keymap.chat]
@@ -681,7 +683,7 @@ yank = []
 ```
 
 - **按键**写作修饰键加按键，用 `-` 连接：`ctrl-t`、`alt-<`、`shift-enter`、`page-down`、`f3`、`space`、`minus`；大写字母等于 `shift-` 加这个字母。符号带不带 Shift 都匹配，因为各终端的报告方式不同；但在带 Ctrl 或 Alt 时，不需要 Shift 的符号（美式键盘上的 `,`、`.`、`/` 等）加上 Shift 就是另一个键：`alt-shift-,` 是 Alt+`<`，不是 `alt-,`。
-- **组合键**是用空格分开的两个按键（`ctrl-g o`）：第一个键等待第二个键一秒钟。`leader K` 是前导键（`global.leader`，默认 Ctrl-X）再按 `K`；前导键会一直等到下一个键。没有完成任何组合的按键，或 Esc，会把两个键都丢弃。如果配置的某个按键正是默认前导键，它优先：除非 `global.leader` 另行设置，前导键就没有绑定。
+- **组合键**是用空格分开的两个按键（`ctrl-q o`）：第一个键等待第二个键一秒钟。`leader K` 是前导键（`global.leader`，默认 Ctrl-X）再按 `K`；前导键会一直等到下一个键。没有完成任何组合的按键，或 Esc，会把两个键都丢弃。如果配置的某个按键正是默认前导键，它优先：除非 `global.leader` 另行设置，前导键就没有绑定。
 - **上下文**是读取按键的地方：`global` 处处有效，`chat` 和 `composer` 在输入框获得按键时有效，`editor` 在所有文本输入框中有效，`transcript` 在 Fullscreen 的对话中（与输入框同时）有效，`pager` 在对话记录和 `/diff` 中有效，`agents` 在[指挥中心](#agents)中有效。在输入框旁边，不能绑定会输入文字的按键（不带 Ctrl 或 Alt 的字母），也不能绑定以它开头的组合键；只在输入框为空时读取的动作（`composer.show_shortcuts`、`composer.previous_agent`、`composer.next_agent`）可以绑定这样的按键，但仍不能绑定以它开头的组合键。
 - **冲突**：同一个按键（或组合键）不能触发同时读取的两个动作，不能是另一个动作的组合键的开头，也不能是界面保留的 Ctrl-C（以及 Ctrl-D，编辑框和分页器中除外）。默认就共用按键的动作仍然允许：`chat.interrupt_turn` 和 `chat.edit_previous`（Esc）、`composer.submit` 和 `editor.insert_newline`（Enter）、历史和编辑框的 Up、Down、`global.open_transcript` 和 `pager.close_transcript`、`composer.previous_agent` 和 `editor.move_word_left`（Alt+Left）、`composer.next_agent` 和 `editor.move_word_right`（Alt+Right）。
 - 无法使用的设置（不认识的上下文或动作、不是按键的字符串、冲突）会让这个动作保留默认按键，并产生一条[警告](#warnings)。
@@ -718,6 +720,7 @@ yank = []
 | `composer.queue`                  | `tab`                                                                 | 回合进行中：把消息排入队列，等回合结束后发送                 |
 | `composer.history_previous`       | `up`、`ctrl-p`                                                        | 上一条发送过的消息                                           |
 | `composer.history_next`           | `down`、`ctrl-n`                                                      | 下一条发送过的消息                                           |
+| `composer.external_editor`        | `ctrl-g`                                                              | 在外部编辑器（`VISUAL`，没有则 `EDITOR`）中编辑草稿          |
 | `composer.history_search`         | `ctrl-r`                                                              | 搜索发送过的消息，包括本次运行和之前的会话中的               |
 | `composer.show_shortcuts`         | `?`                                                                   | 输入框为空时：显示或隐藏快捷键说明                           |
 | `composer.previous_agent`         | `alt-left`                                                            | 输入框为空时：显示会话及其子代理中的上一个                   |

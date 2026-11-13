@@ -333,6 +333,18 @@ impl ChatWidget {
         self.bottom_pane.on_recent_messages(messages);
     }
 
+    pub(crate) fn external_editor_seed(&self) -> String {
+        self.bottom_pane.external_editor_seed()
+    }
+
+    pub(crate) fn set_external_editor_open(&mut self, open: bool) {
+        self.bottom_pane.set_external_editor_open(open);
+    }
+
+    pub(crate) fn apply_external_edit(&mut self, text: String) {
+        self.bottom_pane.apply_external_edit(text);
+    }
+
     fn on_ctrl_c(&mut self) {
         let key = key_hint::ctrl(KeyCode::Char('c'));
         let modal_or_popup_active = !self.bottom_pane.no_modal_or_popup_active();

@@ -173,9 +173,13 @@ fn the_shortcuts_show_the_keys_in_force() {
         ("chat", "reasoning_up", &[]),
         ("composer", "previous_agent", &[]),
         ("composer", "history_search", &["f7"]),
+        ("composer", "external_editor", &["f9"]),
     ]);
     let text = overlay_text(overlay(), 140);
-    install(&[("composer", "history_search", &[])]);
+    install(&[
+        ("composer", "history_search", &[]),
+        ("composer", "external_editor", &[]),
+    ]);
     let unbound = overlay_text(overlay(), 140);
     keymap::install(Keymap::default());
     assert!(text.contains("f6 Change mode"), "{text}");
@@ -183,7 +187,9 @@ fn the_shortcuts_show_the_keys_in_force() {
     assert!(!text.contains("More reasoning"), "{text}");
     assert!(!text.contains("Subagents"), "{text}");
     assert!(text.contains("f7 Search history"), "{text}");
+    assert!(text.contains("f9 External editor"), "{text}");
     assert!(!unbound.contains("Search history"), "{unbound}");
+    assert!(!unbound.contains("External editor"), "{unbound}");
 }
 
 #[test]
@@ -202,12 +208,13 @@ fn the_shortcuts_list_what_works_here() {
         "shift + ⌥ + , / shift + ⌥ + .",
         "/keymap customize",
         "! Shell command",
+        "ctrl + g External editor",
         "ctrl + r Search history",
     ] {
         assert!(text.contains(wanted), "{wanted}:\n{text}");
     }
-    // No voice; and no Ctrl+V or Ctrl+G until their actions exist.
-    for absent in ["Voice", "f8", "Paste image", "External editor"] {
+    // No voice; and no Ctrl+V until its action exists.
+    for absent in ["Voice", "f8", "Paste image"] {
         assert!(!text.contains(absent), "{absent}:\n{text}");
     }
     // A second conversation's mode, effort and earlier messages are the

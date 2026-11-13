@@ -3,13 +3,16 @@
 //! The terminal: its modes, set on entry and restored on exit and on a
 //! fatal panic; the inline viewport at the bottom of the screen, with the
 //! transcript written into the scrollback above it; the alternate screen
-//! the overlays take over; and the scheduling of frames.
+//! the overlays take over; the scheduling of frames; and the terminal handed
+//! to another program and taken back (`handoff`).
 //!
 //! Codex reads the terminal with crossterm's async event stream behind a
-//! broker it can pause; here one thread reads it (`input`) and the app loop
-//! is a plain receive loop, since nothing pauses the input.
+//! broker it can pause; here one thread reads it (`input`), stopped while
+//! another program has the terminal, and the app loop is a plain receive
+//! loop.
 
 mod alternate_screen;
+mod handoff;
 mod input;
 
 use std::io::{self, stdout, Result, Stdout, Write};
@@ -105,6 +108,11 @@ pub(crate) struct Tui<B: Backend<Error = io::Error> + Write = CrosstermBackend<S
     alt_saved_viewport: Option<Rect>,
     /// Scrollback's tail has the mouse (off the alternate screen).
     inline_mouse_capture: bool,
+    /// The entered alternate screen reports the pointer.
+    alt_mouse_capture: bool,
+    /// The real terminal's input; tests have none, and then the terminal's
+    /// raw mode is left alone too.
+    input: Option<InputReader>,
 }
 
 impl<B: Backend<Error = io::Error> + Write> Tui<B> {
@@ -114,7 +122,18 @@ impl<B: Backend<Error = io::Error> + Write> Tui<B> {
             pending_history_lines: Vec::new(),
             alt_saved_viewport: None,
             inline_mouse_capture: false,
+            alt_mouse_capture: false,
+            input: None,
         }
+    }
+
+    /// Reads the terminal's input with `input` until [`Self::stop_input`].
+    pub(crate) fn set_input(&mut self, input: InputReader) {
+        self.input = Some(input);
+    }
+
+    pub(crate) fn stop_input(&mut self) {
+        self.input = None;
     }
 
     /// Enters the alternate screen and expands the viewport to all of it,
@@ -125,6 +144,7 @@ impl<B: Backend<Error = io::Error> + Write> Tui<B> {
         // The alternate screen sets the mouse its own way, and leaving it
         // turns it off.
         self.inline_mouse_capture = false;
+        self.alt_mouse_capture = capture_mouse;
         let entered = ALTERNATE_SCREEN.enter(self.terminal.backend_mut(), capture_mouse);
         if let Ok(size) = self.terminal.size() {
             self.alt_saved_viewport = Some(self.terminal.viewport_area);
@@ -147,6 +167,9 @@ impl<B: Backend<Error = io::Error> + Write> Tui<B> {
     /// Turns the pointer reporting of the entered alternate screen on or
     /// off.
     pub(crate) fn set_mouse_capture(&mut self, capture: bool) -> Result<()> {
+        if self.alt_saved_viewport.is_some() {
+            self.alt_mouse_capture = capture;
+        }
         if !ALTERNATE_SCREEN.is_active() || ALTERNATE_SCREEN.is_capturing_mouse() == capture {
             return Ok(());
         }

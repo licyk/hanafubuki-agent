@@ -1414,8 +1414,167 @@ and any module-size exception.
       - CI on Linux, Windows and macOS: https://github.com/licyk/hanafubuki-agent/actions/runs/43460170435
         (run on ed2828f; all three passed at once). Site on ed2828f:
         .../runs/43460170282, passed, its build and prerender included.
-- [ ] K4: Ctrl+G external editor (`VISUAL`/`EDITOR`), a foreground child
+- [x] K4: Ctrl+G external editor (`VISUAL`/`EDITOR`), a foreground child
       as `/diff`'s `git` (D17).
+      Done (2026-11-13):
+      - TUI: keymap 73 → 74 actions, `composer.external_editor` (`ctrl-g`),
+        before `history_search`. `external_editor.rs` (Codex's): the
+        command is `VISUAL`'s, else `EDITOR`'s, read when the interface
+        starts (`EditorVariables`, an `App` field); a variable set to blanks
+        is unset. Split with `shlex` on Unix and `winsplit` on Windows (the
+        command line's rules: a backslash is part of a path), and on Windows
+        the program looked up with `which` (`PATHEXT`: `code` → `code.cmd`).
+        The draft goes to a `tempfile` `.md` (a path, no open handle;
+        removed once read), the editor runs with inherited stdio, on the
+        app's thread, and its file is read back on success. Failures
+        (`EditorError`), each leaving the draft and shown as an error in the
+        transcript: `Set VISUAL or EDITOR to edit the message in an
+        editor.`; `The editor in VISUAL is not a command line (a quote is
+        not closed).` (Unix); ``The editor `X` was not found; set VISUAL or
+        EDITOR to an installed one.``; `The editor could not be started:
+        …`; `The draft could not be written to a temporary file for the
+        editor: …`; `The editor exited with exit status: N; the draft is
+        unchanged.`; `The edited message could not be read (…); the draft is
+        unchanged.` (not UTF-8, or gone). The composer
+        (`chat_composer/external_editor.rs`): the key, before any popup's,
+        flushes a paste burst into the draft and sends
+        `AppEvent::ExternalEditor` when the composer has the keys and no
+        popup or history search is open, and does nothing otherwise (as
+        Codex); a bottom-pane view or an overlay takes the key first. The
+        event is dropped when another conversation than its own has the
+        focus (`route_event`). The app (`app/external_editor.rs`): the
+        editor resolved first (no handoff without one); the seed is the
+        draft with its large pastes written out; the footer row reads
+        `Save and close external editor to continue.` (Codex's) and a frame
+        is drawn; `Tui::release` (`tui/handoff.rs`): the input thread
+        stopped and joined (`InputReader::pause`), the alternate screen
+        left when entered, the pointer off (unconditionally, whatever the
+        shared record says), the keyboard enhancement popped, bracketed
+        paste off, the cursor shown, raw mode off; the editor runs;
+        `Tui::reclaim`: raw mode, bracketed paste and the enhancement back,
+        the input drained of what was typed meanwhile and its thread
+        started again (`resume`), the alternate screen entered again with
+        the pointer it had (Fullscreen), else the viewport cleared and
+        Scrollback's click capture as it was; every step taken even when
+        one fails. The edited text is the draft (`\r\n` → `\n`, trailing
+        blanks dropped, cursor at the end), and a large paste whose text
+        comes back unchanged is its placeholder again, in the draft's
+        order; an edited one stays text, a deleted one is gone. The
+        `InputReader` now lives in `Tui` (`set_input`, `stop_input`): a
+        `Tui` without one (the tests) leaves raw mode and the terminal's
+        input alone. The `?` overlay gains `ctrl + g  External editor`
+        under Compose, after New line, before Search history (Codex's
+        order).
+      - Ctrl+G with a popup (`/` commands, `@` files) or the history search
+        open does nothing and leaves them open; during a turn it works
+        (the turn goes on; its events wait in the app's channel until the
+        editor exits); in a side conversation or a subagent shown it edits
+        that composer's draft.
+      - Deviations: (1) `winsplit` is a third new dependency (Windows only):
+        the plan named `shlex` and `which`, but Codex at 57a808a392 splits
+        with `winsplit` on Windows, and `shlex` reads `C:\tools\vim.exe` as
+        escapes. `shlex` is a Unix-only and `which` a Windows-only
+        dependency; all three are MIT or MIT/Apache-2.0, which `about.toml`
+        accepts (no change). (2) "Its placeholders kept": Codex writes the
+        pastes out and drops them; here the editor gets them written out
+        (as Codex) and an unchanged one is collapsed back into its
+        placeholder, which keeps the placeholders of pastes the person did
+        not touch. Image placeholders are I1's. (3) The terminal is released
+        whole, as the plan says (raw mode and the alternate screen left);
+        Codex now keeps raw mode and repaints its last frame on the
+        alternate screen for an editor in another window. So in Fullscreen
+        a GUI editor (`code --wait`) shows the shell's screen until it
+        closes, the footer's row showing in Scrollback only; and the
+        terminal being in its normal mode, Ctrl+C typed there while such an
+        editor waits stops the interface (SIGINT, as for `git commit`),
+        documented. (4) Codex's temporary directory that the sandbox cannot
+        write (`<codex_home>/editor`) is not ported: the file is in the
+        system's temporary directory, so a command the model runs with
+        write access there could change the draft while it is open (not
+        guarded against; say if it should be). (5) A blank variable counts
+        as unset (Codex errors on an empty `VISUAL`), as `config edit`
+        does. (6) What was typed into the terminal while the editor had it
+        is dropped by reading crossterm's events (Codex flushes the tty
+        with `tcflush`/`FlushConsoleInputBuffer`); a resize meanwhile is
+        dropped with it, and the full redraw after covers it. (7) A
+        non-alternate-screen editor that scrolls Scrollback's screen is not
+        accounted for (the inline viewport is cleared and drawn where it
+        was).
+      - Keymap tests and docs that used `ctrl-g` as a free key moved to
+        `ctrl-q` (`keymap/tests/{resolution,chords}.rs`,
+        `app/tests/preferences.rs`; the `[tui.keymap]` examples in
+        `terminal-interface`, `configuration`, `config-reference`). A
+        person's own `ctrl-g` binding beside the composer (the docs' old
+        example, `global.open_transcript = "ctrl-g"`) now conflicts with
+        `composer.external_editor`: it is refused with a warning and that
+        action keeps its default keys; unbinding `composer.external_editor`
+        (`[]`) frees Ctrl+G.
+      - Tests (written with the code; seen failing by mutation): unit
+        `external_editor/tests.rs` (VISUAL over EDITOR, a blank one unset,
+        neither; a shell's words with quotes and an unclosed quote (Unix);
+        a quoted and an unquoted Windows path (Windows); `code`-style `.cmd`
+        found on a PATH and a missing one left as named (Windows); a round
+        trip through `FakeEditor`; exit 3, not found, not UTF-8).
+        `test_support::FakeEditor`: a `sh` script on Unix, a `.cmd` on
+        Windows, that keeps what it was given and saves a prepared result
+        with an exit code. `tui/handoff/tests.rs` (vt100): Scrollback and
+        Fullscreen with and without the pointer, released (no alternate
+        screen, bracketed paste and pointer off, cursor shown) and taken
+        back (screen, paste, pointer as before; the viewport drawn whole).
+        `chat_composer/external_editor/tests.rs`: asks on a draft and an
+        empty composer; nothing with a `/` popup, the history search
+        (both stay open, the draft back on cancel) or without the keys; a
+        rebound key (`f9`) works and Ctrl+G then does not; the footer row;
+        the edit's line endings and trailing blanks; two large pastes
+        written out, one back unchanged as its placeholder and one edited
+        as text, a deleted one gone; a paste ending the draft with a line
+        break, saved back with the editor's own line break after it, its
+        placeholder again (a review found the text trimmed before the
+        pastes were looked for; seen failing with that order). Footer: the overlay snapshots (140,
+        90, 50 columns, during a turn, and the composer's) with `ctrl + g
+        External editor`; a remapped (`f9`) and unbound
+        `external_editor`. Keymap: the default. App, end to end
+        (`app/tests/external_editor.rs`, Scrollback and Fullscreen): a draft
+        typed as fast as a paste, Ctrl+G, the editor got it, the edited
+        two-line text is the draft, the footer row gone, the screen
+        (alternate in Fullscreen only), bracketed paste and Fullscreen's
+        pointer back, and Enter sends it to the model; no editor, a missing
+        one and one exiting 3 each say why and keep the draft. Mutations:
+        without `reclaim` three app tests fail (screen and modes); without
+        the burst flush the editor gets an empty draft.
+      - Not verified without a real terminal: raw mode, the keyboard
+        enhancement and the input thread's pause and drain (a `Tui` in
+        tests has no input and leaves raw mode alone; vt100 does not read
+        the enhancement); a real interactive editor (vim, nano, `code
+        --wait`) in either presentation; Windows' console and macOS
+        terminals beyond CI's runs.
+      - Goldens: none changed.
+      - Docs (both languages): `terminal-interface#keys` (Ctrl-G row, the
+        rebindable list), `#shortcuts` (the overlay and its note),
+        `#composer` (Editing in your editor), `#keymap` (the row; the
+        example's and the chord's key now `ctrl-q`); `environment` (the
+        variables are Ctrl-G's too); `configuration`, `config-reference`
+        (their `ctrl-g` examples).
+      - Validation: `cargo fmt --all --check`; `RUSTFLAGS="-D warnings"
+        cargo check --workspace --all-targets --all-features`; `cargo clippy
+        --workspace --all-targets --all-features -- -D warnings`; `cargo
+        xtask check` (its notices check first failed on the two new
+        original test files, now listed); `cargo test --workspace
+        --all-features --no-fail-fast` (4166 passed, none failed; no flake
+        seen; after the review's fix, `cargo fmt`, the workspace's clippy,
+        `cargo xtask check` and the TUI's 948 tests again); `cargo clippy -p
+        hanafubuki-agent-tui --target x86_64-pc-windows-gnu --all-targets
+        --all-features` clean for the TUI (the `cfg(windows)` code and
+        tests compile; the MSVC target cannot be cross-built here, Oniguruma
+        needs MSVC's C compiler); `bun install --frozen-lockfile`, `bun run
+        format:site`, `bun run format:check:site`, `bun run site:check`,
+        `bun run site:test`, and the eight changed pages compiled with the
+        store's `@mdx-js/mdx` 3.1.1; `VITE_BASE_PATH=/hanafubuki-agent/ bun
+        run site:build` not run locally (port 3000 held by another
+        project's server); CI's Site run covers it.
+      - Hanafubuki at its next pin: nothing (the terminal interface only;
+        no facade, contract or format change).
+      - Module size: no exception added or raised.
 
 **Images ([2])**
 

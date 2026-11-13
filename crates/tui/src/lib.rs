@@ -19,6 +19,7 @@ mod clipboard;
 mod commands;
 mod custom_terminal;
 mod diff_render;
+mod external_editor;
 mod file_search;
 mod get_git_diff;
 mod history_cell;

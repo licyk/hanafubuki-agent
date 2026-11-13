@@ -275,6 +275,22 @@ impl BottomPane {
         self.request_redraw();
     }
 
+    /// The draft as the external editor gets it, its large pastes written
+    /// out.
+    pub(crate) fn external_editor_seed(&self) -> String {
+        self.composer.current_text_with_pending()
+    }
+
+    pub(crate) fn set_external_editor_open(&mut self, open: bool) {
+        self.composer.set_external_editor_open(open);
+        self.request_redraw();
+    }
+
+    pub(crate) fn apply_external_edit(&mut self, text: String) {
+        self.composer.apply_external_edit(text);
+        self.request_redraw();
+    }
+
     /// Shows a list to pick from over the composer, as `command`'s view.
     pub(crate) fn show_command_selection_view(
         &mut self,

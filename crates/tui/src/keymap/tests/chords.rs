@@ -75,20 +75,20 @@ fn a_second_key_that_completes_nothing_cancels_and_a_plain_key_passes() {
 fn an_ordinary_chord_expires_after_a_second() {
     let config = BTreeMap::from([(
         "chat".to_string(),
-        BTreeMap::from([("toggle_thinking".to_string(), vec!["ctrl-g o".to_string()])]),
+        BTreeMap::from([("toggle_thinking".to_string(), vec!["ctrl-q o".to_string()])]),
     )]);
     let (keymap, warnings) = Keymap::resolve(&config);
     assert!(warnings.is_empty(), "{warnings:#?}");
     let mut state = ChordState::default();
     let now = Instant::now();
-    let ctrl_g = key(KeyCode::Char('g'), KeyModifiers::CONTROL);
+    let ctrl_q = key(KeyCode::Char('q'), KeyModifiers::CONTROL);
     let o = key(KeyCode::Char('o'), KeyModifiers::NONE);
-    assert_eq!(state.feed(&keymap, &ctrl_g, &MAIN, now), ChordStep::Wait);
+    assert_eq!(state.feed(&keymap, &ctrl_q, &MAIN, now), ChordStep::Wait);
     let ChordStep::Complete(token) = state.feed(&keymap, &o, &MAIN, now) else {
         panic!("no chord");
     };
     assert!(keymap.matches(Action::ToggleThinking, &token));
-    assert_eq!(state.feed(&keymap, &ctrl_g, &MAIN, now), ChordStep::Wait);
+    assert_eq!(state.feed(&keymap, &ctrl_q, &MAIN, now), ChordStep::Wait);
     let late = now + Duration::from_millis(1500);
     assert_eq!(state.feed(&keymap, &o, &MAIN, late), ChordStep::Pass);
 }

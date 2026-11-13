@@ -115,8 +115,10 @@ pub fn run(
     let restore = RestoreOnDrop;
     let enhanced_keys_supported = tui::enhanced_keys_supported();
     let mut tui = Tui::new(terminal);
-    let input = InputReader::start(events.sender.clone())
-        .map_err(|error| format!("the terminal's input: {error}"))?;
+    tui.set_input(
+        InputReader::start(events.sender.clone())
+            .map_err(|error| format!("the terminal's input: {error}"))?,
+    );
     let chat_widget = ChatWidget::new(ChatWidgetInit {
         app_event_tx: events.sender.clone(),
         frame_requester: FrameRequester::new(events.sender.clone()),
@@ -158,7 +160,7 @@ pub fn run(
     let result = app.run(&mut tui, &events.receiver);
     app.save_state_on_exit();
     app.restore_terminal_title(&mut tui);
-    drop(input);
+    tui.stop_input();
     if mode.is_owned() {
         let _ = tui.leave_alt_screen();
     }

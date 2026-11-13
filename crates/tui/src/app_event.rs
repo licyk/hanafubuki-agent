@@ -60,6 +60,8 @@ pub(crate) enum AppEvent {
     ReadRecentMessages,
     /// What was read, newest first (none when the read failed).
     RecentMessagesRead(Vec<String>),
+    /// Ctrl+G: edit the composer's draft in the external editor.
+    ExternalEditor,
     /// `/diff`: run `git diff` in the workspace.
     Diff,
     /// Its output, for the pager.

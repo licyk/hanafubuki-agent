@@ -293,6 +293,8 @@ impl App {
             {
                 Route::Parked(event)
             }
+            // The editor edits the focused composer's draft.
+            AppEvent::ExternalEditor if focus.is_some_and(|focus| focus != owner) => Route::Dropped,
             event => Route::Here(event),
         }
     }

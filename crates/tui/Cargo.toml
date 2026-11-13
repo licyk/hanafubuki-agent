@@ -18,6 +18,8 @@ pulldown-cmark = { version = "0.13", default-features = false }
 # Without the default features, which pull crossterm 0.28 in beside 0.29.
 ratatui = { version = "0.30", default-features = false, features = ["crossterm_0_29", "scrolling-regions", "unstable-rendered-line-info"] }
 serde_json.workspace = true
+# The external editor's temporary file (Ctrl+G).
+tempfile.workspace = true
 # Codex's feature set: the grammars and themes two-face bundles, read with
 # Oniguruma, which some of its grammars need.
 syntect = { version = "5", default-features = false, features = ["parsing", "plist-load", "regex-onig"] }
@@ -32,10 +34,21 @@ unicode-width.workspace = true
 [target.'cfg(not(target_os = "android"))'.dependencies]
 arboard = { version = "3", default-features = false, features = ["wayland-data-control"] }
 
+# How the external editor's command is split, as in Codex: into a shell's
+# words on Unix, by the Windows command line's rules on Windows (where a
+# backslash in a path is no escape); and, on Windows, the program looked up
+# on PATH with PATHEXT, which finds a shim such as `code.cmd` that a spawn by
+# name does not.
+[target.'cfg(not(windows))'.dependencies]
+shlex = "2"
+
+[target.'cfg(windows)'.dependencies]
+which = "8"
+winsplit = "0.1"
+
 [dev-dependencies]
 hanafubuki-agent = { workspace = true, features = ["test-support"] }
 insta = "1.46"
-tempfile.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread"] }
 # The vt100 test terminal reads what the crossterm backend wrote.
 ratatui = { version = "0.30", default-features = false, features = ["unstable-backend-writer"] }

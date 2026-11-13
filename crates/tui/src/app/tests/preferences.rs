@@ -58,20 +58,20 @@ fn keymap_rebinds_ctrl_t_with_a_captured_key_and_refuses_a_conflict() {
     // Ctrl-Y is the editor's yank.
     harness.ctrl('y');
     harness.pump_until_screen_shows("and editor.yank");
-    harness.ctrl('g');
+    harness.ctrl('q');
     // The center says what its page saved: the transcript is behind it.
-    harness.pump_until_screen_shows("global.open_transcript: ctrl-g.");
+    harness.pump_until_screen_shows("global.open_transcript: ctrl-q.");
     assert!(harness.app.workspace.settings().is_some());
     harness.leave_settings();
-    harness.pump_until_screen_shows("global.open_transcript: ctrl-g.");
+    harness.pump_until_screen_shows("global.open_transcript: ctrl-q.");
     let file = harness.config_file();
-    assert!(file.contains("open_transcript = \"ctrl-g\""), "{file}");
+    assert!(file.contains("open_transcript = \"ctrl-q\""), "{file}");
 
-    // Ctrl-T no longer opens the transcript; Ctrl-G does.
+    // Ctrl-T no longer opens the transcript; Ctrl-Q does.
     harness.ctrl('t');
     harness.app.draw(&mut harness.tui).unwrap();
     assert!(!harness.screen().contains("T R A N S C R I P T"));
-    harness.ctrl('g');
+    harness.ctrl('q');
     harness.pump_until_screen_shows("T R A N S C R I P T");
     harness.key(KeyCode::Char('q'));
 
@@ -86,7 +86,7 @@ fn keymap_rebinds_ctrl_t_with_a_captured_key_and_refuses_a_conflict() {
         .find(|line| line.trim_start().starts_with("global.open_transcript"))
         .expect(&debug);
     assert!(
-        line.contains("ctrl-g") && line.contains("(configured)"),
+        line.contains("ctrl-q") && line.contains("(configured)"),
         "{line}"
     );
 }
@@ -105,14 +105,14 @@ fn the_leader_chord_starts_select_mode_and_a_chord_can_be_captured() {
     harness.key(KeyCode::Down);
     harness.key(KeyCode::Enter);
     harness.pump_until_screen_shows("Press the first key");
-    harness.ctrl('g');
-    harness.pump_until_screen_shows("First key: ctrl-g");
+    harness.ctrl('q');
+    harness.pump_until_screen_shows("First key: ctrl-q");
     harness.key(KeyCode::Char('o'));
     harness.leave_settings();
-    harness.pump_until_screen_shows("chat.toggle_thinking: ctrl-g o.");
+    harness.pump_until_screen_shows("chat.toggle_thinking: ctrl-q o.");
     assert!(harness
         .config_file()
-        .contains("toggle_thinking = \"ctrl-g o\""));
+        .contains("toggle_thinking = \"ctrl-q o\""));
 }
 
 #[test]

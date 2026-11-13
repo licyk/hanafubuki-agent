@@ -835,6 +835,7 @@ mod backtrack;
 mod compaction;
 mod compression;
 mod context;
+mod external_editor;
 mod features;
 mod history_search;
 mod plugins;

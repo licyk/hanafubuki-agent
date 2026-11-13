@@ -2338,6 +2338,7 @@ dependencies = [
  "pulldown-cmark",
  "ratatui",
  "serde_json",
+ "shlex",
  "syntect",
  "tempfile",
  "textwrap",
@@ -2346,6 +2347,8 @@ dependencies = [
  "unicode-segmentation",
  "unicode-width",
  "vt100",
+ "which",
+ "winsplit",
 ]
 
 [[package]]
@@ -6566,6 +6569,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "which"
+version = "8.0.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bae2f2b2b816647a1cab1acc91f5bd20812d53cb344382635ec2181940c8034f"
+dependencies = [
+ "libc",
+]
+
+[[package]]
 name = "winapi"
 version = "0.3.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6787,6 +6799,12 @@ checksum = "80d0f4e272c85def139476380b12f9ac60926689dd2e01d4923222f40580869d"
 dependencies = [
  "winapi",
 ]
+
+[[package]]
+name = "winsplit"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3ab703352da6a72f35c39a533526393725640575bb211f61987a2748323ad956"
 
 [[package]]
 name = "wit-bindgen"

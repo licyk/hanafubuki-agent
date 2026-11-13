@@ -1,4 +1,6 @@
-//! The thread that reads the terminal's input into the app loop.
+//! The thread that reads the terminal's input into the app loop. It stops
+//! while another program has the terminal (`pause`), so that program reads
+//! the keys, and what was typed meanwhile is dropped when it starts again.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -15,30 +17,57 @@ use crate::app_event::{AppEvent, AppEventSender};
 const POLL_INTERVAL: Duration = Duration::from_millis(50);
 
 pub(crate) struct InputReader {
+    app_event_tx: AppEventSender,
     stop: Arc<AtomicBool>,
     thread: Option<JoinHandle<()>>,
 }
 
 impl InputReader {
     pub(crate) fn start(app_event_tx: AppEventSender) -> std::io::Result<Self> {
+        let mut reader = Self {
+            app_event_tx,
+            stop: Arc::new(AtomicBool::new(false)),
+            thread: None,
+        };
+        reader.spawn()?;
+        Ok(reader)
+    }
+
+    /// Returns once the thread no longer reads the terminal.
+    pub(crate) fn pause(&mut self) {
+        self.stop.store(true, Ordering::Relaxed);
+        if let Some(thread) = self.thread.take() {
+            let _ = thread.join();
+        }
+    }
+
+    /// Reads again, after dropping what the terminal holds: keys typed
+    /// while another program had it were not meant for the interface.
+    pub(crate) fn resume(&mut self) -> std::io::Result<()> {
+        while event::poll(Duration::ZERO).unwrap_or(false) {
+            if event::read().is_err() {
+                break;
+            }
+        }
+        self.spawn()
+    }
+
+    fn spawn(&mut self) -> std::io::Result<()> {
         let stop = Arc::new(AtomicBool::new(false));
         let stopping = stop.clone();
+        let app_event_tx = self.app_event_tx.clone();
         let thread = std::thread::Builder::new()
             .name("tui-input".to_string())
             .spawn(move || read_input(&app_event_tx, &stopping))?;
-        Ok(Self {
-            stop,
-            thread: Some(thread),
-        })
+        self.stop = stop;
+        self.thread = Some(thread);
+        Ok(())
     }
 }
 
 impl Drop for InputReader {
     fn drop(&mut self) {
-        self.stop.store(true, Ordering::Relaxed);
-        if let Some(thread) = self.thread.take() {
-            let _ = thread.join();
-        }
+        self.pause();
     }
 }
 
