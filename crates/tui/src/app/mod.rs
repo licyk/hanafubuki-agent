@@ -608,6 +608,7 @@ impl App {
         if self.mode.is_owned() {
             return self.draw_owned(tui);
         }
+        self.chat_widget.set_navigation_footer(None);
         self.draw_scrollback(tui)
     }
 

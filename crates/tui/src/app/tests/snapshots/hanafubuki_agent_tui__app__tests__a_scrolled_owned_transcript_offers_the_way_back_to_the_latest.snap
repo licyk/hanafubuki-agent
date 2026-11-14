@@ -1,11 +1,10 @@
 ---
 source: crates/tui/src/app/tests/mod.rs
-assertion_line: 642
 expression: harness.bottom_rows(6)
 ---
-• note 42
-                                       ↓ Back to bottom · esc
+                                          ↓ Back to bottom
 
 › Ask the Agent to do anything
 
-  fixture-model · /project · ← for agents
+  fixture-model · /project
+  esc latest

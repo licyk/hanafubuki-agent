@@ -54,25 +54,20 @@ impl TranscriptView {
         {
             return None;
         }
-        let labels = if self.unseen_activity {
-            [
-                " New activity · ↓ Back to bottom · esc ",
+        let labels: &[&str] = if self.unseen_activity {
+            &[
+                " New activity · ↓ Back to bottom ",
                 " New activity · ↓ Bottom ",
                 " New · ↓ Bottom ",
                 " ↓ Bottom ",
                 " ↓ ",
             ]
         } else {
-            [
-                " ↓ Back to bottom · esc ",
-                " ↓ Back to bottom ",
-                " ↓ Bottom · esc ",
-                " ↓ Bottom ",
-                " ↓ ",
-            ]
+            &[" ↓ Back to bottom ", " ↓ Bottom ", " ↓ "]
         };
         labels
-            .into_iter()
+            .iter()
+            .copied()
             .find(|label| label.width() <= usize::from(width))
     }
 

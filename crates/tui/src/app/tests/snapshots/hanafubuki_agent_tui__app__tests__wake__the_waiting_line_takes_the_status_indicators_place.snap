@@ -2,10 +2,10 @@
 source: crates/tui/src/app/tests/wake.rs
 expression: harness.bottom_rows(7)
 ---
-
 Waiting for 1 agent — resumes by itself · /tasks                                                    
 
 
 › Ask the Agent to do anything
 
-  fixture-model · 1 agent · /project · Delegate the count. · ← for agents
+  fixture-model · 1 agent · /project · Delegate the count.
+  ← for agents · ? for shortcuts

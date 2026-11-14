@@ -12,12 +12,11 @@
 //! schedule a redraw so it can expire even if the UI is otherwise idle.
 //!
 //! After a first Esc on an empty composer, the footer says a second one edits a previous message
-//! (`FooterMode::EscHint`). The status line (`/statusline`) takes the row of
-//! the shortcuts hint while the composer is empty, and while a draft is
-//! written with no turn running; a draft written during a turn shows the key
-//! that queues it instead. `?` shows the shortcuts in its place
-//! ([`shortcut_overlay`]). A newer release's notice takes the right of the
-//! one-row modes' row, in full, shortened or not at all, so it never cuts
+//! (`FooterMode::EscHint`). The status line (`/statusline`) precedes the
+//! shortcut and transcript-navigation hints. A draft written during a turn
+//! shows the key that queues it; `?` expands the shortcuts below the status
+//! line ([`shortcut_overlay`]). A newer release's notice takes the right of
+//! the first row, in full, shortened or not at all, so it never cuts
 //! the row's own content and adds no row. Codex's footer also shows the context window left, the collaboration
 //! mode and its width-based collapse rules; those are not ported.
 
@@ -46,7 +45,9 @@ pub(crate) struct FooterProps<'a> {
     ///
     /// This is rendered when `mode` is `FooterMode::QuitShortcutReminder`.
     pub(crate) quit_shortcut_key: KeyBinding,
-    /// The status line, when this mode shows it.
+    /// Transcript navigation replaces the ordinary shortcut hints.
+    pub(crate) navigation: Option<&'a [Line<'static>]>,
+    /// Session information above the hints.
     pub(crate) status_line: Option<&'a Line<'static>>,
     /// A newer release, shown on the right where the row has room.
     pub(crate) update_notice: Option<&'a TuiUpdateNotice>,
@@ -119,6 +120,7 @@ pub(crate) fn footer_height(props: FooterProps<'_>, width: u16) -> u16 {
     let rows = match props.mode {
         FooterMode::ShortcutOverlay => {
             shortcut_overlay::lines(&props, width.saturating_sub(FOOTER_INDENT_COLS as u16)).len()
+                + usize::from(props.status_line.is_some())
         }
         _ => footer_lines(props).len(),
     };
@@ -127,13 +129,21 @@ pub(crate) fn footer_height(props: FooterProps<'_>, width: u16) -> u16 {
 
 /// Render footer content from `FooterProps`, indented like the composer.
 pub(crate) fn render_footer(area: Rect, buf: &mut Buffer, props: FooterProps<'_>) {
+    if area.is_empty() {
+        return;
+    }
     if props.mode == FooterMode::ShortcutOverlay {
         let indent = (FOOTER_INDENT_COLS as u16).min(area.width);
-        let area = Rect {
+        let mut area = Rect {
             x: area.x + indent,
             width: area.width - indent,
             ..area
         };
+        if let Some(status) = props.status_line {
+            buf.set_line(area.x, area.y, status, area.width);
+            area.y = area.y.saturating_add(1);
+            area.height = area.height.saturating_sub(1);
+        }
         return shortcut_overlay::render(&props, area, buf);
     }
     let lines = footer_lines(props);
@@ -180,7 +190,17 @@ pub(crate) fn render_footer_line(area: Rect, buf: &mut Buffer, line: Line<'stati
 
 /// The canonical FooterMode-to-text mapping.
 fn footer_lines(props: FooterProps<'_>) -> Vec<Line<'static>> {
-    match props.mode {
+    let mut lines: Vec<_> = props.status_line.cloned().into_iter().collect();
+    if let Some(navigation) = props.navigation.filter(|_| {
+        !matches!(
+            props.mode,
+            FooterMode::QuitShortcutReminder | FooterMode::EscHint
+        )
+    }) {
+        lines.extend_from_slice(navigation);
+        return lines;
+    }
+    lines.extend(match props.mode {
         FooterMode::QuitShortcutReminder => {
             vec![quit_shortcut_reminder_line(props.quit_shortcut_key)]
         }
@@ -194,7 +214,7 @@ fn footer_lines(props: FooterProps<'_>) -> Vec<Line<'static>> {
             Some(key) if props.task_running => {
                 Line::from(vec![key.into(), " to queue message".dim()])
             }
-            _ => props.status_line.cloned().unwrap_or_default(),
+            _ => composer_empty_line(props),
         }],
         FooterMode::EscHint => vec![Line::from(vec![
             keymap::hint(Action::EditPrevious)
@@ -203,35 +223,28 @@ fn footer_lines(props: FooterProps<'_>) -> Vec<Line<'static>> {
             " again to edit a previous message".into(),
         ])
         .dim()],
-    }
+    });
+    lines
 }
 
-/// The status line, else `? for shortcuts` (the key that shows them);
-/// with `← for agents` after the status line, or before the shortcuts
-/// (Codex's `passive_footer_suffix` and `left_side_line`).
+/// The available shortcuts below the session information.
 fn composer_empty_line(props: FooterProps<'_>) -> Line<'static> {
     let agents = [key_hint::plain(KeyCode::Left).into(), " for agents".dim()];
     let shortcuts = keymap::hint(Action::ShowShortcuts)
         .map(|key| vec![key.into(), " for shortcuts".dim()])
         .unwrap_or_default();
-    match (props.status_line, props.agents_hint) {
-        (Some(status), false) => status.clone(),
-        (Some(status), true) => {
-            let mut line = status.clone();
-            line.push_span(" · ".dim());
-            line.spans.extend(agents);
-            line
+    let mut spans = if props.agents_hint {
+        agents.to_vec()
+    } else {
+        Vec::new()
+    };
+    if !shortcuts.is_empty() {
+        if !spans.is_empty() {
+            spans.push(" · ".dim());
         }
-        (None, false) => Line::from(shortcuts),
-        (None, true) => {
-            let mut spans = agents.to_vec();
-            if !shortcuts.is_empty() {
-                spans.push(" · ".dim());
-                spans.extend(shortcuts);
-            }
-            Line::from(spans)
-        }
+        spans.extend(shortcuts);
     }
+    Line::from(spans)
 }
 
 fn quit_shortcut_reminder_line(key: KeyBinding) -> Line<'static> {

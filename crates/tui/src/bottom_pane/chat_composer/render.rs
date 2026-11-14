@@ -41,7 +41,7 @@ impl ChatComposer {
     /// popup's, or the footer's.
     fn popup_or_footer_height(&self, width: u16) -> u16 {
         if self.history_search_active() || self.external_editor_open {
-            return 1;
+            return 1 + u16::from(self.status_line.is_some());
         }
         match &self.active_popup {
             ActivePopup::None => footer_height(self.footer_props(), width),
@@ -52,14 +52,12 @@ impl ChatComposer {
 
     pub(super) fn footer_props(&self) -> FooterProps<'_> {
         let mode = self.footer_mode();
-        // A draft written during a turn keeps the row clear.
-        let shows_status_line = mode == FooterMode::ComposerEmpty
-            || (mode == FooterMode::ComposerHasDraft && !self.is_task_running);
         FooterProps {
             mode,
             use_shift_enter_hint: self.use_shift_enter_hint,
             quit_shortcut_key: self.quit_shortcut_key,
-            status_line: self.status_line.as_ref().filter(|_| shows_status_line),
+            status_line: self.status_line.as_ref(),
+            navigation: self.navigation_footer.as_deref(),
             update_notice: self.update_notice.as_ref(),
             task_running: self.is_task_running,
             agents_hint: self.agents_navigation_available(),
@@ -99,8 +97,12 @@ impl Renderable for ChatComposer {
         if !self.has_focus {
             return None;
         }
-        let [_, textarea_rect, popup_rect] = self.layout_areas(area);
+        let [_, textarea_rect, mut popup_rect] = self.layout_areas(area);
         if self.history_search_active() {
+            popup_rect.y += u16::from(self.status_line.is_some());
+            popup_rect.height = popup_rect
+                .height
+                .saturating_sub(u16::from(self.status_line.is_some()));
             return self.history_search_cursor_pos(popup_rect);
         }
         let state = *self.textarea_state.borrow();
@@ -124,7 +126,15 @@ impl Renderable for ChatComposer {
                 .history_search_line()
                 .or_else(|| self.external_editor_line())
             {
-                Some(line) => render_footer_line(popup_rect, buf, line),
+                Some(line) => {
+                    let mut hints = popup_rect;
+                    if let Some(status) = &self.status_line {
+                        render_footer_line(hints, buf, status.clone());
+                        hints.y += 1;
+                        hints.height = hints.height.saturating_sub(1);
+                    }
+                    render_footer_line(hints, buf, line);
+                }
                 None => {
                     // The footer hides while a paste burst buffers, so a pasted `?` does
                     // not flash "? for shortcuts" away and back.

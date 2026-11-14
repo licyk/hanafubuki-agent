@@ -14,6 +14,13 @@ use crate::appearance::AppearanceEvent;
 use crate::status_indicator_widget::waiting_line;
 
 impl ChatWidget {
+    pub(crate) fn set_navigation_footer(
+        &mut self,
+        lines: Option<Vec<ratatui::text::Line<'static>>>,
+    ) {
+        self.bottom_pane.set_navigation_footer(lines);
+    }
+
     /// A change of the theme, the status line or the title.
     pub(crate) fn apply_appearance(&mut self, event: AppearanceEvent) {
         self.appearance.apply(event);

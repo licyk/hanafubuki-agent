@@ -96,6 +96,7 @@ pub(crate) struct ChatComposer {
     is_task_running: bool,
     /// The status line the footer shows (`/statusline`).
     status_line: Option<Line<'static>>,
+    navigation_footer: Option<Vec<Line<'static>>>,
     /// A newer release, on the right of the footer's row.
     update_notice: Option<TuiUpdateNotice>,
     /// Non-bracketed paste burst tracker (see `bottom_pane/paste_burst.rs`).
@@ -149,6 +150,7 @@ impl ChatComposer {
             placeholder_text,
             is_task_running: false,
             status_line: None,
+            navigation_footer: None,
             update_notice: None,
             paste_burst: PasteBurst::default(),
             footer_mode: FooterMode::ComposerEmpty,
@@ -731,6 +733,10 @@ impl ChatComposer {
 
     pub fn set_task_running(&mut self, running: bool) {
         self.is_task_running = running;
+    }
+
+    pub(crate) fn set_navigation_footer(&mut self, lines: Option<Vec<Line<'static>>>) {
+        self.navigation_footer = lines;
     }
 
     pub(crate) fn set_status_line(&mut self, line: Option<Line<'static>>) {

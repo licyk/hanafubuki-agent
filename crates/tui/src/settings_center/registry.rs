@@ -32,6 +32,12 @@ impl std::fmt::Debug for PageOverride {
 
 /// Where a page is in the center.
 pub(crate) enum Attach {
+    /// A record field opens a page using another field's value as its argument.
+    RecordField {
+        collection: &'static str,
+        field: &'static str,
+        argument: &'static str,
+    },
     /// In place of the editor of this setting's row.
     Setting(&'static str),
     /// A row of its own in a tab.
@@ -45,6 +51,22 @@ pub(crate) enum Attach {
         collection: &'static str,
         label: &'static str,
     },
+}
+
+pub(super) fn page_of_record_field(
+    collection: &str,
+    field: &str,
+) -> Option<(&'static PageOverride, &'static str)> {
+    SETTINGS_PAGES
+        .into_iter()
+        .find_map(|page| match page.attach {
+            Attach::RecordField {
+                collection: owner,
+                field: key,
+                argument,
+            } if owner == collection && key == field => Some((page, argument)),
+            _ => None,
+        })
 }
 
 /// The page of the setting `key`, when it has one.

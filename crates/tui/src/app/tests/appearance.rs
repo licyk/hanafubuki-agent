@@ -15,10 +15,14 @@ fn statusline_arguments_apply_to_the_run_and_the_setup_saves() {
 
     harness.type_and_submit("/statusline model --no-colors");
     harness.pump_until_screen_shows("Updated for this session; it is not saved.");
-    let bottom = harness.bottom_rows(1);
+    let bottom = harness.bottom_rows(2);
     // Left opens the command center from the empty composer, which the
     // footer says after the status line.
-    assert_eq!(bottom.trim(), "fixture-model · ← for agents", "{bottom}");
+    assert_eq!(
+        bottom.trim(),
+        "fixture-model\n  ← for agents · ? for shortcuts",
+        "{bottom}"
+    );
     assert!(!harness.config_file().contains("statusLine"));
 
     harness.type_and_submit("/statusline nonsense");
@@ -42,7 +46,10 @@ fn statusline_arguments_apply_to_the_run_and_the_setup_saves() {
         "{config}"
     );
     assert!(config.contains("statusLineColors = false"), "{config}");
-    assert_eq!(harness.bottom_rows(1).trim(), "/project · ← for agents");
+    assert_eq!(
+        harness.bottom_rows(2).trim(),
+        "/project\n  ← for agents · ? for shortcuts"
+    );
 }
 
 #[test]
@@ -53,10 +60,10 @@ fn the_status_line_follows_the_session() {
     harness.type_and_submit("hello");
     harness.pump_until_turn_ends();
     harness.pump_until("the status line to show the session", |harness| {
-        harness.bottom_rows(1).contains("used")
+        harness.bottom_rows(2).contains("used")
     });
     let session_id = harness.app.bridge.session_id().unwrap().to_string();
-    let bottom = harness.bottom_rows(1);
+    let bottom = harness.bottom_rows(2);
     assert!(bottom.contains(&session_id), "{bottom}");
 }
 

@@ -37,20 +37,33 @@ pub(crate) static MODEL_PAGE: PageOverride = PageOverride {
         label: "Choose the model",
     },
     command: &PROVIDERS,
-    open: |context, record| {
-        let Some(provider_id) = record else {
-            return;
-        };
-        let tx = context.app_event_tx();
-        let loading = LoadingLine::new(FrameRequester::new(tx.clone()), true);
-        context.show_view(Box::new(ModelPicker::new(
-            provider_id.to_string(),
-            tx,
-            loading,
-        )));
-        context.agent_command(AgentCommand::ProviderModels(provider_id.to_string()));
-    },
+    open: open_model,
 };
+
+pub(crate) static MODEL_SETTING_PAGE: PageOverride = PageOverride {
+    id: "default-model",
+    attach: Attach::RecordField {
+        collection: "modelPolicy",
+        field: "model",
+        argument: "defaultProviderId",
+    },
+    command: &PROVIDERS,
+    open: open_model,
+};
+
+fn open_model(context: &mut CommandContext<'_>, record: Option<&str>) {
+    let Some(provider_id) = record else {
+        return;
+    };
+    let tx = context.app_event_tx();
+    let loading = LoadingLine::new(FrameRequester::new(tx.clone()), true);
+    context.show_view(Box::new(ModelPicker::new(
+        provider_id.to_string(),
+        tx,
+        loading,
+    )));
+    context.agent_command(AgentCommand::ProviderModels(provider_id.to_string()));
+}
 
 fn dispatch(context: &mut CommandContext<'_>, args: &str) {
     match args.trim() {

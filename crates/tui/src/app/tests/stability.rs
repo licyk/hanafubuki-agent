@@ -58,7 +58,10 @@ impl Harness {
         // of the conversation's area.
         let height = 1 + rows[header + 1..]
             .iter()
-            .take_while(|row| row.starts_with("  └ ") || row.starts_with("    "))
+            .take_while(|row| {
+                !row.contains("Back to bottom")
+                    && (row.starts_with("  └ ") || row.starts_with("    "))
+            })
             .count();
         Frame {
             rows,

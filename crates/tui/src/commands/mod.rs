@@ -212,7 +212,7 @@ pub(crate) fn has_prefix(name: &str, disabled: &[&str]) -> bool {
 
 /// The settings center's pages that are commands' views, each declared
 /// beside its command.
-pub(crate) static SETTINGS_PAGES: [&PageOverride; 10] = [
+pub(crate) static SETTINGS_PAGES: [&PageOverride; 11] = [
     &theme::PAGE,
     &statusline::PAGE,
     &title::PAGE,
@@ -222,6 +222,7 @@ pub(crate) static SETTINGS_PAGES: [&PageOverride; 10] = [
     &hooks::PAGE,
     &memories::PAGE,
     &providers::MODEL_PAGE,
+    &providers::MODEL_SETTING_PAGE,
     &mcp::LOGIN_PAGE,
 ];
 

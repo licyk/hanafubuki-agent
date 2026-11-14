@@ -500,6 +500,10 @@ impl BottomPane {
     }
 
     /// The status line under the composer; `None` for the shortcuts hint.
+    pub(crate) fn set_navigation_footer(&mut self, lines: Option<Vec<Line<'static>>>) {
+        self.composer.set_navigation_footer(lines);
+    }
+
     pub(crate) fn set_status_line(&mut self, line: Option<Line<'static>>) {
         self.composer.set_status_line(line);
         self.request_redraw();

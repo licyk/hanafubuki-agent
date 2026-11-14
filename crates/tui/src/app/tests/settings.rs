@@ -564,3 +564,44 @@ fn an_mcp_login_opens_over_its_server_and_says_why_it_failed() {
     harness.key(KeyCode::Char('x'));
     assert!(harness.app.chat_widget.composer_is_empty());
 }
+
+#[test]
+fn the_global_model_field_lists_facts_and_accepts_a_manual_id() {
+    for mode in [TranscriptMode::Terminal, TranscriptMode::Owned] {
+        let listing = || {
+            FakeListing::ok(
+                r#"{"data":[{"id":"fixture-model","context_window":200000,"input_modalities":["text","image"]},{"id":"first-model"}]}"#,
+            )
+        };
+        let mut harness = Harness::listing(vec![listing(), listing()], mode, |_| {});
+        harness.type_and_submit("/config modelPolicy");
+        harness.pump_until_screen_shows("Default Provider");
+        harness.select_setting("Model");
+        harness.key(KeyCode::Enter);
+        let screen = harness.pump_until_screen_shows("first-model");
+        assert!(screen.contains("Context  Thinking  Vision"), "{screen}");
+        assert!(screen.contains("200K"), "{screen}");
+        harness.key(KeyCode::Up);
+        harness.key(KeyCode::Enter);
+        harness.pump_until("the global model is saved", |h| {
+            h.registry().model_policy.model == "first-model"
+        });
+        harness.pump_until_screen_shows("Default Provider");
+        harness.select_setting("Model");
+        harness.key(KeyCode::Enter);
+        harness.pump_until_screen_shows("Enter a model id…");
+        harness.key(KeyCode::Down);
+        harness.key(KeyCode::Down);
+        harness.key(KeyCode::Enter);
+        harness.pump_until_screen_shows("Use this model");
+        for character in "manual-model".chars() {
+            harness.key(KeyCode::Char(character));
+        }
+        harness.key(KeyCode::Tab);
+        harness.key(KeyCode::Enter);
+        harness.pump_until("the manual model is saved", |h| {
+            h.registry().model_policy.model == "manual-model"
+        });
+        assert_eq!(harness.app.bridge.session_id(), None);
+    }
+}

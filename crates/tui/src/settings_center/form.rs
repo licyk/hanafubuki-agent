@@ -339,6 +339,17 @@ impl FormPage {
             Some(Line::Field(index)) if self.editable(catalog) => {
                 let spec = self.fields(catalog)[index];
                 let value = self.value(catalog, &spec.key);
+                if let FormTarget::Record { collection, .. } = &self.target {
+                    if let Some((page, argument)) =
+                        registry::page_of_record_field(collection, &spec.key)
+                    {
+                        if let Some(SettingValue::Text(argument)) = self.value(catalog, argument) {
+                            if !argument.is_empty() {
+                                return Effect::Open(page, Some(argument));
+                            }
+                        }
+                    }
+                }
                 match &spec.kind {
                     SettingKind::Boolean => Effect::Edit {
                         key: spec.key.clone(),
@@ -516,6 +527,11 @@ impl FormPage {
                             && record.is_some_and(|record| record.secrets_set.contains(&spec.key));
                         let value = self.value(catalog, &spec.key);
                         let mut row = Row::setting(spec, value.as_ref(), secret_set, false);
+                        if let FormTarget::Record { collection, .. } = &self.target {
+                            if registry::page_of_record_field(collection, &spec.key).is_some() {
+                                row.hint = "enter choose".to_string();
+                            }
+                        }
                         if drafted && matches!(self.target, FormTarget::Record { .. }) {
                             row.source = Some("unsaved".to_string());
                         }

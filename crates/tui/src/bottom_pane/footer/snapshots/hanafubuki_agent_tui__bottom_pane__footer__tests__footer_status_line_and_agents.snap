@@ -1,5 +1,6 @@
 ---
 source: crates/tui/src/bottom_pane/footer/tests.rs
-expression: terminal.backend()
+expression: "draw(props, width, height).backend()"
 ---
-"  model · ~/project · ← for agents                                              "
+"  model · ~/project                                                             "
+"  ← for agents · ? for shortcuts                                                "

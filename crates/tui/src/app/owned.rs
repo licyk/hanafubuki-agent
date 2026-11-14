@@ -6,7 +6,7 @@
 //! share of the keys.
 //!
 //! Each frame syncs the view with the cells, paints the view, then the
-//! view's footer and the chat below it, and puts the follow-latest control
+//! chat with the view's hints below its status line, and puts the follow-latest control
 //! (or, for a few seconds, the last copy's notice) in the blank row above
 //! the composer.
 //!
@@ -32,7 +32,7 @@ use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::layout::Rect;
 use ratatui::style::Stylize;
 use ratatui::text::Line;
-use ratatui::widgets::{Paragraph, Widget};
+use ratatui::widgets::Widget;
 
 use super::{is_transcript_key, App, LIVE_TICK, VIEW_TICK};
 use crate::chatwidget::ChatWidget;
@@ -116,10 +116,15 @@ impl App {
             .is_browsing()
             .then(|| super::backtrack::browsing_footer(width));
         let dragging = self.workspace.is_dragging();
-        let chat_widget = &self.chat_widget;
         let cells = &self.transcript_cells;
         let view = &mut self.transcript_view;
         let (scanning, measured_footer) = prepare_pane(view, cells, width, browsing.is_some());
+        self.chat_widget.set_navigation_footer(
+            view.footer(width.saturating_sub(crate::ui_consts::FOOTER_INDENT_COLS as u16))
+                .map(|footer| footer.lines)
+                .or_else(|| browsing.clone().map(|line| vec![line])),
+        );
+        let chat_widget = &mut self.chat_widget;
         let mut passive = layout.passive.zip(self.workspace.parked_mut());
         let passive_animating = passive.as_mut().is_some_and(|(area, parked)| {
             prepare_pane(
@@ -127,6 +132,15 @@ impl App {
                 &parked.transcript_cells,
                 area.width,
                 false,
+            );
+            parked.chat_widget.set_navigation_footer(
+                parked
+                    .transcript_view
+                    .footer(
+                        area.width
+                            .saturating_sub(crate::ui_consts::FOOTER_INDENT_COLS as u16),
+                    )
+                    .map(|footer| footer.lines),
             );
             parked.transcript_view.is_following() && parked.chat_widget.has_live_entries()
         });
@@ -142,7 +156,6 @@ impl App {
                     view,
                     notice,
                     browsing,
-                    measured_footer,
                 },
             );
             footer_rows = painted.footer_rows;
@@ -151,12 +164,11 @@ impl App {
                     buf,
                     area,
                     PanePaint {
-                        chat_widget: &parked.chat_widget,
+                        chat_widget: &mut parked.chat_widget,
                         cells: &parked.transcript_cells,
                         view: &mut parked.transcript_view,
                         notice: None,
                         browsing: None,
-                        measured_footer: 0,
                     },
                 );
             }
@@ -190,13 +202,11 @@ impl App {
 
 /// One conversation's pane, as [`paint_pane`] draws it.
 struct PanePaint<'a> {
-    chat_widget: &'a ChatWidget,
+    chat_widget: &'a mut ChatWidget,
     cells: &'a [Arc<dyn HistoryCell>],
     view: &'a mut TranscriptView,
     notice: Option<String>,
     browsing: Option<Line<'static>>,
-    /// The view's footer rows as measured before the frame.
-    measured_footer: usize,
 }
 
 /// What a painted pane leaves: the composer's cursor, and the footer rows
@@ -218,13 +228,13 @@ fn prepare_pane(
     view.prepare_width(width);
     let scanning = view.advance_search(cells);
     let measured = view
-        .footer(width)
+        .footer(width.saturating_sub(crate::ui_consts::FOOTER_INDENT_COLS as u16))
         .map_or(usize::from(browsing), |footer| footer.lines.len());
     (scanning, measured)
 }
 
-/// A conversation in `area`: its transcript view, the view's footer, and
-/// the chat below; the follow-latest control (or a copy's notice) in the
+/// A conversation in `area`: its transcript view and the chat with navigation
+/// hints below its status line; the follow-latest control (or a copy's notice) in the
 /// blank row above the composer.
 fn paint_pane(buf: &mut Buffer, area: Rect, pane: PanePaint<'_>) -> Painted {
     let PanePaint {
@@ -233,18 +243,20 @@ fn paint_pane(buf: &mut Buffer, area: Rect, pane: PanePaint<'_>) -> Painted {
         view,
         notice,
         browsing,
-        measured_footer,
     } = pane;
     let width = area.width;
     let chat_height = chat_widget.desired_height(width).min(area.height);
-    let footer_height = u16::try_from(measured_footer)
-        .unwrap_or(u16::MAX)
-        .min(area.height - chat_height);
+
     let transcript = Rect {
-        height: area.height - chat_height - footer_height,
+        height: area.height - chat_height,
         ..area
     };
     view.render(transcript, buf, cells);
+    chat_widget.set_navigation_footer(
+        view.footer(width.saturating_sub(crate::ui_consts::FOOTER_INDENT_COLS as u16))
+            .map(|footer| footer.lines)
+            .or_else(|| browsing.clone().map(|line| vec![line])),
+    );
     let chat_area = Rect::new(area.x, area.bottom() - chat_height, width, chat_height);
     chat_widget.render(chat_area, buf);
     // The chat's first row is the blank above the composer.
@@ -255,19 +267,18 @@ fn paint_pane(buf: &mut Buffer, area: Rect, pane: PanePaint<'_>) -> Painted {
     if let (Some(gap), Some(notice)) = (gap, notice) {
         Line::from(notice).dim().render(gap, buf);
     }
-    let footer = view.footer(width);
+    let footer = view.footer(width.saturating_sub(crate::ui_consts::FOOTER_INDENT_COLS as u16));
     let footer_rows = footer
         .as_ref()
         .map_or(usize::from(browsing.is_some()), |footer| footer.lines.len());
-    let footer_area = Rect::new(area.x, transcript.bottom(), width, footer_height);
     let mut cursor = chat_widget.cursor_pos(chat_area);
     if let Some(footer) = footer {
-        if let Some(column) = footer.cursor_column.filter(|_| footer_height > 0) {
-            cursor = Some((footer_area.x + column, footer_area.y));
+        if let Some(column) = footer.cursor_column {
+            cursor = Some((
+                area.x + column + crate::ui_consts::FOOTER_INDENT_COLS as u16,
+                area.bottom().saturating_sub(footer_rows as u16),
+            ));
         }
-        Paragraph::new(footer.lines).render(footer_area, buf);
-    } else if let Some(browsing) = browsing {
-        browsing.render(footer_area, buf);
     }
     Painted {
         cursor,

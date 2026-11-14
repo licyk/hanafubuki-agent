@@ -41,7 +41,7 @@ Fullscreen 下，对话占满底部区域上方的屏幕。Scrollback 下，界�
 1. **状态行**：回合进行中显示 `• Working 25s • esc to interrupt`，包括已用时间；回合思考过之后显示 `• Working 25s (Thinking 20.7s) • esc to interrupt`，括号中是整个回合到目前为止的思考时间，只在模型思考时增长（[思考过程](#thinking)）。模型请求重试时改为 `Reconnecting 1/3: 原因`。等待审批或回答问题时，工作计时暂停。状态行在整个回合中保持显示，模型输出回答时也是。
 2. **等待中的消息**：有消息在等待回合时显示（[见下文](#composer)）。回合进行中，回合读取了这些消息之后，它们占用的行留作空行，直到回合结束，所以上方的对话不会每次都移动。
 3. **输入框**：以 `›` 开头。
-4. **底栏**：输入框为空，或有草稿但没有回合在运行时，显示[状态栏](#status-line)，默认是模型及其推理强度、工作目录和会话标题；状态栏没有可显示的项目时显示 `? for shortcuts`。输入框为空且 Left 可以打开[指挥中心](#agents)时，后面接着显示 `← for agents`。回合进行中写的草稿改为显示 `tab to queue message`。有更新的版本发布时，同一行的右侧会显示 `Update available: 0.3.0 · hanafubuki-agent update`（[更新](#updates)）。
+4. **底栏**：[状态栏](#status-line)默认显示模型及其推理强度、工作目录和会话标题。下一行单独显示可用的 `← for agents · ? for shortcuts`。草稿排队、退出、历史翻页（`esc latest`）、选择和搜索等提示也显示在状态栏下方。回合运行中输入草稿时显示 `tab to queue message`。有新版本时，更新提示显示在状态栏右侧（[更新](#updates)）。
 
 审批、提问以及 `/model` 和 `/mode` 的选择列表打开时，会暂时替换状态行和输入框。回合结束时，选择列表保持打开；`/model` 的列表在任何 Provider 回答之前就打开，随每个 Provider 的回答填入（[模型列表](#model-list)）。各项设置（包括 `/providers` 和 `/mcp`）都在全屏的[设置中心](#config)中。
 
@@ -443,7 +443,7 @@ Esc 返回上一页，在标签页上回到设置中心。用 `--safe-mode` 启�
 
 ## 阅读对话 [#reading]
 
-Fullscreen 下，对话会跟随最新输出，直到你向上滚动。向上滚动后，回合继续运行时视图停留在原处，输入框上方会出现 `↓ Back to bottom · esc` 控件（下方有新内容时为 `New activity · ...`），用它回到最新输出。
+Fullscreen 下，对话会跟随最新输出，直到你向上滚动。向上滚动后，回合继续运行时视图停留在原处，输入框上方会出现 `↓ Back to bottom` 控件（下方有新内容时为 `New activity · ...`），用它回到最新输出。
 
 | 按键或操作                              | 作用                                                                                                               |
 | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
@@ -928,6 +928,8 @@ yank = []
 - **集合**（Provider、模型覆盖、模型策略、MCP 服务器、MCP 机密、插件的 MCP 服务器、插件、已安装的插件、市场、钩子、角色；独立模式下还有 profile 和项目）打开它的记录，每条显示状态和摘要，上方显示它无法读取的部分。Enter 把一条记录打开为字段表单，每个字段改动时即保存；记录拒绝的字段保持标记为 `unsaved`，随下一次改动一起发送（例如先改 MCP 服务器的传输方式，再填它的 URL）。在记录的字段上按 `r` 取消设置它（profile 的某个键、模型的窗口、插件服务器回到插件自己的工具）。表单的其余行是记录的动作（Make default、List models、Connect、Update、Trust、Delete……）；其中一些（如 Delete 和 Trust）会先询问。`a` 添加一条记录（一个由 Add 保存的表单，字段从 add 将写入的值开始；MCP 服务器、模型覆盖、profile、项目和角色在其中命名，已安装的插件用 `PLUGIN@MARKETPLACE` 或它的目录命名），`d` 在询问后删除选中的记录。机密从不显示：`••••` 表示已设置，输入新值会替换它。在别处写入的记录（角色文件、profile 或插件中的角色、内置角色）只显示，并说明写在哪里；钩子的定义是它的摘要，写在它的文件中。对 `providers.toml` 或 `mcp.toml` 的写入如果被其他改动抢先，会被拒绝：记录会重新读取，你的改动保留，可以再次保存。模型策略是只有一条记录的集合，直接以表单打开。
 - **页面**：语法主题、状态栏和终端标题这几行打开主题选择和两个设置界面；Keymap 和 Presets 行（Interface）、Plugin browser（Plugins）、Hook review（Tools）和 Memory store（Memory）打开按键映射、预设、插件浏览器、钩子浏览器，以及记忆的状态、参与和重置。Provider 的 **Choose the model** 和 MCP 服务器的 **Log in** 是它们记录的页面。Esc 回到打开它们的那一行。页面保存的内容（绑定的按键、预设、主题）也会显示在标题下方。这些页面只在设置中心中：原来打开它们的命令现在在设置中心打开它们。
 - **鼠标**：滚轮移动选择，点击标签页显示它，点击一行选中它，点击已选中的行等同于 Enter。
+
+**Model policy** 中的 **Model** 行会打开默认 Provider 的模型列表，显示与 `/model` 相同的上下文窗口、思考和读图信息。搜索或移动选择后按 Enter，保存为新会话的默认模型。选择 **Enter a model id…** 可以手动输入模型名称，获取列表失败时也可使用。Esc 取消，不会修改当前会话的模型。需要使用其他 Provider 时，先选择 **Default Provider**。
 
 `/config 目标` 在某个标签页（`memory`）、分节（`web`、`compaction`、`tui`、`pluginOptions.subagents`）、集合（`providers`、`providerModels`、`modelPolicy`、`mcp`、`mcpSecrets`、`pluginMcp`、`packages`、`roles`）或页面（`theme`、`statusline`、`title`、`keymap`、`presets`、`plugin-browser`、`hook-review`、`memory-store`）打开设置中心。各命令是它的快捷方式：`/providers` 即 `/config providers`（`policy`：`modelPolicy`），`/mcp` 即 `/config mcp`，`/plugins` 对应 `plugin-browser`，`/hooks` 对应 `hook-review`，`/memories` 对应 `memory`，`/tui` 对应 `tui`，`/theme`、`/statusline`、`/title`、`/keymap` 和 `/presets` 对应各自的页面。每次写入都在界面的事件循环之外进行，一次一个；设置中心从不等待它。分层不再是一个页面：每一行会标出设置它的那一层，profile 和项目是集合，[`/warnings`](#warnings) 保留各层无法使用的内容。会话角色由 [`/role`](#role) 负责。目标不对应其中任何一个时，会提示没有这样的设置页面。`config set` 是修改单个键的命令行等价方式。
 

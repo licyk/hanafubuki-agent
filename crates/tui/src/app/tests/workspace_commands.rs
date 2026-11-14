@@ -189,12 +189,12 @@ fn the_status_line_shows_the_mode_permissions_set() {
     // The session is created and its status read first.
     harness.type_and_submit("/permissions manual");
     harness.pump_until("the status line to show manual", |harness| {
-        harness.bottom_rows(1).trim() == "manual · ← for agents"
+        harness.bottom_rows(2).trim() == "manual\n  ← for agents · ? for shortcuts"
     });
     harness.type_and_submit("/permissions full-access");
     harness.pump_until_screen_shows("Permissions set to Full access for this session");
     harness.pump_until("the status line to show the session's mode", |harness| {
-        harness.bottom_rows(1).trim() == "full-access · ← for agents"
+        harness.bottom_rows(2).trim() == "full-access\n  ← for agents · ? for shortcuts"
     });
 
     // A preset sets the session's sandbox mode with its permission mode.
@@ -211,7 +211,7 @@ fn the_status_line_shows_the_mode_permissions_set() {
         Ok(Some(hanafubuki_agent::AgentSandboxMode::ReadOnly))
     );
     harness.pump_until("the status line to show the preset's mode", |harness| {
-        harness.bottom_rows(1).trim() == "manual · ← for agents"
+        harness.bottom_rows(2).trim() == "manual\n  ← for agents · ? for shortcuts"
     });
 }
 

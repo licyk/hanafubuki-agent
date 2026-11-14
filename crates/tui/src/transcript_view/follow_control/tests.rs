@@ -145,13 +145,13 @@ fn the_control_tracks_pause_activity_hover_resize_and_click() {
     one
     two
     three
-                                 ↓ Back to bottom · esc
+                                    ↓ Back to bottom
 
     activity at 80
     one
     two
     three
-                         New activity · ↓ Back to bottom · esc
+                            New activity · ↓ Back to bottom
 
     activity at 20
     one

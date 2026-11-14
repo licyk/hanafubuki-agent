@@ -59,6 +59,7 @@ fn props(mode: FooterMode) -> FooterProps<'static> {
         use_shift_enter_hint: false,
         quit_shortcut_key: key_hint::ctrl(KeyCode::Char('c')),
         status_line: None,
+        navigation: None,
         update_notice: None,
         task_running: false,
         agents_hint: false,
@@ -344,7 +345,7 @@ fn the_update_notice_sits_beside_every_one_row_mode() {
                 status_line: Some(&status),
                 ..with_notice(FooterMode::ComposerEmpty)
             },
-            "Footer notice · ← for agents",
+            "Footer notice",
         ),
         (
             FooterProps {

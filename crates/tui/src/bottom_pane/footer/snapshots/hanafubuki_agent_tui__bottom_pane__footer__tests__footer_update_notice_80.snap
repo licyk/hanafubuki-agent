@@ -3,3 +3,4 @@ source: crates/tui/src/bottom_pane/footer/tests.rs
 expression: "draw(props, width, height).backend()"
 ---
 "  gpt-5.1 high · ~/src/hanafubuki · Footer notice      Update available: 0.3.0  "
+"  ? for shortcuts                                                               "

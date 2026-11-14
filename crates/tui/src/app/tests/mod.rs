@@ -720,6 +720,12 @@ fn a_scrolled_owned_transcript_offers_the_way_back_to_the_latest() {
     harness.app.draw(&mut harness.tui).unwrap();
     let scrolled = harness.screen();
     assert!(!scrolled.contains("note 59"), "{scrolled}");
+    let rows: Vec<_> = scrolled.lines().collect();
+    let status = rows
+        .iter()
+        .rposition(|row| row.contains("fixture-model"))
+        .unwrap();
+    assert!(rows[status + 1].contains("esc latest"), "{scrolled}");
     insta::assert_snapshot!(harness.bottom_rows(6));
 
     // Esc returns to the latest output, and so does Enter on an empty
