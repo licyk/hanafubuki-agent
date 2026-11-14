@@ -1,3 +1,93 @@
+## Plan: the update check, the update prompt and self-update (2026-11-14)
+
+The plan is [docs/plan-self-update.md](docs/plan-self-update.md), read from
+main `2726e6a`, Hanamori `cb6b08b` (its self-update) and Codex `57a808a392`
+(its update check and prompt).
+
+Findings that changed the request's premises (the plan's §1 and §1.1):
+
+- The interface starts only after the Agent has started (up to 120 s, the
+  data directory locked, plugins and their processes up): the prompt runs
+  between `Standalone::open` and `start` instead, where nothing of the
+  Agent runs.
+- Codex replaces nothing: its "Update now" hands an action back and the
+  outer binary runs it. Taken: the TUI only renders the notice and the
+  prompt; the CLI owns the cache, the check and the install, and the TUI's
+  layer stays `[FACADE]`.
+- Only the facade reads the configuration, so the engine takes its own
+  proxy type; the User-Agent is not the foundation's (it holds only a
+  browser string).
+- On Unix one atomic rename replaces the executable; the `.outdated` backup
+  is a Windows need. The API gives a SHA-256 digest for every v0.2.0 asset,
+  so the `.sha256` files add nothing; the archives stay as they are.
+- A running old instance's sandboxed commands start whatever executable is
+  at the path recorded at its start (`helper.rs:42`), the new one after any
+  upgrade; it fails closed, and the helper's flags become a cross-version
+  contract.
+- On Windows a running executable cannot be overwritten, so `cargo
+  install` run by that executable is expected to fail (U1 confirms it on
+  Windows CI): cargo installs are updated by cargo on Unix and only told
+  the command on Windows.
+- A Linux process whose executable was replaced reads its own path as
+  `… (deleted)`: the installation is resolved once, at launch or at
+  `update`'s start, and passed along.
+
+Each milestone is one commit on main with green CI. **Lanes** (the plan's
+§7): **U0 and U2 can start now, in parallel**; U2 begins with the setting,
+the notice and the footer and commits its CLI part only after U0 is on main;
+**U1 starts when U0 lands**, beside the rest of U2; **U3 after U1 and U2**;
+U4 only if chosen (Q8). U0 takes every shared edit (the workspace
+`Cargo.toml`, the `LAYERS` rows, the CLI's dependency), so the lanes meet
+only in `crates/cli/src/main.rs`'s module list and in documentation tables,
+each adding a row in its own place. The U milestones share no file with M8,
+L3 or O1–O3; with R8 they share `appearance/mod.rs`,
+`crates/config/src/tui.rs` and `config-reference#tui`, for different items
+(whichever lands second rebases). Each records, when done: what landed and
+any deviation, the validation commands that ran and those skipped, the CI
+run's URL (no Windows or macOS claim from a Linux run), whether goldens
+changed (none expected), what Hanafubuki must change at its next pin
+(nothing expected: the facade is untouched), and any module-size exception.
+
+- [ ] Decisions: D1–D22 of the plan's §2, and the open questions Q1–Q12 of
+      §6 (each recommended there: the check on by default, cargo run on
+      Unix and named on Windows, exit after an update, releases unchanged,
+      the notice on the footer's right side, every 20 hours, a retried
+      Windows rename, signatures later, the notice also for a dismissed
+      version, no GitHub from debug builds, `cargo install --locked`, a
+      crate rather than a CLI module).
+- [ ] U0 (lane A, now): `hanafubuki-agent-update` (`crates/update`, over
+      the foundation; the CLI's layer row gains it, the TUI's does not):
+      the release lookup (tolerant, `GITHUB_TOKEN` only when given, the
+      `hanafubuki-agent/<version>` User-Agent, `network.proxy` through
+      `UpdateProxy`), the version rules (stable, semver precedence, never
+      down), the four-target asset table and its contract test against
+      `release.yml` and `about.toml`, the installation's kind (released
+      binary, cargo from a registry, checkout build) and its action
+      (replace, cargo, or the manual step the notice names), the debug-only
+      `HANAFUBUKI_AGENT_TEST_RELEASE_URL`, and the fake release server.
+      `semver` moves to the workspace dependencies.
+- [ ] U1 (lane A, after U0): the engine (lock beside the executable, the
+      installed file's version asked first, staging beside it, streamed
+      download with digest and size, one entry from the `.tar.gz`/`.zip`,
+      the staged `--version`, Unix rename over the real path, Windows
+      move-aside with rollback, leftovers swept, `cargo install` on Unix)
+      and `hanafubuki-agent update [--check] [--force]`; a running copy
+      replaces itself on all three systems (a small test executable: the
+      debug CLI is about 1.1 GB).
+- [ ] U2 (lane B, now; its CLI part after U0): `tui.checkForUpdates`
+      (default on) and `HANAFUBUKI_AGENT_NO_UPDATE_CHECK`; `update-check.json`
+      in the data directory; the check on a thread at the interface's
+      launch, at most every 20 hours, silent; the notice on the footer
+      row's right side (`Update available: 0.3.0 · hanafubuki-agent
+      update`, shortened, then omitted, by width), from the cache at once
+      and from this launch's check when it lands.
+- [ ] U3 (after U1 and U2): the prompt before the Agent starts (Codex's
+      screen and keys: Update now, Skip, Skip until next version), skipped
+      with a prompt argument; "Update now" runs `update`'s flow in the
+      terminal and ends; the Windows backup swept at launch.
+- [ ] U4 (optional, Q8): minisign signatures over each archive, verified
+      before extraction.
+
 ## Plan: the model list's facts and its loading state (2026-11-14)
 
 The plan is [docs/plan-model-list-facts.md](docs/plan-model-list-facts.md),
