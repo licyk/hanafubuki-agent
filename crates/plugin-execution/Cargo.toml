@@ -16,6 +16,7 @@ hanafubuki-agent-sandbox.workspace = true
 hanafubuki-agent-tool-contracts.workspace = true
 kardia-core.workspace = true
 log.workspace = true
+serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 
 [dev-dependencies]

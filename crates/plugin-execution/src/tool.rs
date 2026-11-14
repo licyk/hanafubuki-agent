@@ -1,3 +1,4 @@
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
 use std::time::Instant;
@@ -49,12 +50,14 @@ impl ExecToolKind {
 }
 
 /// The services every execution tool shares: the executions, the workers
-/// that stream their output, and the blocking boundary.
+/// that stream their output, the blocking boundary, and the command
+/// timeout the options set now, which a change of them replaces.
 #[derive(Clone)]
 pub(crate) struct ExecServices {
     pub(crate) executions: AgentExecutionService,
     pub(crate) workers: BackgroundWorkerGroup,
     pub(crate) blocking: Arc<BlockingService>,
+    pub(crate) command_timeout_ms: Arc<AtomicU64>,
 }
 
 /// One execution tool. `exec_command` needs approval of the exact prepared
@@ -100,7 +103,9 @@ impl AgentToolHandler for ExecTool {
         invocation: &'a ToolInvocation,
     ) -> ToolFuture<'a, Result<PermissionRequirement<ApprovalAction>, AgentToolError>> {
         Box::pin(async move {
-            let (ExecCall::ExecCommand(request), _) = parse_call(self.kind, invocation)? else {
+            let (ExecCall::ExecCommand(request), _) =
+                parse_call(self.kind, invocation, &self.services)?
+            else {
                 return Ok(PermissionRequirement::NotRequired);
             };
             let executions = self.services.executions.clone();
@@ -126,7 +131,7 @@ impl AgentToolHandler for ExecTool {
         approval: Option<AuthorizedAction>,
     ) -> ToolFuture<'_, Result<ToolResult, AgentToolError>> {
         Box::pin(async move {
-            let (call, notes) = parse_call(self.kind, &invocation)?;
+            let (call, notes) = parse_call(self.kind, &invocation, &self.services)?;
             let services = self.services.clone();
             let activity = ExecutionActivity {
                 session_id: invocation.context.session_id,
@@ -160,12 +165,16 @@ impl AgentToolHandler for ExecTool {
 /// The call `invocation` makes, its command confined by the sandbox its
 /// turn froze. A turn without one (restored after a restart, which keeps no
 /// turn data) runs no command, rather than one unconfined. A command the
-/// person typed is the person's (`ApprovalOrigin::User`).
+/// person typed is the person's (`ApprovalOrigin::User`). Its timeout is
+/// the options' at the call: one set between its approval and its start
+/// fails the start's exact-approval check, and the model calls again.
 fn parse_call(
     kind: ExecToolKind,
     invocation: &ToolInvocation,
+    services: &ExecServices,
 ) -> Result<(ExecCall, ArgumentNotes), AgentToolError> {
-    let (mut call, notes) = parse(kind, &invocation.arguments)?;
+    let command_timeout_ms = services.command_timeout_ms.load(Ordering::Relaxed);
+    let (mut call, notes) = parse(kind, &invocation.arguments, command_timeout_ms)?;
     if let ExecCall::ExecCommand(request) = &mut call {
         if invocation.context.origin == ToolCallOrigin::User {
             request.origin = ApprovalOrigin::User;

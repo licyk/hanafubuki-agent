@@ -211,20 +211,24 @@ icon: ListTree
 
 编译进 Agent 的插件（以及宿主的插件）的选项，按插件名、再按选项：`[pluginOptions.名字]`。插件的描述符说明它接受哪些选项，以及它们的种类、界限和默认值；`/plugins` 用表单显示它们（`o`），设置中心把它们显示为 Plugins 标签页中该插件自己的分节（`/config pluginOptions.名字`）。
 
-| 键                                             | 类型和取值      | 默认值 | 含义                                                       |
-| ---------------------------------------------- | --------------- | ------ | ---------------------------------------------------------- |
-| `pluginOptions.subagents.maximumRunningAgents` | 整数，1 到 16   | `3`    | 一个对话的子代理同时最多有几个在运行轮次                   |
-| `pluginOptions.subagents.defaultWaitSeconds`   | 整数，10 到 300 | `30`   | 模型没有给出超时时 `wait_agent` 等多久，取到最短与最长之间 |
-| `pluginOptions.subagents.minimumWaitSeconds`   | 整数，10 到 300 | `10`   | `wait_agent` 接受的最短超时；高于最长超时时取为最长超时    |
-| `pluginOptions.subagents.maximumWaitSeconds`   | 整数，10 到 300 | `300`  | `wait_agent` 接受的最长超时                                |
+| 键                                              | 类型和取值      | 默认值 | 含义                                                                                                                                                                                             |
+| ----------------------------------------------- | --------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `pluginOptions.execution.commandTimeoutMinutes` | 整数，1 到 1440 | `10`   | 命令从启动起最多运行多久就被停止（分钟）：每次 `exec_command` 运行，包括模型的、子代理的、它们留下的后台终端以及 `!` 命令；`!` 命令在[工具超时](#model-policy)或回合的 30 分钟更短时先被它们停止 |
+| `pluginOptions.subagents.maximumRunningAgents`  | 整数，1 到 16   | `3`    | 一个对话的子代理同时最多有几个在运行轮次                                                                                                                                                         |
+| `pluginOptions.subagents.defaultWaitSeconds`    | 整数，10 到 300 | `30`   | 模型没有给出超时时 `wait_agent` 等多久，取到最短与最长之间                                                                                                                                       |
+| `pluginOptions.subagents.minimumWaitSeconds`    | 整数，10 到 300 | `10`   | `wait_agent` 接受的最短超时；高于最长超时时取为最长超时                                                                                                                                          |
+| `pluginOptions.subagents.maximumWaitSeconds`    | 整数，10 到 300 | `300`  | `wait_agent` 接受的最长超时                                                                                                                                                                      |
 
 ```toml
+[pluginOptions.execution]
+commandTimeoutMinutes = 60
+
 [pluginOptions.subagents]
 maximumRunningAgents = 4
 defaultWaitSeconds = 60
 ```
 
-这个表按插件和键跨层合并，就像 `[plugins]` 按条目合并：某层设置的键替换下层的，其余键保留。每个键单独读取：类型不对的值，或不合适的文本，取选项的默认值；越界的整数被截取到边界；两者都会产生一条警告，指明层、插件和键（`/warnings`，以及 `/plugins` 中该插件的选项）。插件不接受的键保留在文件中但被忽略，并有一条警告；插件没有选项的表没有意义，就像 `disabledPlugins` 中的未知名字。写入是严格的：`config set pluginOptions.名字.键 值`、设置中心、选项表单以及门面的 `write_setting_values` 和 `set_plugin_options` 按插件的选项检查每个值，在写入任何内容之前带着原因拒绝不合适的值；`config get pluginOptions.名字.键` 打印各层解析出的值，没有设置时打印默认值。配置档或项目的 `pluginOptions` 需要手动编写。Agent 写入的更改立即生效：`subagents` 就地接受新的运行中代理上限，对新的等待界限则重新启动，它运行的子代理继续运行。`web` 插件的设置仍是上面的 `webSearchProvider`、`searxngBaseUrl`、`webFetchUseJinaReader` 和 `webFetchResolveThroughProxy`，即设置中心的 Web tools 分节（Tools 标签页）。
+这个表按插件和键跨层合并，就像 `[plugins]` 按条目合并：某层设置的键替换下层的，其余键保留。每个键单独读取：类型不对的值，或不合适的文本，取选项的默认值；越界的整数被截取到边界；两者都会产生一条警告，指明层、插件和键（`/warnings`，以及 `/plugins` 中该插件的选项）。插件不接受的键保留在文件中但被忽略，并有一条警告；插件没有选项的表没有意义，就像 `disabledPlugins` 中的未知名字。写入是严格的：`config set pluginOptions.名字.键 值`、设置中心、选项表单以及门面的 `write_setting_values` 和 `set_plugin_options` 按插件的选项检查每个值，在写入任何内容之前带着原因拒绝不合适的值；`config get pluginOptions.名字.键` 打印各层解析出的值，没有设置时打印默认值。配置档或项目的 `pluginOptions` 需要手动编写。Agent 写入的更改立即生效：`execution` 就地接受新的命令超时，作用于此后启动的命令，正在运行的命令保留启动时的超时；`subagents` 就地接受新的运行中代理上限，对新的等待界限则重新启动，它运行的子代理继续运行。`web` 插件的设置仍是上面的 `webSearchProvider`、`searxngBaseUrl`、`webFetchUseJinaReader` 和 `webFetchResolveThroughProxy`，即设置中心的 Web tools 分节（Tools 标签页）。
 
 ### 角色 [#agents]
 

@@ -245,11 +245,12 @@ fn every_option_of_every_descriptor_has_the_generic_editor() {
             Some(serde_json::Map::new())
         );
     }
-    assert_eq!(described, 4, "the subagents options");
+    assert_eq!(described, 5, "the execution and subagents options");
 
     let schema = agent_plugin_descriptors()
         .into_iter()
-        .find_map(|descriptor| descriptor.options)
+        .find(|descriptor| descriptor.name == "subagents")
+        .and_then(|descriptor| descriptor.options)
         .unwrap();
     let values = schema
         .options

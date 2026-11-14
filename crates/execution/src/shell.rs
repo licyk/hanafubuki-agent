@@ -11,7 +11,7 @@ use crate::environment::build_clean_command_environment;
 use crate::model::{AgentExecutionError, ExecCommandRequest, PlatformShell, ResolvedCommandPlan};
 use crate::resolver::{
     canonical_directory, resolve_executable, utf8_path, validate_execution_origin,
-    DEFAULT_COMMAND_TIMEOUT_MS, EXEC_RETAINED_OUTPUT_BYTES, MAX_WAIT_MS,
+    EXEC_RETAINED_OUTPUT_BYTES, MAX_WAIT_MS,
 };
 use sha2::{Digest, Sha256};
 
@@ -77,9 +77,10 @@ pub(crate) fn prepare_exec_command(
         || request.cmd.as_bytes().contains(&0)
         || request.yield_time_ms == 0
         || request.yield_time_ms > MAX_WAIT_MS
+        || request.timeout_ms == 0
     {
         return Err(AgentExecutionError::InvalidRequest(format!(
-            "command must contain 1 to {MAX_SHELL_SCRIPT_BYTES} bytes without NUL and yield_time must be between 1 and {MAX_WAIT_MS} ms"
+            "command must contain 1 to {MAX_SHELL_SCRIPT_BYTES} bytes without NUL, yield_time must be between 1 and {MAX_WAIT_MS} ms and the timeout at least 1 ms"
         )));
     }
     let shell = request.shell.unwrap_or_else(default_platform_shell);
@@ -113,7 +114,7 @@ pub(crate) fn prepare_exec_command(
         command: exec_shell_command(shell, program, &request.cmd, request.login)?,
         cwd,
         environment,
-        timeout_ms: DEFAULT_COMMAND_TIMEOUT_MS,
+        timeout_ms: request.timeout_ms,
         output_bytes_cap: EXEC_RETAINED_OUTPUT_BYTES,
         io_mode,
         cols,

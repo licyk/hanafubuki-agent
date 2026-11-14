@@ -72,6 +72,7 @@ fn exec_request(tty: bool) -> ExecCommandRequest {
         tty,
         yield_time_ms: 10,
         max_output_bytes: Some(4096),
+        timeout_ms: 600_000,
         workdir: Some(std::env::current_dir().unwrap()),
         environment: BTreeMap::new(),
         origin: ApprovalOrigin::Model,
@@ -87,6 +88,7 @@ mod output;
 #[cfg(unix)]
 mod ownership;
 mod platform;
+mod timeout;
 mod unified;
 #[cfg(windows)]
 mod windows_posix;

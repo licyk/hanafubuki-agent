@@ -99,7 +99,11 @@ pub(crate) fn agent_plugin_manifest(
         }),
         AgentPluginRow::unconfigured(Capability, workspace_fs_plugin(inputs.files.clone())),
         AgentPluginRow::unconfigured(Capability, view_image_plugin(inputs.files)),
-        AgentPluginRow::unconfigured(Capability, execution_plugin(inputs.executions)),
+        AgentPluginRow::from_settings(
+            Capability,
+            execution_plugin(inputs.executions),
+            |settings| settings.options_value("execution"),
+        ),
         AgentPluginRow::unconfigured(Capability, mcp_plugin(inputs.mcp)),
         AgentPluginRow::unconfigured(Capability, memory_plugin(inputs.memory)),
         AgentPluginRow::unconfigured(

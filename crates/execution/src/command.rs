@@ -17,7 +17,6 @@ use crate::environment::build_clean_command_environment;
 use crate::model::{AgentExecutionError, ResolvedCommandPlan, StartCommandRequest};
 use crate::resolver::{
     canonical_directory, resolve_executable, utf8_path, validate_execution_origin,
-    DEFAULT_COMMAND_OUTPUT_BYTES, DEFAULT_COMMAND_TIMEOUT_MS,
 };
 
 const MAX_COMMAND_ARGUMENTS: usize = 128;
@@ -25,6 +24,8 @@ const MAX_COMMAND_ARGUMENT_BYTES: usize = 16 * 1024;
 const MAX_COMMAND_TOTAL_BYTES: usize = 64 * 1024;
 const MAX_COMMAND_ENVIRONMENT_ENTRIES: usize = 64;
 const MAX_COMMAND_ENVIRONMENT_BYTES: usize = 64 * 1024;
+const DEFAULT_COMMAND_TIMEOUT_MS: u64 = 10 * 60 * 1_000;
+const DEFAULT_COMMAND_OUTPUT_BYTES: usize = 256 * 1024;
 const MAX_COMMAND_TIMEOUT_MS: u64 = 30 * 60 * 1_000;
 const MAX_COMMAND_OUTPUT_BYTES: usize = 1024 * 1024;
 

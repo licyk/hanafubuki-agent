@@ -42,10 +42,12 @@ const MAX_JUSTIFICATION_BYTES: usize = 1024;
 /// Parses a call and the notes on how its limits were adjusted. An omitted
 /// nullable field is absent, like `null`; an unknown key is ignored, since
 /// the executor's capabilities (argv, receipts, confirmations) are never
-/// arguments, so no key the model adds can reach one.
+/// arguments, so no key the model adds can reach one. A command runs for at
+/// most `command_timeout_ms`, the plugin's option: no argument sets it.
 pub(crate) fn parse(
     kind: ExecToolKind,
     raw: &Value,
+    command_timeout_ms: u64,
 ) -> Result<(ExecCall, ArgumentNotes), ToolCallValidationError> {
     let arguments = object_arguments(raw)?;
     let mut notes = ArgumentNotes::default();
@@ -79,6 +81,7 @@ pub(crate) fn parse(
                     MAX_OUTPUT_BYTES,
                     &mut notes,
                 )?,
+                timeout_ms: command_timeout_ms,
                 workdir: nullable_bounded_string(arguments, "workdir", 4096)?.map(PathBuf::from),
                 environment: Default::default(),
                 origin: ApprovalOrigin::Model,

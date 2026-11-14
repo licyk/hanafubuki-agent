@@ -7,8 +7,6 @@ use hanafubuki_agent_foundation::paths::ResolvedPath;
 
 use crate::model::AgentExecutionError;
 
-pub(crate) const DEFAULT_COMMAND_TIMEOUT_MS: u64 = 10 * 60 * 1_000;
-pub(crate) const DEFAULT_COMMAND_OUTPUT_BYTES: usize = 256 * 1024;
 pub(crate) const MAX_OUTPUT_READ_BYTES: usize = 256 * 1024;
 /// What one read returns when its caller names no bound.
 pub(crate) const DEFAULT_READ_BYTES: usize = 64 * 1024;

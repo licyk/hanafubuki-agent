@@ -4808,7 +4808,7 @@ its next pin, and any module-size exception.
       never refused. A child's completion is held until its subtree is
       quiet. Adds the `Waiting` and `Closed` states, and splits
       `subagents/service.rs` by responsibility. Goldens regenerated.
-- [ ] R4b: the command timeout becomes a setting,
+- [x] R4b: the command timeout becomes a setting,
       `pluginOptions.execution.commandTimeoutMinutes` (1–1440, default
       10). The `execution` row takes options and a change in place,
       without a restart; every `exec_command` execution, a `!command`'s
@@ -4816,6 +4816,102 @@ its next pin, and any module-size exception.
       (`ExecCommandRequest.timeout_ms`, in its plan and its approval's
       canonical bytes); running commands keep theirs. No goldens; the
       `config-reference` row is hand-written in both languages.
+      Done (2026-11-14), before R2–R4 by the coordinator's decision (it
+      needs no wake and shares no file with them):
+      - `hanafubuki-agent-execution`: `ExecCommandRequest.timeout_ms: u64`;
+        `prepare_exec_command` puts it in the plan (and so in the approval's
+        canonical bytes, shape and `agent-shell-v5` unchanged) and refuses 0,
+        which the executor's timer takes as no limit.
+        `DEFAULT_COMMAND_TIMEOUT_MS` moved from `resolver.rs` to `command.rs`
+        beside the argv harness, its only user, and so did
+        `DEFAULT_COMMAND_OUTPUT_BYTES` (also the harness's only, a dead-code
+        warning in a build without `test-support`).
+      - `hanafubuki-agent-plugin-execution`: `options.rs` (new:
+        `ExecutionOptions`, exported `COMMAND_TIMEOUT_MINUTES_LIMITS` (1,
+        1440) and `DEFAULT_COMMAND_TIMEOUT_MINUTES` 10); `execution_plugin`
+        is `PluginDef::typed`, its `ctx.on_update` stores the value in
+        `ExecServices.command_timeout_ms` (`Arc<AtomicU64>`, milliseconds)
+        and returns `true`; `parse_call` reads it and `parse` puts it in the
+        request (no argument sets it). `serde` (derive) added to the crate.
+      - `hanafubuki-agent`: `execution_option_schema()` in
+        `host/descriptors.rs` (label "Command timeout", summary "How long a
+        command may run before it is stopped (minutes)"), the row
+        `AgentPluginRow::from_settings(…, |settings|
+        settings.options_value("execution"))` in `host/manifest.rs`.
+      - Scope as landed: the model's calls (pipe and PTY) and the background
+        terminals they leave, sub-agents' calls (the same tool) and a
+        `!command` (`ToolCallOrigin::User`, through the same `parse_call`),
+        which the tool timeout (`toolIdleTimeoutSeconds`, 600 s, a bound on
+        the whole call in `tool_execution/handler.rs`) and the turn's 30
+        minutes still stop first when shorter. Hooks, MCP servers and Git
+        queries keep their own limits.
+      - Approval: the action digest is matched only within a call (the
+        start's exact-approval check); `AllowForSession` keys on the tool or,
+        unsandboxed, the command's details, and approval rules read the
+        details, so a change undoes neither; no code outside
+        `crates/approval` reads the digest. The summary does not name the
+        timeout. A change between a call's approval and its start fails that
+        call's check (accepted, no code).
+      - Reconciliations: W1's `exec_shell_command` `Result` and Windows POSIX
+        environment are untouched (the timeout is set after them); K2's
+        `!command` runs through the same handler, so it takes the option with
+        no code of its own, and `terminal-interface#composer` already named
+        the tool timeout (now the shortest of the three); M7's
+        `contracts/colour.rs` also builds a request (not in the plan's
+        list). The execution contract tests are a new `contracts/timeout.rs`
+        rather than `unified.rs` (778 of 900 code lines).
+      - Tests: `contracts/timeout.rs` (the plan's start request and the
+        digest carry the request's timeout, a different timeout is a
+        different digest, 0 refused; a real `sleep` with a 1-second timeout
+        ends `TimedOut`, POSIX and PowerShell by platform);
+        `arguments/tests.rs` (the request takes the plugin's value; a
+        `timeout_ms` argument is ignored); `tests/plugin.rs` (a call takes
+        10 minutes, an update to 90 is taken in place: same handler, the
+        first command's monitor still reports output, the next start has 90
+        minutes and a different digest, the first keeps 10; a `!command`
+        takes a configured 2); agent `settings_catalog.rs` (the section, key,
+        label, default 10, bounds 1..1440; a file's 2000 clamped to 1440 with
+        a warning; 0, 1441 and a text refused; 30 written) and
+        `executions.rs` (`set_plugin_options` reaches the running plugin: the
+        same handler, a new digest). The TUI's
+        `commands/plugins/tests.rs` counted the subagents' 4 options as
+        every descriptor's and took the first schema for theirs: it failed
+        first (5 options now), and finds `subagents` by name. By mutation: `on_update` returning
+        `false` failed the plugin test twice over (handler identity, and
+        alone the monitor's output); `parse` ignoring the value failed the
+        argument and both plugin tests; the plan ignoring the request and the
+        missing 0 check failed the contract tests; the row left
+        `unconfigured` failed the agent's in-place test. No test waits on
+        the option.
+      - Goldens: unchanged (no tool description names the limit).
+      - Docs (both languages): `config-reference#plugin-options` (the row,
+        the example and "a change applies at once"), `tools#commands`,
+        `terminal-interface#composer`, `plugin-rules#host-configuration-and-status`
+        and `#the-plugins-today`. Each compiled with `@mdx-js/mdx` and
+        remark-gfm.
+      - Module sizes (code lines): agent `tests/settings_catalog.rs` 760 →
+        835 of a test file's 900, the nearest; every production file it
+        touches is far below 600. No exception added or raised.
+      - Validation (Linux): `cargo fmt --all --check`; `RUSTFLAGS="-D
+        warnings" cargo check --workspace --all-targets --all-features`;
+        `cargo clippy --workspace --all-targets --all-features -- -D
+        warnings`; `cargo clippy -p hanafubuki-agent-execution -p
+        hanafubuki-agent-plugin-execution --target x86_64-pc-windows-gnu
+        --all-targets --all-features -- -D warnings`; `cargo xtask check`;
+        `cargo test --workspace --all-features --no-fail-fast`; `bun install
+        --frozen-lockfile`, `bun run format:check:site`, `bun run
+        site:check`, `bun run site:test`. Skipped: `site:build` (left to the
+        Site workflow). Windows and macOS: CI only.
+      - For R5: the value at a step is
+        `ExecServices.command_timeout_ms` (milliseconds; the plugin's
+        `Arc<AtomicU64>`, which `on_update` replaces), so the
+        `background_terminals` fragment's contributor, registered by the
+        same plugin, reads it from there and divides by 60 000 for `{M}`.
+        A terminal's own timeout is its start request's (`timeout_ms`), not
+        the current value.
+      - Hanafubuki at its next pin: `ExecCommandRequest.timeout_ms` where it
+        builds one (0 is refused); the `pluginOptions.execution` section
+        reaches its settings page from the catalog with no code.
 - [ ] R5: background terminals wake their owner. The kernel queues the
       end on a terminal status of a call not in flight and withdraws it on
       disposal; `!command` and `Cancelled` are excluded. Adds the execution

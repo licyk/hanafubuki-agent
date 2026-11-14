@@ -6,7 +6,11 @@
 use std::collections::BTreeMap;
 
 use hanafubuki_agent_config::{
-    AgentSettings, PluginOptionSchema, PluginOptionsSettings, ResolvedPluginOptions,
+    AgentSettings, PluginOptionSchema, PluginOptionsSettings, ResolvedPluginOptions, SettingKind,
+    SettingSpec, SettingValue,
+};
+use hanafubuki_agent_plugin_execution::{
+    COMMAND_TIMEOUT_MINUTES_LIMITS, DEFAULT_COMMAND_TIMEOUT_MINUTES,
 };
 use serde::Serialize;
 
@@ -63,7 +67,7 @@ pub fn agent_plugin_descriptors() -> Vec<AgentPluginDescriptor> {
             "view-image",
             "Showing the model an image from the workspace",
         ),
-        row("execution", "Running commands in the sandbox"),
+        row("execution", "Running commands in the sandbox").with_options(execution_option_schema()),
         row("mcp", "The tools and resources of the MCP servers"),
         row("memory", "What the Agent remembers across sessions"),
         row(
@@ -94,6 +98,29 @@ pub fn agent_plugin_descriptors() -> Vec<AgentPluginDescriptor> {
             "The permission mode and the sandbox, as the model reads them",
         ),
     ]
+}
+
+/// The `execution` row's options. Built here, since the plugin's crate
+/// may not depend on the one that defines the schema, from the bounds and
+/// default the plugin decodes with.
+fn execution_option_schema() -> PluginOptionSchema {
+    let (minimum, maximum) = COMMAND_TIMEOUT_MINUTES_LIMITS;
+    PluginOptionSchema {
+        options: vec![SettingSpec {
+            summary: "How long a command may run before it is stopped (minutes)".to_string(),
+            default: Some(SettingValue::Integer(
+                DEFAULT_COMMAND_TIMEOUT_MINUTES as i64,
+            )),
+            ..SettingSpec::new(
+                "commandTimeoutMinutes",
+                "Command timeout",
+                SettingKind::Integer {
+                    minimum: Some(minimum as i64),
+                    maximum: Some(maximum as i64),
+                },
+            )
+        }],
+    }
 }
 
 /// Every row's descriptor, by name.

@@ -158,6 +158,85 @@ async fn a_write_by_key_takes_settings_and_plugin_options_together() {
     done(service, paths);
 }
 
+/// The execution plugin's command timeout, in minutes: a file's value past
+/// its bounds is clamped with a warning, a write past them is refused.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_command_timeout_is_the_execution_plugins_option() {
+    let (service, paths, _) = service_with_config("settings-catalog-timeout", |paths, _| {
+        std::fs::create_dir_all(&paths.config_dir).unwrap();
+        std::fs::write(
+            paths.config_dir.join("config.toml"),
+            "[pluginOptions.execution]\ncommandTimeoutMinutes = 2000\n",
+        )
+        .unwrap();
+    });
+    let catalog = service.settings_catalog().await.unwrap();
+    let section = catalog
+        .sections
+        .iter()
+        .find(|section| section.id == "pluginOptions.execution")
+        .unwrap();
+    assert_eq!(section.group, SettingsGroup::Plugins);
+    let [spec] = section.settings.as_slice() else {
+        panic!("one option: {:?}", section.settings);
+    };
+    assert_eq!(
+        (spec.key.as_str(), spec.label.as_str()),
+        (
+            "pluginOptions.execution.commandTimeoutMinutes",
+            "Command timeout"
+        )
+    );
+    assert_eq!(spec.default, Some(SettingValue::Integer(10)));
+    assert_eq!(
+        spec.kind,
+        SettingKind::Integer {
+            minimum: Some(1),
+            maximum: Some(1440)
+        }
+    );
+    let options = service
+        .plugin_status()
+        .into_iter()
+        .find(|status| status.name == "execution")
+        .unwrap()
+        .options
+        .unwrap();
+    assert_eq!(options.values[0].value, Some(SettingValue::Integer(1440)));
+    assert!(
+        options.issues[0].contains("commandTimeoutMinutes is 2000"),
+        "{:?}",
+        options.issues
+    );
+
+    let set = |value: serde_json::Value| SettingsWrite {
+        changes: vec![SettingChange {
+            key: "pluginOptions.execution.commandTimeoutMinutes".to_string(),
+            op: SettingWriteOp::Set(value),
+        }],
+    };
+    for refused in [json!(0), json!(1441), json!("ten")] {
+        let error = service
+            .write_setting_values(set(refused.clone()))
+            .await
+            .unwrap_err();
+        assert!(
+            error.contains("commandTimeoutMinutes"),
+            "{refused}: {error}"
+        );
+    }
+    service.write_setting_values(set(json!(30))).await.unwrap();
+    let catalog = service.settings_catalog().await.unwrap();
+    let state = catalog
+        .sections
+        .iter()
+        .flat_map(|section| &section.values)
+        .find(|state| state.key == "pluginOptions.execution.commandTimeoutMinutes")
+        .unwrap();
+    assert_eq!(state.value, Some(SettingValue::Integer(30)));
+    done(service, paths);
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn a_providers_records_round_trip_and_keep_their_secret() {
     let (service, paths, config) = service_with_config("settings-catalog-providers", with_token);

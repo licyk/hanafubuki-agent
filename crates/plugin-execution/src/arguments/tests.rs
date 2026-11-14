@@ -1,8 +1,36 @@
+use hanafubuki_agent_contracts::tools::arguments::ArgumentNotes;
 use hanafubuki_agent_contracts::ToolCallValidationError;
 use serde_json::{json, Value};
 
-use super::{parse, ExecCall};
+use super::{parse as parse_with_timeout, ExecCall};
 use crate::tool::ExecToolKind;
+
+/// The plugin's command timeout in these tests.
+const COMMAND_TIMEOUT_MS: u64 = 7 * 60_000;
+
+fn parse(
+    kind: ExecToolKind,
+    raw: &Value,
+) -> Result<(ExecCall, ArgumentNotes), ToolCallValidationError> {
+    parse_with_timeout(kind, raw, COMMAND_TIMEOUT_MS)
+}
+
+/// A command's timeout is the plugin's, which no argument sets: a
+/// `timeout_ms` the model adds is ignored like any unknown key.
+#[test]
+fn a_command_runs_for_the_plugins_timeout_whatever_the_arguments_say() {
+    for arguments in [
+        json!({ "cmd": "sleep 1" }),
+        json!({ "cmd": "sleep 1", "timeout_ms": 1, "timeout": 1 }),
+    ] {
+        let (ExecCall::ExecCommand(request), _) =
+            parse_with_timeout(ExecToolKind::ExecCommand, &arguments, 90 * 60_000).unwrap()
+        else {
+            panic!("exec_command parses to a command");
+        };
+        assert_eq!(request.timeout_ms, 90 * 60_000, "{arguments}");
+    }
+}
 
 #[test]
 fn execution_tools_are_typed_and_do_not_accept_executor_capabilities() {

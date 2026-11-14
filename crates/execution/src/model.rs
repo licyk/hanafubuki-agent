@@ -114,6 +114,10 @@ pub struct ExecCommandRequest {
     pub tty: bool,
     pub yield_time_ms: u64,
     pub max_output_bytes: Option<usize>,
+    /// How long the command may run from its start before it is stopped
+    /// (`TimedOut`), in milliseconds; at least 1, since the executor takes 0
+    /// as no limit. Part of what its approval approves.
+    pub timeout_ms: u64,
     /// Where the command runs: absolute, or relative to the service's
     /// working directory; `None` is that directory.
     pub workdir: Option<PathBuf>,

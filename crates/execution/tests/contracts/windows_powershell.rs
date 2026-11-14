@@ -45,6 +45,7 @@ fn request(shell: PlatformShell, script: &str, tty: bool) -> ExecCommandRequest 
         tty,
         yield_time_ms: YIELD_MS,
         max_output_bytes: None,
+        timeout_ms: 600_000,
         workdir: Some(std::env::current_dir().unwrap()),
         environment,
         origin: ApprovalOrigin::Model,

@@ -90,6 +90,7 @@ mod windows {
             tty,
             yield_time_ms: 30_000,
             max_output_bytes: None,
+            timeout_ms: 600_000,
             workdir: None,
             environment,
             origin: ApprovalOrigin::Model,

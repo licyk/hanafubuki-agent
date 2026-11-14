@@ -2186,6 +2186,7 @@ dependencies = [
  "hanafubuki-agent-tool-contracts",
  "kardia-core",
  "log",
+ "serde",
  "serde_json",
  "tokio",
 ]

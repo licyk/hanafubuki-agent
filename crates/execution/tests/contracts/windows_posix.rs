@@ -141,6 +141,7 @@ fn request(flavour: Flavour, script: &str, login: bool, tty: bool) -> ExecComman
         tty,
         yield_time_ms: YIELD_MS,
         max_output_bytes: None,
+        timeout_ms: 600_000,
         workdir: Some(std::env::current_dir().unwrap()),
         environment: flavour.environment(),
         origin: ApprovalOrigin::Model,

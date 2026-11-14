@@ -123,3 +123,80 @@ async fn unified_exec_completes_only_after_manual_exact_approval() {
         .is_empty());
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }
+
+/// A write of the command timeout reaches the running execution plugin in
+/// place: the tool it registered stays, and the approval a command asks for
+/// from then on is of the new timeout.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_command_timeout_reaches_the_running_plugin_in_place() {
+    use hanafubuki_agent_contracts::{
+        AgentToolHandler, RegistryService, ToolCallContext, ToolInvocation, TurnExtensions,
+    };
+    use hanafubuki_agent_kernel::PermissionRequirement;
+
+    let (service, paths, _) = service_with_config("command-timeout-in-place", |_, _| {});
+    service.start_plugins().await;
+    let registries = service.test_plugin_registries();
+    let exec_command = || {
+        registries
+            .tools
+            .registry()
+            .snapshot()
+            .items()
+            .find(|tool| tool.descriptor().name.qualified() == "exec_command")
+            .cloned()
+            .unwrap()
+    };
+    let workdir = paths.data_dir.clone();
+    let digest = |tool: Arc<dyn AgentToolHandler>| {
+        let context = crate::test_support::test_tool_context();
+        let invocation = ToolInvocation {
+            context: ToolCallContext {
+                session_id: context.session_id,
+                turn_id: context.turn_id,
+                generation: context.generation,
+                mode: context.mode,
+                session_revision: context.session_revision,
+                call_id: context.call_id,
+                image_input: false,
+                origin: Default::default(),
+            },
+            arguments: json!({ "cmd": "ls", "workdir": workdir }),
+            cancellation: Default::default(),
+            progress: context.progress,
+            plan_leases: Vec::new(),
+            turn: TurnExtensions::default().with(Arc::new(
+                hanafubuki_agent_sandbox::SandboxSettings::full_access(),
+            )),
+        };
+        async move {
+            match tool.permission(&invocation).await.unwrap() {
+                PermissionRequirement::ReviewRequired(action) => action.digest,
+                other => panic!("a command asks for its approval: {other:?}"),
+            }
+        }
+    };
+    let tool = exec_command();
+    let before = digest(tool.clone()).await;
+
+    let mut options = serde_json::Map::new();
+    options.insert("commandTimeoutMinutes".to_string(), json!(45));
+    service
+        .set_plugin_options("execution".into(), options)
+        .await
+        .unwrap();
+    let deadline = Instant::now() + TEST_WAIT;
+    while digest(tool.clone()).await == before {
+        assert!(
+            Instant::now() < deadline,
+            "the option never reached the plugin"
+        );
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    assert!(
+        Arc::ptr_eq(&tool, &exec_command()),
+        "the plugin did not restart"
+    );
+    let _ = service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE);
+    let _ = std::fs::remove_dir_all(paths.app_data_dir);
+}

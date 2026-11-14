@@ -61,6 +61,7 @@ pub(super) fn install_fake_background_execution(
         tty: false,
         yield_time_ms: 5_000,
         max_output_bytes: Some(32 * 1024),
+        timeout_ms: 600_000,
         workdir: Some(std::env::current_dir().unwrap()),
         environment: BTreeMap::new(),
         origin: ApprovalOrigin::Model,

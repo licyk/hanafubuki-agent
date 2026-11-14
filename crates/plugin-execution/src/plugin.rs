@@ -1,3 +1,4 @@
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -9,6 +10,7 @@ use hanafubuki_agent_foundation::background_worker::BackgroundWorkerGroup;
 use kardia_core::{Context, Disposer, Inject, PluginDef, Service};
 
 use crate::approval::GitCloneRequiresUser;
+use crate::options::ExecutionOptions;
 use crate::presenter::ExecPresenter;
 use crate::tool::{ExecServices, ExecTool, ExecToolKind};
 
@@ -19,9 +21,10 @@ const MONITOR_STOP_BOUND: Duration = Duration::from_secs(3);
 /// Registers the execution tools over `executions`, which the host owns: it
 /// also serves background terminals and is shut down after the plugins. Also
 /// registers their presenter and the approval rule of the commands they
-/// run.
+/// run. A change of its options is taken in place, for the commands started
+/// after it: a restart would stop the output monitors of the running ones.
 pub fn execution_plugin(executions: AgentExecutionService) -> PluginDef {
-    PluginDef::new(move |ctx: Context, _| {
+    PluginDef::typed(move |ctx: Context, options: Arc<ExecutionOptions>| {
         let executions = executions.clone();
         async move {
             let tools = ctx.get::<ToolRegistry>()?;
@@ -30,11 +33,17 @@ pub fn execution_plugin(executions: AgentExecutionService) -> PluginDef {
             let blocking = ctx.get::<BlockingService>()?.arc().clone();
             // Agent threads: a panicking monitor ends only itself.
             let workers = BackgroundWorkerGroup::contained();
+            let command_timeout_ms = Arc::new(AtomicU64::new(options.command_timeout_ms()));
             let services = ExecServices {
                 executions,
                 workers: workers.clone(),
                 blocking: blocking.clone(),
+                command_timeout_ms: command_timeout_ms.clone(),
             };
+            ctx.on_update(move |options: &ExecutionOptions| {
+                command_timeout_ms.store(options.command_timeout_ms(), Ordering::Relaxed);
+                true
+            })?;
             ctx.defer(
                 "execution monitors",
                 Disposer::future(move || async move {
