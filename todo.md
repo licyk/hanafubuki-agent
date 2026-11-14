@@ -4847,6 +4847,12 @@ exception.
         format:site`, `bun run format:check:site`, `bun run site:check`,
         `bun run site:test` (28 passed); `site:build` not run locally
         (port 3000 is another project's); CI's Site run covers it.
+      - CI on ca6ee77 (rebased onto R4b and U3; their tests, check,
+        clippy and `cargo xtask check` re-run locally first):
+        https://github.com/licyk/hanafubuki-agent/actions/runs/43591210059,
+        Linux, Windows and macOS passed at the first attempt. Site on
+        ca6ee77: .../runs/43591210073, passed, its build and deploy
+        included.
       - For R2–R8: `agents_on_models` is the listing to build on (each
         child's `ListedAgent` with its `ChildModelView` from one summary
         page); the `/tasks` manager can show `AgentSubagentStatus`'
