@@ -110,6 +110,7 @@ async fn workspace_binding_survives_fork_child_and_reopen_and_refuses_missing_pa
     });
     let root = tempfile::tempdir().unwrap();
     let path = root.path().to_string_lossy().to_string();
+    let expected = hanafubuki_agent_foundation::paths::ResolvedPath::resolve(root.path()).unwrap();
     let session = service
         .create_session_with_workspace(AgentSessionMode::Default, None, path.clone())
         .await
@@ -136,7 +137,7 @@ async fn workspace_binding_survives_fork_child_and_reopen_and_refuses_missing_pa
         .unwrap();
     assert_eq!(
         service.session_summary(session.id).unwrap().cwd.as_deref(),
-        Some(path.as_str())
+        Some(expected.native_text())
     );
     for id in [session.id, fork.id, child.id] {
         assert_eq!(
@@ -146,7 +147,7 @@ async fn workspace_binding_survives_fork_child_and_reopen_and_refuses_missing_pa
                 .unwrap()
                 .execution_root
                 .as_deref(),
-            Some(path.as_str())
+            Some(expected.native_text())
         );
     }
     let invalid = root.path().join("not-directory");
@@ -183,7 +184,7 @@ async fn workspace_binding_survives_fork_child_and_reopen_and_refuses_missing_pa
             .unwrap()
             .primary()
             .to_string_lossy(),
-        path
+        expected.native_text()
     );
     drop(root);
     assert!(reopened.session_workspace_roots(session.id).is_err());
