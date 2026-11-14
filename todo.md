@@ -3264,6 +3264,17 @@ and any module-size exception.
         `@mdx-js/mdx` 3.1.1 with remark-gfm; `VITE_BASE_PATH=/hanafubuki-agent/
         bun run site:build` not run locally (port 3000 held by another
         project's server); CI's Site run covers it.
+      - CI on 914dc79:
+        https://github.com/licyk/hanafubuki-agent/actions/runs/43561142905,
+        Linux and macOS passed at the first attempt; Windows failed once on
+        `tests::user_shell::a_session_of_commands_reopens_and_continues`
+        (`crates\agent\src\tests\user_shell.rs:481`, the known `!command`
+        shutdown flake; M7's colour tests all passed in that attempt) and
+        passed at its re-run. The Windows log shows the new tests ran:
+        execution `colour::…_in_pipe_mode` and `…_in_pty_mode` (ConPTY),
+        agent `tests::colour::*`, TUI `app::tests::colour::*` and the cell
+        tests. Site on 914dc79: .../runs/43561142920, passed, its build and
+        deploy included.
       - Not verified without a real terminal: how each terminal draws the
         256/RGB colours, reverse and underline beside the interface's own
         styles; colour from console-API programs under ConPTY.
