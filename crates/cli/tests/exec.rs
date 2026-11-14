@@ -779,11 +779,11 @@ fn a_sub_agents_approval_is_answered_by_approve() {
     assert!(sessions.windows(2).all(|pair| pair[0] == pair[1]));
 }
 
-/// A sub-agent's question that no one at a terminal can answer interrupts
+/// A sub-agent's question that no one at a terminal can answer closes
 /// that agent; the run goes on and exits with the session's turn's
 /// outcome.
 #[test]
-fn a_sub_agents_question_without_a_terminal_interrupts_it() {
+fn a_sub_agents_question_without_a_terminal_closes_it() {
     let question = serde_json::json!({
         "questions": [{
             "id": "scope",
@@ -798,6 +798,7 @@ fn a_sub_agents_question_without_a_terminal_interrupts_it() {
     let parent = Model::start(vec![
         spawn_on_second("asker", "Ask me."),
         assistant_events("The asker is on it."),
+        assistant_events("The asker was closed by the user."),
     ]);
     let children = Model::start(vec![tool_events(
         "request_user_input",
@@ -809,11 +810,11 @@ fn a_sub_agents_question_without_a_terminal_interrupts_it() {
     assert!(
         stdout.contains(
             "· sub-agent asker asked a question that no one at a terminal can answer; \
-             interrupting it"
+             closing it"
         ),
         "{stdout}"
     );
     assert!(stdout.contains("The asker is on it."), "{stdout}");
-    assert_eq!(parent.request_count(), 2, "an interrupt reports nothing");
+    assert_eq!(parent.request_count(), 3, "the close wakes the parent");
     assert_eq!(children.request_count(), 1);
 }

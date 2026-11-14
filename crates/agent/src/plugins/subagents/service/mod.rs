@@ -27,6 +27,7 @@
 //! one Agent instance; what is not in it (an agent of an earlier run of the
 //! Agent) is read from the kernel. What the facade asks is `statuses.rs`'s.
 
+mod close;
 mod runs;
 mod statuses;
 mod wake;

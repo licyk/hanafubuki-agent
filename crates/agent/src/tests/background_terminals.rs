@@ -7,6 +7,8 @@
 //! which is not told again. Each command waits on a file the test (or
 //! another command) creates, never on time.
 
+mod close;
+
 use std::path::Path;
 
 use hanafubuki_agent_kernel::{AgentEvent, AgentEventSink, AgentTurnAccepted, AgentWakePolicy};

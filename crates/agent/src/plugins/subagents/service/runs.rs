@@ -146,6 +146,7 @@ pub(super) struct AgentRun {
     pub(super) parent: AgentSessionId,
     name: String,
     pub(super) status: AgentRunStatus,
+    pub(super) closing: bool,
     /// When `status` was set, in Unix milliseconds; `None` for the status
     /// of an agent this instance has not run yet.
     pub(super) since: Option<u64>,
@@ -198,7 +199,7 @@ impl SubagentRuns {
             .runs
             .lock()
             .get(&child)
-            .filter(|run| run.turn == turn)
+            .filter(|run| run.turn == turn && !run.closing)
             .map(|run| (run.parent, run.name.clone()));
         if let (Some((parent, name)), Some(event)) = (parent, status.wake()) {
             let source = AgentWakeSource::Subagent {
@@ -268,6 +269,7 @@ impl AgentRun {
     pub(super) fn new(parent: AgentSessionId, agent: ListedAgent) -> Self {
         Self {
             parent,
+            closing: false,
             name: agent.name,
             status: agent.status,
             since: agent.since,

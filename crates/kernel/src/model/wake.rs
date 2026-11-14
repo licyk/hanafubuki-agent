@@ -24,6 +24,15 @@ pub const MAXIMUM_WAKE_OUTPUT_BYTES: usize = 4 * 1024;
 /// A terminal's command is cut at this many bytes.
 pub const MAXIMUM_WAKE_COMMAND_BYTES: usize = 1024;
 
+/// A terminal whose process authority confirmed a person's close.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AgentClosedBackgroundTerminal {
+    pub execution_id: u64,
+    pub generation: u64,
+    pub command: String,
+    pub exit_code: Option<i32>,
+}
+
 /// The kind of the context fragment a `WakeEvents` item is lowered to.
 pub(crate) const BACKGROUND_EVENTS_FRAGMENT: &str = "background_events";
 
@@ -142,6 +151,8 @@ pub struct AgentWakeTurnAccepted {
 /// Which queued events `take_wake_events` removes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum AgentWakeFilter {
+    /// Every update of an owner being closed.
+    All,
     /// Every sub-agent's final status (not its messages): what `wait_agent`
     /// reads.
     SubagentStatuses,
@@ -154,6 +165,7 @@ pub enum AgentWakeFilter {
 impl AgentWakeFilter {
     fn matches(self, source: &AgentWakeSource) -> bool {
         match (self, source) {
+            (Self::All, _) => true,
             (Self::SubagentStatuses, AgentWakeSource::Subagent { event, .. }) => {
                 !matches!(event, AgentSubagentWake::Message { .. })
             }

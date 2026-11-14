@@ -45,6 +45,12 @@ struct TrackedTerminal {
 }
 
 impl BackgroundTerminals {
+    pub(super) fn contains(&self, id: u64, generation: u64) -> bool {
+        self.0
+            .get(&id)
+            .is_some_and(|terminal| terminal.generation == generation)
+    }
+
     /// The tracked executions still running.
     pub(in crate::service) fn running(&self) -> usize {
         self.0.values().filter(|terminal| !terminal.ended).count()

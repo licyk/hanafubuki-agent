@@ -159,12 +159,18 @@ impl Turn<'_> {
         loop {
             let code = self.run_turn(turn)?;
             if code != SUCCESS {
+                if code == CANCELLED {
+                    self.close_background(turn.session_id);
+                }
                 return Ok(code);
             }
             match self.wait_for_background(turn.session_id, &sender)? {
                 Waited::Woken(woken) => turn = woken,
                 Waited::Done => return Ok(SUCCESS),
-                Waited::Interrupted => return Ok(CANCELLED),
+                Waited::Interrupted => {
+                    self.close_background(turn.session_id);
+                    return Ok(CANCELLED);
+                }
             }
         }
     }

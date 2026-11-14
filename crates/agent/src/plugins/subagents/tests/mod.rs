@@ -10,6 +10,7 @@
 //! `wake.rs`'s; when it is not woken `pause.rs`'s; what the host is told of
 //! a root's background work `feed.rs`'s.
 
+mod closing;
 mod feed;
 mod guidance;
 mod listing;

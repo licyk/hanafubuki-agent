@@ -549,6 +549,8 @@ impl AgentEventSink for PrintEvents {
 
 ## 功能调用 [#feature-calls]
 
+`close_subagent(child)` 异步确认其存活子树的回合和终端都停止，清除被关闭会话的排队更新，只向所选子代理的父会话报告一次 `ClosedByUser`。关闭的子代理仍可接收后续任务。`close_background_terminal(owner, execution_id: AgentExecutionId)` 阻塞直到一个终端停止，然后向所属会话报告 `StoppedByUser`。`stop_background_terminals_confirmed(owner)` 对全部终端执行相同操作，把这些报告一起入队。阻塞的终端方法应在界面和异步运行时线程之外调用。归档、删除和关闭旁路对话时静默清理终端。
+
 `background_tasks(root)` 按父代理在前的顺序列出整棵树；`subagents(parent)` 仍只列出直接子代理。Agent 的调度器自行恢复嵌套子代理，因此宿主只收到主对话的 `Woken`。`resume_background_wakes(root)` 清除暂停并重新检查所有后代，即使主对话自己没有排队更新。单独提交一次唤醒回合不会清除暂停。
 
 有些功能由插件行承担，服务 API 每次调用时找到它们：

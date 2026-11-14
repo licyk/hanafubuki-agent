@@ -699,10 +699,12 @@ the queue to 4 KiB. Nothing changes in `activity.rs`.
 `close_background_terminal(owner, execution)`:
 
 1. `stop_confirmed` (`execution/src/service/lifecycle.rs:35`).
-2. Publish the stop's progress (`publish_background_terminal_stop`): the
-   status, then the disposal, which withdraws any queued end.
-3. Queue `StoppedByUser { exit_code }` on `owner`, which wakes it (a
-   sub-agent through the dispatcher, a root through its host).
+2. In one kernel checkpoint, publish the stop’s status and disposal and
+   replace any queued exit with `StoppedByUser { exit_code }`. This avoids
+   a running owner consuming an exit between disposal and its replacement.
+3. Notify `owner` once after the commit (a sub-agent through the dispatcher,
+   a root through its host). Only tracked model-started terminals report;
+   foreground `!` commands do not.
 
 `stop_background_terminals_confirmed(owner)` (the facade's, `/stop`) is
 step 1–3 for each. `quiesce_background_terminals`

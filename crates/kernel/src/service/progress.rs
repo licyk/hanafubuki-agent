@@ -477,14 +477,7 @@ impl AgentService {
     ) -> Result<(), AgentError> {
         let changed = background_changed(&update);
         let cell = self.session(session_id)?;
-        if !cell
-            .progress()
-            .flushed_blocking(Instant::now() + SYNCHRONOUS_REPORT_FLUSH)
-        {
-            log::warn!(
-                "agent_diag stage=execution.progress.flush session_id={session_id} outcome=deadline_elapsed"
-            );
-        }
+        self.flush_execution_progress_blocking(&cell);
         let staged = {
             let mut record = cell.lock_after_persistence_blocking()?;
             self.stage_execution_progress(&cell, &mut record, None, update, None)
@@ -551,6 +544,18 @@ impl AgentService {
             StagedPersistence::delta(cell, record, previous)
         };
         Some((staged, event, woken))
+    }
+
+    pub(in crate::service) fn flush_execution_progress_blocking(&self, cell: &Arc<SessionCell>) {
+        if !cell
+            .progress()
+            .flushed_blocking(Instant::now() + SYNCHRONOUS_REPORT_FLUSH)
+        {
+            log::warn!(
+                "agent_diag stage=execution.progress.flush session_id={} outcome=deadline_elapsed",
+                cell.session_id()
+            );
+        }
     }
 
     /// Emits a session-level event to the sink of the session's managed turn,

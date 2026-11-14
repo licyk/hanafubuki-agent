@@ -99,15 +99,17 @@ The model may also ask you a question (to choose between approaches, say). `exec
   In CI, make sure the machine is one you can throw away.
 </Callout>
 
-Sub-agents’ approvals use the same `--approve` policy, whether the root is working or waiting. Notes name the child, for example `· approval denied: sub-agent runner: exec_command: Run ...`. Questions also name the child; without a terminal or a valid answer, only that child’s turn is interrupted, and the run continues with the root’s outcome. Waiting is driven by background events, without a periodic status check. With `--json`, these notes go to standard error; standard output remains the root’s event stream.
+Sub-agents’ approvals use the same `--approve` policy, whether the root is working or waiting. Notes name the child, for example `· approval denied: sub-agent runner: exec_command: Run ...`. Questions also name the child; without a terminal or a valid answer, that child and its active subtree are closed, its parent receives the close, and the run continues with the root’s outcome. Waiting is driven by background events, without a periodic status check. With `--json`, these notes go to standard error; standard output remains the root’s event stream.
+
+Ctrl-C closes the live delegated tree and its terminals before shutdown and exits with 130. Their saved updates describe the person’s close when the conversation is reopened.
 
 ## Waiting for sub-agents [#subagents]
 
-`exec` also waits for background terminals started by the model. It reports what it is waiting for, runs the turn woken by an exit, failure or timeout, and writes that last turn’s answer to `-o`. A command that does not exit by itself keeps `exec` waiting until its configured `pluginOptions.execution.commandTimeoutMinutes` expires (10 minutes by default). Ctrl-C stops the wait and shuts down the Agent.
+`exec` also waits for background terminals started by the model. It reports what it is waiting for, runs the turn woken by an exit, failure or timeout, and writes that last turn’s answer to `-o`. A command that does not exit by itself keeps `exec` waiting until its configured `pluginOptions.execution.commandTimeoutMinutes` expires (10 minutes by default). Ctrl-C closes that background work before shutting down the Agent.
 
 When the turn completes while [sub-agents](/docs/tools#subagents) it spawned still work, `exec` does not exit: it waits for them, running nothing meanwhile. When one of them ends or sends the session a message, `exec` runs the turn that wakes the session for what was reported, printed as any turn's: each report as a note first (``· background update: Sub-agent `counter` (agent id 2) completed: Twelve files.``, on standard error with `--json`), then the turn. It goes on until no sub-agent works and nothing is left to read, then exits with how the last turn ended, and `-o` writes that turn's final answer.
 
-It exits at the turn's end, as before, when `wakeOnBackgroundTasks` is off, when the turn did not complete, and after the sub-agents woke the session 100 times (with a note). Ctrl-C while `exec` waits exits with 130, and the sub-agents stop with the Agent.
+It exits at the turn's end, as before, when `wakeOnBackgroundTasks` is off, when the turn did not complete, and after the sub-agents woke the session 100 times (with a note). Ctrl-C while `exec` waits closes its background work and exits with 130.
 
 ## Saving the final answer [#output-last-message]
 

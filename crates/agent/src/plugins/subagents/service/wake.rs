@@ -27,7 +27,8 @@ impl SubagentService {
             let run = runs
                 .entry(child)
                 .or_insert_with(|| AgentRun::new(parent, agent));
-            if run.status == AgentRunStatus::Running {
+            if run.closing || matches!(run.status, AgentRunStatus::Running | AgentRunStatus::Closed)
+            {
                 return Ok(());
             }
             let previous = run.status.clone();
@@ -83,6 +84,9 @@ impl SubagentRuns {
         }
         let held = self.runs.lock().get(&child).and_then(|run| {
             if let AgentRunStatus::Waiting(answer) = &run.status {
+                if run.closing {
+                    return None;
+                }
                 Some((run.turn, answer.clone()))
             } else {
                 None

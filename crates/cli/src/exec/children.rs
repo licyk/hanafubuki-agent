@@ -3,7 +3,7 @@
 //! during the session's turn or while it waits: an approval is answered by
 //! `--approve`, as the session's are, and noted with the sub-agent's title;
 //! a question is answered by the person at a terminal, and without one the
-//! sub-agent's turn is interrupted (the run goes on, and its exit code is
+//! sub-agent and its live subtree are closed (the run goes on, and its exit code is
 //! still the session's last turn's).
 
 use hanafubuki_agent::{AgentEvent, AgentEventKind, AgentSessionId};
@@ -12,6 +12,42 @@ use super::Turn;
 use crate::agent::block_on;
 
 impl Turn<'_> {
+    pub(super) fn close_background(&mut self, root: AgentSessionId) {
+        let closed = block_on(self.agent, move |agent| async move {
+            let tree = agent.background_tasks(root).await?;
+            for child in tree
+                .agents
+                .into_iter()
+                .filter(|child| child.parent_session_id == root)
+            {
+                let live = matches!(
+                    child.status,
+                    hanafubuki_agent::AgentSubagentState::Running
+                        | hanafubuki_agent::AgentSubagentState::Waiting
+                ) || !agent.background_status(child.session_id)?.work.is_empty();
+                if live {
+                    agent.close_subagent(child.session_id).await?;
+                }
+            }
+            Ok::<(), hanafubuki_agent::AgentError>(())
+        });
+        if let Err(failure) = closed {
+            self.output.note(&format!(
+                "background agents were not closed: {}",
+                failure.message
+            ));
+        }
+        match self.agent.stop_background_terminals_confirmed(root) {
+            Ok(outcome) if outcome.retained.is_empty() => {}
+            Ok(_) => self
+                .output
+                .note("some background terminals could not be stopped"),
+            Err(error) => self
+                .output
+                .note(&format!("background terminals were not closed: {error}")),
+        }
+    }
+
     /// Answers what `event`, an event of a sub-agent's turn, asks.
     pub(super) fn child(&mut self, event: AgentEvent) {
         let child = event.session_id;
@@ -53,25 +89,25 @@ impl Turn<'_> {
                             ));
                         }
                     }
-                    None => self.interrupt_child(child, &title),
+                    None => self.close_child(child, &title),
                 }
             }
             _ => {}
         }
     }
 
-    /// Interrupts `child`, whose question no one can answer.
-    fn interrupt_child(&mut self, child: AgentSessionId, title: &str) {
+    /// Closes `child`, whose question no one can answer.
+    fn close_child(&mut self, child: AgentSessionId, title: &str) {
         self.output.note(&format!(
             "sub-agent {title} asked a question that no one at a terminal can answer; \
-             interrupting it"
+             closing it"
         ));
-        let interrupted = block_on(self.agent, move |agent| async move {
-            agent.interrupt_subagent(child).await
+        let closed = block_on(self.agent, move |agent| async move {
+            agent.close_subagent(child).await
         });
-        if let Err(failure) = interrupted {
+        if let Err(failure) = closed {
             self.output.note(&format!(
-                "sub-agent {title} was not interrupted: {}",
+                "sub-agent {title} was not closed: {}",
                 failure.message
             ));
         }

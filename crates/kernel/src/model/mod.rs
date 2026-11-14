@@ -90,10 +90,10 @@ pub use turn::{
 pub(crate) use user_shell_command::{user_shell_command_record, USER_SHELL_COMMAND_FRAGMENT};
 pub(crate) use wake::{tolerant_wake_events, BACKGROUND_EVENTS_FRAGMENT};
 pub use wake::{
-    wake_events_record, AgentSubagentWake, AgentTerminalWake, AgentWakeEvent, AgentWakeFilter,
-    AgentWakePolicy, AgentWakeQueue, AgentWakeQueued, AgentWakeSource, AgentWakeTurnAccepted,
-    MAXIMUM_QUEUED_WAKE_MESSAGES, MAXIMUM_WAKE_ANSWER_BYTES, MAXIMUM_WAKE_COMMAND_BYTES,
-    MAXIMUM_WAKE_OUTPUT_BYTES,
+    wake_events_record, AgentClosedBackgroundTerminal, AgentSubagentWake, AgentTerminalWake,
+    AgentWakeEvent, AgentWakeFilter, AgentWakePolicy, AgentWakeQueue, AgentWakeQueued,
+    AgentWakeSource, AgentWakeTurnAccepted, MAXIMUM_QUEUED_WAKE_MESSAGES,
+    MAXIMUM_WAKE_ANSWER_BYTES, MAXIMUM_WAKE_COMMAND_BYTES, MAXIMUM_WAKE_OUTPUT_BYTES,
 };
 pub(crate) use world_state::{
     effective_world_state, full_world_state_checkpoint, kernel_context_renderers,

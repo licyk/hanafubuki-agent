@@ -127,6 +127,8 @@ A side conversation is a temporary conversation beside a session, for a question
 
 ## Sub-agents [#subagents]
 
+Closing a sub-agent stops its active descendants and their terminals, clears their pending updates, and tells its parent that it was closed by the user. It remains available for a follow-up task. Interrupting just a turn leaves its background work running.
+
 A sub-agent is a child the session's model spawns with `spawn_agent` to work on a task in the background ([Tools](/docs/tools#subagents)).
 
 - It is **durable**: written to the history like any session, with `origin` `subagent` and the task name as its title. Session lists leave it out like every child; it is listed with its parent's children.

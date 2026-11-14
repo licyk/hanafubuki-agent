@@ -240,7 +240,7 @@ pub use hanafubuki_agent_config::{
 };
 pub use hanafubuki_agent_execution::{
     AgentBackgroundTerminalSnapshot, AgentBackgroundTerminalStopFailure,
-    AgentBackgroundTerminalStopOutcome,
+    AgentBackgroundTerminalStopOutcome, AgentExecutionId,
 };
 use hanafubuki_agent_foundation::cancellation::CancellationToken;
 pub use hanafubuki_agent_kernel::AgentError;

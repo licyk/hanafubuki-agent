@@ -12,6 +12,7 @@ use super::*;
 use crate::{AgentWakeFilter, AgentWakePolicy, AgentWakeQueued, AgentWakeSource};
 
 mod admission;
+mod close;
 mod terminal;
 mod work;
 

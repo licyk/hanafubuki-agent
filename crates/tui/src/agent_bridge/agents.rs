@@ -50,9 +50,8 @@ impl AgentBridge {
             .map_err(|error| format!("the session was not deleted: {error}"))
     }
 
-    /// Interrupts the turn `session` runs: a subagent's through the
-    /// subagents' own call, which keeps it taking follow-up tasks. A
-    /// failure comes back as a reply.
+    /// Stops the listed session, closing a sub-agent's subtree. A failure
+    /// comes back as a reply.
     pub(crate) fn stop_listed(&self, session: &AgentSessionSummary) -> Result<(), String> {
         if session.origin != Some(AgentSessionOrigin::Subagent) {
             return self.interrupt_listed(session.session_id);
@@ -60,10 +59,10 @@ impl AgentBridge {
         let child = session.session_id;
         self.spawn(move |agent| async move {
             agent
-                .interrupt_subagent(child)
+                .close_subagent(child)
                 .await
                 .map(|()| None)
-                .map_err(|error| format!("the subagent was not interrupted: {error}"))
+                .map_err(|error| format!("the subagent was not closed: {error}"))
         });
         Ok(())
     }

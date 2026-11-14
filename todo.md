@@ -5634,9 +5634,34 @@ its next pin, and any module-size exception.
         check, scoped agent/kernel/CLI/TUI clippy with warnings denied,
         xtask, fmt, diff, and full site formatting check. No full workspace
         or native platform test rerun; no site build/test for these docs.
-- [ ] R6: `close_subagent` (cascade), `close_background_terminal`, and
+- [x] R6: `close_subagent` (cascade), `close_background_terminal`, and
       `/stop` as the person's close. Each wakes the owner; archive, delete
       and side close do not.
+      Done (2026-11-14). The cascade reserves admission, prevents dispatch
+      while closing, confirms child turns and terminals stopped, clears
+      their queues, and reports only the selected child's close. Closed
+      agents accept follow-up tasks. The facade exports AgentExecutionId
+      and both close calls; the command center and unanswerable CLI child
+      questions use close. Ctrl-C explicitly closes live delegated work
+      and terminals before shutdown, preserving ClosedByUser on reopen.
+      Person-terminal closure now projects status/disposal and replaces a
+      pending exit with StoppedByUser in one kernel checkpoint, including
+      batches from /stop. Tracked model origin excludes foreground !commands.
+      The internal teardown publication remains silent and preserves Lost.
+      Shared terminal publication lives on the driver for cascade reuse.
+      Both-language embedding, sessions, terminal, exec and internals docs
+      describe the calls and their effects. No goldens changed; no module
+      exception added or raised.
+      Validation on Linux: five real terminal-close tests (including three
+      terminal batching, exited-close replacement, !command origin, archive,
+      delete and side cleanup); the active-grandchild/two-terminal cascade
+      and follow-up test; CLI unanswerable-question close; real SIGINT with
+      saved ClosedByUser after reopening; scoped agent/kernel/CLI/TUI
+      all-target all-feature clippy with warnings denied; agent/CLI/TUI
+      all-target all-feature check; cargo xtask check; cargo fmt --all --check;
+      git diff --check; full site formatting check. Full workspace tests,
+      native Windows/macOS and site build/test are left to CI. R8 covers
+      its UI's close and confirmation snapshots with these APIs.
 - [ ] R7: restart. Work a stop of the Agent ended is reported as `Lost`
       to its owner (transitively), at a clean shutdown before turns are
       cancelled and at start for a crash. It is idempotent by key, and

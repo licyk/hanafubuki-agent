@@ -143,10 +143,10 @@ pub use model::{
     ToolIdentity, ToolPattern, CORE_PLUGINS, MAX_SCOPE_TOOL_PATTERNS, MAX_TOOL_PATTERN_BYTES,
 };
 pub use model::{
-    wake_events_record, AgentSubagentWake, AgentTerminalWake, AgentWakeEvent, AgentWakeFilter,
-    AgentWakePolicy, AgentWakeQueue, AgentWakeQueued, AgentWakeSource, AgentWakeTurnAccepted,
-    MAXIMUM_QUEUED_WAKE_MESSAGES, MAXIMUM_WAKE_ANSWER_BYTES, MAXIMUM_WAKE_COMMAND_BYTES,
-    MAXIMUM_WAKE_OUTPUT_BYTES,
+    wake_events_record, AgentClosedBackgroundTerminal, AgentSubagentWake, AgentTerminalWake,
+    AgentWakeEvent, AgentWakeFilter, AgentWakePolicy, AgentWakeQueue, AgentWakeQueued,
+    AgentWakeSource, AgentWakeTurnAccepted, MAXIMUM_QUEUED_WAKE_MESSAGES,
+    MAXIMUM_WAKE_ANSWER_BYTES, MAXIMUM_WAKE_COMMAND_BYTES, MAXIMUM_WAKE_OUTPUT_BYTES,
 };
 pub use model_metadata::{ModelMetadataSnapshot, ModelMetadataStore};
 pub use parallel_tool_runtime::{

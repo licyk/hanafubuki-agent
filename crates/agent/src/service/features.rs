@@ -45,6 +45,15 @@ impl AgentApplicationService {
         .await
     }
 
+    /// Closes a sub-agent and its live descendants, confirms their turns and
+    /// terminals stopped, and reports the close to its parent. It can take a
+    /// later follow-up task.
+    pub async fn close_subagent(&self, session_id: AgentSessionId) -> Result<(), AgentError> {
+        self.feature(SUBAGENTS_PLUGIN, |subagents: Arc<SubagentService>| async move {
+            subagents.close_subagent(session_id).await
+        }).await
+    }
+
     /// A brief catch-up on `session_id` from its latest exchanges, by the
     /// session's model; `FeatureUnavailable` while the `recap` plugin is not
     /// running. Nothing is committed.

@@ -39,7 +39,7 @@ pub(super) static STOP: CommandSpec = CommandSpec {
             context,
             Confirmation {
                 title: "Stop all background terminals?",
-                subtitle: "Every background terminal of this session is stopped.",
+                subtitle: "Every background terminal of this session is stopped and its owner is notified.",
                 no: "No, keep them running",
                 yes: "Yes, stop them",
                 yes_description: "Stop every background terminal now",
