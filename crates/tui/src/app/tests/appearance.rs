@@ -25,11 +25,11 @@ fn statusline_arguments_apply_to_the_run_and_the_setup_saves() {
     harness.pump_until_screen_shows("Unknown status-line item 'nonsense'");
 
     // The setup lists the items shown first, then the others in their
-    // order: `model` is turned off and `current-dir`, the fourth, on.
+    // order: `model` is turned off and `current-dir`, the fifth, on.
     harness.type_and_submit("/statusline");
     harness.pump_until_screen_shows("Configure Status Line");
     harness.key(KeyCode::Char(' '));
-    for _ in 0..3 {
+    for _ in 0..4 {
         harness.key(KeyCode::Down);
     }
     harness.key(KeyCode::Char(' '));

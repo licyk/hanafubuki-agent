@@ -15,7 +15,7 @@ expression: "screen(&mut center, 140, 25)"
     Command center grouping  Project ›                     How the command center (/agents) groups its sessions; g there changes it
     Raw output               [ ] Off                       The conversation shown as the plain text it was made from
     Syntax theme             (unset) ›                     The syntax highlighting theme; unset, the default
-    Status line              model-with-reasoning, cur...  The status line's items, in order
+    Status line              model-with-reasoning, bac...  The status line's items, in order
     Status line colors       [x] On                        Whether the status line's items take the theme's colors
     Terminal title           activity, session-title, ...  The terminal title's items, in order; none leaves the title alone
     Tables                   [x] On                        Pipe tables laid out in columns; off, shown as written

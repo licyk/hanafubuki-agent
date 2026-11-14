@@ -91,6 +91,7 @@ fn the_unfiltered_list_is_the_registry_in_order() {
         "review",
         "side",
         "subagents",
+        "tasks",
         "agents",
         "goal",
         "copy",
