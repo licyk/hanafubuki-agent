@@ -49,6 +49,7 @@ use ratatui::text::Line;
 mod agents_navigation;
 mod attachments;
 mod external_editor;
+mod history_navigation;
 mod history_search;
 mod popups;
 mod render;
@@ -185,6 +186,7 @@ impl ChatComposer {
     /// In all cases, clears any paste-burst Enter suppression state so a real paste cannot affect
     /// the next user Enter key.
     pub fn handle_paste(&mut self, pasted: String) -> bool {
+        self.history.cancel_pending_navigation();
         let pasted = pasted.replace("\r\n", "\n").replace('\r', "\n");
         if self.paste_into_history_search(&pasted) {
             return true;
@@ -316,6 +318,12 @@ impl ChatComposer {
 
     /// Handle a key event coming from the main UI.
     pub fn handle_key_event(&mut self, key_event: KeyEvent) -> (InputResult, bool) {
+        if key_event.kind != KeyEventKind::Release
+            && !keymap::matches(Action::HistoryPrevious, &key_event)
+            && !keymap::matches(Action::HistoryNext, &key_event)
+        {
+            self.history.cancel_pending_navigation();
+        }
         if self.handle_external_editor_key(&key_event) || self.handle_paste_image_key(&key_event) {
             return (InputResult::None, true);
         }
@@ -354,20 +362,8 @@ impl ChatComposer {
             key if keymap::matches(Action::HistoryPrevious, &key)
                 || keymap::matches(Action::HistoryNext, &key) =>
             {
-                if self
-                    .history
-                    .should_handle_navigation(self.textarea.text(), self.textarea.cursor())
-                {
-                    let replace_entry = if keymap::matches(Action::HistoryPrevious, &key) {
-                        self.history.navigate_up()
-                    } else {
-                        self.history.navigate_down()
-                    };
-                    if let Some(entry) = replace_entry {
-                        self.set_message(entry);
-                        self.textarea.set_cursor(0);
-                        return (InputResult::None, true);
-                    }
+                if self.navigate_history(&key) {
+                    return (InputResult::None, true);
                 }
                 self.handle_input_basic(key_event)
             }

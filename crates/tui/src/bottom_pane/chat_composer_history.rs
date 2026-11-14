@@ -2,10 +2,10 @@
 // Modified from OpenAI Codex 57a808a392 (Apache-2.0).
 
 //! The chat composer's history: shell-style navigation (Up/Down) over the
-//! messages sent in this run, and Ctrl+R's search (Codex's traversal in
-//! `chat_composer_history.rs`) over those, then over what the person sent
-//! in the Agent's sessions, read once from the history store on the first
-//! search. Codex fetches its history file entry by entry; here the stored
+//! messages sent in this run, then those from earlier sessions, and
+//! Ctrl+R's search (Codex's traversal in `chat_composer_history.rs`).
+//! Stored messages are read once on the first Up or search. Codex fetches
+//! its history file entry by entry; here the stored
 //! messages come in one bounded read, so a search waits only while that
 //! read runs. An entry is a message with its images (`UserMessage`); a
 //! stored one keeps its text only.
@@ -28,6 +28,7 @@ pub(crate) struct ChatComposerHistory {
     /// Current cursor within the history. `None` indicates the user is *not*
     /// currently browsing history.
     history_cursor: Option<usize>,
+    pending_navigation: bool,
 
     /// The text that was last inserted into the composer as a result of
     /// history navigation. Used to decide if further Up/Down presses should be
@@ -42,6 +43,7 @@ impl ChatComposerHistory {
             stored: StoredHistory::Unread,
             search: None,
             history_cursor: None,
+            pending_navigation: false,
             last_history_text: None,
         }
     }
@@ -54,6 +56,7 @@ impl ChatComposerHistory {
         }
 
         self.history_cursor = None;
+        self.pending_navigation = false;
         self.last_history_text = None;
         self.search = None;
 
@@ -68,13 +71,16 @@ impl ChatComposerHistory {
     /// Reset navigation tracking so the next Up key resumes from the latest entry.
     pub fn reset_navigation(&mut self) {
         self.history_cursor = None;
+        self.pending_navigation = false;
         self.last_history_text = None;
     }
 
     /// Should Up/Down key presses be interpreted as history navigation given
     /// the current content and cursor position of `textarea`?
     pub fn should_handle_navigation(&self, text: &str, cursor: usize) -> bool {
-        if self.local_history.is_empty() {
+        if self.local_history.is_empty()
+            && matches!(&self.stored, StoredHistory::Read(entries) if entries.is_empty())
+        {
             return false;
         }
 
@@ -82,77 +88,91 @@ impl ChatComposerHistory {
             return true;
         }
 
-        // Textarea is not empty – only navigate when cursor is at start and
+        // Textarea is not empty – only navigate when cursor is at either text boundary and
         // text matches last recalled history entry so regular editing is not
         // hijacked.
-        if cursor != 0 {
+        if cursor != 0 && cursor != text.len() {
             return false;
         }
 
         matches!(&self.last_history_text, Some(prev) if prev == text)
     }
 
-    /// Handle <Up>: the entry to show, if the cursor moved.
+    /// Newest-first offsets remain stable when the older stored entries arrive.
     pub fn navigate_up(&mut self) -> Option<UserMessage> {
-        let total_entries = self.local_history.len();
-        if total_entries == 0 {
-            return None;
-        }
-
-        let next_idx = match self.history_cursor {
-            None => total_entries - 1,
-            Some(0) => return None, // already at oldest
-            Some(idx) => idx - 1,
-        };
-
-        self.history_cursor = Some(next_idx);
-        self.populate_history_at_index(next_idx)
+        self.search = None;
+        let index = self.history_cursor.map_or(0, |index| index + 1);
+        let entry = self.populate_history_at_index(index);
+        self.pending_navigation = entry.is_none() && matches!(self.stored, StoredHistory::Reading);
+        entry
     }
 
-    /// Handle <Down>.
     pub fn navigate_down(&mut self) -> Option<UserMessage> {
-        let total_entries = self.local_history.len();
-        if total_entries == 0 {
-            return None;
-        }
-
-        let next_idx_opt = match self.history_cursor {
-            None => return None, // not browsing
-            Some(idx) if idx + 1 >= total_entries => None,
-            Some(idx) => Some(idx + 1),
-        };
-
-        match next_idx_opt {
-            Some(idx) => {
-                self.history_cursor = Some(idx);
-                self.populate_history_at_index(idx)
-            }
-            None => {
-                // Past newest – clear and exit browsing mode.
-                self.history_cursor = None;
-                self.last_history_text = None;
+        self.cancel_pending_navigation();
+        self.search = None;
+        match self.history_cursor? {
+            0 => {
+                self.reset_navigation();
                 Some(UserMessage::default())
             }
+            index => self.populate_history_at_index(index - 1),
         }
     }
 
-    /// The entry at `idx` as the composer shows it, without the images
-    /// that are gone.
-    fn populate_history_at_index(&mut self, idx: usize) -> Option<UserMessage> {
-        let entry = self.local_history.get(idx).cloned()?.available();
+    fn populate_history_at_index(&mut self, index: usize) -> Option<UserMessage> {
+        let stored = match &self.stored {
+            StoredHistory::Read(entries) => entries.as_slice(),
+            StoredHistory::Unread | StoredHistory::Reading => &[],
+        };
+        // The bounded read may already contain submissions from this run.
+        let local_texts: HashSet<&str> = self
+            .local_history
+            .iter()
+            .map(|entry| entry.text.as_str())
+            .collect();
+        let entry = self
+            .local_history
+            .iter()
+            .rev()
+            .cloned()
+            .chain(
+                stored
+                    .iter()
+                    .filter(|text| !text.is_empty() && !local_texts.contains(text.as_str()))
+                    .map(|text| UserMessage::stored(text)),
+            )
+            .nth(index)?
+            .available();
+        self.history_cursor = Some(index);
         self.last_history_text = Some(entry.text.clone());
         Some(entry)
     }
 
+    pub fn request_stored_read(&mut self) -> bool {
+        if !matches!(self.stored, StoredHistory::Unread) {
+            return false;
+        }
+        self.stored = StoredHistory::Reading;
+        true
+    }
+
+    pub fn cancel_pending_navigation(&mut self) {
+        self.pending_navigation = false;
+    }
+
+    pub fn resume_navigation(&mut self) -> Option<UserMessage> {
+        if !std::mem::take(&mut self.pending_navigation) {
+            return None;
+        }
+        self.navigate_up()
+    }
+
     /// Starts a search; `true` when the stored messages are to be read
-    /// now (the first search of this history).
+    /// now (unless navigation already requested them).
     pub fn begin_search(&mut self) -> bool {
         self.search = None;
-        let read = matches!(self.stored, StoredHistory::Unread);
-        if read {
-            self.stored = StoredHistory::Reading;
-        }
-        read
+        self.cancel_pending_navigation();
+        self.request_stored_read()
     }
 
     /// Clears the search, so the next one starts from the newest match.

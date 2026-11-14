@@ -1,7 +1,7 @@
 //! What the person sent in the Agent's sessions, read for the composer's
-//! history search (Ctrl+R) on a blocking thread of the Agent's runtime. A
-//! reply always comes, empty when the read failed or never ran, so a search
-//! waiting for it ends.
+//! history navigation (Up/Down) and search (Ctrl+R) on a blocking thread of
+//! the Agent's runtime. A reply always comes, empty when the read failed or
+//! never ran, so navigation or search waiting for it ends.
 
 use hanafubuki_agent::RECENT_USER_MESSAGES_MAX;
 

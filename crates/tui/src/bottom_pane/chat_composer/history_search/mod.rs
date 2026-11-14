@@ -124,14 +124,6 @@ impl ChatComposer {
         true
     }
 
-    /// What the person sent in the Agent's sessions, newest first, read
-    /// for the search; one waiting for them goes on.
-    pub(crate) fn on_recent_messages(&mut self, messages: Vec<String>) {
-        if let Some(result) = self.history.on_stored_read(messages) {
-            self.apply_history_search_result(result);
-        }
-    }
-
     /// The footer's row while the search is open: the query, then what it
     /// found.
     pub(super) fn history_search_line(&self) -> Option<Line<'static>> {
@@ -218,7 +210,7 @@ impl ChatComposer {
 
     /// Shows a step's result: a match in the draft's place; none, the
     /// draft. At an end the match shown stays.
-    fn apply_history_search_result(&mut self, result: HistorySearchResult) {
+    pub(super) fn apply_history_search_result(&mut self, result: HistorySearchResult) {
         let Some(query) = self.history_search.as_ref().map(|s| s.query.clone()) else {
             return;
         };

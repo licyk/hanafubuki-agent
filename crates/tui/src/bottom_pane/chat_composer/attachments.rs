@@ -134,6 +134,7 @@ impl ChatComposer {
     /// cursor at the end. The draft's own images are let go, not removed:
     /// the history may hold them.
     pub(crate) fn set_message(&mut self, message: UserMessage) {
+        self.history.cancel_pending_navigation();
         self.textarea.set_text_clearing_elements("");
         self.pending_pastes.clear();
         self.images.clear();
