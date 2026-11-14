@@ -30,7 +30,8 @@ use hanafubuki_agent_kernel::{
     AgentSessionLifecycle, AgentSessionListRequest, AgentSessionMode, AgentSessionOrigin,
     AgentSessionParentFilter, AgentSessionPersistence, AgentSessionRuntimeSnapshot,
     AgentSessionSummary, AgentSessionTitleRenameRequest, AgentTurnInput, AgentTurnOrigin,
-    AgentTurnOutcome, AgentWorldStateSnapshot, ConversationItem, AGENT_SESSION_PAGE_SIZE_MAX,
+    AgentTurnOutcome, AgentWakeEvent, AgentWakeFilter, AgentWakeQueued, AgentWakeSource,
+    AgentWorldStateSnapshot, ConversationItem, AGENT_SESSION_PAGE_SIZE_MAX,
 };
 use hanafubuki_agent_sandbox::{platform_default_mode, SandboxSettings};
 
@@ -195,6 +196,39 @@ impl AgentSessionDriver {
         self.core
             .steer_turn_with_sink(session_id, turn.id, turn.generation, text, &Discard)
             .map(|_| ())
+    }
+
+    /// Queues `source` on `session_id`'s wake queue, loading the session
+    /// first: a parent of an earlier run is not loaded.
+    pub(crate) async fn enqueue_wake_event(
+        &self,
+        session_id: AgentSessionId,
+        source: AgentWakeSource,
+    ) -> Result<AgentWakeQueued, AgentError> {
+        self.load(session_id).await?;
+        self.core.enqueue_wake_event(session_id, source).await
+    }
+
+    /// Takes the events `filter` matches from `session_id`'s wake queue,
+    /// loading the session first.
+    pub(crate) async fn take_wake_events(
+        &self,
+        session_id: AgentSessionId,
+        filter: AgentWakeFilter,
+    ) -> Result<Vec<AgentWakeEvent>, AgentError> {
+        self.load(session_id).await?;
+        self.core.take_wake_events(session_id, filter).await
+    }
+
+    async fn load(&self, session_id: AgentSessionId) -> Result<(), AgentError> {
+        let core = self.core.clone();
+        run_blocking_operation(
+            self.blocking.as_ref(),
+            "agent session load worker",
+            move || core.activate_session(session_id),
+        )
+        .await
+        .map_err(AgentError::Persistence)?
     }
 
     /// The session's current state, loading it first. Blocks.

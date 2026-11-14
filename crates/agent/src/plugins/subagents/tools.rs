@@ -36,16 +36,14 @@ use hanafubuki_agent_contracts::{
     ToolInvocation, ToolResult,
 };
 use hanafubuki_agent_foundation::agent_settings::MAX_MODEL_REASONING_EFFORT_BYTES;
-use hanafubuki_agent_kernel::{AgentError, ModelReasoningEffort};
+use hanafubuki_agent_kernel::{AgentError, AgentSessionId, ModelReasoningEffort};
 use hanafubuki_agent_tool_contracts::{
     ToolContractError, ToolExecutionClass, ToolExposure, ToolName,
 };
 use serde_json::{json, Map, Value};
 
 use super::options::WaitBounds;
-use super::service::{
-    AgentRunStatus, Delivery, ListedAgent, SpawnRequest, SubagentService, WaitOutcome,
-};
+use super::service::{AgentRunStatus, Delivery, SpawnRequest, SubagentService, WaitOutcome};
 use crate::roles::{AgentRoleCatalogReader, DEFAULT_ROLE};
 use crate::session_driver::MAXIMUM_MODEL_ID_BYTES;
 
@@ -224,7 +222,8 @@ impl AgentToolHandler for SubagentTool {
                     let agents = agents
                         .iter()
                         .map(|(agent, model)| {
-                            let mut listed = listed(agent, json!(list_status(&agent.status)));
+                            let status = json!(list_status(&agent.status));
+                            let mut listed = listed(&agent.name, agent.id, status);
                             listed["agent_type"] = json!(agent.role);
                             listed["provider"] = json!(model.provider_id);
                             listed["model"] = json!(model.model);
@@ -397,15 +396,15 @@ fn waited(outcome: WaitOutcome) -> ToolResult {
     };
     let agents = agents
         .iter()
-        .map(|agent| listed(agent, status(&agent.status)))
+        .map(|agent| listed(&agent.name, agent.id, status(&agent.status)))
         .collect::<Vec<_>>();
     json!({ "message": message, "timed_out": timed_out, "agents": agents }).into()
 }
 
-fn listed(agent: &ListedAgent, status: Value) -> Value {
+fn listed(name: &str, id: AgentSessionId, status: Value) -> Value {
     json!({
-        "agent_name": agent.name,
-        "agent_id": agent.id.to_string(),
+        "agent_name": name,
+        "agent_id": id.to_string(),
         "agent_status": status,
     })
 }

@@ -8,16 +8,23 @@
 // final status is what its parent's next wait reports.
 
 //! The agents this Agent instance runs ([`SubagentRuns`]), each with the
-//! status the model reads, and how a run's end is recorded.
+//! status the model reads, and how a run's end reaches its parent: a final
+//! status is queued on the parent's wake queue, which `wait_agent` takes
+//! (and, with the parent's wake policy on, its next step or its woken turn
+//! delivers).
 
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use hanafubuki_agent_kernel::{AgentError, AgentSessionId, AgentTurnOutcome, AgentTurnPhase};
+use hanafubuki_agent_kernel::{
+    AgentError, AgentSessionId, AgentSubagentWake, AgentTurnOutcome, AgentTurnPhase,
+    AgentWakeEvent, AgentWakeSource,
+};
 use parking_lot::Mutex;
 use tokio::sync::Notify;
 
 use super::ListedAgent;
+use crate::session_driver::AgentSessionDriver;
 
 /// An agent's status, as the model reads it.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -56,9 +63,64 @@ impl AgentRunStatus {
         }
     }
 
-    /// Whether the parent's next wait reports it: Codex's final statuses.
-    fn is_final(&self) -> bool {
-        matches!(self, Self::Completed(_) | Self::Errored(_))
+    /// What the parent hears of a run that ended so: Codex's final
+    /// statuses. An interrupt, the parent's own or the person's, is no news
+    /// for it.
+    fn wake(&self) -> Option<AgentSubagentWake> {
+        match self {
+            Self::Completed(answer) => Some(AgentSubagentWake::Completed {
+                answer: answer.clone(),
+                truncated: false,
+            }),
+            Self::Errored(error) => Some(AgentSubagentWake::Errored {
+                error: error.clone(),
+            }),
+            _ => None,
+        }
+    }
+}
+
+/// A final status taken from the parent's wake queue, as `wait_agent`
+/// reports it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(in crate::plugins::subagents) struct AgentUpdate {
+    pub(in crate::plugins::subagents) name: String,
+    pub(in crate::plugins::subagents) id: AgentSessionId,
+    pub(in crate::plugins::subagents) status: AgentRunStatus,
+}
+
+impl AgentUpdate {
+    /// The update a queued sub-agent's status gives; none for anything else.
+    pub(super) fn of_event(event: AgentWakeEvent) -> Option<Self> {
+        let AgentWakeSource::Subagent {
+            session_id,
+            name,
+            event,
+        } = event.source
+        else {
+            return None;
+        };
+        let status = match event {
+            AgentSubagentWake::Completed { answer, truncated } => {
+                AgentRunStatus::Completed(answer.map(|answer| match truncated {
+                    true => format!("{answer}… (cut; the rest is in the sub-agent's conversation)"),
+                    false => answer,
+                }))
+            }
+            AgentSubagentWake::Errored { error } => AgentRunStatus::Errored(error),
+            AgentSubagentWake::ClosedByUser => {
+                AgentRunStatus::Errored("it was closed by the user".to_string())
+            }
+            AgentSubagentWake::Lost => {
+                AgentRunStatus::Errored("it stopped when the Agent restarted".to_string())
+            }
+            AgentSubagentWake::Message { .. } => return None,
+        };
+        Some(Self {
+            name,
+            id: session_id,
+            status,
+        })
     }
 }
 
@@ -66,18 +128,16 @@ impl AgentRunStatus {
 #[derive(Clone, Default)]
 pub(crate) struct SubagentRuns {
     pub(super) runs: Arc<Mutex<HashMap<AgentSessionId, AgentRun>>>,
+    /// Told when a run ends, once what its parent hears of it is queued.
     pub(super) changed: Arc<Notify>,
 }
 
 pub(super) struct AgentRun {
     pub(super) parent: AgentSessionId,
     name: String,
-    role: String,
     pub(super) status: AgentRunStatus,
     /// Messages for its next turn.
     pub(super) queued: Vec<String>,
-    /// A final status the parent's waits have not reported yet.
-    pub(super) unreported: bool,
     /// How many turns this instance started on it.
     pub(super) turn: u64,
 }
@@ -96,40 +156,42 @@ impl SubagentRuns {
     }
 
     /// Records how `child`'s `turn`-th run ended, unless a later run
-    /// started since.
-    pub(super) fn finish(&self, child: AgentSessionId, turn: u64, status: AgentRunStatus) {
+    /// started since. A final status is queued on its parent before the
+    /// run stops counting as running, so a wait that finds no agent running
+    /// finds the status queued.
+    pub(super) async fn finish(
+        &self,
+        driver: &AgentSessionDriver,
+        child: AgentSessionId,
+        turn: u64,
+        status: AgentRunStatus,
+    ) {
+        let parent = self
+            .runs
+            .lock()
+            .get(&child)
+            .filter(|run| run.turn == turn)
+            .map(|run| (run.parent, run.name.clone()));
+        if let (Some((parent, name)), Some(event)) = (parent, status.wake()) {
+            let source = AgentWakeSource::Subagent {
+                session_id: child,
+                name,
+                event,
+            };
+            if let Err(error) = driver.enqueue_wake_event(parent, source).await {
+                // An archived or deleted parent hears of nothing.
+                log::debug!("the end of subagent {child} was not queued on {parent}: {error}");
+            }
+        }
         if let Some(run) = self
             .runs
             .lock()
             .get_mut(&child)
             .filter(|run| run.turn == turn)
         {
-            run.unreported = status.is_final();
             run.status = status;
         }
         self.changed.notify_waiters();
-    }
-
-    /// The final statuses of `parent`'s agents not reported yet, which are
-    /// now reported, and how many of its agents still run.
-    pub(super) fn take_updates(&self, parent: AgentSessionId) -> (Vec<ListedAgent>, usize) {
-        let mut runs = self.runs.lock();
-        let mut updates = Vec::new();
-        let mut running = 0;
-        for (id, run) in runs.iter_mut().filter(|(_, run)| run.parent == parent) {
-            running += usize::from(run.status == AgentRunStatus::Running);
-            if run.unreported {
-                run.unreported = false;
-                updates.push(ListedAgent {
-                    name: run.name.clone(),
-                    id: *id,
-                    role: run.role.clone(),
-                    status: run.status.clone(),
-                });
-            }
-        }
-        updates.sort_by_key(|update| update.id);
-        (updates, running)
     }
 }
 
@@ -138,10 +200,8 @@ impl AgentRun {
         Self {
             parent,
             name: agent.name,
-            role: agent.role,
             status: agent.status,
             queued: Vec::new(),
-            unreported: false,
             turn: 0,
         }
     }

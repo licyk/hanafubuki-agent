@@ -137,6 +137,8 @@ pub enum AgentWakeFilter {
     /// Every sub-agent's final status (not its messages): what `wait_agent`
     /// reads.
     SubagentStatuses,
+    /// One sub-agent's final status, which a new turn of it withdraws.
+    SubagentStatus { session_id: AgentSessionId },
     /// The end of one terminal, which a poll that saw it withdraws.
     Terminal { execution_id: u64 },
 }
@@ -147,6 +149,14 @@ impl AgentWakeFilter {
             (Self::SubagentStatuses, AgentWakeSource::Subagent { event, .. }) => {
                 !matches!(event, AgentSubagentWake::Message { .. })
             }
+            (
+                Self::SubagentStatus { session_id },
+                AgentWakeSource::Subagent {
+                    session_id: queued,
+                    event,
+                    ..
+                },
+            ) => session_id == *queued && !matches!(event, AgentSubagentWake::Message { .. }),
             (
                 Self::Terminal { execution_id },
                 AgentWakeSource::Terminal {

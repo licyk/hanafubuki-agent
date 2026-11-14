@@ -318,6 +318,21 @@ fn messages_are_bounded_and_taking_filters_by_source() {
     );
     assert_eq!(queue.len(), MAXIMUM_QUEUED_WAKE_MESSAGES + 1);
     assert!(queue.take(AgentWakeFilter::SubagentStatuses).is_empty());
+
+    // One sub-agent's status, never its messages nor another's status.
+    queue.push(subagent(42, "docs", AgentSubagentWake::Lost), 5);
+    queue.push(subagent(41, "explore_api", AgentSubagentWake::Lost), 6);
+    let taken = queue.take(AgentWakeFilter::SubagentStatus {
+        session_id: AgentSessionId::new(41),
+    });
+    assert_eq!(
+        taken
+            .into_iter()
+            .map(|event| event.source)
+            .collect::<Vec<_>>(),
+        vec![subagent(41, "explore_api", AgentSubagentWake::Lost)]
+    );
+    assert_eq!(queue.len(), MAXIMUM_QUEUED_WAKE_MESSAGES + 2);
 }
 
 /// An event that does not decode is dropped, never the rest: in the

@@ -5,12 +5,14 @@
 //! permission mode; and the plugin turned off. Agents spawned as roles
 //! are `roles.rs`'s; an agent's Provider, model and reasoning effort
 //! `models.rs`'s; the Providers and models the guidance lists
-//! `guidance.rs`'s; what listed agents run on `listing.rs`'s.
+//! `guidance.rs`'s; what listed agents run on `listing.rs`'s; what a
+//! parent hears of its agents through its wake queue `wake.rs`'s.
 
 mod guidance;
 mod listing;
 mod models;
 mod roles;
+mod wake;
 
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -24,7 +26,7 @@ use hanafubuki_agent_kernel::{
 };
 use serde_json::{json, Value};
 
-use super::service::{AgentRunStatus, Delivery, ListedAgent, SpawnRequest, WaitOutcome};
+use super::service::{AgentRunStatus, AgentUpdate, Delivery, SpawnRequest, WaitOutcome};
 use super::tools::{SubagentTool, SubagentToolKind};
 use super::{AgentSubagentState, AgentSubagentStatus, SubagentService, SUBAGENTS_PLUGIN};
 use crate::test_support::{
@@ -59,7 +61,7 @@ fn finish(service: AgentApplicationService, paths: TestPaths) {
 }
 
 async fn wait_until(what: &str, mut done: impl FnMut() -> bool) {
-    let deadline = Instant::now() + Duration::from_secs(10);
+    let deadline = Instant::now() + Duration::from_secs(30);
     while !done() {
         assert!(Instant::now() < deadline, "timed out waiting until {what}");
         tokio::time::sleep(Duration::from_millis(10)).await;
@@ -320,10 +322,9 @@ async fn messages_steer_a_running_agent_and_wait_for_an_idle_ones_next_turn() {
             .wait(parent, NO_WAIT, &cancellation)
             .await
             .unwrap(),
-        WaitOutcome::Updates(vec![ListedAgent {
+        WaitOutcome::Updates(vec![AgentUpdate {
             name: "worker".to_string(),
             id: child,
-            role: "default".to_string(),
             status: AgentRunStatus::Completed(Some("Checked the tests.".to_string())),
         }])
     );

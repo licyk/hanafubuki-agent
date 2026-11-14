@@ -38,13 +38,13 @@ use hanafubuki_agent_foundation::panic::catch_panic_async;
 use hanafubuki_agent_kernel::{
     AgentChildSessionBase, AgentChildSessionRequest, AgentError, AgentSessionId,
     AgentSessionOrigin, AgentSessionPersistence, AgentSessionRuntimeSnapshot, AgentSessionSummary,
-    ModelReasoningEffort,
+    AgentWakeFilter, ModelReasoningEffort,
 };
 use parking_lot::Mutex;
 
 use self::runs::AgentRun;
-pub(super) use self::runs::AgentRunStatus;
 pub(crate) use self::runs::SubagentRuns;
+pub(super) use self::runs::{AgentRunStatus, AgentUpdate};
 use super::models::refusal;
 use super::options::SubagentLimits;
 use crate::roles::{AgentRoleCatalogReader, AgentSessionRole, DEFAULT_ROLE};
@@ -76,8 +76,9 @@ pub(super) struct ChildModelView {
 /// What a wait ended with.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) enum WaitOutcome {
-    /// These agents finished a turn since the parent's previous wait.
-    Updates(Vec<ListedAgent>),
+    /// The final statuses queued on the parent since its previous wait (or
+    /// its turn's step that delivered them), by agent id.
+    Updates(Vec<AgentUpdate>),
     /// No agent of the parent runs and none has an update.
     Idle,
     TimedOut,
@@ -242,8 +243,9 @@ impl SubagentService {
         Ok(Delivery::Started)
     }
 
-    /// Waits until an agent of `parent` finishes a turn, none runs, the
-    /// timeout passes or `cancellation` is cancelled.
+    /// Waits until a final status of an agent of `parent` is queued on it,
+    /// none runs, the timeout passes or `cancellation` is cancelled; takes
+    /// what is queued, so no step or woken turn delivers it again.
     pub(super) async fn wait(
         &self,
         parent: AgentSessionId,
@@ -252,13 +254,22 @@ impl SubagentService {
     ) -> Result<WaitOutcome, AgentError> {
         let deadline = tokio::time::Instant::now() + timeout;
         loop {
-            // Registered before the runs are read, so a finish in between
-            // still wakes this wait.
+            // Registered before anything is read, so a finish in between
+            // still wakes this wait; the runs are read before the queue,
+            // since a run queues its status before it stops running.
             let changed = self.runs.changed.notified();
             tokio::pin!(changed);
             changed.as_mut().enable();
-            let (updates, running) = self.runs.take_updates(parent);
+            let running = self.runs.running(parent);
+            let mut updates = self
+                .driver
+                .take_wake_events(parent, AgentWakeFilter::SubagentStatuses)
+                .await?
+                .into_iter()
+                .filter_map(AgentUpdate::of_event)
+                .collect::<Vec<_>>();
             if !updates.is_empty() {
+                updates.sort_by_key(|update| update.id);
                 return Ok(WaitOutcome::Updates(updates));
             }
             if running == 0 {
@@ -390,14 +401,26 @@ impl SubagentService {
             parts.push(message);
             run.turn += 1;
             run.status = AgentRunStatus::Running;
-            run.unreported = false;
             (parts.join("\n\n"), run.turn)
         };
+        // What its previous turn left queued on the parent is no news once
+        // the next one runs: the parent hears of that one.
+        let withdrawn = self
+            .driver
+            .take_wake_events(
+                parent,
+                AgentWakeFilter::SubagentStatus { session_id: child },
+            )
+            .await;
+        if let Err(error) = withdrawn {
+            log::debug!("the last status of subagent {child} was not withdrawn: {error}");
+        }
         let runs = self.runs.clone();
         let driver = self.driver.clone();
         tokio::spawn(async move {
             let outcome = catch_panic_async(driver.run_turn(child, text.into())).await;
-            runs.finish(child, turn, AgentRunStatus::of_turn(outcome));
+            let status = AgentRunStatus::of_turn(outcome);
+            runs.finish(&driver, child, turn, status).await;
         });
         Ok(())
     }
