@@ -199,6 +199,11 @@ changed (none expected), what Hanafubuki must change at its next pin
         --frozen-lockfile`, `bun run format:check:site`, `bun run
         site:check`, `bun run site:test`. Skipped: `site:build` (left to the
         Site workflow). Windows and macOS: CI only.
+      - CI on `b4d6147`: CI
+        https://github.com/licyk/hanafubuki-agent/actions/runs/43573445382
+        (Linux, macOS and Windows: success); Site
+        https://github.com/licyk/hanafubuki-agent/actions/runs/43573445385
+        (success).
       - Goldens: none. Module size: no exception. Hanafubuki: nothing (a
         crate it does not use; the facade is unchanged).
 - [ ] U1 (lane A, after U0): the engine (lock beside the executable, the
