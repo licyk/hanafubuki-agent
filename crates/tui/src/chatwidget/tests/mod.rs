@@ -214,15 +214,18 @@ fn an_opened_session_replays_its_transcript_after_its_header() {
 fn a_model_picked_from_the_catalogs_is_set_on_the_session() {
     let (mut chat, events) = chat();
     drain(&events);
-    let entry = |id: &str| hanafubuki_agent::ModelCatalogEntry {
-        id: id.to_string(),
-        display_name: None,
-        default_reasoning_effort: None,
-        supported_reasoning_efforts: Vec::new(),
-        context_window: None,
-        max_output_tokens: None,
-        image_input: None,
-        reasoning: None,
+    let entry = |id: &str| hanafubuki_agent::AgentListedModel {
+        entry: hanafubuki_agent::ModelCatalogEntry {
+            id: id.to_string(),
+            display_name: None,
+            default_reasoning_effort: None,
+            supported_reasoning_efforts: Vec::new(),
+            context_window: None,
+            max_output_tokens: None,
+            image_input: None,
+            reasoning: None,
+        },
+        metadata: hanafubuki_agent::ModelMetadata::default(),
     };
     chat.handle_turn_update(TurnUpdate::ModelChoices(ModelChoices {
         provider_id: "provider-1".to_string(),

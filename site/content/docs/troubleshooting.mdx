@@ -31,7 +31,7 @@ skip  online    the Provider and the MCP servers are reached with --online
 | `roles`     | 可用的角色（包括开启的已安装插件的角色），以及有几个不可用；然后每个读取或解析时的问题各占一行，插件的问题写明该插件（[角色](/docs/roles#issues)）。不可用的角色不算 `FAIL`                                                                       |
 | `keyring`   | 系统密钥环能否读取                                                                                                                                                                                                                                |
 | `data`      | 数据目录是否空闲；被另一个 Agent 进程占用为 `FAIL`                                                                                                                                                                                                |
-| `online`    | 只在 `--online` 且数据目录空闲时运行：启动 Agent，列出默认 Provider 的模型（`provider` 行）及对每个模型所知道的信息（每个模型一行 `model`，如 `gpt-5.1: window 400000 (reported), images yes (reported)`），连接每个启用的 MCP 服务器（`mcp` 行） |
+| `online`    | 只在 `--online` 且数据目录空闲时运行：启动 Agent，列出默认 Provider 的模型（`provider` 行）及对每个模型所知道的信息（每个模型一行 `model`，如 `gpt-5.1: window 400000 (reported), vision yes (reported)`），连接每个启用的 MCP 服务器（`mcp` 行） |
 
 不带 `--online` 时，`doctor` 不启动 Agent，可以在另一个 Agent 进程运行时使用。
 

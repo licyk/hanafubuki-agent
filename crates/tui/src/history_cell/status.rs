@@ -18,7 +18,6 @@ use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 use super::{plain_lines, with_border, HistoryCell};
 use crate::agent_bridge::StatusReport;
-use crate::model_facts::source_name;
 use crate::text_formatting::center_truncate_path;
 
 const LABELS: [&str; 10] = [
@@ -124,7 +123,7 @@ impl StatusHistoryCell {
             ];
         };
         let size = format_tokens_compact(window.value);
-        let source = source_name(window.source);
+        let source = window.source.label();
         let Some(used) = self.context_used else {
             return vec![Span::from(size), Span::from(format!(" ({source})")).dim()];
         };

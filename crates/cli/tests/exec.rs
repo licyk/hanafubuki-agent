@@ -498,19 +498,36 @@ fn json_names_the_sessions_role_on_turn_started() {
 fn doctor_online_lists_each_model_with_what_is_known_of_it() {
     let listing = serde_json::json!({"data": [
         {"id": "fixture-model", "context_window": 200000, "input_modalities": ["text"]},
+        {
+            "id": "reasoner",
+            "max_output_tokens": 64000,
+            "reasoning": {"supported_efforts": ["low", "high"]},
+            "input_modalities": ["text", "image"]
+        },
+        {"id": "gpt-5.1"},
         {"id": "other-model"}
     ]});
     let model = Model::start(vec![listing.to_string().into_bytes()]);
     let home = Home::new().with_provider(&model.server.base_url);
     let stdout = home.run(&["doctor", "--online"]).stdout();
     assert!(
-        stdout.contains("ok    provider  provider-1 answers (2 models)"),
+        stdout.contains("ok    provider  provider-1 answers (4 models)"),
         "{stdout}"
     );
     assert!(
         stdout.contains(
-            "ok    model     fixture-model: window 200000 (reported), images no (reported)"
+            "ok    model     fixture-model: window 200000 (reported), vision no (reported)"
         ),
+        "{stdout}"
+    );
+    assert!(
+        stdout.contains(
+            "ok    model     reasoner: max output 64000 (reported), thinking low/high (reported), vision yes (reported)"
+        ),
+        "{stdout}"
+    );
+    assert!(
+        stdout.contains("ok    model     gpt-5.1: window 272000 (built-in)"),
         "{stdout}"
     );
     assert!(

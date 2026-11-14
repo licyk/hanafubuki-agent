@@ -1,5 +1,6 @@
 //! `ModelMetadata` as it will be persisted: a round trip, and a reader that
-//! keeps every fact it can use.
+//! keeps every fact it can use; and what every surface reads of it: the
+//! levels, whether the model reasons and reads images, each source's label.
 
 use hanafubuki_agent_model_api::{
     KnownReasoning, ModelMetadata, ModelMetadataSource, ModelReasoningEffort,
@@ -175,4 +176,86 @@ fn no_reasoning_is_known_when_configured_reported_or_learned() {
         .known_reasoning(),
         KnownReasoning::Unknown
     );
+}
+
+const SOURCES: [ModelMetadataSource; 5] = [
+    ModelMetadataSource::Configured,
+    ModelMetadataSource::Learned,
+    ModelMetadataSource::Reported,
+    ModelMetadataSource::Catalog,
+    ModelMetadataSource::BuiltIn,
+];
+
+#[test]
+fn each_source_has_one_label() {
+    assert_eq!(
+        SOURCES.map(ModelMetadataSource::label),
+        [
+            "configured",
+            "learned",
+            "reported",
+            "models.dev",
+            "built-in"
+        ]
+    );
+}
+
+#[test]
+fn a_model_reasons_whenever_a_fact_says_so_levels_known_or_not() {
+    for source in SOURCES {
+        for support in [levels(&[ModelReasoningEffort::High]), levels(&[])] {
+            assert_eq!(
+                reasoning(support, source).supports_reasoning(),
+                Some(true),
+                "{source:?}"
+            );
+        }
+    }
+    // models.dev says it reasons and names no level: thinking is a yes,
+    // the levels stay unknown.
+    let catalog = reasoning(
+        ModelReasoningSupport::Supported {
+            efforts: Vec::new(),
+            default: None,
+        },
+        ModelMetadataSource::Catalog,
+    );
+    assert_eq!(catalog.supports_reasoning(), Some(true));
+    assert_eq!(catalog.known_reasoning(), KnownReasoning::Unknown);
+    assert_eq!(ModelMetadata::default().supports_reasoning(), None);
+}
+
+#[test]
+fn a_model_takes_no_reasoning_when_configured_reported_or_learned() {
+    for (source, says) in [
+        (ModelMetadataSource::Configured, Some(false)),
+        (ModelMetadataSource::Learned, Some(false)),
+        (ModelMetadataSource::Reported, Some(false)),
+        (ModelMetadataSource::Catalog, None),
+        (ModelMetadataSource::BuiltIn, None),
+    ] {
+        assert_eq!(
+            reasoning(ModelReasoningSupport::Unsupported, source).supports_reasoning(),
+            says,
+            "{source:?}"
+        );
+    }
+}
+
+#[test]
+fn image_input_is_the_facts_value_whatever_its_source() {
+    for source in SOURCES {
+        for value in [true, false] {
+            let metadata = ModelMetadata {
+                image_input: Some(Sourced {
+                    value,
+                    source,
+                    observed_at_ms: 0,
+                }),
+                ..ModelMetadata::default()
+            };
+            assert_eq!(metadata.supports_image_input(), Some(value), "{source:?}");
+        }
+    }
+    assert_eq!(ModelMetadata::default().supports_image_input(), None);
 }

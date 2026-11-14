@@ -3,7 +3,7 @@ use hanafubuki_agent_config::{
     AgentProviderRegistrySettings, AgentProviderSettings,
 };
 use hanafubuki_agent_kernel::{
-    AgentGeneration, AgentRevision, AgentSessionId, ModelCatalogEntry, ModelHeader,
+    AgentGeneration, AgentRevision, AgentSessionId, ModelCatalogEntry, ModelHeader, ModelMetadata,
     ModelReasoningEffort,
 };
 use serde::{Deserialize, Serialize};
@@ -21,8 +21,20 @@ pub struct AgentProviderModelCatalogRequest {
 pub struct AgentProviderModelCatalogResult {
     pub provider_id: String,
     pub display_name: String,
-    pub models: Vec<ModelCatalogEntry>,
+    pub models: Vec<AgentListedModel>,
     pub error: Option<String>,
+}
+
+/// A model of a Provider's listing, with what is known of it.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentListedModel {
+    /// What the listing reported, as it reported it.
+    #[serde(flatten)]
+    pub entry: ModelCatalogEntry,
+    /// Its resolved facts, each with its source: what `model_metadata`
+    /// gives, with this listing as what was reported.
+    pub metadata: ModelMetadata,
 }
 
 /// One Provider as edited by the user: where a model comes from.

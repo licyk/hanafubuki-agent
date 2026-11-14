@@ -26,7 +26,7 @@ mod state;
 mod store;
 
 use models_dev::ModelsDevCopy;
-use state::RegistryState;
+use state::{RegistryState, RouteFacts};
 pub(crate) use store::NoopModelMetadataStore;
 pub use store::{ModelMetadataSnapshot, ModelMetadataStore};
 
@@ -255,6 +255,64 @@ impl ModelMetadataRegistry {
             configured,
             built_in::context_window(model),
         )
+    }
+
+    /// What is known about each of `entries`, a listing of `endpoint` just
+    /// read, in their order: each entry is its model's reported facts,
+    /// whatever was recorded of it (a held listing, an evicted route), with
+    /// its route's learned facts, what the person `configured` for it,
+    /// models.dev and the built-in window. The lock is held only to copy
+    /// what that needs, so a listing of thousands holds it briefly.
+    pub(crate) fn resolve_listing(
+        &self,
+        endpoint: &ModelEndpointKey,
+        entries: &[ModelCatalogEntry],
+        configured: impl Fn(&str) -> ConfiguredModelFacts,
+        now_ms: u64,
+    ) -> Vec<ModelMetadata> {
+        let routes: Vec<ModelRouteKey> = entries
+            .iter()
+            .map(|entry| endpoint.route(&entry.id))
+            .collect();
+        let (learned, models_dev, names) = {
+            let state = self.state.lock();
+            let learned: Vec<ModelMetadata> = routes
+                .iter()
+                .map(|route| {
+                    state
+                        .live_facts(route, now_ms)
+                        .map(|facts| facts.learned)
+                        .unwrap_or_default()
+                })
+                .collect();
+            (
+                learned,
+                state.live_models_dev(now_ms),
+                state.provider_names.get(endpoint).cloned(),
+            )
+        };
+        entries
+            .iter()
+            .zip(learned)
+            .map(|(entry, learned)| {
+                let facts = RouteFacts {
+                    reported: state::reported_facts(entry, now_ms),
+                    learned,
+                };
+                let catalog = models_dev
+                    .as_ref()
+                    .map_or_else(ModelMetadata::default, |copy| {
+                        copy.catalog
+                            .metadata(names.as_ref(), &entry.id, copy.fetched_at_ms)
+                    });
+                resolve::resolve(
+                    Some(&facts),
+                    &catalog,
+                    configured(&entry.id),
+                    built_in::context_window(&entry.id),
+                )
+            })
+            .collect()
     }
 
     /// The context window a session on `model` is given, and its source.

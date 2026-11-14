@@ -54,6 +54,30 @@ impl ModelMetadata {
             _ => KnownReasoning::Unknown,
         }
     }
+
+    /// Whether the model reasons: yes for any reasoning fact that says so,
+    /// levels known or not (a models.dev "yes" included); no where a
+    /// configured, reported or learned fact says it takes none; else not
+    /// known. Which levels it takes is [`Self::known_reasoning`]'s stricter
+    /// answer.
+    pub fn supports_reasoning(&self) -> Option<bool> {
+        let fact = self.reasoning.as_ref()?;
+        match fact.value {
+            ModelReasoningSupport::Supported { .. } => Some(true),
+            ModelReasoningSupport::Unsupported => matches!(
+                fact.source,
+                ModelMetadataSource::Configured
+                    | ModelMetadataSource::Reported
+                    | ModelMetadataSource::Learned
+            )
+            .then_some(false),
+        }
+    }
+
+    /// Whether the model reads images, when that is known.
+    pub fn supports_image_input(&self) -> Option<bool> {
+        self.image_input.as_ref().map(|fact| fact.value)
+    }
 }
 
 /// The reasoning efforts known for a model ([`ModelMetadata::known_reasoning`]).
@@ -108,6 +132,20 @@ pub enum ModelMetadataSource {
     Reported,
     Catalog,
     BuiltIn,
+}
+
+impl ModelMetadataSource {
+    /// The source as every surface names it: `configured`, `learned`,
+    /// `reported`, `models.dev` or `built-in`.
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Configured => "configured",
+            Self::Learned => "learned",
+            Self::Reported => "reported",
+            Self::Catalog => "models.dev",
+            Self::BuiltIn => "built-in",
+        }
+    }
 }
 
 fn tolerant<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>

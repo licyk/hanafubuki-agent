@@ -1,7 +1,7 @@
 //! What the person configured for a session's model, and what a host reads
-//! and clears of the model metadata: a model's resolved facts, a session's,
-//! forgetting what the Provider's refusals taught, and the copy of
-//! models.dev's catalogue the host fetches. Also the model session a
+//! and clears of the model metadata: a model's resolved facts, a listing's,
+//! a session's, forgetting what the Provider's refusals taught, and the
+//! copy of models.dev's catalogue the host fetches. Also the model session a
 //! structured request samples, which answers and learns its routes'
 //! structured-output rung from the model metadata.
 
@@ -36,6 +36,32 @@ impl AgentService {
             ConfiguredModelFacts::from_configured(configured),
             now_millis_u64(),
         ))
+    }
+
+    /// What is known of each of `entries`, the listing just read of the
+    /// Provider `provider_id` at `base_url`, in their order: what
+    /// [`Self::model_metadata`] gives each model, with what the person
+    /// `configured` for it, but with its own entry as what the listing
+    /// reported, whatever was recorded of it. None known of any when
+    /// `base_url` is not an endpoint.
+    pub fn resolve_listing(
+        &self,
+        provider_id: &str,
+        protocol: ModelApiProtocol,
+        base_url: &str,
+        entries: &[ModelCatalogEntry],
+        configured: impl Fn(&str) -> AgentConfiguredModelFacts,
+    ) -> Vec<ModelMetadata> {
+        let Ok(endpoint) = ModelEndpoint::parse(base_url) else {
+            return vec![ModelMetadata::default(); entries.len()];
+        };
+        self.name_model_provider(provider_id, protocol, &endpoint);
+        self.inner.model_metadata.resolve_listing(
+            &ModelEndpointKey::new(protocol, &endpoint),
+            entries,
+            |model| ConfiguredModelFacts::from_configured(&configured(model)),
+            now_millis_u64(),
+        )
     }
 
     /// What the session `session_id` knows of its model: its route's facts

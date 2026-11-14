@@ -1,37 +1,50 @@
-use hanafubuki_agent::{KnownReasoning, ModelCatalogEntry, ModelReasoningEffort, SettingChoice};
+use hanafubuki_agent::{
+    KnownReasoning, ModelMetadata, ModelMetadataSource, ModelReasoningEffort,
+    ModelReasoningSupport, SettingChoice, Sourced,
+};
 
 use super::{effort_options, entry_badges, step_effort, EffortStep, EffortValue};
 
-fn entry() -> ModelCatalogEntry {
-    ModelCatalogEntry {
-        id: "model".to_string(),
-        display_name: None,
-        default_reasoning_effort: None,
-        supported_reasoning_efforts: Vec::new(),
-        context_window: None,
-        max_output_tokens: None,
-        image_input: None,
-        reasoning: None,
-    }
+fn sourced<T>(value: T, source: ModelMetadataSource) -> Option<Sourced<T>> {
+    Some(Sourced {
+        value,
+        source,
+        observed_at_ms: 0,
+    })
 }
 
 #[test]
-fn an_entry_shows_only_what_it_reports() {
-    assert_eq!(entry_badges(&entry()), None);
-    let reported = ModelCatalogEntry {
-        context_window: Some(200_000),
-        image_input: Some(true),
-        reasoning: Some(true),
-        ..entry()
+fn a_model_shows_what_is_known_of_it_whatever_the_source() {
+    assert_eq!(entry_badges(&ModelMetadata::default()), None);
+    let known = ModelMetadata {
+        context_window: sourced(200_000, ModelMetadataSource::Reported),
+        image_input: sourced(true, ModelMetadataSource::Configured),
+        reasoning: sourced(
+            ModelReasoningSupport::Supported {
+                efforts: Vec::new(),
+                default: None,
+            },
+            ModelMetadataSource::Catalog,
+        ),
+        ..ModelMetadata::default()
     };
     assert_eq!(
-        entry_badges(&reported).as_deref(),
+        entry_badges(&known).as_deref(),
         Some("200K · vision · reasoning")
     );
-    let says_no = ModelCatalogEntry {
-        image_input: Some(false),
-        reasoning: Some(false),
-        ..entry()
+    // An OpenAI model reports no window; the built-in table knows it.
+    let built_in = ModelMetadata {
+        context_window: sourced(272_000, ModelMetadataSource::BuiltIn),
+        ..ModelMetadata::default()
+    };
+    assert_eq!(entry_badges(&built_in).as_deref(), Some("272K"));
+    let says_no = ModelMetadata {
+        image_input: sourced(false, ModelMetadataSource::Learned),
+        reasoning: sourced(
+            ModelReasoningSupport::Unsupported,
+            ModelMetadataSource::Reported,
+        ),
+        ..ModelMetadata::default()
     };
     assert_eq!(entry_badges(&says_no), None);
 }

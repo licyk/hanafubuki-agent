@@ -14,7 +14,6 @@ use hanafubuki_agent::{
 
 use super::{AgentBridge, AgentReply, TurnUpdate};
 use crate::app_event::AppEvent;
-use crate::model_facts;
 
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct SessionStatus {
@@ -112,7 +111,7 @@ impl AgentBridge {
             .ok()
             .and_then(|metadata| metadata.image_input)
             .filter(|known| !known.value)
-            .map(|known| model_facts::source_name(known.source).to_string())
+            .map(|known| known.source.label().to_string())
             .unwrap_or_else(|| "turned off in the settings".to_string())
     }
 

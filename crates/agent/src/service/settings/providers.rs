@@ -276,7 +276,7 @@ async fn list_models(
         .models
         .iter()
         .take(LISTED_MODELS)
-        .map(|model| model.id.as_str())
+        .map(|model| model.entry.id.as_str())
         .collect::<Vec<_>>()
         .join(", ");
     let more = listing.models.len().saturating_sub(LISTED_MODELS);

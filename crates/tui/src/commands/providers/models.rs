@@ -5,7 +5,7 @@
 //! the default. The choice is a save of the model policy, which the
 //! settings center runs as its own.
 
-use hanafubuki_agent::ModelCatalogEntry;
+use hanafubuki_agent::AgentListedModel;
 use ratatui::buffer::Buffer;
 use ratatui::crossterm::event::{KeyCode, KeyEvent};
 use ratatui::layout::Rect;
@@ -60,10 +60,10 @@ impl ModelPicker {
         let note = match &listed.result {
             Ok(models) => {
                 items.extend(models.iter().map(|model| SelectionItem {
-                    name: model.id.clone(),
+                    name: model.entry.id.clone(),
                     description: describe(model),
-                    is_current: listed.current.as_deref() == Some(model.id.as_str()),
-                    search_value: Some(model.id.clone()),
+                    is_current: listed.current.as_deref() == Some(model.entry.id.as_str()),
+                    search_value: Some(model.entry.id.clone()),
                     ..Default::default()
                 }));
                 None
@@ -97,7 +97,7 @@ impl ModelPicker {
         );
         let models = listed
             .result
-            .map(|models| models.into_iter().map(|model| model.id).collect())
+            .map(|models| models.into_iter().map(|model| model.entry.id).collect())
             .unwrap_or_default();
         self.stage = Stage::List {
             list: Box::new(list),
@@ -235,13 +235,14 @@ impl Renderable for ModelPicker {
     }
 }
 
-/// An entry's name, if it has one, and what it reports of itself.
-fn describe(model: &ModelCatalogEntry) -> Option<String> {
+/// A model's name, if its listing gives one, and what is known of it.
+fn describe(model: &AgentListedModel) -> Option<String> {
     let parts: Vec<String> = model
+        .entry
         .display_name
         .iter()
         .cloned()
-        .chain(entry_badges(model))
+        .chain(entry_badges(&model.metadata))
         .collect();
     (!parts.is_empty()).then(|| parts.join(" · "))
 }

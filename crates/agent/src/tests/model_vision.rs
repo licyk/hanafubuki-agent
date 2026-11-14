@@ -3,7 +3,8 @@
 //! no images is offered no `view_image` and sent no image, with no request
 //! refused first, and a turn started with one is refused; a model that
 //! refused an image in one run is sent none in the next
-//! (`model-metadata.json`), unless that refusal is forgotten; and what the
+//! (`model-metadata.json`), unless that refusal is forgotten, and is listed
+//! as reading none whatever its listing says; and what the
 //! person configures for the model (`models."<id>"`) beats the listing,
 //! from a live session's next turn.
 
@@ -208,6 +209,47 @@ async fn an_image_refused_in_one_run_is_not_sent_in_the_next() {
     assert_eq!(requests.len(), 3);
     assert!(!offers_view_image(&requests[2]));
     stop(&reopened);
+    let _ = std::fs::remove_dir_all(paths.app_data_dir);
+}
+
+/// The Provider refused an image; its listing then says the model reads
+/// images: the listed model says it does not, as learned, the refusal
+/// being evidence and the listing a claim.
+#[tokio::test]
+async fn a_listed_model_that_refused_an_image_reads_none_as_learned() {
+    let server = FakeServer::with_listings(
+        vec![
+            (IMAGE_REFUSAL.as_bytes().to_vec(), Duration::ZERO),
+            (assistant_events("Seen as text."), Duration::ZERO),
+        ],
+        vec![FakeListing::ok(
+            r#"{"data":[{"id":"fixture-model","input_modalities":["text","image"]}]}"#,
+        )],
+    )
+    .await;
+    let (service, paths) = configured_service("model-vision-listed-refusal", &server.base_url);
+    let session = service
+        .create_session(AgentSessionMode::Default, None)
+        .await
+        .unwrap();
+    let image = staged(&service, session.id);
+    service
+        .start_turn(session.id, with_image("look", image))
+        .await
+        .unwrap();
+
+    let results = service
+        .list_provider_models(AgentProviderModelCatalogRequest::default())
+        .await
+        .unwrap();
+    let listed = &results[0].models[0];
+    assert_eq!(listed.entry.image_input, Some(true));
+    assert_eq!(listed.metadata.supports_image_input(), Some(false));
+    assert_eq!(
+        listed.metadata.image_input.as_ref().unwrap().source,
+        ModelMetadataSource::Learned
+    );
+    stop(&service);
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }
 

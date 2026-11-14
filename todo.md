@@ -33,7 +33,7 @@ next pin, and any module-size exception.
 
 - [x] Decisions: D1–D14 of the plan's §2 and the questions Q1–Q10 of §5,
       decided by the user on 2026-11-14: each as recommended.
-- [ ] L1: `list_provider_models` gives each model its resolved facts
+- [x] L1: `list_provider_models` gives each model its resolved facts
       (`AgentListedModel { entry, metadata }`, the entry flattened in
       JSON), resolved per Provider with the listing as the reported source
       and `providers.toml` read once. model-api's
@@ -41,6 +41,134 @@ next pin, and any module-size exception.
       `supports_image_input` are the one vocabulary: `/status`, the policy
       form (`built-in`, `models.dev`) and `doctor --online` (no per-model
       call; `vision`, `thinking`) use it.
+      Done (2026-11-14):
+      - model-api (`model_metadata.rs`): `ModelMetadataSource::label()`
+        (`configured`, `learned`, `reported`, `models.dev`, `built-in`);
+        `ModelMetadata::supports_reasoning()` (D13: `Some(true)` for any
+        `Supported` fact, levels or not, whatever its source; `Some(false)`
+        for `Unsupported` from a configured, reported or learned fact;
+        `None` otherwise, a guess's "no" included, as `known_reasoning`
+        reads it) and `supports_image_input()` (the fact's value).
+      - Kernel: `ModelMetadataRegistry::resolve_listing(endpoint, entries,
+        configured, now)` (`model_metadata/mod.rs`) builds the routes
+        outside the lock, takes it once to copy each route's live learned
+        facts (`live_facts`, so the 7-day expiry holds), the live models.dev
+        copy's `Arc` (`RegistryState::live_models_dev`, now shared with
+        `models_dev_facts`) and the endpoint's Provider names, then resolves
+        each entry outside it with `resolve::resolve` over `RouteFacts {
+        reported: reported_facts(entry, now), learned }` (`reported_facts`
+        `pub(super)`). `AgentService::resolve_listing(provider_id,
+        protocol, base_url, entries, configured)`
+        (`service/model_facts.rs`) names the Provider for models.dev as
+        `model_metadata` does; an invalid base URL gives
+        `ModelMetadata::default()` per entry.
+      - Facade: `AgentListedModel { #[serde(flatten)] entry:
+        ModelCatalogEntry, metadata: ModelMetadata }` (`Serialize`, as the
+        result) in `provider/contracts.rs`, re-exported by the crate root;
+        `AgentProviderModelCatalogResult.models: Vec<AgentListedModel>`.
+        JSON per model: the entry's camelCase fields as before (`id`,
+        `displayName`, `defaultReasoningEffort`,
+        `supportedReasoningEfforts`, `contextWindow`, `maxOutputTokens`,
+        `imageInput`, `reasoning`) plus `metadata` (`ModelMetadata`'s
+        JSON: `contextWindow`, `maxOutputTokens`, `reasoning`,
+        `imageInput`, `structuredOutput`, each `{value, source,
+        observedAtMs}` or `null`). `list_provider_models` resolves each
+        Provider from the settings it read (`resolve_settings_provider`,
+        before the task is spawned; no second `providers.toml` read per
+        Provider), lists it (`provider_models` now borrows the resolved
+        Provider), and resolves its entries with `models."<id>"`
+        (`configured_model_facts(provider, None, id)`, as `model_metadata`)
+        in `with_facts`. `test_provider_draft` still returns entries.
+        `settings/providers.rs`' List models reads `.entry.id`; the policy
+        form's window summary says `label()` (`200000 (built-in)`, not
+        `built_in`).
+      - CLI: `doctor --online` prints the listing's own facts, no
+        `model_metadata` call per model (from the code: the server cannot
+        tell, `model_metadata` makes no request); its line is `window …,
+        max output …, thinking low/high|yes|no …, vision yes|no …`, each
+        `(label)`.
+      - TUI (mechanical; L2/L3 redesign the lists): `source_name` removed
+        for `label()` (`/status`, `history_cell/status.rs`, and the images
+        refusal reason in `agent_bridge/status.rs`); `entry_badges` takes the
+        resolved `ModelMetadata` (a window from any source, `vision` and
+        `reasoning` on `Some(true)`; the words kept until L2), so `/model`
+        and the Provider page now show a built-in or configured window;
+        `commands/model.rs`, `commands/providers/models.rs` and
+        `agent_bridge/providers.rs` take `AgentListedModel`.
+      - Tests: model-api (`tests/model_metadata.rs`): each source's label;
+        `supports_reasoning` for each source with and without levels (a
+        models.dev "reasons" without levels `Some(true)` while
+        `known_reasoning` is `Unknown`), `Unsupported` per source;
+        `supports_image_input` for each source and value. Kernel
+        (`model_metadata/tests/listing.rs`): the entry over what was
+        recorded (a larger window; an entry with none has none); learned
+        "no"s, a smaller learned window kept and a larger one not, expiry;
+        configured first; models.dev and the built-in window; a listing the
+        shrink guard held resolves from its entries; 1,000 entries against
+        4,096 routes and a 10,000-model models.dev copy under 5 s
+        (milliseconds here). Facade (`tests/model_list.rs`, new, over the
+        fake server): `gpt-5.1` 272000 `BuiltIn` from an OpenAI-shaped
+        listing, `models."<id>"`'s window and `reasoningEfforts = []`
+        `Configured` over what the entry reports, an OpenRouter-shaped
+        entry's facts `Reported`, a models.dev copy's `Catalog`, each equal
+        (value and source) to `model_metadata`'s once recorded; the JSON
+        flat with `metadata` beside; two Providers on two servers, the
+        first's listing held (`FakeListing::held`): a single-id request for
+        the second answers with its facts while the first is pending, and
+        the release answers the first. `tests/model_vision.rs`: a refused
+        image, then a listing saying images yes: the row says
+        `Some(false)`, `Learned`. `tests/settings_catalog.rs`: the policy's
+        unset window says `272000 (built-in)`. `cli/tests/exec.rs`
+        (`doctor_online_lists_each_model_with_what_is_known_of_it`): four
+        models, `vision`, `thinking low/high`, a `built-in` window. The
+        failing provider's test (`sessions/provider.rs`) keeps its error
+        and the other's models. Fail-first: the policy summary
+        (`built_in`) and doctor (`images`, `reasoning`, their order) tests
+        failed on the unchanged tree; the new API's tests could only fail
+        to compile, so by mutation, each seen failing then restored: the
+        listing resolved from the store (`resolve` per entry: 4 kernel
+        tests), the learned layer dropped (1), the per-model settings
+        dropped from the facade's resolution (the facts test).
+      - Tests changed on purpose: `model_facts/tests.rs` (the badges from
+        resolved facts: a configured image "yes" and a models.dev "reasons"
+        show, a built-in window shows `272K`, a learned and a reported "no"
+        show nothing); `chatwidget/tests/mod.rs`' and
+        `sessions/provider.rs`' element type. No snapshot changed; the TUI's
+        `"200K · vision"` and `"Unset, the model's: 200000 (reported)"`
+        hold.
+      - Goldens: none changed (nothing reaches a model request).
+        Dependencies: none added.
+      - Docs (both languages): `embedding#configuration-in-a-host` (a
+        `list_provider_models` row: `AgentListedModel`, the JSON, one
+        request per Provider for arrival; the `model_metadata` row names
+        the vocabulary), `architecture#model-metadata` (a listing's facts
+        paragraph: resolved in the call, one lock, the entry as the reported
+        source, a held listing, the vocabulary), `cli-reference#doctor`
+        (`thinking`, `vision`, from the listing), `providers-models#model`
+        (each model with what is known of it). Beyond the plan's list:
+        `troubleshooting` (its doctor example said `images yes`).
+      - Hanafubuki at its next pin: nothing to change; its Rust passes the
+        result through, and the JSON only gains `metadata`. A Rust host
+        reading `models` reads `.entry` (`model.entry.id`).
+      - Module size: no exception added or raised.
+      - Validation: `cargo fmt --all --check`; `RUSTFLAGS="-D warnings"
+        cargo check --workspace --all-targets --all-features`; `cargo
+        clippy --workspace --all-targets --all-features -- -D warnings`;
+        `cargo xtask check`; `cargo test --workspace --all-features
+        --no-fail-fast` (4660 passed, none failed, no flake seen); `bun
+        install --frozen-lockfile`, `bun run format:site`, `bun run
+        format:check:site`, `bun run site:check`, `bun run site:test` (28
+        passed), and the ten changed pages compiled with the store's
+        `@mdx-js/mdx` 3.1.1 with remark-gfm; `VITE_BASE_PATH=/hanafubuki-agent/
+        bun run site:build` not run locally (port 3000 held by another
+        project's server); CI's Site run covers it.
+      - For L2/L3: `entry_badges` still words the badges `vision` /
+        `reasoning`; L2's `fact_cells` replaces them with
+        `supports_reasoning`/`supports_image_input`. The bridge's `/model`
+        still makes one call for every Provider. For O1: `resolve_listing`
+        is the facts of a live listing; `listed_models` (the recorded
+        listing's ids) goes beside it in `model_metadata/mod.rs` and
+        `service/model_facts.rs`.
 - [ ] L2: `/model` opens at once with a loading line (spinner, Providers
       answered, elapsed), the session's model pinned first with its facts,
       each Provider's models filling its section as it answers in a fixed

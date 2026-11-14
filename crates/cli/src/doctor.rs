@@ -244,22 +244,14 @@ fn reach(report: &mut Report, standalone: &Standalone, default_provider: Option<
     };
     if let Some(provider) = default_provider {
         let listed = block_on(&agent, move |agent| async move {
-            let results = agent
+            agent
                 .list_provider_models(AgentProviderModelCatalogRequest {
                     provider_ids: Some(vec![provider]),
                 })
-                .await?;
-            let mut known = Vec::new();
-            for result in &results {
-                for model in &result.models {
-                    let metadata = agent.model_metadata(&result.provider_id, &model.id).await?;
-                    known.push((model.id.clone(), metadata));
-                }
-            }
-            Ok::<_, String>((results, known))
+                .await
         });
-        match listed.map(|(results, known)| (results.into_iter().next(), known)) {
-            Ok((Some(result), known)) => match result.error {
+        match listed.map(|results| results.into_iter().next()) {
+            Ok(Some(result)) => match result.error {
                 None => {
                     report.ok(
                         "provider",
@@ -269,13 +261,16 @@ fn reach(report: &mut Report, standalone: &Standalone, default_provider: Option<
                             result.models.len()
                         ),
                     );
-                    for (model, metadata) in known {
-                        report.ok("model", &format!("{model}: {}", model_facts(&metadata)));
+                    for model in &result.models {
+                        report.ok(
+                            "model",
+                            &format!("{}: {}", model.entry.id, model_facts(&model.metadata)),
+                        );
                     }
                 }
                 Some(error) => report.fail("provider", &format!("{}: {error}", result.provider_id)),
             },
-            Ok((None, _)) => report.fail("provider", "the default Provider was not reached"),
+            Ok(None) => report.fail("provider", "the default Provider was not reached"),
             Err(failure) => report.fail("provider", &failure.message),
         }
     }
@@ -318,7 +313,8 @@ fn reach(report: &mut Report, standalone: &Standalone, default_provider: Option<
 }
 
 /// What is known of a model, each fact with its source: `window 200000
-/// (reported), images no (learned)`; `nothing known` when nothing is.
+/// (reported), thinking low/high (reported), vision no (learned)`;
+/// `nothing known` when nothing is.
 fn model_facts(metadata: &ModelMetadata) -> String {
     let mut facts = Vec::new();
     if let Some(window) = &metadata.context_window {
@@ -330,23 +326,22 @@ fn model_facts(metadata: &ModelMetadata) -> String {
             sourced(output.value, output.source)
         ));
     }
-    if let Some(images) = &metadata.image_input {
-        let reads = if images.value { "yes" } else { "no" };
-        facts.push(format!("images {}", sourced(reads, images.source)));
-    }
-    if let Some(reasoning) = &metadata.reasoning {
+    if let (Some(reasons), Some(reasoning)) = (metadata.supports_reasoning(), &metadata.reasoning) {
         let levels = match &reasoning.value {
-            ModelReasoningSupport::Unsupported => "no".to_string(),
-            ModelReasoningSupport::Supported { efforts, .. } if efforts.is_empty() => {
-                "yes".to_string()
-            }
-            ModelReasoningSupport::Supported { efforts, .. } => efforts
+            ModelReasoningSupport::Supported { efforts, .. } if !efforts.is_empty() => efforts
                 .iter()
                 .map(|effort| effort.as_str())
                 .collect::<Vec<_>>()
                 .join("/"),
+            _ => yes_or_no(reasons).to_string(),
         };
-        facts.push(format!("reasoning {}", sourced(levels, reasoning.source)));
+        facts.push(format!("thinking {}", sourced(levels, reasoning.source)));
+    }
+    if let Some(images) = &metadata.image_input {
+        facts.push(format!(
+            "vision {}",
+            sourced(yes_or_no(images.value), images.source)
+        ));
     }
     if facts.is_empty() {
         return "nothing known".to_string();
@@ -354,15 +349,16 @@ fn model_facts(metadata: &ModelMetadata) -> String {
     facts.join(", ")
 }
 
+fn yes_or_no(value: bool) -> &'static str {
+    if value {
+        "yes"
+    } else {
+        "no"
+    }
+}
+
 fn sourced(value: impl std::fmt::Display, source: ModelMetadataSource) -> String {
-    let source = match source {
-        ModelMetadataSource::Configured => "configured",
-        ModelMetadataSource::Learned => "learned",
-        ModelMetadataSource::Reported => "reported",
-        ModelMetadataSource::Catalog => "models.dev",
-        ModelMetadataSource::BuiltIn => "built-in",
-    };
-    format!("{value} ({source})")
+    format!("{value} ({})", source.label())
 }
 
 #[derive(Default)]

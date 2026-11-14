@@ -53,7 +53,7 @@ pub(crate) use provider::{
     ResolvedAgentProvider, ResolvedModelPolicy,
 };
 pub use provider::{
-    AgentModelPolicyWriteRequest, AgentProviderDeleteRequest, AgentProviderDraft,
+    AgentListedModel, AgentModelPolicyWriteRequest, AgentProviderDeleteRequest, AgentProviderDraft,
     AgentProviderEnabledRequest, AgentProviderModelCatalogRequest, AgentProviderModelCatalogResult,
     AgentProviderRegistrySnapshot, AgentProviderWriteRequest, AgentSessionModelSelectionRequest,
     AgentSessionReasoningEffortRequest,

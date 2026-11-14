@@ -31,7 +31,7 @@ Each check prints one line, `ok`, `FAIL` or `skip`, and any `FAIL` exits with co
 | `roles`     | The roles that can be used, the installed plugins' that are on among them, and how many cannot; then one line for each issue of reading or resolving them, a plugin's naming it ([Roles](/docs/roles#issues)). A role that cannot be used does not fail                                                    |
 | `keyring`   | Whether the operating system's keyring answers a read                                                                                                                                                                                                                                                      |
 | `data`      | Whether the data directory is free; held by another Agent process fails                                                                                                                                                                                                                                    |
-| `online`    | With `--online`, when the data directory is free: starts the Agent, lists the default Provider's models (the `provider` line) with what is known of each (a `model` line each, such as `gpt-5.1: window 400000 (reported), images yes (reported)`), and connects each enabled MCP server (the `mcp` lines) |
+| `online`    | With `--online`, when the data directory is free: starts the Agent, lists the default Provider's models (the `provider` line) with what is known of each (a `model` line each, such as `gpt-5.1: window 400000 (reported), vision yes (reported)`), and connects each enabled MCP server (the `mcp` lines) |
 
 Without `--online`, `doctor` does not start the Agent, and works while another Agent process runs.
 

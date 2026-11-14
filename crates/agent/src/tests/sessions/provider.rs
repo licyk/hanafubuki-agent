@@ -368,7 +368,7 @@ async fn model_catalog_sends_the_credentials_stored_with_the_provider() {
         groups[0]
             .models
             .iter()
-            .map(|model| model.id.as_str())
+            .map(|model| model.entry.id.as_str())
             .collect::<Vec<_>>(),
         vec!["model-a"]
     );
@@ -540,7 +540,7 @@ async fn model_catalog_keeps_successful_provider_results_when_another_provider_f
         available
             .models
             .iter()
-            .map(|model| model.id.as_str())
+            .map(|model| model.entry.id.as_str())
             .collect::<Vec<_>>(),
         vec!["model-a"]
     );

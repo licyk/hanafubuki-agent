@@ -11,7 +11,7 @@ mod resolution;
 mod selection;
 
 pub use contracts::{
-    AgentModelPolicyWriteRequest, AgentProviderDeleteRequest, AgentProviderDraft,
+    AgentListedModel, AgentModelPolicyWriteRequest, AgentProviderDeleteRequest, AgentProviderDraft,
     AgentProviderEnabledRequest, AgentProviderModelCatalogRequest, AgentProviderModelCatalogResult,
     AgentProviderRegistrySnapshot, AgentProviderWriteRequest, AgentSessionModelSelectionRequest,
     AgentSessionReasoningEffortRequest,

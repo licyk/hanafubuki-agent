@@ -284,7 +284,7 @@ fn describe_known(fields: &mut [SettingSpec], metadata: &ModelMetadata) {
                     Some(window) => format!(
                         "Unset, the model's: {} ({})",
                         window.value,
-                        name_of(&window.source)
+                        window.source.label()
                     ),
                     None => "Unset, it is unknown: compacts on the Provider's error".into(),
                 }

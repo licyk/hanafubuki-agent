@@ -36,7 +36,10 @@ pub(crate) fn show_model_choices(context: &mut CommandContext<'_>, choices: Mode
     let mut items = Vec::new();
     let listed = choices.catalogs.iter().any(|catalog| {
         catalog.provider_id == choices.provider_id
-            && catalog.models.iter().any(|entry| entry.id == choices.model)
+            && catalog
+                .models
+                .iter()
+                .any(|model| model.entry.id == choices.model)
     });
     if !listed && !choices.model.is_empty() {
         items.push(model_item(
@@ -56,15 +59,16 @@ pub(crate) fn show_model_choices(context: &mut CommandContext<'_>, choices: Mode
             });
             continue;
         }
-        for entry in &catalog.models {
-            let current = catalog.provider_id == choices.provider_id && entry.id == choices.model;
-            let description = match entry_badges(entry) {
+        for model in &catalog.models {
+            let current =
+                catalog.provider_id == choices.provider_id && model.entry.id == choices.model;
+            let description = match entry_badges(&model.metadata) {
                 Some(badges) => format!("{} · {badges}", catalog.display_name),
                 None => catalog.display_name.clone(),
             };
             items.push(model_item(
                 &catalog.provider_id,
-                &entry.id,
+                &model.entry.id,
                 description,
                 current,
             ));

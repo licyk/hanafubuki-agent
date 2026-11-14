@@ -142,9 +142,9 @@ pub use roles::{
 };
 pub use service::{
     package_setting_key, reasoning_effort_choices, AgentApplicationService, AgentEditFromTurn,
-    AgentHook, AgentHookHandler, AgentHooks, AgentHostPorts, AgentModelPolicyWriteRequest,
-    AgentProviderDeleteRequest, AgentProviderDraft, AgentProviderEnabledRequest,
-    AgentProviderModelCatalogRequest, AgentProviderModelCatalogResult,
+    AgentHook, AgentHookHandler, AgentHooks, AgentHostPorts, AgentListedModel,
+    AgentModelPolicyWriteRequest, AgentProviderDeleteRequest, AgentProviderDraft,
+    AgentProviderEnabledRequest, AgentProviderModelCatalogRequest, AgentProviderModelCatalogResult,
     AgentProviderRegistrySnapshot, AgentProviderWriteRequest, AgentRunProjection,
     AgentServiceInputs, AgentSessionModelSelectionRequest, AgentSessionReasoningEffortRequest,
     AgentSettingsView, AgentSkillSessionState, AgentStandaloneSettingsView, AgentWorktree,

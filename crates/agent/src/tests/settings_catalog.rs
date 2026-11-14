@@ -464,6 +464,28 @@ async fn the_policys_effort_offers_the_models_known_levels_and_takes_a_typed_one
     done(service, paths);
 }
 
+/// The policy's window, unset, names the model's window with its source in
+/// the words `/status` and `doctor` use (`built-in`, not `built_in`), and
+/// the exact number a person would type.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_policys_unset_window_names_the_models_window_and_its_source() {
+    let (service, paths, config) = service_with_config("settings-catalog-window", with_token);
+    config
+        .mutate_providers(2, |registry| {
+            registry.model_policy.model = "gpt-5.1".into();
+            Ok(())
+        })
+        .unwrap();
+    let catalog = service.settings_catalog().await.unwrap();
+    let window = collection(&catalog, "modelPolicy")
+        .record
+        .iter()
+        .find(|spec| spec.key == "contextWindowTokens")
+        .unwrap();
+    assert_eq!(window.summary, "Unset, the model's: 272000 (built-in)");
+    done(service, paths);
+}
+
 #[test]
 fn the_effort_choices_mark_the_models_default_and_are_none_without_levels() {
     let known = KnownReasoning::Levels {

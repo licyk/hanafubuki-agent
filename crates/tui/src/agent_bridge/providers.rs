@@ -2,7 +2,7 @@
 //! the Providers and the model policy are written through the settings
 //! catalog.
 
-use hanafubuki_agent::{AgentHandle, AgentProviderModelCatalogRequest, ModelCatalogEntry};
+use hanafubuki_agent::{AgentHandle, AgentListedModel, AgentProviderModelCatalogRequest};
 
 use super::{AgentBridge, AgentReply, TurnUpdate};
 
@@ -14,7 +14,7 @@ pub(crate) struct ProviderModels {
     pub(crate) name: String,
     /// The model new sessions run, when it is the default Provider.
     pub(crate) current: Option<String>,
-    pub(crate) result: Result<Vec<ModelCatalogEntry>, String>,
+    pub(crate) result: Result<Vec<AgentListedModel>, String>,
 }
 
 impl AgentBridge {

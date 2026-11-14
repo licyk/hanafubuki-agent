@@ -1,7 +1,7 @@
-use super::{configured_model_facts, resolve_provider_definition};
+use super::{configured_model_facts, resolve_provider_definition, resolve_settings_provider};
 use crate::service::AgentApplicationService;
 use crate::{
-    model_api_protocol, AgentModelPolicyWriteRequest, AgentProviderDeleteRequest,
+    model_api_protocol, AgentListedModel, AgentModelPolicyWriteRequest, AgentProviderDeleteRequest,
     AgentProviderDraft, AgentProviderEnabledRequest, AgentProviderModelCatalogRequest,
     AgentProviderModelCatalogResult, AgentProviderRegistrySnapshot, AgentProviderWriteRequest,
     ResolvedAgentProvider,
@@ -61,6 +61,10 @@ impl AgentApplicationService {
         .await?
     }
 
+    /// The model listing of each Provider asked for (every enabled one when
+    /// none is named), each read live and at once, sorted by name: each
+    /// model with what is known of it ([`AgentListedModel`]), or why the
+    /// Provider was not listed. `providers.toml` is read once.
     pub async fn list_provider_models(
         &self,
         request: AgentProviderModelCatalogRequest,
@@ -100,17 +104,23 @@ impl AgentApplicationService {
                 .get(&provider_id)
                 .cloned()
                 .unwrap_or_else(|| provider_id.clone());
+            let resolved = resolve_settings_provider(&settings, &provider_id);
             tasks.spawn(async move {
                 let result = async {
-                    let resolved = service.resolve_provider(&provider_id).await?;
-                    service.provider_models(resolved).await
+                    let resolved = resolved?;
+                    let entries = service.provider_models(&resolved).await?;
+                    Ok::<_, String>(service.with_facts(&resolved.definition, entries))
                 }
                 .await;
+                let (models, error) = match result {
+                    Ok(models) => (models, None),
+                    Err(error) => (Vec::new(), Some(error)),
+                };
                 AgentProviderModelCatalogResult {
                     provider_id,
                     display_name,
-                    models: result.as_ref().cloned().unwrap_or_default(),
-                    error: result.err(),
+                    models,
+                    error,
                 }
             });
         }
@@ -143,23 +153,45 @@ impl AgentApplicationService {
             draft.into_settings(String::new()),
             &AgentModelPolicySettings::default(),
         )?;
-        self.provider_models(resolved).await
+        self.provider_models(&resolved).await
     }
 
     async fn provider_models(
         &self,
-        resolved: ResolvedAgentProvider,
+        resolved: &ResolvedAgentProvider,
     ) -> Result<Vec<ModelCatalogEntry>, String> {
         self.core
             .list_provider_models(
                 model_api_protocol(resolved.definition.protocol),
                 &resolved.definition.base_url,
-                resolved.credential,
-                resolved.headers,
+                resolved.credential.clone(),
+                resolved.headers.clone(),
                 hanafubuki_agent_foundation::cancellation::CancellationToken::default(),
             )
             .await
             .map_err(|error| error.to_string())
+    }
+
+    /// `entries`, the listing just read of `provider`, each with what is
+    /// known of it: what `model_metadata` gives, with the entry as what was
+    /// reported and `provider`'s own settings for the model.
+    fn with_facts(
+        &self,
+        provider: &AgentProviderSettings,
+        entries: Vec<ModelCatalogEntry>,
+    ) -> Vec<AgentListedModel> {
+        let metadata = self.core.resolve_listing(
+            &provider.id,
+            model_api_protocol(provider.protocol),
+            &provider.base_url,
+            &entries,
+            |model| configured_model_facts(provider, None, model),
+        );
+        entries
+            .into_iter()
+            .zip(metadata)
+            .map(|(entry, metadata)| AgentListedModel { entry, metadata })
+            .collect()
     }
 
     pub async fn provider_registry_snapshot(

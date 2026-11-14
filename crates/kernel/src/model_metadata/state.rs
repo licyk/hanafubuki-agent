@@ -139,11 +139,19 @@ impl RegistryState {
         model: &str,
         now_ms: u64,
     ) -> ModelMetadata {
-        let Some(copy) = self.models_dev.as_ref().filter(|copy| copy.live(now_ms)) else {
+        let Some(copy) = self.live_models_dev(now_ms) else {
             return ModelMetadata::default();
         };
         let names = route.and_then(|route| self.provider_names.get(route.endpoint()));
         copy.catalog.metadata(names, model, copy.fetched_at_ms)
+    }
+
+    /// The copy of models.dev still used at `now_ms`, shared.
+    pub(super) fn live_models_dev(&self, now_ms: u64) -> Option<Arc<ModelsDevCopy>> {
+        self.models_dev
+            .as_ref()
+            .filter(|copy| copy.live(now_ms))
+            .cloned()
     }
 
     /// Merges `entries`, the listing of `endpoint`, per model: a listed
@@ -322,7 +330,7 @@ fn listed(listings: &HashMap<ModelEndpointKey, ListingState>, route: &ModelRoute
 }
 
 /// What `entry` reports, observed at `now_ms`.
-fn reported_facts(entry: &ModelCatalogEntry, now_ms: u64) -> ModelMetadata {
+pub(super) fn reported_facts(entry: &ModelCatalogEntry, now_ms: u64) -> ModelMetadata {
     let reasoning = entry.reasoning.map(|reasons| {
         if reasons {
             ModelReasoningSupport::Supported {

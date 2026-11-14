@@ -35,6 +35,7 @@ mod golden;
 mod hooks;
 mod memory;
 mod model_discovery;
+mod model_list;
 mod model_reasoning;
 mod model_vision;
 mod network_proxy;
