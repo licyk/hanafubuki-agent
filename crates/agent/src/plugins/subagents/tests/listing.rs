@@ -115,7 +115,7 @@ async fn agents_are_listed_with_the_provider_model_and_effort_they_run_on() {
         json!({ "model": "quick-model", "reasoning_effort": "high" }),
     )
     .await;
-    spawned(
+    let remote = spawned(
         &subagents_now,
         parent,
         "remote",
@@ -130,6 +130,26 @@ async fn agents_are_listed_with_the_provider_model_and_effort_they_run_on() {
             entry("quick", "provider-1", "quick-model", json!("high")),
             entry("remote", "provider-2", "remote-model", json!("medium")),
         ]
+    );
+    let result = call(
+        &subagents_now,
+        SubagentToolKind::ListAgents,
+        parent,
+        json!({}),
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        result["agents"][2],
+        json!({
+            "agent_name": "remote",
+            "agent_id": remote["agent_id"],
+            "agent_status": "completed",
+            "agent_type": "default",
+            "provider": "provider-2",
+            "model": "remote-model",
+            "reasoning_effort": "medium",
+        })
     );
     assert_eq!(
         statuses(&service, parent).await,

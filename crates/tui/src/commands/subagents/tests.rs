@@ -63,20 +63,16 @@ fn text(cell: &dyn HistoryCell, width: u16) -> String {
         .join("\n")
 }
 
-/// `cell` as the scrollback wraps it at `width`.
+/// `cell` as the scrollback wraps it at `width` (`insert_history`'s
+/// word wrap of each line).
 fn wrapped(cell: &dyn HistoryCell, width: u16) -> String {
-    let area = ratatui::layout::Rect::new(0, 0, width, cell.desired_height(width));
-    let mut buf = ratatui::buffer::Buffer::empty(area);
-    ratatui::widgets::Widget::render(
-        ratatui::widgets::Paragraph::new(ratatui::text::Text::from(cell.display_lines(width)))
-            .wrap(ratatui::widgets::Wrap { trim: false }),
-        area,
-        &mut buf,
-    );
-    (0..area.height)
-        .map(|y| {
-            (0..area.width)
-                .map(|x| buf[(x, y)].symbol())
+    cell.display_lines(width)
+        .iter()
+        .flat_map(|line| crate::wrapping::word_wrap_line(line, usize::from(width)))
+        .map(|line| {
+            line.spans
+                .iter()
+                .map(|span| span.content.as_ref())
                 .collect::<String>()
                 .trim_end()
                 .to_string()

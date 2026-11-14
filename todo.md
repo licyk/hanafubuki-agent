@@ -4838,14 +4838,19 @@ exception.
         efforts; a person's `set_session_model` (another Provider) on one
         and `set_session_reasoning_effort` to the default on another
         listed next; after a restart, the same listing from the
-        summaries with no request to either server. `tests/mod.rs`' facade
+        summaries with no request to either server; one entry compared
+        as a whole JSON object. `tests/mod.rs`' facade
         literal gains the three fields. TUI: the status cell at 80
-        (inline) and as the scrollback wraps it at 36, the picker's
-        screen at 80 and 40 (snapshots); `app/tests/subagents.rs` now
-        waits for `• counter  idle · fixture-model · default`. Seen
-        failing first: the new snapshots (empty), and by mutation, each
-        restored: `list_agents`' `provider` from the model (the listing
-        test), `statuses` dropping the effort (the listing test).
+        (inline) and at 36 as `insert_history` word-wraps each line, the
+        picker's screen at 80 and 40 (snapshots); `app/tests/subagents.rs`
+        now waits for `• counter  idle · fixture-model · default`. Seen
+        failing first: the 80-column cell snapshot (empty); the three
+        file snapshots were written on their first run and reviewed. By
+        mutation, each restored: `list_agents`' `provider` from the model
+        and `statuses` dropping the effort (the listing test each);
+        `runs_on` left out of the cell and the picker (the cell and
+        picker snapshot tests and the app test). The listing test's
+        `/model` and restart steps have no mutation of their own.
       - Goldens: none changed (`list_agents`' description is unchanged;
         its output is a tool result no golden pins): `cargo test
         --workspace` runs them unchanged.
@@ -4883,6 +4888,12 @@ exception.
         Linux, Windows and macOS passed at the first attempt. Site on
         ca6ee77: .../runs/43591210073, passed, its build and deploy
         included.
+      - Follow-up (test-only): the narrow cell snapshot now wraps as
+        `insert_history` does (it used ratatui's `Paragraph` wrap), and
+        one `list_agents` entry is compared whole. On the final tree:
+        fmt, check, clippy, `cargo xtask check`, `cargo test --workspace
+        --all-features --no-fail-fast` (5075 passed, none failed),
+        `site:check`, `site:test` (28).
       - For R2–R8: `agents_on_models` is the listing to build on (each
         child's `ListedAgent` with its `ChildModelView` from one summary
         page); the `/tasks` manager can show `AgentSubagentStatus`'
