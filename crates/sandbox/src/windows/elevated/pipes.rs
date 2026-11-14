@@ -12,9 +12,7 @@ use windows_sys::Win32::Foundation::{
 };
 use windows_sys::Win32::Security::Authorization::ConvertStringSecurityDescriptorToSecurityDescriptorW;
 use windows_sys::Win32::Security::SECURITY_ATTRIBUTES;
-use windows_sys::Win32::Storage::FileSystem::{
-    FILE_FLAG_FIRST_PIPE_INSTANCE, PIPE_ACCESS_INBOUND, PIPE_ACCESS_OUTBOUND,
-};
+use windows_sys::Win32::Storage::FileSystem::{FILE_FLAG_FIRST_PIPE_INSTANCE, PIPE_ACCESS_DUPLEX};
 use windows_sys::Win32::System::Console::{
     SetStdHandle, STD_ERROR_HANDLE, STD_INPUT_HANDLE, STD_OUTPUT_HANDLE,
 };
@@ -44,8 +42,8 @@ impl Pipes {
             u128::from_le_bytes(credentials::random()?)
         );
         Ok(Self {
-            input: create(&format!("{name}-in"), PIPE_ACCESS_OUTBOUND, &owner, &sid)?,
-            output: create(&format!("{name}-out"), PIPE_ACCESS_INBOUND, &owner, &sid)?,
+            input: create(&format!("{name}-in"), PIPE_ACCESS_DUPLEX, &owner, &sid)?,
+            output: create(&format!("{name}-out"), PIPE_ACCESS_DUPLEX, &owner, &sid)?,
             error: create(&format!("{name}-err"), PIPE_ACCESS_INBOUND, &owner, &sid)?,
             name,
         })

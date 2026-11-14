@@ -60,6 +60,11 @@ jobs:
           targets: wasm32-unknown-unknown
       - if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libcap-dev pkg-config
+      # Like Codex CI, allow user namespace setup on Ubuntu's AppArmor host.
+      - if: runner.os == 'Linux'
+        run: |
+          sudo sysctl -w kernel.unprivileged_userns_clone=1
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - uses: Swatinem/rust-cache@v2.9.3
       - run: cargo fmt --all --check
       - run: cargo check --workspace --all-targets --all-features
