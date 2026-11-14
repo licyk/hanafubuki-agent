@@ -4903,6 +4903,12 @@ exception.
         fmt, check, clippy, `cargo xtask check`, `cargo test --workspace
         --all-features --no-fail-fast` (5075 passed, none failed),
         `site:check`, `site:test` (28).
+        CI on 26edcde:
+        https://github.com/licyk/hanafubuki-agent/actions/runs/43595332941,
+        Linux and Windows passed; macOS failed only
+        `plugin-packages` `linked::tests::a_replaced_directory_is_watched_anew_though_its_removal_is_not_reported`
+        (`crates/plugin-packages/src/linked/tests.rs:107`, "timed out"
+        after 5 s), a file-watch timing test this change does not touch.
       - For R2–R8: `agents_on_models` is the listing to build on (each
         child's `ListedAgent` with its `ChildModelView` from one summary
         page); the `/tasks` manager can show `AgentSubagentStatus`'
