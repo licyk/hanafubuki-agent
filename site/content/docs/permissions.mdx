@@ -110,15 +110,15 @@ Run Posix command outside the sandbox in /home/me/project: npm install (reason: 
 - 没有网络访问时，在 Linux 上除 Unix 套接字外的所有套接字都会被拒绝，连接任何套接字也会被拒绝，包括 Unix 套接字（SSH agent、Docker 的套接字）；有网络访问时，只有虚拟机套接字仍被拒绝；两种情况下，可以绕过过滤器打开套接字的 `io_uring` 都会被拒绝。在 macOS 上，没有网络访问时任何套接字都无法连接，包括 Unix 套接字；有网络访问时都可以。
 - Windows 受限令牌限制写入而非读取；登录会话或 Everyone 可写的位置仍可写。只有提升后端强制隔离网络。命令的后台子进程随其作业结束。
 - Windows 提升运行器目前桥接管道输入输出。内部 ConPTY、终端尺寸调整和交互式 MSYS 程序仍需原生验收，不能视为与 Codex 终端运行器等价。
-- Git for Windows Bash 和 MSYS2 Bash 可通过提升后端启动，但存在下述[已知文件系统隔离回归](#msys-sandbox-limits)。非提升模式仍可能报 `couldn't create signal pipe, Win32 error 5`。
+- 在 x86_64 Windows 上，Git for Windows Bash 和 MSYS2 Bash 使用提升后端的[登录会话级 IPC 兼容处理](#msys-sandbox-limits)。非提升模式及其他 Windows 架构仍可能报 `couldn't create signal pipe, Win32 error 5`。
 - 在 Linux 的终端（PTY）命令中，`/dev/stdout` 和 `/dev/stderr` 指向终端的 `/dev/pts` 设备，它不可写：请直接写到输出，或写到可写的 `/dev/tty`（命令自己的终端）。
 - 使用旧 Landlock 且 Linux 早于 6.2 时，可写根目录外的文件截断不受限制（ABI 版本低于 3）。
 
-### MSYS2 兼容：已知隔离问题 [#msys-sandbox-limits]
+### MSYS2 兼容及剩余限制 [#msys-sandbox-limits]
 
-**Windows 提升后端支持 MSYS2 启动，但文件系统隔离存在已知回归。** 沙箱账户在工作区 A 创建文件后，后续限定在工作区 B 的命令仍可能覆盖 A 中的该文件。不要依赖切换工作区或只读模式来撤销对该账户拥有的文件的全部访问权。问题来自提升后端的账户 SID，同一后端下的 cmd 和 PowerShell 命令也可能受影响，换用其他 Shell 不能解决。
+**写入旧工作区文件的权限回归已修复。** 受限令牌不再包含可复用的沙箱账户 SID。在 x86_64 Windows 上，提升运行器通过 Windows 调试事件观察其作业拥有的进程，把已加载 MSYS 运行时创建 IPC ACL 时使用的账户 SID 改为本次命令的新登录会话 SID。这样允许创建信号管道，同时不会授予该账户在旧工作区中拥有的文件写权限。安装的 Git/MSYS2 运行时文件不会被修改。兼容处理也覆盖间接启动的子进程，但不用于其他 Windows 架构或非提升模式。不支持的运行时不会回退到原来账户范围的限制 SID。
 
-原生测试已验证启动、管道/子进程和网络开关，但禁止写入旧工作区的回归测试仍失败。这些测试保留并继续执行，不能将此实现视为沙箱验收全部通过。需要严格文件系统边界时，请使用独立虚拟机或操作系统环境。内部 ConPTY 和终端尺寸调整尚未验收。
+[沙箱专用原生 CI](https://github.com/licyk/hanafubuki-agent/actions/runs/43644933076) 已在 Windows、Linux 和 macOS 全部通过。Windows 覆盖 Git for Windows Bash 和 MSYS2 Bash 的启动、管道/fork、CMD 间接启动 Bash、可写根写入、只读读取、根外与受保护元数据写入拒绝、网络开关，以及旧工作区文件覆盖拒绝。CMD 和 PowerShell 也通过旧工作区和只读权限回归检查。这不等于完整工作区 CI，也不代表所有 MSYS 运行时版本均已验收。内部 ConPTY、终端尺寸调整、交互式 MSYS 程序和嵌套调试器尚未验证。
 
 从最初的提升后端更新后，请重新运行 `/setup-default-sandbox` 并批准 UAC。初始化会创建新的沙箱组和账户，使用 `secrets/group-accounts.json`；旧的 `accounts.json`、账户及规则保留但不再使用。普通用户读取 WFP 规则的权限修复仍然保留。
 

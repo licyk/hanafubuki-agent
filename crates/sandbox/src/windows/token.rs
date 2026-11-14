@@ -3,8 +3,8 @@
 // restricting SIDs, default DACL and privileges) at commit `57a808a392`.
 // Copyright 2025 OpenAI. Licensed under the Apache License, Version 2.0
 // (http://www.apache.org/licenses/LICENSE-2.0).
-// Modified for hanafubuki-agent: restrict this process's token; include the
-// user SID only for dedicated elevated accounts. Read-only allows no root SID;
+// Modified for hanafubuki-agent: restrict this process's token; include
+// no account SID in the restriction list. Read-only allows no root SID;
 // handles are owned.
 
 use std::ffi::c_void;
@@ -65,10 +65,7 @@ impl Drop for LocalSid {
 /// (`WRITE_RESTRICTED`), with no privilege but traversal and, for an
 /// administrator, the filtered (UAC) groups (`LUA_TOKEN`). Its default
 /// DACL keeps the objects its processes create to its logon session.
-pub(crate) fn restricted_token(
-    capabilities: &[LocalSid],
-    sandbox_account: bool,
-) -> Result<OwnedHandle, String> {
+pub(crate) fn restricted_token(capabilities: &[LocalSid]) -> Result<OwnedHandle, String> {
     let base = current_token()?;
     let mut logon = logon_sid(&base)?;
     let mut everyone = world_sid()?;
@@ -82,20 +79,6 @@ pub(crate) fn restricted_token(
     for sid in [&mut logon, &mut everyone] {
         restricting.push(SID_AND_ATTRIBUTES {
             Sid: sid.as_mut_ptr().cast(),
-            Attributes: 0,
-        });
-    }
-    // MSYS names kernel objects with an account-only DACL. Only the dedicated
-    // account may join the restricting SIDs; the signed-in user's SID would
-    // grant writes throughout their workspace and profile.
-    let account = if sandbox_account {
-        Some(LocalSid::from_string(&super::elevated::current_user_sid()?)?)
-    } else {
-        None
-    };
-    if let Some(account) = &account {
-        restricting.push(SID_AND_ATTRIBUTES {
-            Sid: account.as_ptr(),
             Attributes: 0,
         });
     }
@@ -128,6 +111,22 @@ pub(crate) fn restricted_token(
 /// The logon session's SID of this process.
 pub(crate) fn current_logon_sid() -> Result<Vec<u8>, String> {
     logon_sid(&current_token()?)
+}
+
+#[cfg(target_arch = "x86_64")]
+pub(crate) fn current_user_sid() -> Result<Vec<u8>, String> {
+    let token = current_token()?;
+    let buffer = token_information(
+        token.as_raw_handle() as HANDLE,
+        windows_sys::Win32::Security::TokenUser,
+    )?;
+    // SAFETY: TokenUser returns a TOKEN_USER whose SID points into this buffer.
+    unsafe {
+        let user = &*buffer
+            .as_ptr()
+            .cast::<windows_sys::Win32::Security::TOKEN_USER>();
+        copy_sid(user.User.Sid).ok_or_else(|| last_error("copy sandbox account SID"))
+    }
 }
 
 fn current_token() -> Result<OwnedHandle, String> {

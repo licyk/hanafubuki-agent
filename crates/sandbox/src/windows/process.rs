@@ -45,7 +45,15 @@ pub(crate) fn run(
     token: &OwnedHandle,
     command_line: &str,
     desktop: &PrivateDesktop,
+    sandbox_account: bool,
 ) -> Result<u32, String> {
+    #[cfg(target_arch = "x86_64")]
+    let debug = sandbox_account;
+    #[cfg(not(target_arch = "x86_64"))]
+    let debug = {
+        let _ = sandbox_account;
+        false
+    };
     let job = kill_on_close_job()?;
     let job_handle = job.as_raw_handle() as HANDLE;
     let standard = [STD_INPUT_HANDLE, STD_OUTPUT_HANDLE, STD_ERROR_HANDLE].map(standard_handle);
@@ -109,7 +117,14 @@ pub(crate) fn run(
             std::ptr::null(),
             std::ptr::null(),
             BOOL::from(!inherited.is_empty()),
-            CREATE_UNICODE_ENVIRONMENT | EXTENDED_STARTUPINFO_PRESENT | console,
+            CREATE_UNICODE_ENVIRONMENT
+                | EXTENDED_STARTUPINFO_PRESENT
+                | console
+                | if debug {
+                    windows_sys::Win32::System::Threading::DEBUG_PROCESS
+                } else {
+                    0
+                },
             std::ptr::null(),
             std::ptr::null(),
             std::ptr::addr_of!(startup.StartupInfo),
@@ -126,6 +141,10 @@ pub(crate) fn run(
             OwnedHandle::from_raw_handle(information.hThread as _),
         )
     };
+    #[cfg(target_arch = "x86_64")]
+    if debug {
+        return super::msys::wait(information.dwProcessId);
+    }
     // SAFETY: a process handle with SYNCHRONIZE.
     if unsafe { WaitForSingleObject(process.as_raw_handle() as HANDLE, INFINITE) } != WAIT_OBJECT_0
     {

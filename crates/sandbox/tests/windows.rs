@@ -93,8 +93,8 @@ mod windows {
             }
             stdio_round_trip(&elevated);
             elevated_network_is_enforced(&elevated);
-            msys_commands(&elevated);
             prior_roots_are_not_writable(&elevated);
+            msys_commands(&elevated);
         }
     }
 
@@ -460,6 +460,27 @@ mod windows {
         assert!(!write(sandbox, &SandboxPolicy::ReadOnly, &old)
             .status
             .success());
+        let powershell = |policy: &SandboxPolicy| {
+            run_confined(
+                sandbox,
+                policy,
+                vec![
+                    "powershell.exe".into(),
+                    "-NoProfile".into(),
+                    "-Command".into(),
+                    format!(
+                        "$ErrorActionPreference='Stop'; Set-Content -LiteralPath '{}' -Value changed",
+                        old.display()
+                    ),
+                ],
+            )
+        };
+        let allowed = powershell(&workspace_write(first.path(), false));
+        assert!(allowed.status.success(), "{allowed:?}");
+        let denied = powershell(&workspace_write(second.path(), false));
+        assert!(!denied.status.success(), "{denied:?}");
+        let denied = powershell(&SandboxPolicy::ReadOnly);
+        assert!(!denied.status.success(), "{denied:?}");
         eprintln!("ok: elevated prior_roots_are_not_writable");
     }
 
@@ -483,6 +504,26 @@ mod windows {
             )));
             assert!(result.status.success(), "{shell}: {result:?}");
             assert_eq!(result.stdout, b"msys-ok");
+            let read = run_confined(
+                sandbox,
+                &SandboxPolicy::ReadOnly,
+                bash(&format!("cat '{root}/file'")),
+            );
+            assert!(read.status.success(), "{shell} read-only startup: {read:?}");
+            assert_eq!(read.stdout, b"hello");
+            // A native parent must also confine an indirectly launched MSYS child.
+            let script = workspace.path().join("indirect.cmd");
+            std::fs::write(
+                &script,
+                format!("@\"{shell}\" -c \"printf again > '{root}/file'\"\r\n"),
+            )
+            .unwrap();
+            let indirect = run_confined(sandbox, &policy, cmd(&script.display().to_string()));
+            assert!(indirect.status.success(), "{shell} indirect: {indirect:?}");
+            assert_eq!(
+                std::fs::read(workspace.path().join("file")).unwrap(),
+                b"again"
+            );
             let result = run_confined(
                 sandbox,
                 &workspace_write(outside.path(), false),
@@ -500,6 +541,10 @@ mod windows {
             assert!(
                 !result.status.success(),
                 "{shell} read-only write: {result:?}"
+            );
+            assert_eq!(
+                std::fs::read(workspace.path().join("file")).unwrap(),
+                b"again"
             );
             let forbidden = outside
                 .path()
