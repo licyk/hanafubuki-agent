@@ -2,12 +2,12 @@
 // (57a808a392, Apache-2.0). Log on as the sandbox account, never elevate a command.
 
 use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle};
-use std::ptr::null;
 
 use hanafubuki_agent_foundation::background_worker::spawn_contained_thread;
 use hanafubuki_agent_foundation::module_faults::FaultOwner;
 use hanafubuki_agent_foundation::paths::ResolvedPath;
 use windows_sys::Win32::Foundation::{HANDLE, WAIT_OBJECT_0};
+use windows_sys::Win32::System::Environment::{FreeEnvironmentStringsW, GetEnvironmentStringsW};
 use windows_sys::Win32::System::JobObjects::AssignProcessToJobObject;
 use windows_sys::Win32::System::Threading::{
     CreateProcessWithLogonW, GetExitCodeProcess, ResumeThread, TerminateProcess,
@@ -63,6 +63,7 @@ pub(crate) fn run(request: HelperRequest) -> Result<u32, String> {
     startup.cb = std::mem::size_of::<STARTUPINFOW>() as u32;
     let mut info: PROCESS_INFORMATION = unsafe { std::mem::zeroed() };
     let job = process::kill_on_close_job()?;
+    let environment = inherited_environment()?;
     // SAFETY: all strings live through the call. The child is suspended until
     // its exact process handle belongs to our kill-on-close job.
     let started = unsafe {
@@ -74,7 +75,7 @@ pub(crate) fn run(request: HelperRequest) -> Result<u32, String> {
             application.as_ptr(),
             command.as_mut_ptr(),
             CREATE_SUSPENDED | CREATE_NO_WINDOW | CREATE_UNICODE_ENVIRONMENT,
-            null(),
+            environment.as_ptr().cast(),
             cwd.as_ptr(),
             &startup,
             &mut info,
@@ -173,4 +174,23 @@ fn bridge(mut child: Child, pipes: Pipes) -> Result<u32, String> {
     // stdin may be waiting for the enclosing ExecutorManager; the helper exits
     // immediately after returning the child's status, ending that reader too.
     Ok(code)
+}
+
+fn inherited_environment() -> Result<Vec<u16>, String> {
+    // GetEnvironmentStringsW supplies a sorted, double-NUL-terminated snapshot.
+    // A null lpEnvironment would construct the sandbox account's environment,
+    // losing the caller's configured PATH, TEMP and tool-specific variables.
+    let block = unsafe { GetEnvironmentStringsW() };
+    if block.is_null() {
+        return Err(last_error("read command environment"));
+    }
+    let mut length = 0;
+    unsafe {
+        while *block.add(length) != 0 || *block.add(length + 1) != 0 {
+            length += 1;
+        }
+        let environment = std::slice::from_raw_parts(block, length + 2).to_vec();
+        FreeEnvironmentStringsW(block);
+        Ok(environment)
+    }
 }

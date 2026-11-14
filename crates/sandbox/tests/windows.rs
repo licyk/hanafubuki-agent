@@ -6,6 +6,16 @@
 #[cfg(windows)]
 fn main() {
     hanafubuki_agent_sandbox::helper_dispatch();
+    if std::env::args().nth(1).as_deref() == Some("--test-connect") {
+        let address = std::env::args().nth(2).unwrap();
+        match std::net::TcpStream::connect(address) {
+            Ok(_) => std::process::exit(0),
+            Err(error) => {
+                eprintln!("TCP connection: {error}");
+                std::process::exit(7);
+            }
+        }
+    }
     windows::run();
 }
 
@@ -259,11 +269,12 @@ mod windows {
         let command = sandbox
             .wrap(
                 &workspace_write(workspace.path(), false),
-                cmd("set /p VALUE=& call echo %%VALUE%%& echo diagnostic 1>&2"),
+                cmd("set /p VALUE=& call echo %%VALUE%%& echo %HANAFUBUKI_TEST_ENV%& echo diagnostic 1>&2"),
             )
             .unwrap();
         let mut child = Command::new(&command[0])
             .args(&command[1..])
+            .env("HANAFUBUKI_TEST_ENV", "environment-inherited")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -285,6 +296,10 @@ mod windows {
             String::from_utf8_lossy(&result.stderr).contains("diagnostic"),
             "{result:?}"
         );
+        assert!(
+            String::from_utf8_lossy(&result.stdout).contains("environment-inherited"),
+            "{result:?}"
+        );
         eprintln!("ok: elevated stdio_round_trip");
     }
 
@@ -292,17 +307,14 @@ mod windows {
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();
         let workspace = directory();
-        let powershell = std::env::var("SystemRoot").unwrap()
-            + r"\System32\WindowsPowerShell\v1.0\powershell.exe";
-        let script = format!("try {{ $c = New-Object Net.Sockets.TcpClient; $c.Connect('127.0.0.1', {port}); $c.Dispose(); exit 0 }} catch {{ [Console]::Error.WriteLine($_.Exception.ToString()); exit 7 }}");
         let command = || {
             vec![
-                powershell.clone(),
-                "-NoLogo".into(),
-                "-NoProfile".into(),
-                "-NonInteractive".into(),
-                "-Command".into(),
-                script.clone(),
+                std::env::current_exe()
+                    .unwrap()
+                    .to_string_lossy()
+                    .into_owned(),
+                "--test-connect".into(),
+                format!("127.0.0.1:{port}"),
             ]
         };
         let baseline = run_confined(sandbox, &SandboxPolicy::FullAccess, command());
@@ -318,5 +330,6 @@ mod windows {
         assert_eq!(blocked.status.code(), Some(7), "{blocked:?}");
         let allowed = run_confined(sandbox, &workspace_write(workspace.path(), true), command());
         assert!(allowed.status.success(), "{allowed:?}");
+        eprintln!("ok: elevated_network_is_enforced");
     }
 }
