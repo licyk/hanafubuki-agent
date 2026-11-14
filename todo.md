@@ -367,6 +367,27 @@ changed (none expected), what Hanafubuki must change at its next pin
         site:check`, `bun run site:test`. Skipped: `site:build` (the Site
         workflow), the `licenses` job (above), macOS (`aws-lc-sys` does not
         cross-compile here). Windows and macOS: CI only.
+      - CI on `f9523c3`: CI
+        https://github.com/licyk/hanafubuki-agent/actions/runs/43579657584
+        (Linux and macOS: success; Windows: failure in `running_copy`, which
+        expected the backups unchanged after a failed update, while that
+        update's sweep rightly removed the first backup once its processes
+        ended; the 7z archive and the replacement passed); Site
+        https://github.com/licyk/hanafubuki-agent/actions/runs/43579657629
+        (success). Fixed in `83c02e5` (no new backup required instead): CI
+        https://github.com/licyk/hanafubuki-agent/actions/runs/43581076793
+        (Linux, macOS and Windows: success). The running copy's log on each:
+        `archived with "tar"` (Linux, macOS) / `"7z"` (Windows), replaced
+        while it and another copy ran (new inode; Windows: the `.outdated`
+        backup), the three failures left as they were, the interrupted
+        update recovered, the sweep left no backup.
+      - The Windows cargo finding (the plan's correction 10), from that
+        Windows log: `cargo install over a running copy: failed (Access is
+        denied. (os error 5)); the installed file now prints "first"`, the
+        running probe going on. cargo cannot replace a running executable
+        there, so the split stays (`ManualReason::CargoOnWindows`): cargo
+        runs on Unix and is only named on Windows. On Linux, run here once,
+        cargo replaced the running probe.
       - Goldens: none. Module size: no exception (`error.rs` 402 lines;
         `fmt_install`, the largest new function, 158 code lines).
         Hanafubuki: nothing (the facade and its dependencies are
