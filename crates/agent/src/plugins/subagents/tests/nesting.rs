@@ -38,7 +38,7 @@ async fn a_waiting_parent_is_reported_only_after_its_child_wakes_it_and_it_answe
         .await
         .unwrap()
         .id;
-    waiting(&agents, root, child).await;
+    wait_for_state(&agents, root, child, AgentSubagentState::Waiting).await;
     let tasks = service.background_tasks(root).await.unwrap();
     assert_eq!(tasks.agents.len(), 2);
     assert_eq!(tasks.agents[0].status, AgentSubagentState::Waiting);
@@ -139,10 +139,8 @@ async fn cap_with_parent_outcome(failed: bool) {
         .id;
     if failed {
         queued(&service, root, 1).await;
-        assert_eq!(
-            service.background_tasks(root).await.unwrap().agents[0].status,
-            AgentSubagentState::Failed
-        );
+        // The error is queued before the run stops counting as live.
+        wait_for_state(&agents, root, child, AgentSubagentState::Failed).await;
         let updates = agents
             .wait(root, NO_WAIT, &CancellationToken::default())
             .await
@@ -151,7 +149,7 @@ async fn cap_with_parent_outcome(failed: bool) {
             matches!(updates, WaitOutcome::Updates(ref updates) if matches!(updates[0].status, AgentRunStatus::Errored(_)))
         );
     } else {
-        waiting(&agents, root, child).await;
+        wait_for_state(&agents, root, child, AgentSubagentState::Waiting).await;
     }
     let leaf = agents.agents(child).await.unwrap()[0].id;
     for index in 0..6 {
@@ -179,7 +177,7 @@ async fn cap_with_parent_outcome(failed: bool) {
         .await
         .unwrap();
     wait_until("the wake requested", || first.requests().len() == 3).await;
-    waiting(&agents, root, child).await;
+    wait_for_state(&agents, root, child, AgentSubagentState::Waiting).await;
     assert!(body(&first, 2).contains("Progress from the leaf."));
     assert_eq!(service.background_status(root).unwrap().work.agents, 8);
     assert_eq!(service.snapshot(root).unwrap().pending_wake_events, 0);
@@ -225,19 +223,27 @@ async fn side_and_review_sessions_cannot_spawn() {
     finish(service, paths);
 }
 
-async fn waiting(agents: &SubagentService, parent: AgentSessionId, child: AgentSessionId) {
+async fn wait_for_state(
+    agents: &SubagentService,
+    parent: AgentSessionId,
+    child: AgentSessionId,
+    expected: AgentSubagentState,
+) {
     let deadline = Instant::now() + Duration::from_secs(30);
     loop {
         if agents
-            .agents(parent)
+            .statuses(parent)
             .await
             .unwrap()
             .iter()
-            .any(|agent| agent.id == child && matches!(agent.status, AgentRunStatus::Waiting(_)))
+            .any(|agent| agent.session_id == child && agent.status == expected)
         {
             return;
         }
-        assert!(Instant::now() < deadline, "the child never waited");
+        assert!(
+            Instant::now() < deadline,
+            "the child never reached {expected:?}"
+        );
         tokio::time::sleep(Duration::from_millis(10)).await;
     }
 }
@@ -266,7 +272,7 @@ async fn resuming_the_root_rechecks_a_descendant_even_with_no_root_updates() {
         .await
         .unwrap()
         .id;
-    waiting(&agents, root, child).await;
+    wait_for_state(&agents, root, child, AgentSubagentState::Waiting).await;
     let leaf = agents.agents(child).await.unwrap()[0].id;
     agents.wakes.pauses.interrupted(root);
     agents
@@ -279,7 +285,7 @@ async fn resuming_the_root_rechecks_a_descendant_even_with_no_root_updates() {
     assert_eq!(service.snapshot(child).unwrap().pending_wake_events, 1);
     service.resume_background_wakes(root).unwrap();
     wait_until("the descendant was resumed", || first.requests().len() == 3).await;
-    waiting(&agents, root, child).await;
+    wait_for_state(&agents, root, child, AgentSubagentState::Waiting).await;
     assert!(body(&first, 2).contains("Progress while paused."));
     assert_eq!(service.snapshot(child).unwrap().pending_wake_events, 0);
     assert_eq!(
@@ -316,7 +322,7 @@ async fn a_failed_leaf_wakes_its_parent_and_only_the_parents_answer_reaches_the_
         .await
         .unwrap()
         .id;
-    waiting(&agents, root, child).await;
+    wait_for_state(&agents, root, child, AgentSubagentState::Waiting).await;
     second.hold.notify_one();
     queued(&service, root, 1).await;
     assert!(body(&first, 2).contains("leaf refused"));

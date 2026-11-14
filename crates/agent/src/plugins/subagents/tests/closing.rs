@@ -36,8 +36,7 @@ async fn closing_a_waiting_parent_stops_its_child_and_both_terminals_then_accept
         ),
     ])
     .await;
-    let (service, paths, _, events) =
-        waking("close-tree", &branch_model, &leaf_model, |_| {}).await;
+    let (service, paths, _, _) = waking("close-tree", &branch_model, &leaf_model, |_| {}).await;
     let root = service
         .create_session(AgentSessionMode::Default, None)
         .await
@@ -112,7 +111,14 @@ async fn closing_a_waiting_parent_stops_its_child_and_both_terminals_then_accept
         3,
         "the closing parent was never resumed"
     );
-    assert!(events.woken(root) <= 1);
+    assert_eq!(
+        agents
+            .wait(root, Duration::ZERO, &CancellationToken::default())
+            .await
+            .unwrap(),
+        WaitOutcome::Idle,
+        "the close was reported once"
+    );
     agents
         .followup_task(root, "branch", "Do a new task.".into())
         .await
