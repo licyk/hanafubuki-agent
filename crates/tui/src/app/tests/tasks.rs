@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use hanafubuki_agent::test_support::{assistant_events, queue_wake_event, tool_calls_events};
+use hanafubuki_agent::test_support::{assistant_events, queue_wake_event, tool_calls_events, HOLD};
 use hanafubuki_agent::{AgentSessionId, AgentSubagentWake, AgentWakeSource, AgentWakeState};
 use ratatui::crossterm::event::{KeyCode, KeyModifiers};
 
@@ -126,8 +126,12 @@ fn task_manager_resumes_a_paused_wake_in_both_transcript_modes() {
             vec![
                 (assistant_events("Ready."), Duration::ZERO),
                 (
-                    assistant_events("This answer was interrupted."),
-                    Duration::from_secs(5),
+                    [
+                        HOLD.as_bytes(),
+                        &assistant_events("This answer was interrupted."),
+                    ]
+                    .concat(),
+                    Duration::ZERO,
                 ),
                 (
                     assistant_events("The queued update was read."),
@@ -139,7 +143,9 @@ fn task_manager_resumes_a_paused_wake_in_both_transcript_modes() {
         );
         let root = harness.answered("Start", "Ready.");
         harness.type_and_submit("Keep working");
-        harness.pump_until("the delayed model call", |h| h.server.requests().len() >= 2);
+        harness.pump_until("the held model call is shown as running", |h| {
+            h.server.requests().len() >= 2 && h.app.chat_widget.is_task_running()
+        });
         harness.key(KeyCode::Esc);
         harness.pump_until_turn_ends();
         let agent = harness.runtime.slot().agent().unwrap();
@@ -147,6 +153,7 @@ fn task_manager_resumes_a_paused_wake_in_both_transcript_modes() {
             agent.background_status(root).unwrap().wake,
             AgentWakeState::Paused { .. }
         ));
+        harness.server.hold.notify_one();
         let worker = agent.clone();
         agent
             .runtime()

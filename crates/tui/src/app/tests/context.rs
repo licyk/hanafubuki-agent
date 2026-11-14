@@ -55,7 +55,7 @@ fn context_shows_the_next_request_then_the_one_sent_and_its_cache() {
         harness.type_and_submit("Hello.");
         // The answer streams up to its hold, without a line to show yet.
         harness.pump_until("the request sent", |harness| {
-            harness.server.requests().len() == 1
+            harness.server.requests().len() == 1 && harness.app.chat_widget.is_task_running()
         });
         assert!(harness.app.chat_widget.is_task_running());
         harness.type_and_submit("/context");
