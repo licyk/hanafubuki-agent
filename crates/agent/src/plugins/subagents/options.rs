@@ -1,5 +1,5 @@
 //! The `subagents` plugin's options (`[pluginOptions.subagents]`): how many
-//! agents of one parent run at once and how long `wait_agent` waits. The
+//! agents across one tree run at once and how long `wait_agent` waits. The
 //! bounds in code stay hard limits; the options choose within them.
 
 use std::time::Duration;
@@ -7,14 +7,13 @@ use std::time::Duration;
 use hanafubuki_agent_config::{PluginOptionSchema, SettingKind, SettingSpec, SettingValue};
 use serde::Deserialize;
 
-/// The most agents of one parent the option lets run at once.
+/// The most agents across one tree the option lets run at once.
 const MAXIMUM_RUNNING_AGENTS_LIMIT: i64 = 16;
 /// The wait bounds a `wait_agent` timeout is clamped to, in seconds: what
 /// the options choose within.
 const WAIT_SECONDS_LIMITS: (i64, i64) = (10, 300);
-/// Codex's 4 threads per session less the root, counted by running turns
-/// since nothing is evicted.
-const DEFAULT_RUNNING_AGENTS: i64 = 3;
+/// Live agents include parents waiting for their own background work.
+const DEFAULT_RUNNING_AGENTS: i64 = 8;
 const DEFAULT_WAIT_SECONDS: i64 = 30;
 
 /// The configuration the row derives from the settings: every option, as
@@ -93,7 +92,7 @@ pub(crate) fn subagents_option_schema() -> PluginOptionSchema {
             integer(
                 "maximumRunningAgents",
                 "Running sub-agents",
-                "How many sub-agents of one conversation run at once",
+                "How many sub-agents work at once under one conversation, theirs included",
                 (1, MAXIMUM_RUNNING_AGENTS_LIMIT),
                 DEFAULT_RUNNING_AGENTS,
             ),

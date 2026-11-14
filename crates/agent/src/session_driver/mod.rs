@@ -14,6 +14,7 @@
 //! extension `TurnWake` that freezes it.
 
 mod model;
+mod turns;
 
 pub(crate) use self::model::{
     ChildModelError, ChildModelRequest, SpawnModelCatalog, SpawnProvider, MAXIMUM_MODEL_ID_BYTES,
@@ -32,9 +33,9 @@ use hanafubuki_agent_kernel::{
     AgentEventSink, AgentKernelRegistries, AgentPermissionMode, AgentService, AgentSessionId,
     AgentSessionLifecycle, AgentSessionListRequest, AgentSessionMode, AgentSessionOrigin,
     AgentSessionParentFilter, AgentSessionPersistence, AgentSessionRuntimeSnapshot,
-    AgentSessionSummary, AgentSessionTitleRenameRequest, AgentTurnInput, AgentTurnOrigin,
-    AgentTurnOutcome, AgentWakeEvent, AgentWakeFilter, AgentWakePolicy, AgentWakeQueued,
-    AgentWakeSource, AgentWorldStateSnapshot, ConversationItem, AGENT_SESSION_PAGE_SIZE_MAX,
+    AgentSessionSummary, AgentSessionTitleRenameRequest, AgentWakeEvent, AgentWakeFilter,
+    AgentWakePolicy, AgentWakeQueued, AgentWakeSource, AgentWorldStateSnapshot, ConversationItem,
+    AGENT_SESSION_PAGE_SIZE_MAX,
 };
 use hanafubuki_agent_sandbox::{platform_default_mode, SandboxSettings};
 
@@ -104,53 +105,6 @@ impl AgentSessionDriver {
             settings.memory.enabled && settings.memory.generate_memories,
         )?;
         self.core.snapshot(child.id)
-    }
-
-    /// Runs `input`'s turn on `session_id` and waits for its outcome, in
-    /// the mode [`Self::turn_permission_mode`] resolves; its events go to
-    /// `event_sink` (and its journal).
-    pub(crate) async fn run_turn(
-        &self,
-        session_id: AgentSessionId,
-        input: crate::AgentTurnInput,
-        event_sink: Arc<dyn AgentEventSink>,
-    ) -> Result<AgentTurnOutcome, AgentError> {
-        let session = self
-            .activate_provider_session(session_id)
-            .await
-            .map_err(AgentError::InvalidInput)?;
-        let permission_mode = self
-            .turn_permission_mode(session_id, input.permission_mode)
-            .await
-            .map_err(AgentError::InvalidInput)?;
-        let world_state = self
-            .collect_world_state(
-                session_id,
-                session.mode,
-                permission_mode,
-                Some(input.text.clone()),
-                TurnExtensions::default(),
-            )
-            .await?;
-        let turn = self
-            .collect_turn_extensions(session_id, session.mode)
-            .await?;
-        self.core
-            .start_turn_with_sink(
-                session_id,
-                AgentTurnInput {
-                    text: input.text,
-                    images: input.images,
-                    skills: input.skills,
-                    permission_mode,
-                    turn,
-                    world_state,
-                    origin: AgentTurnOrigin::Programmatic,
-                    provisional_title: None,
-                },
-                event_sink,
-            )
-            .await
     }
 
     /// Cancels the turn `session_id` runs, if any, and waits until the
@@ -244,6 +198,13 @@ impl AgentSessionDriver {
         session_id: AgentSessionId,
     ) -> Result<AgentSessionRuntimeSnapshot, AgentError> {
         self.core.snapshot(session_id)
+    }
+
+    pub(crate) fn background_work(
+        &self,
+        session_id: AgentSessionId,
+    ) -> hanafubuki_agent_kernel::AgentBackgroundWork {
+        self.core.background_work(session_id)
     }
 
     /// Whether `wakeOnBackgroundTasks` is on now, as the settings were last

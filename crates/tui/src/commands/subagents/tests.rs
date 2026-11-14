@@ -20,6 +20,8 @@ fn status(
     answer: Option<&str>,
 ) -> AgentSubagentStatus {
     AgentSubagentStatus {
+        parent_session_id: AgentSessionId::new(1),
+        depth: 1,
         session_id: AgentSessionId::new(id),
         title: title.to_string(),
         status: state,

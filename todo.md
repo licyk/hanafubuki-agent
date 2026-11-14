@@ -5426,12 +5426,35 @@ its next pin, and any module-size exception.
         hints, and exclude output/timestamps from feed comparison. For R6:
         change the CLI's unanswerable-question interrupt to close. For R8:
         `Changed` prompts a fresh async tree read; do not count hints as work.
-- [ ] R4: two levels of sub-agents (depth from lineage; depth 2, side
+- [x] R4: two levels of sub-agents (depth from lineage; depth 2, side
       conversations and reviews refused) and `maximumRunningAgents`
       default 8, counting live agents across the tree; woken turns are
       never refused. A child's completion is held until its subtree is
       quiet. Adds the `Waiting` and `Closed` states, and splits
       `subagents/service.rs` by responsibility. Goldens regenerated.
+
+      Done (2026-11-14). Lineage enforces two levels and the shared admission
+      gate counts live turns and descendant work across the root tree (default
+      8), including a failed parent with active descendants;
+      woken children bypass that cap. The optional subagents service is
+      resolved under its fault guard per dispatch, with shared regular/wake
+      preparation. Held answers are delivered once after the subtree settles.
+      Root pause and its runaway bound cover descendants;
+      `resume_background_wakes(root)` explicitly clears pause and rechecks
+      descendants even with no root update. The tree facade adds parent id
+      and depth, plus authoritative tree work counts; reopening a root reads pending requests across that tree.
+      Both-language docs and 15 request goldens updated intentionally.
+      No module-size exceptions added or raised.
+
+      Validation on Linux: scoped agent/kernel/TUI clippy with all targets
+      and features and `-D warnings`; agent/TUI all-target all-feature check;
+      51 subagent tests plus six final nested regressions (including a failed
+      parent retaining its live slot),
+      24 golden tests, 12 settings-catalog tests, 11 TUI subagent tests;
+      `cargo xtask check`, `cargo fmt --all --check`, `git diff --check`.
+      Full workspace tests/check and native Windows/macOS validation are
+      left to CI; site build/tests skipped for documentation-only edits.
+      R5 adds terminal liveness to this subtree contract.
 - [x] R4b: the command timeout becomes a setting,
       `pluginOptions.execution.commandTimeoutMinutes` (1–1440, default
       10). The `execution` row takes options and a change in place,

@@ -33,6 +33,8 @@ pub(in crate::plugins::subagents) enum AgentRunStatus {
     /// Spawned, but no turn of it is known.
     PendingInit,
     Running,
+    Waiting(Option<String>),
+    Closed,
     /// Its turn was interrupted; it takes messages and follow-up tasks.
     Interrupted,
     /// Its turn ended with this final answer, when it is known.
@@ -41,6 +43,10 @@ pub(in crate::plugins::subagents) enum AgentRunStatus {
 }
 
 impl AgentRunStatus {
+    pub(super) fn is_live(&self) -> bool {
+        matches!(self, Self::Running | Self::Waiting(_))
+    }
+
     /// What the latest turn of an agent this instance did not run says.
     pub(super) fn of_phase(phase: Option<AgentTurnPhase>) -> Self {
         match phase {
@@ -109,9 +115,7 @@ impl AgentUpdate {
                 }))
             }
             AgentSubagentWake::Errored { error } => AgentRunStatus::Errored(error),
-            AgentSubagentWake::ClosedByUser => {
-                AgentRunStatus::Errored("it was closed by the user".to_string())
-            }
+            AgentSubagentWake::ClosedByUser => AgentRunStatus::Closed,
             AgentSubagentWake::Lost => {
                 AgentRunStatus::Errored("it stopped when the Agent restarted".to_string())
             }
@@ -134,6 +138,8 @@ pub(crate) struct SubagentRuns {
     /// Told of the parent whose agent started or ended, once its status is
     /// set.
     pub(super) feed: Arc<Feed>,
+    pub(super) signals: Arc<crate::wake::Signals>,
+    pub(super) admission: Arc<tokio::sync::Semaphore>,
 }
 
 pub(super) struct AgentRun {
@@ -150,11 +156,13 @@ pub(super) struct AgentRun {
 }
 
 impl SubagentRuns {
-    pub(crate) fn new(feed: Arc<Feed>) -> Self {
+    pub(crate) fn new(feed: Arc<Feed>, signals: Arc<crate::wake::Signals>) -> Self {
         Self {
             runs: Arc::default(),
             changed: Arc::default(),
             feed,
+            signals,
+            admission: Arc::new(tokio::sync::Semaphore::new(1)),
         }
     }
 
@@ -165,7 +173,7 @@ impl SubagentRuns {
         self.runs
             .lock()
             .values()
-            .filter(|run| run.parent == parent && run.status == AgentRunStatus::Running)
+            .filter(|run| run.parent == parent && run.status.is_live())
             .count()
     }
 
@@ -180,6 +188,12 @@ impl SubagentRuns {
         turn: u64,
         status: AgentRunStatus,
     ) {
+        let status = match status {
+            AgentRunStatus::Completed(answer) if self.has_work(driver, child) => {
+                AgentRunStatus::Waiting(answer)
+            }
+            other => other,
+        };
         let parent = self
             .runs
             .lock()
@@ -208,6 +222,8 @@ impl SubagentRuns {
         self.changed.notify_waiters();
         if let Some(parent) = parent {
             self.feed.hint(parent);
+            self.signals.signal(child);
+            self.signals.signal(parent);
         }
     }
 

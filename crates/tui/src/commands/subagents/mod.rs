@@ -89,6 +89,8 @@ pub(crate) fn status_cell(statuses: &[AgentSubagentStatus]) -> PlainHistoryCell 
 pub(crate) fn state_name(state: AgentSubagentState) -> &'static str {
     match state {
         AgentSubagentState::Running => "running",
+        AgentSubagentState::Waiting => "waiting",
+        AgentSubagentState::Closed => "closed",
         AgentSubagentState::Idle => "idle",
         AgentSubagentState::Failed => "failed",
     }
@@ -107,7 +109,8 @@ pub(crate) fn runs_on(status: &AgentSubagentStatus) -> String {
 fn state_span(state: AgentSubagentState) -> ratatui::text::Span<'static> {
     match state {
         AgentSubagentState::Running => state_name(state).cyan(),
-        AgentSubagentState::Idle => state_name(state).dim(),
+        AgentSubagentState::Idle | AgentSubagentState::Closed => state_name(state).dim(),
+        AgentSubagentState::Waiting => state_name(state).yellow(),
         AgentSubagentState::Failed => state_name(state).red(),
     }
 }

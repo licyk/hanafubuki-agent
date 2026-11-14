@@ -26,7 +26,7 @@ use std::sync::Arc;
 
 use hanafubuki_agent_kernel::{AgentEvent, AgentSessionId};
 
-pub(crate) use self::dispatcher::wake_plugin;
+pub(crate) use self::dispatcher::{wake_plugin, Signals};
 pub(crate) use self::feed::Feed;
 pub(crate) use self::pause::Pauses;
 pub use self::pause::{AgentWakePause, AgentWakeState, MAXIMUM_WOKEN_TURNS};
@@ -81,15 +81,18 @@ pub(crate) struct Wakes {
     pub(crate) pauses: Pauses,
     pub(crate) feed: Arc<Feed>,
     pub(crate) runs: SubagentRuns,
+    pub(crate) signals: Arc<Signals>,
 }
 
 impl Wakes {
     pub(crate) fn new(sink: Arc<dyn AgentBackgroundEventSink>) -> Self {
         let feed = Arc::new(Feed::default());
+        let signals = Arc::new(Signals::default());
         Self {
             sink,
             pauses: Pauses::default(),
-            runs: SubagentRuns::new(feed.clone()),
+            runs: SubagentRuns::new(feed.clone(), signals.clone()),
+            signals,
             feed,
         }
     }

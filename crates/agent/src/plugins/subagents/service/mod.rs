@@ -13,10 +13,8 @@
 // policy on, its next step or its woken turn delivers; an agent messages
 // its parent (`target` `parent`) through the same queue and never another
 // agent; a message to a running agent steers its turn and one to an idle
-// agent waits for its next follow-up task; by default at most 3 agents of one parent
-// run at once (Codex's 4 threads per session less the root, counted by
-// running turns since nothing is evicted), only a session without a parent
-// spawns (Codex's `agents.max_depth` default), and a wait lasts at most 5
+// agent waits for its next follow-up task; by default at most 8 agents across
+// the tree work at once, two levels below its root; a wait lasts at most 5
 // minutes (the turn's own tool timeout and deadline bound it); the limits
 // and the wait bounds are the plugin's options; an agent's role
 // (`agent_type`) is one of the Agent's roles, which only narrow it; its
@@ -31,6 +29,7 @@
 
 mod runs;
 mod statuses;
+mod wake;
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -49,6 +48,7 @@ pub(crate) use self::runs::SubagentRuns;
 pub(super) use self::runs::{AgentRunStatus, AgentUpdate};
 use super::models::refusal;
 use super::options::SubagentLimits;
+use super::tree::spawn_lineage;
 use crate::roles::{AgentRoleCatalogReader, AgentSessionRole, DEFAULT_ROLE};
 use crate::session_driver::{AgentSessionDriver, ChildModelRequest, SpawnModelCatalog};
 use crate::wake::{root_of, Wakes};
@@ -147,12 +147,16 @@ impl SubagentService {
         parent: AgentSessionId,
         request: SpawnRequest,
     ) -> Result<AgentSessionRuntimeSnapshot, AgentError> {
+        let _admission = self
+            .runs
+            .admission
+            .acquire()
+            .await
+            .map_err(|error| AgentError::Internal(error.to_string()))?;
+        let lineage = self
+            .blocking(move |driver| spawn_lineage(driver, parent))
+            .await?;
         let parent_session = self.session(parent).await?;
-        if parent_session.parent_session_id.is_some() {
-            return Err(refused(
-                "a sub-agent cannot spawn agents of its own; only the main conversation spawns agents",
-            ));
-        }
         if self
             .agents(parent)
             .await?
@@ -164,7 +168,7 @@ impl SubagentService {
                 request.task_name
             )));
         }
-        self.ensure_capacity(parent)?;
+        self.ensure_capacity(lineage.root, None).await?;
         let role = request.role;
         let model = self
             .driver
@@ -289,6 +293,14 @@ impl SubagentService {
         let Some(message) = self.steer(agent.id, message).await? else {
             return Ok(Delivery::Steered);
         };
+        let _admission = self
+            .runs
+            .admission
+            .acquire()
+            .await
+            .map_err(|error| AgentError::Internal(error.to_string()))?;
+        let root = self.blocking(move |driver| root_of(driver, parent)).await?;
+        self.ensure_capacity(root, Some(agent.id)).await?;
         self.start(parent, agent, message).await?;
         Ok(Delivery::Started)
     }
@@ -386,15 +398,22 @@ impl SubagentService {
             .await
     }
 
-    /// What the session may spawn agents on, when it is not an agent
-    /// itself.
+    /// The eligible spawning session’s depth in its root’s tree.
+    pub(super) async fn spawn_depth(
+        &self,
+        session_id: AgentSessionId,
+    ) -> Result<usize, AgentError> {
+        self.blocking(move |driver| spawn_lineage(driver, session_id).map(|lineage| lineage.depth))
+            .await
+    }
+
     pub(super) async fn spawn_models(
         &self,
         session_id: AgentSessionId,
     ) -> Result<Option<SpawnModelCatalog>, AgentError> {
         self.blocking(move |driver| {
             let session = driver.snapshot(session_id)?;
-            if session.parent_session_id.is_some() {
+            if spawn_lineage(driver, session_id).is_err() {
                 return Ok(None);
             }
             driver
@@ -405,9 +424,20 @@ impl SubagentService {
         .await
     }
 
-    fn ensure_capacity(&self, parent: AgentSessionId) -> Result<(), AgentError> {
+    async fn ensure_capacity(
+        &self,
+        root: AgentSessionId,
+        continuing: Option<AgentSessionId>,
+    ) -> Result<(), AgentError> {
+        let runs = self.runs.clone();
+        let agents = self
+            .blocking(move |driver| runs.live_agents(driver, root))
+            .await?;
+        if continuing.is_some_and(|id| agents.contains(&id)) {
+            return Ok(());
+        }
         let maximum = self.limits().maximum_running_agents;
-        if self.runs.running(parent) >= maximum {
+        if agents.len() >= maximum {
             return Err(capacity_refusal(maximum));
         }
         Ok(())
@@ -424,16 +454,8 @@ impl SubagentService {
         let child = agent.id;
         self.driver.inherit_permission_mode(parent, child).await?;
         let root = self.blocking(move |driver| root_of(driver, parent)).await?;
-        let maximum = self.limits().maximum_running_agents;
         let (text, turn) = {
             let mut runs = self.runs.runs.lock();
-            let running = runs
-                .values()
-                .filter(|run| run.parent == parent && run.status == AgentRunStatus::Running)
-                .count();
-            if running >= maximum {
-                return Err(capacity_refusal(maximum));
-            }
             let run = runs
                 .entry(child)
                 .or_insert_with(|| AgentRun::new(parent, agent));
@@ -518,7 +540,7 @@ fn role_name(role: Option<String>) -> String {
 
 fn capacity_refusal(maximum: usize) -> AgentError {
     refused(format!(
-        "at most {maximum} agents can run at once; wait for one to finish or interrupt one"
+        "at most {maximum} sub-agents work at once under the main conversation, counting theirs; wait for one to finish, or interrupt or close one"
     ))
 }
 

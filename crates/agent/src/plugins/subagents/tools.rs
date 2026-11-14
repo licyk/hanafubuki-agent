@@ -426,13 +426,15 @@ fn list_status(status: &AgentRunStatus) -> &'static str {
     match status {
         AgentRunStatus::PendingInit => "pending_init",
         AgentRunStatus::Running => "running",
+        AgentRunStatus::Waiting(_) => "waiting",
+        AgentRunStatus::Closed => "closed",
         AgentRunStatus::Interrupted => "interrupted",
         AgentRunStatus::Completed(_) => "completed",
         AgentRunStatus::Errored(_) => "errored",
     }
 }
 
-const SPAWN_AGENT_DESCRIPTION: &str = r#"Spawns an agent to work on the specified task. The agent is a separate conversation that runs in the background with your permission mode, and with your model and your tools unless `model`, `provider`, `reasoning_effort` or its `agent_type` say otherwise; it cannot spawn agents of its own. Refer to it by its task name, or by the agent id this returns, in the other agent tools.
+const SPAWN_AGENT_DESCRIPTION: &str = r#"Spawns an agent to work on the specified task. The agent is a separate conversation that runs in the background with your permission mode, and with your model and your tools unless `model`, `provider`, `reasoning_effort` or its `agent_type` say otherwise; an agent spawned by the main conversation can spawn agents of its own, one spawned by another agent cannot. Refer to it by its task name, or by the agent id this returns, in the other agent tools.
 When it finishes, wait_agent returns its final answer, and the sub-agent guidance says whether it also reaches you by itself. You can send it messages and follow-up tasks meanwhile.
 
 Note that passing `fork_turns="none"` will not pass any surrounding context to the spawned agent, which may cause the agent to lack the context it needs to complete its task, whereas `fork_turns="all"` will provide the agent with this conversation up to your current turn. Either way the message is the only part of the current turn the agent reads, so make it self-contained."#;
