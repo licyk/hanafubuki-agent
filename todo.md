@@ -364,6 +364,11 @@ changed (none expected), what Hanafubuki must change at its next pin
         format:check:site`, `bun run site:check`, `bun run site:test` (28
         passed). Skipped: `site:build` (the Site workflow builds it).
         Windows and macOS: CI only.
+      - CI on daceddf:
+        https://github.com/licyk/hanafubuki-agent/actions/runs/43575490852,
+        Linux, Windows and macOS passed at the first attempt. Site on
+        daceddf: .../runs/43575490865, passed, its build and deploy
+        included.
 - [ ] U3 (after U1 and U2): the prompt before the Agent starts (Codex's
       screen and keys: Update now, Skip, Skip until next version), skipped
       with a prompt argument; "Update now" runs `update`'s flow in the
