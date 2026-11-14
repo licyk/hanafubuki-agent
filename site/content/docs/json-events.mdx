@@ -200,6 +200,8 @@ icon: Braces
 | `startedAt`、`updatedAt`、`finishedAt` | 时间；`finishedAt` 在活动结束前为 `null`                                                                                                |
 | `execution`、`output`                  | 进程活动的状态和输出摘要，或 `null`                                                                                                     |
 
+执行活动的 `execution.initiatingCallId`（若有）标识启动进程的调用。后续 `write_stdin` 报告保留最初的身份，`kind.callId` 仍标识本次报告的调用。旧的持久活动或启动调用未知时，该可选字段缺省。
+
 ## 顺序 [#ordering]
 
 - 回合以 `turn_started` 开始，接着是记录你的消息的 `history_committed`，新会话随后是 `session_title_updated`。

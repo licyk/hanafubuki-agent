@@ -200,6 +200,8 @@ The stream carries no session object and no event when a session's [role](/docs/
 | `startedAt`, `updatedAt`, `finishedAt` | Times; `finishedAt` is `null` until the activity ends                                                                                   |
 | `execution`, `output`                  | A process activity's state and an excerpt of its output, or `null`                                                                      |
 
+An execution activity's `execution.initiatingCallId`, when present, identifies the call that started the process. Later `write_stdin` reports keep that initial identity; `kind.callId` still identifies the reporting call. The optional field is also absent on older persisted activities or when the initiating call is unknown.
+
 ## Order [#ordering]
 
 - A turn starts with `turn_started`, then the `history_committed` of your message, and in a new session `session_title_updated`.

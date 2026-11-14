@@ -19,6 +19,65 @@ fn tool_event(call_id: &str, action: AgentActivityAction) -> AgentEventKind {
 }
 
 #[test]
+fn stdin_and_duplicate_start_keep_the_execution_initiating_call() {
+    let mut tracker = AgentActivityTracker::default();
+    let start = AgentToolProgressUpdate::ExecutionStarted {
+        execution_id: 7,
+        generation: 2,
+        action: AgentActivityAction::fixed("exec_command"),
+        status: AgentExecutionProgressStatus::Running,
+    };
+    tracker.observe(
+        AgentEventSequence::new(1),
+        &AgentEventKind::ExecutionProgress {
+            call_id: Some("original".into()),
+            update: start.clone(),
+        },
+        10,
+    );
+    assert!(tracker
+        .observe(
+            AgentEventSequence::new(2),
+            &AgentEventKind::ExecutionProgress {
+                call_id: Some("later-stdin".into()),
+                update: start
+            },
+            20
+        )
+        .is_none());
+    let updated = tracker
+        .observe(
+            AgentEventSequence::new(3),
+            &AgentEventKind::ExecutionProgress {
+                call_id: Some("later-stdin".into()),
+                update: AgentToolProgressUpdate::ExecutionOutput {
+                    execution_id: 7,
+                    generation: 2,
+                    text: "still running".into(),
+                    next_offset: 13,
+                    truncated: false,
+                },
+            },
+            30,
+        )
+        .unwrap();
+    assert_eq!(
+        updated.execution.unwrap().initiating_call_id.as_deref(),
+        Some("original")
+    );
+    let restored = AgentActivityTracker::restore(tracker.persisted_snapshots());
+    assert_eq!(
+        restored.active_snapshots()[0]
+            .execution
+            .as_ref()
+            .unwrap()
+            .initiating_call_id
+            .as_deref(),
+        Some("original")
+    );
+}
+
+#[test]
 fn concurrent_tools_complete_independently() {
     let mut tracker = AgentActivityTracker::default();
     let first = tracker

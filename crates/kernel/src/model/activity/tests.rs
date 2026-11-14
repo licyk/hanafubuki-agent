@@ -89,3 +89,18 @@ fn lifecycle_values_stay_strict() {
     assert!(serde_json::from_str::<AgentActivityPhase>(r#""not_a_phase""#).is_err());
     assert!(serde_json::from_str::<AgentActivityKind>(r#""not_a_kind""#).is_err());
 }
+
+#[test]
+fn an_execution_with_an_unknown_initiating_call_remains_readable() {
+    let base =
+        serde_json::json!({"executionId":7,"generation":2,"status":"running","exitCode":null});
+    let absent: AgentExecutionActivityRef = serde_json::from_value(base.clone()).unwrap();
+    assert!(absent.initiating_call_id.is_none());
+    for invalid in [serde_json::json!(42), serde_json::json!({"later":"format"})] {
+        let mut value = base.clone();
+        value["initiatingCallId"] = invalid;
+        let decoded: AgentExecutionActivityRef = serde_json::from_value(value).unwrap();
+        assert!(decoded.initiating_call_id.is_none());
+        assert_eq!(decoded.execution_id, 7);
+    }
+}

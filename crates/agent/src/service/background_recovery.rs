@@ -17,10 +17,9 @@ mod tests;
 
 impl AgentApplicationService {
     pub(super) fn capture_lost_background_work(&self) -> LostWork {
-        let active = self
-            .core
-            .list_snapshots()
-            .into_iter()
+        let sessions = self.core.list_snapshots();
+        let mut active: BTreeSet<_> = sessions
+            .iter()
             .filter_map(|session| {
                 session
                     .turn
@@ -29,6 +28,18 @@ impl AgentApplicationService {
                     .then_some(session.id)
             })
             .collect();
+        for root in sessions
+            .iter()
+            .filter(|session| session.parent_session_id.is_none())
+        {
+            match self.wakes.runs.live_agents(&self.driver, root.id) {
+                Ok(agents) => active.extend(agents),
+                Err(error) => log::warn!(
+                    "could not capture live background agents for {}: {error}",
+                    root.id
+                ),
+            }
+        }
         self.lost_background_work(active, self.core.background_terminals_to_interrupt())
     }
 

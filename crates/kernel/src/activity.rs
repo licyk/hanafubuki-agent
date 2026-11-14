@@ -176,7 +176,9 @@ impl AgentActivityTracker {
                 Some(*current_retry),
                 now,
             ),
-            AgentEventKind::ExecutionProgress { update, .. } => self.observe_execution(update, now),
+            AgentEventKind::ExecutionProgress { call_id, update } => {
+                self.observe_execution(update, call_id.as_deref(), now)
+            }
             AgentEventKind::TurnCompleted { .. } => {
                 self.finish_turn_activities(AgentActivityPhase::Succeeded, now);
                 None
@@ -417,6 +419,7 @@ impl AgentActivityTracker {
     fn observe_execution(
         &mut self,
         update: &AgentToolProgressUpdate,
+        call_id: Option<&str>,
         now: u128,
     ) -> Option<AgentActivitySnapshot> {
         let changed = match update {
@@ -429,7 +432,17 @@ impl AgentActivityTracker {
                 if self.execution_index(*execution_id, *generation).is_some() {
                     return None;
                 }
-                self.start_execution(*execution_id, *generation, action.clone(), *status, now)
+                self.start_execution(
+                    AgentExecutionActivityRef {
+                        execution_id: *execution_id,
+                        generation: *generation,
+                        initiating_call_id: call_id.map(str::to_owned),
+                        status: *status,
+                        exit_code: None,
+                    },
+                    action.clone(),
+                    now,
+                )
             }
             AgentToolProgressUpdate::ExecutionOutput {
                 execution_id,
@@ -501,12 +514,12 @@ impl AgentActivityTracker {
     /// Record a new execution activity. The caller trims retained activities.
     fn start_execution(
         &mut self,
-        execution_id: u64,
-        generation: u64,
+        execution: AgentExecutionActivityRef,
         action: AgentActivityAction,
-        status: AgentExecutionProgressStatus,
         now: u128,
     ) -> AgentActivitySnapshot {
+        let execution_id = execution.execution_id;
+        let generation = execution.generation;
         let snapshot = AgentActivitySnapshot {
             id: self.allocate_activity_id(),
             revision: 1,
@@ -520,12 +533,7 @@ impl AgentActivityTracker {
             started_at: now,
             updated_at: now,
             finished_at: None,
-            execution: Some(AgentExecutionActivityRef {
-                execution_id,
-                generation,
-                status,
-                exit_code: None,
-            }),
+            execution: Some(execution),
             output: Some(AgentActivityOutputPreview::default()),
         };
         self.activities.push_back(ActivityRecord {

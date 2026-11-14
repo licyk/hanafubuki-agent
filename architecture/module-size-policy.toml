@@ -14,8 +14,8 @@ production-function = 200
 
 [[exceptions]]
 path = "crates/kernel/src/activity.rs"
-ceiling = 647
-reason = "The activity tracker and the output preview it maintains; observe is an exhaustive event dispatch with no catch-all arm."
+ceiling = 655
+reason = "The activity tracker and its output preview, including the initiating call retained across later execution progress; observe is an exhaustive event dispatch with no catch-all arm."
 
 [[exceptions]]
 path = "crates/agent/src/memory/supervisor.rs"

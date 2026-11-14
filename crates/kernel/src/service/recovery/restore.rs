@@ -97,6 +97,10 @@ impl AgentService {
             .filter(|activity| !activity.phase.is_terminal())
             .filter_map(|activity| {
                 let execution = activity.execution.as_ref()?;
+                let call_id = execution.initiating_call_id.as_deref()?;
+                if crate::service::tool_execution::is_user_shell_call_id(call_id) {
+                    return None;
+                }
                 (!execution.status.is_terminal()).then(|| crate::AgentInterruptedExecution {
                     session_id: recovered.runtime.id,
                     execution_id: execution.execution_id,

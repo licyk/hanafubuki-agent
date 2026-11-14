@@ -745,6 +745,13 @@ cross-session transaction protocol. Failed report writes are diagnosed
 and retain the histories. Execution activities do not always persist a
 command subject, so a recovered terminal can be identified by id alone.
 
+Execution activities additionally retain optional `initiating_call_id` from
+their first `ExecutionStarted`. Later stdin progress cannot replace it.
+Recovery excludes `!command` call ids; missing or unreadable old origins
+remain readable and are repaired without guessing a terminal loss.
+Clean capture includes `SubagentRuns::live_agents`, so a paused `Waiting`
+branch with only an unread child update is reported once as lost too.
+
 ### 3.11 `exec` [1][2][3]
 
 - `exec` installs a background sink that forwards to its channel

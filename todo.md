@@ -5684,8 +5684,18 @@ its next pin, and any module-size exception.
       and scoped kernel/history/facade clippy with all targets/features
       and `-D warnings` passed. Full workspace and native CI belong to
       integration; documentation-only site edits do not need site builds.
-      No golden changes or module-size exceptions. Embedding hosts adopt
-      the added typed fields on `AgentRecoveryReport` at their next pin.
+      No model golden changes. Embedding hosts adopt the added typed
+      fields on `AgentRecoveryReport` and optional `initiating_call_id`
+      on `AgentExecutionActivityRef` (including struct literals) at their
+      next pin; execution activity JSON adds optional `initiatingCallId`.
+    - Integrated R4 `live_agents` capture includes pending-only `Waiting`
+      branches without interpreting restored queues as newly live work.
+      Regressions cover that nested shutdown and another restart, and a
+      crashed foreground `!command` beside an earlier model terminal.
+      Unknown legacy origins remain readable/repaired without guessed
+      terminal loss; stdin and duplicate starts retain the initial call.
+      The cohesive activity tracker's reviewed size ceiling rises from
+      647 to 655 code lines for that identity plumbing (no unrelated split).
 - [ ] R8: the terminal interface. `/tasks` (the manager: a tree of agents,
       the terminals, inspect, close, resume), the `background-tasks`
       status item in the default status line, the waiting and paused
