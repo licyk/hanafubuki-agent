@@ -707,6 +707,14 @@ changed (none expected), what Hanafubuki must change at its next pin
         run format:check:site`, `bun run site:check`, `bun run site:test`
         (28 passed). Skipped: `site:build` (the Site workflow). Windows
         and macOS: CI only.
+      - CI on `e4c0fbe`: CI
+        https://github.com/licyk/hanafubuki-agent/actions/runs/43589707533
+        (Linux, macOS and Windows: success, at the first attempt); Site
+        https://github.com/licyk/hanafubuki-agent/actions/runs/43589707528
+        (success). The pseudo-terminal suite ran its 6 tests on Linux and
+        macOS (0 on Windows, as gated); the Windows sweep test ran on
+        Windows (`a_launch_removes_the_executables_moved_aside_on_windows
+        ... ok`).
       - Goldens: none. Module size: no exception added or raised
         (`update_prompt.rs` 317 code lines, `update_check/mod.rs` 140,
         `app/tests/mod.rs` 796 of 900). Hanafubuki: nothing (the facade is
