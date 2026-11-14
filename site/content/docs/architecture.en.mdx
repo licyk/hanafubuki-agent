@@ -376,7 +376,7 @@ Compared with Codex (`codex-rs`), which the Agent's mechanisms were checked agai
 | Context sections | typed world state                                                                 | typed sections with plugin-owned renderers and slots                                                                                               |
 | Compaction       | local, remote and remote v2, in line or asynchronous; initial context re-rendered | local summary, Responses compact and v2, in line or in the background (`background`, a rebased install); every section re-rendered; a capped retry |
 | Memory           | two phases, leases, citations                                                     | the same design, with eligibility before the limit and backoff in both phases                                                                      |
-| Sandbox | bubblewrap/seccomp, Seatbelt, restricted tokens and elevated setup | bundled bubblewrap/seccomp with legacy Landlock, Seatbelt, Windows restricted tokens and account/WFP setup; approval-based escalation |
+| Sandbox          | bubblewrap/seccomp, Seatbelt, restricted tokens and elevated setup                | bundled bubblewrap/seccomp with legacy Landlock, Seatbelt, Windows restricted tokens and account/WFP setup; approval-based escalation              |
 
 ## Known limits [#known-limits]
 

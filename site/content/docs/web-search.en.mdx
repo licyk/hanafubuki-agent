@@ -8,18 +8,18 @@ The built-in `web` plugin includes the search implementation ported from [dsh-fr
 
 ## Tools [#tools]
 
-| Tool | Use |
-| --- | --- |
-| `web_search`, `advanced_search` | Search with a selected engine or the automatic fallback chain. |
-| `multi_search` | Query a language pool concurrently, merge URLs and similar snippets, diversify domains and retain engine provenance. |
-| `platform_search` | GitHub, V2EX hot topics, Bilibili, Reddit, Hacker News (`hackernews`), Stack Overflow, Wikipedia, npm, YouTube, Vimeo, Juejin, Douban, Qiita or X. |
-| `video_search` | Bing Videos and DuckDuckGo Videos, including automatic fallback. |
-| `weather` | Open-Meteo current conditions and a 1–7 day forecast, with timezone and units. |
-| `domain_search` | Query a specialized source directly; choose the engine appropriate to the question. |
-| `research` | Build a bounded evidence package, optionally rerank it and perform one gap-driven follow-up. |
-| `cache_search` | Search research documents fetched within seven days, without network access. |
-| `fetch_web_page` | Extract and paginate a public page; continue with the returned offset and content generation. |
-| `free_search_test` | Probe engines and inspect their errors, cooldowns and statistics. Explicit paid-engine probes consume credits. |
+| Tool                            | Use                                                                                                                                                |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `web_search`, `advanced_search` | Search with a selected engine or the automatic fallback chain.                                                                                     |
+| `multi_search`                  | Query a language pool concurrently, merge URLs and similar snippets, diversify domains and retain engine provenance.                               |
+| `platform_search`               | GitHub, V2EX hot topics, Bilibili, Reddit, Hacker News (`hackernews`), Stack Overflow, Wikipedia, npm, YouTube, Vimeo, Juejin, Douban, Qiita or X. |
+| `video_search`                  | Bing Videos and DuckDuckGo Videos, including automatic fallback.                                                                                   |
+| `weather`                       | Open-Meteo current conditions and a 1–7 day forecast, with timezone and units.                                                                     |
+| `domain_search`                 | Query a specialized source directly; choose the engine appropriate to the question.                                                                |
+| `research`                      | Build a bounded evidence package, optionally rerank it and perform one gap-driven follow-up.                                                       |
+| `cache_search`                  | Search research documents fetched within seven days, without network access.                                                                       |
+| `fetch_web_page`                | Extract and paginate a public page; continue with the returned offset and content generation.                                                      |
+| `free_search_test`              | Probe engines and inspect their errors, cooldowns and statistics. Explicit paid-engine probes consume credits.                                     |
 
 `timeRange` accepts `day`, `week`, `month`, `year`, a duration such as `12h`, `3d`, `2w`, `3mo`, or an absolute `YYYY-MM-DD`. Engines with coarse time filters approximate durations; others receive a start date. Engine provenance means “retrieved by”, not independent corroboration.
 
@@ -29,16 +29,16 @@ Metaso, Yandex, Yuanbao, OpenAI, Gemini and Claude require an explicit selection
 
 ## Specialized engines [#specialized-engines]
 
-| Category | Engine IDs |
-| --- | --- |
-| Packages and lifecycle | `pypi`, `crates`, `github_releases`, `endoflife`, `registries`, `huggingface` |
-| Academic literature | `crossref`, `openalex`, `s2`, `arxiv`, `pubmed`, `europepmc`, `dblp`, `zenodo`, `doaj` |
-| Vulnerabilities | `nvd`, `osv`, `cisakev` |
-| Finance | `yahoofinance`, `coingecko`, `frankfurter`, `sec_edgar`, `imf`, `cfets`, `cninfo` |
-| Public facts | `worldbank`, `wikidata`, `holidays`, `worldclock`, `openmeteo`, `rdap`, `gleif` |
-| News | `googlenews`, `gdelt`, `aihot` |
-| Legal sources | `federalregister`, `courtlistener`, `openlegaldata`, `uk_legislation` |
-| Additional SERPs | `so360`, `sogou` |
+| Category               | Engine IDs                                                                             |
+| ---------------------- | -------------------------------------------------------------------------------------- |
+| Packages and lifecycle | `pypi`, `crates`, `github_releases`, `endoflife`, `registries`, `huggingface`          |
+| Academic literature    | `crossref`, `openalex`, `s2`, `arxiv`, `pubmed`, `europepmc`, `dblp`, `zenodo`, `doaj` |
+| Vulnerabilities        | `nvd`, `osv`, `cisakev`                                                                |
+| Finance                | `yahoofinance`, `coingecko`, `frankfurter`, `sec_edgar`, `imf`, `cfets`, `cninfo`      |
+| Public facts           | `worldbank`, `wikidata`, `holidays`, `worldclock`, `openmeteo`, `rdap`, `gleif`        |
+| News                   | `googlenews`, `gdelt`, `aihot`                                                         |
+| Legal sources          | `federalregister`, `courtlistener`, `openlegaldata`, `uk_legislation`                  |
+| Additional SERPs       | `so360`, `sogou`                                                                       |
 
 ## Configuration [#configuration]
 
@@ -63,24 +63,24 @@ cacheTtlMinutes = 5
 
 The older top-level `webSearchProvider` remains a host restriction: pinning it to `duckduckgo` or `searxng` overrides model-selected engines. Leave it `auto` to use the plugin's full engine catalog. The global network proxy, `searxngBaseUrl`, `webFetchUseJinaReader` and `webFetchResolveThroughProxy` still apply.
 
-| Options | Meaning |
-| --- | --- |
-| `provider`, `allowedEngines`, `disabledEngines` | Default mode/engine and host restrictions. An empty allowlist allows automatically eligible engines. |
-| `fallbackOrder`, `fallbackOn` | Priority and failure classes permitting fallback: `quota`, `auth`, `region`, `bot-wall`, `transient`, `invalid-response`, `unknown`. |
-| `zhPool`, `enPool` | CJK and other-language pools; automatic routing also considers task and time constraints. |
-| `multiMaxEngines`, `multiMinSources`, `multiMaxResults` | Parallel engine ceiling (`0`: whole pool), target successful engines, and merged result ceiling (1–50). The target is not a guarantee. |
-| `language`, `bingMarket`, `region`, `safeSearch` | Provider localization, optional Bing market override, region and safe-search policy. |
-| `promptLanguage` | English or Chinese tool descriptions, independent of search language. Custom user instructions use the Agent's normal `AGENTS.md`/host instructions. |
-| `platforms`, `disabledTools`, `blockedDomains` | Native-platform allowlist, tools to omit from the catalog, and result domains to exclude (including subdomains). |
-| `cacheEnabled`, `cacheTtlMinutes` | In-memory search cache, 0–5 minutes. |
-| `<engine>ApiKeys`, `<engine>Endpoint`, `<engine>Model` | Secret key rings, endpoint and supported model overrides. Keys accept commas, semicolons or newlines; empty keys fall back to the engine's environment variables. Hyphen/underscore engine IDs become camelCase option prefixes, such as `deepseekOfficialApiKeys` and `zhihuGlobalApiKeys`. |
-| `googleCseId`, `metasoScope`, `yandexFolderId`, `yandexSearchType`, `yuanbaoMode`, `yuanbaoSite` | Provider-specific parameters. |
-| `searxngInstances`, `degoogInstances` | Instance failover lists; Degoog requires a configured instance. |
-| `researchPrimaryPool`, `researchEscalationPool` | Initial and follow-up research engines. |
-| `rerankKey`, `rerankEndpoint`, `decisionKey`, `decisionEndpoint` | Optional SiliconFlow reranking/embeddings and decision service. Missing or failed enrichment uses rules and reports reduced evaluation. |
-| `fetchPrefer`, `fetchExaEndpoint`, `fetchFirecrawlEndpoint`, `fetchCrawl4aiEndpoint`, `crawl4aiApiKey` | Extraction fallback order (`exa` or `firecrawl`) and service endpoints/credentials. Exa and Firecrawl use their engine key rings. |
-| `localHelpersEnabled`, `browserFetch` | Enable optional installed local helpers, and browser rendering within those helpers. Local helpers are off by default. |
-| `allowFakeIpCidrs` | Explicit reserved DNS ranges for transparent proxies, for example `198.18.0.0/15`. Loopback, IPv4 private networks, link-local and multicast remain blocked. |
+| Options                                                                                                | Meaning                                                                                                                                                                                                                                                                                      |
+| ------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `provider`, `allowedEngines`, `disabledEngines`                                                        | Default mode/engine and host restrictions. An empty allowlist allows automatically eligible engines.                                                                                                                                                                                         |
+| `fallbackOrder`, `fallbackOn`                                                                          | Priority and failure classes permitting fallback: `quota`, `auth`, `region`, `bot-wall`, `transient`, `invalid-response`, `unknown`.                                                                                                                                                         |
+| `zhPool`, `enPool`                                                                                     | CJK and other-language pools; automatic routing also considers task and time constraints.                                                                                                                                                                                                    |
+| `multiMaxEngines`, `multiMinSources`, `multiMaxResults`                                                | Parallel engine ceiling (`0`: whole pool), target successful engines, and merged result ceiling (1–50). The target is not a guarantee.                                                                                                                                                       |
+| `language`, `bingMarket`, `region`, `safeSearch`                                                       | Provider localization, optional Bing market override, region and safe-search policy.                                                                                                                                                                                                         |
+| `promptLanguage`                                                                                       | English or Chinese tool descriptions, independent of search language. Custom user instructions use the Agent's normal `AGENTS.md`/host instructions.                                                                                                                                         |
+| `platforms`, `disabledTools`, `blockedDomains`                                                         | Native-platform allowlist, tools to omit from the catalog, and result domains to exclude (including subdomains).                                                                                                                                                                             |
+| `cacheEnabled`, `cacheTtlMinutes`                                                                      | In-memory search cache, 0–5 minutes.                                                                                                                                                                                                                                                         |
+| `<engine>ApiKeys`, `<engine>Endpoint`, `<engine>Model`                                                 | Secret key rings, endpoint and supported model overrides. Keys accept commas, semicolons or newlines; empty keys fall back to the engine's environment variables. Hyphen/underscore engine IDs become camelCase option prefixes, such as `deepseekOfficialApiKeys` and `zhihuGlobalApiKeys`. |
+| `googleCseId`, `metasoScope`, `yandexFolderId`, `yandexSearchType`, `yuanbaoMode`, `yuanbaoSite`       | Provider-specific parameters.                                                                                                                                                                                                                                                                |
+| `searxngInstances`, `degoogInstances`                                                                  | Instance failover lists; Degoog requires a configured instance.                                                                                                                                                                                                                              |
+| `researchPrimaryPool`, `researchEscalationPool`                                                        | Initial and follow-up research engines.                                                                                                                                                                                                                                                      |
+| `rerankKey`, `rerankEndpoint`, `decisionKey`, `decisionEndpoint`                                       | Optional SiliconFlow reranking/embeddings and decision service. Missing or failed enrichment uses rules and reports reduced evaluation.                                                                                                                                                      |
+| `fetchPrefer`, `fetchExaEndpoint`, `fetchFirecrawlEndpoint`, `fetchCrawl4aiEndpoint`, `crawl4aiApiKey` | Extraction fallback order (`exa` or `firecrawl`) and service endpoints/credentials. Exa and Firecrawl use their engine key rings.                                                                                                                                                            |
+| `localHelpersEnabled`, `browserFetch`                                                                  | Enable optional installed local helpers, and browser rendering within those helpers. Local helpers are off by default.                                                                                                                                                                       |
+| `allowFakeIpCidrs`                                                                                     | Explicit reserved DNS ranges for transparent proxies, for example `198.18.0.0/15`. Loopback, IPv4 private networks, link-local and multicast remain blocked.                                                                                                                                 |
 
 The Agent's secret setting fields are masked in forms; environment variables can keep API keys out of `config.toml`. DSH's credential center, plugin installer/updater, web UI and prompt page editor are replaced by the Agent's configuration, release, plugin and instruction facilities; DSH settings are not imported automatically.
 

@@ -8,18 +8,18 @@ icon: Search
 
 ## 工具 [#tools]
 
-| 工具 | 用途 |
-| --- | --- |
-| `web_search`、`advanced_search` | 指定引擎搜索，或使用自动回退链。 |
-| `multi_search` | 按语言池并发搜索，合并重复 URL 和相似片段，分散来源域名并保留引擎出处。 |
-| `platform_search` | GitHub、V2EX 热门主题、Bilibili、Reddit、Hacker News（`hackernews`）、Stack Overflow、Wikipedia、npm、YouTube、Vimeo、掘金、豆瓣、Qiita、X。 |
-| `video_search` | Bing Videos 与 DuckDuckGo Videos，支持自动回退。 |
-| `weather` | Open-Meteo 当前天气和 1–7 日预报，包含时区及单位。 |
-| `domain_search` | 直接查询专业数据源，按问题选择相应引擎。 |
-| `research` | 汇集有界证据包，可选重排，并按证据缺口补搜一轮。 |
-| `cache_search` | 无网络请求地查询近七日抓取的研究文档。 |
-| `fetch_web_page` | 提取公开网页并分页，使用返回的偏移和内容版本继续读取。 |
-| `free_search_test` | 探测引擎并查看错误、冷却和统计；显式探测付费引擎会消耗额度。 |
+| 工具                            | 用途                                                                                                                                         |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `web_search`、`advanced_search` | 指定引擎搜索，或使用自动回退链。                                                                                                             |
+| `multi_search`                  | 按语言池并发搜索，合并重复 URL 和相似片段，分散来源域名并保留引擎出处。                                                                      |
+| `platform_search`               | GitHub、V2EX 热门主题、Bilibili、Reddit、Hacker News（`hackernews`）、Stack Overflow、Wikipedia、npm、YouTube、Vimeo、掘金、豆瓣、Qiita、X。 |
+| `video_search`                  | Bing Videos 与 DuckDuckGo Videos，支持自动回退。                                                                                             |
+| `weather`                       | Open-Meteo 当前天气和 1–7 日预报，包含时区及单位。                                                                                           |
+| `domain_search`                 | 直接查询专业数据源，按问题选择相应引擎。                                                                                                     |
+| `research`                      | 汇集有界证据包，可选重排，并按证据缺口补搜一轮。                                                                                             |
+| `cache_search`                  | 无网络请求地查询近七日抓取的研究文档。                                                                                                       |
+| `fetch_web_page`                | 提取公开网页并分页，使用返回的偏移和内容版本继续读取。                                                                                       |
+| `free_search_test`              | 探测引擎并查看错误、冷却和统计；显式探测付费引擎会消耗额度。                                                                                 |
 
 `timeRange` 支持 `day`、`week`、`month`、`year`，`12h`、`3d`、`2w`、`3mo` 等时长，以及绝对日期 `YYYY-MM-DD`。只有粗粒度时间过滤的引擎会近似映射时长，其他引擎使用起始日期。引擎出处表示“由谁检索到”，不代表独立验证。
 
@@ -29,16 +29,16 @@ Metaso、Yandex、Yuanbao、OpenAI、Gemini 和 Claude 需要显式选择或宿�
 
 ## 专业数据引擎 [#specialized-engines]
 
-| 类别 | 引擎 ID |
-| --- | --- |
-| 软件包与生命周期 | `pypi`, `crates`, `github_releases`, `endoflife`, `registries`, `huggingface` |
-| 学术文献 | `crossref`, `openalex`, `s2`, `arxiv`, `pubmed`, `europepmc`, `dblp`, `zenodo`, `doaj` |
-| 漏洞信息 | `nvd`, `osv`, `cisakev` |
-| 财经 | `yahoofinance`, `coingecko`, `frankfurter`, `sec_edgar`, `imf`, `cfets`, `cninfo` |
-| 公共数据 | `worldbank`, `wikidata`, `holidays`, `worldclock`, `openmeteo`, `rdap`, `gleif` |
-| 新闻 | `googlenews`, `gdelt`, `aihot` |
-| 法律资料 | `federalregister`, `courtlistener`, `openlegaldata`, `uk_legislation` |
-| 补充网页搜索 | `so360`, `sogou` |
+| 类别             | 引擎 ID                                                                                |
+| ---------------- | -------------------------------------------------------------------------------------- |
+| 软件包与生命周期 | `pypi`, `crates`, `github_releases`, `endoflife`, `registries`, `huggingface`          |
+| 学术文献         | `crossref`, `openalex`, `s2`, `arxiv`, `pubmed`, `europepmc`, `dblp`, `zenodo`, `doaj` |
+| 漏洞信息         | `nvd`, `osv`, `cisakev`                                                                |
+| 财经             | `yahoofinance`, `coingecko`, `frankfurter`, `sec_edgar`, `imf`, `cfets`, `cninfo`      |
+| 公共数据         | `worldbank`, `wikidata`, `holidays`, `worldclock`, `openmeteo`, `rdap`, `gleif`        |
+| 新闻             | `googlenews`, `gdelt`, `aihot`                                                         |
+| 法律资料         | `federalregister`, `courtlistener`, `openlegaldata`, `uk_legislation`                  |
+| 补充网页搜索     | `so360`, `sogou`                                                                       |
 
 ## 配置 [#configuration]
 
@@ -63,24 +63,24 @@ cacheTtlMinutes = 5
 
 原有顶层 `webSearchProvider` 仍是宿主限制：固定为 `duckduckgo` 或 `searxng` 会覆盖模型选择的引擎。使用完整插件引擎目录时应设为 `auto`。全局网络代理、`searxngBaseUrl`、`webFetchUseJinaReader`、`webFetchResolveThroughProxy` 继续生效。
 
-| 选项 | 含义 |
-| --- | --- |
-| `provider`、`allowedEngines`、`disabledEngines` | 默认模式/引擎和宿主限制；空允许列表采用自动可用引擎。 |
-| `fallbackOrder`、`fallbackOn` | 回退优先级及允许回退的失败类型：`quota`、`auth`、`region`、`bot-wall`、`transient`、`invalid-response`、`unknown`。 |
-| `zhPool`、`enPool` | CJK 与其他语言池；自动路由还会考虑任务和时间要求。 |
-| `multiMaxEngines`、`multiMinSources`、`multiMaxResults` | 并发引擎上限（`0` 表示整个池）、成功引擎目标数和合并结果上限（1–50）；目标数不代表保证。 |
-| `language`、`bingMarket`、`region`、`safeSearch` | 提供方语言、可选 Bing 市场覆盖、区域和安全搜索。 |
-| `promptLanguage` | 英文或中文工具描述，与搜索语言独立；自定义用户指令使用 Agent 的 `AGENTS.md` 或宿主指令设施。 |
-| `platforms`、`disabledTools`、`blockedDomains` | 平台允许列表、从目录中移除的工具和排除域名（含子域名）。 |
-| `cacheEnabled`、`cacheTtlMinutes` | 内存搜索缓存及 0–5 分钟有效期。 |
-| `<engine>ApiKeys`、`<engine>Endpoint`、`<engine>Model` | 密钥组、端点和受支持的模型覆盖；密钥用逗号、分号或换行分隔，留空则读取相应环境变量。引擎 ID 中连字符/下划线转换为 camelCase 前缀，例如 `deepseekOfficialApiKeys`、`zhihuGlobalApiKeys`。 |
-| `googleCseId`、`metasoScope`、`yandexFolderId`、`yandexSearchType`、`yuanbaoMode`、`yuanbaoSite` | 提供方专用参数。 |
-| `searxngInstances`、`degoogInstances` | 实例回退列表；Degoog 需要配置实例。 |
-| `researchPrimaryPool`、`researchEscalationPool` | 研究首轮与补搜引擎。 |
-| `rerankKey`、`rerankEndpoint`、`decisionKey`、`decisionEndpoint` | 可选 SiliconFlow 重排/嵌入及决策服务；未配置或失败时使用规则并报告未完成评估。 |
-| `fetchPrefer`、`fetchExaEndpoint`、`fetchFirecrawlEndpoint`、`fetchCrawl4aiEndpoint`、`crawl4aiApiKey` | 抓取回退顺序（`exa` 或 `firecrawl`）及端点/凭据；Exa、Firecrawl 使用其搜索引擎密钥组。 |
-| `localHelpersEnabled`、`browserFetch` | 启用已安装的本地辅助程序，以及其中的浏览器渲染；本地辅助程序默认关闭。 |
-| `allowFakeIpCidrs` | 透明代理使用的显式保留 DNS 网段，例如 `198.18.0.0/15`；回环、IPv4 私网、链路本地和多播仍被阻止。 |
+| 选项                                                                                                   | 含义                                                                                                                                                                                     |
+| ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `provider`、`allowedEngines`、`disabledEngines`                                                        | 默认模式/引擎和宿主限制；空允许列表采用自动可用引擎。                                                                                                                                    |
+| `fallbackOrder`、`fallbackOn`                                                                          | 回退优先级及允许回退的失败类型：`quota`、`auth`、`region`、`bot-wall`、`transient`、`invalid-response`、`unknown`。                                                                      |
+| `zhPool`、`enPool`                                                                                     | CJK 与其他语言池；自动路由还会考虑任务和时间要求。                                                                                                                                       |
+| `multiMaxEngines`、`multiMinSources`、`multiMaxResults`                                                | 并发引擎上限（`0` 表示整个池）、成功引擎目标数和合并结果上限（1–50）；目标数不代表保证。                                                                                                 |
+| `language`、`bingMarket`、`region`、`safeSearch`                                                       | 提供方语言、可选 Bing 市场覆盖、区域和安全搜索。                                                                                                                                         |
+| `promptLanguage`                                                                                       | 英文或中文工具描述，与搜索语言独立；自定义用户指令使用 Agent 的 `AGENTS.md` 或宿主指令设施。                                                                                             |
+| `platforms`、`disabledTools`、`blockedDomains`                                                         | 平台允许列表、从目录中移除的工具和排除域名（含子域名）。                                                                                                                                 |
+| `cacheEnabled`、`cacheTtlMinutes`                                                                      | 内存搜索缓存及 0–5 分钟有效期。                                                                                                                                                          |
+| `<engine>ApiKeys`、`<engine>Endpoint`、`<engine>Model`                                                 | 密钥组、端点和受支持的模型覆盖；密钥用逗号、分号或换行分隔，留空则读取相应环境变量。引擎 ID 中连字符/下划线转换为 camelCase 前缀，例如 `deepseekOfficialApiKeys`、`zhihuGlobalApiKeys`。 |
+| `googleCseId`、`metasoScope`、`yandexFolderId`、`yandexSearchType`、`yuanbaoMode`、`yuanbaoSite`       | 提供方专用参数。                                                                                                                                                                         |
+| `searxngInstances`、`degoogInstances`                                                                  | 实例回退列表；Degoog 需要配置实例。                                                                                                                                                      |
+| `researchPrimaryPool`、`researchEscalationPool`                                                        | 研究首轮与补搜引擎。                                                                                                                                                                     |
+| `rerankKey`、`rerankEndpoint`、`decisionKey`、`decisionEndpoint`                                       | 可选 SiliconFlow 重排/嵌入及决策服务；未配置或失败时使用规则并报告未完成评估。                                                                                                           |
+| `fetchPrefer`、`fetchExaEndpoint`、`fetchFirecrawlEndpoint`、`fetchCrawl4aiEndpoint`、`crawl4aiApiKey` | 抓取回退顺序（`exa` 或 `firecrawl`）及端点/凭据；Exa、Firecrawl 使用其搜索引擎密钥组。                                                                                                   |
+| `localHelpersEnabled`、`browserFetch`                                                                  | 启用已安装的本地辅助程序，以及其中的浏览器渲染；本地辅助程序默认关闭。                                                                                                                   |
+| `allowFakeIpCidrs`                                                                                     | 透明代理使用的显式保留 DNS 网段，例如 `198.18.0.0/15`；回环、IPv4 私网、链路本地和多播仍被阻止。                                                                                         |
 
 密钥字段在表单中掩码显示，也可以通过环境变量避免写入 `config.toml`。DSH 的凭据中心、安装/更新器、网页设置和提示词分页编辑器改由 Agent 的配置、发布、插件及指令设施承接，不自动导入 DSH 配置。
 
