@@ -1282,6 +1282,12 @@ From CI's failed jobs over the last 60 runs; each passed on a re-run.
   kill not confirmed in 5 s, a second defect. Left as is: such a turn ends before its stop is confirmed (its
   `ExecutionDisposed` progress comes after the turn). Locally: 30 of 30 runs with the 2 s hold (the only runs that
   exercise the race on Linux), 240 of 240 without it under CPU load, the contract tests 500 of 500.
+- **`plugin-packages` `guests` `linked.rs:33`** (Linux, locally: "signalled after 259 ms", "10.8 ms"): a test fault.
+  The debounce was timed from after `fs::write` returned, and on a loaded ext4 disk closing the rewritten file blocks
+  while ext4 flushes its data, after the events the debounce counts from. Under three `dd … conv=fdatasync` writers,
+  writes took up to 766 ms and 6 of 72 runs failed, each signalled 500 ms after its write's event. Fix: the clock starts
+  before the write and the bound is the whole 500 ms debounce: the count comes 500 ms after an event that follows
+  the write's start. 0 of 180 runs failed under the same load (whether a stall occurred in those runs was not recorded).
 - Other first-attempt CI failures of 2026-11-14 were real test faults, fixed with their work: K4's pointer-mode tests,
   I1's Ctrl+Alt+V test, U1's running-copy test.
 - Already fixed, not recurring: `bottom_pane::tests::tabs_within_a_paste_burst_are_the_pastes_and_send_nothing` (6e36de1),

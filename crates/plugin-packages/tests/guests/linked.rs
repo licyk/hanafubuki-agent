@@ -13,9 +13,9 @@ use tokio::sync::watch;
 use crate::fixture::{running, Fixture, Options, DEADLINE};
 use crate::watchdog::step;
 
-/// The guest host's debounce, less what the clock reads of the event's
-/// delivery before the write is timed.
-const AT_LEAST: Duration = Duration::from_millis(400);
+/// The guest host's debounce: a change is counted once its directory has
+/// been quiet that long after the write's last event.
+const AT_LEAST: Duration = Duration::from_millis(500);
 
 pub async fn a_linked_guest_starts_anew_once_its_directory_changes() {
     let fixture = Fixture::start(Options::default()).await;
@@ -98,7 +98,10 @@ async fn watched(host: &GuestHost, id: &str) {
 }
 
 /// Changes a file in `package`'s directory until the guest host signals,
-/// again every 3 s, and how long after the change that was.
+/// again every 3 s, and how long after the change began that was. The
+/// clock starts before the write: on a loaded disk its close alone can
+/// block past the debounce (ext4 flushes a truncated file's data there),
+/// after the events the debounce counts from.
 async fn change_until_signalled(
     host: &GuestHost,
     package: &GuestPackage,
@@ -109,17 +112,17 @@ async fn change_until_signalled(
     loop {
         attempt += 1;
         changes.borrow_and_update();
+        let began = Instant::now();
         fs::write(
             package.root.join("package.txt"),
             format!("changed {attempt}"),
         )
         .unwrap();
-        let written = Instant::now();
         step(format!("changed the linked directory ({attempt})"));
         if let Ok(signalled) = tokio::time::timeout(Duration::from_secs(3), changes.changed()).await
         {
             signalled.unwrap();
-            return written.elapsed();
+            return began.elapsed();
         }
         assert!(
             Instant::now() < deadline,
