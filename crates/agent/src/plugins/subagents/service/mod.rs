@@ -7,11 +7,13 @@
 // Copyright 2025 OpenAI. Licensed under the Apache License, Version 2.0
 // (http://www.apache.org/licenses/LICENSE-2.0).
 // Modified for hanafubuki-agent: an agent is a durable child session of
-// origin `Subagent`, named by its title; there is no mailbox, so a finished
-// turn is reported by the parent's next `wait_agent`, which returns the
-// final answer, and agents never message their parent or each other; a
-// message to a running agent steers its turn and one to an idle agent waits
-// for its next follow-up task; by default at most 3 agents of one parent
+// origin `Subagent`, named by its title; in place of a mailbox, a finished
+// turn is queued on the parent's durable wake queue, which the parent's
+// next `wait_agent` takes (returning the final answer) or, with its wake
+// policy on, its next step or its woken turn delivers; an agent messages
+// its parent (`target` `parent`) through the same queue and never another
+// agent; a message to a running agent steers its turn and one to an idle
+// agent waits for its next follow-up task; by default at most 3 agents of one parent
 // run at once (Codex's 4 threads per session less the root, counted by
 // running turns since nothing is evicted), only a session without a parent
 // spawns (Codex's `agents.max_depth` default), and a wait lasts at most 5
@@ -38,7 +40,7 @@ use hanafubuki_agent_foundation::panic::catch_panic_async;
 use hanafubuki_agent_kernel::{
     AgentChildSessionBase, AgentChildSessionRequest, AgentError, AgentSessionId,
     AgentSessionOrigin, AgentSessionPersistence, AgentSessionRuntimeSnapshot, AgentSessionSummary,
-    AgentWakeFilter, ModelReasoningEffort,
+    AgentSubagentWake, AgentWakeFilter, AgentWakeQueued, AgentWakeSource, ModelReasoningEffort,
 };
 use parking_lot::Mutex;
 
@@ -51,6 +53,8 @@ use crate::roles::{AgentRoleCatalogReader, AgentSessionRole, DEFAULT_ROLE};
 use crate::session_driver::{AgentSessionDriver, ChildModelRequest, SpawnModelCatalog};
 
 const CANCELLATION_POLL_INTERVAL: Duration = Duration::from_millis(50);
+/// The `target` a sub-agent names the agent that spawned it by.
+pub(super) const PARENT_TARGET: &str = "parent";
 
 /// An agent of a parent, as `list_agents` and `wait_agent` report it.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -208,13 +212,25 @@ impl SubagentService {
     }
 
     /// Delivers `message` to `target` without starting a turn: it steers
-    /// the turn the agent runs, or waits for its next one.
+    /// the turn the agent runs, or waits for its next one. A sub-agent's
+    /// `parent` is the agent that spawned it ([`Self::message_parent`]).
     pub(super) async fn send_message(
         &self,
         parent: AgentSessionId,
         target: &str,
         message: String,
     ) -> Result<Delivery, AgentError> {
+        if target == PARENT_TARGET {
+            let session = self.session(parent).await?;
+            if let (Some(spawner), Some(AgentSessionOrigin::Subagent)) =
+                (session.parent_session_id, session.origin)
+            {
+                let name = session
+                    .title
+                    .map_or_else(|| parent.to_string(), |title| title.value);
+                return self.message_parent(spawner, parent, name, message).await;
+            }
+        }
         let agent = self.resolve(parent, target).await?;
         let Some(message) = self.steer(agent.id, message).await? else {
             return Ok(Delivery::Steered);
@@ -225,6 +241,34 @@ impl SubagentService {
             .queued
             .push(message);
         Ok(Delivery::Queued)
+    }
+
+    /// Queues `message` from the sub-agent `child`, named `name`, on its
+    /// parent's wake queue: the parent's running turn reads it at its next
+    /// step, and an idle parent is woken to read it (D7).
+    async fn message_parent(
+        &self,
+        parent: AgentSessionId,
+        child: AgentSessionId,
+        name: String,
+        message: String,
+    ) -> Result<Delivery, AgentError> {
+        let source = AgentWakeSource::Subagent {
+            session_id: child,
+            name,
+            event: AgentSubagentWake::Message { text: message },
+        };
+        match self.driver.enqueue_wake_event(parent, source).await {
+            Ok(AgentWakeQueued::Delivering) => Ok(Delivery::Steered),
+            Ok(AgentWakeQueued::Waiting) => Ok(Delivery::Queued),
+            Ok(AgentWakeQueued::Disabled) => Err(refused(
+                "your parent takes no messages: wakeOnBackgroundTasks is off; put what it must know in your final answer",
+            )),
+            Err(AgentError::LimitExceeded { limit, .. }) => Err(refused(format!(
+                "your parent has {limit} unread messages; wait until it reads them"
+            ))),
+            Err(error) => Err(error),
+        }
     }
 
     /// Gives `target` a follow-up task: it steers the turn the agent runs,

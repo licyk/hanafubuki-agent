@@ -466,6 +466,10 @@ path = "crates/tui/src/agent_bridge/mod.rs"
 reason = "The adapter between the facade and the interface, written for the Agent; it stands where Codex has its ConversationManager."
 
 [[original]]
+path = "crates/tui/src/agent_bridge/background.rs"
+reason = "The session woken for its background work, onto the facade's woken turn; Codex resumes nothing by itself."
+
+[[original]]
 path = "crates/tui/src/agent_bridge/events.rs"
 reason = "The Agent's events onto what the chat shows, and the sinks into the app loop; moved out of the bridge's module."
 
@@ -952,6 +956,10 @@ reason = "/side end to end over the standalone Agent: refusals, the switch in sc
 [[original]]
 path = "crates/tui/src/app/tests/subagents.rs"
 reason = "/subagents and a subagent's approval end to end over the standalone Agent."
+
+[[original]]
+path = "crates/tui/src/app/tests/wake.rs"
+reason = "A session woken by its sub-agents end to end over the standalone Agent: the waiting line, the woken turn in both presentations and parked, a message typed while waiting."
 
 [[original]]
 path = "crates/tui/src/agent_bridge/center_reads.rs"

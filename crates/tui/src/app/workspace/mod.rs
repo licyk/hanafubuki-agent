@@ -291,6 +291,7 @@ impl App {
             }
             AppEvent::Agent(_)
             | AppEvent::AgentReply(_)
+            | AppEvent::AgentBackground(_)
             | AppEvent::Op(_)
             | AppEvent::InsertHistoryCell(_)
             | AppEvent::InsertLiveEntry(_)

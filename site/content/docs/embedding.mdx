@@ -70,8 +70,8 @@ use hanafubuki_agent::{
     AgentServiceInputs,
     AgentSessionMode, AgentSlot, AgentStartMarker, AgentStatusEventSink, AgentStoragePaths,
     AgentTurnRequest, AgentWorkspaceRoots, DesktopAgent, NetworkSettingsPort, NoHostContext,
-    NoopAgentPluginEventSink, NoopMcpEventSink, SecretFuture, SecretKey, SecretStore, SkillRoots,
-    WorkspaceRootsPort, AGENT_SHUTDOWN_BUDGET,
+    NoopAgentBackgroundEventSink, NoopAgentPluginEventSink, NoopMcpEventSink, SecretFuture,
+    SecretKey, SecretStore, SkillRoots, WorkspaceRootsPort, AGENT_SHUTDOWN_BUDGET,
 };
 use hanafubuki_agent_contracts::TurnExtensions;
 use hanafubuki_agent_runtime::ContainedRuntime;
@@ -107,6 +107,7 @@ fn main() -> Result<(), String> {
                 blocking,
                 mcp_event_sink: Arc::new(NoopMcpEventSink),
                 plugin_event_sink: Arc::new(NoopAgentPluginEventSink),
+                background_event_sink: Arc::new(NoopAgentBackgroundEventSink),
                 host: AgentHostPorts {
                     plugins: vec![(
                         AgentPluginRow::unconfigured(
@@ -226,12 +227,13 @@ fn main() -> Result<(), String> {
 
 `AgentRuntimeHost` 是独立模式的使用者可以替换的部分：
 
-| 字段            | 默认值                                | 说明                                              |
-| --------------- | ------------------------------------- | ------------------------------------------------- |
-| `secrets`       | `None`：操作系统钥匙串（`keyring` 4） | 服务名 `org.licyk.hanafubuki-agent.secrets`       |
-| `status`        | `NoopAgentStatusEventSink`            | 槽位状态改变时调用 `status_changed()`，不携带负载 |
-| `plugin_events` | `NoopAgentPluginEventSink`            | 插件状态的提示，以及每次已安装插件的变化          |
-| `mcp_events`    | `NoopMcpEventSink`                    | MCP 状态与工具目录变化                            |
+| 字段            | 默认值                                | 说明                                                              |
+| --------------- | ------------------------------------- | ----------------------------------------------------------------- |
+| `secrets`       | `None`：操作系统钥匙串（`keyring` 4） | 服务名 `org.licyk.hanafubuki-agent.secrets`                       |
+| `status`        | `NoopAgentStatusEventSink`            | 槽位状态改变时调用 `status_changed()`，不携带负载                 |
+| `plugin_events` | `NoopAgentPluginEventSink`            | 插件状态的提示，以及每次已安装插件的变化                          |
+| `mcp_events`    | `NoopMcpEventSink`                    | MCP 状态与工具目录变化                                            |
+| `background`    | `NoopAgentBackgroundEventSink`        | 为后台工作唤醒某个会话时的 `Woken`（[见下](#events-and-history)） |
 
 轮次与会话事件不经过这里，而是发给每次调用传入的 `AgentEventSink`（见[事件与历史](#events-and-history)）。
 
@@ -488,7 +490,8 @@ impl AgentEventSink for PrintEvents {
 
 - **轮次事件**发给每次调用传入的 `AgentEventSink`：`submit_turn_with_sink`、`submit_user_shell_command_with_sink`、`submit_wake_turn_with_sink`、`steer_turn_with_sink`、`submit_plan_implementation_with_sink`、`compact_session_with_sink`。`emit` 在 Agent 的线程上调用，只能做有界的工作（例如送进通道），不能阻塞。事件类型（`AgentEventKind`）与 `exec --json` 输出的相同，见[JSON 事件](/docs/json-events)。`ExecutionProgress` 的 `update` 是 `AgentToolProgressUpdate`；要流式显示进程输出的界面用 `render_plain_text` 渲染它的终端文本，要连颜色一起显示时用 `render_styled_text`（同样的文字旁边有一个 `AgentStyledText`，以及末尾仍然有效的样式，下一段从它开始），并用 `complete_prefix_len` 暂留一行中未结束的转义序列，这些都由门面重新导出（终端界面的[流式输出](/docs/internals#tui-details)）。伪终端的行在同一段文字中带着它的单元格的颜色，每个带样式的段放在它的 SGR 序列和一个重置之间；把文字渲染为纯文本的界面看不到任何变化。
 - **用户的 shell 命令**：`submit_user_shell_command_with_sink(session_id, command, sink)` 把用户输入的命令（终端界面的 `!` 命令）作为不询问模型的轮次运行，在会话的沙箱和工作目录中，以用户的输入作为批准（要求由人决定的审批规则仍会询问）；`cancel_turn` 停止它和它的进程。它的 `ToolStarted` 名为 `exec_command`，调用 ID 为 `user-shell-<轮次>`，历史条目是 `ConversationItem::UserShellCommand`，模型从下一个请求起读到它，并以 `TurnCompleted { final_answer_message_id: None }` 结束。这一条目随轮次开始一起提交，内容是命令没有运行完，命令结束时就地补全，没有单独的事件：收到 `ToolCompleted` 之后再读取它（`tool_display`，或重新读取对话记录）。有轮次运行时和 Plan 模式下它被拒绝，它的轮次不读取补充消息（[内部细节](/docs/internals#turn-details)）。
-- **唤醒事件**：会话的后台工作（它的子代理和后台终端）报告的内容排在该会话上，并只到达模型一次：作为下一个轮次准入时（在其 `TurnStart` 和世界状态之后、消息之前）或运行中轮次的某一步提交的 `ConversationItem::WakeEvents { events }`。`submit_wake_turn_with_sink(session_id, sink)` 启动投递它们的轮次：一个没有用户消息的 `Programmatic` 轮次，其请求以 `<background_events>` 片段结尾；队列已空或有轮次在运行时返回 `Ok(None)`。每个 `AgentWakeEvent` 有一个 `source`（`AgentWakeSource::Subagent` 或 `Terminal`，带 `AgentSubagentWake` 或 `AgentTerminalWake`）；`summary()` 是给人看的一行，`wake_events_record` 是模型读到的文本。会话的策略（`AgentWakePolicy`）在被赋予之前为关闭，快照与 `pending_wake_events` 一起携带它。目前 Agent 中还没有任何地方排入事件（[唤醒事件](/docs/internals#wake-events)）：宿主显示对话记录时渲染这一条目，或跳过它。
+- **唤醒事件**：会话的后台工作（它的子代理和后台终端）报告的内容排在该会话上，并只到达模型一次：作为下一个轮次准入时（在其 `TurnStart` 和世界状态之后、消息之前）或运行中轮次的某一步提交的 `ConversationItem::WakeEvents { events }`。`submit_wake_turn_with_sink(session_id, sink)` 启动投递它们的轮次：一个没有用户消息的 `Programmatic` 轮次，其请求以 `<background_events>` 片段结尾，并以 `AgentWakeTurnAccepted { turn, events }` 返回它（它投递的事件，界面可以把它们显示为轮次的第一项）；队列已空、有轮次在运行（由那个轮次投递）或会话不被唤醒（`wakeOnBackgroundTasks` 关闭、旁路对话、审查）时返回 `Ok(None)`。每个 `AgentWakeEvent` 有一个 `source`（`AgentWakeSource::Subagent` 或 `Terminal`，带 `AgentSubagentWake` 或 `AgentTerminalWake`）；`summary()` 是给人看的一行，`wake_events_record` 是模型读到的文本。子代理的结束和它发给父会话的消息排在父会话上；快照携带 `pending_wake_events` 和会话的 `wake_policy`，每次激活时按 `wakeOnBackgroundTasks` 赋予（[唤醒事件](/docs/internals#wake-events)）。宿主显示对话记录时渲染这一条目，或跳过它。
+- **唤醒会话**：没有父会话的会话有排队的事件且没有轮次在运行时，Agent 告知启动时安装的 `AgentBackgroundEventSink`（`AgentServiceInputs::background_event_sink`；独立运行时为 `AgentRuntimeHost::background`）`AgentBackgroundEvent::Woken { session_id }`。`event` 在 Agent 的线程上调用，只做有界的工作。由宿主决定：用 `submit_wake_turn_with_sink` 和它选择的 sink 提交被唤醒的轮次（终端界面对它显示的会话这样做），或者忽略，事件留给会话的下一个轮次。同一批事件的 `Woken` 可能来两次，或在宿主还没看到上一个轮次结束时到来：找不到事件或遇到正在运行的轮次的提交返回 `Ok(None)`。用户暂停了会话的唤醒时不发送（对其轮次的 `cancel_turn` 暂停唤醒，直到下一次 `submit_turn_with_sink`；没有用户消息时连续 100 个被唤醒的轮次也会暂停）；宿主自己的提交此时仍会运行。`background_status(session_id)` 返回 `AgentBackgroundStatus { work, pending_wake_events, wake }`：仍在工作的子代理（`AgentBackgroundWork { agents, terminals }`）、尚未读到的事件，以及 `AgentWakeState::On`、`Paused { reason }`（`AgentWakePause::PersonInterrupted` 或 `RunawayBound`）或 `Off`；`exec` 依据它等待，终端界面的等待行读取它。其中的子代理是本实例为该会话运行的子代理（一个子代理一直计数到它的结束排入队列为止，且先于队列读取，所以已结束的子代理要么被计数、要么已排队，不会两者皆非）。选项打开时（默认），会话的模型被告知子代理报告时它会被恢复，所以从不在 `Woken` 时提交的宿主（例如使用 `NoopAgentBackgroundEventSink`，或只通过 `start_turn` 运行轮次的宿主）会让它一直等到下一个轮次：要么提交，要么关闭 `wakeOnBackgroundTasks`，让模型像以前一样等待它的子代理。
 - **审批与提问**：`ApprovalRequested` 用 `resolve_approval` 回答，`UserInputRequested` 用 `resolve_user_input` 回答，取消轮次用 `cancel_turn`。
 - **事件日志**：每个会话保留一份有界的事件日志，`events_since(session, after)` 返回某个序号之后的 `AgentEventBatch`，适合断开后补读；`snapshot(session)` 返回会话当前的运行状态。
 - **历史**：`list_sessions_page`（分页、可搜索）、`open_session`（会话及其最近的转录）、`read_transcript_page` 和 `read_turn_page` 读取已提交的 `ConversationItem`。`recent_user_messages(limit, before)` 读取用户在顶层会话中发送过的内容，从最新的开始，相同的文字只出现一次，最多 `limit` 条，且不超过 `RECENT_USER_MESSAGES_MAX`（1,000）：消息、补充消息和 `!` 命令（`!` 加命令）；`before`（Unix 毫秒）只保留在它之前记录的内容。终端界面的 Ctrl-R 搜索的就是这些；请在界面线程之外调用。宿主自己的历史存储如果不维护索引，就没有这些内容：`AgentHistoryStore::recent_user_messages` 默认返回空列表。工具调用显示的内容来自其工具的[呈现器](/docs/plugin-rules#tool-presenters)，从不是事件：`tool_display(session_id, call_id)` 从历史中读回调用及其输出（在 `ToolCompleted` 到达之后、在界面线程之外调用），返回 `AgentToolCallDisplay { subject, display }`，`display` 是一个 `AgentToolDisplay`；`present_tool_call(namespace, name, arguments, output)` 呈现已读到的转录页中的一个调用，`output` 是 `ToolOutput` 条目的 `output` 和 `display_metadata`（`Some((&output, &display_metadata))`）。`Command` 显示的 `styled`（`Option<AgentStyledText>`）是它的 `output` 的颜色：其字节的若干段（`AgentStyleSpan { start, end, style }`），每段一个 `AgentTextStyle`（`fg`、`bg` 为 `AgentTextColor::Indexed` 或 `Rgb`，`bold`、`dim`、`italic`、`underline`、`reverse`）；没有颜色的输出、被截短的输出或此前的会话为 `None`；忽略它的界面像以前一样显示纯文本输出。补丁应用成功时，`Patch` 显示的各文件带有 `hunk_starts`（`Vec<AgentPatchHunkStart>`，每块在补丁前和补丁后的文件中的第一行），否则以及此前记录的调用为空；`Content` 显示是逐项的输出（`AgentOutputBlock`），其中从不带图片或音频的数据。`AgentToolDisplayMetadata` 在 `styled_output` 旁边有 `patch_hunk_starts`。`ToolStarted` 的 `presentation.subject` 是同一个主题，`ExecutionProgress { call_id, update }` 指明报告它的进程属于哪个调用。列表只包含没有父会话的会话，除非请求的 `parent` 是 `AgentSessionParentFilter::ChildrenOf(session)`；不带这个字段的请求列出前者。`AgentSessionSummary` 带有会话的 `parent_session_id` 和 `origin`（`AgentSessionOrigin`：`Side`、`Subagent`、`Review`），以及创建时的 `cwd` 和 `branch`，未知或在这些字段出现之前创建的会话为 `None`；运行时快照带有 `parent_session_id`、`origin` 和 `ephemeral`。思考内容是 `ConversationItem::Reasoning { text, duration_millis, sampling_step, truncated, replay }`：其中 `text` 只用于展示，从不作为模型输入回放；`replay` 是 Provider 要求回传的块（`ModelReasoningReplay`）：类型化的条目带着它，加载的会话上 Chat Completions 的 `reasoning_content` 也一样，只有转录页的序列化略去它（[思考](/docs/architecture#thinking)）。

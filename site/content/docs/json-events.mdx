@@ -209,7 +209,7 @@ icon: Braces
 - 一步中的工具调用：先按调用顺序为每个调用发出 `tool_started`；每个调用执行中可能有它的钩子的 `hook_started` 与 `hook_completed`（调用运行之前和之后）、审批、提问或计划事件，结束时有 `tool_execution_finished`（按完成顺序）；之后按调用顺序是 `history_committed` 和 `tool_completed`（折叠成功的 `compress` 调用在两者之间还有 `context_compressed`）；最后，如果钩子在调用之后添加了上下文，是它的 `history_committed`。
 - `execution_progress` 可能穿插在任何位置。需要严格顺序时，按 `sequence` 排序。
 
-**最后一行**总是 `turn_completed`、`turn_cancelled` 或 `turn_failed`：`exec` 在收到它后停止输出，之后会话中的事件（例如稍后生成的标题）不会出现。
+**最后一行**总是 `turn_completed`、`turn_cancelled` 或 `turn_failed`：`exec` 在收到它后停止输出，之后会话中的事件（例如稍后生成的标题）不会出现。回合完成时如果会话的[子代理](/docs/exec#subagents)仍在工作，`exec` 会继续运行为它们的报告唤醒会话的回合：每个回合都是一组和任何回合一样的事件，从它的 `turn_started` 到它的最后一行，它的第一个 `history_committed` 写入的是更新（`background_events` 条目），而不是你的消息。最后一行于是是最后一个回合的。
 
 ## 兼容性 [#stability]
 

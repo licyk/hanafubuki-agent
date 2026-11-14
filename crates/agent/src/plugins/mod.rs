@@ -31,6 +31,7 @@ pub use review::{
     AgentReviewOutput, AgentReviewTarget, AgentReviewTargets,
 };
 pub(crate) use skills::skills_plugin;
+pub(crate) use structured_request::wait_for_cancellation;
 pub(crate) use subagents::{
     subagents_option_schema, subagents_plugin, SubagentService, SUBAGENTS_PLUGIN,
 };

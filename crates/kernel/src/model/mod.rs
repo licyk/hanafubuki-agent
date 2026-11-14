@@ -45,14 +45,15 @@ pub use event::{
 pub(crate) use goal::tolerant_goal;
 pub use goal::{AgentGoal, AgentGoalChange, AgentGoalOrigin, AgentGoalStatus};
 pub use hanafubuki_agent_contracts::{
-    AgentActivityAction, AgentActivityId, AgentActivityPresentation, AgentCompactionGeneration,
-    AgentCompactionId, AgentContextWindowId, AgentContinuationHookGeneration,
-    AgentContinuationHookId, AgentContinuationHookProviderId, AgentEventSequence,
-    AgentExecutionProgressStatus, AgentGeneration, AgentImageDetail, AgentMemoryCitationSnapshot,
-    AgentMemoryContributionMode, AgentMemoryContributionState, AgentMessageId,
-    AgentModelSessionGeneration, AgentReasoningId, AgentRevision, AgentSessionId, AgentSessionMode,
-    AgentSessionOrigin, AgentSteeringSequence, AgentToolPresentation, AgentToolProgressUpdate,
-    AgentTurnId, AgentTurnOrigin, AgentUserInputRequestId, ContextSectionKind, PreparedAgentImage,
+    AgentActivityAction, AgentActivityId, AgentActivityPresentation, AgentBackgroundWork,
+    AgentCompactionGeneration, AgentCompactionId, AgentContextWindowId,
+    AgentContinuationHookGeneration, AgentContinuationHookId, AgentContinuationHookProviderId,
+    AgentEventSequence, AgentExecutionProgressStatus, AgentGeneration, AgentImageDetail,
+    AgentMemoryCitationSnapshot, AgentMemoryContributionMode, AgentMemoryContributionState,
+    AgentMessageId, AgentModelSessionGeneration, AgentReasoningId, AgentRevision, AgentSessionId,
+    AgentSessionMode, AgentSessionOrigin, AgentSteeringSequence, AgentToolPresentation,
+    AgentToolProgressUpdate, AgentTurnId, AgentTurnOrigin, AgentUserInputRequestId,
+    ContextSectionKind, PreparedAgentImage,
 };
 pub(crate) use lineage::tolerant_origin;
 pub use lineage::{
@@ -90,7 +91,7 @@ pub(crate) use user_shell_command::{user_shell_command_record, USER_SHELL_COMMAN
 pub(crate) use wake::{tolerant_wake_events, BACKGROUND_EVENTS_FRAGMENT};
 pub use wake::{
     wake_events_record, AgentSubagentWake, AgentTerminalWake, AgentWakeEvent, AgentWakeFilter,
-    AgentWakePolicy, AgentWakeQueue, AgentWakeQueued, AgentWakeSource,
+    AgentWakePolicy, AgentWakeQueue, AgentWakeQueued, AgentWakeSource, AgentWakeTurnAccepted,
     MAXIMUM_QUEUED_WAKE_MESSAGES, MAXIMUM_WAKE_ANSWER_BYTES, MAXIMUM_WAKE_COMMAND_BYTES,
     MAXIMUM_WAKE_OUTPUT_BYTES,
 };

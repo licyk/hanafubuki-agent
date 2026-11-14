@@ -18,7 +18,8 @@
 // agents) and no `path_prefix`; `wait_agent` returns
 // the final answers instead of a mailbox summary, and returns at once when
 // no agent runs; `send_message` and `followup_task` say how the message was
-// delivered; the descriptions say what this Agent does.
+// delivered, and a sub-agent's `send_message` to `parent` reaches the agent
+// that spawned it; the descriptions say what this Agent does.
 
 //! The six subagent tools: their specs, their arguments and what each
 //! returns to the model.
@@ -391,7 +392,7 @@ fn delivered(delivery: Delivery) -> ToolResult {
 fn waited(outcome: WaitOutcome) -> ToolResult {
     let (message, timed_out, agents) = match outcome {
         WaitOutcome::Updates(agents) => ("Wait completed.", false, agents),
-        WaitOutcome::Idle => ("No agent is running.", false, Vec::new()),
+        WaitOutcome::Idle => ("None of your agents is still working.", false, Vec::new()),
         WaitOutcome::TimedOut => ("Wait timed out.", true, Vec::new()),
     };
     let agents = agents
@@ -432,11 +433,11 @@ fn list_status(status: &AgentRunStatus) -> &'static str {
 }
 
 const SPAWN_AGENT_DESCRIPTION: &str = r#"Spawns an agent to work on the specified task. The agent is a separate conversation that runs in the background with your permission mode, and with your model and your tools unless `model`, `provider`, `reasoning_effort` or its `agent_type` say otherwise; it cannot spawn agents of its own. Refer to it by its task name, or by the agent id this returns, in the other agent tools.
-Its final answer is provided to you by wait_agent when it finishes. You can send it messages and follow-up tasks meanwhile.
+When it finishes, wait_agent returns its final answer, and the sub-agent guidance says whether it also reaches you by itself. You can send it messages and follow-up tasks meanwhile.
 
 Note that passing `fork_turns="none"` will not pass any surrounding context to the spawned agent, which may cause the agent to lack the context it needs to complete its task, whereas `fork_turns="all"` will provide the agent with this conversation up to your current turn. Either way the message is the only part of the current turn the agent reads, so make it self-contained."#;
 
-const WAIT_AGENT_DESCRIPTION: &str = "Wait until an agent you spawned finishes its turn. Returns the final status of every agent that finished since your previous wait: its final answer when it completed, or its error. Returns at once when such an update is pending or when no agent is running, and with `timed_out` when no agent finishes before the deadline.";
+const WAIT_AGENT_DESCRIPTION: &str = "Wait until an agent you spawned finishes its turn. Returns the final status of every agent that finished and that you have not been told of yet: its final answer when it completed, or its error. Returns at once when such an update is pending or when none of your agents is still working, and with `timed_out` when no agent finishes before the deadline.";
 
 /// The model-visible description and input schema of `kind`, with `waits`
 /// the bounds `wait_agent` states. `spawn_agent`'s names no role: a spec is
@@ -480,9 +481,9 @@ fn spec(kind: SubagentToolKind, waits: WaitBounds) -> (String, Value) {
             &["task_name", "message"],
         ),
         SubagentToolKind::SendMessage => (
-            "Send a message to an existing agent. An agent that is running reads it promptly, at its next message boundary; an idle agent reads it with its next follow-up task. Does not trigger a new turn.",
+            "Send a message to an existing agent, or, with `target` `parent`, to the agent that spawned you. An agent that is running reads it promptly, at its next message boundary; an idle sub-agent reads it with its next follow-up task, and an idle parent is resumed to read it. Does not give a sub-agent a new turn.",
             json!({
-                "target": target("Task name or agent id of the agent to message (from spawn_agent)."),
+                "target": target("Task name or agent id of the agent to message (from spawn_agent), or `parent`."),
                 "message": { "type": "string", "description": "Message text to send to the target agent." }
             }),
             &["target", "message"],

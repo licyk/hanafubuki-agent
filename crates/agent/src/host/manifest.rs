@@ -34,6 +34,7 @@ use crate::service::AgentMcpApplication;
 use crate::session_driver::AgentSessionDriver;
 use crate::skills::AgentSkillApplication;
 use crate::titles::AgentTitleApplication;
+use crate::wake::{wake_plugin, Wakes};
 use crate::{AgentMemoryApplication, AgentProxy, WorkspaceRootsPort};
 
 /// Services the application constructs once and hands to the plugins that
@@ -73,10 +74,14 @@ pub(crate) struct AgentPluginInputs {
     /// The installed plugins, which the `plugins` row summarizes, and their
     /// reload, which it runs once a linked package changed.
     pub(crate) packages: PackageReload,
+    /// The host's sink and the roots' pauses, which the `agent-wake` core
+    /// row shares with the facade.
+    pub(crate) wakes: Wakes,
 }
 
-/// The rows the host mounts after its core ones, and the descriptors of the
-/// host's rows among them (the Agent's own are `agent_plugin_descriptors`).
+/// The rows the host mounts after its own core ones (the first of them the
+/// core row `agent-wake`), and the descriptors of the host's rows among
+/// them (the Agent's own are `agent_plugin_descriptors`).
 pub(crate) struct AgentPluginManifest {
     pub(crate) rows: Vec<AgentPluginRow>,
     pub(crate) host_descriptors: Vec<AgentPluginDescriptor>,
@@ -92,8 +97,10 @@ pub(crate) fn agent_plugin_manifest(
     inputs: AgentPluginInputs,
     host: Vec<(AgentPluginRow, AgentPluginDescriptor)>,
 ) -> AgentPluginManifest {
-    use AgentPluginGroup::{Capability, Context};
+    use AgentPluginGroup::{Capability, Context, Core};
     let mut rows = vec![
+        // The last core row: wakes cannot be turned off but by the option.
+        AgentPluginRow::unconfigured(Core, wake_plugin(inputs.driver.clone(), inputs.wakes)),
         AgentPluginRow::from_settings(Capability, web_plugin(), |settings| {
             serde_json::to_value(web_config(settings)?).map_err(|error| error.to_string())
         }),

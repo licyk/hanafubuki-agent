@@ -89,10 +89,10 @@ impl AgentService {
                 needs_follow_up = true;
                 reasons.insert(AgentFollowUpReason::PendingUserInput);
             }
-            if self
+            let delivered = self
                 .consume_pending_wake_events(identity, event_sink)
-                .await?
-            {
+                .await?;
+            if delivered.is_some() {
                 needs_follow_up = true;
                 reasons.insert(AgentFollowUpReason::BackgroundEvents);
             }
@@ -100,6 +100,7 @@ impl AgentService {
             if needs_follow_up {
                 let digest =
                     sampling_progress_digest(&assistant_messages, &progress_tool_calls, &reasons);
+                let digest = delivered.map_or(digest, |last| wake_progress_digest(digest, last));
                 self.observe_follow_up_progress(identity, digest).await?;
                 continue;
             }

@@ -1,4 +1,4 @@
-use crate::loop_control::{sampling_progress_digest, AgentFollowUpReason};
+use crate::loop_control::{sampling_progress_digest, wake_progress_digest, AgentFollowUpReason};
 use crate::model::AgentMessageId;
 use crate::model::{AgentError, AgentEventSink, AgentTurnOutcome};
 use crate::service::{exact_turn, AgentService, TurnExecutionGuard, TurnIdentity, TurnKind};
@@ -105,12 +105,15 @@ impl AgentService {
                         continue;
                     }
                     Err(AgentError::WakeEventsPending) => {
-                        self.consume_pending_wake_events(identity, event_sink)
+                        let delivered = self
+                            .consume_pending_wake_events(identity, event_sink)
                             .await?;
                         let reasons = std::collections::BTreeSet::from([
                             AgentFollowUpReason::BackgroundEvents,
                         ]);
                         let digest = sampling_progress_digest(&[], &[], &reasons);
+                        let digest =
+                            delivered.map_or(digest, |last| wake_progress_digest(digest, last));
                         self.observe_follow_up_progress(identity, digest).await?;
                         continue;
                     }

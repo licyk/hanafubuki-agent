@@ -482,7 +482,7 @@
       "type": "function"
     },
     {
-      "description": "Wait until an agent you spawned finishes its turn. Returns the final status of every agent that finished since your previous wait: its final answer when it completed, or its error. Returns at once when such an update is pending or when no agent is running, and with `timed_out` when no agent finishes before the deadline.",
+      "description": "Wait until an agent you spawned finishes its turn. Returns the final status of every agent that finished and that you have not been told of yet: its final answer when it completed, or its error. Returns at once when such an update is pending or when none of your agents is still working, and with `timed_out` when no agent finishes before the deadline.",
       "name": "wait_agent",
       "parameters": {
         "additionalProperties": false,

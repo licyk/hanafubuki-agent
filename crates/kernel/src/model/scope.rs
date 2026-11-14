@@ -20,7 +20,7 @@ pub const MAX_TOOL_PATTERN_BYTES: usize = 256;
 pub const MAX_SCOPE_TOOL_PATTERNS: usize = 128;
 
 /// The rows that are the Agent itself: a scope never turns them off.
-pub const CORE_PLUGINS: [&str; 2] = ["agent-host-services", "agent-kernel"];
+pub const CORE_PLUGINS: [&str; 3] = ["agent-host-services", "agent-kernel", "agent-wake"];
 
 /// One entry of a role's `tools.allow` or `tools.deny`.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]

@@ -311,7 +311,16 @@ async fn a_wake_turn_opens_with_the_events_alone() {
         .unwrap();
 
     let accepted = wake(&service).unwrap().expect("a wake turn");
-    wait_for_completion(&service, accepted).await;
+    assert_eq!(
+        accepted
+            .events
+            .iter()
+            .map(|event| event.source.clone())
+            .collect::<Vec<_>>(),
+        vec![completed(41, "done"), completed(43, "also done")],
+        "the turn names the events it delivers"
+    );
+    wait_for_completion(&service, accepted.turn).await;
 
     assert_eq!(
         model.requests()[0].input,
@@ -500,4 +509,77 @@ async fn take_wake_events_removes_what_its_filter_names() {
         service.enqueue_wake_event(session_id, exited(14)).await,
         Ok(AgentWakeQueued::Waiting)
     );
+}
+
+/// Queues a new message on its session each time a final answer is asked
+/// about, `remaining` times.
+struct QueuingHook {
+    service: std::sync::OnceLock<AgentService>,
+    session_id: std::sync::OnceLock<AgentSessionId>,
+    remaining: AtomicUsize,
+}
+
+impl AgentContinuationHook for QueuingHook {
+    fn evaluate<'a>(
+        &'a self,
+        _context: AgentContinuationContext,
+        _cancellation: CancellationToken,
+    ) -> AgentContinuationHookFuture<'a> {
+        Box::pin(async move {
+            let left = self.remaining.load(Ordering::SeqCst);
+            if left > 0 {
+                self.remaining.store(left - 1, Ordering::SeqCst);
+                let (service, session_id) =
+                    (self.service.get().unwrap(), *self.session_id.get().unwrap());
+                service
+                    .enqueue_wake_event(session_id, message(41, &format!("note {left}")))
+                    .await
+                    .unwrap();
+            }
+            Ok(AgentContinuationHookDecision::Pass)
+        })
+    }
+}
+
+/// Events that keep arriving as the turn ends make it take a step for each
+/// delivery, the same answer each time; new events are progress, so this
+/// is never counted as stalled steps, past the limit of four.
+#[tokio::test]
+async fn a_stream_of_events_at_the_finish_is_no_stall() {
+    let deliveries = 6;
+    let model = ScriptedEventModel::new(
+        (0..=deliveries).map(|_| deterministic_assistant_events("still waiting")),
+    );
+    let hook = Arc::new(QueuingHook {
+        service: std::sync::OnceLock::new(),
+        session_id: std::sync::OnceLock::new(),
+        remaining: AtomicUsize::new(deliveries),
+    });
+    let tools = FakeTools::new([]).await;
+    tools
+        .mount(&registering::<ContinuationHookRegistry>(
+            "queuing",
+            vec![AgentContinuationHookRegistration {
+                provider_id: AgentContinuationHookProviderId::parse("test".to_string()).unwrap(),
+                hook_id: AgentContinuationHookId::parse("queue".to_string()).unwrap(),
+                generation: AgentContinuationHookGeneration([4; 32]),
+                priority: 1,
+                failure_policy: AgentContinuationHookFailurePolicy::FailTurn,
+                hook: hook.clone(),
+            }],
+        ))
+        .await;
+    let service = AgentService::new(Arc::new(model.clone()), tools.registries());
+    let session_id = wake_session(&service).await;
+    let _ = hook.service.set(service.clone());
+    let _ = hook.session_id.set(session_id);
+
+    let outcome = service
+        .start_turn(session_id, "wait for them".to_string())
+        .await
+        .unwrap();
+
+    assert_eq!(outcome.final_answer, "still waiting");
+    assert_eq!(model.requests().len(), deliveries + 1);
+    assert_eq!(delivered(&service, session_id).len(), deliveries);
 }

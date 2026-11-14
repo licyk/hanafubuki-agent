@@ -98,6 +98,7 @@ async fn registers_its_hooks_and_service_while_it_runs() {
         revision: AgentRevision::new(1),
         sampling_step: 1,
         candidate_final_answer: "done".to_string(),
+        background: Default::default(),
     };
     let applies = || {
         (

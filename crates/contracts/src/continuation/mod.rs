@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 
 pub use registry::ContinuationHookRegistry;
 
-use crate::{AgentGeneration, AgentRevision, AgentSessionId, AgentTurnId};
+use crate::{AgentBackgroundWork, AgentGeneration, AgentRevision, AgentSessionId, AgentTurnId};
 
 macro_rules! bounded_id {
     ($name:ident) => {
@@ -62,6 +62,9 @@ pub struct AgentContinuationContext {
     pub revision: AgentRevision,
     pub sampling_step: u32,
     pub candidate_final_answer: String,
+    /// What the session is woken for once the turn ends: none while its
+    /// wake policy is off, so nothing resumes it.
+    pub background: AgentBackgroundWork,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

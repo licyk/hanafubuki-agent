@@ -2,7 +2,8 @@
 //! working toward across final answers within its budgets. The model reads
 //! and sets it with `get_goal`, `create_goal` and `update_goal`; each turn
 //! starts with it in the `goal` world-state section; and a continuation hook
-//! keeps a turn going while the goal is active. It provides [`GoalService`]
+//! keeps a turn going while the goal is active, unless the session is woken
+//! for background work still running, whose woken turn goes on with it. It provides [`GoalService`]
 //! under its name for the facade's goal calls; with the plugin off or
 //! failed, only goals are unavailable (a goal already set stays stored with
 //! its session).
@@ -93,7 +94,9 @@ pub(crate) fn goal_plugin(goals: AgentGoalApplication) -> PluginDef {
 }
 
 /// Keeps a turn going while its session's goal is active; a session whose
-/// goal is not active is neither asked nor reported.
+/// goal is not active is neither asked nor reported. A turn whose session
+/// is woken for background work still running passes: it ends, and the
+/// woken turn goes on with the goal.
 struct GoalContinuation(Arc<GoalRuntime>);
 
 impl AgentContinuationHook for GoalContinuation {
@@ -107,6 +110,9 @@ impl AgentContinuationHook for GoalContinuation {
         _cancellation: CancellationToken,
     ) -> AgentContinuationHookFuture<'a> {
         Box::pin(async move {
+            if !context.background.is_empty() {
+                return Ok(AgentContinuationHookDecision::Pass);
+            }
             match self.0.continuation(context.session_id).await {
                 Ok(Some(fragment)) => Ok(AgentContinuationHookDecision::Continue {
                     fragments: vec![fragment],

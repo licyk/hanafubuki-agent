@@ -11,6 +11,7 @@ use hanafubuki_agent::AgentTuiPreferences;
 use super::ChatWidget;
 use crate::agent_bridge::SessionStatus;
 use crate::appearance::AppearanceEvent;
+use crate::status_indicator_widget::waiting_line;
 
 impl ChatWidget {
     /// A change of the theme, the status line or the title.
@@ -26,6 +27,8 @@ impl ChatWidget {
     }
 
     pub(super) fn set_session_status(&mut self, status: SessionStatus) {
+        let waiting = status.background.as_ref().and_then(waiting_line);
+        self.bottom_pane.set_waiting(waiting);
         self.appearance.values_mut().status = Some(status);
         self.sync_status_line();
     }

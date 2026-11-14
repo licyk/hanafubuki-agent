@@ -32,7 +32,8 @@ use crate::conversation::{
 use crate::core_tools::{CoreToolCall, RequestUserInputTool, UpdateTaskPlanTool};
 use crate::limits::{AgentHardLimits, FIRST_BATCH_HARD_LIMITS};
 use crate::loop_control::{
-    sampling_progress_digest, AgentFollowUpReason, AgentNoProgressState, SamplingRequestResult,
+    sampling_progress_digest, wake_progress_digest, AgentFollowUpReason, AgentNoProgressState,
+    SamplingRequestResult,
 };
 use crate::model::{
     AgentCompactionGeneration, AgentCompactionId, AgentCompactionImplementation,

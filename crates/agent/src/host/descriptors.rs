@@ -58,6 +58,10 @@ pub fn agent_plugin_descriptors() -> Vec<AgentPluginDescriptor> {
             "agent-kernel",
             "The kernel's registries every plugin contributes to",
         ),
+        row(
+            "agent-wake",
+            "Resumes a conversation when its background work reports",
+        ),
         row("web", "Web search and page fetching for the model"),
         row(
             "workspace-fs",

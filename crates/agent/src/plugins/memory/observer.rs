@@ -69,7 +69,7 @@ impl AgentObserver for MemoryObserver {
                 self.memory.signal_scan(None);
             }
             // A turn's history is read once it has finished.
-            AgentNotification::TurnAdmitted { .. } => {}
+            AgentNotification::TurnAdmitted { .. } | AgentNotification::WakeEventQueued { .. } => {}
         }
     }
 }

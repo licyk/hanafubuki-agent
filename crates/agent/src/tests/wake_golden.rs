@@ -1,11 +1,13 @@
 //! The golden of a wake turn's request: its only opener is a
 //! `<background_events>` fragment with one event of each kind
-//! (`golden.rs` holds the helpers). Linux-only, as the fixtures are.
+//! (`golden.rs` holds the helpers); and, with `wakeOnBackgroundTasks` off,
+//! a request is the one from before wakes. Linux-only, as the fixtures
+//! are.
 
 use hanafubuki_agent_kernel::AgentExecutionProgressStatus;
 use serde_json::Value;
 
-use super::golden::{assert_golden, normalize};
+use super::golden::{assert_golden, first_request_with, golden_path, normalize};
 use super::wake::{run_wake_turn, session_with_events};
 use super::*;
 use crate::{AgentSubagentWake, AgentTerminalWake, AgentWakeSource};
@@ -98,4 +100,55 @@ fn every_kind_of_event() -> Vec<AgentWakeSource> {
         ),
         terminal(16, "make bench", AgentTerminalWake::Lost),
     ]
+}
+
+/// The tools whose descriptions changed with wakes, to be true with the
+/// option on and off.
+const REWORDED: [&str; 3] = ["spawn_agent", "send_message", "wait_agent"];
+
+/// With `wakeOnBackgroundTasks` off, the first request of a session is the
+/// one before wakes (`default_mode_request_before_wake.json`, kept as it
+/// was, never regenerated), byte for byte, but for the reworded
+/// descriptions of three tools: the guidance tells the model to wait.
+#[tokio::test(flavor = "multi_thread")]
+async fn with_the_wake_off_a_request_is_the_one_before_wakes() {
+    let off = first_request_with(
+        "golden-wake-off",
+        AgentSessionMode::Default,
+        |_, config| {
+            config
+                .write_settings(crate::AgentSettingsPatch {
+                    wake_on_background_tasks: Some(false),
+                    ..crate::AgentSettingsPatch::default()
+                })
+                .unwrap();
+        },
+        |_, _| {},
+    )
+    .await;
+    let before: Value = serde_json::from_str(
+        &std::fs::read_to_string(golden_path("default_mode_request_before_wake.json")).unwrap(),
+    )
+    .unwrap();
+
+    assert_ne!(off, before, "the three descriptions are reworded");
+    assert_eq!(without_reworded(off), without_reworded(before));
+}
+
+/// `request` without the descriptions of the [`REWORDED`] tools and their
+/// arguments.
+fn without_reworded(mut request: Value) -> Value {
+    for tool in request["tools"].as_array_mut().unwrap() {
+        if REWORDED.contains(&tool["name"].as_str().unwrap_or_default()) {
+            tool.as_object_mut().unwrap().remove("description");
+            for property in tool["parameters"]["properties"]
+                .as_object_mut()
+                .unwrap()
+                .values_mut()
+            {
+                property.as_object_mut().unwrap().remove("description");
+            }
+        }
+    }
+    request
 }

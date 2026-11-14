@@ -5122,7 +5122,7 @@ its next pin, and any module-size exception.
         (Linux, macOS and Windows: success); Site
         https://github.com/licyk/hanafubuki-agent/actions/runs/43582965026
         (success).
-- [ ] R2: the main agent suspends and wakes on its sub-agents. Adds
+- [x] R2: the main agent suspends and wakes on its sub-agents. Adds
       `wakeOnBackgroundTasks` (default on), the dispatcher, the person's
       pause and the 100-turn runaway bound. `wait_agent` reads the queue
       (`unreported` goes). Adds `send_message` to `parent`, the guidance
@@ -5130,6 +5130,219 @@ its next pin, and any module-size exception.
       work runs, the host's `Woken`, the TUI's submit and waiting line, and
       `exec` waiting for the tree. The 12 guidance and 14 spec goldens are
       regenerated.
+      Done (2026-11-14), in three commits: the behaviour-neutral splits
+      (`subagents/service.rs` into `service/{mod,runs,statuses}.rs`;
+      `agent_bridge/mod.rs`'s event mapping and sinks into `events.rs`);
+      the queue-backed `wait_agent`, with no policy on yet; then the rest.
+      - Kernel: `AgentNotification::WakeEventQueued { session_id }` once a
+        queued event is durable (not one the policy dropped);
+        `AgentWakeFilter::SubagentStatus { session_id }` (a follow-up
+        withdraws its agent's last status, as starting a turn cleared
+        `unreported`); `background_work(session) -> AgentBackgroundWork {
+        agents, terminals }` (`service/wake/work.rs`: `Subagent` children
+        running a turn or with work of their own, two levels, over the
+        loaded sessions, each locked in turn; terminals 0 until R5);
+        `AgentContinuationContext.background` (none with the policy off;
+        read before the session's guard); the wake admission returns
+        `AgentWakeTurnAccepted { turn, events }`; the drain returns the last
+        delivered sequence, which `wake_progress_digest` folds into the
+        follow-up's digest. R1's risk was real: six deliveries at a turn's
+        finish ended it as stalled (`a_stream_of_events_at_the_finish_is_no_
+        stall` failed with the old digest). `CORE_PLUGINS` gains
+        `agent-wake`.
+      - Contracts: `AgentBackgroundWork`, `TurnWake { on }` (a turn
+        extension), the notification; `plugin-packages` guests may observe
+        `wake_event_queued`.
+      - Config: `wakeOnBackgroundTasks` (General, Boolean, default true,
+        "Wake on background tasks"; `/config` and `config set` from its
+        spec).
+      - Agent: the driver gives each session `AgentWakePolicy` at every
+        activation (`activate_provider_session`; off for the `Side` and
+        `Review` origins) and each turn `TurnWake`; its `enqueue_wake_event`
+        and `take_wake_events` load the session first. `wake/` (new): the
+        core row `agent-wake` (the manifest's first row, group `Core`;
+        `agent-host-services` mounts before the kernel, so it cannot inject
+        the observer registry), its observer (a coalescing set of session
+        ids and a `Notify`, never a bounded `try_send`) and its worker, which
+        wakes a root with events, no turn, its policy and the option on now,
+        not paused, by `AgentBackgroundEvent::Woken`; `Pauses` (the facade's
+        `cancel_turn` of a root pauses before it cancels; a `TurnAdmitted` of
+        origin `User` clears (a plan's implementation, `Programmatic`, does
+        not); the facade's admitted wake submissions count
+        toward `MAXIMUM_WOKEN_TURNS`, 100). Facade (`service/background.rs`,
+        new; the call moved there from `turns.rs`):
+        `submit_wake_turn_with_sink(session, sink) ->
+        Result<Option<AgentWakeTurnAccepted>, String>` (`None` also with the
+        policy off after activation) and `background_status(session) ->
+        Result<AgentBackgroundStatus { work, pending_wake_events, wake }, _>`
+        (its agents from the runs this instance keeps, read before the queue:
+        one counts from before `spawn_agent` returns until its end is queued,
+        so neither a turn's start nor its end leaves a gap where an agent is
+        neither working nor reported; the kernel's count, which reads turn
+        phases, is the continuation context's only),
+        `wake` an `AgentWakeState::{On, Paused { reason }, Off}` (reasons
+        `AgentWakePause::{PersonInterrupted, RunawayBound}`);
+        `AgentServiceInputs.background_event_sink`,
+        `AgentRuntimeHost.background`, `AgentBackgroundEventSink`,
+        `NoopAgentBackgroundEventSink`. Subagents: a run's end (a completion
+        with its answer, an error; never an interrupt) is queued on the
+        parent before the run stops counting as running, and `wait` reads
+        the runs before the queue; a sub-agent's `send_message` to `parent`
+        queues a `Message` (`Delivering` reads "delivered to its running
+        turn", `Waiting` "queued for its next turn"; the 17th "your parent
+        has 16 unread messages; wait until it reads them"; with the policy
+        off "your parent takes no messages: wakeOnBackgroundTasks is off;
+        put what it must know in your final answer"); `wait_agent`'s idle
+        text "None of your agents is still working."; an answer over 32 KiB
+        reaches a wait cut, with the update's note. Goal passes while
+        `background` is not none. Hooks: `SubagentStart`/`SubagentStop`
+        "the Agent runs no hook when a sub-agent starts or stops".
+      - Model-visible: the guidance's fourth bullet with `TurnWake` on is
+        §3.3's text exactly; with it off, today's. `spawn_agent`'s second
+        line "When it finishes, wait_agent returns its final answer, and the
+        sub-agent guidance says whether it also reaches you by itself. You
+        can send it messages and follow-up tasks meanwhile." (its depth
+        clause is R4's, unchanged); `send_message`'s description and
+        `target` as §3.3; `wait_agent`'s "…of every agent that finished and
+        that you have not been told of yet… or when none of your agents is
+        still working…" ("since your previous wait" would be false with the
+        policy on). What a woken model reads: its request ends with the
+        user-role `<background_events>` fragment (R1's text), no message.
+      - Goldens: 16 regenerated on purpose (15 carry the specs,
+        `plan_mode_request.json` `wait_agent`'s only; the guidance in 13
+        files, 17 blocks); the diff of every file is those five texts,
+        nothing else. `default_mode_request_before_wake.json` (new: the
+        pre-R2 golden, frozen, never regenerated) pins that a request with
+        the option off is the one before R2 but for the three reworded
+        tools.
+      - Terminal interface: `TuiEvents::background_sink` (`BackgroundSink`
+        into `AppEvent::AgentBackground`, routed to the main conversation,
+        so a parked one handles it); `agent_bridge/background.rs` (new):
+        `Woken` for the session shown submits the woken turn with the
+        bridge's sink, holds what the person asks meanwhile (as a session's
+        creation does) and shows the returned events as the `• Background
+        updates` cell; a turn running or being submitted ignores it (its end
+        signals again); one during a review is retried at its end unless
+        paused, and so is a refused submission (a compaction runs), at the
+        compaction's end. `SessionStatus.background` (`background_status`), refreshed
+        on the subagents watch's `Changed` too; the watch starts when a
+        session opens. In the status indicator's place while no turn runs:
+        `Waiting for N agent(s) — resumes by itself`, or `Paused: N agent(s)
+        still running — send a message to resume`.
+      - `exec`: after a completed turn, `wait_for_background` loops on
+        `background_status` (on `Woken`, or a 500 ms re-check): queued events
+        are submitted as the woken turn (each noted `background update:
+        …`), working agents waited for, else done; the exit code and `-o`
+        are the last turn's. It stops at once with the wake off or paused
+        (the bound with a note), after a turn that did not complete, and
+        with 130 on Ctrl-C while waiting. It answers no sub-agent's approval
+        yet (R3).
+      - Tests: kernel `loop_contract/wake.rs` (the stalled steps, the
+        returned events) and `observers.rs` (the notification; none when
+        dropped or archived); subagents `tests/wake.rs` (new: a status
+        across a restart; the follow-up's withdrawal; the round trip, woken
+        exactly once and the answer read; the race at a turn's end, held on
+        the parent's last response: no wake, read once; two ends, one turn;
+        17 messages over three steps; a status a step delivered is not
+        waited for again; a queued status read with the next message after a
+        restart, nothing woken at start) and `tests/pause.rs` (new: the
+        person's interrupt; the bound, lowered to 2 by `Pauses::set_bound`;
+        the option off, and turned off while an agent works; an archived
+        parent; a side conversation; a woken turn in Plan mode; a goal that
+        passes, then continues); `tests/hooks.rs` (a woken turn runs Stop
+        hooks, no UserPromptSubmit); `wake_golden.rs` (the identity); TUI
+        `app/tests/wake.rs` (new: both presentations, the waiting line's
+        snapshot, a parked main conversation, a message typed while
+        waiting); cli `tests/exec.rs` (`exec --json` waits, two turns, `-o`
+        the woken answer). Seen failing: by mutation the follow-up test (no
+        withdrawal), every subagent wait test (no enqueue), the stalled-steps
+        test (the old digest); the parked test failed
+        once before it waited for the shown agent's turn end, and the
+        step-then-wait test 3 times in about 70 runs under load before it
+        held the agent until the parent's step sampled and `agents_done`
+        waited for an agent to exist (the race and goal tests got the same
+        holds; the tests' fixes). The agent tests synchronize with
+        `settled` (a session woken after the earlier signals: the worker
+        looks at a batch in id order), never a sleep. Stress (the test
+        binaries run directly, Linux): the agent's wake, pause, hook and R1
+        wake tests (24 a run) 150 of 150, most of them beside the TUI loop
+        and an `exec` loop; the TUI wake tests 200 of 200, beside the agent
+        loops; the kernel's wake and observer contracts 200 of 200 and the
+        `exec` test 110 of 110, beside them too.
+      - §4 edge cases: typed while suspended (a person's turn; with an end
+        already queued the admission reads it first; in the TUI a `Woken`
+        already in the loop's channel wins, and the message steers the woken
+        turn); a wake during an approval or a question (the turn runs; its
+        next step reads it, R1's kernel test); Plan mode (test); a parent
+        archived (test: refused, its queue kept), deleted
+        (`SessionNotFound`, dropped); a child ending as the parent's turn
+        ends (test: the queuing and the terminal commit take the session's
+        lock, so the turn reads it or it is signalled after); two together
+        (test); 17 messages (test); the option toggled (test; on, from each
+        session's next activation); a restart (test; R7 reports lost work);
+        side conversations (test) and reviews (the same origin rule).
+        Editing a message whose admission delivered events forks before its
+        `TurnStart`: the fork's model never reads them.
+      - Docs (both languages): `tools#subagents`, `sessions#subagents`,
+        `terminal-interface#subagents`, `exec#subagents` (new), its exit
+        codes and `-o`, `json-events#ordering`, `config-reference#general`,
+        `configuration#hooks`, `embedding` (composition, `AgentRuntimeHost`,
+        `#events-and-history`), `plugin-rules` (observers, continuation
+        context, capability scope, the `agent-wake`, `goal` and `subagents`
+        rows, guest kinds), `writing-plugins`, `internals#wake-events`,
+        `architecture` (the tree, "Wake"), `contributing` (the notice's
+        paths). Each compiled with `@mdx-js/mdx` 3.1.1 and remark-gfm.
+      - Module sizes (code lines): `subagents/service.rs` 520 → `service/`
+        `mod.rs` about 426, `runs.rs` 159, `statuses.rs` 52;
+        `agent_bridge/mod.rs` 598 → 471 (`events.rs` 150, `background.rs`
+        90); `session_driver/mod.rs` 520 → 575; agent `service/mod.rs` 556 →
+        570, `construct` 188 → 192; `run_continuation_hooks` 195 → 197;
+        `bottom_pane/mod.rs` 554 → 569; `conversation_item.rs` (592) and
+        `activity.rs` untouched. No exception added or raised.
+      - Deviations: the core row is named `agent-wake` (the core rows'
+        prefix); the pause is set by the facade's `cancel_turn`, not read
+        from a turn's terminal reason (that read could race a newer turn);
+        woken turns are counted where `submit_wake_turn_with_sink` admits
+        one (`TurnAdmitted.origin` cannot tell them); `history_committed`
+        names no item, so the TUI shows the events the submission returns
+        and `exec --json` has none to name (the plan's premise does not
+        hold); only a woken turn's cell is live (a step's or an admission's
+        delivery shows on replay); `BackgroundWorkChanged` waits for its
+        consumer (R3/R4); `start_wake_turn` and `SubagentService::resume`
+        are R4's; the paused line is shown already (R8's richer line stays
+        R8's). O1's `interrupt` of an unloaded agent is on no R2 path.
+        Hierarchical compression untouched.
+      - Validation (Linux): `cargo fmt --all --check`; `RUSTFLAGS="-D
+        warnings" cargo check --workspace --all-targets --all-features`;
+        `cargo clippy --workspace --all-targets --all-features -- -D
+        warnings`; `cargo xtask check`; `cargo test --workspace
+        --all-features --no-fail-fast` (5101 passed, none failed); `bun
+        install --frozen-lockfile`, `bun run format:check:site`, `bun run
+        site:check`, `bun run site:test` (28 passed). Skipped: `site:build`
+        (the Site workflow). Windows and macOS: CI only.
+      - Hanafubuki at its next pin: `AgentServiceInputs.background_event_sink`.
+        With the option on by default its models are told they are resumed
+        when their sub-agents report, so it must submit on `Woken` (with
+        `submit_wake_turn_with_sink`, now `AgentWakeTurnAccepted`) or set
+        `wakeOnBackgroundTasks` off: a `NoopAgentBackgroundEventSink`, or
+        turns run only through `start_turn`, leave a session that ended its
+        turn waiting until its next one; `AgentNotification::
+        WakeEventQueued` and `AgentContinuationContext.background` in matches
+        and literals; `wakeOnBackgroundTasks` on its settings page from the
+        catalog; its integration goldens (the bullet, three descriptions).
+      - For R3: `background_tasks(root)` and `Changed` go beside (or take
+        in) `background_status`; the waiting line and `exec` then read the
+        feed instead of the 400 ms watch and the 500 ms re-check; `Child`
+        events let `exec` answer a sub-agent's approval. For R4: the
+        dispatcher's sub-agent branch is the early return on
+        `parent_session_id` in `Dispatcher::consider`; `Pauses` is keyed by
+        the session it is given (roots now), so map a sub-agent to its root;
+        `background_work` counts two levels already; the held completion
+        goes in `SubagentRuns::finish`. For R5: `TurnWake` is in contracts
+        for the execution plugin's fragment; `background_work`'s
+        `terminals` is 0. For R8: `SessionStatus.background` and
+        `waiting_line` are what the status item and the `/tasks` hint build
+        on.
 - [ ] R3: the background feed: `background_tasks(root)`, `Changed`, and
       `Child` events from a forwarding sink on child turns. The TUI's
       400 ms watch goes, and `exec` answers children's approvals.

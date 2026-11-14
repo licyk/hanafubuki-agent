@@ -18,6 +18,11 @@ impl AgentBridge {
         }
         self.denials.observe(event.session_id, &event.kind);
         self.adopt_followed_turn(&event.kind, event.turn_id);
+        if let AgentEventKind::CompactionUpdated { compaction } = &event.kind {
+            if compaction.status.is_terminal() {
+                self.retry_missed_wake();
+            }
+        }
         // The turn's events can arrive before the reply that accepted it.
         if let (None, Some(turn_id), true) = (self.turn, event.turn_id, self.turn_running) {
             self.turn = Some(AgentTurnAccepted {

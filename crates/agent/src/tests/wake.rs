@@ -60,7 +60,8 @@ pub(super) async fn run_wake_turn(
         .submit_wake_turn_with_sink(session_id, Arc::new(Discard))
         .await
         .unwrap()
-        .expect("events are queued");
+        .expect("events are queued")
+        .turn;
     wait_for_end(service, &accepted).await;
     accepted
 }
@@ -103,12 +104,13 @@ fn transcript(
         .collect()
 }
 
-/// How many times a request's input carries the fragment.
+/// How many times a request's input carries the fragment, by its first
+/// line: the sub-agent guidance names the tag too.
 fn fragments(body: &[u8]) -> usize {
     let body: Value = serde_json::from_slice(body).unwrap();
     body["input"]
         .to_string()
-        .matches("<background_events>")
+        .matches("Updates on work you started in the background")
         .count()
 }
 

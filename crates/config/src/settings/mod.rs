@@ -49,6 +49,10 @@ pub struct AgentSettings {
     /// name no plugin carries is kept but means nothing, and the core plugins
     /// ignore it. Changed through the plugin enablement call, never patched.
     pub disabled_plugins: BTreeSet<String>,
+    /// Whether a conversation is resumed by itself when its background
+    /// work reports (a sub-agent finishes or sends it a message). Each
+    /// session takes it at its next activation.
+    pub wake_on_background_tasks: bool,
     pub web_search_provider: AgentWebSearchProvider,
     pub searxng_base_url: Option<String>,
     pub web_fetch_use_jina_reader: bool,
@@ -94,6 +98,7 @@ impl Default for AgentSettings {
             windows: AgentWindowsSettings::default(),
             memory: AgentMemorySettings::default(),
             disabled_plugins: BTreeSet::new(),
+            wake_on_background_tasks: true,
             web_search_provider: AgentWebSearchProvider::Auto,
             searxng_base_url: None,
             web_fetch_use_jina_reader: false,
@@ -124,6 +129,7 @@ pub struct AgentSettingsPatch {
     pub sandbox_workspace_write: Option<AgentSandboxWorkspaceWrite>,
     pub windows: Option<AgentWindowsSettings>,
     pub memory: Option<AgentMemorySettings>,
+    pub wake_on_background_tasks: Option<bool>,
     pub web_search_provider: Option<AgentWebSearchProvider>,
     /// `null` clears the endpoint; a missing key leaves it.
     #[serde(default, deserialize_with = "present")]
@@ -159,6 +165,9 @@ impl AgentSettingsPatch {
             check_specs("memory", &memory)?;
             memory::validate_memory(&memory)?;
             settings.memory = memory;
+        }
+        if let Some(enabled) = self.wake_on_background_tasks {
+            settings.wake_on_background_tasks = enabled;
         }
         if let Some(provider) = self.web_search_provider {
             settings.web_search_provider = provider;
@@ -214,8 +223,8 @@ pub(crate) fn validate_disabled_plugins(names: &BTreeSet<String>) -> Result<(), 
     Ok(())
 }
 
-/// `permissionMode` and `disabledPlugins`. `logLevel` is the standalone
-/// Agent's ([`crate::standalone`]).
+/// `permissionMode`, `wakeOnBackgroundTasks` and `disabledPlugins`.
+/// `logLevel` is the standalone Agent's ([`crate::standalone`]).
 pub(crate) fn general_section() -> SettingsSection {
     SettingsSection::new(
         "general",
@@ -238,6 +247,17 @@ pub(crate) fn general_section() -> SettingsSection {
                         },
                     ),
                     "Which tool calls need an approval",
+                )
+            },
+            SettingSpec {
+                keywords: vec!["sub-agents".into(), "resume".into(), "wake".into()],
+                ..described(
+                    SettingSpec::new(
+                        "wakeOnBackgroundTasks",
+                        "Wake on background tasks",
+                        SettingKind::Boolean,
+                    ),
+                    "Resume a conversation by itself when a sub-agent it started finishes or sends it a message",
                 )
             },
             SettingSpec {

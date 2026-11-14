@@ -131,6 +131,14 @@ pub enum AgentWakeQueued {
     Disabled,
 }
 
+/// A wake turn admitted, with the events its opener delivers.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentWakeTurnAccepted {
+    pub turn: super::AgentTurnAccepted,
+    pub events: Vec<AgentWakeEvent>,
+}
+
 /// Which queued events `take_wake_events` removes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum AgentWakeFilter {

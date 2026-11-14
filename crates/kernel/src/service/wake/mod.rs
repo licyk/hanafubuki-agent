@@ -3,12 +3,15 @@
 //! `ConversationItem::WakeEvents`: at a turn's admission (after
 //! `TurnStart`), or at a step of the running turn (after its steering).
 //! Queuing and taking commit a checkpoint without a revision, as a setting
-//! does; delivering appends to history.
+//! does; delivering appends to history. A queued event is notified
+//! (`WakeEventQueued`), which is what wakes an idle session. What the
+//! session's background work holds open is `work.rs`'s.
 
 use super::*;
 use crate::{AgentWakeFilter, AgentWakePolicy, AgentWakeQueued, AgentWakeSource};
 
 mod admission;
+mod work;
 
 impl AgentService {
     /// Queues `source` on `session_id`, durably. A sub-agent's or a
@@ -17,6 +20,7 @@ impl AgentService {
     /// refused. With the policy off, only a sub-agent's final status is
     /// queued (`wait_agent` reads it); anything else is dropped. A session
     /// that is archived or gone refuses it, and its caller drops the event.
+    /// The observers are told of a queued event once it is durable.
     pub async fn enqueue_wake_event(
         &self,
         session_id: AgentSessionId,
@@ -52,6 +56,10 @@ impl AgentService {
             (StagedPersistence::commit(&cell, record, previous), queued)
         };
         self.persist_staged(staged).await?;
+        self.inner
+            .registries
+            .observers
+            .notify(&AgentNotification::WakeEventQueued { session_id });
         Ok(queued)
     }
 
@@ -93,23 +101,28 @@ impl AgentService {
     }
 
     /// Delivers the queued wake events to the running turn as one item, at
-    /// a step boundary; whether it delivered any (the turn then takes
-    /// another step). Nothing with the policy off.
+    /// a step boundary; the sequence of the last one it delivered, if any
+    /// (the turn then takes another step). Nothing with the policy off.
     pub(super) async fn consume_pending_wake_events(
         &self,
         identity: TurnIdentity,
         event_sink: &dyn AgentEventSink,
-    ) -> Result<bool, AgentError> {
+    ) -> Result<Option<u64>, AgentError> {
         let cell = self.session(identity.session_id)?;
-        let (staged, history_event) = {
+        let (staged, history_event, last) = {
             let mut guard = cell.lock_after_persistence().await?;
             let record = &mut *guard;
             exact_turn(record, identity.turn_id, identity.generation)?;
-            if record.runtime.wake_policy == AgentWakePolicy::Off
-                || record.runtime.wake_queue.is_empty()
-            {
-                return Ok(false);
-            }
+            let Some(last) = record
+                .runtime
+                .wake_queue
+                .events
+                .last()
+                .map(|event| event.sequence)
+                .filter(|_| record.runtime.wake_policy == AgentWakePolicy::On)
+            else {
+                return Ok(None);
+            };
             let previous = record.rollback_state();
             let items = [ConversationItem::WakeEvents {
                 events: record.runtime.wake_queue.events.clone(),
@@ -136,11 +149,12 @@ impl AgentService {
             (
                 StagedPersistence::commit(&cell, record, previous),
                 history_event,
+                last,
             )
         };
         self.persist_staged(staged).await?;
         event_sink.emit(history_event);
-        Ok(true)
+        Ok(Some(last))
     }
 }
 

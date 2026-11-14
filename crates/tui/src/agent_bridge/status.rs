@@ -1,14 +1,16 @@
 //! What the status line and the terminal title show of the session
 //! ([`SessionStatus`]): read from its snapshot when something it shows
 //! changes (a commit's usage, a new title or plan, a compaction, the end
-//! of a turn, a model or role change), with the configured permission mode and the
-//! goal, which are read once when the session opens and kept. The chat also
-//! reads there whether the session's model is known not to read images.
+//! of a turn, a model or role change, a change of its subagents, which also
+//! changes what its background work holds open), with the configured
+//! permission mode and the goal, which are read once when the session opens
+//! and kept. The chat also reads there whether the session's model is known
+//! not to read images, and whether it waits on its background work.
 
 use std::path::{Path, PathBuf};
 
 use hanafubuki_agent::{
-    AgentCompressionSummary, AgentGoal, AgentPermissionMode, AgentSessionId,
+    AgentBackgroundStatus, AgentCompressionSummary, AgentGoal, AgentPermissionMode, AgentSessionId,
     AgentTaskPlanStepStatus,
 };
 
@@ -36,6 +38,8 @@ pub(crate) struct SessionStatus {
     /// Why the session sends its model no image (the kernel refuses a
     /// message with one); `None` when it sends them, or nothing says.
     pub(crate) images_refused: Option<String>,
+    /// What its background work holds open, and whether it is woken for it.
+    pub(crate) background: Option<AgentBackgroundStatus>,
 }
 
 /// The session's tokens so far, and its context when the window is known.
@@ -100,6 +104,7 @@ impl AgentBridge {
             role: snapshot.role,
             images_refused: (!snapshot.input_capabilities.image_input)
                 .then(|| self.images_refused_because(session_id)),
+            background: self.agent.background_status(session_id).ok(),
         })))
     }
 

@@ -113,6 +113,9 @@ impl ChatWidget {
             TurnUpdate::Error(message) => {
                 self.add_to_history(history_cell::new_error_event(message))
             }
+            TurnUpdate::BackgroundUpdates(summaries) => {
+                self.add_to_history(history_cell::new_background_updates(summaries))
+            }
             // The commands' updates are handled before.
             TurnUpdate::SessionOpened(_)
             | TurnUpdate::ModelList(_)
@@ -337,5 +340,6 @@ fn adds_entry(update: &TurnUpdate) -> bool {
             | TurnUpdate::CompressionFailed(_)
             | TurnUpdate::CompactionFailed(_)
             | TurnUpdate::ContextWindowLearned(_)
+            | TurnUpdate::BackgroundUpdates(_)
     )
 }

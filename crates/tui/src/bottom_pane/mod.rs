@@ -49,6 +49,7 @@ use ratatui::buffer::Buffer;
 use ratatui::crossterm::event::KeyCode;
 use ratatui::crossterm::event::KeyEvent;
 use ratatui::layout::Rect;
+use ratatui::style::Stylize;
 use ratatui::text::Line;
 
 use crate::app_event::{AppEvent, AppEventSender, Op};
@@ -126,6 +127,9 @@ pub(crate) struct BottomPane {
     is_task_running: bool,
 
     status: Option<StatusIndicatorWidget>,
+    /// What the session waits on while no turn runs, shown in the status
+    /// indicator's place.
+    waiting: Option<String>,
     /// The messages waiting for the turn, shown above the composer.
     pending_input: PendingInput,
     /// The rows the waiting messages reached during the turn, and the
@@ -166,6 +170,7 @@ impl BottomPane {
             has_input_focus,
             is_task_running: false,
             status: None,
+            waiting: None,
             pending_input: PendingInput::default(),
             pending_rows: Cell::default(),
             view_failures: ViewFailures::default(),
@@ -500,6 +505,14 @@ impl BottomPane {
         self.request_redraw();
     }
 
+    /// What the session waits on while no turn runs, if anything.
+    pub(crate) fn set_waiting(&mut self, waiting: Option<String>) {
+        if self.waiting != waiting {
+            self.waiting = waiting;
+            self.request_redraw();
+        }
+    }
+
     pub(crate) fn set_update_notice(&mut self, notice: Option<TuiUpdateNotice>) {
         self.composer.set_update_notice(notice);
         self.request_redraw();
@@ -679,6 +692,12 @@ impl BottomPane {
             let mut flex = FlexRenderable::new();
             if let Some(status) = &self.status {
                 flex.push(0, RenderableItem::Borrowed(status));
+                flex.push(0, RenderableItem::Owned("".into()));
+            } else if let Some(waiting) = &self.waiting {
+                flex.push(
+                    0,
+                    RenderableItem::Owned(Box::new(Line::from(waiting.clone()).dim())),
+                );
                 flex.push(0, RenderableItem::Owned("".into()));
             }
             if self.is_task_running {

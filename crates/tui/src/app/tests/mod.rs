@@ -19,7 +19,7 @@ use hanafubuki_agent::{
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use super::App;
-use crate::agent_bridge::{AgentBridge, AgentReply, StatusSink};
+use crate::agent_bridge::{AgentBridge, AgentReply, BackgroundSink, StatusSink};
 use crate::app_event::{AppEvent, AppEventSender};
 use crate::chatwidget::{ChatWidget, ChatWidgetInit};
 use crate::custom_terminal::Terminal;
@@ -174,6 +174,7 @@ impl Harness {
             AgentRuntimeHost {
                 secrets: Some(Arc::new(MemorySecretStore::default())),
                 status: Arc::new(StatusSink(sender.clone())),
+                background: Arc::new(BackgroundSink(sender.clone())),
                 ..AgentRuntimeHost::default()
             },
         )
@@ -903,4 +904,5 @@ mod thinking;
 mod tools;
 mod update_notice;
 mod update_prompt;
+mod wake;
 mod workspace_commands;

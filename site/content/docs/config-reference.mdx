@@ -12,11 +12,12 @@ icon: ListTree
 
 ### 通用 [#general]
 
-| 键                | 类型和取值                                                   | 默认值     | 含义                                                          |
-| ----------------- | ------------------------------------------------------------ | ---------- | ------------------------------------------------------------- |
-| `permissionMode`  | `"manual"`、`"auto_review"`、`"full_access"`                 | `"manual"` | [权限模式](/docs/permissions)                                 |
-| `disabledPlugins` | 插件名的数组，最多 64 个                                     | `[]`       | 关闭的插件，见下表                                            |
-| `logLevel`        | `"off"`、`"error"`、`"warn"`、`"info"`、`"debug"`、`"trace"` | `"info"`   | 日志文件的级别，见[网络与日志](/docs/network-logging#logging) |
+| 键                      | 类型和取值                                                   | 默认值     | 含义                                                                                                                                                |
+| ----------------------- | ------------------------------------------------------------ | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `permissionMode`        | `"manual"`、`"auto_review"`、`"full_access"`                 | `"manual"` | [权限模式](/docs/permissions)                                                                                                                       |
+| `wakeOnBackgroundTasks` | 布尔值                                                       | `true`     | 对话启动的子代理结束或给它发消息时，自行恢复该对话；关闭时，模型被告知等待它的子代理（[工具](/docs/tools#subagents)）。每个会话在下一个回合采用修改 |
+| `disabledPlugins`       | 插件名的数组，最多 64 个                                     | `[]`       | 关闭的插件，见下表                                                                                                                                  |
+| `logLevel`              | `"off"`、`"error"`、`"warn"`、`"info"`、`"debug"`、`"trace"` | `"info"`   | 日志文件的级别，见[网络与日志](/docs/network-logging#logging)                                                                                       |
 
 `disabledPlugins` 中有意义的插件名：
 

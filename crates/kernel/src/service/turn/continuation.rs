@@ -12,6 +12,7 @@ impl AgentService {
         if hooks.is_empty() {
             return Ok(Vec::new());
         }
+        let background = self.background_work_waking(identity.session_id)?;
         let (context, timeout) = {
             let cell = self.session(identity.session_id)?;
             let guard = cell.lock()?;
@@ -25,6 +26,7 @@ impl AgentService {
                     revision: AgentRevision::new(record.status.revision),
                     sampling_step: turn.sampling_step,
                     candidate_final_answer,
+                    background,
                 },
                 record.settings.budget_policy.tool_idle_timeout(),
             )

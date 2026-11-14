@@ -244,6 +244,7 @@ impl App {
                 }
                 self.queue_settings_page_check();
             }
+            AppEvent::AgentBackground(event) => self.bridge.background(event),
             AppEvent::Op(op) => {
                 if let Some(update) = self.bridge.submit(op) {
                     self.show_update(update);

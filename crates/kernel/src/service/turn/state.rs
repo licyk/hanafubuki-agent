@@ -171,9 +171,10 @@ impl AgentService {
         let opened = admission_items(record, session_id, turn_id, input, admission)?;
         log_selected_skills(session_id, &opened.items);
         validate_history_append(record, &opened.items, self.inner.limits)?;
-        if opened.delivers_wake_events {
-            record.runtime.wake_queue.events.clear();
-        }
+        let wake_events = match opened.delivers_wake_events {
+            true => std::mem::take(&mut record.runtime.wake_queue.events),
+            false => Vec::new(),
+        };
         self.refresh_context_window(record);
         if opened.implementing_plan {
             record.settings.config.mode = crate::AgentSessionMode::Default;
@@ -274,6 +275,7 @@ impl AgentService {
                 identity,
                 origin,
                 automatic_title,
+                wake_events,
             },
             started_event,
             history_event,
@@ -298,6 +300,8 @@ pub(in crate::service) struct AdmittedTurn {
     origin: hanafubuki_agent_contracts::AgentTurnOrigin,
     /// The session's title after the admission, when the Agent gave it.
     automatic_title: Option<String>,
+    /// The wake events the admission delivered.
+    pub(in crate::service) wake_events: Vec<crate::AgentWakeEvent>,
 }
 
 /// What an admission opens its turn with, and what the turn runs.

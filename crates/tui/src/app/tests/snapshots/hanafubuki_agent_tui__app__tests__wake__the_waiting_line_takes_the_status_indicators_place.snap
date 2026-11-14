@@ -1,0 +1,12 @@
+---
+source: crates/tui/src/app/tests/wake.rs
+assertion_line: 150
+expression: harness.bottom_rows(7)
+---
+
+Waiting for 1 agent — resumes by itself                                                             
+
+
+› Ask the Agent to do anything
+
+  fixture-model · /project · Delegate the count. · ← for agents

@@ -50,6 +50,7 @@ pub(crate) fn run(
     let events = TuiEvents::new();
     let host = AgentRuntimeHost {
         status: events.status_sink(),
+        background: events.background_sink(),
         ..AgentRuntimeHost::default()
     };
     let standalone = Standalone::open(global, host)?;

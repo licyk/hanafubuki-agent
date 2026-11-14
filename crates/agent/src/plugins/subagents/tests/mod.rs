@@ -6,11 +6,13 @@
 //! are `roles.rs`'s; an agent's Provider, model and reasoning effort
 //! `models.rs`'s; the Providers and models the guidance lists
 //! `guidance.rs`'s; what listed agents run on `listing.rs`'s; what a
-//! parent hears of its agents through its wake queue `wake.rs`'s.
+//! parent hears of its agents through its wake queue, and how it is woken,
+//! `wake.rs`'s; when it is not woken `pause.rs`'s.
 
 mod guidance;
 mod listing;
 mod models;
+mod pause;
 mod roles;
 mod wake;
 
@@ -199,6 +201,10 @@ async fn a_spawned_agent_runs_its_task_and_the_wait_returns_its_answer() {
     let waited = body(&server, 2);
     assert!(waited.contains("Wait completed."), "{waited}");
     assert!(waited.contains("Twelve files."), "{waited}");
+    assert!(
+        !waited.contains(wake::UPDATES),
+        "the wait took the status: no step delivers it again"
+    );
 
     let agents = service.subagents(parent.id).await.unwrap();
     let child = agents[0].session_id;

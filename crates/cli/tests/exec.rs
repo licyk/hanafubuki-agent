@@ -3,13 +3,14 @@
 
 mod support;
 
-use std::io::Write;
+use std::io::{BufRead, Write};
 use std::process::Stdio;
 use std::time::Duration;
 
 use hanafubuki_agent::test_support::{
-    assistant_events, reasoning_answer_events, tool_events, FakeServer,
+    add_test_provider, assistant_events, reasoning_answer_events, tool_events, FakeServer, HOLD,
 };
+use hanafubuki_agent::AgentConfig;
 use serde_json::Value;
 use support::Home;
 
@@ -155,6 +156,80 @@ fn json_prints_one_event_per_line_ending_with_the_completion() {
     }
     let request = String::from_utf8_lossy(&model.server.requests()[0].body).into_owned();
     assert!(request.contains("From standard input"));
+}
+
+/// The root delegates and its turn completes while the agent works:
+/// `exec` waits, submits the turn the agent's end wakes the session for
+/// (its events printed as any turn's, the update noted), and exits 0 with
+/// that turn's answer as the last message.
+#[test]
+fn exec_waits_for_its_agents_and_ends_with_the_woken_turns_answer() {
+    let spawn = serde_json::json!({
+        "task_name": "counter",
+        "message": "Count the files.",
+        "fork_turns": "none",
+        "provider": "provider-2",
+        "model": "fixture-model",
+    });
+    let parent = Model::start(vec![
+        tool_events("spawn_agent", &spawn.to_string()),
+        assistant_events("The counter is on it."),
+        assistant_events("There are twelve."),
+    ]);
+    let children = Model::start(vec![
+        [HOLD.as_bytes(), &assistant_events("Twelve files.")].concat()
+    ]);
+    let home = Home::new().with_provider(&parent.server.base_url);
+    add_test_provider(
+        &AgentConfig::new(&home.home),
+        "provider-2",
+        "Second",
+        &children.server.base_url,
+    );
+    let last = home.home.join("last.txt");
+    let mut exec = home
+        .command()
+        .args([
+            "exec",
+            "--json",
+            "-o",
+            last.to_str().unwrap(),
+            "Delegate the count.",
+        ])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let mut lines = std::io::BufReader::new(exec.stdout.take().unwrap()).lines();
+    let mut kinds = Vec::new();
+    // The first turn completes while the agent's answer is held.
+    for line in lines.by_ref() {
+        let event = serde_json::from_str::<Value>(&line.unwrap()).unwrap();
+        kinds.push(event["kind"]["type"].as_str().unwrap().to_string());
+        if kinds.last().unwrap() == "turn_completed" {
+            break;
+        }
+    }
+    children.server.hold.notify_one();
+    for line in lines {
+        let event = serde_json::from_str::<Value>(&line.unwrap()).unwrap();
+        kinds.push(event["kind"]["type"].as_str().unwrap().to_string());
+    }
+    let run = support::Run(exec.wait_with_output().unwrap()).expect(0);
+
+    let turns = |kind: &str| kinds.iter().filter(|seen| *seen == kind).count();
+    assert_eq!((turns("turn_started"), turns("turn_completed")), (2, 2));
+    assert_eq!(kinds.last().map(String::as_str), Some("turn_completed"));
+    assert!(
+        run.stderr()
+            .contains("background update: Sub-agent `counter`"),
+        "{}",
+        run.stderr()
+    );
+    assert_eq!(std::fs::read_to_string(last).unwrap(), "There are twelve.");
+    assert_eq!(parent.request_count(), 3);
+    let woken = String::from_utf8_lossy(&parent.server.requests()[2].body).into_owned();
+    assert!(woken.contains("Twelve files."), "{woken}");
 }
 
 #[test]

@@ -8,7 +8,10 @@
 //! (the session's Provider, its permission mode, the world state and the
 //! turn's extensions), so a turn a plugin runs is prepared like a user's.
 //! A session's model selection, the model of an agent a session spawns,
-//! and what it may spawn agents on, are their own (`model.rs`).
+//! and what it may spawn agents on, are their own (`model.rs`). It gives a
+//! session its wake policy at each activation (`wakeOnBackgroundTasks`;
+//! never a side conversation's or a review's), and each turn the
+//! extension `TurnWake` that freezes it.
 
 mod model;
 
@@ -20,7 +23,7 @@ use std::ops::ControlFlow;
 use std::sync::Arc;
 
 use hanafubuki_agent_config::{AgentConfig, AgentSettings};
-use hanafubuki_agent_contracts::{ContextRequest, TurnAdmissionRequest, TurnExtensions};
+use hanafubuki_agent_contracts::{ContextRequest, TurnAdmissionRequest, TurnExtensions, TurnWake};
 use hanafubuki_agent_execution::{AgentExecutionScope, AgentExecutionService};
 use hanafubuki_agent_foundation::blocking::{run_blocking_operation, BlockingOperationPort};
 use hanafubuki_agent_foundation::cancellation::CancellationToken;
@@ -30,8 +33,8 @@ use hanafubuki_agent_kernel::{
     AgentSessionLifecycle, AgentSessionListRequest, AgentSessionMode, AgentSessionOrigin,
     AgentSessionParentFilter, AgentSessionPersistence, AgentSessionRuntimeSnapshot,
     AgentSessionSummary, AgentSessionTitleRenameRequest, AgentTurnInput, AgentTurnOrigin,
-    AgentTurnOutcome, AgentWakeEvent, AgentWakeFilter, AgentWakeQueued, AgentWakeSource,
-    AgentWorldStateSnapshot, ConversationItem, AGENT_SESSION_PAGE_SIZE_MAX,
+    AgentTurnOutcome, AgentWakeEvent, AgentWakeFilter, AgentWakePolicy, AgentWakeQueued,
+    AgentWakeSource, AgentWorldStateSnapshot, ConversationItem, AGENT_SESSION_PAGE_SIZE_MAX,
 };
 use hanafubuki_agent_sandbox::{platform_default_mode, SandboxSettings};
 
@@ -231,6 +234,23 @@ impl AgentSessionDriver {
         .map_err(AgentError::Persistence)?
     }
 
+    /// The state of `session_id` if it is loaded; it is not loaded here.
+    /// Does not block.
+    pub(crate) fn loaded_snapshot(
+        &self,
+        session_id: AgentSessionId,
+    ) -> Result<AgentSessionRuntimeSnapshot, AgentError> {
+        self.core.snapshot(session_id)
+    }
+
+    /// Whether `wakeOnBackgroundTasks` is on now, as the settings were last
+    /// read. Does not block.
+    pub(crate) fn wakes_on_background_tasks(&self) -> bool {
+        self.config
+            .settings_snapshot()
+            .is_none_or(|settings| settings.wake_on_background_tasks)
+    }
+
     /// The session's current state, loading it first. Blocks.
     pub(crate) fn snapshot(
         &self,
@@ -394,10 +414,10 @@ impl AgentSessionDriver {
         Ok(())
     }
 
-    /// Loads `session_id` and binds it to its Provider and its compaction
-    /// strategy as the settings now describe them, for a model operation.
-    /// The kernel calls load history and wait for the session's staged
-    /// commit, so they run on the blocking boundary.
+    /// Loads `session_id` and binds it to its Provider, its compaction
+    /// strategy and its wake policy as the settings now describe them, for
+    /// a model operation. The kernel calls load history and wait for the
+    /// session's staged commit, so they run on the blocking boundary.
     pub(crate) async fn activate_provider_session(
         &self,
         session_id: AgentSessionId,
@@ -467,7 +487,7 @@ impl AgentSessionDriver {
         )
         .await?
         .map_err(|error| error.to_string())?;
-        let (changed, snapshot) = activated;
+        let (changed, mut snapshot) = activated;
         if changed {
             warn_unreachable_background_threshold(
                 strategy,
@@ -475,6 +495,11 @@ impl AgentSessionDriver {
                 auto_compact_threshold_percent,
             );
         }
+        snapshot.wake_policy = wake_policy(&snapshot, &settings);
+        self.core
+            .set_session_wake_policy(session_id, snapshot.wake_policy)
+            .await
+            .map_err(|error| error.to_string())?;
         Ok(snapshot)
     }
 
@@ -616,7 +641,22 @@ impl AgentSessionDriver {
         turn.insert(Arc::new(sandbox));
         turn.insert(Arc::new(background));
         turn.insert(Arc::new(hierarchical));
+        let on = self.core.snapshot(session_id)?.wake_policy == AgentWakePolicy::On;
+        turn.insert(Arc::new(TurnWake { on }));
         Ok(turn)
+    }
+}
+
+/// Whether `session` is woken for its background work: as
+/// `wakeOnBackgroundTasks` says, never a side conversation or a review.
+fn wake_policy(session: &AgentSessionRuntimeSnapshot, settings: &AgentSettings) -> AgentWakePolicy {
+    let excluded = matches!(
+        session.origin,
+        Some(AgentSessionOrigin::Side | AgentSessionOrigin::Review)
+    );
+    match settings.wake_on_background_tasks && !excluded {
+        true => AgentWakePolicy::On,
+        false => AgentWakePolicy::Off,
     }
 }
 

@@ -4,7 +4,7 @@ description: "Run one turn without the terminal interface: prompt sources, outpu
 icon: Play
 ---
 
-`hanafubuki-agent exec` creates a session, runs one turn in it and exits when the turn ends. It is meant for scripts, CI and anywhere without an interactive terminal.
+`hanafubuki-agent exec` creates a session, runs one turn in it and exits when the turn ends, or, when the turn delegated to sub-agents, once they are done ([below](#subagents)). It is meant for scripts, CI and anywhere without an interactive terminal.
 
 ```sh
 hanafubuki-agent exec "Summarize the open TODOs in this repository"
@@ -77,7 +77,7 @@ hanafubuki-agent exec --json "List the five largest files"
 }
 ```
 
-The turn's last line is `turn_completed`, `turn_cancelled` or `turn_failed`. Every event's fields, their order and the compatibility rule are in [exec --json events](/docs/json-events). The first line, `turn_started`, names the session's [role](/docs/roles#sessions) (`role`, `null` for `default`), as `--role` gave it.
+The turn's last line is `turn_completed`, `turn_cancelled` or `turn_failed`; a turn that sub-agents wake the session for follows as its own run of events, from its `turn_started` ([below](#subagents)), with no kind of its own. Every event's fields, their order and the compatibility rule are in [exec --json events](/docs/json-events). The first line, `turn_started`, names the session's [role](/docs/roles#sessions) (`role`, `null` for `default`), as `--role` gave it.
 
 ## Approvals and questions [#approvals]
 
@@ -99,9 +99,15 @@ The model may also ask you a question (to choose between approaches, say). `exec
   In CI, make sure the machine is one you can throw away.
 </Callout>
 
+## Waiting for sub-agents [#subagents]
+
+When the turn completes while [sub-agents](/docs/tools#subagents) it spawned still work, `exec` does not exit: it waits for them, running nothing meanwhile. When one of them ends or sends the session a message, `exec` runs the turn that wakes the session for what was reported, printed as any turn's: each report as a note first (``· background update: Sub-agent `counter` (agent id 2) completed: Twelve files.``, on standard error with `--json`), then the turn. It goes on until no sub-agent works and nothing is left to read, then exits with how the last turn ended, and `-o` writes that turn's final answer.
+
+It exits at the turn's end, as before, when `wakeOnBackgroundTasks` is off, when the turn did not complete, and after the sub-agents woke the session 100 times (with a note). `exec` does not answer a sub-agent's approvals yet: in Manual mode one waits until it expires (15 minutes), and the sub-agent goes on without it. Ctrl-C while `exec` waits exits with 130, and the sub-agents stop with the Agent.
+
 ## Saving the final answer [#output-last-message]
 
-`-o FILE` (`--output-last-message FILE`) writes the model's final answer to `FILE` once the turn has ended. When the turn has no final answer (it failed, say), the file is empty.
+`-o FILE` (`--output-last-message FILE`) writes the model's final answer to `FILE` once the turn has ended (the last turn's, after [waiting for sub-agents](#subagents)). When the turn has no final answer (it failed, say), the file is empty.
 
 ```sh
 hanafubuki-agent exec -o summary.md "Summarize the README in three paragraphs"
@@ -115,7 +121,7 @@ Ctrl-C cancels the turn; `exec` exits with 130 once the Agent has shut down. A s
 
 | Code | Means                                                                                                                  |
 | ---- | ---------------------------------------------------------------------------------------------------------------------- |
-| 0    | The turn completed                                                                                                     |
+| 0    | The turn completed (the last one, after [waiting for sub-agents](#subagents))                                          |
 | 1    | The turn failed, the Agent stopped during it, or the command could not run (no Provider, the data directory in use, …) |
 | 2    | The command line is wrong: an unknown flag, no prompt, an `--approve` that is not a policy                             |
 | 3    | The model asked a question no one could answer, so the turn was cancelled                                              |

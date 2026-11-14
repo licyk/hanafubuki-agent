@@ -24,7 +24,9 @@ pub use service::{
     service_with_host, test_host, test_paths, FixedProxy, FixedWorkspaceRoots, NoHostContext,
     TestBlockingOperationPort, TestPaths, TEST_SHUTDOWN_DEADLINE, TEST_WAIT,
 };
-pub use wake::{queue_wake_event, set_wake_policy};
+pub use wake::{
+    queue_wake_event, reopen_service_waking, set_wake_policy, RecordedBackgroundEvents,
+};
 
 /// A secure store in memory.
 pub use hanafubuki_agent_foundation::secrets::MemorySecretStore;

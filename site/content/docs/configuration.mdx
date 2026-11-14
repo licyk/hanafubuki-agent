@@ -147,7 +147,7 @@ timeout = 30
 - **命令**通过你的 shell 运行（`$SHELL -lc`，Windows 上为 `%COMSPEC% /C`），工作目录是当前工作目录，事件以 JSON 写到它的 stdin：`session_id`、`turn_id`、`cwd`、`hook_event_name` 和事件自己的字段（`tool_name`、`tool_input`、`tool_use_id` 与 `tool_response`；`prompt`；`source`；`stop_hook_active` 与 `last_assistant_message`）。Windows 上用 `commandWindows` 代替它。`timeout` 以秒计（默认 600）；`statusMessage` 在运行时显示。
 - 退出码 0 且 stdout 为空表示什么都不做。其他退出码、超时或无法读取的 JSON 是钩子的失败：会被记录且不起作用，所以坏掉的钩子从不让调用或轮次停下。钩子的输出按宽松方式读取：Agent 不用的字段被忽略。
 - 同一事件的钩子按配置顺序依次运行（用户的在前）；`PreToolUse` 遇到第一个拒绝就结束。
-- 不支持 Codex 的其他事件（`PermissionRequest`、`PreCompact`、`PostCompact`、`SessionEnd`、`SubagentStart`、`SubagentStop`、`PreModelRequest`、`PostModelRequest`、`Interrupt`）、它的 `mcp_tool`、`prompt` 与 `agent` 钩子，以及 `async` 命令：它们会被报告，从不运行。文件中无法使用的内容逐项跳过；其余照常加载。
+- 不支持 Codex 的其他事件（`PermissionRequest`、`PreCompact`、`PostCompact`、`SessionEnd`、`SubagentStart`、`SubagentStop`、`PreModelRequest`、`PostModelRequest`、`Interrupt`）、它的 `mcp_tool`、`prompt` 与 `agent` 钩子，以及 `async` 命令：它们会被报告，从不运行（`SubagentStart` 和 `SubagentStop` 是因为 Agent 在子代理开始或停止时不运行钩子）。文件中无法使用的内容逐项跳过；其余照常加载。
 
 ### 信任 [#hooks-trust]
 

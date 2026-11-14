@@ -1,8 +1,9 @@
 //! The user's hooks end to end, over the scripted model: a trusted
 //! PreToolUse hook denies a call, a PostToolUse hook adds context after the
 //! step's outputs, a Stop hook keeps a turn going once, a hook past its
-//! timeout has no say, an untrusted hook never runs, and with the `hooks`
-//! row off nothing runs and the hook calls are unavailable.
+//! timeout has no say, an untrusted hook never runs, with the `hooks` row
+//! off nothing runs and the hook calls are unavailable, and a woken turn
+//! runs Stop hooks but no UserPromptSubmit hook.
 
 use hanafubuki_agent_kernel::{
     AgentError, AgentHookEvent, AgentHookOutcome, AgentSessionMode, ConversationItem,
@@ -423,5 +424,85 @@ async fn session_start_and_user_prompt_submit_hooks_add_world_state() {
         "the latest prompt's context is shown"
     );
     assert!(second.contains("hook-session-start"));
+    finish(service, paths).await;
+}
+
+/// A woken turn (opened by what the session's background work reported)
+/// has no message, so no UserPromptSubmit hook runs for it; Stop hooks run
+/// at its end as at any turn's.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_woken_turn_runs_stop_hooks_and_no_user_prompt_submit_hook() {
+    let (service, paths, server) = hooked_service(
+        "hooks-woken",
+        json!({
+            "UserPromptSubmit": [{ "hooks": [command("cat >/dev/null; echo hook-prompt-seen")] }],
+            "Stop": [{ "hooks": [command("cat >/dev/null")] }],
+        }),
+        vec![assistant_events("Noted.")],
+    )
+    .await;
+    trust_every_hook(&service).await;
+    let session = service
+        .create_session(AgentSessionMode::Default, None)
+        .await
+        .unwrap();
+    set_wake_policy(&service, session.id, crate::AgentWakePolicy::On)
+        .await
+        .unwrap();
+    queue_wake_event(
+        &service,
+        session.id,
+        crate::AgentWakeSource::Subagent {
+            session_id: AgentSessionId::new(41),
+            name: "counter".to_string(),
+            event: crate::AgentSubagentWake::Completed {
+                answer: Some("Twelve files.".to_string()),
+                truncated: false,
+            },
+        },
+    )
+    .await
+    .unwrap();
+
+    struct Discard;
+    impl hanafubuki_agent_kernel::AgentEventSink for Discard {
+        fn emit(&self, _event: hanafubuki_agent_kernel::AgentEvent) {}
+    }
+    let wake = service
+        .submit_wake_turn_with_sink(session.id, Arc::new(Discard))
+        .await
+        .unwrap()
+        .unwrap();
+    let deadline = Instant::now() + TEST_WAIT;
+    while !service
+        .events_since(session.id, None)
+        .unwrap()
+        .events
+        .iter()
+        .any(|event| event.turn_id == Some(wake.turn.turn_id) && event.kind.is_terminal())
+    {
+        assert!(Instant::now() < deadline, "the woken turn ends");
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+
+    let request = request_text(&server, 0);
+    assert!(request.contains("Twelve files."), "{request}");
+    assert!(!request.contains("hook-prompt-seen"), "{request}");
+    let stops = service
+        .events_since(session.id, None)
+        .unwrap()
+        .events
+        .into_iter()
+        .filter(|event| {
+            matches!(
+                event.kind,
+                AgentEventKind::ContinuationHookCompleted {
+                    outcome: hanafubuki_agent_kernel::AgentContinuationHookOutcome::Passed,
+                    ..
+                }
+            )
+        })
+        .count();
+    assert_eq!(stops, 1, "the Stop hook ran at the woken turn's end");
     finish(service, paths).await;
 }

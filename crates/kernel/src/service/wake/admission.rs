@@ -5,17 +5,17 @@ use super::*;
 
 impl AgentService {
     /// Admits a turn that delivers the session's queued wake events, and
-    /// schedules it as `submit_turn_with_sink` does. `input` gives its
-    /// permission mode, turn extensions, world state and origin; its text,
-    /// images and Skills are not read. `Ok(None)` when nothing is queued or
-    /// a turn runs (that turn delivers them); refused while the session's
-    /// policy is off.
+    /// schedules it as `submit_turn_with_sink` does; returns it with the
+    /// events it delivers. `input` gives its permission mode, turn
+    /// extensions, world state and origin; its text, images and Skills are
+    /// not read. `Ok(None)` when nothing is queued or a turn runs (that turn
+    /// delivers them); refused while the session's policy is off.
     pub fn submit_wake_turn_with_sink(
         &self,
         session_id: AgentSessionId,
         input: crate::AgentTurnInput,
         event_sink: Arc<dyn AgentEventSink>,
-    ) -> Result<Option<AgentTurnAccepted>, AgentError> {
+    ) -> Result<Option<crate::AgentWakeTurnAccepted>, AgentError> {
         if !self.inner.accepting.load(Ordering::Acquire) {
             return Err(AgentError::ShuttingDown);
         }
@@ -32,7 +32,8 @@ impl AgentService {
             Err(AgentError::NoWakeEvents | AgentError::TurnAlreadyRunning) => return Ok(None),
             Err(error) => return Err(error),
         };
-        self.spawn_managed_turn(admitted, event_sink, runtime)
-            .map(Some)
+        let events = admitted.wake_events.clone();
+        let turn = self.spawn_managed_turn(admitted, event_sink, runtime)?;
+        Ok(Some(crate::AgentWakeTurnAccepted { turn, events }))
     }
 }

@@ -8,8 +8,8 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use hanafubuki_agent::{
-    AgentEvent, AgentSessionId, AgentSessionMode, AgentUserInputAnswer, AgentUserInputRequestId,
-    ApprovalRequestId, ApprovalUserDecision,
+    AgentBackgroundEvent, AgentEvent, AgentSessionId, AgentSessionMode, AgentUserInputAnswer,
+    AgentUserInputRequestId, ApprovalRequestId, ApprovalUserDecision,
 };
 use ratatui::crossterm::event::{KeyEvent, MouseEvent};
 
@@ -43,6 +43,8 @@ pub(crate) enum AppEvent {
     AgentStatusChanged,
     /// A call into the Agent finished.
     AgentReply(AgentReply),
+    /// What the Agent tells of the sessions' background work.
+    AgentBackground(AgentBackgroundEvent),
     /// Something for the Agent to do.
     Op(Op),
     InsertHistoryCell(Box<dyn HistoryCell>),

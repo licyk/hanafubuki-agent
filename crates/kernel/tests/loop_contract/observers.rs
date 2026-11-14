@@ -417,3 +417,59 @@ async fn a_refused_admission_is_not_told() {
     assert!(observer.seen.lock().unwrap().is_empty());
     assert_eq!(service.snapshot(session.id).unwrap().title, None);
 }
+
+/// A wake event is told once it is queued: never one the policy dropped,
+/// nor one an archived session refused.
+#[tokio::test]
+async fn observers_are_told_of_a_queued_wake_event() {
+    let tools = FakeTools::new([]).await;
+    let observer = Arc::new(RecordingObserver::default());
+    tools
+        .mount(&registering::<ObserverRegistry>(
+            "recording",
+            vec![observer.clone() as Arc<dyn AgentObserver>],
+        ))
+        .await;
+    let model = FakeModelTransport::new([]);
+    let service = AgentService::new(Arc::new(model), tools.registries());
+    let _ = observer.service.set(service.clone());
+    let session = service.create_session(config()).unwrap();
+    let message = hanafubuki_agent_kernel::AgentWakeSource::Subagent {
+        session_id: AgentSessionId::new(41),
+        name: "agent_41".to_string(),
+        event: hanafubuki_agent_kernel::AgentSubagentWake::Message {
+            text: "a note".to_string(),
+        },
+    };
+
+    // The policy is off: a message is dropped, untold.
+    service
+        .enqueue_wake_event(session.id, message.clone())
+        .await
+        .unwrap();
+    assert!(observer.seen.lock().unwrap().is_empty());
+    service
+        .set_session_wake_policy(session.id, hanafubuki_agent_kernel::AgentWakePolicy::On)
+        .await
+        .unwrap();
+    service
+        .enqueue_wake_event(session.id, message.clone())
+        .await
+        .unwrap();
+    assert_eq!(
+        *observer.seen.lock().unwrap(),
+        vec![AgentNotification::WakeEventQueued {
+            session_id: session.id
+        }]
+    );
+    let session = service.snapshot(session.id).unwrap();
+    service
+        .archive_session(session.id, session.generation, session.revision)
+        .unwrap();
+    observer.seen.lock().unwrap().clear();
+    assert_eq!(
+        service.enqueue_wake_event(session.id, message).await,
+        Err(AgentError::SessionArchived)
+    );
+    assert!(observer.seen.lock().unwrap().is_empty());
+}

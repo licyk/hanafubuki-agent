@@ -32,3 +32,27 @@ pub enum AgentTurnOrigin {
     #[default]
     Programmatic,
 }
+
+/// What a session's background work holds open, which the session is woken
+/// for when it ends: its sub-agents still working (running a turn, or
+/// waiting on work of their own) and its background terminals.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentBackgroundWork {
+    pub agents: usize,
+    pub terminals: usize,
+}
+
+impl AgentBackgroundWork {
+    pub fn is_empty(&self) -> bool {
+        self.agents == 0 && self.terminals == 0
+    }
+}
+
+/// A turn extension, frozen at the turn's admission: whether the session is
+/// woken for its background work (its wake policy is on), so what the
+/// model is told about waiting can say so.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TurnWake {
+    pub on: bool,
+}

@@ -96,5 +96,18 @@ pub fn sampling_progress_digest(
     AgentProgressDigest(hasher.finalize().into())
 }
 
+/// `digest` with the last wake event its follow-up delivered: events never
+/// delivered before are progress, even after the same answer, so a stream
+/// of them is never counted as stalled steps.
+pub(crate) fn wake_progress_digest(
+    digest: AgentProgressDigest,
+    last_delivered: u64,
+) -> AgentProgressDigest {
+    let mut hasher = Sha256::new();
+    hasher.update(digest.0);
+    hasher.update(last_delivered.to_le_bytes());
+    AgentProgressDigest(hasher.finalize().into())
+}
+
 #[cfg(test)]
 mod tests;

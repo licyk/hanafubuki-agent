@@ -10,10 +10,11 @@ use std::sync::mpsc::{channel, Receiver};
 use std::sync::Arc;
 
 use hanafubuki_agent::{
-    AgentHandle, AgentRuntime, AgentSessionId, AgentSessionListRequest, AgentStatusEventSink,
+    AgentBackgroundEventSink, AgentHandle, AgentRuntime, AgentSessionId, AgentSessionListRequest,
+    AgentStatusEventSink,
 };
 
-use crate::agent_bridge::{with_model, AgentBridge, AgentReply, StatusSink};
+use crate::agent_bridge::{with_model, AgentBridge, AgentReply, BackgroundSink, StatusSink};
 use crate::app::App;
 use crate::app_event::{AppEvent, AppEventSender};
 use crate::appearance::{Appearance, AppearanceEvent};
@@ -47,6 +48,12 @@ impl TuiEvents {
     /// Agent stops under a running turn.
     pub fn status_sink(&self) -> Arc<dyn AgentStatusEventSink> {
         Arc::new(StatusSink(self.sender.clone()))
+    }
+
+    /// For `AgentRuntimeHost::background`: the session shown is woken for
+    /// its background work by the interface.
+    pub fn background_sink(&self) -> Arc<dyn AgentBackgroundEventSink> {
+        Arc::new(BackgroundSink(self.sender.clone()))
     }
 
     /// For the command line's update check, which may end before the

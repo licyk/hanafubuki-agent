@@ -29,11 +29,12 @@ use self::keyring::KeyringSecretStore;
 pub use self::keyring::{probe_keyring, KEYRING_SERVICE};
 use self::workspace::StandaloneWorkspace;
 use crate::{
-    AgentApplicationService, AgentConfig, AgentConstructor, AgentHandle, AgentHostInstructions,
-    AgentHostPorts, AgentLaunch, AgentPluginEventSink, AgentProxy, AgentServiceInputs, AgentSlot,
-    AgentStartMarker, AgentStartOptions, AgentStatusEventSink, AgentStoragePaths, AgentUnavailable,
-    AgentWorkspaceRoots, DesktopAgent, NetworkSettingsPort, NoHostContext,
-    NoopAgentPluginEventSink, NoopAgentStatusEventSink, SkillRoots, WorkspaceRootsPort,
+    AgentApplicationService, AgentBackgroundEventSink, AgentConfig, AgentConstructor, AgentHandle,
+    AgentHostInstructions, AgentHostPorts, AgentLaunch, AgentPluginEventSink, AgentProxy,
+    AgentServiceInputs, AgentSlot, AgentStartMarker, AgentStartOptions, AgentStatusEventSink,
+    AgentStoragePaths, AgentUnavailable, AgentWorkspaceRoots, DesktopAgent, NetworkSettingsPort,
+    NoHostContext, NoopAgentBackgroundEventSink, NoopAgentPluginEventSink,
+    NoopAgentStatusEventSink, SkillRoots, WorkspaceRootsPort,
 };
 
 /// Where and how the standalone Agent runs.
@@ -57,14 +58,15 @@ pub struct AgentRuntimeOptions {
 }
 
 /// What a standalone consumer replaces: the secret store (the keyring when
-/// `None`) and the sinks the Agent tells about its state, its plugins and
-/// its MCP servers. Turn and session events go to the sink each call is
-/// given.
+/// `None`) and the sinks the Agent tells about its state, its plugins, its
+/// MCP servers and the sessions to wake for their background work. Turn
+/// and session events go to the sink each call is given.
 pub struct AgentRuntimeHost {
     pub secrets: Option<Arc<dyn SecretStore>>,
     pub status: Arc<dyn AgentStatusEventSink>,
     pub plugin_events: Arc<dyn AgentPluginEventSink>,
     pub mcp_events: Arc<dyn McpEventSink>,
+    pub background: Arc<dyn AgentBackgroundEventSink>,
 }
 
 impl Default for AgentRuntimeHost {
@@ -74,6 +76,7 @@ impl Default for AgentRuntimeHost {
             status: Arc::new(NoopAgentStatusEventSink),
             plugin_events: Arc::new(NoopAgentPluginEventSink),
             mcp_events: Arc::new(NoopMcpEventSink),
+            background: Arc::new(NoopAgentBackgroundEventSink),
         }
     }
 }
@@ -128,8 +131,12 @@ impl AgentRuntime {
         }
         .proxy()?;
         let storage_paths = storage.clone();
-        let (secrets, plugin_events, mcp_events) =
-            (host.secrets, host.plugin_events, host.mcp_events);
+        let (secrets, plugin_events, mcp_events, background) = (
+            host.secrets,
+            host.plugin_events,
+            host.mcp_events,
+            host.background,
+        );
         let construct: AgentConstructor = Arc::new(move |runtime, instance| {
             // Read again for every instance, as a host's is.
             let config = AgentConfig::layered(&config_dir, layers.clone());
@@ -144,6 +151,7 @@ impl AgentRuntime {
                 blocking,
                 mcp_event_sink: mcp_events.clone(),
                 plugin_event_sink: plugin_events.clone(),
+                background_event_sink: background.clone(),
                 host: AgentHostPorts {
                     plugins: Vec::new(),
                     workspace: roots.clone(),

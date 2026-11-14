@@ -81,6 +81,7 @@ impl AgentBridge {
 
     pub(super) fn review_ended(&mut self, end: ReviewEnd) -> Option<TurnUpdate> {
         self.review = None;
+        self.retry_missed_wake();
         Some(TurnUpdate::Review(ReviewReply::Ended(end)))
     }
 

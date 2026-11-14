@@ -803,7 +803,7 @@ async fn connect_scripted_mcp_servers(service: &AgentApplicationService, mcp: &S
 
 /// The first request of a "Hello." turn in `mode`, after `configure` sets
 /// the settings and `prepare` the fixture files of a configured service.
-async fn first_request_with(
+pub(super) async fn first_request_with(
     name: &str,
     mode: AgentSessionMode,
     configure: impl FnOnce(&TestPaths, &AgentConfig),
@@ -955,7 +955,7 @@ fn updating_history() -> bool {
     std::env::var_os("HANAFUBUKI_AGENT_UPDATE_GOLDEN_HISTORY").is_some()
 }
 
-fn golden_path(name: &str) -> PathBuf {
+pub(super) fn golden_path(name: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .join(GOLDEN_DIR)
         .join(name)

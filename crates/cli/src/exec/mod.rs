@@ -1,19 +1,24 @@
 //! `exec`: one turn without the terminal interface. The turn's events go to
 //! standard output as text or as JSON lines; approvals and questions are
 //! answered by the `--approve` policy and, on a terminal, by the person at
-//! it; the exit code says how the turn ended (site/content/docs/exec.en.mdx, "Exit codes").
+//! it. Once the turn completes, `exec` waits while the sub-agents it left
+//! work, and runs each turn that wakes the session for what they report,
+//! until nothing is left (or wakes are off or paused); the exit code says
+//! how the last turn ended (site/content/docs/exec.en.mdx, "Exit codes").
 
 mod answers;
 mod output;
 
 use std::io::{IsTerminal, Read};
-use std::sync::mpsc::{channel, Receiver, Sender};
+use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
 use std::sync::Arc;
+use std::time::Duration;
 
 use hanafubuki_agent::{
-    AgentAvailability, AgentEvent, AgentEventKind, AgentEventSink, AgentHandle, AgentRuntimeHost,
-    AgentSessionMode, AgentSessionModelSelectionRequest, AgentStatusEventSink, AgentTurnAccepted,
-    AgentTurnRequest, AgentTurnTerminalReason,
+    AgentAvailability, AgentBackgroundEvent, AgentBackgroundEventSink, AgentEvent, AgentEventKind,
+    AgentEventSink, AgentHandle, AgentRuntimeHost, AgentSessionId, AgentSessionMode,
+    AgentSessionModelSelectionRequest, AgentStatusEventSink, AgentTurnAccepted, AgentTurnRequest,
+    AgentTurnTerminalReason, AgentWakePause, AgentWakeState,
 };
 
 use self::answers::{Answers, ApprovePolicy};
@@ -29,6 +34,7 @@ pub(crate) fn run(global: &GlobalArgs, args: ExecArgs) -> Result<u8, Failure> {
     let (sender, receiver) = channel();
     let host = AgentRuntimeHost {
         status: Arc::new(Channel(sender.clone())),
+        background: Arc::new(Channel(sender.clone())),
         ..AgentRuntimeHost::default()
     };
     let standalone = Standalone::open(global, host)?;
@@ -79,8 +85,14 @@ fn prompt(argument: Option<&str>) -> Result<String, Failure> {
     Ok(prompt)
 }
 
+/// How often the wait for background work looks again without being told:
+/// a sub-agent's end that wakes nothing (an interrupt) is no event.
+const BACKGROUND_RECHECK: Duration = Duration::from_millis(500);
+
 enum Message {
     Event(Box<AgentEvent>),
+    /// The session is woken for its background work.
+    Woken,
     StatusChanged,
     Interrupted,
 }
@@ -100,8 +112,29 @@ impl AgentStatusEventSink for Channel {
     }
 }
 
+impl AgentBackgroundEventSink for Channel {
+    fn event(&self, event: AgentBackgroundEvent) {
+        match event {
+            AgentBackgroundEvent::Woken { .. } => {
+                let _ = self.0.send(Message::Woken);
+            }
+        }
+    }
+}
+
+/// What the wait for the session's background work ended with.
+enum Waited {
+    /// A turn woke the session for what it reported.
+    Woken(AgentTurnAccepted),
+    /// Nothing is left to wait for, or the session is not woken for it.
+    Done,
+    /// Ctrl-C.
+    Interrupted,
+}
+
 /// The turn's loop, on the calling thread: it prints each event and answers
-/// what the turn asks, until the turn ends.
+/// what the turn asks, until the turn ends, then waits for the session's
+/// background work and runs the turns that wake it, one at a time.
 struct Turn<'a> {
     standalone: &'a Standalone,
     agent: &'a AgentHandle,
@@ -118,8 +151,24 @@ impl Turn<'_> {
         prompt: String,
         sender: Sender<Message>,
     ) -> Result<u8, Failure> {
-        let turn = self.submit(model, role, prompt, sender.clone())?;
-        watch_interrupts(self.agent, sender);
+        let mut turn = self.submit(model, role, prompt, sender.clone())?;
+        watch_interrupts(self.agent, sender.clone());
+        loop {
+            let code = self.run_turn(turn)?;
+            if code != SUCCESS {
+                return Ok(code);
+            }
+            match self.wait_for_background(turn.session_id, &sender)? {
+                Waited::Woken(woken) => turn = woken,
+                Waited::Done => return Ok(SUCCESS),
+                Waited::Interrupted => return Ok(CANCELLED),
+            }
+        }
+    }
+
+    /// Prints `turn`'s events and answers what it asks until it ends; how
+    /// it ended.
+    fn run_turn(&mut self, turn: AgentTurnAccepted) -> Result<u8, Failure> {
         let mut unanswered = false;
         loop {
             let event = match self.receiver.recv() {
@@ -133,6 +182,9 @@ impl Turn<'_> {
                     self.cancel(turn);
                     continue;
                 }
+                // The turn reads what woke it at its next step; its end
+                // tells again of anything left.
+                Ok(Message::Woken) => continue,
                 Err(_) => return Err(Failure::new("the Agent stopped telling about the turn")),
             };
             self.output.event(&event);
@@ -188,6 +240,70 @@ impl Turn<'_> {
                 _ => {}
             }
         }
+    }
+
+    /// Waits while `root`'s sub-agents work, and submits the turn that
+    /// wakes it once they report. Done when nothing is left, or when its
+    /// wakes are off (`wakeOnBackgroundTasks`) or paused.
+    fn wait_for_background(
+        &mut self,
+        root: AgentSessionId,
+        sender: &Sender<Message>,
+    ) -> Result<Waited, Failure> {
+        loop {
+            let status = self
+                .agent
+                .background_status(root)
+                .map_err(|error| Failure::new(error.to_string()))?;
+            match status.wake {
+                AgentWakeState::On => {}
+                AgentWakeState::Paused {
+                    reason: AgentWakePause::RunawayBound,
+                } => {
+                    self.output.note(
+                        "the sub-agents woke the session too many times without a message; not waiting for them",
+                    );
+                    return Ok(Waited::Done);
+                }
+                AgentWakeState::Paused { .. } | AgentWakeState::Off => return Ok(Waited::Done),
+            }
+            if status.pending_wake_events > 0 {
+                if let Some(woken) = self.submit_woken(root, sender.clone())? {
+                    return Ok(Waited::Woken(woken));
+                }
+            } else if status.work.is_empty() {
+                return Ok(Waited::Done);
+            }
+            match self.receiver.recv_timeout(BACKGROUND_RECHECK) {
+                Ok(Message::Interrupted) => return Ok(Waited::Interrupted),
+                Ok(Message::StatusChanged) => self.check_running()?,
+                Ok(Message::Woken | Message::Event(_)) | Err(RecvTimeoutError::Timeout) => {}
+                Err(RecvTimeoutError::Disconnected) => {
+                    return Err(Failure::new("the Agent stopped telling about the session"))
+                }
+            }
+        }
+    }
+
+    /// Submits the turn that reads what `root`'s background work reported,
+    /// and notes each report; `None` when nothing was left to read.
+    fn submit_woken(
+        &mut self,
+        root: AgentSessionId,
+        sender: Sender<Message>,
+    ) -> Result<Option<AgentTurnAccepted>, Failure> {
+        let woken = block_on(self.agent, move |agent| async move {
+            agent
+                .submit_wake_turn_with_sink(root, Arc::new(Channel(sender)))
+                .await
+        })?;
+        Ok(woken.map(|woken| {
+            for event in &woken.events {
+                self.output
+                    .note(&format!("background update: {}", event.source.summary()));
+            }
+            woken.turn
+        }))
     }
 
     fn submit(

@@ -1,5 +1,5 @@
 //! What the facade asks of a parent's agents: their statuses, as an
-//! interface lists them, and the interrupt of one.
+//! interface lists them, how many work, and the interrupt of one.
 
 use hanafubuki_agent_kernel::{AgentError, AgentSessionId, AgentSessionOrigin};
 
@@ -40,6 +40,13 @@ impl SubagentService {
             });
         }
         Ok(statuses)
+    }
+
+    /// How many agents of `parent` this instance runs: one counts from
+    /// before its spawn returns until its end is queued on `parent`, so a
+    /// parent that waits on it never sees it neither running nor reported.
+    pub(crate) fn working(&self, parent: AgentSessionId) -> usize {
+        self.runs.running(parent)
     }
 
     /// Interrupts the turn the subagent `session_id` runs, if any.

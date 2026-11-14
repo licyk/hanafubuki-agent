@@ -4,7 +4,7 @@ description: 不打开终端界面，运行一轮对话：提示词来源、输�
 icon: Play
 ---
 
-`hanafubuki-agent exec` 创建一个新会话，在其中运行一轮对话，回合结束后退出。它适合脚本、CI 和任何没有交互终端的场合。
+`hanafubuki-agent exec` 创建一个新会话，在其中运行一轮对话，回合结束后退出；如果回合把工作交给了子代理，则等它们完成后退出（[见下](#subagents)）。它适合脚本、CI 和任何没有交互终端的场合。
 
 ```sh
 hanafubuki-agent exec "总结这个仓库中未完成的 TODO"
@@ -77,7 +77,7 @@ hanafubuki-agent exec --json "列出最大的五个文件"
 }
 ```
 
-回合的最后一行是 `turn_completed`、`turn_cancelled` 或 `turn_failed`。每种事件的字段、顺序和兼容性规则见 [exec --json 事件](/docs/json-events)。第一行 `turn_started` 给出会话的[角色](/docs/roles#sessions)（`role`，`default` 时为 `null`），即 `--role` 给它的角色。
+回合的最后一行是 `turn_completed`、`turn_cancelled` 或 `turn_failed`；子代理唤醒会话的回合随后作为一组独立的事件出现，从它的 `turn_started` 开始（[见下](#subagents)），没有专门的事件种类。每种事件的字段、顺序和兼容性规则见 [exec --json 事件](/docs/json-events)。第一行 `turn_started` 给出会话的[角色](/docs/roles#sessions)（`role`，`default` 时为 `null`），即 `--role` 给它的角色。
 
 ## 审批与提问 [#approvals]
 
@@ -99,9 +99,15 @@ hanafubuki-agent exec --json "列出最大的五个文件"
   CI 中使用时，确保运行环境是可以丢弃的。
 </Callout>
 
+## 等待子代理 [#subagents]
+
+回合完成时，如果它创建的[子代理](/docs/tools#subagents)仍在工作，`exec` 不会退出：它等待它们，期间不运行任何东西。其中一个结束或给会话发消息时，`exec` 运行为所报告内容唤醒会话的回合，像任何回合一样输出：先把每条报告作为一条说明输出（``· background update: Sub-agent `counter` (agent id 2) completed: Twelve files.``，使用 `--json` 时输出到标准错误），然后是回合本身。它一直进行，直到没有子代理在工作、也没有剩下要读的内容，然后按最后一个回合的结束方式退出，`-o` 写入那个回合的最终回答。
+
+`wakeOnBackgroundTasks` 关闭时、回合没有完成时，以及子代理唤醒会话 100 次之后（会输出一条说明），它像以前一样在回合结束时退出。`exec` 还不会回答子代理的审批：在 Manual 模式下，这样的审批会一直等到过期（15 分钟），子代理在没有它的情况下继续。`exec` 等待时按 Ctrl-C 以 130 退出，子代理随 Agent 一起停止。
+
 ## 保存最终回答 [#output-last-message]
 
-`-o FILE`（`--output-last-message FILE`）在回合结束后把模型的最终回答写入 `FILE`。回合没有最终回答时（例如失败了），写入一个空文件。
+`-o FILE`（`--output-last-message FILE`）在回合结束后把模型的最终回答写入 `FILE`（[等待子代理](#subagents)之后，是最后一个回合的）。回合没有最终回答时（例如失败了），写入一个空文件。
 
 ```sh
 hanafubuki-agent exec -o summary.md "用三段话总结 README"
@@ -115,7 +121,7 @@ hanafubuki-agent exec -o summary.md "用三段话总结 README"
 
 | 退出码 | 含义                                                                              |
 | ------ | --------------------------------------------------------------------------------- |
-| 0      | 回合完成                                                                          |
+| 0      | 回合完成（[等待子代理](#subagents)之后的最后一个回合）                            |
 | 1      | 回合失败、Agent 在回合中停止，或者命令无法运行（没有 Provider、数据目录被占用等） |
 | 2      | 命令行有误：未知选项、没有提示词、无效的 `--approve` 策略                         |
 | 3      | 模型提出的问题无人回答，回合被取消                                                |

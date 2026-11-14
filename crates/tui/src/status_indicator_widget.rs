@@ -1,11 +1,13 @@
 // Modified from OpenAI Codex rust-v0.93.0 (Apache-2.0).
 
 //! A live status indicator that shows the *latest* log line emitted by the
-//! application while the agent is processing a long‑running task.
+//! application while the agent is processing a long‑running task, and the
+//! line that takes its place while the session waits on its background
+//! work ([`waiting_line`]).
 
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use hanafubuki_agent::AgentReasoningSnapshot;
+use hanafubuki_agent::{AgentBackgroundStatus, AgentReasoningSnapshot, AgentWakeState};
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
@@ -27,6 +29,28 @@ use crate::wrapping::word_wrap_lines;
 use crate::wrapping::RtOptions;
 
 const DETAILS_MAX_LINES: usize = 3;
+
+/// What shows in place of the status indicator while the session runs no
+/// turn and its background work does: that it resumes by itself, or that
+/// the person's message resumes it. `None` when nothing holds it open, or
+/// it is not woken for it.
+pub(crate) fn waiting_line(background: &AgentBackgroundStatus) -> Option<String> {
+    let agents = background.work.agents;
+    if agents == 0 {
+        return None;
+    }
+    let work = match agents {
+        1 => "1 agent".to_string(),
+        agents => format!("{agents} agents"),
+    };
+    match background.wake {
+        AgentWakeState::On => Some(format!("Waiting for {work} — resumes by itself")),
+        AgentWakeState::Paused { .. } => Some(format!(
+            "Paused: {work} still running — send a message to resume"
+        )),
+        AgentWakeState::Off => None,
+    }
+}
 const DETAILS_PREFIX: &str = "  └ ";
 
 pub(crate) struct StatusIndicatorWidget {

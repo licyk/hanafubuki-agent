@@ -20,13 +20,14 @@ use crate::package::GuestPackage;
 const QUEUE: usize = 64;
 
 /// The kinds a guest may observe, as its manifest names them.
-pub(super) const EVENTS: [&str; 6] = [
+pub(super) const EVENTS: [&str; 7] = [
     "turn_admitted",
     "sampling_committed",
     "turn_finished",
     "memory_contribution_changed",
     "session_archived",
     "session_restored",
+    "wake_event_queued",
 ];
 
 pub(super) fn register(
@@ -154,6 +155,10 @@ fn event(notification: &AgentNotification) -> Value {
         }),
         AgentNotification::SessionRestored { session_id, .. } => json!({
             "event": "session_restored",
+            "sessionId": session_id.value(),
+        }),
+        AgentNotification::WakeEventQueued { session_id } => json!({
+            "event": "wake_event_queued",
             "sessionId": session_id.value(),
         }),
     }

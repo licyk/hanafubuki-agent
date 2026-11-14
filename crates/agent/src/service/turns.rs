@@ -215,60 +215,6 @@ impl AgentApplicationService {
         .await?
     }
 
-    /// Starts the turn that delivers `session_id`'s queued wake events (what
-    /// its sub-agents and background terminals reported): a `Programmatic`
-    /// turn whose only opener is the events, in the session's permission
-    /// mode, with no user message. `Ok(None)` when nothing is queued any
-    /// more, or a turn runs, which delivers them at its next step; refused
-    /// while the session's wake policy is off.
-    pub async fn submit_wake_turn_with_sink(
-        &self,
-        session_id: AgentSessionId,
-        event_sink: Arc<dyn AgentEventSink>,
-    ) -> Result<Option<AgentTurnAccepted>, String> {
-        let session = self.activate_provider_session(session_id).await?;
-        let permission_mode = self.driver.turn_permission_mode(session_id, None).await?;
-        let world_state = self
-            .driver
-            .collect_world_state(
-                session_id,
-                session.mode,
-                permission_mode,
-                None,
-                TurnExtensions::default(),
-            )
-            .await
-            .map_err(|error| error.to_string())?;
-        let turn = self
-            .driver
-            .collect_turn_extensions(session_id, session.mode)
-            .await
-            .map_err(|error| error.to_string())?;
-        let core = self.core.clone();
-        hanafubuki_agent_foundation::blocking::run_blocking_operation(
-            self.blocking.as_ref(),
-            "agent wake turn admission worker",
-            move || {
-                core.submit_wake_turn_with_sink(
-                    session_id,
-                    hanafubuki_agent_kernel::AgentTurnInput {
-                        text: String::new(),
-                        images: Vec::new(),
-                        skills: Vec::new(),
-                        permission_mode,
-                        turn,
-                        world_state,
-                        origin: hanafubuki_agent_kernel::AgentTurnOrigin::Programmatic,
-                        provisional_title: None,
-                    },
-                    event_sink,
-                )
-                .map_err(|error| error.to_string())
-            },
-        )
-        .await?
-    }
-
     pub async fn steer_turn_with_sink(
         &self,
         session_id: AgentSessionId,
@@ -325,12 +271,22 @@ impl AgentApplicationService {
         .await?
     }
 
+    /// Cancels the turn, as the person asked: a root's wakes pause until
+    /// the person's next message (its background work goes on).
     pub async fn cancel_turn(
         &self,
         session_id: AgentSessionId,
         turn_id: AgentTurnId,
         generation: AgentGeneration,
     ) -> Result<AgentTurnCancellationOutcome, AgentError> {
+        // Before the cancel, so the turn's end wakes nothing.
+        if self
+            .core
+            .snapshot(session_id)
+            .is_ok_and(|session| session.parent_session_id.is_none())
+        {
+            self.wakes.pauses.interrupted(session_id);
+        }
         self.core
             .cancel_turn_confirmed(session_id, turn_id, generation)
             .await

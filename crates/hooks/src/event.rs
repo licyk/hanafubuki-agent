@@ -75,7 +75,9 @@ pub(crate) fn unraised_event_reason(name: &str) -> Option<&'static str> {
         }
         "PreCompact" | "PostCompact" => "the Agent has no hook around a compaction",
         "SessionEnd" => "the Agent does not tell plugins that a session ended",
-        "SubagentStart" | "SubagentStop" => "the Agent has no subagents",
+        "SubagentStart" | "SubagentStop" => {
+            "the Agent runs no hook when a sub-agent starts or stops"
+        }
         "Interrupt" => "the Agent does not tell plugins why a turn was cancelled",
         _ => return None,
     })

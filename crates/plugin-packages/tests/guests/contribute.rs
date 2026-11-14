@@ -139,6 +139,7 @@ fn continuation(answer: &str) -> AgentContinuationContext {
         revision: AgentRevision::new(1),
         sampling_step: 1,
         candidate_final_answer: answer.to_string(),
+        background: Default::default(),
     }
 }
 

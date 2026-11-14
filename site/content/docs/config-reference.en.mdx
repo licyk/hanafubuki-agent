@@ -12,11 +12,12 @@ These keys go in the user's `config.toml`, in a profile `[profiles.NAME]` and in
 
 ### General [#general]
 
-| Key               | Type and values                                              | Default    | Means                                                                          |
-| ----------------- | ------------------------------------------------------------ | ---------- | ------------------------------------------------------------------------------ |
-| `permissionMode`  | `"manual"`, `"auto_review"`, `"full_access"`                 | `"manual"` | The [permission mode](/docs/permissions)                                       |
-| `disabledPlugins` | An array of plugin names, at most 64                         | `[]`       | The plugins turned off (below)                                                 |
-| `logLevel`        | `"off"`, `"error"`, `"warn"`, `"info"`, `"debug"`, `"trace"` | `"info"`   | The log file's level; see [Network and logging](/docs/network-logging#logging) |
+| Key                     | Type and values                                              | Default    | Means                                                                                                                                                                                                                        |
+| ----------------------- | ------------------------------------------------------------ | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `permissionMode`        | `"manual"`, `"auto_review"`, `"full_access"`                 | `"manual"` | The [permission mode](/docs/permissions)                                                                                                                                                                                     |
+| `wakeOnBackgroundTasks` | boolean                                                      | `true`     | Resume a conversation by itself when a sub-agent it started finishes or sends it a message; off, the model is told to wait for its sub-agents ([Tools](/docs/tools#subagents)). Each session takes a change at its next turn |
+| `disabledPlugins`       | An array of plugin names, at most 64                         | `[]`       | The plugins turned off (below)                                                                                                                                                                                               |
+| `logLevel`              | `"off"`, `"error"`, `"warn"`, `"info"`, `"debug"`, `"trace"` | `"info"`   | The log file's level; see [Network and logging](/docs/network-logging#logging)                                                                                                                                               |
 
 The plugin names that mean something in `disabledPlugins`:
 

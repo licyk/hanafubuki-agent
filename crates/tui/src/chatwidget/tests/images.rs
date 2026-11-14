@@ -110,6 +110,7 @@ fn a_message_with_images_a_model_does_not_read_stays_in_the_composer() {
         compression: None,
         role: None,
         images_refused: Some("reported".to_string()),
+        background: None,
     })));
     let image = pasted(directory.path(), "a.png");
     chat.submit_user_message(with_image("[Image #1] what is it?", image.clone()));

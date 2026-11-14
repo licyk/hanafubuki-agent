@@ -8,6 +8,7 @@ use super::model_metadata_store::FileModelMetadataStore;
 use super::session_driver::AgentSessionDriver;
 use super::skills::AgentSkillApplication;
 use super::titles::AgentTitleApplication;
+use super::wake::{AgentBackgroundEventSink, Wakes};
 use super::{
     agent_base_instructions, AgentHostInstructions, AgentInstanceInputs, AgentMemoryApplication,
     AgentStoragePaths, HostContextPort, NetworkSettingsPort, SkillRoots, WorkspaceRootsPort,
@@ -27,6 +28,8 @@ use hanafubuki_agent_workspace_fs::{WorkspaceFsPolicy, WorkspaceFsService};
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
+mod background;
+pub use background::AgentBackgroundStatus;
 mod background_terminals;
 mod children;
 mod compression;
@@ -93,6 +96,8 @@ pub struct AgentServiceInputs {
     pub blocking: Arc<dyn hanafubuki_agent_foundation::blocking::BlockingOperationPort>,
     pub mcp_event_sink: Arc<dyn McpEventSink>,
     pub plugin_event_sink: Arc<dyn AgentPluginEventSink>,
+    /// Told when a root is to be woken for its background work.
+    pub background_event_sink: Arc<dyn AgentBackgroundEventSink>,
     /// What the embedding host supplies.
     pub host: AgentHostPorts,
     /// This instance's start options, fault sink and Executor.
@@ -158,6 +163,9 @@ pub struct AgentApplicationService {
     pub(crate) kernel_faults: Arc<dyn hanafubuki_agent_kernel::AgentKernelFaultSink>,
     /// Lists the Providers' models in the background.
     discovery: ModelDiscovery,
+    /// The host's background sink and the roots' pauses, shared with the
+    /// `agent-wake` core row.
+    pub(crate) wakes: Wakes,
 }
 
 impl AgentApplicationService {
@@ -169,7 +177,7 @@ impl AgentApplicationService {
     }
 
     /// The test Agent: built and recovered. It discovers no models by
-    /// itself, whatever its settings say.
+    /// itself, whatever its settings say, and tells no one of its wakes.
     #[cfg(any(test, feature = "test-support"))]
     pub fn new_with_host(
         config: AgentConfig,
@@ -185,10 +193,12 @@ impl AgentApplicationService {
             skill_roots,
             executor,
             ModelDiscoveryPolicy::OFF,
+            Arc::new(super::wake::NoopAgentBackgroundEventSink),
         )
     }
 
-    /// [`Self::new_with_host`], discovering models under `discovery`.
+    /// [`Self::new_with_host`], discovering models under `discovery` and
+    /// telling `background` of its wakes.
     #[cfg(any(test, feature = "test-support"))]
     pub(crate) fn new_with_host_discovering(
         config: AgentConfig,
@@ -197,6 +207,7 @@ impl AgentApplicationService {
         skill_roots: SkillRoots,
         executor: ExecutorManager,
         discovery: ModelDiscoveryPolicy,
+        background: Arc<dyn AgentBackgroundEventSink>,
     ) -> Result<Self, String> {
         let service = Self::construct(
             AgentServiceInputs {
@@ -206,6 +217,7 @@ impl AgentApplicationService {
                 blocking: Arc::new(crate::test_support::TestBlockingOperationPort),
                 mcp_event_sink: Arc::new(hanafubuki_agent_mcp::NoopMcpEventSink),
                 plugin_event_sink: Arc::new(super::host::NoopAgentPluginEventSink),
+                background_event_sink: background,
                 host,
                 instance: AgentInstanceInputs {
                     executor: executor.owned_by(
@@ -253,6 +265,7 @@ impl AgentApplicationService {
                 blocking: Arc::new(crate::test_support::TestBlockingOperationPort),
                 mcp_event_sink: Arc::new(hanafubuki_agent_mcp::NoopMcpEventSink),
                 plugin_event_sink: Arc::new(super::host::NoopAgentPluginEventSink),
+                background_event_sink: Arc::new(super::wake::NoopAgentBackgroundEventSink),
                 host,
                 instance,
             },
@@ -283,6 +296,7 @@ impl AgentApplicationService {
                 blocking: Arc::new(crate::test_support::TestBlockingOperationPort),
                 mcp_event_sink: Arc::new(hanafubuki_agent_mcp::NoopMcpEventSink),
                 plugin_event_sink: Arc::new(super::host::NoopAgentPluginEventSink),
+                background_event_sink: Arc::new(super::wake::NoopAgentBackgroundEventSink),
                 host,
                 instance: AgentInstanceInputs::default(),
             },
@@ -319,6 +333,7 @@ impl AgentApplicationService {
             blocking,
             mcp_event_sink,
             plugin_event_sink,
+            background_event_sink,
             host,
             instance,
         } = inputs;
@@ -415,6 +430,7 @@ impl AgentApplicationService {
             memory_workers.clone(),
         )?;
         let base_instructions: Arc<str> = agent_base_instructions(&host.instructions).into();
+        let wakes = Wakes::new(background_event_sink);
         let driver = AgentSessionDriver::new(
             core.clone(),
             config.clone(),
@@ -467,6 +483,7 @@ impl AgentApplicationService {
                         faults: kernel_faults.clone(),
                     },
                     working_directory: hooks::working_directory(workspace.clone()),
+                    wakes: wakes.clone(),
                 },
                 host.plugins,
             ),
@@ -503,6 +520,7 @@ impl AgentApplicationService {
             files,
             kernel_faults,
             discovery,
+            wakes,
         })
     }
 

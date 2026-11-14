@@ -46,6 +46,7 @@ fn open_with(
         },
         ExecutorManager::default(),
         policy,
+        Arc::new(crate::NoopAgentBackgroundEventSink),
     )
     .unwrap()
 }

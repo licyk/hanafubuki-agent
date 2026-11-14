@@ -72,6 +72,9 @@ pub enum AgentNotification {
         session_id: AgentSessionId,
         revision: AgentRevision,
     },
+    /// An event was queued on the session's wake queue (one dropped with
+    /// the policy off is not notified).
+    WakeEventQueued { session_id: AgentSessionId },
 }
 
 /// Receives the kernel's notifications.

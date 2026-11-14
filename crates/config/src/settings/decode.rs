@@ -33,6 +33,11 @@ pub(crate) fn decode_settings(
     let windows = read.read("windows", &defaults.windows, no_rule);
     let memory = read.read("memory", &defaults.memory, validate_memory);
     let disabled_plugins = decode_disabled_plugins(&mut read, &defaults.disabled_plugins);
+    let wake_on_background_tasks = read.read(
+        "wakeOnBackgroundTasks",
+        &defaults.wake_on_background_tasks,
+        no_rule,
+    );
     let searxng_base_url = decode_searxng_base_url(&mut read, &defaults.searxng_base_url);
     let web_search_provider = decode_search_provider(
         &mut read,
@@ -62,6 +67,7 @@ pub(crate) fn decode_settings(
         windows,
         memory,
         disabled_plugins,
+        wake_on_background_tasks,
         web_search_provider,
         searxng_base_url,
         web_fetch_use_jina_reader,

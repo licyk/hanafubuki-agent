@@ -21,6 +21,7 @@
 //! [`AgentReply`].
 
 mod agents;
+mod background;
 mod catalog;
 mod center_reads;
 mod commands;
@@ -54,12 +55,13 @@ use hanafubuki_agent::{
     AgentAvailability, AgentEventSink, AgentGoal, AgentHandle, AgentPermissionMode,
     AgentReasoningId, AgentReasoningSnapshot, AgentRuntime, AgentSessionContext, AgentSessionId,
     AgentSessionMode, AgentSlot, AgentTaskPlanSnapshot, AgentToolCallDisplay, AgentTurnAccepted,
-    AgentUserInputRequest, AgentUserInputRequestId, ApprovalRequest, ApprovalRequestId,
-    ModelReasoningEffort, SkillCatalogSnapshot,
+    AgentUserInputRequest, AgentUserInputRequestId, AgentWakeTurnAccepted, ApprovalRequest,
+    ApprovalRequestId, ModelReasoningEffort, SkillCatalogSnapshot,
 };
 use tokio::sync::oneshot;
 
 use crate::app_event::{AppEvent, AppEventSender, Op};
+pub(crate) use background::BackgroundSink;
 pub(crate) use catalog::{CatalogCall, CatalogOutcome, CatalogReply};
 pub(crate) use center_reads::{
     CenterJob, CenterRead, CenterReader, Exchange, LiveSession, RootsRead, Waiting,
@@ -147,6 +149,9 @@ pub(crate) enum TurnUpdate {
     Ended(TurnEnd),
     /// A call into the Agent failed.
     Error(String),
+    /// What the session's background work reported, one line per event: a
+    /// woken turn opens with it.
+    BackgroundUpdates(Vec<String>),
     /// The interface now shows this session: a new one, or one reopened
     /// with its transcript.
     SessionOpened(OpenedSession),
@@ -233,6 +238,9 @@ pub(crate) enum AgentReply {
         call_id: String,
         display: Option<AgentToolCallDisplay>,
     },
+    /// The session's woken turn was submitted: started with the events it
+    /// delivers, or not (nothing was left to deliver), or refused.
+    WakeTurn(Result<Option<AgentWakeTurnAccepted>, String>),
     /// A subagent of `parent` waits on an approval.
     ChildApproval(Box<ChildApproval>),
     /// It was answered, or its turn ended.
@@ -283,6 +291,12 @@ pub(crate) struct AgentBridge {
     child_approvals: HashMap<ApprovalRequestId, subagents::ChildTarget>,
     /// The journal of the subagent this bridge shows, followed.
     following: Option<subagents::Following>,
+    /// While the session's woken turn is being submitted: what was asked
+    /// meanwhile, in order, carried out once it is answered.
+    waking: Option<Vec<Op>>,
+    /// The session was woken while a review ran, or its woken turn was
+    /// refused: tried again when a review or a compaction ends.
+    missed_wake: bool,
 }
 
 impl AgentBridge {
@@ -314,6 +328,8 @@ impl AgentBridge {
             watch: None,
             child_approvals: HashMap::new(),
             following: None,
+            waking: None,
+            missed_wake: false,
         }
     }
 
@@ -329,7 +345,7 @@ impl AgentBridge {
     /// Carries out what the interface asked; what it leads to arrives as
     /// events and replies.
     pub(crate) fn submit(&mut self, op: Op) -> Option<TurnUpdate> {
-        if let Some(waiting) = self.creating.as_mut() {
+        if let Some(waiting) = self.creating.as_mut().or(self.waking.as_mut()) {
             waiting.push(op);
             return None;
         }
@@ -461,6 +477,8 @@ impl AgentBridge {
                 self.turn = None;
                 self.turn_running = false;
                 self.load_session_status();
+                // Its subagents may still work, which it may wait on.
+                self.watch_subagents();
                 Some(TurnUpdate::SessionOpened(opened))
             }
             AgentReply::Update(update) => match *update {
@@ -485,6 +503,11 @@ impl AgentBridge {
                     self.subagents_listed(&statuses);
                     Some(TurnUpdate::Subagents(SubagentsReply::Listed(statuses)))
                 }
+                // What the session waits on changed with them.
+                TurnUpdate::Subagents(SubagentsReply::Changed(statuses)) => {
+                    self.send_session_status();
+                    Some(TurnUpdate::Subagents(SubagentsReply::Changed(statuses)))
+                }
                 // `/cd` moved: the status line's branch is the new root's.
                 TurnUpdate::Session(reply) if reply.working_directory().is_some() => {
                     self.send_session_status();
@@ -506,6 +529,7 @@ impl AgentBridge {
                 call_id, display, ..
             } => Some(TurnUpdate::ToolDisplayed { call_id, display }),
             AgentReply::EnteredWorktree(entered) => self.entered_worktree(entered),
+            AgentReply::WakeTurn(accepted) => self.woken(accepted),
             AgentReply::ChildApproval(approval) => self.child_approval(*approval),
             AgentReply::ChildApprovalResolved { parent, request_id } => {
                 self.child_approval_resolved(parent, request_id)
