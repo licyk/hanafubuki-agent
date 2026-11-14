@@ -51,6 +51,15 @@ impl AgentApplicationService {
         mode: AgentSessionMode,
         role: Option<String>,
     ) -> Result<AgentSessionRuntimeSnapshot, String> {
+        self.create_session_in(mode, role, None).await
+    }
+
+    pub(super) async fn create_session_in(
+        &self,
+        mode: AgentSessionMode,
+        role: Option<String>,
+        workspace: Option<hanafubuki_agent_kernel::AgentSessionWorkspace>,
+    ) -> Result<AgentSessionRuntimeSnapshot, String> {
         if !self.accepting.load(Ordering::Acquire) {
             return Err("Agent service is shutting down".to_string());
         }
@@ -72,7 +81,7 @@ impl AgentApplicationService {
         hanafubuki_agent_foundation::blocking::run_blocking_operation(
             self.blocking.as_ref(),
             "agent session creation worker",
-            move || service.create_session_with_provider(mode, settings, resolved, role),
+            move || service.create_session_with_provider(mode, settings, resolved, role, workspace),
         )
         .await?
     }
@@ -83,6 +92,7 @@ impl AgentApplicationService {
         settings: hanafubuki_agent_config::AgentSettings,
         resolved: ResolvedAgentProvider,
         role: crate::roles::AgentSessionRole,
+        workspace: Option<hanafubuki_agent_kernel::AgentSessionWorkspace>,
     ) -> Result<AgentSessionRuntimeSnapshot, String> {
         let mut policy = resolved.policy;
         if let Some(model) = role.model {
@@ -145,11 +155,12 @@ impl AgentApplicationService {
             &settings.compaction,
             config.auto_compact_threshold_percent,
         );
-        let workspace = self
-            .workspace
-            .roots()
-            .map(|roots| session_workspace(roots.primary()))
-            .unwrap_or_default();
+        let workspace = workspace.unwrap_or_else(|| {
+            self.workspace
+                .roots()
+                .map(|roots| session_workspace(roots.primary()))
+                .unwrap_or_default()
+        });
         let snapshot = if model_configured {
             self.core.create_model_session(
                 config,

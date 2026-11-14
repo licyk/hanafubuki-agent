@@ -92,6 +92,7 @@ impl AgentService {
                 origin: runtime.origin,
                 workspace: crate::AgentSessionWorkspace {
                     cwd: runtime.cwd,
+                    execution_root: runtime.execution_root,
                     branch: runtime.branch,
                 },
                 ephemeral: false,

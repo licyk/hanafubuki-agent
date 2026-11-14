@@ -7,6 +7,36 @@ use super::{SkillService, MAX_TURN_DOCUMENT_BYTES};
 const TRUNCATION_NOTICE: &str = "\n\n<!-- SKILL.md truncated to fit the model context -->\n\n";
 
 impl SkillService {
+    /// Builds a read-only catalog view without changing another session's roots.
+    pub fn turn_catalog_for_roots(
+        &self,
+        repo: Vec<std::path::PathBuf>,
+    ) -> Result<SkillTurnCatalog, SkillError> {
+        let _mutation = self.inner.mutation.lock();
+        let view = self.catalog_view(repo);
+        view.turn_catalog()
+    }
+
+    pub fn list_for_roots(
+        &self,
+        repo: Vec<std::path::PathBuf>,
+    ) -> Result<crate::SkillCatalogSnapshot, SkillError> {
+        let _mutation = self.inner.mutation.lock();
+        self.catalog_view(repo).list()
+    }
+
+    fn catalog_view(&self, repo: Vec<std::path::PathBuf>) -> Self {
+        Self {
+            inner: std::sync::Arc::new(super::Inner {
+                roots: self.inner.roots.clone(),
+                repo: parking_lot::RwLock::new(repo),
+                plugins: parking_lot::RwLock::new(self.inner.plugins.read().clone()),
+                mutation: parking_lot::Mutex::new(()),
+                catalog: parking_lot::RwLock::new(super::CatalogState::default()),
+            }),
+        }
+    }
+
     /// Every enabled, locally available Skill. Callers apply external
     /// dependency availability before admitting the turn.
     pub fn turn_catalog(&self) -> Result<SkillTurnCatalog, SkillError> {

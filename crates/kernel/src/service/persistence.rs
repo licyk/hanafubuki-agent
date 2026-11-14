@@ -408,6 +408,7 @@ pub(super) fn conversation_commit(
             parent_session_id: record.lineage.parent_session_id,
             origin: record.lineage.origin,
             cwd: record.lineage.workspace.cwd.clone(),
+            execution_root: record.lineage.workspace.execution_root.clone(),
             branch: record.lineage.workspace.branch.clone(),
             title: record.settings.title.clone(),
             goal: record.settings.goal.clone(),

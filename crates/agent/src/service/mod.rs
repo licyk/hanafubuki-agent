@@ -76,7 +76,8 @@ mod test_access;
 mod tui_preferences;
 pub use tui_preferences::AgentStandaloneSettingsView;
 mod turns;
-mod workspace;
+pub(crate) mod workspace;
+mod workspace_diff;
 mod worktree;
 pub use worktree::AgentWorktree;
 mod hooks;
@@ -133,6 +134,7 @@ pub struct AgentApplicationService {
     /// gets two.
     side_conversations: Arc<parking_lot::Mutex<()>>,
     executions: AgentExecutionService,
+    git_queries: hanafubuki_agent_worktree::GitQueries,
     skills: AgentSkillApplication,
     memory: AgentMemoryApplication,
     accepting: Arc<AtomicBool>,
@@ -436,6 +438,7 @@ impl AgentApplicationService {
             config.clone(),
             registries.clone(),
             executions.clone(),
+            workspace.clone(),
             blocking.clone(),
             base_instructions.clone(),
             discovery.clone(),
@@ -482,7 +485,7 @@ impl AgentApplicationService {
                         roles: roles.clone(),
                         faults: kernel_faults.clone(),
                     },
-                    working_directory: hooks::working_directory(workspace.clone()),
+                    working_directory: hooks::working_directory(driver.clone()),
                     wakes: wakes.clone(),
                 },
                 host.plugins,
@@ -499,6 +502,7 @@ impl AgentApplicationService {
             core,
             driver,
             side_conversations: Arc::new(parking_lot::Mutex::new(())),
+            git_queries: hanafubuki_agent_worktree::GitQueries::new(executor),
             executions,
             skills,
             memory,

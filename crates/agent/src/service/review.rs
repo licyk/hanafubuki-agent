@@ -25,7 +25,12 @@ impl AgentApplicationService {
         parent: AgentSessionId,
         target: AgentReviewTarget,
     ) -> Result<AgentReviewOutput, AgentError> {
-        let cwd = self.working_directory().await?;
+        let cwd = self
+            .driver
+            .workspace_roots_async(parent)
+            .await?
+            .primary()
+            .clone();
         self.feature(REVIEW_PLUGIN, |reviews: Arc<ReviewService>| async move {
             reviews.start(parent, target, cwd).await
         })
@@ -47,7 +52,28 @@ impl AgentApplicationService {
     /// branches, the current branch and its latest commits.
     /// `FeatureUnavailable` while the `review` plugin is not running.
     pub async fn review_targets(&self) -> Result<AgentReviewTargets, AgentError> {
-        let cwd = self.working_directory().await?;
+        self.review_targets_in(self.working_directory().await?)
+            .await
+    }
+
+    pub async fn review_targets_for_session(
+        &self,
+        session_id: AgentSessionId,
+    ) -> Result<AgentReviewTargets, AgentError> {
+        self.review_targets_in(
+            self.driver
+                .workspace_roots_async(session_id)
+                .await?
+                .primary()
+                .clone(),
+        )
+        .await
+    }
+
+    async fn review_targets_in(
+        &self,
+        cwd: std::path::PathBuf,
+    ) -> Result<AgentReviewTargets, AgentError> {
         self.feature(REVIEW_PLUGIN, |reviews: Arc<ReviewService>| async move {
             reviews.targets(cwd).await
         })

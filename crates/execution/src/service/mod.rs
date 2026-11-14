@@ -69,6 +69,7 @@ pub use process_port::{AgentExecutionProcessPort, ExecutorAgentExecutionPort};
 #[derive(Clone)]
 pub struct AgentExecutionService {
     inner: Arc<AgentExecutionServiceInner>,
+    workspace_override: Option<Arc<Vec<PathBuf>>>,
 }
 
 struct AgentExecutionServiceInner {
@@ -117,6 +118,7 @@ impl AgentExecutionService {
 
     pub fn with_sandbox(process: Arc<dyn AgentExecutionProcessPort>, sandbox: Sandbox) -> Self {
         Self {
+            workspace_override: None,
             inner: Arc::new(AgentExecutionServiceInner {
                 process,
                 registry: Mutex::new(ExecutionRegistry {
@@ -161,12 +163,23 @@ impl AgentExecutionService {
         *self.inner.workspace_roots.write() = roots;
     }
 
+    /// A session-local view sharing process ownership, but never mutable roots.
+    pub fn with_workspace_roots(&self, roots: Vec<PathBuf>) -> Self {
+        Self {
+            inner: self.inner.clone(),
+            workspace_override: Some(Arc::new(roots)),
+        }
+    }
+
     pub fn workspace_roots(&self) -> Vec<PathBuf> {
-        self.inner.workspace_roots.read().clone()
+        self.workspace_override
+            .as_ref()
+            .map(|roots| roots.as_ref().clone())
+            .unwrap_or_else(|| self.inner.workspace_roots.read().clone())
     }
 
     pub fn working_directory(&self) -> Option<PathBuf> {
-        self.inner.workspace_roots.read().first().cloned()
+        self.workspace_roots().first().cloned()
     }
 
     /// `command` as `request`'s sandbox confines it over the workspace

@@ -15,6 +15,24 @@ impl AgentService {
             .map_err(history_store_error)
     }
 
+    /// A draft may use a staged image owned by this session, or a visible
+    /// inherited image. Cross-session references still require history visibility.
+    pub fn read_input_image_attachment(
+        &self,
+        session_id: AgentSessionId,
+        attachment: &crate::AgentImageAttachmentRef,
+    ) -> Result<Vec<u8>, AgentError> {
+        self.session(session_id)?;
+        if attachment.source_session_id == session_id {
+            self.inner
+                .history_store
+                .load_image_attachment(attachment)
+                .map_err(history_store_error)
+        } else {
+            self.read_image_attachment(session_id, attachment)
+        }
+    }
+
     pub fn read_image_attachment(
         &self,
         session_id: AgentSessionId,

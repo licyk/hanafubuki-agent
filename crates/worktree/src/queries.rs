@@ -40,6 +40,37 @@ impl GitQueries {
         Self { executor }
     }
 
+    /// Staged and unstaged patches, followed by untracked file names.
+    /// Every query uses the same owned executor as the worktree operations.
+    pub fn working_tree_diff(&self, cwd: &Path) -> Result<String, WorktreeError> {
+        let staged = git_text(
+            &self.executor,
+            cwd,
+            &["diff", "--no-ext-diff", "--no-textconv", "--cached"],
+        )?;
+        let unstaged = git_text(
+            &self.executor,
+            cwd,
+            &["diff", "--no-ext-diff", "--no-textconv"],
+        )?;
+        let untracked = git_text(
+            &self.executor,
+            cwd,
+            &["ls-files", "--others", "--exclude-standard"],
+        )?;
+        let mut sections = Vec::new();
+        if !staged.is_empty() {
+            sections.push(format!("Staged changes\n{staged}"));
+        }
+        if !unstaged.is_empty() {
+            sections.push(format!("Unstaged changes\n{unstaged}"));
+        }
+        if !untracked.is_empty() {
+            sections.push(format!("Untracked files\n{untracked}"));
+        }
+        Ok(sections.join("\n\n"))
+    }
+
     /// The local branches by name, the default one (`main`, else `master`)
     /// first.
     pub fn local_branches(&self, cwd: &Path) -> Result<Vec<String>, WorktreeError> {

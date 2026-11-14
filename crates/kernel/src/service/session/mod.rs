@@ -10,6 +10,7 @@ mod goal;
 mod memory;
 mod query;
 mod title;
+mod workspace;
 
 fn ensure_head_fork_idle(record: &SessionRecord) -> Result<(), AgentError> {
     if record

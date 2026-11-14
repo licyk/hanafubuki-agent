@@ -405,3 +405,13 @@ A new plugin changes no kernel or contracts file.
 - A host keeps goldens of its own over its rows (Hanafubuki's are in `hanafubuki-agent-integration`), which a model-visible change here changes as well. The fixtures are Linux-only.
 
 The commands and update rules are in [Building and testing](/docs/building-testing).
+
+### Frozen conversation workspace [#conversation-workspace]
+
+`TurnAdmissionRequest.workspace` carries the admitting session's roots; a bound
+conversation's filesystem and execution tools receive the same immutable
+`TurnWorkspace` through `ToolInvocation.turn`. Tools use a scoped service view for
+both approval preparation and execution. They must not mutate a shared service's
+roots to select a conversation. The scoped execution view retains the same process
+registry and receipts. Host-global package configuration and guest process grants
+remain host-global; a conversation binding does not reconfigure a running guest.

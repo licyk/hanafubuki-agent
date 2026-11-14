@@ -145,6 +145,7 @@ pub use roles::{
     AgentResolvedRole, AgentRoleCatalog, AgentRoleIssue, AgentRoleLink, AgentRoleSource,
     AgentUnusableRole, DEFAULT_ROLE, EXPLORER_ROLE, MAX_ROLE_CHAIN,
 };
+pub use service::workspace::AgentSessionWorkspaceRequest;
 pub use service::{
     package_setting_key, reasoning_effort_choices, AgentApplicationService, AgentEditFromTurn,
     AgentHook, AgentHookHandler, AgentHooks, AgentHostPorts, AgentListedModel,
@@ -252,10 +253,10 @@ pub use hanafubuki_agent_kernel::{
     AgentContextComposition, AgentContextRequest, AgentContextSection, AgentContextTools,
     AgentEvent, AgentEventBatch, AgentEventKind, AgentEventSequence, AgentEventSink,
     AgentGeneration, AgentGoal, AgentGoalOrigin, AgentGoalStatus, AgentHistorySortDirection,
-    AgentHostContext, AgentImageAttachmentRef, AgentMessageId, AgentMessagePhase, AgentModelUsage,
-    AgentPermissionMode, AgentPlanImplementationRequest, AgentReasoningId, AgentReasoningPhase,
-    AgentReasoningSnapshot, AgentReportedPrompt, AgentRevision, AgentSentRequest,
-    AgentSessionContext, AgentSessionForkOutcome, AgentSessionForkRequest,
+    AgentHostContext, AgentImageAttachmentRef, AgentImageDetail, AgentMessageId, AgentMessagePhase,
+    AgentModelUsage, AgentPermissionMode, AgentPlanImplementationRequest, AgentReasoningId,
+    AgentReasoningPhase, AgentReasoningSnapshot, AgentReportedPrompt, AgentRevision,
+    AgentSentRequest, AgentSessionContext, AgentSessionForkOutcome, AgentSessionForkRequest,
     AgentSessionHeadForkOutcome, AgentSessionHeadForkRequest, AgentSessionId,
     AgentSessionLifecycle, AgentSessionListRequest, AgentSessionMode, AgentSessionOpenResult,
     AgentSessionOrigin, AgentSessionPage, AgentSessionParentFilter, AgentSessionRuntimeSnapshot,

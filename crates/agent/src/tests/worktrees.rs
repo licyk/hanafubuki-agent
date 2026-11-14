@@ -49,7 +49,12 @@ fn repository(paths: &TestPaths) {
 async fn worktrees_are_made_listed_bound_and_removed_through_their_plugin() {
     let (service, paths) = configured_service("worktree-calls", "http://127.0.0.1:1/v1");
     repository(&paths);
-    let (owner, other) = (AgentSessionId::new(7), AgentSessionId::new(8));
+    let owner = service
+        .create_session(AgentSessionMode::Default, None)
+        .await
+        .unwrap()
+        .id;
+    let other = AgentSessionId::new(8);
 
     let first = service.worktree_create(Some(owner)).await.unwrap();
     let second = service.worktree_create(None).await.unwrap();
@@ -76,7 +81,7 @@ async fn worktrees_are_made_listed_bound_and_removed_through_their_plugin() {
         .unwrap_err();
     assert_eq!(
         error,
-        AgentError::InvalidInput("the worktree belongs to session 7".to_string())
+        AgentError::InvalidInput(format!("the worktree belongs to session {owner}"))
     );
     let mut listed = service.worktree_list().await.unwrap();
     listed.sort_by(|left, right| left.path.cmp(&right.path));

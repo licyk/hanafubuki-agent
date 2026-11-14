@@ -187,6 +187,7 @@ fn context_request() -> ContextRequest {
 
 fn admission_request() -> TurnAdmissionRequest {
     TurnAdmissionRequest {
+        workspace: None,
         session_id: AgentSessionId::new(1),
         mode: AgentSessionMode::Default,
     }

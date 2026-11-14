@@ -633,3 +633,39 @@ The facade installs no logger: the host keeps its own `log` implementation, and 
 - Turn on the `test-support` feature of `hanafubuki-agent` in `[dev-dependencies]` for `hanafubuki_agent::test_support`: `mount` (mounts a plugin in a context that provides the registries and `PluginFaults`), `test_host`, the scripted model and MCP servers. The scripted model server answers `GET …/models` from listings of its own when it is given some (`FakeServer::with_listings`, `FakeListing`), else with its next response, as any request. The test Agent (`new_with_host`) discovers no models by itself, and `configure_test_provider` writes `modelMetadata.discovery = "off"`, so even an Agent a test builds as a host builds its own (`AgentApplicationService::open`) sends the scripted server only the requests the test makes.
 - A host keeps goldens of its own that pin what the model receives with its plugins and instructions; a model-visible change on the Agent's side changes them too, and they are regenerated on purpose.
 - A host tests the panic-hook bridge, in a child process.
+
+## Conversation workspaces and clipboard images [#conversation-workspaces]
+
+An embedded host can bind a conversation to a directory with
+`create_session_with_workspace(mode, role, path)`, or change an idle conversation
+with `set_session_workspace(AgentSessionWorkspaceRequest)` (session id, generation,
+revision and path). Creation resolves the directory before committing the session.
+The binding is durable and inherited by forks and children. It is distinct from
+historical `cwd` metadata: a conversation without an explicit binding continues to
+follow the host workspace, including standalone `/cd`. A bound directory that no
+longer exists fails; it never falls back to the host directory. Changing a binding
+is refused while that conversation has an active turn, compaction or background
+terminal. Other conversations can continue running in their own directories.
+
+Turn admission freezes the roots for filesystem tools, command working directories
+and sandbox policy, workspace instructions, repository Skills, image reads and
+hooks. Scoped service views share the process ownership registry; changing a
+conversation never rewrites a running turn's global tool policy. The configuration
+layers and installed package set remain those of the running Agent; a directory
+binding does not implicitly trust a project's configuration.
+
+Use `session_workspace_roots(id)` for the actual roots and
+`search_user_files_for_session(id, request)` for file mentions,
+`list_skills_for_session(id)` for its catalog and `diff_for_session(id)` for Git changes. Review starts in its
+parent's directory; `review_targets_for_session`, `worktree_list_for_session` and
+`worktree_remove_for_session` take a session id. `worktree_create(Some(owner))`
+creates from that owner's workspace. Global variants remain for standalone
+workspace views. Worktree creation does not move a conversation automatically;
+the host explicitly binds it after creation.
+
+`import_image_bytes(session_id, bytes, display_name, detail)` accepts clipboard
+images without an intermediate file. It applies the same source-size, decoded
+pixel, supported-format and normalization limits as selected images, then stages a
+durable attachment. Preview it with `read_image_preview` and submit the returned
+reference through `DesktopAgentImageInput.attachment`. The host does not write into
+the attachment store or delete files when discarding a draft.

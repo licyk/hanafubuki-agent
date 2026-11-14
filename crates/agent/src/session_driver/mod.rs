@@ -16,6 +16,7 @@
 mod background;
 mod model;
 mod turns;
+mod workspace;
 
 pub(crate) use self::model::{
     ChildModelError, ChildModelRequest, SpawnModelCatalog, SpawnProvider, MAXIMUM_MODEL_ID_BYTES,
@@ -53,6 +54,7 @@ pub(crate) struct AgentSessionDriver {
     config: AgentConfig,
     registries: AgentKernelRegistries,
     executions: AgentExecutionService,
+    workspace: Arc<dyn crate::WorkspaceRootsPort>,
     blocking: Arc<dyn BlockingOperationPort>,
     /// The base instructions with the host's additions, which a model
     /// selection gives the session.
@@ -62,11 +64,16 @@ pub(crate) struct AgentSessionDriver {
 }
 
 impl AgentSessionDriver {
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "composition supplies the shared session services explicitly"
+    )]
     pub(crate) fn new(
         core: AgentService,
         config: AgentConfig,
         registries: AgentKernelRegistries,
         executions: AgentExecutionService,
+        workspace: Arc<dyn crate::WorkspaceRootsPort>,
         blocking: Arc<dyn BlockingOperationPort>,
         base_instructions: Arc<str>,
         discovery: ModelDiscovery,
@@ -76,6 +83,7 @@ impl AgentSessionDriver {
             config,
             registries,
             executions,
+            workspace,
             blocking,
             base_instructions,
             discovery,
@@ -522,7 +530,18 @@ impl AgentSessionDriver {
             .sandbox()
             .with_windows_sandbox(sandbox.windows_sandbox)
             .enforcement();
-        host.insert(Arc::new(sandbox.policy(&self.executions.workspace_roots())));
+        let roots = self.workspace_roots_async(session_id).await?;
+        host.insert(Arc::new(sandbox.policy(roots.roots())));
+        if self
+            .core
+            .session_workspace(session_id)?
+            .execution_root
+            .is_some()
+        {
+            host.insert(Arc::new(hanafubuki_agent_contracts::TurnWorkspace {
+                roots: roots.into_vec(),
+            }));
+        }
         host.insert(Arc::new(enforcement));
         let request = ContextRequest {
             session_id,
@@ -597,14 +616,22 @@ impl AgentSessionDriver {
         };
         let hierarchical = hierarchical_compression(&settings.compaction.hierarchical);
         let sandbox = self.sandbox_settings(session_id, settings)?;
+        let workspace = hanafubuki_agent_contracts::TurnWorkspace {
+            roots: self.workspace_roots_async(session_id).await?.into_vec(),
+        };
         let mut turn = hanafubuki_agent_kernel::collect_turn_extensions(
             &self.registries.turn_admission,
-            &TurnAdmissionRequest { session_id, mode },
+            &TurnAdmissionRequest {
+                session_id,
+                mode,
+                workspace: Some(workspace.clone()),
+            },
             &self.core.session_scope(session_id)?,
             &admission_cancellation(),
             self.core.limits().plugin_call_deadline,
         )
         .await?;
+        turn.insert(Arc::new(workspace));
         turn.insert(Arc::new(sandbox));
         turn.insert(Arc::new(background));
         turn.insert(Arc::new(hierarchical));

@@ -34,20 +34,26 @@ pub struct AgentFileSearchResult {
 }
 
 impl AgentApplicationService {
+    pub fn search_user_files_for_session(
+        &self,
+        session_id: crate::AgentSessionId,
+        request: AgentFileSearch,
+    ) -> Result<AgentFileSearchResult, String> {
+        validate_search(&request)?;
+        let roots = self
+            .session_workspace_roots(session_id)?
+            .into_vec()
+            .into_iter()
+            .map(|path| ("workspace".to_string(), path))
+            .collect::<Vec<_>>();
+        search_roots(&roots, &request.query, request.limit)
+    }
+
     pub fn search_user_files(
         &self,
         request: AgentFileSearch,
     ) -> Result<AgentFileSearchResult, String> {
-        if request.query.len() > MAXIMUM_FILE_QUERY_BYTES || request.query.as_bytes().contains(&0) {
-            return Err(format!(
-                "file query must contain at most {MAXIMUM_FILE_QUERY_BYTES} bytes without NUL"
-            ));
-        }
-        if request.limit == 0 || request.limit > MAXIMUM_FILE_RESULTS {
-            return Err(format!(
-                "file result limit must be between 1 and {MAXIMUM_FILE_RESULTS}"
-            ));
-        }
+        validate_search(&request)?;
         let roots = self.workspace.search_roots(&request.host)?;
         search_roots(&roots, &request.query, request.limit)
     }
@@ -145,3 +151,17 @@ fn label_text(path: &Path) -> Result<String, String> {
 
 #[cfg(test)]
 mod tests;
+
+fn validate_search(request: &AgentFileSearch) -> Result<(), String> {
+    if request.query.len() > MAXIMUM_FILE_QUERY_BYTES || request.query.as_bytes().contains(&0) {
+        return Err(format!(
+            "file query must contain at most {MAXIMUM_FILE_QUERY_BYTES} bytes without NUL"
+        ));
+    }
+    if request.limit == 0 || request.limit > MAXIMUM_FILE_RESULTS {
+        return Err(format!(
+            "file result limit must be between 1 and {MAXIMUM_FILE_RESULTS}"
+        ));
+    }
+    Ok(())
+}

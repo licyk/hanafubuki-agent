@@ -99,6 +99,17 @@ impl AgentService {
         ))
     }
 
+    /// Loads one session by identity, without scanning the paged catalog.
+    pub fn session_summary(
+        &self,
+        session_id: AgentSessionId,
+    ) -> Result<AgentSessionSummary, AgentError> {
+        self.activate_session(session_id)?;
+        let cell = self.session(session_id)?;
+        let record = cell.lock_after_persistence_blocking()?;
+        Ok(session_summary(session_id, &record))
+    }
+
     pub fn list_sessions_page(
         &self,
         request: AgentSessionListRequest,

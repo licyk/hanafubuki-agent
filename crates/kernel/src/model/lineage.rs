@@ -26,10 +26,12 @@ pub enum AgentChildSessionBase {
 }
 
 /// Where a session was created: the workspace's primary root and the Git
-/// branch checked out there, each `None` when unknown. Recorded once, at
-/// creation; a child or a fork takes its source's.
+/// branch checked out there, each `None` when unknown. The cwd and branch start as creation metadata; an explicit execution binding
+/// updates them. A child or a fork takes its source's workspace.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct AgentSessionWorkspace {
+    /// An explicitly bound execution root; absent means follow the host.
+    pub execution_root: Option<String>,
     pub cwd: Option<String>,
     pub branch: Option<String>,
 }

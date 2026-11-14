@@ -108,7 +108,16 @@ impl AgentToolHandler for ExecTool {
             else {
                 return Ok(PermissionRequirement::NotRequired);
             };
-            let executions = self.services.executions.clone();
+            let executions = match invocation
+                .turn
+                .get::<hanafubuki_agent_contracts::TurnWorkspace>()
+            {
+                Some(workspace) => self
+                    .services
+                    .executions
+                    .with_workspace_roots(workspace.roots.clone()),
+                None => self.services.executions.clone(),
+            };
             let prepared = self
                 .services
                 .blocking
@@ -132,7 +141,15 @@ impl AgentToolHandler for ExecTool {
     ) -> ToolFuture<'_, Result<ToolResult, AgentToolError>> {
         Box::pin(async move {
             let (call, notes) = parse_call(self.kind, &invocation, &self.services)?;
-            let services = self.services.clone();
+            let mut services = self.services.clone();
+            if let Some(workspace) = invocation
+                .turn
+                .get::<hanafubuki_agent_contracts::TurnWorkspace>()
+            {
+                services.executions = services
+                    .executions
+                    .with_workspace_roots(workspace.roots.clone());
+            }
             let activity = ExecutionActivity {
                 session_id: invocation.context.session_id,
                 progress: invocation.progress.clone(),

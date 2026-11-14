@@ -12,6 +12,7 @@ use hanafubuki_agent_kernel::AgentSessionWorkspace;
 /// `None` when it cannot be read; a session is never refused for it.
 pub(crate) fn session_workspace(primary: &Path) -> AgentSessionWorkspace {
     AgentSessionWorkspace {
+        execution_root: None,
         cwd: native_form(primary)
             .ok()
             .map(|path| path.to_string_lossy().into_owned()),

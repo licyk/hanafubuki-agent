@@ -622,3 +622,25 @@ impl AgentEventSink for PrintEvents {
 - 在 `[dev-dependencies]` 中为 `hanafubuki-agent` 打开 `test-support` feature，得到 `hanafubuki_agent::test_support`：`mount`（在一个提供注册表与 `PluginFaults` 的上下文中挂载插件）、`test_host`、脚本化的模型服务器与 MCP 服务器。给了模型列表时（`FakeServer::with_listings`、`FakeListing`），脚本化的模型服务器用它们回答 `GET …/models`；否则像对待其他请求一样用下一个响应回答。测试用 Agent（`new_with_host`）不自己发现模型，`configure_test_provider` 也会写入 `modelMetadata.discovery = "off"`，所以即使测试像宿主那样自己构建 Agent（`AgentApplicationService::open`），脚本化服务器也只看到测试自己的请求。
 - 宿主应保留自己的 golden 测试，固定加上宿主插件与指令后模型收到的内容；Agent 一侧模型可见的变化也会改变它们，需要有意地重新生成。
 - panic hook 桥由宿主在子进程中测试。
+
+## 会话工作区与剪贴板图片 [#conversation-workspaces]
+
+嵌入宿主通过 `create_session_with_workspace(mode, role, path)` 创建已绑定目录的会话，或用
+`set_session_workspace(AgentSessionWorkspaceRequest)` 修改空闲会话；请求携带会话 id、generation、revision 和路径。
+创建操作先解析目录，再提交会话。绑定持久保存，fork 和子会话继承。它与历史 `cwd` 元数据不同：
+没有显式绑定的会话仍跟随宿主工作区，包括独立模式的 `/cd`。已绑定目录消失时操作失败，绝不回退到宿主目录。
+该会话运行回合、压缩或后台终端时拒绝修改绑定；其他会话可以在各自目录继续运行。
+
+回合准入冻结文件工具、命令 cwd 和沙箱策略、工作区指令、仓库 Skills、图片读取及 hooks 使用的根目录。
+各会话的服务视图共享进程所有权注册表；切换会话不会改写运行中回合的全局工具策略。
+配置层和已安装插件包仍属于运行中的 Agent；目录绑定不会隐式信任项目配置。
+
+实际根目录通过 `session_workspace_roots(id)` 读取，文件引用通过 `search_user_files_for_session(id, request)` 搜索；`list_skills_for_session(id)` 读取会话目录的 Skill 列表，`diff_for_session(id)` 读取 Git 改动。
+Review 使用父会话目录；`review_targets_for_session`、`worktree_list_for_session`、`worktree_remove_for_session`
+接收会话 id；`worktree_create(Some(owner))` 从该拥有者的工作区创建。全局版本保留给独立模式的工作区视图。
+创建 worktree 不会自动迁移会话，宿主在创建后显式绑定。
+
+`import_image_bytes(session_id, bytes, display_name, detail)` 无需中间文件即可接收剪贴板图片，
+应用与选择文件相同的源文件大小、解码像素、支持格式和归一化限制，再暂存持久附件。
+通过 `read_image_preview` 预览，并以 `DesktopAgentImageInput.attachment` 提交返回的引用。
+宿主不直接写入附件目录，也不在丢弃草稿时自行删除存储文件。

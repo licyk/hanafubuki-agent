@@ -141,6 +141,7 @@ async fn contributors_follow_rank_then_id_and_ids_are_unique() {
         .collect::<Vec<_>>();
     assert_eq!(ids, ["zeta", "alpha", "beta"]);
     let request = TurnAdmissionRequest {
+        workspace: None,
         session_id: AgentSessionId::new(1),
         mode: AgentSessionMode::Default,
     };

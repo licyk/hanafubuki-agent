@@ -39,16 +39,20 @@ impl TurnAdmissionContributor for SkillTurnAdmission {
 
     fn contribute<'a>(
         &'a self,
-        _request: &'a TurnAdmissionRequest,
+        request: &'a TurnAdmissionRequest,
         _cancellation: CancellationToken,
     ) -> TurnAdmissionFuture<'a> {
         let skills = self.skills.clone();
+        let workspace = request.workspace.clone();
         let mcp = self.mcp.clone();
         Box::pin(async move {
             let catalog = self
                 .blocking
                 .run("agent turn Skill catalog worker", move || {
-                    let mut catalog = skills.turn_catalog()?;
+                    let mut catalog = match workspace {
+                        Some(workspace) => skills.turn_catalog_for_roots(&workspace.roots)?,
+                        None => skills.turn_catalog()?,
+                    };
                     retain_available_skill_tools(&mut catalog, &mcp);
                     Ok::<_, String>(catalog)
                 })

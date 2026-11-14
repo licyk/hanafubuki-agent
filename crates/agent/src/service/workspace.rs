@@ -63,3 +63,108 @@ impl AgentApplicationService {
         None
     }
 }
+
+/// Host request to change one conversation's authoritative directory.
+#[derive(Clone, Debug)]
+pub struct AgentSessionWorkspaceRequest {
+    pub session_id: hanafubuki_agent_kernel::AgentSessionId,
+    pub generation: hanafubuki_agent_kernel::AgentGeneration,
+    pub revision: hanafubuki_agent_kernel::AgentRevision,
+    pub path: String,
+}
+
+impl AgentApplicationService {
+    pub async fn create_session_with_workspace(
+        &self,
+        mode: hanafubuki_agent_kernel::AgentSessionMode,
+        role: Option<String>,
+        path: String,
+    ) -> Result<hanafubuki_agent_kernel::AgentSessionRuntimeSnapshot, String> {
+        let service = self.clone();
+        let workspace = hanafubuki_agent_foundation::blocking::run_blocking_operation(
+            self.blocking.as_ref(),
+            "agent new session workspace",
+            move || service.resolve_session_workspace(&path),
+        )
+        .await??;
+        self.create_session_in(mode, role, Some(workspace)).await
+    }
+
+    pub fn set_session_workspace(
+        &self,
+        request: AgentSessionWorkspaceRequest,
+    ) -> Result<hanafubuki_agent_kernel::AgentSessionRuntimeSnapshot, String> {
+        self.activate_session(request.session_id)
+            .map_err(|error| error.to_string())?;
+        let workspace = self.resolve_session_workspace(&request.path)?;
+        let scope =
+            background_terminal_scope(request.session_id).map_err(|error| error.to_string())?;
+        if self
+            .executions
+            .list_background_terminals(&scope)
+            .map_err(|error| error.to_string())?
+            .iter()
+            .any(|terminal| !terminal.status.is_terminal())
+        {
+            return Err(
+                "the session workspace cannot change while its background terminals run"
+                    .to_string(),
+            );
+        }
+        self.core
+            .set_session_workspace(
+                request.session_id,
+                request.generation,
+                request.revision,
+                workspace,
+            )
+            .map_err(|error| error.to_string())
+    }
+
+    pub fn session_workspace_roots(
+        &self,
+        session_id: hanafubuki_agent_kernel::AgentSessionId,
+    ) -> Result<AgentWorkspaceRoots, String> {
+        self.activate_session(session_id)
+            .map_err(|error| error.to_string())?;
+        self.driver
+            .workspace_roots(session_id)
+            .map_err(|error| error.to_string())
+    }
+
+    pub(crate) async fn session_files(
+        &self,
+        session_id: hanafubuki_agent_kernel::AgentSessionId,
+    ) -> Result<hanafubuki_agent_workspace_fs::WorkspaceFsService, String> {
+        let service = self.clone();
+        hanafubuki_agent_foundation::blocking::run_blocking_operation(
+            self.blocking.as_ref(),
+            "agent session file policy",
+            move || {
+                service
+                    .files
+                    .with_workspace_roots(service.session_workspace_roots(session_id)?.into_vec())
+                    .map_err(|error| error.to_string())
+            },
+        )
+        .await?
+    }
+}
+
+impl AgentApplicationService {
+    fn resolve_session_workspace(
+        &self,
+        path: &str,
+    ) -> Result<hanafubuki_agent_kernel::AgentSessionWorkspace, String> {
+        let path = hanafubuki_agent_foundation::paths::ResolvedPath::resolve(path)
+            .map_err(|error| error.to_string())?;
+        WorkspaceFsPolicy::new(
+            vec![path.native().to_path_buf()],
+            self.workspace.protected_roots(),
+        )
+        .map_err(|error| error.to_string())?;
+        let mut workspace = crate::session_workspace::session_workspace(path.native());
+        workspace.execution_root = Some(path.native_text().to_string());
+        Ok(workspace)
+    }
+}

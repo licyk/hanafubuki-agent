@@ -91,7 +91,7 @@ impl HooksRuntime {
                 let scope = HookScope {
                     session_id: session_id.to_string(),
                     turn_id: turn_id.map(|turn| turn.to_string()),
-                    cwd: working_directory()?,
+                    cwd: working_directory(session_id)?,
                 };
                 Ok(engine.run(&catalog, &event, &scope, &cancellation))
             })

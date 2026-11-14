@@ -190,6 +190,21 @@ impl AgentSkillApplication {
         self.service()?.delete(id).map_err(to_message)
     }
 
+    pub(crate) fn list_for_roots(&self, roots: &[PathBuf]) -> Result<SkillCatalogSnapshot, String> {
+        self.service()?
+            .list_for_roots(repository_skill_roots(roots))
+            .map_err(to_message)
+    }
+
+    pub(crate) fn turn_catalog_for_roots(
+        &self,
+        roots: &[PathBuf],
+    ) -> Result<SkillTurnCatalog, String> {
+        self.service()?
+            .turn_catalog_for_roots(repository_skill_roots(roots))
+            .map_err(to_message)
+    }
+
     pub(crate) fn turn_catalog(&self) -> Result<SkillTurnCatalog, String> {
         self.follow_workspace()?;
         self.service()?.turn_catalog().map_err(to_message)

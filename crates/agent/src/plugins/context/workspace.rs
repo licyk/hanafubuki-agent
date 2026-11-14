@@ -110,8 +110,17 @@ impl ContextContributor for WorkspaceContext {
 
 impl Workspace {
     fn sections(&self, host: &TurnExtensions) -> Result<Vec<ContextSection>, String> {
-        let roots = self.roots.roots()?;
-        let selected_target = self.roots.selected(host);
+        let frozen = host.get::<hanafubuki_agent_contracts::TurnWorkspace>();
+        let roots = match frozen {
+            Some(workspace) => crate::agent_workspace_roots_from(workspace.roots.clone())
+                .ok_or("turn workspace is empty")?,
+            None => self.roots.roots()?,
+        };
+        let selected_target = if frozen.is_some() {
+            Some(roots.primary().clone())
+        } else {
+            self.roots.selected(host)
+        };
         let discovered = discover_workspace_instructions(
             &self.user_instructions_dir,
             &roots,

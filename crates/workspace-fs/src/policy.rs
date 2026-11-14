@@ -68,6 +68,10 @@ impl WorkspaceFsPolicy {
 
     /// The workspace roots, in the order the policy checks them. The first is
     /// the base for relative requests.
+    pub(crate) fn protected_roots(&self) -> &[ResolvedPath] {
+        &self.protected_roots
+    }
+
     pub fn roots(&self) -> impl Iterator<Item = &Path> {
         self.workspace_roots.iter().map(ResolvedPath::native)
     }

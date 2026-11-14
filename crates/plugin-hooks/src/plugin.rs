@@ -23,7 +23,9 @@ pub const HOOKS_PLUGIN: &str = "hooks";
 
 /// The directory the Agent works in, where a hook's command runs; called
 /// on the blocking pool.
-pub type WorkingDirectory = Arc<dyn Fn() -> Result<PathBuf, String> + Send + Sync>;
+pub type WorkingDirectory = Arc<
+    dyn Fn(hanafubuki_agent_contracts::AgentSessionId) -> Result<PathBuf, String> + Send + Sync,
+>;
 
 /// Binds `engine`'s hooks to the kernel and provides the [`HooksService`].
 /// The application builds the engine over its own `ExecutorManager`.

@@ -46,6 +46,25 @@ impl WorkspaceFsService {
         *self.policy.write() = Arc::new(policy);
     }
 
+    /// Returns an independent policy view, preserving the publish adapter.
+    pub fn with_workspace_roots(
+        &self,
+        roots: Vec<std::path::PathBuf>,
+    ) -> Result<Self, WorkspaceFsError> {
+        let policy = self.policy();
+        let policy = WorkspaceFsPolicy::new(
+            roots,
+            policy
+                .protected_roots()
+                .iter()
+                .map(|root| root.native().to_path_buf()),
+        )?;
+        Ok(Self {
+            policy: Arc::new(RwLock::new(Arc::new(policy))),
+            publish_hook: self.publish_hook.clone(),
+        })
+    }
+
     fn policy(&self) -> Arc<WorkspaceFsPolicy> {
         self.policy.read().clone()
     }

@@ -32,6 +32,32 @@ pub struct AgentImagePreview {
 }
 
 impl AgentApplicationService {
+    /// Normalizes clipboard bytes and stages them through the history authority.
+    pub fn import_image_bytes(
+        &self,
+        session_id: AgentSessionId,
+        bytes: Vec<u8>,
+        display_name: String,
+        detail: hanafubuki_agent_kernel::AgentImageDetail,
+    ) -> Result<hanafubuki_agent_kernel::AgentImageAttachmentRef, String> {
+        if bytes.len() > MAXIMUM_SOURCE_IMAGE_BYTES {
+            return Err("image exceeds source byte limit".to_string());
+        }
+        if display_name.is_empty()
+            || display_name.len() > 256
+            || display_name.as_bytes().contains(&0)
+        {
+            return Err("image display name must contain 1 to 256 bytes without NUL".to_string());
+        }
+        self.core
+            .activate_session(session_id)
+            .map_err(|error| error.to_string())?;
+        let prepared = normalize_image(bytes, display_name, detail)?;
+        self.core
+            .stage_image_attachment(session_id, prepared)
+            .map_err(|error| error.to_string())
+    }
+
     pub fn preview_selected_image(&self, path: String) -> Result<AgentImagePreview, String> {
         let selected = self
             .files
@@ -56,7 +82,7 @@ impl AgentApplicationService {
     ) -> Result<AgentImagePreview, String> {
         let bytes = self
             .core
-            .read_image_attachment(session_id, &attachment)
+            .read_input_image_attachment(session_id, &attachment)
             .map_err(|error| error.to_string())?;
         bounded_preview(&bytes)
     }
@@ -130,7 +156,7 @@ pub(crate) fn prepare_and_stage_images(
             return Err("image display name must contain 1 to 256 bytes without NUL".to_string());
         }
         if let (None, Some(attachment)) = (&input.path, &input.attachment) {
-            core.read_image_attachment(session_id, attachment)
+            core.read_input_image_attachment(session_id, attachment)
                 .map_err(|error| error.to_string())?;
             staged.push(attachment.clone());
             continue;

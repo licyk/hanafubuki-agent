@@ -275,6 +275,7 @@ fn idle_session(
         wake_queue: Default::default(),
         origin: None,
         cwd: None,
+        execution_root: None,
         branch: None,
         title: None,
         goal: None,

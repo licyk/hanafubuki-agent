@@ -110,7 +110,16 @@ impl AgentToolHandler for ViewImageTool {
                             .to_string(),
                 });
             }
-            let files = self.files.clone();
+            let files = match invocation
+                .turn
+                .get::<hanafubuki_agent_contracts::TurnWorkspace>()
+            {
+                Some(workspace) => self
+                    .files
+                    .with_workspace_roots(workspace.roots.clone())
+                    .map_err(|error| AgentToolError::Failed(error.to_string()))?,
+                None => self.files.clone(),
+            };
             let validated = self
                 .blocking
                 .run("agent view_image validate", move || {
@@ -138,7 +147,16 @@ impl AgentToolHandler for ViewImageTool {
                 ));
             }
             let path = parse(&invocation.arguments)?;
-            let files = self.files.clone();
+            let files = match invocation
+                .turn
+                .get::<hanafubuki_agent_contracts::TurnWorkspace>()
+            {
+                Some(workspace) => self
+                    .files
+                    .with_workspace_roots(workspace.roots.clone())
+                    .map_err(|error| AgentToolError::Failed(error.to_string()))?,
+                None => self.files.clone(),
+            };
             let cancellation = invocation.cancellation.clone();
             let image = self
                 .blocking

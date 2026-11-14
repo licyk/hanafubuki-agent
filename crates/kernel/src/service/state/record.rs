@@ -1,6 +1,7 @@
 //! The live state of one session, grouped by what each part is for.
 //!
-//! The identity (id, lineage, creation time) never changes. Every other group
+//! The session id and creation time never change. Lineage includes the mutable
+//! execution workspace binding. Every other group
 //! is replaced as a whole when a staged durable mutation is rolled back, so a
 //! new field only has to join a group to be covered by rollback.
 
@@ -131,11 +132,12 @@ pub(in crate::service) struct SessionRuntime {
     pub(in crate::service) background_terminals: crate::service::wake::BackgroundTerminals,
 }
 
-/// Bounded rollback state for one staged durable mutation: every group but
-/// the identity. Canonical history is shared by `Arc`, so taking it never
+/// Bounded rollback state for one staged durable mutation, including the
+/// execution workspace binding in lineage. Canonical history is shared by `Arc`, so taking it never
 /// clones historical message or tool-output payloads.
 #[derive(Clone)]
 pub(in crate::service) struct SessionRollbackState {
+    lineage: SessionLineage,
     settings: SessionSettings,
     status: SessionStatus,
     conversation: SessionConversation,
@@ -146,6 +148,7 @@ pub(in crate::service) struct SessionRollbackState {
 impl SessionRecord {
     pub(in crate::service) fn rollback_state(&self) -> SessionRollbackState {
         SessionRollbackState {
+            lineage: self.lineage.clone(),
             settings: self.settings.clone(),
             status: self.status.clone(),
             conversation: self.conversation.clone(),
@@ -155,6 +158,7 @@ impl SessionRecord {
     }
 
     pub(in crate::service) fn restore_rollback_state(&mut self, state: SessionRollbackState) {
+        self.lineage = state.lineage;
         self.settings = state.settings;
         self.status = state.status;
         self.conversation = state.conversation;

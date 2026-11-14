@@ -55,6 +55,7 @@ impl TurnAdmissionContributor for Fixed {
 
 fn request() -> TurnAdmissionRequest {
     TurnAdmissionRequest {
+        workspace: None,
         session_id: crate::AgentSessionId::new(1),
         mode: crate::AgentSessionMode::Default,
     }

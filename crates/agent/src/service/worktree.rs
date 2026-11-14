@@ -35,7 +35,15 @@ impl AgentApplicationService {
         &self,
         owner: Option<AgentSessionId>,
     ) -> Result<AgentWorktree, AgentError> {
-        let source = self.working_directory().await?;
+        let source = match owner {
+            Some(id) => self
+                .driver
+                .workspace_roots_async(id)
+                .await?
+                .primary()
+                .clone(),
+            None => self.working_directory().await?,
+        };
         self.feature(
             WORKTREE_PLUGIN,
             |worktrees: Arc<WorktreeService>| async move {
@@ -67,7 +75,24 @@ impl AgentApplicationService {
 
     /// The worktrees of the repository the working directory is in.
     pub async fn worktree_list(&self) -> Result<Vec<AgentWorktree>, AgentError> {
-        let source = self.working_directory().await?;
+        self.worktree_list_in(self.working_directory().await?).await
+    }
+
+    pub async fn worktree_list_for_session(
+        &self,
+        session_id: AgentSessionId,
+    ) -> Result<Vec<AgentWorktree>, AgentError> {
+        self.worktree_list_in(
+            self.driver
+                .workspace_roots_async(session_id)
+                .await?
+                .primary()
+                .clone(),
+        )
+        .await
+    }
+
+    async fn worktree_list_in(&self, source: PathBuf) -> Result<Vec<AgentWorktree>, AgentError> {
         self.feature(
             WORKTREE_PLUGIN,
             |worktrees: Arc<WorktreeService>| async move {
@@ -100,7 +125,27 @@ impl AgentApplicationService {
     /// Removes the worktree at `path`, local changes and all; refused while
     /// the working directory is inside it.
     pub async fn worktree_remove(&self, path: PathBuf) -> Result<(), AgentError> {
-        let source = self.working_directory().await?;
+        self.worktree_remove_in(self.working_directory().await?, path)
+            .await
+    }
+
+    pub async fn worktree_remove_for_session(
+        &self,
+        session_id: AgentSessionId,
+        path: PathBuf,
+    ) -> Result<(), AgentError> {
+        self.worktree_remove_in(
+            self.driver
+                .workspace_roots_async(session_id)
+                .await?
+                .primary()
+                .clone(),
+            path,
+        )
+        .await
+    }
+
+    async fn worktree_remove_in(&self, source: PathBuf, path: PathBuf) -> Result<(), AgentError> {
         self.feature(
             WORKTREE_PLUGIN,
             |worktrees: Arc<WorktreeService>| async move {

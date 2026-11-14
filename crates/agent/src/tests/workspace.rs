@@ -142,6 +142,15 @@ async fn the_workspace_does_not_move_while_a_turn_runs() {
             session.id
         )
     );
+    let snapshot = service.snapshot(session.id).unwrap();
+    assert!(service
+        .set_session_workspace(crate::AgentSessionWorkspaceRequest {
+            session_id: session.id,
+            generation: snapshot.generation,
+            revision: snapshot.revision,
+            path: roots.primary().to_string_lossy().into_owned(),
+        })
+        .is_err());
     turn.await.unwrap().unwrap();
     service.move_workspace(&roots).unwrap();
     assert_eq!(

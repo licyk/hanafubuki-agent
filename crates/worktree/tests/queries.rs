@@ -191,3 +191,20 @@ fn outside_a_repository_a_query_is_an_error() {
         Err(WorktreeError::Git(_))
     ));
 }
+
+#[test]
+fn diff_reads_staged_unstaged_and_untracked_and_releases_processes() {
+    let repo = repository();
+    std::fs::write(repo.path().join("tracked.txt"), "base\n").unwrap();
+    setup_git(repo.path(), &["add", "tracked.txt"]);
+    commit(repo.path(), "add tracked");
+    std::fs::write(repo.path().join("tracked.txt"), "staged\n").unwrap();
+    setup_git(repo.path(), &["add", "tracked.txt"]);
+    std::fs::write(repo.path().join("tracked.txt"), "unstaged\n").unwrap();
+    std::fs::write(repo.path().join("new.txt"), "new\n").unwrap();
+    let diff = repo.queries.working_tree_diff(repo.path()).unwrap();
+    assert!(diff.contains("Staged changes") && diff.contains("+staged"));
+    assert!(diff.contains("Unstaged changes") && diff.contains("+unstaged"));
+    assert!(diff.contains("Untracked files\nnew.txt"));
+    repo.assert_no_process_left();
+}

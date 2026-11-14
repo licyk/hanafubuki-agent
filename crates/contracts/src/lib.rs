@@ -8,6 +8,9 @@
 //! this crate alone. Domain crates never depend on this crate or on kardia.
 //! See `site/content/docs/plugin-rules.en.mdx`.
 
+mod workspace;
+pub use workspace::TurnWorkspace;
+
 pub mod activity;
 pub mod admission;
 pub mod approval;

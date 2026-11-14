@@ -49,6 +49,7 @@ mod plugin_faults;
 mod plugin_host;
 mod quarantine;
 mod restart;
+mod session_workspaces;
 mod sessions;
 mod settings_catalog;
 mod settings_collections;

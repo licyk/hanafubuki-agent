@@ -14,7 +14,6 @@ use hanafubuki_agent_plugin_hooks::{HooksService, WorkingDirectory, HOOKS_PLUGIN
 use serde::Serialize;
 
 use super::AgentApplicationService;
-use crate::WorkspaceRootsPort;
 
 /// The hooks configured now, and what in their configuration could not be
 /// used.
@@ -114,8 +113,15 @@ pub(super) fn hook_sources(config: &AgentConfig) -> Result<HookSources, String> 
 }
 
 /// The first workspace root, as it is when a hook runs.
-pub(super) fn working_directory(workspace: Arc<dyn WorkspaceRootsPort>) -> WorkingDirectory {
-    Arc::new(move || workspace.roots().map(|roots| roots.primary().clone()))
+pub(super) fn working_directory(
+    driver: crate::session_driver::AgentSessionDriver,
+) -> WorkingDirectory {
+    Arc::new(move |session_id| {
+        driver
+            .workspace_roots(session_id)
+            .map(|roots| roots.primary().clone())
+            .map_err(|error| error.to_string())
+    })
 }
 
 fn agent_hooks(catalog: &HookCatalog) -> AgentHooks {

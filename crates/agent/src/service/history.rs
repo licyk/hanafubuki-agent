@@ -21,6 +21,13 @@ impl AgentApplicationService {
         self.core.events_since(session_id, after)
     }
 
+    pub fn session_summary(
+        &self,
+        session_id: AgentSessionId,
+    ) -> Result<hanafubuki_agent_kernel::AgentSessionSummary, AgentError> {
+        self.core.session_summary(session_id)
+    }
+
     pub fn list_sessions_page(
         &self,
         request: AgentSessionListRequest,

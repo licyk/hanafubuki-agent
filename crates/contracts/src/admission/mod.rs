@@ -15,11 +15,13 @@ pub use registry::TurnAdmissionRegistry;
 use crate::{AgentSessionId, AgentSessionMode, TurnExtensions};
 
 /// The turn being admitted.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TurnAdmissionRequest {
     pub session_id: AgentSessionId,
     /// The mode the turn runs in.
     pub mode: AgentSessionMode,
+    /// The execution roots captured by the admitting host.
+    pub workspace: Option<crate::TurnWorkspace>,
 }
 
 pub type TurnAdmissionFuture<'a> =

@@ -58,7 +58,7 @@ impl AgentApplicationService {
             .then(|| provisional_agent_title(&input.text))
             .flatten();
         let core = self.core.clone();
-        let files = self.files.clone();
+        let files = self.session_files(session_id).await?;
         let permission_mode = self.driver.turn_permission_mode(session_id, None).await?;
         let world_state = self
             .driver
@@ -194,11 +194,16 @@ impl AgentApplicationService {
             .collect_turn_extensions(session_id, session.mode)
             .await
             .map_err(|error| error.to_string())?;
-        let workdir = self
-            .executions
-            .working_directory()
-            .and_then(|directory| ResolvedPath::resolve(directory).ok())
-            .map(|directory| directory.native_text().to_string());
+        let workdir = Some(
+            self.driver
+                .workspace_roots_async(session_id)
+                .await
+                .map_err(|error| error.to_string())?
+                .primary()
+                .clone(),
+        )
+        .and_then(|directory| ResolvedPath::resolve(directory).ok())
+        .map(|directory| directory.native_text().to_string());
         let core = self.core.clone();
         hanafubuki_agent_foundation::blocking::run_blocking_operation(
             self.blocking.as_ref(),
@@ -227,7 +232,7 @@ impl AgentApplicationService {
     ) -> Result<AgentSteeringAccepted, String> {
         let core = self.core.clone();
         let steering_context = self.steering_context.clone();
-        let files = self.files.clone();
+        let files = self.session_files(session_id).await?;
         hanafubuki_agent_foundation::blocking::run_blocking_operation(
             self.blocking.as_ref(),
             "agent steering admission worker",

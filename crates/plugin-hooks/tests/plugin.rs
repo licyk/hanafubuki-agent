@@ -63,7 +63,7 @@ async fn registers_its_hooks_and_service_while_it_runs() {
         ExecutorManager::default(),
     ));
     let cwd = directory.path().to_path_buf();
-    let working_directory: WorkingDirectory = Arc::new(move || Ok(cwd.clone()));
+    let working_directory: WorkingDirectory = Arc::new(move |_| Ok(cwd.clone()));
     let fiber = root
         .plugin_def(&hooks_plugin(engine, working_directory), Value::Null)
         .unwrap();

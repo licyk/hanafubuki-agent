@@ -33,6 +33,16 @@ pub struct LocalSkillInstallRequest {
 }
 
 impl AgentApplicationService {
+    pub fn list_skills_for_session(
+        &self,
+        session_id: AgentSessionId,
+    ) -> Result<SkillCatalogSnapshot, String> {
+        self.enrich_skill_catalog_dependencies(
+            self.skills
+                .list_for_roots(self.session_workspace_roots(session_id)?.roots())?,
+        )
+    }
+
     pub fn list_skills(&self) -> Result<SkillCatalogSnapshot, String> {
         self.enrich_skill_catalog_dependencies(self.skills.list()?)
     }
@@ -68,7 +78,7 @@ impl AgentApplicationService {
             .snapshot(session_id)
             .map_err(|error| error.to_string())?;
         let available = self
-            .list_skills()?
+            .list_skills_for_session(session_id)?
             .entries
             .into_iter()
             .filter(|entry| {

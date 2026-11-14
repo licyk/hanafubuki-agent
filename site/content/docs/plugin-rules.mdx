@@ -405,3 +405,10 @@ kardia 的日志通过宿主安装在根上的 `LogExporter` 到达 `log` facade
 - 宿主保留它自己的、覆盖它的行的 golden（Hanafubuki 的在 `hanafubuki-agent-integration`），这里模型可见的变化也会改变它们。fixture 只在 Linux 上有效。
 
 命令与更新规则见[构建与测试](/docs/building-testing)。
+
+### 回合冻结的会话工作区 [#conversation-workspace]
+
+`TurnAdmissionRequest.workspace` 携带准入会话的根目录；已绑定会话的文件和执行工具通过
+`ToolInvocation.turn` 收到同一个不可变的 `TurnWorkspace`。工具在准备审批和实际执行时都使用
+会话服务视图，不得通过修改共享服务的根目录切换会话。执行视图保留同一套进程注册表与 receipt。
+宿主级的插件包配置与 guest 进程授权仍是宿主级状态；会话绑定不会重新配置运行中的 guest。
