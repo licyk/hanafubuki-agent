@@ -141,6 +141,15 @@ pub(crate) enum Command {
         #[arg(long)]
         online: bool,
     },
+    /// Updates this executable to the latest release, or says how to.
+    Update {
+        /// Only looks the latest release up and reports it.
+        #[arg(long, conflicts_with = "force")]
+        check: bool,
+        /// Reinstalls the latest release when it is this version.
+        #[arg(long)]
+        force: bool,
+    },
 }
 
 #[derive(Debug, Args)]

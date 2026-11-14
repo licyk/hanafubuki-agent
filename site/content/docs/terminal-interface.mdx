@@ -941,7 +941,7 @@ yank = []
 
 - 行较窄时缩短为 `Update available: 0.3.0`；连这也放不下时就不显示：状态栏和提示永远不会为它被截断，它也不会增加一行。快捷键说明（`?`）、历史搜索、外部编辑器的提示行以及命令和文件列表占用这一行时不显示它。
 - 之前某次启动发现的版本从第一帧起就显示；本次启动的检查发现的版本在回答到达时显示，输入框不会移动。旁支对话中也会显示。
-- 后面的命令取决于这个副本的安装方式：发布的二进制文件是 `hanafubuki-agent update`，用 `cargo install` 安装的是 `cargo install --locked hanafubuki-agent-cli`，其他情况是 `hanafubuki-agent update --check`，它会说明该怎么做。
+- 后面的命令取决于这个副本的安装方式：发布的二进制文件是 `hanafubuki-agent update`，用 `cargo install` 安装的是 `cargo install --locked hanafubuki-agent-cli`，其他情况是 `hanafubuki-agent update --check`，它会说明该怎么做（[update](/docs/cli-reference#update)）。
 - 只有稳定版本、且比当前版本新的才算。检查失败（没有网络、GitHub 的速率限制、读不懂的回答）时什么也不显示，下次启动时再检查。从源码检出构建的副本（`target/debug`、`target/release` 或 `cargo install --path`）从不检查。
 - 回答保存在 [`update-check.json`](/docs/data-directory#contents) 中。
 

@@ -25,16 +25,17 @@ hanafubuki-agent config set network.proxy system
 
 ### What it applies to [#proxy-scope]
 
-| What                                                  | Uses                                                                                                                                                 |
-| ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Web search and fetch (`web_search`, `fetch_web_page`) | `network.proxy`, each redirect and the Jina Reader fallback too; the page's name is still resolved here unless you opt out ([below](#web-fetch-dns)) |
-| MCP Streamable HTTP servers and OAuth                 | `network.proxy` (login and token refresh too); a change reconnects those servers                                                                     |
-| The commands and terminals the model runs             | The environment variables `network.proxy` decides (below)                                                                                            |
-| MCP stdio servers                                     | The same variables, over their own environment; a change restarts them                                                                               |
-| Plugin package and marketplace downloads (`git`)      | The same variables (a `http.proxy` in your git configuration wins over them)                                                                         |
-| Requests to model Providers and their model lists     | `network.proxy`; a change reaches each session's next turn (below)                                                                                   |
-| The models.dev download (`modelMetadata.modelsDev`)   | `network.proxy`                                                                                                                                      |
-| The update check at the terminal interface's launch   | `network.proxy`; what it sends is in [Terminal interface](/docs/terminal-interface#updates)                                                          |
+| What                                                  | Uses                                                                                                                                                           |
+| ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Web search and fetch (`web_search`, `fetch_web_page`) | `network.proxy`, each redirect and the Jina Reader fallback too; the page's name is still resolved here unless you opt out ([below](#web-fetch-dns))           |
+| MCP Streamable HTTP servers and OAuth                 | `network.proxy` (login and token refresh too); a change reconnects those servers                                                                               |
+| The commands and terminals the model runs             | The environment variables `network.proxy` decides (below)                                                                                                      |
+| MCP stdio servers                                     | The same variables, over their own environment; a change restarts them                                                                                         |
+| Plugin package and marketplace downloads (`git`)      | The same variables (a `http.proxy` in your git configuration wins over them)                                                                                   |
+| Requests to model Providers and their model lists     | `network.proxy`; a change reaches each session's next turn (below)                                                                                             |
+| The models.dev download (`modelMetadata.modelsDev`)   | `network.proxy`                                                                                                                                                |
+| The update check at the terminal interface's launch   | `network.proxy`; what it sends is in [Terminal interface](/docs/terminal-interface#updates)                                                                    |
+| `hanafubuki-agent update`                             | `network.proxy` for the lookup and the download (the system's when the configuration cannot be read); what it sends is in [update](/docs/cli-reference#update) |
 
 ### The commands' proxy variables [#child-processes]
 

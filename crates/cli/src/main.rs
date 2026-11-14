@@ -15,6 +15,7 @@ mod providers;
 mod roles;
 mod sessions;
 mod skills;
+mod update;
 mod update_check;
 
 use std::process::ExitCode;
@@ -47,6 +48,7 @@ fn main() -> ExitCode {
         Some(Command::Memory(command)) => memory::run(global, command).map(|()| SUCCESS),
         Some(Command::Roles(command)) => roles::run(global, command).map(|()| SUCCESS),
         Some(Command::Doctor { online }) => doctor::run(global, online),
+        Some(Command::Update { check, force }) => update::run(global, check, force),
     };
     match result {
         Ok(code) => ExitCode::from(code),

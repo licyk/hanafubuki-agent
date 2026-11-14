@@ -30,6 +30,26 @@ pub enum ManualReason {
     CargoOnWindows,
 }
 
+impl InstallKind {
+    /// For a cargo installation, the command that updates it: `cargo
+    /// install --locked hanafubuki-agent-cli`, with `--root <root>` off
+    /// cargo's default root, the program first. On Windows it is only
+    /// named ([`ManualReason::CargoOnWindows`]).
+    pub fn cargo_command(&self) -> Option<Vec<String>> {
+        let Self::Cargo { root, default_root } = self else {
+            return None;
+        };
+        let mut command: Vec<String> = ["cargo", "install", "--locked", CLI_CRATE]
+            .map(String::from)
+            .into();
+        if !default_root {
+            command.push("--root".to_string());
+            command.push(root.to_string_lossy().into_owned());
+        }
+        Some(command)
+    }
+}
+
 impl Installation {
     /// What can be done for this installation; for a released binary it
     /// probes the directory ([`Installation::writable`]).
@@ -51,16 +71,9 @@ pub(crate) fn action_for(
     match kind {
         InstallKind::Checkout => UpdateAction::Manual(ManualReason::Checkout),
         InstallKind::Cargo { .. } if windows => UpdateAction::Manual(ManualReason::CargoOnWindows),
-        InstallKind::Cargo { root, default_root } => {
-            let mut command: Vec<String> = ["cargo", "install", "--locked", CLI_CRATE]
-                .map(String::from)
-                .into();
-            if !default_root {
-                command.push("--root".to_string());
-                command.push(root.to_string_lossy().into_owned());
-            }
-            UpdateAction::Cargo { command }
-        }
+        InstallKind::Cargo { .. } => UpdateAction::Cargo {
+            command: kind.cargo_command().unwrap_or_default(),
+        },
         InstallKind::Release if target.is_none() => {
             UpdateAction::Manual(ManualReason::NoReleaseForPlatform)
         }

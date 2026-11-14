@@ -942,7 +942,7 @@ When the interface starts (`hanafubuki-agent` and `hanafubuki-agent resume`; nev
 
 - On a narrower row it is shortened to `Update available: 0.3.0`, and left out when even that does not fit beside the row's own content: the status line and the hints are never cut for it, and it adds no row. The shortcuts (`?`), the history search, the external editor's line and the command and file lists take the row without it.
 - A release an earlier launch found shows from the first frame; one this launch's check finds shows as soon as the answer comes, without moving the composer. It is shown in a side conversation too.
-- The command after it depends on how this copy was installed: `hanafubuki-agent update` for a released binary, `cargo install --locked hanafubuki-agent-cli` for one `cargo install` put in place, and `hanafubuki-agent update --check` otherwise, which says what to do.
+- The command after it depends on how this copy was installed: `hanafubuki-agent update` for a released binary, `cargo install --locked hanafubuki-agent-cli` for one `cargo install` put in place, and `hanafubuki-agent update --check` otherwise, which says what to do ([update](/docs/cli-reference#update)).
 - Only a stable release counts, and only one newer than this version. A check that fails (no network, GitHub's rate limit, an answer it does not read) shows nothing and is made again at the next launch. A build from a checkout (`target/debug`, `target/release`, or `cargo install --path`) never checks.
 - The answer is kept in [`update-check.json`](/docs/data-directory#contents).
 

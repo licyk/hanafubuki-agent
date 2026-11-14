@@ -6,16 +6,17 @@ icon: Variable
 
 ## Agent 读取的变量 [#read]
 
-| 变量                                                 | 作用                                                                                                                                                         |
-| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `HANAFUBUKI_AGENT_HOME`                              | 用一个目录同时代替配置目录和数据目录。相对路径相对于当前目录解析（不是 `-C`）；设为空值等于没有设置                                                          |
-| `XDG_CONFIG_HOME`、`XDG_DATA_HOME`                   | Linux 上配置目录和数据目录的基准位置，默认分别是 `~/.config` 和 `~/.local/share`                                                                             |
-| `VISUAL`、`EDITOR`                                   | `config edit` 打开的编辑器，以及 Ctrl-G 编辑草稿所用的编辑器（[终端界面](/docs/terminal-interface#composer)），先看 `VISUAL`。可以带参数，例如 `code --wait` |
-| `--api-key-env` 指定的变量                           | `providers add` 从中读取 API 令牌，只在添加时读取一次                                                                                                        |
-| `HANAFUBUKI_AGENT_NO_UPDATE_CHECK`                   | 任意非空值都会关闭终端界面的[更新检查](/docs/terminal-interface#updates)及其提示，无论 `tui.checkForUpdates` 如何设置                                        |
-| `PATH`（Windows 上还有 `PATHEXT`）                   | 查找 stdio MCP 服务器的程序                                                                                                                                  |
-| `HTTP_PROXY`、`HTTPS_PROXY`、`ALL_PROXY`、`NO_PROXY` | 访问模型 Provider 时使用的代理，见[网络与日志](/docs/network-logging#provider-proxy)                                                                         |
-| `HANAFUBUKI_AGENT_TEST_RELEASE_URL`                  | 只用于调试构建：代替 GitHub 的发布查询地址（`http` 只能指向回环地址）；没有它，调试构建不查询任何发布                                                        |
+| 变量                                                 | 作用                                                                                                                                                                   |
+| ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `HANAFUBUKI_AGENT_HOME`                              | 用一个目录同时代替配置目录和数据目录。相对路径相对于当前目录解析（不是 `-C`）；设为空值等于没有设置                                                                    |
+| `XDG_CONFIG_HOME`、`XDG_DATA_HOME`                   | Linux 上配置目录和数据目录的基准位置，默认分别是 `~/.config` 和 `~/.local/share`                                                                                       |
+| `VISUAL`、`EDITOR`                                   | `config edit` 打开的编辑器，以及 Ctrl-G 编辑草稿所用的编辑器（[终端界面](/docs/terminal-interface#composer)），先看 `VISUAL`。可以带参数，例如 `code --wait`           |
+| `--api-key-env` 指定的变量                           | `providers add` 从中读取 API 令牌，只在添加时读取一次                                                                                                                  |
+| `HANAFUBUKI_AGENT_NO_UPDATE_CHECK`                   | 任意非空值都会关闭终端界面的[更新检查](/docs/terminal-interface#updates)及其提示，无论 `tui.checkForUpdates` 如何设置                                                  |
+| `GITHUB_TOKEN`                                       | [`update`](/docs/cli-reference#update) 查询 GitHub 发布时以 `Authorization: Bearer` 发送它，可以提高 GitHub 的速率限制；下载归档时不发送，终端界面的更新检查也从不发送 |
+| `PATH`（Windows 上还有 `PATHEXT`）                   | 查找 stdio MCP 服务器的程序                                                                                                                                            |
+| `HTTP_PROXY`、`HTTPS_PROXY`、`ALL_PROXY`、`NO_PROXY` | 访问模型 Provider 时使用的代理，见[网络与日志](/docs/network-logging#provider-proxy)                                                                                   |
+| `HANAFUBUKI_AGENT_TEST_RELEASE_URL`                  | 只用于调试构建：代替 GitHub 的发布查询地址（`http` 只能指向回环地址）；没有它，调试构建不查询任何发布                                                                  |
 
 Agent 本身不读取 `RUST_LOG` 或 `NO_COLOR`：日志级别由 `logLevel` 和 `--log-level` 决定，见[网络与日志](/docs/network-logging#logging)。
 

@@ -2,7 +2,12 @@
 //! own (so synchronous tests, async tests and child processes can all use
 //! it): GitHub's latest-release answer at [`LATEST_PATH`], assets at
 //! `/download/<name>`, any path answered as a test routes it, and every
-//! request kept with its headers. An unrouted path answers 404.
+//! request kept with its headers. An unrouted path answers 404. With it,
+//! release archives ([`FakeArchive`]).
+
+mod archive;
+
+pub use archive::FakeArchive;
 
 use std::collections::BTreeMap;
 use std::net::SocketAddr;
@@ -282,10 +287,17 @@ impl FakeRelease {
 
     /// [`Self::client`], the lookup bounded by `timeout`.
     pub fn client_with_timeout(&self, token: Option<String>, timeout: Duration) -> ReleaseClient {
-        let endpoint = Url::parse(&self.api_url()).expect("the fake release's URL");
-        ReleaseClient::new(endpoint, true, &UpdateProxy::Disabled, token, timeout)
-            .expect("a client of the fake release")
+        client_of(&self.api_url(), token, timeout)
     }
+}
+
+/// A client of the fake release whose latest-release endpoint is `api_url`
+/// (from [`FakeRelease::api_url`], in another process), without a proxy:
+/// a release build of a test reaches it too.
+pub fn client_of(api_url: &str, token: Option<String>, timeout: Duration) -> ReleaseClient {
+    let endpoint = Url::parse(api_url).expect("the fake release's URL");
+    ReleaseClient::new(endpoint, true, &UpdateProxy::Disabled, token, timeout)
+        .expect("a client of the fake release")
 }
 
 impl Drop for FakeRelease {

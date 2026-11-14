@@ -174,9 +174,56 @@ See [Memory](/docs/memory).
 
 See [Troubleshooting](/docs/troubleshooting#doctor).
 
+## update [#update]
+
+| Command          | Does                                                                                                                                                                                       |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `update`         | Updates this executable to the latest release, the way it was installed (below): the steps on standard error, the result on standard output                                                |
+| `update --check` | Looks the latest release up and reports it: this version, the latest, the executable, how it was installed, the release notes and what `update` would do. It downloads and changes nothing |
+| `update --force` | Also reinstalls the latest release when it is this version. Nothing installs an older release: a build newer than the latest release is left as it is                                      |
+
+`--check` and `--force` together are a usage error (exit code 2).
+
+```text
+$ hanafubuki-agent update --check
+Current version  0.2.0
+Latest release   0.3.0
+Executable       /home/me/.local/bin/hanafubuki-agent
+Installed as     a released binary
+Release notes    https://github.com/licyk/hanafubuki-agent/releases/tag/v0.3.0
+
+An update is available: run `hanafubuki-agent update` to install 0.3.0.
+
+$ hanafubuki-agent update
+Updating hanafubuki-agent 0.2.0 → 0.3.0 at /home/me/.local/bin/hanafubuki-agent
+Downloading hanafubuki-agent-0.3.0-x86_64-unknown-linux-gnu.tar.gz: 18.9 MiB: done
+Verifying the SHA-256 digest: ok
+Checking the new executable: hanafubuki-agent 0.3.0
+Installing: done
+Updated to 0.3.0. The next start of hanafubuki-agent runs it; running ones keep 0.2.0 until they restart.
+```
+
+On a terminal the download line counts up in place; otherwise only its first state and its end are printed.
+
+What it does depends on how the executable was installed:
+
+- **A released binary**: the latest release's archive for this platform (`hanafubuki-agent-VERSION-TARGET.tar.gz`, `.zip` on Windows) is downloaded into a new hidden directory beside the executable (`.hanafubuki-agent-update-…`) and checked against the size and the SHA-256 digest GitHub gives for it; a release without a digest is refused. Only the executable is taken from it, by its exact path (`hanafubuki-agent-VERSION-TARGET/hanafubuki-agent`), and it must answer `--version` with the new version within 10 seconds, which also catches a build for another architecture or, on Linux, a glibc older than 2.35. Then a rename puts it in place: the installed executable is never written into, and nothing before this last step touches it. Through a symbolic link, the file it points to is replaced and the link stays. On Windows, where a running executable cannot be replaced, it is first renamed to `hanafubuki-agent.exe.NUMBER.outdated` beside it (and put back if the new one cannot be put in place); the next update removes that file once no process runs it.
+- **`cargo install`**: on Linux and macOS it runs `cargo install --locked hanafubuki-agent-cli` (with `--root` when the executable is not in cargo's default root) in a temporary directory, so no project's cargo settings apply, showing cargo's own output; then it asks the executable its version, so a cargo that installed it elsewhere (`CARGO_INSTALL_ROOT`, `install.root`) is noticed. On Windows it only names the command.
+- **A build from a checkout** (`target/debug`, `target/release`, `cargo install --path`), **a directory you cannot write**, or **a platform no release is built for**: it says what to do instead and exits with 1.
+
+A failure says what was kept, usually "nothing was changed": the executable is then as it was. A stopped or killed update leaves at most its hidden directory, which the next update removes.
+
+One update at a time: while one runs, another of the same executable is refused at once (its lock is the file `.hanafubuki-agent.update.lock` beside the executable, which stays). An update that finds the executable already at the latest version (another process updated it) downloads nothing.
+
+`update` does not start the Agent and does not take the data directory's lock, so it runs while Agents run. They keep their version until they restart, and the next start runs the new one; meanwhile their sandboxed commands start the executable at its path, now the new one ([Internals](/docs/internals#self-update)).
+
+What it sends: `GET https://api.github.com/repos/licyk/hanafubuki-agent/releases/latest` with `Accept: application/vnd.github+json`, `User-Agent: hanafubuki-agent/VERSION` and, when `GITHUB_TOKEN` is set, `Authorization: Bearer` with it ([Environment](/docs/environment#read)); then the archive, from the address GitHub's answer gives (GitHub redirects it to its download host), without the token. Every request and every redirect is HTTPS. Both go through `network.proxy`; a configuration that cannot be read only warns, and the system's proxy is used. A debug build looks up releases only at `HANAFUBUKI_AGENT_TEST_RELEASE_URL`.
+
+It exits with 0 when it updated or there was nothing to install, and with 1 when it could not ([Exit codes](/docs/exit-codes)). See also [Updating](/docs/installation#updating).
+
 ## Which commands start the Agent [#agent-start]
 
-`config`, `providers list`, `roles` and `doctor` without `--online` only read and write the configuration (`roles` and `doctor` also read the installed plugins, writing nothing there): they do not start the Agent, and work while another Agent process runs. The other commands start it, and need the data directory to themselves.
+`config`, `providers list`, `roles` and `doctor` without `--online` only read and write the configuration (`roles` and `doctor` also read the installed plugins, writing nothing there), and `update` reads it for its proxy: they do not start the Agent, and work while another Agent process runs. The other commands start it, and need the data directory to themselves.
 
 Every command reads the configuration first, then installs the crash handler and the log file, before it starts the Agent or changes anything. A management command that starts the Agent also connects the enabled MCP servers in the background, as every start does.
 

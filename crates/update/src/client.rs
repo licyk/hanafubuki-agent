@@ -11,9 +11,7 @@ use reqwest::header::{HeaderValue, ACCEPT, AUTHORIZATION};
 use reqwest::{ClientBuilder, StatusCode, Url};
 
 use crate::error::UpdateError;
-#[cfg(debug_assertions)]
-use crate::release::is_loopback_http;
-use crate::release::Release;
+use crate::release::{is_loopback_http, Release};
 
 /// GitHub's newest release that is neither a draft nor a pre-release. Only
 /// a release build has it: a debug build never contacts GitHub.
@@ -26,6 +24,8 @@ const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 /// The whole lookup, the answer's body included.
 const LOOKUP_TIMEOUT: Duration = Duration::from_secs(30);
 const MAX_BODY_BYTES: usize = 1024 * 1024;
+/// reqwest's own bound.
+const MAX_REDIRECTS: usize = 10;
 /// A debug build's only release API (D16); a release build has no such
 /// variable.
 #[cfg(debug_assertions)]
@@ -126,6 +126,7 @@ impl ReleaseClient {
         let builder = reqwest::Client::builder()
             .connect_timeout(CONNECT_TIMEOUT)
             .pool_max_idle_per_host(0)
+            .redirect(redirect_policy(loopback_http))
             .user_agent(USER_AGENT);
         let http = proxy
             .apply(builder)?
@@ -190,6 +191,27 @@ impl ReleaseClient {
             timed_out,
         }
     }
+
+    /// The HTTP client, for the archive's download: it carries no token
+    /// (only the lookup's request adds it).
+    pub(crate) fn http(&self) -> &reqwest::Client {
+        &self.http
+    }
+}
+
+/// Every hop of a redirect is held to the asset URL's rule: `https`, or
+/// `http` to a loopback address when the test release URL allows it.
+fn redirect_policy(loopback_http: bool) -> reqwest::redirect::Policy {
+    reqwest::redirect::Policy::custom(move |attempt| {
+        let url = attempt.url();
+        if attempt.previous().len() >= MAX_REDIRECTS {
+            attempt.error("too many redirects")
+        } else if url.scheme() == "https" || loopback_http && is_loopback_http(url) {
+            attempt.follow()
+        } else {
+            attempt.error("a redirect to a URL that is not https")
+        }
+    })
 }
 
 fn bearer(token: &str) -> Result<HeaderValue, UpdateError> {

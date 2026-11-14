@@ -174,9 +174,56 @@ hanafubuki-agent exec [选项] [提示词|-]
 
 见[故障排查](/docs/troubleshooting#doctor)。
 
+## update [#update]
+
+| 命令             | 作用                                                                                                                         |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `update`         | 按这个可执行文件的安装方式（见下文）把它更新到最新发布版本：步骤输出到标准错误，结果输出到标准输出                           |
+| `update --check` | 只查询并报告最新发布版本：当前版本、最新版本、可执行文件、安装方式、发布说明，以及 `update` 会做什么。不下载、不改动任何东西 |
+| `update --force` | 最新发布版本与当前版本相同时也重新安装。任何情况下都不会安装更旧的版本：比最新发布版本还新的构建保持不变                     |
+
+同时使用 `--check` 和 `--force` 是用法错误（退出码 2）。
+
+```text
+$ hanafubuki-agent update --check
+Current version  0.2.0
+Latest release   0.3.0
+Executable       /home/me/.local/bin/hanafubuki-agent
+Installed as     a released binary
+Release notes    https://github.com/licyk/hanafubuki-agent/releases/tag/v0.3.0
+
+An update is available: run `hanafubuki-agent update` to install 0.3.0.
+
+$ hanafubuki-agent update
+Updating hanafubuki-agent 0.2.0 → 0.3.0 at /home/me/.local/bin/hanafubuki-agent
+Downloading hanafubuki-agent-0.3.0-x86_64-unknown-linux-gnu.tar.gz: 18.9 MiB: done
+Verifying the SHA-256 digest: ok
+Checking the new executable: hanafubuki-agent 0.3.0
+Installing: done
+Updated to 0.3.0. The next start of hanafubuki-agent runs it; running ones keep 0.2.0 until they restart.
+```
+
+在终端中，下载进度在同一行原地刷新；否则只打印开始和结束两行。
+
+具体做法取决于可执行文件的安装方式：
+
+- **发布的二进制**：把最新发布版本中本平台的归档（`hanafubuki-agent-VERSION-TARGET.tar.gz`，Windows 上是 `.zip`）下载到可执行文件旁边新建的隐藏目录（`.hanafubuki-agent-update-…`）中，并按 GitHub 给出的大小和 SHA-256 摘要校验；没有摘要的发布会被拒绝。只按确切路径（`hanafubuki-agent-VERSION-TARGET/hanafubuki-agent`）从中取出可执行文件，它必须在 10 秒内用新版本号回答 `--version`，这同时能发现其他架构的构建，以及 Linux 上低于 2.35 的 glibc。然后用一次重命名把它放到位：从不写入已安装的可执行文件，这最后一步之前的任何步骤都不会碰它。通过符号链接运行时，替换的是链接指向的文件，链接保持不变。在 Windows 上，正在运行的可执行文件不能被替换，所以先把它重命名为旁边的 `hanafubuki-agent.exe.NUMBER.outdated`（新文件放不到位时会改回来）；没有进程再运行它之后，下一次更新会删除这个文件。
+- **`cargo install`**：在 Linux 和 macOS 上运行 `cargo install --locked hanafubuki-agent-cli`（可执行文件不在 cargo 的默认安装根目录时带上 `--root`），在一个临时目录中运行，这样任何项目的 cargo 设置都不会生效，并显示 cargo 自己的输出；然后询问可执行文件的版本，从而发现 cargo 把它装到了别处（`CARGO_INSTALL_ROOT`、`install.root`）的情况。在 Windows 上只给出这条命令。
+- **从检出的源码构建**（`target/debug`、`target/release`、`cargo install --path`）、**没有写权限的目录**，或**没有发布构建的平台**：说明应该怎么做，并以退出码 1 退出。
+
+失败时会说明保留了什么，通常是 “nothing was changed”：此时可执行文件保持原样。被中断或杀掉的更新最多留下它的隐藏目录，下一次更新会删除它。
+
+同一时间只有一个更新：一个更新运行时，同一个可执行文件的另一个更新会被立即拒绝（锁是可执行文件旁边的 `.hanafubuki-agent.update.lock` 文件，更新后保留）。发现可执行文件已经是最新版本（另一个进程更新了它）的更新不会下载任何东西。
+
+`update` 不启动 Agent，也不获取数据目录的锁，所以可以在 Agent 运行时使用。正在运行的 Agent 保持原来的版本直到重启，下次启动运行新版本；在此期间，它们的沙箱命令会启动该路径上的可执行文件，也就是新版本（[内部实现](/docs/internals#self-update)）。
+
+发送的内容：`GET https://api.github.com/repos/licyk/hanafubuki-agent/releases/latest`，带 `Accept: application/vnd.github+json`、`User-Agent: hanafubuki-agent/VERSION`，设置了 `GITHUB_TOKEN` 时还带上 `Authorization: Bearer` 和它的值（[环境变量](/docs/environment#read)）；然后从 GitHub 回答中给出的地址下载归档（GitHub 会把它重定向到下载主机），不带令牌。每个请求和每次重定向都是 HTTPS。两者都经过 `network.proxy`；配置无法读取时只给出警告，并使用系统代理。调试构建只会在 `HANAFUBUKI_AGENT_TEST_RELEASE_URL` 查询发布。
+
+更新成功或没有可安装的版本时以 0 退出，无法更新时以 1 退出（[退出码](/docs/exit-codes)）。另见[更新](/docs/installation#updating)。
+
 ## 哪些命令会启动 Agent [#agent-start]
 
-`config`、`providers list`、`roles` 和不带 `--online` 的 `doctor` 只读写配置（`roles` 和 `doctor` 还会读取已安装插件，但不在那里写入任何东西），不启动 Agent，可以在另一个 Agent 进程运行时使用。其他命令会启动 Agent，需要独占数据目录。
+`config`、`providers list`、`roles` 和不带 `--online` 的 `doctor` 只读写配置（`roles` 和 `doctor` 还会读取已安装插件，但不在那里写入任何东西），`update` 只读取其中的代理；它们都不启动 Agent，可以在另一个 Agent 进程运行时使用。其他命令会启动 Agent，需要独占数据目录。
 
 每个命令都会先读取配置，再安装崩溃处理和日志文件，然后才启动 Agent 或修改任何内容。会启动 Agent 的管理命令也会像每次启动一样在后台连接启用的 MCP 服务器。
 

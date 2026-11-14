@@ -28,9 +28,21 @@ serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 sha2.workspace = true
 tempfile.workspace = true
-tokio = { workspace = true, features = ["rt", "time"] }
+tokio = { workspace = true, features = ["fs", "io-util", "process", "rt", "time"] }
+# The release archive's gzip on Unix, and the backend of zip's Deflate on
+# Windows (zip takes flate2 without one).
+flate2 = "1"
+
+[target.'cfg(unix)'.dependencies]
+tar = { version = "0.4", default-features = false }
+
+[target.'cfg(windows)'.dependencies]
+zip = { version = "9", default-features = false, features = ["deflate-flate2"] }
 
 [dev-dependencies]
+# Both archive formats, so both readers are tested on every system.
+tar = { version = "0.4", default-features = false }
+zip = { version = "9", default-features = false, features = ["deflate-flate2"] }
 # What `test-support` enables, for the unit tests that use it without the feature.
 parking_lot.workspace = true
 tokio = { workspace = true, features = [
@@ -43,4 +55,15 @@ tokio = { workspace = true, features = [
 
 [[test]]
 name = "lookup"
+required-features = ["test-support"]
+
+[[test]]
+name = "engine"
+required-features = ["test-support"]
+
+# Its own `main` answers `--version` and updates itself, so a copy of it
+# is replaced while it runs.
+[[test]]
+name = "running_copy"
+harness = false
 required-features = ["test-support"]

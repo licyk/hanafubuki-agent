@@ -35,6 +35,7 @@ hanafubuki-agent config set network.proxy system
 | 模型 Provider 的请求及其模型列表                 | `network.proxy`；修改后各会话从下一轮起使用，见下文                                                                      |
 | models.dev 的下载（`modelMetadata.modelsDev`）   | `network.proxy`                                                                                                          |
 | 终端界面启动时的更新检查                         | `network.proxy`；发送的内容见[终端界面](/docs/terminal-interface#updates)                                                |
+| `hanafubuki-agent update`                        | 查询和下载都使用 `network.proxy`（配置无法读取时使用系统代理）；发送的内容见 [update](/docs/cli-reference#update)        |
 
 ### 命令的代理变量 [#child-processes]
 

@@ -206,7 +206,7 @@ changed (none expected), what Hanafubuki must change at its next pin
         (success).
       - Goldens: none. Module size: no exception. Hanafubuki: nothing (a
         crate it does not use; the facade is unchanged).
-- [ ] U1 (lane A, after U0): the engine (lock beside the executable, the
+- [x] U1 (lane A, after U0): the engine (lock beside the executable, the
       installed file's version asked first, staging beside it, streamed
       download with digest and size, one entry from the `.tar.gz`/`.zip`,
       the staged `--version`, Unix rename over the real path, Windows
@@ -214,6 +214,163 @@ changed (none expected), what Hanafubuki must change at its next pin
       and `hanafubuki-agent update [--check] [--force]`; a running copy
       replaces itself on all three systems (a small test executable: the
       debug CLI is about 1.1 GB).
+      Done (2026-11-14):
+      - The engine (`crates/update/src`, new modules): `updater.rs`
+        (`install`, `install_blocking`, `Progress`, `Installed`; §3.7's
+        order: compare, this target's archive and its digest, the lock,
+        the sweep, the installed file's `--version` unless `--force`,
+        staging beside the executable, download, extract, mode, check,
+        replace), `download.rs` (streamed, SHA-256 and count as it comes,
+        a byte past the listed size stops it, 60 s without a byte fails,
+        progress at most every 100 ms), `archive.rs` (one entry by its exact
+        path, a regular file of at most 16 times the archive, written to a
+        name the updater chooses; `.tar.gz` on Unix, `.zip` on Windows, a
+        zip name with `\` read as `/`), `verify.rs` (`--version`: stdin
+        closed, both outputs read bounded, 10 s then killed and waited for,
+        `CREATE_NO_WINDOW`, an `ETXTBSY` spawn tried again), `lock.rs`
+        (`.<name>.update.lock`, `File::try_lock`, unlocked on drop, kept),
+        `cleanup.rs` (stale staging directories, directories only;
+        `<name>.<digits>.outdated` of this executable; `sweep_outdated`,
+        Windows only), `cargo.rs` (`run_cargo`), `replace/{mod,unix,windows}.rs`
+        (Unix one rename over the resolved path; Windows move aside, rename
+        in, put back, each rename retried 10 times 200 ms apart on errors 5
+        and 32; `windows.rs` is compiled everywhere for its tests).
+        `version.rs` gains `Comparison::{Available, UpToDate, Ahead}` and
+        `compare`; `error.rs` the engine's 25 variants with §4's sentences
+        (an `fmt_install` beside `fmt`, under the 200-line function limit);
+        `action.rs` `InstallKind::cargo_command()` (also for Windows's named
+        command); `client.rs` a redirect policy: every hop `https`, or
+        loopback `http` through the test URL, at most ten (reqwest's default
+        followed `https` to `http`); `test_support/` (was `test_support.rs`)
+        gains `FakeArchive` (release layout, files, directories, symlinks,
+        `..` and absolute names; `.tar.gz`/`.zip` for this platform, both in
+        the crate's tests) and `client_of(api_url, …)`.
+      - Decisions: `default_root` now also honours `CARGO_INSTALL_ROOT`
+        (cargo's own order), and after cargo succeeds the executable is
+        asked its version: one still at the old version (cargo installed
+        elsewhere, e.g. `install.root`) is `CargoElsewhere`, so "Updated
+        to" is never printed for a copy cargo did not touch. `--root` is not
+        always passed (D7's wording, read by U2's notice, kept). An
+        installed executable that reports the release's version or a newer
+        one is left alone (`already`, with the version it reports): D6's
+        equality would have put an older release over a newer build. `--force`
+        with a cargo installation adds `--force` to cargo. The cache is not
+        written by `update`: after an update the cache's version is not
+        newer than the binary, so nothing is shown (§3.4).
+      - The command (`crates/cli/src/update/{mod,install}.rs`,
+        `Command::Update { check, force }`, `--check` conflicts with
+        `--force`): the installation resolved first; `Standalone::open`
+        only for `network.proxy` (a configuration that does not read warns
+        and uses the system's), no Agent started, no data-directory lock;
+        `GITHUB_TOKEN` for the lookup only (non-Unicode is
+        `InvalidToken`). Output as §3.8 (progress on stderr, rewritten in
+        place on a terminal, first and last download line otherwise; a
+        step that fails ends its line with `failed`); the manual cases print
+        their `--check` sentence on stdout and exit 1; `--force` against an
+        older release is the `Older` error. Deviations: an equal version
+        with `--force` prints `Reinstalling hanafubuki-agent X at …`; the
+        Windows backup line says "the next update removes it" (U3 adds "or
+        start" with its launch sweep).
+      - Dependencies: `tar` 0.4.46 (default features off, Unix), `zip`
+        9.5.1 (default features off, `deflate-flate2`, Windows), `flate2` 1
+        (already locked); both archive crates also dev-dependencies, so both
+        readers are tested everywhere. New in `Cargo.lock`: `tar`,
+        `filetime` (MIT/Apache-2.0), `zip` (MIT), `typed-path` (MIT OR
+        Apache-2.0), `constant_time_eq` (CC0-1.0 OR MIT-0 OR Apache-2.0),
+        `zeroize_derive` (Apache-2.0 OR MIT): each has a licence `about.toml`
+        accepts. The `licenses` job itself was not run: `cargo-about` is not
+        installed here and does not install offline (a dependency is not
+        cached), and no branch run of `release.yml` was allowed; checked
+        from `cargo metadata`'s `license` fields instead.
+      - Tests: unit tests per module (`archive`, `cargo`, `cleanup`,
+        `download`, `lock`, `replace/windows`, `updater`, `verify`, the CLI's
+        `update`); `tests/engine/main.rs` over the fake release (the same
+        version without `--force`, an older release refused even with it,
+        metadata errors before any download, a held lock, a stale staging
+        directory, corrupt/short/long/cut downloads, archives without the
+        entry as a file or over the bound, the token on the API only; Unix:
+        a newer release by rename with a new inode and the mode kept,
+        `--force`, an executable already updated, a failing or wrong-version
+        new executable, a symlinked install, an unwritable directory);
+        `tests/running_copy/main.rs` (`harness = false`): the test
+        executable copied to `工具 bin/custom name[.exe]`, archived with
+        `tar czf` / `7z a -tzip` when present (else `FakeArchive`), replaced
+        with `force` while it and a waiting copy run (Unix: new inode;
+        Windows: the `.outdated` backup holds the original bytes), the next
+        `--version` answers, a held lock / a wrong version / a silent
+        executable (10 s) each leave the file (identity, bytes, no staging
+        directory, no new backup), a stale staging directory and the first
+        backup removed by the next update, the sweep removing the last; on
+        Windows also `cargo install --path` of a dependency-free probe crate
+        (offline, temporary root, home and target) over a running copy,
+        outcome printed. `crates/cli/tests/update.rs` through the
+        hard-linked binary: `--help` and `--check --force` without side
+        effects, a debug build without the test URL, `--check` against
+        99.0.0 (the whole report), nothing to install, a checkout build, no
+        digest; Unix: the whole update with its exact stderr/stdout and the
+        token only on the API, a digest mismatch (`failed` then the error),
+        a cargo installation through a fake `cargo` on `PATH`. Every test
+        passed at once; by mutation each failed as it should: the redirect
+        policy following everything, the entry bound removed, the
+        installed-version check skipped, the lock ignored, the Unix replace
+        written in place (the running copy failed with ETXTBSY). Removing
+        the staging filter's `is_dir` survived (a file cannot be removed by
+        `remove_dir_all` anyway). The running-copy test takes about 20 s
+        here (a 77 MB test executable). On Windows it tolerates a staging
+        directory left after a failed check (an image released late; the
+        next update's sweep, which it checks, removes it) and sweeps the
+        last backup for up to 10 s. The CLI suite is `cfg(debug_assertions)`
+        (a release build would ask GitHub). The unwritable-directory tests
+        (`lock`, `engine`) and the whole engine suite also ran as `nobody`:
+        passed. The Windows cargo probe ran here once on Linux (enabled for
+        the run, then back to Windows only): cargo replaced the running
+        probe, which went on.
+      - Hand rehearsal (§9, Linux, a debug CLI hard-linked out of `target/`,
+        a script as 9.9.9, `python3 -m http.server`): `update --check`
+        reported 9.9.9; no digest, a wrong digest and a stopped server each
+        failed with §4's sentence and left `--version`; `update` installed
+        it and `--version` printed `hanafubuki-agent 9.9.9`.
+      - Docs (both languages): `cli-reference#update` (new) and
+        `#agent-start`; `installation#updating` ("Upgrading" renamed, with
+        an id; `cargo install --locked`); `exit-codes`; `environment#read`
+        (`GITHUB_TOKEN`); `network-logging#proxy-scope` (`update`'s row);
+        `internals#self-update` (the mechanism, and the sandbox helper's
+        flags only added from now on); `terminal-interface#updates` links
+        `cli-reference#update`. Each changed page compiled with
+        `@mdx-js/mdx` and remark-gfm.
+      - For U3: `hanafubuki_agent_update::{install, install_blocking}(client,
+        installation, release, force, &mut |Progress| …) -> Result<Installed
+        { version, backup, already }, UpdateError>`, `run_cargo(installation,
+        command, force) -> Result<Version, UpdateError>`,
+        `sweep_outdated(installation)`. In the CLI, "Update now" calls
+        `crate::update::update(&installation, &crate::update::client(&proxy)?,
+        false) -> Result<u8, Failure>` (proxy from
+        `crate::update::proxy(&standalone)`), after the terminal is
+        restored: it looks the release up again, prints §3.8's lines
+        (stderr, the result on stdout) and returns the exit code (0 updated
+        or nothing to do, 1 a manual case; `Err` a failure, which `main`
+        prints as `error: …` with 1). It needs the installation resolved at
+        launch (U2's `Installation::current()` there). Add "or start" to the
+        Windows backup line once the launch sweep exists.
+      - Validation (Linux): `cargo fmt --all --check`; `RUSTFLAGS="-D
+        warnings" cargo check --workspace --all-targets --all-features`;
+        `cargo clippy --workspace --all-targets --all-features -- -D
+        warnings`; `cargo clippy -p hanafubuki-agent-update --target
+        x86_64-pc-windows-gnu --all-targets --all-features -- -D warnings`
+        and the CLI's for that target (compiles only; the CLI's shows only
+        `hanafubuki-agent-execution`'s dead-code warning, not this change's);
+        `cargo xtask check`; `cargo test --workspace --all-features
+        --no-fail-fast`; `cargo check -p hanafubuki-agent-update -p
+        hanafubuki-agent-cli --release`; `cargo test -p
+        hanafubuki-agent-update --release --lib`; `bun install
+        --frozen-lockfile`, `bun run format:check:site`, `bun run
+        site:check`, `bun run site:test`. Skipped: `site:build` (the Site
+        workflow), the `licenses` job (above), macOS (`aws-lc-sys` does not
+        cross-compile here). Windows and macOS: CI only.
+      - Goldens: none. Module size: no exception (`error.rs` 402 lines;
+        `fmt_install`, the largest new function, 158 code lines).
+        Hanafubuki: nothing (the facade and its dependencies are
+        unchanged).
 - [x] U2 (lane B, now; its CLI part after U0): `tui.checkForUpdates`
       (default on) and `HANAFUBUKI_AGENT_NO_UPDATE_CHECK`; `update-check.json`
       in the data directory; the check on a thread at the interface's

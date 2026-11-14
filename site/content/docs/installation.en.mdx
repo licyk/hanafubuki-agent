@@ -1,6 +1,6 @@
 ---
 title: Installation
-description: Install with cargo, download a released binary, or build from source; upgrading and uninstalling.
+description: Install with cargo, download a released binary, or build from source; updating and uninstalling.
 icon: Download
 ---
 
@@ -15,7 +15,7 @@ icon: Download
 ## With cargo
 
 ```sh
-cargo install hanafubuki-agent-cli
+cargo install --locked hanafubuki-agent-cli
 ```
 
 The crate's command is `hanafubuki-agent`, installed in `~/.cargo/bin` (`%USERPROFILE%\.cargo\bin` on Windows). Check that it is on your `PATH`:
@@ -134,12 +134,21 @@ The repository's `rust-toolchain.toml` pins the toolchain (1.99.0), and rustup i
   </Tab>
 </Tabs>
 
-## Upgrading
+## Updating [#updating]
 
-- **cargo**: run `cargo install hanafubuki-agent-cli` again; it replaces an older version.
-- **A released binary**: download the new version and replace the executable.
+`hanafubuki-agent update` updates the executable it runs from, the way it was installed; `hanafubuki-agent update --check` only says whether a newer release exists and what `update` would do ([update](/docs/cli-reference#update)).
 
-Quit any running Agent first. The new version reads your configuration and history as they are: it tolerates fields it does not know, and never deletes data it cannot use.
+| Installed as      | `hanafubuki-agent update`                                                                                                                                                                                                |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| A released binary | Downloads the latest release's archive for this platform, checks its size and SHA-256 digest, checks that its executable runs here, then puts it in place                                                                |
+| `cargo install`   | On Linux and macOS, runs `cargo install --locked hanafubuki-agent-cli` for you. On Windows, run it yourself from another terminal once no Agent runs from that executable: a running executable cannot be replaced there |
+| Built from source | Nothing: update the checkout and build it again                                                                                                                                                                          |
+
+By hand, a released binary is updated as it was installed: download the new archive, check its checksum and replace the executable. On Windows, quit every Agent that runs from it first, or rename the running executable aside before you put the new one in its place.
+
+Running Agents keep their version until they restart; the next start runs the new one. Restart them soon: their sandboxed commands already start the new executable. The new version reads your configuration and history as they are: it tolerates fields it does not know, and never deletes data it cannot use.
+
+On Windows `update` renames the running executable to `hanafubuki-agent.exe.NUMBER.outdated` beside the new one, and the next update removes it once nothing runs it. An update interrupted between its two renames (they are milliseconds apart) leaves no `hanafubuki-agent.exe`: rename the newest `.outdated` file back to `hanafubuki-agent.exe`.
 
 ## Uninstalling
 

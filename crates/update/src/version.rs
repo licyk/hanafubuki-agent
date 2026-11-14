@@ -17,6 +17,28 @@ pub fn is_newer(latest: &Version, current: &Version) -> bool {
     latest.pre.is_empty() && latest.cmp_precedence(current) == Ordering::Greater
 }
 
+/// The latest release against this build.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Comparison {
+    /// The release is newer: it can be installed.
+    Available,
+    /// The same version by precedence: `--force` reinstalls it.
+    UpToDate,
+    /// This build is newer than the latest release: nothing is installed.
+    Ahead,
+}
+
+/// How `latest`, a stable release, compares with `current` (D8).
+pub fn compare(latest: &Version, current: &Version) -> Comparison {
+    if is_newer(latest, current) {
+        Comparison::Available
+    } else if latest.cmp_precedence(current) == Ordering::Equal {
+        Comparison::UpToDate
+    } else {
+        Comparison::Ahead
+    }
+}
+
 /// Why a release tag is not one this version understands.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum TagProblem {

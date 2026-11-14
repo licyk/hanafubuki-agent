@@ -15,7 +15,7 @@ icon: Download
 ## 用 cargo 安装
 
 ```sh
-cargo install hanafubuki-agent-cli
+cargo install --locked hanafubuki-agent-cli
 ```
 
 这个 crate 提供的命令叫 `hanafubuki-agent`，安装在 `~/.cargo/bin`（Windows 上是 `%USERPROFILE%\.cargo\bin`）。确认它在 `PATH` 中：
@@ -134,12 +134,21 @@ cargo install --path crates/cli
   </Tab>
 </Tabs>
 
-## 升级
+## 更新 [#updating]
 
-- **cargo**：再次运行 `cargo install hanafubuki-agent-cli`，有新版本时会替换旧版本。
-- **发布的二进制**：下载新版本，覆盖原来的可执行文件。
+`hanafubuki-agent update` 按安装方式更新运行它的可执行文件；`hanafubuki-agent update --check` 只说明是否有更新的发布版本，以及 `update` 会做什么（[update](/docs/cli-reference#update)）。
 
-升级前请先退出正在运行的 Agent。配置文件和历史记录会被新版本直接读取：新版本能容忍它不认识的字段，也不会删除它无法使用的数据。
+| 安装方式        | `hanafubuki-agent update`                                                                                                                                                                  |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 发布的二进制    | 下载最新发布版本中本平台的归档，校验大小和 SHA-256 摘要，确认其中的可执行文件能在本机运行，然后把它放到位                                                                                  |
+| `cargo install` | 在 Linux 和 macOS 上替你运行 `cargo install --locked hanafubuki-agent-cli`。在 Windows 上，请在没有 Agent 从该可执行文件运行时，从另一个终端自己运行它：那里正在运行的可执行文件不能被替换 |
+| 从源码构建      | 不做任何事：更新检出的源码并重新构建                                                                                                                                                       |
+
+手动更新发布的二进制和安装时一样：下载新的归档，核对校验和，替换可执行文件。在 Windows 上，请先退出所有从它运行的 Agent，或者先把正在运行的可执行文件重命名到一旁，再把新文件放到原来的位置。
+
+正在运行的 Agent 保持原来的版本直到重启，下次启动运行新版本。请尽快重启它们：它们的沙箱命令已经会启动新的可执行文件。配置文件和历史记录会被新版本直接读取：新版本能容忍它不认识的字段，也不会删除它无法使用的数据。
+
+在 Windows 上，`update` 会把正在运行的可执行文件重命名为新文件旁边的 `hanafubuki-agent.exe.NUMBER.outdated`，没有进程再运行它之后，下一次更新会删除它。如果更新恰好在两次重命名之间被中断（两者相隔只有几毫秒），就不会有 `hanafubuki-agent.exe`：把最新的 `.outdated` 文件改回 `hanafubuki-agent.exe` 即可。
 
 ## 卸载
 

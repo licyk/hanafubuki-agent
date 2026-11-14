@@ -79,6 +79,27 @@ fn cargo_on_windows_and_a_checkout_are_manual() {
 }
 
 #[test]
+fn only_a_cargo_installation_has_a_cargo_command_named_on_every_system() {
+    assert_eq!(
+        cargo("/opt/tools", false).cargo_command().unwrap(),
+        [
+            "cargo",
+            "install",
+            "--locked",
+            "hanafubuki-agent-cli",
+            "--root",
+            "/opt/tools"
+        ]
+    );
+    assert_eq!(
+        cargo("/home/me/.cargo", true).cargo_command().unwrap(),
+        ["cargo", "install", "--locked", "hanafubuki-agent-cli"]
+    );
+    assert_eq!(InstallKind::Release.cargo_command(), None);
+    assert_eq!(InstallKind::Checkout.cargo_command(), None);
+}
+
+#[test]
 fn an_installation_on_this_machine_has_the_action_of_its_kind() {
     let temp = tempfile::tempdir().unwrap();
     let executable = temp

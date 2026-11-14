@@ -35,8 +35,8 @@ pub enum InstallKind {
     /// A released binary (or anything not recognised as the others).
     Release,
     /// `cargo install` from a registry, into `root` (`<root>/bin` holds the
-    /// executable); `default_root` when that is `$CARGO_HOME`, else
-    /// `~/.cargo`.
+    /// executable); `default_root` when a plain `cargo install` installs
+    /// there (`$CARGO_INSTALL_ROOT`, else `$CARGO_HOME`, else `~/.cargo`).
     Cargo { root: PathBuf, default_root: bool },
     /// A build in a cargo profile directory, or a `cargo install --path` or
     /// `--git`.
@@ -90,11 +90,14 @@ fn executable_error(error: PathError) -> UpdateError {
     }
 }
 
-/// `$CARGO_HOME` when set, else `~/.cargo`, resolved; `None` when it does
-/// not exist.
+/// Where a plain `cargo install` installs: `$CARGO_INSTALL_ROOT` when set,
+/// else `$CARGO_HOME`, else `~/.cargo`, resolved; `None` when it does not
+/// exist. (cargo's `install.root` setting is not read: when it moves the
+/// root, the update notices that the executable did not change.)
 fn default_cargo_root() -> Option<ResolvedPath> {
-    let root = std::env::var_os("CARGO_HOME")
-        .filter(|home| !home.is_empty())
+    let variable = |name| std::env::var_os(name).filter(|value| !value.is_empty());
+    let root = variable("CARGO_INSTALL_ROOT")
+        .or_else(|| variable("CARGO_HOME"))
         .map(PathBuf::from)
         .or_else(|| std::env::home_dir().map(|home| home.join(".cargo")))?;
     ResolvedPath::resolve(root).ok()
