@@ -18,7 +18,7 @@ use windows_sys::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken}
 use super::super::process::wide;
 use super::super::token::{last_error, LocalSid};
 
-pub(super) fn current_user_sid() -> Result<String, String> {
+pub(crate) fn current_user_sid() -> Result<String, String> {
     let mut token = null_mut();
     // SAFETY: opens this process's token, owned below.
     if unsafe { OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token) } == 0 {
@@ -235,6 +235,47 @@ pub(super) fn enable_standard_account(account: &str) -> Result<(), String> {
         return Err(format!(
             "hide sandbox sign-in account: Windows error {result}"
         ));
+    }
+    Ok(())
+}
+
+/// Ordinary access uses the group, while the restricted check uses root SIDs.
+pub(super) fn provision_group(group: &str, accounts: &[&str]) -> Result<(), String> {
+    use windows_sys::Win32::NetworkManagement::NetManagement::{
+        NetLocalGroupAdd, NetLocalGroupAddMembers, LOCALGROUP_INFO_0, LOCALGROUP_MEMBERS_INFO_0,
+    };
+    let name = wide(group);
+    let info = LOCALGROUP_INFO_0 {
+        lgrpi0_name: name.as_ptr().cast_mut(),
+    };
+    let result = unsafe {
+        NetLocalGroupAdd(
+            null(),
+            0,
+            (&info as *const LOCALGROUP_INFO_0).cast(),
+            null_mut(),
+        )
+    };
+    if result != 0 && result != 2223 && result != 1379 {
+        return Err(format!("create sandbox group: Windows error {result}"));
+    }
+    for account in accounts {
+        let sid = account_sid(account)?;
+        let member = LOCALGROUP_MEMBERS_INFO_0 {
+            lgrmi0_sid: sid.as_ptr(),
+        };
+        let result = unsafe {
+            NetLocalGroupAddMembers(
+                null(),
+                name.as_ptr(),
+                0,
+                (&member as *const LOCALGROUP_MEMBERS_INFO_0).cast(),
+                1,
+            )
+        };
+        if result != 0 && result != 1378 {
+            return Err(format!("join sandbox group: Windows error {result}"));
+        }
     }
     Ok(())
 }

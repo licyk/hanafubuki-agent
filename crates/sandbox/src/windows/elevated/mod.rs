@@ -8,6 +8,8 @@ mod pipes;
 mod security;
 mod setup;
 
+pub(super) use security::current_user_sid;
+
 pub(crate) use launch::{run, RUNNER_ARG};
 pub(crate) use setup::{ready, setup, SETUP_ARG};
 
@@ -35,6 +37,6 @@ pub(crate) fn dispatch(
         // this dedicated runner exits immediately after dispatch returns.
         let _stdio = std::mem::ManuallyDrop::new(pipes::attach(&name)?);
         let request = crate::helper::HelperRequest::parse(args.collect())?;
-        super::run_prepared(request)
+        super::run_prepared(request, true)
     })())
 }

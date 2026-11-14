@@ -30,6 +30,7 @@ pub(crate) fn run(request: HelperRequest) -> Result<u32, String> {
         &install.credentials.offline
     };
     let sid = security::account_sid(&account.name)?;
+    let group = security::account_sid(&install.credentials.group())?;
     let runner = ResolvedPath::resolve(std::env::current_exe().map_err(|e| e.to_string())?)
         .map_err(|e| e.to_string())?;
     acl::ensure_allow_read_ace(runner.system(), &sid)?;
@@ -43,7 +44,7 @@ pub(crate) fn run(request: HelperRequest) -> Result<u32, String> {
     }
     acl::ensure_allow_read_ace(cwd.system(), &sid)?;
     for root in crate::roots::resolve_roots(&request.writable_roots) {
-        acl::ensure_allow_write_ace(root.root.system(), &sid)?;
+        acl::ensure_allow_write_ace(root.root.system(), &group)?;
     }
     super::super::prepare(&request)?;
     let pipes = Pipes::create(&account.name)?;

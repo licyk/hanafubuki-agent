@@ -34,7 +34,7 @@ mod token;
 #[cfg(windows)]
 pub(crate) fn run(request: crate::helper::HelperRequest) -> Result<u32, String> {
     prepare(&request)?;
-    run_prepared(request)
+    run_prepared(request, false)
 }
 
 #[cfg(windows)]
@@ -60,7 +60,10 @@ fn prepare(request: &crate::helper::HelperRequest) -> Result<(), String> {
 }
 
 #[cfg(windows)]
-fn run_prepared(request: crate::helper::HelperRequest) -> Result<u32, String> {
+fn run_prepared(
+    request: crate::helper::HelperRequest,
+    sandbox_account: bool,
+) -> Result<u32, String> {
     let command = request
         .command
         .iter()
@@ -73,7 +76,7 @@ fn run_prepared(request: crate::helper::HelperRequest) -> Result<u32, String> {
         .iter()
         .map(|grant| token::LocalSid::from_string(&grant.sid))
         .collect::<Result<Vec<_>, _>>()?;
-    let token = token::restricted_token(&capabilities)?;
+    let token = token::restricted_token(&capabilities, sandbox_account)?;
     for sid in &capabilities {
         acl::allow_null_device(sid);
     }

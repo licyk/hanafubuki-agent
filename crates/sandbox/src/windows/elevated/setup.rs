@@ -30,7 +30,7 @@ pub(super) fn directory() -> Result<ResolvedPath, String> {
 }
 
 pub(super) fn load(root: ResolvedPath) -> Result<Installation, String> {
-    let file = root.system().join("secrets/accounts.json");
+    let file = root.system().join("secrets/group-accounts.json");
     let bytes = std::fs::read(file)
         .map_err(|_| "Windows sandbox is not set up; run /setup-default-sandbox")?;
     let credentials: Credentials = serde_json::from_slice(&bytes)
@@ -74,7 +74,7 @@ pub(crate) fn setup() -> Result<(), String> {
     let secret_dir = root.system().join("secrets");
     std::fs::create_dir_all(&secret_dir).map_err(|e| e.to_string())?;
     security::protect_secrets(&secret_dir, &owner)?;
-    let accounts = secret_dir.join("accounts.json");
+    let accounts = secret_dir.join("group-accounts.json");
     if !accounts.exists() {
         let credentials = Credentials::create()?;
         let bytes =
@@ -110,6 +110,13 @@ fn provision(root: &ResolvedPath) -> Result<(), String> {
     install.credentials.offline.provision()?;
     security::enable_standard_account(&install.credentials.online.name)?;
     security::enable_standard_account(&install.credentials.offline.name)?;
+    security::provision_group(
+        &install.credentials.group(),
+        &[
+            &install.credentials.online.name,
+            &install.credentials.offline.name,
+        ],
+    )?;
     install.credentials.online.verify()?;
     install.credentials.offline.verify()?;
     firewall::install(
