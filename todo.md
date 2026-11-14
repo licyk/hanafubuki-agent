@@ -2317,6 +2317,12 @@ and any module-size exception.
         busy): no failure. Not verified
         without a real terminal: the pacing as seen at a frame's tick, and
         how a terminal shows the tail changing in place.
+      - CI on 8c9da67:
+        https://github.com/licyk/hanafubuki-agent/actions/runs/43529880296,
+        Linux, Windows and macOS passed at the first attempt. Site on
+        8c9da67: .../runs/43529880309, passed, its build and deploy
+        included. (8c9da67 also pasted M3's validation, known-issues and
+        M4–M8 notes into two older records by mistake; removed here.)
       - Known, as in Codex: when a line's newline arrives in smooth mode,
         its preview gives way to its rows, which are queued, not shown,
         until the next tick (8 ms) commits them, so the line is gone for
@@ -3909,38 +3915,7 @@ independent.
         (run on ac9be0b, which differs from the landed commit only in this
         line; Site: .../runs/43200798790).
       - Hanafubuki at its next pin: nothing (the TUI crate only).
-      - Module size: no exception added or raised.
-      - Validation: `cargo fmt --all --check`; `RUSTFLAGS="-D warnings"
-        cargo check --workspace --all-targets --all-features`; `cargo
-        clippy --workspace --all-targets --all-features -- -D warnings`;
-        `cargo xtask check` (the notices check first failed on the new
-        end-to-end test, listed as original); `cargo test --workspace
-        --all-features --no-fail-fast` (4455 passed, none failed, no flake
-        seen); `bun install --frozen-lockfile`, `bun run
-        format:check:site`, `bun run site:check`, `bun run site:test` (28
-        passed), and the six changed pages compiled with the store's
-        `@mdx-js/mdx` 3.1.1; `VITE_BASE_PATH=/hanafubuki-agent/ bun run
-        site:build` not run locally (port 3000 held by another project's
-        server); CI's Site run covers it. `app::tests` run twelve times more
-        (eight in parallel, two with one thread, two with every core kept
-        busy): no failure. Not verified
-        without a real terminal: the pacing as seen at a frame's tick, and
-        how a terminal shows the tail changing in place.
-      - Known, as in Codex: when a line's newline arrives in smooth mode,
-        its preview gives way to its rows, which are queued, not shown,
-        until the next tick (8 ms) commits them, so the line is gone for
-        a frame (seen on the vt100 screen: a frame drawn between the
-        newline and the tick lacks the line). A list of local file links moves the tail's start at each
-        line, so the rows before it are rendered again at each line (the
-        prefix cache misses); fine at an answer's size.
-      - For M4–M8: the stream's rows are plain `Line`s, rewrapped by the
-        cells, and the preview withholds a link's destination: M4's
-        hyperlinks must ride in the `StreamUpdate` cells and in the
-        committed-rows comparison of `finalize_remaining`. M5 adds the math
-        start to `active_tail_source_start` (`controller/commit.rs`) and a
-        math mode to `prose_preview.rs`. M6 adds mermaid to the tracker's
-        mutable fences (`markdown_render/streaming.rs`) and leaves it out of
-        `OpenCodeFence::detect`. `notices-policy.toml`
+      - Module size: no exception added or raised. `notices-policy.toml`
         lists `app/tests/thinking.rs` as original.
 - [x] T3: an id and a control on every expandable entry, a click on its
       control or header, in Fullscreen and in Scrollback's tail.
@@ -4027,37 +4002,6 @@ independent.
         `success`).
       - Hanafubuki at its next pin: nothing (the TUI crate only).
       - Module size: no exception added or raised.
-      - Validation: `cargo fmt --all --check`; `RUSTFLAGS="-D warnings"
-        cargo check --workspace --all-targets --all-features`; `cargo
-        clippy --workspace --all-targets --all-features -- -D warnings`;
-        `cargo xtask check` (the notices check first failed on the new
-        end-to-end test, listed as original); `cargo test --workspace
-        --all-features --no-fail-fast` (4455 passed, none failed, no flake
-        seen); `bun install --frozen-lockfile`, `bun run
-        format:check:site`, `bun run site:check`, `bun run site:test` (28
-        passed), and the six changed pages compiled with the store's
-        `@mdx-js/mdx` 3.1.1; `VITE_BASE_PATH=/hanafubuki-agent/ bun run
-        site:build` not run locally (port 3000 held by another project's
-        server); CI's Site run covers it. `app::tests` run twelve times more
-        (eight in parallel, two with one thread, two with every core kept
-        busy): no failure. Not verified
-        without a real terminal: the pacing as seen at a frame's tick, and
-        how a terminal shows the tail changing in place.
-      - Known, as in Codex: when a line's newline arrives in smooth mode,
-        its preview gives way to its rows, which are queued, not shown,
-        until the next tick (8 ms) commits them, so the line is gone for
-        a frame (seen on the vt100 screen: a frame drawn between the
-        newline and the tick lacks the line). A list of local file links moves the tail's start at each
-        line, so the rows before it are rendered again at each line (the
-        prefix cache misses); fine at an answer's size.
-      - For M4–M8: the stream's rows are plain `Line`s, rewrapped by the
-        cells, and the preview withholds a link's destination: M4's
-        hyperlinks must ride in the `StreamUpdate` cells and in the
-        committed-rows comparison of `finalize_remaining`. M5 adds the math
-        start to `active_tail_source_start` (`controller/commit.rs`) and a
-        math mode to `prose_preview.rs`. M6 adds mermaid to the tracker's
-        mutable fences (`markdown_render/streaming.rs`) and leaves it out of
-        `OpenCodeFence::detect`.
 - [x] T4: `AgentToolPresenter` and `ToolPresenterRegistry`; presenters for
       every built-in tool and a fallback; `subject` on `tool_started`,
       `callId` on `execution_progress`; `tool_display` fetched off the UI
