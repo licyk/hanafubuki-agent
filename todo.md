@@ -5363,9 +5363,69 @@ its next pin, and any module-size exception.
         (Linux, macOS and Windows: success at the first attempt); Site
         https://github.com/licyk/hanafubuki-agent/actions/runs/43603725504
         (success, its build and deploy included).
-- [ ] R3: the background feed: `background_tasks(root)`, `Changed`, and
+- [x] R3: the background feed: `background_tasks(root)`, `Changed`, and
       `Child` events from a forwarding sink on child turns. The TUI's
       400 ms watch goes, and `exec` answers children's approvals.
+      Done (2026-11-14), continuing the interrupted Claude worktree:
+      - `AgentBackgroundEvent` adds `Changed { root }` and
+        `Child { root, session_id, event: Box<AgentEvent> }`. Child turns
+        forward starts, approvals and questions (requests and resolutions),
+        and terminal events; streamed content stays in the child's journal.
+      - `background_tasks(root)` is async, with history work on the blocking
+        pool. `AgentBackgroundTasks` contains `agents`, `terminals`,
+        `pending_wake_events`, and `wake`; statuses gain `state_since`
+        (`stateSince` in JSON, optional Unix milliseconds). Both this call
+        and `background_status` read the shared runs before the wake queue.
+        The runs and feed live in `Wakes` across subagents plugin restarts.
+      - The feed coalesces session hints, resolves their roots and compares
+        snapshots without answer excerpts. It reports starts, ends,
+        model/effort/title changes, pauses and configuration changes, and
+        wake queue changes, with no streaming hints or periodic scan.
+        `BackgroundWorkChanged` is notified after durable delivery or
+        withdrawal, outside the session lock; guest observers may receive it.
+      - TUI status and request polling (400 ms) is gone. Requests arrive
+        through `Child`, and both approvals and questions are answered on
+        the child. Opening a session reads outstanding requests once;
+        resolutions that overtook that read suppress stale requests. The
+        displayed child's streaming journal still uses its 150 ms follower,
+        because the feed deliberately carries no streamed deltas.
+      - `exec` waits on events instead of its 500 ms re-check and applies
+        `--approve` to child requests. Notes name the child; with `--json`
+        they go to stderr and the root's event stream stays separate. An
+        unanswerable child question interrupts that child until R6 supplies
+        the close operation.
+      - Tests: four agent feed scenarios (changes/quiet snapshots, queue
+        ordering, interruption, pause/configuration, child requests and
+        resolutions); kernel observer delivery/withdrawal; CLI deny, allow,
+        ask without a terminal, JSON notes and an unanswerable question;
+        existing TUI subagent flows, with approval and stale-opening-request
+        coverage in both transcript modes. No golden regeneration.
+      - Documentation updated in both languages: embedding, host plugins,
+        internals, plugin rules, exec, JSON events and terminal interface.
+        No module-size exception added or raised.
+      - Validation (Linux): `cargo fmt --all --check`; `cargo check -p
+        hanafubuki-agent -p hanafubuki-agent-cli -p hanafubuki-agent-tui
+        --all-targets --all-features`; the same package selection with
+        `cargo clippy ... -- -D warnings`; `cargo xtask check`;
+        `cargo test -p hanafubuki-agent --all-features
+        plugins::subagents::tests::feed` (4 tests, plus the custom integration
+        harnesses this invocation also runs); `cargo test -p
+        hanafubuki-agent --all-features --lib golden` (24); `cargo test -p
+        hanafubuki-agent-kernel --all-features --test loop_contract observers`
+        (9); `cargo test -p hanafubuki-agent-cli --all-features --test exec
+        a_sub_agents` (2); `cargo test -p hanafubuki-agent-tui --all-features
+        --lib app::tests::subagents` (4). All 14 changed MDX pages compiled
+        directly with `@mdx-js/mdx` and remark-gfm; `git diff --check` passed.
+        Workspace-wide checks and tests, the site's full checks/build and
+        Windows/macOS validation are left to the coordinator and CI. No
+        additional stress loop or mutation test was run.
+      - For R4: `Wakes::child_events(root)`, `root_of`, shared `SubagentRuns`
+        and state timestamps are ready; tree traversal and depth remain R4.
+        For R5: terminal entries and counts remain empty until its integration;
+        populate `wake/tasks.rs`, emit lifecycle `BackgroundWorkChanged`
+        hints, and exclude output/timestamps from feed comparison. For R6:
+        change the CLI's unanswerable-question interrupt to close. For R8:
+        `Changed` prompts a fresh async tree read; do not count hints as work.
 - [ ] R4: two levels of sub-agents (depth from lineage; depth 2, side
       conversations and reviews refused) and `maximumRunningAgents`
       default 8, counting live agents across the tree; woken turns are

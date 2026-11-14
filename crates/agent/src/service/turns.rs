@@ -37,7 +37,9 @@ impl AgentApplicationService {
         input: AgentTurnInput,
     ) -> Result<AgentTurnOutcome, AgentError> {
         self.host.ensure_started().await;
-        self.driver.run_turn(session_id, input).await
+        self.driver
+            .run_turn(session_id, input, Arc::new(crate::session_driver::Discard))
+            .await
     }
 
     pub async fn submit_turn_with_sink(
@@ -286,6 +288,7 @@ impl AgentApplicationService {
             .is_ok_and(|session| session.parent_session_id.is_none())
         {
             self.wakes.pauses.interrupted(session_id);
+            self.wakes.feed.hint(session_id);
         }
         self.core
             .cancel_turn_confirmed(session_id, turn_id, generation)

@@ -103,6 +103,8 @@ impl AgentService {
     /// Tells the observers that a turn's admission is durable and its
     /// events are emitted. No session lock is held.
     pub(super) fn notify_turn_admitted(&self, admitted: AdmittedTurn) {
+        let session_id = admitted.identity.session_id;
+        let delivered = !admitted.wake_events.is_empty();
         self.inner
             .registries
             .observers
@@ -113,6 +115,9 @@ impl AgentService {
                 origin: admitted.origin,
                 automatic_title: admitted.automatic_title,
             });
+        if delivered {
+            self.notify_wake_events_left(session_id);
+        }
     }
 
     /// Stages the admission of a turn on `record`, the record `cell` holds.

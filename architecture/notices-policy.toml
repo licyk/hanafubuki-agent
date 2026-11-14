@@ -470,6 +470,10 @@ path = "crates/tui/src/agent_bridge/background.rs"
 reason = "The session woken for its background work, onto the facade's woken turn; Codex resumes nothing by itself."
 
 [[original]]
+path = "crates/tui/src/agent_bridge/children.rs"
+reason = "The Agent's background child events surface approvals and questions in their parent's conversation."
+
+[[original]]
 path = "crates/tui/src/agent_bridge/events.rs"
 reason = "The Agent's events onto what the chat shows, and the sinks into the app loop; moved out of the bridge's module."
 
@@ -935,7 +939,7 @@ reason = "The second conversation's bridge: the side conversation's open and clo
 
 [[original]]
 path = "crates/tui/src/agent_bridge/subagents.rs"
-reason = "The subagents' calls, the watch over their statuses and approvals, and the following of a subagent shown, over the facade's journal."
+reason = "The subagents' calls and status feed, and the following of a subagent shown over the facade's journal."
 
 [[original]]
 path = "crates/tui/src/agent_bridge/agents.rs"

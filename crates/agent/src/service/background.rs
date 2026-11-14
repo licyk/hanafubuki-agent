@@ -1,30 +1,18 @@
 //! A session's background work, for its host: what it holds open, the
-//! events it has not read, whether it is woken for them, and the woken turn
-//! a host submits when it is told `AgentBackgroundEvent::Woken`.
+//! events it has not read, whether it is woken for them, a root's tree in
+//! full, and the woken turn a host submits when it is told
+//! `AgentBackgroundEvent::Woken`.
 
 use std::sync::Arc;
 
 use hanafubuki_agent_contracts::TurnExtensions;
+use hanafubuki_agent_foundation::blocking::run_blocking_operation;
 use hanafubuki_agent_kernel::{
-    AgentBackgroundWork, AgentError, AgentEventSink, AgentSessionId, AgentWakePolicy,
-    AgentWakeTurnAccepted,
+    AgentError, AgentEventSink, AgentSessionId, AgentWakePolicy, AgentWakeTurnAccepted,
 };
-use serde::Serialize;
 
 use super::AgentApplicationService;
-use crate::plugins::{SubagentService, SUBAGENTS_PLUGIN};
-use crate::wake::AgentWakeState;
-
-/// What a session's background work holds open, and what came of it.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct AgentBackgroundStatus {
-    /// Its sub-agents still working (terminals count from R5).
-    pub work: AgentBackgroundWork,
-    /// The events queued on it that no turn has delivered yet.
-    pub pending_wake_events: usize,
-    pub wake: AgentWakeState,
-}
+use crate::wake::{AgentBackgroundStatus, AgentBackgroundTasks};
 
 impl AgentApplicationService {
     /// Starts the turn that delivers `session_id`'s queued wake events (what
@@ -87,6 +75,7 @@ impl AgentApplicationService {
         .await??;
         if accepted.is_some() {
             self.wakes.pauses.woken(session_id);
+            self.wakes.feed.hint(session_id);
         }
         Ok(accepted)
     }
@@ -95,34 +84,33 @@ impl AgentApplicationService {
     /// not read, and whether it is woken for them. Its agents are those
     /// this instance runs for it, read before its queue: an agent counts
     /// until its end is queued, so one that ended is counted or queued,
-    /// never neither.
+    /// never neither. Cheap; it may load the session.
     pub fn background_status(
         &self,
         session_id: AgentSessionId,
     ) -> Result<AgentBackgroundStatus, AgentError> {
-        let agents = self
-            .host
-            .service::<SubagentService>(SUBAGENTS_PLUGIN)
-            .map_or(0, |subagents| subagents.working(session_id));
-        self.activate_session(session_id)?;
-        let session = self.core.snapshot(session_id)?;
-        let wake = if session.wake_policy == AgentWakePolicy::Off
-            || !self.driver.wakes_on_background_tasks()
-        {
-            AgentWakeState::Off
-        } else {
-            match self.wakes.pauses.pause(session_id) {
-                Some(reason) => AgentWakeState::Paused { reason },
-                None => AgentWakeState::On,
-            }
-        };
-        Ok(AgentBackgroundStatus {
-            work: AgentBackgroundWork {
-                agents,
-                terminals: 0,
-            },
-            pending_wake_events: session.pending_wake_events,
-            wake,
-        })
+        self.wakes.status(&self.driver, session_id)
+    }
+
+    /// The background work of `root`'s tree in full: its sub-agents (each
+    /// as `subagents` lists it, with its last answer's start), its
+    /// background terminals (none are listed yet), the events queued on it
+    /// and whether it is woken for them. The counts agree with
+    /// [`Self::background_status`]: an agent listed as running is one it
+    /// counts. Read it again when told `AgentBackgroundEvent::Changed`. It
+    /// lists the tree's sessions and reads their last answers off the
+    /// async runtime.
+    pub async fn background_tasks(
+        &self,
+        root: AgentSessionId,
+    ) -> Result<AgentBackgroundTasks, AgentError> {
+        let (driver, wakes) = (self.driver.clone(), self.wakes.clone());
+        run_blocking_operation(
+            self.blocking.as_ref(),
+            "agent background tasks worker",
+            move || wakes.tasks(&driver, root, true),
+        )
+        .await
+        .map_err(AgentError::Internal)?
     }
 }

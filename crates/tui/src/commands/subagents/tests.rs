@@ -27,6 +27,7 @@ fn status(
         model: "fixture-model".to_string(),
         reasoning_effort: Some(ModelReasoningEffort::High),
         last_answer: answer.map(str::to_string),
+        state_since: None,
     }
 }
 

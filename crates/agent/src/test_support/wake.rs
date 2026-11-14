@@ -4,7 +4,7 @@
 use std::sync::Arc;
 
 use hanafubuki_agent_kernel::{
-    AgentError, AgentSessionId, AgentWakePolicy, AgentWakeQueued, AgentWakeSource,
+    AgentError, AgentEvent, AgentSessionId, AgentWakePolicy, AgentWakeQueued, AgentWakeSource,
 };
 use hanafubuki_agent_process::executor::ExecutorManager;
 use parking_lot::Mutex;
@@ -31,6 +31,29 @@ impl RecordedBackgroundEvents {
             .iter()
             .filter(|event| **event == AgentBackgroundEvent::Woken { session_id })
             .count()
+    }
+
+    /// How many times the host was told that `root`'s tree changed.
+    pub fn changed(&self, root: AgentSessionId) -> usize {
+        self.0
+            .lock()
+            .iter()
+            .filter(|event| **event == AgentBackgroundEvent::Changed { root })
+            .count()
+    }
+
+    /// The events of sub-agents' turns told for `root`'s tree, in order.
+    pub fn child_events(&self, root: AgentSessionId) -> Vec<AgentEvent> {
+        self.0
+            .lock()
+            .iter()
+            .filter_map(|event| match event {
+                AgentBackgroundEvent::Child {
+                    root: told, event, ..
+                } if *told == root => Some((**event).clone()),
+                _ => None,
+            })
+            .collect()
     }
 }
 

@@ -211,6 +211,8 @@ The stream carries no session object and no event when a session's [role](/docs/
 
 **The last line** is always `turn_completed`, `turn_cancelled` or `turn_failed`: `exec` stops writing once it has it, so later events of the session (a title generated afterwards, say) are not printed. When the session's [sub-agents](/docs/exec#subagents) still work as a turn completes, `exec` goes on to the turns that wake it for what they report: each is a run of events like any turn's, from its `turn_started` to its last line, and its first `history_committed` writes the update (the `background_events` item) in place of your message. The last line is then the last turn's.
 
+Sub-agent approvals and questions are handled through the background feed. Their human-readable notes go to standard error with `--json`; the child's events are not interleaved into the root's JSON event stream.
+
 ## Compatibility [#stability]
 
 The format is the Agent's own event type, serialized, so it changes with the Agent:

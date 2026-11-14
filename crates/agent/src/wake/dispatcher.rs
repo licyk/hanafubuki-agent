@@ -6,14 +6,16 @@
 //! running, its policy on, the option on, its root not paused), and the
 //! woken turn's admission is the kernel's: two signals for one session, or
 //! a signal racing the person's message, wake it at most once. The observer
-//! also clears a root's pause when the person's message is admitted.
+//! also clears a root's pause when the person's message is admitted, and
+//! hints the feed (`feed.rs`) of what may change a tree, which the row's
+//! second worker reads.
 
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use hanafubuki_agent_contracts::{
-    spawn_scoped_worker, AgentNotification, AgentObserver, AgentTurnOrigin, ObserverRegistry,
-    PluginFaults, Register,
+    spawn_scoped_worker, AgentNotification, AgentObserver, AgentTurnOrigin, BlockingService,
+    ObserverRegistry, PluginFaults, Register,
 };
 use hanafubuki_agent_foundation::cancellation::CancellationToken;
 use hanafubuki_agent_kernel::{AgentSessionId, AgentWakePolicy};
@@ -21,6 +23,7 @@ use kardia_core::{Context, Inject, PluginDef, Service};
 use parking_lot::Mutex;
 use tokio::sync::Notify;
 
+use super::feed::{Feed, FeedWorker};
 use super::{AgentBackgroundEvent, Pauses, Wakes};
 use crate::plugins::wait_for_cancellation;
 use crate::session_driver::AgentSessionDriver;
@@ -28,8 +31,8 @@ use crate::session_driver::AgentSessionDriver;
 /// The core row's plugin name.
 const WAKE_PLUGIN: &str = "agent-wake";
 
-/// Registers the dispatcher's observer and runs its worker over `driver`,
-/// telling the host through `wakes`.
+/// Registers the dispatcher's observer and runs its worker and the feed's
+/// over `driver`, telling the host through `wakes`.
 pub(crate) fn wake_plugin(driver: AgentSessionDriver, wakes: Wakes) -> PluginDef {
     PluginDef::new(move |ctx: Context, _| {
         let driver = driver.clone();
@@ -37,17 +40,26 @@ pub(crate) fn wake_plugin(driver: AgentSessionDriver, wakes: Wakes) -> PluginDef
         async move {
             let signals = Arc::new(Signals::default());
             let dispatcher = Dispatcher {
-                driver,
+                driver: driver.clone(),
                 wakes: wakes.clone(),
                 signals: signals.clone(),
             };
             spawn_scoped_worker(&ctx, "agent-wake", move |cancellation| {
                 dispatcher.run(cancellation)
             })?;
+            let feed = FeedWorker {
+                driver,
+                wakes: wakes.clone(),
+                blocking: ctx.get::<BlockingService>()?.arc().clone(),
+            };
+            spawn_scoped_worker(&ctx, "agent-wake-feed", move |cancellation| {
+                feed.run(cancellation)
+            })?;
             ctx.get::<ObserverRegistry>()?
                 .register(Arc::new(WakeObserver {
                     signals,
                     pauses: wakes.pauses,
+                    feed: wakes.feed,
                 }))?;
             Ok(())
         }
@@ -56,7 +68,8 @@ pub(crate) fn wake_plugin(driver: AgentSessionDriver, wakes: Wakes) -> PluginDef
     .inject(
         Inject::new()
             .with(ObserverRegistry::NAME)
-            .with(PluginFaults::NAME),
+            .with(PluginFaults::NAME)
+            .with(BlockingService::NAME),
     )
 }
 
@@ -80,10 +93,11 @@ impl Signals {
     }
 }
 
-/// Bounded work only: it records a signal, or a root's pause.
+/// Bounded work only: it records a signal, a hint, or a root's pause.
 struct WakeObserver {
     signals: Arc<Signals>,
     pauses: Pauses,
+    feed: Arc<Feed>,
 }
 
 impl AgentObserver for WakeObserver {
@@ -95,16 +109,24 @@ impl AgentObserver for WakeObserver {
         match notification {
             AgentNotification::WakeEventQueued { session_id }
             | AgentNotification::TurnFinished { session_id, .. } => {
-                self.signals.signal(*session_id)
+                self.signals.signal(*session_id);
+                self.feed.hint(*session_id);
             }
-            // The person's message delivers what queued, and the session's
-            // wakes resume.
             AgentNotification::TurnAdmitted {
-                session_id,
-                origin: AgentTurnOrigin::User,
-                ..
-            } => self.pauses.person_message(*session_id),
-            _ => {}
+                session_id, origin, ..
+            } => {
+                // The person's message delivers what queued, and the
+                // session's wakes resume.
+                if *origin == AgentTurnOrigin::User {
+                    self.pauses.person_message(*session_id);
+                }
+                self.feed.hint(*session_id);
+            }
+            AgentNotification::BackgroundWorkChanged { session_id }
+            | AgentNotification::SessionArchived { session_id, .. }
+            | AgentNotification::SessionRestored { session_id, .. } => self.feed.hint(*session_id),
+            AgentNotification::SamplingCommitted { .. }
+            | AgentNotification::MemoryContributionChanged { .. } => {}
         }
     }
 }

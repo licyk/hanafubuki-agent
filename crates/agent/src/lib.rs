@@ -146,8 +146,8 @@ pub use roles::{
     AgentUnusableRole, DEFAULT_ROLE, EXPLORER_ROLE, MAX_ROLE_CHAIN,
 };
 pub use service::{
-    package_setting_key, reasoning_effort_choices, AgentApplicationService, AgentBackgroundStatus,
-    AgentEditFromTurn, AgentHook, AgentHookHandler, AgentHooks, AgentHostPorts, AgentListedModel,
+    package_setting_key, reasoning_effort_choices, AgentApplicationService, AgentEditFromTurn,
+    AgentHook, AgentHookHandler, AgentHooks, AgentHostPorts, AgentListedModel,
     AgentModelPolicyWriteRequest, AgentProviderDeleteRequest, AgentProviderDraft,
     AgentProviderEnabledRequest, AgentProviderModelCatalogRequest, AgentProviderModelCatalogResult,
     AgentProviderRegistrySnapshot, AgentProviderWriteRequest, AgentRunProjection,
@@ -305,10 +305,12 @@ pub use hanafubuki_agent_mcp::{
 pub use hanafubuki_agent_tool_contracts::{ToolOutput, ToolOutputContent};
 use hanafubuki_agent_workspace_fs::WorkspaceFsService;
 use serde::{Deserialize, Serialize};
-/// How the Agent tells its host to wake a session, and whether it does.
+/// How the Agent tells its host to wake a session, and whether it does;
+/// what a session's background work holds open, and when that changes.
 pub use wake::{
-    AgentBackgroundEvent, AgentBackgroundEventSink, AgentWakePause, AgentWakeState,
-    NoopAgentBackgroundEventSink, MAXIMUM_WOKEN_TURNS,
+    AgentBackgroundEvent, AgentBackgroundEventSink, AgentBackgroundStatus, AgentBackgroundTasks,
+    AgentBackgroundTerminal, AgentWakePause, AgentWakeState, NoopAgentBackgroundEventSink,
+    MAXIMUM_WOKEN_TURNS,
 };
 
 #[cfg(test)]

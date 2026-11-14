@@ -59,14 +59,11 @@ impl AgentBridge {
                 call_id,
                 name,
                 presentation,
-            } => {
-                self.observe_tool(&name);
-                TurnUpdate::ToolStarted {
-                    call_id,
-                    name,
-                    subject: presentation.subject,
-                }
-            }
+            } => TurnUpdate::ToolStarted {
+                call_id,
+                name,
+                subject: presentation.subject,
+            },
             AgentEventKind::ToolCompleted { call_id, is_error } => {
                 self.read_tool_display(event.session_id, call_id.clone());
                 TurnUpdate::ToolCompleted { call_id, is_error }

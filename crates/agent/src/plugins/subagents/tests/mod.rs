@@ -7,8 +7,10 @@
 //! `models.rs`'s; the Providers and models the guidance lists
 //! `guidance.rs`'s; what listed agents run on `listing.rs`'s; what a
 //! parent hears of its agents through its wake queue, and how it is woken,
-//! `wake.rs`'s; when it is not woken `pause.rs`'s.
+//! `wake.rs`'s; when it is not woken `pause.rs`'s; what the host is told of
+//! a root's background work `feed.rs`'s.
 
+mod feed;
 mod guidance;
 mod listing;
 mod models;
@@ -208,6 +210,7 @@ async fn a_spawned_agent_runs_its_task_and_the_wait_returns_its_answer() {
 
     let agents = service.subagents(parent.id).await.unwrap();
     let child = agents[0].session_id;
+    let ended = agents[0].state_since.expect("this instance ran it");
     assert_eq!(
         agents,
         vec![AgentSubagentStatus {
@@ -218,6 +221,7 @@ async fn a_spawned_agent_runs_its_task_and_the_wait_returns_its_answer() {
             model: "fixture-model".to_string(),
             reasoning_effort: None,
             last_answer: Some("Twelve files.".to_string()),
+            state_since: Some(ended),
         }]
     );
     let snapshot = service.snapshot(child).unwrap();

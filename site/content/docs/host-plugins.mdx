@@ -313,6 +313,8 @@ pub fn turn_request(text: String, title: String) -> AgentTurnRequest {
 
 各自的完整规则见[插件规则](/docs/plugin-rules)。
 
+宿主的任务显示和子代理审批应使用启动时安装的 `AgentBackgroundEventSink`，不必另建轮询插件：`Changed` 提示刷新 `background_tasks`，`Child` 转发子代理的请求，`Woken` 提示宿主提交唤醒回合。线程、顺序和快照契约见[事件与历史](/docs/embedding#events-and-history)。
+
 ## 插件代码中的 panic [#panics-in-plugin-code]
 
 插件 panic 是 bug，但它留在插件里：内核对插件代码的每次调用都在守卫下进行，panic 变成那次调用自己的错误路径，并记为插件的故障。

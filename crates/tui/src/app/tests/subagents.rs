@@ -7,7 +7,7 @@
 use std::time::Duration;
 
 use hanafubuki_agent::test_support::{assistant_events, tool_calls_events};
-use hanafubuki_agent::{AgentEventKind, AgentSessionId, AgentSessionOrigin};
+use hanafubuki_agent::{AgentBackgroundEvent, AgentEventKind, AgentSessionId, AgentSessionOrigin};
 use ratatui::crossterm::event::KeyCode;
 
 use super::{command_arguments, Harness};
@@ -88,16 +88,26 @@ fn subagents_lists_them_and_shows_one_beside_its_parent() {
 
 #[test]
 fn a_subagents_approval_is_shown_in_the_parent_and_answered_on_the_subagent() {
-    let mut harness = Harness::start(vec![
-        spawn_and_wait("Run the command."),
-        tool_calls_events(&[(
-            "call-child",
-            "exec_command",
-            &command_arguments("echo child-output"),
-        )]),
-        assistant_events("The command printed child-output."),
-        assistant_events("The subagent ran it."),
-    ]);
+    for mode in [TranscriptMode::Terminal, TranscriptMode::Owned] {
+        child_approval(mode);
+    }
+}
+
+fn child_approval(mode: TranscriptMode) {
+    let mut harness = Harness::start_with(
+        vec![
+            spawn_and_wait("Run the command."),
+            tool_calls_events(&[(
+                "call-child",
+                "exec_command",
+                &command_arguments("echo child-output"),
+            )]),
+            assistant_events("The command printed child-output."),
+            assistant_events("The subagent ran it."),
+        ],
+        true,
+        mode,
+    );
     harness.type_and_submit("Delegate the command.");
     // The subagent runs in Manual mode, as its parent: its call waits.
     // The shell's name is the platform's: Posix, or PowerShell on Windows.
@@ -106,6 +116,16 @@ fn a_subagents_approval_is_shown_in_the_parent_and_answered_on_the_subagent() {
     let unwrapped = approval.split_whitespace().collect::<Vec<_>>().join(" ");
     assert!(unwrapped.contains("echo child-output"), "{approval}");
     assert!(approval.contains("Yes, proceed"), "{approval}");
+    let parent = harness.app.bridge.session_id().unwrap();
+    let child = harness.asking_subagent().unwrap();
+    let agent = harness.runtime.slot().agent().unwrap();
+    let asked = agent
+        .events_since(child, None)
+        .unwrap()
+        .events
+        .into_iter()
+        .find(|event| matches!(event.kind, AgentEventKind::ApprovalRequested { .. }))
+        .unwrap();
     harness.key(KeyCode::Char('y'));
     harness.pump_until_screen_shows("The subagent ran it.");
     harness.pump_until_turn_ends();
@@ -113,6 +133,16 @@ fn a_subagents_approval_is_shown_in_the_parent_and_answered_on_the_subagent() {
     assert_eq!(requests.len(), 4);
     let answered = String::from_utf8(requests[2].body.clone()).unwrap();
     assert!(answered.contains("child-output"), "{answered}");
+
+    // The initial journal read may arrive after the live resolution.
+    let stale = AppEvent::AgentBackground(AgentBackgroundEvent::Child {
+        root: parent,
+        session_id: child,
+        event: Box::new(asked),
+    });
+    harness.app.handle_event(&mut harness.tui, stale);
+    harness.app.draw(&mut harness.tui).unwrap();
+    assert!(!harness.screen().contains("Yes, proceed"));
 }
 
 #[test]

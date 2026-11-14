@@ -50,6 +50,8 @@ impl AgentApplicationService {
             tokio::spawn(report_reconfigured(name, settle));
         }
         self.spawn_package_reload();
+        // `wakeOnBackgroundTasks` is in every tree's background work.
+        self.wakes.feed.hint_all();
         match self.network.proxy() {
             Ok(proxy) => self
                 .core

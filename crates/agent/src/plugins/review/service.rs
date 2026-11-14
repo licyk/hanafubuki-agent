@@ -91,7 +91,12 @@ impl ReviewService {
             permission_mode: Some(AgentPermissionMode::FullAccess),
             ..prompt.into()
         };
-        let outcome = Box::pin(self.driver.run_turn(child, input)).await;
+        let outcome = Box::pin(self.driver.run_turn(
+            child,
+            input,
+            Arc::new(crate::session_driver::Discard),
+        ))
+        .await;
         let output = outcome.map(|outcome| parse_review_answer(&outcome.final_answer, child));
         let note = review_exit_note(output.as_ref().ok()).map_err(AgentError::Internal)?;
         self.tell_parent(parent, note).await?;

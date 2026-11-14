@@ -7,7 +7,10 @@ impl AgentApplicationService {
         &self,
         request: AgentSessionModelSelectionRequest,
     ) -> Result<AgentSessionRuntimeSnapshot, String> {
-        self.driver.select_model(request).await
+        let session = self.driver.select_model(request).await?;
+        // A sub-agent's model is in its tree's background work.
+        self.wakes.feed.hint(session.id);
+        Ok(session)
     }
 
     pub async fn set_session_reasoning_effort(
@@ -16,7 +19,7 @@ impl AgentApplicationService {
     ) -> Result<AgentSessionRuntimeSnapshot, String> {
         self.activate_provider_session(request.session_id).await?;
         let service = self.clone();
-        hanafubuki_agent_foundation::blocking::run_blocking_operation(
+        let session = hanafubuki_agent_foundation::blocking::run_blocking_operation(
             self.blocking.as_ref(),
             "agent session reasoning effort worker",
             move || {
@@ -31,6 +34,8 @@ impl AgentApplicationService {
                     .map_err(|error| error.to_string())
             },
         )
-        .await?
+        .await??;
+        self.wakes.feed.hint(session.id);
+        Ok(session)
     }
 }

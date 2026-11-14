@@ -211,6 +211,8 @@ icon: Braces
 
 **最后一行**总是 `turn_completed`、`turn_cancelled` 或 `turn_failed`：`exec` 在收到它后停止输出，之后会话中的事件（例如稍后生成的标题）不会出现。回合完成时如果会话的[子代理](/docs/exec#subagents)仍在工作，`exec` 会继续运行为它们的报告唤醒会话的回合：每个回合都是一组和任何回合一样的事件，从它的 `turn_started` 到它的最后一行，它的第一个 `history_committed` 写入的是更新（`background_events` 条目），而不是你的消息。最后一行于是是最后一个回合的。
 
+子代理的审批和问题通过后台事件流处理。使用 `--json` 时，其可读提示写到标准错误；子代理的事件不会混入根会话的 JSON 事件流。
+
 ## 兼容性 [#stability]
 
 事件的格式就是 Agent 内部事件类型的序列化结果，会随 Agent 一起变化：

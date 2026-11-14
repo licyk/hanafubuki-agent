@@ -4,7 +4,8 @@
 //! `TurnStart`), or at a step of the running turn (after its steering).
 //! Queuing and taking commit a checkpoint without a revision, as a setting
 //! does; delivering appends to history. A queued event is notified
-//! (`WakeEventQueued`), which is what wakes an idle session. What the
+//! (`WakeEventQueued`), which is what wakes an idle session, and so are
+//! events that leave the queue (`BackgroundWorkChanged`). What the
 //! session's background work holds open is `work.rs`'s.
 
 use super::*;
@@ -82,6 +83,7 @@ impl AgentService {
             (StagedPersistence::commit(&cell, record, previous), taken)
         };
         self.persist_staged(staged).await?;
+        self.notify_wake_events_left(session_id);
         Ok(taken)
     }
 
@@ -154,7 +156,17 @@ impl AgentService {
         };
         self.persist_staged(staged).await?;
         event_sink.emit(history_event);
+        self.notify_wake_events_left(identity.session_id);
         Ok(Some(last))
+    }
+
+    /// Tells the observers that events left `session_id`'s queue, once
+    /// that is durable.
+    pub(super) fn notify_wake_events_left(&self, session_id: AgentSessionId) {
+        self.inner
+            .registries
+            .observers
+            .notify(&AgentNotification::BackgroundWorkChanged { session_id });
     }
 }
 

@@ -24,6 +24,7 @@ mod agents;
 mod background;
 mod catalog;
 mod center_reads;
+mod children;
 mod commands;
 mod edit;
 mod effort;
@@ -47,7 +48,6 @@ mod steering;
 mod subagents;
 mod workspace;
 
-use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -84,7 +84,7 @@ pub(crate) use side::OpenedSide;
 use start::Start;
 pub(crate) use status::{SessionStatus, UsageSummary};
 pub(crate) use steering::SteerOutcome;
-pub(crate) use subagents::{ChildApproval, SubagentsCall, SubagentsReply};
+pub(crate) use subagents::{SubagentsCall, SubagentsReply};
 
 /// What the chat widget is told: the turn's progress, and what the
 /// commands it asked for found.
@@ -241,13 +241,6 @@ pub(crate) enum AgentReply {
     /// The session's woken turn was submitted: started with the events it
     /// delivers, or not (nothing was left to deliver), or refused.
     WakeTurn(Result<Option<AgentWakeTurnAccepted>, String>),
-    /// A subagent of `parent` waits on an approval.
-    ChildApproval(Box<ChildApproval>),
-    /// It was answered, or its turn ended.
-    ChildApprovalResolved {
-        parent: AgentSessionId,
-        request_id: ApprovalRequestId,
-    },
 }
 
 pub(crate) struct AgentBridge {
@@ -285,10 +278,8 @@ pub(crate) struct AgentBridge {
     /// The worktree the next session the interface creates is bound to
     /// (`/worktree`'s new conversation).
     pending_worktree: Option<PathBuf>,
-    /// The watch over the session's subagents while they run.
-    watch: Option<subagents::Watch>,
-    /// The subagents' approvals shown as the session's, by request.
-    child_approvals: HashMap<ApprovalRequestId, subagents::ChildTarget>,
+    /// What the session's subagents ask, shown as the session's.
+    children: children::ChildRequests,
     /// The journal of the subagent this bridge shows, followed.
     following: Option<subagents::Following>,
     /// While the session's woken turn is being submitted: what was asked
@@ -325,8 +316,7 @@ impl AgentBridge {
             review: None,
             denials: permissions::RecentDenials::default(),
             pending_worktree: None,
-            watch: None,
-            child_approvals: HashMap::new(),
+            children: children::ChildRequests::default(),
             following: None,
             waking: None,
             missed_wake: false,
@@ -418,6 +408,10 @@ impl AgentBridge {
                 request_id,
                 answers,
             } => {
+                let answers = match self.resolve_child_question(request_id, answers) {
+                    Ok(answered) => return answered,
+                    Err(answers) => answers,
+                };
                 let turn = self.turn?;
                 self.agent
                     .resolve_user_input(
@@ -472,13 +466,11 @@ impl AgentBridge {
                     self.pending_worktree = None;
                 }
                 self.session_id = opened.session_id;
-                self.watch = None;
-                self.child_approvals.clear();
                 self.turn = None;
                 self.turn_running = false;
                 self.load_session_status();
-                // Its subagents may still work, which it may wait on.
-                self.watch_subagents();
+                // Its subagents may still work, and ask.
+                self.read_child_requests();
                 Some(TurnUpdate::SessionOpened(opened))
             }
             AgentReply::Update(update) => match *update {
@@ -499,15 +491,6 @@ impl AgentBridge {
                     Some(TurnUpdate::EffortChanged(effort))
                 }
                 TurnUpdate::Goal(reply) => self.goal_reply(reply),
-                TurnUpdate::Subagents(SubagentsReply::Listed(statuses)) => {
-                    self.subagents_listed(&statuses);
-                    Some(TurnUpdate::Subagents(SubagentsReply::Listed(statuses)))
-                }
-                // What the session waits on changed with them.
-                TurnUpdate::Subagents(SubagentsReply::Changed(statuses)) => {
-                    self.send_session_status();
-                    Some(TurnUpdate::Subagents(SubagentsReply::Changed(statuses)))
-                }
                 // `/cd` moved: the status line's branch is the new root's.
                 TurnUpdate::Session(reply) if reply.working_directory().is_some() => {
                     self.send_session_status();
@@ -530,10 +513,6 @@ impl AgentBridge {
             } => Some(TurnUpdate::ToolDisplayed { call_id, display }),
             AgentReply::EnteredWorktree(entered) => self.entered_worktree(entered),
             AgentReply::WakeTurn(accepted) => self.woken(accepted),
-            AgentReply::ChildApproval(approval) => self.child_approval(*approval),
-            AgentReply::ChildApprovalResolved { parent, request_id } => {
-                self.child_approval_resolved(parent, request_id)
-            }
         }
     }
 
@@ -562,7 +541,7 @@ impl AgentBridge {
         self.turn = None;
         self.turn_running = false;
         self.send_session_status();
-        self.reshow_child_approvals();
+        self.reshow_child_requests();
         TurnUpdate::Ended(end)
     }
 

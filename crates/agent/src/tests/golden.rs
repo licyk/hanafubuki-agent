@@ -448,7 +448,11 @@ async fn record_lineage_history() {
         })
         .unwrap();
     driver
-        .run_turn(child.id, "Child question.".into())
+        .run_turn(
+            child.id,
+            "Child question.".into(),
+            Arc::new(crate::session_driver::Discard),
+        )
         .await
         .unwrap();
     assert_eq!(

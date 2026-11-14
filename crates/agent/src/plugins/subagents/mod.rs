@@ -33,11 +33,12 @@ use serde::Serialize;
 pub(crate) use self::options::subagents_option_schema;
 use self::options::{SubagentLimits, SubagentsOptions};
 use self::prompt::{SubagentGuidancePrompt, SUBAGENT_GUIDANCE_RENDERER};
-use self::service::SubagentRuns;
+pub(crate) use self::service::SubagentRuns;
 pub(crate) use self::service::SubagentService;
 use self::tools::{SubagentTool, SubagentToolKind};
 use crate::roles::AgentRoleCatalogReader;
 use crate::session_driver::AgentSessionDriver;
+use crate::wake::Wakes;
 
 /// The plugin's name, under which it provides its [`SubagentService`].
 pub(crate) const SUBAGENTS_PLUGIN: &str = "subagents";
@@ -57,6 +58,10 @@ pub struct AgentSubagentStatus {
     pub reasoning_effort: Option<ModelReasoningEffort>,
     /// The start of its latest answer, if it has answered.
     pub last_answer: Option<String>,
+    /// When its current state began (its turn started, or ended), in Unix
+    /// milliseconds; `None` for an agent this Agent instance has not run.
+    /// An interface shows how long it has been running from it.
+    pub state_since: Option<u64>,
 }
 
 /// Whether a subagent runs a turn.
@@ -72,7 +77,9 @@ pub enum AgentSubagentState {
 
 /// Registers the subagent tools and the orchestrator guidance over
 /// `driver`, with the roles `roles` reads, and provides the
-/// [`SubagentService`]. The runs it tracks outlive a restart of the plugin.
+/// [`SubagentService`]. The runs it tracks are `wakes`', which outlive a
+/// restart of the plugin, and its agents' turns tell `wakes`' host what
+/// they ask of a person.
 /// A change of the running-agent limit is taken in place; one of the wait
 /// bounds, which `wait_agent`'s spec states, restarts the plugin.
 /// The guidance and a spawn read the spawnable roles at each step and call;
@@ -80,17 +87,18 @@ pub enum AgentSubagentState {
 pub(crate) fn subagents_plugin(
     driver: AgentSessionDriver,
     roles: AgentRoleCatalogReader,
+    wakes: Wakes,
 ) -> PluginDef {
-    let runs = SubagentRuns::default();
     PluginDef::typed(move |ctx: Context, options: Arc<SubagentsOptions>| {
         let driver = driver.clone();
         let roles = roles.clone();
-        let runs = runs.clone();
+        let wakes = wakes.clone();
         async move {
             let limits = SubagentLimits::of(&options);
             let service = Arc::new(SubagentService {
                 driver,
-                runs,
+                runs: wakes.runs.clone(),
+                wakes,
                 blocking: ctx.get::<BlockingService>()?.arc().clone(),
                 roles,
                 limits: parking_lot::Mutex::new(limits),

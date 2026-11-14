@@ -100,7 +100,10 @@ pub(crate) fn agent_plugin_manifest(
     use AgentPluginGroup::{Capability, Context, Core};
     let mut rows = vec![
         // The last core row: wakes cannot be turned off but by the option.
-        AgentPluginRow::unconfigured(Core, wake_plugin(inputs.driver.clone(), inputs.wakes)),
+        AgentPluginRow::unconfigured(
+            Core,
+            wake_plugin(inputs.driver.clone(), inputs.wakes.clone()),
+        ),
         AgentPluginRow::from_settings(Capability, web_plugin(), |settings| {
             serde_json::to_value(web_config(settings)?).map_err(|error| error.to_string())
         }),
@@ -122,7 +125,7 @@ pub(crate) fn agent_plugin_manifest(
         AgentPluginRow::unconfigured(Capability, goal_plugin(inputs.goals)),
         AgentPluginRow::from_settings(
             Capability,
-            subagents_plugin(inputs.driver.clone(), inputs.roles),
+            subagents_plugin(inputs.driver.clone(), inputs.roles, inputs.wakes),
             |settings| settings.options_value(SUBAGENTS_PLUGIN),
         ),
         AgentPluginRow::unconfigured(Capability, review_plugin(inputs.driver, inputs.git)),

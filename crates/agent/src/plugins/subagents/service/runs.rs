@@ -17,14 +17,15 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use hanafubuki_agent_kernel::{
-    AgentError, AgentSessionId, AgentSubagentWake, AgentTurnOutcome, AgentTurnPhase,
-    AgentWakeEvent, AgentWakeSource,
+    AgentError, AgentSessionId, AgentSessionOrigin, AgentSubagentWake, AgentTurnOutcome,
+    AgentTurnPhase, AgentWakeEvent, AgentWakeSource,
 };
 use parking_lot::Mutex;
 use tokio::sync::Notify;
 
-use super::ListedAgent;
+use super::{role_name, ChildModelView, ListedAgent};
 use crate::session_driver::AgentSessionDriver;
+use crate::wake::Feed;
 
 /// An agent's status, as the model reads it.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -125,17 +126,23 @@ impl AgentUpdate {
 }
 
 /// The agents this Agent instance runs, kept across the plugin's restarts.
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub(crate) struct SubagentRuns {
     pub(super) runs: Arc<Mutex<HashMap<AgentSessionId, AgentRun>>>,
     /// Told when a run ends, once what its parent hears of it is queued.
     pub(super) changed: Arc<Notify>,
+    /// Told of the parent whose agent started or ended, once its status is
+    /// set.
+    pub(super) feed: Arc<Feed>,
 }
 
 pub(super) struct AgentRun {
     pub(super) parent: AgentSessionId,
     name: String,
     pub(super) status: AgentRunStatus,
+    /// When `status` was set, in Unix milliseconds; `None` for the status
+    /// of an agent this instance has not run yet.
+    pub(super) since: Option<u64>,
     /// Messages for its next turn.
     pub(super) queued: Vec<String>,
     /// How many turns this instance started on it.
@@ -143,16 +150,23 @@ pub(super) struct AgentRun {
 }
 
 impl SubagentRuns {
-    pub(super) fn running(&self, parent: AgentSessionId) -> usize {
+    pub(crate) fn new(feed: Arc<Feed>) -> Self {
+        Self {
+            runs: Arc::default(),
+            changed: Arc::default(),
+            feed,
+        }
+    }
+
+    /// How many agents of `parent` run: one counts from before its spawn
+    /// returns until its end is queued on `parent`, so a parent that waits
+    /// on it never sees it neither running nor reported.
+    pub(crate) fn running(&self, parent: AgentSessionId) -> usize {
         self.runs
             .lock()
             .values()
             .filter(|run| run.parent == parent && run.status == AgentRunStatus::Running)
             .count()
-    }
-
-    pub(super) fn status(&self, child: AgentSessionId) -> Option<AgentRunStatus> {
-        self.runs.lock().get(&child).map(|run| run.status.clone())
     }
 
     /// Records how `child`'s `turn`-th run ended, unless a later run
@@ -183,15 +197,54 @@ impl SubagentRuns {
                 log::debug!("the end of subagent {child} was not queued on {parent}: {error}");
             }
         }
-        if let Some(run) = self
-            .runs
-            .lock()
-            .get_mut(&child)
-            .filter(|run| run.turn == turn)
-        {
-            run.status = status;
-        }
+        let parent = {
+            let mut runs = self.runs.lock();
+            let run = runs.get_mut(&child).filter(|run| run.turn == turn);
+            run.map(|run| {
+                run.set(status);
+                run.parent
+            })
+        };
         self.changed.notify_waiters();
+        if let Some(parent) = parent {
+            self.feed.hint(parent);
+        }
+    }
+
+    /// `parent`'s agents, oldest first, each with the model it runs on, the
+    /// runs read at once. Blocks.
+    pub(super) fn agents_on_models(
+        &self,
+        driver: &AgentSessionDriver,
+        parent: AgentSessionId,
+    ) -> Result<Vec<(ListedAgent, ChildModelView)>, AgentError> {
+        let children = driver.children(parent, AgentSessionOrigin::Subagent)?;
+        let runs = self.runs.lock();
+        Ok(children
+            .into_iter()
+            .map(|child| {
+                let model = ChildModelView {
+                    provider_id: child.provider_id.clone(),
+                    model: child.model.clone(),
+                    reasoning_effort: child.reasoning_effort.clone(),
+                };
+                let run = runs.get(&child.session_id);
+                let agent = ListedAgent {
+                    name: child
+                        .title
+                        .map(|title| title.value)
+                        .unwrap_or_else(|| child.session_id.to_string()),
+                    id: child.session_id,
+                    role: role_name(child.role),
+                    status: run.map_or_else(
+                        || AgentRunStatus::of_phase(child.latest_turn_phase),
+                        |run| run.status.clone(),
+                    ),
+                    since: run.and_then(|run| run.since),
+                };
+                (agent, model)
+            })
+            .collect())
     }
 }
 
@@ -201,8 +254,23 @@ impl AgentRun {
             parent,
             name: agent.name,
             status: agent.status,
+            since: agent.since,
             queued: Vec::new(),
             turn: 0,
         }
     }
+
+    pub(super) fn set(&mut self, status: AgentRunStatus) {
+        let since = now_millis();
+        self.status = status;
+        self.since = Some(since);
+    }
+}
+
+fn now_millis() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |elapsed| {
+            u64::try_from(elapsed.as_millis()).unwrap_or(u64::MAX)
+        })
 }

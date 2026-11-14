@@ -29,7 +29,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
 mod background;
-pub use background::AgentBackgroundStatus;
+
 mod background_terminals;
 mod children;
 mod compression;

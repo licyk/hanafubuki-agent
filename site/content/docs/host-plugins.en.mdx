@@ -313,6 +313,8 @@ The rules:
 
 The full rules of each are in [Plugin rules](/docs/plugin-rules).
 
+For a host’s task display and child approvals, use the launch-time `AgentBackgroundEventSink`, not a polling plugin: `Changed` refreshes `background_tasks`, `Child` forwards a child’s requests, and `Woken` invites the host to submit a wake turn. The threading, ordering and snapshot contract is in [Events and history](/docs/embedding#events-and-history).
+
 ## Panics in plugin code [#panics-in-plugin-code]
 
 A plugin panic is a bug, but it stays in its plugin: the kernel calls plugin code only under a guard, and a panic becomes that call's own error path and a fault of the plugin.

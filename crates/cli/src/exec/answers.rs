@@ -1,5 +1,6 @@
-//! How `exec` answers what a turn asks: approvals by the `--approve` policy,
-//! the model's questions only by a person at a terminal.
+//! How `exec` answers what a turn asks, the session's or a sub-agent's:
+//! approvals by the `--approve` policy, the model's questions only by a
+//! person at a terminal.
 
 use std::collections::{BTreeSet, HashMap};
 use std::io::{BufRead, IsTerminal, Write};
@@ -51,8 +52,8 @@ impl ApprovePolicy {
 
 pub(super) struct Answers {
     policy: ApprovePolicy,
-    /// The tool of each call the turn started, by call id: an approval
-    /// names its call (`operation_id`).
+    /// The tool of each call the session's turns started, by call id: an
+    /// approval names its call (`operation_id`).
     tools: HashMap<String, String>,
 }
 
@@ -68,23 +69,32 @@ impl Answers {
         self.tools.insert(call_id.to_string(), name.to_string());
     }
 
+    /// The tool of the session's call `call_id`.
+    pub(super) fn tool(&self, call_id: &str) -> Option<&str> {
+        self.tools.get(call_id).map(String::as_str)
+    }
+
+    /// The answer to `request`, a call of `tool` (`unknown tool` when not
+    /// known) that `asker` makes (a sub-agent, by its title; the session
+    /// itself when none), noted on `output`.
     pub(super) fn approval(
         &self,
         request: &ApprovalRequest,
+        tool: Option<&str>,
+        asker: Option<&str>,
         output: &mut dyn Output,
     ) -> ApprovalUserDecision {
-        let tool = self
-            .tools
-            .get(&request.operation_id)
-            .map(String::as_str)
-            .unwrap_or("unknown tool");
-        let summary = &request.action.summary;
+        let tool = tool.unwrap_or("unknown tool");
+        let summary = &match asker {
+            Some(asker) => format!("sub-agent {asker}: {tool}: {}", request.action.summary),
+            None => format!("{tool}: {}", request.action.summary),
+        };
         let decision = match &self.policy {
             ApprovePolicy::Deny => ApprovalUserDecision::Deny,
             ApprovePolicy::Allow(tools) if tools.contains(tool) => ApprovalUserDecision::AllowOnce,
             ApprovePolicy::Allow(_) => ApprovalUserDecision::Deny,
             ApprovePolicy::Ask if terminal() => {
-                ask_approval(tool, summary, request.offers_allow_for_session)
+                ask_approval(summary, request.offers_allow_for_session)
             }
             ApprovePolicy::Ask => ApprovalUserDecision::Deny,
         };
@@ -93,15 +103,17 @@ impl Answers {
             ApprovalUserDecision::AllowForSession => "allowed for the session",
             ApprovalUserDecision::Deny => "denied",
         };
-        output.note(&format!("approval {answer}: {tool}: {summary}"));
+        output.note(&format!("approval {answer}: {summary}"));
         decision
     }
 
-    /// The answers of the person at the terminal; `None` without one, or
-    /// when they give none.
+    /// The answers of the person at the terminal to what `asker` (a
+    /// sub-agent, by its title; the session itself when none) asks; `None`
+    /// without one, or when they give none.
     pub(super) fn questions(
         &self,
         request: &AgentUserInputRequest,
+        asker: Option<&str>,
         output: &mut dyn Output,
     ) -> Option<Vec<AgentUserInputAnswer>> {
         if !terminal() {
@@ -109,7 +121,13 @@ impl Answers {
         }
         let mut answers = Vec::new();
         for question in &request.questions {
-            eprintln!("\n{}\n{}", question.header, question.question);
+            let asker = asker.map(|asker| format!("sub-agent {asker}: "));
+            let header = &question.header;
+            eprintln!(
+                "\n{}{header}\n{}",
+                asker.unwrap_or_default(),
+                question.question
+            );
             for (index, option) in question.options.iter().enumerate() {
                 eprintln!("  {}. {} — {}", index + 1, option.label, option.description);
             }
@@ -135,13 +153,13 @@ fn terminal() -> bool {
     std::io::stdin().is_terminal() && std::io::stderr().is_terminal()
 }
 
-fn ask_approval(tool: &str, summary: &str, offers_session: bool) -> ApprovalUserDecision {
+fn ask_approval(summary: &str, offers_session: bool) -> ApprovalUserDecision {
     let choices = if offers_session {
         "[y]es, [s]ession, [N]o"
     } else {
         "[y]es, [N]o"
     };
-    let answer = read_line(&format!("\nallow {tool}: {summary}? {choices} "));
+    let answer = read_line(&format!("\nallow {summary}? {choices} "));
     match answer.as_deref().map(str::trim) {
         Some("y" | "Y" | "yes") => ApprovalUserDecision::AllowOnce,
         Some("s" | "S" | "session") if offers_session => ApprovalUserDecision::AllowForSession,

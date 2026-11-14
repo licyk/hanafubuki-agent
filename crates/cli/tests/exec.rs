@@ -610,3 +610,144 @@ fn doctor_online_lists_each_model_with_what_is_known_of_it() {
         "{stdout}"
     );
 }
+
+/// `name`'s spawn on the second Provider, with `task`.
+fn spawn_on_second(name: &str, task: &str) -> Vec<u8> {
+    let spawn = serde_json::json!({
+        "task_name": name,
+        "message": task,
+        "fork_turns": "none",
+        "provider": "provider-2",
+        "model": "fixture-model",
+    });
+    tool_events("spawn_agent", &spawn.to_string())
+}
+
+/// A home whose sessions run on `parent` and may spawn agents on
+/// `children`, the second Provider.
+fn delegating(parent: &Model, children: &Model) -> Home {
+    let home = Home::new().with_provider(&parent.server.base_url);
+    add_test_provider(
+        &AgentConfig::new(&home.home),
+        "provider-2",
+        "Second",
+        &children.server.base_url,
+    );
+    home
+}
+
+/// The root delegates a command to an agent and completes its turn; the
+/// agent's call waits on an approval, which `exec` answers by `approve`.
+/// The run, and the agent's model once it ended.
+fn delegated_command(approve: &str, json: bool) -> (support::Run, Model) {
+    #[cfg(not(windows))]
+    let command = "printf child-output";
+    #[cfg(windows)]
+    let command = "Write-Output child-output";
+    let parent = Model::start(vec![
+        spawn_on_second("runner", "Run the command."),
+        assistant_events("The runner is on it."),
+        assistant_events("The runner is done."),
+    ]);
+    let children = Model::start(vec![
+        command_call(command),
+        assistant_events("The runner ran it."),
+    ]);
+    let home = delegating(&parent, &children);
+    let mut arguments = vec!["exec", "--approve", approve];
+    if json {
+        arguments.push("--json");
+    }
+    arguments.push("Delegate the command.");
+    let run = home.run(&arguments).expect(0);
+    assert_eq!(parent.request_count(), 3, "woken once the agent ended");
+    (run, children)
+}
+
+/// A sub-agent's approval is answered by `--approve`, as the session's are,
+/// and noted with the sub-agent's title; the run waits for the agent and
+/// ends with the woken turn's answer.
+#[test]
+fn a_sub_agents_approval_is_answered_by_approve() {
+    let (run, children) = delegated_command("deny", false);
+    let stdout = run.stdout();
+    assert!(
+        stdout.contains("· approval denied: sub-agent runner: exec_command: "),
+        "{stdout}"
+    );
+    assert!(stdout.contains("The runner is done."), "{stdout}");
+    let answered = String::from_utf8_lossy(&children.server.requests()[1].body).into_owned();
+    assert!(!answered.contains("child-output\\n"), "{answered}");
+
+    let (run, children) = delegated_command("allow:exec_command", false);
+    let stdout = run.stdout();
+    assert!(
+        stdout.contains("· approval allowed: sub-agent runner: exec_command: "),
+        "{stdout}"
+    );
+    let answered = String::from_utf8_lossy(&children.server.requests()[1].body).into_owned();
+    assert!(answered.contains("child-output"), "{answered}");
+
+    // Without a terminal to ask, `ask` denies.
+    let (run, _) = delegated_command("ask", false);
+    let stdout = run.stdout();
+    assert!(
+        stdout.contains("· approval denied: sub-agent runner: exec_command: "),
+        "{stdout}"
+    );
+
+    // With --json the note goes to standard error, and standard output
+    // has the session's own events only.
+    let (run, _) = delegated_command("allow:apply_patch", true);
+    assert!(
+        run.stderr()
+            .contains("approval denied: sub-agent runner: exec_command: "),
+        "{}",
+        run.stderr()
+    );
+    let sessions = run
+        .stdout()
+        .lines()
+        .map(|line| serde_json::from_str::<Value>(line).unwrap()["sessionId"].clone())
+        .collect::<Vec<_>>();
+    assert!(sessions.windows(2).all(|pair| pair[0] == pair[1]));
+}
+
+/// A sub-agent's question that no one at a terminal can answer interrupts
+/// that agent; the run goes on and exits with the session's turn's
+/// outcome.
+#[test]
+fn a_sub_agents_question_without_a_terminal_interrupts_it() {
+    let question = serde_json::json!({
+        "questions": [{
+            "id": "scope",
+            "header": "Scope",
+            "question": "Choose a scope",
+            "options": [
+                { "id": "focused", "label": "Focused", "description": "Only this" },
+                { "id": "broad", "label": "Broad", "description": "All of it" }
+            ]
+        }]
+    });
+    let parent = Model::start(vec![
+        spawn_on_second("asker", "Ask me."),
+        assistant_events("The asker is on it."),
+    ]);
+    let children = Model::start(vec![tool_events(
+        "request_user_input",
+        &question.to_string(),
+    )]);
+    let home = delegating(&parent, &children);
+    let run = home.run(&["exec", "Delegate the question."]).expect(0);
+    let stdout = run.stdout();
+    assert!(
+        stdout.contains(
+            "· sub-agent asker asked a question that no one at a terminal can answer; \
+             interrupting it"
+        ),
+        "{stdout}"
+    );
+    assert!(stdout.contains("The asker is on it."), "{stdout}");
+    assert_eq!(parent.request_count(), 2, "an interrupt reports nothing");
+    assert_eq!(children.request_count(), 1);
+}

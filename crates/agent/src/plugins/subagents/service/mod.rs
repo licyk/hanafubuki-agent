@@ -39,8 +39,8 @@ use hanafubuki_agent_contracts::{BlockingService, CancellationToken};
 use hanafubuki_agent_foundation::panic::catch_panic_async;
 use hanafubuki_agent_kernel::{
     AgentChildSessionBase, AgentChildSessionRequest, AgentError, AgentSessionId,
-    AgentSessionOrigin, AgentSessionPersistence, AgentSessionRuntimeSnapshot, AgentSessionSummary,
-    AgentSubagentWake, AgentWakeFilter, AgentWakeQueued, AgentWakeSource, ModelReasoningEffort,
+    AgentSessionOrigin, AgentSessionPersistence, AgentSessionRuntimeSnapshot, AgentSubagentWake,
+    AgentWakeFilter, AgentWakeQueued, AgentWakeSource, ModelReasoningEffort,
 };
 use parking_lot::Mutex;
 
@@ -51,6 +51,7 @@ use super::models::refusal;
 use super::options::SubagentLimits;
 use crate::roles::{AgentRoleCatalogReader, AgentSessionRole, DEFAULT_ROLE};
 use crate::session_driver::{AgentSessionDriver, ChildModelRequest, SpawnModelCatalog};
+use crate::wake::{root_of, Wakes};
 
 const CANCELLATION_POLL_INTERVAL: Duration = Duration::from_millis(50);
 /// The `target` a sub-agent names the agent that spawned it by.
@@ -64,6 +65,8 @@ pub(super) struct ListedAgent {
     /// The role its session has, `default` when it narrows nothing.
     pub(super) role: String,
     pub(super) status: AgentRunStatus,
+    /// When this instance set `status`, in Unix milliseconds.
+    pub(super) since: Option<u64>,
 }
 
 /// The Provider, model and reasoning effort an agent's session runs on now,
@@ -119,6 +122,8 @@ pub(super) struct SpawnRequest {
 pub(crate) struct SubagentService {
     pub(super) driver: AgentSessionDriver,
     pub(super) runs: SubagentRuns,
+    /// Where its agents' turns tell the host what they ask of a person.
+    pub(super) wakes: Wakes,
     pub(super) blocking: Arc<BlockingService>,
     /// The roles an agent is spawned as, read at each call.
     pub(super) roles: AgentRoleCatalogReader,
@@ -206,6 +211,7 @@ impl SubagentService {
             id: child,
             role: child_role,
             status: AgentRunStatus::PendingInit,
+            since: None,
         };
         self.start(parent, agent, request.message).await?;
         Ok(snapshot)
@@ -345,20 +351,9 @@ impl SubagentService {
         &self,
         parent: AgentSessionId,
     ) -> Result<Vec<(ListedAgent, ChildModelView)>, AgentError> {
-        let children = self
-            .blocking(move |driver| driver.children(parent, AgentSessionOrigin::Subagent))
-            .await?;
-        Ok(children
-            .into_iter()
-            .map(|child| {
-                let model = ChildModelView {
-                    provider_id: child.provider_id.clone(),
-                    model: child.model.clone(),
-                    reasoning_effort: child.reasoning_effort.clone(),
-                };
-                (self.listed(child), model)
-            })
-            .collect())
+        let runs = self.runs.clone();
+        self.blocking(move |driver| runs.agents_on_models(driver, parent))
+            .await
     }
 
     /// Interrupts the turn `target` runs, if any; returns its status from
@@ -428,6 +423,7 @@ impl SubagentService {
     ) -> Result<(), AgentError> {
         let child = agent.id;
         self.driver.inherit_permission_mode(parent, child).await?;
+        let root = self.blocking(move |driver| root_of(driver, parent)).await?;
         let maximum = self.limits().maximum_running_agents;
         let (text, turn) = {
             let mut runs = self.runs.runs.lock();
@@ -444,9 +440,10 @@ impl SubagentService {
             let mut parts = std::mem::take(&mut run.queued);
             parts.push(message);
             run.turn += 1;
-            run.status = AgentRunStatus::Running;
+            run.set(AgentRunStatus::Running);
             (parts.join("\n\n"), run.turn)
         };
+        self.runs.feed.hint(parent);
         // What its previous turn left queued on the parent is no news once
         // the next one runs: the parent hears of that one.
         let withdrawn = self
@@ -461,8 +458,9 @@ impl SubagentService {
         }
         let runs = self.runs.clone();
         let driver = self.driver.clone();
+        let events = self.wakes.child_events(root);
         tokio::spawn(async move {
-            let outcome = catch_panic_async(driver.run_turn(child, text.into())).await;
+            let outcome = catch_panic_async(driver.run_turn(child, text.into(), events)).await;
             let status = AgentRunStatus::of_turn(outcome);
             runs.finish(&driver, child, turn, status).await;
         });
@@ -499,21 +497,6 @@ impl SubagentService {
                     "no agent named `{target}`; list_agents lists the agents you spawned"
                 ))
             })
-    }
-
-    fn listed(&self, child: AgentSessionSummary) -> ListedAgent {
-        ListedAgent {
-            name: child
-                .title
-                .map(|title| title.value)
-                .unwrap_or_else(|| child.session_id.to_string()),
-            id: child.session_id,
-            role: role_name(child.role),
-            status: self
-                .runs
-                .status(child.session_id)
-                .unwrap_or_else(|| AgentRunStatus::of_phase(child.latest_turn_phase)),
-        }
     }
 
     async fn blocking<T: Send + 'static>(

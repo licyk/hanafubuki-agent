@@ -107,11 +107,13 @@ impl AgentSessionDriver {
     }
 
     /// Runs `input`'s turn on `session_id` and waits for its outcome, in
-    /// the mode [`Self::turn_permission_mode`] resolves.
+    /// the mode [`Self::turn_permission_mode`] resolves; its events go to
+    /// `event_sink` (and its journal).
     pub(crate) async fn run_turn(
         &self,
         session_id: AgentSessionId,
         input: crate::AgentTurnInput,
+        event_sink: Arc<dyn AgentEventSink>,
     ) -> Result<AgentTurnOutcome, AgentError> {
         let session = self
             .activate_provider_session(session_id)
@@ -134,7 +136,7 @@ impl AgentSessionDriver {
             .collect_turn_extensions(session_id, session.mode)
             .await?;
         self.core
-            .start_turn(
+            .start_turn_with_sink(
                 session_id,
                 AgentTurnInput {
                     text: input.text,
@@ -146,6 +148,7 @@ impl AgentSessionDriver {
                     origin: AgentTurnOrigin::Programmatic,
                     provisional_title: None,
                 },
+                event_sink,
             )
             .await
     }
@@ -694,7 +697,7 @@ pub(crate) fn hierarchical_compression(
 
 /// Where the events of what a plugin drives on a child go: the child's
 /// journal keeps them, which is where an interface reads them.
-struct Discard;
+pub(crate) struct Discard;
 
 impl AgentEventSink for Discard {
     fn emit(&self, _event: AgentEvent) {}

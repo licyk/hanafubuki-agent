@@ -473,3 +473,121 @@ async fn observers_are_told_of_a_queued_wake_event() {
     );
     assert!(observer.seen.lock().unwrap().is_empty());
 }
+
+/// Events that leave a wake queue are told once that is durable: delivered
+/// at a step of the running turn, taken by a filter (a take that finds
+/// nothing tells nothing), delivered at a turn's admission (after its
+/// `TurnAdmitted`).
+#[tokio::test]
+async fn observers_are_told_when_events_leave_a_wake_queue() {
+    let model = ScriptedEventModel::new([
+        mutation_tool_call_events(),
+        deterministic_assistant_events("started"),
+        deterministic_assistant_events("read"),
+    ]);
+    let tools = FakeTools::new([FakeRegisteredExchange::success(
+        "control_instance",
+        json!({ "instanceId": "instance-a", "action": "start" }),
+        hanafubuki_agent_tool_contracts::ToolOutput::structured(
+            json!({ "instanceId": "instance-a" }),
+            false,
+        ),
+    )])
+    .await;
+    let observer = Arc::new(RecordingObserver::default());
+    tools
+        .mount(&registering::<ObserverRegistry>(
+            "recording",
+            vec![observer.clone() as Arc<dyn AgentObserver>],
+        ))
+        .await;
+    let service = AgentService::new(Arc::new(model), tools.registries());
+    let _ = observer.service.set(service.clone());
+    let session_id = service.create_session(config()).unwrap().id;
+    service
+        .set_session_wake_policy(session_id, hanafubuki_agent_kernel::AgentWakePolicy::On)
+        .await
+        .unwrap();
+    let left = || {
+        observer
+            .seen
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|seen| **seen == AgentNotification::BackgroundWorkChanged { session_id })
+            .count()
+    };
+    let status = |id: u64| hanafubuki_agent_kernel::AgentWakeSource::Subagent {
+        session_id: AgentSessionId::new(id),
+        name: format!("agent_{id}"),
+        event: hanafubuki_agent_kernel::AgentSubagentWake::Completed {
+            answer: Some("done".to_string()),
+            truncated: false,
+        },
+    };
+
+    let executing = service.clone();
+    let task = tokio::spawn(async move {
+        executing
+            .start_turn(session_id, "start it".to_string())
+            .await
+    });
+    let (turn, approval) = approval_request(&service, session_id, 0).await;
+    service
+        .enqueue_wake_event(session_id, status(41))
+        .await
+        .unwrap();
+    assert_eq!(left(), 0, "queued, not left");
+    service
+        .resolve_approval(
+            session_id,
+            turn.id,
+            turn.generation,
+            approval.request_id,
+            ApprovalUserDecision::AllowOnce,
+        )
+        .unwrap();
+    task.await.unwrap().unwrap();
+    assert_eq!(left(), 1, "a step delivered it");
+
+    service
+        .enqueue_wake_event(session_id, status(42))
+        .await
+        .unwrap();
+    let filter = hanafubuki_agent_kernel::AgentWakeFilter::SubagentStatus {
+        session_id: AgentSessionId::new(43),
+    };
+    assert!(service
+        .take_wake_events(session_id, filter)
+        .await
+        .unwrap()
+        .is_empty());
+    assert_eq!(left(), 1, "nothing was taken");
+    service
+        .take_wake_events(
+            session_id,
+            hanafubuki_agent_kernel::AgentWakeFilter::SubagentStatuses,
+        )
+        .await
+        .unwrap();
+    assert_eq!(left(), 2, "taken");
+
+    service
+        .enqueue_wake_event(session_id, status(44))
+        .await
+        .unwrap();
+    service
+        .start_turn(session_id, "what happened?".to_string())
+        .await
+        .unwrap();
+    assert_eq!(left(), 3, "an admission delivered it");
+    let seen = observer.seen.lock().unwrap().clone();
+    let admitted = seen
+        .iter()
+        .rposition(|seen| matches!(seen, AgentNotification::TurnAdmitted { .. }))
+        .unwrap();
+    assert_eq!(
+        seen[admitted + 1],
+        AgentNotification::BackgroundWorkChanged { session_id }
+    );
+}

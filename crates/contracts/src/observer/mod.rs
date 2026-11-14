@@ -75,6 +75,10 @@ pub enum AgentNotification {
     /// An event was queued on the session's wake queue (one dropped with
     /// the policy off is not notified).
     WakeEventQueued { session_id: AgentSessionId },
+    /// Events left the session's wake queue: a turn delivered them (at its
+    /// admission or at a step), or they were taken (`wait_agent`'s
+    /// statuses, a follow-up's withdrawal).
+    BackgroundWorkChanged { session_id: AgentSessionId },
 }
 
 /// Receives the kernel's notifications.

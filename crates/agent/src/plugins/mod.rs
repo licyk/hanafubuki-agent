@@ -33,7 +33,7 @@ pub use review::{
 pub(crate) use skills::skills_plugin;
 pub(crate) use structured_request::wait_for_cancellation;
 pub(crate) use subagents::{
-    subagents_option_schema, subagents_plugin, SubagentService, SUBAGENTS_PLUGIN,
+    subagents_option_schema, subagents_plugin, SubagentRuns, SubagentService, SUBAGENTS_PLUGIN,
 };
 pub use subagents::{AgentSubagentState, AgentSubagentStatus};
 pub(crate) use titles::{titles_plugin, TitleService, TITLES_PLUGIN};

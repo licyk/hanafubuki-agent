@@ -71,6 +71,8 @@ icon: Microscope
 - **暂停**（`wake/pause.rs`，按根会话保存在内存中）：门面对根会话轮次的 `cancel_turn`（用户的中断）暂停它的唤醒，自用户上一条消息以来第 100 个被唤醒的轮次也会暂停（`MAXIMUM_WOKEN_TURNS`，在 `submit_wake_turn_with_sink` 准入一个轮次时计数）；它的来源为 `User` 的 `TurnAdmitted` 到来时，观察者清除这两者（计划的实施是 `Programmatic`，不清除任何东西）。`background_status` 从本实例保存的运行中计数会话的子代理（在 `spawn_agent` 返回之前标记为运行中，只在结束排入队列后才清除），并先于队列读取，所以宿主不会看到一个已结束的子代理既不在工作也没有报告；继续上下文的计数读取内核的轮次阶段，漏计只会让目标多走一步。暂停期间事件照常排队，不唤醒任何会话，下一条消息读到它们；宿主自己的提交仍会运行。`background_status` 报告它（`AgentWakeState::Paused`）。
 - **模型读到的内容**：该条目被降为一个用户角色、种类为 `background_events` 的上下文片段，即 `<background_events>`，其中有一行说明这不是用户写的，然后按队列顺序每个事件一段（`wake_events_record`）。审查者把它读作名为 `background_events` 的工具结果，记忆把它读作同名调用的输出；分层压缩保留它的原样，标准压缩把它与其余内容一起摘要；`/context` 把它计入工具调用及其输出；导出、`sessions show` 和终端界面的回放为每个事件显示一行（`AgentWakeSource::summary`）。
 
+后台事件流（`wake/feed.rs`）合并收到提示的会话 id，找到根会话，在阻塞池读取不含回答摘要的树快照。只有快照与上次读取不同才发送 `Changed`。提示来自运行记录、门面修改，以及唤醒事件持久地离开队列后发出的 `BackgroundWorkChanged`（准入、步骤投递、`wait_agent` 或撤回），还有已有的准入、结束和入队通知。通知时不持有会话锁。TUI 用这些提示替代原来每 400 毫秒的状态和审批轮询，子代理请求由转发 sink 送达。打开会话时只读取一次子代理待处理请求；若请求在读取后已解决则忽略。只有正在显示的子代理仍用 150 毫秒定时器跟随流式日志。`exec` 同样等待事件流，移除了原来每 500 毫秒的复查。
+
 ## 历史存储的拒绝规则 [#history-refusals]
 
 `FileAgentHistoryStore`（`hanafubuki-agent-history`）：每个会话一份 JSONL rollout，它是权威的；SQLite 索引（`index.sqlite3`）是 rollout 的投影（[存储](/docs/architecture#storage)）。存储无法使用的东西只损失它自己的会话，从不损失整个存储，也从不损失文件。只有索引或布局（其 schema、SQL、目录 I/O）的问题会让存储打开失败，并因此让 Agent 的构造失败。

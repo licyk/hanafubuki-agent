@@ -32,9 +32,13 @@ impl AgentApplicationService {
     ) -> Result<AgentSessionRuntimeSnapshot, String> {
         self.activate_session(request.session_id)
             .map_err(|error| error.to_string())?;
-        self.core
+        let session = self
+            .core
             .rename_session(request, event_sink)
-            .map_err(|error| error.to_string())
+            .map_err(|error| error.to_string())?;
+        // A sub-agent's title is in its tree's background work.
+        self.wakes.feed.hint(session.id);
+        Ok(session)
     }
 
     /// Creates a session in `mode` with the role `role` of the current

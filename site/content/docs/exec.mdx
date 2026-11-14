@@ -99,11 +99,13 @@ hanafubuki-agent exec --json "列出最大的五个文件"
   CI 中使用时，确保运行环境是可以丢弃的。
 </Callout>
 
+子代理的审批也遵循相同的 `--approve` 策略，无论根会话正在工作还是等待。提示会标明子代理，例如 `· approval denied: sub-agent runner: exec_command: Run ...`。问题也标明子代理；没有终端或有效回答时，只中断该子代理的回合，整个运行继续，退出结果仍取决于根会话。等待由后台事件驱动，不再定期检查状态。使用 `--json` 时，这些提示写到标准错误，标准输出仍是根会话的事件流。
+
 ## 等待子代理 [#subagents]
 
 回合完成时，如果它创建的[子代理](/docs/tools#subagents)仍在工作，`exec` 不会退出：它等待它们，期间不运行任何东西。其中一个结束或给会话发消息时，`exec` 运行为所报告内容唤醒会话的回合，像任何回合一样输出：先把每条报告作为一条说明输出（``· background update: Sub-agent `counter` (agent id 2) completed: Twelve files.``，使用 `--json` 时输出到标准错误），然后是回合本身。它一直进行，直到没有子代理在工作、也没有剩下要读的内容，然后按最后一个回合的结束方式退出，`-o` 写入那个回合的最终回答。
 
-`wakeOnBackgroundTasks` 关闭时、回合没有完成时，以及子代理唤醒会话 100 次之后（会输出一条说明），它像以前一样在回合结束时退出。`exec` 还不会回答子代理的审批：在 Manual 模式下，这样的审批会一直等到过期（15 分钟），子代理在没有它的情况下继续。`exec` 等待时按 Ctrl-C 以 130 退出，子代理随 Agent 一起停止。
+`wakeOnBackgroundTasks` 关闭时、回合没有完成时，以及子代理唤醒会话 100 次之后（会输出一条说明），它像以前一样在回合结束时退出。`exec` 等待时按 Ctrl-C 以 130 退出，子代理随 Agent 一起停止。
 
 ## 保存最终回答 [#output-last-message]
 

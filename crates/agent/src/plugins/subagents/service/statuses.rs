@@ -1,10 +1,12 @@
 //! What the facade asks of a parent's agents: their statuses, as an
-//! interface lists them, how many work, and the interrupt of one.
+//! interface lists them (and `background_tasks` lists a tree's), and the
+//! interrupt of one.
 
 use hanafubuki_agent_kernel::{AgentError, AgentSessionId, AgentSessionOrigin};
 
-use super::{AgentRunStatus, SubagentService};
+use super::{AgentRunStatus, SubagentRuns, SubagentService};
 use crate::plugins::subagents::{AgentSubagentState, AgentSubagentStatus};
+use crate::session_driver::AgentSessionDriver;
 
 /// The longest last answer the facade's status carries.
 const ANSWER_EXCERPT_CHARS: usize = 400;
@@ -16,37 +18,9 @@ impl SubagentService {
         &self,
         parent: AgentSessionId,
     ) -> Result<Vec<AgentSubagentStatus>, AgentError> {
-        let mut statuses = Vec::new();
-        for (agent, model) in self.agents_on_models(parent).await? {
-            let last_answer = match &agent.status {
-                AgentRunStatus::Completed(Some(answer)) => Some(answer.clone()),
-                _ => {
-                    let id = agent.id;
-                    self.blocking(move |driver| driver.last_answer(id)).await?
-                }
-            };
-            statuses.push(AgentSubagentStatus {
-                session_id: agent.id,
-                title: agent.name,
-                status: match agent.status {
-                    AgentRunStatus::Running => AgentSubagentState::Running,
-                    AgentRunStatus::Errored(_) => AgentSubagentState::Failed,
-                    _ => AgentSubagentState::Idle,
-                },
-                provider_id: model.provider_id,
-                model: model.model,
-                reasoning_effort: model.reasoning_effort,
-                last_answer: last_answer.map(|answer| excerpt(&answer)),
-            });
-        }
-        Ok(statuses)
-    }
-
-    /// How many agents of `parent` this instance runs: one counts from
-    /// before its spawn returns until its end is queued on `parent`, so a
-    /// parent that waits on it never sees it neither running nor reported.
-    pub(crate) fn working(&self, parent: AgentSessionId) -> usize {
-        self.runs.running(parent)
+        let runs = self.runs.clone();
+        self.blocking(move |driver| runs.statuses(driver, parent, true))
+            .await
     }
 
     /// Interrupts the turn the subagent `session_id` runs, if any.
@@ -60,6 +34,42 @@ impl SubagentService {
             )));
         }
         self.stop_turn(session_id).await
+    }
+}
+
+impl SubagentRuns {
+    /// `parent`'s agents as an interface lists them, their runs read at
+    /// once; with their last answers when `answers` says so (each may read
+    /// the agent's conversation), else none. Blocks.
+    pub(crate) fn statuses(
+        &self,
+        driver: &AgentSessionDriver,
+        parent: AgentSessionId,
+        answers: bool,
+    ) -> Result<Vec<AgentSubagentStatus>, AgentError> {
+        let mut statuses = Vec::new();
+        for (agent, model) in self.agents_on_models(driver, parent)? {
+            let last_answer = match (&agent.status, answers) {
+                (_, false) => None,
+                (AgentRunStatus::Completed(Some(answer)), true) => Some(answer.clone()),
+                (_, true) => driver.last_answer(agent.id)?,
+            };
+            statuses.push(AgentSubagentStatus {
+                session_id: agent.id,
+                title: agent.name,
+                status: match agent.status {
+                    AgentRunStatus::Running => AgentSubagentState::Running,
+                    AgentRunStatus::Errored(_) => AgentSubagentState::Failed,
+                    _ => AgentSubagentState::Idle,
+                },
+                provider_id: model.provider_id,
+                model: model.model,
+                reasoning_effort: model.reasoning_effort,
+                last_answer: last_answer.map(|answer| excerpt(&answer)),
+                state_since: agent.since,
+            });
+        }
+        Ok(statuses)
     }
 }
 

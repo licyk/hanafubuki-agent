@@ -4,7 +4,9 @@
 //! opened by a "Background updates" cell. What the person asks meanwhile
 //! waits for the submission's answer. Another session's wake is left to
 //! that session's next turn. A wake that comes while a review runs, or that
-//! is refused (a compaction runs), is tried again when that ends.
+//! is refused (a compaction runs), is tried again when that ends. A change
+//! of the session's tree is `subagents`', and what a subagent asks is
+//! `children`'s.
 
 use hanafubuki_agent::{
     AgentBackgroundEvent, AgentBackgroundEventSink, AgentWakeState, AgentWakeTurnAccepted,
@@ -14,13 +16,19 @@ use super::{AgentBridge, AgentReply, TurnUpdate};
 use crate::app_event::{AppEvent, AppEventSender};
 
 impl AgentBridge {
-    /// What the bridge does with `event`.
-    pub(crate) fn background(&mut self, event: AgentBackgroundEvent) {
+    /// What the bridge does with `event`; what the chat shows of it.
+    pub(crate) fn background(&mut self, event: AgentBackgroundEvent) -> Option<TurnUpdate> {
         match event {
             AgentBackgroundEvent::Woken { session_id } if Some(session_id) == self.session_id => {
-                self.wake()
+                self.wake();
+                None
             }
-            AgentBackgroundEvent::Woken { .. } => {}
+            AgentBackgroundEvent::Woken { .. } => None,
+            AgentBackgroundEvent::Changed { root } => {
+                self.tree_changed(root);
+                None
+            }
+            AgentBackgroundEvent::Child { root, event, .. } => self.child_event(root, *event),
         }
     }
 

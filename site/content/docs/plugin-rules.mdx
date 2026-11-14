@@ -227,7 +227,7 @@ panic 消息进入日志和插件状态，从不进入模型。`mcp` 插件自�
 
 ## 观察者 [#observers]
 
-- `AgentObserver` 通过 `AgentNotification` 得知内核提交了什么：`TurnAdmitted`（带轮次的 `AgentTurnOrigin`，以及准入后由 Agent 给出的会话标题 `automatic_title`）、`SamplingCommitted`（带回答的记忆引用）、`TurnFinished`、`MemoryContributionChanged`（带原因）、`SessionArchived`/`SessionRestored`、`WakeEventQueued`（会话的唤醒队列上排入了一个事件，核心行 `agent-wake` 的调度器据此唤醒空闲的会话）。通知随它的第一个使用者添加。
+- `AgentObserver` 通过 `AgentNotification` 得知内核提交了什么：`TurnAdmitted`（带轮次的 `AgentTurnOrigin`，以及准入后由 Agent 给出的会话标题 `automatic_title`）、`SamplingCommitted`（带回答的记忆引用）、`TurnFinished`、`MemoryContributionChanged`（带原因）、`SessionArchived`/`SessionRestored`、`BackgroundWorkChanged`（事件已持久地离开唤醒队列）、`WakeEventQueued`（会话的唤醒队列上排入了一个事件，核心行 `agent-wake` 的调度器据此唤醒空闲的会话）。通知随它的第一个使用者添加。
 - 内核在提交持久化且其事件发出之后通知，从不在会话锁下，按提交顺序。失败的提交不通知任何东西。
 - `observe` 是同步的，在提交线程上运行：它通知一个工作线程或做一个小的有界本地更新，从不等待内核。它不返回任何东西，所以不能改变结果；必须持久化或到达模型的东西不是观察。
 - 调用不持有租约：插件正在停止的观察者从它开始退役起就被跳过。
