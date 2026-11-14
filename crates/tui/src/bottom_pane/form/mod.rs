@@ -152,7 +152,7 @@ impl FormView {
         let space = key_hint::plain(KeyCode::Char(' ')).is_press(key);
         let mut advance = false;
         match self.items.get_mut(self.focus).map(|item| &mut item.kind) {
-            Some(Kind::Action(id)) if enter => return FormEvent::Action(*id),
+            Some(Kind::Action(id)) if enter => return FormEvent::Action(id),
             Some(Kind::Toggle(on)) if enter || space => *on = !*on,
             Some(Kind::Choice { options, selected }) => {
                 let len = options.len().max(1);
