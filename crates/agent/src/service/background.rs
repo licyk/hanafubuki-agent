@@ -94,7 +94,7 @@ impl AgentApplicationService {
 
     /// The background work of `root`'s tree in full: its sub-agents (each
     /// as `subagents` lists it, with its last answer's start), its
-    /// background terminals (none are listed yet), the events queued on it
+    /// background terminals with their recent output, the events queued on it
     /// and whether it is woken for them. The counts agree with
     /// [`Self::background_status`]: an agent listed as running is one it
     /// counts. Read it again when told `AgentBackgroundEvent::Changed`. It

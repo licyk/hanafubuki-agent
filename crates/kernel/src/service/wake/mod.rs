@@ -86,7 +86,7 @@ impl AgentService {
             (StagedPersistence::commit(&cell, record, previous), taken)
         };
         self.persist_staged(staged).await?;
-        self.notify_wake_events_left(session_id);
+        self.notify_background_work_changed(session_id);
         Ok(taken)
     }
 
@@ -162,13 +162,12 @@ impl AgentService {
         };
         self.persist_staged(staged).await?;
         event_sink.emit(history_event);
-        self.notify_wake_events_left(identity.session_id);
+        self.notify_background_work_changed(identity.session_id);
         Ok(Some(last))
     }
 
-    /// Tells the observers that events left `session_id`'s queue, once
-    /// that is durable.
-    pub(super) fn notify_wake_events_left(&self, session_id: AgentSessionId) {
+    /// Tells observers that background work changed after its durable commit.
+    pub(super) fn notify_background_work_changed(&self, session_id: AgentSessionId) {
         self.inner
             .registries
             .observers

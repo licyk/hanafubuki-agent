@@ -116,7 +116,7 @@ impl AgentService {
                 automatic_title: admitted.automatic_title,
             });
         if delivered {
-            self.notify_wake_events_left(session_id);
+            self.notify_background_work_changed(session_id);
         }
     }
 

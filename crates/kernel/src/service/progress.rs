@@ -441,6 +441,7 @@ impl AgentService {
         update: AgentToolProgressUpdate,
     ) -> Result<(), AgentError> {
         let command = self.started_terminal_command(cell, call_id.as_deref(), &update);
+        let changed = background_changed(&update);
         let staged = {
             let mut record = cell.lock_after_persistence().await?;
             self.stage_execution_progress(cell, &mut record, call_id, update, command)
@@ -450,6 +451,9 @@ impl AgentService {
         };
         self.persist_staged(staged).await?;
         self.emit_session_event(cell.session_id(), event);
+        if changed {
+            self.notify_background_work_changed(cell.session_id());
+        }
         if woken {
             self.inner
                 .registries
@@ -471,6 +475,7 @@ impl AgentService {
         session_id: AgentSessionId,
         update: AgentToolProgressUpdate,
     ) -> Result<(), AgentError> {
+        let changed = background_changed(&update);
         let cell = self.session(session_id)?;
         if !cell
             .progress()
@@ -490,6 +495,9 @@ impl AgentService {
         };
         self.persist_staged_blocking(staged)?;
         self.emit_session_event(session_id, event);
+        if changed {
+            self.notify_background_work_changed(session_id);
+        }
         Ok(())
     }
 
@@ -595,6 +603,18 @@ impl AgentService {
         self.flush_execution_progress(&cell).await;
         Ok(())
     }
+}
+
+fn background_changed(update: &AgentToolProgressUpdate) -> bool {
+    matches!(
+        update,
+        AgentToolProgressUpdate::ExecutionStarted { .. }
+            | AgentToolProgressUpdate::ExecutionDisposed { .. }
+            | AgentToolProgressUpdate::ExecutionCleanupFailed { .. }
+    ) || matches!(
+        update,
+        AgentToolProgressUpdate::ExecutionStatus { status, .. } if status.is_terminal()
+    )
 }
 
 #[cfg(test)]

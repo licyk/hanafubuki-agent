@@ -239,9 +239,29 @@ async fn a_command_that_ends_after_its_turn_wakes_the_session_once() {
     );
     settled(&service, &woken).await;
     assert_eq!(woken.woken(session_id), 0, "nothing ended yet");
+    wait_until("the terminal start changes the tree", || {
+        woken.changed(session_id) > 0
+    })
+    .await;
+    let changed = woken.changed(session_id);
+    let tasks = service.background_tasks(session_id).await.unwrap();
+    assert_eq!(tasks.terminals.len(), 1);
+    assert_eq!(tasks.terminals[0].owner, session_id);
+    assert_eq!(tasks.terminals[0].terminal.execution_id.value(), terminal);
 
     std::fs::write(&go, b"").unwrap();
     wait_until("the end wakes the session", || woken.woken(session_id) == 1).await;
+    wait_until("the terminal end changes the tree", || {
+        woken.changed(session_id) > changed
+    })
+    .await;
+    let tasks = service.background_tasks(session_id).await.unwrap();
+    assert_eq!(tasks.terminals[0].terminal.exit_code, Some(3));
+    assert!(tasks.terminals[0]
+        .terminal
+        .recent_output
+        .iter()
+        .any(|line| line.contains("waited")));
     let status = service.background_status(session_id).unwrap();
     assert_eq!((status.work.terminals, status.pending_wake_events), (0, 1));
     let accepted = service

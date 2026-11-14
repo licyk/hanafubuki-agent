@@ -5586,6 +5586,18 @@ its next pin, and any module-size exception.
         No module-size exception added or raised.
       - Hanafubuki at its next pin: regenerate its request goldens for the
         execution guidance. No history-format change.
+      - R3 integration: the shared `Wakes::status` counts model-started
+        terminals before reading the queue. `background_tasks` lists terminals
+        of the root and its agents, with owner/title and recent output;
+        feed comparison omits recent output and the changing update timestamp.
+        Durable terminal starts, terminal states, disposal and cleanup failure
+        notify `BackgroundWorkChanged`; output does not. The terminal round-trip
+        test checks the task snapshot and start/end change hints. Passed on
+        Linux: three agent background-terminal tests, the CLI terminal-wait
+        test, scoped agent/CLI clippy with all targets/features and warnings
+        denied, `cargo xtask check`, `bun run format:check:site`, and diff
+        validation. Integration also fixes R5's four documentation tables
+        flagged by the site formatter.
 - [ ] R6: `close_subagent` (cascade), `close_background_terminal`, and
       `/stop` as the person's close. Each wakes the owner; archive, delete
       and side close do not.
