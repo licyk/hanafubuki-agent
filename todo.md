@@ -4259,6 +4259,11 @@ exception.
         format:check:site`, `bun run site:check`, `bun run site:test` (28
         passed); `site:build` not run locally (port 3000 is another
         project's); CI's Site run covers it.
+      - CI on e600236:
+        https://github.com/licyk/hanafubuki-agent/actions/runs/43577307471,
+        Linux, Windows and macOS passed at the first attempt. Site on
+        e600236: .../runs/43577307575, passed, its build and deploy
+        included.
       - For O2: `spawn_agent`'s descriptions already point at the guidance
         for models, efforts and Providers; `listed_models`,
         `known_reasoning` and `enabled_provider`'s rule are what the list
