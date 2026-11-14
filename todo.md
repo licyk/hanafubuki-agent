@@ -2768,6 +2768,15 @@ and any module-size exception.
         `@mdx-js/mdx` 3.1.1 (with remark-gfm); `VITE_BASE_PATH=/hanafubuki-agent/
         bun run site:build` not run locally (port 3000 held by another
         project's server); CI's Site run covers it.
+      - CI on f1d5808:
+        https://github.com/licyk/hanafubuki-agent/actions/runs/43547639725,
+        Linux and macOS passed at the first attempt; Windows failed once on
+        `tests::user_shell::a_session_of_commands_reopens_and_continues`
+        (`crates\agent\src\tests\user_shell.rs:481`: `assertion failed:
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE).is_empty()`,
+        the agent crate's `!command` shutdown, which M5 does not touch) and
+        passed at its re-run. Site on f1d5808: .../runs/43547639722, passed,
+        its build and deploy included.
       - For M6–M8: a mermaid fence must stay out of the masker's way —
         it is a code block, so already protected; M6 adds mermaid to the
         tracker's mutable fences, `preferences::current().mermaid` and its
