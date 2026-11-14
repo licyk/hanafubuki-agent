@@ -31,7 +31,9 @@ pub(crate) fn dispatch(
             .next()
             .and_then(|name| name.into_string().ok())
             .ok_or("sandbox runner needs its IO endpoint")?;
-        let _stdio = pipes::attach(&name)?;
+        // Keep standard handles alive through helper_dispatch error reporting;
+        // this dedicated runner exits immediately after dispatch returns.
+        let _stdio = std::mem::ManuallyDrop::new(pipes::attach(&name)?);
         let request = crate::helper::HelperRequest::parse(args.collect())?;
         super::run_prepared(request)
     })())

@@ -78,6 +78,7 @@ mod windows {
                 eprintln!("ok: elevated {name}");
             }
             elevated_network_is_enforced(&elevated);
+            stdio_round_trip(&elevated);
         }
     }
 
@@ -249,6 +250,42 @@ mod windows {
         assert!(String::from_utf8_lossy(&output.stderr).contains("hanafubuki-agent sandbox:"));
         assert!(!marker.exists());
     }
+    fn stdio_round_trip(sandbox: &Sandbox) {
+        use std::io::Write;
+        use std::process::Stdio;
+        let workspace = directory();
+        let command = sandbox
+            .wrap(
+                &workspace_write(workspace.path(), false),
+                cmd("set /p VALUE=& call echo %%VALUE%%& echo diagnostic 1>&2"),
+            )
+            .unwrap();
+        let mut child = Command::new(&command[0])
+            .args(&command[1..])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        child
+            .stdin
+            .take()
+            .unwrap()
+            .write_all(b"round-trip\r\n")
+            .unwrap();
+        let result = child.wait_with_output().unwrap();
+        assert!(result.status.success(), "{result:?}");
+        assert!(
+            String::from_utf8_lossy(&result.stdout).contains("round-trip"),
+            "{result:?}"
+        );
+        assert!(
+            String::from_utf8_lossy(&result.stderr).contains("diagnostic"),
+            "{result:?}"
+        );
+        eprintln!("ok: elevated stdio_round_trip");
+    }
+
     fn elevated_network_is_enforced(sandbox: &Sandbox) {
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();

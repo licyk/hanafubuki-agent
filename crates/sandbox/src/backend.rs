@@ -3,13 +3,10 @@
 // command's transformation) at commit `57a808a392`.
 // Copyright 2025 OpenAI. Licensed under the Apache License, Version 2.0
 // (http://www.apache.org/licenses/LICENSE-2.0).
-// Modified for hanafubuki-agent: Landlock rather than bubblewrap on Linux,
-// probed once; Seatbelt on macOS when `/usr/bin/sandbox-exec` exists; on
-// Windows only the unelevated (restricted token) sandbox, through the
-// helper, and only when `[windows] sandbox` chooses it; a policy no backend
-// can enforce is an error, never a command run unconfined; a plugin's
-// profile restricts reads too (not on Windows); no network
-// proxy.
+// Modified for hanafubuki-agent: bundled bubblewrap with legacy Landlock,
+// Seatbelt, and opt-in Windows restricted-token/account backends.
+// Unavailable confinement fails closed; plugin reads remain unrestricted
+// on Windows. No managed network proxy.
 
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -113,8 +110,8 @@ impl fmt::Display for SandboxError {
 impl std::error::Error for SandboxError {}
 
 impl Sandbox {
-    /// The sandbox this machine has. On Linux: Landlock (Linux 5.13 or
-    /// later, enabled) and seccomp on x86_64 or aarch64, run by this
+    /// The sandbox this machine has. On Linux: bubblewrap (or explicitly
+    /// selected legacy Landlock) and seccomp, run by this
     /// program as the helper once it called
     /// [`helper_dispatch`](crate::helper_dispatch). On macOS: Seatbelt,
     /// through `/usr/bin/sandbox-exec`. On Windows: a restricted token, run
@@ -136,8 +133,8 @@ impl Sandbox {
     }
 
     /// This sandbox as `[windows] sandbox` (`setting`) has it on Windows:
-    /// unset, none (the sandbox is opt-in there, as in Codex); `elevated`,
-    /// none yet; `unelevated`, the restricted token. Elsewhere it changes
+    /// unset, none; `elevated`, provisioned accounts and WFP; `unelevated`,
+    /// the current identity with a restricted token. Elsewhere it changes
     /// nothing.
     pub fn with_windows_sandbox(&self, setting: Option<AgentWindowsSandbox>) -> Self {
         self.with_windows_sandbox_on(cfg!(windows), setting)
@@ -162,7 +159,7 @@ impl Sandbox {
             },
 
             None => Self::unavailable(
-                "the Windows sandbox is off; set windows.sandbox to \"unelevated\" to turn it on",
+                "the Windows sandbox is off; run /setup-default-sandbox to initialize it",
             ),
         }
     }

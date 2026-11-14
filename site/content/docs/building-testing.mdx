@@ -132,3 +132,5 @@ bun run format:check:site
 在 Windows 上，测试运行时 `TEMP` 和 `TMP` 指向作业自己在 `runner.temp` 下创建的目录，位于运行器的本地磁盘（`D:`）上，并像用户配置文件中的临时目录一样直接授予用户本身写权限（`D:` 只通过 Administrators 授予写权限，而沙箱的非提升令牌没有 Administrators）：在系统盘上，Agent 的持久化写入每次刷盘最多要几秒，使轮次、取消和测试的等待超出了各自的期限。
 
 CI 的验证只覆盖它实际运行的平台和命令；本地不要声称与 CI 等价，除非按当前的工作流复现了它。
+
+Linux 构建内置 bubblewrap 需要 C 编译器、`pkg-config` 和 libcap 开发包（Debian/Ubuntu：`libcap-dev`）。只验证原生沙箱可运行 `cargo test -p hanafubuki-agent-sandbox`。Windows 提升账户测试须显式设置 `HANAFUBUKI_TEST_ELEVATED_SANDBOX=1`：它会执行 UAC 初始化并创建本地账户和防火墙规则，因此 CI 使用一次性 runner。Linux 命名空间测试要求宿主允许非特权用户命名空间；CI 与 Codex 一样启用该能力。

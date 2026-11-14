@@ -289,7 +289,7 @@ Agent 对它访问的每个模型所知道的内容，是内核的 `ModelMetadat
 - **启动需要什么。** 对程序，清单请求的权限必须已授予（`install.json` 保存授权，已链接的包则是 `linked.json`，由 `grant_package_permissions` 记录）；包的内容哈希必须仍是安装时记录的那个（每次启动进程时检查，模块则在编译前检查一次）。等待授权的访客处于 `blocked`；内容变化的包启动失败。已链接的包没有要保持的哈希：它按目录当前的样子启动，授权和沙箱配置与已安装的包相同。
 - **已链接的包跟随它的目录。** 访客宿主运行期间，它在实例的受控 worker 组的一个线程上监视每个启用的已链接包（有代码或没有）的目录。某个目录改动并随后安静 500 毫秒，该包的修订号加一，访客宿主发出信号；`plugins` 行随即在后台运行门面对包的重新加载，也就是 `reload_packages` 运行的那一个，所以这个包的 Skill、MCP 服务器、钩子和角色被重新读取，它的访客以新的名字重新启动（[插件访客](/docs/internals#plugin-guests)）。
 - **模块什么也访问不到。** 它能导入的只有访客 ABI 的宿主函数（`view` 和 `invoke` 与程序一样受限），所以它没有文件、网络、时钟或环境变量：清单的 `permissions` 被忽略并记为问题，它不需要授权（`AgentPackageGuest::ungranted` 为 `None`）也不需要沙箱，在所有平台上都能启动。它的限制（`runtime.limits`）约束每个导出：燃料、通过 epoch 中断实现的时间（默认为它最长的调用可能用的时间，每次调用自己的期限也同样生效）以及线性内存（默认 256 MiB）。
-- **插件配置。** 进程以空环境启动，只带被授予的 `env` 变量、`PLUGIN_ROOT` 和 `PLUGIN_DATA`（在 Windows 上还有 `SystemRoot`），工作目录是它的数据目录，并受沙箱的插件配置（`SandboxPolicy::Plugin`）约束：它读取平台的系统目录和它的包，只写它的数据目录，按授权访问工作区（`none`、`read` 或 `write`），只有被授权时才能使用网络。Linux（Landlock）和 macOS（Seatbelt）强制限制读取；Windows 的受限令牌不能拒绝读取，所以在那里访客能读它的用户能读的一切，`workspace: "none"` 不被强制。访客使用平台的沙箱，无论 `[windows] sandbox` 怎样设置（该设置管的是模型的命令）；没有沙箱的地方（没有调用 `helper_dispatch` 的程序、没有 Landlock 的 Linux 内核），访客不会启动。
+- **插件配置。** 进程以空环境启动，只带被授予的 `env` 变量、`PLUGIN_ROOT` 和 `PLUGIN_DATA`（在 Windows 上还有 `SystemRoot`），工作目录是它的数据目录，并受沙箱的插件配置（`SandboxPolicy::Plugin`）约束：它读取平台的系统目录和它的包，只写它的数据目录，按授权访问工作区（`none`、`read` 或 `write`），只有被授权时才能使用网络。Linux（bubblewrap 或旧 Landlock）和 macOS（Seatbelt）强制限制读取；Windows 的受限令牌不能拒绝读取，所以在那里访客能读它的用户能读的一切，`workspace: "none"` 不被强制。访客使用平台的沙箱，无论 `[windows] sandbox` 怎样设置（该设置管的是模型的命令）；没有沙箱的地方（没有调用 `helper_dispatch` 的程序、无法初始化沙箱的宿主），访客不会启动。
 - **它的状态**属于访客宿主：`starting`、`running`、`restarting`、`failed`、`stopped` 或 `blocked`，附带原因、最后一次退出报告（自行退出、被杀死或被释放，原因与状态）以及 stderr 的最后 16 KiB。`packages()` 连同请求与授予的权限一起显示它（`AgentPackageStatus.guest`）。
 - **重启。** 运行之后失败的访客（进程退出或被杀死、调用超过期限、违反协议或发送超过 4 MiB 的帧；模块触发陷阱、用尽燃料或时间，或要把内存增长到超过限制，`GuestHost::call` 从调用的错误中识别这些情况）使它的 fiber 失败，即 Kardia 的 `Failed`；访客宿主随后按重启策略（2 秒、10 秒、30 秒之后，10 分钟内三次）通过更新失败的 fiber 来重启它，这不写任何配置。窗口内的第四次故障使它保持 `failed`，直到 `retry_package`。启动失败不会被重启。因故障停止不等于关闭：这些都不会写入 `[plugins]`。
 
@@ -349,7 +349,7 @@ Agent 对它访问的每个模型所知道的内容，是内核的 `ModelMetadat
 - **插件宿主关闭 `module_faults`、开启自动重启。** 那个标志是关于应用的模块故障 sink 的，插件故障从不使用它，而是通过 `PluginFaults` 到达 Agent 的宿主。
 - **渲染器是数据**，**注册拒绝、规划改名**（见上文）。
 - **轮次限制对模型不可见。** 历史中没有失败轮次原因的条目；用户读轮次的错误消息，没有什么需要模型看到它。
-- **沙箱改写 argv；进程 crate 不知道它。** `sandbox` 把一个命令变成辅助进程的命令行：辅助进程就是 Agent 自己的程序文件，由第一个参数选中（`--hanafubuki-agent-sandbox`，和 Codex 选择它的其他辅助进程一样），它先限制自身，再原地执行那个命令。`ExecutorManager` 像对待其他进程一样启动、拥有和回收这个进程，管道和 PTY 模式都一样，所以 `process`（Hanafubuki 那份的孪生）没有改动；Codex 按 argv[0] 选择的方式需要它能设置 `arg0`。它所在的位置：回合冻结会话的沙箱设置（`SandboxSettings`，门面准备回合时加入的扩展），`plugin-execution` 把它和命令一起交给 `execution`，`execution` 在自己的工作区根目录上解析它，并在启动前包装已获批准的命令。在 Linux 上，辅助进程使用 Codex 的 Landlock 流程，而不是它默认的 bubblewrap：不需要许多发行版都会限制的用户命名空间，不需要从 C 构建的随附 `bwrap`，而 Codex 放弃 Landlock 的理由（它的 app-server 的 Unix 套接字、拒绝访问的例外路径）在这里都不适用。在 macOS 上没有辅助进程：命令行是 `/usr/bin/sandbox-exec` 加上 Codex 的 Seatbelt 策略，可写根目录和只读的例外路径（`.git`，Landlock 做不到）作为参数（`-D`）传入，而不是拼进策略的文本。机器无法执行的模式会让命令失败，绝不会不受限地运行它（[权限](/docs/permissions#sandbox-unavailable)）。
+- **沙箱改写 argv；`ExecutorManager` 保留进程所有权。** 回合冻结 `SandboxSettings`，执行层在启动受管理辅助进程前包装已批准的命令。Linux 使用内置 bubblewrap 命名空间和内部 seccomp 辅助进程，并提供显式旧 Landlock 选项。macOS 使用 `/usr/bin/sandbox-exec`，所有可写根授权之后统一拒绝元数据写入，嵌套 Seatbelt 会报告不可用。Windows 重新执行辅助进程：非提升模式限制当前令牌；提升模式登录已初始化的标准账户，连接私有标准输入输出管道，再以受限令牌和独立桌面启动命令。关闭即终止的作业保留子进程所有权。UAC 仅用于初始化账户和持久 WFP 网络规则，命令不会提升权限。无法隔离时拒绝执行（[权限](/docs/permissions#sandbox-platforms)）。
 - **`hierarchical` 是内置策略，不是插件。** 做成插件需要一个内核每次请求都调用的新注册表，于是每个请求都依赖插件可以替换的代码（[组合规则 1](/docs/plugin-rules#composition-rules)），而且契约无法引用模型 API 的类型。所以算法是一个纯 crate（没有 I/O、没有异步，生产代码不 panic，与插件一样受检查），内核在 `catch_panic` 下调用它：那里的失败只损失一个请求的投影或一次工具调用，不会损失会话，这正是插件的隔离本来能给的。
 - **没有做的：** 代码模式（用 JS 调用所有工具）、跨会话的 MCP 连接池、无论目录大小都延迟所有 MCP 工具、MCP 的 prompts/subscriptions/sampling/roots、Skill 注册的工具或 `allowed-tools` 的执行、从 Agent 单独安装一个 Skill（Skill 随携带它的[插件](/docs/plugins)一起安装，或者手动复制到某个 Skill 根目录），以及进程外的 Agent。
 
@@ -368,7 +368,7 @@ Agent 对它访问的每个模型所知道的内容，是内核的 `ModelMetadat
 | 上下文段  | 类型化的世界状态                                          | 类型化的段，渲染器与槽位属于插件                                                                        |
 | 压缩      | 本地、remote 与 remote v2，在线或异步；重新渲染初始上下文 | 本地摘要、Responses compact 与 v2，在线或在后台（`background`，变基安装）；重新渲染每个段；有上限的重试 |
 | 记忆      | 两个阶段、租约、引用                                      | 相同的设计，加上先判断资格再限量和两阶段退避                                                            |
-| 沙箱      | bubblewrap 和 seccomp、Seatbelt、受限令牌；审批后可提升   | Linux 上为 Landlock 和 seccomp，macOS 上为 Seatbelt；没有提升                                           |
+| 沙箱 | bubblewrap/seccomp、Seatbelt、受限令牌和提升初始化 | 内置 bubblewrap/seccomp 及旧 Landlock、Seatbelt、Windows 受限令牌及账户/WFP 初始化；审批后可在沙箱外执行 |
 
 ## 已知的限制 [#known-limits]
 
@@ -380,5 +380,5 @@ Agent 对它访问的每个模型所知道的内容，是内核的 `ModelMetadat
 - 在 Windows 上，程序访客的沙箱不限制读取。
 - WebAssembly 访客的实例失败只能由调用者等到结果的调用识别：在调用者已放弃的调用（被取消的轮次）中停止的访客，由它的下一次调用使其失败，而那次调用本身也会失败。每组在用的限制保留一个引擎，以及一个每 10 毫秒推进一次其 epoch 的线程。
 - 内置的上下文窗口只覆盖公开了上限的模型系列（GPT、o 系列、Claude、Gemini 2.5）；其他模型需要 Provider 的列表或设置才能自动压缩。
-- 命令沙箱只存在于 Linux 和 macOS；Windows（受限令牌及其提权设置）还没有，所以在那里未设置的 `sandboxMode` 即完全访问。macOS 的沙箱只由它在 macOS 上运行的测试检查。
+- 沙箱原生测试在 Linux、Windows 和 macOS 上运行。`test/sandbox-platforms` 分支的专用 `Sandbox platforms` 工作流只检查沙箱 crate，不等同于完整工作区 CI。
 - 在 Linux 之外未验证：`notify` 监视器的 macOS 与 Windows 后端、Skill 目录中显示的 Windows 路径、Windows 上 MCP stdio 的退出原因和已退出子进程的释放，以及 Windows 上记忆制品的安装重命名。
