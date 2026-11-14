@@ -4,7 +4,8 @@
 //! Compose, Session and Transcript, in three, two or one column by width
 //! (`shortcut_help`), then `/keymap customize`. Each key is the keymap's
 //! in force, so a remapped action shows its new key and an unbound one, or
-//! one with only a chord, is left out; `/`, `@`, `!`, Ctrl+C and PgUp/PgDn
+//! one with only a chord, is left out, except Background tasks shows its
+//! chord too; `/`, `@`, `!`, Ctrl+C and PgUp/PgDn
 //! are fixed. Paste image shows Ctrl+Alt+V under WSL, as Codex does. Codex's
 //! voice key is not ported. A cut list ends with a note naming `/keymap`.
 

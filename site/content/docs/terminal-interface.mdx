@@ -85,7 +85,7 @@ Fullscreen 下还有阅读对话的按键：Page Up/Page Down、F3、F4、Ctrl-S
 
 ### 快捷键说明 [#shortcuts]
 
-在空输入框上按 `?`，输入框下方按三组显示按键：窗口足够宽时三组并排，否则分两列或一列；再按 `?` 隐藏，输入框接收的按键（输入文字、Enter、方向键）也会隐藏它。每个按键都是[按键映射](#keymap)当前给这个动作的按键：改绑的按键显示新的按键，取消绑定（或只绑定了组合键）的动作不显示。
+在空输入框上按 `?`，输入框下方按三组显示按键：窗口足够宽时三组并排，否则分两列或一列；再按 `?` 隐藏，输入框接收的按键（输入文字、Enter、方向键）也会隐藏它。每个按键都是[按键映射](#keymap)当前给这个动作的按键：改绑的按键显示新的按键，取消绑定的动作不显示。多数提示只显示单键；后台任务也会显示其配置的组合键，默认为 `leader t`。
 
 ```text
   Keyboard shortcuts
@@ -96,11 +96,10 @@ Fullscreen 下还有阅读对话的按键：Page Up/Page Down、F3、F4、Ctrl-S
   !         Shell command        alt + ,            Less reasoning              pgup / pgdn                        Scroll
   ctrl + j  New line             alt + .            More reasoning              ctrl + space                       Start selection
   ctrl + v  Paste image          ←                  Agents (empty prompt)       ctrl + home / ctrl + end           Top / latest
-  ctrl + g  External editor      alt + ← / alt + →  Subagents (empty prompt)    shift + alt + , / shift + alt + .  Top / latest
-  ctrl + r  Search history       f4                 Inspect activity
-  esc esc   Edit last message    ctrl + c           Quit
-
-  ctrl + x, t  后台任务
+  ctrl + g  External editor      leader t           Background tasks            shift + alt + , / shift + alt + .  Top / latest
+  ctrl + r  Search history       alt + ← / alt + →  Subagents (empty prompt)
+  esc esc   Edit last message    f4                 Inspect activity
+                                 ctrl + c           Quit
 
   /keymap customize
 ```

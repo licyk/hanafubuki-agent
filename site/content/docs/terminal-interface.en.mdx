@@ -86,7 +86,7 @@ The composer has the usual Emacs-style editing keys: Ctrl-A/E for the start and 
 
 ### The shortcuts [#shortcuts]
 
-`?` on an empty composer shows the keys under it in three groups, side by side when the window is wide enough, else in two columns or one; `?` again hides them, and so does a key the composer takes (typing, Enter, the arrows). Each key is the one [the keymap](#keymap) gives its action now: a key you rebind shows as rebound, and an action you unbind (or bind only to a chord) is left out.
+`?` on an empty composer shows the keys under it in three groups, side by side when the window is wide enough, else in two columns or one; `?` again hides them, and so does a key the composer takes (typing, Enter, the arrows). Each key is the one [the keymap](#keymap) gives its action now: a key you rebind shows as rebound, and an unbound action is left out. Most hints show single keys; Background tasks also shows its configured chord, `leader t` by default.
 
 ```text
   Keyboard shortcuts
@@ -97,11 +97,10 @@ The composer has the usual Emacs-style editing keys: Ctrl-A/E for the start and 
   !         Shell command        alt + ,            Less reasoning              pgup / pgdn                        Scroll
   ctrl + j  New line             alt + .            More reasoning              ctrl + space                       Start selection
   ctrl + v  Paste image          ←                  Agents (empty prompt)       ctrl + home / ctrl + end           Top / latest
-  ctrl + g  External editor      alt + ← / alt + →  Subagents (empty prompt)    shift + alt + , / shift + alt + .  Top / latest
-  ctrl + r  Search history       f4                 Inspect activity
-  esc esc   Edit last message    ctrl + c           Quit
-
-  ctrl + x, t  Background tasks
+  ctrl + g  External editor      leader t           Background tasks            shift + alt + , / shift + alt + .  Top / latest
+  ctrl + r  Search history       alt + ← / alt + →  Subagents (empty prompt)
+  esc esc   Edit last message    f4                 Inspect activity
+                                 ctrl + c           Quit
 
   /keymap customize
 ```
