@@ -11,10 +11,13 @@ async fn shutdown_cancels_the_active_model_and_joins_the_tool_worker() {
         .unwrap();
     let executing = service.clone();
     let turn = tokio::spawn(async move { executing.start_turn(session.id, "wait".into()).await });
-    for _ in 0..100 {
-        if !server.requests().is_empty() {
-            break;
-        }
+    // A shutdown before the turn is admitted refuses it (`ShuttingDown`).
+    let waiting = Instant::now();
+    while server.requests().is_empty() {
+        assert!(
+            waiting.elapsed() < Duration::from_secs(10),
+            "the turn's request never reached the model"
+        );
         tokio::time::sleep(Duration::from_millis(2)).await;
     }
     let shutting_down = service.clone();

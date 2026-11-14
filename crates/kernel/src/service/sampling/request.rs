@@ -388,6 +388,10 @@ impl AgentService {
                         return Err(AgentError::Cancelled);
                     }
                 }
+                // An interruption seen once the turn is cancelled is the cancellation.
+                Err(AgentError::ModelStreamInterrupted(_)) if cancellation.is_cancelled() => {
+                    return Err(AgentError::Cancelled);
+                }
                 Err(AgentError::ModelStreamInterrupted(message)) => {
                     return Err(AgentError::ModelStreamRetriesExhausted { retries, message });
                 }

@@ -1309,14 +1309,27 @@ From CI's failed jobs over the last 60 runs; each passed on a re-run.
   wait now says what the watcher was asked to watch and whether the watch still runs, so a recurrence tells a missed
   re-arm (one path: a product bug on macOS) from a watch that ended or re-armed twice. On that commit (`b1bc11d`),
   [run 43598048804](https://github.com/licyk/hanafubuki-agent/actions/runs/43598048804) ran it green on all three.
-- **Open, not investigated**: `tests::shutdown::shutdown_cancels_the_active_model_and_joins_the_tool_worker` (macOS 1×,
+- **`tests::shutdown::shutdown_cancels_the_active_model_and_joins_the_tool_worker`** (macOS 1×,
   [run 43598048804](https://github.com/licyk/hanafubuki-agent/actions/runs/43598048804); not in the 100 runs before):
   the turn ended `ModelStreamRetriesExhausted { retries: 0, message: "model response stream ended before a terminal
-  event" }` instead of `Cancelled`, its shutdown diagnostics empty. The code suggests a product race: in
-  `kernel/src/service/sampling/request.rs` a `ModelStreamInterrupted` that arrives once the turn is cancelled skips the
-  retry arm (`!cancellation.is_cancelled()`) and falls to `ModelStreamRetriesExhausted`, so a stream the shutdown ended
-  reads as the model's failure rather than the cancellation. Not from the execution sweep change (the test runs no
-  command, so the sweep has no record).
+  event" }` instead of `Cancelled`. A product race. The test's response is an empty body (`content-length: 0`), so the
+  stream ends by itself at once and is retried; the shutdown then cancels the turn in the 100 ms backoff. When the
+  cancellation lands between the stream's end and the retry decision in `kernel/src/service/sampling/request.rs`, the
+  retry arm (`!cancellation.is_cancelled()`) was skipped and the interruption fell to `ModelStreamRetriesExhausted`
+  (`retries: 0` under the default 2 is reachable no other way). So a turn a person (Esc) or a shutdown cancelled just as
+  its stream failed was recorded `Failed` (`ModelStreamRetriesExhausted`): the terminal interface showed the stream
+  error instead of an interruption, `exec` exited 1 instead of 130, and a sub-agent's run was `Errored` (its state `Failed`)
+  instead of `Interrupted`. Fix: an interruption seen once the turn is cancelled is the cancellation
+  (`TurnCancelled { UserInterrupted }`, no retry scheduled). Guard: `loop_contract`
+  `sampling::retry::a_response_stream_interrupted_as_the_turn_is_cancelled_is_the_cancellation` (the stream cancels
+  the turn, then reports the interruption), which failed before the fix with the CI's error. Not changed: an
+  interruption after the first model event, or a Provider's refusal, that coincides with a cancellation still ends
+  the turn `Failed`; neither is retried, so it would have ended the turn without the cancellation. A second, test-only
+  fault (Linux under load, not seen in CI): the test waited for the request at most 200 ms and then shut down anyway,
+  so under load the turn could be refused at admission (`Err(ShuttingDown)`); it now waits for the request. Locally on
+  Linux with 20 busy loops: before the fix 296 of 300 (4× the CI's error; 300 of 300 without load); with the kernel fix
+  only 899 of 900 under load (1× `ShuttingDown`) and 300 of 300 idle; with both 900 of 900 under load and 300 of 300 idle; the
+  new test 300 of 300 idle and under load.
 - Already fixed, not recurring: `bottom_pane::tests::tabs_within_a_paste_burst_are_the_pastes_and_send_nothing` (6e36de1),
   `crates/plugin-packages/tests/guests/linked.rs:124` (6d61cc8), and the macOS
   `output::a_poll_behind_the_retained_output_says_exactly_what_it_missed` (BSD `seq` printing `1e+06`, replaced by `awk`

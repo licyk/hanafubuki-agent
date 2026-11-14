@@ -89,6 +89,40 @@ impl ModelPort for CancellingImageRejectionModel {
     }
 }
 
+/// A model whose response stream is interrupted just as the turn is
+/// cancelled: the interruption is seen after the cancellation.
+struct CancellingInterruptedModel {
+    attempts: AtomicUsize,
+}
+
+impl ModelPort for CancellingInterruptedModel {
+    fn stream(
+        &self,
+        _request: ModelRequest,
+        cancellation: CancellationToken,
+    ) -> ModelFuture<'_, ModelResult<ModelStream>> {
+        self.attempts.fetch_add(1, Ordering::SeqCst);
+        Box::pin(async move {
+            Ok(Box::new(CancellingInterruptedStream { cancellation }) as ModelStream)
+        })
+    }
+}
+
+struct CancellingInterruptedStream {
+    cancellation: CancellationToken,
+}
+
+impl ModelEventStream for CancellingInterruptedStream {
+    fn next(&mut self) -> ModelFuture<'_, Option<ModelResult<ModelEvent>>> {
+        self.cancellation.cancel();
+        Box::pin(async {
+            Some(Err(ModelError::StreamInterrupted(
+                "model response stream ended before a terminal event".into(),
+            )))
+        })
+    }
+}
+
 fn direct_image_request(text: &str) -> ModelRequest {
     image_request(vec![ModelInputItem::UserMessage {
         content: vec![

@@ -162,6 +162,34 @@ async fn cancellation_interrupts_response_stream_retry_backoff() {
 }
 
 #[tokio::test]
+async fn a_response_stream_interrupted_as_the_turn_is_cancelled_is_the_cancellation() {
+    let model = Arc::new(CancellingInterruptedModel {
+        attempts: AtomicUsize::new(0),
+    });
+    let service = AgentService::new(model.clone(), FakeTools::new([]).await.registries());
+    let session = service.create_session(config()).unwrap();
+
+    let result = service.start_turn(session.id, "hello".to_string()).await;
+
+    assert!(matches!(result, Err(AgentError::Cancelled)), "{result:?}");
+    assert_eq!(model.attempts.load(Ordering::SeqCst), 1);
+    let turn = service.snapshot(session.id).unwrap().turn.unwrap();
+    assert_eq!(turn.phase, AgentTurnPhase::Cancelled);
+    assert_eq!(
+        turn.terminal_reason,
+        Some(AgentTurnTerminalReason::UserInterrupted)
+    );
+    let events = service.events_since(session.id, None).unwrap().events;
+    assert!(!events.iter().any(|event| matches!(
+        event.kind,
+        AgentEventKind::ModelRetryScheduled { .. } | AgentEventKind::TurnFailed { .. }
+    )));
+    assert!(events
+        .iter()
+        .any(|event| matches!(event.kind, AgentEventKind::TurnCancelled { .. })));
+}
+
+#[tokio::test]
 async fn per_turn_sink_observes_committed_events_in_sequence_outside_the_registry_lock() {
     let expected = request(vec![ModelInputItem::user_text("hello")]);
     let model = FakeModelTransport::new([FakeModelExchange::new(
