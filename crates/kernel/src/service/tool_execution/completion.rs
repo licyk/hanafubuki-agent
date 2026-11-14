@@ -26,6 +26,13 @@ impl AgentService {
                     .map_err(history_store_error)
             })
             .collect::<Result<Vec<_>, _>>()?;
+        // A bounded output is no longer the text its display metadata
+        // describes.
+        let display_metadata = if truncation.is_none() {
+            output.display_metadata
+        } else {
+            Default::default()
+        };
         let mut committed_items = vec![ConversationItem::ToolOutput {
             call_id: call.call_id.clone(),
             origin: call.origin(),
@@ -33,6 +40,7 @@ impl AgentService {
             truncation,
             images,
             tool_search_results: output.tool_search_results,
+            display_metadata,
         }];
         if !output.selected_tools.is_empty() {
             committed_items.push(ConversationItem::ToolSelection {
@@ -73,6 +81,7 @@ impl AgentService {
                             output,
                             truncation,
                             images,
+                            display_metadata,
                             ..
                         }) = items.first_mut()
                         {
@@ -84,6 +93,7 @@ impl AgentService {
                                         run.output,
                                         self.inner.limits.maximum_tool_output_bytes,
                                     );
+                                *display_metadata = Default::default();
                             }
                             images.extend(run.images);
                         }

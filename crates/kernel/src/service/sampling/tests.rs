@@ -66,6 +66,59 @@ fn embedded_tool_result_image_uses_the_same_bounded_media_estimate() {
     assert!(estimated < 10_000, "media estimate was {estimated}");
 }
 
+/// A command's styles are kept in the history's bytes but never sent, so
+/// they move neither the context estimate nor when compaction starts.
+#[test]
+fn display_metadata_is_not_in_the_context_estimate() {
+    let styles = hanafubuki_agent_contracts::AgentStyledText {
+        text_bytes: 4,
+        spans: vec![hanafubuki_agent_contracts::AgentStyleSpan {
+            start: 0,
+            end: 3,
+            style: hanafubuki_agent_contracts::AgentTextStyle {
+                bold: true,
+                ..Default::default()
+            },
+        }],
+    };
+    let output = |display_metadata| ConversationItem::ToolOutput {
+        call_id: "call-1".to_string(),
+        origin: Default::default(),
+        output: hanafubuki_agent_tool_contracts::ToolOutput::structured(
+            serde_json::json!({ "output": "red\n" }),
+            false,
+        ),
+        truncation: None,
+        images: Vec::new(),
+        tool_search_results: Vec::new(),
+        display_metadata,
+    };
+    let shell = |styled| ConversationItem::UserShellCommand {
+        call_id: "user-shell-1".to_string(),
+        command: "ls".to_string(),
+        cwd: None,
+        exit_code: Some(0),
+        duration_millis: 1,
+        output: "red\n".repeat(400),
+        truncated: false,
+        styled,
+    };
+    let styled = [
+        output(hanafubuki_agent_contracts::AgentToolDisplayMetadata {
+            styled_output: Some(styles.clone()),
+        }),
+        shell(Some(styles)),
+    ];
+    let plain = [output(Default::default()), shell(None)];
+    for (styled, plain) in styled.iter().zip(&plain) {
+        assert!(styled.retained_bytes() > plain.retained_bytes());
+        assert_eq!(
+            estimate::estimate_conversation_items_tokens([styled]).unwrap(),
+            estimate::estimate_conversation_items_tokens([plain]).unwrap()
+        );
+    }
+}
+
 #[test]
 fn context_window_projects_tool_outputs_without_mutating_canonical_values() {
     let first = hanafubuki_agent_tool_contracts::ToolOutput::structured(

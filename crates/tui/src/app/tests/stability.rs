@@ -91,6 +91,7 @@ fn command_display(command: &str, output: &str) -> AgentToolDisplay {
         exit_code: Some(0),
         duration_millis: Some(61_000),
         truncated: false,
+        styled: None,
     }
 }
 

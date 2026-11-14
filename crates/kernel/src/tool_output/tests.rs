@@ -169,6 +169,7 @@ fn envelope_identity_and_deferred_selection_survive_canonical_truncation() {
         selected_tools: vec![selection.clone()],
         tool_search_results: Vec::new(),
         skill_context: Some(skill_context.clone()),
+        display_metadata: Default::default(),
     };
 
     let (canonical, truncation) = canonicalize_agent_tool_output(output, 512);

@@ -32,6 +32,7 @@ fn a_command_shows_its_line_and_what_it_printed() {
             exit_code: Some(101),
             duration_millis: Some(4200),
             truncated: false,
+            styled: None,
         })
     );
 }

@@ -34,6 +34,7 @@ fn a_command_that_went_on_in_the_background_snapshot() {
             exit_code: None,
             duration_millis: Some(10_000),
             truncated: false,
+            styled: None,
         },
     );
     insta::assert_snapshot!(both(&cell, 60));

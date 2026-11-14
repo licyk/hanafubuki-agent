@@ -1,6 +1,7 @@
 //! The tool call entry: each display's view collapsed and expanded, what
 //! expanding adds, the frame while a call runs, and the exploration run.
 
+mod colour;
 mod exploration;
 mod shape;
 mod streamed;
@@ -58,6 +59,7 @@ fn command(command: &str, output: &str, exit_code: Option<i32>) -> AgentToolDisp
         exit_code,
         duration_millis: Some(4_200),
         truncated: false,
+        styled: None,
     }
 }
 

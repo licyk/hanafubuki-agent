@@ -513,8 +513,31 @@ fn a_unified_exec_result_is_self_describing_on_the_wire() {
         session_id: None,
         wall_time_ms: 12,
         truncated: false,
+        // Display-only: never on the wire the model reads.
+        styles: Some(hanafubuki_agent_foundation::terminal_text::TextStyles {
+            text_bytes: 6,
+            spans: vec![hanafubuki_agent_foundation::terminal_text::StyleSpan {
+                start: 0,
+                end: 5,
+                style: hanafubuki_agent_foundation::terminal_text::TextStyle {
+                    bold: true,
+                    ..Default::default()
+                },
+            }],
+        }),
     })
     .unwrap();
+    assert_eq!(
+        value.as_object().unwrap().keys().collect::<Vec<_>>(),
+        [
+            "exitCode",
+            "output",
+            "sessionId",
+            "truncated",
+            "type",
+            "wallTimeMs"
+        ]
+    );
 
     assert_eq!(value["type"], "unified_exec");
     assert_eq!(value["output"], "hello\n");
@@ -526,6 +549,7 @@ fn a_unified_exec_result_is_self_describing_on_the_wire() {
     let restored: UnifiedExecResult = serde_json::from_value(value).unwrap();
     assert_eq!(restored.output, "hello\n");
     assert_eq!(restored.exit_code, Some(0));
+    assert_eq!(restored.styles, None);
 }
 
 #[cfg(unix)]

@@ -2,7 +2,7 @@
 //! display, from the tool's presenter. Computed when asked, never stored
 //! or sent as an event: a display can be as large as the output.
 
-use hanafubuki_agent_contracts::{AgentToolDisplay, RegistryService};
+use hanafubuki_agent_contracts::{AgentToolDisplay, AgentToolDisplayMetadata, RegistryService};
 use hanafubuki_agent_tool_contracts::ToolOutput;
 use serde_json::Value;
 
@@ -49,8 +49,9 @@ impl AgentService {
                     ConversationItem::ToolOutput {
                         call_id: id,
                         output: committed,
+                        display_metadata,
                         ..
-                    } if id == call_id => output = Some(committed),
+                    } if id == call_id => output = Some((committed, display_metadata)),
                     ConversationItem::ToolCall {
                         call_id: id,
                         namespace,
@@ -62,7 +63,7 @@ impl AgentService {
                             namespace.as_deref(),
                             &name,
                             &arguments,
-                            output.as_ref(),
+                            output.as_ref().map(|(output, metadata)| (output, metadata)),
                         )));
                     }
                     _ => {}
@@ -77,23 +78,25 @@ impl AgentService {
     }
 
     /// How a call with the model's `arguments` and its committed `output`
-    /// is shown, the call named as history records it (`namespace`,
-    /// `name`). The presenter reads the arguments normalized against the
-    /// schema of the tool registered under that name now, as a call of it
-    /// would receive them, and the model's own when none is.
+    /// (with the display metadata committed beside it) is shown, the call
+    /// named as history records it (`namespace`, `name`). The presenter
+    /// reads the arguments normalized against the schema of the tool
+    /// registered under that name now, as a call of it would receive them,
+    /// and the model's own when none is.
     pub fn present_tool_call(
         &self,
         namespace: Option<&str>,
         name: &str,
         arguments: &Value,
-        output: Option<&ToolOutput>,
+        output: Option<(&ToolOutput, &AgentToolDisplayMetadata)>,
     ) -> AgentToolCallDisplay {
         let tool = hanafubuki_agent_model_api::flattened_tool_call_name(namespace, name);
         let arguments = self.presented_arguments(&tool, arguments);
         let presenters = &self.inner.registries.tool_presenters;
         AgentToolCallDisplay {
             subject: presenters.subject(&tool, &arguments),
-            display: output.map(|output| presenters.display(&tool, &arguments, output)),
+            display: output
+                .map(|(output, metadata)| presenters.display(&tool, &arguments, output, metadata)),
         }
     }
 

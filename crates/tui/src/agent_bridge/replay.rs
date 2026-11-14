@@ -7,7 +7,7 @@ use std::collections::HashMap;
 
 use hanafubuki_agent::{
     AgentHandle, AgentRevision, AgentSessionId, AgentSessionMode, AgentToolCallDisplay,
-    AgentToolDisplay, ConversationItem,
+    AgentToolDisplay, AgentToolDisplayMetadata, ConversationItem,
 };
 
 use super::{AgentBridge, AgentReply};
@@ -137,13 +137,20 @@ pub(crate) fn transcript(
                 calls.insert(call_id, (namespace, name, arguments));
             }
             ConversationItem::ToolOutput {
-                call_id, output, ..
+                call_id,
+                output,
+                display_metadata,
+                ..
             } => {
                 let Some((namespace, name, arguments)) = calls.get(&call_id) else {
                     continue;
                 };
-                let shown =
-                    agent.present_tool_call(namespace.as_deref(), name, arguments, Some(&output));
+                let shown = agent.present_tool_call(
+                    namespace.as_deref(),
+                    name,
+                    arguments,
+                    Some((&output, &display_metadata)),
+                );
                 let entry = transcript.iter_mut().rev().find_map(|entry| match entry {
                     ReplayedItem::Tool {
                         call_id: id,
@@ -167,18 +174,25 @@ pub(crate) fn transcript(
                 duration_millis,
                 output,
                 truncated,
+                styled,
             } => transcript.push(ReplayedItem::UserShellCommand {
                 call_id,
                 display: AgentToolCallDisplay {
                     subject: Some(command.clone()),
-                    display: Some(AgentToolDisplay::Command {
-                        command,
-                        cwd,
-                        output,
-                        exit_code,
-                        duration_millis: Some(duration_millis),
-                        truncated,
-                    }),
+                    display: Some(
+                        AgentToolDisplay::Command {
+                            command,
+                            cwd,
+                            output,
+                            exit_code,
+                            duration_millis: Some(duration_millis),
+                            truncated,
+                            styled: None,
+                        }
+                        .with_metadata(&AgentToolDisplayMetadata {
+                            styled_output: styled,
+                        }),
+                    ),
                 },
             }),
             _ => {}

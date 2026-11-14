@@ -21,6 +21,9 @@ pub struct AgentToolOutput {
     /// output, from a handler's `ToolContextFragment`. Only the Agent core
     /// persists this as developer context.
     pub skill_context: Option<ActivatedSkillContext>,
+    /// What an interface's display of the output adds (a command's colours),
+    /// committed beside it; never sent to the model.
+    pub display_metadata: hanafubuki_agent_contracts::AgentToolDisplayMetadata,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -32,23 +35,15 @@ pub struct ActivatedSkillContext {
 
 impl AgentToolOutput {
     pub fn success(value: Value) -> Self {
-        Self {
-            output: hanafubuki_agent_tool_contracts::ToolOutput::structured(value, false),
-            prepared_images: Vec::new(),
-            selected_tools: Vec::new(),
-            tool_search_results: Vec::new(),
-            skill_context: None,
-        }
+        Self::typed(hanafubuki_agent_tool_contracts::ToolOutput::structured(
+            value, false,
+        ))
     }
 
     pub fn model_visible_error(value: Value) -> Self {
-        Self {
-            output: hanafubuki_agent_tool_contracts::ToolOutput::structured(value, true),
-            prepared_images: Vec::new(),
-            selected_tools: Vec::new(),
-            tool_search_results: Vec::new(),
-            skill_context: None,
-        }
+        Self::typed(hanafubuki_agent_tool_contracts::ToolOutput::structured(
+            value, true,
+        ))
     }
 
     pub fn typed(output: hanafubuki_agent_tool_contracts::ToolOutput) -> Self {
@@ -58,20 +53,18 @@ impl AgentToolOutput {
             selected_tools: Vec::new(),
             tool_search_results: Vec::new(),
             skill_context: None,
+            display_metadata: Default::default(),
         }
     }
 
     pub fn image(image: crate::PreparedAgentImage) -> Self {
         Self {
-            output: hanafubuki_agent_tool_contracts::ToolOutput {
+            prepared_images: vec![image],
+            ..Self::typed(hanafubuki_agent_tool_contracts::ToolOutput {
                 content: Vec::new(),
                 structured_content: None,
                 is_error: false,
-            },
-            prepared_images: vec![image],
-            selected_tools: Vec::new(),
-            tool_search_results: Vec::new(),
-            skill_context: None,
+            })
         }
     }
 

@@ -341,6 +341,7 @@ fn evidence_is_bounded_utf8_safe_and_binary_content_is_omitted() {
         truncation: None,
         images: Vec::new(),
         tool_search_results: Vec::new(),
+        display_metadata: Default::default(),
     });
     for index in 0..80 {
         transcript.push(ConversationItem::AssistantMessage {

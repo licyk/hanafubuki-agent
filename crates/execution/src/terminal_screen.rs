@@ -7,6 +7,10 @@
 //! size and gives each reader the rows that scrolled off the top since its
 //! last read, then the screen's rows from the first one that changed.
 //!
+//! Each row comes with its cells' styles (colours, bold, dim, italic,
+//! underline, inverse) for a display. The text is the row's whatever its
+//! styles, and a row whose styles alone changed is not taken again.
+//!
 //! `vt100` keeps scrolled-off rows in a bounded scrollback and drops the
 //! oldest silently, so the output is fed in slices that cannot overflow it,
 //! the new rows are collected after each, and the scrollback is emptied, by
@@ -14,7 +18,9 @@
 //!
 //! [`render_plain_text`]: hanafubuki_agent_foundation::terminal_text::render_plain_text
 
-use hanafubuki_agent_foundation::terminal_text::{complete_prefix_len, MAX_HELD_SEQUENCE_BYTES};
+use hanafubuki_agent_foundation::terminal_text::{
+    complete_prefix_len, TextColor, TextStyle, TextStyles, MAX_HELD_SEQUENCE_BYTES,
+};
 use hanafubuki_agent_process::terminal_size::{TerminalResize, TerminalSize};
 
 use crate::model::AgentExecutionOutput;
@@ -34,7 +40,7 @@ pub struct TerminalScreen {
     collected: usize,
     /// Rows scrolled off since the last [`Self::take`], oldest first, each
     /// with whether it continues on the next row.
-    scrolled: Vec<(String, bool)>,
+    scrolled: Vec<(StyledRow, bool)>,
     /// Rows ever scrolled off: the absolute index of the screen's top row.
     top: u64,
     /// The screen's rows at the last take, from its top row then.
@@ -55,6 +61,14 @@ pub struct ScreenText {
     /// Rows, each ended by a line break unless the next row continues it or
     /// the cursor is still on it.
     pub text: String,
+    /// The styles of `text`'s cells.
+    pub styles: TextStyles,
+}
+
+/// A row's text, its trailing blanks trimmed, and its cells' styles.
+struct StyledRow {
+    text: String,
+    styles: TextStyles,
 }
 
 impl TerminalScreen {
@@ -157,20 +171,22 @@ impl TerminalScreen {
         let scrolled = self.scrolled.len();
         let mut rows = std::mem::take(&mut self.scrolled);
         rows.extend(screen.rows(0, cols).enumerate().map(|(index, text)| {
-            (
-                text.trim_end_matches(' ').to_owned(),
-                screen.row_wrapped(index as u16),
-            )
+            let row = StyledRow {
+                text: text.trim_end_matches(' ').to_owned(),
+                styles: TextStyles::default(),
+            };
+            (row, screen.row_wrapped(index as u16))
         }));
         let cursor = scrolled + usize::from(screen.cursor_position().0);
         let end = rows
             .iter()
-            .rposition(|(text, _)| !text.is_empty())
+            .rposition(|(row, _)| !row.text.is_empty())
             .map_or(0, |last| last + 1);
+        // Compared by text: a row whose styles alone changed is not taken.
         let mut start = rows
             .iter()
             .zip(&self.shown)
-            .position(|((text, _), shown)| text != shown)
+            .position(|((row, _), shown)| row.text != *shown)
             .unwrap_or(self.shown.len().min(rows.len()));
 
         let mut taken = ScreenText::default();
@@ -179,11 +195,16 @@ impl TerminalScreen {
                 start = start.min(row.saturating_sub(self.shown_top) as usize);
                 taken.rewrites_last_line = true;
             }
-            for (index, (text, wrapped)) in rows.iter().enumerate().take(end).skip(start) {
-                taken.text.push_str(text);
+            for (index, (row, wrapped)) in rows.iter_mut().enumerate().take(end).skip(start) {
+                if index >= scrolled {
+                    row.styles = row_styles(screen, (index - scrolled) as u16, &row.text);
+                }
+                taken.text.push_str(&row.text);
+                taken.styles.append(&row.styles);
                 let ended = index + 1 < end || cursor > index;
-                if ended && !wrapped {
+                if ended && !*wrapped {
                     taken.text.push('\n');
+                    taken.styles.extend_plain(1);
                 }
             }
             let last = end - 1;
@@ -192,7 +213,7 @@ impl TerminalScreen {
         self.shown_top = self.top;
         self.shown = rows
             .drain(scrolled.min(end)..end)
-            .map(|(text, _)| text)
+            .map(|(row, _)| row.text)
             .collect();
         taken
     }
@@ -211,9 +232,10 @@ impl TerminalScreen {
         for index in self.collected..held {
             screen.set_scrollback(held - index);
             let text = screen.rows(0, cols).next().unwrap_or_default();
+            let text = text.trim_end_matches(' ').to_owned();
+            let styles = row_styles(screen, 0, &text);
             let wrapped = screen.row_wrapped(0);
-            self.scrolled
-                .push((text.trim_end_matches(' ').to_owned(), wrapped));
+            self.scrolled.push((StyledRow { text, styles }, wrapped));
         }
         screen.set_scrollback(0);
         self.top += held.saturating_sub(self.collected) as u64;
@@ -229,6 +251,63 @@ impl TerminalScreen {
         self.collected = parser.screen().scrollback();
         parser.screen_mut().set_scrollback(0);
         self.parser = parser;
+    }
+}
+
+/// The styles of the cells of the screen's row `row`, whose text (as
+/// `vt100` writes a row, its trailing blanks trimmed) is `text`. Cells that
+/// spell another text give none, so a style never lands on the wrong text.
+fn row_styles(screen: &vt100::Screen, row: u16, text: &str) -> TextStyles {
+    let (_, cols) = screen.size();
+    let mut spelled = String::with_capacity(text.len());
+    let mut styles = TextStyles::default();
+    // The column after the last cell written: empty cells before the next
+    // one with contents show as blanks.
+    let mut written = 0;
+    let mut column = 0;
+    while column < cols {
+        let Some(cell) = screen.cell(row, column) else {
+            break;
+        };
+        if cell.has_contents() {
+            spelled.extend(std::iter::repeat_n(' ', usize::from(column - written)));
+            let start = spelled.len();
+            spelled.push_str(cell.contents());
+            styles.push(start, spelled.len(), cell_style(cell));
+            written = column + if cell.is_wide() { 2 } else { 1 };
+        }
+        column += if cell.is_wide() { 2 } else { 1 };
+    }
+    styles.text_bytes = text.len();
+    if spelled.trim_end_matches(' ') != text {
+        styles.spans.clear();
+        return styles;
+    }
+    // Styled blanks past the text were trimmed with it.
+    styles.spans.retain_mut(|span| {
+        span.end = span.end.min(text.len());
+        span.start < span.end
+    });
+    styles
+}
+
+fn cell_style(cell: &vt100::Cell) -> TextStyle {
+    TextStyle {
+        fg: color(cell.fgcolor()),
+        bg: color(cell.bgcolor()),
+        bold: cell.bold(),
+        dim: cell.dim(),
+        italic: cell.italic(),
+        underline: cell.underline(),
+        reverse: cell.inverse(),
+    }
+}
+
+fn color(color: vt100::Color) -> Option<TextColor> {
+    match color {
+        vt100::Color::Default => None,
+        vt100::Color::Idx(index) => Some(TextColor::Indexed(index)),
+        vt100::Color::Rgb(r, g, b) => Some(TextColor::Rgb(r, g, b)),
     }
 }
 

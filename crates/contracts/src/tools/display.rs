@@ -2,9 +2,20 @@
 //! reads. Not model-visible: a presenter computes it from the call's
 //! arguments and committed output whenever an interface asks.
 
+use hanafubuki_agent_foundation::terminal_text::{StyleSpan, TextColor, TextStyle, TextStyles};
 use hanafubuki_agent_tool_contracts::{ToolOutput, ToolOutputContent};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+
+/// The colours and attributes of a command's plain output (`output` of
+/// [`AgentToolDisplay::Command`]): runs of its bytes with their SGR style.
+pub type AgentStyledText = TextStyles;
+/// One run of an [`AgentStyledText`].
+pub type AgentStyleSpan = StyleSpan;
+/// A run's colours and attributes.
+pub type AgentTextStyle = TextStyle;
+/// A palette index (0–15: the terminal's 16 colours) or 24-bit colour.
+pub type AgentTextColor = TextColor;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(
@@ -21,6 +32,9 @@ pub enum AgentToolDisplay {
         exit_code: Option<i32>,
         duration_millis: Option<u64>,
         truncated: bool,
+        /// The styles `output` was printed in, when it had any.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        styled: Option<AgentStyledText>,
     },
     Patch {
         preview: AgentPatchPreview,
@@ -156,7 +170,55 @@ pub enum AgentPatchLineKind {
     Marker,
 }
 
+/// What a handler gives an interface's display of its output beyond what
+/// the model reads. The kernel commits it beside the output and never
+/// sends it to the model; a reader of a committed one decodes it
+/// tolerantly, a field it cannot read being absent.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentToolDisplayMetadata {
+    /// The styles of a command's output, for [`AgentToolDisplay::Command`].
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "tolerant"
+    )]
+    pub styled_output: Option<AgentStyledText>,
+}
+
+impl AgentToolDisplayMetadata {
+    pub fn is_empty(&self) -> bool {
+        self.styled_output.is_none()
+    }
+}
+
+/// A committed field that does not decode is absent.
+fn tolerant<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: serde::de::DeserializeOwned,
+{
+    let value = Value::deserialize(deserializer)?;
+    Ok(serde_json::from_value(value).ok())
+}
+
 impl AgentToolDisplay {
+    /// `self` with what `metadata` adds: a command's styles, when they are
+    /// the styles of its output (a bounded or otherwise changed output
+    /// shows plain).
+    pub fn with_metadata(mut self, metadata: &AgentToolDisplayMetadata) -> Self {
+        if let Self::Command { output, styled, .. } = &mut self {
+            if let Some(styles) = metadata
+                .styled_output
+                .as_ref()
+                .filter(|styles| styles.fits(output))
+            {
+                *styled = Some(styles.clone());
+            }
+        }
+        self
+    }
+
     /// What a call without a presenter shows: its structured output's
     /// top-level keys, else its text.
     pub fn fallback(output: &ToolOutput) -> Self {

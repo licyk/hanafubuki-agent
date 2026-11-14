@@ -19,7 +19,8 @@ pub use approval::verify_tool_approval;
 pub use display::{
     output_text, structured_output, AgentListingEntry, AgentListingEntryKind, AgentMutationKind,
     AgentPatchFile, AgentPatchLine, AgentPatchLineKind, AgentPatchOperation, AgentPatchPreview,
-    AgentSearchMatch, AgentToolDisplay, AgentWebResult,
+    AgentSearchMatch, AgentStyleSpan, AgentStyledText, AgentTextColor, AgentTextStyle,
+    AgentToolDisplay, AgentToolDisplayMetadata, AgentWebResult,
 };
 pub use error::{decode_arguments, object_arguments, AgentToolError, ToolCallValidationError};
 pub use extensions::TurnExtensions;

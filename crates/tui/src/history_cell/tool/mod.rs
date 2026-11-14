@@ -24,6 +24,7 @@ mod live_output;
 mod mutation;
 mod patch;
 mod search;
+mod styled_output;
 mod text;
 mod web;
 
@@ -382,6 +383,7 @@ impl ToolCall {
                 output,
                 exit_code,
                 duration_millis,
+                styled,
                 ..
             } => command::view(
                 self,
@@ -389,6 +391,7 @@ impl ToolCall {
                     command,
                     cwd: cwd.as_deref(),
                     output,
+                    styled: styled.as_ref(),
                     exit_code: *exit_code,
                     duration_millis: *duration_millis,
                 },
@@ -526,17 +529,22 @@ fn text_lines(text: &str) -> Vec<String> {
 /// `line` with each tab replaced by spaces up to the next stop, as the
 /// transcript lays a tab out, so its width is measured as it shows.
 fn expand_tabs(line: &str) -> String {
+    expand_tabs_at(line, &mut 0)
+}
+
+/// [`expand_tabs`] for a piece of a line that starts at `column`, which it
+/// moves to the piece's end.
+fn expand_tabs_at(piece: &str, column: &mut usize) -> String {
     const TAB_STOP: usize = 4;
-    let mut expanded = String::with_capacity(line.len());
-    let mut column = 0;
-    for ch in line.chars() {
+    let mut expanded = String::with_capacity(piece.len());
+    for ch in piece.chars() {
         if ch == '\t' {
-            let spaces = TAB_STOP - column % TAB_STOP;
+            let spaces = TAB_STOP - *column % TAB_STOP;
             expanded.extend(std::iter::repeat_n(' ', spaces));
-            column += spaces;
+            *column += spaces;
         } else {
             expanded.push(ch);
-            column += ch.to_string().width();
+            *column += ch.to_string().width();
         }
     }
     expanded

@@ -5,7 +5,9 @@
 //! lines (or `(no output)`), and the exit when it failed. Expanded: `$` and
 //! the command, the whole output as the result returned it, and how it
 //! ended. The output reaches the interface as plain text (the execution
-//! plugin renders the terminal's), so it has no colours to keep.
+//! service renders the terminal's) with the styles its SGR sequences gave
+//! it beside it, and shows in those colours (`styled_output`); the
+//! collapsed rows dim them, as Codex's preview does.
 //!
 //! While the command runs, and until its display arrives, the same rows show
 //! what its process printed so far (`streamed`).
@@ -18,8 +20,11 @@ use std::time::Duration;
 use ratatui::style::Stylize;
 use ratatui::text::{Line, Span};
 
+use hanafubuki_agent::AgentStyledText;
+
 use super::live_output::LiveOutput;
-use super::{clipped, text_lines, wrapped, Extent, ToolCall, View, EXEC_COMMAND, PREVIEW_LINES};
+use super::styled_output::output_lines;
+use super::{clipped, wrapped, Extent, ToolCall, View, EXEC_COMMAND, PREVIEW_LINES};
 use crate::history_cell::ActivityDisclosure;
 use crate::render::highlight::highlight_code_to_lines;
 use crate::status_indicator_widget::fmt_elapsed_tenths;
@@ -34,6 +39,7 @@ pub(super) struct Command<'a> {
     pub(super) command: &'a str,
     pub(super) cwd: Option<&'a str>,
     pub(super) output: &'a str,
+    pub(super) styled: Option<&'a AgentStyledText>,
     pub(super) exit_code: Option<i32>,
     pub(super) duration_millis: Option<u64>,
 }
@@ -68,7 +74,7 @@ pub(super) fn view(call: &ToolCall, command: &Command, failed: bool, extent: Ext
         title
     };
 
-    let output = text_lines(command.output);
+    let output = output_lines(command.output, command.styled);
     let (mut preview, cut) = last_rows(&output, extent);
     if output.is_empty() && !interaction {
         preview.push(Line::from("(no output)".dim()));
@@ -131,11 +137,11 @@ pub(super) fn streamed(call: &ToolCall, header: View, live: &LiveOutput, extent:
 }
 
 /// The last of `output`'s lines, each cut to a row, and whether one was.
-fn last_rows(output: &[String], extent: Extent) -> (Vec<Line<'static>>, bool) {
+fn last_rows(output: &[Line<'static>], extent: Extent) -> (Vec<Line<'static>>, bool) {
     let mut rows = Vec::new();
     let mut cut = false;
     for line in &output[output.len().saturating_sub(PREVIEW_LINES)..] {
-        let (row, was_cut) = clipped(Line::from(line.clone()).dim(), extent.columns);
+        let (row, was_cut) = clipped(line.clone().dim(), extent.columns);
         cut |= was_cut;
         rows.push(row);
     }
@@ -153,10 +159,10 @@ fn script_rows(script_lines: &[Line<'static>], extent: Extent) -> Vec<Line<'stat
     rows
 }
 
-fn output_rows(output: &[String], extent: Extent) -> Vec<Line<'static>> {
+fn output_rows(output: &[Line<'static>], extent: Extent) -> Vec<Line<'static>> {
     output
         .iter()
-        .flat_map(|line| wrapped(Line::from(line.clone()), extent.columns, ""))
+        .flat_map(|line| wrapped(line.clone(), extent.columns, ""))
         .collect()
 }
 

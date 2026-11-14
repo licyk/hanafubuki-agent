@@ -19,6 +19,7 @@ use sessions::approved_command;
 use tools::{configured_service, service_with, service_with_config};
 
 mod base_instructions;
+mod colour;
 #[cfg(target_os = "linux")]
 mod compaction_golden;
 mod compression;

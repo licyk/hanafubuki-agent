@@ -197,6 +197,15 @@ pub enum ConversationItem {
         images: Vec<AgentImageAttachmentRef>,
         #[serde(default)]
         tool_search_results: Vec<hanafubuki_agent_tool_contracts::ToolSpec>,
+        /// What an interface's display of `output` adds (a command's
+        /// colours). Never lowered to the model; absent from older records,
+        /// and absent again when it does not decode.
+        #[serde(
+            default,
+            skip_serializing_if = "hanafubuki_agent_contracts::AgentToolDisplayMetadata::is_empty",
+            deserialize_with = "tolerant_default"
+        )]
+        display_metadata: hanafubuki_agent_contracts::AgentToolDisplayMetadata,
     },
     /// The deferred tools a `tool_search` call selected, committed after its
     /// output. The planner offers them until the next compaction, which does
@@ -249,6 +258,14 @@ pub enum ConversationItem {
         output: String,
         #[serde(default)]
         truncated: bool,
+        /// The styles `output` was printed in, for an interface; never
+        /// lowered to the model, and absent when it does not decode.
+        #[serde(
+            default,
+            skip_serializing_if = "Option::is_none",
+            deserialize_with = "tolerant_default"
+        )]
+        styled: Option<hanafubuki_agent_contracts::AgentStyledText>,
     },
 }
 
@@ -289,7 +306,8 @@ impl ConversationItem {
                 .len()
                 .saturating_add(json_bytes(output))
                 .saturating_add(json_bytes(images))
-                .saturating_add(json_bytes(tool_search_results)),
+                .saturating_add(json_bytes(tool_search_results))
+                .saturating_add(self.display_bytes()),
             Self::ToolSelection { call_id, tools } => {
                 call_id.len().saturating_add(json_bytes(tools))
             }
@@ -328,7 +346,24 @@ impl ConversationItem {
                 .len()
                 .saturating_add(command.len())
                 .saturating_add(cwd.as_ref().map_or(0, String::len))
-                .saturating_add(output.len()),
+                .saturating_add(output.len())
+                .saturating_add(self.display_bytes()),
+        }
+    }
+
+    /// The bytes of what only an interface reads (a command's styles),
+    /// which [`Self::retained_bytes`] counts and the model's context does
+    /// not.
+    pub(crate) fn display_bytes(&self) -> usize {
+        match self {
+            Self::ToolOutput {
+                display_metadata, ..
+            } if !display_metadata.is_empty() => json_bytes(display_metadata),
+            Self::UserShellCommand {
+                styled: Some(styled),
+                ..
+            } => json_bytes(styled),
+            _ => 0,
         }
     }
 
@@ -596,6 +631,17 @@ fn deserialize_replay<'de, D: serde::Deserializer<'de>>(
         .filter(|replay| {
             replay.outlives_its_turn() && replay.text_len() <= MAX_MODEL_REASONING_REPLAY_BYTES
         }))
+}
+
+/// A display-only field of a persisted item that does not decode is its
+/// default: the item and the rest of it stay.
+fn tolerant_default<'de, D, T>(deserializer: D) -> Result<T, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: serde::de::DeserializeOwned + Default,
+{
+    let value = Value::deserialize(deserializer)?;
+    Ok(serde_json::from_value(value).unwrap_or_default())
 }
 
 fn json_bytes<T: Serialize>(value: &T) -> usize {

@@ -7,9 +7,9 @@ use hanafubuki_agent_approval::{
 };
 use hanafubuki_agent_contracts::tools::arguments::ArgumentNotes;
 use hanafubuki_agent_contracts::{
-    AgentActivityAction, AgentMemoryContextEffect, AgentToolError, AgentToolHandler,
-    AgentToolProgressUpdate, BlockingService, ToolCallOrigin, ToolDescriptor, ToolEffect,
-    ToolFuture, ToolInvocation, ToolResult,
+    AgentActivityAction, AgentMemoryContextEffect, AgentStyledText, AgentToolDisplayMetadata,
+    AgentToolError, AgentToolHandler, AgentToolProgressUpdate, BlockingService, ToolCallOrigin,
+    ToolDescriptor, ToolEffect, ToolFuture, ToolInvocation, ToolResult,
 };
 use hanafubuki_agent_execution::{
     AgentExecutionError, AgentExecutionId, AgentExecutionScope, AgentExecutionService,
@@ -144,7 +144,11 @@ impl AgentToolHandler for ExecTool {
                 return Err(AgentToolError::Cancelled);
             }
             result
-                .map(|value| ToolResult::success(value).with_argument_notes(&notes))
+                .map(|(value, styled_output)| {
+                    ToolResult::success(value)
+                        .with_argument_notes(&notes)
+                        .with_display_metadata(AgentToolDisplayMetadata { styled_output })
+                })
                 .map_err(AgentToolError::Failed)
         })
     }
@@ -176,13 +180,15 @@ fn parse_call(
     Ok((call, notes))
 }
 
+/// What a call returns: the result the model reads, and the styles of the
+/// output it shows, for a display only.
 fn execute(
     services: &ExecServices,
     activity: &ExecutionActivity,
     call: ExecCall,
     approval: Option<&AuthorizedAction>,
     cancellation: &CancellationToken,
-) -> Result<Value, String> {
+) -> Result<(Value, Option<AgentStyledText>), String> {
     let executions = &services.executions;
     let scope = AgentExecutionScope::for_agent_session(activity.session_id.value())
         .map_err(|error| error.to_string())?;
@@ -260,7 +266,7 @@ fn execute(
                         generation: snapshot.generation.value(),
                     });
             }
-            serde_json::to_value(result).map_err(|error| error.to_string())
+            model_result(result)
         }
         ExecCall::WriteStdin {
             session_id,
@@ -299,7 +305,7 @@ fn execute(
                         generation: generation.value(),
                     });
             }
-            serde_json::to_value(result).map_err(|error| error.to_string())
+            model_result(result)
         }
         ExecCall::Resize {
             session_id,
@@ -312,14 +318,23 @@ fn execute(
                 .snapshot(&scope, execution_id)
                 .map_err(|error| error.to_string())?
                 .generation;
-            serde_json::to_value(
+            let resized = serde_json::to_value(
                 executions
                     .resize_interactive(&scope, execution_id, generation, cols, rows)
                     .map_err(|error| error.to_string())?,
             )
-            .map_err(|error| error.to_string())
+            .map_err(|error| error.to_string())?;
+            Ok((resized, None))
         }
     }
+}
+
+/// `result` as the model reads it (its styles are not serialized), and its
+/// styles beside it.
+fn model_result(mut result: UnifiedExecResult) -> Result<(Value, Option<AgentStyledText>), String> {
+    let styles = result.styles.take();
+    let value = serde_json::to_value(result).map_err(|error| error.to_string())?;
+    Ok((value, styles))
 }
 
 /// A command the person typed runs until it exits (Codex's user shell

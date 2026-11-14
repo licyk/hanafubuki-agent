@@ -224,6 +224,7 @@ fn handler_output(result: ToolResult) -> AgentToolOutput {
     let mut output = AgentToolOutput::typed(result.output);
     output.prepared_images = result.images;
     output.skill_context = skill_context;
+    output.display_metadata = result.display_metadata;
     output
 }
 

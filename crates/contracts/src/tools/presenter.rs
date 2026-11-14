@@ -99,8 +99,15 @@ impl ToolPresenterRegistry {
 
     /// What a finished call of `tool` shows: its presenter's display, or
     /// [`AgentToolDisplay::fallback`] without one, when it returns none or
-    /// when it panicked.
-    pub fn display(&self, tool: &str, arguments: &Value, output: &ToolOutput) -> AgentToolDisplay {
+    /// when it panicked; with what the handler's `metadata` adds to it
+    /// ([`AgentToolDisplay::with_metadata`]).
+    pub fn display(
+        &self,
+        tool: &str,
+        arguments: &Value,
+        output: &ToolOutput,
+        metadata: &super::AgentToolDisplayMetadata,
+    ) -> AgentToolDisplay {
         self.presenter(tool)
             .and_then(|entry| {
                 entry
@@ -111,6 +118,7 @@ impl ToolPresenterRegistry {
                     .flatten()
             })
             .unwrap_or_else(|| AgentToolDisplay::fallback(output))
+            .with_metadata(metadata)
     }
 
     fn presenter(&self, tool: &str) -> Option<Arc<RegistryEntry<Arc<dyn AgentToolPresenter>>>> {

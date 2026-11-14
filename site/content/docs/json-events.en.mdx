@@ -131,7 +131,7 @@ The `update.type` of `execution_progress`:
 
 What a finished call shows (its output as an interface lays it out) is not in the stream: the output the model read is in the session's history, and a host asks the facade for the display ([Tool presenters](/docs/plugin-rules#tool-presenters)).
 
-`text` is terminal text, to be rendered in order: a pipe's output as the process wrote it, escape sequences included; a pseudo-terminal's as its screen shows it, rows ended by line breaks, a row the previous update left unfinished written again after `\r` and `ESC [2K`.
+`text` is terminal text, to be rendered in order: a pipe's output as the process wrote it, escape sequences included; a pseudo-terminal's as its screen shows it, rows ended by line breaks, each run of a row in a colour or an attribute between its SGR sequence (`ESC [ … m`) and a reset `ESC [0m`, a row the previous update left unfinished written again after `\r` and `ESC [2K`. The tool's result in the history, which the model reads, is plain text either way.
 
 ### Approvals [#approvals]
 

@@ -56,6 +56,7 @@ fn output(call_id: &str, text: &str, is_error: bool) -> ConversationItem {
         truncation: None,
         images: Vec::new(),
         tool_search_results: Vec::new(),
+        display_metadata: Default::default(),
     }
 }
 
@@ -144,6 +145,7 @@ fn a_user_shell_command_is_an_activity_with_its_exit() {
             duration_millis: 12,
             output: output.to_string(),
             truncated: false,
+            styled: None,
         };
     let items = [
         shell("ls", Some(0), "a.txt\nb.txt"),

@@ -148,7 +148,7 @@ panic 消息进入日志和插件状态，从不进入模型。`mcp` 插件自�
 界面如何显示一个工具的调用，归它的插件管：`ToolPresenterRegistry` 中的一个 `AgentToolPresenter`，负责它的 `tools()` 列出的工具（扁平化后的名字）。它对模型不可见：请求不变，golden 保持不变。
 
 - **`subject(tool, arguments)`** 是调用作用的对象：命令行、路径、查询。内核在调用开始时询问它，用的是工具收到的参数（按其 schema 规范化后），并把它作为 `tool_started` 的 `presentation.subject`（[exec --json 事件](/docs/json-events#tools)）以及活动的呈现发送出去：取第一行，截到 200 个字符（`MAX_TOOL_SUBJECT_CHARS`）。没有时保留计划中工具自己的主题（来源工具的活动主题，`tool_search` 的 `tool discovery`）。
-- **`display(tool, arguments, output)`** 是调用结束后显示的内容，一个从已提交的 `ToolOutput` 读出的 `AgentToolDisplay`：`Command`、`Patch`（`AgentPatchPreview`）、`FileRead`、`Listing`、`Search`、`WebSearch`、`WebPage`、`Mutation`（移动或删除的路径）、`Text` 或 `Fields`。它从不是事件，因为事件会进入日志并由 `exec --json` 打印，而显示内容可能和输出一样大：界面向门面询问，`AgentHandle::tool_display(session, call_id)` 从历史中读回调用及其输出（在界面自己的线程之外），对已经读到的转录则用 `present_tool_call`。
+- **`display(tool, arguments, output)`** 是调用结束后显示的内容，一个从已提交的 `ToolOutput` 读出的 `AgentToolDisplay`：`Command`、`Patch`（`AgentPatchPreview`）、`FileRead`、`Listing`、`Search`、`WebSearch`、`WebPage`、`Mutation`（移动或删除的路径）、`Text` 或 `Fields`。它从不是事件，因为事件会进入日志并由 `exec --json` 打印，而显示内容可能和输出一样大：界面向门面询问，`AgentHandle::tool_display(session, call_id)` 从历史中读回调用及其输出（在界面自己的线程之外），对已经读到的转录则用 `present_tool_call`。处理器在 `ToolResult.display_metadata` 中返回的内容（`AgentToolDisplayMetadata`，例如命令输出的颜色 `styled_output`）与输出一起提交、从不发给模型，由注册表加到显示上：`Command` 的 `output` 与之相符时成为它的 `styled`。
 - **回退显示。** 宽容地解码，读不了的（工具返回的错误、形状不同的输出）返回 `None`。此时调用显示 `AgentToolDisplay::fallback`：结构化输出的顶层键（`Fields`，嵌套值只给摘要），否则显示它的文本。`structured_output` 读取结构化值，排在 `with_argument_notes` 追加的参数说明之前。没有呈现器的工具（MCP 服务器的、guest 的）显示回退内容，恢复的会话中插件已关闭的调用也一样。
 - **从历史读取时**，调用的参数按当时以该名字注册的工具的 schema 规范化；没有这样的工具时就是模型自己的参数。
 - `ArgumentSubjects` 是那些回退显示已足够的工具的呈现器：每次调用的主题是按工具指定的一个字符串参数。

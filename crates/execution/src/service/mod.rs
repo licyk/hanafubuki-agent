@@ -5,7 +5,9 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use hanafubuki_agent_approval::AuthorizedAction;
 use hanafubuki_agent_foundation::cancellation::CancellationToken;
-use hanafubuki_agent_foundation::terminal_text::{complete_prefix_len, render_plain_text};
+use hanafubuki_agent_foundation::terminal_text::{
+    complete_prefix_len, render_plain_text, render_styled_text, TextStyle, TextStyles,
+};
 use hanafubuki_agent_process::executor::manager::{
     dispose_reserved_executor, finalize_executor_reservation_handle, get_reserved_executor_info,
     interrupt_reserved_executor, read_reserved_executor_output, reserve_executor_id,

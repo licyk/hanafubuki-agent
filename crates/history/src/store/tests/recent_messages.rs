@@ -87,6 +87,7 @@ fn the_persons_messages_come_newest_first_each_once_bounded() {
                     duration_millis: 10,
                     output: "ok".to_string(),
                     truncated: false,
+                    styled: None,
                 },
             ),
             // An image alone has no text to find.

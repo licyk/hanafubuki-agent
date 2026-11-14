@@ -440,6 +440,63 @@ fn a_pty_preview_shows_the_screen_a_terminal_would() {
 }
 
 #[test]
+fn a_pty_preview_carries_each_rows_colours_closed_within_the_row() {
+    use hanafubuki_agent_foundation::terminal_text::{
+        render_plain_text, render_styled_text, TextColor, TextStyle,
+    };
+
+    // The colour is left open at the first row's end and goes on into the
+    // second, as the screen's cells have it; the preview closes it per row.
+    let updates = monitored_output(
+        true,
+        "\x1b[31mred\r\nstill red\x1b[0m plain\r\n\x1b[1;4mtitle\x1b[0m\r\n",
+    );
+    let text = updates
+        .iter()
+        .map(|(text, _)| text.as_str())
+        .collect::<String>();
+    // The plain text, which the activity's preview shows, is unchanged.
+    assert_eq!(
+        render_plain_text(text.as_bytes()),
+        "red\nstill red plain\ntitle\n"
+    );
+    let rendered = render_styled_text(text.as_bytes(), TextStyle::default());
+    assert_eq!(rendered.pen, TextStyle::default(), "{text:?}");
+    let runs = rendered
+        .styles
+        .spans
+        .iter()
+        .map(|span| (&rendered.text[span.start..span.end], span.style))
+        .collect::<Vec<_>>();
+    let red = TextStyle {
+        fg: Some(TextColor::Indexed(1)),
+        ..TextStyle::default()
+    };
+    assert_eq!(
+        runs,
+        vec![
+            ("red", red),
+            ("still red", red),
+            (
+                "title",
+                TextStyle {
+                    bold: true,
+                    underline: true,
+                    ..TextStyle::default()
+                }
+            ),
+        ]
+    );
+    for row in text.split('\n') {
+        assert_eq!(
+            render_styled_text(row.as_bytes(), TextStyle::default()).pen,
+            TextStyle::default(),
+            "{row:?}"
+        );
+    }
+}
+
+#[test]
 fn bounding_an_update_never_starts_it_inside_an_escape_sequence() {
     use hanafubuki_agent_foundation::terminal_text::render_plain_text;
 

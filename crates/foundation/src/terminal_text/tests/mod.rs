@@ -1,3 +1,5 @@
+mod styled;
+
 use super::{
     aligned_start, complete_prefix_len, end_point, render_plain_text, resume_point,
     ALIGN_SEARCH_BYTES, MAX_HELD_SEQUENCE_BYTES,

@@ -88,6 +88,7 @@ fn freeform_calls_and_outputs_replay_as_custom_responses_items() {
         truncation: None,
         images: Vec::new(),
         tool_search_results: Vec::new(),
+        display_metadata: Default::default(),
     };
 
     assert!(matches!(

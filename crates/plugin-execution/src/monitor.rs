@@ -11,7 +11,9 @@ use hanafubuki_agent_execution::{
 };
 use hanafubuki_agent_foundation::background_worker::BackgroundWorkerGroup;
 use hanafubuki_agent_foundation::cancellation::CancellationToken;
-use hanafubuki_agent_foundation::terminal_text::{aligned_start, resume_point, ALIGN_SEARCH_BYTES};
+use hanafubuki_agent_foundation::terminal_text::{
+    aligned_start, resume_point, styled_terminal_text, ALIGN_SEARCH_BYTES,
+};
 use std::time::Duration;
 
 /// The activity an execution reports into: its session (for worker names)
@@ -282,15 +284,17 @@ pub(crate) fn monitor_execution(
 }
 
 /// Replace a PTY's `output` with what its `screen` shows of it, as terminal
-/// text the preview renders: a row the previous update left unfinished is
-/// cleared and written again.
+/// text the preview renders: each styled run of a row between its SGR
+/// sequence and a reset, so no style outlives its row; a row the previous
+/// update left unfinished is cleared and written again.
 fn render_screen(screen: &mut TerminalScreen, output: &mut AgentExecutionOutput) {
     screen.push_output(output);
     let taken = screen.take();
+    let rows = styled_terminal_text(&taken.text, &taken.styles);
     let text = if taken.rewrites_last_line {
-        format!("\r\x1b[2K{}", taken.text)
+        format!("\r\x1b[2K{rows}")
     } else {
-        taken.text
+        rows
     };
     output.chunks = vec![AgentExecutionOutputChunk {
         stream: AgentExecutionOutputStream::Merged,

@@ -141,6 +141,7 @@ fn truncated_tool_output(
             }),
             images: Vec::new(),
             tool_search_results: Vec::new(),
+            display_metadata: Default::default(),
         },
     }
 }

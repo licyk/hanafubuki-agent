@@ -61,6 +61,8 @@ impl AgentToolPresenter for ExecPresenter {
             exit_code: result.exit_code,
             duration_millis: Some(result.wall_time_ms),
             truncated: result.truncated,
+            // The registry adds the styles the call committed beside it.
+            styled: None,
         })
     }
 }

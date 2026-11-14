@@ -81,6 +81,7 @@ fn exec_request(tty: bool) -> ExecCommandRequest {
 }
 
 mod cleanup;
+mod colour;
 #[cfg(unix)]
 mod output;
 #[cfg(unix)]

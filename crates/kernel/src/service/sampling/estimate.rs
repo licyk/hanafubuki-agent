@@ -152,6 +152,7 @@ fn context_bytes(item: &ConversationItem) -> usize {
             .as_ref()
             .filter(|replay| replay.outlives_its_turn())
             .map_or(0, |replay| replay.text_len()),
-        item => item.retained_bytes(),
+        // A command's styles are never sent.
+        item => item.retained_bytes().saturating_sub(item.display_bytes()),
     }
 }

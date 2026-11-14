@@ -146,6 +146,9 @@ pub struct ToolResult {
     pub images: Vec<PreparedAgentImage>,
     /// Context the kernel commits after the output.
     pub context: Option<ToolContextFragment>,
+    /// What an interface's display of the output adds (a command's
+    /// colours); committed beside the output, never sent to the model.
+    pub display_metadata: super::AgentToolDisplayMetadata,
 }
 
 impl ToolResult {
@@ -167,11 +170,17 @@ impl ToolResult {
             },
             images: vec![image],
             context: None,
+            display_metadata: Default::default(),
         }
     }
 
     pub fn with_context(mut self, context: ToolContextFragment) -> Self {
         self.context = Some(context);
+        self
+    }
+
+    pub fn with_display_metadata(mut self, metadata: super::AgentToolDisplayMetadata) -> Self {
+        self.display_metadata = metadata;
         self
     }
 
@@ -200,6 +209,7 @@ impl From<ToolOutput> for ToolResult {
             output,
             images: Vec::new(),
             context: None,
+            display_metadata: Default::default(),
         }
     }
 }

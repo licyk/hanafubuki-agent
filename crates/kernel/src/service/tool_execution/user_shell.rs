@@ -97,7 +97,12 @@ impl AgentService {
         let item = user_shell_command_item(
             call.call_id.clone(),
             command,
-            presenters.display(EXEC_COMMAND, &normalized.arguments, &output.output),
+            presenters.display(
+                EXEC_COMMAND,
+                &normalized.arguments,
+                &output.output,
+                &output.display_metadata,
+            ),
             &output.output,
             truncation.is_some(),
             started.elapsed(),
@@ -191,6 +196,7 @@ pub(in crate::service) fn unfinished_user_shell_command(
         duration_millis: 0,
         output: "The command did not finish.".to_string(),
         truncated: false,
+        styled: None,
     }
 }
 
@@ -213,6 +219,7 @@ fn user_shell_command_item(
             exit_code,
             duration_millis,
             truncated,
+            styled,
             ..
         } if !output.is_error => ConversationItem::UserShellCommand {
             call_id,
@@ -222,6 +229,8 @@ fn user_shell_command_item(
             duration_millis: duration_millis.unwrap_or(elapsed_millis),
             output: text,
             truncated: truncated || cut,
+            // A bounded output is no longer the text they style.
+            styled: styled.filter(|_| !cut),
         },
         _ => ConversationItem::UserShellCommand {
             call_id,
@@ -231,6 +240,7 @@ fn user_shell_command_item(
             duration_millis: elapsed_millis,
             output: error_text(output),
             truncated: cut,
+            styled: None,
         },
     }
 }
@@ -258,6 +268,7 @@ pub(in crate::service) fn user_shell_command_display(
         duration_millis,
         output,
         truncated,
+        styled,
     } = item
     else {
         return None;
@@ -265,15 +276,20 @@ pub(in crate::service) fn user_shell_command_display(
     if id != call_id {
         return None;
     }
+    let display = AgentToolDisplay::Command {
+        command: command.clone(),
+        cwd: cwd.clone(),
+        output: output.clone(),
+        exit_code: *exit_code,
+        duration_millis: Some(*duration_millis),
+        truncated: *truncated,
+        styled: None,
+    };
+    let metadata = hanafubuki_agent_contracts::AgentToolDisplayMetadata {
+        styled_output: styled.clone(),
+    };
     Some(crate::AgentToolCallDisplay {
         subject: Some(command.clone()),
-        display: Some(AgentToolDisplay::Command {
-            command: command.clone(),
-            cwd: cwd.clone(),
-            output: output.clone(),
-            exit_code: *exit_code,
-            duration_millis: Some(*duration_millis),
-            truncated: *truncated,
-        }),
+        display: Some(display.with_metadata(&metadata)),
     })
 }

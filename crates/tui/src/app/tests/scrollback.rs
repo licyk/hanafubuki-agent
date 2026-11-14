@@ -81,6 +81,7 @@ fn completed(tool: &LiveCell<ToolCallCell>, call_id: &str, lines: usize) {
                 exit_code: Some(0),
                 duration_millis: Some(10),
                 truncated: false,
+                styled: None,
             },
         )
     });

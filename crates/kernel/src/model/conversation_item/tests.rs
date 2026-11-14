@@ -186,6 +186,74 @@ fn a_transcript_leaves_the_reasoning_sent_back_out() {
     assert_eq!(encoded["items"][0]["content"]["text"], "Shown thought.");
 }
 
+fn coloured_output(
+    display_metadata: hanafubuki_agent_contracts::AgentToolDisplayMetadata,
+) -> ConversationItem {
+    ConversationItem::ToolOutput {
+        call_id: "call-1".to_string(),
+        origin: hanafubuki_agent_model_api::ModelToolCallOrigin::Function,
+        output: hanafubuki_agent_tool_contracts::ToolOutput::structured(
+            serde_json::json!({ "type": "unified_exec", "output": "red\n" }),
+            false,
+        ),
+        truncation: None,
+        images: Vec::new(),
+        tool_search_results: Vec::new(),
+        display_metadata,
+    }
+}
+
+fn red_styles() -> hanafubuki_agent_contracts::AgentToolDisplayMetadata {
+    hanafubuki_agent_contracts::AgentToolDisplayMetadata {
+        styled_output: Some(hanafubuki_agent_contracts::AgentStyledText {
+            text_bytes: 4,
+            spans: vec![hanafubuki_agent_contracts::AgentStyleSpan {
+                start: 0,
+                end: 3,
+                style: hanafubuki_agent_contracts::AgentTextStyle {
+                    fg: Some(hanafubuki_agent_contracts::AgentTextColor::Indexed(1)),
+                    ..Default::default()
+                },
+            }],
+        }),
+    }
+}
+
+/// A tool output's display metadata is persisted beside it, never lowered
+/// to the model, absent from older records, and dropped alone when it does
+/// not decode.
+#[test]
+fn a_tool_outputs_display_metadata_is_persisted_tolerantly_and_never_lowered() {
+    let styled = coloured_output(red_styles());
+    let plain = coloured_output(Default::default());
+    assert_eq!(styled.as_model_input(), plain.as_model_input());
+    let encoded = serde_json::to_value(&styled).unwrap();
+    assert!(encoded.get("displayMetadata").is_some(), "{encoded}");
+    assert_eq!(
+        serde_json::from_value::<ConversationItem>(encoded.clone()).unwrap(),
+        styled
+    );
+    // Without styles, the record is what it was before display metadata.
+    let older = serde_json::to_value(&plain).unwrap();
+    assert!(older.get("displayMetadata").is_none(), "{older}");
+    assert_eq!(
+        serde_json::from_value::<ConversationItem>(older).unwrap(),
+        plain
+    );
+    for broken in [
+        serde_json::json!("red"),
+        serde_json::json!({ "styledOutput": { "spans": "all" } }),
+    ] {
+        let mut record = encoded.clone();
+        record["displayMetadata"] = broken;
+        assert_eq!(
+            serde_json::from_value::<ConversationItem>(record).unwrap(),
+            plain
+        );
+    }
+    assert!(styled.retained_bytes() > plain.retained_bytes());
+}
+
 /// A `!command`'s item is the person's context for the model, and reads
 /// back with its optional fields defaulted.
 #[test]
@@ -207,6 +275,7 @@ fn a_user_shell_command_is_user_context_and_decodes_tolerantly() {
             duration_millis: 0,
             output: String::new(),
             truncated: false,
+            styled: None,
         }
     );
     let Some(hanafubuki_agent_model_api::ModelInputItem::ContextFragment {

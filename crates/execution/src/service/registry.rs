@@ -23,6 +23,9 @@ pub(super) struct ExecutionRecord {
     /// A PTY execution's screen, as `exec_command` and `write_stdin` polls
     /// last read it.
     pub(super) screen: Option<TerminalScreen>,
+    /// The style a pipe execution's output was in where the last poll
+    /// ended, which the next one starts in.
+    pub(super) pen: TextStyle,
     /// A progress reporter is streaming this execution's output.
     pub(super) observed: bool,
     /// One caller is disposing this execution; to every other caller it is
@@ -70,6 +73,7 @@ impl AgentExecutionService {
                 interactive,
                 unified_output_offset: 0,
                 screen: None,
+                pen: TextStyle::default(),
                 observed: false,
                 disposing: false,
             },

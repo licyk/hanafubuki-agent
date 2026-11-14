@@ -3096,7 +3096,180 @@ and any module-size exception.
       - For M7–M8: a diagram's rows are code rows (`push_span` in a code
         block); M8's tool-output formats do not render Markdown, so no
         fence there is drawn.
-- [ ] M7: SGR colour in command output, live and on replay (D21).
+- [x] M7: SGR colour in command output, live and on replay (D21).
+      Done (2026-11-14):
+      - When there is colour: the command environment is unchanged
+        (`NO_COLOR=1`, `TERM=dumb`, pipe or PTY as before), so a program
+        that honours them prints none; one that forces it (`ls
+        --color=always`, `grep --color=always`, `cargo --color=always`:
+        each measured to print ESC under `NO_COLOR=1 TERM=dumb`, plain
+        `cargo build` none, in a pipe) or writes sequences anyway shows it. Nothing the model reads
+        changed: the result's JSON, the history's tool output, the
+        `<user_shell_command>` fragment and exports are the plain text as
+        before; goldens unchanged.
+      - foundation (`terminal_text` → `terminal_text/{mod,render,style}.rs`,
+        a twin of Hanafubuki's foundation module): one state machine for
+        both renderers, each cell with its style; `render_plain_text` is its
+        text (compared byte for byte with the previous implementation on
+        300,000 random inputs before committing, not kept as a test);
+        `render_styled_text(bytes, pen) -> StyledRender { text, styles, pen
+        }`; `TextStyles { textBytes, spans: [StyleSpan { start, end, style
+        }] }` (runs of the plain text's bytes, non-default only, within one
+        line, at most `MAX_STYLE_SPANS` = 2048, the rest plain),
+        `TextStyle { fg, bg, bold, dim, italic, underline, reverse }`,
+        `TextColor::{Indexed, Rgb}`; `sgr_sequence`, `styled_terminal_text`
+        (each run between its sequence and a reset). Honoured: SGR 0/empty,
+        1, 2, 3, 4 (`4:0` off, `4:1`–`4:5` on), 7, 22–24, 27, 30–37, 39,
+        40–47, 49, 90–97, 100–107, 38/48 `;5;n`, `;2;r;g;b`, `:5:n`,
+        `:2:r:g:b`, `:2:cs:r:g:b`; dropped: 5, 6, 8, 9, 21, 53, 58/59 (with
+        their parts), fonts, every unknown code; a private (`ESC[>4;2m`),
+        intermediate-byte or over-128-character SGR changes nothing. CSI
+        cursor/erase still read the first 32 characters, as before; every
+        other sequence is applied or dropped exactly as before.
+      - execution: `TerminalScreen::take` gives `ScreenText.styles` from the
+        `vt100` cells (fg, bg, bold, dim, italic, underline, inverse) of the
+        rows it takes, spelled as `vt100` writes a row (no styles when they
+        spell another text); changes still detected by text alone, so a
+        colour-only repaint is not taken again. `unified_result` renders
+        each window part styled; the marker and gaps are plain, a part
+        after a gap starts plain, and a pipe's style in force at a poll's
+        end is the record's `pen`, which the next poll starts in.
+        `UnifiedExecResult.styles` is `#[serde(skip)]`. Nothing else is
+        retained: styles are computed from the bytes the 4 MiB buffer keeps.
+      - contracts: `AgentStyledText` (= `TextStyles`), `AgentStyleSpan`,
+        `AgentTextStyle`, `AgentTextColor`; `AgentToolDisplay::Command.styled`;
+        `AgentToolDisplayMetadata { styled_output }` (tolerant per field);
+        `ToolResult.display_metadata` and `with_display_metadata`;
+        `ToolPresenterRegistry::display` takes the metadata and adds it
+        through `AgentToolDisplay::with_metadata` when it fits the output.
+        The presenter trait is unchanged.
+      - kernel: `AgentToolOutput.display_metadata`;
+        `ConversationItem::ToolOutput.display_metadata` and
+        `UserShellCommand.styled` (default, skipped when empty, tolerant:
+        a value that does not decode is absent and the item kept; counted in
+        `retained_bytes`, so the history's byte budget, and left out of the
+        context estimate through `display_bytes`, so compaction starts as
+        before; never lowered); dropped when the output was
+        bounded (`truncation`) or a compression run replaced it;
+        `present_tool_call(…, output: Option<(&ToolOutput,
+        &AgentToolDisplayMetadata)>)`. The kernel does not bound what a
+        handler returns there; the execution renderer's 2,048 runs are the
+        bound. Kernel files changed (for R5):
+        `model/conversation_item.rs` (+ its tests), `tool_runtime.rs`,
+        `service/sampling/estimate.rs` (+ `sampling/tests.rs`),
+        `service/tool_display.rs`, `service/tool_execution/{completion,
+        handler,search,user_shell}.rs`, `service/validation/tool_pairs.rs`,
+        tests `permission/tests.rs`, `service/validation/tests.rs`,
+        `tool_output/tests.rs`. **Not** changed: `service/progress.rs`,
+        `activity.rs` (the progress update has no new field; its text is
+        still terminal text, the activity preview still plain).
+      - plugin-execution: `tool.rs` returns the styles beside the model's
+        JSON; the monitor writes a PTY's rows with each styled run between
+        its sequence and a reset (`styled_terminal_text`), so live colour
+        rides in `ExecutionOutput.text` as a pipe's own sequences already
+        did. Deviation: the plan's "the progress field" is this text, not a
+        new field (no contract change, coalescing unchanged, kernel files
+        untouched).
+      - TUI: `history_cell/tool/styled_output.rs` (original) builds output
+        lines from the plain text and its styles (16 colours as ratatui's
+        named ones, so the terminal's palette/theme; 256 and RGB passed
+        through), falling back to the plain lines when the styles do not fit
+        or would change a line's text; `command.rs` and `live_output.rs`
+        use it, so live and final show the same spans; collapsed rows dim
+        their colours (Codex's `dimmed_output_line`), expanded rows keep
+        them across wrapping; `LiveOutput` keeps `Line`s and the style in
+        force at its pending line, resets after a gap, and writes a
+        collapsed unfinished line back as styled terminal text; `/raw`,
+        copy, find and export stay plain. Replay: `present_tool_call` with
+        the item's metadata and the `UserShellCommand` display through
+        `with_metadata`, so `/resume` shows colour; a record from before M7
+        shows plain. No setting (the plan names none); no `NO_COLOR` for
+        the interface (none exists). URLs in command output stay unlinked
+        (M4's note; the plan's M7 scope has no links).
+      - Windows: PTY colours are read from the screen's cells after ConPTY's
+        repaint sequences; pipe mode reads what the program wrote. The
+        Windows tests write `ESC[31m` with PowerShell's
+        `[Console]::Out.Write` in pipe and PTY (execution `colour.rs`) and
+        end to end (agent and TUI tests); their CI result is in the CI
+        bullet below. Console-API colours (`Write-Host -ForegroundColor`)
+        are not tested.
+      - Tests (new): foundation `terminal_text/tests/styled.rs` (every kept
+        attribute on/off, both colour planes in every form, 34-character
+        truecolour, resets, unknown and dropped codes, lines and reads,
+        CR overwrite, wide and zero-width cells, non-SGR and private
+        sequences, overlong SGR, the span bound, `fits`, the round trip
+        through `styled_terminal_text` and every style through
+        `sgr_sequence`, JSON tolerance, and a sweep of 3,000 random hostile
+        inputs cut at every byte: text equals the plain renderer's, no
+        control but `\n`/`\t`, styles fit); execution
+        `terminal_screen/tests.rs` (cells' styles, colour-only repaint not
+        taken, scrolled rows, wide/gaps/blanks, hostile sweep);
+        `tests/contracts/colour.rs` (all OSes: pipe and PTY real commands
+        plain for the model and styled; Unix: a style left open across
+        polls, styles on both sides of the omission marker); the wire test
+        checks the JSON keys; contracts `presenters.rs` (fits/with_metadata,
+        tolerant metadata, the registry adding it); kernel conversation item
+        (persisted, never lowered, older records, broken values, bytes);
+        plugin-execution monitor (PTY rows closed per row, plain text
+        unchanged); agent `tests/colour.rs` (fake model server: a model's and
+        a typed command, the next request and export plain, history plain,
+        display styled, read back after a restart); TUI
+        `styled_output/tests.rs`, `tool/tests/colour.rs` (live = final spans
+        collapsed and expanded, dim, wrap, raw, `!command`, plain unchanged),
+        `live_output/tests.rs` (colour across lines/updates, pending
+        restyle, gap reset, PTY row, collapsed progress line, Codex's
+        `truncated_ansi_sequence_does_not_hide_the_retained_tail` adapted),
+        `app/tests/colour.rs` (vt100 cells red, model request plain, both
+        presentations, model's and typed command, `/resume`). Failing first,
+        by mutation, each seen failing then restored: styles never attached
+        (2 agent, 2 TUI app tests), no pen across polls (the carry test), the
+        monitor sending plain rows (its test), the SGR cap at 32 (2 foundation
+        tests), no pen in `LiveOutput` (3 TUI tests), `serde(skip)` removed
+        (the wire test and both execution colour tests).
+      - Snapshots and goldens: none changed. Dependencies: none added (no
+        `ansi-to-tui`: the plan's SGR-tracking renderer instead).
+      - Docs (both languages): `terminal-interface` (`#tools`, `#rendering`
+        command output bullets, `#terminal`), `tools#commands`,
+        `internals#execution-files` (the styled copy) and `#tui-details`,
+        `embedding#events-and-history`, `json-events#tools` (PTY rows' SGR),
+        `plugin-rules#tool-presenters`, `architecture` (over the facade).
+        `environment` unchanged (no environment change).
+      - Hanafubuki at its next pin: `AgentToolDisplay::Command` gains
+        `styled` (struct literals and exhaustive patterns); `ToolResult`
+        gains `display_metadata` (literals; `From`/constructors default it);
+        `ToolPresenterRegistry::display` takes `&AgentToolDisplayMetadata`;
+        `present_tool_call`'s `output` is `Option<(&ToolOutput,
+        &AgentToolDisplayMetadata)>`; `ConversationItem::ToolOutput` gains
+        `display_metadata`, `UserShellCommand` gains `styled`;
+        `AgentToolOutput` gains `display_metadata`; PTY
+        `ExecutionOutput.text` carries SGR around styled runs (a plain
+        renderer drops them); facade re-exports `render_styled_text`,
+        `styled_terminal_text`, `sgr_sequence`, `StyledRender` and the
+        `Agent*Style*` types. `terminal_text` is a twin of Hanafubuki's
+        foundation: port `render.rs`/`style.rs` by hand if wanted (the plain
+        renderer's behaviour is unchanged).
+      - Module size: no exception added or raised.
+      - Validation: `cargo fmt --all --check`; `RUSTFLAGS="-D warnings"
+        cargo check --workspace --all-targets --all-features`; `cargo
+        clippy --workspace --all-targets --all-features -- -D warnings`, and
+        `cargo clippy --target x86_64-pc-windows-gnu` (all targets and
+        features) for foundation, execution, contracts, plugin-execution,
+        kernel, the facade and the TUI; `cargo xtask check` (the notices
+        check first failed on the four new TUI files, listed as original);
+        `cargo test --workspace --all-features --no-fail-fast` on the final
+        tree (4703 passed, none failed, no flake seen); `bun install
+        --frozen-lockfile`, `bun run format:site`, `bun run
+        format:check:site`, `bun run site:check`, `bun run site:test` (28
+        passed), and the fourteen changed pages compiled with the store's
+        `@mdx-js/mdx` 3.1.1 with remark-gfm; `VITE_BASE_PATH=/hanafubuki-agent/
+        bun run site:build` not run locally (port 3000 held by another
+        project's server); CI's Site run covers it.
+      - Not verified without a real terminal: how each terminal draws the
+        256/RGB colours, reverse and underline beside the interface's own
+        styles; colour from console-API programs under ConPTY.
+      - Acceptance gap: the plan's "`cargo build` shows its colours" holds
+        only with `--color=always` (or `CARGO_TERM_COLOR=always`), since
+        cargo honours `NO_COLOR`/`TERM=dumb`, which the plan keeps.
 - [ ] M8: JSON pretty-printing, MCP content summaries, the diff
       improvements.
 

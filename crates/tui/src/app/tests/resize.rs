@@ -235,6 +235,7 @@ fn a_resize_keeps_what_each_entry_disclosed() {
                         exit_code: Some(0),
                         duration_millis: Some(10),
                         truncated: false,
+                        styled: None,
                     },
                 )
             });

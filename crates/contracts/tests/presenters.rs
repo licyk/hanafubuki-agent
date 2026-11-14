@@ -5,7 +5,8 @@
 use std::sync::{Arc, Mutex};
 
 use hanafubuki_agent_contracts::{
-    AgentToolDisplay, AgentToolPresenter, ArgumentSubjects, ExtensionPoint, PluginFault,
+    AgentStyleSpan, AgentStyledText, AgentTextColor, AgentTextStyle, AgentToolDisplay,
+    AgentToolDisplayMetadata, AgentToolPresenter, ArgumentSubjects, ExtensionPoint, PluginFault,
     PluginFaults, Register, RegistrationError, RegistryService, ToolPresenterRegistry,
     MAX_TOOL_SUBJECT_CHARS,
 };
@@ -111,7 +112,7 @@ async fn a_presenter_presents_its_tools_while_its_plugin_runs() {
         Some("hello")
     );
     assert_eq!(
-        registry.display("echo", &arguments, &output),
+        registry.display("echo", &arguments, &output, &Default::default()),
         AgentToolDisplay::Text {
             text: "hello".to_string()
         }
@@ -122,7 +123,7 @@ async fn a_presenter_presents_its_tools_while_its_plugin_runs() {
     fiber.dispose().await.unwrap();
     assert_eq!(registry.subject("echo", &arguments), None);
     assert_eq!(
-        registry.display("echo", &arguments, &output),
+        registry.display("echo", &arguments, &output, &Default::default()),
         AgentToolDisplay::Fields {
             rows: vec![("ok".to_string(), "true".to_string())]
         }
@@ -187,7 +188,7 @@ async fn a_panicking_presenter_shows_no_subject_and_the_fallback() {
 
     assert_eq!(registry.subject("echo", &json!({ "text": "x" })), None);
     assert_eq!(
-        registry.display("echo", &json!({}), &output),
+        registry.display("echo", &json!({}), &output, &Default::default()),
         AgentToolDisplay::Text {
             text: "first\nsecond".to_string()
         }
@@ -255,4 +256,111 @@ fn the_fallback_shows_structured_keys_before_text_notes() {
             text: "done".to_string()
         }
     );
+}
+
+fn command(output: &str) -> AgentToolDisplay {
+    AgentToolDisplay::Command {
+        command: "ls --color=always".to_string(),
+        cwd: None,
+        output: output.to_string(),
+        exit_code: Some(0),
+        duration_millis: None,
+        truncated: false,
+        styled: None,
+    }
+}
+
+fn red_styles(text_bytes: usize, end: usize) -> AgentToolDisplayMetadata {
+    AgentToolDisplayMetadata {
+        styled_output: Some(AgentStyledText {
+            text_bytes,
+            spans: vec![AgentStyleSpan {
+                start: 0,
+                end,
+                style: AgentTextStyle {
+                    fg: Some(AgentTextColor::Indexed(1)),
+                    ..AgentTextStyle::default()
+                },
+            }],
+        }),
+    }
+}
+
+#[test]
+fn a_commands_display_takes_the_styles_of_its_own_output_only() {
+    let metadata = red_styles(10, 3);
+    let AgentToolDisplay::Command { styled, .. } = command("src\nnotes\n").with_metadata(&metadata)
+    else {
+        unreachable!()
+    };
+    assert_eq!(styled, metadata.styled_output);
+    // An output the kernel bounded, or another one, shows plain.
+    for other in ["src\nnot", "src\nnotes\n and more", "模型\n"] {
+        let AgentToolDisplay::Command { styled, .. } = command(other).with_metadata(&metadata)
+        else {
+            unreachable!()
+        };
+        assert_eq!(styled, None, "{other:?}");
+    }
+    // Any other display is left as it is.
+    let text = AgentToolDisplay::Text {
+        text: "src\nnotes\n".to_string(),
+    };
+    assert_eq!(text.clone().with_metadata(&metadata), text);
+}
+
+#[test]
+fn display_metadata_is_absent_when_empty_and_decodes_tolerantly() {
+    assert_eq!(
+        serde_json::to_value(AgentToolDisplayMetadata::default()).unwrap(),
+        json!({})
+    );
+    assert_eq!(
+        serde_json::to_value(command("x")).unwrap().get("styled"),
+        None
+    );
+    let metadata = red_styles(3, 3);
+    let json = serde_json::to_value(&metadata).unwrap();
+    assert_eq!(
+        serde_json::from_value::<AgentToolDisplayMetadata>(json).unwrap(),
+        metadata
+    );
+    for broken in [
+        json!({ "styledOutput": "red" }),
+        json!({ "styledOutput": { "textBytes": -1, "spans": [] } }),
+        json!({ "styledOutput": { "textBytes": 3, "spans": [{ "start": 0 }] } }),
+        json!({ "futureField": 1 }),
+    ] {
+        assert_eq!(
+            serde_json::from_value::<AgentToolDisplayMetadata>(broken.clone()).unwrap(),
+            AgentToolDisplayMetadata::default(),
+            "{broken}"
+        );
+    }
+}
+
+struct Exec;
+
+impl AgentToolPresenter for Exec {
+    fn tools(&self) -> &[&'static str] {
+        &["exec"]
+    }
+
+    fn display(&self, _: &str, _: &Value, _: &ToolOutput) -> Option<AgentToolDisplay> {
+        Some(command("red"))
+    }
+}
+
+#[tokio::test]
+async fn the_registry_adds_the_metadata_to_a_presenters_command() {
+    let (root, registry) = registry_root(Arc::default()).await;
+    let _fiber = presenting(&root, "exec", Arc::new(Exec)).await;
+    let output = structured(json!({}));
+    let metadata = red_styles(3, 3);
+    let AgentToolDisplay::Command { styled, .. } =
+        registry.display("exec", &json!({}), &output, &metadata)
+    else {
+        panic!("a command")
+    };
+    assert_eq!(styled, metadata.styled_output);
 }

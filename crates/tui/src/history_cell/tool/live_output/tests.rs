@@ -1,10 +1,19 @@
 //! The live buffer: lines as a terminal shows them, redraws in place, and
 //! its bounds.
 
+use ratatui::style::{Color, Modifier, Style};
+
+use super::super::styled_output::line_text;
 use super::*;
 
 fn lines(output: &LiveOutput) -> Vec<String> {
-    output.lines().0
+    plain(output).0
+}
+
+/// The lines' text, and how many lines they stand for.
+fn plain(output: &LiveOutput) -> (Vec<String>, usize) {
+    let (lines, count) = output.lines();
+    (lines.iter().map(line_text).collect(), count)
 }
 
 fn pushed(chunks: &[&str]) -> LiveOutput {
@@ -19,13 +28,13 @@ fn pushed(chunks: &[&str]) -> LiveOutput {
 fn ended_lines_are_committed_and_the_unfinished_one_shows_as_it_is_now() {
     let output = pushed(&["first\nsec", "ond\nthi"]);
     assert_eq!(
-        output.lines(),
+        plain(&output),
         (vec!["first".into(), "second".into(), "thi".into()], 3)
     );
     // Trailing blank lines are not shown, as in the finished output.
     let output = pushed(&["done\n\n\n"]);
-    assert_eq!(output.lines(), (vec!["done".into()], 1));
-    assert_eq!(LiveOutput::default().lines(), (Vec::new(), 0));
+    assert_eq!(plain(&output), (vec!["done".into()], 1));
+    assert_eq!(plain(&LiveOutput::default()), (Vec::new(), 0));
 }
 
 #[test]
@@ -77,7 +86,7 @@ fn the_first_and_the_newest_lines_are_kept_with_how_many_fell_between() {
     for n in 1..=1000 {
         output.push(&format!("line {n}\n"), false);
     }
-    let (shown, count) = output.lines();
+    let (shown, count) = plain(&output);
     assert_eq!(count, 1000);
     assert_eq!(shown.len(), HEAD_LINES + 1 + TAIL_LINES);
     assert_eq!(shown[0], "line 1");
@@ -119,4 +128,108 @@ fn a_line_is_cut_and_one_that_never_ends_stays_bounded() {
         output.pending.len()
     );
     assert!(lines(&output)[0].len() <= MAX_LINE_BYTES + '…'.len_utf8());
+}
+
+fn red() -> Style {
+    Style::default().fg(Color::Red)
+}
+
+/// The styled spans of each line: text and style.
+fn runs(output: &LiveOutput) -> Vec<Vec<(String, Style)>> {
+    output
+        .lines()
+        .0
+        .iter()
+        .map(|line| {
+            line.spans
+                .iter()
+                .map(|span| (span.content.to_string(), span.style))
+                .collect()
+        })
+        .collect()
+}
+
+#[test]
+fn colours_show_and_a_style_goes_on_across_lines_and_updates() {
+    let mut output = pushed(&["plain \x1b[31mred\nstill"]);
+    output.push(" red\x1b[0m plain\n", false);
+    assert_eq!(
+        runs(&output),
+        [
+            vec![
+                ("plain ".to_string(), Style::default()),
+                ("red".to_string(), red())
+            ],
+            vec![
+                ("still red".to_string(), red()),
+                (" plain".to_string(), Style::default())
+            ],
+        ]
+    );
+}
+
+#[test]
+fn the_unfinished_line_shows_in_the_style_in_force_and_a_redraw_restyles_it() {
+    let mut output = pushed(&["\x1b[32mstart\n", "50%"]);
+    let green = Style::default().fg(Color::Green);
+    assert_eq!(runs(&output)[1], vec![("50%".to_string(), green)]);
+    output.push("\r\x1b[2K\x1b[1;31mfailed\x1b[0m\n", false);
+    assert_eq!(
+        runs(&output)[1],
+        vec![("failed".to_string(), red().add_modifier(Modifier::BOLD))]
+    );
+}
+
+#[test]
+fn a_style_starts_plain_again_after_a_gap() {
+    let mut output = pushed(&["\x1b[31mred before\n"]);
+    output.push("after\n", true);
+    assert_eq!(
+        runs(&output)[2],
+        vec![("after".to_string(), Style::default())]
+    );
+}
+
+#[test]
+fn a_pty_row_keeps_its_colours_when_written_again() {
+    // The monitor writes each styled run of a row between its sequence and
+    // a reset, and an unfinished row again after `\r ESC[2K`.
+    let mut output = pushed(&["\x1b[0;33mwarn\x1b[0m 1/2"]);
+    output.push("\r\x1b[2K\x1b[0;33mwarn\x1b[0m 2/2\n", false);
+    let yellow = Style::default().fg(Color::Yellow);
+    assert_eq!(
+        runs(&output),
+        [vec![
+            ("warn".to_string(), yellow),
+            (" 2/2".to_string(), Style::default())
+        ]]
+    );
+}
+
+#[test]
+fn a_collapsed_progress_line_keeps_its_colours_and_the_style_in_force() {
+    let mut output = LiveOutput::default();
+    output.push("\x1b[36m", false);
+    for n in 0..20_000 {
+        output.push(&format!("\r{}%", n % 100), false);
+    }
+    assert!(output.pending.len() <= MAX_PENDING_BYTES);
+    let cyan = Style::default().fg(Color::Cyan);
+    assert_eq!(runs(&output), [vec![("99%".to_string(), cyan)]]);
+    output.push("\rdone\n", false);
+    assert_eq!(runs(&output), [vec![("done".to_string(), cyan)]]);
+}
+
+/// Codex's `truncated_ansi_sequence_does_not_hide_the_retained_tail`, for
+/// this buffer: a title too long for the pending bound, cut, never shows
+/// and never hides what follows it.
+#[test]
+fn a_cut_title_does_not_hide_the_text_after_it() {
+    let output = pushed(&[&format!(
+        "{}\x1b]0;{}\x07visible-tail",
+        "x".repeat(10),
+        "hidden".repeat(4_000)
+    )]);
+    let shown = lines(&output);
+    assert_eq!(shown, [format!("{}visible-tail", "x".repeat(10))]);
 }

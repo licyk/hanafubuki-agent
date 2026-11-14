@@ -1,5 +1,7 @@
 use hanafubuki_agent_process::terminal_size::{TerminalResize, TerminalSize};
 
+use hanafubuki_agent_foundation::terminal_text::{TextColor, TextStyle};
+
 use super::{ScreenText, TerminalScreen};
 
 fn screen(cols: u16, rows: u16) -> TerminalScreen {
@@ -38,20 +40,19 @@ fn a_line_still_being_written_is_rewritten_by_the_next_take() {
     let mut screen = screen(80, 24);
     screen.push(b"ready\r\nPassword: ");
     assert_eq!(
-        screen.take(),
-        ScreenText {
-            rewrites_last_line: false,
-            text: "ready\nPassword:".into()
-        }
+        plain(screen.take()),
+        (false, "ready\nPassword:".to_string())
     );
     screen.push(b"****\r\nwelcome\r\n");
     assert_eq!(
-        screen.take(),
-        ScreenText {
-            rewrites_last_line: true,
-            text: "Password: ****\nwelcome\n".into()
-        }
+        plain(screen.take()),
+        (true, "Password: ****\nwelcome\n".to_string())
     );
+}
+
+fn plain(taken: ScreenText) -> (bool, String) {
+    assert!(taken.styles.fits(&taken.text));
+    (taken.rewrites_last_line, taken.text)
 }
 
 #[test]
@@ -160,4 +161,151 @@ fn the_alternate_screen_leaves_the_main_one_as_it_was() {
     }
     output.push_str("\x1b[?1049lafter\r\n");
     assert_eq!(text(&mut screen, output.as_bytes()), "before\nafter\n");
+}
+
+fn runs(taken: &ScreenText) -> Vec<(&str, TextStyle)> {
+    assert!(taken.styles.fits(&taken.text), "{taken:?}");
+    taken
+        .styles
+        .spans
+        .iter()
+        .map(|span| (&taken.text[span.start..span.end], span.style))
+        .collect()
+}
+
+fn fg(index: u8) -> TextStyle {
+    TextStyle {
+        fg: Some(TextColor::Indexed(index)),
+        ..TextStyle::default()
+    }
+}
+
+#[test]
+fn a_rows_cells_keep_their_colours_and_attributes() {
+    let mut screen = screen(80, 24);
+    screen.push(
+        b"\x1b[1;31merror\x1b[0m: \x1b[38;2;1;2;3;4mrgb\x1b[0m \x1b[7;3;2;48;5;200mx\x1b[0m\r\n",
+    );
+    let taken = screen.take();
+    assert_eq!(taken.text, "error: rgb x\n");
+    assert_eq!(
+        runs(&taken),
+        vec![
+            (
+                "error",
+                TextStyle {
+                    bold: true,
+                    ..fg(1)
+                }
+            ),
+            (
+                "rgb",
+                TextStyle {
+                    fg: Some(TextColor::Rgb(1, 2, 3)),
+                    underline: true,
+                    ..TextStyle::default()
+                }
+            ),
+            (
+                "x",
+                TextStyle {
+                    bg: Some(TextColor::Indexed(200)),
+                    reverse: true,
+                    italic: true,
+                    dim: true,
+                    ..TextStyle::default()
+                }
+            ),
+        ]
+    );
+}
+
+#[test]
+fn a_row_whose_colour_alone_changed_is_not_taken_again() {
+    // The text the model reads would otherwise repeat a row it already
+    // has, only because its colour changed.
+    let mut screen = screen(80, 24);
+    assert_eq!(text(&mut screen, b"building\r\n"), "building\n");
+    screen.push(b"\x1b[1A\r\x1b[32mbuilding\x1b[0m\r\n");
+    let taken = screen.take();
+    assert_eq!(taken.text, "");
+    assert!(taken.styles.spans.is_empty());
+}
+
+#[test]
+fn rows_scrolled_off_keep_their_styles() {
+    let mut screen = screen(40, 5);
+    let output: String = (1..=600)
+        .map(|line| format!("\x1b[3{}mline {line}\x1b[0m\r\n", line % 8))
+        .collect();
+    screen.push(output.as_bytes());
+    let taken = screen.take();
+    let runs = runs(&taken);
+    assert_eq!(runs.len(), 600);
+    for ((text, style), line) in runs.iter().zip(1..=600u32) {
+        assert_eq!(*text, format!("line {line}"));
+        assert_eq!(*style, fg((line % 8) as u8));
+    }
+}
+
+#[test]
+fn wide_characters_gaps_and_blanks_are_styled_where_they_stand() {
+    let mut screen = screen(20, 5);
+    screen.push("\x1b[32m中\x1b[0m\x1b[3Cx \x1b[41m  \x1b[0my\x1b[44m   \x1b[0m\r\n".as_bytes());
+    let taken = screen.take();
+    assert_eq!(taken.text, "中   x   y\n");
+    assert_eq!(
+        runs(&taken),
+        vec![
+            ("中", fg(2)),
+            (
+                "  ",
+                TextStyle {
+                    bg: Some(TextColor::Indexed(1)),
+                    ..TextStyle::default()
+                }
+            ),
+        ]
+    );
+}
+
+#[test]
+fn hostile_output_leaves_rows_whose_styles_fit_them() {
+    let pieces: [&[u8]; 16] = [
+        b"\x1b[",
+        b"31m",
+        b"1;4;7m",
+        b"2J",
+        b"H",
+        b"5;3H",
+        b"K",
+        b"\r\n",
+        b"\x08",
+        "中".as_bytes(),
+        b"text ",
+        b"\x1b[?1049h",
+        b"\x1b[?1049l",
+        b"\x1b]0;t\x07",
+        b"38;2;1;2;3m",
+        b"\x1b[0m",
+    ];
+    let mut seed: u64 = 0xfeed_beef;
+    let mut next = move || {
+        seed ^= seed << 13;
+        seed ^= seed >> 7;
+        seed ^= seed << 17;
+        seed
+    };
+    for _ in 0..300 {
+        let mut screen = screen(12, 4);
+        for _ in 0..8 {
+            let mut bytes = Vec::new();
+            for _ in 0..next() % 30 {
+                bytes.extend_from_slice(pieces[(next() % pieces.len() as u64) as usize]);
+            }
+            screen.push(&bytes);
+            let taken = screen.take();
+            runs(&taken);
+        }
+    }
 }

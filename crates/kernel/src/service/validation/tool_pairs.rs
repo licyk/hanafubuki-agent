@@ -218,6 +218,7 @@ pub(super) fn interrupted_tool_output(
         truncation: None,
         images: Vec::new(),
         tool_search_results: Vec::new(),
+        display_metadata: Default::default(),
     }
 }
 

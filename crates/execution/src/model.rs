@@ -3,6 +3,7 @@ use std::fmt;
 use std::path::PathBuf;
 
 use hanafubuki_agent_approval::{ApprovalOrigin, SandboxEscalation};
+use hanafubuki_agent_foundation::terminal_text::TextStyles;
 use hanafubuki_agent_process::executor::{ExecutorIoMode, ExecutorStatus, OutputStream};
 use hanafubuki_agent_process::terminal_size::{TerminalResize, TerminalSize};
 use hanafubuki_agent_sandbox::{SandboxError, SandboxSettings};
@@ -148,6 +149,11 @@ pub struct UnifiedExecResult {
     pub session_id: Option<u64>,
     pub wall_time_ms: u64,
     pub truncated: bool,
+    /// The styles `output` was written in (SGR colours and attributes), for
+    /// a display; `None` when it has none. Never serialized: the JSON is
+    /// what the model reads.
+    #[serde(skip)]
+    pub styles: Option<TextStyles>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]

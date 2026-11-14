@@ -838,6 +838,7 @@ fn a_resumed_session_loads_its_earlier_pages_into_the_owned_transcript() {
 mod agents;
 mod appearance;
 mod backtrack;
+mod colour;
 mod compaction;
 mod compression;
 mod context;

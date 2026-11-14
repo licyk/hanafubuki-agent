@@ -92,14 +92,18 @@ impl AgentApplicationService {
     }
 
     /// How a call, named as history records it (`namespace`, `name`), with
-    /// the model's `arguments` and its committed `output` is shown, for a
-    /// transcript read already.
+    /// the model's `arguments` and its committed `output` (with the
+    /// `displayMetadata` committed beside it) is shown, for a transcript
+    /// read already.
     pub fn present_tool_call(
         &self,
         namespace: Option<&str>,
         name: &str,
         arguments: &serde_json::Value,
-        output: Option<&hanafubuki_agent_tool_contracts::ToolOutput>,
+        output: Option<(
+            &hanafubuki_agent_tool_contracts::ToolOutput,
+            &crate::AgentToolDisplayMetadata,
+        )>,
     ) -> AgentToolCallDisplay {
         self.core
             .present_tool_call(namespace, name, arguments, output)

@@ -74,6 +74,7 @@ impl AgentService {
             selected_tools,
             tool_search_results,
             skill_context: None,
+            display_metadata: Default::default(),
         })
     }
 }

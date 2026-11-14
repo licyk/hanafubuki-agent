@@ -99,9 +99,13 @@ pub use hanafubuki_agent_foundation::persistence::quarantine_file;
 pub use hanafubuki_agent_foundation::secrets::{
     SecretFuture, SecretKey, SecretStore, SecretStoreError,
 };
-/// Terminal output as the plain text it displayed, for an interface that
-/// shows `ExecutionProgress`'s output as it streams.
-pub use hanafubuki_agent_foundation::terminal_text::{complete_prefix_len, render_plain_text};
+/// Terminal output as the plain text it displayed, and with the styles its
+/// SGR sequences gave it, for an interface that shows `ExecutionProgress`'s
+/// output as it streams.
+pub use hanafubuki_agent_foundation::terminal_text::{
+    complete_prefix_len, render_plain_text, render_styled_text, sgr_sequence, styled_terminal_text,
+    StyledRender,
+};
 /// What a hook in [`AgentHook`] is for, where it comes from and whether it
 /// is trusted.
 pub use hanafubuki_agent_hooks::{HookEventName, HookSource, HookTrust};
@@ -192,7 +196,8 @@ pub use hanafubuki_agent_contracts::AgentToolProgressUpdate;
 /// (`AgentHandle::tool_display`, `present_tool_call`).
 pub use hanafubuki_agent_contracts::{
     AgentListingEntry, AgentListingEntryKind, AgentMutationKind, AgentPatchFile, AgentPatchLine,
-    AgentPatchLineKind, AgentPatchOperation, AgentPatchPreview, AgentSearchMatch, AgentToolDisplay,
+    AgentPatchLineKind, AgentPatchOperation, AgentPatchPreview, AgentSearchMatch, AgentStyleSpan,
+    AgentStyledText, AgentTextColor, AgentTextStyle, AgentToolDisplay, AgentToolDisplayMetadata,
     AgentWebResult,
 };
 pub use hanafubuki_agent_kernel::AgentToolCallDisplay;

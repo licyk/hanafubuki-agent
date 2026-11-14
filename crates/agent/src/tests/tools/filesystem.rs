@@ -109,7 +109,12 @@ fn assert_presented(
         false,
     );
     assert_eq!(
-        service.present_tool_call(None, "not_a_tool", &poll, Some(&unknown)),
+        service.present_tool_call(
+            None,
+            "not_a_tool",
+            &poll,
+            Some((&unknown, &Default::default()))
+        ),
         crate::AgentToolCallDisplay {
             subject: None,
             display: Some(crate::AgentToolDisplay::Fields {
