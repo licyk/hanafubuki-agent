@@ -2955,6 +2955,11 @@ and any module-size exception.
         `VITE_BASE_PATH=/hanafubuki-agent/ bun run site:build` not run
         locally (port 3000 held by another project's server); CI's Site run
         covers it.
+      - CI on ca7d024:
+        https://github.com/licyk/hanafubuki-agent/actions/runs/43553815704,
+        Linux, Windows and macOS passed at the first attempt. Site on
+        ca7d024: .../runs/43553815828, passed, its build and deploy
+        included.
       - For M7–M8: a diagram's rows are code rows (`push_span` in a code
         block); M8's tool-output formats do not render Markdown, so no
         fence there is drawn.
