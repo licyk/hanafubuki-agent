@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use hanafubuki_agent_kernel::{AgentEvent, AgentEventKind, AgentEventSink, AgentSessionId};
 
-use super::{AgentBackgroundEvent, AgentBackgroundEventSink, Wakes};
+use super::{AgentBackgroundEvent, AgentBackgroundEventSink, Pauses, Wakes};
 
 impl Wakes {
     /// The sink of a turn of a sub-agent in `root`'s tree.
@@ -16,6 +16,15 @@ impl Wakes {
         Arc::new(ChildEvents {
             root,
             sink: self.sink.clone(),
+            pauses: None,
+        })
+    }
+
+    pub(crate) fn woken_child_events(&self, root: AgentSessionId) -> Arc<dyn AgentEventSink> {
+        Arc::new(ChildEvents {
+            root,
+            sink: self.sink.clone(),
+            pauses: Some(self.pauses.clone()),
         })
     }
 }
@@ -23,10 +32,16 @@ impl Wakes {
 struct ChildEvents {
     root: AgentSessionId,
     sink: Arc<dyn AgentBackgroundEventSink>,
+    pauses: Option<Pauses>,
 }
 
 impl AgentEventSink for ChildEvents {
     fn emit(&self, event: AgentEvent) {
+        if matches!(event.kind, AgentEventKind::TurnStarted { .. }) {
+            if let Some(pauses) = &self.pauses {
+                pauses.woken(self.root);
+            }
+        }
         if !told(&event.kind) {
             return;
         }

@@ -54,25 +54,22 @@ impl AgentService {
     /// published and told to the observers. Dropped while the append is in
     /// flight, it cancels the turn once the admission is published, as a
     /// dropped turn does.
-    pub(super) async fn admit_turn(
+    pub(in crate::service) async fn admit_turn(
         &self,
         session_id: AgentSessionId,
         input: crate::AgentTurnInput,
+        admission: TurnAdmission,
         event_sink: &Arc<dyn AgentEventSink>,
     ) -> Result<TurnIdentity, AgentError> {
-        validate_turn_input(&input)?;
+        if !matches!(admission, TurnAdmission::Wake) {
+            validate_turn_input(&input)?;
+        }
         self.refresh_session_image_input_capability(session_id)
             .await?;
         let cell = self.session(session_id)?;
         let admitted = {
             let mut record = cell.lock_after_persistence().await?;
-            self.stage_turn_admission(
-                &cell,
-                &mut record,
-                session_id,
-                input,
-                TurnAdmission::Regular,
-            )?
+            self.stage_turn_admission(&cell, &mut record, session_id, input, admission)?
         };
         let StagedAdmission {
             staged,

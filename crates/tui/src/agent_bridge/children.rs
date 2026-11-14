@@ -244,11 +244,12 @@ fn read_asked(agent: &AgentHandle, parent: AgentSessionId, app_event_tx: &AppEve
     let reader = agent.clone();
     let Ok(Ok(statuses)) = agent
         .runtime()
-        .block_on(async move { reader.subagents(parent).await })
+        .block_on(async move { reader.background_tasks(parent).await })
     else {
         return;
     };
     let running = statuses
+        .agents
         .iter()
         .filter(|status| status.status == AgentSubagentState::Running);
     for status in running {

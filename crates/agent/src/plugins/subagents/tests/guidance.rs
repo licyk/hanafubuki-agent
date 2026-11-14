@@ -578,7 +578,7 @@ async fn a_learned_reasoning_refusal_changes_the_models_part_until_it_is_forgott
 /// (nor the rest of the guidance).
 // The turns' tasks must finish while `shutdown` blocks this thread.
 #[tokio::test(flavor = "multi_thread")]
-async fn a_sub_agent_and_a_plan_mode_session_are_not_shown_it() {
+async fn a_depth_one_agent_gets_guidance_but_a_plan_mode_session_does_not() {
     let first = FakeServer::start(vec![(assistant_events("Done."), Duration::ZERO); 2]).await;
     let second = FakeServer::start(Vec::new()).await;
     let (service, paths, _) =
@@ -602,9 +602,9 @@ async fn a_sub_agent_and_a_plan_mode_session_are_not_shown_it() {
 
     let child = request_with(&first, "Task child.").await;
     let plan = request_with(&first, "Plan it.").await;
-    for request in [child, plan] {
-        assert!(models_part(&request).is_none());
-        assert!(!request.to_string().contains(INTRO));
-    }
+    assert!(models_part(&child).is_some());
+    assert!(child.to_string().contains("you and yours included"));
+    assert!(models_part(&plan).is_none());
+    assert!(!plan.to_string().contains(INTRO));
     finish(service, paths);
 }

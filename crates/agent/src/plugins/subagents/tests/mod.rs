@@ -14,6 +14,7 @@ mod feed;
 mod guidance;
 mod listing;
 mod models;
+mod nesting;
 mod pause;
 mod roles;
 mod wake;
@@ -197,8 +198,8 @@ async fn a_spawned_agent_runs_its_task_and_the_wait_returns_its_answer() {
         "fork_turns none inherits nothing"
     );
     assert!(
-        !child_request.contains("<subagents>"),
-        "an agent is not told to spawn"
+        child_request.contains("<subagents>"),
+        "a depth-one agent is told how to spawn"
     );
     let waited = body(&server, 2);
     assert!(waited.contains("Wait completed."), "{waited}");
@@ -215,6 +216,8 @@ async fn a_spawned_agent_runs_its_task_and_the_wait_returns_its_answer() {
         agents,
         vec![AgentSubagentStatus {
             session_id: child,
+            parent_session_id: parent.id,
+            depth: 1,
             title: "counter".to_string(),
             status: AgentSubagentState::Idle,
             provider_id: "provider-1".to_string(),
@@ -403,6 +406,7 @@ async fn the_depth_and_running_limits_refuse_a_spawn_with_a_tool_error() {
     .await;
     let (service, paths) = started("subagents-limits", &server).await;
     let subagents = subagents(&service).await;
+    subagents.limits.lock().maximum_running_agents = 3;
     let parent = service
         .create_session(AgentSessionMode::Default, None)
         .await
@@ -430,23 +434,10 @@ async fn the_depth_and_running_limits_refuse_a_spawn_with_a_tool_error() {
         )
         .await,
         Err(AgentToolError::Failed(
-            "at most 3 agents can run at once; wait for one to finish or interrupt one".into()
+            "at most 3 sub-agents work at once under the main conversation, counting theirs; wait for one to finish, or interrupt or close one".into()
         ))
     );
     let child = subagents.agents(parent).await.unwrap()[0].id;
-    assert_eq!(
-        call(
-            &subagents,
-            SubagentToolKind::SpawnAgent,
-            child,
-            spawn_args("nested")
-        )
-        .await,
-        Err(AgentToolError::Failed(
-            "a sub-agent cannot spawn agents of its own; only the main conversation spawns agents"
-                .into()
-        ))
-    );
     assert_eq!(
         call(&subagents, SubagentToolKind::SpawnAgent, parent, spawn_args("one")).await,
         Err(AgentToolError::Failed(
@@ -535,7 +526,7 @@ async fn an_option_write_is_taken_in_place_or_restarts_the_plugin() {
     let (service, paths) = started("subagents-options", &server).await;
     let options = |value: Value| value.as_object().unwrap().clone();
     let before = subagents(&service).await;
-    assert_eq!(before.limits().maximum_running_agents, 3);
+    assert_eq!(before.limits().maximum_running_agents, 8);
     let refused = service
         .set_plugin_options(
             SUBAGENTS_PLUGIN.into(),
@@ -577,7 +568,7 @@ async fn an_option_write_is_taken_in_place_or_restarts_the_plugin() {
         .start_turn(parent, "Hello.".to_string().into())
         .await
         .unwrap();
-    assert!(body(&server, 0).contains("At most 5 sub-agents run at once"));
+    assert!(body(&server, 0).contains("At most 5 sub-agents work at once"));
 
     service
         .set_plugin_options(

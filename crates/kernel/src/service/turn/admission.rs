@@ -28,7 +28,15 @@ impl AgentService {
         }
         let admission_started = Instant::now();
         log::info!("agent_diag stage=turn.admission.begin session_id={session_id}");
-        let identity = match self.admit_turn(session_id, input.into(), &event_sink).await {
+        let identity = match self
+            .admit_turn(
+                session_id,
+                input.into(),
+                TurnAdmission::Regular,
+                &event_sink,
+            )
+            .await
+        {
             Ok(identity) => identity,
             Err(error) => {
                 log::info!(

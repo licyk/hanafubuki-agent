@@ -64,6 +64,19 @@ async fn the_catalog_reads_every_owner_and_returns_no_secret() {
         .find(|section| section.id == "pluginOptions.subagents")
         .unwrap();
     assert_eq!(options.group, SettingsGroup::Plugins);
+    let limit = options
+        .settings
+        .iter()
+        .find(|spec| spec.key == "pluginOptions.subagents.maximumRunningAgents")
+        .unwrap();
+    assert_eq!(
+        limit.default,
+        Some(hanafubuki_agent_config::SettingValue::Integer(8))
+    );
+    assert_eq!(
+        limit.summary,
+        "How many sub-agents work at once under one conversation, theirs included"
+    );
     assert_eq!(options.values.len(), options.settings.len());
     assert!(options
         .settings

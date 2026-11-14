@@ -42,7 +42,7 @@ impl AgentService {
             .sessions
             .cells()
             .into_iter()
-            .filter(|cell| {
+            .map(|cell| {
                 let (child, running) = match cell.lock() {
                     Ok(record) => (
                         record.lineage.parent_session_id == Some(session_id)
@@ -55,8 +55,12 @@ impl AgentService {
                     ),
                     Err(_) => (false, false),
                 };
-                child && (running || self.working_subagents(cell.session_id(), levels - 1) > 0)
+                if !child {
+                    return 0;
+                }
+                let descendants = self.working_subagents(cell.session_id(), levels - 1);
+                usize::from(running || descendants > 0) + descendants
             })
-            .count()
+            .sum()
     }
 }

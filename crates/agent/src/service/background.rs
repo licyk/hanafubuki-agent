@@ -5,7 +5,6 @@
 
 use std::sync::Arc;
 
-use hanafubuki_agent_contracts::TurnExtensions;
 use hanafubuki_agent_foundation::blocking::run_blocking_operation;
 use hanafubuki_agent_kernel::{
     AgentError, AgentEventSink, AgentSessionId, AgentWakePolicy, AgentWakeTurnAccepted,
@@ -15,6 +14,21 @@ use super::AgentApplicationService;
 use crate::wake::{AgentBackgroundStatus, AgentBackgroundTasks};
 
 impl AgentApplicationService {
+    /// Resumes the background work of a paused root, including descendants
+    /// whose queued updates have not yet produced an update for the root.
+    /// A host's submission of one wake turn does not clear this pause.
+    pub fn resume_background_wakes(&self, root: AgentSessionId) -> Result<(), AgentError> {
+        if self.driver.snapshot(root)?.parent_session_id.is_some() {
+            return Err(AgentError::InvalidInput(
+                "resume background work from its main conversation".to_string(),
+            ));
+        }
+        self.wakes.pauses.person_message(root);
+        self.wakes.signals.signal(root);
+        self.wakes.feed.hint(root);
+        Ok(())
+    }
+
     /// Starts the turn that delivers `session_id`'s queued wake events (what
     /// its sub-agents reported): a `Programmatic` turn whose only opener is
     /// the events, in the session's permission mode, with no user message.
@@ -33,21 +47,9 @@ impl AgentApplicationService {
         if session.wake_policy == AgentWakePolicy::Off {
             return Ok(None);
         }
-        let permission_mode = self.driver.turn_permission_mode(session_id, None).await?;
-        let world_state = self
+        let input = self
             .driver
-            .collect_world_state(
-                session_id,
-                session.mode,
-                permission_mode,
-                None,
-                TurnExtensions::default(),
-            )
-            .await
-            .map_err(|error| error.to_string())?;
-        let turn = self
-            .driver
-            .collect_turn_extensions(session_id, session.mode)
+            .prepare_turn(session_id, None, None)
             .await
             .map_err(|error| error.to_string())?;
         let core = self.core.clone();
@@ -55,21 +57,8 @@ impl AgentApplicationService {
             self.blocking.as_ref(),
             "agent wake turn admission worker",
             move || {
-                core.submit_wake_turn_with_sink(
-                    session_id,
-                    hanafubuki_agent_kernel::AgentTurnInput {
-                        text: String::new(),
-                        images: Vec::new(),
-                        skills: Vec::new(),
-                        permission_mode,
-                        turn,
-                        world_state,
-                        origin: hanafubuki_agent_kernel::AgentTurnOrigin::Programmatic,
-                        provisional_title: None,
-                    },
-                    event_sink,
-                )
-                .map_err(|error| error.to_string())
+                core.submit_wake_turn_with_sink(session_id, input, event_sink)
+                    .map_err(|error| error.to_string())
             },
         )
         .await??;

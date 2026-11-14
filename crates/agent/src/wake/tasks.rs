@@ -28,6 +28,8 @@ pub struct AgentBackgroundStatus {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentBackgroundTasks {
+    /// The tree’s live work, including agents whose last turn failed.
+    pub work: AgentBackgroundWork,
     /// The sub-agents of its tree, oldest first.
     pub agents: Vec<AgentSubagentStatus>,
     /// The background terminals of its tree (none are listed yet).
@@ -52,6 +54,7 @@ impl AgentBackgroundTasks {
     /// is told anything.
     pub(super) fn idle() -> Self {
         Self {
+            work: AgentBackgroundWork::default(),
             agents: Vec::new(),
             terminals: Vec::new(),
             pending_wake_events: 0,
@@ -67,7 +70,7 @@ impl Wakes {
         driver: &AgentSessionDriver,
         session_id: AgentSessionId,
     ) -> Result<AgentBackgroundStatus, AgentError> {
-        let agents = self.runs.running(session_id);
+        let agents = self.runs.live_agents(driver, session_id)?.len();
         let (pending_wake_events, wake) = self.queue(driver, session_id)?;
         Ok(AgentBackgroundStatus {
             work: AgentBackgroundWork {
@@ -87,9 +90,11 @@ impl Wakes {
         root: AgentSessionId,
         answers: bool,
     ) -> Result<AgentBackgroundTasks, AgentError> {
-        let agents = self.runs.statuses(driver, root, answers)?;
+        let agents = self.runs.tree_statuses(driver, root, answers)?;
+        let work = self.status(driver, root)?.work;
         let (pending_wake_events, wake) = self.queue(driver, root)?;
         Ok(AgentBackgroundTasks {
+            work,
             agents,
             terminals: Vec::new(),
             pending_wake_events,
@@ -108,7 +113,7 @@ impl Wakes {
             if session.wake_policy == AgentWakePolicy::Off || !driver.wakes_on_background_tasks() {
                 AgentWakeState::Off
             } else {
-                match self.pauses.pause(session_id) {
+                match self.pauses.pause(root_of(driver, session_id)?) {
                     Some(reason) => AgentWakeState::Paused { reason },
                     None => AgentWakeState::On,
                 }

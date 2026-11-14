@@ -18,14 +18,15 @@ use hanafubuki_agent_contracts::{
     ObserverRegistry, PluginFaults, Register,
 };
 use hanafubuki_agent_foundation::cancellation::CancellationToken;
-use hanafubuki_agent_kernel::{AgentSessionId, AgentWakePolicy};
+use hanafubuki_agent_host::FaultPoint;
+use hanafubuki_agent_kernel::{AgentSessionId, AgentSessionOrigin, AgentWakePolicy};
 use kardia_core::{Context, Inject, PluginDef, Service};
 use parking_lot::Mutex;
 use tokio::sync::Notify;
 
 use super::feed::{Feed, FeedWorker};
 use super::{AgentBackgroundEvent, Pauses, Wakes};
-use crate::plugins::wait_for_cancellation;
+use crate::plugins::{wait_for_cancellation, SubagentService, SUBAGENTS_PLUGIN};
 use crate::session_driver::AgentSessionDriver;
 
 /// The core row's plugin name.
@@ -38,9 +39,12 @@ pub(crate) fn wake_plugin(driver: AgentSessionDriver, wakes: Wakes) -> PluginDef
         let driver = driver.clone();
         let wakes = wakes.clone();
         async move {
-            let signals = Arc::new(Signals::default());
+            let signals = wakes.signals.clone();
             let dispatcher = Dispatcher {
                 driver: driver.clone(),
+                context: ctx.clone(),
+                blocking: ctx.get::<BlockingService>()?.arc().clone(),
+                faults: ctx.get::<PluginFaults>()?.arc().clone(),
                 wakes: wakes.clone(),
                 signals: signals.clone(),
             };
@@ -76,14 +80,14 @@ pub(crate) fn wake_plugin(driver: AgentSessionDriver, wakes: Wakes) -> PluginDef
 /// The sessions signalled since the worker last looked: several signals
 /// for one session are one look.
 #[derive(Default)]
-struct Signals {
+pub(crate) struct Signals {
     sessions: Mutex<BTreeSet<AgentSessionId>>,
     /// Keeps one permit while the worker is busy, so no signal is missed.
     ready: Notify,
 }
 
 impl Signals {
-    fn signal(&self, session_id: AgentSessionId) {
+    pub(crate) fn signal(&self, session_id: AgentSessionId) {
         self.sessions.lock().insert(session_id);
         self.ready.notify_one();
     }
@@ -121,10 +125,16 @@ impl AgentObserver for WakeObserver {
                     self.pauses.person_message(*session_id);
                 }
                 self.feed.hint(*session_id);
+                if *origin == AgentTurnOrigin::User {
+                    self.signals.signal(*session_id);
+                }
             }
             AgentNotification::BackgroundWorkChanged { session_id }
             | AgentNotification::SessionArchived { session_id, .. }
-            | AgentNotification::SessionRestored { session_id, .. } => self.feed.hint(*session_id),
+            | AgentNotification::SessionRestored { session_id, .. } => {
+                self.feed.hint(*session_id);
+                self.signals.signal(*session_id);
+            }
             AgentNotification::SamplingCommitted { .. }
             | AgentNotification::MemoryContributionChanged { .. } => {}
         }
@@ -132,6 +142,9 @@ impl AgentObserver for WakeObserver {
 }
 
 struct Dispatcher {
+    context: Context,
+    blocking: Arc<BlockingService>,
+    faults: Arc<PluginFaults>,
     driver: AgentSessionDriver,
     wakes: Wakes,
     signals: Arc<Signals>,
@@ -145,36 +158,91 @@ impl Dispatcher {
                 () = wait_for_cancellation(cancellation.clone()) => return,
             }
             for session_id in self.signals.take() {
-                self.consider(session_id);
+                self.consider(session_id).await;
             }
         }
     }
 
     /// Wakes `session_id` if its queue holds events, no turn runs and
     /// nothing keeps it from being woken.
-    fn consider(&self, session_id: AgentSessionId) {
+    async fn consider(&self, session_id: AgentSessionId) {
         let Ok(session) = self.driver.loaded_snapshot(session_id) else {
             return;
         };
-        let running = session
+        let (driver, wakes) = (self.driver.clone(), self.wakes.clone());
+        let Ok(Ok((root, descendants))) = self
+            .blocking
+            .run("agent wake lineage", move || {
+                let root = super::root_of(&driver, session_id)?;
+                let descendants = if root == session_id {
+                    wakes
+                        .runs
+                        .tree_statuses(&driver, root, false)?
+                        .into_iter()
+                        .map(|agent| agent.session_id)
+                        .collect::<Vec<_>>()
+                } else {
+                    Vec::new()
+                };
+                Ok::<_, hanafubuki_agent_kernel::AgentError>((root, descendants))
+            })
+            .await
+        else {
+            return;
+        };
+        for child in descendants {
+            self.signals.signal(child);
+        }
+        let service = self.context.live_as::<SubagentService>(SUBAGENTS_PLUGIN);
+        if let Some(service) = &service {
+            let service = service.arc().clone();
+            let _ = self
+                .faults
+                .guard_async(
+                    SUBAGENTS_PLUGIN,
+                    FaultPoint::new("settle background work"),
+                    || async {
+                        service.settle(session_id).await;
+                        if let Some(parent) = session.parent_session_id {
+                            service.settle(parent).await;
+                        }
+                    },
+                )
+                .await;
+        }
+        let Ok(session) = self.driver.loaded_snapshot(session_id) else {
+            return;
+        };
+        if session
             .turn
             .as_ref()
-            .is_some_and(|turn| !turn.phase.is_terminal());
-        if running
+            .is_some_and(|turn| !turn.phase.is_terminal())
             || session.pending_wake_events == 0
             || session.wake_policy == AgentWakePolicy::Off
             || !self.driver.wakes_on_background_tasks()
+            || self.wakes.pauses.pause(root).is_some()
         {
             return;
         }
-        // Only a root is woken here, by its host: a sub-agent's events wait
-        // for its next turn, and side conversations and reviews have the
-        // policy off.
-        if session.parent_session_id.is_some() || self.wakes.pauses.pause(session_id).is_some() {
-            return;
+        if session.origin == Some(AgentSessionOrigin::Subagent) {
+            if let Some(service) = service {
+                let service = service.arc().clone();
+                let result = self
+                    .faults
+                    .guard_async(
+                        SUBAGENTS_PLUGIN,
+                        FaultPoint::new("resume background work"),
+                        || service.resume(session_id),
+                    )
+                    .await;
+                if let Ok(Err(error)) = result {
+                    log::debug!("subagent {session_id} was not resumed: {error}");
+                }
+            }
+        } else if session.parent_session_id.is_none() {
+            self.wakes
+                .sink
+                .event(AgentBackgroundEvent::Woken { session_id });
         }
-        self.wakes
-            .sink
-            .event(AgentBackgroundEvent::Woken { session_id });
     }
 }

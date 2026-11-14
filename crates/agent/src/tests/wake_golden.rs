@@ -131,12 +131,15 @@ async fn with_the_wake_off_a_request_is_the_one_before_wakes() {
     )
     .unwrap();
 
-    assert_ne!(off, before, "the three descriptions are reworded");
+    assert_ne!(
+        off, before,
+        "tool descriptions and nesting guidance intentionally changed"
+    );
     assert_eq!(without_reworded(off), without_reworded(before));
 }
 
 /// `request` without the descriptions of the [`REWORDED`] tools and their
-/// arguments.
+/// arguments, allowing the later nesting/default-limit guidance change.
 fn without_reworded(mut request: Value) -> Value {
     for tool in request["tools"].as_array_mut().unwrap() {
         if REWORDED.contains(&tool["name"].as_str().unwrap_or_default()) {
@@ -147,6 +150,17 @@ fn without_reworded(mut request: Value) -> Value {
                 .values_mut()
             {
                 property.as_object_mut().unwrap().remove("description");
+            }
+        }
+    }
+    for item in request["input"].as_array_mut().unwrap() {
+        for part in item["content"].as_array_mut().into_iter().flatten() {
+            if let Some(text) = part["text"].as_str() {
+                let text = text.replace(
+                    "At most 8 sub-agents work at once in this conversation, counting the ones they spawn; a sub-agent you spawn can spawn sub-agents of its own, which cannot spawn further.",
+                    "At most 3 sub-agents run at once, and a sub-agent cannot spawn sub-agents of its own.",
+                );
+                part["text"] = Value::String(text);
             }
         }
     }

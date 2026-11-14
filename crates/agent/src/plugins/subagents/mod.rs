@@ -19,6 +19,7 @@ mod options;
 mod prompt;
 mod service;
 mod tools;
+mod tree;
 
 use std::sync::Arc;
 
@@ -48,6 +49,9 @@ pub(crate) const SUBAGENTS_PLUGIN: &str = "subagents";
 #[serde(rename_all = "camelCase")]
 pub struct AgentSubagentStatus {
     pub session_id: AgentSessionId,
+    pub parent_session_id: AgentSessionId,
+    /// Levels below the main conversation (one or two).
+    pub depth: usize,
     /// Its task name, the title of its session.
     pub title: String,
     pub status: AgentSubagentState,
@@ -69,6 +73,10 @@ pub struct AgentSubagentStatus {
 #[serde(rename_all = "camelCase")]
 pub enum AgentSubagentState {
     Running,
+    /// Its turn ended while its background work or updates remain.
+    Waiting,
+    /// The person closed the agent.
+    Closed,
     /// Its latest turn ended (or was interrupted); it takes follow-up tasks.
     Idle,
     /// Its latest turn failed.

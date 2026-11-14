@@ -9,7 +9,7 @@ use std::time::Instant;
 impl AgentService {
     /// Runs an admitted turn to its terminal commit; its outcome is `None`
     /// for a turn that ends with no answer (a `!command`'s).
-    pub(super) async fn execute_admitted_turn(
+    pub(in crate::service) async fn execute_admitted_turn(
         &self,
         identity: TurnIdentity,
         event_sink: Arc<dyn AgentEventSink>,

@@ -38,6 +38,46 @@ impl SubagentService {
 }
 
 impl SubagentRuns {
+    /// Live admission slots include failed/interrupted agents whose descendants
+    /// still work, even though their displayed final status remains unchanged.
+    pub(crate) fn live_agents(
+        &self,
+        driver: &AgentSessionDriver,
+        root: AgentSessionId,
+    ) -> Result<Vec<AgentSessionId>, AgentError> {
+        let mut live = Vec::new();
+        for agent in self.tree_statuses(driver, root, false)? {
+            let active_turn = driver
+                .snapshot(agent.session_id)?
+                .turn
+                .is_some_and(|turn| !turn.phase.is_terminal());
+            if matches!(
+                agent.status,
+                AgentSubagentState::Running | AgentSubagentState::Waiting
+            ) || active_turn
+                || !driver.background_work(agent.session_id).is_empty()
+            {
+                live.push(agent.session_id);
+            }
+        }
+        Ok(live)
+    }
+
+    pub(crate) fn tree_statuses(
+        &self,
+        driver: &AgentSessionDriver,
+        root: AgentSessionId,
+        answers: bool,
+    ) -> Result<Vec<AgentSubagentStatus>, AgentError> {
+        let mut tree = Vec::new();
+        for agent in self.statuses(driver, root, answers)? {
+            let children = self.statuses(driver, agent.session_id, answers)?;
+            tree.push(agent);
+            tree.extend(children);
+        }
+        Ok(tree)
+    }
+
     /// `parent`'s agents as an interface lists them, their runs read at
     /// once; with their last answers when `answers` says so (each may read
     /// the agent's conversation), else none. Blocks.
@@ -47,6 +87,8 @@ impl SubagentRuns {
         parent: AgentSessionId,
         answers: bool,
     ) -> Result<Vec<AgentSubagentStatus>, AgentError> {
+        let depth =
+            super::super::tree::lineage(driver, parent).map_or(1, |lineage| lineage.depth + 1);
         let mut statuses = Vec::new();
         for (agent, model) in self.agents_on_models(driver, parent)? {
             let last_answer = match (&agent.status, answers) {
@@ -56,9 +98,13 @@ impl SubagentRuns {
             };
             statuses.push(AgentSubagentStatus {
                 session_id: agent.id,
+                parent_session_id: parent,
+                depth,
                 title: agent.name,
                 status: match agent.status {
                     AgentRunStatus::Running => AgentSubagentState::Running,
+                    AgentRunStatus::Waiting(_) => AgentSubagentState::Waiting,
+                    AgentRunStatus::Closed => AgentSubagentState::Closed,
                     AgentRunStatus::Errored(_) => AgentSubagentState::Failed,
                     _ => AgentSubagentState::Idle,
                 },
