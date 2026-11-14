@@ -44,7 +44,7 @@ impl Pipes {
         Ok(Self {
             input: create(&format!("{name}-in"), PIPE_ACCESS_DUPLEX, &owner, &sid)?,
             output: create(&format!("{name}-out"), PIPE_ACCESS_DUPLEX, &owner, &sid)?,
-            error: create(&format!("{name}-err"), PIPE_ACCESS_INBOUND, &owner, &sid)?,
+            error: create(&format!("{name}-err"), PIPE_ACCESS_DUPLEX, &owner, &sid)?,
             name,
         })
     }

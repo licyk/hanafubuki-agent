@@ -58,6 +58,9 @@ mod linux {
                 a_failed_confinement_runs_nothing,
             ),
         ];
+        if std::env::var_os("HANAFUBUKI_AGENT_USE_LEGACY_LANDLOCK").is_none() {
+            protected_metadata_survives_overlapping_roots(&sandbox);
+        }
         for (name, check) in checks {
             check(&sandbox);
             eprintln!("ok: {name}");
@@ -219,6 +222,23 @@ mod linux {
         let into_package = package.path().join("file");
         assert!(!write(sandbox, &policy, &into_package).status.success());
         assert!(!into_package.exists());
+    }
+
+    fn protected_metadata_survives_overlapping_roots(sandbox: &Sandbox) {
+        let workspace = directory();
+        let git = workspace.path().join(".git");
+        std::fs::create_dir(&git).unwrap();
+        let policy = SandboxPolicy::WorkspaceWrite {
+            writable_roots: vec![workspace.path().to_path_buf(), git.clone()],
+            network_access: false,
+        };
+        let written = write(sandbox, &policy, &git.join("hook"));
+        assert!(!written.status.success(), "{written:?}");
+        assert!(!git.join("hook").exists());
+        let removed = run_confined(sandbox, &policy, sh(&format!("rm -rf '{}'", git.display())));
+        assert!(!removed.status.success(), "{removed:?}");
+        assert!(git.exists());
+        eprintln!("ok: protected_metadata_survives_overlapping_roots");
     }
 
     fn full_access_is_unrestricted(sandbox: &Sandbox) {
