@@ -90,21 +90,25 @@ pub(crate) fn setup() -> Result<(), String> {
         &[
             SETUP_ARG.to_string(),
             install.root.native_text().to_string(),
+            owner,
         ],
     )?;
     ready()
 }
 
-pub(crate) fn elevated_setup(root: PathBuf) -> Result<(), String> {
+pub(crate) fn elevated_setup(
+    root: PathBuf,
+    reader: super::super::token::LocalSid,
+) -> Result<(), String> {
     let root = ResolvedPath::resolve(root).map_err(|e| e.to_string())?;
-    let result = provision(&root);
+    let result = provision(&root, &reader);
     if let Err(error) = &result {
         let _ = std::fs::write(root.system().join("setup-error"), error);
     }
     result
 }
 
-fn provision(root: &ResolvedPath) -> Result<(), String> {
+fn provision(root: &ResolvedPath, reader: &super::super::token::LocalSid) -> Result<(), String> {
     let install = load(root.clone())?;
     install.credentials.online.provision()?;
     install.credentials.offline.provision()?;
@@ -115,6 +119,7 @@ fn provision(root: &ResolvedPath) -> Result<(), String> {
     firewall::install(
         &install.credentials.offline.name,
         &install.credentials.keys(),
+        reader,
     )?;
     std::fs::write(root.system().join("ready"), b"1\n").map_err(|e| e.to_string())
 }

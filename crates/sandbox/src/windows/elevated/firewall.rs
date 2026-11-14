@@ -9,11 +9,15 @@ use windows_sys::Win32::Foundation::{
 };
 use windows_sys::Win32::NetworkManagement::WindowsFilteringPlatform::*;
 use windows_sys::Win32::Security::Authorization::{
-    BuildExplicitAccessWithNameW, BuildSecurityDescriptorW, EXPLICIT_ACCESS_W, GRANT_ACCESS,
+    BuildExplicitAccessWithNameW, BuildSecurityDescriptorW,
+    ConvertStringSecurityDescriptorToSecurityDescriptorW, EXPLICIT_ACCESS_W, GRANT_ACCESS,
 };
 use windows_sys::Win32::Security::PSECURITY_DESCRIPTOR;
 
-use super::super::process::wide;
+use super::super::{
+    process::wide,
+    token::{last_error, LocalSid},
+};
 
 const PROVIDER: GUID = GUID::from_u128(0x58a4b3b6_7c47_4c83_90aa_f5e3da140a64);
 const SUBLAYER: GUID = GUID::from_u128(0x31497012_f472_47b3_b032_829fe4f57ef2);
@@ -96,7 +100,7 @@ impl Drop for UserCondition {
 
 /// All IPv4/IPv6 connections, including loopback, are blocked for the offline
 /// identity. Network-enabled commands use a different identity.
-pub(super) fn install(account: &str, keys: &[GUID; 4]) -> Result<(), String> {
+pub(super) fn install(account: &str, keys: &[GUID; 4], reader: &LocalSid) -> Result<(), String> {
     let engine = Engine::open()?;
     let name = wide("Hanafubuki Agent sandbox");
     let mut provider: FWPM_PROVIDER0 = unsafe { std::mem::zeroed() };
@@ -120,6 +124,7 @@ pub(super) fn install(account: &str, keys: &[GUID; 4]) -> Result<(), String> {
         "add WFP sublayer",
     )?;
     let user = UserCondition::new(account)?;
+    let security = FilterSecurity::new(reader)?;
     let layers = [
         FWPM_LAYER_ALE_AUTH_CONNECT_V4,
         FWPM_LAYER_ALE_AUTH_CONNECT_V6,
@@ -153,7 +158,7 @@ pub(super) fn install(account: &str, keys: &[GUID; 4]) -> Result<(), String> {
         filter.action.r#type = FWP_ACTION_BLOCK;
         // SAFETY: the descriptor, condition and filter live through the call.
         check(
-            unsafe { FwpmFilterAdd0(engine.0, &filter, null_mut(), null_mut()) },
+            unsafe { FwpmFilterAdd0(engine.0, &filter, security.0, null_mut()) },
             "block sandbox network",
         )?;
     }
@@ -195,5 +200,37 @@ fn check(code: u32, operation: &str) -> Result<(), String> {
         Ok(())
     } else {
         Err(format!("{operation}: Windows error {code}"))
+    }
+}
+
+struct FilterSecurity(PSECURITY_DESCRIPTOR);
+
+impl FilterSecurity {
+    fn new(reader: &LocalSid) -> Result<Self, String> {
+        let reader = super::security::sid_string(reader.as_ptr())?;
+        // Administrators own/manage the rule; the initiating user can only read
+        // it after UAC returns. Using the elevated identity breaks alternate-admin UAC.
+        let sddl = wide(&format!(
+            "O:BAG:BAD:P(A;;GA;;;SY)(A;;GA;;;BA)(A;;{FWPM_ACTRL_READ:#x};;;{reader})"
+        ));
+        let mut descriptor = null_mut();
+        if unsafe {
+            ConvertStringSecurityDescriptorToSecurityDescriptorW(
+                sddl.as_ptr(),
+                1,
+                &mut descriptor,
+                null_mut(),
+            )
+        } == 0
+        {
+            return Err(last_error("build sandbox filter read permissions"));
+        }
+        Ok(Self(descriptor))
+    }
+}
+
+impl Drop for FilterSecurity {
+    fn drop(&mut self) {
+        unsafe { LocalFree(self.0) };
     }
 }

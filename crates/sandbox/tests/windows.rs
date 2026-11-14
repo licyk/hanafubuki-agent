@@ -77,8 +77,10 @@ mod windows {
         }
         if std::env::var_os("HANAFUBUKI_TEST_ELEVATED_SANDBOX").is_some() {
             hanafubuki_agent_sandbox::setup_windows_sandbox().unwrap();
+            ordinary_user_can_verify_but_not_change_filters();
             // Re-running setup repairs the existing installation and filter keys.
             hanafubuki_agent_sandbox::setup_windows_sandbox().unwrap();
+            ordinary_user_can_verify_but_not_change_filters();
             let elevated = detected.with_windows_sandbox(Some(AgentWindowsSandbox::Elevated));
             assert!(
                 matches!(elevated.status(), SandboxStatus::Available { .. }),
@@ -301,6 +303,144 @@ mod windows {
             "{result:?}"
         );
         eprintln!("ok: elevated stdio_round_trip");
+    }
+
+    fn ordinary_user_can_verify_but_not_change_filters() {
+        use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle};
+        use std::ptr::{null, null_mut};
+        use windows_sys::Win32::Foundation::{ERROR_ACCESS_DENIED, HANDLE};
+        use windows_sys::Win32::NetworkManagement::WindowsFilteringPlatform::{
+            FwpmEngineClose0, FwpmEngineOpen0, FwpmFilterDeleteByKey0,
+            FwpmFilterSetSecurityInfoByKey0,
+        };
+        use windows_sys::Win32::Security::{
+            CheckTokenMembership, CreateRestrictedToken, CreateWellKnownSid,
+            ImpersonateLoggedOnUser, RevertToSelf, WinBuiltinAdministratorsSid,
+            DACL_SECURITY_INFORMATION, DISABLE_MAX_PRIVILEGE, SID_AND_ATTRIBUTES, TOKEN_DUPLICATE,
+            TOKEN_IMPERSONATE, TOKEN_QUERY,
+        };
+        use windows_sys::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
+
+        #[derive(serde::Deserialize)]
+        struct FilterKeys {
+            filter_keys: [[u8; 16]; 4],
+        }
+        let accounts = std::path::PathBuf::from(std::env::var_os("LOCALAPPDATA").unwrap())
+            .join("hanafubuki-agent/sandbox/secrets/accounts.json");
+        let keys: FilterKeys = serde_json::from_slice(&std::fs::read(accounts).unwrap()).unwrap();
+        let mut administrators = [0u8; 68];
+        let mut size = administrators.len() as u32;
+        assert_ne!(
+            unsafe {
+                CreateWellKnownSid(
+                    WinBuiltinAdministratorsSid,
+                    null_mut(),
+                    administrators.as_mut_ptr().cast(),
+                    &mut size,
+                )
+            },
+            0
+        );
+        let disable = SID_AND_ATTRIBUTES {
+            Sid: administrators.as_mut_ptr().cast(),
+            Attributes: 0,
+        };
+        let mut base = null_mut();
+        assert_ne!(
+            unsafe {
+                OpenProcessToken(
+                    GetCurrentProcess(),
+                    TOKEN_DUPLICATE | TOKEN_QUERY | TOKEN_IMPERSONATE,
+                    &mut base,
+                )
+            },
+            0
+        );
+        let base = unsafe { OwnedHandle::from_raw_handle(base as _) };
+        let mut token = null_mut();
+        assert_ne!(
+            unsafe {
+                CreateRestrictedToken(
+                    base.as_raw_handle() as HANDLE,
+                    DISABLE_MAX_PRIVILEGE,
+                    1,
+                    &disable,
+                    0,
+                    null(),
+                    0,
+                    null(),
+                    &mut token,
+                )
+            },
+            0
+        );
+        let token = unsafe { OwnedHandle::from_raw_handle(token as _) };
+        assert_ne!(
+            unsafe { ImpersonateLoggedOnUser(token.as_raw_handle() as HANDLE) },
+            0
+        );
+        struct Revert;
+        impl Drop for Revert {
+            fn drop(&mut self) {
+                unsafe { RevertToSelf() };
+            }
+        }
+        let _revert = Revert;
+        let mut admin = 1;
+        assert_ne!(
+            unsafe { CheckTokenMembership(null_mut(), disable.Sid, &mut admin) },
+            0
+        );
+        assert_eq!(
+            admin, 0,
+            "the readiness check must not have administrator access"
+        );
+        let status = Sandbox::detect()
+            .with_windows_sandbox(Some(AgentWindowsSandbox::Elevated))
+            .status();
+        assert!(
+            matches!(status, SandboxStatus::Available { .. }),
+            "ordinary user readiness: {status:?}"
+        );
+
+        struct Engine(HANDLE);
+        impl Drop for Engine {
+            fn drop(&mut self) {
+                unsafe { FwpmEngineClose0(self.0) };
+            }
+        }
+        let mut engine = null_mut();
+        assert_eq!(
+            unsafe { FwpmEngineOpen0(null(), 10, null(), null(), &mut engine) },
+            0
+        );
+        let engine = Engine(engine);
+        for key in keys.filter_keys {
+            let key = windows_sys::core::GUID::from_u128(u128::from_be_bytes(key));
+            assert_eq!(
+                unsafe { FwpmFilterDeleteByKey0(engine.0, &key) },
+                ERROR_ACCESS_DENIED,
+                "ordinary users must not remove a network block"
+            );
+            assert_eq!(
+                unsafe {
+                    FwpmFilterSetSecurityInfoByKey0(
+                        engine.0,
+                        &key,
+                        DACL_SECURITY_INFORMATION,
+                        null(),
+                        null(),
+                        null(),
+                        null(),
+                    )
+                },
+                ERROR_ACCESS_DENIED,
+                "ordinary users must not replace the filter DACL"
+            );
+        }
+        eprintln!(
+            "ok: ordinary user verifies filters but cannot delete or change their permissions"
+        );
     }
 
     fn elevated_network_is_enforced(sandbox: &Sandbox) {

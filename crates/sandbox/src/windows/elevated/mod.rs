@@ -16,12 +16,16 @@ pub(crate) fn dispatch(
     mut args: impl Iterator<Item = std::ffi::OsString>,
 ) -> Option<Result<u32, String>> {
     if first == SETUP_ARG {
-        return Some(
-            args.next()
-                .ok_or_else(|| "sandbox setup needs its directory".to_string())
-                .and_then(|path| setup::elevated_setup(path.into()))
-                .map(|()| 0),
-        );
+        return Some((|| {
+            let root = args.next().ok_or("sandbox setup needs its directory")?;
+            let reader = args
+                .next()
+                .and_then(|sid| sid.into_string().ok())
+                .ok_or("sandbox setup needs the requesting user's SID")?;
+            let reader = super::token::LocalSid::from_string(&reader)?;
+            setup::elevated_setup(root.into(), reader)?;
+            Ok(0)
+        })());
     }
     if first != RUNNER_ARG {
         return None;
