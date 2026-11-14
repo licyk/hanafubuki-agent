@@ -163,6 +163,19 @@ pub struct PatchMutationResult {
     pub added: Vec<String>,
     pub modified: Vec<String>,
     pub deleted: Vec<String>,
+    /// Where each chunk of each file landed, one list per file in the
+    /// patch's order (empty for an added or deleted file). For an
+    /// interface's diff only: never serialized, so the model never reads it.
+    #[serde(skip)]
+    pub hunk_starts: Vec<Vec<PatchHunkStart>>,
+}
+
+/// An update chunk's first line, from 1: in the file before the patch and
+/// after it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct PatchHunkStart {
+    pub old_line: u64,
+    pub new_line: u64,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

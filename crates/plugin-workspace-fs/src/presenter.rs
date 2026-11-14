@@ -178,6 +178,7 @@ fn agent_preview(preview: PatchPreview) -> AgentPatchPreview {
                 added: file.added,
                 removed: file.removed,
                 omitted_lines: file.omitted_lines,
+                hunk_starts: Vec::new(),
             })
             .collect(),
         error: preview.error,

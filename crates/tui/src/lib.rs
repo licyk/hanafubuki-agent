@@ -16,6 +16,7 @@ mod appearance;
 mod bottom_pane;
 mod chatwidget;
 mod clipboard;
+mod color;
 mod commands;
 mod custom_terminal;
 mod diff_render;
@@ -44,6 +45,7 @@ mod style;
 mod table_detect;
 mod terminal_detection;
 mod terminal_hyperlinks;
+mod terminal_palette;
 #[cfg(test)]
 mod test_support;
 mod text_formatting;

@@ -5,7 +5,7 @@ use hanafubuki_agent::{AgentListingEntry, AgentListingEntryKind};
 use ratatui::style::Stylize;
 use ratatui::text::Line;
 
-use super::{counted, wrapped, Extent, ToolCall, View};
+use super::{counted, size_label, wrapped, Extent, ToolCall, View};
 use crate::history_cell::ActivityDisclosure;
 use crate::text_formatting::strip_terminal_controls;
 
@@ -54,18 +54,5 @@ pub(super) fn view(
         preview: Vec::new(),
         details,
         hidden: (!entries.is_empty()).then_some(ActivityDisclosure::OutputLines(entries.len())),
-    }
-}
-
-/// `42 B`, `1.5 KiB`, `3.0 MiB`.
-fn size_label(bytes: u64) -> String {
-    const KIB: f64 = 1024.0;
-    let size = bytes as f64;
-    if size < KIB {
-        format!("{bytes} B")
-    } else if size < KIB * KIB {
-        format!("{:.1} KiB", size / KIB)
-    } else {
-        format!("{:.1} MiB", size / (KIB * KIB))
     }
 }

@@ -1,5 +1,5 @@
 use super::*;
-use crate::patch::ParsedPatch;
+use crate::patch::{ParsedPatch, UpdatedContent};
 
 pub(super) struct PreparedPatch {
     pub(super) changes: Vec<PatchFilePlan>,
@@ -60,7 +60,10 @@ pub(super) fn prepare_patch_changes(
                 // Naming both spellings is what makes a mismatch actionable:
                 // the model can only correct the header it actually wrote.
                 let label = patch_path_label(&path, &source.identity.path);
-                let updated = derive_updated_content(&original, &label, &chunks)?;
+                let UpdatedContent {
+                    text: updated,
+                    hunk_starts,
+                } = derive_updated_content(&original, &label, &chunks)?;
                 validate_content(&updated)?;
                 let destination = move_to
                     .map(|path| {
@@ -83,6 +86,7 @@ pub(super) fn prepare_patch_changes(
                     destination,
                     content_sha256: sha256_hex(&content),
                     content,
+                    hunk_starts,
                 });
             }
         }

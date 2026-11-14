@@ -4,14 +4,14 @@ use hanafubuki_agent_approval::{
     ApprovalAction, ApprovalActionKind, AuthorizedAction, PermissionRequirement,
 };
 use hanafubuki_agent_contracts::{
-    AgentActivityAction, AgentMemoryContextEffect, AgentToolError, AgentToolHandler,
-    BlockingService, ToolAvailability, ToolDescriptor, ToolEffect, ToolFuture, ToolInvocation,
-    ToolPlanContext, ToolResult,
+    AgentActivityAction, AgentMemoryContextEffect, AgentPatchHunkStart, AgentToolDisplayMetadata,
+    AgentToolError, AgentToolHandler, BlockingService, ToolAvailability, ToolDescriptor,
+    ToolEffect, ToolFuture, ToolInvocation, ToolPlanContext, ToolResult,
 };
 use hanafubuki_agent_tool_contracts::{
     FreeformToolSpec, ToolContractError, ToolExecutionClass, ToolExposure, ToolName,
 };
-use hanafubuki_agent_workspace_fs::WorkspaceFsService;
+use hanafubuki_agent_workspace_fs::{WorkspaceFsResult, WorkspaceFsService};
 
 use crate::arguments::parse;
 use crate::specs::{apply_patch_freeform, spec};
@@ -156,9 +156,39 @@ impl AgentToolHandler for FsTool {
                 return Err(AgentToolError::Cancelled);
             }
             let result = result.map_err(|error| AgentToolError::Failed(error.to_string()))?;
+            let metadata = display_metadata(&result);
             serde_json::to_value(result)
-                .map(|value| ToolResult::success(value).with_argument_notes(&notes))
+                .map(|value| {
+                    ToolResult::success(value)
+                        .with_argument_notes(&notes)
+                        .with_display_metadata(metadata)
+                })
                 .map_err(|error| AgentToolError::Failed(error.to_string()))
         })
+    }
+}
+
+/// Where an applied patch's chunks landed, for its diff's line numbers;
+/// the model's result never carries them.
+fn display_metadata(result: &WorkspaceFsResult) -> AgentToolDisplayMetadata {
+    let WorkspaceFsResult::PatchApplied(applied) = result else {
+        return AgentToolDisplayMetadata::default();
+    };
+    AgentToolDisplayMetadata {
+        patch_hunk_starts: Some(
+            applied
+                .hunk_starts
+                .iter()
+                .map(|file| {
+                    file.iter()
+                        .map(|start| AgentPatchHunkStart {
+                            old_line: start.old_line,
+                            new_line: start.new_line,
+                        })
+                        .collect()
+                })
+                .collect(),
+        ),
+        ..Default::default()
     }
 }

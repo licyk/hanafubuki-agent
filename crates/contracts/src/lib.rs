@@ -86,15 +86,15 @@ pub use tool_lifecycle::{
 pub use tools::{
     decode_arguments, object_arguments, output_text, structured_output, verify_tool_approval,
     AgentListingEntry, AgentListingEntryKind, AgentMemoryContextEffect, AgentMutationKind,
-    AgentPatchFile, AgentPatchLine, AgentPatchLineKind, AgentPatchOperation, AgentPatchPreview,
-    AgentSearchMatch, AgentStyleSpan, AgentStyledText, AgentTextColor, AgentTextStyle,
-    AgentToolDisplay, AgentToolDisplayMetadata, AgentToolError, AgentToolHandler,
-    AgentToolOmission, AgentToolPresenter, AgentToolSource, AgentWebResult, ArgumentSubjects,
-    SourcedTool, ToolAvailability, ToolCallContext, ToolCallOrigin, ToolCallValidationError,
-    ToolContextFragment, ToolDescriptor, ToolEffect, ToolFuture, ToolInvocation, ToolPlanContext,
-    ToolPlanLease, ToolPresenterRegistry, ToolRegistry, ToolResult, ToolSourceContribution,
-    ToolSourceRegistry, ToolSourceStep, ToolSourceTrust, TurnExtensions, MAX_AGENT_TOOL_OMISSIONS,
-    MAX_TOOL_SUBJECT_CHARS, RESERVED_TOOL_NAMES,
+    AgentOutputBlock, AgentPatchFile, AgentPatchHunkStart, AgentPatchLine, AgentPatchLineKind,
+    AgentPatchOperation, AgentPatchPreview, AgentSearchMatch, AgentStyleSpan, AgentStyledText,
+    AgentTextColor, AgentTextStyle, AgentToolDisplay, AgentToolDisplayMetadata, AgentToolError,
+    AgentToolHandler, AgentToolOmission, AgentToolPresenter, AgentToolSource, AgentWebResult,
+    ArgumentSubjects, SourcedTool, ToolAvailability, ToolCallContext, ToolCallOrigin,
+    ToolCallValidationError, ToolContextFragment, ToolDescriptor, ToolEffect, ToolFuture,
+    ToolInvocation, ToolPlanContext, ToolPlanLease, ToolPresenterRegistry, ToolRegistry,
+    ToolResult, ToolSourceContribution, ToolSourceRegistry, ToolSourceStep, ToolSourceTrust,
+    TurnExtensions, MAX_AGENT_TOOL_OMISSIONS, MAX_TOOL_SUBJECT_CHARS, RESERVED_TOOL_NAMES,
 };
 
 /// Helpers for other crates' tests.

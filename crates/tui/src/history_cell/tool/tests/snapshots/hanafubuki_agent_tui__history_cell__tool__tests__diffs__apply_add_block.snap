@@ -1,0 +1,8 @@
+---
+source: crates/tui/src/history_cell/tool/tests/diffs.rs
+assertion_line: 63
+expression: "expanded(preview, 80)"
+---
+• Added new_file.txt (+2 -0)
+  └ 1 +alpha
+    2 +beta

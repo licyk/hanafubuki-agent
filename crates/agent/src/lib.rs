@@ -195,10 +195,10 @@ pub use hanafubuki_agent_contracts::AgentToolProgressUpdate;
 /// What an interface shows of a tool call, from the tool's presenter
 /// (`AgentHandle::tool_display`, `present_tool_call`).
 pub use hanafubuki_agent_contracts::{
-    AgentListingEntry, AgentListingEntryKind, AgentMutationKind, AgentPatchFile, AgentPatchLine,
-    AgentPatchLineKind, AgentPatchOperation, AgentPatchPreview, AgentSearchMatch, AgentStyleSpan,
-    AgentStyledText, AgentTextColor, AgentTextStyle, AgentToolDisplay, AgentToolDisplayMetadata,
-    AgentWebResult,
+    AgentListingEntry, AgentListingEntryKind, AgentMutationKind, AgentOutputBlock, AgentPatchFile,
+    AgentPatchHunkStart, AgentPatchLine, AgentPatchLineKind, AgentPatchOperation,
+    AgentPatchPreview, AgentSearchMatch, AgentStyleSpan, AgentStyledText, AgentTextColor,
+    AgentTextStyle, AgentToolDisplay, AgentToolDisplayMetadata, AgentWebResult,
 };
 pub use hanafubuki_agent_kernel::AgentToolCallDisplay;
 

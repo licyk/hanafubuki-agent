@@ -3626,8 +3626,162 @@ and any module-size exception.
       - Acceptance gap: the plan's "`cargo build` shows its colours" holds
         only with `--color=always` (or `CARGO_TERM_COLOR=always`), since
         cargo honours `NO_COLOR`/`TERM=dumb`, which the plan keeps.
-- [ ] M8: JSON pretty-printing, MCP content summaries, the diff
+- [x] M8: JSON pretty-printing, MCP content summaries, the diff
       improvements.
+      Done (2026-11-14):
+      - What the model reads is unchanged: `apply_patch`'s result JSON
+        (`PatchMutationResult`) is as before, the chunk positions beside it
+        are `#[serde(skip)]` and travel as display metadata; MCP outputs
+        reach the model as before (the change is the fallback display only).
+        Goldens unchanged (`cargo test -p hanafubuki-agent --lib golden`, 22
+        passed, none regenerated).
+      - workspace-fs: `derive_updated_content` → `UpdatedContent { text,
+        hunk_starts }`, each chunk's first line before and after the patch
+        (`PatchHunkStart { old_line, new_line }`, from 1; the new line moved
+        by the replacements before it in the file, sorted once, O(n log n);
+        a pure addition at the end whatever its order);
+        `PatchFilePlan::Update.hunk_starts` (not in the canonical approval
+        form); `PatchMutationResult.hunk_starts: Vec<Vec<_>>` per file in
+        patch order, `#[serde(skip)]` (the type has no `Serialize`).
+      - contracts: `AgentToolDisplayMetadata.patch_hunk_starts` (tolerant,
+        skipped when absent); `AgentPatchFile.hunk_starts` (default, skipped
+        when empty) and `AgentPatchHunkStart`; `with_metadata` adds the
+        starts to a `Patch` only when they fit (same file count; per updated
+        file one start per `Hunk` line, at least those shown when the
+        preview omitted lines; none for added/deleted files).
+        `AgentToolDisplay::Content { blocks: Vec<AgentOutputBlock> }`,
+        `AgentOutputBlock::{Text, Image { mime_type, bytes }, Audio,
+        Link, Resource { uri, mime_type, text, bytes }}`: sizes from the
+        base64 length (never decoded), the data never carried. The
+        fallback shows `Fields` only when the content carries the structured
+        value (a `Structured` item, as `ToolOutput::json` makes it, or no
+        content at all), else `Content`, item by item: an MCP result whose
+        structured content its text items repeat now shows those (Codex's
+        behaviour); the Agent's own structured tools (with argument notes)
+        show `Fields` as before; `view_image` (empty content, its image sent
+        apart) shows nothing, as before. Unknown MCP block types were already a
+        placeholder text item (`mcp/src/output.rs`), unchanged.
+      - plugin-workspace-fs: `tool.rs` returns the starts as
+        `display_metadata`; the kernel commits, bounds-drops and replays them
+        as M7's styles (no kernel production change but `user_shell.rs`'s
+        struct literal).
+      - TUI (Codex `57a808a392`): `diff_render/style.rs` (Codex's palette:
+        dark/light tints, truecolor/256/16 levels, `RichDiffColorLevel`,
+        theme scope backgrounds `markup.*`/`diff.*`, gutter/sign/content
+        styles, Codex's depth policy with Windows Terminal promotion) and
+        `wrap.rs` (`wrap_styled_spans` by grapheme and display width, tabs 4,
+        `push_wrapped_diff_line` with optional gutter, line tint as the
+        line's style); `diff_render/mod.rs`: numbering (added files from 1,
+        updates from the starts, removed rows by the old file), `⋮` and
+        markers under the gutter, per-chunk highlighting with Codex's
+        whole-file limit, long file rows wrapped, a multi-file patch's rows no
+        longer nested two columns (Codex's layout); `color.rs` (Codex's
+        `color.rs` and `style/contrast.rs`: `readable_color_on`),
+        `terminal_palette.rs` (`supports-color`, xterm palette computed and
+        checked against Codex's table); `render/highlight`
+        `diff_scope_backgrounds`; `text_formatting` `format_json_compact`
+        (Codex's) and `format_json_pretty`; `history_cell/tool/content.rs`
+        (text and items as rows); `Extent.raw` so `/raw` keeps a text as it
+        came; patch summary rows clipped collapsed. `/diff` (`git_diff.rs`)
+        keeps its own colours (Codex's `/diff` is git's ANSI output).
+      - Deviations: (1) JSON expanded is indented (the plan's acceptance)
+        where Codex shows the raw text; collapsed is Codex's compact form; the
+        reformatter re-spaces the validated text (`serde::de::IgnoredAny`)
+        rather than re-printing a `Value`, since the workspace's
+        `serde_json` has no `preserve_order` (keys would sort) — so numbers
+        and escapes keep their spelling (`1E5`, `é`) where Codex
+        normalises them; bounds: 1 MiB in, depth 128, 4 MiB out. (2) Media
+        summaries use the plan's form `image/png · 33.2 KiB` (the interface's
+        size label), not Codex's `Returned image`/`<audio content>`; a text
+        resource keeps its text after `embedded resource: URI`
+        (`read_mcp_resource`). (3) No terminal background query (as before),
+        so the palette is always the dark one; a 16-colour terminal shows no
+        24-bit theme colours in a diff (Codex's `readable_color_on`), nor
+        does the `/theme` preview, drawn as a diff; with 16 colours and the
+        default `ansi` theme a highlighted removed row differs from a kept
+        one only by its red sign (no tint, no dimming, as in Codex). (4)
+        The cell frame puts one `└` before the body where Codex's summary
+        indents four and gives each file its own `└`; deleted files show no
+        content (the patch format has none); headers wrap with the frame.
+        (5) The MCP header stays `Called mcp__server__tool: subject`, not
+        Codex's `server.tool({args})` (out of the plan's scope).
+      - Closes T5's deviation "Line numbers in a patch only for a file it
+        adds": an applied update's rows are numbered from the applier's
+        positions (display-only, as the plan's §2.12 row says).
+      - Tests (new): workspace-fs `patch/tests.rs` (4 starts cases);
+        contracts `presenters.rs` (MCP items and a 6 MiB image never carried,
+        empty/structured-only, patch starts fit/no-fit/omitted/tolerant);
+        agent `tests/patch_lines.rs` (fake server: an applied patch numbered,
+        the next request and history without positions, read back after a
+        restart, the export without them); TUI `diff_render/tests.rs`
+        (Codex's palette, depth, wrapping and highlighting tests ported, numbering, per-chunk
+        highlighting, width sweep 120–8, hostile rows), `tool/tests/diffs.rs`
+        (Codex's diff snapshots at its widths, gallery at 40/20, collapsed,
+        raw), `tool/tests/content.rs` (Codex's MCP preview and projection
+        tests adapted, JSON compact/indented/raw, not-JSON and too large or
+        deep, 6 MiB image one row, hostile summaries, CJK width sweep,
+        structured MCP; a laid-out JSON's control is `+ Show details`, as
+        expanding adds more rows than it counts), `text_formatting` (Codex's
+        9 JSON tests unchanged, ordering, serde equivalence, invalid, hostile
+        bounds up to 524,288 levels at the size bound), `insert_history`
+        (Scrollback's writer: a tinted row to the right edge, the next row
+        plain), `color` and
+        `terminal_palette` tests (Codex's), `app/tests/diffs.rs` (vt100, both
+        presentations, Scrollback's through its Ctrl-T overlay, its writer
+        by the `insert_history` test: numbered rows, the `+` row tinted `#213A2B` to the
+        right edge, after `/resume`, request without positions). Failing
+        first by mutation, each seen failing then restored: no sort of the
+        starts (workspace-fs), no metadata from the tool (agent and TUI app
+        tests), the fit check and the fallback rule (contracts), removed rows
+        numbered wrongly, char-count wrapping, raw formatted, one highlight
+        across chunks, no output bound (24 TUI tests). The `serde(skip)`
+        mutation cannot compile (no `Serialize`).
+      - Codex snapshot comparison (script, rows trimmed): ours equal Codex's
+        `apply_update_block`, `…_with_rename_block`, `apply_add_block`,
+        `…_wraps_long_lines`, `…_wraps_long_lines_text`,
+        `…_line_numbers_three_digits_text` and the galleries row for row
+        except the first body row's `└` (Codex: four spaces), a multi-file
+        patch's later file rows without `└`, the 28-column header wrapping,
+        and the gallery's deleted files (no content, `(+0 -0)`).
+      - Snapshot changes (reviewed): `diff_render` `several_files…` (rows
+        numbered, not nested: intended), `a_patch_is_highlighted…` (numbers,
+        removed row no longer dimmed, colours made readable on the tint:
+        intended), `views__a_patch_of_several_files` (not nested: intended).
+        No other snapshot changed.
+      - Dependencies: `supports-color` 3.0.2 (Apache-2.0) and its `is_ci`
+        1.2.0 (ISC), both accepted by `about.toml`, Codex's choice; `serde`
+        (workspace) now a direct TUI dependency.
+      - Docs (both languages): `terminal-interface` (`#tools` rows,
+        `#rendering` JSON/items/diffs/colours, `#highlighting`, `#terminal`
+        colour depth), `tools`, `mcp#interface`, `plugin-rules#tool-presenters`,
+        `embedding` (history), `internals` (patch positions, `#tui-details`),
+        `architecture` (the port).
+      - Validation: `cargo fmt --all --check`; `RUSTFLAGS="-D warnings"
+        cargo check --workspace --all-targets --all-features`; `cargo clippy
+        --workspace --all-targets --all-features -- -D warnings`; `cargo
+        xtask check` (the notices check needed the original
+        `app/tests/diffs.rs` listed); `cargo test --workspace --all-features
+        --no-fail-fast` on the final tree, after L2 (4833 passed, none
+        failed, no flake seen); `bun
+        install --frozen-lockfile`, `bun run format:site`, `bun run
+        format:check:site`, `bun run site:check`, `bun run site:test` (28
+        passed), and the fourteen changed pages compiled with the store's
+        `@mdx-js/mdx` 3.1.1 with remark-gfm; `VITE_BASE_PATH=/hanafubuki-agent/
+        bun run site:build` not run locally (port 3000 held by another
+        project's server); CI's Site run covers it.
+      - Hanafubuki at its next pin: `AgentToolDisplay::Content` and
+        `AgentOutputBlock` (exhaustive matches; the fallback of an
+        unpresented tool is `Content` unless its content carries structured
+        output); `AgentPatchFile.hunk_starts` and `AgentPatchHunkStart`
+        (struct literals); `AgentToolDisplayMetadata.patch_hunk_starts`
+        (literals); `PatchMutationResult.hunk_starts` (literals);
+        workspace-fs's `PatchHunkStart`.
+      - Module size: no exception added or raised.
+      - Not verified without a real terminal: how each terminal draws the
+        tints and the contrast-adjusted colours; what `supports-color`
+        reads in real terminals (Windows Terminal is promoted by
+        `WT_SESSION`).
+- All of this plan's milestones (B1–M8) are done (2026-11-14).
 
 ## Plan: a sub-agent's model, Provider and reasoning effort, chosen at each spawn (2026-11-13)
 

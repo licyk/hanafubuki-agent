@@ -17,6 +17,7 @@
 //! exploration cell (`exploration`): its activity ids are its calls'.
 
 mod command;
+mod content;
 mod exploration;
 mod file_read;
 mod listing;
@@ -216,30 +217,34 @@ impl ToolCallCell {
         self.calls.iter_mut().find(|call| call.call_id == call_id)
     }
 
-    fn lines(&self, width: u16, expanded: bool) -> Vec<Line<'static>> {
+    fn lines(&self, width: u16, extent: Extent) -> Vec<Line<'static>> {
         match &self.calls[..] {
             [call] => {
-                let view = call.view(Extent::new(width, expanded));
-                let body = if expanded { view.details } else { view.preview };
+                let view = call.view(extent);
+                let body = if extent.expanded {
+                    view.details
+                } else {
+                    view.preview
+                };
                 let bullet = call.bullet(view.failed);
                 frame(bullet, view.title, call.clock(), body, width)
             }
-            calls => exploration::lines(calls, width, expanded),
+            calls => exploration::lines(calls, width, extent.expanded),
         }
     }
 }
 
 impl HistoryCell for ToolCallCell {
     fn display_lines(&self, width: u16) -> Vec<Line<'static>> {
-        self.lines(width, false)
+        self.lines(width, Extent::new(width, false))
     }
 
     fn transcript_lines(&self, width: u16) -> Vec<Line<'static>> {
-        self.lines(width, true)
+        self.lines(width, Extent::new(width, true))
     }
 
     fn raw_lines(&self) -> Vec<Line<'static>> {
-        plain_lines(self.lines(u16::MAX, true))
+        plain_lines(self.lines(u16::MAX, Extent::raw()))
     }
 
     fn activity_ids(&self) -> Vec<String> {
@@ -278,6 +283,8 @@ impl HistoryCell for ToolCallCell {
 struct Extent {
     columns: usize,
     expanded: bool,
+    /// `/raw`: expanded, a tool's text as it came rather than laid out.
+    raw: bool,
 }
 
 impl Extent {
@@ -285,6 +292,14 @@ impl Extent {
         Self {
             columns: usize::from(width).saturating_sub(4).max(1),
             expanded,
+            raw: false,
+        }
+    }
+
+    fn raw() -> Self {
+        Self {
+            raw: true,
+            ..Self::new(u16::MAX, true)
         }
     }
 
@@ -423,7 +438,9 @@ impl ToolCall {
                 url, title, text, ..
             } => web::page_view(url, title.as_deref(), text, extent),
             AgentToolDisplay::Mutation { kind, paths } => mutation::view(self, *kind, paths),
-            AgentToolDisplay::Text { text } => text::view(self, failed, text_lines(text), extent),
+            AgentToolDisplay::Text { text } => {
+                content::view(self, failed, content::text_rows(text, extent), extent)
+            }
             AgentToolDisplay::Fields { rows } => text::view(
                 self,
                 failed,
@@ -432,6 +449,9 @@ impl ToolCall {
                     .collect(),
                 extent,
             ),
+            AgentToolDisplay::Content { blocks } => {
+                content::view(self, failed, content::block_rows(blocks, extent), extent)
+            }
         }
     }
 
@@ -548,6 +568,19 @@ fn expand_tabs_at(piece: &str, column: &mut usize) -> String {
         }
     }
     expanded
+}
+
+/// `512 B`, `33.2 KiB`, `6.0 MiB`.
+fn size_label(bytes: u64) -> String {
+    const KIB: f64 = 1024.0;
+    let size = bytes as f64;
+    if size < KIB {
+        format!("{bytes} B")
+    } else if size < KIB * KIB {
+        format!("{:.1} KiB", size / KIB)
+    } else {
+        format!("{:.1} MiB", size / (KIB * KIB))
+    }
 }
 
 /// `1 match`, `7 matches`.

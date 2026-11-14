@@ -1,14 +1,20 @@
 // Modified from OpenAI Codex rust-v0.93.0 (Apache-2.0).
+// Modified from OpenAI Codex 57a808a392 (Apache-2.0).
 
 //! A terminal for tests: crossterm's backend writing into a vt100 screen,
-//! the bytes it was given kept; the OSC 8 links in those bytes; and an
-//! external editor that edits no file interactively.
+//! the bytes it was given kept; the OSC 8 links in those bytes; an
+//! external editor that edits no file interactively; and patches as the
+//! applier reads them.
 
 use std::fmt::{self};
 use std::io::Write;
 use std::io::{self};
 use std::path::PathBuf;
 
+use hanafubuki_agent::{
+    AgentPatchFile, AgentPatchHunkStart, AgentPatchLine, AgentPatchLineKind, AgentPatchOperation,
+    AgentPatchPreview,
+};
 use ratatui::backend::CrosstermBackend;
 
 use ratatui::backend::Backend;
@@ -275,4 +281,111 @@ impl FakeEditor {
         let name = if cfg!(windows) { "edit.cmd" } else { "edit.sh" };
         self.dir.path().join(name)
     }
+}
+
+// Patches as the transcript shows them (Codex's diff tests' files).
+
+/// A file of a patch from a diff-like body: `@@ OLD NEW` starts a chunk
+/// (its starts, `@@` alone for none), then ` `, `+` and `-` rows.
+pub(crate) fn patch_file(
+    operation: &str,
+    path: &str,
+    moved_to: Option<&str>,
+    body: &str,
+) -> AgentPatchFile {
+    let operation = match operation {
+        "add" => AgentPatchOperation::Add,
+        "delete" => AgentPatchOperation::Delete,
+        _ => AgentPatchOperation::Update,
+    };
+    let mut lines = Vec::new();
+    let mut hunk_starts = Vec::new();
+    let (mut added, mut removed) = (0, 0);
+    for row in body.lines() {
+        let (kind, text) = match row.split_at(row.len().min(1)) {
+            ("@", rest) => {
+                let starts: Vec<u64> = rest
+                    .trim_start_matches('@')
+                    .split_whitespace()
+                    .map(|number| number.parse().unwrap())
+                    .collect();
+                if let [old_line, new_line] = starts[..] {
+                    hunk_starts.push(AgentPatchHunkStart { old_line, new_line });
+                }
+                (AgentPatchLineKind::Hunk, "")
+            }
+            ("+", text) => {
+                added += 1;
+                (AgentPatchLineKind::Added, text)
+            }
+            ("-", text) => {
+                removed += 1;
+                (AgentPatchLineKind::Removed, text)
+            }
+            (" ", text) => (AgentPatchLineKind::Context, text),
+            ("", _) => (AgentPatchLineKind::Context, ""),
+            ("*", _) => (AgentPatchLineKind::Marker, row),
+            (_, _) => panic!("row {row:?}"),
+        };
+        lines.push(AgentPatchLine {
+            kind,
+            text: text.to_string(),
+        });
+    }
+    AgentPatchFile {
+        operation,
+        path: path.to_string(),
+        moved_to: moved_to.map(str::to_string),
+        lines,
+        added,
+        removed,
+        omitted_lines: 0,
+        hunk_starts,
+    }
+}
+
+pub(crate) fn patch_preview(files: Vec<AgentPatchFile>) -> AgentPatchPreview {
+    AgentPatchPreview { files, error: None }
+}
+
+/// Codex's `apply_update_block`: `line two` changed in a file of three.
+pub(crate) fn update_block() -> AgentPatchPreview {
+    patch_preview(vec![patch_file(
+        "update",
+        "example.txt",
+        None,
+        "@@ 1 1\n line one\n-line two\n+line two changed\n line three",
+    )])
+}
+
+/// Codex's diff gallery: updates (one renamed), additions, deletions.
+pub(crate) fn diff_gallery() -> AgentPatchPreview {
+    patch_preview(vec![
+        patch_file(
+            "add",
+            "assets/banner.txt",
+            None,
+            "+HEADER\tVALUE\n+rocket\t🚀\n+city\t東京",
+        ),
+        patch_file(
+            "add",
+            "examples/new_sample.rs",
+            None,
+            "+pub fn greet(name: &str) {\n+    println!(\"Hello, {name}!\");\n+}",
+        ),
+        patch_file("delete", "legacy/old_script.py", None, ""),
+        patch_file(
+            "update",
+            "scripts/calc.txt",
+            Some("scripts/calc.py"),
+            "@@ 1 1\n def add(a, b):\n-\treturn a + b\n+\treturn a + b + 42\n \n print(add(1, 2))",
+        ),
+        patch_file(
+            "update",
+            "src/lib.rs",
+            None,
+            "@@ 1 1\n fn greet(name: &str) {\n-    println!(\"hello\");\n-    println!(\"bye\");\n+    println!(\"hello {name}\");\n+    println!(\"emoji: 🚀✨ and CJK: 你好世界\");\n }",
+        ),
+        patch_file("delete", "tmp/obsolete.log", None, ""),
+    ])
 }

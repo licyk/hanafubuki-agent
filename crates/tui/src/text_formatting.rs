@@ -1,4 +1,5 @@
 // Modified from OpenAI Codex rust-v0.93.0 (Apache-2.0).
+// Modified from OpenAI Codex 57a808a392 (Apache-2.0).
 
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthChar;
@@ -294,6 +295,102 @@ pub(crate) fn truncate_text(text: &str, max_graphemes: usize) -> String {
         // There are max_graphemes or fewer graphemes, return original text
         text.to_string()
     }
+}
+
+/// The largest JSON text laid out; a larger one shows as it came.
+const MAX_JSON_FORMAT_BYTES: usize = 1024 * 1024;
+/// The deepest nesting laid out: `serde_json`'s own limit when it builds a
+/// value.
+const MAX_JSON_FORMAT_DEPTH: usize = 128;
+/// The largest JSON laid out, indentation included.
+const MAX_JSON_FORMAT_OUTPUT_BYTES: usize = 4 * MAX_JSON_FORMAT_BYTES;
+
+/// `text` as JSON on one line, a space after each `:` and `,` (Codex's
+/// `format_json_compact`): readable, with places to wrap, and one row where
+/// indenting would take many. `None` when `text` is not one JSON value.
+///
+/// Example: `{"a":"b","c":["d","e"]}` becomes `{"a": "b", "c": ["d", "e"]}`.
+pub(crate) fn format_json_compact(text: &str) -> Option<String> {
+    reformat_json(text, None)
+}
+
+/// `text` as JSON indented by two spaces, a value per line; `None` when it
+/// is not one JSON value.
+pub(crate) fn format_json_pretty(text: &str) -> Option<String> {
+    reformat_json(text, Some("  "))
+}
+
+/// Codex parses the JSON and prints it again; here it is validated without
+/// building it, then the text itself is re-spaced, so keys keep their order
+/// and numbers and escapes their spelling. The work is bounded: the input
+/// in size and nesting, the output in size (indentation multiplies a deep,
+/// wide value's).
+fn reformat_json(text: &str, indent: Option<&str>) -> Option<String> {
+    let text = text.trim();
+    if text.len() > MAX_JSON_FORMAT_BYTES {
+        return None;
+    }
+    serde_json::from_str::<serde::de::IgnoredAny>(text).ok()?;
+    let mut out = String::with_capacity(text.len() + text.len() / 4);
+    let mut depth = 0usize;
+    let mut chars = text.chars().peekable();
+    while let Some(ch) = chars.next() {
+        match ch {
+            '"' => {
+                out.push(ch);
+                while let Some(ch) = chars.next() {
+                    out.push(ch);
+                    match ch {
+                        '\\' => out.extend(chars.next()),
+                        '"' => break,
+                        _ => {}
+                    }
+                }
+                continue;
+            }
+            '{' | '[' => {
+                out.push(ch);
+                while chars.next_if(|next| next.is_whitespace()).is_some() {}
+                if chars.next_if(|next| matches!(next, '}' | ']')).is_some() {
+                    out.push(if ch == '{' { '}' } else { ']' });
+                    continue;
+                }
+                // serde_json skips a value without its depth limit.
+                depth += 1;
+                if depth > MAX_JSON_FORMAT_DEPTH {
+                    return None;
+                }
+            }
+            '}' | ']' => depth = depth.saturating_sub(1),
+            ',' if indent.is_none() => {
+                out.push_str(", ");
+                continue;
+            }
+            ',' => out.push(','),
+            ':' => {
+                out.push_str(": ");
+                continue;
+            }
+            ch if ch.is_whitespace() => continue,
+            ch => {
+                out.push(ch);
+                continue;
+            }
+        }
+        // After an opening or a comma, before a closing: a new line at the
+        // depth.
+        if let Some(indent) = indent {
+            out.push('\n');
+            out.extend(std::iter::repeat_n(indent, depth));
+            if out.len() > MAX_JSON_FORMAT_OUTPUT_BYTES {
+                return None;
+            }
+        }
+        if matches!(ch, '}' | ']') {
+            out.push(ch);
+        }
+    }
+    Some(out)
 }
 
 #[cfg(test)]

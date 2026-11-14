@@ -147,7 +147,10 @@ impl AgentToolHandler for ExecTool {
                 .map(|(value, styled_output)| {
                     ToolResult::success(value)
                         .with_argument_notes(&notes)
-                        .with_display_metadata(AgentToolDisplayMetadata { styled_output })
+                        .with_display_metadata(AgentToolDisplayMetadata {
+                            styled_output,
+                            ..Default::default()
+                        })
                 })
                 .map_err(AgentToolError::Failed)
         })

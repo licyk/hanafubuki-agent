@@ -154,6 +154,50 @@ pub(crate) fn foreground_for_scopes_with_theme(theme: &Theme, scopes: &[&str]) -
     })
 }
 
+/// A background a theme gives a diff scope: a colour, or the terminal's
+/// default (an `ansi` theme's alpha marker), which leaves the row unfilled.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum DiffScopeBackground {
+    Rgb((u8, u8, u8)),
+    TerminalDefault,
+}
+
+/// The backgrounds the active theme gives added and removed lines, which
+/// a diff's rows take over its own palette's.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(crate) struct DiffScopeBackgrounds {
+    pub(crate) inserted: Option<DiffScopeBackground>,
+    pub(crate) deleted: Option<DiffScopeBackground>,
+}
+
+/// The active theme's `markup.inserted` / `markup.deleted` backgrounds
+/// (the convention of most VS Code themes), else `diff.inserted` /
+/// `diff.deleted` (older `.tmTheme` files).
+pub(crate) fn diff_scope_backgrounds() -> DiffScopeBackgrounds {
+    let theme = theme_lock();
+    let theme = theme.read();
+    diff_scope_backgrounds_for_theme(&theme)
+}
+
+pub(crate) fn diff_scope_backgrounds_for_theme(theme: &Theme) -> DiffScopeBackgrounds {
+    let highlighter = Highlighter::new(theme);
+    let background = |scopes: [&str; 2]| {
+        scopes.iter().find_map(|scope| {
+            let scope = Scope::new(scope).ok()?;
+            let bg = highlighter.style_mod_for_stack(&[scope]).background?;
+            Some(if bg.a == ANSI_ALPHA_DEFAULT {
+                DiffScopeBackground::TerminalDefault
+            } else {
+                DiffScopeBackground::Rgb((bg.r, bg.g, bg.b))
+            })
+        })
+    };
+    DiffScopeBackgrounds {
+        inserted: background(["markup.inserted", "diff.inserted"]),
+        deleted: background(["markup.deleted", "diff.deleted"]),
+    }
+}
+
 fn highlight_to_line_spans(code: &str, lang: &str) -> Option<Vec<Vec<Span<'static>>>> {
     let theme = theme_lock();
     let theme = theme.read();

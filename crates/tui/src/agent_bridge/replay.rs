@@ -191,6 +191,7 @@ pub(crate) fn transcript(
                         }
                         .with_metadata(&AgentToolDisplayMetadata {
                             styled_output: styled,
+                            ..Default::default()
                         }),
                     ),
                 },

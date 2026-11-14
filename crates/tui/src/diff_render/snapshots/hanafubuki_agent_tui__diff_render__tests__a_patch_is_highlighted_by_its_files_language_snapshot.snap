@@ -1,8 +1,8 @@
 ---
 source: crates/tui/src/diff_render/tests.rs
-expression: "styled(&patch_diff_lines(&preview, 80))"
+expression: "styled(&truecolor_lines(&preview, 80))"
 ---
-[ ][fn]{#B48EAD}[ ]{#C0C5CE}[answer]{#8FA1B3}[(]{#C0C5CE}[)]{#C0C5CE}[ ]{#C0C5CE}[->]{#C0C5CE}[ ]{#C0C5CE}[u32]{#B48EAD}[ ]{#C0C5CE}[{]{#C0C5CE}
-[-]{Red}[    ]{#C0C5CE~}[41]{#D08770~}
-[+]{Green}[    ]{#C0C5CE}[42]{#D08770}[ ]{#C0C5CE}[//]{#65737E}[ the answer]{#65737E}
-[ ][}]{#C0C5CE}
+[1 ]~[ ][fn]{#B48EAD}[ ]{#C0C5CE}[answer]{#8FA1B3}[(]{#C0C5CE}[)]{#C0C5CE}[ ]{#C0C5CE}[->]{#C0C5CE}[ ]{#C0C5CE}[u32]{#B48EAD}[ ]{#C0C5CE}[{]{#C0C5CE}
+[2 ]~[-]{Red}[    ]{#C0C5CE}[41]{#D08770}
+[2 ]~[+]{Green}[    ]{#C0C5CE}[42]{#D28C76}[ ]{#C0C5CE}[//]{#949EA5}[ the answer]{#949EA5}
+[3 ]~[ ][}]{#C0C5CE}

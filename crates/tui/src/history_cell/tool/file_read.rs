@@ -59,7 +59,7 @@ fn numbered(
 ) -> Vec<Line<'static>> {
     let first = start_line.unwrap_or(1);
     let gutter =
-        start_line.map(|first| line_number_width(first as usize + lines.len().saturating_sub(1)));
+        start_line.map(|first| line_number_width(first + lines.len().saturating_sub(1) as u64));
     let mut highlighted = highlight_lines(path, lines).map(Vec::into_iter);
     let mut details = Vec::new();
     for (index, line) in lines.iter().enumerate() {

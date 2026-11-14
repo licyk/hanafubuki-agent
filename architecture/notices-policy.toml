@@ -701,6 +701,10 @@ path = "crates/tui/src/app/tests/colour.rs"
 reason = "Command output's colours end to end on an emulated terminal in both presentations, for a model's command and a typed one, live and after /resume, with the model's request plain; written for the colour milestone."
 
 [[original]]
+path = "crates/tui/src/app/tests/diffs.rs"
+reason = "An applied patch's numbered, tinted diff end to end on an emulated terminal in both presentations, live and after /resume, with the model's request carrying no positions; written for the tool-output milestone."
+
+[[original]]
 path = "crates/tui/src/history_cell/tool/styled_output.rs"
 reason = "Command output's lines in the styles the execution service read from its SGR sequences, which the Agent carries beside the plain output; Codex parses the escape sequences in the cell with ansi-to-tui instead."
 

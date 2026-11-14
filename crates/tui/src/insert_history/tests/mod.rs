@@ -317,3 +317,44 @@ fn a_hostile_row_writes_no_control_sequence_of_its_own() {
         "{written:?}"
     );
 }
+
+/// A diff's tinted row is written with its tint to the right edge (the
+/// line's background, cleared to the end of the row), and the next row
+/// starts in the terminal's colours.
+#[test]
+fn a_tinted_diff_row_is_tinted_to_the_edge_and_the_next_row_is_not() {
+    use crate::diff_render::{
+        patch_diff_lines_with_style, DiffColorLevel, DiffRenderStyleContext, DiffTheme,
+    };
+    use crate::render::highlight::DiffScopeBackgrounds;
+    use crate::test_support::{patch_file, patch_preview};
+
+    let width = 30;
+    let mut term = history_terminal(width, 6);
+    let style = DiffRenderStyleContext::new(
+        DiffTheme::Dark,
+        DiffColorLevel::TrueColor,
+        DiffScopeBackgrounds::default(),
+    );
+    let preview = patch_preview(vec![patch_file(
+        "update",
+        "a.txt",
+        None,
+        "@@ 1 1\n-old\n+new\n same",
+    )]);
+    let rows = patch_diff_lines_with_style(&preview, usize::from(width), style);
+    insert_history_lines(&mut term, rows).expect("insert");
+    let screen = term.backend().vt100().screen();
+    let row_of = |text: &str| {
+        (0..6)
+            .find(|row| screen.contents_between(*row, 0, *row, width).contains(text))
+            .unwrap()
+    };
+    let bg = |row: u16, column: u16| screen.cell(row, column).unwrap().bgcolor();
+    let (removed, added, kept) = (row_of("1 -old"), row_of("1 +new"), row_of("2  same"));
+    for column in [0, width - 1] {
+        assert_eq!(bg(removed, column), vt100::Color::Rgb(74, 34, 29));
+        assert_eq!(bg(added, column), vt100::Color::Rgb(33, 58, 43));
+        assert_eq!(bg(kept, column), vt100::Color::Default);
+    }
+}

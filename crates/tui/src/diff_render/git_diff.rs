@@ -5,10 +5,10 @@
 //! in bold, its chunk headers in cyan, and each file's lines highlighted
 //! by the file's language when its name tells it.
 
-use ratatui::style::{Modifier, Stylize};
+use ratatui::style::{Color, Modifier, Style, Stylize};
 use ratatui::text::{Line, Span};
 
-use super::{highlight_lines, style_add, style_del};
+use super::highlight_lines;
 
 pub(crate) fn git_diff_lines(text: &str) -> Vec<Line<'static>> {
     if text.trim().is_empty() {
@@ -82,8 +82,8 @@ impl FileSection {
         let mut highlighted = highlighted.into_iter().flatten();
         for (sign, text) in std::mem::take(&mut self.code) {
             let style = match sign {
-                '+' => style_add(),
-                '-' => style_del(),
+                '+' => Style::default().fg(Color::Green),
+                '-' => Style::default().fg(Color::Red),
                 _ => Default::default(),
             };
             let mut spans = vec![Span::styled(sign.to_string(), style)];

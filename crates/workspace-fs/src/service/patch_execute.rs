@@ -10,6 +10,7 @@ impl WorkspaceFsService {
         let mut added = Vec::new();
         let mut modified = Vec::new();
         let mut deleted = Vec::new();
+        let mut hunk_starts = Vec::with_capacity(changes.len());
         for change in changes {
             check_cancel(cancellation)?;
             match change {
@@ -21,17 +22,20 @@ impl WorkspaceFsService {
                     let path = target_resolved(&target).native_text().to_string();
                     self.write_file(target, content, content_sha256, true, true, cancellation)?;
                     added.push(path);
+                    hunk_starts.push(Vec::new());
                 }
                 PatchFilePlan::Delete { target } => {
                     let path = target.identity.path.clone();
                     self.delete_path(target, false, cancellation)?;
                     deleted.push(path);
+                    hunk_starts.push(Vec::new());
                 }
                 PatchFilePlan::Update {
                     source,
                     destination,
                     content,
                     content_sha256,
+                    hunk_starts: starts,
                     ..
                 } => {
                     let modified_path = destination
@@ -59,6 +63,7 @@ impl WorkspaceFsService {
                         )?;
                     }
                     modified.push(modified_path);
+                    hunk_starts.push(starts);
                 }
             }
         }
@@ -66,6 +71,7 @@ impl WorkspaceFsService {
             added,
             modified,
             deleted,
+            hunk_starts,
         }))
     }
 

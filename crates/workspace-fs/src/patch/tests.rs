@@ -33,8 +33,9 @@ fn update_matching_is_ordered_and_whitespace_tolerant() {
     let PatchHunk::Update { chunks, .. } = &hunks[0] else {
         panic!("expected update hunk");
     };
-    let output =
-        derive_updated_content("section  \n  value  \ntail\n", "sample.txt", chunks).unwrap();
+    let output = derive_updated_content("section  \n  value  \ntail\n", "sample.txt", chunks)
+        .unwrap()
+        .text;
     assert_eq!(output, "section  \nchanged\ntail\n");
 }
 
@@ -81,7 +82,9 @@ fn update_context_may_contain_patch_marker_text() {
         panic!("expected update hunk");
     };
     assert_eq!(
-        derive_updated_content("*** End Patch\nold\n", "sample.txt", chunks).unwrap(),
+        derive_updated_content("*** End Patch\nold\n", "sample.txt", chunks)
+            .unwrap()
+            .text,
         "*** End Patch\nnew\n"
     );
 }
@@ -97,7 +100,9 @@ fn update_matching_normalizes_common_model_punctuation() {
         panic!("expected update hunk");
     };
     assert_eq!(
-        derive_updated_content("Use “apply‐patch”\n", "sample.txt", chunks).unwrap(),
+        derive_updated_content("Use “apply‐patch”\n", "sample.txt", chunks)
+            .unwrap()
+            .text,
         "Use \"apply_patch\"\n"
     );
 }
@@ -146,7 +151,9 @@ fn pure_addition_chunk_appends_at_end_of_file() {
         panic!("expected update hunk");
     };
     assert_eq!(
-        derive_updated_content("line1\nline2\n", "sample.txt", chunks).unwrap(),
+        derive_updated_content("line1\nline2\n", "sample.txt", chunks)
+            .unwrap()
+            .text,
         "line1\nline2\nadded line 1\nadded line 2\n"
     );
 }
@@ -164,7 +171,9 @@ fn pure_addition_with_end_of_file_appends_at_file_end() {
         panic!("expected update hunk");
     };
     assert_eq!(
-        derive_updated_content("foo\nbar\nbaz\n", "sample.txt", chunks).unwrap(),
+        derive_updated_content("foo\nbar\nbaz\n", "sample.txt", chunks)
+            .unwrap()
+            .text,
         "foo\nbar\nbaz\nquux\n"
     );
 }
@@ -185,7 +194,9 @@ fn blank_lines_after_end_of_file_are_ignored() {
     assert_eq!(chunks.len(), 1);
     assert!(chunks[0].is_end_of_file());
     assert_eq!(
-        derive_updated_content("foo\nbar\n", "sample.txt", chunks).unwrap(),
+        derive_updated_content("foo\nbar\n", "sample.txt", chunks)
+            .unwrap()
+            .text,
         "foo\nbar\nappended\n"
     );
 }
@@ -205,7 +216,9 @@ fn a_context_chunk_may_follow_an_end_of_file_marker() {
     assert_eq!(chunks.len(), 2);
     assert!(chunks[0].is_end_of_file());
     assert_eq!(
-        derive_updated_content("first\nother\n", "sample.txt", chunks).unwrap(),
+        derive_updated_content("first\nother\n", "sample.txt", chunks)
+            .unwrap()
+            .text,
         "first\nchanged\nappended\n"
     );
 }
@@ -222,4 +235,48 @@ fn a_second_end_of_file_marker_is_rejected() {
     assert!(error
         .to_string()
         .contains("End of File must finish an update chunk"));
+}
+
+fn starts(original: &str, patch: &str) -> Vec<(u64, u64)> {
+    let hunks = parse_patch(patch).unwrap().hunks;
+    let PatchHunk::Update { chunks, .. } = &hunks[0] else {
+        panic!("expected update hunk");
+    };
+    derive_updated_content(original, "sample.txt", chunks)
+        .unwrap()
+        .hunk_starts
+        .iter()
+        .map(|start| (start.old_line, start.new_line))
+        .collect()
+}
+
+#[test]
+fn each_chunk_starts_where_it_matched_before_and_after_the_patch() {
+    let original = "a\nb\nc\nd\ne\nf\ng\n";
+    // The first chunk replaces one line by three, so the second chunk's
+    // lines move down by two in the result.
+    let patch = "*** Begin Patch\n*** Update File: sample.txt\n@@\n b\n-c\n+c1\n+c2\n+c3\n@@\n f\n-g\n+G\n*** End Patch";
+    assert_eq!(starts(original, patch), vec![(2, 2), (6, 8)]);
+}
+
+#[test]
+fn a_context_header_moves_the_start_to_the_first_shown_line() {
+    let original = "fn one() {\n    a();\n}\nfn two() {\n    b();\n}\n";
+    let patch = "*** Begin Patch\n*** Update File: sample.txt\n@@ fn two() {\n-    b();\n+    c();\n*** End Patch";
+    assert_eq!(starts(original, patch), vec![(5, 5)]);
+}
+
+#[test]
+fn a_pure_addition_starts_at_the_end_of_the_file_whatever_its_order() {
+    let patch = "*** Begin Patch\n*** Update File: sample.txt\n@@\n+appended\n*** End of File\n@@\n-other\n+changed\n+more\n*** End Patch";
+    // The addition lands after `other`, which the second chunk grew by one.
+    assert_eq!(starts("first\nother\n", patch), vec![(3, 4), (2, 2)]);
+}
+
+#[test]
+fn removed_lines_move_later_chunks_up() {
+    let original = "1\n2\n3\n4\n5\n6\n";
+    let patch =
+        "*** Begin Patch\n*** Update File: sample.txt\n@@\n-1\n-2\n-3\n@@\n 5\n+5b\n*** End Patch";
+    assert_eq!(starts(original, patch), vec![(1, 1), (5, 2)]);
 }

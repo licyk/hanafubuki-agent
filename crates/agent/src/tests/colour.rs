@@ -50,7 +50,7 @@ fn assert_plain(text: &str) {
     assert!(!text.contains("displayMetadata"), "{text:?}");
 }
 
-fn transcript(
+pub(super) fn transcript(
     service: &AgentApplicationService,
     session_id: AgentSessionId,
 ) -> Vec<ConversationItem> {
@@ -71,7 +71,7 @@ fn transcript(
 
 /// A new Agent over `paths`' storage, as after a restart, its plugins (the
 /// presenters among them) started.
-async fn reopen(config: AgentConfig, paths: &TestPaths) -> AgentApplicationService {
+pub(super) async fn reopen(config: AgentConfig, paths: &TestPaths) -> AgentApplicationService {
     let service = AgentApplicationService::new_with_host(
         config,
         test_host(paths),
@@ -89,17 +89,16 @@ async fn reopen(config: AgentConfig, paths: &TestPaths) -> AgentApplicationServi
     service
 }
 
-/// Runs the model's coloured command (approved by hand) and its answer.
-async fn model_runs_the_coloured_command(
+/// Runs a turn whose one tool call is approved by hand: the model's
+/// coloured command, or another call.
+pub(super) async fn run_approved_turn(
     service: &AgentApplicationService,
     session_id: AgentSessionId,
+    prompt: &str,
 ) {
     let executing = service.clone();
-    let turn = tokio::spawn(async move {
-        executing
-            .start_turn(session_id, "Run it.".to_string().into())
-            .await
-    });
+    let prompt = prompt.to_string();
+    let turn = tokio::spawn(async move { executing.start_turn(session_id, prompt.into()).await });
     let (turn_identity, request) = tokio::time::timeout(TEST_WAIT, async {
         loop {
             if let Some(turn_identity) = service.snapshot(session_id).unwrap().turn {
@@ -161,7 +160,7 @@ async fn a_models_coloured_command_is_plain_for_the_model_and_styled_for_the_dis
         .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
-    model_runs_the_coloured_command(&service, session.id).await;
+    run_approved_turn(&service, session.id, "Run it.").await;
 
     // The request after the call carries the output as the model reads it.
     let requests = server.requests();

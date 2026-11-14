@@ -1,0 +1,10 @@
+---
+source: crates/tui/src/history_cell/tool/tests/diffs.rs
+assertion_line: 32
+expression: "expanded(update_block(), 80)"
+---
+• Edited example.txt (+1 -1)
+  └ 1  line one
+    2 -line two
+    2 +line two changed
+    3  line three

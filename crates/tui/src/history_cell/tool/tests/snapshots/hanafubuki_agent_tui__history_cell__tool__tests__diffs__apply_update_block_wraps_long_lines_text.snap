@@ -1,0 +1,17 @@
+---
+source: crates/tui/src/history_cell/tool/tests/diffs.rs
+assertion_line: 85
+expression: "expanded(preview, 28)"
+---
+• Edited wrap_demo.txt (+2
+    -2)
+  └ 1  1
+    2 -2
+    2 +added long line which
+        wraps and_if_there_i
+       s_a_long_token_it_wil
+       l_be_broken
+    3  3
+    4 -4
+    4 +4 context line which
+       also wraps across

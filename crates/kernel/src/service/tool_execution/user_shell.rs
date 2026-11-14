@@ -287,6 +287,7 @@ pub(in crate::service) fn user_shell_command_display(
     };
     let metadata = hanafubuki_agent_contracts::AgentToolDisplayMetadata {
         styled_output: styled.clone(),
+        ..Default::default()
     };
     Some(crate::AgentToolCallDisplay {
         subject: Some(command.clone()),

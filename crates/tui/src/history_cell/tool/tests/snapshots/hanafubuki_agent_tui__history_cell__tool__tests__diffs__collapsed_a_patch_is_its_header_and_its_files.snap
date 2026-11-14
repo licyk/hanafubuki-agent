@@ -1,0 +1,42 @@
+---
+source: crates/tui/src/history_cell/tool/tests/diffs.rs
+assertion_line: 143
+expression: "both(&cell(diff_gallery()), 80)"
+---
+• Edited 6 files (+9 -3)
+  └ assets/banner.txt (+3 -0)
+    examples/new_sample.rs (+3 -0)
+    legacy/old_script.py (+0 -0)
+    scripts/calc.txt → scripts/calc.py (+1 -1)
+    src/lib.rs (+2 -2)
+    tmp/obsolete.log (+0 -0)
+─── expanded (Some(Generic)) ───
+• Edited 6 files (+9 -3)
+  └ assets/banner.txt (+3 -0)
+    1 +HEADER    VALUE
+    2 +rocket    🚀
+    3 +city    東京
+    
+    examples/new_sample.rs (+3 -0)
+    1 +pub fn greet(name: &str) {
+    2 +    println!("Hello, {name}!");
+    3 +}
+    
+    legacy/old_script.py (+0 -0)
+    
+    scripts/calc.txt → scripts/calc.py (+1 -1)
+    1  def add(a, b):
+    2 -    return a + b
+    2 +    return a + b + 42
+    3  
+    4  print(add(1, 2))
+    
+    src/lib.rs (+2 -2)
+    1  fn greet(name: &str) {
+    2 -    println!("hello");
+    3 -    println!("bye");
+    2 +    println!("hello {name}");
+    3 +    println!("emoji: 🚀✨ and CJK: 你好世界");
+    4  }
+    
+    tmp/obsolete.log (+0 -0)

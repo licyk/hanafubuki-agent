@@ -106,6 +106,7 @@ fn display_metadata_is_not_in_the_context_estimate() {
     let styled = [
         output(hanafubuki_agent_contracts::AgentToolDisplayMetadata {
             styled_output: Some(styles.clone()),
+            ..Default::default()
         }),
         shell(Some(styles)),
     ];

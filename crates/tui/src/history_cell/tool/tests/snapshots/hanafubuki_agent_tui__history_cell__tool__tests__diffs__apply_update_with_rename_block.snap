@@ -1,0 +1,10 @@
+---
+source: crates/tui/src/history_cell/tool/tests/diffs.rs
+assertion_line: 43
+expression: "expanded(preview, 80)"
+---
+• Edited old_name.rs → new_name.rs (+1 -1)
+  └ 1  A
+    2 -B
+    2 +B changed
+    3  C

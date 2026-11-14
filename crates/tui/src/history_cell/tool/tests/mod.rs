@@ -2,6 +2,8 @@
 //! expanding adds, the frame while a call runs, and the exploration run.
 
 mod colour;
+mod content;
+mod diffs;
 mod exploration;
 mod shape;
 mod streamed;

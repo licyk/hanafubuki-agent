@@ -1,5 +1,5 @@
 use super::sha256_hex;
-use crate::model::WorkspacePathKind;
+use crate::model::{PatchHunkStart, WorkspacePathKind};
 use grep_regex::RegexMatcher;
 use hanafubuki_agent_approval::ApprovalAction;
 use hanafubuki_agent_foundation::paths::{PathKey, ResolvedPath};
@@ -111,6 +111,8 @@ pub(crate) enum PatchFilePlan {
         destination: Option<Box<TargetPlan>>,
         content: Vec<u8>,
         content_sha256: String,
+        /// For the interface's diff; not part of what is approved.
+        hunk_starts: Vec<PatchHunkStart>,
     },
 }
 

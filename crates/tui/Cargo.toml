@@ -20,6 +20,9 @@ parking_lot.workspace = true
 pulldown-cmark = { version = "0.13", default-features = false }
 # Without the default features, which pull crossterm 0.28 in beside 0.29.
 ratatui = { version = "0.30", default-features = false, features = ["crossterm_0_29", "scrolling-regions", "unstable-rendered-line-info"] }
+# A tool's JSON output validated without building a map, so its keys keep
+# their order when it is laid out (the workspace's `serde_json` sorts them).
+serde.workspace = true
 serde_json.workspace = true
 # A pasted path's shell quoting undone (Codex's normalisation), and the
 # external editor's command split into a shell's words on Unix.
@@ -27,6 +30,9 @@ shlex = "2"
 # The external editor's temporary file (Ctrl+G), and the run's directory of
 # pasted clipboard images.
 tempfile.workspace = true
+# The terminal's colour depth, which picks a diff's palette (Codex's
+# `terminal_palette`).
+supports-color = "3.0.2"
 # Codex's feature set: the grammars and themes two-face bundles, read with
 # Oniguruma, which some of its grammars need.
 syntect = { version = "5", default-features = false, features = ["parsing", "plist-load", "regex-onig"] }

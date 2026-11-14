@@ -875,6 +875,7 @@ mod colour;
 mod compaction;
 mod compression;
 mod context;
+mod diffs;
 mod external_editor;
 mod features;
 mod history_search;

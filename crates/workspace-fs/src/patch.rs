@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use crate::{WorkspaceFsError, MAX_PATCH_BYTES, MAX_PATCH_FILES};
+use crate::{PatchHunkStart, WorkspaceFsError, MAX_PATCH_BYTES, MAX_PATCH_FILES};
 
 const BEGIN_PATCH: &str = "*** Begin Patch";
 const END_PATCH: &str = "*** End Patch";
@@ -220,11 +220,19 @@ pub(crate) fn parse_patch(input: &str) -> Result<ParsedPatch, WorkspaceFsError> 
     Ok(ParsedPatch { hunks })
 }
 
+/// A file's content after an update, and where each of its chunks landed.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct UpdatedContent {
+    pub(crate) text: String,
+    /// One per chunk, in the patch's order.
+    pub(crate) hunk_starts: Vec<PatchHunkStart>,
+}
+
 pub(crate) fn derive_updated_content(
     original: &str,
     path: &str,
     chunks: &[PatchChunk],
-) -> Result<String, WorkspaceFsError> {
+) -> Result<UpdatedContent, WorkspaceFsError> {
     let mut original_lines = original.split('\n').map(str::to_owned).collect::<Vec<_>>();
     if original_lines.last().is_some_and(String::is_empty) {
         original_lines.pop();
@@ -269,11 +277,35 @@ pub(crate) fn derive_updated_content(
         replacements.push((found, pattern.len(), replacement.to_vec()));
         cursor = found + pattern.len();
     }
+    let hunk_starts = hunk_starts(&replacements);
     for (start, old_len, replacement) in replacements.into_iter().rev() {
         original_lines.splice(start..start + old_len, replacement);
     }
     original_lines.push(String::new());
-    Ok(original_lines.join("\n"))
+    Ok(UpdatedContent {
+        text: original_lines.join("\n"),
+        hunk_starts,
+    })
+}
+
+/// Each replacement's first line in the original and in the result. A
+/// chunk's new position moves by what the replacements before it in the
+/// file added or removed; a pure addition lands at the end of the file, so
+/// it can come after a later chunk's position.
+fn hunk_starts(replacements: &[(usize, usize, Vec<String>)]) -> Vec<PatchHunkStart> {
+    let mut in_file: Vec<usize> = (0..replacements.len()).collect();
+    in_file.sort_by_key(|&index| (replacements[index].0, index));
+    let mut starts = vec![PatchHunkStart::default(); replacements.len()];
+    let mut shift = 0isize;
+    for index in in_file {
+        let (start, old_len, new) = &replacements[index];
+        starts[index] = PatchHunkStart {
+            old_line: *start as u64 + 1,
+            new_line: start.saturating_add_signed(shift) as u64 + 1,
+        };
+        shift += new.len() as isize - *old_len as isize;
+    }
+    starts
 }
 
 fn seek_sequence(lines: &[String], pattern: &[String], start: usize, eof: bool) -> Option<usize> {
@@ -374,7 +406,7 @@ fn invalid_at<T>(line: usize, message: impl Into<String>) -> Result<T, Workspace
     invalid(format!("line {line}: {}", message.into()))
 }
 
-fn mismatch(message: impl Into<String>) -> Result<String, WorkspaceFsError> {
+fn mismatch<T>(message: impl Into<String>) -> Result<T, WorkspaceFsError> {
     Err(WorkspaceFsError::PreimageMismatch(message.into()))
 }
 

@@ -18,7 +18,9 @@ use crate::app_event::{AppEvent, AppEventSender};
 use crate::bottom_pane::{
     BottomPaneView, CancellationEvent, ListSelectionView, SelectionItem, SelectionViewParams,
 };
-use crate::diff_render::{highlight_lines, push_wrapped_diff_line, DiffLineKind};
+use crate::diff_render::{
+    current_diff_render_style_context, highlight_lines, push_wrapped_diff_line, DiffLineType,
+};
 use crate::render::highlight::{
     current_syntax_theme, list_available_themes, resolve_theme_by_name, set_syntax_theme,
     themes_dir, DEFAULT_THEME,
@@ -26,11 +28,14 @@ use crate::render::highlight::{
 use crate::render::renderable::Renderable;
 
 /// The sample: one line removed and one added between two kept.
-const PREVIEW_ROWS: [(DiffLineKind, &str); 4] = [
-    (DiffLineKind::Context, "fn greet(name: &str) -> String {"),
-    (DiffLineKind::Removed, "    format!(\"Hello, {}!\", name)"),
-    (DiffLineKind::Added, "    format!(\"Hello, {name}!\") // 42"),
-    (DiffLineKind::Context, "}"),
+const PREVIEW_ROWS: [(DiffLineType, &str); 4] = [
+    (DiffLineType::Context, "fn greet(name: &str) -> String {"),
+    (DiffLineType::Delete, "    format!(\"Hello, {}!\", name)"),
+    (
+        DiffLineType::Insert,
+        "    format!(\"Hello, {name}!\") // 42",
+    ),
+    (DiffLineType::Context, "}"),
 ];
 /// The sample beside the list from this width on.
 const SIDE_BY_SIDE_MIN_WIDTH: u16 = 96;
@@ -205,12 +210,21 @@ pub(crate) fn preview_lines(width: u16) -> Vec<Line<'static>> {
         .collect();
     let highlighted = highlight_lines("preview.rs", &texts).unwrap_or_default();
     let mut highlighted = highlighted.into_iter();
+    let style = current_diff_render_style_context();
     PREVIEW_ROWS
         .iter()
         .filter_map(|(kind, text)| {
-            push_wrapped_diff_line(*kind, text, highlighted.next(), None, usize::from(width))
-                .into_iter()
-                .next()
+            let spans = highlighted.next();
+            push_wrapped_diff_line(
+                *kind,
+                text,
+                spans.as_deref(),
+                None,
+                usize::from(width),
+                style,
+            )
+            .into_iter()
+            .next()
         })
         .collect()
 }

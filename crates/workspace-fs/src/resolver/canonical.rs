@@ -158,6 +158,7 @@ pub(super) fn canonical_patch_change(change: &PatchFilePlan) -> CanonicalPatchCh
             destination,
             content,
             content_sha256,
+            ..
         } => CanonicalPatchChange::Update {
             source: source.identity.clone(),
             source_sha256: source_sha256.clone(),

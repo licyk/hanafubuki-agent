@@ -216,6 +216,7 @@ fn red_styles() -> hanafubuki_agent_contracts::AgentToolDisplayMetadata {
                 },
             }],
         }),
+        ..Default::default()
     }
 }
 

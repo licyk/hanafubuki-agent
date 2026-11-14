@@ -18,10 +18,10 @@ pub mod test_support;
 pub use model::{
     ApplyPatchRequest, DeletePathRequest, DirectoryEntry, DirectoryListing, ExternalPathReport,
     FileMutationResult, FileReadResult, ListDirectoryRequest, MovePathRequest, MovePathResult,
-    PatchMutationResult, ReadFileRequest, SearchMatch, SearchResults, SearchTextRequest,
-    SelectedBinaryFile, WorkspaceFsError, WorkspaceFsRequest, WorkspaceFsResult, WorkspacePathKind,
-    WriteFileRequest, MAX_DIRECTORY_DEPTH, MAX_LIST_ENTRIES, MAX_PATCH_BYTES, MAX_PATCH_FILES,
-    MAX_PATH_BYTES, MAX_READ_FILE_BYTES, MAX_READ_PAGE_BYTES, MAX_SEARCH_BYTES,
+    PatchHunkStart, PatchMutationResult, ReadFileRequest, SearchMatch, SearchResults,
+    SearchTextRequest, SelectedBinaryFile, WorkspaceFsError, WorkspaceFsRequest, WorkspaceFsResult,
+    WorkspacePathKind, WriteFileRequest, MAX_DIRECTORY_DEPTH, MAX_LIST_ENTRIES, MAX_PATCH_BYTES,
+    MAX_PATCH_FILES, MAX_PATH_BYTES, MAX_READ_FILE_BYTES, MAX_READ_PAGE_BYTES, MAX_SEARCH_BYTES,
     MAX_SEARCH_FILE_BYTES, MAX_SEARCH_QUERY_BYTES, MAX_SEARCH_RESULTS, MAX_WRITE_BYTES,
     MIN_READ_PAGE_BYTES,
 };

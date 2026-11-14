@@ -41,6 +41,7 @@ mod model_reasoning;
 mod model_vision;
 mod network_proxy;
 mod packages;
+mod patch_lines;
 #[cfg(unix)]
 mod pipeline;
 mod plugin_faults;

@@ -1,0 +1,12 @@
+---
+source: crates/tui/src/history_cell/tool/tests/diffs.rs
+assertion_line: 52
+expression: "expanded(preview, 80)"
+---
+• Edited 2 files (+2 -1)
+  └ a.txt (+1 -1)
+    1 -one
+    1 +one changed
+
+    b.txt (+1 -0)
+    1 +new
