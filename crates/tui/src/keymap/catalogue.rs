@@ -26,7 +26,7 @@ macro_rules! action {
 }
 
 /// Every action, in [`Action`]'s order.
-pub(crate) static ACTIONS: [ActionSpec; 75] = [
+pub(crate) static ACTIONS: [ActionSpec; 76] = [
     action!(
         Leader,
         Global,
@@ -124,6 +124,13 @@ pub(crate) static ACTIONS: [ActionSpec; 75] = [
         "open_agents",
         "Open the command center (Left on an empty composer opens it too)",
         []
+    ),
+    action!(
+        OpenTasks,
+        Global,
+        "open_tasks",
+        "Open background tasks",
+        ["leader t"]
     ),
     action!(
         InterruptTurn,

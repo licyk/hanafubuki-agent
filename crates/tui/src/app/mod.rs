@@ -245,6 +245,9 @@ impl App {
                 self.queue_settings_page_check();
             }
             AppEvent::AgentBackground(event) => {
+                if let hanafubuki_agent::AgentBackgroundEvent::Changed { root } = &event {
+                    self.refresh_tasks(*root);
+                }
                 if let Some(update) = self.bridge.background(event) {
                     self.show_update(update);
                 }
@@ -360,7 +363,10 @@ impl App {
         tui: &mut Tui<B>,
         mouse: MouseEvent,
     ) {
-        if self.handle_settings_mouse(tui, mouse) || self.handle_agents_mouse(tui, mouse) {
+        if self.workspace.tasks.is_some()
+            || self.handle_settings_mouse(tui, mouse)
+            || self.handle_agents_mouse(tui, mouse)
+        {
             return;
         }
         if self.overlay.is_none() && self.handle_workspace_mouse(mouse) {
@@ -590,7 +596,7 @@ impl App {
             }
             return Ok(());
         }
-        if self.draw_agents_center(tui)? {
+        if self.draw_tasks(tui)? || self.draw_agents_center(tui)? {
             return Ok(());
         }
         if self.draw_settings_center(tui)? {

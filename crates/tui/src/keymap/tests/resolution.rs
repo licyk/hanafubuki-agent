@@ -232,6 +232,7 @@ fn the_default_leader_yields_to_a_key_bound_to_it() {
             "ctrl-q = EqualizePaneWidths",
             "ctrl-q z TogglePaneZoom",
             "ctrl-q x HidePane",
+            "ctrl-q t OpenTasks",
             "ctrl-q p OpenPresets"
         ]
     );

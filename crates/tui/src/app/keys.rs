@@ -43,6 +43,9 @@ impl App {
         key: KeyEvent,
     ) -> bool {
         self.tail_mouse.released = false;
+        if self.handle_tasks_key(tui, key) {
+            return true;
+        }
         if self.resume_picker.is_some() {
             return self.handle_picker_key(tui, key);
         }

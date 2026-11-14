@@ -137,6 +137,19 @@ fn commands_with_an_argument_act_on_it_at_once() {
 }
 
 #[test]
+fn terminal_list_links_to_the_task_manager() {
+    let lines = crate::commands::terminals::terminal_lines(&[]);
+    insta::assert_snapshot!(
+        "ps_empty_tasks_hint",
+        lines
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
+}
+
+#[test]
 fn reports_ask_the_agent_and_init_submits_the_prompt() {
     let (mut chat, events) = chat(false);
     for (line, expected) in [

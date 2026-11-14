@@ -124,6 +124,7 @@ fn status_preview(values: &SurfaceValues, item: StatusLineItem) -> Option<String
             match item {
                 StatusLineItem::Model => "gpt-5",
                 StatusLineItem::ModelWithReasoning => "gpt-5 high",
+                StatusLineItem::BackgroundTasks => "2 agents · 1 terminal",
                 StatusLineItem::Reasoning => "high",
                 StatusLineItem::CurrentDir => "~/project",
                 StatusLineItem::GitBranch => "main",

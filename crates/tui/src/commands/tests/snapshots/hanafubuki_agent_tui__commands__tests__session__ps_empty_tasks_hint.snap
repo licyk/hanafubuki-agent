@@ -1,0 +1,7 @@
+---
+source: crates/tui/src/commands/tests/session.rs
+expression: "lines.iter().map(ToString::to_string).collect::<Vec<_>>().join(\"\\n\")"
+---
+/ps
+  • No background terminals.
+/tasks to manage

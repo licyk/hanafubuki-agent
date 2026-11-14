@@ -204,6 +204,44 @@ impl SurfaceValues {
                 })
             }
             StatusLineItem::Reasoning => effort,
+            StatusLineItem::BackgroundTasks => {
+                let background = status.and_then(|status| status.background.as_ref())?;
+                let mut parts = Vec::new();
+                if background.work.agents > 0 {
+                    parts.push(format!(
+                        "{} {}",
+                        background.work.agents,
+                        if background.work.agents == 1 {
+                            "agent"
+                        } else {
+                            "agents"
+                        }
+                    ));
+                }
+                if background.work.terminals > 0 {
+                    parts.push(format!(
+                        "{} {}",
+                        background.work.terminals,
+                        if background.work.terminals == 1 {
+                            "terminal"
+                        } else {
+                            "terminals"
+                        }
+                    ));
+                }
+                if parts.is_empty() {
+                    return None;
+                }
+                let prefix = if matches!(
+                    background.wake,
+                    hanafubuki_agent::AgentWakeState::Paused { .. }
+                ) {
+                    "paused · "
+                } else {
+                    ""
+                };
+                Some(format!("{prefix}{}", parts.join(" · ")))
+            }
             StatusLineItem::CurrentDir => Some(display_directory(&self.directory)),
             StatusLineItem::GitBranch => status.and_then(|status| status.git_branch.clone()),
             StatusLineItem::ContextRemaining => {

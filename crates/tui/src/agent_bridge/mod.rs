@@ -46,6 +46,7 @@ mod start;
 mod status;
 mod steering;
 mod subagents;
+mod tasks;
 mod workspace;
 
 use std::path::PathBuf;

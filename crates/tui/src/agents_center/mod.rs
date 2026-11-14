@@ -75,6 +75,7 @@ pub(crate) enum CenterAction {
 /// One listed session, with its status and its heading.
 #[derive(Clone, Debug)]
 pub(crate) struct Row {
+    pub(crate) pending_wake_events: usize,
     pub(crate) summary: AgentSessionSummary,
     pub(crate) status: Status,
     pub(crate) heading: Heading,
@@ -224,6 +225,10 @@ impl AgentsCenter {
                 let place = root.cwd.as_ref().and_then(|cwd| self.places.get(cwd));
                 let pinned = self.marks.pinned.contains(&id);
                 Row {
+                    pending_wake_events: self
+                        .live
+                        .get(&id)
+                        .map_or(0, |live| live.pending_wake_events),
                     heading: if pinned {
                         Heading::pinned()
                     } else {

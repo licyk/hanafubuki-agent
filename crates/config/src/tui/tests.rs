@@ -30,6 +30,7 @@ fn missing_preferences_are_the_defaults() {
             theme: None,
             status_line: vec![
                 "model-with-reasoning".to_string(),
+                "background-tasks".to_string(),
                 "current-dir".to_string(),
                 "session-title".to_string(),
             ],

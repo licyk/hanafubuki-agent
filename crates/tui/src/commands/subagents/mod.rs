@@ -67,6 +67,7 @@ pub(crate) fn status_cell(statuses: &[AgentSubagentStatus]) -> PlainHistoryCell 
     ];
     if statuses.is_empty() {
         lines.push("  • No subagents in this conversation.".italic().into());
+        lines.push("/tasks to manage".dim().into());
         return PlainHistoryCell::new(lines);
     }
     for status in statuses {
@@ -83,6 +84,7 @@ pub(crate) fn status_cell(statuses: &[AgentSubagentStatus]) -> PlainHistoryCell 
         );
         lines.push(Line::from(vec!["    ".into(), answer]));
     }
+    lines.push("/tasks to manage".dim().into());
     PlainHistoryCell::new(lines)
 }
 

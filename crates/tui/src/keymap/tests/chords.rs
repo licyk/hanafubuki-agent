@@ -15,6 +15,31 @@ const MAIN: [Context; 5] = [
     Context::Transcript,
 ];
 
+#[test]
+fn leader_t_opens_background_tasks() {
+    let keymap = Keymap::default();
+    let mut state = ChordState::default();
+    let now = Instant::now();
+    assert_eq!(
+        state.feed(
+            &keymap,
+            &key(KeyCode::Char('x'), KeyModifiers::CONTROL),
+            &MAIN,
+            now
+        ),
+        ChordStep::Wait
+    );
+    let ChordStep::Complete(token) = state.feed(
+        &keymap,
+        &key(KeyCode::Char('t'), KeyModifiers::NONE),
+        &MAIN,
+        now,
+    ) else {
+        panic!("task chord missing");
+    };
+    assert!(keymap.matches(Action::OpenTasks, &token));
+}
+
 fn key(code: KeyCode, modifiers: KeyModifiers) -> KeyEvent {
     KeyEvent::new(code, modifiers)
 }

@@ -100,6 +100,8 @@ Fullscreen 下还有阅读对话的按键：Page Up/Page Down、F3、F4、Ctrl-S
   ctrl + r  Search history       f4                 Inspect activity
   esc esc   Edit last message    ctrl + c           Quit
 
+  ctrl + x, t  后台任务
+
   /keymap customize
 ```
 
@@ -174,6 +176,7 @@ Fullscreen 下还有阅读对话的按键：Page Up/Page Down、F3、F4、Ctrl-S
 | `/presets`                 | 在[设置中心](#config)打开预设的页面：运行、新建、编辑和删除保存在 0 到 9 号位置的输入（[见下文](#presets)）                                                                                                                                                                                                                                                                                                                                                 | 可用                           |
 | `/memories`                | 打开[设置中心](#config)的 Memory 标签页：使用和生成[记忆](/docs/memory#status-reset)，以及它的 Memory store 页面：本会话是否参与记忆和重置                                                                                                                                                                                                                                                                                                                  | 可用                           |
 | `/warnings`                | 列出本次运行的警告，可以复制或忽略（[见下文](#warnings)）                                                                                                                                                                                                                                                                                                                                                                                                   | 可用                           |
+| `/tasks`                   | 管理后台 Agent 和终端；查看、关闭或恢复暂停的唤醒                                                                                                                                                                                                                                                                                                                                                                                                           | 是                             |
 | `/ps`                      | 列出会话的后台终端：命令、状态、目录、最近的输出                                                                                                                                                                                                                                                                                                                                                                                                            | 可用                           |
 | `/stop`、`/clean`          | 确认后停止会话的所有后台终端                                                                                                                                                                                                                                                                                                                                                                                                                                | 可用                           |
 | `/clear [name]`            | 清空终端的滚动历史和屏幕（Fullscreen 下清空对话）并离开会话；下一个会话使用这个名字                                                                                                                                                                                                                                                                                                                                                                         | 不可用                         |
@@ -348,7 +351,7 @@ Esc 返回上一页，在标签页上回到设置中心。用 `--safe-mode` 启�
 - **Fullscreen**：旁路对话是停靠在对话右侧的窗格，有自己的对话、输入框和状态栏；每个窗格顶部有一行标题，两个窗格之间有分隔线。窗格打开时获得焦点。它的消息发给旁路会话，主对话的消息发给主会话，两边都保持运行：一边的回合在你于另一边输入时继续进行。屏幕窄于 100 列或放大（`leader z`）时，获得焦点的对话占满屏幕，上方显示它的标题。用鼠标拖动分隔线，或用 `leader <` 和 `leader >`，调整窗格宽度；`leader =` 让两个窗格等宽；在另一个窗格中单击会让它获得焦点。
 - **Scrollback**：界面切换到旁路对话：先在回滚区写入 `Side conversation · Esc returns · /side close closes it`，再写旁路对话。这期间主对话写出的内容会先保留，回到主对话时再写入。
 - **返回和关闭**：在空输入框上、没有任务运行时按 Esc（`chat.edit_previous` 的按键），或 `leader left`，回到主对话。旁路对话保持打开：`/side`、`leader right` 或 `leader tab` 会再次显示它，连同它的记录和草稿。`/side close` 或 `leader x` 关闭它：中断它正在运行的回合并丢弃这个会话（`Side conversation closed.`）。主对话切换到别的会话时（`/new`、`/resume`、`/fork` 等），它也会被关闭。
-- 旁路对话中的**命令**是 Codex 在那里允许的那些：`/copy`、`/agents`、`/export`、`/raw`、`/diff`、`/mention`、`/status`、`/warnings`、`/pwd` 和 `/side`。弹出列表只列出这些；其他命令会提示 `'/x' is unavailable here; Esc returns to the main conversation.`。旁路对话中之前的消息不能编辑。
+- 旁路对话支持以下查看**命令**：`/copy`、`/agents`、`/tasks`、`/export`、`/raw`、`/diff`、`/mention`、`/status`、`/warnings`、`/pwd` 和 `/side`。弹出列表只列出这些；其他命令会提示 `'/x' is unavailable here; Esc returns to the main conversation.`。旁路对话中之前的消息不能编辑。
 
 窗格的按键是[按键映射](#keymap)中的动作，默认是前导键（Ctrl-X）再按一个键：
 
@@ -369,10 +372,21 @@ Esc 返回上一页，在标签页上回到设置中心。用 `--safe-mode` 启�
 `/subagents` 把会话的[子代理](/docs/sessions#subagents)写入对话，每个都带有状态（`running`、`waiting`、`idle`、`failed` 或 `closed`）、它运行的模型和推理强度（使用其 Provider 的默认值时为 `default`），例如 `counter  idle · gpt-5.4-mini · low`，以及它最近一次回答的开头，然后打开它们的列表，每一项的说明也是这样（`idle · gpt-5.4-mini · low`，然后是回答的开头）；有子代理在运行时，列表会跟着它们的状态更新。Enter 用选中的子代理代替会话显示，上方是 `Subagent NAME · from PARENT · Esc or ctrl-x left returns`：它的记录和 `/resume` 显示的一样；它在运行时，它的回合会继续显示（回答逐步输出，工具调用逐个出现，它等待的批准在那里询问，包括显示它之前就已提出的批准，Esc 中断它）。在那里发送的消息发给这个子代理。
 
 - 在空输入框上、没有任务运行时按 Esc，或 `leader left`、`leader x`，回到会话；会话自己的回合在这期间一直在继续。
-- **唤醒**：模型在子代理工作时结束了回合的会话，会不运行任何东西地等待它们；在工作行的位置显示 `Waiting for 1 agent — resumes by itself`（或 `2 agents`）。子代理结束或给它发消息时，会话自行恢复：一个回合开始，以列出所报告内容的 `• Background updates` 单元开头，模型像在任何回合中一样回应它（`wakeOnBackgroundTasks` 打开时，默认如此；[工具](/docs/tools#subagents)）。显示子代理或旁路对话时也是如此：主对话的回合在那里运行，你回来时就能看到。这期间你输入的消息是你自己的回合，它会先读到在它之前报告的内容。在会话的回合上按 Esc 会暂停它的唤醒，直到你的下一条消息，这一行显示 `Paused: 1 agent still running — send a message to resume`；没有你的消息时连续 100 个被唤醒的回合也会暂停。其他会话的子代理不会在这里唤醒任何东西：它们报告的内容随那个会话的下一个回合读到。
+- **唤醒**：模型在子代理工作时结束了回合的会话，会不运行任何东西地等待它们；在工作行的位置显示 `Waiting for 1 agent — resumes by itself · /tasks`（或 `2 agents`）。子代理结束或给它发消息时，会话自行恢复：一个回合开始，以列出所报告内容的 `• Background updates` 单元开头，模型像在任何回合中一样回应它（`wakeOnBackgroundTasks` 打开时，默认如此；[工具](/docs/tools#subagents)）。显示子代理或旁路对话时也是如此：主对话的回合在那里运行，你回来时就能看到。这期间你输入的消息是你自己的回合，它会先读到在它之前报告的内容。在会话的回合上按 Esc 会暂停它的唤醒，直到你的下一条消息，这一行显示 `Paused: 1 agent still running — send a message to resume`；没有你的消息时连续 100 个被唤醒的回合也会暂停。其他会话的子代理不会在这里唤醒任何东西：它们报告的内容随那个会话的下一个回合读到。
 - 在空输入框上按 **Alt+Right 和 Alt+Left**，按这个列表的顺序在会话及其子代理之间循环切换：从会话到第一个子代理，从最后一个回到会话。没有子代理时提示 `This session has no subagents.`；打开了旁路对话时，提示先关闭它。
 - 在 Fullscreen 中子代理占满屏幕；在 Scrollback 中界面切换到它，和[旁路对话](#side)一样。它可用的命令和旁路对话相同。打开了旁路对话时不能显示子代理：先关闭旁路对话。
 - **子代理的审批和问题**：子代理使用父会话的权限模式。后台事件流在请求发出时将它显示出来，以 `Subagent NAME:` 标记；你的回答发给这个子代理。父会话回合结束时请求仍保留，在别处回答后或子代理回合结束时关闭。旁路对话获得焦点时，请求在主对话中等待：Fullscreen 显示主对话窗格，Scrollback 则在返回时显示。状态列表也由事件流刷新，包括模型变更；空闲子代理不再被轮询。只有正在显示其对话的子代理，仍通过日志读取流式输出。
+
+## 后台任务 [#tasks]
+
+`/tasks` 或 `leader t`（默认为 Ctrl+X 后按 T）打开后台任务管理器，回合运行时也可使用。在 Fullscreen 和 Scrollback 中均占满屏幕；Esc 返回会话。
+
+- **Agents** 显示会话的子 Agent 树，以及各自的状态、持续时间、模型和角色。选中后查看最初的任务、最近回答及其终端；Enter 打开该 Agent 的会话。waiting 表示仍有后台工作，closed 表示不再接受消息。
+- **Terminals** 显示整棵树的后台终端，包括命令、状态、持续时间、所属 Agent、目录及最近三行输出。Enter 展开所选终端现有的输出；Page Up、Page Down 滚动详情。
+- Tab 切换分区。**x** 在确认后关闭所选 Agent（连同其后代）或终端。Terminals 中的 **X** 在确认后停止根会话的全部终端。停止后，其 Agent 会收到后台更新。
+- 页脚显示 `wake: on`、`wake: paused (you interrupted)` 或 `wake: off (wakeOnBackgroundTasks)`。**r** 恢复暂停的唤醒，也会处理后代排队的更新；不会启用已关闭的唤醒策略。
+
+视图在后台工作发生变化时刷新，不逐行刷新输出；重新打开会读取最新输出。`/ps` 和 `/subagents` 保留简短列表，并以 `/tasks to manage` 结尾。模型等待后台工作时，输入框仍可编辑，等待行提示 `/tasks`。命令中心以 `N updates` 标记有待处理唤醒事件的会话。
 
 ## 指挥中心 [#agents]
 
@@ -743,23 +757,24 @@ flowchart TD
 
 输入框下方的底栏显示状态栏：关于会话的若干项目，以 `·` 分隔。还没有值的项目不显示：不在 Git 仓库中时没有分支，会话有标题之前没有标题。`tui.statusLineColors` 为真时，每个项目取主题中的颜色；否则整行变暗。
 
-| 项目                                        | 显示                                                                                                   |
-| ------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `model`                                     | 模型                                                                                                   |
-| `model-with-reasoning`                      | 模型及其推理强度（默认显示）                                                                           |
-| `reasoning`                                 | 推理强度                                                                                               |
-| `current-dir`                               | 工作目录，主目录写作 `~`（默认显示）                                                                   |
-| `git-branch`                                | 第一个工作区目录检出的分支，分离状态时是短提交号，从 `.git` 读取                                       |
-| `context-remaining`、`context-used`         | `Context 75% left`、`Context 25% used`，知道模型的上下文窗口之后显示                                   |
-| `used-tokens`                               | 会话的输入和输出 token 总数，有用量之后显示                                                            |
-| `total-input-tokens`、`total-output-tokens` | `12K in`、`3.4K out`                                                                                   |
-| `session-id`                                | 会话 ID                                                                                                |
-| `session-title`                             | 会话标题（默认显示）                                                                                   |
-| `task-progress`                             | `Tasks 2/5`：最近的任务计划中已完成的步骤数和总步骤数                                                  |
-| `permission-mode`                           | 会话的权限模式，没有时是配置的 `permissionMode`                                                        |
-| `goal`                                      | `Goal: 目标 (状态)`，会话设有目标时显示                                                                |
-| `compression`                               | `3 blocks, 42K saved`：[分层压缩](#compression)的活动块数和折叠所替换的 token 数，会话运行过它之后显示 |
-| `role`                                      | `Role: 名字`，会话有 `default` 以外的[角色](#role)时显示                                               |
+| 项目                                        | 显示                                                                                                     |
+| ------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `model`                                     | 模型                                                                                                     |
+| `model-with-reasoning`                      | 模型及其推理强度（默认显示）                                                                             |
+| `background-tasks`                          | 运行中的 Agent 和终端，例如 `2 agents · 1 terminal`；唤醒暂停时带 `paused ·`。无后台工作时省略；默认显示 |
+| `reasoning`                                 | 推理强度                                                                                                 |
+| `current-dir`                               | 工作目录，主目录写作 `~`（默认显示）                                                                     |
+| `git-branch`                                | 第一个工作区目录检出的分支，分离状态时是短提交号，从 `.git` 读取                                         |
+| `context-remaining`、`context-used`         | `Context 75% left`、`Context 25% used`，知道模型的上下文窗口之后显示                                     |
+| `used-tokens`                               | 会话的输入和输出 token 总数，有用量之后显示                                                              |
+| `total-input-tokens`、`total-output-tokens` | `12K in`、`3.4K out`                                                                                     |
+| `session-id`                                | 会话 ID                                                                                                  |
+| `session-title`                             | 会话标题（默认显示）                                                                                     |
+| `task-progress`                             | `Tasks 2/5`：最近的任务计划中已完成的步骤数和总步骤数                                                    |
+| `permission-mode`                           | 会话的权限模式，没有时是配置的 `permissionMode`                                                          |
+| `goal`                                      | `Goal: 目标 (状态)`，会话设有目标时显示                                                                  |
+| `compression`                               | `3 blocks, 42K saved`：[分层压缩](#compression)的活动块数和折叠所替换的 token 数，会话运行过它之后显示   |
+| `role`                                      | `Role: 名字`，会话有 `default` 以外的[角色](#role)时显示                                                 |
 
 终端标题（OSC 0）有自己的项目，以 `|` 连接；默认是旋转指示、会话标题和项目名称。
 
@@ -823,6 +838,7 @@ yank = []
 | `global.toggle_pane_zoom`         | `leader z`                                                            | 只显示获得焦点的窗格，或恢复两个窗格（Fullscreen）           |
 | `global.hide_pane`                | `leader x`                                                            | 关闭旁路对话，或离开正在显示的子代理                         |
 | `global.open_agents`              | 无                                                                    | 打开指挥中心（在空输入框上按 Left 也会打开）                 |
+| `global.open_tasks`               | `leader t`                                                            | 打开后台任务管理器                                           |
 | `chat.interrupt_turn`             | `esc`                                                                 | 中断正在运行的回合                                           |
 | `chat.edit_previous`              | `esc`                                                                 | 在空输入框上按两次：编辑之前的消息                           |
 | `chat.edit_queued_message`        | `shift-left`、`alt-up`                                                | 把最后一条排队的消息放回输入框                               |

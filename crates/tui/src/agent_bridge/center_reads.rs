@@ -93,6 +93,7 @@ pub(crate) struct LiveSession {
     pub(crate) waiting: Option<Waiting>,
     /// What its turn does now: an activity's action and subject.
     pub(crate) activity: Option<String>,
+    pub(crate) pending_wake_events: usize,
 }
 
 /// What a session waits on you for.
@@ -286,6 +287,7 @@ fn live_session(snapshot: AgentSessionRuntimeSnapshot) -> LiveSession {
         revision: snapshot.revision,
         waiting,
         activity,
+        pending_wake_events: snapshot.pending_wake_events,
     }
 }
 

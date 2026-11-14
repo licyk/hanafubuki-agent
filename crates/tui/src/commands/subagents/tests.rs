@@ -94,6 +94,7 @@ fn the_status_cell_lists_each_subagent_with_its_model_and_latest_answer() {
         Twelve files in src. The rest of the answer goes on past the picker's sixty characters.
       • writer  running · qwen3-coder-480b-a35b-instruct · default
         No answer yet.
+    /tasks to manage
     ");
     insta::assert_snapshot!("status_cell_36", wrapped(&status_cell(&statuses()), 36));
     assert!(text(&status_cell(&[]), 80).contains("No subagents in this conversation."));

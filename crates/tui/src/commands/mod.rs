@@ -49,6 +49,7 @@ mod setup_sandbox;
 mod side;
 mod statusline;
 pub(crate) mod subagents;
+mod tasks;
 mod terminals;
 mod theme;
 mod title;
@@ -89,7 +90,7 @@ pub(crate) use subagents::SUBAGENTS;
 pub(crate) use warnings::{show_warnings, WARNINGS};
 
 /// Every command, in presentation order: the most used first.
-pub(crate) static COMMANDS: [&CommandSpec; 50] = [
+pub(crate) static COMMANDS: [&CommandSpec; 51] = [
     &model::MODEL,
     &effort::EFFORT,
     &providers::PROVIDERS,
@@ -113,6 +114,7 @@ pub(crate) static COMMANDS: [&CommandSpec; 50] = [
     &review::REVIEW,
     &side::SIDE,
     &subagents::SUBAGENTS,
+    &tasks::TASKS,
     &agents::AGENTS,
     &goal::GOAL,
     &copy::COPY,

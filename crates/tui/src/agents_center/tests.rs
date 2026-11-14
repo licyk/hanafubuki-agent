@@ -24,6 +24,18 @@ use crate::tui_state::AgentsMarks;
 const MINUTE: u128 = 60_000;
 const NOW: u128 = 1_000 * MINUTE;
 
+#[test]
+fn queued_updates_are_visible_without_a_running_turn() {
+    let mut center = center(
+        vec![summary(1, "Waiting for updates", "completed", 0)],
+        vec![],
+    );
+    let mut session = live(1, None, 1);
+    session.pending_wake_events = 3;
+    center.ingest(CenterRead::Live(vec![session]));
+    assert!(screen(&mut center, 120, 24).contains("3 updates"));
+}
+
 fn summary(id: u64, title: &str, phase: &str, minutes_ago: u128) -> AgentSessionSummary {
     serde_json::from_value(json!({
         "sessionId": id,
@@ -57,6 +69,7 @@ fn child(id: u64, parent: u64, phase: &str) -> AgentSessionSummary {
 
 fn live(id: u64, parent: Option<u64>, revision: u64) -> LiveSession {
     LiveSession {
+        pending_wake_events: 0,
         session_id: AgentSessionId::new(id),
         parent: parent.map(AgentSessionId::new),
         revision: AgentRevision::new(revision),

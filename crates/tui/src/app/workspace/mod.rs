@@ -30,6 +30,7 @@ mod agents;
 mod keys;
 mod panes;
 mod settings;
+mod tasks;
 
 use std::io::{self, Write};
 use std::sync::Arc;
@@ -86,6 +87,7 @@ pub(crate) enum WorkspaceEvent {
     FocusOther,
     /// `/agents`.
     OpenAgents,
+    Tasks(Box<crate::tasks::TasksEvent>),
     /// `/config [target]`: the settings center, at the tab, section,
     /// collection or page named; a record's page on `record`.
     OpenSettings {
@@ -185,6 +187,7 @@ pub(super) struct Workspace {
     /// The parked conversation whose event is being handled.
     handling: Option<Focus>,
     agents: Option<AgentsCenter>,
+    pub(super) tasks: Option<crate::tasks::Tasks>,
     /// The command center's reads, while it is open.
     agents_reads: Option<CenterReader>,
     /// The session the main conversation showed, as last noted.
@@ -394,6 +397,7 @@ impl App {
                 }
             }
             WorkspaceEvent::OpenAgents => self.open_agents_center(tui),
+            WorkspaceEvent::Tasks(event) => self.tasks_event(tui, *event),
             WorkspaceEvent::OpenSettings { target, record } => {
                 self.open_settings_center(tui, target, record)
             }
@@ -650,6 +654,10 @@ impl App {
         }
         if keymap::matches(Action::OpenAgents, &key) {
             self.open_agents_center(tui);
+            return true;
+        }
+        if keymap::matches(Action::OpenTasks, &key) {
+            self.tasks_event(tui, crate::tasks::TasksEvent::Open);
             return true;
         }
         let returns = self.workspace.second_focused()

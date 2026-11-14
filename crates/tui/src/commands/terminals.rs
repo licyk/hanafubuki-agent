@@ -79,6 +79,7 @@ pub(super) fn terminal_lines(terminals: &[AgentBackgroundTerminalSnapshot]) -> V
     let mut lines: Vec<Line<'static>> = vec!["/ps".magenta().into()];
     if terminals.is_empty() {
         lines.push("  • No background terminals.".italic().into());
+        lines.push("/tasks to manage".dim().into());
         return lines;
     }
     for terminal in terminals {
@@ -98,5 +99,6 @@ pub(super) fn terminal_lines(terminals: &[AgentBackgroundTerminalSnapshot]) -> V
             lines.push(Line::from(vec![prefix.dim(), output.clone().dim()]));
         }
     }
+    lines.push("/tasks to manage".dim().into());
     lines
 }

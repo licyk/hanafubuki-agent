@@ -42,6 +42,7 @@ pub(crate) fn ids<T: SurfaceItem>(items: &[T]) -> Vec<String> {
 pub(crate) enum StatusLineItem {
     Model,
     ModelWithReasoning,
+    BackgroundTasks,
     Reasoning,
     CurrentDir,
     GitBranch,
@@ -63,6 +64,7 @@ impl SurfaceItem for StatusLineItem {
     const ALL: &'static [Self] = &[
         Self::Model,
         Self::ModelWithReasoning,
+        Self::BackgroundTasks,
         Self::Reasoning,
         Self::CurrentDir,
         Self::GitBranch,
@@ -84,6 +86,7 @@ impl SurfaceItem for StatusLineItem {
         match self {
             Self::Model => "model",
             Self::ModelWithReasoning => "model-with-reasoning",
+            Self::BackgroundTasks => "background-tasks",
             Self::Reasoning => "reasoning",
             Self::CurrentDir => "current-dir",
             Self::GitBranch => "git-branch",
@@ -106,6 +109,7 @@ impl SurfaceItem for StatusLineItem {
         match self {
             Self::Model => "Current model name",
             Self::ModelWithReasoning => "Current model name with reasoning effort",
+            Self::BackgroundTasks => "Background agents and terminals (omitted when idle)",
             Self::Reasoning => "Current reasoning effort",
             Self::CurrentDir => "Current working directory",
             Self::GitBranch => "Current Git branch (omitted when unavailable)",
@@ -149,7 +153,9 @@ impl StatusLineItem {
             Self::SessionTitle | Self::Goal => {
                 (&["markup.heading", "entity.name.section"], Color::Magenta)
             }
-            Self::TaskProgress => (&["markup.inserted", "constant.numeric"], Color::Green),
+            Self::TaskProgress | Self::BackgroundTasks => {
+                (&["markup.inserted", "constant.numeric"], Color::Green)
+            }
             Self::PermissionMode | Self::Role => {
                 (&["storage.modifier", "keyword.operator"], Color::Cyan)
             }

@@ -5696,11 +5696,26 @@ its next pin, and any module-size exception.
       terminal loss; stdin and duplicate starts retain the initial call.
       The cohesive activity tracker's reviewed size ceiling rises from
       647 to 655 code lines for that identity plumbing (no unrelated split).
-- [ ] R8: the terminal interface. `/tasks` (the manager: a tree of agents,
+- [x] R8: the terminal interface. `/tasks` (the manager: a tree of agents,
       the terminals, inspect, close, resume), the `background-tasks`
       status item in the default status line, the waiting and paused
       lines, `open_tasks` on `leader t` with its `?` row, and the `/ps`
       and `/subagents` hints.
+  - Reads the tree and details off the UI loop, refreshed by `Changed`;
+    inherited transcript pages are skipped using each item's source session
+    so the detail is the child's own assigned task. Closing an agent or
+    terminal asks first, and `r` uses the explicit tree resume operation.
+    Both Scrollback and Fullscreen keep the main conversation running.
+  - Added the command-center queued-update count, the default background
+    status item, the leader chord and shortcut row, bilingual reference
+    sections and original-source notices. Terminal scrolling uses actual
+    rendered row heights, including terminals with no output.
+  - Validated 87 scoped TUI tests, including snapshots, keyboard close and
+    resume in both modes, a fork with more than one inherited transcript
+    page, and silent/mixed-output terminal selection; all 9 configuration
+    TUI tests pass. `cargo xtask check`, formatting and scoped Clippy pass.
+    The coordinator runs merged workspace and platform CI; no local
+    Windows/macOS or full workspace/site-build claim is made here.
 
 ## Plan: a registry-driven settings center, the command center, and the conversation timeline (2026-11-12)
 

@@ -67,6 +67,12 @@ pub(super) fn lines(props: &FooterProps<'_>, width: u16) -> Vec<Line<'static>> {
         );
     }
     session.push(keymap::hint(Action::OpenAgents), "Agents");
+    if !keymap::current().bindings(Action::OpenTasks).is_empty() {
+        session.entries.push(Shortcut {
+            key: keymap::current().label(Action::OpenTasks),
+            action: "Background tasks",
+        });
+    }
     if let Some(keys) = pair(Action::PreviousAgent, Action::NextAgent) {
         session.entries.push(Shortcut {
             key: keys,

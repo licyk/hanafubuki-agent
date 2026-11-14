@@ -1004,3 +1004,35 @@ reason = "Order-preserving JSON, standing in for the key order JavaScript's JSON
 [[original]]
 path = "crates/compression/tests/compression/scale.rs"
 reason = "A release timing harness of process_turn over long histories, written for this port."
+
+[[original]]
+path = "crates/tui/src/tasks/mod.rs"
+reason = "Background task manager over the Agent task snapshot and event feed, written for this port."
+
+[[original]]
+path = "crates/tui/src/tasks/render.rs"
+reason = "Background task manager over the Agent task snapshot and event feed, written for this port."
+
+[[original]]
+path = "crates/tui/src/tasks/input.rs"
+reason = "Background task manager over the Agent task snapshot and event feed, written for this port."
+
+[[original]]
+path = "crates/tui/src/tasks/tests.rs"
+reason = "Background task manager over the Agent task snapshot and event feed, written for this port."
+
+[[original]]
+path = "crates/tui/src/commands/tasks.rs"
+reason = "Background task manager over the Agent task snapshot and event feed, written for this port."
+
+[[original]]
+path = "crates/tui/src/agent_bridge/tasks.rs"
+reason = "Background task manager over the Agent task snapshot and event feed, written for this port."
+
+[[original]]
+path = "crates/tui/src/app/workspace/tasks.rs"
+reason = "Background task manager over the Agent task snapshot and event feed, written for this port."
+
+[[original]]
+path = "crates/tui/src/app/tests/tasks.rs"
+reason = "Background task manager over the Agent task snapshot and event feed, written for this port."

@@ -900,6 +900,7 @@ mod side;
 mod stability;
 mod streaming;
 mod subagents;
+mod tasks;
 mod thinking;
 mod tools;
 mod update_notice;

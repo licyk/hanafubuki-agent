@@ -152,7 +152,12 @@ impl Default for AgentTuiRendering {
 }
 
 /// Codex's defaults.
-const DEFAULT_STATUS_LINE: [&str; 3] = ["model-with-reasoning", "current-dir", "session-title"];
+const DEFAULT_STATUS_LINE: [&str; 4] = [
+    "model-with-reasoning",
+    "background-tasks",
+    "current-dir",
+    "session-title",
+];
 const DEFAULT_TERMINAL_TITLE: [&str; 3] = ["activity", "session-title", "project-name"];
 
 /// Whether the interface may use the terminal's alternate screen.

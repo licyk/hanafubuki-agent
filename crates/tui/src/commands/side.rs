@@ -15,7 +15,8 @@ use crate::app_event::AppEvent;
 /// shown) runs: Codex's `available_in_side_conversation`, those this
 /// interface has, and `/side` itself to close it.
 pub(crate) const SECOND_CONVERSATION_COMMANDS: &[&str] = &[
-    "copy", "agents", "export", "raw", "diff", "mention", "status", "warnings", "pwd", "side",
+    "copy", "agents", "tasks", "export", "raw", "diff", "mention", "status", "warnings", "pwd",
+    "side",
 ];
 
 pub(super) static SIDE: CommandSpec = CommandSpec {

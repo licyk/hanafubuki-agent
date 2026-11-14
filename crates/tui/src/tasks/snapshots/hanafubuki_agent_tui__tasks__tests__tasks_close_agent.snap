@@ -1,0 +1,27 @@
+---
+source: crates/tui/src/tasks/tests.rs
+expression: screen(&tasks)
+---
+Background tasks
+
+Agents · Tab switches section                               │ Details
+› explore_api  waiting (1 agent · 1 terminal) · 3m12s · test│explore_api
+    check_tests  running · 3m12s · test-model · default     │fixture · test-model · default
+                                                            │Role: explorer · 0 terminals
+                                                            │
+                                                            │Inspect the API and delegate its tests.
+                        ┌ Confirm ─────────────────────────────────────────────────────────────┐
+                        │Close explore_api and its 1 sub-agents? Its parent is told it was     │
+                        │closed.                                                               │
+                        │                                                                      │
+                        │› No, keep running    Yes, close                                      │
+                        │Tab chooses · Enter confirms · Esc cancels                            │
+                        └──────────────────────────────────────────────────────────────────────┘
+                                                            │
+                                                            │
+                                                            │
+                                                            │
+                                                            │
+                                                            │
+wake: on
+Enter inspect · x close · X stop terminals · r resume · Tab section · PgUp/PgDn details · Esc return

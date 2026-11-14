@@ -356,6 +356,11 @@ fn render_row(row: &Row, selected: bool, shown: bool, now: u128, line: Rect, buf
         (false, true) => " (hidden)",
         (false, false) => "",
     };
+    let suffix = if row.pending_wake_events > 0 {
+        format!("{suffix} · {} updates", row.pending_wake_events)
+    } else {
+        suffix.into()
+    };
     let room = usize::from(title_area.width).saturating_sub(suffix.len());
     let mut title: Span<'static> = truncate_text(&title_of(&row.summary), room).into();
     if selected || row.unread {

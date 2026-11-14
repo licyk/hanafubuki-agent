@@ -52,7 +52,7 @@ pub(crate) fn waiting_line(background: &AgentBackgroundStatus) -> Option<String>
         return None;
     }
     match background.wake {
-        AgentWakeState::On => Some(format!("Waiting for {work} — resumes by itself")),
+        AgentWakeState::On => Some(format!("Waiting for {work} — resumes by itself · /tasks")),
         AgentWakeState::Paused { .. } => Some(format!(
             "Paused: {work} still running — send a message to resume"
         )),

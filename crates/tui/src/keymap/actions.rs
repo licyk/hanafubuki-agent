@@ -79,6 +79,7 @@ pub(crate) enum Action {
     TogglePaneZoom,
     HidePane,
     OpenAgents,
+    OpenTasks,
     InterruptTurn,
     EditPrevious,
     EditQueuedMessage,

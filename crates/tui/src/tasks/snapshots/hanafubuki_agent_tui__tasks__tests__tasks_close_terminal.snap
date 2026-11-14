@@ -1,0 +1,27 @@
+---
+source: crates/tui/src/tasks/tests.rs
+expression: screen(&tasks)
+---
+Background tasks
+
+Terminals · Tab switches section                            │ Details
+› #12 cargo test --workspace · running · 3m02s · check_tests│cargo test --workspace
+    Running tests                                           │in /work/repo · exit None
+    test first ... ok                                       │
+    test second ... ok                                      │Compiling example
+                                                            │Running tests
+                        ┌ Confirm ─────────────────────────────────────────────────────────────┐
+                        │Close terminal #12? Its agent is told it was stopped.                 │
+                        │                                                                      │
+                        │› No, keep running    Yes, close                                      │
+                        │Tab chooses · Enter confirms · Esc cancels                            │
+                        │                                                                      │
+                        └──────────────────────────────────────────────────────────────────────┘
+                                                            │
+                                                            │
+                                                            │
+                                                            │
+                                                            │
+                                                            │
+wake: on
+Enter inspect · x close · X stop terminals · r resume · Tab section · PgUp/PgDn details · Esc return

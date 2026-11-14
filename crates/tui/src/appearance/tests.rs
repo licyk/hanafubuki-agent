@@ -11,6 +11,43 @@ use crate::app_event::{AppEvent, AppEventSender};
 use crate::bottom_pane::BottomPaneView;
 use crate::render::highlight::{resolve_theme_by_name, set_syntax_theme};
 
+#[test]
+fn background_tasks_counts_and_pause_come_from_the_session_status() {
+    use hanafubuki_agent::{
+        AgentBackgroundStatus, AgentBackgroundWork, AgentWakePause, AgentWakeState,
+    };
+    let mut appearance = appearance(&["background-tasks"], &[]);
+    let mut status = status();
+    for (agents, terminals, wake, expected) in [
+        (0, 0, AgentWakeState::On, None),
+        (2, 1, AgentWakeState::On, Some("2 agents · 1 terminal")),
+        (1, 0, AgentWakeState::On, Some("1 agent")),
+        (0, 3, AgentWakeState::Off, Some("3 terminals")),
+        (
+            2,
+            0,
+            AgentWakeState::Paused {
+                reason: AgentWakePause::PersonInterrupted,
+            },
+            Some("paused · 2 agents"),
+        ),
+    ] {
+        status.background = Some(AgentBackgroundStatus {
+            work: AgentBackgroundWork { agents, terminals },
+            pending_wake_events: 0,
+            wake,
+        });
+        appearance.values_mut().status = Some(status.clone());
+        assert_eq!(
+            appearance
+                .values
+                .status_value(StatusLineItem::BackgroundTasks)
+                .as_deref(),
+            expected
+        );
+    }
+}
+
 fn preferences(status_line: &[&str], terminal_title: &[&str]) -> AgentTuiPreferences {
     AgentTuiPreferences {
         status_line: status_line.iter().map(|id| id.to_string()).collect(),
@@ -226,13 +263,13 @@ fn the_status_line_setup_saves_the_items_in_their_order_and_the_colours() {
     let appearance = appearance(&["model", "current-dir"], &[]);
     let mut view = setup::status_line_setup(&appearance, tx);
     // The items shown come first: `model` is turned off; `git-branch`, the
-    // fifth, is turned on and moved up above `current-dir`.
+    // sixth, is turned on and moved up above `current-dir`.
     press(&mut view, KeyCode::Char(' '));
-    for _ in 0..4 {
+    for _ in 0..5 {
         press(&mut view, KeyCode::Down);
     }
     press(&mut view, KeyCode::Char(' '));
-    for _ in 0..3 {
+    for _ in 0..4 {
         press(&mut view, KeyCode::Left);
     }
     press(&mut view, KeyCode::Enter);
