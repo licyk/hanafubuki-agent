@@ -80,7 +80,7 @@ fn deltas_advance_transcript_head_without_rewriting_the_runtime_checkpoint() {
     let session_id = store.allocate_session_id().unwrap();
     store
         .create_session(AgentConversationCommit {
-            runtime: runtime(session_id, 0, 2),
+            runtime: runtime(session_id, 2, 2),
             history_mutations: vec![AgentHistoryMutation::AppendItem {
                 item: item(1, 0, "checkpoint"),
             }],
@@ -89,7 +89,7 @@ fn deltas_advance_transcript_head_without_rewriting_the_runtime_checkpoint() {
     store
         .append_delta(AgentConversationDelta {
             session_id,
-            session_revision: AgentRevision::new(1),
+            session_revision: AgentRevision::new(4),
             session_updated_at: 1_800_000_000_001,
             history_mutations: vec![AgentHistoryMutation::AppendItem {
                 item: item(2, 0, "delta"),
@@ -103,7 +103,7 @@ fn deltas_advance_transcript_head_without_rewriting_the_runtime_checkpoint() {
             .unwrap()
             .revision
             .value(),
-        0
+        4
     );
     let page = store
         .list_items_page(AgentTranscriptPageRequest {
@@ -114,7 +114,7 @@ fn deltas_advance_transcript_head_without_rewriting_the_runtime_checkpoint() {
             through_revision: None,
         })
         .unwrap();
-    assert_eq!(page.through_revision.value(), 1);
+    assert_eq!(page.through_revision.value(), 4);
     let mut delta_item = item(2, 0, "delta");
     delta_item.logical_order = 65_536;
     assert_eq!(page.items, vec![item(1, 0, "checkpoint"), delta_item]);
@@ -125,13 +125,16 @@ fn deltas_advance_transcript_head_without_rewriting_the_runtime_checkpoint() {
             .sessions[0]
             .revision
             .value(),
-        1
+        4
     );
 
     store.shutdown_session(session_id).unwrap();
     let mut files = Vec::new();
     collect_jsonl_files(&paths.active_sessions, &mut files).unwrap();
     let records = fs::read_to_string(&files[0]).unwrap();
+    let checkpoint: serde_json::Value =
+        serde_json::from_str(records.lines().next().unwrap()).unwrap();
+    assert_eq!(checkpoint["payload"]["runtimeCheckpoint"]["revision"], 2);
     let delta: serde_json::Value = serde_json::from_str(records.lines().nth(1).unwrap()).unwrap();
     assert!(delta["payload"].get("runtimeCheckpoint").is_none());
 
@@ -148,7 +151,7 @@ fn deltas_advance_transcript_head_without_rewriting_the_runtime_checkpoint() {
             .unwrap()
             .revision
             .value(),
-        0
+        4
     );
     assert_eq!(
         rebuilt
@@ -162,8 +165,22 @@ fn deltas_advance_transcript_head_without_rewriting_the_runtime_checkpoint() {
             .unwrap()
             .through_revision
             .value(),
-        1
+        4
     );
+    rebuilt
+        .connection()
+        .unwrap()
+        .execute("UPDATE agent_sessions SET recovery_needed = 1", [])
+        .unwrap();
+    let candidates = rebuilt.load_recovery_candidates().unwrap();
+    assert_eq!(candidates[0].as_ref().unwrap().runtime.revision.value(), 4);
+    rebuilt
+        .connection()
+        .unwrap()
+        .execute("UPDATE agent_sessions SET checkpoint_revision = 1", [])
+        .unwrap();
+    assert!(rebuilt.load_runtime_state(session_id).is_err());
+    assert!(rebuilt.load_recovery_candidates().unwrap()[0].is_err());
     assert!(rebuilt_workers
         .shutdown(Instant::now() + Duration::from_secs(2))
         .is_empty());
