@@ -5,6 +5,7 @@
 //! mode for the run ([`TranscriptMode`]), and the terminal set up and
 //! restored around the app loop.
 
+use std::io::IsTerminal;
 use std::sync::mpsc::{channel, Receiver};
 use std::sync::Arc;
 
@@ -101,6 +102,13 @@ pub fn run(
     };
     let preferences = bridge.tui_preferences();
     crate::markdown_render::preferences::set(preferences.rendering);
+    crate::markdown_render::preferences::set_web_link_display(
+        crate::markdown_render::WebLinkDisplay::for_terminal(
+            &crate::terminal_detection::terminal_info(),
+            std::io::stdout().is_terminal(),
+            std::env::var_os("STY").is_some(),
+        ),
+    );
     let theme_warning = configure_theme(
         preferences.theme.as_deref(),
         Some(runtime.storage_paths().root.join("themes")),

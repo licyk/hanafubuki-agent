@@ -35,6 +35,7 @@ use ratatui::text::Line;
 use super::{App, LIVE_TICK};
 use crate::history_cell::{plain_lines, HistoryCell, UserHistoryCell};
 use crate::render::renderable::Renderable;
+use crate::terminal_hyperlinks::{visible_lines, HyperlinkLine};
 use crate::transcript_view::{TailEntry, TranscriptView};
 use crate::tui::Tui;
 
@@ -170,7 +171,7 @@ impl Tail {
         view: &mut TranscriptView,
         width: u16,
         limit: Option<u16>,
-    ) -> (Vec<Line<'static>>, Vec<TailEntry>) {
+    ) -> (Vec<HyperlinkLine>, Vec<TailEntry>) {
         let mut entries = view.measure_tail(&self.cells, width, self.written);
         let mut rows: usize = entries.iter().map(|entry| entry.rows).sum();
         let mut lines = Vec::new();
@@ -214,17 +215,33 @@ impl Tail {
 /// out as they were, and the entry, which a rewrite shows whole again.
 #[derive(Debug)]
 struct Remainder {
-    rows: Vec<Line<'static>>,
+    rows: Vec<HyperlinkLine>,
     origin: Arc<dyn HistoryCell>,
 }
 
 impl HistoryCell for Remainder {
     fn display_lines(&self, _width: u16) -> Vec<Line<'static>> {
+        visible_lines(self.rows.clone())
+    }
+
+    fn display_hyperlink_lines(&self, _width: u16) -> Vec<HyperlinkLine> {
         self.rows.clone()
     }
 
+    fn compact_hyperlink_lines(&self, width: u16) -> Vec<HyperlinkLine> {
+        self.display_hyperlink_lines(width)
+    }
+
+    fn transcript_hyperlink_lines(&self, width: u16) -> Vec<HyperlinkLine> {
+        self.display_hyperlink_lines(width)
+    }
+
+    fn retained_hyperlink_lines(&self, width: u16, _detailed: bool) -> Vec<HyperlinkLine> {
+        self.display_hyperlink_lines(width)
+    }
+
     fn raw_lines(&self) -> Vec<Line<'static>> {
-        plain_lines(self.rows.clone())
+        plain_lines(self.display_lines(0))
     }
 
     fn is_stream_continuation(&self) -> bool {

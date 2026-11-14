@@ -12,7 +12,9 @@ fn cap(vars: &[(&str, &str)]) -> usize {
         .iter()
         .map(|(name, value)| (name.to_string(), value.to_string()))
         .collect();
-    row_cap_for(|name| vars.get(name).cloned())
+    row_cap_for(&crate::terminal_detection::detect(|name| {
+        vars.get(name).cloned()
+    }))
 }
 
 #[test]

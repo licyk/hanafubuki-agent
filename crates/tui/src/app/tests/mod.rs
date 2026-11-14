@@ -844,6 +844,7 @@ mod context;
 mod external_editor;
 mod features;
 mod history_search;
+mod hyperlinks;
 mod paste_image;
 mod plugins;
 mod preferences;

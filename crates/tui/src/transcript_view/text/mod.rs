@@ -9,7 +9,9 @@
 //! one logical line again; the cells here wrap their own lines, so text
 //! copied across a wrap the cell made carries a line break. Display rows
 //! added for spacing and disclosure controls never enter `text`. Tabs are
-//! expanded to spaces, so the copied text has the columns shown.
+//! expanded to spaces, so the copied text has the columns shown. A row
+//! keeps the part of each web link it shows, which painting puts in the
+//! buffer's cells; the text copied and searched is the label alone.
 
 mod wrap;
 
@@ -22,11 +24,14 @@ use ratatui::text::Line;
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
+use crate::terminal_hyperlinks::{
+    mark_hyperlink_cells, plain_hyperlink_lines, HyperlinkLine, TerminalHyperlink,
+};
 use wrap::{expand_tabs, wrap_line};
 
 /// One cell's text and its width-dependent display rows.
 pub(crate) struct TextLayout {
-    lines: Vec<Line<'static>>,
+    lines: Vec<HyperlinkLine>,
     text: String,
     rows: Vec<TextRow>,
     width: u16,
@@ -44,6 +49,8 @@ struct DisclosureControl {
 
 struct TextRow {
     line: Line<'static>,
+    /// The links over the row's columns, `first_column` not counted.
+    hyperlinks: Vec<TerminalHyperlink>,
     source: Range<usize>,
     /// The source offset of the logical line's end; absent on wrapped and
     /// synthetic rows.
@@ -54,6 +61,11 @@ struct TextRow {
 
 impl TextLayout {
     pub(crate) fn new(lines: Vec<Line<'static>>, width: u16) -> Self {
+        Self::linked(plain_hyperlink_lines(lines), width)
+    }
+
+    /// Lines with their hyperlinks.
+    pub(crate) fn linked(lines: Vec<HyperlinkLine>, width: u16) -> Self {
         Self::from_lines(lines.into_iter().map(expand_tabs).collect(), width)
     }
 
@@ -105,6 +117,7 @@ impl TextLayout {
         let label_line = Line::from(label.clone()).dim();
         let mut row = TextRow {
             line: label_line,
+            hyperlinks: Vec::new(),
             source: source_offset..source_offset,
             line_end: None,
             first_column: indent,
@@ -127,6 +140,7 @@ impl TextLayout {
                 0,
                 TextRow {
                     line: Line::default(),
+                    hyperlinks: Vec::new(),
                     source: 0..0,
                     line_end: None,
                     first_column: 0,
@@ -160,16 +174,22 @@ impl TextLayout {
         self.rows.len()
     }
 
-    /// A display row as a line of its own, its indent included.
-    pub(super) fn row_line(&self, row: usize) -> Line<'static> {
+    /// A display row as a line of its own, its indent included, with its
+    /// links.
+    pub(super) fn row_line(&self, row: usize) -> HyperlinkLine {
         let Some(row) = self.rows.get(row) else {
-            return Line::default();
+            return HyperlinkLine::default();
         };
-        let mut line = row.line.clone();
-        if row.first_column > 0 {
-            line.spans.insert(0, " ".repeat(row.first_column).into());
+        let line = HyperlinkLine {
+            line: row.line.clone(),
+            hyperlinks: row.hyperlinks.clone(),
+        };
+        if row.first_column == 0 {
+            return line;
         }
-        line
+        let style = line.line.style;
+        line.prefixed(vec![" ".repeat(row.first_column).into()])
+            .style(style)
     }
 
     /// The entry's first row with text: its header, past a separator and a
@@ -190,7 +210,8 @@ impl TextLayout {
         row.first_column as u16..end as u16
     }
 
-    /// Paints the visible rows, with each line's style over its whole row.
+    /// Paints the visible rows, with each line's style over its whole row,
+    /// and their links in the cells they cover.
     pub(crate) fn render(&self, area: Rect, buf: &mut Buffer, start_row: usize) {
         for (screen_row, row) in self.visible_rows(area, start_row) {
             let y = area.y + screen_row;
@@ -198,6 +219,15 @@ impl TextLayout {
             let x = area.x + row.first_column as u16;
             let width = area.width.saturating_sub(row.first_column as u16);
             buf.set_line(x, y, &row.line, width);
+            for link in &row.hyperlinks {
+                let start = link.columns.start.min(usize::from(width)) as u16;
+                let end = link.columns.end.min(usize::from(width)) as u16;
+                mark_hyperlink_cells(
+                    buf,
+                    Rect::new(x + start, y, end.saturating_sub(start), 1),
+                    &link.destination,
+                );
+            }
         }
     }
 
@@ -361,7 +391,7 @@ impl TextLayout {
             .map(|(row, text)| (row as u16, text))
     }
 
-    fn from_lines(lines: Vec<Line<'static>>, width: u16) -> Self {
+    fn from_lines(lines: Vec<HyperlinkLine>, width: u16) -> Self {
         let width = width.max(1);
         let mut text = String::new();
         let mut rows = Vec::new();
@@ -370,7 +400,7 @@ impl TextLayout {
                 text.push('\n');
             }
             let start = text.len();
-            text.extend(line.spans.iter().map(|span| span.content.as_ref()));
+            text.extend(line.line.spans.iter().map(|span| span.content.as_ref()));
             rows.extend(layout_line(line, start, width));
             if let Some(row) = rows.last_mut() {
                 row.line_end = Some(text.len());
@@ -391,19 +421,20 @@ impl TextLayout {
 
 /// The display rows of one logical line, its source starting at
 /// `text_start`.
-fn layout_line(line: &Line<'static>, text_start: usize, width: u16) -> Vec<TextRow> {
+fn layout_line(line: &HyperlinkLine, text_start: usize, width: u16) -> Vec<TextRow> {
     let columns = usize::from(width);
     wrap_line(line, columns)
         .into_iter()
-        .map(|(source, row_line)| {
-            let text_width = row_line.width();
-            let first_column = match line.alignment.unwrap_or(Alignment::Left) {
+        .map(|(source, row)| {
+            let text_width = row.line.width();
+            let first_column = match line.line.alignment.unwrap_or(Alignment::Left) {
                 Alignment::Left => 0,
                 Alignment::Center => columns.saturating_sub(text_width) / 2,
                 Alignment::Right => columns.saturating_sub(text_width),
             };
             TextRow {
-                line: row_line,
+                line: row.line,
+                hyperlinks: row.hyperlinks,
                 source: text_start + source.start..text_start + source.end,
                 line_end: None,
                 first_column,

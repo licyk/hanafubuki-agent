@@ -2,14 +2,16 @@
 // Modified from OpenAI Codex 57a808a392 (Apache-2.0).
 
 //! The rows written: the line being built, wrapped under the quote and list
-//! prefixes when it is done, and the table rows laid out already.
+//! prefixes when it is done, and the table rows laid out already. A row
+//! carries its web links beside its text.
 
 use ratatui::text::{Line, Span};
-use unicode_width::UnicodeWidthStr;
 
 use super::Writer;
-use crate::render::line_utils::line_to_static;
-use crate::wrapping::{word_wrap_line, RtOptions};
+use crate::terminal_hyperlinks::{remap_source_wrapped_line, HyperlinkLine};
+use crate::wrapping::{adaptive_wrap_line_with_source, RtOptions};
+
+pub(super) use crate::wrapping::display_width;
 
 impl Writer<'_> {
     pub(super) fn flush_current_line(&mut self) {
@@ -21,15 +23,15 @@ impl Writer<'_> {
                 let opts = RtOptions::new(width)
                     .initial_indent(self.current_initial_indent.clone().into())
                     .subsequent_indent(self.current_subsequent_indent.clone().into());
-                for wrapped in word_wrap_line(&line, opts) {
-                    let owned = line_to_static(&wrapped).style(style);
-                    self.text.lines.push(owned);
+                // A URL is kept whole, on a row of its own when it does
+                // not fit, wider than the row when it is wider.
+                let wrapped = adaptive_wrap_line_with_source(&line.line, opts);
+                for row in remap_source_wrapped_line(&line, wrapped) {
+                    self.lines.push(row.style(style));
                 }
             } else {
-                let mut spans = self.current_initial_indent.clone();
-                let mut line = line;
-                spans.append(&mut line.spans);
-                self.text.lines.push(Line::from_iter(spans).style(style));
+                let indent = std::mem::take(&mut self.current_initial_indent);
+                self.lines.push(line.prefixed(indent).style(style));
             }
             self.current_initial_indent.clear();
             self.current_subsequent_indent.clear();
@@ -47,25 +49,24 @@ impl Writer<'_> {
 
     /// A row laid out at its width already (a table's): the quote and list
     /// prefixes go before it, and it is not wrapped again.
-    pub(super) fn push_prewrapped_line(&mut self, line: Line<'static>, pending_marker_line: bool) {
+    pub(super) fn push_prewrapped_line(&mut self, line: HyperlinkLine, pending_marker_line: bool) {
         self.flush_current_line();
         let style = if self.is_blockquote_active() {
-            self.styles.blockquote.patch(line.style)
+            self.styles.blockquote.patch(line.line.style)
         } else {
-            line.style
+            line.line.style
         };
-        let mut spans = self.prefix_spans(pending_marker_line);
-        let mut line = line;
-        spans.append(&mut line.spans);
-        self.text.lines.push(Line::from(spans).style(style));
+        let prefix = self.prefix_spans(pending_marker_line);
+        self.lines.push(line.prefixed(prefix).style(style));
     }
 
-    pub(super) fn push_line(&mut self, line: Line<'static>) {
+    pub(super) fn push_line(&mut self, line: impl Into<HyperlinkLine>) {
+        let line = line.into();
         self.flush_current_line();
         let style = if self.is_blockquote_active() {
             self.styles.blockquote
         } else {
-            line.style
+            line.line.style
         };
         let was_pending = self.pending_marker_line;
 
@@ -79,19 +80,38 @@ impl Writer<'_> {
         self.pending_marker_line = false;
     }
 
+    /// `span` on the line being built, linked when it is a web link's.
     pub(super) fn push_span(&mut self, span: Span<'static>) {
         let span = self.style_link_label(span);
+        let destination = self.web_link_destination();
+        if self.current_line_content.is_none() {
+            self.push_line(Line::default());
+        }
         if let Some(line) = self.current_line_content.as_mut() {
-            line.push_span(span);
-        } else {
-            self.push_line(Line::from(vec![span]));
+            line.push_span(span, destination.as_deref());
+        }
+    }
+
+    /// A run of text: a web link's label, or prose whose bare web URLs are
+    /// styled and linked.
+    pub(super) fn push_text_span(&mut self, span: Span<'static>) {
+        if self.link.is_some() || self.in_code_block {
+            self.push_span(span);
+            return;
+        }
+        let annotated = self.style_bare_web_urls(span);
+        if self.current_line_content.is_none() {
+            self.push_line(Line::default());
+        }
+        if let Some(line) = self.current_line_content.as_mut() {
+            line.append(annotated);
         }
     }
 
     pub(super) fn push_blank_line(&mut self) {
         self.flush_current_line();
         if self.indent_stack.iter().all(|ctx| ctx.is_list) {
-            self.text.lines.push(Line::default());
+            self.lines.push(HyperlinkLine::default());
         } else {
             self.push_line(Line::default());
             self.flush_current_line();
@@ -131,14 +151,4 @@ impl Writer<'_> {
 /// The columns `spans` take in a terminal.
 pub(super) fn spans_display_width(spans: &[Span<'_>]) -> usize {
     spans.iter().map(|span| display_width(&span.content)).sum()
-}
-
-/// The columns `text` takes as ratatui draws it: Unicode's width, with the
-/// halfwidth sound marks (`ﾞ`, `ﾟ`) a column each, as ratatui gives them.
-pub(super) fn display_width(text: &str) -> usize {
-    text.width()
-        + text
-            .chars()
-            .filter(|ch| matches!(ch, '\u{FF9E}' | '\u{FF9F}'))
-            .count()
 }

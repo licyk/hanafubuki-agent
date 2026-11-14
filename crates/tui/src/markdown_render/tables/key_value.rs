@@ -12,6 +12,7 @@ use super::super::output::display_width;
 use super::layout::{cell_display_width, line_display_width, TableColumnKind, TableColumnMetrics};
 use super::{wrap_cell, TableCell, TABLE_BODY_SEPARATOR_CHAR};
 use crate::render::line_utils::line_to_static;
+use crate::terminal_hyperlinks::HyperlinkLine;
 use crate::wrapping::{word_wrap_line, RtOptions};
 
 const FIELD_LEADING_PADDING: usize = 1;
@@ -100,7 +101,7 @@ pub(super) fn render_records(
     available_width: Option<usize>,
     label_style: Style,
     separator_style: Style,
-) -> Vec<Line<'static>> {
+) -> Vec<HyperlinkLine> {
     let label_width = headers
         .iter()
         .map(|header| display_width(&header.plain_text()))
@@ -134,12 +135,19 @@ pub(super) fn render_records(
             }
         }
         if row_index + 1 < rows.len() {
-            let width = available_width
-                .unwrap_or_else(|| out.iter().map(line_display_width).max().unwrap_or(0));
-            out.push(Line::from(Span::styled(
-                TABLE_BODY_SEPARATOR_CHAR.to_string().repeat(width),
-                separator_style,
-            )));
+            let width = available_width.unwrap_or_else(|| {
+                out.iter()
+                    .map(|line| line_display_width(&line.line))
+                    .max()
+                    .unwrap_or(0)
+            });
+            out.push(
+                Line::from(Span::styled(
+                    TABLE_BODY_SEPARATOR_CHAR.to_string().repeat(width),
+                    separator_style,
+                ))
+                .into(),
+            );
         }
     }
     out
@@ -147,7 +155,7 @@ pub(super) fn render_records(
 
 /// ` label   value`, the value wrapped in the column after the widest label.
 fn render_aligned_field(
-    out: &mut Vec<Line<'static>>,
+    out: &mut Vec<HyperlinkLine>,
     header: &TableCell,
     value: &TableCell,
     label_width: usize,
@@ -159,7 +167,7 @@ fn render_aligned_field(
         .map(|width| width.saturating_sub(value_indent).max(MIN_VALUE_WIDTH))
         .unwrap_or_else(|| cell_display_width(value).max(MIN_VALUE_WIDTH));
     for (line_index, value_line) in wrap_cell(value, value_width).into_iter().enumerate() {
-        let mut spans = if line_index == 0 {
+        let spans = if line_index == 0 {
             let label = header.plain_text();
             let padding = label_width.saturating_sub(display_width(&label)) + FIELD_GAP;
             vec![
@@ -170,14 +178,13 @@ fn render_aligned_field(
         } else {
             vec![Span::raw(" ".repeat(value_indent))]
         };
-        spans.extend(value_line.spans);
-        out.push(Line::from(spans));
+        out.push(value_line.prefixed(spans));
     }
 }
 
 /// ` label` on its own lines, the value under it indented.
 fn render_stacked_field(
-    out: &mut Vec<Line<'static>>,
+    out: &mut Vec<HyperlinkLine>,
     header: &TableCell,
     value: &TableCell,
     available_width: Option<usize>,
@@ -190,15 +197,13 @@ fn render_stacked_field(
     for label_line in word_wrap_line(&label, RtOptions::new(label_width)) {
         let mut spans = vec![Span::raw(" ".repeat(FIELD_LEADING_PADDING))];
         spans.extend(line_to_static(&label_line).spans);
-        out.push(Line::from(spans));
+        out.push(Line::from(spans).into());
     }
 
     let value_width = available_width
         .map(|width| width.saturating_sub(STACKED_VALUE_INDENT).max(1))
         .unwrap_or_else(|| cell_display_width(value).max(1));
     for value_line in wrap_cell(value, value_width) {
-        let mut spans = vec![Span::raw(" ".repeat(STACKED_VALUE_INDENT))];
-        spans.extend(value_line.spans);
-        out.push(Line::from(spans));
+        out.push(value_line.prefixed(vec![Span::raw(" ".repeat(STACKED_VALUE_INDENT))]));
     }
 }

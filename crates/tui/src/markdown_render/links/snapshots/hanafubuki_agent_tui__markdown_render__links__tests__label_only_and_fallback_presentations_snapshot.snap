@@ -1,0 +1,19 @@
+---
+source: crates/tui/src/markdown_render/links/tests.rs
+assertion_line: 317
+expression: "presentations.join(\"\\n\\n---\\n\\n\")"
+---
+plain plain code code
+
+ Resource
+━━━━━━━━━━
+ docs
+
+---
+
+plain plain (https://example.com) code
+code (https://example.com)
+
+ Resource
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ docs (https://example.com/docs)

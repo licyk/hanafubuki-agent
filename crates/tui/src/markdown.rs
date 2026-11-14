@@ -18,20 +18,21 @@ use ratatui::text::Line;
 
 use crate::markdown_render::{ListSpacing, StreamingMarkdownRender};
 use crate::table_detect;
+use crate::terminal_hyperlinks::HyperlinkLine;
 
 /// `markdown_source` rendered and wrapped to `width`, local file links
-/// relative to `cwd`, appended to `lines`.
+/// relative to `cwd`, appended to `lines`: no hyperlinks, so a web link's
+/// destination stays in its text.
 pub(crate) fn append_markdown(
     markdown_source: &str,
     width: Option<usize>,
     cwd: Option<&str>,
     lines: &mut Vec<Line<'static>>,
 ) {
-    lines.extend(render_markdown_with_list_spacing(
+    lines.extend(crate::markdown_render::render_markdown_unlinked(
         markdown_source,
         width,
         cwd,
-        ListSpacing::AfterMultiline,
     ));
 }
 
@@ -44,28 +45,25 @@ pub(crate) fn append_markdown_agent(
     cwd: Option<&str>,
     lines: &mut Vec<Line<'static>>,
 ) {
-    lines.extend(render_markdown_agent_with_list_spacing(
-        markdown_source,
-        width,
-        cwd,
-        ListSpacing::AfterMultiline,
+    lines.extend(crate::terminal_hyperlinks::visible_lines(
+        render_markdown_agent_with_list_spacing(
+            markdown_source,
+            width,
+            cwd,
+            ListSpacing::AfterMultiline,
+        ),
     ));
 }
 
-/// [`append_markdown`]'s lines, lists spaced by `list_spacing`.
+/// [`append_markdown`]'s lines, with their links, lists spaced by
+/// `list_spacing`.
 pub(crate) fn render_markdown_with_list_spacing(
     markdown_source: &str,
     width: Option<usize>,
     cwd: Option<&str>,
     list_spacing: ListSpacing,
-) -> Vec<Line<'static>> {
-    crate::markdown_render::render_markdown_text_with_spacing(
-        markdown_source,
-        width,
-        cwd,
-        list_spacing,
-    )
-    .lines
+) -> Vec<HyperlinkLine> {
+    crate::markdown_render::render_markdown_lines(markdown_source, width, cwd, list_spacing)
 }
 
 /// [`append_markdown_agent`]'s lines, lists spaced by `list_spacing`.
@@ -74,7 +72,7 @@ pub(crate) fn render_markdown_agent_with_list_spacing(
     width: Option<usize>,
     cwd: Option<&str>,
     list_spacing: ListSpacing,
-) -> Vec<Line<'static>> {
+) -> Vec<HyperlinkLine> {
     let normalized = if crate::markdown_render::preferences::current().tables {
         unwrap_markdown_fences(markdown_source)
     } else {

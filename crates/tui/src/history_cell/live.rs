@@ -9,6 +9,7 @@ use parking_lot::{MappedRwLockReadGuard, RwLock, RwLockReadGuard};
 use ratatui::text::Line;
 
 use super::{ActivityDisclosure, HistoryCell, HistoryRenderMode, StreamId};
+use crate::terminal_hyperlinks::HyperlinkLine;
 
 #[derive(Debug)]
 pub(crate) struct LiveCell<C> {
@@ -68,6 +69,26 @@ impl<C: HistoryCell> HistoryCell for LiveCell<C> {
 
     fn expanded_lines(&self, width: u16) -> Vec<Line<'static>> {
         self.cell().expanded_lines(width)
+    }
+
+    fn retained_lines(&self, width: u16, detailed: bool) -> Vec<Line<'static>> {
+        self.cell().retained_lines(width, detailed)
+    }
+
+    fn display_hyperlink_lines(&self, width: u16) -> Vec<HyperlinkLine> {
+        self.cell().display_hyperlink_lines(width)
+    }
+
+    fn transcript_hyperlink_lines(&self, width: u16) -> Vec<HyperlinkLine> {
+        self.cell().transcript_hyperlink_lines(width)
+    }
+
+    fn compact_hyperlink_lines(&self, width: u16) -> Vec<HyperlinkLine> {
+        self.cell().compact_hyperlink_lines(width)
+    }
+
+    fn retained_hyperlink_lines(&self, width: u16, detailed: bool) -> Vec<HyperlinkLine> {
+        self.cell().retained_hyperlink_lines(width, detailed)
     }
 
     fn activity_ids(&self) -> Vec<String> {

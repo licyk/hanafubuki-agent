@@ -13,7 +13,7 @@ use super::{render_table_row, wrap_cell, TableBodyRow, TableCell};
 
 fn make_cell(text: &str) -> TableCell {
     let mut cell = TableCell::default();
-    cell.push_span(text.to_string().into());
+    cell.push(Line::from(text.to_string()).into());
     cell
 }
 
@@ -42,10 +42,10 @@ fn metrics(
 fn wrap_cell_preserves_hard_break_lines() {
     let mut cell = make_cell("first line");
     cell.hard_break();
-    cell.push_span("second line".into());
+    cell.push(Line::from("second line").into());
     let rendered: Vec<String> = wrap_cell(&cell, 40)
         .iter()
-        .map(ToString::to_string)
+        .map(|line| line.line.to_string())
         .collect();
     assert_eq!(rendered, vec!["first line", "second line"]);
 }
@@ -55,7 +55,7 @@ fn blank_table_continuations_do_not_repeat_the_first_cell() {
     let mut cell = make_cell("first");
     cell.hard_break();
     cell.hard_break();
-    cell.push_span("last".into());
+    cell.push(Line::from("last").into());
     cell.hard_break();
     let lines = render_table_row(
         &[make_cell("short"), cell],
@@ -63,7 +63,7 @@ fn blank_table_continuations_do_not_repeat_the_first_cell() {
         &[Alignment::None, Alignment::None],
         Style::default(),
     );
-    let rendered: Vec<String> = lines.iter().map(Line::to_string).collect();
+    let rendered: Vec<String> = lines.iter().map(|line| line.line.to_string()).collect();
     insta::assert_debug_snapshot!(rendered);
 }
 

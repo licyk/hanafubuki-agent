@@ -11,9 +11,12 @@
 //! - Task lists show `☐`/`☑` and unordered items `•` (`lists`); after an
 //!   item that took more than one row, its next sibling is a blank line
 //!   below.
-//! - A web link shows its label in the link style and its destination after
-//!   it; a local file link shows its target, relative to the session's
-//!   directory (`links`, `local_links`).
+//! - A web link shows its label in the link style, linked to its
+//!   destination, and the destination after it unless the terminal opens
+//!   such links; a bare web URL is styled and linked too; a local file link
+//!   shows its target, relative to the session's directory (`links`,
+//!   `local_links`). Each row carries its links beside its text
+//!   ([`HyperlinkLine`]).
 //! - `tui.rendering` turns tables or list markers off (`preferences`); what
 //!   is off is shown as written.
 
@@ -32,11 +35,13 @@ use std::ops::Range;
 
 use pulldown_cmark::{CodeBlockKind, Event, Tag, TagEnd};
 use ratatui::style::Style;
-use ratatui::text::{Line, Span, Text};
+use ratatui::text::{Line, Span};
 
+pub(crate) use links::WebLinkDisplay;
 pub(crate) use list_spacing::ListSpacing;
 pub(crate) use streaming::{render_streaming_markdown, StreamingMarkdownRender};
 
+use crate::terminal_hyperlinks::HyperlinkLine;
 use links::LinkState;
 use list_spacing::UniformList;
 use tables::TableState;
@@ -97,12 +102,15 @@ impl IndentContext {
 }
 
 #[cfg(test)]
-pub fn render_markdown_text(input: &str) -> Text<'static> {
+pub fn render_markdown_text(input: &str) -> ratatui::text::Text<'static> {
     render_markdown_text_with_width(input, None)
 }
 
 #[cfg(test)]
-pub(crate) fn render_markdown_text_with_width(input: &str, width: Option<usize>) -> Text<'static> {
+pub(crate) fn render_markdown_text_with_width(
+    input: &str,
+    width: Option<usize>,
+) -> ratatui::text::Text<'static> {
     render_markdown_text_with_width_and_cwd(input, width, None)
 }
 
@@ -111,8 +119,38 @@ pub(crate) fn render_markdown_text_with_width_and_cwd(
     input: &str,
     width: Option<usize>,
     cwd: Option<&str>,
-) -> Text<'static> {
+) -> ratatui::text::Text<'static> {
     render_markdown_text_with_spacing(input, width, cwd, ListSpacing::AfterMultiline)
+}
+
+#[cfg(test)]
+pub(crate) fn render_markdown_text_with_spacing(
+    input: &str,
+    width: Option<usize>,
+    cwd: Option<&str>,
+    list_spacing: ListSpacing,
+) -> ratatui::text::Text<'static> {
+    ratatui::text::Text::from(crate::terminal_hyperlinks::visible_lines(
+        render_markdown_lines(input, width, cwd, list_spacing),
+    ))
+}
+
+/// [`render_markdown_lines`]'s visible lines, for a cell that shows no
+/// hyperlink: each web link keeps its destination in its text, whatever
+/// the terminal.
+pub(crate) fn render_markdown_unlinked(
+    input: &str,
+    width: Option<usize>,
+    cwd: Option<&str>,
+) -> Vec<Line<'static>> {
+    let rendered = streaming::render_with_display(
+        input,
+        width,
+        cwd,
+        ListSpacing::AfterMultiline,
+        WebLinkDisplay::WithDestination,
+    );
+    crate::terminal_hyperlinks::visible_lines(rendered.lines)
 }
 
 /// `input` rendered, wrapped to `width` when there is one (`None` keeps
@@ -120,20 +158,20 @@ pub(crate) fn render_markdown_text_with_width_and_cwd(
 /// `list_spacing`. `cwd`, the session's directory as it is shown, shortens
 /// the targets of local file links under it; without one an absolute
 /// target stays absolute.
-pub(crate) fn render_markdown_text_with_spacing(
+pub(crate) fn render_markdown_lines(
     input: &str,
     width: Option<usize>,
     cwd: Option<&str>,
     list_spacing: ListSpacing,
-) -> Text<'static> {
-    Text::from(render_streaming_markdown(input, width, cwd, list_spacing).lines)
+) -> Vec<HyperlinkLine> {
+    render_streaming_markdown(input, width, cwd, list_spacing).lines
 }
 
 /// The pulldown-cmark event consumer: inline styles, the indentation of
 /// quotes and lists, list numbering, the link and the table being read.
 struct Writer<'a> {
     input: &'a str,
-    text: Text<'static>,
+    lines: Vec<HyperlinkLine>,
     styles: MarkdownStyles,
     inline_styles: Vec<Style>,
     indent_stack: Vec<IndentContext>,
@@ -146,6 +184,7 @@ struct Writer<'a> {
     /// Per open list, under [`ListSpacing::Uniform`].
     uniform_lists: Vec<UniformList>,
     link: Option<LinkState>,
+    link_display: WebLinkDisplay,
     needs_newline: bool,
     pending_marker_line: bool,
     /// Where the last task marker taken ended, so a marker the parser
@@ -159,7 +198,7 @@ struct Writer<'a> {
     code_block_buffer: String,
     wrap_width: Option<usize>,
     cwd: Option<&'a str>,
-    current_line_content: Option<Line<'static>>,
+    current_line_content: Option<HyperlinkLine>,
     current_initial_indent: Vec<Span<'static>>,
     current_subsequent_indent: Vec<Span<'static>>,
     current_line_style: Style,
@@ -175,10 +214,15 @@ struct Writer<'a> {
 }
 
 impl<'a> Writer<'a> {
-    fn new(input: &'a str, wrap_width: Option<usize>, cwd: Option<&'a str>) -> Self {
+    fn new(
+        input: &'a str,
+        wrap_width: Option<usize>,
+        cwd: Option<&'a str>,
+        link_display: WebLinkDisplay,
+    ) -> Self {
         Self {
             input,
-            text: Text::default(),
+            lines: Vec::new(),
             styles: MarkdownStyles::default(),
             inline_styles: Vec::new(),
             indent_stack: Vec::new(),
@@ -188,6 +232,7 @@ impl<'a> Writer<'a> {
             list_spacing: ListSpacing::default(),
             uniform_lists: Vec::new(),
             link: None,
+            link_display,
             needs_newline: false,
             pending_marker_line: false,
             last_task_marker_end: 0,
@@ -233,7 +278,7 @@ impl<'a> Writer<'a> {
             Event::HardBreak => self.hard_break(),
             Event::Rule => {
                 self.flush_current_line();
-                if !self.text.lines.is_empty() {
+                if !self.lines.is_empty() {
                     self.push_blank_line();
                 }
                 self.push_line(Line::from("———"));

@@ -112,14 +112,8 @@ impl Writer<'_> {
             let has_content = self
                 .current_line_content
                 .as_ref()
-                .map(|line| !line.spans.is_empty())
-                .unwrap_or_else(|| {
-                    self.text
-                        .lines
-                        .last()
-                        .map(|line| !line.spans.is_empty())
-                        .unwrap_or(false)
-                });
+                .or(self.lines.last())
+                .is_some_and(|line| !line.line.spans.is_empty());
             if has_content {
                 self.push_line(Line::default());
             }
@@ -133,7 +127,7 @@ impl Writer<'_> {
                 self.push_line(Line::default());
             }
             let span = Span::styled(line.to_string(), self.current_inline_style());
-            self.push_span(span);
+            self.push_text_span(span);
         }
         self.needs_newline = false;
     }
@@ -251,7 +245,7 @@ impl Writer<'_> {
                 .indent_stack
                 .last()
                 .is_some_and(|context| context.is_list);
-        if !self.text.lines.is_empty()
+        if !self.lines.is_empty()
             && (self.list_spacing == ListSpacing::AfterMultiline || !first_item_block)
         {
             self.push_blank_line();

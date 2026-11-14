@@ -20,7 +20,7 @@
 use std::collections::VecDeque;
 use std::time::{Duration, Instant};
 
-use ratatui::text::Line;
+use crate::terminal_hyperlinks::HyperlinkLine;
 
 use crate::markdown_stream::MarkdownStreamCollector;
 
@@ -33,7 +33,7 @@ mod render;
 mod table_holdback;
 
 struct QueuedLine {
-    line: Line<'static>,
+    line: HyperlinkLine,
     enqueued_at: Instant,
 }
 
@@ -52,7 +52,7 @@ impl StreamState {
     }
 
     /// The first queued row.
-    pub(crate) fn step(&mut self) -> Vec<Line<'static>> {
+    pub(crate) fn step(&mut self) -> Vec<HyperlinkLine> {
         self.queued_lines
             .pop_front()
             .map(|queued| queued.line)
@@ -61,7 +61,7 @@ impl StreamState {
     }
 
     /// Up to `max_lines` queued rows from the front.
-    pub(crate) fn drain_n(&mut self, max_lines: usize) -> Vec<Line<'static>> {
+    pub(crate) fn drain_n(&mut self, max_lines: usize) -> Vec<HyperlinkLine> {
         let end = max_lines.min(self.queued_lines.len());
         self.queued_lines
             .drain(..end)
@@ -88,7 +88,7 @@ impl StreamState {
     }
 
     /// Queues `lines`, all at `now`.
-    pub(crate) fn enqueue(&mut self, lines: Vec<Line<'static>>, now: Instant) {
+    pub(crate) fn enqueue(&mut self, lines: Vec<HyperlinkLine>, now: Instant) {
         self.queued_lines
             .extend(lines.into_iter().map(|line| QueuedLine {
                 line,

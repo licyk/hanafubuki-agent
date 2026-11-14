@@ -8,7 +8,27 @@ use ratatui::style::{Color, Modifier, Stylize};
 use ratatui::text::Line;
 
 use super::TextLayout;
+use crate::terminal_hyperlinks::{annotate_web_urls_in_line, osc8_parts, HyperlinkLine};
 use crate::text_selection::SelectionUnit;
+
+/// The cells linked on each painted row: their destination and text.
+fn linked_cells(buffer: &Buffer) -> Vec<(u16, String, String)> {
+    let mut out: Vec<(u16, String, String)> = Vec::new();
+    for y in 0..buffer.area.height {
+        for x in 0..buffer.area.width {
+            let Some((destination, visible)) = osc8_parts(buffer[(x, y)].symbol()) else {
+                continue;
+            };
+            match out.last_mut() {
+                Some((row, last, text)) if *row == y && last == destination => {
+                    text.push_str(visible)
+                }
+                _ => out.push((y, destination.to_string(), visible.to_string())),
+            }
+        }
+    }
+    out
+}
 
 fn painted(layout: &TextLayout, area: Rect, start_row: usize) -> Buffer {
     let mut buffer = Buffer::empty(area);
@@ -164,4 +184,68 @@ fn the_caret_stays_on_graphemes_and_empty_rows() {
     assert_eq!(layout.after_cursor_grapheme(0, 1), 2);
     assert!(layout.is_cursor_position(1));
     assert!(!layout.is_cursor_position(2));
+}
+
+#[test]
+fn tabs_move_links_with_the_text_after_them() {
+    let mut line = HyperlinkLine::new(Line::from("a\t"));
+    line.push_span("docs".into(), Some("https://example.com/docs"));
+    line.push_span("\tafter".into(), None);
+    let layout = TextLayout::linked(vec![line], 20);
+    assert_eq!(layout.text(), "a   docs    after");
+    let buffer = painted(&layout, Rect::new(0, 0, 20, 1), 0);
+    assert_eq!(
+        linked_cells(&buffer),
+        [(
+            0,
+            "https://example.com/docs".to_string(),
+            "docs".to_string()
+        )]
+    );
+    assert!(osc8_parts(buffer[(3, 0)].symbol()).is_none());
+    assert!(osc8_parts(buffer[(8, 0)].symbol()).is_none());
+}
+
+#[test]
+fn a_url_wider_than_the_view_is_cut_at_the_width_and_linked_on_each_row() {
+    let url = "https://example.com/a-very-long-path-with-many-segments";
+    let line = annotate_web_urls_in_line(Line::from(format!("• {url}")));
+    for width in 8..40 {
+        let layout = TextLayout::linked(vec![line.clone()], width);
+        let area = Rect::new(0, 0, width, layout.row_count() as u16);
+        let buffer = painted(&layout, area, 0);
+        let linked = linked_cells(&buffer);
+        assert_eq!(
+            linked
+                .iter()
+                .map(|(_, _, text)| text.as_str())
+                .collect::<String>(),
+            url,
+            "{width}"
+        );
+        // The bullet stays on the URL's row, which is cut at the width as
+        // a terminal wraps it: every row but the last is full.
+        let rows = layout.row_count();
+        assert_eq!(
+            rows,
+            (2 + url.len()).div_ceil(usize::from(width)),
+            "{width}"
+        );
+        for row in 0..rows - 1 {
+            assert_eq!(layout.row_line(row).width(), usize::from(width), "{width}");
+        }
+        // The copied text is the URL whole.
+        assert_eq!(layout.text(), format!("• {url}"));
+    }
+}
+
+#[test]
+fn a_row_line_carries_its_links_after_its_indent() {
+    let mut line = HyperlinkLine::default();
+    line.push_span("docs".into(), Some("https://example.com"));
+    line.line = line.line.right_aligned();
+    let layout = TextLayout::linked(vec![line], 10);
+    let row = layout.row_line(0);
+    assert_eq!(row.line.to_string(), "      docs");
+    assert_eq!(row.hyperlinks[0].columns, 6..10);
 }

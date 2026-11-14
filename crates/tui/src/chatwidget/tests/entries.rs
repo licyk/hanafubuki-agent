@@ -559,6 +559,38 @@ fn a_replayed_answer_and_plan_keep_their_markdown() {
     assert_eq!(cell_lines(answer, false), "• Two files changed.");
 }
 
+/// A resumed answer and plan link their web links as the live ones do, in
+/// every presentation.
+#[test]
+fn a_replayed_answer_and_plan_keep_their_links() {
+    let (chat, _events) = chat();
+    let cells = chat.replayed_cells(vec![
+        ReplayedItem::Assistant("See [docs](https://example.com/docs).".to_string()),
+        ReplayedItem::Plan("1. Read https://example.com/plan".to_string()),
+    ]);
+    for (cell, destination) in cells
+        .iter()
+        .zip(["https://example.com/docs", "https://example.com/plan"])
+    {
+        let cell = cell.as_ref() as &dyn HistoryCell;
+        for lines in [
+            cell.display_hyperlink_lines(60),
+            cell.compact_hyperlink_lines(60),
+            cell.transcript_hyperlink_lines(60),
+            cell.retained_hyperlink_lines(60, false),
+            cell.retained_hyperlink_lines(60, true),
+        ] {
+            assert!(
+                lines
+                    .iter()
+                    .flat_map(|line| &line.hyperlinks)
+                    .any(|link| link.destination == destination),
+                "{destination}: {lines:?}"
+            );
+        }
+    }
+}
+
 /// A streamed answer's cells, and then the cell of its Markdown, which the
 /// app puts in their place; an answer cut by an entry is two.
 #[test]

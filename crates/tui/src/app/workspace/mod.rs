@@ -567,7 +567,7 @@ impl App {
         }
         self.swap_conversations();
         if !self.mode.is_owned() {
-            lines.extend([Line::from(""), self.workspace.banner(focus)]);
+            lines.extend([Line::from("").into(), self.workspace.banner(focus).into()]);
             if self.alt_screen_open() {
                 self.deferred_history_lines.extend(lines);
             } else {

@@ -25,8 +25,8 @@ use ratatui::text::{Line, Span};
 
 use super::output::spans_display_width;
 use super::Writer;
-use crate::render::line_utils::line_to_static;
-use crate::wrapping::{word_wrap_line, RtOptions};
+use crate::terminal_hyperlinks::{remap_source_wrapped_line, HyperlinkLine};
+use crate::wrapping::{word_wrap_line_with_source, RtOptions};
 use layout::{collect_table_column_metrics, compute_column_widths, line_display_width};
 
 const TABLE_COLUMN_GAP: usize = 2;
@@ -34,28 +34,29 @@ const TABLE_CELL_PADDING: usize = 1;
 const TABLE_HEADER_SEPARATOR_CHAR: char = '━';
 const TABLE_BODY_SEPARATOR_CHAR: char = '─';
 
-/// One cell's content: a line per hard break, with its inline styles.
+/// One cell's content: a line per hard break, with its inline styles and
+/// links.
 #[derive(Clone, Debug, Default)]
 struct TableCell {
-    lines: Vec<Line<'static>>,
+    lines: Vec<HyperlinkLine>,
 }
 
 impl TableCell {
     fn ensure_line(&mut self) {
         if self.lines.is_empty() {
-            self.lines.push(Line::default());
+            self.lines.push(HyperlinkLine::default());
         }
     }
 
-    fn push_span(&mut self, span: Span<'static>) {
+    fn push(&mut self, part: HyperlinkLine) {
         self.ensure_line();
         if let Some(line) = self.lines.last_mut() {
-            line.push_span(span);
+            line.append(part);
         }
     }
 
     fn hard_break(&mut self) {
-        self.lines.push(Line::default());
+        self.lines.push(HyperlinkLine::default());
     }
 
     /// The text, its lines joined by spaces: what widths are measured on.
@@ -63,7 +64,8 @@ impl TableCell {
         self.lines
             .iter()
             .map(|line| {
-                line.spans
+                line.line
+                    .spans
                     .iter()
                     .map(|span| span.content.as_ref())
                     .collect::<String>()
@@ -99,9 +101,9 @@ pub(super) struct TableState {
 /// already unless they are the raw pipe rows of a header-only table, and
 /// the spillover prose after them.
 struct RenderedTableLines {
-    table_lines: Vec<Line<'static>>,
+    table_lines: Vec<HyperlinkLine>,
     table_lines_prewrapped: bool,
-    spillover_lines: Vec<Line<'static>>,
+    spillover_lines: Vec<HyperlinkLine>,
 }
 
 impl Writer<'_> {
@@ -243,14 +245,21 @@ impl Writer<'_> {
             .is_some_and(|table_state| table_state.current_cell.is_some())
     }
 
+    /// `span` in the cell being read, linked when it is a web link's.
     pub(super) fn push_span_to_table_cell(&mut self, span: Span<'static>) {
         let span = self.style_link_label(span);
+        let mut part = HyperlinkLine::default();
+        part.push_span(span, self.web_link_destination().as_deref());
+        self.push_to_table_cell(part);
+    }
+
+    pub(super) fn push_to_table_cell(&mut self, part: HyperlinkLine) {
         if let Some(cell) = self
             .table_state
             .as_mut()
             .and_then(|table_state| table_state.current_cell.as_mut())
         {
-            cell.push_span(span);
+            cell.push(part);
         }
     }
 
@@ -270,7 +279,13 @@ impl Writer<'_> {
             if i > 0 {
                 self.push_table_cell_hard_break();
             }
-            self.push_span_to_table_cell(Span::styled(line.to_string(), style));
+            let span = Span::styled(line.to_string(), style);
+            if self.link.is_some() {
+                self.push_span_to_table_cell(span);
+            } else {
+                let annotated = self.style_bare_web_urls(span);
+                self.push_to_table_cell(annotated);
+            }
         }
     }
 
@@ -392,14 +407,14 @@ fn render_table_separator(
     column_widths: &[usize],
     separator_char: char,
     style: Style,
-) -> Line<'static> {
+) -> HyperlinkLine {
     let segment = separator_char.to_string();
     let text = column_widths
         .iter()
         .map(|width| segment.repeat(width + TABLE_CELL_PADDING * 2))
         .collect::<Vec<_>>()
         .join(&" ".repeat(TABLE_COLUMN_GAP));
-    Line::from(Span::styled(text, style))
+    Line::from(Span::styled(text, style)).into()
 }
 
 /// One table row: each cell wrapped to its column and aligned in it, as
@@ -410,8 +425,8 @@ fn render_table_row(
     column_widths: &[usize],
     alignments: &[Alignment],
     row_style: Style,
-) -> Vec<Line<'static>> {
-    let wrapped_cells: Vec<Vec<Line<'static>>> = row
+) -> Vec<HyperlinkLine> {
+    let wrapped_cells: Vec<Vec<HyperlinkLine>> = row
         .iter()
         .zip(column_widths)
         .map(|(cell, width)| wrap_cell(cell, *width))
@@ -423,7 +438,7 @@ fn render_table_row(
         let Some(last_visible_column) = wrapped_cells.iter().rposition(|lines| {
             lines
                 .get(row_line)
-                .is_some_and(|line| line_display_width(line) > 0)
+                .is_some_and(|line| line_display_width(&line.line) > 0)
         }) else {
             let line = wrapped_cells
                 .iter()
@@ -433,36 +448,41 @@ fn render_table_row(
             out.push(line.style(row_style));
             continue;
         };
-        let mut spans = Vec::new();
+        let mut out_line = HyperlinkLine::default();
         for (column, width) in column_widths
             .iter()
             .enumerate()
             .take(last_visible_column + 1)
         {
-            spans.push(Span::raw(" ".repeat(TABLE_CELL_PADDING)));
-            let mut line = wrapped_cells[column]
+            push_blank(&mut out_line, TABLE_CELL_PADDING);
+            let line = wrapped_cells[column]
                 .get(row_line)
                 .cloned()
                 .unwrap_or_default();
-            let remaining = width.saturating_sub(line_display_width(&line));
+            let remaining = width.saturating_sub(line_display_width(&line.line));
             let (left_padding, right_padding) = match alignments[column] {
                 Alignment::Left | Alignment::None => (0, remaining),
                 Alignment::Center => (remaining / 2, remaining - remaining / 2),
                 Alignment::Right => (remaining, 0),
             };
             if left_padding > 0 {
-                spans.push(Span::raw(" ".repeat(left_padding)));
+                push_blank(&mut out_line, left_padding);
             }
-            spans.append(&mut line.spans);
+            out_line.append(line);
             if column != last_visible_column {
-                spans.push(Span::raw(
-                    " ".repeat(right_padding + TABLE_CELL_PADDING + TABLE_COLUMN_GAP),
-                ));
+                push_blank(
+                    &mut out_line,
+                    right_padding + TABLE_CELL_PADDING + TABLE_COLUMN_GAP,
+                );
             }
         }
-        out.push(Line::from(spans).style(row_style));
+        out.push(out_line.style(row_style));
     }
     out
+}
+
+fn push_blank(line: &mut HyperlinkLine, columns: usize) {
+    line.line.push_span(Span::raw(" ".repeat(columns)));
 }
 
 /// A header-only table too wide for its columns, as its pipe source
@@ -471,7 +491,7 @@ fn render_table_row(
 fn render_table_pipe_fallback(
     header: &[TableCell],
     alignments: &[Alignment],
-) -> Vec<Line<'static>> {
+) -> Vec<HyperlinkLine> {
     let mut row = String::from("|");
     for cell in header {
         row.push(' ');
@@ -488,23 +508,20 @@ fn render_table_pipe_fallback(
         });
         delimiter.push('|');
     }
-    vec![Line::from(row), Line::from(delimiter)]
+    vec![Line::from(row).into(), Line::from(delimiter).into()]
 }
 
 /// A cell's content wrapped to `width`, each hard-broken line on its own,
-/// its inline styles kept; an empty cell is one empty line.
-fn wrap_cell(cell: &TableCell, width: usize) -> Vec<Line<'static>> {
+/// its inline styles and links kept (a link split over rows is linked on
+/// each); an empty cell is one empty line.
+fn wrap_cell(cell: &TableCell, width: usize) -> Vec<HyperlinkLine> {
     let mut wrapped = Vec::new();
     for source_line in &cell.lines {
-        let rendered = word_wrap_line(source_line, RtOptions::new(width.max(1)));
-        if rendered.is_empty() {
-            wrapped.push(source_line.clone());
-        } else {
-            wrapped.extend(rendered.iter().map(line_to_static));
-        }
+        let rendered = word_wrap_line_with_source(&source_line.line, RtOptions::new(width.max(1)));
+        wrapped.extend(remap_source_wrapped_line(source_line, rendered));
     }
     if wrapped.is_empty() {
-        wrapped.push(Line::default());
+        wrapped.push(HyperlinkLine::default());
     }
     wrapped
 }

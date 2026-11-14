@@ -19,6 +19,7 @@ use std::io::{self, stdout, Result, Stdout, Write};
 use std::panic;
 use std::time::{Duration, Instant};
 
+use crate::terminal_hyperlinks::HyperlinkLine;
 use ratatui::backend::{Backend, CrosstermBackend};
 use ratatui::crossterm::event::{
     DisableBracketedPaste, EnableBracketedPaste, PopKeyboardEnhancementFlags,
@@ -30,7 +31,6 @@ use ratatui::crossterm::terminal::{
 use ratatui::crossterm::terminal::{BeginSynchronizedUpdate, EndSynchronizedUpdate};
 use ratatui::crossterm::{execute, queue};
 use ratatui::layout::{Offset, Rect};
-use ratatui::text::Line;
 
 use crate::app_event::{AppEvent, AppEventSender};
 use crate::custom_terminal;
@@ -103,10 +103,10 @@ pub(crate) fn enhanced_keys_supported() -> bool {
 /// to be written above it. Tests draw it on a vt100 screen.
 pub(crate) struct Tui<B: Backend<Error = io::Error> + Write = CrosstermBackend<Stdout>> {
     pub(crate) terminal: CustomTerminal<B>,
-    pending_history_lines: Vec<Line<'static>>,
+    pending_history_lines: Vec<HyperlinkLine>,
     /// Every line written into the scrollback since it was last cleared.
     #[cfg(test)]
-    pub(crate) written_history_lines: Vec<Line<'static>>,
+    pub(crate) written_history_lines: Vec<HyperlinkLine>,
     /// The inline viewport, kept while an overlay holds the alternate screen.
     alt_saved_viewport: Option<Rect>,
     /// Scrollback's tail has the mouse (off the alternate screen).
@@ -201,8 +201,12 @@ impl<B: Backend<Error = io::Error> + Write> Tui<B> {
         self.inline_mouse_capture
     }
 
-    pub(crate) fn insert_history_lines(&mut self, lines: Vec<Line<'static>>) {
-        self.pending_history_lines.extend(lines);
+    pub(crate) fn insert_history_lines(
+        &mut self,
+        lines: impl IntoIterator<Item = impl Into<HyperlinkLine>>,
+    ) {
+        self.pending_history_lines
+            .extend(lines.into_iter().map(Into::into));
     }
 
     /// Draws the viewport at `height` rows, after writing the pending

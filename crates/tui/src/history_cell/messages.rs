@@ -24,6 +24,7 @@ use super::{
 use crate::markdown_render::ListSpacing;
 use crate::render::line_utils::prefix_lines;
 use crate::style::user_message_style;
+use crate::terminal_hyperlinks::{adaptive_wrap_hyperlink_lines, visible_lines, HyperlinkLine};
 use crate::ui_consts::LIVE_PREFIX_COLS;
 use crate::user_message::UserMessage;
 use crate::wrapping::{word_wrap_lines, RtOptions};
@@ -131,16 +132,17 @@ impl StreamId {
     }
 }
 
-/// Rows of a streaming answer, rendered at the width its stream started at.
+/// Rows of a streaming answer, rendered at the width its stream started at,
+/// with their links.
 #[derive(Debug)]
 pub(crate) struct AgentMessageCell {
-    lines: Vec<Line<'static>>,
+    lines: Vec<HyperlinkLine>,
     is_first_line: bool,
     stream: StreamId,
 }
 
 impl AgentMessageCell {
-    pub(crate) fn new(lines: Vec<Line<'static>>, is_first_line: bool, stream: StreamId) -> Self {
+    pub(crate) fn new(lines: Vec<HyperlinkLine>, is_first_line: bool, stream: StreamId) -> Self {
         Self {
             lines,
             is_first_line,
@@ -151,7 +153,11 @@ impl AgentMessageCell {
 
 impl HistoryCell for AgentMessageCell {
     fn display_lines(&self, width: u16) -> Vec<Line<'static>> {
-        word_wrap_lines(
+        visible_lines(self.display_hyperlink_lines(width))
+    }
+
+    fn display_hyperlink_lines(&self, width: u16) -> Vec<HyperlinkLine> {
+        adaptive_wrap_hyperlink_lines(
             &self.lines,
             RtOptions::new(width as usize)
                 .initial_indent(if self.is_first_line {
@@ -163,8 +169,20 @@ impl HistoryCell for AgentMessageCell {
         )
     }
 
+    fn transcript_hyperlink_lines(&self, width: u16) -> Vec<HyperlinkLine> {
+        self.display_hyperlink_lines(width)
+    }
+
+    fn compact_hyperlink_lines(&self, width: u16) -> Vec<HyperlinkLine> {
+        self.display_hyperlink_lines(width)
+    }
+
+    fn retained_hyperlink_lines(&self, width: u16, _detailed: bool) -> Vec<HyperlinkLine> {
+        self.display_hyperlink_lines(width)
+    }
+
     fn raw_lines(&self) -> Vec<Line<'static>> {
-        plain_lines(self.lines.clone())
+        plain_lines(visible_lines(self.lines.clone()))
     }
 
     fn is_stream_continuation(&self) -> bool {
@@ -205,6 +223,24 @@ impl HistoryCell for StreamTailCell {
         self.shown
             .as_ref()
             .map_or_else(Vec::new, |shown| shown.display_lines(width))
+    }
+
+    fn display_hyperlink_lines(&self, width: u16) -> Vec<HyperlinkLine> {
+        self.shown
+            .as_ref()
+            .map_or_else(Vec::new, |shown| shown.display_hyperlink_lines(width))
+    }
+
+    fn transcript_hyperlink_lines(&self, width: u16) -> Vec<HyperlinkLine> {
+        self.display_hyperlink_lines(width)
+    }
+
+    fn compact_hyperlink_lines(&self, width: u16) -> Vec<HyperlinkLine> {
+        self.display_hyperlink_lines(width)
+    }
+
+    fn retained_hyperlink_lines(&self, width: u16, _detailed: bool) -> Vec<HyperlinkLine> {
+        self.display_hyperlink_lines(width)
     }
 
     fn raw_lines(&self) -> Vec<Line<'static>> {
@@ -248,7 +284,7 @@ impl AgentMarkdownCell {
         }
     }
 
-    fn render(&self, width: u16, list_spacing: ListSpacing) -> Vec<Line<'static>> {
+    fn render(&self, width: u16, list_spacing: ListSpacing) -> Vec<HyperlinkLine> {
         self.rendered.render(width, list_spacing, || {
             // Two columns for the `• ` or `  ` in front of each row.
             let wrap_width = usize::from(width.saturating_sub(2)).max(1);
@@ -260,7 +296,7 @@ impl AgentMarkdownCell {
             );
             // As the stream's rows show (`AgentMessageCell`), so the
             // answer keeps its rows when its stream is consolidated.
-            word_wrap_lines(
+            adaptive_wrap_hyperlink_lines(
                 &lines,
                 RtOptions::new(usize::from(width))
                     .initial_indent("• ".dim().into())
@@ -272,10 +308,26 @@ impl AgentMarkdownCell {
 
 impl HistoryCell for AgentMarkdownCell {
     fn display_lines(&self, width: u16) -> Vec<Line<'static>> {
+        visible_lines(self.display_hyperlink_lines(width))
+    }
+
+    fn retained_lines(&self, width: u16, detailed: bool) -> Vec<Line<'static>> {
+        visible_lines(self.retained_hyperlink_lines(width, detailed))
+    }
+
+    fn display_hyperlink_lines(&self, width: u16) -> Vec<HyperlinkLine> {
         self.render(width, ListSpacing::AfterMultiline)
     }
 
-    fn retained_lines(&self, width: u16, _detailed: bool) -> Vec<Line<'static>> {
+    fn transcript_hyperlink_lines(&self, width: u16) -> Vec<HyperlinkLine> {
+        self.display_hyperlink_lines(width)
+    }
+
+    fn compact_hyperlink_lines(&self, width: u16) -> Vec<HyperlinkLine> {
+        self.display_hyperlink_lines(width)
+    }
+
+    fn retained_hyperlink_lines(&self, width: u16, _detailed: bool) -> Vec<HyperlinkLine> {
         self.render(width, ListSpacing::Uniform)
     }
 

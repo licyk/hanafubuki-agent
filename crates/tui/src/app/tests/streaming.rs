@@ -39,7 +39,9 @@ impl Harness {
 
     /// The lines written into the scrollback, as text.
     fn written(&self) -> Vec<String> {
-        plain(&self.tui.written_history_lines)
+        plain(&crate::terminal_hyperlinks::visible_lines(
+            self.tui.written_history_lines.clone(),
+        ))
     }
 
     /// The stream's tail entry, while it is in the transcript.

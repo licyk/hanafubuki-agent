@@ -16,11 +16,12 @@ use crate::transcript_view::TranscriptView;
 
 const WIDTH: u16 = 60;
 
-fn text(lines: &[Line<'static>]) -> Vec<String> {
+fn text(lines: &[HyperlinkLine]) -> Vec<String> {
     lines
         .iter()
         .map(|line| {
-            line.spans
+            line.line
+                .spans
                 .iter()
                 .map(|span| span.content.as_ref())
                 .collect::<String>()
@@ -37,7 +38,10 @@ fn info(text: &str) -> Arc<dyn HistoryCell> {
 /// An answer's lines, the first with its bullet.
 fn answer(lines: impl IntoIterator<Item = String>, first: bool) -> Arc<dyn HistoryCell> {
     Arc::new(AgentMessageCell::new(
-        lines.into_iter().map(Line::from).collect(),
+        lines
+            .into_iter()
+            .map(|line| Line::from(line).into())
+            .collect(),
         first,
         StreamId::next(),
     ))

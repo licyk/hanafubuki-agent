@@ -51,6 +51,9 @@ use search::Search;
 use select_mode::SelectMode;
 use selection::Selection;
 use snapshot::ViewSnapshot;
+#[cfg(test)]
+pub(crate) use text::TextLayout;
+#[cfg(not(test))]
 use text::TextLayout;
 
 pub(crate) use history::TranscriptHistoryState;

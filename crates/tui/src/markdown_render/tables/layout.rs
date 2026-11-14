@@ -230,7 +230,11 @@ pub(super) fn line_display_width(line: &Line<'_>) -> usize {
 }
 
 pub(super) fn cell_display_width(cell: &TableCell) -> usize {
-    cell.lines.iter().map(line_display_width).max().unwrap_or(0)
+    cell.lines
+        .iter()
+        .map(|line| line_display_width(&line.line))
+        .max()
+        .unwrap_or(0)
 }
 
 pub(super) fn longest_token_width(text: &str) -> usize {

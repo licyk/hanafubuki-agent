@@ -2,15 +2,15 @@
 
 //! The last render of a Markdown cell, for one width and list spacing, so
 //! a long transcript is not rendered again on every frame or layout cache
-//! miss; another width renders again and replaces it.
-
-use ratatui::text::Line;
+//! miss; another width renders again and replaces it. The rows keep their
+//! links.
 
 use crate::markdown_render::ListSpacing;
+use crate::terminal_hyperlinks::HyperlinkLine;
 
 #[derive(Debug, Default)]
 pub(super) struct MarkdownRenderCache {
-    cached: parking_lot::Mutex<Option<(MarkdownRenderKey, Vec<Line<'static>>)>>,
+    cached: parking_lot::Mutex<Option<(MarkdownRenderKey, Vec<HyperlinkLine>)>>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -25,8 +25,8 @@ impl MarkdownRenderCache {
         &self,
         width: u16,
         list_spacing: ListSpacing,
-        render: impl FnOnce() -> Vec<Line<'static>>,
-    ) -> Vec<Line<'static>> {
+        render: impl FnOnce() -> Vec<HyperlinkLine>,
+    ) -> Vec<HyperlinkLine> {
         let key = MarkdownRenderKey {
             width,
             list_spacing,
@@ -42,7 +42,7 @@ impl MarkdownRenderCache {
     }
 
     #[cfg(test)]
-    pub(super) fn replace_cached_lines(&self, lines: Vec<Line<'static>>) {
+    pub(super) fn replace_cached_lines(&self, lines: Vec<HyperlinkLine>) {
         if let Some((_, cached)) = self.cached.lock().as_mut() {
             *cached = lines;
         }

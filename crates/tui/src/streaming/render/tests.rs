@@ -175,7 +175,9 @@ fn incremental_render_does_not_add_blank_line_before_html_block() {
     for chunks in streams {
         let (_, render) = assert_stream_matches_full_render(chunks, Some(80));
         assert_eq!(
-            lines_to_plain_strings(&render.lines),
+            lines_to_plain_strings(&crate::terminal_hyperlinks::visible_lines(
+                render.lines.clone()
+            )),
             vec!["Paragraph.", "<div>x</div>", "", "Following paragraph."],
         );
     }
@@ -268,7 +270,7 @@ fn long_open_fence_retains_its_rendered_prefix() {
     let mut source = String::new();
     let mut render = new_render();
     append_and_assert_matches_full(&mut render, &mut source, "```rust\nfn main() {\n", Some(80));
-    let first_line = render.lines[0].spans[1].content.as_ptr();
+    let first_line = render.lines[0].line.spans[1].content.as_ptr();
     for index in 0..512 {
         append(
             &mut render,
@@ -278,7 +280,7 @@ fn long_open_fence_retains_its_rendered_prefix() {
         );
         assert!(render.open_code_fence.is_some());
     }
-    assert_eq!(render.lines[0].spans[1].content.as_ptr(), first_line);
+    assert_eq!(render.lines[0].line.spans[1].content.as_ptr(), first_line);
     append_and_assert_matches_full(&mut render, &mut source, "}\n```\n", Some(80));
 }
 

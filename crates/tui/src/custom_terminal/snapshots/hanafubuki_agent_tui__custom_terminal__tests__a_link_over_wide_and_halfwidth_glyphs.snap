@@ -1,0 +1,7 @@
+---
+source: crates/tui/src/custom_terminal/tests.rs
+assertion_line: 217
+expression: terminal.backend().vt100().screen().contents()
+---
+prefix 漢字 ｶﾞ
+tail

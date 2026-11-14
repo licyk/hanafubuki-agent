@@ -2338,7 +2338,214 @@ and any module-size exception.
         math mode to `prose_preview.rs`. M6 adds mermaid to the tracker's
         mutable fences (`markdown_render/streaming.rs`) and leaves it out of
         `OpenCodeFence::detect`.
-- [ ] M4: OSC 8 hyperlinks and URL-aware wrapping.
+- [x] M4: OSC 8 hyperlinks and URL-aware wrapping.
+      Done (2026-11-14):
+      - Wrapping (`wrapping/`, Codex 57a808a392's `wrapping.rs`, which
+        replaces the rust-v0.93.0 textwrap port): `mod.rs` the entry points
+        and `RtOptions`, `ranges.rs` (wrap ranges with compound graphemes
+        and halfwidth sound marks projected as painted, an owned textwrap
+        line mapped back instead of a panic), `urls.rs` (URL-like tokens,
+        the rows of a line mixing URLs and prose), `spans.rs` (flatten and
+        slice, `display_width`, `line_width`). The standard path keeps the
+        caller's options; `adaptive_wrap_line_with_source` keeps a URL token
+        whole (a URL-only line wraps at spaces without breaking; a mixed
+        line moves a URL whole and splits prose only when it is wider than
+        a row) and every path returns each row's source range
+        (`WrappedLine`). `word_wrap_lines_borrowed` and the unused
+        `RtOptions` setters are gone; M1's `markdown_render::output`
+        `display_width` is the wrapping one.
+      - Hyperlinks (`terminal_hyperlinks/`, Codex's, without its copy
+        sources and trusted file links): `HyperlinkLine` (a line and the
+        display columns each web destination covers), Codex's bare-URL scan
+        (`web_links_in_text`, punctuation and unbalanced closers trimmed),
+        `web_destination` (at most 8 KiB, control characters — ESC, BEL,
+        C1 such as `\u{9c}`/`\u{9b}`, CR/LF, DEL — removed, then `http`/`https`
+        with a host; `mailto:`, `file:`, `javascript:`, `ftp:`, `data:`,
+        custom schemes and scheme-less hosts are never linked; it replaces
+        M1's `is_web_destination`), `remap_source_wrapped_line` (each row's
+        part of each link from the wrap's ranges: a split link is linked
+        whole on every row), `prefix_hyperlink_lines`, `append`/`prefixed`,
+        `adaptive_wrap_hyperlink_lines`; `emission.rs`: `decorate_spans`
+        (the scrollback writer's spans: control characters left out of the
+        text as ratatui leaves them out of a buffer, each link between its
+        OSC 8 sequences, closed on its row), `mark_hyperlink_cells` (a
+        linked cell's symbol carries the link around its visible text, with
+        `CellDiffOption::ForcedWidth`), `osc8_parts`.
+      - Renderer: the writer, its tables (cells, grid rows, key/value
+        records, spillover) and its streaming metadata carry
+        `HyperlinkLine`s; `links.rs` has Codex's policy (a web label in the
+        link style and linked; the destination after it, linked too, unless
+        `WebLinkDisplay::LabelOnly`; a label that shows nothing keeps the
+        destination; local file links unchanged and unlinked) and
+        `style_bare_web_urls` (prose and table text, not code or a link's
+        label). URL-only rows: the rows textwrap gives a URL's prefix (its
+        leading whitespace, a marker, `>`) stay on the URL's row when blank
+        or when the URL is wider than its row (`keep_url_with_its_prefix`;
+        Codex leaves an empty row or a bullet alone there).
+        `render_markdown_unlinked` (thinking) always shows the address.
+      - Streams and cells: the stream's render, open fence, preview, queue,
+        controller (the plan's block too) and `StreamUpdate` cells hold
+        `HyperlinkLine`s, and `finalize_remaining` compares them with their
+        links, so a committed row that differs from the final render only by
+        its link asks for the repair (decided so: the scrollback's copy
+        would link the wrong address). `HistoryCell` gains the
+        `display/transcript/compact/retained_hyperlink_lines` twins, plain
+        lines by default; `AgentMessageCell`, `StreamTailCell`,
+        `AgentMarkdownCell`, `ProposedPlanStreamCell`, `ProposedPlanCell` and
+        Scrollback's `Remainder` answer them (their plain lines are the
+        twins' visible lines), `LiveCell` forwards them (and
+        `retained_lines`); the markdown cache keeps `HyperlinkLine`s; the
+        cells rewrap with `adaptive_wrap_hyperlink_lines`.
+      - Display: `transcript_entry_lines` returns `HyperlinkLine`s and
+        `TextLayout::linked` keeps each display row's links (`expand_tabs`
+        moves them; a line with links wider than the view wraps URL-aware
+        and a row still wider is cut at the width, as a terminal wraps it);
+        `render` marks the cells, so Fullscreen, Scrollback's tail and the
+        Ctrl+T overlay paint links. `custom_terminal`: the diff measures a
+        cell by its visible symbol (`painted_width`), and `draw` opens a link
+        before a run of its cells and closes it before any cursor move or
+        another link (and at the end), so none stays open past a row, a wide
+        glyph's skipped column or a clear. `tail_lines`, `Tail::take`,
+        `scrollback_lines`, `Tui::insert_history_lines` and
+        `insert_history_lines` (now `impl Into<HyperlinkLine>`) carry links;
+        the scrollback writer prints `decorate_spans`.
+      - Detection: `terminal_detection.rs` (the identity part of Codex's
+        `codex-terminal-detection`: `TERM_PROGRAM` but tmux's, Ghostty,
+        WezTerm, iTerm2, kitty, Alacritty, Konsole, GNOME Terminal, VTE,
+        Windows Terminal, then `TERM`; tmux/Zellij; over an injected
+        environment). `WebLinkDisplay::for_terminal` (Codex's list: Ghostty,
+        iTerm2, WezTerm, Rex, kitty, VS Code, Alacritty, Windows Terminal,
+        Konsole, GNOME Terminal, VTE show the label alone; Terminal.app,
+        Warp, Dumb, unknown, any multiplexer, `TERM` `dumb`/`screen*`/`tmux*`,
+        `STY`, or standard output not a terminal keep the destination) is
+        decided once at launch (`interface.rs`) and kept in
+        `markdown_render/preferences.rs` beside `tui.rendering` (a thread's
+        own in tests, where it is the fallback). M2's row cap reads the same
+        ladder: `TERM=wezterm` now gets WezTerm's 3,500, and a variable set
+        empty counts as Codex's `has` does.
+      - What the user sees: on a terminal of the list, `See the docs` with
+        the label clickable (the terminal's gesture, often Ctrl/Cmd-click;
+        in Fullscreen, which captures the mouse, with the terminal's bypass,
+        usually Shift — the interface opens nothing itself); on any other,
+        `See the docs (https://example.com/docs)` with both linked, so a
+        terminal that opens OSC 8 links still does. Bare URLs take the link
+        style and are linked. A URL that fits a row is never split; one
+        wider than the conversation is cut at each row's edge with each
+        piece opening the whole URL; in a table cell it wraps in its column
+        (as Codex). Selection and find work on the text shown; `/raw` shows
+        the addresses. A terminal that ignores OSC 8 shows the same text.
+      - Deviations: (1) OSC 8 is written on every terminal, as in Codex;
+        detection only hides the address. (2) A link closes at each cursor
+        move (Codex's frame keeps one open across rows; its
+        `terminal_draw_coalesces_wrapped_hyperlink_output` adapted to a pair
+        per row). (3) A URL wider than its row is cut where the transcript
+        lays it out, Scrollback included (Codex leaves its scrollback rows
+        to the terminal's autowrap, which the tail's and the rewrite's row
+        counts cannot follow). (4) The prefix kept on a URL's row (above).
+        (5) Wrapping still patches a line's style over its spans' (Codex
+        lets the span's win), as before and as the scrollback writer merges
+        them, so no colour changes outside links. (6) No setting: the plan
+        names none and Codex's `tui_rendering` has none. (7) Not ported:
+        trusted file links, copy sources (`LogicalLineSource`), Codex's
+        URL-annotated composer, popups, user messages and tool output, and
+        the terminal-wrap `HistoryLineWrapPolicy`; thinking shows its links
+        as text. (8) The detection tests are a reduced matrix of Codex's
+        identity cases, not its 930-line suite. (9) `TextLayout`'s fast
+        path and word breaking measure with `display_width`: a row ending
+        in a halfwidth sound mark was cut by a column before (seen by the
+        sweep below). (10) The plan's docs go under `#terminal`, the brief's
+        under `#rendering`: both are updated.
+      - Tests (`terminal_hyperlinks/tests.rs`, `markdown_render/links/tests.rs`,
+        `terminal_detection/tests.rs`, `wrapping/{tests,ranges/tests}`,
+        `streaming/controller/tests/links.rs`, `app/tests/hyperlinks.rs`, and
+        additions to the custom terminal, insert-history, TextLayout and
+        replay tests): Codex's wrapping tests (47, its line-level URL
+        tests through `url_and_prose_tokens`) and reuse tests (2); Codex's
+        hyperlink tests (columns, punctuation, balanced parentheses, a 64 KiB
+        prefix, 50,000 URLs, unmatched closers, joined emoji, one pair per
+        run, wrapping across indented Unicode rows, oversized destinations,
+        forced width for the diff); Codex's web-link tests (the supporting
+        and the fallback terminals, non-web and literal URLs, empty labels,
+        prose and table wrapping, bare URLs, streaming equal to the full
+        render at every prefix, the two presentations' snapshot, the same
+        text as Codex's oracle); hostile destinations (ESC, BEL, `\u{9c}`,
+        `\u{9b}`, CR/LF/TAB, DEL, an embedded OSC 8, `CSI 2J`) and labels
+        (their own OSC 0/OSC 8/CSI), the bytes asserted (two BELs, two
+        ESCs); the display per platform's environment (Windows Terminal,
+        the legacy console, VS Code, Terminal.app, iTerm2, Ghostty, WezTerm,
+        xterm, VTE, Konsole, kitty, a CI `TERM=dumb`, tmux, Zellij, screen),
+        never the runner's; the bytes written (`VT100Backend::take_written`,
+        `test_support::osc8_links`, which fails on a link open across a
+        cursor move, a line feed, a clear or the end): a wrapped URL opened
+        and closed on each row, a link over wide and halfwidth glyphs (Codex's
+        `forced_width` screen as the oracle), a changed link drawn again, the
+        diff measuring a linked wide cell, Codex's forced-width shrink, a
+        linked row through the scrollback writer, one it wraps, a hostile
+        row; the screen equals the layout's rows (OSC 8 counts no column);
+        tabs before a link; a URL wider than the view cut at each width
+        8–39; a marker kept with an over-wide URL; streams of six linked
+        samples (prose, bare URLs, a table, nested lists, a quote with CJK
+        and sound marks, empty and mailto links) by line and by character at
+        None/80/40/20 in both displays equal the full render with links, no
+        repair; a row differing only by its link asks for one; the tail
+        links what has arrived and withholds an unfinished destination; a
+        replayed answer and plan link in every presentation; the text under
+        each destination's columns is its label at every stage (render,
+        answer and plan cells, `TextLayout` narrower, the buffer's cells)
+        across a quote, a nested list, a table in a list, key/value records,
+        a bare URL and a CJK label, both displays, 24–80 columns; end to end
+        in both presentations (a short Scrollback screen, so the answer
+        leaves the tail): the links' bytes, the label alone or with its
+        address, after a resize's rewrite, in the Ctrl+T overlay. Fail-first
+        by mutation, each seen failing then restored: no cell marking (7
+        tests), the scrollback writer without `decorate_spans` (5, two end to
+        end), links kept open across rows (3) and closed only at row changes
+        (the wide-glyph test), the end's comparison without links (the repair
+        test), no control filter (2 hostile tests), no bare-URL linking (7);
+        the sweep failed first on the sound-mark cut (deviation 9). Not
+        mutated: the detection matrix, the wrapping ports.
+      - Snapshots: 2 existing changed, each reviewed: Codex's halfwidth table
+        (`Final ｶﾞ` / `ﾊﾟ row.`, now Codex's byte for byte: regression fixed)
+        and the uniform list-spacing snapshot's long URL (kept whole on its
+        row, now Codex's: improved URL handling). New: the two link
+        presentations, the wide/halfwidth link screen. No snapshot of the
+        composer, popups or footers changed.
+      - Goldens: none changed. Dependencies: none added.
+      - Docs (both languages): `terminal-interface` (`#rendering` the Links
+        bullet and a Long addresses bullet; `#terminal` OSC 8, which
+        terminals show the label alone and how that is detected, clicking
+        with Fullscreen's mouse capture), `architecture` (the Markdown
+        bullet; a Hyperlinks and wrapping bullet with the deviations),
+        `internals#tui-details` (a Hyperlinks bullet). No setting, so no
+        `config-reference` change.
+      - Hanafubuki at its next pin: nothing (the TUI crate only).
+      - Module size: no exception added or raised.
+      - Validation: `cargo fmt --all --check`; `RUSTFLAGS="-D warnings"
+        cargo check --workspace --all-targets --all-features`; `cargo
+        clippy --workspace --all-targets --all-features -- -D warnings`;
+        `cargo xtask check` (the notices check first failed on the new
+        end-to-end test, listed as original); `cargo test --workspace
+        --all-features --no-fail-fast` (4537 passed, none failed, no flake
+        seen); `bun install --frozen-lockfile`, `bun run
+        format:check:site`, `bun run site:check`, `bun run site:test` (28
+        passed), and the six changed pages compiled with the store's
+        `@mdx-js/mdx` 3.1.1; `VITE_BASE_PATH=/hanafubuki-agent/ bun run
+        site:build` not run locally (port 3000 held by another project's
+        server); CI's Site run covers it.
+      - Not verified without real terminals: whether each listed terminal
+        opens the links (and with which gesture), Windows conhost and
+        Terminal.app ignoring the sequences cleanly, tmux/Zellij/screen
+        passing them through, and how a terminal shows a link cut over rows.
+      - For M5–M8: a cell that shows Markdown answers the
+        `*_hyperlink_lines` twins (and `LiveCell` forwards them); the writer
+        links what goes through `push_span` inside a link and annotates what
+        goes through `push_text_span` (prose), so math (M5) and mermaid (M6)
+        output should go through `push_span` or as code; a render that drops
+        its links uses `render_markdown_unlinked`. M7's command output is
+        plain lines without links (annotate with `annotate_web_urls_in_line`
+        and answer the twins to link URLs there). Over-wide rows are cut by
+        `TextLayout`; the scrollback writer never writes a row wider than
+        the screen.
 - [ ] M5: math (D20).
 - [ ] M6: mermaid, as `crates/tui/src/mermaid/` (D22).
 - [ ] M7: SGR colour in command output, live and on replay (D21).

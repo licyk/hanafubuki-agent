@@ -12,7 +12,7 @@ use crate::markdown::render_markdown_agent_with_list_spacing;
 fn render(source: &str, width: usize, spacing: ListSpacing) -> Vec<String> {
     render_markdown_agent_with_list_spacing(source, Some(width), None, spacing)
         .iter()
-        .map(|line| line.to_string().trim_end().to_owned())
+        .map(|line| line.line.to_string().trim_end().to_owned())
         .collect()
 }
 

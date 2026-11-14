@@ -34,7 +34,7 @@ impl<'a> Writer<'a> {
     pub(super) fn end_list(&mut self) {
         self.flush_current_line();
         if let Some(list) = self.uniform_lists.pop() {
-            list.finish(&mut self.text.lines);
+            list.finish(&mut self.lines);
         }
         self.list_indices.pop();
         self.list_needs_blank_before_next_item.pop();
@@ -96,9 +96,9 @@ impl<'a> Writer<'a> {
             ListSpacing::Uniform => self.uniform_lists.last().is_some_and(|list| list.has_item),
         };
         if separate {
-            let index = self.text.lines.len();
+            let index = self.lines.len();
             self.push_blank_line();
-            if self.text.lines.len() > index {
+            if self.lines.len() > index {
                 if let Some(list) = self.uniform_lists.last_mut() {
                     list.separators.push(index);
                 }
@@ -107,7 +107,7 @@ impl<'a> Writer<'a> {
         if let Some(list) = self.uniform_lists.last_mut() {
             list.has_item = true;
         }
-        self.list_item_start_line_counts.push(self.text.lines.len());
+        self.list_item_start_line_counts.push(self.lines.len());
         self.pending_marker_line = true;
         let depth = self.list_indices.len();
         let is_ordered = self
@@ -155,12 +155,12 @@ impl<'a> Writer<'a> {
         self.flush_current_line();
         let start_line_count = self.list_item_start_line_counts.pop().unwrap_or_default();
         if let Some(list) = self.uniform_lists.last_mut() {
-            let rows = &self.text.lines[start_line_count..];
+            let rows = &self.lines[start_line_count..];
             list.multiline |= rows.len() > 1
                 || (rows.len() == 1
                     && self.wrap_width.is_some_and(|width| rows[0].width() > width));
         }
-        if self.text.lines.len().saturating_sub(start_line_count) > 1 {
+        if self.lines.len().saturating_sub(start_line_count) > 1 {
             if let Some(needs_blank) = self.list_needs_blank_before_next_item.last_mut() {
                 *needs_blank = true;
             }

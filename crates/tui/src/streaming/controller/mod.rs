@@ -22,12 +22,14 @@ use std::time::{Duration, Instant};
 use ratatui::prelude::Stylize;
 use ratatui::text::Line;
 
+use crate::terminal_hyperlinks::HyperlinkLine;
+
 use crate::history_cell::{
     self, AgentMarkdownCell, HistoryCell, LiveCell, ProposedPlanCell, StreamId, StreamTailCell,
 };
 use crate::markdown_render::ListSpacing;
-use crate::render::line_utils::prefix_lines;
 use crate::style::proposed_plan_style;
+use crate::terminal_hyperlinks::prefix_hyperlink_lines;
 use state::StreamCore;
 
 /// A finished stream's cell, to replace the cells its rows were committed
@@ -66,7 +68,7 @@ pub(crate) struct Finalized {
 /// The stream's tail entry and what it was last told to show.
 struct Tail {
     cell: Arc<LiveCell<StreamTailCell>>,
-    shown: (Vec<Line<'static>>, bool),
+    shown: (Vec<HyperlinkLine>, bool),
 }
 
 impl Tail {
@@ -82,9 +84,9 @@ impl Tail {
     fn update(
         &mut self,
         committed: Option<Box<dyn HistoryCell>>,
-        lines: Vec<Line<'static>>,
+        lines: Vec<HyperlinkLine>,
         first: bool,
-        shown: impl FnOnce(Vec<Line<'static>>) -> Box<dyn HistoryCell>,
+        shown: impl FnOnce(Vec<HyperlinkLine>) -> Box<dyn HistoryCell>,
     ) -> Option<StreamUpdate> {
         let changed = self.shown.0 != lines || (!lines.is_empty() && self.shown.1 != first);
         if committed.is_none() && !changed {
@@ -219,7 +221,7 @@ impl StreamController {
         !self.header_emitted && self.core.enqueued_stable_len == 0
     }
 
-    fn emit(&mut self, lines: Vec<Line<'static>>) -> Option<Box<dyn HistoryCell>> {
+    fn emit(&mut self, lines: Vec<HyperlinkLine>) -> Option<Box<dyn HistoryCell>> {
         if lines.is_empty() {
             return None;
         }
@@ -233,7 +235,7 @@ impl StreamController {
     }
 
     #[cfg(test)]
-    pub(crate) fn tail_lines(&self) -> Vec<Line<'static>> {
+    pub(crate) fn tail_lines(&self) -> Vec<HyperlinkLine> {
         self.core.current_tail_lines()
     }
 
@@ -353,7 +355,7 @@ impl PlanStreamController {
 
     fn emit(
         &mut self,
-        lines: Vec<Line<'static>>,
+        lines: Vec<HyperlinkLine>,
         include_bottom_padding: bool,
     ) -> Option<Box<dyn HistoryCell>> {
         if lines.is_empty() && !include_bottom_padding {
@@ -374,25 +376,25 @@ impl PlanStreamController {
     /// first, its bottom padding at the end.
     fn render_display_lines(
         &self,
-        lines: Vec<Line<'static>>,
+        lines: Vec<HyperlinkLine>,
         include_bottom_padding: bool,
-    ) -> Vec<Line<'static>> {
-        let mut out_lines: Vec<Line<'static>> = Vec::new();
+    ) -> Vec<HyperlinkLine> {
+        let mut out_lines: Vec<HyperlinkLine> = Vec::new();
         if !self.header_emitted {
-            out_lines.push(vec!["• ".dim(), "Proposed Plan".bold()].into());
-            out_lines.push(Line::from(" "));
+            out_lines.push(Line::from(vec!["• ".dim(), "Proposed Plan".bold()]).into());
+            out_lines.push(Line::from(" ").into());
         }
-        let mut plan_lines: Vec<Line<'static>> = Vec::new();
+        let mut plan_lines: Vec<HyperlinkLine> = Vec::new();
         if !self.top_padding_emitted {
-            plan_lines.push(Line::from(" "));
+            plan_lines.push(Line::from(" ").into());
         }
         plan_lines.extend(lines);
         if include_bottom_padding {
-            plan_lines.push(Line::from(" "));
+            plan_lines.push(Line::from(" ").into());
         }
         let plan_style = proposed_plan_style();
         out_lines.extend(
-            prefix_lines(plan_lines, "  ".into(), "  ".into())
+            prefix_hyperlink_lines(plan_lines, "  ".into(), "  ".into())
                 .into_iter()
                 .map(|line| line.style(plan_style)),
         );
@@ -401,7 +403,8 @@ impl PlanStreamController {
 }
 
 /// An answer's stream as the tests read it: the rows it commits and its
-/// tail, without the cells' indent.
+/// tail, without the cells' indent; their visible lines, or with their
+/// links (`*_linked`).
 #[cfg(test)]
 pub(crate) struct TestStream {
     core: StreamCore,
@@ -430,10 +433,18 @@ impl TestStream {
 
     /// Every queued row, committed.
     pub(crate) fn commit(&mut self) -> Vec<Line<'static>> {
+        crate::terminal_hyperlinks::visible_lines(self.commit_linked())
+    }
+
+    pub(crate) fn commit_linked(&mut self) -> Vec<HyperlinkLine> {
         self.core.tick_batch(usize::MAX)
     }
 
     pub(crate) fn tail(&self) -> Vec<Line<'static>> {
+        crate::terminal_hyperlinks::visible_lines(self.tail_linked())
+    }
+
+    pub(crate) fn tail_linked(&self) -> Vec<HyperlinkLine> {
         self.core.current_tail_lines()
     }
 
@@ -448,6 +459,11 @@ impl TestStream {
     }
 
     pub(crate) fn finalize_checked(&mut self) -> (Vec<Line<'static>>, bool) {
+        let (lines, diverged) = self.finalize_linked_checked();
+        (crate::terminal_hyperlinks::visible_lines(lines), diverged)
+    }
+
+    pub(crate) fn finalize_linked_checked(&mut self) -> (Vec<HyperlinkLine>, bool) {
         let remaining = self.core.finalize_remaining();
         (remaining.lines, remaining.diverged)
     }

@@ -2,6 +2,7 @@
 // Modified from OpenAI Codex 57a808a392 (Apache-2.0).
 
 mod equality;
+mod links;
 mod preview;
 mod resize;
 mod visible;
@@ -402,7 +403,9 @@ fn controller_live_view_matches_render_during_interleaved_table_streaming() {
             }
         }
         let mut visible = emitted.clone();
-        visible.extend(lines_to_plain_strings(&ctrl.tail_lines()));
+        visible.extend(lines_to_plain_strings(
+            &crate::terminal_hyperlinks::visible_lines(ctrl.tail_lines()),
+        ));
         assert_eq!(
             visible,
             full_render(ctrl.committed_source(), width),

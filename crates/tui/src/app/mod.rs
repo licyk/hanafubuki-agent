@@ -43,7 +43,6 @@ use std::time::{Duration, Instant};
 use std::io::{self, Write};
 
 use ratatui::backend::Backend;
-use ratatui::text::Line;
 
 use ratatui::crossterm::event::MouseEvent;
 
@@ -108,7 +107,7 @@ pub(crate) struct App {
     resume_picker: Option<ResumePicker>,
     /// What was committed while an overlay was open, written into the
     /// scrollback when it closes.
-    deferred_history_lines: Vec<Line<'static>>,
+    deferred_history_lines: Vec<crate::terminal_hyperlinks::HyperlinkLine>,
     commit_anim_running: Arc<AtomicBool>,
     next_frame: Option<Instant>,
     last_frame: Option<Instant>,

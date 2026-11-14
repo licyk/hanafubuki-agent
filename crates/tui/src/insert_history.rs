@@ -1,10 +1,16 @@
 // Modified from OpenAI Codex rust-v0.93.0 (Apache-2.0).
+// Modified from OpenAI Codex 57a808a392 (Apache-2.0).
+
+//! Rows written into the terminal's scrollback, above the viewport. A row's
+//! text is printed as ratatui would paint it (control characters left out)
+//! and its web links as OSC 8 hyperlinks, each closed on its row.
 
 use std::fmt;
 use std::io;
 use std::io::Write;
 
-use crate::wrapping::word_wrap_lines_borrowed;
+use crate::terminal_hyperlinks::{decorate_spans, remap_source_wrapped_line, HyperlinkLine};
+use crate::wrapping::word_wrap_line_with_source;
 use ratatui::backend::{Backend, IntoCrossterm};
 use ratatui::crossterm::cursor::MoveTo;
 use ratatui::crossterm::queue;
@@ -28,11 +34,12 @@ use ratatui::text::Span;
 /// (avoids direct stdout references).
 pub fn insert_history_lines<B>(
     terminal: &mut crate::custom_terminal::Terminal<B>,
-    lines: Vec<Line>,
+    lines: impl IntoIterator<Item = impl Into<HyperlinkLine>>,
 ) -> io::Result<()>
 where
     B: Backend<Error = io::Error> + Write,
 {
+    let lines = lines.into_iter().map(Into::into).collect::<Vec<_>>();
     let screen_size = terminal.backend().size().unwrap_or(Size::new(0, 0));
 
     let mut area = terminal.viewport_area;
@@ -42,7 +49,13 @@ where
 
     // Pre-wrap lines using word-aware wrapping so terminal scrollback sees the same
     // formatting as the TUI. This avoids character-level hard wrapping by the terminal.
-    let wrapped = word_wrap_lines_borrowed(&lines, area.width.max(1) as usize);
+    let width = area.width.max(1) as usize;
+    let wrapped = lines
+        .iter()
+        .flat_map(|line| {
+            remap_source_wrapped_line(line, word_wrap_line_with_source(&line.line, width))
+        })
+        .collect::<Vec<_>>();
     let wrapped_lines = wrapped.len() as u16;
     let cursor_top = if area.bottom() < screen_size.height {
         // If the viewport is not at the bottom of the screen, scroll it down to make room.
@@ -96,14 +109,15 @@ where
 
     for line in wrapped {
         queue!(writer, Print("\r\n"))?;
+        let line_style = line.line.style;
         queue!(
             writer,
             SetColors(Colors::new(
-                line.style
+                line_style
                     .fg
                     .map(IntoCrossterm::into_crossterm)
                     .unwrap_or(CColor::Reset),
-                line.style
+                line_style
                     .bg
                     .map(IntoCrossterm::into_crossterm)
                     .unwrap_or(CColor::Reset)
@@ -112,15 +126,20 @@ where
         queue!(writer, Clear(ClearType::UntilNewLine))?;
         // Merge line-level style into each span so that ANSI colors reflect
         // line styles (e.g., blockquotes with green fg).
-        let merged_spans: Vec<Span> = line
-            .spans
-            .iter()
-            .map(|s| Span {
-                style: s.style.patch(line.style),
-                content: s.content.clone(),
-            })
-            .collect();
-        write_spans(writer, merged_spans.iter())?;
+        let merged = HyperlinkLine {
+            line: Line::from(
+                line.line
+                    .spans
+                    .iter()
+                    .map(|s| Span {
+                        style: s.style.patch(line_style),
+                        content: s.content.clone(),
+                    })
+                    .collect::<Vec<_>>(),
+            ),
+            hyperlinks: line.hyperlinks,
+        };
+        write_spans(writer, decorate_spans(&merged).iter())?;
     }
 
     queue!(writer, ResetScrollRegion)?;

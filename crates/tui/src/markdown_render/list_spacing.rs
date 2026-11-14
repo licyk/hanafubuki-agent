@@ -7,8 +7,6 @@
 //! list once any of its items takes more than one row, and streams its
 //! lists without separators until the answer is consolidated.
 
-use ratatui::text::Line;
-
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(crate) enum ListSpacing {
     /// A blank line before the next sibling of an item of several rows.
@@ -33,7 +31,7 @@ pub(super) struct UniformList {
 }
 
 impl UniformList {
-    pub(super) fn finish(self, lines: &mut Vec<Line<'static>>) {
+    pub(super) fn finish<T>(self, lines: &mut Vec<T>) {
         if self.multiline {
             return;
         }

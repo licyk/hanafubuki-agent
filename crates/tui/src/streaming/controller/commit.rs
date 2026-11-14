@@ -9,7 +9,7 @@
 
 use std::time::{Duration, Instant};
 
-use ratatui::text::Line;
+use crate::terminal_hyperlinks::HyperlinkLine;
 
 use super::super::table_holdback::TableHoldbackState;
 use super::state::{StablePrefixLenCache, StreamCore};
@@ -17,20 +17,20 @@ use crate::table_detect::strip_blockquote_prefix;
 
 impl StreamCore {
     /// The first queued row, committed.
-    pub(super) fn tick(&mut self) -> Vec<Line<'static>> {
+    pub(super) fn tick(&mut self) -> Vec<HyperlinkLine> {
         let step = self.state.step();
         self.note_emitted(&step);
         step
     }
 
     /// Up to `max_lines` queued rows, committed.
-    pub(super) fn tick_batch(&mut self, max_lines: usize) -> Vec<Line<'static>> {
+    pub(super) fn tick_batch(&mut self, max_lines: usize) -> Vec<HyperlinkLine> {
         let step = self.state.drain_n(max_lines);
         self.note_emitted(&step);
         step
     }
 
-    fn note_emitted(&mut self, lines: &[Line<'static>]) {
+    fn note_emitted(&mut self, lines: &[HyperlinkLine]) {
         self.emitted_stable_len += lines.len();
         self.emitted.extend_from_slice(lines);
     }

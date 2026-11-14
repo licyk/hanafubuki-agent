@@ -1,6 +1,6 @@
 ---
 source: crates/tui/src/markdown_render/tests/tables.rs
-assertion_line: 144
+assertion_line: 146
 expression: "format!(\"grid (23 cells):\\n{}\\n\\nrecords (17 cells):\\n{}\",\nplain_lines(&grid).join(\"\\n\"), plain_lines(&records).join(\"\\n\"))"
 ---
 grid (23 cells):
@@ -18,8 +18,8 @@ grid (23 cells):
              escaped |
              pipe.
 ──────────  ───────────
- short       Final ｶﾞﾊﾟ
-             row.
+ short       Final ｶﾞ
+             ﾊﾟ row.
 
 records (17 cells):
  Key

@@ -1,5 +1,6 @@
 ---
 source: crates/tui/src/markdown_render/list_spacing/tests.rs
+assertion_line: 32
 expression: "stages.join(\"\\n\\n---\\n\\n\")"
 ---
 1. One
@@ -49,9 +50,7 @@ expression: "stages.join(\"\\n\\n---\\n\\n\")"
 
 ---
 
-• https://example.com/a-
-  very-long-path-with-
-  many-segments
+• https://example.com/a-very-long-path-with-many-segments
 
 • Short
 

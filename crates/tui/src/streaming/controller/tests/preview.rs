@@ -5,12 +5,13 @@ use ratatui::text::Line;
 use super::{finalized_cell, stream_controller};
 use crate::history_cell::{AgentMessageCell, HistoryCell, StreamId};
 use crate::markdown_render::ListSpacing;
+use crate::terminal_hyperlinks::HyperlinkLine;
 
-fn plain(lines: &[Line<'static>]) -> Vec<String> {
-    lines.iter().map(Line::to_string).collect()
+fn plain(lines: &[HyperlinkLine]) -> Vec<String> {
+    lines.iter().map(|line| line.line.to_string()).collect()
 }
 
-fn render_source(source: &str, width: Option<usize>) -> Vec<Line<'static>> {
+fn render_source(source: &str, width: Option<usize>) -> Vec<HyperlinkLine> {
     crate::markdown::render_streaming_markdown_agent(
         source,
         width,
@@ -160,10 +161,10 @@ fn long_unicode_preview_keeps_recent_text_and_finalizes_full_source() {
     controller.push(&"🦀 ".repeat(3000));
     controller.push("latest text");
     let preview = controller.tail_lines();
-    assert_eq!(preview.first(), Some(&Line::from("…")));
+    assert_eq!(preview.first(), Some(&Line::from("…").into()));
     let text = preview
         .iter()
-        .map(Line::to_string)
+        .map(|line| line.line.to_string())
         .collect::<Vec<_>>()
         .join(" ");
     assert!(text.trim_end().ends_with("latest text"), "{text}");
@@ -186,7 +187,7 @@ fn prose_preview_resumes_after_fenced_code() {
     controller.push("prose after code");
     assert_eq!(
         controller.tail_lines(),
-        vec![Line::from("prose after code")]
+        vec![HyperlinkLine::from(Line::from("prose after code"))]
     );
 }
 
@@ -196,7 +197,10 @@ fn prose_after_a_table_is_previewed_until_another_table_starts() {
     controller.push("| A | B |\n| --- | --- |\n| a | b |\n\n");
     controller.push("prose after the table");
     let tail = controller.tail_lines();
-    assert_eq!(tail.last(), Some(&Line::from("prose after the table")));
+    assert_eq!(
+        tail.last(),
+        Some(&Line::from("prose after the table").into())
+    );
     assert_eq!(controller.queued_lines(), 0);
 
     controller.push("\n\n| C | D |\n| --- | --- |\n");

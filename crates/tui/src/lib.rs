@@ -41,6 +41,8 @@ mod status_indicator_widget;
 mod streaming;
 mod style;
 mod table_detect;
+mod terminal_detection;
+mod terminal_hyperlinks;
 #[cfg(test)]
 mod test_support;
 mod text_formatting;

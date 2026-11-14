@@ -29,6 +29,7 @@ use unicode_width::UnicodeWidthStr;
 
 use crate::render::renderable::Renderable;
 use crate::status_indicator_widget::{fmt_elapsed_compact, fmt_elapsed_tenths};
+use crate::terminal_hyperlinks::{plain_hyperlink_lines, HyperlinkLine};
 
 pub(crate) use context::new_context_output;
 pub(crate) use live::LiveCell;
@@ -155,6 +156,25 @@ pub(crate) trait HistoryCell: std::fmt::Debug + Send + Sync + Any {
         Some(ActivityDisclosure::Generic)
     }
 
+    /// Each presentation's lines with their terminal hyperlinks. Only a
+    /// cell that renders Markdown has links; it overrides these, and its
+    /// plain presentations are their visible lines.
+    fn display_hyperlink_lines(&self, width: u16) -> Vec<HyperlinkLine> {
+        plain_hyperlink_lines(self.display_lines(width))
+    }
+
+    fn transcript_hyperlink_lines(&self, width: u16) -> Vec<HyperlinkLine> {
+        plain_hyperlink_lines(self.transcript_lines(width))
+    }
+
+    fn compact_hyperlink_lines(&self, width: u16) -> Vec<HyperlinkLine> {
+        plain_hyperlink_lines(self.compact_lines(width))
+    }
+
+    fn retained_hyperlink_lines(&self, width: u16, detailed: bool) -> Vec<HyperlinkLine> {
+        plain_hyperlink_lines(self.retained_lines(width, detailed))
+    }
+
     /// The source text the cell was rendered from, for copying it whole.
     #[allow(dead_code, reason = "`/copy` (P4) copies a cell's source")]
     fn copy_source(&self) -> Option<String> {
@@ -186,24 +206,25 @@ pub(crate) trait HistoryCell: std::fmt::Debug + Send + Sync + Any {
     }
 }
 
-/// The lines of an entry of the transcript view: the full transcript when
-/// `detailed`, otherwise the compact or the raw presentation; `retained`
-/// in a view that lays its entries out again.
+/// The lines of an entry of the transcript view, with their hyperlinks:
+/// the full transcript when `detailed`, otherwise the compact or the raw
+/// presentation (no links); `retained` in a view that lays its entries out
+/// again.
 pub(crate) fn transcript_entry_lines(
     cell: &dyn HistoryCell,
     width: u16,
     detailed: bool,
     mode: HistoryRenderMode,
     retained: bool,
-) -> Vec<Line<'static>> {
+) -> Vec<HyperlinkLine> {
     if retained && (detailed || mode == HistoryRenderMode::Rich) {
-        cell.retained_lines(width, detailed)
+        cell.retained_hyperlink_lines(width, detailed)
     } else if detailed {
-        cell.transcript_lines(width)
+        cell.transcript_hyperlink_lines(width)
     } else if mode == HistoryRenderMode::Rich {
-        cell.compact_lines(width)
+        cell.compact_hyperlink_lines(width)
     } else {
-        cell.display_lines_for_mode(width, mode)
+        plain_hyperlink_lines(cell.display_lines_for_mode(width, mode))
     }
 }
 

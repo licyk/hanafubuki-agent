@@ -661,6 +661,10 @@ path = "crates/tui/src/app/tests/streaming.rs"
 reason = "A streamed answer frame by frame on an emulated terminal in both presentations, written for the streaming port's tail entry and updates."
 
 [[original]]
+path = "crates/tui/src/app/tests/hyperlinks.rs"
+reason = "The bytes an answer's links reach an emulated terminal as, in both presentations, after a resize and in the overlay, written for the hyperlink port."
+
+[[original]]
 path = "crates/tui/src/app/tests/thinking.rs"
 reason = "Thinking entries on an emulated terminal in both presentations, written for the Agent's timeline."
 

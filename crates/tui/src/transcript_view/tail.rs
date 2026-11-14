@@ -16,6 +16,7 @@ use ratatui::text::Span;
 
 use super::*;
 use crate::keymap::{self, Action};
+use crate::terminal_hyperlinks::HyperlinkLine;
 
 /// One entry of the tail as laid out.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -54,7 +55,7 @@ impl TranscriptView {
         cells: &[Arc<dyn HistoryCell>],
         index: usize,
         separated: bool,
-    ) -> Vec<Line<'static>> {
+    ) -> Vec<HyperlinkLine> {
         self.scrollback_tail = true;
         self.leading_separator = separated;
         let Some(layout) = self.current_layout(cells, index) else {
@@ -69,7 +70,7 @@ impl TranscriptView {
                 if Some(row) != control {
                     Some(layout.row_line(row))
                 } else {
-                    (!expanded).then(|| expand_hint(layout.disclosure_columns().start))
+                    (!expanded).then(|| expand_hint(layout.disclosure_columns().start).into())
                 }
             })
             .collect()

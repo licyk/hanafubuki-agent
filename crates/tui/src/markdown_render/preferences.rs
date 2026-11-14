@@ -5,8 +5,14 @@
 //! change keeps its look until it is laid out for another width (an answer
 //! or a plan after a resize), as in Codex. Tests read a value of their own
 //! thread, so parallel tests do not change each other's rendering.
+//!
+//! How web links show ([`WebLinkDisplay`]) is no setting: it is the
+//! terminal's, detected once at launch. Tests keep the fallback, which
+//! shows the destination, unless they set it.
 
 use hanafubuki_agent::AgentTuiRendering;
+
+use super::WebLinkDisplay;
 
 #[cfg(not(test))]
 static RENDERING: parking_lot::RwLock<AgentTuiRendering> =
@@ -37,4 +43,32 @@ pub(crate) fn current() -> AgentTuiRendering {
     }
     #[cfg(test)]
     RENDERING.get()
+}
+
+#[cfg(not(test))]
+static WEB_LINK_DISPLAY: parking_lot::RwLock<WebLinkDisplay> =
+    parking_lot::RwLock::new(WebLinkDisplay::WithDestination);
+
+#[cfg(test)]
+thread_local! {
+    static WEB_LINK_DISPLAY: std::cell::Cell<WebLinkDisplay> =
+        const { std::cell::Cell::new(WebLinkDisplay::WithDestination) };
+}
+
+pub(crate) fn set_web_link_display(display: WebLinkDisplay) {
+    #[cfg(not(test))]
+    {
+        *WEB_LINK_DISPLAY.write() = display;
+    }
+    #[cfg(test)]
+    WEB_LINK_DISPLAY.set(display);
+}
+
+pub(crate) fn web_link_display() -> WebLinkDisplay {
+    #[cfg(not(test))]
+    {
+        *WEB_LINK_DISPLAY.read()
+    }
+    #[cfg(test)]
+    WEB_LINK_DISPLAY.get()
 }

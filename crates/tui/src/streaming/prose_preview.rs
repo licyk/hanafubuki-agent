@@ -10,6 +10,8 @@
 
 use ratatui::text::Line;
 
+use crate::terminal_hyperlinks::HyperlinkLine;
+
 use super::render::StreamRenderer;
 use crate::markdown_render::ListSpacing;
 
@@ -19,7 +21,7 @@ const MAX_PREVIEW_BYTES: usize = 8192;
 /// newline commits it.
 #[derive(Default)]
 pub(super) struct ProsePreview {
-    pub(super) lines: Vec<Line<'static>>,
+    pub(super) lines: Vec<HyperlinkLine>,
     scanned_len: usize,
     safe_len: usize,
     has_pipe: bool,
@@ -59,7 +61,7 @@ impl ProsePreview {
         let start = source.ceil_char_boundary(source.len().saturating_sub(MAX_PREVIEW_BYTES));
         let mut lines = renderer(&source[start..], width, Some(cwd), ListSpacing::default()).lines;
         if start > 0 {
-            lines.insert(0, Line::from("…"));
+            lines.insert(0, Line::from("…").into());
         }
         if self.lines == lines {
             return false;

@@ -1,10 +1,12 @@
 // Modified from OpenAI Codex rust-v0.93.0 (Apache-2.0).
+// Modified from OpenAI Codex 57a808a392 (Apache-2.0).
 
 mod vt100_history;
 
 use super::*;
 use crate::markdown_render::render_markdown_text;
-use crate::test_support::VT100Backend;
+use crate::terminal_hyperlinks::annotate_web_urls_in_line;
+use crate::test_support::{osc8_links, VT100Backend};
 use ratatui::layout::Rect;
 use ratatui::style::Color;
 
@@ -242,4 +244,76 @@ fn vt100_deep_nested_mixed_list_third_level_marker_is_colored() {
             cell.fgcolor()
         );
     }
+}
+
+fn history_terminal(width: u16, height: u16) -> crate::custom_terminal::Terminal<VT100Backend> {
+    let backend = VT100Backend::new(width, height);
+    let mut term = crate::custom_terminal::Terminal::with_options(backend).expect("terminal");
+    term.set_viewport_area(Rect::new(0, height - 1, width, 1));
+    term
+}
+
+#[test]
+fn a_linked_row_is_written_as_an_osc8_link_closed_on_its_row() {
+    let mut term = history_terminal(40, 6);
+    let mut line = HyperlinkLine::new(Line::from("> See "));
+    line.push_span("the docs".into(), Some("https://example.com/docs"));
+    line.push_span(" and ".into(), None);
+    line.push_span("界ｶﾞ".into(), Some("https://example.com/wide"));
+    insert_history_lines(&mut term, vec![line.style(Color::Green.into())]).expect("insert");
+    let written = term.backend_mut().take_written();
+    assert_eq!(
+        osc8_links(&written),
+        [
+            (
+                "https://example.com/docs".to_string(),
+                "the docs".to_string()
+            ),
+            ("https://example.com/wide".to_string(), "界ｶﾞ".to_string()),
+        ]
+    );
+    let screen = term.backend().vt100().screen().contents();
+    assert!(screen.contains("> See the docs and 界ｶﾞ"), "{screen}");
+}
+
+#[test]
+fn a_link_the_writer_wraps_is_linked_on_each_row() {
+    let url = "https://example.com/a/rather/long/path/to/the/page";
+    let mut term = history_terminal(20, 8);
+    insert_history_lines(&mut term, vec![annotate_web_urls_in_line(Line::from(url))])
+        .expect("insert");
+    let links = osc8_links(&term.backend_mut().take_written());
+    assert!(links.len() > 1, "{links:?}");
+    assert_eq!(
+        links
+            .iter()
+            .map(|(_, text)| text.as_str())
+            .collect::<String>(),
+        url
+    );
+}
+
+#[test]
+fn a_hostile_row_writes_no_control_sequence_of_its_own() {
+    let mut term = history_terminal(60, 4);
+    let mut line = HyperlinkLine::new(Line::from("\x1b]8;;https://evil.test\x07x\x1b[2J\u{9c}"));
+    line.push_span(
+        "click\x1b]0;title\x07".into(),
+        Some("https://example.com/\x1b]8;;https://evil.test\x07\u{9b}"),
+    );
+    insert_history_lines(&mut term, vec![line]).expect("insert");
+    let written = term.backend_mut().take_written();
+    assert_eq!(
+        osc8_links(&written),
+        [(
+            "https://example.com/]8;;https://evil.test".to_string(),
+            "click]0;title".to_string()
+        )]
+    );
+    // The link's own two BELs, and no other.
+    assert_eq!(written.matches('\x07').count(), 2, "{written:?}");
+    assert!(
+        !written.contains("\x1b[2J") && !written.contains("\x1b]0;"),
+        "{written:?}"
+    );
 }

@@ -65,7 +65,7 @@ fn cell_content_layout(
             presentation.expanded,
         )
     } else {
-        TextLayout::new(
+        TextLayout::linked(
             transcript_entry_lines(
                 cell,
                 width,

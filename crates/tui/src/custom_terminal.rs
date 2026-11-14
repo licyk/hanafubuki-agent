@@ -384,6 +384,17 @@ where
 use ratatui::buffer::{Cell, CellDiffOption};
 use unicode_width::UnicodeWidthStr;
 
+use crate::terminal_hyperlinks::{osc8_open, osc8_parts, OSC8_CLOSE};
+
+/// The columns a cell's symbol takes on the screen: a linked cell's
+/// visible symbol's, never its OSC 8 sequences'.
+fn painted_width(cell: &Cell) -> usize {
+    let symbol = cell.symbol();
+    osc8_parts(symbol)
+        .map_or(symbol, |(_, visible)| visible)
+        .width()
+}
+
 #[derive(Debug)]
 enum DrawCommand {
     Put { x: u16, y: u16, cell: Cell },
@@ -411,7 +422,7 @@ fn diff_buffers(a: &Buffer, b: &Buffer) -> Vec<DrawCommand> {
         let mut column = 0usize;
         while column < row.len() {
             let cell = &row[column];
-            let width = cell.symbol().width();
+            let width = painted_width(cell);
             if cell.symbol() != " " || cell.bg != bg || cell.modifier != Modifier::empty() {
                 last_nonblank_column = column + (width.saturating_sub(1));
             }
@@ -447,14 +458,18 @@ fn diff_buffers(a: &Buffer, b: &Buffer) -> Vec<DrawCommand> {
             }
         }
 
-        to_skip = current.symbol().width().saturating_sub(1);
+        to_skip = painted_width(current).saturating_sub(1);
 
-        let affected_width = std::cmp::max(current.symbol().width(), previous.symbol().width());
+        let affected_width = std::cmp::max(painted_width(current), painted_width(previous));
         invalidated = std::cmp::max(affected_width, invalidated).saturating_sub(1);
     }
     updates
 }
 
+/// Writes the commands. A run of linked cells is one OSC 8 link: opened
+/// before its first cell, closed after its last, and always before the
+/// cursor moves (to another row, or past a wide glyph), so no link stays
+/// open past a row or over cells it does not cover.
 fn draw<I>(writer: &mut impl Write, commands: I) -> io::Result<()>
 where
     I: Iterator<Item = DrawCommand>,
@@ -463,13 +478,23 @@ where
     let mut bg = Color::Reset;
     let mut modifier = Modifier::empty();
     let mut last_pos: Option<Position> = None;
+    let mut active_hyperlink: Option<String> = None;
     for command in commands {
         let (x, y) = match command {
             DrawCommand::Put { x, y, .. } => (x, y),
             DrawCommand::ClearToEnd { x, y, .. } => (x, y),
         };
+        let destination = match &command {
+            DrawCommand::Put { cell, .. } => osc8_parts(cell.symbol()).map(|(d, _)| d.to_owned()),
+            DrawCommand::ClearToEnd { .. } => None,
+        };
         // Move the cursor if the previous location was not (x - 1, y)
-        if !matches!(last_pos, Some(p) if x == p.x + 1 && y == p.y) {
+        let moves = !matches!(last_pos, Some(p) if x == p.x + 1 && y == p.y);
+        if active_hyperlink.is_some() && (active_hyperlink != destination || moves) {
+            queue!(writer, Print(OSC8_CLOSE))?;
+            active_hyperlink = None;
+        }
+        if moves {
             queue!(writer, MoveTo(x, y))?;
         }
         last_pos = Some(Position { x, y });
@@ -495,7 +520,15 @@ where
                     bg = cell.bg;
                 }
 
-                queue!(writer, Print(cell.symbol()))?;
+                if active_hyperlink.is_none() {
+                    if let Some(destination) = &destination {
+                        queue!(writer, Print(osc8_open(destination)))?;
+                    }
+                    active_hyperlink = destination;
+                }
+                let symbol = cell.symbol();
+                let visible = osc8_parts(symbol).map_or(symbol, |(_, visible)| visible);
+                queue!(writer, Print(visible))?;
             }
             DrawCommand::ClearToEnd { bg: clear_bg, .. } => {
                 queue!(
@@ -511,6 +544,9 @@ where
                 )?;
             }
         }
+    }
+    if active_hyperlink.is_some() {
+        queue!(writer, Print(OSC8_CLOSE))?;
     }
 
     queue!(

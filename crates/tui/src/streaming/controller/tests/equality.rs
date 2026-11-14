@@ -149,7 +149,7 @@ fn compact_streams_equal_the_compact_render() {
             );
             assert_eq!(
                 streamed,
-                lines_to_plain_strings(&expected.lines),
+                lines_to_plain_strings(&crate::terminal_hyperlinks::visible_lines(expected.lines)),
                 "at {width:?}:\n{source}"
             );
         }

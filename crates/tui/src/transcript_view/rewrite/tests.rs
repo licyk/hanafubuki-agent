@@ -17,7 +17,7 @@ fn rewrite(cells: &[Arc<dyn HistoryCell>], width: u16, cap: usize) -> String {
     let mut view = TranscriptView::default();
     view.scrollback_lines(cells, width, cap)
         .iter()
-        .map(|line| line.to_string().trim_end().to_owned())
+        .map(|line| line.line.to_string().trim_end().to_owned())
         .collect::<Vec<_>>()
         .join("\n")
 }

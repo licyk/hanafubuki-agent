@@ -24,7 +24,7 @@ fn finalized_markdown_reuses_rendered_lines() {
     let rendered = cell.display_lines(width);
     assert_eq!(text(&rendered), vec!["• finalized markdown"]);
     cell.rendered
-        .replace_cached_lines(vec![Line::from("cached")]);
+        .replace_cached_lines(vec![Line::from("cached").into()]);
     assert_eq!(cell.display_lines(width), vec![Line::from("cached")]);
 }
 
@@ -33,11 +33,11 @@ fn finalized_markdown_cache_misses_when_width_or_list_spacing_changes() {
     let cell = AgentMarkdownCell::new("finalized **markdown**".to_string(), "/tmp".to_string());
     let expected = cell.display_lines(48);
     cell.rendered
-        .replace_cached_lines(vec![Line::from("cached")]);
+        .replace_cached_lines(vec![Line::from("cached").into()]);
     cell.display_lines(47);
     assert_eq!(cell.display_lines(48), expected);
     cell.rendered
-        .replace_cached_lines(vec![Line::from("cached")]);
+        .replace_cached_lines(vec![Line::from("cached").into()]);
     cell.retained_lines(48, false);
     assert_eq!(cell.display_lines(48), expected);
 }
@@ -48,7 +48,7 @@ fn raw_markdown_bypasses_the_rich_render_cache() {
     let cell = AgentMarkdownCell::new(source.to_string(), "/tmp".to_string());
     cell.display_lines(48);
     cell.rendered
-        .replace_cached_lines(vec![Line::from("cached")]);
+        .replace_cached_lines(vec![Line::from("cached").into()]);
     assert_eq!(
         cell.display_lines_for_mode(48, HistoryRenderMode::Raw),
         vec![Line::from(source)]
@@ -133,7 +133,7 @@ fn a_stream_span_takes_in_what_was_inserted_among_its_cells() {
     let other = StreamId::next();
     let row = |stream: StreamId, first: bool| -> Arc<dyn HistoryCell> {
         Arc::new(AgentMessageCell::new(
-            vec![Line::from("row")],
+            vec![Line::from("row").into()],
             first,
             stream,
         ))

@@ -10,14 +10,14 @@
 use std::ops::Range;
 
 use pulldown_cmark::{CodeBlockKind, Event, Options, Parser, Tag};
-use ratatui::text::Line;
 
-use super::{preferences, source_tables, ListSpacing, Writer};
+use super::{preferences, source_tables, ListSpacing, WebLinkDisplay, Writer};
 use crate::table_detect::is_markdown_fence_info;
+use crate::terminal_hyperlinks::HyperlinkLine;
 
 /// The rows, and where the source may still change them.
 pub(crate) struct StreamingMarkdownRender {
-    pub(crate) lines: Vec<Line<'static>>,
+    pub(crate) lines: Vec<HyperlinkLine>,
     /// The last top-level block's start, when one came before it.
     pub(crate) last_top_level_block_start: Option<usize>,
     /// A reference definition can change any block, before or after it.
@@ -34,13 +34,30 @@ pub(crate) struct StreamingMarkdownRender {
     pub(crate) trailing_local_link: bool,
 }
 
-/// `input` rendered as [`super::render_markdown_text_with_spacing`] does,
+/// `input` rendered as [`super::render_markdown_lines`] does,
 /// with what a stream needs to know of its blocks.
 pub(crate) fn render_streaming_markdown(
     input: &str,
     width: Option<usize>,
     cwd: Option<&str>,
     list_spacing: ListSpacing,
+) -> StreamingMarkdownRender {
+    render_with_display(
+        input,
+        width,
+        cwd,
+        list_spacing,
+        preferences::web_link_display(),
+    )
+}
+
+/// [`render_streaming_markdown`], web links shown as `display` says.
+pub(super) fn render_with_display(
+    input: &str,
+    width: Option<usize>,
+    cwd: Option<&str>,
+    list_spacing: ListSpacing,
+    display: WebLinkDisplay,
 ) -> StreamingMarkdownRender {
     let mut options = Options::empty();
     options.insert(Options::ENABLE_STRIKETHROUGH);
@@ -56,11 +73,11 @@ pub(crate) fn render_streaming_markdown(
         first_is_html: false,
         mutable_fence_start: None,
     };
-    let mut writer = Writer::new(input, width, cwd);
+    let mut writer = Writer::new(input, width, cwd, display);
     writer.list_spacing = list_spacing;
     writer.run(&mut events);
     StreamingMarkdownRender {
-        lines: writer.text.lines,
+        lines: writer.lines,
         last_top_level_block_start: (events.block_count > 1).then_some(events.last_start),
         has_reference_link_definition,
         first_top_level_block_is_html: events.first_is_html,

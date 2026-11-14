@@ -16,6 +16,7 @@ use super::{
 use crate::markdown_render::ListSpacing;
 use crate::render::line_utils::prefix_lines;
 use crate::style::proposed_plan_style;
+use crate::terminal_hyperlinks::{prefix_hyperlink_lines, visible_lines, HyperlinkLine};
 
 /// The steps a collapsed checklist shows.
 const PLAN_PREVIEW_STEPS: usize = 3;
@@ -31,7 +32,7 @@ pub(crate) fn new_plan_update(snapshot: &AgentTaskPlanSnapshot) -> PlanUpdateCel
 }
 
 pub(crate) fn new_proposed_plan_stream(
-    lines: Vec<Line<'static>>,
+    lines: Vec<HyperlinkLine>,
     is_stream_continuation: bool,
     stream: StreamId,
 ) -> ProposedPlanStreamCell {
@@ -43,21 +44,37 @@ pub(crate) fn new_proposed_plan_stream(
 }
 
 /// Rows of a streaming proposed plan, rendered at the width its stream
-/// started at.
+/// started at, with their links.
 #[derive(Debug)]
 pub(crate) struct ProposedPlanStreamCell {
-    lines: Vec<Line<'static>>,
+    lines: Vec<HyperlinkLine>,
     is_stream_continuation: bool,
     stream: StreamId,
 }
 
 impl HistoryCell for ProposedPlanStreamCell {
     fn display_lines(&self, _width: u16) -> Vec<Line<'static>> {
+        visible_lines(self.lines.clone())
+    }
+
+    fn display_hyperlink_lines(&self, _width: u16) -> Vec<HyperlinkLine> {
         self.lines.clone()
     }
 
+    fn transcript_hyperlink_lines(&self, width: u16) -> Vec<HyperlinkLine> {
+        self.display_hyperlink_lines(width)
+    }
+
+    fn compact_hyperlink_lines(&self, width: u16) -> Vec<HyperlinkLine> {
+        self.display_hyperlink_lines(width)
+    }
+
+    fn retained_hyperlink_lines(&self, width: u16, _detailed: bool) -> Vec<HyperlinkLine> {
+        self.display_hyperlink_lines(width)
+    }
+
     fn raw_lines(&self) -> Vec<Line<'static>> {
-        plain_lines(self.lines.clone())
+        plain_lines(self.display_lines(0))
     }
 
     fn is_stream_continuation(&self) -> bool {
@@ -87,23 +104,23 @@ impl ProposedPlanCell {
         }
     }
 
-    fn render(&self, width: u16, list_spacing: ListSpacing) -> Vec<Line<'static>> {
+    fn render(&self, width: u16, list_spacing: ListSpacing) -> Vec<HyperlinkLine> {
         self.rendered.render(width, list_spacing, || {
-            let mut body = vec![Line::from(" ")];
+            let mut body = vec![HyperlinkLine::from(Line::from(" "))];
             body.extend(crate::markdown::render_markdown_with_list_spacing(
                 &self.source,
                 Some(usize::from(width.saturating_sub(4)).max(1)),
                 Some(&self.cwd),
                 list_spacing,
             ));
-            body.push(Line::from(" "));
+            body.push(Line::from(" ").into());
             let style = proposed_plan_style();
             let mut lines = vec![
-                Line::from(vec!["• ".dim(), "Proposed Plan".bold()]),
-                Line::from(" "),
+                HyperlinkLine::from(Line::from(vec!["• ".dim(), "Proposed Plan".bold()])),
+                Line::from(" ").into(),
             ];
             lines.extend(
-                prefix_lines(body, "  ".into(), "  ".into())
+                prefix_hyperlink_lines(body, "  ".into(), "  ".into())
                     .into_iter()
                     .map(|line| line.style(style)),
             );
@@ -114,10 +131,26 @@ impl ProposedPlanCell {
 
 impl HistoryCell for ProposedPlanCell {
     fn display_lines(&self, width: u16) -> Vec<Line<'static>> {
+        visible_lines(self.display_hyperlink_lines(width))
+    }
+
+    fn retained_lines(&self, width: u16, detailed: bool) -> Vec<Line<'static>> {
+        visible_lines(self.retained_hyperlink_lines(width, detailed))
+    }
+
+    fn display_hyperlink_lines(&self, width: u16) -> Vec<HyperlinkLine> {
         self.render(width, ListSpacing::AfterMultiline)
     }
 
-    fn retained_lines(&self, width: u16, _detailed: bool) -> Vec<Line<'static>> {
+    fn transcript_hyperlink_lines(&self, width: u16) -> Vec<HyperlinkLine> {
+        self.display_hyperlink_lines(width)
+    }
+
+    fn compact_hyperlink_lines(&self, width: u16) -> Vec<HyperlinkLine> {
+        self.display_hyperlink_lines(width)
+    }
+
+    fn retained_hyperlink_lines(&self, width: u16, _detailed: bool) -> Vec<HyperlinkLine> {
         self.render(width, ListSpacing::Uniform)
     }
 

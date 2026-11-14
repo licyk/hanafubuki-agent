@@ -10,6 +10,7 @@ use ratatui::text::Span;
 
 use super::*;
 use crate::keymap::{self, Action};
+use crate::terminal_hyperlinks::{plain_hyperlink_lines, HyperlinkLine};
 use crate::wrapping::word_wrap_lines;
 
 impl TranscriptView {
@@ -23,7 +24,7 @@ impl TranscriptView {
         cells: &[Arc<dyn HistoryCell>],
         width: u16,
         cap: usize,
-    ) -> Vec<Line<'static>> {
+    ) -> Vec<HyperlinkLine> {
         self.cache.begin_frame();
         self.scrollback_tail = true;
         self.prepare_width(width);
@@ -44,7 +45,10 @@ impl TranscriptView {
             lines.drain(..lines.len() - cap);
         }
         if truncated {
-            let notice = word_wrap_lines([earlier_notice()], usize::from(width.max(1)));
+            let notice = plain_hyperlink_lines(word_wrap_lines(
+                [earlier_notice()],
+                usize::from(width.max(1)),
+            ));
             // A cap too small for the notice keeps the conversation.
             if let Some(room) = cap.checked_sub(notice.len()).filter(|room| *room > 0) {
                 lines.drain(..lines.len().saturating_sub(room));

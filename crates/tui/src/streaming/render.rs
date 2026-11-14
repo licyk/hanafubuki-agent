@@ -5,7 +5,7 @@
 //! next line may still change (a list's spacing, a setext heading, a fence,
 //! a table), is rendered again as lines arrive.
 
-use ratatui::text::Line;
+use crate::terminal_hyperlinks::HyperlinkLine;
 
 use super::code_fence::OpenCodeFence;
 use crate::markdown_render::{ListSpacing, StreamingMarkdownRender};
@@ -21,7 +21,7 @@ pub(crate) type StreamRenderer =
 pub(super) struct StreamingRender {
     pub(super) renderer: StreamRenderer,
     pub(super) list_spacing: ListSpacing,
-    pub(super) lines: Vec<Line<'static>>,
+    pub(super) lines: Vec<HyperlinkLine>,
     pub(super) mutable_fence_start: Option<usize>,
     /// The last row ends with a local file link's target.
     pub(super) trailing_local_link: bool,
@@ -133,7 +133,7 @@ impl StreamingRender {
             && (!pending.lines.is_empty() || !pending_source.trim().is_empty())
             && !pending.first_top_level_block_is_html
         {
-            self.lines.push(Line::default());
+            self.lines.push(HyperlinkLine::default());
         }
         let pending_render_start = self.lines.len();
         self.lines.extend(pending.lines);

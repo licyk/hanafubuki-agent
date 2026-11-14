@@ -5,7 +5,9 @@
 //! rows, instead of the whole fence being rendered again at each line.
 //! Anything the whole render might treat otherwise goes back to it.
 
-use ratatui::text::{Line, Span};
+use ratatui::text::Span;
+
+use crate::terminal_hyperlinks::HyperlinkLine;
 
 use crate::render::highlight::{
     syntax_theme_revision, StreamingCodeHighlighter, MAX_HIGHLIGHT_LINE_BYTES,
@@ -78,7 +80,7 @@ impl OpenCodeFence {
         mut self,
         raw_source: &str,
         committed_source: &str,
-    ) -> Option<(Self, Vec<Line<'static>>)> {
+    ) -> Option<(Self, Vec<HyperlinkLine>)> {
         if self.source_len.checked_add(committed_source.len()) != Some(raw_source.len())
             || !raw_source.ends_with(committed_source)
             || committed_source.contains(['\r', '\0'])
@@ -103,7 +105,7 @@ impl OpenCodeFence {
             .map(|mut line| {
                 // The writer's indent of a top-level fence: an empty span.
                 line.spans.insert(0, Span::default());
-                line
+                HyperlinkLine::new(line)
             })
             .collect();
         Some((self, lines))

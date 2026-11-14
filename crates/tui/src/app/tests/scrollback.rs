@@ -181,7 +181,7 @@ fn the_mouse_is_let_go_at_the_wheel_and_taken_again_at_the_next_key() {
     assert!(!harness.tui.captures_inline_mouse());
     // An answer's next lines are not a new entry.
     let chunk = AgentMessageCell::new(
-        vec![Line::from("more of the answer")],
+        vec![Line::from("more of the answer").into()],
         false,
         StreamId::next(),
     );

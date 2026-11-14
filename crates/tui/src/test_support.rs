@@ -1,7 +1,8 @@
 // Modified from OpenAI Codex rust-v0.93.0 (Apache-2.0).
 
-//! A terminal for tests: crossterm's backend writing into a vt100 screen;
-//! and an external editor that edits no file interactively.
+//! A terminal for tests: crossterm's backend writing into a vt100 screen,
+//! the bytes it was given kept; the OSC 8 links in those bytes; and an
+//! external editor that edits no file interactively.
 
 use std::fmt::{self};
 use std::io::Write;
@@ -25,7 +26,26 @@ use ratatui::layout::Size;
 /// - getting the terminal size
 /// - getting the cursor position
 pub struct VT100Backend {
-    crossterm_backend: CrosstermBackend<vt100::Parser>,
+    crossterm_backend: CrosstermBackend<Recorder>,
+}
+
+/// The vt100 screen, and every byte written to it since the last
+/// [`VT100Backend::take_written`]: vt100 ignores OSC 8, so the bytes show
+/// the hyperlinks.
+struct Recorder {
+    parser: vt100::Parser,
+    written: Vec<u8>,
+}
+
+impl Write for Recorder {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        self.written.extend_from_slice(buf);
+        self.parser.write(buf)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.parser.flush()
+    }
 }
 
 impl VT100Backend {
@@ -33,12 +53,21 @@ impl VT100Backend {
     pub fn new(width: u16, height: u16) -> Self {
         ratatui::crossterm::style::force_color_output(true);
         Self {
-            crossterm_backend: CrosstermBackend::new(vt100::Parser::new(height, width, 0)),
+            crossterm_backend: CrosstermBackend::new(Recorder {
+                parser: vt100::Parser::new(height, width, 0),
+                written: Vec::new(),
+            }),
         }
     }
 
     pub fn vt100(&self) -> &vt100::Parser {
-        self.crossterm_backend.writer()
+        &self.crossterm_backend.writer().parser
+    }
+
+    /// The bytes written since the last call, as text.
+    pub(crate) fn take_written(&mut self) -> String {
+        let written = std::mem::take(&mut self.crossterm_backend.writer_mut().written);
+        String::from_utf8_lossy(&written).into_owned()
     }
 
     /// The window resized, its screen cleared (the cursor left where it
@@ -46,7 +75,7 @@ impl VT100Backend {
     /// it, where a real terminal reflows or cuts its rows. What the app
     /// draws after a resize is tested, not the terminal's own reflow.
     pub fn resize(&mut self, width: u16, height: u16) {
-        let parser = self.crossterm_backend.writer_mut();
+        let parser = &mut self.crossterm_backend.writer_mut().parser;
         parser.process(b"\x1b[2J");
         parser.screen_mut().set_size(height, width);
     }
@@ -64,7 +93,7 @@ impl Write for VT100Backend {
 
 impl fmt::Display for VT100Backend {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.crossterm_backend.writer().screen().contents())
+        write!(f, "{}", self.vt100().screen().contents())
     }
 }
 
@@ -140,6 +169,61 @@ impl Backend for VT100Backend {
     ) -> io::Result<()> {
         self.crossterm_backend.scroll_region_down(region, scroll_by)
     }
+}
+
+/// The OSC 8 links `written` opens, in order: each destination and the text
+/// printed while it was open. Panics when a link is still open at a cursor
+/// move, a line feed or the end, or is closed without being open: a link
+/// is opened and closed on one row.
+pub(crate) fn osc8_links(written: &str) -> Vec<(String, String)> {
+    let mut links: Vec<(String, String)> = Vec::new();
+    let mut open = false;
+    let mut rest = written;
+    while let Some(ch) = rest.chars().next() {
+        if let Some(after) = rest.strip_prefix("\x1b]8;;") {
+            let (destination, after) = after.split_once('\x07').expect("an OSC 8 ends with BEL");
+            if destination.is_empty() {
+                assert!(open, "a link closed that was not open: {written:?}");
+                open = false;
+            } else {
+                assert!(!open, "a link opened inside another: {written:?}");
+                links.push((destination.to_string(), String::new()));
+                open = true;
+            }
+            rest = after;
+            continue;
+        }
+        if let Some(after) = rest.strip_prefix("\x1b[") {
+            let end = after
+                .find(|c: char| ('\x40'..='\x7e').contains(&c))
+                .expect("a CSI ends with its final byte");
+            let final_byte = after.as_bytes()[end];
+            assert!(
+                !(open && matches!(final_byte, b'H' | b'r' | b'J' | b'K')),
+                "a link open across `CSI {}`: {written:?}",
+                &after[..=end]
+            );
+            rest = &after[end + 1..];
+            continue;
+        }
+        if let Some(after) = rest.strip_prefix('\x1b') {
+            assert!(!open, "a link open across an escape: {written:?}");
+            rest = &after[after.chars().next().map_or(0, char::len_utf8)..];
+            continue;
+        }
+        assert!(
+            !(open && (ch == '\n' || ch == '\r')),
+            "a link open across a line: {written:?}"
+        );
+        if open {
+            if let Some((_, text)) = links.last_mut() {
+                text.push(ch);
+            }
+        }
+        rest = &rest[ch.len_utf8()..];
+    }
+    assert!(!open, "a link left open: {written:?}");
+    links
 }
 
 /// An "editor" for Ctrl+G's tests: a script that keeps the file it was

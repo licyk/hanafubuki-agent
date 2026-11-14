@@ -3,7 +3,7 @@
 //! What the stream shows past its queued rows: the mutable tail, then the
 //! preview of the line still arriving, outside tables and fences.
 
-use ratatui::text::Line;
+use crate::terminal_hyperlinks::HyperlinkLine;
 
 use super::super::prose_preview::ProsePreview;
 use super::state::StreamCore;
@@ -25,7 +25,7 @@ impl StreamCore {
     /// The rows past the queued ones, which may still change: they start
     /// at the queued count, so a row queued but not committed never shows
     /// twice.
-    pub(super) fn current_tail_lines(&self) -> Vec<Line<'static>> {
+    pub(super) fn current_tail_lines(&self) -> Vec<HyperlinkLine> {
         let start = self.enqueued_stable_len.min(self.render.lines.len());
         let mut lines = self.render.lines[start..].to_vec();
         lines.extend(self.preview.lines.iter().cloned());

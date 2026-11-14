@@ -30,6 +30,7 @@ use ratatui::backend::Backend;
 use ratatui::layout::Size;
 
 use super::App;
+use crate::terminal_detection::{TerminalInfo, TerminalName};
 use crate::tui::Tui;
 
 /// How long the size holds before the scrollback is written again, so a
@@ -144,7 +145,7 @@ impl App {
 /// The most rows a rewrite writes, about what the terminal's scrollback
 /// keeps: Codex's for the terminals it knows, 1,000 elsewhere.
 fn row_cap() -> usize {
-    row_cap_for(|name| std::env::var(name).ok().filter(|value| !value.is_empty()))
+    row_cap_for(&crate::terminal_detection::terminal_info())
 }
 
 const DEFAULT_ROW_CAP: usize = 1_000;
@@ -152,50 +153,13 @@ const WINDOWS_TERMINAL_ROW_CAP: usize = 9_001;
 const WEZTERM_ROW_CAP: usize = 3_500;
 const ALACRITTY_ROW_CAP: usize = 10_000;
 
-/// [`row_cap`] for the environment `var` reads, in the order Codex's
-/// terminal detection reads it: `TERM_PROGRAM` (but tmux's) first.
-fn row_cap_for(var: impl Fn(&str) -> Option<String>) -> usize {
-    if let Some(program) =
-        var("TERM_PROGRAM").filter(|program| !program.eq_ignore_ascii_case("tmux"))
-    {
-        let program = program
-            .chars()
-            .filter(|c| !matches!(c, ' ' | '-' | '_' | '.'))
-            .collect::<String>()
-            .to_ascii_lowercase();
-        return match program.as_str() {
-            "wezterm" => WEZTERM_ROW_CAP,
-            "alacritty" => ALACRITTY_ROW_CAP,
-            "windowsterminal" => WINDOWS_TERMINAL_ROW_CAP,
-            _ => DEFAULT_ROW_CAP,
-        };
+fn row_cap_for(terminal: &TerminalInfo) -> usize {
+    match terminal.name {
+        TerminalName::WezTerm => WEZTERM_ROW_CAP,
+        TerminalName::Alacritty => ALACRITTY_ROW_CAP,
+        TerminalName::WindowsTerminal => WINDOWS_TERMINAL_ROW_CAP,
+        _ => DEFAULT_ROW_CAP,
     }
-    let known_elsewhere = ["GHOSTTY_RESOURCES_DIR"];
-    if known_elsewhere.iter().any(|name| var(name).is_some()) {
-        return DEFAULT_ROW_CAP;
-    }
-    if var("WEZTERM_VERSION").is_some() {
-        return WEZTERM_ROW_CAP;
-    }
-    let term = var("TERM").unwrap_or_default();
-    let before_alacritty = ["ITERM_SESSION_ID", "ITERM_PROFILE", "KITTY_WINDOW_ID"];
-    if before_alacritty.iter().any(|name| var(name).is_some()) || term.contains("kitty") {
-        return DEFAULT_ROW_CAP;
-    }
-    if var("ALACRITTY_SOCKET").is_some() || term == "alacritty" {
-        return ALACRITTY_ROW_CAP;
-    }
-    let before_windows_terminal = ["KONSOLE_VERSION", "GNOME_TERMINAL_SCREEN", "VTE_VERSION"];
-    if before_windows_terminal
-        .iter()
-        .any(|name| var(name).is_some())
-    {
-        return DEFAULT_ROW_CAP;
-    }
-    if var("WT_SESSION").is_some() {
-        return WINDOWS_TERMINAL_ROW_CAP;
-    }
-    DEFAULT_ROW_CAP
 }
 
 #[cfg(test)]

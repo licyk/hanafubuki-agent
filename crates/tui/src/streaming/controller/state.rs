@@ -6,7 +6,7 @@
 
 use std::time::Instant;
 
-use ratatui::text::Line;
+use crate::terminal_hyperlinks::HyperlinkLine;
 
 use super::super::prose_preview::ProsePreview;
 use super::super::render::{StreamRenderer, StreamingRender};
@@ -27,7 +27,7 @@ pub(in crate::streaming) struct StreamCore {
     pub(super) enqueued_stable_len: usize,
     pub(super) emitted_stable_len: usize,
     /// The rows committed, to compare with the final render at the end.
-    pub(super) emitted: Vec<Line<'static>>,
+    pub(super) emitted: Vec<HyperlinkLine>,
     /// The session's directory, local file links are shown relative to.
     pub(super) cwd: String,
     /// The rows of the source before a table's start, at a width.
@@ -46,7 +46,7 @@ pub(in crate::streaming) struct StablePrefixLenCache {
 /// definition, an underline making a heading, a resize), so the scrollback
 /// must be written again.
 pub(in crate::streaming) struct Remaining {
-    pub(super) lines: Vec<Line<'static>>,
+    pub(super) lines: Vec<HyperlinkLine>,
     pub(super) source: String,
     pub(super) diverged: bool,
 }
