@@ -26,4 +26,15 @@ alone is not native acceptance. Keep setup credentials out of arguments and logs
 - Investigation: Windows setup is a placeholder; disabled backend is collapsed to
   a boolean in the picker. Elevated mode is explicitly refused. Linux only uses
   Landlock; macOS policy is already derived from the same Codex revision.
-- Implementation pending.
+- Implemented bundled bubblewrap with explicit legacy Landlock compatibility,
+  macOS overlapping-root protection and nested detection, Windows UAC/account/WFP
+  setup and command runner, and TUI setup/readiness integration.
+- Dedicated worktree: /tmp/hanafubuki-sandbox; GitHub branch:
+  test/sandbox-platforms. Only the Sandbox platforms workflow runs on pushes.
+- Linux bubblewrap and legacy tests and macOS native tests passed. Windows
+  compilation/lint and unelevated native tests passed; elevated native acceptance
+  is still running. No whole-workspace test suite was requested or run.
+- Native PTY fidelity, MSYS compatibility and interruption remain acceptance
+  limits; elevated stdio is a pipe bridge and does not yet create an inner ConPTY.
+  Do not describe this implementation as complete Codex terminal parity.
+- No merge to main or release until the remaining native failures are resolved.

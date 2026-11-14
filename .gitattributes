@@ -1,3 +1,5 @@
 # Prompts, Skills and fixtures are compiled in and pinned byte for byte, so a
 # checkout on Windows must not turn their line endings into CRLF.
 * text=auto eol=lf
+# Preserve the upstream LGPL text byte for byte, including its original spaces.
+crates/sandbox/vendor/bubblewrap/COPYING whitespace=-blank-at-eol

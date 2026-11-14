@@ -12327,8 +12327,8 @@ moves its pin.
   - [ ] P14e, Windows, elevated: sandbox users from a UAC setup, network
         blocked by firewall rules, the command runner, readiness; a real
         `/setup-default-sandbox` writing `windows.sandbox = "elevated"`;
-        then the Windows default. Left open by decision (2026-11-09):
-        port it only once asked.
+        then the Windows default. Requested on 2026-11-14; implementation
+        and native acceptance tracked in docs/plan-sandbox-parity.md.
   - Open (P14c): unelevated does not block the network (Codex's offline
     environment variables only; the `sandbox` section then adds
     `"networkEnforced": false`); a background process ends with its

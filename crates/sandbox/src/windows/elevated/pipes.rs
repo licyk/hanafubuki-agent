@@ -7,7 +7,7 @@ use std::ptr::null_mut;
 use std::time::Duration;
 
 use windows_sys::Win32::Foundation::{
-    GetLastError, LocalFree, ERROR_PIPE_CONNECTED, ERROR_PIPE_LISTENING, HANDLE,
+    GetLastError, LocalFree, ERROR_NO_DATA, ERROR_PIPE_CONNECTED, ERROR_PIPE_LISTENING, HANDLE,
     INVALID_HANDLE_VALUE, WAIT_TIMEOUT,
 };
 use windows_sys::Win32::Security::Authorization::ConvertStringSecurityDescriptorToSecurityDescriptorW;
@@ -56,7 +56,9 @@ impl Pipes {
                 let connected =
                     unsafe { ConnectNamedPipe(file.as_raw_handle() as HANDLE, null_mut()) };
                 let error = unsafe { GetLastError() };
-                if connected != 0 || error == ERROR_PIPE_CONNECTED {
+                // A fast runner may already have closed its endpoint. Its buffered
+                // output and exit status must still be collected.
+                if connected != 0 || error == ERROR_PIPE_CONNECTED || error == ERROR_NO_DATA {
                     break;
                 }
                 if error != ERROR_PIPE_LISTENING {

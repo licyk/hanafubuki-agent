@@ -177,3 +177,20 @@ fn full_access_is_unrestricted() {
     assert!(written.status.success(), "{written:?}");
     assert!(file.exists());
 }
+
+#[test]
+fn overlapping_writable_roots_do_not_regrant_metadata() {
+    let workspace = directory();
+    let git = workspace.path().join(".git");
+    std::fs::create_dir(&git).unwrap();
+    let policy = SandboxPolicy::WorkspaceWrite {
+        writable_roots: vec![workspace.path().to_path_buf(), git.clone()],
+        network_access: false,
+    };
+    let result = write(&policy, &git.join("hook"));
+    assert!(!result.status.success(), "{result:?}");
+    assert!(!git.join("hook").exists());
+    let result = run_confined(&policy, sh(&format!("rm -rf '{}'", git.display())));
+    assert!(!result.status.success(), "{result:?}");
+    assert!(git.exists());
+}
