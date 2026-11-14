@@ -31,10 +31,16 @@ alone is not native acceptance. Keep setup credentials out of arguments and logs
   setup and command runner, and TUI setup/readiness integration.
 - Dedicated worktree: /tmp/hanafubuki-sandbox; GitHub branch:
   test/sandbox-platforms. Only the Sandbox platforms workflow runs on pushes.
-- Linux bubblewrap and legacy tests and macOS native tests passed. Windows
-  compilation/lint and unelevated native tests passed; elevated native acceptance
-  is still running. No whole-workspace test suite was requested or run.
+- Commit 4e02ba9d passed Sandbox platforms run 43629054590 on Linux, Windows
+  and macOS: scoped check/clippy/native sandbox tests, Linux legacy Landlock,
+  Windows repeated elevated setup, filesystem boundaries, native TCP network
+  on/off, stdin/stdout/stderr and environment inheritance.
+  https://github.com/licyk/hanafubuki-agent/actions/runs/43629054590
+- Local cargo fmt --all --check, cargo xtask check, sandbox tests and Windows
+  cross-target clippy passed during implementation. No whole-workspace test
+  suite was requested or run.
 - Native PTY fidelity, MSYS compatibility and interruption remain acceptance
   limits; elevated stdio is a pipe bridge and does not yet create an inner ConPTY.
   Do not describe this implementation as complete Codex terminal parity.
-- No merge to main or release until the remaining native failures are resolved.
+- Kept on the dedicated test branch; no main merge or release. The passed
+  sandbox suite is not evidence of full-workspace or interactive-terminal parity.
