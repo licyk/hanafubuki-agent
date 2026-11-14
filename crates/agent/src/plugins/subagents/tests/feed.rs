@@ -385,6 +385,7 @@ async fn an_agents_approval_and_question_reach_the_host_as_child_events() {
         .unwrap();
     wait_until("the agent's turn ends", asked("turn_completed")).await;
     queued(&service, root, 1).await;
+    agents_done(&subagents(&service).await, root).await;
 
     let events = told.child_events(root);
     assert_eq!(

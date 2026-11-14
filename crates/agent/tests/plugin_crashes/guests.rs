@@ -51,7 +51,19 @@ fn back_after(status: &GuestStatus, restarts: usize, cause: GuestExitCause, why:
         exit.reason.as_deref().unwrap_or_default(),
         exit.status.as_deref().unwrap_or_default()
     );
-    assert!(said.contains(why), "{why:?} not in {said:?}");
+    // Bubblewrap reports the command's terminating signal as 128 + signal;
+    // the legacy backend exposes the signal directly on the owned process.
+    let wrapped_status = match why {
+        "SIGABRT" => Some("exit status: 134"),
+        "SIGSEGV" => Some("exit status: 139"),
+        "SIGKILL" => Some("exit status: 137"),
+        _ => None,
+    };
+    assert!(
+        said.contains(why)
+            || wrapped_status.is_some_and(|expected| exit.status.as_deref() == Some(expected)),
+        "{why:?} not in {said:?}"
+    );
 }
 
 pub async fn a_guest_panic_is_the_tool_calls_error() {

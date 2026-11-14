@@ -99,7 +99,6 @@ fn availability_follows_the_spec() {
             "providers",
             "permissions",
             "approve",
-            "setup-default-sandbox",
             "skills",
             "compression",
             "review",

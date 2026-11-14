@@ -9,7 +9,7 @@
 
 use hanafubuki_agent::{
     AgentPackageStatus, AgentPluginOptionsStatus, AgentPluginStatus, PluginOptionSchema,
-    ResolvedPluginOption, SettingKind, SettingSpec, SettingValue, MAX_PLUGIN_OPTIONS,
+    ResolvedPluginOption, SettingKind, SettingSpec, SettingValue,
 };
 use serde_json::{Map, Value};
 
@@ -82,78 +82,9 @@ fn package<'a>(state: &'a PluginsState, id: &str) -> Option<&'a AgentPackageStat
     state.packages.iter().find(|package| package.id == id)
 }
 
-/// One field per option, by its place in the schema.
-const FIELDS: [FieldId; MAX_PLUGIN_OPTIONS] = [
-    "option_0",
-    "option_1",
-    "option_2",
-    "option_3",
-    "option_4",
-    "option_5",
-    "option_6",
-    "option_7",
-    "option_8",
-    "option_9",
-    "option_10",
-    "option_11",
-    "option_12",
-    "option_13",
-    "option_14",
-    "option_15",
-    "option_16",
-    "option_17",
-    "option_18",
-    "option_19",
-    "option_20",
-    "option_21",
-    "option_22",
-    "option_23",
-    "option_24",
-    "option_25",
-    "option_26",
-    "option_27",
-    "option_28",
-    "option_29",
-    "option_30",
-    "option_31",
-    "option_32",
-    "option_33",
-    "option_34",
-    "option_35",
-    "option_36",
-    "option_37",
-    "option_38",
-    "option_39",
-    "option_40",
-    "option_41",
-    "option_42",
-    "option_43",
-    "option_44",
-    "option_45",
-    "option_46",
-    "option_47",
-    "option_48",
-    "option_49",
-    "option_50",
-    "option_51",
-    "option_52",
-    "option_53",
-    "option_54",
-    "option_55",
-    "option_56",
-    "option_57",
-    "option_58",
-    "option_59",
-    "option_60",
-    "option_61",
-    "option_62",
-    "option_63",
-];
-
 /// The field of the option at `index` of a schema.
-#[cfg(test)]
-pub(super) fn option_field(index: usize) -> FieldId {
-    FIELDS[index]
+pub(super) fn option_field(index: usize) -> String {
+    format!("option_{index}")
 }
 
 /// What an option without a value shows in a choice.
@@ -169,8 +100,8 @@ pub(super) fn options_form(
     let mut items = schema
         .options
         .iter()
-        .zip(FIELDS)
-        .map(|(option, id)| option_item(id, option, current(option, values)))
+        .enumerate()
+        .map(|(index, option)| option_item(&option_field(index), option, current(option, values)))
         .collect::<Vec<_>>();
     items.push(FormItem::action(SAVE_OPTIONS, "Save"));
     FormView::new(title, items).with_subtitle(
@@ -188,7 +119,9 @@ pub(super) fn changed_options(
     form.clear_errors();
     let mut changed = Map::new();
     let mut fits = true;
-    for (option, id) in schema.options.iter().zip(FIELDS) {
+    for (index, option) in schema.options.iter().enumerate() {
+        let id = option_field(index);
+        let id = id.as_str();
         let before = current(option, values);
         let Some(raw) = read(form, id, option, before.is_none()) else {
             continue;
@@ -237,7 +170,7 @@ fn current<'a>(
         .as_ref()
 }
 
-fn option_item(id: FieldId, option: &SettingSpec, value: Option<&SettingValue>) -> FormItem {
+fn option_item(id: &str, option: &SettingSpec, value: Option<&SettingValue>) -> FormItem {
     let label = label(option);
     let text = |value: Option<&SettingValue>| match value {
         Some(SettingValue::Integer(value)) => value.to_string(),
@@ -308,7 +241,7 @@ fn bounds<T: std::fmt::Display>(minimum: Option<T>, maximum: Option<T>) -> Strin
 /// had no value (`unset`) starts with an `unset` entry.
 fn read(
     form: &FormView,
-    id: FieldId,
+    id: &str,
     option: &SettingSpec,
     unset: bool,
 ) -> Option<Result<Value, String>> {

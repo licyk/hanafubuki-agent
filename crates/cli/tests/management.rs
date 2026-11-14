@@ -131,7 +131,11 @@ fn config_get_and_set_check_a_plugin_option_against_its_plugin() {
     let run = home
         .run(&["config", "set", "pluginOptions.web.proxy", "1"])
         .expect(1);
-    assert!(run.stderr().contains("has no options"), "{}", run.stderr());
+    assert!(
+        run.stderr().contains("no option `proxy`"),
+        "{}",
+        run.stderr()
+    );
     assert!(home
         .file("config.toml")
         .contains("maximumRunningAgents = 6"));

@@ -231,9 +231,9 @@ fn every_option_of_every_descriptor_has_the_generic_editor() {
         let mut form = options::options_form(descriptor.name, &schema, &values);
         for index in 0..schema.options.len() {
             let id = options::option_field(index);
-            form.set_error(id, "probe");
+            form.set_error(&id, "probe");
             assert_eq!(
-                form.error(id),
+                form.error(&id),
                 Some("probe"),
                 "{}",
                 schema.options[index].key
@@ -244,8 +244,25 @@ fn every_option_of_every_descriptor_has_the_generic_editor() {
             options::changed_options(&mut form, &schema, &values),
             Some(serde_json::Map::new())
         );
+        if descriptor.name == "web" {
+            let index = schema
+                .options
+                .iter()
+                .position(|option| option.key == "browserFetch")
+                .unwrap();
+            assert!(index >= 64, "exercise an option beyond the old form limit");
+            form.set_error(&options::option_field(index), "focus");
+            form.handle_key(KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE));
+            assert_eq!(
+                options::changed_options(&mut form, &schema, &values),
+                Some(serde_json::Map::from_iter([(
+                    "browserFetch".to_string(),
+                    serde_json::json!(false),
+                )]))
+            );
+        }
     }
-    assert_eq!(described, 5, "the execution and subagents options");
+    assert!(described > 64, "includes the full web plugin options");
 
     let schema = agent_plugin_descriptors()
         .into_iter()
@@ -275,7 +292,7 @@ fn every_option_of_every_descriptor_has_the_generic_editor() {
     form.handle_key(key(KeyCode::Char('0')));
     assert_eq!(options::changed_options(&mut form, &schema, &values), None);
     assert_eq!(
-        form.error(options::option_field(0)),
+        form.error(&options::option_field(0)),
         Some("`maximumRunningAgents` is between 1 and 16")
     );
 }

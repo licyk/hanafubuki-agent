@@ -28,7 +28,7 @@ pub(crate) enum FormEvent {
 }
 
 pub(crate) struct FormItem {
-    id: FieldId,
+    id: String,
     label: String,
     kind: Kind,
     error: Option<String>,
@@ -44,11 +44,11 @@ enum Kind {
         selected: usize,
     },
     Toggle(bool),
-    Action,
+    Action(FieldId),
 }
 
 impl FormItem {
-    pub(crate) fn text(id: FieldId, label: &str, value: &str) -> Self {
+    pub(crate) fn text(id: &str, label: &str, value: &str) -> Self {
         Self::new(
             id,
             label,
@@ -59,7 +59,7 @@ impl FormItem {
         )
     }
 
-    pub(crate) fn choice(id: FieldId, label: &str, options: &[&str], selected: usize) -> Self {
+    pub(crate) fn choice(id: &str, label: &str, options: &[&str], selected: usize) -> Self {
         Self::new(
             id,
             label,
@@ -70,12 +70,12 @@ impl FormItem {
         )
     }
 
-    pub(crate) fn toggle(id: FieldId, label: &str, on: bool) -> Self {
+    pub(crate) fn toggle(id: &str, label: &str, on: bool) -> Self {
         Self::new(id, label, Kind::Toggle(on))
     }
 
     pub(crate) fn action(id: FieldId, label: &str) -> Self {
-        Self::new(id, label, Kind::Action)
+        Self::new(id, label, Kind::Action(id))
     }
 
     /// A text field whose value is drawn as dots.
@@ -93,9 +93,9 @@ impl FormItem {
         self
     }
 
-    fn new(id: FieldId, label: &str, kind: Kind) -> Self {
+    fn new(id: &str, label: &str, kind: Kind) -> Self {
         Self {
-            id,
+            id: id.to_string(),
             label: label.to_string(),
             kind,
             error: None,
@@ -151,9 +151,8 @@ impl FormView {
         let enter = key_hint::plain(KeyCode::Enter).is_press(key);
         let space = key_hint::plain(KeyCode::Char(' ')).is_press(key);
         let mut advance = false;
-        let id = self.items.get(self.focus).map(|item| item.id);
         match self.items.get_mut(self.focus).map(|item| &mut item.kind) {
-            Some(Kind::Action) if enter => return id.map_or(FormEvent::None, FormEvent::Action),
+            Some(Kind::Action(id)) if enter => return FormEvent::Action(*id),
             Some(Kind::Toggle(on)) if enter || space => *on = !*on,
             Some(Kind::Choice { options, selected }) => {
                 let len = options.len().max(1);
@@ -186,21 +185,21 @@ impl FormView {
     }
 
     /// The text of the field `id`, as typed.
-    pub(crate) fn text(&self, id: FieldId) -> &str {
+    pub(crate) fn text(&self, id: &str) -> &str {
         match self.item(id).map(|item| &item.kind) {
             Some(Kind::Text { field, .. }) => field.text(),
             _ => "",
         }
     }
 
-    pub(crate) fn choice(&self, id: FieldId) -> usize {
+    pub(crate) fn choice(&self, id: &str) -> usize {
         match self.item(id).map(|item| &item.kind) {
             Some(Kind::Choice { selected, .. }) => *selected,
             _ => 0,
         }
     }
 
-    pub(crate) fn toggle(&self, id: FieldId) -> bool {
+    pub(crate) fn toggle(&self, id: &str) -> bool {
         matches!(
             self.item(id).map(|item| &item.kind),
             Some(Kind::Toggle(true))
@@ -208,7 +207,7 @@ impl FormView {
     }
 
     /// Says what is wrong with `id` under it, and moves the focus there.
-    pub(crate) fn set_error(&mut self, id: FieldId, error: impl Into<String>) {
+    pub(crate) fn set_error(&mut self, id: &str, error: impl Into<String>) {
         let Some(index) = self.items.iter().position(|item| item.id == id) else {
             return;
         };
@@ -227,11 +226,11 @@ impl FormView {
     }
 
     #[cfg(test)]
-    pub(crate) fn error(&self, id: FieldId) -> Option<&str> {
+    pub(crate) fn error(&self, id: &str) -> Option<&str> {
         self.item(id).and_then(|item| item.error.as_deref())
     }
 
-    fn item(&self, id: FieldId) -> Option<&FormItem> {
+    fn item(&self, id: &str) -> Option<&FormItem> {
         self.items.iter().find(|item| item.id == id)
     }
 }

@@ -28,7 +28,7 @@ impl FormView {
         let label_width = self
             .items
             .iter()
-            .filter(|item| !matches!(item.kind, Kind::Action))
+            .filter(|item| !matches!(item.kind, Kind::Action(_)))
             .map(|item| item.label.width())
             .max()
             .unwrap_or(0);
@@ -62,7 +62,7 @@ impl FormView {
                     let mark = if *on { "[x]" } else { "[ ]" };
                     line.push_span(if focused { mark.cyan() } else { mark.into() });
                 }
-                Kind::Action => {
+                Kind::Action(_) => {
                     let label = item.label.clone();
                     line = Line::from(vec![
                         marker(focused),

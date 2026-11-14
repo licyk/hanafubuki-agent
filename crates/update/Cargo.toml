@@ -28,7 +28,7 @@ serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 sha2.workspace = true
 tempfile.workspace = true
-tokio = { workspace = true, features = ["fs", "io-util", "process", "rt", "time"] }
+tokio = { workspace = true, features = ["fs", "io-util", "macros", "process", "rt", "time"] }
 # The release archive's gzip on Unix, and the backend of zip's Deflate on
 # Windows (zip takes flate2 without one).
 flate2 = "1"

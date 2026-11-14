@@ -311,7 +311,7 @@ Fullscreen 下还有阅读对话的按键：Page Up/Page Down、F3、F4、Ctrl-S
 - **Marketplaces** 列出已添加的市场，每个显示来源和其中已安装的插件数量。Enter 打开一个市场：列出它的插件，标为 **Available**、**Installed**、**Disabled** 或 **Not installable**；在未安装的插件上按 Enter 显示 **Install plugin**。Ctrl+U 升级 git 市场，Ctrl+R 确认后删除市场。**Add a marketplace…** 要求输入来源：`owner/repo`、git URL 或本地市场目录。
 - 安装带 hook 的插件后，会列出这些 hook 的命令并询问是否信任（**Trust them**，或 **Not now**：之后在 `/hooks` 或插件页面信任）。hook 只有被信任后才会运行。
 - **Built-in** 列出编译进 Agent 的插件（以及宿主的插件）及其状态和摘要：空格或 Enter 启用或停用（`disabledPlugins`；核心插件不能停用），`r` 重新启动失败的插件，`o` 打开有选项的插件的选项（`[pluginOptions.名字]`）。
-- **选项表单**是通用的：插件的每个选项一个字段，标签为它的摘要和键，形式为开关、数字（占位符显示它的界限）、选择、文本（机密时显示为圆点）或用逗号分隔的文本列表。保存时按写入的方式检查每个值，不合适的字段下显示原因；只写入改动过的值，写入用户的 `config.toml`（内置插件的 [`[pluginOptions.NAME]`](/docs/config-reference#plugin-options)，代码插件的 [`[plugins."ID"].settings`](/docs/config-reference#plugins)），插件立即接受它们。这些选项同样是设置中心 Plugins 标签页中该插件自己分节的行。
+- **选项表单**是通用的：插件的每个选项一个字段，标签为它的摘要和键，形式为开关、数字（占位符显示它的界限）、选择、文本（机密时显示为圆点）或用逗号分隔的文本列表。保存时按写入的方式检查每个值，不合适的字段下显示原因；只写入改动过的值，写入用户的 `config.toml`（内置插件的 [`[pluginOptions.NAME]`](/docs/config-reference#plugin-options)，代码插件的 [`[plugins."ID"].settings`](/docs/config-reference#plugins)），插件立即接受它们。表单包含内置插件声明的全部选项，超过 64 项也不会截断。这些选项同样是设置中心 Plugins 标签页中该插件自己分节的行。
 
 Esc 返回上一页，在标签页上回到设置中心。用 `--safe-mode` 启动时，浏览器会提示没有加载任何已安装插件。
 
