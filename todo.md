@@ -1,6 +1,6 @@
 Windows ordinary-user setup: [plan](docs/plan-windows-user-setup.md).
 
-MSYS sandbox compatibility (known isolation limitation): [plan](docs/plan-msys-sandbox.md).
+MSYS sandbox compatibility (permission regression fixed; remaining limits recorded): [plan](docs/plan-msys-sandbox.md).
 
 ## Sandbox completion (2026-11-14)
 

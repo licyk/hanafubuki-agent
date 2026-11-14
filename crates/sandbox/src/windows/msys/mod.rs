@@ -1,4 +1,4 @@
-//! Experimental session-scoped MSYS IPC ACL compatibility.
+//! Session-scoped MSYS IPC ACL compatibility.
 //!
 //! The restricting token never includes the reusable sandbox account SID.
 //! MSYS's GENERIC_ALL account ACEs use this command's fresh logon SID instead.

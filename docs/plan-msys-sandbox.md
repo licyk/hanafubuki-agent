@@ -57,3 +57,29 @@ pipes/fork, networking, previous-workspace and read-only regressions must pass
 before merging. Debug event handling and MSYS fork compatibility are additional
 acceptance points. Public warnings remain until native evidence supports changing
 them. Run only the sandbox workflow on this branch; do not run the full suite.
+
+## Replacement accepted
+
+Commit 94277bbc passed sandbox-only native CI on all three platforms:
+https://github.com/licyk/hanafubuki-agent/actions/runs/43644933076
+
+Windows passes 29 unit tests and the native integration executable, including
+Git for Windows and MSYS2 startup, pipelines/fork, indirect CMD launches,
+read-only reads, repeat writes in the authorized root, previous-root and
+read-only write denials, protected metadata, and online/offline networking.
+CMD and PowerShell previous-root and read-only denials also pass. UAC repair
+and the ordinary user's read-only access to WFP remain covered and pass.
+
+The prototype's thread-context alignment error was fixed with a 16-byte
+aligned CONTEXT wrapper. The indirect-launch fixture uses a batch file to avoid
+passing nested quotes through the existing generic Windows argv serializer.
+No regression assertion was removed or disabled. The token remains strict on
+all Windows architectures; the MSYS compatibility hook is x86_64 only.
+
+Local `cargo fmt --all --check`, `cargo xtask check`, and sandbox-only Windows
+GNU cross-target clippy pass. CI runs sandbox-only native check, clippy and
+tests on Linux, Windows and macOS, plus Linux legacy Landlock. No full-workspace
+suite ran. Inner ConPTY, resizing, interactive programs, nested debuggers and
+other MSYS runtime versions remain unverified; public documentation retains
+those limits. The successful native run supersedes the old known-regression
+status above, which remains as historical evidence.
