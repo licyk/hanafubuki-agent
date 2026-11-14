@@ -36,6 +36,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2.9.3
         with:
           key: sandbox
+          cache-on-failure: true
       - run: cargo check -p hanafubuki-agent-sandbox --all-targets
         env:
           RUSTFLAGS: -D warnings

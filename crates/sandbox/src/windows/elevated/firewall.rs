@@ -4,7 +4,9 @@
 use std::ptr::{null, null_mut};
 
 use windows_sys::core::GUID;
-use windows_sys::Win32::Foundation::{LocalFree, FWP_E_ALREADY_EXISTS, HANDLE};
+use windows_sys::Win32::Foundation::{
+    LocalFree, FWP_E_ALREADY_EXISTS, FWP_E_FILTER_NOT_FOUND, HANDLE,
+};
 use windows_sys::Win32::NetworkManagement::WindowsFilteringPlatform::*;
 use windows_sys::Win32::Security::Authorization::{
     BuildExplicitAccessWithNameW, BuildSecurityDescriptorW, EXPLICIT_ACCESS_W, GRANT_ACCESS,
@@ -124,7 +126,16 @@ pub(super) fn install(account: &str, keys: &[GUID; 4]) -> Result<(), String> {
         FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V4,
         FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V6,
     ];
+    // Rebuild account conditions on repair: a recreated account has a new SID.
+    check(
+        unsafe { FwpmTransactionBegin0(engine.0, 0) },
+        "begin WFP update",
+    )?;
     for (key, layer) in keys.iter().zip(layers) {
+        let removed = unsafe { FwpmFilterDeleteByKey0(engine.0, key) };
+        if removed != FWP_E_FILTER_NOT_FOUND as u32 {
+            check(removed, "replace sandbox network block")?;
+        }
         let mut condition: FWPM_FILTER_CONDITION0 = unsafe { std::mem::zeroed() };
         condition.fieldKey = FWPM_CONDITION_ALE_USER_ID;
         condition.matchType = FWP_MATCH_EQUAL;
@@ -141,12 +152,15 @@ pub(super) fn install(account: &str, keys: &[GUID; 4]) -> Result<(), String> {
         filter.filterCondition = &mut condition;
         filter.action.r#type = FWP_ACTION_BLOCK;
         // SAFETY: the descriptor, condition and filter live through the call.
-        allow_existing(
+        check(
             unsafe { FwpmFilterAdd0(engine.0, &filter, null_mut(), null_mut()) },
             "block sandbox network",
         )?;
     }
-    Ok(())
+    check(
+        unsafe { FwpmTransactionCommit0(engine.0) },
+        "commit WFP update",
+    )
 }
 
 pub(super) fn verify(keys: &[GUID; 4]) -> Result<(), String> {

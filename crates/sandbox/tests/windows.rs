@@ -67,6 +67,8 @@ mod windows {
         }
         if std::env::var_os("HANAFUBUKI_TEST_ELEVATED_SANDBOX").is_some() {
             hanafubuki_agent_sandbox::setup_windows_sandbox().unwrap();
+            // Re-running setup repairs the existing installation and filter keys.
+            hanafubuki_agent_sandbox::setup_windows_sandbox().unwrap();
             let elevated = detected.with_windows_sandbox(Some(AgentWindowsSandbox::Elevated));
             assert!(
                 matches!(elevated.status(), SandboxStatus::Available { .. }),
@@ -77,8 +79,8 @@ mod windows {
                 check(&elevated);
                 eprintln!("ok: elevated {name}");
             }
-            elevated_network_is_enforced(&elevated);
             stdio_round_trip(&elevated);
+            elevated_network_is_enforced(&elevated);
         }
     }
 
@@ -292,7 +294,7 @@ mod windows {
         let workspace = directory();
         let powershell = std::env::var("SystemRoot").unwrap()
             + r"\System32\WindowsPowerShell\v1.0\powershell.exe";
-        let script = format!("try {{ $c = New-Object Net.Sockets.TcpClient; $c.Connect('127.0.0.1', {port}); $c.Dispose(); exit 0 }} catch {{ exit 7 }}");
+        let script = format!("try {{ $c = New-Object Net.Sockets.TcpClient; $c.Connect('127.0.0.1', {port}); $c.Dispose(); exit 0 }} catch {{ [Console]::Error.WriteLine($_.Exception.ToString()); exit 7 }}");
         let command = || {
             vec![
                 powershell.clone(),
@@ -303,6 +305,11 @@ mod windows {
                 script.clone(),
             ]
         };
+        let baseline = run_confined(sandbox, &SandboxPolicy::FullAccess, command());
+        assert!(
+            baseline.status.success(),
+            "unconfined network baseline: {baseline:?}"
+        );
         let blocked = run_confined(
             sandbox,
             &workspace_write(workspace.path(), false),
