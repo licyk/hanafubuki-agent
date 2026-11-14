@@ -336,6 +336,133 @@ fn snapshot_narrow_width_preserves_third_option() {
     );
 }
 
+/// Rows with facts as a model list has them: a long name, a short one, and
+/// a row without facts (a Provider still listing).
+fn facts_view() -> ListSelectionView {
+    let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+    let tx = AppEventSender::new(tx_raw);
+    let row = |name: &str, provider: &str, columns: &str, stacked: &str| SelectionItem {
+        name: name.to_string(),
+        description: Some(provider.to_string()),
+        search_value: Some(name.to_string()),
+        facts: Some(RowFacts {
+            columns: columns.to_string(),
+            stacked: stacked.to_string(),
+        }),
+        ..Default::default()
+    };
+    let items = vec![
+        SelectionItem {
+            is_current: true,
+            ..row(
+                "claude-sonnet-4-5",
+                "Anthropic",
+                "   200K  yes       yes   ",
+                "context 200K · thinking yes · vision yes",
+            )
+        },
+        row(
+            "meta-llama/llama-3.1-405b-instruct:free",
+            "OpenRouter",
+            "   131K  no        no    ",
+            "context 131K · thinking no · vision no",
+        ),
+        SelectionItem {
+            name: "Team gateway".to_string(),
+            description: Some("listing…".to_string()),
+            is_disabled: true,
+            ..Default::default()
+        },
+    ];
+    ListSelectionView::new(
+        SelectionViewParams {
+            title: Some("Select Model".to_string()),
+            items,
+            is_searchable: true,
+            facts_header: Some("Context  Thinking  Vision".to_string()),
+            ..Default::default()
+        },
+        tx,
+    )
+}
+
+#[test]
+fn rows_with_facts_have_them_in_columns_under_a_header_or_under_their_names() {
+    let view = facts_view();
+    let rendered = [100, 80, 50]
+        .map(|width| format!("--- {width} ---\n{}", render_lines_with_width(&view, width)))
+        .join("\n");
+    assert_snapshot!("list_selection_rows_with_facts", rendered);
+}
+
+#[test]
+fn no_width_hides_a_row_or_its_facts() {
+    let view = facts_view();
+    for width in 30..=120 {
+        let rendered = render_lines_with_width(&view, width);
+        for fact in ["200K", "131K", "listing…"] {
+            assert!(rendered.contains(fact), "{fact} at {width}:\n{rendered}");
+        }
+        let header = rendered.contains("Context  Thinking  Vision");
+        let columns = rendered.contains("200K  yes       yes");
+        assert_eq!(header, columns, "a header only over columns, at {width}");
+    }
+}
+
+#[test]
+fn replaced_items_keep_the_search_the_selected_row_and_its_line() {
+    let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+    let tx = AppEventSender::new(tx_raw);
+    let items = |names: &[String]| -> Vec<SelectionItem> {
+        names
+            .iter()
+            .map(|name| SelectionItem {
+                name: name.clone(),
+                search_value: Some(name.clone()),
+                ..Default::default()
+            })
+            .collect()
+    };
+    let names: Vec<String> = (0..20).map(|n| format!("model-{n:02}")).collect();
+    let mut view = ListSelectionView::new(
+        SelectionViewParams {
+            items: items(&names),
+            is_searchable: true,
+            ..Default::default()
+        },
+        tx,
+    );
+    // Scrolled, the selected row mid-list.
+    for _ in 0..12 {
+        view.handle_key_event(KeyEvent::from(KeyCode::Down));
+    }
+    for _ in 0..3 {
+        view.handle_key_event(KeyEvent::from(KeyCode::Up));
+    }
+    let line = |view: &ListSelectionView| view.state.selected_idx.unwrap() - view.state.scroll_top;
+    assert_eq!(view.selected_index(), Some(9));
+    let before = line(&view);
+    assert!(view.state.scroll_top > 0 && before < 7, "{before}");
+
+    // Five rows inserted above: the same row, on the same line.
+    let mut more: Vec<String> = (0..5).map(|n| format!("first-{n}")).collect();
+    more.extend(names.iter().cloned());
+    view.replace_items(items(&more), Some(14));
+    assert_eq!(view.selected_index(), Some(14));
+    assert_eq!(line(&view), before);
+
+    // A search is kept and applied to the new rows.
+    for c in "model-1".chars() {
+        view.handle_key_event(KeyEvent::from(KeyCode::Char(c)));
+    }
+    let selected = view.selected_index();
+    more.insert(0, "model-1x".to_string());
+    view.replace_items(items(&more), selected.map(|index| index + 1));
+    assert_eq!(view.search_query, "model-1");
+    assert_eq!(view.selected_index(), selected.map(|index| index + 1));
+    assert_eq!(view.visible_len(), 11, "model-1x and model-10 to model-19");
+}
+
 /// Codex's standard popup hint, which the tests' views carry.
 fn standard_popup_hint_line() -> Line<'static> {
     Line::from(vec![

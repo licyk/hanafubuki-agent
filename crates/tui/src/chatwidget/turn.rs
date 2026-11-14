@@ -115,7 +115,7 @@ impl ChatWidget {
             }
             // The commands' updates are handled before.
             TurnUpdate::SessionOpened(_)
-            | TurnUpdate::ModelChoices(_)
+            | TurnUpdate::ModelList(_)
             | TurnUpdate::ModelChanged(_)
             | TurnUpdate::EffortChoices(_)
             | TurnUpdate::EffortChanged(_)

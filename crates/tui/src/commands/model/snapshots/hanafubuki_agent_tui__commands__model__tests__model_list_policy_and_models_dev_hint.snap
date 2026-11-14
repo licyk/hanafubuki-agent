@@ -1,0 +1,53 @@
+---
+source: crates/tui/src/commands/model/tests.rs
+expression: at_widths(&view)
+---
+--- 100 columns ---
+
+  Select Model
+  Switch the model of this session. The model policy never sends images.
+
+  Type to search models
+                                                                         Context  Thinking  Vision
+› claude-sonnet-4-5 (current)  Anthropic                                    200K  yes       yes
+  gpt-4.1                      OpenAI                                      1.05M  ?         ?
+  gpt-5.1                      OpenAI                                       272K  ?         ?
+
+  claude-sonnet-4-5 · Anthropic: context 200K (reported) · max output 64K (reported) · thinking low,
+  medium, high (reported) · vision yes (reported)
+  enter choose · esc close · ? not known · models.dev can fill these: /config modelMetadata
+--- 80 columns ---
+
+  Select Model
+  Switch the model of this session. The model policy never sends images.
+
+  Type to search models
+                                                     Context  Thinking  Vision
+› claude-sonnet-4-5 (current)  Anthropic                200K  yes       yes
+  gpt-4.1                      OpenAI                  1.05M  ?         ?
+  gpt-5.1                      OpenAI                   272K  ?         ?
+
+  claude-sonnet-4-5 · Anthropic: context 200K (reported) · max output 64K
+  (reported) · thinking low, medium, high (reported) · vision yes (reported)
+  enter choose · esc close · ? not known · models.dev can fill these: /config
+  modelMetadata
+--- 50 columns ---
+
+  Select Model
+  Switch the model of this session. The model
+  policy never sends images.
+
+  Type to search models
+› claude-sonnet-4-5 (current)  Anthropic
+    context 200K · thinking yes · vision yes
+  gpt-4.1  OpenAI
+    context 1.05M · thinking ? · vision ?
+  gpt-5.1  OpenAI
+    context 272K · thinking ? · vision ?
+
+  claude-sonnet-4-5 · Anthropic: context 200K
+  (reported) · max output 64K (reported) ·
+  thinking low, medium, high (reported) · vision
+  yes (reported)
+  enter choose · esc close · ? not known ·
+  models.dev can fill these: /config modelMetadata

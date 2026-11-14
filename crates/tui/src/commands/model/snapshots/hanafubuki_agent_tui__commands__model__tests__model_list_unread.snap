@@ -1,0 +1,10 @@
+---
+source: crates/tui/src/commands/model/tests.rs
+expression: "render(&view, 80)"
+---
+
+  Select Model
+  Switch the model of this session.
+
+  The Providers were not read: providers.toml is unreadable
+  esc close

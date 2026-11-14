@@ -1,0 +1,35 @@
+---
+source: crates/tui/src/bottom_pane/list_selection_view/tests.rs
+expression: rendered
+---
+--- 100 ---
+                                                                                                    
+  Select Model                                                                                      
+                                                                                                    
+                                                                                                    
+                                                                         Context  Thinking  Vision  
+› claude-sonnet-4-5 (current)              Anthropic                        200K  yes       yes     
+  meta-llama/llama-3.1-405b-instruct:free  OpenRouter                       131K  no        no      
+  Team gateway                             listing…                                                 
+                                                                                                    
+--- 80 ---
+                                                                                
+  Select Model                                                                  
+                                                                                
+                                                                                
+                                                     Context  Thinking  Vision  
+› claude-sonnet-4-5 (current)            Anthropic      200K  yes       yes     
+  meta-llama/llama-3.1-405b-instruct:f…  OpenRouter     131K  no        no      
+  Team gateway                           listing…                               
+                                                                                
+--- 50 ---
+                                                  
+  Select Model                                    
+                                                  
+                                                  
+› claude-sonnet-4-5 (current)  Anthropic          
+    context 200K · thinking yes · vision yes      
+  meta-llama/llama-3.1-405b-instruct:free         
+    context 131K · thinking no · vision no        
+  Team gateway                                    
+    listing…

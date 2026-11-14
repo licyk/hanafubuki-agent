@@ -271,7 +271,8 @@ fn effort_sets_the_sessions_reasoning_effort() {
 }
 
 /// The model policy's window, unset, names the window the default model's
-/// listing reported; the model picker shows what each entry reports; and
+/// listing reported; the model list shows what each entry reports, in
+/// columns, with where it came from under the list; and
 /// `/status` shows a session's window with its source, or that it is
 /// unknown; `/model forget` says when nothing was learned.
 #[test]
@@ -296,8 +297,13 @@ fn the_reported_window_is_shown_in_the_policy_the_picker_and_status() {
     );
 
     harness.type_and_submit("/model");
-    let picker = harness.pump_until_screen_shows("200K · vision");
-    assert!(picker.contains("fixture-model"), "{picker}");
+    let picker = harness.pump_until_screen_shows("200K  ?         yes");
+    assert!(picker.contains("fixture-model (current)"), "{picker}");
+    let detail: String = picker.split_whitespace().collect();
+    assert!(
+        detail.contains("context200K(reported)") && detail.contains("visionyes(reported)"),
+        "{picker}"
+    );
     harness.key(KeyCode::Esc);
     harness.type_and_submit("/providers policy");
     harness.pump_until_screen_shows("Settings › Model policy");

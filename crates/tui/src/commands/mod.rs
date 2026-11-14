@@ -61,6 +61,7 @@ use std::fmt;
 
 use hanafubuki_agent::{AgentSessionMode, AgentSubagentStatus, AgentTuiPreferences};
 
+use crate::agent_bridge::model_list::ModelListUpdate;
 use crate::agent_bridge::{
     HooksReply, McpReply, PluginsReply, ProviderModels, SessionCall, SessionReply, SettingsReply,
 };
@@ -76,7 +77,7 @@ pub(crate) use hooks::HOOKS;
 pub(crate) use mcp::MCP;
 pub(crate) use memories::MEMORIES;
 pub(crate) use mode::{mode_name, MODE};
-pub(crate) use model::{show_model_choices, MODEL};
+pub(crate) use model::{on_model_list, MODEL};
 pub(crate) use parse::{parse_input, ParsedInput};
 pub(crate) use plugins::PLUGINS;
 pub(crate) use presets::PRESETS;
@@ -260,6 +261,8 @@ pub(crate) fn send_step(
 #[derive(Debug)]
 pub(crate) enum CommandReply {
     ProviderModels(ProviderModels),
+    /// What `/model`'s listing heard.
+    ModelList(ModelListUpdate),
     Mcp(McpReply),
     Session(SessionReply),
     Hooks(HooksReply),

@@ -1,15 +1,140 @@
 // Modified from OpenAI Codex 57a808a392 (Apache-2.0).
 
 //! How the interface names what is known of a model: what a model list
-//! shows of it, and the reasoning efforts offered for it, which Alt+, and
-//! Alt+. step through. The sources' names are model-api's
+//! shows of it (its fact columns, and the detail line of the one selected),
+//! and the reasoning efforts offered for it, which Alt+, and Alt+. step
+//! through. The sources' names are model-api's
 //! (`ModelMetadataSource::label`).
 
 use hanafubuki_agent::{
     reasoning_effort_choices, KnownReasoning, ModelMetadata, ModelReasoningEffort, SettingChoice,
 };
 
+use crate::bottom_pane::RowFacts;
 use crate::history_cell::format_tokens_compact;
+
+/// The names over [`fact_columns`], as wide.
+pub(crate) const FACTS_HEADER: &str = "Context  Thinking  Vision";
+
+/// What a model list says of a model: its window (`200K`, or `?` when not
+/// known), and whether it thinks and reads images (`yes`, `no` or `?`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct FactCells {
+    pub(crate) window: String,
+    pub(crate) thinking: &'static str,
+    pub(crate) vision: &'static str,
+}
+
+pub(crate) fn fact_cells(metadata: &ModelMetadata) -> FactCells {
+    FactCells {
+        window: metadata.context_window.as_ref().map_or_else(
+            || "?".to_string(),
+            |window| format_tokens_compact(window.value),
+        ),
+        thinking: answer(metadata.supports_reasoning()),
+        vision: answer(metadata.supports_image_input()),
+    }
+}
+
+fn answer(known: Option<bool>) -> &'static str {
+    match known {
+        Some(true) => "yes",
+        Some(false) => "no",
+        None => "?",
+    }
+}
+
+/// The cells in columns under [`FACTS_HEADER`].
+pub(crate) fn fact_columns(cells: &FactCells) -> String {
+    format!(
+        "{:>7}  {:<8}  {:<6}",
+        cells.window, cells.thinking, cells.vision
+    )
+}
+
+/// The cells on one line, each named: `context 200K · thinking yes ·
+/// vision no`.
+pub(crate) fn fact_line(cells: &FactCells) -> String {
+    format!(
+        "context {} · thinking {} · vision {}",
+        cells.window, cells.thinking, cells.vision
+    )
+}
+
+/// A model's row facts, in columns and on one line.
+pub(crate) fn row_facts(metadata: &ModelMetadata) -> RowFacts {
+    let cells = fact_cells(metadata);
+    RowFacts {
+        columns: fact_columns(&cells),
+        stacked: fact_line(&cells),
+    }
+}
+
+/// The detail line of a model: `model` on `provider`, then each fact with
+/// where it came from (`context 200K (reported) · max output 64K
+/// (reported) · thinking low, high (reported) · vision no (learned)`).
+pub(crate) fn fact_details(model: &str, provider: &str, metadata: &ModelMetadata) -> String {
+    let window = metadata.context_window.as_ref().map_or_else(
+        || "context not known (compacts on the Provider's error)".to_string(),
+        |window| {
+            format!(
+                "context {} ({})",
+                format_tokens_compact(window.value),
+                window.source.label()
+            )
+        },
+    );
+    let output = metadata.max_output_tokens.as_ref().map(|output| {
+        format!(
+            "max output {} ({})",
+            format_tokens_compact(output.value),
+            output.source.label()
+        )
+    });
+    let vision = metadata.image_input.as_ref().map_or_else(
+        || "vision not known".to_string(),
+        |vision| {
+            format!(
+                "vision {} ({})",
+                answer(Some(vision.value)),
+                vision.source.label()
+            )
+        },
+    );
+    let facts: Vec<String> = [
+        Some(window),
+        output,
+        Some(thinking_detail(metadata)),
+        Some(vision),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
+    format!("{model} · {provider}: {}", facts.join(" · "))
+}
+
+/// Whether a model thinks, and at which levels when they are known.
+fn thinking_detail(metadata: &ModelMetadata) -> String {
+    let source = metadata
+        .reasoning
+        .as_ref()
+        .map_or("", |fact| fact.source.label());
+    match (metadata.known_reasoning(), metadata.supports_reasoning()) {
+        (KnownReasoning::Levels { efforts, default }, _) => {
+            let levels: Vec<&str> = efforts.iter().map(ModelReasoningEffort::as_str).collect();
+            let default = default
+                .map(|effort| format!(", default {}", effort.as_str()))
+                .unwrap_or_default();
+            format!("thinking {}{default} ({source})", levels.join(", "))
+        }
+        (_, Some(true)) => format!("thinking yes, levels not known ({source})"),
+        (KnownReasoning::Unsupported { learned: true }, _) => {
+            "thinking no (learned: the Provider refused it)".to_string()
+        }
+        (_, Some(false)) => format!("thinking no ({source})"),
+        (_, None) => "thinking not known".to_string(),
+    }
+}
 
 /// What is known of a model, for a model list: its window, and `vision`
 /// and `reasoning` when it is known to read images and to reason

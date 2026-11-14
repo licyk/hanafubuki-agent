@@ -3,7 +3,10 @@ use hanafubuki_agent::{
     ModelReasoningSupport, SettingChoice, Sourced,
 };
 
-use super::{effort_options, entry_badges, step_effort, EffortStep, EffortValue};
+use super::{
+    effort_options, entry_badges, fact_cells, fact_columns, fact_details, fact_line, row_facts,
+    step_effort, EffortStep, EffortValue, FACTS_HEADER,
+};
 
 fn sourced<T>(value: T, source: ModelMetadataSource) -> Option<Sourced<T>> {
     Some(Sourced {
@@ -11,6 +14,145 @@ fn sourced<T>(value: T, source: ModelMetadataSource) -> Option<Sourced<T>> {
         source,
         observed_at_ms: 0,
     })
+}
+
+fn reasons(
+    efforts: &[ModelReasoningEffort],
+    default: Option<ModelReasoningEffort>,
+    source: ModelMetadataSource,
+) -> Option<Sourced<ModelReasoningSupport>> {
+    sourced(
+        ModelReasoningSupport::Supported {
+            efforts: efforts.to_vec(),
+            default,
+        },
+        source,
+    )
+}
+
+fn takes_none(source: ModelMetadataSource) -> Option<Sourced<ModelReasoningSupport>> {
+    sourced(ModelReasoningSupport::Unsupported, source)
+}
+
+/// The cells of `metadata`: window, thinking, vision.
+fn cells(metadata: &ModelMetadata) -> (String, &'static str, &'static str) {
+    let cells = fact_cells(metadata);
+    (cells.window, cells.thinking, cells.vision)
+}
+
+#[test]
+fn a_cell_says_yes_no_or_not_known_whatever_the_source() {
+    assert_eq!(
+        cells(&ModelMetadata::default()),
+        ("?".to_string(), "?", "?")
+    );
+    let known = ModelMetadata {
+        context_window: sourced(1_047_576, ModelMetadataSource::Reported),
+        reasoning: reasons(&[], None, ModelMetadataSource::Catalog),
+        image_input: sourced(true, ModelMetadataSource::Configured),
+        ..ModelMetadata::default()
+    };
+    assert_eq!(cells(&known), ("1.05M".to_string(), "yes", "yes"));
+    for source in [
+        ModelMetadataSource::Configured,
+        ModelMetadataSource::Reported,
+        ModelMetadataSource::Learned,
+    ] {
+        let no = ModelMetadata {
+            context_window: sourced(272_000, ModelMetadataSource::BuiltIn),
+            reasoning: takes_none(source),
+            image_input: sourced(false, source),
+            ..ModelMetadata::default()
+        };
+        assert_eq!(cells(&no), ("272K".to_string(), "no", "no"), "{source:?}");
+    }
+    // A guess's "takes none" says nothing.
+    let guessed = ModelMetadata {
+        reasoning: takes_none(ModelMetadataSource::Catalog),
+        ..ModelMetadata::default()
+    };
+    assert_eq!(cells(&guessed).1, "?");
+}
+
+#[test]
+fn the_cells_fit_their_header_in_columns_and_name_themselves_on_one_line() {
+    let metadata = ModelMetadata {
+        context_window: sourced(200_000, ModelMetadataSource::Reported),
+        reasoning: reasons(&[], None, ModelMetadataSource::Reported),
+        image_input: sourced(false, ModelMetadataSource::Learned),
+        ..ModelMetadata::default()
+    };
+    let cells = fact_cells(&metadata);
+    assert_eq!(fact_columns(&cells), "   200K  yes       no    ");
+    assert_eq!(fact_columns(&cells).len(), FACTS_HEADER.len());
+    assert_eq!(fact_line(&cells), "context 200K · thinking yes · vision no");
+    let row = row_facts(&metadata);
+    assert_eq!(row.columns, fact_columns(&cells));
+    assert_eq!(row.stacked, fact_line(&cells));
+}
+
+#[test]
+fn the_detail_line_names_each_fact_with_its_source() {
+    let details = |metadata: &ModelMetadata| fact_details("m", "P", metadata);
+    assert_eq!(
+        details(&ModelMetadata::default()),
+        "m · P: context not known (compacts on the Provider's error) · thinking not known · vision not known"
+    );
+    let reported = ModelMetadata {
+        context_window: sourced(200_000, ModelMetadataSource::Reported),
+        max_output_tokens: sourced(64_000, ModelMetadataSource::Reported),
+        reasoning: reasons(
+            &[
+                ModelReasoningEffort::Low,
+                ModelReasoningEffort::Medium,
+                ModelReasoningEffort::High,
+            ],
+            Some(ModelReasoningEffort::Medium),
+            ModelMetadataSource::Reported,
+        ),
+        image_input: sourced(true, ModelMetadataSource::Reported),
+        ..ModelMetadata::default()
+    };
+    assert_eq!(
+        details(&reported),
+        "m · P: context 200K (reported) · max output 64K (reported) · thinking low, medium, high, default medium (reported) · vision yes (reported)"
+    );
+    let configured_levels = ModelMetadata {
+        reasoning: reasons(
+            &[ModelReasoningEffort::Low, ModelReasoningEffort::High],
+            None,
+            ModelMetadataSource::Configured,
+        ),
+        ..ModelMetadata::default()
+    };
+    assert!(details(&configured_levels).contains("thinking low, high (configured)"));
+    let guessed = ModelMetadata {
+        context_window: sourced(272_000, ModelMetadataSource::BuiltIn),
+        reasoning: reasons(&[], None, ModelMetadataSource::Catalog),
+        image_input: sourced(true, ModelMetadataSource::Catalog),
+        ..ModelMetadata::default()
+    };
+    assert_eq!(
+        details(&guessed),
+        "m · P: context 272K (built-in) · thinking yes, levels not known (models.dev) · vision yes (models.dev)"
+    );
+    let configured_none = ModelMetadata {
+        reasoning: takes_none(ModelMetadataSource::Configured),
+        ..ModelMetadata::default()
+    };
+    assert!(details(&configured_none).contains("thinking no (configured)"));
+    let learned = ModelMetadata {
+        reasoning: takes_none(ModelMetadataSource::Learned),
+        image_input: sourced(false, ModelMetadataSource::Learned),
+        ..ModelMetadata::default()
+    };
+    assert!(details(&learned)
+        .ends_with("thinking no (learned: the Provider refused it) · vision no (learned)"));
+    let guessed_none = ModelMetadata {
+        reasoning: takes_none(ModelMetadataSource::BuiltIn),
+        ..ModelMetadata::default()
+    };
+    assert!(details(&guessed_none).contains("thinking not known"));
 }
 
 #[test]

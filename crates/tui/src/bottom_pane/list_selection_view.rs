@@ -13,6 +13,7 @@ use ratatui::text::Span;
 use ratatui::widgets::Paragraph;
 use ratatui::widgets::Widget;
 
+use super::selection_popup_common::facts_in_columns;
 use super::selection_popup_common::render_menu_surface;
 use super::selection_popup_common::wrap_styled_line;
 use crate::app_event::AppEventSender;
@@ -26,6 +27,7 @@ use super::scroll_state::ScrollState;
 use super::selection_popup_common::measure_rows_height;
 use super::selection_popup_common::render_rows;
 use super::selection_popup_common::GenericDisplayRow;
+use super::selection_popup_common::RowFacts;
 use super::CancellationEvent;
 use unicode_width::UnicodeWidthStr;
 
@@ -45,6 +47,8 @@ pub(crate) struct SelectionItem {
     pub dismiss_on_select: bool,
     pub search_value: Option<String>,
     pub disabled_reason: Option<String>,
+    /// Shown at the row's right edge, in columns ([`RowFacts`]).
+    pub facts: Option<RowFacts>,
 }
 
 pub(crate) struct SelectionViewParams {
@@ -57,6 +61,9 @@ pub(crate) struct SelectionViewParams {
     pub search_placeholder: Option<String>,
     pub header: Box<dyn Renderable>,
     pub initial_selected_idx: Option<usize>,
+    /// The fact columns' names, right-aligned over them while the rows
+    /// show them in columns.
+    pub facts_header: Option<String>,
 }
 
 impl Default for SelectionViewParams {
@@ -71,6 +78,7 @@ impl Default for SelectionViewParams {
             search_placeholder: None,
             header: Box::new(()),
             initial_selected_idx: None,
+            facts_header: None,
         }
     }
 }
@@ -89,6 +97,7 @@ pub(crate) struct ListSelectionView {
     last_selected_actual_idx: Option<usize>,
     header: Box<dyn Renderable>,
     initial_selected_idx: Option<usize>,
+    facts_header: Option<String>,
 }
 
 impl ListSelectionView {
@@ -121,6 +130,7 @@ impl ListSelectionView {
             last_selected_actual_idx: None,
             header,
             initial_selected_idx: params.initial_selected_idx,
+            facts_header: params.facts_header,
         };
         s.apply_filter();
         s
@@ -227,6 +237,7 @@ impl ListSelectionView {
                         wrap_indent,
                         is_disabled,
                         disabled_reason: item.disabled_reason.clone(),
+                        facts: item.facts.clone(),
                     }
                 })
             })
@@ -285,6 +296,35 @@ impl ListSelectionView {
 
     pub(crate) fn take_last_selected_index(&mut self) -> Option<usize> {
         self.last_selected_actual_idx.take()
+    }
+
+    /// The list's items replaced by `items`, the search kept: `selected`
+    /// (an index in `items`) is selected when the search shows it, else the
+    /// first row, and kept on the line the selected row was on while the
+    /// rows below fill the list.
+    pub(crate) fn replace_items(&mut self, items: Vec<SelectionItem>, selected: Option<usize>) {
+        let line = self
+            .state
+            .selected_idx
+            .map(|idx| idx.saturating_sub(self.state.scroll_top));
+        self.items = items;
+        self.apply_filter();
+        let len = self.visible_len();
+        let visible = Self::max_visible_rows(len);
+        self.state.selected_idx = selected
+            .and_then(|actual| self.filtered_indices.iter().position(|idx| *idx == actual))
+            .or_else(|| (len > 0).then_some(0));
+        if let (Some(line), Some(idx)) = (line, self.state.selected_idx) {
+            self.state.scroll_top = idx.saturating_sub(line).min(len.saturating_sub(visible));
+        }
+        self.state.ensure_visible(len, visible);
+    }
+
+    /// The header of the fact columns, when the rows show them at `width`.
+    fn facts_header(&self, rows: &[GenericDisplayRow], width: u16) -> Option<Line<'static>> {
+        let header = self.facts_header.as_ref()?;
+        facts_in_columns(rows, &self.state, MAX_POPUP_ROWS, Self::rows_width(width))
+            .then(|| Line::from(header.clone().dim()).right_aligned())
     }
 
     fn rows_width(total_width: u16) -> u16 {
@@ -449,6 +489,9 @@ impl Renderable for ListSelectionView {
         // Subtract 4 for the padding on the left and right of the header.
         let mut height = self.header.desired_height(width.saturating_sub(4));
         height = height.saturating_add(rows_height + 3);
+        if self.facts_header(&rows, width).is_some() {
+            height = height.saturating_add(1);
+        }
         if self.is_searchable {
             height = height.saturating_add(1);
         }
@@ -494,10 +537,12 @@ impl Renderable for ListSelectionView {
             MAX_POPUP_ROWS,
             rows_width.saturating_add(1),
         );
-        let [header_area, _, search_area, list_area] = Layout::vertical([
+        let facts_header = self.facts_header(&rows, outer_content_area.width);
+        let [header_area, _, search_area, facts_header_area, list_area] = Layout::vertical([
             Constraint::Max(header_height),
             Constraint::Max(1),
             Constraint::Length(if self.is_searchable { 1 } else { 0 }),
+            Constraint::Length(u16::from(facts_header.is_some())),
             Constraint::Length(rows_height),
         ])
         .areas(content_area);
@@ -526,6 +571,16 @@ impl Renderable for ListSelectionView {
                 self.search_query.clone().into()
             };
             Line::from(query_span).render(search_area, buf);
+        }
+
+        if let Some(facts_header) = facts_header {
+            // Over the rows, which are drawn from two columns further left.
+            let facts_header_area = Rect {
+                x: facts_header_area.x.saturating_sub(2),
+                width: rows_width,
+                ..facts_header_area
+            };
+            facts_header.render(facts_header_area, buf);
         }
 
         if list_area.height > 0 {

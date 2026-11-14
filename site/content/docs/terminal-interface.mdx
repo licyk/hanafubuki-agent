@@ -43,7 +43,7 @@ Fullscreen 下，对话占满底部区域上方的屏幕。Scrollback 下，界�
 3. **输入框**：以 `›` 开头。
 4. **底栏**：输入框为空，或有草稿但没有回合在运行时，显示[状态栏](#status-line)，默认是模型及其推理强度、工作目录和会话标题；状态栏没有可显示的项目时显示 `? for shortcuts`。输入框为空且 Left 可以打开[指挥中心](#agents)时，后面接着显示 `← for agents`。回合进行中写的草稿改为显示 `tab to queue message`。
 
-审批、提问以及 `/model` 和 `/mode` 的选择列表打开时，会暂时替换状态行和输入框。回合结束时，选择列表保持打开。各项设置（包括 `/providers` 和 `/mcp`）都在全屏的[设置中心](#config)中。
+审批、提问以及 `/model` 和 `/mode` 的选择列表打开时，会暂时替换状态行和输入框。回合结束时，选择列表保持打开；`/model` 的列表在任何 Provider 回答之前就打开，随每个 Provider 的回答填入（[模型列表](#model-list)）。各项设置（包括 `/providers` 和 `/mcp`）都在全屏的[设置中心](#config)中。
 
 对话记录中，你的消息以 `›` 开头；工具调用在开始的位置显示为 `• Running 工具名: 对象`（命令显示为 `• Running 命令`；对象是它作用的东西：命令行、路径、查询），并在原处就地变为它做了什么，默认折叠：`• Ran cargo test` 加输出的最后几行、`• Edited src/lib.rs (+12 -3)`、`• Read src/lib.rs (lines 1–120)`、`• Called 工具名` 加它返回内容的前几行（[工具调用](#tools)）；思考显示为 `• Thinking 3.4s`，之后变为 `• Thought · 20.7s`（[思考过程](#thinking)）；任务计划显示为 `• Updated Plan · 1/5 complete` 和它的步骤；错误以红色的 `■` 开头。一段工具调用之后，回答之前会有一条 `─ Worked for 1m 05s ─` 分隔线，回合思考过时为 `─ Worked for 1m 05s · thought for 20.7s ─`。
 
@@ -128,7 +128,7 @@ Fullscreen 下还有阅读对话的按键：Page Up/Page Down、F3、F4、Ctrl-S
 
 | 命令                       | 作用                                                                                                                                                                                                                                                                                                                                                                                                                                                        | 回合中                         |
 | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
-| `/model`                   | 从已启用 Provider 的模型目录中选择本会话的模型，每个模型旁显示目录报告的信息（窗口、`vision`、`reasoning`）；无法读取目录的 Provider 会显示原因。`/model forget` 遗忘 Provider 的拒绝教给会话模型的信息（[遗忘学到的信息](/docs/providers-models#forget)）                                                                                                                                                                                                  | 不可用                         |
+| `/model`                   | 从已启用 Provider 的模型中选择本会话的模型：列表立即打开，每个 Provider 回答后填入它的模型，每个模型显示窗口以及是否思考、是否读图（[模型列表](#model-list)）。`/model forget` 遗忘 Provider 的拒绝教给会话模型的信息（[遗忘学到的信息](/docs/providers-models#forget)）                                                                                                                                                                                    | 不可用                         |
 | `/effort [level\|default]` | 选择本会话的推理强度：该模型已知的档位，然后是 Default（Provider 的默认值）和 Custom（手动输入）；没有已知档位时只有 Default 和 Custom。`/effort LEVEL` 和 `/effort default` 直接设置（[见下文](#effort)）                                                                                                                                                                                                                                                  | 不可用                         |
 | `/providers [policy]`      | 在[设置中心](#config)打开 Provider：添加、编辑、测试和删除，把其中一个设为默认并选择新会话使用的模型；`/providers policy` 打开模型策略（[见下文](#providers)）                                                                                                                                                                                                                                                                                              | 可用                           |
 | `/mode`                    | 在默认模式和[计划模式](/docs/plan-mode)之间选择                                                                                                                                                                                                                                                                                                                                                                                                             | 不可用                         |
@@ -185,6 +185,28 @@ Fullscreen 下还有阅读对话的按键：Page Up/Page Down、F3、F4、Ctrl-S
 - `/raw` 立即生效并保存（`tui.rawOutput`），下次启动时沿用。Fullscreen 下整个对话以原始形式重新显示；Scrollback 下已经写入滚动历史的内容保持不变，只有之后的内容是原始形式，直到调整终端大小后滚动历史按当前的形式重新写入。已结束的回答或计划显示它的 Markdown；流式输出期间显示去掉样式的各行。`/raw` 后面跟 `on`、`off` 以外的内容时，会提示 `Usage: /raw [on|off]`。
 - `tui.fullscreenTranscript`（`/tui`）从下次启动起生效：正在运行的界面保持当前方式。届时 `--no-alt-screen` 和 `tui.alternateScreen` 仍然适用。
 - 命令或它打开的列表因内部错误（panic）失败时，该命令在本次运行的剩余时间内关闭：对话中显示 `'/x' failed and is turned off for the rest of this run`，命令列表不再列出它，再输入它会提示它已关闭。会话、输入框和其他命令照常工作。聊天本身（输入框、对话内容、流式回答）的内部错误仍会结束界面，结束前会恢复终端状态。
+
+## 模型列表 [#model-list]
+
+`/model` 立即打开列表，不等任何 Provider 回答。会话的模型排在第一行，附上已经知道的信息（它自己的设置、一次拒绝教会的、上一次列表、打开时的 models.dev、内置窗口；不为它发出任何请求），之后每个已启用的 Provider 各占一行，显示 `listing…`。每个 Provider 由单独的请求列出，一回答，它的模型就替换它那一行，顺序固定：Provider 按名字排列，每个 Provider 的模型按其列表的顺序。所以一个缓慢或无法访问的 Provider 不会拖住其他 Provider。列表下方的 `• Listing models… 3 of 6 Providers answered · 4s` 统计已经回答（列出或失败）的 Provider 数和列表已等待的时间；所有 Provider 都回答后这一行消失。没有启用任何 Provider 时，显示 `No Provider is enabled: /providers adds one.`。新到的行保留你在搜索中输入的内容、选中的行以及它在屏幕上的位置：移动的是它周围的行，而不是它。
+
+每个模型的一行显示它的 ID、它的 Provider，以及标题下的三列：
+
+```text
+                                                     Context  Thinking  Vision
+› claude-sonnet-4-5 (current)            Anthropic      200K  yes       yes
+  gpt-5.1                                OpenAI         272K  ?         ?
+  meta-llama/llama-3.1-405b-instruct:f…  OpenRouter     131K  no        no
+  Team gateway                           listing…
+  Work proxy                             not listed: 401 Unauthorized
+```
+
+- **Context** 是模型的窗口（`200K`、`1.05M`），**Thinking** 表示它是否推理，**Vision** 表示它是否读图：`yes`、`no`，没有任何来源说明时为 `?`。这些是模型本身的信息，命名方式与 `/status` 和 `doctor --online` 相同（[模型](/docs/providers-models#model)）。模型策略的 `contextWindowTokens` 和 `imageInput = "disabled"` 适用于会话运行的任何模型，所以列表只在标题下说明一次（`The model policy sets every session's window to 128K; images are never sent.`）。
+- 过长的 ID 在它那一行用 `…` 截断，在此之前 Provider 名先缩短到 10 列。不足约 51 列时每一行分两行显示：ID（放得下时后面跟着 Provider），下面是 `context 200K · thinking yes · vision yes`。
+- 列表下方显示选中模型的各项信息及其来源：`claude-sonnet-4-5 · Anthropic: context 200K (reported) · max output 64K (reported) · thinking low, medium, high (reported) · vision yes (reported)`；或者 `context not known (compacts on the Provider's error)`、`thinking yes, levels not known (models.dev)`、`thinking no (learned: the Provider refused it)`、`vision not known`。
+- 再下面的按键说明以 `? not known` 结尾；[models.dev](/docs/providers-models#models-dev) 关闭（默认）且某一行有 `?` 时，还会加上 `models.dev can fill these: /config modelMetadata`。
+
+输入的文字会搜索模型 ID、列表给出的模型名称以及 Provider 的名字（`openrouter`、`Sonnet`）。Up 和 Down 会跳过仍在列出的 Provider。在模型上按 Enter 会把它设为本会话的模型并关闭列表，即使其他 Provider 仍在列出。在列出失败的 Provider 上（`not listed: …`，完整的错误显示在列表下方，按键说明为 `enter lists again`）按 Enter 会重新列出它。Esc 随时关闭列表：仍在进行的列出会完成，它们报告的模型信息会像 Agent 自己列出时一样保存，但回答找不到列表，会被丢弃；再次执行 `/model` 会开始一个新的列表。每个列表都实时读取：不显示之前列表的内容。
 
 ## 会话命令 [#session-commands]
 

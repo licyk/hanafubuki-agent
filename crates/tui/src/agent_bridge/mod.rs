@@ -28,6 +28,7 @@ mod effort;
 mod goal;
 mod hooks;
 mod mcp;
+pub(crate) mod model_list;
 mod permissions;
 mod plugins;
 mod providers;
@@ -63,7 +64,7 @@ pub(crate) use catalog::{CatalogCall, CatalogOutcome, CatalogReply};
 pub(crate) use center_reads::{
     CenterJob, CenterRead, CenterReader, Exchange, LiveSession, RootsRead, Waiting,
 };
-pub(crate) use commands::{setup_needed, with_model, ModelChoices, RoleChoices, StatusReport};
+pub(crate) use commands::{setup_needed, with_model, RoleChoices, StatusReport};
 pub(crate) use effort::{EffortCall, EffortChoices};
 pub(crate) use goal::{GoalCall, GoalReply};
 pub(crate) use hooks::{needing_review, HooksCall, HooksReply};
@@ -147,7 +148,7 @@ pub(crate) enum TurnUpdate {
     /// The interface now shows this session: a new one, or one reopened
     /// with its transcript.
     SessionOpened(OpenedSession),
-    ModelChoices(ModelChoices),
+    ModelList(model_list::ModelListUpdate),
     ModelChanged(String),
     /// What `/effort` offers.
     EffortChoices(EffortChoices),
@@ -438,7 +439,7 @@ impl AgentBridge {
                 None
             }
             // A message waiting for the session started no turn.
-            AgentReply::SessionNotCreated(message) => match self.creating.take() {
+            AgentReply::SessionNotCreated(message) => match self.not_created(&message) {
                 Some(waiting)
                     if waiting
                         .iter()

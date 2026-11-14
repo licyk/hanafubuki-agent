@@ -1,0 +1,69 @@
+---
+source: crates/tui/src/commands/model/tests.rs
+expression: at_widths(&view)
+---
+--- 100 columns ---
+
+  Select Model
+  Switch the model of this session.
+
+  Type to search models
+                                                                         Context  Thinking  Vision
+› claude-sonnet-4-5 (current)  Anthropic                                    200K  yes       yes
+  Anthropic                    listing…
+  Local                        listing…
+  OpenAI                       listing…
+  OpenRouter                   listing…
+  Team gateway                 listing…
+  Work proxy                   listing…
+
+  • Listing models… 0 of 6 Providers answered
+  claude-sonnet-4-5 · Anthropic: context 200K (reported) · max output 64K (reported) · thinking low,
+  medium, high (reported) · vision yes (reported)
+  enter choose · esc close · ? not known
+--- 80 columns ---
+
+  Select Model
+  Switch the model of this session.
+
+  Type to search models
+                                                     Context  Thinking  Vision
+› claude-sonnet-4-5 (current)  Anthropic                200K  yes       yes
+  Anthropic                    listing…
+  Local                        listing…
+  OpenAI                       listing…
+  OpenRouter                   listing…
+  Team gateway                 listing…
+  Work proxy                   listing…
+
+  • Listing models… 0 of 6 Providers answered
+  claude-sonnet-4-5 · Anthropic: context 200K (reported) · max output 64K
+  (reported) · thinking low, medium, high (reported) · vision yes (reported)
+  enter choose · esc close · ? not known
+--- 50 columns ---
+
+  Select Model
+  Switch the model of this session.
+
+  Type to search models
+› claude-sonnet-4-5 (current)  Anthropic
+    context 200K · thinking yes · vision yes
+  Anthropic
+    listing…
+  Local
+    listing…
+  OpenAI
+    listing…
+  OpenRouter
+    listing…
+  Team gateway
+    listing…
+  Work proxy
+    listing…
+
+  • Listing models… 0 of 6 Providers answered
+  claude-sonnet-4-5 · Anthropic: context 200K
+  (reported) · max output 64K (reported) ·
+  thinking low, medium, high (reported) · vision
+  yes (reported)
+  enter choose · esc close · ? not known

@@ -3,9 +3,12 @@ use hanafubuki_agent::AgentTuiPreferences;
 use std::sync::mpsc::{channel, Receiver};
 
 use super::*;
+use crate::agent_bridge::model_list::{
+    CurrentModel, ModelListEvent, ModelListStart, ModelListUpdate,
+};
 use crate::agent_bridge::{
-    HooksCall, HooksReply, McpCall, ModelChoices, OlderTranscript, OpenedSession, ReplayedItem,
-    SteerOutcome, TurnEnd, TurnUpdate,
+    HooksCall, HooksReply, McpCall, OlderTranscript, OpenedSession, ReplayedItem, SteerOutcome,
+    TurnEnd, TurnUpdate,
 };
 use crate::app::WorkspaceEvent;
 use crate::app_event::AgentCommand;
@@ -214,6 +217,18 @@ fn an_opened_session_replays_its_transcript_after_its_header() {
 fn a_model_picked_from_the_catalogs_is_set_on_the_session() {
     let (mut chat, events) = chat();
     drain(&events);
+    chat.dispatch_command(&commands::MODEL, String::new());
+    let listing = drain(&events)
+        .1
+        .into_iter()
+        .find_map(|op| match op {
+            Op::Command(AgentCommand::ListModels {
+                listing,
+                provider_ids: None,
+            }) => Some(listing),
+            _ => None,
+        })
+        .expect("/model lists the models");
     let entry = |id: &str| hanafubuki_agent::AgentListedModel {
         entry: hanafubuki_agent::ModelCatalogEntry {
             id: id.to_string(),
@@ -227,24 +242,37 @@ fn a_model_picked_from_the_catalogs_is_set_on_the_session() {
         },
         metadata: hanafubuki_agent::ModelMetadata::default(),
     };
-    chat.handle_turn_update(TurnUpdate::ModelChoices(ModelChoices {
-        provider_id: "provider-1".to_string(),
-        model: "model-a".to_string(),
-        catalogs: vec![
-            hanafubuki_agent::AgentProviderModelCatalogResult {
-                provider_id: "provider-1".to_string(),
-                display_name: "First".to_string(),
-                models: vec![entry("model-a"), entry("model-b")],
-                error: None,
-            },
-            hanafubuki_agent::AgentProviderModelCatalogResult {
-                provider_id: "provider-2".to_string(),
-                display_name: "Second".to_string(),
-                models: Vec::new(),
-                error: Some("unreachable".to_string()),
-            },
+    let heard = |event| TurnUpdate::ModelList(ModelListUpdate { listing, event });
+    chat.handle_turn_update(heard(ModelListEvent::Started(Box::new(ModelListStart {
+        providers: vec![
+            ("provider-1".to_string(), "First".to_string()),
+            ("provider-2".to_string(), "Second".to_string()),
         ],
-    }));
+        current: Some(CurrentModel {
+            provider_id: "provider-1".to_string(),
+            provider: "First".to_string(),
+            model: "model-a".to_string(),
+            metadata: hanafubuki_agent::ModelMetadata::default(),
+        }),
+        policy_note: None,
+        models_dev: false,
+    }))));
+    for catalog in [
+        hanafubuki_agent::AgentProviderModelCatalogResult {
+            provider_id: "provider-1".to_string(),
+            display_name: "First".to_string(),
+            models: vec![entry("model-a"), entry("model-b")],
+            error: None,
+        },
+        hanafubuki_agent::AgentProviderModelCatalogResult {
+            provider_id: "provider-2".to_string(),
+            display_name: "Second".to_string(),
+            models: Vec::new(),
+            error: Some("unreachable".to_string()),
+        },
+    ] {
+        chat.handle_turn_update(heard(ModelListEvent::Listed(catalog)));
+    }
     let area = ratatui::layout::Rect::new(0, 0, 60, chat.desired_height(60));
     let mut buf = ratatui::buffer::Buffer::empty(area);
     chat.render(area, &mut buf);
@@ -257,10 +285,7 @@ fn a_model_picked_from_the_catalogs_is_set_on_the_session() {
         .collect::<Vec<_>>()
         .join("\n");
     assert!(screen.contains("Select Model"), "{screen}");
-    assert!(
-        screen.contains("models not listed: unreachable"),
-        "{screen}"
-    );
+    assert!(screen.contains("not listed: unreachable"), "{screen}");
 
     chat.handle_key_event(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     chat.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
@@ -271,6 +296,54 @@ fn a_model_picked_from_the_catalogs_is_set_on_the_session() {
             model: "model-b".to_string(),
         })]
     );
+}
+
+/// The listing numbers of the `/model` lists dispatched since the last
+/// look.
+fn model_listings(events: &Receiver<AppEvent>) -> Vec<u64> {
+    drain(events)
+        .1
+        .into_iter()
+        .filter_map(|op| match op {
+            Op::Command(AgentCommand::ListModels { listing, .. }) => Some(listing),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn a_second_model_list_replaces_the_first_whose_answers_are_dropped() {
+    let (mut chat, events) = chat();
+    drain(&events);
+    chat.dispatch_command(&commands::MODEL, String::new());
+    chat.dispatch_command(&commands::MODEL, String::new());
+    let [first, second] = model_listings(&events)[..] else {
+        panic!("two lists, each listing");
+    };
+    assert_ne!(first, second);
+    let started = |listing| {
+        TurnUpdate::ModelList(ModelListUpdate {
+            listing,
+            event: ModelListEvent::Started(Box::new(ModelListStart {
+                providers: Vec::new(),
+                current: Some(CurrentModel {
+                    provider_id: "provider-1".to_string(),
+                    provider: "First".to_string(),
+                    model: "model-a".to_string(),
+                    metadata: hanafubuki_agent::ModelMetadata::default(),
+                }),
+                policy_note: None,
+                models_dev: false,
+            })),
+        })
+    };
+    chat.handle_turn_update(started(first));
+    let shown = screen(&chat, 80);
+    assert!(shown.contains("Listing models…"), "{shown}");
+    assert!(!shown.contains("model-a"), "{shown}");
+    chat.handle_turn_update(started(second));
+    let shown = screen(&chat, 80);
+    assert!(shown.contains("model-a (current)"), "{shown}");
 }
 
 #[test]

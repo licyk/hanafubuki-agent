@@ -1,0 +1,21 @@
+---
+source: crates/tui/src/commands/model/tests.rs
+expression: "render(&view, 80)"
+---
+
+  Select Model
+  Switch the model of this session.
+
+  Type to search models
+                                                     Context  Thinking  Vision
+  claude-sonnet-4-5 (current)            Anthropic      200K  yes       yes
+  claude-haiku-4-5                       Anthropic      200K  yes       yes
+  qwen3-coder:30b                        Local             ?  ?         ?
+  gpt-4.1                                OpenAI        1.05M  ?         ?
+  gpt-5.1                                OpenAI         272K  ?         ?
+  meta-llama/llama-3.1-405b-instruct:f…  OpenRouter     131K  no        no
+  team-coder                             Team gate…     128K  ?         no
+› Work proxy                             not listed: 401 Unauthorized
+
+  Work proxy: not listed: 401 Unauthorized
+  enter lists again · esc close

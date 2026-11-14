@@ -130,6 +130,7 @@ impl CommandPopup {
                 wrap_indent: None,
                 is_disabled: false,
                 disabled_reason: None,
+                facts: None,
             })
             .collect()
     }

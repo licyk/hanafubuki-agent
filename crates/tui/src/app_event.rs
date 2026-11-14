@@ -179,8 +179,12 @@ pub(crate) enum AgentCommand {
     NewSession,
     Resume(AgentSessionId),
     Compact,
-    /// The models `/model` offers.
-    ListModels,
+    /// The models `/model`'s view numbered `listing` offers: every enabled
+    /// Provider's (`provider_ids` `None`), or these Providers' again.
+    ListModels {
+        listing: u64,
+        provider_ids: Option<Vec<String>>,
+    },
     SetModel {
         provider_id: String,
         model: String,

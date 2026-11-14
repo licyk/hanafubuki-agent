@@ -8,11 +8,11 @@
 use std::path::PathBuf;
 
 use hanafubuki_agent::{
-    AgentHandle, AgentHistorySortDirection, AgentPermissionMode, AgentProviderModelCatalogRequest,
-    AgentProviderModelCatalogResult, AgentProviderRegistrySnapshot, AgentSessionId,
-    AgentSessionListRequest, AgentSessionMode, AgentSessionModelSelectionRequest, AgentSessionPage,
-    AgentSessionRuntimeSnapshot, AgentSessionTitleRenameRequest, AgentTranscriptPageRequest,
-    AgentTuiPreferences, AgentTuiPreferencesPatch, ModelMetadata, SettingsWrite,
+    AgentHandle, AgentHistorySortDirection, AgentPermissionMode, AgentProviderRegistrySnapshot,
+    AgentSessionId, AgentSessionListRequest, AgentSessionMode, AgentSessionModelSelectionRequest,
+    AgentSessionPage, AgentSessionRuntimeSnapshot, AgentSessionTitleRenameRequest,
+    AgentTranscriptPageRequest, AgentTuiPreferences, AgentTuiPreferencesPatch, ModelMetadata,
+    SettingsWrite,
 };
 
 use super::{
@@ -30,14 +30,6 @@ pub(super) const REPLAYED_ITEMS: usize = 200;
 pub(crate) fn setup_needed(registry: &AgentProviderRegistrySnapshot, model_override: bool) -> bool {
     registry.default_provider_id.is_none()
         || (!model_override && registry.model_policy.model.trim().is_empty())
-}
-
-/// What `/model` offers: each Provider's models, and the session's own.
-#[derive(Debug)]
-pub(crate) struct ModelChoices {
-    pub(crate) provider_id: String,
-    pub(crate) model: String,
-    pub(crate) catalogs: Vec<AgentProviderModelCatalogResult>,
 }
 
 /// What `/role` offers: the usable roles, by name with their
@@ -102,22 +94,10 @@ impl AgentBridge {
                     Ok(None)
                 })
             }
-            AgentCommand::ListModels => {
-                let session = self.current()?;
-                self.spawn(move |agent| async move {
-                    let catalogs = agent
-                        .list_provider_models(AgentProviderModelCatalogRequest::default())
-                        .await
-                        .map_err(|error| format!("the models were not listed: {error}"))?;
-                    Ok(Some(AgentReply::Update(Box::new(
-                        TurnUpdate::ModelChoices(ModelChoices {
-                            provider_id: session.provider_id,
-                            model: session.model,
-                            catalogs,
-                        }),
-                    ))))
-                })
-            }
+            AgentCommand::ListModels {
+                listing,
+                provider_ids,
+            } => return Ok(self.list_models(listing, provider_ids)),
             AgentCommand::SetModel { provider_id, model } => {
                 let session = self.current()?;
                 self.spawn(move |agent| async move {

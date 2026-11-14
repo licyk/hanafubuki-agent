@@ -1,0 +1,72 @@
+---
+source: crates/tui/src/commands/model/tests.rs
+expression: rendered
+---
+--- 100 columns ---
+
+  Select Model
+  Switch the model of this session.
+
+  Type to search models
+                                                                         Context  Thinking  Vision
+› claude-sonnet-4-5 (current)              Anthropic                        200K  yes       yes
+  claude-haiku-4-5                         Anthropic                        200K  yes       yes
+  qwen3-coder:30b                          Local                               ?  ?         ?
+  gpt-4.1                                  OpenAI                          1.05M  ?         ?
+  gpt-5.1                                  OpenAI                           272K  ?         ?
+  meta-llama/llama-3.1-405b-instruct:free  OpenRouter                       131K  no        no
+  team-coder                               Team gateway                     128K  ?         no
+  Work proxy                               not listed: 401 Unauthorized
+
+  claude-sonnet-4-5 · Anthropic: context 200K (reported) · max output 64K (reported) · thinking low,
+  medium, high (reported) · vision yes (reported)
+  enter choose · esc close · ? not known · models.dev can fill these: /config modelMetadata
+--- 80 columns ---
+
+  Select Model
+  Switch the model of this session.
+
+  Type to search models
+                                                     Context  Thinking  Vision
+› claude-sonnet-4-5 (current)            Anthropic      200K  yes       yes
+  claude-haiku-4-5                       Anthropic      200K  yes       yes
+  qwen3-coder:30b                        Local             ?  ?         ?
+  gpt-4.1                                OpenAI        1.05M  ?         ?
+  gpt-5.1                                OpenAI         272K  ?         ?
+  meta-llama/llama-3.1-405b-instruct:f…  OpenRouter     131K  no        no
+  team-coder                             Team gate…     128K  ?         no
+  Work proxy                             not listed: 401 Unauthorized
+
+  claude-sonnet-4-5 · Anthropic: context 200K (reported) · max output 64K
+  (reported) · thinking low, medium, high (reported) · vision yes (reported)
+  enter choose · esc close · ? not known · models.dev can fill these: /config
+  modelMetadata
+--- 50 columns ---
+
+  Select Model
+  Switch the model of this session.
+
+  Type to search models
+› claude-sonnet-4-5 (current)  Anthropic
+    context 200K · thinking yes · vision yes
+  claude-haiku-4-5  Anthropic
+    context 200K · thinking yes · vision yes
+  qwen3-coder:30b  Local
+    context ? · thinking ? · vision ?
+  gpt-4.1  OpenAI
+    context 1.05M · thinking ? · vision ?
+  gpt-5.1  OpenAI
+    context 272K · thinking ? · vision ?
+  meta-llama/llama-3.1-405b-instruct:free
+    context 131K · thinking no · vision no
+  team-coder  Team gateway
+    context 128K · thinking ? · vision no
+  Work proxy
+    not listed: 401 Unauthorized
+
+  claude-sonnet-4-5 · Anthropic: context 200K
+  (reported) · max output 64K (reported) ·
+  thinking low, medium, high (reported) · vision
+  yes (reported)
+  enter choose · esc close · ? not known ·
+  models.dev can fill these: /config modelMetadata

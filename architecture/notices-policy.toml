@@ -597,6 +597,30 @@ path = "crates/tui/src/agent_bridge/providers.rs"
 reason = "The Provider screen's calls onto the facade's Provider API."
 
 [[original]]
+path = "crates/tui/src/agent_bridge/model_list.rs"
+reason = "/model's calls onto the facade: what it shows at once, then one listing per Provider, each answer numbered by its list."
+
+[[original]]
+path = "crates/tui/src/commands/model/view.rs"
+reason = "/model's list over the Agent's per-Provider listings: the pinned session's model, a section per Provider, the retry of a failed one and the detail line."
+
+[[original]]
+path = "crates/tui/src/commands/model/tests.rs"
+reason = "The tests of /model's list: its snapshots at three widths, the dropped answers of another list, the kept selection, the retry and the search."
+
+[[original]]
+path = "crates/tui/src/bottom_pane/loading_line.rs"
+reason = "The line a view shows while it waits on the Agent, over Codex's spinner and elapsed-time format."
+
+[[original]]
+path = "crates/tui/src/bottom_pane/loading_line/tests.rs"
+reason = "The tests of the loading line's counter and its frames."
+
+[[original]]
+path = "crates/tui/src/app/tests/model_list.rs"
+reason = "/model end to end over the standalone Agent and held listings, in both presentations."
+
+[[original]]
 path = "crates/tui/src/agent_bridge/mcp.rs"
 reason = "The MCP manager's calls onto the facade's MCP API, the OAuth login on the Agent's runtime."
 

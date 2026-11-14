@@ -26,6 +26,7 @@ mod file_search_popup;
 mod footer;
 mod form;
 mod list_selection_view;
+mod loading_line;
 mod menu_view;
 mod module_view;
 mod multi_select_picker;
@@ -67,6 +68,7 @@ pub(crate) use bottom_pane_view::BottomPaneView;
 use chat_composer::ChatComposer;
 pub(crate) use form::{FieldId, FormEvent, FormItem, FormView, TextField};
 pub(crate) use list_selection_view::{ListSelectionView, SelectionItem, SelectionViewParams};
+pub(crate) use loading_line::LoadingLine;
 pub(crate) use menu_view::{MenuKey, MenuModel, MenuView};
 pub(crate) use module_view::ViewFailure;
 use module_view::{ModuleView, ViewFailures};
@@ -75,7 +77,7 @@ use paste_burst::PasteBurst;
 pub(crate) use pending_input_preview::PendingInput;
 use pending_input_preview::ReservedPendingInput;
 use request_user_input::RequestUserInputOverlay;
-pub(crate) use selection_popup_common::{render_menu_surface, GenericDisplayRow};
+pub(crate) use selection_popup_common::{render_menu_surface, GenericDisplayRow, RowFacts};
 pub(crate) use textarea::{TextArea, TextAreaState};
 
 /// How long the "press again to quit" hint stays visible.

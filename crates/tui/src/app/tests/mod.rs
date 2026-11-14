@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 
 use hanafubuki_agent::test_support::{
     assistant_events, configure_test_provider, reasoning_answer_events, reasoning_tool_events,
-    tool_events, FakeServer, MemorySecretStore,
+    tool_events, FakeListing, FakeServer, MemorySecretStore,
 };
 use hanafubuki_agent::{
     AgentConfig, AgentDirs, AgentRuntime, AgentRuntimeHost, AgentRuntimeOptions, AgentSessionMode,
@@ -110,6 +110,39 @@ impl Harness {
     ) -> Self {
         let model_runtime = tokio::runtime::Runtime::new().unwrap();
         let server = model_runtime.block_on(FakeServer::start(responses));
+        Self::serving(
+            home,
+            model_runtime,
+            server,
+            with_provider,
+            mode,
+            configure,
+            profile,
+        )
+    }
+
+    /// The test Provider answers `GET …/models` with `listings`, in order
+    /// ([`FakeServer::with_listings`]), and nothing else.
+    fn listing(
+        listings: Vec<FakeListing>,
+        mode: TranscriptMode,
+        configure: impl FnOnce(&AgentConfig),
+    ) -> Self {
+        let model_runtime = tokio::runtime::Runtime::new().unwrap();
+        let server = model_runtime.block_on(FakeServer::with_listings(Vec::new(), listings));
+        let home = tempfile::tempdir().unwrap();
+        Self::serving(home, model_runtime, server, true, mode, configure, None)
+    }
+
+    fn serving(
+        home: tempfile::TempDir,
+        model_runtime: tokio::runtime::Runtime,
+        server: FakeServer,
+        with_provider: bool,
+        mode: TranscriptMode,
+        configure: impl FnOnce(&AgentConfig),
+        profile: Option<&str>,
+    ) -> Self {
         let cwd = home.path().join("project");
         std::fs::create_dir_all(cwd.join(".git")).unwrap();
         std::fs::write(
@@ -848,6 +881,7 @@ mod history_search;
 mod hyperlinks;
 mod math;
 mod mermaid;
+mod model_list;
 mod paste_image;
 mod plugins;
 mod preferences;

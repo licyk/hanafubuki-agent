@@ -161,8 +161,8 @@ impl ChatWidget {
     pub(super) fn handle_command_update(&mut self, update: TurnUpdate) -> Option<TurnUpdate> {
         match update {
             TurnUpdate::SessionOpened(opened) => self.on_session_opened(opened),
-            TurnUpdate::ModelChoices(choices) => self.run_command(&commands::MODEL, |context| {
-                commands::show_model_choices(context, choices)
+            TurnUpdate::ModelList(update) => self.run_command(&commands::MODEL, |context| {
+                commands::on_model_list(context, update)
             }),
             TurnUpdate::ModelChanged(model) => {
                 self.appearance.values_mut().model = model.clone();

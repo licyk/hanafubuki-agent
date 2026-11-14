@@ -174,7 +174,7 @@ next pin, and any module-size exception.
         is the facts of a live listing; `listed_models` (the recorded
         listing's ids) goes beside it in `model_metadata/mod.rs` and
         `service/model_facts.rs`.
-- [ ] L2: `/model` opens at once with a loading line (spinner, Providers
+- [x] L2: `/model` opens at once with a loading line (spinner, Providers
       answered, elapsed), the session's model pinned first with its facts,
       each Provider's models filling its section as it answers in a fixed
       order, the selection, search and scroll kept. Rows show `Context`,
@@ -183,6 +183,170 @@ next pin, and any module-size exception.
       under the list. Enter on a failed Provider lists it again. The shared
       row renderer gains opt-in fact columns and `replace_items`; existing
       snapshots unchanged.
+      Done (2026-11-14):
+      - Shared renderer (`bottom_pane/selection_popup_common.rs`):
+        `GenericDisplayRow.facts: Option<RowFacts { columns, stacked }>`.
+        With no visible row having facts, the layout is today's
+        (`compute_desc_col`); otherwise one decision from the width alone,
+        so scrolling never switches it: columns while `width - facts - 2`
+        leaves a prefixed name 22 columns (`MIN_TABULAR_NAME_WIDTH`), else
+        stacked. In columns the description of the rows with facts shrinks
+        to 10 (`MIN_DESCRIPTION_WIDTH`) before a name is cut, a name is
+        cut down to 22, then the description is cut further; names and
+        descriptions are cut with `…`, never wrapped; rows without facts
+        share the description column and wrap as today. Stacked: the name
+        (with the description when both fit), then `stacked` at
+        `STACKED_INDENT`, each cut. `measure_rows_height` counts the same
+        lines (`laid_out_lines`); `start_index` is the one copy of the
+        scroll window both use. `facts_in_columns` tells the list whether
+        to draw the header.
+      - `ListSelectionView`: `SelectionItem.facts`,
+        `SelectionViewParams.facts_header` (right-aligned over the rows,
+        dim, only while they are in columns), `replace_items(items,
+        selected)`: the search re-applied, `selected` (an index in the new
+        items) selected, else the first row, and `scroll_top` shifted so it
+        keeps its line while the rows below fill the list.
+      - `bottom_pane/loading_line.rs` (new): `LoadingLine::new(frames,
+        animations)`, `line(text)` (spinner, text, `· 3s` from the first
+        second, `fmt_elapsed_compact`; each drawing asks for a frame in
+        200 ms), `restart()`, and the test constructor `still()` (dim
+        bullet, its start an hour ahead, so a snapshot shows no counter
+        however slow the runner).
+      - `model_facts.rs`: `FACTS_HEADER`, `FactCells`, `fact_cells`
+        (`supports_reasoning`/`supports_image_input`, the window by
+        `format_tokens_compact`), `fact_columns` (`{:>7}  {:<8}  {:<6}`),
+        `fact_line`, `row_facts` (the two in a `RowFacts`, for L3 too),
+        `fact_details` (the detail line, each fact with `label()`).
+        `entry_badges` stays for the Provider page until L3.
+      - Bridge (`agent_bridge/model_list.rs`, new): `ListModels { listing,
+        provider_ids }`; with `None` it reads the registry, `settings_view`
+        (`modelMetadata.modelsDev`) and `model_metadata` for the session's
+        pair (default facts if its Provider is gone), sends `Started`
+        (`ModelListStart { providers, current, policy_note, models_dev }`,
+        the enabled Providers in the facade's order), then spawns one
+        `list_provider_models` per Provider, each sending one `Listed`
+        whatever fails; `Some(ids)` lists those again. Each reply is an
+        `AgentReply::Update(TurnUpdate::ModelList(ModelListUpdate {
+        listing, event }))` through the app's sender. `agent_bridge/mod.rs`
+        changes the variant and gains `pub(crate) mod model_list;` (597 →
+        598 code lines); `commands.rs`' arm and `ModelChoices` are gone.
+      - View (`commands/model/{mod.rs,view.rs}`, `model.rs` moved): the
+        dispatch numbers the list from a static counter, opens
+        `ModelListView` and sends `ListModels`; `on_model_list` offers the
+        update to the open view and drops it otherwise; the view drops
+        another number's. States: opened (its own heading: an empty list
+        would say "no matches"), unread, listing. Rows are built again on
+        each answer from the start and the sections, keyed by Provider and
+        model; the key falls back to the first row of its Provider (a
+        Provider listed again lands on its first model), else the first
+        row that is not pending. Enter on a model sends `SetModel` and
+        closes; on a failed row it turns pending (the loading line's count
+        restarts when every Provider had answered) and sends `ListModels`
+        for that Provider with the same number. Under the list: the
+        loading line or `No Provider is enabled: /providers adds one.` or
+        `The Providers were not read: …`, the detail line (a failed row:
+        its whole error), and the keys (`enter choose · esc close · ? not
+        known`, `· models.dev can fill these: /config modelMetadata` while
+        it is off and some row says `?`; `enter lists again · esc close`
+        on a failed row), all wrapped. The policy note follows the
+        subtitle, wrapped. Search: id, display name, Provider name.
+      - Deviations: `ModelListEvent::Unread(String)` added: the plan's
+        events have none for §3.5's unread registry (also sent when there
+        is no session to list for). `Started.current` is an `Option` (no
+        pinned row while the session has no model). A failed row's
+        description wraps as every row without facts does (§3.3.1) rather
+        than being cut. The real rows, header and stacked rows match the
+        plan's mock-ups at 100, 80 and 50 columns character for character
+        (the snapshot of every Provider answered, Team gateway's row
+        aside); the mock-ups wrap the 50-column detail line narrower than
+        the renderer, which wraps at the width less 2, and leave out the
+        models.dev hint the rows' `?` bring (Q3), which wraps at 80 and 50.
+        Docs: a section `terminal-interface#model-list` (both languages)
+        holds what the commands table's row had no room for.
+      - Tests: `list_selection_view/tests.rs`: rows with facts at 100, 80
+        and 50 (`list_selection_rows_with_facts`), no width from 30 to 120
+        hides a row or its facts and the header shows only over columns,
+        `replace_items` keeps the search, the row and its line.
+        `loading_line/tests.rs`: the counter from the first second, a
+        frame asked per drawing. `model_facts/tests.rs`: the cells for each
+        value and source (a guess's "takes none" is `?`), the columns as
+        wide as the header, the detail line for each state and source.
+        `commands/model/tests.rs`: snapshots at 100/80/50 opened, started,
+        partly answered, all answered with a failed row, a failed row
+        selected, CJK and an id longer than the screen, the policy note
+        with the models.dev hint, unread; another list's answers dropped;
+        the session's model once, with its listing's facts; a section
+        arriving above keeps the row, its line and the search; Enter on a
+        failed row lists that Provider only and lands on its models, Enter
+        on a model sets it; search by display name and Provider; Esc; 32
+        Providers × 1 000 models (here, debug: arriving 0.9 s in all, a
+        frame 37 ms, a 14-key search 66 ms; bound 20 s each).
+        `app/tests/model_list.rs` (new; `Harness::listing`, the harness
+        split at `serving`): two Providers on two servers, both held, in
+        Scrollback and Fullscreen: `0 of 2 Providers answered` with the
+        pinned row and the policy's sentence before any reply, the first's
+        rows with the second `listing…` above them (it sorts first by
+        name, last in the file), then the second's, and the chosen model
+        set; Esc before a held answer, then the answer: no view, no error,
+        and a new list hears its own; a 401 listing, Enter on its row, a
+        second request reaches the server; a session not created while the
+        list waited for it ends the wait with `The Providers were not
+        read: …` (found on review: the bridge dropped the queued
+        `ListModels` with the other waiting ops, leaving the loading line
+        counting forever; `AgentBridge::not_created` in `model_list.rs`
+        now answers it, `mod.rs` calling it in place of
+        `creating.take()`). `commands/model/tests.rs` also: the same id on
+        two Providers is two rows, `(current)` on the session's pair only;
+        the session's model missing from its listing keeps the start's
+        facts; every Provider failing ends the wait, each listed again.
+        `chatwidget/tests/mod.rs`' `ModelChoices` test dispatches `/model`
+        and feeds the new updates; a second `/model` replaces the first,
+        whose `Started` is dropped. `app/tests/settings.rs` checks the
+        columns and the detail line.
+        Fail-first by mutation, each seen failing then restored: the
+        listing number unchecked (1 test), the index kept instead of the
+        key (1), the scroll shift skipped (2, after the first versions of
+        both tests passed with it skipped, the selected row being on the
+        last line; they now select a row mid-list), the pinned row
+        repeated in its section (5), a retry of every Provider (1), the
+        pinned row matched by model id alone (1), the Providers left in
+        the file's order (1), the failed creation's queue dropped as before
+        (1).
+      - Existing snapshots: none changed. Goldens: none changed.
+        Dependencies: none added. Module size: no exception added or
+        raised (`list_selection_view.rs` 580, `commands/model/view.rs`
+        506, `agent_bridge/mod.rs` 598 code lines).
+      - Docs (both languages): `terminal-interface` (the lists paragraph,
+        the `/model` row, the new `#model-list` section),
+        `providers-models#model` (a request per Provider, `yes`/`no`/`?`,
+        Enter on a failed one) and `#interface` (Choose the model's
+        badges are no longer `/model`'s), `internals`' command map (the
+        plan's list has it; the brief did not).
+      - Hanafubuki at its next pin: nothing (TUI only).
+      - Validation: `cargo fmt --all --check`; `RUSTFLAGS="-D warnings"
+        cargo check --workspace --all-targets --all-features`; `cargo
+        clippy --workspace --all-targets --all-features -- -D warnings`;
+        `cargo xtask check`; `cargo test --workspace --all-features
+        --no-fail-fast` before the rebase onto M7 (4685 passed, none
+        failed; the run exits 101 for the `guests` binary of
+        plugin-packages, `linked.rs:33` "signalled after 10.8ms", the known
+        local flake); `bun install --frozen-lockfile`, `bun run
+        format:site`, `bun run format:check:site`, `bun run site:check`,
+        `bun run site:test` (28 passed), and the six changed pages compiled
+        with the store's `@mdx-js/mdx` 3.1.1 with remark-gfm. After the
+        rebase onto M7 and the review's additions: fmt, check, clippy,
+        `xtask check`, the TUI crate's tests (1475 passed) and the site's
+        checks again.
+        `site:build` not run locally (port 3000 is another project's);
+        CI's Site run covers it.
+      - For L3: `row_facts`, `FACTS_HEADER` and `fact_details` are the
+        Provider page's columns, header and detail line;
+        `SelectionViewParams.facts_header` and `SelectionItem.facts` opt a
+        `ListSelectionView` in; `LoadingLine` (built from the view's
+        `AppEventSender` through `FrameRequester::new`, `still()` in
+        snapshots) replaces its static `Listing models… esc closes`; the
+        detail line goes under the list as `commands/model/view.rs`'
+        footer does. Once it drops `entry_badges`, the function goes.
 - [ ] L3: the Provider page's **Choose the model** takes the loading line
       and the columns; the settings center's busy notice names the action
       (`List models…`, not `Saving…`).

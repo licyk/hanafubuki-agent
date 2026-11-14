@@ -1,0 +1,25 @@
+---
+source: crates/tui/src/commands/model/tests.rs
+expression: at_widths(&view)
+---
+--- 100 columns ---
+
+  Select Model
+  Switch the model of this session.
+
+  • Listing models…
+  esc close
+--- 80 columns ---
+
+  Select Model
+  Switch the model of this session.
+
+  • Listing models…
+  esc close
+--- 50 columns ---
+
+  Select Model
+  Switch the model of this session.
+
+  • Listing models…
+  esc close
