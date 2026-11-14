@@ -20,7 +20,7 @@ use windows_sys::Win32::System::Pipes::{
     ConnectNamedPipe, CreateNamedPipeW, SetNamedPipeHandleState, PIPE_NOWAIT,
     PIPE_REJECT_REMOTE_CLIENTS, PIPE_WAIT,
 };
-use windows_sys::Win32::System::Threading::WaitForSingleObject;
+use windows_sys::Win32::System::Threading::{GetExitCodeProcess, WaitForSingleObject};
 
 use super::super::{process::wide, token::last_error};
 use super::{credentials, security};
@@ -51,6 +51,7 @@ impl Pipes {
 
     pub fn connect(&self, process: HANDLE) -> Result<(), String> {
         for file in [&self.input, &self.output, &self.error] {
+            let mut exited = false;
             loop {
                 // Nonblocking connect lets a runner that fails at startup be reaped.
                 let connected =
@@ -64,9 +65,16 @@ impl Pipes {
                 if error != ERROR_PIPE_LISTENING {
                     return Err(last_error("connect sandbox stdio"));
                 }
-                if unsafe { WaitForSingleObject(process, 25) } != WAIT_TIMEOUT {
-                    return Err("the sandbox runner exited before connecting its IO".into());
+                if exited {
+                    let mut code = 0;
+                    unsafe { GetExitCodeProcess(process, &mut code) };
+                    return Err(format!(
+                        "the sandbox runner exited before connecting its IO (status {code:#x})"
+                    ));
                 }
+                // Recheck the pipe after observing exit: the client may have
+                // connected and closed between ConnectNamedPipe and this wait.
+                exited = unsafe { WaitForSingleObject(process, 25) } != WAIT_TIMEOUT;
                 std::thread::sleep(Duration::from_millis(5));
             }
             let mode = PIPE_WAIT;
