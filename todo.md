@@ -36,7 +36,7 @@ Each milestone is one commit on main with green CI. **Lanes** (the plan's
 §7): **U0 and U2 can start now, in parallel**; U2 begins with the setting,
 the notice and the footer and commits its CLI part only after U0 is on main;
 **U1 starts when U0 lands**, beside the rest of U2; **U3 after U1 and U2**;
-U4 only if chosen (Q8). U0 takes every shared edit (the workspace
+U4 only after a further decision (Q8). U0 takes every shared edit (the workspace
 `Cargo.toml`, the `LAYERS` rows, the CLI's dependency), so the lanes meet
 only in `crates/cli/src/main.rs`'s module list and in documentation tables,
 each adding a row in its own place. The U milestones share no file with M8,
@@ -48,13 +48,14 @@ run's URL (no Windows or macOS claim from a Linux run), whether goldens
 changed (none expected), what Hanafubuki must change at its next pin
 (nothing expected: the facade is untouched), and any module-size exception.
 
-- [ ] Decisions: D1–D22 of the plan's §2, and the open questions Q1–Q12 of
-      §6 (each recommended there: the check on by default, cargo run on
-      Unix and named on Windows, exit after an update, releases unchanged,
-      the notice on the footer's right side, every 20 hours, a retried
-      Windows rename, signatures later, the notice also for a dismissed
-      version, no GitHub from debug builds, `cargo install --locked`, a
-      crate rather than a CLI module).
+- [x] Decisions: D1–D22 of the plan's §2 agreed, and the questions Q1–Q12
+      of §6 decided by the user on 2026-11-14, each as recommended: the
+      check on by default, cargo run on Unix and named on Windows, exit
+      after an update, releases unchanged, the notice on the footer's right
+      side, every 20 hours, a retried Windows rename, signatures later (U4
+      optional, not started without a further decision), the notice also
+      for a dismissed version, no GitHub from debug builds, `cargo install
+      --locked`, a crate rather than a CLI module.
 - [ ] U0 (lane A, now): `hanafubuki-agent-update` (`crates/update`, over
       the foundation; the CLI's layer row gains it, the TUI's does not):
       the release lookup (tolerant, `GITHUB_TOKEN` only when given, the
@@ -85,8 +86,8 @@ changed (none expected), what Hanafubuki must change at its next pin
       screen and keys: Update now, Skip, Skip until next version), skipped
       with a prompt argument; "Update now" runs `update`'s flow in the
       terminal and ends; the Windows backup swept at launch.
-- [ ] U4 (optional, Q8): minisign signatures over each archive, verified
-      before extraction.
+- [ ] U4 (optional, later: Q8; not started without a further decision):
+      minisign signatures over each archive, verified before extraction.
 
 ## Plan: the model list's facts and its loading state (2026-11-14)
 

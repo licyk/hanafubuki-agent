@@ -23,6 +23,10 @@ Repositories, read from source on 2026-11-14:
   assets, four archives and their `.sha256` files, **each with a `digest`
   (`sha256:<hex>`)** and a size (the archives 15.7–19.8 MB).
 
+The user agreed to the decisions of §2 on 2026-11-14 and decided the
+questions of §6, each as recommended: U0–U3 are the work; U4 stays an
+optional later milestone, not started without a further decision (Q8).
+
 The request has five parts. Numbers in brackets refer to them throughout:
 
 - [1] **Self-update**, after Hanamori: the application replaces itself.
@@ -46,7 +50,7 @@ any change to the facade, so the embedded host (Hanafubuki, which has its
 own updater) gets none of this; signatures in this round (U4, §6 Q8).
 
 The `todo.md` section "Plan: the update check, the update prompt and
-self-update" tracks the milestones U0–U3, and U4 if it is chosen (§7). A
+self-update" tracks the milestones U0–U3, and U4 after a further decision (§7). A
 path this plan names that does not exist yet is a file its milestone
 creates; it is marked "(new)".
 
@@ -138,7 +142,7 @@ creates; it is marked "(new)".
 ## 2. Decisions
 
 Each gives what is decided, why, and the alternative rejected. Those that
-are also questions for the user are marked and listed in §6.
+were also questions for the user are marked and listed, answered, in §6.
 
 - **D1 — A real self-update from the GitHub release, Hanamori's
   mechanism adapted.** Look up the latest release, take this target's
@@ -888,7 +892,7 @@ the digest GitHub computed for the uploaded file.
 | Attacker | Could | The design |
 | --- | --- | --- |
 | On the network (a hostile Wi-Fi, a proxy) | Read or change traffic only with a certificate the system trusts; otherwise block or delay | TLS for the lookup and the download (`https` required, D16); the digest from the TLS-protected answer; a blocked lookup means no update, and never an older one (D8). A freeze (always answering an old release) keeps the person on their version. |
-| Controlling a release (a stolen maintainer account or token, a compromised workflow) | Publish a malicious archive with a matching digest, reaching everyone who updates | Nothing in this round beyond what a manual download has. The staged `--version` is a sanity check, not a defence. Recommended later (U4, §6 Q8): sign each archive in `release.yml` with a minisign (Ed25519) key kept as a secret, and verify it with the public key compiled into the binary (`minisign-verify`, one small dependency). GitHub's artifact attestations are the alternative; verifying them in-process is far heavier. Enabling immutable releases would forbid the `--clobber` resume path (`releasing#resuming-a-release-that-stopped`). |
+| Controlling a release (a stolen maintainer account or token, a compromised workflow) | Publish a malicious archive with a matching digest, reaching everyone who updates | Nothing in this round beyond what a manual download has. The staged `--version` is a sanity check, not a defence. Decided for later (U4, §6 Q8): sign each archive in `release.yml` with a minisign (Ed25519) key kept as a secret, and verify it with the public key compiled into the binary (`minisign-verify`, one small dependency). GitHub's artifact attestations are the alternative; verifying them in-process is far heavier. Enabling immutable releases would forbid the `--clobber` resume path (`releasing#resuming-a-release-that-stopped`). |
 | A local user who can write the executable's directory | Replace the executable at any time, with or without the updater | Staging is a private, randomly named directory inside the executable's own directory (never `/tmp`), so the updater adds no window another user can use where the directory is the person's own. A world-writable install directory is already compromised. |
 | A local user who can write the data directory | Change `update-check.json` to announce any version | The prompt and notice show only a parsed semver (no terminal escapes); "Update now" looks the release up again and installs what GitHub says, verified. At worst a misleading prompt. |
 | The environment | Redirect the lookup | A release build has no endpoint variable (D16); proxies come from `network.proxy` and the system, as every other request. |
@@ -904,54 +908,61 @@ SmartScreen do not assess it at first run; this is the same as `curl` or
 file its own inode (D5). Nothing is codesigned or notarized; the docs keep
 saying so.
 
-## 6. Open questions
+## 6. The questions, answered
 
-Each with a recommendation; the milestones assume the recommendation until
-the user decides.
+The user answered every question on 2026-11-14, each as recommended. Each
+entry keeps the question and records the decision; none is open.
 
-- **Q1 — The check on by default?** It sends one request a day to GitHub
-  (a third party, like models.dev, which is off by default). The user asked
-  for an automatic check. **Recommended: on**, with the setting, the
-  variable and the statement of §3.12.
+- **Q1 — The check on by default?** It sends one request a day to GitHub (a
+  third party, like models.dev, which is off by default). The user asked for
+  an automatic check. **Decided by the user on 2026-11-14, as recommended:
+  on**, with the setting, the variable and the statement of §3.12.
 - **Q2 — Cargo installations.** Run `cargo install --locked
   hanafubuki-agent-cli` for the person (Codex runs its package manager), or
   only name it? On Windows cargo is expected not to replace the running
   executable (U1 confirms it on Windows CI; if it does replace it, cargo
-  runs there too); moving it aside first (as D5 does) and putting it back if cargo fails
-  would work but adds the Windows rename path and a Ctrl-C window around a
-  build of several minutes. **Recommended: run it on Unix, name it on
-  Windows** (no prompt there, the notice and `update --check` name it).
-- **Q3 — After an update, exit or re-execute?** **Recommended: exit** (D9).
-- **Q4 — Bare binaries or a checksums file in releases?** **Recommended:
-  neither** (D4, D3); `release.yml` is unchanged.
+  runs there too); moving it aside first (as D5 does) and putting it back if
+  cargo fails would work but adds the Windows rename path and a Ctrl-C
+  window around a build of several minutes. **Decided by the user on
+  2026-11-14, as recommended: run it on Unix, name it on Windows** (no
+  prompt there, the notice and `update --check` name it).
+- **Q3 — After an update, exit or re-execute?** **Decided by the user on
+  2026-11-14, as recommended: exit** (D9).
+- **Q4 — Bare binaries or a checksums file in releases?** **Decided by the
+  user on 2026-11-14, as recommended: neither** (D4, D3); `release.yml` is
+  unchanged.
 - **Q5 — The notice's place.** The footer's right side, a status-line item,
-  an info line in the transcript, or a row of its own? **Recommended: the
-  footer's right side** (D12).
-- **Q6 — The interval.** Every launch, 20 h (Codex), or a day?
-  **Recommended: 20 h**; a person who starts it daily sees a release within
-  a day, and it is one request a day.
+  an info line in the transcript, or a row of its own? **Decided by the user
+  on 2026-11-14, as recommended: the footer's right side** (D12).
+- **Q6 — The interval.** Every launch, 20 h (Codex), or a day? **Decided by
+  the user on 2026-11-14, as recommended: 20 h**; a person who starts it
+  daily sees a release within a day, and it is one request a day.
 - **Q7 — Retrying a Windows rename on a sharing violation.** An antivirus
-  scan of the file just written commonly holds it for a moment (the error
-  is 32, "used by another process"); without a retry the update fails and
-  the person retries by hand. About ten lines: up to ten attempts over two
-  seconds, only for errors 5 and 32, only on Windows. **Recommended: yes.**
-- **Q8 — Signatures (U4).** **Recommended: later**, minisign over each
-  archive (§5); not a blocker for U0–U3. It needs a key pair, a secret and
-  a release, and the first version that verifies can only check the release
-  after it.
-- **Q9 — The notice for a dismissed version.** **Recommended: shown**
-  (Codex), only the prompt respects the dismissal.
+  scan of the file just written commonly holds it for a moment (the error is
+  32, "used by another process"); without a retry the update fails and the
+  person retries by hand. About ten lines: up to ten attempts over two
+  seconds, only for errors 5 and 32, only on Windows. **Decided by the user
+  on 2026-11-14, as recommended: yes.**
+- **Q8 — Signatures (U4).** **Decided by the user on 2026-11-14, as
+  recommended: later**, minisign over each archive (§5); not a blocker for
+  U0–U3. It needs a key pair, a secret and a release, and the first version
+  that verifies can only check the release after it. U4 stays optional and
+  is not started without a further decision.
+- **Q9 — The notice for a dismissed version.** **Decided by the user on
+  2026-11-14, as recommended: shown** (Codex), only the prompt respects the
+  dismissal.
 - **Q10 — Debug builds never contact GitHub** (D16), so `update --check`
-  from a debug build needs the test URL. **Recommended: yes**; the release
-  build is the one people run.
+  from a debug build needs the test URL. **Decided by the user on
+  2026-11-14, as recommended: yes**; the release build is the one people
+  run.
 - **Q11 — `cargo install --locked`** in the updater and in `installation`.
-  **Recommended: yes**: the released crate's lock file, as the binaries are
-  built (`release.yml:205`).
-- **Q12 — A crate, or a module of the CLI?** The engine has one consumer.
-  A module in `crates/cli` saves a crate on crates.io and a layer row, but
-  its tests would be white-box modules of a binary crate or reach it only
+  **Decided by the user on 2026-11-14, as recommended: yes**: the released
+  crate's lock file, as the binaries are built (`release.yml:205`).
+- **Q12 — A crate, or a module of the CLI?** The engine has one consumer. A
+  module in `crates/cli` saves a crate on crates.io and a layer row, but its
+  tests would be white-box modules of a binary crate or reach it only
   through the process, and nothing would prove the facade never links it.
-  **Recommended: the crate** (D2).
+  **Decided by the user on 2026-11-14, as recommended: the crate** (D2).
 
 ## 7. Milestones
 
@@ -974,7 +985,7 @@ every page prerendered).
 
 ```text
 now ──┬── lane A: U0 ──────────► U1 ───────────────┐
-      │                                            ├──► U3 ──► (U4, if chosen)
+      │                                            ├──► U3 ──► (U4, if decided)
       └── lane B: U2 (TUI, config, docs) ─► U2 (CLI, after U0) ┘
 ```
 
@@ -985,7 +996,7 @@ now ──┬── lane A: U0 ──────────► U1 ────
   lines and lands first.
 - **When U0 lands: U1** (lane A), in parallel with the rest of U2.
 - **When U1 and U2 have landed: U3.**
-- **U4** only if Q8 is decided for it.
+- **U4** only after a further decision (Q8: later, optional).
 
 U0 takes every shared edit, so the lanes do not meet: the workspace
 `Cargo.toml` and `Cargo.lock` entry of the new crate, the `semver` move, the
@@ -1150,7 +1161,7 @@ row in a different place (`environment`, `network-logging`).
     version; "Update now" prints `update`'s lines and ends, and the next
     start runs the new version (rehearsed by hand, §9).
   - Hanafubuki: nothing (the terminal interface is not its).
-- **U4 — signed archives** (optional, Q8). `release.yml` signs each archive
+- **U4 — signed archives** (optional, later: Q8). `release.yml` signs each archive
   (`<archive>.minisig`), the crate verifies it with the compiled-in key
   before extracting, `releasing` documents the key and its rotation,
   `installation` the manual check. Not scheduled.
