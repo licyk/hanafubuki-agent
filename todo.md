@@ -4762,8 +4762,92 @@ exception.
         (`spawn_models` returns none for any child today); its "yours" is
         then its own pair. R1's new golden, if a top-level request with
         `spawn_agent`, carries the Models part.
-- [ ] O3: a child's Provider, model and effort in `list_agents`,
+- [x] O3: a child's Provider, model and effort in `list_agents`,
       `AgentSubagentStatus` and `/subagents` (status cell and picker).
+      Done (2026-11-14):
+      - Plugin (`service.rs`): `ChildModelView { provider_id, model,
+        reasoning_effort }`, read from each child's `AgentSessionSummary`
+        (the session's values now: a `/model` or `/effort` on a child
+        shows; never a copy kept at spawn) beside its `ListedAgent` by
+        `SubagentService::agents_on_models(parent)`, the one listing read
+        (`agents` keeps its callers on it). No new read: the summaries
+        `driver.children` already pages. `wait_agent`'s output and
+        `ListedAgent` unchanged. `tools.rs`: each `list_agents` entry
+        gains `provider`, `model`, `reasoning_effort` (`null`: the
+        Provider's default), the names spawn's result uses:
+        `{"agent_name", "agent_id", "agent_status", "agent_type",
+        "provider", "model", "reasoning_effort"}`; the description is
+        unchanged (the Codex notice says so).
+      - Facade (`mod.rs`): `AgentSubagentStatus` gains `provider_id:
+        String`, `model: String`, `reasoning_effort:
+        Option<ModelReasoningEffort>` (JSON `providerId`, `model`,
+        `reasoningEffort`, `null` for the default), filled by
+        `statuses` from the same view, so `subagents(parent)` carries
+        them. The type is `Serialize` only (nothing decodes it), so no
+        serde default applies.
+      - Terminal interface (`commands/subagents/{mod,picker}.rs`): the
+        status cell reads `• counter  idle · fixture-model · high`, the
+        picker's description `idle · fixture-model · high · ` and the
+        answer's start; the effort `default` when none (`runs_on`, shared
+        by both). No Provider, as §2.6 says. The bridge is unchanged:
+        its watch compares whole statuses, so a child's model change is
+        now a `Changed` too.
+      - Tests: `plugins/subagents/tests/listing.rs` (new; `models.rs` is
+        at 760 lines), over the fake servers and `add_test_provider`: a
+        child with no arguments, one with `model` and
+        `reasoning_effort`, one on `Second` by name, listed by
+        `list_agents` and `subagents(parent)` with their pairs and
+        efforts; a person's `set_session_model` (another Provider) on one
+        and `set_session_reasoning_effort` to the default on another
+        listed next; after a restart, the same listing from the
+        summaries with no request to either server. `tests/mod.rs`' facade
+        literal gains the three fields. TUI: the status cell at 80
+        (inline) and as the scrollback wraps it at 36, the picker's
+        screen at 80 and 40 (snapshots); `app/tests/subagents.rs` now
+        waits for `• counter  idle · fixture-model · default`. Seen
+        failing first: the new snapshots (empty), and by mutation, each
+        restored: `list_agents`' `provider` from the model (the listing
+        test), `statuses` dropping the effort (the listing test).
+      - Goldens: none changed (`list_agents`' description is unchanged;
+        its output is a tool result no golden pins): `cargo test
+        --workspace` runs them unchanged.
+      - Docs (both languages): `tools#subagents` (`list_agents`' row),
+        `terminal-interface#subagents`, `embedding#feature-calls` (the
+        `subagents(parent)` row); also, stale otherwise, `plugin-rules`
+        (the `subagents` row's `list_agents`) and `sessions#subagents`
+        (`/subagents`). Each changed page compiled with `@mdx-js/mdx`
+        3.1.1 and remark-gfm.
+      - Deviations: (1) the tests are in `tests/listing.rs`, not
+        `models.rs` (size). (2) Docs also in `plugin-rules` and
+        `sessions` (their text named the old output). (3) The
+        coordinator's brief asked for the Provider when it differs and
+        the effort only when set in `/subagents`; the plan (§2.6) wins:
+        model and effort, `default` when none, no Provider.
+      - Hanafubuki at its next pin: `AgentSubagentStatus.{provider_id,
+        model, reasoning_effort}` (struct literals; serialized JSON gains
+        `providerId`, `model`, `reasoningEffort`). No golden.
+      - Module size: no exception added or raised; `subagents/service.rs`
+        520, `subagents/tools.rs` 461, `subagents/mod.rs` 104,
+        `commands/subagents/mod.rs` 91, `picker.rs` 93 code lines;
+        `agent_bridge/mod.rs` untouched (598).
+      - Validation: `cargo fmt --all --check`; `RUSTFLAGS="-D warnings"
+        cargo check --workspace --all-targets --all-features`; `cargo
+        clippy --workspace --all-targets --all-features -- -D warnings`;
+        `cargo xtask check`; `cargo test --workspace --all-features
+        --no-fail-fast` (5038 passed, none failed, no flake seen; the
+        goldens unchanged); `bun install --frozen-lockfile`, `bun run
+        format:site`, `bun run format:check:site`, `bun run site:check`,
+        `bun run site:test` (28 passed); `site:build` not run locally
+        (port 3000 is another project's); CI's Site run covers it.
+      - For R2–R8: `agents_on_models` is the listing to build on (each
+        child's `ListedAgent` with its `ChildModelView` from one summary
+        page); the `/tasks` manager can show `AgentSubagentStatus`'
+        three fields with `commands::subagents::runs_on`'s wording
+        (`model · effort`, `default`). Replacing the 400 ms watch must
+        keep a child's model change visible (today it is a whole-status
+        comparison). `wait_agent` and a wake's text carry no model.
+
+- All of this plan's milestones (O1–O3) are done (2026-11-14).
 
 ## Plan: wake events, nested sub-agents and the background task manager (2026-11-13)
 

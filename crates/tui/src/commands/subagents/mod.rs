@@ -2,7 +2,8 @@
 
 //! `/subagents`: the session's subagents (Codex's `/subagents` status feed,
 //! `app/agent_status_feed.rs`, and its agent picker): a cell with each
-//! one's title, status and the start of its latest answer, then a list to
+//! one's title, status, model and reasoning effort and the start of its
+//! latest answer, then a list to
 //! show one of them in place of the session. While one runs the list
 //! follows their statuses (the bridge's watch reads them). The subagent
 //! is shown as `/resume` shows a session, its parent kept aside: Esc (with
@@ -10,7 +11,7 @@
 
 mod picker;
 
-use hanafubuki_agent::{AgentSubagentState, AgentSubagentStatus};
+use hanafubuki_agent::{AgentSubagentState, AgentSubagentStatus, ModelReasoningEffort};
 use ratatui::style::Stylize;
 use ratatui::text::Line;
 
@@ -56,8 +57,8 @@ pub(crate) fn on_reply(context: &mut CommandContext<'_>, reply: SubagentsReply) 
     }
 }
 
-/// The status feed: each subagent's title and status, and the start of
-/// its latest answer.
+/// The status feed: each subagent's title, status, model and reasoning
+/// effort, and the start of its latest answer.
 pub(crate) fn status_cell(statuses: &[AgentSubagentStatus]) -> PlainHistoryCell {
     let mut lines: Vec<Line<'static>> = vec![
         "/subagents".magenta().into(),
@@ -74,6 +75,7 @@ pub(crate) fn status_cell(statuses: &[AgentSubagentStatus]) -> PlainHistoryCell 
             status.title.clone().bold(),
             "  ".into(),
             state_span(status.status),
+            format!(" · {}", runs_on(status)).dim(),
         ]));
         let answer = status.last_answer.as_deref().map_or_else(
             || "No answer yet.".dim().italic(),
@@ -90,6 +92,16 @@ pub(crate) fn state_name(state: AgentSubagentState) -> &'static str {
         AgentSubagentState::Idle => "idle",
         AgentSubagentState::Failed => "failed",
     }
+}
+
+/// The model a subagent runs on and its reasoning effort, `default` for
+/// the Provider's.
+pub(crate) fn runs_on(status: &AgentSubagentStatus) -> String {
+    let effort = status
+        .reasoning_effort
+        .as_ref()
+        .map_or("default", ModelReasoningEffort::as_str);
+    format!("{} · {effort}", status.model)
 }
 
 fn state_span(state: AgentSubagentState) -> ratatui::text::Span<'static> {

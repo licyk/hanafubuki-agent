@@ -5,9 +5,10 @@
 //! permission mode; and the plugin turned off. Agents spawned as roles
 //! are `roles.rs`'s; an agent's Provider, model and reasoning effort
 //! `models.rs`'s; the Providers and models the guidance lists
-//! `guidance.rs`'s.
+//! `guidance.rs`'s; what listed agents run on `listing.rs`'s.
 
 mod guidance;
+mod listing;
 mod models;
 mod roles;
 
@@ -205,6 +206,9 @@ async fn a_spawned_agent_runs_its_task_and_the_wait_returns_its_answer() {
             session_id: child,
             title: "counter".to_string(),
             status: AgentSubagentState::Idle,
+            provider_id: "provider-1".to_string(),
+            model: "fixture-model".to_string(),
+            reasoning_effort: None,
             last_answer: Some("Twelve files.".to_string()),
         }]
     );

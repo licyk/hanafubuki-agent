@@ -26,7 +26,7 @@ use hanafubuki_agent_contracts::{
     ArgumentSubjects, BlockingService, ContextRendererRegistry, PromptContributorRegistry,
     Register, ToolPresenterRegistry, ToolRegistry,
 };
-use hanafubuki_agent_kernel::AgentSessionId;
+use hanafubuki_agent_kernel::{AgentSessionId, ModelReasoningEffort};
 use kardia_core::{Context, Inject, PluginDef, Service};
 use serde::Serialize;
 
@@ -50,6 +50,11 @@ pub struct AgentSubagentStatus {
     /// Its task name, the title of its session.
     pub title: String,
     pub status: AgentSubagentState,
+    /// The Provider (its id), model and reasoning effort its session runs
+    /// on now; no effort is the Provider's default.
+    pub provider_id: String,
+    pub model: String,
+    pub reasoning_effort: Option<ModelReasoningEffort>,
     /// The start of its latest answer, if it has answered.
     pub last_answer: Option<String>,
 }

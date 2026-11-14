@@ -104,6 +104,17 @@ pub(super) struct ListedAgent {
     pub(super) status: AgentRunStatus,
 }
 
+/// The Provider, model and reasoning effort an agent's session runs on now,
+/// read from its summary (a `/model` on it shows), never kept from its
+/// spawn.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) struct ChildModelView {
+    pub(super) provider_id: String,
+    pub(super) model: String,
+    /// None: the Provider's default.
+    pub(super) reasoning_effort: Option<ModelReasoningEffort>,
+}
+
 /// What a wait ended with.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) enum WaitOutcome {
@@ -379,12 +390,32 @@ impl SubagentService {
         &self,
         parent: AgentSessionId,
     ) -> Result<Vec<ListedAgent>, AgentError> {
+        Ok(self
+            .agents_on_models(parent)
+            .await?
+            .into_iter()
+            .map(|(agent, _)| agent)
+            .collect())
+    }
+
+    /// `parent`'s agents, oldest first, each with the model it runs on.
+    pub(super) async fn agents_on_models(
+        &self,
+        parent: AgentSessionId,
+    ) -> Result<Vec<(ListedAgent, ChildModelView)>, AgentError> {
         let children = self
             .blocking(move |driver| driver.children(parent, AgentSessionOrigin::Subagent))
             .await?;
         Ok(children
             .into_iter()
-            .map(|child| self.listed(child))
+            .map(|child| {
+                let model = ChildModelView {
+                    provider_id: child.provider_id.clone(),
+                    model: child.model.clone(),
+                    reasoning_effort: child.reasoning_effort.clone(),
+                };
+                (self.listed(child), model)
+            })
             .collect())
     }
 
@@ -409,14 +440,14 @@ impl SubagentService {
         }
     }
 
-    /// The facade's view of `parent`'s agents, with each one's last answer
-    /// cut to an excerpt.
+    /// The facade's view of `parent`'s agents, each with the model it runs
+    /// on and its last answer cut to an excerpt.
     pub(crate) async fn statuses(
         &self,
         parent: AgentSessionId,
     ) -> Result<Vec<AgentSubagentStatus>, AgentError> {
         let mut statuses = Vec::new();
-        for agent in self.agents(parent).await? {
+        for (agent, model) in self.agents_on_models(parent).await? {
             let last_answer = match &agent.status {
                 AgentRunStatus::Completed(Some(answer)) => Some(answer.clone()),
                 _ => {
@@ -432,6 +463,9 @@ impl SubagentService {
                     AgentRunStatus::Errored(_) => AgentSubagentState::Failed,
                     _ => AgentSubagentState::Idle,
                 },
+                provider_id: model.provider_id,
+                model: model.model,
+                reasoning_effort: model.reasoning_effort,
                 last_answer: last_answer.map(|answer| excerpt(&answer)),
             });
         }

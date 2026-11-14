@@ -366,7 +366,7 @@ Esc 返回上一页，在标签页上回到设置中心。用 `--safe-mode` 启�
 
 ## 子代理 [#subagents]
 
-`/subagents` 把会话的[子代理](/docs/sessions#subagents)写入对话，每个都带有状态（`running`、`idle` 或 `failed`）和它最近一次回答的开头，然后打开它们的列表；有子代理在运行时，列表会跟着它们的状态更新。Enter 用选中的子代理代替会话显示，上方是 `Subagent NAME · from PARENT · Esc or ctrl-x left returns`：它的记录和 `/resume` 显示的一样；它在运行时，它的回合会继续显示（回答逐步输出，工具调用逐个出现，它等待的批准在那里询问，包括显示它之前就已提出的批准，Esc 中断它）。在那里发送的消息发给这个子代理。
+`/subagents` 把会话的[子代理](/docs/sessions#subagents)写入对话，每个都带有状态（`running`、`idle` 或 `failed`）、它运行的模型和推理强度（使用其 Provider 的默认值时为 `default`），例如 `counter  idle · gpt-5.4-mini · low`，以及它最近一次回答的开头，然后打开它们的列表，每一项的说明也是这样（`idle · gpt-5.4-mini · low`，然后是回答的开头）；有子代理在运行时，列表会跟着它们的状态更新。Enter 用选中的子代理代替会话显示，上方是 `Subagent NAME · from PARENT · Esc or ctrl-x left returns`：它的记录和 `/resume` 显示的一样；它在运行时，它的回合会继续显示（回答逐步输出，工具调用逐个出现，它等待的批准在那里询问，包括显示它之前就已提出的批准，Esc 中断它）。在那里发送的消息发给这个子代理。
 
 - 在空输入框上、没有任务运行时按 Esc，或 `leader left`、`leader x`，回到会话；会话自己的回合在这期间一直在继续。
 - 在空输入框上按 **Alt+Right 和 Alt+Left**，按这个列表的顺序在会话及其子代理之间循环切换：从会话到第一个子代理，从最后一个回到会话。没有子代理时提示 `This session has no subagents.`；打开了旁路对话时，提示先关闭它。

@@ -60,7 +60,9 @@ fn subagents_lists_them_and_shows_one_beside_its_parent() {
     harness.type_and_submit("/subagents");
     harness.pump_until_screen_shows("Enter shows one in place of this conversation");
     harness.pump_until("the status cell", |harness| {
-        harness.transcript().contains("• counter  idle")
+        harness
+            .transcript()
+            .contains("• counter  idle · fixture-model · default")
     });
     assert!(harness.transcript().contains("Twelve files."));
 

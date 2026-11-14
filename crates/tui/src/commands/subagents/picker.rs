@@ -1,15 +1,16 @@
 // Modified from OpenAI Codex 57a808a392 (Apache-2.0).
 
 //! The list `/subagents` opens (Codex's agent picker): each subagent with
-//! its status and the start of its latest answer, kept current while the
-//! watch reads new statuses; Enter shows the one selected.
+//! its status, model and reasoning effort and the start of its latest
+//! answer, kept current while the watch reads new statuses; Enter shows
+//! the one selected.
 
 use hanafubuki_agent::AgentSubagentStatus;
 use ratatui::buffer::Buffer;
 use ratatui::crossterm::event::KeyEvent;
 use ratatui::layout::Rect;
 
-use super::{single_line, state_name};
+use super::{runs_on, single_line, state_name};
 use crate::app::WorkspaceEvent;
 use crate::app_event::{AppEvent, AppEventSender};
 use crate::bottom_pane::{
@@ -49,9 +50,10 @@ fn list(
                 .last_answer
                 .as_deref()
                 .map(|answer| truncate_text(&single_line(answer), ANSWER_CHARS));
+            let state = format!("{} · {}", state_name(status.status), runs_on(status));
             let description = match answer {
-                Some(answer) => format!("{} · {answer}", state_name(status.status)),
-                None => state_name(status.status).to_string(),
+                Some(answer) => format!("{state} · {answer}"),
+                None => state,
             };
             SelectionItem {
                 name: status.title.clone(),

@@ -1,0 +1,16 @@
+---
+source: crates/tui/src/commands/subagents/tests.rs
+expression: "wrapped(&status_cell(&statuses()), 36)"
+---
+/subagents
+Subagents
+
+  • counter  idle · fixture-model ·
+high
+    Twelve files in src. The rest of
+the answer goes on past the picker's
+sixty characters.
+  • writer  running ·
+qwen3-coder-480b-a35b-instruct ·
+default
+    No answer yet.

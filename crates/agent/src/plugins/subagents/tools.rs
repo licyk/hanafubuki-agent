@@ -12,7 +12,8 @@
 // is not passed is the role's, else the parent's (the argument wins over
 // the role, and a passed model keeps the role's or the parent's effort);
 // the spawn returns the Provider, model and effort the agent runs with;
-// `list_agents` reports each agent's role; no task
+// `list_agents` reports each agent's role and the Provider, model and
+// effort it runs on now; no task
 // paths (an agent is named by its task name or its id among its parent's
 // agents) and no `path_prefix`; `wait_agent` returns
 // the final answers instead of a mailbox summary, and returns at once when
@@ -219,12 +220,15 @@ impl AgentToolHandler for SubagentTool {
                     Ok(waited(outcome).with_argument_notes(&notes))
                 }
                 SubagentToolKind::ListAgents => {
-                    let agents = service.agents(parent).await.map_err(tool_error)?;
+                    let agents = service.agents_on_models(parent).await.map_err(tool_error)?;
                     let agents = agents
                         .iter()
-                        .map(|agent| {
+                        .map(|(agent, model)| {
                             let mut listed = listed(agent, json!(list_status(&agent.status)));
                             listed["agent_type"] = json!(agent.role);
+                            listed["provider"] = json!(model.provider_id);
+                            listed["model"] = json!(model.model);
+                            listed["reasoning_effort"] = json!(model.reasoning_effort);
                             listed
                         })
                         .collect::<Vec<_>>();
